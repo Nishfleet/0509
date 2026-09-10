@@ -28,7 +28,10 @@ import {
   sendWeeklyBusinessNumbers,
 } from "../app/lib/monitoring.server";
 import { sendMonthlyCustomerRecaps } from "../app/lib/monthly-recap.server";
-import { runOnboardingNudgeSweep } from "../app/lib/onboarding-nudge.server";
+import {
+  runOnboardingNudgeSweep,
+  runWatchlistResumeSweep,
+} from "../app/lib/onboarding-nudge.server";
 import {
   isPublicMarkdownPage,
   buildLlmsText,
@@ -533,6 +536,26 @@ export default {
           },
           (error) =>
             reportScheduledTaskFailure(env, "onboarding_nudge_sweep", error),
+        ),
+      );
+      // Paused-watchlist re-engagement (issue #2115): rides the same 04:00
+      // daily rail as the abandoned-onboarding nudge for the same
+      // release-soak reason (a new wrangler cron would escape the CHECK that
+      // accepts only the four production crons). The sweep selects users who
+      // own at least one watchlist paused 14+ days with no prior resume
+      // attempt, gates each on the 09:00-11:00 local send window (IST
+      // default), and sends exactly one plain-text-first resume email per
+      // user, ever, via the mandated delivery.server path. No auto-resume,
+      // no plan/gating changes, no discount or pricing copy.
+      ctx.waitUntil(
+        runWatchlistResumeSweep(env).then(
+          (result) => {
+            if (result.selected > 0) {
+              console.log("watchlist resume sweep completed", result);
+            }
+          },
+          (error) =>
+            reportScheduledTaskFailure(env, "watchlist_resume_sweep", error),
         ),
       );
       // Nightly sitemap-timeline cohort backfill (issue #1958): calendly.com

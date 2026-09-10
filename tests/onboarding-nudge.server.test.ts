@@ -442,3 +442,271 @@ describe("onboarding nudge send + idempotency (sqlite)", () => {
     expect(call.unsubscribeUrl).toBe("https://0509.io/unsubscribe?token=abc");
   });
 });
+
+/**
+ * Paused-watchlist re-engagement (issue #2115).
+ *
+ * Covers the three acceptance surfaces:
+ *   1. selection — a user owning a watchlist paused 14+ days with no prior
+ *      resume attempt is selected, with the paused count;
+ *   2. idempotency — a user who already has a `watchlist_resume`
+ *      delivery_attempt row is never re-selected;
+ *   3. one-send guarantee — a second sweep does not double-send.
+ */
+
+const RESUME_TEMPLATE_NAME = "watchlist_resume";
+
+function insertPausedWatchlist(
+  harness: ReturnType<typeof createSqliteD1>,
+  input: { id: string; userId: string; pausedAt: string },
+) {
+  harness.sqlite
+    .prepare(
+      `INSERT INTO watchlist (
+        id, user_id, name, target_type, target_id, target_fingerprint,
+        target_label, is_active, created_at, updated_at
+       ) VALUES (?, ?, 'watch', 'advertiser', 'target-1', 'fp-1', 'Brand', 0, ?, ?)`,
+    )
+    .run(input.id, input.userId, input.pausedAt, input.pausedAt);
+}
+
+function insertActiveWatchlist(
+  harness: ReturnType<typeof createSqliteD1>,
+  input: { id: string; userId: string; createdAt: string },
+) {
+  harness.sqlite
+    .prepare(
+      `INSERT INTO watchlist (
+        id, user_id, name, target_type, target_id, target_fingerprint,
+        target_label, is_active, created_at, updated_at
+       ) VALUES (?, ?, 'watch', 'advertiser', 'target-1', 'fp-1', 'Brand', 1, ?, ?)`,
+    )
+    .run(input.id, input.userId, input.createdAt, input.createdAt);
+}
+
+describe("watchlist resume selection (sqlite)", () => {
+  const fixtures: Array<ReturnType<typeof createSqliteD1>> = [];
+
+  afterEach(() => {
+    while (fixtures.length > 0) fixtures.pop()?.close();
+  });
+
+  it("selects a user owning a watchlist paused 14+ days with no prior resume", async () => {
+    const harness = createSqliteD1();
+    fixtures.push(harness);
+    createNudgeTables(harness);
+
+    const now = new Date("2026-09-10T04:00:00.000Z");
+    const pausedLong = new Date(now.getTime() - 20 * 24 * 60 * 60 * 1000).toISOString();
+    const pausedRecent = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString();
+
+    insertUser(harness, { id: "user-paused-long", email: "a@example.com", name: "A", createdAt: pausedLong });
+    insertPausedWatchlist(harness, { id: "watch-1", userId: "user-paused-long", pausedAt: pausedLong });
+    insertPausedWatchlist(harness, { id: "watch-2", userId: "user-paused-long", pausedAt: pausedLong });
+
+    insertUser(harness, { id: "user-paused-recent", email: "b@example.com", name: "B", createdAt: pausedRecent });
+    insertPausedWatchlist(harness, { id: "watch-3", userId: "user-paused-recent", pausedAt: pausedRecent });
+
+    const { listPausedWatchlistUsers } = await import("~/lib/onboarding-nudge.server");
+    const selected = await listPausedWatchlistUsers(
+      { DB: harness.db } as never,
+      now,
+    );
+
+    expect(selected.map((u) => u.id)).toEqual(["user-paused-long"]);
+    expect(selected[0]?.pausedCount).toBe(2);
+  });
+
+  it("excludes a user whose watchlist is active", async () => {
+    const harness = createSqliteD1();
+    fixtures.push(harness);
+    createNudgeTables(harness);
+
+    const now = new Date("2026-09-10T04:00:00.000Z");
+    const old = new Date(now.getTime() - 20 * 24 * 60 * 60 * 1000).toISOString();
+
+    insertUser(harness, { id: "user-active", email: "a@example.com", name: "A", createdAt: old });
+    insertActiveWatchlist(harness, { id: "watch-1", userId: "user-active", createdAt: old });
+
+    const { listPausedWatchlistUsers } = await import("~/lib/onboarding-nudge.server");
+    const selected = await listPausedWatchlistUsers(
+      { DB: harness.db } as never,
+      now,
+    );
+
+    expect(selected).toEqual([]);
+  });
+
+  it("excludes a user who already received a watchlist resume email", async () => {
+    const harness = createSqliteD1();
+    fixtures.push(harness);
+    createNudgeTables(harness);
+
+    const now = new Date("2026-09-10T04:00:00.000Z");
+    const pausedLong = new Date(now.getTime() - 20 * 24 * 60 * 60 * 1000).toISOString();
+
+    insertUser(harness, { id: "user-resumed", email: "a@example.com", name: "A", createdAt: pausedLong });
+    insertPausedWatchlist(harness, { id: "watch-1", userId: "user-resumed", pausedAt: pausedLong });
+    insertDeliveryAttempt(harness, {
+      id: "attempt-1",
+      userId: "user-resumed",
+      templateName: RESUME_TEMPLATE_NAME,
+      idempotencyKey: `watchlist-resume:user-resumed`,
+    });
+
+    const { listPausedWatchlistUsers } = await import("~/lib/onboarding-nudge.server");
+    const selected = await listPausedWatchlistUsers(
+      { DB: harness.db } as never,
+      now,
+    );
+
+    expect(selected).toEqual([]);
+  });
+
+  it("does not exclude a user whose only delivery_attempt is a different template", async () => {
+    const harness = createSqliteD1();
+    fixtures.push(harness);
+    createNudgeTables(harness);
+
+    const now = new Date("2026-09-10T04:00:00.000Z");
+    const pausedLong = new Date(now.getTime() - 20 * 24 * 60 * 60 * 1000).toISOString();
+
+    insertUser(harness, { id: "user-other-template", email: "a@example.com", name: "A", createdAt: pausedLong });
+    insertPausedWatchlist(harness, { id: "watch-1", userId: "user-other-template", pausedAt: pausedLong });
+    insertDeliveryAttempt(harness, {
+      id: "attempt-1",
+      userId: "user-other-template",
+      templateName: "onboarding_nudge",
+      idempotencyKey: "onboarding-nudge:user-other-template",
+    });
+
+    const { listPausedWatchlistUsers } = await import("~/lib/onboarding-nudge.server");
+    const selected = await listPausedWatchlistUsers(
+      { DB: harness.db } as never,
+      now,
+    );
+
+    expect(selected.map((u) => u.id)).toEqual(["user-other-template"]);
+  });
+});
+
+describe("watchlist resume send + idempotency (sqlite)", () => {
+  const fixtures: Array<ReturnType<typeof createSqliteD1>> = [];
+
+  afterEach(() => {
+    while (fixtures.length > 0) fixtures.pop()?.close();
+    vi.resetModules();
+    vi.restoreAllMocks();
+  });
+
+  it("sends exactly one resume email per user and records the delivery_attempt", async () => {
+    vi.resetModules();
+    const harness = createSqliteD1();
+    fixtures.push(harness);
+    createNudgeTables(harness);
+
+    const now = new Date("2026-09-10T04:00:00.000Z");
+    const pausedLong = new Date(now.getTime() - 20 * 24 * 60 * 60 * 1000).toISOString();
+    insertUser(harness, { id: "user-1", email: "owner@example.com", name: "Owner", createdAt: pausedLong });
+    insertPausedWatchlist(harness, { id: "watch-1", userId: "user-1", pausedAt: pausedLong });
+    insertDeliveryTarget(harness, { id: "target-1", userId: "user-1", targetValue: "owner@example.com" });
+
+    const send = vi.fn().mockResolvedValue({ messageId: "msg-1" });
+    const sendCloudflareEmail = vi.fn().mockImplementation(async (env, input) => {
+      await send(env, input);
+      return {
+        provider: "cloudflare_email",
+        status: "sent",
+        webhookStatus: "provider_unknown",
+        providerMessageId: "msg-1",
+        providerStatusLastSeenAt: new Date().toISOString(),
+        errorMessage: null,
+        deliveredAt: null,
+      };
+    });
+    vi.doMock("~/lib/delivery-email-core.server", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("~/lib/delivery-email-core.server")>();
+      return {
+        ...actual,
+        sendCloudflareEmail,
+      };
+    });
+    vi.doMock("~/lib/unsubscribe.server", () => ({
+      buildUnsubscribeUrl: vi.fn().mockResolvedValue("https://0509.io/unsubscribe?token=abc"),
+    }));
+
+    const { runWatchlistResumeSweep } = await import("~/lib/onboarding-nudge.server");
+    const env = {
+      DB: harness.db,
+      EMAIL: { send },
+      EMAIL_FROM_EMAIL: "alerts@0509.io",
+      BETTER_AUTH_SECRET: "test-secret-with-at-least-32-characters",
+      BETTER_AUTH_URL: "https://0509.io",
+    } as never;
+
+    const first = await runWatchlistResumeSweep(env, { now });
+    expect(first).toMatchObject({ selected: 1, sent: 1, skipped: 0, failed: 0 });
+
+    // A second sweep must not re-select or re-send the same user.
+    const second = await runWatchlistResumeSweep(env, { now });
+    expect(second).toMatchObject({ selected: 0, sent: 0, skipped: 0, failed: 0 });
+
+    expect(sendCloudflareEmail).toHaveBeenCalledTimes(1);
+    const attempt = harness.sqlite
+      .prepare("SELECT COUNT(*) AS count, status FROM delivery_attempt")
+      .get();
+    expect(attempt).toMatchObject({ count: 1, status: "sent" });
+  });
+
+  it("passes a List-Unsubscribe URL to the provider", async () => {
+    vi.resetModules();
+    const harness = createSqliteD1();
+    fixtures.push(harness);
+    createNudgeTables(harness);
+
+    const now = new Date("2026-09-10T04:00:00.000Z");
+    const pausedLong = new Date(now.getTime() - 20 * 24 * 60 * 60 * 1000).toISOString();
+    insertUser(harness, { id: "user-1", email: "owner@example.com", name: "Owner", createdAt: pausedLong });
+    insertPausedWatchlist(harness, { id: "watch-1", userId: "user-1", pausedAt: pausedLong });
+    insertDeliveryTarget(harness, { id: "target-1", userId: "user-1", targetValue: "owner@example.com" });
+
+    const send = vi.fn().mockResolvedValue({ messageId: "msg-1" });
+    const sendCloudflareEmail = vi.fn().mockResolvedValue({
+      provider: "cloudflare_email",
+      status: "sent",
+      webhookStatus: "provider_unknown",
+      providerMessageId: "msg-1",
+      providerStatusLastSeenAt: new Date().toISOString(),
+      errorMessage: null,
+      deliveredAt: null,
+    });
+    vi.doMock("~/lib/delivery-email-core.server", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("~/lib/delivery-email-core.server")>();
+      return {
+        ...actual,
+        sendCloudflareEmail,
+      };
+    });
+    vi.doMock("~/lib/unsubscribe.server", () => ({
+      buildUnsubscribeUrl: vi.fn().mockResolvedValue("https://0509.io/unsubscribe?token=abc"),
+    }));
+
+    const { runWatchlistResumeSweep } = await import("~/lib/onboarding-nudge.server");
+    const env = {
+      DB: harness.db,
+      EMAIL: { send },
+      EMAIL_FROM_EMAIL: "alerts@0509.io",
+      BETTER_AUTH_SECRET: "test-secret-with-at-least-32-characters",
+      BETTER_AUTH_URL: "https://0509.io",
+    } as never;
+
+    const result = await runWatchlistResumeSweep(env, { now });
+    expect(result).toMatchObject({ sent: 1 });
+
+    expect(sendCloudflareEmail).toHaveBeenCalledTimes(1);
+    const call = sendCloudflareEmail.mock.calls[0]?.[1] as {
+      unsubscribeUrl: string | null;
+    };
+    expect(call.unsubscribeUrl).toBe("https://0509.io/unsubscribe?token=abc");
+  });
+});
