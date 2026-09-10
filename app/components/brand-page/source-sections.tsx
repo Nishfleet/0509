@@ -109,7 +109,7 @@ function GoogleAdsBrandSection({ snapshot }: { snapshot: SourceSnapshotRecord })
   // Guard a malformed or partially-shaped stored payload: a missing formatMix
   // must not throw, and a formatMix missing one key must not render
   // "text undefined" on a public page.
-  const rawFm = payload.formatMix ?? {};
+  const rawFm: Partial<GoogleAdsPayload["formatMix"]> = payload.formatMix ?? {};
   const fm = {
     text: typeof rawFm.text === "number" ? rawFm.text : 0,
     image: typeof rawFm.image === "number" ? rawFm.image : 0,
