@@ -92,8 +92,10 @@ describe("DashboardShell accessibility (WP-43)", () => {
 
     const current = Array.from(view.querySelectorAll('a[aria-current="page"]'));
     expect(current.length).toBeGreaterThan(0);
+    // Route diet phase 1 (#2213): /app/watchlists is a member page of the
+    // Competitors destination, so the Competitors row carries aria-current.
     for (const link of current) {
-      expect(link.getAttribute("href")).toBe("/app/watchlists");
+      expect(link.getAttribute("href")).toBe("/app");
     }
   });
 
@@ -116,15 +118,15 @@ describe("DashboardShell accessibility (WP-43)", () => {
     expect(mobile?.textContent).not.toContain("Ops");
   });
 
-  it("keeps the mobile row to the five destinations — member pages live inside them", async () => {
+  it("keeps the mobile row to the seven destinations — member pages live inside them", async () => {
     const view = await renderShell("/app/presence", {
       showPresenceNav: true,
     });
     const mobile = view.querySelector('nav[aria-label="Workspace sections"]');
-    // PR-5a: Presence is a member of Watch, not a strip peer; staff ops
-    // left the customer shell entirely (G4).
+    // Route diet phase 1 (#2213): Presence is a member of Competitors, not a
+    // strip peer; staff ops left the customer shell entirely (G4).
     expect(mobile?.textContent).not.toContain("Presence");
-    expect(mobile?.textContent).toContain("Watch");
+    expect(mobile?.textContent).toContain("Competitors");
     expect(mobile?.textContent).toContain("Settings");
     expect(mobile?.textContent).not.toContain("Ops");
   });

@@ -409,7 +409,7 @@ describe("DigestIntelligence", () => {
 
 describe("readDigestSourceUrl", () => {
   it("skips unsafe source candidates and returns the first safe fallback", async () => {
-    const { readDigestSourceUrl } = await import("~/routes/app.digests");
+    const { readDigestSourceUrl } = await import("~/routes/app.briefs");
 
     expect(
       readDigestSourceUrl({

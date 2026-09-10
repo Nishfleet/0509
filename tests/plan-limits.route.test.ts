@@ -314,7 +314,7 @@ describe("digest access", () => {
       listDigests,
     }));
 
-    const { loader } = await import("~/routes/app.digests");
+    const { loader } = await import("~/routes/app.briefs");
     const result = await loader({
       context: createContext(),
       request: new Request("http://localhost/app/digests"),
@@ -363,7 +363,7 @@ describe("digest access", () => {
       listDigests,
     }));
 
-    const { loader } = await import("~/routes/app.digests");
+    const { loader } = await import("~/routes/app.briefs");
     const result = await loader({
       context: createContext(),
       request: new Request("http://localhost/app/digests"),
@@ -493,7 +493,7 @@ describe("pricing CTA rendering", () => {
       },
     });
 
-    const { default: DigestsRoute } = await import("~/routes/app.digests");
+    const { default: DigestsRoute } = await import("~/routes/app.briefs");
     const markup = renderToStaticMarkup(createElement(DigestsRoute));
 
     expect(markup).toContain("Competitor change briefs");

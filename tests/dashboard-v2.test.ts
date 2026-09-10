@@ -6,7 +6,6 @@ import { describe, expect, it } from "vitest";
 import { DashboardShell } from "~/components/dashboard-shell";
 import {
   DASHBOARD_PRIMARY_NAV,
-  DASHBOARD_SETTINGS_NAV,
   buildDashboardMobileNav,
   filterDashboardNav,
 } from "~/lib/dashboard-navigation";
@@ -29,93 +28,108 @@ const PRIMARY_APP_ROUTE_FILES = readdirSync("app/routes").filter(
 );
 
 /**
- * PR-5a — the ratified 5-destination IA (design-unification, Nish
- * 2026-08-08). Five customer jobs in the rail, no disclosure, and nothing
- * advertised that the plan cannot use. Member pages stay URL-reachable and
- * keep their owning destination's rail row active via activePaths.
+ * Route diet phase 1 (#2213) — the 8-screen model, 7 static rail rows.
+ * The rail shows the seven destinations a logged-in user sees in the nav
+ * for the eight screens; `/app/c/:id` is a drill-in, not a rail row. All
+ * member routes fold into a destination via redirects, so a folded route
+ * keeps its owning destination's rail row active via activePaths.
  */
 const CUSTOMER_NAV_CASES = [
-  { label: "Today", path: "/app", group: "primary" },
-  { label: "Watch", path: "/app/watchlists", group: "primary" },
-  { label: "Library", path: "/app/collections", group: "primary" },
-  { label: "Deliver", path: "/app/deliver", group: "primary" },
-  { label: "Settings", path: "/app/settings", group: "primary" },
-  { label: "Billing & usage", path: "/app/billing", group: "settings" },
-  { label: "Account & security", path: "/app/account", group: "settings" },
+  { label: "Competitors", path: "/app" },
+  { label: "Briefs", path: "/app/briefs" },
+  { label: "Account & Billing", path: "/app/account" },
+  { label: "Team", path: "/app/team" },
+  { label: "API", path: "/app/api" },
+  { label: "Settings", path: "/app/settings" },
+  { label: "Help", path: "/app/help" },
 ] as const;
 
-describe("dashboard v2 navigation", () => {
-  it.each(CUSTOMER_NAV_CASES)("maps $label to $path in the $group rail", ({ label, path, group }) => {
-    const sections = group === "primary" ? DASHBOARD_PRIMARY_NAV : DASHBOARD_SETTINGS_NAV;
-    const items = sections.flatMap((section) => section.items);
+describe("dashboard navigation (route diet phase 1)", () => {
+  it.each(CUSTOMER_NAV_CASES)("maps $label to $path in the rail", ({ label, path }) => {
+    const items = DASHBOARD_PRIMARY_NAV.flatMap((section) => section.items);
     expect(items).toContainEqual(expect.objectContaining({ label, to: path }));
-    const other = group === "primary" ? DASHBOARD_SETTINGS_NAV : DASHBOARD_PRIMARY_NAV;
-    expect(other.flatMap((section) => section.items).map((item) => item.to)).not.toContain(path);
   });
 
-  it("keeps the rail to five destinations — the ratified IA", () => {
+  it("keeps the rail to seven destinations — the 8-screen route diet", () => {
     const visible = filterDashboardNav(DASHBOARD_PRIMARY_NAV, {
       showPresence: false,
     }).flatMap((section) => section.items);
-    expect(visible).toHaveLength(5);
+    expect(visible).toHaveLength(7);
     // Every section is ungrouped: no mono label may reappear above a row.
     expect(DASHBOARD_PRIMARY_NAV.every((section) => section.title === undefined)).toBe(true);
-    expect(DASHBOARD_SETTINGS_NAV.every((section) => section.title === undefined)).toBe(true);
-    // The disclosure holds the seven long-dwell settings routes.
-    expect(DASHBOARD_SETTINGS_NAV.flatMap((section) => section.items)).toHaveLength(7);
+    // Seven rows in one group — the Settings disclosure constant is gone.
+    expect(DASHBOARD_PRIMARY_NAV).toHaveLength(1);
   });
 
-  it("exposes the unified 5-destination IA and retires the old row soup", () => {
+  it("exposes the 8-screen model and retires the row soup", () => {
     const primaryLabels = DASHBOARD_PRIMARY_NAV.flatMap((section) =>
       section.items.map((item) => item.label),
     );
-    expect(primaryLabels).toEqual(["Today", "Watch", "Library", "Deliver", "Settings"]);
+    expect(primaryLabels).toEqual([
+      "Competitors", "Briefs", "Account & Billing", "Team", "API", "Settings",
+      "Help",
+    ]);
     // Old destinations survive as URLs owned by a destination, never as rows.
     for (const retired of [
-      "Overview", "Competitors", "Presence", "Search", "Briefs",
+      "Today", "Watch", "Library", "Deliver", "Presence", "Search",
       "Collections", "Reports", "Shared links", "Client rooms",
     ]) {
       expect(primaryLabels).not.toContain(retired);
     }
-    const deliver = DASHBOARD_PRIMARY_NAV[0].items.find((item) => item.label === "Deliver");
-    expect(deliver?.activePaths).toEqual([
-      "/app/digests", "/app/reports", "/app/shares", "/app/clients",
+    const competitors = DASHBOARD_PRIMARY_NAV[0].items.find(
+      (item) => item.label === "Competitors",
+    );
+    expect(competitors?.activePaths).toContain("/app/c");
+    expect(competitors?.activePaths).toContain("/app/watchlists");
+    expect(competitors?.activePaths).toContain("/app/presence");
+    const briefs = DASHBOARD_PRIMARY_NAV[0].items.find((item) => item.label === "Briefs");
+    expect(briefs?.activePaths).toEqual([
+      "/app/digests", "/app/clients", "/app/deliver", "/app/shares", "/app/reports",
     ]);
     const settings = DASHBOARD_PRIMARY_NAV[0].items.find((item) => item.label === "Settings");
-    expect(settings?.activePaths).toContain("/app/billing");
-    expect(settings?.activePaths).toContain("/app/account");
+    expect(settings?.activePaths).toContain("/app/notifications");
+    expect(settings?.activePaths).toContain("/app/source-access");
+    expect(settings?.activePaths).not.toContain("/app/billing");
+    expect(settings?.activePaths).not.toContain("/app/team");
   });
 
-  it.each([
-    { label: "Today", path: "/app" },
-    { label: "Watch", path: "/app/watchlists" },
-    { label: "Library", path: "/app/collections" },
-    { label: "Deliver", path: "/app/deliver" },
-    { label: "Settings", path: "/app/settings" },
-  ] as const)("keeps $label reachable on mobile at $path", ({ label, path }) => {
-    expect(buildDashboardMobileNav({ showPresence: false })).toContainEqual(
-      expect.objectContaining({ label, to: path }),
-    );
-  });
+  it.each(CUSTOMER_NAV_CASES)(
+    "keeps $label reachable on mobile at $path",
+    ({ label, path }) => {
+      expect(buildDashboardMobileNav({ showPresence: false })).toContainEqual(
+        expect.objectContaining({ label, to: path }),
+      );
+    },
+  );
 
-  it("keeps mobile to the five destinations — never a strip of sixteen", () => {
-    // Staff ops left the customer app entirely (G4); the strip is the five
-    // customer destinations for everyone.
+  it("keeps mobile to the same seven destinations as the rail", () => {
     const mobile = buildDashboardMobileNav({ showPresence: true });
     expect(mobile.map((item) => item.label)).toEqual([
-      "Today", "Watch", "Library", "Deliver", "Settings",
+      "Competitors", "Briefs", "Account & Billing", "Team", "API",
+      "Settings", "Help",
     ]);
     expect(new Set(mobile.map((item) => item.to)).size).toBe(mobile.length);
   });
 
-  it("presence is never a rail row — it lives inside Watch", () => {
-    // PR-5a: an entity is a tracked thing, not a parallel product. The
-    // Watch board carries the doorway when the plan is entitled; the rail
-    // stays five rows for everyone.
+  it("the Competitor detail is a drill-in, never a rail row", () => {
+    const labels = DASHBOARD_PRIMARY_NAV.flatMap((section) =>
+      section.items.map((item) => item.label),
+    );
+    // `/app/c/:id` is reached by opening a competitor, not from a row.
+    expect(labels).not.toContain("Competitor");
+    const competitors = DASHBOARD_PRIMARY_NAV[0].items.find(
+      (item) => item.label === "Competitors",
+    );
+    expect(competitors?.activePaths).toContain("/app/c");
+  });
+
+  it("presence is never a rail row — the drill-in owns /app/presence", () => {
     const withPresence = filterDashboardNav(DASHBOARD_PRIMARY_NAV, { showPresence: true });
     expect(withPresence.flatMap((s) => s.items).some((item) => item.label === "Presence")).toBe(false);
-    const watch = DASHBOARD_PRIMARY_NAV[0].items.find((item) => item.label === "Watch");
-    expect(watch?.activePaths).toContain("/app/presence");
+    const competitors = DASHBOARD_PRIMARY_NAV[0].items.find(
+      (item) => item.label === "Competitors",
+    );
+    expect(competitors?.activePaths).toContain("/app/presence");
   });
 });
 
@@ -149,11 +163,31 @@ describe("dashboard v2 shell", () => {
   });
 
   it("wraps primary app routes in DashboardPage except staff ops", () => {
+    // Route diet phase 1 (#2213): folded routes are now redirect stubs that
+    // render nothing, so they are excluded the same way ops is. The new
+    // destinations (app.c.$id, app.briefs, app.help, app.settings, ...) keep
+    // DashboardPage; app.api re-exports the unlocked UI like
+    // app.developer-access did.
     const wrapperRoutes = new Set([
-      "app.developer-access.tsx",
+      // Pure redirect stubs (route diet phase 1, #2213).
+      "app.collections.tsx",
+      "app.deliver.tsx",
+      "app.clients.tsx",
+      "app.shares.tsx",
+      "app.billing.tsx",
+      "app.support.tsx",
+      "app.digests.tsx",
+      "app.presence.tsx",
+      "app.presence.$entityId.tsx",
+      "app.reports.tsx",
       "app.source-access.tsx",
-      // Pure redirect since the subtraction pass (S5) — renders nothing.
+      "app.developer-access.tsx",
+      "app.watchlists.$watchlistId.tsx",
+      // UI-shell re-exports / pure redirects.
       "app.sources.tsx",
+      "app.api.tsx",
+      // Re-exports the board's own detail screen (route diet phase 1, #2213).
+      "app.c.$id.tsx",
     ]);
     const missing = PRIMARY_APP_ROUTE_FILES.filter((file) => {
       if (file === "ops.tsx") return false;
@@ -215,14 +249,22 @@ describe("dashboard shell render", () => {
     expect(shellSource).toContain("f9-cursor-main");
   });
 
-  it("keeps signed-in mobile utilities one hop away inside Settings", () => {
-    // PR-5a: support and billing are member pages of the Settings
-    // destination — reachable from the mobile Settings row, not peers in
-    // the strip.
+  it("keeps signed-in utilities one hop from their owning rail row", () => {
+    // Route diet phase 1: billing folds into Account & Billing, support
+    // into Help, and notifications/sources into Settings — each one hop from
+    // its owning row, never a peer in the strip.
+    const account = DASHBOARD_PRIMARY_NAV[0].items.find(
+      (item) => item.label === "Account & Billing",
+    );
+    expect(account?.activePaths).toContain("/app/billing");
+    const help = DASHBOARD_PRIMARY_NAV[0].items.find((item) => item.label === "Help");
+    expect(help?.activePaths).toContain("/app/support");
     const settings = DASHBOARD_PRIMARY_NAV[0].items.find((item) => item.label === "Settings");
-    expect(settings?.activePaths).toContain("/app/support");
-    expect(settings?.activePaths).toContain("/app/billing");
+    expect(settings?.activePaths).toContain("/app/notifications");
+    expect(settings?.activePaths).toContain("/app/source-access");
     const mobile = buildDashboardMobileNav({ showPresence: false });
     expect(mobile.map((item) => item.label)).toContain("Settings");
+    expect(mobile.map((item) => item.label)).toContain("Account & Billing");
+    expect(mobile.map((item) => item.label)).toContain("Help");
   });
 });
