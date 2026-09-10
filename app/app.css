@@ -8430,6 +8430,9 @@ reds soften --- */
   border: 2.5px solid var(--ed-rule);
   background: var(--ed-surface);
   box-shadow: var(--ed-shadow);
+  /* Hash landings and Gate-B's scrollIntoView({block:"start"}) must not
+     tuck the tracking submit 6px above the visual viewport (#2513). */
+  scroll-margin-top: 12px;
 }
 
 .f9-evidence-setup-header {
@@ -11607,6 +11610,30 @@ a.f9-wk-btn {
 
   .f9-dash-page-app .f9-wk-rail {
     display: none;
+  }
+
+  /* Journey 2 mobile: the tracking submit sat 5.7px above the fold after
+     fill()+hash reset because align-items:end walked the CTA up a shared
+     row. Stack it under the field with start alignment, and keep 8px of
+     section padding so box.y stays >= 0 (#2513). */
+  .f9-wk-page .f9-evidence-setup-card {
+    padding-top: 8px;
+  }
+
+  .f9-wk-page .f9-evidence-setup-primary {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .f9-wk-page .f9-evidence-setup-primary > .f9-evidence-cta {
+    grid-column: 1;
+    grid-row: 2;
+    align-self: start;
+  }
+
+  .f9-wk-page .f9-evidence-setup-primary > .f9-evidence-setup-hint {
+    grid-column: 1;
+    grid-row: 3;
   }
 
   .f9-wk-head {
