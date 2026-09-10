@@ -2,7 +2,6 @@ const PRIMARY_HOST = "0509.io";
 const APEX_REDIRECT_HOSTS = new Set(["0509.in", "www.0509.in", "www.0509.io"]);
 const API_REDIRECT_HOSTS = new Set(["api.0509.in"]);
 const REDIRECT_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
-const PROVIDER_CHALLENGE_PATHS = new Set(["/api/delivery-status/whatsapp"]);
 
 export function primaryDomainRedirect(request: Request): Response | null {
   if (!REDIRECT_METHODS.has(request.method.toUpperCase())) {
@@ -10,10 +9,6 @@ export function primaryDomainRedirect(request: Request): Response | null {
   }
 
   const url = new URL(request.url);
-  if (PROVIDER_CHALLENGE_PATHS.has(url.pathname)) {
-    return null;
-  }
-
   const hostname = url.hostname.toLowerCase();
   // Keep the canonical www health probe on the responding Worker so release
   // gates prove that alias instead of following its ordinary apex redirect.
