@@ -14,6 +14,7 @@ Use this file as the instruction entrypoint for non-Claude coding agents in this
 
 - This repo is the `0509` product codebase.
 - Prefer shipping-focused changes over speculative infrastructure unless explicitly requested.
+- All Playwright e2e specs live in `e2e/`. Do not add specs under `tests/e2e/` — it no longer exists (issue #2379).
 
 ## Lane Evidence Records
 
