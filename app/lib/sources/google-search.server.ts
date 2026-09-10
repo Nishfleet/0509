@@ -31,8 +31,9 @@ import { GoogleSearchSection } from "~/components/sources/google-search";
  *
  * Daily gate: the monitor cron REGULAR_MONITORING_CRON (workers/schedule.ts,
  * every 3 hours) checks each competitor 8x/day. Without a gate that is
- * 8 x 30 = 240 Decodo calls per competitor per month, so the 1,500/month
- * free budget would cap the fleet at ~6 competitors. Holding the source to
+ * 8 x 30 = 240 Decodo calls per competitor per month, so the 1,800/month
+ * standard budget (DECODO_LIMITS.std in decodo-budget.server.ts) would cap
+ * the fleet at ~7 competitors. Holding the source to
  * one fetch per UTC calendar day costs <= 30 calls per competitor per month,
  * which fits ~50 competitors inside the same budget. A stored snapshot whose
  * `fetchedAt` is already on today's UTC date short-circuits the fetch —

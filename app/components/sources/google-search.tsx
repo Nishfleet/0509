@@ -71,22 +71,14 @@ function formatCheckedDate(iso: string | null | undefined): string {
   }
 }
 
-const CHANGE_CATEGORIES = new Set(["new_sponsored_advertisers", "new_top10_domains"]);
-
 /**
- * One compact count of the diff entries this section's lists can show:
- * new sponsored advertisers and new top-10 domains since the last check.
+ * One compact count of the diff entries since the last check. Every emitted
+ * category is a real change the alert path fired, so the count is all of
+ * them — filtering to only the categories the lists render would report
+ * "0 changes" while alerts went out.
  */
 function diffChangeCount(diff: SourceChange[]): number {
-  let n = 0;
-  for (const change of diff) {
-    const meta = change?.metadata as { category?: unknown } | null;
-    if (meta && typeof meta === "object" && typeof meta.category === "string" &&
-        CHANGE_CATEGORIES.has(meta.category)) {
-      n += 1;
-    }
-  }
-  return n;
+  return diff.length;
 }
 
 /** Only an absolute http(s) url is ever used as a link target. */
