@@ -28,6 +28,7 @@ import {
   sendWeeklyBusinessNumbers,
 } from "../app/lib/monitoring.server";
 import { sendMonthlyCustomerRecaps } from "../app/lib/monthly-recap.server";
+import { runOnboardingNudgeSweep } from "../app/lib/onboarding-nudge.server";
 import {
   isPublicMarkdownPage,
   buildLlmsText,
@@ -514,6 +515,24 @@ export default {
           },
           (error) =>
             reportScheduledTaskFailure(env, "demo_brand_backfill", error),
+        ),
+      );
+      // Abandoned-onboarding nudge (issue #2114): rides the same 04:00 daily
+      // rail as the demo-brand backfill for the same release-soak reason (a
+      // new wrangler cron would escape the CHECK that accepts only the four
+      // production crons). The sweep selects users created 24-48h ago with
+      // zero watchlists and no prior nudge, gates each on the 09:00-11:00
+      // local send window (IST default), and sends exactly one plain-text-
+      // first email per user, ever, via the mandated delivery.server path.
+      ctx.waitUntil(
+        runOnboardingNudgeSweep(env).then(
+          (result) => {
+            if (result.selected > 0) {
+              console.log("onboarding nudge sweep completed", result);
+            }
+          },
+          (error) =>
+            reportScheduledTaskFailure(env, "onboarding_nudge_sweep", error),
         ),
       );
       // Nightly sitemap-timeline cohort backfill (issue #1958): calendly.com
