@@ -67,29 +67,29 @@ function ad(overrides: Partial<AdRecord> = {}): AdRecord {
 
 // Brand-owned creative: advertiser page is the brand itself, with the
 // search-v2 pipeline's verified advertiser-domain match attached.
-function ownedAd(id: string): AdRecord {
+function ownedAd(id: string, domain: string): AdRecord {
   return ad({
     metaAdId: id,
     advertiser: "Nykaa",
-    landingPageUrl: "https://www.nykaa.com/lp",
+    landingPageUrl: `https://www.${domain}/lp`,
     domainMatch: {
       level: "verified_advertiser_domain",
-      reason: "Advertiser domain matches nykaa.com",
-      matchedDomain: "nykaa.com",
+      reason: `Advertiser domain matches ${domain}`,
+      matchedDomain: domain,
     },
   });
 }
 
 // Verified-linked creative that is NOT the brand's own ad: the landing link
 // evidence is verified, but the advertiser is an unrelated page (reseller).
-function verifiedNotOwnedAd(id: string): AdRecord {
+function verifiedNotOwnedAd(id: string, domain: string): AdRecord {
   return ad({
     metaAdId: id,
     advertiser: "Beauty Drops",
     domainMatch: {
       level: "registrable_domain",
-      reason: "Landing page matches nykaa.com",
-      matchedDomain: "nykaa.com",
+      reason: `Landing page matches ${domain}`,
+      matchedDomain: domain,
     },
   });
 }
@@ -105,9 +105,9 @@ function demoAd(id: string): AdRecord {
   return ad({ metaAdId: id, advertiser: "Sample Co", source: "demo" });
 }
 
-function cacheEntry() {
+function cacheEntry(domain = "nykaa.com") {
   return {
-    cacheKey: "meta_library_browser:fnv1a-parity:all:page-1",
+    cacheKey: `meta_library_browser:fnv1a-parity:all:page-1`,
     provider: "meta_library_browser",
     routeContext: "public_search",
     queryFingerprint: "fnv1a-parity",
@@ -115,9 +115,9 @@ function cacheEntry() {
     cursor: null,
     payload: {
       ads: [
-        ...Array.from({ length: OWNED_ADS }, (_, i) => ownedAd(`owned-${i}`)),
+        ...Array.from({ length: OWNED_ADS }, (_, i) => ownedAd(`owned-${i}`, domain)),
         ...Array.from({ length: VERIFIED_NOT_OWNED_ADS }, (_, i) =>
-          verifiedNotOwnedAd(`verified-${i}`),
+          verifiedNotOwnedAd(`verified-${i}`, domain),
         ),
         ...Array.from({ length: UNVERIFIED_ADS }, (_, i) => unverifiedAd(`unv-${i}`)),
         ...Array.from({ length: DEMO_ADS }, (_, i) => demoAd(`demo-${i}`)),
@@ -216,8 +216,8 @@ describe("home proof brief ↔ brand page count parity (#1468)", () => {
     expect(brief?.activeAdCount).toBe(SNAPSHOT_AD_COUNT);
   });
 
-  it("home /api/demo-proof and /ads/nykaa.com report the same total for the same visitor", { timeout: 30_000 }, async () => {
-    installMocks({ entry: cacheEntry() });
+  it("home /api/demo-proof and /ads/nike.com report the same total for the same visitor", { timeout: 30_000 }, async () => {
+    installMocks({ entry: cacheEntry("nike.com") });
 
     const { loader: apiLoader } = await import("~/routes/api.demo-proof");
     const apiResponse = await apiLoader({
@@ -234,8 +234,8 @@ describe("home proof brief ↔ brand page count parity (#1468)", () => {
     const { loader: adsLoader } = await import("~/routes/ads.$domain");
     const page = await adsLoader({
       context: createContext({ DB: {} }),
-      params: { domain: "nykaa.com" },
-      request: new Request("https://0509.io/ads/nykaa.com", {
+      params: { domain: "nike.com" },
+      request: new Request("https://0509.io/ads/nike.com", {
         headers: { "cf-ipcountry": "DE" },
       }),
     } as never);
@@ -254,7 +254,7 @@ describe("home proof brief ↔ brand page count parity (#1468)", () => {
   });
 
   it("home and brand page resolve the SAME cache row (same first discovery-cache lookup)", async () => {
-    const mocks = installMocks({ entry: cacheEntry() });
+    const mocks = installMocks({ entry: cacheEntry("nike.com") });
 
     const { loader: apiLoader } = await import("~/routes/api.demo-proof");
     await apiLoader({
@@ -270,8 +270,8 @@ describe("home proof brief ↔ brand page count parity (#1468)", () => {
     const { loader: adsLoader } = await import("~/routes/ads.$domain");
     await adsLoader({
       context: createContext({ DB: {} }),
-      params: { domain: "nykaa.com" },
-      request: new Request("https://0509.io/ads/nykaa.com", {
+      params: { domain: "nike.com" },
+      request: new Request("https://0509.io/ads/nike.com", {
         headers: { "cf-ipcountry": "DE" },
       }),
     } as never);
@@ -281,5 +281,31 @@ describe("home proof brief ↔ brand page count parity (#1468)", () => {
     // pin is ":all:", which FAILS this assertion for a geolocated visitor.
     expect(homeFirstLookupKey).toBe(pageFirstLookupKey);
     expect(homeFirstLookupKey).not.toContain(":all:");
+  });
+
+  it("features a brand the visitor recognizes: nike for US/EU/unknown, nykaa for India (#2281)", async () => {
+    const { featuredWebsiteForVisitorCountry } = await import("~/lib/public-proof.server");
+
+    // US/EU/unknown visitors get a Western flagship.
+    expect(featuredWebsiteForVisitorCountry("United States")).toBe("nike.com");
+    expect(featuredWebsiteForVisitorCountry("Germany")).toBe("nike.com");
+    expect(featuredWebsiteForVisitorCountry("all")).toBe("nike.com");
+    // Indian visitors get an Indian flagship.
+    expect(featuredWebsiteForVisitorCountry("India")).toBe("nykaa.com");
+  });
+
+  it("loadPublicProofBrief reads the featured brand's cache row for the visitor country (#2281)", { timeout: 30_000 }, async () => {
+    installMocks({ entry: cacheEntry("nike.com") });
+
+    const { loadPublicProofBrief } = await import("~/lib/public-proof.server");
+    const brief = await loadPublicProofBrief({ DB: {} } as never, {
+      now: NOW,
+      visitorCountry: "Germany",
+    });
+
+    expect(brief).not.toBeNull();
+    // A German visitor is shown the Western flagship, not the Indian one.
+    expect(brief?.website).toBe("nike.com");
+    expect(brief?.adCount).toBe(SNAPSHOT_AD_COUNT);
   });
 });

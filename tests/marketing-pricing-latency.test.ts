@@ -75,6 +75,7 @@ describe("marketing pricing SSR", () => {
       proofBrief: null,
       indexableAdsLinks: [],
       changeMark: null,
+      featuredDomain: "nike.com",
     });
     expect(publicCommercialLaunchSummary).toHaveBeenCalledWith({
       DODO_0509_API_KEY: "provider-key",
@@ -110,6 +111,7 @@ describe("marketing pricing SSR", () => {
       proofBrief: null,
       indexableAdsLinks: [],
       changeMark: null,
+      featuredDomain: "nike.com",
     });
   });
 
@@ -149,6 +151,7 @@ describe("marketing pricing SSR", () => {
       proofBrief: null,
       indexableAdsLinks: [],
       changeMark: null,
+      featuredDomain: "nike.com",
     });
     expect(previewDodo0509PlanPrices).toHaveBeenCalledTimes(1);
     expect(publicCommercialLaunchSummary).toHaveBeenCalledWith({
@@ -223,6 +226,7 @@ describe("marketing pricing SSR", () => {
     vi.doMock("~/lib/commercial-launch-gate.server", () => ({ publicCommercialLaunchSummary }));
     vi.doMock("~/lib/public-proof.server", () => ({
       loadPublicProofBrief: vi.fn().mockResolvedValue(null),
+      featuredWebsiteForVisitorCountry: vi.fn(() => "nike.com"),
     }));
 
     const { loader } = await import("~/routes/marketing");

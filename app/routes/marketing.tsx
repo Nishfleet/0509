@@ -17,7 +17,11 @@ import {
 } from "~/lib/seo";
 import { noPricingPreview, pricingPreviewWithinBound } from "~/lib/pricing-preview.server";
 import type { RootLoaderData } from "~/root";
-import { pickFeaturedAdsInternalLink, type IndexableAdsLink } from "~/lib/ads-internal-links";
+import {
+  displayNameFromDomain,
+  pickFeaturedAdsInternalLink,
+  type IndexableAdsLink,
+} from "~/lib/ads-internal-links";
 import type { PublicProofBrief } from "~/lib/public-proof.server";
 import type { PublicChangeMark } from "~/lib/public-change-mark.server";
 
@@ -31,8 +35,17 @@ export type { LocalPricingPreview } from "~/components/pricing-section";
 // Library coverage is named as a public source below and in the FAQ.
 const marketingDescription =
   "See the Meta ads any competitor is running right now — free, no account. Five to Nine watches the offer behind the ads and emails proof when it changes.";
-const publicSearchTrialPath =
-  "/search?query=nykaa&mode=advertiser&website=https%3A%2F%2Fnykaa.com";
+
+/**
+ * The free-preview search target for the featured demo brand. The brand is
+ * chosen by the visitor's home market (issue #2281) so the CTA shows a brand
+ * the visitor recognizes — nike for US/EU/unknown, nykaa for India.
+ */
+function publicSearchTrialPathFor(domain: string): string {
+  const host = domain.replace(/^www\./, "");
+  const query = host.split(".")[0] ?? host;
+  return `/search?query=${query}&mode=advertiser&website=${encodeURIComponent(`https://${host}`)}`;
+}
 
 export const links: LinksFunction = () => canonicalLinks("/");
 
@@ -69,6 +82,12 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const visitorCountry = defaultCountryForVisitor(
     getOptionalCloudflareContext(context)?.country ?? request.headers.get("cf-ipcountry"),
   );
+  // The featured demo brand, chosen by the visitor's home market (issue
+  // #2281). The proof brief, the "Try with <brand>" CTA, and the featured
+  // /ads link all use the SAME domain so the home never shows one brand in
+  // the brief and a different one in the CTA.
+  const { featuredWebsiteForVisitorCountry } = await import("~/lib/public-proof.server");
+  const featuredDomain = featuredWebsiteForVisitorCountry(visitorCountry);
 
   let proofBrief: PublicProofBrief | null = null;
   try {
@@ -115,12 +134,12 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     // explicitly-set cache-control on cacheable HTML paths instead of
     // stamping the generic public, max-age=300 policy.
     return Response.json(
-      { pricingPreview, commercialLaunch, proofBrief, indexableAdsLinks, changeMark },
+      { pricingPreview, commercialLaunch, proofBrief, indexableAdsLinks, changeMark, featuredDomain },
       { headers: { "Cache-Control": "private, max-age=300", Vary: "cookie" } },
     );
   }
 
-  return { pricingPreview: noPricingPreview, commercialLaunch, proofBrief, indexableAdsLinks, changeMark };
+  return { pricingPreview: noPricingPreview, commercialLaunch, proofBrief, indexableAdsLinks, changeMark, featuredDomain };
 }
 
 /**
@@ -348,9 +367,16 @@ export default function MarketingRoute() {
   };
   const proofBrief = routeData.proofBrief ?? null;
   const changeMark = routeData.changeMark ?? null;
+  // The featured demo brand, chosen by the visitor's home market (issue
+  // #2281). Defaults to nykaa.com when the loader did not supply it (e.g. a
+  // test that mocks useLoaderData without the field) so the CTA and the
+  // featured /ads link stay consistent with the proof brief's default.
+  const featuredDomain = routeData.featuredDomain ?? "nykaa.com";
+  const publicSearchTrialPath = publicSearchTrialPathFor(featuredDomain);
+  const featuredBrandName = displayNameFromDomain(featuredDomain);
   const featuredAdsLink = pickFeaturedAdsInternalLink(
     routeData.indexableAdsLinks ?? [],
-    "nykaa.com",
+    featuredDomain,
   );
   const primaryCta = rootData.session ? "/app" : "/auth/signup";
   const primaryLabel = rootData.session ? "Open app" : "Create account";
@@ -684,7 +710,7 @@ export default function MarketingRoute() {
             </Form>
 
             <div className="f9-hero-proof-actions" aria-label="Proof brief before signup">
-              <Link to={publicSearchTrialPath}>Try with Nykaa</Link>
+              <Link to={publicSearchTrialPath}>Try with {featuredBrandName}</Link>
               <a href="#demo">Review the proof brief</a>
             </div>
 
