@@ -101,7 +101,7 @@ export function buildDomainProviderQuery(
   // term is a brand name, not a domain guess, and the matcher still requires a
   // row to land on the searched domain or one of its live aliases.
   void identityAliases;
-  return getCuratedProviderQuery(intent.registrableDomain) ??
+  return getCuratedProviderQuery(intent.registrableDomain ?? "") ??
     intent.registrableDomain ??
     intent.comparableHostname ??
     intent.originalInput;
