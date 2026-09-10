@@ -2790,4 +2790,103 @@ describe("search status copy", () => {
       }),
     ).toBe("We are checking this competitor now. Results should appear shortly.");
   });
+
+  it("defaults the anonymous /search payload to verified-before-Likely (issue #2289)", async () => {
+    // The public preview of a proof-first product must lead with rows it
+    // has actually verified, not the "Likely" leads it is not sure belong
+    // to the competitor. The anonymous default sort is verified_first, so
+    // every verified row sorts above every Likely row in the response
+    // payload. Counts and labels are unchanged.
+    const env = { DB: {} };
+    const likelyAd: AdRecord = {
+      ...baseAd,
+      metaAdId: "likely-active",
+      active: true,
+      firstSeenAt: "2025-01-01T00:00:00.000Z",
+      domainMatch: {
+        level: "likely_brand_name",
+        reason: "brand name fits",
+        matchedDomain: null,
+      },
+    };
+    const verifiedAd: AdRecord = {
+      ...baseAd,
+      metaAdId: "verified-inactive",
+      active: false,
+      firstSeenAt: "2026-01-01T00:00:00.000Z",
+      domainMatch: {
+        level: "exact_hostname",
+        reason: "landing page links to brand domain",
+        matchedDomain: "nykaa.com",
+      },
+    };
+    const sourceResult = {
+      // Source returns the Likely row first (active, recent) — the sort
+      // must reorder it below the verified row for anonymous sessions.
+      ads: [likelyAd, verifiedAd],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+      discoverySummary: null,
+      discoveryFailureClass: null,
+      verifiedCount: 1,
+      likelyCount: 1,
+      unmatchedCount: 0,
+    };
+    const hydratedResult = { ...sourceResult, cacheStatus: "miss" };
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => env) }));
+    vi.doMock("~/lib/data.server", () => ({ listCollections: vi.fn() }));
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforcePublicSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceSearchSelectionRateLimit: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver: vi.fn().mockResolvedValue(sourceResult),
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection: vi.fn().mockResolvedValue({
+        result: hydratedResult,
+        selectedAd: verifiedAd,
+      }),
+    }));
+
+    const { loader } = await import("~/routes/search");
+    const result = await unwrapLoaderResult(loader, {
+      context: createContext(env),
+      request: new Request("http://localhost/search?q=nykaa&country=all"),
+    } as never);
+
+    expect(result.session).toBeNull();
+    expect(result.result).toEqual(hydratedResult);
+    // The anonymous default sort (verified_first) puts every verified row
+    // above every Likely row, even when the Likely row is active and the
+    // verified row is inactive. Counts and labels are unchanged.
+    const { ANONYMOUS_DEFAULT_SEARCH_RESULT_SORT, sortAdsForSearchDisplay } =
+      await import("~/lib/search-sort");
+    expect(ANONYMOUS_DEFAULT_SEARCH_RESULT_SORT).toBe("verified_first");
+    const sorted = sortAdsForSearchDisplay(
+      (result.result as SearchResponse).ads,
+      ANONYMOUS_DEFAULT_SEARCH_RESULT_SORT,
+    );
+    expect(sorted.map((item) => item.metaAdId)).toEqual([
+      "verified-inactive",
+      "likely-active",
+    ]);
+    // Counts and labels are unchanged by the sort.
+    expect((result.result as SearchResponse).verifiedCount).toBe(1);
+    expect((result.result as SearchResponse).likelyCount).toBe(1);
+  });
 });
