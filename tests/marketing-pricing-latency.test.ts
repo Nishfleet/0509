@@ -3,8 +3,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { pricingPlans, usageBundles } from "~/lib/pricing";
+import type { LocalPricingPreview } from "~/components/pricing-section";
 
-describe("marketing pricing SSR", () => {
+describe("marketing pricing is client-fetched", () => {
   beforeEach(() => {
     vi.resetModules();
   });
@@ -21,24 +22,19 @@ describe("marketing pricing SSR", () => {
     agencySaleOpen: false,
   };
 
-  const availablePreview = {
-    available: true,
-    provider: "dodo",
-    source: "dodo_checkout_preview",
-    country: "US",
-    adaptiveCurrency: true,
-    feesInclusive: true,
-    prices: {
-      starter: {
-        monthly: { display: "$99", amount: 9900, currency: "USD", billingCountry: "US" },
-      },
-    },
-    annualValidation: {},
-    usageBundles: {},
+  const expectedLoaderData = {
+    // The route declares the field for shape parity with /pricing, but the
+    // homepage never resolves a preview: it is always the sentinel.
+    pricingPreview: { available: false },
+    commercialLaunch,
+    proofBrief: null,
+    indexableAdsLinks: [],
+    changeMark: null,
+    featuredDomain: "nike.com",
   };
 
-  it("publishes the Dodo pricing preview in the loader when it responds within the SSR bound", async () => {
-    const previewDodo0509PlanPrices = vi.fn().mockResolvedValue(availablePreview);
+  it("keeps Dodo out of the homepage loader so `/` can be shared-cached", async () => {
+    const previewDodo0509PlanPrices = vi.fn();
     const publicCommercialLaunchSummary = vi.fn(() => commercialLaunch);
 
     vi.doMock("~/lib/dodo-pricing.server", () => ({ previewDodo0509PlanPrices }));
@@ -47,83 +43,33 @@ describe("marketing pricing SSR", () => {
     }));
     vi.doMock("~/lib/commercial-launch-gate.server", () => ({ publicCommercialLaunchSummary }));
 
-    const { headers, loader } = await import("~/routes/marketing");
-    const response = (await loader({
+    const marketing = await import("~/routes/marketing");
+    const result = await marketing.loader({
       context: { cloudflare: { env: {} } },
       request: new Request("https://0509.io/"),
-    } as never)) as Response;
+    } as never);
 
-    expect(previewDodo0509PlanPrices).toHaveBeenCalledTimes(1);
-    expect(response).toBeInstanceOf(Response);
-    // Country-specific prices are embedded in this HTML: it must be
-    // browser-only so a shared cache never replays one country's prices
-    // for another visitor.
-    expect(response.headers.get("cache-control")).toBe("private, max-age=300");
-    expect(response.headers.get("vary")).toContain("cookie");
-    // React Router only merges Set-Cookie from loader responses into the
-    // document; the route-level headers export must carry the rest through.
-    const documentHeaders = headers({
-      loaderHeaders: response.headers,
-      parentHeaders: new Headers(),
-      actionHeaders: new Headers(),
-      errorHeaders: undefined,
-    });
-    expect(documentHeaders.get("cache-control")).toBe("private, max-age=300");
-    await expect(response.json()).resolves.toEqual({
-      pricingPreview: availablePreview,
-      commercialLaunch,
-      proofBrief: null,
-      indexableAdsLinks: [],
-      changeMark: null,
-      featuredDomain: "nike.com",
-    });
+    // Issue #2389: buyer-country prices embedded in this document were the
+    // only reason the one public page that could be shared-cached was pinned
+    // to `private, max-age=300`. The loader no longer calls Dodo, so it
+    // returns plain loader data — never a Response carrying its own
+    // cache-control. With no route-set cache-control in play, the worker
+    // stamps the shared policy for `/` (asserted in
+    // tests/worker-security-headers.test.ts). This route must never grow a
+    // `headers` export again: that export was the only way a private
+    // cache-control reached the document, so a future one would silently
+    // un-cache `/` without failing any assertion here.
+    expect(previewDodo0509PlanPrices).not.toHaveBeenCalled();
+    expect(result).not.toBeInstanceOf(Response);
+    expect(result).toEqual(expectedLoaderData);
+    expect("headers" in marketing).toBe(false);
     expect(publicCommercialLaunchSummary).toHaveBeenCalledWith({
       DODO_0509_API_KEY: "provider-key",
     });
   });
 
-  it("falls back to the checkout-localized preview when Dodo exceeds the SSR bound", async () => {
-    vi.useFakeTimers();
+  it("never waits on a Dodo preview, so a slow provider cannot hold the document open", async () => {
     const previewDodo0509PlanPrices = vi.fn(() => new Promise<never>(() => {}));
-    const publicCommercialLaunchSummary = vi.fn(() => commercialLaunch);
-
-    vi.doMock("~/lib/dodo-pricing.server", () => ({ previewDodo0509PlanPrices }));
-    vi.doMock("~/lib/context.server", () => ({
-      getEnv: vi.fn(() => ({ DODO_0509_API_KEY: "provider-key" })),
-    }));
-    vi.doMock("~/lib/commercial-launch-gate.server", () => ({ publicCommercialLaunchSummary }));
-
-    const { loader } = await import("~/routes/marketing");
-    const loading = loader({
-      context: { cloudflare: { env: {} } },
-      request: new Request("https://0509.io/"),
-    } as never);
-
-    await vi.advanceTimersByTimeAsync(2_500);
-    const result = await loading;
-
-    // The homepage document never blocks on a slow Dodo preview: it degrades
-    // to the honest checkout-localized fallback and the client-side
-    // /api/pricing-preview fetch takes over near the fold.
-    expect(result).toEqual({
-      pricingPreview: { available: false },
-      commercialLaunch,
-      proofBrief: null,
-      indexableAdsLinks: [],
-      changeMark: null,
-      featuredDomain: "nike.com",
-    });
-  });
-
-  it("waits for a Dodo preview only up to the SSR bound, then falls back", async () => {
-    const previewDodo0509PlanPrices = vi.fn(
-      () => new Promise<never>(() => {}),
-    );
-    const commercialLaunch = {
-      scoutSaleOpen: true,
-      starterSaleOpen: true,
-      agencySaleOpen: false,
-    };
     const publicCommercialLaunchSummary = vi.fn(() => commercialLaunch);
 
     vi.doMock("~/lib/dodo-pricing.server", () => ({ previewDodo0509PlanPrices }));
@@ -142,112 +88,14 @@ describe("marketing pricing SSR", () => {
       context: { cloudflare: { env: {} } },
       request: new Request("https://0509.io/"),
     } as never);
+    const elapsed = Date.now() - start;
 
-    // The document waits only the bounded SSR window (2.5s), then degrades to
-    // the honest checkout-localized fallback instead of blocking the page.
-    expect(Date.now() - start).toBeGreaterThanOrEqual(2300);
-    expect(result).toEqual({
-      pricingPreview: { available: false },
-      commercialLaunch,
-      proofBrief: null,
-      indexableAdsLinks: [],
-      changeMark: null,
-      featuredDomain: "nike.com",
-    });
-    expect(previewDodo0509PlanPrices).toHaveBeenCalledTimes(1);
-    expect(publicCommercialLaunchSummary).toHaveBeenCalledWith({
-      DODO_0509_API_KEY: "provider-key",
-    });
-  });
-
-  it("renders real per-plan prices in the SSR document when the preview is available", async () => {
-    const preview = {
-      available: true,
-      provider: "dodo",
-      source: "dodo_checkout_preview",
-      country: "US",
-      adaptiveCurrency: true,
-      feesInclusive: true,
-      prices: {
-        scout: {
-          monthly: { display: "$19", amount: 1900, currency: "USD", billingCountry: "US" },
-          yearly: { display: "$152", amount: 15200, currency: "USD", billingCountry: "US" },
-        },
-        starter: {
-          monthly: { display: "$59", amount: 5900, currency: "USD", billingCountry: "US" },
-          yearly: { display: "$472", amount: 47200, currency: "USD", billingCountry: "US" },
-        },
-        agency: {
-          monthly: { display: "$199", amount: 19900, currency: "USD", billingCountry: "US" },
-          yearly: { display: "$1,592", amount: 159200, currency: "USD", billingCountry: "US" },
-        },
-      },
-      annualValidation: {
-        scout: {
-          valid: true,
-          reason: "valid_4_months_free",
-          monthlyAmount: 1900,
-          annualAmount: 15200,
-          expectedAnnualAmount: 15200,
-          currency: "USD",
-          billingCountry: "US",
-        },
-        starter: {
-          valid: true,
-          reason: "valid_4_months_free",
-          monthlyAmount: 5900,
-          annualAmount: 47200,
-          expectedAnnualAmount: 47200,
-          currency: "USD",
-          billingCountry: "US",
-        },
-        agency: {
-          valid: true,
-          reason: "valid_4_months_free",
-          monthlyAmount: 19900,
-          annualAmount: 159200,
-          expectedAnnualAmount: 159200,
-          currency: "USD",
-          billingCountry: "US",
-        },
-      },
-      usageBundles: {},
-    };
-    const previewDodo0509PlanPrices = vi.fn().mockResolvedValue(preview);
-    const publicCommercialLaunchSummary = vi.fn(() => ({
-      scoutSaleOpen: true,
-      starterSaleOpen: true,
-      agencySaleOpen: false,
-    }));
-
-    vi.doMock("~/lib/dodo-pricing.server", () => ({ previewDodo0509PlanPrices }));
-    vi.doMock("~/lib/context.server", () => ({
-      getEnv: vi.fn(() => ({ DODO_0509_API_KEY: "provider-key" })),
-    }));
-    vi.doMock("~/lib/commercial-launch-gate.server", () => ({ publicCommercialLaunchSummary }));
-    vi.doMock("~/lib/public-proof.server", () => ({
-      loadPublicProofBrief: vi.fn().mockResolvedValue(null),
-      featuredWebsiteForVisitorCountry: vi.fn(() => "nike.com"),
-    }));
-
-    const { loader } = await import("~/routes/marketing");
-    const response = (await loader({
-      context: { cloudflare: { env: {} } },
-      request: new Request("https://0509.io/"),
-    } as never)) as Response;
-
-    expect(response.status).toBe(200);
-    // Buyer-country prices must never be shared-cached: a DE/EUR variant could
-    // otherwise be replayed for a US visitor.
-    expect(response.headers.get("cache-control")).toBe("private, max-age=300");
-    const data = (await response.json()) as {
-      pricingPreview: { prices?: Record<string, Record<string, { display: string }>> };
-      commercialLaunch: { scoutSaleOpen: boolean };
-    };
-    expect(data.pricingPreview.prices?.scout?.monthly?.display).toBe("$19");
-    expect(data.pricingPreview.prices?.starter?.monthly?.display).toBe("$59");
-    expect(data.pricingPreview.prices?.agency?.monthly?.display).toBe("$199");
-    expect(data.commercialLaunch.scoutSaleOpen).toBe(true);
+    // The old 2.5s `pricingPreviewWithinBound` race is gone: a provider call
+    // that never settles cannot delay the document, because the provider is
+    // never called from this route at all.
+    expect(elapsed).toBeLessThan(2_000);
+    expect(previewDodo0509PlanPrices).not.toHaveBeenCalled();
+    expect(result).toEqual(expectedLoaderData);
   });
 });
 
@@ -319,6 +167,18 @@ describe("marketing pricing monthly cadence note", () => {
     return renderToStaticMarkup(createElement(MarketingRoute));
   }
 
+  async function renderPricingSection(
+    initialPricingPreview: LocalPricingPreview | null,
+  ): Promise<string> {
+    const { PricingSection } = await import("~/components/pricing-section");
+    return renderToStaticMarkup(
+      createElement(PricingSection, {
+        commercialLaunch: { scoutSaleOpen: true, starterSaleOpen: true, agencySaleOpen: false },
+        initialPricingPreview,
+      }),
+    );
+  }
+
   it("shows the monthly cadence note on every card in the cold anonymous fallback", async () => {
     loaderData = {
       pricingPreview: { available: false },
@@ -346,33 +206,32 @@ describe("marketing pricing monthly cadence note", () => {
 
   it("keeps the annual price note only on plans with annual checkout available", async () => {
     const valid = { valid: true, reason: "valid_4_months_free" };
-    loaderData = {
-      pricingPreview: {
-        available: true,
-        prices: {
-          scout: {
-            monthly: { display: "$49", amount: 4900, currency: "USD" },
-            yearly: { display: "$392", amount: 39200, currency: "USD" },
-          },
-          starter: {
-            monthly: { display: "$99", amount: 9900, currency: "USD" },
-            yearly: { display: "$792", amount: 79200, currency: "USD" },
-          },
-          agency: {
-            monthly: { display: "$249", amount: 24900, currency: "USD" },
-            yearly: { display: "$1992", amount: 199200, currency: "USD" },
-          },
+
+    // The resolved-preview render is exercised directly here: /pricing still
+    // resolves the preview server-side and hands it to the section, while the
+    // home route now leaves pricing to the client fetch (issue #2389).
+    const markup = await renderPricingSection({
+      available: true,
+      prices: {
+        scout: {
+          monthly: { display: "$49", amount: 4900, currency: "USD" },
+          yearly: { display: "$392", amount: 39200, currency: "USD" },
         },
-        annualValidation: {
-          scout: valid,
-          starter: valid,
-          agency: { valid: false, reason: "amount_mismatch" },
+        starter: {
+          monthly: { display: "$99", amount: 9900, currency: "USD" },
+          yearly: { display: "$792", amount: 79200, currency: "USD" },
+        },
+        agency: {
+          monthly: { display: "$249", amount: 24900, currency: "USD" },
+          yearly: { display: "$1992", amount: 199200, currency: "USD" },
         },
       },
-      commercialLaunch: { scoutSaleOpen: true, starterSaleOpen: true, agencySaleOpen: false },
-    };
-
-    const markup = await renderRoute();
+      annualValidation: {
+        scout: valid,
+        starter: valid,
+        agency: { valid: false, reason: "amount_mismatch" },
+      },
+    });
 
     // Monthly is selected: sale-open plans keep the truthful annual price
     // note, while the held Agency card (no annual checkout) stays on the

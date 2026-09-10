@@ -1,6 +1,6 @@
 import { Form, Link, useLoaderData, useRouteLoaderData } from "react-router";
 import { useEffect } from "react";
-import type { HeadersArgs, LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
+import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
@@ -16,7 +16,7 @@ import {
   webSiteJsonLd,
   type FaqJsonLdEntry,
 } from "~/lib/seo";
-import { noPricingPreview, pricingPreviewWithinBound } from "~/lib/pricing-preview.server";
+import { noPricingPreview } from "~/lib/pricing-preview.server";
 import type { RootLoaderData } from "~/root";
 import {
   displayNameFromDomain,
@@ -50,15 +50,6 @@ function publicSearchTrialPathFor(domain: string): string {
 
 export const links: LinksFunction = () => canonicalLinks("/");
 
-// React Router merges only Set-Cookie from loader responses into the document
-// response; every other header needs a route-level `headers` export. Without
-// this, the private cache-control set by the SSR-pricing loader would be
-// dropped and the worker would stamp the generic public policy on HTML that
-// embeds buyer-country prices.
-export function headers({ loaderHeaders }: HeadersArgs) {
-  return loaderHeaders;
-}
-
 export const meta: MetaFunction = () =>
   publicSeoMeta({
     title: "Five to Nine | Know when competitors change the offer",
@@ -75,7 +66,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { emitFunnelHomeView } = await import("~/lib/funnel-measurement.server");
   emitFunnelHomeView(env, request);
   const commercialLaunch = publicCommercialLaunchSummary(env);
-  const pricingPreview = await pricingPreviewWithinBound({ env, request });
   // Resolve the visitor country EXACTLY like the /ads/:domain loader so the
   // home proof brief reads the SAME discovery-cache row its linked brand
   // page reads — never different totals for the same brand on the same day
@@ -128,18 +118,18 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     indexableAdsLinks = [];
   }
 
-  if (pricingPreview.available) {
-    // Buyer-country prices are embedded in this HTML, so the response must
-    // never be shared-cached: a cached DE/EUR variant would otherwise be
-    // served to a US visitor (and vice versa). The worker honors an
-    // explicitly-set cache-control on cacheable HTML paths instead of
-    // stamping the generic public, max-age=300 policy.
-    return Response.json(
-      { pricingPreview, commercialLaunch, proofBrief, indexableAdsLinks, changeMark, featuredDomain },
-      { headers: { "Cache-Control": "private, max-age=300", Vary: "cookie" } },
-    );
-  }
-
+  // Pricing is deliberately NOT resolved here (issue #2389). Buyer-country
+  // Dodo prices embedded in this HTML were the reason this public page was
+  // pinned to `cache-control: private` instead of the worker's shared
+  // `public, max-age=300` policy, and they cost a 2.5s SSR bound plus ~8 Dodo
+  // checkout-preview calls per cold isolate. PricingSection fetches the
+  // already-existing /api/pricing-preview from the client instead, so this
+  // document carries no prices and rides the worker's shared policy. It is NOT
+  // country-invariant HTML — `proofBrief` and `featuredDomain` above are still
+  // chosen from the visitor's country (#2281/#1468), which a shared cache can
+  // replay across markets for the 5-minute max-age (filed as #2696). The route
+  // still declares the `pricingPreview` field so its data shape stays identical
+  // to /pricing; it is always the "no preview" sentinel here.
   return { pricingPreview: noPricingPreview, commercialLaunch, proofBrief, indexableAdsLinks, changeMark, featuredDomain };
 }
 
