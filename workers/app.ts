@@ -102,9 +102,11 @@ type GlobalEnvCarrier = typeof globalThis & {
 // bytes behind it.
 //
 // Scope is exactly the three prefixes the issue names and nothing else. The
-// `public` half of the cache-control is what decides storability, so a route
-// that answered `private` (the SSR pricing pages) can never enter the shared
-// cache even though it sits under a matching prefix.
+// `public` directive in the cache-control is what decides storability, which
+// is the second gate behind the prefix check: the routes that answer `private`
+// on purpose (the SSR pricing pages, which set it themselves) can never enter
+// the shared cache, and neither could a future private document under one of
+// the three prefixes.
 // ---------------------------------------------------------------------------
 
 /** Matches `PUBLIC_HTML_CACHE_CONTROL`'s max-age so the edge cache expires
