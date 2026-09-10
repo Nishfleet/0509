@@ -38,6 +38,15 @@ export default [
   route("api/billing/dodo/portal", "routes/api.billing.dodo.portal.ts"),
   route("api/billing/dodo/plan-change", "routes/api.billing.dodo.plan-change.ts"),
   route("api/demo-proof", "routes/api.demo-proof.ts"),
+  // Public capture-failure list for the /ads/:domain "What we checked, even
+  // when it didn't alert" expander (issue #2249). The page lazy-fetches
+  // `/api/ads/capture-failures/:domain` on expand; without this registration
+  // the fetch 404s on every /ads/:domain page.
+  route("api/ads/capture-failures/:domain", "routes/api.ads.capture-failures.$domain.ts"),
+  // Agency customer API: latest run capture-attempt history (issue #1289).
+  // Same unmounted-route class as capture-failures — caught by the
+  // routes-manifest test.
+  route("api/v1/watchlists/:watchlistId/runs/latest", "routes/api.v1.watchlists.$watchlistId.runs.latest.ts"),
   route("api/mcp", "routes/api.mcp.ts"),
   route("api/v1", "routes/api.v1.ts"),
   route("api/v1/actions", "routes/api.v1.actions.ts"),
