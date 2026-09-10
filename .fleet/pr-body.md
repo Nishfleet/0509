@@ -1,64 +1,82 @@
-## Why
+## Subdomain signals via Certificate Transparency (crt.sh) — issue #2198
 
-Issue #2108 — generalize signup attribution beyond the six hardcoded strings. Production D1 ground truth: 15 users, 0 signups Jul-Sep, 0 real paying customers. The existing `signup_source` column (migration 0080) has a SQL `CHECK` that admits exactly five literals, so any new slug or `ref:<eTLD+1>` referer marker is rejected at write time. This PR opens the allowlist to lowercase slugs and referer-derived markers, in code and in the D1 schema, so signup attribution can grow without a migration per campaign.
+Replaces the seam (#2218) stub with a real subdomains source: it watches
+Certificate Transparency logs (crt.sh) for a tracked competitor's registrable
+domain and alerts on new public subdomains, which are often the first public
+signal that a competitor is standing up a new product surface.
 
-This is the orchestrator re-spec (2026-09-09T16:43Z) — it overrides step 2's file list because the original `files:` scope could not meet the `accept:` criterion (the 0080 CHECK rejects any value outside the five literals; SQLite cannot ALTER a CHECK in place).
+### What shipped
 
-## Scope
+- `app/lib/sources/subdomains/subdomain-signals.server.ts` — `fetchSubdomains(domain)`:
+  one crt.sh fetch (60s budget, no retry in-app), normalize (lowercase, split
+  `name_value` on newlines, strip a leading `*.`, drop the apex and anything
+  not ending in `.<domain>`, dedupe by min `not_before`), classify
+  `kind: "internal" | "public"` (regex documented in-file), cap at 5,000
+  entries with `truncated: true`. Treats 5xx/timeout/non-JSON/empty-domain as
+  `{ unavailable: true, reason }`.
+- `app/lib/sources/subdomains/subdomain-snapshot.server.ts` — snapshot payload
+  + `diffSubdomainSnapshots`: returns `SourceChange[]` **only** for new public
+  names and `[]` on a first (baseline) snapshot; internal names live in the
+  payload, never in diff output (judge edit batch 2). Unavailable never blocks.
+- `app/lib/sources/subdomains.server.ts` — the real adapter (was the stub):
+  `implemented: true`, cadence `daily` (no new schedule; crt.sh politeness),
+  `requiresEnv: () => true`, resolves the registrable domain from the
+  watchlist, delegates fetch + diff, `Section` wired.
+- `app/components/sources/subdomains.tsx` — the Section (renders inside the
+  seam's source section): count, newest 10 public names with firstSeen, an
+  expandable list of internal names, and a one-line explanation.
+- `tests/fixtures/crtsh/**` + `tests/sources/subdomains-*.test.ts` — fixtures
+  with wildcards/duplicates/apex/unrelated names and unit tests for
+  classification, baseline-never-alerts, new-public-alerts, new-internal-no-
+  alert, unavailable, truncated.
 
-- `migrations/0087_signup_source_open_allowlist.sql` (new) — rebuilds the `user` and `signup_source_pending` CHECK constraints (create-copy-drop-rename, so child FK references to `user` are never rewritten) so `signup_source` accepts: NULL, the five existing literals, `pricing-free`, `for_agencies`, and any value matching `length(signup_source) BETWEEN 1 AND 44 AND signup_source NOT GLOB '*[^a-z0-9:.-]*'` (lowercase slugs and `ref:<eTLD+1>`). Keeps NOT NULL on the pending table; recreates `idx_user_email_nocase` and `idx_signup_source_pending_expires`.
-- `app/lib/signup-source.ts` (modified) — `allowlistedSignupSource` now also accepts lowercase slugs (`/^[a-z0-9][a-z0-9-]{0,39}$/`) and `ref:<eTLD+1>` markers (`/^ref:[a-z0-9.-]{1,40}$/`); the six existing constants keep working. `signupSourceFromRequest` falls back to `ref:<eTLD+1>` derived from the `Referer` header (coarse domain only, never the full URL or query string).
-- `tests/signup-source.test.ts` (modified) — slug accepted, junk rejected, referer-derived value stored, cookie round-trip unchanged, and a shared fixture list asserted against both the code rule and the migration SQL.
-- `tests/integration/signup-source.integration.test.ts` (modified) — referer-derived `ref:example.com` persisted end to end on real D1, open slug persisted, 0087 CHECK accepts/rejects the same fixture list as the code rule, and the rebuilt `user` table keeps its email index and inbound foreign keys.
+### Scope note (two shared test files)
 
-## D1 expand/contract
+Per the ownership note, seam shared **runtime** files (`registry.server.ts`,
+`presence-source-coverage.server.ts`, `types.ts`, `env.server.ts`, the claim
+table, migrations) were not edited. The seam's `implemented: true` flip this
+ticket requires necessarily invalidates the hardcoded "subdomains is a stub"
+assertions in `tests/sources/registry.test.ts` and
+`tests/presence-source-coverage.test.ts`, so those two test files were updated
+to derive stub state from the registry rather than hardcode the list — kept
+robust so the parallel source tickets (#2181/#2189/#2194/#2199) don't conflict
+as they land one at a time. The Seam's own claim-table row stays the seam's
+("not live - stub"); #2188 flips it on production proof. Per do:4 I did not
+edit the claim table.
 
-This is a single-phase schema change (rebuild the CHECK constraints). No `DROP COLUMN`, no `DROP TABLE` of a live table (the rebuild drops the old table only after copying into the replacement), no rename of a column, no `NOT NULL` without a DEFAULT. The migration is validated by the real-D1 integration tests (the `workers` vitest project applies the full migration set to local D1).
+do:5 (crWorker can reach crt.sh) — verified live from the worker environment:
+`GET https://crt.sh/?q=%25.notion.so&output=json&exclude=expired` returned
+`200` / `application/json` / 265 entries. (The full preview-deploy fetch is
+available once deployed under #2188's production proof; I cannot deploy from
+this worker.)
 
-## Verification
+### Verification
 
-Real-D1 leg (workers vitest project, applies all migrations including 0087 to local D1):
+- `npx vitest run --configLoader runner --project node <5 touched test files>`
+  → 62 passed. Full `--project node` suite → 665 files / 7917 tests passed.
+- `fleet-no-agent-names-check --commit-range origin/main..HEAD` → OK.
+- `fleet-review-arm-check` → exit 0 (senior seat usable).
 
-```
-NODE_OPTIONS=--max-old-space-size=6144 npx vitest run --configLoader runner tests/signup-source.test.ts tests/integration/signup-source.integration.test.ts
-```
+run-proof: node vitest project, 5 subdomain/registry/coverage test files
+(green), full node project (green).
 
-→ 2 files, 23 tests passed (15 unit + 8 integration). The accept criterion is proven: a signup arriving with only `Referer: https://example.com/page` persists `ref:example.com` on `user.signup_source` (integration test "persists a referer-derived ref:<eTLD+1> marker end to end").
+research: the crt.sh endpoint contract and the existing Meta watch-event path
+come from the issue's own verified request and the seam (#2218) in-repo code;
+no new dependency. Not a hand-build of an existing seam helper.
 
-Type check:
+help-first: no new CLI; implementation-only PR within the seam's existing
+source adapter shape.
 
-```
-NODE_OPTIONS=--max-old-space-size=6144 npm run typecheck
-```
+loose-ends: none intentional beyond the below reviewer buckets.
 
-→ exit 0.
+### Reviewer round (one)
 
-Regression (the `user` rebuild must keep child-table writes intact):
+reviewer seat: cursor/cursor-grok-4.6-high
 
-```
-NODE_OPTIONS=--max-old-space-size=6144 npx vitest run --configLoader runner --project workers tests/integration/watch-event-writes.integration.test.ts tests/integration/saucony-watchlist.integration.test.ts tests/integration/signup-first-brief.integration.test.ts tests/integration/retention-sweep-state.integration.test.ts tests/integration/website-scan-baseline.integration.test.ts
-```
+Review-adjudication buckets for findings from the single reviewer round:
+- Act on: none
+- Consider: see notes kept in PR thread
+- Noted: —
+- Dismissed-with-reason: —
 
-→ 5 files, 32 tests passed.
-
-run-proof: tests/signup-source.test.ts (15 tests) + tests/integration/signup-source.integration.test.ts (8 tests, real D1) + 5 regression integration files (32 tests, real D1) all green in the same vitest workers-project run; `npm run typecheck` exit 0.
-
-net-positive-because: this is the issue's own acceptance — the open allowlist (code + D1 schema) is the load-bearing new code, and the rest is the required real-D1 integration proof plus the referer-derivation wiring. It is product work, not control-plane machinery.
-
-## Termination note (check-d1-migrations-synced.mjs)
-
-The issue's termination command ends with `node scripts/check-d1-migrations-synced.mjs`. That script is a **deploy-time** check (it runs in `scripts/deploy-production-plan.mjs` with `includeCloudflareCredentials: true`) that compares the local `migrations/` ledger against the **remote production D1** ledger via `wrangler d1 migrations list 0509 --remote`. It requires Cloudflare production credentials (`CLOUDFLARE_API_TOKEN` or OAuth) that do not exist on this worker VPS, and it is production-gated by repo rules. It would also report 0087 as pending (expected — the migration is applied at deploy time, not by the worker PR).
-
-The migration is instead validated by the real-D1 integration tests, which apply the full migration set (including 0087) to local D1 and assert both the READ and WRITE paths. This matches the precedent of migration PR #1964 (0086), which also validated via real-D1 integration tests and left the production sync check to deploy time.
-
-loose-ends: 0509#2108-check-d1-migrations-synced (deploy-time check requires Cloudflare prod credentials not present on the worker VPS; migration validated by real-D1 integration tests, production sync verified at deploy).
-
-## Reviewer round (cursor/cursor-grok-4.6-high)
-
-- **Act on** — `migrations/0087` CHECK literal lists omitted `for_agencies`, which the code allowlist accepts via the exact-match branch; the open shape `[a-z0-9:.-]` rejects the underscore, so a `for_agencies` signup was silently dropped at write time (violates step 2b "code and DB never disagree"). Fixed: added `for_agencies` to both CHECK literal lists and to the `ACCEPTED_BY_BOTH` fixture lists in both test files. Verified: `tests/signup-source.test.ts` (15), `tests/integration/signup-source.integration.test.ts` (8, real D1), `tests/for-agencies.route.test.ts` (8) all green; `npm run typecheck` exit 0.
-- **Consider** — the `ACCEPTED_BY_BOTH` fixture lists are duplicated across two test files with a "keep in sync" comment but no enforcement. Noted; a shared fixture module is a follow-up, not a blocker.
-- **Consider** — `isOwnDomain` hardcodes `0509.io`/`0509.in`, duplicating `signupSourceCookieDomain`. Noted; deriving both from one source is a follow-up.
-- **Noted** — referer fallback attributes any external referer as `ref:<domain>` (intended accept behavior); the §4 event allowlist is untouched per must-not.
-- **Noted** — `PRAGMA foreign_keys` toggle in 0087; the rename-into-place order preserves child references regardless.
-
-Closes #2108
+Closes #2198
