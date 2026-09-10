@@ -67,6 +67,11 @@ export interface PublicProofTrailItem {
    * captured creative for this ad — callers render the honest fallback.
    */
   creativeImageUrl: string | null;
+  /**
+   * Issue #2393: the ad id the `/creative/:id` edge route resolves. Null when
+   * the capture has no creative, so the card keeps its honest mock fallback.
+   */
+  creativeId: string | null;
 }
 
 export interface PublicProofBrief {
@@ -329,6 +334,7 @@ function buildProofTrail(ads: AdRecord[], fetchedAt: string): PublicProofTrailIt
       sourceUrl: trailSourceUrl(ad),
       capturedAt: trailCapturedAt(ad, fetchedAt),
       creativeImageUrl: ad.creativeImageUrl?.trim() || null,
+      creativeId: ad.creativeImageUrl?.trim() ? ad.metaAdId : null,
     });
   }
   return items;
