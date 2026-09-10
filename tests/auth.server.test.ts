@@ -5,6 +5,7 @@ import {
   BetterAuthUnknownUserError,
   appendBetterAuthSetCookieHeaders,
   betterAuthMagicLinkConfirmationUrl,
+  betterAuthTrustedOrigins,
   buildBetterAuthMagicLinkEmail,
   enabledBetterAuthOAuthProviders,
   hasBetterAuthPasskeysForEmail,
@@ -324,6 +325,28 @@ describe("Better Auth configuration", () => {
       ),
     ).toBe(false);
     expect(isSameOriginAuthFormPost(env(), new Request("https://0509.io/auth/login"))).toBe(false);
+  });
+
+  it("pins trusted origins to the canonical list without the request origin", () => {
+    // The canonical list is BETTER_AUTH_URL/APP_ORIGIN plus any explicitly
+    // configured trusted origins — never the request's own origin, so a
+    // workers.dev (or other unlisted) host is not auto-trusted for auth.
+    expect(betterAuthTrustedOrigins(env(), new Request("https://0509.io/"))).toEqual([
+      "https://0509.io",
+    ]);
+
+    expect(
+      betterAuthTrustedOrigins(
+        env({ BETTER_AUTH_TRUSTED_ORIGINS: "https://preview.0509.dev" }),
+        new Request("https://0509.io/"),
+      ),
+    ).toEqual(["https://0509.io", "https://preview.0509.dev"]);
+
+    // The request origin is NOT folded into trusted origins, even when the
+    // request arrives via a non-canonical host.
+    expect(
+      betterAuthTrustedOrigins(env(), new Request("https://0509.example.workers.dev/")),
+    ).toEqual(["https://0509.io"]);
   });
 });
 
