@@ -364,14 +364,19 @@ async function main() {
   const demoOnly = argv.includes("--demo-only");
   const sitemapOnly = argv.includes("--sitemap-only");
 
-  let sql;
-  if (demoOnly) sql = DEMO_BRAND_SEED_SQL;
-  else if (sitemapOnly) sql = SITEMAP_BRAND_SEED_SQL;
-  else sql = demoBrandSeedSql();
+  // Each D1 statement is executed separately: the remote `/query` endpoint
+  // takes ONE SQL statement (no semicolon splitting), so combining both
+  // INSERTs into a single `--command` is only reliable locally. Splitting here
+  // keeps `--all` (the default) correct on both local and remote.
+  const statements = demoOnly
+    ? [DEMO_BRAND_SEED_SQL]
+    : sitemapOnly
+      ? [SITEMAP_BRAND_SEED_SQL]
+      : [DEMO_BRAND_SEED_SQL, SITEMAP_BRAND_SEED_SQL];
 
   if (outFile) {
     const { writeFileSync } = await import("node:fs");
-    writeFileSync(outFile, `${sql}\n`, "utf8");
+    writeFileSync(outFile, `${statements.join("\n\n")}\n`, "utf8");
     console.log(`Wrote seed SQL to ${outFile}`);
     return;
   }
@@ -379,33 +384,37 @@ async function main() {
   // Lazily load Node-only machinery only on the CLI path so the module stays
   // importable inside the workerd-backed `workers` vitest project.
   const { spawnSync } = await import("node:child_process");
-  const result = spawnSync(
-    "npx",
-    [
-      "wrangler",
-      "d1",
-      "execute",
-      database,
-      remote ? "--remote" : "--local",
-      "--command",
-      sql,
-    ],
-    { encoding: "utf8", env: process.env, maxBuffer: 1024 * 1024 * 10 },
-  );
-  if (result.status !== 0) {
-    const message = (result.stderr || result.stdout || "").trim();
-    throw new Error(
-      `wrangler d1 execute failed${message ? `: ${message}` : ""}`,
+  let summaryLines = [];
+  for (const statement of statements) {
+    const result = spawnSync(
+      "npx",
+      [
+        "wrangler",
+        "d1",
+        "execute",
+        database,
+        remote ? "--remote" : "--local",
+        "--command",
+        statement,
+      ],
+      { encoding: "utf8", env: process.env, maxBuffer: 1024 * 1024 * 10 },
     );
+    if (result.status !== 0) {
+      const message = (result.stderr || result.stdout || "").trim();
+      throw new Error(
+        `wrangler d1 execute failed${message ? `: ${message}` : ""}`,
+      );
+    }
+    const summary = (result.stdout || "").trim();
+    if (summary) summaryLines.push(summary);
   }
-  const summary = (result.stdout || "").trim();
   const scope = demoOnly
     ? "demo brands (0079)"
     : sitemapOnly
       ? "sitemap brands (0081)"
       : "demo + sitemap brands (0079+0081)";
   console.log(
-    `Seeded ${scope} into ${database} (${remote ? "remote" : "local"}).\n${summary}`,
+    `Seeded ${scope} into ${database} (${remote ? "remote" : "local"}).\n${summaryLines.join("\n")}`,
   );
 }
 
