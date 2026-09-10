@@ -15,14 +15,19 @@ describe("source registry", () => {
     expect(SOURCES.map((a) => a.id).sort()).toEqual([...SOURCE_IDS].sort());
   });
 
+  // Stubs = adapters still marked implemented: false. Source tickets that
+  // flip their stub to real (#2198 subdomains) leave the remaining stubs here.
+  const stubs = SOURCES.filter((a) => !a.implemented);
+
   it("every stub adapter exports implemented: false", () => {
-    for (const adapter of SOURCES) {
+    expect(stubs.length).toBeGreaterThan(0);
+    for (const adapter of stubs) {
       expect(adapter.implemented, adapter.id).toBe(false);
     }
   });
 
   it("every stub fetch returns unavailable with reason not_implemented", async () => {
-    for (const adapter of SOURCES) {
+    for (const adapter of stubs) {
       const result = await adapter.fetch(baseEnv, {
         competitorId: "c1",
         competitorLabel: "Test",
@@ -32,7 +37,7 @@ describe("source registry", () => {
   });
 
   it("every stub diff returns an empty array", () => {
-    for (const adapter of SOURCES) {
+    for (const adapter of stubs) {
       expect(adapter.diff(null, { payload: {} }), adapter.id).toEqual([]);
     }
   });
@@ -40,19 +45,28 @@ describe("source registry", () => {
   it("getSourceAdapter resolves by id", () => {
     expect(getSourceAdapter("google")?.id).toBe("google");
     expect(getSourceAdapter("hiring")?.id).toBe("hiring");
+    expect(getSourceAdapter("subdomains")?.id).toBe("subdomains");
     expect(getSourceAdapter("nonexistent" as never)).toBeUndefined();
   });
 
-  it("getEnabledSources filters by requiresEnv (all stubs return false → empty)", () => {
+  it("getEnabledSources includes implemented adapters with requiresEnv: true", () => {
     const plan = "agency" as PlanFamily;
-    expect(getEnabledSources(baseEnv, plan)).toEqual([]);
+    const enabled = getEnabledSources(baseEnv, plan);
+    const enabledIds = enabled.map((a) => a.id);
+    // subdomains (#2198) is implemented and requiresEnv: true.
+    expect(enabledIds).toContain("subdomains");
+    // Stubs (requiresEnv: false) are excluded.
+    for (const stub of stubs) {
+      expect(enabledIds).not.toContain(stub.id);
+    }
   });
 
-  it("getEnabledSources treats a missing sources entitlement as 'all' (stubs still filtered by requiresEnv)", () => {
+  it("getEnabledSources treats a missing sources entitlement as 'all'", () => {
     // PlanEntitlements has no `sources` field yet (#2212 adds it). The
     // registry must not throw and must still apply requiresEnv.
-    const plan = "free" as PlanFamily;
+    const plan = "scout" as PlanFamily;
     const enabled = getEnabledSources(baseEnv, plan);
-    expect(enabled).toEqual([]);
+    const enabledIds = enabled.map((a) => a.id);
+    expect(enabledIds).toContain("subdomains");
   });
 });

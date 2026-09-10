@@ -322,9 +322,10 @@ describe("presence source coverage policy", () => {
     expect(docs.find((entry) => entry.sourceId === "x")?.productionStatus).toBe("gated");
   });
 
-  it("marks the five new seam sources as coming_soon (stubs)", async () => {
-    const newIds = ["google", "google_ads", "tiktok", "subdomains", "hiring"] as const;
-    for (const sourceId of newIds) {
+  it("marks the remaining seam stubs as coming_soon", async () => {
+    // #2198 (subdomains) is implemented; the rest are still stubs.
+    const stubIds = ["google", "google_ads", "tiktok", "hiring"] as const;
+    for (const sourceId of stubIds) {
       const entry = await evaluatePresenceSourceCoverage(baseEnv, sourceId, "competitor");
       expect(entry.status, sourceId).toBe("coming_soon");
       expect(entry.reasonCode, sourceId).toBe("not_implemented");
@@ -332,10 +333,16 @@ describe("presence source coverage policy", () => {
     }
   });
 
-  it("lists the five new seam sources in the docs coverage table as coming_soon", () => {
+  it("marks subdomains as configured (#2198 implemented)", async () => {
+    const entry = await evaluatePresenceSourceCoverage(baseEnv, "subdomains", "competitor");
+    expect(entry.status).toBe("configured");
+    expect(entry.coverageLabel).toBe("OFFICIAL_PUBLIC_API");
+  });
+
+  it("lists the remaining seam stubs in the docs coverage table as coming_soon", () => {
     const docs = presenceSourceCoverageForDocs();
-    const newIds = ["google", "google_ads", "tiktok", "subdomains", "hiring"] as const;
-    for (const sourceId of newIds) {
+    const stubIds = ["google", "google_ads", "tiktok", "hiring"] as const;
+    for (const sourceId of stubIds) {
       const entry = docs.find((d) => d.sourceId === sourceId);
       expect(entry, sourceId).toBeDefined();
       expect(entry?.productionStatus, sourceId).toBe("coming_soon");
