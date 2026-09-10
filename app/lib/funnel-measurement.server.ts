@@ -396,7 +396,7 @@ export function emitFunnelFirstBriefEmailSent(env: AppEnv) {
  * deliberately swallowed so it can never roll back a successful scan
  * (`maybeSendFreeActivationResultEmail` in `~/lib/monitoring.server`), and
  * `claimInstantDeliveryAttempt` returns "duplicate" when an earlier attempt
-exists. A surface that says "we've emailed this brief to you" therefore has
+ * exists. A surface that says "we've emailed this brief to you" therefore has
  * to read the durable `delivery_attempt` row instead of assuming the dispatch
  * succeeded.
  *
