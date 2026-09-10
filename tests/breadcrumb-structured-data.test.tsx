@@ -77,7 +77,6 @@ async function renderDefault(route: string, data?: unknown): Promise<string> {
 describe("BreadcrumbList on /compare/* pages (issue #1463)", () => {
   it.each([
     ["compare.visualping", ["Home", "Competitor monitoring", "Visualping"]],
-    ["compare.magicbrief", ["Home", "Competitor monitoring", "MagicBrief"]],
     ["compare.panoramata", ["Home", "Competitor monitoring", "Panoramata"]],
   ])("%s carries an honest BreadcrumbList and visible nav", async (route, names) => {
     const markup = await renderDefault(route);
@@ -93,12 +92,12 @@ describe("BreadcrumbList on /compare/* pages (issue #1463)", () => {
 });
 
 describe("BreadcrumbList on /switch/* pages (issue #1463)", () => {
-  it("switch/magicbrief carries the shared SwitchLanding trail", async () => {
-    const markup = await renderDefault("switch.magicbrief");
+  it("switch/panoramata carries the shared SwitchLanding trail", async () => {
+    const markup = await renderDefault("switch.panoramata");
     expect(crumbNames(itemsOf(breadcrumb(markup)))).toEqual([
       "Home",
       "Competitor monitoring",
-      "Switch from MagicBrief",
+      "Switch from Panoramata",
     ]);
     expect(markup).toContain('<nav aria-label="Breadcrumb"');
   });

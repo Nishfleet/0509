@@ -176,7 +176,6 @@ describe("shared marketing footer", () => {
       "/trust",
       "/privacy",
       "/terms",
-      "/compare/magicbrief",
       "/compare/meta-ad-library",
       // Generic /compare/visualping and /compare/foreplay are not in the
       // footer (issue #1481): duplicates canonicalizing to the two below.
@@ -187,7 +186,6 @@ describe("shared marketing footer", () => {
       "/compare/panoramata",
       "/compare/adspyder",
       "/compare/adspy",
-      "/switch/magicbrief",
       "/switch/panoramata",
       "/switch/visualping",
       "/sneaker-resale",
@@ -204,7 +202,6 @@ describe("shared marketing footer", () => {
   it("is used by the landing page, all compare pages, and all switch pages", () => {
     for (const path of [
       "app/routes/marketing.tsx",
-      "app/routes/compare.magicbrief.tsx",
       "app/routes/compare.meta-ad-library.tsx",
       "app/routes/compare.visualping.tsx",
       "app/routes/compare.visualping-ad-libraries.tsx",

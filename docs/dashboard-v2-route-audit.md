@@ -52,7 +52,6 @@
 | `/help`, `/docs`, `/status`, `/changelog`, `/trust` | doc routes |
 | `/auth/*` | auth routes |
 | `/privacy`, `/terms`, `/unsubscribe` | legal |
-| `/compare/magicbrief` | comparison landing |
 
 ## API (no dashboard shell)
 

@@ -7,7 +7,6 @@ type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
 type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
 
 const PINNED_COMPARED_PRODUCT: Record<string, string> = {
-  "compare.magicbrief": "MagicBrief",
   "compare.meta-ad-library": "Meta Ad Library",
   "compare.visualping": "Visualping",
   "compare.visualping-ad-libraries": "Visualping",

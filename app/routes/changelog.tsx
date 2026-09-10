@@ -51,8 +51,8 @@ export default function ChangelogRoute() {
           <li>A deliberate Gone (HTTP 410) page — an empty offer timeline we have chosen not to store — now renders an honest &quot;not stored yet&quot; shell instead of a generic &quot;something broke on our side&quot; error, so a visitor understands the page is intentionally absent rather than broken.</li>
           <li>The /search pre-search (idle, no-query) state now reads as a tool — one sentence and one text action — instead of a brochure, so a first-time visitor sees what to type, not a wall of explanatory prose.</li>
           <li>The /status page copy was realigned to match what the release gate actually verifies, and the &quot;switch from X&quot; links were resized for phone, so the public status page and its switch-from prompts stay honest and tappable on mobile.</li>
-          <li>The three switch pages (/switch/magicbrief, /switch/panoramata, /switch/visualping) are now reachable from the public nav on /search and /competitor-monitoring, so a buyer landing on those surfaces can find the honest comparison instead of having to know the URL.</li>
-          <li>/search results for a known switch-target brand (MagicBrief, Panoramata, Visualping) now show a &quot;Switching from X?&quot; card above the fold with a link to the honest /switch/* destination, and /competitor-monitoring gained a &quot;Switching to 0509?&quot; section.</li>
+          <li>The switch pages (/switch/panoramata, /switch/visualping) are now reachable from the public nav on /search and /competitor-monitoring, so a buyer landing on those surfaces can find the honest comparison instead of having to know the URL.</li>
+          <li>/search results for a known switch-target brand (Panoramata, Visualping) now show a &quot;Switching from X?&quot; card above the fold with a link to the honest /switch/* destination, and /competitor-monitoring gained a &quot;Switching to 0509?&quot; section.</li>
           <li>Landing-page monitoring now deduplicates captures by offer state (canonical URL, headline, CTA, price, form-present), so a later capture that is identical to an existing one no longer appends a duplicate versioned row — your timeline shows real changes, not repeats.</li>
           <li>Every /search result row now renders a visible tier badge — Verified (green), Likely (amber), Unmatched (grey) — and a zero-verified result with candidates names the tiers in its headline, so a visitor can tell at a glance which results were actually verified.</li>
           <li>Sitemap /ads/:domain pages now serve the correct robots directive in production, so the sitemap and the page headers agree on what is indexable.</li>
@@ -65,7 +65,7 @@ export default function ChangelogRoute() {
       <PublicDocBlock title="2026-08-30">
         <ul className="f9-doc-list">
           <li>Cold searches on /search now show a tier-progress row on first load — &quot;N verified · M checking&quot; — so visitors see what we already know while the verify pass keeps running in the background, instead of staring at a blank warming state.</li>
-          <li>A new /compare hub page lists every comparison against Visualping, Panoramata, Foreplay, MagicBrief, and the other alternatives, so visitors can scan them all from one place instead of finding each one by search.</li>
+          <li>A new /compare hub page lists every comparison against Visualping, Panoramata, Foreplay, and the other alternatives, so visitors can scan them all from one place instead of finding each one by search.</li>
         </ul>
       </PublicDocBlock>
 
@@ -156,7 +156,7 @@ export default function ChangelogRoute() {
           <li>Every brief now says why the period matters, names one accountable reviewer, and gives one next action — including when a check failed or a period has no record.</li>
           <li>Monitoring periods are now told apart honestly: meaningful changes, routine activity, quiet periods, and pending or failed evidence are each named instead of being mixed into one count.</li>
           <li>Landing-page changes can show before/after evidence in the Overview and in digests when the data supports it; otherwise the page says the evidence is pending or unavailable.</li>
-          <li>Monthly plan cards and the public sample brief describe only what the product currently supports; the MagicBrief migration page says exactly what it can import.</li>
+          <li>Monthly plan cards and the public sample brief describe only what the product currently supports.</li>
           <li>The home page loads faster by fetching the pricing preview only when the pricing section nears the viewport.</li>
           <li>Visitors now see a Sign up button in the public header, and the header keeps its touch targets on small phones.</li>
         </ul>

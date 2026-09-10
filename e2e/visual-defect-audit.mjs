@@ -37,7 +37,6 @@ const ROUTES = [
   { path: "/terms", name: "terms" },
   { path: "/competitor-monitoring", name: "competitor-monitoring" },
   { path: "/ads/nike.com", name: "ads-page" },
-  { path: "/compare/magicbrief", name: "compare-magicbrief" },
   { path: "/compare/meta-ad-library", name: "compare-meta-ad-library" },
   { path: "/compare/visualping", name: "compare-visualping" },
   { path: "/compare/spyland", name: "compare-spyland" },

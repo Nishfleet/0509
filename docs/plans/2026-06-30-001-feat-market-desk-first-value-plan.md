@@ -42,7 +42,7 @@ Current production truth is strong on raw capability: Dodo pricing and billing, 
 - R2. Competitor import accepts domains, URLs, names, optional notes, and optional tags/client fields from pasted text or CSV.
 - R3. Import preview classifies every row as valid, invalid, duplicate, existing, over cap, selected, or skipped before writing anything.
 - R4. Import commit creates only selected valid rows, enforces plan caps, queues first scans, preserves onboarding progress, and reports partial success honestly.
-- R5. MagicBrief migration copy is truthful: support generic competitor-list CSV/text import, and do not claim full MagicBrief data migration without a supplied export format.
+- R5. Vendor migration copy is truthful: support generic competitor-list CSV/text import, and do not claim full vendor data migration without a supplied export format.
 - R6. Search presents an evidence-aware answer above results while preserving current result cards and verified-domain matching behavior.
 - R7. Search answers never fabricate proof; exact domain no-result, broader-only, degraded provider, and partial data states are explicit.
 - R8. The Market Desk Brief answers what changed, why it matters, proof status, source, and next action across the workspace.
@@ -70,7 +70,7 @@ Current production truth is strong on raw capability: Dodo pricing and billing, 
 - Do not change Dodo prices, products, or subscription lifecycle behavior.
 - Do not enable X, Reddit, LinkedIn, Slack, or WhatsApp publicly.
 - Do not add migrations unless an unavoidable data model gap is verified.
-- Do not build full MagicBrief data migration without real export samples.
+- Do not build full vendor data migration without real export samples.
 
 ---
 
@@ -83,7 +83,7 @@ Current production truth is strong on raw capability: Dodo pricing and billing, 
 - KTD3. Build Market Desk Brief as derived state. Compose from watchlists, watch events, proof classification, source/readiness, proof usage, recent runs, and follow-ups. Persist later only through existing report/share/client-room/audit paths.
 - KTD4. Add search answer as a pure presentation helper over hydrated `SearchResponse`. Provider discovery, Search V2, and domain matching remain unchanged unless tests reveal a bug.
 - KTD5. Use existing customer language and design systems. Logged-in surfaces stay Vercel-inspired and operational; public search keeps the current search layout with a compact answer block.
-- KTD6. Treat MagicBrief as generic import. Official MagicBrief FAQ says reports can export CSV and Inspire collections have no bulk export; import copy must ask for a competitor list rather than promising a full data port.
+- KTD6. Treat vendor migration as generic import. The vendor's own FAQ said reports can export CSV and collections have no bulk export; import copy must ask for a competitor list rather than promising a full data port.
 - KTD7. Keep metrics privacy-safe. Use existing action/audit records or route tests where useful, but do not add an analytics provider or log raw import rows.
 
 ### High-Level Technical Design
@@ -123,7 +123,6 @@ stateDiagram-v2
 - `app/lib/competitor-website.ts`, `app/lib/search-query.ts`, and `app/lib/normalize.ts` define URL/domain/search normalization.
 - `app/lib/plan-entitlements.ts` and `app/lib/plan.server.ts` define watchlist caps.
 - `app/lib/counter-move-brief.server.ts`, `app/lib/proof-classification.ts`, `app/lib/report-builder.server.ts`, and `app/routes/app.dashboard.tsx` provide brief/report/dashboard patterns.
-- Official MagicBrief FAQ: MagicBrief closes on July 31, 2026; Insights reports can export CSV; Inspire collections do not have a bulk export.
 
 ### System-Wide Impact
 
@@ -139,7 +138,7 @@ This changes first-value flows across onboarding, search, dashboard, reports, Ag
 - **Requirements:** R1, R2, R3, R5, R11
 - **Files:** `app/lib/competitor-import.ts`, `tests/competitor-import.test.ts`, optional shared CSV escaping helper if needed.
 - **Approach:** Reuse `normalizeCompetitorWebsiteInput`, support headers such as `name`, `domain`, `url`, `website`, `notes`, `tags`, `client`, cap bytes/rows, neutralize formula-like values for exported output, and avoid logging raw rows.
-- **Test Scenarios:** pasted one-domain-per-line; mixed name/domain lines; CSV with quoted commas; MagicBrief-like generic columns; invalid URL; duplicate `www`/apex rows; existing watchlist classification; over-cap rows; huge input rejected; formula-prefixed cells retained safely for UI and neutralized for export.
+- **Test Scenarios:** pasted one-domain-per-line; mixed name/domain lines; CSV with quoted commas; vendor-export-like generic columns; invalid URL; duplicate `www`/apex rows; existing watchlist classification; over-cap rows; huge input rejected; formula-prefixed cells retained safely for UI and neutralized for export.
 - **Verification:** Focused parser tests pass and no route writes happen during preview.
 
 ### U2. Bulk Market Desk Setup Route
@@ -227,7 +226,7 @@ This changes first-value flows across onboarding, search, dashboard, reports, Ag
 ## Definition of Done
 
 - Bulk paid setup/import is available, tested, plan-aware, and does not silently drop rows.
-- MagicBrief migration copy is truthful and source-backed.
+- Vendor migration copy is truthful and source-backed.
 - Market Desk Brief appears immediately after setup and at the top of Overview with honest ready, queued, all-quiet, not-enough-data, source-unavailable, no-verified-ads, proof-pending, and plan-cap states.
 - Search presents an evidence-aware answer summary and keeps existing result/detail behavior.
 - Agency, client room, Developer access, support, billing, and delivery surfaces use customer language and preserve existing gates.

@@ -31,9 +31,9 @@
 - **Re-verified 2026-08-14.** Freshness pass from the 2026-08-14 lane run
   (evidence record: `.lane/reports/0509-lane1-saashub-listing-already-prepared.md`):
   submission URL, all five category pages, the Ad Spy substitute, every
-  listed competitor slug (including `primespy-net` and `MagicBrief`), the
+  listed competitor slug (including `primespy-net`), the
   India startup page, and the product pages (`0509.io/`, `/search`,
-  `/auth/signup`, `/compare/magicbrief`) re-checked live — 31/31 HTTP 200,
+  `/auth/signup`) re-checked live — 31/31 HTTP 200,
   no slug drift. Plan facts re-checked against `app/lib/plan-entitlements.ts`
   and the live homepage copy in `app/routes/marketing.tsx` (lines 32, 78,
   102, 140, 297–300); no corrections needed. Nothing submitted — the same
@@ -42,7 +42,7 @@
   record: `.lane/reports/0509-lane2-saashub-listing-2026-08-21-reverify.md`):
   submission URL, all five category pages, the Ad Spy substitute, all 27
   competitor slugs, the India startup page, and the product pages
-  (`0509.io/`, `/search`, `/auth/signup`, `/compare/magicbrief`) re-checked
+  (`0509.io/`, `/search`, `/auth/signup`) re-checked
   live — 35/35 HTTP 200, no slug drift since the 2026-08-15 opus review.
   Plan facts in the listing (Free 1 watchlist + weekly brief; Scout
   3 / every_6h; Starter 10 / every_3h + daily_and_weekly; Agency 75)
@@ -198,11 +198,6 @@ Ad-intelligence peers (Meta/creative focus):
 - `SOCIALFUEL` (Meta/Google/TikTok ad intelligence)
 - `LandingSpy` (ad landing-page spy)
 - `SEMRush` (all-in-one marketing toolkit with competitive analysis)
-
-(If `MagicBrief` is still listed at submission time, include it — Five to Nine
-has a live migration guide at `https://0509.io/compare/magicbrief` for teams
-coming from MagicBrief's wind-down, and SaaSHub lists it as a direct
-competitor for that audience.)
 
 ### Pricing
 

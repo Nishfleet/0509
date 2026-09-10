@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -7,7 +6,7 @@ type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
 type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
 
 // Surfaces still overclaiming after #977/#1182. Homepage, category, pricing,
-// compare.magicbrief, compare.meta-ad-library, and /switch/* are owned elsewhere.
+// compare.meta-ad-library and /switch/* are owned elsewhere.
 const REMAINING_COMPARE_ROUTES = [
   "compare.panoramata",
   "compare.pulzifi",
@@ -79,11 +78,4 @@ describe("remaining compare and docs pages do not promise a screenshot on every 
       expect(copy).toContain(HONEST_SCREENSHOT_QUALIFIER);
     },
   );
-
-  it("docs/magicbrief-migration.md does not promise a screenshot on every watchlist scan", () => {
-    const guide = readFileSync("docs/magicbrief-migration.md", "utf8");
-
-    expect(guide).not.toContain("save fresh screenshots");
-    expect(guide).toContain(HONEST_SCREENSHOT_QUALIFIER);
-  });
 });

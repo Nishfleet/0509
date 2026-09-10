@@ -11,8 +11,8 @@ from a gut feel.
 
 1. **German (`/de/sneaker-resale`)** — Europe is Meta's second-largest revenue
    region after US & Canada (Meta FY2025 geographic split: Europe $46.57B,
-   US & Canada $78.87B). Germany is the largest DACH economy. Foreplay,
-   MagicBrief, and AdSpy market in English; a German query for competitor-ad
+   US & Canada $78.87B). Germany is the largest DACH economy. Foreplay
+   and AdSpy market in English; a German query for competitor-ad
    monitoring does not land on a segment page from those products.
 2. **Japanese (`/ja/sneaker-resale`)** — Asia-Pacific is the fastest-growing
    sneaker-resale region (DataM Intelligence: global resale $10.6B in 2025,
@@ -36,7 +36,7 @@ that still has a watchlist seven days later.
 
 This slice records anonymous `funnel_locale_segment_view_*` and
 `funnel_signup_start_locale_*` events (same non-joinable contract as the
-MagicBrief blitz). Joining those starts to day-7 watchlist retention needs a
+other anonymous funnel events). Joining those starts to day-7 watchlist retention needs a
 stored allowlisted `signup_source` on the user row. That is a later phase,
 not this PR.
 

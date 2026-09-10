@@ -352,7 +352,6 @@ test.describe("public production-safe E2E smoke", { lock: "external-api" }, () =
     const publicPaths = [
       "/",
       "/search",
-      "/compare/magicbrief",
       "/help",
       "/docs",
       "/api/docs",

@@ -43,7 +43,6 @@ export function MarketingFooter() {
       <nav className="ld-footer-compare" aria-label="Compare">
         <span className="ld-footer-group-label">Compare</span>
         <Link to="/compare/meta-ad-library">vs checking the Meta Ad Library by hand</Link>
-        <Link to="/compare/magicbrief">vs MagicBrief</Link>
         {/* /compare/visualping and /compare/foreplay are not linked here
             (issue #1481): duplicates canonicalizing to the two links below. */}
         <Link to="/compare/visualping-ad-libraries">vs Visualping for ad libraries</Link>
@@ -56,7 +55,6 @@ export function MarketingFooter() {
       </nav>
       <nav className="ld-footer-compare" aria-label="Switch">
         <span className="ld-footer-group-label">Switch</span>
-        <Link to="/switch/magicbrief">from MagicBrief</Link>
         <Link to="/switch/panoramata">from Panoramata</Link>
         <Link to="/switch/visualping">from Visualping</Link>
       </nav>

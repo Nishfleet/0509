@@ -3,7 +3,6 @@ import type { MockInstance } from "vitest";
 
 const LOCALE_FUNNEL_OPERATIONS = [
   "funnel_signup_start",
-  "funnel_signup_start_magicbrief",
   "funnel_signup_start_locale_en",
   "funnel_signup_start_locale_de",
   "funnel_signup_start_locale_ja",
@@ -57,11 +56,6 @@ describe("funnel measurement locale sneaker-resale events", () => {
     emitFunnelLocaleSegmentView(env, new Request("http://localhost/de/sneaker-resale"), "de");
     emitFunnelSignupStartFromAllowlistedSource(env, new Request(hostile), deMarker);
     emitFunnelSignupStartFromAllowlistedSource(env, new Request(hostile), "not-a-marker");
-    emitFunnelSignupStartFromAllowlistedSource(
-      env,
-      new Request("http://localhost/auth/signup?source=magicbrief-migration"),
-      "magicbrief-migration",
-    );
 
     const records = emittedFunnelRecords(logSpy);
     const operations = records.map((record) => (record as { operation: string }).operation);
@@ -69,7 +63,6 @@ describe("funnel measurement locale sneaker-resale events", () => {
       "funnel_locale_segment_view_de",
       "funnel_signup_start_locale_de",
       "funnel_signup_start",
-      "funnel_signup_start_magicbrief",
     ]);
 
     for (const record of records) {

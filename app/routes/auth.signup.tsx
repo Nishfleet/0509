@@ -51,7 +51,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const linkResent = url.searchParams.get("resent") === "1";
   const message = linkSent
       ? "Check your email. The setup link will verify you and create the account."
-      : magicbriefMigrationMessage(url.searchParams.get("source"));
+      : null;
   const error = signupErrorMessage(url.searchParams.get("error"));
   const oauthProviders = enabledBetterAuthOAuthProviders(env);
   const { allowlistedSignupSource } = await import("~/lib/signup-source");
@@ -71,24 +71,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     ...(error ? { error } : {}),
     ...(signupSource ? { signupSource } : {}),
   };
-}
-
-/**
- * MagicBrief wind-down capture: a visitor landing on signup straight from the
- * migration page's CTA gets the migration path on the same screen instead of a
- * generic pitch. The message stays inside the honest boundary the migration
- * page already promises — competitor lists import as watchlists; collections,
- * boards, analytics history, and past evidence are recreated with help.
- */
-function magicbriefMigrationMessage(source: string | null): string | null {
-  if (source !== "magicbrief-migration") {
-    return null;
-  }
-  return (
-    "Coming from MagicBrief? Sign up, then use the setup checklist's competitor import " +
-    "to turn your list into watchlists. Collections, boards, analytics history, and past " +
-    "evidence are not migrated — you recreate them with our help."
-  );
 }
 
 export async function action({ context, request }: ActionFunctionArgs) {
@@ -134,8 +116,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
     return signupActionError("send_failed", { email, name, redirectTo });
   }
 
-  // CTA markers (`source=`) select an allowlisted funnel kind. MagicBrief
-  // wind-down and locale sneaker-resale pages both use this path. The raw
+  // CTA markers (`source=`) select an allowlisted funnel kind. The /pricing
+  // Free card and locale sneaker-resale pages both use this path. The raw
   // query value is compared to constants and never recorded.
   const { emitFunnelSignupStartFromAllowlistedSource } =
     await import("~/lib/funnel-measurement.server");

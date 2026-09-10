@@ -30,7 +30,7 @@ fact the listing depends on still holds, no slug drift, no plan drift,
 no product-copy drift. The `five-to-nine` slug is still 404 (name still
 free); all seven primary targets (Facebook Ad Library 15, Kompyte 26,
 Crayon.co 17, SpyFu top-12 paginated, Dozier.io 3, Perch Intel 26,
-Compint 12, Owler 21) are still listed with 200s; MagicBrief is still
+Compint 12, Owler 21) are still listed with 200s; the former target 0 vendor is still
 404 on AlternativeTo (the conditional target 0 still resolves to
 "skip"); the FAQ's $5 priority review, geo policy, AI-tools decline
 list, email verification, and sign-in-only submission form are
@@ -263,16 +263,6 @@ Recommended targets (targets 1–8 verified to exist and be listed
 2026-08-11; target 0 is conditional — see note), by fit with
 AlternativeTo's own rule — same main task and focus:
 
-0. **MagicBrief** (`/software/magicbrief/`) — wind-down buyers land here
-   first (MagicBrief closed 2026-07-31; displaced users browse its
-   alternatives page when picking a replacement). **Time-sensitive:**
-   suggest Five to Nine as an alternative on this page BEFORE the wind-down
-   attention fades. AlternativeTo blocked automated verification
-   (HTTP 403 to a plain fetch on 2026-08-12), so confirm the page is still
-   listed at submission time — if it is gone (or was never listed), skip
-   and keep target 1 below. Our live migration guide
-   (`https://0509.io/compare/magicbrief`) is the landing page for that
-   audience.
 1. **Facebook Ad Library** (`/software/facebook-ad-library/`) — the manual
    ad-transparency tool Five to Nine automates on top of; 15 alternatives
    listed today. Highest-fit target.
