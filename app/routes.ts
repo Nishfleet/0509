@@ -179,6 +179,10 @@ export default [
     route("competitor-monitoring", "routes/$locale.competitor-monitoring.tsx"),
     route("capture-rules", "routes/$locale.capture-rules.tsx"),
     route("methodology", "routes/$locale.methodology.tsx"),
+    // Issue #2294: the /guides/* how-to cluster is advertised in the locale
+    // sitemaps, so it must serve 200 under every buyer-surface locale prefix.
+    // Re-exports the EN guide (canonical→EN) like the other locale surfaces.
+    route("guides/how-to-track-competitor-ads", "routes/$locale.guides.how-to-track-competitor-ads.tsx"),
     // Programmatic /ads/:domain under every locale prefix (issue #1562):
     // the #1501 buyer-surface cluster added /de, /de/pricing, ... but not
     // the /ads/:domain Ad Aggression Score pages, so /de/ads/nike.com
