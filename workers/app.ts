@@ -658,13 +658,18 @@ export default {
     // domain cap (ADS_DOMAIN_PUBLISHER_CAP, default 60) bounds the nightly
     // provider spend; a per-domain failure is logged and counted, never
     // thrown, and a whole-run failure surfaces through the same scheduled-
-    // task alert channel as the backfill.
+    // task alert channel as the backfill. The run iterates ALL SEED_LISTS as
+    // one queue, stops starting new scrapes at a ~10-minute internal
+    // deadline (issue #2361), persists a last_offset cursor so the next
+    // night resumes where this one stopped, and emits truncated:true when
+    // the deadline bites — so a wall-clock kill no longer restarts at domain
+    // #1 and silently starves tail domains.
     if (scheduledTask.kind === "monitoring" && scheduledTask.digestCadence === "daily") {
       const publisherRun = runAdsDomainPublisher(env, ctx);
       ctx.waitUntil(
         publisherRun.then(
           (result) => {
-            if (result.attempted > 0) {
+            if (result.attempted > 0 || result.truncated) {
               console.log("ads domain publisher completed", {
                 list: result.list,
                 gate: result.gate,
@@ -674,6 +679,7 @@ export default {
                 warming: result.warming,
                 failed: result.failed,
                 invalid: result.invalid,
+                truncated: result.truncated,
               });
             }
           },
