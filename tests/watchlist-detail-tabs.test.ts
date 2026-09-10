@@ -12,6 +12,7 @@ describe("competitor detail tabs (brief §6.4)", () => {
   it("keeps the fixed brief order", () => {
     expect(WATCHLIST_DETAIL_TABS.map((tab) => tab.id)).toEqual([
       "changed",
+      "archive",
       "evidence",
       "creative",
       "delivery",
@@ -19,6 +20,7 @@ describe("competitor detail tabs (brief §6.4)", () => {
     ]);
     expect(WATCHLIST_DETAIL_TABS.map((tab) => tab.label)).toEqual([
       "What changed",
+      "Archive",
       "Evidence",
       "Creative",
       "Delivery",
