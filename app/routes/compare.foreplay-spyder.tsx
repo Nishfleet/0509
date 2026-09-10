@@ -4,6 +4,7 @@ import type { LinksFunction, MetaFunction } from "react-router";
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
 import { Breadcrumbs } from "~/components/breadcrumbs";
+import { LiveBrandProof } from "~/components/live-brand-proof";
 import {
   Cite,
   CompareCitationsFooter,
@@ -19,7 +20,7 @@ import {
   webPageJsonLd,
   type FaqJsonLdEntry,
 } from "~/lib/seo";
-import { FREE_PREVIEW_SEARCH_DOMAIN } from "~/lib/demo-brand-pages";
+import { FREE_PREVIEW_SEARCH_DOMAIN, LIVE_BRAND_PROOF_DOMAIN } from "~/lib/demo-brand-pages";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import foreplaySpyderCitations from "~/data/compare/foreplay-spyder-citations.json";
 
@@ -229,6 +230,8 @@ export default function CompareForeplaySpyderRoute() {
           Questions? Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>.
         </p>
       </section>
+
+      <LiveBrandProof domain={LIVE_BRAND_PROOF_DOMAIN} />
 
       <CompareCitationsFooter citations={citations} />
 

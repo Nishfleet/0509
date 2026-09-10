@@ -3,8 +3,10 @@ import type { LinksFunction, MetaFunction } from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
+import { LiveBrandProof } from "~/components/live-brand-proof";
 import { isBuyerSurfaceLocaleId } from "~/lib/locale-markets";
 import { canonicalLinks, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
+import { LIVE_BRAND_PROOF_DOMAIN } from "~/lib/demo-brand-pages";
 
 const pageDescription =
   "Five to Nine vs the alternatives: source-backed competitor ad and landing-page change monitoring compared to Visualping, MagicBrief, Panoramata, Foreplay, Spyland, Pulzifi, and more.";
@@ -104,6 +106,8 @@ export default function CompareIndexRoute() {
           needed — and see what is publicly available before deciding anything.
         </p>
       </section>
+
+      <LiveBrandProof domain={LIVE_BRAND_PROOF_DOMAIN} />
 
       <MarketingFooter />
     </main>
