@@ -26,7 +26,6 @@ vi.mock("~/lib/monitoring.server", () => ({
   flushDeferredInstantAlerts: flushDeferredInstantAlertsMock,
   runScheduledDiscoveryWarmup: runScheduledDiscoveryWarmupMock,
   runScheduledMonitoring: vi.fn(),
-  sendCustomerAtRiskAlert: vi.fn(),
   sendWeeklyBusinessNumbers: vi.fn(),
 }));
 vi.mock("~/lib/monitoring-fanout.server", () => ({

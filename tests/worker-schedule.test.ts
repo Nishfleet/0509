@@ -8,8 +8,6 @@ import {
   DISCOVERY_WARMUP_CRON,
   REGULAR_MONITORING_CRON,
   WEEKLY_DIGEST_CRON,
-  resolveOperationalRiskAlertIdempotencyKey,
-  isScanFailureRateExceeded,
   resolveScheduledTask,
 } from "../workers/schedule";
 
@@ -32,7 +30,6 @@ describe("worker schedule", () => {
       includeDigests: false,
       includeMentionResweep: true,
       includeAutoCompetitorResweep: false,
-      includeRiskAlert: false,
     });
     expect(resolveScheduledTask(DAILY_DIGEST_CRON)).toEqual({
       kind: "monitoring",
@@ -40,7 +37,6 @@ describe("worker schedule", () => {
       includeDigests: true,
       includeMentionResweep: false,
       includeAutoCompetitorResweep: true,
-      includeRiskAlert: true,
       digestCadence: "daily",
       digestLookbackDays: 1,
     });
@@ -51,7 +47,6 @@ describe("worker schedule", () => {
       includeDigests: false,
       includeMentionResweep: true,
       includeAutoCompetitorResweep: false,
-      includeRiskAlert: false,
     });
   });
 
@@ -62,83 +57,8 @@ describe("worker schedule", () => {
       includeDigests: true,
       includeMentionResweep: false,
       includeAutoCompetitorResweep: false,
-      includeRiskAlert: false,
       digestCadence: "weekly",
       digestLookbackDays: 7,
     });
-  });
-
-  it("keeps operational risk alert idempotency distinct by failure type", () => {
-    expect(resolveOperationalRiskAlertIdempotencyKey("2026-07-03", {
-      skippedForBudget: 2,
-      dispatchFailures: 0,
-    })).toBe("operator-alert:scan-budget:2026-07-03");
-    expect(resolveOperationalRiskAlertIdempotencyKey("2026-07-03", {
-      skippedForBudget: 0,
-      dispatchFailures: 1,
-    })).toBe("operator-alert:fanout-dispatch:2026-07-03");
-    expect(resolveOperationalRiskAlertIdempotencyKey("2026-07-03", {
-      skippedForBudget: 2,
-      dispatchFailures: 1,
-    })).toBe("operator-alert:scan-budget-and-fanout-dispatch:2026-07-03");
-    expect(resolveOperationalRiskAlertIdempotencyKey("2026-07-03", {
-      skippedForBudget: 0,
-      dispatchFailures: 0,
-    })).toBeNull();
-    expect(resolveOperationalRiskAlertIdempotencyKey("2026-07-03", {
-      skippedForBudget: 0,
-      dispatchFailures: 0,
-      inlineFailures: 1,
-      digestFailures: 0,
-    })).toBe("operator-alert:scheduled-degraded-inline:2026-07-03");
-    expect(resolveOperationalRiskAlertIdempotencyKey("2026-07-03", {
-      skippedForBudget: 0,
-      dispatchFailures: 0,
-      inlineFailures: 0,
-      digestFailures: 1,
-    })).toBe("operator-alert:scheduled-degraded-digest:2026-07-03");
-    expect(resolveOperationalRiskAlertIdempotencyKey("2026-07-03", {
-      skippedForBudget: 0,
-      dispatchFailures: 0,
-      inlineFailures: 1,
-      digestFailures: 1,
-    })).toBe("operator-alert:scheduled-degraded-inline-and-digest:2026-07-03");
-    expect(resolveOperationalRiskAlertIdempotencyKey("2026-07-03", {
-      skippedForBudget: 2,
-      dispatchFailures: 1,
-      inlineFailures: 1,
-      digestFailures: 1,
-    })).toBe(
-      "operator-alert:scheduled-degraded-scan-budget-and-fanout-dispatch-and-inline-and-digest:2026-07-03",
-    );
-  });
-
-  it("does not page when failed-share stays below threshold or finished runs are too few", () => {
-    expect(resolveOperationalRiskAlertIdempotencyKey("2026-08-10", {
-      skippedForBudget: 0,
-      dispatchFailures: 0,
-      scanFailed: 1,
-      scanRetrying: 0,
-      scanSucceeded: 9,
-    })).toBeNull();
-    expect(resolveOperationalRiskAlertIdempotencyKey("2026-08-10", {
-      skippedForBudget: 0,
-      dispatchFailures: 0,
-      scanFailed: 1,
-      scanRetrying: 1,
-      scanSucceeded: 5,
-    })).toBeNull();
-  });
-
-  it("pages the operator once per idempotency day when the scan failure rate is exceeded", () => {
-    expect(resolveOperationalRiskAlertIdempotencyKey("2026-08-10", {
-      skippedForBudget: 0,
-      dispatchFailures: 0,
-      scanFailed: 2,
-      scanRetrying: 1,
-      scanSucceeded: 7,
-    })).toBe("operator-alert:scan-failure-rate:2026-08-10");
-    expect(isScanFailureRateExceeded(2, 1, 7)).toBe(true);
-    expect(isScanFailureRateExceeded(1, 0, 9)).toBe(false);
   });
 });

@@ -15,7 +15,6 @@ export const RELEASE_SCHEDULED_TASK_NAMES = RUNTIME_RELEASE_SCHEDULED_TASK_NAMES
   "retention_sweep",
   "presence_polling_batch",
   "scheduled_monitoring",
-  "customer_at_risk_alert",
 ];
 
 export const RELEASE_SCHEDULE_CRONS = RUNTIME_RELEASE_SCHEDULE_CRONS as readonly [

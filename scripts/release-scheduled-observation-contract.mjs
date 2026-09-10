@@ -9,7 +9,6 @@ export const RELEASE_SCHEDULED_TASK_NAMES = Object.freeze([
   "retention_sweep",
   "presence_polling_batch",
   "scheduled_monitoring",
-  "customer_at_risk_alert",
 ]);
 
 export const RELEASE_SCHEDULE_CRONS = Object.freeze([
@@ -35,7 +34,6 @@ const MONITORING_TASKS = Object.freeze([
 ]);
 const DAILY_TASKS = Object.freeze([
   ...MONITORING_TASKS,
-  "customer_at_risk_alert",
 ]);
 const WEEKLY_TASKS = Object.freeze([
   "billing_lifecycle_email_recovery",
