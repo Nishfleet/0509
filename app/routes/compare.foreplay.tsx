@@ -1,5 +1,5 @@
-import { Form, Link } from "react-router";
-import type { LinksFunction, MetaFunction } from "react-router";
+import { Form, Link, redirect } from "react-router";
+import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { CompareAdsExampleLink } from "~/components/ads-internal-links";
 import { MarketingNav } from "~/components/marketing-nav";
@@ -25,16 +25,19 @@ import foreplayCitations from "~/data/compare/foreplay-citations.json";
 
 const citations = foreplayCitations as CompareCitations;
 
-export { compareAdsExampleLoader as loader } from "~/lib/ads-internal-links.server";
-
 const pageDescription =
   "Foreplay is an ad intelligence and creative research platform. Five to Nine is source-backed competitor change monitoring for Meta ads and landing pages.";
 
-// Duplicate of /compare/foreplay-spyder (#1481): the generic vs-page
-// canonicalizes to the narrower Spyder comparison and is absent from the
-// sitemap. The page still renders HTTP 200 so existing links never 404.
+// Duplicate of /compare/foreplay-spyder (#1481, #2085): the generic vs-page
+// 301-redirects to the narrower Spyder comparison (the /ads alias
+// canonical-redirect pattern) and is absent from the sitemap, so the two
+// identical <title> pages no longer both stay indexable.
 export const links: LinksFunction = () =>
   canonicalLinks(COMPARE_CANONICAL_TARGETS["/compare/foreplay"]);
+
+export async function loader(_args: LoaderFunctionArgs) {
+  throw redirect(COMPARE_CANONICAL_TARGETS["/compare/foreplay"], 301);
+}
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({
