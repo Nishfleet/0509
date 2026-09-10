@@ -26,7 +26,6 @@ import {
   runScheduledMonitoring,
 } from "../app/lib/monitoring.server";
 import {
-  sendCustomerAtRiskAlert,
   sendWeeklyBusinessNumbers,
 } from "../app/lib/operator-metrics-emails.server";
 import { sendMonthlyCustomerRecaps } from "../app/lib/monthly-recap.server";
@@ -64,8 +63,6 @@ import { scheduleBillingLifecycleEmailRecovery } from "./delivery-recovery";
 import { scheduleDigestScheduleExhaustionRecovery } from "./digest-schedule-recovery";
 import { primaryDomainRedirect } from "./primary-domain";
 import {
-  isScanFailureRateExceeded,
-  resolveOperationalRiskAlertIdempotencyKey,
   resolveScheduledTask,
   WEEKLY_DIGEST_CRON,
 } from "./schedule";
@@ -723,50 +720,6 @@ export default {
             cron: controller.cron,
             ...result,
           });
-          if (
-            scheduledTask.includeRiskAlert ||
-            result.skippedForBudget > 0 ||
-            result.dispatchFailures > 0 ||
-            result.inlineFailures > 0 ||
-            result.digestFailures > 0 ||
-            isScanFailureRateExceeded(
-              result.scanFailed ?? 0,
-              result.scanRetrying ?? 0,
-              result.scanSucceeded ?? 0,
-            )
-          ) {
-            const scheduledDay = new Date(controller.scheduledTime).toISOString().slice(0, 10);
-            const operationalIdempotencyKey = resolveOperationalRiskAlertIdempotencyKey(
-              scheduledDay,
-              {
-                skippedForBudget: result.skippedForBudget,
-                dispatchFailures: result.dispatchFailures,
-                inlineFailures: result.inlineFailures,
-                digestFailures: result.digestFailures,
-                scanFailed: result.scanFailed,
-                scanRetrying: result.scanRetrying,
-                scanSucceeded: result.scanSucceeded,
-              },
-            );
-            try {
-              const alert = await observe("customer_at_risk_alert", sendCustomerAtRiskAlert(env, {
-                skippedForBudget: result.skippedForBudget,
-                dispatchFailures: result.dispatchFailures,
-                inlineFailures: result.inlineFailures,
-                digestFailures: result.digestFailures,
-                idempotencyKey: scheduledTask.includeRiskAlert
-                  ? undefined
-                  : operationalIdempotencyKey ?? undefined,
-              }));
-              if (alert.sent) {
-                console.log("customer-at-risk alert sent", alert);
-              }
-            } catch (error) {
-              await reportScheduledTaskFailure(env, "customer_at_risk_alert", error, {
-                cron: controller.cron,
-              });
-            }
-          }
         },
         (error) =>
           reportScheduledTaskFailure(env, "scheduled_monitoring", error, {

@@ -32,7 +32,6 @@ const SAFE_RELEASE_TASK_NAMES = new Set([
   "retention_sweep",
   "presence_polling_batch",
   "scheduled_monitoring",
-  "customer_at_risk_alert",
 ]);
 const REQUIRED_GATE_C_STEPS = Object.freeze([
   "identity_pre",
