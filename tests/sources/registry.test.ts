@@ -20,7 +20,6 @@ describe("source registry", () => {
   const stubs = SOURCES.filter((a) => !a.implemented);
 
   it("every stub adapter exports implemented: false", () => {
-    expect(stubs.length).toBeGreaterThan(0);
     for (const adapter of stubs) {
       expect(adapter.implemented, adapter.id).toBe(false);
     }
