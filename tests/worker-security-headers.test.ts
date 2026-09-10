@@ -9,14 +9,19 @@ import {
   CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC,
   CONNECT_SRC,
   cspAllowsReactRouterManifest,
+  generateCspNonce,
   HTML_NO_STORE_HEADERS,
   PUBLIC_HTML_CACHE_CONTROL,
   REACT_ROUTER_MANIFEST_PATH,
   SECURITY_HEADERS,
+  SITE_REP_WIDGET_HOST,
   withSecurityHeaders,
 } from "../workers/security-headers";
 
-const BASE_SCRIPT_SRC = `script-src 'self' 'unsafe-inline' ${CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC}`;
+// Baseline script-src has NO 'unsafe-inline' (issue #2348). A per-request nonce
+// is injected by withSecurityHeaders when one is supplied; without a nonce the
+// directive is 'self' + the edge-injected beacon only.
+const BASE_SCRIPT_SRC = `script-src 'self' ${CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC}`;
 
 function htmlResponse(init: ResponseInit & { headers?: Record<string, string> } = {}) {
   return new Response("<!doctype html>", {
@@ -48,6 +53,73 @@ describe("Worker security headers", () => {
     expect(response.headers.get("permissions-policy")).toContain("camera=()");
   });
 
+  it("never allows 'unsafe-inline' in script-src (issue #2348)", () => {
+    // Dropping 'unsafe-inline' is the whole point of the nonce move: a single
+    // stored XSS must not be able to run an arbitrary inline script. This must
+    // hold on every response — with a nonce, without one, on widget pages, and
+    // on non-HTML responses.
+    const cases = [
+      withSecurityHeaders(new Response("ok")),
+      withSecurityHeaders(htmlResponse(), new Request("https://0509.io/")),
+      withSecurityHeaders(htmlResponse(), new Request("https://0509.io/app")),
+      withSecurityHeaders(htmlResponse(), new Request("https://0509.io/"), "test-nonce-abc"),
+      withSecurityHeaders(
+        htmlResponse(),
+        new Request("https://0509.io/", { headers: { cookie: "better-auth.session_token=x" } }),
+        "test-nonce-abc",
+      ),
+    ];
+    for (const response of cases) {
+      const scriptSrc = cspDirective(response, "script-src") ?? "";
+      expect(scriptSrc, response.headers.get("content-security-policy") ?? "").not.toContain(
+        "'unsafe-inline'",
+      );
+    }
+  });
+
+  it("never allows a bare 'https:' wildcard in connect-src (issue #2348)", () => {
+    // The bare `https:` wildcard let a single injected script exfiltrate
+    // session data to any HTTPS host. connect-src must be an explicit allowlist
+    // ('self' + the Site Rep widget host on widget pages) — never the scheme
+    // wildcard. This must hold on every response.
+    const cases = [
+      withSecurityHeaders(new Response("ok")),
+      withSecurityHeaders(htmlResponse(), new Request("https://0509.io/")),
+      withSecurityHeaders(htmlResponse(), new Request("https://0509.io/app")),
+      withSecurityHeaders(htmlResponse(), new Request("https://0509.io/"), "test-nonce-abc"),
+    ];
+    for (const response of cases) {
+      const connectSrc = cspDirective(response, "connect-src") ?? "";
+      // Match the bare scheme token `https:` only — not a full URL like
+      // `https://siterep.net` which legitimately appears on widget pages.
+      const tokens = connectSrc.split(/\s+/);
+      expect(tokens, connectSrc).not.toContain("https:");
+    }
+  });
+
+  it("injects the per-request nonce into script-src on HTML responses", () => {
+    const nonce = generateCspNonce();
+    const response = withSecurityHeaders(
+      htmlResponse(),
+      new Request("https://0509.io/app"),
+      nonce,
+    );
+    const scriptSrc = cspDirective(response, "script-src") ?? "";
+    expect(scriptSrc).toBe(`script-src 'self' ${CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC} 'nonce-${nonce}'`);
+    expect(scriptSrc).not.toContain("'unsafe-inline'");
+    // Without a nonce the directive stays the baseline (no nonce, no unsafe-inline).
+    const noNonce = withSecurityHeaders(htmlResponse(), new Request("https://0509.io/app"));
+    expect(cspDirective(noNonce, "script-src")).toBe(BASE_SCRIPT_SRC);
+  });
+
+  it("generates a fresh base64 nonce on each call", () => {
+    const a = generateCspNonce();
+    const b = generateCspNonce();
+    expect(a).not.toBe(b);
+    expect(a).toMatch(/^[A-Za-z0-9+/]+={0,2}$/);
+    expect(b).toMatch(/^[A-Za-z0-9+/]+={0,2}$/);
+  });
+
   it("allows the Cloudflare Web Analytics beacon script on HTML responses", () => {
     // Web Analytics is enabled for this zone with automatic (edge) injection:
     // Cloudflare inserts https://static.cloudflareinsights.com/beacon.min.js into
@@ -64,13 +136,13 @@ describe("Worker security headers", () => {
     const scriptSrc = cspDirective(response, "script-src") ?? "";
     expect(scriptSrc).toBe(BASE_SCRIPT_SRC);
     expect(scriptSrc).toContain("'self'");
-    expect(scriptSrc).toContain("'unsafe-inline'");
+    expect(scriptSrc).not.toContain("'unsafe-inline'");
     expect(scriptSrc).toContain(CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC);
     expect(cspDirective(response, "connect-src")).toBe(CONNECT_SRC);
     expect(cspDirective(response, "connect-src")).toContain("'self'");
   });
 
-  it("allows the Site Rep script only on public widget HTML routes", () => {
+  it("allows the Site Rep script + connect only on public widget HTML routes", () => {
     const publicResponse = withSecurityHeaders(
       new Response("<!doctype html>", { headers: { "content-type": "text/html; charset=utf-8" } }),
       new Request("https://0509.io/"),
@@ -90,12 +162,35 @@ describe("Worker security headers", () => {
       }),
     );
 
+    // The widget loads its script from AND makes API calls to siterep.net, so
+    // both script-src and connect-src get the host on widget pages (issue #2348).
     expect(cspDirective(publicResponse, "script-src")).toBe(
-      `${BASE_SCRIPT_SRC} https://siterep.net`,
+      `${BASE_SCRIPT_SRC} ${SITE_REP_WIDGET_HOST}`,
+    );
+    expect(cspDirective(publicResponse, "connect-src")).toBe(
+      `connect-src 'self' ${SITE_REP_WIDGET_HOST}`,
     );
     expect(cspDirective(authResponse, "script-src")).toBe(BASE_SCRIPT_SRC);
+    expect(cspDirective(authResponse, "connect-src")).toBe(CONNECT_SRC);
     expect(cspDirective(appResponse, "script-src")).toBe(BASE_SCRIPT_SRC);
+    expect(cspDirective(appResponse, "connect-src")).toBe(CONNECT_SRC);
     expect(cspDirective(publicWithAuthCookieResponse, "script-src")).toBe(BASE_SCRIPT_SRC);
+    expect(cspDirective(publicWithAuthCookieResponse, "connect-src")).toBe(CONNECT_SRC);
+  });
+
+  it("combines the nonce and the Site Rep widget host in script-src on widget pages", () => {
+    const nonce = generateCspNonce();
+    const response = withSecurityHeaders(
+      htmlResponse(),
+      new Request("https://0509.io/"),
+      nonce,
+    );
+    expect(cspDirective(response, "script-src")).toBe(
+      `script-src 'self' ${CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC} 'nonce-${nonce}' ${SITE_REP_WIDGET_HOST}`,
+    );
+    expect(cspDirective(response, "connect-src")).toBe(
+      `connect-src 'self' ${SITE_REP_WIDGET_HOST}`,
+    );
   });
 
   it("prevents stale cached public HTML from surviving a rebuild", () => {
@@ -335,6 +430,9 @@ describe("Worker security headers", () => {
     // auth-shell __manifest loader on these two pages. The worker must keep
     // the policy ENFORCED (not Report-Only) and connect-src must allow the
     // same-origin /__manifest fetch React Router lazy discovery makes.
+    // /trust is a Site Rep widget page so its connect-src carries the widget
+    // host too; /app/billing is an app route so it gets the baseline. Both
+    // must still allow the same-origin __manifest fetch.
     for (const pathname of ["/trust", "/app/billing"]) {
       const response = withSecurityHeaders(
         htmlResponse(),
@@ -342,7 +440,6 @@ describe("Worker security headers", () => {
       );
       expect(response.headers.has("content-security-policy")).toBe(true);
       expect(response.headers.has("content-security-policy-report-only")).toBe(false);
-      expect(cspDirective(response, "connect-src")).toBe(CONNECT_SRC);
       expect(
         cspAllowsReactRouterManifest(response.headers.get("content-security-policy") ?? ""),
       ).toBe(true);

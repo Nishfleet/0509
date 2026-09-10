@@ -68,7 +68,7 @@ import {
   resolveScheduledTask,
   WEEKLY_DIGEST_CRON,
 } from "./schedule";
-import { withSecurityHeaders } from "./security-headers";
+import { withSecurityHeaders, generateCspNonce } from "./security-headers";
 import {
   hasSiteRepAuthCookie,
   isSiteRepWidgetIsolatedPath,
@@ -344,14 +344,21 @@ export default {
     }
 
     (globalThis as GlobalEnvCarrier).__APP_REQUEST_ENV__ = env;
+    // One per-request CSP nonce (issue #2348): the same value is threaded into
+    // the rendered HTML (via the cloudflare context → root loader → Layout)
+    // and into the CSP script-src 'nonce-…' directive (via withSecurityHeaders)
+    // so dropping 'unsafe-inline' does not break React Router hydration or the
+    // two inline boot scripts.
+    const cspNonce = generateCspNonce();
     const routerContext = new RouterContextProvider();
     routerContext.set(cloudflareRuntimeContext, {
       env,
       ctx,
       country: request.headers.get("cf-ipcountry"),
+      cspNonce,
     });
     const response = await requestHandler(request, routerContext);
-    return withSecurityHeaders(withPublicContentSignal(response, request), request);
+    return withSecurityHeaders(withPublicContentSignal(response, request), request, cspNonce);
   },
   async scheduled(controller, env, ctx) {
     const observationContext = Object.freeze({

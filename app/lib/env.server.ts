@@ -196,6 +196,11 @@ export interface CloudflareRuntimeContext {
   ctx: ExecutionContext;
   country: string | null;
   requestCf?: Record<string, unknown>;
+  // Per-request CSP nonce (issue #2348). The worker generates one nonce per
+  // fetch, threads it here so app/root.tsx can stamp it onto React Router's
+  // <Scripts>/<Links>/<ScrollRestoration> and the two boot scripts, and passes
+  // the same value to withSecurityHeaders for the script-src 'nonce-…' entry.
+  cspNonce?: string;
 }
 
 function forwardedOrigin(request: Request) {
