@@ -563,6 +563,7 @@ export default {
                 attempted: result.attempted,
                 published: result.published,
                 skipped: result.skipped,
+                warming: result.warming,
                 failed: result.failed,
                 invalid: result.invalid,
               });

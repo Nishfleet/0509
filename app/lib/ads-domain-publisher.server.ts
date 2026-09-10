@@ -188,7 +188,7 @@ export function isSeededBrandDomain(domain: string): boolean {
 
 export interface AdsDomainPublisherDomainOutcome {
   domain: string;
-  verdict: "publish" | "skip" | "failed" | "invalid";
+  verdict: "publish" | "skip" | "warming" | "failed" | "invalid";
   reason: string;
   verifiedCount?: number;
   likelyCount?: number;
@@ -202,6 +202,7 @@ export interface AdsDomainPublisherRunSummary {
   attempted: number;
   published: number;
   skipped: number;
+  warming: number;
   failed: number;
   invalid: number;
   outcomes: AdsDomainPublisherDomainOutcome[];
@@ -244,6 +245,7 @@ export async function runAdsDomainPublisher(
       attempted: 0,
       published: 0,
       skipped: 0,
+      warming: 0,
       failed: 0,
       invalid: 0,
       outcomes: [],
@@ -265,6 +267,7 @@ export async function runAdsDomainPublisher(
       attempted: 0,
       published: 0,
       skipped: 0,
+      warming: 0,
       failed: 0,
       invalid: 0,
       outcomes: [],
@@ -286,6 +289,7 @@ export async function runAdsDomainPublisher(
       attempted: 0,
       published: 0,
       skipped: 0,
+      warming: 0,
       failed: 0,
       invalid: 0,
       outcomes: [],
@@ -302,6 +306,7 @@ export async function runAdsDomainPublisher(
     attempted: 0,
     published: 0,
     skipped: 0,
+    warming: 0,
     failed: 0,
     invalid: 0,
     outcomes: [],
@@ -320,6 +325,8 @@ export async function runAdsDomainPublisher(
         summary.published += 1;
       } else if (outcome.verdict === "skip") {
         summary.skipped += 1;
+      } else if (outcome.verdict === "warming") {
+        summary.warming += 1;
       } else if (outcome.verdict === "invalid") {
         summary.invalid += 1;
       } else {
@@ -349,6 +356,7 @@ export async function runAdsDomainPublisher(
     attempted: summary.attempted,
     published: summary.published,
     skipped: summary.skipped,
+    warming: summary.warming,
     failed: summary.failed,
     invalid: summary.invalid,
   });
@@ -421,16 +429,31 @@ async function publishSeedListDomain(
   const hydratedAds = await hydrateAdsWithPersistedCreatives(env, rawResult.ads);
   const v2Result = await applySearchV2PostFilter(env, { ...rawResult, ads: hydratedAds }, v2Context);
 
-  const verdict = classifySeedListVerdict(v2Result.verifiedCount, v2Result.likelyCount);
+  // A resolver that is still warming its discovery cache (discoveryProgress
+  // "warming") with zero ads is NOT a completed empty search — it is a cold
+  // domain whose coverage has not been proven yet. Do not classify it as a
+  // skip (that would log every cold domain as "No verified/likely coverage"
+  // and pollute the nightly skip metric). Emit a distinct "warming" verdict
+  // counted separately in the run summary.
+  const isWarming = v2Result.discoveryProgress === "warming" &&
+    v2Result.verifiedCount + v2Result.likelyCount === 0;
+
+  const verdict = isWarming
+    ? "warming"
+    : classifySeedListVerdict(v2Result.verifiedCount, v2Result.likelyCount);
   const reason =
     verdict === "publish"
       ? `≥1 verified/likely result (${v2Result.verifiedCount}+${v2Result.likelyCount})`
-      : `No verified/likely coverage (${v2Result.verifiedCount} verified, ${v2Result.likelyCount} likely, ${v2Result.unmatchedCount} unmatched)${
-          v2Result.discoveryEmptyReason ? `; empty reason: ${v2Result.discoveryEmptyReason}` : ""
-        }`;
+      : verdict === "warming"
+        ? `Discovery is still warming this query; coverage not yet proven (${v2Result.verifiedCount} verified, ${v2Result.likelyCount} likely, ${v2Result.unmatchedCount} unmatched)${
+            v2Result.discoverySummary ? `; ${v2Result.discoverySummary}` : ""
+          }`
+        : `No verified/likely coverage (${v2Result.verifiedCount} verified, ${v2Result.likelyCount} likely, ${v2Result.unmatchedCount} unmatched)${
+            v2Result.discoveryEmptyReason ? `; empty reason: ${v2Result.discoveryEmptyReason}` : ""
+          }`;
 
   emitPublisherEvent({
-    metric: verdict === "publish" ? "ads_domain_published" : "ads_domain_skipped",
+    metric: verdict === "publish" ? "ads_domain_published" : verdict === "warming" ? "ads_domain_warming" : "ads_domain_skipped",
     list: listName,
     domain,
     verifiedCount: v2Result.verifiedCount,
@@ -439,6 +462,7 @@ async function publishSeedListDomain(
     provider: v2Result.provider ?? v2Result.source ?? null,
     cacheStatus: v2Result.cacheStatus ?? null,
     discoveryStatus: v2Result.discoveryStatus ?? null,
+    discoveryProgress: v2Result.discoveryProgress ?? null,
   });
 
   return {
