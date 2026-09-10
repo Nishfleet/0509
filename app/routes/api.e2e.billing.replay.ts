@@ -1,6 +1,7 @@
 import { RouterContextProvider, type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
 
 import { cloudflareRuntimeContext, getCloudflareContext } from "~/lib/cloudflare-context";
+import { e2eProductionGateResponse, isE2EProductionEnvironment } from "~/lib/e2e-harness-guard.server";
 import type { AppEnv, EmailSendingBinding } from "~/lib/env.server";
 
 const J5_FIXTURE_SECRET = "e2e-j5-fixture-webhook-secret-v1";
@@ -296,6 +297,7 @@ export function resolveJ5ReplayStateRequest(request: Request) {
 }
 
 export async function action({ context, request }: ActionFunctionArgs) {
+  if (isE2EProductionEnvironment()) return e2eProductionGateResponse();
   if (request.method !== "POST" || new URL(request.url).pathname !== "/api/e2e/billing/replay") return notFound();
   const { getEnv } = await import("~/lib/context.server");
   const env = getEnv(context);
@@ -339,6 +341,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 }
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
+  if (isE2EProductionEnvironment()) return e2eProductionGateResponse();
   const identity = resolveJ5ReplayStateRequest(request);
   if (!identity) return notFound();
   const { getEnv } = await import("~/lib/context.server");
