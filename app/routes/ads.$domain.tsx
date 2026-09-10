@@ -379,36 +379,117 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     throw redirect(`/search?q=${encodeURIComponent(brand.domain)}`, 301);
   }
 
-  let offerTimelineEntries: OfferLedgerEntry[] = [];
-  try {
-    const loaded = await loadOfferTimeline(env, { domain: brand.domain, asOf: null });
-    offerTimelineEntries = loaded.entries;
-  } catch (error) {
+  // Issue #2390 — these five secondary reads are provably independent: each
+  // derives only from `env` + `brand.domain`, none consumes another's result,
+  // and each already carries its OWN catch-and-degrade path. Awaited one by
+  // one they formed a D1 waterfall (measured /ads TTFB 0.71s), so they now run
+  // concurrently and the page pays the slowest read instead of the sum.
+  //
+  // Deliberately NOT a `DB.batch()` call: batch fails as a unit, so one bad
+  // statement would sink all five and destroy the per-read degrade paths that
+  // keep a D1 hiccup from 500ing the page. Each promise keeps its own wrapper.
+  const [
+    offerTimelineEntries,
+    timelineIndexable,
+    recentWatchChanges,
+    sourceSnapshots,
+    internalLinksResult,
+  ] = await Promise.all([
     // Timeline is a secondary surface. A D1 hiccup must hide the section,
     // never 500 the ads page or trigger a live capture.
-    console.warn("Brand page offer timeline read failed; hiding the section.", {
-      errorName: error instanceof Error ? error.name : typeof error,
-    });
-  }
+    (async (): Promise<OfferLedgerEntry[]> => {
+      try {
+        const loaded = await loadOfferTimeline(env, { domain: brand.domain, asOf: null });
+        return loaded.entries;
+      } catch (error) {
+        console.warn("Brand page offer timeline read failed; hiding the section.", {
+          errorName: error instanceof Error ? error.name : typeof error,
+        });
+        return [];
+      }
+    })(),
 
-  // Issue #1931 — the Offer Timeline cross-link must be gated by the SAME
-  // indexability signal the sitemap uses (`loadIndexableTimelineEntries`), so
-  // a demo/empty/410 timeline is never linked. This is independent of the
-  // ledger above: the section renders the ledger, but the cross-link only
-  // appears when the sitemap would list the /timeline/:domain URL. A D1
-  // hiccup degrades to `false` (no cross-link) rather than 500 the page.
-  let timelineIndexable = false;
-  try {
-    const { resolveIndexableTimelineLinkForDomain } = await import(
-      "~/lib/ads-internal-links.server"
-    );
-    timelineIndexable =
-      (await resolveIndexableTimelineLinkForDomain(env, brand.domain)) !== null;
-  } catch (error) {
-    console.warn("Brand page timeline indexability read failed; omitting the cross-link.", {
-      errorName: error instanceof Error ? error.name : typeof error,
-    });
-  }
+    // Issue #1931 — the Offer Timeline cross-link must be gated by the SAME
+    // indexability signal the sitemap uses (`loadIndexableTimelineEntries`), so
+    // a demo/empty/410 timeline is never linked. This is independent of the
+    // ledger above: the section renders the ledger, but the cross-link only
+    // appears when the sitemap would list the /timeline/:domain URL. A D1
+    // hiccup degrades to `false` (no cross-link) rather than 500 the page.
+    (async (): Promise<boolean> => {
+      try {
+        const { resolveIndexableTimelineLinkForDomain } = await import(
+          "~/lib/ads-internal-links.server"
+        );
+        return (await resolveIndexableTimelineLinkForDomain(env, brand.domain)) !== null;
+      } catch (error) {
+        console.warn("Brand page timeline indexability read failed; omitting the cross-link.", {
+          errorName: error instanceof Error ? error.name : typeof error,
+        });
+        return false;
+      }
+    })(),
+
+    // Issue #2112 — "changed in the last 7 days" proof. When any watchlist
+    // tracks this advertiser's domain, load its last-7d watch_event rows and
+    // ship only the public projection (event type, change mark, capture date).
+    // Bounded D1 read; a hiccup degrades to [] (the section hides) rather than
+    // 500ing the page or triggering any paid operation.
+    (async (): Promise<AdsDomainRecentChange[]> => {
+      try {
+        const { loadAdsDomainRecentChanges } = await import(
+          "~/lib/ads-domain-recent-changes.server"
+        );
+        return await loadAdsDomainRecentChanges(env, brand.domain);
+      } catch (error) {
+        console.warn("Brand page recent watch-changes read failed; hiding the section.", {
+          errorName: error instanceof Error ? error.name : typeof error,
+        });
+        return [];
+      }
+    })(),
+
+    // Issue #2200 — load the latest snapshot per LIVE competitor-monitoring
+    // source for this brand, from the same generic snapshot store the
+    // logged-in competitor page uses. Read-only; the public page never
+    // triggers a fetch. A source renders only when its claim row is live
+    // (adapter implemented + env-enabled) AND a snapshot exists. A D1 hiccup
+    // degrades to [] (the source-sections block omits) rather than 500ing.
+    (async (): Promise<BrandPageSourceSnapshot[]> => {
+      try {
+        const { loadBrandPageSourceSnapshots } = await import(
+          "~/components/brand-page/source-snapshots.server"
+        );
+        return await loadBrandPageSourceSnapshots(env, brand.domain);
+      } catch (error) {
+        console.warn("Brand page source snapshots read failed; hiding the sections.", {
+          errorName: error instanceof Error ? error.name : typeof error,
+        });
+        return [];
+      }
+    })(),
+
+    // Issue #1417: the sitemap's /ads/:domain pages were orphaned — none
+    // linked to another /ads page, so a buyer landing on /ads/nike.com could
+    // not discover /ads/adidas.com without going back to search, and Google
+    // saw no internal link equity flowing between brand pages. Load the other
+    // indexable brand-page links (the same sitemap indexability signal) and
+    // pick this page's deterministic "Related brands" set. Cache-only: one
+    // bounded D1 read; a hiccup degrades to null (both dependent sections
+    // hide) rather than 500ing the page or triggering any paid operation.
+    (async (): Promise<IndexableAdsLink[] | null> => {
+      try {
+        const { loadIndexableAdsInternalLinks } = await import(
+          "~/lib/ads-internal-links.server"
+        );
+        return await loadIndexableAdsInternalLinks(env);
+      } catch (error) {
+        console.warn("Brand page related-brands load failed; omitting cross-links.", {
+          errorName: error instanceof Error ? error.name : typeof error,
+        });
+        return null;
+      }
+    })(),
+  ]);
 
   // Issues #1289 / #1345: surface failed/suppressed landing-page captures
   // for this domain so the public page names what we checked and why it did
@@ -417,48 +498,16 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
   // client. The per-entry list is lazy-loaded on expand via the
   // `api.ads.capture-failures.$domain` endpoint. Bounded D1 read; degrades
   // to null on any failure.
+  //
+  // Issue #2390 deliberately leaves this read OUT of the concurrent batch
+  // above: unlike the five, it has no catch-and-degrade wrapper, so folding
+  // it in would change its failure semantics (a throw here still propagates
+  // exactly as before).
   const { loadDomainCaptureFailures, summarizeDomainCaptureFailures } = await import(
     "~/lib/offer-timeline.server"
   );
   const captureFailures = await loadDomainCaptureFailures(env, { domain: brand.domain });
   const captureFailuresSummary = summarizeDomainCaptureFailures(captureFailures);
-
-  // Issue #2112 — "changed in the last 7 days" proof. When any watchlist
-  // tracks this advertiser's domain, load its last-7d watch_event rows and
-  // ship only the public projection (event type, change mark, capture date).
-  // Bounded D1 read; a hiccup degrades to [] (the section hides) rather than
-  // 500ing the page or triggering any paid operation.
-  let recentWatchChanges: AdsDomainRecentChange[] = [];
-  try {
-    const { loadAdsDomainRecentChanges } = await import(
-      "~/lib/ads-domain-recent-changes.server"
-    );
-    recentWatchChanges = await loadAdsDomainRecentChanges(env, brand.domain);
-  } catch (error) {
-    console.warn("Brand page recent watch-changes read failed; hiding the section.", {
-      errorName: error instanceof Error ? error.name : typeof error,
-    });
-    recentWatchChanges = [];
-  }
-
-  // Issue #2200 — load the latest snapshot per LIVE competitor-monitoring
-  // source for this brand, from the same generic snapshot store the
-  // logged-in competitor page uses. Read-only; the public page never
-  // triggers a fetch. A source renders only when its claim row is live
-  // (adapter implemented + env-enabled) AND a snapshot exists. A D1 hiccup
-  // degrades to [] (the source-sections block omits) rather than 500ing.
-  let sourceSnapshots: BrandPageSourceSnapshot[] = [];
-  try {
-    const { loadBrandPageSourceSnapshots } = await import(
-      "~/components/brand-page/source-snapshots.server"
-    );
-    sourceSnapshots = await loadBrandPageSourceSnapshots(env, brand.domain);
-  } catch (error) {
-    console.warn("Brand page source snapshots read failed; hiding the sections.", {
-      errorName: error instanceof Error ? error.name : typeof error,
-    });
-    sourceSnapshots = [];
-  }
 
   const now = new Date();
   const freshness = snapshot
@@ -476,10 +525,12 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
   // than 500ing the brand page or triggering any paid operation.
   let relatedBrands: IndexableAdsLink[] = [];
   let categorySiblings: { category: string; links: IndexableAdsLink[] } | null = null;
-  try {
-    const { loadIndexableAdsInternalLinks } = await import("~/lib/ads-internal-links.server");
+  // `internalLinksResult === null` means the concurrent read above already
+  // logged and degraded; both dependent sections stay hidden. Otherwise the
+  // link picking below is pure in-memory work and cannot fail on D1.
+  if (internalLinksResult !== null) {
     const { pickRelatedBrandLinks } = await import("~/lib/ads-internal-links");
-    const allLinks = await loadIndexableAdsInternalLinks(env);
+    const allLinks = internalLinksResult;
     relatedBrands = pickRelatedBrandLinks(allLinks, brand.domain);
     // Issue #2298 — "Also tracked in <category>" module: same-category
     // siblings from the SAME category source /brands uses
@@ -501,12 +552,6 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
       .slice(0, 6);
     categorySiblings =
       siblings.length > 0 ? { category: currentCategory, links: siblings } : null;
-  } catch (error) {
-    console.warn("Brand page related-brands load failed; omitting cross-links.", {
-      errorName: error instanceof Error ? error.name : typeof error,
-    });
-    relatedBrands = [];
-    categorySiblings = null;
   }
 
   // Attribution analytics (score, teaser, change feed, ownership) derive ONLY
