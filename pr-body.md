@@ -1,109 +1,79 @@
-## seo: publish the Ad Aggression Score methodology as its own linkable, indexable page
+## What
 
-Closes #2022.
+A Dodo webhook redelivery that lands while another worker holds a live
+processing lease was acked HTTP 200 (`{ ok: true, duplicate: true, inProgress: true }`).
+That 200 tells Dodo to stop retrying. If the worker holding the lease dies
+before finalizing, the payment is stranded: the lease expires but the only
+reclaim path is a later delivery of the same event, which never comes.
 
-### What changed
+The sibling `deferred` state already answers 503 + `retry-after: 60` for
+exactly this not-owned-work case. This change makes `in_progress` answer the
+same way, so Dodo redelivers after the lease expires and the reclaim path can
+pick the work back up.
 
-The Ad Aggression Score methodology page — the formula, four sub-scores
-(Velocity/Testing/Freshness/Persistence), score bands, and evidence floor — is
-promoted to its own canonical, indexable URL at **`/methodology`**, and is now
-linked from the footer of **every `/ads/:domain` page** ("How this Ad
-Aggression Score is calculated — read the methodology") and listed in
-`sitemap.xml` through the existing sitemap generation path.
+## Change
 
-Path history on the same published content (the formula is unchanged — only the
-canonical URL moved):
-- `#960`: `/methodology/ad-aggression-score`
-- `#1263`: `/ad-aggression`
-- `#2022` (this PR): `/methodology` — canonical
+- `app/routes/api.webhooks.dodo.ts`: the `in_progress` claim now throws a 503
+  Response with `cache-control: no-store` and `retry-after: 60`, matching the
+  `deferred` path. The processed/duplicate 200 path is unchanged.
+- `tests/dodo-webhook.route.test.ts`: new test asserting a redelivery during a
+  live processing lease returns 503 with the correct headers and performs no
+  business mutation.
 
-Both prior paths keep permanent 301 redirects to `/methodology` so external
-links and any indexed entries keep their equity:
-- `/ad-aggression` → 301 → `/methodology` (`app/routes/ad-aggression-redirect.ts`)
-- `/methodology/ad-aggression-score` → 301 → `/methodology` (redirect target updated)
+## must-not respected
 
-Localized methodology twins (`/de/methodology`, etc.) re-export the EN page and
-canonicalize to the EN `/methodology`.
+- Lease duration unchanged.
+- Processed/duplicate 200 path unchanged.
+- No scheduled sweep added.
+- Signature verification untouched.
 
-No migration, no workflow-file edits, no `/ads/:domain` regression. The inline
-per-brand score and its formula are byte-for-byte unchanged.
+## Verification
 
-### Verification
+Ran the affected test file and the full node + workers test projects:
 
-Real run, from the rebased `origin/main..HEAD` in the claim worktree:
+```
+$ npx vitest run --configLoader runner --project node tests/dodo-webhook.route.test.ts
+Test Files  1 passed (1)
+     Tests  76 passed (76)
 
-- `vitest run --project node` (full): **620 files, 7423 tests passed** — including the
-  methodology redirect/path tests, `ads-brand-page.render`, `seo`, sitemap,
-  locale buyer-surface, breadcrumb, and `design-system-ratchet` (raw-hex-color
-  ceiling back to 258) suites.
-- `vitest run --project worker`: **41 files, 202 tests passed**.
-- Targeted re-run after rebasing onto latest `origin/main`
-  (`a3f93889`): 14 files / 193 tests passed.
-- `react-router typegen` clean.
+$ npx vitest run --configLoader runner --project node
+Test Files  651 passed (651)
+     Tests  7738 passed (7738)
 
-Local termination-gate checks against the worktree:
-- `grep -q methodology app/routes/*ads*` → matches (`app/routes/ads.$domain.tsx`)
-- `buildSitemapXml` now emits `<loc>https://0509.io/methodology</loc>`
-- `/methodology` route serves the methodology page (200); `/ad-aggression` and
-  `/methodology/ad-aggression-score` 301 to it.
+$ npx vitest run --configLoader runner --project workers
+Test Files  46 passed (46)
+     Tests  231 passed (231)
 
-### run-proof
+$ npm run typecheck
+exit 0
+```
 
-`origin/main..HEAD`: 29 files changed (182 insertions, 339 deletions). No new
-`bin/`, no timed unit/workflow files. Proof of run is the standing vitest suites
-above (node + workers projects), all green, plus the route/redirect unit tests in
-`tests/aggression-score-methodology.test.ts` (301 targets and route wiring) and
-the sitemap/locale tests.
+run-proof: 76/76 route tests, 7738/7738 node tests, 231/231 workers tests, typecheck exit 0
 
-### research / help-first
+## Acceptance
 
-Not applicable — no new `bin/` files added.
+- Redelivery during a live lease returns 503. ✓ (new test)
+- A processed event still returns 200 duplicate. ✓ (existing test at
+  "skips processing entirely when the event was already claimed")
 
-### Reviewer round
+net-positive-because: a bug fix that adds a regression test for a stranded-payment path; the added lines are the test and the 503 branch that closes the gap.
 
-- Reviewer seat: `commandcode / meta/muse-spark-1.2-contributor` (resolved via
-  `find_senior_seat`). One round, no loops.
-- **Act on**: none — the reviewer found no blocking or act-on findings.
-- **Consider** (both landed):
-  - Removed a dead, unused `redirectTarget` helper left in
-    `tests/aggression-score-methodology.test.ts` (reviewer flagged it).
-  - `app/components/ads/brand-score-card.tsx` comment now records the full
-    canonical path history through `/ad-aggression` (#1263) instead of
-    skipping the intermediate hop.
-- **Noted**: single-hop 301s straight to `/methodology` (no chained redirects)
-  preserve indexed equity; no leftover functional `/ad-aggression` in
-  `app/`/`workers/` outside comments, the legacy constant, and the redirect
-  loader; sitemap + security-header cache paths move through the shared
-  generation path; the orphaned `methodology.ad-aggression-score.tsx` module
-  was unreferenced dead code, safely removed.
-- **Dismissed-with-reason**: deleting the orphan module (dead, un-wired) and
-  the deliberate literal `/methodology` HREF in `brand-score-card.tsx`
-  (documented grep-ability for the issue's termination check).
+## Review
 
-### Test plan
+Reviewer seat: cursor/cursor-grok-4.6-high
 
-- `/methodology` returns 200 and renders the formula with the four sub-scores,
-  bands, and evidence floor.
-- `/ads/:domain` footer links to `/methodology` with the "read the
-  methodology" wording; source matches `grep methodology app/routes/*ads*`.
-- `sitemap.xml` lists `/methodology` (and no longer lists a redirect target).
-- `/ad-aggression` and `/methodology/ad-aggression-score` 301 to `/methodology`.
+- Act on: none.
+- Consider: the billing canary harness (api.billing.dodo.canary.ts) invokes the real
+  webhook action; a thrown 503 now surfaces as a rejected promise mapped to
+  `{ ok: false, status: 500 }`. Non-production verification harness; correctly signals
+  the webhook was not processed. No action required.
+- Noted: the e2e replay harness (api.e2e.billing.replay.ts) throws on `!response.ok`;
+  in practice it uses fresh event IDs (claimed) and the duplicate path, so `in_progress`
+  should not arise. Test-only harness. No action required.
+- Dismissed-with-reason: the new test mocks `beginDodoWebhookEventProcessing` to return
+  `in_progress` rather than seeding a real DB row. This matches the established pattern
+  in the file (the duplicate test does the same) and directly exercises the route's
+  `in_progress` branch; the data-layer lease semantics are already covered by
+  `dodo-billing-webhook-lease-atomicity.test.ts`.
 
-### Salvage resume (fleet-ops#1204)
-
-Work resumed from the banked `wip/pi-issue-0509-2022-20260908T215253Z` state and
-re-verified end to end by a fresh run. The branch was then rebased onto the
-moved `origin/main` (`fe534bbc`, PRs #2035/#2036/#2038 landed mid-flight; the
-new `/no-phantom-changes` registry entries from #2026 were kept and the
-methodology canonical switched to `/methodology` in the same resolution), and
-the full suite re-ran to green on the rebased head: `vitest --project node`
-7439 tests green, `vitest --project workers` 202 tests green,
-`react-router typegen` clean, `sgscan` no new findings, all PR-body gates
-(prove-one-run-check, fleet-exec-review-canary, fleet-no-agent-names-check,
-fleet-rebuild-verify-check, fleet-token-efficiency-check,
-research-before-build-check, fleet-organ-heartbeat-check) green.
-crgate: skipped — CodeRabbit not signed in on this machine.
-
-organ-heartbeat: app/routes + app/lib not-an-organ: marketing-surface diff touches no organ paths (gate SKIP: no fleet organ touched in the diff).
-
-loose-ends: none in scope — page, footer links, sitemap entry, and both 301 redirects ship; the issue's live `curl https://0509.io/...` checks land automatically after merge + deploy.
+Closes #2257
