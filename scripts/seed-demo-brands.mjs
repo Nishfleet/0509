@@ -16,6 +16,11 @@
 // The SQL below is the exact INSERT from each migration, exported so the
 // integration tests can drive it onto local D1 without re-applying the
 // migration.
+//
+// KEEP IN SYNC: the two SQL constants below are byte-for-byte copies of the
+// INSERT bodies in migrations/0079_*.sql and migrations/0081_*.sql. If you
+// change one, change the other; no test detects the drift (issue #2344 only
+// relocates the rows, it does not add a sync guard).
 
 import { spawnSync } from "node:child_process";
 
