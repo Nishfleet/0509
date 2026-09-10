@@ -4,6 +4,7 @@ import {
   buildWatchlistExecutionIdempotencyKey,
   claimOrchestratedWatchlistRun,
   finishOrchestratedWatchlistRun,
+  renewOrchestratedWatchlistRunLease,
 } from "~/lib/monitoring-fanout.server";
 import { runWatchlist } from "~/lib/monitoring.server";
 import { createSqliteD1 } from "./helpers/sqlite-d1";
@@ -181,5 +182,89 @@ describe("orchestrated watchlist fencing", () => {
       status: "running",
       attempt_count: 2,
     });
+  });
+
+  it("lets a run reach its own terminal status without the lease guard firing after the write", async () => {
+    // Regression guard for the withRunLease conversion. Finishing a run nulls
+    // its processing_token, so a wrapper that asserted the lease again *after*
+    // the finalizing write would reject the run's own success and report a
+    // stale lease. The guard must stay strict for a reclaimed run (covered by
+    // the tests above), so this pins the successful path at the same seam: a
+    // lease held by the finishing worker stops renewing once the run is done.
+    const { db, sqlite } = createSqliteD1();
+    sqlite.exec(`
+      CREATE TABLE watchlist_run (
+        id TEXT PRIMARY KEY,
+        watchlist_id TEXT NOT NULL,
+        trigger_type TEXT NOT NULL,
+        status TEXT NOT NULL,
+        page_budget INTEGER NOT NULL DEFAULT 2,
+        pages_scanned INTEGER NOT NULL DEFAULT 0,
+        baseline_from_run_id TEXT,
+        summary_json TEXT NOT NULL DEFAULT '{}',
+        started_at TEXT NOT NULL,
+        finished_at TEXT,
+        error_code TEXT,
+        error_message TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        idempotency_key TEXT,
+        workflow_instance_id TEXT,
+        processing_token TEXT,
+        processing_started_at TEXT,
+        queued_at TEXT,
+        attempt_count INTEGER NOT NULL DEFAULT 0,
+        retry_after TEXT
+      );
+      INSERT INTO watchlist_run (
+        id, watchlist_id, trigger_type, status, page_budget, summary_json,
+        started_at, created_at, updated_at, attempt_count
+      ) VALUES (
+        'run-finalizes', 'watch-1', 'scheduled', 'pending', 2, '{}',
+        '2026-07-15T00:00:00.000Z', '2026-07-15T00:00:00.000Z',
+        '2026-07-15T00:00:00.000Z', 0
+      );
+    `);
+    const claim = await claimOrchestratedWatchlistRun({ DB: db } as never, {
+      runId: "run-finalizes",
+      leaseMs: 60_000,
+    });
+    expect(claim.claimed).toBe(true);
+
+    // The owning worker can renew while the run is running...
+    await expect(
+      renewOrchestratedWatchlistRunLease({ DB: db } as never, {
+        runId: "run-finalizes",
+        processingToken: claim.processingToken!,
+      }),
+    ).resolves.toBe(true);
+
+    // ...and finalizing succeeds, which is the run's own success.
+    await expect(
+      finishOrchestratedWatchlistRun({ DB: db } as never, {
+        runId: "run-finalizes",
+        processingToken: claim.processingToken!,
+        status: "succeeded",
+        pagesScanned: 1,
+        summary: { adsSeen: 0, events: 0 },
+      }),
+    ).resolves.toBe(true);
+
+    // After finalization the lease deliberately cannot renew, because the
+    // token is cleared. This is why withRunLease must not assert the lease
+    // again after a finalizing write; it would read this as a stale lease.
+    await expect(
+      renewOrchestratedWatchlistRunLease({ DB: db } as never, {
+        runId: "run-finalizes",
+        processingToken: claim.processingToken!,
+      }),
+    ).resolves.toBe(false);
+    expect(
+      sqlite
+        .prepare(
+          "SELECT status, processing_token FROM watchlist_run WHERE id = 'run-finalizes'",
+        )
+        .get(),
+    ).toEqual({ status: "succeeded", processing_token: null });
   });
 });

@@ -8,7 +8,7 @@ import {
 } from "~/lib/search-domain-match.server";
 import { normalizeNumericPageId } from "~/lib/normalize";
 import { parseSearchInputFromWebsiteField, type ParsedSearchQuery } from "~/lib/search-query";
-import { resolveWebsiteIdentity } from "~/lib/website-identity.server";
+import { getCuratedProviderQuery, resolveWebsiteIdentity } from "~/lib/website-identity.server";
 import type { AdRecord, NormalizedSavedQuery, SearchResponse } from "~/lib/types";
 
 export type SearchScope = "exact" | "broader";
@@ -93,8 +93,16 @@ export function buildDomainProviderQuery(
   // provider query is what left website=on.com / website=reebok.com empty
   // after #1950 / #1993. Exact vs broader is a proof policy, not a provider
   // search mode.
+  //
+  // A curated provider term overrides it for the one class where the
+  // registrable domain is not a term Meta indexes: a country storefront that
+  // redirects onto the brand's primary host (saucony.co.uk -> www.saucony.com),
+  // so the brand's ads never carry the .co.uk host (issue #2233). The curated
+  // term is a brand name, not a domain guess, and the matcher still requires a
+  // row to land on the searched domain or one of its live aliases.
   void identityAliases;
-  return intent.registrableDomain ??
+  return getCuratedProviderQuery(intent.registrableDomain ?? "") ??
+    intent.registrableDomain ??
     intent.comparableHostname ??
     intent.originalInput;
 }
@@ -268,6 +276,14 @@ export function buildSearchV2CacheKey(input: {
     const normalizedPageId = normalizeNumericPageId(input.pageId);
     if (normalizedPageId) {
       base.push(`page:${normalizedPageId}`);
+    }
+    // A curated provider term is part of the question asked of Meta, so it is
+    // part of the key: without it, a settled 0-row entry cached under the old
+    // registrable-domain query keeps serving the empty page and the fix never
+    // shows up (issue #2233). Same rail as the page-id segment above.
+    const curatedQuery = getCuratedProviderQuery(input.intent.registrableDomain);
+    if (curatedQuery) {
+      base.push(`q:${curatedQuery.trim().toLowerCase()}`);
     }
     base.push((input.cursor ?? "page-1").trim());
     return base.join(":");

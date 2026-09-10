@@ -6,7 +6,11 @@ import {
   readReleaseIdentity,
 } from "~/lib/canary-release-identity.server";
 import type { AppEnv } from "~/lib/env.server";
-import { listScheduledObservationHealth } from "~/lib/scheduled-observation-health.server";
+import {
+  listScheduledObservationHealth,
+  readScheduledObservationGapCheckHealth,
+  type ScheduledObservationGapCheckStatus,
+} from "~/lib/scheduled-observation-health.server";
 
 type DependencyStatus = "ok" | "error" | "missing";
 type ScheduledWorkStatus = "ok" | "degraded" | "missing";
@@ -19,6 +23,13 @@ type DeepHealthBody = {
     edge: "ok";
     d1: DependencyStatus;
     scheduledWork: ScheduledWorkStatus;
+    /**
+     * Freshness of the hourly gap-check cron's own heartbeat. This is its own
+     * check, never a member of `scheduledWork`: the soak contract only covers
+     * the four workload crons, so the gap check dying silently used to leave
+     * `scheduledWork` green (issue #2368).
+     */
+    scheduledGapCheck: ScheduledObservationGapCheckStatus;
   };
   releaseIdentity?: ReturnType<typeof readReleaseIdentity>;
 };
@@ -42,6 +53,7 @@ async function probeD1(env: AppEnv): Promise<DependencyStatus> {
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const cloudflare = getCloudflareContext(context);
   const env = cloudflare.env;
+  const releaseIdentity = readReleaseIdentity(env);
   const d1 = await probeD1(env);
   let scheduledWork: ScheduledWorkStatus = "missing";
   if (d1 === "ok") {
@@ -56,10 +68,16 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       scheduledWork = "missing";
     }
   }
-  const healthy = d1 === "ok" && scheduledWork === "ok";
-  const releaseIdentity = (await mayReadReleaseIdentity(request, env))
-    ? readReleaseIdentity(env)
-    : undefined;
+  // Read unconditionally: the heartbeat lives in object storage, not D1, so a
+  // D1 outage must not hide whether the hourly gap-check cron is running.
+  const scheduledGapCheck = await readScheduledObservationGapCheckHealth(env, {
+    deployedAt: releaseIdentity.timestamp,
+  });
+  const healthy =
+    d1 === "ok" &&
+    scheduledWork === "ok" &&
+    scheduledGapCheck.status === "ok";
+  const showReleaseIdentity = await mayReadReleaseIdentity(request, env);
 
   const body: DeepHealthBody = {
     status: healthy ? "ok" : "degraded",
@@ -69,8 +87,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       edge: "ok",
       d1,
       scheduledWork,
+      scheduledGapCheck: scheduledGapCheck.status,
     },
-    ...(releaseIdentity ? { releaseIdentity } : {}),
+    ...(showReleaseIdentity ? { releaseIdentity } : {}),
   };
 
   return new Response(JSON.stringify(body), {
