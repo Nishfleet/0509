@@ -118,7 +118,7 @@ describe("support route", () => {
     ]);
     mockDataServer({ listSupportCases });
 
-    const { loader } = await import("~/routes/app.support");
+    const { loader } = await import("~/routes/app.help");
     const result = await loader({
       context: createContext(),
       request: new Request("https://0509.io/app/support?category=billing"),
@@ -188,7 +188,7 @@ describe("support route", () => {
     ]);
     mockDataServer({ getSupportCase, listSupportCaseEvents, listSupportCases });
 
-    const { loader } = await import("~/routes/app.support");
+    const { loader } = await import("~/routes/app.help");
     const result = await loader({
       context: createContext(),
       request: new Request("https://0509.io/app/support?case=case-1"),
@@ -219,7 +219,7 @@ describe("support route", () => {
     const createSupportCaseEvent = vi.fn().mockResolvedValue({ id: "event-1" });
     mockDataServer({ createSupportCase, createSupportCaseEvent });
 
-    const { action } = await import("~/routes/app.support");
+    const { action } = await import("~/routes/app.help");
     const formData = new FormData();
     formData.set("intent", "create-support-case");
     formData.set("category", "billing");
@@ -280,7 +280,7 @@ describe("support route", () => {
     const createSupportCaseEvent = vi.fn();
     mockDataServer({ createSupportCase, createSupportCaseEvent, getDeliveryAttemptByIdempotencyKey });
 
-    const { action } = await import("~/routes/app.support");
+    const { action } = await import("~/routes/app.help");
     const formData = new FormData();
     formData.set("intent", "create-support-case");
     formData.set("category", "delivery");
@@ -326,7 +326,7 @@ describe("support route", () => {
       getDeliveryAttemptByIdempotencyKey,
     });
 
-    const { action } = await import("~/routes/app.support");
+    const { action } = await import("~/routes/app.help");
     const formData = new FormData();
     formData.set("intent", "create-support-case");
     formData.set("category", "delivery");
@@ -361,7 +361,7 @@ describe("support route", () => {
       getDeliveryAttemptByIdempotencyKey,
     });
 
-    const { action } = await import("~/routes/app.support");
+    const { action } = await import("~/routes/app.help");
     const formData = new FormData();
     formData.set("intent", "create-support-case");
     formData.set("category", "delivery");
@@ -386,7 +386,7 @@ describe("support route", () => {
     const getDeliveryAttemptByIdempotencyKey = vi.fn().mockResolvedValue({ status: "failed" });
     mockDataServer({ createSupportCase, getDeliveryAttemptByIdempotencyKey });
 
-    const { action } = await import("~/routes/app.support");
+    const { action } = await import("~/routes/app.help");
     const formData = new FormData();
     formData.set("intent", "create-support-case");
     formData.set("category", "delivery");
@@ -414,7 +414,7 @@ describe("support route", () => {
     const createSupportCaseEvent = vi.fn().mockResolvedValue({ id: "event-1" });
     mockDataServer({ createSupportCase, createSupportCaseEvent });
 
-    const { action } = await import("~/routes/app.support");
+    const { action } = await import("~/routes/app.help");
     const formData = new FormData();
     formData.set("intent", "create-support-case");
     formData.set("category", "delivery");
@@ -448,7 +448,7 @@ describe("support route", () => {
     const createSupportCaseEvent = vi.fn().mockResolvedValue({ id: "event-1" });
     mockDataServer({ createSupportCase, createSupportCaseEvent });
 
-    const { action } = await import("~/routes/app.support");
+    const { action } = await import("~/routes/app.help");
     const formData = new FormData();
     formData.set("intent", "create-support-case");
     formData.set("category", "delivery");
@@ -479,7 +479,7 @@ describe("support route", () => {
     const createSupportCase = vi.fn().mockRejectedValue(new Error("D1 unavailable"));
     mockDataServer({ createSupportCase });
 
-    const { action } = await import("~/routes/app.support");
+    const { action } = await import("~/routes/app.help");
     const formData = new FormData();
     formData.set("intent", "create-support-case");
     formData.set("category", "delivery");
@@ -505,7 +505,7 @@ describe("support route", () => {
     const createSupportCase = vi.fn();
     mockDataServer({ createSupportCase });
 
-    const { action } = await import("~/routes/app.support");
+    const { action } = await import("~/routes/app.help");
     const formData = new FormData();
     formData.set("intent", "create-support-case");
     formData.set("category", "billing");
@@ -532,7 +532,7 @@ describe("support route", () => {
     const createSupportCase = vi.fn();
     mockDataServer({ createSupportCase });
 
-    const { action } = await import("~/routes/app.support");
+    const { action } = await import("~/routes/app.help");
     const formData = new FormData();
     formData.set("intent", "create-support-case");
     formData.set("category", "team");
@@ -559,7 +559,7 @@ describe("support route", () => {
     const createSupportCase = vi.fn();
     mockDataServer({ createSupportCase });
 
-    const { action } = await import("~/routes/app.support");
+    const { action } = await import("~/routes/app.help");
     const formData = new FormData();
     formData.set("intent", "create-support-case");
     formData.set("category", "other");
@@ -586,7 +586,7 @@ describe("support route", () => {
     const createSupportCase = vi.fn().mockResolvedValue({ id: "case-invoice" });
     mockDataServer({ createSupportCase });
 
-    const { action } = await import("~/routes/app.support");
+    const { action } = await import("~/routes/app.help");
     const formData = new FormData();
     formData.set("intent", "create-support-case");
     formData.set("category", "billing");
@@ -617,7 +617,7 @@ describe("support route", () => {
     const createSupportCase = vi.fn().mockResolvedValue({ id: "case-cancel" });
     mockDataServer({ createSupportCase });
 
-    const { action } = await import("~/routes/app.support");
+    const { action } = await import("~/routes/app.help");
     const formData = new FormData();
     formData.set("intent", "create-support-case");
     formData.set("category", "billing");
@@ -648,7 +648,7 @@ describe("support route", () => {
     const createSupportCase = vi.fn().mockResolvedValue({ id: "case-2" });
     mockDataServer({ createSupportCase });
 
-    const { action } = await import("~/routes/app.support");
+    const { action } = await import("~/routes/app.help");
     const formData = new FormData();
     formData.set("intent", "create-support-case");
     formData.set("category", "delivery");
@@ -678,7 +678,7 @@ describe("support route", () => {
     const createSupportCase = vi.fn().mockResolvedValue({ id: "case-3" });
     mockDataServer({ createSupportCase });
 
-    const { action } = await import("~/routes/app.support");
+    const { action } = await import("~/routes/app.help");
     const formData = new FormData();
     formData.set("intent", "create-support-case");
     formData.set("category", "security");
@@ -708,7 +708,7 @@ describe("support route", () => {
     const createSupportCase = vi.fn();
     mockDataServer({ createSupportCase });
 
-    const { action } = await import("~/routes/app.support");
+    const { action } = await import("~/routes/app.help");
     const formData = new FormData();
     formData.set("intent", "create-support-case");
     formData.set("category", "refund-now");
@@ -732,7 +732,7 @@ describe("support route", () => {
     const createSupportCase = vi.fn();
     mockDataServer({ createSupportCase });
 
-    const { action } = await import("~/routes/app.support");
+    const { action } = await import("~/routes/app.help");
     const formData = new FormData();
     formData.set("intent", "create-support-case");
     formData.set("category", "delivery");
@@ -759,7 +759,7 @@ describe("support route", () => {
     const createSupportCase = vi.fn();
     mockDataServer({ createSupportCase });
 
-    const { action } = await import("~/routes/app.support");
+    const { action } = await import("~/routes/app.help");
     const formData = new FormData();
     formData.set("intent", "create-support-case");
     formData.set("category", "billing");
@@ -786,7 +786,7 @@ describe("support route", () => {
     const createSupportCase = vi.fn();
     mockDataServer({ createSupportCase });
 
-    const { action } = await import("~/routes/app.support");
+    const { action } = await import("~/routes/app.help");
     const formData = new FormData();
     formData.set("intent", "create-support-case");
     formData.set("category", "billing");
@@ -813,7 +813,7 @@ describe("support route", () => {
     const createSupportCase = vi.fn();
     mockDataServer({ createSupportCase });
 
-    const { action } = await import("~/routes/app.support");
+    const { action } = await import("~/routes/app.help");
     const formData = new FormData();
     formData.set("intent", "create-support-case");
     formData.set("category", "billing");
@@ -840,7 +840,7 @@ describe("support route", () => {
     const createSupportCase = vi.fn();
     mockDataServer({ createSupportCase });
 
-    const { action } = await import("~/routes/app.support");
+    const { action } = await import("~/routes/app.help");
     const formData = new FormData();
     formData.set("intent", "create-support-case");
     formData.set("category", "billing");
@@ -882,7 +882,7 @@ describe("support route", () => {
       ],
     });
 
-    const { default: SupportRoute } = await import("~/routes/app.support");
+    const { default: SupportRoute } = await import("~/routes/app.help");
     const markup = renderToStaticMarkup(createElement(SupportRoute));
 
     expect(markup).toContain("Get account help without losing the trail.");
@@ -911,7 +911,7 @@ describe("support route", () => {
       message: "Support case saved and notification is still being confirmed.",
     });
 
-    const { default: SupportRoute } = await import("~/routes/app.support");
+    const { default: SupportRoute } = await import("~/routes/app.help");
     const markup = renderToStaticMarkup(createElement(SupportRoute));
 
     expect(markup).toContain('role="alert"');

@@ -1,5 +1,5 @@
 /**
- * Dashboard V2 — single customer navigation model.
+ * Dashboard — single customer navigation model (route diet phase 1, #2213).
  * Customer jobs, not backend modules.
  */
 
@@ -21,71 +21,73 @@ export interface DashboardNavSection {
 }
 
 /**
- * BL-030 — the rail is regrouped, not reduced.
+ * Route diet phase 1 (#2213) — the 8-screen model, 7 static rail rows.
  *
- * The old model shipped SIX mono section labels over sixteen destinations in
- * one flat list: more label than content, and the labels ate the vertical
- * space that would otherwise give the rail any hierarchy. The concept v4 rail
- * carries the eight daily jobs ungrouped and sentence-cased, then one
- * disclosure row — "Workspace & account" — holding the seven long-dwell
- * settings routes. Nine visible rows instead of sixteen, and every route in
- * `app/routes.ts` is still one click or one disclosure away.
- */
-/**
- * Design-unification PR-5a — the ratified 5-destination IA (tri-audit,
- * Nish 2026-08-08). Five customer jobs, no disclosure, nothing in the rail
- * a customer's plan cannot use. Search is the ⌘K overlay and one rail
- * button, not a destination. Deliver and Settings are sectioned index
- * pages that own the surfaces the old 16-row rail advertised; the deep
- * per-destination rebuilds land as the follow-on PR-5 packages.
+ * The old IA shipped five destinations (Today / Watch / Library / Deliver /
+ * Settings) with every member route living inside Deliver or Settings. The
+ * ratified route diet collapses the workspace to eight screens and folds the
+ * member pages into them via redirects:
+ *
+ *   /app            Competitors (today's dashboard)
+ *   /app/c/:id      Competitor (drill-in — evidence, source status, share)
+ *   /app/briefs     Briefs
+ *   /app/account    Account & Billing
+ *   /app/team       Team
+ *   /app/api        API
+ *   /app/settings   Settings (notifications/sources fold in via #hash)
+ *   /app/help       Help
+ *
+ * The rail shows the SEVEN static destinations a logged-in user sees in the
+ * nav for those eight screens. `/app/c/:id` is a drill-in (opened from the
+ * Competitors list row), NOT a rail row, so it never appears in the rail. All
+ * seven rows live in one ungrouped list — no section titles, no disclosure.
+ * old folded member pages (watchlists, digests, shares, reports, billing,
+ * support, source-access, developer-access, notifications, sources,
+ * presence...) 302 to their new home, so the rail only needs the rows above
+ * and every fold is still one click from its owning destination.
  */
 export const DASHBOARD_PRIMARY_NAV: DashboardNavSection[] = [
   {
     items: [
-      { label: "Today", to: "/app", end: true },
       {
-        label: "Watch",
-        to: "/app/watchlists",
-        activePaths: ["/app/presence"],
+        label: "Competitors",
+        to: "/app",
+        end: true,
+        // /app/c/:id (the drill-in), the old /app/watchlists* board/fold
+        // routes, collections (its "Pinned" section lives here) and presence:
+        // the row stays lit while a competitor is open.
+        activePaths: ["/app/c", "/app/watchlists", "/app/presence", "/app/collections"],
       },
-      { label: "Library", to: "/app/collections" },
       {
-        label: "Deliver",
-        to: "/app/deliver",
-        activePaths: ["/app/digests", "/app/reports", "/app/shares", "/app/clients"],
+        label: "Briefs",
+        to: "/app/briefs",
+        // The whole delivery family folded here.
+        activePaths: [
+          "/app/digests",
+          "/app/clients",
+          "/app/deliver",
+          "/app/shares",
+          "/app/reports",
+        ],
+      },
+      {
+        label: "Account & Billing",
+        to: "/app/account",
+        activePaths: ["/app/billing"],
+      },
+      { label: "Team", to: "/app/team" },
+      {
+        label: "API",
+        to: "/app/api",
+        activePaths: ["/app/developer-access"],
       },
       {
         label: "Settings",
         to: "/app/settings",
-        activePaths: [
-          "/app/notifications",
-          "/app/source-access",
-          "/app/developer-access",
-          "/app/team",
-          "/app/billing",
-          "/app/account",
-          "/app/support",
-        ],
+        // Folded settings homes land on /app/settings via #hash redirects.
+        activePaths: ["/app/notifications", "/app/source-access", "/app/sources"],
       },
-    ],
-  },
-];
-
-/**
- * Routes that now live INSIDE a destination (Deliver or Settings). Kept as
- * a map so the rail can mark the owning destination active while the
- * customer is on one of its member pages.
- */
-export const DASHBOARD_SETTINGS_NAV: DashboardNavSection[] = [
-  {
-    items: [
-      { label: "Delivery", to: "/app/notifications" },
-      { label: "Source access", to: "/app/source-access" },
-      { label: "Developer access", to: "/app/developer-access" },
-      { label: "Team", to: "/app/team" },
-      { label: "Billing & usage", to: "/app/billing" },
-      { label: "Account & security", to: "/app/account" },
-      { label: "Help & support", to: "/app/support" },
+      { label: "Help", to: "/app/help", activePaths: ["/app/support"] },
     ],
   },
 ];
@@ -93,7 +95,7 @@ export const DASHBOARD_SETTINGS_NAV: DashboardNavSection[] = [
 /**
  * The ONE member-page ownership resolver — desktop rail and mobile strip
  * both use it, so a destination can never be active on one and idle on the
- * other (Sol, wave-2).
+ * other.
  */
 export function isDestinationMemberActive(
   item: DashboardNavItem,
@@ -102,23 +104,6 @@ export function isDestinationMemberActive(
   return Boolean(
     item.activePaths?.some(
       (path) => pathname === path || pathname.startsWith(`${path}/`),
-    ),
-  );
-}
-
-/** Member pages of the Deliver destination. */
-export const DELIVER_MEMBER_PATHS = [
-  "/app/digests",
-  "/app/reports",
-  "/app/shares",
-  "/app/clients",
-] as const;
-
-/** Pathnames that live inside the "Workspace & account" disclosure. */
-export function isSettingsNavPath(pathname: string) {
-  return DASHBOARD_SETTINGS_NAV.some((section) =>
-    section.items.some(
-      (item) => pathname === item.to || pathname.startsWith(`${item.to}/`),
     ),
   );
 }
@@ -135,7 +120,6 @@ export const PUBLIC_SEARCH_NAV: DashboardNavItem[] = MARKETING_PRIMARY_LINKS.map
     end: link.to === "/search",
   }),
 );
-
 export const PUBLIC_SEARCH_FOOTER: DashboardNavItem[] = [
   { label: "Sign in", to: "/auth/login" },
   { label: "Sign up", to: "/auth/signup" },
@@ -157,13 +141,9 @@ export function filterDashboardNav(
 }
 
 /**
- * BL-042 — one mobile route row, sourced from the same IA as the desktop rail.
- *
- * The previous helper maintained a second hand-written route list while the
- * shell appended Team, Client rooms, Support and Billing from a third list.
- * That produced duplicate navigation models and made some destinations look
- * like boxed utilities rather than peers. Flattening the canonical groups
- * keeps every entitled destination reachable exactly once.
+ * One mobile route row, sourced from the same IA as the desktop rail.
+ * Route diet phase 1: the strip returns the same 7 destinations as the rail,
+ * so a destination is never active on the rail but idle in the strip.
  */
 export function buildDashboardMobileNav(options: {
   showPresence: boolean;
@@ -172,8 +152,5 @@ export function buildDashboardMobileNav(options: {
   const primary = filterDashboardNav(DASHBOARD_PRIMARY_NAV, visible).flatMap(
     (section) => section.items,
   );
-
-  // Five destinations fit a phone without a scroll of sixteen peers; the
-  // member pages live inside Deliver/Settings, not in the strip.
   return [...primary];
 }
