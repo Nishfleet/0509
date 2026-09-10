@@ -27,19 +27,35 @@ const SETUP_ACTION_INTENTS = new Set([
   "create-watchlist",
   "preview-market-desk-import",
   "create-market-desk-import",
+  "create-handoff-watchlists",
   "finish",
 ]);
+
+export interface SetupHandoffCandidate {
+  advertiser: string;
+  pageId: string | null;
+  landingPageUrl: string | null;
+  targetCountry: string | null;
+}
+
+export interface SetupHandoff {
+  domain: string;
+  country: string;
+  candidates: SetupHandoffCandidate[];
+}
 
 export function SetupChecklistCard({
   readiness,
   actionData,
   prefillWebsite = "",
   prefillCountry = "",
+  handoff = null,
 }: {
   readiness: WorkspaceReadiness;
   actionData?: SetupActionData;
   prefillWebsite?: string;
   prefillCountry?: string;
+  handoff?: SetupHandoff | null;
 }) {
   const items = blockingSetupItems(readiness);
   const pendingItems = pendingBlockingSetupItems(readiness);
@@ -134,6 +150,14 @@ export function SetupChecklistCard({
             <Link to={setupActionData.upgradePath}>View plans</Link>
           ) : null}
         </div>
+      ) : null}
+
+      {handoff && handoff.candidates.length > 0 && nextIsCompetitor ? (
+        <HandoffConfirm
+          handoff={handoff}
+          creating={creatingWatchlist}
+          hasCapacity={hasWatchlistCapacity}
+        />
       ) : null}
 
       {!hasActionableImportPreview && nextIsCompetitor ? (
@@ -262,6 +286,91 @@ export function SetupChecklistCard({
         </TertiaryAction>
         <TertiaryAction to="/app/account#brand-profile">Add your brand website</TertiaryAction>
       </div>
+    </section>
+  );
+}
+
+/**
+ * Issue #2174 — one-click confirmation of the competitors a visitor picked
+ * on the logged-out /search page. The signed handoff token carried the
+ * domain + candidates through signup; this renders them for confirmation
+ * and submits a single `create-handoff-watchlists` intent that creates all
+ * the watchlists (within the plan cap) and triggers the first capture for
+ * each. The server re-validates every candidate against the plan cap and
+ * the existing watchlist-dedupe, so a stale or tampered token can never
+ * create watchlists outside the plan.
+ */
+function HandoffConfirm({
+  handoff,
+  creating,
+  hasCapacity,
+}: {
+  handoff: SetupHandoff;
+  creating: boolean;
+  hasCapacity: boolean;
+}) {
+  const count = handoff.candidates.length;
+  return (
+    <section
+      aria-label="Confirm competitors from your search"
+      className="f9-evidence-setup-handoff"
+      data-test="setup-handoff-confirm"
+    >
+      <p className="f9-evidence-setup-handoff-intro">
+        {`From your search for ${handoff.domain}, confirm the ${count} ${count === 1 ? "competitor" : "competitors"} you picked. One click creates the watchlists and starts the first proof capture for each.`}
+      </p>
+      <ul className="f9-evidence-setup-handoff-list" data-test="setup-handoff-list">
+        {handoff.candidates.map((candidate, index) => (
+          <li
+            className="f9-evidence-setup-handoff-row"
+            data-test="setup-handoff-row"
+            key={`${candidate.advertiser}-${index}`}
+          >
+            <span className="f9-evidence-setup-handoff-name">
+              {candidate.advertiser}
+            </span>
+            {candidate.targetCountry ? (
+              <span className="f9-evidence-micro">{candidate.targetCountry}</span>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+      {hasCapacity ? (
+        <Form method="post" className="f9-evidence-action-row">
+          <input name="intent" type="hidden" value="create-handoff-watchlists" />
+          <input name="country" type="hidden" value={handoff.country} />
+          {handoff.candidates.map((candidate, index) => (
+            <input
+              key={`${candidate.advertiser}-${index}`}
+              name="candidate"
+              type="hidden"
+              value={JSON.stringify({
+                advertiser: candidate.advertiser,
+                pageId: candidate.pageId,
+                landingPageUrl: candidate.landingPageUrl,
+                targetCountry: candidate.targetCountry,
+              })}
+            />
+          ))}
+          <SubmitButton
+            className="f9-evidence-cta f9-evidence-cta--rank1"
+            intent="create-handoff-watchlists"
+            pending={creating}
+            pendingLabel="Creating watchlists and starting first scans…"
+          >
+            {count === 1
+              ? "Create watchlist and start first proof"
+              : `Create ${count} watchlists and start first proofs`}
+          </SubmitButton>
+        </Form>
+      ) : (
+        <p className="f9-evidence-setup-capacity">
+          Your current plan is at its competitor limit.{" "}
+          <TertiaryAction to="/app/billing?source=setup-checklist#plans">
+            View plans
+          </TertiaryAction>
+        </p>
+      )}
     </section>
   );
 }

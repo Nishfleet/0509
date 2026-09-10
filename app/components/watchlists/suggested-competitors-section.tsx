@@ -131,6 +131,7 @@ export function resolveSuggestedPanelFeedback(
  */
 export function SearchCompetitorPreviewSection(props: {
   preview: SuggestedCompetitorsPanelData | null;
+  handoffToken: string | null;
   country: string;
 }) {
   if (!props.preview || props.preview.rows.length === 0) {
@@ -155,6 +156,7 @@ export function SearchCompetitorPreviewSection(props: {
       rows={props.preview.rows}
       signupPath={signupPath}
       signupPathForRow={signupPathForRow}
+      handoffToken={props.handoffToken}
     />
   );
 }

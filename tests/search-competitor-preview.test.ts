@@ -353,11 +353,15 @@ function makeRow(overrides: Partial<SuggestedCompetitorRow> = {}): SuggestedComp
 function renderSection(props: {
   preview: SuggestedCompetitorsPanelData | null;
   country: string;
+  handoffToken?: string | null;
 }) {
   const router = createMemoryRouter([
     {
       path: "/",
-      element: createElement(SearchCompetitorPreviewSection, props),
+      element: createElement(SearchCompetitorPreviewSection, {
+        ...props,
+        handoffToken: props.handoffToken ?? null,
+      }),
     },
   ]);
   return renderToStaticMarkup(createElement(RouterProvider, { router }));
@@ -414,5 +418,31 @@ describe("SearchCompetitorPreviewSection rendering (issue #2113)", () => {
 
     expect(html).not.toContain("competitor-preview");
     expect(html).not.toContain("/auth/signup");
+  });
+
+  it("renders the selectable handoff panel with a pick-aware signup CTA when a handoff token is present (issue #2174)", () => {
+    const rows = [
+      makeRow({ candidateId: "rothys|rothys.com|", advertiser: "Rothy's", landingPageUrl: "https://rothys.com" }),
+      makeRow({ candidateId: "vivaia|vivaia.com|", advertiser: "Vivaia", landingPageUrl: "https://vivaia.com" }),
+      makeRow({ candidateId: "allbirds|allbirds.com|", advertiser: "Allbirds", landingPageUrl: "https://allbirds.com" }),
+    ];
+    const html = renderSection({
+      preview: { domain: "nykaa.com", rows },
+      country: "all",
+      handoffToken: "signed-token-abc",
+    });
+
+    expect(html).toContain('data-test="competitor-preview-panel"');
+    // Every row renders a selectable checkbox (all checked by default).
+    expect((html.match(/data-test="competitor-preview-select"/g) ?? []).length).toBe(3);
+    // The CTA carries the handoff token + the default pick (all indexes).
+    // The pick is a comma-separated list inside the redirectTo query, which
+    // is itself URL-encoded as the signup `redirectTo` param — so the commas
+    // appear double-encoded (`%252C`).
+    expect(html).toContain("handoff%3Dsigned-token-abc");
+    expect(html).toContain("pick%3D0%252C1%252C2");
+    expect(html).toContain("Create a free account to watch 3 competitors");
+    // The honesty marker is preserved on every selectable row.
+    expect((html.match(/Suggested · unverified/g) ?? []).length).toBe(3);
   });
 });
