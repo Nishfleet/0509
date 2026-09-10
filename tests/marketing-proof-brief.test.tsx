@@ -222,3 +222,48 @@ describe("anonymous homepage proof brief (real proof)", () => {
     expect(markup).toContain("was the hook on 6 Meta ads");
   });
 });
+
+const DAY_MS = 86_400_000;
+// PROOF_CAPTURE_FRESH_DAYS in marketing.tsx — the loader's existing
+// freshness boundary: a capture older than 30 days is "on record".
+const FRESH_BOUNDARY_DAYS = 30;
+
+/** Clone the real proof brief with a capture clock relative to now so the
+ *  hero wall's freshness gate can be exercised at a chosen age. */
+function withCaptureAge(overrides: {
+  hoursAgo?: number;
+  daysAgo?: number;
+  freshForLiveClaim?: boolean;
+}) {
+  const capturedAt =
+    overrides.hoursAgo != null
+      ? new Date(Date.now() - overrides.hoursAgo * 3_600_000).toISOString()
+      : new Date(Date.now() - (overrides.daysAgo ?? 0) * DAY_MS).toISOString();
+  return {
+    ...realProofBrief,
+    fetchedAt: capturedAt,
+    freshForLiveClaim: overrides.freshForLiveClaim ?? false,
+    proofTrail: realProofBrief.proofTrail.map((row, i) =>
+      i === 0 ? { ...row, capturedAt } : row,
+    ),
+  };
+}
+
+describe("hero wall live flag freshness gate (issue #2313)", () => {
+  it("renders no ld-flag when the proof capture is 16h old (on record, not live)", async () => {
+    mockReactRouter(withCaptureAge({ hoursAgo: 16, freshForLiveClaim: false }));
+    const markup = await renderMarketing();
+
+    expect(markup).not.toContain("ld-flag");
+    expect(markup).toContain("right now.");
+  });
+
+  it("renders the ld-flag at the loader's existing freshness boundary (30 days, PROOF_CAPTURE_FRESH_DAYS) when freshForLiveClaim is true", async () => {
+    mockReactRouter(
+      withCaptureAge({ daysAgo: FRESH_BOUNDARY_DAYS, freshForLiveClaim: true }),
+    );
+    const markup = await renderMarketing();
+
+    expect(markup).toContain("ld-flag");
+  });
+});

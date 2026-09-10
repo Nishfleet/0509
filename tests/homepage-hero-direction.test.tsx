@@ -114,8 +114,10 @@ describe("BET 9 chosen hero direction (#1173)", () => {
     expect(chosen).toContain("#1173");
   });
 
-  it("leads with the free live-search promise even when live Nykaa proof is present (#2170)", async () => {
-    mockReactRouter(proofBrief);
+  it("leads with the free live-search promise and shows the live flag when live Nykaa proof is present (#2170, #2313)", async () => {
+    // Issue #2313 gates the "live" flag: it only renders when the loader's
+    // heroProofLive is true, so a genuinely fresh live proof keeps the flag.
+    mockReactRouter({ ...proofBrief, freshForLiveClaim: true });
     const markup = await renderMarketing();
     const h1 = heroH1(markup);
 
@@ -126,6 +128,16 @@ describe("BET 9 chosen hero direction (#1173)", () => {
     expect(h1).toMatch(/<i class="ld-flag">live<\/i>/);
     expect(h1).not.toContain("Unlock the secret to radiant");
     expect(h1).not.toContain("nykaa.com");
+  });
+
+  it("hides the live flag when the proof is not live (on record) but keeps the wall (#2313)", async () => {
+    mockReactRouter(proofBrief);
+    const markup = await renderMarketing();
+    const h1 = heroH1(markup);
+
+    expect(h1).toContain("right now.");
+    expect(h1).toContain("Free, no account.");
+    expect(h1).not.toMatch(/<i class="ld-flag">live<\/i>/);
   });
 
   it("uses the same live-search H1 when there is no live proof", async () => {
