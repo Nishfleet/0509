@@ -24,16 +24,19 @@ export function resolveScheduledTask(cron: string): ScheduledTask {
   }
 
   if (cron === WEEKLY_DIGEST_CRON) {
-    // The Monday 05:00 cron only assembles the weekly digests. Regular scans
-    // run on the three-hour cron, so this path must not double-scan.
+    // The Monday 05:00 UTC cron no longer assembles weekly digests: a single
+    // UTC shot lands Sunday evening in the Americas. The three-hourly
+    // monitoring tick now hosts the weekly cycle and enqueues each
+    // workspace only while its local time sits inside the Monday
+    // 05:00-08:00 window (issue #2406). This cron still fires the weekly
+    // operator business numbers and first-of-month customer recaps —
+    // workers/app.ts keys those on the cron string, not the resolved task.
     return {
       kind: "monitoring",
       includeScans: false,
-      includeDigests: true,
+      includeDigests: false,
       includeMentionResweep: false,
       includeAutoCompetitorResweep: false,
-      digestCadence: "weekly",
-      digestLookbackDays: 7,
     };
   }
 
@@ -50,12 +53,18 @@ export function resolveScheduledTask(cron: string): ScheduledTask {
   }
 
   if (cron === REGULAR_MONITORING_CRON) {
+    // The three-hourly tick also hosts the weekly brief: the digest cycle
+    // enqueues a workspace only while its local time is inside the Monday
+    // 05:00-08:00 window. The window equals the tick spacing, so every
+    // timezone enters it exactly once per local Monday (issue #2406).
     return {
       kind: "monitoring",
       includeScans: true,
-      includeDigests: false,
+      includeDigests: true,
       includeMentionResweep: true,
       includeAutoCompetitorResweep: false,
+      digestCadence: "weekly",
+      digestLookbackDays: 7,
     };
   }
 
