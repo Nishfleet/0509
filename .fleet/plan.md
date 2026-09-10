@@ -14,11 +14,17 @@ The 7 curated slugs (must match the issue verify exactly):
 
 - [x] phase 1: category slugify + curated-slug registry + social-card kind ("brand") in the pure libs (`brand-categories.ts`, `seo.ts`, `social-cards.server.ts`), unit-tested for slug round-trips.
   - reviewer: no critical/warning findings; slugs derive the 7 verify slugs correctly, brand/More-brands -> null, card path matches parse. (commit 7762b4c6)
-- [ ] phase 2: new `/brands/:category` route (`brands.$category.tsx`) — loader reuses the hub's indexable brand source; 404 for unknown / empty category; renders brand list with ad count + Ad Aggression Score.
-- [ ] phase 3: category page SEO — per-category title + category-intent meta description, ItemList JSON-LD, canonical tag, breadcrumb (Home > Brands > Category), og:image+twitter:card = per-category social card.
-- [ ] phase 4: `/brands` hub links to each non-empty category page (and category links back to the hub) so the cluster is internally connected.
-- [ ] phase 5: dynamic sitemap entries for non-empty curated categories (with lastmod), appended via `buildSitemapXml`; empty/"More brands" never emitted.
-- [ ] phase 6: tests (node project only — no typecheck, no `--project workers`) + targeted run to green, then repo checks.
+- [x] phase 2+3: new `/brands/:category` route (`app/routes/brands.$category.tsx`) — loader reuses the hub's indexable brand source (`loadIndexableBrandPageEntries`) and 404s unknown / `more-brands` / empty curated categories; renders each brand with ad count + Ad Aggression Score; per-category title + category-intent meta description, ItemList JSON-LD, BreadcrumbList (Home > Brands > Category), WebPage JSON-LD, canonical, og:image+twitter:card = per-category social card. Registered in `app/routes.ts`.
+  - reviewer: reviewed against the real exports it imports (all exist); loader reduced to a single cache-only read; bounded score enrichment degrades to honest `null`, never 500. (commit accc1dc4)
+- [x] phase 4: `/brands` hub links every NON-EMPTY curated category to its `/brands/<slug>` page (derived, never hard-coded) and each category page links back to the hub.
+- [x] phase 5: `brandCategorySitemapEntries()` — one entry per non-empty curated category, `lastmod` = newest brand lastmod, threaded through `buildSitemapXml` (optional 3rd param, backward compatible) + `publicSitemapFile`.
+- [x] phase 6: tests added (`brand-categories.slug`, `brands-category.loader`, `brands-category.render`, `brands-route.render`, `sitemap.server`, `social-cards`) — node project only, no typecheck / no `--project workers`.
+  - reviewer: manager re-run on the final commit — 8 files / 178 tests green, then the full affected suite `--changed origin/main` 259 files / 3122 tests green.
+
+## Phase records
+- phase 1: reviewer clean (commit 7762b4c6).
+- phases 2-3 / 4 / 5 / 6: single implementation commit `accc1dc4` on top of `a1ede9c3`; per-phase reviewer note above. No phase stalled; no phase needed a retry round.
+- Amendments: none. All 6 phases shipped as planned; no phase was dropped or added.
 
 ## Files to Modify
 - `app/lib/brand-categories.ts` — add slug->label helpers + curated slug list, reusing the registry (no new classification source).
