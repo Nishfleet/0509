@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
 
 const specDir = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(specDir, "../..");
+const repoRoot = path.resolve(specDir, "..");
 const fixtures = JSON.parse(
   readFileSync(path.join(specDir, "search-landing-page-capture.fixtures.json"), "utf8"),
 ) as Array<{
