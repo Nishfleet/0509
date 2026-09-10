@@ -365,6 +365,37 @@ export function breadcrumbListJsonLd(
   } as const;
 }
 
+export interface ItemListJsonLdEntry {
+  name: string;
+  pathname: string;
+}
+
+/**
+ * schema.org ItemList for a browse-hub page that links a set of sibling
+ * pages (issue #2215). The /brands hub lists every indexable /ads/:domain
+ * brand page; wrapping that set in an ItemList tells Google the page is a
+ * browsable collection and lets it connect the brand pages as a cluster
+ * (collection rich results / internal-link graph) instead of reading a flat
+ * page. Each ListItem's `item` URL is derived from its pathname via
+ * `canonicalUrl` so the structured data can never drift from the site's
+ * canonical URL scheme, and the `name` matches the visible link label.
+ *
+ * Emitted only when the hub actually lists brands — an empty hub renders no
+ * ItemList (nothing to enumerate).
+ */
+export function itemListJsonLd(entries: ReadonlyArray<ItemListJsonLdEntry>) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    itemListElement: entries.map((entry, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: entry.name,
+      item: canonicalUrl(entry.pathname),
+    })),
+  } as const;
+}
+
 /**
  * schema.org WebPage for a public informational page. Deliberately plain: it
  * states only what the page already shows — its name, its description, and the
