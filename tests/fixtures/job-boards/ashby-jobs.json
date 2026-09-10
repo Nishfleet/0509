@@ -1,0 +1,20 @@
+{
+  "jobs": [
+    {
+      "id": "a1",
+      "title": "Product Designer",
+      "location": { "name": "London" },
+      "department": "Design",
+      "jobUrl": "https://jobs.ashbyhq.com/gamma/a1",
+      "publishedAt": "2026-02-01T00:00:00Z"
+    },
+    {
+      "id": "a2",
+      "title": "Analytics Engineer",
+      "location": { "name": "Remote" },
+      "team": { "name": "Data" },
+      "jobUrl": "https://jobs.ashbyhq.com/gamma/a2",
+      "publishedAt": "2026-02-02T00:00:00Z"
+    }
+  ]
+}
