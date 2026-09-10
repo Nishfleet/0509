@@ -2,6 +2,26 @@ const LOOPBACK_HOST = "127.0.0.1";
 const E2E_TEST_MODE_HEADER = "x-0509-e2e-test-mode";
 const E2E_FIXTURE_COOKIE = "f9_e2e_fixture";
 
+/**
+ * Production environment gate for the e2e harness routes (issue #2346). The
+ * `api.e2e.*` route modules ship in the production route table; their runtime
+ * guard (`isE2ETestRequestEnabled`) already fails closed off a production host,
+ * but that check lives inside the modules and still loads the replay libs.
+ * This gate short-circuits to a 404 in a production build before any replay
+ * code runs, so the harness routes cannot execute in production regardless
+ * of host or headers. `process.env.NODE_ENV` is statically `"production"` in a
+ * deployed build and `"development"`/`"test"` elsewhere (see `workers/app.ts`),
+ * matching the build mode the request handler is created with.
+ */
+export function isE2EProductionEnvironment(): boolean {
+  return process.env.NODE_ENV === "production";
+}
+
+/** The 404 returned by the production gate. Uncached, empty body. */
+export function e2eProductionGateResponse(): Response {
+  return new Response(null, { status: 404, headers: { "cache-control": "no-store" } });
+}
+
 export const E2E_HARNESS_REPLAY_MAX_JSON_BYTES = 16 * 1024;
 export const E2E_HARNESS_CLOCK_FUTURE_TOLERANCE_MS = 60 * 1000;
 export const E2E_HARNESS_GUARD_FAILURE_RESPONSE = Object.freeze({

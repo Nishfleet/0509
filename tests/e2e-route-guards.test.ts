@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 /**
  * G2 (tri-audit safety): eleven `api/e2e/*` routes ship in the production
@@ -17,6 +17,7 @@ import { describe, expect, it } from "vitest";
 const ROUTES_DIR = join(__dirname, "..", "app", "routes");
 const LIB_DIR = join(__dirname, "..", "app", "lib");
 const GUARD = "isE2ETestRequestEnabled(";
+const PROD_GATE = "isE2EProductionEnvironment()";
 
 function readRoute(name: string): string {
   return readFileSync(join(ROUTES_DIR, name), "utf8");
@@ -47,6 +48,28 @@ function isGuarded(source: string, seen = new Set<string>()): boolean {
   return false;
 }
 
+/**
+ * Issue #2346: every `api/e2e.*` route module must also carry the production
+ * environment gate (`isE2EProductionEnvironment()`), which 404s in a
+ * production build before any replay code runs. Re-export-only route files
+ * inherit the gate from the base route they re-export, so this follows
+ * `~/routes/api.e2e.*` re-exports the same way `isGuarded` does.
+ */
+function isProductionGated(source: string, seen = new Set<string>()): boolean {
+  if (source.includes(PROD_GATE)) return true;
+
+  const reExports = [...source.matchAll(/~\/routes\/(api\.e2e\.[a-z0-9.-]+)"/g)].map(
+    (match) => `${match[1]}.ts`,
+  );
+  for (const route of reExports) {
+    if (seen.has(route)) continue;
+    seen.add(route);
+    if (isProductionGated(readRoute(route), seen)) return true;
+  }
+
+  return false;
+}
+
 describe("every api/e2e route is fail-closed", () => {
   const e2eRoutes = readdirSync(ROUTES_DIR).filter(
     (name) => name.startsWith("api.e2e.") && name.endsWith(".ts"),
@@ -59,6 +82,18 @@ describe("every api/e2e route is fail-closed", () => {
   for (const name of e2eRoutes) {
     it(`${name} carries or inherits the ${GUARD}...) guard call`, () => {
       expect(isGuarded(readRoute(name), new Set([name]))).toBe(true);
+    });
+  }
+});
+
+describe("every api/e2e route carries the production environment gate (issue #2346)", () => {
+  const e2eRoutes = readdirSync(ROUTES_DIR).filter(
+    (name) => name.startsWith("api.e2e.") && name.endsWith(".ts"),
+  );
+
+  for (const name of e2eRoutes) {
+    it(`${name} carries or inherits the ${PROD_GATE} production gate`, () => {
+      expect(isProductionGated(readRoute(name), new Set([name]))).toBe(true);
     });
   }
 });
@@ -148,5 +183,88 @@ describe("legacy /app/ops POSTs survive the extraction (G4)", () => {
     const response = action();
     expect(response.status).toBe(307);
     expect(response.headers.get("Location")).toBe("/ops");
+  });
+});
+
+/**
+ * Issue #2346: every `api/e2e.*` route module is gated behind an env check
+ * (`isE2EProductionEnvironment`) that returns 404 when the build is a
+ * production build (`process.env.NODE_ENV === "production"`). The request
+ * below is shaped to PASS the existing test-mode guard in dev (local host +
+ * `E2E_TEST_MODE` env flag + test-mode header + fixture cookie + a D1
+ * sentinel that reports enabled) — so the only thing that can produce the
+ * 404 under a production environment is the production gate, not the
+ * test-mode guard. Without the gate these requests would proceed into the
+ * replay logic; with it they short-circuit to 404 before any replay code runs.
+ */
+describe("every api/e2e route 404s under a production environment (issue #2346)", () => {
+  const sentinelDb = {
+    prepare: () => ({
+      bind: () => ({
+        first: async () => ({ enabled: 1 }),
+        run: async () => ({ meta: { changes: 0 } }),
+      }),
+    }),
+  } as unknown as D1Database;
+
+  const prodTestContext = {
+    cloudflare: { env: { E2E_TEST_MODE: "1", DB: sentinelDb } },
+  } as never;
+
+  function e2eRequest(method: string) {
+    return new Request("http://127.0.0.1:43127/api/e2e/anything", {
+      method,
+      headers: {
+        "x-0509-e2e-test-mode": "1",
+        cookie: "f9_e2e_fixture=e2e-starter",
+        "content-type": "application/json",
+      },
+    });
+  }
+
+  it("returns 404 from every e2e loader and action when NODE_ENV is production", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    try {
+      const routes = readdirSync(join(__dirname, "..", "app", "routes"))
+        .filter((name) => name.startsWith("api.e2e.") && name.endsWith(".ts"))
+        .map((name) => `~/routes/${name.slice(0, -3)}`);
+      expect(routes.length).toBeGreaterThanOrEqual(11);
+
+      for (const path of routes) {
+        const module = (await import(/* @vite-ignore */ path)) as {
+          loader?: (args: unknown) => Promise<unknown>;
+          action?: (args: unknown) => Promise<unknown>;
+        };
+        if (module.loader) {
+          const result = (await module.loader({
+            context: prodTestContext,
+            params: {},
+            request: e2eRequest("GET"),
+          })) as Response;
+          expect(result.status, `${path} loader`).toBe(404);
+          expect(result.headers.get("cache-control"), `${path} loader`).toBe("no-store");
+        }
+        if (module.action) {
+          const result = (await module.action({
+            context: prodTestContext,
+            params: {},
+            request: e2eRequest("POST"),
+          })) as Response;
+          expect(result.status, `${path} action`).toBe(404);
+          expect(result.headers.get("cache-control"), `${path} action`).toBe("no-store");
+        }
+      }
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("the production gate is the cause: with NODE_ENV=test the gate helper reports non-production", async () => {
+    const { isE2EProductionEnvironment } = await import("~/lib/e2e-harness-guard.server");
+    expect(isE2EProductionEnvironment()).toBe(false);
+    vi.stubEnv("NODE_ENV", "production");
+    expect(isE2EProductionEnvironment()).toBe(true);
+    vi.unstubAllEnvs();
+    expect(isE2EProductionEnvironment()).toBe(false);
   });
 });
