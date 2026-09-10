@@ -61,7 +61,11 @@ async function countPendingWelcomeAttempts(userId: string): Promise<number> {
 describe("sendWelcomeEmail dispatch (real D1)", () => {
   it("sends the welcome email once against a provisioned delivery target", async () => {
     const userId = await seedUser();
-    const emailSend = async () => ({ messageId: `msg_${userId}` });
+    let sendCalls = 0;
+    const emailSend = async () => {
+      sendCalls += 1;
+      return { messageId: `msg_${userId}` };
+    };
     const env = welcomeEnv(emailSend);
 
     const result = await sendWelcomeEmail(env, {
@@ -72,6 +76,8 @@ describe("sendWelcomeEmail dispatch (real D1)", () => {
 
     expect(result.sent).toBe(true);
     expect(result.reason).toBe("sent");
+    // The welcome email is sent exactly once (no retry loop, no duplicate).
+    expect(sendCalls).toBe(1);
 
     // The welcome claim must have advanced past the customer-lane dispatch gate
     // (real SQL, not a mock): the attempt row is no longer pending.
