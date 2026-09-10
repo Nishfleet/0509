@@ -185,7 +185,14 @@ export async function action({ context, request }: ActionFunctionArgs) {
     return Response.json({ ok: true, duplicate: true, outcome: claim.outcome });
   }
   if (claim.status === "in_progress") {
-    return Response.json({ ok: true, duplicate: true, inProgress: true });
+    // Another worker holds a live lease on this event. A 200 here would tell
+    // Dodo to stop retrying, stranding the payment when that worker dies
+    // before finalizing. Answer 503 + retry-after so Dodo redelivers after
+    // the lease expires and the reclaim path can pick the work back up.
+    throw new Response(DODO_WEBHOOK_PROCESSING_FAILURE_MESSAGE, {
+      status: 503,
+      headers: { "cache-control": "no-store", "retry-after": "60" },
+    });
   }
   const lifecycleEmailRetry = claim.lifecycleEmailRetry ?? null;
 
