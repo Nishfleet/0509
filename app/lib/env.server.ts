@@ -159,6 +159,13 @@ export interface AppEnv {
    * flip, not a code revert). See issue #1276.
    */
   SIGNUP_FIRST_BRIEF_ENABLED?: string;
+  /**
+   * Agency mode org-keyed ownership gate (issue #2176). When true, new
+   * watchlists, rooms, share links and API keys are dual-written with an
+   * org_id. Default off until Nish flips it — the Agency plan stays fiction
+   * until the data model is organization-scoped.
+   */
+  AGENCY_ORG_MODE_ENABLED?: string;
   /** HMAC secret for one-time OAuth transactions (32+ bytes). Fail closed when missing. */
   PRESENCE_OAUTH_STATE_SECRET?: string;
   /** Owner-documented internal workspace user id for presence pilot (never a customer id). */
@@ -278,6 +285,11 @@ export function isFullSiteWatchAllowedForHost(env: AppEnv, websiteUrl: string): 
 /** BET 7 — same-session first brief gate (issue #1276). Default off. */
 export function isSignupFirstBriefEnabled(env: AppEnv) {
   return parseEnvFlag(env.SIGNUP_FIRST_BRIEF_ENABLED);
+}
+
+/** Agency mode org-keyed ownership gate (issue #2176). Default off. */
+export function isAgencyOrgModeEnabled(env: AppEnv) {
+  return parseEnvFlag(env.AGENCY_ORG_MODE_ENABLED);
 }
 
 export function emailFromAddress(env: AppEnv) {
