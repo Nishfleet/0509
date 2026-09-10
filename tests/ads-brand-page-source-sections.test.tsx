@@ -572,3 +572,101 @@ describe("/ads/:domain source sections tolerate a loader payload without the fie
     expect(markup).not.toContain('id="brand-google-ads-title"');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Loader-level: the claim gate + snapshot presence (issue #2200 step 1).
+// These drive loadBrandPageSourceSnapshots against a fake D1 instead of a
+// stubbed snapshot array, so the actual gate the issue is about —
+// "live claim row AND a stored snapshot" — is proven, not assumed.
+// ---------------------------------------------------------------------------
+
+describe("loadBrandPageSourceSnapshots — the claim gate and snapshot presence (issue #2200 step 1)", () => {
+  function fakeD1(watchlists: unknown[], snapshots: unknown[]) {
+    const sqls: string[] = [];
+    const env = {
+      DB: {
+        prepare(sql: string) {
+          return {
+            bind(..._b: unknown[]) {
+              sqls.push(sql);
+              return {
+                async all() {
+                  if (sql.includes("FROM watchlist")) return { results: watchlists };
+                  throw new Error(`Unexpected all(): ${sql}`);
+                },
+                async first() {
+                  if (sql.includes("FROM source_snapshot")) {
+                    return snapshots.find((s) => {
+                      const row = s as { source_id: string };
+                      return row.source_id === _b[1];
+                    }) ?? null;
+                  }
+                  throw new Error(`Unexpected first(): ${sql}`);
+                },
+              };
+            },
+          };
+        },
+      },
+    } as never;
+    return { env, sqls };
+  }
+
+  function snapshotRow(sourceId: string, fetchedAt: string) {
+    return {
+      id: `snap-${sourceId}`,
+      watchlist_id: "wl-1",
+      source_id: sourceId,
+      fetched_at: fetchedAt,
+      payload_json: JSON.stringify({ domain: "nike.com", fetchedAt }),
+      created_at: fetchedAt,
+    };
+  }
+
+  const tracking = [{ id: "wl-1", target_id: "https://nike.com" }];
+
+  it("omits a source whose snapshot exists but whose claim row is not live", async () => {
+    // `google` is a registered but NOT-implemented adapter (stub), so its
+    // claim row is not live. A stored snapshot must NOT render it.
+    const { env } = fakeD1(tracking, [
+      snapshotRow("google", "2026-09-01T00:00:00Z"),
+      snapshotRow("google_ads", "2026-09-01T00:00:00Z"),
+    ]);
+    const { loadBrandPageSourceSnapshots } = await import(
+      "~/components/brand-page/source-snapshots.server"
+    );
+    const result = await loadBrandPageSourceSnapshots(env, "nike.com");
+    // The live source with a snapshot comes back; the not-live one does not.
+    expect(result.map((r) => r.sourceId)).toEqual(["google_ads"]);
+  });
+
+  it("omits a live source that has no stored snapshot", async () => {
+    const { env } = fakeD1(tracking, []);
+    const { loadBrandPageSourceSnapshots } = await import(
+      "~/components/brand-page/source-snapshots.server"
+    );
+    const result = await loadBrandPageSourceSnapshots(env, "nike.com");
+    expect(result).toEqual([]);
+  });
+
+  it("returns a live source that has a stored snapshot for the tracking watchlist", async () => {
+    const { env } = fakeD1(tracking, [snapshotRow("google_ads", "2026-09-01T00:00:00Z")]);
+    const { loadBrandPageSourceSnapshots } = await import(
+      "~/components/brand-page/source-snapshots.server"
+    );
+    const result = await loadBrandPageSourceSnapshots(env, "nike.com");
+    expect(result.map((r) => r.sourceId)).toEqual(["google_ads"]);
+  });
+
+  it("ignores a watchlist that tracks a different domain", async () => {
+    const { env } = fakeD1(
+      [{ id: "wl-1", target_id: "https://adidas.com" }],
+      [snapshotRow("google_ads", "2026-09-01T00:00:00Z")],
+    );
+    const { loadBrandPageSourceSnapshots } = await import(
+      "~/components/brand-page/source-snapshots.server"
+    );
+    const result = await loadBrandPageSourceSnapshots(env, "nike.com");
+    expect(result).toEqual([]);
+  });
+});
