@@ -66,14 +66,12 @@ describe("ops liveness probe", () => {
     expect(readFileSync(TIMER, "utf8")).toContain("Persistent=true");
   });
 
-  it("asserts the current production searchRolloutMode (v2), not the long-gone shadow mode", () => {
+  it("asserts public status/app/checks and tolerates a missing release identity", () => {
     const probe = readFileSync(PROBE, "utf8");
-    expect(probe).toContain('"v2"');
-    expect(probe).not.toContain('"shadow"');
     expect(probe).toContain('payload.get("status")');
+    expect(probe).toContain('payload.get("app")');
     expect(probe).toContain('checks.get("d1")');
     expect(probe).toContain('checks.get("scheduledWork")');
-    expect(probe).toContain("[A-Za-z0-9._-]{1,128}");
     expect(probe).toContain("--max-time 20");
     expect(probe).toContain("--retry 2");
   });
@@ -86,15 +84,15 @@ describe("ops liveness probe", () => {
         LIVENESS_STATE_DIR: stateDir,
         HEALTH_URL: "https://0509.io/api/health",
         DEEP_HEALTH_URL: "https://0509.io/api/health/deep",
+        // Anonymous callers no longer receive releaseIdentity; the probe must
+        // still pass on public status/app/checks alone.
         FAKE_SHALLOW_PAYLOAD: JSON.stringify({
           status: "ok",
           app: "0509",
-          releaseIdentity: { workerVersionId: "worker-v1", searchRolloutMode: "v2" },
         }),
         FAKE_DEEP_PAYLOAD: JSON.stringify({
           status: "ok",
           checks: { d1: "ok", scheduledWork: "ok" },
-          releaseIdentity: { workerVersionId: "worker-v1", searchRolloutMode: "v2" },
         }),
       },
       encoding: "utf8",
@@ -111,13 +109,13 @@ describe("ops liveness probe", () => {
     expect(records.length).toBe(1);
     const record = JSON.parse(records[0]);
     expect(record.ok).toBe(true);
-    expect(record.workerVersionId).toBe("worker-v1");
-    expect(record.searchRolloutMode).toBe("v2");
+    expect(record.workerVersionId).toBeNull();
+    expect(record.searchRolloutMode).toBeNull();
     expect(record.d1).toBe("ok");
     expect(record.scheduledWork).toBe("ok");
     const latest = JSON.parse(readFileSync(join(stateDir, "latest.json"), "utf8"));
     expect(latest.status).toBe("ok");
-    expect(latest.workerVersionId).toBe("worker-v1");
+    expect(latest.workerVersionId).toBeNull();
     expect(latest.error).toBeNull();
   });
 

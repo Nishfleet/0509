@@ -35,10 +35,31 @@ describe("health route", () => {
     expect(typeof body.timestamp).toBe("string");
   });
 
-  it("exposes bounded worker release identity and normalized rollout mode", async () => {
+  it("omits release identity for anonymous callers even when metadata is present", async () => {
     const { loader } = await import("~/routes/api.health");
     const response = await loader({
       context: createContext({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        CF_VERSION_METADATA: {
+          id: "worker-version-123",
+          tag: "release-2026-07-15",
+          timestamp: "2026-07-15T10:00:00.000Z",
+        },
+        SEARCH_ROLLOUT_MODE: "v2",
+      }),
+      request: new Request("https://0509.io/api/health"),
+    } as never);
+
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body).not.toHaveProperty("releaseIdentity");
+    expect(JSON.stringify(body)).not.toContain("worker-version-123");
+  });
+
+  it("exposes bounded worker release identity and normalized rollout mode to a tokened caller", async () => {
+    const { loader } = await import("~/routes/api.health");
+    const response = await loader({
+      context: createContext({
+        CANARY_BYPASS_TOKEN: "secret-token",
         CF_VERSION_METADATA: {
           id: "worker-version-123",
           tag: "release-2026-07-15",
@@ -46,7 +67,9 @@ describe("health route", () => {
         },
         SEARCH_ROLLOUT_MODE: "  SHADOW ",
       }),
-      request: new Request("https://0509.io/api/health"),
+      request: new Request("https://0509.io/api/health", {
+        headers: { "x-0509-canary-token": "secret-token" },
+      }),
     } as never);
 
     const body = (await response.json()) as Record<string, unknown>;
@@ -59,11 +82,33 @@ describe("health route", () => {
     expect(JSON.stringify(body)).not.toContain("SECRET");
   });
 
-  it("returns null release identity fields when version metadata is absent", async () => {
+  it("rejects a wrong canary token even when one is presented", async () => {
     const { loader } = await import("~/routes/api.health");
     const response = await loader({
-      context: createContext({ SEARCH_ROLLOUT_MODE: "" }),
-      request: new Request("https://0509.io/api/health"),
+      context: createContext({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        CF_VERSION_METADATA: { id: "worker-version-123" },
+      }),
+      request: new Request("https://0509.io/api/health", {
+        headers: { "x-0509-canary-token": "wrong-token" },
+      }),
+    } as never);
+
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body).not.toHaveProperty("releaseIdentity");
+    expect(JSON.stringify(body)).not.toContain("worker-version-123");
+  });
+
+  it("returns null release identity fields to a tokened caller when version metadata is absent", async () => {
+    const { loader } = await import("~/routes/api.health");
+    const response = await loader({
+      context: createContext({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        SEARCH_ROLLOUT_MODE: "",
+      }),
+      request: new Request("https://0509.io/api/health", {
+        headers: { "x-0509-canary-token": "secret-token" },
+      }),
     } as never);
 
     const body = (await response.json()) as Record<string, unknown>;
@@ -75,10 +120,11 @@ describe("health route", () => {
     });
   });
 
-  it("nulls unbounded or control-character release metadata", async () => {
+  it("nulls unbounded or control-character release metadata for a tokened caller", async () => {
     const { loader } = await import("~/routes/api.health");
     const response = await loader({
       context: createContext({
+        CANARY_BYPASS_TOKEN: "secret-token",
         CF_VERSION_METADATA: {
           id: "x".repeat(129),
           tag: "release\nSECRET",
@@ -86,7 +132,9 @@ describe("health route", () => {
         },
         SEARCH_ROLLOUT_MODE: "shadow\nSECRET",
       }),
-      request: new Request("https://0509.io/api/health"),
+      request: new Request("https://0509.io/api/health", {
+        headers: { "x-0509-canary-token": "secret-token" },
+      }),
     } as never);
 
     const body = JSON.stringify(await response.json());
