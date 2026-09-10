@@ -48,7 +48,7 @@ const staleSignals = [
 const requiredSourceSignals = [
   "Know when competitors change the offer.",
   "Stop finding out after the sales call.",
-  "Recommended launch plan",
+  "Recommended",
   "Start with Starter",
   "PUBLISHED_PLAN_PRICES_USD",
   "PUBLISHED_BUNDLE_PRICES_USD",
@@ -57,7 +57,7 @@ const requiredSourceSignals = [
 const requiredBuildSignals = [
   "Know when competitors change the offer.",
   "Stop finding out after the sales call.",
-  "Recommended launch plan",
+  "Recommended",
   "Start with Starter",
 ];
 
