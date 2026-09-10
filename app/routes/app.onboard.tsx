@@ -84,9 +84,8 @@ async function firstBriefLoader(
     hasEvidenceLinkedItem,
     buildSignupFirstBriefPayload,
   } = await import("~/lib/first-brief");
-  const { emitFunnelFirstBriefViewed } = await import(
-    "~/lib/funnel-measurement.server"
-  );
+  const { emitFunnelFirstBriefViewed, activationResultEmailSent } =
+    await import("~/lib/funnel-measurement.server");
   const { shouldEnsureFirstBrief } = await import("~/lib/first-brief");
 
   const { workspaceUserId } = await requireWorkspaceSession(env, request);
@@ -192,5 +191,13 @@ async function firstBriefLoader(
     step: "first-brief",
     status: "ready",
     brief: payload,
+    // Issue #2407: the ready state may only claim "we've emailed this brief to
+    // you" when the activation-result delivery attempt actually reached
+    // `sent` — a delivery failure is swallowed in the scan path, so the
+    // surface must read the attempt row instead of assuming success.
+    activationEmailSent: await activationResultEmailSent(env, {
+      userId: workspaceUserId,
+      watchlistId: payload.watchlistId,
+    }),
   };
 }
