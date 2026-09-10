@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AdRecord, LandingPageSnapshotData } from "~/lib/types";
-import fixtures from "./e2e/search-landing-page-capture.fixtures.json";
+import fixtures from "../e2e/search-landing-page-capture.fixtures.json";
 
 type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
 type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
