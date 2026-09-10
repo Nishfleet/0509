@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * Seam #2218 — generic competitor-source field action on
@@ -16,14 +16,12 @@ let lastUpdate: { sql: string; binds: unknown[] } | null = null;
 
 function makePrepared() {
   return {
-    prepare: vi.fn(() => ({
-      bind: vi.fn(function (this: unknown, ...binds: unknown[]) {
-        return {
-          run: vi.fn(() => {
-            lastUpdate = { sql: (this as { sql?: string })?.sql ?? "", binds };
-          }),
-        };
-      }),
+    prepare: vi.fn((sql: string) => ({
+      bind: vi.fn((...binds: unknown[]) => ({
+        run: vi.fn(() => {
+          lastUpdate = { sql, binds };
+        }),
+      })),
     })),
   };
 }
@@ -44,6 +42,8 @@ vi.mock("~/lib/data/d1.server", () => ({
   ensureDb: vi.fn().mockReturnValue(makePrepared()),
 }));
 
+const { getWatchlist } = await import("~/lib/data.server");
+
 function makeRequest(formData: FormData) {
   return new Request("https://0509.io/app/watchlists/wl-1", {
     method: "POST",
@@ -60,6 +60,11 @@ function makeArgs(formData: FormData) {
 }
 
 describe("update-source-field action (seam #2218)", () => {
+  beforeEach(() => {
+    vi.mocked(getWatchlist).mockReset();
+    lastUpdate = null;
+  });
+
   it("rejects an unknown intent", async () => {
     const { action } = await import("~/routes/app.watchlists.$watchlistId");
     const formData = new FormData();
@@ -69,8 +74,6 @@ describe("update-source-field action (seam #2218)", () => {
   });
 
   it("rejects an invalid (sourceId, field) combination", async () => {
-    const { getWatchlist } = await import("~/lib/data.server");
-    vi.mocked(getWatchlist).mockResolvedValueOnce({ id: watchlistId, isActive: true } as never);
     const { action } = await import("~/routes/app.watchlists.$watchlistId");
     const formData = new FormData();
     formData.set("intent", "update-source-field");
@@ -82,7 +85,6 @@ describe("update-source-field action (seam #2218)", () => {
   });
 
   it("returns not_found when the watchlist does not exist", async () => {
-    const { getWatchlist } = await import("~/lib/data.server");
     vi.mocked(getWatchlist).mockResolvedValueOnce(null as never);
     const { action } = await import("~/routes/app.watchlists.$watchlistId");
     const formData = new FormData();
@@ -96,7 +98,6 @@ describe("update-source-field action (seam #2218)", () => {
 
   it("writes tiktok_advertiser for the tiktok source", async () => {
     lastUpdate = null;
-    const { getWatchlist } = await import("~/lib/data.server");
     vi.mocked(getWatchlist).mockResolvedValueOnce({ id: watchlistId, isActive: true } as never);
     const { action } = await import("~/routes/app.watchlists.$watchlistId");
     const formData = new FormData();
@@ -114,7 +115,6 @@ describe("update-source-field action (seam #2218)", () => {
 
   it("writes job_board_verified coerced to 1 for a truthy value", async () => {
     lastUpdate = null;
-    const { getWatchlist } = await import("~/lib/data.server");
     vi.mocked(getWatchlist).mockResolvedValueOnce({ id: watchlistId, isActive: true } as never);
     const { action } = await import("~/routes/app.watchlists.$watchlistId");
     const formData = new FormData();
@@ -129,7 +129,6 @@ describe("update-source-field action (seam #2218)", () => {
 
   it("writes job_board_verified coerced to 0 for a falsy value", async () => {
     lastUpdate = null;
-    const { getWatchlist } = await import("~/lib/data.server");
     vi.mocked(getWatchlist).mockResolvedValueOnce({ id: watchlistId, isActive: true } as never);
     const { action } = await import("~/routes/app.watchlists.$watchlistId");
     const formData = new FormData();
@@ -144,7 +143,6 @@ describe("update-source-field action (seam #2218)", () => {
 
   it("writes job_board_provider for the hiring source", async () => {
     lastUpdate = null;
-    const { getWatchlist } = await import("~/lib/data.server");
     vi.mocked(getWatchlist).mockResolvedValueOnce({ id: watchlistId, isActive: true } as never);
     const { action } = await import("~/routes/app.watchlists.$watchlistId");
     const formData = new FormData();
