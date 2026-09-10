@@ -371,6 +371,13 @@ async function searchMetaLibraryViaSessions(
   mode: MetaLibraryBrowserMode,
   sessionOptions: { onPartialResults?: (ads: AdRecord[]) => void | Promise<void> } = {},
 ): Promise<SearchResponse> {
+  console.info(
+    JSON.stringify({
+      event: "meta_library_strategy_invoked",
+      strategy: "session_scrape",
+      ts: new Date().toISOString(),
+    }),
+  );
   let browser: BrowserInstance | null = null;
   let browserContext: BrowserContext | null = null;
   let page: BrowserPage | null = null;
@@ -1069,6 +1076,13 @@ async function searchMetaLibraryByQuickActions(
   env: AppEnv,
   query: NormalizedSavedQuery,
 ): Promise<MetaDiscoveryLegResult> {
+  console.info(
+    JSON.stringify({
+      event: "meta_library_strategy_invoked",
+      strategy: "quick_actions",
+      ts: new Date().toISOString(),
+    }),
+  );
   try {
     const extracted = await extractMetaLibraryByQuickActions(env, query);
     if (extracted.cards.length === 0) {
@@ -1384,6 +1398,13 @@ async function searchMetaLibraryByBrowserless(
   env: AppEnv,
   query: NormalizedSavedQuery,
 ): Promise<SearchResponse> {
+  console.info(
+    JSON.stringify({
+      event: "meta_library_strategy_invoked",
+      strategy: "browserless_bql",
+      ts: new Date().toISOString(),
+    }),
+  );
   let lastEmptyResult: CommercialDiscoveryError | null = null;
 
   for (
