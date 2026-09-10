@@ -150,7 +150,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   const dedicatedCanaryEmail =
-    env.BILLING_CANARY_EMAIL?.trim() || BILLING_CANARY_USER_EMAIL;
+    (env.BILLING_CANARY_EMAIL?.trim() || BILLING_CANARY_USER_EMAIL).toLowerCase();
   const canaryEmail = canaryInput.email ?? dedicatedCanaryEmail;
   if (!canaryEmail) {
     return canaryFailure("missing_launch_canary_email");
