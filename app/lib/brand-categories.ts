@@ -49,6 +49,69 @@ export function brandCategoryForDomain(domain: string): string {
 }
 
 /**
+ * Kebab-slug for a category label (issue #2067). Derives the URL slug from
+ * the label so the registry (`BRAND_CATEGORIES`) stays the single source of
+ * truth — there is no separately-maintained slug map to drift. The label is
+ * lowercased and every run of non-`[a-z0-9]` characters (spaces, `&`, dots,
+ * apostrophes) collapses to a single `-`, with leading/trailing `-` stripped.
+ * This maps the 7 curated labels to exactly the issue's verify slugs:
+ *   "Sport & footwear"        -> sport-footwear
+ *   "E-commerce"              -> e-commerce
+ *   "Beauty & personal care"  -> beauty-personal-care
+ *   "Optical & eyewear"       -> optical-eyewear
+ *   "SaaS & software"         -> saas-software
+ *   "Wearables & health"      -> wearables-health
+ *   "Wallet & accessories"    -> wallet-accessories
+ * The single `[^a-z0-9]+` run handles `&` together with its surrounding
+ * spaces so "Sport & footwear" becomes `sport-footwear` — never a stray
+ * double separator (each run collapses to one `-`).
+ */
+export function brandCategorySlug(category: string): string {
+  return category
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/**
+ * The curated category labels — every distinct value in `BRAND_CATEGORIES`
+ * except the `BRAND_CATEGORY_OTHER` fallback ("More brands"). Derived from
+ * the registry (no second classification source), deduped, in
+ * first-appearance order.
+ */
+const CURATED_CATEGORY_LABELS: readonly string[] = [
+  ...new Set(
+    Object.values(BRAND_CATEGORIES).filter(
+      (category) => category !== BRAND_CATEGORY_OTHER,
+    ),
+  ),
+];
+
+/**
+ * The derived slug list for the curated categories (issue #2067). Excludes
+ * "More brands" — the fallback bucket has no landing page, so it must never
+ * appear here. The route builder and sitemap both derive their category set
+ * from this, so they can never drift from the registry.
+ */
+export const CURATED_BRAND_CATEGORY_SLUGS: readonly string[] =
+  CURATED_CATEGORY_LABELS.map(brandCategorySlug);
+
+/**
+ * Resolve a URL slug back to its curated category label (issue #2067).
+ * Matches against the slugs derived from the curated labels only — so the
+ * "More brands" placeholders and arbitrary slugs resolve to `null` (the
+ * route 404s on those).
+ */
+export function brandCategoryFromSlug(slug: string): string | null {
+  const normalized = slug.trim().toLowerCase();
+  for (const label of CURATED_CATEGORY_LABELS) {
+    if (brandCategorySlug(label) === normalized) return label;
+  }
+  return null;
+}
+
+/**
  * Group a set of brand records (anything carrying a `domain` field, e.g. the
  * `IndexableAdsLink` shape) into ordered categories for the /brands hub. The
  * first-appearance order of each named category is preserved, with the
