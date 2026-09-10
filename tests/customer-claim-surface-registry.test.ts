@@ -154,7 +154,6 @@ const CLAIM_CHECKS: Record<string, ClaimCheck> = {
   "COMPAT-MOBILE-A11Y": sourcePatternCheck(/Firefox|WebKit|Safari|Android Chrome/iu),
   "GA-AGENCY-STATUS": sourcePatternCheck(/release|readiness|GA/iu),
   "E2E-CANARY-ROUTES": sourcePatternCheck(/api\/e2e|guardE2EHarnessReplayRequest/u),
-  "DAILY-MONITORING-ALIAS": sourcePatternCheck(/DAILY_MONITORING_CRON\s*=\s*DAILY_DIGEST_CRON/u),
   "NATIVE-APP-EDITING": sourcePatternCheck(/Native app work is `LATER\/REJECT`|native app.*REJECT/iu),
 };
 
@@ -205,7 +204,6 @@ const expectedClaimIds = [
 
 const expectedExclusionIds = [
   "E2E-CANARY-ROUTES",
-  "DAILY-MONITORING-ALIAS",
   "NATIVE-APP-EDITING",
 ] as const;
 
@@ -257,8 +255,11 @@ function registryContractSha256() {
 // Slack+Teams/WhatsApp-dormant truth; no proof fabricated).
 // 2026-09-09: re-pinned after the vendor compare-page wipe (issue #2127)
 // removed the COMPARE-MIGRATION-AFTERNOON claim with its deleted source route.
+// 2026-09-10: re-pinned after issue #2370 deleted the DAILY-MONITORING-ALIAS
+// exclusion — the deprecated schedule alias it documented is gone, so the
+// registry freeze is thawed for this entry (deprecation completed).
 const EXPECTED_REGISTRY_CONTRACT_SHA256 =
-  "87bf75b1fe5c090d8745373d670a4a6ec55629f682d6040f31533d28f0ac7fa7";
+  "c4a28a52b5b0126c37ca57be4d3c5b82b6c3dfd9f799a9cdaa8264e04e77923d";
 
 type Catalogs = {
   agentActions: string[];
