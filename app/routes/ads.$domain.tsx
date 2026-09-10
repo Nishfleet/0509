@@ -67,6 +67,7 @@ import { BrandScoreCard } from "~/components/ads/brand-score-card";
 import { BrandStatLine } from "~/components/ads/brand-stat-line";
 import { BrandTicker } from "~/components/ads/brand-ticker";
 import { BrowseTrackedCompetitors } from "~/components/ads-internal-links";
+import { BrandPageSourceSections } from "~/components/brand-page/source-sections";
 import { MarketingFooter } from "~/components/marketing-footer";
 import { MarketingNav } from "~/components/marketing-nav";
 import { OfferTimelineLedger } from "~/components/offer-timeline-ledger";
@@ -103,6 +104,7 @@ import {
 import type { BreadcrumbJsonLdItem, FaqJsonLdEntry } from "~/lib/seo";
 import { SUPPORT_EMAIL } from "~/lib/support";
 import type { AdRecord } from "~/lib/types";
+import type { BrandPageSourceSnapshot } from "~/components/brand-page/source-snapshots.server";
 
 export interface BrandPageLoaderData {
   domain: string;
@@ -245,6 +247,17 @@ export interface BrandPageLoaderData {
    * section hides in that case.
    */
   recentWatchChanges: AdsDomainRecentChange[];
+  /**
+   * Issue #2200 — the latest snapshot per LIVE competitor-monitoring source
+   * (Google Ads, Google Search, LinkedIn, TikTok, subdomains, hiring) for
+   * this brand, read from the same generic snapshot store the logged-in
+   * competitor page uses. A source appears only when (a) its claim row is
+   * live (adapter implemented + env-enabled) AND (b) a snapshot exists for
+   * a watchlist tracking this domain. Empty when no live source has a
+   * snapshot — the source-sections block omits entirely. The public page
+   * never triggers a fetch; this is a read-only D1 read.
+   */
+  sourceSnapshots: BrandPageSourceSnapshot[];
 }
 
 export async function loader({ context, params, request }: LoaderFunctionArgs): Promise<BrandPageLoaderData> {
@@ -428,6 +441,25 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     recentWatchChanges = [];
   }
 
+  // Issue #2200 — load the latest snapshot per LIVE competitor-monitoring
+  // source for this brand, from the same generic snapshot store the
+  // logged-in competitor page uses. Read-only; the public page never
+  // triggers a fetch. A source renders only when its claim row is live
+  // (adapter implemented + env-enabled) AND a snapshot exists. A D1 hiccup
+  // degrades to [] (the source-sections block omits) rather than 500ing.
+  let sourceSnapshots: BrandPageSourceSnapshot[] = [];
+  try {
+    const { loadBrandPageSourceSnapshots } = await import(
+      "~/components/brand-page/source-snapshots.server"
+    );
+    sourceSnapshots = await loadBrandPageSourceSnapshots(env, brand.domain);
+  } catch (error) {
+    console.warn("Brand page source snapshots read failed; hiding the sections.", {
+      errorName: error instanceof Error ? error.name : typeof error,
+    });
+    sourceSnapshots = [];
+  }
+
   const now = new Date();
   const freshness = snapshot
     ? resolveBrandPageFreshness(snapshot.fetchedAt, now)
@@ -583,6 +615,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     canonicalPath: `/ads/${brand.domain}`,
     captureFailuresSummary,
     recentWatchChanges,
+    sourceSnapshots,
   };
 }
 
@@ -1525,6 +1558,15 @@ function BrandAdsResults({
           ) : null}
         </div>
       </section>
+
+      {/* 5b. COMPETITOR-MONITORING SOURCE SECTIONS — issue #2200. The new
+          sources (Google Ads, Google Search, LinkedIn, TikTok, subdomains,
+          hiring) render after the existing Meta block, in a fixed order,
+          each gated by a live claim row AND a stored snapshot. Missing
+          sources omit entirely (no placeholder). The block renders nothing
+          when no live source has a snapshot. Read-only D1 reads; the public
+          page never triggers a fetch to any provider. */}
+      <BrandPageSourceSections snapshots={data.sourceSnapshots} />
 
       {/* 6. BRAND FAQ — rendered from the same array as the FAQPage JSON-LD
           so the visible copy can never drift from the structured data. Every
