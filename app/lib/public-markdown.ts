@@ -742,6 +742,11 @@ const LLMS_PAGE_DETAILS = {
     description:
       "Customer API documentation for key-based exports and approved workspace actions.",
   },
+  "/mcp/setup": {
+    title: "MCP setup",
+    description:
+      "One-paste MCP connector setup for Claude Desktop, ChatGPT, and pi — connect Five to Nine as an agent tool with a customer API key.",
+  },
   "/status": {
     title: "Status",
     description:
