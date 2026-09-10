@@ -596,7 +596,7 @@ describe("customer-at-risk operator alert", () => {
       }),
     }));
 
-    const { sendCustomerAtRiskAlert } = await import("~/lib/monitoring.server");
+    const { sendCustomerAtRiskAlert } = await import("~/lib/operator-metrics-emails.server");
     const result = await sendCustomerAtRiskAlert({ DB: {} } as never, {
       skippedForBudget: 3,
       idempotencyKey: "operator-alert:scan-budget:2026-07-03",
@@ -626,7 +626,7 @@ describe("customer-at-risk operator alert", () => {
         stuckRuns: 0,
       }),
     }));
-    const fresh = await import("~/lib/monitoring.server");
+    const fresh = await import("~/lib/operator-metrics-emails.server");
     const quiet = await fresh.sendCustomerAtRiskAlert({ DB: {} } as never);
     expect(quiet).toMatchObject({ sent: false, reason: "all_clear" });
   });
@@ -643,7 +643,7 @@ describe("customer-at-risk operator alert", () => {
       }),
     }));
 
-    const { sendCustomerAtRiskAlert } = await import("~/lib/monitoring.server");
+    const { sendCustomerAtRiskAlert } = await import("~/lib/operator-metrics-emails.server");
     const result = await sendCustomerAtRiskAlert({ DB: {} } as never, {
       dispatchFailures: 2,
       idempotencyKey: "operator-alert:fanout-dispatch:2026-07-03",
@@ -676,7 +676,7 @@ describe("customer-at-risk operator alert", () => {
       }),
     }));
 
-    const { sendCustomerAtRiskAlert } = await import("~/lib/monitoring.server");
+    const { sendCustomerAtRiskAlert } = await import("~/lib/operator-metrics-emails.server");
     const result = await sendCustomerAtRiskAlert({ DB: {} } as never, {
       inlineFailures: 1,
     });
@@ -1144,7 +1144,7 @@ describe("weekly business numbers", () => {
       }),
     }));
 
-    const { sendWeeklyBusinessNumbers } = await import("~/lib/monitoring.server");
+    const { sendWeeklyBusinessNumbers } = await import("~/lib/operator-metrics-emails.server");
     const result = await sendWeeklyBusinessNumbers({ DB: {} } as never);
 
     expect(result.sent).toBe(true);
@@ -1163,7 +1163,7 @@ describe("weekly business numbers", () => {
   });
 
   it("reports honest empties when there is no traffic yet", async () => {
-    const { buildWeeklyBusinessLines } = await import("~/lib/monitoring.server");
+    const { buildWeeklyBusinessLines } = await import("~/lib/operator-metrics-emails.server");
     const lines = buildWeeklyBusinessLines({
       signups7d: 0,
       activated7d: 0,
@@ -1199,7 +1199,7 @@ describe("weekly business numbers", () => {
       }),
     }));
 
-    const { sendWeeklyBusinessNumbers } = await import("~/lib/monitoring.server");
+    const { sendWeeklyBusinessNumbers } = await import("~/lib/operator-metrics-emails.server");
     await expect(sendWeeklyBusinessNumbers({ DB: {} } as never)).resolves.toMatchObject({
       sent: false,
       reason: "duplicate",
@@ -1210,7 +1210,7 @@ describe("weekly business numbers", () => {
     const {
       buildWeeklyBusinessLines,
       formatAnnualValidationDriftLines,
-    } = await import("~/lib/monitoring.server");
+    } = await import("~/lib/operator-metrics-emails.server");
 
     expect(
       formatAnnualValidationDriftLines({
