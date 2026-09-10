@@ -226,8 +226,9 @@ export function valueMathLabel(
   const perDay = formatMinorCurrency(
     Number.isFinite(monthlyPrice?.amount)
       ? Number(monthlyPrice?.amount) / 30
-      : PUBLISHED_PLAN_PRICES_USD[planId].monthly / 30,
+      : PUBLISHED_PLAN_PRICES_USD[planId].monthly * 100 / 30,
     monthlyPrice?.currency || "USD",
+    { roundWhole: false },
   );
   return perDay ? `About ${perDay}/day` : "Simple monthly start";
 }
