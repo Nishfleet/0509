@@ -1,10 +1,10 @@
 # Plan — issue #2067: indexable /brands/:category landing pages
 
-Manager mode (difficulty: heavy). Existing work on `claim/issue-2067` (commit
-`7168b7b5 feat(seo): add indexable /brands/:category landing pages`) is
-complete and covers all acceptance bullets. The work is 26 commits behind
-origin/main. Plan: rebase, verify acceptance, run tests to green, review,
-open PR.
+Manager mode (difficulty: heavy). Existing work on `claim/issue-2067` is
+complete and covers all acceptance bullets. Rebased onto origin/main (was 4
+commits behind; the stale diff had shown reverts of #2248/#2109 that were
+just missing commits — the rebase removed them). Plan: verify acceptance, run
+tests to green, review, open PR.
 
 ## Acceptance bullets (from issue body)
 
