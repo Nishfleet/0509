@@ -4,6 +4,7 @@ import { billingCanaryMutationGuardSql } from "~/lib/data/billing-canary-lock.se
 import { logAppEvent } from "~/lib/log.server";
 import { getWatchlist } from "~/lib/data.server";
 import { getScheduledMonitoringPolicy } from "~/lib/plan-entitlements";
+import type { UserPlanBillingInfo } from "~/lib/data/billing-plan.server";
 import type { WatchlistRecord, WatchlistRunRecord } from "~/lib/types";
 import { reportConsecutiveWatchlistFailure } from "~/lib/watchlist-failure-alert.server";
 import type {
@@ -88,7 +89,6 @@ export const DEFAULT_MONITORING_ORCHESTRATION_LEASE_MS =
 export const DEFAULT_MONITORING_CONCURRENCY_SLOT_LEASE_MS = DEFAULT_MONITORING_ORCHESTRATION_LEASE_MS;
 export const MONITORING_DISPATCH_BATCH_SIZE = 100;
 export const MONITORING_RECONCILIATION_LIMIT = 40;
-export const MONITORING_CONCURRENCY_WAIT_MAX_ROUNDS = 240;
 export const MONITORING_QUEUE_AGING_INTERVAL_MS = 30 * 60 * 1000;
 export const MONITORING_QUEUE_AGING_MAX_BOOST = 2;
 
@@ -120,6 +120,23 @@ interface PendingRunQueueRow {
   plan: string;
 }
 
+/**
+ * One plan read per user per claim round. A workspace that tracks several
+ * competitors queues one run per watchlist, so the per-row `user_plan` lookup
+ * is shared across the whole round instead of repeated for every row.
+ */
+export type MonitoringPlanBillingCache = Map<string, UserPlanBillingInfo>;
+
+/**
+ * Everything one capacity-wait round needs, built once per round by
+ * `claimMonitoringConcurrencySlot`: the ranked snapshot and the plan cache the
+ * snapshot filled.
+ */
+export interface MonitoringConcurrencyClaimRound {
+  ranked?: PendingRunQueueRow[];
+  billingByUser?: MonitoringPlanBillingCache;
+}
+
 export function computeEffectiveQueuePriority(
   queuePriority: number,
   queuedAt: string,
@@ -149,7 +166,11 @@ export function compareQueuedRuns(
   return left.id.localeCompare(right.id);
 }
 
-export async function selectRankedEligibleOrchestratedRuns(env: AppEnv, now = nowIso()) {
+export async function selectRankedEligibleOrchestratedRuns(
+  env: AppEnv,
+  now = nowIso(),
+  billingByUser: MonitoringPlanBillingCache = new Map(),
+) {
   const result = await ensureDb(env)
     .prepare(
       `
@@ -177,7 +198,7 @@ export async function selectRankedEligibleOrchestratedRuns(env: AppEnv, now = no
   const nowMs = Date.parse(now);
   const eligibleRows: PendingRunQueueRow[] = [];
   for (const row of result.results ?? []) {
-    const access = await evaluateScheduledBrowserAccess(env, row.user_id);
+    const access = await evaluateScheduledBrowserAccess(env, row.user_id, { billingByUser });
     if (access.eligible) {
       eligibleRows.push(row);
     }
@@ -211,9 +232,12 @@ async function countSlotsHeldByRun(env: AppEnv, runId: string) {
 export async function isRunEligibleForConcurrencyClaim(
   env: AppEnv,
   runId: string,
+  round: MonitoringConcurrencyClaimRound = {},
   maxSlots = resolveEffectiveMonitoringFanoutMaxInflight(env),
 ) {
-  const ranked = await selectRankedEligibleOrchestratedRuns(env);
+  const ranked =
+    round.ranked ??
+    (await selectRankedEligibleOrchestratedRuns(env, nowIso(), round.billingByUser));
   if (ranked.length === 0) {
     return false;
   }
@@ -336,7 +360,11 @@ function hasActiveScheduledBrowserSubscription(input: {
   return false;
 }
 
-export async function evaluateScheduledBrowserAccess(env: AppEnv, userId: string) {
+export async function evaluateScheduledBrowserAccess(
+  env: AppEnv,
+  userId: string,
+  options: { billingByUser?: MonitoringPlanBillingCache } = {},
+) {
   const mode = resolveScheduledBrowserAccessMode(env);
   const allowlisted = isScheduledBrowserAllowlisted(env, userId);
 
@@ -345,7 +373,9 @@ export async function evaluateScheduledBrowserAccess(env: AppEnv, userId: string
   }
 
   const { getUserPlanBillingInfo } = await import("~/lib/data.server");
-  const billing = await getUserPlanBillingInfo(env, userId);
+  const cachedBilling = options.billingByUser?.get(userId);
+  const billing = cachedBilling ?? (await getUserPlanBillingInfo(env, userId));
+  options.billingByUser?.set(userId, billing);
   const hasActiveSubscription = hasActiveScheduledBrowserSubscription(billing);
 
   if (mode === "allowlist") {
@@ -756,6 +786,20 @@ export async function markOrchestratedDispatchFailure(
   );
 }
 
+async function readWatchlistRunStatus(env: AppEnv, runId: string) {
+  const row = await one<{ status: string }>(
+    env,
+    `
+      SELECT status
+      FROM watchlist_run
+      WHERE id = ?
+      LIMIT 1
+    `,
+    runId,
+  );
+  return row?.status ?? null;
+}
+
 export async function claimMonitoringConcurrencySlot(
   env: AppEnv,
   input: {
@@ -776,7 +820,19 @@ export async function claimMonitoringConcurrencySlot(
   const staleBefore = new Date(Date.now() - leaseMs).toISOString();
 
   if (input.mode !== "interactive") {
-    const eligible = await isRunEligibleForConcurrencyClaim(env, input.runId);
+    // A finished or stale-cancelled run can never become eligible again, so the
+    // wait loop must be able to stop instead of burning rounds on it.
+    if ((await readWatchlistRunStatus(env, input.runId)) !== "pending") {
+      return { claimed: false as const, reason: "run_inactive" as const };
+    }
+    const billingByUser: MonitoringPlanBillingCache = new Map();
+    const ranked = await selectRankedEligibleOrchestratedRuns(env, nowIso(), billingByUser);
+    const eligible = await isRunEligibleForConcurrencyClaim(
+      env,
+      input.runId,
+      { ranked, billingByUser },
+      maxSlots,
+    );
     if (!eligible) {
       return { claimed: false as const, reason: "queue_not_ready" as const };
     }
