@@ -198,6 +198,16 @@ describe("indexable ads link helpers", () => {
     expect(pickFeaturedAdsInternalLink([nykaa, glossier], "nykaa.com")).toEqual(nykaa);
   });
 
+  it("honors a caller-pinned priority sneaker brand so the homepage brief and featured link stay the same (issue #2314 regression guard)", () => {
+    const nike = { domain: "nike.com", path: "/ads/nike.com", name: "Nike" };
+    const footlocker = { domain: "footlocker.com", path: "/ads/footlocker.com", name: "Foot Locker" };
+    // Homepage resolves featuredDomain=nike for a US/EU visitor; a lower-priority
+    // sneaker must not displace it (the brief and "Try with Nike" still say nike).
+    expect(pickFeaturedAdsInternalLink([footlocker, nike], "nike.com")).toEqual(nike);
+    // When the pinned brand is stale/absent, fall back to the priority order.
+    expect(pickFeaturedAdsInternalLink([footlocker], "nike.com")).toEqual(footlocker);
+  });
+
   it("resolves a search brand domain from an explicit domain search", () => {
     expect(
       resolveSearchBrandPageDomain({
