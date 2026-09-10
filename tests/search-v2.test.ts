@@ -477,6 +477,147 @@ describe("curated page-id scoping (issue #1982)", () => {
   });
 });
 
+describe("curated provider query (issue #2233)", () => {
+  // saucony.co.uk is a country storefront that redirects onto www.saucony.com,
+  // so Saucony's Meta ads never carry the .co.uk host. Asking Meta for the
+  // registrable domain (the #1999 rule) settles on a confirmed 0-row page for
+  // it; the brand name is the term Meta actually indexes. The curated term is
+  // narrow by design: it only applies to a domain listed in IDENTITY_OVERRIDES,
+  // so the #1999 registrable-domain contract stands everywhere else.
+  it("asks the provider the curated brand term for a curated country storefront", () => {
+    const sauconyUk = parseSearchInputFromWebsiteField("https://saucony.co.uk");
+    const query = buildSearchV2SavedQuery(sauconyUk, "exact", filters);
+
+    expect(query.filters.query).toBe("Saucony");
+  });
+
+  it("keeps the registrable domain for every domain without a curated term", () => {
+    // The .com sibling of the same brand has no curated term, and neither do
+    // the #1999 regression brands — their provider query must not move.
+    for (const [input, expected] of [
+      ["https://saucony.com", "saucony.com"],
+      ["https://goat.com", "goat.com"],
+      ["https://on.com", "on.com"],
+      ["https://zappos.com", "zappos.com"],
+      ["https://mamaearth.in", "mamaearth.in"],
+      // An uncurated country storefront must NOT pick up the brand stem: a
+      // heuristic like "ccTLD storefront -> brand name" would pass the cases
+      // above while silently changing the provider term for every one of
+      // these (issue #2233).
+      ["https://nike.co.uk", "nike.co.uk"],
+      ["https://jdsports.co.uk", "jdsports.co.uk"],
+    ] as const) {
+      const query = buildSearchV2SavedQuery(
+        parseSearchInputFromWebsiteField(input),
+        "exact",
+        filters,
+      );
+      expect(query.filters.query).toBe(expected);
+    }
+  });
+
+  it("connects a curated country storefront to the ads landing on its primary host", async () => {
+    // The curated term only changes the question asked of Meta. The connection
+    // that makes the row verified is still the landing page, and it needs no
+    // curated alias: www.saucony.com and saucony.co.uk share the folded label
+    // "saucony", which the collapsed-label rule already connects. This is the
+    // pairing the canary measures, with empty aliases on purpose.
+    const sauconyUk = parseSearchInputFromWebsiteField("https://saucony.co.uk");
+    const result = await applySearchV2PostFilter(
+      {},
+      {
+        ads: [
+          ad({
+            metaAdId: "saucony-uk-shoe",
+            advertiser: "Saucony",
+            landingPageUrl: "https://www.saucony.com/UK/en_GB/home/",
+          }),
+        ],
+        nextCursor: null,
+        source: "meta_library_browser",
+        cacheStatus: "miss",
+      },
+      {
+        queryIntent: sauconyUk,
+        scope: "exact",
+        displayDomain: "saucony.co.uk",
+        identityAliases: [],
+        domainAliases: [],
+      },
+    );
+
+    expect(result.verifiedCount).toBe(1);
+  });
+
+  it("does not verify a curated-term row that lands somewhere unrelated", async () => {
+    // The guard on the curated term: it must never turn a same-name advertiser
+    // into a verified row. A row landing on an unrelated host is not connected
+    // to saucony.co.uk no matter which term surfaced it.
+    const sauconyUk = parseSearchInputFromWebsiteField("https://saucony.co.uk");
+    const result = await applySearchV2PostFilter(
+      {},
+      {
+        ads: [
+          ad({
+            metaAdId: "unrelated-saucony-name",
+            advertiser: "Saucony",
+            landingPageUrl: "https://example.com/promo",
+          }),
+        ],
+        nextCursor: null,
+        source: "meta_library_browser",
+        cacheStatus: "miss",
+      },
+      {
+        queryIntent: sauconyUk,
+        scope: "exact",
+        displayDomain: "saucony.co.uk",
+        identityAliases: [],
+        domainAliases: [],
+      },
+    );
+
+    expect(result.verifiedCount).toBe(0);
+  });
+
+  it("gives a curated provider term its own cache-key segment", () => {
+    // The stale 0-row page for saucony.co.uk was written to the cache under the
+    // registrable-domain key. If the curated term did not move the key, the
+    // empty page would keep being served and the fix would never be observable.
+    const sauconyUk = parseSearchInputFromWebsiteField("https://saucony.co.uk");
+    const key = buildSearchV2CacheKey({
+      provider: "meta_library_browser",
+      intent: sauconyUk,
+      scope: "exact",
+      country: "all",
+    });
+
+    expect(key).toContain("q:saucony");
+    expect(key).toContain("page-1");
+    // The segment is what makes the already-cached settled 0-row page
+    // unreachable, so pin the whole key rather than a substring.
+    expect(key).toBe(
+      "search-v2:domain:saucony.co.uk:exact:meta_library_browser:all:q:saucony:page-1",
+    );
+    expect(key).not.toBe(
+      "search-v2:domain:saucony.co.uk:exact:meta_library_browser:all:page-1",
+    );
+  });
+
+  it("leaves cache keys without a curated term on the legacy shape", () => {
+    const saucony = parseSearchInputFromWebsiteField("https://saucony.com");
+    const key = buildSearchV2CacheKey({
+      provider: "meta_library_browser",
+      intent: saucony,
+      scope: "exact",
+      country: "all",
+    });
+
+    expect(key).not.toContain("q:");
+    expect(key).toContain("page-1");
+  });
+});
+
 describe("website identity SSRF guard", () => {
   afterEach(() => {
     clearWebsiteIdentityCacheForTests();
