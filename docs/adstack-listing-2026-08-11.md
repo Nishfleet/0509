@@ -103,6 +103,19 @@ action.** Recorded 2026-08-11:
   No corrections needed to the prep; the email below is still paste-ready,
   the sender is still the unblock owner step.
 
+- **re-verified 2026-09-09** (growth2 send-off sheet work, issue #2133):
+  the venue's submission path (About page + FAQ Q-04), no-pay-to-play rule
+  (About page + FAQ Q-01), quarterly re-test cadence (FAQ Q-03), essay
+  content, and eight-tool ranking list (Superscale #1 → SpyFu #8, published
+  2026-07-15) are all unchanged on `https://ad-stack.ai`. One URL note: the
+  essay URL now 307-redirects to the `www` subdomain
+  (`https://www.ad-stack.ai/blog/best-ad-intelligence-software-2026/`); the
+  non-www URL still resolves, so the prepared email's link stays valid.
+  Every `0509.io` URL the submission copy cites is still HTTP 200, and the
+  plan facts in the email body still match `app/lib/plan-entitlements.ts`
+  exactly. No corrections needed to the prep; the email below is still
+  paste-ready, the sender is still the unblock owner step.
+
 ## Ready-to-send submission (the whole submission is one email)
 
 To: `hello@ad-stack.ai`
