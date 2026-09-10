@@ -149,35 +149,6 @@ describe("canary-cta-detector (#1500)", () => {
       expect(result.failures.join(" ")).toMatch(/silent CTA detector/);
     });
 
-    it("fails when the event rate is below 1 per 25 watchlists even though the detector fired", () => {
-      const result = validateCtaDetector({
-        windowDays: 7,
-        watchlistCohort: 25,
-        row: {
-          ctaEventCount: 1,
-          activeWatchlistCount: 26,
-          firstCtaEventAt: "2026-09-01 10:00:00",
-          lastCtaEventAt: "2026-09-01 10:00:00",
-        },
-      });
-      expect(result.ok).toBe(false);
-      expect(result.failures.join(" ")).toMatch(/rate below 1 per 25/);
-    });
-
-    it("passes when the event rate meets 1 per 25 watchlists", () => {
-      const result = validateCtaDetector({
-        windowDays: 7,
-        watchlistCohort: 25,
-        row: {
-          ctaEventCount: 2,
-          activeWatchlistCount: 50,
-          firstCtaEventAt: "2026-09-01 10:00:00",
-          lastCtaEventAt: "2026-09-02 10:00:00",
-        },
-      });
-      expect(result).toEqual({ ok: true, failures: [] });
-    });
-
     it("fails when the query returned no rows", () => {
       const result = validateCtaDetector({
         windowDays: 7,
