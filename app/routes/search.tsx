@@ -1087,7 +1087,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       {
         limitMessage: ({ limit }) =>
           limit <= 1
-            ? "Free includes 1 watchlist and 1 Collection. Upgrade for scheduled scans and more competitors."
+            ? "Free includes 1 competitor and 1 first check. Upgrade for automatic checks and more competitors."
             : "You've reached your competitor tracking limit.",
         upgradePath: "/app/billing?source=search#plans",
       },
@@ -1167,7 +1167,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         current: watchlistResult.current,
         message:
           watchlistResult.limit <= 1
-            ? "Free includes 1 watchlist and 1 Collection. Upgrade for scheduled scans and more competitors."
+            ? "Free includes 1 competitor and 1 first check. Upgrade for automatic checks and more competitors."
             : "You've reached your competitor tracking limit.",
         upgradePath: "/app/billing?source=search#plans",
       });
@@ -1230,16 +1230,15 @@ export async function action({ context, request }: ActionFunctionArgs) {
       };
     }
     if (savePlan === "free") {
-      const { checkPlanLimit } = await import("~/lib/plan.server");
-      const collectionSlots = await checkPlanLimit(env, workspaceUserId, "collections");
-      if (collectionSlots.current < 1) {
-        return {
-          ok: false,
-          error: "plan_limit_exceeded" as const,
-          message: "Free includes 1 Collection — create it in the Library, then save this ad.",
-          upgradePath: "/app/collections",
-        };
-      }
+      // Free is barebones: no Collections (limit 0). Existing free workspaces
+      // keep their collections read-only; saving new evidence into one is a
+      // paid feature.
+      return {
+        ok: false,
+        error: "plan_limit_exceeded" as const,
+        message: "Collections are included in paid plans — upgrade to save this ad.",
+        upgradePath: "/app/billing?source=search#plans",
+      };
     }
 
     const { listAdsByIds } = await import("~/lib/data.server");

@@ -165,9 +165,9 @@ function uniqueSorted(values: readonly string[]) {
 }
 
 const expectedPlanFeaturesByPlan: Record<string, readonly string[]> = {
-  // 2026-07-20 merge: overnight free-weekly-watch stack wins — free gets the
-  // weekly brief plus the email lane it rides on, nothing else.
-  free: ["weekly_digest", "email_delivery", "api_access", "mcp_read_access"],
+  // 2026-09-10: barebones free — one first brief plus the email lane it rides
+  // on, nothing else. No API/MCP, no exports, no team.
+  free: ["weekly_digest", "email_delivery"],
   scout: [
     "competitor_research", "weekly_digest", "email_delivery",
     "presence_competitor_tracking", "presence_website_sources", "presence_digest_alerts",

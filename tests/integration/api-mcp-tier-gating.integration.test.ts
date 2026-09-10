@@ -83,7 +83,7 @@ describe("api MCP tier gating against real D1", () => {
     }
   });
 
-  it("lets a free key call a read-only tool and returns 200", async () => {
+  it("blocks a free key from a read-only tool (barebones: no API/MCP)", async () => {
     const userId = await seedUserWithPlan("free");
     const secret = await createReadOnlyKey(userId);
 
@@ -92,11 +92,9 @@ describe("api MCP tier gating against real D1", () => {
       date: "2026-08-20",
     });
 
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as {
-      result: { structuredContent: { tool: string } };
-    };
-    expect(body.result.structuredContent.tool).toBe("get_offer_state_at");
+    // Barebones free (2026-09-10): no API/MCP access at all. Read-only MCP
+    // tools are Scout+.
+    expect(response.status).toBe(403);
   });
 
   it("blocks a free key from a write tool with a clean 403 and the tier message", async () => {

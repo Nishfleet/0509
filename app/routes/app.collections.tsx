@@ -457,7 +457,9 @@ export default function CollectionsRoute() {
                 Collection limit reached
               </h2>
               <p className="f9-library-note">
-                {`You are using all ${collectionLimit} ${collectionLimit === 1 ? "Collection" : "Collections"} on this plan. Delete one you no longer need, or compare plans to keep more evidence sets side by side.`}
+                {collectionLimit <= 0
+                  ? "Free keeps your existing collections read-only. New collections are included in paid plans."
+                  : `You are using all ${collectionLimit} ${collectionLimit === 1 ? "Collection" : "Collections"} on this plan. Delete one you no longer need, or compare plans to keep more evidence sets side by side.`}
               </p>
               <Link className="f9-wk-lnk" to="/app/billing?source=collections#plans">
                 Compare plans <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>

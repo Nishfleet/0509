@@ -332,9 +332,24 @@ export default function DigestsRoute() {
     "No briefs filed yet. The first completed check files one here."
   );
 
+  // Free is barebones: the activation scan files the one first brief, then no
+  // further brief is generated. When a free workspace has its first brief on
+  // file, explain that weekly briefs are paid.
+  const briefsLockedNote =
+    plan === "free" && data.canAccessDigests && data.selectedDigest
+      ? "Your first brief is here. Weekly briefs are paid."
+      : null;
+
   return (
     <DashboardPage className="f9-wk-page f9-wk-briefs">
       <WorkingHeader action={headerAction} context={headerContext} title="Briefs" />
+
+      {briefsLockedNote ? (
+        <section aria-labelledby="briefs-locked-note-title" className="f9-wk-sec f9-wk-quiet-state">
+          <h2 id="briefs-locked-note-title">Your first brief is here</h2>
+          <p>Weekly briefs are paid.</p>
+        </section>
+      ) : null}
 
       {actionData?.message ? (
         <FeedbackStrip
