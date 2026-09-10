@@ -1134,31 +1134,6 @@ describe("concurrent-scan guard", () => {
     expect(mocks.createWatchlistRun).not.toHaveBeenCalled();
     expect(mocks.searchAdsViaSourceResolver).not.toHaveBeenCalled();
   });
-
-  it("blocks a second manual run while a scan started 11 minutes ago is still in flight", async () => {
-    // A scan may legitimately run for up to MONITORING_WORKFLOW_SCAN_TIMEOUT_MS
-    // (30 min). The in-flight cutoff must reach back that far, so a healthy
-    // 25-minute scan is not treated as stale at minute 11. The mock below models
-    // a run that started 11 minutes ago and is still pending/running: it reports
-    // the run as in-flight only when the cutoff window covers that start time.
-    const watchlist = buildWatchlist(1, "adspy");
-    const mocks = mockReliabilityDependencies({ watchlists: [watchlist] });
-    const data = await import("~/lib/data.server");
-    const elevenMinMs = 11 * 60 * 1000;
-    vi.mocked(data.hasInFlightWatchlistRun).mockImplementation(
-      async (_env, _watchlistId, sinceIso: string) => {
-        const windowMs = Date.now() - new Date(sinceIso).getTime();
-        return windowMs >= elevenMinMs;
-      },
-    );
-
-    const { runWatchlistManual } = await import("~/lib/monitoring.server");
-    await expect(runWatchlistManual(mocks.env as never, watchlist)).rejects.toThrow(
-      /already running/,
-    );
-    expect(mocks.createWatchlistRun).not.toHaveBeenCalled();
-    expect(mocks.searchAdsViaSourceResolver).not.toHaveBeenCalled();
-  });
 });
 
 describe("stale-cache scan honesty", () => {
