@@ -111,6 +111,8 @@ function cachedIndexable(overrides: Partial<BrandPageLoaderData> = {}): BrandPag
     adLibraryCountry: "India",
     noindex: false,
     relatedBrands: [],
+    brandCategory: "Sport & footwear",
+    sameCategoryBrands: [],
     canonicalPath: "/ads/nike.com",
     offerTimelineEntries: [],
     timelineIndexable: true,

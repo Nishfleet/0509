@@ -143,6 +143,8 @@ function populated(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoade
     adLibraryCountry: "India",
     noindex: false,
     relatedBrands: [],
+    brandCategory: "Sport & footwear",
+    sameCategoryBrands: [],
     canonicalPath: "/ads/nike.com",
     captureFailuresSummary: null,
     recentWatchChanges: [],

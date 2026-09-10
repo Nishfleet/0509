@@ -457,6 +457,8 @@ function populated(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoade
     adLibraryCountry: "all countries",
     noindex: false,
     relatedBrands: [],
+    brandCategory: "Beauty & personal care",
+    sameCategoryBrands: [],
     canonicalPath: "/ads/nykaa.com",
     captureFailuresSummary: null,
     recentWatchChanges: [],
