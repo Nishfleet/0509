@@ -25,8 +25,11 @@ export function loader({ request }: LoaderFunctionArgs) {
 
 // A form still open on a pre-fold /app/developer-access page must not 405: a
 // 307 preserves method and body for the /app/api action.
-export function action(_args: ActionFunctionArgs) {
-  return redirect("/app/api", 307);
+export function action({ request }: ActionFunctionArgs) {
+  // 307 keeps method and body; the query rides along so the destination action
+  // sees the same request the old route saw.
+  const search = new URL(request.url).search;
+  return redirect(`/app/api${search}`, 307);
 }
 
 export function HydrateFallback() {
