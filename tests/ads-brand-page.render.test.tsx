@@ -701,10 +701,12 @@ describe("/ads/:domain — Case File render", () => {
     expect(stale).not.toContain("marked active");
 
     // Fresh capture reads present tense; stale capture reads "at the last
-    // check", mirroring the hero line and the caption flip above.
-    expect(fresh).toContain(">6 active<");
-    expect(stale).toContain("6 active at last check");
-    expect(stale).not.toContain(">6 active<");
+    // check", mirroring the hero line and the caption flip above. Both name
+    // the brand-owned subset too, so the active count and the H1 ownership
+    // count carry visibly different labels (issue #2319).
+    expect(fresh).toContain(">6 ads active (6 brand-owned)<");
+    expect(stale).toContain("6 ads active at last check (6 brand-owned)");
+    expect(stale).not.toContain(">6 ads active (6 brand-owned)<");
   });
 
   it("stops telling visitors the brand is running ads when the creatives are other advertisers'", async () => {
@@ -797,6 +799,45 @@ describe("/ads/:domain — Case File render", () => {
     // Mixed copy never over-claims a full brand-owned wall or the reverse.
     expect(stale).not.toContain("Nike's real ads");
     expect(stale).not.toContain("6 Meta ads are pointing at");
+  });
+
+  it("labels the H1 ownership count and the stat-line active count so they cannot collide (issue #2319)", async () => {
+    // Live-like split: the H1 owns "2 of these 6" (brandOwnedAdCount) while
+    // the stat-line active count is a different number (teaser.activeCount).
+    // Both must carry visibly different labels so a visitor never reads 2
+    // and 4 as the same quantity on one page.
+    const stale = await render(
+      populated({
+        brandOwnedAdCount: 2,
+        teaser: { ...teaser, activeCount: 4 },
+      }),
+    );
+    const fresh = await render(
+      populated({
+        brandOwnedAdCount: 2,
+        teaser: { ...teaser, activeCount: 4 },
+        checkedAgo: "moments ago",
+        freshForLiveClaim: true,
+      }),
+    );
+
+    const h1 = stale.match(/<h1[^>]*id="brand-ads-title"[^>]*>([\s\S]*?)<\/h1>/)?.[1] ?? "";
+    expect(h1).toContain("2 of these 6 Meta ads");
+
+    // The stat line names both numbers — the active count and the brand-owned
+    // count — each with an explicit label. Never a bare "2" and "4".
+    expect(stale).toContain(">4 ads active at last check (2 brand-owned)<");
+    expect(fresh).toContain(">4 ads active (2 brand-owned)<");
+
+    // Singular captures pluralize ("1 ad active"), never "1 ads active".
+    const single = await render(
+      populated({
+        brandOwnedAdCount: 1,
+        teaser: { ...teaser, totalCount: 1, activeCount: 1 },
+      }),
+    );
+    expect(single).toContain(">1 ad active at last check (1 brand-owned)<");
+    expect(single).not.toContain("1 ads active");
   });
 
   it("uses the full brand-owned headline when every verified-linked ad is the brand's (unverified extras on the wall)", async () => {
