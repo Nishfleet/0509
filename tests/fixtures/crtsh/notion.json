@@ -1,0 +1,17 @@
+[
+  {"name_value": "notion.so", "not_before": "2026-01-01T00:00:00.000Z", "not_after": "2027-01-01T00:00:00.000Z", "issuer_name": "Let's Encrypt", "id": 1},
+  {"name_value": "www.notion.so", "not_before": "2026-01-02T00:00:00.000Z", "not_after": "2027-01-02T00:00:00.000Z", "issuer_name": "Let's Encrypt", "id": 2},
+  {"name_value": "api.notion.so", "not_before": "2026-03-01T00:00:00.000Z", "not_after": "2027-03-01T00:00:00.000Z", "issuer_name": "Let's Encrypt", "id": 3},
+  {"name_value": "beta.notion.so", "not_before": "2026-06-01T00:00:00.000Z", "not_after": "2027-06-01T00:00:00.000Z", "issuer_name": "Let's Encrypt", "id": 4},
+  {"name_value": "ai.notion.so", "not_before": "2026-07-01T00:00:00.000Z", "not_after": "2027-07-01T00:00:00.000Z", "issuer_name": "Let's Encrypt", "id": 5},
+  {"name_value": "*.notion.so", "not_before": "2026-01-01T00:00:00.000Z", "not_after": "2027-01-01T00:00:00.000Z", "issuer_name": "Let's Encrypt", "id": 6},
+  {"name_value": "dev.notion.so\nstaging.notion.so", "not_before": "2026-02-01T00:00:00.000Z", "not_after": "2027-02-01T00:00:00.000Z", "issuer_name": "Let's Encrypt", "id": 7},
+  {"name_value": "mail.notion.so", "not_before": "2026-01-01T00:00:00.000Z", "not_after": "2027-01-01T00:00:00.000Z", "issuer_name": "Let's Encrypt", "id": 8},
+  {"name_value": "ns1.notion.so", "not_before": "2026-01-01T00:00:00.000Z", "not_after": "2027-01-01T00:00:00.000Z", "issuer_name": "Let's Encrypt", "id": 9},
+  {"name_value": "api.notion.so", "not_before": "2026-02-01T00:00:00.000Z", "not_after": "2027-02-01T00:00:00.000Z", "issuer_name": "Let's Encrypt", "id": 10},
+  {"name_value": "app.notion.so", "not_before": "2026-08-01T00:00:00.000Z", "not_after": "2027-08-01T00:00:00.000Z", "issuer_name": "Let's Encrypt", "id": 11},
+  {"name_value": "unrelated.example.com", "not_before": "2026-01-01T00:00:00.000Z", "not_after": "2027-01-01T00:00:00.000Z", "issuer_name": "Let's Encrypt", "id": 12},
+  {"name_value": "_acme-challenge.notion.so", "not_before": "2026-01-01T00:00:00.000Z", "not_after": "2027-01-01T00:00:00.000Z", "issuer_name": "Let's Encrypt", "id": 13},
+  {"name_value": "myapp-dev.notion.so", "not_before": "2026-05-01T00:00:00.000Z", "not_after": "2027-05-01T00:00:00.000Z", "issuer_name": "Let's Encrypt", "id": 14},
+  {"name_value": "cdn1.notion.so", "not_before": "2026-01-01T00:00:00.000Z", "not_after": "2027-01-01T00:00:00.000Z", "issuer_name": "Let's Encrypt", "id": 15}
+]
