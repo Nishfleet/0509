@@ -307,47 +307,6 @@ export function brandPageRowHasVerifiedAds(row: SitemapCacheRow, domain: string)
 }
 
 /**
- * Priority bands for /ads/:domain sitemap entries (issue #966). A capture
- * younger than this with strong evidence earns the top band; a capture this
- * old (or older) is aging out of the 7-day indexability window and drops to
- * the bottom band even with thin evidence.
- */
-export const BRAND_PAGE_PRIORITY_FRESH_MS = 2 * 24 * 60 * 60 * 1000;
-export const BRAND_PAGE_PRIORITY_NEAR_EXPIRY_MS = 5 * 24 * 60 * 60 * 1000;
-/** Verified-linked ads a capture must carry to count as strong evidence. */
-export const BRAND_PAGE_PRIORITY_STRONG_EVIDENCE_ADS = 3;
-
-/**
- * Honest crawl-importance hint per /ads/:domain entry, derived from the same
- * two facts the indexability gates already read: capture freshness (age of
- * `fetched_at`) and evidence count (verified-linked ads backing the page).
- * - "0.7": fresh capture (≤ 2 days) with strong evidence (≥ 3 verified-linked
- *   ads) — the pages most worth re-crawling first.
- * - "0.5": capture nearing the 7-day noindex expiry (≥ 5 days), or an aging
- *   capture (≥ 2 days) whose evidence is thin (≤ 1 verified-linked ad) —
- *   low-signal pages about to fall out of the indexable set.
- * - "0.6": everything else — the historical default band.
- * Pure and exported so the bands are unit-testable without a database.
- * Callers must pre-filter to ageMs >= 0 (indexableBrandPageEntriesFromRows
- * does — isIndexableBrandPageRow rejects future-dated captures).
- */
-export function brandPageEntryPriority(ageMs: number, verifiedAdCount: number): string {
-  if (
-    ageMs <= BRAND_PAGE_PRIORITY_FRESH_MS &&
-    verifiedAdCount >= BRAND_PAGE_PRIORITY_STRONG_EVIDENCE_ADS
-  ) {
-    return "0.7";
-  }
-  if (
-    ageMs >= BRAND_PAGE_PRIORITY_NEAR_EXPIRY_MS ||
-    (verifiedAdCount <= 1 && ageMs >= BRAND_PAGE_PRIORITY_FRESH_MS)
-  ) {
-    return "0.5";
-  }
-  return "0.6";
-}
-
-/**
  * The exact discovery-cache keys the /ads/:domain page reads for this domain,
  * under the given provider and rollout posture, restricted to the
  * always-tried country scopes. A row qualifies for the sitemap only when its
@@ -385,9 +344,8 @@ export interface IndexableBrandPageRowOptions {
  * /ads/:domain sitemap entries that the brand page would both find and render
  * indexable. Each entry carries a `lastmod` derived from the cache row's
  * `fetched_at` (the honest freshness signal — when we last saw real ads for
- * this brand), `changefreq=weekly`, and a `priority` tiered by freshness and
- * verified-evidence count via brandPageEntryPriority (issue #966). Kept separate from
- * the D1 read so the filtering rules are unit-testable without a database.
+ * this brand). Kept separate from the D1 read so the filtering rules are
+ * unit-testable without a database.
  */
 export function indexableBrandPageEntriesFromRows(
   rows: readonly SitemapCacheRow[],
@@ -439,13 +397,9 @@ export function indexableBrandPageEntriesFromRows(
     const fetchedDate = row.fetched_at.slice(0, 10);
     const payload = parseSitemapCachePayload(row.payload_json);
     const adCount = payload ? nonDemoAdsFromPayload(payload).length : 0;
-    // isIndexableBrandPageRow already proved fetched_at parses and age >= 0.
-    const ageMs = now.getTime() - Date.parse(row.fetched_at);
     entries.push({
       path: `/ads/${domain}`,
       lastmod: fetchedDate,
-      changefreq: "weekly",
-      priority: brandPageEntryPriority(ageMs, verifiedAdCount),
       adCount,
       fetchedAt: row.fetched_at,
     });
@@ -534,7 +488,7 @@ function isMissingSitemapTableError(error: unknown): boolean {
  * compare/switch children (`BUYER_SURFACE_CHILD_PATHS`) plus the `/guides/*`
  * how-to cluster — the single source of truth in `app/lib/locale-markets.ts`
  * (and the guide path in `SITEMAP_PATHS`). Each entry reuses the EN
- * changefreq/priority from `SITEMAP_STATIC_ENTRIES` so the two can never
+ * path set from `SITEMAP_STATIC_ENTRIES` so the two can never
  * drift. The bare `/{locale}` index and `/{locale}/sitemap.xml` are excluded
  * — neither is a real page to advertise. The genuinely translated
  * sneaker-resale cluster stays for the locales that ship it (de, ja, pt-br).
@@ -633,8 +587,8 @@ function staticEntriesWithDatedLastmod(
 }
 
 /**
- * Full production sitemap body: static funnel entries first (with changefreq
- * and priority), then the dynamic indexable brand-page entries (with lastmod
+ * Full production sitemap body: static funnel entries first, then the dynamic
+ * indexable brand-page entries (with lastmod
  * from their cache fetched_at), then the dynamic indexable /timeline/:domain
  * entries (with lastmod from their newest snapshot capture). The root feed
  * deliberately EXCLUDES every buyer-surface locale-prefixed path (those live
@@ -716,10 +670,8 @@ export function timelineDomainFromSnapshotRow(row: TimelineSitemapRow): string |
  * timeline ledger renders indexable regardless of capture age. Each entry's
  * `lastmod` is the newest passing row's captured_at within the window
  * ("newest" = last in the ASC-ordered window). Capped at
- * `SITEMAP_TIMELINE_PATH_LIMIT` distinct domains, with `changefreq=weekly`
- * and `priority=0.5` (timelines sit one level below /ads/:domain in the
- * funnel: 0.6 > 0.5 > the 0.3–0.4 boilerplate band). Kept separate from the
- * D1 read so the filtering rules are unit-testable without a database.
+ * `SITEMAP_TIMELINE_PATH_LIMIT` distinct domains. Kept separate from the D1
+ * read so the filtering rules are unit-testable without a database.
  */
 export function indexableTimelineEntriesFromRows(
   rows: readonly TimelineSitemapRow[],
@@ -783,8 +735,6 @@ export function indexableTimelineEntriesFromRows(
     entries.push({
       path: `/timeline/${domain}`,
       lastmod,
-      changefreq: "weekly",
-      priority: "0.5",
     });
   }
 
@@ -887,7 +837,7 @@ export function collectingTimelineEntries(
     if (listed.has(path)) {
       continue;
     }
-    collecting.push({ path, changefreq: "weekly", priority: "0.3" });
+    collecting.push({ path });
   }
   return collecting;
 }
