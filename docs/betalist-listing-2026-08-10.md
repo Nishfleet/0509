@@ -214,6 +214,22 @@ Every claim in this document was re-checked against live sources:
 | No stale beta wording | `grep -i "beta\|early access" app/routes/marketing.tsx app/routes/compare.magicbrief.tsx` returns nothing | No customer-facing beta caveat remains to conflict with the listing; eligibility row updated to drop the stale "beta caveat" phrase |
 | Logo asset exists | `brand/five-to-nine-colored-logo.svg` in repo | Asset checklist item 1 is ready to upload |
 
+### re-verified 2026-09-09
+
+Fresh pass done by the growth2 send-off sheet work (issue #2133) on
+2026-09-09. Every claim this document depends on still holds:
+
+| Check | Evidence | Verdict |
+|---|---|---|
+| Paid-only requirement unchanged | Live fetch of `https://betalist.com/faq` on 2026-09-09: "All submissions are paid. There is no free submission option." | SKIPPED_PAID decision stands; the free queue is the default (see the send-off sheet) |
+| Submission guidelines unchanged | Live fetch of `https://betalist.com/criteria` on 2026-09-09 | Five to Nine still passes all six guidelines |
+| Plan/entitlement copy still accurate | `app/lib/plan-entitlements.ts`: Free 1 watchlist/weekly digest, Scout 3 @ 6-hour checks, Starter 10 @ 3-hour + daily digests, Agency 75 | The Pricing value and both description versions match the catalog exactly |
+| Product URLs live | `https://0509.io`, `https://0509.io/search`, `https://0509.io/auth/signup` all HTTP 200 on 2026-09-09 | Submission URL and signup path still valid |
+
+No field, URL, or requirement changed since the 2026-08-12 log above. The
+prepared copy stays paste-ready; the paid fast-track remains an owner money
+decision with the free queue as default (flagged in the send-off sheet).
+
 ## Launch-status wording (owner decision)
 
 BetaList's guideline favors products that are pre-launch, private-beta, or

@@ -281,6 +281,39 @@ sourced from `MEMORY.md`, `README.md`, and the live homepage copy
 - `docs/segwise-listing-2026-08-21.md` — this prepared-listing package.
 - `.lane/reports/lane2-segwise-listing-prepared.md` — lane evidence record.
 
+## re-verified 2026-09-09
+
+Fresh pass done by the growth2 send-off sheet work (issue #2133). The
+roundup has been **updated since the 2026-08-23 pass** — the pitch now
+targets the current version of the article:
+
+- **Title changed:** the article is now **"15 Best Ad Spy and Competitor Ad
+  Research Tools in 2026"** (was "Best Ad Spy and Competitor Tracking Tools
+  in 2026: Top 7 Compared"). The URL is unchanged:
+  `https://segwise.ai/blog/best-ad-spy-competitor-tools` (HTTP 200 on
+  2026-09-09).
+- **Update note changed:** the banner now reads **"Updated September 2026"**
+  (was "Updated July 2026") — the script has moved to a new update cycle,
+  so a pitch now targets the next refresh of this current version.
+- **Author unchanged:** Angad Singh is still the listed author (profile at
+  `https://segwise.ai/blog/author/angad-singh`).
+- **Five to Nine still absent:** `grep -ci 'five to nine\|0509'` = 0 on the
+  live article (2026-09-09).
+- **Product URLs still live:** `https://0509.io`, `https://0509.io/search`,
+  `https://0509.io/auth/signup`, `https://0509.io/compare/magicbrief` all
+  HTTP 200 on 2026-09-09.
+- **Pitch facts still match current repo copy:** "screenshot evidence and
+  change alerts" and the every-3–6-hours cadence lines in
+  `app/routes/marketing.tsx`; `SUPPORT_EMAIL = "support@0509.io"` at
+  `app/lib/support.ts:13`.
+
+No correction to the pitch body is needed — the copy is venue-agnostic and
+still accurate against the current article. The sole remaining action is
+unchanged: the owner sends the prepared message via LinkedIn to Angad Singh
+(recommended) or a verified Segwise vendor-facing inbox once one is
+confirmed. Success signal stays an article change or an author reply — never
+a claim of listing.
+
 ## Rollback
 
 N/A — documentation-only; no product code, data, or billing change. The
