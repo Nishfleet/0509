@@ -106,6 +106,16 @@ export interface AppEnv {
   META_AD_LIBRARY_TOKEN?: string;
   META_AD_LIBRARY_API_VERSION?: string;
   META_TOKEN_ENCRYPTION_SECRET?: string;
+  // Serp provider for the Google Search source (#2181, seam #2218). Accepted
+  // values: "decodo" (default) or "gateway". When unset, the registry defaults
+  // to "decodo". DECODO_SCRAPER_AUTH is the optional bearer token for the
+  // Decodo scraper API; store as a secret (see wrangler.jsonc secret list).
+  SERP_PROVIDER?: string;
+  DECODO_SCRAPER_AUTH?: string;
+  // KV namespace for the Decodo monthly budget counters (#2181, seam #2218).
+  // Optional until #2181 wires the binding in wrangler.jsonc; the budget
+  // helper treats an absent binding as "no quota enforced".
+  DECODO_BUDGET?: KVNamespace;
   MONITORING_WORKFLOW?: Workflow;
   OPS_ALLOWLIST_EMAILS?: string;
   UNSUBSCRIBE_SIGNING_SECRET?: string;

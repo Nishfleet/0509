@@ -133,6 +133,8 @@
   // - PRESENCE_OAUTH_STATE_SECRET (32+ bytes; fail closed when missing)
   // - PRESENCE_INTERNAL_WORKSPACE_ID (owner-documented internal presence pilot workspace; never commit a value)
   // - META_TOKEN_ENCRYPTION_SECRET
+  // - SERP_PROVIDER (optional; "decodo" default or "gateway" for the Google Search source, seam #2218 / #2181)
+  // - DECODO_SCRAPER_AUTH (optional bearer token for the Decodo scraper API; store as secret)
   // Email sending uses the Cloudflare Email Service `send_email` binding above —
   // no API key secret. The active sender is the 0509.io brand address.
   "d1_databases": [
