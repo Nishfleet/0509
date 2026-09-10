@@ -5,10 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EffectiveDeliveryConfig } from "~/lib/types";
 
 // The card renders a react-router <Form> and a SubmitButton that reads
-// useNavigation. A mutable fixture plus a mocked react-router lets each test
-// render the card with a specific effective delivery config and assert the
-// quiet-hours inputs' default state.
-let currentConfig: EffectiveDeliveryConfig;
+// useNavigation. A mocked react-router lets each test render the card with a
+// specific effective delivery config and assert the quiet-hours inputs'
+// default state.
 
 beforeEach(() => {
   vi.resetModules();
@@ -31,7 +30,6 @@ afterEach(() => {
 });
 
 async function render(config: EffectiveDeliveryConfig): Promise<string> {
-  currentConfig = config;
   const { DeliverySettingsCard } = await import("~/components/watchlists/delivery-settings-card");
   return renderToStaticMarkup(
     createElement(DeliverySettingsCard, {
