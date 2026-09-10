@@ -27,7 +27,9 @@ async function mockReactRouter() {
 async function renderAuthForm(props: {
   mode: "login" | "signup";
   linkSent?: boolean;
+  linkResent?: boolean;
   initialEmail?: string;
+  initialName?: string;
   redirectTo?: string;
 }) {
   const { AuthForm } = await import("~/components/auth-form");
@@ -35,9 +37,38 @@ async function renderAuthForm(props: {
     createElement(AuthForm, {
       mode: props.mode,
       redirectTo: props.redirectTo ?? "/app#setup-checklist",
-      ...(props.linkSent ? { linkSent: true, initialEmail: props.initialEmail ?? "new@example.com" } : {}),
+      ...(props.linkSent
+        ? {
+            linkSent: true,
+            initialEmail: props.initialEmail ?? "new@example.com",
+            ...(props.linkResent ? { linkResent: true } : {}),
+            ...(props.initialName !== undefined ? { initialName: props.initialName } : {}),
+          }
+        : {}),
     }),
   );
+}
+
+function mockSignupActionModules(sendBetterAuthMagicLink: ReturnType<typeof vi.fn>) {
+  vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => ({})) }));
+  vi.doMock("~/lib/better-auth.server", () => ({
+    isBetterAuthConfigured: vi.fn(() => true),
+    isSameOriginAuthFormPost: vi.fn(() => true),
+    sendBetterAuthMagicLink,
+  }));
+  vi.doMock("~/lib/funnel-measurement.server", () => ({
+    emitFunnelSignupStartFromAllowlistedSource: vi.fn(),
+  }));
+  vi.doMock("~/lib/signup-source", () => ({
+    allowlistedSignupSource: vi.fn(() => null),
+    rememberAllowlistedSignupSource: vi.fn().mockResolvedValue(null),
+    signupSourceCookieHeader: vi.fn(() => ""),
+    signupSourceFromRequest: vi.fn(() => null),
+  }));
+}
+
+function actionArgs(request: Request) {
+  return { context: { cloudflare: { env: {} } }, request } as never;
 }
 
 beforeEach(() => {
@@ -101,5 +132,243 @@ describe("AuthForm signup next-step guidance", () => {
     expect(markup).toContain("a one-time link to your inbox.");
     expect(markup).not.toContain("send a setup link to that inbox");
     expect(markup).not.toContain("spam and promotions folders");
+  });
+});
+
+describe("AuthForm signup sent-state address and inbox links", () => {
+  it("post-submit state shows the exact address the link went to", async () => {
+    await mockReactRouter();
+    const markup = await renderAuthForm({
+      mode: "signup",
+      linkSent: true,
+      initialEmail: "founder@startup.io",
+    });
+
+    expect(markup).toContain("Link sent to");
+    expect(markup).toContain("<strong>founder@startup.io</strong>");
+  });
+
+  it("offers an Open Gmail link for gmail.com addresses", async () => {
+    await mockReactRouter();
+    const markup = await renderAuthForm({ mode: "signup", linkSent: true, initialEmail: "new@gmail.com" });
+
+    expect(markup).toContain('href="https://mail.google.com/"');
+    expect(markup).toContain('rel="noopener"');
+    expect(markup).toContain("Open Gmail");
+    expect(markup).not.toContain("Open Outlook");
+  });
+
+  it("offers an Open Gmail link for googlemail.com addresses", async () => {
+    await mockReactRouter();
+    const markup = await renderAuthForm({
+      mode: "signup",
+      linkSent: true,
+      initialEmail: "new@googlemail.com",
+    });
+
+    expect(markup).toContain('href="https://mail.google.com/"');
+    expect(markup).toContain("Open Gmail");
+  });
+
+  it("offers an Open Outlook link for outlook.com, hotmail.com and live.com addresses", async () => {
+    for (const domain of ["outlook.com", "hotmail.com", "live.com"]) {
+      await mockReactRouter();
+      const markup = await renderAuthForm({
+        mode: "signup",
+        linkSent: true,
+        initialEmail: `new@${domain}`,
+      });
+
+      expect(markup).toContain('href="https://outlook.live.com/mail/"');
+      expect(markup).toContain('rel="noopener"');
+      expect(markup).toContain("Open Outlook");
+      expect(markup).not.toContain("Open Gmail");
+      vi.doUnmock("react-router");
+      vi.resetModules();
+    }
+  });
+
+  it("shows a plain Open your inbox line with no link for other domains", async () => {
+    await mockReactRouter();
+    const markup = await renderAuthForm({
+      mode: "signup",
+      linkSent: true,
+      initialEmail: "founder@startup.io",
+    });
+
+    expect(markup).toContain("Open your inbox");
+    expect(markup).not.toContain("mail.google.com");
+    expect(markup).not.toContain("outlook.live.com");
+    expect(markup).not.toContain('rel="noopener"');
+  });
+
+  it("keeps inbox links out of the login sent state", async () => {
+    await mockReactRouter();
+    const markup = await renderAuthForm({ mode: "login", linkSent: true, initialEmail: "user@gmail.com" });
+
+    expect(markup).not.toContain("Open Gmail");
+    expect(markup).not.toContain("Open Outlook");
+    expect(markup).not.toContain("Open your inbox");
+  });
+});
+
+describe("AuthForm signup resend", () => {
+  it("resend form re-posts the same email, name and redirectTo", async () => {
+    await mockReactRouter();
+    const markup = await renderAuthForm({
+      mode: "signup",
+      linkSent: true,
+      initialEmail: "new@example.com",
+      initialName: "Nish Kumar",
+      redirectTo: "/app?website=nykaa.com#setup-checklist",
+    });
+
+    expect(markup).toContain("Resend link");
+    expect(markup).toContain('type="hidden" name="resend" value="1"');
+    expect(markup).toContain('type="hidden" name="email" value="new@example.com"');
+    expect(markup).toContain('type="hidden" name="name" value="Nish Kumar"');
+    expect(markup).toContain('type="hidden" name="redirectTo" value="/app?website=nykaa.com#setup-checklist"');
+  });
+
+  it("shows Sent again with the address after a successful resend", async () => {
+    await mockReactRouter();
+    const markup = await renderAuthForm({
+      mode: "signup",
+      linkSent: true,
+      linkResent: true,
+      initialEmail: "new@example.com",
+    });
+
+    expect(markup).toContain("Sent again");
+    expect(markup).toContain("<strong>new@example.com</strong>");
+    expect(markup).not.toContain("Link sent to");
+  });
+});
+
+describe("/auth/signup loader sent state", () => {
+  it("exposes the sent address, name and resent marker for the post-submit screen", async () => {
+    vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => ({})) }));
+    vi.doMock("~/lib/auth.server", () => ({ getOptionalSession: vi.fn().mockResolvedValue(null) }));
+    vi.doMock("~/lib/better-auth.server", () => ({
+      enabledBetterAuthOAuthProviders: vi.fn(() => []),
+    }));
+    vi.doMock("~/lib/signup-source", () => ({ allowlistedSignupSource: vi.fn(() => null) }));
+
+    const { loader } = await import("~/routes/auth.signup");
+    const result = await loader({
+      context: { cloudflare: { env: {} } },
+      request: new Request(
+        "https://0509.io/auth/signup?sent=1&resent=1&email=owner%40gmail.com&name=Nish%20Kumar&redirectTo=%2Fapp",
+      ),
+    } as never);
+
+    expect(result).toMatchObject({
+      linkSent: true,
+      linkResent: true,
+      prefillEmail: "owner@gmail.com",
+      prefillName: "Nish Kumar",
+    });
+  });
+});
+
+describe("/auth/signup resend action", () => {
+  it("resend success re-sends through the same action and marks the link resent", async () => {
+    const sendBetterAuthMagicLink = vi.fn().mockResolvedValue(undefined);
+    mockSignupActionModules(sendBetterAuthMagicLink);
+
+    const { action } = await import("~/routes/auth.signup");
+    const request = new Request("https://0509.io/auth/signup?sent=1", {
+      method: "POST",
+      body: new URLSearchParams({
+        resend: "1",
+        name: "Nish Kumar",
+        email: "Owner@Example.com",
+        redirectTo: "/app#setup-checklist",
+      }),
+    });
+
+    let response: Response | null = null;
+    try {
+      await action(actionArgs(request));
+    } catch (error) {
+      response = error as Response;
+    }
+
+    expect(response?.status).toBe(302);
+    // The resend goes through the exact same send path (same rate-limit scope).
+    expect(sendBetterAuthMagicLink).toHaveBeenCalledTimes(1);
+    expect(sendBetterAuthMagicLink.mock.calls[0]?.[2]).toMatchObject({
+      email: "owner@example.com",
+      mode: "signup",
+      name: "Nish Kumar",
+      redirectTo: "/app#setup-checklist",
+    });
+    const location = new URL(response?.headers.get("Location") ?? "", "https://0509.io");
+    expect(location.pathname).toBe("/auth/signup");
+    expect(location.searchParams.get("sent")).toBe("1");
+    expect(location.searchParams.get("resent")).toBe("1");
+    expect(location.searchParams.get("email")).toBe("owner@example.com");
+    expect(location.searchParams.get("name")).toBe("Nish Kumar");
+    expect(location.searchParams.get("redirectTo")).toBe("/app#setup-checklist");
+  });
+
+  it("first send redirects to the sent state without the resent marker", async () => {
+    const sendBetterAuthMagicLink = vi.fn().mockResolvedValue(undefined);
+    mockSignupActionModules(sendBetterAuthMagicLink);
+
+    const { action } = await import("~/routes/auth.signup");
+    const request = new Request("https://0509.io/auth/signup", {
+      method: "POST",
+      body: new URLSearchParams({
+        name: "Nish Kumar",
+        email: "owner@example.com",
+        redirectTo: "/app#setup-checklist",
+      }),
+    });
+
+    let response: Response | null = null;
+    try {
+      await action(actionArgs(request));
+    } catch (error) {
+      response = error as Response;
+    }
+
+    expect(response?.status).toBe(302);
+    const location = new URL(response?.headers.get("Location") ?? "", "https://0509.io");
+    expect(location.searchParams.get("sent")).toBe("1");
+    expect(location.searchParams.get("resent")).toBeNull();
+    expect(location.searchParams.get("email")).toBe("owner@example.com");
+    expect(location.searchParams.get("name")).toBe("Nish Kumar");
+  });
+
+  it("rate-limit refusal returns an error instead of the sent state and never logs the address", async () => {
+    const rateLimitError = Object.assign(new Error("Too many requests"), { status: 429 });
+    const sendBetterAuthMagicLink = vi.fn().mockRejectedValue(rateLimitError);
+    mockSignupActionModules(sendBetterAuthMagicLink);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const { action } = await import("~/routes/auth.signup");
+    const request = new Request("https://0509.io/auth/signup?sent=1", {
+      method: "POST",
+      body: new URLSearchParams({
+        resend: "1",
+        name: "Nish Kumar",
+        email: "owner@example.com",
+        redirectTo: "/app#setup-checklist",
+      }),
+    });
+
+    await expect(action(actionArgs(request))).resolves.toEqual({
+      ok: false,
+      error: "We couldn't send the setup link. Try again in a minute.",
+      email: "owner@example.com",
+      name: "Nish Kumar",
+      redirectTo: "/app#setup-checklist",
+    });
+    // The refusal came out of the existing send path — not a bypass around it.
+    expect(sendBetterAuthMagicLink).toHaveBeenCalledTimes(1);
+    for (const call of warn.mock.calls) {
+      expect(JSON.stringify(call)).not.toContain("owner@example.com");
+    }
   });
 });

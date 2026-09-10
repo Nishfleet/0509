@@ -89,7 +89,9 @@ describe("auth signup loader", () => {
     expect(result).toEqual({
       redirectTo: "/app#setup-checklist",
       prefillEmail: "",
+      prefillName: "",
       linkSent: false,
+      linkResent: false,
     });
   });
 });
