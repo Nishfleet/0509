@@ -322,14 +322,20 @@ describe("presence source coverage policy", () => {
     expect(docs.find((entry) => entry.sourceId === "x")?.productionStatus).toBe("gated");
   });
 
-  it("marks the five new seam sources as coming_soon (stubs)", async () => {
-    const newIds = ["google", "google_ads", "tiktok", "subdomains", "hiring"] as const;
-    for (const sourceId of newIds) {
+  it("marks the remaining four seam stubs as coming_soon (google_ads flipped to configured in #2189)", async () => {
+    const stubIds = ["google", "tiktok", "subdomains", "hiring"] as const;
+    for (const sourceId of stubIds) {
       const entry = await evaluatePresenceSourceCoverage(baseEnv, sourceId, "competitor");
       expect(entry.status, sourceId).toBe("coming_soon");
       expect(entry.reasonCode, sourceId).toBe("not_implemented");
       expect(entry.coverageLabel, sourceId).toBe("UNAVAILABLE");
     }
+  });
+
+  it("marks google_ads as configured once implemented + requiresEnv are true (#2189)", async () => {
+    const entry = await evaluatePresenceSourceCoverage(baseEnv, "google_ads", "competitor");
+    expect(entry.status).toBe("configured");
+    expect(entry.coverageLabel).toBe("OFFICIAL_PUBLIC_API");
   });
 
   it("lists the five new seam sources in the docs coverage table as coming_soon", () => {

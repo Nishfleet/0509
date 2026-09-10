@@ -16,13 +16,17 @@ describe("source registry", () => {
   });
 
   it("every stub adapter exports implemented: false", () => {
-    for (const adapter of SOURCES) {
+    // Landed sources flip implemented to true (#2189 google_ads); only the
+    // remaining stubs must still be false.
+    const stubs = SOURCES.filter((a) => !a.implemented);
+    for (const adapter of stubs) {
       expect(adapter.implemented, adapter.id).toBe(false);
     }
   });
 
   it("every stub fetch returns unavailable with reason not_implemented", async () => {
-    for (const adapter of SOURCES) {
+    const stubs = SOURCES.filter((a) => !a.implemented);
+    for (const adapter of stubs) {
       const result = await adapter.fetch(baseEnv, {
         competitorId: "c1",
         competitorLabel: "Test",
@@ -32,7 +36,8 @@ describe("source registry", () => {
   });
 
   it("every stub diff returns an empty array", () => {
-    for (const adapter of SOURCES) {
+    const stubs = SOURCES.filter((a) => !a.implemented);
+    for (const adapter of stubs) {
       expect(adapter.diff(null, { payload: {} }), adapter.id).toEqual([]);
     }
   });
@@ -43,14 +48,17 @@ describe("source registry", () => {
     expect(getSourceAdapter("nonexistent" as never)).toBeUndefined();
   });
 
-  it("getEnabledSources filters by requiresEnv (all stubs return false → empty)", () => {
+  it("getEnabledSources includes implemented sources whose requiresEnv is true (agency = all sources)", () => {
     const plan = "agency" as PlanFamily;
-    expect(getEnabledSources(baseEnv, plan)).toEqual([]);
+    // google_ads is implemented with requiresEnv: () => true; stubs still
+    // return false and are excluded. Agency allows all sources.
+    expect(getEnabledSources(baseEnv, plan).map((a) => a.id)).toEqual(["google_ads"]);
   });
 
-  it("getEnabledSources treats a missing sources entitlement as 'all' (stubs still filtered by requiresEnv)", () => {
-    // PlanEntitlements has no `sources` field yet (#2212 adds it). The
-    // registry must not throw and must still apply requiresEnv.
+  it("getEnabledSources excludes google_ads from the free plan (allowlist is ['meta'])", () => {
+    // The free plan's `sources` entitlement is ['meta'] (#2212); google_ads
+    // is not in the allowlist, so it is excluded even though requiresEnv
+    // is true. Stubs are excluded by requiresEnv.
     const plan = "free" as PlanFamily;
     const enabled = getEnabledSources(baseEnv, plan);
     expect(enabled).toEqual([]);

@@ -1,35 +1,34 @@
-# Plan — issue 2218 (sources seam)
+# Plan — #2189 Google Ads Transparency Center source
 
-Manager mode (heavy/keystone). Base: salvaged worktree `issue-0509-2218-fresh` on
-origin/main (30cdf07e) with uncommitted seam work. The salvaged work covers most
-of the issue; the binding "Judge edits, batch 2" gaps remain.
+Issue: Nishfleet/0509#2189. Replaces the google_ads stub adapter with a real
+implementation. Dependency #2218 (sources seam) merged. Files owned (per issue
+`files:` line + judge batch-2 edit):
 
-## Phase 1 — Assess salvaged work, verify it builds/tests green
-- [x] Verify salvaged work compiles and the seam tests pass (registry, budget, presence coverage, claim surface)
-- [x] Confirm the six stub adapters + six stub sections exist at the exact ownership-map paths
-- [x] Confirm migration 0088 is the next number and the integration test references it correctly
+- `app/lib/sources/google-ads.server.ts` (replace stub adapter)
+- `app/lib/sources/google-ads/google-ads-transparency.server.ts` (fetch client)
+- `app/lib/sources/google-ads/google-ads-snapshot.server.ts` (diff logic)
+- `app/components/sources/google-ads.tsx` (replace stub Section)
+- `tests/sources/google-ads-transparency.server.test.ts`
+- `tests/sources/google-ads-snapshot.server.test.ts`
+- `tests/fixtures/google-ads-transparency/**`
 
-## Phase 2 — Close binding judge-edit gaps (types, runSources, action, renderer)
-- [x] Add `competitorUpdate` return channel to `SourceFetchResult`; `runSources` persists it to the seam's competitor columns
-- [x] Add generic source action on the competitor route (`sourceId`, field, value → writes seam columns) for #2199's manual Job board URL
-- [x] SourceSections renders one locked line per plan-disabled source from `getPlanEntitlements(plan).sources`; pass `plan` from competitor-detail
-- [x] Document the files line: competitor page route file, per-competitor check file, Meta helper file
+Judge batch-2 binding edits applied:
+- requiresEnv = () => true, implemented: true (coverage -> "configured")
+- diff() returns SourceChange[]; the seam emits (no direct alert call)
+- Section renders inside its own component only; never edit competitor page route
+- claim table row stays "not live - stub"; #2188 flips it (do not edit claim table)
+- termination: `npx vitest run tests/sources/google-ads*.test.ts`
 
-## Phase 3 — Tests for the new judge-edit behavior
-- [x] Test `competitorUpdate` persistence in runSources (fake adapter)
-- [x] Test the generic source action endpoint
-- [x] Test locked-source renderer in SourceSections
-- [x] Fix migration number references (0087 → 0088) in the integration test
+Necessary seam-test updates (judge-ordered flip breaks stub assertions; scoped
+to google_ads only; sequential landing order prevents source-vs-source conflict):
+- `tests/sources/registry.test.ts` — exclude google_ads from all-stubs assertions
+- `tests/presence-source-coverage.test.ts` — exclude google_ads from five-new-sources coming_soon assertion
 
-## Phase 4 — Full verification (termination criteria)
-- [x] `npx vitest run tests/sources/registry.test.ts tests/decodo-budget*.test.ts` green
-- [x] `npm run typecheck` green
-- [x] Migration applies on a fresh D1 in CI (integration test green)
+## Phases
 
-## Phase 5 — Review each phase (reviewer), land findings
-- [x] Reviewer on the full diff vs origin/main; land every finding in a bucket
-- [x] Fix Act-on findings
-
-## Phase 6 — Open PR, arm auto-merge
-- [x] PR body with Verification / run-proof / research / help-first / Closes #2218
-- [x] Arm auto-merge
+- [ ] phase 1: fetchCreativesByDomain(domain,{maxCreatives:200}) — pages SearchCreatives (40/page, stop at maxCreatives or no token), 1 req/sec max, 20s timeout, one attempt per page; normalized creatives [{advertiserId,advertiserName,creativeId,format,domain,firstShownAt,lastShownAt,previewUrl|null}]; unavailable on non-200/parse-fail/HTML; format enum 1=text 2=image 3=video else unknown (documented from fixtures + GoogleAdsTransparencyScraper); previewUrl from 3.3.2 img html; truncated:true when maxCreatives hit.
+- [ ] phase 2: diffSnapshots(prev,next) — new creative ids (ad_new); creatives whose lastShownAt stopped advancing 7+ days (ad_inactive, paused); new advertiser ids on domain (ad_new); format mix change (website_page_changed); no change -> []. Pure function over snapshot payloads.
+- [ ] phase 3: adapter google-ads.server.ts — id google_ads, label "Google Ads (Transparency Center)", kind ads, implemented true, cadence daily, requiresEnv ()=>true; fetch looks up watchlist target_id via getWatchlist -> domainFromWatchlistTargetId -> fetchCreativesByDomain -> buildSnapshotPayload; diff -> diffSnapshots; Section = GoogleAdsSection.
+- [ ] phase 4: GoogleAdsSection component — render advertiser name(s), total creatives, new since last check (from diff), format mix, up to 12 image previews (previewUrl, lazy-loaded, no video embeds). Null when no snapshot.
+- [ ] phase 5: tests — transparency (3-domain field mapping, paging with token, maxCreatives stop, unavailable non-200/HTML/parse, zero ads, format mapping, pacing) + snapshot (new creative, paused 7+ days, new advertiser, format mix, no change); update registry + coverage seam tests for google_ads.
+- [ ] phase 6: termination `npx vitest run --configLoader runner --project node tests/sources/google-ads*.test.ts tests/sources/registry.test.ts tests/presence-source-coverage.test.ts` green; commit; PR with Verification + run-proof; arm auto-merge.
