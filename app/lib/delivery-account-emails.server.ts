@@ -780,11 +780,28 @@ export async function sendWelcomeEmail(
     return { sent: false as const, reason: "missing_email" as const };
   }
 
+  // The customer-lane dispatch gate (markInstantDeliveryDispatchStarted) only
+  // advances a claim when a matching, validated, opted-in delivery_target row
+  // exists for the recipient. A welcome claim with deliveryTargetId: null can
+  // never pass that gate, so every attempt is lost and leaves a stuck pending
+  // row that is reclaimed and re-failed on every later trigger. Resolve or
+  // provision the verified account-email target up front and claim against it
+  // so the gate can actually advance the dispatch.
+  const targetResolution = await resolveActivationEmailTarget(
+    env,
+    input.userId,
+    recipient,
+  );
+  if (!targetResolution.target) {
+    return { sent: false as const, reason: "target_unavailable" as const };
+  }
+  const deliveryTarget = targetResolution.target;
+
   const idempotencyKey = `welcome:${input.userId}`;
   const claim = await claimInstantDeliveryAttempt(env, {
     userId: input.userId,
     watchlistId: null,
-    deliveryTargetId: null,
+    deliveryTargetId: deliveryTarget.id,
     lane: "customer",
     channel: "email",
     provider: EMAIL_PROVIDER,
