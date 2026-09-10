@@ -55,7 +55,7 @@ function fixture(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoaderD
     brandName: "Nike",
     hasCachedAds: true,
     ads: [],
-    verifiedLinkedAds: [],
+    verifiedLinkedIds: [],
     checkedAgo: "2 hours ago",
     lastCheckedAt: new Date("2026-09-08T12:00:00Z").toISOString(),
     freshForLiveClaim: false,

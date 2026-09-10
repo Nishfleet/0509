@@ -29,7 +29,12 @@ export function BrandStatLine({
 }: {
   teaser: BrandIntelTeaser;
   aggression: BrandPageAggression | null;
-  ads: AdRecord[];
+  /**
+   * The verified-linked wall records. The strip reads only each creative's
+   * variant count, so this is the narrow projection the loader ships (issue
+   * #2391) rather than a full `AdRecord`.
+   */
+  ads: Pick<AdRecord, "variantCount">[];
   movesThisWeek: number;
   freshnessLabel: string | null;
   fresh: boolean;

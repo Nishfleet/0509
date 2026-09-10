@@ -13,6 +13,29 @@ const WALL_VISIBLE_ADS = 5;
 const NEW_AD_HOURS = 48;
 
 /**
+ * The fields one wall card reads. Mirrors the loader's `BrandPageAd`
+ * projection (issue #2391): the hydration payload ships only these fields, so
+ * typing the prop as this Pick keeps a newly added `ad.<field>` read here from
+ * silently resolving to `undefined` in the browser.
+ */
+type WallAd = Pick<
+  AdRecord,
+  | "metaAdId"
+  | "advertiser"
+  | "previewHeadline"
+  | "hook"
+  | "cta"
+  | "format"
+  | "landingPageUrl"
+  | "firstSeenAt"
+  | "lastSeenAt"
+  | "activeStatusObserved"
+  | "variantCount"
+  | "creativeImageUrl"
+  | "linkVerifiedDomain"
+>;
+
+/**
  * "All N ads, on the wall" — the grid of real creatives, ordered
  * longest-running → newest so proven runners land first. When the cache holds
  * more ads than fit, the final tile is an honest "+N more ads live" (or
@@ -36,7 +59,7 @@ export function BrandAdWall({
   now = new Date(),
   capturedAt = null,
 }: {
-  ads: AdRecord[];
+  ads: WallAd[];
   totalCount: number;
   domain: string;
   fresh: boolean;
@@ -92,7 +115,7 @@ export function BrandAdWall({
   );
 }
 
-function BrandAdCard({ ad, now, capturedAt, isPartner }: { ad: AdRecord; now: Date; capturedAt: Date | null; isPartner: boolean }) {
+function BrandAdCard({ ad, now, capturedAt, isPartner }: { ad: WallAd; now: Date; capturedAt: Date | null; isPartner: boolean }) {
   const isNew = isNewlySeen(ad, now);
   const savedLabel = isNew ? "New" : "Screenshot saved";
   // The per-ad capture date: when this creative was first observed. A
@@ -142,14 +165,14 @@ function BrandAdCard({ ad, now, capturedAt, isPartner }: { ad: AdRecord; now: Da
   );
 }
 
-function isNewlySeen(ad: AdRecord, now: Date): boolean {
+function isNewlySeen(ad: WallAd, now: Date): boolean {
   if (!ad.firstSeenAt) return false;
   const firstSeen = Date.parse(ad.firstSeenAt);
   if (Number.isNaN(firstSeen)) return false;
   return now.getTime() - firstSeen <= NEW_AD_HOURS * 60 * 60 * 1000;
 }
 
-function secondaryLine(ad: AdRecord): string | null {
+function secondaryLine(ad: WallAd): string | null {
   const cta = ad.cta?.trim();
   const hook = ad.hook?.trim();
   if (cta && hook && hook !== ad.previewHeadline?.trim()) {

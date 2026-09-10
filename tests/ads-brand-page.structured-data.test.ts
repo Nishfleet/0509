@@ -80,7 +80,7 @@ function cachedIndexable(overrides: Partial<BrandPageLoaderData> = {}): BrandPag
     brandName: "Nike",
     hasCachedAds: true,
     ads,
-    verifiedLinkedAds: ads,
+    verifiedLinkedIds: ads.map((creative) => creative.metaAdId),
     checkedAgo: "about 2 hours ago",
     lastCheckedAt: "2026-08-09T10:00:00.000Z",
     freshForLiveClaim: false,
@@ -277,7 +277,7 @@ describe("/ads/:domain JSON-LD", () => {
       cachedIndexable({
         hasCachedAds: false,
         ads: [],
-        verifiedLinkedAds: [],
+        verifiedLinkedIds: [],
         checkedAgo: null,
         lastCheckedAt: null,
         teaser: null,

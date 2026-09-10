@@ -120,7 +120,7 @@ function adsPageData(): BrandPageLoaderData {
     brandName: "Nike",
     hasCachedAds: true,
     ads: populatedAds(),
-    verifiedLinkedAds: populatedAds(),
+    verifiedLinkedIds: populatedAds().map((creative) => creative.metaAdId),
     checkedAgo: "about 2 hours ago",
     lastCheckedAt: "2026-08-09T10:00:00.000Z",
     freshForLiveClaim: false,
