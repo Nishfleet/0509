@@ -940,7 +940,7 @@ describe("Dodo billing canary route", () => {
   it("defaults to the dedicated canary identity and self-provisions its baseline", async () => {
     const env = createEnv();
     const response = await invokeCanary({ env });
-    const body = await response.json();
+    const body = (await response.json()) as { ok?: boolean };
 
     expect(response.status).toBe(200);
     expect(body.ok).toBe(true);

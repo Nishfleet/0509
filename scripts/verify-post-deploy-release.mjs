@@ -600,7 +600,14 @@ export async function defaultBilling({ workerVersionId, runId, token, attempts =
     expectedWorkerVersionId: workerVersionId,
     gateRunId: runId,
   };
-  let last = null;
+  /** @type {{ ok: boolean, blocker: string | null, status: number, serverBlocker: string | null, reason?: string }} */
+  let last = {
+    ok: false,
+    blocker: "billing_canary_not_attempted",
+    status: 0,
+    serverBlocker: null,
+    reason: `attempts=${attempts}`,
+  };
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
       const { payload, response } = await runBillingCanary({ config, token, fetchImpl: fetcher });
