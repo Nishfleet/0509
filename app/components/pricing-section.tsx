@@ -373,12 +373,11 @@ export function PricingSection({
         <span className="ld-kicker">Plans</span>
         <HeadingTag>Choose the monitoring rhythm your team needs.</HeadingTag>
         <div className="ld-plan-summary" aria-label="Pricing summary">
-          <span>Recommended launch plan</span>
+          <span>Recommended</span>
           <strong>Start with Starter</strong>
           <p>3-hour competitor monitoring for 10 competitors, plus daily and weekly briefs.</p>
         </div>
         <p className="ld-pricing-note">
-          Free: watch 1 competitor — one first check and one first brief, Meta Ad Library only.
           No card required. Paid plans add automatic checks, evidence, more competitors,
           Collections, daily briefs, and clear check caps. Save
           winning ads to collections — and see how long each ad has been running when the Ad Library
@@ -423,12 +422,9 @@ export function PricingSection({
           <h3>€0</h3>
           <small>free, forever</small>
           <div className="f9-plan-value" aria-label="Free value summary">
-            <strong>
-              Watch 1 competitor — one first check and one first brief, Meta Ad Library only.
-            </strong>
             <span>No card required.</span>
           </div>
-          <p>One first check files one first brief, from the Meta Ad Library only.</p>
+          <p>Watch 1 competitor — one first check and one first brief, Meta Ad Library only.</p>
           <ul className="f9-plan-feature-list">
             <li>1 competitor</li>
             <li>First check + first brief</li>
