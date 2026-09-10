@@ -364,7 +364,7 @@ export async function sendDeliveryTestEmail(
   return finalized && providerResult.status === "sent";
 }
 
-function normalizeDeliveryEmail(value: string | null | undefined) {
+export function normalizeDeliveryEmail(value: string | null | undefined) {
   const normalized = value?.trim().toLowerCase() ?? "";
   return normalized.length > 0 ? normalized : null;
 }
@@ -1040,7 +1040,7 @@ async function listAccountEmailTargetsForWelcome(
   });
 }
 
-type ActivationEmailTarget = {
+export type ActivationEmailTarget = {
   id: string;
   targetValue: string;
   isOptedIn: boolean;
@@ -1050,7 +1050,7 @@ type ActivationEmailTarget = {
   validationStatus: string;
 };
 
-async function resolveActivationEmailTarget(
+export async function resolveActivationEmailTarget(
   env: AppEnv,
   userId: string,
   accountEmail: string,
