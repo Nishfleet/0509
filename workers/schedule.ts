@@ -75,6 +75,37 @@ export function resolveScheduledTask(cron: string): ScheduledTask {
   };
 }
 
+/**
+ * Scan-failure-rate alert (fleet-ops 0509 reccos): in fanout mode scans fail
+ * *inside* Workflows after dispatch, so `skippedForBudget` / `dispatchFailures`
+ * / `inlineFailures` / `digestFailures` never reflect them. The operator is
+ * paged when the at-risk (failed + retrying) share of the scanned
+ * `watchlist_run` population over the trailing orchestration window stays above
+ * this threshold with at least `SCAN_FAILURE_MIN_FINISHED_RUNS` scanned runs —
+ * exactly one email per idempotency day, keyed below.
+ */
+export const SCAN_FAILURE_RATE_THRESHOLD = 0.25;
+export const SCAN_FAILURE_MIN_FINISHED_RUNS = 8;
+
+/**
+ * A scheduled scan counts as at-risk when it either hard-failed inside the
+ * Workflow (`scanFailed`) or is stuck retrying a dispatch error (`scanRetrying`).
+ * The operator page fires when the at-risk share of the scanned population
+ * (`at-risk + succeeded`) stays above the threshold with enough runs.
+ */
+export function isScanFailureRateExceeded(
+  scanFailed: number,
+  scanRetrying: number,
+  scanSucceeded: number,
+): boolean {
+  const atRisk = Math.max(0, scanFailed) + Math.max(0, scanRetrying);
+  const scanned = atRisk + Math.max(0, scanSucceeded);
+  return (
+    scanned >= SCAN_FAILURE_MIN_FINISHED_RUNS &&
+    atRisk / scanned >= SCAN_FAILURE_RATE_THRESHOLD
+  );
+}
+
 export function resolveOperationalRiskAlertIdempotencyKey(
   dayKey: string,
   input: {
@@ -82,8 +113,20 @@ export function resolveOperationalRiskAlertIdempotencyKey(
     dispatchFailures: number;
     inlineFailures?: number;
     digestFailures?: number;
+    scanFailed?: number;
+    scanRetrying?: number;
+    scanSucceeded?: number;
   },
 ) {
+  if (
+    isScanFailureRateExceeded(
+      input.scanFailed ?? 0,
+      input.scanRetrying ?? 0,
+      input.scanSucceeded ?? 0,
+    )
+  ) {
+    return `operator-alert:scan-failure-rate:${dayKey}`;
+  }
   const budgetSkipped = input.skippedForBudget > 0;
   const dispatchFailed = input.dispatchFailures > 0;
   const inlineFailed = (input.inlineFailures ?? 0) > 0;

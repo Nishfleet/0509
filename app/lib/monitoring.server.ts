@@ -277,6 +277,9 @@ export async function runScheduledMonitoring(
       skippedForBudget: 0,
       skippedForBilling: 0,
       dispatchFailures: 0,
+      scanFailed: 0,
+      scanSucceeded: 0,
+      scanRetrying: 0,
       digests: 0,
       digestAttempts: 0,
       digestFailures: 0,
@@ -306,6 +309,9 @@ export async function runScheduledMonitoring(
   let skippedForBilling = 0;
   let dispatchFailures = 0;
   let planLookupFailures = 0;
+  let scanFailed = 0;
+  let scanSucceeded = 0;
+  let scanRetrying = 0;
 
   if (options.includeScans !== false) {
     const listedWatchlists = await listActiveWatchlists(env, {
@@ -395,6 +401,9 @@ export async function runScheduledMonitoring(
       }
 
       const metrics = await collectMonitoringOrchestrationMetrics(env);
+      scanFailed = metrics.failed;
+      scanSucceeded = metrics.succeeded;
+      scanRetrying = metrics.retrying;
       const { logAppEvent } = await import("~/lib/log.server");
       logAppEvent(
         "info",
@@ -412,6 +421,9 @@ export async function runScheduledMonitoring(
             shadowOnly: fanoutResult.shadowOnly,
             running: metrics.running,
             oldestQueuedAgeMs: metrics.oldestQueuedAgeMs,
+            succeeded: metrics.succeeded,
+            failed: metrics.failed,
+            retrying: metrics.retrying,
           },
         },
       );
@@ -465,6 +477,9 @@ export async function runScheduledMonitoring(
     skippedForBudget,
     skippedForBilling,
     dispatchFailures,
+    scanFailed,
+    scanSucceeded,
+    scanRetrying,
     digests: digestResult.sent,
     digestAttempts: digestResult.attempted,
     digestFailures: digestResult.failed,

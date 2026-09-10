@@ -9,6 +9,7 @@ import {
   REGULAR_MONITORING_CRON,
   WEEKLY_DIGEST_CRON,
   resolveOperationalRiskAlertIdempotencyKey,
+  isScanFailureRateExceeded,
   resolveScheduledTask,
 } from "../workers/schedule";
 
@@ -110,5 +111,34 @@ describe("worker schedule", () => {
     })).toBe(
       "operator-alert:scheduled-degraded-scan-budget-and-fanout-dispatch-and-inline-and-digest:2026-07-03",
     );
+  });
+
+  it("does not page when failed-share stays below threshold or finished runs are too few", () => {
+    expect(resolveOperationalRiskAlertIdempotencyKey("2026-08-10", {
+      skippedForBudget: 0,
+      dispatchFailures: 0,
+      scanFailed: 1,
+      scanRetrying: 0,
+      scanSucceeded: 9,
+    })).toBeNull();
+    expect(resolveOperationalRiskAlertIdempotencyKey("2026-08-10", {
+      skippedForBudget: 0,
+      dispatchFailures: 0,
+      scanFailed: 1,
+      scanRetrying: 1,
+      scanSucceeded: 5,
+    })).toBeNull();
+  });
+
+  it("pages the operator once per idempotency day when the scan failure rate is exceeded", () => {
+    expect(resolveOperationalRiskAlertIdempotencyKey("2026-08-10", {
+      skippedForBudget: 0,
+      dispatchFailures: 0,
+      scanFailed: 2,
+      scanRetrying: 1,
+      scanSucceeded: 7,
+    })).toBe("operator-alert:scan-failure-rate:2026-08-10");
+    expect(isScanFailureRateExceeded(2, 1, 7)).toBe(true);
+    expect(isScanFailureRateExceeded(1, 0, 9)).toBe(false);
   });
 });
