@@ -168,6 +168,42 @@ describe("checkMigrationNumbering", () => {
     expect(result).toEqual({ ok: true, added: [], baseTop: 89 });
   });
 
+  it("fails two added migrations that duplicate each other's prefix above the base top", () => {
+    let refusal: any;
+    try {
+      // base tops at 0089; both 0090_a and 0090_b sort after the base, so the
+      // sort-last rule alone lets them through — but they recreate the exact
+      // duplicate-number incident inside one PR.
+      checkMigrationNumbering(
+        execFrom([
+          baseMigrations(["migrations/0089_org_scoped_ownership.sql"]),
+          addedMigrations(["migrations/0090_a.sql", "migrations/0090_b.sql"]),
+        ]),
+      );
+    } catch (error) {
+      refusal = error;
+    }
+    expect(refusal).toBeInstanceOf(GateRefusal);
+    expect(refusal.reason).toBe("migration_not_sorting_last");
+    expect(refusal.detail).toContain("0090 used by both");
+    expect(refusal.detail).toContain("migrations/0090_a.sql");
+    expect(refusal.detail).toContain("migrations/0090_b.sql");
+  });
+
+  it("passes two distinct added migrations above the base top", () => {
+    const result = checkMigrationNumbering(
+      execFrom([
+        baseMigrations(["migrations/0089_org_scoped_ownership.sql"]),
+        addedMigrations(["migrations/0090_a.sql", "migrations/0091_b.sql"]),
+      ]),
+    );
+    expect(result).toEqual({
+      ok: true,
+      added: ["migrations/0090_a.sql", "migrations/0091_b.sql"],
+      baseTop: 89,
+    });
+  });
+
   it("does not trip on historical duplicates already on the base branch", () => {
     // 0088 is duplicated on the base branch (the real-world state). A new
     // 0090 must pass — the duplicates are not "added in this PR".

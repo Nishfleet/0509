@@ -165,30 +165,65 @@ export function checkMigrationNumbering(exec = defaultExec, baseRef = BASE_REF) 
   const baseTop = baseTopPrefix(exec, baseRef);
   const added = listAddedMigrations(exec, baseRef);
 
+  /** @param {number} n */
+  const pad = (n) => String(n).padStart(4, "0");
+
   const offenders = [];
+  const prefixToPath = new Map();
+  const dupes = [];
   for (const path of added) {
     const n = migrationPrefix(path);
     if (n === null) continue; // not a numbered migration; not this gate's concern
     if (n <= baseTop) {
       offenders.push({ path, number: n });
     }
+    // A prefix used more than once in the SAME PR would recreate the exact
+    // duplicate-number incident, even when both sort above the base top.
+    // Historical duplicates already on the base branch stay untouched.
+    if (prefixToPath.has(n)) {
+      dupes.push({ number: n, paths: [/** @type {string} */ (prefixToPath.get(n)), path] });
+    } else {
+      prefixToPath.set(n, path);
+    }
   }
 
+  const messages = [];
   if (offenders.length > 0) {
-    /** @param {number} n */
-    const pad = (n) => String(n).padStart(4, "0");
     const required = baseTop + 1;
-    const lines = offenders.map(
-      (o) =>
-        `  ${o.path} (prefix ${pad(o.number)}) — must sort after ${pad(baseTop)}; ` +
-        `use ${pad(required)} or higher`,
-    );
-    throw new GateRefusal(
-      "migration_not_sorting_last",
+    messages.push(
       "A newly added migration must sort after every migration on the base " +
         `branch. The base branch (${baseRef}) tops out at ${pad(baseTop)}.\n\n` +
-        `Offending migration(s):\n${lines.join("\n")}\n\n` +
-        "Renumber the file(s) above to sort last, or drop them if unintended.",
+        `Offending migration(s) (must renumber to sort last):\n` +
+        offenders
+          .map(
+            (o) =>
+              `  ${o.path} (prefix ${pad(o.number)}) — must sort after ${pad(baseTop)}; ` +
+              `use ${pad(required)} or higher`,
+          )
+          .join("\n"),
+    );
+  }
+  if (dupes.length > 0) {
+    messages.push(
+      "A newly added migration must not duplicate another migration added in " +
+        "the same PR.\n\n" +
+        `Duplicated prefix(es):\n` +
+        dupes
+          .map(
+            (d) =>
+              `  ${pad(d.number)} used by both:\n` +
+              d.paths.map((p) => `    - ${p}`).join("\n"),
+          )
+          .join("\n"),
+    );
+  }
+
+  if (messages.length > 0) {
+    throw new GateRefusal(
+      "migration_not_sorting_last",
+      messages.join("\n\n") +
+        "\n\nRenumber the file(s) above to sort last and stay distinct within this PR, " +
+        "or drop them if unintended.",
     );
   }
 
