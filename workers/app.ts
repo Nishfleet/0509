@@ -56,6 +56,7 @@ import {
 } from "../app/lib/release-scheduled-observation.server";
 import { runRetentionSweep } from "../app/lib/retention.server";
 import {
+  recordScheduledObservationGapCheckHeartbeat,
   sendScheduledObservationGapAlert,
   SCHEDULED_OBSERVATION_GAP_CHECK_CRON,
 } from "../app/lib/scheduled-observation-health.server";
@@ -363,7 +364,12 @@ export default {
       // Preserve the shared outbox drain without trying to record this check
       // cron in the release-soak observation table, whose contract intentionally
       // accepts only the four production workload schedules.
+      // Issue #2368: this check cron is itself unobserved — the soak table
+      // accepts only the four workload crons, so a selective loss of just this
+      // trigger left deep health green while the gap alerter was already dead.
+      // Record our own heartbeat and let /api/health/deep report its freshness.
       scheduleBillingLifecycleEmailRecovery(env, ctx);
+      ctx.waitUntil(recordScheduledObservationGapCheckHeartbeat(env));
       ctx.waitUntil(
         sendScheduledObservationGapAlert(env).then(
           (result) => {
