@@ -15,14 +15,19 @@ describe("source registry", () => {
     expect(SOURCES.map((a) => a.id).sort()).toEqual([...SOURCE_IDS].sort());
   });
 
+  // The "every stub" contract only applies to adapters that are NOT yet
+  // implemented. Source tickets flip their adapter to implemented:true with a
+  // real fetch/diff, so they are excluded here. Filtering on !a.implemented
+  // keeps this robust to per-source implementation (future source tickets
+  // won't need to re-edit this test).
   it("every stub adapter exports implemented: false", () => {
-    for (const adapter of SOURCES) {
+    for (const adapter of SOURCES.filter((a) => !a.implemented)) {
       expect(adapter.implemented, adapter.id).toBe(false);
     }
   });
 
   it("every stub fetch returns unavailable with reason not_implemented", async () => {
-    for (const adapter of SOURCES) {
+    for (const adapter of SOURCES.filter((a) => !a.implemented)) {
       const result = await adapter.fetch(baseEnv, {
         competitorId: "c1",
         competitorLabel: "Test",
@@ -32,7 +37,7 @@ describe("source registry", () => {
   });
 
   it("every stub diff returns an empty array", () => {
-    for (const adapter of SOURCES) {
+    for (const adapter of SOURCES.filter((a) => !a.implemented)) {
       expect(adapter.diff(null, { payload: {} }), adapter.id).toEqual([]);
     }
   });
