@@ -17,6 +17,14 @@ async function hasWebhookLedger(env: AppEnv) {
     `).bind().all<{ present: number }>()
     .then((result) => result.results?.[0]?.present === 1);
   ledgerSupport.set(key, check);
+  // A transient D1 failure must not pin the isolate: without this eviction
+  // the rejected promise stays in the WeakMap for the binding's lifetime, so
+  // every later canary-guarded billing write in this isolate throws. Delete
+  // the cached entry on rejection so the next call re-probes; the rejection
+  // still propagates to the caller (the guard does not fail open).
+  check.catch(() => {
+    ledgerSupport.delete(key);
+  });
   return check;
 }
 
