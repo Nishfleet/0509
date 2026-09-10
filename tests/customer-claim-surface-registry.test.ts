@@ -7,7 +7,6 @@ import { AGENT_ACTION_GROUPS } from "~/lib/agent-action-catalog";
 import { BILLING_SKU_SLUGS } from "~/lib/billing-sku-catalog";
 import {
   DASHBOARD_PRIMARY_NAV,
-  DASHBOARD_SETTINGS_NAV,
   PUBLIC_SEARCH_NAV,
 } from "~/lib/dashboard-navigation";
 import {
@@ -285,7 +284,6 @@ const actualCatalogs: Catalogs = {
     ...DASHBOARD_PRIMARY_NAV.flatMap((section) =>
       section.items.flatMap((item) => [...(item.activePaths ?? [])]),
     ),
-    ...DASHBOARD_SETTINGS_NAV.flatMap((section) => section.items.map((item) => item.to)),
     ...PUBLIC_SEARCH_NAV.map((item) => item.to),
   ]),
   publicMarkdownPaths: [...PUBLIC_MARKDOWN_PATHS],
@@ -323,15 +321,16 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
     "presence_digest_alerts",
   ],
   presenceSources: ["website", "x", "reddit", "linkedin", "rss", "youtube", "amazon", "context_dev", "google", "google_ads", "tiktok", "subdomains", "hiring"],
-  // PR-5a: the rail carries five destinations; Deliver and Settings own
-  // their member pages. Presence left the nav (it lives inside Watch).
+  // Route diet phase 1 (#2213): the rail carries seven destinations; the
+  // 8-screen model folds every member route into its owning destination via
+  // redirects, so the folded paths stay customer nav surface (activePaths).
   customerNavPaths: [
-    "/app", "/app/account", "/app/billing", "/app/clients",
-    "/app/collections", "/app/deliver", "/app/developer-access", "/app/digests",
-    "/app/notifications", "/app/presence", "/app/reports", "/app/settings",
-    "/app/shares", "/app/source-access", "/app/support", "/app/team",
-    "/app/watchlists", "/compare", "/docs", "/help", "/pricing", "/search",
-    "/status",
+    "/app", "/app/account", "/app/api", "/app/billing", "/app/briefs",
+    "/app/c", "/app/clients", "/app/deliver", "/app/developer-access",
+    "/app/digests", "/app/help", "/app/notifications", "/app/presence",
+    "/app/reports", "/app/settings", "/app/shares", "/app/source-access",
+    "/app/sources", "/app/support", "/app/team", "/app/watchlists",
+    "/compare", "/docs", "/help", "/pricing", "/search", "/status",
   ],
   publicMarkdownPaths: ["/", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/capture-rules", "/privacy", "/terms", "/methodology", "/pricing", "/compare/meta-ad-library", "/compare/visualping-ad-libraries", "/compare/spyland", "/compare/pulzifi", "/compare/foreplay-spyder", "/compare/panoramata", "/compare/adspyder", "/compare/adspy"],
   // 2026-07-20 merge: overnight stack wins — sitemap gained /search, /auth/signup
