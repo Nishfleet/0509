@@ -58,6 +58,28 @@ function heroH1(markup: string): string {
   return markup.match(/<h1[^>]*ld-wall[^>]*>[\s\S]*?<\/h1>/)?.[0] ?? "";
 }
 
+/** The `<span class="ld-row">` lines of the hero wall, in document order. */
+function heroWallRows(h1: string): string[] {
+  return Array.from(h1.matchAll(/<span class="ld-row[^"]*">/g)).map((match) => match[0]);
+}
+
+/** The rendered hero search command form. */
+function heroCommand(markup: string): string {
+  return markup.match(/<form class="ld-command"[\s\S]*?<\/form>/)?.[0] ?? "";
+}
+
+/** The rendered final email-capture CTA form. */
+function finalCta(markup: string): string {
+  return markup.match(/<form class="f9-email-cta"[\s\S]*?<\/form>/)?.[0] ?? "";
+}
+
+const REAL_CHANGE_MARK = {
+  competitorLabel: "Nykaa",
+  fieldLabel: "Offer / price",
+  mark: { from: "Flat 10% off", to: "Flat 20% off" },
+  caughtAt: "2026-09-08T04:00:00.000Z",
+};
+
 function changeBlock(markup: string): string {
   return markup.match(/<section class="ld-change"[\s\S]*?<\/section>/)?.[0] ?? "";
 }
@@ -99,65 +121,69 @@ afterEach(() => {
 });
 
 describe("homepage first viewport — free live-search promise (#2170)", () => {
-  it("renders the exact H1 promise logged-out", async () => {
+  it("renders the hero promise wall logged-out", async () => {
     mockReactRouter({});
     const markup = await renderMarketing();
     const h1 = heroH1(markup);
 
-    expect(h1).toContain("See the Meta ads");
-    expect(h1).toContain("any competitor is");
-    expect(h1).toContain("running");
-    expect(h1).toContain("right now.");
-    expect(h1).toContain("Free, no account.");
+    // Structural: four ld-row lines with the indented callout. The wall text
+    // itself is copy and is free to change without rewriting this test.
+    expect(heroWallRows(h1)).toHaveLength(4);
+    expect(h1).toContain('<span class="ld-row ld-row-indent">');
+    expect(h1).toContain('<ins class="ld-ins">');
   });
 
   it("renders the live search input and its primary CTA without a session", async () => {
     mockReactRouter({});
     const markup = await renderMarketing();
 
-    // Logged-out render: the final CTA is the email capture + "Create account",
-    // not the signed-in "Account ready" state.
-    expect(markup).toContain('aria-label="Work email"');
-    expect(markup).toContain("Create account");
-    expect(markup).not.toContain("Account ready");
+    // Logged-out render: the final CTA is the email capture input, not the
+    // signed-in state element.
+    const cta = finalCta(markup);
+    expect(cta).toContain('type="email"');
+    expect(cta).toContain('name="email"');
+    expect(cta).not.toContain("f9-email-state");
+    expect(cta).toMatch(/<button[^>]*type="submit"/);
 
     // The hero search command posts straight to the public /search route.
-    expect(markup).toContain('action="/search"');
-    expect(markup).toContain('aria-label="Competitor website"');
-    expect(markup).toContain('name="website"');
-    expect(markup).toContain("Preview available ads");
+    const command = heroCommand(markup);
+    expect(command).toContain('action="/search"');
+    expect(command).toContain('aria-label="Competitor website"');
+    expect(command).toContain('name="website"');
+    expect(command).toMatch(/<button[^>]*type="submit"/);
   });
 
   it("states the deck's screenshot promise with the capture-includes-one qualifier", async () => {
     mockReactRouter({});
     const markup = await renderMarketing();
 
-    expect(markup).toContain("Then Five to Nine keeps watching the offer behind those ads");
-    expect(markup).toContain("before-and-after with the page text and source link");
-    expect(markup).toContain("plus a screenshot when the capture includes one");
-    expect(markup).not.toContain("Weekly on Free, every 3 hours on Starter.");
+    const deck = markup.match(/<p class="ld-deck-copy">([\s\S]*?)<\/p>/)?.[1] ?? "";
+    expect(deck.length).toBeGreaterThan(0);
+    // Shape: the deck still promises page text plus a source link.
+    expect(deck).toMatch(/page text[\s\S]*source link/);
+    // The audit table marks the screenshot qualifier a customer claim
+    // (AUDIT-SAVES-SCREENSHOTS, the homepage hero deck surface; the same
+    // sentence also appears on AUDIT-PROOF-BRIEF-REAL), so this one stays an
+    // exact-string assertion.
+    expect(deck).toContain("plus a screenshot when the capture includes one");
+    // The deck is not the plan-cadence surface.
+    expect(deck).not.toMatch(/\bevery \d+\s*hours?\b|\bweekly\b|\bdaily\b/i);
   });
 });
 
 describe("homepage under-fold change mark (#2170)", () => {
   it("renders a real stored before/after mark when one qualifies", async () => {
-    mockReactRouter({
-      changeMark: {
-        competitorLabel: "Nykaa",
-        fieldLabel: "Offer / price",
-        mark: { from: "Flat 10% off", to: "Flat 20% off" },
-        caughtAt: "2026-09-08T04:00:00.000Z",
-      },
-    });
+    mockReactRouter({ changeMark: REAL_CHANGE_MARK });
     const markup = await renderMarketing();
     const block = changeBlock(markup);
 
-    expect(block).toContain("Nykaa");
-    expect(block).toContain("Offer / price");
-    expect(block).toContain("<s>Flat 10% off</s>");
-    expect(block).toContain("<ins>Flat 20% off</ins>");
-    expect(block).toContain("A real stored event from a tracked public advertiser");
-    expect(block).not.toContain("Sample");
+    // The loader's own values are rendered, not a canned sentence.
+    expect(block).toContain(REAL_CHANGE_MARK.competitorLabel);
+    expect(block).toContain(REAL_CHANGE_MARK.fieldLabel);
+    expect(block).toContain(`<s>${REAL_CHANGE_MARK.mark.from}</s>`);
+    expect(block).toContain(`<ins>${REAL_CHANGE_MARK.mark.to}</ins>`);
+    // Real vs sample is a structural state: the sample marker is absent.
+    expect(block).not.toContain("ld-change-sample");
   });
 
   it("renders the clearly labelled sample state when no stored event qualifies", async () => {
@@ -165,9 +191,12 @@ describe("homepage under-fold change mark (#2170)", () => {
     const markup = await renderMarketing();
     const block = changeBlock(markup);
 
-    expect(block).toContain(">Sample</span>");
-    expect(block).toContain("No real before-and-after is available to show right now");
-    expect(block).not.toContain("A real stored event");
+    // The sample card carries the sample marker and no real loader value.
+    expect(block).toContain('class="ld-change-sample"');
+    expect(block).toContain("<s>");
+    expect(block).toContain("<ins>");
+    expect(block).not.toContain(REAL_CHANGE_MARK.competitorLabel);
+    expect(block).not.toContain(`<s>${REAL_CHANGE_MARK.mark.from}</s>`);
   });
 });
 
