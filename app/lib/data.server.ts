@@ -224,6 +224,7 @@ export {
   getLatestDigestRunSummaryForWatchlist,
   listRetryableDigestRuns,
   enqueueDigestScheduleJobs,
+  listDigestScheduleJobTimezones,
   listRetryableDigestScheduleJobs,
   exhaustStaleMaxAttemptDigestScheduleJobs,
   claimDigestScheduleJob,
