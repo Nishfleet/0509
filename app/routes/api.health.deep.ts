@@ -1,25 +1,12 @@
 import type { LoaderFunctionArgs } from "react-router";
 
 import { getCloudflareContext } from "~/lib/cloudflare-context";
-import { readReleaseIdentity } from "~/lib/canary-release-identity.server";
+import {
+  mayReadReleaseIdentity,
+  readReleaseIdentity,
+} from "~/lib/canary-release-identity.server";
 import type { AppEnv } from "~/lib/env.server";
 import { listScheduledObservationHealth } from "~/lib/scheduled-observation-health.server";
-
-const CANARY_TOKEN_HEADER = "x-0509-canary-token";
-
-// Worker version id + cron health is free recon for timing deploy windows and
-// knowing when monitoring is degraded. Only a caller presenting the canary token
-// may read release identity; anonymous callers omit the field. Status body stays
-// public so the liveness probe and uptime checks still pass.
-function mayReadReleaseIdentity(request: Request, env: {
-  CANARY_BYPASS_TOKEN?: string;
-}) {
-  const configured = env.CANARY_BYPASS_TOKEN?.trim();
-  if (!configured) {
-    return false;
-  }
-  return request.headers.get(CANARY_TOKEN_HEADER) === configured;
-}
 
 type DependencyStatus = "ok" | "error" | "missing";
 type ScheduledWorkStatus = "ok" | "degraded" | "missing";
@@ -70,7 +57,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     }
   }
   const healthy = d1 === "ok" && scheduledWork === "ok";
-  const releaseIdentity = mayReadReleaseIdentity(request, env)
+  const releaseIdentity = (await mayReadReleaseIdentity(request, env))
     ? readReleaseIdentity(env)
     : undefined;
 

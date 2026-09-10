@@ -66,6 +66,22 @@ describe("ops liveness probe", () => {
     expect(readFileSync(TIMER, "utf8")).toContain("Persistent=true");
   });
 
+  it("provisioner smoke check accepts the identity-free record the probe writes", () => {
+    // The probe is a no-secrets DynamicUser unit and cannot read release
+    // identity, so its record has workerVersionId: null. The provisioner's
+    // smoke check must accept that shape, or re-provisioning the liveness host
+    // fails hard. (Regression guard added in review of #2352.)
+    const provision = readFileSync(PROVISION, "utf8");
+    const smoke = provision.slice(
+      provision.indexOf("smoke_probe()"),
+      provision.indexOf("verify_timer()"),
+    );
+    expect(smoke).not.toContain("workerVersionId");
+    expect(smoke).toContain('record.get("d1")');
+    expect(smoke).toContain('record.get("scheduledWork")');
+    expect(smoke).toContain('"smoke probe record was not ok"');
+  });
+
   it("asserts public status/app/checks and tolerates a missing release identity", () => {
     const probe = readFileSync(PROBE, "utf8");
     expect(probe).toContain('payload.get("status")');
