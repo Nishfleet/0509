@@ -748,6 +748,19 @@ export default function AppDashboardRoute() {
   const sourceNeedsRecovery =
     Boolean(data.metaStatus) && data.metaStatus?.status !== "healthy";
   const latestDigest = digests[0] ?? null;
+  // Onboarding is narrower than "setup is incomplete". A long-standing
+  // account can still carry a pending blocking item — `first_digest` stays
+  // unready until a digest is actually sent — so the greeting must also rule
+  // out accounts that already hold a brief or an active watchlist. The
+  // readiness-unavailable guard is belt and braces: the fail-closed fallback
+  // currently carries `items: []`, so it is already caught by the gap count,
+  // but this copy must never claim a setup card below when the card has been
+  // replaced by the retry specimen.
+  const isFirstRunOnboarding =
+    !readinessUnavailable &&
+    readinessGaps.length > 0 &&
+    latestDigest === null &&
+    activeWatchlists === 0;
   // A competitor name, not an event title, is what the row is about — the
   // Bricolage face means "a watched entity" and nothing else.
   const watchlistNameById = new Map(
@@ -792,17 +805,24 @@ export default function AppDashboardRoute() {
             : { label: marketDeskBrief.action.label, to: marketDeskBrief.action.href }
         }
         context={
-          <>
-            Welcome back.{" "}
-            {latestDigest ? (
-              <>
-                Your latest brief was filed{" "}
-                <LocalTime iso={latestDigest.createdAt} mode="date" />.
-              </>
-            ) : (
-              "No brief has been filed yet."
-            )}
-          </>
+          // Someone who signed up moments ago and landed on #setup-checklist
+          // has no past visit to be welcomed back to, and telling them no
+          // brief exists yet reads as a fault rather than a next step.
+          isFirstRunOnboarding ? (
+            "Welcome — your first scan starts from the setup card below."
+          ) : (
+            <>
+              Welcome back.{" "}
+              {latestDigest ? (
+                <>
+                  Your latest brief was filed{" "}
+                  <LocalTime iso={latestDigest.createdAt} mode="date" />.
+                </>
+              ) : (
+                "No brief has been filed yet."
+              )}
+            </>
+          )
         }
         title="Today"
       />
