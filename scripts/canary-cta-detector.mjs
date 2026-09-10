@@ -190,6 +190,19 @@ export function validateCtaDetector(input) {
       `silent CTA detector: 0 landing_page_cta_changed events in the last ${input.windowDays} day(s).`,
     );
   }
+  // Issue #1538 step 4: a detector that fires, but below 1 event per
+  // <watchlistCohort> active watchlists in the window, is a degraded
+  // detector — alarm on the rate too, not only on total silence. Integer
+  // compare (events * cohort < watchlists) keeps it exact: 1 event across
+  // 26 active watchlists is below 1-per-25 and fails.
+  if (
+    input.row.ctaEventCount * input.watchlistCohort <
+    input.row.activeWatchlistCount
+  ) {
+    failures.push(
+      `CTA detector rate below 1 per ${input.watchlistCohort} watchlists: ${input.row.ctaEventCount} event(s) across ${input.row.activeWatchlistCount} active watchlist(s) in the last ${input.windowDays} day(s).`,
+    );
+  }
   return { ok: failures.length === 0, failures };
 }
 

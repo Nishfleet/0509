@@ -199,6 +199,12 @@ describe("deterministic outcome mappers", () => {
     expect(mapLandingFailureOutcome("landing_url_invalid")).toBe("failed");
     expect(mapLandingFailureOutcome("landing_redirect_limit")).toBe("failed");
     expect(mapLandingFailureOutcome("landing_http_error")).toBe("failed");
+    // #1538 narrowed codes.
+    expect(mapLandingFailureOutcome("landing_auth_required")).toBe("blocked");
+    expect(mapLandingFailureOutcome("landing_not_found")).toBe("failed");
+    expect(mapLandingFailureOutcome("landing_gone")).toBe("failed");
+    expect(mapLandingFailureOutcome("landing_server_error")).toBe("failed");
+    expect(mapLandingFailureOutcome("landing_content_empty")).toBe("empty");
     expect(mapLandingFailureOutcome(null)).toBe("failed");
   });
 

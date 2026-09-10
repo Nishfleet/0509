@@ -173,11 +173,16 @@ export function mapLandingFailureOutcome(
 ): BrowserJobOutcome {
   switch (reasonCode) {
     case "landing_blocked":
+    case "landing_auth_required":
     case "landing_redirect_blocked":
       return "blocked";
     case "landing_rate_limited":
       return "rate_limited";
+    // `landing_content_empty_or_oversized` was retired by #1538 (oversized
+    // pages are truncated and parsed, empty bodies report as
+    // `landing_content_empty`); the case stays for historical rows.
     case "landing_content_empty_or_oversized":
+    case "landing_content_empty":
       return "empty";
     // Capture-validity gate rejections (BET 4): a challenge/cookie-wall/partial
     // -SPA/error body is a render failure, recorded as `capture_failed` and
@@ -188,6 +193,10 @@ export function mapLandingFailureOutcome(
     case "landing_error_page":
     case "landing_content_signature_too_small":
       return "failed";
+    case "landing_http_error":
+    case "landing_not_found":
+    case "landing_gone":
+    case "landing_server_error":
     case "landing_fetch_failed":
       return "failed";
     default:
