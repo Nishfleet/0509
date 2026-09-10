@@ -477,6 +477,14 @@ describe("pricing CTA rendering", () => {
         useNavigate: vi.fn().mockReturnValue(vi.fn()),
         useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
         useRevalidator: vi.fn().mockReturnValue({ state: "idle", revalidate: vi.fn() }),
+        // Issue #2416: the dashboard renders DeliveryTimezoneCapture, which
+        // posts the browser timezone on first load. These tests render outside a
+        // data router, so stand in for the hook; no test here asserts capture.
+        useFetcher: vi.fn().mockReturnValue({
+          state: "idle",
+          data: undefined,
+          submit: vi.fn(),
+        }),
         useRouteLoaderData: vi.fn().mockReturnValue(overrides.rootData),
         useSearchParams: vi.fn().mockReturnValue([new URLSearchParams(), vi.fn()]),
       };

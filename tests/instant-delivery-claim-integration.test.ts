@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createSqliteD1 } from "./helpers/sqlite-d1";
 
@@ -168,8 +168,17 @@ async function loadDelivery(
 describe("instant delivery durable claim wiring", () => {
   const fixtures: Array<ReturnType<typeof createSqliteD1>> = [];
 
+  beforeEach(() => {
+    // Issue #2416: quiet hours are always 22:00-08:00 now and these tests never
+    // pass `now`, so policy read the wall clock. Pin it to midday UTC so an
+    // instant send cannot silently defer by hour of day.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-01T12:00:00.000Z"));
+  });
+
   afterEach(() => {
     while (fixtures.length > 0) fixtures.pop()?.close();
+    vi.useRealTimers();
     vi.resetModules();
     vi.restoreAllMocks();
   });

@@ -255,12 +255,7 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
       <>
         <DeliverySettingsCard
           canConfigureDigestSettings={props.canConfigureDigestSettings}
-          canEmailDelivery={props.canEmailDelivery}
-          canInstantAlert={props.canInstantAlert}
           data={data}
-          showSlackDelivery={props.showSlackDelivery}
-          showTeamsDelivery={props.showTeamsDelivery}
-          watchlistId={watchlist.id}
         />
         <DeliveryTargetsSection
           canConfigureDelivery={props.canConfigureDelivery}
