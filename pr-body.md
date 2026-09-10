@@ -1,109 +1,81 @@
-## seo: publish the Ad Aggression Score methodology as its own linkable, indexable page
+## What and why
 
-Closes #2022.
+Every visitor's featured proof example on the compare pages named the Indian
+beauty brand Nykaa ("See Nykaa's ads on Five to Nine"), while the ICP is global
+growth teams whose buyer knows the sneaker/sport brands. The featured-proof
+loader (`pickFeaturedAdsInternalLink`, fed by `compareAdsExampleLoader`) pinned
+`nykaa.com` as the first preference.
 
-### What changed
+Per the binding judge edits (issue #2314), the featured-proof loader now
+prefers the newest fresh capture from Footlocker, New Balance, Adidas, Nike,
+JD Sports **in that order** and falls back to Nykaa only when none of them is
+fresh. Fresh = the same capture-age window the brand pages already use
+(`BRAND_PAGE_FRESH_FOR_INDEXING_MS`, 7 days): `loadIndexableBrandPageEntries`
+only returns captures within that window, so any priority brand present is a
+fresh capture and an absent one means stale/missing. No country→brand mapping
+is introduced — the same fixed order serves every visitor.
 
-The Ad Aggression Score methodology page — the formula, four sub-scores
-(Velocity/Testing/Freshness/Persistence), score bands, and evidence floor — is
-promoted to its own canonical, indexable URL at **`/methodology`**, and is now
-linked from the footer of **every `/ads/:domain` page** ("How this Ad
-Aggression Score is calculated — read the methodology") and listed in
-`sitemap.xml` through the existing sitemap generation path.
+The compare routes already call the featured-proof loader (edit #5):
+`compare.meta-ad-library`, `compare.pulzifi` and `compare.spyland` wire
+`compareAdsExampleLoader`, and `CompareAdsExampleLink` renders the resolved
+brand — so no data-loading change to the compare routes was needed. The CTA
+updates automatically for every visitor who lands on a fresh sneaker capture.
 
-Path history on the same published content (the formula is unchanged — only the
-canonical URL moved):
-- `#960`: `/methodology/ad-aggression-score`
-- `#1263`: `/ad-aggression`
-- `#2022` (this PR): `/methodology` — canonical
+## Acceptance
 
-Both prior paths keep permanent 301 redirects to `/methodology` so external
-links and any indexed entries keep their equity:
-- `/ad-aggression` → 301 → `/methodology` (`app/routes/ad-aggression-redirect.ts`)
-- `/methodology/ad-aggression-score` → 301 → `/methodology` (redirect target updated)
+- Route test mocking `CF-IPCountry: US`, and one with no header, show a
+  non-Nykaa brand (`footlocker.com` / `adidas.com`) when a fresh sneaker-brand
+  capture exists; Nykaa appears only in the all-stale fixture.
+- The priority order is exercised: Footlocker > New Balance > Adidas > Nike >
+  JD Sports.
+- Nykaa is returned only as the fallback when no fresh priority brand is
+  present.
+- Regression guard: a caller-pinned priority sneaker brand (the homepage's
+  country-derived nike) is honored so the proof brief and the featured link
+  never disagree on the home surface — this addresses the reviewer's single
+  should-fix finding without editing `marketing.tsx` (out of ticket scope).
 
-Localized methodology twins (`/de/methodology`, etc.) re-export the EN page and
-canonicalize to the EN `/methodology`.
+## Verification
 
-No migration, no workflow-file edits, no `/ads/:domain` regression. The inline
-per-brand score and its formula are byte-for-byte unchanged.
+Real test runs (`npx vitest run --configLoader runner --project node`):
 
-### Verification
+- `tests/ads-internal-links.test.ts` — **30 passed** (sneaker order, Nykaa
+  fallback, pinned-sneaker guard, and the `compareAdsExampleLoader` route test
+  with `CF-IPCountry: US`, no header, and the all-stale fixture).
+- Broad affected slice (17 files: internal-links, homepage*, marketing-*,
+  compare-*, switch-search-crosslink, breadcrumb): **162 passed**.
+- `tests/homepage-vs-brandpage-count-parity.test.tsx` still passes (count
+  parity is untouched — the reorder does not affect the `/api/demo-proof` /
+  `/ads/:domain` loaders).
 
-Real run, from the rebased `origin/main..HEAD` in the claim worktree:
+## Review adjudication
 
-- `vitest run --project node` (full): **620 files, 7423 tests passed** — including the
-  methodology redirect/path tests, `ads-brand-page.render`, `seo`, sitemap,
-  locale buyer-surface, breadcrumb, and `design-system-ratchet` (raw-hex-color
-  ceiling back to 258) suites.
-- `vitest run --project worker`: **41 files, 202 tests passed**.
-- Targeted re-run after rebasing onto latest `origin/main`
-  (`a3f93889`): 14 files / 193 tests passed.
-- `react-router typegen` clean.
+Reviewer seat: `cursor/cursor-grok-4.6-high` (senior seat #3121).
 
-Local termination-gate checks against the worktree:
-- `grep -q methodology app/routes/*ads*` → matches (`app/routes/ads.$domain.tsx`)
-- `buildSitemapXml` now emits `<loc>https://0509.io/methodology</loc>`
-- `/methodology` route serves the methodology page (200); `/ad-aggression` and
-  `/methodology/ad-aggression-score` 301 to it.
+- **Act on** — 1: the shared helper let a lower-priority sneaker brand displace
+  the homepage-pinned `featuredDomain` (brief/CTA vs featured-link divergence).
+  Fixed in `pickFeaturedAdsInternalLink` by honoring a caller-pinned priority
+  brand first; regression test added.
+- **Consider** — none.
+- **Noted** — the `CF-IPCountry` header is inert in `compareAdsExampleLoader`
+  (it never reads it), consistent with the binding judgment that the mapping is
+  not a worker decision; the no-header test provides the real coverage.
+- **Dismissed-with-reason** — homepage count-parity would break (rejected: that
+  test compares `/api/demo-proof` and `/ads/:domain` loaders, not
+  `pickFeaturedAdsInternalLink`); `featuredWebsiteForVisitorCountry` /
+  `PUBLIC_PROOF_FEATURED_WEBSITE` misused (rejected: unaffected pure helpers).
 
-### run-proof
+net-positive-because: the +172 lines are overwhelmingly new tests (sneaker-order
+selection, Nykaa fallback, pinned-sneaker guard, and the `compareAdsExampleLoader`
+route test required by the issue's accept); the production change is a ~45-line
+selector in `app/lib/ads-internal-links.ts`. The tests are the durable proof of
+the behavioral contract the issue demands.
 
-`origin/main..HEAD`: 29 files changed (182 insertions, 339 deletions). No new
-`bin/`, no timed unit/workflow files. Proof of run is the standing vitest suites
-above (node + workers projects), all green, plus the route/redirect unit tests in
-`tests/aggression-score-methodology.test.ts` (301 targets and route wiring) and
-the sitemap/locale tests.
+## run-proof
 
-### research / help-first
+- Units: 30 vitest cases in `tests/ads-internal-links.test.ts` (node project),
+  plus 162 cases across the 17-file affected slice.
+- No schedule/timer/workflow shipped — this is a selector behavior change with
+  route- and unit-level proof only.
 
-Not applicable — no new `bin/` files added.
-
-### Reviewer round
-
-- Reviewer seat: `commandcode / meta/muse-spark-1.2-contributor` (resolved via
-  `find_senior_seat`). One round, no loops.
-- **Act on**: none — the reviewer found no blocking or act-on findings.
-- **Consider** (both landed):
-  - Removed a dead, unused `redirectTarget` helper left in
-    `tests/aggression-score-methodology.test.ts` (reviewer flagged it).
-  - `app/components/ads/brand-score-card.tsx` comment now records the full
-    canonical path history through `/ad-aggression` (#1263) instead of
-    skipping the intermediate hop.
-- **Noted**: single-hop 301s straight to `/methodology` (no chained redirects)
-  preserve indexed equity; no leftover functional `/ad-aggression` in
-  `app/`/`workers/` outside comments, the legacy constant, and the redirect
-  loader; sitemap + security-header cache paths move through the shared
-  generation path; the orphaned `methodology.ad-aggression-score.tsx` module
-  was unreferenced dead code, safely removed.
-- **Dismissed-with-reason**: deleting the orphan module (dead, un-wired) and
-  the deliberate literal `/methodology` HREF in `brand-score-card.tsx`
-  (documented grep-ability for the issue's termination check).
-
-### Test plan
-
-- `/methodology` returns 200 and renders the formula with the four sub-scores,
-  bands, and evidence floor.
-- `/ads/:domain` footer links to `/methodology` with the "read the
-  methodology" wording; source matches `grep methodology app/routes/*ads*`.
-- `sitemap.xml` lists `/methodology` (and no longer lists a redirect target).
-- `/ad-aggression` and `/methodology/ad-aggression-score` 301 to `/methodology`.
-
-### Salvage resume (fleet-ops#1204)
-
-Work resumed from the banked `wip/pi-issue-0509-2022-20260908T215253Z` state and
-re-verified end to end by a fresh run. The branch was then rebased onto the
-moved `origin/main` (`fe534bbc`, PRs #2035/#2036/#2038 landed mid-flight; the
-new `/no-phantom-changes` registry entries from #2026 were kept and the
-methodology canonical switched to `/methodology` in the same resolution), and
-the full suite re-ran to green on the rebased head: `vitest --project node`
-7439 tests green, `vitest --project workers` 202 tests green,
-`react-router typegen` clean, `sgscan` no new findings, all PR-body gates
-(prove-one-run-check, fleet-exec-review-canary, fleet-no-agent-names-check,
-fleet-rebuild-verify-check, fleet-token-efficiency-check,
-research-before-build-check, fleet-organ-heartbeat-check) green.
-crgate: skipped — CodeRabbit not signed in on this machine.
-
-organ-heartbeat: app/routes + app/lib not-an-organ: marketing-surface diff touches no organ paths (gate SKIP: no fleet organ touched in the diff).
-
-loose-ends: none in scope — page, footer links, sitemap entry, and both 301 redirects ship; the issue's live `curl https://0509.io/...` checks land automatically after merge + deploy.
+Closes #2314
