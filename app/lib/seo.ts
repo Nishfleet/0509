@@ -824,6 +824,12 @@ export const SITEMAP_PATHS = [
   "/help",
   "/docs",
   "/api/docs",
+  // Issue #2125: /mcp/setup is the public one-paste MCP connector setup page
+  // (BET 6). It is live 200 and indexable (no noindex, canonical self) but
+  // was missing from every discovery surface — Google and llms.txt consumers
+  // could not find the shipped connector. One static entry: the page is
+  // stable long-form copy, so it never serves a noindex shell.
+  "/mcp/setup",
   "/status",
   "/changelog",
   "/trust",
@@ -903,6 +909,7 @@ const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority:
   "/help": { changefreq: "monthly", priority: "0.5" },
   "/docs": { changefreq: "monthly", priority: "0.5" },
   "/api/docs": { changefreq: "monthly", priority: "0.5" },
+  "/mcp/setup": { changefreq: "monthly", priority: "0.5" },
   "/status": { changefreq: "monthly", priority: "0.5" },
   "/trust": { changefreq: "yearly", priority: "0.3" },
   "/privacy": { changefreq: "yearly", priority: "0.3" },
