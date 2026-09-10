@@ -77,7 +77,6 @@ const adspyCosts: readonly CompareClaimCard[] = [
     title: "No public API",
     detail:
       "AdSpy has no public API, which is the largest structural limitation in 2026. You cannot pull its data into your own workflow or automation, so the database is a walled garden.",
-    sourceId: "adspy-pricing",
   },
 ];
 
