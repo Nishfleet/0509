@@ -49,9 +49,7 @@ export function inferDestinationType(url: string | null): DestinationType {
   const host = parsed.hostname;
   if (
     isHostOrSubdomain(host, "play.google.com") ||
-    isHostOrSubdomain(host, "appstore.com") ||
-    isHostOrSubdomain(host, "apps.apple.com") ||
-    isHostOrSubdomain(host, "itunes.apple.com")
+    isHostOrSubdomain(host, "appstore.com")
   ) {
     return "app";
   }
