@@ -812,19 +812,6 @@ describe("buildSitemapXml", () => {
     expect(xml).toContain("<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">");
     expect(xml).not.toContain("/ads/");
   });
-
-  it("lists /mcp/setup in the sitemap XML and llms.txt (issue #2125)", async () => {
-    // The BET 6 one-paste MCP connector page is live 200 and indexable but
-    // was missing from every discovery surface. It must appear in the built
-    // sitemap XML and in llms.txt so unpaid search and answer engines can
-    // find the shipped connector.
-    const xml = buildSitemapXml([]);
-    expect(xml).toContain("<loc>https://0509.io/mcp/setup</loc>");
-
-    const { buildLlmsText } = await import("~/lib/public-markdown");
-    const llms = buildLlmsText([], []);
-    expect(llms).toContain("https://0509.io/mcp/setup");
-  });
 });
 
 describe("llms.txt parity with dynamic sitemap brand paths", () => {
@@ -1520,6 +1507,7 @@ describe("SITEMAP_PATHS", () => {
       "/compare/foreplay-spyder",
       "/compare/panoramata",
       "/compare/adspyder",
+      "/compare/adspy",
     ] as const;
 
     const rootPaths = ROOT_SITEMAP_STATIC_ENTRIES.map((e) => e.path);

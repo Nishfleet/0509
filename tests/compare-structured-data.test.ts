@@ -17,6 +17,7 @@ const PINNED_COMPARED_PRODUCT: Record<string, string> = {
   "compare.foreplay-spyder": "Foreplay Spyder",
   "compare.panoramata": "Panoramata",
   "compare.adspyder": "AdSpyder",
+  "compare.adspy": "AdSpy",
 };
 
 function compareRouteIds(): string[] {

@@ -129,6 +129,7 @@ const PUBLIC_CACHEABLE_HTML_PATHS = new Set([
   "/compare/foreplay-spyder",
   "/compare/panoramata",
   "/compare/adspyder",
+  "/compare/adspy",
   "/switch/magicbrief",
   "/switch/panoramata",
   "/switch/visualping",

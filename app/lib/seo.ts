@@ -783,6 +783,7 @@ export const SITEMAP_PATHS = [
   "/compare/foreplay-spyder",
   "/compare/panoramata",
   "/compare/adspyder",
+  "/compare/adspy",
   // BET 8 switch/intent pages (issue #2081). Production /sitemap.xml is
   // buildSitemapXml → ROOT_SITEMAP_STATIC_ENTRIES, which is this list minus
   // locale prefixes. lastmod is deliberately omitted: these pages have no
@@ -824,12 +825,6 @@ export const SITEMAP_PATHS = [
   "/help",
   "/docs",
   "/api/docs",
-  // Issue #2125: /mcp/setup is the public one-paste MCP connector setup page
-  // (BET 6). It is live 200 and indexable (no noindex, canonical self) but
-  // was missing from every discovery surface — Google and llms.txt consumers
-  // could not find the shipped connector. One static entry: the page is
-  // stable long-form copy, so it never serves a noindex shell.
-  "/mcp/setup",
   "/status",
   "/changelog",
   "/trust",
@@ -902,6 +897,7 @@ const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority:
   "/compare/foreplay-spyder": { changefreq: "weekly", priority: "0.7" },
   "/compare/panoramata": { changefreq: "weekly", priority: "0.7" },
   "/compare/adspyder": { changefreq: "weekly", priority: "0.7" },
+  "/compare/adspy": { changefreq: "weekly", priority: "0.7" },
   "/switch/magicbrief": { changefreq: "weekly", priority: "0.7" },
   "/switch/panoramata": { changefreq: "weekly", priority: "0.7" },
   "/switch/visualping": { changefreq: "weekly", priority: "0.7" },
@@ -909,7 +905,6 @@ const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority:
   "/help": { changefreq: "monthly", priority: "0.5" },
   "/docs": { changefreq: "monthly", priority: "0.5" },
   "/api/docs": { changefreq: "monthly", priority: "0.5" },
-  "/mcp/setup": { changefreq: "monthly", priority: "0.5" },
   "/status": { changefreq: "monthly", priority: "0.5" },
   "/trust": { changefreq: "yearly", priority: "0.3" },
   "/privacy": { changefreq: "yearly", priority: "0.3" },

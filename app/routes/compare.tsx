@@ -31,6 +31,7 @@ const COMPARE_PAGES = [
   { slug: "foreplay-spyder", label: "Five to Nine vs Foreplay Spyder", href: "/compare/foreplay-spyder" },
   { slug: "panoramata", label: "Five to Nine vs Panoramata", href: "/compare/panoramata" },
   { slug: "adspyder", label: "Five to Nine vs AdSpyder", href: "/compare/adspyder" },
+  { slug: "adspy", label: "Five to Nine vs AdSpy", href: "/compare/adspy" },
 ] as const;
 
 export default function CompareIndexRoute() {
