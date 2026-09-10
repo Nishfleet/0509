@@ -18,7 +18,6 @@ export const notificationsMeta: MetaFunction = () => [
 
 export type NotificationsLoaderData = {
   emailDeliveryReady: boolean;
-  digestCadencePreference: "plan_default" | "weekly_only";
   showSlackDelivery: boolean;
   showTeamsDelivery: boolean;
   slackDelivery: {
@@ -148,40 +147,11 @@ export function NotificationsRoute() {
 
       <section aria-labelledby="email-delivery-title" className="f9-notif-section">
         <SectionHeading
-          context="Each workspace keeps one frequency; quiet hours stay with the competitor they protect."
+          context="Quiet hours stay with the competitor they protect."
           id="email-delivery-title"
           title="Email delivery"
         />
         <div className="f9-notif-working-rows">
-          <div className="f9-notif-work-row">
-            <WorkRowCopy
-              name="Digest frequency"
-              say="Use the plan cadence, or keep every workspace brief weekly."
-            />
-            <Form className="f9-notif-inline-form" method="post">
-              <input name="intent" type="hidden" value="save-digest-cadence" />
-              <label className="f9-notif-field">
-                <span className="f9-notif-label">Frequency</span>
-                <select
-                  className="f9-notif-select"
-                  defaultValue={data.digestCadencePreference ?? "plan_default"}
-                  name="digestCadencePreference"
-                >
-                  <option value="plan_default">
-                    Plan default (daily when your plan includes it)
-                  </option>
-                  <option value="weekly_only">Weekly only</option>
-                </select>
-              </label>
-              <SubmitButton
-                className="f9-wk-lnk f9-notif-submit"
-                intent="save-digest-cadence"
-                pendingLabel="Saving…"
-              >
-                Save frequency
-              </SubmitButton>
-            </Form>
-          </div>
           <div className="f9-notif-work-row">
             <WorkRowCopy
               name="Quiet hours"
