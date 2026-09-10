@@ -1,8 +1,10 @@
 import { canUseSiteRepWidgetScript, hasSiteRepAuthCookie } from "../app/lib/siterep-widget";
 
-// Baseline security headers applied to every response. CSP allows Google Fonts
-// (used in app/root.tsx) and inline <script>/<style> emitted by React Router's
-// <Scripts /> / <Links /> during SSR hydration. Tighten to nonces in a follow-up.
+// Baseline security headers applied to every response. CSP uses a per-request
+// nonce for inline <script> emitted by React Router's <Scripts /> /
+// <ScrollRestoration /> and the two boot scripts in app/root.tsx — no
+// 'unsafe-inline' in script-src. Inline <style> (React Router <Links />) still
+// needs 'unsafe-inline' in style-src, which is the standard CSP trade-off.
 //
 // Cloudflare Web Analytics is enabled for this zone with automatic (edge)
 // injection, so Cloudflare inserts its RUM beacon script into every HTML
@@ -16,8 +18,18 @@ import { canUseSiteRepWidgetScript, hasSiteRepAuthCookie } from "../app/lib/site
 // the beacon ever drops out of the deployed CSP again (PR #610 regression
 // class: CSP blocks the beacon and analytics silently records zero page views).
 export const CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC = "https://static.cloudflareinsights.com/beacon.min.js";
-const BASE_SCRIPT_SRC = `script-src 'self' 'unsafe-inline' ${CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC}`;
-const SITE_REP_WIDGET_SCRIPT_SRC = `${BASE_SCRIPT_SRC} https://siterep.net`;
+
+// The Site Rep support widget (loaded only on public widget pages for
+// anonymous visitors) loads its script from and makes API calls to
+// https://siterep.net — see app/lib/siterep-widget.ts. Both the script-src and
+// connect-src additions are scoped to those pages by securityHeadersForRequest.
+export const SITE_REP_WIDGET_HOST = "https://siterep.net";
+
+// script-src without a nonce: 'self' + the edge-injected beacon. A nonce is
+// added per-request by securityHeadersForRequest when the worker renders HTML.
+// 'unsafe-inline' is intentionally absent — a single stored XSS must not be
+// able to run an arbitrary inline script (issue #2348).
+const BASE_SCRIPT_SRC = `script-src 'self' ${CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC}`;
 
 // React Router lazy route discovery fetches this same-origin path (see
 // react-router fog-of-war). connect-src 'self' is what allows it. Keep the
@@ -25,7 +37,16 @@ const SITE_REP_WIDGET_SCRIPT_SRC = `${BASE_SCRIPT_SRC} https://siterep.net`;
 // accident — Firefox logged a Report-Only connect-src warning for it on
 // /app/billing and /trust (issue #1051).
 export const REACT_ROUTER_MANIFEST_PATH = "/__manifest";
-export const CONNECT_SRC = "connect-src 'self' https:";
+
+// connect-src allowlist (issue #2348): 'self' covers every same-origin fetch —
+// the React Router __manifest loader, all /api/* calls, and the Cloudflare Web
+// Analytics beacon posting to /cdn-cgi/rum. The bare `https:` wildcard that
+// used to be here let a single injected script exfiltrate session data to any
+// host; it is gone. The Site Rep widget's cross-origin API calls
+// (siterep.net /api/public/install + /api/public/config) are added only on the
+// public widget pages where the widget actually loads.
+export const CONNECT_SRC = "connect-src 'self'";
+const CONNECT_SRC_WITH_SITE_REP_WIDGET = `connect-src 'self' ${SITE_REP_WIDGET_HOST}`;
 
 function cspDirectiveSources(csp: string, name: string): string[] | null {
   const directive = csp
@@ -62,6 +83,22 @@ export function cspAllowsReactRouterManifest(csp: string): boolean {
     withoutNoneIfOthers.includes("*") ||
     withoutNoneIfOthers.some((source) => source.includes(REACT_ROUTER_MANIFEST_PATH))
   );
+}
+
+/**
+ * Generates a fresh per-request CSP nonce (base64 of 18 random bytes). The same
+ * nonce is threaded into the CSP `script-src 'nonce-…'` directive AND into the
+ * rendered HTML (React Router `<Scripts nonce>` / `<ScrollRestoration nonce>`
+ * / `<Links nonce>` and the two boot scripts in app/root.tsx) so the browser
+ * only runs inline scripts the server vouched for this response. A nonce that
+ * is not in the CSP is useless, and a CSP nonce with no matching element blocks
+ * hydration — both halves must use the same value from the same request.
+ */
+export function generateCspNonce(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(18));
+  // btoa is available in the Workers runtime; String.fromCharCode over the
+  // byte array gives a binary string btoa can base64-encode.
+  return btoa(String.fromCharCode(...bytes));
 }
 
 export const SECURITY_HEADERS: Record<string, string> = {
@@ -185,28 +222,56 @@ function isNoindexRequestPath(request?: Request): boolean {
 	return NOINDEX_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 }
 
-function securityHeadersForRequest(responseHeaders: Headers, request?: Request): Record<string, string> {
+// Builds the script-src directive for a response. When a per-request nonce is
+// provided (HTML rendered by the React Router handler), 'nonce-<value>' is
+// inserted so the inline boot scripts and React Router's hydration scripts can
+// run without 'unsafe-inline'. When the Site Rep widget is active on the page,
+// its script host is appended. Without a nonce the directive is the baseline
+// ('self' + beacon) — non-HTML responses carry no inline scripts, so no nonce
+// is needed and 'unsafe-inline' stays absent.
+function buildScriptSrc(nonce: string | undefined, widgetHost: boolean): string {
+  const sources = [`'self'`, CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC];
+  if (nonce) {
+    sources.push(`'nonce-${nonce}'`);
+  }
+  if (widgetHost) {
+    sources.push(SITE_REP_WIDGET_HOST);
+  }
+  return `script-src ${sources.join(" ")}`;
+}
+
+function securityHeadersForRequest(
+  responseHeaders: Headers,
+  request?: Request,
+  nonce?: string,
+): Record<string, string> {
   if (!request || !isHtmlResponse(responseHeaders)) {
     return SECURITY_HEADERS;
   }
 
-  if (!canUseSiteRepWidgetScript(request)) {
+  const widgetHost = canUseSiteRepWidgetScript(request);
+  // Non-HTML or no-nonce: the baseline CSP (no 'unsafe-inline', no nonce) is
+  // correct — there are no inline scripts to authorize. Only HTML responses
+  // that carry inline scripts need the nonce injected.
+  if (!nonce && !widgetHost) {
     return SECURITY_HEADERS;
   }
 
+  const csp = SECURITY_HEADERS["content-security-policy"];
+  let patched = csp.replace(BASE_SCRIPT_SRC, buildScriptSrc(nonce, widgetHost));
+  if (widgetHost) {
+    patched = patched.replace(CONNECT_SRC, CONNECT_SRC_WITH_SITE_REP_WIDGET);
+  }
   return {
     ...SECURITY_HEADERS,
-    "content-security-policy": SECURITY_HEADERS["content-security-policy"].replace(
-      BASE_SCRIPT_SRC,
-      SITE_REP_WIDGET_SCRIPT_SRC,
-    ),
+    "content-security-policy": patched,
   };
 }
 
-export function withSecurityHeaders(response: Response, request?: Request): Response {
+export function withSecurityHeaders(response: Response, request?: Request, nonce?: string): Response {
   // Clone headers so we don't mutate a potentially-immutable response.
   const headers = new Headers(response.headers);
-  for (const [name, value] of Object.entries(securityHeadersForRequest(headers, request))) {
+  for (const [name, value] of Object.entries(securityHeadersForRequest(headers, request, nonce))) {
     if (!headers.has(name)) {
       headers.set(name, value);
     }

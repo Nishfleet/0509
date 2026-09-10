@@ -67,7 +67,7 @@ import {
   resolveScheduledTask,
   WEEKLY_DIGEST_CRON,
 } from "./schedule";
-import { withSecurityHeaders } from "./security-headers";
+import { withSecurityHeaders, generateCspNonce } from "./security-headers";
 import {
   hasSiteRepAuthCookie,
   isSiteRepWidgetIsolatedPath,
@@ -189,6 +189,12 @@ function cacheControlDirectives(response: Response): Set<string> {
  * - An explicit `public` cache-control — `private`/`no-store` responses
  *   (the SSR pricing pages, authed documents) stay uncached.
  * - An HTML body — assets, JSON, and XML have their own caching stories.
+ * - No per-response CSP nonce. A `script-src 'nonce-…'` header is only safe
+ *   because that nonce is unpredictable and used once; the stored bytes would
+ *   hand the SAME nonce and the SAME matching body to every visitor of this
+ *   colo for the whole cache lifetime, which downgrades nonce-based CSP to a
+ *   static allowlist token that any visitor can read. Issue #2348 turned
+ *   nonces on, so a nonce-bearing document is per-response by construction.
  */
 export function isEdgeCacheableHtmlResponse(response: Response): boolean {
   if (response.status !== 200) {
@@ -198,6 +204,10 @@ export function isEdgeCacheableHtmlResponse(response: Response): boolean {
     return false;
   }
   if (!cacheControlDirectives(response).has("public")) {
+    return false;
+  }
+  const csp = response.headers.get("content-security-policy") ?? "";
+  if (csp.includes("'nonce-")) {
     return false;
   }
   const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
@@ -551,16 +561,23 @@ export default {
     }
 
     (globalThis as GlobalEnvCarrier).__APP_REQUEST_ENV__ = env;
+    // One per-request CSP nonce (issue #2348): the same value is threaded into
+    // the rendered HTML (via the cloudflare context → root loader → Layout)
+    // and into the CSP script-src 'nonce-…' directive (via withSecurityHeaders)
+    // so dropping 'unsafe-inline' does not break React Router hydration or the
+    // two inline boot scripts.
+    const cspNonce = generateCspNonce();
     const routerContext = new RouterContextProvider();
     routerContext.set(cloudflareRuntimeContext, {
       env,
       ctx,
       country: request.headers.get("cf-ipcountry"),
+      cspNonce,
     });
     const response = await requestHandler(request, routerContext);
     return storeEdgeCachedHtmlResponse(
       request,
-      withSecurityHeaders(withPublicContentSignal(response, request), request),
+      withSecurityHeaders(withPublicContentSignal(response, request), request, cspNonce),
       ctx,
     );
   },

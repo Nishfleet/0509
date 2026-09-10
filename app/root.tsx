@@ -50,6 +50,10 @@ export interface RootLoaderData {
   usageBundles: UsageBundle[];
   countryCode: string | null;
   googleSiteVerification: string | undefined;
+  // Per-request CSP nonce (issue #2348). The worker always sets this at
+  // runtime via the cloudflare context; optional in the type so existing test
+  // fixtures that construct RootLoaderData without it still type-check.
+  cspNonce?: string;
 }
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
@@ -72,6 +76,15 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       env.GOOGLE_SITE_VERIFICATION.trim() !== ""
         ? env.GOOGLE_SITE_VERIFICATION.trim()
         : undefined,
+    // The per-request CSP nonce (issue #2348). The worker generates it and
+    // threads it through the cloudflare context; Layout stamps it onto the
+    // inline boot scripts and React Router's <Scripts>/<Links>/
+    // <ScrollRestoration> so they run under a nonce-based script-src with no
+    // 'unsafe-inline'. The same nonce is in the CSP header (withSecurityHeaders).
+    // Deliberately passed through as-is, never coerced to "": React renders
+    // `nonce=""` for an empty string, which is an invalid attribute, while an
+    // absent value drops the attribute entirely.
+    cspNonce: cloudflare.cspNonce,
   } satisfies RootLoaderData;
 }
 
@@ -222,7 +235,7 @@ function SiteRepWidgetEmbed({ widget }: { widget: typeof SITE_REP_WIDGET | null 
  * FONT_SWAP_SCRIPT once loaded, and keep a no-JS fallback. Fonts still apply
  * via display=swap; nothing visible depends on the sheet for first render.
  */
-export function GoogleFontsStylesheet() {
+export function GoogleFontsStylesheet({ nonce }: { nonce?: string } = {}) {
   return (
     <>
       <link rel="preload" as="style" href={GOOGLE_FONTS_STYLESHEET_HREF} />
@@ -239,7 +252,7 @@ export function GoogleFontsStylesheet() {
         media="print"
         suppressHydrationWarning
       />
-      <script dangerouslySetInnerHTML={{ __html: FONT_SWAP_SCRIPT }} />
+      <script nonce={nonce} dangerouslySetInnerHTML={{ __html: FONT_SWAP_SCRIPT }} />
       <noscript>
         <link rel="stylesheet" href={GOOGLE_FONTS_STYLESHEET_HREF} />
       </noscript>
@@ -296,6 +309,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
   }, [shouldReloadForSiteRepWidget]);
 
   const documentLang = htmlLangForPathname(location.pathname);
+  // Per-request CSP nonce (issue #2348): stamped onto every inline script and
+  // React Router script-emitting component so they run under a nonce-based
+  // script-src with no 'unsafe-inline'. The same nonce is in the CSP header.
+  const cspNonce = rootData?.cspNonce;
 
   if (shouldReloadForSiteRepWidget) {
     return (
@@ -304,8 +321,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <meta charSet="utf-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1" />
           <Meta />
-          <Links />
-          <GoogleFontsStylesheet />
+          <Links nonce={cspNonce} />
+          <GoogleFontsStylesheet nonce={cspNonce} />
         </head>
         <body data-pricing="dodo-local" />
       </html>
@@ -320,17 +337,17 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="theme-color" content={THEME_COLOR_LIGHT} suppressHydrationWarning />
-        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+        <script nonce={cspNonce} dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
         <Meta />
-        <Links />
-        <GoogleFontsStylesheet />
+        <Links nonce={cspNonce} />
+        <GoogleFontsStylesheet nonce={cspNonce} />
       </head>
       <body data-pricing="dodo-local">
         {children}
         <ThemeSync />
         <SiteRepWidgetEmbed widget={siteRepWidget} />
-        <ScrollRestoration />
-        <Scripts />
+        <ScrollRestoration nonce={cspNonce} />
+        <Scripts nonce={cspNonce} />
       </body>
     </html>
   );
