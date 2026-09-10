@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { e2eProductionGateResponse, isE2EProductionEnvironment } from "~/lib/e2e-harness-guard.server";
 import type { AppEnv } from "~/lib/env.server";
 import { stableStringify } from "~/lib/normalize";
 
@@ -126,6 +127,7 @@ export function resolveJ4ReplayStateRequest(request: Request) {
 }
 
 export async function action({ context, request }: ActionFunctionArgs) {
+  if (isE2EProductionEnvironment()) return e2eProductionGateResponse();
   const { getEnv } = await import("~/lib/context.server");
   const env = getEnv(context);
   const [{ resolveE2EProviderDeny, sanitizeE2EProviderEnv }, { isE2ETestRequestEnabled }, guardModule] =
@@ -181,6 +183,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 }
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
+  if (isE2EProductionEnvironment()) return e2eProductionGateResponse();
   const identity = resolveJ4ReplayStateRequest(request);
   if (!identity) return notFound();
   const { getEnv } = await import("~/lib/context.server");

@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { e2eProductionGateResponse, isE2EProductionEnvironment } from "~/lib/e2e-harness-guard.server";
 import type { AppEnv } from "~/lib/env.server";
 
 const J3_WORKFLOW_WATCHLIST_ID = "e2e-watchlist-j3-workflow";
@@ -166,6 +167,7 @@ interface ReplayStateRow {
 }
 
 export function loader(_args: LoaderFunctionArgs) {
+  if (isE2EProductionEnvironment()) return e2eProductionGateResponse();
   return notFound();
 }
 
@@ -177,6 +179,7 @@ export function resolveJ3ReplayAction(idempotencyKey: string, userId: string, ru
 }
 
 export async function action({ context, request }: ActionFunctionArgs) {
+  if (isE2EProductionEnvironment()) return e2eProductionGateResponse();
   const { getEnv } = await import("~/lib/context.server");
   const env = getEnv(context);
   const [{ resolveE2EProviderDeny, sanitizeE2EProviderEnv }, { isE2ETestRequestEnabled }, guardModule] =

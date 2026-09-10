@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { e2eProductionGateResponse, isE2EProductionEnvironment } from "~/lib/e2e-harness-guard.server";
 import type { AppEnv } from "~/lib/env.server";
 
 const J6_PERSONA = "e2e-support-recovery";
@@ -105,6 +106,7 @@ export function resolveJ6ReplayStateRequest(request: Request) {
 }
 
 export async function action({ context, request }: ActionFunctionArgs) {
+  if (isE2EProductionEnvironment()) return e2eProductionGateResponse();
   if (request.method !== "POST" || new URL(request.url).pathname !== "/api/e2e/support/replay") {
     return notFound();
   }
@@ -157,6 +159,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 }
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
+  if (isE2EProductionEnvironment()) return e2eProductionGateResponse();
   const identity = resolveJ6ReplayStateRequest(request);
   if (!identity) return notFound();
   const { getEnv } = await import("~/lib/context.server");
