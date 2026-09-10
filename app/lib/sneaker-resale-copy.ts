@@ -48,9 +48,9 @@ export interface SneakerResaleCopy {
 }
 
 const EN: SneakerResaleCopy = {
-  title: "Sneaker resale competitor ads | Five to Nine",
+  title: "Sneakers below retail, tracked with proof | Five to Nine",
   description:
-    "Watch sneaker-resale competitors' Meta ads and landing pages. Saved screenshots, not a swipe file. Public search is free. The app is English; checkout currency follows you.",
+    "See the sneaker below retail swing with proof. Watch competitors' Meta ads and landing pages, saved as screenshots — not a swipe file. Public search is free.",
   kicker: "Sneaker resale · competitor ads",
   h1: "See the drop they posted before you price yours.",
   deck: "Five to Nine watches the Meta ads and landing pages of other resellers. When the offer, the CTA, or the page copy moves, you get the screenshot and the original link — not a mood-board of creatives.",
