@@ -66,6 +66,27 @@ const BILLING_CANARY_RECOVERY_STALE_DAYS = 5 / (24 * 60);
 // Keep the lock-held work below the shared 5-minute webhook lease and the
 // script's 60-second request timeout; observed overruns fail closed.
 const BILLING_CANARY_MAX_RUNTIME_MS = 60_000;
+// Gate C must not borrow the launch owner's account. LAUNCH_CANARY_EMAIL is a
+// real customer identity whose live billing state changes without any deploy
+// — a lapsed subscription, a pending plan change, or a row deleted by an
+// unrelated admin action turned the release gate red for ~24h (issue #2646),
+// and because the client collapsed every non-2xx into
+// billing_canary_http_failure the evidence never named the assertion.
+//
+// The canary now runs on a dedicated non-customer identity that this endpoint
+// provisions once and nothing else mutates. The provision is INSERT OR IGNORE:
+// an existing row is never repaired, so drift on the dedicated identity still
+// fails the stability check loudly and the gate's strength is unchanged.
+const BILLING_CANARY_USER_ID = "billing-canary-0509";
+const BILLING_CANARY_DEFAULT_EMAIL = "billing-canary@0509.internal";
+
+/**
+ * The address the billing canary runs as when the caller does not override it.
+ * Deliberately independent of LAUNCH_CANARY_EMAIL.
+ */
+function resolveDedicatedBillingCanaryEmail(env: AppEnv) {
+  return (env.BILLING_CANARY_EMAIL?.trim() || BILLING_CANARY_DEFAULT_EMAIL).toLowerCase();
+}
 
 export function loader(_args: LoaderFunctionArgs) {
   return Response.json(
@@ -138,13 +159,22 @@ export async function action({ context, request }: ActionFunctionArgs) {
     return canaryFailure("invalid_canary_email_override");
   }
 
-  const canaryEmail = canaryInput.email ?? env.LAUNCH_CANARY_EMAIL?.trim();
+  const dedicatedCanaryEmail = resolveDedicatedBillingCanaryEmail(env);
+  const usesDedicatedIdentity = !canaryInput.email;
+  const canaryEmail = canaryInput.email ?? dedicatedCanaryEmail;
   if (!canaryEmail) {
     return canaryFailure("missing_launch_canary_email");
   }
 
   let user: BillingCanaryUserRow | null;
   try {
+    // The dedicated identity provisions itself so the release gate never
+    // depends on the live billing state of a real customer account
+    // (issue #2646). An explicit @example.com override still addresses a real
+    // account and is never provisioned or repaired.
+    if (usesDedicatedIdentity) {
+      await ensureDedicatedBillingCanaryUser(env, dedicatedCanaryEmail);
+    }
     user = await getBillingCanaryUser(env, canaryEmail);
     if (!user) {
       return canaryFailure("missing_canary_user");
@@ -551,6 +581,32 @@ async function postSignedWebhook({
     status: response.status,
     ...(watchlistUpdatedAt ? { watchlistUpdatedAt } : {}),
   };
+}
+
+/**
+ * Provision the dedicated billing-canary identity exactly once: a `user` row
+ * plus a `user_plan` baseline whose state satisfies the canary's stability
+ * precondition (`plan` is a canary-supported slug, `dodo_status` is a settled
+ * paid state, no pending plan change). Both writes are INSERT OR IGNORE, so an
+ * existing row is never clobbered — drift on the dedicated identity still
+ * fails the stability check instead of being silently repaired, which is what
+ * keeps the gate's strength unchanged.
+ */
+async function ensureDedicatedBillingCanaryUser(env: AppEnv, email: string) {
+  if (!env.DB) return;
+  const now = new Date().toISOString();
+  await env.DB.prepare(`
+      INSERT OR IGNORE INTO user (id, name, email, emailVerified, createdAt, updatedAt)
+      VALUES (?, ?, ?, 1, ?, ?)
+    `)
+    .bind(BILLING_CANARY_USER_ID, "Billing Canary", email, now, now)
+    .run();
+  await env.DB.prepare(`
+      INSERT OR IGNORE INTO user_plan (user_id, plan, plan_updated_at, dodo_status)
+      VALUES (?, 'scout', ?, 'payment.succeeded')
+    `)
+    .bind(BILLING_CANARY_USER_ID, now)
+    .run();
 }
 
 async function getBillingCanaryUser(env: AppEnv, email: string) {
