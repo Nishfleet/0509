@@ -60,6 +60,30 @@ function sleep(ms) {
   });
 }
 
+/**
+ * Redact any userinfo (username and password) from a URL so that proxy
+ * credentials never leak into error messages or logs. The host is kept so
+ * bakeoff failures stay diagnosable. Falls back to the host only when the
+ * value does not parse as a URL.
+ *
+ * @param {string} url
+ * @returns {string}
+ */
+export function redactUrlUserinfo(url) {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return url;
+  }
+  if (parsed.username || parsed.password) {
+    parsed.username = "";
+    parsed.password = "";
+    return parsed.toString();
+  }
+  return url;
+}
+
 class MinimalCdpClient {
   /**
    * @param {string} wsUrl
@@ -84,7 +108,7 @@ class MinimalCdpClient {
 
     await new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
-        reject(new Error(`Timed out connecting to ${this.wsUrl}`));
+        reject(new Error(`Timed out connecting to ${redactUrlUserinfo(this.wsUrl)}`));
       }, CONNECT_TIMEOUT_MS);
 
       socket.addEventListener("open", () => {
@@ -94,7 +118,7 @@ class MinimalCdpClient {
 
       socket.addEventListener("error", () => {
         clearTimeout(timeout);
-        reject(new Error(`Failed to connect to ${this.wsUrl}`));
+        reject(new Error(`Failed to connect to ${redactUrlUserinfo(this.wsUrl)}`));
       }, { once: true });
     });
 
