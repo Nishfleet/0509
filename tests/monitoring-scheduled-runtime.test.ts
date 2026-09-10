@@ -11,6 +11,7 @@ const claimOrchestratedWatchlistRunMock = vi.fn();
 const ensureOrchestratedWatchlistRunMock = vi.fn();
 const finishOrchestratedWatchlistRunMock = vi.fn();
 const markOrchestratedRunCancelledMock = vi.fn();
+const markOrchestratedDispatchFailureMock = vi.fn();
 const renewMonitoringConcurrencySlotMock = vi.fn();
 const renewOrchestratedWatchlistRunLeaseMock = vi.fn();
 
@@ -29,6 +30,7 @@ vi.mock("~/lib/monitoring-fanout.server", async (importOriginal) => {
     isFanoutEnabledForWorkspace: vi.fn(() => true),
     hasOrchestratedRunBlockingInlineScan: vi.fn().mockResolvedValue(false),
     markOrchestratedRunCancelled: markOrchestratedRunCancelledMock,
+    markOrchestratedDispatchFailure: markOrchestratedDispatchFailureMock,
     renewMonitoringConcurrencySlot: renewMonitoringConcurrencySlotMock,
     renewOrchestratedWatchlistRunLease: renewOrchestratedWatchlistRunLeaseMock,
   };
@@ -53,6 +55,7 @@ beforeEach(() => {
   ensureOrchestratedWatchlistRunMock.mockClear();
   finishOrchestratedWatchlistRunMock.mockClear();
   markOrchestratedRunCancelledMock.mockClear();
+  markOrchestratedDispatchFailureMock.mockClear();
   renewMonitoringConcurrencySlotMock.mockClear();
   renewOrchestratedWatchlistRunLeaseMock.mockClear();
   isWatchlistEligibleForScheduledScanMock.mockResolvedValue({
@@ -69,6 +72,7 @@ beforeEach(() => {
   });
   finishOrchestratedWatchlistRunMock.mockResolvedValue(true);
   markOrchestratedRunCancelledMock.mockResolvedValue(undefined);
+  markOrchestratedDispatchFailureMock.mockResolvedValue(undefined);
   renewMonitoringConcurrencySlotMock.mockResolvedValue(true);
   renewOrchestratedWatchlistRunLeaseMock.mockResolvedValue(true);
   reconcileOrchestratedWatchlistRunsMock.mockResolvedValue({
@@ -705,6 +709,57 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
     expect(mocks.createWatchlistRun.mock.calls[0]?.[2]).toBe("scheduled");
     expect(mocks.createWatchlistRun.mock.calls[1]?.[2]).toBe("scheduled");
     expect(result.inlineRuns).toBe(2);
+  });
+
+  it("returns retry_scheduled on a retryable scan failure so the reconciler stays the single retry owner", async () => {
+    const mocks = mockMonitoringDependencies({
+      provider: "meta_library_browser",
+      workflowWatchlist: activeWatchlists[0],
+    });
+    // A rate-limited upstream is a retryable failure that used to rethrow,
+    // re-entering the workflow step's own 3x/2-minute retry loop and re-running
+    // the full Meta Ad Library scrape before the +10min reconciler pass could
+    // pick the run back up.
+    mocks.searchAdsViaSourceResolver.mockRejectedValue(
+      new Error("Meta Ad Library throttled the request"),
+    );
+
+    const env = {
+      BROWSER: { fetch: vi.fn() },
+      DB: createFanoutDbMock(),
+      MONITORING_FANOUT_MODE: "fanout",
+    };
+
+    const { runWatchlistWorkflowJob } = await import("~/lib/monitoring.server");
+    let thrown = false;
+    try {
+      await runWatchlistWorkflowJob(env as never, {
+        kind: "scheduled_scan",
+        watchlistId: "watch-1",
+        triggerType: "scheduled",
+        executionKey: "watchlist-run:scheduled:watch-1:0-4:2026-07-03T15-00-00-000Z",
+        workflowInstanceId: "monitor-v1-test",
+        proofCaptureRequestKeyPrefix: "proof:watch-1",
+        queuedAt: "2026-07-03T15:00:00.000Z",
+        runId: "run-1",
+        scheduledSlot: "2026-07-03T15:00:00.000Z",
+        cron: "0 */3 * * *",
+      });
+    } catch {
+      thrown = true;
+    }
+
+    // No throw: the workflow step stays green and never re-enters the scan.
+    expect(thrown).toBe(false);
+    expect(mocks.searchAdsViaSourceResolver).toHaveBeenCalledTimes(1);
+    expect(markOrchestratedDispatchFailureMock).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({
+        runId: "run-1",
+        errorCode: "retryable_scan_failure",
+        retryAfterIso: expect.any(String),
+      }),
+    );
   });
 
   it("does not replay a completed inline scheduled slot", async () => {
