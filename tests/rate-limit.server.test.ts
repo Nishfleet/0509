@@ -124,6 +124,57 @@ describe("enforceRequestRateLimit", () => {
     await Promise.all(deferred.splice(0, deferred.length));
   });
 
+  it("never issues a DELETE on the request path — cleanup is the daily cron's job (issue #2402)", async () => {
+    // Regression lock for the deleted 2% lottery: even with Math.random
+    // forced to a guaranteed "win", no request may carry a cleanup DELETE.
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0);
+    const base = createFakeD1();
+    const issuedDeletes: string[] = [];
+    const env = {
+      DB: {
+        prepare(sql: string) {
+          if (sql.includes("DELETE FROM rate_limit_events")) issuedDeletes.push(sql);
+          return base.prepare(sql);
+        },
+      },
+    } as unknown as AppEnv;
+    const deferred: Promise<unknown>[] = [];
+    const ctx = {
+      waitUntil(promise: Promise<unknown>) {
+        deferred.push(promise);
+      },
+    } as ExecutionContext;
+
+    try {
+      await enforceRequestRateLimit(
+        new Request("https://0509.io/auth/login", {
+          method: "POST",
+          headers: { "cf-connecting-ip": "203.0.113.60", "user-agent": "vitest" },
+        }),
+        env,
+        ctx,
+      );
+      await enforceRequestRateLimit(
+        new Request("https://0509.io/auth/login", {
+          method: "POST",
+          headers: { "cf-connecting-ip": "203.0.113.61", "user-agent": "vitest" },
+        }),
+        env,
+      );
+      await enforceSearchSelectionRateLimit(
+        new Request("https://0509.io/search?query=nykaa&selected=meta-1"),
+        env,
+        "user-1",
+        ctx,
+      );
+      await Promise.all(deferred.splice(0, deferred.length));
+
+      expect(issuedDeletes).toHaveLength(0);
+    } finally {
+      randomSpy.mockRestore();
+    }
+  });
+
   it("fails closed for protected writes when the limiter store is unavailable", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const response = await enforceRequestRateLimit(
