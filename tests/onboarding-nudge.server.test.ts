@@ -200,6 +200,32 @@ function insertDeliveryAttempt(
     );
 }
 
+describe("onboarding nudge send window (IST default)", () => {
+  it("treats an unknown timezone as IST and lands inside the 09:00-11:00 window at the 04:00 UTC daily run", async () => {
+    const { isWithinSendWindow } = await import("~/lib/onboarding-nudge.server");
+    // 04:00 UTC = 09:30 IST, inside 09:00-11:00.
+    const now = new Date("2026-09-10T04:00:00.000Z");
+    expect(isWithinSendWindow(now, null)).toBe(true);
+    expect(isWithinSendWindow(now, undefined)).toBe(true);
+    expect(isWithinSendWindow(now, "Asia/Kolkata")).toBe(true);
+  });
+
+  it("skips a user whose local time at the 04:00 UTC run is outside 09:00-11:00", async () => {
+    const { isWithinSendWindow } = await import("~/lib/onboarding-nudge.server");
+    // 04:00 UTC = 00:00 in New York (UTC-4 in September), outside the window.
+    const now = new Date("2026-09-10T04:00:00.000Z");
+    expect(isWithinSendWindow(now, "America/New_York")).toBe(false);
+    // 04:00 UTC = 04:00 in UTC, outside the window.
+    expect(isWithinSendWindow(now, "UTC")).toBe(false);
+  });
+
+  it("falls back to IST for an invalid timezone name", async () => {
+    const { isWithinSendWindow } = await import("~/lib/onboarding-nudge.server");
+    const now = new Date("2026-09-10T04:00:00.000Z");
+    expect(isWithinSendWindow(now, "Not/ARealZone")).toBe(true);
+  });
+});
+
 describe("onboarding nudge selection (sqlite)", () => {
   const fixtures: Array<ReturnType<typeof createSqliteD1>> = [];
 
