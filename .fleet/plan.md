@@ -1,35 +1,33 @@
-# Plan — issue 2218 (sources seam)
+# Plan — Nishfleet/0509 #2194 (TikTok Ads source)
 
-Manager mode (heavy/keystone). Base: salvaged worktree `issue-0509-2218-fresh` on
-origin/main (30cdf07e) with uncommitted seam work. The salvaged work covers most
-of the issue; the binding "Judge edits, batch 2" gaps remain.
+Manager mode (difficulty: heavy). Manager plans, delegates, reviews, ships.
+Worker implements each phase extremely well.
 
-## Phase 1 — Assess salvaged work, verify it builds/tests green
-- [x] Verify salvaged work compiles and the seam tests pass (registry, budget, presence coverage, claim surface)
-- [x] Confirm the six stub adapters + six stub sections exist at the exact ownership-map paths
-- [x] Confirm migration 0088 is the next number and the integration test references it correctly
+## Goal
+Replace the TikTok Ads stub with a real Decodo-rendered EU-shown ads source:
+resolve advertiser legal name, fetch ads weekly, diff, render in the Section.
 
-## Phase 2 — Close binding judge-edit gaps (types, runSources, action, renderer)
-- [x] Add `competitorUpdate` return channel to `SourceFetchResult`; `runSources` persists it to the seam's competitor columns
-- [x] Add generic source action on the competitor route (`sourceId`, field, value → writes seam columns) for #2199's manual Job board URL
-- [x] SourceSections renders one locked line per plan-disabled source from `getPlanEntitlements(plan).sources`; pass `plan` from competitor-detail
-- [x] Document the files line: competitor page route file, per-competitor check file, Meta helper file
+## Acceptance bullets (one line each)
+- [ ] phase 1: tiktok-ad-library.server.ts — Decodo render + parse + resolveAdvertiser + fetchAds + fixtures
+- [ ] phase 2: tiktok-ads-snapshot.server.ts — weekly fetch (budget, 7-day gate, resolve, fetchAds) + diff (new/paused/total)
+- [ ] phase 3: tiktok-ads.server.ts adapter (implemented true, weekly, requiresEnv DECODO) + tiktok-ads.tsx Section (render snapshot, EU-shown label)
+- [ ] phase 4: tests (tiktok-ads-library + tiktok-ads-snapshot: resolve/exact/zero/613/7-day gate/diff) + registry.test.ts detector fix
+- [ ] phase 5: termination green (vitest tiktok-ads*), commit, push, PR, arm
 
-## Phase 3 — Tests for the new judge-edit behavior
-- [x] Test `competitorUpdate` persistence in runSources (fake adapter)
-- [x] Test the generic source action endpoint
-- [x] Test locked-source renderer in SourceSections
-- [x] Fix migration number references (0087 → 0088) in the integration test
+## Files owned (edit ONLY these)
+- app/lib/sources/tiktok-ads/tiktok-ad-library.server.ts (NEW)
+- app/lib/sources/tiktok-ads/tiktok-ads-snapshot.server.ts (NEW)
+- app/lib/sources/tiktok-ads.server.ts (REPLACE stub)
+- app/components/sources/tiktok-ads.tsx (REPLACE stub)
+- tests/sources/tiktok-ads-library.test.ts (NEW)
+- tests/sources/tiktok-ads-snapshot.test.ts (NEW)
+- tests/fixtures/tiktok-ad-library/** (NEW)
+- tests/sources/registry.test.ts (DETECTOR FIX ONLY — see handoff; document in PR body)
 
-## Phase 4 — Full verification (termination criteria)
-- [x] `npx vitest run tests/sources/registry.test.ts tests/decodo-budget*.test.ts` green
-- [x] `npm run typecheck` green
-- [x] Migration applies on a fresh D1 in CI (integration test green)
+## Do NOT edit (seam #2218 owns)
+registry.server.ts, run.server.ts, types.ts, env.server.ts, presence-*.ts,
+source-sections.tsx, competitor-detail.tsx, decodo-budget.server.ts, migrations,
+claim table. Consume decodo-budget and run.server exports only.
 
-## Phase 5 — Review each phase (reviewer), land findings
-- [x] Reviewer on the full diff vs origin/main; land every finding in a bucket
-- [x] Fix Act-on findings
-
-## Phase 6 — Open PR, arm auto-merge
-- [x] PR body with Verification / run-proof / research / help-first / Closes #2218
-- [x] Arm auto-merge
+## Stall rule
+No box ticked in 10 min → commit what works + stalled note.
