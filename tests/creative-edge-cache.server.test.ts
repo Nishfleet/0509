@@ -254,11 +254,12 @@ describe("serveCreativeResource", () => {
   });
 
   it("refuses a redirect that leaves the fbcdn host", async () => {
-    const fetchWithTimeout = vi.fn(async () =>
-      new Response(null, {
-        status: 302,
-        headers: { location: "https://attacker.test/steal.jpg" },
-      }),
+    const fetchWithTimeout = vi.fn(
+      async (_url: string, _init?: unknown, _options?: unknown) =>
+        new Response(null, {
+          status: 302,
+          headers: { location: "https://attacker.test/steal.jpg" },
+        }),
     );
     vi.doMock("~/lib/fetch-timeout.server", () => ({
       fetchWithTimeout,

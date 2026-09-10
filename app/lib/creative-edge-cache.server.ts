@@ -135,8 +135,16 @@ function creativeCacheKey(creativeId: string): string {
   return `https://creative.0509.internal/${encodeURIComponent(creativeId)}`;
 }
 
-function imageResponse(body: BodyInit | null, contentType: string, status = 200): Response {
-  return new Response(body, {
+/**
+ * `Uint8Array` is not itself a `BodyInit` under the Worker lib types (it is a
+ * `BufferSource`, which `BodyInit` does not include), so the bytes are copied
+ * into a plain `ArrayBuffer` view before being handed to `Response`.
+ */
+function imageBody(bytes: Uint8Array): BodyInit {
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+}
+
+function imageResponse(body: BodyInit | null, contentType: string, status = 200): Response {  return new Response(body, {
     status,
     headers: {
       "content-type": contentType,
@@ -147,7 +155,7 @@ function imageResponse(body: BodyInit | null, contentType: string, status = 200)
 }
 
 function placeholderResponse(): Response {
-  return imageResponse(DEAD_CREATIVE_PLACEHOLDER_PNG, "image/png");
+  return imageResponse(imageBody(DEAD_CREATIVE_PLACEHOLDER_PNG), "image/png");
 }
 
 /**
@@ -278,7 +286,7 @@ export async function primeCreativeEdgeCache(env: AppEnv, adId: string): Promise
     await cache.put(
       key,
       outcome.kind === "ok"
-        ? imageResponse(outcome.bytes, outcome.contentType)
+        ? imageResponse(imageBody(outcome.bytes), outcome.contentType)
         : placeholderResponse(),
     );
     return outcome.kind === "ok";
@@ -337,7 +345,7 @@ export async function serveCreativeResource(
     if (outcome.kind === "transient") {
       // Serve the placeholder without caching it or claiming 30-day
       // freshness — the next request is free to try fbcdn again.
-      const transient = new Response(DEAD_CREATIVE_PLACEHOLDER_PNG, {
+      const transient = new Response(imageBody(DEAD_CREATIVE_PLACEHOLDER_PNG), {
         status: 200,
         headers: {
           "content-type": "image/png",
@@ -350,7 +358,7 @@ export async function serveCreativeResource(
 
     const response =
       outcome.kind === "ok"
-        ? imageResponse(outcome.bytes, outcome.contentType)
+        ? imageResponse(imageBody(outcome.bytes), outcome.contentType)
         : placeholderResponse();
 
     // Cache even the placeholder: the dead creative must not be re-fetched.
