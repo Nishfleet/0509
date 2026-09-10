@@ -106,7 +106,16 @@ function GoogleAdsBrandSection({ snapshot }: { snapshot: SourceSnapshotRecord })
   const advertiserNames = Array.from(
     new Set(creatives.map((c) => c.advertiserName).filter(Boolean)),
   ).slice(0, 4);
-  const fm = payload.formatMix ?? { text: 0, image: 0, video: 0, unknown: 0 };
+  // Guard a malformed or partially-shaped stored payload: a missing formatMix
+  // must not throw, and a formatMix missing one key must not render
+  // "text undefined" on a public page.
+  const rawFm = payload.formatMix ?? {};
+  const fm = {
+    text: typeof rawFm.text === "number" ? rawFm.text : 0,
+    image: typeof rawFm.image === "number" ? rawFm.image : 0,
+    video: typeof rawFm.video === "number" ? rawFm.video : 0,
+    unknown: typeof rawFm.unknown === "number" ? rawFm.unknown : 0,
+  };
   const previews = creatives
     .filter(
       (c): c is GoogleAdsCreative & { previewUrl: string } =>
@@ -307,7 +316,7 @@ function TiktokAdsBrandSection({ snapshot }: { snapshot: SourceSnapshotRecord })
                 >
                   View ad
                 </a>
-                {` · first shown ${ad.firstShown} · last shown ${ad.lastShown}`}
+                {` · first shown ${formatCheckedDate(ad.firstShown)} · last shown ${formatCheckedDate(ad.lastShown)}`}
                 {ad.uniqueUsers ? ` · ${ad.uniqueUsers} unique users` : ""}
               </span>
             </li>

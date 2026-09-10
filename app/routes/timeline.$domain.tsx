@@ -418,7 +418,7 @@ export default function OfferTimelineRoute() {
        * change mark + capture date + the source label. No account data.
        * Hidden when empty (never an empty card).
        */}
-      {data.sourceEvents.length > 0 ? (
+      {(data.sourceEvents ?? []).length > 0 ? (
         <section className="f9-timeline-section" aria-labelledby="offer-timeline-source-events-title">
           <div className="f9-container">
             <h2 className="f9-timeline-section-title" id="offer-timeline-source-events-title">

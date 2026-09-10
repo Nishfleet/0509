@@ -118,3 +118,25 @@ describe("/timeline/:domain source events (issue #2200)", () => {
     expect(title).not.toMatch(/captured/i);
   });
 });
+
+describe("/timeline/:domain source events tolerate a payload without the field (issue #2200)", () => {
+  it("renders the page instead of throwing when sourceEvents is absent", async () => {
+    // Regression: the /ads side had this exact crash (Cannot read properties
+    // of undefined (reading 'length')) because a loader payload predating the
+    // new field hit an unguarded `.length`. The timeline route read
+    // `data.sourceEvents.length` the same way, so it carried the same bug.
+    const payload = data();
+    delete (payload as { sourceEvents?: unknown }).sourceEvents;
+    const markup = await render(payload);
+    expect(markup).toContain("Nike");
+    expect(markup).not.toContain('data-testid="timeline-source-events"');
+  });
+
+  it("renders the page instead of throwing when sourceEvents is null", async () => {
+    const markup = await render(
+      data({ sourceEvents: null as unknown as TimelineSourceEvent[] }),
+    );
+    expect(markup).toContain("Nike");
+    expect(markup).not.toContain('data-testid="timeline-source-events"');
+  });
+});
