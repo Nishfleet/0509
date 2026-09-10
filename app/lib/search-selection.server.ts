@@ -317,6 +317,18 @@ async function enrichAndPersistSelectedAd(
       env,
       canonicalSelectionAd(selectedForPersistence, storedAd ?? null, providerResultIsFresh),
     );
+
+    // Issue #2393: fill the edge cache for the captured creative NOW, while
+    // the fbcdn `oe=` signature is still valid. Without this the /creative/:id
+    // route could only ever miss for a first view after day 4. Runs on the
+    // caller's existing waitUntil (this whole function is already handed to
+    // it) and never throws.
+    if (creativeCapturedAt) {
+      const { primeCreativeEdgeCache } = await import(
+        "~/lib/creative-edge-cache.server"
+      );
+      await primeCreativeEdgeCache(env, selectedAd.metaAdId);
+    }
   }
 
   return { ad: selectedAd, landingPageCaptureFailure };

@@ -589,6 +589,7 @@ export default function MarketingRoute() {
             previewHeadline: item.evidence,
             hook: item.evidence,
             creativeImageUrl: item.creativeImageUrl,
+            metaAdId: item.creativeId,
           }}
           savedLabel={null}
           loading={index === 0 ? "eager" : "lazy"}
