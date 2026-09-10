@@ -551,7 +551,7 @@ describe("Gate C scheduled-work soak journal", () => {
     mondayJournal.window.startedAt = "2026-07-20T00:00:00.000Z";
     mondayJournal.window.endedAt = "2026-07-21T00:00:00.000Z";
     const mondayPayload = buildPayload(mondayJournal);
-    expect(mondayPayload.expectedObservations).toBe(54);
+    expect(mondayPayload.expectedObservations).toBe(53);
     expect(validateReleaseSoakPayload(mondayPayload, mondayJournal)).toBe(mondayPayload);
     expect(() => validateReleaseSoakPayload({ ...mondayPayload, expectedObservations: 51 }, mondayJournal))
       .toThrow("soak_probe_invalid_payload");

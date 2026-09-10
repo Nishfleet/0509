@@ -29,7 +29,6 @@ const SAFE_TASKS = new Set<ReleaseScheduledTaskName>([
   "retention_sweep",
   "presence_polling_batch",
   "scheduled_monitoring",
-  "customer_at_risk_alert",
 ]);
 const SAFE_CRONS = new Set<string>(RELEASE_SCHEDULE_CRONS);
 
