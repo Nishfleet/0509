@@ -52,6 +52,7 @@ describe("email case-file design system (issue #1556)", () => {
       cadence: "weekly",
       timeZone: "Asia/Kolkata",
       fullDigestUrl: "https://0509.io/app/digests/demo",
+      baseUrl: "https://0509.io",
       manageFrequencyUrl: "https://0509.io/app/notifications",
       supportEmail: "support@0509.io",
       supportMailto: "mailto:support@0509.io",
