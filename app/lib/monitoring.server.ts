@@ -1982,6 +1982,38 @@ async function assertOrchestratedWatchlistRunLease(
   }
 }
 
+/**
+ * Run `fn` while holding the orchestrated watchlist run lease. The lease is
+ * re-asserted just before and just after `fn`, so a reclaimed run cannot
+ * persist, notify, or finalize between its own effects without the guard
+ * being re-checked on both sides — the hand-threaded asserts no longer need
+ * to be interleaved manually between every DB effect.
+ *
+ * `finalizesRun` marks `fn` as the effect that records the run's terminal
+ * status. That write clears the run's `processing_token`, so there is no
+ * lease left to assert afterwards and the post-assert is skipped. This keeps
+ * the guard strict everywhere else: a run cancelled or reclaimed elsewhere
+ * still fails the next assert instead of silently passing.
+ */
+async function withRunLease<T>(
+  env: AppEnv,
+  runId: string,
+  token: string | undefined,
+  fn: () => Promise<T>,
+  options?: { finalizesRun?: boolean },
+): Promise<T> {
+  await assertOrchestratedWatchlistRunLease(env, runId, {
+    orchestrationToken: token,
+  });
+  const result = await fn();
+  if (!options?.finalizesRun) {
+    await assertOrchestratedWatchlistRunLease(env, runId, {
+      orchestrationToken: token,
+    });
+  }
+  return result;
+}
+
 function isRetryableMonitoringFailure(error: unknown) {
   if (error instanceof MonitoringConcurrencyLimitError) {
     return true;
@@ -2050,114 +2082,127 @@ export async function runWatchlist(
     // Provider work can outlive a reclaimed lease. Revalidate before the first
     // durable/customer-facing effect, then heartbeat between each effect
     // phase so an expired worker cannot persist, notify, or finalize.
-    await assertOrchestratedWatchlistRunLease(env, runId, options);
-
-    if (degraded) {
-      // Stale-cache honesty: nothing live was fetched, so no diff runs, the
-      // run is recorded as failed (cache_only), lastScannedAt stays put, and
-      // integration status reflects reality. The catch path still attempts
-      // direct-website proof, and the next scan retries live.
-      throw new CommercialDiscoveryError(
-        "Live discovery was cooling down; only cached results were available, so change detection was skipped.",
-        "rate_limited",
-      );
-    }
-
     const effectLease = options.orchestrationToken
       ? { runId, processingToken: options.orchestrationToken }
       : undefined;
 
-    // Full-Site Watch (feature-flagged): sitemap discovery + bounded crawl +
-    // inventory manifest for competitor websites, using the run's lease.
-    // Errors are recorded as honest failed manifests, never run-fatal.
-    if (isFullSiteWatchEnabled(env)) {
-      try {
-        await runWebsiteSiteScanForWatchlist(env, watchlist, {
-          runId,
-          processingToken: options.orchestrationToken ?? null,
-        });
-      } catch (error) {
-        console.error(
-          `Full-Site Watch scan failed for watchlist ${watchlist.id}; ad scan unaffected.`,
-          error,
+    const {
+      currentObservations,
+      eventDrafts,
+      recentWatchEvents,
+      scanNativeEvents,
+    } = await withRunLease(env, runId, options.orchestrationToken, async () => {
+      if (degraded) {
+        // Stale-cache honesty: nothing live was fetched, so no diff runs, the
+        // run is recorded as failed (cache_only), lastScannedAt stays put, and
+        // integration status reflects reality. The catch path still attempts
+        // direct-website proof, and the next scan retries live.
+        throw new CommercialDiscoveryError(
+          "Live discovery was cooling down; only cached results were available, so change detection was skipped.",
+          "rate_limited",
         );
       }
-    }
 
-    await persistCheapScanObservations(env, runId, ads, effectLease);
+      // Full-Site Watch (feature-flagged): sitemap discovery + bounded crawl +
+      // inventory manifest for competitor websites, using the run's lease.
+      // Errors are recorded as honest failed manifests, never run-fatal.
+      if (isFullSiteWatchEnabled(env)) {
+        try {
+          await runWebsiteSiteScanForWatchlist(env, watchlist, {
+            runId,
+            processingToken: options.orchestrationToken ?? null,
+          });
+        } catch (error) {
+          console.error(
+            `Full-Site Watch scan failed for watchlist ${watchlist.id}; ad scan unaffected.`,
+            error,
+          );
+        }
+      }
 
-    const [currentObservations, baselineObservations, priorObservations] =
-      await Promise.all([
-        listObservationsForRun(env, runId),
-        baselineRun
-          ? listObservationsForRun(env, baselineRun.id)
-          : Promise.resolve([]),
-        priorRun
-          ? listObservationsForRun(env, priorRun.id)
-          : Promise.resolve([]),
-      ]);
+      await persistCheapScanObservations(env, runId, ads, effectLease);
 
-    const eventDrafts = buildScanNativeEventDrafts(
-      watchlist,
-      currentObservations,
-      baselineObservations,
-      priorObservations,
-      baselineRun !== null,
-    );
+      const [currentObs, baselineObservations, priorObservations] =
+        await Promise.all([
+          listObservationsForRun(env, runId),
+          baselineRun
+            ? listObservationsForRun(env, baselineRun.id)
+            : Promise.resolve([]),
+          priorRun
+            ? listObservationsForRun(env, priorRun.id)
+            : Promise.resolve([]),
+        ]);
 
-    const recentWatchEvents = await listWatchEvents(env, watchlist.id, 80);
-    const scanNativeEvents = await persistScanNativeEvents(
-      env,
-      watchlist.id,
-      runId,
-      baselineRun?.id ?? null,
-      eventDrafts,
-      effectLease,
-      recentWatchEvents,
-    );
-    // Seam #2218: run the generic competitor-monitoring source path after
-    // scan-native events are persisted and before delivery, so source
-    // alerts flow through the same delivery path. All adapters are stubs on
-    // main, so this is a no-op (fetch returns unavailable). The plan is
-    // resolved from the watchlist owner; a lookup failure is non-blocking.
-    try {
-      const { runSources } = await import("~/lib/sources/run.server");
-      const plan = await getUserPlan(env, watchlist.userId);
-      await runSources(
-        env,
-        { watchlistId: watchlist.id, label: watchlist.targetLabel, runId },
-        plan,
-      );
-    } catch (sourceError) {
-      console.error(
-        `Source run failed for watchlist ${watchlist.id}; Meta scan unaffected.`,
-        sourceError,
-      );
-    }
-    await assertOrchestratedWatchlistRunLease(env, runId, options);
-    await reconcileStaleEvidenceBeforeScan(env);
-    const proofEvaluation = await evaluateSelectiveProofCandidates(env, {
-      watchlist,
-      runId,
-      currentObservations,
-      scanNativeDrafts: eventDrafts,
-      recentWatchEvents,
-      lease: effectLease,
-      // Real request ExecutionContext from the caller (manual refresh routes,
-      // scheduled handler): proof-capture telemetry rows get waitUntil
-      // background completion instead of being dropped by the bounded race.
-      executionContext: options.executionContext ?? null,
-    });
-    const directWebsiteProofEvaluation =
-      await evaluateDirectWebsiteProofCandidate(env, {
+      const drafts = buildScanNativeEventDrafts(
         watchlist,
+        currentObs,
+        baselineObservations,
+        priorObservations,
+        baselineRun !== null,
+      );
+
+      const watchEvents = await listWatchEvents(env, watchlist.id, 80);
+      const nativeEvents = await persistScanNativeEvents(
+        env,
+        watchlist.id,
         runId,
-        recentWatchEvents: [...recentWatchEvents, ...proofEvaluation.events],
-        watchlistRunAttemptCount: proofEvaluation.proofAttemptCount,
-        lease: effectLease,
-        executionContext: options.executionContext ?? null,
+        baselineRun?.id ?? null,
+        drafts,
+        effectLease,
+        watchEvents,
+      );
+      // Seam #2218: run the generic competitor-monitoring source path after
+      // scan-native events are persisted and before delivery, so source
+      // alerts flow through the same delivery path. All adapters are stubs on
+      // main, so this is a no-op (fetch returns unavailable). The plan is
+      // resolved from the watchlist owner; a lookup failure is non-blocking.
+      try {
+        const { runSources } = await import("~/lib/sources/run.server");
+        const plan = await getUserPlan(env, watchlist.userId);
+        await runSources(
+          env,
+          { watchlistId: watchlist.id, label: watchlist.targetLabel, runId },
+          plan,
+        );
+      } catch (sourceError) {
+        console.error(
+          `Source run failed for watchlist ${watchlist.id}; Meta scan unaffected.`,
+          sourceError,
+        );
+      }
+      return {
+        currentObservations: currentObs,
+        eventDrafts: drafts,
+        recentWatchEvents: watchEvents,
+        scanNativeEvents: nativeEvents,
+      };
+    });
+    const { proofEvaluation, directWebsiteProofEvaluation } =
+      await withRunLease(env, runId, options.orchestrationToken, async () => {
+        await reconcileStaleEvidenceBeforeScan(env);
+        const proof = await evaluateSelectiveProofCandidates(env, {
+          watchlist,
+          runId,
+          currentObservations,
+          scanNativeDrafts: eventDrafts,
+          recentWatchEvents,
+          lease: effectLease,
+          // Real request ExecutionContext from the caller (manual refresh routes,
+          // scheduled handler): proof-capture telemetry rows get waitUntil
+          // background completion instead of being dropped by the bounded race.
+          executionContext: options.executionContext ?? null,
+        });
+        const directWebsite =
+          await evaluateDirectWebsiteProofCandidate(env, {
+            watchlist,
+            runId,
+            recentWatchEvents: [...recentWatchEvents, ...proof.events],
+            watchlistRunAttemptCount: proof.proofAttemptCount,
+            lease: effectLease,
+            executionContext: options.executionContext ?? null,
+          });
+        return { proofEvaluation: proof, directWebsiteProofEvaluation: directWebsite };
       });
-    await assertOrchestratedWatchlistRunLease(env, runId, options);
     const newlyEvaluatedEvents = [
       ...scanNativeEvents,
       ...proofEvaluation.events,
@@ -2179,94 +2224,102 @@ export async function runWatchlist(
       watchlist.userId,
     );
     const { deliverWatchlistAlerts } = await import("~/lib/delivery.server");
-    await assertOrchestratedWatchlistRunLease(env, runId, options);
-    const alertDelivery =
-      allEvents.length > 0
-        ? await deliverWatchlistAlerts(env, {
-            userId: watchlist.userId,
-            userName: userDeliveryProfile?.name ?? null,
-            accountEmail: userDeliveryProfile?.email ?? null,
-            watchlist,
-            events: allEvents,
-            lane: "customer",
-          })
-        : { attempts: 0, channels: [], details: [] };
-    const alertOutcome = summarizeAlertDelivery(alertDelivery);
-    const alertDeliveryFailed = alertOutcome.errorCode !== null;
-
-    // WP-25: free users get no digests/instant alerts — send one activation-result
-    // email when this run established the baseline (first successful scan).
-    await maybeSendFreeActivationResultEmail(env, {
-      watchlist,
-      runId,
-      baselineRunId: baselineRun?.id ?? null,
-      events: allEvents,
-      adsSeen: currentObservations.length,
-      observations: currentObservations,
-      userDeliveryProfile,
-    });
-
-    await completeWatchlistRun(
+    const alertOutcome = await withRunLease(
       env,
       runId,
-      watchlist.id,
-      {
-        status: alertDeliveryFailed ? "failed" : "succeeded",
-        pagesScanned,
-        summary: {
+      options.orchestrationToken,
+      async () => {
+        const alertDelivery =
+          allEvents.length > 0
+            ? await deliverWatchlistAlerts(env, {
+                userId: watchlist.userId,
+                userName: userDeliveryProfile?.name ?? null,
+                accountEmail: userDeliveryProfile?.email ?? null,
+                watchlist,
+                events: allEvents,
+                lane: "customer",
+              })
+            : { attempts: 0, channels: [], details: [] };
+        const outcome = summarizeAlertDelivery(alertDelivery);
+        const alertDeliveryFailed = outcome.errorCode !== null;
+
+        // WP-25: free users get no digests/instant alerts — send one activation-result
+        // email when this run established the baseline (first successful scan).
+        await maybeSendFreeActivationResultEmail(env, {
+          watchlist,
+          runId,
+          baselineRunId: baselineRun?.id ?? null,
+          events: allEvents,
           adsSeen: currentObservations.length,
-          websiteProofUrl: directWebsiteProofEvaluation.websiteUrl,
-          candidatesDetected:
-            eventDrafts.length +
-            proofEvaluation.candidateCount +
-            directWebsiteProofEvaluation.candidateCount,
-          proofsAttempted:
-            proofEvaluation.proofAttemptCount +
-            directWebsiteProofEvaluation.proofAttemptCount,
-          eventsConfirmed:
-            scanNativeEvents.length +
-            proofEvaluation.confirmedEventCount +
-            directWebsiteProofEvaluation.confirmedEventCount,
-          sendsTriggered: alertOutcome.accepted,
-          sendAttempts: alertOutcome.attempts,
-          sendFailures: alertOutcome.failures,
-          sendDeferrals: alertOutcome.deferrals,
-          events: allEvents.length,
-          eventTypes: summarizeEventTypes(allEvents),
-        },
-        errorCode: alertOutcome.errorCode,
-        errorMessage: alertOutcome.errorMessage,
+          observations: currentObservations,
+          userDeliveryProfile,
+        });
+
+        await completeWatchlistRun(
+          env,
+          runId,
+          watchlist.id,
+          {
+            status: alertDeliveryFailed ? "failed" : "succeeded",
+            pagesScanned,
+            summary: {
+              adsSeen: currentObservations.length,
+              websiteProofUrl: directWebsiteProofEvaluation.websiteUrl,
+              candidatesDetected:
+                eventDrafts.length +
+                proofEvaluation.candidateCount +
+                directWebsiteProofEvaluation.candidateCount,
+              proofsAttempted:
+                proofEvaluation.proofAttemptCount +
+                directWebsiteProofEvaluation.proofAttemptCount,
+              eventsConfirmed:
+                scanNativeEvents.length +
+                proofEvaluation.confirmedEventCount +
+                directWebsiteProofEvaluation.confirmedEventCount,
+              sendsTriggered: outcome.accepted,
+              sendAttempts: outcome.attempts,
+              sendFailures: outcome.failures,
+              sendDeferrals: outcome.deferrals,
+              events: allEvents.length,
+              eventTypes: summarizeEventTypes(allEvents),
+            },
+            errorCode: outcome.errorCode,
+            errorMessage: outcome.errorMessage,
+          },
+          options,
+        );
+        if (!options.orchestrationToken && !alertDeliveryFailed) {
+          await touchWatchlistScanned(env, watchlist.id);
+        }
+        const commercialProvider = resolveCommercialDiscoveryProvider(env, {
+          customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
+        });
+        await logMetaIntegrationStatus(env, {
+          status:
+            alertDeliveryFailed
+              ? "degraded"
+              : commercialProvider === "meta_library_browser"
+              ? "healthy"
+              : commercialProvider === "meta_api"
+                ? "degraded"
+                : "demo",
+          summary:
+            alertDeliveryFailed
+              ? "Watchlist evidence completed, but customer alert delivery did not reach a confirmed successful outcome."
+              : commercialProvider === "meta_library_browser"
+              ? "Scheduled watchlist scan completed through the commercial discovery resolver."
+              : commercialProvider === "meta_api"
+                ? "Scheduled watchlist scan completed with the diagnostic Meta API path."
+                : "Watchlist scan completed in explicit demo mode because no live commercial provider is configured.",
+          metadata: {
+            watchlistId: watchlist.id,
+            runId,
+          },
+        });
+        return outcome;
       },
-      options,
+      { finalizesRun: true },
     );
-    if (!options.orchestrationToken && !alertDeliveryFailed) {
-      await touchWatchlistScanned(env, watchlist.id);
-    }
-    const commercialProvider = resolveCommercialDiscoveryProvider(env, {
-      customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
-    });
-    await logMetaIntegrationStatus(env, {
-      status:
-        alertDeliveryFailed
-          ? "degraded"
-          : commercialProvider === "meta_library_browser"
-          ? "healthy"
-          : commercialProvider === "meta_api"
-            ? "degraded"
-            : "demo",
-      summary:
-        alertDeliveryFailed
-          ? "Watchlist evidence completed, but customer alert delivery did not reach a confirmed successful outcome."
-          : commercialProvider === "meta_library_browser"
-          ? "Scheduled watchlist scan completed through the commercial discovery resolver."
-          : commercialProvider === "meta_api"
-            ? "Scheduled watchlist scan completed with the diagnostic Meta API path."
-            : "Watchlist scan completed in explicit demo mode because no live commercial provider is configured.",
-      metadata: {
-        watchlistId: watchlist.id,
-        runId,
-      },
-    });
 
     if (alertOutcome.errorCode !== null) {
       throw new RecordedAlertDeliveryOutcomeError(
@@ -2283,7 +2336,6 @@ export async function runWatchlist(
     if (error instanceof StaleOrchestratedWatchlistRunError) {
       throw error;
     }
-    await assertOrchestratedWatchlistRunLease(env, runId, options);
     const details =
       error instanceof Error ? error.message : "Unknown monitoring error.";
     const errorCode =
@@ -2302,65 +2354,73 @@ export async function runWatchlist(
       !evidenceUsagePendingReconciliation &&
       !(error instanceof MonitoringConcurrencyLimitError)
     ) {
-      const directWebsiteProofEvaluation =
-        await evaluateDirectWebsiteProofCandidate(env, {
-          watchlist,
-          runId,
-          recentWatchEvents: await listWatchEvents(env, watchlist.id, 80),
-          watchlistRunAttemptCount: 0,
-          lease: options.orchestrationToken
-            ? { runId, processingToken: options.orchestrationToken }
-            : undefined,
-          executionContext: options.executionContext ?? null,
-        });
-      await assertOrchestratedWatchlistRunLease(env, runId, options);
+      const directWebsiteProofEvaluation = await withRunLease(
+        env,
+        runId,
+        options.orchestrationToken,
+        async () =>
+          evaluateDirectWebsiteProofCandidate(env, {
+            watchlist,
+            runId,
+            recentWatchEvents: await listWatchEvents(env, watchlist.id, 80),
+            watchlistRunAttemptCount: 0,
+            lease: options.orchestrationToken
+              ? { runId, processingToken: options.orchestrationToken }
+              : undefined,
+            executionContext: options.executionContext ?? null,
+          }),
+      );
       if (!directWebsiteProofEvaluation.proofCaptureSucceeded) {
-        await completeWatchlistRun(
-          env,
-          runId,
-          watchlist.id,
-          {
-            status: "failed",
-            pagesScanned: 0,
-            summary: {
-              adsSeen: 0,
-              websiteProofUrl: directWebsiteProofEvaluation.websiteUrl,
-              candidatesDetected: directWebsiteProofEvaluation.candidateCount,
-              proofsAttempted: directWebsiteProofEvaluation.proofAttemptCount,
-              eventsConfirmed: directWebsiteProofEvaluation.confirmedEventCount,
-              sendsTriggered: 0,
-              events: directWebsiteProofEvaluation.events.length,
-              eventTypes: summarizeEventTypes(
-                directWebsiteProofEvaluation.events,
-              ),
-              scanStatus: "failed",
-              scanErrorCode: errorCode,
-              scanErrorMessage: details,
+        await withRunLease(env, runId, options.orchestrationToken, async () => {
+          await completeWatchlistRun(
+            env,
+            runId,
+            watchlist.id,
+            {
+              status: "failed",
+              pagesScanned: 0,
+              summary: {
+                adsSeen: 0,
+                websiteProofUrl: directWebsiteProofEvaluation.websiteUrl,
+                candidatesDetected: directWebsiteProofEvaluation.candidateCount,
+                proofsAttempted: directWebsiteProofEvaluation.proofAttemptCount,
+                eventsConfirmed: directWebsiteProofEvaluation.confirmedEventCount,
+                sendsTriggered: 0,
+                events: directWebsiteProofEvaluation.events.length,
+                eventTypes: summarizeEventTypes(
+                  directWebsiteProofEvaluation.events,
+                ),
+                scanStatus: "failed",
+                scanErrorCode: errorCode,
+                scanErrorMessage: details,
+              },
+              errorCode,
+              errorMessage: details,
             },
+            options,
+          );
+          await reportConsecutiveWatchlistFailure(env, {
+            watchlistId: watchlist.id,
+            watchlistName: watchlist.name,
+            runId,
+            triggerType,
+          });
+          await logMetaIntegrationStatus(env, {
+            status: "degraded",
+            summary:
+              "Commercial discovery failed and direct website evidence did not complete.",
             errorCode,
             errorMessage: details,
+            metadata: {
+              watchlistId: watchlist.id,
+              runId,
+              websiteProofUrl: directWebsiteProofEvaluation.websiteUrl,
+              proofAttemptCount: directWebsiteProofEvaluation.proofAttemptCount,
+            },
+          });
           },
-          options,
+          { finalizesRun: true },
         );
-        await reportConsecutiveWatchlistFailure(env, {
-          watchlistId: watchlist.id,
-          watchlistName: watchlist.name,
-          runId,
-          triggerType,
-        });
-        await logMetaIntegrationStatus(env, {
-          status: "degraded",
-          summary:
-            "Commercial discovery failed and direct website evidence did not complete.",
-          errorCode,
-          errorMessage: details,
-          metadata: {
-            watchlistId: watchlist.id,
-            runId,
-            websiteProofUrl: directWebsiteProofEvaluation.websiteUrl,
-            proofAttemptCount: directWebsiteProofEvaluation.proofAttemptCount,
-          },
-        });
 
         return { runId, events: 0 };
       }
@@ -2370,73 +2430,81 @@ export async function runWatchlist(
         watchlist.userId,
       );
       const { deliverWatchlistAlerts } = await import("~/lib/delivery.server");
-      await assertOrchestratedWatchlistRunLease(env, runId, options);
-      const alertDelivery =
-        directWebsiteProofEvaluation.events.length > 0
-          ? await deliverWatchlistAlerts(env, {
-              userId: watchlist.userId,
-              userName: userDeliveryProfile?.name ?? null,
-              accountEmail: userDeliveryProfile?.email ?? null,
-              watchlist,
-              events: directWebsiteProofEvaluation.events,
-              lane: "customer",
-            })
-          : { attempts: 0, channels: [], details: [] };
-      const alertOutcome = summarizeAlertDelivery(alertDelivery);
-      const alertDeliveryFailed = alertOutcome.errorCode !== null;
-
-      await completeWatchlistRun(
+      const alertOutcome = await withRunLease(
         env,
         runId,
-        watchlist.id,
-        {
-          status: alertDeliveryFailed ? "failed" : "succeeded",
-          pagesScanned: 0,
-          summary: {
-            adsSeen: 0,
-            websiteProofUrl: directWebsiteProofEvaluation.websiteUrl,
-            candidatesDetected: directWebsiteProofEvaluation.candidateCount,
-            proofsAttempted: directWebsiteProofEvaluation.proofAttemptCount,
-            eventsConfirmed: directWebsiteProofEvaluation.confirmedEventCount,
-            sendsTriggered: alertOutcome.accepted,
-            sendAttempts: alertOutcome.attempts,
-            sendFailures: alertOutcome.failures,
-            sendDeferrals: alertOutcome.deferrals,
-            events: directWebsiteProofEvaluation.events.length,
-            eventTypes: summarizeEventTypes(
-              directWebsiteProofEvaluation.events,
-            ),
-            scanStatus: "degraded",
-            scanErrorCode: errorCode,
-            scanErrorMessage: details,
-          },
-          errorCode: alertOutcome.errorCode,
-          errorMessage: alertOutcome.errorMessage,
+        options.orchestrationToken,
+        async () => {
+          const alertDelivery =
+            directWebsiteProofEvaluation.events.length > 0
+              ? await deliverWatchlistAlerts(env, {
+                  userId: watchlist.userId,
+                  userName: userDeliveryProfile?.name ?? null,
+                  accountEmail: userDeliveryProfile?.email ?? null,
+                  watchlist,
+                  events: directWebsiteProofEvaluation.events,
+                  lane: "customer",
+                })
+              : { attempts: 0, channels: [], details: [] };
+          const outcome = summarizeAlertDelivery(alertDelivery);
+          const alertDeliveryFailed = outcome.errorCode !== null;
+
+          await completeWatchlistRun(
+            env,
+            runId,
+            watchlist.id,
+            {
+              status: alertDeliveryFailed ? "failed" : "succeeded",
+              pagesScanned: 0,
+              summary: {
+                adsSeen: 0,
+                websiteProofUrl: directWebsiteProofEvaluation.websiteUrl,
+                candidatesDetected: directWebsiteProofEvaluation.candidateCount,
+                proofsAttempted: directWebsiteProofEvaluation.proofAttemptCount,
+                eventsConfirmed: directWebsiteProofEvaluation.confirmedEventCount,
+                sendsTriggered: outcome.accepted,
+                sendAttempts: outcome.attempts,
+                sendFailures: outcome.failures,
+                sendDeferrals: outcome.deferrals,
+                events: directWebsiteProofEvaluation.events.length,
+                eventTypes: summarizeEventTypes(
+                  directWebsiteProofEvaluation.events,
+                ),
+                scanStatus: "degraded",
+                scanErrorCode: errorCode,
+                scanErrorMessage: details,
+              },
+              errorCode: outcome.errorCode,
+              errorMessage: outcome.errorMessage,
+            },
+            options,
+          );
+          if (!options.orchestrationToken && !alertDeliveryFailed) {
+            await touchWatchlistScanned(env, watchlist.id);
+          }
+          await logMetaIntegrationStatus(env, {
+            status: "degraded",
+            summary:
+              alertDeliveryFailed
+                ? "Commercial discovery failed; direct website evidence completed, but customer alert delivery did not reach a confirmed successful outcome."
+                : "Commercial discovery failed, but direct website evidence still completed.",
+            errorCode,
+            errorMessage: details,
+            metadata: {
+              watchlistId: watchlist.id,
+              runId,
+              websiteProofUrl: directWebsiteProofEvaluation.websiteUrl,
+              alertDeliveryAttempts: outcome.attempts,
+              alertDeliveryAccepted: outcome.accepted,
+              alertDeliveryFailures: outcome.failures,
+              alertDeliveryDeferrals: outcome.deferrals,
+              alertDeliveryErrorCode: outcome.errorCode,
+            },
+          });
+          return outcome;
         },
-        options,
+        { finalizesRun: true },
       );
-      if (!options.orchestrationToken && !alertDeliveryFailed) {
-        await touchWatchlistScanned(env, watchlist.id);
-      }
-      await logMetaIntegrationStatus(env, {
-        status: "degraded",
-        summary:
-          alertDeliveryFailed
-            ? "Commercial discovery failed; direct website evidence completed, but customer alert delivery did not reach a confirmed successful outcome."
-            : "Commercial discovery failed, but direct website evidence still completed.",
-        errorCode,
-        errorMessage: details,
-        metadata: {
-          watchlistId: watchlist.id,
-          runId,
-          websiteProofUrl: directWebsiteProofEvaluation.websiteUrl,
-          alertDeliveryAttempts: alertOutcome.attempts,
-          alertDeliveryAccepted: alertOutcome.accepted,
-          alertDeliveryFailures: alertOutcome.failures,
-          alertDeliveryDeferrals: alertOutcome.deferrals,
-          alertDeliveryErrorCode: alertOutcome.errorCode,
-        },
-      });
 
       if (alertOutcome.errorCode !== null) {
         throw new RecordedAlertDeliveryOutcomeError(
@@ -2448,41 +2516,49 @@ export async function runWatchlist(
       return { runId, events: directWebsiteProofEvaluation.events.length };
     }
 
-    await completeWatchlistRun(
+    await withRunLease(
       env,
       runId,
-      watchlist.id,
-      {
-        status: "failed",
-        pagesScanned: 0,
-        summary: {
-          adsSeen: 0,
-          events: 0,
+      options.orchestrationToken,
+      async () => {
+        await completeWatchlistRun(
+        env,
+        runId,
+        watchlist.id,
+        {
+          status: "failed",
+          pagesScanned: 0,
+          summary: {
+            adsSeen: 0,
+            events: 0,
+          },
+          errorCode,
+          errorMessage: details,
         },
+        options,
+      );
+      await reportConsecutiveWatchlistFailure(env, {
+        watchlistId: watchlist.id,
+        watchlistName: watchlist.name,
+        runId,
+        triggerType,
+      });
+      await logMetaIntegrationStatus(env, {
+        status: "degraded",
+        summary:
+          error instanceof CommercialDiscoveryError
+            ? "Commercial discovery failed during monitoring."
+            : "A monitoring run failed and needs attention.",
         errorCode,
         errorMessage: details,
+        metadata: {
+          watchlistId: watchlist.id,
+          runId,
+        },
+      });
       },
-      options,
+      { finalizesRun: true },
     );
-    await reportConsecutiveWatchlistFailure(env, {
-      watchlistId: watchlist.id,
-      watchlistName: watchlist.name,
-      runId,
-      triggerType,
-    });
-    await logMetaIntegrationStatus(env, {
-      status: "degraded",
-      summary:
-        error instanceof CommercialDiscoveryError
-          ? "Commercial discovery failed during monitoring."
-          : "A monitoring run failed and needs attention.",
-      errorCode,
-      errorMessage: details,
-      metadata: {
-        watchlistId: watchlist.id,
-        runId,
-      },
-    });
     throw error;
   }
 }
@@ -3100,30 +3176,22 @@ async function persistCheapScanObservations(
   lease?: { runId: string; processingToken: string },
 ) {
   for (const ad of ads) {
-    await assertOrchestratedWatchlistRunLease(env, runId, {
-      orchestrationToken: lease?.processingToken,
-    });
-    const enrichedAd = await enrichAdForCheapScan(env, ad);
-    await assertOrchestratedWatchlistRunLease(env, runId, {
-      orchestrationToken: lease?.processingToken,
-    });
-    await upsertAd(env, enrichedAd);
-
-    await assertOrchestratedWatchlistRunLease(env, runId, {
-      orchestrationToken: lease?.processingToken,
-    });
-    await createAdObservation(env, {
-      adId: enrichedAd.metaAdId,
-      watchlistRunId: runId,
-      landingPageSnapshotId: null,
-      landingPageUrl: enrichedAd.landingPageUrl,
-      seenAt: new Date().toISOString(),
-      isActive: enrichedAd.active,
-      metadata: {
-        advertiser: enrichedAd.advertiser,
-        hook: enrichedAd.hook,
-        offer: enrichedAd.offer,
-      },
+    await withRunLease(env, runId, lease?.processingToken, async () => {
+      const enrichedAd = await enrichAdForCheapScan(env, ad);
+      await upsertAd(env, enrichedAd);
+      await createAdObservation(env, {
+        adId: enrichedAd.metaAdId,
+        watchlistRunId: runId,
+        landingPageSnapshotId: null,
+        landingPageUrl: enrichedAd.landingPageUrl,
+        seenAt: new Date().toISOString(),
+        isActive: enrichedAd.active,
+        metadata: {
+          advertiser: enrichedAd.advertiser,
+          hook: enrichedAd.hook,
+          offer: enrichedAd.offer,
+        },
+      });
     });
   }
 }
@@ -3147,59 +3215,61 @@ async function persistScanNativeEvents(
   );
 
   for (const draft of draftsToPersist) {
-    await assertOrchestratedWatchlistRunLease(env, runId, {
-      orchestrationToken: lease?.processingToken,
-    });
-    const importanceScore = getScanNativeImportanceScore(draft.eventType);
-    const candidateId = await createEventCandidate(env, {
-      watchlistId,
+    const eventId = await withRunLease(
+      env,
       runId,
-      eventType: draft.eventType,
-      status: "confirmed",
-      importanceScore,
-      adId: draft.adId,
-      title: draft.title,
-      summary: draft.summary,
-      metadata: draft.metadata,
-      proofRequired: false,
-      lastEvaluatedAt: new Date().toISOString(),
-    });
+      lease?.processingToken,
+      async () => {
+        const importanceScore = getScanNativeImportanceScore(draft.eventType);
+        const candidateId = await createEventCandidate(env, {
+          watchlistId,
+          runId,
+          eventType: draft.eventType,
+          status: "confirmed",
+          importanceScore,
+          adId: draft.adId,
+          title: draft.title,
+          summary: draft.summary,
+          metadata: draft.metadata,
+          proofRequired: false,
+          lastEvaluatedAt: new Date().toISOString(),
+        });
 
-    await assertOrchestratedWatchlistRunLease(env, runId, {
-      orchestrationToken: lease?.processingToken,
-    });
-    const eventId = await createWatchEvent(env, {
-      watchlistId,
-      runId,
-      eventType: draft.eventType,
-      adId: draft.adId,
-      baselineFromRunId,
-      candidateId,
-      importanceScore,
-      title: draft.title,
-      summary: draft.summary,
-      metadata: draft.metadata,
-    });
-    createdEvents.push({
-      id: eventId,
-      watchlistId,
-      runId,
-      eventType: draft.eventType,
-      status: "confirmed",
-      importanceScore,
-      adId: draft.adId,
-      baselineFromRunId,
-      candidateId,
-      proofCaptureId: null,
-      title: draft.title,
-      summary: draft.summary,
-      metadata: draft.metadata,
-      confirmedAt: null,
-      suppressedAt: null,
-      invalidatedAt: null,
-      lastEvaluatedAt: null,
-      createdAt: new Date().toISOString(),
-    });
+        const createdEventId = await createWatchEvent(env, {
+          watchlistId,
+          runId,
+          eventType: draft.eventType,
+          adId: draft.adId,
+          baselineFromRunId,
+          candidateId,
+          importanceScore,
+          title: draft.title,
+          summary: draft.summary,
+          metadata: draft.metadata,
+        });
+        createdEvents.push({
+          id: createdEventId,
+          watchlistId,
+          runId,
+          eventType: draft.eventType,
+          status: "confirmed",
+          importanceScore,
+          adId: draft.adId,
+          baselineFromRunId,
+          candidateId,
+          proofCaptureId: null,
+          title: draft.title,
+          summary: draft.summary,
+          metadata: draft.metadata,
+          confirmedAt: null,
+          suppressedAt: null,
+          invalidatedAt: null,
+          lastEvaluatedAt: null,
+          createdAt: new Date().toISOString(),
+        });
+        return createdEventId;
+      },
+    );
   }
 
   return createdEvents;
@@ -3352,16 +3422,19 @@ async function evaluateSelectiveProofCandidates(
       adId: observation.ad_id,
       canonicalPageIdentity,
     });
-    await assertOrchestratedWatchlistRunLease(env, input.runId, {
-      orchestrationToken: input.lease?.processingToken,
-    });
-    const proofTarget = await upsertProofTarget(env, {
-      watchlistId: input.watchlist.id,
-      adId: observation.ad_id,
-      landingPageUrl: observation.landing_page_url,
-      canonicalPageIdentity,
-      proofTargetIdentity,
-    });
+    const proofTarget = await withRunLease(
+      env,
+      input.runId,
+      input.lease?.processingToken,
+      async () =>
+        upsertProofTarget(env, {
+          watchlistId: input.watchlist.id,
+          adId: observation.ad_id,
+          landingPageUrl: observation.landing_page_url,
+          canonicalPageIdentity,
+          proofTargetIdentity,
+        }),
+    );
 
     if (!proofTarget) {
       continue;
@@ -3467,28 +3540,32 @@ async function evaluateSelectiveProofCandidates(
 
     if (!proofDecision.shouldCapture) {
       if (proofDecision.skipReason) {
-        await assertOrchestratedWatchlistRunLease(env, input.runId, {
-          orchestrationToken: input.lease?.processingToken,
-        });
-        await createProofCapture(env, {
-          proofTargetId: proofTarget.id,
-          status: proofDecision.skipReason,
-          skipReason: proofDecision.skipReason,
-          failureReason: "Evidence policy skipped the attempt.",
-          captureMetadata:
-            recentFailureCountForTarget >= 2
-              ? { unreadableReasonCode: "landing_capture_retry_cooldown" }
-              : undefined,
-          extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
-          idempotencyKey: `${proofRequestKey}:skip:${proofDecision.skipReason}`,
-          planAtCapture: userPlan,
-          captureDiagnostics: {
-            screenshotMissingReason:
-              proofDecision.skipReason === "skipped_due_to_budget"
-                ? "budget"
-                : "policy_skip",
-          },
-        });
+        const skipReason = proofDecision.skipReason;
+        await withRunLease(
+          env,
+          input.runId,
+          input.lease?.processingToken,
+          async () =>
+            createProofCapture(env, {
+              proofTargetId: proofTarget.id,
+              status: skipReason,
+              skipReason,
+              failureReason: "Evidence policy skipped the attempt.",
+              captureMetadata:
+                recentFailureCountForTarget >= 2
+                  ? { unreadableReasonCode: "landing_capture_retry_cooldown" }
+                  : undefined,
+              extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+              idempotencyKey: `${proofRequestKey}:skip:${skipReason}`,
+              planAtCapture: userPlan,
+              captureDiagnostics: {
+                screenshotMissingReason:
+                  skipReason === "skipped_due_to_budget"
+                    ? "budget"
+                    : "policy_skip",
+              },
+            }),
+        );
       }
       continue;
     }
@@ -3507,25 +3584,29 @@ async function evaluateSelectiveProofCandidates(
     });
 
     if (evidenceReservation && !evidenceReservation.result.ok) {
-      await assertOrchestratedWatchlistRunLease(env, input.runId, {
-        orchestrationToken: input.lease?.processingToken,
-      });
-      await createProofCapture(env, {
-        proofTargetId: proofTarget.id,
-        status: "skipped_due_to_budget",
-        skipReason: "skipped_due_to_budget",
-        failureReason:
-          evidenceReservation.result.reason === "top_up_inactive_plan"
-            ? "Purchased proof captures require an active paid plan."
-            : "Proof capture allowance exhausted.",
-        extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
-        idempotencyKey: `${proofRequestKey}:skip:budget`,
-        planAtCapture: userPlan,
-        captureDiagnostics: {
-          screenshotMissingReason: "budget",
-          budgetReason: evidenceReservation.result.reason,
-        },
-      });
+      const failedReservation = evidenceReservation.result;
+      await withRunLease(
+        env,
+        input.runId,
+        input.lease?.processingToken,
+        async () =>
+          createProofCapture(env, {
+            proofTargetId: proofTarget.id,
+            status: "skipped_due_to_budget",
+            skipReason: "skipped_due_to_budget",
+            failureReason:
+              failedReservation.reason === "top_up_inactive_plan"
+                ? "Purchased proof captures require an active paid plan."
+                : "Proof capture allowance exhausted.",
+            extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+            idempotencyKey: `${proofRequestKey}:skip:budget`,
+            planAtCapture: userPlan,
+            captureDiagnostics: {
+              screenshotMissingReason: "budget",
+              budgetReason: failedReservation.reason,
+            },
+          }),
+      );
       continue;
     }
 
@@ -3543,14 +3624,17 @@ async function evaluateSelectiveProofCandidates(
     let proofCaptureCommitted = false;
     const finalizeEvidence = async (outcome: "succeeded" | "failed") => {
       if (!evidenceOperationKey || evidenceFinalized) return true;
-      await assertOrchestratedWatchlistRunLease(env, input.runId, {
-        orchestrationToken: input.lease?.processingToken,
-      });
-      const finalized = await tryFinalizeEvidenceForProofCapture(
+      const finalized = await withRunLease(
         env,
-        evidenceOperationKey,
-        outcome,
-        input.lease,
+        input.runId,
+        input.lease?.processingToken,
+        async () =>
+          tryFinalizeEvidenceForProofCapture(
+            env,
+            evidenceOperationKey,
+            outcome,
+            input.lease,
+          ),
       );
       evidenceFinalized = finalized;
       return finalized;
@@ -3621,43 +3705,39 @@ async function evaluateSelectiveProofCandidates(
           failedClassification.status,
           failedClassification.reason,
         );
-        await assertOrchestratedWatchlistRunLease(env, input.runId, {
-          orchestrationToken: input.lease?.processingToken,
-        });
-        await createProofCapture(env, {
-          proofTargetId: proofTarget.id,
-          status: "failed",
-          failureCode:
-            failureDetail?.reasonCode ?? "proof_capture_failed",
-          failureReason: "Landing-page proof capture failed.",
-          captureMetadata: {
-            ...(failureDetail?.metadata ?? {}),
-            captureValidityStatus: failedClassification.status,
-            captureFailureReason: failedClassification.reason,
-            unreadableReasonCode: failureDetail?.reasonCode ?? "proof_capture_failed",
-          },
-          extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
-          idempotencyKey: proofRequestKey,
-          planAtCapture: userPlan,
-          captureDiagnostics: {
-            screenshotMissingReason:
+        await withRunLease(env, input.runId, input.lease?.processingToken, async () => {
+          await createProofCapture(env, {
+            proofTargetId: proofTarget.id,
+            status: "failed",
+            failureCode:
               failureDetail?.reasonCode ?? "proof_capture_failed",
-            captureValidityStatus: failedClassification.status,
-            ...(failureDetail?.metadata ?? {}),
-          },
-        });
-        await assertOrchestratedWatchlistRunLease(env, input.runId, {
-          orchestrationToken: input.lease?.processingToken,
-        });
-        await upsertProofTarget(env, {
-          watchlistId: input.watchlist.id,
-          adId: observation.ad_id,
-          landingPageUrl: observation.landing_page_url!,
-          canonicalPageIdentity,
-          proofTargetIdentity,
-          lastCaptureAttemptAt: new Date().toISOString(),
-          lastSuccessfulProofAt: proofTarget.lastSuccessfulProofAt,
-          lastSuccessfulCaptureId: proofTarget.lastSuccessfulCaptureId,
+            failureReason: "Landing-page proof capture failed.",
+            captureMetadata: {
+              ...(failureDetail?.metadata ?? {}),
+              captureValidityStatus: failedClassification.status,
+              captureFailureReason: failedClassification.reason,
+              unreadableReasonCode: failureDetail?.reasonCode ?? "proof_capture_failed",
+            },
+            extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+            idempotencyKey: proofRequestKey,
+            planAtCapture: userPlan,
+            captureDiagnostics: {
+              screenshotMissingReason:
+                failureDetail?.reasonCode ?? "proof_capture_failed",
+              captureValidityStatus: failedClassification.status,
+              ...(failureDetail?.metadata ?? {}),
+            },
+          });
+          await upsertProofTarget(env, {
+            watchlistId: input.watchlist.id,
+            adId: observation.ad_id,
+            landingPageUrl: observation.landing_page_url!,
+            canonicalPageIdentity,
+            proofTargetIdentity,
+            lastCaptureAttemptAt: new Date().toISOString(),
+            lastSuccessfulProofAt: proofTarget.lastSuccessfulProofAt,
+            lastSuccessfulCaptureId: proofTarget.lastSuccessfulCaptureId,
+          });
         });
         // Issue #949: the fetch bailed out — the diff stage never ran.
         recordDiffStage(pipelineCounters, {
@@ -3698,20 +3778,19 @@ async function evaluateSelectiveProofCandidates(
         adId: observation.ad_id,
         canonicalPageIdentity: finalCanonicalPageIdentity,
       });
-      await assertOrchestratedWatchlistRunLease(env, input.runId, {
-        orchestrationToken: input.lease?.processingToken,
-      });
-      const persistedProofTarget =
-        (await upsertProofTarget(env, {
-          watchlistId: input.watchlist.id,
-          adId: observation.ad_id,
-          landingPageUrl: snapshot.canonicalUrl,
-          canonicalPageIdentity: finalCanonicalPageIdentity,
-          proofTargetIdentity: finalProofTargetIdentity,
-        })) ?? proofTarget;
-      await assertOrchestratedWatchlistRunLease(env, input.runId, {
-        orchestrationToken: input.lease?.processingToken,
-      });
+      const persistedProofTarget = await withRunLease(
+        env,
+        input.runId,
+        input.lease?.processingToken,
+        async () =>
+          (await upsertProofTarget(env, {
+            watchlistId: input.watchlist.id,
+            adId: observation.ad_id,
+            landingPageUrl: snapshot.canonicalUrl,
+            canonicalPageIdentity: finalCanonicalPageIdentity,
+            proofTargetIdentity: finalProofTargetIdentity,
+          })) ?? proofTarget,
+      );
       // Persist a fresh capture as a versioned landing_page_snapshot row.
       // Replayed captures (freshSnapshot === null) reuse an existing proof
       // capture and must not append a duplicate snapshot row.
@@ -3761,57 +3840,62 @@ async function evaluateSelectiveProofCandidates(
         classification.reason,
       );
 
-      const proofCaptureId = await createProofCapture(env, {
-        proofTargetId: persistedProofTarget.id,
-        status: "succeeded",
-        screenshotArtifactKey: readSnapshotString(
-          snapshot.metadata,
-          "screenshotArtifactKey",
-        ),
-        htmlArtifactKey:
-          readSnapshotString(snapshot.metadata, "htmlArtifactKey") ??
-          snapshot.artifactKey ??
-          null,
-        extractedFields,
-        fieldConfidence,
-        extractionWarnings,
-        captureMetadata: {
-          ...(snapshot.metadata ?? {}),
-          ...(landingPageSnapshotId
-            ? { landingPageSnapshotId }
-            : {}),
-          captureValidityStatus: classification.status,
-          ...(classification.reason
-            ? { captureFailureReason: classification.reason }
-            : {}),
-        },
-        renderMode: readSnapshotRenderMode(snapshot),
-        deviceProfile: readSnapshotDeviceProfile(snapshot),
-        extractorVersion:
-          readSnapshotString(snapshot.metadata, "extractorVersion") ??
-          LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
-        idempotencyKey: proofRequestKey,
-        attemptedAt: snapshot.capturedAt,
-        succeededAt: snapshot.capturedAt,
-        planAtCapture: userPlan,
-      });
+      const proofCaptureId = await withRunLease(
+        env,
+        input.runId,
+        input.lease?.processingToken,
+        async () =>
+          createProofCapture(env, {
+            proofTargetId: persistedProofTarget.id,
+            status: "succeeded",
+            screenshotArtifactKey: readSnapshotString(
+              snapshot.metadata,
+              "screenshotArtifactKey",
+            ),
+            htmlArtifactKey:
+              readSnapshotString(snapshot.metadata, "htmlArtifactKey") ??
+              snapshot.artifactKey ??
+              null,
+            extractedFields,
+            fieldConfidence,
+            extractionWarnings,
+            captureMetadata: {
+              ...(snapshot.metadata ?? {}),
+              ...(landingPageSnapshotId
+                ? { landingPageSnapshotId }
+                : {}),
+              captureValidityStatus: classification.status,
+              ...(classification.reason
+                ? { captureFailureReason: classification.reason }
+                : {}),
+            },
+            renderMode: readSnapshotRenderMode(snapshot),
+            deviceProfile: readSnapshotDeviceProfile(snapshot),
+            extractorVersion:
+              readSnapshotString(snapshot.metadata, "extractorVersion") ??
+              LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+            idempotencyKey: proofRequestKey,
+            attemptedAt: snapshot.capturedAt,
+            succeededAt: snapshot.capturedAt,
+            planAtCapture: userPlan,
+          }),
+      );
       proofCaptureCommitted = true;
       if (!(await finalizeEvidence("succeeded"))) {
         preservePendingEvidenceReservation = true;
         throw new Error("evidence_usage_pending_reconciliation");
       }
-      await assertOrchestratedWatchlistRunLease(env, input.runId, {
-        orchestrationToken: input.lease?.processingToken,
-      });
-      await upsertProofTarget(env, {
-        watchlistId: input.watchlist.id,
-        adId: observation.ad_id,
-        landingPageUrl: snapshot.canonicalUrl,
-        canonicalPageIdentity: finalCanonicalPageIdentity,
-        proofTargetIdentity: finalProofTargetIdentity,
-        lastCaptureAttemptAt: snapshot.capturedAt,
-        lastSuccessfulProofAt: snapshot.capturedAt,
-        lastSuccessfulCaptureId: proofCaptureId,
+      await withRunLease(env, input.runId, input.lease?.processingToken, async () => {
+        await upsertProofTarget(env, {
+          watchlistId: input.watchlist.id,
+          adId: observation.ad_id,
+          landingPageUrl: snapshot.canonicalUrl,
+          canonicalPageIdentity: finalCanonicalPageIdentity,
+          proofTargetIdentity: finalProofTargetIdentity,
+          lastCaptureAttemptAt: snapshot.capturedAt,
+          lastSuccessfulProofAt: snapshot.capturedAt,
+          lastSuccessfulCaptureId: proofCaptureId,
+        });
       });
 
       // Issue #949: record the diff-stage outcome and per-field bail
@@ -3823,49 +3907,55 @@ async function evaluateSelectiveProofCandidates(
       );
 
       for (const event of classification.events) {
-        await assertOrchestratedWatchlistRunLease(env, input.runId, {
-          orchestrationToken: input.lease?.processingToken,
-        });
-        const candidateId = await createEventCandidate(env, {
-          watchlistId: input.watchlist.id,
-          runId: input.runId,
-          eventType: event.eventType,
-          status: event.status,
-          importanceScore: event.importanceScore,
-          adId: observation.ad_id,
-          proofTargetId: persistedProofTarget.id,
-          title: event.title,
-          summary: event.summary,
-          metadata: event.metadata,
-          proofRequired: true,
-          dedupeReason: event.dedupeReason,
-          lastEvaluatedAt: snapshot.capturedAt,
-        });
+        const candidateId = await withRunLease(
+          env,
+          input.runId,
+          input.lease?.processingToken,
+          async () =>
+            createEventCandidate(env, {
+              watchlistId: input.watchlist.id,
+              runId: input.runId,
+              eventType: event.eventType,
+              status: event.status,
+              importanceScore: event.importanceScore,
+              adId: observation.ad_id,
+              proofTargetId: persistedProofTarget.id,
+              title: event.title,
+              summary: event.summary,
+              metadata: event.metadata,
+              proofRequired: true,
+              dedupeReason: event.dedupeReason,
+              lastEvaluatedAt: snapshot.capturedAt,
+            }),
+        );
         candidateCount += 1;
 
         if (event.status !== "confirmed") {
           continue;
         }
 
-        await assertOrchestratedWatchlistRunLease(env, input.runId, {
-          orchestrationToken: input.lease?.processingToken,
-        });
-        const eventId = await createWatchEvent(env, {
-          watchlistId: input.watchlist.id,
-          runId: input.runId,
-          eventType: event.eventType,
-          status: "confirmed",
-          importanceScore: event.importanceScore,
-          adId: observation.ad_id,
-          baselineFromRunId: null,
-          candidateId,
-          proofCaptureId,
-          title: event.title,
-          summary: event.summary,
-          metadata: event.metadata,
-          confirmedAt: snapshot.capturedAt,
-          lastEvaluatedAt: snapshot.capturedAt,
-        });
+        const eventId = await withRunLease(
+          env,
+          input.runId,
+          input.lease?.processingToken,
+          async () =>
+            createWatchEvent(env, {
+              watchlistId: input.watchlist.id,
+              runId: input.runId,
+              eventType: event.eventType,
+              status: "confirmed",
+              importanceScore: event.importanceScore,
+              adId: observation.ad_id,
+              baselineFromRunId: null,
+              candidateId,
+              proofCaptureId,
+              title: event.title,
+              summary: event.summary,
+              metadata: event.metadata,
+              confirmedAt: snapshot.capturedAt,
+              lastEvaluatedAt: snapshot.capturedAt,
+            }),
+        );
         confirmedEventCount += 1;
 
         const createdEvent = {
@@ -3903,9 +3993,6 @@ async function evaluateSelectiveProofCandidates(
           });
       }
       if (!preservePendingEvidenceReservation) {
-        await assertOrchestratedWatchlistRunLease(env, input.runId, {
-          orchestrationToken: input.lease?.processingToken,
-        });
         await finalizeEvidence("failed");
       }
       throw error;
@@ -3985,16 +4072,19 @@ async function evaluateDirectWebsiteProofCandidate(
     adId: null,
     canonicalPageIdentity,
   });
-  await assertOrchestratedWatchlistRunLease(env, input.runId, {
-    orchestrationToken: input.lease?.processingToken,
-  });
-  const proofTarget = await upsertProofTarget(env, {
-    watchlistId: input.watchlist.id,
-    adId: null,
-    landingPageUrl: websiteUrl,
-    canonicalPageIdentity,
-    proofTargetIdentity,
-  });
+  const proofTarget = await withRunLease(
+    env,
+    input.runId,
+    input.lease?.processingToken,
+    async () =>
+      upsertProofTarget(env, {
+        watchlistId: input.watchlist.id,
+        adId: null,
+        landingPageUrl: websiteUrl,
+        canonicalPageIdentity,
+        proofTargetIdentity,
+      }),
+  );
 
   if (!proofTarget) {
     return emptyProofEvaluation(websiteUrl);
@@ -4048,19 +4138,22 @@ async function evaluateDirectWebsiteProofCandidate(
   }
 
   if (proofRequestDuplicate) {
-    await assertOrchestratedWatchlistRunLease(env, input.runId, {
-      orchestrationToken: input.lease?.processingToken,
-    });
-    await createProofCapture(env, {
-      proofTargetId: proofTarget.id,
-      status: "skipped_due_to_dedupe",
-      skipReason: "skipped_due_to_dedupe",
-      failureReason: "Direct website evidence was already requested recently.",
-      extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
-      idempotencyKey: `${proofRequestKey}:skip:dedupe`,
-      planAtCapture: userPlan,
-      captureDiagnostics: { screenshotMissingReason: "dedupe" },
-    });
+    await withRunLease(
+      env,
+      input.runId,
+      input.lease?.processingToken,
+      async () =>
+        createProofCapture(env, {
+          proofTargetId: proofTarget.id,
+          status: "skipped_due_to_dedupe",
+          skipReason: "skipped_due_to_dedupe",
+          failureReason: "Direct website evidence was already requested recently.",
+          extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+          idempotencyKey: `${proofRequestKey}:skip:dedupe`,
+          planAtCapture: userPlan,
+          captureDiagnostics: { screenshotMissingReason: "dedupe" },
+        }),
+    );
     return emptyProofEvaluation(websiteUrl);
   }
 
@@ -4068,22 +4161,25 @@ async function evaluateDirectWebsiteProofCandidate(
   // are budget, same as the ad-proof path (#1184). Do not return empty
   // before createProofCapture — that swallows the skip from the evidence card.
   if (recentFailureCountForTarget >= 2) {
-    await assertOrchestratedWatchlistRunLease(env, input.runId, {
-      orchestrationToken: input.lease?.processingToken,
-    });
-    await createProofCapture(env, {
-      proofTargetId: proofTarget.id,
-      status: "skipped_due_to_rate_limit",
-      skipReason: "skipped_due_to_rate_limit",
-      failureReason: "Direct website evidence policy skipped the attempt.",
-      captureMetadata: {
-        unreadableReasonCode: "landing_capture_retry_cooldown",
-      },
-      extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
-      idempotencyKey: `${proofRequestKey}:skip:rate-limit`,
-      planAtCapture: userPlan,
-      captureDiagnostics: { screenshotMissingReason: "rate_limit" },
-    });
+    await withRunLease(
+      env,
+      input.runId,
+      input.lease?.processingToken,
+      async () =>
+        createProofCapture(env, {
+          proofTargetId: proofTarget.id,
+          status: "skipped_due_to_rate_limit",
+          skipReason: "skipped_due_to_rate_limit",
+          failureReason: "Direct website evidence policy skipped the attempt.",
+          captureMetadata: {
+            unreadableReasonCode: "landing_capture_retry_cooldown",
+          },
+          extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+          idempotencyKey: `${proofRequestKey}:skip:rate-limit`,
+          planAtCapture: userPlan,
+          captureDiagnostics: { screenshotMissingReason: "rate_limit" },
+        }),
+    );
     return emptyProofEvaluation(websiteUrl);
   }
 
@@ -4099,19 +4195,22 @@ async function evaluateDirectWebsiteProofCandidate(
       workspaceMonthlyRemaining: capacity.workspaceMonthlyRemaining,
     })
   ) {
-    await assertOrchestratedWatchlistRunLease(env, input.runId, {
-      orchestrationToken: input.lease?.processingToken,
-    });
-    await createProofCapture(env, {
-      proofTargetId: proofTarget.id,
-      status: "skipped_due_to_budget",
-      skipReason: "skipped_due_to_budget",
-      failureReason: "Proof capture allowance exhausted.",
-      extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
-      idempotencyKey: `${proofRequestKey}:skip:budget`,
-      planAtCapture: userPlan,
-      captureDiagnostics: { screenshotMissingReason: "budget" },
-    });
+    await withRunLease(
+      env,
+      input.runId,
+      input.lease?.processingToken,
+      async () =>
+        createProofCapture(env, {
+          proofTargetId: proofTarget.id,
+          status: "skipped_due_to_budget",
+          skipReason: "skipped_due_to_budget",
+          failureReason: "Proof capture allowance exhausted.",
+          extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+          idempotencyKey: `${proofRequestKey}:skip:budget`,
+          planAtCapture: userPlan,
+          captureDiagnostics: { screenshotMissingReason: "budget" },
+        }),
+    );
     return emptyProofEvaluation(websiteUrl);
   }
 
@@ -4124,25 +4223,29 @@ async function evaluateDirectWebsiteProofCandidate(
   });
 
   if (evidenceReservation && !evidenceReservation.result.ok) {
-    await assertOrchestratedWatchlistRunLease(env, input.runId, {
-      orchestrationToken: input.lease?.processingToken,
-    });
-    await createProofCapture(env, {
-      proofTargetId: proofTarget.id,
-      status: "skipped_due_to_budget",
-      skipReason: "skipped_due_to_budget",
-      failureReason:
-        evidenceReservation.result.reason === "top_up_inactive_plan"
-          ? "Purchased proof captures require an active paid plan."
-          : "Proof capture allowance exhausted.",
-      extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
-      idempotencyKey: `${proofRequestKey}:skip:budget`,
-      planAtCapture: userPlan,
-      captureDiagnostics: {
-        screenshotMissingReason: "budget",
-        budgetReason: evidenceReservation.result.reason,
-      },
-    });
+    const failedReservation = evidenceReservation.result;
+    await withRunLease(
+      env,
+      input.runId,
+      input.lease?.processingToken,
+      async () =>
+        createProofCapture(env, {
+          proofTargetId: proofTarget.id,
+          status: "skipped_due_to_budget",
+          skipReason: "skipped_due_to_budget",
+          failureReason:
+            failedReservation.reason === "top_up_inactive_plan"
+              ? "Purchased proof captures require an active paid plan."
+              : "Proof capture allowance exhausted.",
+          extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+          idempotencyKey: `${proofRequestKey}:skip:budget`,
+          planAtCapture: userPlan,
+          captureDiagnostics: {
+            screenshotMissingReason: "budget",
+            budgetReason: failedReservation.reason,
+          },
+        }),
+    );
     return emptyProofEvaluation(websiteUrl);
   }
 
@@ -4155,14 +4258,17 @@ async function evaluateDirectWebsiteProofCandidate(
   let proofCaptureCommitted = false;
   const finalizeEvidence = async (outcome: "succeeded" | "failed") => {
     if (!evidenceOperationKey || evidenceFinalized) return true;
-    await assertOrchestratedWatchlistRunLease(env, input.runId, {
-      orchestrationToken: input.lease?.processingToken,
-    });
-    const finalized = await tryFinalizeEvidenceForProofCapture(
+    const finalized = await withRunLease(
       env,
-      evidenceOperationKey,
-      outcome,
-      input.lease,
+      input.runId,
+      input.lease?.processingToken,
+      async () =>
+        tryFinalizeEvidenceForProofCapture(
+          env,
+          evidenceOperationKey,
+          outcome,
+          input.lease,
+        ),
     );
     evidenceFinalized = finalized;
     return finalized;
@@ -4224,36 +4330,35 @@ async function evaluateDirectWebsiteProofCandidate(
         failedClassification.status,
         failedClassification.reason,
       );
-      await assertOrchestratedWatchlistRunLease(env, input.runId, {
-        orchestrationToken: input.lease?.processingToken,
-      });
-      await createProofCapture(env, {
-        proofTargetId: proofTarget.id,
-        status: "failed",
-        failureCode:
-          failureDetail?.reasonCode ??
-          "direct_website_proof_capture_failed",
-        failureReason: "Competitor website proof capture failed.",
-        captureMetadata: {
-          ...(failureDetail?.metadata ?? {}),
-          source: "direct_competitor_website",
-          watchlistTargetId: input.watchlist.targetId,
-          captureValidityStatus: failedClassification.status,
-          captureFailureReason: failedClassification.reason,
-          unreadableReasonCode:
+      await withRunLease(env, input.runId, input.lease?.processingToken, async () => {
+        await createProofCapture(env, {
+          proofTargetId: proofTarget.id,
+          status: "failed",
+          failureCode:
             failureDetail?.reasonCode ??
             "direct_website_proof_capture_failed",
-        },
-        extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
-        idempotencyKey: proofRequestKey,
-        planAtCapture: userPlan,
-        captureDiagnostics: {
-          screenshotMissingReason:
-            failureDetail?.reasonCode ??
-            "direct_website_proof_capture_failed",
-          captureValidityStatus: failedClassification.status,
-          ...(failureDetail?.metadata ?? {}),
-        },
+          failureReason: "Competitor website proof capture failed.",
+          captureMetadata: {
+            ...(failureDetail?.metadata ?? {}),
+            source: "direct_competitor_website",
+            watchlistTargetId: input.watchlist.targetId,
+            captureValidityStatus: failedClassification.status,
+            captureFailureReason: failedClassification.reason,
+            unreadableReasonCode:
+              failureDetail?.reasonCode ??
+              "direct_website_proof_capture_failed",
+          },
+          extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+          idempotencyKey: proofRequestKey,
+          planAtCapture: userPlan,
+          captureDiagnostics: {
+            screenshotMissingReason:
+              failureDetail?.reasonCode ??
+              "direct_website_proof_capture_failed",
+            captureValidityStatus: failedClassification.status,
+            ...(failureDetail?.metadata ?? {}),
+          },
+        });
       });
       // Issue #949: the fetch bailed out — the diff stage never ran.
       recordDiffStage(pipelineCounters, {
@@ -4293,145 +4398,158 @@ async function evaluateDirectWebsiteProofCandidate(
       adId: null,
       canonicalPageIdentity: finalCanonicalPageIdentity,
     });
-    await assertOrchestratedWatchlistRunLease(env, input.runId, {
-      orchestrationToken: input.lease?.processingToken,
-    });
-    const persistedProofTarget =
-      (await upsertProofTarget(env, {
+    const {
+      persistedProofTarget,
+      proofCaptureId,
+      finalLastSuccessfulProof,
+      directWebsiteClassification,
+    } = await withRunLease(
+      env,
+      input.runId,
+      input.lease?.processingToken,
+      async () => {
+        const persisted =
+          (await upsertProofTarget(env, {
+            watchlistId: input.watchlist.id,
+            adId: null,
+            landingPageUrl: snapshot.canonicalUrl,
+            canonicalPageIdentity: finalCanonicalPageIdentity,
+            proofTargetIdentity: finalProofTargetIdentity,
+            lastCaptureAttemptAt: snapshot.capturedAt,
+          })) ?? proofTarget;
+        const finalTargetCaptures = await listProofCapturesForTarget(
+          env,
+          persisted.id,
+          20,
+        );
+        const finalProofRequestKey = [
+          buildProofCaptureRequestIdempotencyKey({
+            watchlistId: input.watchlist.id,
+            adId: null,
+            landingPageUrl: snapshot.canonicalUrl,
+            eventType: "landing_page_offer_changed",
+          }),
+          input.runId,
+        ].join(":");
+        const lastProof =
+          selectLastSuccessfulProofCapture(
+            finalTargetCaptures.filter(
+              (capture) => capture.idempotencyKey !== finalProofRequestKey,
+            ),
+          ) ?? lastSuccessfulProof;
+        // Persist a fresh capture as a versioned landing_page_snapshot row.
+        // Replayed captures (freshSnapshot === null) reuse an existing proof
+        // capture and must not append a duplicate snapshot row.
+        const landingPageSnapshotId = freshSnapshot
+          ? await persistLandingPageSnapshotRow(env, freshSnapshot)
+          : null;
+
+        const directWebsiteCurrentProof = {
+          rawHeadline: snapshot.rawHeadline,
+          normalizedHeadline: snapshot.normalizedHeadline,
+          normalizedHeadlineHash: snapshot.normalizedHeadlineHash,
+          ctaText: snapshot.ctaText ?? null,
+          priceText: snapshot.priceText ?? null,
+          formPresent: snapshot.formPresent ?? null,
+          extractorVersion:
+            readSnapshotString(snapshot.metadata, "extractorVersion") ??
+            LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+          ...extractorFingerprintsFromSnapshot(snapshot),
+        };
+
+        const classification = classifyCaptureValidity({
+          snapshot,
+          failureDetail: null,
+          currentProof: directWebsiteCurrentProof,
+          lastSuccessfulProof: lastProof,
+          recentWatchEvents: input.recentWatchEvents,
+          proofTargetIdentity: finalProofTargetIdentity,
+          sensitivityMode: "balanced",
+          burstCount: 1,
+          currentCapturedAt: snapshot.capturedAt,
+          screenshotCorroborates:
+            readSnapshotBoolean(snapshot.metadata, "screenshotCorroborates") ??
+            false,
+        });
+        // Issue #1565: record the capture-validity gate outcome for the
+        // direct-website path. This branch always has a snapshot, so the gate
+        // passed (succeeded or suppressed).
+        recordValidityStage(
+          pipelineCounters,
+          classification.status,
+          classification.reason,
+        );
+
+        const captureId = await createProofCapture(env, {
+          proofTargetId: persisted.id,
+          status: "succeeded",
+          screenshotArtifactKey: readSnapshotString(
+            snapshot.metadata,
+            "screenshotArtifactKey",
+          ),
+          htmlArtifactKey:
+            readSnapshotString(snapshot.metadata, "htmlArtifactKey") ??
+            snapshot.artifactKey ??
+            null,
+          extractedFields,
+          fieldConfidence: readSnapshotConfidence(snapshot),
+          extractionWarnings: readSnapshotWarnings(snapshot),
+          captureMetadata: {
+            ...(snapshot.metadata ?? {}),
+            source: "direct_competitor_website",
+            watchlistTargetId: input.watchlist.targetId,
+            ...(landingPageSnapshotId ? { landingPageSnapshotId } : {}),
+            captureValidityStatus: classification.status,
+            ...(classification.reason
+              ? { captureFailureReason: classification.reason }
+              : {}),
+          },
+          renderMode: readSnapshotRenderMode(snapshot),
+          deviceProfile: readSnapshotDeviceProfile(snapshot),
+          extractorVersion:
+            readSnapshotString(snapshot.metadata, "extractorVersion") ??
+            LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+          idempotencyKey: finalProofRequestKey,
+          attemptedAt: snapshot.capturedAt,
+          succeededAt: snapshot.capturedAt,
+          planAtCapture: userPlan,
+        });
+        proofCaptureCommitted = true;
+        return {
+          persistedProofTarget: persisted,
+          proofCaptureId: captureId,
+          finalLastSuccessfulProof: lastProof,
+          directWebsiteClassification: classification,
+        };
+      },
+    );
+    if (!(await finalizeEvidence("succeeded"))) {
+      preservePendingEvidenceReservation = true;
+      throw new Error("evidence_usage_pending_reconciliation");
+    }
+    await withRunLease(env, input.runId, input.lease?.processingToken, async () => {
+      await upsertProofTarget(env, {
         watchlistId: input.watchlist.id,
         adId: null,
         landingPageUrl: snapshot.canonicalUrl,
         canonicalPageIdentity: finalCanonicalPageIdentity,
         proofTargetIdentity: finalProofTargetIdentity,
         lastCaptureAttemptAt: snapshot.capturedAt,
-      })) ?? proofTarget;
-    const finalTargetCaptures = await listProofCapturesForTarget(
-      env,
-      persistedProofTarget.id,
-      20,
-    );
-    const finalProofRequestKey = [
-      buildProofCaptureRequestIdempotencyKey({
-        watchlistId: input.watchlist.id,
-        adId: null,
-        landingPageUrl: snapshot.canonicalUrl,
-        eventType: "landing_page_offer_changed",
-      }),
-      input.runId,
-    ].join(":");
-    const finalLastSuccessfulProof =
-      selectLastSuccessfulProofCapture(
-        finalTargetCaptures.filter(
-          (capture) => capture.idempotencyKey !== finalProofRequestKey,
-        ),
-      ) ?? lastSuccessfulProof;
-    // Persist a fresh capture as a versioned landing_page_snapshot row.
-    // Replayed captures (freshSnapshot === null) reuse an existing proof
-    // capture and must not append a duplicate snapshot row.
-    const landingPageSnapshotId = freshSnapshot
-      ? await persistLandingPageSnapshotRow(env, freshSnapshot)
-      : null;
-
-    const directWebsiteCurrentProof = {
-      rawHeadline: snapshot.rawHeadline,
-      normalizedHeadline: snapshot.normalizedHeadline,
-      normalizedHeadlineHash: snapshot.normalizedHeadlineHash,
-      ctaText: snapshot.ctaText ?? null,
-      priceText: snapshot.priceText ?? null,
-      formPresent: snapshot.formPresent ?? null,
-      extractorVersion:
-        readSnapshotString(snapshot.metadata, "extractorVersion") ??
-        LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
-      ...extractorFingerprintsFromSnapshot(snapshot),
-    };
-
-    const directWebsiteClassification = classifyCaptureValidity({
-      snapshot,
-      failureDetail: null,
-      currentProof: directWebsiteCurrentProof,
-      lastSuccessfulProof: finalLastSuccessfulProof,
-      recentWatchEvents: input.recentWatchEvents,
-      proofTargetIdentity: finalProofTargetIdentity,
-      sensitivityMode: "balanced",
-      burstCount: 1,
-      currentCapturedAt: snapshot.capturedAt,
-      screenshotCorroborates:
-        readSnapshotBoolean(snapshot.metadata, "screenshotCorroborates") ??
-        false,
-    });
-    // Issue #1565: record the capture-validity gate outcome for the
-    // direct-website path. This branch always has a snapshot, so the gate
-    // passed (succeeded or suppressed).
-    recordValidityStage(
-      pipelineCounters,
-      directWebsiteClassification.status,
-      directWebsiteClassification.reason,
-    );
-
-    const proofCaptureId = await createProofCapture(env, {
-      proofTargetId: persistedProofTarget.id,
-      status: "succeeded",
-      screenshotArtifactKey: readSnapshotString(
-        snapshot.metadata,
-        "screenshotArtifactKey",
-      ),
-      htmlArtifactKey:
-        readSnapshotString(snapshot.metadata, "htmlArtifactKey") ??
-        snapshot.artifactKey ??
-        null,
-      extractedFields,
-      fieldConfidence: readSnapshotConfidence(snapshot),
-      extractionWarnings: readSnapshotWarnings(snapshot),
-      captureMetadata: {
-        ...(snapshot.metadata ?? {}),
-        source: "direct_competitor_website",
-        watchlistTargetId: input.watchlist.targetId,
-        ...(landingPageSnapshotId ? { landingPageSnapshotId } : {}),
-        captureValidityStatus: directWebsiteClassification.status,
-        ...(directWebsiteClassification.reason
-          ? { captureFailureReason: directWebsiteClassification.reason }
-          : {}),
-      },
-      renderMode: readSnapshotRenderMode(snapshot),
-      deviceProfile: readSnapshotDeviceProfile(snapshot),
-      extractorVersion:
-        readSnapshotString(snapshot.metadata, "extractorVersion") ??
-        LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
-      idempotencyKey: finalProofRequestKey,
-      attemptedAt: snapshot.capturedAt,
-      succeededAt: snapshot.capturedAt,
-      planAtCapture: userPlan,
-    });
-    proofCaptureCommitted = true;
-    if (!(await finalizeEvidence("succeeded"))) {
-      preservePendingEvidenceReservation = true;
-      throw new Error("evidence_usage_pending_reconciliation");
-    }
-    await assertOrchestratedWatchlistRunLease(env, input.runId, {
-      orchestrationToken: input.lease?.processingToken,
-    });
-    await upsertProofTarget(env, {
-      watchlistId: input.watchlist.id,
-      adId: null,
-      landingPageUrl: snapshot.canonicalUrl,
-      canonicalPageIdentity: finalCanonicalPageIdentity,
-      proofTargetIdentity: finalProofTargetIdentity,
-      lastCaptureAttemptAt: snapshot.capturedAt,
-      lastSuccessfulProofAt: snapshot.capturedAt,
-      lastSuccessfulCaptureId: proofCaptureId,
+        lastSuccessfulProofAt: snapshot.capturedAt,
+        lastSuccessfulCaptureId: proofCaptureId,
+      });
     });
     if (finalProofTargetIdentity !== proofTargetIdentity) {
-      await assertOrchestratedWatchlistRunLease(env, input.runId, {
-        orchestrationToken: input.lease?.processingToken,
-      });
-      await upsertProofTarget(env, {
-        watchlistId: input.watchlist.id,
-        adId: null,
-        landingPageUrl: websiteUrl,
-        canonicalPageIdentity,
-        proofTargetIdentity,
-        lastCaptureAttemptAt: snapshot.capturedAt,
-        lastSuccessfulProofAt: snapshot.capturedAt,
+      await withRunLease(env, input.runId, input.lease?.processingToken, async () => {
+        await upsertProofTarget(env, {
+          watchlistId: input.watchlist.id,
+          adId: null,
+          landingPageUrl: websiteUrl,
+          canonicalPageIdentity,
+          proofTargetIdentity,
+          lastCaptureAttemptAt: snapshot.capturedAt,
+          lastSuccessfulProofAt: snapshot.capturedAt,
+        });
       });
     }
 
@@ -4447,57 +4565,63 @@ async function evaluateDirectWebsiteProofCandidate(
     let confirmedEventCount = 0;
 
     for (const event of directWebsiteClassification.events) {
-      await assertOrchestratedWatchlistRunLease(env, input.runId, {
-        orchestrationToken: input.lease?.processingToken,
-      });
-      const candidateId = await createEventCandidate(env, {
-        watchlistId: input.watchlist.id,
-        runId: input.runId,
-        eventType: event.eventType,
-        status: event.status,
-        importanceScore: event.importanceScore,
-        adId: null,
-        proofTargetId: persistedProofTarget.id,
-        title: event.title,
-        summary: event.summary,
-        metadata: {
-          ...event.metadata,
-          source: "direct_competitor_website",
-          websiteUrl: snapshot.canonicalUrl,
-        },
-        proofRequired: true,
-        dedupeReason: event.dedupeReason,
-        lastEvaluatedAt: snapshot.capturedAt,
-      });
+      const candidateId = await withRunLease(
+        env,
+        input.runId,
+        input.lease?.processingToken,
+        async () =>
+          createEventCandidate(env, {
+            watchlistId: input.watchlist.id,
+            runId: input.runId,
+            eventType: event.eventType,
+            status: event.status,
+            importanceScore: event.importanceScore,
+            adId: null,
+            proofTargetId: persistedProofTarget.id,
+            title: event.title,
+            summary: event.summary,
+            metadata: {
+              ...event.metadata,
+              source: "direct_competitor_website",
+              websiteUrl: snapshot.canonicalUrl,
+            },
+            proofRequired: true,
+            dedupeReason: event.dedupeReason,
+            lastEvaluatedAt: snapshot.capturedAt,
+          }),
+      );
       candidateCount += 1;
 
       if (event.status !== "confirmed") {
         continue;
       }
 
-      await assertOrchestratedWatchlistRunLease(env, input.runId, {
-        orchestrationToken: input.lease?.processingToken,
-      });
-      const eventId = await createWatchEvent(env, {
-        watchlistId: input.watchlist.id,
-        runId: input.runId,
-        eventType: event.eventType,
-        status: "confirmed",
-        importanceScore: event.importanceScore,
-        adId: null,
-        baselineFromRunId: null,
-        candidateId,
-        proofCaptureId,
-        title: event.title,
-        summary: event.summary,
-        metadata: {
-          ...event.metadata,
-          source: "direct_competitor_website",
-          websiteUrl: snapshot.canonicalUrl,
-        },
-        confirmedAt: snapshot.capturedAt,
-        lastEvaluatedAt: snapshot.capturedAt,
-      });
+      const eventId = await withRunLease(
+        env,
+        input.runId,
+        input.lease?.processingToken,
+        async () =>
+          createWatchEvent(env, {
+            watchlistId: input.watchlist.id,
+            runId: input.runId,
+            eventType: event.eventType,
+            status: "confirmed",
+            importanceScore: event.importanceScore,
+            adId: null,
+            baselineFromRunId: null,
+            candidateId,
+            proofCaptureId,
+            title: event.title,
+            summary: event.summary,
+            metadata: {
+              ...event.metadata,
+              source: "direct_competitor_website",
+              websiteUrl: snapshot.canonicalUrl,
+            },
+            confirmedAt: snapshot.capturedAt,
+            lastEvaluatedAt: snapshot.capturedAt,
+          }),
+      );
       confirmedEventCount += 1;
 
       proofEvents.push({
@@ -4546,9 +4670,6 @@ async function evaluateDirectWebsiteProofCandidate(
         });
     }
     if (!preservePendingEvidenceReservation) {
-      await assertOrchestratedWatchlistRunLease(env, input.runId, {
-        orchestrationToken: input.lease?.processingToken,
-      });
       await finalizeEvidence("failed");
     }
     throw error;
