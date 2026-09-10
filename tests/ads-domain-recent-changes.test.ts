@@ -434,7 +434,7 @@ function populated(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoade
     brandName: "Nykaa",
     hasCachedAds: true,
     ads: [baseAd],
-    verifiedLinkedAds: [baseAd],
+    verifiedLinkedIds: [baseAd.metaAdId],
     checkedAgo: "about 2 hours ago",
     lastCheckedAt: "2026-09-09T10:00:00.000Z",
     freshForLiveClaim: false,

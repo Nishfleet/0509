@@ -18,7 +18,15 @@ export function BrandTicker({
   fresh,
   now = new Date(),
 }: {
-  ads: AdRecord[];
+  /**
+   * The cached creatives the ticker reads from. The loader ships only the
+   * projection the page renders (issue #2391), so the prop names exactly the
+   * fields this component uses instead of a full `AdRecord`.
+   */
+  ads: Pick<
+    AdRecord,
+    "metaAdId" | "previewHeadline" | "hook" | "source" | "firstSeenAt" | "lastSeenAt"
+  >[];
   brandName: string;
   fresh: boolean;
   now?: Date;
@@ -63,7 +71,11 @@ export function BrandTicker({
   );
 }
 
-function tickerTime(ad: AdRecord, now: Date, fresh: boolean): string {
+function tickerTime(
+  ad: Pick<AdRecord, "firstSeenAt" | "lastSeenAt">,
+  now: Date,
+  fresh: boolean,
+): string {
   const days = adLongevityDays(ad, now);
   if (days === null) return fresh ? "live" : "on record";
   if (days < 1) return "new";

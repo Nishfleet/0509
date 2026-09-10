@@ -106,20 +106,60 @@ import { SUPPORT_EMAIL } from "~/lib/support";
 import type { AdRecord } from "~/lib/types";
 import type { BrandPageSourceSnapshot } from "~/components/brand-page/source-snapshots.server";
 
+/**
+ * The hydrated projection of one cached creative — the wall, the ticker and
+ * the stat line (issue #2391).
+ *
+ * Every field here is read by a component that receives `ads`: BrandAdWall
+ * (plus AdCreative, AdLongevityPill and the ad-display / landing-page-display
+ * helpers they call), BrandTicker, and the stat line's split-testing count.
+ * Nothing else about a creative reaches the browser — see
+ * `projectBrandPageAd` for the audit that cleared the dropped fields.
+ */
+export type BrandPageAd = Pick<
+  AdRecord,
+  | "metaAdId"
+  | "advertiser"
+  | "previewHeadline"
+  | "hook"
+  | "cta"
+  | "format"
+  | "landingPageUrl"
+  | "firstSeenAt"
+  | "lastSeenAt"
+  | "activeStatusObserved"
+  | "source"
+  | "variantCount"
+  | "creativeImageUrl"
+  | "linkVerifiedDomain"
+>;
+
 export interface BrandPageLoaderData {
   domain: string;
   brandName: string;
   hasCachedAds: boolean;
-  ads: AdRecord[];
   /**
-   * The subset of `ads` that carry VERIFIED link evidence to the domain
-   * (landing-page or advertiser-domain match). Attribution copy, the stat
-   * line, and analytics are built ONLY from this subset — creatives that
-   * merely match the search text are rendered but never described as linking.
-   * Computed in the loader so the client bundle never touches the server-only
-   * evidence module.
+   * The wall: every cached creative, each carrying its own verified-link
+   * signal, projected to the fields the page renders (`BrandPageAd`, issue
+   * #2391). Serialized once — the verified subset is derived from this array
+   * on the client via `verifiedLinkedIds`.
    */
-  verifiedLinkedAds: AdRecord[];
+  ads: BrandPageAd[];
+  /**
+   * metaAdIds of the `ads` entries that carry VERIFIED link evidence to the
+   * domain (landing-page or advertiser-domain match). Attribution copy and
+   * analytics are computed server-side from this subset — creatives that
+   * merely match the search text are rendered but never described as linking.
+   *
+   * Issue #2391: this is the ID LIST, not a second copy of the records. A
+   * full `AdRecord[]` subset here serialized every verified creative twice
+   * into the hydration payload. The client derives the subset with
+   * `verifiedLinkedAdsOf`, so it sees exactly the ids the loader computed
+   * from. The wall's own per-card badge and ordering read the
+   * `linkVerifiedDomain` the loader stamps from this same set — the two
+   * agree on any loader-built payload.
+   */
+  verifiedLinkedIds: string[];
   checkedAgo: string | null;
   /**
    * ISO timestamp of the underlying Ad Library check — the machine-readable
@@ -616,6 +656,29 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
       : ad,
   );
 
+  // Issue #2391 — the hydration payload carries each cached creative ONCE.
+  //
+  // Two things were in the payload that no renderer read. First, a second
+  // full `AdRecord[]` (`verifiedLinkedAds`) beside `ads` — on live
+  // /ads/nike.com 48.5KB of JSON next to the wall's 49.0KB, though the stream
+  // tokenizer shares the identical strings, so its marginal cost is ~4.8KB.
+  // `verifiedLinkedIds` replaces it; the client derives the records from the
+  // array it already renders.
+  //
+  // Second, the discovery-time fields no client renderer reads. Dropped from
+  // this projection: analysisFields (~13.7KB of the token stream on that
+  // page), body, bodySecondary, previewSubhead, offer, languageLabel,
+  // destinationType, adSnapshotUrl, countries, platforms, active,
+  // researchSummary, advertiserPageId, creativeText, creativeFormatHint,
+  // creativeTextCaptureMethod, creativeTextMetadata, landingPage,
+  // evidenceCapturedAt, canonicalRevision, tags, domainMatch.
+  //
+  // Audited against every reader of `ads`: BrandAdWall (+ AdCreative,
+  // AdLongevityPill, the ad-display and landing-page-display helpers they
+  // call), BrandTicker, the stat line's split-testing count, and the
+  // meta/headers code (which reads counts, never fields).
+  // `adsPageServiceJsonLd` takes no ad records at all.
+
   // The Ad Aggression Score (0–100, four public sub-scores) is the page's
   // named differentiator (category-research §1.2). It renders ONLY when the
   // capture has at least one verified-linked ad AND the observed window
@@ -643,8 +706,8 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     domain: brand.domain,
     brandName: brand.displayName,
     hasCachedAds: Boolean(snapshot),
-    ads: wallAds,
-    verifiedLinkedAds,
+    ads: wallAds.map(projectBrandPageAd),
+    verifiedLinkedIds: Array.from(verifiedLinkedIds),
     checkedAgo: freshness?.checkedAgo ?? null,
     lastCheckedAt: snapshot?.fetchedAt ?? null,
     freshForLiveClaim: freshness?.freshForLiveClaim ?? false,
@@ -673,6 +736,47 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     recentWatchChanges,
     sourceSnapshots,
   };
+}
+
+/**
+ * Project one wall creative down to the fields the page renders (issue
+ * #2391): the hydration payload never ships a field no renderer reads. Typed
+ * as `BrandPageAd`, so a component that starts reading a dropped field is a
+ * type error rather than a silently undefined value in the browser.
+ */
+export function projectBrandPageAd(ad: AdRecord): BrandPageAd {
+  return {
+    metaAdId: ad.metaAdId,
+    advertiser: ad.advertiser,
+    previewHeadline: ad.previewHeadline,
+    hook: ad.hook,
+    cta: ad.cta,
+    format: ad.format,
+    landingPageUrl: ad.landingPageUrl,
+    firstSeenAt: ad.firstSeenAt,
+    lastSeenAt: ad.lastSeenAt,
+    activeStatusObserved: ad.activeStatusObserved,
+    source: ad.source,
+    variantCount: ad.variantCount,
+    creativeImageUrl: ad.creativeImageUrl,
+    linkVerifiedDomain: ad.linkVerifiedDomain,
+  };
+}
+
+/**
+ * The verified-linked subset of the wall, derived from the loader's
+ * `verifiedLinkedIds` (issue #2391). The loader used to hand the client a
+ * second full copy of these records; the ids are the whole signal, and
+ * filtering the array the page already has means the subset always speaks
+ * about the creatives the wall renders. Both come from the loader's one
+ * verification pass.
+ */
+export function verifiedLinkedAdsOf(data: {
+  ads: BrandPageAd[];
+  verifiedLinkedIds: string[];
+}): BrandPageAd[] {
+  const verifiedIds = new Set(data.verifiedLinkedIds);
+  return data.ads.filter((ad) => verifiedIds.has(ad.metaAdId));
 }
 
 /**
@@ -1508,10 +1612,12 @@ function BrandAdsResults({
         </div>
       </section>
 
-      {/* 3. STAT LINE — built only from verified-linked creatives (see loader) */}
+      {/* 3. STAT LINE — built only from verified-linked creatives (see loader;
+          the subset is derived here from the payload's own verifiedLinkedIds,
+          issue #2391) */}
       {teaser ? (
         <BrandStatLine
-          ads={data.verifiedLinkedAds}
+          ads={verifiedLinkedAdsOf(data)}
           aggression={data.aggression}
           brandOwnedAdCount={data.brandOwnedAdCount}
           freshnessLabel={data.checkedAgo}
