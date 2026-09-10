@@ -1126,7 +1126,7 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
     expect(put).toHaveBeenCalledTimes(2);
   });
 
-	it("treats www and apex as the same Browserless allowlist origin (issue #1919)", async () => {
+	it("treats www and apex as the same Browserless capture site (issue #1919)", async () => {
 	  const screenshotBytes = new Uint8Array([8, 5, 0, 9]);
 	  const put = vi.fn().mockResolvedValue(undefined);
 	  const fetch = mockFetchWithDns(
@@ -1182,25 +1182,62 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
 	  ).toBe(true);
 	});
 
-	it("does not send arbitrary proof URLs to Browserless without an allowlist", async () => {
+	it("sends a watchlist's own public brand origin to Browserless with no allowlist configured (issue #2366)", async () => {
 	  const fetch = mockFetchWithDns(
 	    vi.fn(async (input) => {
-	      if (String(input).includes("browserless.io/stealth/bql")) {
-	        return new Response(JSON.stringify({ data: {} }), { status: 200 });
+	      if (!String(input).includes("browserless.io/stealth/bql")) {
+	        throw new Error("fetch failed");
 	      }
 
-	      throw new Error("fetch failed");
+	      return new Response(
+	        JSON.stringify({
+	          data: {
+	            html: {
+	              html: `
+	                <html>
+	                  <head><title>Watchlist brand proof</title></head>
+	                  <body><button>Shop now</button><p>Our best-selling serum is 20% off this week. Starting at ₹499 with free shipping above ₹999.</p></body>
+	                </html>
+	              `,
+	            },
+	            screenshot: { base64: btoa("1234") },
+	            documentRequests: [{ url: "https://brand.example.com/" }],
+	            url: { url: "https://brand.example.com/" },
+	          },
+	        }),
+	        { status: 200, headers: { "content-type": "application/json" } },
+	      );
 	    }) as never,
 	  );
 
-	  const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+	  const { captureBrowserlessProofSnapshot } = await import("~/lib/browser-run.server");
+	  const snapshot = await captureBrowserlessProofSnapshot(
+	    { BROWSERLESS_TOKEN: "browserless-token" },
+	    "https://brand.example.com/",
+	    { persistArtifacts: false },
+	  );
 
+	  expect(
+	    nonDnsFetchCalls(fetch).some(([input]) => String(input).includes("browserless.io/stealth/bql")),
+	  ).toBe(true);
+	  expect(snapshot).toMatchObject({
+	    rawHeadline: "Watchlist brand proof",
+	    metadata: expect.objectContaining({ renderProvider: "browserless_bql" }),
+	  });
+	});
+
+	it("refuses a capture URL that resolves to a private address before any paid Browserless call", async () => {
+	  const fetch = mockFetchWithDns(
+	    vi.fn(async () => new Response(JSON.stringify({ data: {} }), { status: 200 })) as never,
+	    { "private.example.com": { A: ["10.1.2.3"] } },
+	  );
+
+	  const { captureBrowserlessProofSnapshot } = await import("~/lib/browser-run.server");
 	  await expect(
-	    captureLandingPageSnapshot(
-	      {
-	        BROWSERLESS_TOKEN: "browserless-token",
-	      },
-	      "https://example.com/glow",
+	    captureBrowserlessProofSnapshot(
+	      { BROWSERLESS_TOKEN: "browserless-token" },
+	      "https://private.example.com/",
+	      { persistArtifacts: false },
 	    ),
 	  ).resolves.toBeNull();
 
@@ -1611,7 +1648,6 @@ describe("rendered chain attempt ordering and job correlation", () => {
       {
         BROWSER: {} as Fetcher,
         BROWSERLESS_TOKEN: "browserless-token",
-        BROWSERLESS_PROOF_ALLOWLIST_ORIGINS: "https://example.com https://www.example.com",
         DB: harness.db,
       } as never,
       "https://example.com/glow",

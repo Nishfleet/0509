@@ -11,6 +11,32 @@ export const SCHEDULED_OBSERVATION_DEADLINES = Object.freeze([
   { cron: "0 5 * * MON", maxAgeMs: 8 * 24 * 60 * 60 * 1000 },
 ]);
 
+/**
+ * The hourly gap-check cron writes this object on every run. It is the only
+ * durable evidence that the `13 * * * *` trigger itself is alive: the four-cron
+ * soak contract (migration 0070) deliberately refuses to record this
+ * control-plane cron, so losing just this trigger left `/api/health/deep`
+ * green while the gap alerter was already dead (issue #2368). It lives in
+ * object storage because both soak tables pin their `cron` column with a CHECK
+ * and widening either one needs a table rebuild plus a prod-D1 migration.
+ */
+export const SCHEDULED_OBSERVATION_GAP_CHECK_HEARTBEAT_KEY =
+  "cron-heartbeats/gap-check.json";
+
+/**
+ * An hourly cron that missed one tick is still healthy; two missed ticks is the
+ * signal. Kept under half a day so a dead trigger is visible the same shift.
+ */
+export const SCHEDULED_OBSERVATION_GAP_CHECK_MAX_AGE_MS = 2 * 60 * 60 * 1000;
+
+/**
+ * A version that has been live for less than one hourly cadence has not had a
+ * chance to write its first heartbeat. Deliberately one cadence rather than the
+ * full max age, so a gap-check trigger that is dead on a brand-new version is
+ * still caught inside two hours instead of hiding behind the freshness window.
+ */
+export const SCHEDULED_OBSERVATION_GAP_CHECK_ACTIVATION_GRACE_MS = 60 * 60 * 1000;
+
 export type ScheduledObservationHealth = {
   cron: string;
   lastScheduledAt: string | null;
@@ -18,6 +44,103 @@ export type ScheduledObservationHealth = {
   overdue: boolean;
   futureEvidence: boolean;
 };
+
+export type ScheduledObservationGapCheckStatus = "ok" | "degraded" | "missing";
+
+export type ScheduledObservationGapCheckHealth = {
+  status: ScheduledObservationGapCheckStatus;
+  lastRunAt: string | null;
+  maxAgeMs: number;
+};
+
+/**
+ * Best-effort record that the hourly gap-check cron ran. Rollback rolls back
+ * code, never data: if this writer is reverted the object simply goes unread.
+ * Never throws — a broken heartbeat write must not be reported as a failed gap
+ * check, which would page for the wrong reason.
+ */
+export async function recordScheduledObservationGapCheckHeartbeat(
+  env: AppEnv,
+  options: { now?: Date } = {},
+): Promise<boolean> {
+  const bucket = env.LANDING_PAGE_ARTIFACTS;
+  if (!bucket) return false;
+
+  const now = options.now ?? new Date();
+  try {
+    await bucket.put(
+      SCHEDULED_OBSERVATION_GAP_CHECK_HEARTBEAT_KEY,
+      JSON.stringify({ lastRunAt: now.toISOString() }),
+      { httpMetadata: { contentType: "application/json" } },
+    );
+    return true;
+  } catch (error) {
+    console.warn("scheduled observation gap check heartbeat write failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return false;
+  }
+}
+
+/**
+ * Freshness of the gap-check heartbeat, read without mutating anything.
+ *
+ * A missing heartbeat on a version that has been live for less than one hourly
+ * cadence is not yet evidence of a dead cron: this version has not had a full
+ * cadence in which to write its first heartbeat (the same activation-baseline
+ * posture as migration 0072). A missing heartbeat on an older version, or one
+ * that stopped advancing, is degraded. An unbound bucket reports `missing` so
+ * the caller can tell "no object storage here" from "the cron stopped".
+ */
+export async function readScheduledObservationGapCheckHealth(
+  env: AppEnv,
+  options: { now?: Date; deployedAt?: string | null } = {},
+): Promise<ScheduledObservationGapCheckHealth> {
+  const now = options.now ?? new Date();
+  const maxAgeMs = SCHEDULED_OBSERVATION_GAP_CHECK_MAX_AGE_MS;
+  const bucket = env.LANDING_PAGE_ARTIFACTS;
+  if (!bucket) {
+    return { status: "missing", lastRunAt: null, maxAgeMs };
+  }
+
+  let lastRunAt: string | null = null;
+  try {
+    const object = await bucket.get(SCHEDULED_OBSERVATION_GAP_CHECK_HEARTBEAT_KEY);
+    if (object) {
+      const payload = (await object.json()) as { lastRunAt?: unknown };
+      lastRunAt = typeof payload?.lastRunAt === "string" ? payload.lastRunAt : null;
+    }
+  } catch {
+    // A read failure is treated exactly like an absent heartbeat: a broken
+    // observability rail must not pretend the cron is healthy.
+    lastRunAt = null;
+  }
+
+  const lastRunMs = lastRunAt ? Date.parse(lastRunAt) : Number.NaN;
+  if (Number.isFinite(lastRunMs)) {
+    const futureEvidence =
+      lastRunMs - now.getTime() > SCHEDULED_OBSERVATION_MAX_FUTURE_SKEW_MS;
+    return {
+      status:
+        futureEvidence || now.getTime() - lastRunMs > maxAgeMs
+          ? "degraded"
+          : "ok",
+      lastRunAt,
+      maxAgeMs,
+    };
+  }
+
+  const deployedMs = options.deployedAt ? Date.parse(options.deployedAt) : Number.NaN;
+  const withinActivationGrace =
+    Number.isFinite(deployedMs) &&
+    deployedMs <= now.getTime() &&
+    now.getTime() - deployedMs <= SCHEDULED_OBSERVATION_GAP_CHECK_ACTIVATION_GRACE_MS;
+  return {
+    status: withinActivationGrace ? "ok" : "degraded",
+    lastRunAt: null,
+    maxAgeMs,
+  };
+}
 
 /**
  * Reads schedule freshness without mutating health state. Migration 0072 seeds
