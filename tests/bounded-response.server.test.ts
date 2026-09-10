@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  base64DecodedLengthExceeds,
+  decodeBase64ToUint8Array,
   readRequestTextWithinLimit,
   readResponseJsonWithinLimit,
   readResponseTextWithinLimit,
@@ -92,5 +94,31 @@ describe("bounded response readers", () => {
     } as RequestInit & { duplex: "half" });
 
     await expect(readRequestTextWithinLimit(request, 5)).resolves.toBeNull();
+  });
+});
+
+describe("screenshot base64 decode", () => {
+  const bytes = new Uint8Array([8, 5, 0, 9]);
+  const canonical = btoa(String.fromCharCode(...bytes));
+
+  it("decodes MIME-wrapped, data-URL, URL-safe, and unpadded payloads", () => {
+    const wrapped = `${canonical.slice(0, 4)}\n${canonical.slice(4)}`;
+    const dataUrl = `data:image/jpeg;base64,${canonical}`;
+    const urlSafe = canonical.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+
+    expect(decodeBase64ToUint8Array(wrapped)).toEqual(bytes);
+    expect(decodeBase64ToUint8Array(dataUrl)).toEqual(bytes);
+    expect(decodeBase64ToUint8Array(urlSafe)).toEqual(bytes);
+    expect(decodeBase64ToUint8Array(` ${canonical} `)).toEqual(bytes);
+  });
+
+  it("still rejects garbage that is not base64", () => {
+    expect(() => decodeBase64ToUint8Array("%%%truncated%%%")).toThrow();
+  });
+
+  it("measures decoded length after stripping wrap and padding", () => {
+    const wrapped = `${canonical.slice(0, 4)}\n${canonical.slice(4)}`;
+    expect(base64DecodedLengthExceeds(wrapped, 3)).toBe(true);
+    expect(base64DecodedLengthExceeds(wrapped, 4)).toBe(false);
   });
 });

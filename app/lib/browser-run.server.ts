@@ -2,6 +2,7 @@ import puppeteer from "@cloudflare/puppeteer";
 
 import {
   base64DecodedLengthExceeds,
+  decodeBase64ToUint8Array,
   readResponseJsonWithinLimit,
   readResponseTextWithinLimit,
   utf8ByteLength,
@@ -71,6 +72,8 @@ const BROWSERLESS_RETRY_DELAY_MS = 300;
 const QUICK_ACTION_MAX_ATTEMPTS = 2;
 /** Retry budget for a viewport screenshot after HTML is already in hand. */
 const SCREENSHOT_CAPTURE_ATTEMPTS = 2;
+/** Bound a hanging `page.screenshot` so the capture cannot stall CI. */
+const SCREENSHOT_CAPTURE_TIMEOUT_MS = 8_000;
 /**
  * Retry budget for persisting a captured artifact to R2 (2 attempts total).
  * A transient R2 put failure must not silently drop the screenshot that was
@@ -381,11 +384,15 @@ export async function captureBrowserRunSnapshot(
     const captureWarningCodes: string[] = [];
     for (let attempt = 1; attempt <= SCREENSHOT_CAPTURE_ATTEMPTS; attempt += 1) {
       try {
-        screenshot = await page.screenshot({
-          type: "jpeg",
-          quality: 85,
-          fullPage: false,
-        });
+        screenshot = await promiseWithTimeout(
+          page.screenshot({
+            type: "jpeg",
+            quality: 85,
+            fullPage: false,
+          }),
+          SCREENSHOT_CAPTURE_TIMEOUT_MS,
+          "Browser Run screenshot timed out.",
+        );
         break;
       } catch (error) {
         if (attempt >= SCREENSHOT_CAPTURE_ATTEMPTS) {
@@ -1081,11 +1088,6 @@ function buildBrowserlessBqlEndpoint(env: AppEnv) {
   }
   url.searchParams.set("token", env.BROWSERLESS_TOKEN?.trim() ?? "");
   return url.toString();
-}
-
-function decodeBase64ToUint8Array(value: string) {
-  const binary = atob(value);
-  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 
 async function persistBrowserArtifacts(

@@ -1,0 +1,18 @@
+<!--
+  Pinned landing-page HTML for tests/landing-pages.browser-run.test.ts
+  (issue #2241). Tests that exercise the landing_fetch_failed → rendered
+  fallback path must read this file instead of fetching a live URL.
+-->
+<html>
+  <head>
+    <title>Glow Serum Sale</title>
+  </head>
+  <body>
+    <button>Shop now</button>
+    <p>Starting at ₹499 only today. Our best-selling vitamin C serum is now at 20% off for the launch week. Free shipping on all orders above ₹999.</p>
+    <form action="/lead">
+      <input name="phone" />
+      <input type="submit" value="Get Offer" />
+    </form>
+  </body>
+</html>
