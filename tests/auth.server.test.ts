@@ -325,6 +325,21 @@ describe("Better Auth configuration", () => {
     ).toBe(false);
     expect(isSameOriginAuthFormPost(env(), new Request("https://0509.io/auth/login"))).toBe(false);
   });
+
+  it("does not trust an unknown serving host's own origin", () => {
+    // A host that serves the worker (workers.dev, a misconfigured alias) must
+    // not silently become a trusted auth origin. The request's own origin is
+    // no longer auto-added, so a self-origin post on an unknown host is rejected.
+    expect(
+      isSameOriginAuthFormPost(
+        env(),
+        new Request("https://some-worker-alias.example/auth/login", {
+          headers: { origin: "https://some-worker-alias.example" },
+          method: "POST",
+        }),
+      ),
+    ).toBe(false);
+  });
 });
 
 describe("auth session boundary", () => {
