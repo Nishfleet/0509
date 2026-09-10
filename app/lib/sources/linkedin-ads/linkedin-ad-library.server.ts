@@ -257,8 +257,28 @@ function extractCreativeImage(block: string): string | null {
   return img ? img[1] : null;
 }
 
+/**
+ * Strip markup by scanning for tag boundaries instead of a global
+ * `<[^>]*>` replace. A single regex pass is an incomplete sanitizer (a nested
+ * `<scr<script>ipt>` survives one pass) and CodeQL fails the PR for it; the
+ * scanner is the pattern already used by landing-page-signals.server.ts.
+ * The result is display text only — React escapes it at render time.
+ */
 function stripTags(html: string): string {
-  return html.replace(/<[^>]*>/g, "");
+  const output: string[] = [];
+  let cursor = 0;
+  while (cursor < html.length) {
+    const tagStart = html.indexOf("<", cursor);
+    if (tagStart < 0) {
+      output.push(html.slice(cursor));
+      break;
+    }
+    output.push(html.slice(cursor, tagStart), " ");
+    const tagEnd = html.indexOf(">", tagStart + 1);
+    if (tagEnd < 0) break;
+    cursor = tagEnd + 1;
+  }
+  return output.join("");
 }
 
 /**

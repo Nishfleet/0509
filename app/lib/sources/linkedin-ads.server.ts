@@ -47,7 +47,10 @@ export const linkedinAdsAdapter: SourceAdapter = {
       maxAds: 25,
     });
 
-    if ("unavailable" in result && result.unavailable) {
+    // Plain `in` check on purpose: `"unavailable" in result && result.unavailable`
+    // does not narrow the union in TypeScript 5.9, the negative branch keeps the
+    // declared union and the payload reads below stop compiling.
+    if ("unavailable" in result) {
       return result;
     }
 
