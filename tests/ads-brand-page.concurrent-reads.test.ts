@@ -130,8 +130,8 @@ describe("/ads/:domain concurrent secondary reads (issue #2390)", () => {
     vi.resetModules();
   });
 
-  it("has the five independent reads in flight simultaneously, not a waterfall", async () => {
-    const barrier = createBarrier(5);
+  it("has the six independent reads in flight simultaneously, not a waterfall", async () => {
+    const barrier = createBarrier(6);
     let sitemapCalls = 0;
     const env = { DB: {} };
     installBaseMocks(env);
@@ -152,7 +152,10 @@ describe("/ads/:domain concurrent secondary reads (issue #2390)", () => {
         await barrier.arrive("offerTimeline");
         return { entries: [], asOfState: null };
       }),
-      loadDomainCaptureFailures: vi.fn().mockResolvedValue([]),
+      loadDomainCaptureFailures: vi.fn().mockImplementation(async () => {
+        await barrier.arrive("captureFailures");
+        return [];
+      }),
     }));
 
     vi.doMock("~/lib/ads-domain-recent-changes.server", async (importOriginal) => ({
@@ -176,9 +179,10 @@ describe("/ads/:domain concurrent secondary reads (issue #2390)", () => {
     // Every read reached the barrier. Under a waterfall only the first would
     // ever arrive, the barrier would never release, and this line would never
     // run — the test would time out instead.
-    // Five distinct reads arrived while none had resolved. A waterfall can
+    // Six distinct reads arrived while none had resolved. A waterfall can
     // only ever deliver one arrival, so this set is impossible sequentially.
     expect(barrier.arrived.sort()).toEqual([
+      "captureFailures",
       "offerTimeline",
       "recentWatchChanges",
       "sitemapBrandEntries#0",
@@ -213,7 +217,10 @@ describe("/ads/:domain concurrent secondary reads (issue #2390)", () => {
     vi.doMock("~/lib/offer-timeline.server", async (importOriginal) => ({
       ...(await importOriginal<Record<string, unknown>>()),
       loadOfferTimeline: timelineRead,
-      loadDomainCaptureFailures: vi.fn().mockResolvedValue([]),
+      loadDomainCaptureFailures: vi.fn().mockImplementation(async () => {
+        reached.push("captureFailures");
+        return [];
+      }),
     }));
 
     vi.doMock("~/lib/ads-domain-recent-changes.server", async (importOriginal) => ({
@@ -234,10 +241,13 @@ describe("/ads/:domain concurrent secondary reads (issue #2390)", () => {
     const result = await runLoader(env);
 
     // The page survived, the failing read logged its own named degrade, and
-    // the other four reads still ran (proof batch-style all-or-nothing did
-    // not replace the per-read wrappers).
+    // the other reads still ran. This is a degrade guard, not a concurrency
+    // proof: it holds under a waterfall too. It is here to pin that the
+    // per-read wrappers survived the Promise.all change, so a future
+    // `DB.batch()` rewrite (which fails as a unit) breaks it.
     expect(result).toBeTruthy();
     expect(timelineRead).toHaveBeenCalledTimes(1);
+    expect(reached).toContain("captureFailures");
     expect(reached).toContain("indexableAdsInternalLinks");
     expect(reached).toContain("recentWatchChanges");
     expect(reached).toContain("sourceSnapshots");
