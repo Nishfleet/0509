@@ -201,13 +201,33 @@ jobs:
           perms_json="$(awk -F'\t' 'NF==2 {print}' "$perms_file" | jq -Rn \
             '[inputs | split("\t") | select(length==2) | {key: .[0], value: .[1]}] | from_entries')"
 
+          # Every large value goes to a FILE, never argv. A long PR body plus a
+          # busy comment thread pushed this jq call past the kernel's argument
+          # limit and it died with "Argument list too long" (exit 126) — the gate
+          # failing on exactly the candidates carrying the most evidence
+          # (0509#2516). --rawfile keeps pr_body byte-identical to the old --arg
+          # (printf '%s' adds no trailing newline); --slurpfile wraps each
+          # document in an array, hence the [0] indexes below.
+          ctx="$RUNNER_TEMP/ctx"
+          mkdir -p "$ctx"
+          printf '%s' "${PR_BODY:-}" > "$ctx/pr_body.txt"
+          printf '%s' "$files_json" > "$ctx/files.json"
+          printf '%s' "$commits_json" > "$ctx/commits.json"
+          printf '%s' "$comments_json" > "$ctx/comments.json"
+          printf '%s' "$perms_json" > "$ctx/perms.json"
+          # An empty document means an upstream API read produced nothing; keep
+          # that fail-loud instead of letting --slurpfile turn it into null.
+          for doc in files commits comments perms; do
+            test -s "$ctx/$doc.json" || { echo "empty context document: $doc" >&2; exit 1; }
+          done
+
           jq -n \
             --arg head_sha "$HEAD_SHA" \
-            --arg pr_body "${PR_BODY:-}" \
-            --argjson files "$files_json" \
-            --argjson commit_messages "$commits_json" \
-            --argjson comments "$comments_json" \
-            --argjson permissions "$perms_json" \
+            --rawfile pr_body "$ctx/pr_body.txt" \
+            --slurpfile files "$ctx/files.json" \
+            --slurpfile commit_messages "$ctx/commits.json" \
+            --slurpfile comments "$ctx/comments.json" \
+            --slurpfile permissions "$ctx/perms.json" \
             --argjson gate_globs '[
               ".github/workflows/**",
               ".github/scripts/**",
@@ -222,9 +242,9 @@ jobs:
               "scripts/ci-vitest-run.sh",
               "scripts/ci-verify-*.sh"
             ]' \
-            '{head_sha: $head_sha, pr_body: $pr_body, files: $files,
-              commit_messages: $commit_messages, comments: $comments,
-              permissions: $permissions, gate_globs: $gate_globs}' \
+            '{head_sha: $head_sha, pr_body: $pr_body, files: $files[0],
+              commit_messages: $commit_messages[0], comments: $comments[0],
+              permissions: $permissions[0], gate_globs: $gate_globs}' \
             > "$RUNNER_TEMP/gate-bundle.json"
 
       - name: Evaluate gate integrity
