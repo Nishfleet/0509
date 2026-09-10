@@ -1,10 +1,13 @@
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { pricingPlans, usageBundles } from "~/lib/pricing";
+
+const root = process.cwd();
 
 const commercialLaunch = {
   scoutSaleOpen: true,
@@ -209,6 +212,33 @@ describe("pricing section render smoke", () => {
     expect(markup).not.toContain("1 Collection");
     expect(markup).not.toContain("Weekly proof-backed brief");
     expect(markup).not.toContain("Instant first scan");
+  });
+
+  it("keeps the Free pitch once and drops the 'launch plan' badge (issue #2315)", async () => {
+    const { default: PricingRoute } = await import("~/routes/pricing");
+    const markup = renderToStaticMarkup(createElement(PricingRoute));
+
+    // The Free sentence survives exactly once, in the Free card body.
+    const freeSentence =
+      "Watch 1 competitor — one first check and one first brief, Meta Ad Library only.";
+    const occurrences = markup.split(freeSentence).length - 1;
+    expect(occurrences).toBe(1);
+
+    // The summary badge reads "Recommended", never "launch plan".
+    expect(markup).not.toContain("launch plan");
+
+    // The accept criterion requires the string to be gone from the source
+    // files too, not just the rendered output.
+    const sourceFiles = [
+      readFileSync(join(root, "app/routes/pricing.tsx"), "utf8"),
+      readFileSync(
+        join(root, "app/components/pricing-section.tsx"),
+        "utf8",
+      ),
+    ];
+    for (const source of sourceFiles) {
+      expect(source).not.toContain("launch plan");
+    }
   });
 
   it("renders a single plain-text h1 in the route SSR output", async () => {
