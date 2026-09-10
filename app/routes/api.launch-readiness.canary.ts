@@ -84,6 +84,32 @@ async function getCanaryOwner(env: { DB?: D1Database }, canaryEmail: string) {
   return result.results?.[0]?.user_id ?? null;
 }
 
+// The auth-relevant e2e sentinel row that must never be enabled in production
+// D1 (see app/lib/e2e-auth.server.ts E2E_DATABASE_SENTINEL_ID). A single bad
+// UPDATE on this row would otherwise silently widen the e2e auth surface, so
+// the launch-readiness canary asserts it stays off and turns red if it flips.
+const E2E_TEST_MODE_SENTINEL_ID = "local-authenticated";
+const E2E_TEST_MODE_SENTINEL_BLOCKER = "e2e_test_mode_enabled_in_production";
+
+async function readE2ETestModeSentinel(env: { DB?: D1Database }) {
+  if (!env.DB) {
+    return { enabled: false };
+  }
+
+  try {
+    const result = await env.DB.prepare(`
+      SELECT enabled
+      FROM e2e_test_mode
+      WHERE id = ?
+      LIMIT 1
+    `).bind(E2E_TEST_MODE_SENTINEL_ID).all<{ enabled: number | string | null }>();
+    const enabled = result.results?.[0]?.enabled;
+    return { enabled: enabled === 1 || enabled === "1" };
+  } catch {
+    return { enabled: false };
+  }
+}
+
 export async function action({ context, request }: ActionFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const env = getEnv(context);
@@ -125,6 +151,24 @@ export async function action({ context, request }: ActionFunctionArgs) {
       {
         ok: false,
         blocker: "missing_db",
+      },
+      {
+        status: 503,
+        headers: { "cache-control": "no-store" },
+      },
+    );
+  }
+
+  // Assert the e2e DB sentinel is never enabled in production D1. Flipping
+  // the row turns the canary red (fail closed) and the check is surfaced in
+  // every canary payload so the assertion is observable even when green.
+  const e2eTestModeSentinel = await readE2ETestModeSentinel(env);
+  if (e2eTestModeSentinel.enabled) {
+    return Response.json(
+      {
+        ok: false,
+        blocker: E2E_TEST_MODE_SENTINEL_BLOCKER,
+        e2eTestModeSentinel: { enabled: true },
       },
       {
         status: 503,
@@ -584,6 +628,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       proofCaptureId,
       digestRunId,
       delivery: sanitizeDeliveryForCanary(deliveryDetails, delivery.attempts, delivery.channels),
+      e2eTestModeSentinel: { enabled: e2eTestModeSentinel.enabled },
       ...(proofEmail ? { proofEmail } : {}),
       slackDelivery: {
         required: requireSlackDelivery,

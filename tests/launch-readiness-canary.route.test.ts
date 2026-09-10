@@ -60,6 +60,27 @@ function createDbWithUserOnly() {
   };
 }
 
+function createDbWithSentinelEnabled() {
+  return {
+    prepare() {
+      return {
+        bind(id: string) {
+          return {
+            async all<T>() {
+              return {
+                results:
+                  id === "local-authenticated"
+                    ? ([{ enabled: 1 }] as T[])
+                    : ([] as T[]),
+              };
+            },
+          };
+        },
+      };
+    },
+  };
+}
+
 beforeEach(() => {
   vi.resetModules();
 });
@@ -135,6 +156,39 @@ describe("launch readiness canary route", () => {
       status: 404,
     });
   }, 10_000);
+
+  it("turns the canary red when the e2e DB sentinel is enabled in production D1", async () => {
+    const createWatchlistRun = vi.fn();
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DB: createDbWithSentinelEnabled(),
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({ createWatchlistRun }));
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    const response = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/api/launch-readiness/canary", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-0509-canary-token": "secret-token",
+        },
+        body: JSON.stringify({ gateRunId: "gate-c-sentinel-red" }),
+      }),
+    } as never);
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      ok: false,
+      blocker: "e2e_test_mode_enabled_in_production",
+      e2eTestModeSentinel: { enabled: true },
+    });
+    expect(createWatchlistRun).not.toHaveBeenCalled();
+  });
 
   it.each([
     "http://0509.io/api/launch-readiness/canary",
@@ -363,6 +417,7 @@ describe("launch readiness canary route", () => {
     await expect(response.json()).resolves.toMatchObject({
       ok: true,
       blockers: [],
+      e2eTestModeSentinel: { enabled: false },
       runId: "run-1",
       proofCaptureId: "proof-1",
       digestRunId: "digest-1",
