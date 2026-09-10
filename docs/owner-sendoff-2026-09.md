@@ -18,9 +18,10 @@ stay yours after this file exists.
   (`https://betalist.com/sign_up`). No email is published on the listing.
 - **Money decision (owner):** BetaList has **no free submission option** —
   all submissions are paid, and plans differ only by featuring speed and
-  newsletter guarantee. **Default: stay on the free queue / do not pay.** If
-  you ever want the paid fast-track, that is your call alone; the free queue
-  is the default and costs nothing.
+  newsletter guarantee. **Default: do not submit / do not pay.** If you ever
+  want the paid fast-track, that is your call alone; there is no free queue
+  to wait on, so the default is simply to skip this venue unless you approve
+  the paid tier.
 - **Paste-ready fields** (from `docs/betalist-listing-2026-08-10.md`):
   - Product name: `Five to Nine`
   - URL: `https://0509.io`
@@ -178,8 +179,8 @@ stay yours after this file exists.
   - Body:
     > Hi Angad,
     >
-    > Tool suggestion for your "Best Ad Spy and Competitor Tracking Tools in
-    > 2026" roundup: **Five to Nine** (https://0509.io) — competitor ad and
+    > Tool suggestion for your "15 Best Ad Spy and Competitor Ad Research
+    > Tools in 2026" roundup: **Five to Nine** (https://0509.io) — competitor ad and
     > landing-page monitoring where every change alert carries screenshot
     > evidence and a source link you can open yourself.
     >
