@@ -1231,6 +1231,39 @@ describe("Dodo webhook route", () => {
     expect(data.applyDodoPlanGrantWithWatchlistReconcile).not.toHaveBeenCalled();
   });
 
+  it("answers 503 with retry-after when a redelivery lands during a live processing lease", async () => {
+    // A worker already holds a live lease on this event (beginDodoWebhookEventProcessing
+    // returns in_progress). A 200 here would tell Dodo to stop retrying and strand the
+    // payment if that worker dies before finalizing. The route must answer 503 + retry-after
+    // so Dodo redelivers after the lease expires and the reclaim path can pick the work up.
+    const { data } = mockWebhookDependencies({
+      data: {
+        beginDodoWebhookEventProcessing: vi.fn().mockResolvedValue({
+          status: "in_progress",
+        }),
+      },
+    });
+
+    const { action } = await import("~/routes/api.webhooks.dodo");
+    let thrown: unknown;
+    try {
+      await action({
+        context: {},
+        request: webhookRequest("evt-in-progress", { type: "payment.succeeded" }),
+        params: {},
+      } as never);
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Response);
+    const response = thrown as Response;
+    expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("retry-after")).toBe("60");
+    expect(data.applyDodoPlanGrantWithWatchlistReconcile).not.toHaveBeenCalled();
+  });
+
   it("rejects blank webhook ids before claiming the event", async () => {
     mockWebhookDependencies();
     const { action } = await import("~/routes/api.webhooks.dodo");
