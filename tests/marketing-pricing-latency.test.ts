@@ -22,22 +22,6 @@ describe("marketing pricing is client-fetched", () => {
     agencySaleOpen: false,
   };
 
-  const availablePreview = {
-    available: true,
-    provider: "dodo",
-    source: "dodo_checkout_preview",
-    country: "US",
-    adaptiveCurrency: true,
-    feesInclusive: true,
-    prices: {
-      starter: {
-        monthly: { display: "$99", amount: 9900, currency: "USD", billingCountry: "US" },
-      },
-    },
-    annualValidation: {},
-    usageBundles: {},
-  };
-
   const expectedLoaderData = {
     // The route declares the field for shape parity with /pricing, but the
     // homepage never resolves a preview: it is always the sentinel.
@@ -50,7 +34,7 @@ describe("marketing pricing is client-fetched", () => {
   };
 
   it("keeps Dodo out of the homepage loader so `/` can be shared-cached", async () => {
-    const previewDodo0509PlanPrices = vi.fn().mockResolvedValue(availablePreview);
+    const previewDodo0509PlanPrices = vi.fn();
     const publicCommercialLaunchSummary = vi.fn(() => commercialLaunch);
 
     vi.doMock("~/lib/dodo-pricing.server", () => ({ previewDodo0509PlanPrices }));
@@ -59,8 +43,8 @@ describe("marketing pricing is client-fetched", () => {
     }));
     vi.doMock("~/lib/commercial-launch-gate.server", () => ({ publicCommercialLaunchSummary }));
 
-    const { loader } = await import("~/routes/marketing");
-    const result = await loader({
+    const marketing = await import("~/routes/marketing");
+    const result = await marketing.loader({
       context: { cloudflare: { env: {} } },
       request: new Request("https://0509.io/"),
     } as never);
@@ -69,11 +53,16 @@ describe("marketing pricing is client-fetched", () => {
     // only reason the one public page that could be shared-cached was pinned
     // to `private, max-age=300`. The loader no longer calls Dodo, so it
     // returns plain loader data — never a Response carrying its own
-    // cache-control — and the worker stamps the shared `public, max-age=300`
-    // policy that lets the edge cache `/`.
+    // cache-control. With no route-set cache-control in play, the worker
+    // stamps the shared policy for `/` (asserted in
+    // tests/worker-security-headers.test.ts). This route must never grow a
+    // `headers` export again: that export was the only way a private
+    // cache-control reached the document, so a future one would silently
+    // un-cache `/` without failing any assertion here.
     expect(previewDodo0509PlanPrices).not.toHaveBeenCalled();
     expect(result).not.toBeInstanceOf(Response);
     expect(result).toEqual(expectedLoaderData);
+    expect("headers" in marketing).toBe(false);
     expect(publicCommercialLaunchSummary).toHaveBeenCalledWith({
       DODO_0509_API_KEY: "provider-key",
     });
