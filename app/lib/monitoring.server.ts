@@ -226,7 +226,6 @@ import {
   markOrchestratedRunCancelled,
   markOrchestratedRunDispatched,
   markOrchestratedDispatchFailure,
-  orchestratedWatchlistRunIsFinished,
   reconcileOrchestratedWatchlistRuns,
   releaseMonitoringConcurrencySlot,
   renewMonitoringConcurrencySlot,
@@ -1978,24 +1977,9 @@ async function assertOrchestratedWatchlistRunLease(
     runId,
     processingToken: options.orchestrationToken,
   });
-  if (renewed) {
-    return;
+  if (!renewed) {
+    throw new StaleOrchestratedWatchlistRunError();
   }
-  // A renew can fail two different ways, and only one of them is a problem.
-  //
-  // The lease was stolen: another worker now holds the row, so its
-  // processing_token differs while the status is still 'running'. That must
-  // abort the run.
-  //
-  // Or this run already finished: a terminal write nulls processing_token
-  // and moves the status off 'running', so later effects in the same run can
-  // no longer renew by design. That is the run's own success, not a steal;
-  // treating it as stale would make every guarded step after finalization
-  // throw.
-  if (await orchestratedWatchlistRunIsFinished(env, runId)) {
-    return;
-  }
-  throw new StaleOrchestratedWatchlistRunError();
 }
 
 /**
@@ -2004,20 +1988,29 @@ async function assertOrchestratedWatchlistRunLease(
  * persist, notify, or finalize between its own effects without the guard
  * being re-checked on both sides — the hand-threaded asserts no longer need
  * to be interleaved manually between every DB effect.
+ *
+ * `finalizesRun` marks `fn` as the effect that records the run's terminal
+ * status. That write clears the run's `processing_token`, so there is no
+ * lease left to assert afterwards and the post-assert is skipped. This keeps
+ * the guard strict everywhere else: a run cancelled or reclaimed elsewhere
+ * still fails the next assert instead of silently passing.
  */
 async function withRunLease<T>(
   env: AppEnv,
   runId: string,
   token: string | undefined,
   fn: () => Promise<T>,
+  options?: { finalizesRun?: boolean },
 ): Promise<T> {
   await assertOrchestratedWatchlistRunLease(env, runId, {
     orchestrationToken: token,
   });
   const result = await fn();
-  await assertOrchestratedWatchlistRunLease(env, runId, {
-    orchestrationToken: token,
-  });
+  if (!options?.finalizesRun) {
+    await assertOrchestratedWatchlistRunLease(env, runId, {
+      orchestrationToken: token,
+    });
+  }
   return result;
 }
 
@@ -2325,6 +2318,7 @@ export async function runWatchlist(
         });
         return outcome;
       },
+      { finalizesRun: true },
     );
 
     if (alertOutcome.errorCode !== null) {
@@ -2424,7 +2418,9 @@ export async function runWatchlist(
               proofAttemptCount: directWebsiteProofEvaluation.proofAttemptCount,
             },
           });
-        });
+          },
+          { finalizesRun: true },
+        );
 
         return { runId, events: 0 };
       }
@@ -2507,6 +2503,7 @@ export async function runWatchlist(
           });
           return outcome;
         },
+        { finalizesRun: true },
       );
 
       if (alertOutcome.errorCode !== null) {
@@ -2519,8 +2516,12 @@ export async function runWatchlist(
       return { runId, events: directWebsiteProofEvaluation.events.length };
     }
 
-    await withRunLease(env, runId, options.orchestrationToken, async () => {
-      await completeWatchlistRun(
+    await withRunLease(
+      env,
+      runId,
+      options.orchestrationToken,
+      async () => {
+        await completeWatchlistRun(
         env,
         runId,
         watchlist.id,
@@ -2555,7 +2556,9 @@ export async function runWatchlist(
           runId,
         },
       });
-    });
+      },
+      { finalizesRun: true },
+    );
     throw error;
   }
 }

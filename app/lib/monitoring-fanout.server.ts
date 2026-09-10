@@ -954,30 +954,6 @@ export async function claimOrchestratedWatchlistRun(
   return { claimed: true as const, processingToken: token };
 }
 
-/**
- * True when the run exists and is no longer owned because it reached a
- * terminal status. `finishOrchestratedWatchlistRun` nulls `processing_token`
- * and moves the status off `running` in the same write, so a finished run can
- * no longer renew its lease — that is its own success, not a stolen lease.
- * Callers use this to tell the two apart.
- */
-export async function orchestratedWatchlistRunIsFinished(
-  env: AppEnv,
-  runId: string,
-) {
-  const row = await one<{ finished: number }>(
-    env,
-    `
-      SELECT 1 AS finished
-      FROM watchlist_run
-      WHERE id = ?
-        AND status IN ('succeeded', 'failed', 'skipped')
-    `,
-    runId,
-  );
-  return row !== null;
-}
-
 export async function renewOrchestratedWatchlistRunLease(
   env: AppEnv,
   input: {
