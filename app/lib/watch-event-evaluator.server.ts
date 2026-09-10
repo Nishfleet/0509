@@ -43,10 +43,11 @@ const BASE_IMPORTANCE_BY_EVENT: Record<WatchEventType, number> = {
   landing_page_cta_changed: 72,
   landing_page_form_changed: 70,
   // Competitor-site page events are emitted directly (emitWebsitePageChangeEvents)
-  // with their own importance; these base values source the SAME shared
-  // constant (WEBSITE_PAGE_EVENT_IMPORTANCE in digest-rerank.ts) so the
-  // evaluator path and the direct emission path can never drift. They clear
-  // the balanced instant gate (75) without spamming a quiet workspace (90).
+  // through the change-criticality scorer (issue #1387); these base values source
+  // the SAME shared constant (WEBSITE_PAGE_EVENT_IMPORTANCE in digest-rerank.ts) so
+  // any page event that routes through the evaluator stays consistent with the
+  // direct-emission base values. They clear the balanced instant gate (75) without
+  // spamming a quiet workspace (90).
   website_page_added: WEBSITE_PAGE_EVENT_IMPORTANCE.website_page_added ?? 0,
   website_page_removed: WEBSITE_PAGE_EVENT_IMPORTANCE.website_page_removed ?? 0,
   website_page_changed: WEBSITE_PAGE_EVENT_IMPORTANCE.website_page_changed ?? 0,
