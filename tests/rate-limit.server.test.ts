@@ -99,7 +99,6 @@ describe("enforceRequestRateLimit", () => {
   });
 
   it("defers event inserts through waitUntil while gating on the count", async () => {
-    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.99);
     const env = { DB: createFakeD1() } as unknown as AppEnv;
     const deferred: Promise<unknown>[] = [];
     const ctx = {
@@ -123,7 +122,6 @@ describe("enforceRequestRateLimit", () => {
     const blocked = await enforceRequestRateLimit(request, env, ctx);
     expect(blocked?.status).toBe(429);
     await Promise.all(deferred.splice(0, deferred.length));
-    randomSpy.mockRestore();
   });
 
   it("fails closed for protected writes when the limiter store is unavailable", async () => {
@@ -454,24 +452,19 @@ describe("enforceAuthenticatedSearchRateLimit", () => {
 
 describe("enforceSearchSelectionRateLimit", () => {
   it("claims the warm-selection budget synchronously instead of deferring admission", async () => {
-    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.99);
     const env = { DB: createFakeD1() } as unknown as AppEnv;
     const waitUntil = vi.fn();
 
-    try {
-      await expect(
-        enforceSearchSelectionRateLimit(
-          new Request("https://0509.io/search?query=nykaa&selected=meta-1"),
-          env,
-          "user-1",
-          { waitUntil } as unknown as ExecutionContext,
-        ),
-      ).resolves.toBeNull();
+    await expect(
+      enforceSearchSelectionRateLimit(
+        new Request("https://0509.io/search?query=nykaa&selected=meta-1"),
+        env,
+        "user-1",
+        { waitUntil } as unknown as ExecutionContext,
+      ),
+    ).resolves.toBeNull();
 
-      expect(waitUntil).not.toHaveBeenCalled();
-    } finally {
-      randomSpy.mockRestore();
-    }
+    expect(waitUntil).not.toHaveBeenCalled();
   });
 
   it("admits at most 120 concurrent warm selections", async () => {
