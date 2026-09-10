@@ -193,27 +193,29 @@ describe("createWatchEvent against real D1", () => {
     expect(await countWatchEvents(watchlistId)).toBe(1);
   });
 
-  it("lets D1 reject an event_type outside the schema's CHECK vocabulary", async () => {
-    // The write path does not validate `eventType` in TypeScript at runtime —
-    // the schema is the enforcement point. If a future migration widens or
-    // drops this CHECK, the guarantee is gone and this test says so.
+  it("accepts an event_type outside the legacy schema vocabulary (migration 0090)", async () => {
+    // Migration 0090 (#2334) dropped the `event_type` CHECK from `watch_event`
+    // and `event_candidate` so every queued source can ship new event types as
+    // an adapter change with zero migration; vocabulary validation moves from
+    // the schema to code (the source adapter registry, #2333). The D1 layer
+    // must therefore accept — not reject — a value the pre-0090 CHECK never
+    // listed. This replaces the pre-0090 assertion that D1 rejected it.
     const { watchlistId, runId } = await seedWatchlistWithRun();
 
-    await expect(
-      createWatchEvent(appEnv, {
-        watchlistId,
-        runId,
-        // Deliberately outside the CHECK list.
-        eventType: "landing_page_pricing_changed" as never,
-        adId: null,
-        baselineFromRunId: null,
-        title: "Unknown type",
-        summary: "rejected by the schema",
-        metadata: {},
-      }),
-    ).rejects.toThrow(/CONSTRAINT/i);
+    const id = await createWatchEvent(appEnv, {
+      watchlistId,
+      runId,
+      // Deliberately outside the old CHECK list.
+      eventType: "landing_page_pricing_changed" as never,
+      adId: null,
+      baselineFromRunId: null,
+      title: "Unknown type",
+      summary: "accepted by the schema",
+      metadata: {},
+    });
 
-    expect(await countWatchEvents(watchlistId)).toBe(0);
+    expect(id).toMatch(/^watch_event_/);
+    expect(await countWatchEvents(watchlistId)).toBe(1);
   });
 
   it("keeps a stable, content-derived id so retries across processes converge", async () => {
