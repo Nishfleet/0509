@@ -245,6 +245,36 @@ export function validateBillingCanaryResult(payload, response, expected = {}) {
 }
 
 /**
+ * Bounded, secret-free attribution for a failed billing canary call.
+ *
+ * `validateBillingCanaryResult` collapses every non-2xx response into
+ * `billing_canary_http_failure`, which is why issue #2646 cost ~24h: the
+ * gate-c evidence named neither the HTTP status nor the server's own
+ * `blocker`, so "the deploy is broken" and "the canary account drifted"
+ * looked identical. This keeps the verdict exactly as strict and adds the two
+ * facts a reader needs.
+ *
+ * Only a short, character-whitelisted blocker string is surfaced — the
+ * endpoint's blocker values are identifiers, never payloads or secrets.
+ *
+ * @param {Response} response
+ * @param {unknown} payload
+ * @returns {{ status: number, serverBlocker: string | null }}
+ */
+export function describeBillingCanaryResponse(response, payload) {
+  const raw =
+    payload && typeof payload === "object" && !Array.isArray(payload)
+      ? /** @type {{ blocker?: unknown }} */ (payload).blocker
+      : null;
+  const serverBlocker =
+    typeof raw === "string" && /^[a-z0-9_]{1,64}$/u.test(raw.trim())
+      ? raw.trim()
+      : null;
+
+  return { status: response.status, serverBlocker };
+}
+
+/**
  * @param {{ config?: ReturnType<typeof parseArgs>, token?: string, fetchImpl?: typeof fetch }} [input]
  */
 export async function runCanary({ config = parseArgs([]), token = process.env.CANARY_BYPASS_TOKEN?.trim(), fetchImpl = fetch } = {}) {
