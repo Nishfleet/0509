@@ -1060,27 +1060,31 @@ export async function searchAdsViaSourceResolver(
               partial,
             },
           });
-          await upsertDiscoveryProviderState(effectiveEnv, {
-            provider,
-            status: partial ? "degraded" : "healthy",
-            failureClass: liveResult.discoveryFailureClass ?? null,
-            summary:
-              partial
-                ? liveResult.discoverySummary ??
-                  "Interactive discovery returned partial results."
-                : provider === "meta_library_browser"
-                ? "Live commercial discovery running through Browser Run."
-                : "Official Meta API is available for limited diagnostic use.",
-            lastSuccessAt: partial
-              ? providerState?.lastSuccessAt ?? usableCached?.fetchedAt ?? null
-              : timestamp,
-            lastFailureAt: partial ? timestamp : null,
-            metadata: {
-              customerOwned: provider === "meta_api" ? hasCustomerMetaToken : false,
-              partial,
-              routeContext,
-            },
-          });
+          // Customer-owned Meta tokens must never write the shared meta_api
+          // provider state or cooldown (mirrors the read-side guard above).
+          if (!(provider === "meta_api" && hasCustomerMetaToken)) {
+            await upsertDiscoveryProviderState(effectiveEnv, {
+              provider,
+              status: partial ? "degraded" : "healthy",
+              failureClass: liveResult.discoveryFailureClass ?? null,
+              summary:
+                partial
+                  ? liveResult.discoverySummary ??
+                    "Interactive discovery returned partial results."
+                  : provider === "meta_library_browser"
+                  ? "Live commercial discovery running through Browser Run."
+                  : "Official Meta API is available for limited diagnostic use.",
+              lastSuccessAt: partial
+                ? providerState?.lastSuccessAt ?? usableCached?.fetchedAt ?? null
+                : timestamp,
+              lastFailureAt: partial ? timestamp : null,
+              metadata: {
+                customerOwned: provider === "meta_api" ? hasCustomerMetaToken : false,
+                partial,
+                routeContext,
+              },
+            });
+          }
         }
 
         return liveResult;
@@ -1156,20 +1160,24 @@ export async function searchAdsViaSourceResolver(
             retryAfterSeconds: cooldownState?.retryAfterSeconds ?? null,
           },
         });
-        await upsertDiscoveryProviderState(effectiveEnv, {
-          provider,
-          status: usableCached ? "cache_only" : "degraded",
-          failureClass,
-          summary,
-          lastSuccessAt: usableCached?.fetchedAt ?? null,
-          lastFailureAt: timestamp,
-          metadata: {
-            cooldownUntil: cooldownState?.cooldownUntil ?? null,
-            customerOwned: provider === "meta_api" ? hasCustomerMetaToken : false,
-            retryAfterSeconds: cooldownState?.retryAfterSeconds ?? null,
-            routeContext,
-          },
-        });
+        // Customer-owned Meta tokens must never write the shared meta_api
+        // provider state or cooldown (mirrors the read-side guard above).
+        if (!(provider === "meta_api" && hasCustomerMetaToken)) {
+          await upsertDiscoveryProviderState(effectiveEnv, {
+            provider,
+            status: usableCached ? "cache_only" : "degraded",
+            failureClass,
+            summary,
+            lastSuccessAt: usableCached?.fetchedAt ?? null,
+            lastFailureAt: timestamp,
+            metadata: {
+              cooldownUntil: cooldownState?.cooldownUntil ?? null,
+              customerOwned: provider === "meta_api" ? hasCustomerMetaToken : false,
+              retryAfterSeconds: cooldownState?.retryAfterSeconds ?? null,
+              routeContext,
+            },
+          });
+        }
       }
 
       if (provider === "meta_library_browser" && (!forceLive || options.customerMetaAdLibraryToken?.trim())) {
@@ -1406,19 +1414,23 @@ async function tryMetaApiFallback(
           fallbackFor: "meta_library_browser",
         },
       });
-      await upsertDiscoveryProviderState(metaApiEnv, {
-        provider: "meta_api",
-        status: "healthy",
-        failureClass: null,
-        summary: "Meta Ad Library API fallback is available while browser capture is unavailable.",
-        lastSuccessAt: timestamp,
-        lastFailureAt: null,
-        metadata: {
-          customerOwned: hasCustomerMetaToken,
-          fallbackFor: "meta_library_browser",
-          routeContext: input.routeContext,
-        },
-      });
+      // Customer-owned Meta tokens must never write the shared meta_api
+      // provider state or cooldown (mirrors the read-side guard above).
+      if (!hasCustomerMetaToken) {
+        await upsertDiscoveryProviderState(metaApiEnv, {
+          provider: "meta_api",
+          status: "healthy",
+          failureClass: null,
+          summary: "Meta Ad Library API fallback is available while browser capture is unavailable.",
+          lastSuccessAt: timestamp,
+          lastFailureAt: null,
+          metadata: {
+            customerOwned: hasCustomerMetaToken,
+            fallbackFor: "meta_library_browser",
+            routeContext: input.routeContext,
+          },
+        });
+      }
     }
 
     return {
@@ -1480,22 +1492,26 @@ async function tryMetaApiFallback(
           retryAfterSeconds: cooldownState?.retryAfterSeconds ?? null,
         },
       });
-      await upsertDiscoveryProviderState(metaApiEnv, {
-        provider: "meta_api",
-        status: "degraded",
-        failureClass,
-        summary: "Meta Ad Library API fallback failed while browser capture is unavailable.",
-        lastSuccessAt: null,
-        lastFailureAt: timestamp,
-        metadata: {
-          cooldownUntil: cooldownState?.cooldownUntil ?? null,
-          customerOwned: hasCustomerMetaToken,
-          errorMessage,
-          fallbackFor: "meta_library_browser",
-          retryAfterSeconds: cooldownState?.retryAfterSeconds ?? null,
-          routeContext: input.routeContext,
-        },
-      });
+      // Customer-owned Meta tokens must never write the shared meta_api
+      // provider state or cooldown (mirrors the read-side guard above).
+      if (!hasCustomerMetaToken) {
+        await upsertDiscoveryProviderState(metaApiEnv, {
+          provider: "meta_api",
+          status: "degraded",
+          failureClass,
+          summary: "Meta Ad Library API fallback failed while browser capture is unavailable.",
+          lastSuccessAt: null,
+          lastFailureAt: timestamp,
+          metadata: {
+            cooldownUntil: cooldownState?.cooldownUntil ?? null,
+            customerOwned: hasCustomerMetaToken,
+            errorMessage,
+            fallbackFor: "meta_library_browser",
+            retryAfterSeconds: cooldownState?.retryAfterSeconds ?? null,
+            routeContext: input.routeContext,
+          },
+        });
+      }
     }
 
     return null;
