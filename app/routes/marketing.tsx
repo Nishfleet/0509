@@ -928,7 +928,7 @@ export default function MarketingRoute() {
                 <p className="ld-export">
                   {proofBrief.decision.subject}
                   {"\n"}Priority: {proofBrief.decision.priority}
-                  {"\n"}Proof: {proofBrief.adCount} real captures — {proofBrief.fetchedAt}
+                  {"\n"}Proof: {proofBrief.adCount} real captures — {proofTimeLabel(proofBrief.fetchedAt)}
                 </p>
               </article>
             </div>
