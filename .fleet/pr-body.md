@@ -1,64 +1,47 @@
-## Why
+## DOMAIN IN, COMPETITORS WATCHED — collapse the funnel to one action
 
-Issue #2108 — generalize signup attribution beyond the six hardcoded strings. Production D1 ground truth: 15 users, 0 signups Jul-Sep, 0 real paying customers. The existing `signup_source` column (migration 0080) has a SQL `CHECK` that admits exactly five literals, so any new slug or `ref:<eTLD+1>` referer marker is rejected at write time. This PR opens the allowlist to lowercase slugs and referer-derived markers, in code and in the D1 schema, so signup attribution can grow without a migration per campaign.
+A logged-out visitor on `/search` can now select several suggested competitors and carry them through email-link signup into onboarding with zero re-entry, then confirm them in one click that creates the watchlists and starts the first proof capture immediately.
 
-This is the orchestrator re-spec (2026-09-09T16:43Z) — it overrides step 2's file list because the original `files:` scope could not meet the `accept:` criterion (the 0080 CHECK rejects any value outside the five literals; SQLite cannot ALTER a CHECK in place).
+### What changed
 
-## Scope
+1. **`/search` multi-select (issue #2113 extended).** The "who advertises against you" preview becomes selectable: each suggested competitor gets a checkbox (all checked by default). The CTA signs a short-lived handoff token carrying the searched domain + the picked candidates and links to signup.
 
-- `migrations/0087_signup_source_open_allowlist.sql` (new) — rebuilds the `user` and `signup_source_pending` CHECK constraints (create-copy-drop-rename, so child FK references to `user` are never rewritten) so `signup_source` accepts: NULL, the five existing literals, `pricing-free`, `for_agencies`, and any value matching `length(signup_source) BETWEEN 1 AND 44 AND signup_source NOT GLOB '*[^a-z0-9:.-]*'` (lowercase slugs and `ref:<eTLD+1>`). Keeps NOT NULL on the pending table; recreates `idx_user_email_nocase` and `idx_signup_source_pending_expires`.
-- `app/lib/signup-source.ts` (modified) — `allowlistedSignupSource` now also accepts lowercase slugs (`/^[a-z0-9][a-z0-9-]{0,39}$/`) and `ref:<eTLD+1>` markers (`/^ref:[a-z0-9.-]{1,40}$/`); the six existing constants keep working. `signupSourceFromRequest` falls back to `ref:<eTLD+1>` derived from the `Referer` header (coarse domain only, never the full URL or query string).
-- `tests/signup-source.test.ts` (modified) — slug accepted, junk rejected, referer-derived value stored, cookie round-trip unchanged, and a shared fixture list asserted against both the code rule and the migration SQL.
-- `tests/integration/signup-source.integration.test.ts` (modified) — referer-derived `ref:example.com` persisted end to end on real D1, open slug persisted, 0087 CHECK accepts/rejects the same fixture list as the code rule, and the rebuilt `user` table keeps its email index and inbound foreign keys.
+2. **Signed handoff token (`app/lib/competitor-handoff.server.ts`).** A `base64url(payload).hex-signature` token keyed by `BETTER_AUTH_SECRET` (no new secret, no new env var), 30-minute TTL. It rides the existing `redirectTo` through the email-link round-trip, so the visitor's picks survive the gap with zero re-entry. A tampered or expired token fails verification with a named code and degrades to the plain `?website=` prefill path.
 
-## D1 expand/contract
+3. **Onboarding one-click confirm.** The setup checklist verifies the token, renders the confirmed candidates, and one click (`create-handoff-watchlists`) creates all watchlists within the plan cap and triggers the first proof capture for each — idempotent via the existing `createWatchlistWithinLimit` fingerprint dedupe + the existing queue primitives (one watchlist never gets two concurrent scans). It then routes to the same-session first brief so the first email fires as soon as the first capture completes.
 
-This is a single-phase schema change (rebuild the CHECK constraints). No `DROP COLUMN`, no `DROP TABLE` of a live table (the rebuild drops the old table only after copying into the replacement), no rename of a column, no `NOT NULL` without a DEFAULT. The migration is validated by the real-D1 integration tests (the `workers` vitest project applies the full migration set to local D1).
+### Honesty invariants preserved
 
-## Verification
+- No plan-limit relaxations — every candidate is re-validated against the plan cap and the existing watchlist-dedupe before any write.
+- No new queue systems — reuses `queueFirstWatchlistScan` / `queueFirstWatchlistScanForSignupFirstBrief`.
+- No fake candidates — an empty discovery still renders nothing; a tampered/expired token degrades to the plain prefill path.
+- No new dependencies.
 
-Real-D1 leg (workers vitest project, applies all migrations including 0087 to local D1):
+### Verification
 
-```
-NODE_OPTIONS=--max-old-space-size=6144 npx vitest run --configLoader runner tests/signup-source.test.ts tests/integration/signup-source.integration.test.ts
-```
+- `npm run typecheck` — clean (0 errors).
+- `npm run test` (node project) — 650 files passed, 7737 tests passed; 1 pre-existing flaky timeout (`customer-readiness-candidate.test.ts`, a git-script test unrelated to this change, passes in isolation).
+- `tests/competitor-handoff.test.ts` — 6 passed (round-trip, tamper, forged-signature, malformed, expiry, missing-secret).
+- `tests/onboarding.route.test.ts` — 25 passed (incl. 3 new: creates N watchlists within cap, idempotent first capture, plan-cap rejection).
+- `tests/search-competitor-preview.test.ts` — 10 passed (incl. new selectable-handoff render).
+- `tests/integration/signup-first-brief.integration.test.ts` — 5 passed.
+- `tests/integration/auto-competitor-seed.integration.test.ts` — 3 passed.
 
-→ 2 files, 23 tests passed (15 unit + 8 integration). The accept criterion is proven: a signup arriving with only `Referer: https://example.com/page` persists `ref:example.com` on `user.signup_source` (integration test "persists a referer-derived ref:<eTLD+1> marker end to end").
+### run-proof
 
-Type check:
+- `npm run typecheck` → exit 0
+- `npx vitest run --project node tests/competitor-handoff.test.ts` → 6 passed
+- `npx vitest run --project node tests/onboarding.route.test.ts` → 25 passed
+- `npx vitest run --project node tests/search-competitor-preview.test.ts` → 10 passed
+- `npx vitest run --project workers tests/integration/signup-first-brief.integration.test.ts` → 5 passed
+- `npx vitest run --project workers tests/integration/auto-competitor-seed.integration.test.ts` → 3 passed
 
-```
-NODE_OPTIONS=--max-old-space-size=6144 npm run typecheck
-```
+### Test plan
 
-→ exit 0.
+- Handoff token round-trip: sign → verify → exact payload.
+- Tamper/forged-signature/expiry/missing-secret: each fails with a named code.
+- Onboarding creates N watchlists within the plan cap and queues one first scan each.
+- Idempotent first capture: an already-watched candidate is never double-created and never gets a second scan.
+- Plan-cap rejection: over-cap candidates return `plan_limit_exceeded` with an upgrade path.
 
-Regression (the `user` rebuild must keep child-table writes intact):
-
-```
-NODE_OPTIONS=--max-old-space-size=6144 npx vitest run --configLoader runner --project workers tests/integration/watch-event-writes.integration.test.ts tests/integration/saucony-watchlist.integration.test.ts tests/integration/signup-first-brief.integration.test.ts tests/integration/retention-sweep-state.integration.test.ts tests/integration/website-scan-baseline.integration.test.ts
-```
-
-→ 5 files, 32 tests passed.
-
-run-proof: tests/signup-source.test.ts (15 tests) + tests/integration/signup-source.integration.test.ts (8 tests, real D1) + 5 regression integration files (32 tests, real D1) all green in the same vitest workers-project run; `npm run typecheck` exit 0.
-
-net-positive-because: this is the issue's own acceptance — the open allowlist (code + D1 schema) is the load-bearing new code, and the rest is the required real-D1 integration proof plus the referer-derivation wiring. It is product work, not control-plane machinery.
-
-## Termination note (check-d1-migrations-synced.mjs)
-
-The issue's termination command ends with `node scripts/check-d1-migrations-synced.mjs`. That script is a **deploy-time** check (it runs in `scripts/deploy-production-plan.mjs` with `includeCloudflareCredentials: true`) that compares the local `migrations/` ledger against the **remote production D1** ledger via `wrangler d1 migrations list 0509 --remote`. It requires Cloudflare production credentials (`CLOUDFLARE_API_TOKEN` or OAuth) that do not exist on this worker VPS, and it is production-gated by repo rules. It would also report 0087 as pending (expected — the migration is applied at deploy time, not by the worker PR).
-
-The migration is instead validated by the real-D1 integration tests, which apply the full migration set (including 0087) to local D1 and assert both the READ and WRITE paths. This matches the precedent of migration PR #1964 (0086), which also validated via real-D1 integration tests and left the production sync check to deploy time.
-
-loose-ends: 0509#2108-check-d1-migrations-synced (deploy-time check requires Cloudflare prod credentials not present on the worker VPS; migration validated by real-D1 integration tests, production sync verified at deploy).
-
-## Reviewer round (cursor/cursor-grok-4.6-high)
-
-- **Act on** — `migrations/0087` CHECK literal lists omitted `for_agencies`, which the code allowlist accepts via the exact-match branch; the open shape `[a-z0-9:.-]` rejects the underscore, so a `for_agencies` signup was silently dropped at write time (violates step 2b "code and DB never disagree"). Fixed: added `for_agencies` to both CHECK literal lists and to the `ACCEPTED_BY_BOTH` fixture lists in both test files. Verified: `tests/signup-source.test.ts` (15), `tests/integration/signup-source.integration.test.ts` (8, real D1), `tests/for-agencies.route.test.ts` (8) all green; `npm run typecheck` exit 0.
-- **Consider** — the `ACCEPTED_BY_BOTH` fixture lists are duplicated across two test files with a "keep in sync" comment but no enforcement. Noted; a shared fixture module is a follow-up, not a blocker.
-- **Consider** — `isOwnDomain` hardcodes `0509.io`/`0509.in`, duplicating `signupSourceCookieDomain`. Noted; deriving both from one source is a follow-up.
-- **Noted** — referer fallback attributes any external referer as `ref:<domain>` (intended accept behavior); the §4 event allowlist is untouched per must-not.
-- **Noted** — `PRAGMA foreign_keys` toggle in 0087; the rename-into-place order preserves child references regardless.
-
-Closes #2108
+Closes #2174
