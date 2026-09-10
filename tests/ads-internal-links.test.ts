@@ -143,6 +143,61 @@ describe("indexable ads link helpers", () => {
     expect(pickFeaturedAdsInternalLink([], "nykaa.com")).toBeNull();
   });
 
+  // Issue #2314: the fresh sneaker/sport brands the global ICP knows are
+  // preferred ahead of the historical Nykaa default, in a fixed precedence
+  // order, with Nykaa kept only as the fallback when none of them is fresh.
+  it("prefers a fresh sneaker/sport brand over Nykaa (issue #2314)", () => {
+    const nike = { domain: "nike.com", path: "/ads/nike.com", name: "Nike" };
+    const nykaaLink = { domain: "nykaa.com", path: "/ads/nykaa.com", name: "Nykaa" };
+    expect(pickFeaturedAdsInternalLink([nykaaLink, nike])).toEqual(nike);
+  });
+
+  it("resolves the priority order Footlocker > New Balance > Adidas > Nike > JD Sports (issue #2314)", () => {
+    const links: IndexableAdsLink[] = [
+      { domain: "jdsports.com", path: "/ads/jdsports.com", name: "JD Sports" },
+      { domain: "nike.com", path: "/ads/nike.com", name: "Nike" },
+      { domain: "adidas.com", path: "/ads/adidas.com", name: "Adidas" },
+      { domain: "newbalance.com", path: "/ads/newbalance.com", name: "New Balance" },
+      { domain: "footlocker.com", path: "/ads/footlocker.com", name: "Foot Locker" },
+      { domain: "nykaa.com", path: "/ads/nykaa.com", name: "Nykaa" },
+    ];
+    // All priority brands fresh → Footlocker (highest priority) wins.
+    expect(pickFeaturedAdsInternalLink(links)).toEqual(
+      expect.objectContaining({ domain: "footlocker.com" }),
+    );
+    // Only some fresh → the highest-priority present brand wins over a
+    // lower-priority one and over Nykaa.
+    expect(
+      pickFeaturedAdsInternalLink([
+        { domain: "nike.com", path: "/ads/nike.com", name: "Nike" },
+        { domain: "newbalance.com", path: "/ads/newbalance.com", name: "New Balance" },
+        nykaa,
+      ]),
+    ).toEqual(expect.objectContaining({ domain: "newbalance.com" }));
+    expect(
+      pickFeaturedAdsInternalLink([
+        { domain: "jdsports.com", path: "/ads/jdsports.com", name: "JD Sports" },
+        nykaa,
+      ]),
+    ).toEqual(expect.objectContaining({ domain: "jdsports.com" }));
+  });
+
+  it("falls back to Nykaa only when no fresh sneaker/sport brand is present (issue #2314)", () => {
+    // All-stale fixture: no priority brand is in the fresh set → Nykaa.
+    expect(pickFeaturedAdsInternalLink([nykaa, glossier], "nykaa.com")).toEqual(nykaa);
+    // Even without a preferred domain, an unrelated fresh brand is preferred
+    // over inventing Nykaa when Nykaa is absent too.
+    expect(pickFeaturedAdsInternalLink([glossier])).toEqual(glossier);
+  });
+
+  it("uses the preferred domain as a fallback only after the sneaker priority, and never favours it over a fresh sneaker brand (issue #2314)", () => {
+    const nike = { domain: "nike.com", path: "/ads/nike.com", name: "Nike" };
+    // Nykaa is the preferred fallback, but a fresh sneaker brand wins.
+    expect(pickFeaturedAdsInternalLink([nykaa, nike], "nykaa.com")).toEqual(nike);
+    // No fresh sneaker brand → preferred fallback (nykaa).
+    expect(pickFeaturedAdsInternalLink([nykaa, glossier], "nykaa.com")).toEqual(nykaa);
+  });
+
   it("resolves a search brand domain from an explicit domain search", () => {
     expect(
       resolveSearchBrandPageDomain({
@@ -322,6 +377,69 @@ describe("public funnel loaders reuse the sitemap indexability filter", () => {
       proofBrief: null,
       indexableAdsLinks: [nykaa, glossier],
     });
+  });
+});
+
+describe("compareAdsExampleLoader picks a non-Nykaa featured brand from the compare routes (issue #2314)", () => {
+  // Accept (issue #2314): a compare route with a fresh sneaker-brand capture
+  // shows a non-Nykaa brand in the featured-ads CTA, with and without a
+  // CF-IPCountry header; Nykaa appears only in the all-stale fixture. The
+  // loader resolves the same `/ads/:domain` link the `CompareAdsExampleLink`
+  // component renders on the compare pages.
+  beforeEach(() => {
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({})),
+    }));
+  });
+
+  it("shows a non-Nykaa brand when a fresh sneaker capture exists (CF-IPCountry: US)", async () => {
+    vi.doMock("~/lib/sitemap.server", () => ({
+      loadIndexableBrandPageEntries: vi.fn().mockResolvedValue([
+        { path: "/ads/nike.com" },
+        { path: "/ads/footlocker.com" },
+        { path: "/ads/nykaa.com" },
+      ]),
+    }));
+    const { compareAdsExampleLoader } = await import("~/lib/ads-internal-links.server");
+    const result = await compareAdsExampleLoader({
+      context: { cloudflare: { env: {} } },
+      request: new Request("https://0509.io/compare/pulzifi", {
+        headers: { "cf-ipcountry": "US" },
+      }),
+    } as never);
+    expect(result.featuredAdsLink?.domain).toBe("footlocker.com");
+  });
+
+  it("shows the same non-Nykaa brand with no country header", async () => {
+    vi.doMock("~/lib/sitemap.server", () => ({
+      loadIndexableBrandPageEntries: vi.fn().mockResolvedValue([
+        { path: "/ads/adidas.com" },
+        { path: "/ads/nike.com" },
+      ]),
+    }));
+    const { compareAdsExampleLoader } = await import("~/lib/ads-internal-links.server");
+    const result = await compareAdsExampleLoader({
+      context: { cloudflare: { env: {} } },
+      request: new Request("https://0509.io/compare/pulzifi"),
+    } as never);
+    expect(result.featuredAdsLink?.domain).toBe("adidas.com");
+  });
+
+  it("shows Nykaa only in the all-stale fixture (no fresh sneaker blanket capture)", async () => {
+    vi.doMock("~/lib/sitemap.server", () => ({
+      loadIndexableBrandPageEntries: vi.fn().mockResolvedValue([
+        { path: "/ads/nykaa.com" },
+        { path: "/ads/glossier.com" },
+      ]),
+    }));
+    const { compareAdsExampleLoader } = await import("~/lib/ads-internal-links.server");
+    const result = await compareAdsExampleLoader({
+      context: { cloudflare: { env: {} } },
+      request: new Request("https://0509.io/compare/pulzifi", {
+        headers: { "cf-ipcountry": "US" },
+      }),
+    } as never);
+    expect(result.featuredAdsLink?.domain).toBe("nykaa.com");
   });
 });
 
