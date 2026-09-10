@@ -138,7 +138,7 @@ npm run dev
 
 ## Key Files
 
-- `app/lib/data.server.ts` — D1 CRUD layer (~9,000 lines; overdue for a split by domain)
+- `app/lib/data.server.ts` — D1 persistence barrel (352 lines, re-exports only); domain implementations live in `app/lib/data/*` leaves. Leaves must not import this barrel (cycle); importers keep using `~/lib/data.server`
 - `app/lib/customer-agent-actions.server.ts` — customer agent action dispatch (~2,600 lines)
 - `app/lib/browser-run.server.ts` — Browser Rendering snapshot runner (~700 lines)
 - `app/lib/evidence-usage.server.ts` — proof/evidence credit ledger (~790 lines)
