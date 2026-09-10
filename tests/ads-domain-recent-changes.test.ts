@@ -460,6 +460,7 @@ function populated(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoade
     canonicalPath: "/ads/nykaa.com",
     captureFailuresSummary: null,
     recentWatchChanges: [],
+    sourceSnapshots: [],
     ...overrides,
   };
 }
