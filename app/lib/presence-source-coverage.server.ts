@@ -3,6 +3,8 @@ import {
   connectorHasCustomerPollPath,
   evaluateConnectorAccessGate,
 } from "~/lib/presence-access-gates.server";
+import { getSourceAdapter } from "~/lib/sources/registry";
+import { SOURCE_IDS } from "~/lib/sources/types";
 import type {
   PresenceConnectorId,
   PresenceCoverageLabel,
@@ -23,6 +25,16 @@ const SOURCE_LABELS: Record<PresenceSourceId, string> = {
   youtube: "YouTube",
   amazon: "Amazon marketplace",
   context_dev: "Context.dev (open-web provider)",
+  // Five new competitor-monitoring sources added by the seam (#2218). Their
+  // adapters are stubs (`implemented: false`) until the source tickets
+  // (#2181/#2189/#2193/#2194/#2198/#2199) land; coverage reports "coming soon"
+  // until then. `linkedin` already existed as a presence connector; the
+  // linkedin-ads adapter reuses that id and is also a stub here.
+  google: "Google Search",
+  google_ads: "Google Ads (Transparency Center)",
+  tiktok: "TikTok Ads (Commercial Content Library, EU-shown)",
+  subdomains: "New web addresses",
+  hiring: "Hiring",
 };
 
 const CONNECTOR_FOR_SOURCE: Partial<Record<PresenceSourceId, PresenceConnectorId>> = {
@@ -146,7 +158,10 @@ async function evaluateConnectorSourceCoverage(
   return statusFromConnectorGate(sourceId, gate, trackingMode);
 }
 
-function evaluatePlannedSourceCoverage(sourceId: PresenceSourceId): PresenceSourceCoverageEntry {
+function evaluatePlannedSourceCoverage(
+  env: AppEnv,
+  sourceId: PresenceSourceId,
+): PresenceSourceCoverageEntry {
   if (sourceId === "youtube") {
     return baseEntry(sourceId, "planned", {
       coverageLabel: "UNAVAILABLE",
@@ -171,6 +186,31 @@ function evaluatePlannedSourceCoverage(sourceId: PresenceSourceId): PresenceSour
       reasonCode: "provider_not_configured",
       reasonMessage: "Context.dev is an optional backend open-web provider. It is not required for website tracking and is not active until configured and approved.",
       actionNeeded: null,
+    });
+  }
+
+  // Seam (#2218): the five new competitor-monitoring sources. Coverage is
+  // "configured" only when the adapter exports implemented: true AND
+  // requiresEnv(env) is true. Stubs (implemented: false) report
+  // "coming_soon" — never "configured". The source tickets flip implemented
+  // to true and wire requiresEnv; this branch then resolves to "configured".
+  const adapter = (SOURCE_IDS as readonly string[]).includes(sourceId)
+    ? getSourceAdapter(sourceId as (typeof SOURCE_IDS)[number])
+    : undefined;
+  if (adapter) {
+    if (adapter.implemented && adapter.requiresEnv(env)) {
+      return baseEntry(sourceId, "configured", {
+        coverageLabel: "OFFICIAL_PUBLIC_API",
+        reasonCode: null,
+        reasonMessage: null,
+        actionNeeded: null,
+      });
+    }
+    return baseEntry(sourceId, "coming_soon", {
+      coverageLabel: "UNAVAILABLE",
+      reasonCode: "not_implemented",
+      reasonMessage: `${SOURCE_LABELS[sourceId]} is wired in as a stub and not live yet.`,
+      actionNeeded: "Coming soon",
     });
   }
 
@@ -211,7 +251,7 @@ export async function evaluatePresenceSourceCoverage(
     return evaluateConnectorSourceCoverage(env, sourceId, trackingMode, workspaceUserId);
   }
 
-  return evaluatePlannedSourceCoverage(sourceId);
+  return evaluatePlannedSourceCoverage(env, sourceId);
 }
 
 export async function listPresenceSourceCoverage(
@@ -394,6 +434,36 @@ export function presenceSourceCoverageForDocs(): Array<{
       label: SOURCE_LABELS.context_dev,
       productionStatus: "planned",
       notes: "Optional backend open-web provider. Not a platform-policy bypass.",
+    },
+    {
+      sourceId: "google",
+      label: SOURCE_LABELS.google,
+      productionStatus: "coming_soon",
+      notes: "Google Search source wired in as a stub (seam #2218). Live adapter lands in #2181.",
+    },
+    {
+      sourceId: "google_ads",
+      label: SOURCE_LABELS.google_ads,
+      productionStatus: "coming_soon",
+      notes: "Google Ads Transparency Center source wired in as a stub (seam #2218). Live adapter lands in #2189.",
+    },
+    {
+      sourceId: "tiktok",
+      label: SOURCE_LABELS.tiktok,
+      productionStatus: "coming_soon",
+      notes: "TikTok Commercial Content Library source wired in as a stub (seam #2218). Live adapter lands in #2194.",
+    },
+    {
+      sourceId: "subdomains",
+      label: SOURCE_LABELS.subdomains,
+      productionStatus: "coming_soon",
+      notes: "New web addresses (subdomains via crt.sh) source wired in as a stub (seam #2218). Live adapter lands in #2198.",
+    },
+    {
+      sourceId: "hiring",
+      label: SOURCE_LABELS.hiring,
+      productionStatus: "coming_soon",
+      notes: "Hiring (job boards) source wired in as a stub (seam #2218). Live adapter lands in #2199.",
     },
   ];
 }

@@ -1,5 +1,5 @@
 import { Link, useLoaderData } from "react-router";
-import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { DashboardPage } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
@@ -101,6 +101,74 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
       checkedAt: attempt.checkedAt,
     })),
   };
+}
+
+/**
+ * Seam #2218 — generic competitor-source field action.
+ *
+ * The competitor detail route was render-only (loader, no action). The seam
+ * adds this one action so a source section can write back the seam's own
+ * competitor columns (#2199's manual "Job board URL" field has no other
+ * endpoint). The action is seam-owned: it writes only the columns the seam
+ * migration created, allowlisted by (sourceId, field), scoped to the signed-in
+ * owner. It does not touch `watchlist-route-actions.server.ts` (#2212-owned).
+ */
+const SOURCE_FIELD_COLUMNS: ReadonlyArray<{ sourceId: string; field: string; column: string }> = [
+  { sourceId: "tiktok", field: "tiktok_advertiser", column: "tiktok_advertiser" },
+  { sourceId: "hiring", field: "job_board_provider", column: "job_board_provider" },
+  { sourceId: "hiring", field: "job_board_slug", column: "job_board_slug" },
+  { sourceId: "hiring", field: "job_board_verified", column: "job_board_verified" },
+];
+
+export async function action({ context, request, params }: ActionFunctionArgs) {
+  const { requireWorkspaceSession } = await import("~/lib/auth.server");
+  const { getEnv } = await import("~/lib/context.server");
+  const { getWatchlist } = await import("~/lib/data.server");
+  const { ensureDb } = await import("~/lib/data/d1.server");
+
+  const env = getEnv(context);
+  const { workspaceUserId } = await requireWorkspaceSession(env, request);
+
+  const form = await request.formData();
+  const intent = String(form.get("intent") ?? "");
+
+  if (intent !== "update-source-field") {
+    return { ok: false, error: "unknown_intent" };
+  }
+
+  const watchlistId = (params.watchlistId ?? "").trim();
+  const sourceId = String(form.get("sourceId") ?? "");
+  const field = String(form.get("field") ?? "");
+  const rawValue = form.get("value");
+
+  const allowed = SOURCE_FIELD_COLUMNS.find(
+    (entry) => entry.sourceId === sourceId && entry.field === field,
+  );
+  if (!allowed) {
+    return { ok: false, error: "invalid_source_field" };
+  }
+
+  const watchlist = watchlistId
+    ? await getWatchlist(env, watchlistId, workspaceUserId)
+    : null;
+  if (!watchlist) {
+    return { ok: false, error: "not_found" };
+  }
+
+  // job_board_verified is a 0/1 flag; everything else is a trimmed string.
+  const value =
+    field === "job_board_verified"
+      ? rawValue === "1" || rawValue === "true"
+        ? 1
+        : 0
+      : String(rawValue ?? "").trim();
+
+  await ensureDb(env)
+    .prepare(`UPDATE watchlist SET ${allowed.column} = ? WHERE id = ?`)
+    .bind(value, watchlist.id)
+    .run();
+
+  return { ok: true, sourceId, field };
 }
 
 function toRenderRun(run: WatchlistRunRecord) {
