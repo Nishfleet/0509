@@ -1,109 +1,35 @@
-## seo: publish the Ad Aggression Score methodology as its own linkable, indexable page
+**Issue #2334** — Replace the `event_type` CHECK constraints with a lookup/free-text column in one final table rebuild.
 
-Closes #2022.
+## What changed
+Migration `migrations/0090_event_type_free_text.sql` (new) rebuilds `event_candidate` and `watch_event` one final time:
 
-### What changed
+- `event_type` becomes unconstrained free text (the inline `CHECK (... IN (...))` is dropped from both tables) — vocabulary validation moves from the schema to code (the source adapter registry from #2333).
+- A new nullable `source_kind TEXT` column is added to both tables.
+- Rebuild uses the established `_next` → `INSERT ... SELECT` → `DROP` → `RENAME` convention (0077:40-135 for `watch_event`, 0077:146-250 for `event_candidate`) with `PRAGMA foreign_keys = OFF/ON`, preserving every existing column, value, and row and recreating the same indexes. Row counts are unchanged by the rebuild.
+- Apply is one-way (D1 has no down-migrations); the pre-0090 event types remain valid free text, so reverting the code does not depend on re-imposing a CHECK. One phase only: this is the final table rebuild. (`Relates to #2333` — the adapter-registry code validation is that issue's scope.)
 
-The Ad Aggression Score methodology page — the formula, four sub-scores
-(Velocity/Testing/Freshness/Persistence), score bands, and evidence floor — is
-promoted to its own canonical, indexable URL at **`/methodology`**, and is now
-linked from the footer of **every `/ads/:domain` page** ("How this Ad
-Aggression Score is calculated — read the methodology") and listed in
-`sitemap.xml` through the existing sitemap generation path.
+## Migration numbering note
+The judge edits (binding) pinned this as `migrations/0088_event_type_free_text.sql`, but `0088` is already taken by two applied migrations (`0088_competitor_source_fields.sql`, `0088_recreate_delivery_hot_path_indexes.sql`). Per the sibling issue's standing principle ("verify the next free migration number at run time; if taken, use the next and note it in the PR"), this lands as the next genuinely free number, `0090`. A duplicate `0088` would collide with D1's per-id migration bookkeeping on a fresh apply.
 
-Path history on the same published content (the formula is unchanged — only the
-canonical URL moved):
-- `#960`: `/methodology/ad-aggression-score`
-- `#1263`: `/ad-aggression`
-- `#2022` (this PR): `/methodology` — canonical
+## Verification
+Ran `npm test` on this branch — full suite green against real D1:
+- `node` project: **662 test files / 7885 tests passed**
+- `workers` (real D1 + real migrations applied): **53 test files / 258 tests passed**, including the new `tests/integration/migrations/0090-event-type-free-text.integration.test.ts` (4 tests) and the updated `tests/integration/watch-event-writes.integration.test.ts`.
 
-Both prior paths keep permanent 301 redirects to `/methodology` so external
-links and any indexed entries keep their equity:
-- `/ad-aggression` → 301 → `/methodology` (`app/routes/ad-aggression-redirect.ts`)
-- `/methodology/ad-aggression-score` → 301 → `/methodology` (redirect target updated)
+`run-proof: migrations/0090_event_type_free_text.sql applied to a fresh D1 in the workers project; tests/integration/migrations/0090-event-type-free-text.integration.test.ts (4 tests) + full `npm test` (node 662/7885, workers 53/258) green`
 
-Localized methodology twins (`/de/methodology`, etc.) re-export the EN page and
-canonicalize to the EN `/methodology`.
+## Integration test (D1 schema rule)
+`tests/integration/migrations/0090-event-type-free-text.integration.test.ts` applies the repo's real migrations and asserts both the **READ** path (both tables expose `source_kind`; the `event_type` CHECK is gone from the live `sqlite_master` DDL; a legacy `ad_new` event_type round-trips unchanged with `source_kind` NULL) and the **WRITE** path (a brand-new `event_type` that the old CHECK never allowed, plus a `source_kind`, is accepted into both tables and read back).
 
-No migration, no workflow-file edits, no `/ads/:domain` regression. The inline
-per-brand score and its formula are byte-for-byte unchanged.
+The pre-existing `watch-event-writes.integration.test.ts` test `lets D1 reject an event_type outside the schema's CHECK vocabulary` pinned the schema as the enforcement point — precisely the behavior #2334 removes. It is updated (same assertion count) to assert the new contract: D1 accepts free-text `event_type`, with `test-removal-justified:` on the commit. It touches no gate-owned path and removes no test.
 
-### Verification
+## Scope checks
+- `research:` — no `bin/` files added (migration + test only); `research-before-build-check` not applicable.
+- `help-first:` — not applicable (no new `bin/` files).
+- rebuild/masking diffs: none.
+- organ diffs: none (`organ-heartbeat:` not-an-organ — `watch_event`/`event_candidate` are data tables, not organs; no organ files touched).
+net-positive-because: a migration file plus its required real-D1 integration test necessarily add schema-lines; the added code is persistent intent (the free-text event_type contract #2334 demands), not a throwaway shim.
 
-Real run, from the rebased `origin/main..HEAD` in the claim worktree:
+loose-ends: legacy `watch_event`/`event_candidate` rows keep `source_kind` NULL; the column is populated by new sources going forward (code wiring lands with the #2333 adapter registry, out of scope here).
 
-- `vitest run --project node` (full): **620 files, 7423 tests passed** — including the
-  methodology redirect/path tests, `ads-brand-page.render`, `seo`, sitemap,
-  locale buyer-surface, breadcrumb, and `design-system-ratchet` (raw-hex-color
-  ceiling back to 258) suites.
-- `vitest run --project worker`: **41 files, 202 tests passed**.
-- Targeted re-run after rebasing onto latest `origin/main`
-  (`a3f93889`): 14 files / 193 tests passed.
-- `react-router typegen` clean.
-
-Local termination-gate checks against the worktree:
-- `grep -q methodology app/routes/*ads*` → matches (`app/routes/ads.$domain.tsx`)
-- `buildSitemapXml` now emits `<loc>https://0509.io/methodology</loc>`
-- `/methodology` route serves the methodology page (200); `/ad-aggression` and
-  `/methodology/ad-aggression-score` 301 to it.
-
-### run-proof
-
-`origin/main..HEAD`: 29 files changed (182 insertions, 339 deletions). No new
-`bin/`, no timed unit/workflow files. Proof of run is the standing vitest suites
-above (node + workers projects), all green, plus the route/redirect unit tests in
-`tests/aggression-score-methodology.test.ts` (301 targets and route wiring) and
-the sitemap/locale tests.
-
-### research / help-first
-
-Not applicable — no new `bin/` files added.
-
-### Reviewer round
-
-- Reviewer seat: `commandcode / meta/muse-spark-1.2-contributor` (resolved via
-  `find_senior_seat`). One round, no loops.
-- **Act on**: none — the reviewer found no blocking or act-on findings.
-- **Consider** (both landed):
-  - Removed a dead, unused `redirectTarget` helper left in
-    `tests/aggression-score-methodology.test.ts` (reviewer flagged it).
-  - `app/components/ads/brand-score-card.tsx` comment now records the full
-    canonical path history through `/ad-aggression` (#1263) instead of
-    skipping the intermediate hop.
-- **Noted**: single-hop 301s straight to `/methodology` (no chained redirects)
-  preserve indexed equity; no leftover functional `/ad-aggression` in
-  `app/`/`workers/` outside comments, the legacy constant, and the redirect
-  loader; sitemap + security-header cache paths move through the shared
-  generation path; the orphaned `methodology.ad-aggression-score.tsx` module
-  was unreferenced dead code, safely removed.
-- **Dismissed-with-reason**: deleting the orphan module (dead, un-wired) and
-  the deliberate literal `/methodology` HREF in `brand-score-card.tsx`
-  (documented grep-ability for the issue's termination check).
-
-### Test plan
-
-- `/methodology` returns 200 and renders the formula with the four sub-scores,
-  bands, and evidence floor.
-- `/ads/:domain` footer links to `/methodology` with the "read the
-  methodology" wording; source matches `grep methodology app/routes/*ads*`.
-- `sitemap.xml` lists `/methodology` (and no longer lists a redirect target).
-- `/ad-aggression` and `/methodology/ad-aggression-score` 301 to `/methodology`.
-
-### Salvage resume (fleet-ops#1204)
-
-Work resumed from the banked `wip/pi-issue-0509-2022-20260908T215253Z` state and
-re-verified end to end by a fresh run. The branch was then rebased onto the
-moved `origin/main` (`fe534bbc`, PRs #2035/#2036/#2038 landed mid-flight; the
-new `/no-phantom-changes` registry entries from #2026 were kept and the
-methodology canonical switched to `/methodology` in the same resolution), and
-the full suite re-ran to green on the rebased head: `vitest --project node`
-7439 tests green, `vitest --project workers` 202 tests green,
-`react-router typegen` clean, `sgscan` no new findings, all PR-body gates
-(prove-one-run-check, fleet-exec-review-canary, fleet-no-agent-names-check,
-fleet-rebuild-verify-check, fleet-token-efficiency-check,
-research-before-build-check, fleet-organ-heartbeat-check) green.
-crgate: skipped — CodeRabbit not signed in on this machine.
-
-organ-heartbeat: app/routes + app/lib not-an-organ: marketing-surface diff touches no organ paths (gate SKIP: no fleet organ touched in the diff).
-
-loose-ends: none in scope — page, footer links, sitemap entry, and both 301 redirects ship; the issue's live `curl https://0509.io/...` checks land automatically after merge + deploy.
+Closes #2334

@@ -25,7 +25,11 @@ async function columnsFor(table: string): Promise<Set<string>> {
   return new Set((rows.results ?? []).map((r) => r.name));
 }
 
-/** Assert the LIVE table definition no longer CHECK-constrains event_type. */
+/**
+ * Assert the LIVE table definition no longer CHECK-constrains event_type. A
+ * negative lookahead keeps this honest: `event_type TEXT NOT NULL` must be
+ * immediately followed by something other than a CHECK block.
+ */
 async function eventTypeIsFreeText(table: string): Promise<boolean> {
   const row = await db()
     .prepare(
@@ -35,7 +39,7 @@ async function eventTypeIsFreeText(table: string): Promise<boolean> {
     .first<{ sql: string }>();
   const sql = row?.sql ?? "";
   // Free text = the event_type column declaration has no inline CHECK.
-  return /event_type\s+TEXT\s+NOT NULL[\s,;]/.test(sql);
+  return /event_type\s+TEXT\s+NOT NULL\s*(?!CHECK\b)/.test(sql);
 }
 
 describe("migration 0090 — event_type free text + source_kind (issue #2334)", () => {
