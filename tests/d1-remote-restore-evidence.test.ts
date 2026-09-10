@@ -186,15 +186,23 @@ describe("D1 remote restore evidence automation", () => {
     const moduleUrl = pathToFileURL(
       resolve("scripts/d1-remote-restore-evidence.mjs"),
     ).href;
+    // The pid publish must be atomic and last: a plain writeFileSync lets the
+    // reader's existsSync poll observe the still-empty file between the
+    // child's open() and its write() when the child is descheduled mid-call
+    // under suite-wide load — the deploy-gate flake (AssertionError at :222,
+    // run 33561746667). The child installs its SIGTERM handler first, then
+    // writes a ".part" sibling and renameSyncs it into place, so a visible
+    // pidfile guarantees a complete pid AND a registered handler.
     writeFileSync(
       helper,
       [
         `import { runCaptured } from ${JSON.stringify(moduleUrl)};`,
         `await runCaptured(process.execPath, ["-e", ${JSON.stringify(
           [
-            'const { writeFileSync } = require("node:fs");',
-            "writeFileSync(process.argv[1], String(process.pid));",
+            'const { renameSync, writeFileSync } = require("node:fs");',
             'process.on("SIGTERM", () => setTimeout(() => process.exit(0), 250));',
+            'writeFileSync(process.argv[1] + ".part", String(process.pid));',
+            "renameSync(process.argv[1] + \".part\", process.argv[1]);",
             "setInterval(() => {}, 1_000);",
           ].join(""),
         )}, process.argv[2]]);`,
@@ -222,11 +230,19 @@ describe("D1 remote restore evidence automation", () => {
       childPid = Number(readFileSync(childPidFile, "utf8"));
       expect(pidAlive(childPid)).toBe(true);
 
+      // The helper forwards this SIGTERM to the child's own process group and
+      // re-raises it on itself only once the child closes, so the relayed
+      // close cannot land before the child's own handler releases it (~250ms
+      // later). A wall-clock floor on that close therefore proves the
+      // forwarded signal reached the child's handler, and it survives a loaded
+      // runner — timers only fire late. The fixed-sleep liveness probe it
+      // replaces does not: the test process itself can be descheduled past the
+      // child's 250ms lifetime and read an already-dead pid at :226.
+      const signaledAt = Date.now();
       helperProcess.kill("SIGTERM");
-      await new Promise((resolveDelay) => setTimeout(resolveDelay, 50));
-      expect(pidAlive(childPid)).toBe(true);
 
       expect(await completed).toEqual({ code: null, signal: "SIGTERM" });
+      expect(Date.now() - signaledAt).toBeGreaterThanOrEqual(200);
       expect(pidAlive(childPid)).toBe(false);
     } finally {
       helperProcess.kill("SIGKILL");

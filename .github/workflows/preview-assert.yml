@@ -8,11 +8,14 @@ name: Preview assert
 # caught by the deploy job's full unsharded run).
 #
 # This workflow runs the deploy job's own pre-deploy verification against the
-# PR head, invoked unchanged from deploy-production.yml:
+# PR head, invoked unchanged from deploy-production.yml — minus the suite,
+# which ci.yml's four node shards already run on every PR. The extra
+# unsharded run here existed only to catch the sharded-vs-unsharded
+# divergence at d1-remote-restore-evidence.test.ts:222; that was a pidfile
+# publish race inside the spec itself (the reader could observe the child's
+# still-empty pidfile between its open() and write() once suite-wide load
+# stretched the gap), fixed at the source in 0509#2373.
 #   - `npm run typecheck` (same step, same NODE_OPTIONS heap budget)
-#   - `npm run test`      (the FULL unsharded suite — the demonstrated
-#                          failure class is a test that passes sharded and
-#                          fails when the whole suite runs together)
 #   - `npm run build`     (the deploy pipeline's react-router build; emits
 #                          build/server/wrangler.json + the .wrangler config
 #                          redirect that the deploy uses)
@@ -125,25 +128,11 @@ jobs:
             npm install --ignore-scripts
           fi
 
-      - name: Install Playwright browsers
-        # Same runner shape as the deploy job: the full suite's process-
-        # lifecycle tests spawn detached provider children that the deploy
-        # runner proves with browsers installed. Keep the shapes identical so
-        # a pass here predicts a pass on the deploy runner.
-        run: npx playwright install chromium firefox webkit
-
       - name: Typecheck
         env:
           # Same heap budget as deploy-production.yml and ci.yml.
           NODE_OPTIONS: --max-old-space-size=2048
         run: npm run typecheck
-
-      - name: Test
-        # The FULL unsharded suite, exactly as the deploy job runs it. PR CI
-        # shards this suite across 4 jobs; the deploy job runs it whole, and
-        # a test that passes sharded can fail when all 529 files run together
-        # (run 33561746667). This is the demonstrated failure class.
-        run: npm run test
 
       - name: Build
         # The deploy pipeline's own build (react-router build via the
