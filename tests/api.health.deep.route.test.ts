@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { SCHEDULED_OBSERVATION_GAP_CHECK_MAX_AGE_MS } from "~/lib/scheduled-observation-health.server";
+import {
+  SCHEDULED_OBSERVATION_GAP_CHECK_ACTIVATION_GRACE_MS,
+  SCHEDULED_OBSERVATION_GAP_CHECK_MAX_AGE_MS,
+} from "~/lib/scheduled-observation-health.server";
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -262,7 +265,7 @@ describe("deep health route", () => {
     expect(body.checks.scheduledGapCheck).toBe("ok");
   });
 
-  it("reports scheduledGapCheck missing when no heartbeat bucket is bound", async () => {
+  it("reports scheduledGapCheck missing and stays degraded when no heartbeat bucket is bound", async () => {
     const { prepare } = healthySoakDb(
       new Date(Date.now() - 5 * 60 * 1000).toISOString(),
       new Date(Date.now() - 5 * 60 * 1000).toISOString(),
@@ -273,10 +276,90 @@ describe("deep health route", () => {
       request: new Request("https://0509.io/api/health/deep"),
     } as never);
 
+    expect(response.status).toBe(503);
     const body = (await response.json()) as {
-      checks: { scheduledGapCheck: string };
+      status: string;
+      checks: { d1: string; scheduledWork: string; scheduledGapCheck: string };
     };
-    expect(body.checks.scheduledGapCheck).toBe("missing");
+    expect(body.status).toBe("degraded");
+    expect(body.checks).toMatchObject({
+      d1: "ok",
+      scheduledWork: "ok",
+      scheduledGapCheck: "missing",
+    });
+  });
+
+  it("stays ok on a fresh version that has not written its first heartbeat yet", async () => {
+    const now = new Date();
+    const { prepare } = healthySoakDb(
+      new Date(now.getTime() - 5 * 60 * 1000).toISOString(),
+      new Date(now.getTime() - 5 * 60 * 1000).toISOString(),
+    );
+    const { loader } = await import("~/routes/api.health.deep");
+    const response = await loader({
+      context: createContext({
+        DB: { prepare },
+        LANDING_PAGE_ARTIFACTS: createBucket(),
+        CF_VERSION_METADATA: {
+          id: "worker-version-fresh",
+          timestamp: new Date(now.getTime() - 60 * 1000).toISOString(),
+        },
+      }),
+      request: new Request("https://0509.io/api/health/deep"),
+    } as never);
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      status: string;
+      checks: { scheduledWork: string; scheduledGapCheck: string };
+    };
+    expect(body.status).toBe("ok");
+    expect(body.checks).toMatchObject({
+      scheduledWork: "ok",
+      scheduledGapCheck: "ok",
+    });
+    const serialized = JSON.stringify(body);
+    for (const privateDetail of [
+      "cron-heartbeats/",
+      "gap-check.json",
+      "lastRunAt",
+      "13 * * * *",
+    ]) {
+      expect(serialized).not.toContain(privateDetail);
+    }
+  });
+
+  it("degrades an absent heartbeat once the version is older than one cadence", async () => {
+    const now = new Date();
+    const { prepare } = healthySoakDb(
+      new Date(now.getTime() - 5 * 60 * 1000).toISOString(),
+      new Date(now.getTime() - 5 * 60 * 1000).toISOString(),
+    );
+    const { loader } = await import("~/routes/api.health.deep");
+    const response = await loader({
+      context: createContext({
+        DB: { prepare },
+        LANDING_PAGE_ARTIFACTS: createBucket(),
+        CF_VERSION_METADATA: {
+          id: "worker-version-old",
+          timestamp: new Date(
+            now.getTime() -
+              SCHEDULED_OBSERVATION_GAP_CHECK_ACTIVATION_GRACE_MS -
+              HOUR_MS,
+          ).toISOString(),
+        },
+      }),
+      request: new Request("https://0509.io/api/health/deep"),
+    } as never);
+
+    expect(response.status).toBe(503);
+    const body = (await response.json()) as {
+      status: string;
+      checks: { scheduledWork: string; scheduledGapCheck: string };
+    };
+    expect(body.status).toBe("degraded");
+    expect(body.checks.scheduledWork).toBe("ok");
+    expect(body.checks.scheduledGapCheck).toBe("degraded");
   });
 
   it("returns degraded 503 when D1 is missing", async () => {

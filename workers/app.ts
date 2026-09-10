@@ -368,6 +368,8 @@ export default {
       // accepts only the four workload crons, so a selective loss of just this
       // trigger left deep health green while the gap alerter was already dead.
       // Record our own heartbeat and let /api/health/deep report its freshness.
+      // The key sits outside `landing-pages/`, so the R2 orphan reconciliation
+      // sweep (app/lib/retention.server.ts) can never delete it.
       scheduleBillingLifecycleEmailRecovery(env, ctx);
       ctx.waitUntil(recordScheduledObservationGapCheckHeartbeat(env));
       ctx.waitUntil(

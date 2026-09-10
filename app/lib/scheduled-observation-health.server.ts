@@ -29,6 +29,14 @@ export const SCHEDULED_OBSERVATION_GAP_CHECK_HEARTBEAT_KEY =
  */
 export const SCHEDULED_OBSERVATION_GAP_CHECK_MAX_AGE_MS = 2 * 60 * 60 * 1000;
 
+/**
+ * A version that has been live for less than one hourly cadence has not had a
+ * chance to write its first heartbeat. Deliberately one cadence rather than the
+ * full max age, so a gap-check trigger that is dead on a brand-new version is
+ * still caught inside two hours instead of hiding behind the freshness window.
+ */
+export const SCHEDULED_OBSERVATION_GAP_CHECK_ACTIVATION_GRACE_MS = 60 * 60 * 1000;
+
 export type ScheduledObservationHealth = {
   cron: string;
   lastScheduledAt: string | null;
@@ -77,8 +85,8 @@ export async function recordScheduledObservationGapCheckHeartbeat(
 /**
  * Freshness of the gap-check heartbeat, read without mutating anything.
  *
- * A missing heartbeat on a version that has been live for less than one
- * max-age is not yet evidence of a dead cron: this version has not had a full
+ * A missing heartbeat on a version that has been live for less than one hourly
+ * cadence is not yet evidence of a dead cron: this version has not had a full
  * cadence in which to write its first heartbeat (the same activation-baseline
  * posture as migration 0072). A missing heartbeat on an older version, or one
  * that stopped advancing, is degraded. An unbound bucket reports `missing` so
@@ -126,7 +134,7 @@ export async function readScheduledObservationGapCheckHealth(
   const withinActivationGrace =
     Number.isFinite(deployedMs) &&
     deployedMs <= now.getTime() &&
-    now.getTime() - deployedMs <= maxAgeMs;
+    now.getTime() - deployedMs <= SCHEDULED_OBSERVATION_GAP_CHECK_ACTIVATION_GRACE_MS;
   return {
     status: withinActivationGrace ? "ok" : "degraded",
     lastRunAt: null,

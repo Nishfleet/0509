@@ -8,6 +8,7 @@ import {
   readScheduledObservationGapCheckHealth,
   recordScheduledObservationGapCheckHeartbeat,
   SCHEDULED_OBSERVATION_DEADLINES,
+  SCHEDULED_OBSERVATION_GAP_CHECK_ACTIVATION_GRACE_MS,
   SCHEDULED_OBSERVATION_GAP_CHECK_CRON,
   SCHEDULED_OBSERVATION_GAP_CHECK_HEARTBEAT_KEY,
   SCHEDULED_OBSERVATION_GAP_CHECK_MAX_AGE_MS,
@@ -429,6 +430,17 @@ describe("scheduled observation gap-check heartbeat", () => {
     );
     expect(fresh).toMatchObject({ status: "ok", lastRunAt: null });
 
+    const oneCadenceOld = await readScheduledObservationGapCheckHealth(
+      { LANDING_PAGE_ARTIFACTS: heartbeatBucket() } as never,
+      {
+        now,
+        deployedAt: new Date(
+          now.getTime() - SCHEDULED_OBSERVATION_GAP_CHECK_ACTIVATION_GRACE_MS - 1,
+        ).toISOString(),
+      },
+    );
+    expect(oneCadenceOld).toMatchObject({ status: "degraded", lastRunAt: null });
+
     const stale = await readScheduledObservationGapCheckHealth(
       { LANDING_PAGE_ARTIFACTS: heartbeatBucket() } as never,
       {
@@ -439,6 +451,29 @@ describe("scheduled observation gap-check heartbeat", () => {
       },
     );
     expect(stale).toMatchObject({ status: "degraded", lastRunAt: null });
+  });
+
+  it("treats an unreadable or unparseable payload as an absent heartbeat", async () => {
+    const wrongType = await readScheduledObservationGapCheckHealth(
+      { LANDING_PAGE_ARTIFACTS: heartbeatBucket(JSON.stringify({ lastRunAt: 1 })) } as never,
+      { now, deployedAt: now.toISOString() },
+    );
+    expect(wrongType).toMatchObject({ status: "ok", lastRunAt: null });
+
+    const unparseable = await readScheduledObservationGapCheckHealth(
+      {
+        LANDING_PAGE_ARTIFACTS: heartbeatBucket(
+          JSON.stringify({ lastRunAt: "not-a-timestamp" }),
+        ),
+      } as never,
+      {
+        now,
+        deployedAt: new Date(
+          now.getTime() - SCHEDULED_OBSERVATION_GAP_CHECK_ACTIVATION_GRACE_MS - 1,
+        ).toISOString(),
+      },
+    );
+    expect(unparseable).toMatchObject({ status: "degraded", lastRunAt: null });
   });
 
   it("treats an unbound bucket as missing and a read failure as an absent heartbeat", async () => {
