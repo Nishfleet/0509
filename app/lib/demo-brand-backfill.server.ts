@@ -30,7 +30,8 @@
  *     brands' captures.
  *
  * The module is deliberately small: it drives existing organs (capture
- * pipeline, D1 data layer, scheduled handler) and adds no schema.
+ * pipeline, D1 data layer, scheduled handler) and adds only its own
+ * per-domain backoff state table (migration 0091, issue #2364).
  */
 
 import { buildLandingPageAnalysisFields } from "~/lib/analysis.server";
@@ -39,6 +40,7 @@ import {
   replaceAnalysisFields,
 } from "~/lib/data/ads.server";
 import { execute, queryOne } from "~/lib/data/d1.server";
+import { reportScheduledTaskFailure } from "~/lib/cron-failure-alert.server";
 import { jsonValue, nowIso } from "~/lib/data/helpers.server";
 import { DEMO_BRAND_PAGE_DOMAINS } from "~/lib/demo-brand-pages";
 import type { AppEnv } from "~/lib/env.server";
@@ -57,6 +59,9 @@ import type { LandingPageSnapshotData } from "~/lib/types";
 export type DemoBrandBackfillStatus =
   | "captured"
   | "skipped_already_captured"
+  | "skipped_attempt_cap"
+  | "stopped"
+  | "skipped_stopped"
   | "capture_failed"
   | "error";
 
@@ -136,6 +141,184 @@ export function demoBackfillRowId(domain: string, day: string): string {
 }
 
 /**
+ * Max capture attempts per demo domain per UTC day (issue #2364). The hourly
+ * proof-hole catch-up rides the gap-check rail (up to 24 passes/day); without
+ * this cap a persistently blocked brand re-spends Browser Run minutes all day.
+ */
+export const DEMO_BRAND_MAX_ATTEMPTS_PER_DAY = 3;
+
+/**
+ * Consecutive fully-failed UTC days after which a demo domain stops capturing
+ * (issue #2364). A day is "failed" when it had at least one attempt and every
+ * attempt that day failed. On the third consecutive failed day the domain is
+ * stopped and the worker routes one throttled operator alert.
+ */
+export const DEMO_BRAND_STOP_AFTER_FAILED_DAYS = 3;
+
+/** Row shape for the `demo_brand_proof_hole_state` table (migration 0091). */
+interface DemoBrandProofHoleStateRow {
+  day: string;
+  attempts_today: number;
+  day_succeeded: number;
+  consecutive_failed_days: number;
+  stopped: number;
+}
+
+/**
+ * The rolled-over, in-code view of a domain's proof-hole state for the current
+ * UTC day, plus whether the stop threshold was crossed on this load.
+ */
+interface DemoBrandProofHoleState {
+  attemptsToday: number;
+  consecutiveFailedDays: number;
+  stopped: boolean;
+  /** True only on the run where the domain first crossed the stop threshold. */
+  becameStopped: boolean;
+}
+
+/**
+ * Read the per-domain proof-hole state and fast-forward it to the current UTC
+ * day. On a day change it finalizes the previous day (failed-day verdict and
+ * consecutive-failed-days streak) and resets the per-day attempt counters.
+ * Never throws: it is the first gate in the per-domain loop, so a state-layer
+ * failure should leave the domain to the normal capture path, not abort it.
+ */
+async function demoBrandProofHoleStateForToday(
+  env: AppEnv,
+  domain: string,
+  today: string,
+): Promise<DemoBrandProofHoleState> {
+  // The read is the one gate that must never throw: under a rolled-back
+  // schema (no demo_brand_proof_hole_state table) the domain must fall
+  // through to the normal capture path, not abort the whole backfill.
+  let existing: DemoBrandProofHoleStateRow | null = null;
+  try {
+    existing = await queryOne<DemoBrandProofHoleStateRow>(
+      env,
+      `SELECT day, attempts_today, day_succeeded, consecutive_failed_days, stopped
+         FROM demo_brand_proof_hole_state WHERE domain = ?`,
+      domain,
+    );
+  } catch {
+    return {
+      attemptsToday: 0,
+      consecutiveFailedDays: 0,
+      stopped: false,
+      becameStopped: false,
+    };
+  }
+
+  if (!existing) {
+    try {
+      await execute(
+        env,
+        `INSERT INTO demo_brand_proof_hole_state (
+           domain, day, attempts_today, day_succeeded,
+           consecutive_failed_days, stopped, updated_at
+         ) VALUES (?, ?, 0, 0, 0, 0, ?)`,
+        domain,
+        today,
+        nowIso(),
+      );
+    } catch {
+      // Row creation is best-effort (see the guarded read comment above).
+    }
+    return {
+      attemptsToday: 0,
+      consecutiveFailedDays: 0,
+      stopped: false,
+      becameStopped: false,
+    };
+  }
+
+  if (existing.day === today) {
+    return {
+      attemptsToday: existing.attempts_today,
+      consecutiveFailedDays: existing.consecutive_failed_days,
+      stopped: existing.stopped === 1,
+      becameStopped: false,
+    };
+  }
+
+  // UTC-day rollover: finalize the previous day.
+  let consecutive = existing.consecutive_failed_days;
+  if (existing.attempts_today > 0) {
+    // A day with at least one attempt counts as failed only when every attempt
+    // failed; any success resets the streak to zero.
+    consecutive = existing.day_succeeded === 1 ? 0 : consecutive + 1;
+  }
+  const wasStopped = existing.stopped === 1;
+  const stopped = wasStopped || consecutive >= DEMO_BRAND_STOP_AFTER_FAILED_DAYS;
+  try {
+    await execute(
+      env,
+      `UPDATE demo_brand_proof_hole_state
+          SET day = ?, attempts_today = 0, day_succeeded = 0,
+              consecutive_failed_days = ?, stopped = ?, updated_at = ?
+        WHERE domain = ?`,
+      today,
+      consecutive,
+      stopped ? 1 : 0,
+      nowIso(),
+      domain,
+    );
+  } catch {
+    // Best-effort (see the guarded read comment above).
+  }
+  return {
+    attemptsToday: 0,
+    consecutiveFailedDays: consecutive,
+    stopped,
+    becameStopped: stopped && !wasStopped,
+  };
+}
+
+/**
+ * Record one capture attempt's outcome in the per-domain proof-hole state: bump
+ * the today counter and mark the day as having a success when it succeeded. The
+ * consecutive-failed-days streak is only updated at UTC-day rollover, so a day
+ * that is still in flight is never counted early. Never throws into the cron.
+ */
+async function recordDemoBrandProofHoleAttempt(
+  env: AppEnv,
+  domain: string,
+  day: string,
+  succeeded: boolean,
+): Promise<void> {
+  try {
+    await execute(
+      env,
+      `INSERT INTO demo_brand_proof_hole_state (
+         domain, day, attempts_today, day_succeeded,
+         consecutive_failed_days, stopped, updated_at
+       ) VALUES (?, ?, 1, ?, 0, 0, ?)
+       ON CONFLICT(domain) DO UPDATE SET
+         day = excluded.day,
+         attempts_today = attempts_today + 1,
+         day_succeeded = MAX(day_succeeded, excluded.day_succeeded),
+         updated_at = excluded.updated_at`,
+      domain,
+      day,
+      succeeded ? 1 : 0,
+      nowIso(),
+    );
+  } catch {
+    // Best-effort state write; a failure to record must not break the capture.
+  }
+}
+
+/**
+ * Per-domain operator-alert task key for a stopped proof-hole domain. The
+ * cron-failure alert throttle (`cron_failure_alert_throttle`, migration 0064)
+ * dedupes on this key, so the stop email is emitted at most once per window
+ * and never re-fires from a repeated `skipped_stopped` pass. `safeTaskKey`
+ * admits only `[a-z0-9_-]{1,80}`, so the domain's dots are folded to `_`.
+ */
+function demoBrandProofHoleStopTaskKey(domain: string): string {
+  return `demo_brand_proof_hole_stopped_${domain.replace(/[^a-z0-9_-]/g, "_")}`;
+}
+
+/**
  * Run one nightly capture pass over the five demo brands. Each brand gets at
  * most one row per UTC day (idempotent). Safe under missing D1: returns an
  * empty degraded result instead of throwing.
@@ -164,6 +347,50 @@ export async function runDemoBrandBackfill(
   for (const domain of domains) {
     const rowId = demoBackfillRowId(domain, day);
     try {
+      // Issue #2364: proof-hole backoff gate. State is per-domain in D1
+      // (`demo_brand_proof_hole_state`, migration 0091); the first gate in the
+      // loop cheaply rolls any UTC-day boundary forward and tells us whether
+      // this domain is stopped or has already spent its daily attempt budget.
+      const state = await demoBrandProofHoleStateForToday(env, domain, day);
+      if (state.stopped) {
+        // A domain that crossed the stop threshold emits exactly one throttled
+        // operator email (becameStopped is true only on the transition run),
+        // then reports `stopped`/`skipped_stopped` on every later pass and
+        // never spends another Browser Run minute.
+        if (state.becameStopped) {
+          await reportScheduledTaskFailure(
+            env,
+            demoBrandProofHoleStopTaskKey(domain),
+            new Error(
+              `${domain}: demo brand proof hole persisted for ` +
+                `${DEMO_BRAND_STOP_AFTER_FAILED_DAYS} consecutive failed days; ` +
+                `capture stopped`,
+            ),
+          );
+        }
+        results.push({
+          domain,
+          status: state.becameStopped ? "stopped" : "skipped_stopped",
+          snapshotId: null,
+          reasonCode: null,
+          canonicalUrl: null,
+          capturedAt: null,
+          error: null,
+        });
+        continue;
+      }
+      if (state.attemptsToday >= DEMO_BRAND_MAX_ATTEMPTS_PER_DAY) {
+        results.push({
+          domain,
+          status: "skipped_attempt_cap",
+          snapshotId: null,
+          reasonCode: null,
+          canonicalUrl: null,
+          capturedAt: null,
+          error: null,
+        });
+        continue;
+      }
       const existing = await queryOne<{ id: string }>(
         env,
         "SELECT id FROM landing_page_snapshot WHERE id = ?",
@@ -207,6 +434,7 @@ export async function runDemoBrandBackfill(
       }
 
       if (!snapshot) {
+        await recordDemoBrandProofHoleAttempt(env, domain, day, false);
         results.push({
           domain,
           status: "capture_failed",
@@ -268,6 +496,7 @@ export async function runDemoBrandBackfill(
         buildLandingPageAnalysisFields(snapshot),
       );
 
+      await recordDemoBrandProofHoleAttempt(env, domain, day, true);
       results.push({
         domain,
         status: "captured",
@@ -337,6 +566,12 @@ export function summarizeDemoBrandBackfill(result: DemoBrandBackfillResult): str
         return `${r.domain}:captured`;
       case "skipped_already_captured":
         return `${r.domain}:already`;
+      case "skipped_attempt_cap":
+        return `${r.domain}:capped`;
+      case "stopped":
+        return `${r.domain}:stopped`;
+      case "skipped_stopped":
+        return `${r.domain}:stopped-skip`;
       case "capture_failed":
         return `${r.domain}:failed${r.reasonCode ? `:${r.reasonCode}` : ""}`;
       case "error":
