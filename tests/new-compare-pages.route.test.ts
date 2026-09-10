@@ -122,16 +122,15 @@ describe("new compare pages (issue 1107)", () => {
     },
   );
 
-  it("publishes each new page in the sitemap and llms.txt with weekly 0.7 priority", async () => {
+  it("publishes each new page in the sitemap and llms.txt", async () => {
     const { publicSeoFileForPathname } = await import("~/lib/seo");
     const sitemap = publicSeoFileForPathname("/sitemap.xml");
     const { LLMS_TEXT } = await import("~/lib/public-markdown");
 
     for (const { slug } of NEW_COMPARE_PAGES) {
       expect(sitemap?.body).toContain(`<loc>https://0509.io/compare/${slug}</loc>`);
-      const around = sitemap?.body.split(`<loc>https://0509.io/compare/${slug}</loc>`)[1] ?? "";
-      expect(around).toContain("<changefreq>weekly</changefreq>");
-      expect(around).toContain("<priority>0.7</priority>");
+      expect(sitemap?.body).not.toContain("<changefreq>");
+      expect(sitemap?.body).not.toContain("<priority>");
       expect(LLMS_TEXT).toContain(`https://0509.io/compare/${slug}`);
     }
   });

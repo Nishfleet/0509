@@ -890,16 +890,13 @@ export const NOINDEX_ACTION_SURFACES = [
 
 /**
  * A sitemap `<url>` entry with optional metadata. `lastmod` is an ISO 8601
- * date (YYYY-MM-DD); `changefreq` and `priority` follow the sitemaps.org spec.
- * Only `lastmod` is actually honored by Google for crawl scheduling — the
- * other two are hints — but all three are emitted so crawlers that do read
- * them get an honest freshness and importance signal instead of nothing.
+ * date (YYYY-MM-DD). `changefreq` and `priority` were removed: Google has
+ * ignored both for years, so emitting them was maintenance surface that
+ * produced nothing.
  */
 export interface SitemapEntry {
   path: string;
   lastmod?: string;
-  changefreq?: string;
-  priority?: string;
   /** Number of non-demo ads backing an /ads/:domain entry; used by llms.txt. */
   adCount?: number;
   /** ISO timestamp of the underlying cache fetch; used by llms.txt. */
@@ -907,50 +904,11 @@ export interface SitemapEntry {
 }
 
 /**
- * Static funnel paths with honest changefreq/priority tiers. lastmod is
- * deliberately omitted on static paths — the build has no per-page content
- * timestamp, and inventing one would be a false freshness claim. Dynamic
- * /ads/:domain brand pages carry a real lastmod from their cache fetched_at.
+ * Static funnel paths. lastmod is deliberately omitted on static paths — the
+ * build has no per-page content timestamp, and inventing one would be a false
+ * freshness claim. Dynamic /ads/:domain brand pages carry a real lastmod from
+ * their cache fetched_at.
  */
-const STATIC_CHANGEFREQ_PRIORITY: Record<string, { changefreq: string; priority: string }> = {
-  "/": { changefreq: "daily", priority: "1.0" },
-  "/search": { changefreq: "weekly", priority: "0.9" },
-  "/brands": { changefreq: "weekly", priority: "0.6" },
-  "/briefs/weekly": { changefreq: "weekly", priority: "0.6" },
-  "/sample-brief": { changefreq: "weekly", priority: "0.6" },
-  "/llms-full.txt": { changefreq: "daily", priority: "0.6" },
-  "/guides/how-to-track-competitor-ads": { changefreq: "monthly", priority: "0.6" },
-  "/competitor-monitoring": { changefreq: "weekly", priority: "0.8" },
-  "/for-agencies": { changefreq: "weekly", priority: "0.8" },
-  "/sneaker-resale": { changefreq: "weekly", priority: "0.8" },
-  "/de/sneaker-resale": { changefreq: "weekly", priority: "0.8" },
-  "/ja/sneaker-resale": { changefreq: "weekly", priority: "0.8" },
-  "/pt-br/sneaker-resale": { changefreq: "weekly", priority: "0.8" },
-  "/capture-rules": { changefreq: "monthly", priority: "0.5" },
-  "/no-phantom-changes": { changefreq: "monthly", priority: "0.5" },
-  "/methodology": { changefreq: "monthly", priority: "0.6" },
-  "/pricing": { changefreq: "weekly", priority: "0.8" },
-  "/compare": { changefreq: "weekly", priority: "0.8" },
-  "/compare/meta-ad-library": { changefreq: "weekly", priority: "0.7" },
-  "/compare/visualping-ad-libraries": { changefreq: "weekly", priority: "0.7" },
-  "/compare/spyland": { changefreq: "weekly", priority: "0.7" },
-  "/compare/pulzifi": { changefreq: "weekly", priority: "0.7" },
-  "/compare/foreplay-spyder": { changefreq: "weekly", priority: "0.7" },
-  "/compare/panoramata": { changefreq: "weekly", priority: "0.7" },
-  "/compare/adspyder": { changefreq: "weekly", priority: "0.7" },
-  "/compare/adspy": { changefreq: "weekly", priority: "0.7" },
-  "/switch/panoramata": { changefreq: "weekly", priority: "0.7" },
-  "/switch/visualping": { changefreq: "weekly", priority: "0.7" },
-  "/changelog": { changefreq: "weekly", priority: "0.6" },
-  "/help": { changefreq: "monthly", priority: "0.5" },
-  "/docs": { changefreq: "monthly", priority: "0.5" },
-  "/api/docs": { changefreq: "monthly", priority: "0.5" },
-  "/mcp/setup": { changefreq: "monthly", priority: "0.5" },
-  "/status": { changefreq: "monthly", priority: "0.5" },
-  "/trust": { changefreq: "yearly", priority: "0.3" },
-  "/privacy": { changefreq: "yearly", priority: "0.3" },
-  "/terms": { changefreq: "yearly", priority: "0.3" },
-};
 
 /**
  * Dated entries on the public /changelog page, newest first (issue #2297).
@@ -978,10 +936,7 @@ export const CHANGELOG_ENTRY_DATES: readonly string[] = [
 ];
 
 export const SITEMAP_STATIC_ENTRIES: readonly SitemapEntry[] = SITEMAP_PATHS.map(
-  (path) => ({
-    path,
-    ...STATIC_CHANGEFREQ_PRIORITY[path],
-  }),
+  (path) => ({ path }),
 );
 
 /**
@@ -1017,12 +972,6 @@ export function renderSitemapXml(entries: readonly SitemapEntry[]): string {
     const children = [`<loc>${canonicalUrl(entry.path)}</loc>`];
     if (entry.lastmod) {
       children.push(`<lastmod>${entry.lastmod}</lastmod>`);
-    }
-    if (entry.changefreq) {
-      children.push(`<changefreq>${entry.changefreq}</changefreq>`);
-    }
-    if (entry.priority) {
-      children.push(`<priority>${entry.priority}</priority>`);
     }
     return `  <url>${children.join("")}</url>`;
   });
