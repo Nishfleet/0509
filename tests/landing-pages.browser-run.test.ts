@@ -1,7 +1,14 @@
+import { readFileSync } from "node:fs";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PromiseTimeoutError } from "~/lib/fetch-timeout.server";
 import { applyMigration, createSqliteD1 } from "./helpers/sqlite-d1";
+
+const LANDING_PAGE_FIXTURE = readFileSync(
+  "tests/fixtures/landing-page-browser-run.html",
+  "utf8",
+);
 
 const DNS_JSON_ENDPOINT = "https://cloudflare-dns.com/dns-query";
 
@@ -49,6 +56,15 @@ function mockFetchWithDns(
 
 function nonDnsFetchCalls(fetch: ReturnType<typeof mockFetchWithDns>) {
   return fetch.mock.calls.filter(([input]) => !String(input).startsWith(DNS_JSON_ENDPOINT));
+}
+
+/** Never call through to a live origin — DNS and page fetch stay in-process. */
+function mockPinnedLandingFetchFailed() {
+  return mockFetchWithDns(
+    vi.fn(async () => {
+      throw new Error("fetch failed");
+    }) as never,
+  );
 }
 
 describe("captureLandingPageSnapshot Browser Run fallback", () => {
@@ -465,9 +481,7 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
   });
 
   it("captures a real browser-rendered proof bundle when fetch fails", async () => {
-    mockFetchWithDns(vi.fn(async () => {
-      throw new Error("fetch failed");
-    }) as never);
+    mockPinnedLandingFetchFailed();
 
     const page = {
       goto: vi.fn(),
@@ -475,21 +489,7 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
       setUserAgent: vi.fn(),
       setRequestInterception: vi.fn(),
       setViewport: vi.fn(),
-      content: vi.fn().mockResolvedValue(`
-        <html>
-          <head>
-            <title>Glow Serum Sale</title>
-          </head>
-          <body>
-            <button>Shop now</button>
-            <p>Starting at ₹499 only today. Our best-selling vitamin C serum is now at 20% off for the launch week. Free shipping on all orders above ₹999.</p>
-            <form action="/lead">
-              <input name="phone" />
-              <input type="submit" value="Get Offer" />
-            </form>
-          </body>
-        </html>
-      `),
+      content: vi.fn().mockResolvedValue(LANDING_PAGE_FIXTURE),
       screenshot: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3, 4])),
       url: vi.fn().mockReturnValue("https://example.com/glow?ref=browser"),
     };
@@ -585,6 +585,45 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
         screenshotArtifactKey: null,
         captureWarningCodes: ["screenshot_capture_failed"],
       },
+    });
+  });
+
+  it("retries a timed-out screenshot once and keeps the rendered proof", async () => {
+    mockPinnedLandingFetchFailed();
+    const screenshot = vi
+      .fn()
+      .mockRejectedValueOnce(new PromiseTimeoutError("Browser Run screenshot timed out."))
+      .mockResolvedValueOnce(new Uint8Array([1, 2, 3, 4]));
+    const page = {
+      goto: vi.fn(),
+      on: vi.fn(),
+      setUserAgent: vi.fn(),
+      setRequestInterception: vi.fn(),
+      setViewport: vi.fn(),
+      content: vi.fn().mockResolvedValue(
+        "<html><head><title>Timed screenshot</title></head><body><button>Buy now</button><p>Our best-selling serum is now at 20% off for the launch week. Starting at ₹499 with free shipping on all orders above ₹999.</p></body></html>",
+      ),
+      screenshot,
+      url: vi.fn().mockReturnValue("https://example.com/offer"),
+    };
+    const browser = {
+      newPage: vi.fn().mockResolvedValue(page),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch: vi.fn().mockResolvedValue(browser) },
+    }));
+
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+    const snapshot = await captureLandingPageSnapshot(
+      { BROWSER: {} as Fetcher },
+      "https://example.com/offer",
+    );
+
+    expect(screenshot).toHaveBeenCalledTimes(2);
+    expect(snapshot).toMatchObject({
+      rawHeadline: "Timed screenshot",
+      captureMethod: "browser_render",
     });
   });
 
@@ -1038,6 +1077,55 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
     expect(put).toHaveBeenCalledTimes(1);
   });
 
+  it("decodes MIME-wrapped Browserless screenshot base64 instead of warning decode_failed", async () => {
+    const screenshotBytes = new Uint8Array([8, 5, 0, 9]);
+    const canonical = btoa(String.fromCharCode(...screenshotBytes));
+    const wrapped = `${canonical.slice(0, 4)}\n${canonical.slice(4)}`;
+    const put = vi.fn();
+    mockFetchWithDns(
+      vi.fn(async (input) => {
+        if (!String(input).includes("browserless.io/stealth/bql")) {
+          throw new Error("fetch failed");
+        }
+
+        return new Response(
+          JSON.stringify({
+            data: {
+              html: {
+                html: "<html><head><title>Wrapped proof</title></head><body><a>Buy now</a><p>Our best-selling serum is now at 20% off for the launch week. Starting at ₹499 with free shipping on all orders above ₹999.</p></body></html>",
+              },
+              screenshot: { base64: wrapped },
+              documentRequests: [{ url: "https://www.example.com/glow" }],
+              url: { url: "https://www.example.com/glow" },
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }) as never,
+    );
+
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+    const snapshot = await captureLandingPageSnapshot(
+      {
+        BROWSERLESS_TOKEN: "browserless-token",
+        BROWSERLESS_PROOF_ALLOWLIST_ORIGINS: "https://example.com https://www.example.com",
+        LANDING_PAGE_ARTIFACTS: { put } as unknown as R2Bucket,
+      },
+      "https://example.com/glow",
+    );
+
+    expect(snapshot).toMatchObject({
+      rawHeadline: "Wrapped proof",
+      ctaText: "Buy now",
+      metadata: {
+        screenshotArtifactKey: expect.stringMatching(/\.jpeg$/u),
+        htmlArtifactKey: expect.stringMatching(/\.html$/u),
+      },
+    });
+    expect(snapshot?.metadata?.captureWarningCodes ?? []).not.toContain("screenshot_decode_failed");
+    expect(put).toHaveBeenCalledTimes(2);
+  });
+
 	it("treats www and apex as the same Browserless allowlist origin (issue #1919)", async () => {
 	  const screenshotBytes = new Uint8Array([8, 5, 0, 9]);
 	  const put = vi.fn().mockResolvedValue(undefined);
@@ -1120,11 +1208,34 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
 	});
 
 	it("fails honestly when fetch fails and Browser Run is unavailable", async () => {
-	  vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("fetch failed"));
+    mockPinnedLandingFetchFailed();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
     const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
 
     await expect(captureLandingPageSnapshot({}, "https://example.com/glow")).resolves.toBeNull();
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('"reasonCode":"landing_fetch_failed"'),
+    );
+  });
+
+  it("does not skip when Browser Run launch is unavailable", async () => {
+    mockPinnedLandingFetchFailed();
+    const launch = vi.fn().mockRejectedValue(new Error("Could not find Chrome"));
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch },
+    }));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+    await expect(
+      captureLandingPageSnapshot({ BROWSER: {} as Fetcher }, "https://example.com/glow"),
+    ).resolves.toBeNull();
+
+    expect(launch).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('"reasonCode":"browser_render_failed"'),
+    );
   });
 
   it("contains a rejected rendered fallback after fetch failure", async () => {
