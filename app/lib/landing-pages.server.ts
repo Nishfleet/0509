@@ -1,5 +1,5 @@
 import { captureRenderedLandingPageSnapshot } from "~/lib/browser-run.server";
-import { readResponseTextCapped, utf8ByteLength } from "~/lib/bounded-response.server";
+import { readResponseTextWithinLimit, utf8ByteLength } from "~/lib/bounded-response.server";
 import {
   assessCaptureValidity,
   type CaptureValidityReasonCode,
@@ -63,14 +63,10 @@ export type LandingPageCaptureFailureReasonCode =
   | "landing_redirect_blocked"
   | "landing_redirect_limit"
   | "landing_blocked"
-  | "landing_auth_required"
   | "landing_rate_limited"
   | "landing_http_error"
-  | "landing_not_found"
-  | "landing_gone"
-  | "landing_server_error"
   | "landing_fetch_failed"
-  | "landing_content_empty"
+  | "landing_content_empty_or_oversized"
   | "screenshot_required"
   | CaptureValidityReasonCode;
 
@@ -436,7 +432,12 @@ async function captureLandingPageSnapshotAt(
     if (!response.ok) {
       const fetchStatus = response.status;
       releaseFetchTimeout(response);
-      const reasonCode = landingHttpFailureReasonCode(fetchStatus);
+      const reasonCode =
+        fetchStatus === 429
+          ? "landing_rate_limited"
+          : fetchStatus === 401 || fetchStatus === 403
+            ? "landing_blocked"
+            : "landing_http_error";
       if (auditContext) {
         emitLpRunAudit({
           context: auditContext,
@@ -447,14 +448,7 @@ async function captureLandingPageSnapshotAt(
           ms: Math.max(0, Date.now() - fetchStartedAt),
         });
       }
-      // A rendered leg fetches the same URL in a real browser. Bot walls
-      // (403) and transient 5xx can genuinely be rescued that way; an auth
-      // wall (401) or a dead URL (404/410) renders the same non-page — at
-      // best a phantom snapshot of the site's error screen, never the offer.
-      // Spending a rendered leg on those burns browser budget for a
-      // guaranteed non-capture, so they bail straight to the narrow reason.
       if (
-        !renderCannotRescueStatus(fetchStatus) &&
         options.allowRenderedFallback !== false &&
         !state.renderedAttempted
       ) {
@@ -471,16 +465,13 @@ async function captureLandingPageSnapshotAt(
       return recordFailedLanding(env, telemetry, options, reasonCode, { fetchStatus });
     }
 
-    // Issue #1538: an oversized body is no longer an automatic bail — the
-    // reader keeps the first MAX_LANDING_PAGE_HTML_BYTES and the pipeline
-    // parses that head. Only a genuinely empty body bails here.
-    const bodyRead = await readResponseTextCapped(response, MAX_LANDING_PAGE_HTML_BYTES);
-    if (bodyRead === null) {
+    const html = await readResponseTextWithinLimit(response, MAX_LANDING_PAGE_HTML_BYTES);
+    if (!html) {
       if (auditContext) {
         emitLpRunAudit({
           context: auditContext,
           stage: "html_fetch",
-          outcome: "bailed:landing_content_empty",
+          outcome: "bailed:landing_content_empty_or_oversized",
           bytesIn: utf8ByteLength(resolvedUrl.toString()),
           bytesOut: 0,
           ms: Math.max(0, Date.now() - fetchStartedAt),
@@ -494,7 +485,7 @@ async function captureLandingPageSnapshotAt(
         await recordLandingLeg(
           env,
           telemetry,
-          mapLandingFailureOutcome("landing_content_empty"),
+          mapLandingFailureOutcome("landing_content_empty_or_oversized"),
         );
         const rendered = await captureRenderedSnapshot(env, finalUrl.toString(), options, telemetry);
         if (rendered) {
@@ -505,13 +496,9 @@ async function captureLandingPageSnapshotAt(
         env,
         telemetry,
         options,
-        "landing_content_empty",
+        "landing_content_empty_or_oversized",
         { fetchStatus: response.status },
       );
-    }
-    const html = bodyRead.text;
-    if (bodyRead.truncated) {
-      captureWarningCodes.push("landing_content_truncated");
     }
     // html_fetch ok — the response body was read within the byte cap.
     // bytesIn is the URL (the request payload is the URL itself); bytesOut
@@ -819,36 +806,6 @@ async function fetchLandingPageWithTransientRetry(
 
 function isTransientFetchStatus(status: number) {
   return status === 429 || status >= 500;
-}
-
-/**
- * Issue #1538: split the old catch-alls into the narrowest honest reason so
- * the bail-reason table can tell a dead ad URL (404/410) from a server
- * outage (5xx) from a bot wall (403) from an auth wall (401). Anything not
- * individually named keeps the historical `landing_http_error` bucket.
- */
-function landingHttpFailureReasonCode(
-  status: number,
-): LandingPageCaptureFailureReasonCode {
-  if (status === 429) return "landing_rate_limited";
-  if (status === 401) return "landing_auth_required";
-  if (status === 403) return "landing_blocked";
-  if (status === 404) return "landing_not_found";
-  if (status === 410) return "landing_gone";
-  if (status >= 500) return "landing_server_error";
-  return "landing_http_error";
-}
-
-/**
- * Statuses a rendered leg cannot rescue: the browser fetches the same URL
- * and gets the same non-page — an auth wall (401) renders a login wall and
- * a dead URL (404/410) renders the site's error screen. Capturing either
- * would fabricate a proof from a page that is not the offer. (403 stays
- * renderable: bot walls routinely let a real browser through, and 5xx may
- * have recovered by the time the render lands.)
- */
-function renderCannotRescueStatus(status: number) {
-  return status === 401 || status === 404 || status === 410;
 }
 
 function sleep(ms: number) {

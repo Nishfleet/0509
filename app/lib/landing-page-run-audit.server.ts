@@ -27,14 +27,8 @@
  * log query can GROUP BY them and surface the dominant bail-out:
  *   html_fetch      — HTTP fetch itself (timeouts, 4xx, 5xx, redirects)
  *                     bail reasons: landing_rate_limited, landing_blocked,
- *                     landing_auth_required, landing_http_error,
- *                     landing_not_found, landing_gone, landing_server_error,
- *                     landing_fetch_failed, landing_redirect_blocked,
- *                     landing_content_empty
- *                     (#1538 split the old landing_http_error catch-all and
- *                     retired landing_content_empty_or_oversized — an
- *                     oversized body is truncated and parsed, only a 0-byte
- *                     body still bails as landing_content_empty)
+ *                     landing_http_error, landing_fetch_failed,
+ *                     landing_redirect_blocked, landing_content_empty_or_oversized
  *   html_parse      — removeNonVisibleElements / ad-slot strip
  *                     bail reasons: empty_after_strip
  *   anchor_resolve  — extractActionLinks + cleanText
