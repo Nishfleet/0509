@@ -190,12 +190,15 @@ describe("issue #2051 — prefill param alias", () => {
     expect(source).toMatch(/searchParams\.get\("competitor"\)/);
   });
 
-  it("the onboard compat path accepts the competitor alias", async () => {
+  it("the onboard redirect forwards the competitor alias", async () => {
+    // Issue #2292 removed the compat cookie branch; the competitor alias now
+    // lives in the 301 redirect's forwarded-key set. Assert that set so the
+    // test cannot silently pass when the param is dropped.
     const { readFile } = await import("node:fs/promises");
     const source = await readFile(
       new URL("../app/routes/app.onboard.tsx", import.meta.url),
       "utf8",
     );
-    expect(source).toMatch(/searchParams\.get\("competitor"\)/);
+    expect(source).toMatch(/\["website", "country", "competitor"\]/);
   });
 });
