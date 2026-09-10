@@ -172,7 +172,7 @@ describe("workspace settings route components", () => {
     });
 
     const { default: DeveloperAccessRoute } =
-      await import("~/routes/app.developer-access");
+      await import("~/routes/app.api");
     const markup = renderToStaticMarkup(createElement(DeveloperAccessRoute));
 
     expect(markup).toContain("Developer access");

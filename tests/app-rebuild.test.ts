@@ -13,7 +13,7 @@ const collectionExternalProof = readFileSync(
   "utf8",
 );
 const clientsRoute = readFileSync("app/routes/app.clients.tsx", "utf8");
-const digestsRoute = readFileSync("app/routes/app.digests.tsx", "utf8");
+const digestsRoute = readFileSync("app/routes/app.briefs.tsx", "utf8");
 const watchlistsRoute = readFileSync("app/routes/app.watchlists.tsx", "utf8");
 // BL-030 replaced BL-006's competitor band with the ruled list row; the row
 // component is where the competitor link now lives.
@@ -104,10 +104,10 @@ describe("app rebuild", () => {
     expect(ruledList).not.toContain("href=");
     expect(watchlistsRoute).toContain("watchlistDetailTabHref(row.id)");
     expect(digestsRoute).toContain(
-      "to={`/app/digests?digest=${digest.id}#first-brief-detail`}",
+      "to={`/app/briefs?digest=${digest.id}#first-brief-detail`}",
     );
     expect(digestsRoute).toContain("preventScrollReset");
-    expect(digestsRoute).not.toContain("href={`/app/digests?digest=${digest.id}`}");
+    expect(digestsRoute).not.toContain("href={`/app/briefs?digest=${digest.id}`}");
   });
 
   it("matches the advertised competitor-ad dashboard surface", () => {

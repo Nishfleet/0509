@@ -540,10 +540,10 @@ describe("the rail", () => {
     );
   }
 
-  it("shows five destinations and no disclosure — the ratified IA", () => {
+  it("shows seven destinations and no disclosure — the 8-screen route diet", () => {
     const markup = renderShell();
     const rows = markup.match(/class="f9-dash-nav-link f9-wk-nav-a[^"]*"/g) ?? [];
-    expect(rows).toHaveLength(5);
+    expect(rows).toHaveLength(7);
     expect(markup).not.toContain("Workspace &amp; account");
     expect(markup).not.toContain("f9-wk-more");
   });
@@ -556,12 +556,13 @@ describe("the rail", () => {
   });
 
   it("marks the owning destination active on a member page", () => {
-    // On /app/billing the Settings row is the active row — a customer deep
+    // Route diet phase 1 (#2213): /app/billing is a member page of the
+    // Account & Billing destination, so that row is active. A customer deep
     // inside a member page is never nowhere.
     const markup = renderShell("/app/billing");
     const active = markup.match(/f9-dash-nav-link[^"]*is-active[^"]*"[^>]*href="([^"]+)"/);
-    expect(markup).toContain('href="/app/settings"');
-    expect(active?.[1]).toBe("/app/settings");
+    expect(markup).toContain('href="/app/account"');
+    expect(active?.[1]).toBe("/app/account");
   });
 
   it("carries a workspace footer block, and every route is still reachable", () => {

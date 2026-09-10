@@ -40,7 +40,7 @@ describe("developer access route API-key readiness", () => {
       apiKeys: [],
     });
 
-    const { default: DeveloperAccessRoute } = await import("~/routes/app.developer-access");
+    const { default: DeveloperAccessRoute } = await import("~/routes/app.api");
     const markup = renderToStaticMarkup(createElement(DeveloperAccessRoute));
 
     expect(markup).toContain("0 active keys · 0 with approved actions");
@@ -56,7 +56,7 @@ describe("developer access route API-key readiness", () => {
       apiKeys: [],
     });
 
-    const { default: DeveloperAccessRoute } = await import("~/routes/app.developer-access");
+    const { default: DeveloperAccessRoute } = await import("~/routes/app.api");
     const markup = renderToStaticMarkup(createElement(DeveloperAccessRoute));
 
     expect(markup).toContain("Developer access is included in the Agency plan. Upgrade to Agency to create API keys.");
@@ -76,7 +76,7 @@ describe("developer access route API-key readiness", () => {
     });
 
     const { default: DeveloperAccessRoute } = await import(
-      "~/routes/app.developer-access"
+      "~/routes/app.api"
     );
     const markup = renderToStaticMarkup(createElement(DeveloperAccessRoute));
 
@@ -124,7 +124,7 @@ describe("developer access route API-key readiness", () => {
       ],
     });
 
-    const { default: DeveloperAccessRoute } = await import("~/routes/app.developer-access");
+    const { default: DeveloperAccessRoute } = await import("~/routes/app.api");
     const markup = renderToStaticMarkup(createElement(DeveloperAccessRoute));
 
     expect(markup).toContain("2 active keys · 1 with approved actions");
@@ -152,7 +152,7 @@ describe("developer access route API-key readiness", () => {
     );
 
     const { default: DeveloperAccessRoute } = await import(
-      "~/routes/app.developer-access"
+      "~/routes/app.api"
     );
     const markup = renderToStaticMarkup(createElement(DeveloperAccessRoute));
 

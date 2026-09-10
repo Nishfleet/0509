@@ -97,7 +97,7 @@ async function renderDigest(
     DashboardPageHeader: () => null,
   }));
 
-  const { default: DigestsRoute } = await import("~/routes/app.digests");
+  const { default: DigestsRoute } = await import("~/routes/app.briefs");
   return renderToStaticMarkup(createElement(DigestsRoute));
 }
 
@@ -129,7 +129,7 @@ describe("digest plan-aware controls", () => {
       getDigest: vi.fn(),
     }));
 
-    const { action } = await import("~/routes/app.digests");
+    const { action } = await import("~/routes/app.briefs");
     const formData = new FormData();
     formData.set("intent", "share-digest");
     formData.set("digestId", "digest-1");
