@@ -26,6 +26,14 @@ export interface WebsiteIdentity {
    * the field still type-check; production always sets it via `?? null`.
    */
   advertiserPageId?: string | null;
+  /**
+   * Curated Meta Ad Library query term for the brand, when the registrable
+   * domain is not itself a term the provider indexes. Null/absent for the
+   * common case, where the registrable domain is the right question to ask
+   * (issue #1999). Only ever produced from `IDENTITY_OVERRIDES` — a curated
+   * fact, never a guess (issue #2233).
+   */
+  providerQuery?: string | null;
   resolvedAt: string;
 }
 
@@ -49,7 +57,12 @@ const IDENTITY_FETCH_TIMEOUT_MS = 10_000;
  */
 const IDENTITY_OVERRIDES: Record<
   string,
-  { siteName?: string; domainAliases?: string[]; advertiserPageId?: string }
+  {
+    siteName?: string;
+    domainAliases?: string[];
+    advertiserPageId?: string;
+    providerQuery?: string;
+  }
 > = {
   // GOAT's marketplace CDN returns 403 to scripted fetches regardless of the
   // user-agent (even a full browser UA), so live identity resolution cannot
@@ -123,6 +136,26 @@ const IDENTITY_OVERRIDES: Record<
   // post-fetch classifier uses; the provider query is the registrable domain
   // zappos.com (issue #1999), not this alias.
   "zappos.com": { siteName: "Zappos", domainAliases: ["www.zappos.com"] },
+  // Saucony UK (issue #2233). saucony.co.uk is the buyer-typed UK storefront,
+  // but it 302s onto the US host (https://saucony.co.uk ->
+  // https://www.saucony.com/UK/en_GB/home/), so the brand's Meta ads land on
+  // saucony.com and never on the .co.uk host itself.
+  //
+  // The #1999 rule asks Meta for the registrable domain, which is the right
+  // question for a .com brand that prints its domain in its ads. It is the
+  // wrong question when the registrable domain is a country storefront Meta
+  // has never indexed: live 2026-09-10, website=saucony.co.uk asked Meta for
+  // "saucony.co.uk" and settled on a confirmed "No verified ads found for
+  // saucony.co.uk" (0 rows) while q=saucony returned 9 verified rows. The
+  // canary was green on saucony.co.uk (8-9 verified rows) in all 39 runs
+  // before #1999 shipped and red on it in every run after.
+  //
+  // The curated brand term is the query Meta actually indexes, exactly as
+  // ridge.com/zappos.com curate the alias facts that connect their ads. It
+  // does not loosen the matcher: a row still has to land on saucony.co.uk or
+  // on a host the live redirect chain resolved from it before it can be
+  // labelled verified or likely.
+  "saucony.co.uk": { siteName: "Saucony", providerQuery: "Saucony" },
 };
 
 const identityCache = new Map<string, { expiresAt: number; identity: WebsiteIdentity | null }>();
@@ -204,6 +237,7 @@ function applyIdentityOverride(
     aliases: siteName ? [...new Set([...baseAliases, siteName])] : [...baseAliases],
     domainAliases: mergedDomainAliases,
     advertiserPageId: override.advertiserPageId ?? null,
+    providerQuery: override.providerQuery ?? null,
     resolvedAt: live?.resolvedAt ?? new Date().toISOString(),
   };
 }
@@ -221,6 +255,19 @@ export function clearWebsiteIdentityCacheForTests() {
  */
 export function getCuratedAdvertiserPageId(registrableDomain: string): string | null {
   return IDENTITY_OVERRIDES[registrableDomain]?.advertiserPageId ?? null;
+}
+
+/**
+ * Sync lookup of a curated Meta Ad Library query term for a registrable
+ * domain, without a network fetch. Used by the search-v2 query builder so a
+ * country storefront Meta has never indexed (saucony.co.uk) still asks the
+ * provider the term it indexes (the brand name) instead of its own host,
+ * which returns nothing (issue #2233). Returns null when no curated term
+ * exists — the common case, where the registrable domain is the right
+ * question (issue #1999).
+ */
+export function getCuratedProviderQuery(registrableDomain: string): string | null {
+  return IDENTITY_OVERRIDES[registrableDomain]?.providerQuery ?? null;
 }
 
 async function fetchWebsiteIdentity(safeUrl: URL, registrableDomain: string): Promise<WebsiteIdentity | null> {
