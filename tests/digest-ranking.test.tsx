@@ -163,7 +163,10 @@ describe("BET 1 digest re-ranking (issue 1483)", () => {
     });
 
     // 12 changes total; 6 are headline-worthy landing changes, 6 are churn.
-    expect(email.subject).toBe("12 changes found, 6 worth action");
+    // Issue #2175: the subject leads with the top-ranked change, never a count.
+    expect(email.subject).toBe(
+      "Nykaa changed a landing page offer — captured 05:30 GMT+5:30",
+    );
     expect(email.html).toContain("Top moves");
     // The five rendered top moves are all landing_page_* titles — a 100% share
     // against the >=60% acceptance floor. Both offer changes outrank the CTA
