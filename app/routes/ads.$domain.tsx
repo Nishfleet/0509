@@ -379,21 +379,25 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     throw redirect(`/search?q=${encodeURIComponent(brand.domain)}`, 301);
   }
 
-  // Issue #2390 — these five secondary reads are provably independent: each
+  // Issue #2390 — these six secondary reads are provably independent: each
   // derives only from `env` + `brand.domain`, none consumes another's result,
-  // and each already carries its OWN catch-and-degrade path. Awaited one by
-  // one they formed a D1 waterfall (measured /ads TTFB 0.71s), so they now run
-  // concurrently and the page pays the slowest read instead of the sum.
+  // and each already carries its OWN catch-and-degrade path (the five local
+  // try/catch wrappers below, plus `loadDomainCaptureFailures`' own internal
+  // catch that returns []). Awaited one by one they formed a D1 waterfall
+  // (measured /ads TTFB 0.71s), so they now run concurrently and the page
+  // pays the slowest read instead of the sum.
   //
   // Deliberately NOT a `DB.batch()` call: batch fails as a unit, so one bad
-  // statement would sink all five and destroy the per-read degrade paths that
-  // keep a D1 hiccup from 500ing the page. Each promise keeps its own wrapper.
+  // statement would sink every read and destroy the per-read degrade paths
+  // that keep a D1 hiccup from 500ing the page. Each promise keeps its own
+  // wrapper.
   const [
     offerTimelineEntries,
     timelineIndexable,
     recentWatchChanges,
     sourceSnapshots,
     internalLinksResult,
+    captureFailures,
   ] = await Promise.all([
     // Timeline is a secondary surface. A D1 hiccup must hide the section,
     // never 500 the ads page or trigger a live capture.
@@ -476,6 +480,12 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     // pick this page's deterministic "Related brands" set. Cache-only: one
     // bounded D1 read; a hiccup degrades to null (both dependent sections
     // hide) rather than 500ing the page or triggering any paid operation.
+    //
+    // Note: `loadIndexableAdsInternalLinks` catches its own D1 failures and
+    // returns [], so its internal degrade — not this wrapper — is the live
+    // path for a database hiccup. The wrapper here covers an import/module
+    // failure only; `null` is therefore the sentinel for "the read never
+    // produced a value", distinct from the read's own empty-array result.
     (async (): Promise<IndexableAdsLink[] | null> => {
       try {
         const { loadIndexableAdsInternalLinks } = await import(
@@ -489,24 +499,24 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
         return null;
       }
     })(),
+
+    // Issues #1289 / #1345: surface failed/suppressed landing-page captures
+    // for this domain so the public page names what we checked and why it did
+    // not become an alert. The full array is NOT leaked into the loader data —
+    // only a server-rendered summary (count, date range, reason) ships to the
+    // client. The per-entry list is lazy-loaded on expand via the
+    // `api.ads.capture-failures.$domain` endpoint. Bounded D1 read; it already
+    // degrades to [] internally on any D1 failure (`loadDomainCaptureFailures`
+    // in ~/lib/offer-timeline.server), so no extra wrapper is needed here and
+    // none is added — this read is independent of the other five and joins
+    // them directly.
+    (async () => {
+      const { loadDomainCaptureFailures } = await import("~/lib/offer-timeline.server");
+      return await loadDomainCaptureFailures(env, { domain: brand.domain });
+    })(),
   ]);
 
-  // Issues #1289 / #1345: surface failed/suppressed landing-page captures
-  // for this domain so the public page names what we checked and why it did
-  // not become an alert. The full array is NOT leaked into the loader data —
-  // only a server-rendered summary (count, date range, reason) ships to the
-  // client. The per-entry list is lazy-loaded on expand via the
-  // `api.ads.capture-failures.$domain` endpoint. Bounded D1 read; degrades
-  // to null on any failure.
-  //
-  // Issue #2390 deliberately leaves this read OUT of the concurrent batch
-  // above: unlike the five, it has no catch-and-degrade wrapper, so folding
-  // it in would change its failure semantics (a throw here still propagates
-  // exactly as before).
-  const { loadDomainCaptureFailures, summarizeDomainCaptureFailures } = await import(
-    "~/lib/offer-timeline.server"
-  );
-  const captureFailures = await loadDomainCaptureFailures(env, { domain: brand.domain });
+  const { summarizeDomainCaptureFailures } = await import("~/lib/offer-timeline.server");
   const captureFailuresSummary = summarizeDomainCaptureFailures(captureFailures);
 
   const now = new Date();
@@ -525,9 +535,10 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
   // than 500ing the brand page or triggering any paid operation.
   let relatedBrands: IndexableAdsLink[] = [];
   let categorySiblings: { category: string; links: IndexableAdsLink[] } | null = null;
-  // `internalLinksResult === null` means the concurrent read above already
-  // logged and degraded; both dependent sections stay hidden. Otherwise the
-  // link picking below is pure in-memory work and cannot fail on D1.
+  // `internalLinksResult === null` means the concurrent read above never
+  // produced a value at all (import/module failure) and already logged; both
+  // dependent sections stay hidden. An empty array is a real result and still
+  // runs the link picking below, which is pure in-memory work.
   if (internalLinksResult !== null) {
     const { pickRelatedBrandLinks } = await import("~/lib/ads-internal-links");
     const allLinks = internalLinksResult;
