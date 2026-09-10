@@ -16,13 +16,18 @@ describe("source registry", () => {
   });
 
   it("every stub adapter exports implemented: false", () => {
-    for (const adapter of SOURCES) {
+    // Source tickets flip their adapter to `implemented: true` as they land;
+    // only the remaining stubs are asserted here.
+    const stubs = SOURCES.filter((a) => !a.implemented);
+    expect(stubs.length, "at least one stub remains").toBeGreaterThan(0);
+    for (const adapter of stubs) {
       expect(adapter.implemented, adapter.id).toBe(false);
     }
   });
 
   it("every stub fetch returns unavailable with reason not_implemented", async () => {
-    for (const adapter of SOURCES) {
+    const stubs = SOURCES.filter((a) => !a.implemented);
+    for (const adapter of stubs) {
       const result = await adapter.fetch(baseEnv, {
         competitorId: "c1",
         competitorLabel: "Test",
@@ -32,7 +37,8 @@ describe("source registry", () => {
   });
 
   it("every stub diff returns an empty array", () => {
-    for (const adapter of SOURCES) {
+    const stubs = SOURCES.filter((a) => !a.implemented);
+    for (const adapter of stubs) {
       expect(adapter.diff(null, { payload: {} }), adapter.id).toEqual([]);
     }
   });

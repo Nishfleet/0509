@@ -1,35 +1,29 @@
-# Plan — issue 2218 (sources seam)
+# Plan — Nishfleet/0509 #2193 — LinkedIn Ads presence source
 
-Manager mode (heavy/keystone). Base: salvaged worktree `issue-0509-2218-fresh` on
-origin/main (30cdf07e) with uncommitted seam work. The salvaged work covers most
-of the issue; the binding "Judge edits, batch 2" gaps remain.
+Manager mode (heavy). Dependency #2218 (sources seam) merged; stubs exist at
+the owned paths. This ticket replaces the linkedin-ads stub with a real
+adapter + Section + tests. Ownership is binding: edit ONLY the files on the
+`files:` line. The one exception is `tests/sources/registry.test.ts`, which
+asserts ALL adapters are stubs and breaks the moment linkedin flips to
+`implemented: true` — it is updated minimally to filter stub assertions by
+`!implemented` so the build stays green (documented in the PR body).
 
-## Phase 1 — Assess salvaged work, verify it builds/tests green
-- [x] Verify salvaged work compiles and the seam tests pass (registry, budget, presence coverage, claim surface)
-- [x] Confirm the six stub adapters + six stub sections exist at the exact ownership-map paths
-- [x] Confirm migration 0088 is the next number and the integration test references it correctly
+## Phases
 
-## Phase 2 — Close binding judge-edit gaps (types, runSources, action, renderer)
-- [x] Add `competitorUpdate` return channel to `SourceFetchResult`; `runSources` persists it to the seam's competitor columns
-- [x] Add generic source action on the competitor route (`sourceId`, field, value → writes seam columns) for #2199's manual Job board URL
-- [x] SourceSections renders one locked line per plan-disabled source from `getPlanEntitlements(plan).sources`; pass `plan` from competitor-detail
-- [x] Document the files line: competitor page route file, per-competitor check file, Meta helper file
+- [x] phase 1: app/lib/sources/linkedin-ads/linkedin-ad-library.server.ts — fetchAdsByAccountOwner + HTML parser + fixtures (parser verified against all 5 fixtures: page-1=24, page-2=24, ambiguous=3, zero-0, parse-break=0)
+- [x] phase 2: app/lib/sources/linkedin-ads.server.ts — real adapter (budget helper, fetch, diff, cadence weekly, implemented true, requiresEnv)
+- [x] phase 3: app/components/sources/linkedin-ads.tsx — real Section (render snapshot, null when none)
+- [x] phase 4: tests/sources/linkedin-ads*.test.ts + fixtures + registry.test.ts stub-filter update (43 source tests + 9 claim tests green; 32 in the 3 touched files)
+- [ ] phase 5: verify (vitest run touched tests green), commit, push, PR, arm auto-merge
 
-## Phase 3 — Tests for the new judge-edit behavior
-- [x] Test `competitorUpdate` persistence in runSources (fake adapter)
-- [x] Test the generic source action endpoint
-- [x] Test locked-source renderer in SourceSections
-- [x] Fix migration number references (0087 → 0088) in the integration test
+## Notes
 
-## Phase 4 — Full verification (termination criteria)
-- [x] `npx vitest run tests/sources/registry.test.ts tests/decodo-budget*.test.ts` green
-- [x] `npm run typecheck` green
-- [x] Migration applies on a fresh D1 in CI (integration test green)
-
-## Phase 5 — Review each phase (reviewer), land findings
-- [x] Reviewer on the full diff vs origin/main; land every finding in a bucket
-- [x] Fix Act-on findings
-
-## Phase 6 — Open PR, arm auto-merge
-- [x] PR body with Verification / run-proof / research / help-first / Closes #2218
-- [x] Arm auto-merge
+- Decodo v2/scrape response: `{ results: [{ content: "<html>", status_code: 200, ... }] }`. status 613 = Decodo internal failure.
+- cadence: "weekly" on the adapter; the seam's runner applies the gate (judge batch-2 edit). No 7-day plumbing in this adapter.
+- diff() returns SourceChange[]; the seam emits. eventType: ad_new / ad_inactive / landing_page_headline_changed (copy change).
+- requiresEnv: true only when DECODO_SCRAPER_AUTH set (live only when secret present).
+- Call reserveDecodoBudget(env, "std") BEFORE every request; on deny → { unavailable: true, reason: "quota" }.
+- Page 1 only (start=0), one Decodo request, one attempt, 60s timeout. Do NOT fetch detail pages.
+- Account owner = competitorLabel; keep only exact case-insensitive name matches, set ambiguous when non-matches dropped.
+- Section renders null when snapshot is null (keeps source-sections.test.tsx green).
+- typecheck is CI-owned (memory budget rule); worker runs vitest node project on touched files only.
