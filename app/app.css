@@ -528,6 +528,55 @@ img {
   margin-top: 52px;
 }
 
+/* Issue #2241: the sourced "Price of knowing" table (issue #2139) is a
+   five-column data table whose natural width exceeds a phone viewport. The
+   section clips document-level overflow, but the nested-element overflow
+   contract (e2e/helpers/release-experience.ts expectNoHorizontalOverflow)
+   still flags the table's own scrollWidth. Contain the table in a
+   horizontally scrollable box so it never inflates the page width on
+   mobile; the scroll affordance keeps every column readable. */
+.f9-price-anchors {
+  max-width: 100%;
+  overflow-x: auto;
+  margin-top: 40px;
+}
+
+.f9-price-anchors table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.f9-price-anchors th,
+.f9-price-anchors td {
+  padding: 10px 12px;
+  border: 1px solid rgba(164, 184, 240, 0.2);
+  text-align: left;
+  vertical-align: top;
+}
+
+.f9-price-anchors thead th {
+  font-family: var(--ld-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ld-green);
+}
+
+.f9-price-anchors tbody th {
+  font-weight: 700;
+}
+
+.f9-price-anchors td {
+  color: var(--ld-ink-soft);
+}
+
+.f9-price-anchors a {
+  color: var(--ld-green);
+  text-decoration: underline;
+}
+
 .f9-commerce-card {
   position: relative;
   display: grid;
