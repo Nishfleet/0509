@@ -128,13 +128,14 @@ describe("homepage first viewport — free live-search promise (#2170)", () => {
     expect(markup).toContain("Preview available ads");
   });
 
-  it("states the paid loop in the deck with the sourced plan cadences", async () => {
+  it("states the deck's screenshot promise with the capture-includes-one qualifier", async () => {
     mockReactRouter({});
     const markup = await renderMarketing();
 
-    expect(markup).toContain("Then Five to Nine watches the offer behind those ads");
-    expect(markup).toContain("before-and-after screenshot when it changes");
-    expect(markup).toContain("Weekly on Free, every 3 hours on Starter.");
+    expect(markup).toContain("Then Five to Nine keeps watching the offer behind those ads");
+    expect(markup).toContain("before-and-after with the page text and source link");
+    expect(markup).toContain("plus a screenshot when the capture includes one");
+    expect(markup).not.toContain("Weekly on Free, every 3 hours on Starter.");
   });
 });
 
