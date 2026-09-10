@@ -95,3 +95,12 @@ No box ticked in 10 min → commit what works + stalled note in this file.
   tests/sources/job-board-discovery.test.ts tests/sources/hiring-signals.test.ts`
   -> 4 files passed, 96 tests passed.
 - No `stalled:` phases. No phase needed a retry beyond the two fix rounds above.
+- phase 6f (senior review round, seat cursor/cursor-grok-4.6-high, one round):
+  1 Critical + 8 Warnings. Act-on: unconfirmed (label-guessed) board now
+  renders the manual override so it can be confirmed/replaced (the Critical);
+  sequential `update-source-field` writes (slug -> provider -> verified last);
+  `parseBoardUrl` tolerates listing paths/query/hash; `findCareersLink` matches
+  an absolute `/careers` or `/jobs` link whose text does not; discovered slugs
+  lowercased; the missing-location bucket renamed from `(remote)` to
+  `(not listed)`. Consider/Noted/Dismissed reasons are recorded in the PR body.
+  Manager re-ran the four files after the fixes: 102 tests passed.

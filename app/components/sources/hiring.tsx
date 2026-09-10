@@ -4,9 +4,10 @@ import type { SourceChange, SourceSnapshotRecord } from "~/lib/sources/types";
 /**
  * Hiring (job boards) source section (#2199). Renders the latest hiring
  * snapshot: total open roles, opened/closed since the last weekly check,
- * top departments + locations, and a link to the public job board. When no
- * public board has been detected it shows a manual "Job board URL" override
- * that posts to the seam's generic update-source-field action.
+ * top departments + locations, and a link to the public job board. The manual
+ * "Job board URL" override is shown when no public board has been detected AND
+ * on an unconfirmed (label-guessed) board, so the guess can be confirmed or
+ * replaced; it posts to the seam's generic update-source-field action.
  *
  * Client-safe: imports only react + types + local pure helpers. No `.server`
  * modules, no data-layer calls from the render path. Returns null when there
@@ -110,22 +111,29 @@ interface ManualBoard {
  * Parse a typed board URL into {provider, slug}. Greenhouse accepts
  * boards.greenhouse.io/<slug>, job-boards.greenhouse.io/<slug>, or a
  * <slug>.greenhouse.io subdomain; Ashby and Lever are their jobs.* hosts.
- * A scheme is optional (a bare `acme.greenhouse.io` is accepted).
- * Unrecognized input returns null.
+ * Only the FIRST path segment is the slug, so a pasted listing URL
+ * (…/acme/jobs, …/acme/abc-123) parses to the board; a `?query` or
+ * `#fragment` is ignored. A scheme is optional (a bare `acme.greenhouse.io`
+ * is accepted). Unrecognized input, or input with no usable first segment,
+ * returns null.
  */
 export function parseBoardUrl(raw: string): ManualBoard | null {
   const s = raw.trim();
   if (!s) return null;
   let hostname: string;
-  let pathname = "/";
+  let firstSegment: string | undefined;
   try {
     const u = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(s) ? s : `https://${s}`);
     hostname = u.hostname.toLowerCase();
-    pathname = u.pathname;
+    // URL parsing already drops any ?query / #fragment from the pathname.
+    firstSegment = u.pathname.split("/").filter(Boolean)[0];
   } catch {
     return null;
   }
-  const seg = pathname.match(/^\/?([a-z0-9_-]+)\/?$/i)?.[1];
+  const seg =
+    firstSegment && /^[a-z0-9_-]+$/i.test(firstSegment)
+      ? firstSegment
+      : undefined;
   if (hostname === "boards.greenhouse.io" || hostname === "job-boards.greenhouse.io") {
     return seg ? { provider: "greenhouse", slug: seg } : null;
   }
@@ -161,12 +169,19 @@ async function submitBoardOverride(
     return fetch(`${origin}/app/watchlists/${id}`, { method: "POST", body: form });
   };
   try {
-    const [slugRes, providerRes, verifiedRes] = await Promise.all([
-      post("job_board_slug", parsed.slug),
-      post("job_board_provider", parsed.provider),
-      post("job_board_verified", "1"),
-    ]);
-    return { ok: slugRes.ok && providerRes.ok && verifiedRes.ok };
+    // Sequential on purpose: a slug must never land without its provider, so
+    // stop on the first failed POST. `job_board_verified` is last, which means
+    // a slug+provider pair is only ever marked verified after both landed.
+    const writes: Array<[field: string, value: string]> = [
+      ["job_board_slug", parsed.slug],
+      ["job_board_provider", parsed.provider],
+      ["job_board_verified", "1"],
+    ];
+    for (const [field, value] of writes) {
+      const res = await post(field, value);
+      if (!res.ok) return { ok: false };
+    }
+    return { ok: true };
   } catch {
     return { ok: false };
   }
@@ -203,6 +218,52 @@ function topEntries(counts: Record<string, number>, limit: number): string[] {
     .map(([group, count]) => `${group}: ${count}`);
 }
 
+/* --------------------------- manual override form --------------------------- */
+
+/**
+ * The manual "Job board URL" override, as ONE component used by both the
+ * no-board view and an unconfirmed board view, so the submit logic exists in
+ * exactly one place.
+ */
+function ManualBoardOverride() {
+  const [url, setUrl] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        const parsed = parseBoardUrl(url);
+        if (!parsed) {
+          setError("We don't recognize that as a Greenhouse, Ashby, or Lever board URL.");
+          return;
+        }
+        setError(null);
+        void submitBoardOverride(parsed).then((result) => {
+          if (result.ok) setConfirmed(true);
+          else setError("Could not save the board. Please try again.");
+        });
+      }}
+    >
+      <div className="f9-field">
+        <span>Job board URL</span>
+        <input
+          type="url"
+          value={url}
+          onChange={(event) => setUrl(event.currentTarget.value)}
+          placeholder="https://boards.greenhouse.io/acme"
+          aria-label="Job board URL"
+        />
+      </div>
+      {error ? <p className="f9-wk-note">{error}</p> : null}
+      {confirmed ? <p className="f9-wk-note">Board confirmed — saved.</p> : null}
+      <button type="submit" className="f9-wk-btn">
+        Save
+      </button>
+    </form>
+  );
+}
+
 export function HiringSection({
   snapshot,
   diff,
@@ -210,10 +271,6 @@ export function HiringSection({
   snapshot: SourceSnapshotRecord | null;
   diff: SourceChange[];
 }) {
-  const [url, setUrl] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [confirmed, setConfirmed] = useState(false);
-
   const view = parseSnapshot(snapshot?.payload);
   if (!view) return null;
 
@@ -251,6 +308,14 @@ export function HiringSection({
             </a>
           </p>
         ) : null}
+        {view.verified !== true ? (
+          <>
+            <p className="f9-wk-dim">
+              Confirm this board or paste the right one.
+            </p>
+            <ManualBoardOverride />
+          </>
+        ) : null}
       </section>
     );
   }
@@ -260,37 +325,7 @@ export function HiringSection({
     <section aria-label="Hiring">
       <p className="f9-evidence-micro">Hiring</p>
       <p className="f9-wk-dim">No public job board detected</p>
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          const parsed = parseBoardUrl(url);
-          if (!parsed) {
-            setError("We don't recognize that as a Greenhouse, Ashby, or Lever board URL.");
-            return;
-          }
-          setError(null);
-          void submitBoardOverride(parsed).then((result) => {
-            if (result.ok) setConfirmed(true);
-            else setError("Could not save the board. Please try again.");
-          });
-        }}
-      >
-        <div className="f9-field">
-          <span>Job board URL</span>
-          <input
-            type="url"
-            value={url}
-            onChange={(event) => setUrl(event.currentTarget.value)}
-            placeholder="https://boards.greenhouse.io/acme"
-            aria-label="Job board URL"
-          />
-        </div>
-        {error ? <p className="f9-wk-note">{error}</p> : null}
-        {confirmed ? <p className="f9-wk-note">Board confirmed — saved.</p> : null}
-        <button type="submit" className="f9-wk-btn">
-          Save
-        </button>
-      </form>
+      <ManualBoardOverride />
     </section>
   );
 }

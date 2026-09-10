@@ -463,14 +463,14 @@ describe("computeCounts", () => {
     expect(counts.byDepartment).toEqual({ "(none)": 2, Sales: 1 });
   });
 
-  it("buckets a missing location to (remote)", () => {
+  it("buckets a missing location to (not listed)", () => {
     const counts = computeCounts([
       job({ id: "1", location: null, department: "Sales" }),
       job({ id: "2", location: "", department: "Sales" }),
       job({ id: "3", location: "New York", department: "Sales" }),
     ]);
 
-    expect(counts.byLocation).toEqual({ "(remote)": 2, "New York": 1 });
+    expect(counts.byLocation).toEqual({ "(not listed)": 2, "New York": 1 });
   });
 
   it("returns empty buckets for no jobs", () => {

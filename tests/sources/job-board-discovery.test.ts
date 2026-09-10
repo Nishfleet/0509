@@ -111,13 +111,34 @@ describe("findBoardInHtml", () => {
     expect(findBoardInHtml('<a href="https://greenhouse.io">Greenhouse</a>')).toBeNull();
   });
 
-  it("is case-insensitive and tolerates paths after the slug", () => {
+  it("is case-insensitive and lowercases the slug it returns", () => {
     expect(
       findBoardInHtml('<a href="https://BOARDS.GREENHOUSE.IO/Acme/jobs/1">x</a>'),
-    ).toEqual({ provider: "greenhouse", slug: "Acme" });
+    ).toEqual({ provider: "greenhouse", slug: "acme" });
     expect(
-      findBoardInHtml('<a href="https://jobs.lever.co/beta/abc-123">x</a>'),
+      findBoardInHtml('<a href="https://jobs.lever.co/Beta/abc-123">x</a>'),
     ).toEqual({ provider: "lever", slug: "beta" });
+  });
+
+  it("lowercases a mixed-case board URL from every provider shape", () => {
+    expect(
+      findBoardInHtml('<a href="https://jobs.ashbyhq.com/Gamma">Gamma</a>'),
+    ).toEqual({ provider: "ashby", slug: "gamma" });
+    expect(
+      findBoardInHtml('<a href="https://job-boards.greenhouse.io/Acme">Acme</a>'),
+    ).toEqual({ provider: "greenhouse", slug: "acme" });
+    expect(
+      findBoardInHtml('<a href="https://Delta.Greenhouse.IO">Delta</a>'),
+    ).toEqual({ provider: "greenhouse", slug: "delta" });
+  });
+
+  it("still filters reserved platform slugs after lowercasing", () => {
+    expect(
+      findBoardInHtml('<a href="https://boards.greenhouse.io/EMBED">Apply</a>'),
+    ).toBeNull();
+    expect(
+      findBoardInHtml('<a href="https://JOBS.greenhouse.io">Jobs</a>'),
+    ).toBeNull();
   });
 
   describe("provider priority", () => {
@@ -235,6 +256,29 @@ describe("findCareersLink", () => {
     expect(
       findCareersLink('<a href="/careers/">Work here</a>', "https://acme.com"),
     ).toBe("https://acme.com/careers/");
+  });
+
+  it("matches an absolute careers link on its resolved pathname", () => {
+    expect(
+      findCareersLink(
+        '<a href="https://acme.com/careers">Open positions</a>',
+        "https://acme.com",
+      ),
+    ).toBe("https://acme.com/careers");
+    // With a trailing path, and on another host's absolute URL.
+    expect(
+      findCareersLink(
+        '<a href="https://www.acme.com/jobs/all">Open positions</a>',
+        "https://acme.com",
+      ),
+    ).toBe("https://www.acme.com/jobs/all");
+    // A resolved pathname that is not /careers|/jobs still does not match.
+    expect(
+      findCareersLink(
+        '<a href="https://acme.com/about">Open positions</a>',
+        "https://acme.com",
+      ),
+    ).toBeNull();
   });
 
   it("resolves relative hrefs against the page URL", () => {

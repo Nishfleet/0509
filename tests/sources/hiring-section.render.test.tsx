@@ -47,7 +47,7 @@ function boardPayload(overrides: Record<string, unknown> = {}): Record<string, u
     label: "Acme",
     counts: {
       byDepartment: { Engineering: 4, Sales: 3, Marketing: 2, Legal: 1 },
-      byLocation: { London: 2, "New York": 2, "(remote)": 1, Berlin: 1 },
+      byLocation: { London: 2, "New York": 2, "(not listed)": 1, Berlin: 1 },
     },
     fetchedAt: "2026-09-10T00:00:00.000Z",
     ...overrides,
@@ -68,7 +68,7 @@ const roleChangeDiff: SourceChange[] = [
       openedTopDepartments: [{ group: "Sales", count: 1 }],
       openedTopLocations: [{ group: "London", count: 1 }],
       closedTopDepartments: [{ group: "(none)", count: 3 }],
-      closedTopLocations: [{ group: "(remote)", count: 3 }],
+      closedTopLocations: [{ group: "(not listed)", count: 3 }],
     },
   },
 ];
@@ -96,7 +96,7 @@ describe("HiringSection render", () => {
     expect(html).not.toContain("Legal");
     expect(html).toContain("London: 2");
     expect(html).toContain("New York: 2");
-    expect(html).toContain("(remote): 1");
+    expect(html).toContain("(not listed): 1");
     expect(html).not.toContain("Berlin");
     expect(html).toContain('href="https://boards.greenhouse.io/acme"');
   });
@@ -121,7 +121,7 @@ describe("HiringSection render", () => {
     expect(html).toContain('href="https://jobs.ashbyhq.com/acme"');
   });
 
-  it("labels an unconfirmed board", () => {
+  it("labels an unconfirmed board and offers the manual override on the board view", () => {
     const html = renderToStaticMarkup(
       createElement(HiringSection, {
         snapshot: record(boardPayload({ verified: false })),
@@ -129,6 +129,21 @@ describe("HiringSection render", () => {
       }),
     );
     expect(html).toContain("unconfirmed board");
+    expect(html).toContain("4 open roles");
+    expect(html).toContain("Job board URL");
+    expect(html).toContain('aria-label="Job board URL"');
+  });
+
+  it("does not show the manual override on a verified board view", () => {
+    const html = renderToStaticMarkup(
+      createElement(HiringSection, {
+        snapshot: record(boardPayload()),
+        diff: [],
+      }),
+    );
+    expect(html).not.toContain("unconfirmed board");
+    expect(html).not.toContain("Job board URL");
+    expect(html).not.toContain('aria-label="Job board URL"');
   });
 
   it("reads opened/closed from the single grouped role_change entry", () => {
@@ -190,6 +205,38 @@ describe("parseBoardUrl", () => {
       provider: "greenhouse",
       slug: "acme",
     });
+  });
+
+  it("ignores a trailing listing path", () => {
+    expect(parseBoardUrl("https://boards.greenhouse.io/acme/jobs")).toEqual({
+      provider: "greenhouse",
+      slug: "acme",
+    });
+    expect(parseBoardUrl("https://jobs.lever.co/acme/abc-123")).toEqual({
+      provider: "lever",
+      slug: "acme",
+    });
+    expect(parseBoardUrl("https://jobs.ashbyhq.com/acme/xyz")).toEqual({
+      provider: "ashby",
+      slug: "acme",
+    });
+  });
+
+  it("ignores a query or fragment", () => {
+    expect(parseBoardUrl("https://boards.greenhouse.io/acme?gh_src=1")).toEqual({
+      provider: "greenhouse",
+      slug: "acme",
+    });
+    expect(parseBoardUrl("https://jobs.lever.co/acme?mode=json#top")).toEqual({
+      provider: "lever",
+      slug: "acme",
+    });
+    expect(parseBoardUrl("jobs.ashbyhq.com/acme/xyz?utm=x#apply")).toEqual({
+      provider: "ashby",
+      slug: "acme",
+    });
+    // A query-only URL has no usable first segment.
+    expect(parseBoardUrl("https://boards.greenhouse.io/?token=1")).toBeNull();
   });
 
   it("accepts the Ashby and Lever board hosts", () => {

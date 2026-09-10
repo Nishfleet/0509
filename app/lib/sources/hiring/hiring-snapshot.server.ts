@@ -332,7 +332,12 @@ function topEntries(
   const counts = new Map<string, number>();
   for (const job of jobs) {
     const raw = field === "department" ? job.department : job.location;
-    const group = raw && raw.trim() ? raw.trim() : field === "department" ? "(none)" : "(remote)";
+    const group =
+      raw && raw.trim()
+        ? raw.trim()
+        : field === "department"
+          ? "(none)"
+          : "(not listed)";
     counts.set(group, (counts.get(group) ?? 0) + 1);
   }
   return [...counts.entries()]
