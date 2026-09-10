@@ -54,9 +54,12 @@ export function GoogleAdsSection({
   diff: SourceChange[];
 }) {
   if (!snapshot) return null;
-  const payload = snapshot.payload as SnapshotPayload;
-  const creatives = payload?.creatives;
-  if (!Array.isArray(creatives) || creatives.length === 0) {
+  // The stored payload is JSON written by the adapter; narrow it the same way
+  // the other source sections do (Partial, then explicit shape checks) rather
+  // than asserting the full shape.
+  const payload = snapshot.payload as Partial<SnapshotPayload>;
+  const creatives = Array.isArray(payload.creatives) ? payload.creatives : [];
+  if (creatives.length === 0) {
     return (
       <section aria-label="Google Ads (Transparency Center)" className="f9-watchdetail-section">
         <p className="f9-evidence-micro">Google Ads (Transparency Center)</p>
@@ -65,6 +68,9 @@ export function GoogleAdsSection({
     );
   }
 
+  const truncated = payload.truncated === true;
+  const advertiserCount =
+    typeof payload.advertiserCount === "number" ? payload.advertiserCount : 0;
   const advertiserNames = Array.from(
     new Set(creatives.map((c) => c.advertiserName).filter((n) => n)),
   ).slice(0, 4);
@@ -79,7 +85,7 @@ export function GoogleAdsSection({
     .slice(0, MAX_PREVIEWS);
   // Guard a malformed/older stored payload: a missing formatMix must not
   // throw and take down the evidence tab.
-  const fm = payload?.formatMix ?? { text: 0, image: 0, video: 0, unknown: 0 };
+  const fm = payload.formatMix ?? { text: 0, image: 0, video: 0, unknown: 0 };
   const sinceLast = newCreativeCount(diff);
 
   return (
@@ -88,15 +94,15 @@ export function GoogleAdsSection({
       <h3 className="f9-wk-mt0">Google Ads creatives</h3>
       <p className="f9-wk-dim">
         {creatives.length} creative{creatives.length === 1 ? "" : "s"}
-        {payload.truncated ? " (showing first 200; more exist)" : ""} across{" "}
-        {payload.advertiserCount} advertiser{payload.advertiserCount === 1 ? "" : "s"}
+        {truncated ? " (showing first 200; more exist)" : ""} across {advertiserCount} advertiser
+        {advertiserCount === 1 ? "" : "s"}
         {sinceLast > 0 ? ` · ${sinceLast} new since last check` : ""}
       </p>
       {advertiserNames.length > 0 ? (
         <p className="f9-wk-dim">
           {advertiserNames.join(", ")}
-          {payload.advertiserCount > advertiserNames.length
-            ? ` +${payload.advertiserCount - advertiserNames.length} more`
+          {advertiserCount > advertiserNames.length
+            ? ` +${advertiserCount - advertiserNames.length} more`
             : ""}
         </p>
       ) : null}
@@ -105,31 +111,27 @@ export function GoogleAdsSection({
         {fm.unknown > 0 ? ` · other ${fm.unknown}` : ""}
       </p>
       {previews.length > 0 ? (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
-            gap: "0.5rem",
-            marginTop: "0.75rem",
-          }}
-        >
+        // Reuses the competitor-detail creative wall (the same wall the Meta
+        // creatives render in) instead of local inline styles, so the design
+        // system owns the grid and no new legacy marker lands.
+        <ul className="f9-creative-wall">
           {previews.map((c) => (
-            <a
-              key={c.creativeId}
-              href={`https://adstransparency.google.com/advertiser/${encodeURIComponent(c.advertiserId)}?creativeId=${encodeURIComponent(c.creativeId)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ display: "block" }}
-            >
-              <img
-                src={c.previewUrl}
-                alt={`Google Ad creative ${c.creativeId} by ${c.advertiserName || "unknown advertiser"}`}
-                loading="lazy"
-                style={{ width: "100%", height: "auto", borderRadius: "0.25rem", display: "block" }}
-              />
-            </a>
+            <li key={c.creativeId} className="f9-creative-tile">
+              <a
+                href={`https://adstransparency.google.com/advertiser/${encodeURIComponent(c.advertiserId)}?creativeId=${encodeURIComponent(c.creativeId)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <img
+                  className="f9-ad-thumb"
+                  src={c.previewUrl}
+                  alt={`Google Ad creative ${c.creativeId} by ${c.advertiserName || "unknown advertiser"}`}
+                  loading="lazy"
+                />
+              </a>
+            </li>
           ))}
-        </div>
+        </ul>
       ) : null}
     </section>
   );
