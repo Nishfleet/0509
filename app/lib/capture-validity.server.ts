@@ -83,6 +83,7 @@ const CHALLENGE_FINGERPRINTS: RegExp[] = [
   /<div[^>]*id=["']cf-please-wait["']/i,
   /data-[^=]+=["']cf-/i,
   /cdn-cgi\/challenge-platform\//i,
+  /challenges\.cloudflare\.com\/turnstile/i,
   /window\._cf_chl_opt\b/i,
   /<noscript[^>]*>\s*enable javascript and cookies to continue/i,
   // PerimeterX/HUMAN and DataDome interstitials.
@@ -91,17 +92,6 @@ const CHALLENGE_FINGERPRINTS: RegExp[] = [
   /window\._pxAppId\b/i,
   /datadome\.co\/js\.js/i,
   /id=["']ddjs-?key["']/i,
-];
-
-// A Turnstile *widget* script src is not, on its own, a challenge wall: real
-// landing pages embed the standard widget on their signup/lead forms all the
-// time. Only condemn it when the visible body is too thin to be the real page,
-// the same thin-body qualifier the cookie-wall branch below uses. The
-// interstitial-specific markers in CHALLENGE_FINGERPRINTS above (`_cf_chl_opt`,
-// `cdn-cgi/challenge-platform/`, the `cf-challenge-*` ids) still catch a real
-// challenge wall on their own, so gating this one pattern loses no coverage.
-const TURNSTILE_WIDGET_FINGERPRINTS: RegExp[] = [
-  /challenges\.cloudflare\.com\/turnstile/i,
 ];
 
 // --- Cookie / consent-wall fingerprints ------------------------------------
@@ -225,22 +215,6 @@ export function assessCaptureValidity(input: CaptureValidityInput): CaptureValid
       reason: "Anti-bot / challenge interstitial detected (the page body is a verification wall, not the real page).",
       fingerprint: `challenge:${hit.source}`,
     };
-  }
-
-  // Turnstile widget script src: a wall only when the visible body is too thin
-  // to be the real page. A full page that embeds the widget passes.
-  const widgetHit = matchesAny(html, TURNSTILE_WIDGET_FINGERPRINTS);
-  if (widgetHit) {
-    const widgetBodyText = visibleBodyText(html, documentMode);
-    if (widgetBodyText.length < MIN_VISIBLE_BODY_CHARACTERS) {
-      return {
-        valid: false,
-        reasonCode: "landing_challenge_page",
-        reason:
-          "Anti-bot / challenge interstitial detected (Turnstile widget script present and the visible body is too thin to be the real page).",
-        fingerprint: `challenge:${widgetHit.source}:thin_body`,
-      };
-    }
   }
 
   const cookieHit = matchesAny(html, COOKIE_WALL_FINGERPRINTS);

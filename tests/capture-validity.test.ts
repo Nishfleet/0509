@@ -89,45 +89,6 @@ describe("assessCaptureValidity — Cloudflare / anti-bot challenge", () => {
     expect(result.reasonCode).toBe("landing_challenge_page");
   });
 
-  it("does NOT reject a real page that embeds a Turnstile form widget", () => {
-    // A real landing page that embeds a Turnstile widget on its signup/lead
-    // form via the standard script src is not a challenge wall — the widget
-    // sits inside the real page, which rendered fine. The bare script-src
-    // fingerprint only condemns the capture when the visible body is too thin
-    // to be the real page.
-    const html = REAL_LANDING_PAGE.replace(
-      "</body>",
-      `<div class="cf-turnstile" data-sitekey="0xabc"></div>
-      <script src="https://challenges.cloudflare.com/turnstile/v0/api.js"></script>
-      </body>`,
-    );
-    const result = assessCaptureValidity({ html, fetchStatus: 200 });
-    expect(result.valid).toBe(true);
-  });
-
-  it("still rejects a thin shell whose only challenge marker is the Turnstile script src", () => {
-    // Gating the script-src pattern behind body thinness must not remove it:
-    // a thin body carrying only the Turnstile script is still a challenge wall.
-    const html = `<html><body>
-      <script src="https://challenges.cloudflare.com/turnstile/v0/api.js"></script>
-    </body></html>`;
-    const result = assessCaptureValidity({ html, fetchStatus: 200 });
-    expect(result.valid).toBe(false);
-    expect(result.reasonCode).toBe("landing_challenge_page");
-  });
-
-  it("still rejects a thin rendered shell whose only challenge marker is the Turnstile script src", () => {
-    // Same pin for the rendered leg: `stripTags` treats <noscript> differently
-    // in rendered mode, so the thin-body read must stay thin there too.
-    const html = `<html><body>
-      <noscript>Please enable JavaScript to continue.</noscript>
-      <script src="https://challenges.cloudflare.com/turnstile/v0/api.js"></script>
-    </body></html>`;
-    const result = assessCaptureValidity({ html, fetchStatus: 200, documentMode: "rendered" });
-    expect(result.valid).toBe(false);
-    expect(result.reasonCode).toBe("landing_challenge_page");
-  });
-
   it("rejects a 'Checking your browser' PerimeterX interstitial", () => {
     const html = `<html><head><title>Checking your browser before accessing the site</title></head>
       <body><div id="px-captcha"></div><script>window._pxAppId="123";</script></body></html>`;
