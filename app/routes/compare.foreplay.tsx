@@ -2,7 +2,9 @@ import { Form, Link, redirect } from "react-router";
 import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { CompareAdsExampleLink } from "~/components/ads-internal-links";
+import { CompareLiveSources } from "~/components/compare-live-sources";
 import { MarketingNav } from "~/components/marketing-nav";
+import { isMonitoringSourceLive } from "~/lib/monitoring-source-claims";
 import { MarketingFooter } from "~/components/marketing-footer";
 import {
   Cite,
@@ -89,7 +91,7 @@ const foreplayCosts: readonly CompareClaimCard[] = [
   {
     title: "Multi-platform breadth",
     detail:
-      "Foreplay covers many platforms. Five to Nine currently reads the Meta Ad Library only, so it is narrower in ad-library breadth.",
+      `Foreplay covers many platforms. Five to Nine reads the Meta Ad Library${isMonitoringSourceLive("google") ? " and Google Search results" : ""} only, so it is narrower in platform breadth.`,
     sourceId: "foreplay-home",
   },
 ];
@@ -109,7 +111,7 @@ const fiveToNineAdds = [
   },
   {
     theirs: "Honest scope",
-    ours: "We do not aggregate TikTok, Google, or LinkedIn ad libraries. We focus on proof-backed Meta Ad Library + landing-page changes.",
+    ours: "We do not aggregate TikTok, Google Ads, or LinkedIn ad libraries. We focus on proof-backed Meta Ad Library + landing-page changes.",
   },
 ] as const;
 
@@ -232,6 +234,8 @@ export default function CompareForeplayRoute() {
           ))}
         </div>
       </section>
+
+      <CompareLiveSources />
 
       <section className="ld-final">
         <h2>

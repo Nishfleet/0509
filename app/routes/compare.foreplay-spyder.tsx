@@ -4,6 +4,7 @@ import type { LinksFunction, MetaFunction } from "react-router";
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
 import { Breadcrumbs } from "~/components/breadcrumbs";
+import { CompareLiveSources } from "~/components/compare-live-sources";
 import { LiveBrandProof } from "~/components/live-brand-proof";
 import {
   Cite,
@@ -92,7 +93,7 @@ const fiveToNineAdds = [
   },
   {
     theirs: "Honest scope",
-    ours: "We read the Meta Ad Library and the live landing page. We do not aggregate TikTok, Google, or LinkedIn ad libraries, and we do not ship a 200-million-ad swipe file.",
+    ours: "We read the Meta Ad Library and the live landing page. We do not aggregate TikTok, Google Ads, or LinkedIn ad libraries, and we do not ship a 200-million-ad swipe file.",
   },
 ] as const;
 
@@ -218,6 +219,8 @@ export default function CompareForeplaySpyderRoute() {
           ))}
         </div>
       </section>
+
+      <CompareLiveSources />
 
       <section className="ld-final">
         <h2>

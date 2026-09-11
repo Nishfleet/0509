@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -85,10 +87,31 @@ describe("compare meta-ad-library route", () => {
     expect(markup).not.toContain("Slack delivery");
     expect(markup).not.toContain("WhatsApp");
     // Must-not (issue #2141): no TikTok/Google/LinkedIn coverage claims and no
-    // spend or impression data claims.
+    // spend or impression data claims — except that issue #2188 adds one row
+    // per source whose claim-table row is live, so each named source is read
+    // from the table instead of being hardcoded.
+    const audit = JSON.parse(
+      readFileSync("docs/customer-claim-audit-table.json", "utf8"),
+    ) as {
+      claims: Array<{
+        claimId: string;
+        text: string;
+        currentResult: string;
+        monitoringSource?: { sourceId: string; label: string; status: string };
+      }>;
+    };
+    const sourceRows = audit.claims.filter((claim) => claim.monitoringSource);
+    for (const row of sourceRows) {
+      const source = row.monitoringSource!;
+      const live = source.status === "live" && row.currentResult === "pass";
+      expect(
+        markup.includes(row.text),
+        `${row.claimId} wording on page should match live=${live}`,
+      ).toBe(live);
+    }
+    // Ad libraries that are never claimed, live row or not.
     expect(markup).not.toContain("TikTok");
     expect(markup).not.toContain("LinkedIn");
-    expect(markup).not.toContain("Google");
     expect(markup).not.toMatch(/spend data|impression data|impressions data/i);
   });
 

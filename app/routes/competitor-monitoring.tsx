@@ -22,6 +22,7 @@ import {
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import { SWITCH_PAGES, SWITCH_SLUGS } from "~/lib/switch-pages";
 import { localeSearchPathname } from "~/lib/locale-markets";
+import { isMonitoringSourceLive } from "~/lib/monitoring-source-claims";
 
 const publicSearchTrialPath =
   "/search?query=nykaa&mode=advertiser&website=https%3A%2F%2Fnykaa.com";
@@ -272,13 +273,12 @@ export const categoryFaqEntries: ReadonlyArray<FaqJsonLdEntry> = [
   },
   {
     question: "Where does the data come from?",
-    answer:
-      "Public surfaces only: the Meta Ad Library — the same public archive anyone can open in a browser — plus the public landing pages those ads link to. Five to Nine never logs in to anything and never reads anything behind a login.",
+    answer: `Public surfaces only: the Meta Ad Library — the same public archive anyone can open in a browser — ${isMonitoringSourceLive("google") ? "plus Google Search results for each watched competitor’s brand query, plus " : "plus "}the public landing pages those ads link to. Five to Nine never logs in to anything and never reads anything behind a login.`,
   },
   {
     question: "How is this different from ad-spy tools?",
     answer:
-      "Ad-spy tools are built for browsing creatives, and some search many platforms’ ad libraries at once. Five to Nine monitors the Meta Ad Library only — other platforms’ ad libraries are out of scope — and is built around what changed: offers, prices, CTAs, and landing-page copy, each confirmed change saved with page text, the source link, and a screenshot when the capture includes one, then summarized in a brief. If you mainly want a large multi-platform creative library, ours is narrower; the change evidence is deeper.",
+      `Ad-spy tools are built for browsing creatives, and some search many platforms’ ad libraries at once. ${isMonitoringSourceLive("google") ? "Five to Nine reads the Meta Ad Library and Google Search results — other platforms’ ad libraries are out of scope" : "Five to Nine monitors the Meta Ad Library only — other platforms’ ad libraries are out of scope"} — and is built around what changed: offers, prices, CTAs, and landing-page copy, each confirmed change saved with page text, the source link, and a screenshot when the capture includes one, then summarized in a brief. If you mainly want a large multi-platform creative library, ours is narrower; the change evidence is deeper.`,
   },
   {
     question: "How fast will I hear about changes?",
@@ -371,9 +371,11 @@ export default function CompetitorMonitoringCategoryRoute() {
 
         <p className="ld-honest" role="note">
           <strong>No account needed.</strong> The public search preview shows what a monitoring
-          check looks like before you decide. Coverage is the Meta Ad Library only — other
-          platforms&rsquo; ad libraries are not included — and freshness is labeled and can vary by
-          source.
+          check looks like before you decide.{" "}
+          {isMonitoringSourceLive("google")
+            ? "Coverage is the Meta Ad Library plus Google Search results for each watched competitor’s brand query — other platforms’ ad libraries are not included"
+            : "Coverage is the Meta Ad Library only — other platforms’ ad libraries are not included"}
+          {" "}— and freshness is labeled and can vary by source.
         </p>
       </section>
 

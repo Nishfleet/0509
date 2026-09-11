@@ -4,6 +4,7 @@ import type { LinksFunction, MetaFunction } from "react-router";
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
 import { Breadcrumbs } from "~/components/breadcrumbs";
+import { CompareLiveSources } from "~/components/compare-live-sources";
 import { LiveBrandProof } from "~/components/live-brand-proof";
 import {
   Cite,
@@ -216,6 +217,8 @@ export default function CompareAdspyderRoute() {
           ))}
         </div>
       </section>
+
+      <CompareLiveSources />
 
       <section className="ld-final">
         <h2>
