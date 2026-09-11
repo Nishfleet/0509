@@ -124,7 +124,7 @@ describe("/switch/magicbrief wind-down page (issue #2887)", () => {
 
   it("emits canonical self, SEO title/description, and WebPage JSON-LD", async () => {
     const page = SWITCH_PAGES.magicbrief;
-    const routeModule = (await import("~/routes/switch.magicbrief")) as {
+    const routeModule = (await import("~/routes/switch.magicbrief")) as unknown as {
       links: () => Array<{ rel?: string; href?: string }>;
       meta: () => Array<{ title?: string; name?: string; content?: string }>;
     };
