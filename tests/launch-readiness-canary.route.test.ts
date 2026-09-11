@@ -400,6 +400,175 @@ describe("launch readiness canary route", () => {
     await expect(response.json()).resolves.toEqual({ ok: false, blocker: "missing_db" });
   });
 
+  it("self-provisions the canary user and active watchlist when the substrate was wiped", async () => {
+    // Post-wipe prod state (#2908): getCanaryTarget returned null and the
+    // route 503'd missing_active_watchlist before any proof email, killing
+    // every Deploy run with proof_email_dispatch_invalid. The route must
+    // rebuild its own deterministic substrate instead of 503-ing.
+    const statements: string[] = [];
+    let userInserted = false;
+    let watchlistInserted = false;
+    const db = {
+      prepare(sql: string) {
+        return {
+          bind(..._args: unknown[]) {
+            return {
+              async all<T>() {
+                if (sql.includes("e2e_test_mode")) return { results: [] as T[] };
+                if (sql.includes("INNER JOIN user")) {
+                  return {
+                    results: (userInserted && watchlistInserted
+                      ? [{
+                          user_id: "launch-readiness-canary-owner",
+                          email: "owner@example.com",
+                          name: "Launch readiness canary owner",
+                          watchlist_id: "launch-readiness-canary-watchlist",
+                          watchlist_name: "Launch readiness canary",
+                          target_label: "0509.io",
+                        }]
+                      : []) as T[],
+                  };
+                }
+                if (sql.includes("FROM user")) {
+                  return { results: (userInserted ? [{ user_id: "launch-readiness-canary-owner" }] : []) as T[] };
+                }
+                throw new Error(`unexpected query: ${sql.slice(0, 80)}`);
+              },
+              async run() {
+                statements.push(sql);
+                if (sql.includes("INSERT INTO user")) userInserted = true;
+                if (sql.includes("INSERT INTO watchlist")) watchlistInserted = true;
+                return { success: true };
+              },
+            };
+          },
+        };
+      },
+    };
+
+    const createWatchlistRun = vi.fn().mockResolvedValue("run-1");
+    const finishWatchlistRun = vi.fn().mockResolvedValue(undefined);
+    const upsertProofTarget = vi.fn().mockResolvedValue({ id: "proof-target-1" });
+    const createProofCapture = vi.fn().mockResolvedValue("proof-1");
+    const createWatchEvent = vi.fn().mockResolvedValue("event-1");
+    const createDigestRun = vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true });
+    const deliverWeeklyDigest = vi.fn().mockResolvedValue({
+      attempts: 1,
+      channels: ["email"],
+      details: [
+        {
+          channel: "email",
+          status: "sent",
+          targetValue: "owner@example.com",
+          providerMessageId: "email-1",
+          errorMessage: null,
+          deliveredAt: new Date().toISOString(),
+          subject: "0509 Gate C proof gate-c-worker-v1",
+          providerDispatchStartedAt: "2026-09-11T00:00:00.000Z",
+          providerStatusLastSeenAt: "2026-09-11T00:05:00.000Z",
+        },
+      ],
+    });
+
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DB: db,
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      createDigestRun,
+      createProofCapture,
+      createWatchEvent,
+      createWatchlistRun,
+      finishWatchlistRun,
+      upsertProofTarget,
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+    mockLandingPageCapture();
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    const response = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/api/launch-readiness/canary", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-0509-canary-token": "secret-token",
+        },
+        body: JSON.stringify({ gateRunId: "gate-c-worker-v1" }),
+      }),
+    } as never);
+
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      blockers: [],
+      proofEmail: { gateRunId: "gate-c-worker-v1", provider: { status: "sent" } },
+    });
+    expect(statements.some((sql) => sql.includes("INSERT INTO user"))).toBe(true);
+    expect(statements.some((sql) => sql.includes("INSERT INTO watchlist"))).toBe(true);
+    expect(createWatchlistRun).toHaveBeenCalledWith(
+      expect.anything(),
+      "launch-readiness-canary-watchlist",
+      "manual",
+      null,
+      1,
+      expect.objectContaining({ kind: "launch_readiness_canary" }),
+    );
+  }, 10_000);
+
+  it("fails closed with the pre-existing blocker when substrate provisioning throws", async () => {
+    const db = {
+      prepare(_sql: string) {
+        return {
+          bind(..._args: unknown[]) {
+            return {
+              async all<T>() {
+                // Sentinel readable; target and owner lookups both empty.
+                return { results: [] as T[] };
+              },
+              async run() {
+                throw new Error("d1 write rejected");
+              },
+            };
+          },
+        };
+      },
+    };
+    const deliverWeeklyDigest = vi.fn();
+
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DB: db,
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    const response = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/api/launch-readiness/canary", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-0509-canary-token": "secret-token",
+        },
+        body: JSON.stringify({ gateRunId: "gate-c-worker-v1" }),
+      }),
+    } as never);
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      ok: false,
+      blocker: "missing_active_watchlist",
+      provisioningFailed: true,
+    });
+    expect(deliverWeeklyDigest).not.toHaveBeenCalled();
+  }, 10_000);
+
   it("creates fresh monitoring, proof, digest, and delivery signals", async () => {
     const createWatchlistRun = vi.fn().mockResolvedValue("run-1");
     const finishWatchlistRun = vi.fn().mockResolvedValue(undefined);

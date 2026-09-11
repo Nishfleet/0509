@@ -123,7 +123,7 @@ const RELEASE_COMPATIBLE_EMAIL_BLOCKERS = Object.freeze([
  *   backupLifecycleSummary?: unknown,
  *   backupProofStatus?: "required" | "deferred",
  *   backupProofDisposition?: Record<string, unknown>,
- *   proofDiagnostics?: { blockers?: string[], delivery?: { attempts?: number, channels?: string[], details?: Array<{ channel?: string, status?: string, webhookStatus?: string }> }, proofEmailEvidence?: Record<string, string | boolean> },
+ *   proofDiagnostics?: { blocker?: string, blockers?: string[], delivery?: { attempts?: number, channels?: string[], details?: Array<{ channel?: string, status?: string, webhookStatus?: string }> }, proofEmailEvidence?: Record<string, string | boolean> },
  *   completedAt?: string,
  *   ownerPid?: number
  * }} GateJournal
@@ -463,6 +463,13 @@ export function sanitizeProofDiagnostics(payload) {
   const source = /** @type {Record<string, unknown>} */ (payload);
   /** @type {NonNullable<GateJournal["proofDiagnostics"]>} */
   const diagnostics = {};
+  // The route's early returns (missing_db, missing_active_watchlist, ...)
+  // carry a singular `blocker` string and NEITHER `blockers` nor `delivery`.
+  // Before 2026-09-11 those runs (34600179872, 34602656730, ...) journaled no
+  // route field at all, so the 503's own reason was invisible in evidence.
+  if (typeof source.blocker === "string" && DIAGNOSTIC_IDENTIFIER_PATTERN.test(source.blocker)) {
+    diagnostics.blocker = source.blocker;
+  }
   if (Array.isArray(source.blockers)) {
     const blockers = source.blockers.filter(
       (value) =>
