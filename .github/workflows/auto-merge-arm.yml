@@ -12,7 +12,8 @@ on:
   pull_request:
     types: [opened, ready_for_review]
 
-permissions: {}
+permissions:
+  issues: read
 
 concurrency:
   group: auto-merge-arm-${{ github.event.pull_request.number }}

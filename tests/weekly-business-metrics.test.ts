@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildDriftIssueCommand,
   buildEvidenceUsageQuery,
   buildSignupsQuery,
   buildTopUpsQuery,
   buildYieldPerWatchlistQuery,
   buildYieldWeeklyQuery,
+  evaluateDrift,
 } from "../scripts/weekly-business-metrics.mjs";
 
 const NOW = new Date("2026-09-10T12:00:00.000Z");
@@ -40,5 +42,56 @@ describe("weekly business-metrics windowed series", () => {
   it("keeps the per-watchlist yield query floored at the trailing 7 days", () => {
     const sql = buildYieldPerWatchlistQuery(NOW);
     expect(sql).toContain(`we.created_at >= '${isoDaysAgo(7)}'`);
+  });
+});
+
+describe("weekly business-metrics unexplained-drift check (issue #2836)", () => {
+  it("flags a 100% watchlist drop (the observed 11 -> 0 case)", () => {
+    const flags = evaluateDrift(
+      { users_total: 15, active_watchlists: 0 },
+      { users_total: 15, active_watchlists: 11 },
+    );
+    expect(flags).toEqual([
+      { metric: "active_watchlists", current: 0, previous: 11, ratio: 0 },
+    ]);
+  });
+
+  it("flags any drop below 50% but not at or above it", () => {
+    expect(
+      evaluateDrift(
+        { users_total: 7, active_watchlists: 6 },
+        { users_total: 15, active_watchlists: 11 },
+      ),
+    ).toEqual([{ metric: "users_total", current: 7, previous: 15, ratio: 7 / 15 }]);
+    expect(
+      evaluateDrift(
+        { users_total: 15, active_watchlists: 6 },
+        { users_total: 15, active_watchlists: 11 },
+      ),
+    ).toEqual([]);
+  });
+
+  it("stays quiet when there is no prior value to compare against", () => {
+    expect(
+      evaluateDrift(
+        { users_total: 0, active_watchlists: 0 },
+        { users_total: 0, active_watchlists: 0 },
+      ),
+    ).toEqual([]);
+  });
+
+  it("builds a gh issue create command carrying the unexplained-drift marker and issue reference", () => {
+    const argv = buildDriftIssueCommand({
+      metric: "active_watchlists",
+      current: 0,
+      previous: 11,
+      ratio: 0,
+      generatedAt: "2026-09-10T03:00:00.000Z",
+    });
+    expect(argv).toContain("-R");
+    expect(argv).toContain("Nishfleet/0509");
+    expect(argv[argv.indexOf("--title") + 1]).toContain("unexplained-drift");
+    expect(argv[argv.indexOf("--body") + 1]).toContain("unexplained-drift");
+    expect(argv[argv.indexOf("--body") + 1]).toContain("Relates to #2836");
   });
 });
