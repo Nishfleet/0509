@@ -34,7 +34,7 @@
 
 import { resolveSeedList } from "~/lib/ads-domain-publisher.server";
 import { buildLandingPageAnalysisFields } from "~/lib/analysis.server";
-import { replaceAnalysisFields } from "~/lib/data/ads.server";
+import { landingPageSnapshotContentKey, replaceAnalysisFields } from "~/lib/data/ads.server";
 import { execute, queryOne } from "~/lib/data/d1.server";
 import { jsonValue, nowIso } from "~/lib/data/helpers.server";
 import type { AppEnv } from "~/lib/env.server";
@@ -320,7 +320,11 @@ export async function runSneakerResaleBackfill(
       // INSERT OR IGNORE keeps the deterministic id the single source of
       // truth against an overlapping cron retry — for the analysis write
       // as well as the row: an ignored insert means a concurrent pass
-      // already owns this row.
+      // already owns this row. Issue #2442: with the schema's content_key
+      // unique index, an ignored insert may also be an identical capture
+      // persisted under a different id, so the conflict target is named
+      // explicitly and the skip path read-back below resolves whichever row
+      // actually persisted.
       const inserted = await execute(
         env,
         `
@@ -344,6 +348,7 @@ export async function runSneakerResaleBackfill(
             price_tier
           )
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)
+          ON CONFLICT(content_key) DO NOTHING
         `,
         rowId,
         snapshot.rawUrl,
@@ -363,11 +368,25 @@ export async function runSneakerResaleBackfill(
       );
       if (Number(inserted.meta?.changes ?? 0) === 0) {
         // The concurrent winner's row and analysis fields are authoritative;
-        // report the skip, not a capture this pass did not write.
+        // report the skip, not a capture this pass did not write. The
+        // read-back resolves whichever row actually persisted (ours, or the
+        // identical capture that won the content_key race) so the reported
+        // snapshotId always points at a real row.
+        const persisted = await queryOne<{ id: string }>(
+          env,
+          `SELECT id FROM landing_page_snapshot WHERE id = ? OR content_key = ?
+           ORDER BY (id = ?) DESC LIMIT 1`,
+          rowId,
+          landingPageSnapshotContentKey(snapshot),
+          rowId,
+        );
+        if (!persisted) {
+          throw new Error(`sneaker resale backfill snapshot for ${entry.domain} was not persisted`);
+        }
         results.push({
           domain: entry.domain,
           status: "skipped_already_captured",
-          snapshotId: rowId,
+          snapshotId: persisted.id,
           reasonCode: null,
           canonicalUrl: null,
           capturedAt: null,
