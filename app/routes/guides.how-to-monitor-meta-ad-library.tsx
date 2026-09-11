@@ -12,9 +12,9 @@
  * see, interactive gates interrupt an unattended routine, and nobody checks
  * for you when you skip a week.
  *
- * The automated answer is positioned honestly: the free weekly watch (Free
- * plan: one competitor, instant first scan, then a weekly scheduled check and
- * weekly email brief, no card). The CTA is the public /search preview
+ * The automated answer is positioned honestly: the free first check (Free
+ * plan: one competitor, instant first scan, one first brief, no card —
+ * recurring checks and briefs are paid). The CTA is the public /search preview
  * carrying the allowlisted `source=guide-monitor-ad-library` marker — no
  * account needed. Guardrails from the issue: no named competitor tools are
  * disparaged, no multi-platform coverage is claimed (Meta Ad Library only),
@@ -46,7 +46,7 @@ const PATHNAME = "/guides/how-to-monitor-meta-ad-library";
 export const guideSearchPreviewPath = "/search?source=guide-monitor-ad-library";
 
 const pageDescription =
-  "How to monitor a competitor's Meta Ad Library: the free manual routine — find the Ad Library URL, pick a check cadence, log what runs — where it breaks (no history, geo variance, interactive gates), and the free weekly watch that automates it.";
+  "How to monitor a competitor's Meta Ad Library: the free manual routine — find the Ad Library URL, pick a check cadence, log what runs — where it breaks (no history, geo variance, interactive gates), and the free first check that automates it.";
 
 export const links: LinksFunction = () => canonicalLinks(PATHNAME);
 
@@ -126,7 +126,7 @@ export const monitorAdLibraryFaqEntries: ReadonlyArray<FaqJsonLdEntry> = [
   {
     question: "Can I automate this monitoring myself?",
     answer:
-      "Partly. A scraper or workflow can fetch the live results on a timer, but the Ad Library is a browser page with interactive gates — login and consent prompts, CAPTCHA challenges, rate limiting — that an unattended run has to clear, and the live view has no history. Five to Nine's free plan automates one competitor on a weekly schedule, also with no card.",
+      "Partly. A scraper or workflow can fetch the live results on a timer, but the Ad Library is a browser page with interactive gates — login and consent prompts, CAPTCHA challenges, rate limiting — that an unattended run has to clear, and the live view has no history. Five to Nine's free plan automates one competitor with a first check and a first brief, also with no card — recurring scheduled checks are paid.",
   },
   {
     question: "Does Five to Nine monitor more than the Meta Ad Library?",
@@ -230,15 +230,15 @@ export default function GuideHowToMonitorMetaAdLibraryRoute() {
       </section>
 
       <section className="ld-how">
-        <h2>The automated answer: a free weekly watch.</h2>
+        <h2>The automated answer: a free first check and brief.</h2>
         <div className="ld-how-grid">
           <article>
             <span className="ld-step">01</span>
-            <h3>One competitor, watched weekly, free</h3>
+            <h3>One competitor, free: one first check, one first brief</h3>
             <p>
-              Five to Nine&rsquo;s free plan watches one competitor: an instant first scan, then a
-              scheduled check every week and a weekly email brief. No card, and the recurring
-              library visit stops being your job.
+              Five to Nine&rsquo;s free plan watches one competitor: an instant first scan and one
+              first email brief, Meta Ad Library only. No card — and no recurring checks or briefs;
+              scheduled checks and recurring briefs are a paid plan.
             </p>
           </article>
           <article>

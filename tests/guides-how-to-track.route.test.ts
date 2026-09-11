@@ -36,9 +36,12 @@ describe("guides how-to-track-competitor-ads route", () => {
     expect(markup).toContain("Inactive ads disappear");
     expect(markup).toContain("Skipped weeks are permanent gaps");
     expect(markup).toContain("No landing-page diff");
-    // The free weekly watch positioned as the automated answer.
-    expect(markup).toContain("The automated answer: a free weekly watch.");
-    expect(markup).toContain("One competitor, watched weekly, free");
+    // The free first check positioned as the automated answer.
+    expect(markup).toContain("The automated answer: a free first check and brief.");
+    expect(markup).toContain("One competitor, free: one first check, one first brief");
+    expect(markup).not.toContain("watched weekly");
+    expect(markup).not.toContain("weekly email brief");
+    expect(markup).toContain("scheduled checks and recurring briefs are a paid plan");
     // CTA is the public /search preview carrying the allowlisted marker.
     expect(markup).toContain('action="/search"');
     expect(markup).toContain('name="source"');

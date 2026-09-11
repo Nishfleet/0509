@@ -105,18 +105,20 @@ describe("/auth/signup WebPage JSON-LD", () => {
 });
 
 describe("/auth/signup story column plan promises", () => {
-  it("names the free weekly watch and paid-plan additions without inventing entitlements", async () => {
+  it("names the free first check and paid-plan additions without inventing entitlements", async () => {
     const { default: SignupRoute } = await import("~/routes/auth.signup");
     const markup = renderToStaticMarkup(createElement(SignupRoute));
 
-    // Free weekly watch: one competitor, activation scan, weekly check, weekly
-    // email brief, no card — matches the plan-entitlements free catalog.
-    expect(markup).toContain("Free weekly watch");
+    // Free first check: one competitor, activation scan, one proof-backed first
+    // brief, no card, nothing recurring — matches PUBLISHED_FREE_PLAN_OFFER.
+    expect(markup).toContain("Free first check");
     expect(markup).toContain("Your free account watches one competitor");
     expect(markup).toContain("an activation scan when you add it");
-    expect(markup).toContain("a weekly check with");
-    expect(markup).toContain("weekly email brief");
+    expect(markup).toContain("one proof-backed first brief");
     expect(markup).toContain("No card needed");
+    expect(markup).toContain("recurring checks and briefs are a paid plan");
+    expect(markup).not.toContain("weekly email brief");
+    expect(markup).not.toContain("one saved");
 
     // Paid cadence: Scout every 6, Starter every 3, and the Agency top-25 /
     // rest-of-6 split disclosed exactly as the pricing surface states it.

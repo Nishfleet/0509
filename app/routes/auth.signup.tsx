@@ -206,10 +206,9 @@ export default function SignupRoute() {
           </div>
           <div className="f9-auth-proof-list">
             <div>
-              <strong>Free weekly watch</strong>
-              <p>Your free account watches one competitor: an activation scan when you add it (with one
-              proof-backed brief), then a weekly check with a weekly email brief, plus one saved
-              Collection. No card needed.</p>
+              <strong>Free first check</strong>
+              <p>Your free account watches one competitor: an activation scan when you add it, with one
+              proof-backed first brief. No card needed — recurring checks and briefs are a paid plan.</p>
             </div>
             <div>
               <strong>Proof on paid plans</strong>

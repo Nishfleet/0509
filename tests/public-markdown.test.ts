@@ -170,16 +170,17 @@ describe("public markdown", () => {
       "top 25 competitors checked every 3 hours and the rest every 6 hours",
     );
     expect(LLMS_TEXT).toContain("top 25 competitors every 3 hours (rest every 6 hours)");
-    // Free-plan sentence must match the entitlement catalog in
-    // app/lib/plan-entitlements.ts (1 watchlist, 1 Collection, 1 included
-    // proof capture/month backing the weekly brief). The earlier
-    // "(no proof captures/collections)" parenthetical denied what the same
-    // sentence granted and contradicted shipped free-plan behavior.
+    // Free-plan sentence must match PUBLISHED_FREE_PLAN_OFFER (1 watchlist,
+    // one first check and one first brief, Meta Ad Library only, no card,
+    // nothing recurring). The earlier "weekly brief / one Collection" claims
+    // contradicted plan-entitlements (briefs: first_only, collections: 0).
     expect(LLMS_TEXT).toContain("one watchlist with an activation scan on add");
-    expect(LLMS_TEXT).toContain("weekly email brief backed by one included proof capture a month");
-    expect(LLMS_TEXT).toContain("plus one Collection");
-    expect(LLMS_TEXT).not.toContain("(no proof captures/collections)");
-    expect(PUBLIC_MARKDOWN).toContain("one included proof capture a month, with one Collection");
+    expect(LLMS_TEXT).toContain("one first brief");
+    expect(LLMS_TEXT).toContain("recurring scheduled checks, recurring briefs");
+    expect(LLMS_TEXT).not.toContain("plus one Collection");
+    expect(LLMS_TEXT).not.toContain("weekly email brief backed by");
+    expect(PUBLIC_MARKDOWN).toContain("an activation scan when the watchlist is added and one first brief");
+    expect(PUBLIC_MARKDOWN).not.toContain("weekly email brief");
     expect(PUBLIC_MARKDOWN).not.toContain("no collections, proof captures");
     expect(PUBLIC_MARKDOWN).toContain("Proof capture packs add purchased proof captures that never expire");
     expect(PUBLIC_MARKDOWN).toContain("Included proof captures reset every month and do not roll over");
