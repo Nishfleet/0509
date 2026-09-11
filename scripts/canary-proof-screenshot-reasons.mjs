@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// d1-budget: reads=300 writes=0 runs_per_day=4
 /**
  * Live guard for issue #2082: surface the dominant screenshot-failure / skip
  * reasons behind the "saves the screenshots" proof promise, so a low

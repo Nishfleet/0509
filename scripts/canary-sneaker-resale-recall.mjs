@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// d1-budget: reads=400 writes=0 runs_per_day=8
 // Sneaker-resale seed-list recall guard (issue #1945).
 //
 // The sneaker-resale cluster is the strongest, most-consistent buyer signal
