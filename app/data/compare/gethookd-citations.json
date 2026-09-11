@@ -1,0 +1,13 @@
+{
+  "competitor": "gethookd",
+  "productName": "GetHookd",
+  "sources": [
+    {
+      "id": "gethookd-site",
+      "href": "https://gethookd.ai/",
+      "label": "GetHookd home page",
+      "checked": "2026-09-11",
+      "claim": "GetHookd positions itself as a Facebook Ads Library analysis platform (brand, campaign, and creative analysis); its public site advertises a 7-day free trial and API & MCP access included with every annual plan."
+    }
+  ]
+}

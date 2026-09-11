@@ -1,4 +1,5 @@
 import { createElement } from "react";
+import { mockReactRouter } from "./helpers/mock-react-router";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -10,22 +11,9 @@ let currentData: BrandPageLoaderData;
 
 beforeEach(() => {
   vi.resetModules();
-  vi.doMock("react-router", async () => {
-    const actual = await vi.importActual<typeof import("react-router")>("react-router");
-    const React = await import("react");
-    return {
-      ...actual,
-      useLoaderData: () => currentData,
-      useRouteLoaderData: () => undefined,
-      Link: ({
-        children,
-        to,
-        ...props
-      }: { children?: React.ReactNode; to?: string } & Record<string, unknown>) =>
-        React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
-      Form: ({ children, ...props }: { children?: React.ReactNode } & Record<string, unknown>) =>
-        React.createElement("form", props, children),
-    };
+  mockReactRouter({
+    loader: () => currentData,
+    loaderData: () => undefined,
   });
 });
 
@@ -80,7 +68,9 @@ function cachedIndexable(overrides: Partial<BrandPageLoaderData> = {}): BrandPag
     brandName: "Nike",
     hasCachedAds: true,
     ads,
-    verifiedLinkedIds: ads.map((creative) => creative.metaAdId),
+    adCount: ads.length,
+    verifiedTestedCount: 0,
+    tickerAds: [],
     checkedAgo: "about 2 hours ago",
     lastCheckedAt: "2026-08-09T10:00:00.000Z",
     freshForLiveClaim: false,
@@ -277,7 +267,9 @@ describe("/ads/:domain JSON-LD", () => {
       cachedIndexable({
         hasCachedAds: false,
         ads: [],
-        verifiedLinkedIds: [],
+        adCount: 0,
+        verifiedTestedCount: 0,
+        tickerAds: [],
         checkedAgo: null,
         lastCheckedAt: null,
         teaser: null,

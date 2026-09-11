@@ -28,14 +28,15 @@ async function seedProofCaptureFull(
     attemptedAt: string;
     landingPageUrl?: string | null;
     captureMetadataJson?: string;
+    captureDiagnosticsJson?: string;
   },
   id = uid("pc"),
 ) {
   await appEnv.DB!.prepare(
     `INSERT INTO proof_capture (
        id, proof_target_id, status, skip_reason, failure_code, failure_reason,
-       capture_metadata_json, extractor_version, attempted_at, created_at, updated_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, 'v1', ?, ?, ?)`,
+       capture_metadata_json, capture_diagnostics, extractor_version, attempted_at, created_at, updated_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'v1', ?, ?, ?)`,
   )
     .bind(
       id,
@@ -45,6 +46,7 @@ async function seedProofCaptureFull(
       input.failureCode ?? null,
       input.failureReason ?? null,
       input.captureMetadataJson ?? "{}",
+      input.captureDiagnosticsJson ?? null,
       input.attemptedAt,
       input.attemptedAt,
       input.attemptedAt,
@@ -117,6 +119,47 @@ describe("listCaptureAttemptsForRun against real D1", () => {
     const budget = byUrl.get("https://brand.example/c")!;
     expect(budget.status).toBe("skipped_due_to_budget");
     expect(budget.reasonCode).toBe("budget_skip");
+  });
+
+  it("reads capture_diagnostics.budgetReason off the row so an inactive-plan budget skip keeps its own reason (#2890)", async () => {
+    const userId = await seedUser();
+    const watchlistId = await seedWatchlist(userId);
+    await seedRun(watchlistId, { startedAt: RUN_START, status: "succeeded" });
+
+    const exhaustedTarget = await seedProofTargetWithUrl(watchlistId, "https://brand.example/exhausted");
+    const topupTarget = await seedProofTargetWithUrl(watchlistId, "https://brand.example/topup");
+
+    await seedProofCaptureFull(exhaustedTarget, {
+      status: "skipped_due_to_budget",
+      skipReason: "skipped_due_to_budget",
+      failureReason: "Proof capture allowance exhausted.",
+      attemptedAt: "2026-08-20T10:01:00.000Z",
+      captureDiagnosticsJson: JSON.stringify({ budgetReason: "exhausted" }),
+    });
+    await seedProofCaptureFull(topupTarget, {
+      status: "skipped_due_to_budget",
+      skipReason: "skipped_due_to_budget",
+      failureReason: "Purchased proof captures require an active paid plan.",
+      attemptedAt: "2026-08-20T10:02:00.000Z",
+      captureDiagnosticsJson: JSON.stringify({ budgetReason: "top_up_inactive_plan" }),
+    });
+
+    const attempts = await listCaptureAttemptsForRun(appEnv, {
+      watchlistId,
+      startedAt: RUN_START,
+      finishedAt: RUN_END,
+    });
+
+    const byUrl = new Map(attempts.map((a) => [a.urlChecked, a]));
+    expect(attempts).toHaveLength(2);
+
+    const exhausted = byUrl.get("https://brand.example/exhausted")!;
+    expect(exhausted.status).toBe("skipped_due_to_budget");
+    expect(exhausted.reasonCode).toBe("budget_skip");
+
+    const topup = byUrl.get("https://brand.example/topup")!;
+    expect(topup.status).toBe("skipped_due_to_budget");
+    expect(topup.reasonCode).toBe("budget_topup_inactive");
   });
 
   it("excludes captures outside the run window and from other watchlists", async () => {

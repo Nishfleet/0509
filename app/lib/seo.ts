@@ -891,6 +891,9 @@ export const SITEMAP_PATHS = [
   "/compare/panoramata",
   "/compare/adspyder",
   "/compare/adspy",
+  // Issue #2866: two verified competitors that had no compare page (both 404'd).
+  "/compare/keeptabz",
+  "/compare/gethookd",
   // BET 8 switch/intent pages (issue #2081). Production /sitemap.xml is
   // buildSitemapXml → ROOT_SITEMAP_STATIC_ENTRIES, which is this list minus
   // locale prefixes. lastmod is deliberately omitted: these pages have no

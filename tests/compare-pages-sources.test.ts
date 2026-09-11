@@ -58,6 +58,8 @@ const COMPARE_PAGES = [
   },
   { slug: "pulzifi", module: "~/routes/compare.pulzifi", citations: "~/data/compare/pulzifi-citations.json" },
   { slug: "spyland", module: "~/routes/compare.spyland", citations: "~/data/compare/spyland-citations.json" },
+  { slug: "keeptabz", module: "~/routes/compare.keeptabz", citations: "~/data/compare/keeptabz-citations.json" },
+  { slug: "gethookd", module: "~/routes/compare.gethookd", citations: "~/data/compare/gethookd-citations.json" },
 ] as const;
 
 async function renderPage(modulePath: string) {

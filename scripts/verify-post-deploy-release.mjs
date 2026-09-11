@@ -123,7 +123,7 @@ const RELEASE_COMPATIBLE_EMAIL_BLOCKERS = Object.freeze([
  *   backupLifecycleSummary?: unknown,
  *   backupProofStatus?: "required" | "deferred",
  *   backupProofDisposition?: Record<string, unknown>,
- *   proofDiagnostics?: { blockers?: string[], delivery?: { attempts?: number, channels?: string[], details?: Array<{ channel?: string, status?: string, webhookStatus?: string }> } },
+ *   proofDiagnostics?: { blockers?: string[], delivery?: { attempts?: number, channels?: string[], details?: Array<{ channel?: string, status?: string, webhookStatus?: string }> }, proofEmailEvidence?: Record<string, string | boolean> },
  *   completedAt?: string,
  *   ownerPid?: number
  * }} GateJournal
@@ -215,6 +215,58 @@ function validateProofEmailRouteEvidence(value, gateRunId) {
     return false;
   }
   return true;
+}
+
+const PROOF_EMAIL_KEY_PATTERN = /^[A-Za-z0-9_.-]{1,64}$/u;
+const PROOF_EMAIL_PROVIDER_STATUSES = Object.freeze(["sent", "pending", "failed"]);
+
+/**
+ * Structural verdict on the route's proofEmail evidence: one boolean or enum
+ * per rule of validateProofEmailRouteEvidence, never a private value, so a
+ * `proof_email_dispatch_invalid` names the failing field in the journal.
+ * Until 2026-09-11 the invalid path threw before anything was persisted;
+ * three consecutive Deploy production runs (34581070289, 34587175261,
+ * 34589430332) failed on it and the evidence carried only
+ * `proof_email: {status: "started"}`. Gate C stays as strict as before.
+ * @param {unknown} value @param {string} gateRunId
+ */
+export function describeProofEmailEvidence(value, gateRunId) {
+  const present = Boolean(value && typeof value === "object" && !Array.isArray(value));
+  const source = /** @type {Record<string, any>} */ (present ? value : {});
+  const provider =
+    source.provider && typeof source.provider === "object" && !Array.isArray(source.provider)
+      ? /** @type {Record<string, any>} */ (source.provider)
+      : null;
+  const status = provider?.status;
+  const statusValid = PROOF_EMAIL_PROVIDER_STATUSES.includes(status);
+  /** @param {unknown} v */
+  const typeOf = (v) => (v === null ? "null" : v === undefined ? "missing" : typeof v);
+  const checks = {
+    present,
+    keys: present
+      ? Object.keys(source)
+          .sort()
+          .map((key) => (PROOF_EMAIL_KEY_PATTERN.test(key) ? key : "invalid-key"))
+          .join(",")
+      : "",
+    keysExact: Boolean(exactKeys(source, ["gateRunId", "dispatchStartedAt", "subject", "provider"])),
+    gateRunIdMatches: source.gateRunId === gateRunId,
+    dispatchStartedAtType: typeOf(source.dispatchStartedAt),
+    dispatchStartedAtValid: validIso(source.dispatchStartedAt),
+    subjectType: typeOf(source.subject),
+    subjectMatches: source.subject === `0509 Gate C proof ${gateRunId}`,
+    providerKeysExact: Boolean(exactKeys(provider, ["status", "accepted", "messageId", "error"])),
+    providerStatus: statusValid ? String(status) : status === null ? "null" : status === undefined ? "missing" : "invalid",
+    providerAcceptedConsistent: provider?.accepted === (status === "sent"),
+    providerMessageIdType: typeOf(provider?.messageId),
+    providerMessageIdValid: validPrivateValue(provider?.messageId, 512),
+    providerErrorType: typeOf(provider?.error),
+    providerErrorValid: validPrivateValue(provider?.error, 1_024),
+    sentShapeValid:
+      status !== "sent" ||
+      (typeof provider?.messageId === "string" && provider.messageId.length > 0 && provider.error === null),
+  };
+  return { valid: validateProofEmailRouteEvidence(value, gateRunId), checks };
 }
 
 /** @param {ProofPayload | undefined} payload @param {string} gateRunId */
@@ -807,6 +859,18 @@ export async function runVersionBoundGateC({
         proofCaptureId: payload.proofCaptureId,
       };
       journal.cleanupTicket = cleanupTicket;
+    }
+    const proofEmailEvidence = describeProofEmailEvidence(payload?.proofEmail, runId);
+    if (!proofEmailEvidence.valid) {
+      // Persist the structural verdict and the route's own blockers BEFORE
+      // failing, so the next red run names the field instead of "started".
+      journal.steps.proof_email = { status: "failed", at: now().toISOString() };
+      journal.proofDiagnostics = {
+        ...(sanitizeProofDiagnostics(payload) ?? {}),
+        proofEmailEvidence: proofEmailEvidence.checks,
+      };
+      persist();
+      throw new Error("proof_email_dispatch_invalid");
     }
     const proofEmail = readProofEmailStepDetail(payload, runId);
     journal.steps.proof_email = {

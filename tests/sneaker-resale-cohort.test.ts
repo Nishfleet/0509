@@ -231,7 +231,7 @@ describe("deriveSneakerResaleCohort", () => {
 });
 
 describe("deriveSneakerResaleCohort with the bundled seed list", () => {
-  it("filters the real 25-domain sneaker-resale seed list down to the covered brands", () => {
+  it("filters the real 24-domain sneaker-resale seed list down to the covered brands", () => {
     // Use a fake tier map so the test stays deterministic: stockx.com and
     // flightclub.com have coverage; the rest are unmatched-only.
     const tierByDomain = new Map<string, SneakerResaleTier>();

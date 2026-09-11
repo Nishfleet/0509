@@ -1,4 +1,5 @@
 import { createElement } from "react";
+import { mockReactRouter } from "./helpers/mock-react-router";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -13,19 +14,10 @@ let currentData: BrandPageLoaderData;
 
 beforeEach(() => {
   vi.resetModules();
-  vi.doMock("react-router", async () => {
-    const actual = await vi.importActual<typeof import("react-router")>("react-router");
-    const React = await import("react");
-    return {
-      ...actual,
-      useLoaderData: () => currentData,
-      useRouteLoaderData: () => undefined,
-      useLocation: () => ({ pathname: "/ads/nike.com" }),
-      Link: ({ children, to, ...props }: { children?: React.ReactNode; to?: string } & Record<string, unknown>) =>
-        React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
-      Form: ({ children, ...props }: { children?: React.ReactNode } & Record<string, unknown>) =>
-        React.createElement("form", props, children),
-    };
+  mockReactRouter({
+    loader: () => currentData,
+    loaderData: () => undefined,
+    location: () => ({ pathname: "/ads/nike.com" }),
   });
 });
 
@@ -95,7 +87,9 @@ function populated(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoade
     brandName: "Nike",
     hasCachedAds: true,
     ads: [ad()],
-    verifiedLinkedIds: [ad().metaAdId],
+    adCount: 1,
+    verifiedTestedCount: 0,
+    tickerAds: [],
     checkedAgo: "about 2 hours ago",
     lastCheckedAt: "2026-09-01T10:00:00.000Z",
     freshForLiveClaim: false,

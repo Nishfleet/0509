@@ -3,7 +3,7 @@
 //
 // The sneaker-resale cluster is the strongest, most-consistent buyer signal
 // across the daily market reports (tracked across 7 consecutive daily reports,
-// 2026-08-25..2026-09-07). Its 25 seed-list brands must each render >=1
+// 2026-08-25..2026-09-07). Its 24 seed-list brands must each render >=1
 // verified/likely row on a bare /search probe, or the /ads/:domain page cannot
 // publish and the brand dead-ends in the free preview. The existing
 // search-tier-canary guards only the §1.8 six-domain set and is not scheduled;
@@ -11,7 +11,7 @@
 // all, so a silent recall/alias regression on the strongest cluster went
 // unmeasured.
 //
-// This canary iterates the 25 `data/seed-lists/sneaker-resale.json` domains,
+// This canary iterates the 24 `data/seed-lists/sneaker-resale.json` domains,
 // probes each against the production /search surface (the exact path a buyer
 // and Google take — the same `website=<domain>` probe the ads-domain-publisher
 // uses), reports per-domain verified/likely/unmatched rows, and fails loud
@@ -44,13 +44,15 @@ export const SEED_LIST_PATH = `${repoRoot}data/seed-lists/sneaker-resale.json`.r
 // not fail the canary — the honest "not evidence of inactivity" copy, no page.
 // A brand NOT in this set (and not a known identity gap) that dead-ends (0
 // rows) or blanket-unmatches is a recall/alias regression and fails the canary.
-// This set is the classification output of issue #1945: the entry was probed
-// on 2026-09-07 and the live search surface reports no verified Meta coverage
-// for it, and the brand is not a known large-scale Meta advertiser, so the
-// honest treatment is no-coverage (no page), not a failed canary.
-// Remove an entry the moment the brand starts running Meta ads so a real
+// This set is the classification output of issue #1945. Its only member was
+// sneakerping.com (probed 2026-09-07: no verified Meta coverage, not a known
+// large-scale Meta advertiser) — removed from the seed list on 2026-09-11 when
+// the market signal dropped SneakerPing from the below-retail cluster
+// (issue #2926), so the set is empty until a future probe classifies another
+// no-coverage seed brand. Add an entry only for a probed no-coverage brand,
+// and remove an entry the moment the brand starts running Meta ads so a real
 // future regression on that brand is not silently masked.
-export const KNOWN_NO_COVERAGE = Object.freeze(new Set(["sneakerping.com"]));
+export const KNOWN_NO_COVERAGE = Object.freeze(new Set());
 
 // A brand that SHOULD carry verified/likely Meta coverage (a major, established
 // Meta advertiser) but currently dead-ends (0 rows) or blanket-unmatches
@@ -83,7 +85,7 @@ export const KNOWN_IDENTITY_GAPS = Object.freeze(new Map([
 export const WARMING_RETRY_LIMIT = 2;
 export const WARMING_RETRY_DELAY_MS = 15_000;
 
-// Anonymous /search is 20 requests per 10 minutes per IP. The canary makes 25
+// Anonymous /search is 20 requests per 10 minutes per IP. The canary makes 24
 // requests (one per domain), so a scheduled run can collide with other search
 // canaries on the same runner IP; a 429 is retried with the same backoff the
 // BET 2 verifier uses rather than treated as a dead-end.

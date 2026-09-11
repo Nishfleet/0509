@@ -290,7 +290,7 @@ export async function upsertDeliveryTarget(
     targetValue,
   });
   const timestamp = nowIso();
-  if (existingTarget) {
+  const applyUpdate = async (existingTarget: NonNullable<Awaited<ReturnType<typeof getDeliveryTargetByUniqueFields>>>) => {
     const inputGeneration = readMetadataString(input.metadata, "validationGeneration");
     const existingGeneration = readMetadataString(
       existingTarget.metadata,
@@ -362,11 +362,20 @@ export async function upsertDeliveryTarget(
       timestamp,
       existingTarget.id,
     );
+  };
+  if (existingTarget) {
+    await applyUpdate(existingTarget);
   } else {
-    await run(
+    // M11: two concurrent first-time upserts of the same target race on the
+    // partial unique indexes (idx_delivery_target_unique_workspace /
+    // idx_delivery_target_unique_watchlist). The loser's insert is ignored;
+    // it then converges on the winner's row through the update path instead
+    // of throwing UNIQUE constraint failed. Same pattern as
+    // provisionVerifiedAccountEmailTargetIfUnsuppressed.
+    const result = await run(
       env,
       `
-        INSERT INTO delivery_target (
+        INSERT OR IGNORE INTO delivery_target (
           id,
           user_id,
           watchlist_id,
@@ -411,11 +420,21 @@ export async function upsertDeliveryTarget(
       timestamp,
       timestamp,
     );
+    if ((result.meta?.changes ?? 0) === 0) {
+      const winner = await getDeliveryTargetByUniqueFields(env, {
+        userId: input.userId,
+        watchlistId: input.watchlistId ?? null,
+        channel: input.channel,
+        targetValue,
+      });
+      if (winner) await applyUpdate(winner);
+    }
   }
 
   const [target] = await listDeliveryTargets(env, input.userId, {
     watchlistId: input.watchlistId ?? null,
     channel: input.channel,
+    targetValue,
     limit: 1,
   });
   return target ?? null;

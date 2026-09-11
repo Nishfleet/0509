@@ -177,9 +177,19 @@ describe("BET 1 digest re-ranking (issue 1483)", () => {
     expect(email.html).toContain("Landing page headline changed");
     // The 6th-ranked landing change is omitted, never a churn event.
     expect(email.html).toContain("1 more change is in the full brief");
-    // Creative churn collapses into exactly one counted footnote line.
-    expect(email.html).toContain("4 new creatives, 2 retired — open the wall to see them.");
-    expect(email.text).toContain("4 new creatives, 2 retired — open the wall to see them.");
+    // Creative churn collapses into ONE counted line per watchlist, linked to
+    // the watchlist (issue 2880). Dot ×2, Wow ×2, Boat2 ×2.
+    expect(email.html).toContain("2 new creatives — ");
+    expect(email.html).toContain("open the ad wall");
+    expect(email.text).toContain(
+      "Dot: 2 new creatives — open the ad wall: https://0509.io/app/watchlists?watchlist=wl-dot",
+    );
+    expect(email.text).toContain(
+      "Wow: 2 new creatives — open the ad wall: https://0509.io/app/watchlists?watchlist=wl-wow",
+    );
+    expect(email.text).toContain(
+      "Boat2: 2 retired — open the ad wall: https://0509.io/app/watchlists?watchlist=wl-boat2",
+    );
     // Churn titles never surface as headline items.
     expect(email.html).not.toContain("New ad creative");
     expect(email.html).not.toContain("Ad retired");
