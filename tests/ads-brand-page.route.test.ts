@@ -466,11 +466,14 @@ describe("/ads/:domain loader", () => {
     expect(result.hasCachedAds).toBe(true);
     // The wall carries both creatives…
     expect(result.ads).toHaveLength(2);
-    // …but only one carries verified link evidence, and the loader exposes
-    // exactly that subset for the client (which must never re-derive it from
-    // the server-only evidence module).
+    // …but only one carries verified link evidence, stamped on the record
+    // itself so the badge and the verified-first ordering read the same
+    // signal (issue #2391; the parallel id list is gone since issue #2704 —
+    // the loader's counts carry every aggregate the page states).
     expect(result.verifiedLinkCount).toBe(1);
-    expect(result.verifiedLinkedIds).toEqual(["meta-nykaa-1"]);
+    expect(result.ads.find((ad) => ad.metaAdId === "meta-nykaa-1")?.linkVerifiedDomain).toBe("nykaa.com");
+    expect(result.ads.find((ad) => ad.metaAdId === "meta-text-1")?.linkVerifiedDomain).toBeUndefined();
+    expect(result.adCount).toBe(2);
     expect(result.unverifiedMatchCount).toBe(1);
     expect(result.brandOwnedAdCount).toBe(1);
     // The teaser/score/change feed speak only about the verified capture
@@ -506,22 +509,24 @@ describe("/ads/:domain loader", () => {
     });
 
     const result = await runLoader("nykaa.com", mocks.env);
-    const { verifiedLinkedAdsOf } = await import("~/routes/ads.$domain");
-
-    // The verified subset the client renders is derived from the payload's own
-    // ids — the same records the wall shows, from the loader's one
-    // verification pass.
-    expect(verifiedLinkedAdsOf(result).map((ad) => ad.metaAdId)).toEqual([
-      "meta-verified-1",
-      "meta-verified-2",
-    ]);
 
     // Every creative is serialized ONCE: one `metaAdId` key per cached
-    // creative. The pre-#2391 payload carried the verified-linked records a
-    // second time as `verifiedLinkedAds`.
+    // creative plus at most the belt's narrow candidates (issue #2704 ships
+    // the belt its own slice so no candidate the belt drops is carried).
+    // The pre-#2391 payload carried the verified-linked records a second
+    // time as `verifiedLinkedAds`; #2704 also removed the parallel id list
+    // (`verifiedLinkedIds`) and the wall's never-rendered overflow.
     const serialized = JSON.stringify(result);
     expect(result).not.toHaveProperty("verifiedLinkedAds");
-    expect(serialized.split('"metaAdId"').length - 1).toBe(result.ads.length);
+    expect(result).not.toHaveProperty("verifiedLinkedIds");
+    expect(result.ads.map((ad) => ad.metaAdId)).toEqual([
+      "meta-verified-1",
+      "meta-verified-2",
+      "meta-text-1",
+    ]);
+    expect(serialized.split('"metaAdId"').length - 1).toBe(
+      result.ads.length + result.tickerAds.length,
+    );
 
     // Fields no renderer reads never reach the browser at all (issue #2391
     // projection; the full dropped list is in the loader comment and the PR
@@ -580,9 +585,13 @@ describe("/ads/:domain loader", () => {
     });
 
     const result = await runLoader("nykaa.com", mocks.env);
-    expect(result.ads).toHaveLength(fullAds.length);
+    // Issue #2704: the payload ships only the wall's visible slots; the
+    // full capture size lives in `adCount` and the belt in `tickerAds`.
+    expect(result.adCount).toBe(fullAds.length);
+    expect(result.ads.length).toBeLessThanOrEqual(5);
+    expect(result.ads.length).toBeLessThan(fullAds.length);
 
-    // The pre-#2391 shape: the same two arrays, unprojected.
+    // The pre-#2391 shape: the same 24 records, unprojected, twice.
     const beforeBytes = JSON.stringify({
       ...result,
       ads: fullAds,
@@ -591,6 +600,108 @@ describe("/ads/:domain loader", () => {
     const afterBytes = JSON.stringify(result).length;
 
     expect(afterBytes).toBeLessThan(beforeBytes * 0.6);
+  });
+
+  it("ships only the creatives the page renders — wall slice, belt slice, counts (issue #2704)", async () => {
+    // Mirrors the live /ads/nike.com capture: 13 verified creatives, all with
+    // distinct bodies. The wall renders 5 of them (+ a "+8 more" tile), the
+    // belt renders the first 6 distinct bodies. The payload must carry
+    // exactly those — never the 8 overflow creatives the wall drops and
+    // never belt candidates the dedupe drops.
+    const fullAds: AdRecord[] = Array.from({ length: 13 }, (_v, i) => ({
+      ...baseAd,
+      metaAdId: `meta-ad-${i}`,
+      previewHeadline: `Distinct headline number ${i} for the belt`,
+      // Stagger first-seen so the longevity ordering is unambiguous.
+      firstSeenAt: isoAgo((20 - i) * DAY_MS),
+    }));
+    const mocks = installBrandPageMocks({
+      entry: cacheEntry({
+        payload: {
+          ads: fullAds,
+          nextCursor: null,
+          source: "meta_library_browser",
+          provider: "meta_library_browser",
+          cacheStatus: "hit",
+        },
+      }),
+    });
+
+    const result = await runLoader("nykaa.com", mocks.env);
+    const { WALL_VISIBLE_ADS } = await import("~/components/ads/brand-ad-wall");
+    const { TICKER_MAX_ITEMS } = await import("~/components/ads/brand-ticker");
+
+    // The wall slice: exactly the visible slots, verified-first and
+    // longevity-ordered from the CAPTURE time (deterministic across server
+    // render and hydration — a wall-clock key would let same-length
+    // creatives swap ranks between the two).
+    expect(result.adCount).toBe(13);
+    expect(result.ads).toHaveLength(WALL_VISIBLE_ADS);
+    expect(result.ads.map((ad) => ad.metaAdId)).toEqual(
+      Array.from({ length: WALL_VISIBLE_ADS }, (_v, i) => `meta-ad-${i}`),
+    );
+
+    // The belt slice: the first TICKER_MAX_ITEMS distinct bodies in snapshot
+    // order, projected to the six fields the belt reads — nothing else.
+    expect(result.tickerAds).toHaveLength(TICKER_MAX_ITEMS);
+    expect(result.tickerAds.map((ad) => ad.metaAdId)).toEqual(
+      Array.from({ length: TICKER_MAX_ITEMS }, (_v, i) => `meta-ad-${i}`),
+    );
+    for (const candidate of result.tickerAds) {
+      expect(Object.keys(candidate).sort()).toEqual(
+        ["firstSeenAt", "hook", "lastSeenAt", "metaAdId", "previewHeadline", "source"].sort(),
+      );
+    }
+
+    // The overflow creatives the wall and belt both drop are gone from the
+    // shipped arrays entirely — the split-testing count and every other
+    // aggregate ship as numbers over the FULL capture, not over the slices.
+    // (The change feed may still name an overflow ad's id: a new-ad event is
+    // a real rendered signal, not a second copy of the creative.)
+    const shippedIds = new Set([
+      ...result.ads.map((ad) => ad.metaAdId),
+      ...result.tickerAds.map((ad) => ad.metaAdId),
+    ]);
+    expect(shippedIds.has("meta-ad-12")).toBe(false);
+  });
+
+  it("belt output is identical whether fed the shipped ticker slice or the full capture (issue #2704)", async () => {
+    // The belt must not lose items because the loader pre-selected its
+    // candidates: rendering BrandTicker with the loader's `tickerAds` must
+    // produce the same markup as rendering it with the full projected
+    // capture it used to read.
+    const fullAds: AdRecord[] = Array.from({ length: 13 }, (_v, i) => ({
+      ...baseAd,
+      metaAdId: `meta-ad-${i}`,
+      // A repeated body early in the capture must not multiply on the belt.
+      previewHeadline: i === 3 ? "Distinct headline number 2 for the belt" : `Distinct headline number ${i} for the belt`,
+    }));
+    const mocks = installBrandPageMocks({
+      entry: cacheEntry({
+        payload: {
+          ads: fullAds,
+          nextCursor: null,
+          source: "meta_library_browser",
+          provider: "meta_library_browser",
+          cacheStatus: "hit",
+        },
+      }),
+    });
+
+    const result = await runLoader("nykaa.com", mocks.env);
+    const { BrandTicker } = await import("~/components/ads/brand-ticker");
+    const { createElement } = await import("react");
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { projectBrandPageAd } = await import("~/routes/ads.$domain");
+
+    const now = new Date("2026-09-11T08:00:00.000Z");
+    const fromSlice = renderToStaticMarkup(
+      createElement(BrandTicker, { ads: result.tickerAds, brandName: "Nykaa", fresh: false, now }),
+    );
+    const fromFull = renderToStaticMarkup(
+      createElement(BrandTicker, { ads: fullAds.map(projectBrandPageAd), brandName: "Nykaa", fresh: false, now }),
+    );
+    expect(fromSlice).toBe(fromFull);
   });
 
   it("reports zero brand-owned creatives when every cached ad is another advertiser's", async () => {
@@ -1077,6 +1188,9 @@ describe("/ads/:domain meta", () => {
     brandName: "Nykaa",
     hasCachedAds: true,
     ads: [baseAd],
+    adCount: 1,
+    verifiedTestedCount: 0,
+    tickerAds: [],
     checkedAgo: "about 2 hours ago",
     teaser: null,
     adLibraryCountry: "India",
@@ -1196,6 +1310,7 @@ describe("/ads/:domain meta", () => {
     const tags = await metaFor({
       ...richData,
       ads: [baseAd, { ...baseAd, metaAdId: "meta-2" }],
+      adCount: 2,
       brandOwnedAdCount: 1,
       verifiedLinkCount: 2,
     });
@@ -1213,6 +1328,7 @@ describe("/ads/:domain meta", () => {
     const tags = await metaFor({
       ...richData,
       ads: [unverifiedAd, { ...unverifiedAd, metaAdId: "meta-text-2" }],
+      adCount: 2,
       brandOwnedAdCount: 0,
       verifiedLinkCount: 0,
       unverifiedMatchCount: 2,
@@ -1237,6 +1353,7 @@ describe("/ads/:domain meta", () => {
     const tags = await metaFor({
       ...richData,
       ads: [baseAd, unverifiedAd],
+      adCount: 2,
       brandOwnedAdCount: 1,
       verifiedLinkCount: 1,
       unverifiedMatchCount: 1,

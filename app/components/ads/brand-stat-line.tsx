@@ -21,7 +21,7 @@ interface StatCell {
 export function BrandStatLine({
   teaser,
   aggression,
-  ads,
+  testedCount,
   movesThisWeek,
   freshnessLabel,
   fresh,
@@ -30,17 +30,17 @@ export function BrandStatLine({
   teaser: BrandIntelTeaser;
   aggression: BrandPageAggression | null;
   /**
-   * The verified-linked wall records. The strip reads only each creative's
-   * variant count, so this is the narrow projection the loader ships (issue
-   * #2391) rather than a full `AdRecord`.
+   * How many VERIFIED-LINKED cached creatives carry more than one variant —
+   * the loader's count for the "Split-testing N/total" cell (issue #2704).
+   * The strip used to receive the whole verified subset just to run this one
+   * predicate client-side; the payload now ships the number.
    */
-  ads: Pick<AdRecord, "variantCount">[];
+  testedCount: number;
   movesThisWeek: number;
   freshnessLabel: string | null;
   fresh: boolean;
   brandOwnedAdCount: number;
 }) {
-  const testedCount = ads.filter((ad) => (ad.variantCount ?? 0) > 1).length;
   const cells: StatCell[] = [];
   // A one-ad capture must read "1 ad active", never "1 ads active".
   const adWord = teaser.activeCount === 1 ? "ad" : "ads";
