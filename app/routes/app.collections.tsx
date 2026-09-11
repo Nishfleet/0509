@@ -156,10 +156,23 @@ export async function action({ context, request }: ActionFunctionArgs) {
       .map((tag) => tag.trim())
       .filter(Boolean);
 
-    await updateCollectionItem(env, workspaceUserId, itemId, {
-      note: note || null,
-      tags,
-    });
+    // A stale or tampered itemId makes the ownership-scoped lookup in
+    // updateCollectionItem throw; convert it to the same inline feedback the
+    // sibling remove-item intent returns instead of nuking the page into the
+    // route ErrorBoundary.
+    try {
+      await updateCollectionItem(env, workspaceUserId, itemId, {
+        note: note || null,
+        tags,
+      });
+    } catch {
+      return {
+        ok: false,
+        intent,
+        itemId,
+        message: "We couldn't find that item. Refresh the page and try again.",
+      };
+    }
 
     return {
       ok: true,
