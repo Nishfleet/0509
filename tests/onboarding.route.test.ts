@@ -311,6 +311,73 @@ describe("setup checklist actions", () => {
     expect(completeUserOnboarding).toHaveBeenCalledWith({}, "user-1");
   });
 
+  it("stores a setup-checklist watchlist for the workspace's own brand site as self (issue #2723)", async () => {
+    const completeUserOnboarding = vi.fn().mockResolvedValue(undefined);
+    const createWatchlistWithinLimit = vi.fn().mockResolvedValue({
+      status: "created",
+      watchlist: { id: "watch-1", targetLabel: "My Brand" },
+      current: 1,
+      limit: 3,
+    });
+
+    vi.doMock("~/lib/auth.server", () => authModuleFromSession({
+        user: {
+          id: "user-1",
+          email: "owner@example.com",
+          name: "Owner",
+          onboardedAt: null,
+        },
+        session: {
+          id: "session-1",
+          userId: "user-1",
+          expiresAt: "2026-04-03T00:00:00.000Z",
+        },
+      }));
+    vi.doMock("~/lib/data.server", () => ({
+      completeUserOnboarding,
+      createSavedQuery: vi.fn(),
+      createWatchlistWithinLimit,
+      upsertWorkspaceBranding: vi.fn(),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      checkPlanLimit: vi.fn().mockResolvedValue({
+        allowed: true,
+        current: 0,
+        limit: 3,
+      }),
+    }));
+
+    const { handleSetupChecklistAction: action } = await import("~/lib/setup-checklist-action.server");
+    const formData = new FormData();
+    formData.set("intent", "create-watchlist");
+    // The customer creates a watch on their own brand through the setup
+    // checklist — the create path must classify it as self, not competitor.
+    formData.set("website", "https://mybrand.example/pricing");
+    formData.set("brandWebsite", "www.mybrand.example");
+
+    await expectRedirect(
+      () =>
+        action({
+          context: createContext(),
+          request: new Request("http://localhost/app/onboard", {
+            method: "POST",
+            body: formData,
+          }),
+        } as never),
+      "/app/watchlists?watchlist=watch-1",
+    );
+
+    expect(createWatchlistWithinLimit).toHaveBeenCalledWith(
+      {},
+      "user-1",
+      expect.objectContaining({
+        targetId: "https://mybrand.example/pricing",
+        trackingRole: "self",
+      }),
+      3,
+    );
+  });
+
   it("previews a bulk competitor import without writing watchlists", async () => {
     const completeUserOnboarding = vi.fn();
     const createWatchlist = vi.fn();
@@ -1294,6 +1361,103 @@ describe("setup checklist actions", () => {
     // One first scan queued per created watchlist.
     expect(queueFirstWatchlistScan).toHaveBeenCalledTimes(2);
     expect(completeUserOnboarding).toHaveBeenCalledWith({}, "user-1");
+  });
+
+  it("classifies a handoff candidate on the workspace's own brand site as self and the rest as competitor (issue #2723)", async () => {
+    const completeUserOnboarding = vi.fn().mockResolvedValue(undefined);
+    const createWatchlistWithinLimit = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: "created",
+        watchlist: { id: "watch-1", targetLabel: "My Brand" },
+        current: 1,
+        limit: 3,
+      })
+      .mockResolvedValueOnce({
+        status: "created",
+        watchlist: { id: "watch-2", targetLabel: "Vivaia" },
+        current: 2,
+        limit: 3,
+      });
+    const queueFirstWatchlistScan = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => authModuleFromSession({
+        user: {
+          id: "user-1",
+          email: "owner@example.com",
+          name: "Owner",
+          onboardedAt: null,
+        },
+        session: {
+          id: "session-1",
+          userId: "user-1",
+          expiresAt: "2026-04-03T00:00:00.000Z",
+        },
+      }));
+    vi.doMock("~/lib/data.server", () => ({
+      completeUserOnboarding,
+      createWatchlistWithinLimit,
+      listWatchlists: vi.fn().mockResolvedValue([]),
+      upsertWorkspaceBranding: vi.fn(),
+    }));
+    vi.doMock("~/lib/monitoring.server", () => ({
+      queueFirstWatchlistScan,
+      queueFirstWatchlistScanForSignupFirstBrief: vi.fn(),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      checkPlanLimit: vi.fn().mockResolvedValue({
+        allowed: true,
+        current: 0,
+        limit: 3,
+      }),
+    }));
+    vi.doMock("~/lib/env.server", () => ({
+      isSignupFirstBriefEnabled: vi.fn().mockReturnValue(false),
+    }));
+
+    const { handleSetupChecklistAction: action } = await import("~/lib/setup-checklist-action.server");
+    const formData = new FormData();
+    formData.set("intent", "create-handoff-watchlists");
+    formData.set("brandWebsite", "mybrand.example");
+    formData.append("candidate", JSON.stringify({
+      advertiser: "My Brand",
+      pageId: "page-1",
+      landingPageUrl: "https://www.mybrand.example",
+      targetCountry: null,
+    }));
+    formData.append("candidate", JSON.stringify({
+      advertiser: "Vivaia",
+      pageId: null,
+      landingPageUrl: "https://vivaia.com",
+      targetCountry: null,
+    }));
+
+    await expectRedirect(
+      () =>
+        action({
+          context: createContext(),
+          request: new Request("http://localhost/app/onboard", {
+            method: "POST",
+            body: formData,
+          }),
+        } as never),
+      "/app?setup=watchlist&created=2",
+    );
+
+    expect(createWatchlistWithinLimit).toHaveBeenNthCalledWith(
+      1,
+      {},
+      "user-1",
+      expect.objectContaining({ targetId: "https://mybrand.example", trackingRole: "self" }),
+      3,
+    );
+    expect(createWatchlistWithinLimit).toHaveBeenNthCalledWith(
+      2,
+      {},
+      "user-1",
+      expect.objectContaining({ targetLabel: "Vivaia", trackingRole: "competitor" }),
+      3,
+    );
   });
 
   it("does not double-create a handoff candidate that is already watched (idempotent first capture)", async () => {
