@@ -16,15 +16,16 @@ import { LIVE_BRAND_PROOF_DOMAIN } from "~/lib/demo-brand-pages";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import spylandCitations from "~/data/compare/spyland-citations.json";
 
-// Source verification (issue #1288, #2069): primary-source-verified —
-// https://spyland.ing/ returns HTTP 200 and names the product with a free plan
-// and paid tiers from $19/mo — verified live 2026-09-09.
+// Source verification (issue #1288, #2069, #2835): primary-source-verified —
+// https://spyland.ing/ returns HTTP 200 and names the product with a Free plan
+// ($0/mo, weekly checks) and paid Solo $10/mo / Business $49/mo tiers with
+// daily checks — verified live 2026-09-11.
 const citations = spylandCitations as CompareCitations;
 
 export { compareAdsExampleLoader as loader } from "~/lib/ads-internal-links.server";
 
 const pageDescription =
-  "Spyland watches competitor landing pages daily and flags copy, pricing, and CTA changes. Five to Nine adds the ad source and more frequent source-backed checks.";
+  "Spyland watches competitor landing pages on a schedule and flags copy, pricing, and CTA changes. Five to Nine adds the ad source and more frequent source-backed checks.";
 
 export const links: LinksFunction = () => canonicalLinks("/compare/spyland");
 
@@ -39,9 +40,9 @@ export const meta: MetaFunction = () =>
 
 const spylandStrengths: readonly CompareClaimCard[] = [
   {
-    title: "Daily competitor page checks",
+    title: "Scheduled competitor page checks",
     detail:
-      "Add competitor landing, pricing, or feature pages and Spyland checks them once a day, flagging copy, pricing, and CTA changes.",
+      "Add competitor landing, pricing, or feature pages and Spyland checks them on a schedule — weekly on the Free plan, daily on paid plans — flagging copy, pricing, and CTA changes.",
     sourceId: "spyland-home",
   },
   {
@@ -70,9 +71,9 @@ const spylandCosts: readonly CompareClaimCard[] = [
       "Spyland focuses on the pages you add. It does not pull from public ad libraries or save ad-creative evidence alongside the page.",
   },
   {
-    title: "Daily is the default cadence",
+    title: "Free checks weekly, paid plans daily",
     detail:
-      "Faster or slower check frequencies may be available, but daily is the standard pitch. Confirm current plans on the live source at SpyLand.ing.",
+      "The Free plan checks weekly; Solo and Business check daily. Confirm current plans on the live source at SpyLand.ing.",
     sourceId: "spyland-pricing",
   },
   {
@@ -121,7 +122,7 @@ export default function CompareSpylandRoute() {
           <span>Five to Nine vs Spyland</span>
         </p>
         <h1 className="ld-wall ld-wall-compact">
-          Spyland tracks landing-page changes daily. Five to Nine adds the ad source and faster
+          Spyland tracks landing-page changes on a schedule. Five to Nine adds the ad source and faster
           checks.
         </h1>
         <p className="ld-deck-copy">
