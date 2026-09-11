@@ -21,6 +21,24 @@ const SOCIAL_IMAGE_URL = `${SITE_ORIGIN}${SOCIAL_IMAGE_PATH}`;
 const LEGACY_SOCIAL_CARD_PATH = "/social-card.svg";
 const SOCIAL_IMAGE_ALT = "Five to Nine competitor offer monitoring preview";
 
+/**
+ * Social-card palette (issue #2956): mirrors the live workspace tokens in
+ * app.css — `--bone` page field, `--card` panel, `--ink` text/rules,
+ * `--green` accent — so link previews render the cream Evidence Desk look
+ * instead of the retired blue-purple gradient. Shared with the per-route
+ * cards in `social-cards.server.ts` so the two card families cannot drift
+ * apart again.
+ */
+export const SOCIAL_CARD_COLORS = {
+  bone: "#f4f1e8",
+  card: "#fffdf8",
+  ink: "#171611",
+  inkSoft: "#55524a",
+  inkFaint: "#6a665b",
+  line: "#e0ddd4",
+  green: "#16c47f",
+} as const;
+
 export function canonicalUrl(pathname: string): string {
   const normalizedPath = pathname.startsWith("/") ? pathname : `/${pathname}`;
   const pathOnly = normalizedPath.split(/[?#]/)[0] ?? "/";
@@ -1194,35 +1212,51 @@ ${LOCALE_SITEMAP_LINES}
 ${GROUNDING_BLOCKS}
 `;
 
+// This is the SVG source the checked-in public/og-image.png was rasterized
+// from (resvg-wasm + the embedded Inter Bold/SemiBold buffers the worker uses,
+// issue #2956). Regenerate the PNG from this markup if the card ever changes —
+// do not let the two drift apart again.
 const SOCIAL_CARD_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
   <title id="title">Five to Nine</title>
   <desc id="desc">Competitor offer monitoring workspace preview for Five to Nine.</desc>
   <defs>
-    <linearGradient id="sky" x1="0" x2="1" y1="0" y2="1">
-      <stop offset="0" stop-color="#52c9df"/>
-      <stop offset="0.42" stop-color="#7f5cff"/>
-      <stop offset="0.72" stop-color="#ff5f74"/>
-      <stop offset="1" stop-color="#f9c37b"/>
+    <linearGradient id="token" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0AA982"/>
+      <stop offset="0.52" stop-color="#F5B84B"/>
+      <stop offset="1" stop-color="#7047FF"/>
     </linearGradient>
   </defs>
-  <rect width="1200" height="630" fill="url(#sky)"/>
-  <path d="M0 420 L1200 300 L1200 630 L0 630 Z" fill="#fff"/>
-  <g opacity="0.23" stroke="#fff" stroke-width="1">
-    <path d="M0 96H1200"/><path d="M0 192H1200"/><path d="M0 288H1200"/><path d="M0 384H1200"/>
-    <path d="M120 0V630"/><path d="M240 0V630"/><path d="M360 0V630"/><path d="M480 0V630"/>
-    <path d="M600 0V630"/><path d="M720 0V630"/><path d="M840 0V630"/><path d="M960 0V630"/><path d="M1080 0V630"/>
+  <rect width="1200" height="630" fill="${SOCIAL_CARD_COLORS.bone}"/>
+  <g stroke="${SOCIAL_CARD_COLORS.line}" stroke-width="1">
+    <path d="M0 130H1200"/><path d="M0 226H1200"/><path d="M0 322H1200"/><path d="M0 418H1200"/>
   </g>
-  <g font-family="Inter, Arial, sans-serif" font-weight="800">
-    <text x="86" y="92" fill="#fff" font-size="42">Five to Nine</text>
-    <text x="86" y="222" fill="#07111a" font-size="78">Know when competitors</text>
-    <text x="86" y="318" fill="#07111a" font-size="78">change the offer.</text>
-  <text x="88" y="418" fill="#344052" font-size="34" font-weight="600">Watch ads and landing pages with sources.</text>
-    <rect x="780" y="118" width="340" height="330" rx="34" fill="#ffffff" opacity="0.9"/>
-    <text x="818" y="180" fill="#07111a" font-size="28">Competitor changes</text>
-    <path d="M820 260 L884 230 L944 246 L1014 186 L1080 206" fill="none" stroke="#635bff" stroke-width="7" stroke-linecap="round"/>
-    <text x="818" y="340" fill="#425466" font-size="26" font-weight="700">Offer changed</text>
-    <text x="818" y="386" fill="#425466" font-size="26" font-weight="700">Landing page saved</text>
-    <text x="818" y="432" fill="#425466" font-size="26" font-weight="700">Saved evidence</text>
+  <rect y="522" width="1200" height="108" fill="${SOCIAL_CARD_COLORS.card}"/>
+  <path d="M0 522H1200" stroke="${SOCIAL_CARD_COLORS.ink}" stroke-width="2.5"/>
+  <g font-family="Inter, Arial, sans-serif">
+    <rect x="86" y="56" width="56" height="56" rx="14" fill="url(#token)"/>
+    <text x="114" y="93" text-anchor="middle" font-size="30" font-weight="800" fill="#ffffff">59</text>
+    <text x="162" y="95" font-size="40" font-weight="800" fill="${SOCIAL_CARD_COLORS.ink}">Five to Nine</text>
+    <text x="86" y="196" font-size="68" font-weight="800" fill="${SOCIAL_CARD_COLORS.ink}" letter-spacing="-1">KNOW WHEN</text>
+    <text x="86" y="272" font-size="68" font-weight="800" fill="${SOCIAL_CARD_COLORS.ink}" letter-spacing="-1">COMPETITORS</text>
+    <text x="86" y="348" font-size="68" font-weight="800" fill="${SOCIAL_CARD_COLORS.ink}" letter-spacing="-1">CHANGE THE</text>
+    <rect x="76" y="376" width="280" height="80" fill="${SOCIAL_CARD_COLORS.green}"/>
+    <text x="88" y="432" font-size="68" font-weight="800" fill="${SOCIAL_CARD_COLORS.ink}" letter-spacing="-1">OFFER.</text>
+    <g transform="translate(370,382) rotate(3)">
+      <rect width="96" height="38" rx="6" fill="${SOCIAL_CARD_COLORS.ink}"/>
+      <text x="48" y="27" text-anchor="middle" font-size="20" font-weight="700" fill="${SOCIAL_CARD_COLORS.green}" letter-spacing="1">PROOF</text>
+    </g>
+    <text x="88" y="496" font-size="28" font-weight="600" fill="${SOCIAL_CARD_COLORS.inkSoft}">Meta ads and landing pages, with source-linked proof.</text>
+    <rect x="816" y="180" width="300" height="290" rx="18" fill="${SOCIAL_CARD_COLORS.ink}"/>
+    <rect x="808" y="172" width="300" height="290" rx="18" fill="${SOCIAL_CARD_COLORS.card}" stroke="${SOCIAL_CARD_COLORS.ink}" stroke-width="2.5"/>
+    <text x="838" y="224" font-size="23" font-weight="800" fill="${SOCIAL_CARD_COLORS.ink}" letter-spacing="2">SIGNAL DESK</text>
+    <path d="M838 240H1078" stroke="${SOCIAL_CARD_COLORS.line}" stroke-width="2"/>
+    <polyline points="848,318 898,294 948,308 1008,260 1068,280" fill="none" stroke="${SOCIAL_CARD_COLORS.green}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="850" cy="388" r="6" fill="${SOCIAL_CARD_COLORS.green}"/>
+    <text x="868" y="397" font-size="25" font-weight="700" fill="${SOCIAL_CARD_COLORS.inkSoft}">Offer changed</text>
+    <circle cx="850" cy="430" r="6" fill="${SOCIAL_CARD_COLORS.green}"/>
+    <text x="868" y="439" font-size="25" font-weight="700" fill="${SOCIAL_CARD_COLORS.inkSoft}">Proof saved</text>
+    <text x="88" y="580" font-size="30" font-weight="800" fill="${SOCIAL_CARD_COLORS.ink}">0509.io</text>
+    <text x="1112" y="578" text-anchor="end" font-size="25" font-weight="600" fill="${SOCIAL_CARD_COLORS.inkFaint}">Competitor offer monitoring</text>
   </g>
 </svg>
 `;

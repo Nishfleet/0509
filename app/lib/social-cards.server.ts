@@ -28,16 +28,20 @@
  */
 
 import { brandCategoryFromSlug } from "~/lib/brand-categories";
+import { SOCIAL_CARD_COLORS } from "~/lib/seo";
 
 const SITE_NAME = "Five to Nine";
 
-/** Gradient reused from the site-wide `SOCIAL_CARD_SVG` in seo.ts. */
-const CARD_GRADIENT_DEFS = `<defs>
-    <linearGradient id="sky" x1="0" x2="1" y1="0" y2="1">
-      <stop offset="0" stop-color="#52c9df"/>
-      <stop offset="0.42" stop-color="#7f5cff"/>
-      <stop offset="0.72" stop-color="#ff5f74"/>
-      <stop offset="1" stop-color="#f9c37b"/>
+/**
+ * Brand-token gradient reused from the site-wide `SOCIAL_CARD_SVG` in seo.ts —
+ * the green→amber→violet "59" mark from `brand/five-to-nine-colored-logo.svg`,
+ * not the retired blue-purple field gradient (issue #2956).
+ */
+const CARD_TOKEN_DEFS = `<defs>
+    <linearGradient id="token" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0AA982"/>
+      <stop offset="0.52" stop-color="#F5B84B"/>
+      <stop offset="1" stop-color="#7047FF"/>
     </linearGradient>
   </defs>`;
 
@@ -58,9 +62,12 @@ function clampLine(value: string, max: number): string {
 }
 
 /**
- * Shared 1200×630 card frame: gradient background, the "Five to Nine" wordmark
- * top-left, and a headline + subline pair. Callers supply the two text lines so
- * each surface shapes its own card without re-inlining the SVG skeleton.
+ * Shared 1200×630 card frame (issue #2956): cream `--bone` field with faint
+ * ledger rules, the "59" token + "Five to Nine" wordmark top-left, an ink
+ * headline + muted subline, and an ink-ruled `--card` footer band carrying
+ * `0509.io` — the same palette and frame as the site-wide `og-image.png`
+ * (`SOCIAL_CARD_SVG` in seo.ts). Callers supply the two text lines so each
+ * surface shapes its own card without re-inlining the SVG skeleton.
  */
 function renderCard(input: { headline: string; subline: string }): string {
   const headline = clampLine(escapeSvgText(input.headline), 46);
@@ -68,13 +75,20 @@ function renderCard(input: { headline: string; subline: string }): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
   <title id="title">${headline}</title>
   <desc id="desc">${subline}</desc>
-  ${CARD_GRADIENT_DEFS}
-  <rect width="1200" height="630" fill="url(#sky)"/>
-  <path d="M0 420 L1200 300 L1200 630 L0 630 Z" fill="#fff"/>
+  ${CARD_TOKEN_DEFS}
+  <rect width="1200" height="630" fill="${SOCIAL_CARD_COLORS.bone}"/>
+  <g stroke="${SOCIAL_CARD_COLORS.line}" stroke-width="1">
+    <path d="M0 130H1200"/><path d="M0 226H1200"/><path d="M0 322H1200"/><path d="M0 418H1200"/>
+  </g>
+  <rect y="522" width="1200" height="108" fill="${SOCIAL_CARD_COLORS.card}"/>
+  <path d="M0 522H1200" stroke="${SOCIAL_CARD_COLORS.ink}" stroke-width="2.5"/>
   <g font-family="Inter, Arial, sans-serif">
-    <text x="86" y="92" fill="#fff" font-size="42" font-weight="800">${SITE_NAME}</text>
-    <text x="86" y="250" fill="#07111a" font-size="68" font-weight="800">${headline}</text>
-    <text x="88" y="330" fill="#344052" font-size="32" font-weight="600">${subline}</text>
+    <rect x="86" y="56" width="56" height="56" rx="14" fill="url(#token)"/>
+    <text x="114" y="93" text-anchor="middle" font-size="30" font-weight="800" fill="#ffffff">59</text>
+    <text x="162" y="95" font-size="40" font-weight="800" fill="${SOCIAL_CARD_COLORS.ink}">${SITE_NAME}</text>
+    <text x="86" y="280" fill="${SOCIAL_CARD_COLORS.ink}" font-size="68" font-weight="800">${headline}</text>
+    <text x="88" y="350" fill="${SOCIAL_CARD_COLORS.inkSoft}" font-size="32" font-weight="600">${subline}</text>
+    <text x="88" y="580" font-size="30" font-weight="800" fill="${SOCIAL_CARD_COLORS.ink}">0509.io</text>
   </g>
 </svg>
 `;
