@@ -44,18 +44,38 @@ function parseLdJsonBlocks(markup: string): Array<Record<string, unknown>> {
   return matches.map((match) => JSON.parse(match[1] ?? "") as Record<string, unknown>);
 }
 
-function canonicalHref(markup: string): string {
-  const match = markup.match(/rel="canonical" href="([^"]+)"/);
-  expect(match, "the rendered page must state a canonical link").not.toBeNull();
-  return match![1];
+// Both routes ship their <link rel=canonical> as a meta-descriptor link
+// ({ tagName: "link", rel: "canonical", ... }) from their `meta` function —
+// links() cannot see route params in this router version, so the tag is not
+// in the component's own markup. The descriptor IS the code that renders the
+// shipped <link rel="canonical">, so the metric's comparison point is its href.
+type RouteModule = {
+  // biome-ignore lint/suspicious/noExplicitAny: route meta is a MetaFunction; the
+  // arg object mirrors react-router's MetaArgs for our fixtures.
+  meta: (args: any) => Array<Record<string, any>>;
+};
+
+function canonicalHref(route: RouteModule, loaderData: AnyFixtureData): string {
+  const descriptors = route.meta({
+    data: loaderData,
+    loaderData,
+    params: {},
+    matches: [],
+    location: { pathname: loaderData.canonicalPath, search: "", hash: "", state: null, key: "test" },
+  });
+  const link = descriptors.find(
+    (d) => d.tagName === "link" && d.rel === "canonical",
+  );
+  expect(link, "the page's meta must ship a rel=canonical link").toBeDefined();
+  return link!.href as string;
 }
 
 /** Assert the metric on one rendered page: JSON-LD present, parses, @id == canonical. */
-function assertStructuredData(markup: string): void {
+function assertStructuredData(markup: string, route: RouteModule, loaderData: AnyFixtureData): void {
   const blocks = parseLdJsonBlocks(markup);
   expect(blocks.length, "page must ship at least one JSON-LD block").toBeGreaterThan(0);
 
-  const canonical = canonicalHref(markup);
+  const canonical = canonicalHref(route, loaderData);
   const onPage = blocks.filter((block) => block["@type"] === "WebPage");
   expect(onPage, "must include one WebPage block").toHaveLength(1);
   expect(onPage[0]?.["@id"]).toBe(canonical);
@@ -204,17 +224,17 @@ function timelineData(overrides: Partial<OfferTimelineLoaderData> = {}): OfferTi
 describe("ads-timeline structured data (issue #2961 metric)", () => {
   it("/ads/:domain emits server-rendered JSON-LD whose @id equals the canonical", async () => {
     currentData = cachedIndexable();
-    const { default: BrandAdsRoute } = await import("~/routes/ads.$domain");
-    const markup = renderToStaticMarkup(createElement(BrandAdsRoute));
+    const route = await import("~/routes/ads.$domain");
+    const markup = renderToStaticMarkup(createElement(route.default));
     expect(markup).toContain("application/ld+json");
-    assertStructuredData(markup);
+    assertStructuredData(markup, route, currentData);
   });
 
   it("/timeline/:domain emits server-rendered JSON-LD whose @id equals the canonical", async () => {
     currentData = timelineData();
-    const { default: OfferTimelineRoute } = await import("~/routes/timeline.$domain");
-    const markup = renderToStaticMarkup(createElement(OfferTimelineRoute));
+    const route = await import("~/routes/timeline.$domain");
+    const markup = renderToStaticMarkup(createElement(route.default));
     expect(markup).toContain("application/ld+json");
-    assertStructuredData(markup);
+    assertStructuredData(markup, route, currentData);
   });
 });
