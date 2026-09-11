@@ -270,13 +270,14 @@ describe("cta pipeline stage counters on real D1 (issue #1565)", () => {
     expect(persisted.event_emitted).toBeUndefined();
   });
 
-  it("records validity_passed for a valid page with NO change (suppressed)", async () => {
+  it("records validity_passed for a valid page with NO change (invalidated)", async () => {
     const day = "2026-09-04";
     // A real page that did not change: the capture-validity gate passed
-    // (the page was real), the extractor ran, the diff ran but suppressed
-    // (no confirmed event). The prior mapping (validity = diff.confirmed)
-    // would have wrongly recorded validity_passed = 0 here — this test pins
-    // that the validity gate and the diff are separate funnel stages.
+    // (the page was real), the extractor ran, and the diff found no field
+    // change (evaluator status `invalidated` — "all four field drafts returned
+    // null"). The prior mapping (validity = diff.confirmed) would have wrongly
+    // recorded validity_passed = 0 here — this test pins that the validity gate
+    // and the diff are separate funnel stages.
     const baseline = baselineProof();
     const snapshot = realSnapshot(); // same CTA as baseline → no change
     const currentProof = currentProofFromSnapshot(snapshot);
@@ -295,8 +296,11 @@ describe("cta pipeline stage counters on real D1 (issue #1565)", () => {
     });
 
     // No CTA change → no confirmed event. The classifier still classifies
-    // the capture as a real page (succeeded or suppressed), NOT capture_failed.
-    expect(classification.status).not.toBe("capture_failed");
+    // the capture as a real page (succeeded), NOT capture_failed, and the
+    // evaluator ran a real comparison against the prior capture.
+    expect(classification.status).toBe("succeeded");
+    expect(classification.evaluation?.status).toBe("invalidated");
+    expect(classification.events).toHaveLength(0);
 
     const counters = createLandingPagePipelineCounters({
       scanId: "proof-request:watch-4:run-4",
@@ -315,11 +319,9 @@ describe("cta pipeline stage counters on real D1 (issue #1565)", () => {
       ctaFunnelStage: "reached",
       ctaFunnelReasonCode: null,
     });
+    // The diff stage ran against a real prior capture and found no change.
     recordDiffStage(counters, {
-      status:
-        classification.evaluation?.status === "suppressed"
-          ? "suppressed"
-          : "baseline_established",
+      status: "invalidated",
       confirmedEventTypes: classification.events.map((e) => e.eventType),
     });
 
@@ -329,6 +331,10 @@ describe("cta pipeline stage counters on real D1 (issue #1565)", () => {
     // The page was real — validity passed even though no event fired.
     expect(counts.validity_passed).toBe(1);
     expect(counts.dom_extracted).toBe(1);
+    // Issue #2443 (finding M9): `diff_computed` means the diff ran against a
+    // prior capture. This capture WAS diffed against `proof-baseline`, so it
+    // counts. The no-prior-capture case (`baseline_established`) does not — see
+    // tests/cta-pipeline-stage-counts.test.ts for that case.
     expect(counts.diff_computed).toBe(1);
     // No confirmed change → no event emitted.
     expect(counts.event_emitted).toBe(0);

@@ -71,9 +71,16 @@ export function ctaPipelineStageCountsFromCounters(
   // The extract stage ran (and ctaFunnelStage becomes non-null) only when the
   // DOM extraction actually ran against a snapshot.
   const domExtracted = counters.extract.ctaFunnelStage !== null;
+  // Issue #2443 (finding M9): `baseline_established` is the no-prior-capture
+  // outcome — `recordDiffStage`'s `ctaUnchanged` doc defines it as "no prior
+  // capture to diff against". The stage doc above says `diff_computed` is the
+  // diff stage that "ran against a prior capture", so a first-ever capture of
+  // a page did NOT compute a diff and must not be counted here (counting it
+  // overstated `diff_computed` and hid the real new-page bail-out point).
   const diffComputed =
     counters.diff.status !== null &&
-    counters.diff.status !== "skipped_no_snapshot";
+    counters.diff.status !== "skipped_no_snapshot" &&
+    counters.diff.status !== "baseline_established";
   const eventEmitted = counters.diff.confirmedEventTypes.length > 0;
 
   return {
@@ -146,6 +153,13 @@ export function ctaPipelineBailReasonFromCounters(
   // would drown the real top-5 in `no_event_emitted` rows from every successful
   // volume capture. So only record an event_emitted bail when the diff stage
   // actually ran (status set and not skipped_no_snapshot).
+  //
+  // NOT the same condition as `diffComputed` above (issue #2443, finding M9):
+  // this asks "did the check reach the diff stage?" so a no-event outcome is
+  // attributed to the right gate, and `baseline_established` DID reach it (its
+  // field bails carry `no_baseline_first_scan`). `diffComputed` asks the
+  // narrower "was there a prior capture to diff against?", where
+  // `baseline_established` is a no. Keep the two separate.
   const diffRan =
     counters.diff.status !== null &&
     counters.diff.status !== "skipped_no_snapshot";
