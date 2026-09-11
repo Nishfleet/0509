@@ -62,8 +62,6 @@ export const meta: MetaFunction = () =>
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const { publicCommercialLaunchSummary } = await import("~/lib/commercial-launch-gate.server");
-  const { defaultCountryForVisitor } = await import("~/lib/countries");
-  const { getOptionalCloudflareContext } = await import("~/lib/cloudflare-context");
   const env = getEnv(context);
   const { emitFunnelHomeView } = await import("~/lib/funnel-measurement.server");
   emitFunnelHomeView(env, request);
