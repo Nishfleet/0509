@@ -44,11 +44,15 @@ const DEFAULT_USER_LIMIT = 100;
 
 /**
  * Workspaces ordered by oldest work first. `presence_poll_cursor` is keyed by
- * `source_target_id`, so the per-source `MIN(last_polled_at)` is the workspace's
- * oldest poll; a workspace with no cursor at all sorts first (`NULLS FIRST`).
- * `user_id ASC` breaks ties deterministically. Ordering by identity instead
- * would re-poll the same 100 alphabetical workspaces forever and starve the
- * rest (issue #2457).
+ * `source_target_id`, so `MIN(last_polled_at)` is the workspace's oldest *poll*;
+ * a workspace with no cursor at all sorts first (`NULLS FIRST`). `user_id ASC`
+ * breaks ties deterministically. Ordering by identity instead would re-poll the
+ * same 100 alphabetical workspaces forever and starve the rest (issue #2457).
+ *
+ * Caveat: a workspace with one very old poll and one never-polled source still
+ * sorts by its old poll, so `NULLS FIRST` only rescues workspaces with no
+ * cursors at all. That is deliberate — ordering by source would split a
+ * workspace across the limit, and the limit counts workspaces.
  */
 export async function listResweepUsers(env: AppEnv, limit: number): Promise<string[]> {
   if (!env.DB) return [];
