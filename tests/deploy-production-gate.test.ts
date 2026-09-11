@@ -22,6 +22,7 @@ const {
   printReleaseReadinessDiagnostics,
 } = deployPlanModule;
 const {
+  anchorPreviousHead,
   bootstrapPreviousSuccessHead,
   firstParentMigrationDiffs,
   hasAppliedMigrationMutation,
@@ -1634,6 +1635,74 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(
       hasRestoreCriticalChanges(".github/workflows/deploy-production.yml\n"),
     ).toBe(true);
+  });
+
+  it("anchors on the recorded head only when it exists in this history; a rewritten-away head falls through to the bootstrap, loudly (0509#2975)", () => {
+    const ancestor = spawnSync(
+      "git",
+      ["rev-parse", "--verify", "HEAD~1^{commit}"],
+      { encoding: "utf8" },
+    ).stdout.trim();
+    const vanished = "d16b1f00096d5a29db9f6ba51b32bc49db45824b";
+    /** @type {string[]} */
+    const warnings = [];
+    const collect = (/** @type {string} */ message) => {
+      warnings.push(message);
+    };
+
+    // Recorded head resolves: it wins, and a supplied bootstrap is ignored
+    // with the existing loud warning (unchanged behaviour).
+    expect(
+      anchorPreviousHead(
+        { recordedHead: ancestor },
+        { BOOTSTRAP_PREVIOUS_SUCCESS_SHA: ancestor },
+        collect,
+      ),
+    ).toBe(ancestor);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("Ignoring the bootstrap value");
+    warnings.length = 0;
+
+    // Recorded head is NOT in this history (main rewritten): without a
+    // bootstrap the run fails with a named reason, never a raw git error.
+    expect(() =>
+      anchorPreviousHead({ recordedHead: vanished }, {}, collect),
+    ).toThrow("remote_restore_last_successful_head_unresolvable");
+    expect(warnings.some((w) => w.includes("not reachable from HEAD"))).toBe(true);
+    warnings.length = 0;
+
+    // Same, with a valid operator bootstrap: the bootstrap anchors this run,
+    // and both warnings are emitted so the override is visible in the log.
+    expect(
+      anchorPreviousHead(
+        { recordedHead: vanished },
+        { BOOTSTRAP_PREVIOUS_SUCCESS_SHA: ancestor },
+        collect,
+      ),
+    ).toBe(ancestor);
+    expect(warnings.some((w) => w.includes("not reachable from HEAD"))).toBe(true);
+    expect(warnings.some((w) => w.includes("BOOTSTRAP: GitHub reports zero"))).toBe(true);
+    warnings.length = 0;
+
+    // No recorded history at all: plain bootstrap path (unchanged).
+    expect(
+      anchorPreviousHead(
+        { recordedHead: null },
+        { BOOTSTRAP_PREVIOUS_SUCCESS_SHA: ancestor },
+        collect,
+      ),
+    ).toBe(ancestor);
+  });
+
+  it("fetches a moved main tip before testing ancestry so drift is judged on objects, not on a stale checkout (0509#2975)", () => {
+    const cas = readFileSync("scripts/ci-verify-provider-main-cas.sh", "utf8");
+    const fetchAt = cas.indexOf('git cat-file -e "${remote_sha}^{commit}"');
+    const ancestryAt = cas.indexOf('git merge-base --is-ancestor "$PINNED_SHA" "$remote_sha"');
+    expect(fetchAt).toBeGreaterThan(0);
+    expect(ancestryAt).toBeGreaterThan(fetchAt);
+    expect(cas).toContain('git fetch --quiet --no-tags origin "$remote_sha"');
+    // A rewind/rewrite (candidate not an ancestor of the new tip) must still fail closed.
+    expect(cas).toContain('fail "remote_main_drift"');
   });
 
   it("bounds restore-evidence freshness headroom to one day", () => {

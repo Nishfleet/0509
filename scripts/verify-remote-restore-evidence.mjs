@@ -211,6 +211,57 @@ export function firstParentMigrationDiffs(previousHead) {
  * @param {(message: string) => void} [warn]
  * @returns {string | null} the bootstrap anchor, or null when none applies
  */
+/**
+ * True only when `sha` is reachable from HEAD. "Exists as an object" is not
+ * enough: after a history rewrite the old commits linger unreachable in the
+ * object store, and an unreachable head cannot anchor previousHead..HEAD.
+ * @param {string} sha
+ */
+export function reachableFromHead(sha) {
+  try {
+    execFileSync("git", ["merge-base", "--is-ancestor", sha, "HEAD"], {
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Pick the anchor for previousHead..HEAD. A recorded last-success head wins
+ * whenever it resolves in this history. If it does NOT resolve (main history
+ * rewritten), it can anchor nothing: fall through to the operator bootstrap
+ * (loudly) or fail with a named reason instead of a raw git error.
+ * @param {{ recordedHead: string | null }} args
+ */
+export function anchorPreviousHead(
+  { recordedHead },
+  env = process.env,
+  warn = (message) => process.stderr.write(`${message}\n`),
+  reachable = reachableFromHead,
+) {
+  if (recordedHead && reachable(recordedHead)) {
+    bootstrapPreviousSuccessHead({ hasRecordedHistory: true }, env, warn);
+    return recordedHead;
+  }
+  if (recordedHead) {
+    warn(
+      `::warning::recorded last successful production deploy ${recordedHead} is not reachable from HEAD (main rewritten?). It cannot anchor previousHead..HEAD; consulting the operator bootstrap instead.`,
+    );
+    const bootstrapped = bootstrapPreviousSuccessHead(
+      { hasRecordedHistory: false },
+      env,
+      warn,
+    );
+    if (!bootstrapped) {
+      throw new Error("remote_restore_last_successful_head_unresolvable");
+    }
+    return bootstrapped;
+  }
+  return bootstrapPreviousSuccessHead({ hasRecordedHistory: false }, env, warn);
+}
+
 export function bootstrapPreviousSuccessHead(
   { hasRecordedHistory },
   env = process.env,
@@ -326,11 +377,13 @@ async function restoreEvidenceClassification() {
     : null;
   // Recorded run history always wins. The bootstrap anchor is consulted only
   // when this successful query found no eligible run at all, and is ignored
-  // (loudly) whenever one exists — see bootstrapPreviousSuccessHead.
-  const bootstrapHead = bootstrapPreviousSuccessHead({
-    hasRecordedHistory: Boolean(previous),
+  // (loudly) whenever one exists — see bootstrapPreviousSuccessHead. The one
+  // exception (0509#2975): a recorded head that is not in this history at all
+  // (main was rewritten, fleet-ops#5385) cannot anchor anything, so it is
+  // treated as "no recorded history" and the operator bootstrap may apply.
+  const previousHead = anchorPreviousHead({
+    recordedHead: previous ? previous.head_sha : null,
   });
-  const previousHead = previous ? previous.head_sha : bootstrapHead;
   if (
     typeof previousHead !== "string" ||
     !/^[a-f0-9]{40}$/u.test(previousHead)
