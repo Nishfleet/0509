@@ -31,10 +31,10 @@ $ npx vitest run tests/watchlists.route.test.ts tests/watchlist-route-loader.tes
  Test Files  3 passed (3)   Tests  38 passed (38)
 
 $ npx vitest run --configLoader runner --project node --changed origin/main
- Test Files  325 passed (325)   Tests  4146 passed (4146)
+ Test Files  337 passed (337)   Tests  4230 passed (4230)
 ```
 
-run-proof: `npx vitest run --configLoader runner --project node --changed origin/main` -> 325/325 files, 4146/4146 tests green (exit 0).
+run-proof: `npx vitest run --configLoader runner --project node --changed origin/main` -> 337/337 files, 4230/4230 tests green (exit 0, rebased onto origin/main d06540ed0 2026-09-12).
 
 Typecheck is CI-owned (`npm run typecheck` runs in `ci.yml`); per fleet-ops#4891 / repo AGENTS.md it is intentionally not run inside the worker.
 
