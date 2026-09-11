@@ -3,8 +3,6 @@ import { describe, expect, it } from "vitest";
 
 import { collectMonitoringOrchestrationMetrics } from "~/lib/monitoring-fanout.server";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 // Minimal D1 stub (mirrors tests/helpers/sqlite-d1.ts) that also supports
 // prepare().all() without bind(), the way Cloudflare D1 does — the shared
 // helper only exposes all()/first()/run() after bind().
@@ -82,14 +80,28 @@ async function buildMetricsEnv() {
 // Regression test for the ISO-vs-SQLite datetime comparison bug (issue #2459):
 // started_at is stored as ISO (…T…) while datetime('now','-2 days') emits a
 // space-separated string, so string comparison pulled the entire cutoff
-// calendar day into the window. The seeded timestamps are derived from the
-// real clock because SQLite's datetime('now') reads the OS clock, not
-// vi.setSystemTime — this keeps the test hermetic no matter when it runs.
+// calendar day into the window.
+//
+// The seeded timestamps are anchored to SQLite's own clock because
+// datetime('now') reads the OS clock, not vi.setSystemTime. The outside-row
+// seed is 1 second past the start of the calendar day that SQLite's own
+// buggy cutoff lands on, so the old code always included it ('T' > ' ' at
+// position 10) while the true 2-day cutoff excludes it — the failing-first
+// repro holds at any real clock time except within the first second after
+// midnight UTC.
 describe("collectMonitoringOrchestrationMetrics 2-day window", () => {
   it("does not count a scheduled run older than the true 2-day cutoff", async () => {
     const { sqlite, env } = await buildMetricsEnv();
-    // 1 hour before the true cutoff: outside the window, same calendar day.
-    const startedAt = new Date(Date.now() - 2 * DAY_MS - 60 * 60 * 1000).toISOString();
+    // Anchor to SQLite's own clock: the start of the calendar day its buggy
+    // cutoff string lands on, plus 1 second, rendered in ISO. The buggy
+    // space-separated comparison includes it; the true cutoff does not.
+    const buggyCutoffDay =
+      (
+        sqlite.prepare("SELECT datetime('now', '-2 days') AS c").get() as {
+          c: string;
+        }
+      ).c.slice(0, 10);
+    const startedAt = `${buggyCutoffDay}T00:00:01.000Z`;
     seedRun(sqlite, "run-outside", startedAt);
 
     const metrics = await collectMonitoringOrchestrationMetrics(env);
