@@ -71,10 +71,13 @@ describe("public-tree privacy guard (issue #2954)", () => {
     expect(DOC_AUDIT_PATTERN.test("docs/customer-claim-audit-table.json")).toBe(
       true,
     );
-    // The two documented exceptions must never be flagged by the pattern.
-    for (const exc of EXCEPTIONS) {
-      if (EXACT_PATHS.has(exc)) continue;
-      expect(DOC_AUDIT_PATTERN.test(exc) && !EXCEPTIONS.has(exc)).toBe(false);
-    }
+    // Prove the pattern WOULD match the two exceptions (they must stay
+    // exceptions because of their live readers, not because they slip the net).
+    expect(DOC_AUDIT_PATTERN.test("docs/customer-claim-audit-table.json")).toBe(
+      true,
+    );
+    expect(DOC_AUDIT_PATTERN.test("docs/ga-customer-journey-audit.md")).toBe(
+      true,
+    );
   });
 });
