@@ -305,6 +305,19 @@ billing drops to secondary. **Customer moment:** the "was this worth it?"
 renewal skim. XS scope per CHALLENGE-VERDICT.md; acceptance evidence:
 monthly-recap-active/quiet renders + screenshots.
 
+### Distribution receipts — directory/listing submissions (closeout, issue #2857)
+The 7 queued listing artefacts each carry a line-start `receipt:`/`blocked:`
+status line (receipts pass 2026-09-11) — zero remain silently PREPARED.
+Ledger: `docs/listing-submissions.md` (artefact → status → receipt).
+SaaSHub is submitted + approved and live (re-verified 2026-09-11); the other
+5 venues are blocked with reasons — BetaList is a payment wall (owner money
+decision), and ad-stack.ai / Adyntel+Trendtrack / AlternativeTo / Segwise
+need owner-identity send steps (one email, LinkedIn message, or account
+signup each) that an unattended worker cannot fire. Owner sends stay parked
+here as P3-adjacent identity steps; new `docs/*listing*.md` drafts must
+carry a status line on landing — enforced by
+`tests/unit/listing-receipts.test.ts`.
+
 ## P2 — engineering health
 
 ### BL-010 — Split app/lib/data.server.ts by domain

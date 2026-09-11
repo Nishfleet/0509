@@ -229,3 +229,7 @@ Same rules as the SaaSHub/BetaList preparations, sourced from `MEMORY.md`,
 After the send, this venue's part of the item is complete; "listed" itself
 depends on the venue's editorial re-test, which no amount of preparation can
 guarantee — recorded honestly here rather than assumed.
+
+## Receipt pass (2026-09-11, issue #2857)
+
+blocked: needs Nish's identity — the entire submission is one email from support@0509.io to hello@ad-stack.ai, and no repo-local outbound mail path exists (the only outbound sender in the product is the production Worker's `send_email` binding, recorded as unsuitable for a one-off vendor email in the Submission status above); the worker holds no 0509.io mailbox session, so the send step cannot be fired from here. The prepared email above stays paste-ready — sending it from support@0509.io is the unblock owner step, after which the send date belongs in the Submission status section.
