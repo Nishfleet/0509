@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { runVersionBoundGateC, sanitizeProofDiagnostics, defaultHealthAnchor } = await import("../scripts/verify-post-deploy-release.mjs");
+const { runVersionBoundGateC, sanitizeProofDiagnostics, defaultHealthAnchor, describeProofEmailEvidence } = await import("../scripts/verify-post-deploy-release.mjs");
 const { createDeferredBackupDisposition } = await import(
   "../scripts/deploy-production-plan.mjs"
 );
@@ -476,6 +476,68 @@ describe("version-bound Gate C orchestrator", () => {
       expect(productionCanary).not.toHaveBeenCalled();
     },
   );
+
+  it("names the failing proofEmail field in the persisted journal when the route evidence is invalid", async () => {
+    // Regression for the 2026-09-11 dark window: three Deploy production runs
+    // failed with proof_email_dispatch_invalid and the evidence file carried
+    // only proof_email: {status: "started"} — nothing to act on.
+    const payload = proofPayload();
+    payload.ok = false;
+    (payload as { blockers?: string[] }).blockers = ["proof_email_dispatch_timestamp_invalid"];
+    payload.proofEmail.dispatchStartedAt = null as unknown as string;
+    payload.proofEmail.provider.status = "queued";
+    payload.proofEmail.provider.accepted = false;
+    payload.proofEmail.provider.messageId = "provider-secret-id";
+    const path = evidencePath();
+    const productionCanary = vi.fn();
+    const cleanup = vi.fn(async () => ({ ok: true }));
+    const result = await runVersionBoundGateC({
+      workerVersionId: "worker-v1",
+      token: "token",
+      evidencePath: path,
+      dependencies: {
+        healthAnchor: vi.fn(async () => ({ ok: true })),
+        backupLifecycle: vi.fn(async () => ({ ok: true, report: backupReport() })),
+        pricing: vi.fn(async () => ({ ok: true })),
+        billing: vi.fn(async () => ({ ok: true })),
+        proof: vi.fn(async () => ({ ok: false, payload })),
+        productionCanary,
+        cleanup,
+      },
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.journal.errors).toContain("proof_email_dispatch_invalid");
+    expect(productionCanary).not.toHaveBeenCalled();
+    expect(cleanup).toHaveBeenCalledTimes(1);
+    const journal = JSON.parse(readFileSync(path, "utf8"));
+    expect(journal.steps.proof_email.status).toBe("failed");
+    expect(journal.proofDiagnostics.blockers).toEqual(["proof_email_dispatch_timestamp_invalid"]);
+    expect(journal.proofDiagnostics.proofEmailEvidence).toMatchObject({
+      present: true,
+      keysExact: true,
+      gateRunIdMatches: true,
+      dispatchStartedAtType: "null",
+      dispatchStartedAtValid: false,
+      subjectMatches: true,
+      providerKeysExact: true,
+      providerStatus: "invalid",
+      providerAcceptedConsistent: true,
+      providerMessageIdType: "string",
+    });
+    // Never a private value in the evidence.
+    expect(JSON.stringify(journal)).not.toContain("provider-secret-id");
+  });
+
+  it("describeProofEmailEvidence agrees with the strict validator on the happy path", () => {
+    const verdict = describeProofEmailEvidence(proofPayload().proofEmail, "gate-c-worker-v1");
+    expect(verdict.valid).toBe(true);
+    expect(Object.values(verdict.checks).every((value) => value === true || typeof value === "string")).toBe(true);
+    expect(describeProofEmailEvidence(undefined, "gate-c-worker-v1")).toMatchObject({
+      valid: false,
+      checks: { present: false, providerStatus: "missing" },
+    });
+  });
 
   it("does not hide a primary failure and still runs cleanup and the final identity check", async () => {
     const order: string[] = [];
