@@ -281,7 +281,7 @@ describe("createLandingPageSnapshot", () => {
     expect(analysisInserts.some((statement) => statement.bindings.includes("cta_text"))).toBe(true);
     expect(analysisInserts.some((statement) => statement.bindings.includes("price_text"))).toBe(true);
     expect(analysisInserts.some((statement) => statement.bindings.includes("form_present"))).toBe(true);
-    expect(analysisInserts.every((statement) => statement.bindings.includes("lp-signals-v6"))).toBe(true);
+    expect(analysisInserts.every((statement) => statement.bindings.includes("lp-signals-v7"))).toBe(true);
   });
 
   it("keeps an accepted digest immutable when a stale retry result arrives", async () => {
@@ -4553,7 +4553,7 @@ describe("upsertDeliveryTarget", () => {
     );
 
     const statement = mock.statements.find((entry) =>
-      entry.sql.includes("INSERT INTO delivery_target"),
+      entry.sql.includes("INTO delivery_target ("),
     );
 
     expect(statement?.bindings).toContain("user-1");
