@@ -105,10 +105,22 @@ function populated(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoade
     brandName: "Nike",
     hasCachedAds: true,
     ads: Array.from({ length: 6 }, (_v, i) => ad({ metaAdId: `ad-${i}` })),
-    // Every fixture creative links to nike.com (landing page), so the whole
-    // capture carries verified link evidence by default — mirror the loader's
-    // verifiedLinkedIds output for the same fixture set.
-    verifiedLinkedIds: Array.from({ length: 6 }, (_v, i) => `ad-${i}`),
+    // Issue #2704: the payload ships only the creatives the wall renders plus
+    // the counts that describe the FULL capture. The fixture mirrors the
+    // loader's shape: 6 cached creatives, every one verified-linked, so the
+    // counts match the array for the default fixture.
+    adCount: 6,
+    verifiedTestedCount: 0,
+    tickerAds: Array.from({ length: 6 }, (_v, i) => ad({ metaAdId: `ad-${i}` })).map(
+      (creative) => ({
+        metaAdId: creative.metaAdId,
+        previewHeadline: creative.previewHeadline,
+        hook: creative.hook,
+        source: creative.source,
+        firstSeenAt: creative.firstSeenAt,
+        lastSeenAt: creative.lastSeenAt,
+      }),
+    ),
     checkedAgo: "about 2 hours ago",
     lastCheckedAt: "2026-08-09T10:00:00.000Z",
     freshForLiveClaim: false,
@@ -369,7 +381,9 @@ describe("/ads/:domain — Case File render", () => {
     const markup = await render(
       populated({
         ads: Array.from({ length: 6 }, (_v, i) => ad({ metaAdId: `ad-${i}` })),
-        verifiedLinkedIds: Array.from({ length: 6 }, (_v, i) => `ad-${i}`),
+        adCount: 6,
+        verifiedTestedCount: 0,
+        tickerAds: [],
         brandOwnedAdCount: 5,
         partnerCampaignAdIds: ["ad-0"],
       }),
@@ -393,7 +407,12 @@ describe("/ads/:domain — Case File render", () => {
     const markup = await render(
       populated({
         ads,
-        verifiedLinkedIds: ads.map((creative) => creative.metaAdId),
+        adCount: ads.length,
+        // Two of the six creatives run more than one version — the stat
+        // strip's "Split-testing" cell counts them from the loader's number
+        // (issue #2704).
+        verifiedTestedCount: 2,
+        tickerAds: [],
         teaser: { ...teaser, totalCount: 6, activeCount: 6 },
       }),
     );
@@ -834,11 +853,12 @@ describe("/ads/:domain — Case File render", () => {
     // wall match. The H1 must not use split "X of these Y" copy — every
     // verified-linked ad is Nike's; the extra match belongs in the subline.
     const ads = Array.from({ length: 16 }, (_v, i) => ad({ metaAdId: `ad-${i}` }));
-    const verifiedLinkedIds = ads.slice(0, 15).map((creative) => creative.metaAdId);
     const markup = await render(
       populated({
         ads,
-        verifiedLinkedIds,
+        adCount: ads.length,
+        verifiedTestedCount: 0,
+        tickerAds: [],
         brandOwnedAdCount: 15,
         verifiedLinkCount: 15,
         unverifiedMatchCount: 1,
@@ -871,7 +891,9 @@ describe("/ads/:domain — Case File render", () => {
     const markup = await render(
       populated({
         ads,
-        verifiedLinkedIds: ads.slice(0, 2).map((creative) => creative.metaAdId),
+        adCount: ads.length,
+        verifiedTestedCount: 0,
+        tickerAds: [],
         brandOwnedAdCount: 2,
         verifiedLinkCount: 2,
         unverifiedMatchCount: 3,
@@ -953,7 +975,9 @@ describe("/ads/:domain — Case File render", () => {
     const stale = await render(
       populated({
         ads,
-        verifiedLinkedIds: [ads[0].metaAdId],
+        adCount: ads.length,
+        verifiedTestedCount: 0,
+        tickerAds: [],
         brandOwnedAdCount: 1,
         verifiedLinkCount: 1,
         unverifiedMatchCount: 5,
@@ -1263,7 +1287,7 @@ describe("/ads/:domain — methodology footer cross-link (issues #1552, #2022)",
 
   it("hides the methodology footer on an unverified wall with no verified-linked ad (no score exists to explain)", async () => {
     const markup = await render(
-      populated({ verifiedLinkedIds: [], verifiedLinkCount: 0, aggression: null }),
+      populated({ verifiedLinkCount: 0, aggression: null }),
     );
 
     expect(markup).not.toContain(anchor);
@@ -1434,7 +1458,6 @@ describe("ads.cross.link.breadcrumb.canary — combined conditional rule (issue 
     // would render cross-links here, breaking the combined rule).
     const markup = await render(
       populated({
-        verifiedLinkedIds: [],
         verifiedLinkCount: 0,
         relatedBrands: otherBrands,
         noindex: true,

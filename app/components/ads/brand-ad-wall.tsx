@@ -9,7 +9,7 @@ import {
 import { formatAdvertiserLabel } from "~/lib/landing-page-display";
 import type { AdRecord } from "~/lib/types";
 
-const WALL_VISIBLE_ADS = 5;
+export const WALL_VISIBLE_ADS = 5;
 const NEW_AD_HOURS = 48;
 
 /**
@@ -84,14 +84,20 @@ export function BrandAdWall({
    */
   capturedAt?: string | null;
 }) {
+  // Verified-link cards lead the wall (accept #2: "the verified set
+  // renders first"); within each group keep the proven-runners-first
+  // longevity ordering so the two rules never conflict. The longevity key
+  // is measured from the CAPTURE time (the issue #2142 basis, deterministic
+  // across server render and hydration) — never wall-clock, which would let
+  // two same-length creatives swap ranks between the server render and the
+  // browser and break hydration (issue #2704; the loader selects the
+  // shipped slice with this exact key).
+  const sortKey = capturedAt ? new Date(capturedAt) : now;
   const ordered = [...ads].sort((a, b) => {
-    // Verified-link cards lead the wall (accept #2: "the verified set
-    // renders first"); within each group keep the proven-runners-first
-    // longevity ordering so the two rules never conflict.
     const aVerified = a.linkVerifiedDomain ? 1 : 0;
     const bVerified = b.linkVerifiedDomain ? 1 : 0;
     if (aVerified !== bVerified) return bVerified - aVerified;
-    return (adLongevityDays(b, now) ?? 0) - (adLongevityDays(a, now) ?? 0);
+    return (adLongevityDays(b, sortKey) ?? 0) - (adLongevityDays(a, sortKey) ?? 0);
   });
   const visible = ordered.slice(0, WALL_VISIBLE_ADS);
   const remaining = Math.max(0, totalCount - visible.length);
