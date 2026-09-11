@@ -90,9 +90,11 @@ async function loadWebsiteCoverageLabel(
     }
     return buildWebsiteCoverageLabel({
       scan: {
+        status: latest.scan.status,
         inventoryComplete: latest.scan.inventoryComplete,
         pageBudget: latest.scan.pageBudget,
         fetchedPageCount: latest.scan.fetchedPageCount,
+        finalizedAt: latest.scan.finalizedAt,
       },
       pages: latest.pages,
     });
