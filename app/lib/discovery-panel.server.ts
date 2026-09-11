@@ -197,6 +197,57 @@ export function registrableDomainsFromSearchV2CacheKeys(
 }
 
 /**
+ * Issue 3021: suggested-brand chips on the completed 0-verified /search
+ * empty state. Reads the same recent public_search cache rows the warmup
+ * pre-heats, but only domains whose cached result is still fresh AND holds
+ * at least one ad — a chip must land on a warm page with material, never on
+ * another dead end or a fresh 60s warming wall.
+ */
+export const SEARCH_SUGGESTED_BRAND_LIMIT = 4;
+
+export async function listRecentSearchedBrandSuggestions(
+  env: AppEnv,
+  options: { excludeDomain?: string | null; limit?: number } = {},
+): Promise<string[]> {
+  const limit = options.limit ?? SEARCH_SUGGESTED_BRAND_LIMIT;
+  if (!env.DB || limit <= 0) {
+    return [];
+  }
+  const excludeDomain = options.excludeDomain?.trim().toLowerCase() || null;
+  // Fetch past the cap so the exclusion + dedupe pass still fills the row.
+  const fetchLimit = Math.max(limit * 4, 12);
+
+  let cacheKeys: string[];
+  try {
+    const rows = await queryAll<{ cache_key: string }>(
+      env,
+      `
+        SELECT cache_key
+        FROM discovery_cache_entry
+        WHERE route_context = 'public_search'
+          AND cache_key LIKE ?
+          AND expires_at > ?
+          AND json_array_length(payload_json, '$.ads') > 0
+        ORDER BY updated_at DESC
+        LIMIT ?
+      `,
+      `${SEARCH_V2_DOMAIN_KEY_PREFIX}%`,
+      new Date().toISOString(),
+      fetchLimit,
+    );
+    cacheKeys = rows.map((row) => row.cache_key);
+  } catch {
+    // No cache table (fresh D1) or transient read failure: the empty state
+    // must not fail the search page over optional suggestions.
+    return [];
+  }
+
+  return registrableDomainsFromSearchV2CacheKeys(cacheKeys, fetchLimit)
+    .filter((domain) => domain !== excludeDomain)
+    .slice(0, limit);
+}
+
+/**
  * Issue 2403: pre-warms the domains people actually search so the
  * no-account preview serves from cache instead of hitting the 60s warming
  * wall. The source is `discovery_cache_entry` rows with

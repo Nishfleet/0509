@@ -443,6 +443,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       watchedWatchlist: null,
       competitorPreview: null,
       competitorHandoff: null,
+      suggestedBrands: [],
       ...navFlags,
     };
   }
@@ -476,6 +477,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       watchedWatchlist: null,
       competitorPreview: null,
       competitorHandoff: null,
+      suggestedBrands: [],
       ...navFlags,
     };
   }
@@ -696,6 +698,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
           watchedWatchlist: null,
           competitorPreview: null,
           competitorHandoff: null,
+          suggestedBrands: [],
           ...navFlags,
         };
       }
@@ -727,6 +730,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       watchedWatchlist: null,
       competitorPreview: null,
       competitorHandoff: null,
+      suggestedBrands: [],
       ...navFlags,
     };
   }
@@ -960,6 +964,22 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       ? null
       : await signSearchCompetitorHandoff(env, competitorPreview, parsed.filters.country);
 
+  // Issue 3021: a completed 0-verified search is the funnel's dead-end — its
+  // "what next" is suggested-brand chips pulled from the recently-searched
+  // public_search cache the 6-hourly warmup keeps hot. Chips are only
+  // offered domains whose cached result is fresh and non-empty, so a chip
+  // never lands on another dead end; the searched domain is excluded.
+  const suggestedBrands =
+    hydratedResult.ads.length === 0 &&
+    hydratedResult.discoveryEmptyReason === "no_results"
+      ? await (
+          await import("~/lib/discovery-panel.server")
+        ).listRecentSearchedBrandSuggestions(env, {
+          excludeDomain:
+            searchExecution.displayDomain ?? competitorWebsite.host ?? null,
+        })
+      : [];
+
   const searchPayload = {
     mode: parsed.mode,
     filters: filtersForForms,
@@ -987,6 +1007,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     watchedWatchlist,
     competitorPreview,
     competitorHandoff,
+    suggestedBrands,
     ...navFlags,
   };
   // Issue #1972 phase 1: when an anonymous visitor's very first search
@@ -1852,6 +1873,22 @@ export default function SearchRoute() {
     }
   }
 
+  // Issue 3021: suggested-brand chips for the completed empty state. The
+  // loader already filtered to recently-searched domains whose cached result
+  // is fresh and non-empty; the href pins country=all so the chip lands on
+  // exactly the warmed cache entry (a geo-defaulted country would miss it).
+  const suggestedBrands = completedEmptySearch
+    ? (data.suggestedBrands ?? [])
+    : [];
+  const suggestedBrandHref = (domain: string) => {
+    const params = new URLSearchParams({
+      website: domain,
+      country: ALL_COUNTRIES_VALUE,
+      trackingRole,
+    });
+    return `${searchPath}?${params.toString()}`;
+  };
+
   // BL-031: the refine panel is a disclosure that stays SHUT until the visitor
   // actually has filters on, so the pre-search screen is one field and one
   // button instead of a six-control form page. The count is written into the
@@ -2284,47 +2321,22 @@ export default function SearchRoute() {
                     {/* One sub-line, and the search answer's own sentence
                         wins it when there is one — the panel below then
                         carries only the facts it uniquely knows. */}
-                    {searchAnswer ? (
+                    {/* Issue 3021: the completed empty state carries ONE
+                        explanatory line — the honest "not evidence" sentence
+                        in the panel below — so the summary's second telling
+                        is suppressed here. Non-empty verdicts keep theirs. */}
+                    {!completedEmptySearch && searchAnswer ? (
                       <p className="f9-wk-sec-sub">{searchAnswer.summary}</p>
-                    ) : isDomainSearch &&
+                    ) : !completedEmptySearch &&
+                      isDomainSearch &&
                       data.relevanceApplied &&
                       !isBroaderScope ? (
                       <p className="f9-wk-sec-sub">{`Verified ads linked to ${displayDomain}`}</p>
-                    ) : isDomainSearch && isBroaderScope ? (
+                    ) : !completedEmptySearch && isDomainSearch && isBroaderScope ? (
                       <p className="f9-wk-sec-sub">{`Broader matches related to ${displayDomain}`}</p>
                     ) : null}
                   </div>
                   <div className="f9-wk-sec-acts">
-                    {completedEmptySearch ? (
-                      /* Issue 1568: a finished 0-verified search is a dead-end
-                         card with no next step. The natural "why is this
-                         empty?" answer is the public /capture-rules artifact
-                         (BET 4 — "what we refuse to alert on"), with the
-                         /methodology methodology page as the secondary
-                         "how the score works" handoff. Both pages already
-                         exist; this wires the empty card to them so the
-                         section action container is no longer empty for the
-                         0-verified case. The non-empty (>=1 verified) card
-                         is unchanged — its result list, not copy, drives the
-                         buyer. */
-                      <>
-                        <Link className="f9-wk-lnk" to="/capture-rules">
-                          Read what we refuse to alert on{" "}
-                          <span aria-hidden="true" className="f9-wk-chev">
-                            &rsaquo;
-                          </span>
-                        </Link>
-                        <Link
-                          className="f9-wk-lnk f9-wk-lnk--quiet"
-                          to="/methodology/ad-aggression-score"
-                        >
-                          How the score works{" "}
-                          <span aria-hidden="true" className="f9-wk-chev">
-                            &rsaquo;
-                          </span>
-                        </Link>
-                      </>
-                    ) : null}
                     {data.brandPageLink ? (
                       /* BET 5: the programmatic-SEO destination handoff. The
                          results preview links straight to the indexable public
@@ -2695,6 +2707,32 @@ export default function SearchRoute() {
                         </div>
                       )
                     ) : null}
+                    {/* Issue 3021: beside the one re-search action, offer
+                        suggested-brand chips — domains visitors recently
+                        checked whose cached result is warm and non-empty.
+                        They are the "a suggested similar brand" next step
+                        this dead-end used to lack, in place of the old
+                        three-link doc row. */}
+                    {suggestedBrands.length > 0 ? (
+                      <div
+                        aria-label="Suggested brands"
+                        className="f9-wk-suggest"
+                        role="group"
+                      >
+                        <span className="f9-wk-suggest-label">
+                          Recently checked:
+                        </span>
+                        {suggestedBrands.map((domain) => (
+                          <Link
+                            className="f9-wk-chip"
+                            key={domain}
+                            to={suggestedBrandHref(domain)}
+                          >
+                            {domain}
+                          </Link>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 )}
 
@@ -2717,7 +2755,18 @@ export default function SearchRoute() {
 
                 {searchAnswer ? (
                   <SearchAnswerPanel
-                    answer={searchAnswer}
+                    answer={
+                      /* Issue 3021: the honest "not evidence" sentence is told
+                         exactly once on this state. When discoveryEmptyReason
+                         is "no_results" the empty panel above already carries
+                         it, so the answer panel's near-identical note is a
+                         second telling and is stripped; otherwise the note IS
+                         the one telling and stays. */
+                      completedEmptySearch &&
+                      visibleResult.discoveryEmptyReason === "no_results"
+                        ? { ...searchAnswer, note: null }
+                        : searchAnswer
+                    }
                     showHeadline={false}
                     steal={stealSummary}
                   />
