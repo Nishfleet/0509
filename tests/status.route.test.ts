@@ -147,6 +147,62 @@ describe("status route", () => {
     expect(markup).toContain("Configuration and scope information and live monitoring facts");
   });
 
+  it("never publishes cold bootstrap zeros — prose replaces '0 runs / no digests sent yet' (issue #2963)", async () => {
+    await mockRouter(() => ({
+      generatedAt: "2026-09-11T19:00:00.000Z",
+      asOf: "2026-09-11T19:48:09.655Z",
+      appServed: true,
+      monitoring: {
+        lastWatchlistRunAt: null,
+        runsInLast24h: 0,
+        failedRunsInLast24h: 0,
+        lastDigestSentAt: null,
+        digestHealth: "unknown" as const,
+        scheduledMonitoringSince: "2026-09-01T00:00:00.000Z",
+      },
+      measurementsUnavailable: false,
+    }));
+
+    const { default: StatusRoute } = await import("~/routes/status");
+    const markup = renderToStaticMarkup(createElement(StatusRoute));
+
+    expect(markup).toContain("Monitoring pipeline");
+    expect(markup).toContain("first scheduled run is recorded");
+    expect(markup).not.toContain("no runs recorded yet");
+    expect(markup).not.toContain("no digests sent yet");
+    // The uptime-style coverage figure is derived from the real schedule
+    // baseline and rendered beside it.
+    expect(markup).toContain("Scheduled monitoring active since");
+    expect(markup).toContain("2026-09-01T00:00:00.000Z");
+    expect(markup).toMatch(/continuous scheduled monitoring coverage \(\d+ days\)/);
+  });
+
+  it("renders the real measured counters unchanged when the pipeline has activity", async () => {
+    const counters = {
+      lastWatchlistRunAt: "2026-09-01T03:00:00.000Z",
+      runsInLast24h: 31,
+      failedRunsInLast24h: 0,
+      lastDigestSentAt: "2026-09-04T00:00:00.000Z",
+      digestHealth: "recent" as const,
+      scheduledMonitoringSince: "2026-09-01T00:00:00.000Z",
+    };
+
+    await mockRouter(() => ({
+      generatedAt: "2026-09-04T09:00:00.000Z",
+      asOf: "2026-09-04T09:30:00.000Z",
+      appServed: true,
+      monitoring: counters,
+      measurementsUnavailable: false,
+    }));
+
+    const { default: StatusRoute } = await import("~/routes/status");
+    const markup = renderToStaticMarkup(createElement(StatusRoute));
+
+    expect(markup).toContain("31");
+    expect(markup).toContain("Scheduled monitoring active since");
+    expect(markup).not.toContain("Monitoring pipeline");
+  });
+
   it("honestly surfaces a stalled digest instead of re-rendering a stale date when monitoring is healthy", async () => {
     const counters = {
       lastWatchlistRunAt: "2026-09-06T09:00:04.000Z",
