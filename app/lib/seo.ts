@@ -917,16 +917,17 @@ export const SITEMAP_PATHS = [
   // indexable. The genuinely translated sneaker-resale cluster
   // (`/de/sneaker-resale` etc., listed above) stays in the sitemap because
   // its content differs per locale.
-  // Canonical Ad Aggression Score methodology page (issue #2022). Path history:
+  // Canonical Ad Aggression Score methodology page (issue #2871). Path history:
   // /methodology/ad-aggression-score (#960) -> /ad-aggression (#1263) ->
-  // /methodology (#2022). The older paths 301-redirect here so any indexed
-  // link keeps its equity; /proof is the legacy capture-rules canonical kept
-  // out of the sitemap since it 301s to /capture-rules.
+  // /methodology (#2022) -> /methodology/ad-aggression-score (#2871). The
+  // older paths 301-redirect here so any indexed link keeps its equity;
+  // /proof is the legacy capture-rules canonical kept out of the sitemap
+  // since it 301s to /capture-rules.
   "/capture-rules",
   // Issue #2026: the buyer-facing "no phantom changes" guarantee page. Same
   // rules source as /capture-rules, framed for a prospect evaluating a plan.
   "/no-phantom-changes",
-  "/methodology",
+  "/methodology/ad-aggression-score",
   "/pricing",
   "/help",
   "/docs",
