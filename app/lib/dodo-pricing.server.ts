@@ -9,7 +9,7 @@ import {
   type BillingSkuSlug,
 } from "~/lib/billing-sku-catalog";
 import { fetchWithTimeout } from "~/lib/fetch-timeout.server";
-import { countryFromRequest, hasValidCanaryToken } from "~/lib/dodo-pricing-country.server";
+import { countryFromRequest } from "~/lib/dodo-pricing-country.server";
 import {
   dodoPreviewProductIssue,
   normalizeDodoPlanPricePreview,
@@ -22,7 +22,6 @@ import type { PricingBillingCycle, PricingPlanSlug, UsageBundleSlug } from "~/li
 
 const DODO_LIVE_URL = "https://live.dodopayments.com";
 const DODO_TEST_URL = "https://test.dodopayments.com";
-const PRICE_PREVIEW_CACHE_MS = 5 * 60 * 1000;
 const DODO_PRICING_PREVIEW_TIMEOUT_MS = 10_000;
 const DODO_PRICING_PREVIEW_JSON_MAX_BYTES = 64_000;
 const USAGE_BUNDLE_CREDITS: Record<UsageBundleSlug, number> = {
@@ -110,8 +109,6 @@ export interface DodoPricingPreview {
   annualValidation: Partial<Record<PricingPlanSlug, DodoAnnualPlanValidation>>;
   usageBundles: Partial<Record<UsageBundleSlug, DodoUsageBundleDisplayPrice>>;
 }
-
-const pricePreviewCache = new Map<string, { createdAt: number; value: DodoPricingPreview }>();
 
 export function dodo0509BrandId(env: AppEnv) {
   return env.DODO_0509_BRAND_ID?.trim() ?? "";
@@ -205,13 +202,11 @@ export async function previewDodo0509PlanPrices({
   env,
   request,
   fetcher = fetch,
-  bypassCache = false,
   trustProxyHeaders = true,
 }: {
   env: AppEnv;
   request: Request;
   fetcher?: typeof fetch;
-  bypassCache?: boolean;
   trustProxyHeaders?: boolean;
 }): Promise<DodoPricingPreview> {
   const apiKey = dodo0509ApiKey(env);
@@ -220,7 +215,6 @@ export async function previewDodo0509PlanPrices({
   if (!brandId) return unavailable("missing_brand_id", env, request, trustProxyHeaders);
 
   const country = countryFromRequest(env, request, { trustProxyHeaders });
-  const skipCache = bypassCache || hasValidCanaryToken(env, request);
   const products = dodo0509ProductIds(env);
   const bundles = dodo0509UsageBundleProductIds(env);
   const configuredPlans = Object.entries(products).flatMap(([planId, cycles]) =>
@@ -241,20 +235,6 @@ export async function previewDodo0509PlanPrices({
 
   if (configuredPlans.length === 0 && configuredBundles.length === 0) {
     return unavailable("missing_product_ids", env, request);
-  }
-
-  const cacheKey = [
-    dodo0509BaseUrl(env),
-    brandId,
-    country || "auto",
-    dodo0509AdaptiveCurrencyEnabled(env) ? "adaptive" : "base",
-    dodo0509AdaptiveCurrencyFeesInclusive(env) ? "inclusive" : "exclusive",
-    configuredPlans.map((item) => `${item.planId}:${item.cycle}:${item.productId}`).join("|"),
-    configuredBundles.map((item) => `${item.bundleId}:${item.productId}`).join("|"),
-  ].join(":");
-  const cached = pricePreviewCache.get(cacheKey);
-  if (!skipCache && cached && Date.now() - cached.createdAt < PRICE_PREVIEW_CACHE_MS) {
-    return cached.value;
   }
 
   const planEntries = await Promise.all(
@@ -324,15 +304,6 @@ export async function previewDodo0509PlanPrices({
       : {}),
   };
 
-  const expectedPreviewCount = configuredPlans.length + configuredBundles.length;
-  const actualPreviewCount =
-    configuredPlans.filter(({ planId, cycle }) => Boolean(prices[planId]?.[cycle]?.display)).length +
-    configuredBundles.filter(({ bundleId }) => Boolean(usageBundles[bundleId]?.display)).length;
-  const previewIsComplete = expectedPreviewCount > 0 && actualPreviewCount === expectedPreviewCount;
-
-  if (!skipCache && previewIsComplete) {
-    pricePreviewCache.set(cacheKey, { createdAt: Date.now(), value });
-  }
   return value;
 }
 
