@@ -901,9 +901,11 @@ async function readRemoteRowCounts(scratchConfigPath) {
     { quiet: true },
   );
   const tablePayload = parseWranglerJson(tablesResult.stdout);
-  const rows = Array.isArray(tablePayload)
-    ? (tablePayload[0]?.results ?? [])
-    : (tablePayload?.results ?? []);
+  const rows = /** @type {Array<{ name: unknown }>} */ (
+    Array.isArray(tablePayload)
+      ? (tablePayload[0]?.results ?? [])
+      : (tablePayload?.results ?? [])
+  );
   const names = rows.map((row) => String(row.name));
   if (names.length === 0) return new Map();
   const countExpression = names
@@ -936,7 +938,6 @@ async function readRemoteRowCounts(scratchConfigPath) {
     names.map((name) => [name, Number(countRow[name] ?? 0)]),
   );
 }
-
 /**
  * The production dry run (issue #2779, step 1): restore the pre-migration
  * backup that was just taken into a scratch D1, apply the pending repository
