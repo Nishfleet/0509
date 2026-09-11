@@ -275,6 +275,7 @@ async function fetchCustomerLandingPageHtml(url: string): Promise<string | null>
     }
     let body = "";
     let bytes = 0;
+    const chunks: Uint8Array[] = [];
     try {
       for (;;) {
         const { done, value } = await reader.read();
@@ -289,7 +290,12 @@ async function fetchCustomerLandingPageHtml(url: string): Promise<string | null>
           if (bytes > LANDING_PAGE_MAX_BYTES) {
             return null;
           }
-          body += new TextDecoder().decode(value);
+          // Accumulate raw bytes and decode ONCE after the loop: a fresh
+          // TextDecoder per chunk splits a multi-byte UTF-8 sequence that
+          // straddles a chunk boundary into U+FFFD, and the split point varies
+          // run to run — the same unchanged page would decode differently
+          // across runs.
+          chunks.push(value);
         }
       }
     } catch {
@@ -301,6 +307,13 @@ async function fetchCustomerLandingPageHtml(url: string): Promise<string | null>
       reader.releaseLock();
       releaseFetchTimeout(response);
     }
+    const raw = new Uint8Array(bytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      raw.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    body = new TextDecoder().decode(raw);
     return body;
   }
 

@@ -450,21 +450,40 @@ export async function safeFetchDocument(
       releaseFetchTimeout(response);
       return { ok: false, status, body: null, finalUrl: current.toString(), refusedReason: "unreadable_body" };
     }
+    const chunks: Uint8Array[] = [];
+    let totalBytes = 0;
     try {
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
         if (value) {
-          body += new TextDecoder().decode(value);
-          if (body.length > maxBytes) {
+          // Accumulate raw bytes and decode ONCE after the loop. Decoding each
+          // chunk with a fresh TextDecoder split a multi-byte UTF-8 sequence
+          // that straddled a chunk boundary into U+FFFD; the split point
+          // varies run to run, so the same unchanged page produced a
+          // different visibleTextHash and fired phantom
+          // website_page_changed alerts. One decoder over the whole byte
+          // stream is chunk-boundary-independent, and the cap counts bytes
+          // (UTF-16 .length under-reports ~3x for CJK).
+          totalBytes += value.byteLength;
+          if (totalBytes > maxBytes) {
             return { ok: false, status, body: null, finalUrl: current.toString(), refusedReason: "body_too_large" };
           }
+          chunks.push(value);
         }
       }
     } finally {
       reader.releaseLock();
       releaseFetchTimeout(response);
     }
+
+    const bytes = new Uint8Array(totalBytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    body = new TextDecoder().decode(bytes);
 
     return { ok: true, status, body, finalUrl: current.toString(), refusedReason: null };
   }
