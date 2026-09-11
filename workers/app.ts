@@ -65,6 +65,7 @@ import {
   sendScheduledObservationGapAlert,
   SCHEDULED_OBSERVATION_GAP_CHECK_CRON,
 } from "../app/lib/scheduled-observation-health.server";
+import { canonicalPathRedirect } from "./canonical-path";
 import { scheduleBillingLifecycleEmailRecovery } from "./delivery-recovery";
 import { scheduleDigestScheduleExhaustionRecovery } from "./digest-schedule-recovery";
 import { primaryDomainRedirect } from "./primary-domain";
@@ -178,6 +179,16 @@ export default {
     const primaryDomainResponse = primaryDomainRedirect(request);
     if (primaryDomainResponse) {
       return withSecurityHeaders(primaryDomainResponse, request);
+    }
+
+    // Path canonicalization (issue #2955): one URL per public route — a
+    // non-canonical casing or trailing slash 301s here, before any public
+    // file or route handling, so /Pricing and /pricing/ stop serving
+    // duplicates of /pricing. Exempt surfaces (assets, /api/*, /share/*,
+    // ...) and non-GET/HEAD methods pass through untouched.
+    const canonicalPathResponse = canonicalPathRedirect(request);
+    if (canonicalPathResponse) {
+      return withSecurityHeaders(canonicalPathResponse, request);
     }
 
     // /sitemap.xml is dynamic: the static funnel paths plus the indexable
