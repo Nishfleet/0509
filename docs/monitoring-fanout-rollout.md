@@ -136,3 +136,47 @@ Top-up balance does **not** alter cadence or priority. Fan-out is globally enabl
 - Code gate (`commercial-launch-gate.server.ts`) correctly holds Agency when `inline` or `shadow`.
 - Simulated vitest proof was green; production dispatched an Agency-scale internal proof through Workflow fan-out in the dated run.
 - Keep `MONITORING_FANOUT_GLOBAL=1` only while scheduled dispatch failures stay at zero and operator-owned internal scan failures remain explainable. Do not use customer data to prove the engineering gate.
+
+## Measured watchlist scheduling ceiling (2026-09-11, 0509#2990)
+
+Earlier drafts inferred a "practical ceiling in the low hundreds". That inference is
+replaced by a deterministic measurement against the real committed couple of
+constants: `npm run test:presence-load` models the fan-out scheduler with the
+committed `MONITORING_FANOUT_MAX_INFLIGHT=8`, the paid cadence (agency/starter,
+every 3 hours), and the worst-case per-run scan duration (30-minute
+`MONITORING_WORKFLOW_SCAN_TIMEOUT_MS` cap). Output as committed at 79f8226eb:
+
+```
+npm run test:presence-load
+watchlist ceiling (inflight=8, cadence=180min, worst-run=30min):
+  keeps pace at up to 48 watchlists
+  slips <=1 cadence up to 96 watchlists (canary alert threshold)
+  > 96 watchlists: schedule falls more than one cadence behind
+```
+
+- **48 active paid watchlists/workspace** is the throughput bound that keeps
+  every scheduled run dispatched before the next cadence window, even if every
+  run consumes its full 30-minute scan cap.
+- **96** is the published slip allowance: with one full cadence of accumulated
+  slip the schedule still drains. Agency's promised 75 watchlists/workspace sits
+  in this band — fine on average, but every back-to-back worst-case window
+  leaves the fleet permanently one window behind until inflight rises.
+- What to do before promising more than 48: raise `MONITORING_FANOUT_MAX_INFLIGHT`
+  (slot capacity is 64) and re-measure with
+  `MONITORING_FANOUT_MAX_INFLIGHT=16 npm run test:presence-load` — each doubling
+  of inflight doubles the ceiling at the same cadence and scan cap
+  (measured: inflight 16 → 96 keeps-pace / 192 slip-bound).
+- If real scans complete well under the 30-minute cap in production, re-run the
+  simulation with `MONITORING_CADENCE_MINUTES` unchanged and a smaller worst-run
+  constant in `scripts/presence-load-test.mjs`; the published numbers scale as
+  `inflight * floor(2 * cadence / worst_run)`.
+
+### Schedule-slip canary
+
+`node scripts/monitoring-fanout-canary.mjs --step cadence [--cadence-hours 3]`
+alerts when the oldest queued scheduled run has been waiting more than one
+cadence beyond its due window (`schedule_slipped_more_than_one_cadence`), and
+warns once it is past one cadence. Read queue age via `--remote` (D1
+`MIN(queued_at)` over pending scheduled runs) or `--metrics-file`. Wire it into
+the scheduled canary runbook next to `--step nightly` so a slipped schedule is
+noticed before Agency customers do.

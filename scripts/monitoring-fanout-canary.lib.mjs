@@ -9,7 +9,11 @@ export const FANOUT_LADDER_STEPS = Object.freeze([
   "allowlist",
   "fleet75",
   "nightly",
+  "cadence",
 ]);
+
+/** Default paid-plan cadence: agency/starter scheduled scans run every 3 hours. */
+export const DEFAULT_CADENCE_HOURS = 3;
 
 /**
  * @typedef {{
@@ -229,6 +233,52 @@ export function evaluateNightlyStep(metrics) {
  * @param {{ config?: FanoutConfigInput, metrics?: FanoutMetricsInput }} input
  * @returns {FanoutLadderEvaluation}
  */
+/**
+ * Schedule-slip canary (0509#2990): alert when the monitoring schedule slips by
+ * more than one cadence. `cadenceHours` is the paid-plan cadence (default 3).
+ * A scheduled run still queued more than cadence + 1 cadence after dispatch
+ * means the fleet has fallen more than a full window behind.
+ *
+ * @param {FanoutMetricsInput} metrics
+ * @param {{ cadenceHours?: number }} [options]
+ * @returns {FanoutLadderEvaluation}
+ */
+export function evaluateCadenceSlipStep(metrics, options = {}) {
+  const cadenceHours = options.cadenceHours ?? DEFAULT_CADENCE_HOURS;
+  const cadenceMs = cadenceHours * 60 * 60 * 1000;
+  const oldest = metrics.oldestQueuedAgeMs ?? 0;
+  const notes = [
+    `Paid cadence ${cadenceHours}h; alert threshold cadence + 1 cadence = ${2 * cadenceHours}h of queue age.`,
+    "Re-measure the ceiling with `npm run test:presence-load` when inflight or the worst-case scan cap changes.",
+  ];
+  let blocker = null;
+
+  if (metrics.oldestQueuedAgeMs == null) {
+    notes.push("oldestQueuedAgeMs unavailable (no metrics file / not remote); slip cannot be assessed.");
+    blocker = blocker ?? "cadence_metrics_missing";
+  } else {
+    if (oldest > 2 * cadenceMs) {
+      blocker = "schedule_slipped_more_than_one_cadence";
+    } else if (oldest > cadenceMs) {
+      notes.push(
+        "Warning: oldest queued run is past one cadence; schedule is starting to slip. Re-run the ceiling simulation before raising inflight.",
+      );
+    }
+  }
+
+  return {
+    ok: blocker === null,
+    step: "cadence",
+    blocker,
+    notes,
+  };
+}
+
+/**
+ * @param {string} step
+ * @param {{ config?: FanoutConfigInput, metrics?: FanoutMetricsInput, cadenceHours?: number }} input
+ * @returns {FanoutLadderEvaluation}
+ */
 export function evaluateFanoutLadderStep(step, input = {}) {
   const normalized = step.trim().toLowerCase();
   const config = input.config ?? {};
@@ -245,6 +295,8 @@ export function evaluateFanoutLadderStep(step, input = {}) {
       return evaluateFleet75Step(metrics);
     case "nightly":
       return evaluateNightlyStep(metrics);
+    case "cadence":
+      return evaluateCadenceSlipStep(metrics, { cadenceHours: input.cadenceHours });
     default:
       return {
         ok: false,

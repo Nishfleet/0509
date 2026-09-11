@@ -70,6 +70,7 @@ function parseArgs(args) {
    *   internalWorkspaceSource: "env" | "wrangler_secret_list" | "unavailable",
    *   workflowBindingConfigured: boolean,
    *   shadowOnly: number | null,
+   *   cadenceHours: number | null,
    * }} */
   const parsed = {
     step: "config",
@@ -85,6 +86,7 @@ function parseArgs(args) {
     internalWorkspaceSource,
     workflowBindingConfigured: true,
     shadowOnly: null,
+    cadenceHours: null,
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -126,6 +128,10 @@ function parseArgs(args) {
       parsed.shadowOnly = Number.parseInt(args[index + 1], 10);
       index += 1;
     }
+    if (arg === "--cadence-hours" && args[index + 1]) {
+      parsed.cadenceHours = Number.parseInt(args[index + 1], 10);
+      index += 1;
+    }
   }
 
   return parsed;
@@ -143,7 +149,11 @@ async function loadMetrics(config) {
 
   if (config.metricsFile) {
     const raw = readFileSync(config.metricsFile, "utf8");
-    Object.assign(metrics, parseWatchlistRunStatusCounts(JSON.parse(raw)));
+    const parsed = JSON.parse(raw);
+    Object.assign(metrics, parseWatchlistRunStatusCounts(parsed));
+    if (parsed.oldestQueuedAgeMs != null) {
+      metrics.oldestQueuedAgeMs = parsed.oldestQueuedAgeMs;
+    }
     return metrics;
   }
 
@@ -162,6 +172,13 @@ async function loadMetrics(config) {
     SELECT COUNT(*) AS count
     FROM monitoring_concurrency_slot
     WHERE holder_run_id IS NOT NULL
+  `;
+  const oldestQueuedQuery = `
+    SELECT MIN(queued_at) AS oldest_queued_at
+    FROM watchlist_run
+    WHERE trigger_type = 'scheduled'
+      AND started_at IS NULL
+      AND status = 'pending'
   `;
 
   const statusPayload = JSON.parse(
@@ -186,6 +203,21 @@ async function loadMetrics(config) {
   )[0];
   metrics.heldSlots = Number(heldRow?.count ?? 0);
 
+  const oldestQueuedPayload = JSON.parse(
+    execFileSync(
+      "npx",
+      ["wrangler", "d1", "execute", "0509", "--remote", "--json", "--command", oldestQueuedQuery],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+    ),
+  );
+  const oldestRow = (oldestQueuedPayload.result ?? []).flatMap(
+    /** @param {{ results?: Array<{ oldest_queued_at?: string | number | null }> }} batch */
+    (batch) => batch.results ?? [],
+  )[0];
+  const oldestQueuedAt = oldestRow?.oldest_queued_at != null ? Date.parse(String(oldestRow.oldest_queued_at)) : null;
+  metrics.oldestQueuedAgeMs =
+    oldestQueuedAt != null && Number.isFinite(oldestQueuedAt) ? Math.max(0, Date.now() - oldestQueuedAt) : null;
+
   if (config.shadowOnly !== null) {
     metrics.shadowOnly = config.shadowOnly;
   }
@@ -205,6 +237,7 @@ const evaluation = evaluateFanoutLadderStep(config.step, {
     workflowBindingConfigured: config.workflowBindingConfigured,
   },
   metrics,
+  cadenceHours: config.cadenceHours ?? undefined,
 });
 
 const payload = {
