@@ -2,7 +2,10 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-const css = readFileSync("app/app.css", "utf8");
+// app.css split in issue #2392: the public tree loads base.css + marketing.css.
+const css = ["app/base.css", "app/marketing.css"]
+  .map((p) => readFileSync(p, "utf8"))
+  .join("\n");
 
 describe("public accessibility source contract", () => {
   it("uses dark focus treatments on light marketing, share, and mobile app surfaces", () => {

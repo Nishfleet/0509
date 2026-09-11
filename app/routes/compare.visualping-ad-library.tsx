@@ -3,6 +3,7 @@ import type { LinksFunction, LoaderFunctionArgs } from "react-router";
 
 import { COMPARE_CANONICAL_TARGETS, canonicalLinks } from "~/lib/seo";
 import CompareVisualpingAdLibrariesRoute, { meta } from "./compare.visualping-ad-libraries";
+import "../marketing.css";
 
 export { meta };
 

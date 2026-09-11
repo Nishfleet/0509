@@ -22,6 +22,7 @@ import {
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import foreplayCitations from "~/data/compare/foreplay-citations.json";
+import "../marketing.css";
 
 const citations = foreplayCitations as CompareCitations;
 

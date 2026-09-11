@@ -7,7 +7,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { DashboardShell } from "~/components/dashboard-shell";
 
-const appCss = readFileSync("app/app.css", "utf8");
+// app.css split in issue #2392: the /app workspace loads base.css + app.css.
+const appCss = ["app/base.css", "app/app.css"]
+  .map((p) => readFileSync(p, "utf8"))
+  .join("\n");
 
 function styleRulesFor(selectorFragment: string) {
   const cssWithoutComments = appCss.replace(/\/\*[\s\S]*?\*\//g, "");

@@ -23,6 +23,7 @@ import {
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import visualpingCitations from "~/data/compare/visualping-citations.json";
+import "../marketing.css";
 
 const citations = visualpingCitations as CompareCitations;
 

@@ -8,7 +8,10 @@ const marketingRoute = [
 ].join("\n");
 const marketingNav = readFileSync("app/components/marketing-nav.tsx", "utf8");
 const brandWordmark = readFileSync("app/components/brand-wordmark.tsx", "utf8");
-const appCss = readFileSync("app/app.css", "utf8");
+// app.css split in issue #2392: the public tree loads base.css + marketing.css.
+const appCss = ["app/base.css", "app/marketing.css"]
+  .map((p) => readFileSync(p, "utf8"))
+  .join("\n");
 const rootRoute = readFileSync("app/root.tsx", "utf8");
 const routes = readFileSync("app/routes.ts", "utf8");
 const publicMarkdown = readFileSync("app/lib/public-markdown.ts", "utf8");

@@ -23,6 +23,7 @@ import {
 import { FREE_PREVIEW_SEARCH_DOMAIN, LIVE_BRAND_PROOF_DOMAIN } from "~/lib/demo-brand-pages";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import visualpingAdLibraryCitations from "~/data/compare/visualping-ad-library-citations.json";
+import "../marketing.css";
 
 const citations = visualpingAdLibraryCitations as CompareCitations;
 

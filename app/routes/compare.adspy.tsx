@@ -21,6 +21,7 @@ import {
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import adspyCitations from "~/data/compare/adspy-citations.json";
+import "../marketing.css";
 
 const citations = adspyCitations as CompareCitations;
 

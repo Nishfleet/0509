@@ -31,6 +31,7 @@ import {
   type FaqJsonLdEntry,
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import "../marketing.css";
 
 const PATHNAME = "/guides/how-to-track-competitor-ads";
 

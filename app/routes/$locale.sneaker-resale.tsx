@@ -12,6 +12,7 @@ import {
 } from "~/lib/locale-markets";
 import { sneakerResaleCopy } from "~/lib/sneaker-resale-copy";
 import { canonicalUrl, clusterSocialCardUrl, publicSeoMeta, sneakerResaleHreflangLinks } from "~/lib/seo";
+import "../marketing.css";
 
 function localeFromParams(params: LoaderFunctionArgs["params"] | { locale?: string }): SneakerResaleLocaleId {
   const locale = params.locale;

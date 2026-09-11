@@ -24,6 +24,7 @@ import {
   type FaqJsonLdEntry,
 } from "~/lib/seo";
 import { localeSearchPathname } from "~/lib/locale-markets";
+import "../marketing.css";
 
 const pageTitle = "Ad Aggression Score methodology | Five to Nine";
 const pageDescription =

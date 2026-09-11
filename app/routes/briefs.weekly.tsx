@@ -31,6 +31,7 @@ import {
   webPageJsonLd,
 } from "~/lib/seo";
 import type { WeeklyPublicMove } from "~/lib/weekly-public-moves.server";
+import "../marketing.css";
 
 interface BriefsWeeklyLoaderData {
   moves: WeeklyPublicMove[];

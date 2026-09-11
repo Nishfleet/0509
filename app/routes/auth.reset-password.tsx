@@ -1,5 +1,6 @@
 import { redirect } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
+import "../marketing.css";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const next = new URL("/auth/login", request.url);

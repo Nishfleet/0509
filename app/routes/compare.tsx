@@ -15,6 +15,7 @@ import {
   webPageJsonLd,
 } from "~/lib/seo";
 import { LIVE_BRAND_PROOF_DOMAIN } from "~/lib/demo-brand-pages";
+import "../marketing.css";
 
 const pageDescription =
   "Five to Nine vs the alternatives: source-backed competitor ad and landing-page change monitoring compared to Visualping, Panoramata, Foreplay, Spyland, Pulzifi, and more.";

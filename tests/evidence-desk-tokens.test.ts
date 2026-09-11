@@ -9,7 +9,12 @@ import { describe, expect, it } from "vitest";
  * in the primitives section carries a hex literal.
  */
 
-const css = readFileSync("app/app.css", "utf8");
+// app.css split in issue #2392: Evidence Desk renders on /share and /search
+// (public) as well as /app, so the primitives the brief pins live in the
+// shared base.css layer.
+const css = ["app/base.css", "app/app.css"]
+  .map((p) => readFileSync(p, "utf8"))
+  .join("\n");
 
 const PRIMITIVES_MARKER = "Evidence Desk primitives (BL-005, 2026-07-27)";
 /**

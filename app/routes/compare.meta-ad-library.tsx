@@ -23,6 +23,7 @@ import {
 import { FREE_PREVIEW_SEARCH_DOMAIN, LIVE_BRAND_PROOF_DOMAIN } from "~/lib/demo-brand-pages";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import metaAdLibraryCitations from "~/data/compare/meta-ad-library-citations.json";
+import "../marketing.css";
 
 const citations = metaAdLibraryCitations as CompareCitations;
 

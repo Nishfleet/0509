@@ -8,6 +8,7 @@ import {
 import { sneakerResaleMarket } from "~/lib/locale-markets";
 import { sneakerResaleCopy } from "~/lib/sneaker-resale-copy";
 import { canonicalLinks, clusterSocialCardUrl, publicSeoMeta, sneakerResaleHreflangLinks } from "~/lib/seo";
+import "../marketing.css";
 
 const MARKET = sneakerResaleMarket("en");
 const COPY = sneakerResaleCopy("en");

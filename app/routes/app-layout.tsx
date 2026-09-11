@@ -6,6 +6,7 @@ import { DashboardShell } from "~/components/dashboard-shell";
 import { DashboardRouteError } from "~/components/dashboard-route-loading";
 import { QuickAddPalette } from "~/components/quick-add-palette";
 import { QuickAddProvider } from "~/components/quick-add-context";
+import "../app.css";
 
 /** Cmd/Ctrl+K anywhere in /app opens quick-add, except while typing. */
 export function isQuickAddShortcut(event: {

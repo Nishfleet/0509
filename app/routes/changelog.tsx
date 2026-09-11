@@ -7,6 +7,7 @@ import {
   publicSeoMeta,
   webPageJsonLd,
 } from "~/lib/seo";
+import "../marketing.css";
 
 const description =
   "Customer-facing updates for Five to Nine, with clear product and availability boundaries.";

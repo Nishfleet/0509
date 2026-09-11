@@ -10,6 +10,7 @@ import {
   webPageJsonLd,
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import "../marketing.css";
 
 const termsDescription =
   "Terms for Five to Nine, including billing, acceptable use, and tracking limits.";

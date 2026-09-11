@@ -15,6 +15,7 @@ import { canonicalLinks, compareSocialCardUrl, jsonLdScriptProps, publicSeoMeta,
 import { LIVE_BRAND_PROOF_DOMAIN } from "~/lib/demo-brand-pages";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import spylandCitations from "~/data/compare/spyland-citations.json";
+import "../marketing.css";
 
 // Source verification (issue #1288, #2069): primary-source-verified —
 // https://spyland.ing/ returns HTTP 200 and names the product with a free plan

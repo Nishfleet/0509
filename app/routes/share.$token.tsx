@@ -31,6 +31,7 @@ import {
 import { isReportDocument, type ReportDocument } from "~/lib/report";
 import { isApprovedReportSnapshot } from "~/lib/report-approval";
 import type { ShareResourceType } from "~/lib/types";
+import "../marketing.css";
 
 export const meta = () => [
   { title: "Shared report | Five to Nine" },

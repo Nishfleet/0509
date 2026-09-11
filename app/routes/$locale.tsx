@@ -2,6 +2,7 @@ import { Outlet, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 
 import { isBuyerSurfaceLocaleId } from "~/lib/locale-markets";
+import "../marketing.css";
 
 /**
  * Layout route for the locale-prefixed buyer-surface cluster (issue #1501).

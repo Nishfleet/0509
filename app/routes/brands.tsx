@@ -36,6 +36,7 @@ import {
   groupBrandRecordsByCategory,
 } from "~/lib/brand-categories";
 import type { IndexableAdsLink } from "~/lib/ads-internal-links";
+import "../marketing.css";
 
 /** A brand-page link plus whether its `/timeline/:domain` is indexable. */
 interface BrandHubItem extends IndexableAdsLink {

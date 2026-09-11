@@ -2,7 +2,10 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-const css = readFileSync("app/app.css", "utf8");
+// app.css split in issue #2392: the /app workspace loads base.css + app.css.
+const css = ["app/base.css", "app/app.css"]
+  .map((p) => readFileSync(p, "utf8"))
+  .join("\n");
 const rootTsx = readFileSync("app/root.tsx", "utf8");
 const searchRoute = readFileSync("app/routes/search.tsx", "utf8");
 const searchResultRow = readFileSync(
