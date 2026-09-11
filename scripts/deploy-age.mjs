@@ -73,7 +73,9 @@ async function measure() {
       lastSuccess = { sha: successRun.head_sha, at: successRun.updated_at };
     }
     const failedRun = await newestRun(token, repository, "completed", (e) =>
-      e?.conclusion && e.conclusion !== "success" && Number.isInteger(e?.id));
+      typeof e?.conclusion === "string" &&
+      e.conclusion !== "success" &&
+      Number.isInteger(e?.id));
     if (failedRun) {
       lastFailure = `${failedRun.conclusion}@${failedRun.id}`;
     }
