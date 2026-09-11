@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import {
   buildCreativeResourceUrl,
-  isEdgeCacheableCreativeUrl,
+  isFbcdnCreativeUrl,
 } from "~/lib/creative-edge-cache-url";
 import type { AdRecord } from "~/lib/types";
 
@@ -47,10 +47,13 @@ export function AdCreative({
   const storedUrl = ad.creativeImageUrl?.trim() || null;
   // Issue #2401: a raw fbcdn URL is never emitted — its `oe=` signature expires
   // in ~4 days, it hands Meta a referrer and it bypasses every cache we control.
-  // A stored fbcdn creative goes through the `/creative/:id` route or renders
-  // the honest mock. Any other host is left as stored: it has none of those
-  // failure modes and the edge route is fbcdn-gated by design (no open proxy).
-  const src = isEdgeCacheableCreativeUrl(storedUrl)
+  // Issue #2730: that gate covers EVERY fbcdn shape — apex host, http, and
+  // scheme-relative included — not just the https subdomains the edge route
+  // fetches. A stored fbcdn creative goes through the `/creative/:id` route or
+  // renders the honest mock; any other host is left as stored: it has none of
+  // those failure modes and the edge route is fbcdn-gated by design (no open
+  // proxy).
+  const src = isFbcdnCreativeUrl(storedUrl)
     ? buildCreativeResourceUrl(ad.metaAdId, storedUrl)
     : storedUrl;
   const format = normalizeFormat(ad.format);

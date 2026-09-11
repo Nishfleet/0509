@@ -42,9 +42,36 @@ export function isEdgeCacheableCreativeUrl(stored: string | null | undefined): b
 }
 
 /**
+ * True for ANY stored URL the browser would resolve to an fbcdn host — apex
+ * `fbcdn.net` or a subdomain, over http, https, or scheme-relative. This is
+ * the raw-render gate (issue #2730), deliberately broader than
+ * `isEdgeCacheableCreativeUrl`: the edge route only fetches https subdomain
+ * URLs, but an fbcdn URL of ANY shape must never be emitted as a raw
+ * `<img src>` — it carries an expiring `oe=` signature, leaks a Meta
+ * referrer, and bypasses every cache we control. The fallback base mirrors
+ * browser resolution exactly: `//x.fbcdn.net/x` is scheme-relative and still
+ * reaches fbcdn, while a bare path or bare `x.fbcdn.net/x` resolves
+ * same-origin and is not an fbcdn hit.
+ */
+export function isFbcdnCreativeUrl(stored: string | null | undefined): boolean {
+  const raw = stored?.trim() ?? "";
+  if (!raw) {
+    return false;
+  }
+  try {
+    const url = new URL(raw, "https://fbcdn-gate.invalid");
+    const host = url.hostname.toLowerCase();
+    return host === "fbcdn.net" || host.endsWith(".fbcdn.net");
+  } catch {
+    return false;
+  }
+}
+
+/**
  * The same-origin URL an `AdCreative` should emit for a captured creative.
  * Null when the id is unusable or the stored URL is not an edge-cacheable
- * fbcdn asset — the caller then falls back to the raw URL.
+ * fbcdn asset — the caller renders the honest mock for those, since an fbcdn
+ * URL is never emitted raw (issue #2730).
  */
 export function buildCreativeResourceUrl(
   metaAdId: string | null | undefined,
