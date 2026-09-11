@@ -69,6 +69,58 @@ describe("watchlist setup self-resolution (#2418)", () => {
     );
   });
 
+  it("ignores a posted trackingRole — the role is always inferred", async () => {
+    const updateWatchlist = vi.fn().mockResolvedValue({
+      ...watchlist,
+      name: "Nykaa launch watch",
+      targetId: "https://nykaa.com",
+      targetLabel: "Nykaa",
+      targetCountry: null,
+    });
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getWatchlist: vi.fn().mockResolvedValue(watchlist),
+      getWorkspaceBranding: vi.fn().mockResolvedValue({ brandWebsite: null }),
+      updateWatchlist,
+    }));
+
+    const { action } = await import("~/routes/app.watchlists");
+    const formData = new FormData();
+    formData.set("intent", "update-watchlist");
+    formData.set("watchlistId", "watch-1");
+    formData.set("name", "Nykaa launch watch");
+    formData.set("targetLabel", "https://www.nykaa.com/?utm_source=meta");
+    // Spoofed / stale-render radio value: the handler must disregard it —
+    // a competitor target can never become self via a posted field.
+    formData.set("trackingRole", "self");
+
+    await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/watchlists", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(updateWatchlist).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      "watch-1",
+      expect.objectContaining({
+        trackingRole: "competitor",
+      }),
+    );
+  });
+
   it("infers self tracking from a domain typed into the single target field", async () => {
     const updateWatchlist = vi.fn().mockResolvedValue({
       ...watchlist,

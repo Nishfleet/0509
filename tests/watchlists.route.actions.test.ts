@@ -1106,6 +1106,9 @@ describe("watchlists route actions", () => {
       targetFingerprint: "saved-query-fingerprint",
       targetLabel: "Nykaa launch searches",
       targetCountry: null,
+      // Issue #2418: saved-query targets keep their stored role — there is
+      // no domain to match, so inference never rewrites it.
+      trackingRole: "self" as const,
     };
     const updateWatchlist = vi.fn().mockResolvedValue({
       ...savedQueryWatchlist,
@@ -1156,6 +1159,8 @@ describe("watchlists route actions", () => {
         targetFingerprint: "saved-query-fingerprint",
         targetLabel: "Nykaa launch searches",
         targetCountry: null,
+        // Stored role passes through untouched on a saved-query rename.
+        trackingRole: "self",
       }),
     );
   });
