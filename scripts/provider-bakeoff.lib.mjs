@@ -956,6 +956,7 @@ export async function runBrowserbaseProbe(target, options = {}) {
   const env = options.env ?? process.env;
   const fetchImpl = options.fetchImpl ?? fetch;
   const request = buildBrowserbaseSessionRequest(target, env);
+  const startedAt = performance.now();
 
   if (!env.BROWSERBASE_API_KEY || !env.BROWSERBASE_PROJECT_ID) {
     return {
@@ -978,12 +979,39 @@ export async function runBrowserbaseProbe(target, options = {}) {
     };
   }
 
-  const sessionResponse = await fetchImpl(request.endpoint, {
-    method: "POST",
-    headers: request.headers,
-    body: JSON.stringify(request.body),
-  });
-  const payload = await sessionResponse.json().catch(() => ({}));
+  /** @type {Response} */
+  let sessionResponse;
+  /** @type {any} */
+  let payload;
+  try {
+    sessionResponse = await fetchImpl(request.endpoint, {
+      method: "POST",
+      headers: request.headers,
+      body: JSON.stringify(request.body),
+    });
+    payload = await sessionResponse.json().catch(() => ({}));
+  } catch (error) {
+    const note = error instanceof Error ? error.message : "Unknown browserbase probe failure.";
+    const status = classifyErrorStatus(note);
+    return {
+      provider: "browserbase",
+      query: target.query,
+      country: target.country,
+      mode: target.mode,
+      status,
+      latencyMs: Math.round(performance.now() - startedAt),
+      httpStatus: null,
+      siteStatus: null,
+      matchCount: 0,
+      loginWall: false,
+      rateLimited: status === "rate_limited",
+      blockedLikely: note.toLowerCase().includes("blocked") || note.toLowerCase().includes("captcha"),
+      degraded: false,
+      sourceLabel: null,
+      url: buildMetaLibraryUrl(target),
+      note,
+    };
+  }
 
   if (!sessionResponse.ok) {
     const note = payload?.message || payload?.error || `HTTP ${sessionResponse.status}`;
