@@ -120,7 +120,14 @@ export function BrandAdWall({
 
 function BrandAdCard({ ad, now, capturedAt, isPartner }: { ad: WallAd; now: Date; capturedAt: Date | null; isPartner: boolean }) {
   const isNew = isNewlySeen(ad, now);
-  const savedLabel = isNew ? "New" : "Screenshot saved";
+  // Issue #2475 (M50): the chip claims a saved snapshot exists — only say it
+  // when a captured creative actually backs the card. A mock fallback tile is
+  // not a screenshot.
+  const savedLabel = isNew
+    ? "New"
+    : ad.creativeImageUrl?.trim()
+      ? "Screenshot saved"
+      : null;
   // The per-ad capture date: when this creative was first observed. A
   // months-old seasonal creative (Diwali/Navratri/Pay Day, …) reads as
   // current rotation without it — the date is the card's honest age anchor.
@@ -172,6 +179,7 @@ function isNewlySeen(ad: WallAd, now: Date): boolean {
   if (!ad.firstSeenAt) return false;
   const firstSeen = Date.parse(ad.firstSeenAt);
   if (Number.isNaN(firstSeen)) return false;
+  if (firstSeen > now.getTime()) return false; // clock-skew guard (issue #2475, M52)
   return now.getTime() - firstSeen <= NEW_AD_HOURS * 60 * 60 * 1000;
 }
 
