@@ -146,6 +146,14 @@ const LLMS_PAGE_DETAILS = {
     description:
       "The free manual routine — find the Ad Library URL, pick a check cadence, log what runs — where it breaks (no history, geo variance, interactive gates), and the free weekly watch that automates it.",
   },
+  // Issue #2888: third guide in the /guides/* cluster — the landing-page
+  // change watch intent. In SITEMAP_PATHS, so it needs a title/description
+  // here or the _llmsDetailsCoverSitemap type fails.
+  "/guides/how-to-monitor-competitor-landing-page-changes": {
+    title: "How to monitor a competitor's landing page changes",
+    description:
+      "The free by-hand check, the URL-and-condition-prompt page monitor, where pixel diffs break (Visualping's own AI calls 83% of detected changes unimportant), and the semantic-diff alternative.",
+  },
   "/compare": {
     title: "Compare Five to Nine vs the alternatives",
     description:

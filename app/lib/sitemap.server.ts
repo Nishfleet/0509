@@ -512,6 +512,7 @@ export function staticSitemapEntriesForLocale(
     // locale sitemaps when the guide set grows.
     "/guides/how-to-track-competitor-ads",
     "/guides/how-to-monitor-meta-ad-library",
+    "/guides/how-to-monitor-competitor-landing-page-changes",
   ].filter((path) => path !== "/" && path !== "/sitemap.xml");
   const entries: SitemapEntry[] = [];
   for (const path of buyerSurfacePaths) {

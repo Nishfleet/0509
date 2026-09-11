@@ -143,6 +143,11 @@ export default [
   // guide above. Ends in the no-account /search preview
   // (source=guide-monitor-ad-library).
   route("guides/how-to-monitor-meta-ad-library", "routes/guides.how-to-monitor-meta-ad-library.tsx"),
+  // Issue #2888: the third /guides/* page — the "monitor a competitor's
+  // website/landing page changes" intent (offer/price/CTA watch), distinct
+  // from the two ad-library guides above. Ends in the no-account /search
+  // preview (source=guide-landing-page-changes).
+  route("guides/how-to-monitor-competitor-landing-page-changes", "routes/guides.how-to-monitor-competitor-landing-page-changes.tsx"),
   route("for-agencies", "routes/for-agencies.tsx"),
   route("sneaker-resale", "routes/sneaker-resale.tsx"),
   route(":locale/sneaker-resale", "routes/$locale.sneaker-resale.tsx"),
@@ -201,6 +206,8 @@ export default [
     route("guides/how-to-track-competitor-ads", "routes/$locale.guides.how-to-track-competitor-ads.tsx"),
     // Issue #2867: second guide in the cluster — the watch-over-time intent.
     route("guides/how-to-monitor-meta-ad-library", "routes/$locale.guides.how-to-monitor-meta-ad-library.tsx"),
+    // Issue #2888: third guide in the cluster — the landing-page change watch.
+    route("guides/how-to-monitor-competitor-landing-page-changes", "routes/$locale.guides.how-to-monitor-competitor-landing-page-changes.tsx"),
     // Programmatic /ads/:domain under every locale prefix (issue #1562):
     // the #1501 buyer-surface cluster added /de, /de/pricing, ... but not
     // the /ads/:domain Ad Aggression Score pages, so /de/ads/nike.com

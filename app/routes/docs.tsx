@@ -151,6 +151,7 @@ Authorization: Bearer f9_live_...`}</code>
           <Link to="/help">Help</Link>
           <Link to="/guides/how-to-track-competitor-ads">Guide: how to track competitor ads</Link>
           <Link to="/guides/how-to-monitor-meta-ad-library">Guide: how to monitor a competitor's Meta Ad Library</Link>
+          <Link to="/guides/how-to-monitor-competitor-landing-page-changes">Guide: how to monitor a competitor's landing page changes</Link>
           <Link to="/api/docs">API docs</Link>
           <Link to="/mcp/setup">MCP setup</Link>
           <Link to="/status">Status</Link>

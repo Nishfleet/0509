@@ -878,6 +878,9 @@ export const SITEMAP_PATHS = [
   // Issue #2867: second guide — the "monitor a competitor's Meta Ad Library"
   // watch-over-time intent. Stable long-form copy, never a noindex shell.
   "/guides/how-to-monitor-meta-ad-library",
+  // Issue #2888: third guide — the "monitor a competitor's website/landing
+  // page changes" intent. Stable long-form copy, never a noindex shell.
+  "/guides/how-to-monitor-competitor-landing-page-changes",
   "/compare",
   "/compare/meta-ad-library",
   // /compare/visualping, /compare/foreplay, and /compare/visualping-ad-library

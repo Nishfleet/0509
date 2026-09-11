@@ -706,7 +706,10 @@ export default function CompetitorMonitoringCategoryRoute() {
           free manual workflow, the n8n/Apify DIY route, and where both break. Watching over
           time instead? Read <Link to="/guides/how-to-monitor-meta-ad-library">how to monitor a
           competitor&rsquo;s Meta Ad Library</Link> — the free cadence-and-log routine and where it
-          breaks. Questions about
+          breaks. Watching the page behind the ad? Read{" "}
+          <Link to="/guides/how-to-monitor-competitor-landing-page-changes">how to monitor a
+          competitor&rsquo;s landing page changes</Link> — the by-hand check, the page-monitor route,
+          and where pixel diffs break. Questions about
           coverage on your competitors? Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and
           we&rsquo;ll answer honestly.
         </p>

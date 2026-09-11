@@ -1699,7 +1699,7 @@ describe("locale sitemap feed count matches the buyer-surface derivation (issue 
     const derivedCount =
       BUYER_SURFACE_PATHS.filter((p) => p !== "/" && p !== "/sitemap.xml").length +
       BUYER_SURFACE_CHILD_PATHS.length +
-      2; // /guides/how-to-track-competitor-ads + /guides/how-to-monitor-meta-ad-library (issue #2867)
+      3; // /guides/how-to-track-competitor-ads + /guides/how-to-monitor-meta-ad-library (issue #2867) + /guides/how-to-monitor-competitor-landing-page-changes (issue #2888)
     for (const locale of BUYER_SURFACE_LOCALE_IDS) {
       const entries = staticSitemapEntriesForLocale(locale);
       const body = buildLocaleSitemapXml(locale);
@@ -1750,6 +1750,7 @@ describe("locale sitemap feed count matches the buyer-surface derivation (issue 
       ...BUYER_SURFACE_CHILD_PATHS,
       "/guides/how-to-track-competitor-ads",
       "/guides/how-to-monitor-meta-ad-library",
+      "/guides/how-to-monitor-competitor-landing-page-changes",
     ];
     for (const path of derived) {
       expect(staticPaths, `${path} missing from SITEMAP_STATIC_ENTRIES`).toContain(path);
