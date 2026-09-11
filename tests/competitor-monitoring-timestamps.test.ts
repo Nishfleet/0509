@@ -39,6 +39,7 @@ const proofBrief: PublicProofBrief = {
       source: "Meta Ad Library (public archive) — India",
       sourceUrl: "https://www.facebook.com/ads/library",
       capturedAt: "2026-09-07T06:18:00.000Z",
+      creativeId: "creative-1",
       creativeImageUrl: null,
     },
   ],
