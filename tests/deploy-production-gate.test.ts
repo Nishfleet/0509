@@ -1656,7 +1656,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(
       anchorPreviousHead(
         { recordedHead: ancestor },
-        ({ BOOTSTRAP_PREVIOUS_SUCCESS_SHA: ancestor } as NodeJS.ProcessEnv),
+        ({ BOOTSTRAP_PREVIOUS_SUCCESS_SHA: ancestor } as unknown as NodeJS.ProcessEnv),
         collect,
       ),
     ).toBe(ancestor);
@@ -1677,7 +1677,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(
       anchorPreviousHead(
         { recordedHead: vanished },
-        ({ BOOTSTRAP_PREVIOUS_SUCCESS_SHA: ancestor } as NodeJS.ProcessEnv),
+        ({ BOOTSTRAP_PREVIOUS_SUCCESS_SHA: ancestor } as unknown as NodeJS.ProcessEnv),
         collect,
       ),
     ).toBe(ancestor);
@@ -1689,7 +1689,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(
       anchorPreviousHead(
         { recordedHead: null },
-        ({ BOOTSTRAP_PREVIOUS_SUCCESS_SHA: ancestor } as NodeJS.ProcessEnv),
+        ({ BOOTSTRAP_PREVIOUS_SUCCESS_SHA: ancestor } as unknown as NodeJS.ProcessEnv),
         collect,
       ),
     ).toBe(ancestor);
