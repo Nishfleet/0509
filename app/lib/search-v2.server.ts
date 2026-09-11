@@ -265,12 +265,13 @@ export function buildSearchV2CacheKey(input: {
   /**
    * Result filters carried by the same saved query the key is used for.
    * `creativeType` and `status` become the provider request's `media_type` and
-   * `active_status` (meta-library-browser.server.ts buildSearchUrl), and
-   * `firstSeenFrom` / `lastSeenFrom` are applied to the rows afterwards, so all
-   * four change the payload written under the key. Omitting them let an
-   * unfiltered and a video-only search for one domain share a cache entry
-   * (issue #2437). Optional: when every filter is default the key keeps its
-   * exact legacy shape, which the format-pinning canaries assert.
+   * `active_status` (meta-library-browser.server.ts buildSearchUrl), while
+   * `platform`, `firstSeenFrom` and `lastSeenFrom` narrow the rows afterwards
+   * (ad-source.server.ts `filterAdsBySearchFilters`), so every one of them
+   * changes the payload written under the key. Omitting them let an unfiltered
+   * and a video-only search for one domain share a cache entry (issue #2437).
+   * Optional: when every filter is default the key keeps its exact legacy
+   * shape, which the format-pinning canaries assert.
    */
   filters?: SearchFilters | null;
 }) {
@@ -325,22 +326,26 @@ export function buildSearchV2CacheKey(input: {
 /**
  * A filter segment for the v2 domain cache key, or null when every result
  * filter is at its default. Null is what keeps the legacy key shape intact for
- * unfiltered searches: `creativeType`/`status` default to "all" and the two
- * date bounds default to the empty string (normalizeSearchFilters).
+ * unfiltered searches: `creativeType`/`status`/`platform` default to "all" and
+ * the two date bounds default to the empty string (normalizeSearchFilters).
  *
- * Hashing the four in a stable field order means the segment never depends on
- * object key order, and a later filter can be added without reordering the
- * existing ones.
+ * `platform` is included because the browser scrape encodes only
+ * country/query in the Ad Library URL, so platform is applied client-side
+ * (ad-source.server.ts `filterAdsBySearchFilters`) and the narrowed payload is
+ * what lands in the cache. Omitting it reproduced the same bug for
+ * `?platform=Instagram` (reviewer BLOCKING on issue #2437).
  */
-export function buildResultFilterSegment(
+function buildResultFilterSegment(
   filters: SearchFilters | null | undefined,
 ): string | null {
+  const platform = (filters?.platform ?? "all").trim() || "all";
   const creativeType = (filters?.creativeType ?? "all").trim() || "all";
   const status = (filters?.status ?? "all").trim() || "all";
   const firstSeenFrom = (filters?.firstSeenFrom ?? "").trim();
   const lastSeenFrom = (filters?.lastSeenFrom ?? "").trim();
 
   if (
+    platform === "all" &&
     creativeType === "all" &&
     status === "all" &&
     !firstSeenFrom &&
@@ -349,7 +354,7 @@ export function buildResultFilterSegment(
     return null;
   }
 
-  return `f:${hashString(stableStringify({ creativeType, status, firstSeenFrom, lastSeenFrom }))}`;
+  return `f:${hashString(stableStringify({ platform, creativeType, status, firstSeenFrom, lastSeenFrom }))}`;
 }
 
 export function attachDomainMatchMetadata(ad: AdRecord, matched: DomainMatchedAd | undefined) {

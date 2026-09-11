@@ -151,12 +151,16 @@ describe("search v2 cache isolation", () => {
     const unfiltered = keyFor({});
     expect(keyFor({ creativeType: "video" })).not.toBe(unfiltered);
     expect(keyFor({ status: "active" })).not.toBe(unfiltered);
+    expect(keyFor({ platform: "Instagram" })).not.toBe(unfiltered);
     expect(keyFor({ firstSeenFrom: "2026-01-01" })).not.toBe(unfiltered);
     expect(keyFor({ lastSeenFrom: "2026-01-01" })).not.toBe(unfiltered);
 
-    // Stability: the same filters must always land on the same key, or the
-    // probe and the execution path drift apart and every search runs cold.
-    expect(keyFor({ creativeType: "video" })).toBe(keyFor({ creativeType: "video" }));
+    // Every filter must isolate independently, not merely from the unfiltered
+    // key: two different non-default values that shared a key would still
+    // cross-serve.
+    expect(keyFor({ platform: "Instagram" })).not.toBe(keyFor({ platform: "Facebook" }));
+    expect(keyFor({ creativeType: "video" })).not.toBe(keyFor({ creativeType: "image" }));
+    expect(keyFor({ status: "active" })).not.toBe(keyFor({ status: "inactive" }));
   });
 
   it("keeps the legacy six-segment key when every result filter is default", () => {
