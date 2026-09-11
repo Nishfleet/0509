@@ -10,3 +10,4 @@ manager note: phases 1-6 run in one worker pass — single-file defect fix, spli
 - [x] phase 6: Run npx vitest run --configLoader runner --project node tests/monitoring-workflow*.test.ts green; typecheck is CI-owned
 Consider: test anchors in tests/monitoring-workflow.test.ts are string-based (import order, indexOf slice) — add a "update anchors if step config is restructured" comment in a follow-up.
 Noted: scheduled step literal limit:3 vs SCHEDULED_SCAN_MAX_ATTEMPTS=8 — no cap breach; potential follow-up issue.
+- [x] phase 4: CI round 1 failed (TS2741 missing creativeId in test fixture, both codex-node-checks + preview-assert); fixed by adding creativeId:"creative-1"; local run 14/14 GREEN; merged origin/main to resolve .fleet/plan.md conflict.
