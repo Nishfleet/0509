@@ -678,7 +678,7 @@ test.describe("BL-035 competitor detail live proof", () => {
           await expect(page.locator(".f9-watchdetail-detail")).toBeVisible();
           await expect(page.locator(".f9-wk-board")).toHaveCount(0);
           await expect(
-            page.getByRole("navigation", { name: "Competitor sections" }).getByRole("link"),
+            page.getByRole("navigation", { name: "Competitor sections" }).getByRole("tab"),
           ).toHaveCount(6);
 
           const measured = await measure(page);
