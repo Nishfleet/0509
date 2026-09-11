@@ -1766,14 +1766,15 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     process.env.GITHUB_RUN_ID = "99";
     delete process.env.BOOTSTRAP_PREVIOUS_SUCCESS_SHA;
     delete process.env.D1_REMOTE_RESTORE_MIGRATION_BEARING;
-    globalThis.fetch = (async () => ({
-      ok: true,
-      json: async () => ({
-        workflow_runs: [
-          { id: 41, conclusion: "success", head_sha: vanished },
-        ],
-      }),
-    })) as typeof fetch;
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          workflow_runs: [
+            { id: 41, conclusion: "success", head_sha: vanished },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      )) as unknown as typeof fetch;
     try {
       await expect(restoreEvidenceClassification()).resolves.toEqual({
         migrationBearing: true,
