@@ -90,7 +90,12 @@ import {
 import { applyMigration, createSqliteD1 } from "./helpers/sqlite-d1";
 
 function createMockDb(
-  resultOverrides: Array<{ sqlIncludes: string; results: unknown[] }> = [],
+  resultOverrides: Array<{
+    sqlIncludes: string;
+    results: unknown[];
+    /** Computed at read time from the statements recorded so far. */
+    resolveResults?: (statements: Array<{ sql: string; bindings: unknown[] }>) => unknown[];
+  }> = [],
 ) {
   const statements: Array<{ sql: string; bindings: unknown[] }> = [];
 
@@ -108,7 +113,10 @@ function createMockDb(
               async all<T>() {
                 const override = resultOverrides.find((entry) => sql.includes(entry.sqlIncludes));
                 if (override) {
-                  return { results: override.results as T[] };
+                  const results = override.resolveResults
+                    ? override.resolveResults(statements)
+                    : override.results;
+                  return { results: results as T[] };
                 }
                 return { results: [] as T[] };
               },
@@ -244,7 +252,22 @@ describe("failed agent watchlist compensation", () => {
 
 describe("createLandingPageSnapshot", () => {
   it("persists structured landing-page fields and landing-page analysis provenance", async () => {
-    const mock = createMockDb();
+    const mock = createMockDb([
+      // Issue #2442: the write is now INSERT ... ON CONFLICT(content_key) DO
+      // NOTHING followed by a read-back of the surviving row, so this mock has
+      // to answer the content_key probe with the row id the INSERT carried.
+      // The mock cannot model a generated column or a unique index; the real
+      // schema behaviour is covered by
+      // tests/integration/landing-page-snapshot-persistence.integration.test.ts.
+      {
+        sqlIncludes: "WHERE content_key = ?",
+        results: [],
+        resolveResults: (statements) => {
+          const insert = statements.find((s) => s.sql.includes("INSERT INTO landing_page_snapshot"));
+          return insert ? [{ id: insert.bindings[0] }] : [];
+        },
+      },
+    ]);
 
     await createLandingPageSnapshot(
       { DB: mock.db } as never,
@@ -269,6 +292,11 @@ describe("createLandingPageSnapshot", () => {
     const snapshotInsert = mock.statements.find((statement) =>
       statement.sql.includes("INSERT INTO landing_page_snapshot"),
     );
+    // The dedup is enforced by the schema, not by a check-then-insert read.
+    expect(snapshotInsert?.sql).toContain("ON CONFLICT(content_key) DO NOTHING");
+    expect(mock.statements.some((statement) =>
+      statement.sql.includes("SELECT id\n      FROM landing_page_snapshot\n      WHERE canonical_url"),
+    )).toBe(false);
     expect(snapshotInsert?.bindings).toContain("Shop now");
     expect(snapshotInsert?.bindings).toContain("Starting at ₹499");
     expect(snapshotInsert?.bindings).toContain(1);

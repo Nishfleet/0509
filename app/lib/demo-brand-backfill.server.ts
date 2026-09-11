@@ -37,6 +37,7 @@
 import { buildLandingPageAnalysisFields } from "~/lib/analysis.server";
 import {
   createLandingPageSnapshot,
+  landingPageSnapshotContentKey,
   replaceAnalysisFields,
 } from "~/lib/data/ads.server";
 import { execute, queryOne } from "~/lib/data/d1.server";
@@ -447,12 +448,16 @@ export async function runDemoBrandBackfill(
         continue;
       }
 
-      // INSERT OR IGNORE keeps the deterministic id the single source of
-      // truth against an overlapping cron retry.
+      // The deterministic id is the single source of truth against an
+      // overlapping cron retry. Issue #2442: `INSERT OR IGNORE` would now also
+      // swallow the `content_key` unique-index violation, silently dropping an
+      // identical content capture and reporting a `snapshotId` that does not
+      // exist, so the conflict target is named explicitly and the read-back
+      // below resolves to whichever row actually persisted.
       await execute(
         env,
         `
-          INSERT OR IGNORE INTO landing_page_snapshot (
+          INSERT INTO landing_page_snapshot (
             id,
             raw_url,
             canonical_url,
@@ -472,6 +477,7 @@ export async function runDemoBrandBackfill(
             price_tier
           )
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)
+          ON CONFLICT(content_key) DO NOTHING
         `,
         rowId,
         snapshot.rawUrl,
@@ -489,10 +495,23 @@ export async function runDemoBrandBackfill(
         nowIso(),
         extractPriceTier(snapshot.priceText),
       );
+      // Either this row was inserted under `rowId`, or an identical capture won
+      // the content-key race. Report the row that actually persisted.
+      const persisted = await queryOne<{ id: string }>(
+        env,
+        `SELECT id FROM landing_page_snapshot WHERE id = ? OR content_key = ?
+         ORDER BY (id = ?) DESC LIMIT 1`,
+        rowId,
+        landingPageSnapshotContentKey(snapshot),
+        rowId,
+      );
+      if (!persisted) {
+        throw new Error(`demo brand backfill snapshot for ${domain} was not persisted`);
+      }
       await replaceAnalysisFields(
         env,
         "landing_page",
-        rowId,
+        persisted.id,
         buildLandingPageAnalysisFields(snapshot),
       );
 
@@ -500,7 +519,7 @@ export async function runDemoBrandBackfill(
       results.push({
         domain,
         status: "captured",
-        snapshotId: rowId,
+        snapshotId: persisted.id,
         reasonCode: null,
         canonicalUrl: snapshot.canonicalUrl,
         capturedAt: snapshot.capturedAt,

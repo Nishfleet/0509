@@ -37,6 +37,23 @@ vi.mock("~/lib/data/d1.server", () => ({
 
 vi.mock("~/lib/data/ads.server", () => ({
   replaceAnalysisFields,
+  // Issue #2442: the backfill write paths now dedupe on the schema's
+  // `content_key` generated column, so the backfill calls this helper to build
+  // the read-back probe. Mirror the real implementation.
+  landingPageSnapshotContentKey: (snapshot: {
+    canonicalUrl: string;
+    normalizedHeadlineHash: string;
+    ctaText?: string | null;
+    priceText?: string | null;
+    formPresent?: boolean | null;
+  }) =>
+    [
+      snapshot.canonicalUrl,
+      snapshot.normalizedHeadlineHash,
+      snapshot.ctaText ?? "",
+      snapshot.priceText ?? "",
+      typeof snapshot.formPresent === "boolean" ? (snapshot.formPresent ? 1 : 0) : -1,
+    ].join("|"),
 }));
 
 vi.mock("~/lib/landing-pages.server", () => ({
@@ -55,7 +72,6 @@ afterEach(() => {
   replaceAnalysisFields.mockReset();
   loadOfferTimeline.mockReset();
 });
-
 beforeEach(() => {
   loadOfferTimeline.mockResolvedValue({ entries: [], asOfState: null });
   replaceAnalysisFields.mockResolvedValue(undefined);
@@ -245,7 +261,9 @@ describe("runSneakerResaleBackfill (no-cohort path)", () => {
 describe("runSneakerResaleBackfill (per-brand failure isolation)", () => {
   it("records a capture_failed brand without losing the other brands", async () => {
     const env = { DB: {} } as unknown as AppEnv;
-    queryOne.mockResolvedValue(null);
+    // Fresh DB (no existing row), then the content_key read-back returns the
+    // row the INSERT wrote under its deterministic id.
+    mockSnapshotWrites();
     execute.mockResolvedValue({});
     replaceAnalysisFields.mockResolvedValue(undefined);
 
@@ -292,7 +310,9 @@ describe("runSneakerResaleBackfill (per-brand failure isolation)", () => {
 
   it("records an unexpected per-brand error without aborting the other brands", async () => {
     const env = { DB: {} } as unknown as AppEnv;
-    queryOne.mockResolvedValue(null);
+    // Fresh DB (no existing row), then the content_key read-back returns the
+    // row the INSERT wrote under its deterministic id.
+    mockSnapshotWrites();
 
     const captureStub = vi.fn(async (_env: AppEnv, url: string) => {
       const domain = url.replace(/^https:\/\/www\./, "").replace(/\/$/, "");
@@ -329,7 +349,9 @@ describe("runSneakerResaleBackfill (per-brand failure isolation)", () => {
 
   it("surfaces the capture pipeline's reasonCode for capture_failed brands", async () => {
     const env = { DB: {} } as unknown as AppEnv;
-    queryOne.mockResolvedValue(null);
+    // Fresh DB (no existing row), then the content_key read-back returns the
+    // row the INSERT wrote under its deterministic id.
+    mockSnapshotWrites();
 
     const captureStub = vi.fn(
       async (
@@ -355,6 +377,41 @@ describe("runSneakerResaleBackfill (per-brand failure isolation)", () => {
   });
 });
 
+/**
+ * Issue #2442: the write path now issues TWO `queryOne` calls per brand — the
+ * pre-insert "already captured by deterministic id?" guard, then the
+ * "which row survived the content_key conflict?" read-back. Mocking them by
+ * call order keeps each test's intent (no existing row -> capture -> persist).
+ * `onReadBack` receives the content key so a test can return the deterministic
+ * row id, exactly as the real INSERT does on the non-conflicting path.
+ */
+function mockSnapshotWrites() {
+  // On the non-conflicting path the read-back returns the row the INSERT wrote
+  // under its deterministic id; derive it from the canonical_url binding the
+  // same way the writer does.
+  const onReadBack = (contentKey: string): { id: string } | null => {
+    const canonicalUrl = contentKey.split("|")[0] ?? "";
+    const domain = canonicalUrl
+      .replace(/^https?:\/\/(www\.)?/, "")
+      .replace(/\/.*$/, "");
+    return { id: `sneaker-${domain}-2026-09-05` };
+  };
+
+  let call = 0;
+  queryOne.mockImplementation(async (_env: unknown, sql: string, ...bindings: unknown[]) => {
+    call += 1;
+    if (sql.includes("WHERE id = ? OR content_key = ?")) {
+      return onReadBack(String(bindings[1] ?? ""));
+    }
+    if (sql.includes("content_key = ?")) {
+      return onReadBack(String(bindings[0] ?? ""));
+    }
+    // The pre-insert existence guard: fresh DB, nothing captured yet.
+    void call;
+    return null;
+  });
+}
+
 describe("runSneakerResaleBackfill (idempotency + subset paths)", () => {
   it("marks an existing row as skipped_already_captured without re-capturing", async () => {
     const env = { DB: {} } as unknown as AppEnv;
@@ -377,7 +434,9 @@ describe("runSneakerResaleBackfill (idempotency + subset paths)", () => {
 
   it("restricts the run to a caller-supplied domains subset", async () => {
     const env = { DB: {} } as unknown as AppEnv;
-    queryOne.mockResolvedValue(null);
+    // Fresh DB (no existing row), then the content_key read-back returns the
+    // row the INSERT wrote under its deterministic id.
+    mockSnapshotWrites();
     execute.mockResolvedValue({});
     replaceAnalysisFields.mockResolvedValue(undefined);
 
@@ -418,7 +477,9 @@ describe("runSneakerResaleBackfill (idempotency + subset paths)", () => {
 
   it("canonicalizes the caller-supplied domains subset (WWW.StockX.com === stockx.com)", async () => {
     const env = { DB: {} } as unknown as AppEnv;
-    queryOne.mockResolvedValue(null);
+    // Fresh DB (no existing row), then the content_key read-back returns the
+    // row the INSERT wrote under its deterministic id.
+    mockSnapshotWrites();
     execute.mockResolvedValue({});
     replaceAnalysisFields.mockResolvedValue(undefined);
 
@@ -465,7 +526,9 @@ describe("runSneakerResaleBackfill (idempotency + subset paths)", () => {
 describe("runSneakerResaleBackfill (write path shape)", () => {
   it("INSERTs the snapshot row with the deterministic id and calls replaceAnalysisFields", async () => {
     const env = { DB: {} } as unknown as AppEnv;
-    queryOne.mockResolvedValue(null);
+    // Fresh DB (no existing row), then the content_key read-back returns the
+    // row the INSERT wrote under its deterministic id.
+    mockSnapshotWrites();
     execute.mockResolvedValue({});
     replaceAnalysisFields.mockResolvedValue(undefined);
 
@@ -492,7 +555,12 @@ describe("runSneakerResaleBackfill (write path shape)", () => {
     expect(execute).toHaveBeenCalledTimes(1);
     const call = execute.mock.calls[0];
     // execute(env, sql, rowId, ...) — the SQL is the first arg after the env.
-    expect(call?.[1]).toMatch(/INSERT OR IGNORE INTO landing_page_snapshot/);
+    // Issue #2442: the conflict target is named explicitly, because a bare
+    // `INSERT OR IGNORE` would also swallow the content_key unique-index
+    // violation and silently drop an identical capture.
+    expect(call?.[1]).toMatch(/INSERT INTO landing_page_snapshot/);
+    expect(call?.[1]).toMatch(/ON CONFLICT\(content_key\) DO NOTHING/);
+    expect(call?.[1]).not.toMatch(/INSERT OR IGNORE/);
     expect(call?.[2]).toBe("sneaker-stockx.com-2026-09-05");
     expect(replaceAnalysisFields).toHaveBeenCalledWith(
       env,
@@ -511,7 +579,9 @@ describe("default tierLookup path (seed list → tier map → cohort)", () => {
     // `cohort` override is supplied, the backfill reads the seed list and
     // asks the adapter for the tier map.
     const env = { DB: {} } as unknown as AppEnv;
-    queryOne.mockResolvedValue(null);
+    // Fresh DB (no existing row), then the content_key read-back returns the
+    // row the INSERT wrote under its deterministic id.
+    mockSnapshotWrites();
     execute.mockResolvedValue({});
     replaceAnalysisFields.mockResolvedValue(undefined);
 

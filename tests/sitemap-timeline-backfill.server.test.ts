@@ -38,6 +38,23 @@ vi.mock("~/lib/data/d1.server", () => ({
 
 vi.mock("~/lib/data/ads.server", () => ({
   replaceAnalysisFields,
+  // Issue #2442: the write path dedupes on the schema's `content_key`
+  // generated column and reads the surviving row back by that key. Mirror the
+  // real implementation.
+  landingPageSnapshotContentKey: (snapshot: {
+    canonicalUrl: string;
+    normalizedHeadlineHash: string;
+    ctaText?: string | null;
+    priceText?: string | null;
+    formPresent?: boolean | null;
+  }) =>
+    [
+      snapshot.canonicalUrl,
+      snapshot.normalizedHeadlineHash,
+      snapshot.ctaText ?? "",
+      snapshot.priceText ?? "",
+      typeof snapshot.formPresent === "boolean" ? (snapshot.formPresent ? 1 : 0) : -1,
+    ].join("|"),
 }));
 
 vi.mock("~/lib/landing-pages.server", () => ({
@@ -139,6 +156,31 @@ function snapshotForUrl(url: string) {
   };
 }
 
+
+/**
+ * Issue #2442: the write path now issues TWO `queryOne` calls per domain — the
+ * pre-insert "already captured by deterministic id?" guard, then the
+ * "which row survived the content_key conflict?" read-back. Mocking them by
+ * call order keeps each test's intent (no existing row -> capture -> persist).
+ */
+function mockSnapshotWrites() {
+  queryOne.mockImplementation(async (_env: unknown, sql: string, ...bindings: unknown[]) => {
+    if (sql.includes("OR content_key = ?")) {
+      return { id: rowIdFromContentKey(String(bindings[1] ?? "")) };
+    }
+    if (sql.includes("content_key = ?")) {
+      return { id: rowIdFromContentKey(String(bindings[0] ?? "")) };
+    }
+    // The pre-insert existence guard: fresh DB, nothing captured yet.
+    return null;
+  });
+}
+
+function rowIdFromContentKey(contentKey: string): string {
+  const canonicalUrl = contentKey.split("|")[0] ?? "";
+  const domain = canonicalUrl.replace(/^https?:\/\/(www\.)?/, "").replace(/\/.*$/, "");
+  return `timeline-${domain}-2026-09-05`;
+}
 describe("sitemapTimelineBackfillRowId", () => {
   it("builds the deterministic `timeline-<domain>-<day>` row id per (domain, UTC day)", () => {
     expect(sitemapTimelineBackfillRowId("calendly.com", "2026-09-05")).toBe(
@@ -315,7 +357,9 @@ describe("runSitemapTimelineBackfill (missing snapshot table)", () => {
 describe("runSitemapTimelineBackfill (per-domain failure isolation)", () => {
   it("records a capture_failed domain without losing the other domains", async () => {
     const env = { DB: {} } as unknown as AppEnv;
-    queryOne.mockResolvedValue(null);
+    // Fresh DB (no existing row), then the content_key read-back returns the
+    // row the INSERT wrote under its deterministic id.
+    mockSnapshotWrites();
     execute.mockResolvedValue({});
     replaceAnalysisFields.mockResolvedValue(undefined);
 
@@ -355,7 +399,9 @@ describe("runSitemapTimelineBackfill (per-domain failure isolation)", () => {
 
   it("records an unexpected per-domain error without aborting the other domains", async () => {
     const env = { DB: {} } as unknown as AppEnv;
-    queryOne.mockResolvedValue(null);
+    // Fresh DB (no existing row), then the content_key read-back returns the
+    // row the INSERT wrote under its deterministic id.
+    mockSnapshotWrites();
 
     const capturedDomains: string[] = [];
     const captureStub = vi.fn(async (_env: AppEnv, url: string) => {
@@ -389,7 +435,9 @@ describe("runSitemapTimelineBackfill (per-domain failure isolation)", () => {
 
   it("surfaces the capture pipeline's reasonCode for capture_failed domains", async () => {
     const env = { DB: {} } as unknown as AppEnv;
-    queryOne.mockResolvedValue(null);
+    // Fresh DB (no existing row), then the content_key read-back returns the
+    // row the INSERT wrote under its deterministic id.
+    mockSnapshotWrites();
 
     const captureStub = vi.fn(
       async (
@@ -439,7 +487,9 @@ describe("runSitemapTimelineBackfill (idempotency + subset paths)", () => {
 
   it("restricts the run to a caller-supplied, canonicalized domains subset", async () => {
     const env = { DB: {} } as unknown as AppEnv;
-    queryOne.mockResolvedValue(null);
+    // Fresh DB (no existing row), then the content_key read-back returns the
+    // row the INSERT wrote under its deterministic id.
+    mockSnapshotWrites();
     execute.mockResolvedValue({});
     replaceAnalysisFields.mockResolvedValue(undefined);
 
@@ -465,7 +515,9 @@ describe("runSitemapTimelineBackfill (idempotency + subset paths)", () => {
 describe("runSitemapTimelineBackfill (write path shape)", () => {
   it("INSERTs the snapshot row with the deterministic id and calls replaceAnalysisFields", async () => {
     const env = { DB: {} } as unknown as AppEnv;
-    queryOne.mockResolvedValue(null);
+    // Fresh DB (no existing row), then the content_key read-back returns the
+    // row the INSERT wrote under its deterministic id.
+    mockSnapshotWrites();
     execute.mockResolvedValue({});
     replaceAnalysisFields.mockResolvedValue(undefined);
 
@@ -481,7 +533,12 @@ describe("runSitemapTimelineBackfill (write path shape)", () => {
     );
     expect(execute).toHaveBeenCalledTimes(1);
     const call = execute.mock.calls[0];
-        expect(call?.[1]).toMatch(/INSERT OR IGNORE INTO landing_page_snapshot/);
+    // Issue #2442: the conflict target is named explicitly, because a bare
+    // `INSERT OR IGNORE` would also swallow the content_key unique-index
+    // violation and silently drop an identical capture.
+    expect(call?.[1]).toMatch(/INSERT INTO landing_page_snapshot/);
+    expect(call?.[1]).toMatch(/ON CONFLICT\(content_key\) DO NOTHING/);
+    expect(call?.[1]).not.toMatch(/INSERT OR IGNORE/);
     expect(call?.[2]).toBe("timeline-calendly.com-2026-09-05");
     expect(replaceAnalysisFields).toHaveBeenCalledWith(
       env,
@@ -498,7 +555,9 @@ describe("runSitemapTimelineBackfill (write path shape)", () => {
 describe("runSitemapTimelineBackfill (cohort derivation, default path)", () => {
   it("captures only sitemap candidates with hasCoverage — no-phantom-row on coverage false", async () => {
     const env = { DB: {} } as unknown as AppEnv;
-    queryOne.mockResolvedValue(null);
+    // Fresh DB (no existing row), then the content_key read-back returns the
+    // row the INSERT wrote under its deterministic id.
+    mockSnapshotWrites();
     execute.mockResolvedValue({});
     replaceAnalysisFields.mockResolvedValue(undefined);
 
@@ -534,7 +593,9 @@ describe("runSitemapTimelineBackfill (cohort derivation, default path)", () => {
 
   it("keeps demo and sneaker-seed domains out via the real exclusion set", async () => {
     const env = { DB: {} } as unknown as AppEnv;
-    queryOne.mockResolvedValue(null);
+    // Fresh DB (no existing row), then the content_key read-back returns the
+    // row the INSERT wrote under its deterministic id.
+    mockSnapshotWrites();
     execute.mockResolvedValue({});
     replaceAnalysisFields.mockResolvedValue(undefined);
 
@@ -577,7 +638,9 @@ describe("runSitemapTimelineBackfill (cohort derivation, default path)", () => {
 
   it("honors an injected exclusion set instead of the real one", async () => {
     const env = { DB: {} } as unknown as AppEnv;
-    queryOne.mockResolvedValue(null);
+    // Fresh DB (no existing row), then the content_key read-back returns the
+    // row the INSERT wrote under its deterministic id.
+    mockSnapshotWrites();
     execute.mockResolvedValue({});
     replaceAnalysisFields.mockResolvedValue(undefined);
 
@@ -609,7 +672,9 @@ describe("runSitemapTimelineBackfill (cohort derivation, default path)", () => {
 describe("runSitemapTimelineBackfill (CAP bound)", () => {
   it("slices the derived cohort at SITEMAP_TIMELINE_COHORT_CAP so spend is bounded", async () => {
     const env = { DB: {} } as unknown as AppEnv;
-    queryOne.mockResolvedValue(null);
+    // Fresh DB (no existing row), then the content_key read-back returns the
+    // row the INSERT wrote under its deterministic id.
+    mockSnapshotWrites();
     execute.mockResolvedValue({});
     replaceAnalysisFields.mockResolvedValue(undefined);
 

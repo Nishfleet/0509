@@ -259,3 +259,73 @@ describe("landing-page snapshot persistence against real D1", () => {
     ).toBe(true);
   });
 });
+
+/**
+ * Issue #2442 (review finding M8): the dedup above is check-then-insert, so two
+ * captures of the same page state that run concurrently both miss the SELECT
+ * and both INSERT. Monitoring fan-out runs up to 8 checks in flight, so this is
+ * a live path, and it inflates offer-timeline versions.
+ *
+ * The fix moves the dedup into the schema: a generated `content_key` column
+ * with a UNIQUE index, written with `INSERT ... ON CONFLICT(content_key) DO
+ * NOTHING`. Mocked D1 cannot see a generated column or a unique index, so this
+ * has to run against the real schema.
+ *
+ * RED is probabilistic on the unmigrated schema, so the pair is run 20x and the
+ * assertion is "exactly one row every time".
+ */
+describe("issue #2442 concurrent identical landing page snapshots dedupe", () => {
+  it("two concurrent identical captures produce exactly one row (20/20)", async () => {
+    const url = `https://${DOMAIN}/concurrent`;
+    const input: CaptureInput = {
+      canonicalUrl: url,
+      headline: "Concurrent offer",
+      ctaText: "Buy now",
+      priceText: "₹199",
+      capturedAt: "2026-09-03T10:00:00.000Z",
+    };
+
+    const counts: number[] = [];
+    for (let round = 0; round < 20; round += 1) {
+      const [a, b] = await Promise.all([
+        persistCapture(input, `cc-${round}-a`),
+        persistCapture(input, `cc-${round}-b`),
+      ]);
+
+      const rows = await db()
+        .prepare(`SELECT COUNT(*) AS n FROM landing_page_snapshot WHERE canonical_url = ?`)
+        .bind(url)
+        .all<{ n: number }>();
+      counts.push(rows.results![0]!.n);
+
+      // Both callers must resolve to the same persisted row id.
+      expect(b).toBe(a);
+    }
+
+    // Exactly one row after every concurrent pair.
+    expect(counts).toEqual(new Array(20).fill(1));
+  });
+
+  it("a concurrent burst of 8 identical captures still produces exactly one row", async () => {
+    // The monitoring fan-out runs up to 8 checks in flight.
+    const url = `https://${DOMAIN}/concurrent-burst`;
+    const input: CaptureInput = {
+      canonicalUrl: url,
+      headline: "Burst offer",
+      ctaText: "Claim now",
+      priceText: "₹99",
+      capturedAt: "2026-09-04T10:00:00.000Z",
+    };
+
+    const ids = await Promise.all(
+      Array.from({ length: 8 }, (_, i) => persistCapture(input, `burst-${i}`)),
+    );
+    expect(new Set(ids).size).toBe(1);
+
+    const rows = await db()
+      .prepare(`SELECT COUNT(*) AS n FROM landing_page_snapshot WHERE canonical_url = ?`)
+      .bind(url)
+      .all<{ n: number }>();
+    expect(rows.results![0]!.n).toBe(1);
+  });
+});
