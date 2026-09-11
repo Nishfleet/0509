@@ -11,6 +11,7 @@ export {
   migrateAutoProvisionedEmailTargets,
   getWorkspaceDeliveryConfig,
   upsertWorkspaceDeliveryConfig,
+  enableWorkspaceDeliveryChannel,
   getUserDeliveryProfile,
 } from "~/lib/data/delivery-records-workspace.server";
 
