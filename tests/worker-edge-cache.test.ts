@@ -186,7 +186,13 @@ describe("edge cache storage semantics", () => {
   it("keys (path, country, version) independently — a fresh version id never replays the old deploy", async () => {
     const cache = memoryCache();
     const request = anonymousGet("https://0509.io/");
-    await storeEdgeCache(request, cache, "v1", htmlResponse({}, "<html>deploy-one</html>"), "US");
+    await storeEdgeCache(
+      request,
+      cache,
+      "v1",
+      htmlResponse({ headers: { "cache-control": "public, max-age=300" } }, "<html>deploy-one</html>"),
+      "US",
+    );
 
     expect((await matchEdgeCache(request, cache, "v1", "US"))?.headers.get(EDGE_PROOF_HEADER)).toBe(
       "HIT",
@@ -203,16 +209,24 @@ describe("edge cache storage semantics", () => {
   it("rewrites the stored copy to public but leaves the caller's own headers untouched", async () => {
     const cache = memoryCache();
     const request = anonymousGet("https://0509.io/");
+    // A set-cookie response is refused by the storage gate outright — it is
+    // never shared, so the caller's own reply is returned unchanged.
+    const cookieResponse = htmlResponse({ headers: { "cache-control": "private, max-age=45", "set-cookie": "sid=1" } });
+    const refused = await storeEdgeCache(request, cache, "v1", cookieResponse, "US");
+    expect(refused.headers.get("cache-control")).toBe("private, max-age=45");
+    expect(refused.headers.get("set-cookie")).toBe("sid=1");
+    expect(cache.keys()).toHaveLength(0);
+    expect((await matchEdgeCache(request, cache, "v1", "US"))).toBeNull();
+
     const miss = await storeEdgeCache(
       request,
       cache,
       "v1",
-      htmlResponse({ headers: { "cache-control": "private, max-age=45", "set-cookie": "sid=1" } }),
+      htmlResponse({ headers: { "cache-control": "private, max-age=45" } }),
       "US",
     );
     // The browser sees the origin's own policy (plus the stamp).
     expect(miss.headers.get("cache-control")).toBe("private, max-age=45");
-    expect(miss.headers.get("set-cookie")).toBe("sid=1");
     // The edge copy is shared and clean.
     const hit = await matchEdgeCache(request, cache, "v1", "US");
     expect(hit?.headers.get("cache-control")).toBe("public, max-age=45");
@@ -221,7 +235,7 @@ describe("edge cache storage semantics", () => {
 
   it("serves a HEAD from the stored FULL-BODY copy and never poisons later GETs", async () => {
     const cache = memoryCache();
-    const headRequest = new Request("https://0509.io/", { method: "HEAD" });
+    const headRequest = new Request("https://0509.io/", { method: "HEAD", headers: { "cf-ipcountry": "US" } });
     // The worker wires an eligible HEAD through a GET-ified render, so what
     // reaches the store is the full-body secured response.
     const reply = await storeEdgeCache(
@@ -234,11 +248,11 @@ describe("edge cache storage semantics", () => {
     expect(await reply.text()).toBe(""); // HEAD reply carries headers only
     expect(reply.headers.get(EDGE_PROOF_HEADER)).toBe("MISS");
 
-    const headHit = await matchEdgeCache(headRequest, cache, "v1");
+    const headHit = await matchEdgeCache(headRequest, cache, "v1", "US");
     expect(headHit?.headers.get(EDGE_PROOF_HEADER)).toBe("HIT");
     expect(await headHit?.text()).toBe("");
 
-    const getHit = await matchEdgeCache(anonymousGet("https://0509.io/"), cache, "v1", "US");
+    const getHit = await matchEdgeCache(anonymousGet("https://0509.io/", { "cf-ipcountry": "US" }), cache, "v1");
     expect(await getHit?.text()).toContain("0509");
   });
 
