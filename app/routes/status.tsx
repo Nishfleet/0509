@@ -18,6 +18,38 @@ const description =
 const degradedDescription =
   "Configuration and scope information for Five to Nine. Live monitoring facts are unavailable right now; this page does not measure live search, email, billing, or provider availability.";
 
+/**
+ * Pre-run bootstrap: the monitoring tables exist but no scheduled run has ever
+ * been recorded (issue #2963). Publishing "0 runs / no digests sent yet" reads
+ * to a buyer as a dead product, so the page shows honest configuration prose
+ * instead of empty counters. Any recorded activity falls through to the
+ * measured counters with their as-of timestamps.
+ */
+function isPreRunBootstrap(monitoring: {
+  lastWatchlistRunAt: string | null;
+  runsInLast24h: number;
+  lastDigestSentAt: string | null;
+}): boolean {
+  return (
+    monitoring.lastWatchlistRunAt === null &&
+    monitoring.runsInLast24h === 0 &&
+    monitoring.lastDigestSentAt === null
+  );
+}
+
+/**
+ * Continuous scheduled-monitoring coverage: whole days between the earliest
+ * activation baseline and the as-of instant. A truthful figure derived from
+ * real schedule data, not a fabricated uptime percentage.
+ */
+function coverageDays(sinceIso: string | null, asOfIso: string): number | null {
+  if (!sinceIso) return null;
+  const since = new Date(sinceIso).getTime();
+  const asOf = new Date(asOfIso).getTime();
+  if (!Number.isFinite(since) || !Number.isFinite(asOf) || asOf < since) return null;
+  return Math.floor((asOf - since) / (24 * 60 * 60 * 1000));
+}
+
 export const links: LinksFunction = () => canonicalLinks("/status");
 
 export const meta: MetaFunction = () =>
@@ -81,9 +113,33 @@ export default function StatusRoute() {
       />
 
       <PublicDocBlock title="Monitoring health">
-        <dl className="proof-trail-list">
-          {monitoring ? (
-            <>
+        {monitoring ? (
+          isPreRunBootstrap(monitoring) ? (
+            <dl className="proof-trail-list">
+              <div>
+                <dt>Monitoring pipeline</dt>
+                <dd>
+                  Monitoring is configured and scheduled on this service.
+                  Aggregate run and digest counts will appear here after the
+                  first scheduled run is recorded; until then there is no
+                  historical activity to display. As of {asOf}.
+                </dd>
+              </div>
+              {monitoring.scheduledMonitoringSince ? (
+                <div>
+                  <dt>Scheduled monitoring active since</dt>
+                  <dd>{monitoring.scheduledMonitoringSince} — continuous scheduled monitoring coverage ({coverageDays(monitoring.scheduledMonitoringSince, asOf)} days). As of {asOf}.</dd>
+                </div>
+              ) : null}
+            </dl>
+          ) : (
+            <dl className="proof-trail-list">
+              {monitoring.scheduledMonitoringSince ? (
+                <div>
+                  <dt>Scheduled monitoring active since</dt>
+                  <dd>{monitoring.scheduledMonitoringSince} — continuous scheduled monitoring coverage ({coverageDays(monitoring.scheduledMonitoringSince, asOf)} days). As of {asOf}.</dd>
+                </div>
+              ) : null}
               <div>
                 <dt>Watchlist runs in the last 24 hours</dt>
                 <dd>{monitoring.runsInLast24h.toLocaleString()} — as of {asOf}</dd>
@@ -94,7 +150,7 @@ export default function StatusRoute() {
               </div>
               <div>
                 <dt>Last watchlist run</dt>
-                <dd>{monitoring.lastWatchlistRunAt ?? "no runs recorded yet"} — as of {asOf}</dd>
+                <dd>{monitoring.lastWatchlistRunAt ?? "no recent scheduled runs in the measurement window"} — as of {asOf}</dd>
               </div>
               <div>
                 <dt>Last digest sent</dt>
@@ -108,16 +164,18 @@ export default function StatusRoute() {
                   </dd>
                 ) : (
                   <dd>
-                    {monitoring.lastDigestSentAt ?? "no digests sent yet"} — as of{" "}
+                    {monitoring.lastDigestSentAt ?? "no digest send recorded in the measurement window"} — as of{" "}
                     {asOf}
                   </dd>
                 )}
               </div>
-            </>
-          ) : (
+            </dl>
+          )
+        ) : (
+          <dl className="proof-trail-list">
             <p>Measurements unavailable right now.</p>
-          )}
-        </dl>
+          </dl>
+        )}
       </PublicDocBlock>
 
       <PublicDocBlock title="Core surfaces">

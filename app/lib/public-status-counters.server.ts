@@ -69,6 +69,13 @@ export interface PublicStatusCounters {
    * monitoring is healthy, `unknown` otherwise.
    */
   digestHealth: DigestHealthState;
+  /**
+   * Earliest scheduled-observation baseline (`scheduled_observation_health_state`):
+   * the date the service's monitoring schedules were first activated and have
+   * been continuously configured since. Real coverage data, not a fabricated
+   * uptime percentage; null when the table is unreadable or empty.
+   */
+  scheduledMonitoringSince: string | null;
 }
 
 /**
@@ -89,7 +96,7 @@ export async function getPublicStatusCounters(
     Date.now() - 24 * 60 * 60 * 1000,
   ).toISOString();
 
-  const [lastRunRow, countsRow, digestRow] = await Promise.all([
+  const [lastRunRow, countsRow, digestRow, baselineRow] = await Promise.all([
     one<{ last_started_at: string | null }>(
       env,
       `SELECT MAX(started_at) AS last_started_at FROM watchlist_run`,
@@ -113,6 +120,13 @@ export async function getPublicStatusCounters(
         WHERE status = 'sent'
       `,
     ),
+    one<{ active_since: string | null }>(
+      env,
+      `
+        SELECT MIN(baseline_at) AS active_since
+        FROM scheduled_observation_health_state
+      `,
+    ),
   ]);
 
   const counters = {
@@ -132,6 +146,7 @@ export async function getPublicStatusCounters(
   // confirmation is ever wired, switch this back to `MAX(delivered_at)`.
   return {
     ...counters,
+    scheduledMonitoringSince: baselineRow?.active_since ?? null,
     digestHealth: digestHealthState(counters),
   };
 }

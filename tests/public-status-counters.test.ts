@@ -56,6 +56,37 @@ describe("getPublicStatusCounters digest query", () => {
     });
   });
 
+  it("reads the earliest scheduled-observation baseline for the coverage figure", async () => {
+    const prepare = vi.fn((sql: string) => {
+      let row: Row | null = null;
+      if (sql.includes("scheduled_observation_health_state")) row = { active_since: "2026-09-01T00:00:00.000Z" };
+      else if (sql.includes("SUM(CASE")) row = { total: 24, failed: 0 };
+      else if (sql.includes("FROM watchlist_run")) row = { last_started_at: "2026-09-06T09:00:04.000Z" };
+      else if (sql.includes("FROM digest_delivery")) row = { last_digest_sent_at: null };
+      return {
+        bind: vi.fn(() => ({ all: vi.fn().mockResolvedValue({ results: row ? [row] : [] }) })),
+      };
+    });
+
+    const result = await getPublicStatusCounters(makeEnv(prepare));
+    expect(result!.scheduledMonitoringSince).toBe("2026-09-01T00:00:00.000Z");
+  });
+
+  it("degrades the coverage figure to null when the schedule table is empty or unreadable", async () => {
+    const prepare = vi.fn((sql: string) => {
+      let row: Row | null = null;
+      if (sql.includes("SUM(CASE")) row = { total: 24, failed: 0 };
+      else if (sql.includes("FROM watchlist_run")) row = { last_started_at: "2026-09-06T09:00:04.000Z" };
+      else if (sql.includes("FROM digest_delivery")) row = { last_digest_sent_at: null };
+      return {
+        bind: vi.fn(() => ({ all: vi.fn().mockResolvedValue({ results: row ? [row] : [] }) })),
+      };
+    });
+
+    const result = await getPublicStatusCounters(makeEnv(prepare));
+    expect(result!.scheduledMonitoringSince).toBeNull();
+  });
+
   it("flags a stall when no digest has been sent in 7 days while monitoring is healthy", async () => {
     const stale = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString();
     const prepare = vi.fn((sql: string) => {
