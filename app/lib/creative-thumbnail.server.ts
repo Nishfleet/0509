@@ -17,6 +17,15 @@ import type { AdRecord } from "~/lib/types";
 
 export const CREATIVE_ARTIFACT_KEY_PREFIX = "creatives/";
 export const MAX_SAVED_CREATIVE_IMAGE_BYTES = 2_000_000;
+/** Raster types only — never SVG (scriptable). Shared by the store and serve paths. */
+export const ALLOWED_RASTER_IMAGE_TYPES: ReadonlySet<string> = new Set([
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/avif",
+]);
 const MAX_CREATIVE_FETCH_REDIRECTS = 5;
 const CREATIVE_RESOURCE_FETCH_TIMEOUT_MS = 12_000;
 const META_AD_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
@@ -126,15 +135,7 @@ export async function serveCreativeArtifact(
   // MINOR: only serve raster image types — never SVG (scriptable).
   const rawType = (object.httpMetadata?.contentType ?? "image/jpeg").toLowerCase();
   const mediaType = rawType.split(";")[0]?.trim() ?? "";
-  const allowedRaster = new Set([
-    "image/jpeg",
-    "image/jpg",
-    "image/png",
-    "image/webp",
-    "image/gif",
-    "image/avif",
-  ]);
-  if (!allowedRaster.has(mediaType)) {
+  if (!ALLOWED_RASTER_IMAGE_TYPES.has(mediaType)) {
     return new Response("Unsupported Media Type", { status: 415 });
   }
 
@@ -171,7 +172,8 @@ async function fetchGuardedCreativeImage(
   }
 
   const contentType = response.headers.get("content-type") ?? "application/octet-stream";
-  if (!contentType.toLowerCase().startsWith("image/")) {
+  const mediaType = contentType.toLowerCase().split(";")[0]?.trim() ?? "";
+  if (!ALLOWED_RASTER_IMAGE_TYPES.has(mediaType)) {
     releaseFetchTimeout(response);
     return null;
   }
