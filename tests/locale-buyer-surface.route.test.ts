@@ -8,6 +8,7 @@ import {
   isBuyerSurfaceLocaleId,
 } from "~/lib/locale-markets";
 import { buyerSurfaceHreflangLinks, publicSeoFileForPathname } from "~/lib/seo";
+import { AD_AGGRESSION_METHODOLOGY_PATH } from "~/lib/aggression-score";
 import { buildLocaleSitemapXml } from "~/lib/sitemap.server";
 
 beforeEach(() => {
@@ -79,9 +80,9 @@ describe("locale buyer-surface layout (issue #1501)", () => {
     // alongside hreflang by `canonicalLinks(...)` in each child file.
     for (const splat of ["", "pricing", "help", "docs", "api/docs", "status", "changelog", "trust", "compare", "search", "competitor-monitoring", "capture-rules", "methodology"]) {
       const entries = buyerSurfaceHreflangLinks(splat);
-      // Every buyer-surface locale contributes a self-link; the EN
-      // x-default follows. Self-link count equals the cluster size.
-      expect(entries).toHaveLength(BUYER_SURFACE_LOCALE_IDS.length + 1);
+      // Every buyer-surface locale contributes a link; the EN self entry
+      // and the EN x-default complete the cluster (issue #2030 added en).
+      expect(entries).toHaveLength(BUYER_SURFACE_LOCALE_IDS.length + 2);
       const xDefault = entries.find((entry) => entry.hreflang === "x-default");
       expect(xDefault).toBeDefined();
       const enPath =
@@ -89,7 +90,11 @@ describe("locale buyer-surface layout (issue #1501)", () => {
           ? "/"
           : splat === "api/docs"
             ? "/api/docs"
-            : `/${splat}`;
+            : splat === "methodology"
+              // Issue #2871: the shallow /methodology is a permanent 301 to
+              // the citable EN page, so x-default points there (issue #2030).
+              ? AD_AGGRESSION_METHODOLOGY_PATH
+              : `/${splat}`;
       expect(xDefault?.href).toBe(`https://0509.io${enPath}`);
     }
   });

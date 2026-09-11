@@ -57,7 +57,11 @@ describe("pricing route", () => {
   it("declares the canonical URL and public SEO meta", async () => {
     const { links, meta } = await import("~/routes/pricing");
 
-    expect(links()).toEqual([{ rel: "canonical", href: "https://0509.io/pricing" }]);
+    const { buyerSurfaceHreflangLinks } = await import("~/lib/seo");
+    expect(links()).toEqual([
+      { rel: "canonical", href: "https://0509.io/pricing" },
+      ...buyerSurfaceHreflangLinks("pricing"),
+    ]);
 
     const tags = meta({} as never) as Array<Record<string, string>>;
     const title = tags.find((tag) => "title" in tag)?.title;

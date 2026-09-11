@@ -4,6 +4,7 @@ import type { LinksFunction, MetaFunction } from "react-router";
 import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
 import { AGENT_BLOCKED_CAPABILITIES } from "~/lib/agent-action-catalog";
 import {
+  buyerSurfaceHreflangLinks,
   canonicalLinks,
   jsonLdScriptProps,
   publicSeoMeta,
@@ -14,7 +15,10 @@ import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 const description =
   "Five to Nine trust and security basics, including data handled, retention, backups, external services, and non-claims.";
 
-export const links: LinksFunction = () => canonicalLinks("/trust");
+export const links: LinksFunction = () => [
+  ...canonicalLinks("/trust"),
+  ...buyerSurfaceHreflangLinks("trust"),
+];
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({

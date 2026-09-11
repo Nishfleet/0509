@@ -24,6 +24,7 @@ import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
 import {
   articleJsonLd,
+  buyerSurfaceHreflangLinks,
   canonicalLinks,
   faqPageJsonLd,
   jsonLdScriptProps,
@@ -55,7 +56,10 @@ const guideHeadline =
 const guideDatePublished = "2026-09-09";
 const guideDateModified = "2026-09-09";
 
-export const links: LinksFunction = () => canonicalLinks(PATHNAME);
+export const links: LinksFunction = () => [
+  ...canonicalLinks(PATHNAME),
+  ...buyerSurfaceHreflangLinks(PATHNAME.slice(1)),
+];
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({

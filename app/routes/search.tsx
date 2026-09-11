@@ -136,6 +136,7 @@ import {
   withTrackingContext,
 } from "~/lib/search-display";
 import {
+  buyerSurfaceHreflangLinks,
   canonicalLinks,
   jsonLdScriptProps,
   publicSeoMeta,
@@ -217,7 +218,10 @@ function buildAnonSearchSetCookie(value: string): string {
   return `${ANON_SEARCH_COOKIE}=${value}; HttpOnly; SameSite=Lax; Secure; Path=/; Max-Age=${ANON_SEARCH_COOKIE_MAX_AGE_SECONDS}`;
 }
 
-export const links: LinksFunction = () => canonicalLinks("/search");
+export const links: LinksFunction = () => [
+  ...canonicalLinks("/search"),
+  ...buyerSurfaceHreflangLinks("search"),
+];
 
 export const meta: MetaFunction<typeof loader> = (args) => {
   // The existing tests invoke `meta()` with no loader args (idle page), so

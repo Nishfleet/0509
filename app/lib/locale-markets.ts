@@ -104,6 +104,17 @@ export function isBuyerSurfaceChildSplat(splat: string): boolean {
   return (BUYER_SURFACE_CHILD_PATHS as readonly string[]).includes(`/${splat}`);
 }
 
+/**
+ * The /guides/* how-to paths that serve 200 under every buyer-surface locale
+ * prefix (issues #2294, #2295). Single source of truth for the locale
+ * sitemap set and the sitemap hreflang cluster map, so a new guide cannot
+ * silently fall off the locale side.
+ */
+export const BUYER_SURFACE_GUIDE_PATHS = [
+  "/guides/how-to-track-competitor-ads",
+  "/guides/how-to-monitor-meta-ad-library",
+] as const;
+
 export interface SneakerResaleMarket {
   id: SneakerResaleLocaleId;
   hreflang: string;
