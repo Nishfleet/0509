@@ -86,7 +86,7 @@ describe("durable first watchlist scan queue", () => {
   it("persists before a setup/dispatch failure and requeues the fenced claim", async () => {
     const harness = createSqliteD1();
     seedSchema(harness.sqlite);
-    const { processFirstWatchlistScanQueue } = await import("~/lib/monitoring.server");
+    const { processFirstWatchlistScanQueue } = await import("~/lib/first-watchlist-scan.server");
 
     await expect(processFirstWatchlistScanQueue(env(harness.db), watchlist())).rejects.toThrow();
 
@@ -103,7 +103,7 @@ describe("durable first watchlist scan queue", () => {
   it("deduplicates the activation key and never reclaims a terminal run", async () => {
     const harness = createSqliteD1();
     seedSchema(harness.sqlite);
-    const first = await import("~/lib/monitoring.server");
+    const first = await import("~/lib/first-watchlist-scan.server");
     const e2eEnv = env(harness.db, { E2E_PROVIDER_NETWORK_DENY: "1" });
 
     await expect(first.processFirstWatchlistScanQueue(e2eEnv, watchlist())).resolves.toMatchObject({
@@ -141,7 +141,7 @@ describe("durable first watchlist scan queue", () => {
         FIRST_SCAN_KEY,
         "2026-07-14T00:00:00.000Z",
       );
-    const { processFirstWatchlistScanQueue } = await import("~/lib/monitoring.server");
+    const { processFirstWatchlistScanQueue } = await import("~/lib/first-watchlist-scan.server");
 
     await processFirstWatchlistScanQueue(env(harness.db, { E2E_PROVIDER_NETWORK_DENY: "1" }), watchlist());
 
@@ -158,7 +158,7 @@ describe("durable first watchlist scan queue", () => {
   it("does not call providers, create artifacts, or mark the watchlist scanned in local proof mode", async () => {
     const harness = createSqliteD1();
     seedSchema(harness.sqlite);
-    const { processFirstWatchlistScanQueue } = await import("~/lib/monitoring.server");
+    const { processFirstWatchlistScanQueue } = await import("~/lib/first-watchlist-scan.server");
 
     await processFirstWatchlistScanQueue(
       env(harness.db, { E2E_PROVIDER_NETWORK_DENY: "1" }),
@@ -184,7 +184,7 @@ describe("durable first watchlist scan queue", () => {
       }),
     );
     const waitUntil = vi.fn();
-    const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
+    const { queueFirstWatchlistScan } = await import("~/lib/first-watchlist-scan.server");
 
     let settled = false;
     const queued = queueFirstWatchlistScan(
@@ -229,7 +229,7 @@ describe("durable first watchlist scan queue", () => {
       .fn()
       .mockResolvedValueOnce({ id: "created" })
       .mockRejectedValueOnce(new Error("instance already exists"));
-    const first = await import("~/lib/monitoring.server");
+    const first = await import("~/lib/first-watchlist-scan.server");
     const workflowEnv = env(harness.db, {
       MONITORING_WORKFLOW: { create, get },
     });
@@ -250,7 +250,7 @@ describe("durable first watchlist scan queue", () => {
   it("leaves a failed handoff pending for reconciliation", async () => {
     const harness = createSqliteD1();
     seedSchema(harness.sqlite);
-    const first = await import("~/lib/monitoring.server");
+    const first = await import("~/lib/first-watchlist-scan.server");
     const workflowEnv = env(harness.db, {
       MONITORING_WORKFLOW: {
         create: vi.fn(async () => {
@@ -293,7 +293,7 @@ describe("durable first watchlist scan queue", () => {
         "2026-07-15T00:00:00.000Z",
         "2026-07-15T00:00:00.000Z",
       );
-    const { prepareFirstWatchlistScanRun } = await import("~/lib/monitoring.server");
+    const { prepareFirstWatchlistScanRun } = await import("~/lib/first-watchlist-scan.server");
 
     await expect(prepareFirstWatchlistScanRun(env(harness.db), watchlist())).rejects.toThrow(
       /already running/i,
@@ -307,7 +307,7 @@ describe("durable first watchlist scan queue", () => {
   it("reconciles pending and retryable failed activation runs but not provider-unknown failures", async () => {
     const harness = createSqliteD1();
     seedSchema(harness.sqlite);
-    const { prepareFirstWatchlistScanRun } = await import("~/lib/monitoring.server");
+    const { prepareFirstWatchlistScanRun } = await import("~/lib/first-watchlist-scan.server");
     const descriptor = await prepareFirstWatchlistScanRun(env(harness.db), watchlist());
     harness.sqlite
       .prepare(
@@ -367,7 +367,7 @@ describe("durable first watchlist scan queue", () => {
           `2026-07-15T00:00:0${index}.000Z`,
         );
     }
-    const first = await import("~/lib/monitoring.server");
+    const first = await import("~/lib/first-watchlist-scan.server");
     const descriptors = [];
     for (let index = 1; index <= 4; index += 1) {
       descriptors.push(
@@ -414,7 +414,7 @@ describe("durable first watchlist scan queue", () => {
   it("fails closed before claim when a Workflow payload does not match the durable identity", async () => {
     const harness = createSqliteD1();
     seedSchema(harness.sqlite);
-    const first = await import("~/lib/monitoring.server");
+    const first = await import("~/lib/first-watchlist-scan.server");
     const fanout = await import("~/lib/monitoring-fanout.server");
     const descriptor = await first.prepareFirstWatchlistScanRun(env(harness.db), watchlist());
     await fanout.markOrchestratedRunDispatched(env(harness.db), {
@@ -440,7 +440,7 @@ describe("durable first watchlist scan queue", () => {
   it("marks retryable activation work terminal after the bounded attempt budget", async () => {
     const harness = createSqliteD1();
     seedSchema(harness.sqlite);
-    const first = await import("~/lib/monitoring.server");
+    const first = await import("~/lib/first-watchlist-scan.server");
     const descriptor = await first.prepareFirstWatchlistScanRun(env(harness.db), watchlist());
     harness.sqlite
       .prepare(

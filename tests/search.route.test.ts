@@ -2554,7 +2554,7 @@ describe("search actions", () => {
       createSavedQuery,
       createWatchlistWithinLimit,
     }));
-    vi.doMock("~/lib/monitoring.server", () => ({
+    vi.doMock("~/lib/first-watchlist-scan.server", () => ({
       queueFirstWatchlistScan: vi.fn().mockResolvedValue(true),
     }));
 
@@ -2694,7 +2694,7 @@ describe("search actions", () => {
       createSavedQuery: vi.fn(),
       createWatchlistWithinLimit,
     }));
-    vi.doMock("~/lib/monitoring.server", () => ({
+    vi.doMock("~/lib/first-watchlist-scan.server", () => ({
       queueFirstWatchlistScan: vi.fn().mockResolvedValue(true),
     }));
 
