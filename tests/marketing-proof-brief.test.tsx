@@ -5,11 +5,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
 type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
 
+// Issue #3003 (2026-09-12): the fixture previously hardcoded its capture
+// clocks to "2026-08-11". Once the wall crossed PROOF_CAPTURE_FRESH_DAYS
+// (30 days), captureAgeDays() flipped the strip to the stale-branch copy
+// ("is a hook on record across …") and the "was the hook on 6 Meta ads"
+// assertion — and every deploy its run-gate ships — started failing.
+// Captures are now produced relative to now so the fresh branch holds.
+const CAPTURED_4_HOURS_AGO = new Date(Date.now() - 4 * 3_600_000).toISOString();
+
 const realProofBrief = {
   competitorName: "Nykaa",
   website: "nykaa.com",
   adLibraryCountry: "India",
-  fetchedAt: "2026-08-11T22:17:00.000Z",
+  fetchedAt: CAPTURED_4_HOURS_AGO,
   checkedAgoLabel: "about 4 hours ago",
   freshForLiveClaim: false,
   adCount: 6,
@@ -34,7 +42,7 @@ const realProofBrief = {
       evidence: "Routine-first bundle — Build your routine",
       source: "Meta Ad Library — Nykaa Beauty",
       sourceUrl: "https://www.facebook.com/ads/library/?id=111",
-      capturedAt: "2026-08-11T22:17:00.000Z",
+      capturedAt: CAPTURED_4_HOURS_AGO,
     },
     {
       id: "ad-2:Ad offer",
@@ -42,7 +50,7 @@ const realProofBrief = {
       evidence: "Up to 30% off this week",
       source: "Meta Ad Library — Nykaa Beauty",
       sourceUrl: "https://www.facebook.com/ads/library/?id=222",
-      capturedAt: "2026-08-11T22:17:00.000Z",
+      capturedAt: CAPTURED_4_HOURS_AGO,
     },
   ],
   insights: {
