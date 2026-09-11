@@ -55,9 +55,9 @@ Binding judge edits — loader-only fix. Allowed files:
 
 ## Phase 3 — Sweep confirmation + scoped verification
 
-- [ ] Same-pattern sweep documented (manager already did it): only this loader pairs a bounded recent-capture list with a wider event set — `report-loader.server.ts` and `digest-orchestration.server.ts` already use `listProofCapturePairsForEventIds`; `monitoring.server.ts`, `first-brief.server.ts`, `digest-email.server.ts` only check `proofCaptureId` presence; api.v1/api.mcp don't touch it.
-- [ ] Tests GREEN via `npx vitest run --configLoader runner --project node --changed origin/main` plus `npx vitest run tests/event-changes-section.test.tsx` — typecheck is CI-owned per fleet-ops#4891 / repo AGENTS.md; never run `npm run typecheck` or coverage in a worker.
-- [ ] No copy constants changed; no files outside the allowed list.
+- [x] Same-pattern sweep documented (manager already did it): only this loader pairs a bounded recent-capture list with a wider event set — `report-loader.server.ts` and `digest-orchestration.server.ts` already use `listProofCapturePairsForEventIds`; `monitoring.server.ts`, `first-brief.server.ts`, `digest-email.server.ts` only check `proofCaptureId` presence; api.v1/api.mcp don't touch it.
+- [x] Tests GREEN via `npx vitest run --configLoader runner --project node --changed origin/main` plus `npx vitest run tests/event-changes-section.test.tsx` — typecheck is CI-owned per fleet-ops#4891 / repo AGENTS.md; never run `npm run typecheck` or coverage in a worker.
+- [x] No copy constants changed; no files outside the allowed list.
 
 Phase list: 1) RED test first + commit showing red; 2) `listProofCapturesByIds` + barrel export + loader union merge → GREEN; 3) sweep confirmation + scoped vitest runs + allowed-files guard.
 
@@ -74,3 +74,10 @@ Phase list: 1) RED test first + commit showing red; 2) `listProofCapturesByIds` 
 - CONSIDER (not acted): the unioned `recentProofCaptures` also feeds `classifyWatchPeriodTriage` via `app.watchlists.tsx:443` — an event-referenced older non-succeeded capture could shift triage copy in the no-confirmed-events case. Accepted: it is truthful data and the bound spec names the union as the fetched set; the confirmed-events path short-circuits to "changed" before triage classification matters.
 - NOTED: `recent-evidence-checks-card` tail-fill when <4 recents — honest data, minor.
 - One mechanical deviation from the handoff: `listProofCapturesByIds` is obtained via lazy `await import("~/lib/data.server")` inside the missing-ids branch (the top-level destructure would break `tests/watchlist-route-loader.test.ts`'s strict mock); `data.server.ts` needed an explicit re-export line (named barrel, not `export *`).
+
+## Phase 3 verification
+
+- `npx vitest run tests/event-changes-section.test.tsx --configLoader runner --project node` — 2/2 pass.
+- `npx vitest run --configLoader runner --project node --changed origin/main` — 325 files / 4146 tests pass.
+- Regression found + fixed in-run: `tests/watchlists.route.test.ts` strict `vi.doMock` of `~/lib/data.server` lacked the new export and its "board only until a competitor is opened" case hits the missing-ids branch — added `listProofCapturesByIds: vi.fn().mockResolvedValue([])` to the three `data.server` mock blocks (test-helper change, required by the strict mocks).
+- Typecheck deferred to CI per fleet-ops#4891 / repo AGENTS.md (never run in a worker).
