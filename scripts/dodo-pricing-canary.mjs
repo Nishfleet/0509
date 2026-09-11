@@ -7,7 +7,6 @@ import { fetchCanary, validateCanonicalBaseUrl } from "./dodo-billing-canary.mjs
 const DEFAULT_BASE_URL = "https://0509.io";
 const REQUIRED_COUNTRIES = ["IN", "US", "GB"];
 const REQUIRED_USAGE_BUNDLES = ["proof_500", "proof_2000", "proof_7500"];
-const DODO_PRICING_CANARY_TIMEOUT_MS = 20_000;
 
 /**
  * @typedef {{
