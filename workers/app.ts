@@ -49,7 +49,10 @@ import {
   timelineSitemapEntries,
 } from "../app/lib/sitemap.server";
 import { buildLlmsFullText, loadLlmsFullBrandBlocks } from "../app/lib/llms-full.server";
-import { enforceRequestRateLimit } from "../app/lib/rate-limit.server";
+import {
+  cleanupRateLimitEvents,
+  enforceRequestRateLimit,
+} from "../app/lib/rate-limit.server";
 import {
   observeScheduledTask,
   type ReleaseScheduledTaskName,
@@ -873,6 +876,16 @@ export default {
           },
           (error) =>
             reportScheduledTaskFailure(env, "sitemap_timeline_backfill", error),
+        ),
+      );
+      // rate_limit_events retention (issue #2402): the old 2% random cleanup
+      // rode unrelated requests and added a DELETE to their latency. The
+      // daily 04:00 rail keeps the table bounded instead.
+      ctx.waitUntil(
+        cleanupRateLimitEvents(env).then(
+          undefined,
+          (error) =>
+            reportScheduledTaskFailure(env, "rate_limit_events_cleanup", error),
         ),
       );
     }

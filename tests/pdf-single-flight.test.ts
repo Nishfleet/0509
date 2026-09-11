@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { AppEnv } from "~/lib/env.server";
-import { claimSharePdfSingleFlight, enforceSharePdfRateLimit } from "~/lib/rate-limit.server";
+import { claimSharePdfSingleFlight, cleanupRateLimitEvents, enforceSharePdfRateLimit } from "~/lib/rate-limit.server";
 import { reportPdfContentFingerprint } from "~/lib/report-pdf.server";
 import { applyMigration, createSqliteD1 } from "./helpers/sqlite-d1";
 
@@ -34,7 +34,8 @@ describe("share PDF single-flight lease", () => {
 				.run(id, scope, `key-${id}`, "/share/:token/pdf", createdAt);
 		}
 
-		const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0);
+		// Issue #2402: cleanup no longer rides the request path — the daily cron
+		// calls it directly. The limiter still writes its own event first.
 		await expect(
 			enforceSharePdfRateLimit(
 				new Request("https://0509.io/share/token-x/pdf", {
@@ -43,7 +44,7 @@ describe("share PDF single-flight lease", () => {
 				env,
 			),
 		).resolves.toBeNull();
-		randomSpy.mockRestore();
+		await cleanupRateLimitEvents(env);
 
 		const remaining = harness.sqlite
 			.prepare("SELECT id FROM rate_limit_events ORDER BY id")
