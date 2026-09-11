@@ -307,7 +307,9 @@ SELECT
  */
 export function evaluateDrift(current, previous) {
   const flags = [];
-  for (const metric of ["users_total", "active_watchlists"]) {
+  /** @type {Array<"users_total" | "active_watchlists">} */
+  const driftMetrics = ["users_total", "active_watchlists"];
+  for (const metric of driftMetrics) {
     const now = Number(current?.[metric] ?? 0);
     const prior = Number(previous?.[metric] ?? 0);
     if (!Number.isFinite(now) || !Number.isFinite(prior) || prior <= 0) continue;
