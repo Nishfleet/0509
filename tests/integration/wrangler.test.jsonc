@@ -20,6 +20,15 @@
       "binding": "DB",
       "database_name": "0509-d1-integration-tests",
       "database_id": "00000000-0000-0000-0000-000000000000"
+    },
+    {
+      // Scratch D1 for migration-apply tests that must interleave seed data
+      // between migration steps (issue #2774). The shared DB binding already
+      // has every migration applied by the setup file, so a second database
+      // is the only way to observe a mid-chain apply.
+      "binding": "DB_MIGRATION_SCRATCH",
+      "database_name": "0509-d1-migration-scratch",
+      "database_id": "00000000-0000-0000-0000-000000000001"
     }
   ]
 }
