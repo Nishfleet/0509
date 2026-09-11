@@ -9,6 +9,7 @@ import {
   loadSuggestedCompetitorsPanel,
   type SuggestedCompetitorRow,
 } from "~/lib/auto-competitor-suggested-loader.server";
+import { buildCompetitorImportPreview } from "~/lib/competitor-import";
 import type { AppEnv } from "~/lib/env.server";
 
 /**
@@ -360,6 +361,81 @@ describe("accept-suggested-competitor action", () => {
     expect(result.ok).toBe(true);
     expect(result.acceptedAdvertiser).toBe("Rothy's");
     expect(result.watchlistId).toBe("wl-new");
+  });
+
+  /**
+   * Issue #2436 (Kimi K3 Max F2): the one-click accept must fingerprint the
+   * candidate exactly like every other website-backed createWatchlist path
+   * (bulk-accept via the importer, search.tsx, setup-checklist,
+   * customer-agent), so the same suggested competitor cannot be duplicated
+   * across accept paths. The oracle is the importer's own preview: bulk
+   * accept shapes the panel row as a `name,website` CSV line, so the
+   * fingerprint the action passes to createWatchlistWithinLimit must equal
+   * the fingerprint buildCompetitorImportPreview computes for that same
+   * candidate row. A `fingerprintSavedQuery`-shaped hash (no website
+   * component) misses the idx_watchlist_user_role_fingerprint_active dedup
+   * and the preview's `existing` mark entirely.
+   */
+  it("fingerprints a website-backed candidate identically to the bulk-accept path so dedup fires across accept paths", async () => {
+    const createWatchlistWithinLimit = vi.fn().mockResolvedValue({
+      status: "created",
+      watchlist: {
+        id: "wl-rothys",
+        userId: "user-1",
+        name: "Rothy's",
+        targetType: "advertiser",
+        targetId: "https://rothys.com",
+        targetFingerprint: "fp-rothys",
+        targetLabel: "Rothy's",
+        targetCountry: "United States",
+        isActive: true,
+        lastScannedAt: null,
+        createdAt: "2026-08-28T00:00:00.000Z",
+        updatedAt: "2026-08-28T00:00:00.000Z",
+      },
+      current: 1,
+      limit: 10,
+    });
+    installMocks({
+      seedAutoCompetitors: vi.fn().mockResolvedValue([
+        {
+          advertiser: "Rothy's",
+          advertiserPageId: null,
+          registrableDomain: "rothys.com",
+          overlapScore: 0.84,
+          provenance: "Keyword probe: 'wool runners' × United States",
+          countries: ["United States"],
+          matchedKeywords: ["wool runners"],
+        },
+      ]),
+      countWatchlists: vi.fn().mockResolvedValue(0),
+      createWatchlistWithinLimit,
+    });
+
+    const result = await runAcceptAction({
+      candidateId: candidateIdFor("Rothy's", "rothys.com"),
+    });
+    expect(result.ok).toBe(true);
+    expect(createWatchlistWithinLimit).toHaveBeenCalledTimes(1);
+    const acceptedTarget = createWatchlistWithinLimit.mock.calls[0]![2] as {
+      targetFingerprint: string;
+    };
+
+    // The bulk path's fingerprint for the SAME candidate: bulk-accept emits
+    // the panel row as a `name,website` CSV line (`shapeCandidatesAsImportCsv`)
+    // and groups by `targetCountry ?? "all"`, so this preview is byte-identical
+    // to what a later bulk-accept of this candidate would compute.
+    const bulkPreview = buildCompetitorImportPreview({
+      rawText: "name,website\nRothy's,https://rothys.com",
+      country: "United States",
+      planLimit: 10,
+      currentCount: 0,
+      existingFingerprints: [],
+      selectedRowIds: ["row-2"],
+    });
+    const bulkFingerprint = bulkPreview.rows[0]?.target?.targetFingerprint;
+    expect(bulkFingerprint).toBeTruthy();
+    expect(acceptedTarget.targetFingerprint).toBe(bulkFingerprint);
   });
 
   it("returns plan_limit_exceeded with a named reason when the workspace is at the cap (eval 3.5)", async () => {
