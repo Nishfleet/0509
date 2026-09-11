@@ -52,7 +52,9 @@ function parseLdJsonBlocks(markup: string): Array<Record<string, unknown>> {
 type RouteModule = {
   // biome-ignore lint/suspicious/noExplicitAny: route meta is a MetaFunction; the
   // arg object mirrors react-router's MetaArgs for our fixtures.
-  meta: (args: any) => Array<Record<string, any>>;
+  // MetaFunction returns MetaDescriptor[] | undefined (the no-loaderData
+  // guards in both routes return early, so runtime never hits undefined).
+  meta: (args: any) => Array<Record<string, any>> | undefined;
 };
 
 function canonicalHref(route: RouteModule, loaderData: AnyFixtureData): string {
@@ -62,7 +64,7 @@ function canonicalHref(route: RouteModule, loaderData: AnyFixtureData): string {
     params: {},
     matches: [],
     location: { pathname: loaderData.canonicalPath, search: "", hash: "", state: null, key: "test" },
-  });
+  }) ?? [];
   const link = descriptors.find(
     (d) => d.tagName === "link" && d.rel === "canonical",
   );

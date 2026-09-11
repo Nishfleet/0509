@@ -1,64 +1,81 @@
-## Why
+# fix(seo): @id on the shared WebPage JSON-LD — /ads/:domain and /timeline/:domain meet the BET 5(b) metric (issue #2961)
 
-Issue #2108 — generalize signup attribution beyond the six hardcoded strings. Production D1 ground truth: 15 users, 0 signups Jul-Sep, 0 real paying customers. The existing `signup_source` column (migration 0080) has a SQL `CHECK` that admits exactly five literals, so any new slug or `ref:<eTLD+1>` referer marker is rejected at write time. This PR opens the allowlist to lowercase slugs and referer-derived markers, in code and in the D1 schema, so signup attribution can grow without a migration per campaign.
+## What
 
-This is the orchestrator re-spec (2026-09-09T16:43Z) — it overrides step 2's file list because the original `files:` scope could not meet the `accept:` criterion (the 0080 CHECK rejects any value outside the five literals; SQLite cannot ALTER a CHECK in place).
+The metric: every /ads/:domain and /timeline/:domain page ships at least one
+`application/ld+json` block that parses as JSON and whose `@id` equals the
+page's `<link rel="canonical">`.
+
+Both routes already render a `WebPage` JSON-LD block via the shared
+`webPageJsonLd()` helper in `app/lib/seo.ts` — but the block carried only
+`url`, no `@id`, so the metric failed on all 161 programmatic URLs (~80% of
+the root sitemap) even where the block existed. The one-line durable fix:
+
+- `app/lib/seo.ts` — `webPageJsonLd` now states `@id: canonicalUrl(input.pathname)`
+  (same value as `url`; nothing new claimed, no invented facts — ratings,
+  review counts, aggregates: none added).
+- `tests/seo/ads-timeline-structured-data.test.tsx` — new test (follows the
+  `tests/seo/help-faq-schema.test.tsx` precedent): a real
+  `renderToStaticMarkup` render of each route component with the loader-data
+  fixture, no binding mocks. Asserts: the HTML contains
+  `application/ld+json`, the block JSON.parses, exactly one `WebPage` block,
+  and its `@id` equals the page's canonical.
+
+The routes' `<link rel="canonical">` ships as a `tagName: "link"` descriptor
+from each route's `meta` function (`links()` cannot see route params in this
+router version), so the test's comparison point is that descriptor's `href` —
+the same code that renders the shipped `<link rel="canonical">`.
+
+Empty proof surfaces stay honest: the `/timeline` fixture covers both
+populated and collecting states; the block's `name`/`description` come from
+the same loader data the page renders, consistent with the existing
+`<meta name="description">` (acceptance 2/3).
 
 ## Scope
 
-- `migrations/0087_signup_source_open_allowlist.sql` (new) — rebuilds the `user` and `signup_source_pending` CHECK constraints (create-copy-drop-rename, so child FK references to `user` are never rewritten) so `signup_source` accepts: NULL, the five existing literals, `pricing-free`, `for_agencies`, and any value matching `length(signup_source) BETWEEN 1 AND 44 AND signup_source NOT GLOB '*[^a-z0-9:.-]*'` (lowercase slugs and `ref:<eTLD+1>`). Keeps NOT NULL on the pending table; recreates `idx_user_email_nocase` and `idx_signup_source_pending_expires`.
-- `app/lib/signup-source.ts` (modified) — `allowlistedSignupSource` now also accepts lowercase slugs (`/^[a-z0-9][a-z0-9-]{0,39}$/`) and `ref:<eTLD+1>` markers (`/^ref:[a-z0-9.-]{1,40}$/`); the six existing constants keep working. `signupSourceFromRequest` falls back to `ref:<eTLD+1>` derived from the `Referer` header (coarse domain only, never the full URL or query string).
-- `tests/signup-source.test.ts` (modified) — slug accepted, junk rejected, referer-derived value stored, cookie round-trip unchanged, and a shared fixture list asserted against both the code rule and the migration SQL.
-- `tests/integration/signup-source.integration.test.ts` (modified) — referer-derived `ref:example.com` persisted end to end on real D1, open slug persisted, 0087 CHECK accepts/rejects the same fixture list as the code rule, and the rebuilt `user` table keeps its email index and inbound foreign keys.
+No changes to robots.txt, canonicals, or the six sitemaps. No D1/KV/R2. No
+gate-owned paths touched (no `.github/**`, no CODEOWNERS, no ratchets). No
+test removals or skips. Plain git revert is the rollback.
 
-## D1 expand/contract
-
-This is a single-phase schema change (rebuild the CHECK constraints). No `DROP COLUMN`, no `DROP TABLE` of a live table (the rebuild drops the old table only after copying into the replacement), no rename of a column, no `NOT NULL` without a DEFAULT. The migration is validated by the real-D1 integration tests (the `workers` vitest project applies the full migration set to local D1).
+Phase shipped: this is the whole issue (the sitemap half already shipped via
+#2925; this is the structured-data half).
 
 ## Verification
 
-Real-D1 leg (workers vitest project, applies all migrations including 0087 to local D1):
-
 ```
-NODE_OPTIONS=--max-old-space-size=6144 npx vitest run --configLoader runner tests/signup-source.test.ts tests/integration/signup-source.integration.test.ts
+$ bash ./scripts/ci-vitest-run.sh -- vitest run --configLoader runner tests/seo/ads-timeline-structured-data.test.tsx
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+(exit 0)
+
+$ bash ./scripts/ci-vitest-run.sh -- vitest run --configLoader runner tests/seo/sitemap-noindex-parity.test.ts tests/seo/llms-sitemap-reachable-sync.test.ts tests/seo/compare-canonical.test.ts tests/seo/help-faq-schema.test.tsx
+ Test Files  4 passed (4)
+      Tests  14 passed (14)
+(exit 0)
+
+$ bash ./scripts/ci-vitest-run.sh -- vitest run --configLoader runner --project node --changed origin/main
+ Test Files  361 passed (361)
+      Tests  4372 passed (4372)
+(exit 0)
+
+$ sgscan --base origin/main
+No new security findings.
+(exit 0)
 ```
 
-→ 2 files, 23 tests passed (15 unit + 8 integration). The accept criterion is proven: a signup arriving with only `Referer: https://example.com/page` persists `ref:example.com` on `user.signup_source` (integration test "persists a referer-derived ref:<eTLD+1> marker end to end").
+run-proof: see Verification above — no new units/timers/workflows in this diff; the proof of run is the green vitest + sgscan executions recorded there.
 
-Type check:
+net-positive-because: one reparented line plus a 5-line @id/url/comment block in the shared `webPageJsonLd` helper is the fix the issue's metric requires; the 220-line new test is the issue's own acceptance criterion 4.
 
-```
-NODE_OPTIONS=--max-old-space-size=6144 npm run typecheck
-```
+Closes #2961
 
-→ exit 0.
+## Review round (senior seat: opencode / nemotron-3-ultra-free)
 
-Regression (the `user` rebuild must keep child-table writes intact):
+Verdict: SHIP, no blocking findings. Findings adjudication (review-adjudication):
 
-```
-NODE_OPTIONS=--max-old-space-size=6144 npx vitest run --configLoader runner --project workers tests/integration/watch-event-writes.integration.test.ts tests/integration/saucony-watchlist.integration.test.ts tests/integration/signup-first-brief.integration.test.ts tests/integration/retention-sweep-state.integration.test.ts tests/integration/website-scan-baseline.integration.test.ts
-```
-
-→ 5 files, 32 tests passed.
-
-run-proof: tests/signup-source.test.ts (15 tests) + tests/integration/signup-source.integration.test.ts (8 tests, real D1) + 5 regression integration files (32 tests, real D1) all green in the same vitest workers-project run; `npm run typecheck` exit 0.
-
-net-positive-because: this is the issue's own acceptance — the open allowlist (code + D1 schema) is the load-bearing new code, and the rest is the required real-D1 integration proof plus the referer-derivation wiring. It is product work, not control-plane machinery.
-
-## Termination note (check-d1-migrations-synced.mjs)
-
-The issue's termination command ends with `node scripts/check-d1-migrations-synced.mjs`. That script is a **deploy-time** check (it runs in `scripts/deploy-production-plan.mjs` with `includeCloudflareCredentials: true`) that compares the local `migrations/` ledger against the **remote production D1** ledger via `wrangler d1 migrations list 0509 --remote`. It requires Cloudflare production credentials (`CLOUDFLARE_API_TOKEN` or OAuth) that do not exist on this worker VPS, and it is production-gated by repo rules. It would also report 0087 as pending (expected — the migration is applied at deploy time, not by the worker PR).
-
-The migration is instead validated by the real-D1 integration tests, which apply the full migration set (including 0087) to local D1 and assert both the READ and WRITE paths. This matches the precedent of migration PR #1964 (0086), which also validated via real-D1 integration tests and left the production sync check to deploy time.
-
-loose-ends: 0509#2108-check-d1-migrations-synced (deploy-time check requires Cloudflare prod credentials not present on the worker VPS; migration validated by real-D1 integration tests, production sync verified at deploy).
-
-## Reviewer round (cursor/cursor-grok-4.6-high)
-
-- **Act on** — `migrations/0087` CHECK literal lists omitted `for_agencies`, which the code allowlist accepts via the exact-match branch; the open shape `[a-z0-9:.-]` rejects the underscore, so a `for_agencies` signup was silently dropped at write time (violates step 2b "code and DB never disagree"). Fixed: added `for_agencies` to both CHECK literal lists and to the `ACCEPTED_BY_BOTH` fixture lists in both test files. Verified: `tests/signup-source.test.ts` (15), `tests/integration/signup-source.integration.test.ts` (8, real D1), `tests/for-agencies.route.test.ts` (8) all green; `npm run typecheck` exit 0.
-- **Consider** — the `ACCEPTED_BY_BOTH` fixture lists are duplicated across two test files with a "keep in sync" comment but no enforcement. Noted; a shared fixture module is a follow-up, not a blocker.
-- **Consider** — `isOwnDomain` hardcodes `0509.io`/`0509.in`, duplicating `signupSourceCookieDomain`. Noted; deriving both from one source is a follow-up.
-- **Noted** — referer fallback attributes any external referer as `ref:<domain>` (intended accept behavior); the §4 event allowlist is untouched per must-not.
-- **Noted** — `PRAGMA foreign_keys` toggle in 0087; the rename-into-place order preserves child references regardless.
-
-Closes #2108
+- **Act on:** none.
+- **Consider** — new test could add a `timelineData({ entries: [], collecting: true, noindex: true })` case to regression-protect acceptance 3; compliant as written, closes the gap in a follow-up if wanted.
+- **Noted** — the `@id` addition widens to all 43 `webPageJsonLd` callers (every /compare, /guides, /brands, marketing route); reviewer verified no existing structured-data test deep-equals the object, and every page's @id equals its own canonical (identical to its existing `url`). Conscious, not accidental.
+- **Noted** — acceptance 3 read literally: since #2881, a zero-entry timeline is always noindex and ships no JSON-LD at all (the collecting-state description ternary is dead code). Pre-existing behaviour, untouched here; the issue's `/timeline/adidas.com` example was written against the old behaviour. One-line note posted on #2961.
+- **Dismissed-with-reason** — `canonicalUrl(input.pathname)` computed twice in `webPageJsonLd`: zero behavioural difference, one local const; not worth a diff.
+- **Dismissed-with-reason** — JSON-LD description on /timeline is a shortened variant of the meta description ("consistent" per acceptance 2, not identical): pre-existing, not this PR's scope.
