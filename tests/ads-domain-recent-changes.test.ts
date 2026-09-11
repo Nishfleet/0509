@@ -1,4 +1,5 @@
 import { createElement } from "react";
+import { mockReactRouter } from "./helpers/mock-react-router";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -406,19 +407,10 @@ describe("/ads/:domain loader — recent watch changes (issue #2112)", () => {
 let currentData: BrandPageLoaderData;
 
 function installRenderMocks() {
-  vi.doMock("react-router", async () => {
-    const actual = await vi.importActual<typeof import("react-router")>("react-router");
-    const React = await import("react");
-    return {
-      ...actual,
-      useLoaderData: () => currentData,
-      useRouteLoaderData: () => undefined,
-      useLocation: () => ({ pathname: "/ads/nykaa.com" }),
-      Link: ({ children, to, ...props }: { children?: React.ReactNode; to?: string } & Record<string, unknown>) =>
-        React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
-      Form: ({ children, ...props }: { children?: React.ReactNode } & Record<string, unknown>) =>
-        React.createElement("form", props, children),
-    };
+  mockReactRouter({
+    loader: () => currentData,
+    loaderData: () => undefined,
+    location: () => ({ pathname: "/ads/nykaa.com" }),
   });
 }
 
