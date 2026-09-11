@@ -78,7 +78,10 @@ import {
   resolveCommercialDiscoveryProvider,
   searchAdsViaSourceResolver,
 } from "~/lib/ad-source.server";
-import { warmDiscoveryEvalPanel } from "~/lib/discovery-panel.server";
+import {
+  warmDiscoveryEvalPanel,
+  warmRecentPublicSearchDomains,
+} from "~/lib/discovery-panel.server";
 import { bindD1Named } from "~/lib/d1-bind.server";
 import { reportConsecutiveWatchlistFailure } from "~/lib/watchlist-failure-alert.server";
 import { normalizeSavedQuery } from "~/lib/normalize";
@@ -814,11 +817,16 @@ export async function runScheduledDiscoveryWarmup(
 
   const panel = await warmDiscoveryEvalPanel(env, ctx);
 
+  // Issue 2403: also pre-warm the top ~200 domains visitors actually
+  // searched (recent public_search cache rows), so the no-account preview
+  // serves from cache instead of hitting the 60s warming wall.
+  const recent = await warmRecentPublicSearchDomains(env, ctx);
+
   return {
-    attempted: attempted + panel.attempted,
-    succeeded: succeeded + panel.succeeded,
-    failed: failed + panel.failed,
-    skipped: skipped + panel.skipped,
+    attempted: attempted + panel.attempted + recent.attempted,
+    succeeded: succeeded + panel.succeeded + recent.succeeded,
+    failed: failed + panel.failed + recent.failed,
+    skipped: skipped + panel.skipped + recent.skipped,
   };
 }
 

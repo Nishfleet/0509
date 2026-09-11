@@ -195,6 +195,15 @@ function mockMonitoringDependencies(input: {
         failed: 0,
         skipped: 0,
       }),
+      // Issue 2403: the scheduled pass also pre-warms recent public-search
+      // domains; tests below that enable the real panel warmup unmock this
+      // module together, so both run against the mocked ad-source.
+      warmRecentPublicSearchDomains: vi.fn().mockResolvedValue({
+        attempted: 0,
+        succeeded: 0,
+        failed: 0,
+        skipped: 0,
+      }),
     }));
   }
   vi.doMock("~/lib/data.server", () => ({
