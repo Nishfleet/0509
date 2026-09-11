@@ -1077,7 +1077,7 @@ describe("watchlists route rendering", () => {
     },
     creativeWall: [],
     trendDailyActivity: [],
-    websiteCoverageLabel: "2 of 8 known pages watched; sitemap discovered 6; crawl reached 1; last full crawl <date>",
+    websiteCoverageLabel: "2 of 8 known pages watched; sitemap discovered 6; last full crawl 2026-04-18",
   };
 
   it("renders a selected competitor as one entity-owned detail surface", async () => {

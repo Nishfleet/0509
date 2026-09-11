@@ -1245,6 +1245,7 @@ export interface WebsiteCoverageLabelInput {
     inventoryComplete: boolean;
     pageBudget: number;
     fetchedPageCount: number;
+    finalizedAt: string | null;
   };
   pages: readonly { canonicalUrl: string; discoverySource: WebsitePageDiscoverySource }[];
 }
@@ -1261,18 +1262,35 @@ export function buildWebsiteCoverageLabel(input: WebsiteCoverageLabelInput): str
       page.discoverySource,
     ),
   ).length;
-  const crawlCount = input.pages.filter(
-    (page) => page.discoverySource === "sitemap_content",
-  ).length;
   const watched = Math.min(input.scan.fetchedPageCount, known);
-  const lastFullCrawl = "last full crawl <date>";
-  if (
+  const clauses = [
     input.scan.inventoryComplete &&
     known > 0 &&
     watched >= known &&
     known <= input.scan.pageBudget
-  ) {
-    return `All ${known} known pages watched; sitemap discovered ${sitemapCount}; crawl reached ${crawlCount}; ${lastFullCrawl}`;
+      ? `All ${known} known pages watched`
+      : `${watched} of ${known} known pages watched`,
+    `sitemap discovered ${sitemapCount}`,
+  ];
+  const lastFullCrawl = formatLastFullCrawlDate(input.scan.finalizedAt);
+  if (lastFullCrawl !== null) {
+    clauses.push(`last full crawl ${lastFullCrawl}`);
   }
-  return `${watched} of ${known} known pages watched; sitemap discovered ${sitemapCount}; crawl reached ${crawlCount}; ${lastFullCrawl}`;
+  return clauses.join("; ");
+}
+
+/**
+ * ISO calendar date of the last finalized scan, or null when the manifest
+ * carries none. The clause is omitted rather than rendered as a placeholder,
+ * an empty date, or "Invalid Date".
+ */
+function formatLastFullCrawlDate(finalizedAt: string | null): string | null {
+  if (finalizedAt === null) {
+    return null;
+  }
+  const parsed = new Date(finalizedAt);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return parsed.toISOString().slice(0, 10);
 }
