@@ -3,7 +3,7 @@
  *
  * One page that renders a genuine stored digest for the newest
  * sitemap-indexable brand that has at least one confirmed watch_event in the
- * last 30 days. The digest HTML is built through the existing digest builder
+ * last two windows. The digest HTML is built through the existing digest builder
  * (`buildDigestEmail`) from stored rows only — never a live scrape, Browser
  * Rendering run, or paid operation.
  *
@@ -65,7 +65,7 @@ export const SAMPLE_BRIEF_WINDOW_TIERS_MS = [
 /** Human-readable label for a window tier, used in quiet-brief copy. */
 export function sampleBriefWindowLabel(ms: number): string {
   const days = Math.round(ms / (24 * 60 * 60 * 1000));
-  return days >= 365 ? "365 days" : `${days === 30 ? "30" : days} days`;
+  return `${days} days`;
 }
 /** Hard bound on rendered digest items per brief. */
 export const SAMPLE_BRIEF_EVENT_LIMIT = 20;
@@ -79,7 +79,7 @@ export interface SampleBriefData {
   digestHtml: string;
   /** True when no domain qualified and the honest quiet-brief rendered. */
   quiet: boolean;
-  /** ISO start of the 30-day window. */
+  /** ISO start of the sample window tier that produced this brief. */
   periodStart: string;
   /** ISO end of the 30-day window. */
   periodEnd: string;

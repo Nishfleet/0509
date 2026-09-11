@@ -276,15 +276,19 @@ describe("loadSampleBrief (issue #2136)", () => {
   it("prefers the shallowest tier: a fresh event wins over an older one", async () => {
     const { env } = installLoaderMocks({
       watchlists: [watchlistRow()],
-      events: [eventRow({ created_at: isoAgo(150 * DAY_MS) })],
+      // A fresh event exists, so the 30-day tier must be used without
+      // widening — even though an older change is also on file.
+      events: [
+        eventRow({ id: "evt-fresh", created_at: isoAgo(10 * DAY_MS) }),
+        eventRow({ id: "evt-old", created_at: isoAgo(150 * DAY_MS) }),
+      ],
     });
 
     const result = await runLoader(env);
 
-    // 30-day tier is empty; the loader widens rather than fabricating.
     expect(result.quiet).toBe(false);
     const startMs = Date.parse(result.periodStart);
-    const target = Date.now() - 180 * DAY_MS;
+    const target = Date.now() - 30 * DAY_MS;
     expect(Math.abs(startMs - target)).toBeLessThan(60_000);
   });
 
