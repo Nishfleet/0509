@@ -173,10 +173,6 @@ export function DeliveryTargetsSection(props: {
             type="text"
           />
         </label>
-        <label className="f9-field f9-field-inline">
-          <input defaultChecked name="explicitOptIn" type="checkbox" />
-          <span>Explicit opt-in confirmed</span>
-        </label>
         <SubmitButton className="f9-evidence-cta f9-evidence-cta--rank2" intent="add-delivery-target" pendingLabel="Adding…">
           Add delivery target
         </SubmitButton>
