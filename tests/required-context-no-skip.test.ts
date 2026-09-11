@@ -113,4 +113,59 @@ describe("required contexts can never conclude skipped", () => {
       );
     }
   });
+
+  // The Gate-B release proof (issue #2840) is a merge-queue gate but is
+  // DELIBERATELY exempt from the never-conclude-skipped contract above: it
+  // carries a job-level `if:` restricted to merge_group so the ~10 minute
+  // proof never runs on pull_request pushes. Requiredness comes from the
+  // main-merge-queue ruleset, which evaluates on the gh-readonly-queue ref
+  // where the event is always merge_group; a missing required check fails
+  // closed, so the PR-run skip can never render a queue batch green. These
+  // assertions pin that exemption so the shape cannot drift silently.
+  describe("release-proof merge-queue gate shape", () => {
+    const job = requiredJob(".github/workflows/ci.yml", "release-proof");
+
+    it("runs only on merge_group so PR pushes never pay the ~10 min proof", () => {
+      expect(job.if).toContain("github.event_name == 'merge_group'");
+    });
+
+    it("carries no needs and fails closed within the 25 minute budget", () => {
+      expect(job.needs).toBeUndefined();
+      expect(job["timeout-minutes"]).toBeLessThanOrEqual(25);
+      for (const step of job.steps ?? []) {
+        expect(step["continue-on-error"]).toBeUndefined();
+      }
+    });
+
+    it("refuses non-merge_group events with a real failure and re-verifies checkout", () => {
+      const steps = job.steps ?? [];
+      expect(steps[0]?.id).toBe("authorize");
+      expect(steps[0]?.run).toContain(
+        'test "$GITHUB_EVENT_NAME" = "merge_group"',
+      );
+      expect(steps[0]?.run).toContain(
+        '[[ "$GITHUB_REF" =~ ^refs/heads/gh-readonly-queue/ ]]',
+      );
+      const checkoutIndex = steps.findIndex((step) =>
+        step.uses?.startsWith("actions/checkout@"),
+      );
+      expect(steps[checkoutIndex + 1]?.run).toContain(
+        'test "$(git rev-parse --verify HEAD)" = "$AUTHORIZED_SHA"',
+      );
+    });
+
+    it("runs the canonical release proof over all six journeys and archives gate-b diagnostics on failure", () => {
+      const runs = (job.steps ?? []).map((step) => step.run ?? "").join("\n");
+      expect(runs).toContain("npm run build");
+      expect(runs).toContain("npm run e2e:prepare:local");
+      expect(runs).toContain(
+        "node scripts/run-local-release-proof.mjs --journeys=1,2,3,4,5,6",
+      );
+      const upload = (job.steps ?? []).find((step) =>
+        step.uses?.startsWith("actions/upload-artifact@"),
+      );
+      expect(upload?.if).toBe("failure()");
+      expect(String(upload?.with?.path)).toContain("gate-b-manifest");
+    });
+  });
 });
