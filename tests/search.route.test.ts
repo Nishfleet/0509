@@ -1904,6 +1904,62 @@ describe("search loader", () => {
     });
   });
 
+  it("marks the anonymous search cookie Secure", async () => {
+    // Issue #2474: f9_anon_search carries the per-browser public-search budget
+    // key. Without `Secure` a browser sends it on any plaintext http://0509.io
+    // request (pre-HSTS or a client with no HSTS cache), where an on-path
+    // observer can read or replay it and burn that browser's 20-per-10min
+    // budget. Production only ever sets it on HTTPS, and browsers allow
+    // `Secure` on localhost, so the attribute costs nothing.
+    const env = { DB: {} };
+    const sourceResult = {
+      ads: [baseAd],
+      searchIntent: "text" as const,
+      verifiedCount: 0,
+      likelyCount: 0,
+      unmatchedCount: 1,
+    };
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => env) }));
+    vi.doMock("~/lib/data.server", () => ({ listCollections: vi.fn() }));
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforcePublicSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceSearchSelectionRateLimit: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver: vi.fn().mockResolvedValue(sourceResult),
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection: vi.fn().mockResolvedValue({
+        result: sourceResult,
+        selectedAd: baseAd,
+      }),
+    }));
+
+    const { loader } = await import("~/routes/search");
+    const out = await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search?query=nykaa"),
+    } as never);
+
+    expect(out instanceof Response).toBe(false);
+    const setCookie = new Headers(
+      (out as { init?: ResponseInit | null }).init?.headers,
+    ).get("Set-Cookie");
+    expect(setCookie ?? "").toMatch(/f9_anon_search=/);
+    expect(setCookie ?? "").toMatch(/\bSecure\b/);
+  });
+
   it("forwards the limiter's Retry-After onto the 429 document response", async () => {
     // React Router only carries cookies from a thrown loader response onto
     // the final document unless the boundary route re-exports the header;
