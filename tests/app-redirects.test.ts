@@ -148,10 +148,9 @@ describe("route diet phase 1 redirects", () => {
     );
     const expected = Object.values(RELEASE_COVERAGE_MATRIX).flat();
     expect(expected.length).toBeGreaterThan(0);
-    const expectedPaths = expected.map((entry) => {
-      const { exact, pathname } = entry.finalUrl;
-      return exact === undefined ? pathname : exact.split("?")[0];
-    });
+    const expectedPaths = expected.map((entry) =>
+      "exact" in entry.finalUrl ? entry.finalUrl.exact.split("?")[0] : entry.finalUrl.pathname,
+    );
     for (const fold of SHIPPED_FOLDS) {
       expect(
         expectedPaths,
