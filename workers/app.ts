@@ -75,6 +75,13 @@ import {
 } from "./schedule";
 import { withSecurityHeaders, generateCspNonce } from "./security-headers";
 import {
+  edgeCacheVersionId,
+  edgeHtmlCacheStorage,
+  isEdgeCacheableHtmlRequest,
+  matchEdgeCache,
+  storeEdgeCache,
+} from "./edge-cache";
+import {
   hasSiteRepAuthCookie,
   isSiteRepWidgetIsolatedPath,
 } from "../app/lib/siterep-widget";
@@ -376,6 +383,24 @@ export default {
       }
     }
 
+    // EDGE CACHE (issue #2950): anonymous, cookie-free GETs of the public
+    // marketing HTML are served straight from the named edge cache; every
+    // other response keeps its existing path untouched. A stored copy is the
+    // FULLY-SECURED response (CSP header and embedded nonce from the same
+    // render — see workers/edge-cache.ts for why this closes the #2716
+    // nonce hole that killed #2388's cache), and the version-epoch cache key
+    // (edgeCacheVersionId) is the deploy invalidation: a fresh version id
+    // never replays a previous deploy's asset manifest.
+    // The lookup deliberately sits AFTER the rate-limit gate so the anonymous
+    // funnel counters keep their rows; what a HIT skips is the render itself.
+    // In the Node test harness edgeHtmlCacheStorage() resolves to null and the
+    // worker behaves exactly as before this issue (no stamps, no caching).
+    const edgeCache = await edgeHtmlCacheStorage();
+    const cachedEdgeHtml = await matchEdgeCache(request, edgeCache, edgeCacheVersionId(env));
+    if (cachedEdgeHtml) {
+      return cachedEdgeHtml;
+    }
+
     (globalThis as GlobalEnvCarrier).__APP_REQUEST_ENV__ = env;
     // One per-request CSP nonce (issue #2348): the same value is threaded into
     // the rendered HTML (via the cloudflare context → root loader → Layout)
@@ -390,8 +415,22 @@ export default {
       country: request.headers.get("cf-ipcountry"),
       cspNonce,
     });
-    const response = await requestHandler(request, routerContext);
-    return withSecurityHeaders(withPublicContentSignal(response, request), request, cspNonce);
+    // React Router 8 answers a HEAD with a null document body (server.js
+    // ">if (request.method === "HEAD") return new Response(null, ..."), so an
+    // edge-cacheable HEAD is rendered through a GET-ified request instead: the
+    // cache then stores the FULL-BODY document, and the HEAD reply keeps only
+    // the stored copy's headers (the #2393 headOf pattern). Non-eligible
+    // requests keep their original request untouched.
+    const routerRequest = isEdgeCacheableHtmlRequest(request)
+      ? new Request(request.url, { method: "GET", headers: request.headers })
+      : request;
+    const response = await requestHandler(routerRequest, routerContext);
+    return storeEdgeCache(
+      request,
+      edgeCache,
+      edgeCacheVersionId(env),
+      withSecurityHeaders(withPublicContentSignal(response, request), request, cspNonce),
+    );
   },
   async scheduled(controller, env, ctx) {
     const observationContext = Object.freeze({

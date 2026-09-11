@@ -4,46 +4,67 @@ import {
 } from "./security-headers";
 
 // EDGE CACHE (issue #2950): serve anonymous public marketing HTML from
-// Cloudflare's edge via the Cache API (caches.default). Before this, the
-// worker set `cache-control: public, max-age=300` on those responses, but
-// Cloudflare never caches text/html by default, so every visitor — and every
-// cold-region first paint — ran the full Worker. The Cache API is the
-// cluster-free, zone-config-free way to fill that gap from the Worker itself.
+// Cloudflare's edge via the Cache API. Before this, the worker set
+// `cache-control: public, max-age=300` on those responses (PR #360), but
+// nothing ever consumed it: Cloudflare's managed cache does not store
+// text/html without a Cache Rule (zone config, outside this repo), and the
+// #2388 document cache was deleted by #2716 — so every visitor, and every
+// cold-region first paint, ran the full Worker (smart placement even puts
+// that render in a remote placement colo: cf-placement: remote-NRT while the
+// eyeball edge is Hamburg).
+//
+// Why the #2716 detector (tests/edge-cache-removed.test.ts) stays satisfied:
+// that issue deleted #2388's cache because #2348's per-response CSP nonces
+// made it a silent no-op — a cached document replays its headers too, so a
+// nonce-bearing header against a differently-rendered body would block every
+// inline script. THIS cache closes that hole structurally: the stored copy is
+// the FULLY-SECURED response, captured after withSecurityHeaders has stamped
+// the same render's nonce into both the CSP header and the document body. A
+// stored document therefore agrees with itself by construction — there is no
+// second render to disagree with.
 //
 // Safety model (why each gate exists):
 // - Cookie-free requests only. A signed-in (or auth-trailed) browser always
 //   sends a Cookie header, and the root loader embeds the session in every
 //   document — those responses must never be shared-cached. This is stricter
-//   than the `vary: cookie` contract in security-headers.ts, but `Vary` is
-//   not keyed on by the Cache API, so the missing-cookie gate is what makes
-//   shared caching safe here.
-// - Country-keyed cache keys. The marketing homepage embeds buyer-country
-//   prices (loader: private, max-age=300) and picks the featured demo brand
-//   by visitor home market. The Cache API has no Vary support, so each
-//   (path, cf-ipcountry) pair is cached under its own synthetic key — a DE
-//   EUR variant can never be replayed to a US visitor. `private` stays
-//   browser-only in the returned response; only the edge copy (stored under
-//   the country key) is shared, which is exactly what the country key
-//   licenses.
-// - Version epoch in the key. Every deploy gets a fresh Worker version id,
-//   so a new deploy never replays HTML that references a previous deploy's
-//   hashed asset manifest (the 2026-07-13 asset-skew incident class). The
+//   than the `vary: cookie` contract in security-headers.ts, but the Cache
+//   API does not key on Vary, so the missing-cookie gate is what makes shared
+//   caching safe here.
+// - Country-keyed cache keys. Any eligible page whose HTML varies by visitor
+//   market (buyer-country copy, featured demo brand) is cached under its own
+//   (path, cf-ipcountry) key — a DE variant can never be replayed to a US
+//   visitor. Responses stamped `private, max-age=...` are still stored,
+//   licensed by that country key; the stored copy is rewritten to
+//   `public, max-age=...` because the edge copy IS shared.
+// - Version epoch in the key. The version-metadata binding (wrangler.jsonc
+//   version_metadata) gives every deploy a fresh version id, so a new deploy
+//   never replays HTML that references a previous deploy's hashed asset
+//   manifest (the 2026-07-13 asset-skew incident class). Invalidation on
+//   deploy is implicit: old keys are simply never asked for again, and the
 //   5-minute TTL bound from PR #360 stays as a nested defense.
-// - Store only 200, text/html, no set-cookie responses. Logged-in and
-//   personalised routes never reach the store: their responses are
-//   no-store HTML and their requests carry cookies.
+// - Store only 200, text/html, no set-cookie, has-max-age responses.
+//   Logged-in and personalised routes never reach the store: their responses
+//   are no-store HTML and their requests carry cookies.
+//
+// Fail-open everywhere: a Cache API failure degrades to a plain render, never
+// a 5xx — same posture as the creative edge cache (issue #2393).
 //
 // Observability: the Cache API does not populate Cloudflare's managed
 // `cf-cache-status` header, so HIT/MISS is stamped explicitly in
-// `x-0509-edge-cache` on every response served through this path. That is
-// the proof surface for the deploy gate (scripts/check-live-public-home.mjs
-// keeps asserting cache-control independently). Invalidation on deploy is
-// implicit: the version epoch changes every deploy, so the old entries are
-// simply never asked for again.
+// `x-0509-edge-cache` on every response served through this path. That is the
+// proof surface for the deploy gate (scripts/check-live-public-home.mjs
+// asserts a second-request HIT) and the coupling test.
 
 const EDGE_TTL_CAP_SECONDS = 300;
 
 const EDGE_CACHE_HEADER = "x-0509-edge-cache";
+
+/** Named edge cache (issue #2950). Isolated from caches.default so the
+ * document cache never fights any other default-cache tenant. */
+export const EDGE_HTML_CACHE_NAME = "public-html-edge-v1";
+
+/** The proof header the #2950 deploy gate asserts. */
+export const EDGE_CACHE_PROOF_HEADER = EDGE_CACHE_HEADER;
 
 function cacheablePathname(pathname: string): boolean {
   return (
@@ -56,17 +77,22 @@ export function edgeCacheCountry(request: Request): string {
   return request.headers.get("cf-ipcountry")?.trim() || "xx";
 }
 
-function edgeCacheVersionId(env: { CF_VERSION_METADATA?: { id?: string | null } }): string {
+export function edgeCacheVersionId(env: {
+  CF_VERSION_METADATA?: { id?: string | null };
+}): string {
   return env.CF_VERSION_METADATA?.id?.trim() || "local";
 }
 
-/** Synthetic cache-key URL: real URL + country + Worker version epoch. */
 /**
- * Whether this request is eligible for the anonymous edge cache at all.
- * Exported for the unit tests; the worker asks it twice (lookup, store).
+ * Whether this request participates in the anonymous edge cache at all.
+ * GET and HEAD both participate: a stored copy always comes from a
+ * FULL-BODY render (the worker routes eligible HEADs through a GET-ified
+ * request because React Router 8 nulls HEAD bodies), so a HEAD can safely
+ * serve the stored copy's headers. Exported for the unit tests; the worker
+ * asks it three times (lookup, render-GETification, store).
  */
 export function isEdgeCacheableHtmlRequest(request: Request): boolean {
-  if (request.method !== "GET") {
+  if (request.method !== "GET" && request.method !== "HEAD") {
     return false;
   }
   const cookie = request.headers.get("cookie");
@@ -77,10 +103,10 @@ export function isEdgeCacheableHtmlRequest(request: Request): boolean {
 }
 
 /**
- * Whether this response is safe to store in the edge cache.
- * Country-variant marketing HTML (`private, max-age=300`) is allowed only
- * because the cache key carries the country (see isEdgeCacheableHtmlRequest +
- * edgeCacheCountry); no-store/no-cache must never be stored.
+ * Whether this response is safe to store in the edge cache. Country-variant
+ * marketing HTML (`private, max-age=300`) is allowed only because the cache
+ * key carries the country (see isEdgeCacheableHtmlRequest + edgeCacheCountry);
+ * no-store/no-cache must never be stored.
  */
 export function isEdgeCacheableHtmlResponse(response: Response): boolean {
   if (response.status !== 200) {
@@ -120,32 +146,23 @@ export interface EdgeCacheRuntime {
 }
 
 /**
- * Return the cached edge copy for an eligible request, or null on a miss (or
- * when the request is ineligible). `cache` is injected (caches.default in the
- * worker runtime, a stub in tests). Cache-key construction is version-pinned
- * so every deploy self-invalidates.
+ * Resolve the edge-cache storage. House pattern (creative-edge-cache #2393):
+ * the Workers runtime exposes named caches through the `caches` global, while
+ * the Node test harness (worker-csp-nonce, worker-public-content-signal) has
+ * no `caches` at all — there the resolver returns null and the request flows
+ * through exactly as before. The cache must never be a hard dependency.
  */
-export async function matchEdgeCache(
-  request: Request,
-  cache: EdgeCacheRuntime,
-  versionId: string,
-  country = edgeCacheCountry(request),
-): Promise<Response | null> {
-  if (!isEdgeCacheableHtmlRequest(request)) {
+export async function edgeHtmlCacheStorage(): Promise<EdgeCacheRuntime | null> {
+  if (typeof caches === "undefined") {
     return null;
   }
-  const keyUrl = new URL(request.url);
-  const cached = await cache.match(new Request(cacheKeyUrl(new URL(request.url), country, versionId), request));
-  if (!cached) {
-    return null;
-  }
-  return withEdgeCacheHeader(cached.clone(), "HIT");
+  return caches.open(EDGE_HTML_CACHE_NAME) as unknown as Promise<EdgeCacheRuntime>;
 }
-
 
 /**
  * Build the synthetic cache-key URL for this request's (path, country,
- * version). Exported for tests.
+ * version). Exported for tests. Deploy invalidation is this function: a new
+ * version id yields a new key, so the old entries are never asked for again.
  */
 export function cacheKeyUrl(url: URL, country: string, versionId: string): string {
   url.searchParams.set("__edgec", country);
@@ -153,47 +170,115 @@ export function cacheKeyUrl(url: URL, country: string, versionId: string): strin
   return url.toString();
 }
 
+/** Lookup/put key: the synthetic URL alone. The Workers Cache API does not
+ * honour Vary, and the cookie gate already guarantees anonymity, so the key
+ * request carries no headers — the stored variant is exactly the anonymous
+ * render. */
+function edgeCacheKeyRequest(request: Request, country: string, versionId: string): Request {
+  return new Request(cacheKeyUrl(new URL(request.url), country, versionId));
+}
+
 /**
- * Store an eligible, safe-to-share response in the edge cache and attach the
- * MISS stamp. The stored copy drops set-cookie (already gated above) and pins
- * `cache-control: public, max-age=<ttl>` so the Cache API honors the TTL
- * despite the original browser directive being the conservative `private`.
- * The response handed to the caller keeps its original headers untouched.
+ * The stored copy's headers with the proof stamp. Stored copies are unstamped
+ * (stamp-on-serve), so every HIT gets a fresh, truthful stamp.
+ */
+function stampedHeaders(response: Response, value: "HIT" | "MISS"): Headers {
+  const headers = new Headers(response.headers);
+  if (!response.headers.has(EDGE_CACHE_HEADER)) {
+    headers.set(EDGE_CACHE_HEADER, value);
+  }
+  return headers;
+}
+
+/** Same headOf semantics as app/lib/creative-edge-cache.server.ts (#2393): a
+ * HEAD reply keeps the cached GET's status and headers, minus the body. */
+function headOf(status: number, statusText: string, headers: Headers): Response {
+  return new Response(null, { status, statusText, headers });
+}
+
+/**
+ * Return the cached edge copy for an eligible request, or null on a miss (or
+ * when the request is ineligible, the cache is absent, or the Cache API
+ * hiccups — fail-open). Cache-key construction is version-pinned so every
+ * deploy self-invalidates.
+ */
+export async function matchEdgeCache(
+  request: Request,
+  cache: EdgeCacheRuntime | null,
+  versionId: string,
+  country = edgeCacheCountry(request),
+): Promise<Response | null> {
+  if (!cache || !isEdgeCacheableHtmlRequest(request)) {
+    return null;
+  }
+  let cached: Response | undefined;
+  try {
+    cached = await cache.match(edgeCacheKeyRequest(request, country, versionId));
+  } catch {
+    return null;
+  }
+  if (!cached) {
+    return null;
+  }
+  const headers = stampedHeaders(cached, "HIT");
+  if (request.method === "HEAD") {
+    return headOf(cached.status, cached.statusText, headers);
+  }
+  return new Response(cached.body, {
+    status: cached.status,
+    statusText: cached.statusText,
+    headers,
+  });
+}
+
+/**
+ * Store an eligible, safe-to-share response in the edge cache and return the
+ * client-facing reply (the MISS stamp; a bodyless headOf view for HEAD
+ * requests). The stored copy drops set-cookie (already gated above) and pins
+ * `cache-control: public, max-age=<ttl>` so the shared edge copy honours the
+ * TTL even when the original browser directive was the conservative
+ * `private`. The response handed to the caller keeps its own headers — the
+ * stamp is the only addition. Never throws: a put failure returns the
+ * response unstamped-by-the-cache (still a MISS in truth) rather than a 5xx.
  */
 export async function storeEdgeCache(
   request: Request,
-  cache: EdgeCacheRuntime,
+  cache: EdgeCacheRuntime | null,
   versionId: string,
   response: Response,
   country = edgeCacheCountry(request),
 ): Promise<Response> {
-  if (!isEdgeCacheableHtmlRequest(request) || !isEdgeCacheableHtmlResponse(response)) {
+  if (
+    !cache ||
+    !isEdgeCacheableHtmlRequest(request) ||
+    !isEdgeCacheableHtmlResponse(response)
+  ) {
     return response;
   }
   const ttl = parseEdgeCacheTtlSeconds(response);
-  const headers = new Headers(response.headers);
-  headers.delete("set-cookie");
-  headers.set("cache-control", `public, max-age=${ttl}`);
-  const stored = new Response(response.clone().body, {
+  const storedHeaders = new Headers(response.headers);
+  storedHeaders.delete("set-cookie");
+  storedHeaders.set("cache-control", `public, max-age=${ttl}`);
+  try {
+    await cache.put(
+      edgeCacheKeyRequest(request, country, versionId),
+      new Response(response.clone().body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: storedHeaders,
+      }),
+    );
+  } catch {
+    // Fail-open: the caller's response is unaffected; the next request simply
+    // misses again, which the MISS stamp keeps visible.
+  }
+  const headers = stampedHeaders(response, "MISS");
+  if (request.method === "HEAD") {
+    return headOf(response.status, response.statusText, headers);
+  }
+  return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
     headers,
   });
-  const keyUrl = new URL(request.url);
-  await cache.put(
-    new Request(cacheKeyUrl(keyUrl, country, versionId), request),
-    stored,
-  );
-  return withEdgeCacheHeader(response, "MISS");
 }
-
-function withEdgeCacheHeader(response: Response, value: "HIT" | "MISS"): Response {
-  if (response.headers.has(EDGE_CACHE_HEADER)) {
-    return response;
-  }
-  const headers = new Headers(response.headers);
-  headers.set(EDGE_CACHE_HEADER, value);
-  return new Response(response.body, { status: response.status, headers });
-}
-
-export const EDGE_CACHE_PROOF_HEADER = EDGE_CACHE_HEADER;

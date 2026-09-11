@@ -244,6 +244,54 @@ async function checkUrl(url) {
   };
 }
 
+// #2950 proof: two back-to-back anonymous GETs of the homepage. The first
+// may MISS (render+store) or already HIT (warmed by the ok loop above); the
+// second must HIT. Each probe also records its time-to-headers, so a deploy
+// log prints the before/after in one breath: the MISS stamp is the old
+// render+placement round-trip, the HIT is the cached serve. The header name
+// ("x-0509-edge-cache") is coupled to the worker's stamp by
+// tests/worker-edge-cache.test.ts so the gate and product cannot diverge.
+export const EXPECTED_EDGE_CACHE_PROOF_HEADER = "x-0509-edge-cache";
+const EDGE_CACHE_PROOF_ATTEMPTS = 3;
+const EDGE_CACHE_PROOF_ATTEMPT_INTERVAL_MS = 5_000;
+
+async function proveEdgeCacheHit() {
+  let lastProbes = [];
+  for (let attempt = 1; attempt <= EDGE_CACHE_PROOF_ATTEMPTS; attempt += 1) {
+    lastProbes = [];
+    for (let i = 0; i < 2; i += 1) {
+      const startedAt = performance.now();
+      const response = await fetch(new URL("/", baseUrl), {
+        headers: { "user-agent": "0509-public-home-canary/1.0" },
+        signal: AbortSignal.timeout(15_000),
+      });
+      const headerMs = Math.round(performance.now() - startedAt);
+      await response.text();
+      lastProbes.push({
+        stamp: response.headers.get(EXPECTED_EDGE_CACHE_PROOF_HEADER),
+        headerMs,
+      });
+    }
+    if (lastProbes[1].stamp === "HIT") {
+      const [maybeMiss, mustHit] = lastProbes;
+      console.log(
+        `edge-cache proof passed (attempt ${attempt}): second-request ` +
+          `${EXPECTED_EDGE_CACHE_PROOF_HEADER}: HIT — ` +
+          `${maybeMiss.stamp ?? "none"} ${maybeMiss.headerMs}ms (render) → ` +
+          `HIT ${mustHit.headerMs}ms (edge)`,
+      );
+      return;
+    }
+    if (attempt < EDGE_CACHE_PROOF_ATTEMPTS) {
+      await sleep(EDGE_CACHE_PROOF_ATTEMPT_INTERVAL_MS);
+    }
+  }
+  throw new Error(
+    `no second-request ${EXPECTED_EDGE_CACHE_PROOF_HEADER}: HIT after ${EDGE_CACHE_PROOF_ATTEMPTS} attempts: ` +
+      JSON.stringify(lastProbes),
+  );
+}
+
 async function run() {
   /** @type {Awaited<ReturnType<typeof checkUrl>>[]} */
   let lastResults = [];
@@ -251,6 +299,15 @@ async function run() {
     lastResults = await Promise.all(buildUrls().map(checkUrl));
     if (lastResults.every((result) => result.ok)) {
       console.log("live public-home check passed");
+      try {
+        await proveEdgeCacheHit();
+      } catch (error) {
+        console.error(
+          "edge-cache proof failed (issue #2950):",
+          error instanceof Error ? error.message : error,
+        );
+        process.exit(1);
+      }
       return;
     }
     await sleep(5_000);
