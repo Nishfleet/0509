@@ -51,7 +51,7 @@ Binding judge edits — loader-only fix. Allowed files:
 
 ## Phase 2 — Loader-only fix (GREEN)
 
-- [ ] Loader-only fix applied exactly as the judge edit binds it — add `listProofCapturesByIds(env, watchlistId, ids)` to `app/lib/data/watchlist-proof.server.ts` following `listRecentProofCapturesForWatchlist`'s shape (`proof_capture` joined through `proof_target` scoped by `proof_target.watchlist_id = ?`, mapped via `toProofCaptureRecord`, `queryIn` helper like `listProofCapturePairsForEventIds`; ≤25 ids so D1 bound-param cap is fine); re-export through `app/lib/data/watchlists.server.ts` (domain barrel feeding `data.server.ts`); in `app/lib/watchlist-route-loader.server.ts` merge the union AFTER the highlighted-event pin block (~line 333-340, so a pinned deep-linked event's capture is covered): one `listProofCapturesByIds` call on the loaded events' `proofCaptureId`s, dedupe against the recent-12, append extras ordered `attemptedAt` desc (extras are older than the recent-12 window by construction); `proofSummary: buildProofSummary(...)` keeps its existing 12-recent input — semantics unchanged.
+- [x] Loader-only fix applied exactly as the judge edit binds it — add `listProofCapturesByIds(env, watchlistId, ids)` to `app/lib/data/watchlist-proof.server.ts` following `listRecentProofCapturesForWatchlist`'s shape (`proof_capture` joined through `proof_target` scoped by `proof_target.watchlist_id = ?`, mapped via `toProofCaptureRecord`, `queryIn` helper like `listProofCapturePairsForEventIds`; ≤25 ids so D1 bound-param cap is fine); re-export through `app/lib/data/watchlists.server.ts` (domain barrel feeding `data.server.ts`); in `app/lib/watchlist-route-loader.server.ts` merge the union AFTER the highlighted-event pin block (~line 333-340, so a pinned deep-linked event's capture is covered): one `listProofCapturesByIds` call on the loaded events' `proofCaptureId`s, dedupe against the recent-12, append extras ordered `attemptedAt` desc (extras are older than the recent-12 window by construction); `proofSummary: buildProofSummary(...)` keeps its existing 12-recent input — semantics unchanged.
 
 ## Phase 3 — Sweep confirmation + scoped verification
 
@@ -67,3 +67,10 @@ Phase list: 1) RED test first + commit showing red; 2) `listProofCapturesByIds` 
 - CONSIDER: mock binds the fix to import `listProofCapturesByIds` via the `~/lib/data.server` barrel — phase 2 must not import the leaf directly. (Carried into the phase-2 handoff.)
 - CONSIDER: `listWatchEventsByIds` mocked but unused — harmless future-proofing.
 - DISMISSED: `[]` recency window is the documented honest extreme; no DOM-env pragma needed (markup-only assertions).
+
+## Phase 2 reviewer adjudication (verdict: PASS)
+
+- All checks passed: tenant-scoped `queryIn` with `prefix` matches `listWatchEventsByIds` shape; union merges after the `?event=` pin block with dedupe; lazy `~/lib/data.server` barrel import mirrors the `listWatchEventsByIds` pattern; `proofSummary` keeps the 12-recent input; no copy constants or component code touched.
+- CONSIDER (not acted): the unioned `recentProofCaptures` also feeds `classifyWatchPeriodTriage` via `app.watchlists.tsx:443` — an event-referenced older non-succeeded capture could shift triage copy in the no-confirmed-events case. Accepted: it is truthful data and the bound spec names the union as the fetched set; the confirmed-events path short-circuits to "changed" before triage classification matters.
+- NOTED: `recent-evidence-checks-card` tail-fill when <4 recents — honest data, minor.
+- One mechanical deviation from the handoff: `listProofCapturesByIds` is obtained via lazy `await import("~/lib/data.server")` inside the missing-ids branch (the top-level destructure would break `tests/watchlist-route-loader.test.ts`'s strict mock); `data.server.ts` needed an explicit re-export line (named barrel, not `export *`).

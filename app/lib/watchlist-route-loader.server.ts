@@ -339,6 +339,34 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
     }
   }
 
+  // The feed spans 24 events but the capture list only covers the newest 12,
+  // so an event whose proofCaptureId aged out of that window would resolve
+  // to no capture and falsely claim there is no successful stored capture
+  // behind it. Union in the events' missing captures by id — one extra
+  // query, skipped entirely when the recent-12 already covers every event —
+  // so each rendered event can always resolve its own capture. Extras are
+  // older than the recency window by construction and keep their
+  // attempted_at DESC order after the recent 12.
+  const recentCaptureIds = new Set(recentProofCaptures.map((capture) => capture.id));
+  const missingProofCaptureIds = [
+    ...new Set(
+      events
+        .map((event) => event.proofCaptureId)
+        .filter((id): id is string => Boolean(id) && !recentCaptureIds.has(id)),
+    ),
+  ];
+  let mergedProofCaptures = recentProofCaptures;
+  if (missingProofCaptureIds.length > 0) {
+    // Resolved lazily so the fully-covered path never pays the import.
+    const { listProofCapturesByIds } = await import("~/lib/data.server");
+    const eventProofCaptures = await listProofCapturesByIds(
+      env,
+      selectedWatchlist.id,
+      missingProofCaptureIds,
+    );
+    mergedProofCaptures = [...recentProofCaptures, ...eventProofCaptures];
+  }
+
   // Counter-Brief plan gate: paid plans only. Computed per page load with no
   // persistence — the loader caps generation at 4s (below the module's 10s
   // default) so a hung Workers AI call cannot stall a paid page load; the
@@ -415,7 +443,10 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
     recentDeliveryAttempts: recentDeliveryAttempts
       .filter((attempt) => isVisibleDeliveryChannel(attempt.channel, visibleDelivery))
       .map(toPublicDeliveryAttemptSummary),
-    recentProofCaptures,
+    recentProofCaptures: mergedProofCaptures,
+    // The summary still describes the recent-12 window only — its semantics
+    // (latest check status, screenshot availability) must not shift because
+    // an older event's capture was unioned in above.
     proofSummary: buildProofSummary(recentProofCaptures),
     latestRunCaptureAttempts,
     websiteCoverageLabel,
