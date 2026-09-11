@@ -477,3 +477,28 @@ describe("runAdsDomainPublisher all-lists deadline + cursor (issue #2361)", () =
     expect(second.outcomes[0].domain).toBe(SEED_LISTS["festive-india-2026"].domains[2].domain);
   });
 });
+
+describe("ads-domain-publisher.mjs (script module)", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  // M57: importing the script (e.g. from a vitest worker) must not run
+  // main(), touch the filesystem for a seed list, or exit the process.
+  it("imports without running main / exiting", async () => {
+    const exitSpy = vi
+      .spyOn(process, "exit")
+      .mockImplementation((() => undefined) as never);
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubEnv("SEED_LIST", "");
+    vi.stubEnv("BASE_URL", "");
+
+    const mod = await import("../scripts/ads-domain-publisher.mjs");
+
+    expect(typeof mod.probeDomain).toBe("function");
+    expect(typeof mod.loadSeedList).toBe("function");
+    expect(exitSpy).not.toHaveBeenCalled();
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
+});
