@@ -3,7 +3,7 @@
 // "currently deployed" lag AND re-promotes the production version when a
 // preview upload has polluted the script's latest version.
 //
-// Why this exists: the workflow's "Synchronize private canary token" step
+// Why this exists: the workflow's "Synchronize Worker secrets" step
 // runs `wrangler secret put` right after `npm run deploy` returns. Classic
 // `secret put` requires the Worker's latest version to be marked currently
 // deployed. Two things break that precondition:

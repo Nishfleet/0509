@@ -151,6 +151,14 @@ describe("locale buyer-surface sitemap + worker wiring", () => {
       expect(body).toContain("<urlset");
       for (const path of BUYER_SURFACE_PATHS) {
         if (path === "/" || path === "/sitemap.xml") continue;
+        // Issue #2871: /methodology is now a 301 to the canonical
+        // /methodology/ad-aggression-score; its locale twins serve byte-identical
+        // English canonicalized to the EN page, so per the issue #1570
+        // duplicate-content policy they stay OUT of the locale sitemaps.
+        if (path === "/methodology") {
+          expect(body).not.toContain(`<loc>https://0509.io/${locale}${path}</loc>`);
+          continue;
+        }
         const expected = `<loc>https://0509.io/${locale}${path}</loc>`;
         expect(body, `sitemap must list ${expected}`).toContain(expected);
       }

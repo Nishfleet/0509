@@ -61,10 +61,15 @@ elif [[ "${GITHUB_EVENT_NAME:-}" == "workflow_dispatch" ]] &&
   # (candidate NOT an ancestor of the live tip) stays fail-closed below.
   printf 'Provider main moved to %s; deployed candidate %s is still an ancestor of live main.\n' \
     "$remote_sha" "$PINNED_SHA" >&2
-elif [[ "${TOLERATE_MAIN_DRIFT:-0}" == "1" ]]; then
+elif [[ "${TOLERATE_MAIN_DRIFT:-0}" == "1" ]] &&
+     git merge-base --is-ancestor "$PINNED_SHA" "$remote_sha" 2>/dev/null; then
   # Post-gate drift tolerance: the caller (Deploy production, after its full
   # verification gate) deploys exactly PINNED_SHA, so a mid-run move of main
-  # does not change what ships. Record the move and continue with the verified
+  # does not change what ships. Ancestorship is required here too: forward
+  # drift (the pinned candidate is an ancestor of the moved main tip) is
+  # tolerated on every event, while a rewind/rewrite of main (candidate NOT
+  # an ancestor of the live tip) stays fail-closed below by construction,
+  # not by repo settings. Record the move and continue with the verified
   # SHA instead of failing the whole run. Every other failure above stays
   # fail-closed even with this flag set; drift is the only downgrade.
   printf 'Deploying pinned SHA %s behind main: provider main moved to %s while the exact candidate was verified.\n' \

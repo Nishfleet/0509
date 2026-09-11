@@ -18,6 +18,7 @@ const ACCEPTED_BY_BOTH = [
   "ref:example.com",
   "pricing-free",
   "for_agencies",
+  "digest_footer",
   "locale-de-sneaker-resale",
   "summer-2026-launch",
   "search_warming_exhausted",

@@ -68,41 +68,8 @@ describe("pricing route", () => {
     });
   });
 
-  it("publishes the Dodo pricing preview in the loader when it responds within the SSR bound", async () => {
+  it("never SSRs a Dodo pricing preview and always returns the no-preview sentinel (issue #2694)", async () => {
     const previewDodo0509PlanPrices = vi.fn().mockResolvedValue(availablePreview);
-    const publicCommercialLaunchSummary = vi.fn(() => commercialLaunch);
-
-    vi.doMock("~/lib/dodo-pricing.server", () => ({ previewDodo0509PlanPrices }));
-    vi.doMock("~/lib/context.server", () => ({
-      getEnv: vi.fn(() => ({ DODO_0509_API_KEY: "provider-key" })),
-    }));
-    vi.doMock("~/lib/commercial-launch-gate.server", () => ({ publicCommercialLaunchSummary }));
-
-    const { headers, loader } = await import("~/routes/pricing");
-    const response = (await loader({
-      context: { cloudflare: { env: {} } },
-      request: new Request("https://0509.io/pricing"),
-    } as never)) as Response;
-
-    expect(previewDodo0509PlanPrices).toHaveBeenCalledTimes(1);
-    expect(response).toBeInstanceOf(Response);
-    expect(response.headers.get("cache-control")).toBe("private, max-age=300");
-    expect(response.headers.get("vary")).toContain("cookie");
-    const documentHeaders = headers({
-      loaderHeaders: response.headers,
-      parentHeaders: new Headers(),
-      actionHeaders: new Headers(),
-      errorHeaders: undefined,
-    });
-    expect(documentHeaders.get("cache-control")).toBe("private, max-age=300");
-    await expect(response.json()).resolves.toEqual({
-      pricingPreview: availablePreview,
-      commercialLaunch,
-    });
-  });
-
-  it("falls back to the checkout-localized preview when Dodo is unavailable", async () => {
-    const previewDodo0509PlanPrices = vi.fn().mockResolvedValue({ available: false });
     const publicCommercialLaunchSummary = vi.fn(() => commercialLaunch);
 
     vi.doMock("~/lib/dodo-pricing.server", () => ({ previewDodo0509PlanPrices }));
@@ -117,10 +84,42 @@ describe("pricing route", () => {
       request: new Request("https://0509.io/pricing"),
     } as never);
 
+    // The 2.5s SSR bound and ~8 Dodo checkout-preview calls per cold isolate
+    // were the reason /pricing was the last `private` public page. The loader
+    // must never touch Dodo; PricingSection fetches /api/pricing-preview from
+    // the client instead, and the worker stamps `public, max-age=300`.
+    expect(previewDodo0509PlanPrices).not.toHaveBeenCalled();
     expect(result).toEqual({
       pricingPreview: { available: false },
       commercialLaunch,
     });
+  });
+
+  it("does not set a private cache-control on the loader response", async () => {
+    const publicCommercialLaunchSummary = vi.fn(() => commercialLaunch);
+
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({ DODO_0509_API_KEY: "provider-key" })),
+    }));
+    vi.doMock("~/lib/commercial-launch-gate.server", () => ({ publicCommercialLaunchSummary }));
+
+    const mod = await import("~/routes/pricing");
+    // The headers export that forwarded the loader's private cache-control
+    // into the document is gone; the worker's public policy applies instead.
+    expect("headers" in mod).toBe(false);
+    expect(mod.loader).toBeTypeOf("function");
+    // Direct contract: /pricing is in the worker's public-cacheable path set,
+    // so a stamp-less 200 HTML response from this route gets the shared
+    // `public, max-age=300` policy with `vary: cookie`.
+    const { withSecurityHeaders, PUBLIC_HTML_CACHE_CONTROL } =
+      await import("../workers/security-headers");
+    const stamped = withSecurityHeaders(
+      new Response("<!doctype html>", { headers: { "content-type": "text/html; charset=utf-8" } }),
+      new Request("https://0509.io/pricing"),
+    );
+    expect(stamped.headers.get("cache-control")).toBe("public, max-age=300");
+    expect(stamped.headers.get("cache-control")).toBe(PUBLIC_HTML_CACHE_CONTROL);
+    expect(stamped.headers.get("vary")).toContain("cookie");
   });
 });
 

@@ -55,7 +55,15 @@ import {
 } from "~/lib/landing-pages.server";
 import { compensateUncommittedProofArtifacts } from "~/lib/proof-artifact-retention.server";
 import { LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION } from "~/lib/landing-page-signals.server";
-import { recordCtaPipelineStageCounts } from "~/lib/cta-pipeline-stage-counts.server";
+import {
+  createLandingPageExtractionFunnel,
+  landingPageExtractionFunnelSummaryJson,
+  mergeLandingPageExtractionFunnels,
+  recordCtaPipelineStageCounts,
+  recordLandingPageFunnelCandidateDrop,
+  recordLandingPageFunnelCheck,
+  type LandingPageExtractionFunnel,
+} from "~/lib/cta-pipeline-stage-counts.server";
 import {
   createLandingPagePipelineCounters,
   flushLandingPagePipelineCounters,
@@ -420,6 +428,9 @@ export async function runScheduledMonitoring(
             succeeded: metrics.succeeded,
             failed: metrics.failed,
             retrying: metrics.retrying,
+            // Issue #2893: the extraction funnel aggregated across the
+            // window's scheduled runs (null until runs carry the field).
+            landingPageExtraction: metrics.landingPageExtraction,
           },
         },
       );
@@ -1628,6 +1639,15 @@ export async function runWatchlist(
               proofsAttempted:
                 proofEvaluation.proofAttemptCount +
                 directWebsiteProofEvaluation.proofAttemptCount,
+              // Issue #2893: per-run extraction funnel persisted on the run
+              // row — dispatched → rendered → gate → extracted → diffed, plus
+              // the bail-reason map for checks that stopped earlier.
+              landingPageExtractionFunnel: landingPageExtractionFunnelSummaryJson(
+                mergeLandingPageExtractionFunnels([
+                  proofEvaluation.landingPageFunnel,
+                  directWebsiteProofEvaluation.landingPageFunnel,
+                ]),
+              ),
               eventsConfirmed:
                 scanNativeEvents.length +
                 proofEvaluation.confirmedEventCount +
@@ -1740,6 +1760,11 @@ export async function runWatchlist(
                 websiteProofUrl: directWebsiteProofEvaluation.websiteUrl,
                 candidatesDetected: directWebsiteProofEvaluation.candidateCount,
                 proofsAttempted: directWebsiteProofEvaluation.proofAttemptCount,
+                landingPageExtractionFunnel: landingPageExtractionFunnelSummaryJson(
+                  mergeLandingPageExtractionFunnels([
+                    directWebsiteProofEvaluation.landingPageFunnel,
+                  ]),
+                ),
                 eventsConfirmed: directWebsiteProofEvaluation.confirmedEventCount,
                 sendsTriggered: 0,
                 events: directWebsiteProofEvaluation.events.length,
@@ -1817,6 +1842,11 @@ export async function runWatchlist(
                 websiteProofUrl: directWebsiteProofEvaluation.websiteUrl,
                 candidatesDetected: directWebsiteProofEvaluation.candidateCount,
                 proofsAttempted: directWebsiteProofEvaluation.proofAttemptCount,
+                landingPageExtractionFunnel: landingPageExtractionFunnelSummaryJson(
+                  mergeLandingPageExtractionFunnels([
+                    directWebsiteProofEvaluation.landingPageFunnel,
+                  ]),
+                ),
                 eventsConfirmed: directWebsiteProofEvaluation.confirmedEventCount,
                 sendsTriggered: outcome.accepted,
                 sendAttempts: outcome.attempts,
@@ -2761,8 +2791,18 @@ async function evaluateSelectiveProofCandidates(
   };
 
   const proofCandidates: ProofCandidate[] = [];
+  // Issue #2893: per-run extraction funnel — count every observation that
+  // enters candidacy evaluation and every pre-dispatch drop so the run row
+  // shows where checks bailed before the pipeline counters even existed.
+  const landingFunnel = createLandingPageExtractionFunnel(
+    input.currentObservations.length,
+  );
   for (const observation of input.currentObservations) {
     if (!observation.landing_page_url || !observation.ad_id) {
+      recordLandingPageFunnelCandidateDrop(
+        landingFunnel,
+        "candidate:missing_landing_identity",
+      );
       continue;
     }
 
@@ -2770,6 +2810,10 @@ async function evaluateSelectiveProofCandidates(
       observation.landing_page_url,
     );
     if (!canonicalPageIdentity) {
+      recordLandingPageFunnelCandidateDrop(
+        landingFunnel,
+        "candidate:no_canonical_page_identity",
+      );
       continue;
     }
 
@@ -2793,9 +2837,14 @@ async function evaluateSelectiveProofCandidates(
     );
 
     if (!proofTarget) {
+      recordLandingPageFunnelCandidateDrop(
+        landingFunnel,
+        "candidate:no_proof_target",
+      );
       continue;
     }
 
+    landingFunnel.proofCandidates += 1;
     proofCandidates.push({
       observation,
       canonicalPageIdentity,
@@ -2895,6 +2944,13 @@ async function evaluateSelectiveProofCandidates(
     });
 
     if (!proofDecision.shouldCapture) {
+      // A null skipReason means the candidate scored below every trigger
+      // bucket — the quietest drop in the funnel (it writes no proof_capture
+      // row either). Count it as its own reason so the run funnel can show it.
+      recordLandingPageFunnelCandidateDrop(
+        landingFunnel,
+        `proof_policy:${proofDecision.skipReason ?? "below_threshold"}`,
+      );
       if (proofDecision.skipReason) {
         const skipReason = proofDecision.skipReason;
         await withRunLease(
@@ -2941,6 +2997,10 @@ async function evaluateSelectiveProofCandidates(
 
     if (evidenceReservation && !evidenceReservation.result.ok) {
       const failedReservation = evidenceReservation.result;
+      recordLandingPageFunnelCandidateDrop(
+        landingFunnel,
+        `evidence_reservation:${failedReservation.reason}`,
+      );
       await withRunLease(
         env,
         input.runId,
@@ -3360,6 +3420,9 @@ async function evaluateSelectiveProofCandidates(
       // Issue #1565: persist the per-stage funnel into D1 so the bail-out
       // point is queryable, not just logged. Best-effort — never throws.
       await recordCtaPipelineStageCounts(env, pipelineCounters);
+      // Issue #2893: fold the check into the per-run funnel so the run row's
+      // summary shows dispatched → extracted → diffed for THIS run.
+      recordLandingPageFunnelCheck(landingFunnel, pipelineCounters);
     }
   }
 
@@ -3368,6 +3431,7 @@ async function evaluateSelectiveProofCandidates(
     candidateCount,
     proofAttemptCount,
     confirmedEventCount,
+    landingPageFunnel: landingFunnel,
   };
 }
 
@@ -3389,8 +3453,12 @@ async function evaluateDirectWebsiteProofCandidate(
   },
 ) {
   const websiteUrl = directWebsiteUrlForWatchlist(input.watchlist);
+  // Issue #2893: the direct-website check is a one-candidate funnel; its
+  // early exits (freshness interval, dedupe, budget) previously wrote only a
+  // skipped proof_capture row — or nothing at all for the interval gate.
+  const landingFunnel = createLandingPageExtractionFunnel(0);
   if (!websiteUrl) {
-    return emptyProofEvaluation(null);
+    return emptyProofEvaluation(null, landingFunnel);
   }
 
   const now = new Date().toISOString();
@@ -3420,7 +3488,11 @@ async function evaluateDirectWebsiteProofCandidate(
 
   const canonicalPageIdentity = buildCanonicalPageIdentity(websiteUrl);
   if (!canonicalPageIdentity) {
-    return emptyProofEvaluation(websiteUrl);
+    recordLandingPageFunnelCandidateDrop(
+      landingFunnel,
+      "candidate:no_canonical_page_identity",
+    );
+    return emptyProofEvaluation(websiteUrl, landingFunnel);
   }
 
   const proofTargetIdentity = buildProofTargetIdentity({
@@ -3443,8 +3515,13 @@ async function evaluateDirectWebsiteProofCandidate(
   );
 
   if (!proofTarget) {
-    return emptyProofEvaluation(websiteUrl);
+    recordLandingPageFunnelCandidateDrop(
+      landingFunnel,
+      "candidate:no_proof_target",
+    );
+    return emptyProofEvaluation(websiteUrl, landingFunnel);
   }
+  landingFunnel.proofCandidates += 1;
 
   const targetCaptures = await listProofCapturesForTarget(
     env,
@@ -3490,10 +3567,18 @@ async function evaluateDirectWebsiteProofCandidate(
       lastSuccessfulProof?.succeededAt ?? proofTarget.lastSuccessfulProofAt,
     )
   ) {
-    return emptyProofEvaluation(websiteUrl);
+    recordLandingPageFunnelCandidateDrop(
+      landingFunnel,
+      "proof_freshness_interval",
+    );
+    return emptyProofEvaluation(websiteUrl, landingFunnel);
   }
 
   if (proofRequestDuplicate) {
+    recordLandingPageFunnelCandidateDrop(
+      landingFunnel,
+      "proof_policy:skipped_due_to_dedupe",
+    );
     await withRunLease(
       env,
       input.runId,
@@ -3510,13 +3595,17 @@ async function evaluateDirectWebsiteProofCandidate(
           captureDiagnostics: { screenshotMissingReason: "dedupe" },
         }),
     );
-    return emptyProofEvaluation(websiteUrl);
+    return emptyProofEvaluation(websiteUrl, landingFunnel);
   }
 
   // Failure cooldown stays rate_limit. Daily/monthly/v1 per-watchlist caps
   // are budget, same as the ad-proof path (#1184). Do not return empty
   // before createProofCapture — that swallows the skip from the evidence card.
   if (recentFailureCountForTarget >= 2) {
+    recordLandingPageFunnelCandidateDrop(
+      landingFunnel,
+      "proof_policy:skipped_due_to_rate_limit",
+    );
     await withRunLease(
       env,
       input.runId,
@@ -3536,7 +3625,7 @@ async function evaluateDirectWebsiteProofCandidate(
           captureDiagnostics: { screenshotMissingReason: "rate_limit" },
         }),
     );
-    return emptyProofEvaluation(websiteUrl);
+    return emptyProofEvaluation(websiteUrl, landingFunnel);
   }
 
   if (
@@ -3567,7 +3656,14 @@ async function evaluateDirectWebsiteProofCandidate(
           captureDiagnostics: { screenshotMissingReason: "budget" },
         }),
     );
-    return emptyProofEvaluation(websiteUrl);
+    // Funnel: a budget-exhausted direct-website check bailed before dispatch
+    // (reviewer Consider finding on #2893) — otherwise the top bail-out
+    // surface can silently omit the budget gate.
+    recordLandingPageFunnelCandidateDrop(
+      landingFunnel,
+      "proof_policy:skipped_due_to_budget",
+    );
+    return emptyProofEvaluation(websiteUrl, landingFunnel);
   }
 
   const evidenceReservation = await tryReserveEvidenceForProofCapture(env, {
@@ -3580,6 +3676,10 @@ async function evaluateDirectWebsiteProofCandidate(
 
   if (evidenceReservation && !evidenceReservation.result.ok) {
     const failedReservation = evidenceReservation.result;
+    recordLandingPageFunnelCandidateDrop(
+      landingFunnel,
+      `evidence_reservation:${failedReservation.reason}`,
+    );
     await withRunLease(
       env,
       input.runId,
@@ -3602,7 +3702,7 @@ async function evaluateDirectWebsiteProofCandidate(
           },
         }),
     );
-    return emptyProofEvaluation(websiteUrl);
+    return emptyProofEvaluation(websiteUrl, landingFunnel);
   }
 
   const evidenceOperationKey = evidenceReservation?.logicalOperationKey ?? null;
@@ -3727,7 +3827,7 @@ async function evaluateDirectWebsiteProofCandidate(
         },
       });
       return {
-        ...emptyProofEvaluation(websiteUrl),
+        ...emptyProofEvaluation(websiteUrl, landingFunnel),
         proofAttemptCount: 1,
       };
     }
@@ -4013,6 +4113,7 @@ async function evaluateDirectWebsiteProofCandidate(
       confirmedEventCount,
       websiteUrl: snapshot.canonicalUrl,
       proofCaptureSucceeded: true,
+      landingPageFunnel: landingFunnel,
     };
   } catch (error) {
     if (freshSnapshotForCompensation && !proofCaptureCommitted) {
@@ -4035,10 +4136,15 @@ async function evaluateDirectWebsiteProofCandidate(
     flushLandingPagePipelineCounters(pipelineCounters);
     // Issue #1565: persist the per-stage funnel into D1 (best-effort).
     await recordCtaPipelineStageCounts(env, pipelineCounters);
+    // Issue #2893: fold the check into the per-run funnel.
+    recordLandingPageFunnelCheck(landingFunnel, pipelineCounters);
   }
 }
 
-function emptyProofEvaluation(websiteUrl: string | null) {
+function emptyProofEvaluation(
+  websiteUrl: string | null,
+  landingPageFunnel: LandingPageExtractionFunnel = createLandingPageExtractionFunnel(),
+) {
   return {
     events: [] as WatchEventRecord[],
     candidateCount: 0,
@@ -4046,6 +4152,7 @@ function emptyProofEvaluation(websiteUrl: string | null) {
     confirmedEventCount: 0,
     websiteUrl,
     proofCaptureSucceeded: false,
+    landingPageFunnel,
   };
 }
 
