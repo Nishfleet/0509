@@ -63,10 +63,14 @@ Closes #2477
 
 ## Reviewer round (pre-arm)
 
-Independent reviewer pass over `origin/main...HEAD` — verdict **APPROVE**, zero ACT-ON findings. Seat resolution: `fleet-review-arm-check` exit 0; `find_senior_seat` reported the senior ladder walled and fell through to `opencode/nemotron-3-ultra-free`.
+This branch is the salvaged, rebased work of closed-unmerged PR #2828 (prior worker run reached StartLimitBurst; the claim release reset the branch). Cherry-picked onto origin/main d06540ed0; product diff verified line-identical to the previously reviewed diff, then re-verified green (337/4230 tests) and re-reviewed.
 
-- NOTED: union/dedupe/ordering verified; ≤26 bound params; tenant scoping via `proof_target.watchlist_id` join; `?event=` pinned events covered too.
-- NOTED: `classifyWatchPeriodTriage` concern from phase 2 settled — event `proofCaptureId`s always point at `succeeded` captures (verified across every `createWatchEvent` call site), so triage's failed/pending/skipped branches can't trip.
-- CONSIDER: `buildRunHistoryRefusalRows` may surface an old event-referenced suppressed-validity capture — honest data, bounded.
+Independent reviewer pass over `origin/main...HEAD` — verdict **APPROVE**, zero ACT-ON findings. Seat resolution: `fleet-review-arm-check` exit 0; `find_senior_seat` reported the senior ladder walled and fell through to `commandcode/poolside/laguna-s-2.1-free`.
+
+- NOTED: union/dedupe/ordering verified; ≤25 bound params under D1's cap via `queryIn`; tenant scoping via `proof_target.watchlist_id` join; `?event=` pinned events covered; `buildProofSummary` keeps the unmerged recent-12 — summary semantics unchanged.
+- NOTED: `classifyWatchPeriodTriage` concern settled — event `proofCaptureId`s are attached only on confirmed events and always point at `succeeded` captures (verified across every `createWatchEvent` call site; no `UPDATE watch_event` exists, status is immutable), and the confirmed-events path short-circuits triage before it reads `proofCaptures`.
+- NOTED: the new test drives the real loader end-to-end (real `proofCapturesById` derivation matching `competitor-detail.tsx`, real `EventChangesSection` render); pre-fix RED is real.
 - NOTED: unguarded `listProofCapturesByIds` await matches the file's fail-closed posture (same as the sibling detail queries).
-- DISMISSED: a plan.md doc nit about top-level destructure semantics — the lazy barrel import is correct regardless.
+- CONSIDER: `buildRunHistoryRefusalRows` may surface an old event-referenced suppressed-validity capture — honest data, bounded.
+- CONSIDER (acted): plan.md reported stale pre-rebase test counts — clarified; lane evidence record added at `.lane/reports/claim-issue-2477.md`.
+- DISMISSED: "extras are older by construction" could be falsified by `attempted_at` ties — dismissed: ties only affect tail ordering and no consumer depends on it (`resolvePriorProofCapture` re-sorts).

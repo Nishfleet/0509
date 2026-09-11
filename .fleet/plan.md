@@ -78,6 +78,6 @@ Phase list: 1) RED test first + commit showing red; 2) `listProofCapturesByIds` 
 ## Phase 3 verification
 
 - `npx vitest run tests/event-changes-section.test.tsx --configLoader runner --project node` — 2/2 pass.
-- `npx vitest run --configLoader runner --project node --changed origin/main` — 325 files / 4146 tests pass.
+- `npx vitest run --configLoader runner --project node --changed origin/main` — 325 files / 4146 tests pass (pre-rebase run); 337 files / 4230 tests pass after rebase onto origin/main d06540ed0 (2026-09-12 salvage run — the 5 commits were recovered from closed PR #2828 and cherry-picked; product diff verified line-identical to the reviewed diff).
 - Regression found + fixed in-run: `tests/watchlists.route.test.ts` strict `vi.doMock` of `~/lib/data.server` lacked the new export and its "board only until a competitor is opened" case hits the missing-ids branch — added `listProofCapturesByIds: vi.fn().mockResolvedValue([])` to the three `data.server` mock blocks (test-helper change, required by the strict mocks).
 - Typecheck deferred to CI per fleet-ops#4891 / repo AGENTS.md (never run in a worker).
