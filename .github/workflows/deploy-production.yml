@@ -154,6 +154,13 @@ jobs:
           PINNED_SHA: ${{ needs.authorize_release.outputs.sha }}
           EMIT_PINNED_SHA: "1"
           GH_TOKEN: ${{ github.token }}
+          # Same post-gate drift tolerance as the later steps below: main
+          # advancing while a queued run starts must not fail the pin (and
+          # file a fresh AUTO-REVERT HALT) when the run still ships exactly
+          # PINNED_SHA, which it verified. Forward moves are recorded;
+          # every other CAS failure, including a rewind/rewrite of main,
+          # stays fail-closed.
+          TOLERATE_MAIN_DRIFT: "1"
           # The pin CAS follows the authorize job's dispatch resolution: on a
           # workflow_dispatch the pinned candidate is the dispatched expected
           # SHA (not the run head), and the provider CAS confirms it is still
