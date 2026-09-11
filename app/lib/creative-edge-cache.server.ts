@@ -37,6 +37,12 @@ import {
 import { bindD1Named } from "~/lib/d1-bind.server";
 import type { AppEnv } from "~/lib/env.server";
 import { fetchWithTimeout, releaseFetchTimeout } from "~/lib/fetch-timeout.server";
+import {
+  getCreativeImageByHash,
+  lookupStoredCreativeHash,
+  persistCreativeHash,
+  storeCreativeImageByHash,
+} from "~/lib/creative-r2-hash.server";
 
 export const CREATIVE_CACHE_NAME = "creative-v1";
 /**
@@ -281,6 +287,18 @@ export async function primeCreativeEdgeCache(env: AppEnv, adId: string): Promise
       // Do not write a 30-day immutable placeholder for a wobble.
       return false;
     }
+    // Issue #2981: mirror the bytes into R2 under their content hash while
+    // we have them, so the creative outlives its fbcdn URL.
+    if (outcome.kind === "ok") {
+      try {
+        const stored = await storeCreativeImageByHash(env, outcome.bytes, outcome.contentType);
+        if (stored) {
+          await persistCreativeHash(env, id, stored);
+        }
+      } catch {
+        // A failed mirror must not fail the prime or the cache fill below.
+      }
+    }
     // A dead creative is cached as the placeholder, so no later request
     // re-hits fbcdn. There is no retry loop here or anywhere downstream.
     await cache.put(
@@ -341,6 +359,21 @@ export async function serveCreativeResource(
       return new Response("Not Found", { status: 404 });
     }
 
+    // Issue #2981: the content-hash R2 copy is served FIRST — fetch-time fbcdn
+    // URLs rot, hash-keyed bytes do not. On an R2 hit we still cache-fill the
+    // Cache API entry so the next request is free.
+    const storedHash = await lookupStoredCreativeHash(env, id);
+    try {
+      const image = await getCreativeImageByHash(env, storedHash);
+      if (image) {
+        const r2Response = imageResponse(imageBody(image.bytes), image.contentType);
+        await cache?.put(key, r2Response.clone());
+        return request.method === "HEAD" ? headOf(r2Response) : r2Response;
+      }
+    } catch {
+      // A failed R2 read degrades to the fetch path below.
+    }
+
     const outcome = await fetchFbcdnCreative(resolved);
     if (outcome.kind === "transient") {
       // Serve the placeholder without caching it or claiming 30-day
@@ -360,6 +393,18 @@ export async function serveCreativeResource(
       outcome.kind === "ok"
         ? imageResponse(imageBody(outcome.bytes), outcome.contentType)
         : placeholderResponse();
+
+    // Issue #2981: self-healing backfill — a request that still resolves the
+    // fbcdn URL takes the bytes and lands them in R2 by content hash, so this
+    // is the last request that ever depends on the signed URL being alive.
+    if (outcome.kind === "ok") {
+      // Both halves are idempotent; their failure paths return false/null, so
+      // a failed mirror must not fail the serve that just succeeded.
+      const stored = await storeCreativeImageByHash(env, outcome.bytes, outcome.contentType);
+      if (stored) {
+        await persistCreativeHash(env, id, stored);
+      }
+    }
 
     // Cache even the placeholder: the dead creative must not be re-fetched.
     await cache?.put(key, response.clone());
