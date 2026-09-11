@@ -1,44 +1,44 @@
-**Issue #2334** — Replace the `event_type` CHECK constraints with a lookup/free-text column in one final table rebuild.
+fix: truthful reference counting and error reporting in proof-artifact retention (M33, M34, M35)
 
 ## What changed
-Migration `migrations/0090_event_type_free_text.sql` (new) rebuilds `event_candidate` and `watch_event` one final time:
+Three defect fixes in `app/lib/proof-artifact-retention.server.ts`, each with a RED→GREEN test in `tests/proof-artifact-retention.test.ts` (new file, 15 tests):
 
-- `event_type` becomes unconstrained free text (the inline `CHECK (... IN (...))` is dropped from both tables) — vocabulary validation moves from the schema to code (the source adapter registry from #2333).
-- A new nullable `source_kind TEXT` column is added to both tables.
-- Rebuild uses the established `_next` → `INSERT ... SELECT` → `DROP` → `RENAME` convention (0077:40-135 for `watch_event`, 0077:146-250 for `event_candidate`) with `PRAGMA foreign_keys = OFF/ON`, preserving every existing column, value, and row and recreating the same indexes. Row counts are unchanged by the rebuild.
-- Apply is one-way (D1 has no down-migrations); the pre-0090 event types remain valid free text, so reverting the code does not depend on re-imposing a CHECK. One phase only: this is the final table rebuild. (`Relates to #2333` — the adapter-registry code validation is that issue's scope.)
+- **M33** — `getProofArtifactInventory` counted `landing_page_snapshot` references only through `ad_observation → watchlist_run → watchlist` INNER JOINs, so an observation-less snapshot (a real state: the `deleteExpiredLandingPageSnapshots` sweeper's own `NOT EXISTS` clause proves it) contributed 0 rows and the `shared_reference` guard could delete an R2 object a snapshot still points at. The snapshot branch now counts straight from `landing_page_snapshot` (`artifact_key = ?` OR metadata `$.htmlArtifactKey` / `$.screenshotArtifactKey`, guarded by `json_valid`), with the owner chain converted to LEFT JOINs so a NULL owner still counts as a reference but never as an owner match — exactly how the three sibling guards treat metadata-held keys.
+- **M34** — `compensateUncommittedProofArtifacts` early-returned `{ok:false, deleted:0, failed:1}` on the first malformed key, stranding every valid artifact as an unreferenced R2 object. It now does per-value accounting (`if (!parsed) { failed += 1; continue; }`) and deletes the valid keys, returning `{ok: failed === 0, deleted, failed}`. The missing-bucket path counts malformed + valid keys as failed.
+- **M35** — `deleteProofArtifactsForCapture` wrapped the R2 `head`/`delete` and the D1 reference clear in one `try`, so a D1 throw after a successful R2 delete was misreported as `r2:"failed", d1:"not_updated"`. It now mirrors `deleteOneProofArtifact`: inner try around each `clearCaptureProofArtifactReference` call reporting the truthful already-computed `r2` with `d1:"failed"`, reserving `r2:"failed"` for R2 failures.
 
-## Migration numbering note
-The judge edits (binding) pinned this as `migrations/0088_event_type_free_text.sql`, but `0088` is already taken by two applied migrations (`0088_competitor_source_fields.sql`, `0088_recreate_delivery_hot_path_indexes.sql`). Per the sibling issue's standing principle ("verify the next free migration number at run time; if taken, use the next and note it in the PR"), this lands as the next genuinely free number, `0090`. A duplicate `0088` would collide with D1's per-id migration bookkeeping on a fresh apply.
+## RED→GREEN (per finding, all in tests/proof-artifact-retention.test.ts)
+- M33: snapshot with `artifact_key = HTML_KEY` and no `ad_observation` + owner `proof_capture` → `landingPageSnapshotReferences` was 0 (RED), now 1; `deleteProofArtifacts` outcome was deletion, now `shared_reference`.
+- M34: `{artifactKey: HTML_KEY, metadata: {htmlArtifactKey: "not-a-key"}}` → R2 delete was never called (RED, early return), now `HTML_KEY` deleted and `failed === 1`.
+- M35: R2 delete succeeds, D1 clear throws → was `r2:"failed", d1:"not_updated"` (RED), now `r2:"deleted", d1:"failed"`.
+
+## Same-pattern sweep (step 3)
+Swept `proof-artifact-retention.server.ts` and its callers: `deleteOneProofArtifact` already has the correct nested-try structure (used as the model); `deleteProofArtifacts`, `headProofArtifactForOwner`, `getProofArtifactForOwner` contain no combined R2+D1 try and no early-return-on-malformed-key loop; no further instances. Sweep findings are recorded in `.fleet/plan.md`.
 
 ## Verification
-Post-rebase runs on this branch against real D1:
-- `workers` project (real D1 + real migrations applied): **53 test files / 258 tests passed**, including the new `tests/integration/migrations/0090-event-type-free-text.integration.test.ts` (4 tests) and the updated `tests/integration/watch-event-writes.integration.test.ts` (11 tests).
-- `node` project: affected-tests mode (`--changed origin/main`) — only `tests/integration/**` changed relative to `origin/main`, which belongs to the `workers` project, so no `node` test file changed and it exited green.
+Post-rebase runs on this branch (rebased onto origin/main @ 03b8c6375):
+- `npx vitest run --configLoader runner --project node tests/proof-artifact-retention.test.ts` → **15/15 passed**.
+- `npx vitest run --configLoader runner --project node --changed origin/main` → **327 files / 4193 tests passed**.
+- Typecheck is CI-owned (memory-capped unit; not run locally).
 
-`run-proof: migrations/0090_event_type_free_text.sql applied to a fresh D1 in the workers project; tests/integration/migrations/0090-event-type-free-text.integration.test.ts (4 tests) + full workers suite (53 files / 258 tests) green; node affected-tests (--changed origin/main) clean`
-
-## Integration test (D1 schema rule)
-`tests/integration/migrations/0090-event-type-free-text.integration.test.ts` applies the repo's real migrations and asserts both the **READ** path (both tables expose `source_kind`; the `event_type` CHECK is gone from the live `sqlite_master` DDL; a legacy `ad_new` event_type round-trips unchanged with `source_kind` NULL) and the **WRITE** path (a brand-new `event_type` that the old CHECK never allowed, plus a `source_kind`, is accepted into both tables and read back).
-
-The pre-existing `watch-event-writes.integration.test.ts` test `lets D1 reject an event_type outside the schema's CHECK vocabulary` pinned the schema as the enforcement point — precisely the behavior #2334 removes. It is updated (same assertion count) to assert the new contract: D1 accepts free-text `event_type`, with `test-removal-justified:` on the commit. It touches no gate-owned path and removes no test.
+`run-proof: tests/proof-artifact-retention.test.ts 15/15 green; node --changed origin/main 327 files / 4193 tests green`
 
 ## Scope checks
-- `research:` — no `bin/` files added (migration + test only); `research-before-build-check` not applicable.
-- `help-first:` — not applicable (no new `bin/` files).
+- `research:` — no `bin/` files added; `research-before-build-check` not applicable.
+- `help-first:` — not applicable.
 - rebuild/masking diffs: none.
-- organ diffs: none (`organ-heartbeat:` not-an-organ — `watch_event`/`event_candidate` are data tables, not organs; no organ files touched).
-net-positive-because: a migration file plus its required real-D1 integration test necessarily add schema-lines; the added code is persistent intent (the free-text event_type contract #2334 demands), not a throwaway shim.
+- organ diffs: none (`organ-heartbeat:` not-an-organ — reference-counting SQL in a retention lib, not an organ file).
+- No migrations touched; no public behaviour changed beyond the three named findings.
 
-loose-ends: legacy `watch_event`/`event_candidate` rows keep `source_kind` NULL; the column is populated by new sources going forward (code wiring lands with the #2333 adapter registry, out of scope here).
-
-## Senior reviewer round (seat: opencode`nemotron-3-ultra-free`)
+## Senior reviewer round (seat: cursor/cursor-grok-4.6-high)
 One round, diff `origin/main...HEAD` against the issue acceptance and the repo tests. Review-adjudication buckets:
 - **Act on:** none.
-- **Consider:** the migration test cannot assert a numeric pre/post row-count because migrations apply at setup before any test seeds rows; the rebuild is an unfiltered full-column `INSERT ... SELECT` (no WHERE/join, NULL literal for the one new column) so counts are structurally identical and it follows the 0077 precedent exactly.
-- **Noted:** column parity with 0077 is exact; `event_candidate` FK valid at CREATE under `PRAGMA foreign_keys = OFF/ON`; the test-honesty regex is sound; `source_kind` has zero production `.ts` references (all writes use explicit column lists so position 3 is safe); row-preservation is structural.
-- **Dismissed-with-reason:** "database validation removed without replacement" — removing the schema CHECK is exactly the #2334 contract; vocabulary moves to adapter-registry code in #2333.
+- **Consider:** NULL-owner snapshots count in `landingPageSnapshotReferences` but not `ownerMatchCount`, so `referenceState` for an ownerless snapshot is `"shared_reference"` rather than owner-denied — matches the sibling-guard semantics and the issue's fix paragraph; accepted.
+- **Noted:** `compensateUncommittedProofArtifacts`'s non-string slot values are dropped by a pre-existing filter (predates this change); malformed values count per-occurrence while valid keys dedupe via Set (spec-per-value semantics); M35's outer catch still exists for head/delete failures (`r2_failed` reserved, correct).
+- **Dismissed-with-reason:** none.
 
-review: none blocked (`blocked-by-judge` not applicable — no gate/touch verifier weakened; `watch-event-writes` test replaced with same assertion count, no suite-count regression).
+Phase reviewer verdicts from the phase loop: phase 1 SHIP, phase 2 SHIP, phase 3/4 sweep confirmed no further instances (`.fleet/plan.md`).
 
-Closes #2334
+loose-ends: none known — the production caller at retention.server.ts pre-guards with a join-free query, so behaviour there is unchanged; the fix repairs the exported contract for other callers.
+
+Closes #2463
