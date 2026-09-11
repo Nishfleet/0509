@@ -231,6 +231,64 @@ export async function upsertWorkspaceDeliveryConfig(
   return getWorkspaceDeliveryConfig(env, input.userId);
 }
 
+/**
+ * Channel connect paths touch only their own flag. A whole-row
+ * read-modify-write here replays a stale snapshot and silently flips a
+ * channel a concurrent save just connected back off.
+ */
+export async function enableWorkspaceDeliveryChannel(
+  env: AppEnv,
+  input: { userId: string; channel: "slack" | "teams"; hasEmail: boolean },
+) {
+  const defaults = legacyWorkspaceDeliveryDefaults({
+    hasEmail: input.hasEmail,
+  });
+  const channelColumn =
+    input.channel === "slack" ? "slack_enabled" : "teams_enabled";
+  const timestamp = nowIso();
+  await run(
+    env,
+    `
+      INSERT INTO workspace_delivery_config (
+        id,
+        user_id,
+        sensitivity_mode,
+        instant_enabled,
+        digest_enabled,
+        digest_cadence_preference,
+        email_enabled,
+        whatsapp_enabled,
+        slack_enabled,
+        teams_enabled,
+        quiet_hours_json,
+        timezone,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(user_id)
+      DO UPDATE SET ${channelColumn} = 1,
+                    updated_at = excluded.updated_at
+    `,
+    createId(),
+    input.userId,
+    defaults.sensitivityMode,
+    boolToInt(defaults.instantEnabled),
+    boolToInt(defaults.digestEnabled),
+    defaults.digestCadencePreference,
+    boolToInt(defaults.emailEnabled),
+    boolToInt(defaults.whatsappEnabled),
+    boolToInt(input.channel === "slack"),
+    boolToInt(input.channel === "teams"),
+    jsonValue(null),
+    null,
+    timestamp,
+    timestamp,
+  );
+
+  return getWorkspaceDeliveryConfig(env, input.userId);
+}
+
 export async function getUserDeliveryProfile(env: AppEnv, userId: string) {
   const row = await one<{
     id: string;
