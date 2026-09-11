@@ -347,6 +347,47 @@ describe("Worker security headers", () => {
 		expect(response.headers.get("x-robots-tag")).toBeNull();
 	});
 
+	it("marks parameterised /search noindex, but keeps bare /search clean (issue #2965)", () => {
+		// Every distinct query is otherwise an indexable URL — the mechanical
+		// fix is the same edge-layer header /share/ already carries.
+		const noindexed = [
+			"https://0509.io/search?q=adidas",
+			"https://0509.io/search?website=nike.com",
+			"https://0509.io/search?q=",
+			"https://0509.io/search?utm_source=x",
+			"https://0509.io/search?q=adidas.data",
+		];
+		for (const url of noindexed) {
+			const response = withSecurityHeaders(
+				new Response("<!doctype html>", { headers: { "content-type": "text/html; charset=utf-8" } }),
+				new Request(url),
+			);
+			expect(response.headers.get("x-robots-tag"), url).toBe("noindex, nofollow");
+		}
+		// Bare /search ("?" alone carries no parameter) is handled by the route
+		// loader's 302 to /brands, not by this header — and an unknown-locale
+		// /xx/search prefix must NOT match, so a future real /xx/search route
+		// is never silently noindexed.
+		const clean = ["https://0509.io/search?", "https://0509.io/xx/search?q=adidas"];
+		for (const url of clean) {
+			const response = withSecurityHeaders(
+				new Response("<!doctype html>", { headers: { "content-type": "text/html; charset=utf-8" } }),
+				new Request(url),
+			);
+			expect(response.headers.has("x-robots-tag"), url).toBe(false);
+		}
+	});
+
+	it("marks buyer-surface locale /search twins noindex when parameterised", () => {
+		for (const path of ["/de/search?q=adidas", "/ja/search?q=adidas", "/fr/search?q=nike.data"]) {
+			const response = withSecurityHeaders(
+				new Response("<!doctype html>", { headers: { "content-type": "text/html; charset=utf-8" } }),
+				new Request(`https://0509.io${path}`),
+			);
+			expect(response.headers.get("x-robots-tag"), path).toBe("noindex, nofollow");
+		}
+	});
+
 	it("does not mark public marketing pages noindex", () => {
 		const homeResponse = withSecurityHeaders(
 			new Response("<!doctype html>", { headers: { "content-type": "text/html; charset=utf-8" } }),

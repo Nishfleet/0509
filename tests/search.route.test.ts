@@ -144,7 +144,7 @@ afterEach(() => {
 });
 
 describe("search loader", () => {
-  it("shows the idle public search page without calling live discovery", async () => {
+  it("302s anonymous bare /search to /brands without calling live discovery (issue #2965)", async () => {
     const env = { DB: {} };
     const getOptionalSession = vi.fn().mockResolvedValue(null);
     const listCollections = vi.fn();
@@ -175,7 +175,7 @@ describe("search loader", () => {
     }));
 
     const { loader } = await import("~/routes/search");
-    const result = await unwrapLoaderResult(loader, {
+    const out = await loader({
       context: createContext(env),
       request: new Request("http://localhost/search"),
     } as never);
@@ -184,13 +184,56 @@ describe("search loader", () => {
     expect(listCollections).not.toHaveBeenCalled();
     expect(searchAdsViaSourceResolver).not.toHaveBeenCalled();
     expect(prepareSearchResultSelection).not.toHaveBeenCalled();
-    expect(result).toMatchObject({
-      session: null,
-      result: {
-        ads: [],
-        discoveryStatus: "disabled",
-      },
-    });
+    // Issue #2965: anonymous bare /search is an empty-q page that used to be
+    // indexable — it must 302 to the indexable /brands hub instead of
+    // rendering the idle shell to crawlers.
+    expect(out).toBeInstanceOf(Response);
+    const redirect = out as Response;
+    expect(redirect.status).toBe(302);
+    expect(redirect.headers.get("location")).toBe("/brands");
+  });
+
+  it("keeps the idle search UI for a signed-in visitor on bare /search", async () => {
+    const env = { DB: {} };
+    const listCollections = vi.fn().mockResolvedValue([]);
+    const searchAdsViaSourceResolver = vi.fn();
+    const prepareSearchResultSelection = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(appSession),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections,
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver,
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection,
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue(null),
+    }));
+
+    const { loader } = await import("~/routes/search");
+    const result = await unwrapLoaderResult(loader, {
+      context: createContext(env),
+      request: new Request("http://localhost/search"),
+    } as never);
+
+    // The dashboard/set-up-checklist funnels link to bare /search; a signed-
+    // in user must still get the search UI, not the /brands bounce.
+    expect(result).toMatchObject({ session: { user: appSession.user } });
   });
 
   it("returns plan=null to the UI when the plan lookup blips for a signed-in user", async () => {

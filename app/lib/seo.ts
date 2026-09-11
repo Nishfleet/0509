@@ -917,7 +917,15 @@ export function jsonLdScriptProps(data: unknown) {
 
 export const SITEMAP_PATHS = [
   "/",
-  "/search",
+  // Issue #2965: /search is dropped from the sitemap. Every parameterised
+  // /search?q=... URL now serves `x-robots-tag: noindex, nofollow` at the
+  // worker edge (workers/security-headers.ts, same mechanism as /share/),
+  // and bare /search 302s to /brands, so the sitemap must not advertise
+  // any of them as indexable — every distinct query used to be a
+  // crawlable page. Search stays reachable from nav funnels; the WebPage
+  // JSON-LD SearchAction target (/search?q={search_term_string}) is
+  // unaffected. Buyer-surface locale sitemaps inherit the drop:
+  // staticSitemapEntriesForLocale only maps paths present in this list.
   // Issue #1417: /brands is the hub that links the otherwise-orphaned /ads/*
   // pages to each other — adding it to the sitemap gives crawlers a direct
   // path to the full indexable brand surface (and Google an internal-link

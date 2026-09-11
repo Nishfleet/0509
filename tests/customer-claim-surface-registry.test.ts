@@ -378,8 +378,12 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
   // 2026-09-12: the #3093 trio joined the sitemap — offer-change alert,
   // prove-what-changed, and standing-watch guides; static long-form pages, no
   // new claim text beyond the live plan facts they restate.
+  // 2026-09-12: /search left the sitemap (issue #2965) — every parameterised
+  // /search?q= page serves `x-robots-tag: noindex, nofollow` at the worker
+  // edge (same mechanism as /share/) and bare /search 302s to /brands, so
+  // every distinct query no longer becomes a crawlable indexable page.
   sitemapPaths: [
-    "/", "/search", "/brands", "/briefs/weekly", "/sample-brief", "/llms-full.txt", "/guides/how-to-track-competitor-ads", "/guides/how-to-monitor-meta-ad-library", "/guides/how-to-monitor-competitor-landing-page-changes", "/guides/how-to-get-alerted-when-a-competitor-changes-their-offer", "/guides/how-to-prove-what-changed-on-a-competitor-website", "/guides/how-to-turn-a-one-off-competitor-check-into-a-standing-watch",
+    "/", "/brands", "/briefs/weekly", "/sample-brief", "/llms-full.txt", "/guides/how-to-track-competitor-ads", "/guides/how-to-monitor-meta-ad-library", "/guides/how-to-monitor-competitor-landing-page-changes", "/guides/how-to-get-alerted-when-a-competitor-changes-their-offer", "/guides/how-to-prove-what-changed-on-a-competitor-website", "/guides/how-to-turn-a-one-off-competitor-check-into-a-standing-watch",
     "/compare", "/compare/meta-ad-library",
     "/compare/visualping-ad-libraries", "/compare/spyland",
     "/compare/pulzifi", "/compare/foreplay-spyder",
