@@ -26,11 +26,11 @@
 import { Link, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 
+import { Breadcrumbs, type BreadcrumbCrumb } from "~/components/breadcrumbs";
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
 import {
   brandCategorySocialCardUrl,
-  breadcrumbJsonLd,
   canonicalUrl,
   itemListJsonLd,
   jsonLdScriptProps,
@@ -230,6 +230,11 @@ export default function BrandCategoryRoute() {
   const data = useLoaderData<typeof loader>();
   const { label, slug, brands, lastMod } = data;
   const pageTitle = `${label} competitor Meta ads`;
+  const breadcrumbItems: BreadcrumbCrumb[] = [
+    { name: "Home", pathname: "/" },
+    { name: "Brands", pathname: "/brands" },
+    { name: label, pathname: `/brands/${slug}` },
+  ];
   const brandWord = brands.length === 1 ? "brand" : "brands";
 
   return (
@@ -244,17 +249,7 @@ export default function BrandCategoryRoute() {
           }),
         )}
       />
-      <script
-        {...jsonLdScriptProps(
-          breadcrumbJsonLd({
-            items: [
-              { name: "Home", pathname: "/" },
-              { name: "Brands", pathname: "/brands" },
-              { name: label, pathname: `/brands/${slug}` },
-            ],
-          }),
-        )}
-      />
+      <Breadcrumbs items={breadcrumbItems} />
       {brands.length > 0 && (
         <script
           {...jsonLdScriptProps(
