@@ -30,13 +30,13 @@ this doc gets fixed.
 - Live search results labeled fresh/recent/sample.
 - No WhatsApp delivery claims in GA copy — WhatsApp is dormant, non-GA, barred from customer truth until a provider is configured and Nish un-gates it. Slack and Teams incoming-webhook delivery of confirmed changes is a live Starter+ channel (2026-08-12 decision); the legacy Slack export/API/MCP surface remains dormant and unclaimed.
 - No unlimited monitoring claims — evidence checks are metered.
-- Screenshot and landing-page-change-history copy matches live capture coverage: source-linked proof always, a screenshot only when the capture includes one, and change history only on tracked brands with a baseline. Growing that baseline is issue #2021. See `docs/customer-claim-audit-table.json` (AUDIT-SAVES-SCREENSHOTS, AUDIT-LANDING-PAGE-CHANGE-HISTORY).
+- Screenshot and landing-page-change-history copy matches live capture coverage: source-linked proof always, a screenshot only when the capture includes one, and change history only on tracked brands with a baseline. Growing that baseline is issue #2021. See `docs/customer-claim-table.json` (AUDIT-SAVES-SCREENSHOTS, AUDIT-LANDING-PAGE-CHANGE-HISTORY).
 
 ## Source of truth
 
 - Live GA verdict: `docs/final-self-serve-ga-scorecard.md` (dated release evidence).
 - Deployed state + bindings: `CLAUDE.md` → "Production Reality" and `wrangler.jsonc`.
-- Claim-by-claim reality check: `docs/customer-claim-audit-table.json` +
+- Claim-by-claim reality check: `docs/customer-claim-table.json` +
   `docs/customer-claim-surface-registry.json` → `rows` (mechanical check:
   `npm run verify:claims`).
 - `docs/ga-launch-scorecard.md` is SUPERSEDED — do not use it as the live verdict.
