@@ -580,8 +580,8 @@ function suggestVerifiedSearchDomain(keyword: string): string | null {
   if (stem.includes(".") || stem.includes("/") || stem.includes(" ")) {
     return null;
   }
-  // Strip common brand-noise suffixes so "goat app" → "goat" → "goat.com",
-  // not "goatapp.com". Only a suffix separated from the stem as a distinct
+  // Strip common brand-noise suffixes ("app"/"hq"/"co") only when the suffix
+  // is separated from the stem as a distinct
   // whitespace-bounded token in the original keyword may be stripped: the
   // old offset>=3 heuristic stripped mid-word, mapping "costco" → "cost" →
   // "cost.com" (a domain Costco does not own) and "mexico" → "mexic.com".
