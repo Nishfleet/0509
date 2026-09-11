@@ -335,6 +335,75 @@ UPDATE child SET note = 'hello';
     expect(() =>
       parseExpectsRowLoss("-- expects-row-loss: 0087_thing.sql\n"),
     ).toThrow(/migration_row_invariant_annotation_table_invalid/);
+    // A line that only LOOKS like a declaration because it sits inside a
+    // block comment is not one.
+    expect([
+      ...parseExpectsRowLoss("/*\n-- expects-row-loss: user_plan\n*/\n"),
+    ]).toEqual([]);
+    // A real line comment after a closed block comment still counts.
+    expect([
+      ...parseExpectsRowLoss(
+        "/* prose */\n-- expects-row-loss: user_plan\n",
+      ),
+    ]).toEqual(["user_plan"]);
+  });
+
+  it("(10) a declaration from a file that did not cause the loss does not excuse it", () => {
+    const root = tempRoot();
+    const sourcePath = seedCascadeFixture(root);
+    // 9005 does NOT touch child; 9006 is the culprit and declares nothing.
+    const innocent = writeMigration(
+      root,
+      "9005_innocent.sql",
+      "-- expects-row-loss: child\nCREATE TABLE unrelated (id TEXT PRIMARY KEY NOT NULL);\n",
+    );
+    const culprit = writeMigration(
+      root,
+      "9006_culprit.sql",
+      DESTRUCTIVE_REBUILD,
+    );
+
+    const result = applyMigrationsToCopy({
+      sourcePath,
+      migrations: [innocent, culprit],
+    });
+    const verdict = evaluateMigrationRowInvariant({
+      before: result.before,
+      after: result.after,
+      expectedRowLossByMigration: result.expectedRowLossByMigration,
+      perMigrationCounts: result.perMigrationCounts,
+    });
+
+    // `child` is declared by 9005 but was emptied by 9006, so it is NOT
+    // excused: the union of all declarations would have passed this.
+    expect(verdict.ok).toBe(false);
+    expect(verdict.losses.map((loss) => loss.table)).toEqual([
+      "child",
+      "other_child",
+    ]);
+  });
+
+  it("(11) the culprit's own declaration is honoured", () => {
+    const root = tempRoot();
+    const sourcePath = seedCascadeFixture(root);
+    const culprit = writeMigration(
+      root,
+      "9007_culprit_declared.sql",
+      `-- expects-row-loss: child,other_child\n${DESTRUCTIVE_REBUILD}`,
+    );
+
+    const result = applyMigrationsToCopy({
+      sourcePath,
+      migrations: [culprit],
+    });
+    const verdict = evaluateMigrationRowInvariant({
+      before: result.before,
+      after: result.after,
+      expectedRowLossByMigration: result.expectedRowLossByMigration,
+      perMigrationCounts: result.perMigrationCounts,
+    });
+
+    expect(verdict.ok).toBe(true);
   });
 
   it("(8) the summary diff names every changed table", () => {

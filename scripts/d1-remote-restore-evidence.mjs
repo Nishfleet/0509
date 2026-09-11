@@ -872,6 +872,7 @@ export function assertPendingMigrationsPreserveRowCounts({
     before: result.before,
     after: result.after,
     expectedRowLossByMigration: result.expectedRowLossByMigration,
+    perMigrationCounts: result.perMigrationCounts,
   });
 }
 
@@ -1033,10 +1034,36 @@ export async function runMigrationDryRunOnScratch({
           { timeoutMs: LONG_COMMAND_TIMEOUT_MS },
         );
         const before = await readRemoteRowCounts(scratchConfigPath);
-        if (before.size !== localBefore.length) {
+        // Compare NAMES, not counts. Two different table sets of equal
+        // cardinality would otherwise pass, and a missing table would be
+        // silently rendered as 0 in the `before` snapshot below, which can
+        // mask a real loss.
+        const localNames = localBefore.map((entry) => entry.table).sort();
+        const remoteNames = [...before.keys()].sort();
+        if (JSON.stringify(localNames) !== JSON.stringify(remoteNames)) {
           throw new Error("migration_dry_run_scratch_table_count_mismatch");
         }
-        if (pendingMigrationNames.length > 0) {
+        // Apply the pending set ONE FILE AT A TIME, snapshotting the scratch
+        // row counts in between. That is what makes attribution real: a row
+        // loss can be pinned to the file that caused it rather than to
+        // whichever pending file happens to carry an annotation (issue #2779:
+        // "the migration file that caused it"). `wrangler d1 migrations apply`
+        // with no filter applies every unapplied file in order, so running it
+        // once per file is the same order with an observable boundary.
+        /** @type {Map<string, Set<string>>} */
+        const expectedRowLossByMigration = new Map();
+        /** @type {Map<string, { before: Array<{table: string, count: number}>, after: Array<{table: string, count: number}> }>} */
+        const perMigrationCounts = new Map();
+        let stepBefore = [...before].map(([table, count]) => ({ table, count }));
+        for (const name of pendingMigrationNames) {
+          if (!/^\d{4}_[A-Za-z0-9_]+\.sql$/u.test(name)) {
+            throw new Error(`migration_dry_run_name_invalid:${name}`);
+          }
+          // `wrangler d1 migrations apply` takes no filename argument: it
+          // applies every unapplied file in order. Calling it once per pending
+          // name is therefore idempotent (already-applied files are skipped)
+          // and gives an observable boundary after each file, which is what
+          // the per-file snapshot below needs.
           await runCommand(
             "npx",
             [
@@ -1051,8 +1078,17 @@ export async function runMigrationDryRunOnScratch({
             ],
             { timeoutMs: LONG_COMMAND_TIMEOUT_MS },
           );
+          const applySql = readFileSync(resolve("migrations", name), "utf8");
+          expectedRowLossByMigration.set(name, parseExpectsRowLoss(applySql));
+          const stepAfterMap = await readRemoteRowCounts(scratchConfigPath);
+          const stepAfter = [...stepAfterMap].map(([table, count]) => ({
+            table,
+            count,
+          }));
+          perMigrationCounts.set(name, { before: stepBefore, after: stepAfter });
+          stepBefore = stepAfter;
         }
-        const after = await readRemoteRowCounts(scratchConfigPath);
+        const after = new Map(stepBefore.map((e) => [e.table, e.count]));
         const beforeCounts = localBefore.map((entry) => ({
           table: entry.table,
           count: before.get(entry.table) ?? 0,
@@ -1071,18 +1107,11 @@ export async function runMigrationDryRunOnScratch({
         if (summaryPath) {
           writeFileSync(summaryPath, `${diff}\n`, { mode: 0o600 });
         }
-        const expectedRowLossByMigration = new Map(
-          pendingMigrationNames.map((name) => [
-            name,
-            parseExpectsRowLoss(
-              readFileSync(resolve("migrations", name), "utf8"),
-            ),
-          ]),
-        );
         assertMigrationRowInvariant({
           before: beforeCounts,
           after: afterCounts,
           expectedRowLossByMigration,
+          perMigrationCounts,
         });
         return { before: beforeCounts, after: afterCounts };
       },
