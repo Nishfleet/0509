@@ -3,6 +3,7 @@ import {
   runLpRunAuditStage,
   type LpRunAuditContext,
 } from "~/lib/landing-page-run-audit.server";
+import { decodeHtmlEntities } from "~/lib/decode-html.server";
 import { hashString, stripChurnTokens } from "~/lib/normalize";
 
 export const LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION = "lp-signals-v6";
@@ -1345,52 +1346,10 @@ function stripTags(value: string) {
 }
 
 function cleanText(value: string) {
-  return decodeHtml(value).replace(/\s+/g, " ").trim();
-}
-
-function decodeHtml(value: string) {
-  return value.replace(
-    /&(amp|quot|#39|lt|gt|hellip|#8230|#x[0-9a-f]+);/gi,
-    (entity) => {
-      const lower = entity.toLowerCase();
-      switch (lower) {
-        case "&amp;":
-          return "&";
-        case "&quot;":
-          return '"';
-        case "&#39;":
-          return "'";
-        case "&lt;":
-          return "<";
-        case "&gt;":
-          return ">";
-        case "&hellip;":
-        case "&#8230;":
-          return "…";
-        default: {
-          // Issue #1409: the decoder only knew the single hex entity
-          // &#x2026;, so a hex-encoded apostrophe (&#x27;) survived into
-          // ctaText. Decode any &#x..; here so no `&#x` sequence survives
-          // into extracted_fields_json.ctaText. This is a general hex
-          // decode, not a special case for the one entity.
-          const hex = lower.match(/^&#x([0-9a-f]+);$/);
-          if (hex) {
-            const codePoint = parseInt(hex[1], 16);
-            // Guard the valid scalar range: >0x10ffff throws in
-            // String.fromCodePoint, and 0xd800-0xdfff is the surrogate
-            // range (a lone surrogate would corrupt downstream JSON/DB).
-            if (
-              codePoint <= 0x10ffff &&
-              !(codePoint >= 0xd800 && codePoint <= 0xdfff)
-            ) {
-              return String.fromCodePoint(codePoint);
-            }
-          }
-          return entity;
-        }
-      }
-    },
-  );
+  // Issue #2455: the local decodeHtml here omitted `&nbsp;` (and other named
+  // entities), so entity-joined CTA text like "Buy&nbsp;Now" was stored
+  // literally. Use the one shared single-pass decoder instead.
+  return decodeHtmlEntities(value).replace(/\s+/g, " ").trim();
 }
 
 // Issue #1500: UTF-8 byte-length helper for the lp_run_audit lines. Lives at
