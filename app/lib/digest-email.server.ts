@@ -81,6 +81,17 @@ import {
 // record" (marketing.tsx PROOF_CAPTURE_FRESH_DAYS).
 const EMAIL_PROOF_FRESH_DAYS = 3;
 
+// Growth2 (issue #2146): the free-plan attribution footer and the all-plan
+// forward line. The footer URL carries the allowlisted `digest_footer` signup
+// source (see app/lib/signup-source.ts) so free signups that start from the
+// brief are measured. The forward line sits under the decision summary on
+// every brief; on Starter+ the brief's existing share URL rides with it.
+const DIGEST_FREE_FOOTER_LEAD = "Brief by Five to Nine.";
+const DIGEST_FREE_FOOTER_CTA = "Watch one competitor free";
+const DIGEST_FREE_FOOTER_URL = "https://0509.io/?source=digest_footer";
+const DIGEST_FORWARD_LINE =
+  "Forward this to whoever needs it; every claim keeps its source link.";
+
 // WP-26: monthly customer recap template (implementation lives with the
 // orchestration module; re-exported here so the digest email surface stays the
 // documented home for customer email layouts).
@@ -307,6 +318,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
       ${valueTierSwingHtml}
       ${retentionHtml}
       ${renderEmailAccountabilityBlock(accountability)}
+      ${renderForwardAndShareHtml(input)}
       ${renderTrendSectionHtml(trendLines)}
       <h2 style="${EMAIL_CASE_DISPLAY_STYLE}">Top moves</h2>
       ${renderTopMoveGroupsHtml(topMoveGroups, input.periodEnd, input.timeZone, input.fullDigestUrl)}
@@ -315,7 +327,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
       <p style="margin: 0 0 20px;">
         <a href="${escapeHtml(input.fullDigestUrl)}" style="${EMAIL_CASE_BUTTON_STYLE}">View full brief</a>
       </p>
-      ${renderForwardLineHtml(input.forwardUrl)}${renderUpgradeNoteHtml(input)}<p style="margin: 0; font-family: ${EMAIL_MONO_FONT}; font-size: 11px; line-height: 1.6; color: ${EMAIL_CASE_INK_FAINT};">
+      ${renderForwardLineHtml(input.forwardUrl)}${renderUpgradeNoteHtml(input)}${renderFreeFooterHtml(input)}<p style="margin: 0; font-family: ${EMAIL_MONO_FONT}; font-size: 11px; line-height: 1.6; color: ${EMAIL_CASE_INK_FAINT};">
         Source coverage: verified evidence means a stored screenshot, page record, or source link is attached. Some items are flagged for a quick look before you share this externally. No proof, no claim.
         Manage frequency in <a href="${escapeHtml(input.manageFrequencyUrl)}" style="color: ${EMAIL_CASE_INK_FAINT};">Notifications</a>, unsubscribe below, or contact <a href="${escapeHtml(input.supportMailto)}" style="color: ${EMAIL_CASE_INK_FAINT};">${escapeHtml(input.supportEmail)}</a>.
       </p>
@@ -336,6 +348,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
     "",
     ...valueTierSwingText,
     ...renderEmailAccountabilityText(accountability),
+    ...renderForwardAndShareText(input),
     ...renderTrendSectionText(trendLines),
     "",
     "Top moves:",
@@ -346,6 +359,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
     `View full brief: ${input.fullDigestUrl}`,
     ...renderForwardLineText(input.forwardUrl),
     ...renderUpgradeNoteText(input),
+    ...renderFreeFooterText(input),
     `Manage frequency: ${input.manageFrequencyUrl}`,
     input.unsubscribeUrl ? `Unsubscribe: ${input.unsubscribeUrl}` : null,
     `Support: ${input.supportEmail}`,
@@ -602,10 +616,11 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
       ${retentionHtml}
       ${elsewhere?.html ?? ""}
       ${renderEmailAccountabilityBlock(accountability)}
+      ${renderForwardAndShareHtml(input)}
       <p style="margin: 0 0 20px;">
         <a href="${escapeHtml(input.fullDigestUrl)}" style="${EMAIL_CASE_BUTTON_STYLE}">Review digest history</a>
       </p>
-      ${renderForwardLineHtml(input.forwardUrl)}${renderUpgradeNoteHtml(input)}<p style="margin: 0; font-family: ${EMAIL_MONO_FONT}; font-size: 11px; line-height: 1.6; color: ${EMAIL_CASE_INK_FAINT};">
+      ${renderForwardLineHtml(input.forwardUrl)}${renderUpgradeNoteHtml(input)}${renderFreeFooterHtml(input)}<p style="margin: 0; font-family: ${EMAIL_MONO_FONT}; font-size: 11px; line-height: 1.6; color: ${EMAIL_CASE_INK_FAINT};">
         Source coverage: no action-worthy movement was detected in this period. Manage frequency in <a href="${escapeHtml(input.manageFrequencyUrl)}" style="color: ${EMAIL_CASE_INK_FAINT};">Notifications</a>, unsubscribe below, or contact <a href="${escapeHtml(input.supportMailto)}" style="color: ${EMAIL_CASE_INK_FAINT};">${escapeHtml(input.supportEmail)}</a>.
       </p>
     `)}
@@ -621,10 +636,12 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
     ...retentionTextLines,
     ...(elsewhere ? ["", elsewhere.text] : []),
     ...renderEmailAccountabilityText(accountability),
+    ...renderForwardAndShareText(input),
     "",
     `Review digest history: ${input.fullDigestUrl}`,
     ...renderForwardLineText(input.forwardUrl),
     ...renderUpgradeNoteText(input),
+    ...renderFreeFooterText(input),
     `Manage frequency: ${input.manageFrequencyUrl}`,
     input.unsubscribeUrl ? `Unsubscribe: ${input.unsubscribeUrl}` : null,
     `Support: ${input.supportEmail}`,
@@ -738,10 +755,11 @@ function buildTriageDigestEmail(input: DigestEmailInput): DigestEmailModel {
       ${budgetSkipHtml}
       ${retentionHtml}
       ${renderEmailAccountabilityBlock(accountability)}
+      ${renderForwardAndShareHtml(input)}
       <p style="margin: 0 0 20px;">
         <a href="${escapeHtml(input.fullDigestUrl)}" style="${EMAIL_CASE_BUTTON_STYLE}">View the full brief</a>
       </p>
-      ${renderUpgradeNoteHtml(input)}<p style="margin: 0; font-family: ${EMAIL_MONO_FONT}; font-size: 11px; line-height: 1.6; color: ${EMAIL_CASE_INK_FAINT};">
+      ${renderUpgradeNoteHtml(input)}${renderFreeFooterHtml(input)}<p style="margin: 0; font-family: ${EMAIL_MONO_FONT}; font-size: 11px; line-height: 1.6; color: ${EMAIL_CASE_INK_FAINT};">
         Source coverage: verified evidence means a stored screenshot, page record, or source link is attached. Manage frequency in <a href="${escapeHtml(input.manageFrequencyUrl)}" style="color: ${EMAIL_CASE_INK_FAINT};">Notifications</a>, unsubscribe below, or contact <a href="${escapeHtml(input.supportMailto)}" style="color: ${EMAIL_CASE_INK_FAINT};">${escapeHtml(input.supportEmail)}</a>.
       </p>
     `)}
@@ -760,9 +778,11 @@ function buildTriageDigestEmail(input: DigestEmailInput): DigestEmailModel {
     budgetSkipFooter,
     ...retentionTextLines,
     ...renderEmailAccountabilityText(accountability),
+    ...renderForwardAndShareText(input),
     "",
     `View the full brief: ${input.fullDigestUrl}`,
     ...renderUpgradeNoteText(input),
+    ...renderFreeFooterText(input),
     `Manage frequency: ${input.manageFrequencyUrl}`,
     input.unsubscribeUrl ? `Unsubscribe: ${input.unsubscribeUrl}` : null,
     `Support: ${input.supportEmail}`,
@@ -1447,6 +1467,63 @@ function renderForwardLineText(forwardUrl: string | null | undefined): string[] 
     return [];
   }
   return [`Forward this brief to a teammate or client: ${url}`];
+}
+
+/**
+ * Growth2 (issue #2146): the all-plan forward line under the decision
+ * summary, plus the brief's watermarked share URL on Starter+ when the digest
+ * already carries one. `forwardUrl` is resolved by the delivery layer and is
+ * plan-gated on `share_links`, so it is never set on Free — the upgradeNote
+ * guard keeps a free-plan render byte-identical even if a URL is passed
+ * anyway. No share link is ever generated here (must-not).
+ */
+function renderForwardAndShareHtml(
+  input: Pick<DigestEmailInput, "upgradeNote" | "forwardUrl">,
+): string {
+  const url = input.forwardUrl?.trim();
+  const isFree = Boolean(input.upgradeNote?.trim());
+  const shareLine =
+    !isFree && url
+      ? `<p style="margin: 0 0 16px; color: ${EMAIL_CASE_INK_SOFT};">Share this brief: <a href="${escapeHtml(url)}" style="color: ${EMAIL_CASE_GREEN_INK}; font-weight: 700; text-decoration: underline;">${escapeHtml(url)}</a></p>`
+      : "";
+  return `
+      <p style="margin: 0 0 16px; color: ${EMAIL_CASE_INK_SOFT};">${escapeHtml(DIGEST_FORWARD_LINE)}</p>
+      ${shareLine}`;
+}
+
+function renderForwardAndShareText(
+  input: Pick<DigestEmailInput, "upgradeNote" | "forwardUrl">,
+): string[] {
+  const url = input.forwardUrl?.trim();
+  const isFree = Boolean(input.upgradeNote?.trim());
+  const shareLine = !isFree && url ? [`Share this brief: ${url}`] : [];
+  return [DIGEST_FORWARD_LINE, ...shareLine];
+}
+
+/**
+ * Growth2 (issue #2146): the free-plan attribution footer. Free digests only
+ * — the delivery layer sets `upgradeNote` only for free plans, so its
+ * presence is the free signal; paid briefs render nothing.
+ */
+function renderFreeFooterHtml(
+  input: Pick<DigestEmailInput, "upgradeNote">,
+): string {
+  if (!input.upgradeNote?.trim()) {
+    return "";
+  }
+  return `<p style="margin: 0 0 16px; font-family: ${EMAIL_MONO_FONT}; font-size: 12px; letter-spacing: 0.04em; color: ${EMAIL_CASE_INK_SOFT};">
+        ${DIGEST_FREE_FOOTER_LEAD} <a href="${DIGEST_FREE_FOOTER_URL}" style="color: ${EMAIL_CASE_GREEN_INK}; font-weight: 700; text-decoration: underline;">${DIGEST_FREE_FOOTER_CTA}</a>.
+      </p>
+      `;
+}
+
+function renderFreeFooterText(
+  input: Pick<DigestEmailInput, "upgradeNote">,
+): string[] {
+  if (!input.upgradeNote?.trim()) {
+    return [];
+  }
+  return [`${DIGEST_FREE_FOOTER_LEAD} ${DIGEST_FREE_FOOTER_CTA}: ${DIGEST_FREE_FOOTER_URL}`];
 }
 
 function renderUpgradeNoteHtml(

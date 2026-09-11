@@ -63,10 +63,20 @@ export const FOR_AGENCIES_SIGNUP_SOURCE = "for_agencies";
  */
 export const SAMPLE_BRIEF_SIGNUP_SOURCE = "sample_brief";
 
+/**
+ * Free-plan digest footer marker (issue #2146): the attribution line at the
+ * foot of every free brief links `source=digest_footer` so funnel measurement
+ * can attribute signup starts to the brief. Underscore literal — outside the
+ * open slug shape, so it rides the exact-match branch and the 0087 CHECK
+ * literal list.
+ */
+export const DIGEST_FOOTER_SIGNUP_SOURCE = "digest_footer";
+
 export const ALLOWED_SIGNUP_SOURCES = [
   PRICING_FREE_SIGNUP_SOURCE,
   FOR_AGENCIES_SIGNUP_SOURCE,
   SAMPLE_BRIEF_SIGNUP_SOURCE,
+  DIGEST_FOOTER_SIGNUP_SOURCE,
   ...LOCALE_SNEAKER_RESALE_SIGNUP_SOURCES,
   SEARCH_WARMING_EXHAUSTED_SIGNUP_SOURCE,
   GUIDE_TRACK_ADS_SIGNUP_SOURCE,

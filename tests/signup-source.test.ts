@@ -9,6 +9,7 @@ import { PRICING_FREE_SIGNUP_SOURCE } from "~/lib/funnel-measurement.server";
 import {
   ALLOWED_SIGNUP_SOURCES,
   allowlistedSignupSource,
+  DIGEST_FOOTER_SIGNUP_SOURCE,
   LOCALE_SNEAKER_RESALE_SIGNUP_SOURCES,
   readSignupSourceCookie,
   SIGNUP_SOURCE_COOKIE,
@@ -19,7 +20,9 @@ import {
 describe("allowlisted signup_source", () => {
   it("keeps the pricing-free and locale sneaker-resale markers, and nothing else", () => {
     expect(ALLOWED_SIGNUP_SOURCES).toContain(PRICING_FREE_SIGNUP_SOURCE);
+    expect(ALLOWED_SIGNUP_SOURCES).toContain(DIGEST_FOOTER_SIGNUP_SOURCE);
     expect(allowlistedSignupSource(PRICING_FREE_SIGNUP_SOURCE)).toBe(PRICING_FREE_SIGNUP_SOURCE);
+    expect(allowlistedSignupSource(DIGEST_FOOTER_SIGNUP_SOURCE)).toBe(DIGEST_FOOTER_SIGNUP_SOURCE);
     expect(allowlistedSignupSource("locale-de-sneaker-resale")).toBe("locale-de-sneaker-resale");
     expect([...LOCALE_SNEAKER_RESALE_SIGNUP_SOURCES]).toEqual([
       "locale-en-sneaker-resale",
@@ -177,6 +180,7 @@ describe("migration 0087 ↔ code rule parity (issue #2108 step 2c)", () => {
     "ref:example.com",
     "pricing-free",
     "for_agencies",
+    "digest_footer",
     "locale-de-sneaker-resale",
     "summer-2026-launch",
     "search_warming_exhausted",
@@ -217,6 +221,7 @@ describe("migration 0087 ↔ code rule parity (issue #2108 step 2c)", () => {
       "locale-pt-br-sneaker-resale",
       "pricing-free",
       "for_agencies",
+      "digest_footer",
       "search_warming_exhausted",
       "guide_track_ads",
     ]) {
@@ -229,7 +234,7 @@ describe("migration 0087 ↔ code rule parity (issue #2108 step 2c)", () => {
     // underscore-bearing live markers are accepted via the literal list (the
     // `toContain` loop above), not the open shape, so they are exempt from the
     // [a-z0-9:.-] char-class check.
-    const LITERAL_ONLY = new Set(["search_warming_exhausted", "guide_track_ads", "for_agencies"]);
+    const LITERAL_ONLY = new Set(["search_warming_exhausted", "guide_track_ads", "for_agencies", "digest_footer"]);
     for (const fixture of ACCEPTED_BY_BOTH) {
       expect(fixture.length).toBeGreaterThanOrEqual(1);
       expect(fixture.length).toBeLessThanOrEqual(44);
