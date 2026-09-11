@@ -688,7 +688,10 @@ export default function CompetitorMonitoringCategoryRoute() {
           Paste a competitor website into the <Link to={searchPath}>search preview</Link> — no
           account needed. Doing it by hand today? Read the guide:{" "}
           <Link to="/guides/how-to-track-competitor-ads">how to track competitor ads</Link> — the
-          free manual workflow, the n8n/Apify DIY route, and where both break. Questions about
+          free manual workflow, the n8n/Apify DIY route, and where both break. Watching over
+          time instead? Read <Link to="/guides/how-to-monitor-meta-ad-library">how to monitor a
+          competitor&rsquo;s Meta Ad Library</Link> — the free cadence-and-log routine and where it
+          breaks. Questions about
           coverage on your competitors? Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and
           we&rsquo;ll answer honestly.
         </p>

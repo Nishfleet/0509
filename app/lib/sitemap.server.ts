@@ -511,6 +511,7 @@ export function staticSitemapEntriesForLocale(
     // Issue #2295: the /guides/* how-to cluster must not drop out of the
     // locale sitemaps when the guide set grows.
     "/guides/how-to-track-competitor-ads",
+    "/guides/how-to-monitor-meta-ad-library",
   ].filter((path) => path !== "/" && path !== "/sitemap.xml");
   const entries: SitemapEntry[] = [];
   for (const path of buyerSurfacePaths) {

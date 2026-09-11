@@ -138,6 +138,14 @@ const LLMS_PAGE_DETAILS = {
     description:
       "The free manual Ad Library workflow, the n8n/Apify DIY route with real prices, where both break, and the free weekly watch that automates it.",
   },
+  // Issue #2867: second guide in the /guides/* cluster — the watch-over-time
+  // intent. In SITEMAP_PATHS, so it needs a title/description here or the
+  // _llmsDetailsCoverSitemap type fails.
+  "/guides/how-to-monitor-meta-ad-library": {
+    title: "How to monitor a competitor's Meta Ad Library",
+    description:
+      "The free manual routine — find the Ad Library URL, pick a check cadence, log what runs — where it breaks (no history, geo variance, interactive gates), and the free weekly watch that automates it.",
+  },
   "/compare": {
     title: "Compare Five to Nine vs the alternatives",
     description:
