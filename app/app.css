@@ -12669,6 +12669,8 @@ textarea.f9-wk-in {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   padding: 9px 12px;
   border: 1px solid var(--wk-rule);
   border-radius: 0;
