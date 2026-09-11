@@ -148,6 +148,47 @@ describe("auto-revert workflow", () => {
     expect(run).not.toContain("falling back to legacy revert behavior");
   });
 
+  it("verifies the auto-revert-halt label after filing and fails loud when absent (0509#2929)", () => {
+    // 0509#2929: `gh issue create --label auto-revert-halt` silently dropped
+    // the label under the PAT (104 open halts, zero label events), blinding
+    // both the dedupe and close-halts-on-green. Every create/comment path
+    // must be followed by an API read-back of the label list, an
+    // `--add-label` repair when missing, and a loud `exit 1` if the label is
+    // STILL absent — no silent degraded mode.
+    const haltDef = run.match(/halt \(\)\s*\{([\s\S]*?)\n\s*\}/);
+    expect(haltDef).not.toBeNull();
+    const haltBody = haltDef?.[1] ?? "";
+    // The create step is followed by label verification.
+    expect(haltBody).toContain("halt_label_ensure \"$num\"");
+    expect(haltBody.indexOf("gh issue create")).toBeGreaterThan(-1);
+    // The create branch is followed by label verification.
+    const createBranch = haltBody.slice(haltBody.indexOf("gh issue create"));
+    expect(createBranch).toContain("halt_label_ensure \"$num\"");
+    // The verifier reads the label list back from the API and repairs via
+    // --add-label when missing.
+    const ensureDef = run.match(/halt_label_ensure \(\)\s*\{([\s\S]*?)\n\s*\}/);
+    expect(ensureDef).not.toBeNull();
+    const ensureBody = ensureDef?.[1] ?? "";
+    expect(ensureBody).toContain("repos/$REPO/issues/$num\"");
+    expect(ensureBody).toContain("--add-label auto-revert-halt");
+    // Fail loud if the label is still absent after the repair.
+    expect(ensureBody).toContain("FATAL");
+    expect(ensureBody).toContain("exit 1");
+    // The dedupe falls back to a title search so an unlabelled survivor
+    // never re-opens the flood.
+    expect(haltBody).toContain('"AUTO-REVERT HALT in:title"');
+  });
+
+  it("close-halts-on-green falls back to a title search so unlabelled halts still close (0509#2929)", () => {
+    const closeJob = parsed.jobs?.["close-halts-on-green"];
+    const closeStep = closeJob?.steps?.find(
+      (step) => step.name === "Close open AUTO-REVERT HALT issues",
+    );
+    const closeRun = closeStep?.run ?? "";
+    expect(closeRun).toContain("--label auto-revert-halt");
+    expect(closeRun).toContain('"AUTO-REVERT HALT in:title"');
+  });
+
   it("removes the auto-revert label with gh pr edit --remove-label", () => {
     // `gh pr remove-label` is not a command. Run 33486589900 aborted after
     // opening the revert PR because origin/main called
