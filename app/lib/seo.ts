@@ -127,7 +127,11 @@ export function switchSocialCardUrl(toolSlug: string): string {
 }
 
 export function clusterSocialCardUrl(slug: "sneaker-resale" | "competitor-monitoring"): string {
-  return canonicalUrl(`/social-card/${slug}.svg`);
+  // Served as PNG (issue #2101), so the path uses `.png` — Facebook/X/
+  // LinkedIn scrapers refuse SVG og:images. The `parseSocialCardPathname`
+  // cluster matcher accepts both extensions and the worker rasterizes both
+  // through the same #2089 pipeline, so cached `.svg` links keep rendering.
+  return canonicalUrl(`/social-card/${slug}.png`);
 }
 
 /**

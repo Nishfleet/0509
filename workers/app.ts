@@ -240,9 +240,10 @@ export default {
     // og-image.png. Stateless and public — same serving path as the static
     // social card above, before the rate-limit gate.
     //
-    // The /ads and /timeline cards are rasterized to PNG (issue #2089) so
-    // social scrapers render them; compare/switch/cluster stay SVG (issue
-    // #2083's scope). The rasterizer lives in a worker-only module because its
+    // The /ads, /timeline, and cluster (/sneaker-resale,
+    // /competitor-monitoring) cards are rasterized to PNG (issue #2089,
+    // issue #2101) so social scrapers render them; compare/switch/brand stay
+    // SVG (issue #2083's scope). The rasterizer lives in a worker-only module because its
     // wasm-bindgen glue is not resolvable in the node test environment.
     if (request.method === "GET" || request.method === "HEAD") {
       const { publicSocialCardForRequest } = await import(
@@ -250,7 +251,11 @@ export default {
       );
       const socialCard = publicSocialCardForRequest(request);
       if (socialCard) {
-        if (socialCard.kind === "ads" || socialCard.kind === "timeline") {
+        if (
+          socialCard.kind === "ads" ||
+          socialCard.kind === "timeline" ||
+          socialCard.kind === "cluster"
+        ) {
           const { rasterizeSocialCardPngCached } = await import(
             "../app/lib/social-cards-raster.server"
           );
