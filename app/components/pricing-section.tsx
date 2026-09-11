@@ -264,6 +264,28 @@ function hasBundlePrice(preview: LocalPricingPreview | null, bundleId: UsageBund
   return Boolean(preview?.usageBundles?.[bundleId]?.display);
 }
 
+/**
+ * Issue #2957 — the Free card must declare its price in the SAME currency
+ * source as the paid cards on first paint. The paid cards render the
+ * published USD anchors through Dodo's localized preview, so a hardcoded
+ * "€0" sat next to "$11 USD/mo" in the server-rendered HTML. The Free
+ * price is derived instead: when the localized preview carries a currency,
+ * a zero amount is formatted in that currency; with no preview resolved the
+ * published USD anchor currency applies ("$0/mo"), matching the paid
+ * fallback format.
+ */
+export function freePlanPriceDisplay(preview: LocalPricingPreview | null): string {
+  for (const cycles of Object.values(preview?.prices ?? {})) {
+    for (const price of Object.values(cycles ?? {})) {
+      if (price?.currency) {
+        const display = formatMinorCurrency(0, price.currency);
+        if (display) return display;
+      }
+    }
+  }
+  return "$0/mo";
+}
+
 export function planIntentPath(
   signedIn: boolean,
   plan: PricingPlanSlug,
@@ -420,7 +442,7 @@ export function PricingSection({
             the card and the prose can never claim different things. */}
         <article className="f9-commerce-card">
           <span>Free</span>
-          <h3>€0</h3>
+          <h3>{freePlanPriceDisplay(localPricing)}</h3>
           <small>free, forever</small>
           <div className="f9-plan-value" aria-label="Free value summary">
             <span>No card required.</span>
