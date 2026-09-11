@@ -1,0 +1,112 @@
+{
+  "note": "Manually curated hot-path D1 queries for the budget trip-wire (issue #1731). Each entry is a real query copied from app/lib, workers/, or a canary-backed endpoint, with callsPerDay as the estimated daily invocation count at current pre-launch scale. EXPLAIN QUERY PLAN runs each entry against the migrated schema; a plan regression (new SCAN, blown-up nested loop) or a callsPerDay bump that pushes the daily total over the trip threshold fails CI.",
+  "queries": [
+    {
+      "name": "session-by-token",
+      "source": "better-auth session lookup on every authenticated request",
+      "sql": "SELECT id, userId, expiresAt FROM session WHERE token = ? LIMIT 1",
+      "callsPerDay": 4000,
+      "rowsPerIndexedSearch": 1
+    },
+    {
+      "name": "user-by-email",
+      "source": "app/lib/better-auth.server.ts",
+      "sql": "SELECT id FROM user WHERE email = ? COLLATE NOCASE LIMIT 1",
+      "callsPerDay": 500,
+      "rowsPerIndexedSearch": 1
+    },
+    {
+      "name": "rate-limit-window-count",
+      "source": "app/lib/rate-limit.server.ts",
+      "sql": "SELECT COUNT(*) AS count FROM rate_limit_events WHERE scope = ? AND key_hash = ? AND route = ? AND created_at >= ?",
+      "callsPerDay": 1500,
+      "rowsPerIndexedSearch": 50
+    },
+    {
+      "name": "rate-limit-claim",
+      "source": "app/lib/rate-limit.server.ts",
+      "sql": "INSERT INTO rate_limit_events (id, scope, key_hash, route, created_at) VALUES (?, ?, ?, ?, ?)",
+      "callsPerDay": 2000,
+      "writesPerCall": 1
+    },
+    {
+      "name": "rate-limit-sweep",
+      "source": "app/lib/rate-limit.server.ts retention sweep",
+      "sql": "DELETE FROM rate_limit_events WHERE created_at < ?",
+      "callsPerDay": 24,
+      "writesPerCall": 200
+    },
+    {
+      "name": "monitoring-due-orchestrated-runs",
+      "source": "app/lib/monitoring-fanout.server.ts selectRankedEligibleOrchestratedRuns (3h cron)",
+      "sql": "SELECT wr.id, wr.watchlist_id, wr.queue_priority, wr.queued_at, wr.started_at, w.user_id, up.plan FROM watchlist_run wr INNER JOIN watchlist w ON w.id = wr.watchlist_id LEFT JOIN user_plan up ON up.user_id = w.user_id WHERE wr.status = 'pending' AND wr.trigger_type = 'scheduled' AND wr.idempotency_key IS NOT NULL AND (wr.retry_after IS NULL OR wr.retry_after <= ?) AND w.is_active = 1",
+      "callsPerDay": 8,
+      "rowsPerIndexedSearch": 50
+    },
+    {
+      "name": "monitoring-reconcile-runs",
+      "source": "app/lib/monitoring-fanout.server.ts stale-run reconciliation (3h cron)",
+      "sql": "SELECT id, watchlist_id, status, idempotency_key, workflow_instance_id, processing_token, attempt_count, queued_at, started_at, created_at FROM watchlist_run WHERE trigger_type = 'scheduled' AND idempotency_key IS NOT NULL AND ((status = 'pending' AND (retry_after IS NULL OR retry_after <= ?)) OR (status = 'running' AND processing_started_at IS NOT NULL AND processing_started_at < ?)) ORDER BY queue_priority ASC, queued_at ASC, started_at ASC, id ASC LIMIT ?",
+      "callsPerDay": 8,
+      "rowsPerIndexedSearch": 100
+    },
+    {
+      "name": "monitoring-first-scan-retry",
+      "source": "app/lib/monitoring-fanout.server.ts first-scan retry sweep (3h cron)",
+      "sql": "SELECT id, watchlist_id, status, idempotency_key, workflow_instance_id, processing_token, attempt_count, queued_at, started_at, created_at, error_code, retry_after FROM watchlist_run WHERE trigger_type = 'manual' AND idempotency_key LIKE 'watchlist-run:first-scan:%' AND attempt_count < ? AND ((status = 'pending' AND (retry_after IS NULL OR retry_after <= ?)) OR (status = 'running' AND processing_started_at IS NOT NULL AND processing_started_at < ?) OR (status = 'failed' AND error_code IN ('browser_launch_failed','concurrency_limited','dispatch_rate_limited','first_scan_dispatch_failed','first_scan_setup_failed','rate_limited','retryable_scan_failure','workflow_binding_missing'))) ORDER BY queue_priority ASC, queued_at ASC, started_at ASC, id ASC LIMIT ?",
+      "callsPerDay": 8,
+      "rowsPerIndexedSearch": 100
+    },
+    {
+      "name": "watchlist-list-for-user",
+      "source": "app/lib/data/watchlists-core.server.ts /app/watchlists loader",
+      "sql": "SELECT * FROM watchlist WHERE user_id = ? AND is_active = 1 ORDER BY updated_at DESC, id DESC LIMIT ?",
+      "callsPerDay": 1000,
+      "rowsPerIndexedSearch": 25
+    },
+    {
+      "name": "watchlist-active-scan-join",
+      "source": "app/lib/data/watchlists-core.server.ts active-watchlist sweep each monitoring tick",
+      "sql": "SELECT watchlist.id, watchlist.user_id, watchlist.name, up.plan FROM watchlist LEFT JOIN user_plan up ON up.user_id = watchlist.user_id WHERE watchlist.is_active = 1",
+      "callsPerDay": 8,
+      "rowsPerIndexedSearch": 50
+    },
+    {
+      "name": "billing-webhook-claim",
+      "source": "app/lib/data/billing-webhook-ledger.server.ts idempotent webhook claim",
+      "sql": "INSERT INTO dodo_webhook_event (event_id, event_type, user_id, received_at, payload_timestamp, outcome, processing_started_at, metadata_json) SELECT ?, ?, ?, ?, ?, 'processing', ?, '{}' WHERE NOT EXISTS (SELECT 1 FROM dodo_webhook_event WHERE event_id = ?)",
+      "callsPerDay": 200,
+      "writesPerCall": 1,
+      "rowsPerIndexedSearch": 1
+    },
+    {
+      "name": "billing-webhook-resolve",
+      "source": "app/lib/data/billing-webhook-ledger.server.ts",
+      "sql": "UPDATE dodo_webhook_event SET outcome = ?, processed_at = ?, processing_started_at = NULL, metadata_json = ? WHERE event_id = ? AND outcome = 'processing'",
+      "callsPerDay": 200,
+      "writesPerCall": 1,
+      "rowsPerIndexedSearch": 1
+    },
+    {
+      "name": "meta-readiness-aggregate",
+      "source": "app/lib/meta-ads-readiness.server.ts backing /api/launch-readiness (meta canary + readiness page)",
+      "sql": "SELECT provider, COUNT(*) AS attempts, SUM(CASE WHEN status = 'succeeded' THEN 1 ELSE 0 END) AS successes, MAX(CASE WHEN status = 'succeeded' THEN created_at ELSE NULL END) AS latest_success_at FROM discovery_fetch_log WHERE (provider = 'meta_library_browser' OR (provider = 'meta_api' AND json_extract(metadata_json, '$.customerOwned') = 1)) AND created_at >= ? GROUP BY provider",
+      "callsPerDay": 250,
+      "rowsPerIndexedSearch": 150
+    },
+    {
+      "name": "digest-items-for-run",
+      "source": "digest assembly per digest run",
+      "sql": "SELECT id, digest_run_id FROM digest_item WHERE digest_run_id = ?",
+      "callsPerDay": 300,
+      "rowsPerIndexedSearch": 50
+    },
+    {
+      "name": "watch-event-recent",
+      "source": "watchlist board recent-event reads",
+      "sql": "SELECT id, watchlist_id, event_type, created_at FROM watch_event WHERE watchlist_id = ? ORDER BY created_at DESC LIMIT ?",
+      "callsPerDay": 1000,
+      "rowsPerIndexedSearch": 50
+    }
+  ]
+}

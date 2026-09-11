@@ -1,3 +1,4 @@
+// d1-budget: reads=0 writes=0 runs_per_day=1
 // Decision logic for the canary bypass token sync (scripts/sync-canary-bypass-
 // token.mjs). Pure functions, unit-tested without touching Cloudflare.
 //
