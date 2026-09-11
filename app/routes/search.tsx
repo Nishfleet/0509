@@ -45,6 +45,7 @@ import { FeedbackStrip } from "~/components/workspace/feedback-strip";
 import { RuledList } from "~/components/workspace/ruled-list";
 import { WorkingHeader } from "~/components/workspace/working-header";
 import { formatAdLongevityLabel } from "~/lib/ad-display";
+import { hasValidCanaryToken } from "~/lib/canary-token.server";
 import { queueFirstWatchlistScan } from "~/lib/first-watchlist-scan.server";
 // Issue #2001 — bounded transient-retry for the money-path result step.
 import { withTransientRetry } from "~/lib/transient-retry.server";
@@ -415,7 +416,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   );
   const searchScope =
     url.searchParams.get("broader") === "1" ? "broader" : "exact";
-  const forceLive = canUseCanaryFreshLiveBypass(env, request, url);
+  const forceLive = await canUseCanaryFreshLiveBypass(env, request, url);
 
   if (hasInvalidCompetitorWebsite(competitorWebsite)) {
     return {
@@ -3272,17 +3273,16 @@ function SearchQueryFields({ params }: { params: URLSearchParams }) {
   ));
 }
 
-function canUseCanaryFreshLiveBypass(
+async function canUseCanaryFreshLiveBypass(
   env: { CANARY_BYPASS_TOKEN?: string },
   request: Request,
   url: URL,
 ) {
-  const configuredToken = env.CANARY_BYPASS_TOKEN?.trim();
-  if (!configuredToken || url.searchParams.get("fresh") !== "live") {
+  if (url.searchParams.get("fresh") !== "live") {
     return false;
   }
 
-  return request.headers.get("x-0509-canary-token") === configuredToken;
+  return hasValidCanaryToken(request, env.CANARY_BYPASS_TOKEN);
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {

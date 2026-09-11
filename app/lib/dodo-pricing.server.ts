@@ -214,7 +214,7 @@ export async function previewDodo0509PlanPrices({
   if (!apiKey) return unavailable("missing_api_key", env, request, trustProxyHeaders);
   if (!brandId) return unavailable("missing_brand_id", env, request, trustProxyHeaders);
 
-  const country = countryFromRequest(env, request, { trustProxyHeaders });
+  const country = await countryFromRequest(env, request, { trustProxyHeaders });
   const products = dodo0509ProductIds(env);
   const bundles = dodo0509UsageBundleProductIds(env);
   const configuredPlans = Object.entries(products).flatMap(([planId, cycles]) =>
@@ -335,7 +335,7 @@ export async function validateDodo0509PlanCheckout({
   }
 
   const products = dodo0509ProductIds(env);
-  const country = countryFromRequest(env, request, { trustProxyHeaders: false });
+  const country = await countryFromRequest(env, request, { trustProxyHeaders: false });
   const productId = products[plan]?.[cycle];
   if (!productId) {
     return {
@@ -484,16 +484,16 @@ export async function validateDodo0509TopUpCheckout({
   const apiKey = dodo0509ApiKey(env);
   const brandId = dodo0509BrandId(env);
   const bundleId = legacyBundleSlugForSku(sku);
-  const invalid = (
+  const invalid = async (
     reason: DodoTopUpCheckoutValidationReason,
     price: DodoUsageBundleDisplayPrice | null = null,
-  ): DodoTopUpCheckoutValidation => ({
+  ): Promise<DodoTopUpCheckoutValidation> => ({
     sku,
     bundleId,
     valid: false,
     reason,
     price,
-    pricingContext: pricingContextFromPrice(countryFromRequest(env, request, { trustProxyHeaders: false }), price),
+    pricingContext: pricingContextFromPrice(await countryFromRequest(env, request, { trustProxyHeaders: false }), price),
   });
 
   if (!apiKey || !brandId || !bundleId) {
@@ -506,7 +506,7 @@ export async function validateDodo0509TopUpCheckout({
     return invalid("missing_bundle_price");
   }
 
-  const country = countryFromRequest(env, request, { trustProxyHeaders: false });
+  const country = await countryFromRequest(env, request, { trustProxyHeaders: false });
   let payload: unknown;
   try {
     payload = await requestDodo0509CheckoutPreview(env, apiKey, productId, country, fetcher);
@@ -754,17 +754,17 @@ async function requestStrictDodo0509PlanPricePreview(
   }
 }
 
-function unavailable(
+async function unavailable(
   reason: string,
   env: AppEnv,
   request: Request,
   trustProxyHeaders = true,
-): DodoPricingPreview {
+): Promise<DodoPricingPreview> {
   return {
     available: false,
     provider: "dodo",
     source: "dodo_checkout_preview",
-    country: countryFromRequest(env, request, { trustProxyHeaders }),
+    country: await countryFromRequest(env, request, { trustProxyHeaders }),
     adaptiveCurrency: dodo0509AdaptiveCurrencyEnabled(env),
     feesInclusive: dodo0509AdaptiveCurrencyFeesInclusive(env),
     reason,

@@ -1,14 +1,5 @@
 import type { LoaderFunctionArgs } from "react-router";
 
-function hasValidCanaryToken(request: Request, token: string | undefined) {
-  const configured = token?.trim();
-  if (!configured) {
-    return false;
-  }
-
-  return request.headers.get("x-0509-canary-token") === configured;
-}
-
 function isWhatsAppLaunchScoped(input: {
   providerConfigured: boolean;
   customerReady: boolean;
@@ -32,9 +23,10 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getLaunchReadinessSignals } = await import("~/lib/data.server");
   const { isWhatsAppDeliveryCustomerFacing } = await import("~/lib/ga-customer-surface");
   const { getMetaAdsBetaReadiness } = await import("~/lib/meta-ads-readiness.server");
+  const { hasValidCanaryToken } = await import("~/lib/canary-token.server");
   const env = getEnv(context);
 
-  if (!hasValidCanaryToken(request, env.CANARY_BYPASS_TOKEN)) {
+  if (!(await hasValidCanaryToken(request, env.CANARY_BYPASS_TOKEN))) {
     throw new Response("Not found", { status: 404 });
   }
 
