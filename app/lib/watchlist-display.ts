@@ -188,12 +188,38 @@ export function formatRunSummary(summary: Record<string, unknown>) {
     formatNumericSummaryPart(summary, "adsSeen", "ads seen"),
     formatNumericSummaryPart(summary, "candidatesDetected", "candidates detected"),
     formatNumericSummaryPart(summary, "proofsAttempted", "proof captures attempted"),
+    formatLandingExtractionSummaryPart(summary),
     formatNumericSummaryPart(summary, "eventsConfirmed", "events confirmed"),
     formatNumericSummaryPart(summary, "sendsTriggered", "sends triggered"),
     formatNumericSummaryPart(summary, "events", "events total"),
   ].filter((part): part is string => Boolean(part));
 
   return parts.join(" · ");
+}
+
+/**
+ * Issue #2893: the run-history surface for the per-run landing-page extraction
+ * funnel persisted on `watchlist_run.summary_json.landingPageExtractionFunnel`.
+ * Shows the funnel tail so a run whose checks bailed before dispatch reads
+ * differently from one whose checks ran the pipeline.
+ */
+export function formatLandingExtractionSummaryPart(
+  summary: Record<string, unknown>,
+) {
+  const funnel = summary.landingPageExtractionFunnel;
+  if (!funnel || typeof funnel !== "object" || Array.isArray(funnel)) {
+    return null;
+  }
+  const record = funnel as Record<string, unknown>;
+  const dispatched =
+    typeof record.dispatched === "number" ? record.dispatched : 0;
+  if (dispatched <= 0) {
+    return "landing checks: none dispatched";
+  }
+  const extracted =
+    typeof record.fieldsExtracted === "number" ? record.fieldsExtracted : 0;
+  const diffed = typeof record.diffed === "number" ? record.diffed : 0;
+  return `landing checks: ${dispatched} dispatched, ${extracted} extracted, ${diffed} diffed`;
 }
 
 export function formatRunEventTypes(summary: Record<string, unknown>) {
