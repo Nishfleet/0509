@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractPriceTier, parsePriceToEur } from "../app/lib/landing-page-price-tier.server";
+import { extractPriceTier, parsePriceToEur } from "~/lib/landing-page-price-tier.server";
 
 describe("landing-page-price-tier", () => {
   describe("unrecognised-currency markers (case-insensitive)", () => {
@@ -10,40 +10,45 @@ describe("landing-page-price-tier", () => {
     });
 
     it.each([
-      "$199",
-      "USD 199",
-      "EUR 199",
-      "€199",
-      "GBP 199",
-      "£199",
-      "199",
-      "",
-      "free",
-      "₹1999",
-      "¥1999",
-      "Rs.1999",
-      "Rs 1999",
-      "RS 1999",
-      "JPY 1999",
-      "CNY 1999",
-      "AUD 1999",
-      "CAD 1999",
-      "CHF 1999",
-      "SEK 1999",
-      "NOK 1999",
-      "DKK 1999",
-      "RUB 1999",
-      "KRW 1999",
-      "inr 1999",
-      "jpy 1999",
-    ])("classifies %j without assuming EUR for foreign codes", (input) => {
-      const tier = extractPriceTier(input);
-      const eur = parsePriceToEur(input);
-      if (eur === null) {
-        expect(tier).toBe("unknown");
-      } else {
-        expect(tier).not.toBe("unknown");
-      }
+      ["$199", "100_to_250"],
+      ["USD 199", "100_to_250"],
+      ["EUR 199", "100_to_250"],
+      ["\u20ac199", "100_to_250"],
+      ["GBP 199", "100_to_250"],
+      ["\u00a3199", "100_to_250"],
+      ["199", "100_to_250"],
+      ["", "unknown"],
+      ["free", "unknown"],
+      ["\u20b91999", "unknown"],
+      ["\u00a51999", "unknown"],
+      ["Rs.1999", "unknown"],
+      ["Rs 1999", "unknown"],
+      ["RS 1999", "unknown"],
+      ["JPY 1999", "unknown"],
+      ["CNY 1999", "unknown"],
+      ["AUD 1999", "unknown"],
+      ["CAD 1999", "unknown"],
+      ["CHF 1999", "unknown"],
+      ["SEK 1999", "unknown"],
+      ["NOK 1999", "unknown"],
+      ["DKK 1999", "unknown"],
+      ["RUB 1999", "unknown"],
+      ["KRW 1999", "unknown"],
+      ["inr 1999", "unknown"],
+      ["jpy 1999", "unknown"],
+      ["cny 1999", "unknown"],
+      ["aud 1999", "unknown"],
+      ["cad 1999", "unknown"],
+      ["chf 1999", "unknown"],
+      ["sek 1999", "unknown"],
+      ["nok 1999", "unknown"],
+      ["dkk 1999", "unknown"],
+      ["rub 1999", "unknown"],
+      ["krw 1999", "unknown"],
+      ["rs.1999", "unknown"],
+      ["rs 1999", "unknown"],
+    ])("classifies %j as %s", (input, expected) => {
+      expect(extractPriceTier(input)).toBe(expected);
     });
 
     it("rejects every unrecognised marker in any case", () => {
@@ -87,7 +92,6 @@ describe("landing-page-price-tier", () => {
       expect(extractPriceTier("€250")).toBe("over_250");
       expect(extractPriceTier("from $9.99")).toBe("under_30");
       expect(extractPriceTier("£250")).toBe("over_250");
-      expect(extractPriceTier("$199")).toBe("100_to_250");
     });
   });
 });
