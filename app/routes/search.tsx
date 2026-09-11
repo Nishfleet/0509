@@ -2315,7 +2315,7 @@ export default function SearchRoute() {
                         </Link>
                         <Link
                           className="f9-wk-lnk f9-wk-lnk--quiet"
-                          to="/methodology"
+                          to="/methodology/ad-aggression-score"
                         >
                           How the score works{" "}
                           <span aria-hidden="true" className="f9-wk-chev">

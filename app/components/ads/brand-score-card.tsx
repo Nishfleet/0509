@@ -12,7 +12,7 @@ import { meterWidthClass } from "~/lib/meter-width";
 // the sitemap from `AD_AGGRESSION_METHODOLOGY_PATH`; this file deliberately
 // mirrors that path as a literal so grep / static checks (the issue's
 // termination) and the rendered `href` agree without indirection.
-const AD_AGGRESSION_METHODOLOGY_HREF = "/methodology";
+const AD_AGGRESSION_METHODOLOGY_HREF = "/methodology/ad-aggression-score";
 
 const COMPONENT_ROWS: { key: keyof BrandPageAggression["components"]; label: string }[] = [
   { key: "velocity", label: "Velocity" },

@@ -39,10 +39,10 @@ describe("public markdown", () => {
   });
 
   it("covers the issue #2299 pages AI engines most need clean text for", () => {
-    // /methodology (the score formula), /pricing, and the /compare/* pages
+    // /methodology/ad-aggression-score (the score formula), /pricing, and the /compare/* pages
     // linked from the /compare hub. /search stays excluded (noted in the
     // ticket, deliberately out of scope).
-    expect(isPublicMarkdownPage("/methodology")).toBe(true);
+    expect(isPublicMarkdownPage("/methodology/ad-aggression-score")).toBe(true);
     expect(isPublicMarkdownPage("/pricing")).toBe(true);
     expect(isPublicMarkdownPage("/compare/meta-ad-library")).toBe(true);
     expect(isPublicMarkdownPage("/compare/visualping-ad-libraries")).toBe(true);
@@ -67,8 +67,8 @@ describe("public markdown", () => {
     expect(publicMarkdownForPath("/help")).toBe(PUBLIC_MARKDOWN);
     expect(publicMarkdownForPath("/terms")).toBe(PUBLIC_MARKDOWN);
 
-    // /methodology is assembled from the aggression-score data.
-    const methodology = publicMarkdownForPath("/methodology");
+    // /methodology/ad-aggression-score is assembled from the aggression-score data.
+    const methodology = publicMarkdownForPath("/methodology/ad-aggression-score");
     expect(methodology).toContain("Ad Aggression Score methodology");
     expect(methodology).toContain("Velocity");
     expect(methodology).toContain("Testing");

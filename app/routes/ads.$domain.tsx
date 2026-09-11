@@ -1755,7 +1755,7 @@ function BrandAdsResults({
             capturedAt={data.lastCheckedAt}
           />
 
-          {/* AD-AGGRESSION METHODOLOGY FOOTER — "/methodology" cross-link
+          {/* AD-AGGRESSION METHODOLOGY FOOTER — "/methodology/ad-aggression-score" cross-link
               (issue #1552 canonical updated by #2022 to /methodology). The Ad
               Aggression Score card is the page's named differentiator, but the
               score alone is a number with no explanation for the buyer landing

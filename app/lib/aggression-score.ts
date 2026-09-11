@@ -33,25 +33,25 @@ export const AGGRESSION_FORMULA_VERSION = 1;
 /**
  * Public methodology page for the formula documented in this module.
  *
- * Path history: previously `/methodology/ad-aggression-score` (issue #960);
+ * Path history: first shipped `/methodology/ad-aggression-score` (issue #960);
  * promoted to `/ad-aggression` for issue #1263 — short, quotable, link-magnet;
- * promoted again to `/methodology` for issue #2022 — the SEO direction thread
- * asks for the scoring method as its own linkable, indexable "methodology"
- * page (sitemap + /ads cross-links name it as methodology). The two older
- * paths 301-redirect to this one in `app/routes.ts`, so any external link or
- * sitemap entry pointing at them keeps its equity. The published formula is
- * unchanged — only the canonical URL moved.
+ * then briefly promoted to `/methodology` for issue #2022; and restored to
+ * `/methodology/ad-aggression-score` for issue #2871 (transformation roadmap
+ * Q6) — the citable, quotable link-magnet URL journalists and AI answer
+ * engines can name as its own page. All older paths 301-redirect to this one
+ * in `app/routes.ts`, so any external link or sitemap entry pointing at them
+ * keeps its equity. The published formula is unchanged — only the canonical
+ * URL moved.
  */
-export const AD_AGGRESSION_METHODOLOGY_PATH = "/methodology" as const;
+export const AD_AGGRESSION_METHODOLOGY_PATH = "/methodology/ad-aggression-score" as const;
 
-/** First canonical path; kept so the redirect stays the only redirect source. */
-export const AD_AGGRESSION_METHODOLOGY_PATH_LEGACY =
-	"/methodology/ad-aggression-score" as const;
+/** First legacy path (issue #2022 era). Redirects to the canonical page. */
+export const AD_AGGRESSION_METHODOLOGY_PATH_LEGACY = "/methodology" as const;
 
 /**
  * Second-prior canonical path (issue #1263). Redirected to
  * `AD_AGGRESSION_METHODOLOGY_PATH` so indexed equity from the /ad-aggression
- * era keeps flowing to the /methodology page.
+ * era keeps flowing to the methodology page.
  */
 export const AD_AGGRESSION_METHODOLOGY_PATH_AD_AGGRESSION_LEGACY =
 	"/ad-aggression" as const;

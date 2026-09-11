@@ -35,6 +35,7 @@ import {
   CURATED_BRAND_CATEGORY_SLUGS,
   groupBrandRecordsByCategory,
 } from "~/lib/brand-categories";
+import { AD_AGGRESSION_METHODOLOGY_PATH } from "~/lib/aggression-score";
 import type { IndexableAdsLink } from "~/lib/ads-internal-links";
 
 /** A brand-page link plus whether its `/timeline/:domain` is indexable. */
@@ -207,6 +208,13 @@ export default function BrandsHubRoute() {
             ))}
           </p>
         )}
+
+        <p className="ld-dim ld-browse-categories">
+          {"Scores on these pages come from a published formula — "}
+          <Link to={AD_AGGRESSION_METHODOLOGY_PATH}>
+            read the Ad Aggression Score methodology
+          </Link>
+        </p>
       </section>
 
       <MarketingFooter />

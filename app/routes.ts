@@ -110,17 +110,17 @@ export default [
   route("llms-full.txt", "routes/llms-full.txt.ts"),
   // Canonical Ad Aggression Score methodology page. Path history: issue #960
   // shipped /methodology/ad-aggression-score; #1263 promoted it to
-  // /ad-aggression; #2022 promotes the methodology page itself to /methodology
-  // (the SEO direction asks for the scoring method as its own linkable,
-  // indexable methodology page — sitemap + /ads cross-links name it as
-  // methodology). Both older paths 301 here so indexed links keep their equity.
-  route("methodology", "routes/methodology.tsx"),
-  // Legacy alias — 301 to the canonical /methodology path so existing
-  // /ad-aggression links and sitemap entries keep working (issue #1263 era).
+  // /ad-aggression; #2022 briefly promoted it to /methodology; issue #2871
+  // (transformation roadmap Q6) restores /methodology/ad-aggression-score as
+  // the citable link-magnet URL. All older paths 301 here so indexed links
+  // keep their equity.
+  route("methodology/ad-aggression-score", "routes/methodology.tsx"),
+  // Legacy alias — 301 to the canonical path so existing /ad-aggression
+  // links and sitemap entries keep working (issue #1263 era).
   route("ad-aggression", "routes/ad-aggression-redirect.ts"),
-  // Legacy alias — 301 to the canonical /methodology path so existing
-  // /methodology/ad-aggression-score links and sitemap entries keep working.
-  route("methodology/ad-aggression-score", "routes/methodology.ad-aggression-score-redirect.ts"),
+  // Legacy alias — 301 to the canonical path so existing /methodology links
+  // and sitemap entries keep working (issue #2022 era).
+  route("methodology", "routes/methodology-redirect.ts"),
   route("compare", "routes/compare.tsx"),
   // Issue #2127 wiped a vendor's compare/switch pages. The legacy URLs (and
   // their locale twins below) 301 to the /compare hub through one loader

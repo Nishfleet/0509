@@ -65,13 +65,14 @@ export const PUBLIC_MARKDOWN_PATHS = [
   "/capture-rules",
   "/privacy",
   "/terms",
-  // Issue #2299: the pages AI engines most need clean text for. /methodology
-  // is the score formula, /pricing the plan data, and the /compare/* pages are
+  // Issue #2299: the pages AI engines most need clean text for. The Ad
+  // Aggression Score methodology page is the score formula, /pricing the plan
+  // data, and the /compare/* pages are
   // exactly the ones the /compare hub links (judge edit: "already linked from
   // the /compare hub" — /compare/visualping and /compare/foreplay canonicalize
   // to siblings and are deliberately not linked, so they stay out). /search
   // stays excluded (noted in the ticket, deliberately out of scope).
-  "/methodology",
+  "/methodology/ad-aggression-score",
   "/pricing",
   "/compare/meta-ad-library",
   "/compare/visualping-ad-libraries",
@@ -750,7 +751,7 @@ const LLMS_PAGE_DETAILS = {
     description:
       "Buyer guarantee: the capture-validity rule set behind no-phantom-change alerts, including geo-variance and takedown/restore suppression.",
   },
-  "/methodology": {
+  "/methodology/ad-aggression-score": {
     title: "Ad Aggression Score methodology",
     description:
       "Public formula for the 0–100 Ad Aggression Score: Velocity, Testing, Freshness, and Persistence, 0–25 each.",
@@ -1260,7 +1261,7 @@ ${sources}
  * without a dedicated body so the caller falls back to PUBLIC_MARKDOWN.
  */
 const PUBLIC_MARKDOWN_BY_PATH: Readonly<Record<string, string>> = {
-  "/methodology": METHODOLOGY_MARKDOWN,
+  "/methodology/ad-aggression-score": METHODOLOGY_MARKDOWN,
   "/pricing": PRICING_MARKDOWN,
   "/compare/meta-ad-library": compareMarkdown(
     metaAdLibraryCitations as CompareCitations,

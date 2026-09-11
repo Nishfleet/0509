@@ -10,6 +10,7 @@ import {
 import {
   buyerSurfaceHreflangLinks,
 } from "~/lib/seo";
+import { AD_AGGRESSION_METHODOLOGY_PATH } from "~/lib/aggression-score";
 import { buildLocaleSitemapXml } from "~/lib/sitemap.server";
 
 // First-value search funnel + supporting trust surfaces that must serve 200
@@ -60,7 +61,11 @@ describe("locale first-value search funnel (issue #1578)", () => {
       const canonical = links.find((link: { rel?: string }) => link.rel === "canonical");
       expect(canonical, `${route} canonical`).toBeDefined();
       expect(canonical.href, `${route} canonical href`).toBe(
-        `https://0509.io/${route}`,
+        // Issue #2871: the EN methodology canonical moved to
+        // /methodology/ad-aggression-score; its locale twins canonicalize to it.
+        route === "methodology"
+          ? `https://0509.io${AD_AGGRESSION_METHODOLOGY_PATH}`
+          : `https://0509.io/${route}`,
       );
       const hreflang = links.some((link: { rel?: string }) => link.rel === "alternate");
       expect(hreflang, `${route} hreflang`).toBe(true);
@@ -92,6 +97,15 @@ describe("locale first-value search funnel (issue #1578)", () => {
     for (const locale of BUYER_SURFACE_LOCALE_IDS) {
       const body = buildLocaleSitemapXml(locale);
       for (const route of LOCALE_FIRST_VALUE_ROUTES) {
+        // Issue #2871: /methodology is now a 301 to the canonical
+        // /methodology/ad-aggression-score, and the methodology locale twins
+        // serve byte-identical English canonicalized to that EN page — so per
+        // the issue #1570 duplicate-content policy they stay OUT of the locale
+        // sitemaps (reachable, not advertised as indexable).
+        if (route === "methodology") {
+          expect(body).not.toContain(`<loc>https://0509.io/${locale}/${route}</loc>`);
+          continue;
+        }
         const loc = `<loc>https://0509.io/${locale}/${route}</loc>`;
         expect(body, `locale sitemap should list ${loc}`).toContain(loc);
       }
