@@ -126,6 +126,11 @@ async function probeDomain({ domain, baseUrl, pacedFetch }) {
       continue;
     }
 
+    if (response.status >= 400) {
+      await response.text();
+      return { domain, verdict: "failed", reason: `HTTP ${response.status}`, rowCount: null };
+    }
+
     const html = await response.text();
     const parsed = parseSearchResponseHtml(html);
 
@@ -147,6 +152,10 @@ async function probeDomain({ domain, baseUrl, pacedFetch }) {
       if (pollResponse.status === 429) {
         await sleep(parseRetryAfterMs(pollResponse.headers.get("retry-after")));
         continue;
+      }
+      if (pollResponse.status >= 400) {
+        await pollResponse.text();
+        return { domain, verdict: "failed", reason: `HTTP ${pollResponse.status}`, rowCount: null };
       }
       const pollHtml = await pollResponse.text();
       const pollParsed = parseSearchResponseHtml(pollHtml);
