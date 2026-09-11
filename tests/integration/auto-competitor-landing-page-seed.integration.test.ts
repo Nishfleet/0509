@@ -56,6 +56,12 @@ const BLANK_FIXTURE_HTML = `<html><head><title></title></head><body>
   <script>window.__spa_boot__ = true;</script>
 </body></html>`;
 
+/**
+ * The CTA fixture with a multi-byte rupee sign in the price, so the landing
+ * page exercises the multibyte decode path.
+ */
+const MULTIBYTE_FIXTURE_HTML = CTA_FIXTURE_HTML.replace("$19.99", "₹19.99");
+
 interface FixtureAd {
   metaAdId: string;
   advertiser: string;
@@ -136,6 +142,46 @@ function mockPublicCrawl(domainUrl: string, pageHtml: string) {
     }
     if (url === domainUrl) {
       return new Response(pageHtml, {
+        status: 200,
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    }
+    return new Response("not found", { status: 404 });
+  }) as ReturnType<typeof vi.spyOn>;
+}
+
+/**
+ * Like `mockPublicCrawl`, but the landing page streams its body in chunks of
+ * `chunkSize` bytes, so the test controls exactly where chunk boundaries fall.
+ *
+ * Regression for per-chunk `new TextDecoder()`: a fresh decoder per chunk turns
+ * a multi-byte UTF-8 sequence split across a chunk boundary into U+FFFD.
+ */
+function mockPublicCrawlInChunks(domainUrl: string, pageHtml: string, chunkSize: number) {
+  const bytes = new TextEncoder().encode(pageHtml);
+  return vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const url = String(input);
+    if (url.startsWith(DNS_JSON_ENDPOINT)) {
+      const parsed = new URL(url);
+      const type = parsed.searchParams.get("type") === "AAAA" ? "AAAA" : "A";
+      const addresses = type === "A" ? ["93.184.216.34"] : [];
+      return new Response(
+        JSON.stringify({
+          Answer: addresses.map((address) => ({ data: address, type: type === "A" ? 1 : 28 })),
+        }),
+        { status: 200, headers: { "content-type": "application/dns-json" } },
+      );
+    }
+    if (url === domainUrl) {
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          for (let offset = 0; offset < bytes.byteLength; offset += chunkSize) {
+            controller.enqueue(bytes.slice(offset, offset + chunkSize));
+          }
+          controller.close();
+        },
+      });
+      return new Response(stream, {
         status: 200,
         headers: { "content-type": "text/html; charset=utf-8" },
       });
@@ -317,6 +363,67 @@ describe("seedAutoCompetitors — landing-page fallback (auto-competitor-watch #
     for (const candidate of candidates) {
       expect(candidate.provenance).toContain("meta_ad_library_keyword_probe");
       expect(candidate.provenance).not.toContain("landing_page");
+    }
+  });
+
+  it("decodes a multi-byte landing page identically at every chunk boundary (no U+FFFD flapping)", async () => {
+    // Regression for per-chunk `new TextDecoder()` in the landing-page fetch.
+    // A ₹ (E2 82 B9) straddling a chunk boundary decoded to U+FFFD with a
+    // fresh decoder per chunk, and because the split point varies run to run
+    // the same unchanged page produced different keywords across runs.
+    const userId = await seedUser();
+    const probeCountry = "United States";
+
+    // The multibyte fixture's keyword list includes a price-derived term
+    // ("starting at ₹19"). Corruption drops that term entirely, so assert on
+    // the price term specifically — asserting keywords[0] ("book a demo",
+    // which comes from the <button> and is unaffected) passes even with the
+    // bug, which is a false-green test.
+    const expectedKeywords = extractLandingPageProbeKeywords(MULTIBYTE_FIXTURE_HTML, 8);
+    expect(expectedKeywords.length).toBeGreaterThan(1);
+    const priceKeyword = expectedKeywords.find((k) => k.includes("₹"));
+    expect(priceKeyword, "fixture must yield a price-derived keyword").toBeDefined();
+
+    const probeKey = buildKeywordProbeCacheKey({
+      provider: PROVIDER,
+      keyword: priceKeyword!,
+      country: probeCountry,
+    });
+    await seedCacheEntry(probeKey, [
+      fixtureAd({
+        metaAdId: "ad-multibyte-adidas-1",
+        advertiser: "Adidas",
+        advertiserPageId: "2000004",
+        body: "Trail-ready footwear.",
+        previewHeadline: "Wool runners",
+        cta: "Shop",
+        landingPageUrl: "https://adidas.com",
+        countries: [probeCountry],
+      }),
+    ]);
+
+    // Every chunk size from 1 byte up to the full body, so several runs split
+    // Every chunk size from 1 byte up to the full body. Stepping by 1 (not a
+    // coarse stride) matters: only a chunk boundary that falls INSIDE the
+    // 3-byte ₹ sequence exercises the bug, so a stride would leave most
+    // iterations non-discriminating. Same expected outcome every time: the
+    // price-derived keyword survives, so the cached advertiser seeded under it
+    // is surfaced. A U+FFFD corruption loses the keyword and this candidate
+    // disappears.
+    const byteLength = new TextEncoder().encode(MULTIBYTE_FIXTURE_HTML).byteLength;
+    for (let chunkSize = 1; chunkSize <= byteLength; chunkSize += 1) {
+      vi.restoreAllMocks();
+      mockPublicCrawlInChunks(`https://multibyte.example/`, MULTIBYTE_FIXTURE_HTML, chunkSize);
+
+      const candidates = await seedAutoCompetitors(appEnv, {
+        domain: "multibyte.example",
+        country: probeCountry,
+        userId,
+      });
+
+      const adidas = candidates.find((c) => c.advertiser === "Adidas");
+      expect(adidas, `chunkSize ${chunkSize}`).toBeDefined();
+      expect(adidas!.matchedKeywords).toContain(priceKeyword!);
     }
   });
 });

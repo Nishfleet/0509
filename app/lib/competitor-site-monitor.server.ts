@@ -450,21 +450,36 @@ export async function safeFetchDocument(
       releaseFetchTimeout(response);
       return { ok: false, status, body: null, finalUrl: current.toString(), refusedReason: "unreadable_body" };
     }
+    const chunks: Uint8Array[] = [];
+    let totalBytes = 0;
     try {
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
         if (value) {
-          body += new TextDecoder().decode(value);
-          if (body.length > maxBytes) {
+          // Decode ONCE after the loop, over raw bytes: a fresh TextDecoder
+          // per chunk splits a multi-byte UTF-8 sequence straddling a chunk
+          // boundary into U+FFFD, and the split point varies run to run
+          // (issue #2431). The cap counts bytes, not UTF-16 units.
+          totalBytes += value.byteLength;
+          if (totalBytes > maxBytes) {
             return { ok: false, status, body: null, finalUrl: current.toString(), refusedReason: "body_too_large" };
           }
+          chunks.push(value);
         }
       }
     } finally {
       reader.releaseLock();
       releaseFetchTimeout(response);
     }
+
+    const bytes = new Uint8Array(totalBytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    body = new TextDecoder().decode(bytes);
 
     return { ok: true, status, body, finalUrl: current.toString(), refusedReason: null };
   }
