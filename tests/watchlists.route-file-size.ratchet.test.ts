@@ -36,6 +36,7 @@ describe("watchlists route test file size ratchet", () => {
   it("keeps every live watchlists route test file under the split ceiling", () => {
     const files = listWatchlistsRouteTestFiles(root);
     expect(files.map((file) => file.relativePath)).toEqual([
+      "tests/watchlists.route.actions.self-resolution.test.ts",
       "tests/watchlists.route.actions.test.ts",
       "tests/watchlists.route.test.ts",
     ]);

@@ -896,6 +896,7 @@ describe("watchlists route actions", () => {
         targetLabel: "Nykaa",
         targetCountry: null,
       }),
+      getWorkspaceBranding: vi.fn().mockResolvedValue({ brandWebsite: null }),
       updateWatchlist,
     }));
 
@@ -975,7 +976,7 @@ describe("watchlists route actions", () => {
     expect(updateWatchlist).not.toHaveBeenCalled();
   });
 
-  it("passes self tracking through watchlist edits", async () => {
+  it("infers self tracking when the target domain matches the workspace brand website", async () => {
     const updateWatchlist = vi.fn().mockResolvedValue({
       ...watchlist,
       name: "Samplebrand watch",
@@ -996,6 +997,9 @@ describe("watchlists route actions", () => {
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(watchlist),
+      getWorkspaceBranding: vi
+        .fn()
+        .mockResolvedValue({ brandWebsite: "https://www.samplebrand.com" }),
       updateWatchlist,
     }));
 
@@ -1003,7 +1007,6 @@ describe("watchlists route actions", () => {
     const formData = new FormData();
     formData.set("intent", "update-watchlist");
     formData.set("watchlistId", "watch-1");
-    formData.set("trackingRole", "self");
     formData.set("name", "Samplebrand watch");
     formData.set("competitorWebsite", "samplebrand.com");
     formData.set("targetLabel", "Samplebrand");
@@ -1033,7 +1036,7 @@ describe("watchlists route actions", () => {
     );
   });
 
-  it("keeps the existing fingerprint when only the tracking role changes", async () => {
+  it("keeps the existing fingerprint when only the inferred tracking role changes", async () => {
     const countryWatchlist = {
       ...watchlist,
       targetId: "https://samplebrand.com",
@@ -1057,6 +1060,9 @@ describe("watchlists route actions", () => {
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(countryWatchlist),
+      getWorkspaceBranding: vi
+        .fn()
+        .mockResolvedValue({ brandWebsite: "https://samplebrand.com" }),
       updateWatchlist,
     }));
 
@@ -1064,7 +1070,6 @@ describe("watchlists route actions", () => {
     const formData = new FormData();
     formData.set("intent", "update-watchlist");
     formData.set("watchlistId", "watch-1");
-    formData.set("trackingRole", "self");
     formData.set("name", "Samplebrand watch");
     formData.set("competitorWebsite", "samplebrand.com");
     formData.set("targetLabel", "Samplebrand");

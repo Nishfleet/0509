@@ -306,10 +306,7 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
           ) : null}
         </section>
 
-        <WatchlistSetupCard
-          data={{ selectedWatchlist: watchlist }}
-          selectedTrackingRole={normalizeWatchlistTrackingRole(watchlist.trackingRole)}
-        />
+        <WatchlistSetupCard data={{ selectedWatchlist: watchlist }} />
 
         <section aria-label="How tracking works" className="f9-evidence-panel">
           <p className="f9-evidence-micro">How tracking works</p>
