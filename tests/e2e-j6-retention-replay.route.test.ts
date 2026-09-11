@@ -110,7 +110,7 @@ function seedFixtureRow(harness: ReturnType<typeof createSqliteD1>) {
     INSERT INTO discovery_cache_entry (
       cache_key, provider, route_context, query_fingerprint, country, cursor,
       payload_json, fetched_at, expires_at, browser_ms_used, created_at, updated_at
-    ) VALUES (?, 'demo', 'scheduled_warmup', ?, 'all', NULL, '{}', ?, ?, 0, ?, ?)
+    ) VALUES (?, 'demo', 'scheduled_warmup', ?, 'all', NULL, '{"leftover":true}', ?, ?, 0, ?, ?)
   `).run(CACHE_KEY, QUERY_FINGERPRINT, fetchedAt, expiresAt, fetchedAt, fetchedAt);
 }
 
@@ -172,5 +172,10 @@ describe("Journey 6 retention replay claim", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ ok: true, replayed: false, outcome: "failure" });
+    const rows = harness.sqlite
+      .prepare("SELECT payload_json AS payloadJson FROM discovery_cache_entry WHERE cache_key = ? AND query_fingerprint = ?")
+      .all(CACHE_KEY, QUERY_FINGERPRINT) as { payloadJson: string }[];
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.payloadJson).not.toContain("leftover");
   });
 });
