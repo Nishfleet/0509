@@ -168,7 +168,7 @@ const PUBLIC_CACHEABLE_HTML_PATHS = new Set([
   "/compare/adspy",
   "/switch/panoramata",
   "/switch/visualping",
-  "/methodology",
+  "/methodology/ad-aggression-score",
 ]);
 const PUBLIC_CACHEABLE_HTML_PREFIXES = ["/ads/", "/timeline/"] as const;
 
@@ -283,12 +283,10 @@ export function withSecurityHeaders(response: Response, request?: Request, nonce
       !headers.has("set-cookie") &&
       isPublicCacheableHtmlRequest(request);
     if (cacheablePublicHtml) {
-      // An explicitly-set cache-control on the app response wins. The
-      // marketing page uses this for its SSR pricing: buyer-country prices are
-      // embedded in the HTML, so it must stay private (browser-only) instead
-      // of being shared-cached under the generic public policy — a cached
-      // DE/EUR variant would otherwise be served to a US visitor and vice
-      // versa. Security headers above still apply.
+      // An explicitly-set cache-control on the app response wins. Any page
+      // that pins itself to a browser-only variant (e.g. one carrying
+      // visitor-specific state that a shared cache must never replay) gets
+      // that policy honored as-is. Security headers above still apply.
       if (!headers.has("cache-control")) {
         headers.set("cache-control", PUBLIC_HTML_CACHE_CONTROL);
         const vary = headers.get("vary");

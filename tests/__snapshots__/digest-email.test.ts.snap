@@ -31,6 +31,9 @@ exports[`change brief that sells (issue #2175) > snapshot: active brief 1`] = `
       </div>
   
       
+      <p style="margin: 0 0 16px; color: #55524a;">Forward this to whoever needs it; every claim keeps its source link.</p>
+      <p style="margin: 0 0 16px; color: #55524a;">Share this brief: <a href="https://0509.io/share/forward-token-1" style="color: #064d31; font-weight: 700; text-decoration: underline;">https://0509.io/share/forward-token-1</a></p>
+      
       <h2 style="margin: 0 0 12px; font-family: "Bricolage Grotesque", Georgia, "Times New Roman", serif; font-size: 19px; line-height: 1.25; font-weight: 800; letter-spacing: -0.2px; text-transform: uppercase; color: #171611;">Trends this period</h2>
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; margin: 0 0 20px; background-color: #fffdf8;">
         
@@ -130,6 +133,8 @@ Next action: Review the changes in this brief before your next campaign decision
 Confidence: Medium confidence — changes are check-spotted but not yet verified against stored evidence.
 Fresh until: Fresh until the next weekly check, Mon 8 Jun, 3:00 am.
 
+Forward this to whoever needs it; every claim keeps its source link.
+Share this brief: https://0509.io/share/forward-token-1
 
 Trends this period:
 - Changed CTAs 1× this period
@@ -257,6 +262,9 @@ exports[`change brief that sells (issue #2175) > snapshot: quiet brief 1`] = `
         <p style="margin: 0 0 6px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 11px; letter-spacing: 0.04em; color: #6e6a5e;"><strong>Fresh until:</strong> Fresh until the next weekly check, Mon 8 Jun, 3:00 am.</p>
       </div>
   
+      
+      <p style="margin: 0 0 16px; color: #55524a;">Forward this to whoever needs it; every claim keeps its source link.</p>
+      
       <p style="margin: 0 0 20px;">
         <a href="https://0509.io/app/digests?digest=digest-1" style="display: inline-block; background-color: #171611; color: #f4f1e8; text-decoration: none; padding: 13px 20px; font-family: "IBM Plex Mono", Consolas, "Courier New", monospace; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; border: 1.5px solid #171611; box-shadow: 3px 3px 0 #16c47f;">Review digest history</a>
       </p>
@@ -286,6 +294,7 @@ Next action: We check again at the next scheduled scan.
 Confidence: High confidence — completed checks reviewed the sources that ran.
 Fresh until: Fresh until the next weekly check, Mon 8 Jun, 3:00 am.
 
+Forward this to whoever needs it; every claim keeps its source link.
 
 Review digest history: https://0509.io/app/digests?digest=digest-1
 Manage frequency: https://0509.io/app/notifications

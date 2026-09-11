@@ -194,8 +194,8 @@ const SEARCH_DELAY_SESSION_KEY = "f9.search.recent-delay.v1";
 // anonymous BROWSER gets its own public-search budget via this cookie, so a
 // fresh no-cookie evaluator on a shared/NAT IP can search even when the
 // shared per-IP counter is near its ceiling. Persistent for a 30-day browsing
-// session; HttpOnly + SameSite=Lax + Path=/ so it survives navigation and is
-// not reachable from scripts.
+// session; HttpOnly + SameSite=Lax + Secure + Path=/ so it survives navigation,
+// is not reachable from scripts, and never rides a plaintext request.
 const ANON_SEARCH_COOKIE = "f9_anon_search";
 const ANON_SEARCH_COOKIE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 
@@ -214,7 +214,7 @@ function readAnonSearchCookie(request: Request): string | null {
 }
 
 function buildAnonSearchSetCookie(value: string): string {
-  return `${ANON_SEARCH_COOKIE}=${value}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${ANON_SEARCH_COOKIE_MAX_AGE_SECONDS}`;
+  return `${ANON_SEARCH_COOKIE}=${value}; HttpOnly; SameSite=Lax; Secure; Path=/; Max-Age=${ANON_SEARCH_COOKIE_MAX_AGE_SECONDS}`;
 }
 
 export const links: LinksFunction = () => canonicalLinks("/search");
@@ -2315,7 +2315,7 @@ export default function SearchRoute() {
                         </Link>
                         <Link
                           className="f9-wk-lnk f9-wk-lnk--quiet"
-                          to="/methodology"
+                          to="/methodology/ad-aggression-score"
                         >
                           How the score works{" "}
                           <span aria-hidden="true" className="f9-wk-chev">

@@ -6,15 +6,15 @@
       "id": "spyland-home",
       "href": "https://spyland.ing/",
       "label": "SpyLand.ing home",
-      "checked": "2026-09-08",
-      "claim": "Spyland checks competitor landing pages daily, flags copy, pricing, and CTA changes with before/after screenshots, and adds a short AI read."
+      "checked": "2026-09-11",
+      "claim": "Spyland watches competitor landing pages on a schedule — weekly on the Free plan, daily on paid plans — and flags copy, pricing, and CTA changes with before/after captures and a short AI read."
     },
     {
       "id": "spyland-pricing",
       "href": "https://spyland.ing/#pricing",
       "label": "SpyLand.ing pricing",
-      "checked": "2026-09-08",
-      "claim": "Spyland publishes a Free plan with no credit card required, with paid plans starting at $19/mo (listed alongside a $29/mo tier)."
+      "checked": "2026-09-11",
+      "claim": "Spyland publishes a Free plan ($0/mo, no credit card) with weekly checks, plus paid Solo ($10/mo) and Business ($49/mo) plans with daily checks, billed monthly."
     }
   ]
 }

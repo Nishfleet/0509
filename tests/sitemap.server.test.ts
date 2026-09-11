@@ -778,7 +778,7 @@ describe("buildSitemapXml", () => {
 
     // /compare/* and /methodology have no existing per-page date field, so
     // they must NOT carry an invented <lastmod> (the judge edit on #2297).
-    for (const path of ["/methodology", "/compare", "/compare/meta-ad-library"]) {
+    for (const path of ["/methodology/ad-aggression-score", "/compare", "/compare/meta-ad-library"]) {
       const line = lines.find((l) => l.includes(`<loc>https://0509.io${path}</loc>`));
       expect(line, `expected a sitemap <url> line for ${path}`).toBeDefined();
       expect(line).not.toContain("<lastmod>");
@@ -804,9 +804,9 @@ describe("llms.txt parity with dynamic sitemap brand paths", () => {
       cache_key: "search-v2:domain:nike.com:exact:meta_library_browser:all:page-1",
       payload: { ...basePayload, displayDomain: "nike.com", ads: [nikeAd] },
     });
-    // A brand with >=3 live Meta Ad Library ads stays in llms.txt (issue
-    // #2307); one- and two-ad pages are dropped from llms.txt but remain in
-    // the sitemap.
+    // Every indexable brand is listed in llms.txt regardless of live ad
+    // count (issue #2925 zero-parity — supersedes the >=3-ad citation gate
+    // of issue #2307).
     const threeAd = cacheRow({
       cache_key: "search-v2:domain:adidas.com:exact:meta_library_browser:all:page-1",
       payload: {
@@ -849,11 +849,10 @@ describe("llms.txt parity with dynamic sitemap brand paths", () => {
       "https://0509.io/ads/adidas.com",
       "https://0509.io/ads/nykaa.com",
     ]);
-    // llms.txt keeps only the >=3-ad brand (issue #2307); the 1-ad nike.com
-    // and nykaa.com pages stay in the sitemap but are dropped from llms.txt.
-    expect(llmsAds).toEqual(["https://0509.io/ads/adidas.com"]);
-    expect(llmsAds).not.toContain("https://0509.io/ads/nike.com");
-    expect(llmsAds).not.toContain("https://0509.io/ads/nykaa.com");
+    // Issue #2925 zero-parity: llms.txt lists the same indexable /ads set as
+    // the sitemap — nike.com (1 ad) and nykaa.com stay listed. The indexable
+    // gates still hold: stale, demo, and non-exact rows are absent from both.
+    expect(llmsAds).toEqual(sitemapAds);
     expect(llmsAds).not.toContain("https://0509.io/ads/stale.com");
     expect(llmsAds).not.toContain("https://0509.io/ads/demo.com");
     expect(llmsAds).not.toContain("https://0509.io/ads/myntra.com");
@@ -1686,7 +1685,7 @@ describe("locale sitemap feed count matches the buyer-surface derivation (issue 
     const derivedCount =
       BUYER_SURFACE_PATHS.filter((p) => p !== "/" && p !== "/sitemap.xml").length +
       BUYER_SURFACE_CHILD_PATHS.length +
-      2; // /guides/how-to-track-competitor-ads + /guides/how-to-monitor-meta-ad-library (issue #2867)
+      2 - 1; // /guides/* pair (issue #2867); -1: /methodology locale twins stay OUT of the locale sitemaps (issue #2871/#1570 duplicate-content policy)
     for (const locale of BUYER_SURFACE_LOCALE_IDS) {
       const entries = staticSitemapEntriesForLocale(locale);
       const body = buildLocaleSitemapXml(locale);
@@ -1733,7 +1732,14 @@ describe("locale sitemap feed count matches the buyer-surface derivation (issue 
     // cross-check makes that drift fail loudly.
     const staticPaths = new Set(SITEMAP_STATIC_ENTRIES.map((e) => e.path));
     const derived = [
-      ...BUYER_SURFACE_PATHS.filter((p) => p !== "/" && p !== "/sitemap.xml"),
+      ...BUYER_SURFACE_PATHS.filter(
+        (p) =>
+          p !== "/" &&
+          p !== "/sitemap.xml" &&
+          // /methodology is a 301 to the canonical /methodology/ad-aggression-score
+          // (issue #2871); its locale twins stay out of the locale sitemaps.
+          p !== "/methodology",
+      ),
       ...BUYER_SURFACE_CHILD_PATHS,
       "/guides/how-to-track-competitor-ads",
       "/guides/how-to-monitor-meta-ad-library",

@@ -30,7 +30,7 @@ export const SITE_REP_PUBLIC_WIDGET_PATHS = Object.freeze([
   "/terms",
   "/switch/panoramata",
   "/switch/visualping",
-  "/methodology",
+  "/methodology/ad-aggression-score",
 ]);
 
 const SITE_REP_PUBLIC_WIDGET_PATH_SET = new Set<string>(SITE_REP_PUBLIC_WIDGET_PATHS);

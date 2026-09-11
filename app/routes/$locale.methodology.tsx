@@ -9,11 +9,13 @@
 import type { LinksFunction } from "react-router";
 import AdAggressionMethodologyRoute, { meta } from "./methodology";
 import { buyerSurfaceHreflangLinks, canonicalLinks } from "~/lib/seo";
+import { AD_AGGRESSION_METHODOLOGY_PATH } from "~/lib/aggression-score";
 
 export { meta };
 
 export const links: LinksFunction = () => [
-  ...canonicalLinks("/methodology"),
+  // Canonical points at the EN methodology page (issue #2871 path).
+  ...canonicalLinks(AD_AGGRESSION_METHODOLOGY_PATH),
   ...buyerSurfaceHreflangLinks("methodology"),
 ];
 
