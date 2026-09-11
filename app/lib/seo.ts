@@ -497,6 +497,62 @@ export function breadcrumbJsonLd(input: {
 }
 
 /**
+ * schema.org Article for a /guides/* editorial page (issue #2855). The
+ * guide pages are how-to editorial content, so they carry an Article entity
+ * alongside the WebPage + FAQPage they already emit. Every field mirrors
+ * what the page itself renders: headline is the visible h1 text (the route
+ * passes the same string constant it renders), description the meta
+ * description, datePublished/dateModified the dates the page already states,
+ * author and publisher the site organization.
+ */
+export function articleJsonLd(input: {
+  headline: string;
+  description: string;
+  pathname: string;
+  datePublished: string;
+  dateModified?: string;
+}) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: input.headline,
+    description: input.description,
+    url: canonicalUrl(input.pathname),
+    mainEntityOfPage: { "@type": "WebPage", "@id": canonicalUrl(input.pathname) },
+    datePublished: input.datePublished,
+    ...(input.dateModified ? { dateModified: input.dateModified } : {}),
+    author: { "@type": "Organization", name: SITE_NAME, url: SITE_ORIGIN },
+    publisher: { "@type": "Organization", name: SITE_NAME, url: SITE_ORIGIN },
+  } as const;
+}
+
+/**
+ * schema.org Service for a public category landing page (issue #2855 —
+ * /competitor-monitoring). Mirrors `adsPageServiceJsonLd` but without a
+ * per-domain about: the page offers the monitoring service itself, so the
+ * entity carries only the service name, the meta description the page
+ * already serves, its canonical URL, and Five to Nine as the provider. No
+ * price, rating, or availability — prices are live-loaded from Dodo and
+ * must never be hardcoded in structured data.
+ */
+export function serviceJsonLd(input: {
+  name: string;
+  description: string;
+  pathname: string;
+  serviceType?: string;
+}) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Service",
+    name: input.name,
+    description: input.description,
+    url: canonicalUrl(input.pathname),
+    ...(input.serviceType ? { serviceType: input.serviceType } : {}),
+    provider: { "@type": "Organization", name: SITE_NAME, url: SITE_ORIGIN },
+  } as const;
+}
+
+/**
  * schema.org Product+Offer pair for a /pricing tier or proof pack (#1503).
  *
  * Returns a single Product entity with one nested Offer; the Offer carries

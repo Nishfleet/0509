@@ -15,6 +15,7 @@ import {
   faqPageJsonLd,
   jsonLdScriptProps,
   publicSeoMeta,
+  serviceJsonLd,
   webPageJsonLd,
   type FaqJsonLdEntry,
 } from "~/lib/seo";
@@ -312,6 +313,20 @@ export default function CompetitorMonitoringCategoryRoute() {
             description: pageDescription,
             pathname: "/competitor-monitoring",
             dateModified: "2026-08-21",
+          }),
+        )}
+      />
+      {/* Issue #2855 — the page offers the monitoring service itself, so it
+          carries a Service entity next to the WebPage + FAQPage. Name and
+          description mirror the copy the page already renders; no price or
+          rating (prices are live-loaded from Dodo, never hardcoded). */}
+      <script
+        {...jsonLdScriptProps(
+          serviceJsonLd({
+            name: "Competitor monitoring",
+            description: pageDescription,
+            pathname: "/competitor-monitoring",
+            serviceType: "Competitor monitoring software",
           }),
         )}
       />
