@@ -26,13 +26,26 @@
  *   6. Churn signals (failed/on_hold/cancelled)    — user_plan.dodo_status
  *   7. Event yield: watch_event count per active watchlist per week
  *      (12-week series + trailing-7-day median, WARN when the median < 1)
+ *   8. Drift check (issue #2836): headline headline counts (users, active
+ *      watchlists) compared against the prior daily market-signal snapshot;
+ *      any drop to <50% of the prior value emits an `unexplained-drift`
+ *      marker and — on a real run only — auto-files a follow-up issue.
  */
 import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const databaseName = "0509";
+const driftRepo = "Nishfleet/0509";
+/** Prior daily D1 counts come from the private telemetry sink (see
+ * automation/HERMES_MARKET_SIGNAL.md). Never fetched from the public repo. */
+const priorSnapshotSpec = {
+  repoUrl: "https://github.com/Nishfleet/0509-telemetry.git",
+  ref: "automation/market-signal-snapshot",
+  path: "ops/market-signal/0509-market-signal.json",
+};
 const signupDays = 14;
 const topUpDays = 14;
 const usagePeriods = 12;
@@ -71,8 +84,14 @@ function parseArgs() {
     console.log(helpText);
     process.exit(0);
   }
+  if (args.includes("--self-test-drift-flag")) {
+    selfTestDriftFlag();
+    process.exit(0);
+  }
   if (args.length > 0) {
-    console.error(`Unknown argument: ${args[0]}. Supported: --help`);
+    console.error(
+      `Unknown argument: ${args[0]}. Supported: --help, --self-test-drift-flag`,
+    );
     process.exit(1);
   }
 }
@@ -271,6 +290,161 @@ FROM watchlist
 WHERE is_active = 1;
 `;
 
+/** One read-only round trip for the headline counts the drift check needs. */
+const headlineCountsQuery = `
+SELECT
+  (SELECT COUNT(*) FROM "user") AS users_total,
+  (SELECT COUNT(*) FROM watchlist WHERE is_active = 1) AS active_watchlists;
+`;
+
+/**
+ * Pure drift evaluation: a headline count at <50% of the prior day's value
+ * is an unexplained drop and must be flagged, not absorbed as prose.
+ *
+ * @param {{ users_total: number, active_watchlists: number }} current
+ * @param {{ users_total: number, active_watchlists: number }} previous
+ * @returns {Array<{ metric: string, current: number, previous: number, ratio: number }>}
+ */
+export function evaluateDrift(current, previous) {
+  const flags = [];
+  for (const metric of ["users_total", "active_watchlists"]) {
+    const now = Number(current?.[metric] ?? 0);
+    const prior = Number(previous?.[metric] ?? 0);
+    if (!Number.isFinite(now) || !Number.isFinite(prior) || prior <= 0) continue;
+    const ratio = now / prior;
+    if (ratio < 0.5) {
+      flags.push({ metric, current: now, previous: prior, ratio });
+    }
+  }
+  return flags;
+}
+
+/**
+ * Fetch the prior daily market-signal snapshot from the private telemetry
+ * sink and return the headline counts plus its generation time. Read-only;
+ * any failure degrades to `unavailable` instead of failing the report —
+ * absence of a prior snapshot is not drift evidence.
+ *
+ * @returns {{ unavailable: true, detail: string } | { unavailable: false, generatedAt: string, users_total: number, active_watchlists: number }}
+ */
+export function fetchPriorSnapshot() {
+  const tmp = mkdtempSync("/tmp/drift-snapshot-");
+  try {
+    const init = spawnSync("git", ["init", "-q", "."], {
+      cwd: tmp,
+      env: process.env,
+      encoding: "utf8",
+    });
+    if (init.status !== 0) {
+      return {
+        unavailable: true,
+        detail: (init.stderr || init.error?.message || "git init failed").trim(),
+      };
+    }
+    const fetch = spawnSync(
+      "git",
+      ["fetch", "--depth", "1", priorSnapshotSpec.repoUrl, priorSnapshotSpec.ref],
+      { cwd: tmp, env: process.env, encoding: "utf8", timeout: 60_000 },
+    );
+    if (fetch.status !== 0) {
+      return {
+        unavailable: true,
+        detail: (fetch.stderr || fetch.error?.message || "git fetch failed").trim(),
+      };
+    }
+    const show = spawnSync(
+      "git",
+      ["show", `FETCH_HEAD:${priorSnapshotSpec.path}`],
+      { cwd: tmp, env: process.env, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 },
+    );
+    if (show.status !== 0) {
+      return {
+        unavailable: true,
+        detail: (show.stderr || "git show failed").trim(),
+      };
+    }
+    const parsed = JSON.parse(show.stdout);
+    const product = parsed?.product ?? {};
+    return {
+      unavailable: false,
+      generatedAt: String(parsed?.generatedAt ?? ""),
+      users_total: Number(product.users_total ?? 0),
+      active_watchlists: Number(product.active_watchlists ?? 0),
+    };
+  } catch (error) {
+    return {
+      unavailable: true,
+      detail: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+/**
+ * The exact `gh issue create` argv for a drift incident. Mirrors the
+ * existing canary auto-file path (see scripts/canary-proof-screenshot-rate.mjs).
+ *
+ * @param {{ metric: string, current: number, previous: number, ratio: number, generatedAt: string }} drift
+ */
+export function buildDriftIssueCommand(drift) {
+  const title = `unexplained-drift: ${drift.metric} fell from ${drift.previous} to ${drift.current} (<50% of prior day)`;
+  const body = [
+    "`unexplained-drift` marker emitted by the weekly business-metrics drift check (issue #2836).",
+    "",
+    `- metric: \`${drift.metric}\``,
+    `- prior-day value: ${drift.previous} (daily market-signal snapshot generated ${drift.generatedAt})`,
+    `- current value: ${drift.current} (ratio ${(drift.ratio * 100).toFixed(1)}% of prior)`,
+    "",
+    "Investigation needed: confirm from audit rows whether this was test/telemetry cleanup or find the deletion source. No data restoration without Nish.",
+    "",
+    "Relates to #2836",
+  ].join("\n");
+  return ["issue", "create", "-R", driftRepo, "--title", title, "--body", body];
+}
+
+/**
+ * Dedupe check: one open drift incident per marker, like the canary path.
+ *
+ * @returns {boolean} true when an open unexplained-drift incident already exists
+ */
+function existingOpenDriftIncident() {
+  const result = spawnSync(
+    "gh",
+    ["issue", "list", "-R", driftRepo, "--state", "open", "--search", "unexplained-drift in:title", "--json", "number"],
+    { cwd: root, env: process.env, encoding: "utf8" },
+  );
+  if (result.status !== 0) return false;
+  try {
+    return JSON.parse(result.stdout ?? "[]").length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Self-test (issue #2836 termination clause): replay a fixture snapshot with
+ * a 100% drop and assert the unexplained-drift marker is emitted. Never
+ * touches D1 and never files anything. Exits 0 when the guard fires.
+ */
+function selfTestDriftFlag() {
+  const fixture = { users_total: 15, active_watchlists: 11 };
+  const current = { users_total: 15, active_watchlists: 0 };
+  const flags = evaluateDrift(current, fixture);
+  const watchlistFlag = flags.find((flag) => flag.metric === "active_watchlists");
+  if (!watchlistFlag || watchlistFlag.current !== 0 || watchlistFlag.previous !== 11) {
+    console.error("self-test FAILED: 100% watchlist drop did not produce the unexplained-drift flag.");
+    process.exit(1);
+  }
+  const argv = buildDriftIssueCommand({
+    ...watchlistFlag,
+    generatedAt: "1970-01-01T00:00:00.000Z",
+  });
+  const marker = `unexplained-drift: ${watchlistFlag.metric} ${watchlistFlag.current} < 50% of prior ${watchlistFlag.previous}`;
+  console.log(marker);
+  console.log(`self-test OK: guard fired; would file via gh ${argv[0]} (dry-run, nothing filed).`);
+}
+
 export function buildYieldPerWatchlistQuery(now = new Date()) {
   const trailingWeekCutoff = new Date(now.getTime() - 7 * DAY_MS).toISOString();
   return `
@@ -396,6 +570,9 @@ function main() {
         );
       }
     }
+
+    printSection("8. Drift check — headline counts vs prior daily snapshot");
+    runDriftCheck();
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);
     process.exit(1);
@@ -407,6 +584,66 @@ function main() {
 const invokedDirectly =
   process.argv[1] !== undefined &&
   fileURLToPath(import.meta.url) === process.argv[1];
+
+/**
+ * Compare the just-queried headline counts against the prior daily
+ * market-signal snapshot. Emits an `unexplained-drift` marker per flagged
+ * metric. Filing is gated on real samples (a real --remote D1 run plus a
+ * real prior snapshot from the private telemetry sink); fixture/self-test
+ * runs never open production incidents (fleet-ops #2479-style gate).
+ */
+function runDriftCheck() {
+  const countRows = runQuery(headlineCountsQuery);
+  const current = {
+    users_total: Number(countRows[0]?.users_total ?? 0),
+    active_watchlists: Number(countRows[0]?.active_watchlists ?? 0),
+  };
+  const prior = fetchPriorSnapshot();
+  if (prior.unavailable) {
+    console.log(
+      `no-drift-check: prior daily snapshot unavailable (${prior.detail}); cannot evaluate drift.`,
+    );
+    return;
+  }
+  const previous = {
+    users_total: prior.users_total,
+    active_watchlists: prior.active_watchlists,
+  };
+  console.log(
+    `_Prior daily snapshot: generated ${prior.generatedAt} (users ${previous.users_total}, active watchlists ${previous.active_watchlists})._`,
+  );
+  const flags = evaluateDrift(current, previous);
+  if (flags.length === 0) {
+    console.log(
+      `OK: no drift — users_total ${current.users_total} (prior ${previous.users_total}), active_watchlists ${current.active_watchlists} (prior ${previous.active_watchlists}); both >= 50% of prior.`,
+    );
+    return;
+  }
+  for (const flag of flags) {
+    console.log(
+      `unexplained-drift: ${flag.metric} ${flag.current} < 50% of prior ${flag.previous} (ratio ${(flag.ratio * 100).toFixed(1)}%).`,
+    );
+  }
+  // Real samples only: this path only runs after a live --remote D1 query and
+  // a real snapshot fetch; a self-test/fixture run exits before this point.
+  if (existingOpenDriftIncident()) {
+    console.log("auto-file skipped: an open unexplained-drift incident already exists (dedupe).");
+    return;
+  }
+  const command = buildDriftIssueCommand({ ...flags[0], generatedAt: prior.generatedAt });
+  const createResult = spawnSync("gh", command, {
+    cwd: root,
+    env: process.env,
+    encoding: "utf8",
+    maxBuffer: 1024 * 1024,
+  });
+  if (createResult.status !== 0) {
+    const message = (createResult.stderr || createResult.stdout || "").trim();
+    console.log(`auto-file failed${message ? `: ${message}` : ""}`);
+    return;
+  }
+  console.log(`auto-filed: ${(createResult.stdout ?? "").trim()}`);
+}
 
 if (invokedDirectly) {
   main();
