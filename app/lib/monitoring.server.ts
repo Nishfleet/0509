@@ -3656,6 +3656,13 @@ async function evaluateDirectWebsiteProofCandidate(
           captureDiagnostics: { screenshotMissingReason: "budget" },
         }),
     );
+    // Funnel: a budget-exhausted direct-website check bailed before dispatch
+    // (reviewer Consider finding on #2893) — otherwise the top bail-out
+    // surface can silently omit the budget gate.
+    recordLandingPageFunnelCandidateDrop(
+      landingFunnel,
+      "proof_policy:skipped_due_to_budget",
+    );
     return emptyProofEvaluation(websiteUrl, landingFunnel);
   }
 
