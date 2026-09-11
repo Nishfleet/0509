@@ -506,31 +506,23 @@ function renderPdfErrorHtml(error: string, message: string) {
   const copy = pdfErrorCopy(error, message);
   const heading = escapePdfHtml(copy.heading);
   const body = escapePdfHtml(copy.body);
+  // No <style> element: the deployed CSP has no 'unsafe-inline' in style-src
+  // (issue #2971), so every rule is a style= attribute — those are authorized
+  // by style-src-attr.
   return `<!doctype html>
-<html lang="en">
+<html lang="en" style="color-scheme: light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>${heading} · Five to Nine</title>
-<style>
-  :root { color-scheme: light; }
-  * { box-sizing: border-box; }
-  body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background-color: #f6f5f1; color: #101828; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 24px; }
-  .card { width: 100%; max-width: 440px; background-color: #ffffff; border: 1px solid #e4e2db; border-radius: 16px; padding: 32px; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04); }
-  .kicker { margin: 0 0 20px; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #98a2b3; font-weight: 700; }
-  h1 { margin: 0 0 12px; font-size: 22px; line-height: 1.25; color: #101828; }
-  p { margin: 0 0 20px; color: #475467; font-size: 15px; line-height: 1.5; }
-  a { color: #101828; font-weight: 600; }
-  .foot { margin: 0; font-size: 13px; color: #98a2b3; }
-</style>
 </head>
-<body>
-  <main class="card">
-    <p class="kicker">Five to Nine</p>
-    <h1>${heading}</h1>
-    <p>${body}</p>
-    <p class="foot">Need a hand? Email <a href="${escapePdfHtml(SUPPORT_MAILTO)}">${escapePdfHtml(SUPPORT_EMAIL)}</a>.</p>
+<body style="margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background-color: #f6f5f1; color: #101828; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 24px">
+  <main style="box-sizing: border-box; width: 100%; max-width: 440px; background-color: #ffffff; border: 1px solid #e4e2db; border-radius: 16px; padding: 32px; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04)">
+    <p style="margin: 0 0 20px; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #98a2b3; font-weight: 700">Five to Nine</p>
+    <h1 style="margin: 0 0 12px; font-size: 22px; line-height: 1.25; color: #101828">${heading}</h1>
+    <p style="margin: 0 0 20px; color: #475467; font-size: 15px; line-height: 1.5">${body}</p>
+    <p style="margin: 0; font-size: 13px; color: #98a2b3">Need a hand? Email <a style="color: #101828; font-weight: 600" href="${escapePdfHtml(SUPPORT_MAILTO)}">${escapePdfHtml(SUPPORT_EMAIL)}</a>.</p>
   </main>
 </body>
 </html>`;

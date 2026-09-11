@@ -140,16 +140,23 @@ describe("Worker security headers", () => {
     // can never silently diverge in either direction.
     expect(FORBIDDEN_SCRIPT_SRC_KEYWORD).toBe("'unsafe-inline'");
     expect(FORBIDDEN_CONNECT_SRC_WILDCARD).toBe("https:");
-    // Scope the check to script-src: 'unsafe-inline' legitimately REMAINS in
-    // style-src (React Router's <Links /> emits inline <style>), and the issue
-    // only asks for script-src. Asserting over the whole header would be a
-    // false pass the moment style-src changed for an unrelated reason.
+    // Scope the check to script-src: 'unsafe-inline' legitimately remains in
+    // style-src-attr (`style=` attributes on stored digest markup rendered by
+    // /sample-brief), and issue #2348 only asks for script-src. Asserting over
+    // the whole header would be a false pass the moment a style directive
+    // changed for an unrelated reason. style-src itself must NOT carry
+    // 'unsafe-inline' — issue #2971 moved attribute styles to style-src-attr so
+    // an injected <style> element is blocked.
     const productCsp = SECURITY_HEADERS["content-security-policy"];
-    const productScriptSrc = productCsp
-      .split(";")
-      .map((part) => part.trim())
-      .find((part) => part.startsWith("script-src ")) ?? "";
-    expect(productScriptSrc).not.toContain(FORBIDDEN_SCRIPT_SRC_KEYWORD);
+    const directive = (name: string) =>
+      productCsp
+        .split(";")
+        .map((part) => part.trim())
+        .find((part) => part.startsWith(`${name} `)) ?? "";
+    expect(directive("script-src")).not.toContain(FORBIDDEN_SCRIPT_SRC_KEYWORD);
+    expect(directive("style-src")).not.toContain(FORBIDDEN_SCRIPT_SRC_KEYWORD);
+    expect(directive("style-src-elem")).toBe("");
+    expect(directive("style-src-attr")).toContain(FORBIDDEN_SCRIPT_SRC_KEYWORD);
     // The bare scheme token must be absent while full-URL hosts remain allowed.
     expect(CONNECT_SRC.split(/\s+/)).not.toContain(FORBIDDEN_CONNECT_SRC_WILDCARD);
   });
