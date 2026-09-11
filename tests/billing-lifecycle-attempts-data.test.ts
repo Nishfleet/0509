@@ -109,7 +109,7 @@ describe("billing lifecycle attempt selection", () => {
 		expect(capturedQuery).not.toBe("");
 		const plan = harness.sqlite
 			.prepare(`EXPLAIN QUERY PLAN ${capturedQuery}`)
-			.all("2026-07-13T09:05:00.000Z", 3, 10) as Array<{
+			.all("2026-07-13T09:05:00.000Z", 3, 3, 10) as Array<{
 				detail: string;
 			}>;
 		const details = plan.map((row) => row.detail);
@@ -146,6 +146,12 @@ describe("billing lifecycle attempt selection", () => {
 			status: "pending",
 			webhookStatus: "pending",
 			payload: {},
+		});
+		insertAttempt(harness, {
+			id: "stale-pre-dispatch-budget-exhausted",
+			status: "pending",
+			webhookStatus: "pending",
+			payload: { recoveryAttemptCount: 3 },
 		});
 		insertAttempt(harness, {
 			id: "reconciled-budget-exhausted",

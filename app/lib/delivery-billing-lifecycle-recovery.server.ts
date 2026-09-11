@@ -111,10 +111,13 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
 		}
 
 		if (payload && !currentEmail) {
+			const recoveryExhausted =
+				recoveryAttemptCount >= BILLING_LIFECYCLE_RECOVERY_MAX_ATTEMPTS;
+			const deferredAt = new Date().toISOString();
 			const deferred = await updateDeliveryAttemptResult(env, attempt.id, {
 				provider: attempt.provider,
-				status: attempt.status,
-				webhookStatus: attempt.webhookStatus,
+				status: recoveryExhausted ? "failed" : attempt.status,
+				webhookStatus: recoveryExhausted ? "failed" : attempt.webhookStatus,
 				providerMessageId: attempt.providerMessageId,
 				providerStatusLastSeenAt: attempt.providerStatusLastSeenAt,
 				templateName: attempt.templateName,
@@ -125,14 +128,21 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
 							? "Billing lifecycle recovery recipient is not verified."
 							: "Billing lifecycle recovery recipient is unavailable.",
 				sentAt: attempt.sentAt,
-				failedAt: attempt.failedAt,
-				updatedAt: new Date().toISOString(),
+				failedAt: recoveryExhausted ? deferredAt : attempt.failedAt,
+				payloadSnapshot: {
+					...attempt.payloadSnapshot,
+					recoveryAttemptCount,
+				},
+				updatedAt: deferredAt,
 				expectedStatus: retryingExplicitFailure ? "failed" : "pending",
 				expectedWebhookStatus: retryingExplicitFailure ? "failed" : "pending",
 				expectedUpdatedAt: attempt.updatedAt,
 			});
 			if (deferred !== true) result.conflicts += 1;
-			else result.claimed += 1;
+			else {
+				result.claimed += 1;
+				if (recoveryExhausted) result.failed += 1;
+			}
 			continue;
 		}
 

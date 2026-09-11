@@ -144,4 +144,29 @@ jobs:
       );
     }
   });
+
+  // Issue #2676: CLAUDE.md's `- Crons:` line is a hand-maintained mirror of the
+  // `crons` array in wrangler.jsonc. Nothing asserted the two agree, so the
+  // line went stale once already (#2371: three documented vs five deployed).
+  // This lock fails the suite when the mirror drifts in value or order.
+  it("keeps CLAUDE.md's crons line in sync with wrangler.jsonc", () => {
+    const wranglerConfig = readFileSync("wrangler.jsonc", "utf8");
+    const cronBlock =
+      wranglerConfig.match(/"crons"\s*:\s*\[([\s\S]*?)\]/)?.[1] ?? "";
+    const deployedCrons = [...cronBlock.matchAll(/"([^"]+)"/g)].map(
+      (match) => match[1],
+    );
+
+    const claudeMd = readFileSync("CLAUDE.md", "utf8");
+    const cronsLine = claudeMd
+      .split("\n")
+      .find((line) => line.startsWith("- Crons:"));
+    expect(cronsLine, "CLAUDE.md must have a `- Crons:` line").toBeTruthy();
+
+    const documentedCrons = [...cronsLine!.matchAll(/`([^`]+)`/g)].map(
+      (match) => match[1],
+    );
+
+    expect(documentedCrons).toEqual(deployedCrons);
+  });
 });

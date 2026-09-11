@@ -136,6 +136,10 @@ export async function listStaleBillingLifecycleEmailAttempts(
             status = 'pending'
             AND webhook_status = 'pending'
             AND updated_at <= ?
+            AND COALESCE(
+              CAST(json_extract(payload_snapshot_json, '$.recoveryAttemptCount') AS INTEGER),
+              0
+            ) < ?
           )
           OR (
             status = 'failed'
@@ -167,6 +171,7 @@ export async function listStaleBillingLifecycleEmailAttempts(
       LIMIT ?
     `,
     input.staleBefore,
+    input.maxRecoveryAttempts,
     input.maxRecoveryAttempts,
     input.limit,
   );
@@ -308,6 +313,7 @@ export async function listDeliveryAttempts(
   options: {
     userId?: string;
     watchlistId?: string;
+    digestRunId?: string;
     channel?: DeliveryChannel;
     targetValue?: string;
     limit?: number;
@@ -322,6 +328,10 @@ export async function listDeliveryAttempts(
   if (options.watchlistId) {
     clauses.push("watchlist_id = ?");
     bindings.push(options.watchlistId);
+  }
+  if (options.digestRunId) {
+    clauses.push("digest_run_id = ?");
+    bindings.push(options.digestRunId);
   }
   if (options.channel) {
     clauses.push("channel = ?");

@@ -372,4 +372,52 @@ describe("mention resweep + digest", () => {
     const expectedSince = new Date(Date.now() - lookbackMs).toISOString().slice(0, 10);
     expect(call[1].idempotencyKey).toMatch(new RegExp(`^presence-digest:user_\\d{4}:${expectedSince}$`));
   });
+
+  it("digests >50 distinct (entity, url_hash) pairs without blowing the D1 100-bind cap", async () => {
+    // M25: firstObservedAtByUrlHash binds 1 + 2*pairs parameters in one OR-chain.
+    // 60 pairs = 121 binds > D1's 100-parameter limit; the digest must still build.
+    const { userId, entityId, sourceId } = await seedUserAndEntity();
+
+    const statements = [];
+    for (let i = 0; i < 60; i++) {
+      const canonicalUrl = `https://1.1.1.1/posts/mention-${i}`;
+      const urlHash = await presenceUrlHash(canonicalUrl);
+      const observedAt = new Date(Date.parse(ISO_T0) + (i + 1) * 60_000).toISOString();
+      statements.push(
+        db()
+          .prepare(
+            `INSERT INTO presence_item (
+               id, source_target_id, tracked_entity_id, user_id, connector_id,
+               external_id, canonical_url, url_hash, title, body_excerpt, author,
+               published_at, observed_at, content_hash, raw_json, is_tombstone,
+               created_at
+             ) VALUES (?, ?, ?, ?, 'website', NULL, ?, ?, ?, 'Body', NULL, ?, ?, ?, '{}', 0, ?)`,
+          )
+          .bind(
+            uid(`pi${i}`),
+            sourceId,
+            entityId,
+            userId,
+            canonicalUrl,
+            urlHash,
+            `Mention ${i}`,
+            ISO_T0,
+            observedAt,
+            `hash${i}`,
+            observedAt,
+          ),
+      );
+    }
+    await db().batch(statements);
+
+    const { buildMentionDigestLines } = await import("~/lib/mention-digest.server");
+    const lines = await buildMentionDigestLines(makeEnv(), userId, {
+      since: ISO_T0,
+      mentionConnectorIds: ["website"],
+      limit: 60,
+    });
+    expect(lines).toBeInstanceOf(Array);
+    expect(lines.length).toBe(60);
+    expect(lines.every((line) => line.includes("(new)"))).toBe(true);
+  });
 });

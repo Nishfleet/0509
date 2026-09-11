@@ -135,6 +135,20 @@ export interface ParsedSocialCardPath {
  * standalone surfaces; brand slugs are the `/brands/:category` landing
  * pages (resolved via `brandCategoryFromSlug` in renderSocialCard).
  */
+/**
+ * Safe `decodeURIComponent`: returns `null` instead of throwing `URIError` on
+ * malformed percent-encoding (e.g. `%zz`). Malformed slugs then fall through to
+ * the React Router 404 instead of becoming unauthenticated 500s on a public,
+ * pre-rate-limit route (issue #2465).
+ */
+function safeDecodeURIComponent(value: string): string | null {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return null;
+  }
+}
+
 export function parseSocialCardPathname(pathname: string): ParsedSocialCardPath | null {
   if (!pathname.startsWith("/social-card/")) return null;
   const rest = pathname.slice("/social-card/".length);
@@ -144,12 +158,14 @@ export function parseSocialCardPathname(pathname: string): ParsedSocialCardPath 
   // serves PNG bytes, so cached links and the issue's termination probe keep
   // working. Compare/switch/cluster cards stay SVG (issue #2083's scope).
   const adsMatch = rest.match(/^ads\/(.+)\.(?:svg|png)$/);
-  if (adsMatch) return { kind: "ads", slug: decodeURIComponent(adsMatch[1]) };
+  const adsSlug = adsMatch ? safeDecodeURIComponent(adsMatch[1]) : null;
+  if (adsMatch && adsSlug !== null) return { kind: "ads", slug: adsSlug };
 
   const timelineMatch = rest.match(/^timeline\/(.+)\.(?:svg|png)$/);
-  if (timelineMatch) return {
+  const timelineSlug = timelineMatch ? safeDecodeURIComponent(timelineMatch[1]) : null;
+  if (timelineMatch && timelineSlug !== null) return {
     kind: "timeline",
-    slug: decodeURIComponent(timelineMatch[1]),
+    slug: timelineSlug,
   };
 
   const compareMatch = rest.match(/^compare\/([^/]+)\.svg$/);

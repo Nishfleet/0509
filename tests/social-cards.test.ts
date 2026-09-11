@@ -532,3 +532,30 @@ describe("/ads and /timeline sitemap cohort og:image:type matches served content
     expect(served?.kind).toBe("timeline");
   });
 });
+
+describe("parseSocialCardPathname malformed percent-encoding (issue #2465)", () => {
+  it("does not throw on malformed percent-encoding", () => {
+    expect(() => parseSocialCardPathname("/social-card/ads/%zz.svg")).not.toThrow();
+    expect(() => parseSocialCardPathname("/social-card/ads/%E0%A4%A.svg")).not.toThrow();
+    expect(() => parseSocialCardPathname("/social-card/ads/%.svg")).not.toThrow();
+    expect(() => parseSocialCardPathname("/social-card/timeline/%zz.svg")).not.toThrow();
+  });
+
+  it("falls through to null so the route 404s", () => {
+    expect(parseSocialCardPathname("/social-card/ads/%zz.svg")).toBeNull();
+    expect(parseSocialCardPathname("/social-card/ads/%E0%A4%A.svg")).toBeNull();
+    expect(parseSocialCardPathname("/social-card/ads/%.svg")).toBeNull();
+    expect(parseSocialCardPathname("/social-card/timeline/%zz.svg")).toBeNull();
+  });
+
+  it("still decodes well-formed slugs", () => {
+    expect(parseSocialCardPathname("/social-card/ads/nike.com.svg")).toEqual({
+      kind: "ads",
+      slug: "nike.com",
+    });
+    expect(parseSocialCardPathname("/social-card/ads/nike%2Ecom.svg")).toEqual({
+      kind: "ads",
+      slug: "nike.com",
+    });
+  });
+});

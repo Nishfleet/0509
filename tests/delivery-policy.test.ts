@@ -81,7 +81,12 @@ describe("delivery policy", () => {
     });
   });
 
-  it("lets the watchlist override workspace defaults", () => {
+  // Issue #2416: the per-competitor Delivery settings card is gone, so a
+  // watchlist row can no longer set sensitivity, quiet hours or a timezone
+  // override. This used to assert the override won; it now asserts the override
+  // is ignored — the point of the ticket, because a stored value that nothing
+  // can change any more must not keep governing sends invisibly.
+  it("ignores stored watchlist sensitivity, quiet hours and timezone", () => {
     const watchlistConfig: WatchlistDeliveryConfigRecord = {
       id: "watch-delivery-1",
       watchlistId: "watch-1",
@@ -93,8 +98,8 @@ describe("delivery policy", () => {
       whatsappEnabled: true,
       slackEnabled: false,
       teamsEnabled: false,
-      quietHours: null,
-      timezone: "UTC",
+      quietHours: { startHour: 3, endHour: 4 },
+      timezone: "Asia/Kolkata",
       createdAt: "2026-04-18T00:00:00.000Z",
       updatedAt: "2026-04-18T00:00:00.000Z",
     };
@@ -105,16 +110,31 @@ describe("delivery policy", () => {
     });
 
     expect(resolved).toMatchObject({
-      sensitivityMode: "quiet",
+      // Fixed by policy, not read from the row.
+      sensitivityMode: "balanced",
+      quietHours: { startHour: 22, endHour: 8 },
+      // The workspace row is the only timezone source, so the watchlist's own
+      // Asia/Kolkata is not what answers here — the workspace fixture's is.
+      timezone: "Asia/Kolkata",
+      // Channel switches still come from the per-watchlist row: those are
+      // toggled by delivery targets, which the ticket keeps.
       instantEnabled: false,
       digestEnabled: true,
       emailEnabled: true,
       whatsappEnabled: true,
       slackEnabled: false,
       teamsEnabled: false,
-      quietHours: null,
-      timezone: "UTC",
     });
+  });
+
+  it("reads quiet hours and sensitivity from policy even with no watchlist row", () => {
+    const resolved = resolveDeliveryConfig({
+      workspaceConfig: { ...workspaceConfig, sensitivityMode: "aggressive" },
+      watchlistConfig: null,
+    });
+
+    expect(resolved.sensitivityMode).toBe("balanced");
+    expect(resolved.quietHours).toEqual({ startHour: 22, endHour: 8 });
   });
 
   it("allows confirmed customer events to interrupt in balanced mode when they clear the threshold", () => {

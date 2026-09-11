@@ -68,15 +68,15 @@ function validateRedirect(location, currentUrl) {
  * Fetch a canary endpoint without ever sending the bypass token to an
  * unapproved origin, including a redirect target.
  *
- * @param {{ url: string | URL, token: string, body?: string, userAgent?: string, extraHeaders?: Record<string, string>, fetchImpl?: typeof fetch }} input
+ * @param {{ url: string | URL, token: string, body?: string, method?: "GET" | "POST", userAgent?: string, extraHeaders?: Record<string, string>, fetchImpl?: typeof fetch }} input
  */
-export async function fetchCanary({ url, token, body, userAgent = "0509-dodo-billing-canary/1.0", extraHeaders = {}, fetchImpl = fetch }) {
+export async function fetchCanary({ url, token, body, method: initialMethod = "POST", userAgent = "0509-dodo-billing-canary/1.0", extraHeaders = {}, fetchImpl = fetch }) {
   if (!token?.trim()) {
     throw new Error("Missing CANARY_BYPASS_TOKEN; refusing to construct credential-bearing headers.");
   }
 
   let currentUrl = validateCanonicalRequestUrl(url);
-  let method = "POST";
+  let method = initialMethod;
   let currentBody = body;
 
   for (let redirectCount = 0; ; redirectCount += 1) {

@@ -123,4 +123,47 @@ describe("presence website connector decode wiring", () => {
     expect(poll.items).toHaveLength(1);
     expect(poll.items[0]?.publishedAt).toBe(poll.items[0]?.observedAt);
   });
+
+  it("does not fabricate a change when only hidden page markup differs between polls", async () => {
+    // Two polls of the same page whose HTML differs only in an injected
+    // <meta name="csrf-token" content="..."> within the first 500 chars.
+    // The page-snapshot contentHash must be computed over the same normalized
+    // text that is stored (stripHtml excerpt), not raw HTML — otherwise every
+    // poll records a phantom "website change" for a page that never changed.
+    const buildHtml = (csrfToken: string) =>
+      `<html><head><title>Stable page</title><meta name="csrf-token" content="${csrfToken}">` +
+      `</head><body><h1>Stable heading</h1><p>Stable page copy about the roadmap.</p></body></html>`;
+
+    let pollIndex = 0;
+    const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/robots.txt")) {
+        return new Response("User-agent: FiveToNinePresenceBot\nAllow: /", { status: 200 });
+      }
+      if (url === "https://1.1.1.1" || url === "https://1.1.1.1/") {
+        pollIndex += 1;
+        // Calls 1-2 belong to poll #1 (discovery + page change), 3-4 to poll #2.
+        const html = pollIndex <= 2 ? buildHtml("tok-first-visit") : buildHtml("tok-second-visit");
+        return new Response(html, { status: 200, headers: { "content-type": "text/html" } });
+      }
+      // No feed anywhere: guessed feed candidates must miss.
+      return new Response("not found", { status: 404 });
+    });
+
+    const first = await websiteConnector.poll(
+      { env: baseEnv, userId: "u1", trackingMode: "competitor", fetchImpl: fetchImpl as unknown as typeof fetch },
+      { targetUrl: "https://1.1.1.1", metadata: {} },
+    );
+    expect(first.ok).toBe(true);
+    expect(first.items).toHaveLength(1);
+
+    const second = await websiteConnector.poll(
+      { env: baseEnv, userId: "u1", trackingMode: "competitor", fetchImpl: fetchImpl as unknown as typeof fetch },
+      { targetUrl: "https://1.1.1.1", metadata: {} },
+    );
+    expect(second.ok).toBe(true);
+    expect(second.items).toHaveLength(1);
+
+    // Identical visible page => identical content hash (no phantom change).
+    expect(second.items[0]?.contentHash).toBe(first.items[0]?.contentHash);
+  });
 });
