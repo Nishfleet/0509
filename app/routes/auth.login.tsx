@@ -27,11 +27,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getOptionalSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { safeRedirectPath } = await import("~/lib/safe-redirect");
-  const {
-    enabledBetterAuthOAuthProviders,
-    hasBetterAuthPasskeysForEmail,
-    isBetterAuthPasskeyEnabled,
-  } = await import("~/lib/better-auth.server");
+  const { enabledBetterAuthOAuthProviders, isBetterAuthPasskeyEnabled } =
+    await import("~/lib/better-auth.server");
   const env = getEnv(context);
   const session = await getOptionalSession(env, request);
   const url = new URL(request.url);
@@ -48,10 +45,11 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       : null;
   const error = authErrorMessage(url.searchParams.get("error"));
   const oauthProviders = enabledBetterAuthOAuthProviders(env);
-  const passkeysEnabled =
-    isBetterAuthPasskeyEnabled(env) &&
-    Boolean(prefillEmail) &&
-    (await hasBetterAuthPasskeysForEmail(env, prefillEmail));
+  // Passkey sign-in is offered unconditionally — deciding whether to show it
+  // from an unauthenticated ?email= URL param leaks which addresses hold
+  // accounts (0509#2438). The WebAuthn ceremony itself discovers credentials
+  // without revealing account existence in the page HTML.
+  const passkeysEnabled = isBetterAuthPasskeyEnabled(env);
 
   return {
     redirectTo,
