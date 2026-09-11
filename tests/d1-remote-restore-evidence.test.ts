@@ -411,6 +411,14 @@ describe("D1 remote restore evidence automation", () => {
     const applyMigrationIndex = apply?.steps?.findIndex(
       (step) => step.name === "Apply exact repository migrations remotely",
     ) ?? -1;
+    // Issue #2779: the production dry run and its rollback bookmark sit
+    // between the pre-migration backup and the remote apply, in that order.
+    const applyDryRunIndex = apply?.steps?.findIndex(
+      (step) => step.name === "Dry-run pending migrations on a restored scratch copy",
+    ) ?? -1;
+    const applyTimeTravelIndex = apply?.steps?.findIndex(
+      (step) => step.name === "Record D1 Time Travel bookmark before apply",
+    ) ?? -1;
     const applyBackupValidationIndex = apply?.steps?.findIndex(
       (step) =>
         step.run ===
@@ -427,7 +435,22 @@ describe("D1 remote restore evidence automation", () => {
     expect(applyBackupValidationIndex).toBeLessThan(applyBackupCasIndex);
     expect(applyBackupCasIndex).toBeGreaterThanOrEqual(0);
     expect(applyBackupIndex).toBe(applyBackupCasIndex + 1);
-    expect(applyLocalCleanupIndex).toBe(applyBackupIndex + 1);
+    // The dry run must run while the plaintext backup still exists, so it is
+    // before the run-scoped cleanup; the cleanup in turn stays immediately
+    // before the pre-apply CAS reconfirm.
+    const applyPendingIndex = apply?.steps?.findIndex(
+      (step) => step.name === "Detect pending repository migrations",
+    ) ?? -1;
+    expect(applyPendingIndex).toBe(applyBackupIndex + 1);
+    expect(applyDryRunIndex).toBe(applyPendingIndex + 1);
+    // The diff publisher is always-run and sits between the dry run and the
+    // bookmark so a failed dry run still prints its partial diff.
+    const applyDiffIndex = apply?.steps?.findIndex(
+      (step) => step.name === "Publish migration row-count diff",
+    ) ?? -1;
+    expect(applyDiffIndex).toBe(applyDryRunIndex + 1);
+    expect(applyTimeTravelIndex).toBe(applyDiffIndex + 1);
+    expect(applyLocalCleanupIndex).toBe(applyTimeTravelIndex + 1);
     expect(applyMigrationCasIndex).toBe(applyLocalCleanupIndex + 1);
     expect(applyMigrationIndex).toBe(applyMigrationCasIndex + 1);
     expect(apply?.steps?.[applyBackupCasIndex]).toMatchObject({
@@ -459,10 +482,29 @@ describe("D1 remote restore evidence automation", () => {
       TOLERATE_MAIN_DRIFT: "1",
     });
     expect(apply?.steps?.[applyMigrationIndex]).toMatchObject({
-      if: "success() && steps.pre_migration_backup.outcome == 'success'",
+      if: "success() && steps.pre_migration_backup.outcome == 'success' && steps.migration_dry_run.outcome == 'success' && steps.time_travel.outcome == 'success'",
     });
     expect(apply?.steps?.[applyMigrationIndex]?.run).toContain(
       "npx wrangler d1 migrations apply 0509 --remote",
+    );
+    // The dry run fails closed on any undeclared per-table row loss and is a
+    // hard prerequisite of the remote apply (issue #2779).
+    expect(apply?.steps?.[applyDryRunIndex]).toMatchObject({
+      id: "migration_dry_run",
+      if: "success() && steps.pre_migration_backup.outcome == 'success'",
+    });
+    expect(apply?.steps?.[applyDryRunIndex]?.run).toContain(
+      "scripts/d1-remote-restore-evidence.mjs",
+    );
+    expect(apply?.steps?.[applyDryRunIndex]?.run).toContain(
+      "--dry-run-migrations",
+    );
+    expect(apply?.steps?.[applyTimeTravelIndex]).toMatchObject({
+      id: "time_travel",
+      if: "success() && steps.migration_dry_run.outcome == 'success'",
+    });
+    expect(apply?.steps?.[applyTimeTravelIndex]?.run).toContain(
+      "npx wrangler d1 time-travel info 0509",
     );
     expect(apply?.env).toMatchObject({
       D1_DATABASE_NAME: "0509",
@@ -478,9 +520,27 @@ describe("D1 remote restore evidence automation", () => {
     );
     expect(applyProviderSecretSteps).toEqual([
       apply?.steps?.[applyBackupIndex],
+      apply?.steps?.[applyDryRunIndex],
+      apply?.steps?.[applyTimeTravelIndex],
       apply?.steps?.[applyMigrationIndex],
     ]);
-    expect(JSON.stringify(apply)).not.toContain("d1 execute");
+    // The apply job must never touch production rows outside the two
+    // sanctioned mutations. The only `d1 execute` allowed is the scratch dry
+    // run, and it must name its own scratch config so it cannot be pointed at
+    // production by accident.
+    expect(apply?.steps?.[applyMigrationIndex]?.run).not.toContain("d1 execute");
+    for (const step of apply?.steps ?? []) {
+      if (!step.run?.includes("d1 execute")) continue;
+      expect(step.name).toBe(
+        "Dry-run pending migrations on a restored scratch copy",
+      );
+    }
+    const dryRunScript = readFileSync(
+      "scripts/d1-remote-restore-evidence.mjs",
+      "utf8",
+    );
+    expect(dryRunScript).toContain("runMigrationDryRunOnScratch");
+    expect(dryRunScript).toContain("assertMigrationRowInvariant");
     expect(JSON.stringify(apply)).not.toContain("--cleanup-only");
     expect(JSON.stringify(apply)).not.toContain("--sweep-stale");
     expect(workflow.jobs?.restore).not.toBe(apply);
