@@ -246,7 +246,7 @@ describe("runSneakerResaleBackfill (per-brand failure isolation)", () => {
   it("records a capture_failed brand without losing the other brands", async () => {
     const env = { DB: {} } as unknown as AppEnv;
     queryOne.mockResolvedValue(null);
-    execute.mockResolvedValue({});
+    execute.mockResolvedValue({ meta: { changes: 1 } });
     replaceAnalysisFields.mockResolvedValue(undefined);
 
     const capturedDomains: string[] = [];
@@ -293,6 +293,7 @@ describe("runSneakerResaleBackfill (per-brand failure isolation)", () => {
   it("records an unexpected per-brand error without aborting the other brands", async () => {
     const env = { DB: {} } as unknown as AppEnv;
     queryOne.mockResolvedValue(null);
+    execute.mockResolvedValue({ meta: { changes: 1 } });
 
     const captureStub = vi.fn(async (_env: AppEnv, url: string) => {
       const domain = url.replace(/^https:\/\/www\./, "").replace(/\/$/, "");
@@ -378,7 +379,7 @@ describe("runSneakerResaleBackfill (idempotency + subset paths)", () => {
   it("restricts the run to a caller-supplied domains subset", async () => {
     const env = { DB: {} } as unknown as AppEnv;
     queryOne.mockResolvedValue(null);
-    execute.mockResolvedValue({});
+    execute.mockResolvedValue({ meta: { changes: 1 } });
     replaceAnalysisFields.mockResolvedValue(undefined);
 
     const capturedDomains: string[] = [];
@@ -419,7 +420,7 @@ describe("runSneakerResaleBackfill (idempotency + subset paths)", () => {
   it("canonicalizes the caller-supplied domains subset (WWW.StockX.com === stockx.com)", async () => {
     const env = { DB: {} } as unknown as AppEnv;
     queryOne.mockResolvedValue(null);
-    execute.mockResolvedValue({});
+    execute.mockResolvedValue({ meta: { changes: 1 } });
     replaceAnalysisFields.mockResolvedValue(undefined);
 
     const capturedDomains: string[] = [];
@@ -466,7 +467,7 @@ describe("runSneakerResaleBackfill (write path shape)", () => {
   it("INSERTs the snapshot row with the deterministic id and calls replaceAnalysisFields", async () => {
     const env = { DB: {} } as unknown as AppEnv;
     queryOne.mockResolvedValue(null);
-    execute.mockResolvedValue({});
+    execute.mockResolvedValue({ meta: { changes: 1 } });
     replaceAnalysisFields.mockResolvedValue(undefined);
 
     const result = await runSneakerResaleBackfill(env, {
@@ -512,7 +513,7 @@ describe("default tierLookup path (seed list → tier map → cohort)", () => {
     // asks the adapter for the tier map.
     const env = { DB: {} } as unknown as AppEnv;
     queryOne.mockResolvedValue(null);
-    execute.mockResolvedValue({});
+    execute.mockResolvedValue({ meta: { changes: 1 } });
     replaceAnalysisFields.mockResolvedValue(undefined);
 
     const capturedDomains: string[] = [];

@@ -448,8 +448,10 @@ export async function runDemoBrandBackfill(
       }
 
       // INSERT OR IGNORE keeps the deterministic id the single source of
-      // truth against an overlapping cron retry.
-      await execute(
+      // truth against an overlapping cron retry — for the analysis write
+      // as well as the row: an ignored insert means a concurrent pass (the
+      // nightly rail vs. the hourly catch-up) already owns this row.
+      const inserted = await execute(
         env,
         `
           INSERT OR IGNORE INTO landing_page_snapshot (
@@ -489,6 +491,22 @@ export async function runDemoBrandBackfill(
         nowIso(),
         extractPriceTier(snapshot.priceText),
       );
+      if (Number(inserted.meta?.changes ?? 0) === 0) {
+        // The concurrent winner's row and analysis fields are authoritative.
+        // The day still counts as a success (the hole is filled), but this
+        // pass captured nothing — report the skip, not a fresh capture.
+        await recordDemoBrandProofHoleAttempt(env, domain, day, true);
+        results.push({
+          domain,
+          status: "skipped_already_captured",
+          snapshotId: rowId,
+          reasonCode: null,
+          canonicalUrl: null,
+          capturedAt: null,
+          error: null,
+        });
+        continue;
+      }
       await replaceAnalysisFields(
         env,
         "landing_page",
