@@ -57,8 +57,12 @@ describe("BET 8 switch pages", () => {
   const routeIds = switchRouteIds();
 
   it("ships exactly the three named switch routes", () => {
-    expect(routeIds).toEqual(["switch.panoramata", "switch.visualping"]);
-    expect([...SWITCH_SLUGS].sort()).toEqual(["panoramata", "visualping"]);
+    expect(routeIds).toEqual([
+      "switch.magicbrief",
+      "switch.panoramata",
+      "switch.visualping",
+    ]);
+    expect([...SWITCH_SLUGS].sort()).toEqual(["magicbrief", "panoramata", "visualping"]);
   });
 
   it("lists every switch path in the public sitemap set", () => {

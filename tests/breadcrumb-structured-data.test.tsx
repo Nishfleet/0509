@@ -92,12 +92,15 @@ describe("BreadcrumbList on /compare/* pages (issue #1463)", () => {
 });
 
 describe("BreadcrumbList on /switch/* pages (issue #1463)", () => {
-  it("switch/panoramata carries the shared SwitchLanding trail", async () => {
-    const markup = await renderDefault("switch.panoramata");
+  it.each([
+    ["switch.panoramata", "Switch from Panoramata"],
+    ["switch.magicbrief", "Switch from MagicBrief"],
+  ])("%s carries the shared SwitchLanding trail", async (route, leaf) => {
+    const markup = await renderDefault(route);
     expect(crumbNames(itemsOf(breadcrumb(markup)))).toEqual([
       "Home",
       "Competitor monitoring",
-      "Switch from Panoramata",
+      leaf,
     ]);
     expect(markup).toContain('<nav aria-label="Breadcrumb"');
   });
