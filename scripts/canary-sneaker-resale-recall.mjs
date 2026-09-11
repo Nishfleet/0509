@@ -85,12 +85,41 @@ export const KNOWN_IDENTITY_GAPS = Object.freeze(new Map([
 export const WARMING_RETRY_LIMIT = 2;
 export const WARMING_RETRY_DELAY_MS = 15_000;
 
+// A cold domain's first /search response can legitimately take longer than
+// the 30s the sibling probes use: the route awaits identity resolution (a
+// redirect chain of homepage fetches, up to ~60s) before the warming page or
+// rows come back. finishline.com returned HTTP 200 in 30.7s on a live probe
+// (issue #2700) — inside a user's wait, outside the old 30s budget. The
+// canary asserts what a patient user sees, so the probe waits up to 90s.
+export const PROBE_REQUEST_TIMEOUT_MS = 90_000;
+
+// A transport blip — the fetch throwing (timeout, DNS, connection reset) or a
+// 5xx from the edge — means the probe could not confirm coverage, but a single
+// blip must not fail the whole 24-domain sweep: finishline.com and
+// jdsports.com each returned one-off ERRs that failed otherwise-green runs
+// (issue #2700). The probe retries a bounded number of times; a persistent
+// failure still reports requestError and fails loud — "cannot confirm" is
+// never a pass. The 60s spacing gives an in-flight server-side capture (which
+// outlives an aborted client request via waitUntil) time to land before the
+// retry asks again.
+export const REQUEST_ERROR_RETRY_LIMIT = 2;
+export const REQUEST_ERROR_RETRY_DELAY_MS = 60_000;
+
 // Anonymous /search is 20 requests per 10 minutes per IP. The canary makes 24
 // requests (one per domain), so a scheduled run can collide with other search
 // canaries on the same runner IP; a 429 is retried with the same backoff the
 // BET 2 verifier uses rather than treated as a dead-end.
 export const SEARCH_429_RETRY_LIMIT = 3;
 export const SEARCH_429_DEFAULT_WAIT_MS = 60_000;
+
+// The retry budgets above stack: a full brownout (24 domains each burning 3
+// attempts × 90s + 2 × 60s) would run ~2h42m — past the unit's 45min
+// TimeoutStartSec, so the service would be killed with NO report at all. A
+// run-level wall budget below the unit timeout caps total retry wait: once
+// the budget is spent the probe stops retrying and fails loud on its last
+// state instead of dying silently (reviewer round on issue #2700).
+export const RUN_WALL_BUDGET_MS = 40 * 60_000;
+const RUN_START_MS = Date.now();
 
 /**
  * @typedef {Object} SneakerResaleProbe
@@ -150,6 +179,9 @@ function defaultSleep(ms) {
  *   retryLimit?: number,
  *   retryDelayMs?: number,
  *   max429Retries?: number,
+ *   requestErrorRetryLimit?: number,
+ *   requestErrorRetryDelayMs?: number,
+ *   elapsedMsImpl?: () => number,
  * }} input
  * @returns {Promise<SneakerResaleProbe>}
  */
@@ -161,7 +193,15 @@ export async function probeSneakerResaleDomain({
   retryLimit = WARMING_RETRY_LIMIT,
   retryDelayMs = WARMING_RETRY_DELAY_MS,
   max429Retries = SEARCH_429_RETRY_LIMIT,
+  requestErrorRetryLimit = REQUEST_ERROR_RETRY_LIMIT,
+  requestErrorRetryDelayMs = REQUEST_ERROR_RETRY_DELAY_MS,
+  elapsedMsImpl = () => Date.now() - RUN_START_MS,
 }) {
+  // Remaining wall budget for this run; a retry is only taken when its wait
+  // (plus a 90s attempt) still fits. Exhausted budget ⇒ no retry, terminal
+  // state, fail loud.
+  const canAffordRetry = (/** @type {number} */ delayMs) =>
+    elapsedMsImpl() + delayMs + PROBE_REQUEST_TIMEOUT_MS <= RUN_WALL_BUDGET_MS;
   const url = new URL("/search", baseUrl);
   url.searchParams.set("website", domain);
   url.searchParams.set("country", "all");
@@ -170,6 +210,7 @@ export async function probeSneakerResaleDomain({
   let lastStatus = null;
   let rateLimitHits = 0;
   let warmingAttempts = 0;
+  let requestErrorAttempts = 0;
   while (true) {
     let response;
     try {
@@ -180,13 +221,18 @@ export async function probeSneakerResaleDomain({
           pragma: "no-cache",
           accept: "text/html,application/xhtml+xml",
         },
-        signal: AbortSignal.timeout(30_000),
+        signal: AbortSignal.timeout(PROBE_REQUEST_TIMEOUT_MS),
       });
     } catch (error) {
+      requestErrorAttempts += 1;
+      if (requestErrorAttempts <= requestErrorRetryLimit && canAffordRetry(requestErrorRetryDelayMs)) {
+        await sleepImpl(requestErrorRetryDelayMs);
+        continue;
+      }
       return {
         domain,
         brand: domain,
-        status: null,
+        status: lastStatus,
         rowCount: 0,
         tierCounts: { verified: 0, likely: 0, unmatched: 0 },
         headline: null,
@@ -199,7 +245,7 @@ export async function probeSneakerResaleDomain({
       rateLimitHits += 1;
       const retryAfterHeader = response.headers.get("retry-after");
       await response.text();
-      if (rateLimitHits > max429Retries) {
+      if (rateLimitHits > max429Retries || !canAffordRetry(parseRetryAfterMs(retryAfterHeader, SEARCH_429_DEFAULT_WAIT_MS))) {
         return {
           domain,
           brand: domain,
@@ -214,6 +260,24 @@ export async function probeSneakerResaleDomain({
       await sleepImpl(parseRetryAfterMs(retryAfterHeader, SEARCH_429_DEFAULT_WAIT_MS));
       continue;
     }
+    if (response.status >= 500) {
+      await response.text();
+      requestErrorAttempts += 1;
+      if (requestErrorAttempts <= requestErrorRetryLimit && canAffordRetry(requestErrorRetryDelayMs)) {
+        await sleepImpl(requestErrorRetryDelayMs);
+        continue;
+      }
+      return {
+        domain,
+        brand: domain,
+        status: lastStatus,
+        rowCount: 0,
+        tierCounts: { verified: 0, likely: 0, unmatched: 0 },
+        headline: null,
+        isWarming: false,
+        requestError: `HTTP ${response.status}`,
+      };
+    }
     const html = await response.text();
     lastParsed = parseSearchResponseHtml(html);
     // A warming page with no rows yet: retry once before calling it a
@@ -221,7 +285,7 @@ export async function probeSneakerResaleDomain({
     if (!lastParsed.isWarming || lastParsed.rowCount > 0) {
       break;
     }
-    if (warmingAttempts >= retryLimit) {
+    if (warmingAttempts >= retryLimit || !canAffordRetry(retryDelayMs)) {
       break;
     }
     warmingAttempts += 1;
@@ -241,6 +305,9 @@ export async function probeSneakerResaleDomain({
 
 /**
  * @param {SneakerResaleProbe[]} results
+ * @param {{ knownNoCoverage?: Set<string> }} [options] Test seam: the live
+ *   KNOWN_NO_COVERAGE set is empty since #2926 removed the only member, so the
+ *   carve-out contract is pinned with an injected set instead.
  * @returns {{
  *   pass: boolean,
  *   failures: SneakerResaleProbe[],
@@ -249,7 +316,7 @@ export async function probeSneakerResaleDomain({
  *   warming: SneakerResaleProbe[],
  * }}
  */
-export function evaluateSneakerResaleRecall(results) {
+export function evaluateSneakerResaleRecall(results, { knownNoCoverage = KNOWN_NO_COVERAGE } = {}) {
   const failures = [];
   const noCoverage = [];
   const identityGaps = [];
@@ -287,7 +354,7 @@ export function evaluateSneakerResaleRecall(results) {
     // evidence of inactivity" copy, no page (issue #1945 verify). A brand not
     // in any carve-out that dead-ends (0 rows) or blanket-unmatches is a real
     // recall/alias regression and fails.
-    if (KNOWN_NO_COVERAGE.has(probe.domain)) {
+    if (knownNoCoverage.has(probe.domain)) {
       noCoverage.push(probe);
       continue;
     }
@@ -430,7 +497,9 @@ async function main() {
   for (const probe of verdict.failures) {
     const cause = probe.rateLimited
       ? "rate-limited (429) after retries"
-      : `rows=${probe.rowCount}`;
+      : probe.requestError
+        ? `request error after retries (${probe.requestError})`
+        : `rows=${probe.rowCount}`;
     emitLine(`  - ${probe.domain} (${cause}, status=${String(probe.status ?? "ERR")})`);
   }
   process.exit(1);
