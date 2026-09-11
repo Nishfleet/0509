@@ -403,7 +403,7 @@ export function buildProductionDeployPlan({
       args: ["scripts/check-google-oauth-branding.mjs"],
     },
     {
-      // The workflow's "Synchronize private canary token" step runs classic
+      // The workflow's "Synchronize Worker secrets" step runs classic
       // `wrangler secret put` after `npm run deploy` returns, and it dies
       // when Cloudflare's "currently deployed" mark lags behind `wrangler
       // deploy` (run 34079008963: "Secret edit failed ... latest version of
