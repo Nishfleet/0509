@@ -644,11 +644,11 @@ async function copyWatchlistDeliverySettings(
       INSERT INTO watchlist_delivery_config (
         id, watchlist_id, user_id, sensitivity_mode, instant_enabled,
         digest_enabled, email_enabled, whatsapp_enabled, slack_enabled,
-        quiet_hours_json, timezone, created_at, updated_at
+        teams_enabled, quiet_hours_json, timezone, created_at, updated_at
       )
       SELECT ?, ?, user_id, sensitivity_mode, instant_enabled,
              digest_enabled, email_enabled, whatsapp_enabled, slack_enabled,
-             quiet_hours_json, timezone, ?, ?
+             teams_enabled, quiet_hours_json, timezone, ?, ?
       FROM watchlist_delivery_config
       WHERE watchlist_id = ?
     `,
