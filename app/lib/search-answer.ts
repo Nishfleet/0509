@@ -580,12 +580,17 @@ function suggestVerifiedSearchDomain(keyword: string): string | null {
   if (stem.includes(".") || stem.includes("/") || stem.includes(" ")) {
     return null;
   }
-  // Strip common brand-noise suffixes so "goat app" → "goat" → "goat.com",
-  // not "goatapp.com". Conservative: only trailing "app"/"hq"/"co" when the
-  // remaining stem is at least 3 chars (avoids "co" → "" ).
-  const cleaned = stem.replace(/(app|hq|co)$/, (suffix, _match, offset) =>
-    offset >= 3 ? "" : suffix,
-  );
+  // Strip common brand-noise suffixes ("app"/"hq"/"co") only when the suffix
+  // is separated from the stem as a distinct
+  // whitespace-bounded token in the original keyword may be stripped: the
+  // old offset>=3 heuristic stripped mid-word, mapping "costco" → "cost" →
+  // "cost.com" (a domain Costco does not own) and "mexico" → "mexic.com".
+  // The multi-word guard above already rejects keywords containing spaces,
+  // so the stripper now only ever suppresses the mid-word misfire.
+  const whitespaceBoundedSuffix = /(?:^|\s)(app|hq|co)\s*$/i.test(keyword.trim());
+  const cleaned = whitespaceBoundedSuffix
+    ? stem.replace(/(app|hq|co)$/, "")
+    : stem;
   const label = cleaned || stem;
   if (label.length < 2) {
     return null;
