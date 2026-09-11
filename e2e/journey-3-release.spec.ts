@@ -212,10 +212,18 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", { lock: "d
         viewport,
         "/app/watchlists?watchlist=e2e-watchlist-starter-1&tab=delivery",
         "Okara competitor watch",
-        [/High-priority alerts/],
+        [/Channel policy/, /high-priority alerts and the digest/i],
       );
-      await expect(page.getByText("High-priority alerts (sent as soon as a scan confirms a major change)")).toBeVisible();
-      await expect(page.getByRole("checkbox", { name: /High-priority alerts/ })).toBeChecked();
+      // #2416: the per-competitor Delivery settings card renders zero form
+      // fields. Delivery is the account default (high-priority alerts + digest
+      // together, quiet hours 22:00-08:00 local) and the only per-competitor
+      // control is pause/resume under Targets and pauses.
+      await expect(page.getByRole("heading", { name: "Channel policy", exact: true })).toBeVisible();
+      await expect(
+        page.getByText("Alerts use your account defaults: high-priority alerts and the digest", { exact: false }),
+      ).toBeVisible();
+      await expect(page.getByRole("checkbox", { name: /High-priority alerts/ })).toHaveCount(0);
+      await expect(page.getByRole("heading", { name: "Targets and pauses", exact: true })).toBeVisible();
 
       await expectResponsiveSurface(
         page,
@@ -392,10 +400,15 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", { lock: "d
       await expectPhoneTouchTargets(page);
 
       await signInAs(context, baseURL!, "e2e-scout");
-      // BL-007: the delivery gate lives on the Delivery tab.
+      // BL-007 / #2416: the Delivery tab no longer carries per-competitor
+      // toggles or a Starter gate; the policy card states the account default
+      // and offers no field to a plan that cannot change it. The honest state
+      // before any delivery action is: the card, no checkbox, no gate copy
+      // inviting a field that does not exist.
       await page.goto("/app/watchlists?watchlist=e2e-watchlist-scout-1&tab=delivery");
-      await expect(page.getByText("High-priority alerts require Starter", { exact: false })).toBeVisible();
-      await expect(page.getByRole("checkbox", { name: /High-priority alerts/ })).toBeDisabled();
+      await expect(page.getByRole("heading", { name: "Channel policy", exact: true })).toBeVisible();
+      await expect(page.getByRole("checkbox", { name: /High-priority alerts/ })).toHaveCount(0);
+      await expect(page.getByText("High-priority alerts require Starter", { exact: false })).toHaveCount(0);
       await expect(page.getByText("Email delivery requires Scout", { exact: false })).toHaveCount(0);
       await expectNoHorizontalOverflow(page);
       await expectPhoneTouchTargets(page);
@@ -452,7 +465,9 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", { lock: "d
         /Targets and pauses/,
       ]);
       await expect(page.locator('input[name="targetValue"]')).toHaveCount(1);
-      await expect(page.getByRole("button", { name: "Save delivery settings", exact: true })).toHaveCount(1);
+      // #2416: the delivery settings form (and its Save button) is gone; the
+      // owner's one write action on this tab is adding a recipient target.
+      await expect(page.getByRole("button", { name: "Add delivery target", exact: true })).toHaveCount(1);
 
       await signInAs(context, baseURL!, "e2e-active-member");
       await page.goto("/app/watchlists?watchlist=e2e-watchlist-agency-1&tab=delivery");
@@ -465,7 +480,7 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", { lock: "d
       ).toBeVisible();
       await expect(page.getByText("Delivery settings and recipient targets are managed by the workspace owner.", { exact: true })).toBeVisible();
       await expect(page.locator('input[name="targetValue"]')).toHaveCount(0);
-      await expect(page.getByRole("button", { name: "Save delivery settings", exact: true })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Add delivery target", exact: true })).toHaveCount(0);
       await expect(page.locator("body")).not.toContainText("e2e-starter@example.invalid");
       await expectNoHorizontalOverflow(page);
       await expectPhoneTouchTargets(page);
