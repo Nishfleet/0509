@@ -804,9 +804,9 @@ describe("llms.txt parity with dynamic sitemap brand paths", () => {
       cache_key: "search-v2:domain:nike.com:exact:meta_library_browser:all:page-1",
       payload: { ...basePayload, displayDomain: "nike.com", ads: [nikeAd] },
     });
-    // A brand with >=3 live Meta Ad Library ads stays in llms.txt (issue
-    // #2307); one- and two-ad pages are dropped from llms.txt but remain in
-    // the sitemap.
+    // Every indexable brand is listed in llms.txt regardless of live ad
+    // count (issue #2925 zero-parity — supersedes the >=3-ad citation gate
+    // of issue #2307).
     const threeAd = cacheRow({
       cache_key: "search-v2:domain:adidas.com:exact:meta_library_browser:all:page-1",
       payload: {
@@ -849,11 +849,10 @@ describe("llms.txt parity with dynamic sitemap brand paths", () => {
       "https://0509.io/ads/adidas.com",
       "https://0509.io/ads/nykaa.com",
     ]);
-    // llms.txt keeps only the >=3-ad brand (issue #2307); the 1-ad nike.com
-    // and nykaa.com pages stay in the sitemap but are dropped from llms.txt.
-    expect(llmsAds).toEqual(["https://0509.io/ads/adidas.com"]);
-    expect(llmsAds).not.toContain("https://0509.io/ads/nike.com");
-    expect(llmsAds).not.toContain("https://0509.io/ads/nykaa.com");
+    // Issue #2925 zero-parity: llms.txt lists the same indexable /ads set as
+    // the sitemap — nike.com (1 ad) and nykaa.com stay listed. The indexable
+    // gates still hold: stale, demo, and non-exact rows are absent from both.
+    expect(llmsAds).toEqual(sitemapAds);
     expect(llmsAds).not.toContain("https://0509.io/ads/stale.com");
     expect(llmsAds).not.toContain("https://0509.io/ads/demo.com");
     expect(llmsAds).not.toContain("https://0509.io/ads/myntra.com");
