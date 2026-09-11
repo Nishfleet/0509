@@ -40,6 +40,7 @@ import { formatNextScanLabel, nextScheduledScanAt } from "~/lib/schedule-display
 import { formatMachineTokenLabel } from "~/lib/landing-page-display";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import type { AppEnv } from "~/lib/env.server";
+import { queueFirstWatchlistScan } from "~/lib/first-watchlist-scan.server";
 import type { AgentActionAuditRecord, WatchEventRecord } from "~/lib/types";
 import type { WorkspaceReadiness } from "~/lib/workspace-readiness.server";
 
@@ -605,7 +606,6 @@ export async function action(args: ActionFunctionArgs) {
       };
     }
 
-    const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
     const watchlist = result.watchlist;
     let firstScanQueued = false;
     try {
