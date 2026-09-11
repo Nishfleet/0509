@@ -15,6 +15,7 @@ import { canonicalLinks, compareSocialCardUrl, jsonLdScriptProps, publicSeoMeta,
 import { LIVE_BRAND_PROOF_DOMAIN } from "~/lib/demo-brand-pages";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import pulzifiCitations from "~/data/compare/pulzifi-citations.json";
+import "../marketing.css";
 
 // Source verification (issue #1288, #2069): primary-source-verified —
 // https://pulzifi.com/ returns HTTP 200 and https://pulzifi.com/pricing names

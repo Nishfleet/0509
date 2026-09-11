@@ -1,5 +1,6 @@
 import { SwitchLanding, switchPageLinks, switchPageMeta } from "~/components/switch-landing";
 import { SWITCH_PAGES } from "~/lib/switch-pages";
+import "../marketing.css";
 
 const page = SWITCH_PAGES.visualping;
 

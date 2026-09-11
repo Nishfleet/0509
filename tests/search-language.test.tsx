@@ -19,7 +19,11 @@ import type { AdRecord } from "~/lib/types";
  */
 
 const route = readFileSync("app/routes/search.tsx", "utf8");
-const css = readFileSync("app/app.css", "utf8");
+// app.css split in issue #2392: /search is a public route — it loads
+// base.css + marketing.css.
+const css = ["app/base.css", "app/marketing.css"]
+  .map((p) => readFileSync(p, "utf8"))
+  .join("\n");
 const cssRules = css.replace(/\/\*[\s\S]*?\*\//g, "");
 
 function baseAd(overrides: Partial<AdRecord> = {}): AdRecord {

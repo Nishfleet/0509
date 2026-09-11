@@ -7,6 +7,7 @@ import { LocalTime } from "~/components/local-time";
 import { ProviderObservationTimeField } from "~/components/provider-observation-time";
 import { SignOutButton } from "~/components/sign-out-button";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+import "../app.css";
 
 export const meta = () => [{ title: "Ops | Five to Nine" }];
 

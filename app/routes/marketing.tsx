@@ -25,6 +25,7 @@ import {
 } from "~/lib/ads-internal-links";
 import type { PublicProofBrief } from "~/lib/public-proof.server";
 import type { PublicChangeMark } from "~/lib/public-change-mark.server";
+import "../marketing.css";
 
 export { planIntentPath, valueMathLabel, billingFaqJsonLdEntries } from "~/components/pricing-section";
 export type { LocalPricingPreview } from "~/components/pricing-section";

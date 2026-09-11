@@ -13,7 +13,28 @@ import { describe, expect, it } from "vitest";
  * stops the layer regressing into one of them.
  */
 
-const css = readFileSync("app/app.css", "utf8");
+// Issue #2392 split the sheet per route tree. The layer ran from the BL-030
+// banner to end-of-sheet; each output file still holds its own contiguous
+// share of that region: base.css from the banner, app.css from `.f9-wk-del`,
+// marketing.css from `.f9-wk-versions` (the /search-only share). The "setup
+// card" seam test slices from `.f9-wk-page .f9-evidence-cta` to end-of-layer;
+// interleaving the shares at that anchor keeps both slices covering exactly
+// the rules the single file used to cover.
+function layerTail(path: string, anchor: string): string {
+  const text = readFileSync(path, "utf8");
+  const index = text.indexOf(anchor);
+  expect(index, `${path} keeps its landing-language layer start`).toBeGreaterThan(0);
+  return text.slice(index);
+}
+const base = readFileSync("app/base.css", "utf8");
+const ctaAnchor = ".f9-wk-page .f9-evidence-cta {";
+const ctaIndex = base.indexOf(ctaAnchor);
+const css = [
+  base.slice(0, ctaIndex),
+  layerTail("app/marketing.css", ".f9-wk-versions {"),
+  base.slice(ctaIndex),
+  layerTail("app/app.css", ".f9-wk-del {"),
+].join("\n");
 const MARKER = "BL-030 — the landing-language workspace layer (2026-07-29)";
 
 function layer(): string {

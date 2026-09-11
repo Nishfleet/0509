@@ -1,5 +1,6 @@
 import { PublicDocHeader } from "~/components/public-doc-shell";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import "../marketing.css";
 
 export const meta = () => [
   { title: "Five to Nine Presence Bot" },

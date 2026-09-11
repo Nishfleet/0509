@@ -2,6 +2,7 @@ import { redirect } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 
 import { CAPTURE_RULES_PUBLIC_PATH } from "~/lib/capture-validity-public-rules";
+import "../marketing.css";
 
 /**
  * /proof is a non-canonical alias for the capture-validity rules page.

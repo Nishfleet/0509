@@ -20,6 +20,7 @@ import {
   webPageJsonLd,
 } from "~/lib/seo";
 import type { RootLoaderData } from "~/root";
+import "../marketing.css";
 
 const pricingTitle = "Pricing | Five to Nine";
 const pricingDescription =

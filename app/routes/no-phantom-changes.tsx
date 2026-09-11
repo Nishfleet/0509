@@ -20,6 +20,7 @@ import {
   webPageJsonLd,
   jsonLdScriptProps,
 } from "~/lib/seo";
+import "../marketing.css";
 
 export const NO_PHANTOM_CHANGES_PUBLIC_PATH = "/no-phantom-changes";
 

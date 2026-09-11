@@ -27,7 +27,9 @@ import { describe, expect, it } from "vitest";
  * ratchet. This test fails on that diff.
  */
 
-const appCss = readFileSync("app/app.css", "utf8");
+// app.css split in issue #2392: the ld-* ticker is marketing chrome — it
+// lives in marketing.css on the public tree.
+const appCss = readFileSync("app/marketing.css", "utf8");
 
 /** Extract the body of the first top-level CSS rule block for `selector`. */
 function ruleBody(selector: string): string {
