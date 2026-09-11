@@ -3,6 +3,7 @@ import {
   runLpRunAuditStage,
   type LpRunAuditContext,
 } from "~/lib/landing-page-run-audit.server";
+import { decodeHtmlEntities } from "~/lib/decode-html.server";
 import { hashString, stripChurnTokens } from "~/lib/normalize";
 
 export const LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION = "lp-signals-v6";
@@ -1344,57 +1345,47 @@ function stripTags(value: string) {
   return output.join("");
 }
 
-function cleanText(value: string) {
-  return decodeHtml(value).replace(/\s+/g, " ").trim();
+// Issue #1409 guard: hex entities for lone surrogates (0xd800-0xdfff) and
+// out-of-range scalars (> 0x10ffff) must survive decoding untouched — decoding
+// them would put invalid characters into ctaText and corrupt downstream
+// JSON/DB. The shared decoder does not carry this guard, so shield the guarded
+// entities from it and restore them afterwards.
+const GUARDED_HEX_ENTITY_RE =
+  /&#x(?:0*[dD][89AaBb][0-9A-Fa-f]{2}|0*1[1-9A-Fa-f][0-9A-Fa-f]{4,5});/g;
+const GUARDED_HEX_ENTITY_TEST_RE =
+  /&#x(?:0*[dD][89AaBb][0-9A-Fa-f]{2}|0*1[1-9A-Fa-f][0-9A-Fa-f]{4,5});/;
+const SHIELD = "\u0000";
+
+function shieldGuardedHexEntities(value: string) {
+  // Store without the leading `&` so the shielded form is no longer an entity
+  // the decoder would match.
+  return value.replace(GUARDED_HEX_ENTITY_RE, (entity) => SHIELD + entity.slice(1) + SHIELD);
 }
 
-function decodeHtml(value: string) {
+function restoreGuardedHexEntities(value: string) {
   return value.replace(
-    /&(amp|quot|#39|lt|gt|hellip|#8230|#x[0-9a-f]+);/gi,
-    (entity) => {
-      const lower = entity.toLowerCase();
-      switch (lower) {
-        case "&amp;":
-          return "&";
-        case "&quot;":
-          return '"';
-        case "&#39;":
-          return "'";
-        case "&lt;":
-          return "<";
-        case "&gt;":
-          return ">";
-        case "&hellip;":
-        case "&#8230;":
-          return "…";
-        default: {
-          // Issue #1409: the decoder only knew the single hex entity
-          // &#x2026;, so a hex-encoded apostrophe (&#x27;) survived into
-          // ctaText. Decode any &#x..; here so no `&#x` sequence survives
-          // into extracted_fields_json.ctaText. This is a general hex
-          // decode, not a special case for the one entity.
-          const hex = lower.match(/^&#x([0-9a-f]+);$/);
-          if (hex) {
-            const codePoint = parseInt(hex[1], 16);
-            // Guard the valid scalar range: >0x10ffff throws in
-            // String.fromCodePoint, and 0xd800-0xdfff is the surrogate
-            // range (a lone surrogate would corrupt downstream JSON/DB).
-            if (
-              codePoint <= 0x10ffff &&
-              !(codePoint >= 0xd800 && codePoint <= 0xdfff)
-            ) {
-              return String.fromCodePoint(codePoint);
-            }
-          }
-          return entity;
-        }
-      }
+    new RegExp(`${SHIELD}([^\u0000]{1,24})${SHIELD}`, "g"),
+    (_match, stored: string) => {
+      const entity = "&" + stored;
+      return GUARDED_HEX_ENTITY_TEST_RE.test(entity) ? entity : _match;
     },
   );
 }
 
+function cleanText(value: string) {
+  // Issue #2455: the local decodeHtml here omitted `&nbsp;` (and other named
+  // entities), so entity-joined CTA text like "Buy&nbsp;Now" was stored
+  // literally. Use the one shared single-pass decoder instead, with the
+  // issue-#1409 guard shielded around it.
+  return restoreGuardedHexEntities(
+    decodeHtmlEntities(shieldGuardedHexEntities(value)),
+  )
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // Issue #1500: UTF-8 byte-length helper for the lp_run_audit lines. Lives at
-// the bottom of the file (alongside cleanText / decodeHtml) so it is defined
+// the bottom of the file (alongside cleanText) so it is defined
 // before extractLandingPageSignals runs. The existing app/lib/bounded-response.server.ts
 // helper is intentionally NOT imported here — this file is exercised by
 // vitest in isolation and the run-audit module already carries its own
