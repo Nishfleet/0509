@@ -1179,6 +1179,7 @@ describe("buildWebsiteCoverageLabel", () => {
   it("never claims the whole site when the inventory is incomplete", () => {
     const label = buildWebsiteCoverageLabel({
       scan: {
+        status: "complete",
         inventoryComplete: false,
         pageBudget: 50,
         fetchedPageCount: 2,
@@ -1193,10 +1194,11 @@ describe("buildWebsiteCoverageLabel", () => {
   it("never claims the whole site when only part of the inventory was fetched", () => {
     const label = buildWebsiteCoverageLabel({
       scan: {
+        status: "complete",
         inventoryComplete: true,
         pageBudget: 50,
         fetchedPageCount: 3,
-        finalizedAt: null,
+        finalizedAt: "2026-08-01T03:00:00.000Z",
       },
       pages,
     });
@@ -1207,6 +1209,7 @@ describe("buildWebsiteCoverageLabel", () => {
   it("claims the whole site only when complete AND fully fetched", () => {
     const label = buildWebsiteCoverageLabel({
       scan: {
+        status: "complete",
         inventoryComplete: true,
         pageBudget: 50,
         fetchedPageCount: 4,
@@ -1220,6 +1223,7 @@ describe("buildWebsiteCoverageLabel", () => {
   it("reports sitemap-discovered counts and no crawl clause", () => {
     const label = buildWebsiteCoverageLabel({
       scan: {
+        status: "complete",
         inventoryComplete: false,
         pageBudget: 50,
         fetchedPageCount: 1,
@@ -1236,6 +1240,7 @@ describe("buildWebsiteCoverageLabel", () => {
   it("renders the real finalized date, never a placeholder", () => {
     const label = buildWebsiteCoverageLabel({
       scan: {
+        status: "complete",
         inventoryComplete: true,
         pageBudget: 50,
         fetchedPageCount: 4,
@@ -1251,6 +1256,7 @@ describe("buildWebsiteCoverageLabel", () => {
   it("omits the last-full-crawl clause when the scan never finalized", () => {
     const label = buildWebsiteCoverageLabel({
       scan: {
+        status: "complete",
         inventoryComplete: false,
         pageBudget: 50,
         fetchedPageCount: 2,
@@ -1265,6 +1271,7 @@ describe("buildWebsiteCoverageLabel", () => {
   it("omits the last-full-crawl clause on an unparseable date", () => {
     const label = buildWebsiteCoverageLabel({
       scan: {
+        status: "partial",
         inventoryComplete: false,
         pageBudget: 50,
         fetchedPageCount: 2,
@@ -1275,5 +1282,69 @@ describe("buildWebsiteCoverageLabel", () => {
     expect(label).not.toContain("last full crawl");
     expect(label).not.toContain("Invalid Date");
     expect(label).not.toContain("not-a-date");
+  });
+
+  it("omits the last-full-crawl clause on an empty date", () => {
+    const label = buildWebsiteCoverageLabel({
+      scan: {
+        status: "complete",
+        inventoryComplete: true,
+        pageBudget: 50,
+        fetchedPageCount: 4,
+        finalizedAt: "",
+      },
+      pages,
+    });
+    expect(label).not.toContain("last full crawl");
+    expect(label).not.toContain("Invalid Date");
+  });
+
+  // The loader reads the latest scan of ANY status, and the schema CHECK binds
+  // finalized_at IS NOT NULL to every non-running status — so a partial or
+  // failed scan carries a date that is not a "full crawl" date. Rendering it
+  // would swap the placeholder defect for a new false claim of the same class.
+  it("omits the last-full-crawl clause when the scan only partially ran", () => {
+    const label = buildWebsiteCoverageLabel({
+      scan: {
+        status: "partial",
+        inventoryComplete: false,
+        pageBudget: 50,
+        fetchedPageCount: 3,
+        finalizedAt: "2026-08-15T03:00:00.000Z",
+      },
+      pages,
+    });
+    expect(label).not.toContain("last full crawl");
+    expect(label).not.toContain("2026-08-15");
+  });
+
+  it("omits the last-full-crawl clause when the scan failed", () => {
+    const label = buildWebsiteCoverageLabel({
+      scan: {
+        status: "failed",
+        inventoryComplete: false,
+        pageBudget: 50,
+        fetchedPageCount: 1,
+        finalizedAt: "2026-08-15T03:00:00.000Z",
+      },
+      pages,
+    });
+    expect(label).not.toContain("last full crawl");
+    expect(label).not.toContain("2026-08-15");
+  });
+
+  it("omits the last-full-crawl clause while the scan is still running", () => {
+    const label = buildWebsiteCoverageLabel({
+      scan: {
+        status: "running",
+        status: "complete",
+        inventoryComplete: false,
+        pageBudget: 50,
+        fetchedPageCount: 1,
+        finalizedAt: null,
+      },
+      pages,
+    });
+    expect(label).not.toContain("last full crawl");
   });
 });
