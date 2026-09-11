@@ -262,3 +262,7 @@ must not claim the product is in beta).
 After the owner confirms these, the manual submission itself is a ~10-minute
 form fill at `https://betalist.com/submit` — every field value is in this
 document.
+
+## Receipt pass (2026-09-11, issue #2857)
+
+blocked: payment wall — Nish decision (all BetaList submissions are paid; the venue's own FAQ states "There is no free submission option", last verified live 2026-09-09 — the SKIPPED_PAID decision above stands). The prepared copy stays on file if the paid tier is ever separately approved; founder name, location, and contact email also need owner confirmation per the Owner decisions section.

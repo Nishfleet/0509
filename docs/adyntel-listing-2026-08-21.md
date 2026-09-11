@@ -202,3 +202,7 @@ Fresh pass done by the growth2 send-off sheet work (issue #2133):
 
 No field, URL, or requirement changed since the 2026-08-21 prep. The two
 prepared emails stay paste-ready; the send step remains an owner action.
+
+## Receipt pass (2026-09-11, issue #2857)
+
+blocked: needs Nish's identity — the submission is the two paste-ready payloads above: one email from support@0509.io to hello@adyntel.com (Adyntel), and one message to the Trendtrack author via the byline / X route (https://x.com/Trendtrack_io) — never a Trendtrack account signup for sales-mail. No repo-local outbound mail path exists and the worker holds no 0509.io mailbox or X/LinkedIn session, so neither send step can be fired from here. Both payloads stay paste-ready — sending them is the unblock owner step; record the send date + any reply in a Submission status section here.
