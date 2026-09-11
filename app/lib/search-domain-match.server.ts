@@ -58,12 +58,13 @@ export function explainDomainMatch(
   }
 
   if (landingHost && hostnamesMatchBrandVerifiedProperty(landingHost, intent)) {
+    const region = regionLabelForHost(landingHost);
     return buildExplanation(
       ad,
       "verified_alias",
       landingHost,
       "regional_property",
-      `Landing page matches ${comparableHostname(landingHost)}, a related site for ${displayDomain(intent)}`,
+      `Landing page matches ${comparableHostname(landingHost)}, a related site for ${displayDomain(intent)}${region ? ` (${region})` : ""}`,
     );
   }
 
@@ -115,13 +116,30 @@ export function explainDomainMatch(
     );
   }
 
+  // Issue #2989: the name link alone is not a website link. A distributor
+  // (Allbirds Japan is run by GOLDWIN) can legally name its advertising
+  // entity after the brand while its ads land on a THIRD-PARTY storefront
+  // (goldwin.co.jp). Verified — the central trust token — must only attach
+  // when the landing host itself belongs to the brand-owned domain set: the
+  // searched domain, a regional/collapsed/open-ccTLD property, a
+  // stem-extension product site with a brand-stem advertiser, or an audited
+  // alias. A contradicting landing host caps the row at Likely.
   if (hasVerifiedEntityLink(ad, intent, identityAliases)) {
+    if (landingHostConfirmsBrandOwnedDomain(landingHost, intent, aliases, advertiserIsBrandStem(ad, intent))) {
+      return buildExplanation(
+        ad,
+        "verified_entity",
+        intent.registrableDomain,
+        "verified_entity",
+        `Advertiser is linked to ${displayDomain(intent)}`,
+      );
+    }
     return buildExplanation(
       ad,
-      "verified_entity",
+      "likely_brand_name",
       intent.registrableDomain,
-      "verified_entity",
-      `Advertiser is linked to ${displayDomain(intent)}`,
+      "advertiser_name",
+      `Advertiser is linked to ${displayDomain(intent)}, but the landing page (${landingHost}) is a third-party site — confidence capped at Likely`,
     );
   }
 
@@ -545,4 +563,83 @@ function stemFromDomain(domain: string) {
 
 function normalizeHostname(hostname: string) {
   return hostname.trim().toLowerCase().replace(/\.$/, "");
+}
+
+/**
+ * Region grouping for a .com query (issue #2989): a .com search legitimately
+ * surfaces the brand's regional storefronts, but the customer sees ME/Nordic/
+ * JP/AU/FR rows mixed into one heap. Naming the region on every
+ * regional-property row makes the groupings readable without changing rank.
+ */
+const REGION_LABELS: Record<string, string> = {
+  fr: "France",
+  de: "Germany",
+  it: "Italy",
+  es: "Spain",
+  nl: "Netherlands",
+  se: "Sweden",
+  jp: "Japan",
+  kr: "South Korea",
+  in: "India",
+  au: "Australia",
+  nz: "New Zealand",
+  ca: "Canada",
+  uk: "United Kingdom",
+  ie: "Ireland",
+  eu: "EU",
+  sa: "Saudi Arabia",
+  ae: "UAE",
+  kw: "Kuwait",
+  qa: "Qatar",
+  tr: "Turkey",
+};
+
+function regionLabelForHost(hostname: string): string | null {
+  const suffix = hostname.split(".").slice(1).join(".").toLowerCase();
+  if (!suffix || suffix === "com" || suffix === "net" || suffix === "org") {
+    return null;
+  }
+  const compound = REGION_LABELS[suffix];
+  if (compound) {
+    return compound;
+  }
+  const leading = suffix.split(".")[0] ?? "";
+  return REGION_LABELS[leading] ?? null;
+}
+
+/**
+ * Landing-host confirmation for the name-link verified_entity path
+ * (issue #2989). The landing host must sit inside the brand-owned domain
+ * set: the searched domain, a regional country property
+ * (allbirds.co.uk), a hyphen-collapsed label (hugo-boss.com/hugoboss.com),
+ * an open-ccTLD generic brand (notion.so/notion.com), a stem-extension
+ * product site whose advertiser names the brand (oura.com→ouraring.com),
+ * or an audited alias. Returns false for any unrelated host
+ * (goldwin.co.jp), which demotes the row to Likely.
+ */
+function landingHostConfirmsBrandOwnedDomain(
+  landingHost: string | null,
+  intent: Pick<ParsedSearchQuery, "hostname" | "comparableHostname" | "registrableDomain">,
+  aliases: Set<string>,
+  advertiserIsBrandStem: boolean,
+): boolean {
+  if (!landingHost) {
+    return true; // no landing captured — nothing contradicts the name link
+  }
+  if (hostnamesMatchDomainIntent(landingHost, intent)) {
+    return true;
+  }
+  if (hostnamesMatchBrandVerifiedProperty(landingHost, intent)) {
+    return true;
+  }
+  if (
+    hostnamesMatchBrandStemExtension(landingHost, intent) &&
+    advertiserIsBrandStem
+  ) {
+    return true;
+  }
+  if (aliases.has(comparableHostname(landingHost))) {
+    return true;
+  }
+  return false;
 }

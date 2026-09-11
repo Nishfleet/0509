@@ -208,6 +208,46 @@ describe("BET 2 live gaps (issue #1202)", () => {
     expect(exact[0]?.match.confidenceCategory).toBe("verified");
   });
 
+  // Issue #2989 regression: live 2026-09-11, allbirds.com verified an
+  // "Allbirds Japan" ad that LANDS on the Japanese distributor's storefront
+  // (goldwin.co.jp). GOLDWIN is a third party; the name link alone must cap
+  // the row at Likely, never the green Verified badge.
+  it("caps Allbirds Japan at Likely when the ad lands on the goldwin.co.jp distributor storefront", () => {
+    const intent = parseSearchInputFromWebsiteField("https://allbirds.com");
+    const goldwin = ad({
+      metaAdId: "1481868319988684",
+      advertiser: "Allbirds Japan",
+      landingPageUrl:
+        "https://www.goldwin.co.jp/ap/item/i/m/ABM240073?colvar=AM27",
+    });
+
+    const affected = classifyDomainMatches([goldwin], intent, {
+      includeUnverified: false,
+      identityAliases: ["Allbirds"],
+    });
+    expect(affected).toHaveLength(1);
+    expect(affected[0]?.match.level).toBe("likely_brand_name");
+    expect(affected[0]?.match.confidenceCategory).toBe("likely");
+    expect(affected[0]?.match.customerReason).toContain("goldwin.co.jp");
+  });
+
+  it("keeps verified_entity for an Allbirds ad landing on the brand-owned regional site", () => {
+    const intent = parseSearchInputFromWebsiteField("https://allbirds.com");
+    const regional = ad({
+      advertiser: "Allbirds",
+      landingPageUrl: "https://www.allbirds.co.uk/products",
+    });
+
+    const exact = classifyDomainMatches([regional], intent, {
+      includeUnverified: false,
+      identityAliases: ["Allbirds"],
+    });
+    expect(exact).toHaveLength(1);
+    expect(exact[0]?.match.level).toBe("verified_alias");
+    expect(exact[0]?.match.confidenceCategory).toBe("verified");
+    expect(exact[0]?.match.customerReason).toContain("United Kingdom");
+  });
+
   it("does not verify Notion Press Publishing just because notion.so's site name is Notion", () => {
     const intent = parseSearchInputFromWebsiteField("https://notion.so");
     const publisher = ad({
