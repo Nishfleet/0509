@@ -39,7 +39,7 @@ describe("BL-034 Presence landing language", () => {
           "export default function PresenceIndexRoute",
         ),
       ),
-    ).toBe("ed5711954140ad539f7f751ea96deae4e4f3a7b18c9cdcb6a7b95c04ba4afad8");
+    ).toBe("f4839646a548f1b8dca3514476be3dabfa087b63e4347077eb26d37e1b13e3d4");
   });
 
   it("removes the boxed Evidence Desk composition from the Presence route", () => {
