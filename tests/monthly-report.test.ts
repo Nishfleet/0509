@@ -156,6 +156,13 @@ describe("sendMonthlyReports", () => {
     existingShare?: boolean;
     filesReport?: boolean;
     createShareLink?: ReturnType<typeof vi.fn>;
+    /**
+     * Live-plan re-check. Registered exactly once per test: stacking a second
+     * `vi.doMock("~/lib/plan.server")` on top of this one raced the first
+     * registration under merge-queue load (2026-09-11 10:34Z/10:47Z/10:50Z)
+     * and a Free workspace was filed as paid (#2928).
+     */
+    getUserPlan?: ReturnType<typeof vi.fn>;
   } = {}) {
     const sendCloudflareEmail = overrides.sendCloudflareEmail ?? vi.fn().mockResolvedValue({
       provider: "cloudflare",
@@ -200,7 +207,7 @@ describe("sendMonthlyReports", () => {
       sendCloudflareEmail,
     }));
     vi.doMock("~/lib/plan.server", () => ({
-      getUserPlan: vi.fn().mockResolvedValue("starter"),
+      getUserPlan: overrides.getUserPlan ?? vi.fn().mockResolvedValue("starter"),
     }));
     vi.doMock("~/lib/report-builder.server", () => ({
       buildWatchlistReport: vi.fn().mockReturnValue({
@@ -342,7 +349,9 @@ describe("sendMonthlyReports", () => {
   });
 
   it("treats a Free workspace as nothing to do, and reports it as skipped", async () => {
-    const { sendCloudflareEmail } = mockDelivery();
+    const { sendCloudflareEmail } = mockDelivery({
+      getUserPlan: vi.fn().mockResolvedValue("free"),
+    });
 
     vi.doMock("~/lib/data/d1.server", () => ({
       // The list query already excludes Free; this asserts the live-plan
@@ -351,9 +360,6 @@ describe("sendMonthlyReports", () => {
         { user_id: "user-1", email: "free@example.com", name: "Free", plan: "free" },
       ]),
       queryOne: vi.fn().mockResolvedValue({ count: 0 }),
-    }));
-    vi.doMock("~/lib/plan.server", () => ({
-      getUserPlan: vi.fn().mockResolvedValue("free"),
     }));
 
     const { sendMonthlyReports } = await import("~/lib/delivery.server");
@@ -419,7 +425,9 @@ describe("sendMonthlyReports", () => {
   });
 
   it("fails closed when the live plan read throws, rather than mailing a possibly-Free workspace", async () => {
-    const { sendCloudflareEmail } = mockDelivery();
+    const { sendCloudflareEmail } = mockDelivery({
+      getUserPlan: vi.fn().mockRejectedValue(new Error("d1 transient")),
+    });
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
 
     vi.doMock("~/lib/data/d1.server", () => ({
@@ -429,9 +437,6 @@ describe("sendMonthlyReports", () => {
         { user_id: "user-1", email: "owner@example.com", name: "Owner", plan: "starter" },
       ]),
       queryOne: vi.fn().mockResolvedValue({ count: 0 }),
-    }));
-    vi.doMock("~/lib/plan.server", () => ({
-      getUserPlan: vi.fn().mockRejectedValue(new Error("d1 transient")),
     }));
 
     const { sendMonthlyReports } = await import("~/lib/delivery.server");
@@ -444,16 +449,15 @@ describe("sendMonthlyReports", () => {
   });
 
   it("excludes a workspace whose live plan has lapsed to free", async () => {
-    const { sendCloudflareEmail } = mockDelivery();
+    const { sendCloudflareEmail } = mockDelivery({
+      getUserPlan: vi.fn().mockResolvedValue("free"),
+    });
 
     vi.doMock("~/lib/data/d1.server", () => ({
       queryAll: vi.fn().mockResolvedValue([
         { user_id: "user-1", email: "owner@example.com", name: "Owner", plan: "starter" },
       ]),
       queryOne: vi.fn().mockResolvedValue({ count: 0 }),
-    }));
-    vi.doMock("~/lib/plan.server", () => ({
-      getUserPlan: vi.fn().mockResolvedValue("free"),
     }));
 
     const { sendMonthlyReports } = await import("~/lib/delivery.server");

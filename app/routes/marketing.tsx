@@ -16,7 +16,6 @@ import {
   webSiteJsonLd,
   type FaqJsonLdEntry,
 } from "~/lib/seo";
-import { noPricingPreview } from "~/lib/pricing-preview.server";
 import type { RootLoaderData } from "~/root";
 import {
   displayNameFromDomain,
@@ -25,6 +24,9 @@ import {
 } from "~/lib/ads-internal-links";
 import type { PublicProofBrief } from "~/lib/public-proof.server";
 import type { PublicChangeMark } from "~/lib/public-change-mark.server";
+
+// Issue #2694: same "no preview" sentinel /pricing's loader always returns.
+const noPricingPreview = { available: false } as const;
 
 export { planIntentPath, valueMathLabel, billingFaqJsonLdEntries } from "~/components/pricing-section";
 export type { LocalPricingPreview } from "~/components/pricing-section";

@@ -7,6 +7,7 @@ import {
   PUBLIC_MARKDOWN,
   buildLlmsText,
   llmsPageForBrandPath,
+  llmsPageForCategoryPath,
   llmsPageForTimelinePath,
   publicMarkdownForPath,
   wantsPublicMarkdown,
@@ -303,17 +304,20 @@ describe("public markdown", () => {
     ]);
 
     expect(rendered).toContain("3 live Meta Ad Library ads for nykaa.com from public search, captured on 2026-08-26.");
-    expect(rendered).not.toContain("1 live Meta Ad Library ad for nike.com");
-    expect(rendered).not.toContain("https://0509.io/ads/nike.com");
+    // Issue #2925 zero-parity: thin-but-indexable pages stay listed — the
+    // line still renders the honest live count.
+    expect(rendered).toContain("1 live Meta Ad Library ad for nike.com from public search, captured on 2026-08-25.");
+    expect(rendered).toContain("https://0509.io/ads/nike.com");
     expect(rendered).toContain("Listed only while the capture is fresh enough to index (within 7 days)");
     expect(rendered).toMatch(/Not a worldwide/i);
     expect(rendered).not.toMatch(/worldwide coverage/i);
   });
 
-  it("drops brand entries with fewer than 3 live Meta Ad Library ads (issue #2307)", () => {
-    // One- and two-ad pages are the weakest possible citation and dilute the
-    // file's authority. A brand entry is only listed once it has >=3 live
-    // Meta Ad Library ads (the same count rendered in each llms.txt line).
+  it("lists every indexable sitemap /ads entry regardless of live ad count (issue #2925)", () => {
+    // Zero-parity: llms.txt lists every URL the sitemap emits, so a thin
+    // (0–2 ad) but indexable brand page stays visible to answer engines.
+    // This supersedes the >=3-ad citation gate of issue #2307 — each line
+    // still renders the honest live count instead of being dropped.
     const rendered = buildLlmsText([
       { path: "/ads/nykaa.com", adCount: 3, fetchedAt: "2026-08-26T14:40:00.000Z" },
       { path: "/ads/nike.com", adCount: 2, fetchedAt: "2026-08-25T10:00:00.000Z" },
@@ -322,11 +326,54 @@ describe("public markdown", () => {
     ]);
 
     expect(rendered).toContain("https://0509.io/ads/nykaa.com");
-    expect(rendered).not.toContain("https://0509.io/ads/nike.com");
-    expect(rendered).not.toContain("https://0509.io/ads/puma.com");
-    expect(rendered).not.toContain("https://0509.io/ads/adidas.com");
-    expect(rendered).not.toMatch(/1 live Meta Ad Library ad/);
-    expect(rendered).not.toMatch(/2 live Meta Ad Library ads/);
+    expect(rendered).toContain("https://0509.io/ads/nike.com");
+    expect(rendered).toContain("https://0509.io/ads/puma.com");
+    expect(rendered).toContain("https://0509.io/ads/adidas.com");
+    expect(rendered).toContain("2 live Meta Ad Library ads for nike.com");
+    expect(rendered).toContain("1 live Meta Ad Library ad for puma.com");
+    expect(rendered).toContain("0 live Meta Ad Library ads for adidas.com");
+  });
+
+  it("lists every curated /brands/:slug category hub in a Categories section (issue #2925)", () => {
+    // Zero-parity: the non-empty curated category pages the sitemap emits
+    // (brandCategorySitemapEntries) must appear in llms.txt with the same
+    // one-line summary format as the other index lines.
+    const rendered = buildLlmsText(
+      [{ path: "/ads/nike.com", adCount: 2, fetchedAt: "2026-08-25T10:00:00.000Z" }],
+      [],
+      [
+        { path: "/brands/sport-footwear", lastmod: "2026-08-25" },
+        { path: "/brands/e-commerce", lastmod: "2026-08-24" },
+      ],
+    );
+
+    const sportFootwear = llmsPageForCategoryPath("/brands/sport-footwear");
+    const eCommerce = llmsPageForCategoryPath("/brands/e-commerce");
+    expect(sportFootwear).not.toBeNull();
+    expect(eCommerce).not.toBeNull();
+    expect(rendered).toContain("Categories:");
+    expect(rendered).toContain(
+      `- [${sportFootwear!.title}](${sportFootwear!.url}): ${sportFootwear!.description}`,
+    );
+    expect(rendered).toContain(
+      `- [${eCommerce!.title}](${eCommerce!.url}): ${eCommerce!.description}`,
+    );
+    // Category block splices between the Pages section and the template's
+    // `\n\nCurrent` — same contract as the Timelines section.
+    const categoriesIndex = rendered.indexOf("Categories:");
+    const adsIndex = rendered.indexOf("https://0509.io/ads/nike.com");
+    expect(adsIndex).toBeGreaterThan(-1);
+    expect(categoriesIndex).toBeGreaterThan(adsIndex);
+    expect(rendered).toMatch(/Categories:[\s\S]*?\n\nCurrent product truth:/);
+
+    // Uncurated slugs (the route 404s on them) and non-category paths are
+    // never listed; an empty category list keeps the static fallback
+    // byte-identical.
+    expect(llmsPageForCategoryPath("/brands/not-a-category")).toBeNull();
+    expect(llmsPageForCategoryPath("/brands")).toBeNull();
+    expect(llmsPageForCategoryPath("/ads/nike.com")).toBeNull();
+    expect(buildLlmsText()).not.toContain("Categories:");
+    expect(buildLlmsText()).toBe(LLMS_TEXT);
   });
 
   it("does not list noindex /ads shells or non-brand paths in llms.txt", () => {

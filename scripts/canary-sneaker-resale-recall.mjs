@@ -3,7 +3,7 @@
 //
 // The sneaker-resale cluster is the strongest, most-consistent buyer signal
 // across the daily market reports (tracked across 7 consecutive daily reports,
-// 2026-08-25..2026-09-07). Its 25 seed-list brands must each render >=1
+// 2026-08-25..2026-09-07). Its 24 seed-list brands must each render >=1
 // verified/likely row on a bare /search probe, or the /ads/:domain page cannot
 // publish and the brand dead-ends in the free preview. The existing
 // search-tier-canary guards only the §1.8 six-domain set and is not scheduled;
@@ -11,7 +11,7 @@
 // all, so a silent recall/alias regression on the strongest cluster went
 // unmeasured.
 //
-// This canary iterates the 25 `data/seed-lists/sneaker-resale.json` domains,
+// This canary iterates the 24 `data/seed-lists/sneaker-resale.json` domains,
 // probes each against the production /search surface (the exact path a buyer
 // and Google take — the same `website=<domain>` probe the ads-domain-publisher
 // uses), reports per-domain verified/likely/unmatched rows, and fails loud
@@ -44,13 +44,15 @@ export const SEED_LIST_PATH = `${repoRoot}data/seed-lists/sneaker-resale.json`.r
 // not fail the canary — the honest "not evidence of inactivity" copy, no page.
 // A brand NOT in this set (and not a known identity gap) that dead-ends (0
 // rows) or blanket-unmatches is a recall/alias regression and fails the canary.
-// This set is the classification output of issue #1945: the entry was probed
-// on 2026-09-07 and the live search surface reports no verified Meta coverage
-// for it, and the brand is not a known large-scale Meta advertiser, so the
-// honest treatment is no-coverage (no page), not a failed canary.
-// Remove an entry the moment the brand starts running Meta ads so a real
+// This set is the classification output of issue #1945. Its only member was
+// sneakerping.com (probed 2026-09-07: no verified Meta coverage, not a known
+// large-scale Meta advertiser) — removed from the seed list on 2026-09-11 when
+// the market signal dropped SneakerPing from the below-retail cluster
+// (issue #2926), so the set is empty until a future probe classifies another
+// no-coverage seed brand. Add an entry only for a probed no-coverage brand,
+// and remove an entry the moment the brand starts running Meta ads so a real
 // future regression on that brand is not silently masked.
-export const KNOWN_NO_COVERAGE = Object.freeze(new Set(["sneakerping.com"]));
+export const KNOWN_NO_COVERAGE = Object.freeze(new Set());
 
 // A brand that SHOULD carry verified/likely Meta coverage (a major, established
 // Meta advertiser) but currently dead-ends (0 rows) or blanket-unmatches
@@ -93,7 +95,7 @@ export const PROBE_REQUEST_TIMEOUT_MS = 90_000;
 
 // A transport blip — the fetch throwing (timeout, DNS, connection reset) or a
 // 5xx from the edge — means the probe could not confirm coverage, but a single
-// blip must not fail the whole 25-domain sweep: finishline.com and
+// blip must not fail the whole 24-domain sweep: finishline.com and
 // jdsports.com each returned one-off ERRs that failed otherwise-green runs
 // (issue #2700). The probe retries a bounded number of times; a persistent
 // failure still reports requestError and fails loud — "cannot confirm" is
@@ -103,14 +105,14 @@ export const PROBE_REQUEST_TIMEOUT_MS = 90_000;
 export const REQUEST_ERROR_RETRY_LIMIT = 2;
 export const REQUEST_ERROR_RETRY_DELAY_MS = 60_000;
 
-// Anonymous /search is 20 requests per 10 minutes per IP. The canary makes 25
+// Anonymous /search is 20 requests per 10 minutes per IP. The canary makes 24
 // requests (one per domain), so a scheduled run can collide with other search
 // canaries on the same runner IP; a 429 is retried with the same backoff the
 // BET 2 verifier uses rather than treated as a dead-end.
 export const SEARCH_429_RETRY_LIMIT = 3;
 export const SEARCH_429_DEFAULT_WAIT_MS = 60_000;
 
-// The retry budgets above stack: a full brownout (25 domains each burning 3
+// The retry budgets above stack: a full brownout (24 domains each burning 3
 // attempts × 90s + 2 × 60s) would run ~2h42m — past the unit's 45min
 // TimeoutStartSec, so the service would be killed with NO report at all. A
 // run-level wall budget below the unit timeout caps total retry wait: once
