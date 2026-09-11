@@ -1,8 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 
-import { parse } from "@babel/parser";
-import traverse from "@babel/traverse";
+import * as ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 // vi.doMock registrations are keyed by module path: the LAST registration in
@@ -12,16 +11,18 @@ import { describe, expect, it } from "vitest";
 // registration order — which is exactly how the shard-2 monthly-report flake
 // (issue 2928) filed a report for a Free workspace. One module path, one
 // registration per test body; overrides go through helper parameters.
+//
+// Parsed with the `typescript` compiler API (a declared devDependency) rather
+// than a parser pulled in transitively — the gate must typecheck under
+// `tsc -b` like every other test file.
 const TESTS_DIR = import.meta.dirname;
-
-type Node = { type: string; name?: string; value?: unknown; [key: string]: unknown };
 
 // Registered twice in one test body on main today. Each is deliberate
 // layered mocking (a later registration deliberately narrows an earlier
 // one), not the helper-then-override flake shape — but each is still
 // order-dependent and worth converting. Observe-to-close: new files and new
-// duplicates outside this list fail the gate.
-// Follow-up tracked in Nishfleet/0509 (filed from issue 2928).
+// duplicates outside this list fail the gate, and an entry whose file is
+// clean or gone fails too, so the list can only shrink.
 const LEGACY_DUPLICATE_MOCK_FILES = new Set([
   "competitor-dossier.server.test.ts",
   "discovery-cache.test.ts",
@@ -31,70 +32,75 @@ const LEGACY_DUPLICATE_MOCK_FILES = new Set([
   "watchlists.route.actions.test.ts",
 ]);
 
+// Call-shape suffixes that still denote one test: it.only, it.skip,
+// it.each(cases)("name", fn), test.skipIf(cond), and friends. The unwrap in
+// isTestCallee walks through it.each(cases) to the ("name", fn) call.
+const TEST_MODIFIERS = new Set([
+  "only",
+  "skip",
+  "each",
+  "concurrent",
+  "sequential",
+  "todo",
+  "fails",
+  "skipIf",
+  "runIf",
+]);
+
+function isTestCallee(expr: ts.Expression): boolean {
+  // it.each(cases)("name", fn): the outer call's callee is itself a call.
+  while (ts.isCallExpression(expr)) expr = expr.expression;
+  if (ts.isIdentifier(expr)) return expr.text === "it" || expr.text === "test";
+  if (ts.isPropertyAccessExpression(expr)) {
+    // describe.it(...) / x.test(...)
+    if (expr.name.text === "it" || expr.name.text === "test") return true;
+    // it.only(...), it.each(...)(...), test.skipIf(...)(...) etc.
+    if (TEST_MODIFIERS.has(expr.name.text)) return isTestCallee(expr.expression);
+  }
+  return false;
+}
+
 function duplicateDoMocks(source: string): string[] {
-  const ast = parse(source, {
-    sourceType: "module",
-    plugins: ["typescript"],
-    allowReturnOutsideFunction: true,
-  });
+  const file = ts.createSourceFile(
+    "under-scan.test.ts",
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
   const offenders: string[] = [];
-  const walk = traverse as unknown as (ast: unknown, v: object) => void;
-  walk(ast, {
-    CallExpression: (path: {
-      node: Node & { callee?: Node; arguments?: Node[] };
-    }) => {
-      const callee = path.node.callee;
-      // it("...", fn) is a bare Identifier call; describe.it(...) a member.
-      const isTestFnCall =
-        (callee?.type === "Identifier" &&
-          (callee.name === "it" || callee.name === "test")) ||
-        (callee?.type === "MemberExpression" &&
-          (callee.property as Node | undefined)?.type === "Identifier" &&
-          ((callee.property as Node).name === "it" ||
-            (callee.property as Node).name === "test"));
-      if (!isTestFnCall) return;
-      const callback = path.node.arguments?.find(
-        (a) => a.type === "ArrowFunctionExpression" || a.type === "FunctionExpression",
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node) && isTestCallee(node.expression)) {
+      const callback = node.arguments.find(
+        (a) => ts.isArrowFunction(a) || ts.isFunctionExpression(a),
       );
-      if (!callback) return;
-      const counts = new Map<string, number>();
-      const visit = (node: unknown) => {
-        if (!node || typeof node !== "object") return;
-        if (Array.isArray(node)) {
-          node.forEach(visit);
-          return;
-        }
-        const n = node as Node;
-        if (
-          n.type === "CallExpression" &&
-          n.callee &&
-          (n.callee as Node).type === "MemberExpression"
-        ) {
-          const obj = (n.callee as Node).object as Node | undefined;
-          const prop = (n.callee as Node).property as Node | undefined;
+      if (callback) {
+        const counts = new Map<string, number>();
+        const scan = (n: ts.Node): void => {
           if (
-            obj?.type === "Identifier" &&
-            obj.name === "vi" &&
-            prop?.type === "Identifier" &&
-            (prop.name === "doMock" || prop.name === "doUnmock")
+            ts.isCallExpression(n) &&
+            ts.isPropertyAccessExpression(n.expression) &&
+            ts.isIdentifier(n.expression.expression) &&
+            n.expression.expression.text === "vi" &&
+            (n.expression.name.text === "doMock" ||
+              n.expression.name.text === "doUnmock")
           ) {
-            const first = (n.arguments as Node[] | undefined)?.[0];
-            if (first?.type === "StringLiteral" && typeof first.value === "string") {
-              counts.set(first.value, (counts.get(first.value) ?? 0) + 1);
+            const first = n.arguments[0];
+            if (first && ts.isStringLiteral(first)) {
+              counts.set(first.text, (counts.get(first.text) ?? 0) + 1);
             }
           }
+          ts.forEachChild(n, scan);
+        };
+        scan(callback);
+        for (const [mockPath, count] of counts) {
+          if (count > 1) offenders.push(`${mockPath} registered ${count}x`);
         }
-        for (const key of Object.keys(n)) {
-          if (key === "loc" || key === "start" || key === "end") continue;
-          visit(n[key]);
-        }
-      };
-      visit(callback);
-      for (const [mockPath, count] of counts) {
-        if (count > 1) offenders.push(`${mockPath} registered ${count}x`);
       }
-    },
-  });
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
   return offenders;
 }
 
@@ -111,6 +117,13 @@ describe("mock registry hygiene: one vi.doMock per module path per test", () => 
       it("one", () => { vi.doMock("~/lib/a", () => ({})); });
       it("two", () => { vi.doMock("~/lib/a", () => ({})); });`);
     expect(clean).toEqual([]);
+    // it.each(...)("name", fn) resolves to a test body too.
+    const eachDup = duplicateDoMocks(`import { it, vi } from "vitest";
+      it.each([1, 2])("case %s", () => {
+        vi.doMock("~/lib/a", () => ({}));
+        vi.doMock("~/lib/a", () => ({}));
+      });`);
+    expect(eachDup).toEqual(["~/lib/a registered 2x"]);
   });
 
   const testFiles = readdirSync(TESTS_DIR).filter(
@@ -129,6 +142,23 @@ describe("mock registry hygiene: one vi.doMock per module path per test", () => 
       ).toBe(false);
     }
   });
+
+  for (const legacy of LEGACY_DUPLICATE_MOCK_FILES) {
+    it(`exclusion ${legacy} still exists and still has a duplicate`, () => {
+      let source: string;
+      try {
+        source = readFileSync(path.join(TESTS_DIR, legacy), "utf8");
+      } catch {
+        expect.unreachable(`${legacy} is gone — remove it from the exclusion list`);
+        return;
+      }
+      const offenders = duplicateDoMocks(source);
+      expect(
+        offenders.length,
+        `${legacy} no longer re-registers a module — remove it from the exclusion list`,
+      ).toBeGreaterThan(0);
+    });
+  }
 
   for (const file of testFiles) {
     it(`${file} has no test body that re-registers a mocked module`, () => {
