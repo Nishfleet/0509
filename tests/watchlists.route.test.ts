@@ -466,7 +466,9 @@ describe("watchlists route loader", () => {
         },
       ],
       effectiveDeliveryConfig: {
-        sensitivityMode: "quiet",
+        // Issue #2416: sensitivity is fixed policy now, not the stored
+        // watchlist row's "quiet" — the field that set it is gone.
+        sensitivityMode: "balanced",
         instantEnabled: true,
         digestEnabled: true,
         emailEnabled: true,
