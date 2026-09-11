@@ -132,10 +132,16 @@ describe("public SEO files", () => {
   it("keeps the cached social card customer-facing", () => {
     const card = publicSeoFileForPathname("/social-card.svg");
 
-    expect(card?.body).toContain("Watch ads and landing pages with sources.");
-    expect(card?.body).toContain("Saved evidence");
-    expect(card?.body).not.toContain("with proof");
-    expect(card?.body).not.toContain("Saved proof");
+    // Regression pins for issue #2956: the card renders the live cream
+    // palette and the 0509.io domain — never the retired blue-purple
+    // gradient, the .in domain, or the "we work while you sleep" tagline.
+    expect(card?.body).toContain("#f4f1e8");
+    expect(card?.body).toContain("0509.io");
+    expect(card?.body).toContain("Offer changed");
+    expect(card?.body).toContain("source-linked proof");
+    expect(card?.body).not.toContain("0509.in");
+    expect(card?.body).not.toContain("while you sleep");
+    expect(card?.body).not.toContain("#7f5cff");
   });
 
   it("keeps skill.md entry points on the io domain", () => {

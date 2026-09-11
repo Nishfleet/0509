@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 
+import { publicSeoFileForPathname } from "~/lib/seo";
 import { publicSocialCardForRequest } from "~/lib/social-cards.server";
 import { rasterizeSocialCardPng } from "~/lib/social-cards-raster.server";
+
+// @ts-ignore — Vite inlines the .png as a base64 data URI with ?inline; the
+// workerd test pool has no host filesystem, so the committed asset has to
+// ride in as a module like the rasterizer's .ttf buffers.
+import ogImageDataUri from "../../public/og-image.png?inline";
 
 /**
  * Issue #2089 — the /ads and /timeline social cards must be served as PNG
@@ -54,5 +60,26 @@ describe("ads/timeline social card rasterization (issue #2089)", () => {
     expect(width).toBe(1200);
     expect(height).toBe(630);
     expect(png.length).toBeGreaterThan(10_000);
+  });
+
+  /**
+   * Issue #2956 — the checked-in `public/og-image.png` must be byte-identical
+   * to a resvg render of `SOCIAL_CARD_SVG` (served at /social-card.svg). The
+   * stale-card regression this issue fixed was exactly a drift between the
+   * card markup and the committed PNG; resvg-wasm is deterministic for the
+   * same wasm + fonts, so the equality gate makes the two artifacts unable to
+   * diverge again. A failing run here means: regenerate the PNG from the SVG
+   * (the same rasterizer and Inter buffers the worker uses) and commit it.
+   */
+  it("keeps public/og-image.png byte-identical to the rendered card SVG", async () => {
+    const card = publicSeoFileForPathname("/social-card.svg");
+    expect(card?.body).toContain("0509.io");
+
+    const png = await rasterizeSocialCardPng(card!.body);
+    const base64 = (ogImageDataUri as string).split(";base64,")[1];
+    const binary = atob(base64);
+    const committed = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) committed[i] = binary.charCodeAt(i) & 0xff;
+    expect(png).toEqual(committed);
   });
 });
