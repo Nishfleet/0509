@@ -1295,9 +1295,10 @@ function pickPrice(html: string, declaredCurrency: string | null = null) {
  * Strict plurality vote across every declaration found — deterministic for
  * a given page version, and robust to one stray embed (a widget cart blob
  * in another currency loses to the shop's own repeated declaration).
- * Hardening (issue #2905): HTML comments are stripped before the scan so a
- * commented-out or ad-slot declaration never votes; attribute-shaped
- * matches (`data-currency="EUR"` and other `*-currency` names, which a
+ * Hardening (issue #2905): declarations inside HTML comments never vote —
+ * a commented-out or ad-slot embed can sit ahead of the shop's own
+ * declaration and must not anchor it; attribute-shaped matches
+ * (`data-currency="EUR"` and other `*-currency` names, which a
  * currency-switcher list repeats once per option) cast one vote per code
  * total instead of one per occurrence; and the winner must hold strictly
  * more votes than the runner-up — a top tie resolves null, falling back to
@@ -1305,9 +1306,21 @@ function pickPrice(html: string, declaredCurrency: string | null = null) {
  * anchor the price. Returns null when nothing plausible is declared.
  */
 export function pickDeclaredCurrency(html: string): string | null {
-  // Commented-out or ad-slot markup can declare a foreign currency ahead of
-  // the shop's own declaration; it must not vote.
-  const scannable = html.replace(/<!--[\s\S]*?-->/g, "");
+  // Comment ranges, collected up front so a currency match inside one can
+  // be skipped without rewriting the html (a string-strip could leave a
+  // recombined `<!--`). An unclosed `<!--` comments out the rest of the
+  // page, matching browser parsing.
+  const commentRanges: Array<readonly [number, number]> = [];
+  const commentRe = /<!--[\s\S]*?(?:-->|$)/g;
+  let commentMatch: RegExpExecArray | null;
+  while ((commentMatch = commentRe.exec(html)) !== null) {
+    commentRanges.push([
+      commentMatch.index,
+      commentMatch.index + commentMatch[0].length,
+    ]);
+  }
+  const inComment = (index: number) =>
+    commentRanges.some(([start, end]) => index >= start && index < end);
   const tally = new Map<string, number>();
   // Codes that already cast their one attribute-shaped vote.
   const attributeVoteCast = new Set<string>();
@@ -1317,14 +1330,14 @@ export function pickDeclaredCurrency(html: string): string | null {
       pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`,
     );
     let match: RegExpExecArray | null;
-    while ((match = global.exec(scannable)) !== null) {
+    while ((match = global.exec(html)) !== null) {
       const code = match[1]?.toUpperCase();
-      if (code && KNOWN_CURRENCY_CODES.has(code)) {
+      if (code && KNOWN_CURRENCY_CODES.has(code) && !inComment(match.index)) {
         // `data-currency="EUR"`-style hits sit at `*-currency`, so the char
         // before the keyword is `-`. A switcher repeats them once per
         // option — one vote per code keeps a doubled list (mobile +
         // desktop nav) from out-voting the shop's own declaration.
-        const attributeVote = scannable.charAt(match.index - 1) === "-";
+        const attributeVote = html.charAt(match.index - 1) === "-";
         if (!attributeVote || !attributeVoteCast.has(code)) {
           tally.set(code, (tally.get(code) ?? 0) + 1);
           if (attributeVote) {
