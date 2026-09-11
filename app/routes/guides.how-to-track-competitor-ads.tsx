@@ -23,6 +23,7 @@ import type { LinksFunction, MetaFunction } from "react-router";
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
 import {
+  articleJsonLd,
   canonicalLinks,
   faqPageJsonLd,
   jsonLdScriptProps,
@@ -43,6 +44,16 @@ export const guideSearchPreviewPath = "/search?source=guide_track_ads";
 
 const pageDescription =
   "How to track competitor ads: the free manual Ad Library workflow, the n8n or Apify DIY route with real prices, where both break, and the free weekly watch that automates it.";
+
+// The visible h1 — also the Article JSON-LD headline, so the structured data
+// can never drift from the headline the page renders (issue #2855).
+const guideHeadline =
+  "How to track competitor ads: the free way, the DIY way, and where both break.";
+
+// The date the guide shipped and the date its own copy states ("checked 9
+// September 2026") — the Article entity publishes nothing the page does not.
+const guideDatePublished = "2026-09-09";
+const guideDateModified = "2026-09-09";
 
 export const links: LinksFunction = () => canonicalLinks(PATHNAME);
 
@@ -145,7 +156,18 @@ export default function GuideHowToTrackCompetitorAdsRoute() {
             name: "How to track competitor ads | Five to Nine",
             description: pageDescription,
             pathname: PATHNAME,
-            dateModified: "2026-09-09",
+            dateModified: guideDateModified,
+          }),
+        )}
+      />
+      <script
+        {...jsonLdScriptProps(
+          articleJsonLd({
+            headline: guideHeadline,
+            description: pageDescription,
+            pathname: PATHNAME,
+            datePublished: guideDatePublished,
+            dateModified: guideDateModified,
           }),
         )}
       />
@@ -157,7 +179,7 @@ export default function GuideHowToTrackCompetitorAdsRoute() {
           <span>Guide — how to track competitor ads</span>
         </p>
         <h1 className="ld-wall ld-wall-compact">
-          How to track competitor ads: the free way, the DIY way, and where both break.
+          {guideHeadline}
         </h1>
         <p className="ld-deck-copy">
           There are two honest do-it-yourself ways to track a competitor&rsquo;s ads — a manual
