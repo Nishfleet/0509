@@ -10,6 +10,7 @@ import {
   buildMonitoringWorkflowCapacitySleepStepName,
   buildMonitoringWorkflowConcurrencyStepName,
   claimMonitoringConcurrencySlot,
+  FIRST_SCAN_MAX_ATTEMPTS,
   MONITORING_WORKFLOW_SCAN_TIMEOUT_MS,
   releaseMonitoringConcurrencySlot,
   resolveMonitoringConcurrencySlotLeaseMs,
@@ -74,7 +75,9 @@ export class MonitoringWorkflow extends WorkflowEntrypoint<AppEnv, MonitoringWor
             // A killed worker keeps its D1 lease. The 5/10/20/40 minute
             // retry sequence reaches the first safe post-lease reclaim inside
             // the 90-minute recovery bound without overlapping a live scan.
-            limit: 6,
+            // limit = retries, so one initial attempt + (limit) retries =
+            // FIRST_SCAN_MAX_ATTEMPTS total attempts, the D1 claim cap.
+            limit: FIRST_SCAN_MAX_ATTEMPTS - 1,
             delay: "5 minutes",
             backoff: "exponential",
           },
