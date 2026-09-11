@@ -10,7 +10,7 @@ import {
   buildSnapshotPayload,
   type GoogleSerpSnapshotPayload,
 } from "~/lib/sources/google-search/google-serp-snapshot.server";
-import type { SourceSnapshotInput, SourceSnapshotRecord } from "~/lib/sources/types";
+import type { SourceFetchResult, SourceSnapshotInput, SourceSnapshotRecord } from "~/lib/sources/types";
 
 /**
  * Adapter tests for the Google Search source — issue #2181.
@@ -113,6 +113,14 @@ function snapshotRecord(
 }
 
 const competitor = { competitorId: "wl-1", competitorLabel: "Nike" };
+
+/** Narrow a fetch result to the success shape, failing with the reason. */
+function asSnapshot(result: SourceFetchResult): SourceSnapshotInput {
+  if (result.unavailable === true) {
+    throw new Error(`expected snapshot, got ${result.reason}`);
+  }
+  return result;
+}
 
 // --- Tests ----------------------------------------------------------------
 
@@ -261,8 +269,7 @@ describe("googleSearchAdapter", () => {
       }),
     );
 
-    const result = await googleSearchAdapter.fetch(env(), competitor);
-    if ("unavailable" in result) throw new Error(`expected snapshot, got ${result.reason}`);
+    const result = asSnapshot(await googleSearchAdapter.fetch(env(), competitor));
     const payload = result.payload as GoogleSerpSnapshotPayload;
 
     expect(payload.domain).toBe("nike.com");
