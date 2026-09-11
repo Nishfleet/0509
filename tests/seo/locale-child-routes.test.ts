@@ -11,10 +11,7 @@ import {
 } from "~/lib/locale-markets";
 import { canonicalLinks, SITEMAP_PATHS } from "~/lib/seo";
 import routes from "~/routes";
-import {
-  LEGACY_VENDOR_COMPARE_PATH,
-  LEGACY_VENDOR_SWITCH_PATH,
-} from "~/routes/legacy-vendor-redirect";
+import { LEGACY_VENDOR_COMPARE_PATH } from "~/routes/legacy-vendor-redirect";
 
 type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
 type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
@@ -25,7 +22,7 @@ type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
  * Live production probes are the operator canary lane's job (see
  * `scripts/canary-locale-prefix-routes.*` and the issue's `verify:` block);
  * CI cannot hit production reliably. This test enforces the same failure
- * contract statically: every one of the 5×11 locale × child cells must be
+ * contract statically: every one of the 5×10 locale × child cells must be
  * (a) a real registered route under `:locale` (so the router serves 200, not
  * 404), (b) backed by a `$locale.*.tsx` file that re-exports the EN sibling's
  * component and meta with canonical→EN + the buyer-surface hreflang cluster,
@@ -89,12 +86,14 @@ afterEach(() => {
 });
 
 describe("locale compare/switch child routes (issue #1563)", () => {
-  it("ships exactly the 9 child routes (7 compare + 2 switch)", () => {
+  it("ships exactly the 10 child routes (7 compare + 3 switch)", () => {
     // The compare set is 7, not 9: /compare/visualping and
     // /compare/foreplay are canonicalized duplicates that left the locale
     // child set with the EN URLs (issue #1481). Their $locale.compare.*
     // route files stay registered so those URLs still render 200.
-    expect(BUYER_SURFACE_CHILD_PATHS).toHaveLength(9);
+    // The switch set is 3 since issue #2887: /switch/magicbrief is a live
+    // wind-down page again, so it gets a locale child like its siblings.
+    expect(BUYER_SURFACE_CHILD_PATHS).toHaveLength(10);
   });
 
   it("registers every locale child route under :locale in routes.ts", () => {
@@ -193,7 +192,7 @@ describe("locale compare/switch child routes (issue #1563)", () => {
     // lang="en" and canonical→EN, so listing them as distinct indexable
     // surfaces would be a duplicate-content doorway pattern. They stay
     // reachable (200, canonical→EN) but are excluded from the sitemap.
-    expect(BUYER_SURFACE_CHILD_PATHS).toHaveLength(9);
+    expect(BUYER_SURFACE_CHILD_PATHS).toHaveLength(10);
     expect(BUYER_SURFACE_LOCALE_IDS).toHaveLength(5);
     for (const locale of BUYER_SURFACE_LOCALE_IDS) {
       for (const child of BUYER_SURFACE_CHILD_PATHS) {
@@ -227,15 +226,15 @@ describe("locale compare/switch child routes (issue #1563)", () => {
     const { default: LocaleCompareHub } = await import("~/routes/$locale.compare");
     const markup = renderToStaticMarkup(createElement(LocaleCompareHub));
 
-    // The legacy paths 301 to the EN /compare hub. A locale hub href like
-    // /de/compare/magicbrief 301s to EN /compare — a locale-to-EN hub hop
+    // The legacy compare path 301s to the EN /compare hub. A locale hub href
+    // like /de/compare/magicbrief 301s to EN /compare — a locale-to-EN hub hop
     // that eats the click the same way (issue #2860). Suffix containment
     // catches both the bare EN form and every locale-prefixed form.
-    for (const legacyPath of [LEGACY_VENDOR_COMPARE_PATH, LEGACY_VENDOR_SWITCH_PATH]) {
-      expect(markup, `hub must not link wiped /${legacyPath} in any locale`).not.toContain(
-        `/${legacyPath}"`,
-      );
-    }
+    // /de/switch/magicbrief is deliberately not checked: it is a live
+    // locale-prefixed page since issue #2887 and the hub links it on purpose.
+    expect(markup, `hub must not link wiped /${LEGACY_VENDOR_COMPARE_PATH} in any locale`).not.toContain(
+      `/${LEGACY_VENDOR_COMPARE_PATH}"`,
+    );
   });
 
   it("never passes props across the route-module boundary (withComponentProps drops them)", () => {

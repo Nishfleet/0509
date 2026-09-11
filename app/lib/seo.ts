@@ -898,6 +898,9 @@ export const SITEMAP_PATHS = [
   // clause. Keep both in this list; the #2081 canary fails if any drop.
   "/switch/panoramata",
   "/switch/visualping",
+  // Issue #2887: the MagicBrief wind-down page — the one vendor whose shutdown
+  // (2026-07-31, Canva Grow successor) created real switching demand.
+  "/switch/magicbrief",
   "/competitor-monitoring",
   // Issue #2144: agency audience page (roster math + sourced Agency-vs-
   // Foreplay line). EN-only; no locale cluster.
@@ -990,6 +993,7 @@ export interface SitemapEntry {
  * enforces that the two never drift.
  */
 export const CHANGELOG_ENTRY_DATES: readonly string[] = [
+  "2026-09-11",
   "2026-09-06",
   "2026-09-05",
   "2026-08-30",

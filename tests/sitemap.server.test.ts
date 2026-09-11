@@ -1516,6 +1516,7 @@ describe("SITEMAP_PATHS", () => {
     const rootPaths = ROOT_SITEMAP_STATIC_ENTRIES.map((e) => e.path);
     const switchPages = Object.values(SWITCH_PAGES);
     expect(switchPages.map((page) => page.pathname).sort()).toEqual([
+      "/switch/magicbrief",
       "/switch/panoramata",
       "/switch/visualping",
     ]);

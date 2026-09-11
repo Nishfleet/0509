@@ -2,7 +2,7 @@ import type { DemoBrandPageDomain } from "~/lib/demo-brand-pages";
 import { FREE_PREVIEW_SEARCH_DOMAIN } from "~/lib/demo-brand-pages";
 import type { FaqJsonLdEntry } from "~/lib/seo";
 
-export type SwitchSlug = "panoramata" | "visualping";
+export type SwitchSlug = "panoramata" | "visualping" | "magicbrief";
 
 export type PublishedCaptureValidityReasonCode =
   | "landing_challenge_page"
@@ -277,17 +277,123 @@ export const SWITCH_PAGES: Record<SwitchSlug, SwitchPage> = {
       },
     ],
   },
+  magicbrief: {
+    slug: "magicbrief",
+    productName: "MagicBrief",
+    pathname: "/switch/magicbrief",
+    title: "MagicBrief alternative after the shutdown | Five to Nine",
+    description:
+      "MagicBrief closed on 31 July 2026. Your competitor list imports here as watchlists; saved boards and report history do not. Try the free preview.",
+    ctaBrand: "magicbrief.com",
+    previewSearchDomain: FREE_PREVIEW_SEARCH_DOMAIN,
+    kicker: "MagicBrief closed 31 July 2026",
+    headline: "The library shut down. Your competitor list still works.",
+    deck: "MagicBrief closed on 31 July 2026 after the Canva acquisition. Its successor, Canva Grow, runs on every Canva plan with the highest usage tiers inside Canva Business — listed at US$250 a year per person. If you tracked competitors in MagicBrief, paste the same list here and it becomes watchlists.",
+    cardLine:
+      "MagicBrief closed 31 July 2026. The same competitor list imports here as watchlists.",
+    complaint: {
+      kicker: "The public record",
+      heading: "The shutdown, in their own words.",
+      quote: "With Canva Grow now live, MagicBrief will close on July 31, 2026.",
+      source: {
+        href: "https://magicbrief.com/faqs",
+        label: "MagicBrief shutdown FAQ, checked 2026-09-11",
+        checked: "2026-09-11",
+      },
+    },
+    furtherSources: [
+      {
+        href: "https://www.canva.com/pricing/",
+        label: "Canva pricing — Business at US$250/year per person",
+        checked: "2026-09-11",
+      },
+      {
+        href: "https://magicbrief.com/post/magicbrief-canva-acquisition",
+        label: "MagicBrief's Canva acquisition post, checked 2026-09-11",
+        checked: "2026-09-11",
+      },
+    ],
+    transfers: [
+      {
+        title: "The competitor list",
+        detail:
+          "The brands you tracked — domains, URLs, or brand names — import as watchlists. Paste them or upload a CSV. That is the switch.",
+      },
+      {
+        title: "Ads and landing pages from here on",
+        detail:
+          "Paid plans check public Meta ads and the live landing page on a schedule, and save page text, the source link, and a screenshot when the capture includes one.",
+      },
+    ],
+    doesNotTransfer: [
+      {
+        title: "Inspire collections and boards",
+        detail:
+          "MagicBrief's own FAQ says Inspire collections have no bulk export. Saved ad collections and boards do not import into Five to Nine.",
+      },
+      {
+        title: "Insights reports and analytics history",
+        detail:
+          "MagicBrief let Insights reports export as CSV until shutdown. That history does not import — keep your exports as the record.",
+      },
+      {
+        title: "Their historical archive",
+        detail:
+          "Five to Nine only has history for competitors you start watching here. Nothing older than your first scan exists.",
+      },
+    ],
+    relatedComparePath: null,
+    extraSection: {
+      kicker: "The official successor",
+      heading: "What Canva Grow actually is.",
+      items: [
+        {
+          title: "A Canva product, not a port",
+          detail:
+            "MagicBrief's own FAQ says Canva Grow is built on the same DNA but is a net-new product, not a direct port. It currently supports Meta and TikTok.",
+        },
+        {
+          title: "Tiered inside a bundle",
+          detail:
+            "Canva Grow is available on every Canva plan; the highest usage tiers sit inside Canva Business, listed at US$250 a year per person on Canva's pricing page.",
+        },
+        {
+          title: "A different job than this page",
+          detail:
+            "Canva Grow is creative analytics and ad performance inside a design suite. Five to Nine is competitor monitoring: ads and landing pages, checked on a schedule, with source-linked proof.",
+        },
+      ],
+    },
+    faqEntries: [
+      {
+        question: "What happened to MagicBrief?",
+        answer:
+          "MagicBrief announced its wind-down and closed on 31 July 2026, after Canva acquired the team and built Canva Grow. Its own FAQ says the platform is no longer accessible.",
+      },
+      {
+        question: "Is Five to Nine a MagicBrief alternative?",
+        answer:
+          "For watching competitor Meta ads and landing pages from a pasted domain, yes. For a saved-creative library and boards, no — Five to Nine's library is narrower and change-focused, and MagicBrief collections do not import.",
+      },
+      {
+        question: "What transfers from MagicBrief?",
+        answer:
+          "The competitor list — domains, URLs, or brand names, pasted or as a CSV — imports as watchlists. Inspire collections, boards, Insights reports, and analytics history do not transfer.",
+      },
+    ],
+  },
 };
 
 export const SWITCH_SLUGS = Object.keys(SWITCH_PAGES) as SwitchSlug[];
 
 /**
  * Map a searched brand domain onto its /switch/* destination page (issue
- * 1554). Only the two named switching triggers (Panoramata and
- * Visualping) resolve — never a `<label>.com` guess from the query text
- * alone. Same normalization as the /ads/:domain resolver (trim + lowercase +
- * strip `www.`) so a `?website=` domain search and a V2-resolved brand both
- * land here. Returns null for every other domain.
+ * 1554). Only the named switching triggers (Panoramata, Visualping, and —
+ * since issue #2887 — the shut-down MagicBrief) resolve — never a
+ * `<label>.com` guess from the query text alone. Same normalization as the
+ * /ads/:domain resolver (trim + lowercase + strip `www.`) so a `?website=`
+ * domain search and a V2-resolved brand both land here. Returns null for
+ * every other domain.
  */
 export function switchPageForDomain(domain: string): SwitchPage | null {
   const normalized = domain.trim().toLowerCase().replace(/^www\./, "");
@@ -296,6 +402,8 @@ export function switchPageForDomain(domain: string): SwitchPage | null {
       return SWITCH_PAGES.panoramata;
     case "visualping.io":
       return SWITCH_PAGES.visualping;
+    case "magicbrief.com":
+      return SWITCH_PAGES.magicbrief;
     default:
       return null;
   }

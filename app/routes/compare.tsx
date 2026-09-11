@@ -83,12 +83,10 @@ const COMPARE_TABLE: readonly CompareTableRow[] = [
     proofCaptures: "Yes — page text, source link, and screenshot",
     listPrice: `From $${PUBLISHED_PLAN_PRICES_USD.scout.monthly}/mo (Scout)`,
   },
-  // MagicBrief has no row (issue #2860): both /compare/magicbrief and
-  // /switch/magicbrief are wiped legacy paths that 301 to this very hub, so
-  // linking a MagicBrief row was a self-loop that ate the click. A BET 8
-  // wind-down page would need shutdown facts re-sourced from scratch (the
-  // wipe in PR #2169 removed every MagicBrief surface and source), so the
-  // hub lists only vendors with a live linked page.
+  // MagicBrief's row links /switch/magicbrief (issue #2887): the wind-down
+  // page is live again, so the hub link reaches a real destination instead
+  // of the old 301 self-loop (issue #2860). /compare/magicbrief stays wiped
+  // and is never linked.
   {
     vendor: "Meta Ad Library (by hand)",
     href: "/compare/meta-ad-library",
@@ -144,6 +142,14 @@ const COMPARE_TABLE: readonly CompareTableRow[] = [
     landingPageDiffs: NOT_PUBLISHED,
     proofCaptures: NOT_PUBLISHED,
     listPrice: rivalListPrice("AdSpyder Spy"),
+  },
+  {
+    vendor: "MagicBrief — closed 31 Jul 2026",
+    href: "/switch/magicbrief",
+    adLibrary: "Was — saved ad collections and boards",
+    landingPageDiffs: NOT_PUBLISHED,
+    proofCaptures: NOT_PUBLISHED,
+    listPrice: NOT_PUBLISHED,
   },
 ] as const;
 

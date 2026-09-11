@@ -6,7 +6,6 @@ import { SWITCH_SLUGS } from "~/lib/switch-pages";
 import {
   LEGACY_VENDOR_COMPARE_PATH,
   LEGACY_VENDOR_REDIRECT_TARGET,
-  LEGACY_VENDOR_SWITCH_PATH,
   loader,
 } from "~/routes/legacy-vendor-redirect";
 
@@ -14,27 +13,22 @@ type RouteNode = { path?: string; file?: string; id?: string; children?: RouteNo
 
 const REDIRECT_FILE = "routes/legacy-vendor-redirect.ts";
 
-const LEGACY_URLS = [
-  "/compare/magicbrief",
-  "/switch/magicbrief",
-  "/de/compare/magicbrief",
-  "/ja/switch/magicbrief",
-] as const;
+const LEGACY_URLS = ["/compare/magicbrief", "/de/compare/magicbrief"] as const;
 
 function nodesFor(path: string, nodes: RouteNode[]): RouteNode[] {
   return nodes.filter((node) => node.path === path);
 }
 
 /**
- * MagicBrief wipe (issue #2127): the compare/switch pages, their docs, tests,
- * and every callout are gone. The two legacy URLs (and their locale twins)
- * must 301 to the /compare hub so indexed entries and external links never
- * 404.
+ * MagicBrief wipe (issue #2127) and re-publish (issue #2887): the compare
+ * page and its locale twins are gone for good and must 301 to the /compare
+ * hub so indexed entries and external links never 404. /switch/magicbrief is
+ * different — it is a live BET 8 wind-down page again, so it must serve the
+ * real route file, never the redirect loader.
  */
-describe("MagicBrief legacy URLs 301 to /compare (issue #2127)", () => {
-  it("names the wiped vendor paths and the hub as the target", () => {
+describe("MagicBrief legacy URLs (issues #2127, #2887)", () => {
+  it("names the wiped compare path and the hub as the target", () => {
     expect(LEGACY_VENDOR_COMPARE_PATH).toBe("compare/magicbrief");
-    expect(LEGACY_VENDOR_SWITCH_PATH).toBe("switch/magicbrief");
     expect(LEGACY_VENDOR_REDIRECT_TARGET).toBe("/compare");
   });
 
@@ -50,31 +44,44 @@ describe("MagicBrief legacy URLs 301 to /compare (issue #2127)", () => {
     expect(captured!.headers.get("location")).toBe("/compare");
   });
 
-  it("wires both EN paths and both locale twins to the redirect loader in routes.ts", () => {
+  it("wires the EN compare path and its locale twin to the redirect loader in routes.ts", () => {
     const top = routes as unknown as RouteNode[];
     const locale = top.find((node) => node.path === ":locale");
     expect(locale?.children, "the :locale layout must exist").toBeTruthy();
     for (const tree of [top, locale!.children!]) {
-      for (const path of [LEGACY_VENDOR_COMPARE_PATH, LEGACY_VENDOR_SWITCH_PATH]) {
-        const matches = nodesFor(path, tree);
-        expect(matches, `${path} must be registered exactly once`).toHaveLength(1);
-        expect(matches[0]?.file).toBe(REDIRECT_FILE);
-      }
+      const matches = nodesFor(LEGACY_VENDOR_COMPARE_PATH, tree);
+      expect(matches, `${LEGACY_VENDOR_COMPARE_PATH} must be registered exactly once`).toHaveLength(
+        1,
+      );
+      expect(matches[0]?.file).toBe(REDIRECT_FILE);
     }
     // Each registration needs its own id: React Router derives ids from the
-    // file path, and four routes sharing one loader file would collide.
+    // file path, and two routes sharing one loader file would collide.
     const ids = [top, locale!.children!]
       .flatMap((tree) => tree.filter((node) => node.file === REDIRECT_FILE))
       .map((node) => node.id);
-    expect(ids).toHaveLength(4);
-    expect(new Set(ids).size).toBe(4);
+    expect(ids).toHaveLength(2);
+    expect(new Set(ids).size).toBe(2);
     expect(ids.every((id) => typeof id === "string" && id.length > 0)).toBe(true);
   });
 
-  it("is gone from the sitemap and the switch-page catalogue", () => {
-    for (const path of ["/compare/magicbrief", "/switch/magicbrief"]) {
-      expect(SITEMAP_PATHS as readonly string[]).not.toContain(path);
+  it("keeps /compare/magicbrief out of the sitemap but lists the live /switch page", () => {
+    expect(SITEMAP_PATHS as readonly string[]).not.toContain("/compare/magicbrief");
+    expect(SITEMAP_PATHS as readonly string[]).toContain("/switch/magicbrief");
+    expect(SWITCH_SLUGS as readonly string[]).toContain("magicbrief");
+  });
+
+  it("registers /switch/magicbrief as a real route, never the redirect loader", () => {
+    const top = routes as unknown as RouteNode[];
+    const locale = top.find((node) => node.path === ":locale");
+    for (const [tree, file] of [
+      [top, "routes/switch.magicbrief.tsx"],
+      [locale!.children!, "routes/$locale.switch.magicbrief.tsx"],
+    ] as const) {
+      const matches = nodesFor("switch/magicbrief", tree);
+      expect(matches, "switch/magicbrief must be registered exactly once").toHaveLength(1);
+      expect(matches[0]?.file).toBe(file);
+      expect(matches[0]?.file).not.toBe(REDIRECT_FILE);
     }
-    expect(SWITCH_SLUGS as readonly string[]).not.toContain("magicbrief");
   });
 });

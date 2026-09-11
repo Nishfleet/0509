@@ -168,6 +168,7 @@ const PUBLIC_CACHEABLE_HTML_PATHS = new Set([
   "/compare/adspy",
   "/switch/panoramata",
   "/switch/visualping",
+  "/switch/magicbrief",
   "/methodology",
 ]);
 const PUBLIC_CACHEABLE_HTML_PREFIXES = ["/ads/", "/timeline/"] as const;
