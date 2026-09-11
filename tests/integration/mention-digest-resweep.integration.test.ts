@@ -262,6 +262,92 @@ describe("mention resweep + digest", () => {
     expect(mocks.sendPresenceDigestEmail).not.toHaveBeenCalled();
   });
 
+  it("does not permanently starve workspaces past the user limit (fair sweep ordering)", async () => {
+    mocks.sendPresenceDigestEmail.mockResolvedValue({ accepted: true, delivered: true });
+
+    // 101 fresh paid workspaces, each with one active entity + one website source.
+    // Rows seeded by earlier tests in this file are still visible, so every
+    // assertion below filters `resweepUsers` down to this test's own ids.
+    const seeded = [];
+    for (let i = 0; i < 101; i += 1) {
+      seeded.push(await seedUserAndEntity("agency"));
+    }
+    const mine = new Set(seeded.map((row) => row.userId));
+    const scoped = (ids: string[]) => ids.filter((id) => mine.has(id));
+
+    const ordered = [...seeded].sort((a, b) => (a.userId < b.userId ? -1 : 1));
+    const starvedBefore = ordered[ordered.length - 1];
+
+    const { listResweepUsers } = await import("~/lib/mention-resweep.server");
+
+    // Every one of this test's workspaces is picked at the real cap...
+    const fairBatch = scoped(await listResweepUsers(makeEnv(), 100_000));
+    expect(fairBatch.length).toBe(101);
+
+    // ...and the documented bound is honoured when the cap is the default.
+    // Note this is a whole-database cap, so it is 100 rows total, not 100 of
+    // this test's workspaces. Everything asserted below is scoped to `mine`.
+    expect((await listResweepUsers(makeEnv(), 100)).length).toBe(100);
+
+    // Mark every workspace polled except the highest-id one. Fair ordering must
+    // pick that never-polled workspace even though 100 polled peers exist —
+    // under the old `ORDER BY user_id LIMIT 100` the same first 100 were
+    // re-picked every tick and the 101st was never swept at all.
+    for (const row of ordered.slice(0, 100)) {
+      await db()
+        .prepare(
+          `INSERT INTO presence_poll_cursor (
+             source_target_id, cursor_json, etag, last_modified, last_polled_at,
+             last_success_at, last_error_code, last_error_message, updated_at
+           ) VALUES (?, '{}', NULL, NULL, ?, ?, NULL, NULL, ?)`,
+        )
+        .bind(row.sourceId, ISO_T0, ISO_T0, ISO_T0)
+        .run();
+    }
+
+    expect(scoped(await listResweepUsers(makeEnv(), 100))).toContain(starvedBefore.userId);
+
+    // ...and the starved workspace is polled end to end, writing a cursor row.
+    const { runMentionResweep } = await import("~/lib/mention-resweep.server");
+    const fetchImpl = feedFetcher({
+      "/": { body: SITE_PAGE_WITH_FEED, contentType: "text/html" },
+      "/feed.xml": { body: EMPTY_FEED, contentType: "application/rss+xml" },
+    });
+    const resweep = await runMentionResweep(makeEnv(), { fetchImpl, userLimit: 100 });
+    expect(resweep.polled).toBeGreaterThanOrEqual(1);
+
+    const starvedCursor = await db()
+      .prepare("SELECT * FROM presence_poll_cursor WHERE source_target_id = ?")
+      .bind(starvedBefore.sourceId)
+      .first();
+    expect(starvedCursor).not.toBeNull();
+  });
+
+  it("bounds the sweep by users, not entities (userLimit)", async () => {
+    // One workspace with more entities than the limit must still be the only
+    // user returned: the limit counts users, never entities (the old
+    // `entityLimit` name said otherwise).
+    const { userId, entityId } = await seedUserAndEntity("agency");
+    for (let i = 0; i < 5; i += 1) {
+      await db()
+        .prepare(
+          `INSERT INTO tracked_entity (
+             id, user_id, tracking_mode, label, canonical_url, notes,
+             is_active, created_at, updated_at
+           ) VALUES (?, ?, 'competitor', ?, ?, NULL, 1, ?, ?)`,
+        )
+        .bind(uid("entity"), userId, `Extra ${i}`, FEED_HOST, ISO_T0, ISO_T0)
+        .run();
+    }
+
+    const { listResweepUsers } = await import("~/lib/mention-resweep.server");
+    // One workspace, six entities: a high user limit returns that workspace
+    // exactly once, never once per entity.
+    const batch = (await listResweepUsers(makeEnv(), 1_000_000)).filter((id) => id === userId);
+    expect(batch).toEqual([userId]);
+    expect(entityId).toBeTruthy();
+  });
+
   it("uses the existing idempotency key shape", async () => {
     mocks.sendPresenceDigestEmail.mockResolvedValue({ accepted: true, delivered: true });
     const { userId, email } = await seedUserAndEntity("agency");
