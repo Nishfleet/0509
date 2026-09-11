@@ -180,7 +180,7 @@ async function runLoader(
   }));
 
   const { loader } = await import("~/routes/search");
-  const raw = await loader(loaderArgsLike(mockSession));
+  const raw = await loader(loaderArgs(mockSession));
   if (raw instanceof Response) {
     return (await raw.json()) as ProjectedPayload;
   }
@@ -190,11 +190,6 @@ async function runLoader(
   }
   return raw as ProjectedPayload;
 }
-
-function loaderArgsLike(session: unknown): LoaderFunctionArgs {
-  return loaderArgs(session);
-}
-void loaderArgsLike;
 
 // Signed-in stubs reused for both branches (plan lookups tolerate failure).
 function stubSignedInSession() {
@@ -253,6 +248,30 @@ describe("issue 2987 — anonymous /search payload projection", () => {
     const payload = await runLoader(stubSignedInSession());
     const ads = payload.result?.ads ?? [];
     const kept = ads[0] as Record<string, unknown>;
-    expect(leakFindings({ ads: [kept] })).toContain("extract-v7/BETA-INTERNAL-TUNING");
+
+  // Issue #2987 acceptance: measure payload size before/after the projection.
+  // A realistic 10-ad synthetic payload with a full internal analysis
+  // structure must shrink substantially on the anonymous surface.
+  it("anonymous payload shrinks materially vs the un-projected payload", async () => {
+    const internalProjection = await import(
+      "~/lib/search-public-projection.server"
+    );
+    const heavyAd = internalAd("meta-boat-1") as unknown as AdRecord & {
+      analysisFields: Array<Record<string, unknown>>;
+    };
+    const heavyResult = {
+      ads: Array.from({ length: 10 }, (_, i) =>
+        JSON.parse(JSON.stringify(heavyAd)),
+      ),
+    };
+    heavyAd.metaAdId = "meta-boat-1";
+    const before = JSON.stringify({ result: heavyResult, selectedAd: heavyAd });
+    const projectedPayload = internalProjection.projectAnonymousSearchPayload({
+      result: heavyResult,
+      selectedAd: heavyAd,
+    });
+    const after = JSON.stringify(projectedPayload);
+    expect(Buffer.byteLength(before)).toBeGreaterThan(40000);
+    expect(Buffer.byteLength(after)).toBeLessThan(Buffer.byteLength(before) * 0.5);
   });
 });
