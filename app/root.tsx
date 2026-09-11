@@ -12,6 +12,8 @@ import {
 } from "react-router";
 import { useEffect, useLayoutEffect, useRef } from "react";
 
+import type { LinkHTMLAttributes } from "react";
+
 import { getCloudflareContext } from "~/lib/cloudflare-context";
 import type { LoaderFunctionArgs } from "react-router";
 import "./app.css";
@@ -28,7 +30,6 @@ import {
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import { htmlLangForPathname } from "~/lib/locale-markets";
 import { buyerSurfaceHreflangLinksForPathname } from "~/lib/seo";
-import type { LinkHTMLAttributes } from "react";
 import { applyTheme, THEME_BOOT_SCRIPT, THEME_COLOR_LIGHT } from "~/lib/theme-client";
 import type { AppSession, PricingPlan, UsageBundle } from "~/lib/types";
 export {

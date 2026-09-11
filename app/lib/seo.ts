@@ -38,22 +38,6 @@ export function canonicalLinks(pathname: string) {
 }
 
 /**
- * EN pathname for a buyer-surface locale `splat`, mirroring the mapping in
- * `buyerSurfaceHreflangLinks` (`""` -> `/`, `"api/docs"` -> `/api/docs`,
- * otherwise `"/" + splat`). Shared so the root Layout's hreflang emission
- * and the sitemap catalog never drift from the locale routes' canonical URLs.
- */
-export function buyerSurfaceEnPathForSplat(splat: string): string {
-  if (splat === "") {
-    return "/";
-  }
-  if (splat === "api/docs") {
-    return "/api/docs";
-  }
-  return `/${splat}`;
-}
-
-/**
  * The buyer-surface `splat` for an EN (non-locale-prefixed) pathname, or
  * `null` when the path has no locale cluster. `"/"` maps to `""` (the locale
  * index is canonically EN), `/api/docs` to `"api/docs"`, `/pricing` (and
@@ -227,6 +211,22 @@ export const COMPARE_CANONICAL_TARGETS: Readonly<Record<string, string>> = {
 };
 
 /**
+ * EN pathname for a buyer-surface locale `splat`, mirroring the mapping in
+ * `buyerSurfaceHreflangLinks` (`""` -> `/`, `"api/docs"` -> `/api/docs`,
+ * otherwise `"/" + splat`). Shared so the root Layout's hreflang emission
+ * and the sitemap catalog never drift from the locale routes' canonical URLs.
+ */
+export function buyerSurfaceEnPathForSplat(splat: string): string {
+  if (splat === "") {
+    return "/";
+  }
+  if (splat === "api/docs") {
+    return "/api/docs";
+  }
+  return `/${splat}`;
+}
+
+/**
  * Reciprocal hreflang set for the sneaker-resale cluster, including self and
  * x-default (English). Google ignores one-way annotations.
  * https://developers.google.com/search/docs/specialty/international/localized-versions
@@ -261,7 +261,7 @@ export function sneakerResaleHreflangLinks() {
  * exists so the cluster is reciprocal on both ends.
  */
 export function buyerSurfaceHreflangLinks(splat: string) {
-  const enPath = splat === "" ? "/" : splat === "api/docs" ? "/api/docs" : `/${splat}`;
+  const enPath = buyerSurfaceEnPathForSplat(splat);
   return [
     ...BUYER_SURFACE_LOCALE_IDS.map((locale) => ({
       rel: "alternate" as const,
