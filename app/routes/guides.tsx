@@ -27,7 +27,7 @@ export const meta: MetaFunction = () =>
   publicSeoMeta({
     title: "Guides: track and monitor competitor ads | Five to Nine",
     description:
-      "The how-to guides: track competitor ads by hand, and monitor a competitor's Meta Ad Library over time — both end in the free no-account search preview.",
+      "The how-to guides: track competitor ads by hand, monitor a competitor's Meta Ad Library over time, and watch a landing page for offer/price/CTA changes — all ending in the free no-account search preview.",
     pathname: PATHNAME,
   });
 
@@ -47,6 +47,12 @@ export const GUIDE_ENTRIES = [
     blurb:
       "The watch-over-time routine: find the Ad Library URL, pick a check cadence, log what runs — and where monitoring by hand breaks.",
   },
+  {
+    href: "/guides/how-to-monitor-competitor-landing-page-changes",
+    title: "How to monitor a competitor's landing-page changes",
+    blurb:
+      "The offer/price/CTA watch the two ad guides don't cover: URL + condition by hand, where pixel diffs break, and the semantic-diff routine.",
+  },
 ] as const;
 
 export default function GuidesIndex() {
@@ -60,8 +66,8 @@ export default function GuidesIndex() {
       <main className="mx-auto max-w-3xl px-4 py-16">
         <h1 className="text-3xl font-semibold tracking-tight">Guides</h1>
         <p className="mt-3 text-neutral-600">
-          How-to guides for tracking competitor ads and watching a competitor's
-          Meta Ad Library over time.
+          How-to guides for tracking competitor ads and watching competitor
+          pages change over time.
         </p>
         <ul className="mt-10 space-y-6">
           {GUIDE_ENTRIES.map((guide) => (
