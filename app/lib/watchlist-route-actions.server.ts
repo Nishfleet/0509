@@ -6,6 +6,7 @@ import {
   hasInvalidCompetitorWebsite,
   isHttpCompetitorWebsite,
   normalizeCompetitorWebsiteInput,
+  registrableDomainFromLandingPage,
   watchlistFingerprint,
 } from "~/lib/competitor-website";
 import type { AppEnv } from "~/lib/env.server";
@@ -17,6 +18,7 @@ import {
   whatsappDeliveryUnavailableMessage,
 } from "~/lib/ga-customer-surface";
 import { normalizeSavedQuery } from "~/lib/normalize";
+import { parseSearchInput, registrableDomainFromHostname } from "~/lib/search-query";
 import { canUsePlanFeature } from "~/lib/plan-entitlements";
 import { normalizeTimeZone, safeTimeZone } from "~/lib/safe-timezone";
 import { SUPPORT_EMAIL } from "~/lib/support";
@@ -26,7 +28,6 @@ import {
   isDeliveryTestRequestToken,
   normalizeSensitivityMode,
 } from "~/lib/watchlist-display";
-import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
 
 /**
  * `/app/watchlists` action (BL-007 extraction).
@@ -246,11 +247,17 @@ export async function handleWatchlistsAction(args: ActionFunctionArgs) {
       };
     }
 
-    const trackingRole = normalizeWatchlistTrackingRole(formData.get("trackingRole") ?? watchlist.trackingRole);
-    const competitorWebsite = formData.has("competitorWebsite")
+    // Issue #2418: the setup card posts ONE target field — a domain/URL or a
+    // search term — as `targetLabel`. A domain resolves to the tracked
+    // website and the advertiser label is derived from it; a term stays a
+    // keyword target. A posted `competitorWebsite` field still wins so the
+    // old two-field form contract keeps working for stale renders.
+    const parsedTarget = parseSearchInput(targetLabel ?? "");
+    const legacyWebsitePosted = formData.has("competitorWebsite");
+    const competitorWebsite = legacyWebsitePosted
       ? normalizeCompetitorWebsiteInput(String(formData.get("competitorWebsite") ?? ""))
-      : isHttpCompetitorWebsite(watchlist.targetId)
-        ? normalizeCompetitorWebsiteInput(watchlist.targetId)
+      : parsedTarget.intent === "domain" && parsedTarget.normalizedUrl
+        ? normalizeCompetitorWebsiteInput(parsedTarget.normalizedUrl)
         : emptyCompetitorWebsite();
     if (hasInvalidCompetitorWebsite(competitorWebsite)) {
       return {
@@ -259,7 +266,26 @@ export async function handleWatchlistsAction(args: ActionFunctionArgs) {
       };
     }
 
-    const nextTargetLabel = targetLabel ?? watchlist.targetLabel;
+    const nextTargetLabel = legacyWebsitePosted
+      ? targetLabel ?? watchlist.targetLabel
+      : parsedTarget.intent === "domain"
+        ? competitorWebsite.displayName ?? targetLabel ?? watchlist.targetLabel
+        : parsedTarget.normalizedText ?? targetLabel ?? watchlist.targetLabel;
+
+    // Issue #2418: trackingRole is inferred, not chosen — `self` only when
+    // the target's registrable domain equals the workspace brandWebsite's;
+    // anything else is a competitor. saved_query targets keep their stored
+    // role: there is no domain to match and the target never changes here.
+    let trackingRole = watchlist.trackingRole;
+    if (watchlist.targetType !== "saved_query") {
+      const targetDomain = competitorWebsite.normalizedUrl
+        ? registrableDomainFromLandingPage(competitorWebsite.normalizedUrl)
+        : null;
+      const selfDomain = targetDomain
+        ? await resolveWorkspaceSelfRegistrableDomain(env, workspaceUserId)
+        : null;
+      trackingRole = targetDomain && targetDomain === selfDomain ? "self" : "competitor";
+    }
     const previousCompetitorWebsite = isHttpCompetitorWebsite(watchlist.targetId)
       ? normalizeCompetitorWebsiteInput(watchlist.targetId)
       : emptyCompetitorWebsite();
@@ -307,8 +333,29 @@ export async function handleWatchlistsAction(args: ActionFunctionArgs) {
         name,
         ...targetUpdate,
       });
-      if (updatedWatchlist && updatedWatchlist.id !== watchlist.id) {
-        throw redirect(`/app/watchlists?watchlist=${updatedWatchlist.id}`);
+      if (updatedWatchlist) {
+        // Issue #2418 acceptance metric: one structured line per save — did
+        // the prefilled fields reach the server untouched, and if not, which
+        // ones did the customer edit?
+        const prefilledTarget = isHttpCompetitorWebsite(watchlist.targetId)
+          ? watchlist.targetId
+          : watchlist.targetLabel;
+        const differingFields = [
+          ...(name !== watchlist.name ? ["name"] : []),
+          ...(String(formData.get("targetLabel") ?? "").trim() !== prefilledTarget ? ["target"] : []),
+        ];
+        console.info(
+          JSON.stringify({
+            event: "watchlist_setup_save",
+            watchlist_id: updatedWatchlist.id,
+            prefill_match: differingFields.length === 0,
+            fields: differingFields,
+            ts: new Date().toISOString(),
+          }),
+        );
+        if (updatedWatchlist.id !== watchlist.id) {
+          throw redirect(`/app/watchlists?watchlist=${updatedWatchlist.id}`);
+        }
       }
     } catch (error) {
       if (error instanceof Response) {
@@ -1028,6 +1075,24 @@ async function handleBulkAcceptSuggestedCompetitorsAction(
     currentCount: limit.current,
     existingFingerprints,
   });
+}
+
+/**
+ * Issue #2418: the workspace's own registrable domain from saved branding,
+ * used to infer `trackingRole=self` when a watchlist target lands on it.
+ * Returns null when no brand website is set — no self-domain means every
+ * domain target is a competitor.
+ */
+async function resolveWorkspaceSelfRegistrableDomain(env: AppEnv, userId: string) {
+  const { getWorkspaceBranding } = await import("~/lib/data.server");
+  const branding = await getWorkspaceBranding(env, userId);
+  if (!branding.brandWebsite) {
+    return null;
+  }
+  // brand_website is stored trimmed but not scheme-normalized — a saved
+  // "samplebrand.com" is still the workspace's domain.
+  const website = normalizeCompetitorWebsiteInput(branding.brandWebsite);
+  return website.host ? registrableDomainFromHostname(website.host) : null;
 }
 
 /**
