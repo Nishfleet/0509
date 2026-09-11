@@ -94,9 +94,9 @@ export async function resolveIndexableBrandPageLinkForDomain(
  * Load the set of registrable domains whose `/timeline/:domain` page is in
  * the sitemap's indexable set (issue #1931).
  *
- * Reuses the sitemap's own timeline entry set — capture-backed entries plus
- * the collecting entries the sitemap emits for the tracked /ads cohort
- * (issue #2021) — so a public funnel page can never point at a
+ * Reuses the sitemap's own timeline entry set — capture-backed entries only
+ * (issue #2881: zero-state collecting pages are noindex and never listed),
+ * so a public funnel page can never point at a
  * `/timeline/:domain` that the route would refuse to serve (404) or that the
  * sitemap would refuse to list. Cache-only:
  * never triggers live discovery or scraping.
@@ -107,11 +107,8 @@ export async function resolveIndexableBrandPageLinkForDomain(
  */
 export async function loadIndexableTimelineDomains(env: AppEnv): Promise<Set<string>> {
   try {
-    const [brandEntries, timelineEntries] = await Promise.all([
-      loadIndexableBrandPageEntries(env),
-      loadIndexableTimelineEntries(env),
-    ]);
-    const entries = timelineSitemapEntries(brandEntries, timelineEntries);
+    const timelineEntries = await loadIndexableTimelineEntries(env);
+    const entries = timelineSitemapEntries(timelineEntries);
     const domains = new Set<string>();
     for (const entry of entries) {
       const domain = timelineDomainFromSitemapPath(entry.path);
@@ -133,7 +130,8 @@ export async function loadIndexableTimelineDomains(env: AppEnv): Promise<Set<str
  * null when that timeline is not in the sitemap's indexable set (issue #1931).
  *
  * The returned path is safe to link: it is present only when the sitemap's own
- * indexability decision (capture-backed or collecting, issue #2021) lists it,
+ * indexability decision (capture-backed with ≥1 recorded offer state, issue
+ * #2881) lists it,
  * so a route the timeline never serves is never linked. Cache-only.
  */
 export async function resolveIndexableTimelineLinkForDomain(
