@@ -168,6 +168,7 @@ export {
   listOutstandingInstantProviderUnknownAttempts,
   getWorkspaceDeliveryConfig,
   upsertWorkspaceDeliveryConfig,
+  enableWorkspaceDeliveryChannel,
   listDeliveryTargets,
   hasSuppressedEmailTargetForUserAndAddress,
   provisionVerifiedAccountEmailTargetIfUnsuppressed,

@@ -421,6 +421,10 @@ describe("search.latency.regression.guard: money-path canary (issue #2001)", () 
     expect(detectMoneyPathRegression(records)).toBeNull();
   });
 
+  it("does not fire when a path has fewer than minFailures records", () => {
+    expect(detectMoneyPathRegression([moneyRecord("2026-09-08T13:55:00Z", "/ads/adobe.com", 500)])).toBeNull();
+  });
+
   it("still fires on a 3-long red run whose start was missed by a skipped guard run", () => {
     const records = [
       moneyRecord("2026-09-08T13:45:00Z", "/ads/mailchimp.com", 200),

@@ -135,4 +135,28 @@ describe("route diet phase 1 redirects", () => {
       expect(row).toContain("deferred");
     }
   });
+
+  // Issue #2724: folding a route moves the screen it lands on. The Gate-B
+  // release-coverage registry pins the exact finalUrl of each release proof,
+  // so a fold that skips the registry turns into a production deploy failure
+  // (coverage_missing + coverage_unexpected_entry) hours later. Pin the two
+  // together here, in the test that owns the fold contract.
+  it("keeps release-coverage expectations off every folded-away path", async () => {
+    // @ts-ignore JavaScript reporter module is intentionally exercised through Vitest.
+    const { RELEASE_COVERAGE_MATRIX } = await import(
+      "../scripts/playwright-release-manifest-reporter.mjs"
+    );
+    const expected = Object.values(RELEASE_COVERAGE_MATRIX).flat();
+    expect(expected.length).toBeGreaterThan(0);
+    const expectedPaths = expected.map((entry) => {
+      const finalUrl = entry.finalUrl as { exact?: string; pathname?: string };
+      return finalUrl.exact !== undefined ? finalUrl.exact.split("?")[0] : finalUrl.pathname;
+    });
+    for (const fold of SHIPPED_FOLDS) {
+      expect(
+        expectedPaths,
+        `${fold.name}: release coverage still expects ${fold.oldPath}`,
+      ).not.toContain(fold.oldPath);
+    }
+  });
 });

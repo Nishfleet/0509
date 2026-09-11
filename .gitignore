@@ -44,3 +44,7 @@ worker-configuration.d.ts
 
 # Vale quality-ratchet measurement config (created and removed by scripts/quality-ratchet.mjs)
 /.vale-ratchet-measure-*.ini
+
+# Worker PR-body scratch files (fleet-ops/0509#2609)
+/pr-body.md
+/.pr-body.md

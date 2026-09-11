@@ -313,6 +313,7 @@ export async function listDeliveryAttempts(
   options: {
     userId?: string;
     watchlistId?: string;
+    digestRunId?: string;
     channel?: DeliveryChannel;
     targetValue?: string;
     limit?: number;
@@ -327,6 +328,10 @@ export async function listDeliveryAttempts(
   if (options.watchlistId) {
     clauses.push("watchlist_id = ?");
     bindings.push(options.watchlistId);
+  }
+  if (options.digestRunId) {
+    clauses.push("digest_run_id = ?");
+    bindings.push(options.digestRunId);
   }
   if (options.channel) {
     clauses.push("channel = ?");

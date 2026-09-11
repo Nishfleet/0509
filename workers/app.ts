@@ -29,6 +29,7 @@ import {
   sendWeeklyBusinessNumbers,
 } from "../app/lib/operator-metrics-emails.server";
 import { sendMonthlyCustomerRecaps } from "../app/lib/monthly-recap.server";
+import { sendMonthlyReports } from "../app/lib/delivery.server";
 import {
   runOnboardingNudgeSweep,
   runWatchlistResumeSweep,
@@ -685,6 +686,28 @@ export default {
             }
           },
           (error) => reportScheduledTaskFailure(env, "monthly_customer_recaps", error),
+        ),
+      );
+      // Issue #2422: auto-file one monthly report per paid workspace. This cron
+      // fires four to five times a month, so the job gates on the UTC month
+      // (workspace + YYYY-MM) and files only where that month has no report
+      // share yet. No new cron: a fifth wrangler schedule would escape the
+      // release-soak CHECK that accepts only the four production crons.
+      ctx.waitUntil(
+        sendMonthlyReports(env, { scheduledTime: controller.scheduledTime }).then(
+          async (result) => {
+            if (result.filed > 0) {
+              console.log("monthly reports filed", result);
+            }
+            if (result.failed > 0) {
+              await reportScheduledTaskFailure(
+                env,
+                "monthly_reports_degraded",
+                new Error(`monthly reports completed with ${result.failed} failed workspaces`),
+              );
+            }
+          },
+          (error) => reportScheduledTaskFailure(env, "monthly_reports", error),
         ),
       );
     }

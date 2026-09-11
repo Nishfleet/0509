@@ -61,6 +61,11 @@ export async function secureBackupLocalFile(filePath) {
  * outcome. The strict identity check prevents a malformed variable from
  * widening the recursive deletion target.
  *
+ * The cleanup refuses to run outside GitHub Actions: off-Actions callers
+ * would resolve the retained local backup directory (deliberately kept
+ * outside the checkout), so deletion is only ever permitted for the exact
+ * run-scoped `0509-d1-backups-<runId>-<attempt>` path.
+ *
  * @param {string} directoryPath
  * @param {Record<string, string | undefined>} env
  */
@@ -68,6 +73,9 @@ export async function cleanupAutomationBackupLocalDirectory(
   directoryPath,
   env = process.env,
 ) {
+  if (env.GITHUB_ACTIONS !== "true") {
+    throw new Error("backup_automation_local_cleanup_requires_actions");
+  }
   assertAutomationBackupLocalDirectory(directoryPath, env);
   await rm(resolve(directoryPath), { force: true, recursive: true });
   try {

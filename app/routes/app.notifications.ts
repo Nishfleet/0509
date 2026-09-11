@@ -162,11 +162,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   if (intent === "save-slack-webhook") {
     const { saveSlackWebhookTarget } = await import("~/lib/slack.server");
-    const {
-      getWorkspaceDeliveryConfig,
-      legacyWorkspaceDeliveryDefaults,
-      upsertWorkspaceDeliveryConfig,
-    } = await import("~/lib/data.server");
+    const { enableWorkspaceDeliveryChannel } = await import("~/lib/data.server");
     const webhookUrl = String(formData.get("slackWebhookUrl") ?? "");
     const name = String(formData.get("slackDestinationName") ?? "");
     try {
@@ -185,21 +181,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
       throw error;
     }
-    const existingConfig = await getWorkspaceDeliveryConfig(env, workspaceUserId);
-    const defaults = legacyWorkspaceDeliveryDefaults({
-      hasEmail: Boolean(session.user.email),
-    });
-    await upsertWorkspaceDeliveryConfig(env, {
+    await enableWorkspaceDeliveryChannel(env, {
       userId: workspaceUserId,
-      sensitivityMode: existingConfig?.sensitivityMode ?? defaults.sensitivityMode,
-      instantEnabled: existingConfig?.instantEnabled ?? defaults.instantEnabled,
-      digestEnabled: existingConfig?.digestEnabled ?? defaults.digestEnabled,
-      emailEnabled: existingConfig?.emailEnabled ?? defaults.emailEnabled,
-      whatsappEnabled: existingConfig?.whatsappEnabled ?? defaults.whatsappEnabled,
-      slackEnabled: true,
-      teamsEnabled: existingConfig?.teamsEnabled ?? defaults.teamsEnabled,
-      quietHours: existingConfig?.quietHours ?? null,
-      timezone: existingConfig?.timezone ?? null,
+      channel: "slack",
+      hasEmail: Boolean(session.user.email),
     });
 
     return {
@@ -211,11 +196,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   if (intent === "save-teams-webhook") {
     const { saveTeamsWebhookTarget } = await import("~/lib/teams.server");
-    const {
-      getWorkspaceDeliveryConfig,
-      legacyWorkspaceDeliveryDefaults,
-      upsertWorkspaceDeliveryConfig,
-    } = await import("~/lib/data.server");
+    const { enableWorkspaceDeliveryChannel } = await import("~/lib/data.server");
     const webhookUrl = String(formData.get("teamsWebhookUrl") ?? "");
     const name = String(formData.get("teamsDestinationName") ?? "");
     try {
@@ -234,21 +215,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
       throw error;
     }
-    const existingConfig = await getWorkspaceDeliveryConfig(env, workspaceUserId);
-    const defaults = legacyWorkspaceDeliveryDefaults({
-      hasEmail: Boolean(session.user.email),
-    });
-    await upsertWorkspaceDeliveryConfig(env, {
+    await enableWorkspaceDeliveryChannel(env, {
       userId: workspaceUserId,
-      sensitivityMode: existingConfig?.sensitivityMode ?? defaults.sensitivityMode,
-      instantEnabled: existingConfig?.instantEnabled ?? defaults.instantEnabled,
-      digestEnabled: existingConfig?.digestEnabled ?? defaults.digestEnabled,
-      emailEnabled: existingConfig?.emailEnabled ?? defaults.emailEnabled,
-      whatsappEnabled: existingConfig?.whatsappEnabled ?? defaults.whatsappEnabled,
-      slackEnabled: existingConfig?.slackEnabled ?? defaults.slackEnabled,
-      teamsEnabled: true,
-      quietHours: existingConfig?.quietHours ?? null,
-      timezone: existingConfig?.timezone ?? null,
+      channel: "teams",
+      hasEmail: Boolean(session.user.email),
     });
 
     return {

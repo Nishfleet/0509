@@ -1,36 +1,20 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import type { EffectiveDeliveryConfig } from "~/lib/types";
 
-// The card renders a react-router <Form> and a SubmitButton that reads
-// useNavigation. A mocked react-router lets each test render the card with a
-// specific effective delivery config and assert the quiet-hours inputs'
-// default state.
-
-beforeEach(() => {
-  vi.resetModules();
-  vi.doMock("react-router", async () => {
-    const actual = await vi.importActual<typeof import("react-router")>("react-router");
-    const React = await import("react");
-    return {
-      ...actual,
-      useNavigation: () => ({ state: "idle" }),
-      Form: ({ children, ...props }: { children?: React.ReactNode } & Record<string, unknown>) =>
-        React.createElement("form", props, children),
-    };
-  });
-});
-
-afterEach(() => {
-  vi.doUnmock("react-router");
-  vi.restoreAllMocks();
-  vi.resetModules();
-});
+// Issue #2416: the card used to carry nine form fields per competitor — a
+// sensitivity select, a free-text timezone, quiet-hours number inputs and five
+// channel checkboxes. Every one had a correct default, and the quiet-hours pair
+// was actively harmful (issue #2263: an untouched form silently switched on
+// 22:00-08:00). The card now renders zero fields, so these tests assert the
+// absence rather than the old default values.
 
 async function render(config: EffectiveDeliveryConfig): Promise<string> {
-  const { DeliverySettingsCard } = await import("~/components/watchlists/delivery-settings-card");
+  const { DeliverySettingsCard } = await import(
+    "~/components/watchlists/delivery-settings-card"
+  );
   return renderToStaticMarkup(
     createElement(DeliverySettingsCard, {
       data: {
@@ -39,13 +23,8 @@ async function render(config: EffectiveDeliveryConfig): Promise<string> {
         watchlistDeliveryConfig: null,
         whatsappAvailable: false,
       },
-      watchlistId: "wl-1",
       canConfigureDigestSettings: true,
-      canInstantAlert: false,
-      canEmailDelivery: true,
-      showSlackDelivery: false,
-      showTeamsDelivery: false,
-    }),
+    } as never),
   );
 }
 
@@ -64,30 +43,67 @@ function config(overrides: Partial<EffectiveDeliveryConfig> = {}): EffectiveDeli
   };
 }
 
-describe("DeliverySettingsCard quiet hours inputs", () => {
-  it("renders no quiet-hours defaultValue when none is configured, so an untouched form submits empty strings (issue #2263)", async () => {
-    const markup = await render(config({ quietHours: null }));
+describe("DeliverySettingsCard renders zero form fields (issue #2416)", () => {
+  it("renders no form element at all", async () => {
+    const markup = await render(config());
 
-    // The start/end inputs show the suggested 22/8 as placeholders only, never
-    // as a submitted value. An untouched form therefore posts empty strings,
-    // which parseQuietHours turns into null (the existing "off" state).
-    expect(markup).toContain('name="quietHoursStart"');
-    expect(markup).toContain('placeholder="22"');
-    expect(markup).toContain('name="quietHoursEnd"');
-    expect(markup).toContain('placeholder="8"');
-    // No defaultValue/value attribute on either input when quiet hours are off.
-    expect(markup).not.toMatch(/name="quietHoursStart"[^>]*value=/);
-    expect(markup).not.toMatch(/name="quietHoursEnd"[^>]*value=/);
+    expect(markup).not.toContain("<form");
+    expect(markup).not.toContain("<select");
+    expect(markup).not.toContain("<input");
   });
 
-  it("round-trips the stored quiet hours as defaultValue when configured (issue #2263)", async () => {
+  it("renders none of the deleted controls, whatever the stored config says", async () => {
+    // The stored row may still hold the old values for pre-existing accounts.
+    // None of them may reappear as a control.
     const markup = await render(
-      config({ quietHours: { startHour: 22, endHour: 8 } }),
+      config({
+        sensitivityMode: "aggressive",
+        quietHours: { startHour: 22, endHour: 8 },
+        timezone: "Asia/Kolkata",
+        instantEnabled: true,
+      }),
     );
 
-    expect(markup).toContain('name="quietHoursStart"');
-    expect(markup).toContain('value="22"');
-    expect(markup).toContain('name="quietHoursEnd"');
-    expect(markup).toContain('value="8"');
+    for (const name of [
+      "sensitivityMode",
+      "timezone",
+      "quietHoursStart",
+      "quietHoursEnd",
+      "instantEnabled",
+      "digestEnabled",
+      "emailEnabled",
+      "whatsappEnabled",
+      "slackEnabled",
+      "teamsEnabled",
+    ]) {
+      expect(markup).not.toContain(`name="${name}"`);
+    }
+  });
+
+  it("tells the user where per-competitor control lives instead of a form", async () => {
+    const markup = await render(config());
+
+    expect(markup).toContain("Delivery settings");
+    expect(markup).toContain("Targets and pauses");
+  });
+
+  it("keeps the workspace-owner notice for members who cannot configure", async () => {
+    const { DeliverySettingsCard } = await import(
+      "~/components/watchlists/delivery-settings-card"
+    );
+    const markup = renderToStaticMarkup(
+      createElement(DeliverySettingsCard, {
+        data: {
+          plan: "free",
+          effectiveDeliveryConfig: config(),
+          watchlistDeliveryConfig: null,
+          whatsappAvailable: false,
+        },
+        canConfigureDigestSettings: false,
+      } as never),
+    );
+
+    expect(markup).not.toContain("<form");
+    expect(markup).toContain("managed by the workspace owner");
   });
 });

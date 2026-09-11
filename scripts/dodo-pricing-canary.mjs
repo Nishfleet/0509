@@ -2,10 +2,11 @@
 
 import { pathToFileURL } from "node:url";
 
+import { fetchCanary, validateCanonicalBaseUrl } from "./dodo-billing-canary.mjs";
+
 const DEFAULT_BASE_URL = "https://0509.io";
 const REQUIRED_COUNTRIES = ["IN", "US", "GB"];
 const REQUIRED_USAGE_BUNDLES = ["proof_500", "proof_2000", "proof_7500"];
-const DODO_PRICING_CANARY_TIMEOUT_MS = 20_000;
 
 /**
  * @typedef {{
@@ -117,16 +118,19 @@ export async function fetchPreview({ baseUrl, country, token, expectedWorkerVers
   if (!expectedVersion) {
     throw new Error("pricing_canary_worker_version_missing");
   }
-  const url = new URL("/api/pricing-preview", baseUrl);
+  const url = new URL("/api/pricing-preview", validateCanonicalBaseUrl(baseUrl));
   url.searchParams.set("country", country);
   url.searchParams.set("pricing-canary", String(Date.now()));
-  const response = await fetch(url, {
-    headers: {
-      "user-agent": "0509-dodo-pricing-canary/1.0",
-      "x-0509-canary-token": token,
+  // fetchCanary uses `redirect: "manual"` and revalidates every hop against the
+  // canonical origin, so the canary token is never sent to a redirect target.
+  const response = await fetchCanary({
+    url,
+    token,
+    method: "GET",
+    userAgent: "0509-dodo-pricing-canary/1.0",
+    extraHeaders: {
       "x-0509-expected-worker-version": expectedVersion,
     },
-    signal: AbortSignal.timeout(DODO_PRICING_CANARY_TIMEOUT_MS),
   });
   const body = /** @type {PricingPreview} */ (await response.json().catch(() => ({})));
   return validatePricingPreviewBody({
@@ -364,9 +368,11 @@ export async function main(args = process.argv.slice(2), env = process.env) {
   }
   const expectedWorkerVersionId = config.expectedWorkerVersionId;
 
+  const canonicalBaseUrl = validateCanonicalBaseUrl(config.baseUrl);
+
   const results = await Promise.all(
     config.countries.map((country) => fetchPreview({
-      baseUrl: config.baseUrl,
+      baseUrl: canonicalBaseUrl.toString(),
       country,
       token,
       expectedWorkerVersionId,

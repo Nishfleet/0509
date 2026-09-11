@@ -94,6 +94,32 @@ describe("/brands/:category loader (issue #2067)", () => {
     expect(data.lastMod).toBe("2026-08-21");
   });
 
+  it("404s when the brand source throws — never a 500 or an unhandled throw (issue #2600)", async () => {
+    // A D1 / sitemap hiccup makes loadIndexableBrandPageEntries reject; the
+    // loader must degrade to an empty entry list so the empty-curated-
+    // category guard 404s. The rejection must be a 404 Response — not a 500
+    // and not a raw error escaping to the caller — and no brand list data is
+    // ever produced (no fabricated or partial page).
+    vi.doMock("~/lib/sitemap.server", () => ({
+      loadIndexableBrandPageEntries: () =>
+        Promise.reject(new Error("D1 hiccup")),
+    }));
+
+    const { loader } = await import("~/routes/brands.$category");
+    const rejection = await loader({
+      context: {},
+      params: { category: "beauty-personal-care" },
+    } as never).then(
+      () => {
+        throw new Error("loader resolved — expected a 404 Response");
+      },
+      (error: unknown) => error,
+    );
+    expect(rejection).toBeInstanceOf(Response);
+    expect((rejection as Response).status).toBe(404);
+    expect((rejection as Response).status).not.toBe(500);
+  });
+
   it("degrades a failed score read to an honest deferred null, never a 500", async () => {
     computeBrandPageAggressionScore.mockReturnValue(null);
     loadBrandPageCacheSnapshot.mockResolvedValue(null);

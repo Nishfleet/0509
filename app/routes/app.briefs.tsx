@@ -74,6 +74,17 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const selectedDigestCandidate = selectedDigestId ? await getDigest(env, selectedDigestId) : null;
   const selectedDigest =
     selectedDigestCandidate?.userId === workspaceUserId ? selectedDigestCandidate : null;
+  // Issue #2471: the global newest-80 attempt window does not cover every
+  // listed brief (up to 60 briefs, multiple attempts per recipient), so the
+  // digest whose trail is actually rendered gets its own digestRunId-scoped
+  // fetch instead of relying on the shared window.
+  const selectedDigestScopedAttempts = selectedDigest
+    ? await listDeliveryAttempts(env, {
+        userId: workspaceUserId,
+        digestRunId: selectedDigest.id,
+        limit: 80,
+      })
+    : [];
 
   const { emitFunnelFirstBriefViewed } =
     await import("~/lib/funnel-measurement.server");
@@ -104,16 +115,19 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     digestAttemptsByDigestId: Object.fromEntries(
       digests.map((digest) => [
         digest.id,
+        // Issue #2471: the selected digest's sidebar status uses the same
+        // digestRunId-scoped fetch as its header trail, so the two can never
+        // disagree.
         summarizeDigestAttempts(
-          recentDeliveryAttempts.filter((attempt) => attempt.digestRunId === digest.id),
+          selectedDigest && digest.id === selectedDigest.id
+            ? selectedDigestScopedAttempts
+            : recentDeliveryAttempts.filter((attempt) => attempt.digestRunId === digest.id),
         ).map(toPublicDeliveryAttemptSummary),
       ]),
     ),
     selectedDigest,
     selectedDigestAttempts: selectedDigest
-      ? summarizeDigestAttempts(
-          recentDeliveryAttempts.filter((attempt) => attempt.digestRunId === selectedDigest.id),
-        ).map(toPublicDeliveryAttemptSummary)
+      ? summarizeDigestAttempts(selectedDigestScopedAttempts).map(toPublicDeliveryAttemptSummary)
       : [],
     canAccessDigests: true,
     plan,
@@ -308,7 +322,7 @@ export default function DigestsRoute() {
           )
           .join(" · ")
       : data.canAccessDigests && data.selectedDigest?.delivery?.status === "sent"
-        ? "Sent — predates per-recipient tracking"
+        ? "Sent — per-recipient detail not loaded"
         : null;
   const deliveryRecipient = selectedDigestAttempts[0]?.targetValue ?? null;
   const headerAction = !data.canAccessDigests
@@ -731,7 +745,7 @@ function formatDigestSidebarStatus(
 ) {
   if (attempts.length === 0) {
     if (legacyStatus === "sent") {
-      return "Sent — predates per-recipient tracking";
+      return "Sent — per-recipient detail not loaded";
     }
     if (legacyStatus === "failed") {
       return "Delivery failed";

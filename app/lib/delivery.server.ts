@@ -31,6 +31,7 @@ import {
   createDeliveryAttempt,
   getDeliveryAttemptByIdempotencyKey,
   getOldestUserId,
+  getUserDeliveryProfile,
   getUserIdByEmail,
   getWatchlistDeliveryConfig,
   getWorkspaceDeliveryConfig,
@@ -91,8 +92,10 @@ import {
   EMAIL_CASE_INK_SOFT,
   EMAIL_CASE_LINE,
   EMAIL_CASE_META_STYLE,
+  EMAIL_DISPLAY_FONT,
   EMAIL_MONO_FONT,
 } from "~/lib/email-template.server";
+import { queryAll, queryOne } from "~/lib/data/d1.server";
 import { proofScreenshotAbsoluteUrl } from "~/lib/proof-screenshot.server";
 import { buildUnsubscribeUrl } from "~/lib/unsubscribe.server";
 import type {
@@ -4042,4 +4045,503 @@ export async function sendPresenceDigestEmail(
 function buildPresenceAppUrl(env: AppEnv) {
   const baseUrl = env.APP_ORIGIN?.trim() || env.BETTER_AUTH_URL?.trim() || "https://0509.io";
   return `${baseUrl.replace(/\/+$/, "")}/app/presence`;
+}
+
+/**
+ * Issue #2422: auto-file one monthly report per workspace, so the customer
+ * never has to build one by hand.
+ *
+ * Reports were manual-only — a 765-line builder route behind Deliver → Reports
+ * — while the digest pipeline already assembles the same decision-ladder
+ * content on a schedule. For a small book of business a build-it-yourself
+ * report is a feature nobody runs.
+ *
+ * Reuse-first, per the issue and its binding judge edits: the document comes
+ * from the existing `report-builder.server.ts`, the payload from the existing
+ * report-approval snapshot, the link from the existing `createShareLink`, and
+ * the email from THIS module's existing claim → dispatch → finalize path with
+ * the existing Cloudflare sender. No new sender, no new mechanism, no new cron
+ * — a fifth wrangler schedule would escape the release-soak CHECK that accepts
+ * only the four production crons.
+ *
+ * Idempotency is the point of the ticket. The weekly cron fires four to five
+ * times a month, so "monthly on a weekly slot" needs a gate or it is a coin
+ * flip. The gate is the workspace's own monthly-report share link
+ * (`resource_type='report'`, `resource_id='report-monthly:<YYYY-MM>'`), read
+ * before any build: present means the UTC month is already filed, so a cron
+ * retry and a second weekly slot in the same month are both no-ops.
+ */
+
+/** UTC month key (`YYYY-MM`) that a run belongs to. */
+export function utcMonthKey(now: Date = new Date()): string {
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+/** Stable per-workspace-per-month report id; the idempotency key of the job. */
+export function monthlyReportResourceId(monthKey: string): string {
+  return `report-monthly:${monthKey}`;
+}
+
+export interface MonthlyReportRunResult {
+  attempted: number;
+  filed: number;
+  duplicates: number;
+  skipped: number;
+  failed: number;
+}
+
+/**
+ * Customer copy follows `docs/customer-information-architecture.md`: decision
+ * first, supporting evidence second, no internal implementation labels, and no
+ * invented numbers — the count is the filed report's own row count.
+ */
+export function buildMonthlyReportEmail(input: {
+  name: string | null;
+  monthLabel: string;
+  changeCount: number;
+  shareUrl: string;
+}) {
+  const greeting = input.name?.trim() ? `Hi ${escapeHtml(input.name.trim())},` : "Hi,";
+  const changeLabel = input.changeCount === 1 ? "change" : "changes";
+  const subject = `Your ${input.monthLabel} report is ready — ${input.changeCount} ${changeLabel}`;
+  const preheader = `${input.changeCount} ${changeLabel} with proof status and next actions, already filed for you.`;
+  const html = `
+    <div style="font-family: Inter, system-ui, sans-serif; background-color: #fffdf8; color: #171611; font-size: 15px; line-height: 1.6;">
+      <p style="margin: 0 0 12px;">${greeting}</p>
+      <p style="${EMAIL_CASE_EYEBROW_STYLE}">Your ${escapeHtml(input.monthLabel)} report</p>
+      <p style="margin: 0 0 4px; font-family: ${EMAIL_DISPLAY_FONT}; font-size: 44px; line-height: 1.05; font-weight: 800; letter-spacing: -1px; color: ${EMAIL_CASE_INK};">${input.changeCount}</p>
+      <p style="margin: 0 0 20px; font-size: 18px; line-height: 1.3; letter-spacing: -0.3px; color: ${EMAIL_CASE_INK}; font-weight: 700;">${changeLabel} in ${escapeHtml(input.monthLabel)}, ready to review</p>
+      <p style="margin: 0 0 16px; color: ${EMAIL_CASE_INK_SOFT};">We file this report for you at the start of every month. No proof, no claim — every line is backed by a stored capture.</p>
+      <p style="margin: 0 0 20px;">
+        <a href="${escapeHtml(input.shareUrl)}" style="${EMAIL_CASE_BUTTON_STYLE}">Open your report</a>
+      </p>
+      <p style="margin: 0; font-family: ${EMAIL_MONO_FONT}; font-size: 12px; letter-spacing: 0.04em; color: ${EMAIL_CASE_INK_FAINT};">
+        This link is a read-only snapshot. You can still build any report by hand
+        from Deliver → Reports.
+      </p>
+    </div>
+  `;
+  const text = [
+    input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi,",
+    "",
+    `Your ${input.monthLabel} report is ready: ${input.changeCount} ${changeLabel}.`,
+    "We file this report for you at the start of every month. No proof, no claim.",
+    "",
+    `Open your report: ${input.shareUrl}`,
+  ].join("\n");
+
+  return { subject, preheader, html, text };
+}
+
+function formatMonthlyReportMonthLabel(monthKey: string): string {
+  const match = /^(\d{4})-(\d{2})$/.exec(monthKey);
+  if (!match) return monthKey;
+  const d = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 1));
+  return d.toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+}
+
+/**
+ * Paid workspaces only (Nish decision): Free gets nothing recurring. Excluded
+ * in the same query rather than filtered after the fact, matching
+ * `listPaidUsersForRecap` so both monthly customer jobs see one population.
+ */
+export async function listPaidWorkspacesForMonthlyReport(env: AppEnv) {
+  const rows = await queryAll<{ user_id: string; email: string; name: string | null; plan: string }>(
+    env,
+    `
+      SELECT
+        user_plan.user_id AS user_id,
+        user.email AS email,
+        user.name AS name,
+        user_plan.plan AS plan
+      FROM user_plan
+      INNER JOIN user ON user.id = user_plan.user_id
+      WHERE user_plan.plan IN ('scout', 'starter', 'agency')
+        AND user.email IS NOT NULL
+        AND TRIM(user.email) != ''
+      ORDER BY user_plan.user_id ASC
+    `,
+  );
+  return rows.map((row) => ({
+    userId: row.user_id,
+    email: row.email,
+    name: row.name,
+    plan: row.plan,
+  }));
+}
+
+/**
+ * The month gate: "build only when no report exists for the current UTC
+ * month". Reports are built on demand and never stored as rows, so the durable
+ * per-month artefact is the share link minted for that month.
+ *
+ * The predicate must match the read that decides reuse in
+ * `sendOneMonthlyReport` — including `expires_at` — or the two disagree: a link
+ * whose 90-day TTL has lapsed would still count as "filed" here and silently
+ * suppress the month, while the reuse read would correctly find nothing.
+ */
+async function hasMonthlyReportShare(env: AppEnv, userId: string, monthKey: string) {
+  const row = await queryOne<{ count: number }>(
+    env,
+    `
+      SELECT COUNT(*) AS count
+      FROM share_link
+      WHERE user_id = ?
+        AND resource_type = 'report'
+        AND resource_id = ?
+        AND revoked_at IS NULL
+        AND (expires_at IS NULL OR expires_at > ?)
+    `,
+    userId,
+    monthlyReportResourceId(monthKey),
+    new Date().toISOString(),
+  );
+  return Number(row?.count ?? 0) > 0;
+}
+
+/**
+ * Build the workspace's monthly report snapshot, or null when there is nothing
+ * worth filing. Reuses the same builder + snapshot the manual reports route
+ * uses, so a filed report is identical to one built by hand.
+ */
+async function buildMonthlyReportSnapshot(env: AppEnv, userId: string) {
+  const { listAdsByIds, listProofCapturePairsForEventIds, listWatchEvents, listWatchlists } =
+    await import("~/lib/data.server");
+  const watchlist =
+    (await listWatchlists(env, userId)).find((candidate) => candidate.isActive !== false) ??
+    null;
+  if (!watchlist) return null;
+
+  const events = await listWatchEvents(env, watchlist.id, 60);
+  if (events.length === 0) return null;
+
+  const adIds = events
+    .map((event) => event.adId)
+    .filter((adId): adId is string => typeof adId === "string" && adId.length > 0);
+  const [ads, proofCapturePairs] = await Promise.all([
+    listAdsByIds(env, adIds),
+    listProofCapturePairsForEventIds(
+      env,
+      userId,
+      events.map((event) => event.id),
+      { includePrevious: false },
+    ),
+  ]);
+
+  const { buildWatchlistReport } = await import("~/lib/report-builder.server");
+  const report = buildWatchlistReport({
+    watchlist,
+    events,
+    adsById: new Map(ads.map((ad) => [ad.metaAdId, ad])),
+    proofCapturesByEventId: new Map(
+      proofCapturePairs.map((pair) => [pair.eventId, pair.current]),
+    ),
+  });
+
+  // The same sanitizing snapshot the manual share action mints: identity is
+  // stripped so a leaked link cannot be walked back to the workspace's own
+  // report ids.
+  const { createApprovedReportSnapshot } = await import("~/lib/report-approval");
+  const snapshot = createApprovedReportSnapshot({
+    ...(JSON.parse(JSON.stringify(report)) as typeof report),
+    reportId: "shared-report",
+    resourceId: "shared",
+  });
+  return snapshot ? { report, snapshot } : null;
+}
+
+type MonthlyReportOutcome =
+  | "sent"
+  | "duplicate"
+  | "nothing_to_file"
+  | "unverified"
+  | "disabled"
+  | "missing_email"
+  | "share_failed"
+  | "failed";
+
+/**
+ * Mint the month's share link under its deterministic id.
+ *
+ * `createShareLink` with an explicit id uses INSERT OR IGNORE and then rejects
+ * the row as `share_link_inactive` if it is not live (revoked, or past the
+ * 90-day default TTL). Because the id is deterministic, a dead row would
+ * otherwise make that month permanently unfileable — every later cron tick
+ * would take the error branch and page, with no way to clear it. So on that one
+ * rejection, mint under a fresh id: a new live row for the same month is the
+ * correct outcome (the month is not yet filed), and a superseded dead row is
+ * harmless.
+ */
+async function mintMonthlyReportShare(
+  env: AppEnv,
+  userId: string,
+  monthKey: string,
+  snapshot: Record<string, unknown>,
+): Promise<string> {
+  const session = systemShareSession(userId);
+  const resourceId = monthlyReportResourceId(monthKey);
+  try {
+    return (
+      await deliveryData.createShareLink(env, session, {
+        id: `${resourceId}:${userId}`,
+        resourceType: "report",
+        resourceId,
+        isSnapshot: true,
+        snapshotPayload: snapshot,
+      })
+    ).token;
+  } catch (error) {
+    if (!(error instanceof Error) || error.message !== "share_link_inactive") {
+      throw error;
+    }
+    return (
+      await deliveryData.createShareLink(env, session, {
+        resourceType: "report",
+        resourceId,
+        isSnapshot: true,
+        snapshotPayload: snapshot,
+      })
+    ).token;
+  }
+}
+
+/**
+ * One workspace, one month: mint (or reuse) the report share link, then email
+ * it through the existing instant-delivery path. Returns a reason so the caller
+ * classifies duplicates and skips without string matching.
+ */
+async function sendOneMonthlyReport(
+  env: AppEnv,
+  input: { userId: string; email: string; name: string | null; monthKey: string },
+): Promise<MonthlyReportOutcome> {
+  // Mirror the scan-trouble and recap gates: verified email, workspace
+  // opt-out, List-Unsubscribe. System jobs must never mail an unverified or
+  // opted-out address.
+  const { isUserEmailVerified } = await import("~/lib/email-verification.server");
+  if (!(await isUserEmailVerified(env, input.userId))) {
+    return "unverified";
+  }
+
+  const workspaceConfig = await getWorkspaceDeliveryConfig(env, input.userId);
+  if (workspaceConfig && !workspaceConfig.emailEnabled) {
+    return "disabled";
+  }
+  const primaryTarget =
+    (await resolveDigestEmailTargets(
+      env,
+      input.userId,
+      input.email.trim().toLowerCase() || null,
+    ))[0] ?? null;
+  const recipient = primaryTarget?.targetValue.trim().toLowerCase() ?? "";
+  if (!primaryTarget) return "disabled";
+  if (!recipient) return "missing_email";
+
+  const built = await buildMonthlyReportSnapshot(env, input.userId);
+  if (!built) return "nothing_to_file";
+
+  const resourceId = monthlyReportResourceId(input.monthKey);
+  let shareUrl: string;
+  try {
+    // Read the month's link by its own id, not through a LIMIT-50 window: a
+    // busy workspace can own more than 50 newer shares, and `listActiveShareLinks`
+    // would then miss this month's row.
+    const linkId = `${resourceId}:${input.userId}`;
+    const existing = await deliveryData.getShareLinkById(env, input.userId, linkId);
+    const token =
+      existing?.token ??
+      (await mintMonthlyReportShare(env, input.userId, input.monthKey, built.snapshot as unknown as Record<string, unknown>));
+    shareUrl = `${appBaseUrl(env)}/share/${token}`;
+  } catch (error) {
+    console.error("Monthly report share mint failed.", {
+      userId: input.userId,
+      monthKey: input.monthKey,
+      error,
+    });
+    return "share_failed";
+  }
+
+  let unsubscribeUrl: string | null = null;
+  if (primaryTarget.id) {
+    try {
+      unsubscribeUrl = await buildUnsubscribeUrl(env, {
+        userId: input.userId,
+        targetId: primaryTarget.id,
+      });
+    } catch {
+      unsubscribeUrl = null;
+    }
+  }
+
+  // Per workspace + month, not per run: the weekly cron's second slot in the
+  // same month cannot double-send, and a cron retry is a no-op.
+  const idempotencyKey = `monthly_report:${input.userId}:${input.monthKey}`;
+  const payloadSnapshot = {
+    kind: "monthly_report",
+    monthKey: input.monthKey,
+    reportId: built.report.reportId,
+    changeCount: built.report.rows.length,
+  };
+  const claim = await claimInstantDeliveryAttempt(env, {
+    userId: input.userId,
+    watchlistId: null,
+    deliveryTargetId: primaryTarget.id,
+    lane: "customer",
+    channel: "email",
+    provider: EMAIL_PROVIDER,
+    targetValue: recipient,
+    templateName: "monthly_report",
+    eventIds: [],
+    payloadSnapshot,
+    idempotencyKey,
+  });
+  if (!claim.attemptId || !claim.claimUpdatedAt) {
+    return "duplicate";
+  }
+
+  const dispatchStartedAt = await markInstantDeliveryDispatchStarted(
+    env,
+    claim.attemptId,
+    claim.claimUpdatedAt,
+  );
+  if (!dispatchStartedAt) {
+    // Another worker owns this attempt; a rejected gate with no other owner is
+    // a real failure and must not be reported as a duplicate.
+    const durableAttempt = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
+    const anotherOwnerAdvanced =
+      durableAttempt !== null &&
+      (durableAttempt.status !== "pending" ||
+        durableAttempt.webhookStatus !== "pending" ||
+        durableAttempt.updatedAt !== claim.claimUpdatedAt);
+    if (!anotherOwnerAdvanced) {
+      console.error("Monthly report dispatch gate rejected.", {
+        userId: input.userId,
+        monthKey: input.monthKey,
+        reason: "dispatch_gate_rejected",
+      });
+    }
+    return anotherOwnerAdvanced ? "duplicate" : "failed";
+  }
+
+  const model = buildMonthlyReportEmail({
+    name: input.name,
+    monthLabel: formatMonthlyReportMonthLabel(input.monthKey),
+    changeCount: built.report.rows.length,
+    shareUrl,
+  });
+  const providerResult = await sendCloudflareEmail(env, {
+    to: recipient,
+    subject: model.subject,
+    html: model.html,
+    text: model.text,
+    tag: "monthly_report",
+    unsubscribeUrl,
+    theme: "case-file",
+    preheader: model.preheader,
+  });
+
+  const finalized = await updateDeliveryAttemptResult(env, claim.attemptId, {
+    provider: providerResult.provider,
+    status: providerResult.status,
+    webhookStatus: providerResult.webhookStatus,
+    providerMessageId: providerResult.providerMessageId,
+    providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+    errorMessage: providerResult.errorMessage,
+    sentAt: providerAcceptedAt(providerResult),
+    failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+    payloadSnapshot,
+    targetValue: recipient,
+    expectedStatus: "pending",
+    expectedWebhookStatus: "provider_unknown",
+    expectedUpdatedAt: dispatchStartedAt,
+  });
+
+  return finalized && providerResult.status === "sent" ? "sent" : "failed";
+}
+
+/**
+ * Issue #2422 entry point, called from the existing weekly cron tick in
+ * `workers/app.ts`. Builds at most one report per paid workspace per UTC month;
+ * a retry, a second weekly slot in the same month, and a duplicate cron
+ * delivery all return `duplicates` without sending.
+ */
+export async function sendMonthlyReports(
+  env: AppEnv,
+  options: { scheduledTime?: number } = {},
+): Promise<MonthlyReportRunResult> {
+  const result: MonthlyReportRunResult = {
+    attempted: 0,
+    filed: 0,
+    duplicates: 0,
+    skipped: 0,
+    failed: 0,
+  };
+  if (!env.DB) return result;
+
+  const now =
+    options.scheduledTime === undefined ? new Date() : new Date(options.scheduledTime);
+  const monthKey = utcMonthKey(now);
+
+  for (const workspace of await listPaidWorkspacesForMonthlyReport(env)) {
+    result.attempted += 1;
+    try {
+      // The month gate runs before any build, so the common case (already
+      // filed this month) costs one indexed COUNT and no report work.
+      if (await hasMonthlyReportShare(env, workspace.userId, monthKey)) {
+        result.duplicates += 1;
+        continue;
+      }
+
+      // The list query already restricts to paid plan families; this re-read
+      // catches catalog drift AND a scheduled cancellation whose effective date
+      // has passed (`effectivePlanFromRow`). A failed read must fail CLOSED: a
+      // permissive fallback would mail a workspace the plan gate should have
+      // excluded, which is the one hole worth not having here.
+      try {
+        const { getUserPlan } = await import("~/lib/plan.server");
+        if ((await getUserPlan(env, workspace.userId)) === "free") {
+          result.skipped += 1;
+          continue;
+        }
+      } catch (error) {
+        result.failed += 1;
+        console.error(
+          `Monthly report plan check failed for user ${workspace.userId}; skipping this workspace.`,
+          error,
+        );
+        continue;
+      }
+
+      const profile = await getUserDeliveryProfile(env, workspace.userId);
+      const outcome = await sendOneMonthlyReport(env, {
+        userId: workspace.userId,
+        email: profile?.email?.trim() || workspace.email,
+        name: profile?.name ?? workspace.name,
+        monthKey,
+      });
+      if (outcome === "sent") {
+        result.filed += 1;
+      } else if (outcome === "duplicate") {
+        result.duplicates += 1;
+      } else if (
+        outcome === "unverified" ||
+        outcome === "disabled" ||
+        outcome === "missing_email" ||
+        outcome === "nothing_to_file"
+      ) {
+        result.skipped += 1;
+      } else {
+        result.failed += 1;
+      }
+    } catch (error) {
+      // One bad workspace never stops the run; the failure is counted and
+      // surfaced by the scheduled-task observer in workers/app.ts.
+      result.failed += 1;
+      console.error(
+        `Monthly report failed for user ${workspace.userId}; continuing with remaining workspaces.`,
+        error,
+      );
+    }
+  }
+
+  return result;
 }
