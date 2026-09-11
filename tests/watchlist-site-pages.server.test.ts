@@ -400,7 +400,6 @@ describe("website site scan storage", () => {
     const afterConflict = await getLatestCompleteWebsiteScanBaseline(env, "watch-1");
     expect(afterConflict!.scan.status).toBe("complete");
     expect(afterConflict!.scan.inventoryComplete).toBe(true);
-
     // Nothing may be appended once the manifest is finalized.
     await expect(upsertWebsiteSiteScanPage(env, pageInput({ canonicalUrl: "https://competitor.example/after" })))
       .rejects.toThrow(/website_scan_finalized/);
@@ -460,7 +459,6 @@ describe("website site scan storage", () => {
     seedWatchlist("watch-1", "user-1", "competitor.example");
     seedRun("run-1", "watch-1", "2026-08-01T01:00:00.000Z");
     await beginWebsiteSiteScan(env, beginInput());
-
     // A 3-page inventory; only the home page is actually fetched by the batch.
     await upsertWebsiteSiteScanPage(env, pageInput());
     await upsertWebsiteSiteScanPage(env, pageInput({ canonicalUrl: "https://competitor.example/pricing", pageKind: "pricing", stableOrder: 1 }));
@@ -584,7 +582,6 @@ describe("website site scan storage", () => {
         observationInput({ contentHash: "h".repeat(129) }),
       ),
     ).rejects.toThrow(/website_page_observation_content_hash_too_long/);
-
     // Fetched observations require the versioned structured snapshot.
     await expect(
       upsertWebsitePageObservation(
@@ -605,7 +602,6 @@ describe("website site scan storage", () => {
       ),
     ).rejects.toThrow(/website_page_observation_incomplete/);
 
-    // Nothing was written by the rejected calls.
     expect(tableCount("website_page_observation")).toBe(0);
   });
 
@@ -691,8 +687,7 @@ describe("website site scan storage", () => {
     expect(await listWebsiteSiteScanPagesForRun(env, "watch-2", "run-1")).toEqual([]);
     expect(await listWebsitePageObservationsForRun(env, "watch-1", "run-2")).toEqual([]);
 
-    // watch-2's complete baseline exists once finalized and never leaks into
-    // watch-1's listing.
+    // watch-2's complete baseline exists once finalized and never leaks into watch-1's listing.
     await finalizeWebsiteSiteScan(
       env,
       finalizeInput({ ...lease2, sitemapDocumentCount: 0, cursor: null, inventoryHash: null }),
@@ -721,13 +716,11 @@ describe("website site scan storage", () => {
     await upsertWebsitePageObservation(env, observationInput());
 
     // A crash between the outcome UPDATE and the counts UPDATE would leave the
-    // manifest finalized with counted 0/0 rows while inventory exists, and the
-    // terminal exactRetry path would never repair it. The terminal write must
-    // therefore be one atomic batch.
+    // manifest finalized with 0/0 counts. The terminal write must be one batch.
     const batches: string[][] = [];
     const sqlSpy = tagStatementSql();
     const realBatch = harness.db.batch.bind(harness.db);
-    harness.db.batch = (async (statements: { run(): Promise<unknown> }[]) => {
+    harness.db.batch = (async (statements: Parameters<typeof realBatch>[0]) => {
       batches.push(statements.map((statement) => sqlSpy.statementSql(statement)));
       return realBatch(statements);
     }) as typeof harness.db.batch;
@@ -744,8 +737,7 @@ describe("website site scan storage", () => {
       statements.some((sql) => sql.includes("UPDATE website_site_scan")),
     );
     expect(finalizeBatches).toHaveLength(1);
-    // The terminal write is a single statement inside one batch, so the outcome
-    // and the counts can never be committed apart by a mid-finalize crash.
+    // One statement inside one batch: outcome and counts never commit apart.
     expect(finalizeBatches[0]).toHaveLength(1);
     expect(finalizeBatches[0][0]).toContain("finalized_at");
     expect(finalizeBatches[0][0]).toContain("discovered_page_count");
@@ -761,8 +753,7 @@ describe("website site scan storage", () => {
     await upsertWebsitePageObservation(env, observationInput());
 
     // Simulate the isolate dying during finalize: the batch is abandoned before
-    // it commits. Because the outcome and the counts share one statement, there
-    // is no window in which the terminal write lands with stale 0/0 counts.
+    // it commits, so the terminal write never lands with stale 0/0 counts.
     const realBatch = harness.db.batch.bind(harness.db);
     harness.db.batch = (async () => {
       throw new Error("simulated isolate death during finalize");
