@@ -57,3 +57,22 @@ carve-outs included (pinned in tests).
   errors.
 - `tests/canary-sneaker-resale-recall.test.ts` — 6 tests pinning the retry
   and the cannot-confirm contract.
+
+## Reviewer round (seat cursor/cursor-grok-4.6-high) — 1 round
+
+Verdict BLOCKING on one Act-on finding: retry stack worst case (~2h42m for 25
+domains) exceeds the unit's 45min TimeoutStartSec — a brownout would kill the
+service with no report at all.
+
+Act on → fixed: run-level wall budget `RUN_WALL_BUDGET_MS` (40min < 45min).
+When the budget no longer covers a retry wait plus one 90s attempt, the probe
+skips the retry and returns its terminal state (requestError / rateLimited /
+warming) — still fail-loud. Pinned by 2 new tests (budget spent ⇒ 1 call only;
+budget just sufficient ⇒ retry taken).
+
+Consider findings (recorded, not re-delegated): stale `lastStatus` on a
+throw-after-response is cosmetic; 403 WAF blocks already fail loud via the
+0-row path; a KNOWN_IDENTITY_GAPS requestError pin would test the same
+evaluate() branch the no-coverage pin already covers.
+
+All 8 tests green; sgscan clean.

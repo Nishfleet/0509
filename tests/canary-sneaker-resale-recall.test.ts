@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   KNOWN_NO_COVERAGE,
+  REQUEST_ERROR_RETRY_DELAY_MS,
   REQUEST_ERROR_RETRY_LIMIT,
+  RUN_WALL_BUDGET_MS,
   evaluateSneakerResaleRecall,
   probeSneakerResaleDomain,
 } from "../scripts/canary-sneaker-resale-recall.mjs";
@@ -96,6 +98,46 @@ describe("probeSneakerResaleDomain transport-error retry", () => {
     expect(probe.status).toBe(200);
     expect(probe.tierCounts.verified).toBe(2);
     expect(probe.requestError).toBeUndefined();
+  });
+
+  it("skips retry and fails loud once the run wall budget is spent (reviewer round: retry stack must not outlive TimeoutStartSec)", async () => {
+    let calls = 0;
+    const fetchImpl = (async () => {
+      calls += 1;
+      throw new Error("timeout");
+    }) as typeof fetch;
+
+    const probe = await probeSneakerResaleDomain({
+      domain: "example.com",
+      baseUrl: "https://0509.io",
+      fetchImpl,
+      sleepImpl: NO_SLEEP,
+      elapsedMsImpl: () => RUN_WALL_BUDGET_MS - 10,
+    });
+
+    expect(calls).toBe(1);
+    expect(probe.requestError).toBe("timeout");
+    expect(evaluateSneakerResaleRecall([probe]).pass).toBe(false);
+  });
+
+  it("takes the retry while the wall budget still covers the wait plus an attempt", async () => {
+    let calls = 0;
+    const fetchImpl = (async () => {
+      calls += 1;
+      if (calls === 1) throw new Error("blip");
+      return okResponse(htmlWithVerifiedRows(1));
+    }) as typeof fetch;
+
+    const probe = await probeSneakerResaleDomain({
+      domain: "example.com",
+      baseUrl: "https://0509.io",
+      fetchImpl,
+      sleepImpl: NO_SLEEP,
+      elapsedMsImpl: () => RUN_WALL_BUDGET_MS - REQUEST_ERROR_RETRY_DELAY_MS - 91_000 + 1,
+    });
+
+    expect(calls).toBe(2);
+    expect(probe.rowCount).toBe(1);
   });
 
   it("reports requestError when a 5xx persists past the retry budget", async () => {
