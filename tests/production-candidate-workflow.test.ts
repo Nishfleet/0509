@@ -244,8 +244,11 @@ describe("exact production candidate workflow", () => {
       "generate_restore_evidence",
       "cleanup_restore_evidence",
     ]);
+    // contents: write belongs only to the post-deploy ledger step, which
+    // appends deploy-ledger.jsonl on main (0509#2975) via the sanctioned
+    // github-actions[bot] path quality-ratchet.yml already uses.
     expect(deploy?.permissions).toEqual({
-      contents: "read",
+      contents: "write",
       actions: "read",
       deployments: "write",
     });
