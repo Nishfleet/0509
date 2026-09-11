@@ -71,6 +71,56 @@ async function getCanaryTarget(env: { DB?: D1Database }, canaryEmail: string) {
   return result.results?.[0] ?? null;
 }
 
+// The canary's own substrate is CODE-OWNED, not operator-seeded: every
+// preceding Deploy run (34600179872, 34602656730, and the whole post-wipe
+// streak since 2026-09-09T17:03Z) died in Gate C with
+// `proof_email_dispatch_invalid` because getCanaryTarget 503'd
+// `missing_active_watchlist` — the production watchlist substrate was wiped
+// (2026-09-10→09-11, #2908) and nothing recreated it. Provisioning is
+// idempotent upserts on deterministic IDs, so re-runs converge and the
+// cleanup path (getCanaryOwner) still finds the same user.
+const CANARY_USER_ID = "launch-readiness-canary-owner";
+const CANARY_WATCHLIST_ID = "launch-readiness-canary-watchlist";
+
+/** @param {{ DB?: D1Database }} env @param {string} canaryEmail */
+async function ensureCanaryTarget(env: { DB?: D1Database }, canaryEmail: string) {
+  const existing = await getCanaryTarget(env, canaryEmail);
+  if (existing) return { target: existing, provisioned: false };
+  if (!env.DB) return { target: null, provisioned: false };
+
+  const nowIso = new Date().toISOString();
+  const owner = await getCanaryOwner(env, canaryEmail);
+  const userId = owner ?? CANARY_USER_ID;
+  /** Marks write failures so the route's fail-closed body can say
+   * `provisioningFailed: true` without mislabeling a D1 read outage — the
+   * two lookups above stay outside the write scope. */
+  const write = async (statement: D1PreparedStatement) => {
+    try {
+      await statement.run();
+    } catch (error) {
+      if (error instanceof Error) error.name = "canary_substrate_write_failed";
+      throw error;
+    }
+  };
+  if (!owner) {
+    await write(env.DB.prepare(
+      `INSERT INTO user (id, name, email, createdAt, updatedAt)
+       VALUES (?, 'Launch readiness canary owner', ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET email = excluded.email, updatedAt = excluded.updatedAt`,
+    ).bind(userId, canaryEmail, nowIso, nowIso));
+  }
+  await write(env.DB.prepare(
+    `INSERT INTO watchlist
+       (id, user_id, name, target_type, target_id, target_fingerprint, target_label, is_active, created_at, updated_at)
+     VALUES (?, ?, 'Launch readiness canary', 'advertiser', '0509.io', 'launch-readiness-canary', '0509.io', 1, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       user_id = excluded.user_id, is_active = 1, updated_at = excluded.updated_at`,
+  ).bind(CANARY_WATCHLIST_ID, userId, nowIso, nowIso));
+
+  const target = await getCanaryTarget(env, canaryEmail);
+  return { target, provisioned: true };
+}
+
 async function getCanaryOwner(env: { DB?: D1Database }, canaryEmail: string) {
   if (!env.DB) {
     return null;
@@ -232,12 +282,38 @@ export async function action({ context, request }: ActionFunctionArgs) {
       return cleanupErrorResponse("missing_launch_canary_user", 503);
     }
   } else {
-    target = await getCanaryTarget(env, canaryEmail);
+    let provisioned: boolean;
+    try {
+      ({ target, provisioned } = await ensureCanaryTarget(env, canaryEmail));
+    } catch (error) {
+      // Fail closed: if the substrate cannot be built or read, keep the
+      // pre-existing blocker name (plus the failure kind) instead of a
+      // silent 500. Write failures are provisioning failures; a D1 read
+      // outage is substrate-unreadable so Gate C debugging is not misled.
+      const writeFailure = error instanceof Error && error.name === "canary_substrate_write_failed";
+      console.error("launch-readiness canary substrate unavailable", {
+        kind: writeFailure ? "write" : "read",
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return Response.json(
+        {
+          ok: false,
+          blocker: "missing_active_watchlist",
+          provisioningFailed: writeFailure || undefined,
+          substrateUnreadable: !writeFailure || undefined,
+        },
+        {
+          status: 503,
+          headers: { "cache-control": "no-store" },
+        },
+      );
+    }
     if (!target) {
       return Response.json(
         {
           ok: false,
           blocker: "missing_active_watchlist",
+          provisionedButMissing: provisioned || undefined,
         },
         {
           status: 503,
