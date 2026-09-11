@@ -115,3 +115,35 @@ describe.skipIf(process.env.SKIP_CONCURRENT_VARIANT === "1")(
     });
   },
 );
+
+describe("upsertDeliveryTarget concurrent first-time upserts (M11)", () => {
+  it("both resolve to the target when no row exists yet", async () => {
+    const harness = openHarness();
+    harness.sqlite.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_delivery_target_unique_workspace
+        ON delivery_target(user_id, channel, target_value)
+        WHERE watchlist_id IS NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_delivery_target_unique_watchlist
+        ON delivery_target(user_id, watchlist_id, channel, target_value)
+        WHERE watchlist_id IS NOT NULL;
+    `);
+    const env = { DB: harness.db } as never;
+    const input = {
+      userId: "user-1",
+      watchlistId: null,
+      channel: "email" as const,
+      targetValue: "shared@example.com",
+      isOptedIn: true,
+      isValidated: true,
+      validationStatus: "validated" as const,
+    };
+
+    const [a, b] = await Promise.all([
+      upsertDeliveryTarget(env, { ...input }),
+      upsertDeliveryTarget(env, { ...input }),
+    ]);
+
+    expect(a?.targetValue).toBe("shared@example.com");
+    expect(b?.targetValue).toBe("shared@example.com");
+  });
+});
