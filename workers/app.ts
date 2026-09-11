@@ -2,7 +2,8 @@
 
 import { createRequestHandler, RouterContextProvider } from "react-router";
 
-import { isBuyerSurfaceLocaleId } from "../app/lib/locale-markets";
+// Locale sitemaps removed with the buyer-surface locale cluster (issue
+// #2962): no `/<locale>/sitemap.xml` is served anymore.
 import { cloudflareRuntimeContext } from "../app/lib/cloudflare-context";
 import { reportScheduledTaskFailure } from "../app/lib/cron-failure-alert.server";
 import {
@@ -45,7 +46,6 @@ import {
   brandCategorySitemapEntries,
   loadIndexableBrandPageEntries,
   loadIndexableTimelineEntries,
-  publicLocaleSitemapFile,
   publicSitemapFile,
   SITEMAP_TIMELINE_READ_LIMIT,
   timelineSitemapEntries,
@@ -211,22 +211,9 @@ export default {
     // scoped XML under the locale prefix. `isBuyerSurfaceLocaleId` gates the
     // first segment against the allowlist so an unknown locale
     // (`/xx/sitemap.xml`) cannot silently inherit the root sitemap body.
-    if (
-      (request.method === "GET" || request.method === "HEAD") &&
-      url.pathname.endsWith("/sitemap.xml")
-    ) {
-      const localeSegment = url.pathname.split("/")[1] ?? "";
-      if (
-        localeSegment !== "" &&
-        url.pathname === `/${localeSegment}/sitemap.xml` &&
-        isBuyerSurfaceLocaleId(localeSegment)
-      ) {
-        return publicFileResponse(
-          request,
-          await publicLocaleSitemapFile(localeSegment),
-        );
-      }
-    }
+    // Retired (issue #2962): the per-locale `/<locale>/sitemap.xml` feeds are
+    // gone with the buyer-surface locale cluster. Unknown `/*/sitemap.xml`
+    // paths fall through to the router and 404.
 
     const publicSeoFile = publicSeoFileForPathname(url.pathname);
     if ((request.method === "GET" || request.method === "HEAD") && publicSeoFile) {

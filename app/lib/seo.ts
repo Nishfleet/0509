@@ -199,34 +199,12 @@ export function sneakerResaleHreflangLinks() {
 }
 
 /**
- * Reciprocal hreflang set for the buyer-surface cluster (issue #1501).
- *
- * `splat` is the locale-prefix subpath (e.g. `"pricing"`, `"help"`, or
- * `""` for the locale index). The function emits self + sibling locale
- * entries pointing at the same subpath in each locale, plus the EN
- * (x-default) version. The buyer-surface cluster is broader than the
- * sneaker-resale cluster (fr/es are pre-evidence for the broader
- * marketing surface) and uses the same hreflang recipe.
- *
- * Google ignores one-way annotations, so the EN-side `rel=canonical`
- * pointing at the EN subpath does the heavy lifting; this function
- * exists so the cluster is reciprocal on both ends.
+ * Retired (issue #2962): `buyerSurfaceHreflangLinks` shipped with the
+ * buyer-surface locale cluster and is gone with it. Hreflang alternates
+ * pointing at byte-identical English duplicates contradict each page's
+ * canonical→EN; only the genuinely translated sneaker-resale cluster keeps
+ * its hreflang set.
  */
-export function buyerSurfaceHreflangLinks(splat: string) {
-  const enPath = splat === "" ? "/" : splat === "api/docs" ? "/api/docs" : `/${splat}`;
-  return [
-    ...BUYER_SURFACE_LOCALE_IDS.map((locale) => ({
-      rel: "alternate" as const,
-      hreflang: locale,
-      href: canonicalUrl(splat === "" ? `/${locale}` : `/${locale}/${splat}`),
-    })),
-    {
-      rel: "alternate" as const,
-      hreflang: "x-default",
-      href: canonicalUrl(enPath),
-    },
-  ];
-}
 
 export function publicSeoMeta(input: {
   title: string;

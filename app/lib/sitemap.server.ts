@@ -117,12 +117,6 @@ import {
 import { shouldApplySearchV2 } from "~/lib/search-rollout.server";
 import { registrableDomainFromHostname } from "~/lib/search-query";
 import { CHANGELOG_ENTRY_DATES, renderSitemapXml, ROOT_SITEMAP_STATIC_ENTRIES, SITEMAP_STATIC_ENTRIES, type SitemapEntry } from "~/lib/seo";
-import {
-  BUYER_SURFACE_CHILD_PATHS,
-  BUYER_SURFACE_LOCALE_IDS,
-  BUYER_SURFACE_PATHS,
-  type BuyerSurfaceLocaleId,
-} from "~/lib/locale-markets";
 import type { AdRecord } from "~/lib/types";
 
 /**
@@ -482,76 +476,11 @@ function isMissingSitemapTableError(error: unknown): boolean {
 }
 
 /**
- * Static sitemap entries scoped to a single buyer-surface locale: only paths
- * rooted under `/<locale>/` (issue #1561). Each `/<locale>/sitemap.xml` is a
- * pure static feed — brand (`/ads/:domain`) and timeline (`/timeline/:domain`)
- * entries are EN-prefixed and belong to the root sitemap only, so they never
- * leak into a locale feed and can never duplicate a root `<loc>`.
- *
- * The locale feed is derived from the buyer-surface cluster that serves 200
- * under every locale prefix (issue #2294): `BUYER_SURFACE_PATHS` plus the
- * compare/switch children (`BUYER_SURFACE_CHILD_PATHS`) plus the `/guides/*`
- * how-to cluster — the single source of truth in `app/lib/locale-markets.ts`
- * (and the guide path in `SITEMAP_PATHS`). Each entry reuses the EN
- * path set from `SITEMAP_STATIC_ENTRIES` so the two can never
- * drift. The bare `/{locale}` index and `/{locale}/sitemap.xml` are excluded
- * — neither is a real page to advertise. The genuinely translated
- * sneaker-resale cluster stays for the locales that ship it (de, ja, pt-br).
+ * Retired (issue #2962): the per-locale `/<locale>/sitemap.xml` builders
+ * (`staticSitemapEntriesForLocale`, `buildLocaleSitemapXml`,
+ * `publicLocaleSitemapFile`) shipped with the buyer-surface locale cluster
+ * and are gone with it — no locale sitemap is served or listed anywhere.
  */
-export function staticSitemapEntriesForLocale(
-  locale: BuyerSurfaceLocaleId,
-): readonly SitemapEntry[] {
-  const prefix = `/${locale}/`;
-  const entryByPath = new Map(
-    SITEMAP_STATIC_ENTRIES.map((entry) => [entry.path, entry]),
-  );
-  const buyerSurfacePaths = [
-    ...BUYER_SURFACE_PATHS,
-    ...BUYER_SURFACE_CHILD_PATHS,
-    // Issue #2295: the /guides/* how-to cluster must not drop out of the
-    // locale sitemaps when the guide set grows.
-    "/guides/how-to-track-competitor-ads",
-    "/guides/how-to-monitor-meta-ad-library",
-  ].filter((path) => path !== "/" && path !== "/sitemap.xml");
-  const entries: SitemapEntry[] = [];
-  for (const path of buyerSurfacePaths) {
-    const en = entryByPath.get(path);
-    if (!en) continue;
-    entries.push({ ...en, path: `${prefix}${path.replace(/^\//, "")}` });
-  }
-  // The genuinely translated sneaker-resale cluster stays for the locales
-  // that ship it (de, ja, pt-br). fr/es have no sneaker-resale page.
-  if (locale === "de" || locale === "ja" || locale === "pt-br") {
-    const sneakerEn = entryByPath.get("/sneaker-resale");
-    if (sneakerEn) {
-      entries.push({ ...sneakerEn, path: `${prefix}sneaker-resale` });
-    }
-  }
-  return entries;
-}
-
-/**
- * Full locale-scoped sitemap body for one buyer-surface locale. Purely static
- * (no D1 read) — the only locales that ever serve a locale sitemap are
- * `BUYER_SURFACE_LOCALE_IDS` (de, ja, pt-br, fr, es), gated by the worker.
- */
-export function buildLocaleSitemapXml(locale: BuyerSurfaceLocaleId): string {
-  return renderSitemapXml(staticSitemapEntriesForLocale(locale));
-}
-
-/**
- * Sitemap file shape consumed by workers/app.ts for a locale-prefixed
- * `/<locale>/sitemap.xml`. Same cache policy as the root sitemap.
- */
-export async function publicLocaleSitemapFile(
-  locale: BuyerSurfaceLocaleId,
-): Promise<{ body: string; contentType: string; cacheControl: string }> {
-  return {
-    body: buildLocaleSitemapXml(locale),
-    contentType: "application/xml; charset=utf-8",
-    cacheControl: "public, max-age=3600",
-  };
-}
 
 /**
  * Newest changelog entry date (YYYY-MM-DD), or null when there are no dated

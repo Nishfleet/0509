@@ -164,73 +164,15 @@ export default [
   route("for-agencies", "routes/for-agencies.tsx"),
   route("sneaker-resale", "routes/sneaker-resale.tsx"),
   route(":locale/sneaker-resale", "routes/$locale.sneaker-resale.tsx"),
-  // Locale-prefixed buyer-surface cluster (issue #1501): /de, /de/pricing,
-  // /de/help, etc. Each child re-exports the EN route's loader/meta/links
-  // so the cluster stays in lockstep with the EN surface — only the
-  // lang attribute and hreflang cluster differ. React Router matches
-  // more-specific routes first, so the named `:locale/sneaker-resale`
-  // route above wins for `/<locale>/sneaker-resale` and only the new
-  // buyer surfaces reach this layout.
-  route(":locale", "routes/$locale.tsx", [
-    index("routes/$locale._index.tsx"),
-    route("pricing", "routes/$locale.pricing.tsx"),
-    route("help", "routes/$locale.help.tsx"),
-    route("docs", "routes/$locale.docs.tsx"),
-    route("api/docs", "routes/$locale.api.docs.tsx"),
-    route("status", "routes/$locale.status.tsx"),
-    route("changelog", "routes/$locale.changelog.tsx"),
-    route("trust", "routes/$locale.trust.tsx"),
-    route("compare", "routes/$locale.compare.tsx"),
-    // BET 5 compare child routes + BET 8 switch child routes under every
-    // locale prefix (issue #1563). Each re-exports the EN sibling's meta and
-    // component so the locale cluster stays in lockstep with the EN surface;
-    // canonical consolidates on the EN /compare/<vendor> (or /switch/<vendor>)
-    // per #1562's canonicalisation rule. Before this the locale hub links 200'd
-    // but every locale-prefixed child 404'd, so a non-EN visitor following /
-    // de/compare to a vendor fell back to English or hit a dead route.
-    route(LEGACY_VENDOR_COMPARE_PATH, "routes/legacy-vendor-redirect.ts", { id: "locale-compare-legacy-vendor-redirect" }),
-    route("compare/meta-ad-library", "routes/$locale.compare.meta-ad-library.tsx"),
-    route("compare/visualping", "routes/$locale.compare.visualping.tsx"),
-    route("compare/visualping-ad-library", "routes/$locale.compare.visualping-ad-library.tsx"),
-    route("compare/visualping-ad-libraries", "routes/$locale.compare.visualping-ad-libraries.tsx"),
-    route("compare/spyland", "routes/$locale.compare.spyland.tsx"),
-    route("compare/pulzifi", "routes/$locale.compare.pulzifi.tsx"),
-    route("compare/foreplay", "routes/$locale.compare.foreplay.tsx"),
-    route("compare/foreplay-spyder", "routes/$locale.compare.foreplay-spyder.tsx"),
-    route("compare/panoramata", "routes/$locale.compare.panoramata.tsx"),
-    route("compare/adspyder", "routes/$locale.compare.adspyder.tsx"),
-    route("compare/adspy", "routes/$locale.compare.adspy.tsx"),
-    route("compare/keeptabz", "routes/$locale.compare.keeptabz.tsx"),
-    route("compare/gethookd", "routes/$locale.compare.gethookd.tsx"),
-    route(LEGACY_VENDOR_SWITCH_PATH, "routes/legacy-vendor-redirect.ts", { id: "locale-switch-legacy-vendor-redirect" }),
-    route("switch/panoramata", "routes/$locale.switch.panoramata.tsx"),
-    route("switch/visualping", "routes/$locale.switch.visualping.tsx"),
-    // First-value search funnel + supporting trust/proof surfaces (issue 1578):
-    // search is THE first purchase-intent moment, so the localised
-    // buyer must not be flung back to EN mid-funnel. Each child re-exports
-    // the EN route so the functional surface stays in lockstep; only the
-    // canonical (EN) + hreflang cluster differ, and the page's search entry
-    // points funnel to the locale-prefixed `/search`.
-    route("search", "routes/$locale.search.tsx"),
-    route("competitor-monitoring", "routes/$locale.competitor-monitoring.tsx"),
-    route("capture-rules", "routes/$locale.capture-rules.tsx"),
-    route("methodology", "routes/$locale.methodology.tsx"),
-    // Issue #2294: the /guides/* how-to cluster is advertised in the locale
-    // sitemaps, so it must serve 200 under every buyer-surface locale prefix.
-    // Re-exports the EN guide (canonical→EN) like the other locale surfaces.
-    route("guides/how-to-track-competitor-ads", "routes/$locale.guides.how-to-track-competitor-ads.tsx"),
-    // Issue #2867: second guide in the cluster — the watch-over-time intent.
-    route("guides/how-to-monitor-meta-ad-library", "routes/$locale.guides.how-to-monitor-meta-ad-library.tsx"),
-    // Programmatic /ads/:domain under every locale prefix (issue #1562):
-    // the #1501 buyer-surface cluster added /de, /de/pricing, ... but not
-    // the /ads/:domain Ad Aggression Score pages, so /de/ads/nike.com
-    // 404'd for every brand. This child re-exports the EN route's loader +
-    // meta + component so the localised surface serves the SAME score page
-    // an EN buyer sees; canonical consolidates on the EN /ads/<domain>
-    // (accept #2) and the root layout emits `<html lang="<locale>">` via
-    // htmlLangForPathname (accept #3).
-    route("ads/:domain", "routes/$locale.ads.$domain.tsx"),
-  ]),
+  // Buyer-surface locale cluster retirement (issue #2962, accept "remove").
+  // The old cluster served byte-identical English copy under non-EN URLs,
+  // canonical→EN, while locale sitemaps and hreflang clusters still
+  // advertised it — duplicate content dressed as localisation. Every
+  // `/$locale.*` buyer-surface route file is gone; the retired URLs 301 to
+  // their EN twins so inbound links keep working. The genuinely translated
+  // sneaker-resale cluster (the named route above) is untouched.
+  route(":locale/*", "routes/locale-redirect.ts"),
+  // (end retired locale cluster — see above)
   route("team/accept", "routes/team.accept.tsx"),
 	route("share/:token/pdf", "routes/share.$token.pdf.ts"),
   route("share/:token", "routes/share.$token.tsx"),
