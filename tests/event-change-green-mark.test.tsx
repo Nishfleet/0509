@@ -40,7 +40,7 @@ import type {
  * a string mismatch, which would only prove the two files disagree.
  */
 function shippedGreenMarkSelector(): string {
-  const css = readFileSync("app/app.css", "utf8");
+  const css = ["app/base.css", "app/marketing.css", "app/app.css"].map((f) => readFileSync(f, "utf8")).join("\n");
   const scoped = css
     .slice(css.indexOf("BL-030 — the landing-language workspace layer"))
     // Comments are documentation, not part of a selector.

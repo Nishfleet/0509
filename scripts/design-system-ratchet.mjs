@@ -17,7 +17,7 @@
  * and after that this gate makes a fourth design era structurally
  * impossible to ship.
  */
-import { readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, writeFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join, relative } from "node:path";
 
 const ROOT = new URL("..", import.meta.url).pathname;
@@ -70,7 +70,7 @@ const SCAN_EXTENSIONS = new Set([".ts", ".tsx", ".css"]);
 // supported (Outlook in particular), so a literal colour there is correct, not
 // debt. Widening this scope later is a tightening move and always allowed; the
 // counts below are seeded against exactly these paths.
-export const DESIGN_SURFACE_PATHS = ["app/app.css", "app/components", "app/routes"];
+export const DESIGN_SURFACE_PATHS = ["app/base.css", "app/marketing.css", "app/app.css", "app/components", "app/routes"]; // issue #2392: app.css split into three sheets, all three stay scanned
 
 function countRegex(source, pattern) {
   return source.match(pattern)?.length ?? 0;
@@ -209,7 +209,12 @@ export function countMarkers() {
 export function countPatterns() {
   const counts = Object.fromEntries(BANNED_PATTERNS.map((rule) => [rule.name, 0]));
   for (const target of DESIGN_SURFACE_PATHS) {
-    for (const file of walkPath(join(SCAN_ROOT, target))) {
+    // A surface file may not exist in a fixture tree (the split stylesheet
+    // files are all scanned in production; fixture maps list only what they
+    // test). A missing surface contributes zero — it does not skip the gate.
+    const absolute = join(SCAN_ROOT, target);
+    if (!existsSync(absolute)) continue;
+    for (const file of walkPath(absolute)) {
       const source = readFileSync(file, "utf8");
       for (const rule of BANNED_PATTERNS) {
         counts[rule.name] += rule.count(source);

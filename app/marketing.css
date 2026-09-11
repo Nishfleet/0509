@@ -1,0 +1,5460 @@
+/* app/marketing.css — public/marketing-only rules (landing, pricing, compare,
+ * help/docs/legal, ads wall, ad wall marketing surfaces). Loaded by root.tsx
+ * alongside base.css. Issue #2392 split of app/app.css; workspace-only rules
+ * live in app.css, shared rules in base.css. Never duplicate a selector
+ * between base.css, app.css and marketing.css.
+ */
+
+
+
+.event-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+
+.event-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+
+.event-list li {
+  color: var(--f9-search-muted, var(--f9-global-muted));
+}
+
+
+/* Five to Nine public rebuild */
+.f9-home {
+  --f9-ink: #061629;
+  --f9-muted: #40546a;
+  --f9-soft: #64788d;
+  --f9-line: rgba(6, 22, 41, 0.11);
+  --f9-green: #0aa982;
+  --f9-blue: #2563eb;
+  --f9-violet: var(--green-ink);
+  --f9-coral: #ff5f50;
+  --f9-amber: #f5b84b;
+  overflow: hidden;
+  min-height: 100vh;
+  background: #fff;
+  color: var(--f9-ink);
+  font-family: var(--f9-font);
+}
+
+
+.f9-home *,
+.f9-home *::before,
+.f9-home *::after {
+  box-sizing: border-box;
+}
+
+
+.f9-home a {
+  color: inherit;
+  text-decoration: none;
+}
+
+
+.f9-email-cta button::after {
+  margin-left: 8px;
+}
+
+
+.f9-announcement {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 34px;
+  margin-bottom: 34px;
+  padding: 7px 15px;
+  border-radius: 999px;
+  background: rgba(18, 55, 98, 0.42);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.9rem;
+  font-style: normal;
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.17);
+}
+
+
+.f9-announcement span {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+
+.f9-announcement em {
+  font-style: normal;
+}
+
+
+.f9-email-cta {
+  display: flex;
+  align-items: center;
+  width: min(520px, 100%);
+  min-height: 66px;
+  margin-top: 30px;
+  padding: 5px;
+  border: 1px solid rgba(6, 22, 41, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    0 18px 44px rgba(6, 22, 41, 0.09);
+}
+
+
+.f9-email-cta input {
+  min-width: 0;
+  height: 52px;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--f9-ink);
+  font-size: 1rem;
+  outline: none;
+}
+
+
+.f9-email-cta input:focus {
+  box-shadow: none;
+}
+
+
+.f9-email-state {
+  flex: 1;
+  padding-left: 16px;
+  color: var(--f9-muted);
+  font-weight: 700;
+}
+
+
+.f9-email-cta button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 54px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--f9-ink);
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 12px 24px;
+  white-space: nowrap;
+  box-shadow: 0 18px 38px rgba(6, 22, 41, 0.18);
+}
+
+
+.f9-hero-proof-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+
+.f9-hero-proof-actions a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 9px 13px;
+  border: 1px solid rgba(6, 22, 41, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--f9-ink);
+  font-size: 0.92rem;
+  font-weight: 700;
+  box-shadow: 0 12px 30px rgba(6, 22, 41, 0.08);
+}
+
+
+.f9-growth-pricing {
+  position: relative;
+  overflow: hidden;
+  background: #0b1530;
+  color: #fff;
+}
+
+
+.f9-growth-pricing {
+  padding: 78px 0 92px;
+  border-top: 0;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(24, 122, 115, 0.36), transparent 36%),
+    radial-gradient(circle at 88% 18%, rgba(105, 73, 255, 0.32), transparent 36%),
+    linear-gradient(180deg, #0b1530 0%, #0b1631 52%, #0a1129 100%),
+    #0b1530;
+}
+
+
+.f9-growth-pricing::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.055) 1px, transparent 1px),
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 96px 100%, 100% 88px;
+  opacity: 0.58;
+  pointer-events: none;
+}
+
+
+.f9-growth-pricing::after {
+  content: "";
+  position: absolute;
+  right: -22%;
+  bottom: -48%;
+  width: 145%;
+  height: 128%;
+  background: repeating-radial-gradient(ellipse at 18% 100%, transparent 0 17px, rgba(159, 82, 255, 0.36) 18px 20px);
+  filter: drop-shadow(0 0 34px rgba(161, 66, 255, 0.24));
+  opacity: 0.38;
+  transform: rotate(-4deg);
+  pointer-events: none;
+}
+
+
+.f9-commerce-card > span {
+  color: #8df0d1;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+
+.f9-commerce-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 22px;
+  margin-top: 52px;
+}
+
+
+.f9-commerce-card {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  min-height: 320px;
+  padding: 34px;
+  border: 1px solid rgba(164, 184, 240, 0.2);
+  border-radius: 22px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.052)),
+    rgba(255, 255, 255, 0.075);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 28px 72px rgba(0, 0, 0, 0.26);
+}
+
+
+.f9-commerce-card:nth-child(2) {
+  animation-delay: -2s;
+}
+
+
+.f9-commerce-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  opacity: 0.42;
+  pointer-events: none;
+}
+
+
+.f9-commerce-card h3 {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(2.4rem, 3.9vw, 3.8rem);
+  font-weight: 500;
+  line-height: 0.98;
+}
+
+
+.f9-plan-badge {
+  justify-self: start;
+  margin-top: -6px;
+  border: 1px solid rgba(141, 240, 209, 0.38);
+  border-radius: 999px;
+  background: rgba(125, 243, 212, 0.14);
+  color: #8df0d1;
+  font-size: 0.74rem;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 6px 10px;
+  text-transform: uppercase;
+}
+
+
+.f9-commerce-card small {
+  color: rgba(210, 218, 242, 0.64);
+  font-weight: 600;
+}
+
+
+.f9-commerce-card p {
+  max-width: 54ch;
+  color: rgba(210, 218, 242, 0.74);
+}
+
+
+.f9-price-sync {
+  align-self: start;
+  margin-top: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 0.9rem;
+  font-weight: 700;
+  padding: 12px 18px;
+}
+
+
+@media (max-width: 1023px) {
+
+  .f9-commerce-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+
+
+@media (max-width: 760px) {
+
+  .f9-announcement {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+    border-radius: 18px;
+  }
+
+  .f9-announcement em {
+    display: none;
+  }
+
+  .f9-email-cta {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 8px;
+    border-radius: 22px;
+  }
+
+  .f9-hero-proof-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .f9-hero-proof-actions a {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .f9-commerce-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .f9-growth-pricing {
+    padding: 64px 0;
+  }
+}
+
+
+
+.f9-find-page {
+  --f9-search-ink: var(--ink);
+  --f9-search-muted: var(--ink-soft);
+  --f9-search-soft: var(--ink-faint);
+  --f9-search-line: var(--line);
+  min-height: 100vh;
+  background: var(--bone);
+  color: var(--ink);
+}
+
+
+.f9-find-page *,
+.f9-find-page *::before,
+.f9-find-page *::after {
+  box-sizing: border-box;
+}
+
+
+.f9-find-page a {
+  color: inherit;
+  text-decoration: none;
+}
+
+
+.f9-search-nav {
+  position: relative;
+  z-index: 5;
+  background: #071523;
+}
+
+
+.f9-search-nav-links {
+  gap: 14px;
+}
+
+
+.f9-search-nav-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 9px 13px;
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.94rem;
+  font-weight: 700;
+}
+
+
+.f9-search-nav-links a:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+
+
+.f9-quick-track-form {
+  display: grid;
+  gap: 12px;
+}
+
+
+
+
+
+
+
+
+
+.f9-save-stack {
+  display: grid;
+  gap: 14px;
+}
+
+
+.f9-ad-thumb-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+
+.f9-ad-thumb-row > div {
+  min-width: 0;
+}
+
+
+
+
+
+
+
+
+
+@media (max-width: 760px) {
+  .f9-search-nav-links {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .f9-search-nav-links {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
+
+
+
+/* Five to Nine auth rebuild */
+.f9-auth-page {
+  --f9-search-ink: #061629;
+  --f9-search-muted: #40546a;
+  --f9-search-soft: #64788d;
+  --f9-search-line: rgba(6, 22, 41, 0.1);
+
+  position: relative;
+  overflow: hidden;
+  min-height: 100vh;
+  background: #071523;
+  color: #fff;
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+
+.f9-auth-layout {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(380px, 0.68fr);
+  gap: 42px;
+  align-items: center;
+  min-height: 100vh;
+  padding: 72px 0;
+}
+
+
+.f9-auth-story {
+  display: grid;
+  gap: 46px;
+}
+
+
+.f9-auth-story span,
+.f9-auth-card > span {
+  color: #65d5bb;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+
+.f9-auth-story h1 {
+  max-width: min(100%, 32rem);
+  margin: 10px 0 0;
+  color: #fff;
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: clamp(3.2rem, 5.7vw, 4.35rem);
+  font-weight: 700;
+  line-height: 1.02;
+  letter-spacing: 0;
+}
+
+
+.f9-auth-story p {
+  max-width: 58ch;
+  margin: 22px 0 0;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 1.08rem;
+  line-height: 1.58;
+}
+
+
+.f9-auth-proof-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+
+.f9-auth-proof-list div {
+  min-height: 170px;
+  padding: 22px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+
+.f9-auth-proof-list strong {
+  color: #fff;
+  font-size: 1.05rem;
+}
+
+
+.f9-auth-proof-list p {
+  margin-top: 10px;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 0.94rem;
+}
+
+
+.f9-auth-card {
+  display: grid;
+  gap: 18px;
+  padding: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--f9-search-ink);
+  box-shadow: 0 34px 90px rgba(0, 0, 0, 0.28);
+}
+
+
+.f9-auth-card h2 {
+  margin: 0;
+  color: var(--f9-search-ink);
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 2.4rem;
+  line-height: 1.08;
+  letter-spacing: 0;
+}
+
+
+.f9-auth-card > p {
+  color: var(--f9-search-muted);
+}
+
+
+.f9-auth-oauth {
+  display: grid;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+
+.f9-auth-divider {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 12px;
+  align-items: center;
+  color: var(--f9-search-soft);
+  font-size: 0.9rem;
+}
+
+
+.f9-auth-divider::before,
+.f9-auth-divider::after {
+  content: "";
+  height: 1px;
+  background: var(--f9-search-line);
+}
+
+
+.f9-auth-oauth-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+
+.f9-auth-oauth-grid > .f9-oauth-button:only-child {
+  grid-column: 1 / -1;
+}
+
+
+.f9-oauth-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 0 16px;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  background: #fff;
+  color: #3c4043;
+  font: 500 0.95rem/1 "Roboto", Arial, sans-serif;
+  cursor: pointer;
+}
+
+
+.f9-oauth-button:hover {
+  background: #f8fafd;
+  border-color: #d2e3fc;
+  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.2);
+}
+
+
+.f9-oauth-button:disabled {
+  cursor: progress;
+  opacity: 0.72;
+}
+
+
+.f9-oauth-button.is-passkey {
+  border-color: rgba(6, 22, 41, 0.16);
+  color: var(--f9-search-ink);
+  font-family: inherit;
+  font-weight: 700;
+}
+
+
+.f9-oauth-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+}
+
+
+.f9-auth-switch {
+  color: var(--f9-search-muted);
+}
+
+
+.f9-auth-switch a {
+  color: #07725f;
+  font-weight: 700;
+}
+
+
+
+
+.f9-numbered-guide {
+  margin: 10px 0 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+  color: #425466;
+  font-size: 0.92rem;
+}
+
+
+/* Step titles stack above their body copy — never run together inline. */
+.f9-numbered-guide li strong {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--f9-search-ink);
+}
+
+
+.f9-report-toolbar {
+  padding: 24px 24px 0;
+}
+
+
+.f9-event-card {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--f9-search-line);
+  border-radius: 22px;
+  background: #fff;
+}
+
+
+.f9-legal-page {
+  overflow-x: clip;
+}
+
+
+.f9-share-page {
+  padding-bottom: 72px;
+}
+
+
+.f9-share-header {
+  padding: 24px 0;
+}
+
+
+.f9-share-brand-identity {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 72px;
+}
+
+
+.f9-share-brand-logo {
+  display: grid;
+  place-items: center;
+  min-width: 80px;
+  min-height: 64px;
+  padding: 8px 12px;
+  border: 1px solid var(--f9-search-line);
+  border-radius: 14px;
+  background: #fff;
+}
+
+
+.f9-share-brand-logo img {
+  width: auto;
+  max-width: 180px;
+  height: auto;
+  max-height: 56px;
+  object-fit: contain;
+}
+
+
+.f9-share-brand-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+
+.f9-share-brand-copy small {
+  color: var(--f9-search-soft);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+
+.f9-share-brand-copy strong {
+  color: var(--f9-search-ink);
+  font-size: clamp(1.25rem, 3vw, 1.8rem);
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+
+.f9-share-brand-copy a {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 44px;
+  color: var(--f9-search-muted);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+
+/* `.f9-share-prepared-by` deleted with BL-009: the report's "prepared by" is
+   now a cell in the cover byline row (brief §6.10) and its last consumer went
+   with the old toolbar. */
+
+.f9-share-footer {
+  margin-top: 28px;
+  color: var(--f9-search-soft, #64788d);
+  font-size: 0.85rem;
+}
+
+
+.f9-share-footer p {
+  margin: 0;
+}
+
+
+.f9-share-powered-by {
+  color: var(--f9-search-soft, #64788d);
+  font-size: 0.78rem;
+  letter-spacing: 0.01em;
+}
+
+
+.f9-share-footer a {
+  color: var(--f9-search-muted, #40546a);
+  font-weight: 600;
+}
+
+
+.f9-legal-nav-inner {
+  display: flex;
+  flex-wrap: wrap;
+  min-height: 76px;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  min-width: 0;
+}
+
+
+.f9-legal-section {
+  padding: 56px 0 88px;
+}
+
+
+.f9-legal-block {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding-top: 20px;
+  border-top: 1px solid var(--f9-search-line);
+}
+
+
+.f9-legal-card > *,
+.f9-legal-block > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+
+.f9-legal-card,
+.f9-legal-card * {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+
+.f9-legal-block h2 {
+  margin: 0;
+  font-size: 1.28rem;
+}
+
+
+/* WP-B4.2: in-page docs table of contents. Makes /docs read as docs, distinct
+   from /help. Pure-CSS jump links; no JS, no search index (docs search is a
+   separate part-(c) pass). Scoped to the docs shell — other legal pages that
+   do not render it are unaffected. */
+.f9-legal-page .f9-doc-toc {
+  border: 1px solid var(--f9-search-line);
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin: 0;
+  background: rgba(0, 0, 0, 0.02);
+}
+
+
+.f9-legal-page .f9-doc-toc-label {
+  display: block;
+  color: var(--ld-ink-soft, #55524a);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+
+.f9-legal-page .f9-doc-toc ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 2px 24px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+
+.f9-legal-page .f9-doc-toc a {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 44px;
+  padding: 4px 0;
+  color: var(--ld-ink-soft, #55524a);
+  overflow-wrap: anywhere;
+  text-decoration: none;
+  border: 0;
+}
+
+
+.f9-legal-page .f9-doc-toc a:hover,
+.f9-legal-page .f9-doc-toc a:focus-visible {
+  color: var(--ld-ink, #0e0d0a);
+  text-decoration: underline;
+}
+
+
+@media (max-width: 980px) {
+
+  .f9-auth-layout,
+  .f9-auth-proof-list {
+    grid-template-columns: 1fr;
+  }
+
+  .f9-auth-layout {
+    gap: 28px;
+    padding: 34px 0;
+  }
+
+  /* Mobile keeps the brand wordmark + headline + one supporting line so the
+     auth surface still names what the product is. The two 3-card proof grids
+     and the closing reminder paragraph are dropped — they double the fold
+     without adding proof on a 390-wide viewport. */
+  .f9-auth-story {
+    display: block;
+    max-width: 520px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  .f9-auth-story > p:last-child,
+  .f9-auth-story .f9-auth-proof-list {
+    display: none;
+  }
+
+  .f9-auth-story > div:not(.f9-auth-proof-list) {
+    display: grid;
+    gap: 14px;
+  }
+
+  .f9-auth-story h1 {
+    font-size: clamp(2rem, 7.4vw, 2.6rem);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+  }
+
+  .f9-auth-story p {
+    margin: 0;
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+
+  .f9-auth-card {
+    width: min(100%, 520px);
+    justify-self: center;
+  }
+}
+
+
+
+@media (max-width: 640px) {
+  .f9-auth-layout {
+    padding: 22px 0;
+  }
+
+  .f9-auth-card {
+    gap: 14px;
+    padding: 22px;
+  }
+
+  .f9-legal-nav-inner {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 18px 0;
+  }
+}
+
+
+
+@media print {
+
+  .f9-share-header,
+  .f9-share-brand-identity,
+  .f9-share-powered-by {
+    display: flex !important;
+  }
+
+  .f9-share-header {
+    padding: 0 0 18px;
+  }
+
+  .f9-share-brand-identity {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .f9-share-powered-by {
+    margin-top: 18px;
+  }
+
+  .f9-share-page {
+    padding: 0;
+    gap: 16px;
+  }
+}
+
+
+
+/* P2: report PDF variant (2026-07-13)
+   /share/:token?pdf=1 — the print-clean page the server-side PDF renderer
+   (Browser Rendering + CDP printToPDF) loads for /share/:token/pdf. Agency
+   branding headlines the masthead; Five to Nine demotes to the footer
+   credit. Keep it chrome-free and page-break friendly. */
+
+.f9-share-pdf {
+  background: #fff;
+  padding-bottom: 32px;
+}
+
+
+.f9-pdf-masthead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 26px 0 14px;
+  border-bottom: 2px solid var(--f9-search-ink, #061629);
+  margin-bottom: 20px;
+}
+
+
+.f9-pdf-footer {
+  margin-top: 26px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(6, 22, 41, 0.12);
+  font-size: 0.8rem;
+  letter-spacing: 0.01em;
+  color: var(--f9-search-soft, #64788d);
+}
+
+
+@media print {
+  /* The masthead and footer credit must survive the shared chrome-hiding
+     print rules above — they ARE the document header/footer. */
+  .f9-share-pdf .f9-pdf-masthead {
+    display: flex;
+  }
+
+  .f9-share-pdf .f9-pdf-footer {
+    display: block;
+  }
+}
+
+
+
+/* ============================================================
+   Landing — "Caught in the act" (2026-06-12 redesign)
+   Brief: docs/design/landing-caught-brief.md
+   Bone ground,
+   ink type wall,
+one signal-green accent.
+   ============================================================ */
+
+.f9-home {
+  --ld-bone: #f4f1e8;
+  --ld-card: #fffdf6;
+  --ld-ink: #0e0d0a;
+  --ld-ink-soft: #55524a;
+  --ld-ink-faint: #8e8878;
+  --ld-line: #ddd6c6;
+  --ld-green: #16c47f;
+  --ld-green-ink: #064d31;
+  --ld-green-wash: #d9f6e8;
+  --ld-red: #e0442c;
+  --ld-display: "Bricolage Grotesque", var(--f9-font);
+  --ld-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  background: var(--ld-bone);
+  color: var(--ld-ink);
+}
+
+
+.ld-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+
+.ld-ticker {
+  background: var(--ld-ink);
+  overflow: hidden;
+  max-width: 100%;
+  /* Isolate the marquee: `.ld-ticker-belt` is `width: max-content` so it can
+     otherwise inflate `documentElement.scrollWidth` by 2px on 390px viewports
+     even while this box visually clips (Q8 / issue 971). */
+  contain: inline-size;
+  padding: 9px 0;
+}
+
+
+.ld-ticker-belt {
+  display: flex;
+  width: max-content;
+  animation: ld-roll 32s linear infinite;
+}
+
+
+.ld-ticker-run {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 28px;
+  padding-right: 28px;
+  font-family: var(--ld-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #b9b4a6;
+  white-space: nowrap;
+}
+
+
+.ld-ticker-run em {
+  font-style: normal;
+  color: var(--ld-ink);
+  background: var(--ld-green);
+  padding: 2px 8px;
+  font-weight: 600;
+}
+
+
+.ld-ticker-run b {
+  color: var(--ld-green);
+  font-weight: 500;
+}
+
+
+.ld-ticker-run small {
+  font-size: inherit;
+  color: #6e6a5e;
+}
+
+
+@keyframes ld-roll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+
+.ld-hero {
+  padding: clamp(14px, 2vw, 24px) clamp(20px, 4vw, 48px) 0;
+}
+
+
+.f9-home .ld-hero .f9-announcement {
+  margin-bottom: 8px;
+}
+
+
+@media (max-width: 600px) {
+  .f9-home .ld-hero .f9-announcement {
+    margin-bottom: 12px;
+  }
+}
+
+
+
+/* The `.ld-flag` is `position: absolute` with `right: -0.22em`, but no
+   ancestor along the path is positioned, so it falls back to the viewport's
+   initial containing block. When the row's right edge sits at or near the
+   viewport edge (mobile 390 px, and 1440 px once the hero's content is laid
+   out), the pill punches 2–3 px past `document.documentElement.scrollWidth`
+   and triggers a phantom horizontal-scroll snap. Clip the row so the pill
+   can keep its tucked-corner offset visually without leaking past the page
+   bounds. */
+.ld-wall .ld-row {
+  position: relative;
+  overflow-x: clip;
+}
+
+
+.ld-case {
+  font-family: var(--ld-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ld-ink-soft);
+  margin: 0 0 16px;
+}
+
+
+.f9-home .ld-hero .ld-case {
+  margin-bottom: 10px;
+}
+
+
+.ld-rec {
+  color: var(--ld-red);
+  font-weight: 600;
+  display: inline;
+  margin-right: 14px;
+}
+
+
+/* Homepage `.f9-home a` is more specific and would otherwise wash the kicker
+   back to the case-file ink. Keep the live-dot colour when the claim is a link. */
+.f9-home a.ld-rec {
+  color: var(--ld-red);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+
+.ld-rec::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: var(--ld-red);
+  vertical-align: 0.1em;
+  animation: ld-blink 1.4s infinite;
+}
+
+
+@keyframes ld-blink {
+  50% { opacity: 0.25; }
+}
+
+
+.ld-wall {
+  font-family: var(--ld-display);
+  font-weight: 800;
+  font-size: clamp(2.75rem, 8.4vw, 7.625rem);
+  line-height: 0.95;
+  letter-spacing: -0.045em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+
+.ld-row { display: block; }
+
+.ld-row-indent { padding-left: 0.55em; }
+
+
+.ld-ins {
+  background: var(--ld-green);
+  color: var(--ld-ink);
+  text-decoration: none;
+  padding: 0 0.12em;
+  position: relative;
+  box-decoration-break: clone;
+}
+
+
+.ld-flag {
+  position: absolute;
+  top: -0.34em;
+  right: -0.22em;
+  background: var(--ld-ink);
+  color: var(--ld-green);
+  font-family: var(--ld-mono);
+  font-size: clamp(0.5rem, 0.8vw, 0.7rem);
+  font-style: normal;
+  letter-spacing: 0.12em;
+  padding: 4px 9px;
+  transform: rotate(3deg);
+  font-weight: 600;
+}
+
+
+.ld-command {
+  margin: clamp(18px, 2.5vw, 28px) 0 0;
+  display: flex;
+  align-items: stretch;
+  max-width: 1120px;
+  border: 2.5px solid var(--ld-ink);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--ld-card);
+}
+
+
+.f9-home .ld-command input {
+  flex: 1;
+  min-height: 66px;
+  border: 0;
+  background: transparent;
+  padding: clamp(16px, 2.4vw, 24px) clamp(16px, 2.4vw, 28px);
+  font-family: var(--ld-mono);
+  font-size: clamp(0.95rem, 1.4vw, 1.1rem);
+  color: var(--ld-ink);
+  min-width: 0;
+}
+
+
+.f9-home .ld-command input::placeholder { color: var(--ld-ink-faint); }
+
+.f9-home .ld-command input:focus { outline: none; }
+
+.f9-home .ld-command:focus-within { box-shadow: 0 0 0 3px var(--ld-green); }
+
+
+.f9-home .ld-command button {
+  min-width: 260px;
+  border: 0;
+  border-left: 2.5px solid var(--ld-ink);
+  border-radius: 0;
+  background: var(--ld-ink);
+  color: var(--ld-bone);
+  font-family: var(--ld-display);
+  font-weight: 700;
+  font-size: clamp(0.95rem, 1.5vw, 1.15rem);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: clamp(16px, 2.4vw, 24px) clamp(20px, 3vw, 40px);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  white-space: nowrap;
+  touch-action: manipulation;
+}
+
+
+.f9-home .ld-command button span { color: var(--ld-green); }
+
+.f9-home .ld-command button:hover { background: #2a2820; }
+
+
+.f9-home .ld-hero .f9-hero-proof-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+  margin: 16px 0 0;
+  font-family: var(--ld-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+
+.f9-home .ld-hero .f9-hero-proof-actions a {
+  color: var(--ld-ink-soft);
+  border: 0;
+  background: none;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+
+.f9-home .ld-hero .f9-hero-proof-actions a:hover { color: var(--ld-ink); }
+
+
+.ld-honest {
+  margin: 22px 0 0;
+  padding: 14px 0 26px;
+  border-top: 1px solid var(--ld-line);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--ld-ink-soft);
+  max-width: 760px;
+}
+
+
+.ld-honest strong { color: var(--ld-ink); }
+
+
+.ld-how { border-top: 2.5px solid var(--ld-ink); }
+
+
+.ld-how-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 0;
+  border: 2px solid var(--ld-ink);
+  background: var(--ld-card);
+}
+
+
+.ld-how-grid article {
+  padding: clamp(20px, 2.6vw, 30px);
+  border-right: 2px solid var(--ld-ink);
+}
+
+
+.ld-how-grid article:last-child { border-right: 0; }
+
+@media (min-width: 1024px) {
+  .ld-how-grid article:first-child {
+    grid-column: span 2;
+  }
+}
+
+
+.ld-step {
+  font-family: var(--ld-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.14em;
+  color: var(--ld-green-ink);
+  background: var(--ld-green-wash);
+  padding: 3px 9px;
+}
+
+
+.ld-how-grid h3 {
+  font-family: var(--ld-display);
+  font-weight: 700;
+  font-size: 1.25rem;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  margin: 14px 0 8px;
+}
+
+
+.ld-how-grid p {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: var(--ld-ink-soft);
+}
+
+
+.ld-section-head { max-width: 860px; }
+
+
+.ld-kicker {
+  display: inline-block;
+  font-family: var(--ld-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ld-ink-soft);
+  margin-bottom: 12px;
+}
+
+
+.ld-section-head > p {
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--ld-ink-soft);
+  margin: 0 0 18px;
+  max-width: 620px;
+}
+
+
+.ld-compare-hub {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 18px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+
+.f9-home .ld-compare-hub a {
+  display: block;
+  padding: 16px 18px;
+  background: var(--ld-card);
+  border: 1.5px solid var(--ld-ink);
+  text-decoration: none;
+  color: var(--ld-ink);
+  font-family: var(--ld-display);
+  font-weight: 700;
+  font-size: 1.1rem;
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+
+.f9-home .ld-compare-hub a:hover {
+  background: var(--ld-ink-soft);
+  color: var(--ld-ink);
+  border-color: var(--ld-ink);
+}
+
+
+.ld-change-card {
+  max-width: 880px;
+  border: 2.5px solid var(--ld-ink);
+  background: var(--ld-card);
+  padding: clamp(20px, 3vw, 36px);
+}
+
+
+.ld-change-context {
+  font-family: var(--ld-mono);
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  color: var(--ld-ink-soft);
+  margin: 0 0 14px;
+}
+
+
+.ld-change-context strong { color: var(--ld-ink); }
+
+
+.ld-change-sample {
+  display: inline-block;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  background: var(--ld-ink);
+  color: var(--ld-bone);
+  padding: 2px 8px;
+  margin-right: 8px;
+}
+
+
+.ld-change-mark {
+  font-family: var(--ld-display);
+  font-weight: 800;
+  font-size: clamp(1.5rem, 3.4vw, 2.6rem);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3em;
+}
+
+
+.ld-change-mark s {
+  color: var(--ld-ink-faint);
+  text-decoration-color: var(--ld-red);
+  text-decoration-thickness: 0.09em;
+}
+
+
+.ld-change-mark ins {
+  background: var(--ld-green);
+  color: var(--ld-ink);
+  text-decoration: none;
+  padding: 0 0.14em;
+  box-decoration-break: clone;
+}
+
+
+.ld-change-note {
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--ld-ink-soft);
+  margin: 14px 0 0;
+  max-width: 620px;
+}
+
+
+.ld-proof-actions {
+  display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: 18px;
+  margin-bottom: clamp(24px, 3vw, 36px);
+  font-family: var(--ld-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+
+.f9-home .ld-proof-actions a {
+  color: var(--ld-ink);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+
+.ld-caseboard {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr 1fr;
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+}
+
+
+.ld-case-lead,
+.ld-case-card,
+.ld-intel article {
+  background: var(--ld-card);
+  border: 1.5px solid var(--ld-ink);
+  box-sizing: border-box;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding: 18px 20px;
+  position: relative;
+}
+
+
+.ld-case-lead h3 {
+  font-family: var(--ld-display);
+  font-weight: 700;
+  font-size: 1.6rem;
+  text-transform: uppercase;
+  margin: 6px 0 8px;
+}
+
+
+.ld-case-lead p,
+.ld-case-card p {
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--ld-ink-soft);
+  margin: 0;
+}
+
+
+.ld-case-card h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 4px 0 8px;
+}
+
+
+.ld-case-card dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin: 14px 0 0;
+  font-family: var(--ld-mono);
+  font-size: 0.74rem;
+}
+
+
+.ld-case-card dl > div {
+  flex: 1 1 130px;
+  min-width: 0;
+}
+
+
+.ld-case-card dt {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ld-ink-faint);
+}
+
+
+.ld-case-card dd {
+  margin: 2px 0 0;
+  color: var(--ld-green-ink);
+  font-weight: 600;
+}
+
+
+.ld-trail {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+
+.ld-trail li {
+  padding: 10px 0;
+  border-bottom: 1px dotted var(--ld-line);
+}
+
+
+.ld-trail li:last-child { border-bottom: 0; }
+
+
+.ld-trail strong {
+  display: block;
+  font-size: 0.9rem;
+  margin-bottom: 3px;
+}
+
+
+.ld-trail p {
+  margin: 0 0 4px;
+  font-size: 0.84rem;
+}
+
+
+.ld-trail em,
+.ld-intel em {
+  font-style: normal;
+  font-family: var(--ld-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ld-green-ink);
+  background: var(--ld-green-wash);
+  padding: 1px 7px;
+}
+
+
+.ld-trail-note {
+  margin: 10px 0 0;
+  font-size: 0.74rem;
+  line-height: 1.5;
+  color: var(--ld-ink-soft);
+}
+
+
+.ld-intel {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  min-width: 0;
+}
+
+
+.ld-intel ul {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  font-size: 0.86rem;
+  color: var(--ld-ink-soft);
+}
+
+
+.ld-intel li {
+  padding: 5px 0;
+  border-bottom: 1px dotted var(--ld-line);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+
+.ld-intel li:last-child { border-bottom: 0; }
+
+
+.ld-export {
+  font-family: var(--ld-mono);
+  font-size: 0.76rem !important;
+  line-height: 1.6 !important;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+
+.ld-quiet { border-top: 1px solid var(--ld-line); }
+
+
+.ld-quiet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0;
+  border: 2px solid var(--ld-ink);
+  background: var(--ld-card);
+}
+
+
+.ld-quiet-grid article {
+  padding: clamp(20px, 2.6vw, 30px);
+  border-right: 2px solid var(--ld-ink);
+}
+
+
+.ld-quiet-grid article:last-child { border-right: 0; }
+
+
+.ld-quiet-grid h3 {
+  font-family: var(--ld-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ld-green-ink);
+  margin: 0 0 10px;
+}
+
+
+.ld-quiet-grid p {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: var(--ld-ink-soft);
+}
+
+
+.ld-brand-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0;
+  border: 2px solid var(--ld-ink);
+  background: var(--ld-card);
+}
+
+
+.ld-brand-links li {
+  border-right: 2px solid var(--ld-ink);
+  display: flex;
+  flex-direction: column;
+}
+
+
+.ld-brand-links li:last-child { border-right: 0; }
+
+
+.ld-brand-links a.ld-brand-timeline {
+  padding-top: 0;
+  padding-bottom: 14px;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+}
+
+
+.ld-brand-links a {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: clamp(18px, 2.4vw, 26px);
+  text-decoration: none;
+  color: var(--ld-ink);
+}
+
+
+.ld-brand-links a:hover { background: var(--ld-ink); color: var(--ld-bone); }
+
+
+.ld-brand-links strong {
+  font-family: var(--ld-mono);
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+}
+
+
+.ld-brand-links span {
+  font-family: var(--ld-mono);
+  font-size: 0.78rem;
+  color: var(--ld-ink-soft);
+}
+
+
+.ld-brand-links a:hover span { color: var(--ld-bone); }
+
+
+.ld-stats {
+  background: var(--ld-ink);
+  color: var(--ld-bone);
+}
+
+
+.ld-stats h2 { color: var(--ld-bone); }
+
+
+.ld-stats-belt {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  border-top: 1px solid #2a2820;
+}
+
+
+.ld-stats-belt article {
+  padding: 24px 26px 24px 0;
+  border-right: 1px solid #2a2820;
+}
+
+
+.ld-stats-belt article:not(:first-child) { padding-left: 26px; }
+
+.ld-stats-belt article:last-child { border-right: 0; }
+
+
+.ld-stats-belt strong {
+  font-family: var(--ld-display);
+  font-weight: 700;
+  font-size: 2rem;
+  letter-spacing: -0.02em;
+  color: var(--ld-green);
+  display: block;
+}
+
+
+.ld-stats-belt span {
+  display: block;
+  font-weight: 600;
+  margin: 4px 0 2px;
+}
+
+
+.ld-stats-belt p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #9a958a;
+}
+
+
+.f9-home .f9-growth-pricing {
+  background: var(--ld-bone);
+  border-top: 2.5px solid var(--ld-ink);
+  scroll-margin-top: 16px;
+}
+
+
+.f9-home .f9-growth-pricing .ld-section-head {
+  margin: 0 auto;
+}
+
+
+.ld-plan-summary {
+  border: 2px solid var(--ld-ink);
+  background: var(--ld-green);
+  padding: 16px 20px;
+  margin: 0 auto 16px;
+  max-width: 620px;
+  text-align: center;
+  box-shadow: 6px 6px 0 var(--ld-ink);
+  overflow-wrap: anywhere;
+}
+
+
+.ld-plan-summary span {
+  font-family: var(--ld-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ld-green-ink);
+}
+
+
+.ld-plan-summary strong {
+  display: block;
+  font-family: var(--ld-display);
+  font-weight: 700;
+  font-size: 1.3rem;
+  text-transform: uppercase;
+  margin: 4px 0;
+  color: var(--ld-ink);
+}
+
+
+.ld-plan-summary p {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--ld-green-ink);
+}
+
+
+.ld-pricing-note {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--ld-ink-soft);
+  max-width: 680px;
+  margin: 18px 0;
+}
+
+
+.f9-home .ld-pricing-note a { color: var(--ld-ink); text-decoration: underline; }
+
+.ld-swing-sources {
+  list-style: none;
+  margin: 18px 0;
+  padding: 0;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--ld-ink-soft);
+  max-width: 680px;
+}
+
+.ld-swing-sources li { margin-top: 4px; }
+
+.f9-home .ld-swing-sources a { color: var(--ld-ink); text-decoration: underline; }
+
+.ld-swing-sources time { font-family: var(--ld-mono); font-size: 0.78rem; }
+
+
+/* Issue #2221 — the "Price of knowing" comparison table (5 columns) has no
+   width constraint, so its min-content width (~398px) overflows the 375px
+   mobile viewport by 71px. Fix the layout cause: force the table to the
+   container width with a fixed layout so columns share the available space
+   and long cell text wraps instead of forcing the page wider. The scroll
+   container is a safety net for any residual unbreakable content — it is
+   not overflow:hidden (which the issue forbids); content stays reachable. */
+.f9-price-anchors {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+
+.f9-price-anchors table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+
+.f9-price-anchors th,
+.f9-price-anchors td {
+  overflow-wrap: anywhere;
+}
+
+
+/* The "Source" links in the table render at text height (~17px), below the
+   44x44px phone touch-target floor (WCAG 2.5.5). The overflow gate masked this
+   until #2221 fixed the width; give the links a real tap area on phone widths
+   (PHONE_MAX_WIDTH = 600px in e2e/helpers/release-experience.ts). inline-block
+   keeps the "· checked <date>" text on the same line. */
+@media (max-width: 600px) {
+  .f9-price-anchors a {
+    display: inline-block;
+    min-height: 44px;
+    padding: 12px 6px;
+    box-sizing: border-box;
+    line-height: 20px;
+    vertical-align: middle;
+  }
+}
+
+
+
+.f9-home .f9-toggle-savings {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 8px;
+  border: 2px solid var(--ld-ink);
+  background: var(--ld-ink);
+  color: var(--ld-green);
+  font-family: var(--ld-mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+
+.f9-home :is(a, button, input):focus-visible {
+  outline: 3px solid var(--ld-green-ink);
+  outline-offset: 3px;
+}
+
+
+.f9-home .f9-commerce-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+  margin: clamp(20px, 3vw, 32px) 0;
+}
+
+
+.f9-home .f9-commerce-card {
+  background: var(--ld-card);
+  border: 2px solid var(--ld-ink);
+  border-radius: 0;
+  box-shadow: none;
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--ld-ink);
+  min-width: 0;
+}
+
+
+.f9-home .f9-commerce-card > span {
+  font-family: var(--ld-mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ld-ink-soft);
+}
+
+
+.f9-home .f9-plan-badge {
+  font-style: normal;
+  font-family: var(--ld-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  /* WP-A4.2: recommendation nudge is ink-filled, not green. Green stays for
+     live-state facts only; the card's own green outline marks the pick. */
+  background: var(--ld-ink);
+  color: var(--ld-bone);
+  padding: 3px 9px;
+  align-self: flex-start;
+  font-weight: 600;
+}
+
+
+/* WP-A4: a neutral status note (e.g. Agency "Account review") — NOT a
+   recommendation. Outline pill, no ink fill and no green, so it can never be
+   read as the recommended pick or as a live-state fact. */
+.f9-home .f9-plan-note {
+  font-style: normal;
+  font-family: var(--ld-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  background: transparent;
+  color: var(--ld-ink-soft);
+  border: 1.5px solid var(--ld-line);
+  padding: 3px 9px;
+  align-self: flex-start;
+  font-weight: 600;
+}
+
+
+.f9-home .f9-commerce-card h3 {
+  font-family: var(--ld-display);
+  font-weight: 700;
+  font-size: 2rem;
+  letter-spacing: -0.02em;
+  margin: 4px 0 0;
+  color: var(--ld-ink);
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+  /* Issue #2389: the published anchor label is replaced by the visitor's
+     localized price once the client-side /api/pricing-preview fetch lands,
+     and the resolved type is taller than the `is-loading-price` type it
+     replaces. Reserve the resolved line box (2rem at the 0.98 line-height
+     above) in both states, so the swap can never change the card's height. */
+  min-height: calc(2rem * 0.98);
+}
+
+
+.f9-home .f9-commerce-card h3.is-loading-price {
+  font-size: clamp(1.45rem, 2.2vw, 1.8rem);
+  line-height: 1.08;
+}
+
+
+.f9-home .f9-commerce-card small {
+  color: var(--ld-ink-faint);
+  font-family: var(--ld-mono);
+  font-size: 0.74rem;
+}
+
+
+.f9-home .f9-plan-value {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-height: 48px;
+  padding: 9px 10px;
+  border: 2px solid rgba(23, 22, 17, 0.16);
+  background: rgba(33, 196, 132, 0.1);
+}
+
+
+.f9-home .f9-plan-value strong,
+.f9-home .f9-plan-value span {
+  line-height: 1.25;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+
+.f9-home .f9-plan-value strong {
+  color: var(--ld-ink);
+  font-size: 0.86rem;
+}
+
+
+.f9-home .f9-plan-value span {
+  font-family: var(--ld-mono);
+  color: var(--ld-green-ink);
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+
+.f9-home .f9-annual-status {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+
+.f9-home .f9-annual-status strong {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 9px;
+  border: 2px solid var(--ld-ink);
+  background: var(--ld-green);
+  color: var(--ld-ink);
+  font-size: 0.72rem;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+
+.f9-home .f9-commerce-card > p {
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--ld-ink-soft);
+  margin: 6px 0;
+}
+
+
+.f9-home .f9-price-sync {
+  font-family: var(--ld-mono);
+  font-size: 0.78rem;
+  color: var(--ld-ink-faint);
+}
+
+
+.ld-bundles { margin-top: clamp(28px, 4vw, 44px); }
+
+
+.ld-bundles-head p {
+  font-size: 0.9rem;
+  color: var(--ld-ink-soft);
+  max-width: 560px;
+  margin: 6px 0 16px;
+}
+
+
+.ld-bundles-head .ld-check-pack-note {
+  color: var(--ld-green-ink);
+  font-family: var(--ld-mono);
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin-top: -8px;
+  text-transform: uppercase;
+}
+
+
+.ld-bundles-head h3 {
+  font-family: var(--ld-display);
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin: 6px 0 0;
+  text-transform: uppercase;
+  color: var(--ld-ink);
+}
+
+
+.ld-bundle-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+
+.ld-bundle-card {
+  border: 1.5px solid var(--ld-ink);
+  background: var(--ld-card);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+
+.ld-bundle-card h3 {
+  font-family: var(--ld-display);
+  font-weight: 700;
+  font-size: 1.1rem;
+  text-transform: uppercase;
+  margin: 0;
+  color: var(--ld-ink);
+}
+
+
+.f9-home .ld-pricing-faq h3 {
+  color: var(--ld-ink);
+}
+
+
+.ld-bundle-card strong {
+  font-family: var(--ld-mono);
+  font-size: 1rem;
+  color: var(--ld-green-ink);
+}
+
+
+.ld-bundle-value {
+  font-family: var(--ld-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--ld-ink-faint);
+  text-transform: uppercase;
+}
+
+
+.ld-bundle-card p {
+  font-size: 0.84rem;
+  color: var(--ld-ink-soft);
+  margin: 4px 0 10px;
+  line-height: 1.5;
+}
+
+
+.f9-home .ld-bundle-card a,
+.f9-home .ld-bundle-card button {
+  background: var(--ld-ink);
+  color: var(--ld-bone);
+  border: 0;
+  padding: 10px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: auto;
+  text-align: center;
+  text-decoration: none;
+}
+
+
+.f9-home .ld-bundle-card a:hover,
+.f9-home .ld-bundle-card button:hover {
+  background: #2a2820;
+}
+
+
+.ld-final {
+  border-top: 2.5px solid var(--ld-ink);
+  text-align: left;
+}
+
+
+.ld-final h2 span { color: var(--ld-green-ink); }
+
+
+.f9-home .ld-final .f9-email-cta {
+  display: flex;
+  max-width: 520px;
+  border: 2.5px solid var(--ld-ink);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--ld-card);
+  padding: 0;
+  box-shadow: none;
+}
+
+
+.f9-home .ld-final .f9-email-cta:focus-within {
+  box-shadow: 0 0 0 3px var(--ld-green);
+}
+
+
+.f9-home .ld-final .f9-email-cta input {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  padding: 16px 18px;
+  font-family: var(--ld-mono);
+  font-size: 0.95rem;
+  color: var(--ld-ink);
+  min-width: 0;
+}
+
+
+.f9-home .ld-final .f9-email-cta input:focus { outline: none; }
+
+
+.f9-home .ld-final .f9-email-cta button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 180px;
+  border: 0;
+  border-radius: 0;
+  background: var(--ld-ink);
+  color: var(--ld-bone);
+  font-weight: 700;
+  padding: 16px 26px;
+  cursor: pointer;
+  white-space: normal;
+  touch-action: manipulation;
+}
+
+
+.f9-home .ld-final .f9-email-state {
+  flex: 1;
+  padding: 16px 18px;
+  font-family: var(--ld-mono);
+  font-size: 0.9rem;
+  color: var(--ld-ink-soft);
+}
+
+
+.ld-final > p {
+  margin: 14px 0 0;
+  font-family: var(--ld-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ld-ink-soft);
+}
+
+
+.ld-footer {
+  background: var(--ld-ink);
+  color: #b9b4a6;
+  padding: clamp(32px, 5vw, 48px) clamp(20px, 4vw, 48px);
+}
+
+
+.f9-home .ld-footer-brand { color: var(--ld-bone); }
+
+
+.ld-footer p {
+  max-width: 480px;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  margin: 14px 0 18px;
+}
+
+
+.ld-footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px;
+  font-size: 0.88rem;
+}
+
+
+.ld-footer .ld-footer-origin {
+  margin-top: 0;
+  font-size: 0.82rem;
+}
+
+
+.ld-footer .ld-footer-compare {
+  margin-top: 16px;
+  align-items: center;
+  gap: 16px;
+}
+
+
+.ld-footer .ld-footer-group-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #b9b4a6;
+}
+
+
+.f9-home .ld-footer a { color: var(--ld-bone); }
+
+
+@media (prefers-reduced-motion: reduce) {
+    .ld-rec::before { animation: none; }
+}
+
+
+
+.f9-home .f9-growth-pricing::before,
+.f9-home .f9-growth-pricing::after {
+  content: none;
+}
+
+
+.f9-home .ld-hero .f9-announcement {
+  display: flex;
+  width: fit-content;
+  min-height: 44px;
+  box-sizing: border-box;
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--ld-ink);
+  border-radius: 999px;
+  color: var(--ld-ink);
+  font-weight: 600;
+  font-size: 0.84rem;
+}
+
+
+.f9-home .ld-hero .f9-announcement strong {
+  background: var(--ld-green);
+  color: var(--ld-ink);
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+
+.f9-home .ld-hero .f9-announcement span { color: var(--ld-ink-soft); }
+
+
+/* Hero callout row: #1212 wraps the announcement pills in .ld-hero-callouts
+   so they sit on one desktop row instead of stacking the search command
+   under the fold. */
+.f9-home .ld-hero .ld-hero-callouts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin-bottom: 8px;
+}
+
+
+.f9-home .ld-hero .ld-hero-callouts .f9-announcement {
+  margin-bottom: 0;
+}
+
+
+.f9-home .f9-growth-pricing h1,
+.f9-home .f9-growth-pricing h2 { color: var(--ld-ink); }
+
+
+.f9-auth-page .f9-auth-story p { color: var(--ld-ink-soft); }
+
+
+.f9-auth-page .f9-auth-proof-list > div {
+  background: var(--ld-card);
+  border: 1.5px solid var(--ld-ink);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+
+.f9-auth-page .f9-auth-proof-list strong { color: var(--ld-ink); }
+
+.f9-auth-page .f9-auth-proof-list p { color: var(--ld-ink-soft); }
+
+
+.f9-auth-page .f9-auth-card {
+  background: var(--ld-card);
+  border: 2.5px solid var(--ld-ink);
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--ld-ink);
+}
+
+
+.f9-auth-page .f9-auth-card h2,
+.f9-auth-page .f9-auth-card label,
+.f9-auth-page .f9-auth-card p { color: var(--ld-ink); }
+
+
+.f9-auth-page .f9-auth-switch { color: var(--ld-ink-soft); }
+
+.f9-auth-page .f9-auth-switch a { color: var(--ld-green-ink); }
+
+
+.f9-auth-page .f9-auth-divider {
+  color: var(--ld-ink-soft);
+}
+
+
+.f9-auth-page .f9-auth-divider::before,
+.f9-auth-page .f9-auth-divider::after {
+  background: var(--ld-line);
+}
+
+
+.f9-auth-page .f9-oauth-button {
+  background: #fff;
+  border-color: #dadce0;
+  color: #3c4043;
+}
+
+
+.f9-auth-page .f9-oauth-button:hover {
+  background: #f8fafd;
+  border-color: #d2e3fc;
+}
+
+
+.f9-find-page .f9-search-nav {
+  background: var(--ld-bone);
+  border-bottom: 2.5px solid var(--ld-ink);
+  box-shadow: none;
+}
+
+
+.f9-find-page .f9-search-nav-links a { color: var(--ld-ink-soft); }
+
+.f9-find-page .f9-search-nav-links a:hover { color: var(--ld-ink); }
+
+
+.f9-legal-page .f9-search-nav-links a { color: var(--ld-ink-soft); }
+
+.f9-legal-page .f9-search-nav-links a:hover,
+.f9-legal-page .f9-search-nav-links a:focus-visible { color: var(--ld-ink); }
+
+
+.f9-legal-page .f9-legal-section h2 {
+  font-size: 1.15rem;
+  letter-spacing: -0.01em;
+}
+
+
+/* BL-013: ReportView is the document — no second card frame around it. */
+.f9-share-page .f9-share-report {
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  color: inherit;
+}
+
+
+.f9-share-page .f9-share-header,
+.f9-share-page .f9-share-footer {
+  border-color: var(--ld-line);
+}
+
+
+.f9-share-page .f9-share-footer,
+.f9-share-page .f9-share-powered-by {
+  color: var(--ld-ink-soft);
+}
+
+
+.f9-share-page a,
+.f9-share-page .f9-share-footer a,
+.f9-share-page .f9-share-powered-by a {
+  color: var(--ld-green-ink);
+}
+
+
+/* The legacy `--f9-search-*` blue-white palette still reaches a few shared
+   surfaces; keep the case-file remap scoped to /share. The report itself now
+   renders through the Evidence Desk tokens and needs no palette override
+   (BL-009 deleted the `.report-*` flattening rules that used to sit here). */
+.f9-share-page {
+  --f9-search-ink: var(--ld-ink);
+  --f9-search-muted: var(--ld-ink-soft);
+  --f9-search-soft: var(--ld-ink-faint);
+  --f9-search-line: var(--ld-line);
+}
+
+
+.f9-doc-footer {
+  padding: 0 24px 48px;
+}
+
+
+.f9-doc-footer nav,
+.f9-doc-link-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+}
+
+
+.f9-doc-footer a,
+.f9-doc-link-grid a {
+  display: inline-flex;
+  align-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  color: var(--ld-green-ink);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+
+.f9-doc-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+
+.f9-code-block {
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 14px 0 0;
+  padding: 14px;
+  border: 1px solid var(--ld-ink);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--ld-ink);
+  font-family: var(--ld-mono);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+
+.f9-auth-page .f9-auth-brand {
+  min-height: 44px;
+}
+
+
+/* Cursor dashboard pivot (2026-06-22): compact app shell, quiet utility surfaces, proof-first activity. */
+.f9-find-page {
+  background: #f7f6f1;
+}
+
+
+.f9-find-page .f9-search-nav {
+  border-bottom: 1px solid #e4e0d7;
+  background: rgba(247, 246, 241, 0.94);
+}
+
+
+.f9-auth-page .f9-auth-card > span:first-child {
+  font-family: var(--ld-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ld-green-ink);
+}
+
+
+/* Migration CTA block (sneaker-resale landing). Inline flex with the honest
+   not-imported boundary kept on the page; the button is the only self-serve
+   action. */
+.ld-migration-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: clamp(20px, 4vw, 40px);
+  border: 2.5px solid var(--ld-ink);
+  border-radius: 8px;
+  background: var(--ld-card);
+  padding: clamp(24px, 4vw, 40px);
+}
+
+
+.ld-migration-cta h2 {
+  margin: 0 0 10px;
+}
+
+
+.ld-migration-cta p {
+  margin: 0;
+  max-width: 620px;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--ld-ink-soft);
+}
+
+
+.ld-cta-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  gap: 8px;
+  min-height: 52px;
+  padding: 0 24px;
+  border: 2.5px solid var(--ld-ink);
+  border-radius: 8px;
+  background: var(--ld-green-ink);
+  color: #fff;
+  font-family: var(--ld-mono);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+
+
+.ld-cta-button:hover {
+  background: var(--ld-green);
+  color: var(--ld-ink);
+}
+
+
+.ld-cta-button:focus-visible {
+  outline: 3px solid var(--ld-green);
+  outline-offset: 2px;
+}
+
+
+@media (max-width: 640px) {
+  .ld-migration-cta {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .ld-cta-button {
+    width: 100%;
+  }
+}
+
+
+
+/* Hero radar — "we work while you sleep" as an instrument (2026-06-12) */
+
+.ld-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.75fr);
+  gap: clamp(28px, 4vw, 64px);
+  /* start, not center: the evidence stack is taller than the copy, and
+     centering shoved the search command under the 1440x900 fold (#1212). */
+  align-items: start;
+}
+
+
+.ld-hero-grid .ld-wall {
+  /* Safe BET 9 wall (#1173): buyer-job H1 plus a proof strip must still
+     leave the search command in the 1440x900 first viewport. The cap was
+     3.2rem; with the live Nykaa-length proof strip present that pushed the
+     command to ~993px on desktop (#1875). 2.7rem keeps the H1 the dominant
+     element while reclaiming ~25px so the CTA clears the 900px fold with
+     room to spare. */
+  font-size: clamp(2.1rem, 3.4vw, 2.7rem);
+}
+
+
+.ld-deck-copy {
+  font-size: clamp(1rem, 1.4vw, 1.2rem);
+  line-height: 1.32;
+  font-weight: 500;
+  max-width: 540px;
+  margin: clamp(8px, 1.2vw, 10px) 0 0;
+}
+
+
+.ld-deck-copy b {
+  background: var(--ld-ink);
+  color: var(--ld-bone);
+  padding: 1px 8px;
+  font-weight: 600;
+}
+
+
+.ld-hero-copy .ld-command {
+  width: min(100%, 680px);
+  margin-top: clamp(10px, 1.5vw, 14px);
+}
+
+
+.ld-hero-copy .ld-honest {
+  max-width: 680px;
+}
+
+
+.ld-hero-side {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  align-items: center;
+}
+
+
+@media (max-width: 1100px) {
+  .ld-hero-grid { grid-template-columns: 1fr; }
+  .ld-hero-side {
+    flex-direction: row;
+    align-items: stretch;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
+
+
+
+@media (max-width: 760px) {
+  .ld-stack { display: none; }
+}
+
+
+
+/* Hero evidence stack — saved receipts as the hero object (2026-06-12) */
+
+.ld-stack {
+  position: relative;
+  width: 100%;
+  max-width: 440px;
+  height: 560px;
+}
+
+
+.ld-thread {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+
+.ld-shot {
+  position: absolute;
+  background: var(--ld-card);
+  border: 2px solid var(--ld-ink);
+  width: 72%;
+  box-shadow: 6px 6px 0 rgba(14, 13, 10, 0.12);
+  opacity: 1;
+  animation: ld-cycle-card 9s ease-in-out infinite;
+}
+
+
+@keyframes ld-cycle-card {
+  0% {
+    transform: rotate(var(--tilt)) translateY(18px);
+  }
+  4% {
+    transform: rotate(var(--tilt)) translateY(0);
+  }
+  45% { transform: rotate(var(--tilt)) translateY(-6px); }
+  80% { transform: rotate(var(--tilt)) translateY(0); }
+  95%, 100% {
+    transform: rotate(var(--tilt)) translateY(18px);
+  }
+}
+
+
+.ld-shot-body { padding: 14px; }
+
+
+.ld-stamp {
+  position: absolute;
+  font-family: var(--ld-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  background: var(--ld-card);
+  font-weight: 600;
+  z-index: 2;
+  opacity: 1;
+  animation: ld-cycle-stamp 9s ease-out infinite;
+}
+
+
+.ld-shot-before .ld-stamp { top: -10px; right: 14px; transform: rotate(2deg); animation-delay: 0.6s; }
+
+.ld-shot-after .ld-stamp { bottom: -10px; right: 16px; transform: rotate(-2deg); animation-delay: 0.9s; }
+
+.ld-shot-form .ld-stamp { top: -10px; left: 14px; transform: rotate(-1.5deg); animation-delay: 1.2s; }
+
+
+@keyframes ld-cycle-stamp {
+  0% { scale: 1.08; }
+  2.5% { scale: 1; }
+  90% { scale: 1; }
+  95%, 100% { scale: 1.08; }
+}
+
+.ld-stamp-green { border: 1.5px solid var(--ld-green-ink); color: var(--ld-green-ink); }
+
+
+.ld-diff-clip {
+  position: absolute;
+  top: 132px;
+  left: 56%;
+  z-index: 4;
+  font-family: var(--ld-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: var(--ld-ink);
+  color: var(--ld-green);
+  padding: 6px 12px;
+  transform: rotate(3deg);
+  opacity: 1;
+  animation: ld-cycle-stamp 9s ease-out 0.85s infinite;
+}
+
+
+.ld-brief-strip {
+  width: 100%;
+  max-width: 440px;
+  border: 1.5px solid var(--ld-ink);
+  background: var(--ld-card);
+  padding: 12px 16px;
+  font-family: var(--ld-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: var(--ld-ink-soft);
+}
+
+
+.ld-brief-strip b {
+  display: block;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ld-ink);
+  margin-bottom: 6px;
+}
+
+
+.ld-brief-strip ul {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+}
+
+
+.ld-brief-strip li {
+  padding: 3px 0;
+  border-bottom: 1px dotted var(--ld-line);
+}
+
+
+.ld-brief-strip li:last-child { border-bottom: 0; }
+
+
+.ld-brief-strip small { color: var(--ld-ink-faint); }
+
+
+.ld-proof-strip-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 12px;
+  border-bottom: 1.5px solid var(--ld-ink);
+  background: var(--ld-ink);
+  color: var(--ld-bone);
+  font-family: var(--ld-mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+
+.ld-proof-strip-head b { font-weight: 600; }
+
+
+.ld-proof-strip-head .ld-proof-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ld-green);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+
+.ld-proof-strip-head .ld-proof-live::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  background: var(--ld-green);
+}
+
+
+.ld-proof-strip-head .ld-proof-time {
+  margin-left: auto;
+  color: var(--ld-ink-faint);
+  font-weight: 500;
+}
+
+
+.ld-proof-strip-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 0;
+  align-items: stretch;
+}
+
+
+.ld-proof-hook {
+  padding: 4px 12px;
+  border-right: 1.5px solid var(--ld-ink);
+  font-family: var(--ld-display);
+  font-weight: 700;
+  font-size: clamp(0.9rem, 1.15vw, 1.02rem);
+  line-height: 1.16;
+  color: var(--ld-ink);
+}
+
+
+.ld-proof-hook .ld-proof-quote {
+  display: block;
+  text-transform: none;
+  letter-spacing: -0.01em;
+}
+
+
+.ld-proof-hook .ld-proof-attrib {
+  display: block;
+  margin-top: 5px;
+  font-family: var(--ld-mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ld-ink-soft);
+}
+
+
+.ld-proof-trail {
+  padding: 4px 10px;
+  font-family: var(--ld-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: var(--ld-ink-soft);
+}
+
+
+.ld-proof-trail ul { list-style: none; margin: 0; padding: 0; }
+
+
+.ld-proof-trail li {
+  padding: 1px 0;
+  border-bottom: 1px dotted var(--ld-line);
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+
+
+.ld-proof-trail li:last-child { border-bottom: 0; }
+
+
+.ld-proof-trail li .ld-proof-signal {
+  color: var(--ld-green-ink);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+
+.ld-proof-strip-foot {
+  padding: 5px 14px;
+  border-top: 1px solid var(--ld-line);
+  font-family: var(--ld-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  color: var(--ld-ink-faint);
+  text-transform: uppercase;
+}
+
+
+@media (max-width: 1100px) {
+  .ld-stack { height: 520px; max-width: 400px; }
+}
+
+
+
+@media (prefers-reduced-motion: reduce) {
+  .ld-ticker-belt { animation: none; }
+  .ld-rec::before { animation: none; }
+
+  .ld-shot,
+  .ld-stamp,
+  .ld-diff-clip {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+
+
+/* "Alive" pass — fluid motion across the landing (2026-06-12) */
+
+.ld-motion .ld-reveal.is-seen > * {
+  animation: ld-reveal-in 0.65s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+
+
+.ld-motion .ld-reveal.is-seen > *:nth-child(2) { animation-delay: 0.09s; }
+
+.ld-motion .ld-reveal.is-seen > *:nth-child(3) { animation-delay: 0.18s; }
+
+.ld-motion .ld-reveal.is-seen > *:nth-child(4) { animation-delay: 0.27s; }
+
+.ld-motion .ld-reveal.is-seen > *:nth-child(5) { animation-delay: 0.36s; }
+
+.ld-motion .ld-reveal.is-seen > *:nth-child(6) { animation-delay: 0.45s; }
+
+
+@keyframes ld-reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(26px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+
+/* Fail-safe end state: if the reveal animation never runs (element not
+   rendered when it was created, dropped animation, etc.), the resting
+   opacity is still fully visible. The keyframes above override this while
+   the animation is actually playing, so the stagger is unaffected.
+   Observed live 2026-07-13: .ld-case-card stuck at opacity 0 inside a
+   parent that already had .is-seen. */
+.ld-motion .ld-reveal.is-seen > * {
+  opacity: 1;
+}
+
+
+.f9-home .f9-commerce-card { animation: none; }
+
+
+.ld-flag {
+  animation: ld-wiggle 5s ease-in-out infinite;
+}
+
+
+@keyframes ld-wiggle {
+  0%, 100% { transform: rotate(3deg); }
+  50% { transform: rotate(0.5deg); }
+}
+
+
+.ld-step {
+  animation: ld-step-glow 4.5s ease-in-out infinite;
+}
+
+
+.ld-how-grid article:nth-child(2) .ld-step { animation-delay: 1.5s; }
+
+.ld-how-grid article:nth-child(3) .ld-step { animation-delay: 3s; }
+
+
+@keyframes ld-step-glow {
+  0%, 38%, 100% {
+    background: var(--ld-green-wash);
+    color: var(--ld-green-ink);
+  }
+  8%, 28% {
+    background: var(--ld-green);
+    color: var(--ld-ink);
+  }
+}
+
+
+.f9-home .ld-command button span {
+  display: inline-block;
+  animation: ld-nudge 2.4s ease-in-out infinite;
+}
+
+
+@keyframes ld-nudge {
+  0%, 100% { transform: translateX(0); }
+  12% { transform: translateX(5px); }
+  24% { transform: translateX(0); }
+}
+
+
+.ld-how-grid article,
+.ld-quiet-grid article,
+.ld-case-lead,
+.ld-case-card,
+.ld-intel article,
+.ld-bundle-card,
+.f9-home .f9-commerce-card {
+  transition: transform 0.3s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.3s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+
+.ld-how-grid article:hover,
+.ld-quiet-grid article:hover { transform: translateY(-4px); }
+
+
+.ld-case-lead:hover,
+.ld-case-card:hover,
+.ld-intel article:hover,
+.ld-bundle-card:hover,
+.f9-home .f9-commerce-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 7px 9px 0 rgba(14, 13, 10, 0.1);
+}
+
+
+.ld-ticker:hover .ld-ticker-belt { animation-play-state: paused; }
+
+
+@media (prefers-reduced-motion: reduce) {
+  .ld-del::after,
+  .ld-flag,
+  .ld-step,
+  .f9-home .ld-command button span { animation: none; }
+}
+
+
+
+.ld-wall-compact {
+  font-size: clamp(2.2rem, 5.2vw, 4.6rem);
+  text-transform: none;
+  letter-spacing: -0.03em;
+  max-width: 18ch;
+}
+
+
+.f9-find-page :is(a, button, input, select, textarea):focus-visible {
+  outline: 2px solid rgba(23, 112, 80, 0.72);
+  outline-offset: 2px;
+}
+
+
+/* ============================================================
+   WP-46: keep the lightweight sample-brief artifact visible in the
+   mobile hero (the heavy .ld-stack is hidden at this width).
+   ============================================================ */
+
+@media (max-width: 760px) {
+  .ld-brief-strip {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
+
+
+/* --- Search shell: neutralize the container-level light palettes that
+       the public funnel reskin pins onto .f9-find-page. --- */
+
+[data-f9-theme="dark"] .f9-find-page {
+  --f9-search-ink: var(--ink);
+  --f9-search-muted: var(--ink-soft);
+  --f9-search-soft: var(--ink-faint);
+  --f9-search-line: var(--line);
+  --ld-bone: var(--bone);
+  --ld-card: var(--card);
+  --ld-ink: var(--ink);
+  --ld-ink-soft: var(--ink-soft);
+  --ld-ink-faint: var(--ink-faint);
+  --ld-line: var(--line);
+  --ld-green-ink: var(--green-ink);
+  --ld-green-wash: var(--green-wash);
+  background: var(--bone);
+}
+
+
+[data-f9-theme="dark"] .f9-find-page :is(a, button, input, select, textarea):focus-visible {
+  outline-color: var(--green-ink);
+}
+
+
+/* Inline quick-save on a search result row (workflow-friction pass).
+   BL-031: it used to be an absolutely-positioned box in the corner of a card,
+   revealed on hover at `opacity: 0`. The card is gone, the reveal is gone —
+   an interactive control that is invisible until you hover it is not
+   discoverable, and it was already forced visible on every touch device — and
+   the accent fill on the saved state is gone with it: a green that marks
+   "saved" is a second green moment competing with the caught change. */
+
+.f9-quick-save {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+
+/* Saved is a STATE, not an affordance: it says the word and stops being
+   clickable (brief §4.5). */
+.f9-quick-save-button:disabled {
+  cursor: default;
+  color: var(--ink-faint);
+  text-decoration: none;
+}
+
+
+.f9-quick-save-note {
+  position: absolute;
+  z-index: 3;
+  top: calc(100% + 4px);
+  right: 0;
+  width: max-content;
+  max-width: 240px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+}
+
+
+/* BL-006 deleted the checkbox rail and its bulk bar from the watch board:
+   `.f9-bulk-bar`, `.f9-row-select`, `.f9-bulk-select-target` and
+   `.f9-bulk-checkbox` lived only on `/app/watchlists`. BL-030 then deleted
+   the band itself; bulk selection is now the ruled row's `lead` cell
+   (`.f9-wk-row-lead`), which is a real control sitting above the row-wide
+   hit area rather than a second column of chrome. */
+
+/* Keyboard navigation on search results (workflow-friction pass). */
+
+
+/* Keyboard shortcuts assume a hardware keyboard; hide the trigger on phones. */
+
+
+
+
+
+
+/* ==========================================================================
+   /ads/:domain — "Case File" acquisition page (Direction 1 hybrid)
+   See docs/ADS-PAGE-DIRECTIONS-2026-07-21.md. Public marketing surface: pinned
+   light (bone/ink), one green accent, red only as the removed/cut semantic.
+   Bricolage 700 display · Inter body · IBM Plex Mono labels. Namespaced
+   `.f9-ads-*` so it never collides with workspace or landing chrome.
+   ========================================================================== */
+.f9-ads-page {
+  background: var(--bone);
+  color: var(--ink);
+}
+
+
+/* ticker — reuses the landing marquee, just a firmer bottom rule */
+.f9-ads-ticker {
+  border-bottom: 2.5px solid var(--ink);
+}
+
+
+/* ---- shared eyebrow / headline ---- */
+.f9-ads-eyebrow {
+  font-family: var(--ld-mono);
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.f9-ads-eyebrow-sep {
+  color: var(--ink-faint);
+}
+
+.f9-ads-fresh-stamp {
+  color: var(--green-ink);
+  font-weight: 600;
+}
+
+.f9-ads-dot-live {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 4px var(--green-wash);
+  display: inline-block;
+  position: relative;
+  flex: none;
+}
+
+.f9-ads-dot-live::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1.5px solid var(--green);
+  animation: f9-ads-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+.f9-ads-dot-quiet {
+  background: var(--ink-faint);
+  box-shadow: 0 0 0 4px rgba(23, 22, 17, 0.08);
+}
+
+.f9-ads-dot-quiet::after {
+  display: none;
+}
+
+@keyframes f9-ads-ping {
+  0% { transform: scale(0.7); opacity: 0.8; }
+  100% { transform: scale(2.1); opacity: 0; }
+}
+
+
+.f9-ads-headline {
+  font-family: var(--ld-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: clamp(38px, 7.2vw, 72px);
+  line-height: 0.94;
+  letter-spacing: -0.03em;
+  margin: 1.1rem 0 0;
+  max-width: 15ch;
+}
+
+.f9-ads-hl {
+  background: var(--green);
+  color: var(--ink);
+  padding: 0 0.05em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.f9-ads-subline {
+  font-size: 1.15rem;
+  max-width: 52ch;
+  margin-top: 1.3rem;
+  color: #26241d;
+  line-height: 1.5;
+}
+
+.f9-ads-subline b {
+  background: var(--ink);
+  color: var(--bone);
+  padding: 1px 6px;
+  font-weight: 600;
+}
+
+
+/* ---- HERO ---- */
+/* ---- breadcrumb (issue #1418) ---- */
+.f9-ads-breadcrumb {
+  padding-top: 1rem;
+}
+
+.f9-ads-breadcrumb ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.f9-ads-breadcrumb li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+}
+
+.f9-ads-breadcrumb li:not(:last-child)::after {
+  content: "›";
+  color: var(--ink-faint);
+}
+
+.f9-ads-breadcrumb a {
+  color: var(--green-ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.f9-ads-breadcrumb [aria-current="page"] {
+  color: var(--ink-faint);
+}
+
+.f9-ads-hero {
+  padding: 2.6rem 0 2rem;
+  border-bottom: 2.5px solid var(--ink);
+}
+
+.f9-ads-hero-grid {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 2.8rem;
+  align-items: end;
+}
+
+
+/* ---- SCORE CARD ---- */
+.f9-ads-score-card {
+  border: 2.5px solid var(--ink);
+  background: var(--card);
+  box-shadow: 8px 8px 0 var(--ink);
+  position: relative;
+  padding: 1.4rem 1.5rem 1.25rem;
+}
+
+.f9-ads-score-stamp {
+  position: absolute;
+  top: 1.1rem;
+  right: 1.25rem;
+  font-family: var(--ld-mono);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--green-ink);
+  border: 1.5px solid var(--green-ink);
+  padding: 3px 7px;
+  transform: rotate(6deg);
+  border-radius: 3px;
+}
+
+.f9-ads-score-stamp-hot {
+  color: var(--red);
+  border-color: var(--red);
+}
+
+.f9-ads-score-label {
+  font-family: var(--ld-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.f9-ads-score-num {
+  font-family: var(--ld-display);
+  font-weight: 700;
+  font-size: 5.4rem;
+  line-height: 0.86;
+  letter-spacing: -0.04em;
+  margin-top: 0.25rem;
+}
+
+.f9-ads-score-num small {
+  font-size: 1.65rem;
+  color: var(--ink-faint);
+  font-weight: 700;
+}
+
+.f9-ads-score-band {
+  display: inline-block;
+  background: var(--green);
+  color: var(--ink);
+  font-family: var(--ld-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 5px 11px;
+  margin-top: 0.4rem;
+}
+
+.f9-ads-score-band-hot {
+  background: var(--red);
+  color: var(--bone);
+}
+
+.f9-ads-score-components {
+  margin-top: 1.1rem;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.f9-ads-comp {
+  display: grid;
+  grid-template-columns: 84px 1fr 22px;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.75rem;
+}
+
+.f9-ads-comp-name {
+  font-family: var(--ld-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  font-size: 0.62rem;
+}
+
+.f9-ads-comp-track {
+  height: 8px;
+  background: var(--green-wash);
+  border: 1.5px solid var(--ink);
+  position: relative;
+  overflow: hidden;
+}
+
+.f9-ads-comp-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--green);
+}
+
+.f9-ads-comp-val {
+  font-family: var(--ld-mono);
+  font-weight: 600;
+  text-align: right;
+  font-size: 0.68rem;
+}
+
+.f9-ads-score-formula {
+  font-family: var(--ld-mono);
+  font-size: 0.62rem;
+  color: var(--ink-faint);
+  margin-top: 0.8rem;
+  line-height: 1.5;
+}
+
+.f9-ads-score-formula a,
+.f9-ads-score-thin-note a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.f9-ads-score-thin {
+  box-shadow: 5px 5px 0 var(--ink-faint);
+}
+
+.f9-ads-score-thin-note {
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+  margin-top: 0.6rem;
+  line-height: 1.5;
+}
+
+
+/* Capture-validity trust note under the hero grid — the "no phantom
+   changes" cross-link to /capture-rules (issue #1320). Sits between the
+   hero grid (score card) and the primary CTA strip. */
+.f9-ads-proof-note {
+  margin: 0.4rem 0 0;
+}
+
+
+/* Ad-aggression methodology footer under the ad wall (issue #1552). Dimmed
+   by pairing with .f9-wk-dim; adds the modest separation so the trust link
+   reads as part of the wall, not a stray line. */
+.f9-ads-wall-foot {
+  margin-top: 0.9rem;
+}
+
+
+/* ---- PRIMARY CTA STRIP ---- */
+.f9-ads-watch-strip {
+  background: var(--ink);
+  color: var(--bone);
+  border: 2.5px solid var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.9rem;
+  padding: 1.6rem 1.9rem;
+  margin-top: 2rem;
+}
+
+.f9-ads-watch-copy h2 {
+  font-family: var(--ld-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 1.65rem;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.f9-ads-watch-g {
+  color: var(--green);
+}
+
+.f9-ads-watch-copy p {
+  color: #c9c6bd;
+  font-size: 0.88rem;
+  margin-top: 0.5rem;
+  max-width: 52ch;
+}
+
+.f9-ads-watch-btn {
+  background: var(--green);
+  color: var(--ink);
+  font-family: var(--ld-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+  padding: 1rem 1.6rem;
+  text-decoration: none;
+  white-space: nowrap;
+  border: 2.5px solid var(--green);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.f9-ads-watch-btn:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 4px 4px 0 var(--ink);
+}
+
+
+/* ---- STAT LINE ---- */
+.f9-ads-numbers {
+  padding: 2rem 0 0.4rem;
+}
+
+.f9-ads-numbers-label {
+  font-family: var(--ld-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--green-ink);
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.f9-ads-numbers-sub {
+  color: var(--ink-faint);
+  font-weight: 400;
+  letter-spacing: 0.04em;
+}
+
+.f9-ads-statline {
+  display: grid;
+  grid-template-columns: repeat(var(--f9-ads-cells, 6), 1fr);
+  border: 2.5px solid var(--ink);
+  background: var(--card);
+}
+
+.f9-ads-statline[data-cells="2"] { --f9-ads-cells: 2; }
+
+.f9-ads-statline[data-cells="3"] { --f9-ads-cells: 3; }
+
+.f9-ads-statline[data-cells="4"] { --f9-ads-cells: 4; }
+
+.f9-ads-statline[data-cells="5"] { --f9-ads-cells: 5; }
+
+.f9-ads-statline[data-cells="6"] { --f9-ads-cells: 6; }
+
+.f9-ads-cell {
+  padding: 1.35rem 1.25rem;
+  border-right: 2px solid var(--ink);
+}
+
+.f9-ads-cell:last-child {
+  border-right: none;
+}
+
+.f9-ads-cell-hot {
+  background: var(--green-wash);
+}
+
+.f9-ads-sv {
+  font-family: var(--ld-display);
+  font-weight: 700;
+  font-size: 2.75rem;
+  letter-spacing: -0.035em;
+  line-height: 0.86;
+}
+
+.f9-ads-su {
+  font-size: 0.95rem;
+  color: var(--ink-faint);
+  font-weight: 700;
+}
+
+.f9-ads-cell-hot .f9-ads-sv {
+  color: var(--green-ink);
+}
+
+.f9-ads-sn {
+  font-family: var(--ld-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin-top: 0.7rem;
+}
+
+.f9-ads-sd {
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+  margin-top: 0.2rem;
+  line-height: 1.35;
+}
+
+
+/* ---- SECTION HEADER ---- */
+.f9-ads-sec {
+  padding: 2.6rem 0 2.4rem;
+}
+
+.f9-ads-sec-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 2.5px solid var(--ink);
+  padding-bottom: 0.8rem;
+  margin-bottom: 1.5rem;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.f9-ads-sec-head-left {
+  display: flex;
+  align-items: baseline;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.f9-ads-sec-eyebrow {
+  font-family: var(--ld-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--green-ink);
+  font-weight: 600;
+}
+
+.f9-ads-sec-head h2 {
+  font-family: var(--ld-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 2rem;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.f9-ads-sec-meta {
+  font-family: var(--ld-mono);
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+  letter-spacing: 0.03em;
+}
+
+
+/* ---- PLAY-BY-PLAY TIMELINE ---- */
+.f9-ads-timeline {
+  border: 2.5px solid var(--ink);
+  background: var(--card);
+}
+
+.f9-ads-tl-row {
+  display: grid;
+  grid-template-columns: 92px 1fr 150px;
+  gap: 1.4rem;
+  align-items: center;
+  padding: 1.15rem 1.5rem;
+  border-bottom: 1.5px solid rgba(23, 22, 17, 0.13);
+}
+
+.f9-ads-tl-row:last-child {
+  border-bottom: none;
+}
+
+.f9-ads-tl-day {
+  font-family: var(--ld-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink);
+  border: 1.5px solid var(--ink);
+  padding: 5px 0;
+  text-align: center;
+  align-self: start;
+  margin-top: 2px;
+}
+
+.f9-ads-tl-day-today {
+  background: var(--green);
+  border-color: var(--green);
+}
+
+.f9-ads-tl-what {
+  font-size: 1.02rem;
+  line-height: 1.35;
+}
+
+.f9-ads-tl-move {
+  font-family: var(--ld-display);
+  font-weight: 700;
+}
+
+.f9-ads-tl-why {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  margin-top: 0.25rem;
+  font-family: var(--body, Inter, sans-serif);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.f9-ads-tl-badge {
+  display: inline-block;
+  font-family: var(--ld-mono);
+  font-size: 0.58rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 3px 7px;
+  margin-right: 0.6rem;
+  vertical-align: 2px;
+  background: var(--green);
+  color: var(--ink);
+}
+
+.f9-ads-tl-src {
+  font-family: var(--ld-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  text-align: right;
+}
+
+.f9-ads-tl-row-churn .f9-ads-tl-day {
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+.f9-ads-tl-what-churn {
+  font-family: var(--body, Inter, sans-serif);
+  font-weight: 400;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.f9-ads-tl-move-churn {
+  font-family: var(--body, Inter, sans-serif);
+  font-weight: 400;
+  color: inherit;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.f9-ads-thumb-mock {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  padding: 1rem;
+  background:
+    radial-gradient(120% 100% at 20% 0%, rgba(255, 255, 255, 0.12), transparent 60%),
+    linear-gradient(150deg, var(--ink), #2b281f);
+}
+
+.f9-ads-thumb-mock-headline {
+  font-family: var(--ld-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #fff;
+  font-size: clamp(0.95rem, 2.4vw, 1.25rem);
+  line-height: 1.02;
+  letter-spacing: -0.01em;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.4);
+  position: relative;
+  z-index: 2;
+}
+
+.f9-ads-thumb-play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  transform: translate(-40%, -50%);
+  border-top: 13px solid transparent;
+  border-bottom: 13px solid transparent;
+  border-left: 21px solid rgba(255, 255, 255, 0.92);
+  z-index: 3;
+}
+
+.f9-ads-thumb-dots {
+  position: absolute;
+  bottom: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  z-index: 3;
+}
+
+.f9-ads-thumb-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.f9-ads-thumb-dots i:first-child {
+  background: #fff;
+}
+
+.f9-ads-thumb-fmt {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 6;
+  font-family: var(--ld-mono);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: rgba(23, 22, 17, 0.82);
+  color: #fff;
+  padding: 3px 7px;
+}
+
+.f9-ads-thumb-saved {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  z-index: 6;
+  font-family: var(--ld-mono);
+  font-size: 0.56rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  background: var(--green);
+  color: var(--ink);
+  padding: 3px 7px;
+}
+
+.f9-ads-card-headline {
+  font-family: var(--ld-display);
+  font-weight: 700;
+  font-size: 1.05rem;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+
+.f9-ads-card-pills {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: auto;
+}
+
+.f9-ads-pill {
+  font-family: var(--ld-mono);
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  padding: 4px 9px;
+  border: 1.5px solid var(--ink);
+  text-transform: uppercase;
+}
+
+/* Glanceable "Verified link" signal on /ads/:domain wall cards (issue #1474):
+   the wall's own f9-ads-pill chip, filled green so it reads as proof at a
+   glance — inverted against the transparent-bordered metadata pills, the same
+   way f9-ads-pill-strong inverts the neutral pill. It leads the card body so
+   a buyer can tell at a glance which card the Ad Aggression Score is built
+   from. `data-verified-link` carries the brand domain for the prod-public
+   Playwright assertion. Shares the pill's square shape: the design-system
+   ratchet counts new raw border-radius as legacy debt, so the badge mints no
+   radius of its own. */
+.f9-ads-pill.f9-ads-verified-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  align-self: flex-start;
+  background: var(--green-ink);
+  border-color: var(--green-ink);
+  color: var(--green-wash);
+  font-weight: 600;
+}
+
+.f9-ads-pill-partner {
+  background: var(--amber-wash);
+  border-color: var(--ink);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.f9-ads-card-more {
+  border: 2px dashed var(--ink);
+  background: var(--green-wash);
+}
+
+.f9-ads-card-more a {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 220px;
+  text-decoration: none;
+  gap: 0.4rem;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.f9-ads-more-num {
+  font-family: var(--ld-display);
+  font-weight: 700;
+  font-size: 3.6rem;
+  letter-spacing: -0.04em;
+  line-height: 0.9;
+  color: var(--green-ink);
+}
+
+.f9-ads-more-label {
+  font-family: var(--ld-display);
+  font-weight: 700;
+  font-size: 1.35rem;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.f9-ads-more-cta {
+  font-family: var(--ld-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--green-ink);
+  margin-top: 0.5rem;
+  border-bottom: 2px solid var(--green-ink);
+  padding-bottom: 2px;
+}
+
+
+/* ---- CLOSER ---- */
+.f9-ads-closer {
+  border-top: 2.5px solid var(--ink);
+  margin-top: 0.5rem;
+  padding: 3.6rem 0 2rem;
+  text-align: center;
+}
+
+.f9-ads-closer-head {
+  font-family: var(--ld-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: clamp(30px, 5.4vw, 50px);
+  letter-spacing: -0.03em;
+  line-height: 0.96;
+  max-width: 22ch;
+  margin: 0 auto;
+}
+
+.f9-ads-closer-cta {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  align-items: center;
+  margin-top: 1.8rem;
+  flex-wrap: wrap;
+}
+
+.f9-ads-closer .f9-ads-watch-btn {
+  font-size: 1.25rem;
+  padding: 1.15rem 2rem;
+}
+
+.f9-ads-ghost {
+  font-family: var(--ld-mono);
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  color: var(--ink-soft);
+}
+
+.f9-ads-honest {
+  font-family: var(--ld-mono);
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+  margin-top: 1.6rem;
+  line-height: 1.7;
+  max-width: 82ch;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.f9-ads-honest a {
+  color: var(--green-ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+
+/* ---- CACHE-MISS TEACHING SHELL ---- */
+.f9-ads-shell {
+  padding: 3rem 0 3.5rem;
+}
+
+.f9-ads-shell-head {
+  max-width: 24ch;
+}
+
+.f9-ads-shell-cta {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  margin-top: 1.8rem;
+  flex-wrap: wrap;
+}
+
+.f9-ads-example {
+  position: relative;
+  margin-top: 3rem;
+  border: 2px dashed var(--ink-faint);
+  border-radius: 4px;
+  padding: 2.4rem 1.5rem 1.5rem;
+  background: rgba(255, 253, 248, 0.5);
+}
+
+.f9-ads-example-tag {
+  position: absolute;
+  top: -0.85rem;
+  left: 1.25rem;
+  background: var(--ink);
+  color: var(--bone);
+  font-family: var(--ld-mono);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 5px 10px;
+}
+
+.f9-ads-example-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.35fr;
+  gap: 2rem;
+  align-items: start;
+  filter: saturate(0.5) opacity(0.78);
+}
+
+.f9-ads-example-side {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.f9-ads-example-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+
+/* ---- responsive ---- */
+@media (max-width: 900px) {
+  .f9-ads-hero-grid {
+    grid-template-columns: 1fr;
+    gap: 1.8rem;
+    align-items: stretch;
+  }
+  .f9-ads-score-card {
+    box-shadow: 5px 5px 0 var(--ink);
+  }
+  .f9-ads-example-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+@media (max-width: 760px) {
+  .f9-ads-statline {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+  .f9-ads-cell {
+    border-right: 2px solid var(--ink);
+    border-bottom: 2px solid var(--ink);
+  }
+  .f9-ads-watch-strip {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .f9-ads-watch-strip .f9-ads-watch-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+
+@media (max-width: 620px) {
+  .f9-ads-score-card {
+    box-shadow: 3px 3px 0 var(--ink);
+  }
+  .f9-ads-tl-row {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+  .f9-ads-tl-day {
+    justify-self: start;
+    padding: 4px 10px;
+  }
+  .f9-ads-tl-src {
+    text-align: left;
+  }
+}
+
+
+@media (max-width: 480px) {
+  .f9-ads-statline {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .f9-ads-example-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  .f9-ads-dot-live::after {
+    animation: none;
+  }
+  .f9-ads-watch-btn:hover {
+    transform: none;
+  }
+}
+
+
+
+/* Public Offer Timeline (/timeline/:domain). Reuses ads-page tokens. */
+.f9-timeline-asof {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1.5rem 0 1rem;
+}
+
+.f9-timeline-asof label {
+  font-family: var(--ld-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.f9-timeline-asof input[type="date"] {
+  font-family: var(--ld-mono);
+  font-size: 1rem;
+  padding: 0.45rem 0.7rem;
+  min-height: 44px;
+  border: 2px solid var(--ink);
+  background: var(--bone);
+  color: var(--ink);
+}
+
+.f9-timeline-asof-result {
+  border: 2.5px solid var(--ink);
+  padding: 1rem 1.15rem;
+  margin: 0 0 1.25rem;
+}
+
+.f9-timeline-asof-result h2 {
+  font-family: var(--ld-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0 0 0.4rem;
+}
+
+.f9-timeline-share {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0 0 1rem;
+  max-width: 40rem;
+}
+
+.f9-timeline-share label {
+  font-family: var(--ld-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.f9-timeline-share input {
+  font-family: var(--ld-mono);
+  font-size: 0.92rem;
+  min-height: 44px;
+  padding: 0.45rem 0.7rem;
+  border: 2px solid var(--ink);
+  background: var(--bone);
+  color: var(--ink);
+}
+
+.f9-timeline-also {
+  font-size: 0.95rem;
+}
+
+.f9-timeline-entry {
+  display: grid;
+  grid-template-columns: 8.5rem minmax(0, 1fr);
+  gap: 1.25rem;
+  padding: 0 0 1.75rem 1.5rem;
+  position: relative;
+}
+
+.f9-timeline-entry::before {
+  content: "";
+  position: absolute;
+  left: -5px;
+  top: 0.35rem;
+  width: 8px;
+  height: 8px;
+  background: var(--green-ink);
+  border: 2px solid var(--ink);
+}
+
+.f9-timeline-headline {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin: 0 0 0.4rem;
+}
+
+.f9-timeline-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  margin: 0 0 0.75rem;
+  color: var(--ink-faint);
+}
+
+.f9-timeline-diff {
+  margin: 0 0 0.75rem;
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  gap: 0.35rem 0.5rem;
+}
+
+.f9-timeline-diff dt {
+  font-family: var(--ld-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.f9-timeline-initial {
+  margin: 0 0 0.75rem;
+  color: var(--ink-faint);
+}
+
+.f9-timeline-receipts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  margin: 0;
+}
+
+.f9-timeline-receipts a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+@media (max-width: 620px) {
+  .f9-timeline-entry {
+    grid-template-columns: 1fr;
+    gap: 0.4rem;
+  }
+  .f9-timeline-diff {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* #2392-bl030 */
+
+
+.f9-wk-more {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--wk-on-band-dim);
+  cursor: pointer;
+  font-family: var(--f9-font);
+  font-size: 13px;
+  text-align: left;
+}
+/* #2392-bl030 */
+
+
+.f9-wk-more:hover {
+  background: var(--wk-band-2);
+}
+/* #2392-bl030 */
+
+
+.f9-wk-more .f9-wk-caret {
+  margin-left: auto;
+  font-size: 9px;
+}
+/* #2392-bl030 */
+
+
+/* Issue 2150 (re-scoped): the "×N versions" label on a /search row when a
+   creative runs more than one version. A flat label in the same family as the
+   tier badge — the workspace language layer's boringness budget is law
+   (BL-030), so it is a quiet word, not a pill. */
+.f9-wk-versions {
+  display: inline-block;
+  margin-left: 8px;
+  color: var(--ink-faint);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* #2392-bl030 */
+
+
+/* BET 2 tier badge (issue 1482): the confidence marker on each search row.
+   One badge per row, tier in the class; bet2-live-verification counts these
+   spans, so the markup contract stays stable. Verified (green), Likely
+   (amber), Unmatched (grey). Colours come from the design tokens and the
+   radius stays 0 — the workspace language layer's boringness budget is law
+   (BL-030), so the badge is a flat label, not a pill. */
+.f9-tier-badge {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 7px;
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  line-height: 18px;
+  vertical-align: 1px;
+  white-space: nowrap;
+}
+/* #2392-bl030 */
+
+
+.f9-tier-badge.is-verified {
+  background: var(--green-wash);
+  color: var(--green-ink);
+}
+/* #2392-bl030 */
+
+
+.f9-tier-badge.is-likely {
+  background: var(--amber-wash);
+  color: var(--ink);
+}
+/* #2392-bl030 */
+
+
+.f9-tier-badge.is-unmatched {
+  background: var(--line);
+  color: var(--ink-soft);
+}
+/* #2392-bl030 */
+
+
+/* BET 2: the "Yes, that's them" confirm link on a likely-tier row. It sits
+   in the trail slot (above the row-wide hit area) and opens the detail pane
+   where the track/signup CTA lives — one click to confirm, not a dead-end. */
+.f9-wk-row-confirm {
+  display: inline-flex;
+  align-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  gap: 4px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+/* #2392-bl030 */
+
+
+.f9-wk-row-confirm:hover {
+  text-decoration: underline;
+}
+/* #2392-bl030 */
+
+
+/* The pre-search country scope (issue #1882): the empty state shows the
+   country selector at the top of the instrument, visible by default, so the
+   first viewport reads input + country + CTA. Sized like the command row's
+   other controls, on its own small line so mobile never crowds three controls
+   into one row. */
+.f9-wk-country {
+  max-width: 280px;
+}
+/* #2392-bl030 */
+
+
+.f9-wk-quote {
+  margin: 12px 0 0;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+/* #2392-bl030 */
+
+
+@media (max-width: 900px) {
+
+  .f9-wk-sec-acts {
+    flex: 1 1 100%;
+    justify-content: space-between;
+  }
+}
+
+/* #2392-bl030 */
+
+
+/* ================================================================
+   BL-031 — /search in the landing language (2026-07-29)
+   P1 of the rebuild program. Built on BL-030's primitives: the working
+   header, the ruled row, the Linear-peek detail pane, the ink feedback
+   strip, `.f9-wk-page` scope, one rule weight (1px), radius 0.
+
+   Two things this layer adds to the P0 vocabulary, because a search page
+   needs them and no rebuilt surface had them yet:
+
+     1. FORM CONTROLS (DNA §2). An input is a frame: 1px rule, radius 0, no
+        inner shadow, no placeholder-as-label, and a machine-shaped value
+        (a URL, a date) set in mono. Its label sits above it.
+        DEVIATION, named rather than taken quietly: DNA §2 specifies the
+        label as a 10px caps-mono micro-label. v4 supersedes it — the
+        boringness budget allows THREE caps-mono surfaces per page and the
+        refine panel alone would spend six. Labels are sentence-case body
+        text, exactly like v4's rail labels and account block.
+     2. A SECTION HEAD — a title with at most two quiet controls on its
+        right — because a result list has a sort and a shortcut affordance
+        and the page header already spent its one action.
+
+   Everything else is P0's. There is no new colour and no new rule weight.
+   ================================================================ */
+
+/* ---------------------------------------------------------------
+   Form controls
+   --------------------------------------------------------------- */
+
+.f9-wk-field {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+/* #2392-bl030 */
+
+
+.f9-wk-lab {
+  color: var(--ink-soft);
+  font-family: var(--f9-font);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+/* #2392-bl030 */
+
+
+.f9-wk-sel {
+  appearance: none;
+  padding-right: 30px;
+}
+/* #2392-bl030 */
+
+
+/* The caret is drawn, not imported: a background-image caret cannot follow
+   the theme, and this system has no icon font. */
+.f9-wk-field:has(> select)::after {
+  position: absolute;
+  right: 12px;
+  bottom: 14px;
+  color: var(--ink-faint);
+  content: "\25BE";
+  font-size: 11px;
+  line-height: 1;
+  pointer-events: none;
+}
+/* #2392-bl030 */
+
+
+.f9-wk-field.is-inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+/* #2392-bl030 */
+
+
+.f9-wk-field.is-inline .f9-wk-sel {
+  width: auto;
+  min-width: 152px;
+}
+/* #2392-bl030 */
+
+
+.f9-wk-field.is-inline:has(> select)::after {
+  bottom: 15px;
+}
+/* #2392-bl030 */
+
+
+/* ---------------------------------------------------------------
+   The command band. One field, one filled button, one hint, and a
+   disclosure that stays shut until the visitor actually has filters on.
+   --------------------------------------------------------------- */
+
+/* ROUND 2 — the instrument's vertical rhythm, tightened against the v4 scale.
+   The header above it is P0's, unmodified (26/20 around a 28px title). This
+   band opens at 14px rather than 22px because the header rule already does the
+   separating work; the 22px was landing rhythm on a workspace screen, which is
+   the correction v3 recorded and this row had quietly kept. */
+.f9-wk-command {
+  padding: 14px var(--wk-pad) 0;
+}
+/* #2392-bl030 */
+
+
+.f9-wk-command-row {
+  display: flex;
+  max-width: 640px;
+  align-items: flex-end;
+  gap: 12px;
+}
+/* #2392-bl030 */
+
+
+.f9-wk-command-row .f9-wk-field {
+  flex: 1 1 auto;
+}
+/* #2392-bl030 */
+
+
+.f9-wk-hint {
+  max-width: 62ch;
+  margin: 9px 0 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+/* #2392-bl030 */
+
+
+.f9-wk-refine {
+  margin-top: 8px;
+}
+/* #2392-bl030 */
+
+
+.f9-wk-refine > summary {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: 13.5px;
+  list-style: none;
+}
+/* #2392-bl030 */
+
+
+.f9-wk-refine > summary::-webkit-details-marker {
+  display: none;
+}
+/* #2392-bl030 */
+
+
+.f9-wk-refine > summary::before {
+  color: var(--ink-faint);
+  content: "\25B8";
+  font-size: 10px;
+}
+/* #2392-bl030 */
+
+
+.f9-wk-refine[open] > summary::before {
+  content: "\25BE";
+}
+/* #2392-bl030 */
+
+
+.f9-wk-refine > summary:hover {
+  color: var(--ink);
+}
+/* #2392-bl030 */
+
+
+.f9-wk-refine-n {
+  color: var(--ink-faint);
+}
+/* #2392-bl030 */
+
+
+.f9-search-refine {
+  display: grid;
+  max-width: 880px;
+  margin: 2px 0 6px;
+  gap: 14px 18px;
+  grid-template-columns: repeat(auto-fit, minmax(178px, 1fr));
+}
+/* #2392-bl030 */
+
+
+.f9-wk-refine.is-inline {
+  margin-top: 0;
+}
+/* #2392-bl030 */
+
+
+/* ROUND 2 — the refine disclosure is an INSTRUMENT control, so above the
+   width where there is room for it, it sits in the instrument's own row
+   rather than on a row of its own. That is the header contract measured off
+   incident.io (title left, actions inline right, ONE row) applied to the
+   command band, and it removes a whole 52px band from every state without
+   removing a control: closed, `Refine search` is a word beside the button;
+   open, its panel fills the space to the right of the 640px command row
+   instead of pushing the results down a second time.
+
+   Below 1080px the two columns cannot both be honest widths, so it falls back
+   to the stacked layout — the phone has the vertical room the desktop does
+   not. */
+@media (min-width: 1080px) {
+  .f9-find-page .f9-wk-command-form {
+    display: grid;
+    align-items: end;
+    column-gap: 28px;
+    grid-template-columns: minmax(0, 640px) minmax(0, 1fr);
+  }
+
+  .f9-find-page .f9-wk-command-form > .f9-wk-command-row {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .f9-find-page .f9-wk-command-form > .f9-wk-country {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .f9-find-page .f9-wk-command-form > .f9-wk-hint {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  .f9-find-page .f9-wk-command-form > .f9-wk-refine {
+    align-self: end;
+    margin-top: 0;
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .f9-find-page .f9-wk-command-form > .f9-wk-refine > .f9-search-refine {
+    margin-bottom: 0;
+  }
+}
+
+/* #2392-bl030 */
+
+
+.f9-save-query-form {
+  display: flex;
+  max-width: 480px;
+  align-items: flex-end;
+  gap: 12px;
+  padding-bottom: 6px;
+}
+/* #2392-bl030 */
+
+
+.f9-save-query-form .f9-wk-field {
+  flex: 1 1 auto;
+}
+/* #2392-bl030 */
+
+
+.f9-quick-track-form {
+  display: flex;
+  align-items: center;
+}
+/* #2392-bl030 */
+
+
+.f9-wk-sec-headings {
+  min-width: 0;
+}
+/* #2392-bl030 */
+
+
+.f9-wk-sec-title {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--f9-font);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.3;
+  text-transform: none;
+}
+/* #2392-bl030 */
+
+
+.f9-wk-sec-sub {
+  margin: 5px 0 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+/* #2392-bl030 */
+
+
+/* Snapshot age under the results title: muted so the count and the answer
+   sentence stay the primary reads, but present so a stale cache-served
+   result can never look current. */
+.f9-wk-sec-capture-age {
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+/* #2392-bl030 */
+
+
+.f9-wk-sec-acts {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 16px;
+}
+/* #2392-bl030 */
+
+
+.f9-wk-hints {
+  position: relative;
+}
+/* #2392-bl030 */
+
+
+.f9-wk-hints-body {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 2px);
+  right: 0;
+  display: grid;
+  min-width: 224px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--wk-rule);
+  background: var(--card);
+  font-size: 12.5px;
+  gap: 7px 14px;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+/* #2392-bl030 */
+
+
+.f9-wk-hints-body > div {
+  display: contents;
+}
+/* #2392-bl030 */
+
+
+.f9-wk-hints-body dt {
+  color: var(--ink);
+  font-family: var(--ld-mono);
+}
+/* #2392-bl030 */
+
+
+.f9-wk-hints-body dd {
+  margin: 0;
+  color: var(--ink-soft);
+}
+/* #2392-bl030 */
+
+
+/* BET 2 (issue 951): progressive streaming progress banner. Sits above the
+   result rows when the first batch has landed but the scroll-and-collect
+   passes are still running. Shares the lede/note type roles so it reads as
+   the same voice as the honest empty states, separated by a hairline rule so
+   it is visually distinct from the rows below without introducing a new
+   colour. */
+.f9-wk-progress {
+  padding: 12px 0 14px;
+  border-top: 1px solid var(--wk-rule);
+}
+/* #2392-bl030 */
+
+
+.f9-wk-more-results {
+  padding: 14px 0 0;
+}
+/* #2392-bl030 */
+
+
+/* ---------------------------------------------------------------
+   The retention band (round 2). The page's second and last conversion
+   moment, below the whole split rather than at the foot of the left
+   column, and the same object for both audiences.
+
+   It carries NO new type role and NO new colour: its line is the
+   section title (17px Inter 600) it shares with the results head, and
+   its weight comes from isolation, not from scale — v3's lesson, that
+   scale is not a carrier of character. What makes it unmissable is
+   that it is alone: a full-width rule, 44px of air above the line, and
+   nothing else in its viewport. The commit is the one filled button
+   the DNA allows per viewport; the landing does exactly this with its
+   `.ld-final` band, 6,000px below the hero's.
+   --------------------------------------------------------------- */
+
+.f9-wk-retain {
+  padding: 44px var(--wk-pad) 52px;
+  border-top: 1px solid var(--wk-rule);
+}
+/* #2392-bl030 */
+
+
+.f9-wk-retain-say {
+  max-width: 58ch;
+  margin: 10px 0 0;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+/* #2392-bl030 */
+
+
+.f9-wk-creative {
+  margin-top: 18px;
+}
+/* #2392-bl030 */
+
+
+.f9-wk-creative-head {
+  margin: 12px 0 0;
+  color: var(--ink);
+  font-family: var(--f9-font);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: none;
+}
+/* #2392-bl030 */
+
+
+/* Provenance is told once, and it belongs to the capture. */
+.f9-wk-prov {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 14px 0 0;
+  color: var(--ink-faint);
+  font-size: 12.5px;
+  gap: 2px 0;
+}
+/* #2392-bl030 */
+
+
+.f9-wk-prov span + span::before {
+  margin: 0 8px;
+  content: "\00B7";
+  opacity: 0.55;
+}
+/* #2392-bl030 */
+
+
+.f9-wk-small {
+  margin: 9px 0 0;
+  color: var(--ink-faint);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+/* #2392-bl030 */
+
+
+.f9-wk-blk-head {
+  margin: 10px 0 0;
+  color: var(--ink);
+  font-family: var(--f9-font);
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+/* #2392-bl030 */
+
+
+/* A URL is a link you tap, so it carries the layer's 44px target even though
+   the text it draws is 18px tall. The harness measured this one at 210x18 and
+   refused to write the evidence set. */
+.f9-wk-url {
+  display: block;
+  min-height: 44px;
+  margin-top: 4px;
+  padding: 13px 0 11px;
+  color: var(--ink-soft);
+  font-family: var(--ld-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+/* #2392-bl030 */
+
+
+.f9-wk-url:hover {
+  color: var(--ink);
+}
+/* #2392-bl030 */
+
+
+@media (max-width: 640px) {
+  .f9-wk-command {
+    padding-top: 18px;
+  }
+
+  /* ROUND 2 — DNA §1 says the Rank-1 button is NEVER full-width, and the phone
+     rule that stacked `See ads` under the field and stretched it across the
+     screen was an unnamed deviation from it. The instrument stays one row at
+     every width: it obeys the rule, it reads as one object rather than two,
+     and it takes 56px off the top of every phone search. */
+  .f9-wk-command-row {
+    gap: 10px;
+  }
+
+  .f9-wk-sec-acts {
+    flex: 1 1 100%;
+    justify-content: space-between;
+  }
+
+  .f9-search-refine {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .f9-save-query-form {
+    flex-wrap: wrap;
+  }
+}
+
+/* #2392-bl030 */
+
+
+/* Issue 1554 — switch-target cross-link card, above the fold on /search.
+   Sits one step off the page, same ground as a row hover, so it reads as a
+   distinct handoff without becoming a card that competes with the results.
+   The link keeps the working-page accent. */
+.f9-switch-cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+  margin-top: var(--wk-pad);
+  padding: 16px var(--wk-pad);
+  margin-right: calc(var(--wk-pad) * -1);
+  margin-left: calc(var(--wk-pad) * -1);
+  background: var(--wk-sunk);
+  color: var(--wk-fill);
+  font-family: var(--f9-font);
+  font-size: 14px;
+  line-height: 1.5;
+}
+/* #2392-bl030 */
+
+
+.f9-switch-cta-head {
+  margin: 0;
+  font-weight: 650;
+}
+/* #2392-bl030 */
+
+
+.f9-switch-cta-copy {
+  margin: 0;
+  color: var(--wk-band);
+}
+/* #2392-bl030 */
+
+.f9-wk-mt1 { margin-top: 1rem; }
+/* #2392-bl030 */
+
+.f9-wk-mb15 { margin-bottom: 1.5rem; }
+/* #2392-bl030 */
+
+.f9-quiet-details { margin-top: 12px; }
+/* #2392-bl030 */
+
+.f9-quiet-details > summary { cursor: pointer; color: var(--ink-soft, inherit); font-size: 0.9rem; }
+/* #2392-bl030 */
+
+
+/* ------------------------------------------------------------------ */
+/* Staff ops — standalone container (tri-audit G4). Ops left the       */
+/* customer shell; this is deliberately minimal chrome for a           */
+/* staff-only surface and is NOT part of the customer design system.   */
+/* ------------------------------------------------------------------ */
+.f9-ops-standalone {
+  display: block;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}
+/* #2392-bl030 */
+
+
+/* Mobile first-viewport budget (375x812 and 390x844 / issue 971): keep the
+   live-search field and its CTA above the fold. Trims only — do not hide
+   the nav, the command, or the honest note (journey-1 fold gate). */
+@media (max-width: 600px) {
+  .ld-ticker { padding: 6px 0; }
+  .ld-hero { padding-top: 0; }
+  .ld-hero-grid .ld-wall { font-size: 1.75rem; }
+  .ld-proof-strip-head {
+    padding: 6px 10px;
+    font-size: 0.64rem;
+    gap: 8px;
+  }
+  .ld-proof-strip-body { grid-template-columns: 1fr; }
+  .ld-proof-hook {
+    padding: 8px 10px;
+    font-size: 0.95rem;
+    border-right: 0;
+  }
+  .ld-proof-hook .ld-proof-attrib { margin-top: 6px; }
+  .ld-proof-trail,
+  .ld-proof-strip-foot { display: none; }
+  .ld-proof-strip-head .ld-proof-time { display: none; }
+  .ld-hero-copy { overflow-x: clip; }
+  .ld-deck-copy { font-size: 0.88rem; line-height: 1.35; margin-top: 8px; }
+  .ld-hero-copy .ld-command { margin-top: 0; }
+  .ld-case { margin-bottom: 6px; font-size: 0.7rem; }
+  .f9-home .ld-hero .ld-case { margin-bottom: 6px; }
+  .f9-home .ld-hero .ld-hero-callouts { margin-bottom: 0; }
+  .f9-home .ld-hero .ld-hero-callouts {
+    flex-wrap: nowrap;
+    gap: 6px;
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+    contain: inline-size;
+  }
+
+  /* Beat the 760px column stack so the pill stays one row and the secondary
+     line ("Paste a competitor site…") yields vertical room to the command. */
+  .f9-home .ld-hero .f9-announcement {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    margin-bottom: 0;
+    padding: 0 12px;
+  }
+  .f9-home .ld-hero .f9-announcement span {
+    display: none;
+  }
+
+  .f9-home .ld-command input {
+    min-height: 44px;
+    padding: 10px 14px;
+  }
+  .f9-home .ld-command button {
+    min-height: 44px;
+    padding: 10px 14px;
+  }
+
+  /* Beat the 760px stacked proof-action links (each 44px tall) so they sit
+     on one row under the command instead of pushing the fold. */
+  .f9-home .ld-hero .f9-hero-proof-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 8px;
+    gap: 8px 16px;
+  }
+  .f9-home .ld-hero .f9-hero-proof-actions a {
+    width: auto;
+    justify-content: flex-start;
+  }
+
+  .ld-hero-copy .ld-honest {
+    margin-top: 10px;
+    padding: 8px 0 12px;
+  }
+}
+
+/* #2392-bl030 */
+
+
+/* Short-portrait first-viewport budget (375x667 / 360x632 / issue 2090):
+   the 600px-width pack still leaves the command ~190px under an iPhone SE
+   fold once a live Nykaa-length proof strip is present. Shrink the wall
+   and the strip body; keep the proof strip, the deck, and the primary nav. */
+@media (max-width: 600px) and (max-height: 760px) {
+  .ld-ticker { padding: 2px 0; }
+  .ld-hero-grid .ld-wall { font-size: 1.35rem; }
+  .ld-proof-strip-head {
+    padding: 4px 8px;
+    font-size: 0.58rem;
+    gap: 6px;
+  }
+  .ld-proof-strip-head .ld-proof-time { display: none; }
+  .ld-proof-hook {
+    padding: 6px 8px;
+    font-size: 0.82rem;
+  }
+  .ld-proof-hook .ld-proof-attrib { display: none; }
+  .ld-deck-copy { font-size: 0.8rem; line-height: 1.28; margin-top: 4px; }
+  .f9-home .ld-hero .ld-case { margin-bottom: 2px; }
+  .f9-home .ld-command input {
+    min-height: 44px;
+    padding: 8px 12px;
+  }
+  .f9-home .ld-command button {
+    min-height: 44px;
+    padding: 8px 12px;
+  }
+}
+
+/* #2392-bl030 */
+
+
+/* Visible breadcrumb navigation (issue #1463). Rendered by the shared
+   <Breadcrumbs> component alongside its BreadcrumbList JSON-LD so the visible
+   Home → Category → Page trail and Google's rich-result crumb stay in lockstep.
+   Tones borrow the `.ld-case` eyebrow vocabulary (mono, uppercase, ink-soft)
+   and the site separators, so the trail reads as page chrome, not a second
+   headline. Inline-block <ol>/<li> keeps one clickable target per crumb. */
+.f9-breadcrumbs {
+  font-family: var(--ld-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+/* #2392-bl030 */
+
+.f9-breadcrumbs ol {
+  display: inline-block;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* #2392-bl030 */
+
+.f9-breadcrumbs li {
+  display: inline-block;
+  margin: 0;
+  padding: 0;
+}
+/* #2392-bl030 */
+
+.f9-breadcrumbs li + li::before {
+  content: " › ";
+  color: var(--ld-ink, var(--ink));
+  opacity: 0.45;
+  padding: 0 0.25em;
+}
+/* #2392-bl030 */
+
+.f9-breadcrumbs a {
+  color: var(--ld-ink-soft, var(--ink-soft));
+  text-decoration: none;
+}
+/* #2392-bl030 */
+
+.f9-breadcrumbs a:hover {
+  color: var(--ld-ink, var(--ink));
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+/* #2392-bl030 */
+
+.f9-breadcrumbs [aria-current="page"] {
+  color: var(--ld-ink-soft, var(--ink-soft));
+}

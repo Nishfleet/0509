@@ -27,7 +27,7 @@ const opsRoute = readFileSync("app/routes/ops.tsx", "utf8");
 const digestIntelligence = readFileSync("app/components/digest-intelligence.tsx", "utf8");
 const reportView = readFileSync("app/components/report-view.tsx", "utf8");
 const signOutButton = readFileSync("app/components/sign-out-button.tsx", "utf8");
-const appCss = readFileSync("app/app.css", "utf8");
+const appCss = ["app/base.css", "app/marketing.css", "app/app.css"].map((f) => readFileSync(f, "utf8")).join("\n");
 const appSurface = `${appLayout}\n${shellComponent}\n${dashboardRoute}\n${setupChecklist}\n${collectionsRoute}\n${collectionExternalProof}\n${clientsRoute}\n${digestsRoute}\n${watchlistsRoute}\n${notificationsUiRoute}\n${sourceAccessUiRoute}\n${developerAccessUiRoute}\n${sourcesCompatibilityRoute}\n${reportsRoute}\n${opsRoute}\n${digestIntelligence}\n${reportView}\n${signOutButton}`;
 const appClasses = Array.from(appSurface.matchAll(/className=(?:"([^"]+)"|{`([^`]+)`})/g)).flatMap((match) =>
   (match[1] ?? match[2])

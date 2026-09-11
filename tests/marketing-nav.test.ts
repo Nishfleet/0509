@@ -66,7 +66,7 @@ describe("MarketingNav (shared public nav)", () => {
 	});
 
 	it("has no mobile-hide rule for Open app (it is gated on the session, not CSS)", () => {
-		const css = readFileSync("app/app.css", "utf8");
+		const css = ["app/base.css", "app/marketing.css", "app/app.css"].map((f) => readFileSync(f, "utf8")).join("\n");
 		const compact = css.split("@media (max-width: 860px)")[1] ?? "";
 		// The old ≤860px rule hid Open app for anonymous visitors via
 		// display:none. Open app now only renders when a session exists, so
@@ -77,7 +77,7 @@ describe("MarketingNav (shared public nav)", () => {
 	});
 
 	it("wraps the compact primary nav on legal pages so six public links cannot overflow 375px (#1172)", () => {
-		const css = readFileSync("app/app.css", "utf8");
+		const css = ["app/base.css", "app/marketing.css", "app/app.css"].map((f) => readFileSync(f, "utf8")).join("\n");
 		const compact = css.split("@media (max-width: 860px)")[1] ?? "";
 		expect(compact).toMatch(/\.ld-nav-links\s*\{[^}]*flex-wrap:\s*nowrap/s);
 		expect(compact).toMatch(/\.f9-legal-page \.ld-nav-links\s*\{[^}]*flex-wrap:\s*wrap/s);
