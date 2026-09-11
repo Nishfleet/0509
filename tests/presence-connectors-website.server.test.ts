@@ -91,4 +91,36 @@ describe("presence website connector decode wiring", () => {
     expect(poll.ok).toBe(true);
     expect(poll.items[0]?.bodyExcerpt).toBe("a & b already decoded");
   });
+
+  it("ingests a feed item with the observed timestamp when pubDate is invalid (no throw)", async () => {
+    // An unparseable pubDate used to throw RangeError inside parseFeedItems:
+    // manual "Check now" returned a 500 and the scheduled poll cursor was never
+    // updated, silently killing monitoring for the source.
+    const rss = `<rss><channel><item><title>x</title><link>https://a.test/1</link><pubDate>not-a-date</pubDate></item></channel></rss>`;
+
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.endsWith("/robots.txt")) {
+        return new Response("User-agent: FiveToNinePresenceBot\nAllow: /", { status: 200 });
+      }
+      if (url.includes("/feed")) {
+        return new Response(rss, {
+          status: 200,
+          headers: { "content-type": "application/rss+xml", etag: '"abc"' },
+        });
+      }
+      return new Response(
+        '<html><head><link rel="alternate" type="application/rss+xml" href="/feed"/></head></html>',
+        { status: 200, headers: { "content-type": "text/html" } },
+      );
+    });
+
+    const poll = await websiteConnector.poll(
+      { env: baseEnv, userId: "u1", trackingMode: "competitor", fetchImpl: fetchImpl as typeof fetch },
+      { targetUrl: "https://1.1.1.1", metadata: {} },
+    );
+
+    expect(poll.ok).toBe(true);
+    expect(poll.items).toHaveLength(1);
+    expect(poll.items[0]?.publishedAt).toBe(poll.items[0]?.observedAt);
+  });
 });
