@@ -148,22 +148,13 @@ describe("migration chain row-count invariant (issue #2779)", () => {
     });
     expect(failed).toEqual([]);
 
-    // 0087 is the fleet-ops#4999 signature and must be named. This assertion
-    // is the one that goes red until #2774 rewrites the file; it is not a
-    // rubber stamp, it is the incident reproduced.
-    const byMigration = new Map(
-      losses.map((loss) => [loss.migration, loss.tables]),
-    );
-    expect(byMigration.get("0087_signup_source_open_allowlist.sql")).toEqual([
-      "user_plan",
-      "watchlist",
-    ]);
-    // No OTHER migration in the chain may quietly lose rows.
-    expect(
-      losses
-        .filter((loss) => loss.migration !== "0087_signup_source_open_allowlist.sql")
-        .map((loss) => loss.migration),
-    ).toEqual([]);
+    // 0087 was the fleet-ops#4999 signature until issue #2774 rewrote the
+    // file on main: it now stages the CASCADE closure of `user` and restores
+    // it, so the seeded rows MUST survive a real FK-enforced apply. An
+    // assertion here that 0087 loses rows would rubber-stamp the rewrite;
+    // this one goes red if the rewrite ever breaks (or any other chain file
+    // quietly loses rows).
+    expect(losses).toEqual([]);
   });
 
   it("a destructive rebuild injected into the chain is caught by the same invariant", () => {

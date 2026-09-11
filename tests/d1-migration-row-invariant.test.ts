@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -209,58 +209,65 @@ UPDATE child SET note = 'hello';
     expect(verdict.losses.map((loss) => loss.table)).toEqual(["child"]);
   });
 
-  it("(5) the currently-shipped 0087 file fails the gate", () => {
+  it("(5) the shipped 0087 file passes the invariant after the #2774 rewrite, while the pre-rewrite loss shape still turns the gate red", () => {
+    // 0087 has been rewritten for issue #2774: it now stages every table in
+    // the transitive CASCADE closure of `user` (which reads `account` and 56
+    // siblings), rebuilds `user`, and restores the staged rows. A hand-rolled
+    // mini-schema cannot run it — the second worker run here saw
+    // "no such table: account" when a mid-air collision with #2774 landed
+    // the rewrite behind this test. So the incident shape is now exercised
+    // the honest way: build the source database by applying the REAL chain
+    // files before 0087, seed rows, then run the real 0087 in one
+    // FK-enforced transaction (mirroring D1) through the invariant.
+    const chainNames = readdirSync(resolve("migrations"))
+      .filter(
+        (name) =>
+          /^\d{4}_.+\.sql$/u.test(name) &&
+          name !== "0087_signup_source_open_allowlist.sql",
+      )
+      .sort();
+
+    function buildIncidentSource(root: string) {
+      const databasePath = join(root, "incident.sqlite");
+      const database = new DatabaseSync(databasePath, {
+        enableForeignKeyConstraints: true,
+      });
+      for (const name of chainNames) {
+        database.exec("BEGIN");
+        database.exec(readFileSync(resolve("migrations", name), "utf8"));
+        database.exec("COMMIT");
+      }
+      // The rows that were in production when 0087 emptied the children:
+      // users plus cascade-children rows.
+      database.exec(`
+        INSERT INTO user (id, name, email, createdAt, updatedAt)
+          VALUES ('u1', 'A', 'a@example.com', '2026-01-01', '2026-01-01'),
+                 ('u2', 'B', 'b@example.com', '2026-01-01', '2026-01-01');
+        INSERT INTO account (id, accountId, providerId, userId, createdAt, updatedAt)
+          VALUES ('a1', 'acc-1', 'password', 'u1', '2026-01-01', '2026-01-01');
+        INSERT INTO user_plan (user_id, plan) VALUES ('u1', 'free'), ('u2', 'free');
+        INSERT INTO watchlist (
+          id, user_id, name, target_type, target_id, target_fingerprint,
+          target_label, created_at, updated_at
+        ) VALUES (
+          'w1', 'u1', 'One', 'advertiser', 'a-1', 'fp-1', 'One',
+          '2026-01-01', '2026-01-01'
+        );
+        INSERT INTO session (id, expiresAt, token, createdAt, updatedAt, userId)
+          VALUES ('s1', '2027-01-01', 'tok-1', '2026-01-01', '2026-01-01', 'u1');
+      `);
+      database.close();
+      return databasePath;
+    }
+
     const root = tempRoot();
-    const databasePath = join(root, "incident.sqlite");
-    const database = new DatabaseSync(databasePath, {
-      enableForeignKeyConstraints: true,
-    });
-    // Mirrors the production shape 0087 operates on: `user` plus the cascade
-    // children that went to 0 rows on 2026-09-09.
-    database.exec(`
-      CREATE TABLE user (
-        id TEXT PRIMARY KEY NOT NULL,
-        name TEXT NOT NULL,
-        email TEXT NOT NULL UNIQUE,
-        emailVerified INTEGER NOT NULL DEFAULT 0,
-        image TEXT,
-        createdAt TEXT NOT NULL,
-        updatedAt TEXT NOT NULL,
-        onboardedAt TEXT,
-        signup_source TEXT
-      );
-      CREATE TABLE user_plan (
-        id TEXT PRIMARY KEY NOT NULL,
-        user_id TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE
-      );
-      CREATE TABLE watchlist (
-        id TEXT PRIMARY KEY NOT NULL,
-        user_id TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE
-      );
-      CREATE TABLE session (
-        id TEXT PRIMARY KEY NOT NULL,
-        user_id TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE
-      );
-      CREATE TABLE signup_source_pending (
-        email TEXT PRIMARY KEY NOT NULL,
-        signup_source TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        expires_at TEXT NOT NULL
-      );
-      INSERT INTO user (id, name, email, createdAt, updatedAt)
-        VALUES ('u1', 'A', 'a@example.com', '2026-01-01', '2026-01-01'),
-               ('u2', 'B', 'b@example.com', '2026-01-01', '2026-01-01');
-      INSERT INTO user_plan (id, user_id) VALUES ('p1', 'u1'), ('p2', 'u2');
-      INSERT INTO watchlist (id, user_id) VALUES ('w1', 'u1');
-      INSERT INTO session (id, user_id) VALUES ('s1', 'u1');
-    `);
-    database.close();
+    const databasePath = buildIncidentSource(root);
 
     const name = "0087_signup_source_open_allowlist.sql";
     const source = readFileSync(resolve("migrations", name), "utf8");
-    // The shipped file carries no annotation today, which is exactly why the
-    // incident was silent. If a future PR adds one, this test must be
-    // re-read rather than rubber-stamped.
+    // The rewritten file carries no annotation; it is loss-free by
+    // construction. If a future PR re-introduces a loss without the
+    // annotation, the applied check below is what goes red.
     expect([...parseExpectsRowLoss(source)]).toEqual([]);
 
     const result = applyMigrationsToCopy({
@@ -272,23 +279,51 @@ UPDATE child SET note = 'hello';
       after: result.after,
       expectedRowLossByMigration: result.expectedRowLossByMigration,
     });
+    expect(verdict.ok, formatRowCountDiff({ before: result.before, after: result.after })).toBe(true);
+    expect(verdict.losses).toEqual([]);
+    const after = new Map(result.after.map((r) => [r.table, r.count]));
+    expect(after.get("user_plan")).toBe(2);
+    expect(after.get("watchlist")).toBe(1);
+    expect(after.get("session")).toBe(1);
+    expect(after.get("account")).toBe(1);
 
-    expect(verdict.ok).toBe(false);
-    const losses = Object.fromEntries(
-      verdict.losses.map((loss) => [loss.table, loss.after]),
+    // And the gate is still sharp on this file's destructive class: the
+    // pre-#2774 bug was that the drop's cascades emptied the children. Drop
+    // the restore section from the real file and the remaining staged drop
+    // must wipe `account` and friends, going red with a real count loss.
+    const sabotaged = source.replace(
+      /INSERT INTO account SELECT \* FROM mig0087_account;\nDROP TABLE mig0087_account;/u,
+      "",
     );
-    expect(losses).toMatchObject({
-      user_plan: 0,
-      watchlist: 0,
-      session: 0,
+    expect(sabotaged).not.toEqual(source);
+    const sabotageRoot = mkdtempSync(join(tmpdir(), "0509-0087-sabotage-"));
+    roots.push(sabotageRoot);
+    const sabotagedPath = writeMigration(
+      sabotageRoot,
+      "0087_signup_source_open_allowlist_sabotaged.sql",
+      sabotaged,
+    );
+    const sabotagedResult = applyMigrationsToCopy({
+      sourcePath: databasePath,
+      migrations: [sabotagedPath],
     });
-    // The parent itself keeps its rows in the local seed; prod hit 0 because
-    // the scratch-restore path had already been reconciled. The children are
-    // the invariant's job and they are caught either way.
-    expect(verdict.losses.map((loss) => loss.table).sort()).toEqual([
-      "session",
-      "user_plan",
-      "watchlist",
+    const sabotagedVerdict = evaluateMigrationRowInvariant({
+      before: sabotagedResult.before,
+      after: sabotagedResult.after,
+      expectedRowLossByMigration: sabotagedResult.expectedRowLossByMigration,
+    });
+    expect(sabotagedVerdict.ok).toBe(false);
+    const sabotageLosses = Object.fromEntries(
+      sabotagedVerdict.losses.map((loss) => [loss.table, [loss.before, loss.after]]),
+    );
+    expect(sabotageLosses).toMatchObject({
+      account: [1, 0],
+    });
+    // Only the sabotaged restore is skipped: user_plan/watchlist/session are
+    // staged earlier in the file and survive even in the sabotaged run —
+    // which is exactly what the staging+restore repair bought.
+    expect(sabotagedVerdict.losses.map((loss) => loss.table)).toEqual([
+      "account",
     ]);
   });
 
