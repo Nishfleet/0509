@@ -106,7 +106,11 @@ describe("release hydration bridge", () => {
     expect(detail.url).toBe("/app/watchlists?watchlist=e2e-1");
   });
 
-  it("caps the captured message at 300 characters", () => {
+  // 2026-09-11: the cap moved 300 -> 2000. React 19's attribute-mismatch
+  // message puts the `- server / + client` diff that names the attribute
+  // after ~600 characters; at 300 the manifest for run 34567890736 carried a
+  // red browser_hydration_error:console with no actionable detail.
+  it("caps the captured message at 2000 characters and keeps a React 19 attribute diff intact", () => {
     const page = new FakePage();
     const testInfo = {
       annotations: [] as Array<{ type: string; description?: string }>,
@@ -116,11 +120,13 @@ describe("release hydration bridge", () => {
 
     page.emit("console", {
       type: () => "error",
-      text: () => `Hydration failed because the server rendered ${"x".repeat(600)}`,
+      text: () =>
+        `A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. ${"x".repeat(500)} <script + nonce="abc" - nonce="" ${"y".repeat(2500)}`,
     });
 
     const [detail] = hydrationDetails(testInfo);
-    expect(detail.message.length).toBeLessThanOrEqual(300);
+    expect(detail.message.length).toBeLessThanOrEqual(2000);
+    expect(detail.message).toContain('nonce="abc"');
   });
 
   it("ignores ordinary browser errors and non-error console messages", () => {
