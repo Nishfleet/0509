@@ -15,6 +15,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
+import { copyFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -939,6 +940,70 @@ async function readRemoteRowCounts(scratchConfigPath) {
   );
 }
 /**
+ * Names already recorded in the scratch database's `d1_migrations` ledger.
+ * A missing ledger (a backup that predates wrangler-managed migrations)
+ * reads as empty; the first apply creates the table and the delta assert
+ * below then verifies exactly the one file was added.
+ *
+ * @param {string} stepConfigPath
+ * @returns {Promise<string[]>}
+ */
+export async function readScratchMigrationLedger(stepConfigPath) {
+  try {
+    const ledger = await runCaptured(
+      "npx",
+      [
+        "wrangler",
+        "d1",
+        "execute",
+        SCRATCH_BINDING,
+        "--remote",
+        "--command",
+        "SELECT name FROM d1_migrations ORDER BY name",
+        "--json",
+        "--config",
+        stepConfigPath,
+      ],
+      { quiet: true },
+    );
+    const payload = parseWranglerJson(ledger.stdout);
+    const rows = /** @type {Array<{ name: unknown }>} */ (
+      Array.isArray(payload)
+        ? (payload[0]?.results ?? [])
+        : (payload?.results ?? [])
+    );
+    return rows.map((row) => String(row.name));
+  } catch {
+    // No ledger yet (the restore predates wrangler's migrations table,
+    // wrangler creates it on the first apply).
+    return [];
+  }
+}
+
+/**
+ * The positivity assert for the production dry run: each apply call must
+ * record exactly the one file in the scratch `d1_migrations` ledger. A no-op
+ * apply (mis-resolved migrations dir, already-applied files, a silently
+ * failing remote) would otherwise exit 0 with identical row counts and the
+ * gate would pass having proven nothing.
+ *
+ * @param {{ before: string[], after: string[], name: string }} input
+ * @returns {void}
+ */
+export function assertLedgerAppliedExactlyOne({ before, after, name }) {
+  const beforeSet = new Set(before);
+  const delta = after.filter((entry) => !beforeSet.has(entry));
+  if (delta.length === 0) {
+    throw new Error(`migration_dry_run_ledger_noop:${name}`);
+  }
+  if (delta.length !== 1 || delta[0] !== name) {
+    throw new Error(
+      `migration_dry_run_ledger_unexpected:${JSON.stringify({ expected: name, delta })}`,
+    );
+  }
+}
+
+/**
  * The production dry run (issue #2779, step 1): restore the pre-migration
  * backup that was just taken into a scratch D1, apply the pending repository
  * migrations THERE, and compare per-table row counts before and after. Any
@@ -1016,7 +1081,7 @@ export async function runMigrationDryRunOnScratch({
         });
         return createdMatches[0].uuid;
       },
-      use: async () => {
+      use: async (createdScratchUuid) => {
         await runCommand(
           "npx",
           [
@@ -1045,26 +1110,44 @@ export async function runMigrationDryRunOnScratch({
           throw new Error("migration_dry_run_scratch_table_count_mismatch");
         }
         // Apply the pending set ONE FILE AT A TIME, snapshotting the scratch
-        // row counts in between. That is what makes attribution real: a row
-        // loss can be pinned to the file that caused it rather than to
-        // whichever pending file happens to carry an annotation (issue #2779:
-        // "the migration file that caused it"). `wrangler d1 migrations apply`
-        // with no filter applies every unapplied file in order, so running it
-        // once per file is the same order with an observable boundary.
+        // row counts in between. `wrangler d1 migrations apply` takes no
+        // filename argument, so per-file attribution is engineered, not
+        // assumed: each step gets its own config whose `migrations_dir`
+        // contains ONLY that migration file (and lives next to the config so
+        // wrangler's relative resolution finds it). A vacuous run — e.g. a
+        // migrations_dir mis-resolution that applies nothing and exits 0 —
+        // is caught by the d1_migrations ledger delta assert below instead
+        // of silently passing the gate (issue #2779 reviewer round: fail
+        // the run on "nothing was applied" rather than skip the apply).
         /** @type {Map<string, Set<string>>} */
         const expectedRowLossByMigration = new Map();
         /** @type {Map<string, { before: Array<{table: string, count: number}>, after: Array<{table: string, count: number}> }>} */
         const perMigrationCounts = new Map();
         let stepBefore = [...before].map(([table, count]) => ({ table, count }));
-        for (const name of pendingMigrationNames) {
-          if (!/^\d{4}_[A-Za-z0-9_]+\.sql$/u.test(name)) {
+        for (const [pendingIndex, name] of pendingMigrationNames.entries()) {
+          if (!/^\d{4}_.+\.sql$/u.test(name)) {
             throw new Error(`migration_dry_run_name_invalid:${name}`);
           }
-          // `wrangler d1 migrations apply` takes no filename argument: it
-          // applies every unapplied file in order. Calling it once per pending
-          // name is therefore idempotent (already-applied files are skipped)
-          // and gives an observable boundary after each file, which is what
-          // the per-file snapshot below needs.
+          const stepRoot = join(root, `step-${pendingIndex}`);
+          const stepMigrationsDir = join(stepRoot, "migrations");
+          mkdirSync(stepMigrationsDir, { recursive: true });
+          copyFileSync(resolve("migrations", name), join(stepMigrationsDir, name));
+          const stepConfigPath = join(stepRoot, "wrangler-step.json");
+          writePrivateJson(stepConfigPath, {
+            name: "0509-migration-dry-run-step",
+            compatibility_date: "2026-03-29",
+            d1_databases: [
+              {
+                binding: SCRATCH_BINDING,
+                database_name: scratchName,
+                database_id: createdScratchUuid,
+                // Absolute path so wrangler cannot resolve it against a
+                // different cwd or the parent repo root.
+                migrations_dir: stepMigrationsDir,
+              },
+            ],
+          });
+          const ledgerBefore = await readScratchMigrationLedger(stepConfigPath);
           await runCommand(
             "npx",
             [
@@ -1075,13 +1158,15 @@ export async function runMigrationDryRunOnScratch({
               SCRATCH_BINDING,
               "--remote",
               "--config",
-              scratchConfigPath,
+              stepConfigPath,
             ],
             { timeoutMs: LONG_COMMAND_TIMEOUT_MS },
           );
-          const applySql = readFileSync(resolve("migrations", name), "utf8");
+          const ledgerAfter = await readScratchMigrationLedger(stepConfigPath);
+          assertLedgerAppliedExactlyOne({ before: ledgerBefore, after: ledgerAfter, name });
+          const applySql = readFileSync(join(stepMigrationsDir, name), "utf8");
           expectedRowLossByMigration.set(name, parseExpectsRowLoss(applySql));
-          const stepAfterMap = await readRemoteRowCounts(scratchConfigPath);
+          const stepAfterMap = await readRemoteRowCounts(stepConfigPath);
           const stepAfter = [...stepAfterMap].map(([table, count]) => ({
             table,
             count,

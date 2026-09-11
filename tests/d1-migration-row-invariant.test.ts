@@ -12,6 +12,7 @@ import {
   parseExpectsRowLoss,
   readTableRowCounts,
 } from "../scripts/d1-migration-row-invariant.mjs";
+import { assertLedgerAppliedExactlyOne } from "../scripts/d1-remote-restore-evidence.mjs";
 
 /**
  * Gate for issue #2779. This is the invariant that catches what lints cannot
@@ -464,5 +465,34 @@ UPDATE child SET note = 'hello';
       { table: "other_child", count: 1 },
       { table: "parent", count: 2 },
     ]);
+  });
+
+  it("(12) a vacuous scratch apply fails the gate — the ledger must record exactly the one file", () => {
+    const applied = ["0085_a.sql", "0086_b.sql"];
+    expect(() =>
+      assertLedgerAppliedExactlyOne({
+        before: applied,
+        after: [...applied, "0087_c.sql"],
+        name: "0087_c.sql",
+      }),
+    ).not.toThrow();
+    // The failure this exists for: `wrangler d1 migrations apply` can exit 0
+    // having applied nothing (a mis-resolved migrations_dir), and identical
+    // row-count snapshots would then silently pass the gate.
+    expect(() =>
+      assertLedgerAppliedExactlyOne({
+        before: applied,
+        after: applied,
+        name: "0087_c.sql",
+      }),
+    ).toThrow("migration_dry_run_ledger_noop:0087_c.sql");
+    // A different file landing in the ledger is not this file applied.
+    expect(() =>
+      assertLedgerAppliedExactlyOne({
+        before: applied,
+        after: [...applied, "0088_other.sql"],
+        name: "0087_c.sql",
+      }),
+    ).toThrow(/migration_dry_run_ledger_unexpected/);
   });
 });
