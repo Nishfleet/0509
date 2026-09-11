@@ -3,6 +3,7 @@ import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-rout
 
 import { CompareAdsExampleLink } from "~/components/ads-internal-links";
 import { Breadcrumbs } from "~/components/breadcrumbs";
+import { CompareLiveSources } from "~/components/compare-live-sources";
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
 import {
@@ -243,6 +244,8 @@ export default function CompareVisualpingRoute() {
           ))}
         </div>
       </section>
+
+      <CompareLiveSources />
 
       <section className="ld-final">
         <h2>
