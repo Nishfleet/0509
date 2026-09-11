@@ -48,22 +48,27 @@ on:
         type: string
 
 concurrency:
+  # Why this shared group exists: deploys are real provider mutations —
+  # `wrangler deploy`, `wrangler secret put`, the deploy plan's D1 access,
+  # and this workflow's own inline generate_restore_evidence drill all touch
+  # the same Cloudflare account. Those steps must serialize with each other
+  # and with the manual D1 migration apply in d1-remote-restore-evidence.yml
+  # (which holds this same group at JOB level), never overlap.
+  #
+  # What does NOT belong here (0509#2975): evidence verification and the
+  # restore-drill runs in d1-remote-restore-evidence.yml /
+  # d1-restore-proof-auto-refresh.yml moved to per-candidate-SHA concurrency
+  # groups — they mutate no shared provider state (read-only export,
+  # run-scoped scratch DB, run-keyed R2 objects), and sharing this serial
+  # lane made every merge evict or starve the proof the next deploy needed.
   group: 0509-production-provider-mutations
   cancel-in-progress: false
-  # Deploy-latest (Nish, 2026-08-25): without `queue: max`, GitHub cancels
-  # older PENDING runs in this group when a new run enters, while the
-  # currently RUNNING deploy continues uninterrupted. This gives "deploy
-  # latest" semantics — superseded queued deploys cancel, the newest queued
-  # deploy runs after the current one finishes — without ever interrupting a
-  # deploy mid-flight (cancel-in-progress: false). The running deploy ships
-  # its exact pinned SHA; the next deploy ships the newer one.
-  #
-  # The d1-backup-r2 and d1-remote-restore-evidence workflows keep their own
-  # `queue: max`, so a backup entering the group preserves queued runs; only
-  # a deploy entering cancels superseded queued work. A queued nightly backup
-  # cancelled by a push deploy re-runs the next night, and the deploy's
-  # generate_restore_evidence job creates fresh evidence inline if the proof
-  # is stale, so no gate is weakened.
+  # Deploy order (Nish, 2026-08-25): cancel-in-progress stays false so a
+  # running deploy is never interrupted mid-flight — it ships its exact
+  # pinned SHA. `queue: max` keeps up to 100 pending deploys waiting in
+  # order instead of letting each new merge replace the waiting one, so a
+  # merge burst cannot silently drop a deploy.
+  queue: max
 
 permissions: {}
 
@@ -442,7 +447,10 @@ jobs:
       name: production
       url: https://0509.io
     permissions:
-      contents: read
+      # contents: write is needed only by the post-deploy ledger step, which
+      # appends this release's row to deploy-ledger.jsonl on main through the
+      # same bot-commit path quality-ratchet.yml already uses.
+      contents: write
       actions: read
       deployments: write
     env:
@@ -658,6 +666,24 @@ jobs:
               ;;
           esac
 
+      - name: Record the deploy in the on-main ledger
+        if: success()
+        shell: bash
+        env:
+          GH_PUSH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # deploy-ledger.jsonl on main is the anchor chain's last-resort
+        # recovery source (0509#2975): the recorded run head survives a
+        # history rewrite only through its tree hash, and the runs API
+        # forgets everything across a rename. The row {sha, tree,
+        # deployed_at, version_id} is appended on top of live origin/main by
+        # plumbing (no working-tree churn) and pushed with the job's
+        # GITHUB_TOKEN — which does not retrigger push workflows, so the
+        # ledger commit cannot recurse into another deploy. A merge landing
+        # mid-push retries on the new tip; after 3 attempts the step warns
+        # and succeeds, because the deploy already shipped and failing the
+        # run would trip auto-revert on a good release.
+        run: ./scripts/commit-deploy-ledger.sh
+
       - name: Archive permission-preserving release evidence
         if: success() && env.BACKUP_PROOF_STATUS == 'required'
         shell: bash
@@ -700,3 +726,16 @@ jobs:
             test-results/production-soak-*.json
           if-no-files-found: warn
           retention-days: 90
+
+      # The stalled-deploy detector (0509#2975 item 4). Emits the
+      # `deploy: last_success_age_h=<n> merges_since=<m> last_failure=<reason>`
+      # measure line into the step summary on every run — success AND failure
+      # (if: always()), which is exactly when the signal matters. The same
+      # script is what fleet-ops's judges' measure wires in.
+      - name: Emit deploy-age measure line
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/deploy-age.mjs | tee -a "$GITHUB_STEP_SUMMARY"

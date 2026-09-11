@@ -64,11 +64,17 @@ const MAX_ARTIFACT_SIZE_BYTES = 10 * 1024 * 1024;
 /**
  * Select only an artifact whose producing run is a completed successful main
  * run of one of the two trusted workflow files in this exact repository.
+ * When `pinnedSha` is supplied the producing run's head must equal it: the
+ * deploy consumes evidence for ITS pinned candidate, not for whatever main
+ * tip was newest (0509#2975 — at fleet merge cadence a newer different-sha
+ * artifact would otherwise shadow the pinned candidate's proof and force the
+ * inline-generation fallback every time).
  * @param {{
  *   currentRunId: number,
  *   runs: WorkflowRun[],
  *   artifactsByRun: Record<string, ActionsArtifact[]>,
  *   repository?: string,
+ *   pinnedSha?: string,
  * }} input
  */
 export function selectRecentRemoteRestoreArtifact({
@@ -76,6 +82,7 @@ export function selectRecentRemoteRestoreArtifact({
   runs,
   artifactsByRun,
   repository = REPOSITORY,
+  pinnedSha,
 }) {
   if (
     !Number.isInteger(currentRunId) ||
@@ -83,7 +90,8 @@ export function selectRecentRemoteRestoreArtifact({
     repository !== REPOSITORY ||
     !Array.isArray(runs) ||
     !artifactsByRun ||
-    typeof artifactsByRun !== "object"
+    typeof artifactsByRun !== "object" ||
+    (pinnedSha !== undefined && !SHA_PATTERN.test(pinnedSha))
   ) {
     throw new Error("remote_restore_artifact_selection_invalid");
   }
@@ -98,6 +106,7 @@ export function selectRecentRemoteRestoreArtifact({
         run?.conclusion === "success" &&
         run?.head_branch === "main" &&
         SHA_PATTERN.test(run?.head_sha ?? "") &&
+        (pinnedSha === undefined || run?.head_sha === pinnedSha) &&
         run?.repository?.full_name === repository &&
         run?.head_repository?.full_name === repository &&
         Number.isFinite(Date.parse(run?.created_at ?? "")),
@@ -164,13 +173,15 @@ async function main() {
   const token = process.env.GH_TOKEN?.trim() ?? "";
   const repository = process.env.GITHUB_REPOSITORY?.trim() ?? "";
   const currentRunId = Number(process.env.GITHUB_RUN_ID);
+  const pinnedSha = process.env.PINNED_SHA?.trim() ?? "";
   if (
     process.env.GITHUB_ACTIONS !== "true" ||
     process.env.GITHUB_REF !== "refs/heads/main" ||
     repository !== REPOSITORY ||
     !Number.isInteger(currentRunId) ||
     currentRunId < 1 ||
-    !token
+    !token ||
+    !SHA_PATTERN.test(pinnedSha)
   ) {
     throw new Error("remote_restore_artifact_context_invalid");
   }
@@ -198,9 +209,12 @@ async function main() {
 
   /** @type {Record<string, ActionsArtifact[]>} */
   const artifactsByRun = {};
+  // Only runs for the pinned candidate can produce an artifact this deploy
+  // accepts; skipping the rest also skips their artifacts-list API calls.
   const orderedRunIds = [
     ...new Set(
       runs
+        .filter((run) => run?.head_sha === pinnedSha)
         .sort(
           (left, right) =>
             Date.parse(right.created_at ?? "") -
@@ -224,6 +238,7 @@ async function main() {
       runs,
       artifactsByRun,
       repository,
+      pinnedSha,
     });
     if (selected) {
       process.stdout.write(
