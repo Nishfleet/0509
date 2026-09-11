@@ -360,7 +360,7 @@ export default function MarketingRoute() {
       .then((response) => (response.ok ? response.json() : null))
       .then((value: unknown) => {
         const brief = value as { status?: string; website?: string } & Partial<PublicProofBrief>;
-        if (active && brief?.status === "live" && brief.website && brief.adCount > 0) {
+        if (active && brief?.status === "live" && brief.website && (brief.adCount ?? 0) > 0) {
           setPersonalizedProof({
             proofBrief: brief as PublicProofBrief,
             featuredDomain: brief.website,
