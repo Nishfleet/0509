@@ -10,13 +10,21 @@ function context(env = {}) {
 }
 
 describe("auth form server validation", () => {
-  it("rejects signup without a name before calling the email provider", async () => {
+  it("starts a signup from email alone — no name required", async () => {
     const sendBetterAuthMagicLink = vi.fn();
     vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => ({})) }));
     vi.doMock("~/lib/better-auth.server", () => ({
       isBetterAuthConfigured: vi.fn(() => true),
       isSameOriginAuthFormPost: vi.fn(() => true),
       sendBetterAuthMagicLink,
+    }));
+    vi.doMock("~/lib/funnel-measurement.server", () => ({
+      emitFunnelSignupStartFromAllowlistedSource: vi.fn(),
+    }));
+    vi.doMock("~/lib/signup-source", () => ({
+      rememberAllowlistedSignupSource: vi.fn(() => null),
+      signupSourceCookieHeader: vi.fn(() => ""),
+      signupSourceFromRequest: vi.fn(() => null),
     }));
 
     const { action } = await import("~/routes/auth.signup");
@@ -28,14 +36,18 @@ describe("auth form server validation", () => {
       }),
     });
 
-    await expect(action({ context: context(), request } as never)).resolves.toEqual({
-      ok: false,
-      error: "Enter your name to create the account.",
+    // The signup action completes the email-send path and redirects to the
+    // link-sent state even with no name at all.
+    await expect(
+      action({ context: context(), request } as never),
+    ).rejects.toMatchObject({ status: 302 });
+    expect(sendBetterAuthMagicLink).toHaveBeenCalledTimes(1);
+    expect(sendBetterAuthMagicLink).toHaveBeenCalledWith({}, request, {
       email: "owner@example.com",
+      mode: "signup",
       name: "",
       redirectTo: "/search?website=nykaa.com",
     });
-    expect(sendBetterAuthMagicLink).not.toHaveBeenCalled();
   });
 
   it("preserves signup values after the email provider fails", async () => {
