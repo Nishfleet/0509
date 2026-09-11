@@ -92,6 +92,9 @@ describe("pricing route", () => {
     expect(result).toEqual({
       pricingPreview: { available: false },
       commercialLaunch,
+      // Issue #2972: no DB in this env, so the footer coverage figure
+      // degrades to null (the footer renders the Status link alone).
+      monitoringCoverageDays: null,
     });
   });
 
