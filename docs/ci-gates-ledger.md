@@ -42,7 +42,7 @@ Standing rules that earn a gate (cited per row below):
   contexts** produced by PR CI, plus integrity gates compiled in on top
   (`required-verifier-integrity`, `gate-integrity`).
 - 26 workflow files, 5,093 lines of workflow YAML; `deploy-production.yml` alone
-  728 lines / 9 jobs.
+  728 lines / 6 jobs.
 
 ## The table
 
@@ -55,7 +55,7 @@ Standing rules that earn a gate (cited per row below):
 | `required-verifier-integrity.yml` | PR touching the verifier definitions self-certifying; unverified admin bypasses | Incident: PR #694 changed both required-context producers and self-succeeded; Nish 2026-08-25 | ~1–2 min (compile + diff-owned heuristic) | **KEEP** — this is the P10-B seatbelt |
 | `required-verifier-integrity.yml` `verifier-attest:` | Admin-only fast path for verifier-definition changes | Owner decision Nish 2026-08-20; head-sha-pinned so any push invalidates | Conditional | **KEEP** (sha-pinned, non-additive) |
 | `gate-integrity.yml` | Gate-bypass *moves* RVI cannot see (copies, driver-step swaps) | Nish 2026-08-25 ("cover all our bases"); fleet-ops#828 / 0509#1273 prose-attest shape | ~1 min compile + diff gate | **KEEP** detector, **MERGE-INTO** `required-verifier-integrity` — one integrity workflow files both, and the second admin attestation (`gate-integrity-attest:`) is dropped; two admin attestations per push is not acceptable |
-| `deploy-production.yml` (728 lines, 9 jobs) push-to-main deploy + Gate A/B/C + restore-evidence + ledger | Undeployable or unrestorable state reaching prod | R1 restore-evidence-before-migrations (incidents: scratch-restore kill #630, deploy drift 0509 .lane reports) | Runs only on main | **KEEP, TRIM** — delete steps with no incident; the audit of the ~20 named steps is the deletion batch list below |
+| `deploy-production.yml` (728 lines, 6 jobs) push-to-main deploy + Gate A/B/C + restore-evidence + ledger | Undeployable or unrestorable state reaching prod | R1 restore-evidence-before-migrations (incidents: scratch-restore kill #630, deploy drift 0509 .lane reports) | Runs only on main | **KEEP, TRIM** — delete steps with no incident; the audit of the ~20 named steps is the deletion batch list below |
 | `preview-assert.yml` | Merge lands a diff that fails the release assertion on main | Incident 0509#1576: 9 of 120 merges auto-reverted because the assertion ran only after merge | Path-gated (PR #1580 lesson) ~5 min | **KEEP** |
 | `auto-revert.yml` | Red main after merge | R4 reversibility (Nish canonical) | Runs on failure only | **KEEP** |
 | `auto-merge-arm.yml` | Un-armed merges / merge-queue misuse | fleet-ops#1457, #3532 | ~1 min, PR events only | **KEEP** |
@@ -74,7 +74,7 @@ Standing rules that earn a gate (cited per row below):
 | `d1-backup-r2.yml` | No restorable D1 backup | R1 | Daily | **KEEP** |
 | `d1-backup-validate.yml` | Broken backup tooling in a PR | R1 (validated tooling) | Path-gated to backup scripts/wrangler.jsonc | **KEEP** |
 | `d1-remote-restore-evidence.yml` | Deploy without proved restore | R1 (#2975 per-lane concurrency fix) | On deploy cadence | **KEEP** |
-| `d1-restore-proof-auto-refresh.yml` | Backup proof going stale between restores | R1 | Daily | **KEEP** — candidate to MERGE-INTO `d1-backup-r2`'s schedule; the deletion PR decides with one cron
+| `d1-restore-proof-auto-refresh.yml` | Backup proof going stale between restores | R1 | Daily | **KEEP** — candidate to MERGE-INTO `d1-backup-r2`'s schedule; the deletion PR decides with one cron |
 | `finalize-production-soak.yml` | Un-halting a deploy without soak proof | Gate C (deploy-production-gate tests) | Dispatch-only post-deploy | **KEEP** |
 | `backlog-console-refresh-test.yml` | Regression in automation/backlog-console/refresh.sh | Left its own file deliberately to keep the protected-verifier files untouched; hermetic, path-scoped | Disposable-path PRs | **MERGE-INTO** the one PR job as an additional path-gated job |
 | `launch:readiness` npm chain | Ship-block readiness pipeline | Standing pre-launch proof; `:predeploy` variant exists | Manual | **KEEP** (script, not a gate); documenting only — do not delete |
