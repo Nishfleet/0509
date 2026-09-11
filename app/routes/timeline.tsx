@@ -5,10 +5,12 @@
  * The sitemap lists ~77 /timeline/:domain pages, but the parent /timeline
  * path 404'd: a crawler or reader who climbed one level up from a timeline
  * hit a dead end. This hub renders a thin listing of the domains that have
- * at least one recorded offer state — the SAME capture-qualified set
- * `loadIndexableTimelineEntries` feeds the sitemap, so the index can never
- * list a domain the sitemap doesn't (or vice versa). That is issue #2881's
- * non-empty gating, reused verbatim.
+ * at least one recorded offer state — the SAME capture-qualified,
+ * non-empty set `loadIndexableTimelineEntries` feeds the sitemap, so every
+ * domain listed here is guaranteed to be in the sitemap (the inverse is
+ * not claimed: the sitemap additionally lists the collecting cohort via
+ * `timelineSitemapEntries`, which this index does not re-read). That gate
+ * is issue #2881's non-empty rule, reused verbatim.
  *
  * ZERO-COST CONSTRAINT (mirrors /timeline/:domain): the page reads stored
  * `landing_page_snapshot` rows only and never triggers live scraping or any
@@ -69,6 +71,9 @@ export async function loader({
 
 export default function TimelineIndex() {
   const { domains, degraded } = useLoaderData<TimelineIndexLoaderData>();
+  // ItemList JSON-LD is capped at 100 entries (Google's practical ItemList
+  // guidance) while the visible list renders all domains — the structured
+  // data is a representative sample, the page is the full index.
   const itemListJsonLdValue = itemListJsonLd(
     domains.slice(0, 100).map((item) => ({
       name: item.domain,
