@@ -278,7 +278,9 @@ for (const viewport of viewports) {
     await expect(entityContext).toContainText("Nykaa");
     await expect(page.locator(".f9-watchdetail-detail")).toBeVisible();
     await expect(
-      page.getByRole("navigation", { name: "Competitor sections" }).getByRole("link"),
+      // The competitor tab bar speaks the WAI-ARIA tabs pattern since #2421
+      // (bc9ea87da): its links carry role="tab" inside a role="tablist".
+      page.getByRole("navigation", { name: "Competitor sections" }).getByRole("tab"),
     ).toHaveCount(6);
     if (viewport.name === "mobile") {
       const [nameBox, contextBox] = await Promise.all([
@@ -311,8 +313,10 @@ for (const viewport of viewports) {
     expect(createdWatchlistId).toBeTruthy();
     const activeTab = page
       .getByRole("navigation", { name: "Competitor sections" })
-      .getByRole("link", { name: "What changed", exact: true });
-    await expect(activeTab).toHaveAttribute("aria-current", "page");
+      .getByRole("tab", { name: "What changed", exact: true });
+    // #2421 (bc9ea87da): the active tab signals with aria-selected (tabs
+    // pattern), no longer aria-current="page".
+    await expect(activeTab).toHaveAttribute("aria-selected", "true");
     await expect(activeTab).toHaveAttribute(
       "href",
       `/app/watchlists?watchlist=${createdWatchlistId}`,
