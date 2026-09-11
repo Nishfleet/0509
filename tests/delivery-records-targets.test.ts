@@ -90,8 +90,7 @@ describe("upsertDeliveryTarget read-back (M10)", () => {
 
 // GREEN-only: not RED evidence. With the fix, each concurrent upsert's
 // read-back filters on its own targetValue, so both must return their own row.
-describe.skipIf(process.env.SKIP_CONCURRENT_VARIANT === "1")(
-  "upsertDeliveryTarget concurrent same-channel upserts",
+describe("upsertDeliveryTarget concurrent same-channel upserts",
   () => {
     it("returns each call's own target value", async () => {
       const harness = openHarness();
