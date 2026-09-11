@@ -395,6 +395,16 @@ fixture test_ratchet_path_is_gate_owned '{"files": [
    "patch": "+// doc prose tweak"}]}'
 run_fixture test_ratchet_path_is_gate_owned FAIL "gate-owned path changed"
 
+fixture test_ratchet_pin_masked_by_comment '{"files": [
+  {"filename": "tests/file-size-ratchet.test.ts", "status": "modified",
+   "patch": "-export const TEST_FILE_MAX_LINES = 800;\n+// TEST_FILE_MAX_LINES = 800;"}]}'
+run_fixture test_ratchet_pin_masked_by_comment FAIL "TEST_FILE_MAX_LINES pin was deleted (was 800)"
+
+fixture test_ratchet_seed_in_comment '{"files": [
+  {"filename": "tests/file-size-ratchet.test.ts", "status": "modified",
+   "patch": "+// see \"tests/some-existing.test.ts\" for the shape"}]}'
+run_fixture test_ratchet_seed_in_comment FAIL "gate-owned path changed" "seed entry"
+
 # --- both classes at once ---------------------------------------------------
 fixture both_classes '{"files": [
   {"filename": "tests/auth.test.ts", "status": "removed", "patch": "-it(\"a\", () => {});"},

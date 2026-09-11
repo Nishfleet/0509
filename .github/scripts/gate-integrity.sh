@@ -310,11 +310,11 @@ def ratchet_test_file_weakened(patch):
     pin = re.compile(r"\bTEST_FILE_MAX_LINES\s*=\s*(\d+)")
     old_pin = None
     new_pin = None
-    for line in removed_lines(patch):
+    for line in code_lines(removed_lines(patch)):
         m = pin.search(line)
         if m:
             old_pin = int(m.group(1))
-    for line in added_lines(patch):
+    for line in code_lines(added_lines(patch)):
         m = pin.search(line)
         if m:
             new_pin = int(m.group(1))
