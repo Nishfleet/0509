@@ -13,7 +13,11 @@ const REACT_HYDRATION_ERROR_PATTERN =
 // with no surface to bisect from. The bridge now records a companion detail
 // annotation carrying the message text, the page URL and the test title so the
 // strict manifest and the deploy job log name the failing page.
-const HYDRATION_MESSAGE_LIMIT = 300;
+// 2026-09-11: 300 cut React 19's attribute-mismatch message before the
+// `- server / + client` diff that names the attribute, so a red
+// browser_hydration_error:console carried no actionable detail (run
+// 34567890736). 2000 keeps the diff; redaction above still applies.
+const HYDRATION_MESSAGE_LIMIT = 2000;
 const HYDRATION_TITLE_LIMIT = 160;
 const HYDRATION_URL_LIMIT = 256;
 // The reporter's safeRelativeUrl also caps pathname at 160, so stay aligned.

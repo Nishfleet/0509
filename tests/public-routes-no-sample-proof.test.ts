@@ -30,13 +30,16 @@ describe("public routes and sample-proof fixtures", () => {
   it("public proof is sourced only from the real cache-only loader", () => {
     for (const name of routeFiles) {
       const source = readFileSync(join(routesDir, name), "utf8");
-      // Any route that renders proof must go through loadPublicProofBrief; no
-      // route may synthesize an inline illustrative fixture instead.
+      // Any route that renders proof must go through loadPublicProofBrief —
+      // directly, or via the /api/demo-proof endpoint whose loader is the same
+      // call (#2696 moved the homepage brief to a client fetch so the
+      // shared-cached document stays country-neutral). No route may synthesize
+      // an inline illustrative fixture instead.
       if (source.includes("proofBrief") || source.includes("PublicProofBrief")) {
         expect(
-          source,
-          `app/routes/${name} must use the real loadPublicProofBrief loader for proof`,
-        ).toMatch(/loadPublicProofBrief/);
+          /loadPublicProofBrief/.test(source) || source.includes("/api/demo-proof"),
+          `app/routes/${name} must use the real loadPublicProofBrief loader for proof (directly or via /api/demo-proof)`,
+        ).toBe(true);
       }
     }
   });

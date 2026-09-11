@@ -59,6 +59,14 @@ describe("extractLandingPageSignals", () => {
     });
   });
 
+  it("decodes &nbsp; into a plain space in ctaText (issue #2455)", () => {
+    expect(
+      extractLandingPageSignals("<button>Buy&nbsp;Now</button>"),
+    ).toMatchObject({
+      ctaText: "Buy Now",
+    });
+  });
+
   it("keeps body text after an XHTML-style empty head", () => {
     expect(
       hasMeaningfulLandingPageBodyText(

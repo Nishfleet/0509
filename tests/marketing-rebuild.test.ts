@@ -84,7 +84,13 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).not.toContain("not the live search result");
     expect(marketingRoute).not.toContain("View JSON");
     expect(marketingRoute).not.toContain("Markdown brief");
-    expect(marketingRoute).not.toContain("/api/demo-proof");
+    // No rendered affordance links the raw demo-proof endpoint (the old
+    // "View JSON"/"Markdown brief" links stay gone). The only permitted
+    // reference is the client-side personalization fetch (#2696): every
+    // quoted literal must be a fetch() target.
+    for (const ref of marketingRoute.match(/["'`]\/api\/demo-proof["'`]/g) ?? []) {
+      expect(marketingRoute).toContain(`fetch(${ref}`);
+    }
     expect(marketingRoute).not.toContain("sample watch");
     expect(marketingRoute).not.toContain("Sample watch");
     expect(marketingRoute).not.toContain("Account search");

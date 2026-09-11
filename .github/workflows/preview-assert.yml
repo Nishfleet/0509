@@ -157,6 +157,31 @@ jobs:
         # the first preview-assert run of PR #1580).
         run: npm run build
 
+      - name: Release proof (merge queue only)
+        # #2840: the Gate-B local release proof is the last gate before
+        # `Deploy production` deploys; until now it only ran AFTER merge, so
+        # a merged product change could turn main red for hours (route diet,
+        # tab roles, delivery card, nonce hydration — 2026-09-10/11, zero green
+        # deploys in 2 days). Running it here, once per merge-queue batch, lets
+        # the queue reject the batch instead. Not on every pull_request push:
+        # ~10 min × 100 PRs/day is the runner budget this deliberately avoids.
+        # Same command, browsers and env shape as deploy-production.yml.
+        if: github.event_name == 'merge_group'
+        env:
+          NODE_OPTIONS: --max-old-space-size=2048
+        run: npm run e2e:local:release
+
+      - name: Preserve release proof diagnostics
+        if: github.event_name == 'merge_group' && failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-proof-${{ github.sha }}-${{ github.run_id }}
+          path: |
+            test-results/gate-b-manifest-*.json
+            test-results/e2e/**/error-context.md
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Upload preview version
         # Cloudflare's own preview mechanism ("wrangler versions upload /
         # preview alias", Nish 2026-09-04). Uploads the PR head as a Worker

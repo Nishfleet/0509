@@ -10,7 +10,7 @@ import {
 import {
   firstWatchlistScanExecutionKey,
   runFirstWatchlistScanWorkflowJob,
-} from "~/lib/monitoring.server";
+} from "~/lib/first-watchlist-scan.server";
 import { createSqliteD1 } from "./helpers/sqlite-d1";
 
 vi.mock("~/lib/plan.server", () => ({

@@ -3338,6 +3338,22 @@ one signal-green accent.
 
 .f9-home .ld-pricing-note a { color: var(--ld-ink); text-decoration: underline; }
 
+.ld-swing-sources {
+  list-style: none;
+  margin: 18px 0;
+  padding: 0;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--ld-ink-soft);
+  max-width: 680px;
+}
+
+.ld-swing-sources li { margin-top: 4px; }
+
+.f9-home .ld-swing-sources a { color: var(--ld-ink); text-decoration: underline; }
+
+.ld-swing-sources time { font-family: var(--ld-mono); font-size: 0.78rem; }
+
 /* Issue #2221 — the "Price of knowing" comparison table (5 columns) has no
    width constraint, so its min-content width (~398px) overflows the 375px
    mobile viewport by 71px. Fix the layout cause: force the table to the
@@ -3425,7 +3441,7 @@ one signal-green accent.
   color: var(--ld-green);
   font-family: var(--ld-mono);
   font-size: 0.64rem;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1;
 }
 
@@ -3565,7 +3581,7 @@ one signal-green accent.
   font-family: var(--ld-mono);
   color: var(--ld-green-ink);
   font-size: 0.76rem;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
 }
 
@@ -3678,7 +3694,7 @@ one signal-green accent.
   color: var(--ld-green-ink);
   font-family: var(--ld-mono);
   font-size: 0.74rem;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.04em;
   margin-top: -8px;
   text-transform: uppercase;
@@ -3741,7 +3757,7 @@ one signal-green accent.
 .ld-bundle-value {
   font-family: var(--ld-mono);
   font-size: 0.72rem;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--ld-ink-faint);
   text-transform: uppercase;
 }
@@ -4622,7 +4638,7 @@ one signal-green accent.
   color: var(--ld-green-ink);
   font-family: var(--ld-mono);
   font-size: 0.66rem;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -4971,7 +4987,7 @@ one signal-green accent.
   color: #fff;
   font-family: var(--ld-mono);
   font-size: 0.85rem;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   text-decoration: none;
@@ -6100,7 +6116,7 @@ one signal-green accent.
   color: var(--ink-soft);
   font-family: var(--ed-mono);
   font-size: 0.68rem;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -6263,7 +6279,7 @@ one signal-green accent.
   color: var(--ink-faint);
   font-family: var(--ld-mono);
   font-size: 0.68rem;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -6293,7 +6309,7 @@ one signal-green accent.
   color: var(--ink-faint);
   font-family: var(--ld-mono);
   font-size: 0.66rem;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -6317,7 +6333,7 @@ one signal-green accent.
   color: var(--ink-faint);
   font-family: var(--ld-mono);
   font-size: 0.68rem;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -6350,7 +6366,7 @@ one signal-green accent.
   color: var(--green-ink);
   font-family: var(--ld-mono);
   font-size: 0.72rem;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -6402,7 +6418,7 @@ one signal-green accent.
   color: var(--green-ink);
   font-family: var(--ld-mono);
   font-size: 0.72rem;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .f9-dossier-changes {
@@ -16072,7 +16088,7 @@ textarea.f9-wk-in {
   color: var(--ink-soft);
   font-family: var(--ld-mono);
   font-size: 11.5px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.02em;
 }
 

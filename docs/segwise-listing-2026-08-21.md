@@ -317,3 +317,7 @@ a claim of listing.
 
 N/A — documentation-only; no product code, data, or billing change. The
 pitch is not sent by anything in this repo.
+
+## Receipt pass (2026-09-11, issue #2857)
+
+blocked: needs Nish's identity — the whole submission is one pitch message, delivered via LinkedIn to the article's author (Angad Singh, recommended route: https://www.linkedin.com/in/-angadsingh/) or by email from support@0509.io to a verified Segwise vendor-facing inbox (no vendor inbox is confirmed — common patterns are unverified per this doc); no repo-local outbound mail path exists and the worker holds no LinkedIn session or mailbox, so the send step cannot be fired from here. The paste-ready pitch targets the current "15 Best Ad Spy..." version (Updated September 2026); success signal stays an article change or an author reply.

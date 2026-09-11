@@ -1787,17 +1787,79 @@ async function deliverInstantTeamsBatch(
   );
 }
 
-async function deliverDigestToWhatsAppTarget(
-  env: AppEnv,
-  input: DeliverWeeklyDigestInput,
-  lane: DeliveryLane,
-  target: DeliveryTargetRecord,
-  timeZone: string | null,
+/**
+ * Shared pipeline behind the three webhook digest channels (WhatsApp, Slack,
+ * Teams). The claim -> prepare -> dispatch -> send -> finalize shape is
+ * identical for every channel; only the provider constants, claim-snapshot
+ * extras, preparation, and the send call differ, so those are the only
+ * per-channel inputs (issue #2608). The email digest twin is NOT collapsed
+ * here: its dispatch boundary, dispatch-loss cancel path, and rendered-email
+ * preparation are materially different, and the must-not on #2608 forbids
+ * changing delivery behaviour to force a shared shape.
+ */
+type DigestWebhookPreparationFailure = {
+  provider: string;
+  status: DeliveryAttemptRecord["status"];
+  webhookStatus: DeliveryAttemptRecord["webhookStatus"];
+  providerMessageId: string | null;
+  providerStatusLastSeenAt: string | null;
+  errorMessage: string | null;
+  sentAt: string | null;
+  /** Present (possibly null) means the finalize update carries the key. */
+  templateName?: string | null;
+};
+
+type DigestWebhookPreparation =
+  | { ok: true; payload: Record<string, unknown> }
+  | { ok: false; failure: DigestWebhookPreparationFailure };
+
+type DigestWebhookProviderResult = {
+  provider: string;
+  status: "sent" | "failed" | "pending";
+  webhookStatus: DeliveryAttemptRecord["webhookStatus"];
+  providerMessageId: string | null;
+  providerStatusLastSeenAt: string | null;
+  errorMessage: string | null;
+};
+
+type DigestWebhookSendOutcome = {
+  providerResult: DigestWebhookProviderResult;
+  sentAt: string | null;
+  deliveredAt: string | null;
+  /** Present (possibly null) means the finalize update carries the key. */
+  templateName?: string | null;
+};
+
+type DigestWebhookPipelineInput = {
+  env: AppEnv;
+  input: DeliverWeeklyDigestInput;
+  lane: DeliveryLane;
+  target: DeliveryTargetRecord;
+  timeZone: string | null;
+};
+
+type DigestWebhookPipelineConfig = {
+  channel: "whatsapp" | "slack" | "teams";
+  provider: string;
+  claimSnapshotExtras: (input: DeliverWeeklyDigestInput) => Record<string, unknown>;
+  prepare: (
+    ctx: DigestWebhookPipelineInput,
+  ) => Promise<DigestWebhookPreparation>;
+  send: (
+    ctx: DigestWebhookPipelineInput,
+    preparation: { ok: true; payload: Record<string, unknown> },
+  ) => Promise<DigestWebhookSendOutcome>;
+};
+
+async function runDigestWebhookAttempt(
+  config: DigestWebhookPipelineConfig,
+  ctx: DigestWebhookPipelineInput,
 ): Promise<DigestAttemptSummary> {
+  const { env, input, lane, target, timeZone } = ctx;
   const idempotencyKey = buildDeliveryAttemptIdempotencyKey({
     digestRunId: input.digestRunId,
     lane,
-    channel: "whatsapp",
+    channel: config.channel,
     targetValue: target.targetValue,
   });
   const attemptClaim = await claimDigestDeliveryAttempt(env, {
@@ -1805,13 +1867,14 @@ async function deliverDigestToWhatsAppTarget(
     digestRunId: input.digestRunId,
     deliveryTargetId: target.id,
     lane,
-    channel: "whatsapp",
-    provider: "whatsapp_cloud_api",
+    channel: config.channel,
+    provider: config.provider,
     targetValue: target.targetValue,
     eventIds: input.items.map((item) => item.eventId),
     payloadSnapshot: {
       kind: "weekly_digest",
-      channel: "whatsapp",
+      channel: config.channel,
+      ...config.claimSnapshotExtras(input),
       periodStart: input.periodStart,
       periodEnd: input.periodEnd,
       itemCount: input.items.length,
@@ -1819,49 +1882,47 @@ async function deliverDigestToWhatsAppTarget(
     idempotencyKey,
   });
   if (attemptClaim.duplicate) {
-    return summarizeDigestDeliveryAttempt("whatsapp", attemptClaim.duplicate);
+    return summarizeDigestDeliveryAttempt(config.channel, attemptClaim.duplicate);
   }
   const attemptId = attemptClaim.attemptId;
   const claimUpdatedAt = attemptClaim.claimUpdatedAt;
   if (!attemptId || !claimUpdatedAt) {
-    throw new Error("Digest WhatsApp claim did not return an owned attempt.");
+    throw new Error(
+      `Digest ${config.channel} claim did not return an owned attempt.`,
+    );
   }
 
-  const preparation = prepareDigestWhatsAppTarget(env, {
-    lane,
-    target,
-    itemCount: input.items.length,
-    periodStart: input.periodStart,
-    periodEnd: input.periodEnd,
-    timeZone,
-  });
-  if (preparation.errorMessage) {
+  const preparation = await config.prepare(ctx);
+  if (!preparation.ok) {
+    const failure = preparation.failure;
     const finalized = await updateDeliveryAttemptResult(env, attemptId, {
-      provider: "whatsapp_cloud_api",
-      status: "failed",
-      webhookStatus: "failed",
-      providerMessageId: null,
-      providerStatusLastSeenAt: null,
-      templateName: preparation.templateName,
-      errorMessage: preparation.errorMessage,
-      sentAt: null,
+      provider: failure.provider,
+      status: failure.status,
+      webhookStatus: failure.webhookStatus,
+      providerMessageId: failure.providerMessageId,
+      providerStatusLastSeenAt: failure.providerStatusLastSeenAt,
+      ...(failure.templateName !== undefined
+        ? { templateName: failure.templateName }
+        : null),
+      errorMessage: failure.errorMessage,
+      sentAt: failure.sentAt,
       failedAt: new Date().toISOString(),
       expectedStatus: "pending",
       expectedWebhookStatus: "pending",
       expectedUpdatedAt: claimUpdatedAt,
     });
     const summary: DigestAttemptSummary = {
-      channel: "whatsapp",
+      channel: config.channel,
       status: "failed",
       targetValue: target.targetValue,
       providerMessageId: null,
-      errorMessage: preparation.errorMessage,
+      errorMessage: failure.errorMessage,
       deliveredAt: null,
       claimedByThisRun: true,
     };
     return finalized === false
       ? readFinalizedDigestAttempt(env, {
-          channel: "whatsapp",
+          channel: config.channel,
           idempotencyKey,
           fallback: summary,
         })
@@ -1872,60 +1933,224 @@ async function deliverDigestToWhatsAppTarget(
     attemptId,
     claimUpdatedAt,
     idempotencyKey,
-    provider: "whatsapp_cloud_api",
+    provider: config.provider,
   });
   if (dispatch.duplicate) {
-    return summarizeDigestDeliveryAttempt("whatsapp", dispatch.duplicate);
+    return summarizeDigestDeliveryAttempt(config.channel, dispatch.duplicate);
   }
   if (!dispatch.dispatchStartedAt) {
-    throw new Error("Digest WhatsApp dispatch did not return an owned attempt.");
+    throw new Error(
+      `Digest ${config.channel} dispatch did not return an owned attempt.`,
+    );
   }
 
-  const providerResult = await sendDigestWhatsApp(env, {
-    lane,
-    target,
-    itemCount: input.items.length,
-    periodStart: input.periodStart,
-    periodEnd: input.periodEnd,
-    timeZone,
-  });
-  const deliveredAt = providerResult.status === "sent" ? new Date().toISOString() : null;
+  const outcome = await config.send(ctx, preparation);
+  const providerResult = outcome.providerResult;
   const finalized = await updateDeliveryAttemptResult(env, attemptId, {
     provider: providerResult.provider,
     status: providerResult.status,
     webhookStatus: providerResult.webhookStatus,
     providerMessageId: providerResult.providerMessageId,
     providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
-    templateName: providerResult.templateName,
+    ...(outcome.templateName !== undefined
+      ? { templateName: outcome.templateName }
+      : null),
     errorMessage: providerResult.errorMessage,
-    sentAt: deliveredAt,
-    failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+    sentAt: outcome.sentAt,
+    failedAt:
+      providerResult.status === "failed" ? new Date().toISOString() : null,
     expectedStatus: "pending",
     expectedWebhookStatus: "provider_unknown",
     expectedUpdatedAt: dispatch.dispatchStartedAt,
   });
   const providerSummary: DigestAttemptSummary = {
-    channel: "whatsapp",
+    channel: config.channel,
     status: providerResult.status,
     targetValue: target.targetValue,
     providerMessageId: providerResult.providerMessageId,
     errorMessage: providerResult.errorMessage,
-    deliveredAt,
+    deliveredAt: outcome.deliveredAt,
     claimedByThisRun: true,
   };
   if (finalized === false) {
     return readFinalizedDigestAttempt(env, {
-      channel: "whatsapp",
+      channel: config.channel,
       idempotencyKey,
       fallback: providerSummary,
     });
   }
 
   if (providerResult.status === "sent") {
-    await persistDeliveryTargetSuccess(env, target, attemptId, deliveredAt);
+    await persistDeliveryTargetSuccess(env, target, attemptId, outcome.deliveredAt);
   }
 
   return providerSummary;
+}
+
+const DIGEST_WHATSAPP_PIPELINE: DigestWebhookPipelineConfig = {
+  channel: "whatsapp",
+  provider: "whatsapp_cloud_api",
+  claimSnapshotExtras: () => ({}),
+  prepare: async ({ env, input, lane, target, timeZone }) => {
+    const preparation = prepareDigestWhatsAppTarget(env, {
+      lane,
+      target,
+      itemCount: input.items.length,
+      periodStart: input.periodStart,
+      periodEnd: input.periodEnd,
+      timeZone,
+    });
+    if (preparation.errorMessage) {
+      return {
+        ok: false,
+        failure: {
+          provider: "whatsapp_cloud_api",
+          status: "failed",
+          webhookStatus: "failed",
+          providerMessageId: null,
+          providerStatusLastSeenAt: null,
+          errorMessage: preparation.errorMessage,
+          sentAt: null,
+          templateName: preparation.templateName,
+        },
+      };
+    }
+    return { ok: true, payload: {} };
+  },
+  send: async ({ env, input, lane, target, timeZone }) => {
+    const providerResult = await sendDigestWhatsApp(env, {
+      lane,
+      target,
+      itemCount: input.items.length,
+      periodStart: input.periodStart,
+      periodEnd: input.periodEnd,
+      timeZone,
+    });
+    const deliveredAt =
+      providerResult.status === "sent" ? new Date().toISOString() : null;
+    return {
+      providerResult,
+      sentAt: deliveredAt,
+      deliveredAt,
+      templateName: providerResult.templateName,
+    };
+  },
+};
+
+const DIGEST_SLACK_PIPELINE: DigestWebhookPipelineConfig = {
+  channel: "slack",
+  provider: SLACK_PROVIDER,
+  claimSnapshotExtras: (input) => ({ cadence: input.cadence ?? "weekly" }),
+  prepare: async ({ env, target }) => {
+    const preparation = await prepareSlackWebhookTarget(env, target);
+    if (!preparation.ok) {
+      const localFailure = preparation.result;
+      return {
+        ok: false,
+        failure: {
+          provider: localFailure.provider,
+          status: localFailure.status,
+          webhookStatus: localFailure.webhookStatus,
+          providerMessageId: localFailure.providerMessageId,
+          providerStatusLastSeenAt: localFailure.providerStatusLastSeenAt,
+          errorMessage: localFailure.errorMessage,
+          sentAt: localFailure.deliveredAt,
+        },
+      };
+    }
+    return { ok: true, payload: preparation };
+  },
+  send: async ({ input, timeZone }, preparation) => {
+    if (typeof preparation.payload.webhookUrl !== "string") {
+      throw new Error(
+        "Digest Slack preparation did not return a webhook URL.",
+      );
+    }
+    const providerResult = await sendSlackWebhookUrl(
+      preparation.payload.webhookUrl,
+      {
+        text: renderDigestSlackText({
+          cadenceLabel: digestCadenceLabel(input.cadence),
+          periodStart: input.periodStart,
+          periodEnd: input.periodEnd,
+          items: input.items,
+          timeZone,
+        }),
+      },
+    );
+    return {
+      providerResult,
+      sentAt: providerResult.deliveredAt,
+      deliveredAt: providerResult.deliveredAt,
+    };
+  },
+};
+
+const DIGEST_TEAMS_PIPELINE: DigestWebhookPipelineConfig = {
+  channel: "teams",
+  provider: TEAMS_PROVIDER,
+  claimSnapshotExtras: (input) => ({ cadence: input.cadence ?? "weekly" }),
+  prepare: async ({ env, target }) => {
+    const preparation = await prepareTeamsWebhookTarget(env, target);
+    if (!preparation.ok) {
+      const localFailure = preparation.result;
+      return {
+        ok: false,
+        failure: {
+          provider: localFailure.provider,
+          status: localFailure.status,
+          webhookStatus: localFailure.webhookStatus,
+          providerMessageId: localFailure.providerMessageId,
+          providerStatusLastSeenAt: localFailure.providerStatusLastSeenAt,
+          errorMessage: localFailure.errorMessage,
+          sentAt: localFailure.deliveredAt,
+        },
+      };
+    }
+    return { ok: true, payload: preparation };
+  },
+  send: async ({ input, timeZone }, preparation) => {
+    if (typeof preparation.payload.webhookUrl !== "string") {
+      throw new Error(
+        "Digest Teams preparation did not return a webhook URL.",
+      );
+    }
+    const cadenceLabel = digestCadenceLabel(input.cadence);
+    const providerResult = await sendTeamsWebhookUrl(
+      preparation.payload.webhookUrl,
+      {
+        text: renderDigestTeamsText({
+          cadenceLabel,
+          periodStart: input.periodStart,
+          periodEnd: input.periodEnd,
+          items: input.items,
+          timeZone,
+        }),
+        title: `Five to Nine ${cadenceLabel}`,
+      },
+    );
+    return {
+      providerResult,
+      sentAt: providerResult.deliveredAt,
+      deliveredAt: providerResult.deliveredAt,
+    };
+  },
+};
+
+async function deliverDigestToWhatsAppTarget(
+  env: AppEnv,
+  input: DeliverWeeklyDigestInput,
+  lane: DeliveryLane,
+  target: DeliveryTargetRecord,
+  timeZone: string | null,
+): Promise<DigestAttemptSummary> {
+  return runDigestWebhookAttempt(DIGEST_WHATSAPP_PIPELINE, {
+    env,
+    input,
+    lane,
+    target,
+    timeZone,
+  });
 }
 
 async function deliverDigestToSlackTarget(
@@ -1935,133 +2160,13 @@ async function deliverDigestToSlackTarget(
   target: DeliveryTargetRecord,
   timeZone: string | null,
 ): Promise<DigestAttemptSummary> {
-  const idempotencyKey = buildDeliveryAttemptIdempotencyKey({
-    digestRunId: input.digestRunId,
+  return runDigestWebhookAttempt(DIGEST_SLACK_PIPELINE, {
+    env,
+    input,
     lane,
-    channel: "slack",
-    targetValue: target.targetValue,
-  });
-  const cadenceLabel = digestCadenceLabel(input.cadence);
-  const slackText = renderDigestSlackText({
-    cadenceLabel,
-    periodStart: input.periodStart,
-    periodEnd: input.periodEnd,
-    items: input.items,
+    target,
     timeZone,
   });
-  const attemptClaim = await claimDigestDeliveryAttempt(env, {
-    userId: input.userId,
-    digestRunId: input.digestRunId,
-    deliveryTargetId: target.id,
-    lane,
-    channel: "slack",
-    provider: SLACK_PROVIDER,
-    targetValue: target.targetValue,
-    eventIds: input.items.map((item) => item.eventId),
-    payloadSnapshot: {
-      kind: "weekly_digest",
-      channel: "slack",
-      cadence: input.cadence ?? "weekly",
-      periodStart: input.periodStart,
-      periodEnd: input.periodEnd,
-      itemCount: input.items.length,
-    },
-    idempotencyKey,
-  });
-  if (attemptClaim.duplicate) {
-    return summarizeDigestDeliveryAttempt("slack", attemptClaim.duplicate);
-  }
-  const attemptId = attemptClaim.attemptId;
-  const claimUpdatedAt = attemptClaim.claimUpdatedAt;
-  if (!attemptId || !claimUpdatedAt) {
-    throw new Error("Digest Slack claim did not return an owned attempt.");
-  }
-
-  const preparation = await prepareSlackWebhookTarget(env, target);
-  if (!preparation.ok) {
-    const localFailure = preparation.result;
-    const finalized = await updateDeliveryAttemptResult(env, attemptId, {
-      provider: localFailure.provider,
-      status: localFailure.status,
-      webhookStatus: localFailure.webhookStatus,
-      providerMessageId: localFailure.providerMessageId,
-      providerStatusLastSeenAt: localFailure.providerStatusLastSeenAt,
-      errorMessage: localFailure.errorMessage,
-      sentAt: localFailure.deliveredAt,
-      failedAt: new Date().toISOString(),
-      expectedStatus: "pending",
-      expectedWebhookStatus: "pending",
-      expectedUpdatedAt: claimUpdatedAt,
-    });
-    const summary: DigestAttemptSummary = {
-      channel: "slack",
-      status: "failed",
-      targetValue: target.targetValue,
-      providerMessageId: null,
-      errorMessage: localFailure.errorMessage,
-      deliveredAt: null,
-      claimedByThisRun: true,
-    };
-    return finalized === false
-      ? readFinalizedDigestAttempt(env, {
-          channel: "slack",
-          idempotencyKey,
-          fallback: summary,
-        })
-      : summary;
-  }
-
-  const dispatch = await beginDigestProviderDispatch(env, {
-    attemptId,
-    claimUpdatedAt,
-    idempotencyKey,
-    provider: SLACK_PROVIDER,
-  });
-  if (dispatch.duplicate) {
-    return summarizeDigestDeliveryAttempt("slack", dispatch.duplicate);
-  }
-  if (!dispatch.dispatchStartedAt) {
-    throw new Error("Digest Slack dispatch did not return an owned attempt.");
-  }
-
-  const providerResult = await sendSlackWebhookUrl(preparation.webhookUrl, {
-    text: slackText,
-  });
-  const finalized = await updateDeliveryAttemptResult(env, attemptId, {
-    provider: providerResult.provider,
-    status: providerResult.status,
-    webhookStatus: providerResult.webhookStatus,
-    providerMessageId: providerResult.providerMessageId,
-    providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
-    errorMessage: providerResult.errorMessage,
-    sentAt: providerResult.deliveredAt,
-    failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
-    expectedStatus: "pending",
-    expectedWebhookStatus: "provider_unknown",
-    expectedUpdatedAt: dispatch.dispatchStartedAt,
-  });
-  const providerSummary: DigestAttemptSummary = {
-    channel: "slack",
-    status: providerResult.status,
-    targetValue: target.targetValue,
-    providerMessageId: providerResult.providerMessageId,
-    errorMessage: providerResult.errorMessage,
-    deliveredAt: providerResult.deliveredAt,
-    claimedByThisRun: true,
-  };
-  if (finalized === false) {
-    return readFinalizedDigestAttempt(env, {
-      channel: "slack",
-      idempotencyKey,
-      fallback: providerSummary,
-    });
-  }
-
-  if (providerResult.status === "sent") {
-    await persistDeliveryTargetSuccess(env, target, attemptId, providerResult.deliveredAt);
-  }
-
-  return providerSummary;
 }
 
 async function deliverDigestToTeamsTarget(
@@ -2071,136 +2176,14 @@ async function deliverDigestToTeamsTarget(
   target: DeliveryTargetRecord,
   timeZone: string | null,
 ): Promise<DigestAttemptSummary> {
-  const idempotencyKey = buildDeliveryAttemptIdempotencyKey({
-    digestRunId: input.digestRunId,
+  return runDigestWebhookAttempt(DIGEST_TEAMS_PIPELINE, {
+    env,
+    input,
     lane,
-    channel: "teams",
-    targetValue: target.targetValue,
-  });
-  const cadenceLabel = digestCadenceLabel(input.cadence);
-  const teamsText = renderDigestTeamsText({
-    cadenceLabel,
-    periodStart: input.periodStart,
-    periodEnd: input.periodEnd,
-    items: input.items,
+    target,
     timeZone,
   });
-  const attemptClaim = await claimDigestDeliveryAttempt(env, {
-    userId: input.userId,
-    digestRunId: input.digestRunId,
-    deliveryTargetId: target.id,
-    lane,
-    channel: "teams",
-    provider: TEAMS_PROVIDER,
-    targetValue: target.targetValue,
-    eventIds: input.items.map((item) => item.eventId),
-    payloadSnapshot: {
-      kind: "weekly_digest",
-      channel: "teams",
-      cadence: input.cadence ?? "weekly",
-      periodStart: input.periodStart,
-      periodEnd: input.periodEnd,
-      itemCount: input.items.length,
-    },
-    idempotencyKey,
-  });
-  if (attemptClaim.duplicate) {
-    return summarizeDigestDeliveryAttempt("teams", attemptClaim.duplicate);
-  }
-  const attemptId = attemptClaim.attemptId;
-  const claimUpdatedAt = attemptClaim.claimUpdatedAt;
-  if (!attemptId || !claimUpdatedAt) {
-    throw new Error("Digest Teams claim did not return an owned attempt.");
-  }
-
-  const preparation = await prepareTeamsWebhookTarget(env, target);
-  if (!preparation.ok) {
-    const localFailure = preparation.result;
-    const finalized = await updateDeliveryAttemptResult(env, attemptId, {
-      provider: localFailure.provider,
-      status: localFailure.status,
-      webhookStatus: localFailure.webhookStatus,
-      providerMessageId: localFailure.providerMessageId,
-      providerStatusLastSeenAt: localFailure.providerStatusLastSeenAt,
-      errorMessage: localFailure.errorMessage,
-      sentAt: localFailure.deliveredAt,
-      failedAt: new Date().toISOString(),
-      expectedStatus: "pending",
-      expectedWebhookStatus: "pending",
-      expectedUpdatedAt: claimUpdatedAt,
-    });
-    const summary: DigestAttemptSummary = {
-      channel: "teams",
-      status: "failed",
-      targetValue: target.targetValue,
-      providerMessageId: null,
-      errorMessage: localFailure.errorMessage,
-      deliveredAt: null,
-      claimedByThisRun: true,
-    };
-    return finalized === false
-      ? readFinalizedDigestAttempt(env, {
-          channel: "teams",
-          idempotencyKey,
-          fallback: summary,
-        })
-      : summary;
-  }
-
-  const dispatch = await beginDigestProviderDispatch(env, {
-    attemptId,
-    claimUpdatedAt,
-    idempotencyKey,
-    provider: TEAMS_PROVIDER,
-  });
-  if (dispatch.duplicate) {
-    return summarizeDigestDeliveryAttempt("teams", dispatch.duplicate);
-  }
-  if (!dispatch.dispatchStartedAt) {
-    throw new Error("Digest Teams dispatch did not return an owned attempt.");
-  }
-
-  const providerResult = await sendTeamsWebhookUrl(preparation.webhookUrl, {
-    text: teamsText,
-    title: `Five to Nine ${cadenceLabel}`,
-  });
-  const finalized = await updateDeliveryAttemptResult(env, attemptId, {
-    provider: providerResult.provider,
-    status: providerResult.status,
-    webhookStatus: providerResult.webhookStatus,
-    providerMessageId: providerResult.providerMessageId,
-    providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
-    errorMessage: providerResult.errorMessage,
-    sentAt: providerResult.deliveredAt,
-    failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
-    expectedStatus: "pending",
-    expectedWebhookStatus: "provider_unknown",
-    expectedUpdatedAt: dispatch.dispatchStartedAt,
-  });
-  const providerSummary: DigestAttemptSummary = {
-    channel: "teams",
-    status: providerResult.status,
-    targetValue: target.targetValue,
-    providerMessageId: providerResult.providerMessageId,
-    errorMessage: providerResult.errorMessage,
-    deliveredAt: providerResult.deliveredAt,
-    claimedByThisRun: true,
-  };
-  if (finalized === false) {
-    return readFinalizedDigestAttempt(env, {
-      channel: "teams",
-      idempotencyKey,
-      fallback: providerSummary,
-    });
-  }
-
-  if (providerResult.status === "sent") {
-    await persistDeliveryTargetSuccess(env, target, attemptId, providerResult.deliveredAt);
-  }
-
-  return providerSummary;
 }
-
 async function beginDigestProviderDispatch(
   env: AppEnv,
   input: {
@@ -2381,79 +2364,87 @@ export async function resolveAlertEmailTargets(
   return fallbackTarget ? [fallbackTarget] : [];
 }
 
-async function resolveDigestWhatsAppTargets(env: AppEnv, userId: string) {
-  if (!isWhatsAppDeliveryCustomerFacing()) return [];
+/**
+ * Parameterised webhook target resolvers behind the six per-channel
+ * digest/alert resolvers (issue #2608). Digest resolvers read the
+ * watchlist-scoped-null list; alert resolvers dedupe the watchlist and
+ * account-level lists. The per-channel gate and usability predicate are the
+ * only per-channel inputs.
+ */
+const WEBHOOK_CHANNEL_GATES: Record<
+  "whatsapp" | "slack" | "teams",
+  () => boolean
+> = {
+  whatsapp: isWhatsAppDeliveryCustomerFacing,
+  slack: isSlackWebhookDeliveryCustomerFacing,
+  teams: isTeamsWebhookDeliveryCustomerFacing,
+};
+
+const IS_USABLE_WEBHOOK_TARGET: Record<
+  "whatsapp" | "slack" | "teams",
+  (target: DeliveryTargetRecord) => boolean
+> = {
+  whatsapp: isUsableWhatsAppTarget,
+  slack: isUsableWebhookTarget,
+  teams: isUsableWebhookTarget,
+};
+
+async function resolveDigestWebhookTargets(
+  env: AppEnv,
+  userId: string,
+  channel: "whatsapp" | "slack" | "teams",
+) {
+  if (!WEBHOOK_CHANNEL_GATES[channel]()) return [];
   return (await listDeliveryTargets(env, userId, {
     watchlistId: null,
-    channel: "whatsapp",
+    channel,
     limit: 10,
-  })).filter(isUsableWhatsAppTarget);
+  })).filter(IS_USABLE_WEBHOOK_TARGET[channel]);
+}
+
+async function resolveAlertWebhookTargets(
+  env: AppEnv,
+  userId: string,
+  watchlistId: string,
+  channel: "whatsapp" | "slack" | "teams",
+) {
+  if (!WEBHOOK_CHANNEL_GATES[channel]()) return [];
+  return dedupeTargetsByValue([
+    ...(await listDeliveryTargets(env, userId, {
+      watchlistId,
+      channel,
+      limit: 10,
+    })),
+    ...(await listDeliveryTargets(env, userId, {
+      watchlistId: null,
+      channel,
+      limit: 10,
+    })),
+  ]).filter(IS_USABLE_WEBHOOK_TARGET[channel]);
+}
+
+async function resolveDigestWhatsAppTargets(env: AppEnv, userId: string) {
+  return resolveDigestWebhookTargets(env, userId, "whatsapp");
 }
 
 async function resolveAlertWhatsAppTargets(env: AppEnv, userId: string, watchlistId: string) {
-  if (!isWhatsAppDeliveryCustomerFacing()) return [];
-  return dedupeTargetsByValue([
-    ...(await listDeliveryTargets(env, userId, {
-      watchlistId,
-      channel: "whatsapp",
-      limit: 10,
-    })),
-    ...(await listDeliveryTargets(env, userId, {
-      watchlistId: null,
-      channel: "whatsapp",
-      limit: 10,
-    })),
-  ]).filter(isUsableWhatsAppTarget);
+  return resolveAlertWebhookTargets(env, userId, watchlistId, "whatsapp");
 }
 
 async function resolveDigestSlackTargets(env: AppEnv, userId: string) {
-  if (!isSlackWebhookDeliveryCustomerFacing()) return [];
-  return (await listDeliveryTargets(env, userId, {
-    watchlistId: null,
-    channel: "slack",
-    limit: 10,
-  })).filter(isUsableSlackTarget);
+  return resolveDigestWebhookTargets(env, userId, "slack");
 }
 
 async function resolveAlertSlackTargets(env: AppEnv, userId: string, watchlistId: string) {
-  if (!isSlackWebhookDeliveryCustomerFacing()) return [];
-  return dedupeTargetsByValue([
-    ...(await listDeliveryTargets(env, userId, {
-      watchlistId,
-      channel: "slack",
-      limit: 10,
-    })),
-    ...(await listDeliveryTargets(env, userId, {
-      watchlistId: null,
-      channel: "slack",
-      limit: 10,
-    })),
-  ]).filter(isUsableSlackTarget);
+  return resolveAlertWebhookTargets(env, userId, watchlistId, "slack");
 }
 
 async function resolveDigestTeamsTargets(env: AppEnv, userId: string) {
-  if (!isTeamsWebhookDeliveryCustomerFacing()) return [];
-  return (await listDeliveryTargets(env, userId, {
-    watchlistId: null,
-    channel: "teams",
-    limit: 10,
-  })).filter(isUsableTeamsTarget);
+  return resolveDigestWebhookTargets(env, userId, "teams");
 }
 
 async function resolveAlertTeamsTargets(env: AppEnv, userId: string, watchlistId: string) {
-  if (!isTeamsWebhookDeliveryCustomerFacing()) return [];
-  return dedupeTargetsByValue([
-    ...(await listDeliveryTargets(env, userId, {
-      watchlistId,
-      channel: "teams",
-      limit: 10,
-    })),
-    ...(await listDeliveryTargets(env, userId, {
-      watchlistId: null,
-      channel: "teams",
-      limit: 10,
-    })),
-  ]).filter(isUsableTeamsTarget);
+  return resolveAlertWebhookTargets(env, userId, watchlistId, "teams");
 }
 
 function isUsableEmailTarget(target: DeliveryTargetRecord, currentAccountEmail?: string | null) {
@@ -2513,17 +2504,8 @@ function hasEmailTargetForAddress(targets: DeliveryTargetRecord[], address: stri
   return targets.some((target) => target.targetValue.trim().toLowerCase() === normalized);
 }
 
-function isUsableSlackTarget(target: DeliveryTargetRecord) {
-  return (
-    !target.isPaused &&
-    target.isOptedIn &&
-    !target.optedOutAt &&
-    target.isValidated &&
-    target.validationStatus === "validated"
-  );
-}
-
-function isUsableTeamsTarget(target: DeliveryTargetRecord) {
+/** Slack and Teams targets share the same opt-in/validation gate. */
+function isUsableWebhookTarget(target: DeliveryTargetRecord) {
   return (
     !target.isPaused &&
     target.isOptedIn &&

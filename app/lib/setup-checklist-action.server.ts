@@ -5,6 +5,7 @@ import { sanitizeCustomerFacingMessage } from "~/lib/customer-route-error";
 import {
   hasInvalidCompetitorWebsite,
   normalizeCompetitorWebsiteInput,
+  registrableDomainFromLandingPage,
   watchlistFingerprint,
 } from "~/lib/competitor-website";
 import {
@@ -18,7 +19,41 @@ import {
   type CompetitorImportRow,
 } from "~/lib/competitor-import";
 import type { AppEnv } from "~/lib/env.server";
+import {
+  queueFirstWatchlistScan,
+  queueFirstWatchlistScanForSignupFirstBrief,
+} from "~/lib/first-watchlist-scan.server";
 import type { ClientRoomRecord, ClientRoomResourceRef } from "~/lib/types";
+
+/**
+ * Issue #2723: derive the tracking role on the setup-checklist CREATE paths
+ * the same way the watchlist update path does — `self` only when the
+ * target's registrable domain matches the workspace `brandWebsite`,
+ * `competitor` otherwise. With no brand site set (or an unresolvable
+ * domain) nothing can be matched, so the previous hard-coded `competitor`
+ * stands.
+ */
+async function deriveTrackingRole(input: {
+  env: AppEnv;
+  workspaceUserId: string;
+  formBrandWebsiteUrl: string | null | undefined;
+  targetUrl: string | null | undefined;
+}): Promise<"self" | "competitor"> {
+  const targetDomain = registrableDomainFromLandingPage(input.targetUrl);
+  if (!targetDomain) return "competitor";
+  let brandWebsiteUrl = input.formBrandWebsiteUrl ?? null;
+  if (!brandWebsiteUrl) {
+    try {
+      const { getWorkspaceBranding } = await import("~/lib/data.server");
+      brandWebsiteUrl = (await getWorkspaceBranding(input.env, input.workspaceUserId)).brandWebsite;
+    } catch {
+      // No stored branding available — keep the hard-coded `competitor`.
+      return "competitor";
+    }
+  }
+  const brandDomain = registrableDomainFromLandingPage(brandWebsiteUrl);
+  return brandDomain && brandDomain === targetDomain ? "self" : "competitor";
+}
 
 export async function handleSetupChecklistAction(
   { context, request }: ActionFunctionArgs,
@@ -194,7 +229,6 @@ export async function handleSetupChecklistAction(
     }
 
     const { createWatchlistWithinLimit, upsertAgentMemory, upsertClientRoom } = await import("~/lib/data.server");
-    const { queueFirstWatchlistScan, queueFirstWatchlistScanForSignupFirstBrief } = await import("~/lib/monitoring.server");
     const { isSignupFirstBriefEnabled } = await import("~/lib/env.server");
     const signupFirstBriefEnabled = isSignupFirstBriefEnabled(env);
     const clientRoomContextRequested = rowsToCreate.some((row) => Boolean(row.client));
@@ -360,7 +394,12 @@ export async function handleSetupChecklistAction(
       targetFingerprint,
       targetLabel,
       targetCountry: normalizedQuery.filters.country,
-      trackingRole: "competitor",
+      trackingRole: await deriveTrackingRole({
+        env,
+        workspaceUserId,
+        formBrandWebsiteUrl: brandWebsite.normalizedUrl,
+        targetUrl: competitorWebsite.normalizedUrl,
+      }),
     }, watchlistLimit.limit);
 
     if (watchlistResult.status === "over_cap") {
@@ -378,15 +417,11 @@ export async function handleSetupChecklistAction(
       };
     }
 
-    const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
     const { isSignupFirstBriefEnabled } = await import("~/lib/env.server");
     const signupFirstBriefEnabled = isSignupFirstBriefEnabled(env);
     const watchlist = watchlistResult.watchlist;
     const queueActivationScan = async () => {
       if (signupFirstBriefEnabled) {
-        const { queueFirstWatchlistScanForSignupFirstBrief } = await import(
-          "~/lib/monitoring.server"
-        );
         await queueFirstWatchlistScanForSignupFirstBrief(
           scanEnv,
           cloudflare?.ctx,
@@ -515,10 +550,6 @@ async function handleCreateHandoffWatchlists(input: {
     createWatchlistWithinLimit,
     completeUserOnboarding,
   } = await import("~/lib/data.server");
-  const {
-    queueFirstWatchlistScan,
-    queueFirstWatchlistScanForSignupFirstBrief,
-  } = await import("~/lib/monitoring.server");
   const { isSignupFirstBriefEnabled } = await import("~/lib/env.server");
   const { defaultCountryForVisitor } = await import("~/lib/countries");
   const signupFirstBriefEnabled = isSignupFirstBriefEnabled(env);
@@ -536,6 +567,12 @@ async function handleCreateHandoffWatchlists(input: {
 
   let createdCount = 0;
   let existingCount = 0;
+  // Issue #2723: the brand site posted with the handoff (or the stored
+  // workspace branding, via `deriveTrackingRole`) decides which candidates
+  // are the customer's own brand rather than competitors.
+  const handoffBrandWebsiteUrl = normalizeCompetitorWebsiteInput(
+    String(formData.get("brandWebsite") ?? "").trim(),
+  ).normalizedUrl;
   const queued = new Set<string>();
   const rejected: Array<{ advertiser: string; reason: string }> = [];
   for (const candidate of candidates) {
@@ -565,7 +602,12 @@ async function handleCreateHandoffWatchlists(input: {
       targetFingerprint,
       targetLabel: competitorWebsite.displayName ?? candidate.advertiser,
       targetCountry: normalizedQuery.filters.country,
-      trackingRole: "competitor" as const,
+      trackingRole: await deriveTrackingRole({
+        env,
+        workspaceUserId,
+        formBrandWebsiteUrl: handoffBrandWebsiteUrl,
+        targetUrl: competitorWebsite.normalizedUrl,
+      }),
     }, watchlistLimit.limit);
     if (result.status === "over_cap") {
       rejected.push({

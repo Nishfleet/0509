@@ -10,7 +10,7 @@ import { reportConsecutiveWatchlistFailure } from "~/lib/watchlist-failure-alert
 import type {
   FirstWatchlistScanRunDescriptor,
   FirstWatchlistScanWorkflowParams,
-} from "~/lib/monitoring.server";
+} from "~/lib/first-watchlist-scan.server";
 
 export interface ScheduledMonitoringWorkflowParams {
   kind: "scheduled_scan";

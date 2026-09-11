@@ -80,6 +80,7 @@ describe("marketing pricing is client-fetched", () => {
     vi.doMock("~/lib/public-proof.server", () => ({
       loadPublicProofBrief: vi.fn().mockResolvedValue(null),
       featuredWebsiteForVisitorCountry: vi.fn(() => "nike.com"),
+      PUBLIC_HOME_NEUTRAL_FEATURED_WEBSITE: "nike.com",
     }));
 
     const { loader } = await import("~/routes/marketing");
