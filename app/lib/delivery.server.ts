@@ -1800,7 +1800,7 @@ type DigestWebhookPreparationFailure = {
   webhookStatus: DeliveryAttemptRecord["webhookStatus"];
   providerMessageId: string | null;
   providerStatusLastSeenAt: string | null;
-  errorMessage: string;
+  errorMessage: string | null;
   sentAt: string | null;
   /** Present (possibly null) means the finalize update carries the key. */
   templateName?: string | null;
