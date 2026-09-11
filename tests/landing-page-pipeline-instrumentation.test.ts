@@ -230,7 +230,7 @@ describe("landing-page pipeline instrumentation (issue #949)", () => {
       scanId: "scan-1",
       watchlistId: "watch-1",
       adId: null,
-      extractorVersion: "lp-signals-v6",
+      extractorVersion: "lp-signals-v7",
     });
 
     recordExtractStage(counters, {
@@ -251,7 +251,7 @@ describe("landing-page pipeline instrumentation (issue #949)", () => {
       scanId: "scan-1",
       watchlistId: "watch-1",
       adId: null,
-      extractorVersion: "lp-signals-v6",
+      extractorVersion: "lp-signals-v7",
     });
 
     recordExtractStage(counters, {
@@ -272,7 +272,7 @@ describe("landing-page pipeline instrumentation (issue #949)", () => {
       scanId: "scan-1",
       watchlistId: "watch-1",
       adId: null,
-      extractorVersion: "lp-signals-v6",
+      extractorVersion: "lp-signals-v7",
     });
 
     recordExtractStage(counters, {
@@ -292,7 +292,7 @@ describe("landing-page pipeline instrumentation (issue #949)", () => {
       scanId: "scan-1",
       watchlistId: "watch-1",
       adId: null,
-      extractorVersion: "lp-signals-v6",
+      extractorVersion: "lp-signals-v7",
     });
 
     recordDiffStage(counters, {
@@ -311,7 +311,7 @@ describe("landing-page pipeline instrumentation (issue #949)", () => {
       scanId: "scan-1",
       watchlistId: "watch-1",
       adId: null,
-      extractorVersion: "lp-signals-v6",
+      extractorVersion: "lp-signals-v7",
     });
 
     recordExtractStage(counters, {
@@ -350,7 +350,7 @@ describe("landing-page pipeline instrumentation (issue #949)", () => {
       scanId: "scan-1",
       watchlistId: "watch-1",
       adId: null,
-      extractorVersion: "lp-signals-v6",
+      extractorVersion: "lp-signals-v7",
     });
 
     recordExtractStage(counters, {

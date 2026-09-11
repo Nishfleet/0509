@@ -149,12 +149,30 @@ function mockSlack(sendSlackWebhookMessage: ReturnType<typeof vi.fn>) {
   }));
 }
 
+const PLAN_LIMITS_FIXTURE = {
+  free: { digests: false, digestCadence: "none" },
+  scout: { digests: true, digestCadence: "weekly" },
+  starter: { digests: true, digestCadence: "weekly" },
+  agency: { digests: true, digestCadence: "daily_and_weekly" },
+};
+const planServerMock = {
+  getUserPlan: vi.fn(),
+  PLAN_LIMITS: PLAN_LIMITS_FIXTURE,
+};
+
 beforeEach(() => {
   vi.resetModules();
   emailSend = vi.fn();
-  vi.doMock("~/lib/plan.server", () => ({
-    getUserPlan: vi.fn().mockResolvedValue("starter"),
-  }));
+  // One plan.server mock for the whole file. The orchestration re-entry
+  // tests used to register a second factory for the same module; under CI
+  // load the dynamic import sometimes resolved the first one, which carried
+  // no PLAN_LIMITS, and the job died before delivery ("No PLAN_LIMITS export
+  // is defined on the mock" — the digest-partial-failure flake retriggered
+  // five times on main). Tests change the resolved plan on the shared spy
+  // instead of re-registering the module.
+  planServerMock.getUserPlan.mockReset();
+  planServerMock.getUserPlan.mockResolvedValue("starter");
+  vi.doMock("~/lib/plan.server", () => planServerMock);
   vi.doMock("~/lib/email-verification.server", () => ({
     isUserEmailVerified: vi.fn().mockResolvedValue(true),
   }));
@@ -514,18 +532,6 @@ describe("issue #2450 — partial digest failure aggregate status", () => {
       };
     }
 
-    function planMock() {
-      return {
-        getUserPlan: vi.fn().mockResolvedValue("agency"),
-        PLAN_LIMITS: {
-          free: { digests: false, digestCadence: "none" },
-          scout: { digests: true, digestCadence: "weekly" },
-          starter: { digests: true, digestCadence: "weekly" },
-          agency: { digests: true, digestCadence: "daily_and_weekly" },
-        },
-      };
-    }
-
     async function runScheduledCycle(deliveryStatus: "sent" | "failed" | null) {
       vi.resetModules();
       const data = scheduledDataServer(deliveryStatus);
@@ -538,7 +544,7 @@ describe("issue #2450 — partial digest failure aggregate status", () => {
         deliverWeeklyDigest,
         deliverScanTroubleNotice: vi.fn(),
       }));
-      vi.doMock("~/lib/plan.server", () => planMock());
+      planServerMock.getUserPlan.mockResolvedValue("agency");
       vi.doMock("~/lib/digest-strategy-generation.server", () => ({
         createDigestStrategyGenerationDeadline: () => Date.now() + 60_000,
         createDigestStrategyGenerationLease: vi.fn().mockResolvedValue(true),
@@ -559,7 +565,6 @@ describe("issue #2450 — partial digest failure aggregate status", () => {
       vi.doUnmock("~/lib/auth.server");
       vi.doUnmock("~/lib/data.server");
       vi.doUnmock("~/lib/delivery.server");
-      vi.doUnmock("~/lib/plan.server");
       vi.doUnmock("~/lib/digest-strategy-generation.server");
       return deliverWeeklyDigest;
     }
