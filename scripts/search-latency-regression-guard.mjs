@@ -395,6 +395,7 @@ export function detectMoneyPathRegression(
     const last = pathRecords[pathRecords.length - 1];
     if (!last || !isMoneyPathFailure(last)) continue;
     const failures = pathRecords.slice(-minFailures);
+    if (failures.length < minFailures) continue;
     if (!failures.every(isMoneyPathFailure)) continue;
     const firstFailure = failures[0];
     const withinWindow =
