@@ -31,6 +31,11 @@ export interface SneakerResaleCopy {
   // it; a required field keeps the swing section from shipping a dead link.
   swing: ReadonlyArray<{ brand: string; line: string; domain: string }>;
   swingSource: string;
+  // The dated, linked citations behind the swing section — one entry per
+  // live source in the current market-signal cluster (issue #2856). Facts
+  // only: label, canonical URL, publication date. The page names what the
+  // signal cites; it makes no claim about what a source proves.
+  swingSources: ReadonlyArray<{ label: string; url: string; publishedIso: string }>;
   // Publication date of the cited daily market signal — the freshness guard.
   // The canary test fails when this drifts more than 14 days from today.
   swingAsOfIso: string;
@@ -108,17 +113,29 @@ const EN: SneakerResaleCopy = {
     {
       brand: "Nike",
       domain: "nike.com",
-      line: "The high-engagement demand thread the signal flagged — 'Just Don't Wear It' (~6,000 points, ~1,800 comments) — as resale buyers weigh trading down.",
+      line: "The 'Just Don't Wear It' thread on r/stocks — 6,561 upvotes and 1,919 comments, posted 2026-08-30.",
     },
     {
-      brand: "SneakerPing",
-      domain: "sneakerping.com",
-      line: "Its 2026 report puts most recently sold releases below retail (59.5%) — the below-retail anchor behind the value-tier swing.",
+      brand: "StockX",
+      domain: "stockx.com",
+      line: "Its midyear resale report (via WWD, 2026-08-12) is the second live source in the below-retail cluster.",
     },
   ],
   swingSource:
-    "Source: 0509 daily market signal, 2026-09-01 — SneakerPing's report (59.5% below retail) and a high-engagement Nike demand thread. We cite the public report; we do not rehost it.",
-  swingAsOfIso: "2026-09-01",
+    "Source: 0509 daily market signal, 2026-09-11 — the Nike 'Just Don't Wear It' r/stocks thread (2026-08-30) and the StockX midyear resale report (WWD, 2026-08-12). We link the public sources; we do not rehost them.",
+  swingSources: [
+    {
+      label: "Nike 'Just Don't Wear It' thread — r/stocks",
+      url: "https://www.reddit.com/r/stocks/comments/1w2hjcm/nike_just_dont_wear_it/",
+      publishedIso: "2026-08-30",
+    },
+    {
+      label: "StockX Midyear Resale Report — WWD",
+      url: "https://wwd.com/footwear-news/sneaker-news/stockx-midyear-resale-surprises-1239106008/",
+      publishedIso: "2026-08-12",
+    },
+  ],
+  swingAsOfIso: "2026-09-11",
   honestKicker: "Honest limits",
   honestTitle: "What this page does not pretend.",
   honest: [
@@ -231,17 +248,29 @@ const DE: SneakerResaleCopy = {
     {
       brand: "Nike",
       domain: "nike.com",
-      line: "Der Nachfrage-Thread mit viel Beteiligung, den das Signal markiert hat ('Just Don't Wear It', rund 6.000 Punkte, rund 1.800 Kommentare) — während Resale-Käufer nach unten ausweichen.",
+      line: "Der 'Just Don't Wear It'-Thread auf r/stocks — 6.561 Upvotes und 1.919 Kommentare, vom 2026-08-30.",
     },
     {
-      brand: "SneakerPing",
-      domain: "sneakerping.com",
-      line: "59,5 % von 3.538 Releases aus 31 Marken wurden zuletzt unter dem Verkaufspreis verkauft — der Anker des Below-Retail-Swings.",
+      brand: "StockX",
+      domain: "stockx.com",
+      line: "Sein Halbjahres-Resale-Bericht (über WWD, 2026-08-12) ist die zweite Live-Quelle des Below-Retail-Clusters.",
     },
   ],
   swingSource:
-    "Quelle: 0509-Tagesmarktsignal, 2026-09-01 — SneakerPings Bericht (59,5 % der Releases unter dem Verkaufspreis) und ein Nike-Nachfrage-Thread mit viel Beteiligung. Wir zitieren den öffentlichen Bericht; wir hosten ihn nicht neu.",
-  swingAsOfIso: "2026-09-01",
+    "Quelle: 0509-Tagesmarktsignal, 2026-09-11 — der Nike-'Just Don't Wear It'-Thread auf r/stocks (2026-08-30) und StockX' Halbjahres-Resale-Bericht (WWD, 2026-08-12). Wir verlinken die öffentlichen Quellen; wir hosten sie nicht neu.",
+  swingSources: [
+    {
+      label: "Nike-'Just Don't Wear It'-Thread — r/stocks",
+      url: "https://www.reddit.com/r/stocks/comments/1w2hjcm/nike_just_dont_wear_it/",
+      publishedIso: "2026-08-30",
+    },
+    {
+      label: "StockX-Halbjahres-Resale-Bericht — WWD",
+      url: "https://wwd.com/footwear-news/sneaker-news/stockx-midyear-resale-surprises-1239106008/",
+      publishedIso: "2026-08-12",
+    },
+  ],
+  swingAsOfIso: "2026-09-11",
   honestKicker: "Ehrliche Grenzen",
   honestTitle: "Was diese Seite nicht behauptet.",
   honest: [
@@ -354,17 +383,29 @@ const JA: SneakerResaleCopy = {
     {
       brand: "Nike",
       domain: "nike.com",
-      line: "シグナルが注目した高エンゲージメントの需要スレッド（'Just Don't Wear It'、約6,000ポイント、約1,800コメント）。リセールの買い手が値下げ方向に動いている。",
+      line: "r/stocks の 'Just Don't Wear It' スレッド — 6,561 upvotes・1,919件のコメント、2026-08-30投稿。",
     },
     {
-      brand: "SneakerPing",
-      domain: "sneakerping.com",
-      line: "31ブランドの3,538リリースのうち59.5%が直近で定価以下で売れた——価値重視への潮目の定価割れの要。",
+      brand: "StockX",
+      domain: "stockx.com",
+      line: "その半期再販レポート（WWD経由、2026-08-12）は、定価割れクラスターの2つ目の生きた出典。",
     },
   ],
   swingSource:
-    "出典：0509日次市場シグナル、2026-09-01 — SneakerPingのレポート（定価以下59.5%）と高エンゲージメントのNike需要スレッド。公開レポートを引用するだけで、再ホストはしません。",
-  swingAsOfIso: "2026-09-01",
+    "出典：0509日次市場シグナル、2026-09-11 — Nike 'Just Don't Wear It' の r/stocks スレッド（2026-08-30）と StockX の半期再販レポート（WWD、2026-08-12）。公開ソースへリンクするだけで、再ホストはしません。",
+  swingSources: [
+    {
+      label: "Nike 'Just Don't Wear It' スレッド — r/stocks",
+      url: "https://www.reddit.com/r/stocks/comments/1w2hjcm/nike_just_dont_wear_it/",
+      publishedIso: "2026-08-30",
+    },
+    {
+      label: "StockX 半期再販レポート — WWD",
+      url: "https://wwd.com/footwear-news/sneaker-news/stockx-midyear-resale-surprises-1239106008/",
+      publishedIso: "2026-08-12",
+    },
+  ],
+  swingAsOfIso: "2026-09-11",
   honestKicker: "言わないこと",
   honestTitle: "このページが約束しない範囲。",
   honest: [
@@ -477,17 +518,29 @@ const PT_BR: SneakerResaleCopy = {
     {
       brand: "Nike",
       domain: "nike.com",
-      line: "O tópico de demanda de alto engajamento que o sinal marcou ('Just Don't Wear It', ~6k pontos, ~1,8k comentários) enquanto compradores de revenda pesam trocar para baixo.",
+      line: "A thread 'Just Don't Wear It' no r/stocks — 6.561 upvotes e 1.919 comentários, de 2026-08-30.",
     },
     {
-      brand: "SneakerPing",
-      domain: "sneakerping.com",
-      line: "59,5% de 3.538 lançamentos de 31 marcas venderam recentemente abaixo do varejo — a âncora do below-retail por trás da virada de valor.",
+      brand: "StockX",
+      domain: "stockx.com",
+      line: "Seu relatório semestral de resale (via WWD, 2026-08-12) é a segunda fonte viva do cluster below-retail.",
     },
   ],
   swingSource:
-    "Fonte: sinal de mercado diário 0509, 2026-09-01 — relatório da SneakerPing (59,5% abaixo do varejo) e um tópico de alta demanda da Nike. Citar o relatório público; não o rehospedamos.",
-  swingAsOfIso: "2026-09-01",
+    "Fonte: sinal de mercado diário 0509, 2026-09-11 — a thread 'Just Don't Wear It' da Nike no r/stocks (2026-08-30) e o relatório semestral de resale da StockX (WWD, 2026-08-12). Linkamos as fontes públicas; não as rehospedamos.",
+  swingSources: [
+    {
+      label: "Thread 'Just Don't Wear It' da Nike — r/stocks",
+      url: "https://www.reddit.com/r/stocks/comments/1w2hjcm/nike_just_dont_wear_it/",
+      publishedIso: "2026-08-30",
+    },
+    {
+      label: "Relatório semestral de resale da StockX — WWD",
+      url: "https://wwd.com/footwear-news/sneaker-news/stockx-midyear-resale-surprises-1239106008/",
+      publishedIso: "2026-08-12",
+    },
+  ],
+  swingAsOfIso: "2026-09-11",
   honestKicker: "Limite honesto",
   honestTitle: "O que esta página não vende.",
   honest: [
