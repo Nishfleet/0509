@@ -44,6 +44,52 @@ describe("appOrigin", () => {
 
     expect(appOrigin({}, request)).toBe("https://0509.nishant345.workers.dev");
   });
+
+  it("rejects a Forwarded proto outside http/https and falls back to request.url", () => {
+    const request = new Request("http://localhost/", {
+      headers: { forwarded: "for=192.0.2.1;proto=javascript;host=evil.example" },
+    });
+
+    expect(appOrigin({}, request)).toBe("http://localhost");
+  });
+
+  it("rejects a Forwarded host that is not a bare hostname", () => {
+    const withCredentials = new Request("http://localhost/", {
+      headers: { forwarded: "for=192.0.2.1;proto=https;host=0509.io@evil.example" },
+    });
+    const withPath = new Request("http://localhost/", {
+      headers: { forwarded: "for=192.0.2.1;proto=https;host=evil.example/phish" },
+    });
+
+    expect(appOrigin({}, withCredentials)).toBe("http://localhost");
+    expect(appOrigin({}, withPath)).toBe("http://localhost");
+  });
+
+  it("rejects spoofed x-forwarded proto and host the same way", () => {
+    const badProto = new Request("http://localhost/", {
+      headers: {
+        "x-forwarded-proto": "javascript",
+        "x-forwarded-host": "evil.example",
+      },
+    });
+    const badHost = new Request("http://localhost/", {
+      headers: {
+        "x-forwarded-proto": "https",
+        "x-forwarded-host": "0509.io@evil.example",
+      },
+    });
+
+    expect(appOrigin({}, badProto)).toBe("http://localhost");
+    expect(appOrigin({}, badHost)).toBe("http://localhost");
+  });
+
+  it("keeps a forwarded host carrying an explicit port", () => {
+    const request = new Request("http://localhost/", {
+      headers: { forwarded: "for=192.0.2.1;proto=https;host=0509.io:443" },
+    });
+
+    expect(appOrigin({}, request)).toBe("https://0509.io:443");
+  });
 });
 
 describe("isWhatsAppWebhookConfigured", () => {
