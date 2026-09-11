@@ -862,6 +862,22 @@ async function reconcileWhatsAppSetupValidationTargetFromProviderMessage(
 }
 
 function selectDigestStatusAttempt(attempts: DigestAttemptSummary[]) {
+  // Issue #2450: a partial multi-channel failure must not be recorded as
+  // "sent". The digest-run aggregate gates the orchestration short-circuit
+  // (`existingDigest.delivery.status === "sent"`), so a sent Slack attempt
+  // alongside a failed email used to mark the whole run sent and permanently
+  // kill retry of the failed channel. A definitively failed attempt therefore
+  // wins over a sent one; "definitively failed" means status "failed" only,
+  // because a "pending" attempt is provider-unknown and is owned by the retry
+  // sweep. Sent channels stay deduped by `claimDigestDeliveryAttempt`, so the
+  // re-entry retries only the channel that actually failed.
+  for (const channel of DIGEST_STATUS_CHANNEL_PRIORITY) {
+    const failedAttempt = attempts.find(
+      (attempt) => attempt.channel === channel && attempt.status === "failed",
+    );
+    if (failedAttempt) return failedAttempt;
+  }
+
   for (const channel of DIGEST_STATUS_CHANNEL_PRIORITY) {
     const successfulAttempt = attempts.find(
       (attempt) => attempt.channel === channel && attempt.status === "sent",
