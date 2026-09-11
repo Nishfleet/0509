@@ -819,6 +819,9 @@ export const SITEMAP_PATHS = [
   // Issue #2152: /guides/* how-to cluster. One static entry — the guide is
   // stable long-form copy, so it never serves a noindex shell.
   "/guides/how-to-track-competitor-ads",
+  // Issue #2867: second guide — the "monitor a competitor's Meta Ad Library"
+  // watch-over-time intent. Stable long-form copy, never a noindex shell.
+  "/guides/how-to-monitor-meta-ad-library",
   "/compare",
   "/compare/meta-ad-library",
   // /compare/visualping, /compare/foreplay, and /compare/visualping-ad-library

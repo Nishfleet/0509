@@ -138,6 +138,11 @@ export default [
   // guide for the "how to track competitor ads" query class, ending in the
   // no-account /search preview (source=guide_track_ads).
   route("guides/how-to-track-competitor-ads", "routes/guides.how-to-track-competitor-ads.tsx"),
+  // Issue #2867: the second /guides/* page — the "monitor a competitor's Meta
+  // Ad Library" watch-over-time intent, distinct from the one-shot tracking
+  // guide above. Ends in the no-account /search preview
+  // (source=guide-monitor-ad-library).
+  route("guides/how-to-monitor-meta-ad-library", "routes/guides.how-to-monitor-meta-ad-library.tsx"),
   route("for-agencies", "routes/for-agencies.tsx"),
   route("sneaker-resale", "routes/sneaker-resale.tsx"),
   route(":locale/sneaker-resale", "routes/$locale.sneaker-resale.tsx"),
@@ -194,6 +199,8 @@ export default [
     // sitemaps, so it must serve 200 under every buyer-surface locale prefix.
     // Re-exports the EN guide (canonical→EN) like the other locale surfaces.
     route("guides/how-to-track-competitor-ads", "routes/$locale.guides.how-to-track-competitor-ads.tsx"),
+    // Issue #2867: second guide in the cluster — the watch-over-time intent.
+    route("guides/how-to-monitor-meta-ad-library", "routes/$locale.guides.how-to-monitor-meta-ad-library.tsx"),
     // Programmatic /ads/:domain under every locale prefix (issue #1562):
     // the #1501 buyer-surface cluster added /de, /de/pricing, ... but not
     // the /ads/:domain Ad Aggression Score pages, so /de/ads/nike.com
