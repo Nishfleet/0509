@@ -42,7 +42,9 @@ describe("D1 backup local storage cleanup", () => {
     await expect(
       cleanupAutomationBackupLocalDirectory(retainedDirectory, {}),
     ).rejects.toThrow();
-    expect((await import("node:fs/promises")).stat(retainedDirectory)).toBeTruthy;
+    await expect(
+      (await import("node:fs/promises")).stat(retainedDirectory),
+    ).resolves.toMatchObject({ isDirectory: expect.any(Function) });
   });
 
   it("refuses to delete a run-scoped directory when GITHUB_ACTIONS is not \"true\"", async () => {
