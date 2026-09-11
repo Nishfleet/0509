@@ -12,6 +12,12 @@ const APP_DIR = path.resolve(import.meta.dirname, "..", "app");
 
 const CANDIDATE_SUFFIXES = ["", ".ts", ".tsx", "/index.ts"];
 
+/**
+ * @param {string} specifier
+ * @param {import("node:module").ResolveHookContext} context
+ * @param {(specifier: string, context?: Partial<import("node:module").ResolveHookContext>) => import("node:module").ResolveFnOutput | Promise<import("node:module").ResolveFnOutput>} nextResolve
+ * @returns {Promise<import("node:module").ResolveFnOutput>}
+ */
 export async function resolve(specifier, context, nextResolve) {
   if (specifier.startsWith("~/")) {
     const base = path.join(APP_DIR, specifier.slice(2));
