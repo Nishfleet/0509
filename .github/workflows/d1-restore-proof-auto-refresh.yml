@@ -105,15 +105,13 @@ on:
         type: string
 
 concurrency:
-  group: 0509-production-provider-mutations
+  # One lane per candidate SHA (0509#2975): the shared
+  # 0509-production-provider-mutations lane let every 2026-09-11 merge cancel
+  # these runs. This workflow mutates no shared provider state (read-only D1
+  # export, run-scoped scratch DB, run-keyed R2 objects); `queue: max` keeps
+  # a second run for the SAME sha queued rather than colliding.
+  group: 0509-d1-restore-proof-auto-refresh-${{ github.sha }}
   cancel-in-progress: false
-  # `queue: max` is intentional. A burst of pushes queues multiple
-  # evidence runs in the same group, but cancel-in-progress is false so
-  # every run completes and produces its own exact-SHA artifact. The
-  # deploy's artifact finder (`find-recent-remote-restore-artifact.mjs`)
-  # sorts by `created_at` and returns the newest artifact whose SHA
-  # matches the deploy's pinned SHA, so a queued backlog cannot starve
-  # the deploy of fresh evidence.
   queue: max
 
 permissions: {}

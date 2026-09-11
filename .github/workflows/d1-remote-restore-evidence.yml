@@ -23,13 +23,8 @@ on:
     # commit in between is blocked even though the schema has not moved. A
     # push trigger closes that window commit-by-commit.
     #
-    # Same low-traffic design as schedule: the restore job queues behind any
-    # running deploy in the shared 0509-production-provider-mutations
-    # concurrency group, so the only contention is the export itself, which
-    # is the operation already in the schedule. The 4m32s measured drill is
-    # the cost per push; with main advancing about 12 commits per day the
-    # provider lane is occupied for roughly an hour a day. That is the cost
-    # of removing the 24h race window without weakening the gate.
+    # Concurrency (0509#2975): per-candidate-SHA lanes, so a new merge can
+    # never cancel or starve the evidence run the next deploy needs.
     #
     # The push branch and the existing 02:17 IST schedule intentionally
     # overlap: the schedule is the safety net for any day no push lands, and
@@ -53,7 +48,12 @@ on:
     - cron: "47 20 * * *"
 
 concurrency:
-  group: 0509-production-provider-mutations
+  # One lane per candidate SHA (0509#2975): the shared
+  # 0509-production-provider-mutations lane let each new merge evict or
+  # starve the run the next deploy needed — every 2026-09-11 run was
+  # cancelled. The real provider mutation (the D1 apply in apply_and_restore)
+  # keeps the shared group at job level below.
+  group: 0509-d1-remote-restore-evidence-${{ github.sha }}
   cancel-in-progress: false
   queue: max
 
@@ -107,6 +107,13 @@ jobs:
       inputs.operation == 'apply_and_restore' &&
       needs.authorize_release.result == 'success'
     needs: authorize_release
+    concurrency:
+      # `wrangler d1 migrations apply` below is a production schema mutation,
+      # so it keeps the shared provider-mutations lane even though the rest
+      # of this workflow runs per-SHA.
+      group: 0509-production-provider-mutations
+      cancel-in-progress: false
+      queue: max
     runs-on: ubuntu-latest
     timeout-minutes: 120
     environment: production

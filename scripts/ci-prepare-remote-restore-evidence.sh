@@ -17,6 +17,9 @@ umask 077
 : "${GITHUB_RUN_ATTEMPT:?GITHUB_RUN_ATTEMPT is required}"
 : "${GITHUB_JOB:?GITHUB_JOB is required}"
 : "${GITHUB_SHA:?GITHUB_SHA is required}"
+# The artifact finder only accepts evidence produced for the deploy's exact
+# pinned candidate, never for whatever main tip was newest.
+: "${PINNED_SHA:?PINNED_SHA is required}"
 
 MAX_ARTIFACT_SIZE_BYTES=10485760
 MAX_EVIDENCE_JSON_BYTES=1048576

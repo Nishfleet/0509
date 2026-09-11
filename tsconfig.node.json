@@ -28,6 +28,8 @@
     "scripts/d1-remote-restore-evidence.mjs",
     "scripts/d1-remote-restore-evidence-core.mjs",
     "scripts/find-recent-remote-restore-artifact.mjs",
+    "scripts/deploy-ledger.mjs",
+    "scripts/deploy-age.mjs",
     "scripts/build-remote-restore-candidate-manifest.mjs",
     "scripts/dodo-billing-canary.mjs",
     "scripts/e2e-auth-capture.mjs",

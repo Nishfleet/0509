@@ -12,6 +12,7 @@ type Step = { uses?: string; run?: string; env?: Record<string, string> };
 type Job = {
   "runs-on"?: string | string[];
   environment?: string | { name?: string };
+  concurrency?: { group?: string; "cancel-in-progress"?: boolean; queue?: string };
   steps?: Step[];
 };
 type Workflow = {
@@ -65,11 +66,11 @@ describe("workflow routing hardening", () => {
   });
 
   it("serializes every provider mutation without cancelling running work", () => {
-    // Backup, restore, and soak workflows keep `queue: max` so every queued
-    // run eventually executes — none are superseded or cancelled.
+    // Backup and soak workflows still mutate shared provider state, so they
+    // keep the shared serial lane and `queue: max` — every queued run
+    // eventually executes, none are superseded or cancelled.
     for (const filename of [
       "d1-backup-r2.yml",
-      "d1-remote-restore-evidence.yml",
       "finalize-production-soak.yml",
     ]) {
       const concurrency = workflow(filename).parsed.concurrency;
@@ -79,6 +80,39 @@ describe("workflow routing hardening", () => {
         queue: "max",
       });
     }
+    // Evidence workflows mutate no shared provider state (0509#2975): each
+    // runs in its own per-candidate-SHA lane so a new merge can never cancel
+    // or starve the proof the next deploy needs — the 2026-09-11 incident's
+    // runs were all cancelled inside the shared lane. `queue: max` keeps a
+    // second run for the SAME sha (push + dispatch, or a re-run) queued
+    // rather than colliding.
+    for (const [filename, group] of [
+      [
+        "d1-remote-restore-evidence.yml",
+        "0509-d1-remote-restore-evidence-${{ github.sha }}",
+      ],
+      [
+        "d1-restore-proof-auto-refresh.yml",
+        "0509-d1-restore-proof-auto-refresh-${{ github.sha }}",
+      ],
+    ] as const) {
+      const concurrency = workflow(filename).parsed.concurrency;
+      expect(concurrency, filename).toEqual({
+        group,
+        "cancel-in-progress": false,
+        queue: "max",
+      });
+    }
+    // The one step that does mutate shared provider state — the manual
+    // `wrangler d1 migrations apply` — keeps the shared serial lane at JOB
+    // level inside the otherwise per-SHA workflow.
+    expect(
+      job("d1-remote-restore-evidence.yml", "apply_and_restore").concurrency,
+    ).toEqual({
+      group: "0509-production-provider-mutations",
+      "cancel-in-progress": false,
+      queue: "max",
+    });
     // Deploy production uses deploy-latest semantics (Nish, 2026-08-25):
     // cancel-in-progress: false (a running deploy is never interrupted) but
     // no `queue: max`, so superseded queued deploys are cancelled and only
