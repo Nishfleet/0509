@@ -3,18 +3,30 @@ import { ServerRouter } from "react-router";
 import { isbot } from "isbot";
 import { renderToReadableStream } from "react-dom/server";
 
+import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
+
 export default async function handleRequest(
   request: Request,
   responseStatusCode: number,
   responseHeaders: Headers,
   routerContext: EntryContext,
-  _loadContext: RouterContextProvider
+  loadContext: RouterContextProvider
 ) {
   let shellRendered = false;
   const userAgent = request.headers.get("user-agent");
 
+  // Issue #2724: `ServerRouter` is what emits React Router's streamed handoff
+  // chunks (`window.__reactRouterContext.streamController.enqueue/close`).
+  // Those are inline scripts, so under the nonce-based `script-src` from issue
+  // #2348 they carry no nonce unless it is passed here explicitly — `<Scripts
+  // nonce>` in app/root.tsx does NOT reach them. Without it the browser blocks
+  // both chunks, the client router never receives its loader data, and the
+  // document renders but never hydrates: server-rendered assertions still pass
+  // while every interaction silently does nothing.
+  const cspNonce = getOptionalCloudflareContext(loadContext)?.cspNonce;
+
   const body = await renderToReadableStream(
-    <ServerRouter context={routerContext} url={request.url} />,
+    <ServerRouter context={routerContext} url={request.url} nonce={cspNonce} />,
     {
       onError(error: unknown) {
         responseStatusCode = 500;
