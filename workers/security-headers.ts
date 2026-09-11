@@ -145,7 +145,7 @@ export const HTML_NO_STORE_HEADERS: Record<string, string> = {
 //   (e.g. right after login) instead of replaying the logged-out variant.
 export const PUBLIC_HTML_CACHE_CONTROL = "public, max-age=300";
 
-const PUBLIC_CACHEABLE_HTML_PATHS = new Set([
+export const PUBLIC_CACHEABLE_HTML_PATHS = new Set([
   "/",
   "/pricing",
   "/help",
@@ -172,7 +172,7 @@ const PUBLIC_CACHEABLE_HTML_PATHS = new Set([
   "/methodology",
   "/methodology/ad-aggression-score",
 ]);
-const PUBLIC_CACHEABLE_HTML_PREFIXES = ["/ads/", "/timeline/"] as const;
+export const PUBLIC_CACHEABLE_HTML_PREFIXES = ["/ads/", "/timeline/"] as const;
 
 function isPublicCacheableHtmlRequest(request: Request): boolean {
   if (request.method !== "GET" && request.method !== "HEAD") {
