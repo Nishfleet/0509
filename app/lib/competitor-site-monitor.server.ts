@@ -58,6 +58,7 @@ import type {
   WebsitePageKind,
   WebsitePageObservationRecord,
   WebsitePageObservationSignals,
+  WebsiteScanStatus,
   WebsiteSiteScanPageRecord,
 } from "~/lib/types";
 import {
@@ -1242,6 +1243,7 @@ async function loadRobotsRules(
 
 export interface WebsiteCoverageLabelInput {
   scan: {
+    status: WebsiteScanStatus;
     inventoryComplete: boolean;
     pageBudget: number;
     fetchedPageCount: number;
@@ -1272,7 +1274,7 @@ export function buildWebsiteCoverageLabel(input: WebsiteCoverageLabelInput): str
       : `${watched} of ${known} known pages watched`,
     `sitemap discovered ${sitemapCount}`,
   ];
-  const lastFullCrawl = formatLastFullCrawlDate(input.scan.finalizedAt);
+  const lastFullCrawl = formatLastFullCrawlDate(input.scan.status, input.scan.finalizedAt);
   if (lastFullCrawl !== null) {
     clauses.push(`last full crawl ${lastFullCrawl}`);
   }
@@ -1280,12 +1282,19 @@ export function buildWebsiteCoverageLabel(input: WebsiteCoverageLabelInput): str
 }
 
 /**
- * ISO calendar date of the last finalized scan, or null when the manifest
- * carries none. The clause is omitted rather than rendered as a placeholder,
- * an empty date, or "Invalid Date".
+ * ISO calendar date of the last *complete* scan, or null when there is none.
+ *
+ * The caller reads the latest scan of any status, and the schema binds a
+ * non-null `finalized_at` to every non-running status — so a partial or failed
+ * scan carries a date that is not a full-crawl date. Only a `complete` scan may
+ * claim one. The clause is otherwise omitted rather than rendered as a
+ * placeholder, an empty date, or "Invalid Date".
  */
-function formatLastFullCrawlDate(finalizedAt: string | null): string | null {
-  if (finalizedAt === null) {
+function formatLastFullCrawlDate(
+  status: WebsiteScanStatus,
+  finalizedAt: string | null,
+): string | null {
+  if (status !== "complete" || finalizedAt === null) {
     return null;
   }
   const parsed = new Date(finalizedAt);
