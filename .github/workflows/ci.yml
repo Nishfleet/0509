@@ -412,6 +412,14 @@ jobs:
           if git symbolic-ref --quiet HEAD >/dev/null 2>&1; then
             exit 1
           fi
+      - name: npm audit production deps (high gate)
+        # Standing rule: nothing fails silently (issue #2970). A high-or-above
+        # vulnerability in production dependencies fails this required check.
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts
+          npm audit --omit=dev --audit-level=high
       - name: Query open critical Dependabot alerts on direct deps
         shell: bash
         env:
