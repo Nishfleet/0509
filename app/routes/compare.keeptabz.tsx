@@ -58,7 +58,7 @@ const keeptabzStrengths: readonly CompareClaimCard[] = [
     title: "A low entry price",
     detail:
       "KeepTabz's public entry tiers start at $49.99 and $99.99, which is below most established ad-spy incumbents. Confirm current plans on KeepTabz's site.",
-    sourceId: "keeptabz-announcement",
+    sourceId: "keeptabz-pricing",
   },
 ];
 
