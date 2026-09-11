@@ -12,9 +12,9 @@ type ReactRouterMockOptions = {
   navigation?: unknown;
   /** Value `useLocation` returns. Only overridden when provided. */
   location?: unknown;
-  /** Value `useNavigate` returns. Only overridden when provided. */
+  /** Value `useNavigate` returns. Passed through as-is — pass the mock function itself. */
   navigate?: unknown;
-  /** Value `useRevalidator` returns. Only overridden when provided. */
+  /** Value `useRevalidator` returns. Passed through as-is — pass the mock object itself. */
   revalidator?: unknown;
 };
 
@@ -33,6 +33,7 @@ export function mockReactRouter(options: ReactRouterMockOptions = {}) {
   const has = (key: keyof ReactRouterMockOptions) => key in options;
   // A function-valued option is late-bound: the hook calls it at render time,
   // so tests can keep a mutable fixture (`loader: () => currentData`).
+  // `navigate`/`revalidator` are exempt: their natural value IS a function.
   const resolve = (value: unknown) => (typeof value === "function" ? (value as () => unknown)() : value);
   vi.doMock("react-router", async () => {
     const actual = await vi.importActual<typeof import("react-router")>("react-router");
@@ -49,8 +50,8 @@ export function mockReactRouter(options: ReactRouterMockOptions = {}) {
       ...(has("actionData") ? { useActionData: () => resolve(actionData) } : {}),
       ...(has("navigation") ? { useNavigation: () => resolve(navigation) } : {}),
       ...(has("location") ? { useLocation: () => resolve(location) } : {}),
-      ...(has("navigate") ? { useNavigate: () => resolve(navigate) } : {}),
-      ...(has("revalidator") ? { useRevalidator: () => resolve(revalidator) } : {}),
+      ...(has("navigate") ? { useNavigate: () => navigate } : {}),
+      ...(has("revalidator") ? { useRevalidator: () => revalidator } : {}),
     };
   });
 }
