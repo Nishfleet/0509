@@ -415,8 +415,7 @@ async function enforceRateLimitPolicy(
 		if (policy.atomicClaim) {
 			// A single conditional INSERT is the reservation and the limit check.
 			// D1/SQLite serializes the statement atomically, so concurrent callers
-			// cannot all pass on a stale pre-insert count. The claim is synchronous;
-			// only opportunistic cleanup may be deferred through waitUntil.
+			// cannot all pass on a stale pre-insert count.
 			const eventId = crypto.randomUUID();
 			const createdAt = now.toISOString();
 			const claim = await env.DB.prepare(
@@ -447,17 +446,6 @@ async function enforceRateLimitPolicy(
 
 			if (Number(claim.meta?.changes ?? 0) < 1) {
 				return tooManyRequestsResponse(policy.windowSeconds);
-			}
-
-			if (Math.random() < 0.02) {
-				const cleanup = cleanupRateLimitEvents(env).catch((error) => {
-					console.error("[rate-limit] deferred cleanup failed", error);
-				});
-				if (ctx) {
-					ctx.waitUntil(cleanup);
-				} else {
-					await cleanup;
-				}
 			}
 
 			return null;
@@ -493,16 +481,9 @@ async function enforceRateLimitPolicy(
 
     if (ctx) {
       ctx.waitUntil(
-        recordEvent()
-          .then(() => {
-            if (Math.random() < 0.02) {
-              return cleanupRateLimitEvents(env);
-            }
-            return undefined;
-          })
-          .catch((error) => {
-            console.error("[rate-limit] deferred event insert failed", error);
-          }),
+        recordEvent().catch((error) => {
+          console.error("[rate-limit] deferred event insert failed", error);
+        }),
       );
     } else {
       await recordEvent();
@@ -595,7 +576,7 @@ async function sha256Hex(input: string | Uint8Array) {
     .join("");
 }
 
-async function cleanupRateLimitEvents(env: AppEnv) {
+export async function cleanupRateLimitEvents(env: AppEnv) {
   if (!env.DB) return;
   const cutoff = new Date(Date.now() - CLEANUP_WINDOW_SECONDS * 1000).toISOString();
   const longWindowCutoff = new Date(

@@ -99,7 +99,6 @@ describe("enforceRequestRateLimit", () => {
   });
 
   it("defers event inserts through waitUntil while gating on the count", async () => {
-    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.99);
     const env = { DB: createFakeD1() } as unknown as AppEnv;
     const deferred: Promise<unknown>[] = [];
     const ctx = {
@@ -123,7 +122,57 @@ describe("enforceRequestRateLimit", () => {
     const blocked = await enforceRequestRateLimit(request, env, ctx);
     expect(blocked?.status).toBe(429);
     await Promise.all(deferred.splice(0, deferred.length));
-    randomSpy.mockRestore();
+  });
+
+  it("never issues a DELETE on the request path — cleanup is the daily cron's job (issue #2402)", async () => {
+    // Regression lock for the deleted 2% lottery: even with Math.random
+    // forced to a guaranteed "win", no request may carry a cleanup DELETE.
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0);
+    const base = createFakeD1();
+    const issuedDeletes: string[] = [];
+    const env = {
+      DB: {
+        prepare(sql: string) {
+          if (sql.includes("DELETE FROM rate_limit_events")) issuedDeletes.push(sql);
+          return base.prepare(sql);
+        },
+      },
+    } as unknown as AppEnv;
+    const deferred: Promise<unknown>[] = [];
+    const ctx = {
+      waitUntil(promise: Promise<unknown>) {
+        deferred.push(promise);
+      },
+    } as ExecutionContext;
+
+    try {
+      await enforceRequestRateLimit(
+        new Request("https://0509.io/auth/login", {
+          method: "POST",
+          headers: { "cf-connecting-ip": "203.0.113.60", "user-agent": "vitest" },
+        }),
+        env,
+        ctx,
+      );
+      await enforceRequestRateLimit(
+        new Request("https://0509.io/auth/login", {
+          method: "POST",
+          headers: { "cf-connecting-ip": "203.0.113.61", "user-agent": "vitest" },
+        }),
+        env,
+      );
+      await enforceSearchSelectionRateLimit(
+        new Request("https://0509.io/search?query=nykaa&selected=meta-1"),
+        env,
+        "user-1",
+        ctx,
+      );
+      await Promise.all(deferred.splice(0, deferred.length));
+
+      expect(issuedDeletes).toHaveLength(0);
+    } finally {
+      randomSpy.mockRestore();
+    }
   });
 
   it("fails closed for protected writes when the limiter store is unavailable", async () => {
@@ -454,24 +503,19 @@ describe("enforceAuthenticatedSearchRateLimit", () => {
 
 describe("enforceSearchSelectionRateLimit", () => {
   it("claims the warm-selection budget synchronously instead of deferring admission", async () => {
-    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.99);
     const env = { DB: createFakeD1() } as unknown as AppEnv;
     const waitUntil = vi.fn();
 
-    try {
-      await expect(
-        enforceSearchSelectionRateLimit(
-          new Request("https://0509.io/search?query=nykaa&selected=meta-1"),
-          env,
-          "user-1",
-          { waitUntil } as unknown as ExecutionContext,
-        ),
-      ).resolves.toBeNull();
+    await expect(
+      enforceSearchSelectionRateLimit(
+        new Request("https://0509.io/search?query=nykaa&selected=meta-1"),
+        env,
+        "user-1",
+        { waitUntil } as unknown as ExecutionContext,
+      ),
+    ).resolves.toBeNull();
 
-      expect(waitUntil).not.toHaveBeenCalled();
-    } finally {
-      randomSpy.mockRestore();
-    }
+    expect(waitUntil).not.toHaveBeenCalled();
   });
 
   it("admits at most 120 concurrent warm selections", async () => {
