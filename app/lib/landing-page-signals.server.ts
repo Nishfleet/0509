@@ -1345,11 +1345,43 @@ function stripTags(value: string) {
   return output.join("");
 }
 
+// Issue #1409 guard: hex entities for lone surrogates (0xd800-0xdfff) and
+// out-of-range scalars (> 0x10ffff) must survive decoding untouched — decoding
+// them would put invalid characters into ctaText and corrupt downstream
+// JSON/DB. The shared decoder does not carry this guard, so shield the guarded
+// entities from it and restore them afterwards.
+const GUARDED_HEX_ENTITY_RE =
+  /&#x(?:0*[dD][89AaBb][0-9A-Fa-f]{2}|0*1[1-9A-Fa-f][0-9A-Fa-f]{4,5});/g;
+const GUARDED_HEX_ENTITY_TEST_RE =
+  /&#x(?:0*[dD][89AaBb][0-9A-Fa-f]{2}|0*1[1-9A-Fa-f][0-9A-Fa-f]{4,5});/;
+const SHIELD = "\u0000";
+
+function shieldGuardedHexEntities(value: string) {
+  // Store without the leading `&` so the shielded form is no longer an entity
+  // the decoder would match.
+  return value.replace(GUARDED_HEX_ENTITY_RE, (entity) => SHIELD + entity.slice(1) + SHIELD);
+}
+
+function restoreGuardedHexEntities(value: string) {
+  return value.replace(
+    new RegExp(`${SHIELD}([^\u0000]{1,24})${SHIELD}`, "g"),
+    (_match, stored: string) => {
+      const entity = "&" + stored;
+      return GUARDED_HEX_ENTITY_TEST_RE.test(entity) ? entity : _match;
+    },
+  );
+}
+
 function cleanText(value: string) {
   // Issue #2455: the local decodeHtml here omitted `&nbsp;` (and other named
   // entities), so entity-joined CTA text like "Buy&nbsp;Now" was stored
-  // literally. Use the one shared single-pass decoder instead.
-  return decodeHtmlEntities(value).replace(/\s+/g, " ").trim();
+  // literally. Use the one shared single-pass decoder instead, with the
+  // issue-#1409 guard shielded around it.
+  return restoreGuardedHexEntities(
+    decodeHtmlEntities(shieldGuardedHexEntities(value)),
+  )
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 // Issue #1500: UTF-8 byte-length helper for the lp_run_audit lines. Lives at
