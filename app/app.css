@@ -3338,6 +3338,22 @@ one signal-green accent.
 
 .f9-home .ld-pricing-note a { color: var(--ld-ink); text-decoration: underline; }
 
+.ld-swing-sources {
+  list-style: none;
+  margin: 18px 0;
+  padding: 0;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--ld-ink-soft);
+  max-width: 680px;
+}
+
+.ld-swing-sources li { margin-top: 4px; }
+
+.f9-home .ld-swing-sources a { color: var(--ld-ink); text-decoration: underline; }
+
+.ld-swing-sources time { font-family: var(--ld-mono); font-size: 0.78rem; }
+
 /* Issue #2221 — the "Price of knowing" comparison table (5 columns) has no
    width constraint, so its min-content width (~398px) overflows the 375px
    mobile viewport by 71px. Fix the layout cause: force the table to the
