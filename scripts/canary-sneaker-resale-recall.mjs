@@ -190,6 +190,10 @@ export async function probeSneakerResaleDomain({
   baseUrl,
   fetchImpl = fetch,
   sleepImpl = defaultSleep,
+  // Optional probe identity override (issue #3014: the recall audit reuses
+  // this exact probe so the tier-count parsing and retry budget stay in one
+  // place, but must not identify itself as the sneaker-resale canary).
+  userAgent = SNEAKER_RESALE_CANARY_USER_AGENT,
   retryLimit = WARMING_RETRY_LIMIT,
   retryDelayMs = WARMING_RETRY_DELAY_MS,
   max429Retries = SEARCH_429_RETRY_LIMIT,
@@ -216,7 +220,7 @@ export async function probeSneakerResaleDomain({
     try {
       response = await fetchImpl(url, {
         headers: {
-          "user-agent": SNEAKER_RESALE_CANARY_USER_AGENT,
+          "user-agent": userAgent,
           "cache-control": "no-cache",
           pragma: "no-cache",
           accept: "text/html,application/xhtml+xml",
