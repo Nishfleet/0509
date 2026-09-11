@@ -1,7 +1,5 @@
 import type { ActionFunctionArgs } from "react-router";
 
-import { constantTimeTokenEqual } from "~/lib/constant-time-token.server";
-
 import {
   readReleaseIdentity,
   verifyExpectedCanaryWorkerVersion,
@@ -68,14 +66,6 @@ type DigestJobSlo = {
   unresolvedDeliveryAttempts: number;
   maxCompletionMs: number;
 };
-
-async function hasValidToken(request: Request, token: string | undefined) {
-  const configured = token?.trim();
-  return Boolean(
-    configured &&
-      (await constantTimeTokenEqual(request.headers.get("x-0509-canary-token"), configured)),
-  );
-}
 
 function hasCanonicalOrigin(request: Request) {
   try {
@@ -397,8 +387,9 @@ async function loadObservations(env: AppEnv, workerVersionId: string, startedAt:
 
 export async function action({ context, request }: ActionFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
+  const { hasValidCanaryToken } = await import("~/lib/canary-token.server");
   const env = getEnv(context);
-  if (!(await hasValidToken(request, env.CANARY_BYPASS_TOKEN)) || !hasCanonicalOrigin(request)) {
+  if (!(await hasValidCanaryToken(request, env.CANARY_BYPASS_TOKEN)) || !hasCanonicalOrigin(request)) {
     throw new Response("Not found", { status: 404 });
   }
   if (request.method !== "POST") {
