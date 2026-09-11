@@ -656,7 +656,6 @@ export function isSameOriginAuthFormPost(env: AppEnv, request: Request) {
       .map((value) => originFromUrl(value))
       .filter((value): value is string => Boolean(value)),
   );
-  allowedOrigins.add(new URL(request.url).origin);
   return allowedOrigins.has(presentedOrigin);
 }
 

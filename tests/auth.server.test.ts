@@ -348,6 +348,20 @@ describe("Better Auth configuration", () => {
       betterAuthTrustedOrigins(env(), new Request("https://0509.example.workers.dev/")),
     ).toEqual(["https://0509.io"]);
   });
+  it("rejects an unlisted request origin for same-origin form posts", () => {
+    // Even with a valid Origin header, the presented origin must be on the
+    // canonical trusted list — a request served from an unlisted host does
+    // not auto-trust its own origin.
+    expect(
+      isSameOriginAuthFormPost(
+        env(),
+        new Request("https://0509.example.workers.dev/auth/login", {
+          headers: { origin: "https://0509.example.workers.dev" },
+          method: "POST",
+        }),
+      ),
+    ).toBe(false);
+  });
 });
 
 describe("auth session boundary", () => {
@@ -1856,7 +1870,7 @@ describe("Better Auth routes", () => {
     let redirectResponse: Response | null = null;
     try {
       await action({
-        context: context(env({ E2E_TEST_MODE: "1" })),
+        context: context(env({ E2E_TEST_MODE: "1", BETTER_AUTH_TRUSTED_ORIGINS: "http://127.0.0.1:4179" })),
         params: {},
         pattern: "/auth/logout",
         request,
@@ -1900,7 +1914,13 @@ describe("Better Auth routes", () => {
     let redirectResponse: Response | null = null;
     try {
       await action({
-        context: context(env({ DB: dbWithE2ETestMode(true), E2E_TEST_MODE: "0" })),
+        context: context(
+          env({
+            DB: dbWithE2ETestMode(true),
+            E2E_TEST_MODE: "0",
+            BETTER_AUTH_TRUSTED_ORIGINS: "http://127.0.0.1:4179",
+          }),
+        ),
         params: {},
         pattern: "/auth/logout",
         request,
