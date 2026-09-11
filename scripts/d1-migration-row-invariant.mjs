@@ -132,6 +132,10 @@ function toCountMap(rowCounts) {
  *   before: Iterable<{ table: string, count: number }>,
  *   after: Iterable<{ table: string, count: number }>,
  *   expectedRowLossByMigration?: Map<string, Set<string>>,
+ *   perMigrationCounts?: Map<string, {
+ *     before: Iterable<{ table: string, count: number }>,
+ *     after: Iterable<{ table: string, count: number }>,
+ *   }> | null,
  * }} input
  * @returns {{
  *   ok: boolean,
@@ -252,8 +256,8 @@ export function formatRowCountDiff({ before, after }) {
   const tables = [...new Set([...beforeMap.keys(), ...afterMap.keys()])].sort();
   const lines = ["| table | before | after | delta |", "| --- | --- | --- | --- |"];
   for (const table of tables) {
-    const beforeCount = beforeMap.has(table) ? beforeMap.get(table) : null;
-    const afterCount = afterMap.has(table) ? afterMap.get(table) : null;
+    const beforeCount = beforeMap.get(table) ?? null;
+    const afterCount = afterMap.get(table) ?? null;
     const delta =
       beforeCount === null || afterCount === null
         ? "n/a"
