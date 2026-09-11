@@ -490,6 +490,20 @@ describe("weekly-offer-moves-report.mjs (issue #2143)", () => {
     expect(output).not.toContain("1 price drops");
   });
 
+  it.each([
+    ["up to 70% off", "up to 50% off"],
+    ["₹999", "up to 50% off"],
+    ["$100", "₹50"],
+    ["999", "799"],
+  ])(
+    "does not count %j -> %j as a price drop (issue #2488)",
+    (beforeText, afterText) => {
+      const fixture = writeFixture([offerMove(beforeText, afterText)]);
+      const output = runScript(["--dry-run", "--fixture", fixture]);
+      expect(output).toContain("0 price drops");
+    },
+  );
+
   it("counts only same-currency decreases as price drops (issue #2488)", () => {
     const fixture = writeFixture([
       offerMove("up to 70% off", "up to 50% off"),
