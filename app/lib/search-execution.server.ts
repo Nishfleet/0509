@@ -109,6 +109,7 @@ export async function executeSearchWithRelevance(options: ExecuteSearchOptions):
         country: v2Query.filters.country || "all",
         cursor: options.cursor,
         pageId: v2Context.advertiserPageId,
+        filters: v2Query.filters,
       });
       const v2RawResult = await searchAdsViaSourceResolver(options.env, v2Query, options.cursor, {
         ...resolverOptions,
@@ -180,6 +181,7 @@ export async function executeSearchWithRelevance(options: ExecuteSearchOptions):
           country: query.filters.country || "all",
           cursor: options.cursor,
           pageId: v2Context.advertiserPageId,
+          filters: query.filters,
         })
       : null;
 
@@ -462,6 +464,7 @@ export async function hasWarmSearchCacheEntry(options: SearchCacheProbeOptions):
             country: v2Query.filters.country || "all",
             cursor: options.cursor,
             pageId: v2Context.advertiserPageId,
+            filters: v2Query.filters,
           })
         : null;
 

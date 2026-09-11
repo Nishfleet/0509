@@ -981,6 +981,7 @@ export function deriveBrandPageLookupForCountry(
         country: v2Country,
         cursor: null,
         pageId,
+        filters: v2Query.filters,
       }),
       usedDomainKey: true,
     };
