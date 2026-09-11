@@ -349,6 +349,7 @@ describe("public funnel loaders reuse the sitemap indexability filter", () => {
       loadPublicProofBrief: vi.fn().mockResolvedValue(null),
       PUBLIC_PROOF_FEATURED_WEBSITE: "nykaa.com",
       featuredWebsiteForVisitorCountry: vi.fn(() => "nike.com"),
+      PUBLIC_HOME_NEUTRAL_FEATURED_WEBSITE: "nike.com",
     }));
     vi.doMock("~/lib/sitemap.server", () => ({
       loadIndexableBrandPageEntries: vi.fn().mockResolvedValue([
