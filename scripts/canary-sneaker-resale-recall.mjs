@@ -304,6 +304,9 @@ export async function probeSneakerResaleDomain({
 
 /**
  * @param {SneakerResaleProbe[]} results
+ * @param {{ knownNoCoverage?: Set<string> }} [options] Test seam: the live
+ *   KNOWN_NO_COVERAGE set is empty since #2926 removed the only member, so the
+ *   carve-out contract is pinned with an injected set instead.
  * @returns {{
  *   pass: boolean,
  *   failures: SneakerResaleProbe[],
@@ -312,7 +315,7 @@ export async function probeSneakerResaleDomain({
  *   warming: SneakerResaleProbe[],
  * }}
  */
-export function evaluateSneakerResaleRecall(results) {
+export function evaluateSneakerResaleRecall(results, { knownNoCoverage = KNOWN_NO_COVERAGE } = {}) {
   const failures = [];
   const noCoverage = [];
   const identityGaps = [];
@@ -350,7 +353,7 @@ export function evaluateSneakerResaleRecall(results) {
     // evidence of inactivity" copy, no page (issue #1945 verify). A brand not
     // in any carve-out that dead-ends (0 rows) or blanket-unmatches is a real
     // recall/alias regression and fails.
-    if (KNOWN_NO_COVERAGE.has(probe.domain)) {
+    if (knownNoCoverage.has(probe.domain)) {
       noCoverage.push(probe);
       continue;
     }
