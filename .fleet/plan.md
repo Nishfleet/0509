@@ -8,3 +8,5 @@ manager note: phases 1-6 run in one worker pass — single-file defect fix, spli
 - [x] phase 4: Add GREEN characterization test seeding a watchlist_run with attempt_count = 4, status = 'pending', expecting runFirstWatchlistScanWorkflowJob(...).rejects.toThrow(/owned or exhausted/)
 - [x] phase 5: Sweep workers/*.ts (and siblings) for other retry limits exceeding claim caps; fix any instance found in the same PR
 - [x] phase 6: Run npx vitest run --configLoader runner --project node tests/monitoring-workflow*.test.ts green; typecheck is CI-owned
+Consider: test anchors in tests/monitoring-workflow.test.ts are string-based (import order, indexOf slice) — add a "update anchors if step config is restructured" comment in a follow-up.
+Noted: scheduled step literal limit:3 vs SCHEDULED_SCAN_MAX_ATTEMPTS=8 — no cap breach; potential follow-up issue.
