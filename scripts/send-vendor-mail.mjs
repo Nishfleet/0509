@@ -29,11 +29,20 @@
 // delivery status returned by the API) is appended to the doc's
 // `## Receipts` section.
 //
+// Before the FIRST real --send: verify the endpoint and response shape
+// against Cloudflare's official Email Sending docs (a wrong endpoint or
+// payload fails closed — exit 1, no receipt written — but it should still
+// be confirmed rather than discovered). The production Worker reaches the
+// same Email Service via the runtime send_email binding
+// (app/lib/delivery-email-core.server.ts), which is the fallback path if
+// the REST route ever changes.
+//
 // Edge note: docs/segwise-listing-2026-08-21.md has no `To:` line (its
 // recommended delivery is LinkedIn). Pass `--to <email>` to supply the
 // recipient explicitly for that doc.
 
 import { readFileSync, writeFileSync } from "node:fs";
+import { posix as pathPosix } from "node:path";
 
 const API_URL_BASE = "https://api.cloudflare.com/client/v4/accounts";
 const DEFAULT_FROM = "support@0509.io";
@@ -90,6 +99,36 @@ export function parseDoc(markdown) {
     const ticked = line.match(/`([^`]+)`/);
     return (ticked ? ticked[1] : line.replace(/^[^:]*:\s*/, "")).trim();
   };
+
+  /**
+   * Distinct values seen for a header label in the section. A section that
+   * names several different recipients or subjects (e.g. the adyntel doc
+   * carries two emails under one ready-to-send heading) must fail closed:
+   * this tool sends exactly ONE email, and a silent first-match would pair
+   * an override address with the wrong subject/body.
+   * @param {string} label
+   * @returns {Set<string>}
+   */
+  const distinctHeaderValues = (label) => {
+    const prefix = `${label.toLowerCase()}:`;
+    const vals = new Set();
+    for (const line of section) {
+      const t = line.replace(/^\*+/, "").trim().toLowerCase();
+      if (!t.startsWith(prefix)) continue;
+      const ticked = line.match(/`([^`]+)`/);
+      vals.add((ticked ? ticked[1] : line.replace(/^[^:]*:\s*/, "")).trim());
+    }
+    return vals;
+  };
+
+  for (const label of ["To", "Subject"]) {
+    const vals = distinctHeaderValues(label);
+    if (vals.size > 1) {
+      errors.push(
+        `multiple distinct ${label}: headers (${vals.size}) in the ready-to-send section — this tool sends ONE email; split the doc or trim the section`,
+      );
+    }
+  }
 
   const to = headerValue("To");
   const from = headerValue("From");
@@ -250,7 +289,7 @@ export async function sendMail(message, env, fetchImpl = globalThis.fetch) {
   }
   const ok =
     res.status === 200 &&
-    result &&
+    !!result &&
     ((result.delivered?.length ?? 0) > 0 || (result.queued?.length ?? 0) > 0);
   if (ok) {
     return {
@@ -265,6 +304,12 @@ export async function sendMail(message, env, fetchImpl = globalThis.fetch) {
   if (res.status === 200 && !result) {
     apiErrors = [{ code: 0, message: "HTTP 200 but no result payload from the API" }];
   }
+  if (res.status === 200 && !ok && apiErrors.length === 0) {
+    apiErrors = [{
+      code: 0,
+      message: `HTTP 200 but nothing was delivered or queued (delivered: 0, queued: 0, permanent_bounces: ${(result?.permanent_bounces ?? []).length})`,
+    }];
+  }
   return {
     ok,
     httpStatus: res.status,
@@ -277,18 +322,19 @@ export async function sendMail(message, env, fetchImpl = globalThis.fetch) {
 
 /**
  * @param {string[]} argv
- * @returns {{ doc: string | undefined, send: boolean, to: string | undefined, subject: string | undefined }}
+ * @returns {{ doc: string | undefined, send: boolean, sendExplicit: boolean, dryRunExplicit: boolean, to: string | undefined, subject: string | undefined }}
  */
 function parseArgs(argv) {
-  const args = { doc: undefined, send: false, to: undefined, subject: undefined };
+  const args = { doc: undefined, send: false, sendExplicit: false, dryRunExplicit: false, to: undefined, subject: undefined };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === "--send") args.send = true;
+    if (a === "--send") { args.send = true; args.sendExplicit = true; }
     else if (a === "--doc") args.doc = argv[++i];
     else if (a === "--to") args.to = argv[++i];
     else if (a === "--subject") args.subject = argv[++i];
-    // --dry-run is the default; accepted and ignored for explicitness.
-    else if (a === "--dry-run") args.send = false;
+    // --dry-run is the default; an explicit --dry-run must always win over
+    // --send regardless of flag order (both-explicit is refused in main()).
+    else if (a === "--dry-run") { args.send = false; args.dryRunExplicit = true; }
   }
   return args;
 }
@@ -311,8 +357,19 @@ function parseArgs(argv) {
  */
 export async function main(argv, { env = process.env, stdout = console.log, readFile = (p) => readFileSync(p, "utf8"), writeFile = writeFileSync, fetchImpl } = {}) {
   const args = parseArgs(argv);
+  if (args.sendExplicit && args.dryRunExplicit) {
+    stdout("usage error: pass either --send or --dry-run, not both (ambiguous input is refused)");
+    return 2;
+  }
   if (!args.doc) {
     stdout("usage: node scripts/send-vendor-mail.mjs --doc <docs/<file>.md> [--send] [--to <email>] [--subject <text>]");
+    return 2;
+  }
+  // Acceptance wording: the message is read from "a repo file under docs/".
+  // Restricting the path also bounds where receipts can be written.
+  const docNorm = pathPosix.normalize(args.doc);
+  if (!docNorm.startsWith("docs/")) {
+    stdout(`usage error: --doc must point at a file under docs/ (got ${args.doc})`);
     return 2;
   }
   const markdown = readFile(args.doc);
@@ -381,5 +438,13 @@ function okResult(r) {
 
 const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop());
 if (isMain) {
-  main(process.argv.slice(2)).then((/** @type {number} */ code) => process.exit(code));
+  main(process.argv.slice(2))
+    .then((/** @type {number} */ code) => process.exit(code))
+    .catch((/** @type {unknown} */ err) => {
+      // ENOENT on the doc, a fetch network failure, an odd response shape —
+      // any of these must exit with a friendly message, not a raw
+      // unhandled-rejection stack.
+      console.error(`ERROR: ${err instanceof Error ? err.message : err}`);
+      process.exit(1);
+    });
 }

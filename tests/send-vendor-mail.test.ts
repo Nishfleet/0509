@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import {
   appendReceipt,
@@ -145,6 +146,38 @@ describe("dry-run path (no network)", () => {
     expect(code).toBe(1);
     expect(lines.join("\n")).toMatch(/no `Subject:` header/);
   });
+
+  it("refuses --send and --dry-run together regardless of flag order", async () => {
+    for (const argv of [
+      ["--send", "--dry-run", "--doc", "docs/x.md"],
+      ["--dry-run", "--send", "--doc", "docs/x.md"],
+    ]) {
+      const lines: string[] = [];
+      const code = await main(argv, {
+        stdout: (s: string) => lines.push(s),
+        readFile: () => ADSTACK_FIXTURE,
+        fetchImpl: () => {
+          throw new Error("must never be reached");
+        },
+      });
+      expect(code).toBe(2);
+      expect(lines.join("\n")).toMatch(/pass either --send or --dry-run, not both/);
+    }
+  });
+
+  it("restricts --doc to files under docs/", async () => {
+    for (const doc of ["app/lib/foo.md", "../etc/passwd.md", "docs"]) {
+      const lines: string[] = [];
+      const code = await main(["--doc", doc], {
+        stdout: (s: string) => lines.push(s),
+        readFile: () => {
+          throw new Error("must not read outside docs/");
+        },
+      });
+      expect(code).toBe(2);
+      expect(lines.join("\n")).toMatch(/--doc must point at a file under docs\//);
+    }
+  });
 });
 
 describe("receipt formatting", () => {
@@ -286,5 +319,63 @@ describe("sendMail unit", () => {
     );
     expect(r.ok).toBe(true);
     expect(r.queued).toEqual(["a@b.c"]);
+  });
+
+  it("names a reason when the API returns 200 with no result payload", async () => {
+    const fetchImpl = async () =>
+      new Response(JSON.stringify({ success: true, result: null }), { status: 200 });
+    const r = await sendMail(
+      { to: "a@b.c", from: "support@0509.io", subject: "s", body: "b" },
+      { CLOUDFLARE_API_TOKEN: "t", CLOUDFLARE_ACCOUNT_ID: "acc" },
+      fetchImpl,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.errors.join("\n")).toMatch(/HTTP 200 but no result payload/);
+  });
+
+  it("names a reason when the API returns 200 but nothing was delivered or queued", async () => {
+    const fetchImpl = async () =>
+      new Response(
+        JSON.stringify({
+          success: true,
+          result: { delivered: [], queued: [], permanent_bounces: ["a@b.c"] },
+        }),
+        { status: 200 },
+      );
+    const r = await sendMail(
+      { to: "a@b.c", from: "support@0509.io", subject: "s", body: "b" },
+      { CLOUDFLARE_API_TOKEN: "t", CLOUDFLARE_ACCOUNT_ID: "acc" },
+      fetchImpl,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.permanentBounces).toEqual(["a@b.c"]);
+    expect(r.errors.join("\n")).toMatch(/HTTP 200 but nothing was delivered or queued.*permanent_bounces: 1/s);
+  });
+});
+
+describe("parseDoc against the real prepared docs (format-drift guard)", () => {
+  const realDoc = (name: string) => readFileSync(new URL(`../docs/${name}`, import.meta.url), "utf8");
+
+  it("adstack parses completely", () => {
+    const p = parseDoc(realDoc("adstack-listing-2026-08-11.md"));
+    expect(p.errors).toBeUndefined();
+    expect(p.to).toBe("hello@ad-stack.ai");
+    expect(p.from).toBe("support@0509.io");
+  });
+
+  it("adyntel fails closed: two emails share one ready-to-send section", () => {
+    // The doc carries Email 1 (adyntel) and Email 2 (Trendtrack) under one
+    // heading. First-match parsing would silently send only Email 1 — the
+    // multi-header guard refuses instead.
+    const p = parseDoc(realDoc("adyntel-listing-2026-08-21.md"));
+    expect(p.errors?.join("\n")).toMatch(/multiple distinct To: headers/);
+  });
+
+  it("segwise fails on the missing To: only (subject + body parse fine)", () => {
+    const p = parseDoc(realDoc("segwise-listing-2026-08-21.md"));
+    expect(p.errors?.join("\n")).toMatch(/no `To:` header/);
+    expect(p.errors?.join("\n")).not.toMatch(/multiple distinct/);
+    expect(p.subject).toContain("ad-spy roundup");
+    expect(p.body).toContain("Hi Angad,");
   });
 });
