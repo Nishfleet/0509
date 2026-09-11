@@ -9,8 +9,11 @@ import type { SampleBriefData } from "~/lib/sample-brief.server";
  *
  * Covered here:
  *   1. The loader picks the newest sitemap-indexable domain that has at least
- *      one confirmed watch_event in the last 30 days and builds its digest
+ *      one confirmed watch_event in the sample window and builds its digest
  *      HTML through the existing digest builder from stored rows only.
+ *      Issue #2969: the window widens tier by tier (30 → 90 → 180 → 365
+ *      days) until a real stored change is found, so the public page no
+ *      longer leads with an empty week.
  *   2. The digest HTML never leaks a customer workspace name, email, or
  *      watchlist id — the exact stored watchlist name is scrubbed from any
  *      title/summary that embeds it, and the items carry no event/watchlist
@@ -50,7 +53,20 @@ function fakeD1Env(tables: { watchlists?: unknown[]; events?: unknown[] }) {
                   return { results: tables.watchlists ?? [] };
                 }
                 if (sql.includes("FROM watch_event")) {
-                  return { results: tables.events ?? [] };
+                  // Honour the real SQL's window: the since binding rides in
+                  // the suffix (last two bindings are [since, limit]).
+                  const since = String(bindings[bindings.length - 2]);
+                  const limit = Number(bindings[bindings.length - 1]);
+                  const watchlists = bindings.slice(0, -2).map(String);
+                  const rows = (tables.events ?? [])
+                    .filter(
+                      (event: { created_at: string; watchlist_id: string; status: string }) =>
+                        watchlists.includes(event.watchlist_id) &&
+                        event.status === "confirmed" &&
+                        event.created_at >= since,
+                    )
+                    .slice(0, limit);
+                  return { results: rows };
                 }
                 throw new Error(`Unexpected SQL: ${sql}`);
               },
@@ -233,6 +249,43 @@ describe("loadSampleBrief (issue #2136)", () => {
     // The quiet-brief is a real digest, not a fabricated list.
     expect(result.digestHtml).toContain("All quiet");
     expect(result.digestHtml).not.toContain("Top moves");
+    // Issue #2969: the quiet copy names the widest window actually searched.
+    expect(result.digestHtml).toContain("in the last 365 days.");
+  });
+
+  it("widens the window past the 30-day tier until a real change is found (issue #2969)", async () => {
+    const { env } = installLoaderMocks({
+      watchlists: [watchlistRow()],
+      // The only stored change is 150 days old — outside the 30- and 90-day
+      // windows, inside the 180-day tier.
+      events: [eventRow({ created_at: isoAgo(150 * DAY_MS) })],
+    });
+
+    const result = await runLoader(env);
+
+    expect(result.quiet).toBe(false);
+    expect(result.domain).toBe("nykaa.com");
+    // The brief period is the tier that produced the rows (180 days), so the
+    // digest is honest about its own recency (tolerance for test ticking).
+    const startMs = Date.parse(result.periodStart);
+    const target = Date.now() - 180 * DAY_MS;
+    expect(Math.abs(startMs - target)).toBeLessThan(60_000);
+    expect(result.digestHtml).toContain("Top moves");
+  });
+
+  it("prefers the shallowest tier: a fresh event wins over an older one", async () => {
+    const { env } = installLoaderMocks({
+      watchlists: [watchlistRow()],
+      events: [eventRow({ created_at: isoAgo(150 * DAY_MS) })],
+    });
+
+    const result = await runLoader(env);
+
+    // 30-day tier is empty; the loader widens rather than fabricating.
+    expect(result.quiet).toBe(false);
+    const startMs = Date.parse(result.periodStart);
+    const target = Date.now() - 180 * DAY_MS;
+    expect(Math.abs(startMs - target)).toBeLessThan(60_000);
   });
 
   it("renders the quiet-brief with no brand when no domain is indexable at all", async () => {
