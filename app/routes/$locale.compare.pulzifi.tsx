@@ -3,8 +3,8 @@
 // lockstep with the EN page; the locale-specific `links` keeps canonical→EN
 // (so search ranking consolidates on the EN /compare/pulzifi, per #1562's
 // canonicalisation rule) and emits the buyer-surface hreflang cluster.
-// primary-source-verified (issue #2069): https://pulzifi.com/ and
-// https://pulzifi.com/pricing return HTTP 200 — verified live 2026-09-09.
+// primary-source-verified (issue #2069, #2835): https://pulzifi.com/ and
+// https://pulzifi.com/pricing return HTTP 200 — verified live 2026-09-11.
 import type { LinksFunction } from "react-router";
 import ComparePulzifiRoute, { meta } from "./compare.pulzifi";
 import { buyerSurfaceHreflangLinks, canonicalLinks } from "~/lib/seo";
