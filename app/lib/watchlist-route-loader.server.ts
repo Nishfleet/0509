@@ -325,6 +325,20 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
     ),
   ]);
 
+  // WP-24 deep links (`?event=<id>` from alert/digest emails): the feed above
+  // only holds the 24 most recent events, so an emailed link to an older
+  // change would render with no row and no highlight. Fetch that single event
+  // by id scoped to the watchlist and prepend it, so the existing feed row and
+  // scroll-to-`event-<id>` effect work with no route-component change.
+  if (highlightedEventId && !events.some((event) => event.id === highlightedEventId)) {
+    // Resolved lazily so the feed-window hit path never pays the import.
+    const { listWatchEventsByIds } = await import("~/lib/data.server");
+    const pinned = await listWatchEventsByIds(env, selectedWatchlist.id, [highlightedEventId]);
+    if (pinned[0]) {
+      events.unshift(pinned[0]);
+    }
+  }
+
   // Counter-Brief plan gate: paid plans only. Computed per page load with no
   // persistence — the loader caps generation at 4s (below the module's 10s
   // default) so a hung Workers AI call cannot stall a paid page load; the
