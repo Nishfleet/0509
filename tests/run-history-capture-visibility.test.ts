@@ -172,6 +172,26 @@ describe("run-history capture visibility (#969)", () => {
       expectNoAlert(row!);
     });
 
+    it("a budget skip on purchased credits with an inactive plan shows that reason, not 'allowance reached' (#2890)", () => {
+      const row = resolveProofCaptureRefusal(
+        capture({
+          id: "proof-budget-topup",
+          status: "skipped_due_to_budget",
+          skipReason: "skipped_due_to_budget",
+          failureReason: "Purchased proof captures require an active paid plan.",
+          captureDiagnostics: { budgetReason: "top_up_inactive_plan" },
+        }),
+      );
+
+      expect(row).not.toBeNull();
+      expect(row!.kind).toBe("skipped_due_to_budget");
+      expect(row!.reasonCode).toBe("top_up_inactive_plan");
+      expect(row!.label).toBe("Credits blocked");
+      expect(row!.explanation).toMatch(/active paid plan/i);
+      expect(row!.explanation).not.toMatch(/allowance reached/i);
+      expectNoAlert(row!);
+    });
+
     it("records suppressed_proof_duplicate from a candidate and never alerts", () => {
       const row = resolveSuppressedCandidateRefusal(
         candidate({

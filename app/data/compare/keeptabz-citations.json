@@ -1,0 +1,20 @@
+{
+  "competitor": "keeptabz",
+  "productName": "KeepTabz",
+  "sources": [
+    {
+      "id": "keeptabz-announcement",
+      "href": "https://www.einpresswire.com/article/907156843/san-antonio-startup-keeptabz-launches-with-15-b2b-customers-aims-to-disrupt-6b-competitive-intelligence-market",
+      "label": "KeepTabz launch announcement (EIN Presswire press release)",
+      "checked": "2026-09-11",
+      "claim": "KeepTabz reached general availability on 2026-08-14 with 15 B2B customers, tracking Facebook, Instagram, and Google ad creative and spend."
+    },
+    {
+      "id": "keeptabz-pricing",
+      "href": "https://www.capterra.com/p/10037825/KeepTabz/",
+      "label": "KeepTabz pricing (Capterra listing, verified 2026-09-11)",
+      "checked": "2026-09-11",
+      "claim": "KeepTabz's public entry tiers start at $49.99 (Lite) and $99.99 (Core)."
+    }
+  ]
+}

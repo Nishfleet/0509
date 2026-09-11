@@ -1,23 +1,16 @@
-import { createElement, type ReactNode } from "react";
+import { createElement } from "react";
+import { mockReactRouter } from "./helpers/mock-react-router";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { FeedbackStrip } from "~/components/workspace/feedback-strip";
 
-type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
-type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
 
 async function mockRouter(loaderData: unknown, actionData: unknown = null) {
-  vi.doMock("react-router", async () => {
-    const actual = await vi.importActual<typeof import("react-router")>("react-router");
-    return {
-      ...actual,
-      useLoaderData: () => loaderData,
-      useActionData: () => actionData,
-      useNavigation: () => ({ state: "idle", formData: null }),
-      Form: ({ children, ...props }: MockFormProps) => createElement("form", props, children),
-      Link: ({ children, to, ...props }: MockLinkProps) => createElement("a", { href: to, ...props }, children),
-    };
+  mockReactRouter({
+    loader: () => loaderData,
+    actionData: () => actionData,
+    navigation: () => ({ state: "idle", formData: null }),
   });
 }
 

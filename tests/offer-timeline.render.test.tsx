@@ -1,4 +1,5 @@
 import { createElement } from "react";
+import { mockReactRouter } from "./helpers/mock-react-router";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -9,18 +10,9 @@ let currentData: OfferTimelineLoaderData;
 
 beforeEach(() => {
   vi.resetModules();
-  vi.doMock("react-router", async () => {
-    const actual = await vi.importActual<typeof import("react-router")>("react-router");
-    const React = await import("react");
-    return {
-      ...actual,
-      useLoaderData: () => currentData,
-      useRouteLoaderData: () => undefined,
-      Link: ({ children, to, ...props }: { children?: React.ReactNode; to?: string } & Record<string, unknown>) =>
-        React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
-      Form: ({ children, ...props }: { children?: React.ReactNode } & Record<string, unknown>) =>
-        React.createElement("form", props, children),
-    };
+  mockReactRouter({
+    loader: () => currentData,
+    loaderData: () => undefined,
   });
 });
 
@@ -251,13 +243,20 @@ describe("/timeline/:domain render", () => {
     expect(markup).not.toContain('"@type":"Dataset"');
   });
 
-  it("renders an honest collecting page — no Dataset JSON-LD, no dated-ledger overclaim (issue #2021)", async () => {
+  it("renders an honest collecting page — noindex, no Dataset JSON-LD, no dated-ledger overclaim (issues #2021, #2881)", async () => {
     const markup = await render(
-      data({ entries: [], collecting: true, noindex: false }),
+      data({ entries: [], collecting: true, noindex: true }),
     );
-    // Indexable (WebPage present) but no citable Dataset: nothing is stored
-    // yet, so there is no dataset to cite — the #964 Dataset would overclaim.
-    expect(markup).toContain("application/ld+json");
+    // Issue #2881: a zero-state collecting page is noindex (robots meta) —
+    // an empty page must never be an indexed acquisition surface. The robots
+    // meta is emitted by the route's meta() (not the component body).
+    const { meta } = await import("~/routes/timeline.$domain");
+    const collectingMetas = meta({ loaderData: data({ entries: [], collecting: true, noindex: true }) } as never) as Array<Record<string, string>>;
+    expect(collectingMetas).toContainEqual({ name: "robots", content: "noindex" });
+    // No citable Dataset: nothing is stored yet, so there is no dataset to
+    // cite — the #964 Dataset would overclaim. The noindex shell carries no
+    // JSON-LD at all.
+    expect(markup).not.toContain("application/ld+json");
     expect(markup).not.toContain('"@type":"Dataset"');
     // No "Dated offer states" hero/JSON-LD overclaim on a zero-state page.
     expect(markup).not.toContain("Dated offer states for nykaa.com");

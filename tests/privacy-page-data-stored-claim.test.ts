@@ -1,4 +1,5 @@
 import { createElement } from "react";
+import { mockReactRouter } from "./helpers/mock-react-router";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -7,16 +8,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // <Link> and inert loader stubs so the route renders server-side.
 beforeEach(() => {
   vi.resetModules();
-  vi.doMock("react-router", async () => {
-    const actual = await vi.importActual<typeof import("react-router")>("react-router");
-    const React = await import("react");
-    return {
-      ...actual,
-      useLoaderData: () => undefined,
-      useRouteLoaderData: () => undefined,
-      Link: ({ children, to, ...props }: { children?: React.ReactNode; to?: string } & Record<string, unknown>) =>
-        React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
-    };
+  mockReactRouter({
+    loader: () => undefined,
+    loaderData: () => undefined,
   });
 });
 

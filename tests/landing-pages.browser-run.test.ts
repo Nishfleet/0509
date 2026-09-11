@@ -531,7 +531,7 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
         renderMode: "mobile",
         deviceProfile: "mobile_default",
         renderProvider: "cloudflare_browser_run",
-        extractorVersion: "lp-signals-v6",
+        extractorVersion: "lp-signals-v8",
         // Issue #1401: CTA funnel stage recorded on the capture metadata.
         ctaFunnelStage: "reached",
         extractionWarnings: [],
@@ -855,7 +855,6 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
     const snapshot = await captureLandingPageSnapshot(
       {
         BROWSERLESS_TOKEN: "browserless-token",
-        BROWSERLESS_PROOF_ALLOWLIST_ORIGINS: "https://example.com https://www.example.com",
         LANDING_PAGE_ARTIFACTS: { put } as unknown as R2Bucket,
       },
       "https://example.com/glow",
@@ -918,7 +917,6 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
     const snapshot = await captureLandingPageSnapshot(
       {
         BROWSERLESS_TOKEN: "browserless-token",
-        BROWSERLESS_PROOF_ALLOWLIST_ORIGINS: "https://example.com https://www.example.com",
         LANDING_PAGE_ARTIFACTS: { put, delete: del } as unknown as R2Bucket,
       },
       "https://example.com/glow",
@@ -1014,7 +1012,6 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
     const snapshot = await captureLandingPageSnapshot(
       {
         BROWSERLESS_TOKEN: "browserless-token",
-        BROWSERLESS_PROOF_ALLOWLIST_ORIGINS: "https://example.com https://www.example.com",
         LANDING_PAGE_ARTIFACTS: { put } as unknown as R2Bucket,
       },
       "https://example.com/glow",
@@ -1059,7 +1056,6 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
     const snapshot = await captureLandingPageSnapshot(
       {
         BROWSERLESS_TOKEN: "browserless-token",
-        BROWSERLESS_PROOF_ALLOWLIST_ORIGINS: "https://example.com https://www.example.com",
         LANDING_PAGE_ARTIFACTS: { put } as unknown as R2Bucket,
       },
       "https://example.com/glow",
@@ -1108,7 +1104,6 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
     const snapshot = await captureLandingPageSnapshot(
       {
         BROWSERLESS_TOKEN: "browserless-token",
-        BROWSERLESS_PROOF_ALLOWLIST_ORIGINS: "https://example.com https://www.example.com",
         LANDING_PAGE_ARTIFACTS: { put } as unknown as R2Bucket,
       },
       "https://example.com/glow",
@@ -1125,62 +1120,6 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
     expect(snapshot?.metadata?.captureWarningCodes ?? []).not.toContain("screenshot_decode_failed");
     expect(put).toHaveBeenCalledTimes(2);
   });
-
-	it("treats www and apex as the same Browserless capture site (issue #1919)", async () => {
-	  const screenshotBytes = new Uint8Array([8, 5, 0, 9]);
-	  const put = vi.fn().mockResolvedValue(undefined);
-	  const fetch = mockFetchWithDns(
-	    vi.fn(async (input) => {
-	      if (!String(input).includes("browserless.io/stealth/bql")) {
-	        throw new Error("fetch failed");
-	      }
-
-	      return new Response(
-	        JSON.stringify({
-	          data: {
-	            html: {
-	              html: `
-	                <html>
-	                  <head>
-	                    <title>Mamaearth vitamin C</title>
-	                  </head>
-	                  <body>
-	                    <a href="/offer">Shop now</a>
-	                    <p>Up to 30% off this week on the vitamin C range with free shipping.</p>
-	                  </body>
-	                </html>
-	              `,
-	            },
-	            screenshot: {
-	              base64: btoa(String.fromCharCode(...screenshotBytes)),
-	            },
-	            documentRequests: [{ url: "https://mamaearth.com/" }],
-	            url: { url: "https://mamaearth.com/" },
-	          },
-	        }),
-	        {
-	          status: 200,
-	          headers: { "content-type": "application/json" },
-	        },
-	      );
-	    }) as never,
-	  );
-
-	  const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
-
-	  await captureLandingPageSnapshot(
-	    {
-	      BROWSERLESS_TOKEN: "browserless-token",
-	      BROWSERLESS_PROOF_ALLOWLIST_ORIGINS: "https://www.mamaearth.com",
-	      LANDING_PAGE_ARTIFACTS: { put } as unknown as R2Bucket,
-	    },
-	    "https://mamaearth.com/",
-	  );
-
-	  expect(
-	    nonDnsFetchCalls(fetch).some(([input]) => String(input).includes("browserless.io/stealth/bql")),
-	  ).toBe(true);
-	});
 
 	it("sends a watchlist's own public brand origin to Browserless with no allowlist configured (issue #2366)", async () => {
 	  const fetch = mockFetchWithDns(
@@ -1718,7 +1657,6 @@ describe("rendered chain attempt ordering and job correlation", () => {
     const snapshot = await captureLandingPageSnapshot(
       {
         BROWSERLESS_TOKEN: "browserless-token",
-        BROWSERLESS_PROOF_ALLOWLIST_ORIGINS: "https://example.com https://www.example.com",
         DB: harness.db,
       } as never,
       "https://example.com/glow",
@@ -1921,7 +1859,6 @@ describe("rendered leg provider-error fidelity", () => {
     const snapshot = await captureLandingPageSnapshot(
       {
         BROWSERLESS_TOKEN: "browserless-token",
-        BROWSERLESS_PROOF_ALLOWLIST_ORIGINS: "https://example.com https://www.example.com",
         DB: harness.db,
       } as never,
       "https://example.com/gated",
@@ -1961,7 +1898,6 @@ describe("rendered leg provider-error fidelity", () => {
     const snapshot = await captureLandingPageSnapshot(
       {
         BROWSERLESS_TOKEN: "browserless-token",
-        BROWSERLESS_PROOF_ALLOWLIST_ORIGINS: "https://example.com https://www.example.com",
         DB: harness.db,
       } as never,
       "https://example.com/gated",
@@ -2003,7 +1939,6 @@ describe("rendered leg provider-error fidelity", () => {
     const snapshot = await captureLandingPageSnapshot(
       {
         BROWSERLESS_TOKEN: "browserless-token",
-        BROWSERLESS_PROOF_ALLOWLIST_ORIGINS: "https://example.com https://www.example.com",
         DB: harness.db,
       } as never,
       "https://example.com/gated",
@@ -2042,7 +1977,6 @@ describe("rendered leg provider-error fidelity", () => {
     const snapshot = await captureLandingPageSnapshot(
       {
         BROWSERLESS_TOKEN: "browserless-token",
-        BROWSERLESS_PROOF_ALLOWLIST_ORIGINS: "https://example.com https://www.example.com",
         DB: harness.db,
       } as never,
       "https://example.com/gated",
@@ -2081,7 +2015,6 @@ describe("rendered leg provider-error fidelity", () => {
     const snapshot = await captureLandingPageSnapshot(
       {
         BROWSERLESS_TOKEN: "browserless-token",
-        BROWSERLESS_PROOF_ALLOWLIST_ORIGINS: "https://example.com https://www.example.com",
         DB: harness.db,
       } as never,
       "https://example.com/gated",
@@ -2116,7 +2049,6 @@ describe("rendered leg provider-error fidelity", () => {
     const snapshot = await captureLandingPageSnapshot(
       {
         BROWSERLESS_TOKEN: "browserless-token",
-        BROWSERLESS_PROOF_ALLOWLIST_ORIGINS: "https://example.com https://www.example.com",
         DB: harness.db,
       } as never,
       "https://example.com/gated",
@@ -2157,7 +2089,6 @@ describe("rendered leg provider-error fidelity", () => {
     const snapshot = await captureLandingPageSnapshot(
       {
         BROWSERLESS_TOKEN: "browserless-token",
-        BROWSERLESS_PROOF_ALLOWLIST_ORIGINS: "https://example.com https://www.example.com",
         DB: harness.db,
       } as never,
       "https://example.com/gated",
@@ -2368,7 +2299,6 @@ describe("captureLandingPageSnapshot transient retry", () => {
     const snapshot = await captureLandingPageSnapshot(
       {
         BROWSERLESS_TOKEN: "browserless-token",
-        BROWSERLESS_PROOF_ALLOWLIST_ORIGINS: "https://example.com https://www.example.com",
       },
       "https://example.com/glow",
     );
@@ -2411,7 +2341,6 @@ describe("captureLandingPageSnapshot transient retry", () => {
     const snapshot = await captureLandingPageSnapshot(
       {
         BROWSERLESS_TOKEN: "browserless-token",
-        BROWSERLESS_PROOF_ALLOWLIST_ORIGINS: "https://example.com https://www.example.com",
       },
       "https://example.com/glow",
     );

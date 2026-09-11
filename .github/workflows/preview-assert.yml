@@ -130,7 +130,7 @@ jobs:
         # lifecycle tests spawn detached provider children that the deploy
         # runner proves with browsers installed. Keep the shapes identical so
         # a pass here predicts a pass on the deploy runner.
-        run: npx playwright install chromium firefox webkit
+        run: npx playwright install --with-deps chromium firefox webkit
 
       - name: Typecheck
         env:
