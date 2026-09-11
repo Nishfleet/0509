@@ -8,6 +8,7 @@ import {
   CAPTURE_VALIDITY_PUBLIC_RULES,
 } from "~/lib/capture-validity-public-rules";
 import {
+  buyerSurfaceHreflangLinks,
   canonicalLinks,
   faqPageJsonLd,
   jsonLdScriptProps,
@@ -50,7 +51,10 @@ const captureRulesFaqEntries: ReadonlyArray<FaqJsonLdEntry> = [
 
 export { captureRulesFaqEntries };
 
-export const links: LinksFunction = () => canonicalLinks(CAPTURE_RULES_PUBLIC_PATH);
+export const links: LinksFunction = () => [
+  ...canonicalLinks(CAPTURE_RULES_PUBLIC_PATH),
+  ...buyerSurfaceHreflangLinks("capture-rules"),
+];
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({

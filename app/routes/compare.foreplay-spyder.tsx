@@ -12,6 +12,7 @@ import {
   type CompareClaimCard,
 } from "~/components/compare-citations";
 import {
+  buyerSurfaceHreflangLinks,
   canonicalLinks,
   compareSocialCardUrl,
   faqPageJsonLd,
@@ -30,7 +31,10 @@ const pageTitle = "Five to Nine vs Foreplay Spyder";
 const pageDescription =
   "Foreplay Spyder tracks competitor Meta ads and landing pages inside Foreplay. Five to Nine diffs what changed and keeps the source proof.";
 
-export const links: LinksFunction = () => canonicalLinks("/compare/foreplay-spyder");
+export const links: LinksFunction = () => [
+  ...canonicalLinks("/compare/foreplay-spyder"),
+  ...buyerSurfaceHreflangLinks("compare/foreplay-spyder"),
+];
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({

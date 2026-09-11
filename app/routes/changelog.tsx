@@ -2,6 +2,7 @@ import type { LinksFunction, MetaFunction } from "react-router";
 
 import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
 import {
+  buyerSurfaceHreflangLinks,
   canonicalLinks,
   jsonLdScriptProps,
   publicSeoMeta,
@@ -11,7 +12,10 @@ import {
 const description =
   "Customer-facing updates for Five to Nine, with clear product and availability boundaries.";
 
-export const links: LinksFunction = () => canonicalLinks("/changelog");
+export const links: LinksFunction = () => [
+  ...canonicalLinks("/changelog"),
+  ...buyerSurfaceHreflangLinks("changelog"),
+];
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({

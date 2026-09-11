@@ -8,6 +8,7 @@ import { COMPETITOR_PRICE_ANCHORS } from "~/components/pricing-section";
 import { isBuyerSurfaceLocaleId } from "~/lib/locale-markets";
 import { PUBLISHED_PLAN_PRICES_USD } from "~/lib/pricing";
 import {
+  buyerSurfaceHreflangLinks,
   canonicalLinks,
   itemListJsonLd,
   jsonLdScriptProps,
@@ -19,7 +20,10 @@ import { LIVE_BRAND_PROOF_DOMAIN } from "~/lib/demo-brand-pages";
 const pageDescription =
   "Five to Nine vs the alternatives: source-backed competitor ad and landing-page change monitoring compared to Visualping, Panoramata, Foreplay, Spyland, Pulzifi, and more.";
 
-export const links: LinksFunction = () => canonicalLinks("/compare");
+export const links: LinksFunction = () => [
+  ...canonicalLinks("/compare"),
+  ...buyerSurfaceHreflangLinks("compare"),
+];
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({

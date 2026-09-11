@@ -12,6 +12,7 @@ import {
   type CompareClaimCard,
 } from "~/components/compare-citations";
 import {
+  buyerSurfaceHreflangLinks,
   canonicalLinks,
   compareSocialCardUrl,
   faqPageJsonLd,
@@ -30,7 +31,10 @@ const pageTitle = "Five to Nine vs GetHookd";
 const pageDescription =
   "GetHookd is a Facebook Ads Library analysis platform with a 7-day free trial and API & MCP on annual plans. Five to Nine is scheduled, source-backed Meta Ad Library and landing-page change proof.";
 
-export const links: LinksFunction = () => canonicalLinks("/compare/gethookd");
+export const links: LinksFunction = () => [
+  ...canonicalLinks("/compare/gethookd"),
+  ...buyerSurfaceHreflangLinks("compare/gethookd"),
+];
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({

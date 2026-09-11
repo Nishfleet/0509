@@ -28,6 +28,7 @@ import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
 import { GuideKeepReading } from "~/components/guide-keep-reading";
 import {
+  buyerSurfaceHreflangLinks,
   canonicalLinks,
   faqPageJsonLd,
   jsonLdScriptProps,
@@ -49,7 +50,10 @@ export const guideSearchPreviewPath = "/search?source=guide-monitor-ad-library";
 const pageDescription =
   "How to monitor a competitor's Meta Ad Library: the free manual routine — find the Ad Library URL, pick a check cadence, log what runs — where it breaks (no history, geo variance, interactive gates), and the free first check that automates it.";
 
-export const links: LinksFunction = () => canonicalLinks(PATHNAME);
+export const links: LinksFunction = () => [
+  ...canonicalLinks(PATHNAME),
+  ...buyerSurfaceHreflangLinks(PATHNAME.slice(1)),
+];
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({
