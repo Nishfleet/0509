@@ -234,6 +234,9 @@ export function reachableFromHead(sha) {
  * rewritten), it can anchor nothing: fall through to the operator bootstrap
  * (loudly) or fail with a named reason instead of a raw git error.
  * @param {{ recordedHead: string | null }} args
+ * @param {Record<string, string | undefined>} [env]
+ * @param {(message: string) => void} [warn]
+ * @param {(sha: string) => boolean} [reachable]
  */
 export function anchorPreviousHead(
   { recordedHead },
