@@ -416,6 +416,7 @@ export async function upsertDeliveryTarget(
   const [target] = await listDeliveryTargets(env, input.userId, {
     watchlistId: input.watchlistId ?? null,
     channel: input.channel,
+    targetValue,
     limit: 1,
   });
   return target ?? null;
