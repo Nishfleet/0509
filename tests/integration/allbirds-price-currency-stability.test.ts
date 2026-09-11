@@ -169,6 +169,48 @@ describe("allbirds.com price-currency stability (issue #2861)", () => {
     ).toBe("£50");
   });
 
+  it("ignores stray foreign-currency declarations ahead of the real one (issue #2905)", () => {
+    // A commented-out ad-slot embed declares EUR first, and a doubled
+    // currency-switcher list (desktop + mobile nav) repeats
+    // `data-currency="EUR"` per option — under plurality-with-firstIndex
+    // that stray block ties USD 3:3 and wins on position, anchoring the
+    // extractor to a currency no candidate carries so pass 2 re-selects
+    // the £50 first match. Comments never vote, repeated attribute votes
+    // count once per code, and the winner must lead outright: USD wins
+    // 2:1 and the extracted price stays on the shop currency.
+    const strayForeign = `<!doctype html><html><head>
+      <!-- ad slot: currency = "EUR" -->
+      <script type="application/json">{"currencyCode":"USD"}</script>
+    </head><body>
+      <ul class="currency-switcher"><li data-currency="EUR">EUR</li><li data-currency="USD">USD</li></ul>
+      <ul class="currency-switcher-mobile"><li data-currency="EUR">EUR</li><li data-currency="USD">USD</li></ul>
+      <div class="swiper-slide swiper-slide-active">
+        <p class="text-center"> Free shipping and returns on orders over £50. </p>
+      </div>
+      ${ALLBIRDS_PRODUCT_PRICES}
+    </body></html>`;
+    expect(pickDeclaredCurrency(strayForeign)).toBe("USD");
+    expect(
+      extractLandingPageSignals(strayForeign, { documentMode: "rendered" })
+        .priceText,
+    ).toBe("$100");
+  });
+
+  it("resolves a top-vote tie to no anchor so first-match decides (issue #2905)", () => {
+    // One EUR declaration against one USD declaration is ambiguous — the
+    // vote must not pick whichever happened to render first, it resolves
+    // null and the historical first match (£50) applies.
+    const ambiguous = `<html><head>
+      <script>{"currencyCode":"EUR"}</script>
+      <script>var currency = "USD";</script>
+    </head><body><p class="price">£50</p></body></html>`;
+    expect(pickDeclaredCurrency(ambiguous)).toBeNull();
+    expect(
+      extractLandingPageSignals(ambiguous, { documentMode: "rendered" })
+        .priceText,
+    ).toBe("£50");
+  });
+
   it("never blanks a price whose only marker mismatches the declaration", () => {
     // Declared USD, but the lone visible price is £-marked: the anchor
     // finds no USD candidate and must fall back to the £50 first match
