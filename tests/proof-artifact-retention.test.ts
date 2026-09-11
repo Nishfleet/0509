@@ -1,3 +1,4 @@
+import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -40,6 +41,56 @@ function fakeEnv(row: InventoryRow, r2?: Record<string, unknown>) {
 
 function objectHead(key: string): R2Object {
   return { key, size: 1 } as unknown as R2Object;
+}
+
+/**
+ * Real-SQL fake env over node:sqlite so inventory tests exercise the actual
+ * WHERE/JOIN semantics instead of a canned row. Only the columns the module's
+ * queries touch are declared.
+ */
+function sqliteEnv(seed: (db: DatabaseSync) => void, r2?: Record<string, unknown>) {
+  const database = new DatabaseSync(":memory:");
+  database.exec(`
+    CREATE TABLE landing_page_snapshot (id TEXT PRIMARY KEY, artifact_key TEXT, metadata_json TEXT);
+    CREATE TABLE ad_observation (id TEXT PRIMARY KEY, landing_page_snapshot_id TEXT, watchlist_run_id TEXT);
+    CREATE TABLE watchlist_run (id TEXT PRIMARY KEY, watchlist_id TEXT);
+    CREATE TABLE watchlist (id TEXT PRIMARY KEY, user_id TEXT);
+    CREATE TABLE proof_target (id TEXT PRIMARY KEY, watchlist_id TEXT);
+    CREATE TABLE proof_capture (
+      id TEXT PRIMARY KEY,
+      proof_target_id TEXT,
+      html_artifact_key TEXT,
+      screenshot_artifact_key TEXT,
+      capture_metadata_json TEXT,
+      updated_at TEXT
+    );
+  `);
+  seed(database);
+  const prepare = (sql: string) => {
+    const stmt = database.prepare(sql);
+    return {
+      bind: (...args: unknown[]) => ({
+        all: async () => ({ results: stmt.all(...(args as never[])) }),
+        run: async () => ({ meta: { changes: Number(stmt.run(...(args as never[])).changes) } }),
+      }),
+    };
+  };
+  return {
+    DB: { prepare } as unknown as D1Database,
+    LANDING_PAGE_ARTIFACTS: r2 as unknown as R2Bucket,
+    database,
+  };
+}
+
+/** Orphaned snapshot (its ad_observation rows were cascade-deleted) + an owner proof_capture on the same key. */
+function seedOrphanedSnapshotFixture(db: DatabaseSync) {
+  db.exec(`
+    INSERT INTO landing_page_snapshot (id, artifact_key, metadata_json) VALUES ('snap-orphan', '${HTML_KEY}', NULL);
+    INSERT INTO watchlist (id, user_id) VALUES ('w-owner', '${OWNER}');
+    INSERT INTO proof_target (id, watchlist_id) VALUES ('pt-owner', 'w-owner');
+    INSERT INTO proof_capture (id, proof_target_id, html_artifact_key, capture_metadata_json, updated_at)
+      VALUES ('pc-owner', 'pt-owner', '${HTML_KEY}', '{}', '2026-07-16T00:00:00.000Z');
+  `);
 }
 
 describe("proof artifact retention contract", () => {
@@ -224,5 +275,52 @@ describe("proof artifact retention contract", () => {
       { key: "bad-key", ok: false, outcome: "invalid_key", r2: "not_attempted", d1: "not_updated" },
       { key: "bad-key", ok: false, outcome: "invalid_key", r2: "not_attempted", d1: "not_updated" },
     ]);
+  });
+
+  it("counts an orphaned landing_page_snapshot whose ad_observation rows were cascade-deleted", async () => {
+    const env = sqliteEnv(seedOrphanedSnapshotFixture);
+    try {
+      const inventory = await getProofArtifactInventory(env, HTML_KEY, OWNER);
+      expect(inventory?.landingPageSnapshotReferences).toBe(1);
+      expect(inventory?.proofCaptureReferences).toBe(1);
+      expect(inventory?.ownerHasReference).toBe(true);
+      expect(inventory?.referenceState).toBe("referenced");
+    } finally {
+      env.database.close();
+    }
+  });
+
+  it("refuses to delete an R2 object a live landing_page_snapshot.artifact_key still points at", async () => {
+    const head = vi.fn();
+    const del = vi.fn();
+    const env = sqliteEnv(seedOrphanedSnapshotFixture, { head, delete: del });
+    try {
+      const [result] = await deleteProofArtifacts(env, OWNER, [HTML_KEY]);
+      expect(result).toMatchObject({ ok: false, outcome: "shared_reference", r2: "not_attempted", d1: "not_updated" });
+      expect(head).not.toHaveBeenCalled();
+      expect(del).not.toHaveBeenCalled();
+    } finally {
+      env.database.close();
+    }
+  });
+
+  it("counts a snapshot holding the key only via metadata_json $.htmlArtifactKey", async () => {
+    const env = sqliteEnv((db) => {
+      db.exec(`
+        INSERT INTO landing_page_snapshot (id, artifact_key, metadata_json)
+          VALUES ('snap-meta', NULL, '{"htmlArtifactKey": "${HTML_KEY}"}');
+        INSERT INTO watchlist (id, user_id) VALUES ('w-owner', '${OWNER}');
+        INSERT INTO proof_target (id, watchlist_id) VALUES ('pt-owner', 'w-owner');
+        INSERT INTO proof_capture (id, proof_target_id, html_artifact_key, capture_metadata_json, updated_at)
+          VALUES ('pc-owner', 'pt-owner', '${HTML_KEY}', '{}', '2026-07-16T00:00:00.000Z');
+      `);
+    });
+    try {
+      const inventory = await getProofArtifactInventory(env, HTML_KEY, OWNER);
+      expect(inventory?.landingPageSnapshotReferences).toBe(1);
+      expect(inventory?.ownerHasReference).toBe(true);
+    } finally {
+      env.database.close();
+    }
   });
 });

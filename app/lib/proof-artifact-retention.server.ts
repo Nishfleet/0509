@@ -108,13 +108,15 @@ export async function getProofArtifactInventory(
       FROM (
         SELECT watchlist.user_id AS owner_id, 'landing_page_snapshot' AS source
         FROM landing_page_snapshot
-        INNER JOIN ad_observation
+        LEFT JOIN ad_observation
           ON ad_observation.landing_page_snapshot_id = landing_page_snapshot.id
-        INNER JOIN watchlist_run
+        LEFT JOIN watchlist_run
           ON watchlist_run.id = ad_observation.watchlist_run_id
-        INNER JOIN watchlist
+        LEFT JOIN watchlist
           ON watchlist.id = watchlist_run.watchlist_id
         WHERE landing_page_snapshot.artifact_key = ?
+          OR (json_valid(landing_page_snapshot.metadata_json) AND json_extract(landing_page_snapshot.metadata_json, '$.htmlArtifactKey') = ?)
+          OR (json_valid(landing_page_snapshot.metadata_json) AND json_extract(landing_page_snapshot.metadata_json, '$.screenshotArtifactKey') = ?)
         UNION ALL
         SELECT watchlist.user_id AS owner_id, 'proof_capture' AS source
         FROM proof_capture
@@ -126,6 +128,8 @@ export async function getProofArtifactInventory(
       ) AS references_for_key
     `,
     owner,
+    parsed.key,
+    parsed.key,
     parsed.key,
     parsed.key,
   );
