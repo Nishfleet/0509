@@ -22,8 +22,8 @@ import type {
 } from "~/lib/presence-types";
 
 export interface MentionResweepOptions {
-  /** Limit how many entities to process in one sweep. */
-  entityLimit?: number;
+  /** Limit how many workspaces (users) to sweep in one run. */
+  userLimit?: number;
   /** Override `fetch` for tests; production uses the global. */
   fetchImpl?: typeof fetch;
   /** If set, sweep only this user; otherwise sweep all paid users with tracked entities. */
@@ -40,16 +40,36 @@ export interface MentionResweepResult {
   updated: number;
 }
 
-const DEFAULT_ENTITY_LIMIT = 100;
+const DEFAULT_USER_LIMIT = 100;
 
-async function listResweepUsers(env: AppEnv, limit: number): Promise<string[]> {
+/**
+ * Workspaces ordered by oldest work first. `presence_poll_cursor` is keyed by
+ * `source_target_id`, so `MIN(last_polled_at)` is the workspace's oldest *poll*;
+ * a workspace with no cursor at all sorts first (`NULLS FIRST`). `user_id ASC`
+ * breaks ties deterministically. Ordering by identity instead would re-poll the
+ * same 100 alphabetical workspaces forever and starve the rest (issue #2457).
+ *
+ * Caveat: a workspace with one very old poll and one never-polled source still
+ * sorts by its old poll, so `NULLS FIRST` only rescues workspaces with no
+ * cursors at all. That is deliberate — ordering by source would split a
+ * workspace across the limit, and the limit counts workspaces.
+ */
+export async function listResweepUsers(env: AppEnv, limit: number): Promise<string[]> {
   if (!env.DB) return [];
   const rows = await env.DB
     .prepare(
-      `SELECT DISTINCT user_id
-       FROM tracked_entity
-       WHERE is_active = 1 AND deleted_at IS NULL
-       ORDER BY user_id
+      `SELECT te.user_id AS user_id,
+              MIN(pc.last_polled_at) AS oldest_polled_at
+       FROM tracked_entity te
+       LEFT JOIN source_target st
+         ON st.tracked_entity_id = te.id
+        AND st.is_active = 1
+        AND st.deleted_at IS NULL
+       LEFT JOIN presence_poll_cursor pc
+         ON pc.source_target_id = st.id
+       WHERE te.is_active = 1 AND te.deleted_at IS NULL
+       GROUP BY te.user_id
+       ORDER BY (oldest_polled_at IS NULL) DESC, oldest_polled_at ASC, te.user_id ASC
        LIMIT ?`,
     )
     .bind(limit)
@@ -93,7 +113,7 @@ export async function runMentionResweep(
 
   const userIds = options.userId
     ? [options.userId]
-    : await listResweepUsers(env, options.entityLimit ?? DEFAULT_ENTITY_LIMIT);
+    : await listResweepUsers(env, options.userLimit ?? DEFAULT_USER_LIMIT);
 
   for (const userId of userIds) {
     const plan = await getUserPlan(env, userId);
