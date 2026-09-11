@@ -2466,6 +2466,21 @@ export default function SearchRoute() {
                         ? "We stopped auto-refreshing. Retry this search to load the rest."
                         : "We'll refresh automatically as more ads come in."}
                     </p>
+                    {/* Issue 2403: when warming exhausts with partial rows on
+                        screen, keep the capture inline under the honest
+                        note — the rows stay visible and are not replaced by
+                        a signup wall. Same allowlisted exhausted source as
+                        the zero-row CTA below. */}
+                    {warmingPollExhausted && !data.session ? (
+                      <div className="f9-wk-acts">
+                        <Link className="f9-wk-lnk" to={warmingExhaustedSignupPath}>
+                          Create account to track this competitor{" "}
+                          <span aria-hidden="true" className="f9-wk-chev">
+                            &rsaquo;
+                          </span>
+                        </Link>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
 

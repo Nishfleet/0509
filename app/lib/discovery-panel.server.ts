@@ -3,6 +3,7 @@ import {
   resolveCommercialDiscoveryProvider,
   searchAdsViaSourceResolver,
 } from "~/lib/ad-source.server";
+import { queryAll } from "~/lib/data/d1.server";
 import type { AppEnv } from "~/lib/env.server";
 import { normalizeSearchFilters } from "~/lib/normalize";
 import { parseSearchInputFromWebsiteField } from "~/lib/search-query";
@@ -145,6 +146,171 @@ export interface DiscoveryPanelWarmupResult {
   succeeded: number;
   failed: number;
   skipped: number;
+}
+
+/**
+ * Top-N recency cap for the issue-2403 warm pass: the number of distinct
+ * registrable domains pulled from recent public_search cache rows.
+ */
+export const PUBLIC_SEARCH_WARMUP_DOMAIN_LIMIT = 200;
+
+/**
+ * Live provider fetches the recent-domain warm pass may make in one cron
+ * run. Most of the top-200 list is already warm on steady state, so the
+ * per-run budget stays small; cold domains converge to warm over successive
+ * 6-hourly runs instead of one oversized cron invocation.
+ */
+export const PUBLIC_SEARCH_WARMUP_ATTEMPT_LIMIT = 25;
+
+const SEARCH_V2_DOMAIN_KEY_PREFIX = "search-v2:domain:";
+
+/**
+ * Extracts distinct registrable domains from search-v2 domain cache keys,
+ * in the order given (callers pass keys ordered by recency). Malformed or
+ * non-domain keys are dropped silently — they are foreign key shapes.
+ */
+export function registrableDomainsFromSearchV2CacheKeys(
+  cacheKeys: readonly string[],
+  limit: number = PUBLIC_SEARCH_WARMUP_DOMAIN_LIMIT,
+): string[] {
+  const seen = new Set<string>();
+  const domains: string[] = [];
+  for (const cacheKey of cacheKeys) {
+    if (!cacheKey.startsWith(SEARCH_V2_DOMAIN_KEY_PREFIX)) {
+      continue;
+    }
+    const domain = cacheKey
+      .slice(SEARCH_V2_DOMAIN_KEY_PREFIX.length)
+      .split(":")[0]
+      ?.trim()
+      .toLowerCase();
+    if (!domain || seen.has(domain)) {
+      continue;
+    }
+    seen.add(domain);
+    domains.push(domain);
+    if (domains.length >= limit) {
+      break;
+    }
+  }
+  return domains;
+}
+
+/**
+ * Issue 2403: pre-warms the domains people actually search so the
+ * no-account preview serves from cache instead of hitting the 60s warming
+ * wall. The source is `discovery_cache_entry` rows with
+ * `route_context='public_search'` and a `search-v2:domain:` key — i.e. the
+ * domains visitors already searched — ranked by `updated_at` recency, NOT
+ * funnel events (those carry no domain by construction). Reuses the same
+ * public_search_warmup family and freshness skip as the eval panel.
+ */
+export async function warmRecentPublicSearchDomains(
+  env: AppEnv,
+  ctx?: Pick<ExecutionContext, "waitUntil"> | null,
+): Promise<DiscoveryPanelWarmupResult> {
+  const empty = { attempted: 0, succeeded: 0, failed: 0, skipped: 0 };
+  if (!env.DB) {
+    return empty;
+  }
+
+  let cacheKeys: string[];
+  try {
+    const rows = await queryAll<{ cache_key: string }>(
+      env,
+      `
+        SELECT cache_key
+        FROM discovery_cache_entry
+        WHERE route_context = 'public_search'
+          AND cache_key LIKE ?
+        ORDER BY updated_at DESC
+        LIMIT ?
+      `,
+      `${SEARCH_V2_DOMAIN_KEY_PREFIX}%`,
+      PUBLIC_SEARCH_WARMUP_DOMAIN_LIMIT,
+    );
+    cacheKeys = rows.map((row) => row.cache_key);
+  } catch {
+    // No cache table (fresh D1) or transient read failure: the cron pass
+    // must not fail the whole warmup over an optional top-up.
+    return empty;
+  }
+
+  const domains = registrableDomainsFromSearchV2CacheKeys(cacheKeys);
+  if (domains.length === 0) {
+    return { ...empty };
+  }
+
+  const provider = resolveCommercialDiscoveryProvider(env);
+  let attempted = 0;
+  let succeeded = 0;
+  let failed = 0;
+  let skipped = 0;
+
+  for (const domain of domains) {
+    const intent = parseSearchInputFromWebsiteField(domain);
+    if (intent.intent !== "domain" || !intent.registrableDomain) {
+      skipped += 1;
+      continue;
+    }
+
+    const query = buildSearchV2SavedQuery(intent, "exact", PANEL_SEARCH_FILTERS, {
+      identityAliases: [],
+    });
+    const cacheKeyOverride = buildSearchV2CacheKey({
+      provider,
+      intent,
+      scope: "exact",
+      country: query.filters.country || "all",
+      filters: query.filters,
+    });
+
+    let alreadyWarm = false;
+    try {
+      alreadyWarm = await hasFreshDiscoveryCacheEntry(env, query, null, {
+        cacheKeyOverride,
+        purpose: "public_search_warmup",
+      });
+    } catch {
+      alreadyWarm = false;
+    }
+    if (alreadyWarm) {
+      skipped += 1;
+      continue;
+    }
+
+    // Per-run live-fetch budget: everything beyond the cap waits for the
+    // next 6-hourly pass rather than stretching this cron run.
+    if (attempted >= PUBLIC_SEARCH_WARMUP_ATTEMPT_LIMIT) {
+      skipped += 1;
+      continue;
+    }
+
+    attempted += 1;
+    try {
+      const response = await searchAdsViaSourceResolver(env, query, null, {
+        purpose: "public_search_warmup",
+        cacheKeyOverride,
+        executionContext: ctx ?? null,
+      });
+      if (
+        response.discoveryStatus === "cache_only" ||
+        response.cacheStatus === "stale"
+      ) {
+        skipped += 1;
+        continue;
+      }
+      succeeded += 1;
+    } catch (error) {
+      failed += 1;
+      if (error instanceof CommercialDiscoveryError) {
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  return { attempted, succeeded, failed, skipped };
 }
 
 /**

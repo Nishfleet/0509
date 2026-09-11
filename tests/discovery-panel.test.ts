@@ -5,7 +5,9 @@ import {
   DISCOVERY_EVAL_PANEL,
   DISCOVERY_EVAL_PANEL_DOMAINS,
   formatDiscoveryPanelCoverageReport,
+  registrableDomainsFromSearchV2CacheKeys,
   scoreDiscoveryPanelCoverage,
+  warmRecentPublicSearchDomains,
 } from "~/lib/discovery-panel.server";
 
 const SPIKE_V2_DOMAINS = [
@@ -125,6 +127,115 @@ describe("warmDiscoveryEvalPanel", () => {
     const result = await warmDiscoveryEvalPanel({ DB: {} } as never);
 
     expect(result).toMatchObject({ attempted: 0, succeeded: 0, failed: 0, skipped: 12 });
+    expect(searchAdsViaSourceResolver).not.toHaveBeenCalled();
+  });
+});
+
+describe("registrableDomainsFromSearchV2CacheKeys", () => {
+  it("extracts distinct registrable domains from search-v2 domain keys in recency order", () => {
+    expect(
+      registrableDomainsFromSearchV2CacheKeys([
+        "search-v2:domain:canva.com:exact:meta_library_browser:all:",
+        "search-v2:domain:allbirds.com:exact:meta_library_browser:all:",
+        "search-v2:domain:canva.com:exact:meta_library_browser:in:",
+        "search-v2:domain:allbirds.com:exact:meta_library_browser:all:",
+        "search-v2:fingerprint:abc123:",
+      ]),
+    ).toEqual(["canva.com", "allbirds.com"]);
+  });
+
+  it("drops malformed keys and honors the limit", () => {
+    expect(
+      registrableDomainsFromSearchV2CacheKeys(
+        [
+          "search-v2:domain:a.com:exact:p:all:",
+          "search-v2:domain::exact:p:all:",
+          "search-v2:domain:b.com:exact:p:all:",
+          "search-v2:domain:c.com:exact:p:all:",
+        ],
+        2,
+      ),
+    ).toEqual(["a.com", "b.com"]);
+  });
+});
+
+describe("warmRecentPublicSearchDomains", () => {
+  afterEach(() => {
+    vi.doUnmock("~/lib/ad-source.server");
+    vi.doUnmock("~/lib/data/d1.server");
+    vi.resetModules();
+  });
+
+  it("warms the top distinct domains from recent public_search cache rows", async () => {
+    vi.resetModules();
+    const searchAdsViaSourceResolver = vi.fn().mockResolvedValue({
+      ads: [{ metaAdId: "ad-1" }],
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+    });
+    const hasFreshDiscoveryCacheEntry = vi.fn().mockResolvedValue(false);
+    const queryAll = vi
+      .fn()
+      .mockResolvedValue([
+        { cache_key: "search-v2:domain:canva.com:exact:meta_library_browser:all:" },
+        { cache_key: "search-v2:domain:allbirds.com:exact:meta_library_browser:all:" },
+      ]);
+    vi.doMock("~/lib/ad-source.server", () => ({
+      resolveCommercialDiscoveryProvider: vi.fn(() => "meta_library_browser"),
+      searchAdsViaSourceResolver,
+      hasFreshDiscoveryCacheEntry,
+    }));
+    vi.doMock("~/lib/data/d1.server", () => ({ queryAll }));
+
+    const { warmRecentPublicSearchDomains } = await import(
+      "~/lib/discovery-panel.server"
+    );
+    const result = await warmRecentPublicSearchDomains({ DB: {} } as never);
+
+    expect(result).toMatchObject({ attempted: 2, succeeded: 2, failed: 0, skipped: 0 });
+    expect(queryAll).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringContaining("route_context = 'public_search'"),
+      "search-v2:domain:%",
+      200,
+    );
+    expect(searchAdsViaSourceResolver).toHaveBeenNthCalledWith(
+      1,
+      { DB: {} },
+      expect.objectContaining({
+        mode: "advertiser",
+        filters: expect.objectContaining({ query: "canva.com" }),
+      }),
+      null,
+      expect.objectContaining({
+        purpose: "public_search_warmup",
+        cacheKeyOverride: expect.stringContaining("search-v2:domain:canva.com:exact:"),
+      }),
+    );
+  });
+
+  it("skips already-fresh domains and returns empty when the cache read fails", async () => {
+    vi.resetModules();
+    const searchAdsViaSourceResolver = vi.fn();
+    const hasFreshDiscoveryCacheEntry = vi.fn().mockResolvedValue(true);
+    const queryAll = vi.fn().mockRejectedValue(new Error("no such table"));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      resolveCommercialDiscoveryProvider: vi.fn(() => "meta_library_browser"),
+      searchAdsViaSourceResolver,
+      hasFreshDiscoveryCacheEntry,
+    }));
+    vi.doMock("~/lib/data/d1.server", () => ({ queryAll }));
+
+    const { warmRecentPublicSearchDomains } = await import(
+      "~/lib/discovery-panel.server"
+    );
+
+    expect(await warmRecentPublicSearchDomains({ DB: {} } as never)).toMatchObject({
+      attempted: 0,
+      succeeded: 0,
+      failed: 0,
+      skipped: 0,
+    });
     expect(searchAdsViaSourceResolver).not.toHaveBeenCalled();
   });
 });
