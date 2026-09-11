@@ -450,7 +450,18 @@ describe("D1 remote restore evidence automation", () => {
     ) ?? -1;
     expect(applyDiffIndex).toBe(applyDryRunIndex + 1);
     expect(applyTimeTravelIndex).toBe(applyDiffIndex + 1);
-    expect(applyLocalCleanupIndex).toBe(applyTimeTravelIndex + 1);
+    // The bookmark is then folded into the restore-evidence manifest and
+    // preserved as an artifact before the plaintext cleanup runs.
+    const applyBookmarkManifestIndex = apply?.steps?.findIndex(
+      (step) =>
+        step.name === "Attach the pre-apply bookmark to the restore-evidence manifest",
+    ) ?? -1;
+    const applyBookmarkArtifactIndex = apply?.steps?.findIndex(
+      (step) => step.name === "Preserve the pre-apply bookmark",
+    ) ?? -1;
+    expect(applyBookmarkManifestIndex).toBe(applyTimeTravelIndex + 1);
+    expect(applyBookmarkArtifactIndex).toBe(applyBookmarkManifestIndex + 1);
+    expect(applyLocalCleanupIndex).toBe(applyBookmarkArtifactIndex + 1);
     expect(applyMigrationCasIndex).toBe(applyLocalCleanupIndex + 1);
     expect(applyMigrationIndex).toBe(applyMigrationCasIndex + 1);
     expect(apply?.steps?.[applyBackupCasIndex]).toMatchObject({
@@ -523,8 +534,7 @@ describe("D1 remote restore evidence automation", () => {
       apply?.steps?.[applyDryRunIndex],
       apply?.steps?.[applyTimeTravelIndex],
       apply?.steps?.[applyMigrationIndex],
-    ]);
-    // The apply job must never touch production rows outside the two
+    ]);    // The apply job must never touch production rows outside the two
     // sanctioned mutations. The only `d1 execute` allowed is the scratch dry
     // run, and it must name its own scratch config so it cannot be pointed at
     // production by accident.
