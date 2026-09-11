@@ -129,6 +129,110 @@ describe("persistCreativeThumbnailForSavedAd", () => {
     expect(blocked).toBe(original);
   });
 
+  it("keeps the original URL when the creative serves a non-raster type", async () => {
+    const put = vi.fn().mockResolvedValue(undefined);
+    const head = vi.fn().mockResolvedValue(null);
+    const bytes = new Uint8Array([60, 115, 118, 103]);
+
+    vi.doMock("~/lib/public-url.server", () => ({
+      resolvePublicHttpUrl: vi.fn(async (value: string) => new URL(value)),
+      resolvePublicRedirectUrl: vi.fn(),
+    }));
+    vi.doMock("~/lib/fetch-timeout.server", () => ({
+      fetchWithTimeout: vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: {
+          get: (name: string) =>
+            name.toLowerCase() === "content-type" ? "image/svg+xml" : null,
+        },
+        url: "https://scontent.xx.fbcdn.net/v/t.svg?oh=sig",
+      }),
+      releaseFetchTimeout: vi.fn(),
+    }));
+    vi.doMock("~/lib/bounded-response.server", () => ({
+      contentLengthExceeds: vi.fn().mockReturnValue(false),
+      readResponseBytesWithinLimit: vi.fn().mockResolvedValue(bytes),
+    }));
+
+    const { persistCreativeThumbnailForSavedAd, serveCreativeArtifact } = await import(
+      "~/lib/creative-thumbnail.server"
+    );
+
+    const original = "https://scontent.xx.fbcdn.net/v/t.svg?oh=sig";
+    const result = await persistCreativeThumbnailForSavedAd(
+      {
+        APP_ORIGIN: "https://0509.io",
+        LANDING_PAGE_ARTIFACTS: { put, head },
+      } as never,
+      {
+        metaAdId: "meta_svg_1",
+        creativeImageUrl: original,
+        adSnapshotUrl: "https://www.facebook.com/ads/library/?id=1",
+      },
+    );
+
+    expect(result).toBe(original);
+    expect(put).not.toHaveBeenCalled();
+
+    const get = vi.fn().mockResolvedValue({
+      body: bytes,
+      httpMetadata: { contentType: "image/svg+xml" },
+    });
+    const served = await serveCreativeArtifact(
+      { LANDING_PAGE_ARTIFACTS: { get } } as never,
+      new Request("https://0509.io/artifacts/creatives/meta_svg_1"),
+      "meta_svg_1",
+    );
+    expect(served?.status).toBe(415);
+  });
+
+  it("still stores raster types when the content-type carries parameters", async () => {
+    const put = vi.fn().mockResolvedValue(undefined);
+    const head = vi.fn().mockResolvedValue(null);
+    const bytes = new Uint8Array([1, 2, 3]);
+
+    vi.doMock("~/lib/public-url.server", () => ({
+      resolvePublicHttpUrl: vi.fn(async (value: string) => new URL(value)),
+      resolvePublicRedirectUrl: vi.fn(),
+    }));
+    vi.doMock("~/lib/fetch-timeout.server", () => ({
+      fetchWithTimeout: vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: {
+          get: (name: string) =>
+            name.toLowerCase() === "content-type" ? "image/webp; charset=UTF-8" : null,
+        },
+        url: "https://scontent.xx.fbcdn.net/v/t.webp?oh=sig",
+      }),
+      releaseFetchTimeout: vi.fn(),
+    }));
+    vi.doMock("~/lib/bounded-response.server", () => ({
+      contentLengthExceeds: vi.fn().mockReturnValue(false),
+      readResponseBytesWithinLimit: vi.fn().mockResolvedValue(bytes),
+    }));
+
+    const { persistCreativeThumbnailForSavedAd } = await import(
+      "~/lib/creative-thumbnail.server"
+    );
+
+    const result = await persistCreativeThumbnailForSavedAd(
+      {
+        APP_ORIGIN: "https://0509.io",
+        LANDING_PAGE_ARTIFACTS: { put, head },
+      } as never,
+      {
+        metaAdId: "meta_webp_1",
+        creativeImageUrl: "https://scontent.xx.fbcdn.net/v/t.webp?oh=sig",
+        adSnapshotUrl: null,
+      },
+    );
+
+    expect(result).toBe("https://0509.io/artifacts/creatives/meta_webp_1");
+    expect(put).toHaveBeenCalledOnce();
+  });
+
   it("reuses an existing R2 object without re-fetching", async () => {
     const put = vi.fn();
     const head = vi.fn().mockResolvedValue({ key: "creatives/m1" });
