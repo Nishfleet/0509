@@ -128,14 +128,14 @@ function parseArgs(args) {
       parsed.shadowOnly = Number.parseInt(args[index + 1], 10);
       index += 1;
     }
-  if (arg === "--cadence-hours" && args[index + 1]) {
-    const cadence = Number.parseInt(args[index + 1], 10);
-    if (!Number.isFinite(cadence) || cadence < 1) {
-      throw new Error(`--cadence-hours must be a positive integer (got "${args[index + 1]}"); refusing to silently disable the slip alert.`);
+    if (arg === "--cadence-hours" && args[index + 1]) {
+      const cadence = Number.parseInt(args[index + 1], 10);
+      if (!Number.isFinite(cadence) || cadence < 1) {
+        throw new Error(`--cadence-hours must be a positive integer (got "${args[index + 1]}"); refusing to silently disable the slip alert.`);
+      }
+      parsed.cadenceHours = cadence;
+      index += 1;
     }
-    parsed.cadenceHours = cadence;
-    index += 1;
-  }
   }
 
   return parsed;
@@ -177,12 +177,21 @@ async function loadMetrics(config) {
     FROM monitoring_concurrency_slot
     WHERE holder_run_id IS NOT NULL
   `;
+  // Mirrors the pending-queue predicate in app/lib/monitoring-fanout.server.ts:
+  // a run counts as waiting only while it is actually dispatchable (pending,
+  // dedupe-keyed, not retry-deferred, on an active watchlist). `started_at` is
+  // NOT NULL — it holds the scheduled slot — so the "still waiting" signal is
+  // `status = 'pending'`, not a null start.
+  const nowIso = new Date().toISOString();
   const oldestQueuedQuery = `
-    SELECT MIN(queued_at) AS oldest_queued_at
-    FROM watchlist_run
-    WHERE trigger_type = 'scheduled'
-      AND started_at IS NULL
-      AND status = 'pending'
+    SELECT MIN(wr.queued_at) AS oldest_queued_at
+    FROM watchlist_run wr
+    INNER JOIN watchlist w ON w.id = wr.watchlist_id
+    WHERE wr.trigger_type = 'scheduled'
+      AND wr.status = 'pending'
+      AND wr.idempotency_key IS NOT NULL
+      AND (wr.retry_after IS NULL OR wr.retry_after <= '${nowIso}')
+      AND w.is_active = 1
   `;
 
   const statusPayload = JSON.parse(

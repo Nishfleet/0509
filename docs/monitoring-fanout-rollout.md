@@ -140,32 +140,42 @@ Top-up balance does **not** alter cadence or priority. Fan-out is globally enabl
 ## Measured watchlist scheduling ceiling (2026-09-11, 0509#2990)
 
 Earlier drafts inferred a "practical ceiling in the low hundreds". That inference is
-replaced by a deterministic measurement against the real committed couple of
+replaced by a deterministic measurement against the real committed
 constants: `npm run test:presence-load` models the fan-out scheduler with the
-committed `MONITORING_FANOUT_MAX_INFLIGHT=8`, the paid cadence (agency/starter,
-every 3 hours), and the worst-case per-run scan duration (30-minute
-`MONITORING_WORKFLOW_SCAN_TIMEOUT_MS` cap). Output as committed at 79f8226eb:
+committed `MONITORING_FANOUT_MAX_INFLIGHT=8`, the paid cadence (agency/starter
+tick every 3 hours), and the worst-case per-run scan duration (30-minute
+`MONITORING_WORKFLOW_SCAN_TIMEOUT_MS` cap). Output:
 
 ```
 npm run test:presence-load
 watchlist ceiling (inflight=8, cadence=180min, worst-run=30min):
-  keeps pace at up to 48 watchlists
-  slips <=1 cadence up to 96 watchlists (canary alert threshold)
+  keeps pace at up to 48 watchlists fleet-wide
+  slips <=1 cadence up to 96 watchlists fleet-wide (canary alert threshold)
   > 96 watchlists: schedule falls more than one cadence behind
+agency workspace (priorityScanSlots=25; ranks beyond run on 6h-aligned ticks only):
+  keeps pace at up to 71 watchlists/workspace worst-case
+  the promised 75 demands 100 runs/6h vs 96 worst-case capacity
 ```
 
-- **48 active paid watchlists/workspace** is the throughput bound that keeps
+- **48 active paid watchlists fleet-wide** is the throughput bound that keeps
   every scheduled run dispatched before the next cadence window, even if every
-  run consumes its full 30-minute scan cap.
+  run consumes its full 30-minute scan cap. The 8 in-flight slots are shared
+  across all workspaces — this is a fleet number, not a per-workspace number.
 - **96** is the published slip allowance: with one full cadence of accumulated
-  slip the schedule still drains. Agency's promised 75 watchlists/workspace sits
-  in this band — fine on average, but every back-to-back worst-case window
-  leaves the fleet permanently one window behind until inflight rises.
-- What to do before promising more than 48: raise `MONITORING_FANOUT_MAX_INFLIGHT`
-  (slot capacity is 64) and re-measure with
+  slip the schedule still drains.
+- **Agency's promised 75 watchlists/workspace** is a split cadence, not a flat
+  3h one: only the first `priorityScanSlots=25` watchlists run on every 3h
+  tick, ranks 26–75 run only on 6h-aligned ticks
+  (`shouldScheduleWatchlistInRegularScan`, plan-entitlements). One fully-loaded
+  Agency workspace therefore demands **100 runs per 6h** against a worst-case
+  capacity of **96** — 4 runs over the bound. In practice scans finish far
+  under the 30-minute cap, so the promise holds on average; under sustained
+  worst-case scans a single maxed Agency workspace alone slips ~30 minutes
+  behind per 6h window until inflight rises.
+- What to do before promising more than 71/workspace or 48 fleet-wide: raise
+  `MONITORING_FANOUT_MAX_INFLIGHT` (slot capacity is 64) and re-measure with
   `MONITORING_FANOUT_MAX_INFLIGHT=16 npm run test:presence-load` — each doubling
-  of inflight doubles the ceiling at the same cadence and scan cap
-  (measured: inflight 16 → 96 keeps-pace / 192 slip-bound).
+  of inflight doubles the ceiling at the same cadence and scan cap.
 - If real scans complete well under the 30-minute cap in production, re-run the
   simulation with `MONITORING_CADENCE_MINUTES` unchanged and a smaller worst-run
   constant in `scripts/presence-load-test.mjs`; the published numbers scale as

@@ -45,9 +45,41 @@ assert.ok(
 console.log(
   `watchlist ceiling (inflight=${maxInflight}, cadence=${cadenceMinutes}min, worst-run=${WATCHLIST_SCAN_TIMEOUT_MINUTES}min):`,
 );
-console.log(`  keeps pace at up to ${keepUpCeiling} watchlists`);
-console.log(`  slips <=1 cadence up to ${slipCeiling} watchlists (canary alert threshold)`);
+console.log(`  keeps pace at up to ${keepUpCeiling} watchlists fleet-wide`);
+console.log(`  slips <=1 cadence up to ${slipCeiling} watchlists fleet-wide (canary alert threshold)`);
 console.log(`  > ${slipCeiling} watchlists: schedule falls more than one cadence behind`);
+
+/**
+ * Agency split cadence (WP-37): only a workspace's first PRIORITY_SCAN_SLOTS
+ * watchlists run on every paid-cadence tick; ranks beyond that run only on
+ * 6h-aligned ticks (plan-entitlements.ts `priorityScanSlots`). Per 6h window a
+ * fully-loaded Agency workspace therefore demands
+ * ticksPer6h*min(W,25) + max(0,W-25) runs — more than a flat cadence implies.
+ */
+const PRIORITY_SCAN_SLOTS = 25;
+const AGENCY_WATCHLIST_LIMIT = 75;
+const ticksPer6hWindow = Math.max(1, Math.floor(360 / cadenceMinutes));
+const capacityPer6h = Math.floor((maxInflight * 360) / WATCHLIST_SCAN_TIMEOUT_MINUTES);
+/** @param {number} watchlists */
+function agencyDemandPer6h(watchlists) {
+  return (
+    ticksPer6hWindow * Math.min(watchlists, PRIORITY_SCAN_SLOTS) +
+    Math.max(0, watchlists - PRIORITY_SCAN_SLOTS)
+  );
+}
+let agencyKeepUpCeiling = 0;
+while (agencyDemandPer6h(agencyKeepUpCeiling + 1) <= capacityPer6h) {
+  agencyKeepUpCeiling += 1;
+}
+assert.ok(agencyDemandPer6h(agencyKeepUpCeiling) <= capacityPer6h);
+assert.ok(agencyDemandPer6h(agencyKeepUpCeiling + 1) > capacityPer6h);
+console.log(
+  `agency workspace (priorityScanSlots=${PRIORITY_SCAN_SLOTS}; ranks beyond run on 6h-aligned ticks only):`,
+);
+console.log(`  keeps pace at up to ${agencyKeepUpCeiling} watchlists/workspace worst-case`);
+console.log(
+  `  the promised ${AGENCY_WATCHLIST_LIMIT} demands ${agencyDemandPer6h(AGENCY_WATCHLIST_LIMIT)} runs/6h vs ${capacityPer6h} worst-case capacity`,
+);
 
 function syncKey(workspaceId, sourceId, windowMs) {
   const bucket = Math.floor(Date.now() / windowMs);
