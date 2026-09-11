@@ -100,7 +100,7 @@ export const faqEntries: ReadonlyArray<FaqJsonLdEntry> = [
   {
     question: "How much does KeepTabz cost?",
     answer:
-      "The launch announcement reports entry tiers at $49.99 and $99.99 as of August 2026. Confirm current plans on KeepTabz's site. The visible copy on this page cites the announcement.",
+      "The launch announcement reports entry and higher tiers, both below the established ad-spy incumbents. Confirm current plans on KeepTabz's site. The visible copy on this page cites the announcement figures.",
   },
   {
     question: "Is Five to Nine a KeepTabz alternative?",
