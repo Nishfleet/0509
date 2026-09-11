@@ -1796,7 +1796,7 @@ async function deliverInstantTeamsBatch(
  */
 type DigestWebhookPreparationFailure = {
   provider: string;
-  status: "failed";
+  status: DeliveryAttemptRecord["status"];
   webhookStatus: DeliveryAttemptRecord["webhookStatus"];
   providerMessageId: string | null;
   providerStatusLastSeenAt: string | null;
@@ -1812,7 +1812,7 @@ type DigestWebhookPreparation =
 
 type DigestWebhookProviderResult = {
   provider: string;
-  status: "sent" | "failed" | "pending";
+  status: DeliveryAttemptRecord["status"];
   webhookStatus: DeliveryAttemptRecord["webhookStatus"];
   providerMessageId: string | null;
   providerStatusLastSeenAt: string | null;
