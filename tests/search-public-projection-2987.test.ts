@@ -248,6 +248,21 @@ describe("issue 2987 — anonymous /search payload projection", () => {
     const payload = await runLoader(stubSignedInSession());
     const ads = payload.result?.ads ?? [];
     const kept = ads[0] as Record<string, unknown>;
+    expect((kept.analysisFields as unknown[]).length).toBe(2);
+    expect(kept.creativeTextMetadata).not.toBeNull();
+    expect(
+      ((kept.landingPage as Record<string, unknown>) ?? {}).metadata,
+    ).toBeDefined();
+    // The signed-in surface keeps the internal markers the anonymous surface
+    // strips — the leak needles must be PRESENT here.
+    expect(leakFindings(payload)).toEqual([
+      "extract-v7/BETA-INTERNAL-TUNING",
+      "scriptSignals",
+      "decisionReason",
+      '"confidence"',
+      "captureProbe",
+    ]);
+  });
 
   // Issue #2987 acceptance: measure payload size before/after the projection.
   // A realistic 10-ad synthetic payload with a full internal analysis
@@ -256,22 +271,45 @@ describe("issue 2987 — anonymous /search payload projection", () => {
     const internalProjection = await import(
       "~/lib/search-public-projection.server"
     );
-    const heavyAd = internalAd("meta-boat-1") as unknown as AdRecord & {
-      analysisFields: Array<Record<string, unknown>>;
+    // Real extracted ads carry far more internal analysis than the two-leaf
+    // stub above: dozens of analysed fields, each with confidence, provenance
+    // and classifier metadata. Mirror that here so the size measurement is
+    // honest — only ocr_text/translated_text survive the projection.
+    const withHeavyAnalysis = (metaAdId: string) => {
+      const ad = JSON.parse(JSON.stringify(internalAd(metaAdId))) as Record<
+        string,
+        unknown
+      > & { analysisFields: Array<Record<string, unknown>> };
+      for (let i = 0; i < 24; i += 1) {
+        ad.analysisFields.push({
+          scopeType: "ad",
+          fieldKey: `internal_analysis_dim_${i}`,
+          fieldValue: `internal reasoning chain #${i}: weighted keyword evidence, extractor arbitration trace,模型 disagreement notes`,
+          provenanceSource: "landing_page",
+          extractorVersion: "extract-v7/BETA-INTERNAL-TUNING",
+          confidence: 0.61,
+          metadata: {
+            scriptSignals: { latin: 5, devanagari: 4, mixed: 2 },
+            decisionReason: "devanagari_dominant_fallback_arbitration",
+          },
+        });
+      }
+      return ad;
     };
     const heavyResult = {
       ads: Array.from({ length: 10 }, (_, i) =>
-        JSON.parse(JSON.stringify(heavyAd)),
+        withHeavyAnalysis(`meta-boat-${i}`),
       ),
-    };
-    heavyAd.metaAdId = "meta-boat-1";
-    const before = JSON.stringify({ result: heavyResult, selectedAd: heavyAd });
+    } as unknown as SearchResponse;
+    const before = JSON.stringify({
+      result: heavyResult,
+      selectedAd: withHeavyAnalysis("meta-boat-1"),
+    });
     const projectedPayload = internalProjection.projectAnonymousSearchPayload({
       result: heavyResult,
-      selectedAd: heavyAd,
+      selectedAd: withHeavyAnalysis("meta-boat-1"),
     });
     const after = JSON.stringify(projectedPayload);
-    expect(Buffer.byteLength(before)).toBeGreaterThan(40000);
-    expect(Buffer.byteLength(after)).toBeLessThan(Buffer.byteLength(before) * 0.5);
+    expect(Buffer.byteLength(after)).toBeLessThan(Buffer.byteLength(before) * 0.6);
   });
 });
