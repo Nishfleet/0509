@@ -38,6 +38,7 @@ type WorkflowJob = {
   if?: string;
   needs?: string | string[];
   "runs-on"?: string | string[];
+  "timeout-minutes"?: number;
   steps?: WorkflowStep[];
 };
 
