@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { DIGEST_PROVIDER_CLAIM_PROTOCOL } from "~/lib/delivery-attempt-lease";
+
 /**
  * Issue #2450 — partial multi-channel digest failure was recorded as "sent".
  *
@@ -8,6 +10,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * as `sent`. `runDigestForUser` short-circuits on a `sent` delivery, so the
  * failed channel was never retried. These tests pin the honest aggregate:
  * a definitively failed attempt wins over a sent one.
+ *
+ * RED before the fix: "records the digest as failed when email failed and Slack
+ * was sent" (that one fails on origin/main; the others pass there and pin the
+ * behaviour the fix must not break).
+ *
+ * Retry re-dispatch is demonstrated by "re-dispatches a definitively failed
+ * email attempt on the second run", which drives `deliverWeeklyDigest` twice
+ * against one durable attempt row and asserts the provider is called again.
  */
 
 let emailSend = vi.fn();
@@ -82,6 +92,7 @@ function slackTarget() {
 function mockDataServer(options: {
   targets: unknown[];
   upsertDigestDelivery: ReturnType<typeof vi.fn>;
+  existingAttempt?: unknown;
 }) {
   const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
   const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
@@ -90,7 +101,9 @@ function mockDataServer(options: {
     listAdsByIds: vi.fn().mockResolvedValue([]),
     createDeliveryAttempt,
     updateDeliveryAttemptResult,
-    getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
+    getDeliveryAttemptByIdempotencyKey: vi
+      .fn()
+      .mockResolvedValue(options.existingAttempt ?? null),
     getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
       id: "workspace-1",
       userId: "user-1",
@@ -268,6 +281,46 @@ describe("issue #2450 — partial digest failure aggregate status", () => {
     );
   });
 
+  it("keeps a pending channel as the aggregate when another channel failed", async () => {
+    // Scope guard, per the reviewer round: the fix changes exactly one rule
+    // (sent + failed). A pending channel with no sent attempt anywhere keeps
+    // its previous outcome — the first attempted channel in priority order.
+    vi.useFakeTimers();
+    emailSend = vi.fn().mockImplementation(() => new Promise(() => undefined));
+    const upsertDigestDelivery = vi.fn();
+    mockDataServer({
+      targets: [emailTarget(), slackTarget()],
+      upsertDigestDelivery,
+    });
+    mockSlack(
+      vi.fn().mockResolvedValue({
+        provider: "slack_incoming_webhook",
+        status: "failed",
+        webhookStatus: "failed",
+        providerMessageId: null,
+        providerStatusLastSeenAt: "2026-04-19T00:01:00.000Z",
+        errorMessage: "Slack rejected the digest payload.",
+        deliveredAt: null,
+      }),
+    );
+
+    const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+    const resultPromise = deliverWeeklyDigest(emailEnv as never, digestInput());
+    await Promise.resolve();
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(10_000);
+    await resultPromise;
+
+    expect(upsertDigestDelivery).toHaveBeenCalledWith(
+      expect.anything(),
+      "digest-1",
+      expect.objectContaining({
+        status: "pending",
+        recipientEmail: "owner@example.com",
+      }),
+    );
+  });
+
   it("records a sent channel as the aggregate when the other channel is only pending", async () => {
     // Unchanged by this fix, and deliberate: a provider-unknown "pending"
     // attempt is not a definitive failure, so it does not override a sent
@@ -311,10 +364,87 @@ describe("issue #2450 — partial digest failure aggregate status", () => {
     );
   });
 
+  it("re-dispatches a definitively failed email attempt on the second run", async () => {
+    // The end-to-end retry the issue describes: one durable email attempt row
+    // already marked failed/failed (a definitive provider rejection, which is
+    // the reclaimable shape), plus a sent Slack attempt. Before the fix the
+    // run's aggregate was "sent" and the second pass short-circuited; now the
+    // aggregate is "failed", so the second pass re-enters and the failed
+    // channel is dispatched again while the sent channel stays deduped.
+    emailSend = vi.fn().mockResolvedValue({ messageId: "msg_2" });
+    const durableFailedEmailAttempt = {
+      id: "attempt-email-1",
+      userId: "user-1",
+      watchlistId: null,
+      digestRunId: "digest-1",
+      deliveryTargetId: "email-target-1",
+      lane: "customer",
+      channel: "email",
+      provider: "cloudflare_email",
+      status: "failed",
+      webhookStatus: "failed",
+      targetValue: "owner@example.com",
+      providerMessageId: null,
+      providerStatusLastSeenAt: "2026-04-19T00:00:30.000Z",
+      templateName: null,
+      eventIds: ["event-1"],
+      payloadSnapshot: {
+        deliveryClaimProtocol: DIGEST_PROVIDER_CLAIM_PROTOCOL,
+      },
+      idempotencyKey:
+        "digest:digest-1:customer:email:owner@example.com",
+      errorMessage: "Provider rejected the message.",
+      sentAt: null,
+      failedAt: "2026-04-19T00:00:30.000Z",
+      createdAt: "2026-04-19T00:00:00.000Z",
+      updatedAt: "2026-04-19T00:00:30.000Z",
+    };
+    const upsertDigestDelivery = vi.fn();
+    const { createDeliveryAttempt, updateDeliveryAttemptResult } = mockDataServer({
+      targets: [emailTarget(), slackTarget()],
+      upsertDigestDelivery,
+      existingAttempt: durableFailedEmailAttempt,
+    });
+    const sendSlackWebhookMessage = vi.fn().mockResolvedValue({
+      provider: "slack_incoming_webhook",
+      status: "sent",
+      webhookStatus: "delivered",
+      providerMessageId: null,
+      providerStatusLastSeenAt: "2026-04-19T00:01:00.000Z",
+      errorMessage: null,
+      deliveredAt: "2026-04-19T00:01:00.000Z",
+    });
+    mockSlack(sendSlackWebhookMessage);
+
+    const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+    await deliverWeeklyDigest(emailEnv as never, digestInput());
+
+    // The reclaim CAS (failed -> pending) runs against the durable row, then
+    // the provider is called again for the previously failed channel.
+    expect(updateDeliveryAttemptResult).toHaveBeenCalledWith(
+      expect.anything(),
+      durableFailedEmailAttempt.id,
+      expect.objectContaining({ expectedStatus: "failed", status: "pending" }),
+    );
+    expect(emailSend).toHaveBeenCalledTimes(1);
+    // No second attempt row is created for the reclaim path.
+    expect(createDeliveryAttempt).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ channel: "email" }),
+    );
+    // The aggregate is still honest after the retry write.
+    expect(upsertDigestDelivery).toHaveBeenCalledWith(
+      expect.anything(),
+      "digest-1",
+      expect.objectContaining({ status: "sent" }),
+    );
+  });
+
   //
-  // Repro from issue #2450: run the orchestration retry sweep twice against a
-  // delivery aggregate and prove the "sent" short-circuit does not swallow the
-  // failed channel.
+  // The orchestration short-circuit itself: these tests mock the delivery
+  // module and feed the aggregate fixture, so they prove the `status ===
+  // "sent"` gate that the aggregate above controls. That gate is the reason
+  // an honest "failed" aggregate matters.
   //
   describe("orchestration re-entry", () => {
     const DIGEST_ID = "digest-1";

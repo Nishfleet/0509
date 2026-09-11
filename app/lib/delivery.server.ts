@@ -866,16 +866,25 @@ function selectDigestStatusAttempt(attempts: DigestAttemptSummary[]) {
   // "sent". The digest-run aggregate gates the orchestration short-circuit
   // (`existingDigest.delivery.status === "sent"`), so a sent Slack attempt
   // alongside a failed email used to mark the whole run sent and permanently
-  // kill retry of the failed channel. A definitively failed attempt therefore
-  // wins over a sent one; "definitively failed" means status "failed" only,
-  // because a "pending" attempt is provider-unknown and is owned by the retry
-  // sweep. Sent channels stay deduped by `claimDigestDeliveryAttempt`, so the
-  // re-entry retries only the channel that actually failed.
-  for (const channel of DIGEST_STATUS_CHANNEL_PRIORITY) {
-    const failedAttempt = attempts.find(
-      (attempt) => attempt.channel === channel && attempt.status === "failed",
-    );
-    if (failedAttempt) return failedAttempt;
+  // kill retry of the failed channel.
+  //
+  // Exactly one rule changes: when the attempts include BOTH a sent and a
+  // definitively failed attempt, the failed one wins. "Definitively failed"
+  // means status "failed" only — a "pending" attempt is provider-unknown and
+  // is owned by the retry sweep. Everything else keeps its previous outcome,
+  // so a run of only sent channels still records "sent" and a run with no
+  // sent channel still falls through to the first attempted channel.
+  //
+  // Sent channels stay deduped by `claimDigestDeliveryAttempt`, so re-entry
+  // retries only the channel that actually failed.
+  const hasSentAttempt = attempts.some((attempt) => attempt.status === "sent");
+  if (hasSentAttempt) {
+    for (const channel of DIGEST_STATUS_CHANNEL_PRIORITY) {
+      const failedAttempt = attempts.find(
+        (attempt) => attempt.channel === channel && attempt.status === "failed",
+      );
+      if (failedAttempt) return failedAttempt;
+    }
   }
 
   for (const channel of DIGEST_STATUS_CHANNEL_PRIORITY) {
