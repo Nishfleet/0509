@@ -89,6 +89,13 @@ async function loadWorker() {
     skipped: 0,
     failed: 0,
   });
+  const sendMonthlyReports = vi.fn().mockResolvedValue({
+    attempted: 0,
+    filed: 0,
+    duplicates: 0,
+    skipped: 0,
+    failed: 0,
+  });
   const reportScheduledTaskFailure = vi.fn();
   const cleanupRateLimitEvents = vi.fn().mockResolvedValue(undefined);
   const reconcileOrchestratedWatchlistRuns = vi.fn().mockResolvedValue({
@@ -131,6 +138,12 @@ async function loadWorker() {
   }));
   vi.doMock("../app/lib/cron-failure-alert.server", () => ({ reportScheduledTaskFailure }));
   vi.doMock("../app/lib/monthly-recap.server", () => ({ sendMonthlyCustomerRecaps }));
+  // Issue #2422: monthly reports ride the same weekly Monday tick. Mocked so
+  // the scheduled-handler suite never reaches the real report build.
+  vi.doMock("../app/lib/delivery.server", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("../app/lib/delivery.server")>()),
+    sendMonthlyReports,
+  }));
   vi.doMock("../app/lib/scheduled-observation-health.server", () => ({
     SCHEDULED_OBSERVATION_GAP_CHECK_CRON: GAP_CHECK_CRON,
     recordScheduledObservationGapCheckHeartbeat,
@@ -204,6 +217,7 @@ async function loadWorker() {
     reportScheduledTaskFailure,
     cleanupRateLimitEvents,
     sendMonthlyCustomerRecaps,
+    sendMonthlyReports,
     sendScheduledObservationGapAlert,
     recordScheduledObservationGapCheckHeartbeat,
     reconcileOrchestratedWatchlistRuns,
@@ -396,6 +410,54 @@ describe("Worker scheduled handler", () => {
       "monthly_customer_recaps_degraded",
       expect.objectContaining({
         message: "monthly customer recaps completed with 1 failed recipients",
+      }),
+    );
+  });
+
+  it("files the monthly report on the weekly tick and pages only real failures", async () => {
+    const loaded = await loadWorker();
+    const { ctx, pending } = createContext();
+    loaded.sendMonthlyReports
+      .mockResolvedValueOnce({
+        attempted: 3,
+        filed: 2,
+        duplicates: 1,
+        skipped: 0,
+        failed: 0,
+      })
+      .mockResolvedValueOnce({
+        attempted: 2,
+        filed: 1,
+        duplicates: 0,
+        skipped: 0,
+        failed: 1,
+      });
+
+    for (const scheduledTime of [
+      Date.parse("2026-07-06T05:00:00.000Z"),
+      Date.parse("2026-08-03T05:00:00.000Z"),
+    ]) {
+      await loaded.worker.scheduled(
+        { cron: WEEKLY_DIGEST_CRON, scheduledTime } as never,
+        {} as never,
+        ctx as never,
+      );
+    }
+    await Promise.all(pending);
+
+    // Issue #2422: one monthly report per workspace per UTC month, on the
+    // existing weekly cron tick — no new cron.
+    expect(loaded.sendMonthlyReports).toHaveBeenCalledTimes(2);
+    expect(loaded.sendMonthlyReports).toHaveBeenCalledWith(
+      expect.anything(),
+      { scheduledTime: Date.parse("2026-07-06T05:00:00.000Z") },
+    );
+    expect(loaded.reportScheduledTaskFailure).toHaveBeenCalledTimes(1);
+    expect(loaded.reportScheduledTaskFailure).toHaveBeenCalledWith(
+      expect.anything(),
+      "monthly_reports_degraded",
+      expect.objectContaining({
+        message: "monthly reports completed with 1 failed workspaces",
       }),
     );
   });
