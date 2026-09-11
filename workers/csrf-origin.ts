@@ -15,11 +15,12 @@
  *      that omit Fetch Metadata).
  *   3. Otherwise 403.
  *
- * Machine-API exemption: requests carrying an Authorization header are
- * bearer-token clients (Five to Nine API keys), not cookie sessions — CSRF
- * is an ambient-credential attack and bearer headers are never sent
- * ambiently, so curl/SDK calls to /api/v1/* keep working without Origin or
- * Fetch Metadata headers.
+ * Machine-API exemption: requests under /api/v1/* carrying an Authorization
+ * header are bearer-token clients (Five to Nine API keys), not cookie
+ * sessions — CSRF is an ambient-credential attack and bearer headers are
+ * never sent ambiently, so curl/SDK calls keep working without Origin or
+ * Fetch Metadata headers. /app/* is cookie-session territory and has no
+ * bearer clients, so it keeps the full same-origin requirement.
  */
 
 const CSRF_GATED_METHODS = new Set(["POST", "PUT", "DELETE"]);
@@ -28,9 +29,12 @@ function isCsrfGatedPathname(pathname: string): boolean {
   return (
     pathname === "/app" ||
     pathname.startsWith("/app/") ||
-    pathname === "/api/v1" ||
-    pathname.startsWith("/api/v1/")
+    isApiV1Pathname(pathname)
   );
+}
+
+function isApiV1Pathname(pathname: string): boolean {
+  return pathname === "/api/v1" || pathname.startsWith("/api/v1/");
 }
 
 export function isCsrfGatedRequest(request: Request): boolean {
@@ -59,7 +63,8 @@ export function csrfOriginGuardResponse(request: Request): Response | null {
     return null;
   }
 
-  if (request.headers.has("authorization")) {
+  const onApiV1 = isApiV1Pathname(new URL(request.url).pathname);
+  if (request.headers.has("authorization") && onApiV1) {
     return null;
   }
 

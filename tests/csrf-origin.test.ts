@@ -74,7 +74,17 @@ describe("csrf origin guard (issue #2986)", () => {
     expect(response?.status).toBe(403);
   });
 
-  it("allows bearer-authenticated machine clients without Origin/Fetch Metadata", () => {
+  it("403s cross-site Fetch Metadata even when the Origin header is absent", () => {
+    const sameSite = csrfOriginGuardResponse(
+      new Request("https://0509.io/app/billing", {
+        method: "POST",
+        headers: { "sec-fetch-site": "same-site" },
+      }),
+    );
+    expect(sameSite?.status).toBe(403);
+  });
+
+  it("allows bearer-authenticated machine clients under /api/v1/* only", () => {
     const bearer = csrfOriginGuardResponse(
       new Request("https://0509.io/api/v1/actions", {
         method: "POST",
@@ -82,6 +92,15 @@ describe("csrf origin guard (issue #2986)", () => {
       }),
     );
     expect(bearer).toBeNull();
+    // A bare Authorization header does NOT exempt /app/* — cookie-session
+    // territory keeps the full same-origin requirement.
+    const appBearer = csrfOriginGuardResponse(
+      new Request("https://0509.io/app/billing", {
+        method: "POST",
+        headers: { authorization: "Bearer whatever" },
+      }),
+    );
+    expect(appBearer?.status).toBe(403);
   });
 
   it("is inert outside /app/* and /api/v1/* and on safe methods", () => {
