@@ -98,7 +98,26 @@ describe("sitemap section parents resolve non-404 (issue #2885)", () => {
     ]);
   });
 
-  it("timeline index degrades to an honest empty 200 when D1 is unavailable", async () => {
+  it("timeline index degrades to an honest empty 200 when the timeline read fails", async () => {
+    vi.resetModules();
+    vi.doMock("~/lib/sitemap.server", async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      loadIndexableTimelineEntries: vi.fn(async () => {
+        throw new Error("no such table: landing_page_snapshot");
+      }),
+    }));
+    vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => ({})) }));
+    const { loader } = await import("~/routes/timeline");
+    const data = await loader({
+      request: new Request("https://five-to-nine.test/timeline"),
+      params: {},
+      context: undefined,
+    } as never);
+    expect(data.degraded).toBe(true);
+    expect(data.domains).toEqual([]);
+  });
+
+  it("timeline index serves an honest empty list when D1 is unavailable (no DB)", async () => {
     vi.resetModules();
     vi.doUnmock("~/lib/sitemap.server");
     vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => ({})) }));
