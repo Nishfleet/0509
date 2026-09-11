@@ -308,8 +308,7 @@ describe("production deployment readiness gate", () => {
     expect(plan[canaryIndex + 6]).toMatchObject({ id: "oauth_branding" });
     // The in-plan canary token sync absorbs Cloudflare's "currently
     // deployed" lag (run 34079008963) before the workflow's "Synchronize
-    // private canary token" step runs its single classic `wrangler secret
-    // put`. It MUST be the last plan step: a successful `secret put`
+    // Worker secrets" step runs its classic `wrangler secret put`. It MUST be the last plan step: a successful `secret put`
     // creates and deploys a new Worker version, so every version-anchored
     // check (propagation stabilization, Gate C, the soak — all pinned to
     // the deploy's version id) has to run first. It stays non-blocking so
@@ -1684,7 +1683,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       "- name: Materialize private remote-restore evidence",
     );
     const synchronizeCanaryIndex = workflow.indexOf(
-      "- name: Synchronize private canary token",
+      "- name: Synchronize Worker secrets",
     );
     const deployIndex = workflow.indexOf("- name: Deploy");
     const verifyEvidenceIndex = workflow.indexOf(
@@ -1741,6 +1740,15 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     // "Failed to parse body as FormData" (run 31514742997).
     expect(synchronizeCanaryStep).toContain(
       "./node_modules/.bin/wrangler secret put CANARY_BYPASS_TOKEN --name 0509",
+    );
+    expect(synchronizeCanaryStep).toContain(
+      "DECODO_SCRAPER_AUTH: ${{ secrets.DECODO_SCRAPER_AUTH }}",
+    );
+    expect(synchronizeCanaryStep).toContain(
+      'if [ -n "${DECODO_SCRAPER_AUTH:-}" ]',
+    );
+    expect(synchronizeCanaryStep).toContain(
+      "./node_modules/.bin/wrangler secret put DECODO_SCRAPER_AUTH --name 0509",
     );
     expect(synchronizeCanaryStep).not.toContain(
       "./node_modules/.bin/wrangler versions secret put",
