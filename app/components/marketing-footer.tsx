@@ -1,3 +1,4 @@
+import type { FunctionComponent } from "react";
 import { Link } from "react-router";
 
 import { BrandWordmark } from "~/components/brand-wordmark";
@@ -22,7 +23,9 @@ export interface MarketingFooterProps {
  * pages, and switch pages. Keep every public marketing surface on this one
  * footer so link groups (support, legal, compare, switch) never drift apart.
  */
-export function MarketingFooter({ monitoringCoverageDays }: MarketingFooterProps = {}) {
+export const MarketingFooter: FunctionComponent<MarketingFooterProps> = (
+  { monitoringCoverageDays },
+) => {
   return (
     <footer className="ld-footer">
       <Link className="ld-footer-brand" to="/" aria-label="Five to Nine home">
@@ -87,4 +90,4 @@ export function MarketingFooter({ monitoringCoverageDays }: MarketingFooterProps
       </nav>
     </footer>
   );
-}
+};
