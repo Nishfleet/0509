@@ -10,6 +10,11 @@ declare global {
   namespace Cloudflare {
     interface Env {
       TEST_MIGRATIONS: D1Migration[];
+      // Second D1 binding declared in tests/integration/wrangler.test.jsonc
+      // (issue #2774): a scratch database for migration-apply tests that seed
+      // rows between migration steps — the shared DB binding already has the
+      // full chain applied by the setup file.
+      DB_MIGRATION_SCRATCH: D1Database;
     }
   }
 }
