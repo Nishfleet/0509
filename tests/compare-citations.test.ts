@@ -1,7 +1,11 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+
+import { Cite, CompareCitationsFooter, type CompareCitations } from "~/components/compare-citations";
 
 // Issue #2958: competitor comparison pages state hard facts (AdSpy $149/mo,
 // 2.4/5 Trustpilot, no self-serve cancel) that go stale. Every claim's source
@@ -45,10 +49,20 @@ function citationFiles(): string[] {
 function ageInDays(iso: string): number {
   const then = new Date(`${iso}T00:00:00Z`).getTime();
   const now = Date.parse(new Date().toISOString().slice(0, 10));
-  return Math.round((now - then) / 86_400_000);
+  // Both edges are midnight-UTC of their date strings, so the difference is a
+  // whole number of days; floor keeps the 120-day bound honest if either edge
+  // ever gains a time-of-day (review round 1, issue #2958).
+  return Math.floor((now - then) / 86_400_000);
 }
 
 describe("compare citations: every claim carries a checked date (issue #2958)", () => {
+  it("discovers at least one citations file (rename guard)", () => {
+    expect(
+      citationFiles().length,
+      "no *-citations.json found under app/data/compare — the glob may be pointing at a renamed directory",
+    ).toBeGreaterThan(0);
+  });
+
   for (const file of citationFiles()) {
     const citations = JSON.parse(readFileSync(join(CITATIONS_DIR, file), "utf8")) as CitationsFile;
     const competitor = `${citations.productName ?? citations.competitor} (${file})`;
@@ -82,4 +96,35 @@ describe("compare citations: every claim carries a checked date (issue #2958)", 
       expect(new Set(ids).size, "duplicate citation ids").toBe(ids.length);
     });
   }
+});
+
+// The component-level half of the issue: the as-of date must actually survive
+// rendering, not just exist in the JSON. Review round 1 (issue #2958): a
+// regression that drops the date string from <Cite> while the footer keeps it
+// would weaken claim-level attribution without any page-level test noticing.
+describe("citation rendering shows the as-of date (issue #2958)", () => {
+  const fixture: CompareCitations = {
+    competitor: "adspy",
+    productName: "AdSpy",
+    sources: [
+      { id: "pricing", href: "https://example.com/pricing", label: "Example pricing", claim: "a claim", checked: "2026-09-10" },
+      { id: "reviews", href: "https://example.com/reviews", label: "Example reviews", claim: "another claim", checked: "2026-09-11" },
+    ],
+  };
+
+  it("Cite appends (as of <date>) after the source link", () => {
+    const markup = renderToStaticMarkup(createElement(Cite, { citations: fixture, id: "pricing" }));
+    expect(markup).toContain('href="https://example.com/pricing"');
+    expect(markup).toContain("(as of 2026-09-10)");
+  });
+
+  it("Cite renders nothing when the id is unknown (visible gap, not a throw)", () => {
+    expect(renderToStaticMarkup(createElement(Cite, { citations: fixture, id: "missing" }))).toBe("");
+  });
+
+  it("footer shows as-of for every source", () => {
+    const markup = renderToStaticMarkup(createElement(CompareCitationsFooter, { citations: fixture }));
+    expect(markup).toContain("as of 2026-09-10");
+    expect(markup).toContain("as of 2026-09-11");
+  });
 });

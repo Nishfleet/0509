@@ -120,6 +120,15 @@ describe("compare pages first-party source attribution (issue #1863)", () => {
         markup,
         `page must show the claim's as-of date (as of ${source!.checked})`,
       ).toContain(`as of ${source!.checked}`);
+      // Issue #2958 review round 1: the acceptance is a visible as-of date per
+      // claim, not just the primary one — every declared source must appear on
+      // the rendered page (inline via <Cite> or in the sources footer).
+      for (const candidate of citations.sources) {
+        expect(
+          markup,
+          `source "${candidate.href}" (checked ${candidate.checked}) must appear with its as-of date on the rendered page`,
+        ).toContain(`as of ${candidate.checked}`);
+      }
     });
   }
 });
