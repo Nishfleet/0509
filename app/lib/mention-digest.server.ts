@@ -129,30 +129,36 @@ async function firstObservedAtByUrlHash(
     return new Map();
   }
 
-  const conditions = unique.map(() => "(tracked_entity_id = ? AND url_hash = ?)").join(" OR ");
-  const binds = unique.flatMap((pair) => [pair.trackedEntityId, pair.urlHash]);
-
   if (!env.DB) {
     return new Map();
   }
 
-  const rows = await env.DB
-    .prepare(
-      `SELECT tracked_entity_id, url_hash, MIN(created_at) AS first_at
-       FROM presence_item
-       WHERE user_id = ? AND is_tombstone = 0 AND (${conditions})
-       GROUP BY tracked_entity_id, url_hash`,
-    )
-    .bind(userId, ...binds)
-    .all<{
-      tracked_entity_id: string;
-      url_hash: string;
-      first_at: string;
-    }>();
-
+  // D1 rejects any statement with more than 100 bound parameters. Each pair
+  // binds 2, plus 1 for user_id, so 45 pairs = 91 binds. Chunk and merge.
+  const PAIRS_PER_CHUNK = 45;
   const firstAt = new Map<string, string>();
-  for (const row of rows.results ?? []) {
-    firstAt.set(`${row.tracked_entity_id}:${row.url_hash}`, row.first_at);
+  for (let index = 0; index < unique.length; index += PAIRS_PER_CHUNK) {
+    const chunk = unique.slice(index, index + PAIRS_PER_CHUNK);
+    const conditions = chunk.map(() => "(tracked_entity_id = ? AND url_hash = ?)").join(" OR ");
+    const binds = chunk.flatMap((pair) => [pair.trackedEntityId, pair.urlHash]);
+
+    const rows = await env.DB
+      .prepare(
+        `SELECT tracked_entity_id, url_hash, MIN(created_at) AS first_at
+         FROM presence_item
+         WHERE user_id = ? AND is_tombstone = 0 AND (${conditions})
+         GROUP BY tracked_entity_id, url_hash`,
+      )
+      .bind(userId, ...binds)
+      .all<{
+        tracked_entity_id: string;
+        url_hash: string;
+        first_at: string;
+      }>();
+
+    for (const row of rows.results ?? []) {
+      firstAt.set(`${row.tracked_entity_id}:${row.url_hash}`, row.first_at);
+    }
   }
   return firstAt;
 }
