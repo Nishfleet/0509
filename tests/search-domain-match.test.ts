@@ -221,8 +221,11 @@ describe("BET 2 live gaps (issue #1202)", () => {
         "https://www.goldwin.co.jp/ap/item/i/m/ABM240073?colvar=AM27",
     });
 
+    // Production (search-v2 post-filter) always classifies with
+    // includeUnverified: true — the distributor row must still appear, but
+    // capped at Likely, never the green Verified badge.
     const affected = classifyDomainMatches([goldwin], intent, {
-      includeUnverified: false,
+      includeUnverified: true,
       identityAliases: ["Allbirds"],
     });
     expect(affected).toHaveLength(1);
