@@ -334,7 +334,7 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
     "/app/sources", "/app/support", "/app/team", "/app/watchlists",
     "/compare", "/docs", "/help", "/pricing", "/search", "/status",
   ],
-  publicMarkdownPaths: ["/", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/capture-rules", "/privacy", "/terms", "/methodology", "/pricing", "/compare/meta-ad-library", "/compare/visualping-ad-libraries", "/compare/spyland", "/compare/pulzifi", "/compare/foreplay-spyder", "/compare/panoramata", "/compare/adspyder", "/compare/adspy"],
+  publicMarkdownPaths: ["/", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/capture-rules", "/privacy", "/terms", "/methodology/ad-aggression-score", "/pricing", "/compare/meta-ad-library", "/compare/visualping-ad-libraries", "/compare/spyland", "/compare/pulzifi", "/compare/foreplay-spyder", "/compare/panoramata", "/compare/adspyder", "/compare/adspy"],
   // 2026-07-20 merge: overnight stack wins — sitemap gained /search, /auth/signup
   // and /compare/meta-ad-library (SEO-CANONICAL-INDEXING reopened for re-proof).
   // 2026-08-09: the proof-backed /competitor-monitoring category page joined the
@@ -354,7 +354,8 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
   // 2026-08-30: /compare hub joined the sitemap — the bare route now serves the
   // comparison-cluster index instead of 404 (issue #1470).
   // 2026-09: Ad Aggression Score methodology path renamed from
-  // /methodology/ad-aggression-score to /methodology (issues #1263/#2022). The
+  // /methodology to /methodology/ad-aggression-score (issues #1263/#2022,
+  // restored by #2871). The
   // old paths now 301-redirect; the sitemap lists the canonical one only so we
   // never index a redirect target alongside its origin.
   // 2026-09: /compare/visualping and /compare/foreplay left the sitemap
@@ -386,7 +387,7 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
     "/for-agencies",
     "/sneaker-resale", "/de/sneaker-resale", "/ja/sneaker-resale",
     "/pt-br/sneaker-resale",
-    "/capture-rules", "/no-phantom-changes", "/methodology", "/pricing", "/help", "/docs", "/api/docs",
+    "/capture-rules", "/no-phantom-changes", "/methodology/ad-aggression-score", "/pricing", "/help", "/docs", "/api/docs",
     "/mcp/setup",
     "/status", "/changelog", "/trust", "/privacy", "/terms",
   ],

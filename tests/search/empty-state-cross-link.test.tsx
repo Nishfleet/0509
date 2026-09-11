@@ -156,8 +156,8 @@ describe("search empty-state cross-link to /capture-rules (issue 1568)", () => {
 		expect(markup).toContain('href="/capture-rules"');
 		expect(markup).toContain("Read what we refuse to alert on");
 
-		// The /methodology methodology link is the secondary handoff.
-		expect(markup).toContain('href="/methodology"');
+		// The methodology link (issue #2871 canonical path) is the secondary handoff.
+		expect(markup).toContain('href="/methodology/ad-aggression-score"');
 		expect(markup).toContain("How the score works");
 	});
 
