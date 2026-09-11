@@ -746,7 +746,6 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
       lastSeenAt: ad.lastSeenAt,
     }));
 
-
   // The Ad Aggression Score (0–100, four public sub-scores) is the page's
   // named differentiator (category-research §1.2). It renders ONLY when the
   // capture has at least one verified-linked ad AND the observed window
