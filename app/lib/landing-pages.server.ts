@@ -661,6 +661,13 @@ async function captureLandingPageSnapshotAt(
           priceText: signals.priceText,
           formPresent: signals.formPresent,
         }),
+        // Issue #2889: the page's declared market (Shopify.country /
+        // countryCode) — deterministic per render variant, so the capture
+        // validity gate can tell same-URL geo re-renders apart. No D1
+        // schema change.
+        ...(signals.declaredMarketCountry
+          ? { declaredMarketCountry: signals.declaredMarketCountry }
+          : {}),
         extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
         fetchStatus: response.status,
         ...extractorSuppressionMetadata(signals.suppressionFingerprints),
