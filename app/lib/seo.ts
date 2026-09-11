@@ -239,36 +239,6 @@ export function sneakerResaleHreflangLinks() {
   ];
 }
 
-/**
- * Reciprocal hreflang set for the buyer-surface cluster (issue #1501).
- *
- * `splat` is the locale-prefix subpath (e.g. `"pricing"`, `"help"`, or
- * `""` for the locale index). The function emits self + sibling locale
- * entries pointing at the same subpath in each locale, plus the EN
- * (x-default) version. The buyer-surface cluster is broader than the
- * sneaker-resale cluster (fr/es are pre-evidence for the broader
- * marketing surface) and uses the same hreflang recipe.
- *
- * Google ignores one-way annotations, so the EN-side `rel=canonical`
- * pointing at the EN subpath does the heavy lifting; this function
- * exists so the cluster is reciprocal on both ends.
- */
-export function buyerSurfaceHreflangLinks(splat: string) {
-  const enPath = splat === "" ? "/" : splat === "api/docs" ? "/api/docs" : `/${splat}`;
-  return [
-    ...BUYER_SURFACE_LOCALE_IDS.map((locale) => ({
-      rel: "alternate" as const,
-      hreflang: locale,
-      href: canonicalUrl(splat === "" ? `/${locale}` : `/${locale}/${splat}`),
-    })),
-    {
-      rel: "alternate" as const,
-      hreflang: "x-default",
-      href: canonicalUrl(enPath),
-    },
-  ];
-}
-
 export function publicSeoMeta(input: {
   title: string;
   description: string;
@@ -1250,31 +1220,18 @@ export const GROUNDING_ENGINES = [
 /**
  * Locales whose served `/<locale>/sitemap.xml` actually carries indexable
  * entries (issue #2017, Option A per the orchestrator decision on #1561).
- * robots.txt advertises ONLY these. Since issue #2294 every buyer-surface
- * locale feed is derived from the buyer-surface cluster that serves 200
- * under every locale prefix, so all five locales (de, ja, pt-br, fr, es)
- * carry a non-empty sitemap and are advertised. Derived from
- * `BUYER_SURFACE_LOCALE_IDS` so a future locale is advertised automatically.
+ * robots.txt advertises ONLY these. Issue #2962 (orchestrator Branch B)
+ * deleted the untranslated buyer-surface locale routes, so the only locale
+ * sitemap entries that remain indexable are the genuinely translated
+ * sneaker-resale cluster pages (de, ja, pt-br). fr/es have no sneaker-resale
+ * page, so their feeds hold no indexable URLs and their robots.txt
+ * `Sitemap:` lines are dropped — a robots.txt line advertising an empty
+ * (or redirect-only) feed would just burn crawl.
  */
-export const LOCALE_SITEMAP_LOCALES: readonly BuyerSurfaceLocaleId[] = [
-  ...BUYER_SURFACE_LOCALE_IDS,
-];
-
-/**
- * Every sitemap URL robots.txt advertises: the root sitemap plus one
- * non-empty locale sitemap per translated-entries locale (issue #2017).
- * The locale sitemaps are the ONLY path by which `/de/sneaker-resale`,
- * `/ja/sneaker-resale`, and `/pt-br/sneaker-resale` become discoverable —
- * #1561 keeps locale-prefixed URLs out of the root sitemap, so without these
- * `Sitemap:` lines those acquisition pages have no sitemap path at all.
- * Exposed for the llms.txt↔reachable-sitemap sync canary
- * (tests/seo/llms-sitemap-reachable-sync.test.ts).
- */
-export const ADVERTISED_SITEMAP_URLS: readonly string[] = [
-  canonicalUrl("/sitemap.xml"),
-  ...LOCALE_SITEMAP_LOCALES.map((locale) =>
-    canonicalUrl(`/${locale}/sitemap.xml`),
-  ),
+export const LOCALE_SITEMAP_LOCALES: readonly string[] = [
+  "de",
+  "ja",
+  "pt-br",
 ];
 
 const LOCALE_SITEMAP_LINES = LOCALE_SITEMAP_LOCALES.map(

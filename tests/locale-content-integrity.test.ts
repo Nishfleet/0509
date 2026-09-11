@@ -3,24 +3,20 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  BUYER_SURFACE_LOCALE_IDS,
-  BUYER_SURFACE_PATHS,
   SNEAKER_RESALE_LOCALE_IDS,
   htmlLangForPathname,
 } from "~/lib/locale-markets";
-import { buyerSurfaceHreflangLinks, sneakerResaleHreflangLinks } from "~/lib/seo";
+import { sneakerResaleHreflangLinks } from "~/lib/seo";
 
 /**
- * Regression test for issue #1570: no locale-prefixed buyer page may declare
- * a non-English `<html lang>` while serving byte-identical English content;
- * every shipped locale page that DOES declare a non-EN lang must render
- * content that differs from its EN twin, and must carry an hreflang
- * x-default alternate.
- *
- * Prevention gate: a future worker who adds another byte-identical English
- * locale page and tags it with a fake non-EN lang fails this test — the
- * body-diff check fires (lang != en but body == EN twin). No code review
- * is required to catch the regression.
+ * Regression test for issue #1570, kept for the survivor of issue #2962
+ * (orchestrator Branch B): every locale page that declares a non-EN
+ * `<html lang>` must render content that differs from its EN twin and must
+ * carry an hreflang x-default alternate. The untranslated buyer-surface
+ * cluster the original issue audited is GONE for #2962 — every one of its
+ * paths is now an EN 301, so the only non-EN surfaces left are the genuinely
+ * translated sneaker-resale pages, and this file keeps enforcing that their
+ * lang tags match real translated content (the body-diff prevention gate).
  */
 
 // The sneaker-resale route component reads `useLoaderData()` for its locale.
@@ -81,60 +77,16 @@ async function renderSneakerResale(locale: string): Promise<string> {
   return renderToStaticMarkup(createElement(Route));
 }
 
-describe("locale content integrity (issue #1570)", () => {
-  describe("buyer-surface cluster — lang must match content (en)", () => {
-    // The buyer-surface cluster serves byte-identical English copy. Every
-    // locale-prefixed buyer path must declare lang="en" so a page never
-    // claims a language its content does not speak (WCAG 3.2.6 html-lang)
-    // and Google does not see 43 fake-locale doorway duplicates.
-    for (const locale of BUYER_SURFACE_LOCALE_IDS) {
-      for (const path of BUYER_SURFACE_PATHS) {
-        if (path === "/sitemap.xml") continue;
-        const pathname = path === "/" ? `/${locale}` : `/${locale}${path}`;
-        it(`htmlLangForPathname(${pathname}) === "en"`, () => {
-          expect(htmlLangForPathname(pathname)).toBe("en");
-        });
-      }
-    }
+const SNEAKER_LOCALES = SNEAKER_RESALE_LOCALE_IDS.filter(
+  (locale) => locale !== "en",
+) as string[];
 
-    it("every buyer-surface locale route ships an hreflang x-default alternate", () => {
-      // Accept #1: a complete hreflang cluster (5 locales + x-default -> EN)
-      // on every locale-prefixed buyer page, from one helper.
-      for (const splat of [
-        "",
-        "pricing",
-        "help",
-        "docs",
-        "api/docs",
-        "status",
-        "changelog",
-        "trust",
-        "compare",
-      ]) {
-        const links = buyerSurfaceHreflangLinks(splat);
-        const xDefault = links.find((link) => link.hreflang === "x-default");
-        expect(xDefault, `x-default missing for splat="${splat}"`).toBeDefined();
-        // x-default points at the EN twin.
-        const enPath =
-          splat === ""
-            ? "/"
-            : splat === "api/docs"
-              ? "/api/docs"
-              : `/${splat}`;
-        expect(xDefault?.href).toBe(`https://0509.io${enPath}`);
-      }
-    });
-  });
-
+describe("locale content integrity (issue #1570, survivor set after #2962)", () => {
   describe("sneaker-resale cluster — lang != en must differ from EN twin", () => {
     // The sneaker-resale cluster is the genuinely translated surface: its
     // locale pages declare de/ja/pt-BR and MUST render content that differs
     // from the EN twin. This is the body-diff half of the prevention gate.
-    const nonEnLocales = SNEAKER_RESALE_LOCALE_IDS.filter(
-      (locale) => locale !== "en",
-    );
-
-    for (const locale of nonEnLocales) {
+    for (const locale of SNEAKER_LOCALES) {
       it(`/sneaker-resale locale "${locale}" body differs from EN twin and declares non-EN lang`, async () => {
         const localePath = `/${locale}/sneaker-resale`;
         // lang must be non-EN (this is what makes the body-diff check apply).
@@ -157,14 +109,7 @@ describe("locale content integrity (issue #1570)", () => {
     }
   });
 
-  describe("prevention gate — a fake-lang English locale page fails", () => {
-    // This is the regression the issue asks the test to catch: a future
-    // worker adds a locale-prefixed route that serves byte-identical
-    // English copy but tags it with a non-EN lang. The body-diff check
-    // above (lang != en => body != EN twin) is what fires. Here we
-    // prove the gate logic by simulating the failure shape: the EN
-    // sneaker-resale body is identical to itself, so a non-EN lang claim
-    // on that body would fail.
+  describe("prevention gate — a fake-lang English page fails", () => {
     it("an EN-identical body tagged with a non-EN lang would fail the body-diff check", async () => {
       const enBody = normalizeBody(await renderSneakerResale("en"));
       const enBodyAgain = normalizeBody(await renderSneakerResale("en"));
@@ -173,5 +118,15 @@ describe("locale content integrity (issue #1570)", () => {
       // the sneaker-resale body-diff assertion (`not.toBe(enBody)`) would
       // fail — exactly the regression this test exists to prevent.
     });
+
+    it("the deleted buyer-surface locale paths no longer resolve to a served page", () => {
+      // Issue #2962 Branch B: every buyer-surface locale path 301s to the EN
+      // pathname, so no page is left to mislabel itself with a non-EN lang.
+      // The guard is htmlLangForPathname: no buyer-surface locale path
+      // remains in the htmlLang map (only the sneaker-resale cluster).
+      expect(htmlLangForPathname("/de/pricing")).toBe("en");
+      expect(htmlLangForPathname("/fr/sneaker-resale")).toBe("en");
+    });
   });
 });
+
