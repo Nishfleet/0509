@@ -806,6 +806,36 @@ describe("buildSearchAnswer market scope", () => {
       expect(answer.nextAction?.href).toContain("website=goat.com");
     });
 
+    it("does not strip a trailing 'co' from a real brand stem (costco stays costco.com)", () => {
+      // F3: the /(app|hq|co)$/ stripper used to cut "costco" → "cost" and
+      // suggest the domain Costco does not own.
+      const answer = buildSearchAnswer({
+        result: response({ ads: [ad({ advertiser: "Costco Wholesale" })] }),
+        displayDomain: null,
+        isDomainSearch: false,
+        isBroaderScope: false,
+        query: "costco",
+        country: "all",
+      });
+
+      expect(answer.nextAction?.href).toBe("/search?website=costco.com");
+    });
+
+    it("does not strip a trailing 'co' from other brand stems (mexico, cb2-co)", () => {
+      for (const query of ["mexico", "cb2-co"]) {
+        const answer = buildSearchAnswer({
+          result: response({ ads: [ad()] }),
+          displayDomain: null,
+          isDomainSearch: false,
+          isBroaderScope: false,
+          query,
+          country: "all",
+        });
+
+        expect(answer.nextAction?.href).toBe(`/search?website=${encodeURIComponent(query)}.com`);
+      }
+    });
+
     it("preserves the searched country in the next-action href", () => {
       const answer = buildSearchAnswer({
         result: response({ ads: goatMouthTapeAds() }),
