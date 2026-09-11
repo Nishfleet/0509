@@ -42,5 +42,14 @@
       "binding": "LANDING_PAGE_ARTIFACTS",
       "bucket_name": "0509-landing-page-artifacts"
     }
-  ]
+  ],
+  "unsafe": {
+    "bindings": [
+      {
+        // Mirrors the production RATE_LIMITER binding (issue #2985).
+        "name": "RATE_LIMITER",
+        "type": "ratelimit"
+      }
+    ]
+  }
 }

@@ -19,6 +19,13 @@ export interface EmailSendingBinding {
   }): Promise<{ messageId: string } | undefined>;
 }
 
+export interface RateLimiterBinding {
+  limit(params: {
+    key: string;
+    rate: { requestsPerPeriod: number; period: "10s" | "60s" };
+  }): Promise<{ success: boolean }>;
+}
+
 export interface AppEnv {
   AI?: Ai;
   APP_NAME?: string;
@@ -43,6 +50,14 @@ export interface AppEnv {
   CANARY_BYPASS_TOKEN?: string;
   BETTER_AUTH_URL?: string;
   DB?: D1Database;
+  /**
+   * Native Cloudflare Rate Limiting binding (issue #2985): counting for the
+   * public hot-path scopes happens at the edge, off D1. Declared optional
+   * only because e2e-mode fixtures and unit tests build env objects by hand;
+   * production wrangler.jsonc declares it, and the limiter fails closed
+   * (429 + Retry-After) when a production-like runtime runs without it.
+   */
+  RATE_LIMITER?: RateLimiterBinding;
   DODO_0509_ADAPTIVE_CURRENCY?: string;
   DODO_0509_ADAPTIVE_CURRENCY_FEES_INCLUSIVE?: string;
   DODO_0509_API_KEY?: string;

@@ -144,6 +144,19 @@
       "database_id": "746c6e3d-782e-443a-82d6-28ca93a16294"
     }
   ],
+  "unsafe": {
+    "bindings": [
+      {
+        // Native Cloudflare Rate Limiting binding (issue #2985): public
+        // hot-path scopes (auth, public search, brand pages, public API
+        // reads incl. /api/demo-proof, status) count at the edge, off D1.
+        // Never remove it without wiring an equivalent edge counter — the
+        // limiter fails closed with 429 + Retry-After when it is missing.
+        "name": "RATE_LIMITER",
+        "type": "ratelimit"
+      }
+    ]
+  },
   "r2_buckets": [
     {
       "binding": "LANDING_PAGE_ARTIFACTS",
