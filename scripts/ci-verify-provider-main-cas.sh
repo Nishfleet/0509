@@ -51,6 +51,14 @@ remote_sha="$(
     jq -er '.object.sha'
 )" || fail "remote_main_unavailable"
 [[ "$remote_sha" =~ $sha_pattern ]] || fail "remote_main_sha"
+# 0509#2975: main moves during nearly every deploy at fleet merge cadence. The
+# runner checked out the pinned candidate BEFORE main moved, so the new tip's
+# objects are usually absent locally and `merge-base --is-ancestor` below fails
+# for the wrong reason (unknown object, not a rewrite). Fetch exactly that tip
+# first; a genuine rewind/rewrite still fails closed as remote_main_drift.
+if ! git cat-file -e "${remote_sha}^{commit}" 2>/dev/null; then
+  git fetch --quiet --no-tags origin "$remote_sha" 2>/dev/null || true
+fi
 if [[ "$remote_sha" == "$PINNED_SHA" ]]; then
   printf 'Provider main CAS verified at %s.\n' "$PINNED_SHA"
 elif [[ "${GITHUB_EVENT_NAME:-}" == "workflow_dispatch" ]] &&

@@ -1061,7 +1061,11 @@ export const ROOT_SITEMAP_STATIC_ENTRIES: readonly SitemapEntry[] =
  */
 export function renderSitemapXml(entries: readonly SitemapEntry[]): string {
   const urlBlocks = entries.map((entry) => {
-    const children = [`<loc>${canonicalUrl(entry.path)}</loc>`];
+    // Sitemap <loc>s are public routes only, so they always emit the
+    // canonical path shape the worker 301s to (issue #2955): lowercase, no
+    // trailing slash (canonicalUrl handles the slash). Note canonicalUrl is
+    // NOT lowercased itself — it also serves case-sensitive artifact hrefs.
+    const children = [`<loc>${canonicalUrl(entry.path.toLowerCase())}</loc>`];
     if (entry.lastmod) {
       children.push(`<lastmod>${entry.lastmod}</lastmod>`);
     }

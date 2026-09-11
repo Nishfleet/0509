@@ -24,7 +24,7 @@ export interface CompareCitationSource {
   href: string;
   /** Short human label, shown as the link text. */
   label: string;
-  /** ISO date the URL was last checked live. */
+  /** ISO date the URL was last checked live. Rendered as "as of <date>" beside the claim (issue #2958). */
   checked: string;
   /** The claim on the page that this source backs. */
   claim: string;
@@ -61,6 +61,7 @@ export function Cite({ citations, id }: { citations: CompareCitations; id: strin
       <a href={source.href} rel="noreferrer" target="_blank">
         {source.label}
       </a>
+      {` (as of ${source.checked})`}
     </>
   );
 }
@@ -85,6 +86,7 @@ export function CompareCitationsFooter({ citations }: { citations: CompareCitati
             </a>
             {" — "}
             {source.claim}
+            {` — as of ${source.checked}`}
           </li>
         ))}
       </ul>
