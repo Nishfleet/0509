@@ -275,7 +275,7 @@ describe("issue 2987 — anonymous /search payload projection", () => {
     // stub above: dozens of analysed fields, each with confidence, provenance
     // and classifier metadata. Mirror that here so the size measurement is
     // honest — only ocr_text/translated_text survive the projection.
-    const withHeavyAnalysis = (metaAdId: string) => {
+    const withHeavyAnalysis = (metaAdId: string): AdRecord => {
       const ad = JSON.parse(JSON.stringify(internalAd(metaAdId))) as Record<
         string,
         unknown
@@ -294,7 +294,7 @@ describe("issue 2987 — anonymous /search payload projection", () => {
           },
         });
       }
-      return ad;
+      return ad as unknown as AdRecord;
     };
     const heavyResult = {
       ads: Array.from({ length: 10 }, (_, i) =>
