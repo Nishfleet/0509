@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-// @ts-expect-error -- vitest greenlight
 import { freePlanPriceDisplay } from "~/components/pricing-section";
 
 describe("freePlanPriceDisplay (#2957)", () => {
