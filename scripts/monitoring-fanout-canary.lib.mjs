@@ -236,7 +236,8 @@ export function evaluateNightlyStep(metrics) {
 /**
  * Schedule-slip canary (0509#2990): alert when the monitoring schedule slips by
  * more than one cadence. `cadenceHours` is the paid-plan cadence (default 3).
- * A scheduled run still queued more than cadence + 1 cadence after dispatch
+ * A scheduled run still queued more than cadence + 1 cadence after its
+ * `queued_at` timestamp
  * means the fleet has fallen more than a full window behind.
  *
  * @param {FanoutMetricsInput} metrics

@@ -128,10 +128,14 @@ function parseArgs(args) {
       parsed.shadowOnly = Number.parseInt(args[index + 1], 10);
       index += 1;
     }
-    if (arg === "--cadence-hours" && args[index + 1]) {
-      parsed.cadenceHours = Number.parseInt(args[index + 1], 10);
-      index += 1;
+  if (arg === "--cadence-hours" && args[index + 1]) {
+    const cadence = Number.parseInt(args[index + 1], 10);
+    if (!Number.isFinite(cadence) || cadence < 1) {
+      throw new Error(`--cadence-hours must be a positive integer (got "${args[index + 1]}"); refusing to silently disable the slip alert.`);
     }
+    parsed.cadenceHours = cadence;
+    index += 1;
+  }
   }
 
   return parsed;
