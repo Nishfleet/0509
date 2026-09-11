@@ -1,20 +1,17 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
-import { constantTimeTokenEqual } from "~/lib/constant-time-token.server";
-
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const { publicCommercialLaunchSummary } = await import("~/lib/commercial-launch-gate.server");
   const { previewDodo0509PlanPrices } = await import("~/lib/dodo-pricing.server");
+  const { hasValidCanaryToken } = await import("~/lib/canary-token.server");
   const env = getEnv(context);
   const versionBoundCanary = request.headers.has("x-0509-expected-worker-version");
   if (versionBoundCanary) {
-    const configured = env.CANARY_BYPASS_TOKEN?.trim();
-    const token = request.headers.get("x-0509-canary-token");
     const { verifyExpectedCanaryWorkerVersion } = await import(
       "~/lib/canary-release-identity.server"
     );
-    if (!configured || !(await constantTimeTokenEqual(token, configured)) || !verifyExpectedCanaryWorkerVersion(request, env).ok) {
+    if (!(await hasValidCanaryToken(request, env.CANARY_BYPASS_TOKEN)) || !verifyExpectedCanaryWorkerVersion(request, env).ok) {
       return Response.json(
         { available: false, reason: "worker_version_mismatch" },
         { status: 409, headers: { "Cache-Control": "no-store" } },

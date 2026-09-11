@@ -95,15 +95,6 @@ export function loader(_args: LoaderFunctionArgs) {
   );
 }
 
-function hasValidCanaryToken(request: Request, token: string | undefined) {
-  const configured = token?.trim();
-  if (!configured) {
-    return false;
-  }
-
-  return request.headers.get("x-0509-canary-token") === configured;
-}
-
 function hasCanonicalCanaryOrigin(request: Request) {
   try {
     const url = new URL(request.url);
@@ -123,9 +114,10 @@ function hasCanonicalCanaryOrigin(request: Request) {
 
 export async function action({ context, request }: ActionFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
+  const { hasValidCanaryToken } = await import("~/lib/canary-token.server");
   const env = getEnv(context);
 
-  if (!hasValidCanaryToken(request, env.CANARY_BYPASS_TOKEN)) {
+  if (!(await hasValidCanaryToken(request, env.CANARY_BYPASS_TOKEN))) {
     throw new Response("Not found", { status: 404 });
   }
 
