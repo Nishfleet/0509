@@ -1201,7 +1201,7 @@ const PUBLIC_MARKDOWN_BY_PATH: Readonly<Record<string, string>> = {
   ),
   "/compare/spyland": compareMarkdown(
     spylandCitations as CompareCitations,
-    "Spyland watches competitor landing pages daily and flags copy, pricing, and CTA changes. Five to Nine adds the ad source and more frequent source-backed checks.",
+    "Spyland watches competitor landing pages on a schedule and flags copy, pricing, and CTA changes. Five to Nine adds the ad source and more frequent source-backed checks.",
   ),
   "/compare/pulzifi": compareMarkdown(
     pulzifiCitations as CompareCitations,
