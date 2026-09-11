@@ -208,7 +208,7 @@ export function firstParentMigrationDiffs(previousHead) {
  *
  * @param {{ hasRecordedHistory: boolean }} options
  * @param {Record<string, string | undefined>} [env]
- * @param {(message: string) => void} [warn]
+ * @param {(message: string) => boolean} [warn]
  * @returns {string | null} the bootstrap anchor, or null when none applies
  */
 /**
@@ -235,7 +235,7 @@ export function reachableFromHead(sha) {
  * (loudly) or fail with a named reason instead of a raw git error.
  * @param {{ recordedHead: string | null }} args
  * @param {Record<string, string | undefined>} [env]
- * @param {(message: string) => void} [warn]
+ * @param {(message: string) => boolean} [warn]
  * @param {(sha: string) => boolean} [reachable]
  */
 export function anchorPreviousHead(
