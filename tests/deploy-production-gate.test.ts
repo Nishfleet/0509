@@ -1430,6 +1430,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     const warnings: string[] = [];
     const collect = (message: string) => {
       warnings.push(message);
+      return true;
     };
 
     // Recorded history always wins: the env is ignored outright, loudly, so a
@@ -1655,7 +1656,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(
       anchorPreviousHead(
         { recordedHead: ancestor },
-        /** @type {NodeJS.ProcessEnv} */ ({ BOOTSTRAP_PREVIOUS_SUCCESS_SHA: ancestor }),
+        ({ BOOTSTRAP_PREVIOUS_SUCCESS_SHA: ancestor } as NodeJS.ProcessEnv),
         collect,
       ),
     ).toBe(ancestor);
@@ -1666,7 +1667,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     // Recorded head is NOT in this history (main rewritten): without a
     // bootstrap the run fails with a named reason, never a raw git error.
     expect(() =>
-      anchorPreviousHead({ recordedHead: vanished }, /** @type {NodeJS.ProcessEnv} */ ({}), collect),
+      anchorPreviousHead({ recordedHead: vanished }, ({} as NodeJS.ProcessEnv), collect),
     ).toThrow("remote_restore_last_successful_head_unresolvable");
     expect(warnings.some((w) => w.includes("not reachable from HEAD"))).toBe(true);
     warnings.length = 0;
@@ -1676,7 +1677,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(
       anchorPreviousHead(
         { recordedHead: vanished },
-        /** @type {NodeJS.ProcessEnv} */ ({ BOOTSTRAP_PREVIOUS_SUCCESS_SHA: ancestor }),
+        ({ BOOTSTRAP_PREVIOUS_SUCCESS_SHA: ancestor } as NodeJS.ProcessEnv),
         collect,
       ),
     ).toBe(ancestor);
@@ -1688,7 +1689,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(
       anchorPreviousHead(
         { recordedHead: null },
-        /** @type {NodeJS.ProcessEnv} */ ({ BOOTSTRAP_PREVIOUS_SUCCESS_SHA: ancestor }),
+        ({ BOOTSTRAP_PREVIOUS_SUCCESS_SHA: ancestor } as NodeJS.ProcessEnv),
         collect,
       ),
     ).toBe(ancestor);
