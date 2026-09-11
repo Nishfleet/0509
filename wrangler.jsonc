@@ -79,14 +79,6 @@
     "MONITORING_CONCURRENCY_SLOT_LEASE_MS": "3600000",
     "MONITORING_SCHEDULED_BROWSER_MODE": "billing",
     "BROWSER_RUN_SESSION_REUSE": "0",
-    // Issue #1919: allow the existing Browserless proof fallback leg for the
-    // five demo /timeline brands (www and apex — mamaearth 301s www → apex)
-    // so a second provider can capture a proof-bearing snapshot when the
-    // Browser Run session is blocked or the page is too heavy for it. The
-    // two 0509.io defaults are restated because a configured list replaces them.
-    // Issue #2140: the festive-india-2026 /ads seed cohort's www + apex origins
-    // get the same fallback leg so published brand pages can capture proofs.
-    "BROWSERLESS_PROOF_ALLOWLIST_ORIGINS": "https://0509.io https://www.0509.io https://www.nike.com https://nike.com https://www.nykaa.com https://nykaa.com https://www.allbirds.com https://allbirds.com https://www.lenskart.com https://lenskart.com https://www.mamaearth.com https://mamaearth.com https://www.sugarcosmetics.com https://sugarcosmetics.com https://www.plumgoodness.com https://plumgoodness.com https://www.mcaffeine.com https://mcaffeine.com https://www.thedermaco.com https://thedermaco.com https://www.dotandkey.com https://dotandkey.com https://www.wowskinscience.com https://wowskinscience.com https://www.forestessentials.com https://forestessentials.com https://www.kamaayurveda.com https://kamaayurveda.com https://www.bewakoof.com https://bewakoof.com https://www.thesouledstore.com https://thesouledstore.com https://www.snitch.co.in https://snitch.co.in https://www.zivame.com https://zivame.com https://www.clovia.com https://clovia.com https://www.damensch.com https://damensch.com https://www.xyxxcrew.com https://xyxxcrew.com https://www.libas.in https://libas.in https://www.boat-lifestyle.com https://boat-lifestyle.com https://www.noisefit.com https://noisefit.com https://www.fireboltt.com https://fireboltt.com https://www.portronics.com https://portronics.com https://www.zebronics.com https://zebronics.com https://www.ambraneindia.com https://ambraneindia.com https://www.dailyobjects.com https://dailyobjects.com https://www.thewholetruthfoods.com https://thewholetruthfoods.com https://www.slurrpfarm.com https://slurrpfarm.com https://www.vahdamteas.com https://vahdamteas.com https://www.teabox.com https://teabox.com https://www.bluetokaicoffee.com https://bluetokaicoffee.com https://www.epigamia.com https://epigamia.com https://www.countrydelight.in https://countrydelight.in",
     "SEARCH_ROLLOUT_MODE": "v2",
     "ADS_DOMAIN_PUBLISHER_CAP": "60",
     "PRESENCE_WEBSITE_ROLLOUT": "generally_available",
