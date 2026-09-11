@@ -1,4 +1,5 @@
 import {
+  claimEmailTargetForDispatch,
   claimInstantDeliveryAttempt,
   createDeliveryAttempt,
   getDeliveryAttemptByIdempotencyKey,
@@ -247,7 +248,7 @@ export async function sendDeliveryTestEmail(
     return false;
   }
 
-  const claimTarget = claimEmailTargetForDispatch;
+  const claimTarget = claimEmailTargetForDispatch as unknown as
     | ((claimEnv: AppEnv, claimInput: { userId: string; targetId: string }) => Promise<{
         id: string;
         targetValue: string;
