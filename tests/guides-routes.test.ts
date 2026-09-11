@@ -39,10 +39,17 @@ describe("guides how-to-monitor-competitor-landing-page-changes route (issue #28
     expect(markup).toContain(
       'href="https://visualping.io/blog/how-visualping-cuts-false-positives"',
     );
-    // The semantic-diff alternative positioned as the automated answer.
-    expect(markup).toContain("The automated answer: a semantic diff, on a schedule.");
-    expect(markup).toContain("One competitor, watched weekly, free");
+    // The semantic-diff alternative positioned as the automated answer —
+    // with the honest plan truth: Free is one first check + one first brief,
+    // recurring checks are paid (plan-entitlements.ts, reviewer round).
+    expect(markup).toContain("The automated answer: a semantic diff.");
+    expect(markup).toContain("One competitor, one first check, free");
+    expect(markup).toContain("Recurring checks on a schedule are a paid plan.");
+    expect(markup).toContain("recurring checks are a paid plan");
     expect(markup).toContain("Fields, not pixels");
+    // Never the stale sibling claim: Free is not a weekly watch.
+    expect(markup).not.toContain("watched weekly, free");
+    expect(markup).not.toContain("weekly email brief");
     // Links out to the published differentiator pages and the free preview.
     expect(markup).toContain('href="/capture-rules"');
     expect(markup).toContain('href="/no-phantom-changes"');

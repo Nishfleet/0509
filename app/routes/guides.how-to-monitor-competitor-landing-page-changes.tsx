@@ -11,16 +11,20 @@
  * pixel-diff alerting breaks — Visualping's own published number says its AI
  * classifies 83% of detected changes as not important.
  *
- * The automated answer is positioned honestly: the semantic diff — Five to
- * Nine's free weekly watch reads the commercial fields (headline, offer,
- * price, CTA) instead of comparing pixels, and refuses non-pages via the
- * published capture rules. The CTA is the public /search preview carrying
- * the allowlisted `source=guide-landing-page-changes` marker — no account
- * needed. Guardrails from the issue: only verified, cited competitor facts
- * (the 83% figure links Visualping's own post), honest scope (a general page
- * monitor watches any URL; Five to Nine watches a competitor's public ads
- * and the landing pages behind them), and the manual method is explicitly
- * stated to be free.
+ * The automated answer is positioned honestly: the semantic diff — a check
+ * reads the commercial fields (headline, offer, price, CTA) instead of
+ * comparing pixels, and refuses non-pages via the published capture rules.
+ * Plan truth (plan-entitlements.ts, checked against the reviewer round on
+ * this issue): the Free plan runs one first check on one competitor and
+ * emails the one first brief — recurring checks on a schedule are a paid
+ * plan, and this page says so plainly rather than cloning the sibling
+ * guides' stale "watched weekly, free" line. The CTA is the public /search
+ * preview carrying the allowlisted `source=guide-landing-page-changes`
+ * marker — no account needed. Guardrails from the issue: only verified,
+ * cited competitor facts (the 83% figure links Visualping's own post), honest
+ * scope (a general page monitor watches any URL; Five to Nine watches a
+ * competitor's public ads and the landing pages they link to), and the
+ * manual method is explicitly stated to be free.
  */
 
 import { Form, Link } from "react-router";
@@ -92,7 +96,7 @@ const monitorSteps = [
   {
     title: "Paste the URL into a page-change monitor",
     detail:
-      "Tools in the page-monitoring class — Visualping is the best known — take any public URL and check it on a schedule. Most offer a free tier with limited checks and pages, with paid plans for more frequency.",
+      "Tools in the page-monitoring class take any public URL and check it on a schedule. Most publish a free plan with limited checks and pages, with paid plans for more frequency.",
   },
   {
     title: "Tell it what counts as a change",
@@ -102,7 +106,7 @@ const monitorSteps = [
   {
     title: "Read every alert and decide",
     detail:
-      "Each alert tells you pixels or text moved. Whether the move matters — a dropped price versus a rotated banner — is still your call, alert by alert.",
+      "Each alert tells you pixels or text moved — newer monitors add an AI-written summary and an importance flag on top. Whether the move matters to you — a dropped price versus a rotated banner — is still your call, alert by alert.",
   },
 ] as const;
 
@@ -132,7 +136,7 @@ export const landingPageChangesFaqEntries: ReadonlyArray<FaqJsonLdEntry> = [
   {
     question: "Is monitoring a competitor's landing page free?",
     answer:
-      "The by-hand method is free: save a dated copy of the page, revisit on a weekly cadence, compare the headline, offer, price, and CTA yourself. Page-change monitors such as Visualping publish a free plan with limited checks and pages; Five to Nine's free plan watches one competitor on a weekly schedule, also with no card.",
+      "The by-hand method is free: save a dated copy of the page, revisit on a weekly cadence, compare the headline, offer, price, and CTA yourself. Page-change monitors typically publish a free plan with limited checks and pages. Five to Nine's free plan runs one first check on one competitor and emails the first brief — no card; recurring checks are a paid plan.",
   },
   {
     question: "How often should you check a competitor's landing page?",
@@ -152,7 +156,7 @@ export const landingPageChangesFaqEntries: ReadonlyArray<FaqJsonLdEntry> = [
   {
     question: "Can Five to Nine monitor any page URL?",
     answer:
-      "No. Five to Nine is built around a competitor domain: it watches that competitor's public Meta ads and the landing pages behind them, not arbitrary URLs. If the job is watching a single hand-picked page, a general page monitor is the right tool; if the job is a competitor's commercial moves, paste the domain into the free preview.",
+      "No. Five to Nine is built around a competitor domain: it watches that competitor's public Meta ads and the landing pages they link to, not arbitrary URLs on unrelated sites. If the job is watching a single hand-picked page, a general page monitor is the right tool; if the job is a competitor's commercial moves, paste the domain into the free preview.",
   },
 ] as const;
 
@@ -217,8 +221,8 @@ export default function GuideHowToMonitorCompetitorLandingPageChangesRoute() {
 
         <p className="ld-honest" role="note">
           <strong>No account needed.</strong> The public search preview reads a competitor&rsquo;s
-          public ads and landing pages from a pasted domain. It watches a competitor — it is not
-          a monitor for arbitrary URLs.
+          public ads and the pages they link to from a pasted domain. It watches a competitor —
+          it is not a monitor for arbitrary URLs.
         </p>
       </section>
 
@@ -295,15 +299,15 @@ export default function GuideHowToMonitorCompetitorLandingPageChangesRoute() {
       </section>
 
       <section className="ld-how">
-        <h2>The automated answer: a semantic diff, on a schedule.</h2>
+        <h2>The automated answer: a semantic diff.</h2>
         <div className="ld-how-grid">
           <article>
             <span className="ld-step">01</span>
-            <h3>One competitor, watched weekly, free</h3>
+            <h3>One competitor, one first check, free</h3>
             <p>
-              Five to Nine&rsquo;s free plan watches one competitor: an instant first scan, then a
-              scheduled check every week and a weekly email brief. No card, and the repeat visit
-              stops being your job.
+              Five to Nine&rsquo;s free plan runs one first check on one competitor — an instant
+              scan of its public ads and the landing pages they link to — and emails the first
+              brief. No card. Recurring checks on a schedule are a paid plan.
             </p>
           </article>
           <article>
