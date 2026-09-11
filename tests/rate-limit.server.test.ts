@@ -9,6 +9,7 @@ import {
   enforceRequestRateLimit,
   enforceSearchSelectionRateLimit,
   PUBLIC_BRAND_PAGE_PER_MINUTE_LIMIT,
+  PUBLIC_PROOF_BRIEF_PER_MINUTE_LIMIT,
   PUBLIC_SEARCH_ANON_BROWSER_LIMIT,
   PUBLIC_SEARCH_IP_BACKSTOP_LIMIT,
   PUBLIC_SEARCH_SELECTION_PER_MINUTE_LIMIT,
@@ -79,7 +80,10 @@ describe("rateLimitPolicyFor", () => {
       periodSeconds: 60,
     });
     expect(rateLimitPolicyFor(new Request("https://0509.io/api/demo-proof"))).toMatchObject({
-      scope: "api-read",
+      scope: "public-proof-brief",
+      limit: PUBLIC_PROOF_BRIEF_PER_MINUTE_LIMIT,
+      periodSeconds: 60,
+      keyByIpOnly: true,
     });
   });
 

@@ -71,6 +71,10 @@ export const PUBLIC_SEARCH_IP_BACKSTOP_LIMIT = 10;
 export const PUBLIC_SEARCH_ANON_BROWSER_LIMIT = 2;
 export const PUBLIC_SEARCH_SELECTION_PER_MINUTE_LIMIT = 3;
 export const PUBLIC_BRAND_PAGE_PER_MINUTE_LIMIT = 12;
+// Issue #2964 legacy budget was 30 per 10-minute window; the native Rate
+// Limiting binding only supports 10s/60s periods, so the sustained rate
+// becomes 3/60s.
+export const PUBLIC_PROOF_BRIEF_PER_MINUTE_LIMIT = 3;
 const EDGE_LIMIT_PERIOD_SECONDS = 60;
 
 export type BillingProviderRateLimitKind = "pricing" | "mutation";
@@ -430,9 +434,27 @@ export function rateLimitPolicyFor(request: Request): EdgeLimitPolicy | null {
     return { scope: "write", limit: 60, periodSeconds: 60 };
   }
 
-  // Covers /api/* reads — including /api/demo-proof, whose only protection
-  // pre-#2985 was this fail-open D1 bucket.
-  return { scope: "api-read", limit: 240, periodSeconds: 60 };
+  if (pathname.startsWith("/api/")) {
+    // /api/demo-proof keeps its own dedicated edge bucket (issue #2964
+    // budget parity): 30/10min legacy -> 3/60s, same sustained rate, fail
+    // closed. A degraded edge limiter 429s the public endpoint instead of
+    // silently admitting unbounded traffic.
+    if (pathname === "/api/demo-proof") {
+      return {
+        scope: "public-proof-brief",
+        limit: PUBLIC_PROOF_BRIEF_PER_MINUTE_LIMIT,
+        periodSeconds: 60,
+        keyByIpOnly: true,
+      };
+    }
+
+    // Covers the remaining /api/* reads on the shared edge bucket.
+    return { scope: "api-read", limit: 240, periodSeconds: 60 };
+  }
+
+  // Anything else (HTML page reads such as /, /search, sample-brief) stays
+  // with the route-level anonymous limiters, not the generic API bucket.
+  return null;
 }
 
 function normalizeRateLimitedPathname(pathname: string) {
