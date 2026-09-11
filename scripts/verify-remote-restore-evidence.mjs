@@ -385,7 +385,7 @@ async function restoreEvidenceClassification() {
   // (main was rewritten, fleet-ops#5385) cannot anchor anything, so it is
   // treated as "no recorded history" and the operator bootstrap may apply.
   const previousHead = anchorPreviousHead({
-    recordedHead: previous ? previous.head_sha : null,
+    recordedHead: previous?.head_sha ?? null,
   });
   if (
     typeof previousHead !== "string" ||
