@@ -115,8 +115,13 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     digestAttemptsByDigestId: Object.fromEntries(
       digests.map((digest) => [
         digest.id,
+        // Issue #2471: the selected digest's sidebar status uses the same
+        // digestRunId-scoped fetch as its header trail, so the two can never
+        // disagree.
         summarizeDigestAttempts(
-          recentDeliveryAttempts.filter((attempt) => attempt.digestRunId === digest.id),
+          selectedDigest && digest.id === selectedDigest.id
+            ? selectedDigestScopedAttempts
+            : recentDeliveryAttempts.filter((attempt) => attempt.digestRunId === digest.id),
         ).map(toPublicDeliveryAttemptSummary),
       ]),
     ),
