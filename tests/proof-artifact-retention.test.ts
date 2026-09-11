@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   compensateUncommittedProofArtifacts,
   deleteProofArtifacts,
+  deleteProofArtifactsForCapture,
   getProofArtifactInventory,
   getProofArtifactForOwner,
   headProofArtifactForOwner,
@@ -16,6 +17,7 @@ const HTML_KEY = "landing-pages/2026-07-16/0123456789abcdef0123456789abcdef.html
 const SCREENSHOT_KEY = "landing-pages/2026-07-16/fedcba9876543210fedcba9876543210.jpeg";
 const OWNER = "workspace-owner";
 const OTHER_OWNER = "other-workspace";
+const CAPTURE_ID = "capture-1";
 
 const SNAPSHOT_BASE = {
   rawUrl: "https://0509.io/",
@@ -297,6 +299,38 @@ describe("proof artifact retention contract", () => {
     expect(first[0]).toMatchObject({ ok: true, outcome: "deleted", r2: "deleted", d1: "updated" });
     expect(second[0]).toMatchObject({ ok: true, outcome: "missing", r2: "missing", d1: "updated" });
     expect(del).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports the truthful r2 outcome when the capture-scoped D1 clear fails after R2 delete", async () => {
+    const head = vi.fn(async () => objectHead(HTML_KEY));
+    const del = vi.fn(async () => undefined);
+    const all = vi
+      .fn()
+      .mockResolvedValueOnce({
+        results: [
+          {
+            reference_count: 1,
+            owner_count: 1,
+            owner_match_count: 1,
+            landing_page_snapshot_references: 0,
+            proof_capture_references: 1,
+          },
+        ],
+      })
+      .mockResolvedValue({ results: [{ external_references: 0 }] });
+    const run = vi.fn(async () => {
+      throw new Error("d1 unavailable");
+    });
+    const prepare = vi.fn(() => ({ bind: vi.fn(() => ({ all, run })) }));
+    const env = {
+      DB: { prepare } as unknown as D1Database,
+      LANDING_PAGE_ARTIFACTS: { head, delete: del } as unknown as R2Bucket,
+    };
+
+    const [result] = await deleteProofArtifactsForCapture(env, OWNER, CAPTURE_ID, [HTML_KEY]);
+    expect(result).toMatchObject({ key: HTML_KEY, ok: false, outcome: "d1_failed", r2: "deleted", d1: "failed" });
+    expect(head).toHaveBeenCalledWith(HTML_KEY);
+    expect(del).toHaveBeenCalledWith(HTML_KEY);
   });
 
   it("bounds batches and reports invalid or duplicate keys per key", async () => {
