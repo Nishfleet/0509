@@ -521,7 +521,15 @@ async function ensureTags(env: AppEnv, userId: string, labels: string[]) {
       userId,
       label,
     );
-    ids.push(inserted?.id ?? id);
+    if (!inserted) {
+      // INSERT OR IGNORE suppresses any constraint violation, not just the
+      // idx_tag_user_label race. If the row is genuinely absent after the
+      // insert (e.g. a primary-key collision on the generated id), pushing
+      // the un-inserted id would write a dangling collection_item_tag.tag_id
+      // and trip its foreign key. Fail loudly instead.
+      throw new Error(`Failed to ensure tag "${label}" for user ${userId}.`);
+    }
+    ids.push(inserted.id);
   }
 
   return ids;

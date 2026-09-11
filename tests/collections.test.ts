@@ -4,18 +4,21 @@ import { createCollection, updateCollectionItem } from "~/lib/data/collections.s
 import { applyMigration, createSqliteD1 } from "./helpers/sqlite-d1";
 
 /**
- * Concurrent same-label tag adds.
+ * Concurrent same-label tag adds (Nishfleet/0509#2445).
  *
  * `ensureTags` reads `tag` by `(user_id, label)`, then inserts when absent.
  * `idx_tag_user_label` is UNIQUE (migrations/0001_app.sql), so when two saves
- * carrying the same new label interleave between the read and the insert, the
- * loser's INSERT throws `UNIQUE constraint failed: tag.user_id, tag.label`
- * and the whole save fails even though the desired end-state is identical.
+ * carrying the same new label both observe the label as absent, the loser's
+ * INSERT throws `UNIQUE constraint failed: tag.user_id, tag.label` and the
+ * whole save fails even though the desired end-state is identical.
  *
- * The race is made deterministic (not timing-dependent) by latching the first
- * `SELECT ... FROM tag` for a label: the second save is admitted only after
- * the first save's insert has happened, which is exactly the interleaving a
- * double-clicked "Save" produces in production.
+ * Scope note: this harness runs `node:sqlite` over a single synchronous
+ * in-memory connection, so a save cannot be parked mid-read to build a
+ * deterministic interleave (holding the read open serializes on the
+ * connection). The race is therefore exercised by genuine concurrent
+ * dispatch via `Promise.all`, which is the issue's own `repro:` line. That
+ * variant is a real, reproducible failure on the pre-fix code, not a lucky
+ * microtask ordering.
  */
 describe("collections tags (sqlite)", () => {
   let harness: ReturnType<typeof createSqliteD1>;
@@ -111,86 +114,33 @@ describe("collections tags (sqlite)", () => {
     return row.count;
   }
 
-  /**
-   * Wrap the env so the FIRST `SELECT id FROM tag ... label = ?` for `label`
-   * is held open until `release()` is called. This reproduces the
-   * read-then-INSERT interleaving: the loser has already seen "absent" when
-   * the winner commits its row.
-   */
-  function latchFirstTagSelect(label: string) {
-    let release!: () => void;
-    const released = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    let armed = true;
-    const held: { promise: Promise<void> | null } = { promise: null };
-
-    const db = {
-      prepare(sql: string) {
-        const statement = harness.db.prepare(sql);
-        return {
-          bind(...bindings: unknown[]) {
-            const bound = statement.bind(...bindings);
-            const isTagSelect =
-              sql.includes("FROM tag") && sql.includes("label = ?") && bindings.includes(label);
-            let wait: Promise<void> | null = null;
-            if (armed && isTagSelect) {
-              armed = false;
-              wait = released;
-              held.promise = wait;
-            }
-            return {
-              run: () => bound.run(),
-              all: () => bound.all(),
-              first: async () => {
-                if (wait) {
-                  const pending = wait;
-                  held.promise = null;
-                  await pending;
-                }
-                return bound.first();
-              },
-            };
-          },
-        };
-      },
-      batch: (statements: never[]) => harness.db.batch(statements),
-    };
-
-    return { env: { ...env, DB: db } as typeof env, release };
+  function tagIdsForItem(itemId: string) {
+    return (
+      harness.sqlite
+        .prepare("SELECT tag_id FROM collection_item_tag WHERE collection_item_id = ?")
+        .all(itemId) as { tag_id: string }[]
+    ).map((row) => row.tag_id);
   }
-
-  it("adopts the winner's tag row instead of failing when two saves add the same new label", async () => {
-    const itemA = await seedItem("Alpha");
-    const itemB = await seedItem("Beta");
-
-    const latch = latchFirstTagSelect("new");
-    const winner = updateCollectionItem(env, "user-1", itemA, { note: null, tags: ["new"] });
-    const loser = updateCollectionItem(latch.env, "user-1", itemB, { note: null, tags: ["new"] });
-
-    // Winner completes its insert while the loser is still parked on its read.
-    await winner;
-    latch.release();
-    await expect(loser).resolves.toBeUndefined();
-
-    expect(tagRowCount("new")).toBe(1);
-
-    const tagged = harness.sqlite
-      .prepare("SELECT COUNT(*) AS count FROM collection_item_tag")
-      .get() as { count: number };
-    expect(tagged.count).toBe(2);
-  });
 
   it("keeps exactly one tag row when two same-label saves are issued concurrently", async () => {
     const itemA = await seedItem("Alpha");
     const itemB = await seedItem("Beta");
 
+    // Pre-fix this rejects with UNIQUE constraint failed: tag.user_id, tag.label.
     await Promise.all([
       updateCollectionItem(env, "user-1", itemA, { note: null, tags: ["dupe"] }),
       updateCollectionItem(env, "user-1", itemB, { note: null, tags: ["dupe"] }),
     ]);
 
     expect(tagRowCount("dupe")).toBe(1);
+
+    // Both saves must end up pointing at the single surviving row, so the
+    // loser adopted the winner's id rather than writing one it never inserted.
+    const rows = harness.sqlite
+      .prepare("SELECT id FROM tag WHERE user_id = ? AND label = ?")
+      .all("user-1", "dupe") as { id: string }[];
+    expect(tagIdsForItem(itemA)).toEqual([rows[0]!.id]);
+    expect(tagIdsForItem(itemB)).toEqual([rows[0]!.id]);
   });
 
   it("reuses the existing tag row without duplicating it on sequential saves", async () => {
@@ -201,5 +151,19 @@ describe("collections tags (sqlite)", () => {
     await updateCollectionItem(env, "user-1", itemB, { note: null, tags: ["shared"] });
 
     expect(tagRowCount("shared")).toBe(1);
+    expect(tagIdsForItem(itemA)).toEqual(tagIdsForItem(itemB));
+  });
+
+  it("adds several new labels in one save exactly once each", async () => {
+    const itemA = await seedItem("Alpha");
+
+    await updateCollectionItem(env, "user-1", itemA, {
+      note: null,
+      tags: ["one", "two", "one"],
+    });
+
+    expect(tagRowCount("one")).toBe(1);
+    expect(tagRowCount("two")).toBe(1);
+    expect(tagIdsForItem(itemA)).toHaveLength(2);
   });
 });
