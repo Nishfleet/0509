@@ -7,6 +7,12 @@ import type { SitemapEntry } from "~/lib/seo";
 // category's links from it (mirroring the hub) and enriches each brand's Ad
 // Aggression Score from the cache snapshot.
 let brandEntries: SitemapEntry[];
+// Per-test behaviour hook behind the single `~/lib/sitemap.server` mock
+// registered in beforeEach. A test swaps this instead of calling
+// `vi.doMock` for the same specifier again: doMock registration is async
+// (queueMock resolves through RPC before registering), so a second doMock
+// for one specifier can lose the race to the earlier registration.
+let loadIndexableBrandPageEntries: () => Promise<SitemapEntry[]>;
 const loadBrandPageCacheSnapshot = vi.fn();
 const computeBrandPageAggressionScore = vi.fn();
 
@@ -23,10 +29,11 @@ beforeEach(() => {
   ];
   loadBrandPageCacheSnapshot.mockResolvedValue({ ads: [{ id: "ad-1" }] });
   computeBrandPageAggressionScore.mockReturnValue({ score: 42 });
+  loadIndexableBrandPageEntries = () => Promise.resolve(brandEntries);
 
   vi.doMock("~/lib/context.server", () => ({ getEnv: () => ({ DB: {} }) }));
   vi.doMock("~/lib/sitemap.server", () => ({
-    loadIndexableBrandPageEntries: () => Promise.resolve(brandEntries),
+    loadIndexableBrandPageEntries: () => loadIndexableBrandPageEntries(),
   }));
   vi.doMock("~/lib/brand-page.server", () => ({
     loadBrandPageCacheSnapshot,
@@ -100,10 +107,8 @@ describe("/brands/:category loader (issue #2067)", () => {
     // category guard 404s. The rejection must be a 404 Response — not a 500
     // and not a raw error escaping to the caller — and no brand list data is
     // ever produced (no fabricated or partial page).
-    vi.doMock("~/lib/sitemap.server", () => ({
-      loadIndexableBrandPageEntries: () =>
-        Promise.reject(new Error("D1 hiccup")),
-    }));
+    loadIndexableBrandPageEntries = () =>
+      Promise.reject(new Error("D1 hiccup"));
 
     const { loader } = await import("~/routes/brands.$category");
     const rejection = await loader({

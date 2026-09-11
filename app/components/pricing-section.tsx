@@ -218,7 +218,7 @@ export function valueMathLabel(
         ? Number(monthlyAmount) * 12 - Number(annualAmount)
         : null;
     const savings = savingsAmount && savingsAmount > 0
-      ? formatMinorCurrency(savingsAmount, monthlyCurrency)
+      ? formatMinorCurrency(savingsAmount, monthlyCurrency, { roundWhole: false })
       : "";
     return savings ? `Save ${savings} vs monthly` : DODO_ANNUAL_SAVINGS_LABEL;
   }

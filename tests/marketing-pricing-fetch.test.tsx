@@ -122,6 +122,23 @@ function installFakeIntersectionObserver(): FakeIntersectionObserverInstance[] {
   return instances;
 }
 
+/**
+ * Issue #2696: the homepage route also fetches /api/demo-proof eagerly on
+ * mount (the country-neutral SSR document personalizes after mount). These
+ * tests pin the PRICING preview's lazy-fetch behaviour, so the mock counts
+ * only /api/pricing-preview calls; every other URL (demo-proof, manifest)
+ * resolves ok:false without being recorded.
+ */
+function installPricingFetchMock(response: { ok: boolean; json?: () => Promise<unknown> }) {
+  const pricingFetch = vi.fn().mockResolvedValue(response);
+  const fetchMock = vi.fn((input: unknown) => {
+    if (String(input).includes("/api/pricing-preview")) return pricingFetch(input);
+    return Promise.resolve({ ok: false });
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return pricingFetch;
+}
+
 async function mountMarketing(): Promise<{ root: Root; container: HTMLDivElement }> {
   const { default: MarketingRoute } = await import("~/routes/marketing");
   const container = document.createElement("div");
@@ -165,8 +182,7 @@ describe("marketing pricing preview fetch timing", () => {
 
   it("does not fetch the pricing preview while the pricing section is off-screen", async () => {
     await mockMarketingDependencies(emptyRootData);
-    const fetchMock = vi.fn().mockResolvedValue({ ok: false });
-    vi.stubGlobal("fetch", fetchMock);
+    const fetchMock = installPricingFetchMock({ ok: false });
     installFakeIntersectionObserver();
 
     mounted = await mountMarketing();
@@ -179,8 +195,7 @@ describe("marketing pricing preview fetch timing", () => {
 
   it("fetches the pricing preview once when the pricing section approaches the viewport", async () => {
     await mockMarketingDependencies(emptyRootData);
-    const fetchMock = vi.fn().mockResolvedValue({ ok: false });
-    vi.stubGlobal("fetch", fetchMock);
+    const fetchMock = installPricingFetchMock({ ok: false });
     const instances = installFakeIntersectionObserver();
 
     mounted = await mountMarketing();
@@ -206,8 +221,7 @@ describe("marketing pricing preview fetch timing", () => {
       pricingPlans: pricingPlans(),
       usageBundles: usageBundles(),
     });
-    const fetchMock = vi.fn().mockResolvedValue({ ok: false });
-    vi.stubGlobal("fetch", fetchMock);
+    const fetchMock = installPricingFetchMock({ ok: false });
     installFakeIntersectionObserver();
     // A hydrated pricing section that already holds resolved prices — the
     // loader-data path /pricing still uses — must never re-fetch the preview
@@ -248,7 +262,7 @@ describe("marketing pricing preview fetch timing", () => {
       pricingPlans: pricingPlans(),
       usageBundles: usageBundles(),
     });
-    const fetchMock = vi.fn().mockResolvedValue({
+    const fetchMock = installPricingFetchMock({
       ok: true,
       json: async () => ({
         available: true,
@@ -266,7 +280,6 @@ describe("marketing pricing preview fetch timing", () => {
         usageBundles: {},
       }),
     });
-    vi.stubGlobal("fetch", fetchMock);
     const instances = installFakeIntersectionObserver();
 
     mounted = await mountMarketing();
@@ -288,7 +301,7 @@ describe("marketing pricing preview fetch timing", () => {
       pricingPlans: pricingPlans(),
       usageBundles: usageBundles(),
     });
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
+    installPricingFetchMock({ ok: false });
     installFakeIntersectionObserver();
     const { COMPETITOR_PRICE_ANCHORS } = await import("~/components/pricing-section");
 
@@ -314,8 +327,7 @@ describe("marketing pricing preview fetch timing", () => {
   it("falls back to fetching the preview after the page has long settled", async () => {
     vi.useFakeTimers();
     await mockMarketingDependencies(emptyRootData);
-    const fetchMock = vi.fn().mockResolvedValue({ ok: false });
-    vi.stubGlobal("fetch", fetchMock);
+    const fetchMock = installPricingFetchMock({ ok: false });
     installFakeIntersectionObserver();
 
     mounted = await mountMarketing();

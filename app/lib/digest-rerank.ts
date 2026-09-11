@@ -237,7 +237,11 @@ function readVariantCount(metadata: Record<string, unknown> | undefined): number
  * "3 new creatives, 2 retired — open the wall to see them." Returns null when
  * there is no churn, so callers can render nothing rather than an empty line.
  */
-export function adChurnFootnoteLine(summary: AdChurnSummary): string | null {
+/**
+ * Counted churn phrase without the trailing wall call-to-action, e.g.
+ * "3 new creatives, 2 retired". Returns null when there is no churn.
+ */
+export function adChurnCountsLabel(summary: AdChurnSummary): string | null {
   if (summary.total === 0) {
     return null;
   }
@@ -250,11 +254,32 @@ export function adChurnFootnoteLine(summary: AdChurnSummary): string | null {
   if (summary.retiredCount > 0) {
     parts.push(`${summary.retiredCount} retired`);
   }
+  return parts.join(", ");
+}
+
+/**
+ * Full counted churn phrase including the ×N versions arm, e.g.
+ * "1 new creative, as 4 versions". Returns null when there is no churn.
+ */
+export function adChurnLineLabel(summary: AdChurnSummary): string | null {
+  const counts = adChurnCountsLabel(summary);
+  if (counts === null) {
+    return null;
+  }
+  const parts = [counts];
   // Issue #2151 (re-scoped): name the "×N versions" arm when a new ad is
   // actually testing variants. Only the largest count is named — the line
   // stays a single counted footnote, never a fabricated figure.
   if (summary.maxNewVariantCount !== null) {
     parts.push(`as ${summary.maxNewVariantCount} versions`);
   }
-  return `${parts.join(", ")} — open the wall to see them.`;
+  return parts.join(", ");
+}
+
+export function adChurnFootnoteLine(summary: AdChurnSummary): string | null {
+  const label = adChurnLineLabel(summary);
+  if (label === null) {
+    return null;
+  }
+  return `${label} — open the wall to see them.`;
 }

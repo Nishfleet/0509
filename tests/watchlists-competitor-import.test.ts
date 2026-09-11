@@ -151,7 +151,7 @@ describe("watchlists bulk competitor import", () => {
       upsertClientRoom: vi.fn(),
       upsertWorkspaceBranding: vi.fn(),
     }));
-    vi.doMock("~/lib/monitoring.server", () => ({
+    vi.doMock("~/lib/first-watchlist-scan.server", () => ({
       queueFirstWatchlistScan,
       queueFirstWatchlistScanForSignupFirstBrief: vi.fn(),
     }));
@@ -207,7 +207,7 @@ describe("watchlists bulk competitor import", () => {
       upsertClientRoom: vi.fn(),
       upsertWorkspaceBranding: vi.fn(),
     }));
-    vi.doMock("~/lib/monitoring.server", () => ({
+    vi.doMock("~/lib/first-watchlist-scan.server", () => ({
       queueFirstWatchlistScan,
       queueFirstWatchlistScanForSignupFirstBrief,
     }));

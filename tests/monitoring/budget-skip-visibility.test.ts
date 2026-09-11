@@ -186,6 +186,40 @@ describe("budget-skip visibility (#1485)", () => {
     expect(markup).not.toMatch(/skipped_due_to_budget/);
   });
 
+  it("the evidence card renders the inactive-plan reason for a budget skip on purchased credits (#2890)", () => {
+    const skip = capture({
+      id: "proof-budget-topup",
+      status: "skipped_due_to_budget",
+      skipReason: "skipped_due_to_budget",
+      failureReason: "Purchased proof captures require an active paid plan.",
+      captureDiagnostics: { budgetReason: "top_up_inactive_plan" },
+      attemptedAt: "2026-08-31T10:00:00.000Z",
+    });
+
+    const markup = renderCard({
+      checksExpanded: true,
+      data: {
+        proofSummary: {
+          ...emptyProofSummary(),
+          totalAttempts: 1,
+          skippedAttempts: 1,
+          skippedDueToBudget: 1,
+        },
+        renderedAt: "2026-08-31T11:00:00.000Z",
+        recentProofCaptures: [skip],
+        eventCandidates: [],
+        events: [],
+      },
+      watchlistId: "watch-1",
+    });
+
+    // The per-row reason is the stored one: purchased credits need an active
+    // plan — not the generic "plan allowance reached".
+    expect(markup).toContain("Credits blocked");
+    expect(markup).toContain("active paid plan");
+    expect(markup).not.toMatch(/top_up_inactive_plan|skipped_due_to_budget/);
+  });
+
   it("the evidence card does not render the budget-skip link when no budget skips occurred", () => {
     const markup = renderCard({
       checksExpanded: true,

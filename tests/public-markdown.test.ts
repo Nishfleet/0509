@@ -539,30 +539,30 @@ describe("public markdown", () => {
     expect(brandAndTimeline).toContain("https://0509.io/timeline/calendly.com");
   });
 
-  it("describes a collecting /timeline entry honestly — no dated-ledger overclaim (issue #2021)", () => {
-    // Collecting entries have no lastmod because nothing is captured yet.
-    // llms.txt must still list the URL (sitemap parity) but must not claim
-    // a dated offer state exists.
-    const collecting = llmsPageForTimelinePath("/timeline/gymshark.com");
-    expect(collecting).not.toBeNull();
-    expect(collecting!.description).toContain("collecting");
-    expect(collecting!.description).toContain("no offer states recorded yet");
-    expect(collecting!.description).not.toContain("at least one dated offer state");
-    expect(collecting!.description).not.toContain("last captured");
-
+  it("describes a capture-backed /timeline entry honestly and never lists a zero-state domain in llms.txt (issues #2021, #2881)", () => {
+    // Issue #2881: llms.txt mirrors the sitemap's capture-backed-only set —
+    // a domain with 0 recorded offer states (collecting page, noindex on the
+    // route) is never listed, so no zero-state URL ships into an answer
+    // engine's crawl surface.
     const rendered = buildLlmsText(
       [{ path: "/ads/gymshark.com" }],
-      [{ path: "/timeline/gymshark.com" }],
+      [],
     );
-    expect(rendered).toContain("https://0509.io/timeline/gymshark.com");
-    expect(rendered).toContain("no offer states recorded yet");
-    expect(rendered).not.toMatch(
-      /gymshark\.com[^\n]*at least one dated offer state/,
-    );
+    expect(rendered).not.toContain("https://0509.io/timeline/gymshark.com");
+    expect(rendered).not.toContain("no offer states recorded yet");
 
     // Capture-backed entries keep the dated-ledger wording.
     const backed = llmsPageForTimelinePath("/timeline/calendly.com", "2026-09-01");
     expect(backed!.description).toContain("at least one dated offer state");
     expect(backed!.description).toContain("last captured on 2026-09-01");
+
+    const backedRendered = buildLlmsText(
+      [{ path: "/ads/calendly.com" }],
+      [{ path: "/timeline/calendly.com", lastmod: "2026-09-01" }],
+    );
+    expect(backedRendered).toContain("https://0509.io/timeline/calendly.com");
+    expect(backedRendered).not.toMatch(
+      /calendly\.com[^\n]*no offer states recorded yet/,
+    );
   });
 });

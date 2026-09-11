@@ -8,6 +8,7 @@ import {
   watchlistFingerprint,
 } from "~/lib/competitor-website";
 import type { AppEnv } from "~/lib/env.server";
+import { queueFirstWatchlistScan } from "~/lib/first-watchlist-scan.server";
 import { normalizeSavedQuery } from "~/lib/normalize";
 import type { DiscoveryFailureClass } from "~/lib/types";
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
@@ -44,7 +45,6 @@ export async function createWatchlistFromAgent(
     createWatchlistWithinLimit,
     deleteUnscannedWatchlistCreatedByFailedAgentAction,
   } = await import("~/lib/data.server");
-  const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
   const { resolveWorkspaceDataUserId } = await import("~/lib/workspace.server");
 
   const targetLabelInput = readString(input, "targetLabel") ?? readString(input, "query");

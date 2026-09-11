@@ -193,6 +193,16 @@ export function SneakerResaleLanding({
         <p className="ld-pricing-note" role="note">
           {copy.swingSource}
         </p>
+        <ul className="ld-swing-sources">
+          {copy.swingSources.map((source) => (
+            <li key={source.url}>
+              <a href={source.url} rel="noreferrer" target="_blank">
+                {source.label}
+              </a>{" "}
+              <time dateTime={source.publishedIso}>({source.publishedIso})</time>
+            </li>
+          ))}
+        </ul>
       </section>
 
       <section className="ld-quiet">

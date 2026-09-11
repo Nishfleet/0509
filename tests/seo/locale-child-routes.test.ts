@@ -11,6 +11,10 @@ import {
 } from "~/lib/locale-markets";
 import { canonicalLinks, SITEMAP_PATHS } from "~/lib/seo";
 import routes from "~/routes";
+import {
+  LEGACY_VENDOR_COMPARE_PATH,
+  LEGACY_VENDOR_SWITCH_PATH,
+} from "~/routes/legacy-vendor-redirect";
 
 type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
 type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
@@ -215,6 +219,21 @@ describe("locale compare/switch child routes (issue #1563)", () => {
       );
       expect(hubList, `hub must not emit bare EN link ${comparePath}`).not.toContain(
         `href="${comparePath}"`,
+      );
+    }
+  });
+
+  it("links no wiped legacy path under a locale prefix either (issue #2860 canary)", async () => {
+    const { default: LocaleCompareHub } = await import("~/routes/$locale.compare");
+    const markup = renderToStaticMarkup(createElement(LocaleCompareHub));
+
+    // The legacy paths 301 to the EN /compare hub. A locale hub href like
+    // /de/compare/magicbrief 301s to EN /compare — a locale-to-EN hub hop
+    // that eats the click the same way (issue #2860). Suffix containment
+    // catches both the bare EN form and every locale-prefixed form.
+    for (const legacyPath of [LEGACY_VENDOR_COMPARE_PATH, LEGACY_VENDOR_SWITCH_PATH]) {
+      expect(markup, `hub must not link wiped /${legacyPath} in any locale`).not.toContain(
+        `/${legacyPath}"`,
       );
     }
   });

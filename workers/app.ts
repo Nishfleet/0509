@@ -93,199 +93,6 @@ type GlobalEnvCarrier = typeof globalThis & {
   __APP_REQUEST_ENV__?: Env;
 };
 
-// ---------------------------------------------------------------------------
-// Edge cache for anonymous public HTML (issue #2388)
-//
-// Nothing on this zone cached HTML before this: there is no `caches.default`
-// use anywhere in the repo, no `cacheEverything`/`cacheTtl` fetch option, and
-// Cloudflare does not cache HTML by default, so all three public surfaces had
-// no `cf-cache-status` at all and every buyer, crawler, and sitemap sweep ran
-// the Worker (and its D1 reads) from scratch. These routes already advertise
-// `public, max-age=300` — `withSecurityHeaders` stamps
-// `PUBLIC_HTML_CACHE_CONTROL` on anonymous HTML — but nothing ever stored the
-// bytes behind it.
-//
-// Scope is exactly the three prefixes the issue names and nothing else. The
-// `public` directive in the cache-control is what decides storability, which
-// is the second gate behind the prefix check: the routes that answer `private`
-// on purpose (the SSR pricing pages, which set it themselves) can never enter
-// the shared cache, and neither could a future private document under one of
-// the three prefixes.
-// ---------------------------------------------------------------------------
-
-/** Matches `PUBLIC_HTML_CACHE_CONTROL`'s max-age so the edge cache expires
- * exactly when the browser copy does, and no later. */
-export const EDGE_CACHE_TTL_SECONDS = 300;
-
-/** Run proof: `HIT` is served from the Cache API, `MISS` was rendered by the
- * Worker and stored. Absent means the request was never cache-eligible. */
-export const EDGE_CACHE_STATUS_HEADER = "x-0509-cache";
-
-const EDGE_CACHE_PATH_PREFIXES = ["/ads/", "/compare/", "/timeline/"] as const;
-
-/** The Cache API keys on the request URL, so the buyer country rides the key
- * URL as a query parameter. Same URL under a different country must never
- * replay: the loaders put market and price copy in the document. */
-const EDGE_CACHE_KEY_PARAM = "__0509-edge-cache";
-const EDGE_CACHE_NO_COUNTRY = "none";
-
-type EdgeCacheKeyRequest = Request & { cf?: { country?: string } };
-
-type EdgeCacheStorage = {
-  match(request: Request): Promise<Response | undefined>;
-  put(request: Request, response: Response): Promise<void>;
-};
-
-function edgeCache(): EdgeCacheStorage | null {
-  const storage = (globalThis as unknown as { caches?: { default?: EdgeCacheStorage } })
-    .caches;
-  return storage?.default ?? null;
-}
-
-/**
- * The cache key for a request that may be served from the edge cache, or null
- * when the request may not be:
- *
- * - GET only. HEAD has no document body worth storing.
- * - No `cookie` header at all. A signed-in document embeds that visitor's
- *   session, and the Cache API is shared by everyone hitting the same colo.
- * - One of the three public programmatic prefixes.
- * - Country-bucketed on `request.cf.country`; a missing country collapses to a
- *   single bucket rather than silently joining a real country's entry.
- */
-export function edgeCacheKeyForRequest(request: Request): Request | null {
-  if (request.method !== "GET") {
-    return null;
-  }
-  if (request.headers.has("cookie")) {
-    return null;
-  }
-  const url = new URL(request.url);
-  if (!EDGE_CACHE_PATH_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))) {
-    return null;
-  }
-  const country = (request as EdgeCacheKeyRequest).cf?.country;
-  url.searchParams.set(
-    EDGE_CACHE_KEY_PARAM,
-    country && country.trim() !== "" ? country.trim().toUpperCase() : EDGE_CACHE_NO_COUNTRY,
-  );
-  return new Request(url.toString(), { method: "GET" });
-}
-
-function cacheControlDirectives(response: Response): Set<string> {
-  const value = response.headers.get("cache-control") ?? "";
-  return new Set(
-    value
-      .toLowerCase()
-      .split(",")
-      .map((directive) => directive.trim().split("=")[0]?.trim() ?? "")
-      .filter(Boolean),
-  );
-}
-
-/**
- * Whether this exact response may be stored for every other visitor of this
- * colo. Each condition is a poisoning guard, not a formality:
- *
- * - `200` only — a soft 404 or an error page must never be replayed as the
- *   brand page for 300s.
- * - No `set-cookie` — a response that starts a session is per-visitor.
- * - An explicit `public` cache-control — `private`/`no-store` responses
- *   (the SSR pricing pages, authed documents) stay uncached.
- * - An HTML body — assets, JSON, and XML have their own caching stories.
- * - No per-response CSP nonce. A `script-src 'nonce-…'` header is only safe
- *   because that nonce is unpredictable and used once; the stored bytes would
- *   hand the SAME nonce and the SAME matching body to every visitor of this
- *   colo for the whole cache lifetime, which downgrades nonce-based CSP to a
- *   static allowlist token that any visitor can read. Issue #2348 turned
- *   nonces on, so a nonce-bearing document is per-response by construction.
- */
-export function isEdgeCacheableHtmlResponse(response: Response): boolean {
-  if (response.status !== 200) {
-    return false;
-  }
-  if (response.headers.has("set-cookie")) {
-    return false;
-  }
-  if (!cacheControlDirectives(response).has("public")) {
-    return false;
-  }
-  const csp = response.headers.get("content-security-policy") ?? "";
-  if (csp.includes("'nonce-")) {
-    return false;
-  }
-  const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
-  return contentType.includes("text/html");
-}
-
-/**
- * The stored copy for this request, or null on a miss (or when the request is
- * not cache-eligible, or the runtime has no Cache API — the node test suite).
- * The security headers are already inside the stored bytes: callers store the
- * response the Worker was about to send, not the raw route response.
- */
-export async function readEdgeCachedResponse(
-  request: Request,
-  cache: EdgeCacheStorage | null = edgeCache(),
-): Promise<Response | null> {
-  const key = edgeCacheKeyForRequest(request);
-  if (!key || !cache) {
-    return null;
-  }
-  // A cache read is an optimisation: if the Cache API itself fails, fall
-  // through to the real render rather than 500 a public page.
-  let cached: Response | undefined;
-  try {
-    cached = await cache.match(key);
-  } catch (error) {
-    console.error("[edge-cache] read failed", error);
-    return null;
-  }
-  if (!cached) {
-    return null;
-  }
-  const headers = new Headers(cached.headers);
-  headers.set(EDGE_CACHE_STATUS_HEADER, "HIT");
-  return new Response(cached.body, {
-    status: cached.status,
-    statusText: cached.statusText,
-    headers,
-  });
-}
-
-/**
- * Stamps `MISS`, hands the cache a copy in the background, and returns the
- * response the visitor gets. The copy is a `clone()` so `ctx.waitUntil`'s
- * `put()` can read the body while the visitor reads the original.
- */
-export function storeEdgeCachedHtmlResponse(
-  request: Request,
-  response: Response,
-  ctx: Pick<ExecutionContext, "waitUntil">,
-  cache: EdgeCacheStorage | null = edgeCache(),
-): Response {
-  const key = edgeCacheKeyForRequest(request);
-  if (!key || !cache || !isEdgeCacheableHtmlResponse(response)) {
-    return response;
-  }
-  const headers = new Headers(response.headers);
-  headers.set(EDGE_CACHE_STATUS_HEADER, "MISS");
-  const storable = new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
-  // Same posture for the write: the visitor has already been answered, and a
-  // rejected `put` (a guard the storage layer disagrees with) must degrade to
-  // an uncached page, not to a Worker error on every hit of the route.
-  ctx.waitUntil(
-    cache.put(key, storable.clone()).catch((error: unknown) => {
-      console.error("[edge-cache] write failed", error);
-    }),
-  );
-  return storable;
-}
-
 const requestHandler = createRequestHandler(
   () => import("virtual:react-router/server-build"),
   process.env.NODE_ENV === "development" ? "development" : "production"
@@ -464,7 +271,7 @@ export default {
         request,
         buildLlmsText(
           brandEntries,
-          timelineSitemapEntries(brandEntries, captureBackedTimelineEntries),
+          timelineSitemapEntries(captureBackedTimelineEntries),
         ),
       );
     }
@@ -555,15 +362,6 @@ export default {
       }
     }
 
-    // Issue #2388: the anonymous, country-bucketed public HTML edge cache. Read
-    // before the React Router tree so a HIT never loads it (or the D1 reads
-    // behind it). Placed after the rate-limit gate, which is a no-op for these
-    // GET paths but must keep seeing every request if that policy ever widens.
-    const edgeCachedResponse = await readEdgeCachedResponse(request);
-    if (edgeCachedResponse) {
-      return edgeCachedResponse;
-    }
-
     (globalThis as GlobalEnvCarrier).__APP_REQUEST_ENV__ = env;
     // One per-request CSP nonce (issue #2348): the same value is threaded into
     // the rendered HTML (via the cloudflare context → root loader → Layout)
@@ -579,11 +377,7 @@ export default {
       cspNonce,
     });
     const response = await requestHandler(request, routerContext);
-    return storeEdgeCachedHtmlResponse(
-      request,
-      withSecurityHeaders(withPublicContentSignal(response, request), request, cspNonce),
-      ctx,
-    );
+    return withSecurityHeaders(withPublicContentSignal(response, request), request, cspNonce);
   },
   async scheduled(controller, env, ctx) {
     const observationContext = Object.freeze({

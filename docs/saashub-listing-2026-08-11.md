@@ -331,3 +331,7 @@ code.
 After the owner confirms these, the manual submission itself is a ~10-minute
 form fill at `https://www.saashub.com/services/submit` — every field value is
 in this document.
+
+## Receipt pass (2026-09-11, issue #2857)
+
+receipt: https://www.saashub.com/five-to-nine — submitted and approved; page live (first confirmed 2026-08-22, re-verified 2026-09-11: HTTP 200, page title "Five to Nine reviews. Is Five to Nine good? - SaaSHub", product name and 0509.io link present). This venue is DONE — the only queued follow-ups are optional and recorded above (ownership verification via the 0509.io inbox, Features & Specs correction via the Edit flow, and the $99/month Featured Listing, which remains a separate owner decision).

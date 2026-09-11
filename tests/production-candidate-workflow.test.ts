@@ -141,11 +141,19 @@ describe("exact production candidate workflow", () => {
       id: "pin",
       run: "./scripts/ci-verify-production-candidate.sh",
     });
-    // The initial pin stays fail-closed: drift tolerance is granted only to
-    // post-pin steps that re-verify the already-pinned SHA after the gate
-    // validated it. If main moved before the pin, no candidate has been
-    // verified yet, so the run must stop.
-    expect(steps[verifyIndex]?.env).not.toHaveProperty("TOLERATE_MAIN_DRIFT");
+    // The pin step verifies PINNED_SHA itself and CAS-checks it against live
+    // main. It now tolerates a forward move of main the same way the post-pin
+    // steps do (2026-09-10: main merged every few minutes, so queued Deploy
+    // production runs failed the pin by construction and each red run filed a
+    // fresh AUTO-REVERT HALT; Nishfleet/0509#2701). What ships is still
+    // exactly PINNED_SHA: on workflow_dispatch the CAS enforces ancestorship
+    // of the dispatched candidate, and on push events remote main can only
+    // have advanced from the pinned tip, so a non-ancestor SHA can never
+    // reach the tolerate branch. Every other CAS failure, including a
+    // rewind/rewrite of main, stays fail-closed.
+    expect(steps[verifyIndex]?.env).toMatchObject({
+      TOLERATE_MAIN_DRIFT: "1",
+    });
   });
 
   it("offers the chain bootstrap as an optional dispatch input wired only to the release gate", () => {

@@ -15,6 +15,7 @@ import {
   faqPageJsonLd,
   jsonLdScriptProps,
   publicSeoMeta,
+  serviceJsonLd,
   webPageJsonLd,
   type FaqJsonLdEntry,
 } from "~/lib/seo";
@@ -101,9 +102,19 @@ function proofTimeLabel(iso: string | null | undefined): string {
   if (Number.isNaN(parsed.getTime())) {
     return "recently";
   }
+  // A bare clock ("6:18 AM") with no date reads as "this morning" even when
+  // the capture is a day old (issue 1467). Full-ISO stamps carry the date; a
+  // prior-year capture appends its year exactly like the date-only branch
+  // above so "Aug 27" cannot read as a same-year date for a year-old
+  // capture. Same shape as marketing.tsx's proofTimeLabel (issue 1467).
+  const includeYear = parsed.getUTCFullYear() !== new Date().getUTCFullYear();
   return parsed.toLocaleString("en", {
+    month: "short",
+    day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    ...(includeYear ? { year: "numeric" } : {}),
+    timeZone: "UTC",
   });
 }
 
@@ -302,6 +313,20 @@ export default function CompetitorMonitoringCategoryRoute() {
             description: pageDescription,
             pathname: "/competitor-monitoring",
             dateModified: "2026-08-21",
+          }),
+        )}
+      />
+      {/* Issue #2855 — the page offers the monitoring service itself, so it
+          carries a Service entity next to the WebPage + FAQPage. Name and
+          description mirror the copy the page already renders; no price or
+          rating (prices are live-loaded from Dodo, never hardcoded). */}
+      <script
+        {...jsonLdScriptProps(
+          serviceJsonLd({
+            name: "Competitor monitoring",
+            description: pageDescription,
+            pathname: "/competitor-monitoring",
+            serviceType: "Competitor monitoring software",
           }),
         )}
       />
@@ -678,7 +703,10 @@ export default function CompetitorMonitoringCategoryRoute() {
           Paste a competitor website into the <Link to={searchPath}>search preview</Link> — no
           account needed. Doing it by hand today? Read the guide:{" "}
           <Link to="/guides/how-to-track-competitor-ads">how to track competitor ads</Link> — the
-          free manual workflow, the n8n/Apify DIY route, and where both break. Questions about
+          free manual workflow, the n8n/Apify DIY route, and where both break. Watching over
+          time instead? Read <Link to="/guides/how-to-monitor-meta-ad-library">how to monitor a
+          competitor&rsquo;s Meta Ad Library</Link> — the free cadence-and-log routine and where it
+          breaks. Questions about
           coverage on your competitors? Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and
           we&rsquo;ll answer honestly.
         </p>
