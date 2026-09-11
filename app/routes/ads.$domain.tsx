@@ -731,7 +731,9 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
   // body — and ship just the belt's narrow projection, so the payload
   // carries no ticker candidate the belt never renders.
   const tickerAds: BrandTickerAd[] = dedupeTickerBodies(
-    projectedWallAds,
+    // The belt filters empty bodies BEFORE dedupe — mirror that order here so
+    // a bodiless creative never takes a shipped slot the belt then drops.
+    projectedWallAds.filter((ad) => ad.previewHeadline?.trim() || ad.hook?.trim()),
     (ad) => ad.previewHeadline?.trim() || ad.hook?.trim() || "",
   )
     .slice(0, TICKER_MAX_ITEMS)
