@@ -519,7 +519,8 @@ function main() {
 
   if (
     validation.verdict === "fail" &&
-    args.fileIssue
+    args.fileIssue &&
+    !args.local
   ) {
     const repo = "Nishfleet/0509";
     const title = `Proof screenshot success rate regression: ${buckets.real.pct}% (${buckets.real.withShot}/${buckets.real.total}) over last ${args.windowHours}h`;
