@@ -299,15 +299,14 @@ export function classifyLanguage(input: {
     return buildResult("Hindi", confidence, sampleLength, scriptSignals, cueMatches, "devanagari_dominant");
   }
 
-  if (scriptSignals.latin >= 10 && cueScore >= 2) {
-    const confidence = Math.min(0.94, 0.62 + cueScore * 0.06);
-    return buildResult("Hinglish", confidence, sampleLength, scriptSignals, cueMatches, "latin_with_hinglish_cues");
-  }
-
   if (scriptSignals.latin >= 10) {
     const best = bestLatinProfile(sample);
     if (best) {
       return buildResult(best.label, best.confidence, sampleLength, scriptSignals, cueMatches, "latin_language_cues");
+    }
+    if (cueScore >= 2) {
+      const confidence = Math.min(0.94, 0.62 + cueScore * 0.06);
+      return buildResult("Hinglish", confidence, sampleLength, scriptSignals, cueMatches, "latin_with_hinglish_cues");
     }
     return buildResult("English", 0.79, sampleLength, scriptSignals, cueMatches, "latin_without_hinglish_cues");
   }
