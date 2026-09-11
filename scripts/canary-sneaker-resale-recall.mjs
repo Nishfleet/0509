@@ -181,6 +181,7 @@ function defaultSleep(ms) {
  *   max429Retries?: number,
  *   requestErrorRetryLimit?: number,
  *   requestErrorRetryDelayMs?: number,
+ *   elapsedMsImpl?: () => number,
  * }} input
  * @returns {Promise<SneakerResaleProbe>}
  */
@@ -199,7 +200,7 @@ export async function probeSneakerResaleDomain({
   // Remaining wall budget for this run; a retry is only taken when its wait
   // (plus a 90s attempt) still fits. Exhausted budget ⇒ no retry, terminal
   // state, fail loud.
-  const canAffordRetry = (delayMs) =>
+  const canAffordRetry = (/** @type {number} */ delayMs) =>
     elapsedMsImpl() + delayMs + PROBE_REQUEST_TIMEOUT_MS <= RUN_WALL_BUDGET_MS;
   const url = new URL("/search", baseUrl);
   url.searchParams.set("website", domain);
