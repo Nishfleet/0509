@@ -236,3 +236,88 @@ describe("captureBrowserRunSnapshot decode wiring", () => {
     expect(put).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("installPublicBrowserRequestGuard", () => {
+  function createInterceptedPage() {
+    const requestHandlers: Array<(request: unknown) => void> = [];
+    const page = {
+      setRequestInterception: vi.fn().mockResolvedValue(undefined),
+      on: vi.fn((event: string, handler: (request: unknown) => void) => {
+        if (event === "request") {
+          requestHandlers.push(handler);
+        }
+        return page;
+      }),
+    };
+    return { page, requestHandlers };
+  }
+
+  async function collectUnhandledRejections(emit: () => void) {
+    const rejections: unknown[] = [];
+    const listener = (reason: unknown) => {
+      rejections.push(reason);
+    };
+    process.on("unhandledRejection", listener);
+    try {
+      emit();
+      // The guarded handler is fire-and-forget; give the event loop a turn so
+      // a genuinely unhandled rejection would have fired by now.
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    } finally {
+      process.off("unhandledRejection", listener);
+    }
+    return rejections;
+  }
+
+  it("swallows a continue() rejection when the target closes mid-guard", async () => {
+    const { page, requestHandlers } = createInterceptedPage();
+    const { installPublicBrowserRequestGuard } = await import(
+      "~/lib/browser-run.server"
+    );
+    await installPublicBrowserRequestGuard(page as never);
+    expect(requestHandlers).toHaveLength(1);
+
+    const request = {
+      url: () => "https://example.com/allowed",
+      isInterceptResolutionHandled: () => false,
+      continue: vi.fn().mockRejectedValue(new Error("Target closed")),
+      abort: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const rejections = await collectUnhandledRejections(() =>
+      requestHandlers[0](request),
+    );
+
+    expect(request.continue).toHaveBeenCalledTimes(1);
+    expect(rejections).toEqual([]);
+  });
+
+  it("swallows an abort() rejection when the request was already handled", async () => {
+    const { resolvePublicHttpUrl } = await import("~/lib/public-url.server");
+    vi.mocked(resolvePublicHttpUrl).mockResolvedValueOnce(null);
+
+    const { page, requestHandlers } = createInterceptedPage();
+    const { installPublicBrowserRequestGuard } = await import(
+      "~/lib/browser-run.server"
+    );
+    await installPublicBrowserRequestGuard(page as never);
+    expect(requestHandlers).toHaveLength(1);
+
+    const request = {
+      url: () => "https://example.com/blocked",
+      isInterceptResolutionHandled: () => false,
+      continue: vi.fn().mockResolvedValue(undefined),
+      abort: vi
+        .fn()
+        .mockRejectedValue(new Error("Request is already handled")),
+    };
+
+    const rejections = await collectUnhandledRejections(() =>
+      requestHandlers[0](request),
+    );
+
+    expect(request.abort).toHaveBeenCalledTimes(1);
+    expect(request.continue).not.toHaveBeenCalled();
+    expect(rejections).toEqual([]);
+  });
+});
