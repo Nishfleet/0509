@@ -74,7 +74,7 @@ export function buildWatchlistGrantReconcileStatements(
           WHERE user_id = ?
             AND is_active = 0
             AND (paused_reason = 'plan_limit' OR paused_reason IS NULL)
-          ORDER BY updated_at DESC
+          ORDER BY updated_at DESC, created_at DESC, id DESC
           LIMIT (
             SELECT MAX(
               0,
@@ -221,7 +221,7 @@ export async function reactivateWatchlistsUpToPlanLimit(
             WHERE user_id = ?
               AND is_active = 0
               AND (paused_reason = 'plan_limit' OR paused_reason IS NULL)
-            ORDER BY updated_at DESC
+            ORDER BY updated_at DESC, created_at DESC, id DESC
             LIMIT ?
           )
       `,

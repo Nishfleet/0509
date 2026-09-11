@@ -35,7 +35,6 @@ export interface AppEnv {
   BETTER_AUTH_SECRET?: string;
   BETTER_AUTH_TRUSTED_ORIGINS?: string;
   BROWSER?: BrowserBinding;
-  BROWSERLESS_PROOF_ALLOWLIST_ORIGINS?: string;
   BROWSERLESS_TOKEN?: string;
   BROWSERLESS_BQL_URL?: string;
   BROWSER_RUN_ACCOUNT_ID?: string;

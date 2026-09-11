@@ -50,6 +50,38 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # A green "Deploy production" run on main is the terminus for every open
+  # AUTO-REVERT HALT issue: each halt was filed because the same workflow
+  # was red on consecutive commits ("infra fault, a human must look"). Once
+  # the workflow is green again the halts are resolved by definition, and
+  # leaving them open only pages the judges (96 open halts by 2026-09-11
+  # after two days of red deploys — every one of them stale the moment the
+  # first green deploy landed). Closing them here is the mechanism; nobody
+  # sweeps by hand.
+  close-halts-on-green:
+    name: close halts on green
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.name == 'Deploy production'
+    steps:
+      - name: Close open AUTO-REVERT HALT issues
+        env:
+          GH_TOKEN: ${{ secrets.AUTO_REVERT_PAT || github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          short="${HEAD_SHA:0:7}"
+          closed=0
+          # --paginate + per-page cap: the 2026-09-11 backlog was 96 issues.
+          for num in $(gh issue list --repo "$REPO" --state open --label auto-revert-halt --limit 500 --json number --jq '.[].number'); do
+            gh issue close "$num" --repo "$REPO" --reason completed \
+              --comment "Resolved by a green \`Deploy production\` run on main: $RUN_URL (commit $short). Every AUTO-REVERT HALT records a red-on-consecutive-commits state; that state ended with this run. Closed automatically by auto-revert.yml (close-halts-on-green)." >/dev/null
+            closed=$((closed + 1))
+          done
+          echo "closed $closed AUTO-REVERT HALT issue(s) after green $short"
+
   auto-revert:
     name: auto-revert
     runs-on: ubuntu-latest
