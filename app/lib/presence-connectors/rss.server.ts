@@ -165,31 +165,64 @@ export const rssConnector = {
     }
 
     const fetchImpl = ctx.fetchImpl ?? fetch;
-    const feedUrl =
+    const storedFeedUrl =
       typeof target.metadata.feedUrl === "string" && target.metadata.feedUrl
         ? target.metadata.feedUrl
-        : target.targetUrl;
+        : null;
+    const feedUrl = storedFeedUrl ?? target.targetUrl;
 
-    const response = await presenceSafeFetch(feedUrl, fetchImpl, {
-      method: "GET",
-      maxBytes: MAX_RSS_FETCH_BYTES,
-      etag: cursor?.etag,
-      lastModified: cursor?.lastModified,
-      accept:
-        "application/rss+xml,application/atom+xml,application/xml,text/xml,application/feed+json,application/json,*/*",
-    });
+    const fetched = await fetchFeed(feedUrl, fetchImpl, cursor);
 
-    if (!response) {
-      return {
+    // validateTarget accepts a site target it could not inspect on the promise
+    // that "feed discovery is retried at poll time (mirrors website)". Keep
+    // that promise: when no feedUrl is stored and the fetched document is not
+    // a feed, run the same <link rel="alternate"> discovery here and persist
+    // the discovered feed via cursor.feedUrl so the next poll fetches it
+    // directly.
+    if (!storedFeedUrl && fetched.result.errorCode === "feed_parse_failed" && fetched.body) {
+      const discovered = await resolveDiscoveredFeedUrl(fetched.body, feedUrl);
+      if (discovered) {
+        const retry = await fetchFeed(discovered, fetchImpl);
+        return {
+          ...retry.result,
+          cursor: { feedUrl: discovered, ...(retry.result.cursor ?? {}) },
+        };
+      }
+    }
+
+    return fetched.result;
+  },
+};
+
+async function fetchFeed(
+  feedUrl: string,
+  fetchImpl: typeof fetch,
+  cursor?: { etag?: string | null; lastModified?: string | null },
+): Promise<{ result: PollResult; body: string | null }> {
+  const response = await presenceSafeFetch(feedUrl, fetchImpl, {
+    method: "GET",
+    maxBytes: MAX_RSS_FETCH_BYTES,
+    etag: cursor?.etag,
+    lastModified: cursor?.lastModified,
+    accept:
+      "application/rss+xml,application/atom+xml,application/xml,text/xml,application/feed+json,application/json,*/*",
+  });
+
+  if (!response) {
+    return {
+      result: {
         ok: false,
         items: [],
         errorCode: "fetch_failed",
         errorMessage: "Could not fetch the RSS feed.",
-      };
-    }
+      },
+      body: null,
+    };
+  }
 
-    if (response.notModified) {
-      return {
+  if (response.notModified) {
+    return {
+      result: {
         ok: true,
         items: [],
         etag: response.etag,
@@ -197,36 +230,45 @@ export const rssConnector = {
         coverageLabel: "VERIFIED_PUBLIC_FEED",
         costUnits: 0,
         cursor: { feedUrl },
-      };
-    }
+      },
+      body: null,
+    };
+  }
 
-    if (!response.ok || !response.body) {
-      return {
+  if (!response.ok || !response.body) {
+    return {
+      result: {
         ok: false,
         items: [],
         errorCode: "feed_unavailable",
         errorMessage: `Feed responded with HTTP ${response.status}.`,
-      };
-    }
+      },
+      body: null,
+    };
+  }
 
-    const body = response.body;
-    const items = await parseFeedItems(body, feedUrl);
+  const body = response.body;
+  const items = await parseFeedItems(body, feedUrl);
 
-    // Honesty eval 3.4: a valid feed document that simply has zero entries is
-    // an honest empty result, not a fabrication. Only a document that is not a
-    // feed at all (and yielded nothing) is a parse failure.
-    if (items.length === 0 && !looksLikeFeedDocument(body) && !looksLikeJsonFeed(body)) {
-      return {
+  // Honesty eval 3.4: a valid feed document that simply has zero entries is
+  // an honest empty result, not a fabrication. Only a document that is not a
+  // feed at all (and yielded nothing) is a parse failure.
+  if (items.length === 0 && !looksLikeFeedDocument(body) && !looksLikeJsonFeed(body)) {
+    return {
+      result: {
         ok: false,
         items: [],
         errorCode: "feed_parse_failed",
         errorMessage: "Feed did not contain valid RSS, Atom, or JSON Feed entries.",
         etag: response.etag,
         lastModified: response.lastModified,
-      };
-    }
+      },
+      body,
+    };
+  }
 
-    return {
+  return {
+    result: {
       ok: true,
       items,
       etag: response.etag,
@@ -234,9 +276,23 @@ export const rssConnector = {
       coverageLabel: "VERIFIED_PUBLIC_FEED",
       costUnits: 1,
       cursor: { feedUrl, completeSnapshot: items.length > 0 },
-    };
-  },
-};
+    },
+    body,
+  };
+}
+
+async function resolveDiscoveredFeedUrl(body: string, baseUrl: string): Promise<string | null> {
+  const href = discoverFeedLink(body);
+  if (!href) {
+    return null;
+  }
+  try {
+    const resolved = await resolvePublicHttpUrl(new URL(href, baseUrl));
+    return resolved ? resolved.toString() : null;
+  } catch {
+    return null;
+  }
+}
 
 function isDirectFeedResponse(body: string, contentType: string): boolean {
   if (looksLikeFeedDocument(body) || looksLikeJsonFeed(body)) {
