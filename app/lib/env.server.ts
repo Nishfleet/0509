@@ -210,6 +210,12 @@ export interface CloudflareRuntimeContext {
   cspNonce?: string;
 }
 
+// Client-supplied proto must be http(s) and the host a bare hostname (optional
+// port, no credentials or path); anything else fails closed to request.url so a
+// spoofed header cannot steer token-bearing links to an attacker origin.
+const FORWARDED_PROTO_PATTERN = /^https?$/i;
+const FORWARDED_HOST_PATTERN = /^[a-z0-9.-]+(?::\d+)?$/i;
+
 function forwardedOrigin(request: Request) {
   const forwarded = request.headers.get("forwarded");
   if (forwarded) {
@@ -220,20 +226,26 @@ function forwardedOrigin(request: Request) {
     const host = hostMatch?.[1]?.trim().replace(/^"|"$/g, "");
 
     if (proto && host) {
-      return `${proto}://${host}`;
+      if (!FORWARDED_PROTO_PATTERN.test(proto) || !FORWARDED_HOST_PATTERN.test(host)) {
+        return null;
+      }
+      return `${proto.toLowerCase()}://${host}`;
     }
   }
 
   const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
-  if (!forwardedHost) {
+  if (!forwardedHost || !FORWARDED_HOST_PATTERN.test(forwardedHost)) {
     return null;
   }
 
   const forwardedProto =
     request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() ||
     new URL(request.url).protocol.replace(/:$/, "");
+  if (!FORWARDED_PROTO_PATTERN.test(forwardedProto)) {
+    return null;
+  }
 
-  return `${forwardedProto}://${forwardedHost}`;
+  return `${forwardedProto.toLowerCase()}://${forwardedHost}`;
 }
 
 export function appOrigin(env: AppEnv, request: Request) {
