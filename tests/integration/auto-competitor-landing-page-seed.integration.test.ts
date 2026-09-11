@@ -403,12 +403,15 @@ describe("seedAutoCompetitors — landing-page fallback (auto-competitor-watch #
     ]);
 
     // Every chunk size from 1 byte up to the full body, so several runs split
-    // the multi-byte ₹ across chunks. Same expected outcome every time: the
+    // Every chunk size from 1 byte up to the full body. Stepping by 1 (not a
+    // coarse stride) matters: only a chunk boundary that falls INSIDE the
+    // 3-byte ₹ sequence exercises the bug, so a stride would leave most
+    // iterations non-discriminating. Same expected outcome every time: the
     // price-derived keyword survives, so the cached advertiser seeded under it
     // is surfaced. A U+FFFD corruption loses the keyword and this candidate
     // disappears.
     const byteLength = new TextEncoder().encode(MULTIBYTE_FIXTURE_HTML).byteLength;
-    for (let chunkSize = 1; chunkSize <= byteLength; chunkSize += 7) {
+    for (let chunkSize = 1; chunkSize <= byteLength; chunkSize += 1) {
       vi.restoreAllMocks();
       mockPublicCrawlInChunks(`https://multibyte.example/`, MULTIBYTE_FIXTURE_HTML, chunkSize);
 

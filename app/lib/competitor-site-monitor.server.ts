@@ -457,14 +457,10 @@ export async function safeFetchDocument(
         const { done, value } = await reader.read();
         if (done) break;
         if (value) {
-          // Accumulate raw bytes and decode ONCE after the loop. Decoding each
-          // chunk with a fresh TextDecoder split a multi-byte UTF-8 sequence
-          // that straddled a chunk boundary into U+FFFD; the split point
-          // varies run to run, so the same unchanged page produced a
-          // different visibleTextHash and fired phantom
-          // website_page_changed alerts. One decoder over the whole byte
-          // stream is chunk-boundary-independent, and the cap counts bytes
-          // (UTF-16 .length under-reports ~3x for CJK).
+          // Decode ONCE after the loop, over raw bytes: a fresh TextDecoder
+          // per chunk splits a multi-byte UTF-8 sequence straddling a chunk
+          // boundary into U+FFFD, and the split point varies run to run
+          // (issue #2431). The cap counts bytes, not UTF-16 units.
           totalBytes += value.byteLength;
           if (totalBytes > maxBytes) {
             return { ok: false, status, body: null, finalUrl: current.toString(), refusedReason: "body_too_large" };
