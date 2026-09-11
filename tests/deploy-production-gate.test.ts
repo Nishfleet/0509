@@ -1648,6 +1648,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     const warnings = [];
     const collect = (/** @type {string} */ message) => {
       warnings.push(message);
+      return true;
     };
 
     // Recorded head resolves: it wins, and a supplied bootstrap is ignored
