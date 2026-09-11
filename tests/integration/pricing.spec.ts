@@ -85,13 +85,16 @@ describe("/pricing tier-card grid (#1499)", () => {
     expect(markup.match(/<span>Free<\/span>/g) ?? []).toHaveLength(1);
   });
 
-  it("renders the Free card with the no-card promise, €0 price, and prose-matched features", async () => {
+  it("renders the Free card with the no-card promise, the $0/mo fallback price, and prose-matched features", async () => {
     const markup = await renderPricingSection();
     const freeCard = cardRegion(markup, "Free");
 
     expect(freeCard).toContain("<span>Free</span>");
-    // Price "€0" and sub-label "free, forever" (issue #1499 accept 1).
-    expect(freeCard).toContain("€0");
+    // Free price uses the SAME currency source as the paid cards (issue
+    // #2957): no preview resolved, so the published USD anchor applies and
+    // the card reads "$0/mo" next to "$59 USD/mo" — no mixed currencies.
+    expect(freeCard).toContain("$0/mo");
+    expect(freeCard).not.toContain("€");
     expect(freeCard).toContain("free, forever");
     // The promise the card exists to surface (accept 4: Free card text
     // contains "no card required").
