@@ -424,3 +424,7 @@ field, URL, or requirement is known to have changed; the prepared suggestion
 stays paste-ready. The submission still requires a free AlternativeTo account
 with a verified email (owner action), and the optional $5 priority review
 remains an owner money decision with the free backlog queue as default.
+
+## Receipt pass (2026-09-11, issue #2857)
+
+blocked: needs Nish's identity — the free submission requires an AlternativeTo account with a verified email (none exists yet; creating/verifying it is an owner step) and the VPS IP is blocked by AlternativeTo's Cloudflare Turnstile (HTTP 403 on a plain fetch of https://alternativeto.net/, re-verified 2026-09-11 — same limitation recorded 2026-08-21 and 2026-09-09), so the worker can neither sign in nor reach the form from here. Not a payment wall: the $5 priority review stays skipped and the free backlog queue is accepted as recorded above. Every form field plus the committed assets (docs/assets/alternativeto/) carry the whole submission — once the owner account exists, the form fill is ~15 minutes.
