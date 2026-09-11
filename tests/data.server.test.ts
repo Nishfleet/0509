@@ -4553,7 +4553,7 @@ describe("upsertDeliveryTarget", () => {
     );
 
     const statement = mock.statements.find((entry) =>
-      entry.sql.includes("INSERT INTO delivery_target"),
+      entry.sql.includes("INTO delivery_target ("),
     );
 
     expect(statement?.bindings).toContain("user-1");
