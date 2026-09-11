@@ -36,6 +36,23 @@ vi.mock("~/lib/data/d1.server", () => ({
 }));
 
 vi.mock("~/lib/data/ads.server", () => ({
+  // Issue #2442: the backfill writes now dedupe on the schema's
+  // content_key generated column and call this helper for the skip-path
+  // read-back. Mirror the real implementation.
+  landingPageSnapshotContentKey: (snapshot: {
+    canonicalUrl: string;
+    normalizedHeadlineHash: string;
+    ctaText?: string | null;
+    priceText?: string | null;
+    formPresent?: boolean | null;
+  }) =>
+    [
+      snapshot.canonicalUrl,
+      snapshot.normalizedHeadlineHash,
+      snapshot.ctaText ?? "",
+      snapshot.priceText ?? "",
+      typeof snapshot.formPresent === "boolean" ? (snapshot.formPresent ? 1 : 0) : -1,
+    ].join("|"),
   replaceAnalysisFields,
 }));
 

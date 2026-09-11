@@ -37,6 +37,7 @@
 import { buildLandingPageAnalysisFields } from "~/lib/analysis.server";
 import {
   createLandingPageSnapshot,
+  landingPageSnapshotContentKey,
   replaceAnalysisFields,
 } from "~/lib/data/ads.server";
 import { execute, queryOne } from "~/lib/data/d1.server";
@@ -450,7 +451,11 @@ export async function runDemoBrandBackfill(
       // INSERT OR IGNORE keeps the deterministic id the single source of
       // truth against an overlapping cron retry — for the analysis write
       // as well as the row: an ignored insert means a concurrent pass (the
-      // nightly rail vs. the hourly catch-up) already owns this row.
+      // nightly rail vs. the hourly catch-up) already owns this row. Issue
+      // #2442: with the schema's content_key unique index, an ignored insert
+      // may also be an identical capture persisted under a different id, so
+      // the conflict target is named explicitly and the skip path read-back
+      // below resolves whichever row actually persisted.
       const inserted = await execute(
         env,
         `
@@ -474,6 +479,7 @@ export async function runDemoBrandBackfill(
             price_tier
           )
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)
+          ON CONFLICT(content_key) DO NOTHING
         `,
         rowId,
         snapshot.rawUrl,
@@ -494,12 +500,26 @@ export async function runDemoBrandBackfill(
       if (Number(inserted.meta?.changes ?? 0) === 0) {
         // The concurrent winner's row and analysis fields are authoritative.
         // The day still counts as a success (the hole is filled), but this
-        // pass captured nothing — report the skip, not a fresh capture.
+        // pass captured nothing — report the skip, not a fresh capture. The
+        // read-back resolves whichever row actually persisted (ours, or the
+        // identical capture that won the content_key race) so the reported
+        // snapshotId always points at a real row.
+        const persisted = await queryOne<{ id: string }>(
+          env,
+          `SELECT id FROM landing_page_snapshot WHERE id = ? OR content_key = ?
+           ORDER BY (id = ?) DESC LIMIT 1`,
+          rowId,
+          landingPageSnapshotContentKey(snapshot),
+          rowId,
+        );
+        if (!persisted) {
+          throw new Error(`demo brand backfill snapshot for ${domain} was not persisted`);
+        }
         await recordDemoBrandProofHoleAttempt(env, domain, day, true);
         results.push({
           domain,
           status: "skipped_already_captured",
-          snapshotId: rowId,
+          snapshotId: persisted.id,
           reasonCode: null,
           canonicalUrl: null,
           capturedAt: null,
