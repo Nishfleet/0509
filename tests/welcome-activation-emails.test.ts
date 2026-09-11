@@ -238,7 +238,8 @@ describe("sendFreeActivationResultEmail", () => {
     expect(payload.html).toContain("https://cdn.example.com/ad.jpg");
     expect(payload.html).toContain("proof-backed brief");
     expect(payload.html).not.toContain("no evidence check was used");
-    expect(payload.html).toMatch(/Free keeps watching this competitor with a weekly check/i);
+    expect(payload.html).toMatch(/Free includes one first check and one first brief/i);
+    expect(payload.html).not.toMatch(/weekly check/i);
     expect(payload.html).toMatch(/Paid plans check every 3–6 hours/i);
     expect(payload.html).toContain("/app/billing");
     expect(payload.headers["List-Unsubscribe"]).toBeTruthy();

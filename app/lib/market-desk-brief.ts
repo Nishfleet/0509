@@ -212,7 +212,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
       state: "changes",
       kicker: "Brief",
       title: "Your first brief is ready",
-      summary: "The activation scan filed a brief from this session's baseline, with at least one evidence-linked item. Open it now — the weekly check still runs on Monday.",
+      summary: "The activation scan filed a brief from this session's baseline, with at least one evidence-linked item. Open it now — this is your one first brief; recurring briefs are a paid plan.",
       action: {
         href: firstBriefDigestHref(firstBriefDigest.id),
         label: "Read the brief",
@@ -304,14 +304,14 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
       return {
         state: "quiet",
         kicker: "Brief",
-        title: "Weekly check complete",
-        summary: `We checked ${overnightScope} — nothing moved. The next weekly check runs Monday. Paid plans check every 3–6 hours and add instant alerts.`,
+        title: "First check complete",
+        summary: `We checked ${overnightScope} — nothing moved. That was your one free first check — recurring checks are a paid plan. Paid plans check every 3–6 hours and add instant alerts.`,
         action: { href: "/app/watchlists", label: "Review watchlists" },
         metrics,
         items: activeWatchlists.slice(0, 3).map((watchlist) => ({
           label: "Watched",
           title: watchlist.targetLabel,
-          detail: watchlist.lastScannedAt ? "Checked this week" : "Waiting for its first weekly check",
+          detail: watchlist.lastScannedAt ? "Checked this week" : "Waiting for its first check",
         })),
         hasMetrics,
         retention,
@@ -482,7 +482,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
       kicker: "Brief",
       title: isFreePlan ? "Activation scan is queued" : "First sweep is queued",
       summary: isFreePlan
-        ? `${activeCount} competitor${activeCount === 1 ? "" : "s"} ${activeCount === 1 ? "is" : "are"} ready for the activation scan, then a weekly check. Paid plans check every 3–6 hours.`
+        ? `${activeCount} competitor${activeCount === 1 ? "" : "s"} ${activeCount === 1 ? "is" : "are"} ready for the activation scan and one first brief. Recurring checks are a paid plan — paid plans check every 3–6 hours.`
         : `${activeCount} competitor${activeCount === 1 ? "" : "s"} ${activeCount === 1 ? "is" : "are"} ready. Scheduled checks run ${input.nextScanLabel}.`,
       action: { href: "/app/watchlists", label: "Open watchlists" },
       metrics,
