@@ -456,9 +456,13 @@ export async function upsertWebsiteSiteScanPage(
   }
 
   const timestamp = nowIso();
-  await bindD1Named(
+  // M11 pattern: a concurrent writer on the same unique (site_scan_id,
+  // canonical_url) key wins the insert; the loser's INSERT OR IGNORE is
+  // dropped and it converges on the winner's row through the existing
+  // update path instead of throwing UNIQUE constraint failed.
+  const insertResult = await bindD1Named(
     ensureDb(env).prepare(`
-      INSERT INTO website_site_scan_page (
+      INSERT OR IGNORE INTO website_site_scan_page (
         id,
         site_scan_id,
         canonical_url,
@@ -481,6 +485,9 @@ export async function upsertWebsiteSiteScanPage(
       ["websiteSiteScanPage.updatedAt", timestamp],
     ],
   ).run();
+  if ((insertResult.meta?.changes ?? 0) === 0) {
+    return upsertWebsiteSiteScanPage(env, input);
+  }
 
   const row = await queryOne<WebsiteSiteScanPageRow>(
     env,
@@ -720,9 +727,10 @@ export async function upsertWebsitePageObservation(
     return toWebsitePageObservationRecord(row);
   }
 
-  await bindD1Named(
+  // M11 pattern: same convergence as upsertWebsiteSiteScanPage above.
+  const insertResult = await bindD1Named(
     ensureDb(env).prepare(`
-      INSERT INTO website_page_observation (
+      INSERT OR IGNORE INTO website_page_observation (
         id,
         workspace_id,
         watchlist_id,
@@ -765,6 +773,9 @@ export async function upsertWebsitePageObservation(
       ["websitePageObservation.updatedAt", timestamp],
     ],
   ).run();
+  if ((insertResult.meta?.changes ?? 0) === 0) {
+    return upsertWebsitePageObservation(env, input);
+  }
 
   const row = await queryOne<WebsitePageObservationRow>(
     env,
