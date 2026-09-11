@@ -67,6 +67,14 @@ export function ctaPipelineStageCountsFromCounters(
   const fetchSucceeded =
     counters.fetch.outcome === "succeeded" ||
     counters.fetch.outcome === "replayed";
+  // Issue #2893: a plain-http bail rescued by the browser-render fallback DID
+  // produce a page — the bail recorder already treats it as reaching the next
+  // stage (no fetch bail), and the stage count must agree. Without this every
+  // rescued proof check reads as dying at the fetch step, which is exactly
+  // the "where did the checks go?" blindness this issue instruments against.
+  const renderRescued =
+    counters.fetch.outcome === "failed" &&
+    counters.render.outcome === "succeeded";
   const validityPassed = counters.validity.outcome === "passed";
   // The extract stage ran (and ctaFunnelStage becomes non-null) only when the
   // DOM extraction actually ran against a snapshot.
@@ -85,7 +93,7 @@ export function ctaPipelineStageCountsFromCounters(
 
   return {
     checks_started: 1,
-    page_fetch_succeeded: fetchSucceeded ? 1 : 0,
+    page_fetch_succeeded: fetchSucceeded || renderRescued ? 1 : 0,
     validity_passed: validityPassed ? 1 : 0,
     dom_extracted: domExtracted ? 1 : 0,
     diff_computed: diffComputed ? 1 : 0,
@@ -171,6 +179,152 @@ export function ctaPipelineBailReasonFromCounters(
   const fieldBailReasons = Object.values(counters.diff.fieldBails);
   const reason = fieldBailReasons[0] ?? "no_event_emitted";
   return { stage: "event_emitted", reason };
+}
+
+/**
+ * Issue #2893: per-run extraction funnel. The daily `cta_pipeline_stage_counts`
+ * table answers "where did today's checks stop"; this accumulator answers the
+ * same question for ONE watchlist run so the answer can live on the run row
+ * (`watchlist_run.summary_json.landingPageExtractionFunnel`) and feed the
+ * scheduled orchestration metrics.
+ *
+ * The funnel deliberately extends ABOVE `checks_started`: a run can evaluate
+ * dozens of ad observations yet dispatch zero landing-page checks (missing
+ * landing identity, proof-policy skip, dedupe, budget, freshness interval).
+ * Those pre-dispatch exits write no pipeline counters at all, so they are
+ * counted here as `bailReasons` — that is the "bail out before it" gap the
+ * issue's funnel (dispatched → rendered → content-gate passed → fields
+ * extracted → diffed) needs to make visible.
+ */
+export interface LandingPageExtractionFunnel {
+  /** Ad observations the run evaluated for proof candidacy. */
+  observations: number;
+  /** Observations that cleared the identity gates into a proof candidate. */
+  proofCandidates: number;
+  /** Checks dispatched into the capture pipeline (== checks_started total). */
+  dispatched: number;
+  /** Render/fetch produced a usable snapshot (issue's "rendered" stage). */
+  pageFetchSucceeded: number;
+  /** Capture-validity gate passed (issue's "content-gate passed" stage). */
+  validityPassed: number;
+  /** Field extraction produced a DOM extraction (issue's "fields extracted"). */
+  domExtracted: number;
+  /** A real diff ran against a prior capture (issue's "diffed" stage). */
+  diffComputed: number;
+  /** At least one landing_page_* event was confirmed. */
+  eventEmitted: number;
+  /**
+   * Bail-out reasons across the whole run, keyed "<gate>:<reason>" — both
+   * pre-dispatch drops (e.g. "proof_policy:skipped_due_to_budget",
+   * "evidence_reservation:<reason>", "proof_freshness_interval") and in-funnel
+   * bails (e.g. "page_fetch_succeeded:landing_rate_limited",
+   * "event_emitted:no_baseline_first_scan").
+   */
+  bailReasons: Record<string, number>;
+}
+
+export function createLandingPageExtractionFunnel(
+  observations = 0,
+): LandingPageExtractionFunnel {
+  return {
+    observations,
+    proofCandidates: 0,
+    dispatched: 0,
+    pageFetchSucceeded: 0,
+    validityPassed: 0,
+    domExtracted: 0,
+    diffComputed: 0,
+    eventEmitted: 0,
+    bailReasons: {},
+  };
+}
+
+/** Count a check that exited BEFORE the capture pipeline was dispatched. */
+export function recordLandingPageFunnelCandidateDrop(
+  funnel: LandingPageExtractionFunnel,
+  reason: string,
+) {
+  funnel.bailReasons[reason] = (funnel.bailReasons[reason] ?? 0) + 1;
+}
+
+/**
+ * Fold one completed check's pipeline counters into the run funnel. Call once
+ * per dispatched check — from the same `finally` that records the daily stage
+ * counts — so a thrown error still lands the check's funnel contribution.
+ */
+export function recordLandingPageFunnelCheck(
+  funnel: LandingPageExtractionFunnel,
+  counters: LandingPagePipelineCounters,
+) {
+  const stages = ctaPipelineStageCountsFromCounters(counters);
+  funnel.dispatched += 1;
+  funnel.pageFetchSucceeded += stages.page_fetch_succeeded ?? 0;
+  funnel.validityPassed += stages.validity_passed ?? 0;
+  funnel.domExtracted += stages.dom_extracted ?? 0;
+  funnel.diffComputed += stages.diff_computed ?? 0;
+  funnel.eventEmitted += stages.event_emitted ?? 0;
+  const bail = ctaPipelineBailReasonFromCounters(counters);
+  if (bail) {
+    const key = `${bail.stage}:${bail.reason}`;
+    funnel.bailReasons[key] = (funnel.bailReasons[key] ?? 0) + 1;
+  }
+}
+
+export function mergeLandingPageExtractionFunnels(
+  funnels: Array<LandingPageExtractionFunnel | null | undefined>,
+): LandingPageExtractionFunnel | null {
+  let merged: LandingPageExtractionFunnel | null = null;
+  for (const funnel of funnels) {
+    if (!funnel) continue;
+    merged ??= createLandingPageExtractionFunnel();
+    merged.observations += funnel.observations;
+    merged.proofCandidates += funnel.proofCandidates;
+    merged.dispatched += funnel.dispatched;
+    merged.pageFetchSucceeded += funnel.pageFetchSucceeded;
+    merged.validityPassed += funnel.validityPassed;
+    merged.domExtracted += funnel.domExtracted;
+    merged.diffComputed += funnel.diffComputed;
+    merged.eventEmitted += funnel.eventEmitted;
+    for (const [reason, count] of Object.entries(funnel.bailReasons)) {
+      merged.bailReasons[reason] = (merged.bailReasons[reason] ?? 0) + count;
+    }
+  }
+  return merged;
+}
+
+/**
+ * The JSON-safe shape persisted into `watchlist_run.summary_json`. Keys use the
+ * issue's funnel vocabulary (dispatched → rendered → contentGatePassed →
+ * fieldsExtracted → diffed → eventEmitted) so the run row reads like the
+ * funnel the issue names. Returns null when the run never touched the
+ * landing-page pipeline (no observations, no candidates, nothing dispatched)
+ * so quiet runs keep clean summaries.
+ */
+export function landingPageExtractionFunnelSummaryJson(
+  funnel: LandingPageExtractionFunnel | null | undefined,
+): Record<string, unknown> | null {
+  if (
+    !funnel ||
+    (funnel.observations === 0 &&
+      funnel.proofCandidates === 0 &&
+      funnel.dispatched === 0 &&
+      Object.keys(funnel.bailReasons).length === 0)
+  ) {
+    return null;
+  }
+  return {
+    observations: funnel.observations,
+    proofCandidates: funnel.proofCandidates,
+    dispatched: funnel.dispatched,
+    rendered: funnel.pageFetchSucceeded,
+    contentGatePassed: funnel.validityPassed,
+    fieldsExtracted: funnel.domExtracted,
+    diffed: funnel.diffComputed,
+    eventEmitted: funnel.eventEmitted,
+    ...(Object.keys(funnel.bailReasons).length > 0
+      ? { bailReasons: funnel.bailReasons }
+      : {}),
+  };
 }
 
 /**

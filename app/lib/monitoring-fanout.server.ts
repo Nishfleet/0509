@@ -274,6 +274,27 @@ export interface MonitoringOrchestrationMetrics {
   delayed: number;
   duplicatesPrevented: number;
   oldestQueuedAgeMs: number | null;
+  /**
+   * Issue #2893: scheduled runs' landing-page extraction funnels summed across
+   * the query window — the same dispatched → rendered → contentGatePassed →
+   * fieldsExtracted → diffed → eventEmitted shape persisted per run on
+   * `watchlist_run.summary_json.landingPageExtractionFunnel`, plus the merged
+   * bail-reason map. `runs` counts how many runs carried a funnel (runs
+   * before the field existed, or with no landing activity, contribute none).
+   * Null when no run in the window carried one.
+   */
+  landingPageExtraction: {
+    runs: number;
+    observations: number;
+    proofCandidates: number;
+    dispatched: number;
+    rendered: number;
+    contentGatePassed: number;
+    fieldsExtracted: number;
+    diffed: number;
+    eventEmitted: number;
+    bailReasons: Record<string, number>;
+  } | null;
 }
 
 function nowIso() {
@@ -2258,14 +2279,19 @@ export async function collectMonitoringOrchestrationMetrics(
   const rows = await ensureDb(env)
     .prepare(
       `
-        SELECT status, error_code, queued_at
+        SELECT status, error_code, queued_at, summary_json
         FROM watchlist_run
         WHERE trigger_type = 'scheduled'
           AND idempotency_key IS NOT NULL
           AND started_at >= datetime('now', '-2 days')
       `,
     )
-    .all<{ status: string; error_code: string | null; queued_at: string | null }>();
+    .all<{
+      status: string;
+      error_code: string | null;
+      queued_at: string | null;
+      summary_json: string | null;
+    }>();
   const results = rows.results ?? [];
   const metrics: MonitoringOrchestrationMetrics = {
     eligible: 0,
@@ -2278,6 +2304,7 @@ export async function collectMonitoringOrchestrationMetrics(
     delayed: 0,
     duplicatesPrevented: 0,
     oldestQueuedAgeMs: null,
+    landingPageExtraction: null,
   };
 
   let oldestQueuedAt: number | null = null;
@@ -2313,5 +2340,92 @@ export async function collectMonitoringOrchestrationMetrics(
   metrics.dispatched = metrics.queued + metrics.running + metrics.succeeded + metrics.failed;
   metrics.oldestQueuedAgeMs =
     oldestQueuedAt === null ? null : Math.max(0, Date.now() - oldestQueuedAt);
+
+  // Issue #2893: aggregate each run's persisted landing-page extraction
+  // funnel so the scheduled metrics line shows the same dispatched → diffed
+  // → emitted stages the run rows carry.
+  for (const row of results) {
+    const funnel = parseLandingPageExtractionFunnel(row.summary_json);
+    if (!funnel) continue;
+    metrics.landingPageExtraction ??= {
+      runs: 0,
+      observations: 0,
+      proofCandidates: 0,
+      dispatched: 0,
+      rendered: 0,
+      contentGatePassed: 0,
+      fieldsExtracted: 0,
+      diffed: 0,
+      eventEmitted: 0,
+      bailReasons: {},
+    };
+    const totals = metrics.landingPageExtraction;
+    totals.runs += 1;
+    totals.observations += funnel.observations;
+    totals.proofCandidates += funnel.proofCandidates;
+    totals.dispatched += funnel.dispatched;
+    totals.rendered += funnel.rendered;
+    totals.contentGatePassed += funnel.contentGatePassed;
+    totals.fieldsExtracted += funnel.fieldsExtracted;
+    totals.diffed += funnel.diffed;
+    totals.eventEmitted += funnel.eventEmitted;
+    for (const [reason, count] of Object.entries(funnel.bailReasons)) {
+      totals.bailReasons[reason] = (totals.bailReasons[reason] ?? 0) + count;
+    }
+  }
   return metrics;
+}
+
+type RunLandingPageExtractionFunnel = Omit<
+  NonNullable<MonitoringOrchestrationMetrics["landingPageExtraction"]>,
+  "runs"
+>;
+
+/**
+ * Read the per-run extraction funnel off `watchlist_run.summary_json`
+ * (`landingPageExtractionFunnel`). Defensive: a missing key, malformed JSON,
+ * or a pre-#2893 run all read as "no funnel", never a metrics failure.
+ */
+function parseLandingPageExtractionFunnel(
+  summaryJson: string | null,
+): RunLandingPageExtractionFunnel | null {
+  if (!summaryJson) return null;
+  let summary: unknown;
+  try {
+    summary = JSON.parse(summaryJson);
+  } catch {
+    return null;
+  }
+  const funnel =
+    summary && typeof summary === "object"
+      ? (summary as Record<string, unknown>).landingPageExtractionFunnel
+      : null;
+  if (!funnel || typeof funnel !== "object") return null;
+  const record = funnel as Record<string, unknown>;
+  const num = (key: string) => {
+    const value = record[key];
+    return typeof value === "number" && Number.isFinite(value) ? value : 0;
+  };
+  const bailReasons: Record<string, number> = {};
+  const rawBails = record.bailReasons;
+  if (rawBails && typeof rawBails === "object") {
+    for (const [reason, count] of Object.entries(
+      rawBails as Record<string, unknown>,
+    )) {
+      if (typeof count === "number" && Number.isFinite(count) && count > 0) {
+        bailReasons[reason] = count;
+      }
+    }
+  }
+  return {
+    observations: num("observations"),
+    proofCandidates: num("proofCandidates"),
+    dispatched: num("dispatched"),
+    rendered: num("rendered"),
+    contentGatePassed: num("contentGatePassed"),
+    fieldsExtracted: num("fieldsExtracted"),
+    diffed: num("diffed"),
+    eventEmitted: num("eventEmitted"),
+    bailReasons,
+  };
 }
