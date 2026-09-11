@@ -21,6 +21,7 @@ import {
   clearWebsiteIdentityCacheForTests,
   extractTagContent,
   getCuratedAdvertiserPageId,
+  getCuratedProviderQuery,
   resolveWebsiteIdentity,
 } from "~/lib/website-identity.server";
 
@@ -114,6 +115,47 @@ describe("website-identity decode wiring", () => {
     mockFetch.mockResolvedValue(htmlResponse(""));
     const identity = await resolveWebsiteIdentity("https://empty.example");
     expect(identity).toBeNull();
+  });
+
+  it("returns fallback identity when the live fetch stalls past the deadline (issue #2870)", async () => {
+    // The overall identity budget (IDENTITY_RESOLVE_DEADLINE_MS) bounds the
+    // blocking segment a slow/bot-walled homepage can add to a cache-hit
+    // search: BET 2 measured cache=hit first cards at 26-42 s on a cold
+    // isolate because each redirect hop can legally spend 5 s (DoH) + 10 s
+    // (fetch). Past the deadline the search must stop waiting and take the
+    // curated-only fallback instead of holding the first card hostage.
+    vi.useFakeTimers();
+    try {
+      // Never resolves within the deadline — the stalled-fetch case.
+      mockFetch.mockReturnValue(new Promise(() => {}));
+      const pending = resolveWebsiteIdentity("https://slow-walled.example");
+      const assertion = expect(pending).resolves.toBeNull();
+      await vi.advanceTimersByTimeAsync(2_500);
+      await assertion;
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("serves the curated identity when the live fetch stalls past the deadline (issue #2870)", async () => {
+    // tcs.com curates siteName + providerQuery. A stalled live homepage fetch
+    // must not keep the search waiting past the deadline, and the curated
+    // facts must survive the timeout the same way they survive a hard 403 —
+    // otherwise a slow CDN turns tcs.com back into a dead-end.
+    vi.useFakeTimers();
+    try {
+      mockFetch.mockReturnValue(new Promise(() => {}));
+      const pending = resolveWebsiteIdentity("https://tcs.com");
+      const assertion = expect(pending).resolves.toMatchObject({
+        registrableDomain: "tcs.com",
+        siteName: "Tata Consultancy Services",
+      });
+      await vi.advanceTimersByTimeAsync(2_500);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("records mamaearth.in as a domain alias when mamaearth.com redirects there", async () => {
@@ -262,6 +304,17 @@ describe("curated identity overrides (sneaker-resale brands, issue #1950)", () =
     expect(identity?.siteName).toBe("Zappos");
     expect(identity?.aliases).toContain("Zappos");
     expect(identity?.domainAliases).toContain("www.zappos.com");
+  });
+
+  it("asks Meta the curated TCS brand term for tcs.com (issue #2870)", () => {
+    // The BET 2 25-domain check dead-ended on tcs.com: website=tcs.com
+    // settled on a confirmed 0-row empty state while the curated term is the
+    // question Meta actually indexes (live 2026-09-11: q="Tata Consultancy
+    // Services" returned 7 real TCS ads; q=TCS and website=tcs.com both
+    // returned 0). getCuratedProviderQuery feeds the search-v2 cache key, so
+    // the term must resolve synchronously without a network fetch.
+    expect(getCuratedProviderQuery("tcs.com")).toBe("Tata Consultancy Services");
+    expect(getCuratedProviderQuery("unknown.example")).toBeNull();
   });
 
   it("exposes curated page ids for the loader/sitemap to re-derive cache keys (issue #1982)", () => {
