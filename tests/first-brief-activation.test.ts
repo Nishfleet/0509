@@ -542,7 +542,7 @@ describe("activation scan inline retry (issue #2138)", () => {
         message: "Verify your email",
       }),
     }));
-    vi.doMock("~/lib/monitoring.server", () => ({
+    vi.doMock("~/lib/first-watchlist-scan.server", () => ({
       queueFirstWatchlistScan: vi.fn(),
       queueFirstWatchlistScanForSignupFirstBrief: queueFirstBrief,
     }));

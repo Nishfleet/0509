@@ -45,6 +45,7 @@ import { FeedbackStrip } from "~/components/workspace/feedback-strip";
 import { RuledList } from "~/components/workspace/ruled-list";
 import { WorkingHeader } from "~/components/workspace/working-header";
 import { formatAdLongevityLabel } from "~/lib/ad-display";
+import { queueFirstWatchlistScan } from "~/lib/first-watchlist-scan.server";
 // Issue #2001 — bounded transient-retry for the money-path result step.
 import { withTransientRetry } from "~/lib/transient-retry.server";
 import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
@@ -1201,7 +1202,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
     }
 
     const watchlist = watchlistResult.watchlist;
-    const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
     try {
       await queueFirstWatchlistScan(env, cloudflare?.ctx, watchlist);
     } catch {

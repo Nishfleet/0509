@@ -18,6 +18,10 @@ import {
   type CompetitorImportRow,
 } from "~/lib/competitor-import";
 import type { AppEnv } from "~/lib/env.server";
+import {
+  queueFirstWatchlistScan,
+  queueFirstWatchlistScanForSignupFirstBrief,
+} from "~/lib/first-watchlist-scan.server";
 import type { ClientRoomRecord, ClientRoomResourceRef } from "~/lib/types";
 
 export async function handleSetupChecklistAction(
@@ -194,7 +198,6 @@ export async function handleSetupChecklistAction(
     }
 
     const { createWatchlistWithinLimit, upsertAgentMemory, upsertClientRoom } = await import("~/lib/data.server");
-    const { queueFirstWatchlistScan, queueFirstWatchlistScanForSignupFirstBrief } = await import("~/lib/monitoring.server");
     const { isSignupFirstBriefEnabled } = await import("~/lib/env.server");
     const signupFirstBriefEnabled = isSignupFirstBriefEnabled(env);
     const clientRoomContextRequested = rowsToCreate.some((row) => Boolean(row.client));
@@ -378,15 +381,11 @@ export async function handleSetupChecklistAction(
       };
     }
 
-    const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
     const { isSignupFirstBriefEnabled } = await import("~/lib/env.server");
     const signupFirstBriefEnabled = isSignupFirstBriefEnabled(env);
     const watchlist = watchlistResult.watchlist;
     const queueActivationScan = async () => {
       if (signupFirstBriefEnabled) {
-        const { queueFirstWatchlistScanForSignupFirstBrief } = await import(
-          "~/lib/monitoring.server"
-        );
         await queueFirstWatchlistScanForSignupFirstBrief(
           scanEnv,
           cloudflare?.ctx,
@@ -515,10 +514,6 @@ async function handleCreateHandoffWatchlists(input: {
     createWatchlistWithinLimit,
     completeUserOnboarding,
   } = await import("~/lib/data.server");
-  const {
-    queueFirstWatchlistScan,
-    queueFirstWatchlistScanForSignupFirstBrief,
-  } = await import("~/lib/monitoring.server");
   const { isSignupFirstBriefEnabled } = await import("~/lib/env.server");
   const { defaultCountryForVisitor } = await import("~/lib/countries");
   const signupFirstBriefEnabled = isSignupFirstBriefEnabled(env);
