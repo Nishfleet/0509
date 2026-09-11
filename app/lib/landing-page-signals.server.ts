@@ -6,7 +6,7 @@ import {
 import { decodeHtmlEntities } from "~/lib/decode-html.server";
 import { hashString, stripChurnTokens } from "~/lib/normalize";
 
-export const LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION = "lp-signals-v7";
+export const LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION = "lp-signals-v8";
 
 export type ExtractorSuppressionReason = "churn_stable" | "ad_slot_strip";
 
@@ -291,6 +291,42 @@ const DECLARED_CURRENCY_PATTERNS = [
   /\bcontent\s*=\s*["']([A-Za-z]{3})["'][^>]{0,200}?\bproperty\s*=\s*["'](?:og:price:currency|product:price:currency)["']/gi,
 ] as const;
 
+// Declared-market anchoring for the capture-validity gate (issue #2889,
+// lp-signals-v8). A geo-experiment render can swap the CTA entirely —
+// allbirds.com alternated "Shop Now" (GB render) and "Sign Up" (US render)
+// between captures of the SAME canonical URL, with an identical locale
+// (en-US) and identical declared currency (USD). The only deterministic
+// difference is the page's own declared market: `Shopify.country = "GB"`
+// vs `"US"`, `"countryCode":"GB"` vs `"US"`, distinct market ids. That
+// declaration is stored on the snapshot metadata so the capture-validity
+// gate can suppress a same-URL render-variant pair instead of reporting a
+// phantom CTA transition.
+const DECLARED_MARKET_PATTERNS = [
+  // Shopify storefront scripts: Shopify.country = "GB";
+  /\bShopify\.country\s*=\s*["']([A-Za-z]{2})["']/gi,
+  // Shopify/Shop Pay JSON blobs: "countryCode":"US", countryCode:'US'
+  /\bcountryCode["']?\s*:\s*["']([A-Za-z]{2})["']/gi,
+  // Generic JSON market blocks: "country":"US"
+  /\b"country"\s*:\s*["']([A-Za-z]{2})["']/gi,
+] as const;
+
+// ISO-3166-1 alpha-2 allowlist. A 2-letter token inside a country-named
+// field can only stand for a market when it is a real country code, so
+// values like "us"-the-word or locale-shaped strings never win.
+const KNOWN_COUNTRY_CODES = new Set(
+  ("AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI " +
+    "BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN " +
+    "CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK " +
+    "FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM " +
+    "HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN " +
+    "KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK " +
+    "ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP " +
+    "NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW " +
+    "SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF " +
+    "TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI " +
+    "VN VU WF WS YE YT ZA ZM ZW").split(" "),
+);
+
 // Which ISO codes a bare symbol can stand for. "£"/"€"/"₹" are unambiguous;
 // "$" is shared by every dollar currency so a USD-declared page and an
 // AUD-declared page both keep their "$" candidates; "¥" is JPY or CNY.
@@ -559,11 +595,59 @@ export function extractLandingPageSignals(
     priceText,
     formPresent,
     extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+    declaredMarketCountry: pickDeclaredMarketCountry(rawHtml),
     suppressionFingerprints: computeExtractorSuppressionFingerprints(
       html ?? "",
       documentMode,
     ),
   };
+}
+
+/**
+ * Resolve the market a page declares for itself (issue #2889, lp-signals-v8):
+ * Shopify's `Shopify.country` storefront assignment, `"countryCode"` JSON
+ * fields, and generic `"country"` JSON fields. Read from the RAW html — the
+ * declarations live in script/head markup the normalizer strips. Majority
+ * vote across every declaration found, earliest occurrence winning ties —
+ * deterministic for a given page version. Returns null when nothing
+ * plausible is declared, so the capture-validity gate can only suppress a
+ * KNOWN render-variant pair, never a capture whose market is unknown.
+ */
+export function pickDeclaredMarketCountry(html: string): string | null {
+  const tally = new Map<string, { count: number; firstIndex: number }>();
+  for (const pattern of DECLARED_MARKET_PATTERNS) {
+    const global = new RegExp(
+      pattern.source,
+      pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`,
+    );
+    let match: RegExpExecArray | null;
+    while ((match = global.exec(html)) !== null) {
+      const code = match[1]?.toUpperCase();
+      if (code && KNOWN_COUNTRY_CODES.has(code)) {
+        const entry = tally.get(code) ?? { count: 0, firstIndex: match.index };
+        entry.count += 1;
+        entry.firstIndex = Math.min(entry.firstIndex, match.index);
+        tally.set(code, entry);
+      }
+      if (match[0].length === 0) {
+        global.lastIndex += 1;
+      }
+    }
+  }
+  let best: string | null = null;
+  let bestCount = 0;
+  let bestIndex = Number.POSITIVE_INFINITY;
+  for (const [code, entry] of tally) {
+    if (
+      entry.count > bestCount ||
+      (entry.count === bestCount && entry.firstIndex < bestIndex)
+    ) {
+      best = code;
+      bestCount = entry.count;
+      bestIndex = entry.firstIndex;
+    }
+  }
+  return best;
 }
 
 function hasVisibleBodyText(html: string) {
