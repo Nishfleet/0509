@@ -143,10 +143,11 @@ describe("locale compare/switch child routes (issue #1563)", () => {
       expect(typeof localeModule.links, `no links for ${child}`).toBe("function");
 
       const links = localeModule.links() as Array<{ rel?: string; href?: string }>;
-      expect(links).toHaveLength(1 + BUYER_SURFACE_LOCALE_IDS.length + 1);
+      // canonical + en self + every locale + x-default (issue #2030 added en).
+      expect(links).toHaveLength(1 + BUYER_SURFACE_LOCALE_IDS.length + 2);
       expect(links[0]).toEqual({ rel: "canonical", href: canonicalLinks(child)[0]?.href });
       const hreflang = links.filter((l) => l.rel === "alternate");
-      expect(hreflang).toHaveLength(BUYER_SURFACE_LOCALE_IDS.length + 1);
+      expect(hreflang).toHaveLength(BUYER_SURFACE_LOCALE_IDS.length + 2);
       expect(hreflang).toContainEqual({
         rel: "alternate",
         hreflang: "x-default",

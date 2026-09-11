@@ -58,11 +58,13 @@ describe("guides how-to-monitor-meta-ad-library route (issue #2867)", () => {
       "~/routes/guides.how-to-monitor-meta-ad-library"
     );
 
+    const { buyerSurfaceHreflangLinks } = await import("~/lib/seo");
     expect(links()).toEqual([
       {
         rel: "canonical",
         href: "https://0509.io/guides/how-to-monitor-meta-ad-library",
       },
+      ...buyerSurfaceHreflangLinks("guides/how-to-monitor-meta-ad-library"),
     ]);
 
     const tags = meta({} as never) as Array<Record<string, string>>;

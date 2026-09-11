@@ -6,6 +6,7 @@ import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
 import { getPublicStatusCounters } from "~/lib/public-status-counters.server";
 import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
 import {
+  buyerSurfaceHreflangLinks,
   canonicalLinks,
   jsonLdScriptProps,
   publicSeoMeta,
@@ -18,7 +19,10 @@ const description =
 const degradedDescription =
   "Configuration and scope information for Five to Nine. Live monitoring facts are unavailable right now; this page does not measure live search, email, billing, or provider availability.";
 
-export const links: LinksFunction = () => canonicalLinks("/status");
+export const links: LinksFunction = () => [
+  ...canonicalLinks("/status"),
+  ...buyerSurfaceHreflangLinks("status"),
+];
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({

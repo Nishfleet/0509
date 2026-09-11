@@ -16,6 +16,7 @@ import {
   velocityCurvePoints,
 } from "~/lib/aggression-score";
 import {
+  buyerSurfaceHreflangLinks,
   canonicalLinks,
   faqPageJsonLd,
   jsonLdScriptProps,
@@ -53,7 +54,10 @@ export const adAggressionMethodologyFaqEntries: ReadonlyArray<FaqJsonLdEntry> = 
   },
 ] as const;
 
-export const links: LinksFunction = () => canonicalLinks(AD_AGGRESSION_METHODOLOGY_PATH);
+export const links: LinksFunction = () => [
+  ...canonicalLinks(AD_AGGRESSION_METHODOLOGY_PATH),
+  ...buyerSurfaceHreflangLinks("methodology"),
+];
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({

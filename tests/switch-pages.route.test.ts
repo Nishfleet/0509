@@ -115,7 +115,12 @@ describe("BET 8 switch pages", () => {
       expect(markup).toContain(row.title);
     }
 
-    expect(routeModule.links()).toEqual([{ rel: "canonical", href: `https://0509.io${page.pathname}` }]);
+    const { buyerSurfaceHreflangLinks } = await import("~/lib/seo");
+    expect(routeModule.links()).toEqual([
+      { rel: "canonical", href: `https://0509.io${page.pathname}` },
+      // reciprocal hreflang cluster (issue #2030).
+      ...buyerSurfaceHreflangLinks(page.pathname.slice(1)),
+    ]);
 
     const tags = routeModule.meta();
     const title = tags.find((tag) => "title" in tag)?.title;

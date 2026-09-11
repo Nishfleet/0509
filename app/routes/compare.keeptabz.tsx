@@ -12,6 +12,7 @@ import {
   type CompareClaimCard,
 } from "~/components/compare-citations";
 import {
+  buyerSurfaceHreflangLinks,
   canonicalLinks,
   compareSocialCardUrl,
   faqPageJsonLd,
@@ -30,7 +31,10 @@ const pageTitle = "Five to Nine vs KeepTabz";
 const pageDescription =
   "KeepTabz is a 2026 launch that tracks Facebook, Instagram, and Google ad creative and spend for B2B teams. Five to Nine is scheduled, source-backed Meta Ad Library and landing-page change proof.";
 
-export const links: LinksFunction = () => canonicalLinks("/compare/keeptabz");
+export const links: LinksFunction = () => [
+  ...canonicalLinks("/compare/keeptabz"),
+  ...buyerSurfaceHreflangLinks("compare/keeptabz"),
+];
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({

@@ -61,8 +61,10 @@ describe("guides how-to-track-competitor-ads route", () => {
   it("declares the canonical URL and public SEO meta", async () => {
     const { links, meta } = await import("~/routes/guides.how-to-track-competitor-ads");
 
+    const { buyerSurfaceHreflangLinks } = await import("~/lib/seo");
     expect(links()).toEqual([
       { rel: "canonical", href: "https://0509.io/guides/how-to-track-competitor-ads" },
+      ...buyerSurfaceHreflangLinks("guides/how-to-track-competitor-ads"),
     ]);
 
     const tags = meta({} as never) as Array<Record<string, string>>;

@@ -11,6 +11,7 @@ import {
 } from "~/components/pricing-section";
 import type { PublicCommercialLaunchSummary } from "~/lib/commercial-launch-gate.server";
 import {
+  buyerSurfaceHreflangLinks,
   canonicalLinks,
   faqPageJsonLd,
   jsonLdScriptProps,
@@ -30,7 +31,10 @@ const pricingTitle = "Pricing | Five to Nine";
 const pricingDescription =
   "Competitor monitoring plans: free single-competitor watch, Scout, Starter, and Agency, plus proof capture packs. Prices localize at checkout.";
 
-export const links: LinksFunction = () => canonicalLinks("/pricing");
+export const links: LinksFunction = () => [
+  ...canonicalLinks("/pricing"),
+  ...buyerSurfaceHreflangLinks("pricing"),
+];
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({ title: pricingTitle, description: pricingDescription, pathname: "/pricing" });
