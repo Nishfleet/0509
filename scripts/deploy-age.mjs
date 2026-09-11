@@ -20,6 +20,14 @@ import {
 const REPOSITORY = "Nishfleet/0509";
 const SHA_PATTERN = /^[a-f0-9]{40}$/u;
 
+/** @typedef {{ head_sha?: string, updated_at?: string, conclusion?: string | null, id?: number }} WorkflowRunEntry */
+
+/**
+ * @param {string} token
+ * @param {string} repository
+ * @param {string} status
+ * @param {(entry: WorkflowRunEntry) => boolean} keep
+ */
 async function newestRun(token, repository, status, keep) {
   try {
     const response = await fetch(
