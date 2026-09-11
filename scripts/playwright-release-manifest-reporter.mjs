@@ -177,7 +177,10 @@ export const RELEASE_COVERAGE_MATRIX = Object.freeze({
       persona: "e2e-free-firstbrief,e2e-scout",
       scenario: "first-brief-front-page-and-cadence",
       viewport,
-      finalUrl: { pathname: "/app/digests", search: { firstrun: "1" } },
+      // Route diet phase 1 folds /app/digests onto /app/briefs, so the proof
+      // lands on the new screen (issue #2724). The old path still redirects and
+      // stays covered by tests/app-redirects.test.ts.
+      finalUrl: { pathname: "/app/briefs", search: { firstrun: "1" } },
     },
   ]),
   4: RELEASE_COVERAGE_VIEWPORTS.flatMap((viewport) => [
@@ -264,7 +267,8 @@ export const RELEASE_COVERAGE_MATRIX = Object.freeze({
       persona: "e2e-support-recovery",
       scenario: "journey-6-support-persistence-failure-recovery",
       viewport,
-      finalUrl: { pathname: "/app/support", searchKeys: ["case"] },
+      // Route diet phase 1 folds /app/support onto /app/help (issue #2724).
+      finalUrl: { pathname: "/app/help", searchKeys: ["case"] },
     },
     {
       sourceFile: "journey-6-release.spec.ts",
