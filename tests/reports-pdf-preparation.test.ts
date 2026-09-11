@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { act, createElement, type ReactNode } from "react";
+import { mockReactRouter } from "./helpers/mock-react-router";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -23,19 +24,12 @@ const loaderData = {
 };
 
 async function importRoute() {
-	vi.doMock("react-router", async () => {
-		const actual = await vi.importActual<typeof import("react-router")>("react-router");
-		return {
-			...actual,
-			Form: component("form"),
-			Link: ({ children, to, ...props }: Props & { to?: string }) =>
-				createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
-			useActionData: () => null,
-			useLoaderData: () => loaderData,
-			useNavigation: () => ({ state: "idle", formData: null, location: null }),
-		};
-	});
-	vi.doMock("~/components/dashboard-page", () => ({ DashboardPage: component("main") }));
+	mockReactRouter({
+    actionData: () => null,
+    loader: () => loaderData,
+    navigation: () => ({ state: "idle", formData: null, location: null }),
+  });
+vi.doMock("~/components/dashboard-page", () => ({ DashboardPage: component("main") }));
 	vi.doMock("~/components/dashboard-route-loading", () => ({
 		DashboardRouteError: component("div"),
 		DashboardRouteLoading: component("div"),

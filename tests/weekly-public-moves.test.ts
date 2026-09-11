@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { mockReactRouter } from "./helpers/mock-react-router";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -372,18 +373,11 @@ describe("/briefs/weekly route (issue #2143)", () => {
   });
 
   async function renderRoute(data: { moves: WeeklyPublicMove[]; since: string }) {
-    vi.doMock("react-router", async () => {
-      const actual = await vi.importActual<typeof import("react-router")>("react-router");
-      const React = await import("react");
-      return {
-        ...actual,
-        useLoaderData: () => data,
-        useRouteLoaderData: () => undefined,
-        Link: ({ children, to, ...props }: { children?: React.ReactNode; to?: string } & Record<string, unknown>) =>
-          React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
-      };
-    });
-    const { default: BriefsWeeklyRoute } = await import("~/routes/briefs.weekly");
+    mockReactRouter({
+    loader: () => data,
+    loaderData: () => undefined,
+  });
+const { default: BriefsWeeklyRoute } = await import("~/routes/briefs.weekly");
     return renderToStaticMarkup(createElement(BriefsWeeklyRoute));
   }
 

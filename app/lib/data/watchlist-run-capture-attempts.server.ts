@@ -50,6 +50,7 @@ interface CaptureAttemptRow {
   failure_reason: string | null;
   screenshot_artifact_key: string | null;
   capture_metadata_json: string;
+  capture_diagnostics: string | null;
   attempted_at: string;
   landing_page_url: string | null;
 }
@@ -125,6 +126,7 @@ export async function listCaptureAttemptsForRun(
         proof_capture.failure_reason,
         proof_capture.screenshot_artifact_key,
         proof_capture.capture_metadata_json,
+        proof_capture.capture_diagnostics,
         proof_capture.attempted_at,
         proof_target.landing_page_url
       FROM proof_capture
@@ -164,10 +166,14 @@ function toCaptureAttempt(
     (internalCode === "landing_error_page" ||
       internalCode === "landing_http_error");
 
+  const diagnostics = parseJson<JsonRecord | null>(row.capture_diagnostics, null);
+  const budgetReason =
+    typeof diagnostics?.budgetReason === "string" ? diagnostics.budgetReason : null;
+
   return {
     id: row.id,
     status: toPublicCaptureStatus(row.status),
-    reasonCode: toPublicReasonCode(internalCode, { isTakedownRestore }),
+    reasonCode: toPublicReasonCode(internalCode, { isTakedownRestore, budgetReason }),
     screenshotArtifactKey: row.screenshot_artifact_key,
     errorMessage: row.failure_reason,
     urlChecked: row.landing_page_url,
