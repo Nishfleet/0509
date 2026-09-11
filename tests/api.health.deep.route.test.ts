@@ -293,6 +293,7 @@ describe("deep health route", () => {
     expect(Object.keys(body).sort()).toEqual([
       "app",
       "checks",
+      "errorReports",
       "releaseIdentity",
       "status",
       "timestamp",
