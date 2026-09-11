@@ -1,4 +1,4 @@
-import { Form, Link, useLoaderData, useLocation } from "react-router";
+import { Form, Link, useLoaderData } from "react-router";
 import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
@@ -21,7 +21,6 @@ import {
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import { SWITCH_PAGES, SWITCH_SLUGS } from "~/lib/switch-pages";
-import { localeSearchPathname } from "~/lib/locale-markets";
 
 const publicSearchTrialPath =
   "/search?query=nykaa&mode=advertiser&website=https%3A%2F%2Fnykaa.com";
@@ -298,8 +297,9 @@ export default function CompetitorMonitoringCategoryRoute() {
   // The search funnel entry points funnel a localised visitor to
   // `/{locale}/search` (issue 1578, accept #3), not EN `/search`, so the
   // first-value search moment stays inside the localized surface set.
-  const location = useLocation();
-  const searchPath = localeSearchPathname(location.pathname);
+  // Issue #2962: every buyer-surface locale path now 301s to the EN
+  // pathname, so the search funnel entry point is always EN "/search".
+  const searchPath = "/search";
   // The "try the live search preview" trial links carry a canned query; keep
   // them inside the locale prefix so a localised visitor stays in the funnel.
   const searchTrialPath = publicSearchTrialPath.replace(/^\/search/, searchPath);

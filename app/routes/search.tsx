@@ -146,7 +146,6 @@ import {
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
 import { resolveSearchBrandPageDomain } from "~/lib/ads-internal-links";
 import { switchPageForDomain } from "~/lib/switch-pages";
-import { localeSearchPathname } from "~/lib/locale-markets";
 import type { AppEnv } from "~/lib/env.server";
 import type { SuggestedCompetitorsPanelData } from "~/lib/auto-competitor-suggested-loader.server";
 import type { CompetitorHandoffCandidate } from "~/lib/competitor-handoff.server";
@@ -1330,7 +1329,9 @@ export default function SearchRoute() {
   // a buyer-surface locale prefix this is `/{locale}/search`, so a localised
   // buyer completing the first-value funnel stays inside the localized
   // surface set instead of being flung back to EN mid-journey.
-  const searchPath = localeSearchPathname(location.pathname);
+  // Issue #2962: every buyer-surface locale path now 301s to the EN
+  // pathname, so the search funnel entry point is always EN "/search".
+  const searchPath = "/search";
   const [resultSort, setResultSort] = useState<SearchResultSort>(
     () =>
       parseSearchResultSort(locationSearchParams.get("sort")) ||

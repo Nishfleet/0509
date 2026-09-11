@@ -2,13 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   BUYER_SURFACE_LOCALE_IDS,
-  BUYER_SURFACE_PATHS,
-  canonicalPathnameForLocalePath,
   htmlLangForPathname,
   isBuyerSurfaceLocaleId,
   isSneakerResaleLocaleId,
   isSneakerResaleSignupSource,
-  matchBuyerSurfaceSplat,
   SNEAKER_RESALE_MARKETS,
   SNEAKER_RESALE_PATHS,
   sneakerResaleMarket,
@@ -101,94 +98,33 @@ describe("buyer-surface locale cluster (issue #1501)", () => {
     expect(isBuyerSurfaceLocaleId(undefined)).toBe(false);
   });
 
-  it("keeps buyer-surface locale subpaths OUT of the public sitemap (issue #1570)", () => {
-    // The buyer-surface cluster serves byte-identical English copy with
-    // canonical -> EN. Listing 43 locale `<loc>` entries told Google they
-    // were 43 indexable surfaces — a duplicate-content doorway pattern.
-    // They stay reachable (200, canonical->EN) but are no longer sitemapped.
+  it("keeps buyer-surface locale paths OUT of the public sitemap (issue #2962: deleted)", () => {
+    // Issue #2962 Branch B: the untranslated buyer-surface cluster is
+    // DELETED - every buyer-surface locale path is a 301 to the EN pathname,
+    // so no `<loc>` may advertise a redirecting duplicate. The genuinely
+    // translated sneaker-resale cluster STAYS in the sitemap.
     for (const locale of BUYER_SURFACE_LOCALE_IDS) {
-      for (const path of BUYER_SURFACE_PATHS) {
-        if (path === "/" || path === "/sitemap.xml") continue;
-        const sitemapPath = `/${locale}${path}`;
-        expect(SITEMAP_PATHS as readonly string[]).not.toContain(sitemapPath);
+      for (const path of ["/pricing", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/compare", "/search", "/compare/panoramata", "/switch/visualping"]) {
+        expect(SITEMAP_PATHS as readonly string[]).not.toContain(`/${locale}${path}`);
       }
     }
-    // The genuinely translated sneaker-resale cluster STAYS in the sitemap.
     expect(SITEMAP_PATHS as readonly string[]).toContain("/de/sneaker-resale");
     expect(SITEMAP_PATHS as readonly string[]).toContain("/ja/sneaker-resale");
     expect(SITEMAP_PATHS as readonly string[]).toContain("/pt-br/sneaker-resale");
+    // fr/es have no sneaker-resale page of their own.
+    expect(SITEMAP_PATHS as readonly string[]).not.toContain("/fr/sneaker-resale");
+    expect(SITEMAP_PATHS as readonly string[]).not.toContain("/es/sneaker-resale");
   });
 
-  it("derives the English canonical pathname from any locale-prefixed path", () => {
-    expect(canonicalPathnameForLocalePath("/de")).toBe("/");
-    expect(canonicalPathnameForLocalePath("/de/pricing")).toBe("/pricing");
-    expect(canonicalPathnameForLocalePath("/ja/help")).toBe("/help");
-    expect(canonicalPathnameForLocalePath("/pt-br/api/docs")).toBe("/api/docs");
-    expect(canonicalPathnameForLocalePath("/fr/compare")).toBe("/compare");
-    expect(canonicalPathnameForLocalePath("/es/sitemap.xml")).toBe("/sitemap.xml");
-    // Programmatic /ads/:domain locale pages (issue #1562) canonical to the
-    // EN brand route.
-    expect(canonicalPathnameForLocalePath("/de/ads/nike.com")).toBe("/ads/nike.com");
-    expect(canonicalPathnameForLocalePath("/fr/ads/stockx.com")).toBe("/ads/stockx.com");
-    // Already-English paths pass through unchanged.
-    expect(canonicalPathnameForLocalePath("/pricing")).toBe("/pricing");
-    expect(canonicalPathnameForLocalePath("/sneaker-resale")).toBe("/sneaker-resale");
-    // Trailing slash is normalized.
-    expect(canonicalPathnameForLocalePath("/de/pricing/")).toBe("/pricing");
-  });
-
-  it("dispatches the splat to the matching EN surface and 404s anything else", () => {
-    expect(matchBuyerSurfaceSplat("")).toBe("");
-    expect(matchBuyerSurfaceSplat("pricing")).toBe("pricing");
-    expect(matchBuyerSurfaceSplat("help")).toBe("help");
-    expect(matchBuyerSurfaceSplat("docs")).toBe("docs");
-    expect(matchBuyerSurfaceSplat("api/docs")).toBe("api/docs");
-    expect(matchBuyerSurfaceSplat("status")).toBe("status");
-    expect(matchBuyerSurfaceSplat("changelog")).toBe("changelog");
-    expect(matchBuyerSurfaceSplat("trust")).toBe("trust");
-    expect(matchBuyerSurfaceSplat("compare")).toBe("compare");
-    // First-value search funnel + supporting trust surfaces (issue #1578).
-    expect(matchBuyerSurfaceSplat("search")).toBe("search");
-    expect(matchBuyerSurfaceSplat("competitor-monitoring")).toBe("competitor-monitoring");
-    expect(matchBuyerSurfaceSplat("capture-rules")).toBe("capture-rules");
-    expect(matchBuyerSurfaceSplat("methodology")).toBe("methodology");
-    // Sub-paths that aren't a registered buyer surface (e.g. /compare/visualping
-    // is its own named route, not part of the cluster) must 404 so the
-    // cluster stays bounded.
-    expect(matchBuyerSurfaceSplat("compare/visualping")).toBeNull();
-    expect(matchBuyerSurfaceSplat("pricing/extra")).toBeNull();
-    expect(matchBuyerSurfaceSplat("totally-unknown")).toBeNull();
-  });
-
-  it("maps every buyer-surface locale pathname to lang=en (issue #1570)", () => {
-    // The buyer-surface cluster serves byte-identical English copy. A page
-    // must not declare a language its content does not speak, so every
-    // buyer-surface locale path reports `en` — not de/ja/pt-BR/fr/es.
+  it("maps buyer-surface locale pathnames to lang=en - they are now pure EN redirects", () => {
     for (const locale of BUYER_SURFACE_LOCALE_IDS) {
       expect(htmlLangForPathname(`/${locale}`)).toBe("en");
       expect(htmlLangForPathname(`/${locale}/pricing`)).toBe("en");
-      expect(htmlLangForPathname(`/${locale}/help`)).toBe("en");
-      expect(htmlLangForPathname(`/${locale}/docs`)).toBe("en");
-      expect(htmlLangForPathname(`/${locale}/api/docs`)).toBe("en");
-      expect(htmlLangForPathname(`/${locale}/status`)).toBe("en");
-      expect(htmlLangForPathname(`/${locale}/changelog`)).toBe("en");
-      expect(htmlLangForPathname(`/${locale}/trust`)).toBe("en");
-      expect(htmlLangForPathname(`/${locale}/compare`)).toBe("en");
+      expect(htmlLangForPathname(`/${locale}/ads/nike.com`)).toBe("en");
     }
-    // EN pathnames stay EN.
     expect(htmlLangForPathname("/pricing")).toBe("en");
     expect(htmlLangForPathname("/")).toBe("en");
-    // Programmatic /ads/:domain locale pages (issue #1562) re-export the EN
-    // brand page, so they serve byte-identical English content and must
-    // report lang=en too (issue #1570) — never a fake locale lang.
-    for (const locale of BUYER_SURFACE_LOCALE_IDS) {
-      expect(htmlLangForPathname(`/${locale}/ads/nike.com`)).toBe("en");
-      expect(htmlLangForPathname(`/${locale}/ads/stockx.com`)).toBe("en");
-    }
-    // A stray `/ads` with no domain is a 404, not a locale page — lang stays EN.
-    expect(htmlLangForPathname("/de/ads")).toBe("en");
-    expect(htmlLangForPathname("/de/ads/")).toBe("en");
-    // The genuinely translated sneaker-resale cluster KEEPS its locale lang.
+    // The genuinely translated sneaker-resale cluster keeps its locale lang.
     expect(htmlLangForPathname("/de/sneaker-resale")).toBe("de");
     expect(htmlLangForPathname("/ja/sneaker-resale")).toBe("ja");
     expect(htmlLangForPathname("/pt-br/sneaker-resale")).toBe("pt-BR");
