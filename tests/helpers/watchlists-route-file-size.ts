@@ -6,8 +6,10 @@ import { join, relative } from "node:path";
  * once the full suite was on the machine. Keep each split file under this. */
 export const WATCHLISTS_ROUTE_TEST_MAX_LINES = 1800;
 
+// `actions.<suffix>` files are legitimate splits of the actions suite — every
+// one is held to the same ceiling, so splitting never escapes the ratchet.
 const WATCHLISTS_ROUTE_TEST_NAME =
-  /^watchlists\.route(?:\.(?:loader|actions))?\.test\.ts$/;
+  /^watchlists\.route(?:\.(?:loader|actions(?:\.[a-z0-9-]+)?))?\.test\.ts$/;
 
 export function isWatchlistsRouteTestFile(relativePath: string): boolean {
   const name = relativePath.split("/").pop() ?? "";
