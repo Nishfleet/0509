@@ -1,5 +1,5 @@
 import { readFileSync, readdirSync } from "node:fs";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { applyMigration, createSqliteD1 } from "./helpers/sqlite-d1";
 
@@ -23,7 +23,16 @@ import { applyMigration, createSqliteD1 } from "./helpers/sqlite-d1";
  */
 const WATCHLISTS_CORE_PATH = "app/lib/data/watchlists-core.server.ts";
 
-function watchlistDeliveryConfigSql(): string {
+/**
+ * Splits the copy statement into its INSERT column list and its SELECT list.
+ * Both must name every channel column: a name only in the INSERT list gets no
+ * value from the SELECT, and a list in a different order silently writes each
+ * value into the wrong column.
+ */
+function watchlistDeliveryConfigCopySql(): {
+  columns: string[];
+  select: string[];
+} {
   const source = readFileSync(WATCHLISTS_CORE_PATH, "utf8");
   const start = source.indexOf("INSERT INTO watchlist_delivery_config");
   if (start === -1) {
@@ -38,7 +47,26 @@ function watchlistDeliveryConfigSql(): string {
       `unterminated SQL template literal after ${start} in ${WATCHLISTS_CORE_PATH}`,
     );
   }
-  return source.slice(start, end);
+  const sql = source.slice(start, end);
+
+  const selectAt = sql.indexOf("SELECT");
+  if (selectAt === -1) {
+    throw new Error(`no SELECT in the copy statement of ${WATCHLISTS_CORE_PATH}`);
+  }
+  const columns = identifiers(sql.slice(0, selectAt));
+  const fromAt = sql.indexOf("FROM", selectAt);
+  if (fromAt === -1) {
+    throw new Error(`no FROM in the copy statement of ${WATCHLISTS_CORE_PATH}`);
+  }
+  const select = identifiers(sql.slice(selectAt, fromAt));
+  return { columns, select };
+}
+
+/** Bare column identifiers, ignoring the placeholders and the keywords. */
+function identifiers(fragment: string): string[] {
+  return (fragment.match(/\b[a-z][a-z0-9_]*\b/g) ?? []).filter(
+    (token) => token.endsWith("_enabled"),
+  );
 }
 
 function schemaChannelColumns(): string[] {
@@ -61,15 +89,8 @@ function schemaChannelColumns(): string[] {
 }
 
 describe("copyWatchlistDeliverySettings", () => {
-  const databases: ReturnType<typeof createSqliteD1>[] = [];
-  afterEach(() => {
-    while (databases.length > 0) {
-      databases.pop()?.close();
-    }
-  });
-
-  it("is a hand-written INSERT...SELECT that must list every channel column", () => {
-    const sql = watchlistDeliveryConfigSql();
+  it("is a hand-written INSERT...SELECT that must list every channel column in BOTH lists", () => {
+    const { columns, select } = watchlistDeliveryConfigCopySql();
     const channelColumns = schemaChannelColumns();
 
     // Sanity: the schema really does have the channel columns this guards,
@@ -78,7 +99,21 @@ describe("copyWatchlistDeliverySettings", () => {
     expect(channelColumns).toContain("slack_enabled");
     expect(channelColumns).toContain("teams_enabled");
 
-    const missing = channelColumns.filter((column) => !sql.includes(column));
-    expect(missing).toEqual([]);
+    // Both halves matter. A name present only in the INSERT column list means
+    // the SELECT never supplies a value for it, so the copy still drops or
+    // misaligns the channel. Checking both closes the swapped-list case, where
+    // the values silently land in the wrong column.
+    const missingFromColumns = channelColumns.filter(
+      (column) => !columns.includes(column),
+    );
+    const missingFromSelect = channelColumns.filter(
+      (column) => !select.includes(column),
+    );
+
+    expect(
+      { missingFromColumns, missingFromSelect },
+      `add ${[...new Set([...missingFromColumns, ...missingFromSelect])].join(", ")} ` +
+        "to both the column list and the SELECT list of copyWatchlistDeliverySettings",
+    ).toEqual({ missingFromColumns: [], missingFromSelect: [] });
   });
 });
