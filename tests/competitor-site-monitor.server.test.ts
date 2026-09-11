@@ -1178,7 +1178,12 @@ describe("buildWebsiteCoverageLabel", () => {
 
   it("never claims the whole site when the inventory is incomplete", () => {
     const label = buildWebsiteCoverageLabel({
-      scan: { inventoryComplete: false, pageBudget: 50, fetchedPageCount: 2 },
+      scan: {
+        inventoryComplete: false,
+        pageBudget: 50,
+        fetchedPageCount: 2,
+        finalizedAt: null,
+      },
       pages,
     });
     expect(label).toContain("2 of 4 known pages watched");
@@ -1187,7 +1192,12 @@ describe("buildWebsiteCoverageLabel", () => {
 
   it("never claims the whole site when only part of the inventory was fetched", () => {
     const label = buildWebsiteCoverageLabel({
-      scan: { inventoryComplete: true, pageBudget: 50, fetchedPageCount: 3 },
+      scan: {
+        inventoryComplete: true,
+        pageBudget: 50,
+        fetchedPageCount: 3,
+        finalizedAt: null,
+      },
       pages,
     });
     expect(label).toContain("3 of 4 known pages watched");
@@ -1196,18 +1206,74 @@ describe("buildWebsiteCoverageLabel", () => {
 
   it("claims the whole site only when complete AND fully fetched", () => {
     const label = buildWebsiteCoverageLabel({
-      scan: { inventoryComplete: true, pageBudget: 50, fetchedPageCount: 4 },
+      scan: {
+        inventoryComplete: true,
+        pageBudget: 50,
+        fetchedPageCount: 4,
+        finalizedAt: "2026-08-01T03:00:00.000Z",
+      },
       pages,
     });
     expect(label).toContain("All 4 known pages watched");
   });
 
-  it("reports sitemap-discovered and crawl-reached counts honestly", () => {
+  it("reports sitemap-discovered counts and no crawl clause", () => {
     const label = buildWebsiteCoverageLabel({
-      scan: { inventoryComplete: false, pageBudget: 50, fetchedPageCount: 1 },
+      scan: {
+        inventoryComplete: false,
+        pageBudget: 50,
+        fetchedPageCount: 1,
+        finalizedAt: null,
+      },
       pages,
     });
     expect(label).toContain("sitemap discovered 3");
-    expect(label).toContain("crawl reached 3");
+    // Crawl pages persist as "sitemap_content" so no honest crawl count
+    // exists yet (#2771) — the label must not claim one.
+    expect(label).not.toContain("crawl reached");
+  });
+
+  it("renders the real finalized date, never a placeholder", () => {
+    const label = buildWebsiteCoverageLabel({
+      scan: {
+        inventoryComplete: true,
+        pageBudget: 50,
+        fetchedPageCount: 4,
+        finalizedAt: "2026-08-01T03:00:00.000Z",
+      },
+      pages,
+    });
+    expect(label).toContain("last full crawl 2026-08-01");
+    expect(label).not.toContain("<date>");
+    expect(label).not.toContain("crawl reached");
+  });
+
+  it("omits the last-full-crawl clause when the scan never finalized", () => {
+    const label = buildWebsiteCoverageLabel({
+      scan: {
+        inventoryComplete: false,
+        pageBudget: 50,
+        fetchedPageCount: 2,
+        finalizedAt: null,
+      },
+      pages,
+    });
+    expect(label).not.toContain("last full crawl");
+    expect(label).not.toContain("<date>");
+  });
+
+  it("omits the last-full-crawl clause on an unparseable date", () => {
+    const label = buildWebsiteCoverageLabel({
+      scan: {
+        inventoryComplete: false,
+        pageBudget: 50,
+        fetchedPageCount: 2,
+        finalizedAt: "not-a-date",
+      },
+      pages,
+    });
+    expect(label).not.toContain("last full crawl");
+    expect(label).not.toContain("Invalid Date");
+    expect(label).not.toContain("not-a-date");
   });
 });
