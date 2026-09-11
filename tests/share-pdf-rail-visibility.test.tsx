@@ -48,7 +48,11 @@ const reportSnapshot = {
 	],
 };
 
-const appCss = readFileSync("app/app.css", "utf8");
+// app.css split in issue #2392: /share is a public route — it loads
+// base.css + marketing.css, and the injected sheet below mirrors that.
+const appCss = ["app/base.css", "app/marketing.css"]
+  .map((p) => readFileSync(p, "utf8"))
+  .join("\n");
 
 let root: Root | null = null;
 

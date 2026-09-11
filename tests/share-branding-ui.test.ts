@@ -218,7 +218,9 @@ describe("shared report agency identity", () => {
 	});
 
 	it("keeps identity and attribution in print while hiding only client actions", () => {
-		const appCss = readFileSync("app/app.css", "utf8");
+		// app.css split in issue #2392: /share is a public route — the print
+		// rules live in marketing.css.
+		const appCss = readFileSync("app/marketing.css", "utf8");
 		const printCss = appCss.slice(appCss.indexOf("@media print"));
 
 		expect(printCss).toContain(".f9-share-brand-identity");

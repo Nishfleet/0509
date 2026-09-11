@@ -17,7 +17,10 @@ const searchRoute = readFileSync("app/routes/search.tsx", "utf8");
 const notificationsUiRoute = readFileSync("app/routes/app.notifications.ui.tsx", "utf8");
 const dashboardRoute = readFileSync("app/routes/app.dashboard.tsx", "utf8");
 const shellSource = readFileSync("app/components/dashboard-shell.tsx", "utf8");
-const appCss = readFileSync("app/app.css", "utf8");
+// app.css split in issue #2392: the /app workspace loads base.css + app.css.
+const appCss = ["app/base.css", "app/app.css"]
+  .map((p) => readFileSync(p, "utf8"))
+  .join("\n");
 
 const PRIMARY_APP_ROUTE_FILES = readdirSync("app/routes").filter(
   (name) =>

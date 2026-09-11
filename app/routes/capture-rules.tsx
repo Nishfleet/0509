@@ -15,6 +15,7 @@ import {
   webPageJsonLd,
   type FaqJsonLdEntry,
 } from "~/lib/seo";
+import "../marketing.css";
 
 // Reason codes rendered below via CAPTURE_VALIDITY_PUBLIC_RULES (the source of
 // truth lives in capture-validity-public-rules.ts, which maps each to a

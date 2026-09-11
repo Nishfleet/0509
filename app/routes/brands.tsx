@@ -37,6 +37,7 @@ import {
 } from "~/lib/brand-categories";
 import { AD_AGGRESSION_METHODOLOGY_PATH } from "~/lib/aggression-score";
 import type { IndexableAdsLink } from "~/lib/ads-internal-links";
+import "../marketing.css";
 
 /** A brand-page link plus whether its `/timeline/:domain` is indexable. */
 interface BrandHubItem extends IndexableAdsLink {

@@ -1,4 +1,5 @@
 import { Link } from "react-router";
+import "../marketing.css";
 
 export const meta = () => [{ title: "Page not found | Five to Nine" }];
 

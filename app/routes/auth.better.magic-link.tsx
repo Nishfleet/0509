@@ -3,6 +3,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react
 
 import { BrandWordmark } from "~/components/brand-wordmark";
 import { noindexMetaEntry } from "~/lib/seo";
+import "../marketing.css";
 
 export const meta: MetaFunction = () => [
   { title: "Confirm sign-in | Five to Nine" },

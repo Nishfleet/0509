@@ -6,6 +6,7 @@ import { SignupFirstBriefView } from "~/components/signup-first-brief-view";
 import { useFirstCapturePolling } from "~/components/workspace/use-first-capture-polling";
 import type { SignupFirstBriefLoaderData } from "~/lib/first-brief";
 import type { FirstBriefFileResult } from "~/lib/first-brief.server";
+import "../app.css";
 
 /** Compatibility only: setup now lives in the signed-in Overview. */
 export async function loader({ context, request }: LoaderFunctionArgs) {

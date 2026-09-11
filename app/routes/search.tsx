@@ -151,6 +151,7 @@ import type { SuggestedCompetitorsPanelData } from "~/lib/auto-competitor-sugges
 import type { CompetitorHandoffCandidate } from "~/lib/competitor-handoff.server";
 import type { RootLoaderData } from "~/root";
 import type { SearchFilters, WatchlistTrackingRole } from "~/lib/types";
+import "../marketing.css";
 
 // Re-exported so existing test imports from "~/routes/search" keep working
 // after the pure helpers moved to "~/lib/search-display".

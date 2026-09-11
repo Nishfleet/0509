@@ -10,6 +10,7 @@ import {
   webPageJsonLd,
 } from "~/lib/seo";
 import type { RootLoaderData } from "~/root";
+import "../marketing.css";
 
 const description =
   "Five to Nine product docs for setup, delivery, billing, integrations, and safety.";

@@ -10,6 +10,7 @@ import {
   webPageJsonLd,
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import "../marketing.css";
 
 const description =
   "Five to Nine trust and security basics, including data handled, retention, backups, external services, and non-claims.";

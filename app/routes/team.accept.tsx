@@ -2,6 +2,7 @@ import { Form, Link, redirect, useActionData, useLoaderData } from "react-router
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { SubmitButton } from "~/components/submit-button";
+import "../marketing.css";
 
 export const meta = () => [{ title: "Join team | Five to Nine" }];
 

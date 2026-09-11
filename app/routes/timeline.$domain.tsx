@@ -34,6 +34,7 @@ import {
   timelineSocialCardUrl,
   webPageJsonLd,
 } from "~/lib/seo";
+import "../marketing.css";
 
 export interface OfferTimelineLoaderData {
   domain: string;
