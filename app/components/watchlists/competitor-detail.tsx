@@ -24,7 +24,7 @@ import { WatchlistSetupCard } from "~/components/watchlists/watchlist-setup-card
 import type { DomainArchive } from "~/lib/archive";
 import type { PublicDeliveryAttemptSummary } from "~/lib/delivery-attempt-public";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
-import type { WatchlistRecord } from "~/lib/types";
+import type { EffectiveDeliveryConfig, WatchlistRecord } from "~/lib/types";
 import {
   buildCompetitorDeliveryLines,
   buildCompetitorFactRows,
@@ -67,7 +67,12 @@ import {
 type DetailData = ComponentProps<typeof EventChangesSection>["data"] &
   ComponentProps<typeof RecentEvidenceChecksCard>["data"] &
   ComponentProps<typeof DeliverySettingsCard>["data"] &
-  ComponentProps<typeof DeliveryTargetsSection>["data"] & {
+  ComponentProps<typeof DeliveryTargetsSection>["data"] &
+  // The card no longer carries the effective config (it renders zero fields),
+  // but the delivery summary lines still read it from the loader, so pin the
+  // full shape here instead of inheriting whatever the remaining sections
+  // declare (issue #2416).
+  { effectiveDeliveryConfig: EffectiveDeliveryConfig } & {
     selectedWatchlist: WatchlistRecord;
     eventCandidates: ComponentProps<typeof CandidateHistory>["candidates"];
     creativeWall: ComponentProps<typeof CreativeWall>["items"];
