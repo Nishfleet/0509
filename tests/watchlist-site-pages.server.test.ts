@@ -167,6 +167,26 @@ describe("website site scan storage", () => {
     return row.total;
   }
 
+  function tagStatementSql() {
+    const sqlByStatement = new WeakMap<object, string>();
+    const realPrepare = harness.db.prepare.bind(harness.db);
+    harness.db.prepare = ((sql: string) => {
+      const statement = realPrepare(sql);
+      const realBind = statement.bind.bind(statement);
+      statement.bind = ((...bindings: unknown[]) => {
+        const bound = realBind(...bindings);
+        sqlByStatement.set(bound, sql);
+        return bound;
+      }) as typeof statement.bind;
+      return statement;
+    }) as typeof harness.db.prepare;
+    return {
+      statementSql(statement: object): string {
+        return sqlByStatement.get(statement) ?? "";
+      },
+    };
+  }
+
   it("derives the workspace from watchlist.user_id and proves the run belongs to the claimed watchlist", async () => {
     seedWatchlist("watch-1", "user-1", "competitor.example");
     seedWatchlist("watch-2", "user-2", "other.example");
@@ -682,6 +702,95 @@ describe("website site scan storage", () => {
     expect(otherBaseline!.pages.map((record) => record.canonicalUrl)).toEqual([sameUrl]);
     const watch1Baseline = await getLatestCompleteWebsiteScanBaseline(env, "watch-1");
     expect(watch1Baseline!.observations.every((record) => record.workspaceId === "user-1")).toBe(true);
+  });
+
+  it("finalizeWebsiteSiteScan persists outcome and counts in one atomic batch", async () => {
+    seedWatchlist("watch-1", "user-1", "competitor.example");
+    seedRun("run-1", "watch-1", "2026-08-01T01:00:00.000Z");
+
+    await beginWebsiteSiteScan(env, beginInput());
+    await upsertWebsiteSiteScanPage(env, pageInput());
+    await upsertWebsiteSiteScanPage(
+      env,
+      pageInput({
+        canonicalUrl: "https://competitor.example/pricing",
+        pageKind: "pricing",
+        stableOrder: 1,
+      }),
+    );
+    await upsertWebsitePageObservation(env, observationInput());
+
+    // A crash between the outcome UPDATE and the counts UPDATE would leave the
+    // manifest finalized with counted 0/0 rows while inventory exists, and the
+    // terminal exactRetry path would never repair it. The terminal write must
+    // therefore be one atomic batch.
+    const batches: string[][] = [];
+    const sqlSpy = tagStatementSql();
+    const realBatch = harness.db.batch.bind(harness.db);
+    harness.db.batch = (async (statements: { run(): Promise<unknown> }[]) => {
+      batches.push(statements.map((statement) => sqlSpy.statementSql(statement)));
+      return realBatch(statements);
+    }) as typeof harness.db.batch;
+
+    try {
+      const finalized = await finalizeWebsiteSiteScan(env, finalizeInput());
+      expect(finalized.discoveredPageCount).toBe(2);
+      expect(finalized.fetchedPageCount).toBe(1);
+    } finally {
+      harness.db.batch = realBatch;
+    }
+
+    const finalizeBatches = batches.filter((statements) =>
+      statements.some((sql) => sql.includes("UPDATE website_site_scan")),
+    );
+    expect(finalizeBatches).toHaveLength(1);
+    // The terminal write is a single statement inside one batch, so the outcome
+    // and the counts can never be committed apart by a mid-finalize crash.
+    expect(finalizeBatches[0]).toHaveLength(1);
+    expect(finalizeBatches[0][0]).toContain("finalized_at");
+    expect(finalizeBatches[0][0]).toContain("discovered_page_count");
+    expect(finalizeBatches[0][0]).toContain("fetched_page_count");
+  });
+
+  it("a crash mid-finalize never stores a finalized manifest with zeroed counts", async () => {
+    seedWatchlist("watch-1", "user-1", "competitor.example");
+    seedRun("run-1", "watch-1", "2026-08-01T01:00:00.000Z");
+
+    const scan = await beginWebsiteSiteScan(env, beginInput());
+    await upsertWebsiteSiteScanPage(env, pageInput());
+    await upsertWebsitePageObservation(env, observationInput());
+
+    // Simulate the isolate dying during finalize: the batch is abandoned before
+    // it commits. Because the outcome and the counts share one statement, there
+    // is no window in which the terminal write lands with stale 0/0 counts.
+    const realBatch = harness.db.batch.bind(harness.db);
+    harness.db.batch = (async () => {
+      throw new Error("simulated isolate death during finalize");
+    }) as typeof harness.db.batch;
+
+    try {
+      await expect(finalizeWebsiteSiteScan(env, finalizeInput())).rejects.toThrow(
+        /simulated isolate death during finalize/,
+      );
+    } finally {
+      harness.db.batch = realBatch;
+    }
+
+    const row = harness.sqlite
+      .prepare("SELECT status, finalized_at, discovered_page_count, fetched_page_count FROM website_site_scan WHERE id = ?")
+      .get(scan.id) as {
+      status: string;
+      finalized_at: string | null;
+      discovered_page_count: number;
+      fetched_page_count: number;
+    };
+    expect(row.finalized_at).toBeNull();
+    expect(row.status).toBe("running");
+
+    // The retry completes with true counts, so the terminal write is correct.
+    const retried = await finalizeWebsiteSiteScan(env, finalizeInput());
+    expect(retried.discoveredPageCount).toBe(1);
+    expect(retried.fetchedPageCount).toBe(1);
   });
 
   it("rejects writes that skip beginWebsiteSiteScan", async () => {
