@@ -1337,7 +1337,6 @@ describe("buildWebsiteCoverageLabel", () => {
     const label = buildWebsiteCoverageLabel({
       scan: {
         status: "running",
-        status: "complete",
         inventoryComplete: false,
         pageBudget: 50,
         fetchedPageCount: 1,
