@@ -120,6 +120,25 @@ describe("Dodo pricing canary script", () => {
     expect(drifted.ok).toBe(false);
   });
 
+  it("never forwards the canary token across origins", async () => {
+    const fetchMock = vi.fn()
+      .mockReturnValueOnce(new Response(null, { status: 302, headers: { location: "https://evil.example/x" } }));
+    vi.spyOn(globalThis, "fetch").mockImplementation(fetchMock);
+
+    await expect(fetchPreview({
+      baseUrl: "https://0509.io",
+      country: "US",
+      token: "canary-token",
+      expectedWorkerVersionId: "v",
+    })).rejects.toThrow();
+
+    // With `redirect: "manual"` there is no second fetch to inspect: the 302
+    // must not be followed, so the token never reaches the redirect target.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    vi.restoreAllMocks();
+  });
+
   it("rejects an unbound direct fetch before making a request", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch");
     await expect(fetchPreview({
