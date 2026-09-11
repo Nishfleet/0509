@@ -2,6 +2,7 @@ import { Form, Link } from "react-router";
 import type { LinksFunction, MetaFunction } from "react-router";
 
 import { CompareAdsExampleLink } from "~/components/ads-internal-links";
+import { Breadcrumbs } from "~/components/breadcrumbs";
 import { LiveBrandProof } from "~/components/live-brand-proof";
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
@@ -149,6 +150,13 @@ export default function CompareMetaAdLibraryRoute() {
       />
       <script {...jsonLdScriptProps(structuredFaq)} />
       <MarketingNav />
+      <Breadcrumbs
+        items={[
+          { name: "Home", pathname: "/" },
+          { name: "Competitor monitoring", pathname: "/competitor-monitoring" },
+          { name: "Meta Ad Library", pathname: "/compare/meta-ad-library" },
+        ]}
+      />
 
       <section className="ld-hero">
         <p className="ld-case">

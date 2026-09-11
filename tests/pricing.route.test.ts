@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
+import { mockReactRouter } from "./helpers/mock-react-router";
 import { join } from "node:path";
 
-import { createElement, type ReactNode } from "react";
+import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -123,7 +124,6 @@ describe("pricing route", () => {
 });
 
 describe("pricing section render smoke", () => {
-  type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
 
   const rootData = {
     session: null,
@@ -138,18 +138,11 @@ describe("pricing section render smoke", () => {
 
   beforeEach(() => {
     vi.resetModules();
-    vi.doMock("react-router", async () => {
-      const actual = await vi.importActual<typeof import("react-router")>("react-router");
-      const React = await import("react");
-      return {
-        ...actual,
-        useRouteLoaderData: () => rootData,
-        useLoaderData: () => routeData,
-        Link: ({ children, to, ...props }: MockLinkProps) =>
-          React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
-      };
-    });
+    mockReactRouter({
+    loaderData: () => rootData,
+    loader: () => routeData,
   });
+});
 
   afterEach(() => {
     vi.doUnmock("react-router");

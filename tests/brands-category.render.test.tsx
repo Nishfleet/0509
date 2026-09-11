@@ -114,6 +114,17 @@ describe("/brands/:category — per-category brand landing page (issue #2067)", 
     ]);
   });
 
+  it("renders the visible Breadcrumb trail from the same items as the BreadcrumbList JSON-LD (issue #2601)", async () => {
+    const markup = await render(beautyData());
+
+    expect(markup).toContain('aria-label="Breadcrumb"');
+    expect(markup).toContain('href="/brands"');
+    // First two crumbs link; the current page is plain text with aria-current.
+    expect(markup).toContain('<a href="/">Home</a>');
+    expect(markup).toContain('<a href="/brands">Brands</a>');
+    expect(markup).toContain('<span aria-current="page">Beauty &amp; personal care</span>');
+  });
+
   it("emits a BreadcrumbList JSON-LD of Home > Brands > Category", async () => {
     const markup = await render(beautyData());
 

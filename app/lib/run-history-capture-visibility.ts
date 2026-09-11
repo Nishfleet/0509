@@ -51,7 +51,7 @@ export function formatRunHistoryRefusalCopy(row: RunHistoryRefusalRow): string {
 export function resolveProofCaptureRefusal(
   capture: Pick<
     ProofCaptureRecord,
-    "id" | "status" | "skipReason" | "failureCode" | "failureReason" | "attemptedAt" | "captureMetadata"
+    "id" | "status" | "skipReason" | "failureCode" | "failureReason" | "attemptedAt" | "captureMetadata" | "captureDiagnostics"
   >,
 ): RunHistoryRefusalRow | null {
   if (capture.status === "failed") {
@@ -88,7 +88,26 @@ export function resolveProofCaptureRefusal(
   // Issue #1879: a budget skip is never a generic "Skipped" row — it is a
   // budget-exhaustion event with its own label and the reset/upgrade escape
   // hatch, so a paid-tier capture that was dropped is unmistakable.
+  // Issue #2890: the stored budgetReason keeps the sub-reason honest — a skip
+  // caused by purchased credits waiting on an inactive plan is not "allowance
+  // reached" (the credits exist; the plan is what is missing).
   if (capture.status === "skipped_due_to_budget") {
+    const budgetReason =
+      typeof capture.captureDiagnostics?.budgetReason === "string"
+        ? capture.captureDiagnostics.budgetReason
+        : null;
+    if (budgetReason === "top_up_inactive_plan") {
+      return {
+        id: capture.id,
+        kind: capture.status,
+        reasonCode: budgetReason,
+        label: "Credits blocked",
+        explanation:
+          "you have purchased proof captures, but they need an active paid plan — this check was dropped; reactivate your plan to use the credits you already bought",
+        attemptedAt: capture.attemptedAt,
+        generatesAlert: false,
+      };
+    }
     return {
       id: capture.id,
       kind: capture.status,

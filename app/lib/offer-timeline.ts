@@ -30,6 +30,14 @@ export interface OfferSnapshotInput {
   screenshotKey: string | null;
   pageTextKey: string | null;
   /**
+   * The market the captured page declared for itself (issue #2889,
+   * e.g. `"GB"` vs `"US"`), from Shopify.country / countryCode in the
+   * raw render. Null when the snapshot's metadata predates the signal
+   * (pre-lp-signals-v8) or the page declared nothing — the capture-validity
+   * gate never suppresses on an unknown market.
+   */
+  declaredMarketCountry?: string | null;
+  /**
    * How this snapshot was captured (e.g. `landing_page_fetch`, `demo_backfill`,
    * `sitemap_brand_seed`). Null when the row does not carry a capture method.
    */
@@ -71,6 +79,8 @@ export interface OfferLedgerEntry {
    * `sitemap_brand_seed`). Null when the row does not carry a capture method.
    */
   captureMethod?: string | null;
+  /** The page-declared market carried through from the snapshot (issue #2889). */
+  declaredMarketCountry?: string | null;
   /**
    * Honest evidence label shown when a snapshot has no screenshot and no
    * page-text link (e.g. a seeded backfill row). Null when real artifact
@@ -223,6 +233,7 @@ interface CaptureValiditySnapshot {
   canonicalUrl: string;
   headline: string;
   ctaText: string | null;
+  declaredMarketCountry?: string | null;
 }
 
 /**
@@ -232,6 +243,12 @@ interface CaptureValiditySnapshot {
  * Returns the reason to suppress, or null to diff normally:
  * - `"geo locale change"` when both canonical URLs carry a geo locale path
  *   segment and those locales differ (e.g. `/sg/` vs `/fr/`).
+ * - `"geo market change"` when both snapshots declare a page market
+ *   (Shopify.country / countryCode, issue #2889) and those markets differ —
+ *   the same-URL render-variant case: the allbirds captures alternated
+ *   "Shop Now" / "Sign Up" between GB-declared and US-declared renders of
+ *   the same canonical URL. When either side declares nothing, no
+ *   suppression — an unknown market can never hide a real change.
  * - `"cookie banner / consent string"` when the current CTA or headline
  *   matches a known consent/ads-personalization string.
  * - null otherwise (a genuine same-geo change diffs normally).
@@ -248,6 +265,15 @@ export function captureValidityReason(
     previousLocale !== currentLocale
   ) {
     return "geo locale change";
+  }
+  const previousMarket = previous.declaredMarketCountry ?? null;
+  const currentMarket = current.declaredMarketCountry ?? null;
+  if (
+    previousMarket !== null &&
+    currentMarket !== null &&
+    previousMarket !== currentMarket
+  ) {
+    return "geo market change";
   }
   if (
     isCookieBannerOrConsent(current.ctaText) ||
@@ -365,6 +391,7 @@ export function buildOfferLedger(snapshots: readonly OfferSnapshotInput[]): Offe
       screenshotHref: proofScreenshotSrc(firstInRun.screenshotKey),
       pageTextHref: proofPageTextSrc(firstInRun.pageTextKey),
       captureMethod: firstInRun.captureMethod ?? null,
+      declaredMarketCountry: firstInRun.declaredMarketCountry ?? null,
       evidenceNote: firstInRun.evidenceNote ?? null,
       transition: previousState && suppressedReason === null
         ? diffOfferBetweenStates(previousState, firstInRun)

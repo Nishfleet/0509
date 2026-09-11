@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { e2eProductionGateResponse, isE2EProductionEnvironment } from "~/lib/e2e-harness-guard.server";
+import { prepareFirstWatchlistScanRun } from "~/lib/first-watchlist-scan.server";
 import type { AppEnv } from "~/lib/env.server";
 
 const J3_WORKFLOW_WATCHLIST_ID = "e2e-watchlist-j3-workflow";
@@ -426,15 +427,14 @@ function isoMinusMinutes(iso: string, minutes: number): string {
 }
 
 async function runWorkflowAcceptance(env: AppEnv, userId: string) {
-  const [{ getWatchlist }, monitoring, fanout] = await Promise.all([
+  const [{ getWatchlist }, fanout] = await Promise.all([
     import("~/lib/data.server"),
-    import("~/lib/monitoring.server"),
     import("~/lib/monitoring-fanout.server"),
   ]);
   const watchlist = await getWatchlist(env, J3_WORKFLOW_WATCHLIST_ID, userId);
   if (!watchlist || watchlist.lastScannedAt) throw new Error("workflow_watchlist_unavailable");
 
-  const descriptor = await monitoring.prepareFirstWatchlistScanRun(env, watchlist);
+  const descriptor = await prepareFirstWatchlistScanRun(env, watchlist);
   const dispatch = await fanout.dispatchFirstWatchlistScanWorkflow(env, descriptor);
   const state = await readRunState(env, descriptor.runId);
   if (!state?.workflow_instance_id) throw new Error("workflow_not_bound");
@@ -456,9 +456,8 @@ async function runWorkflowAcceptance(env: AppEnv, userId: string) {
 }
 
 async function runCrashReclaim(env: AppEnv, userId: string, clock: string) {
-  const [{ getWatchlist }, monitoring, fanout, evidence] = await Promise.all([
+  const [{ getWatchlist }, fanout, evidence] = await Promise.all([
     import("~/lib/data.server"),
-    import("~/lib/monitoring.server"),
     import("~/lib/monitoring-fanout.server"),
     import("~/lib/evidence-usage.server"),
   ]);
@@ -498,7 +497,7 @@ async function runCrashReclaim(env: AppEnv, userId: string, clock: string) {
     runId = existingRun.id;
     firstProcessingToken = existingRun.processing_token;
   } else {
-    const descriptor = await monitoring.prepareFirstWatchlistScanRun(env, watchlist);
+    const descriptor = await prepareFirstWatchlistScanRun(env, watchlist);
     runId = descriptor.runId;
     const firstClaim = await fanout.claimOrchestratedWatchlistRun(env, {
       runId,

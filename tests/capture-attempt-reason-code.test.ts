@@ -76,6 +76,27 @@ describe("toPublicReasonCode", () => {
     expect(toPublicReasonCode("skipped_due_to_budget")).toBe("budget_skip");
   });
 
+  it("maps a budget skip on purchased credits with an inactive plan to budget_topup_inactive (#2890)", () => {
+    expect(
+      toPublicReasonCode("skipped_due_to_budget", {
+        budgetReason: "top_up_inactive_plan",
+      }),
+    ).toBe("budget_topup_inactive");
+    // Every other budget sub-reason (or none stored) stays the generic
+    // budget_skip — only the inactive-plan case is a different reason.
+    expect(toPublicReasonCode("skipped_due_to_budget")).toBe("budget_skip");
+    expect(
+      toPublicReasonCode("skipped_due_to_budget", { budgetReason: "exhausted" }),
+    ).toBe("budget_skip");
+    expect(
+      toPublicReasonCode("skipped_due_to_budget", { budgetReason: "unavailable" }),
+    ).toBe("budget_skip");
+    // The sub-reason never leaks onto a non-budget code.
+    expect(
+      toPublicReasonCode("landing_error_page", { budgetReason: "top_up_inactive_plan" }),
+    ).toBe("error_page");
+  });
+
   it("flips an error_page capture to takedown_restore only with the restore signal", () => {
     expect(toPublicReasonCode("landing_error_page")).toBe("error_page");
     expect(toPublicReasonCode("landing_error_page", { isTakedownRestore: true })).toBe(

@@ -441,7 +441,12 @@ describe("presence sync integrity", () => {
     expect(result.pollResult.items[0]?.title).toBe("Fallback page");
   });
 
-  it("only lists customer-pollable website targets for batch polling", async () => {
+  it("does not hardcode the website connector in the batch feeder query", async () => {
+    // Issue #2461: `listActiveSourceTargetsForPolling` used to filter to
+    // `connector_id = 'website'`, so the scheduled batch could never pick up
+    // x/reddit/rss targets even with their rollout flags enabled. Eligibility
+    // is decided per target by `connectorOperationalForPolling` inside
+    // `runPresencePollingBatch` instead.
     let preparedSql = "";
     const env = {
       ...baseEnv,
@@ -461,7 +466,7 @@ describe("presence sync integrity", () => {
     } satisfies Partial<AppEnv> as AppEnv;
 
     await listActiveSourceTargetsForPolling(env, 20);
-    expect(preparedSql).toContain("source_target.connector_id = 'website'");
+    expect(preparedSql).not.toContain("connector_id = 'website'");
   });
 
   it("supports connector-scoped presence item feeds", async () => {

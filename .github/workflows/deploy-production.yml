@@ -154,11 +154,18 @@ jobs:
           PINNED_SHA: ${{ needs.authorize_release.outputs.sha }}
           EMIT_PINNED_SHA: "1"
           GH_TOKEN: ${{ github.token }}
-          # The pin CAS follows the authorize job's dispatch resolution: on a
-          # workflow_dispatch the pinned candidate is the dispatched expected
-          # SHA (not the run head), and the provider CAS confirms it is still
-          # an ancestor of live main before anything ships. Fail-closed on
-          # every other CAS failure, including a rewind/rewrite of main.
+          # Same post-gate drift tolerance as the later steps below: main
+          # advancing while a queued run starts must not fail the pin (and
+          # file a fresh AUTO-REVERT HALT) when the run still ships exactly
+          # PINNED_SHA, which it verified. Forward moves are recorded; on
+          # push events this relies on branch force-push protection (rewind
+          # is fail-closed by construction only on workflow_dispatch, where
+          # the CAS enforces ancestorship). Every other CAS failure stays
+          # fail-closed.
+          TOLERATE_MAIN_DRIFT: "1"
+          # Dispatch resolution: the dispatched candidate is an ancestor of
+          # the live main tip. Rewind/rewrite of main (candidate NOT an
+          # ancestor) is fail-closed here.
         run: ./scripts/ci-verify-production-candidate.sh
 
   prepare_remote_restore_evidence:
@@ -496,7 +503,7 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Install Playwright browsers
-        run: npx playwright install chromium firefox webkit
+        run: npx playwright install --with-deps chromium firefox webkit
 
       - name: Typecheck
         env:

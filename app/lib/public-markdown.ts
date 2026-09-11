@@ -38,6 +38,8 @@ import type { CompareCitations } from "~/components/compare-citations";
 import adspyCitations from "~/data/compare/adspy-citations.json";
 import adspyderCitations from "~/data/compare/adspyder-citations.json";
 import foreplaySpyderCitations from "~/data/compare/foreplay-spyder-citations.json";
+import gethookdCitations from "~/data/compare/gethookd-citations.json";
+import keeptabzCitations from "~/data/compare/keeptabz-citations.json";
 import metaAdLibraryCitations from "~/data/compare/meta-ad-library-citations.json";
 import panoramataCitations from "~/data/compare/panoramata-citations.json";
 import pulzifiCitations from "~/data/compare/pulzifi-citations.json";
@@ -74,6 +76,9 @@ export const PUBLIC_MARKDOWN_PATHS = [
   "/compare/panoramata",
   "/compare/adspyder",
   "/compare/adspy",
+  // Issue #2866: two verified competitors that had no compare page (both 404'd).
+  "/compare/keeptabz",
+  "/compare/gethookd",
 ] as const;
 
 const PUBLIC_MARKDOWN_PATH_SET = new Set<string>(PUBLIC_MARKDOWN_PATHS);
@@ -138,6 +143,14 @@ const LLMS_PAGE_DETAILS = {
     description:
       "The free manual Ad Library workflow, the n8n/Apify DIY route with real prices, where both break, and the free weekly watch that automates it.",
   },
+  // Issue #2867: second guide in the /guides/* cluster — the watch-over-time
+  // intent. In SITEMAP_PATHS, so it needs a title/description here or the
+  // _llmsDetailsCoverSitemap type fails.
+  "/guides/how-to-monitor-meta-ad-library": {
+    title: "How to monitor a competitor's Meta Ad Library",
+    description:
+      "The free manual routine — find the Ad Library URL, pick a check cadence, log what runs — where it breaks (no history, geo variance, interactive gates), and the free weekly watch that automates it.",
+  },
   "/compare": {
     title: "Compare Five to Nine vs the alternatives",
     description:
@@ -187,6 +200,16 @@ const LLMS_PAGE_DETAILS = {
     title: "Five to Nine vs AdSpy",
     description:
       "How Five to Nine's source-backed change proof compares with AdSpy's $149/mo ad-spy database and its weak 2.4/5 review rating.",
+  },
+  "/compare/keeptabz": {
+    title: "Five to Nine vs KeepTabz",
+    description:
+      "How Five to Nine's source-backed change proof compares with KeepTabz's $49.99–$99.99 multi-platform creative and spend tracking.",
+  },
+  "/compare/gethookd": {
+    title: "Five to Nine vs GetHookd",
+    description:
+      "How Five to Nine's scheduled change proof compares with GetHookd's Facebook Ads Library analysis workbench (7-day free trial, API and MCP on annual plans).",
   },
   "/switch/panoramata": {
     title: "Panoramata alternative",
@@ -1199,6 +1222,14 @@ const PUBLIC_MARKDOWN_BY_PATH: Readonly<Record<string, string>> = {
   "/compare/adspy": compareMarkdown(
     adspyCitations as CompareCitations,
     "AdSpy is a single-plan ad-spy database with a 2.4/5 Trustpilot rating and no self-service cancel. Five to Nine is scheduled, source-backed Meta Ad Library and landing-page change proof.",
+  ),
+  "/compare/keeptabz": compareMarkdown(
+    keeptabzCitations as CompareCitations,
+    "KeepTabz tracks Facebook, Instagram, and Google ad creative and spend from $49.99, on an August 2026 launch. Five to Nine is scheduled, source-backed Meta Ad Library and landing-page change proof.",
+  ),
+  "/compare/gethookd": compareMarkdown(
+    gethookdCitations as CompareCitations,
+    "GetHookd is a Facebook Ads Library analysis workbench with a 7-day free trial and API and MCP on annual plans. Five to Nine is scheduled, source-backed Meta Ad Library and landing-page change proof.",
   ),
 };
 

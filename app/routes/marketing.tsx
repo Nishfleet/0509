@@ -1,5 +1,5 @@
 import { Form, Link, useLoaderData, useRouteLoaderData } from "react-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
@@ -40,9 +40,11 @@ const marketingDescription =
   "See the Meta ads any competitor is running right now — free, no account. Five to Nine watches the offer behind the ads and emails proof when it changes.";
 
 /**
- * The free-preview search target for the featured demo brand. The brand is
- * chosen by the visitor's home market (issue #2281) so the CTA shows a brand
- * the visitor recognizes — nike for US/EU/unknown, nykaa for India.
+ * The free-preview search target for the featured demo brand. Before #2696
+ * the brand was chosen by the visitor's home market at SSR time (#2281); the
+ * SSR document now pins the neutral flagship and the client personalizes it
+ * from /api/demo-proof after mount, so this helper receives whichever brand
+ * the current document settled on.
  */
 function publicSearchTrialPathFor(domain: string): string {
   const host = domain.replace(/^www\./, "");
@@ -62,38 +64,29 @@ export const meta: MetaFunction = () =>
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const { publicCommercialLaunchSummary } = await import("~/lib/commercial-launch-gate.server");
-  const { defaultCountryForVisitor } = await import("~/lib/countries");
-  const { getOptionalCloudflareContext } = await import("~/lib/cloudflare-context");
   const env = getEnv(context);
   const { emitFunnelHomeView } = await import("~/lib/funnel-measurement.server");
   emitFunnelHomeView(env, request);
   const commercialLaunch = publicCommercialLaunchSummary(env);
-  // Resolve the visitor country EXACTLY like the /ads/:domain loader so the
-  // home proof brief reads the SAME discovery-cache row its linked brand
-  // page reads — never different totals for the same brand on the same day
-  // (issue #1468).
-  const visitorCountry = defaultCountryForVisitor(
-    getOptionalCloudflareContext(context)?.country ?? request.headers.get("cf-ipcountry"),
-  );
-  // The featured demo brand, chosen by the visitor's home market (issue
-  // #2281). The proof brief, the "Try with <brand>" CTA, and the featured
-  // /ads link all use the SAME domain so the home never shows one brand in
-  // the brief and a different one in the CTA.
-  const { featuredWebsiteForVisitorCountry } = await import("~/lib/public-proof.server");
-  const featuredDomain = featuredWebsiteForVisitorCountry(visitorCountry);
 
-  let proofBrief: PublicProofBrief | null = null;
-  try {
-    const { loadPublicProofBrief } = await import("~/lib/public-proof.server");
-    proofBrief = await loadPublicProofBrief(env, { visitorCountry });
-  } catch (error) {
-    // A cache-read hiccup degrades to the honest "no live proof yet" state,
-    // never a 500 and never a sample fixture.
-    console.warn("Homepage proof brief load failed; rendering the honest state.", {
-      errorName: error instanceof Error ? error.name : typeof error,
-    });
-    proofBrief = null;
-  }
+  // COUNTRY-NEUTRAL SSR (issue #2696). The worker stamps the shared
+  // `public, max-age=300` policy on anonymous `/`, and `vary: cookie` does
+  // not separate anonymous visitors — so any content here chosen from the
+  // visitor's country (the #2281 featured brand, the #1468 proof brief) made
+  // the edge able to replay one market's homepage to another market for the
+  // 5-minute max-age. The document now embeds NO country-resolved content:
+  // it pins the neutral flagship brand and no proof brief, and the client
+  // personalizes both after mount via the EXISTING /api/demo-proof endpoint
+  // — the same client-fetch pattern the pricing section already uses for
+  // buyer-country prices (issue #2389). /api/demo-proof resolves the visitor
+  // country per-request with the EXACT /ads/:domain ladder, so the
+  // personalized brief keeps the #1468 count parity contract the SSR path
+  // could no longer guarantee under a shared cache. Crawler-visible HTML is
+  // the neutral brand with the honest "no live proof yet" state until the
+  // fetch resolves.
+  const { PUBLIC_HOME_NEUTRAL_FEATURED_WEBSITE } = await import("~/lib/public-proof.server");
+  const featuredDomain = PUBLIC_HOME_NEUTRAL_FEATURED_WEBSITE;
+  const proofBrief: PublicProofBrief | null = null;
 
   // The under-fold before/after mark: a real stored watch event or null (the
   // null path renders the clearly labelled sample state, never a fabricated
@@ -126,12 +119,13 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   // `public, max-age=300` policy, and they cost a 2.5s SSR bound plus ~8 Dodo
   // checkout-preview calls per cold isolate. PricingSection fetches the
   // already-existing /api/pricing-preview from the client instead, so this
-  // document carries no prices and rides the worker's shared policy. It is NOT
-  // country-invariant HTML — `proofBrief` and `featuredDomain` above are still
-  // chosen from the visitor's country (#2281/#1468), which a shared cache can
-  // replay across markets for the 5-minute max-age (filed as #2696). The route
-  // still declares the `pricingPreview` field so its data shape stays identical
-  // to /pricing; it is always the "no preview" sentinel here.
+  // document carries no prices and rides the worker's shared policy. Since
+  // #2696 it also carries no country-resolved proof content: `proofBrief` is
+  // always null here and `featuredDomain` is the neutral flagship, so the
+  // shared-cached document is identical for every market and the client
+  // personalizes both via /api/demo-proof. The route still declares the
+  // `pricingPreview` field so its data shape stays identical to /pricing; it
+  // is always the "no preview" sentinel here.
   return { pricingPreview: noPricingPreview, commercialLaunch, proofBrief, indexableAdsLinks, changeMark, featuredDomain };
 }
 
@@ -347,13 +341,49 @@ export default function MarketingRoute() {
     starterSaleOpen: true,
     agencySaleOpen: false,
   };
-  const proofBrief = routeData.proofBrief ?? null;
   const changeMark = routeData.changeMark ?? null;
-  // The featured demo brand, chosen by the visitor's home market (issue
-  // #2281). Defaults to nykaa.com when the loader did not supply it (e.g. a
-  // test that mocks useLoaderData without the field) so the CTA and the
-  // featured /ads link stay consistent with the proof brief's default.
-  const featuredDomain = routeData.featuredDomain ?? "nykaa.com";
+  // Client personalization (issue #2696): the shared-cached SSR document is
+  // country-neutral, so after mount the route fetches the EXISTING
+  // /api/demo-proof endpoint — the same per-request visitor-country
+  // resolution and #1468 parity ladder the /ads/:domain page uses — and
+  // swaps in the visitor's own featured brand and proof brief (issue #2281,
+  // re-applied client-side). The endpoint answers `private, max-age=300`,
+  // so the personalized brief can never be shared-cached across visitors.
+  // Eager (not the lazy pricing pattern): the brief drives the above-fold
+  // hero. Until it resolves (or when it reports "unavailable") the neutral
+  // SSR content stays — honest and identical for every market.
+  const [personalizedProof, setPersonalizedProof] = useState<{
+    proofBrief: PublicProofBrief;
+    featuredDomain: string;
+  } | null>(null);
+  useEffect(() => {
+    let active = true;
+    fetch("/api/demo-proof")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((value: unknown) => {
+        const brief = value as { status?: string; website?: string } & Partial<PublicProofBrief>;
+        if (active && brief?.status === "live" && brief.website && (brief.adCount ?? 0) > 0) {
+          setPersonalizedProof({
+            proofBrief: brief as PublicProofBrief,
+            featuredDomain: brief.website,
+          });
+        }
+      })
+      .catch(() => {
+        // Keep the neutral SSR content on fetch failure.
+        if (active) setPersonalizedProof(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+  const proofBrief = personalizedProof?.proofBrief ?? routeData.proofBrief ?? null;
+  // The featured demo brand. The SSR loader pins the neutral flagship; the
+  // client personalization above swaps in the visitor's home-market brand
+  // (issue #2281, re-applied after #2696). Defaults to nike.com when neither
+  // supplies it so the CTA and the featured /ads link stay consistent with
+  // the proof brief.
+  const featuredDomain = personalizedProof?.featuredDomain ?? routeData.featuredDomain ?? "nike.com";
   const publicSearchTrialPath = publicSearchTrialPathFor(featuredDomain);
   const featuredBrandName = displayNameFromDomain(featuredDomain);
   const featuredAdsLink = pickFeaturedAdsInternalLink(

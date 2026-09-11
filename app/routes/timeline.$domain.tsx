@@ -118,14 +118,17 @@ export async function loader({
   }
 
   // Retire path (issue #1309): a timeline with no stored snapshots is a
-  // soft-404 "not stored yet" shell. Issue #2021 narrows the 410: a domain
-  // the sitemap itself lists as a tracked brand (capture-backed OR collecting
-  // entry) renders an honest "collecting — no offer states recorded yet" 200
-  // so the moat stays discoverable for the whole /ads cohort. Only an
-  // UNLISTED domain with an empty ledger keeps the 410 Gone (never 200 with
-  // brand chrome for a domain we do not track). A transient D1 read FAILURE
-  // is still different — the timeline might have entries once D1 recovers, so
-  // that degrades to the noindex shell below, never a 410.
+  // soft-404 "not stored yet" shell. Issue #2021 narrows the 410: a tracked,
+  // indexable /ads brand (or a capture-backed timeline domain) renders an
+  // honest "collecting — no offer states recorded yet" 200 so the moat stays
+  // discoverable for the whole tracked cohort. Issue #2881: those zero-state
+  // pages are robots-noindex and are never listed in sitemap.xml or /llms.txt
+  // (BET 5 "no page ships empty") — the collecting 200 is a human-facing
+  // landing, not an indexed acquisition page. An UNLISTED domain with an
+  // empty ledger keeps the 410 Gone (never 200 with brand chrome for a
+  // domain we do not track). A transient D1 read FAILURE is still
+  // different — the timeline might have entries once D1 recovers, so that
+  // degrades to the noindex shell below, never a 410.
   let collecting = false;
   if (!loadFailed && loaded.entries.length === 0) {
     const { loadIndexableBrandPageEntries, loadIndexableTimelineEntries, timelineSitemapEntries } = await import(
@@ -137,9 +140,16 @@ export async function loader({
         loadIndexableBrandPageEntries(env),
         loadIndexableTimelineEntries(env),
       ]);
-      listed = timelineSitemapEntries(brandEntries, timelineEntries).some(
-        (entry) => entry.path === `/timeline/${brand.domain}`,
-      );
+      // The tracked-cohort signal: an indexable /ads/:domain page (the brand
+      // is monitored), OR a domain the capture-backed timeline set lists (it
+      // had a proof-complete ledger at sitemap time — a zero-entry read here
+      // is transient). Collecting entries no longer exist in the sitemap set
+      // (issue #2881), so timelineSitemapEntries is capture-backed only.
+      listed =
+        brandEntries.some((entry) => entry.path === `/ads/${brand.domain}`) ||
+        timelineSitemapEntries(timelineEntries).some(
+          (entry) => entry.path === `/timeline/${brand.domain}`,
+        );
     } catch {
       // Sitemap read hiccup: degrade to the retire 410, never a 500.
       listed = false;
@@ -176,7 +186,9 @@ export async function loader({
   const shareUrl = asOf
     ? `${canonicalUrl(canonicalPath)}?asOf=${asOf}`
     : canonicalUrl(canonicalPath);
-  const noindex = loaded.entries.length === 0 && !collecting;
+  // Issue #2881: a zero-state timeline is always noindex — collecting pages
+  // render an honest 200 but are never an indexed acquisition surface.
+  const noindex = loaded.entries.length === 0;
 
   return {
     domain: brand.domain,

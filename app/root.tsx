@@ -235,6 +235,20 @@ function SiteRepWidgetEmbed({ widget }: { widget: typeof SITE_REP_WIDGET | null 
  * FONT_SWAP_SCRIPT once loaded, and keep a no-JS fallback. Fonts still apply
  * via display=swap; nothing visible depends on the sheet for first render.
  */
+/**
+ * The CSP nonce to put on inline scripts and React Router's script-emitting
+ * components for this render. Server render: the per-request nonce (issue
+ * #2348). Client render: "" — browsers hide a parsed nonce (`getAttribute`
+ * returns ""), so a client prop carrying the real value made React 19 report
+ * a hydration attribute mismatch on every nonce'd element (run 34567890736,
+ * strictIssues browser_hydration_error:console). A nonce is only consulted
+ * while the parser executes inline scripts; nothing rendered after hydration
+ * needs one.
+ */
+export function cspNonceForRender(nonce: string | undefined, isServerRender: boolean): string | undefined {
+  return isServerRender ? nonce : "";
+}
+
 export function GoogleFontsStylesheet({ nonce }: { nonce?: string } = {}) {
   return (
     <>
@@ -312,7 +326,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
   // Per-request CSP nonce (issue #2348): stamped onto every inline script and
   // React Router script-emitting component so they run under a nonce-based
   // script-src with no 'unsafe-inline'. The same nonce is in the CSP header.
-  const cspNonce = rootData?.cspNonce;
+  //
+  // Server render only. Browsers hide a nonce once the document is parsed
+  // under a CSP (the `nonce` content attribute reads back as ""), so if the
+  // client re-rendered these elements with the real value React 19 reported
+  // a hydration attribute mismatch on every <script nonce> and <link nonce>
+  // ("A tree hydrated but some attributes ... didn't match", run
+  // 34567890736 — strictIssues browser_hydration_error:console). A nonce is
+  // only consulted while the parser executes inline scripts, so the client
+  // props carry the same "" the DOM does; nothing React inserts after
+  // hydration needs one (React Router renders no nonce'd elements on the
+  // client either). Pinned by tests/root-csp-nonce-hydration.test.tsx.
+  const cspNonce = cspNonceForRender(rootData?.cspNonce, typeof document === "undefined");
 
   if (shouldReloadForSiteRepWidget) {
     return (

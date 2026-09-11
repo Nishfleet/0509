@@ -1027,6 +1027,12 @@ async function buildBrowserRenderedSnapshot(
           priceText: signals.priceText,
           formPresent: signals.formPresent,
         }),
+        // Issue #2889: page-declared market (see landing-pages.server.ts)
+        // so the capture-validity gate can suppress same-URL geo
+        // render-variant pairs.
+        ...(signals.declaredMarketCountry
+          ? { declaredMarketCountry: signals.declaredMarketCountry }
+          : {}),
         ...extractorSuppressionMetadata(signals.suppressionFingerprints),
         extractedFieldConfidence: {
           headline: 0.95,

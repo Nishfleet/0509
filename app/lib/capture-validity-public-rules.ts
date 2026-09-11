@@ -158,7 +158,7 @@ export const CAPTURE_BUDGET_SKIP_PUBLIC_RULE = {
   title: "Plan allowance reached (budget skip)",
   refused:
     "A capture the proof policy declined to run because the workspace has spent its plan's capture allowance for the current period.",
-  why: "Every plan includes a fixed number of captures per period. Once that allowance is spent, further checks are skipped — not failed — so no screenshot is taken and no alert fires. Checks resume when the allowance resets, or immediately after a credit pack or plan upgrade. The skip is recorded in run history with its reason so a buyer can always see what was not captured and why.",
+  why: "Every plan includes a fixed number of captures per period. Once that allowance is spent, further checks are skipped — not failed — so no screenshot is taken and no alert fires. Checks resume when the allowance resets, or immediately after a credit pack or plan upgrade. Purchased credit packs need an active paid plan: if the plan lapses, remaining credits wait and the skip is labelled with that reason instead. The skip is recorded in run history with its reason so a buyer can always see what was not captured and why.",
 } as const;
 
 export const CAPTURE_BUDGET_SKIP_ANCHOR = CAPTURE_BUDGET_SKIP_PUBLIC_RULE.id;

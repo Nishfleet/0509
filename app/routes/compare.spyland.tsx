@@ -2,6 +2,7 @@ import { Form, Link } from "react-router";
 import type { LinksFunction, MetaFunction } from "react-router";
 
 import { CompareAdsExampleLink } from "~/components/ads-internal-links";
+import { Breadcrumbs } from "~/components/breadcrumbs";
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
 import { LiveBrandProof } from "~/components/live-brand-proof";
@@ -115,6 +116,13 @@ export default function CompareSpylandRoute() {
         )}
       />
       <MarketingNav />
+      <Breadcrumbs
+        items={[
+          { name: "Home", pathname: "/" },
+          { name: "Competitor monitoring", pathname: "/competitor-monitoring" },
+          { name: "Spyland", pathname: "/compare/spyland" },
+        ]}
+      />
 
       <section className="ld-hero">
         <p className="ld-case">

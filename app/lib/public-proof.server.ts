@@ -34,6 +34,20 @@ import type { AdRecord } from "~/lib/types";
 export const PUBLIC_PROOF_FEATURED_WEBSITE = "nykaa.com";
 
 /**
+ * The country-neutral featured brand the shared-cached homepage SSR document
+ * renders (issue #2696). The worker stamps `public, max-age=300` on `/`, and
+ * `vary: cookie` does NOT separate anonymous visitors, so a document that
+ * picked its featured brand from `cf-ipcountry` could replay one market's
+ * page (nykaa hero + proof brief) to another market for the 5-minute
+ * max-age. The SSR loader now pins this single brand for EVERY visitor and
+ * the client personalizes after mount via /api/demo-proof — the same
+ * client-fetch pattern the pricing section already uses (issue #2389) — so
+ * the personalized brief still resolves the visitor's country per-request
+ * and keeps the #1468 parity ladder with the /ads/:domain page.
+ */
+export const PUBLIC_HOME_NEUTRAL_FEATURED_WEBSITE = "nike.com";
+
+/**
  * The flagship demo-brand set, split by the visitor's home market so the
  * single most important proof moment shows a brand the visitor recognizes
  * (issue #2281). Indian visitors get an Indian flagship (nykaa); everyone

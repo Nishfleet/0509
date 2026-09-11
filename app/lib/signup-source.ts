@@ -42,6 +42,14 @@ export const SEARCH_WARMING_EXHAUSTED_SIGNUP_SOURCE = "search_warming_exhausted"
 export const GUIDE_TRACK_ADS_SIGNUP_SOURCE = "guide_track_ads";
 
 /**
+ * The exact marker the /guides/how-to-monitor-meta-ad-library guide carries on
+ * its /search preview CTA (issue 2867): the guide is an organic-search entry
+ * point, so a signup that starts from its preview is attributed to the guide.
+ * Hyphen slug — inside the open slug shape, so no migration literal needed.
+ */
+export const GUIDE_MONITOR_AD_LIBRARY_SIGNUP_SOURCE = "guide-monitor-ad-library";
+
+/**
  * /for-agencies CTA marker (issue #2144): the agency landing page's signup
  * link carries `source=for_agencies` so Agency-plan funnel measurement can
  * attribute checkout starts to that page.
@@ -62,6 +70,7 @@ export const ALLOWED_SIGNUP_SOURCES = [
   ...LOCALE_SNEAKER_RESALE_SIGNUP_SOURCES,
   SEARCH_WARMING_EXHAUSTED_SIGNUP_SOURCE,
   GUIDE_TRACK_ADS_SIGNUP_SOURCE,
+  GUIDE_MONITOR_AD_LIBRARY_SIGNUP_SOURCE,
 ] as const;
 
 /**

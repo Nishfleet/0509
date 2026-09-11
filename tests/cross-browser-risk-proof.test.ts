@@ -95,9 +95,16 @@ const candidate = {
 
 describe("risk-based cross-browser release proof", () => {
   it("installs every browser engine required by the protected-main deploy gate", () => {
+    // The hosted ubuntu-latest image does not ship WebKit's system libraries
+    // (libgtk-4, libgraphene-1.0, libevent-2.1), so a bare `playwright install`
+    // leaves every local-release-webkit launch failing with "Host system is
+    // missing dependencies to run browsers" in 2-3ms (run 34581070289, issue
+    // #2902). --with-deps installs the OS libraries via apt on the
+    // github-hosted runner — the same shape cross-browser-matrix.yml carries
+    // since #942.
     const workflow = readFileSync(resolve(".github/workflows/deploy-production.yml"), "utf8");
     expect(workflow).toContain(
-      "npx playwright install chromium firefox webkit",
+      "npx playwright install --with-deps chromium firefox webkit",
     );
   });
 
