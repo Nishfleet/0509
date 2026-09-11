@@ -19,12 +19,14 @@ Termination gate: `npx vitest run --configLoader runner --project node tests/pro
 
 ## Phase 3 — M35: deleteProofArtifactsForCapture reports truthful r2/d1 split
 
-- [ ] phase 3: RED — test where R2 `head`+`delete` succeed but the D1 clear UPDATE throws (mock `run()` rejecting after successful R2 ops) → `result.r2 === "deleted"`, `result.d1 === "failed"`, outcome `d1_failed` (fails today: `r2:"failed", d1:"not_updated"`)
-- [ ] phase 3: fix (~lines 319-337): mirror `deleteOneProofArtifact` — inner try around only the `clearCaptureProofArtifactReference` call, reporting the already-computed `r2` with `d1:"failed"`/`outcome:"d1_failed"`; outer catch reserved for `r2_missing`/head/delete failures (`r2:"failed", d1:"not_updated"`)
-- [ ] phase 3: GREEN — run the scoped vitest command; new M35 test passes, no regressions
+- [x] phase 3: RED — test where R2 `head`+`delete` succeed but the D1 clear UPDATE throws (mock `run()` rejecting after successful R2 ops) → `result.r2 === "deleted"`, `result.d1 === "failed"`, outcome `d1_failed` (fails today: `r2:"failed", d1:"not_updated"`)
+- [x] phase 3: fix (~lines 319-337): mirror `deleteOneProofArtifact` — inner try around only the `clearCaptureProofArtifactReference` call, reporting the already-computed `r2` with `d1:"failed"`/`outcome:"d1_failed"`; outer catch reserved for `r2_missing`/head/delete failures (`r2:"failed", d1:"not_updated"`)
+- [x] phase 3: GREEN — run the scoped vitest command; new M35 test passes, no regressions
 
 ## Phase 4 — same-pattern sweep + termination
 
-- [ ] phase 4: sweep `proof-artifact-retention.server.ts` and `app/lib/` siblings/callers for the three patterns — early-return-on-first-malformed-key loops, one-try wrapping R2+D1 pairs, INNER-JOIN-only reference counting — and fix every instance found (none expected beyond the three fixes, but verify `deleteProofArtifacts`, `headProofArtifactForOwner`, `getProofArtifactForOwner` paths)
-- [ ] phase 4: termination — `npx vitest run --configLoader runner --project node tests/proof-artifact-retention.test.ts` fully green; record pass count; confirm no typecheck/coverage was run locally
+- [x] phase 4: sweep `proof-artifact-retention.server.ts` and `app/lib/` siblings/callers for the three patterns — early-return-on-first-malformed-key loops, one-try wrapping R2+D1 pairs, INNER-JOIN-only reference counting — and fix every instance found (none expected beyond the three fixes, but verify `deleteProofArtifacts`, `headProofArtifactForOwner`, `getProofArtifactForOwner` paths)
+- [x] phase 4: termination — `npx vitest run --configLoader runner --project node tests/proof-artifact-retention.test.ts` fully green; record pass count; confirm no typecheck/coverage was run locally
+
+Phase 3/4 completed: `deleteProofArtifactsForCapture` now mirrors `deleteOneProofArtifact` with an inner try around each `clearCaptureProofArtifactReference` call (including the `artifactReferencedOutsideCapture` branch) so a D1 failure reports `d1_failed` with the truthful `r2` outcome. The same-pattern sweep confirmed `deleteOneProofArtifact` is already structured this way, `deleteProofArtifacts`/`headProofArtifactForOwner`/`getProofArtifactForOwner` contain no R2+D1 combined try, and `compensateUncommittedProofArtifacts` uses per-value accounting. The scoped test file passed 15/15.
 - phase 2 reviewer verdict: SHIP. Consider/Noted (recorded): non-string slot values are silently dropped by the pre-existing filter (defensible, predates change); malformed values count per-occurrence while valid keys dedupe via Set (spec-per-value semantics); delete-loop resilience and empty-snapshot early exit unpinned by tests (adjacent, not required).
