@@ -569,6 +569,80 @@ describe("launch readiness canary route", () => {
     expect(deliverWeeklyDigest).not.toHaveBeenCalled();
   }, 10_000);
 
+  it("issues no substrate writes when the target already exists", async () => {
+    const statements: string[] = [];
+    const db = {
+      prepare(sql: string) {
+        return {
+          bind(..._args: unknown[]) {
+            return {
+              async all<T>() {
+                if (sql.includes("e2e_test_mode")) return { results: [] as T[] };
+                if (sql.includes("INNER JOIN user")) {
+                  return {
+                    results: [{
+                      user_id: "launch-readiness-canary-owner",
+                      email: "owner@example.com",
+                      name: "Launch readiness canary owner",
+                      watchlist_id: "launch-readiness-canary-watchlist",
+                      watchlist_name: "Launch readiness canary",
+                      target_label: "0509.io",
+                    }] as T[],
+                  };
+                }
+                throw new Error(`unexpected query: ${sql.slice(0, 80)}`);
+              },
+              async run() {
+                statements.push(sql);
+                return { success: true };
+              },
+            };
+          },
+        };
+      },
+    };
+    const deliverWeeklyDigest = vi.fn();
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DB: db,
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      createWatchlistRun: vi.fn(),
+      finishWatchlistRun: vi.fn(),
+      upsertProofTarget: vi.fn(),
+      createProofCapture: vi.fn(),
+      createWatchEvent: vi.fn(),
+      createDigestRun: vi.fn(),
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+    mockLandingPageCapture(null);
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    const response = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/api/launch-readiness/canary", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-0509-canary-token": "secret-token",
+        },
+        body: JSON.stringify({ gateRunId: "gate-c-worker-v1" }),
+      }),
+    } as never);
+
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      blocker: "proof_capture_failed",
+    });
+    // Repair, not a per-run write: the substrate INSERTs must be absent
+    // (instrumentation counters from the capture path are unrelated).
+    expect(statements.some((sql) => sql.includes("INSERT INTO user"))).toBe(false);
+    expect(statements.some((sql) => sql.includes("INSERT INTO watchlist"))).toBe(false);
+  }, 10_000);
+
   it("creates fresh monitoring, proof, digest, and delivery signals", async () => {
     const createWatchlistRun = vi.fn().mockResolvedValue("run-1");
     const finishWatchlistRun = vi.fn().mockResolvedValue(undefined);
