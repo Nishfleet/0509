@@ -613,7 +613,7 @@
       "sentence": "Every row above is a real capture. Open the source link and check it yourself — saved watches attach page text and original links, plus a screenshot when the capture includes one.",
       "claimed": true,
       "verified": true,
-      "verify": "grep -qF 'loadPublicProofBrief' app/routes/marketing.tsx && grep -qF 'no live proof' app/routes/marketing.tsx",
+      "verify": "grep -qF 'loadPublicProofBrief' app/routes/api.demo-proof.ts && grep -qF '/api/demo-proof' app/routes/marketing.tsx && grep -qF 'no live proof' app/routes/marketing.tsx",
       "test": "tests/marketing-proof-brief.test.tsx",
       "followUp": null
     },

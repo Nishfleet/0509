@@ -119,7 +119,7 @@
       "surface": "homepage proof brief trail note, competitor-monitoring proof brief trail note",
       "liveQueryOrTest": "tests/marketing-proof-brief.test.tsx → 'renders a truthful non-empty value for every decision-summary field from real captures', 'never labels the brief or its evidence as sample or illustrative', 'links every source-trail row to a real public source page', 'renders the honest no-live-proof state when no real capture exists'; tests/public-routes-no-sample-proof.test.ts",
       "currentResult": "pass",
-      "resultDetail": "loadPublicProofBrief reads only the discovery cache; demo/sample entries are never returned; null renders the honest 'no live proof yet' state. 7/7 marketing-proof-brief tests green.",
+      "resultDetail": "loadPublicProofBrief reads only the discovery cache; demo/sample entries are never returned; null renders the honest 'no live proof yet' state. The homepage fetches the brief client-side from /api/demo-proof (the same loader) so the shared-cached document stays country-neutral (#2696). 7/7 marketing-proof-brief tests green.",
       "betOrCopyChange": "bet 3 (the public-surfaces-only sourcing contract)",
       "nishReserved": false
     },

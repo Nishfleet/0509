@@ -20,6 +20,8 @@ const COMPARE_PAGES = [
   "compare/panoramata",
   "compare/adspyder",
   "compare/adspy",
+  "compare/keeptabz",
+  "compare/gethookd",
 ] as const;
 
 beforeEach(() => {
@@ -66,6 +68,24 @@ describe("/compare hub canary (issue #1470)", () => {
 
     for (const page of COMPARE_PAGES) {
       expect(markup, `/compare hub links /${page}`).toContain(`href="/${page}"`);
+    }
+  });
+
+  it("links no wiped legacy path — no self-loop (issue #2860 canary)", async () => {
+    const { default: CompareIndexRoute } = await import("~/routes/compare");
+    const markup = renderToStaticMarkup(createElement(CompareIndexRoute));
+    const { LEGACY_VENDOR_COMPARE_PATH, LEGACY_VENDOR_SWITCH_PATH } = await import(
+      "~/routes/legacy-vendor-redirect"
+    );
+
+    // Both legacy paths 301 back to /compare, the referrer, so any href to
+    // them on the hub was a self-loop that ate the click (issue #2860). The
+    // constants are imported from the redirect loader — the one source of
+    // truth for wiped paths — so a new wipe automatically extends the canary.
+    for (const legacyPath of [LEGACY_VENDOR_COMPARE_PATH, LEGACY_VENDOR_SWITCH_PATH]) {
+      expect(markup, `hub must not link wiped /${legacyPath}`).not.toContain(
+        `href="/${legacyPath}"`,
+      );
     }
   });
 

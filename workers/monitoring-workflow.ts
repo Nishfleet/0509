@@ -21,10 +21,12 @@ import {
 } from "../app/lib/monitoring-fanout.server";
 import {
   preflightWatchlistWorkflowJob,
-  runFirstWatchlistScanWorkflowJob,
   runWatchlistWorkflowJob,
-  type FirstWatchlistScanWorkflowParams,
 } from "../app/lib/monitoring.server";
+import {
+  runFirstWatchlistScanWorkflowJob,
+  type FirstWatchlistScanWorkflowParams,
+} from "../app/lib/first-watchlist-scan.server";
 
 // LIVE in production when wrangler.jsonc sets MONITORING_FANOUT_MODE=fanout
 // (with MONITORING_FANOUT_GLOBAL=1). Do not delete this as "dead code" — the

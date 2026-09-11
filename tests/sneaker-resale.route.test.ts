@@ -93,6 +93,35 @@ describe("sneaker-resale locale landing pages", () => {
     }
   });
 
+  // #2856 live proof: the 2026-09-11 market signal narrowed the below-retail
+  // cluster to two live sources — the Nike 'Just Don't Wear It' r/stocks
+  // thread (2026-08-30) and the StockX midyear resale report (WWD,
+  // 2026-08-12). The page must cite BOTH with a date and a real outbound
+  // link, and must stop presenting SneakerPing — which dropped out of the
+  // signal — as a current mover.
+  it("cites both live cluster sources with a date and a link in every locale (#2856)", async () => {
+    const { SneakerResaleLanding } = await import("~/components/sneaker-resale-landing");
+    for (const market of SNEAKER_RESALE_MARKETS) {
+      const copy = sneakerResaleCopy(market.id);
+      const markup = renderToStaticMarkup(
+        createElement(SneakerResaleLanding, { locale: market.id }),
+      );
+      expect(markup).toContain("r/stocks");
+      expect(markup).toContain("StockX");
+      expect(markup).toContain(
+        'href="https://www.reddit.com/r/stocks/comments/1w2hjcm/nike_just_dont_wear_it/"',
+      );
+      expect(markup).toContain(
+        'href="https://wwd.com/footwear-news/sneaker-news/stockx-midyear-resale-surprises-1239106008/"',
+      );
+      for (const source of copy.swingSources) {
+        expect(markup).toContain(`href="${source.url}"`);
+        expect(markup).toContain(`dateTime="${source.publishedIso}"`);
+      }
+      expect(markup).not.toContain("SneakerPing");
+    }
+  });
+
   it("emits reciprocal hreflang from no-arg links() and a locale canonical from loaderData", async () => {
     const { links, meta } = await import("~/routes/$locale.sneaker-resale");
 

@@ -7,6 +7,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { SITEMAP_PATHS } from "~/lib/seo";
 import { NO_PHANTOM_CHANGES_PUBLIC_PATH } from "~/lib/capture-validity-public-rules";
 import { CAPTURE_VALIDITY_PUBLIC_RULES } from "~/lib/capture-validity-public-rules";
+import { mockReactRouter } from "./helpers/mock-react-router";
 
 /**
  * Lock test for issue #2026: the /no-phantom-changes buyer-guarantee page
@@ -16,17 +17,7 @@ import { CAPTURE_VALIDITY_PUBLIC_RULES } from "~/lib/capture-validity-public-rul
  */
 beforeEach(() => {
   vi.resetModules();
-  vi.doMock("react-router", async () => {
-    const actual = await vi.importActual<typeof import("react-router")>("react-router");
-    const React = await import("react");
-
-    return {
-      ...actual,
-      useRouteLoaderData: () => undefined,
-      Link: ({ children, to, ...props }: { children?: React.ReactNode; to?: string } & Record<string, unknown>) =>
-        React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
-    };
-  });
+    mockReactRouter();
 });
 
 afterEach(() => {

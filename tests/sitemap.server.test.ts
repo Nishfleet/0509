@@ -40,7 +40,6 @@ import {
   buildSitemapXml,
   buildLocaleSitemapXml,
   staticSitemapEntriesForLocale,
-  collectingTimelineEntries,
   indexableBrandPageEntriesFromRows,
   indexableTimelineEntriesFromRows,
   isIndexableBrandPageRow,
@@ -909,67 +908,55 @@ describe("timelineDomainFromSnapshotRow", () => {
   });
 });
 
-describe("collectingTimelineEntries / timelineSitemapEntries (issue #2021)", () => {
+describe("timelineSitemapEntries (issue #2881 — no empty /timeline pages in the sitemap)", () => {
   const brand = (domain: string) => ({ path: `/ads/${domain}` });
 
-  it("emits a collecting /timeline entry for every tracked /ads brand not yet capture-backed", () => {
+  it("passes through only capture-backed entries — a tracked brand with 0 recorded offer states gets NO /timeline entry", () => {
+    // Tracked /ads cohort: gymshark (no snapshots), hubspot (no snapshots);
+    // only calendly has a proof-complete capture. The sitemap must list
+    // exactly one /timeline URL — the one backed by a recorded offer state.
     const brandEntries = [brand("gymshark.com"), brand("hubspot.com"), brand("calendly.com")];
-    const timelineEntries = [{ path: "/timeline/calendly.com", lastmod: "2026-09-01" }];
+    const captureBacked = [{ path: "/timeline/calendly.com", lastmod: "2026-09-01" }];
 
-    const collecting = collectingTimelineEntries(brandEntries, timelineEntries);
+    const merged = timelineSitemapEntries(captureBacked);
 
-    expect(collecting.map((e) => e.path)).toEqual([
-      "/timeline/gymshark.com",
-      "/timeline/hubspot.com",
-    ]);
-    // No lastmod: nothing is captured yet, so there is no honest lastmod.
-    expect(collecting[0].lastmod).toBeUndefined();
+    expect(merged).toEqual(captureBacked);
+    expect(merged.some((e) => e.path === "/timeline/gymshark.com")).toBe(false);
+    expect(merged.some((e) => e.path === "/timeline/hubspot.com")).toBe(false);
+    // The brand entries themselves cannot smuggle collecting entries in.
+    expect(brandEntries.some((e) => e.path.startsWith("/timeline/"))).toBe(false);
   });
 
-  it("never invents a domain from a non-/ads or multi-segment path", () => {
-    const collecting = collectingTimelineEntries(
-      [{ path: "/compare/adspyder" }, { path: "/ads/hubspot.com/about" }, { path: "/ads/" }],
-      [],
-    );
-    expect(collecting).toEqual([]);
-  });
-
-  it("merges capture-backed first, then collecting, capped at SITEMAP_TIMELINE_PATH_LIMIT", () => {
-    const captureBacked = Array.from({ length: 3 }, (_, i) => ({
+  it("still caps capture-backed entries at SITEMAP_TIMELINE_PATH_LIMIT", () => {
+    const captureBacked = Array.from({ length: SITEMAP_TIMELINE_PATH_LIMIT + 3 }, (_, i) => ({
       path: `/timeline/backed-${i}.com`,
       lastmod: "2026-09-01",
     }));
-    const brandEntries = Array.from(
-      { length: SITEMAP_TIMELINE_PATH_LIMIT + 1 },
-      (_, i) => brand(`cohort-${i}.com`),
-    );
 
-    const merged = timelineSitemapEntries(brandEntries, captureBacked);
+    const merged = timelineSitemapEntries(captureBacked);
 
     expect(merged).toHaveLength(SITEMAP_TIMELINE_PATH_LIMIT);
-    // Capture-backed entries (with lastmod) all survive the cap.
-    expect(merged.slice(0, 3).map((e) => e.path)).toEqual([
-      "/timeline/backed-0.com",
-      "/timeline/backed-1.com",
-      "/timeline/backed-2.com",
-    ]);
-    expect(merged[3].lastmod).toBeUndefined();
+    expect(merged.every((e) => e.lastmod === "2026-09-01")).toBe(true);
   });
 
-  it("puts collecting /timeline locs in the sitemap XML with no lastmod", () => {
+  it("keeps capture-backed locs with an honest lastmod in the sitemap XML and never emits a zero-state loc", () => {
     const xml = buildSitemapXml(
       [brand("gymshark.com"), brand("calendly.com")],
-      timelineSitemapEntries(
-        [brand("gymshark.com"), brand("calendly.com")],
-        [{ path: "/timeline/calendly.com", lastmod: "2026-09-01" }],
-      ),
+      timelineSitemapEntries([
+        { path: "/timeline/calendly.com", lastmod: "2026-09-01" },
+      ]),
     );
-    expect(xml).toContain("<loc>https://0509.io/timeline/gymshark.com</loc>");
     expect(xml).toContain("<loc>https://0509.io/timeline/calendly.com</loc>");
     expect(xml).toContain("<lastmod>2026-09-01</lastmod>");
-    expect(xml).not.toMatch(
-      /<loc>https:\/\/0509\.io\/timeline\/gymshark\.com<\/loc><lastmod>/,
-    );
+    // Zero-state tracked brand: not in the sitemap at all (issue #2881).
+    expect(xml).not.toContain("https://0509.io/timeline/gymshark.com");
+  });
+
+  it("accepts a no-lastmod entry shape without re-adding collecting semantics", () => {
+    // Callers pass only capture-backed entries now; a lastmod-less entry
+    // (should not occur in practice) still cannot mint extra entries.
+    const merged = timelineSitemapEntries([{ path: "/timeline/calendly.com" }]);
+    expect(merged).toEqual([{ path: "/timeline/calendly.com" }]);
   });
 });
 
@@ -1699,7 +1686,7 @@ describe("locale sitemap feed count matches the buyer-surface derivation (issue 
     const derivedCount =
       BUYER_SURFACE_PATHS.filter((p) => p !== "/" && p !== "/sitemap.xml").length +
       BUYER_SURFACE_CHILD_PATHS.length +
-      1; // /guides/how-to-track-competitor-ads
+      2; // /guides/how-to-track-competitor-ads + /guides/how-to-monitor-meta-ad-library (issue #2867)
     for (const locale of BUYER_SURFACE_LOCALE_IDS) {
       const entries = staticSitemapEntriesForLocale(locale);
       const body = buildLocaleSitemapXml(locale);
@@ -1749,6 +1736,7 @@ describe("locale sitemap feed count matches the buyer-surface derivation (issue 
       ...BUYER_SURFACE_PATHS.filter((p) => p !== "/" && p !== "/sitemap.xml"),
       ...BUYER_SURFACE_CHILD_PATHS,
       "/guides/how-to-track-competitor-ads",
+      "/guides/how-to-monitor-meta-ad-library",
     ];
     for (const path of derived) {
       expect(staticPaths, `${path} missing from SITEMAP_STATIC_ENTRIES`).toContain(path);

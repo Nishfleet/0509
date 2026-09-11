@@ -862,17 +862,22 @@ async function handleAcceptSuggestedCompetitorAction(
 
   const targetLabel = row.advertiser.trim() || row.candidateId;
   const targetId = row.landingPageUrl?.trim() || row.candidateId;
-  // Reuse the existing fingerprint helper so the accept path's dedup
-  // semantics match every other createWatchlist call site.
-  const { fingerprintSavedQuery, normalizeSearchFilters } = await import("~/lib/normalize");
-  const normalizedFilters = normalizeSearchFilters({
-    query: row.advertiser,
-    country: row.targetCountry ?? "all",
-  });
-  const targetFingerprint = fingerprintSavedQuery({
-    mode: "advertiser",
-    filters: normalizedFilters,
-  });
+  // Dedup must match every other website-backed createWatchlist call site:
+  // all of them fingerprint through watchlistFingerprint (the
+  // `kind: "competitor_website"` shape) with the website's derived
+  // searchTerm as the query — the importer's `searchTerm || name` in
+  // prepareImportRow, and applyWebsiteSearchFallback on the manual paths.
+  // Fingerprinting the raw advertiser name instead still misses the
+  // bulk-accept fingerprint for the same candidate whenever the advertiser
+  // string differs from the domain ("Rothy's" vs "rothys.com").
+  const competitorWebsite = normalizeCompetitorWebsiteInput(row.landingPageUrl ?? "");
+  const targetFingerprint = watchlistFingerprint(
+    normalizeSavedQuery("advertiser", {
+      query: competitorWebsite.searchTerm ?? row.advertiser,
+      country: row.targetCountry ?? "all",
+    }),
+    competitorWebsite,
+  );
 
   const result = await createWatchlistWithinLimit(
     env,

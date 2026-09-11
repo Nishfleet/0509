@@ -1,22 +1,11 @@
-import { createElement, type ReactNode } from "react";
+import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
+import { mockReactRouter } from "./helpers/mock-react-router";
 
 beforeEach(() => {
   vi.resetModules();
-  vi.doMock("react-router", async () => {
-    const actual = await vi.importActual<typeof import("react-router")>("react-router");
-    const React = await import("react");
-
-    return {
-      ...actual,
-      Link: ({ children, to, ...props }: MockLinkProps) =>
-        React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
-      useRouteLoaderData: () => undefined,
-    };
-  });
+  mockReactRouter();
 });
 
 afterEach(() => {

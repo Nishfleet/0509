@@ -98,12 +98,23 @@ describe("buildDigestEmail", () => {
     // Cap at 5 — Sugar's form change is omitted from top moves.
     expect(email.html).not.toContain("Sugar");
     expect(email.html).toContain("1 more change is in the full brief");
-    // Creative churn collapses into a single counted footnote line.
-    expect(email.html).toContain("2 new creatives, 1 retired — open the wall to see them.");
-    expect(email.text).toContain("2 new creatives, 1 retired — open the wall to see them.");
+    // Creative churn collapses into ONE counted line per watchlist, linked to
+    // the watchlist (issue 2880). Dot/Wow/Boat2 each get their own line.
+    expect(email.html).toContain("1 new creative — ");
+    expect(email.text).toContain(
+      "Dot: 1 new creative — open the ad wall: https://0509.io/app/watchlists?watchlist=wl-dot",
+    );
+    expect(email.text).toContain(
+      "Wow: 1 new creative — open the ad wall: https://0509.io/app/watchlists?watchlist=wl-wow",
+    );
+    expect(email.text).toContain(
+      "Boat2: 1 retired — open the ad wall: https://0509.io/app/watchlists?watchlist=wl-boat2",
+    );
+    expect(email.html).toContain('watchlist=wl-dot"');
+    expect(email.html).toContain("open the ad wall");
     // Churn competitor names never surface as top moves.
-    expect(email.html).not.toContain("Dot");
-    expect(email.html).not.toContain("Wow");
+    expect(email.html).not.toContain("Dot: ");
+    expect(email.html).not.toContain("Wow: ");
     expect(email.html).toContain("Verified evidence");
     expect(email.html).toContain("Check-spotted");
     // WP-24: each top-move deep-links to the watchlist event row (HTML-escaped &).
@@ -677,6 +688,51 @@ describe("buildDigestEmail", () => {
     expect(email.text).not.toContain("Landing page evidence");
   });
 
+  // Issue 2880 prevention pin: the digest's composition rule — landing_page_*
+  // events ARE the headline rows; bare ad pings collapse into the counted
+  // per-watchlist line and never render as rows or fire instant alerts. A
+  // regression that lets an ad ping back into the brief fails CI here.
+  it("composition rule: ad pings are the counted line, never headline rows, with or without landing changes (issue 2880)", () => {
+    const build = (items: ReturnType<typeof digestItem>[]) =>
+      buildDigestEmail({
+        name: "Owner",
+        periodStart: "2026-06-01T00:00:00.000Z",
+        periodEnd: "2026-06-08T00:00:00.000Z",
+        cadence: "weekly",
+        timeZone: "UTC",
+        fullDigestUrl: "https://0509.io/app/digests",
+        baseUrl: "https://0509.io",
+        manageFrequencyUrl: "https://0509.io/app/notifications",
+        supportEmail: "support@0509.io",
+        supportMailto: "mailto:support@0509.io",
+        unsubscribeUrl: null,
+        items,
+      });
+
+    // Mixed window: the ad ping never renders a top-move row, only the
+    // counted Nykaa line linking to the watchlist wall.
+    const mixed = build([
+      digestItem("Nykaa", "Landing page offer changed", 90, "proof_backed"),
+      digestItem("Nykaa", "New ad detected", 95, "proof_backed", "ev-nykaa-ad", "ad_new"),
+    ]);
+    expect(mixed.html).toContain("Landing page offer changed");
+    expect(mixed.html).toContain("1 new creative");
+    expect(mixed.html).toContain("open the ad wall");
+    expect(mixed.html).not.toContain("New ad detected");
+    expect(mixed.text).toContain(
+      "Nykaa: 1 new creative — open the ad wall: https://0509.io/app/watchlists?watchlist=wl-nykaa",
+    );
+
+    // Bare window: ONLY ad pings — zero headline rows, still just the counted
+    // line. No digest claim of headline-worthy activity is invented.
+    const bare = build([
+      digestItem("Nykaa", "New ad detected", 95, "proof_backed", "ev-nykaa-ad", "ad_new"),
+    ]);
+    expect(bare.html).not.toContain("New ad detected");
+    expect(bare.html).toContain("1 new creative");
+    expect(bare.html).toContain("open the ad wall");
+  });
+
   it("collapses ad creative churn to a counted footnote and keeps the landing-page card", () => {
     const email = buildDigestEmail({
       name: "Owner",
@@ -711,10 +767,14 @@ describe("buildDigestEmail", () => {
     });
 
     // BET 1: the ad_new creative churn never renders its thumbnails as a top
-    // move — it collapses into a single counted footnote line.
+    // move — it collapses into a single counted footnote line, linked to the
+    // watchlist (issue 2880).
     expect(email.html).not.toContain('src="https://cdn.example.com/before.jpg"');
-    expect(email.html).toContain("1 new creative — open the wall to see them.");
-    expect(email.text).toContain("1 new creative — open the wall to see them.");
+    expect(email.html).toContain("1 new creative — ");
+    expect(email.html).toContain("open the ad wall");
+    expect(email.text).toContain(
+      "Nykaa: 1 new creative — open the ad wall: https://0509.io/app/watchlists?watchlist=wl-nykaa",
+    );
     expect(email.text).not.toContain("Creative: before/after thumbnails attached in the HTML email.");
     // The landing-page evidence card still renders for the headline item.
     expect(email.html).toContain("Landing page evidence");
@@ -826,8 +886,10 @@ describe("buildDigestEmail", () => {
     });
 
     // The new-ad line (ad churn footnote) names the largest variant split.
-    expect(withVersions.html).toContain("1 new creative, as 4 versions — open the wall to see them.");
-    expect(withVersions.text).toContain("1 new creative, as 4 versions — open the wall to see them.");
+    expect(withVersions.html).toContain("1 new creative, as 4 versions");
+    expect(withVersions.text).toContain(
+      "Nykaa: 1 new creative, as 4 versions — open the ad wall: https://0509.io/app/watchlists?watchlist=wl-nykaa",
+    );
 
     // A count of 1 (or absent) means the advertiser is not testing variants:
     // no versions line, and never a fabricated figure.
@@ -854,7 +916,8 @@ describe("buildDigestEmail", () => {
       ],
     });
 
-    expect(singleVersion.html).toContain("1 new creative — open the wall to see them.");
+    expect(singleVersion.html).toContain("1 new creative — ");
+    expect(singleVersion.html).toContain("open the ad wall");
     expect(singleVersion.html).not.toContain("versions");
     expect(singleVersion.text).not.toContain("versions");
 
@@ -875,7 +938,8 @@ describe("buildDigestEmail", () => {
       ],
     });
 
-    expect(noVersion.html).toContain("1 new creative — open the wall to see them.");
+    expect(noVersion.html).toContain("1 new creative — ");
+    expect(noVersion.html).toContain("open the ad wall");
     expect(noVersion.html).not.toContain("versions");
     expect(noVersion.text).not.toContain("versions");
   });

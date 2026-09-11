@@ -29,8 +29,9 @@ import { resolvePublicHttpUrl } from "~/lib/public-url.server";
  * redirect. A raw `fetch` to a feed URL is a regression.
  *
  * The connector is wired into the registry but gated behind
- * `PRESENCE_RSS_ROLLOUT` (off by default); activation is a separate rollout
- * decision, not a code change.
+ * `PRESENCE_RSS_ROLLOUT` (off by default); activation requires the rollout
+ * flag (and, before migration 0093, the `source_target.connector_id` CHECK
+ * widened to accept 'rss'), not a code change in this connector.
  */
 const MAX_RSS_FETCH_BYTES = 750_000;
 /** Bounded excerpt size for a feed entry body. Documented cap, mirrored from the website connector. */

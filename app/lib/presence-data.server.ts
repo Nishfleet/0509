@@ -629,7 +629,6 @@ export async function listActiveSourceTargetsForPolling(env: AppEnv, limit = 40)
        INNER JOIN tracked_entity ON tracked_entity.id = source_target.tracked_entity_id
        WHERE source_target.is_active = 1
          AND source_target.deleted_at IS NULL
-         AND source_target.connector_id = 'website'
          AND tracked_entity.is_active = 1
          AND tracked_entity.deleted_at IS NULL
        ORDER BY COALESCE(

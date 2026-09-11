@@ -141,11 +141,19 @@ describe("exact production candidate workflow", () => {
       id: "pin",
       run: "./scripts/ci-verify-production-candidate.sh",
     });
-    // The initial pin stays fail-closed: drift tolerance is granted only to
-    // post-pin steps that re-verify the already-pinned SHA after the gate
-    // validated it. If main moved before the pin, no candidate has been
-    // verified yet, so the run must stop.
-    expect(steps[verifyIndex]?.env).not.toHaveProperty("TOLERATE_MAIN_DRIFT");
+    // The pin step verifies PINNED_SHA itself and CAS-checks it against live
+    // main. It now tolerates a forward move of main the same way the post-pin
+    // steps do (2026-09-10: main merged every few minutes, so queued Deploy
+    // production runs failed the pin by construction and each red run filed a
+    // fresh AUTO-REVERT HALT; Nishfleet/0509#2701). What ships is still
+    // exactly PINNED_SHA: on workflow_dispatch the CAS enforces ancestorship
+    // of the dispatched candidate, and on push events remote main can only
+    // have advanced from the pinned tip, so a non-ancestor SHA can never
+    // reach the tolerate branch. Every other CAS failure, including a
+    // rewind/rewrite of main, stays fail-closed.
+    expect(steps[verifyIndex]?.env).toMatchObject({
+      TOLERATE_MAIN_DRIFT: "1",
+    });
   });
 
   it("offers the chain bootstrap as an optional dispatch input wired only to the release gate", () => {
@@ -540,6 +548,12 @@ describe("exact production candidate workflow", () => {
     );
     expect(verifier).toContain("ci-verify-provider-main-cas.sh");
     expect(providerCas).toContain("TOLERATE_MAIN_DRIFT");
+    // Ancestorship guards the TOLERATE_MAIN_DRIFT branch itself on every
+    // event, so a rewound/rewritten main stays fail-closed by construction,
+    // not by repo settings (allow_force_pushes/allow_deletions).
+    expect(providerCas).toMatch(
+      /TOLERATE_MAIN_DRIFT[\s\S]*?git merge-base --is-ancestor "\$PINNED_SHA" "\$remote_sha"/,
+    );
     // Nightly D1 backup (d1-backup-r2.yml schedule) uses this gate; schedule
     // must accept empty expected_sha and reject a smuggled one.
     expect(verifier).toContain("unexpected_schedule_expected_sha");
@@ -692,19 +706,34 @@ printf '{"object":{"sha":"%s"}}\n' "$FAKE_REMOTE_SHA"
       expect(run().status).not.toBe(0);
       git(work, "checkout", "--detach", candidateSha);
       expect(run({ FAKE_REMOTE_SHA: "f".repeat(40) }).status).not.toBe(0);
-      // Post-gate drift tolerance is opt-in and downgrades ONLY drift: with
-      // TOLERATE_MAIN_DRIFT=1 the run deploys the verified pinned SHA even
-      // though main moved, printing the explicit "behind main" note; without
-      // the flag drift still fails closed. Non-drift remote failures (e.g. a
-      // malformed provider SHA) stay hard even with the flag set.
+      // Post-gate drift tolerance is opt-in and downgrades ONLY forward
+      // drift: with TOLERATE_MAIN_DRIFT=1 the run deploys the verified pinned
+      // SHA when the pinned candidate is an ancestor of the moved main tip,
+      // printing the explicit "behind main" note; without the flag drift
+      // still fails closed. A non-ancestor remote (rewound/rewritten main,
+      // or a SHA git cannot resolve) fails remote_main_drift even with the
+      // flag set, on every event name — as does a malformed provider SHA.
+      writeFileSync(join(work, "advance.txt"), "advance\n");
+      git(work, "add", "advance.txt");
+      git(work, "commit", "-m", "advance");
+      const advanceSha = git(work, "rev-parse", "HEAD");
+      git(work, "checkout", "--detach", candidateSha);
       const tolerated = run({
-        FAKE_REMOTE_SHA: "f".repeat(40),
+        FAKE_REMOTE_SHA: advanceSha,
         TOLERATE_MAIN_DRIFT: "1",
       });
       expect(tolerated.status).toBe(0);
       expect(tolerated.stderr).toContain("Deploying pinned SHA");
       expect(tolerated.stderr).toContain(candidateSha);
-      expect(tolerated.stderr).toContain("f".repeat(40));
+      expect(tolerated.stderr).toContain(advanceSha);
+      // Push event: forward drift tolerated, rewind fails closed.
+      expect(
+        run({ FAKE_REMOTE_SHA: advanceSha, TOLERATE_MAIN_DRIFT: "1" }).status,
+      ).toBe(0);
+      expect(
+        run({ FAKE_REMOTE_SHA: "f".repeat(40), TOLERATE_MAIN_DRIFT: "1" })
+          .status,
+      ).not.toBe(0);
       expect(
         run({
           FAKE_REMOTE_SHA: "not-a-sha",
