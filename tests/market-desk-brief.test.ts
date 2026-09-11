@@ -112,7 +112,7 @@ describe("buildMarketDeskBrief", () => {
     expect(brief.hasMetrics).toBe(true);
   });
 
-  it("describes free as an activation scan followed by a weekly check", () => {
+  it("describes free as an activation scan and one first brief, nothing recurring", () => {
     const brief = buildMarketDeskBrief(baseInput({
       plan: "free",
       watchlists: [watchlist()],
@@ -120,8 +120,10 @@ describe("buildMarketDeskBrief", () => {
     }));
 
     expect(brief.title).toBe("Activation scan is queued");
-    expect(brief.summary).toContain("activation scan, then a weekly check");
-    expect(brief.summary).toContain("Paid plans check every 3–6 hours");
+    expect(brief.summary).toContain("activation scan and one first brief");
+    expect(brief.summary).toContain("Recurring checks are a paid plan");
+    expect(brief.summary).toContain("paid plans check every 3–6 hours");
+    expect(brief.summary).not.toContain("weekly check");
     expect(brief.summary).not.toContain("Scheduled checks run");
   });
 
@@ -295,7 +297,7 @@ describe("buildMarketDeskBrief", () => {
     expect(brief.summary).toBe("All quiet - 18 ads checked across 1 competitor. Completed checks found no action-worthy movement.");
   });
 
-  it("describes the free quiet state as a weekly check, never a one-time activation", () => {
+  it("describes the free quiet state as the one first check, never recurring", () => {
     const brief = buildMarketDeskBrief(baseInput({
       plan: "free",
       watchlists: [watchlist({ lastScannedAt: "2026-06-20T02:00:00.000Z" })],
@@ -303,9 +305,9 @@ describe("buildMarketDeskBrief", () => {
     }));
 
     expect(brief.state).toBe("quiet");
-    expect(brief.title).toBe("Weekly check complete");
+    expect(brief.title).toBe("First check complete");
     expect(brief.summary).toBe(
-      "We checked 1 competitor — nothing moved. The next weekly check runs Monday. Paid plans check every 3–6 hours and add instant alerts.",
+      "We checked 1 competitor — nothing moved. That was your one free first check — recurring checks are a paid plan. Paid plans check every 3–6 hours and add instant alerts.",
     );
     expect(brief.items[0]).toMatchObject({
       label: "Watched",

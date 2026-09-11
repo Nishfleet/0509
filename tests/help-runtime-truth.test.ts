@@ -41,8 +41,8 @@ describe("customer help runtime truth", () => {
     const markup = renderToStaticMarkup(createElement(HelpRoute));
 
     expect(markup).toContain("Free lets you watch one competitor");
-    expect(markup).toContain("then a weekly check with a weekly");
-    expect(markup).toContain("Paid plans add 3–6 hour checks, daily briefs, evidence, and more competitors");
+    expect(markup).toContain("an activation scan when you add it and one first brief");
+    expect(markup).toContain("Paid plans add recurring checks (3–6 hour cadence), daily briefs, evidence, and more competitors");
     expect(markup).toContain("Email delivery is in product scope");
     expect(markup).toContain("does not measure live email-provider availability");
     expect(markup).toContain("A manual refresh confirms a fresh check only; it does not confirm recurring delivery.");
