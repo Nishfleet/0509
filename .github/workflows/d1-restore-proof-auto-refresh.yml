@@ -105,15 +105,20 @@ on:
         type: string
 
 concurrency:
-  group: 0509-production-provider-mutations
+  # One lane per candidate SHA (0509#2975). Every push to main produces
+  # evidence for exactly its own commit, so per-SHA groups can never cancel
+  # or starve each other — the shared 0509-production-provider-mutations
+  # group previously held all of these runs in one serial lane and the
+  # 2026-09-11 incident's runs were all cancelled at fleet merge cadence.
+  # This workflow mutates no shared provider state (read-only D1 export,
+  # run-scoped scratch database, run-keyed R2 objects), so nothing here
+  # keeps the shared group — that group exists for deploys and the manual
+  # D1 migration apply in d1-remote-restore-evidence.yml.
+  #
+  # `queue: max` is belt-and-braces: two runs for the SAME sha (push +
+  # dispatch, or a re-run) queue rather than collide.
+  group: 0509-d1-restore-proof-auto-refresh-${{ github.sha }}
   cancel-in-progress: false
-  # `queue: max` is intentional. A burst of pushes queues multiple
-  # evidence runs in the same group, but cancel-in-progress is false so
-  # every run completes and produces its own exact-SHA artifact. The
-  # deploy's artifact finder (`find-recent-remote-restore-artifact.mjs`)
-  # sorts by `created_at` and returns the newest artifact whose SHA
-  # matches the deploy's pinned SHA, so a queued backlog cannot starve
-  # the deploy of fresh evidence.
   queue: max
 
 permissions: {}

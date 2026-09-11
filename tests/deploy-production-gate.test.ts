@@ -24,14 +24,20 @@ const {
 const {
   anchorPreviousHead,
   bootstrapPreviousSuccessHead,
+  deployLedgerAnchor,
   firstParentMigrationDiffs,
   hasAppliedMigrationMutation,
   hasMigrationChanges,
   hasMigrationMutationAcrossCommits,
   hasRestoreCriticalChanges,
   minimumValidityMs,
+  resolveRewrittenRecordedHead,
 } =
   await import("../scripts/verify-remote-restore-evidence.mjs");
+const { selectRecentRemoteRestoreArtifact } =
+  await import("../scripts/find-recent-remote-restore-artifact.mjs");
+const { buildDeployLedgerRow, parseDeployLedgerRows } =
+  await import("../scripts/deploy-ledger.mjs");
 const rollbackTargetModule =
   await import("../scripts/worker-rollback-target.mjs");
 const { validateDeployReadiness } =
@@ -1638,13 +1644,20 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     ).toBe(true);
   });
 
-  it("anchors on the recorded head only when it exists in this history; a rewritten-away head falls through to the bootstrap, loudly (0509#2975)", () => {
+  it("anchors on the recorded head, recovers a rewritten-away head by tree hash then ledger then bootstrap — loudly (0509#2975)", () => {
+    const head = spawnSync("git", ["rev-parse", "--verify", "HEAD^{commit}"], {
+      encoding: "utf8",
+    }).stdout.trim();
     const ancestor = spawnSync(
       "git",
       ["rev-parse", "--verify", "HEAD~1^{commit}"],
       { encoding: "utf8" },
     ).stdout.trim();
-    const vanished = "d16b1f00096d5a29db9f6ba51b32bc49db45824b";
+    const olderAncestor = spawnSync(
+      "git",
+      ["rev-parse", "--verify", "HEAD~2^{commit}"],
+      { encoding: "utf8" },
+    ).stdout.trim();
     const warnings: string[] = [];
     const collect = (message: string) => {
       warnings.push(message);
@@ -1664,10 +1677,140 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(warnings[0]).toContain("Ignoring the bootstrap value");
     warnings.length = 0;
 
-    // Recorded head is NOT in this history (main rewritten): without a
-    // bootstrap the run fails with a named reason, never a raw git error.
+    // — Recovery by tree hash (the live d16b1f00 -> 20382d7e shape): fabricate
+    // a commit object unreachable from HEAD but carrying a tree that occurs
+    // exactly once on the first-parent chain. The real resolve path — no
+    // injected seams — must land on the in-history twin.
+    const listing = spawnSync(
+      "git",
+      ["log", "--first-parent", "--format=%H %T", "HEAD"],
+      { encoding: "utf8" },
+    ).stdout.trim();
+    const pairs = listing.split("\n").map((line) => line.split(" "));
+    const treeCounts = new Map<string, number>();
+    for (const [, tree] of pairs) {
+      treeCounts.set(tree, (treeCounts.get(tree) ?? 0) + 1);
+    }
+    const unique = pairs.find(
+      ([sha, tree]) => treeCounts.get(tree) === 1 && sha !== head,
+    );
+    expect(
+      unique,
+      "first-parent history must contain a tree occurring exactly once outside HEAD",
+    ).toBeDefined();
+    const [anchorSha, anchorTree] = unique!;
+    const stranded = spawnSync(
+      "git",
+      ["commit-tree", anchorTree, "-m", "rewrite-stranded deploy head probe"],
+      {
+        encoding: "utf8",
+        // commit-tree needs an identity and CI checkouts have none; this
+        // object is never referenced so no ref or history is touched.
+        env: {
+          ...process.env,
+          GIT_AUTHOR_NAME: "0509 test",
+          GIT_AUTHOR_EMAIL: "test@0509.invalid",
+          GIT_COMMITTER_NAME: "0509 test",
+          GIT_COMMITTER_EMAIL: "test@0509.invalid",
+        },
+      },
+    ).stdout.trim();
+    expect(stranded).toMatch(/^[a-f0-9]{40}$/);
+    expect(stranded).not.toBe(anchorSha);
+
+    expect(
+      anchorPreviousHead({ recordedHead: stranded }, ({} as NodeJS.ProcessEnv), collect),
+    ).toBe(anchorSha);
+    expect(warnings.some((w) => w.includes("not reachable from HEAD"))).toBe(true);
+    expect(warnings.some((w) => w.includes("identical tree"))).toBe(true);
+    warnings.length = 0;
+
+    // Recovery by tree hash while a bootstrap is also set: recovered history
+    // still wins and the ignored bootstrap stays loud, identical to a
+    // reachable recorded head.
+    expect(
+      anchorPreviousHead(
+        { recordedHead: stranded },
+        ({ BOOTSTRAP_PREVIOUS_SUCCESS_SHA: ancestor } as unknown as NodeJS.ProcessEnv),
+        collect,
+      ),
+    ).toBe(anchorSha);
+    expect(warnings.some((w) => w.includes("Ignoring the bootstrap value"))).toBe(true);
+    warnings.length = 0;
+
+    // — Ledger recovery. When the recorded object is gone entirely (garbage
+    // collected remote) the committed deploy-ledger.jsonl is the next source.
+    const gone = "f".repeat(40);
+    expect(
+      resolveRewrittenRecordedHead(gone, {
+        warn: collect,
+        ensureObject: () => false,
+        ledgerRows: () => [
+          {
+            sha: olderAncestor,
+            tree: null,
+            deployed_at: "2026-09-08T00:00:00Z",
+            version_id: null,
+          },
+          {
+            sha: ancestor,
+            tree: null,
+            deployed_at: "2026-09-09T17:03:00Z",
+            version_id: null,
+          },
+        ],
+      }),
+    ).toBe(ancestor); // newest row wins even though an older row also resolves
+    expect(warnings.some((w) => w.includes("deploy-ledger"))).toBe(true);
+    warnings.length = 0;
+
+    // A ledger row whose sha is itself rewrite-stranded resolves by its
+    // recorded tree — exactly the recovery the live rewrite needs.
+    expect(
+      resolveRewrittenRecordedHead(gone, {
+        warn: collect,
+        ensureObject: () => false,
+        ledgerRows: () => [
+          {
+            sha: gone,
+            tree: anchorTree,
+            deployed_at: "2026-09-09T17:03:00Z",
+            version_id: null,
+          },
+        ],
+        treeMatch: (tree) => (tree === anchorTree ? anchorSha : null),
+      }),
+    ).toBe(anchorSha);
+    warnings.length = 0;
+
+    // A ledger row anchored on HEAD is refused: it would empty the
+    // classification diff and silently downgrade the evidence policy — the
+    // same failure the bootstrap's is-head refusal exists to prevent.
+    const headTree = spawnSync("git", ["rev-parse", "HEAD^{tree}"], {
+      encoding: "utf8",
+    }).stdout.trim();
+    expect(
+      deployLedgerAnchor({ rows: [{ sha: head, tree: null }], head }),
+    ).toBeNull();
+    expect(
+      deployLedgerAnchor({ rows: [{ sha: gone, tree: headTree }], head }),
+    ).toBeNull();
+
+    // — Terminal paths. Object gone AND ledger empty: resolve returns null,
+    // so anchorPreviousHead falls through to the operator bootstrap; without
+    // one it fails with the named reason, never a raw git error.
+    expect(
+      resolveRewrittenRecordedHead(gone, {
+        warn: collect,
+        ensureObject: () => false,
+        ledgerRows: () => [],
+      }),
+    ).toBeNull();
+    warnings.length = 0;
     expect(() =>
-      anchorPreviousHead({ recordedHead: vanished }, ({} as NodeJS.ProcessEnv), collect),
+      anchorPreviousHead({ recordedHead: gone }, ({} as NodeJS.ProcessEnv), collect, undefined, {
+        resolveRewritten: () => null,
+      }),
     ).toThrow("remote_restore_last_successful_head_unresolvable");
     expect(warnings.some((w) => w.includes("not reachable from HEAD"))).toBe(true);
     warnings.length = 0;
@@ -1676,23 +1819,244 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     // and both warnings are emitted so the override is visible in the log.
     expect(
       anchorPreviousHead(
-        { recordedHead: vanished },
+        { recordedHead: gone },
         ({ BOOTSTRAP_PREVIOUS_SUCCESS_SHA: ancestor } as unknown as NodeJS.ProcessEnv),
         collect,
+        undefined,
+        { resolveRewritten: () => null },
       ),
     ).toBe(ancestor);
     expect(warnings.some((w) => w.includes("not reachable from HEAD"))).toBe(true);
     expect(warnings.some((w) => w.includes("BOOTSTRAP: GitHub reports zero"))).toBe(true);
     warnings.length = 0;
 
-    // No recorded history at all: plain bootstrap path (unchanged).
+    // No recorded run head at all (repo-rename wiped runs): the ledger is
+    // real recorded history and outranks the bootstrap, loudly.
+    expect(
+      anchorPreviousHead(
+        { recordedHead: null },
+        ({ BOOTSTRAP_PREVIOUS_SUCCESS_SHA: olderAncestor } as unknown as NodeJS.ProcessEnv),
+        collect,
+        undefined,
+        { ledgerAnchor: () => ancestor },
+      ),
+    ).toBe(ancestor);
+    expect(warnings.some((w) => w.includes("Ignoring the bootstrap value"))).toBe(true);
+    warnings.length = 0;
+
+    // No recorded run head and no usable ledger row: plain bootstrap path
+    // (unchanged).
     expect(
       anchorPreviousHead(
         { recordedHead: null },
         ({ BOOTSTRAP_PREVIOUS_SUCCESS_SHA: ancestor } as unknown as NodeJS.ProcessEnv),
         collect,
+        undefined,
+        { ledgerAnchor: () => null },
       ),
     ).toBe(ancestor);
+  }, 30_000);
+
+  it("keeps deploy-ledger rows strict: schema validation, newest-wins ordering, and no HEAD anchor", () => {
+    const ancestor = spawnSync(
+      "git",
+      ["rev-parse", "--verify", "HEAD~1^{commit}"],
+      { encoding: "utf8" },
+    ).stdout.trim();
+    const tree = spawnSync("git", ["rev-parse", "HEAD^{tree}"], {
+      encoding: "utf8",
+    }).stdout.trim();
+
+    const row = buildDeployLedgerRow({
+      sha: ancestor,
+      tree,
+      deployedAt: "2026-09-09T17:03:00Z",
+      versionId: "worker-version-1",
+    });
+    expect(row).toEqual({
+      sha: ancestor,
+      tree,
+      deployed_at: "2026-09-09T17:03:00Z",
+      version_id: "worker-version-1",
+    });
+    expect(() =>
+      buildDeployLedgerRow({ sha: "bad", tree, deployedAt: "2026-09-09T17:03:00Z" }),
+    ).toThrow("deploy_ledger_sha_invalid");
+    expect(() =>
+      buildDeployLedgerRow({ sha: ancestor, tree: "bad", deployedAt: "2026-09-09T17:03:00Z" }),
+    ).toThrow("deploy_ledger_tree_invalid");
+    expect(() =>
+      buildDeployLedgerRow({ sha: ancestor, tree, deployedAt: "not-a-date" }),
+    ).toThrow("deploy_ledger_deployed_at_invalid");
+
+    // Malformed lines are skipped, never fatal: one corrupt row must not
+    // poison every future deploy's anchor resolution.
+    const parsed = parseDeployLedgerRows(
+      [
+        JSON.stringify(row),
+        "not json",
+        JSON.stringify({ sha: "bad" }),
+        JSON.stringify(null),
+        JSON.stringify({ sha: ancestor, tree: null, deployed_at: "2026-09-10T00:00:00Z", version_id: null }),
+      ].join("\n"),
+    );
+    expect(parsed).toHaveLength(2);
+    expect(parsed[1].sha).toBe(ancestor);
+  });
+
+  it("selects restore evidence only for the deploy's pinned SHA, never for a newer main tip (0509#2975)", () => {
+    const pinnedSha = "a".repeat(40);
+    const newerSha = "b".repeat(40);
+    const runFor = (id: number, sha: string, created_at: string) => ({
+      id,
+      status: "completed",
+      conclusion: "success",
+      head_branch: "main",
+      head_sha: sha,
+      created_at,
+      repository: { full_name: "Nishfleet/0509" },
+      head_repository: { full_name: "Nishfleet/0509" },
+      workflowFile: "d1-restore-proof-auto-refresh.yml",
+    });
+    const artifactFor = (runId: number, sha: string) => ({
+      id: runId * 10,
+      name: `d1-remote-restore-evidence-${sha}-${runId}`,
+      expired: false,
+      size_in_bytes: 1024,
+      workflow_run: { id: runId, head_branch: "main", head_sha: sha },
+    });
+    const runs = [
+      runFor(300, newerSha, "2026-09-11T12:00:00Z"),
+      runFor(200, pinnedSha, "2026-09-11T11:00:00Z"),
+    ];
+    const artifactsByRun = {
+      "200": [artifactFor(200, pinnedSha)],
+      "300": [artifactFor(300, newerSha)],
+    };
+
+    // The newer run's artifact is shadowed, never silently substituted: the
+    // deploy consumes the proof produced for ITS pinned candidate.
+    expect(
+      selectRecentRemoteRestoreArtifact({
+        currentRunId: 999,
+        runs,
+        artifactsByRun,
+        repository: "Nishfleet/0509",
+        pinnedSha,
+      }),
+    ).toEqual({
+      artifactId: 2000,
+      runId: 200,
+      name: `d1-remote-restore-evidence-${pinnedSha}-200`,
+      sizeInBytes: 1024,
+    });
+
+    // Pinned to the newer tip instead: that run's artifact is selected.
+    expect(
+      selectRecentRemoteRestoreArtifact({
+        currentRunId: 999,
+        runs,
+        artifactsByRun,
+        repository: "Nishfleet/0509",
+        pinnedSha: newerSha,
+      }),
+    ).toMatchObject({ runId: 300 });
+
+    // Pinned to a sha with no evidence at all: null, so the deploy's inline
+    // generate path runs — never a wrong-sha artifact.
+    expect(
+      selectRecentRemoteRestoreArtifact({
+        currentRunId: 999,
+        runs,
+        artifactsByRun,
+        repository: "Nishfleet/0509",
+        pinnedSha: "c".repeat(40),
+      }),
+    ).toBeNull();
+
+    expect(() =>
+      selectRecentRemoteRestoreArtifact({
+        currentRunId: 999,
+        runs,
+        artifactsByRun,
+        repository: "Nishfleet/0509",
+        pinnedSha: "main",
+      }),
+    ).toThrow("remote_restore_artifact_selection_invalid");
+  });
+
+  it("gives every evidence run its own per-SHA lane and reserves the provider-mutations group for real mutations (0509#2975)", () => {
+    const evidenceWorkflow = readFileSync(
+      resolve(".github/workflows/d1-remote-restore-evidence.yml"),
+      "utf8",
+    );
+    const refreshWorkflow = readFileSync(
+      resolve(".github/workflows/d1-restore-proof-auto-refresh.yml"),
+      "utf8",
+    );
+    const deployWorkflow = readFileSync(
+      resolve(".github/workflows/deploy-production.yml"),
+      "utf8",
+    );
+    const evidence = parse(evidenceWorkflow) as any;
+    const refresh = parse(refreshWorkflow) as any;
+    const deploy = parse(deployWorkflow) as any;
+
+    // Per-candidate lanes, never cancel-in-progress: a merge landing while
+    // an evidence run is in flight can no longer cancel or starve the proof
+    // the next deploy needs.
+    expect(evidence.concurrency.group).toBe(
+      "0509-d1-remote-restore-evidence-${{ github.sha }}",
+    );
+    expect(evidence.concurrency["cancel-in-progress"]).toBe(false);
+    expect(refresh.concurrency.group).toBe(
+      "0509-d1-restore-proof-auto-refresh-${{ github.sha }}",
+    );
+    expect(refresh.concurrency["cancel-in-progress"]).toBe(false);
+
+    // The shared group survives only where a real provider mutation needs
+    // it: the manual `wrangler d1 migrations apply` job and the deploy job.
+    expect(evidence.jobs.apply_and_restore.concurrency.group).toBe(
+      "0509-production-provider-mutations",
+    );
+    expect(
+      evidence.jobs.apply_and_restore.concurrency["cancel-in-progress"],
+    ).toBe(false);
+    expect(deploy.concurrency.group).toBe(
+      "0509-production-provider-mutations",
+    );
+    expect(deploy.concurrency["cancel-in-progress"]).toBe(false);
+
+    // The deploy consumes evidence for its pinned candidate and records the
+    // success in the committed ledger after shipping.
+    const prepareEnv = deploy.jobs.prepare_remote_restore_evidence.env;
+    expect(prepareEnv.PINNED_SHA).toBe(
+      "${{ needs.pin_candidate.outputs.sha }}",
+    );
+    const prepareScript = readFileSync(
+      resolve("scripts/ci-prepare-remote-restore-evidence.sh"),
+      "utf8",
+    );
+    expect(prepareScript).toContain("PINNED_SHA is required");
+    const deploySteps = deploy.jobs.deploy.steps as Array<{
+      name?: string;
+      if?: string;
+      run?: string;
+    }>;
+    const stepIndex = (name: string) =>
+      deploySteps.findIndex((step) => step.name === name);
+    const ledgerIndex = stepIndex("Record the deploy in the on-main ledger");
+    expect(ledgerIndex).toBeGreaterThan(
+      stepIndex("Verify complete release evidence set"),
+    );
+    expect(deploySteps[ledgerIndex].if).toBe("success()");
+    expect(deploySteps[ledgerIndex].run).toBe(
+      "./scripts/commit-deploy-ledger.sh",
+    );
+    const measureIndex = stepIndex("Emit deploy-age measure line");
+    expect(measureIndex).toBeGreaterThan(ledgerIndex);
+    expect(deploySteps[measureIndex].if).toBe("always()");
+    expect(deploy.jobs.deploy.permissions["contents"]).toBe("write");
   });
 
   it("fetches a moved main tip before testing ancestry so drift is judged on objects, not on a stale checkout (0509#2975)", () => {
@@ -2252,6 +2616,7 @@ exec /bin/mv "$@"
           RESTORE_EVIDENCE_ARCHIVE: archivePath,
           GITHUB_REPOSITORY: "Nishfleet/0509",
           GH_TOKEN: "test-token",
+          PINNED_SHA: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         },
         encoding: "utf8",
       });

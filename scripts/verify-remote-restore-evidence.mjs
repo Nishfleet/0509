@@ -9,6 +9,10 @@ import {
   allowedProductionMigrationLedgers,
   migrationLedgerState,
 } from "./d1-migration-sync-check.lib.mjs";
+import {
+  DEPLOY_LEDGER_PATH,
+  parseDeployLedgerRows,
+} from "./deploy-ledger.mjs";
 
 /** @param {string} name */
 function readArg(name) {
@@ -193,29 +197,227 @@ export function reachableFromHead(sha) {
 }
 
 /**
+ * Make a commit object available locally, fetching it from origin when the
+ * checkout does not have it. A rewrite-stranded recorded head usually still
+ * exists in the remote object store even though no ref reaches it; the fetch
+ * is tolerant because a garbage-collected object is a legitimate outcome.
+ * @param {string} sha
+ */
+export function ensureCommitObjectPresent(sha) {
+  const present = () => {
+    try {
+      execFileSync("git", ["cat-file", "-e", `${sha}^{commit}`], {
+        stdio: ["ignore", "ignore", "ignore"],
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  if (present()) return true;
+  try {
+    execFileSync("git", ["fetch", "--quiet", "--no-tags", "origin", sha], {
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+  } catch {
+    return false;
+  }
+  return present();
+}
+
+/**
+ * @param {string} sha
+ * @returns {string | null} the commit's tree hash, or null when unavailable
+ */
+export function treeHashOfCommit(sha) {
+  try {
+    const tree = execFileSync("git", ["rev-parse", `${sha}^{tree}`], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    return /^[a-f0-9]{40}$/u.test(tree) ? tree : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The newest commit on HEAD's first-parent chain whose tree equals `tree`.
+ * Tree equality means identical content, so a rewritten-away deploy head and
+ * its replacement resolve to the same anchor regardless of SHA.
+ * @param {string} tree
+ * @returns {string | null}
+ */
+export function newestFirstParentCommitWithTree(tree) {
+  if (!/^[a-f0-9]{40}$/u.test(tree)) return null;
+  const listing = execFileSync(
+    "git",
+    ["log", "--first-parent", "--format=%H %T", "HEAD"],
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+  );
+  for (const line of listing.split(/\r?\n/u)) {
+    const [sha, commitTree] = line.trim().split(" ");
+    if (commitTree === tree && /^[a-f0-9]{40}$/u.test(sha)) return sha;
+  }
+  return null;
+}
+
+/**
+ * The committed deploy ledger, read out of HEAD's own tree so it survives
+ * both a history rewrite and a wiped runs API. Absent or unreadable is not an
+ * error — it just contributes no rows.
+ * @returns {Array<{ sha: string, tree: string | null, deployed_at: string, version_id: string | null }>}
+ */
+export function readDeployLedgerRows() {
+  let text;
+  try {
+    text = execFileSync(
+      "git",
+      ["show", `HEAD:${DEPLOY_LEDGER_PATH}`],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+    );
+  } catch {
+    return [];
+  }
+  return parseDeployLedgerRows(text);
+}
+
+/**
+ * Anchor on the newest deploy-ledger row that resolves in this history. A row
+ * whose recorded sha is still reachable is used directly; a rewrite-stranded
+ * sha is resolved by its recorded tree against first-parent HEAD.
+ * @param {{
+ *   rows?: Array<{ sha: string, tree: string | null }>,
+ *   reachable?: (sha: string) => boolean,
+ *   treeMatch?: (tree: string) => string | null,
+ *   head?: string,
+ * }} [args]
+ * @returns {string | null}
+ */
+export function deployLedgerAnchor({
+  rows = readDeployLedgerRows(),
+  reachable = reachableFromHead,
+  treeMatch = newestFirstParentCommitWithTree,
+  head = execFileSync("git", ["rev-parse", "--verify", "HEAD^{commit}"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  }).trim(),
+} = {}) {
+  for (const row of [...rows].reverse()) {
+    // The ledger file is committed content, so a row is weaker evidence than
+    // a recorded run head. Never let it anchor on HEAD itself: that would
+    // make the classification diff empty and silently downgrade the release
+    // to the weaker verified-ledger-7d policy (the same failure the
+    // bootstrap's is-head refusal exists to prevent).
+    if (reachable(row.sha) && row.sha !== head) return row.sha;
+    if (row.tree) {
+      const match = treeMatch(row.tree);
+      if (match && match !== head) return match;
+    }
+  }
+  return null;
+}
+
+/**
+ * Resolve a recorded last-successful head that is not reachable from HEAD —
+ * the history-rewrite recovery chain (0509#2975):
+ *   1. tree hash — fetch the recorded head object if the checkout lacks it,
+ *      then take the newest first-parent commit on main with the same tree
+ *      (the rewritten equivalent of the deployed tree, e.g. 2026-09-11
+ *      d16b1f00 -> 20382d7e);
+ *   2. deploy ledger — when the recorded object itself is gone (or its tree
+ *      matches nothing), the committed deploy-ledger.jsonl still names every
+ *      past deploy, each resolving by sha-or-tree;
+ *   3. caller falls through to the operator bootstrap when both return null.
+ * @param {string} recordedHead
+ * @param {{
+ *   warn?: (message: string) => void,
+ *   ensureObject?: (sha: string) => boolean,
+ *   treeOf?: (sha: string) => string | null,
+ *   treeMatch?: (tree: string) => string | null,
+ *   ledgerRows?: () => Array<{ sha: string, tree: string | null }>,
+ *   reachable?: (sha: string) => boolean,
+ * }} [deps]
+ * @returns {string | null}
+ */
+export function resolveRewrittenRecordedHead(recordedHead, deps = {}) {
+  const {
+    warn = (message) => process.stderr.write(`${message}\n`),
+    ensureObject = ensureCommitObjectPresent,
+    treeOf = treeHashOfCommit,
+    treeMatch = newestFirstParentCommitWithTree,
+    ledgerRows = readDeployLedgerRows,
+    reachable = reachableFromHead,
+  } = deps;
+  if (ensureObject(recordedHead)) {
+    const tree = treeOf(recordedHead);
+    const match = tree ? treeMatch(tree) : null;
+    if (match) {
+      warn(
+        `::warning::recorded last successful deploy ${recordedHead} is not reachable from HEAD after a main history rewrite; anchoring on ${match}, the newest first-parent commit carrying the identical tree ${tree}.`,
+      );
+      return match;
+    }
+    warn(
+      "::warning::recorded head is present but its tree matches no first-parent commit on HEAD; consulting the committed deploy ledger.",
+    );
+  } else {
+    warn(
+      "::warning::recorded head object could not be fetched; consulting the committed deploy ledger.",
+    );
+  }
+  const ledgerAnchor = deployLedgerAnchor({ rows: ledgerRows(), reachable, treeMatch });
+  if (ledgerAnchor) {
+    warn(
+      `::warning::anchoring on committed deploy-ledger.jsonl entry ${ledgerAnchor} because the recorded head cannot be resolved by sha or tree.`,
+    );
+    return ledgerAnchor;
+  }
+  return null;
+}
+
+/**
  * Pick the anchor for previousHead..HEAD. A recorded last-success head wins
  * whenever it resolves in this history. If it does NOT resolve (main history
- * rewritten), it can anchor nothing: fall through to the operator bootstrap
- * (loudly) or fail with a named reason instead of a raw git error.
+ * rewritten), it is recovered by tree hash, then by the committed deploy
+ * ledger, and only then by the operator bootstrap — or the run fails with a
+ * named reason instead of a raw git error.
  * @param {{ recordedHead: string | null }} args
  * @param {NodeJS.ProcessEnv} [env]
  * @param {(message: string) => void} [warn]
  * @param {(sha: string) => boolean} [reachable]
+ * @param {{
+ *   resolveRewritten?: (sha: string) => string | null,
+ *   ledgerAnchor?: () => string | null,
+ * }} [deps] injection seam for tests; production callers use the git defaults
  */
 export function anchorPreviousHead(
   { recordedHead },
   env = process.env,
   warn = (message) => process.stderr.write(`${message}\n`),
   reachable = reachableFromHead,
+  deps = {},
 ) {
+  const {
+    resolveRewritten = (sha) =>
+      resolveRewrittenRecordedHead(sha, { warn, reachable }),
+    ledgerAnchor: findLedgerAnchor = () => deployLedgerAnchor({ reachable }),
+  } = deps;
   if (recordedHead && reachable(recordedHead)) {
     bootstrapPreviousSuccessHead({ hasRecordedHistory: true }, env, warn);
     return recordedHead;
   }
   if (recordedHead) {
     warn(
-      `::warning::recorded last successful production deploy ${recordedHead} is not reachable from HEAD (main rewritten?). It cannot anchor previousHead..HEAD; consulting the operator bootstrap instead.`,
+      `::warning::recorded last successful production deploy ${recordedHead} is not reachable from HEAD (main rewritten?). It cannot anchor previousHead..HEAD directly; attempting tree-hash and deploy-ledger resolution before the operator bootstrap.`,
     );
+    const resolved = resolveRewritten(recordedHead);
+    if (resolved && /^[a-f0-9]{40}$/u.test(resolved) && reachable(resolved)) {
+      // Recovered real history — a set bootstrap is ignored loudly, the same
+      // contract as a reachable recorded head.
+      bootstrapPreviousSuccessHead({ hasRecordedHistory: true }, env, warn);
+      return resolved;
+    }
     const bootstrapped = bootstrapPreviousSuccessHead(
       { hasRecordedHistory: false },
       env,
@@ -225,6 +427,14 @@ export function anchorPreviousHead(
       throw new Error("remote_restore_last_successful_head_unresolvable");
     }
     return bootstrapped;
+  }
+  // No recorded run head at all (the 2026-08-19 repo rename zeroed the runs
+  // API). The committed deploy ledger is real recorded history written by the
+  // deploy job itself, so a usable row outranks the operator bootstrap.
+  const ledgerAnchor = findLedgerAnchor();
+  if (ledgerAnchor) {
+    bootstrapPreviousSuccessHead({ hasRecordedHistory: true }, env, warn);
+    return ledgerAnchor;
   }
   return bootstrapPreviousSuccessHead({ hasRecordedHistory: false }, env, warn);
 }
@@ -329,7 +539,7 @@ function changedPathsFromNameStatus(diffOutput) {
 }
 
 const RESTORE_CRITICAL_PATH_PATTERN =
-  /^(?:wrangler\.jsonc|\.node-version|package(?:-lock)?\.json|\.github\/workflows\/(?:deploy-production|d1-backup-r2|d1-remote-restore-evidence)\.yml|scripts\/(?:customer-readiness-candidate|deploy-production-plan|safe-command-output|validate-d1-backup|build-remote-restore-candidate-manifest|find-recent-remote-restore-artifact|verify-remote-restore-evidence|d1-(?:backup|migration-sync|remote-restore|restore)[^/]*)\.mjs)$/u;
+  /^(?:wrangler\.jsonc|\.node-version|package(?:-lock)?\.json|\.github\/workflows\/(?:deploy-production|d1-backup-r2|d1-remote-restore-evidence|d1-restore-proof-auto-refresh)\.yml|scripts\/(?:customer-readiness-candidate|deploy-production-plan|deploy-ledger|safe-command-output|validate-d1-backup|build-remote-restore-candidate-manifest|find-recent-remote-restore-artifact|verify-remote-restore-evidence|d1-(?:backup|migration-sync|remote-restore|restore)[^/]*)\.mjs)$/u;
 
 /** @param {unknown} diffOutput */
 export function hasRestoreCriticalChanges(diffOutput) {
@@ -383,7 +593,8 @@ async function restoreEvidenceClassification() {
   // (loudly) whenever one exists — see bootstrapPreviousSuccessHead. The one
   // exception (0509#2975): a recorded head that is not in this history at all
   // (main was rewritten, fleet-ops#5385) cannot anchor anything, so it is
-  // treated as "no recorded history" and the operator bootstrap may apply.
+  // recovered by tree hash, then by the committed deploy ledger, and only
+  // then by the operator bootstrap.
   const previousHead = anchorPreviousHead({
     recordedHead: previous?.head_sha ?? null,
   });
