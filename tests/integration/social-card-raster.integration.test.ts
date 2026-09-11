@@ -10,7 +10,8 @@ import { rasterizeSocialCardPng } from "~/lib/social-cards-raster.server";
 import ogImageDataUri from "../../public/og-image.png?inline";
 
 /**
- * Issue #2089 — the /ads and /timeline social cards must be served as PNG
+ * Issue #2089 (and issue #2101 for the cluster cards) — the /ads, /timeline
+ * and cluster social cards must be served as PNG
  * bytes (Facebook/X/LinkedIn refuse SVG og:images). The rasterizer is
  * worker-only (@resvg/resvg-wasm's wasm-bindgen glue is not resolvable in the
  * node test environment), so this suite runs in the `workers` project on real
@@ -22,7 +23,7 @@ import ogImageDataUri from "../../public/og-image.png?inline";
  */
 const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
-describe("ads/timeline social card rasterization (issue #2089)", () => {
+describe("ads/timeline/cluster social card rasterization (issue #2089, issue #2101)", () => {
   it("rasterizes the /ads card SVG to a valid 1200x630 PNG", async () => {
     const card = publicSocialCardForRequest(
       new Request("https://0509.io/social-card/ads/nike.com.png?n=Nike&s=72"),
@@ -50,6 +51,30 @@ describe("ads/timeline social card rasterization (issue #2089)", () => {
     );
     expect(card?.kind).toBe("timeline");
     expect(card?.body).toContain("Nike");
+
+    const png = await rasterizeSocialCardPng(card!.body);
+    for (let i = 0; i < PNG_MAGIC.length; i += 1) {
+      expect(png[i], `PNG magic byte ${i}`).toBe(PNG_MAGIC[i]);
+    }
+    const width = (png[16] << 24) | (png[17] << 16) | (png[18] << 8) | png[19];
+    const height = (png[20] << 24) | (png[21] << 16) | (png[22] << 8) | png[23];
+    expect(width).toBe(1200);
+    expect(height).toBe(630);
+    expect(png.length).toBeGreaterThan(10_000);
+  });
+
+  /**
+   * Issue #2101 — the cluster cards (/sneaker-resale, /competitor-monitoring)
+   * ride the same rasterization pipeline: the canonical .png URL and the
+   * legacy .svg alias both resolve to kind "cluster", which the worker
+   * rasterizes to PNG exactly like the ads/timeline cards.
+   */
+  it("rasterizes the cluster card SVG to a valid 1200x630 PNG", async () => {
+    const card = publicSocialCardForRequest(
+      new Request("https://0509.io/social-card/sneaker-resale.png"),
+    );
+    expect(card?.kind).toBe("cluster");
+    expect(card?.body).toContain("Sneaker resale ads");
 
     const png = await rasterizeSocialCardPng(card!.body);
     for (let i = 0; i < PNG_MAGIC.length; i += 1) {

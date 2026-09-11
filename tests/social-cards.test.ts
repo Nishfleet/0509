@@ -106,9 +106,11 @@ describe("social card URL builders", () => {
   });
 
   it("clusterSocialCardUrl builds the standalone surface card path", () => {
-    expect(clusterSocialCardUrl("sneaker-resale")).toBe(canonicalUrl("/social-card/sneaker-resale.svg"));
+    // Cluster cards are served as PNG (issue #2101) — social scrapers refuse
+    // SVG og:images, so the topical pages advertise the rasterized URL.
+    expect(clusterSocialCardUrl("sneaker-resale")).toBe(canonicalUrl("/social-card/sneaker-resale.png"));
     expect(clusterSocialCardUrl("competitor-monitoring")).toBe(
-      canonicalUrl("/social-card/competitor-monitoring.svg"),
+      canonicalUrl("/social-card/competitor-monitoring.png"),
     );
   });
 
@@ -156,6 +158,10 @@ describe("parseSocialCardPathname", () => {
       slug: "panoramata",
     });
     expect(parseSocialCardPathname("/social-card/sneaker-resale.svg")).toEqual({
+      kind: "cluster",
+      slug: "sneaker-resale",
+    });
+    expect(parseSocialCardPathname("/social-card/sneaker-resale.png")).toEqual({
       kind: "cluster",
       slug: "sneaker-resale",
     });
