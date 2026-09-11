@@ -482,6 +482,33 @@ describe("browser session providers", () => {
     expect(result.note).toBe("Too many requests");
   });
 
+  it("records a Browserbase session-create transport failure as an error row", async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(
+      new Error("getaddrinfo ENOTFOUND api.browserbase.com"),
+    );
+
+    const result = await runBrowserbaseProbe(
+      {
+        provider: "browserbase",
+        query: "nykaa",
+        country: "India",
+        mode: "advertiser",
+      },
+      {
+        env: {
+          BROWSERBASE_API_KEY: "bb-key",
+          BROWSERBASE_PROJECT_ID: "proj_123",
+        },
+        fetchImpl,
+      },
+    );
+
+    expect(result.status).toBe("error");
+    expect(result.httpStatus).toBeNull();
+    expect(result.latencyMs).toBeGreaterThanOrEqual(0);
+    expect(result.note).toBe("getaddrinfo ENOTFOUND api.browserbase.com");
+  });
+
   it("classifies Zyte too-many-requests errors as rate limited", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: false,
