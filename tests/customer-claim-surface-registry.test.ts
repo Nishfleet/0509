@@ -383,7 +383,7 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
     "/compare/panoramata", "/compare/adspyder", "/compare/adspy",
     // Issue #2866: two verified competitors that had no compare page.
     "/compare/keeptabz", "/compare/gethookd",
-    "/switch/panoramata", "/switch/visualping", "/competitor-monitoring",
+    "/switch/panoramata", "/switch/visualping", "/switch/magicbrief", "/competitor-monitoring",
     // Issue #2144: agency audience page (roster math + sourced Agency-vs-
     // Foreplay line), EN-only, no locale cluster.
     "/for-agencies",

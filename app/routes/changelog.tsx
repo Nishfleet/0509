@@ -36,6 +36,12 @@ export default function ChangelogRoute() {
           }),
         )}
       />
+      <PublicDocBlock title="2026-09-11">
+        <ul className="f9-doc-list">
+          <li>A new /switch/magicbrief page gives teams displaced by MagicBrief&apos;s 31 July 2026 shutdown an honest migration landing — what transfers (your competitor list as watchlists), what does not (saved boards and report history), sourced to MagicBrief&apos;s own FAQ and Canva&apos;s pricing page — ending in the free /search preview instead of a demo form.</li>
+        </ul>
+      </PublicDocBlock>
+
       <PublicDocBlock title="2026-09-06">
         <ul className="f9-doc-list">
           <li>The /trust page no longer lists &quot;landing-page snapshots&quot; as a stored data category — we do not store them, so the trust surface now says only what we actually keep.</li>

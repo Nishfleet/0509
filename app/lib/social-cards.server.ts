@@ -115,6 +115,7 @@ const COMPARE_PRODUCT_NAMES: Readonly<Record<string, string>> = {
 const SWITCH_PRODUCT_NAMES: Readonly<Record<string, string>> = {
   panoramata: "Panoramata",
   visualping: "Visualping",
+  magicbrief: "MagicBrief",
 };
 
 /** Cluster card headlines for the standalone buyer surfaces. */

@@ -1,6 +1,5 @@
 import {
   LEGACY_VENDOR_COMPARE_PATH,
-  LEGACY_VENDOR_SWITCH_PATH,
 } from "./routes/legacy-vendor-redirect";
 import {
   type RouteConfig,
@@ -122,10 +121,11 @@ export default [
   // and sitemap entries keep working (issue #2022 era).
   route("methodology", "routes/methodology-redirect.ts"),
   route("compare", "routes/compare.tsx"),
-  // Issue #2127 wiped a vendor's compare/switch pages. The legacy URLs (and
-  // their locale twins below) 301 to the /compare hub through one loader
-  // file with explicit ids; the paths are exported by that file so the route
-  // config, the loader, and its test share one source of truth.
+  // Issue #2127 wiped a vendor's compare/switch pages. The legacy compare URL
+  // (and its locale twin below) 301s to the /compare hub through one loader
+  // file with an explicit id; the path is exported by that file so the route
+  // config, the loader, and its test share one source of truth. The switch
+  // twin is live again (issue #2887) and registered below.
   route(LEGACY_VENDOR_COMPARE_PATH, "routes/legacy-vendor-redirect.ts", { id: "compare-legacy-vendor-redirect" }),
   route("compare/meta-ad-library", "routes/compare.meta-ad-library.tsx"),
   route("compare/visualping", "routes/compare.visualping.tsx"),
@@ -146,6 +146,9 @@ export default [
   route("compare/keeptabz", "routes/compare.keeptabz.tsx"),
   route("compare/gethookd", "routes/compare.gethookd.tsx"),
   route(LEGACY_VENDOR_SWITCH_PATH, "routes/legacy-vendor-redirect.ts", { id: "switch-legacy-vendor-redirect" }),
+  // Issue #2887: the MagicBrief wind-down page — the one vendor shutdown
+  // creating real switching demand (BET 8).
+  route("switch/magicbrief", "routes/switch.magicbrief.tsx"),
   route("switch/panoramata", "routes/switch.panoramata.tsx"),
   route("switch/visualping", "routes/switch.visualping.tsx"),
   route("competitor-monitoring", "routes/competitor-monitoring.tsx"),
@@ -203,6 +206,8 @@ export default [
     route("compare/keeptabz", "routes/$locale.compare.keeptabz.tsx"),
     route("compare/gethookd", "routes/$locale.compare.gethookd.tsx"),
     route(LEGACY_VENDOR_SWITCH_PATH, "routes/legacy-vendor-redirect.ts", { id: "locale-switch-legacy-vendor-redirect" }),
+    // Issue #2887: the MagicBrief wind-down page (BET 8), locale twins.
+    route("switch/magicbrief", "routes/$locale.switch.magicbrief.tsx"),
     route("switch/panoramata", "routes/$locale.switch.panoramata.tsx"),
     route("switch/visualping", "routes/$locale.switch.visualping.tsx"),
     // First-value search funnel + supporting trust/proof surfaces (issue 1578):

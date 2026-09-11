@@ -227,6 +227,11 @@ const LLMS_PAGE_DETAILS = {
     description:
       "Visualping's own blog says 83% of detected changes are not important. Paste a domain for the same ad and landing-page job.",
   },
+  "/switch/magicbrief": {
+    title: "MagicBrief alternative after the shutdown",
+    description:
+      "MagicBrief closed on 31 July 2026. Your competitor list imports here as watchlists; saved boards and report history do not.",
+  },
   "/competitor-monitoring": {
     title: "Competitor monitoring",
     description:

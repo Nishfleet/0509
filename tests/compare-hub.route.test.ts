@@ -74,19 +74,25 @@ describe("/compare hub canary (issue #1470)", () => {
   it("links no wiped legacy path — no self-loop (issue #2860 canary)", async () => {
     const { default: CompareIndexRoute } = await import("~/routes/compare");
     const markup = renderToStaticMarkup(createElement(CompareIndexRoute));
-    const { LEGACY_VENDOR_COMPARE_PATH, LEGACY_VENDOR_SWITCH_PATH } = await import(
+    const { LEGACY_VENDOR_COMPARE_PATH } = await import(
       "~/routes/legacy-vendor-redirect"
     );
 
-    // Both legacy paths 301 back to /compare, the referrer, so any href to
-    // them on the hub was a self-loop that ate the click (issue #2860). The
-    // constants are imported from the redirect loader — the one source of
+    // The legacy compare path 301s back to /compare, the referrer, so any
+    // href to it on the hub was a self-loop that ate the click (issue #2860).
+    // The constant is imported from the redirect loader — the one source of
     // truth for wiped paths — so a new wipe automatically extends the canary.
-    for (const legacyPath of [LEGACY_VENDOR_COMPARE_PATH, LEGACY_VENDOR_SWITCH_PATH]) {
-      expect(markup, `hub must not link wiped /${legacyPath}`).not.toContain(
-        `href="/${legacyPath}"`,
-      );
-    }
+    // /switch/magicbrief is deliberately not checked here: it is live again
+    // (issue #2887) and the hub links it on purpose.
+    expect(markup, `hub must not link wiped /${LEGACY_VENDOR_COMPARE_PATH}`).not.toContain(
+      `href="/${LEGACY_VENDOR_COMPARE_PATH}"`,
+    );
+  });
+
+  it("links the live /switch/magicbrief wind-down page (issue #2887)", async () => {
+    const { default: CompareIndexRoute } = await import("~/routes/compare");
+    const markup = renderToStaticMarkup(createElement(CompareIndexRoute));
+    expect(markup).toContain('href="/switch/magicbrief"');
   });
 
   it("renders the MarketingNav and MarketingFooter shared chrome", async () => {

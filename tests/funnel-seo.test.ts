@@ -178,6 +178,7 @@ describe("shared marketing footer", () => {
       "/compare/adspy",
       "/switch/panoramata",
       "/switch/visualping",
+      "/switch/magicbrief",
       "/sneaker-resale",
     ]) {
       expect(markup).toContain(`href="${href}"`);

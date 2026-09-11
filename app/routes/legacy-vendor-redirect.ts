@@ -2,17 +2,19 @@ import { redirect } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 
 /**
- * MagicBrief wipe (issue #2127). The /compare/magicbrief and /switch/magicbrief
- * pages, their locale-prefixed twins, and every callout that pointed at them
- * are gone. This loader keeps the old URLs working entry points: a permanent
- * 301 to the /compare hub so indexed entries and external links never 404 and
- * pass their ranking signal to the hub instead.
+ * MagicBrief wipe (issue #2127). The /compare/magicbrief page and its
+ * locale-prefixed twins are gone; this loader keeps the old URL a working
+ * entry point: a permanent 301 to the /compare hub so indexed entries and
+ * external links never 404 and pass their ranking signal to the hub instead.
  *
- * The legacy paths live here, next to the loader, so `app/routes.ts`, this
+ * /switch/magicbrief is NOT in this file since issue #2887: it is a live BET 8
+ * wind-down page again (`routes/switch.magicbrief.tsx`), so it serves 200 —
+ * only the compare path keeps redirecting.
+ *
+ * The legacy path lives here, next to the loader, so `app/routes.ts`, this
  * loader, and the test share one source of truth for which URLs redirect.
  */
 export const LEGACY_VENDOR_COMPARE_PATH = "compare/magicbrief";
-export const LEGACY_VENDOR_SWITCH_PATH = "switch/magicbrief";
 export const LEGACY_VENDOR_REDIRECT_TARGET = "/compare";
 
 export function loader(_args: LoaderFunctionArgs) {
