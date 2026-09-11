@@ -271,7 +271,7 @@ export default {
         request,
         buildLlmsText(
           brandEntries,
-          timelineSitemapEntries(brandEntries, captureBackedTimelineEntries),
+          timelineSitemapEntries(captureBackedTimelineEntries),
         ),
       );
     }

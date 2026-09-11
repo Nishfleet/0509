@@ -132,16 +132,21 @@ describe("/ads/:domain concurrent secondary reads (issue #2390)", () => {
 
   it("has the six independent reads in flight simultaneously, not a waterfall", async () => {
     const barrier = createBarrier(6);
-    let sitemapCalls = 0;
     const env = { DB: {} };
     installBaseMocks(env);
 
     vi.doMock("~/lib/sitemap.server", async (importOriginal) => ({
       ...(await importOriginal<Record<string, unknown>>()),
-      // Both the "related brands" read AND the timeline-indexability read
-      // bottom out in this one leaf, so the label carries a sequence number.
+      // The "related brands" read bottoms out in the brand-entries leaf and
+      // the timeline-indexability read bottoms out in the capture-backed
+      // timeline-entries leaf (issue #2881: no brand-entries call in the
+      // internal-links path anymore), so each leaf carries its own label.
       loadIndexableBrandPageEntries: vi.fn().mockImplementation(async () => {
-        await barrier.arrive(`sitemapBrandEntries#${sitemapCalls++}`);
+        await barrier.arrive("sitemapBrandEntries");
+        return [];
+      }),
+      loadIndexableTimelineEntries: vi.fn().mockImplementation(async () => {
+        await barrier.arrive("sitemapTimelineEntries");
         return [];
       }),
     }));
@@ -185,8 +190,8 @@ describe("/ads/:domain concurrent secondary reads (issue #2390)", () => {
       "captureFailures",
       "offerTimeline",
       "recentWatchChanges",
-      "sitemapBrandEntries#0",
-      "sitemapBrandEntries#1",
+      "sitemapBrandEntries",
+      "sitemapTimelineEntries",
       "sourceSnapshots",
     ]);
     expect(result).toBeTruthy();
