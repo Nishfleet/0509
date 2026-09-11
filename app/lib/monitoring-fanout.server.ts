@@ -2,7 +2,9 @@ import type { AppEnv } from "~/lib/env.server";
 import { ensureDb, execute as runStatement, queryOne as one } from "~/lib/data/d1.server";
 import { billingCanaryMutationGuardSql } from "~/lib/data/billing-canary-lock.server";
 import { logAppEvent } from "~/lib/log.server";
-import { getWatchlist } from "~/lib/data.server";
+import {
+  getWatchlist,
+} from "~/lib/data/watchlists.server";
 import { getScheduledMonitoringPolicy } from "~/lib/plan-entitlements";
 import type { UserPlanBillingInfo } from "~/lib/data/billing-plan.server";
 import type { WatchlistRecord, WatchlistRunRecord } from "~/lib/types";

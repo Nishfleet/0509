@@ -30,21 +30,28 @@ import {
 import {
   createDeliveryAttempt,
   getDeliveryAttemptByIdempotencyKey,
-  getOldestUserId,
   getUserDeliveryProfile,
-  getUserIdByEmail,
-  getWatchlistDeliveryConfig,
   getWorkspaceDeliveryConfig,
   legacyWorkspaceDeliveryDefaults,
-  listAdsByIds,
   listDeliveryTargets,
   provisionVerifiedAccountEmailTargetIfUnsuppressed,
   reconcileDeliveryAttemptByProviderMessageId,
   updateDeliveryAttemptResult,
   upsertDeliveryTarget,
+} from "~/lib/data/delivery-records.server";
+import {
+  getOldestUserId,
+  getUserIdByEmail,
+} from "~/lib/data/workspace.server";
+import {
+  getWatchlistDeliveryConfig,
+} from "~/lib/data/watchlists.server";
+import {
+  listAdsByIds,
+} from "~/lib/data/ads.server";
+import {
   upsertDigestDelivery,
-} from "~/lib/data.server";
-import * as deliveryData from "~/lib/data.server";
+} from "~/lib/data/digests.server";
 import {
   claimInstantDeliveryAttempt,
   markInstantDeliveryDispatchStarted,
@@ -134,6 +141,18 @@ import {
   type WeeklyPublicMove,
 } from "~/lib/weekly-public-moves.server";
 
+import {
+  reconcileWhatsAppSetupTargetByProviderMessageId,
+  reconcileWhatsAppSetupTargetFromAttempt,
+} from "~/lib/data/delivery-records.server";
+import {
+  createShareLink,
+  getShareLinkById,
+  listActiveShareLinks,
+} from "~/lib/data/shares.server";
+import {
+  listProofCapturePairsForEventIds,
+} from "~/lib/data/watchlists.server";
 // Facade re-exports: product code and tests import every delivery sender
 // from this module; the billing lifecycle domain lives in its own file.
 export {
@@ -814,7 +833,7 @@ async function reconcileWhatsAppSetupValidationTargetFromAttempt(
     return;
   }
 
-  const reconcile = deliveryData.reconcileWhatsAppSetupTargetFromAttempt;
+  const reconcile = reconcileWhatsAppSetupTargetFromAttempt;
   if (typeof reconcile !== "function" || !attempt.providerMessageId) return;
   await reconcile(env, {
     userId: attempt.userId,
@@ -854,7 +873,7 @@ async function reconcileWhatsAppSetupValidationTargetFromProviderMessage(
     return;
   }
 
-  const reconcile = deliveryData.reconcileWhatsAppSetupTargetByProviderMessageId;
+  const reconcile = reconcileWhatsAppSetupTargetByProviderMessageId;
   if (typeof reconcile !== "function") return;
   await reconcile(env, {
     providerMessageId: input.providerMessageId,
@@ -2222,12 +2241,8 @@ export async function resolveDigestEmailTargets(
   accountEmail: string | null,
   options: { requireUniqueExistingTarget?: boolean } = {},
 ) {
-  if (
-    !options.requireUniqueExistingTarget &&
-    "migrateAutoProvisionedEmailTargets" in deliveryData &&
-    accountEmail
-  ) {
-    const migrate = deliveryData.migrateAutoProvisionedEmailTargets;
+  if (!options.requireUniqueExistingTarget && accountEmail) {
+    const migrate = migrateAutoProvisionedEmailTargets;
     if (typeof migrate === "function") await migrate(env, userId, accountEmail);
   }
   const normalizedAccountEmail = normalizeDeliveryEmailValue(accountEmail);
@@ -2291,11 +2306,7 @@ async function hasSuppressedEmailAddress(
   userId: string,
   targetValue: string,
 ) {
-  const suppressionReader = (
-    "hasSuppressedEmailTargetForUserAndAddress" in deliveryData
-      ? deliveryData.hasSuppressedEmailTargetForUserAndAddress
-      : undefined
-  ) as
+  const suppressionReader = hasSuppressedEmailTargetForUserAndAddress as
     | ((
         readerEnv: AppEnv,
         input: { userId: string; targetValue: string },
@@ -2315,8 +2326,8 @@ export async function resolveAlertEmailTargets(
   watchlistId: string,
   accountEmail: string | null,
 ) {
-  if ("migrateAutoProvisionedEmailTargets" in deliveryData && accountEmail) {
-    const migrate = deliveryData.migrateAutoProvisionedEmailTargets;
+  if (accountEmail) {
+    const migrate = migrateAutoProvisionedEmailTargets;
     if (typeof migrate === "function") await migrate(env, userId, accountEmail);
   }
   const normalizedAccountEmail = normalizeDeliveryEmailValue(accountEmail);
@@ -2472,9 +2483,7 @@ async function resolveVerifiedAccountEmail(
   userId: string,
   fallbackEmail: string | null,
 ) {
-  const profileLoader = ("getUserDeliveryProfile" in deliveryData
-    ? deliveryData.getUserDeliveryProfile
-    : undefined) as unknown as
+  const profileLoader = getUserDeliveryProfile as unknown as
     | ((loaderEnv: AppEnv, loaderUserId: string) => Promise<{
         email: string | null;
         emailVerified?: boolean;
@@ -2526,7 +2535,6 @@ function isUsableWhatsAppTarget(target: DeliveryTargetRecord) {
   );
 }
 
-
 async function sendRenderedDigestEmail(
   env: AppEnv,
   input: {
@@ -2567,7 +2575,6 @@ async function sendInstantEmail(
     theme: "case-file",
   });
 }
-
 
 async function persistDeliveryTargetSuccess(
   env: AppEnv,
@@ -2615,8 +2622,8 @@ async function resolveShareForwardUrl(
   },
 ): Promise<string | null> {
   try {
-    const listActive = deliveryData.listActiveShareLinks;
-    const createShare = deliveryData.createShareLink;
+    const listActive = listActiveShareLinks;
+    const createShare = createShareLink;
     if (typeof listActive !== "function" || typeof createShare !== "function") {
       return null;
     }
@@ -3372,9 +3379,9 @@ async function loadAlertEvidenceStates(
   // (strict mocks throw on property access) or a failed lookup degrades to
   // no evidence, which makes the alert provisional — it never blocks
   // delivery and never invents evidence.
-  let pairs: Awaited<ReturnType<typeof deliveryData.listProofCapturePairsForEventIds>> = [];
+  let pairs: Awaited<ReturnType<typeof listProofCapturePairsForEventIds>> = [];
   try {
-    const listPairs = deliveryData.listProofCapturePairsForEventIds;
+    const listPairs = listProofCapturePairsForEventIds;
     if (typeof listPairs !== "function") {
       return states;
     }
@@ -3423,9 +3430,9 @@ async function loadAlertScreenshotPairs(
   // missing property access, so the lookup is wrapped in try/catch and the
   // empty-map fallback keeps the alert text-only — never blocks delivery,
   // never invents an image.
-  let rows: Awaited<ReturnType<typeof deliveryData.listProofCapturePairsForEventIds>> = [];
+  let rows: Awaited<ReturnType<typeof listProofCapturePairsForEventIds>> = [];
   try {
-    const listPairs = deliveryData.listProofCapturePairsForEventIds;
+    const listPairs = listProofCapturePairsForEventIds;
     if (typeof listPairs !== "function") {
       return pairs;
     }
@@ -3881,7 +3888,6 @@ function dedupeTargetsByValue(targets: DeliveryTargetRecord[]) {
   return [...deduped.values()];
 }
 
-
 export async function sendPresenceDigestEmail(
   env: AppEnv,
   input: {
@@ -4264,7 +4270,7 @@ async function mintMonthlyReportShare(
   const resourceId = monthlyReportResourceId(monthKey);
   try {
     return (
-      await deliveryData.createShareLink(env, session, {
+      await createShareLink(env, session, {
         id: `${resourceId}:${userId}`,
         resourceType: "report",
         resourceId,
@@ -4277,7 +4283,7 @@ async function mintMonthlyReportShare(
       throw error;
     }
     return (
-      await deliveryData.createShareLink(env, session, {
+      await createShareLink(env, session, {
         resourceType: "report",
         resourceId,
         isSnapshot: true,
@@ -4328,7 +4334,7 @@ async function sendOneMonthlyReport(
     // busy workspace can own more than 50 newer shares, and `listActiveShareLinks`
     // would then miss this month's row.
     const linkId = `${resourceId}:${input.userId}`;
-    const existing = await deliveryData.getShareLinkById(env, input.userId, linkId);
+    const existing = await getShareLinkById(env, input.userId, linkId);
     const token =
       existing?.token ??
       (await mintMonthlyReportShare(env, input.userId, input.monthKey, built.snapshot as unknown as Record<string, unknown>));

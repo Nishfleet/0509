@@ -40,7 +40,31 @@ deliverWeeklyDigest: vi.fn(),
 }));
 
 vi.mock("~/lib/auth.server", () => ({}));
-vi.mock("~/lib/data.server", () => mockState.data);
+vi.mock("~/lib/data/ads.server", () => ({
+listAdsByIds: mockState.data.listAdsByIds
+}));
+vi.mock("~/lib/data/digests.server", () => ({
+addDigestItem: mockState.data.addDigestItem,
+claimDigestStrategyGenerationLease: mockState.data.claimDigestStrategyGenerationLease,
+clearDigestItems: mockState.data.clearDigestItems,
+completeDigestStrategyGeneration: mockState.data.completeDigestStrategyGeneration,
+createDigestRun: mockState.data.createDigestRun,
+getDigest: mockState.data.getDigest,
+getDigestByPeriod: mockState.data.getDigestByPeriod,
+listRetryableDigestRuns: mockState.data.listRetryableDigestRuns,
+enqueueDigestScheduleJobs: mockState.data.enqueueDigestScheduleJobs,
+exhaustStaleMaxAttemptDigestScheduleJobs: mockState.data.exhaustStaleMaxAttemptDigestScheduleJobs,
+listRetryableDigestScheduleJobs: mockState.data.listRetryableDigestScheduleJobs,
+claimDigestScheduleJob: mockState.data.claimDigestScheduleJob,
+completeDigestScheduleJob: mockState.data.completeDigestScheduleJob,
+failDigestScheduleJob: mockState.data.failDigestScheduleJob,
+updateDigestRunSummary: mockState.data.updateDigestRunSummary
+}));
+vi.mock("~/lib/data/watchlists.server", () => ({
+getSuccessfulRunStatsForUserBetween: mockState.data.getSuccessfulRunStatsForUserBetween,
+listWatchEventsBetween: mockState.data.listWatchEventsBetween,
+listWatchlists: mockState.data.listWatchlists
+}));
 vi.mock("~/lib/delivery.server", () => ({
 deliverWeeklyDigest: mockState.deliverWeeklyDigest,
 }));

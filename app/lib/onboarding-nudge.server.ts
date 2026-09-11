@@ -3,7 +3,7 @@ import {
   getWorkspaceDeliveryConfig,
   markInstantDeliveryDispatchStarted,
   updateDeliveryAttemptResult,
-} from "~/lib/data.server";
+} from "~/lib/data/delivery-records.server";
 import {
   normalizeDeliveryEmail,
   resolveActivationEmailTarget,

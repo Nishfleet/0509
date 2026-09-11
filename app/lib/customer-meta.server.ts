@@ -3,7 +3,7 @@ import {
   getCustomerMetaConnection,
   updateCustomerMetaConnectionStatus,
   upsertCustomerMetaConnection,
-} from "~/lib/data.server";
+} from "~/lib/data/customer-api.server";
 import {
   credentialFingerprint,
   decryptCredential,

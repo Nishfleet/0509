@@ -1,10 +1,12 @@
 import {
-	getDeliveryAttemptByIdempotencyKey,
-	getUserDeliveryProfile,
-	getUserPlanBillingInfo,
-	listStaleBillingLifecycleEmailAttempts,
-	updateDeliveryAttemptResult,
-} from "~/lib/data.server";
+  getDeliveryAttemptByIdempotencyKey,
+  getUserDeliveryProfile,
+  listStaleBillingLifecycleEmailAttempts,
+  updateDeliveryAttemptResult,
+} from "~/lib/data/delivery-records.server";
+import {
+  getUserPlanBillingInfo,
+} from "~/lib/data/billing.server";
 import {
 	deliveryPreDispatchStaleBefore,
 	markDeliveryAttemptProviderDispatch,

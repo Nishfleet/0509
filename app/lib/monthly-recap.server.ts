@@ -9,7 +9,7 @@ import {
   getUserDeliveryProfile,
   markInstantDeliveryDispatchStarted,
   updateDeliveryAttemptResult,
-} from "~/lib/data.server";
+} from "~/lib/data/delivery-records.server";
 import { queryAll as many, queryOne as one } from "~/lib/data/d1.server";
 import {
   EMAIL_PROVIDER,

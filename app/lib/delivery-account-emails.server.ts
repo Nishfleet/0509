@@ -2,13 +2,14 @@ import {
   claimInstantDeliveryAttempt,
   createDeliveryAttempt,
   getDeliveryAttemptByIdempotencyKey,
-  getOldestUserId,
   getUserDeliveryProfile,
-  getUserIdByEmail,
   markInstantDeliveryDispatchStarted,
   updateDeliveryAttemptResult,
-} from "~/lib/data.server";
-import * as deliveryData from "~/lib/data.server";
+} from "~/lib/data/delivery-records.server";
+import {
+  getOldestUserId,
+  getUserIdByEmail,
+} from "~/lib/data/workspace.server";
 import {
   EMAIL_PROVIDER,
   appBaseUrl,
@@ -19,6 +20,10 @@ import {
 import type { AppEnv } from "~/lib/env.server";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
+import {
+  hasSuppressedEmailTargetForUserAndAddress,
+  provisionVerifiedAccountEmailTargetIfUnsuppressed,
+} from "~/lib/data/delivery-records.server";
 // Operator + account transactional emails: operator at-risk alerts, delivery
 // test sends, account security notices, team invites, password reset, and
 // email verification. Product code imports these via the ~/lib/delivery.server
@@ -242,9 +247,7 @@ export async function sendDeliveryTestEmail(
     return false;
   }
 
-  const claimTarget = ("claimEmailTargetForDispatch" in deliveryData
-    ? deliveryData.claimEmailTargetForDispatch
-    : undefined) as unknown as
+  const claimTarget = claimEmailTargetForDispatch;
     | ((claimEnv: AppEnv, claimInput: { userId: string; targetId: string }) => Promise<{
         id: string;
         targetValue: string;
@@ -266,15 +269,9 @@ export async function sendDeliveryTestEmail(
     return false;
   }
 
-  const claimAttempt = ("claimInstantDeliveryAttempt" in deliveryData
-    ? deliveryData.claimInstantDeliveryAttempt
-    : undefined) as typeof claimInstantDeliveryAttempt | undefined;
-  const startDispatch = ("markInstantDeliveryDispatchStarted" in deliveryData
-    ? deliveryData.markInstantDeliveryDispatchStarted
-    : undefined) as typeof markInstantDeliveryDispatchStarted | undefined;
-  const finalizeAttempt = ("updateDeliveryAttemptResult" in deliveryData
-    ? deliveryData.updateDeliveryAttemptResult
-    : undefined) as typeof updateDeliveryAttemptResult | undefined;
+  const claimAttempt = claimInstantDeliveryAttempt as typeof claimInstantDeliveryAttempt | undefined;
+  const startDispatch = markInstantDeliveryDispatchStarted as typeof markInstantDeliveryDispatchStarted | undefined;
+  const finalizeAttempt = updateDeliveryAttemptResult as typeof updateDeliveryAttemptResult | undefined;
   if (
     typeof claimAttempt !== "function" ||
     typeof startDispatch !== "function" ||
@@ -436,7 +433,6 @@ export async function sendAccountActionEmail(
 
   return providerResult.status === "sent";
 }
-
 
 export async function sendTeamInviteEmail(
   env: AppEnv,
@@ -1034,9 +1030,7 @@ async function listAccountEmailTargetsForWelcome(
   userId: string,
   accountEmail: string,
 ) {
-  const listTargets = ("listDeliveryTargets" in deliveryData
-    ? deliveryData.listDeliveryTargets
-    : undefined) as
+  const listTargets = listDeliveryTargets as
     | ((
         listEnv: AppEnv,
         listUserId: string,
@@ -1080,7 +1074,7 @@ export async function resolveActivationEmailTarget(
   reason: "unsubscribed" | "target_unavailable" | "target_not_ready" | null;
 }> {
   const normalized = normalizeDeliveryEmail(accountEmail);
-  const listTargets = deliveryData.listDeliveryTargets as
+  const listTargets = listDeliveryTargets as
     | ((
         listEnv: AppEnv,
         listUserId: string,
@@ -1093,14 +1087,14 @@ export async function resolveActivationEmailTarget(
       ) => Promise<ActivationEmailTarget[]>)
     | undefined;
   const suppressionReader =
-    deliveryData.hasSuppressedEmailTargetForUserAndAddress as
+    hasSuppressedEmailTargetForUserAndAddress as
       | ((
           readerEnv: AppEnv,
           input: { userId: string; targetValue: string },
         ) => Promise<boolean>)
       | undefined;
   const provisionTarget =
-    deliveryData.provisionVerifiedAccountEmailTargetIfUnsuppressed;
+    provisionVerifiedAccountEmailTargetIfUnsuppressed;
   if (
     !normalized ||
     typeof listTargets !== "function" ||

@@ -20,10 +20,9 @@ vi.mock("~/lib/plan.server", () => ({
   getUserPlan: vi.fn().mockResolvedValue("agency"),
 }));
 
-vi.mock("~/lib/data.server", () => ({
+vi.mock("~/lib/data/watchlists.server", () => ({
   createProofCapture: vi.fn(),
   createWatchlistRun: vi.fn(),
-  deliverWatchlistAlerts: vi.fn(),
   finishWatchlistRun: vi.fn(),
   getWatchlist: vi.fn(),
   hasInFlightWatchlistRun: vi.fn().mockResolvedValue(false),

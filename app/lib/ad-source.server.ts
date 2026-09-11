@@ -4,7 +4,7 @@ import {
   getDiscoveryProviderState,
   upsertDiscoveryCacheEntry,
   upsertDiscoveryProviderState,
-} from "~/lib/data.server";
+} from "~/lib/data/ads.server";
 import { hasBrowserRunQuickActions } from "~/lib/browser-run.server";
 import {
   mapDiscoveryFailureOutcome,

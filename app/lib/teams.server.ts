@@ -5,7 +5,7 @@ import {
 import {
   getDeliveryTargetById,
   upsertDeliveryTarget,
-} from "~/lib/data.server";
+} from "~/lib/data/delivery-records.server";
 import type { AppEnv } from "~/lib/env.server";
 import type { DeliveryTargetRecord } from "~/lib/types";
 import {

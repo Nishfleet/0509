@@ -4,7 +4,9 @@ import {
 } from "~/lib/discovery-cache.server";
 import { resolveCommercialDiscoveryProvider } from "~/lib/ad-source.server";
 import { deriveHook, deriveOffer } from "~/lib/analysis.server";
-import { listWatchlists } from "~/lib/data.server";
+import {
+  listWatchlists,
+} from "~/lib/data/watchlists.server";
 import {
   fetchWithTimeout,
   releaseFetchTimeout,

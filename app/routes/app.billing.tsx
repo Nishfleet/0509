@@ -28,7 +28,9 @@ import {
   type UsageBundleSlug,
 } from "~/lib/pricing";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
-import type { UserPlanBillingInfo } from "~/lib/data.server";
+import type {
+  UserPlanBillingInfo,
+} from "~/lib/data/billing.server";
 import type { AppEnv } from "~/lib/env.server";
 
 const PAYMENT_ISSUE_STATUSES = new Set(["payment.failed", "subscription.failed", "subscription.on_hold"]);

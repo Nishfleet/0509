@@ -1,4 +1,6 @@
-import type { UserPlanBillingInfo } from "~/lib/data.server";
+import type {
+  UserPlanBillingInfo,
+} from "~/lib/data/billing.server";
 import { readString } from "~/lib/delivery-email-core.server";
 import { isPaidPlanFamily } from "~/lib/plan-entitlements";
 import type { DeliveryAttemptRecord } from "~/lib/types";

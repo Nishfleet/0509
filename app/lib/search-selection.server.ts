@@ -7,7 +7,7 @@ import {
   hydrateAdsWithPersistedCreatives,
   listAdsByIds,
   upsertAd,
-} from "~/lib/data.server";
+} from "~/lib/data/ads.server";
 import type { AppEnv } from "~/lib/env.server";
 import type { BrowserJobPlanTier } from "~/lib/browser-job-telemetry.server";
 import {

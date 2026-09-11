@@ -1,9 +1,11 @@
 import {
-	createDeliveryAttempt,
-	getDeliveryAttemptByIdempotencyKey,
-	getUserPlanBillingInfo,
-	updateDeliveryAttemptResult,
-} from "~/lib/data.server";
+  createDeliveryAttempt,
+  getDeliveryAttemptByIdempotencyKey,
+  updateDeliveryAttemptResult,
+} from "~/lib/data/delivery-records.server";
+import {
+  getUserPlanBillingInfo,
+} from "~/lib/data/billing.server";
 import {
 	isStalePreDispatchAttempt,
 	markDeliveryAttemptProviderDispatch,

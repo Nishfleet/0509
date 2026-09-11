@@ -1,7 +1,7 @@
 import {
-	claimDigestStrategyGenerationLease,
-	completeDigestStrategyGeneration,
-} from "~/lib/data.server";
+  claimDigestStrategyGenerationLease,
+  completeDigestStrategyGeneration,
+} from "~/lib/data/digests.server";
 import {
 	DIGEST_STRATEGY_GENERATION_LEASE_MS,
 	DIGEST_STRATEGY_GENERATION_PENDING,

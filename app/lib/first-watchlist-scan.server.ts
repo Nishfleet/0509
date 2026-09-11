@@ -4,7 +4,7 @@
 import {
   countWatchlistRunsForUserSince,
   getWatchlist,
-} from "~/lib/data.server";
+} from "~/lib/data/watchlists.server";
 import { ensureDb } from "~/lib/data/d1.server";
 import { bindD1Named } from "~/lib/d1-bind.server";
 import type { AppEnv } from "~/lib/env.server";

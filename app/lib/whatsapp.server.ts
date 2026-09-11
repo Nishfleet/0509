@@ -10,7 +10,7 @@ import {
   createDeliveryAttempt,
   listDeliveryTargets,
   upsertDeliveryTarget,
-} from "~/lib/data.server";
+} from "~/lib/data/delivery-records.server";
 import { readResponseJsonWithinLimit } from "~/lib/bounded-response.server";
 import { fetchWithTimeout } from "~/lib/fetch-timeout.server";
 import type {

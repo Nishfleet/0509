@@ -1,4 +1,6 @@
-import { getDiscoveryProviderState } from "~/lib/data.server";
+import {
+  getDiscoveryProviderState,
+} from "~/lib/data/ads.server";
 import type { AppEnv } from "~/lib/env.server";
 
 const WINDOW_DAYS = 7;

@@ -1,18 +1,28 @@
 import { resolveCommercialAdSourceStatus } from "~/lib/ad-source.server";
 import { customerDiscoverySummary } from "~/lib/discovery-customer-copy";
 import {
-  listCustomerApiKeys,
   listAgentMemory,
   listClientRooms,
+  listCustomerApiKeys,
+} from "~/lib/data/customer-api.server";
+import {
   listDigests,
-  listRecentWorkspaceProofCaptures,
-  listSavedQueries,
-  listWatchlists,
-  getDeliveryTargetReadinessStats,
-  getSuccessfulRunStatsForUserBetween,
+} from "~/lib/data/digests.server";
+import {
   getSuccessfulProofCaptureStatsForUser,
+  getSuccessfulRunStatsForUserBetween,
+  listRecentWorkspaceProofCaptures,
+  listWatchlists,
+} from "~/lib/data/watchlists.server";
+import {
+  listSavedQueries,
+} from "~/lib/data/workspace.server";
+import {
+  getDeliveryTargetReadinessStats,
+} from "~/lib/data/delivery-records.server";
+import {
   getUserPlanBillingInfo,
-} from "~/lib/data.server";
+} from "~/lib/data/billing.server";
 import type { AppEnv } from "~/lib/env.server";
 import { buildLifecycleNudges, type LifecycleNudge } from "~/lib/lifecycle-nudges.server";
 import { TOP_UP_PACK_DISPLAY } from "~/lib/billing-sku-catalog";
