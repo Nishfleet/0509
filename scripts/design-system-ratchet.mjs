@@ -101,10 +101,37 @@ function countNonTokenDeclaration(source, declaration, allowedPrefixes) {
   return count;
 }
 
+/**
+ * Count matches of `pattern` inside the values of the declarations matched by
+ * `declaration` (which must capture the value in group 1). Value-scoped
+ * counting exists for text that is debt inside a declaration and noise
+ * outside one: `#1234` is a colour after `color:` but an issue reference in
+ * a comment such as "Issue #1234" (0509#2482).
+ */
+function countInDeclarationValues(source, declaration, pattern) {
+  let count = 0;
+  for (const match of source.matchAll(declaration)) {
+    count += match[1].match(pattern)?.length ?? 0;
+  }
+  return count;
+}
+
 /** `font-family: <value>`, value captured. */
 const FONT_FAMILY_DECLARATION = /(?:^|[^-\w])font-family\s*:\s*([^;}\n]+)/g;
 /** `border-radius` and every per-corner longhand, value captured. */
 const BORDER_RADIUS_DECLARATION = /(?:^|[^-\w])border(?:-[a-z]+)*-radius\s*:\s*([^;}\n]+)/g;
+/** 4-digit `#rgba`, bounded so it never eats the head of a longer hex. */
+const FOUR_DIGIT_HEX = /#[0-9a-fA-F]{4}(?![0-9a-fA-F])/g;
+/**
+ * Colour-carrying declarations, value captured: `color` and every `*-color`
+ * longhand, the shorthands that can hold a colour (`background`, the
+ * `border-*` side longhands, `outline`, `box-shadow`, `text-shadow`,
+ * `column-rule`, `text-decoration`, `text-emphasis`), the SVG paint
+ * properties (`fill`, `stroke`), and custom properties — a `--token: #rgba`
+ * definition is the same raw hex this rule measures.
+ */
+const COLOUR_DECLARATION =
+  /(?:^|[^-\w])(?:[a-z-]*color|--[\w-]+|background|border(?:-(?:top|right|bottom|left|block|inline)(?:-(?:start|end))?)?|box-shadow|text-shadow|outline|column-rule|text-decoration|text-emphasis|fill|stroke)\s*:\s*([^;}\n]+)/g;
 
 /**
  * Regex-counted rules, ratcheted exactly like BANNED_MARKERS. These are the
@@ -115,7 +142,12 @@ const BORDER_RADIUS_DECLARATION = /(?:^|[^-\w])border(?:-[a-z]+)*-radius\s*:\s*(
 export const BANNED_PATTERNS = [
   {
     // #rgb / #rrggbb / #rrggbbaa written straight into a component, route or
-    // the stylesheet instead of a token.
+    // the stylesheet instead of a token — plus #rgba, which is counted only
+    // inside a colour declaration's value: after `color:`/`border:`/`fill:`
+    // the text `#1234` is a colour, while the same text in a comment ("Issue
+    // #1234") is an issue reference a source-wide count cannot tell apart
+    // (0509#2482). The 3/6/8 lengths stay source-wide — no 4-digit issue
+    // number can collide with them.
     //
     // Known floor: 19 of these are the custom-property definitions in
     // app.css's `:root` block — the token system itself has to spell its
@@ -125,7 +157,7 @@ export const BANNED_PATTERNS = [
       countRegex(
         source,
         /#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3})(?![0-9a-fA-F])/g,
-      ),
+      ) + countInDeclarationValues(source, COLOUR_DECLARATION, FOUR_DIGIT_HEX),
   },
   {
     // A font stack chosen at the call site. `inherit` is allowed: it defers to
