@@ -260,6 +260,7 @@ describe("briefs delivery trail outside the global attempt window (issue #2471)"
 		expect(markup).toContain("Sent — per-recipient detail not loaded");
 		// The selected brief's own trail renders its real per-recipient
 		// statuses.
+		expect(data.digestAttemptsByDigestId[selectedId]).toHaveLength(2);
 		expect(data.digestAttemptsByDigestId[olderId]).toEqual([]);
 	});
 });
