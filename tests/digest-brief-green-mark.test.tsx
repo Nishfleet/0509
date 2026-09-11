@@ -7,17 +7,20 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { DesignedDigestBrief } from "~/components/digest-intelligence";
 
 function shippedAnnouncementSelector() {
-  const css = readFileSync("app/app.css", "utf8");
+  const css = ["app/base.css", "app/marketing.css", "app/app.css"].map((f) => readFileSync(f, "utf8")).join("\n");
   const sectionStart = css.indexOf("BL-032 — Briefs");
   expect(sectionStart, "the BL-032 Briefs stylesheet section must exist").toBeGreaterThan(-1);
   const sectionCommentStart = css.lastIndexOf("/*", sectionStart);
   expect(sectionCommentStart, "the BL-032 Briefs section must have its owner header").toBeGreaterThan(
     -1,
   );
-  const scoped = css.slice(sectionCommentStart).replace(/\/\*[\s\S]*?\*\//g, "");
+  // Issue #2392: the shared .f9-wk-ins rules moved to app/base.css while the
+  // BL-032 section header stayed in app/app.css, so the rule search now runs
+  // over the full union instead of the text after the section header.
+  const scoped = css.replace(/\/\*[\s\S]*?\*\//g, "");
   const rules = topLevelCssRules(scoped).filter(
     ({ selector, body }) =>
-      /\.f9-wk-ins/.test(selector) && /background:\s*var\(--green\)/.test(body),
+      /\.f9-wk-brief/.test(selector) && /\.f9-wk-ins/.test(selector) && /background:\s*var\(--green\)/.test(body),
   );
   expect(rules, "exactly one BL-032 rule may paint the announcement green").toHaveLength(1);
   return rules[0].selector.trim().replace(/\s+/g, " ");
@@ -92,10 +95,13 @@ function render(items: ReturnType<typeof item>[]) {
 
 describe("the Briefs announcement green", () => {
   it("lets long captured values wrap inside the Briefs-owned scope", () => {
-    const css = readFileSync("app/app.css", "utf8");
+    const css = ["app/base.css", "app/marketing.css", "app/app.css"].map((f) => readFileSync(f, "utf8")).join("\n");
     const sectionStart = css.indexOf("BL-032 — Briefs");
     const sectionCommentStart = css.lastIndexOf("/*", sectionStart);
-    const scoped = css.slice(sectionCommentStart).replace(/\/\*[\s\S]*?\*\//g, "");
+    // Issue #2392: the shared .f9-wk-ins rules moved to app/base.css while the
+  // BL-032 section header stayed in app/app.css, so the rule search now runs
+  // over the full union instead of the text after the section header.
+  const scoped = css.replace(/\/\*[\s\S]*?\*\//g, "");
     const insertionRule = topLevelCssRules(scoped).find(
       ({ selector }) => selector.trim() === ".f9-wk-brief .f9-wk-ins",
     );

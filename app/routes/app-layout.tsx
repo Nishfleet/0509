@@ -2,6 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import type { LoaderFunctionArgs, ShouldRevalidateFunctionArgs } from "react-router";
 import { Outlet, useLoaderData } from "react-router";
 
+// Workspace-only CSS (issue #2392). root.tsx carries base.css + marketing.css;
+// this sheet only loads on /app routes.
+import "../app.css";
+
 import { DashboardShell } from "~/components/dashboard-shell";
 import { DashboardRouteError } from "~/components/dashboard-route-loading";
 import { QuickAddPalette } from "~/components/quick-add-palette";

@@ -14,7 +14,8 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 
 import { getCloudflareContext } from "~/lib/cloudflare-context";
 import type { LoaderFunctionArgs } from "react-router";
-import "./app.css";
+import "./base.css";
+import "./marketing.css";
 import type { AppEnv } from "~/lib/env.server";
 import { pricingPlans, usageBundles } from "~/lib/pricing";
 import {

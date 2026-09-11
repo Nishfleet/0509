@@ -19,7 +19,7 @@ import type { AdRecord } from "~/lib/types";
  */
 
 const route = readFileSync("app/routes/search.tsx", "utf8");
-const css = readFileSync("app/app.css", "utf8");
+const css = ["app/base.css", "app/marketing.css", "app/app.css"].map((f) => readFileSync(f, "utf8")).join("\n");
 const cssRules = css.replace(/\/\*[\s\S]*?\*\//g, "");
 
 function baseAd(overrides: Partial<AdRecord> = {}): AdRecord {
