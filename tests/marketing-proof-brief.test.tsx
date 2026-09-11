@@ -210,7 +210,11 @@ describe("anonymous homepage proof brief (real proof)", () => {
   });
 
   it("renders real capture clocks and the real proof label when proof exists", async () => {
-    mockReactRouter(realProofBrief);
+    // withCaptureAge keeps the capture inside PROOF_CAPTURE_FRESH_DAYS so the
+    // strip renders the date-bearing "was the hook on" copy; a fixed fetchedAt
+    // older than 30 days flips it to "on record" (this fixture crossed that
+    // boundary on 2026-09-10).
+    mockReactRouter(withCaptureAge({ hoursAgo: 4 }));
     const markup = await renderMarketing();
 
     expect(markup).toContain("Proof-backed brief");
