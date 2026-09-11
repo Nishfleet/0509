@@ -866,70 +866,55 @@ export async function finalizeWebsiteSiteScan(
     );
   }
 
-  // Commit-style: store the caller's declared outcome first, then recompute
-  // counts from the actual rows so a partial manifest is stored as partial.
+  // Commit-style: the terminal write is one atomic batch, so a crash can never
+  // leave the manifest finalized with counts that disagree with the rows. Both
+  // the declared outcome and the counts recomputed from the actual rows land in
+  // the same batch — a partial manifest is stored as partial, never as zeroed.
   const timestamp = nowIso();
   const finalizedAt = input.finalizedAt ?? timestamp;
   const inventoryComplete = input.status === "complete" ? 1 : 0;
+  const db = ensureDb(env);
 
-  await bindD1Named(
-    ensureDb(env).prepare(`
-      UPDATE website_site_scan
-      SET status = ?,
-          inventory_complete = ?,
-          sitemap_document_count = ?,
-          scan_cursor = ?,
-          inventory_hash = ?,
-          failure_code = ?,
-          finalized_at = ?,
-          updated_at = ?
-      WHERE id = ?
-    `),
-    [
-      ["websiteSiteScan.status", input.status],
-      ["websiteSiteScan.inventoryComplete", inventoryComplete],
-      ["websiteSiteScan.sitemapDocumentCount", sitemapDocumentCount],
-      ["websiteSiteScan.scanCursor", cursor, "null"],
-      ["websiteSiteScan.inventoryHash", inventoryHash, "null"],
-      ["websiteSiteScan.failureCode", failureCode, "null"],
-      ["websiteSiteScan.finalizedAt", finalizedAt],
-      ["websiteSiteScan.updatedAt", timestamp],
-      ["websiteSiteScan.id", manifest.id],
-    ],
-  ).run();
-
-  // Recompute counts from the actual rows so the stored manifest always
-  // reflects truth, then fail loudly if the recompute ever contradicts the
-  // stored finalized outcome (a stored-complete scan must have a stored
-  // inventory_complete; a stored non-complete status stays non-complete).
-  const inventoryCount = await queryOne<{ total: number }>(
-    env,
-    "SELECT COUNT(*) AS total FROM website_site_scan_page WHERE site_scan_id = ?",
-    manifest.id,
-  );
-  const fetchedCount = await queryOne<{ total: number }>(
-    env,
-    `
-      SELECT COUNT(*) AS total
-      FROM website_page_observation
-      WHERE watchlist_id = ? AND watchlist_run_id = ? AND fetch_status = 'fetched'
-    `,
-    input.watchlistId,
-    input.runId,
-  );
-  await bindD1Named(
-    ensureDb(env).prepare(`
-      UPDATE website_site_scan
-      SET discovered_page_count = ?,
-          fetched_page_count = ?
-      WHERE id = ?
-    `),
-    [
-      ["websiteSiteScan.discoveredPageCount", inventoryCount?.total ?? 0],
-      ["websiteSiteScan.fetchedPageCount", fetchedCount?.total ?? 0],
-      ["websiteSiteScan.id", manifest.id],
-    ],
-  ).run();
+  await db.batch([
+    bindD1Named(
+      db.prepare(`
+        UPDATE website_site_scan
+        SET status = ?,
+            inventory_complete = ?,
+            sitemap_document_count = ?,
+            scan_cursor = ?,
+            inventory_hash = ?,
+            failure_code = ?,
+            finalized_at = ?,
+            updated_at = ?,
+            discovered_page_count = (
+              SELECT COUNT(*) FROM website_site_scan_page WHERE site_scan_id = ?
+            ),
+            fetched_page_count = (
+              SELECT COUNT(*)
+              FROM website_page_observation
+              WHERE watchlist_id = ?
+                AND watchlist_run_id = ?
+                AND fetch_status = 'fetched'
+            )
+        WHERE id = ?
+      `),
+      [
+        ["websiteSiteScan.status", input.status],
+        ["websiteSiteScan.inventoryComplete", inventoryComplete],
+        ["websiteSiteScan.sitemapDocumentCount", sitemapDocumentCount],
+        ["websiteSiteScan.scanCursor", cursor, "null"],
+        ["websiteSiteScan.inventoryHash", inventoryHash, "null"],
+        ["websiteSiteScan.failureCode", failureCode, "null"],
+        ["websiteSiteScan.finalizedAt", finalizedAt],
+        ["websiteSiteScan.updatedAt", timestamp],
+        ["websiteSiteScan.id", manifest.id],
+        ["websiteSiteScan.watchlistId", input.watchlistId],
+        ["websiteSiteScan.watchlistRunId", input.runId],
+        ["websiteSiteScan.id", manifest.id],
+      ],
+    ),
+  ]);
 
   const row = await getManifestRowForRun(env, input.watchlistId, input.runId);
   if (!row) {

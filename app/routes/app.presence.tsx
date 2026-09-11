@@ -1,4 +1,4 @@
-import { Form, Link, redirect, useActionData, useLoaderData } from "react-router";
+import { Form, Link, data, redirect, useActionData, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { DashboardPage } from "~/components/dashboard-page";
@@ -144,7 +144,14 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   try {
     if (intent === "create-entity") {
-      const trackingMode = String(form.get("trackingMode") ?? "competitor") as PresenceTrackingMode;
+      const rawTrackingMode = String(form.get("trackingMode") ?? "competitor");
+      if (rawTrackingMode !== "competitor" && rawTrackingMode !== "self") {
+        return data(
+          { ok: false, intent, formError: "Choose a valid tracking mode.", message: "Choose a valid tracking mode." },
+          { status: 400 },
+        );
+      }
+      const trackingMode = rawTrackingMode as PresenceTrackingMode;
       const label = String(form.get("label") ?? "").trim();
       const canonicalUrl = String(form.get("canonicalUrl") ?? "").trim() || null;
       const entity = await createPresenceEntity(env, workspaceUserId, {

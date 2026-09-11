@@ -36,6 +36,7 @@ Raw proof trails, metadata, source coverage, filters, and exports remain availab
 - Homepage sample proof preview leads with the decision ladder and a client-ready report preview.
 - Digest detail pages show a decision summary before proof/source details, movement summary, filters, and delivery health.
 - Report pages show a decision summary before proof/source coverage, glossary, insight depth, and rows.
+- Paid workspaces get one monthly report filed automatically on the weekly cron tick, gated to one report per UTC month (workspace + `YYYY-MM`); the emailed link is a read-only snapshot. Building a report by hand stays available at Deliver → Reports.
 - Dashboard recent changes include why it matters, urgency, proof status, source, freshness, and next action.
 - CSV exports include decision-ready columns: what changed, why it matters, urgency, proof status, source, last seen, next action, proof trail, and source URL.
 - Public markdown and `llms.txt` describe the same decision hierarchy.
