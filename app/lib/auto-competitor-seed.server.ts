@@ -290,11 +290,9 @@ async function fetchCustomerLandingPageHtml(url: string): Promise<string | null>
           if (bytes > LANDING_PAGE_MAX_BYTES) {
             return null;
           }
-          // Accumulate raw bytes and decode ONCE after the loop: a fresh
-          // TextDecoder per chunk splits a multi-byte UTF-8 sequence that
-          // straddles a chunk boundary into U+FFFD, and the split point varies
-          // run to run — the same unchanged page would decode differently
-          // across runs.
+          // Decode ONCE after the loop, over raw bytes (issue #2431): a fresh
+          // TextDecoder per chunk splits a multi-byte UTF-8 sequence
+          // straddling a chunk boundary into U+FFFD.
           chunks.push(value);
         }
       }
