@@ -468,47 +468,15 @@ img {
   box-shadow: 0 12px 30px rgba(6, 22, 41, 0.08);
 }
 
-.f9-growth-pricing {
-  position: relative;
-  overflow: hidden;
-  background: #0b1530;
-  color: #fff;
-}
-
+/* #2318: the pricing band was a navy SaaS palette with radial purple/teal
+   gradients — the exact "two different products" hybrid the 2026-07-27 audit
+   abolished. Re-inked on the ratified v4 tokens: bone sky, ink type, one
+   hard rule, no gradients. Mirrors the ratified .f9-home overrides below. */
 .f9-growth-pricing {
   padding: 78px 0 92px;
-  border-top: 0;
-  background:
-    radial-gradient(circle at 18% 0%, rgba(24, 122, 115, 0.36), transparent 36%),
-    radial-gradient(circle at 88% 18%, rgba(105, 73, 255, 0.32), transparent 36%),
-    linear-gradient(180deg, #0b1530 0%, #0b1631 52%, #0a1129 100%),
-    #0b1530;
-}
-
-.f9-growth-pricing::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.055) 1px, transparent 1px),
-    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px);
-  background-size: 96px 100%, 100% 88px;
-  opacity: 0.58;
-  pointer-events: none;
-}
-
-.f9-growth-pricing::after {
-  content: "";
-  position: absolute;
-  right: -22%;
-  bottom: -48%;
-  width: 145%;
-  height: 128%;
-  background: repeating-radial-gradient(ellipse at 18% 100%, transparent 0 17px, rgba(159, 82, 255, 0.36) 18px 20px);
-  filter: drop-shadow(0 0 34px rgba(161, 66, 255, 0.24));
-  opacity: 0.38;
-  transform: rotate(-4deg);
-  pointer-events: none;
+  border-top: 2.5px solid var(--ld-ink);
+  background: var(--ld-bone);
+  color: var(--ld-ink);
 }
 
 .f9-growth-pricing > .f9-container {
@@ -517,7 +485,7 @@ img {
 }
 
 .f9-commerce-card > span {
-  color: #8df0d1;
+  color: var(--ld-ink-faint);
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -538,56 +506,32 @@ img {
   gap: 16px;
   min-height: 320px;
   padding: 34px;
-  border: 1px solid rgba(164, 184, 240, 0.2);
-  border-radius: 22px;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.052)),
-    rgba(255, 255, 255, 0.075);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.16),
-    0 28px 72px rgba(0, 0, 0, 0.26);
-}
-
-.f9-commerce-card:nth-child(2) {
-  animation-delay: -2s;
+  border: 2px solid var(--ld-ink);
+  background: var(--ld-card);
+  box-shadow: 7px 7px 0 var(--ld-ink);
 }
 
 .f9-commerce-card.is-recommended {
-  border-color: rgba(141, 240, 209, 0.5);
-  background:
-    linear-gradient(135deg, rgba(125, 243, 212, 0.18), rgba(180, 35, 24, 0.12)),
-    rgba(255, 255, 255, 0.09);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.2),
-    0 34px 90px rgba(29, 209, 161, 0.16),
-    0 28px 72px rgba(0, 0, 0, 0.26);
-}
-
-.f9-commerce-card::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
-  opacity: 0.42;
-  pointer-events: none;
+  outline: 3px solid var(--ld-green);
+  outline-offset: -1px;
 }
 
 .f9-commerce-card h3 {
   margin: 0;
-  color: #fff;
+  color: var(--ld-ink);
   font-size: clamp(2.4rem, 3.9vw, 3.8rem);
   font-weight: 500;
   line-height: 0.98;
 }
 
+/* WP-A4: the recommendation badge is ink-filled; green stays reserved for
+   the live-state facts and the recommended outline above. */
 .f9-plan-badge {
   justify-self: start;
   margin-top: -6px;
-  border: 1px solid rgba(141, 240, 209, 0.38);
-  border-radius: 999px;
-  background: rgba(125, 243, 212, 0.14);
-  color: #8df0d1;
+  border: 1px solid var(--ld-ink);
+  background: var(--ld-ink);
+  color: var(--ld-bone);
   font-size: 0.74rem;
   font-style: normal;
   font-weight: 700;
@@ -597,13 +541,13 @@ img {
 }
 
 .f9-commerce-card small {
-  color: rgba(210, 218, 242, 0.64);
+  color: var(--ld-ink-faint);
   font-weight: 600;
 }
 
 .f9-commerce-card p {
   max-width: 54ch;
-  color: rgba(210, 218, 242, 0.74);
+  color: var(--ld-ink-soft);
 }
 
 .f9-plan-feature-list {
@@ -612,7 +556,7 @@ img {
   margin: 4px 0 0;
   padding: 0;
   list-style: none;
-  color: rgba(237, 242, 255, 0.82);
+  color: var(--ld-ink-soft);
   font-size: 0.96rem;
   line-height: 1.35;
 }
@@ -623,15 +567,10 @@ img {
 }
 
 .f9-plan-feature-list li::before {
-  content: "";
+  content: "→";
   position: absolute;
-  top: 0.58em;
   left: 0;
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: linear-gradient(135deg, #7df3d4, var(--red));
-  box-shadow: 0 0 18px rgba(125, 243, 212, 0.45);
+  color: var(--ld-green-ink);
 }
 
 .f9-commerce-card > a,
@@ -649,9 +588,8 @@ img {
 .f9-price-sync {
   align-self: start;
   margin-top: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 999px;
-  color: rgba(255, 255, 255, 0.76);
+  border: 1px solid var(--ld-ink);
+  color: var(--ld-ink-soft);
   font-size: 0.9rem;
   font-weight: 700;
   padding: 12px 18px;
@@ -662,18 +600,13 @@ img {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 54px;
-  margin-top: 12px;
-  border: 0;
-  border-radius: 999px;
-  background: #fff;
-  color: var(--ink-soft);
-  cursor: pointer;
+  border: 1px solid var(--ld-ink);
+  background: var(--ld-card);
+  color: var(--ld-ink);
   font: inherit;
   font-weight: 700;
   padding: 12px 24px;
   white-space: nowrap;
-  box-shadow: 0 22px 54px rgba(0, 0, 0, 0.24);
 }
 
 .f9-commerce-card > a::after,
@@ -689,9 +622,9 @@ img {
 }
 
 .f9-plan-actions form:nth-child(2) button {
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
+  border: 1px solid var(--ld-ink);
+  background: var(--ld-card);
+  color: var(--ld-ink);
   box-shadow: none;
 }
 
