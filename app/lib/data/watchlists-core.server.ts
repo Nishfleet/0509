@@ -696,6 +696,25 @@ export async function setWatchlistActive(
   const db = ensureDb(env);
   const timestamp = nowIso();
   const billingCanaryGuard = await billingCanaryMutationGuardSql(env, "?");
+  // Resume carries the plan cap inside the UPDATE — the same limit source
+  // createWatchlistWithinLimit's callers use — so two concurrent resumes
+  // serialize in D1 instead of both passing a check-then-act gate and
+  // overshooting the cap.
+  let resumeLimit = 0;
+  if (isActive) {
+    const { getUserPlan } = await import("~/lib/plan.server");
+    const { getPlanLimit } = await import("~/lib/plan-entitlements");
+    resumeLimit = getPlanLimit(await getUserPlan(env, userId), "watchlists");
+  }
+  const resumeLimitGuard = isActive
+    ? `
+          AND (
+            SELECT COUNT(*)
+            FROM watchlist
+            WHERE user_id = ?
+              AND is_active = 1
+          ) < ?`
+    : "";
   const result = await db
     .prepare(
       `
@@ -705,7 +724,7 @@ export async function setWatchlistActive(
             updated_at = ?
         WHERE id = ?
           AND user_id = ?
-          ${billingCanaryGuard}
+          ${billingCanaryGuard}${resumeLimitGuard}
       `,
     )
     .bind(
@@ -715,6 +734,7 @@ export async function setWatchlistActive(
       watchlistId,
       userId,
       ...(billingCanaryGuard ? [userId] : []),
+      ...(isActive ? [userId, resumeLimit] : []),
     )
     .run();
 
