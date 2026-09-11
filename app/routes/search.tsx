@@ -1008,9 +1008,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     ...navFlags,
   };
 
-  // Issue #2952 for real browser navigations. A
-  // browser navigation (initial document or SPA single-fetch) sends
-  // `sec-fetch-mode: navigate`; every other consumer of this loader (curl,
+  // Issue #2952 — stream the results only for real browser document
+  // navigations, the initial GET that first-paints /search. That request
+  // sends `sec-fetch-mode: navigate`; every other consumer of this loader (curl,
   // canary probes, other routes, tests) gets the classic fully settled
   // payload with the exact same shape it always had — the promise resolves
   // in place before the payload returns, so JSON callers never see a
