@@ -410,6 +410,61 @@ describe("search execution cache probing", () => {
     expect(execution.result.ads[0]).not.toHaveProperty("translatedText");
     expect(execution.result.ads[0]).not.toHaveProperty("landingPage");
   });
+
+  // Issue #2437: the real execution path must hand the resolver a different
+  // cache key per result filter. The unit test on buildSearchV2CacheKey proves
+  // the key function; this proves the wiring — a caller that keeps passing no
+  // filters would leave the production bug in place while the unit test passes.
+  it("hands the resolver a distinct v2 cache key per result filter", async () => {
+    const emptyResult = {
+      ads: [],
+      nextCursor: null,
+      source: "meta_library_browser" as const,
+      provider: "meta_library_browser" as const,
+      cacheStatus: "hit" as const,
+      discoveryStatus: "healthy" as const,
+    };
+    searchAdsViaSourceResolver.mockResolvedValue(emptyResult);
+    const { executeSearchWithRelevance } = await import("~/lib/search-execution.server");
+
+    const runWith = async (creativeType: "all" | "video") => {
+      searchAdsViaSourceResolver.mockClear();
+      await executeSearchWithRelevance({
+        env: { SEARCH_ROLLOUT_MODE: "v2" } as never,
+        competitorWebsite: {
+          raw: "https://www.nike.com",
+          normalizedUrl: "https://nike.com",
+          host: "nike.com",
+          displayName: "Nike",
+          searchTerm: "nike.com",
+          error: null,
+        },
+        parsed: {
+          mode: "advertiser",
+          filters: {
+            query: "nike.com",
+            country: "all",
+            platform: "all",
+            creativeType,
+            status: "all",
+            firstSeenFrom: "",
+            lastSeenFrom: "",
+          },
+          fingerprint: "legacy-fingerprint",
+        },
+        scope: "exact",
+        cursor: null,
+      });
+      return searchAdsViaSourceResolver.mock.calls[0]?.[3]?.cacheKeyOverride;
+    };
+
+    const unfilteredKey = await runWith("all");
+    const videoKey = await runWith("video");
+
+    expect(unfilteredKey).toBeTruthy();
+    expect(videoKey).toBeTruthy();
+    expect(videoKey).not.toBe(unfilteredKey);
+  });
 });
 
 describe("search observability privacy", () => {
