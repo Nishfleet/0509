@@ -472,9 +472,15 @@ export function webPageJsonLd(input: {
   return {
     "@context": "https://schema.org",
     "@type": "WebPage",
+    // Issue #2961: the entity node needs a stable machine identifier, not
+    // just a `url`. `@id` is the same canonical URL the page's
+    // <link rel="canonical"> states — the metric for /ads/:domain and
+    // /timeline/:domain is that a parsed JSON-LD block's @id equals that
+    // page's canonical. Same value as `url`; nothing new is claimed.
+    "@id": canonicalUrl(input.pathname),
+    url: canonicalUrl(input.pathname),
     name: input.name,
     description: input.description,
-    url: canonicalUrl(input.pathname),
     ...(input.datePublished ? { datePublished: input.datePublished } : {}),
     ...(input.dateModified ? { dateModified: input.dateModified } : {}),
     ...(input.aboutName
