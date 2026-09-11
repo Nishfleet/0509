@@ -327,7 +327,7 @@ export function evaluateDrift(current, previous) {
  *
  * @returns {{ unavailable: true, detail: string } | { unavailable: false, generatedAt: string, users_total: number, active_watchlists: number }}
  */
-export function fetchPriorSnapshot() {
+export function fetchPriorSnapshot(maxAgeMs = 26 * 60 * 60 * 1000) {
   const tmp = mkdtempSync("/tmp/drift-snapshot-");
   try {
     const init = spawnSync("git", ["init", "-q", "."], {
@@ -365,9 +365,21 @@ export function fetchPriorSnapshot() {
     }
     const parsed = JSON.parse(show.stdout);
     const product = parsed?.product ?? {};
+    const generatedAt = String(parsed?.generatedAt ?? "");
+    const generated = Date.parse(generatedAt);
+    // Same freshness contract as automation/HERMES_MARKET_SIGNAL.md and the
+    // snapshot-age workflow: a stale snapshot is not today's evidence and
+    // must never be the prior in a drift comparison (it would manufacture
+    // 100% false drift from a silently stopped daily workflow).
+    if (!Number.isFinite(generated) || Date.now() - generated > maxAgeMs) {
+      return {
+        unavailable: true,
+        detail: `prior snapshot is stale (generatedAt ${generatedAt || "missing"}, freshness gate 26h); not valid drift evidence`,
+      };
+    }
     return {
       unavailable: false,
-      generatedAt: String(parsed?.generatedAt ?? ""),
+      generatedAt,
       users_total: Number(product.users_total ?? 0),
       active_watchlists: Number(product.active_watchlists ?? 0),
     };
@@ -630,19 +642,21 @@ function runDriftCheck() {
     console.log("auto-file skipped: an open unexplained-drift incident already exists (dedupe).");
     return;
   }
-  const command = buildDriftIssueCommand({ ...flags[0], generatedAt: prior.generatedAt });
-  const createResult = spawnSync("gh", command, {
-    cwd: root,
-    env: process.env,
-    encoding: "utf8",
-    maxBuffer: 1024 * 1024,
-  });
-  if (createResult.status !== 0) {
-    const message = (createResult.stderr || createResult.stdout || "").trim();
-    console.log(`auto-file failed${message ? `: ${message}` : ""}`);
-    return;
+  for (const flag of flags) {
+    const command = buildDriftIssueCommand({ ...flag, generatedAt: prior.generatedAt });
+    const createResult = spawnSync("gh", command, {
+      cwd: root,
+      env: process.env,
+      encoding: "utf8",
+      maxBuffer: 1024 * 1024,
+    });
+    if (createResult.status !== 0) {
+      const message = (createResult.stderr || createResult.stdout || "").trim();
+      console.log(`auto-file failed for ${flag.metric}${message ? `: ${message}` : ""}`);
+      continue;
+    }
+    console.log(`auto-filed ${flag.metric}: ${(createResult.stdout ?? "").trim()}`);
   }
-  console.log(`auto-filed: ${(createResult.stdout ?? "").trim()}`);
 }
 
 if (invokedDirectly) {
