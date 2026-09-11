@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 // app.css split in issue #2392: the /app workspace loads base.css + app.css.
-const css = ["app/base.css", "app/app.css"]
+// WP-46's mobile-hero block lives in marketing.css (the public tree's sheet).
+const css = ["app/base.css", "app/app.css", "app/marketing.css"]
   .map((p) => readFileSync(p, "utf8"))
   .join("\n");
 const rootTsx = readFileSync("app/root.tsx", "utf8");

@@ -104,8 +104,8 @@
 
 html {
   scroll-behavior: smooth;
-}@media (prefers-reduced-motion: reduce) {
-
+}
+@media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
   }
@@ -1029,34 +1029,6 @@ img {
     box-shadow: none;
     background: #fff;
   }}
-@media print {
-
-
-  /* The report is a document before it is a screen: the rail is chrome, the
-     plates are the pages. */
-  .f9-evidence-report {
-    display: block;
-    box-shadow: none;
-    border: 0;
-  }
-
-  .f9-evidence-report-rail {
-    display: none !important;
-  }
-
-  .f9-evidence-report-cover,
-  .f9-evidence-report-number,
-  .f9-evidence-plate,
-  .f9-evidence-report-read,
-  .f9-evidence-report-section {
-    break-inside: avoid;
-    page-break-inside: avoid;
-  }
-
-  .f9-evidence-report-cover {
-    break-after: avoid;
-    page-break-after: avoid;
-  }
 }
 
 
@@ -1169,11 +1141,6 @@ one signal-green accent.
   color: var(--ld-ink);
 }
 
-@keyframes ld-roll {
-  from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
-}
-
 .ld-nav {
   display: flex;
   justify-content: space-between;
@@ -1252,11 +1219,7 @@ one signal-green accent.
 
 .f9-home .ld-hero .f9-announcement {
   margin-bottom: 8px;
-}@media (max-width: 600px) {
-
-  .f9-home .ld-hero .f9-announcement {
-    margin-bottom: 12px;
-  }}
+}
 
 
 .f9-home .ld-hero .ld-case {
@@ -3076,7 +3039,6 @@ one signal-green accent.
     transition: none;
   }}
 @media (min-width: 761px) and (max-width: 900px) {
-
   .f9-find-page .f9-cursor-rail nav a {
     min-height: 44px;
   }
@@ -3120,11 +3082,6 @@ one signal-green accent.
 }
 
 /* ============================================================
-   WP-46: keep the lightweight sample-brief artifact visible in the
-   mobile hero (the heavy .ld-stack is hidden at this width).
-   ============================================================ */
-
-/* ============================================================
    Workspace dark mode (2026-07-19) — /app routes + /search shell only.
    THEME_BOOT_SCRIPT (root.tsx) sets data-f9-theme="dark" on <html>
    before paint, and only on themed paths, so marketing, auth, legal,
@@ -3154,6 +3111,54 @@ one signal-green accent.
 
 /* --- Shell chrome: rail, nav, footer, topbar, mobile nav --- */
 
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--green-ink);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+[data-f9-theme="dark"] {
+  --ink: #ece9e2;
+  --ink-soft: #b5b1a6;
+  /* A half-step lighter than the old dark faint: clears AA 4.5:1 on
+     --card, the darkest ground it sits on (was 4.49:1). */
+  --ink-faint: #8c887e;
+  --line: #33312c;
+  --card: #21201c;
+  --bone: #171611;
+  --green: #16c47f;
+  --green-ink: #7ee2b8;
+  --green-wash: #103326;
+  --red: #ff8577;
+  --red-wash: #2a1512;
+  --amber-wash: #2a2312;
+
+  /* Evidence Desk dark deltas (BL-005; brief §4.1). Only two values are
+     theme-specific: a solid ink offset shadow glares against the dark
+     ground, so it drops to an alpha form; and anything printed ON the
+     accent flips to --bone, which is the dark end of the palette here. */
+  --ed-shadow-ink: color-mix(in srgb, var(--ink) 22%, transparent);
+  --ed-rule-soft: color-mix(in srgb, var(--ink) 16%, transparent);
+  --ed-rule-dashed: color-mix(in srgb, var(--ink) 28%, transparent);
+  --ed-on-accent: var(--bone);
+
+  /* Dark-only helper tones (undefined in light; referenced only inside
+     this dark scope). */
+  --dk-well: #262420;
+  --dk-chip: #33302a;
+  --dk-input: #1c1b17;
+  --dk-hover: #33312c;
+  --dk-red-line: #5c2b24;
+  --dk-red-soft: #ffa294;
+  --dk-amber-line: #4d3f20;
+
+  color-scheme: dark;
+}
 [data-f9-theme="dark"] .f9-cursor-account {
   border-color: var(--line);
   background: var(--dk-well);
@@ -8496,57 +8501,8 @@ a.f9-wk-workrow:hover, .f9-wk-workrow.is-selected { background: var(--wk-sunk); 
     transition: none;
   }
 }
-@media (max-width: 600px) {
 
-  .ld-hero { padding-top: 0; }}
-@media (max-width: 600px) {
 
-  .f9-home .ld-hero .ld-case { margin-bottom: 6px; }
-  .f9-home .ld-hero .ld-hero-callouts { margin-bottom: 0; }
-  .f9-home .ld-hero .ld-hero-callouts {
-    flex-wrap: nowrap;
-    gap: 6px;
-    max-width: 100%;
-    overflow-x: auto;
-    scrollbar-width: none;
-    contain: inline-size;
-  }
-
-  /* Beat the 760px column stack so the pill stays one row and the secondary
-     line ("Paste a competitor site…") yields vertical room to the command. */
-  .f9-home .ld-hero .f9-announcement {
-    flex-direction: row;
-    align-items: center;
-    gap: 8px;
-    min-height: 44px;
-    margin-bottom: 0;
-    padding: 0 12px;
-  }
-  .f9-home .ld-hero .f9-announcement span {
-    display: none;
-  }
-
-  .f9-home .ld-command input {
-    min-height: 44px;
-    padding: 10px 14px;
-  }
-  .f9-home .ld-command button {
-    min-height: 44px;
-    padding: 10px 14px;
-  }
-
-  /* Beat the 760px stacked proof-action links (each 44px tall) so they sit
-     on one row under the command instead of pushing the fold. */
-  .f9-home .ld-hero .f9-hero-proof-actions {
-    flex-direction: row;
-    flex-wrap: wrap;
-    margin-top: 8px;
-    gap: 8px 16px;
-  }
-  .f9-home .ld-hero .f9-hero-proof-actions a {
-    width: auto;
-    justify-content: flex-start;
-  }}
 @media (max-width: 600px) and (max-height: 760px) {
 
   .ld-nav { padding: 8px 16px; }}
