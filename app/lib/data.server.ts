@@ -70,6 +70,7 @@ export {
   listProofCapturesForTarget,
   listProofCapturesForTargets,
   listProofCapturePairsForEventIds,
+  listProofCapturesByIds,
   listSuccessfulProofCapturesForAd,
   listLastSuccessfulProofCapturesForAds,
   listRecentProofCapturesForWatchlist,

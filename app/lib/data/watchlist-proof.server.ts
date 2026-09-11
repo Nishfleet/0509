@@ -507,6 +507,31 @@ export async function listRecentProofCapturesForWatchlist(
 
   return rows.map(toProofCaptureRecord);
 }
+export async function listProofCapturesByIds(
+  env: AppEnv,
+  watchlistId: string,
+  ids: string[],
+) {
+  const uniqueIds = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
+  if (uniqueIds.length === 0) {
+    return [];
+  }
+
+  const rows = await queryIn<ProofCaptureRow>(env, {
+    buildSql: (placeholders) => `
+      SELECT proof_capture.*
+      FROM proof_capture
+      INNER JOIN proof_target ON proof_target.id = proof_capture.proof_target_id
+      WHERE proof_target.watchlist_id = ?
+        AND proof_capture.id IN (${placeholders})
+      ORDER BY proof_capture.attempted_at DESC
+    `,
+    values: uniqueIds,
+    prefix: [watchlistId],
+  });
+
+  return rows.map(toProofCaptureRecord);
+}
 export async function countProofCapturesForWatchlistSince(
   env: AppEnv,
   watchlistId: string,
