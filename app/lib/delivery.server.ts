@@ -1812,7 +1812,7 @@ type DigestWebhookPreparation =
 
 type DigestWebhookProviderResult = {
   provider: string;
-  status: DeliveryAttemptRecord["status"];
+  status: "sent" | "failed" | "pending";
   webhookStatus: DeliveryAttemptRecord["webhookStatus"];
   providerMessageId: string | null;
   providerStatusLastSeenAt: string | null;
