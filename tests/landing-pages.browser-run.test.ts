@@ -531,7 +531,7 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
         renderMode: "mobile",
         deviceProfile: "mobile_default",
         renderProvider: "cloudflare_browser_run",
-        extractorVersion: "lp-signals-v6",
+        extractorVersion: "lp-signals-v7",
         // Issue #1401: CTA funnel stage recorded on the capture metadata.
         ctaFunnelStage: "reached",
         extractionWarnings: [],
