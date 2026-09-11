@@ -18,7 +18,6 @@ const notificationActionIntents = new Set([
   "pause-teams-webhook",
   "resume-teams-webhook",
   "save-whatsapp-target",
-  "save-digest-cadence",
 ]);
 
 const slackNotificationIntents = new Set([
@@ -41,7 +40,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { listDeliveryTargets } = await import("~/lib/data.server");
-  const { getWorkspaceDeliveryConfig } = await import("~/lib/data.server");
   const { slackTargetDisplayName } = await import("~/lib/slack.server");
   const { teamsTargetDisplayName } = await import("~/lib/teams.server");
   const { getEffectiveWorkspacePlan } = await import("~/lib/plan.server");
@@ -53,11 +51,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const env = getEnv(context);
   const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
   const plan = await getEffectiveWorkspacePlan(env, workspaceUserId);
-  const workspaceDeliveryConfig = await getWorkspaceDeliveryConfig(env, workspaceUserId);
-  const digestCadencePreference =
-    workspaceDeliveryConfig?.digestCadencePreference === "weekly_only"
-      ? "weekly_only"
-      : "plan_default";
   const showSlackDelivery = isSlackWebhookDeliveryCustomerFacing();
   const showTeamsDelivery = isTeamsWebhookDeliveryCustomerFacing();
   const slackDeliveryEntitled = canUsePlanFeature(plan, "slack_delivery");
@@ -81,7 +74,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
   return {
     emailDeliveryReady: Boolean(session.user.email),
-    digestCadencePreference,
     showSlackDelivery,
     showTeamsDelivery,
     slackDelivery: {
@@ -202,8 +194,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
       sensitivityMode: existingConfig?.sensitivityMode ?? defaults.sensitivityMode,
       instantEnabled: existingConfig?.instantEnabled ?? defaults.instantEnabled,
       digestEnabled: existingConfig?.digestEnabled ?? defaults.digestEnabled,
-      digestCadencePreference:
-        existingConfig?.digestCadencePreference ?? defaults.digestCadencePreference,
       emailEnabled: existingConfig?.emailEnabled ?? defaults.emailEnabled,
       whatsappEnabled: existingConfig?.whatsappEnabled ?? defaults.whatsappEnabled,
       slackEnabled: true,
@@ -253,8 +243,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
       sensitivityMode: existingConfig?.sensitivityMode ?? defaults.sensitivityMode,
       instantEnabled: existingConfig?.instantEnabled ?? defaults.instantEnabled,
       digestEnabled: existingConfig?.digestEnabled ?? defaults.digestEnabled,
-      digestCadencePreference:
-        existingConfig?.digestCadencePreference ?? defaults.digestCadencePreference,
       emailEnabled: existingConfig?.emailEnabled ?? defaults.emailEnabled,
       whatsappEnabled: existingConfig?.whatsappEnabled ?? defaults.whatsappEnabled,
       slackEnabled: existingConfig?.slackEnabled ?? defaults.slackEnabled,
@@ -304,41 +292,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
               : "Teams delivery resumed.",
         }
       : { ok: false, message: "We couldn't find that Teams destination." };
-  }
-
-  if (intent === "save-digest-cadence") {
-    const {
-      getWorkspaceDeliveryConfig,
-      legacyWorkspaceDeliveryDefaults,
-      upsertWorkspaceDeliveryConfig,
-    } = await import("~/lib/data.server");
-    const preferenceRaw = String(formData.get("digestCadencePreference") ?? "plan_default");
-    const digestCadencePreference =
-      preferenceRaw === "weekly_only" ? "weekly_only" : "plan_default";
-    const existingConfig = await getWorkspaceDeliveryConfig(env, workspaceUserId);
-    const defaults = legacyWorkspaceDeliveryDefaults({
-      hasEmail: Boolean(session.user.email),
-    });
-    await upsertWorkspaceDeliveryConfig(env, {
-      userId: workspaceUserId,
-      sensitivityMode: existingConfig?.sensitivityMode ?? defaults.sensitivityMode,
-      instantEnabled: existingConfig?.instantEnabled ?? defaults.instantEnabled,
-      digestEnabled: existingConfig?.digestEnabled ?? defaults.digestEnabled,
-      digestCadencePreference,
-      emailEnabled: existingConfig?.emailEnabled ?? defaults.emailEnabled,
-      whatsappEnabled: existingConfig?.whatsappEnabled ?? defaults.whatsappEnabled,
-      slackEnabled: existingConfig?.slackEnabled ?? defaults.slackEnabled,
-      teamsEnabled: existingConfig?.teamsEnabled ?? defaults.teamsEnabled,
-      quietHours: existingConfig?.quietHours ?? null,
-      timezone: existingConfig?.timezone ?? null,
-    });
-    return {
-      ok: true,
-      message:
-        digestCadencePreference === "weekly_only"
-          ? "Digest frequency saved: weekly only."
-          : "Digest frequency saved: plan default.",
-    };
   }
 
   return {

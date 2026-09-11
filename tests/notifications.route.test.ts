@@ -126,9 +126,6 @@ describe("notifications route (live Slack/Teams webhook surface)", () => {
   it("the loader returns the live Slack/Teams webhook delivery surface", async () => {
     ownerAuthMock();
     vi.doMock("~/lib/data.server", () => ({
-      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
-        digestCadencePreference: "weekly_only",
-      }),
       listDeliveryTargets: vi
         .fn()
         .mockResolvedValue([]),
@@ -143,7 +140,6 @@ describe("notifications route (live Slack/Teams webhook surface)", () => {
 
     expect(data).toEqual({
       emailDeliveryReady: true,
-      digestCadencePreference: "weekly_only",
       showSlackDelivery: true,
       showTeamsDelivery: true,
       slackDelivery: { plan: "agency", entitled: true },
@@ -308,38 +304,6 @@ describe("notifications route (live Slack/Teams webhook surface)", () => {
     expect(result.message).toMatch(/WhatsApp delivery isn\u2019t available/);
   });
 
-  it("saves the digest cadence for the owner", async () => {
-    ownerAuthMock();
-    const upsertWorkspaceDeliveryConfig = vi.fn();
-    vi.doMock("~/lib/data.server", () => ({
-      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue(null),
-      legacyWorkspaceDeliveryDefaults: vi.fn().mockReturnValue(digestConfigDefaults()),
-      upsertWorkspaceDeliveryConfig,
-    }));
-
-    const { action } = await import("~/routes/app.notifications");
-    const formData = new FormData();
-    formData.set("intent", "save-digest-cadence");
-    formData.set("digestCadencePreference", "weekly_only");
-    const result = (await action({
-      context: createContext({ DB: {} }),
-      params: {},
-      request: new Request("http://localhost/app/notifications", {
-        method: "POST",
-        body: formData,
-      }),
-    } as never)) as { ok: boolean };
-
-    expect(result.ok).toBe(true);
-    expect(upsertWorkspaceDeliveryConfig).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        userId: session.user.id,
-        digestCadencePreference: "weekly_only",
-      }),
-    );
-  });
-
   it("keeps member sessions read-only for delivery intents", async () => {
     vi.doMock("~/lib/auth.server", () => ({
       requireWorkspaceSession: vi.fn().mockResolvedValue({
@@ -353,7 +317,7 @@ describe("notifications route (live Slack/Teams webhook surface)", () => {
 
     const { action } = await import("~/routes/app.notifications");
     const formData = new FormData();
-    formData.set("intent", "save-digest-cadence");
+    formData.set("intent", "save-slack-webhook");
     const result = (await action({
       context: createContext({ DB: {} }),
       params: {},
@@ -370,7 +334,6 @@ describe("notifications route (live Slack/Teams webhook surface)", () => {
   it("renders Slack and Teams rows for entitled workspaces, never WhatsApp", async () => {
     await mockRouter({
       emailDeliveryReady: true,
-      digestCadencePreference: "plan_default",
       showSlackDelivery: true,
       showTeamsDelivery: true,
       slackDelivery: { plan: "agency", entitled: true },
@@ -403,7 +366,6 @@ describe("notifications route (live Slack/Teams webhook surface)", () => {
   it("renders honest Starter+ gating copy for non-entitled workspaces", async () => {
     await mockRouter({
       emailDeliveryReady: true,
-      digestCadencePreference: "plan_default",
       showSlackDelivery: true,
       showTeamsDelivery: true,
       slackDelivery: { plan: "scout", entitled: false },
@@ -424,7 +386,6 @@ describe("notifications route (live Slack/Teams webhook surface)", () => {
   it("keeps missing-email delivery honest and points to the account", async () => {
     await mockRouter({
       emailDeliveryReady: false,
-      digestCadencePreference: "plan_default",
       showSlackDelivery: true,
       showTeamsDelivery: true,
       slackDelivery: { plan: "agency", entitled: true },
@@ -444,7 +405,6 @@ describe("notifications route (live Slack/Teams webhook surface)", () => {
     await mockRouter(
       {
         emailDeliveryReady: true,
-        digestCadencePreference: "plan_default",
         showSlackDelivery: true,
         showTeamsDelivery: true,
         slackDelivery: { plan: "agency", entitled: true },
