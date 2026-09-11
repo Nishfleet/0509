@@ -283,6 +283,11 @@ async function createRetentionFixture(env: AppEnv, viewport: J6RetentionViewport
   if (!Number.isFinite(now)) throw new Error("retention_fixture_clock_invalid");
   const fetchedAt = new Date(now - 32 * 24 * 60 * 60 * 1_000).toISOString();
   const expiresAt = new Date(now - 31 * 24 * 60 * 60 * 1_000).toISOString();
+  const cacheKey = `${J6_RETENTION_CACHE_PREFIX}${viewport}`;
+  const queryFingerprint = `${J6_RETENTION_QUERY_PREFIX}${viewport}`;
+  await ensureDb(env).prepare(`
+    DELETE FROM discovery_cache_entry WHERE cache_key = ? AND query_fingerprint = ?
+  `).bind(cacheKey, queryFingerprint).run();
   const inserted = await ensureDb(env).prepare(`
     INSERT INTO discovery_cache_entry (
       cache_key, provider, route_context, query_fingerprint, country, cursor,
@@ -290,8 +295,8 @@ async function createRetentionFixture(env: AppEnv, viewport: J6RetentionViewport
     ) VALUES (?, 'demo', 'scheduled_warmup', ?, 'all', NULL, '{}', ?, ?, 0, ?, ?)
     ON CONFLICT(cache_key) DO NOTHING
   `).bind(
-    `${J6_RETENTION_CACHE_PREFIX}${viewport}`,
-    `${J6_RETENTION_QUERY_PREFIX}${viewport}`,
+    cacheKey,
+    queryFingerprint,
     fetchedAt,
     expiresAt,
     fetchedAt,
@@ -311,11 +316,17 @@ async function claimReplayAction(env: AppEnv, mapping: J6RetentionReplayMapping,
     VALUES (?, ?, ?, ?, 'started', ?, NULL, ?, ?)
     ON CONFLICT(idempotency_key) DO NOTHING
   `).bind(metadata.idempotencyKey, mapping.outcome, mapping.userId, mapping.runId, processingToken, timestamp, timestamp).run();
-  const row = await readReplayState(env, metadata.idempotencyKey);
+  let row = await readReplayState(env, metadata.idempotencyKey);
   if (!row || row.action !== mapping.outcome || row.user_id !== metadata.userId || row.run_id !== metadata.runId) throw new Error("replay_identity_conflict");
   if (row.status === "succeeded") return { replayed: true as const, result: parseReplayResult(row.result_json), processingToken };
   if (row.processing_token === processingToken) return { replayed: false as const, processingToken };
-  throw new J6ReplayInProgressError();
+  const staleBefore = new Date(Date.now() - 30_000).toISOString();
+  const reclaimed = await db.prepare(`UPDATE e2e_j6_replay SET processing_token = ?, updated_at = ? WHERE idempotency_key = ? AND status = 'started' AND processing_token = ? AND updated_at <= ?`)
+    .bind(processingToken, timestamp, metadata.idempotencyKey, row.processing_token, staleBefore).run();
+  if (Number(reclaimed.meta?.changes ?? 0) !== 1) throw new J6ReplayInProgressError();
+  row = await readReplayState(env, metadata.idempotencyKey);
+  if (row?.processing_token !== processingToken) throw new Error("replay_reclaim_failed");
+  return { replayed: false as const, processingToken };
 }
 
 async function completeReplayAction(env: AppEnv, idempotencyKey: string, processingToken: string, result: Record<string, unknown>) {
