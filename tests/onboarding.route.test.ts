@@ -702,7 +702,7 @@ describe("setup checklist actions", () => {
       upsertClientRoom,
       upsertWorkspaceBranding,
     }));
-    vi.doMock("~/lib/monitoring.server", () => ({
+    vi.doMock("~/lib/first-watchlist-scan.server", () => ({
       queueFirstWatchlistScan,
       queueFirstWatchlistScanForSignupFirstBrief: vi.fn(),
     }));
@@ -842,7 +842,7 @@ describe("setup checklist actions", () => {
         upsertClientRoom,
         upsertWorkspaceBranding: vi.fn(),
       }));
-      vi.doMock("~/lib/monitoring.server", () => ({
+      vi.doMock("~/lib/first-watchlist-scan.server", () => ({
         queueFirstWatchlistScan,
         queueFirstWatchlistScanForSignupFirstBrief: vi.fn(),
       }));
@@ -904,7 +904,7 @@ describe("setup checklist actions", () => {
       listWatchlists: vi.fn().mockResolvedValue([]),
       upsertWorkspaceBranding: vi.fn(),
     }));
-    vi.doMock("~/lib/monitoring.server", () => ({
+    vi.doMock("~/lib/first-watchlist-scan.server", () => ({
       queueFirstWatchlistScan,
       queueFirstWatchlistScanForSignupFirstBrief: vi.fn(),
     }));
@@ -1298,7 +1298,7 @@ describe("setup checklist actions", () => {
       listWatchlists,
       upsertWorkspaceBranding,
     }));
-    vi.doMock("~/lib/monitoring.server", () => ({
+    vi.doMock("~/lib/first-watchlist-scan.server", () => ({
       queueFirstWatchlistScan,
       queueFirstWatchlistScanForSignupFirstBrief: vi.fn(),
     }));
@@ -1494,7 +1494,7 @@ describe("setup checklist actions", () => {
       createWatchlistWithinLimit,
       upsertWorkspaceBranding,
     }));
-    vi.doMock("~/lib/monitoring.server", () => ({
+    vi.doMock("~/lib/first-watchlist-scan.server", () => ({
       queueFirstWatchlistScan,
       queueFirstWatchlistScanForSignupFirstBrief: vi.fn(),
     }));
@@ -1571,7 +1571,7 @@ describe("setup checklist actions", () => {
       listWatchlists,
       upsertWorkspaceBranding,
     }));
-    vi.doMock("~/lib/monitoring.server", () => ({
+    vi.doMock("~/lib/first-watchlist-scan.server", () => ({
       queueFirstWatchlistScan,
       queueFirstWatchlistScanForSignupFirstBrief: vi.fn(),
     }));

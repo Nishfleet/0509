@@ -62,7 +62,7 @@ describe("queueFirstWatchlistScan", () => {
   };
 
   it("schedules a background scan for a never-scanned watchlist", async () => {
-    const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
+    const { queueFirstWatchlistScan } = await import("~/lib/first-watchlist-scan.server");
     const waitUntil = vi.fn();
 
     const queued = await queueFirstWatchlistScan(
@@ -103,7 +103,7 @@ describe("queueFirstWatchlistScan", () => {
         hasInFlightWatchlistRun,
       }));
 
-      const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
+      const { queueFirstWatchlistScan } = await import("~/lib/first-watchlist-scan.server");
       return {
         queueFirstWatchlistScan,
         getUserPlan,
@@ -185,7 +185,7 @@ describe("queueFirstWatchlistScan", () => {
   });
 
   it("does nothing for already-scanned watchlists or when ctx is missing", async () => {
-    const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
+    const { queueFirstWatchlistScan } = await import("~/lib/first-watchlist-scan.server");
     const waitUntil = vi.fn();
 
     expect(

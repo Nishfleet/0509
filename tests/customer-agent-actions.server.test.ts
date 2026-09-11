@@ -529,8 +529,10 @@ function setupMocks(
   vi.doMock("~/lib/delivery.server", () => ({
     sendOperatorAlertEmail: mocks.sendOperatorAlertEmail,
   }));
-  vi.doMock("~/lib/monitoring.server", () => ({
+  vi.doMock("~/lib/first-watchlist-scan.server", () => ({
     queueFirstWatchlistScan: mocks.queueFirstWatchlistScan,
+  }));
+  vi.doMock("~/lib/monitoring.server", () => ({
     runWatchlistManual: mocks.runWatchlistManual,
   }));
   vi.doMock("~/lib/customer-meta.server", () => ({
