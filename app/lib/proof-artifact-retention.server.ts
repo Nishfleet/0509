@@ -425,16 +425,19 @@ export async function compensateUncommittedProofArtifacts(
     snapshot.metadata?.screenshotArtifactKey,
   ].filter((value): value is string => typeof value === "string" && value.length > 0);
   const keys = new Set<string>();
+  let failed = 0;
   for (const value of values) {
     const parsed = parseProofArtifactKey(value);
-    if (!parsed) return { ok: false, deleted: 0, failed: 1 };
+    if (!parsed) {
+      failed += 1;
+      continue;
+    }
     keys.add(parsed.key);
   }
-  if (keys.size === 0) return { ok: true, deleted: 0, failed: 0 };
-  if (!env.LANDING_PAGE_ARTIFACTS) return { ok: false, deleted: 0, failed: keys.size };
+  if (keys.size === 0) return { ok: failed === 0, deleted: 0, failed };
+  if (!env.LANDING_PAGE_ARTIFACTS) return { ok: false, deleted: 0, failed: failed + keys.size };
 
   let deleted = 0;
-  let failed = 0;
   for (const key of keys) {
     try {
       await env.LANDING_PAGE_ARTIFACTS.delete(key);

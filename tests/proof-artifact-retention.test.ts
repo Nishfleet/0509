@@ -17,6 +17,16 @@ const SCREENSHOT_KEY = "landing-pages/2026-07-16/fedcba9876543210fedcba987654321
 const OWNER = "workspace-owner";
 const OTHER_OWNER = "other-workspace";
 
+const SNAPSHOT_BASE = {
+  rawUrl: "https://0509.io/",
+  canonicalUrl: "https://0509.io/",
+  rawHeadline: "0509",
+  normalizedHeadline: "0509",
+  normalizedHeadlineHash: "hash",
+  captureMethod: "browser_render",
+  capturedAt: "2026-07-18T00:00:00.000Z",
+} as const;
+
 type InventoryRow = {
   reference_count: number;
   owner_count: number;
@@ -112,6 +122,36 @@ describe("proof artifact retention contract", () => {
     );
     expect(result).toEqual({ ok: true, deleted: 2, failed: 0 });
     expect(del.mock.calls.map(([key]) => key)).toEqual([HTML_KEY, SCREENSHOT_KEY]);
+  });
+
+  it("still deletes valid keys when a sibling value is malformed", async () => {
+    const del = vi.fn(async (_key: string) => undefined);
+    const result = await compensateUncommittedProofArtifacts(
+      { LANDING_PAGE_ARTIFACTS: { delete: del } as unknown as R2Bucket } as never,
+      { ...SNAPSHOT_BASE, artifactKey: HTML_KEY, metadata: { htmlArtifactKey: "not-a-key" } },
+    );
+    expect(del.mock.calls.map(([key]) => key)).toEqual([HTML_KEY]);
+    expect(result).toEqual({ ok: false, deleted: 1, failed: 1 });
+  });
+
+  it("counts malformed values truthfully on the empty and missing-bucket paths", async () => {
+    const del = vi.fn(async (_key: string) => undefined);
+    const env = { LANDING_PAGE_ARTIFACTS: { delete: del } as unknown as R2Bucket } as never;
+
+    const allMalformed = await compensateUncommittedProofArtifacts(env, {
+      ...SNAPSHOT_BASE,
+      artifactKey: "bad-1",
+      metadata: { htmlArtifactKey: "bad-2" },
+    });
+    expect(allMalformed).toEqual({ ok: false, deleted: 0, failed: 2 });
+    expect(del).not.toHaveBeenCalled();
+
+    const missingBucket = await compensateUncommittedProofArtifacts({} as never, {
+      ...SNAPSHOT_BASE,
+      artifactKey: HTML_KEY,
+      metadata: { htmlArtifactKey: "not-a-key", screenshotArtifactKey: SCREENSHOT_KEY },
+    });
+    expect(missingBucket).toEqual({ ok: false, deleted: 0, failed: 3 });
   });
 
   it("accepts only producer-owned HTML and screenshot key shapes", () => {
