@@ -60,3 +60,13 @@ Plan: `.fleet/plan.md` (3 phases). Phase outputs:
 net-positive-because: the fix adds one new data-layer function plus its RED->GREEN regression test; the bulk of the added lines are the new test file.
 
 Closes #2477
+
+## Reviewer round (pre-arm)
+
+Independent reviewer pass over `origin/main...HEAD` — verdict **APPROVE**, zero ACT-ON findings. Seat resolution: `fleet-review-arm-check` exit 0; `find_senior_seat` reported the senior ladder walled and fell through to `opencode/nemotron-3-ultra-free`.
+
+- NOTED: union/dedupe/ordering verified; ≤26 bound params; tenant scoping via `proof_target.watchlist_id` join; `?event=` pinned events covered too.
+- NOTED: `classifyWatchPeriodTriage` concern from phase 2 settled — event `proofCaptureId`s always point at `succeeded` captures (verified across every `createWatchEvent` call site), so triage's failed/pending/skipped branches can't trip.
+- CONSIDER: `buildRunHistoryRefusalRows` may surface an old event-referenced suppressed-validity capture — honest data, bounded.
+- NOTED: unguarded `listProofCapturesByIds` await matches the file's fail-closed posture (same as the sibling detail queries).
+- DISMISSED: a plan.md doc nit about top-level destructure semantics — the lazy barrel import is correct regardless.
