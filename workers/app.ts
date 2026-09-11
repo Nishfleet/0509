@@ -60,6 +60,7 @@ import {
   type ReleaseScheduledTaskName,
 } from "../app/lib/release-scheduled-observation.server";
 import { runRetentionSweep } from "../app/lib/retention.server";
+import { runAccountErasureSweep } from "../app/lib/account-erasure.server";
 import {
   recordScheduledObservationGapCheckHeartbeat,
   sendScheduledObservationGapAlert,
@@ -457,6 +458,25 @@ export default {
           },
           (error) =>
             reportScheduledTaskFailure(env, "demo_brand_proof_hole_catch_up", error),
+        ),
+      );
+      // Issue #2982: self-serve account erasure rides this hourly rail (a
+      // bounded sweep of due requests — the 7-day grace window makes hourly
+      // cadence far more than enough; the sweep is idempotent and retries
+      // failed requests on the next tick). Observed via the same catch-all
+      // failure reporter as the demo-brand catch-up above.
+      ctx.waitUntil(
+        runAccountErasureSweep(env).then(
+          (result) => {
+            if (result.due > 0) {
+              console.log("account erasure sweep completed", {
+                due: result.due,
+                completed: result.completed,
+                failed: result.failed,
+              });
+            }
+          },
+          (error) => reportScheduledTaskFailure(env, "account_erasure_sweep", error),
         ),
       );
       return;

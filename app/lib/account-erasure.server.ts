@@ -23,6 +23,8 @@ import { PLAN_FAMILIES } from "~/lib/plan-entitlements";
  */
 
 export const ACCOUNT_ERASURE_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
+// Marketing/UI copy uses the whole-number form.
+export const ACCOUNT_ERASURE_GRACE_DAYS = ACCOUNT_ERASURE_GRACE_MS / (24 * 60 * 60 * 1000);
 export const ACCOUNT_ERASURE_SWEEP_LIMIT = 25;
 const EXPORT_ROW_LIMIT = 5000;
 const MAGIC_LINK_TICKET_SCAN_LIMIT = 200;
@@ -373,11 +375,8 @@ export async function requestAccountErasure(
     .prepare(
       `INSERT OR IGNORE INTO account_erasure_request (
          id, user_id, user_email, status, requested_at, execute_after,
-         requested_via_unused, created_at, updated_at
-       ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?)`.replace(
-        "requested_via_unused, created_at, updated_at\n       ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?)",
-        "created_at, updated_at\n       ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?)",
-      ),
+         created_at, updated_at
+       ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?)`,
     )
     .bind(id, input.userId, input.email, now, executeAfter, now, now)
     .run();
