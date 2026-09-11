@@ -47,6 +47,14 @@ describe("classifyLanguage", () => {
     expect(result.metadata.decisionReason).toBe("latin_language_cues");
   });
 
+  it("classifies Spanish copy containing everyday ya/lo words as Spanish not Hinglish", () => {
+    expect(
+      classifyLanguage({
+        body: "Ya lo tienes: compra ahora con envío gratis en toda la tienda",
+      }).label,
+    ).toBe("Spanish");
+  });
+
   it("classifies the Nike Spanish Ad Library miss as Spanish not Vietnamese", () => {
     const result = classifyLanguage({
       body: "Entra a Nike.com y encuentra actualizaciones semanales de producto con envío gratis.",
