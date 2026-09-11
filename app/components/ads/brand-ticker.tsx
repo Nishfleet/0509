@@ -3,6 +3,17 @@ import { dedupeTickerBodies } from "~/lib/ticker-dedup";
 import type { AdRecord } from "~/lib/types";
 
 const TICKER_MAX_ITEMS = 6;
+export { TICKER_MAX_ITEMS };
+
+/**
+ * The fields one belt item reads. The loader ships exactly this projection
+ * per belt candidate (issue #2704) — never the full wall record, and never
+ * candidates the dedupe drops.
+ */
+export type BrandTickerAd = Pick<
+  AdRecord,
+  "metaAdId" | "previewHeadline" | "hook" | "source" | "firstSeenAt" | "lastSeenAt"
+>;
 
 /**
  * The capture ticker — motion before a word is read. Built from the REAL
@@ -19,14 +30,14 @@ export function BrandTicker({
   now = new Date(),
 }: {
   /**
-   * The cached creatives the ticker reads from. The loader ships only the
-   * projection the page renders (issue #2391), so the prop names exactly the
-   * fields this component uses instead of a full `AdRecord`.
+   * The cached creatives the ticker reads from. The loader ships the exact
+   * belt candidates — the dedupe's longest variant per distinct body, in
+   * snapshot order, capped at `TICKER_MAX_ITEMS` (issue #2704) — so the
+   * hydration payload never carries a candidate the belt never renders.
+   * The component still runs its own dedupe/slice, so it stays correct for
+   * any caller that hands it more candidates than the belt can show.
    */
-  ads: Pick<
-    AdRecord,
-    "metaAdId" | "previewHeadline" | "hook" | "source" | "firstSeenAt" | "lastSeenAt"
-  >[];
+  ads: BrandTickerAd[];
   brandName: string;
   fresh: boolean;
   now?: Date;

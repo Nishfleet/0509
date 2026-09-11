@@ -61,11 +61,11 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useState } from "react";
 
 import { AdCreative } from "~/components/ads/ad-creative";
-import { BrandAdWall } from "~/components/ads/brand-ad-wall";
+import { BrandAdWall, WALL_VISIBLE_ADS } from "~/components/ads/brand-ad-wall";
 import { BrandChangeTimeline } from "~/components/ads/brand-change-timeline";
 import { BrandScoreCard } from "~/components/ads/brand-score-card";
 import { BrandStatLine } from "~/components/ads/brand-stat-line";
-import { BrandTicker } from "~/components/ads/brand-ticker";
+import { BrandTicker, TICKER_MAX_ITEMS, type BrandTickerAd } from "~/components/ads/brand-ticker";
 import { BrowseTrackedCompetitors } from "~/components/ads-internal-links";
 import { BrandPageSourceSections } from "~/components/brand-page/source-sections";
 import { MarketingFooter } from "~/components/marketing-footer";
@@ -84,6 +84,8 @@ import type {
   BrandPageAggression,
 } from "~/lib/brand-page.server";
 import { brandOwnedAdIdSet } from "~/lib/brand-page.server";
+import { adLongevityDays } from "~/lib/ad-display";
+import { dedupeTickerBodies } from "~/lib/ticker-dedup";
 import { isSeededBrandDomain } from "~/lib/ads-domain-publisher.server";
 import { brandCategoryForDomain } from "~/lib/brand-categories";
 import type { OfferLedgerEntry } from "~/lib/offer-timeline";
@@ -139,27 +141,45 @@ export interface BrandPageLoaderData {
   brandName: string;
   hasCachedAds: boolean;
   /**
-   * The wall: every cached creative, each carrying its own verified-link
-   * signal, projected to the fields the page renders (`BrandPageAd`, issue
-   * #2391). Serialized once — the verified subset is derived from this array
-   * on the client via `verifiedLinkedIds`.
+   * The creatives the wall renders (issue #2704): the loader applies the
+   * wall's own deterministic sort (verified-linked first, then longevity
+   * measured from the capture time — never wall-clock) and slices to
+   * `WALL_VISIBLE_ADS`, each carrying its own verified-link signal,
+   * projected to the fields the page renders (`BrandPageAd`, issue #2391).
+   * The client cannot see more creatives than the server shows, so the
+   * hydration payload never ships a creative no renderer reads. The full
+   * capture size is `adCount`; each card's badge and ordering read the
+   * `linkVerifiedDomain` the loader stamps from its one verification pass.
    */
   ads: BrandPageAd[];
   /**
-   * metaAdIds of the `ads` entries that carry VERIFIED link evidence to the
-   * domain (landing-page or advertiser-domain match). Attribution copy and
-   * analytics are computed server-side from this subset — creatives that
-   * merely match the search text are rendered but never described as linking.
-   *
-   * Issue #2391: this is the ID LIST, not a second copy of the records. A
-   * full `AdRecord[]` subset here serialized every verified creative twice
-   * into the hydration payload. The client derives the subset with
-   * `verifiedLinkedAdsOf`, so it sees exactly the ids the loader computed
-   * from. The wall's own per-card badge and ordering read the
-   * `linkVerifiedDomain` the loader stamps from this same set — the two
-   * agree on any loader-built payload.
+   * Issue #2704 — the full cached-capture size. The loader ships only the
+   * creatives the wall renders (`ads`, above), so the header copy
+   * ("All N ads, on the wall"), the "+N more" conversion tile, the meta
+   * description and the brand-ownership wording all read THIS count, never
+   * `ads.length` — a sliced array must never understate the capture.
    */
-  verifiedLinkedIds: string[];
+  adCount: number;
+  /**
+   * Issue #2704 — the exact creatives the capture ticker renders, computed
+   * by the loader with the same dedupe the ticker component applies
+   * (`dedupeTickerBodies`, snapshot order, longest variant per body,
+   * `TICKER_MAX_ITEMS` cap). A second full projected array beside the wall
+   * would re-serialize creatives the belt never shows; this narrow
+   * projection (id, headline, hook, source, first/last seen) is the whole
+   * belt's input. Order is the snapshot order, so the belt renders exactly
+   * the items it rendered when it read the full capture.
+   */
+  tickerAds: BrandTickerAd[];
+  /**
+   * Issue #2704 — how many VERIFIED-LINKED cached creatives carry more than
+   * one variant (the stat line's "Split-testing N/total" cell). The strip
+   * used to iterate the full verified subset client-side just to count this
+   * one predicate; the loader counts it from the same records it already
+   * derives the score, teaser and change feed from, and the payload ships a
+   * number instead of the array.
+   */
+  verifiedTestedCount: number;
   checkedAgo: string | null;
   /**
    * ISO timestamp of the underlying Ad Library check — the machine-readable
@@ -662,8 +682,9 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
   // full `AdRecord[]` (`verifiedLinkedAds`) beside `ads` — on live
   // /ads/nike.com 48.5KB of JSON next to the wall's 49.0KB, though the stream
   // tokenizer shares the identical strings, so its marginal cost is ~4.8KB.
-  // `verifiedLinkedIds` replaces it; the client derives the records from the
-  // array it already renders.
+  // (Since #2704 the id list is gone too — `linkVerifiedDomain` on each
+  // shipped record is the single signal, and the loader's counts carry the
+  // aggregates.)
   //
   // Second, the discovery-time fields no client renderer reads. Dropped from
   // this projection: analysisFields (~13.7KB of the token stream on that
@@ -678,6 +699,53 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
   // call), BrandTicker, the stat line's split-testing count, and the
   // meta/headers code (which reads counts, never fields).
   // `adsPageServiceJsonLd` takes no ad records at all.
+  //
+  // Issue #2704 tightens this further: `ads` holds only the wall's visible
+  // slots, `tickerAds` only the belt's slots, and the split-testing count
+  // ships as a number — the meta/headers code reads `adCount` for the full
+  // capture size.
+
+  // Issue #2704 — ship only what the page renders. The wall's visible slots
+  // are selected here with the SAME deterministic sort BrandAdWall applies
+  // (verified-linked first, then longevity measured from the capture time),
+  // so the client's re-sort of the shipped slice is a no-op and the
+  // hydration payload carries no creative the wall never shows. The
+  // capture-time key (the issue #2142 basis the longevity pill already
+  // uses) makes the selection stable across server render and hydration —
+  // a wall-clock key would let two same-length creatives swap ranks
+  // between the server render and the browser.
+  const wallSortKey = snapshot ? new Date(snapshot.fetchedAt) : now;
+  const projectedWallAds = wallAds.map(projectBrandPageAd);
+  const renderedWallAds = [...projectedWallAds]
+    .sort((a, b) => {
+      const aVerified = a.linkVerifiedDomain ? 1 : 0;
+      const bVerified = b.linkVerifiedDomain ? 1 : 0;
+      if (aVerified !== bVerified) return bVerified - aVerified;
+      return (adLongevityDays(b, wallSortKey) ?? 0) - (adLongevityDays(a, wallSortKey) ?? 0);
+    })
+    .slice(0, WALL_VISIBLE_ADS);
+
+  // The capture belt reads the full projected array only to dedupe bodies
+  // and cap at `TICKER_MAX_ITEMS`. Run that exact selection here — same
+  // dedupe lib, same body derivation, snapshot order, longest variant per
+  // body — and ship just the belt's narrow projection, so the payload
+  // carries no ticker candidate the belt never renders.
+  const tickerAds: BrandTickerAd[] = dedupeTickerBodies(
+    // The belt filters empty bodies BEFORE dedupe — mirror that order here so
+    // a bodiless creative never takes a shipped slot the belt then drops.
+    projectedWallAds.filter((ad) => ad.previewHeadline?.trim() || ad.hook?.trim()),
+    (ad) => ad.previewHeadline?.trim() || ad.hook?.trim() || "",
+  )
+    .slice(0, TICKER_MAX_ITEMS)
+    .map((ad) => ({
+      metaAdId: ad.metaAdId,
+      previewHeadline: ad.previewHeadline,
+      hook: ad.hook,
+      source: ad.source,
+      firstSeenAt: ad.firstSeenAt,
+      lastSeenAt: ad.lastSeenAt,
+    }));
+
 
   // The Ad Aggression Score (0–100, four public sub-scores) is the page's
   // named differentiator (category-research §1.2). It renders ONLY when the
@@ -706,8 +774,10 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     domain: brand.domain,
     brandName: brand.displayName,
     hasCachedAds: Boolean(snapshot),
-    ads: wallAds.map(projectBrandPageAd),
-    verifiedLinkedIds: Array.from(verifiedLinkedIds),
+    ads: renderedWallAds,
+    adCount: snapshotAds.length,
+    tickerAds,
+    verifiedTestedCount: verifiedLinkedAds.filter((ad) => (ad.variantCount ?? 0) > 1).length,
     checkedAgo: freshness?.checkedAgo ?? null,
     lastCheckedAt: snapshot?.fetchedAt ?? null,
     freshForLiveClaim: freshness?.freshForLiveClaim ?? false,
@@ -763,21 +833,6 @@ export function projectBrandPageAd(ad: AdRecord): BrandPageAd {
   };
 }
 
-/**
- * The verified-linked subset of the wall, derived from the loader's
- * `verifiedLinkedIds` (issue #2391). The loader used to hand the client a
- * second full copy of these records; the ids are the whole signal, and
- * filtering the array the page already has means the subset always speaks
- * about the creatives the wall renders. Both come from the loader's one
- * verification pass.
- */
-export function verifiedLinkedAdsOf(data: {
-  ads: BrandPageAd[];
-  verifiedLinkedIds: string[];
-}): BrandPageAd[] {
-  const verifiedIds = new Set(data.verifiedLinkedIds);
-  return data.ads.filter((ad) => verifiedIds.has(ad.metaAdId));
-}
 
 /**
  * Single source of truth for the page title — shared by the <title>/og:title
@@ -801,7 +856,7 @@ export function brandPageTitle(data: BrandPageLoaderData): string {
   // the capture carries verified link evidence. Captures that only MATCH the
   // search (text-mention / provider candidates) must say so, never "linking".
   const allBrandOwned =
-    data.ads.length > 0 && data.brandOwnedAdCount === data.ads.length;
+    data.adCount > 0 && data.brandOwnedAdCount === data.adCount;
   let subject: string;
   if (allBrandOwned) {
     subject = `${data.brandName} Facebook & Instagram ads`;
@@ -856,7 +911,7 @@ export function brandPageDescription(data: BrandPageLoaderData): string {
   if (!data.hasCachedAds) {
     return `We haven't checked ${data.domain} recently. Run a free live Meta Ad Library search and track ${data.brandName}'s ads with Five to Nine.`;
   }
-  const totalCount = data.ads.length;
+  const totalCount = data.adCount;
   const adWord = totalCount === 1 ? "ad" : "ads";
   // Only verified-from-other advertisers count as "other advertisers" in the
   // breakdown — unverified text-matches get their own labelled tail, never
@@ -1026,7 +1081,7 @@ export default function BrandAdsRoute() {
   // the first thing the new user tracks is the brand on this page.
   const trackSignupPath = `/auth/signup?competitor=${encodeURIComponent(data.domain)}&redirectTo=${encodeURIComponent(postSignupPath)}`;
   const allBrandOwned =
-    data.ads.length > 0 && data.brandOwnedAdCount === data.ads.length;
+    data.adCount > 0 && data.brandOwnedAdCount === data.adCount;
 
   const faqEntries = brandPageFaqEntries(data);
 
@@ -1109,7 +1164,7 @@ export default function BrandAdsRoute() {
       ) : null}
       {data.hasCachedAds ? (
         <BrandTicker
-          ads={data.ads}
+          ads={data.tickerAds}
           // The ticker tag names the brand only when the creatives are its
           // own; otherwise it tags the domain the ads link to.
           brandName={allBrandOwned ? data.brandName : data.domain}
@@ -1511,9 +1566,10 @@ function BrandAdsResults({
   trackSignupPath: string;
 }) {
   const teaser = data.teaser;
-  // The wall always shows every cached creative; attribution analytics above
-  // it speak only about the verified-linked subset (see the loader).
-  const totalCount = data.ads.length;
+  // The wall header counts the FULL capture (`adCount`); the payload ships
+  // only the creatives the wall renders (issue #2704). Attribution analytics
+  // above it speak only about the verified-linked subset (see the loader).
+  const totalCount = data.adCount;
   const adWord = totalCount === 1 ? "ad" : "ads";
   const watchLabel = `Track ${data.domain}`;
   const allBrandOwned = totalCount > 0 && data.brandOwnedAdCount === totalCount;
@@ -1613,11 +1669,10 @@ function BrandAdsResults({
       </section>
 
       {/* 3. STAT LINE — built only from verified-linked creatives (see loader;
-          the subset is derived here from the payload's own verifiedLinkedIds,
-          issue #2391) */}
+          the split-testing count ships as a number, issue #2704) */}
       {teaser ? (
         <BrandStatLine
-          ads={verifiedLinkedAdsOf(data)}
+          testedCount={data.verifiedTestedCount}
           aggression={data.aggression}
           brandOwnedAdCount={data.brandOwnedAdCount}
           freshnessLabel={data.checkedAgo}
