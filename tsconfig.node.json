@@ -84,6 +84,7 @@
     "scripts/canary-sneaker-resale-recall.mjs",
     "scripts/check-d1-fullsite-runs.mjs",
     "scripts/weekly-business-metrics.mjs",
+    "scripts/send-vendor-mail.mjs",
     "tests/**/*",
     "extension/lib/**/*.mjs",
     "app/**/*",

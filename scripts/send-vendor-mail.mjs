@@ -221,7 +221,7 @@ export function formatReceipt(receipt) {
  * @param {{ readFileSync?: (p: string, enc: string) => string, writeFileSync?: (file: string, data: string, enc: string) => void }} [io]
  * @returns {boolean}
  */
-export function appendReceipt(docPath, receiptBlock, { readFileSync: rf = readFileSync, writeFileSync: wf = writeFileSync } = {}) {
+export function appendReceipt(docPath, receiptBlock, { readFileSync: rf = (p) => readFileSync(p, "utf8"), writeFileSync: wf = (f, d) => writeFileSync(f, d, "utf8") } = {}) {
   const text = /** @type {string} */ (rf(docPath, "utf8"));
   const heading = /^##\s+Receipts\s*$/im;
   let next;
@@ -325,7 +325,9 @@ export async function sendMail(message, env, fetchImpl = globalThis.fetch) {
  * @returns {{ doc: string | undefined, send: boolean, sendExplicit: boolean, dryRunExplicit: boolean, to: string | undefined, subject: string | undefined }}
  */
 function parseArgs(argv) {
-  const args = { doc: undefined, send: false, sendExplicit: false, dryRunExplicit: false, to: undefined, subject: undefined };
+  const args = /** @type {{ doc: string | undefined, send: boolean, sendExplicit: boolean, dryRunExplicit: boolean, to: string | undefined, subject: string | undefined }} */ ({
+    doc: undefined, send: false, sendExplicit: false, dryRunExplicit: false, to: undefined, subject: undefined,
+  });
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--send") { args.send = true; args.sendExplicit = true; }
@@ -355,7 +357,7 @@ function parseArgs(argv) {
  * @param {MainOptions} [options]
  * @returns {Promise<number>}
  */
-export async function main(argv, { env = process.env, stdout = console.log, readFile = (p) => readFileSync(p, "utf8"), writeFile = writeFileSync, fetchImpl } = {}) {
+export async function main(argv, { env = process.env, stdout = console.log, readFile = (p) => readFileSync(p, "utf8"), writeFile = (f, d) => writeFileSync(f, d, "utf8"), fetchImpl } = {}) {
   const args = parseArgs(argv);
   if (args.sendExplicit && args.dryRunExplicit) {
     stdout("usage error: pass either --send or --dry-run, not both (ambiguous input is refused)");
@@ -388,10 +390,10 @@ export async function main(argv, { env = process.env, stdout = console.log, read
     return 1;
   }
   const message = {
-    to: args.to ?? parsed.to,
-    from: parsed.from,
-    subject: args.subject ?? parsed.subject,
-    body: parsed.body,
+    to: /** @type {string} */ (args.to ?? parsed.to),
+    from: /** @type {string} */ (parsed.from),
+    subject: /** @type {string} */ (args.subject ?? parsed.subject),
+    body: /** @type {string} */ (parsed.body),
   };
 
   if (!args.send) {
@@ -436,7 +438,7 @@ function okResult(r) {
   return { delivered: r.delivered ?? [], queued: r.queued ?? [], permanentBounces: r.permanentBounces ?? [] };
 }
 
-const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop());
+const isMain = !!(process.argv[1] && import.meta.url.endsWith(/** @type {string} */ (process.argv[1].split("/").pop())));
 if (isMain) {
   main(process.argv.slice(2))
     .then((/** @type {number} */ code) => process.exit(code))

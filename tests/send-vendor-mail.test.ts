@@ -62,7 +62,7 @@ describe("parseDoc", () => {
   it("reports a clear error when To: is missing (segwise-style doc)", () => {
     const parsed = parseDoc(SEGWISE_FIXTURE);
     expect(parsed.errors).toBeDefined();
-    expect(parsed.errors.join("\n")).toMatch(/no `To:` header/);
+    expect(parsed.errors?.join("\n")).toMatch(/no `To:` header/);
   });
 });
 
@@ -229,7 +229,7 @@ describe("real send (--send)", () => {
   const env = { CLOUDFLARE_API_TOKEN: "test-token", CLOUDFLARE_ACCOUNT_ID: "test-account" };
 
   it("POSTs to the Email Sending REST API with the token in the header only", async () => {
-    const fetchImpl = vi.fn(async () =>
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
       new Response(
         JSON.stringify({
           success: true,
@@ -249,18 +249,16 @@ describe("real send (--send)", () => {
     });
     expect(code).toBe(0);
     expect(written.join("\n")).toContain("### Send receipt");
-    const [url, init] = fetchImpl.mock.calls[0];
-    expect(url).toBe(
+    const [url, init] = fetchImpl.mock.calls[0] ?? [];
+    expect(String(url)).toBe(
       "https://api.cloudflare.com/client/v4/accounts/test-account/email/sending/send",
     );
-    const body = JSON.parse((init as RequestInit).body as string);
+    const body = JSON.parse(String(init?.body));
     expect(body.to).toBe("hello@ad-stack.ai");
     expect(body.from).toEqual({ address: "support@0509.io" });
     expect(body.text).toContain("Hi ad-stack team,");
     // the token travels in the header, never in the body or printed output
-    expect((init as RequestInit).headers).toMatchObject({
-      Authorization: "Bearer test-token",
-    });
+    expect(new Headers(init?.headers).get("authorization")).toBe("Bearer test-token");
     expect(lines.join("\n")).not.toContain("test-token");
     expect(lines.join("\n")).toContain("receipt appended");
   });
