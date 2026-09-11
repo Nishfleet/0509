@@ -107,6 +107,18 @@ describe("pricing route", () => {
     // into the document is gone; the worker's public policy applies instead.
     expect(mod.headers).toBeUndefined();
     expect(mod.loader).toBeTypeOf("function");
+    // Direct contract: /pricing is in the worker's public-cacheable path set,
+    // so a stamp-less 200 HTML response from this route gets the shared
+    // `public, max-age=300` policy with `vary: cookie`.
+    const { withSecurityHeaders, PUBLIC_HTML_CACHE_CONTROL } =
+      await import("../workers/security-headers");
+    const stamped = withSecurityHeaders(
+      new Response("<!doctype html>", { headers: { "content-type": "text/html; charset=utf-8" } }),
+      new Request("https://0509.io/pricing"),
+    );
+    expect(stamped.headers.get("cache-control")).toBe("public, max-age=300");
+    expect(stamped.headers.get("cache-control")).toBe(PUBLIC_HTML_CACHE_CONTROL);
+    expect(stamped.headers.get("vary")).toContain("cookie");
   });
 });
 
