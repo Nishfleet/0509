@@ -2670,6 +2670,7 @@ describe("growth2 digest attribution and forward lines (issue #2146)", () => {
     cadence: "weekly" as const,
     timeZone: "UTC",
     fullDigestUrl: "https://0509.io/app/digests",
+    baseUrl: "https://0509.io",
     manageFrequencyUrl: "https://0509.io/app/notifications",
     supportEmail: "support@0509.io",
     supportMailto: "mailto:support@0509.io",
