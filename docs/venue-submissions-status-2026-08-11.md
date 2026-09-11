@@ -14,9 +14,12 @@ place to check where submission stands.
 
 SaaSHub was submitted and approved (live page confirmed 2026-08-22); AlternativeTo still waits on
 a Nish step, BetaList was deliberately skipped, and the ad-stack.ai email is
-prepared and waiting only on the send (no repo-local outbound mail path
-exists; the product's only sender is the production Worker `send_email`
-binding, which is not used for one-off vendor mail).
+prepared and waiting only on the send. A repo-local outbound mail path
+exists (`scripts/send-vendor-mail.mjs`, dry-run by default, credentials via
+env vars) — the send still stands behind the venue's NEEDS-NISH marker.
+Before the first real `--send`, the REST endpoint should be verified against
+Cloudflare's official Email Sending docs (tracked as the
+`vendor-mail-endpoint-docs-verify` loose-end on PR #3029).
 
 ## Receipts
 

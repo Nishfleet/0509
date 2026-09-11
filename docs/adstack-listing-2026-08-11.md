@@ -6,10 +6,10 @@ software in 2026" ranking — the current-month on-call listing item
 
 **Status:** NEEDS-NISH — prepared and ready to send; the single send step
 remains and requires the owner. **NEEDS-NISH: send the prepared email below
-from `support@0509.io` to `hello@ad-stack.ai`.** (No repo-local outbound mail
-path exists to fire the email — the only sender is the production Worker's
-`send_email` binding, unsuitable for a one-off vendor email — so this is a
-human owner action.) This document
+from `support@0509.io` to `hello@ad-stack.ai`.** (A repo-local outbound mail
+path exists — `scripts/send-vendor-mail.mjs`, dry-run by default, credentials
+via env vars — but the send still stands behind this NEEDS-NISH marker, so it
+remains a human owner action.) This document
 contains the complete submission for the ad-stack.ai journal
 (`https://ad-stack.ai`), grounded in the venue's own submission guidance
 (About page + FAQ, fetched 2026-08-11) and the repo's canonical product copy.
@@ -78,14 +78,17 @@ action.** Recorded 2026-08-11:
   there is no registration, and unlike BetaList there is no paid tier. The
   venue's entire submission path is one email to `hello@ad-stack.ai` with a
   short description and a public link.
-- **No repo-local outbound mail path exists** to fire the email from this
-  worktree: the only outbound sender in the product is the production
-  Worker's Cloudflare `send_email` binding (`EMAIL_FROM_EMAIL: alerts@0509.io`,
-  used for digests/alerts), which requires production secrets/deploy and is
-  not appropriate for a one-off vendor email. The prepared email therefore
-  waits on the sender — exact next step: **send the email below from
-  `support@0509.io` (the live, verified `0509.io` mailbox) to
-  `hello@ad-stack.ai`**; pasting it in takes under a minute.
+- **A repo-local outbound mail path exists** — `scripts/send-vendor-mail.mjs`
+  sends the prepared email via the Cloudflare Email Sending REST API (the
+  same service that backs the production Worker's `send_email` binding).
+  Default is dry-run; a real send needs `--send` plus `CLOUDFLARE_API_TOKEN`
+  and `CLOUDFLARE_ACCOUNT_ID` env vars, and before the first real `--send`
+  the REST endpoint should be verified against Cloudflare's official Email
+  Sending docs (tracked as the `vendor-mail-endpoint-docs-verify` loose-end
+  on PR #3029). The prepared email still waits on the NEEDS-NISH sender —
+  exact next step: **send the email below from `support@0509.io` (the live,
+  verified `0509.io` mailbox) to `hello@ad-stack.ai`**; pasting it in takes
+  under a minute.
 - **No coverage guarantee, by design** — the venue says it can't promise
   coverage and being suggested has no bearing on the verdict. This is a
   submission for the next quarterly re-test, not a confirmed placement; do
@@ -232,4 +235,4 @@ guarantee — recorded honestly here rather than assumed.
 
 ## Receipt pass (2026-09-11, issue #2857)
 
-blocked: needs Nish's identity — the entire submission is one email from support@0509.io to hello@ad-stack.ai, and no repo-local outbound mail path exists (the only outbound sender in the product is the production Worker's `send_email` binding, recorded as unsuitable for a one-off vendor email in the Submission status above); the worker holds no 0509.io mailbox session, so the send step cannot be fired from here. The prepared email above stays paste-ready — sending it from support@0509.io is the unblock owner step, after which the send date belongs in the Submission status section.
+blocked: needs Nish's identity — the entire submission is one email from support@0509.io to hello@ad-stack.ai; a repo-local outbound mail path exists (`scripts/send-vendor-mail.mjs`, dry-run default, credentials via env), but the send stands behind this doc's NEEDS-NISH marker, so the send step remains the owner step. The prepared email above stays paste-ready — sending it from support@0509.io is the unblock owner step, after which the send date belongs in the Submission status section.
