@@ -283,15 +283,34 @@ for (const viewport of viewports) {
       page.getByRole("navigation", { name: "Competitor sections" }).getByRole("tab"),
     ).toHaveCount(6);
     if (viewport.name === "mobile") {
-      const [nameBox, contextBox] = await Promise.all([
-        entityHeading.boundingBox(),
-        entityContext.boundingBox(),
-      ]);
+      // The gap must be read from ONE layout pass. The old two-call
+      // `Promise.all([h1.boundingBox(), ctx.boundingBox()])` let each read
+      // land on a different layout state — boundingBox().y is visual-viewport
+      // relative (mobile Chrome keeps a stale offset after fill(), see
+      // release-experience.ts) and a webfont swap or late reflow between the
+      // two reads inflates the difference (run 34595877209 measured 58.8px
+      // on a settled ~18px layout; the same head passed the next run).
+      // Wait for pending webfonts, then measure both boxes in a single
+      // synchronous evaluate so no reflow can slip between them.
+      await page.waitForFunction(() => document.fonts.status === "loaded");
+      const { nameBox, contextBox } = await page.evaluate(() => {
+        const rect = (el: Element | null) => {
+          if (!el) return null;
+          const r = el.getBoundingClientRect();
+          return { y: r.y, height: r.height };
+        };
+        return {
+          nameBox: rect(document.querySelector("h1.f9-wk-title")),
+          contextBox: rect(document.querySelector(".f9-wk-context")),
+        };
+      });
       expect(nameBox, "mobile entity heading should be measurable").not.toBeNull();
       expect(contextBox, "mobile entity context should be measurable").not.toBeNull();
       if (nameBox && contextBox) {
+        const gap = contextBox.y - (nameBox.y + nameBox.height);
+        process.stdout.write(`GATE-B entity context gap=${gap}\n`);
         expect(
-          contextBox.y - (nameBox.y + nameBox.height),
+          gap,
           "mobile entity context should stay attached to its title",
         ).toBeLessThanOrEqual(48);
       }
