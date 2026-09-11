@@ -1353,7 +1353,7 @@ function cleanText(value: string) {
 }
 
 // Issue #1500: UTF-8 byte-length helper for the lp_run_audit lines. Lives at
-// the bottom of the file (alongside cleanText / decodeHtml) so it is defined
+// the bottom of the file (alongside cleanText) so it is defined
 // before extractLandingPageSignals runs. The existing app/lib/bounded-response.server.ts
 // helper is intentionally NOT imported here — this file is exercised by
 // vitest in isolation and the run-audit module already carries its own
