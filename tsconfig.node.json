@@ -5,6 +5,7 @@
     "playwright.config.ts",
     "vite.config.ts",
     "scripts/prod-canary*.mjs",
+    "scripts/ads-domain-publisher.mjs",
     "scripts/bet2-live-verification.mjs",
     "scripts/bet3-live-verification.mjs",
     "scripts/bet7-activation-verification.mjs",
