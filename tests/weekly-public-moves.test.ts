@@ -1,4 +1,7 @@
 import { execFileSync } from "node:child_process";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -432,6 +435,26 @@ describe("weekly-offer-moves-report.mjs (issue #2143)", () => {
     );
   }
 
+  function writeFixture(moves: Array<Record<string, unknown>>) {
+    const dir = mkdtempSync(join(tmpdir(), "offer-moves-"));
+    const path = join(dir, "moves.json");
+    writeFileSync(path, JSON.stringify(moves));
+    return path;
+  }
+
+  function offerMove(beforeText: string, afterText: string) {
+    return {
+      brand: "Nykaa",
+      domain: "nykaa.com",
+      field: "Offer / price",
+      beforeText,
+      afterText,
+      capturedAt: "2026-09-08T04:30:00.000Z",
+      adsPath: "/ads/nykaa.com",
+      timelinePath: "/timeline/nykaa.com",
+    };
+  }
+
   it("prints a sub-400-word post with at least five public links from the fixture", () => {
     const output = runScript([
       "--dry-run",
@@ -456,6 +479,43 @@ describe("weekly-offer-moves-report.mjs (issue #2143)", () => {
 
     // The sixth (oldest) fixture move is truncated out of the top five.
     expect(output).not.toContain("₹1,299");
+  });
+
+  it("does not count a BOGO-shaped offer move as a price drop (issue #2488)", () => {
+    const fixture = writeFixture([
+      offerMove("buy 2 get 1", "buy 1 get 1"),
+    ]);
+    const output = runScript(["--dry-run", "--fixture", fixture]);
+    expect(output).toContain("1 offer changes");
+    expect(output).not.toContain("1 price drops");
+  });
+
+  it.each([
+    ["up to 70% off", "up to 50% off"],
+    ["₹999", "up to 50% off"],
+    ["$100", "₹50"],
+    ["999", "799"],
+  ])(
+    "does not count %j -> %j as a price drop (issue #2488)",
+    (beforeText, afterText) => {
+      const fixture = writeFixture([offerMove(beforeText, afterText)]);
+      const output = runScript(["--dry-run", "--fixture", fixture]);
+      expect(output).toContain("0 price drops");
+    },
+  );
+
+  it("counts only same-currency decreases as price drops (issue #2488)", () => {
+    const fixture = writeFixture([
+      offerMove("up to 70% off", "up to 50% off"),
+      offerMove("₹999", "up to 50% off"),
+      offerMove("$100", "₹50"),
+      offerMove("999", "799"),
+      offerMove("₹1,299", "₹999"),
+      offerMove("USD 100", "USD 50"),
+    ]);
+    const output = runScript(["--dry-run", "--fixture", fixture]);
+    expect(output).toContain("6 offer changes");
+    expect(output).toContain("2 price drops");
   });
 
   it("refuses to run without --dry-run (there is no posting mode)", () => {
