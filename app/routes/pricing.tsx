@@ -10,12 +10,6 @@ import {
   billingFaqJsonLdEntries,
 } from "~/components/pricing-section";
 import type { PublicCommercialLaunchSummary } from "~/lib/commercial-launch-gate.server";
-
-// Issue #2694: /pricing no longer SSRs buyer-country Dodo prices. The loader
-// always returns the "no preview" sentinel and PricingSection fetches the
-// existing /api/pricing-preview from the client, so the worker can stamp the
-// shared `public, max-age=300` policy on this page.
-const noPricingPreview = { available: false } as const;
 import {
   canonicalLinks,
   faqPageJsonLd,
@@ -25,6 +19,12 @@ import {
   webPageJsonLd,
 } from "~/lib/seo";
 import type { RootLoaderData } from "~/root";
+
+// Issue #2694: /pricing no longer SSRs buyer-country Dodo prices. The loader
+// always returns the "no preview" sentinel and PricingSection fetches the
+// existing /api/pricing-preview from the client, so the worker can stamp the
+// shared `public, max-age=300` policy on this page.
+const noPricingPreview = { available: false } as const;
 
 const pricingTitle = "Pricing | Five to Nine";
 const pricingDescription =
