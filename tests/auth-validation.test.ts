@@ -96,6 +96,50 @@ describe("auth form server validation", () => {
     }));
   });
 
+  it("an explicit non-default redirectTo wins over a filled inline competitor", async () => {
+    const sendBetterAuthMagicLink = vi.fn();
+    vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => ({})) }));
+    vi.doMock("~/lib/better-auth.server", () => ({
+      isBetterAuthConfigured: vi.fn(() => true),
+      isSameOriginAuthFormPost: vi.fn(() => true),
+      sendBetterAuthMagicLink,
+    }));
+    vi.doMock("~/lib/funnel-measurement.server", () => ({
+      emitFunnelSignupStartFromAllowlistedSource: vi.fn(),
+    }));
+    vi.doMock("~/lib/signup-source", () => ({
+      rememberAllowlistedSignupSource: vi.fn(() => null),
+      signupSourceCookieHeader: vi.fn(() => ""),
+      signupSourceFromRequest: vi.fn(() => null),
+    }));
+
+    const { action } = await import("~/routes/auth.signup");
+    const request = new Request("https://0509.io/auth/signup", {
+      method: "POST",
+      body: new URLSearchParams({
+        email: "owner@example.com",
+        competitor: "nykaa.com",
+        redirectTo: "/app/onboard?website=nykaa.com",
+      }),
+    });
+
+    try {
+      await action({ context: context(), request } as never);
+      throw new Error("Expected sent redirect");
+    } catch (error) {
+      const response = error as Response;
+      expect(response.status).toBe(302);
+      // An explicit redirect target wins — the competitor is round-tripped
+      // onto the sent state but never rewrites the caller's redirect.
+      expect(response.headers.get("Location")).toContain(
+        "redirectTo=%2Fapp%2Fonboard%3Fwebsite%3Dnykaa.com",
+      );
+      expect(sendBetterAuthMagicLink).toHaveBeenCalledWith({}, request, expect.objectContaining({
+        redirectTo: "/app/onboard?website=nykaa.com",
+      }));
+    }
+  });
+
   it("leaves an empty competitor out of the redirect entirely", async () => {
     const sendBetterAuthMagicLink = vi.fn();
     vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => ({})) }));
