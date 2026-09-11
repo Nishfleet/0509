@@ -198,3 +198,7 @@ page monitoring`, `change alerts`, `competitor analysis`, `growth teams`,
 8. Follow-up gate: this scout item is marked `unreviewed-by-grok` — run
    the grok review pass over this document and the submitted listing once
    submission is complete.
+
+## Receipt pass (2026-09-11, issue #2857)
+
+receipt: https://www.saashub.com/five-to-nine — submitted and approved, live (first confirmed 2026-08-22, re-verified 2026-09-11: HTTP 200). Canonical receipt and the live-page capture live in docs/saashub-listing-2026-08-11.md, which supersedes this pointer document.
