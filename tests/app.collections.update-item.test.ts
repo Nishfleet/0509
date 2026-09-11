@@ -71,4 +71,19 @@ describe("collections update-item action", () => {
 		});
 		expect(updateCollectionItem).toHaveBeenCalledTimes(1);
 	});
+
+	it("resolves to inline confirmation for an existing item", async () => {
+		const updateCollectionItem = vi.fn().mockResolvedValue(undefined);
+		mockRoute(updateCollectionItem);
+
+		const { action } = await import("~/routes/app.collections");
+		const result = await action({ context: context(), request: updateItemRequest() } as never);
+
+		expect(result).toEqual({
+			ok: true,
+			intent: "update-item",
+			itemId: "item-404",
+			message: "Collection note updated.",
+		});
+	});
 });
