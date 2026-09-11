@@ -20,6 +20,7 @@
  */
 
 import { buildLandingPageAnalysisFields } from "~/lib/analysis.server";
+import { extractPriceTier } from "~/lib/landing-page-price-tier.server";
 import { replaceAnalysisFields } from "~/lib/data/ads.server";
 import { execute, queryOne } from "~/lib/data/d1.server";
 import { jsonValue, nowIso } from "~/lib/data/helpers.server";
@@ -343,10 +344,11 @@ export async function runSitemapTimelineBackfill(
             form_present,
             ocr_text,
             translated_text,
+            price_tier,
             captured_at,
             created_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)
         `,
         rowId,
         snapshot.rawUrl,
@@ -360,6 +362,7 @@ export async function runSitemapTimelineBackfill(
         snapshot.ctaText ?? null,
         snapshot.priceText ?? null,
         typeof snapshot.formPresent === "boolean" ? (snapshot.formPresent ? 1 : 0) : null,
+        extractPriceTier(snapshot.priceText),
         snapshot.capturedAt,
         nowIso(),
       );

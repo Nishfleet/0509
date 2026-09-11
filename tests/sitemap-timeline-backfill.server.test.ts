@@ -494,6 +494,52 @@ describe("runSitemapTimelineBackfill (write path shape)", () => {
     expect(call?.[3]).toBe("https://www.calendly.com/");
     expect(call?.[8]).toBe("browser_render");
   });
+
+  // Issue #2466: the sitemap-timeline rail must tier its rows like its
+  // sibling rails (demo-brand-backfill, sneaker-resale-backfill) do —
+  // a parseable price_text becomes `extractPriceTier(...)` in `price_tier`,
+  // not NULL.
+  it("binds price_tier = extractPriceTier(price_text) on the INSERT", async () => {
+    const env = { DB: {} } as unknown as AppEnv;
+    queryOne.mockResolvedValue(null);
+    execute.mockResolvedValue({ meta: { changes: 1 } });
+    replaceAnalysisFields.mockResolvedValue(undefined);
+
+    await runSitemapTimelineBackfill(env, {
+      now: new Date("2026-09-05T01:00:00.000Z"),
+      cohort: cohort({ domain: "calendly.com" }),
+      capture: (async (_env: AppEnv, url: string) => ({
+        ...snapshotForUrl(url),
+        priceText: "$199",
+      })) as never,
+    });
+
+    expect(execute).toHaveBeenCalledTimes(1);
+    const call = execute.mock.calls[0];
+    const sql = String(call?.[1]);
+    expect(sql).toMatch(/price_tier/);
+    // Same 15-? tuple as the sibling rails: every non-NULL-literal column
+    // is bound, including price_tier.
+    expect(sql).not.toMatch(/VALUES \(\?, \?, \?, \?, \?, \?, \?, \?, \?, \?, \?, \?, NULL, NULL, \?, \?\)/);
+    expect(call?.[14]).toBe("100_to_250");
+  });
+
+  it("binds price_tier = 'unknown' when price_text is not parseable", async () => {
+    const env = { DB: {} } as unknown as AppEnv;
+    queryOne.mockResolvedValue(null);
+    execute.mockResolvedValue({ meta: { changes: 1 } });
+    replaceAnalysisFields.mockResolvedValue(undefined);
+
+    await runSitemapTimelineBackfill(env, {
+      now: new Date("2026-09-05T01:00:00.000Z"),
+      cohort: cohort({ domain: "calendly.com" }),
+      capture: (async (_env: AppEnv, url: string) =>
+        snapshotForUrl(url)) as never,
+    });
+
+    const call = execute.mock.calls[0];
+    expect(call?.[14]).toBe("unknown");
+  });
 });
 
 describe("runSitemapTimelineBackfill (cohort derivation, default path)", () => {
