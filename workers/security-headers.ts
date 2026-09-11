@@ -4,8 +4,10 @@ import { BUYER_SURFACE_LOCALE_IDS } from "../app/lib/locale-markets";
 // Baseline security headers applied to every response. CSP uses a per-request
 // nonce for inline <script> emitted by React Router's <Scripts /> /
 // <ScrollRestoration /> and the two boot scripts in app/root.tsx — no
-// 'unsafe-inline' in script-src. Inline <style> (React Router <Links />) still
-// needs 'unsafe-inline' in style-src, which is the standard CSP trade-off.
+// 'unsafe-inline' in script-src. style-src carries no 'unsafe-inline' either:
+// the only inline styles served are `style=` attributes (stored digest email
+// markup rendered on /sample-brief), which style-src-attr covers, so an
+// injected <style> element is blocked everywhere.
 //
 // Cloudflare Web Analytics is enabled for this zone with automatic (edge)
 // injection, so Cloudflare inserts its RUM beacon script into every HTML
@@ -112,7 +114,15 @@ export const SECURITY_HEADERS: Record<string, string> = {
   "content-security-policy": [
     "default-src 'self'",
     BASE_SCRIPT_SRC,
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    // style-src-attr keeps `style=` attributes working (issue #2971): stored
+    // digest markup rendered on /sample-brief is built for email clients and
+    // cannot be nonced or classed away. <style> elements and <link> stylesheets
+    // fall back to style-src — 'self' + the Google Fonts host, no
+    // 'unsafe-inline' — so an injected <style> is blocked. Browsers old enough
+    // to lack style-src-attr (pre-2022) fall back to style-src and render those
+    // attributes unstyled; acceptable for this audience.
+    "style-src 'self' https://fonts.googleapis.com",
+    "style-src-attr 'unsafe-inline'",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: https:",
     CONNECT_SRC,

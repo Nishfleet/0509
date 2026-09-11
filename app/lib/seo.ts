@@ -1297,14 +1297,16 @@ const GROUNDING_BLOCKS = GROUNDING_ENGINES.map(
 ${PUBLIC_ALLOW_RULES}`,
 ).join("\n\n");
 
+// The served comments below are public-facing: anyone can read robots.txt, so
+// they must not cite internal issue numbers or repo doc paths (issue #2971).
+// The reasoning stays in the code comments above; the served text keeps only
+// the operator-facing explanation.
 const ROBOTS_TXT = `# Grounding / AI-answer engines (Google-Extended, OAI-SearchBot, PerplexityBot)
 # are allowed on the public proof surface. Grounding is search/reference use
 # (content-signal search=yes, use=reference), not training. AI training crawlers
-# stay denied at the zone by Cloudflare managed robots (ai-train=no). Policy:
-# docs/ai-crawler-policy.md. Issue #2061 / #1459: do not re-add a training
-# Disallow block here.
+# stay denied at the zone by Cloudflare managed robots (ai-train=no).
 #
-# Issue #2043: /llms-full.txt is the full-text AEO feed of tracked-brand dated
+# /llms-full.txt is the full-text AEO feed of tracked-brand dated
 # offer/proof/change records. Allowed below by Allow: / and listed in the
 # sitemap; AI answer engines may fetch it for citation.
 
@@ -1313,7 +1315,7 @@ ${PUBLIC_ALLOW_RULES}
 Sitemap: ${canonicalUrl("/sitemap.xml")}
 ${LOCALE_SITEMAP_LINES}
 
-# Grounding / AI-answer engines — explicit, not just wildcard (issue #2061).
+# Grounding / AI-answer engines — explicit, not just wildcard.
 # Google-Extended Allow: / overrides the Cloudflare managed Disallow: / because
 # Google merges same-agent groups and prefers the least restrictive equal-length rule.
 ${GROUNDING_BLOCKS}
