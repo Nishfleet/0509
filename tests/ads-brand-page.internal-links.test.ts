@@ -67,7 +67,7 @@ describe("loadIndexableTimelineDomains", () => {
     expect(domains.size).toBe(1);
   });
 
-  it("includes collecting entries for the tracked /ads cohort (issue #2021)", async () => {
+  it("excludes zero-state collecting domains — only capture-backed timelines are linkable (issue #2881)", async () => {
     mockTimelineEntries(["/timeline/calendly.com"], {
       brandPaths: ["/ads/gymshark.com", "/ads/calendly.com", "/compare/adspyder"],
     });
@@ -75,11 +75,12 @@ describe("loadIndexableTimelineDomains", () => {
       "~/lib/ads-internal-links.server"
     );
     const domains = await loadIndexableTimelineDomains({} as never);
-    // /ads cohort brands gain an indexable timeline path; non-/ads paths do
-    // not; already-capture-backed domains are not duplicated.
-    expect(domains.has("gymshark.com")).toBe(true);
+    // Issue #2881: a brand whose timeline has 0 recorded offer states is
+    // noindex and never in the sitemap, so public pages must not link to it.
+    // Capture-backed domains are linkable; tracked-but-empty ones are not.
     expect(domains.has("calendly.com")).toBe(true);
-    expect(domains.size).toBe(2);
+    expect(domains.has("gymshark.com")).toBe(false);
+    expect(domains.size).toBe(1);
   });
 
   it("degrades to an empty set on a sitemap hiccup (never 500s the page)", async () => {

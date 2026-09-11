@@ -487,6 +487,14 @@ export function rowToSnapshot(row: LandingPageSnapshotRow): OfferSnapshotInput {
     screenshotKey,
     pageTextKey,
     captureMethod: row.capture_method,
+    // Issue #2889: the page-declared market (Shopify.country / countryCode),
+    // stored on capture_metadata_json at extraction time (no D1 schema
+    // change). Null for rows captured before lp-signals-v8 — the
+    // capture-validity gate never suppresses on an unknown market.
+    declaredMarketCountry:
+      typeof metadata.declaredMarketCountry === "string"
+        ? metadata.declaredMarketCountry
+        : null,
     // A backfill row (issue #968) carries no screenshot and no page text by
     // design — fabricating either would be dishonest. The proof gate above
     // (issue #1284) filters these rows out before they reach the ledger, so
