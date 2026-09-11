@@ -12,6 +12,10 @@
 # The probe checks the same public contract the old scheduled workflow did:
 #   - https://0509.io/api/health         (shallow: Worker edge is alive)
 #   - https://0509.io/api/health/deep    (D1 SELECT 1 + scheduled-work check)
+# plus the #2953 edge contract: http://0509.io/ must 301-redirect to its
+# https:// counterpart. With Strict-Transport-Security ... preload declared,
+# an HTTP 200 would invalidate the preload declaration; this catches the
+# zone's Always-Use-HTTPS setting being turned off again.
 # curl retries (3 attempts) absorb single blips before a sample goes red,
 # matching the previous workflow behavior.
 #
@@ -30,6 +34,7 @@ set -euo pipefail
 readonly STATE_DIR="${LIVENESS_STATE_DIR:-/var/lib/0509-liveness}"
 readonly HEALTH_URL="${HEALTH_URL:-https://0509.io/api/health}"
 readonly DEEP_HEALTH_URL="${DEEP_HEALTH_URL:-https://0509.io/api/health/deep}"
+readonly ROOT_URL="${ROOT_URL:-http://0509.io/}"
 readonly RETENTION_DAYS="${PROBE_RETENTION_DAYS:-30}"
 
 fail() {
@@ -54,6 +59,7 @@ worker_version=""
 search_rollout_mode=""
 d1_check=""
 scheduled_work_check=""
+redirect_status=0
 error=""
 
 # Fetches the shallow payload once and validates it. On success the payload
@@ -111,6 +117,34 @@ PY
   fi
 }
 
+# Fetches the edge redirect once and validates the #2953 contract: the
+# origin:// root must answer 301 with an https:// redirect target. A 200 over
+# http while HSTS preload is declared is the regression this catches.
+probe_redirect() {
+  local response
+  response="$(curl --head --silent --show-error --output /dev/null \
+    --write-out '%{http_code} %{redirect_url}' \
+    --max-time 20 --retry 2 --retry-delay 5 "${ROOT_URL}" 2>/dev/null)" || {
+    error="edge_redirect_http_failed"
+    return 1
+  }
+  EDGE_REDIRECT_CODE="${response%% *}"
+  EDGE_REDIRECT_LOCATION="${response#* }"
+  export EDGE_REDIRECT_CODE EDGE_REDIRECT_LOCATION
+  if ! python3 - <<'PY'
+import os
+
+code = os.environ.get("EDGE_REDIRECT_CODE", "")
+location = os.environ.get("EDGE_REDIRECT_LOCATION", "")
+if code != "301" or not location.startswith("https://"):
+    raise SystemExit(f"edge redirect was {code!r} -> {location!r}, expected 301 -> https://*")
+PY
+  then
+    error="edge_redirect_invalid"
+    return 1
+  fi
+}
+
 ok=true
 if probe_shallow; then
   shallow_status=1
@@ -128,6 +162,11 @@ sys.stdout.write((json.load(sys.stdin).get("releaseIdentity") or {}).get("worker
     d1_check="ok"
     scheduled_work_check="ok"
     deep_status=1
+    if probe_redirect; then
+      redirect_status=1
+    else
+      ok=false
+    fi
   else
     ok=false
   fi
@@ -135,16 +174,17 @@ else
   ok=false
 fi
 
-record="$(python3 - "${TS}" "${ok}" "${shallow_status}" "${deep_status}" "${worker_version}" "${search_rollout_mode}" "${d1_check}" "${scheduled_work_check}" "${error}" <<'PY'
+record="$(python3 - "${TS}" "${ok}" "${shallow_status}" "${deep_status}" "${worker_version}" "${search_rollout_mode}" "${d1_check}" "${scheduled_work_check}" "${redirect_status}" "${error}" <<'PY'
 import json
 import sys
 
-ts, ok, shallow_status, deep_status, worker_version, rollout, d1, scheduled, error = sys.argv[1:]
+ts, ok, shallow_status, deep_status, worker_version, rollout, d1, scheduled, redirect, error = sys.argv[1:]
 print(json.dumps({
     "ts": ts,
     "ok": ok == "true",
     "shallowStatus": int(shallow_status),
     "deepStatus": int(deep_status),
+    "httpsRedirect": int(redirect),
     "workerVersionId": worker_version or None,
     "searchRolloutMode": rollout or None,
     "d1": d1 or None,

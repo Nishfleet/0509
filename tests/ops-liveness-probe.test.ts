@@ -15,18 +15,23 @@ describe("ops liveness probe", () => {
   let binDir: string;
   let stateDir: string;
   let failStateDir: string;
+  let redirectFailStateDir: string;
 
   beforeAll(() => {
     tmpRoot = mkdtempSync(join(tmpdir(), "0509-liveness-probe-test-"));
     binDir = join(tmpRoot, "bin");
     stateDir = join(tmpRoot, "state");
     failStateDir = join(tmpRoot, "state-fail");
+    redirectFailStateDir = join(tmpRoot, "state-redirect-fail");
     require("node:fs").mkdirSync(binDir, { recursive: true });
     require("node:fs").mkdirSync(stateDir, { recursive: true });
     require("node:fs").mkdirSync(failStateDir, { recursive: true });
+    require("node:fs").mkdirSync(redirectFailStateDir, { recursive: true });
     // Fake curl routes by URL fragment: shallow → FAKE_SHALLOW_PAYLOAD,
-    // deep → FAKE_DEEP_PAYLOAD. exit 0 either way; failures are simulated by
-    // an empty payload + a separate curl-fail script.
+    // deep → FAKE_DEEP_PAYLOAD, the http:// root → FAKE_REDIRECT (the
+    // "%{http_code} %{redirect_url}" line the probe parses). exit 0 either
+    // way; failures are simulated by an empty payload + a separate curl-fail
+    // script, and the #2953 redirect regression by FAKE_REDIRECT="200 ".
     const fakeCurl = join(binDir, "curl");
     writeFileSync(
       fakeCurl,
@@ -35,6 +40,7 @@ describe("ops liveness probe", () => {
         // The probe passes the URL as the last argument; pick by suffix.
         "case \"$*\" in",
         "  *api/health/deep*) printf '%s\\n' \"$FAKE_DEEP_PAYLOAD\" ;;",
+        "  *http://0509.io/*)  printf '%s\\n' \"$FAKE_REDIRECT\" ;;",
         "  *)                 printf '%s\\n' \"$FAKE_SHALLOW_PAYLOAD\" ;;",
         "esac",
         "",
@@ -90,6 +96,9 @@ describe("ops liveness probe", () => {
     expect(probe).toContain('checks.get("scheduledWork")');
     expect(probe).toContain("--max-time 20");
     expect(probe).toContain("--retry 2");
+    expect(probe).toContain('ROOT_URL="${ROOT_URL:-http://0509.io/}"');
+    expect(probe).toContain("--write-out '%{http_code} %{redirect_url}'");
+    expect(probe).toContain('location.startswith("https://")');
   });
 
   it("writes ok/degraded evidence + probes.jsonl record and exits 0 on healthy run", () => {
@@ -102,6 +111,8 @@ describe("ops liveness probe", () => {
         DEEP_HEALTH_URL: "https://0509.io/api/health/deep",
         // Anonymous callers no longer receive releaseIdentity; the probe must
         // still pass on public status/app/checks alone.
+        ROOT_URL: "http://0509.io/",
+        FAKE_REDIRECT: "301 https://0509.io/",
         FAKE_SHALLOW_PAYLOAD: JSON.stringify({
           status: "ok",
           app: "0509",
@@ -129,6 +140,7 @@ describe("ops liveness probe", () => {
     expect(record.searchRolloutMode).toBeNull();
     expect(record.d1).toBe("ok");
     expect(record.scheduledWork).toBe("ok");
+    expect(record.httpsRedirect).toBe(1);
     const latest = JSON.parse(readFileSync(join(stateDir, "latest.json"), "utf8"));
     expect(latest.status).toBe("ok");
     expect(latest.workerVersionId).toBeNull();
@@ -158,5 +170,43 @@ describe("ops liveness probe", () => {
     expect(records.length).toBe(1);
     const record = JSON.parse(records[0]);
     expect(record.ok).toBe(false);
+    expect(record.httpsRedirect).toBe(0);
+  });
+
+  it("degrades with error=edge_redirect_invalid when the http root answers 200", () => {
+    // #2953 regression: the zone's Always-Use-HTTPS setting off again. The
+    // shallow/deep health endpoints are fine; only the edge redirect is gone.
+    const result = spawnSync("bash", [PROBE], {
+      env: {
+        ...process.env,
+        PATH: `${binDir}:${process.env.PATH ?? ""}`,
+        LIVENESS_STATE_DIR: redirectFailStateDir,
+        HEALTH_URL: "https://0509.io/api/health",
+        DEEP_HEALTH_URL: "https://0509.io/api/health/deep",
+        ROOT_URL: "http://0509.io/",
+        FAKE_REDIRECT: "200 ",
+        FAKE_SHALLOW_PAYLOAD: JSON.stringify({
+          status: "ok",
+          app: "0509",
+        }),
+        FAKE_DEEP_PAYLOAD: JSON.stringify({
+          status: "ok",
+          checks: { d1: "ok", scheduledWork: "ok" },
+        }),
+      },
+      encoding: "utf8",
+    });
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("edge_redirect_invalid");
+    const latest = JSON.parse(readFileSync(join(redirectFailStateDir, "latest.json"), "utf8"));
+    expect(latest.status).toBe("degraded");
+    expect(latest.error).toBe("edge_redirect_invalid");
+    const records = readFileSync(join(redirectFailStateDir, "probes.jsonl"), "utf8")
+      .split("\n")
+      .filter((line) => line.length > 0);
+    expect(records.length).toBe(1);
+    const record = JSON.parse(records[0]);
+    expect(record.ok).toBe(false);
+    expect(record.httpsRedirect).toBe(0);
   });
 });
