@@ -73,6 +73,12 @@ export {
   unappliedForwardMigrationSuffix,
   withScratchCleanup,
 } from "./d1-remote-restore-evidence-core.mjs";
+import {
+  applyMigrationsToCopy,
+  assertMigrationRowInvariant,
+  formatRowCountDiff,
+  parseExpectsRowLoss,
+} from "./d1-migration-row-invariant.mjs";
 
 const PRODUCTION_DATABASE_NAME = "0509";
 const SCRATCH_BINDING = "RESTORE_DB";
@@ -823,6 +829,270 @@ export async function importFreshBackup({
   };
 }
 
+/**
+ * Apply the named repository migrations to a throwaway copy of the restored
+ * source database and fail when any table that existed before the migration
+ * set ends with fewer rows and is not named in an `expects-row-loss`
+ * annotation. See scripts/d1-migration-row-invariant.mjs for the rationale.
+ *
+ * The per-table diff is always printed to stdout so the workflow can tee it
+ * into the job summary, and written to `summaryPath` when the caller passes
+ * one.
+ *
+ * @param {{
+ *   sourceDatabasePath: string,
+ *   migrationNames: string[],
+ *   summaryPath?: string | null,
+ * }} input
+ */
+export function assertPendingMigrationsPreserveRowCounts({
+  sourceDatabasePath,
+  migrationNames,
+  summaryPath = null,
+}) {
+  const migrations = migrationNames.map((name) => ({
+    name,
+    path: resolve("migrations", name),
+  }));
+  const result = applyMigrationsToCopy({
+    sourcePath: sourceDatabasePath,
+    migrations,
+  });
+  const diff = formatRowCountDiff({
+    before: result.before,
+    after: result.after,
+  });
+  process.stdout.write(
+    `migration_row_invariant_applied:${JSON.stringify(result.applied)}\n${diff}\n`,
+  );
+  if (summaryPath) {
+    writeFileSync(summaryPath, `${diff}\n`, { mode: 0o600 });
+  }
+  assertMigrationRowInvariant({
+    before: result.before,
+    after: result.after,
+    expectedRowLossByMigration: result.expectedRowLossByMigration,
+  });
+}
+
+/**
+ * Row counts for every user table in a remote D1 database, read in one round
+ * trip so the before/after snapshots are comparable.
+ *
+ * @param {string} scratchConfigPath
+ * @returns {Promise<Map<string, number>>}
+ */
+async function readRemoteRowCounts(scratchConfigPath) {
+  const tablesResult = await runCaptured(
+    "npx",
+    [
+      "wrangler",
+      "d1",
+      "execute",
+      SCRATCH_BINDING,
+      "--remote",
+      "--command",
+      `SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name`,
+      "--json",
+      "--config",
+      scratchConfigPath,
+    ],
+    { quiet: true },
+  );
+  const tablePayload = parseWranglerJson(tablesResult.stdout);
+  const rows = Array.isArray(tablePayload)
+    ? (tablePayload[0]?.results ?? [])
+    : (tablePayload?.results ?? []);
+  const names = rows.map((row) => String(row.name));
+  if (names.length === 0) return new Map();
+  const countExpression = names
+    .map(
+      (name) =>
+        `(SELECT COUNT(*) FROM "${name.replaceAll('"', '""')}") AS "${name.replaceAll('"', '""')}"`,
+    )
+    .join(", ");
+  const countsResult = await runCaptured(
+    "npx",
+    [
+      "wrangler",
+      "d1",
+      "execute",
+      SCRATCH_BINDING,
+      "--remote",
+      "--command",
+      `SELECT ${countExpression}`,
+      "--json",
+      "--config",
+      scratchConfigPath,
+    ],
+    { quiet: true },
+  );
+  const countsPayload = parseWranglerJson(countsResult.stdout);
+  const countRow = Array.isArray(countsPayload)
+    ? (countsPayload[0]?.results?.[0] ?? {})
+    : (countsPayload?.results?.[0] ?? {});
+  return new Map(
+    names.map((name) => [name, Number(countRow[name] ?? 0)]),
+  );
+}
+
+/**
+ * The production dry run (issue #2779, step 1): restore the pre-migration
+ * backup that was just taken into a scratch D1, apply the pending repository
+ * migrations THERE, and compare per-table row counts before and after. Any
+ * table that shrinks without an `-- expects-row-loss:` annotation in the
+ * migration file fails the run before the real `--remote` apply is reached.
+ *
+ * This rides the existing scratch-D1 rails in this script — the same
+ * `withScratchCleanup` lifecycle the restore-evidence drill uses — rather
+ * than adding a second scratch provisioner.
+ *
+ * @param {{
+ *   backupPath: string,
+ *   pendingMigrationNames: string[],
+ *   summaryPath?: string | null,
+ *   runCommand?: typeof runCaptured,
+ * }} input
+ */
+export async function runMigrationDryRunOnScratch({
+  backupPath,
+  pendingMigrationNames,
+  summaryPath = null,
+  runCommand = runCaptured,
+}) {
+  if (!Array.isArray(pendingMigrationNames)) {
+    throw new Error("migration_dry_run_migrations_invalid");
+  }
+  const { runId, runAttempt } = assertAutomationContext();
+  const scratchName = buildScratchDatabaseName(runId, runAttempt);
+  const root = mkdtempSync(
+    join(tmpdir(), `0509-migration-dry-run-${runId}-${runAttempt}-`),
+  );
+  const scratchConfigPath = join(root, "wrangler-scratch.json");
+  const sourceDatabasePath = join(root, "source.sqlite");
+  const sourceSql = readSqlFileWithinLimit(
+    backupPath,
+    resolveMaxSqlBytes(),
+    "migration_dry_run_backup_invalid",
+  );
+  importSqlite(sourceDatabasePath, sourceSql, {
+    maxBytes: resolveMaxSqlBytes(),
+  });
+  const localBefore = collectDatabaseEvidence(sourceDatabasePath).rowCounts;
+  try {
+    return await withScratchCleanup({
+      create: async () => {
+        const create = await runCommand("npx", [
+          "wrangler",
+          "d1",
+          "create",
+          scratchName,
+        ]);
+        const reportedScratchUuid = parseCreatedDatabaseUuid(
+          `${create.stdout}\n${create.stderr}`,
+        );
+        const createdMatches = (await listD1Databases()).filter(
+          (database) => database.name === scratchName,
+        );
+        if (
+          createdMatches.length !== 1 ||
+          !UUID_PATTERN.test(createdMatches[0].uuid) ||
+          createdMatches[0].uuid !== reportedScratchUuid
+        ) {
+          throw new Error("scratch_database_identity_mismatch");
+        }
+        writePrivateJson(scratchConfigPath, {
+          name: "0509-migration-dry-run",
+          compatibility_date: "2026-03-29",
+          d1_databases: [
+            {
+              binding: SCRATCH_BINDING,
+              database_name: scratchName,
+              database_id: createdMatches[0].uuid,
+            },
+          ],
+        });
+        return createdMatches[0].uuid;
+      },
+      use: async () => {
+        await runCommand(
+          "npx",
+          [
+            "wrangler",
+            "d1",
+            "execute",
+            SCRATCH_BINDING,
+            "--remote",
+            "--file",
+            backupPath,
+            "--yes",
+            "--json",
+            "--config",
+            scratchConfigPath,
+          ],
+          { timeoutMs: LONG_COMMAND_TIMEOUT_MS },
+        );
+        const before = await readRemoteRowCounts(scratchConfigPath);
+        if (before.size !== localBefore.length) {
+          throw new Error("migration_dry_run_scratch_table_count_mismatch");
+        }
+        if (pendingMigrationNames.length > 0) {
+          await runCommand(
+            "npx",
+            [
+              "wrangler",
+              "d1",
+              "migrations",
+              "apply",
+              SCRATCH_BINDING,
+              "--remote",
+              "--config",
+              scratchConfigPath,
+            ],
+            { timeoutMs: LONG_COMMAND_TIMEOUT_MS },
+          );
+        }
+        const after = await readRemoteRowCounts(scratchConfigPath);
+        const beforeCounts = localBefore.map((entry) => ({
+          table: entry.table,
+          count: before.get(entry.table) ?? 0,
+        }));
+        const afterCounts = [...after].map(([table, count]) => ({
+          table,
+          count,
+        }));
+        const diff = formatRowCountDiff({
+          before: beforeCounts,
+          after: afterCounts,
+        });
+        process.stdout.write(
+          `migration_dry_run_pending:${JSON.stringify(pendingMigrationNames)}\n${diff}\n`,
+        );
+        if (summaryPath) {
+          writeFileSync(summaryPath, `${diff}\n`, { mode: 0o600 });
+        }
+        const expectedRowLossByMigration = new Map(
+          pendingMigrationNames.map((name) => [
+            name,
+            parseExpectsRowLoss(
+              readFileSync(resolve("migrations", name), "utf8"),
+            ),
+          ]),
+        );
+        assertMigrationRowInvariant({
+          before: beforeCounts,
+          after: afterCounts,
+          expectedRowLossByMigration,
+        });
+        return { before: beforeCounts, after: afterCounts };
+      },
+      remove: () => removeScratchDatabase(scratchName),
+    });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
 /** @param {string} outputPath */
 async function runAutomation(outputPath) {
   const { runId, runAttempt } = assertAutomationContext();
@@ -894,6 +1164,20 @@ async function runAutomation(outputPath) {
       );
     }
     if (ledgerPlan.action === "apply_forward_suffix") {
+      // Per-table row-count invariant (issue #2779): the catch-up below is a
+      // real `wrangler d1 migrations apply 0509 --remote`. Before 0087 that
+      // call had no guard beyond "a backup exists", and 55 ON DELETE CASCADE
+      // children emptied with the rebuilt `user` table. Apply the same
+      // migration set to a COPY of the freshly restored source database first
+      // and refuse any table that shrinks without an `-- expects-row-loss:`
+      // annotation in the migration file. The source database is the backup,
+      // not production, so nothing here touches live rows.
+      assertPendingMigrationsPreserveRowCounts({
+        sourceDatabasePath,
+        migrationNames: ledgerPlan.migrations,
+        summaryPath:
+          process.env.D1_MIGRATION_ROW_INVARIANT_SUMMARY?.trim() || null,
+      });
       await applyForwardMigrationSuffix(ledgerPlan.migrations);
       backup = await importFreshBackup({
         knownBackupFiles: backup.afterBackups,
@@ -1197,7 +1481,35 @@ if (
 ) {
   const outputPath = readArg("--output");
   const cleanupOnly = process.argv.includes("--cleanup-only");
-  if (!outputPath && !cleanupOnly) {
+  const dryRunMigrations = process.argv.includes("--dry-run-migrations");
+  if (dryRunMigrations) {
+    // Issue #2779: the production dry run. Restores the pre-migration backup
+    // into a scratch D1, applies the pending migrations there, and fails the
+    // job on any undeclared per-table row loss so the workflow never reaches
+    // the real `--remote` apply.
+    const backupPath = readArg("--backup");
+    const migrationsJson = readArg("--migrations");
+    const summaryPath = readArg("--summary");
+    try {
+      if (!backupPath || !migrationsJson) {
+        throw new Error("migration_dry_run_arguments_missing");
+      }
+      const pendingMigrationNames = JSON.parse(migrationsJson);
+      await runMigrationDryRunOnScratch({
+        backupPath,
+        pendingMigrationNames,
+        summaryPath,
+      });
+      process.stdout.write(
+        `${JSON.stringify({ ok: true, pending: pendingMigrationNames.length })}\n`,
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "migration_dry_run_failed";
+      process.stderr.write(`${redactSensitiveOutput(message)}\n`);
+      process.exitCode = 1;
+    }
+  } else if (!outputPath && !cleanupOnly) {
     process.stderr.write("remote_restore_output_path_missing\n");
     process.exitCode = 1;
   } else {
