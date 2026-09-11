@@ -172,7 +172,7 @@ export default function ChangelogRoute() {
           <li>Press Cmd+K (or Ctrl+K) in the workspace to quick-add a competitor watchlist.</li>
           <li>On paid plans, signed-in users can save a search result to a board from the result card.</li>
           <li>The Competitors list supports bulk pause and resume for selected watchlists.</li>
-          <li>Free accounts include one weekly Competitor Watch with an activation scan and weekly email brief.</li>
+          <li>Free accounts include one Competitor Watch with an activation scan and one first brief — no recurring checks or briefs.</li>
           <li>Public brand pages are available at /ads/:domain for cached competitor ad snapshots.</li>
           <li>The landing page has a product FAQ, and a new compare page covers checking the Meta Ad Library by hand.</li>
           <li>Customer-facing product copy received a full voice pass for clearer, plainer language.</li>

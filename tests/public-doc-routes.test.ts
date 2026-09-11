@@ -20,7 +20,8 @@ describe("public documentation routes", () => {
 
     expect(markup).toContain("Run a trustworthy first search");
     expect(markup).toContain("No evidence is not proof that a competitor has no active ads");
-    expect(markup).toContain("Free plan scope: one competitor with an instant first scan, then a weekly scheduled check and a weekly email brief backed by one proof capture a month");
+    expect(markup).toContain("Free plan scope: one competitor with an instant first scan (the activation scan) and one first brief, Meta Ad Library only");
+    expect(markup).toContain("No recurring checks or briefs, no Collections");
     expect(markup).toContain("Use Five to Nine from Claude, ChatGPT, and AI agents");
     expect(markup).toContain("https://0509.io/api/mcp");
     expect(markup).toContain("read-only API and MCP access are available on Free and Scout");
