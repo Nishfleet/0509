@@ -668,8 +668,9 @@ export function renderWelcomeHtml(input: {
         </p>
         <p style="margin: 0 0 20px;">
           When that first scan finishes, we'll email you what we found. After that,
-          free keeps watching with a weekly check and a weekly email brief; paid
-          plans check every 3–6 hours and alert you when things change.
+          your free plan includes one first check and one first brief — nothing
+          recurring; paid plans check every 3–6 hours and alert you when things
+          change.
         </p>
         <p style="margin: 0 0 24px;">
           <a href="${escapeHtml(input.watchlistsUrl)}" style="${ACCOUNT_CTA_STYLE}">Open your competitors</a>
@@ -733,7 +734,7 @@ export function renderActivationResultHtml(input: {
             input.proofCaptureSucceeded
               ? `That capture is your one proof-backed brief this month — saved with a screenshot, page text, and the original link in your Library. `
               : `We couldn't attach a proof-backed capture to this first scan, so no evidence check was used. `
-          }Free keeps watching this competitor with a weekly check and a weekly email brief. Paid plans check every 3–6 hours and email you as soon as things change.
+          }Free includes one first check and one first brief — recurring checks and briefs are a paid plan. Paid plans check every 3–6 hours and email you as soon as things change.
         </p>
         <p style="margin: 0 0 24px;">
           <a href="${escapeHtml(input.watchlistUrl)}" style="${ACCOUNT_CTA_STYLE} margin-right: 12px;">View results</a>

@@ -374,8 +374,8 @@ export function resolveEmptyWatchlistEventCopy(input: {
   if ((!input.latestRun && input.lastScannedAt) || input.latestRun?.status === "succeeded") {
     if (activationOnly) {
       return input.nextScanLabel
-        ? `No confirmed changes yet — your activation scan is complete. Your next weekly check runs ${input.nextScanLabel}; paid plans check every 3–6 hours.`
-        : "No confirmed changes yet — your activation scan is complete. Your watchlist is checked weekly; paid plans check every 3–6 hours.";
+        ? `No confirmed changes yet — your activation scan is complete. That was your one free first check — recurring checks are a paid plan; paid plans check every 3–6 hours.`
+        : "No confirmed changes yet — your activation scan is complete. No further checks are scheduled on free; paid plans check every 3–6 hours.";
     }
     return input.nextScanLabel
       ? `No confirmed changes yet — we'll flag the next one. Next scheduled scan: ${input.nextScanLabel}.`

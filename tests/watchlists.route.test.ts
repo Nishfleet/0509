@@ -750,7 +750,8 @@ describe("watchlists route rendering", () => {
     expect(copy(run("failed", "provider_unavailable"))).toContain("couldn't finish");
     expect(copy(run("skipped", "e2e_provider_network_denied"))).toContain("paused safely");
     expect(copy(run("succeeded"))).toContain("activation scan is complete");
-    expect(copy(run("succeeded"))).toContain("checked weekly");
+    expect(copy(run("succeeded"))).toContain("No further checks are scheduled on free");
+    expect(copy(run("succeeded"))).not.toContain("checked weekly");
     for (const state of [
       null,
       run("pending"),
