@@ -369,6 +369,26 @@ export function normalizeDeliveryEmail(value: string | null | undefined) {
   return normalized.length > 0 ? normalized : null;
 }
 
+// The provider send is irreversible by the time the account-email senders below
+// record the attempt: the message is already in the inbox. A D1 failure here
+// must not surface as a send failure — the caller would retry, no dedupe row
+// exists (the idempotency key embeds a fresh UUID), and a second identical
+// secret-bearing email goes out. The audit row is best-effort: log and continue.
+async function recordAccountDeliveryAttempt(
+  env: AppEnv,
+  input: Parameters<typeof createDeliveryAttempt>[1],
+) {
+  try {
+    await createDeliveryAttempt(env, input);
+  } catch (error) {
+    console.warn("Account email delivery-attempt record failed after provider send.", {
+      templateName: input.templateName ?? null,
+      userId: input.userId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 // Account-action verification emails (change email, delete account).
 // Transactional: no unsubscribe header, still recorded as delivery attempts;
 // action URLs carry secrets and are never persisted in payload snapshots.
@@ -392,7 +412,7 @@ export async function sendAccountActionEmail(
     unsubscribeUrl: null,
   });
 
-  await createDeliveryAttempt(env, {
+  await recordAccountDeliveryAttempt(env, {
     userId: input.userId,
     watchlistId: null,
     digestRunId: null,
@@ -435,7 +455,7 @@ export async function sendTeamInviteEmail(
     unsubscribeUrl: null,
   });
 
-  await createDeliveryAttempt(env, {
+  await recordAccountDeliveryAttempt(env, {
     userId: input.ownerUserId,
     watchlistId: null,
     digestRunId: null,
@@ -482,7 +502,7 @@ export async function sendPasswordResetEmail(
     unsubscribeUrl: null,
   });
 
-  await createDeliveryAttempt(env, {
+  await recordAccountDeliveryAttempt(env, {
     userId: input.userId,
     watchlistId: null,
     digestRunId: null,
@@ -532,7 +552,7 @@ export async function sendEmailVerificationEmail(
     unsubscribeUrl: null,
   });
 
-  await createDeliveryAttempt(env, {
+  await recordAccountDeliveryAttempt(env, {
     userId: input.userId,
     watchlistId: null,
     digestRunId: null,
