@@ -183,6 +183,24 @@ describe("sanitizeProofDiagnostics", () => {
     expect(serialized).not.toContain("deliveredAt");
   });
 
+  it("captures the route's singular early-return blocker so red runs name their field", () => {
+    // Early returns (missing_active_watchlist et al.) carry `blocker` only —
+    // exactly the shape that left runs 34600179872/34602656730 journaling no
+    // route field at all.
+    const diagnostics = sanitizeProofDiagnostics({
+      ok: false,
+      blocker: "missing_active_watchlist",
+      recipient: "someone@example.com",
+    });
+    expect(diagnostics).toEqual({ blocker: "missing_active_watchlist" });
+    expect(JSON.stringify(diagnostics)).not.toContain("example.com");
+
+    // Non-identifier-shaped blocker strings are dropped, not echoed.
+    expect(
+      sanitizeProofDiagnostics({ ok: false, blocker: "DROP TABLE user; --" }),
+    ).toBeNull();
+  });
+
   it("returns null when there is nothing safe to report", () => {
     expect(sanitizeProofDiagnostics(undefined)).toBeNull();
     expect(sanitizeProofDiagnostics({ ok: false })).toBeNull();
