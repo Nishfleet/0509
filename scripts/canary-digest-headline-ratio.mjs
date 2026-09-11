@@ -540,7 +540,9 @@ function main() {
   };
   emitReport(report, args.json);
 
-  if (fired && args.fileIssue) {
+  // Fixture/local runs never open a production incident: filing is gated on a
+  // real sample the same way history writes are (finding M56).
+  if (fired && args.fileIssue && (sampledFromProd || args.record)) {
     const body = buildIssueBody({ measurement, signal, checkedAt, cutoffIso: cutoffIso ?? checkedAt });
     const command = buildGhIssueCommand({ body, title: ISSUE_TITLE, repo: REPO });
     if (args.dryRun) {
