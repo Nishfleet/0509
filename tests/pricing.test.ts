@@ -187,6 +187,24 @@ describe("pricingPlans", () => {
     }
   });
 
+  it("does not overstate fractional annual savings (#2476)", () => {
+    const preview: LocalPricingPreview = {
+      available: true,
+      prices: {
+        starter: {
+          monthly: { display: "$59.50", amount: 5950, currency: "USD" },
+          yearly: { display: "$499.90", amount: 49990, currency: "USD" },
+        },
+      },
+      annualValidation: { starter: { valid: true } },
+      usageBundles: {},
+    } as unknown as LocalPricingPreview;
+
+    const label = valueMathLabel(preview, "starter", "yearly", true);
+    expect(label).toMatch(/^Save \$214(\.\d{2})? vs monthly$/);
+    expect(label).not.toContain("$215");
+  });
+
   it("displays correct per-day on the USD fallback path when no live preview is present (#2309)", () => {
     for (const plan of ["scout", "starter", "agency"] as const) {
       const label = valueMathLabel(null, plan, "monthly", false);
