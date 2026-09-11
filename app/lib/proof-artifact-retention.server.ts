@@ -322,20 +322,28 @@ export async function deleteProofArtifactsForCapture(
     }
     try {
       if (await artifactReferencedOutsideCapture(env, proofCaptureId, parsed.key)) {
-        const changed = await clearCaptureProofArtifactReference(env, ownerId, proofCaptureId, parsed);
-        results.push(changed === 1
-          ? { key: parsed.key, ok: true, outcome: "revoked_shared", r2: "not_attempted", d1: "updated" }
-          : { key: parsed.key, ok: false, outcome: "d1_failed", r2: "not_attempted", d1: "failed" });
+        try {
+          const changed = await clearCaptureProofArtifactReference(env, ownerId, proofCaptureId, parsed);
+          results.push(changed === 1
+            ? { key: parsed.key, ok: true, outcome: "revoked_shared", r2: "not_attempted", d1: "updated" }
+            : { key: parsed.key, ok: false, outcome: "d1_failed", r2: "not_attempted", d1: "failed" });
+        } catch {
+          results.push({ key: parsed.key, ok: false, outcome: "d1_failed", r2: "not_attempted", d1: "failed" });
+        }
         continue;
       }
       if (!env.LANDING_PAGE_ARTIFACTS) throw new Error("r2_missing");
       const existing = await env.LANDING_PAGE_ARTIFACTS.head(parsed.key);
       const r2 = existing ? "deleted" : "missing";
       if (existing) await env.LANDING_PAGE_ARTIFACTS.delete(parsed.key);
-      const changed = await clearCaptureProofArtifactReference(env, ownerId, proofCaptureId, parsed);
-      results.push(changed === 1
-        ? { key: parsed.key, ok: true, outcome: r2, r2, d1: "updated" }
-        : { key: parsed.key, ok: false, outcome: "d1_failed", r2, d1: "failed" });
+      try {
+        const changed = await clearCaptureProofArtifactReference(env, ownerId, proofCaptureId, parsed);
+        results.push(changed === 1
+          ? { key: parsed.key, ok: true, outcome: r2, r2, d1: "updated" }
+          : { key: parsed.key, ok: false, outcome: "d1_failed", r2, d1: "failed" });
+      } catch {
+        results.push({ key: parsed.key, ok: false, outcome: "d1_failed", r2, d1: "failed" });
+      }
     } catch {
       results.push({ key: parsed.key, ok: false, outcome: "r2_failed", r2: "failed", d1: "not_updated" });
     }
