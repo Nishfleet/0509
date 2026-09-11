@@ -24,13 +24,13 @@ const ALLOWED_DETAIL_KEYS = new Set([
   "error_kind",
 ]);
 
-const OPERATIONS = new Set([
-  "funnel_home_view",
-  "funnel_search_preview_submit",
-  "funnel_search_preview_result",
-  "funnel_search_preview_error",
-  "funnel_signup_start",
-]);
+// The spec reserves the `funnel_` prefix for funnel measurement events
+// (docs/funnel-measurement-spec.md, app/lib/funnel-measurement.server.ts),
+// so match by namespace instead of a fixed allowlist — otherwise every new
+// spec'd funnel event is silently mislabeled as non-funnel.
+function isFunnelOperation(operation) {
+  return typeof operation === "string" && operation.startsWith("funnel_");
+}
 
 function parseRecord(line) {
   try {
@@ -67,7 +67,7 @@ rl.on("line", (line) => {
     return;
   }
   const operation = record.operation;
-  if (typeof operation !== "string" || !OPERATIONS.has(operation)) {
+  if (!isFunnelOperation(operation)) {
     nonFunnelRecords += 1;
     return;
   }
@@ -99,12 +99,21 @@ rl.on("line", (line) => {
 });
 
 rl.on("close", () => {
-  const days = [...counts.keys()]
-    .map((key) => key.split("\u0000")[0])
-    .filter((day, index, all) => all.indexOf(day) === index)
-    .sort();
+  const byOperation = new Map();
+  for (const key of counts.keys()) {
+    const [day, operation] = key.split("\u0000");
+    if (!byOperation.has(operation)) {
+      byOperation.set(operation, new Set());
+    }
+    byOperation.get(operation).add(day);
+  }
+  const days = [...byOperation.values()].flatMap((set) => [...set]).filter((day, index, all) => all.indexOf(day) === index).sort();
+  function operationsOfDay(day) {
+    return [...byOperation.entries()].filter(([, daySet]) => daySet.has(day)).map(([operation]) => operation);
+  }
+
   for (const day of days) {
-    for (const operation of [...OPERATIONS].sort()) {
+    for (const operation of operationsOfDay(day).sort()) {
       const cell = counts.get(`${day}\u0000${operation}`);
       if (!cell) {
         continue;

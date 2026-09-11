@@ -539,7 +539,7 @@ function main() {
       // probe verdict.
     }
 
-    if (validation.verdict === "fail" && args.fileIssue) {
+    if (validation.verdict === "fail" && args.fileIssue && !args.local) {
       const repo = "Nishfleet/0509";
       const darkDomains = results
         .filter((r) => validateTimelineProbe(r).verdict === "fail")
@@ -637,7 +637,7 @@ function main() {
     console.log(renderHumanReport({ counts, local: args.local, checkedAt, validation }));
   }
 
-  if (validation.verdict === "fail" && args.fileIssue) {
+  if (validation.verdict === "fail" && args.fileIssue && !args.local) {
     const repo = "Nishfleet/0509";
     const zeroDomains = Object.entries(counts)
       .filter(([, n]) => Number(n) <= 0)

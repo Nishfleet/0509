@@ -1,8 +1,13 @@
-# Issue 2473 — fix full-ISO capture timestamps on /competitor-monitoring (M48)
+# 0509#2478 — first-scan retry limit exceeds D1 claim cap
 
-Judge binding: port the homepage full-ISO branch VERBATIM into competitor-monitoring.tsx `proofTimeLabel`.
-Do NOT extract a shared module (marketing.tsx is off the files line).
+manager note: phases 1-6 run in one worker pass — single-file defect fix, splitting adds handoff cost with no review value.
 
-- [x] phase 1 (DONE, RED proven): new tests/competitor-monitoring-timestamps.test.ts renders the route with proofBrief.proofTrail[0].capturedAt = "2026-09-07T06:18:00.000Z"; before the fix the trail rendered "Captured 11:48 AM" (bare clock, no date) and the "Sep 7" assertion failed
-- [x] phase 2 (DONE, GREEN proven): app/routes/competitor-monitoring.tsx proofTimeLabel full-ISO branch now month:"short", day:"numeric", hour, minute, conditional year (getUTCFullYear compare), timeZone:"UTC" — verbatim shape of marketing.tsx's branch. Sweep result: the route's ONLY other toLocaleString is the date-only branch (lines 93-98), which per binding is untouched; no other hour/minute-only instances exist. GREEN: npx vitest run tests/competitor-monitoring-category.test.ts tests/competitor-monitoring-timestamps.test.ts = 14/14 passing. Not committed (per task instruction).
-- [x] phase 3: GREEN run: npx vitest run tests/competitor-monitoring-category.test.ts (and any new test file); commit; PR with RED evidence, GREEN evidence, instance list; arm auto-merge
+- [x] phase 1: Import FIRST_SCAN_MAX_ATTEMPTS from app/lib/monitoring-fanout.server in workers/monitoring-workflow.ts
+- [x] phase 2: Set run-first-watchlist-scan step retry limit to FIRST_SCAN_MAX_ATTEMPTS - 1 (no NonRetryableError change)
+- [x] phase 3: Add static assertion test in tests/monitoring-workflow.test.ts that the step limit equals FIRST_SCAN_MAX_ATTEMPTS - 1 (RED with literal 6)
+- [x] phase 4: Add GREEN characterization test seeding a watchlist_run with attempt_count = 4, status = 'pending', expecting runFirstWatchlistScanWorkflowJob(...).rejects.toThrow(/owned or exhausted/)
+- [x] phase 5: Sweep workers/*.ts (and siblings) for other retry limits exceeding claim caps; fix any instance found in the same PR
+- [x] phase 6: Run npx vitest run --configLoader runner --project node tests/monitoring-workflow*.test.ts green; typecheck is CI-owned
+Consider: test anchors in tests/monitoring-workflow.test.ts are string-based (import order, indexOf slice) — add a "update anchors if step config is restructured" comment in a follow-up.
+Noted: scheduled step literal limit:3 vs SCHEDULED_SCAN_MAX_ATTEMPTS=8 — no cap breach; potential follow-up issue.
+- [x] phase 4: CI round 1 failed (TS2741 missing creativeId in test fixture, both codex-node-checks + preview-assert); fixed by adding creativeId:"creative-1"; local run 14/14 GREEN; merged origin/main to resolve .fleet/plan.md conflict.

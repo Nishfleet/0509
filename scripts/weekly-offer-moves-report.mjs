@@ -88,11 +88,37 @@ function newAdCount(afterText) {
   return count ?? 1;
 }
 
-/** True when the offer/price move's after number is below its before number. */
+/**
+ * First currency-prefixed amount in an offer string, with its currency
+ * marker ("₹1,299" -> { currency: "₹", amount: 1299 }). Percent-off, BOGO,
+ * and bare-number texts carry no currency marker and return null — those
+ * are offer changes, never price drops (issue #2488).
+ */
+function currencyAmount(value) {
+  if (typeof value !== "string") return null;
+  const match =
+    /(₹|\brs\.?|[$€£]|\b(?:usd|eur|gbp)\b)\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i.exec(
+      value,
+    );
+  if (!match) return null;
+  const amount = Number(match[2].replaceAll(",", ""));
+  if (!Number.isFinite(amount)) return null;
+  return { currency: match[1].toLowerCase().replace(/\.$/, ""), amount };
+}
+
+/**
+ * True only when both sides carry the SAME currency symbol or code
+ * (₹, $, USD are distinct) and the after amount is below the before amount.
+ */
 function isPriceDrop(move) {
-  const before = firstNumber(move.beforeText);
-  const after = firstNumber(move.afterText);
-  return before !== null && after !== null && after < before;
+  const before = currencyAmount(move.beforeText);
+  const after = currencyAmount(move.afterText);
+  return (
+    before !== null &&
+    after !== null &&
+    before.currency === after.currency &&
+    after.amount < before.amount
+  );
 }
 
 function captureDate(capturedAt) {

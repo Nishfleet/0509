@@ -301,7 +301,7 @@ async function fetchPageChange(
 
   const title = extractTitle(response.body) ?? "Website update";
   const observedAt = new Date().toISOString();
-  const contentHash = await presenceContentHash({ title, bodyExcerpt: response.body.slice(0, 500) });
+  const contentHash = await presenceContentHash({ title, bodyExcerpt: stripHtml(response.body).slice(0, 280) });
   const item: NormalizedPresenceItem = {
     externalId: null,
     canonicalUrl: siteUrl,

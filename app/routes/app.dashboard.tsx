@@ -9,6 +9,7 @@ import {
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { DashboardPage } from "~/components/dashboard-page";
+import { DeliveryTimezoneCapture } from "~/components/delivery-timezone-capture";
 import {
   DashboardRouteError,
   DashboardRouteLoading,
@@ -655,6 +656,48 @@ export async function action(args: ActionFunctionArgs) {
     return { ok: true, intent, message: "Marked done." };
   }
 
+  if (intent === "capture-delivery-timezone") {
+    // The Delivery settings card no longer renders a timezone input, so the
+    // browser is the only place that knows the user's zone. Capture it once on
+    // first app load, and never again: a later load must not overwrite a value
+    // the account already has. Existing rows with no timezone read as UTC
+    // (safeTimeZone) until this lands. No data migration.
+    const {
+      getWorkspaceDeliveryConfig,
+      legacyWorkspaceDeliveryDefaults,
+      upsertWorkspaceDeliveryConfig,
+    } = await import("~/lib/data.server");
+    const { normalizeTimeZone } = await import("~/lib/safe-timezone");
+    const existing = await getWorkspaceDeliveryConfig(env, workspaceUserId);
+    if (existing?.timezone) {
+      return { ok: true, intent };
+    }
+    const timezone = normalizeTimeZone(
+      String(formData.get("timezone") ?? ""),
+    );
+    if (!timezone) {
+      return { ok: false, intent, message: "That timezone wasn't recognised." };
+    }
+    const defaults = legacyWorkspaceDeliveryDefaults({
+      hasEmail: Boolean(workspace.session?.user?.email),
+    });
+    await upsertWorkspaceDeliveryConfig(env, {
+      userId: workspaceUserId,
+      sensitivityMode: existing?.sensitivityMode ?? defaults.sensitivityMode,
+      instantEnabled: existing?.instantEnabled ?? defaults.instantEnabled,
+      digestEnabled: existing?.digestEnabled ?? defaults.digestEnabled,
+      digestCadencePreference:
+        existing?.digestCadencePreference ?? defaults.digestCadencePreference,
+      emailEnabled: existing?.emailEnabled ?? defaults.emailEnabled,
+      whatsappEnabled: existing?.whatsappEnabled ?? defaults.whatsappEnabled,
+      slackEnabled: existing?.slackEnabled ?? defaults.slackEnabled,
+      teamsEnabled: existing?.teamsEnabled ?? defaults.teamsEnabled,
+      quietHours: existing?.quietHours ?? null,
+      timezone,
+    });
+    return { ok: true, intent };
+  }
+
   return {
     ok: false,
     message: "We couldn't complete that action. Refresh the page and try again.",
@@ -798,6 +841,9 @@ export default function AppDashboardRoute() {
 
   return (
     <DashboardPage className="f9-wk-page f9-overview">
+      <DeliveryTimezoneCapture
+        needsTimezone={data.workspaceDeliveryTimezone === null}
+      />
       <WorkingHeader
         action={
           hasBlockingSetupGaps
