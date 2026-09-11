@@ -39,7 +39,13 @@ interface FakeQuery {
   bindings: unknown[];
 }
 
-function fakeD1Env(tables: { watchlists?: unknown[]; events?: unknown[] }) {
+interface FakeEventRow {
+  created_at: string;
+  watchlist_id: string;
+  status: string;
+}
+
+function fakeD1Env(tables: { watchlists?: unknown[]; events?: FakeEventRow[] }) {
   const queries: FakeQuery[] = [];
   const env = {
     DB: {
@@ -60,7 +66,7 @@ function fakeD1Env(tables: { watchlists?: unknown[]; events?: unknown[] }) {
                   const watchlists = bindings.slice(0, -2).map(String);
                   const rows = (tables.events ?? [])
                     .filter(
-                      (event: { created_at: string; watchlist_id: string; status: string }) =>
+                      (event: FakeEventRow) =>
                         watchlists.includes(event.watchlist_id) &&
                         event.status === "confirmed" &&
                         event.created_at >= since,
@@ -125,7 +131,7 @@ let loadIndexableAdsInternalLinks: ReturnType<typeof vi.fn>;
 function installLoaderMocks(options: {
   links?: { domain: string; path: string; name: string }[];
   watchlists?: unknown[];
-  events?: unknown[];
+  events?: FakeEventRow[];
 } = {}) {
   loadIndexableAdsInternalLinks = vi.fn().mockResolvedValue(
     options.links ?? [
