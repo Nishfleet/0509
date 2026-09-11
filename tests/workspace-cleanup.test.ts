@@ -639,7 +639,7 @@ describe("operator alert FK attribution", () => {
       {
         EMAIL: { send: emailSend },
         EMAIL_FROM_EMAIL: "alerts@0509.io",
-        LAUNCH_CANARY_EMAIL: "me@inish.in",
+        LAUNCH_CANARY_EMAIL: "alerts@0509.io",
       } as never,
       { subject: "test", lines: ["signal"] },
     );
@@ -661,7 +661,7 @@ describe("operator alert FK attribution", () => {
       {
         EMAIL: { send: emailSend },
         EMAIL_FROM_EMAIL: "alerts@0509.io",
-        LAUNCH_CANARY_EMAIL: "me@inish.in",
+        LAUNCH_CANARY_EMAIL: "alerts@0509.io",
       } as never,
       {
         subject: "0509 support case: Digest did not arrive",
@@ -693,7 +693,7 @@ describe("operator alert FK attribution", () => {
       {
         EMAIL: { send: emailSend },
         EMAIL_FROM_EMAIL: "alerts@0509.io",
-        LAUNCH_CANARY_EMAIL: "me@inish.in",
+        LAUNCH_CANARY_EMAIL: "alerts@0509.io",
       } as never,
       {
         subject: "0509 support case reopened: Delete my account",
@@ -725,7 +725,7 @@ describe("operator alert FK attribution", () => {
       {
         EMAIL: { send: emailSend },
         EMAIL_FROM_EMAIL: "alerts@0509.io",
-        LAUNCH_CANARY_EMAIL: "me@inish.in",
+        LAUNCH_CANARY_EMAIL: "alerts@0509.io",
       } as never,
       { subject: "test", lines: ["signal"], idempotencyKey: "operator-deletion:user-9" },
     );
@@ -751,7 +751,7 @@ describe("operator alert FK attribution", () => {
     const env = {
       EMAIL: { send: emailSend },
       EMAIL_FROM_EMAIL: "alerts@0509.io",
-      LAUNCH_CANARY_EMAIL: "me@inish.in",
+      LAUNCH_CANARY_EMAIL: "alerts@0509.io",
     } as never;
     const input = {
       subject: "test",
@@ -777,7 +777,7 @@ describe("operator alert FK attribution", () => {
         {
           EMAIL: { send: emailSend },
           EMAIL_FROM_EMAIL: "alerts@0509.io",
-          LAUNCH_CANARY_EMAIL: "me@inish.in",
+          LAUNCH_CANARY_EMAIL: "alerts@0509.io",
         } as never,
         {
           subject: "test",
@@ -803,7 +803,7 @@ describe("operator alert FK attribution", () => {
         {
           EMAIL: { send: emailSend },
           EMAIL_FROM_EMAIL: "alerts@0509.io",
-          LAUNCH_CANARY_EMAIL: "me@inish.in",
+          LAUNCH_CANARY_EMAIL: "alerts@0509.io",
         } as never,
         {
           subject: "test",
@@ -845,7 +845,7 @@ describe("operator alert FK attribution", () => {
     const env = {
       EMAIL: { send: vi.fn() },
       EMAIL_FROM_EMAIL: "alerts@0509.io",
-      LAUNCH_CANARY_EMAIL: "me@inish.in",
+      LAUNCH_CANARY_EMAIL: "alerts@0509.io",
     } as never;
     const outcomes = [];
     for (let index = 0; index < providerResults.length; index += 1) {
@@ -902,7 +902,7 @@ describe("operator alert FK attribution", () => {
       {
         EMAIL: { send: emailSend },
         EMAIL_FROM_EMAIL: "alerts@0509.io",
-        LAUNCH_CANARY_EMAIL: "me@inish.in",
+        LAUNCH_CANARY_EMAIL: "alerts@0509.io",
       } as never,
       { subject: "test", lines: ["signal"], idempotencyKey: "support-case:case-1" },
     );

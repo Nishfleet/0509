@@ -245,7 +245,7 @@ free tier —
 2. Add an HTTP(s) monitor for `https://0509.io/api/health`, interval 5 min.
 3. Add a keyword check that the response contains `ok` (the health endpoint
    returns JSON with a `status` field).
-4. Alert contact: nishant345@gmail.com (or me@inish.in).
+4. Alert contact: alerts@0509.io.
 
 The endpoint is public and unauthenticated by design. `/api/health` does **not** query D1 — a database blip should not flip the external monitor while the Worker edge is healthy. Operators who need a D1 check can hit `/api/health/deep` (cheap `SELECT 1`, returns per-dependency status, rate-limited under the public api-read bucket).
 

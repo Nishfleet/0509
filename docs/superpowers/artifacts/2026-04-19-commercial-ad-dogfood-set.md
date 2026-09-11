@@ -14,9 +14,9 @@ The goal is not broad market coverage. The goal is to verify the full operator l
 
 ## Internal Account
 
-- account email: `me@inish.in`
+- account email: `alerts@0509.io`
 - channels:
-  - email: `me@inish.in`
+  - email: `alerts@0509.io`
   - WhatsApp: `+91XXXXXXXXXX` (redacted: real number lives in the credential store, not the repo)
 
 ## Initial Watchlists

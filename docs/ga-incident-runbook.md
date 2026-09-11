@@ -64,5 +64,5 @@ npm run deploy
 
 ## Contacts
 
-- Operator: Nish (`me@inish.in` launch canary email in wrangler vars)
+- Operator: Nish (`alerts@0509.io` launch canary email in wrangler vars)
 - Support customers: `support@0509.io`
