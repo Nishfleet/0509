@@ -123,6 +123,21 @@ describe("provider failure still surfaces", () => {
     ).rejects.toThrow();
   });
 
+  it("sendPasswordResetEmail still throws the provider error when the audit insert also fails", async () => {
+    mockDeliveryDataServer(recordFailure());
+    const { env } = emailSendEnv(vi.fn().mockRejectedValue(new Error("provider down")));
+    const { sendPasswordResetEmail } = await import("~/lib/delivery-account-emails.server");
+
+    await expect(
+      sendPasswordResetEmail(env, {
+        userId: "user-1",
+        email: "owner@example.com",
+        name: "Owner",
+        resetUrl: "https://0509.io/api/auth/reset-password?token=secret-token",
+      }),
+    ).rejects.toThrow();
+  });
+
   it("sendEmailVerificationEmail throws when the provider reports failure", async () => {
     mockDeliveryDataServer();
     const { env } = emailSendEnv(vi.fn().mockRejectedValue(new Error("provider down")));

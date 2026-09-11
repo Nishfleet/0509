@@ -383,6 +383,7 @@ async function recordAccountDeliveryAttempt(
   } catch (error) {
     console.warn("Account email delivery-attempt record failed after provider send.", {
       templateName: input.templateName ?? null,
+      userId: input.userId,
       error: error instanceof Error ? error.message : String(error),
     });
   }
