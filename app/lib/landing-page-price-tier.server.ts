@@ -71,30 +71,31 @@ const USD_TO_EUR = 0.92;
 const GBP_TO_EUR = 1.17;
 
 /**
- * Currency markers the extractor does not recognise, lowercased. If any
+ * Currency markers the extractor does not recognise, uppercased. If any
  * appears in `price_text` (checked case-insensitively against the
  * uppercased input), `parsePriceToEur` returns `null` rather than
  * assuming the value is EUR — the extractor never invents an FX rate.
  * `₹` and `¥` are matched literally; the codes are matched against the
- * uppercased input. The two `Rs` forms cover both "Rs.1,999" and
- * "Rs 1,999" when uppercased ("RS." / "RS ").
+ * uppercased input, so every marker MUST be stored already uppercased.
+ * The two `Rs` forms cover both "Rs.1,999" and "Rs 1,999" once
+ * uppercased ("RS." / "RS ").
  */
 const UNRECOGNISED_CURRENCY_MARKERS = [
   "₹",
-  "rs.",
-  "rs ",
-  "inr",
+  "RS.",
+  "RS ",
+  "INR",
   "¥",
-  "jpy",
-  "cny",
-  "aud",
-  "cad",
-  "chf",
-  "sek",
-  "nok",
-  "dkk",
-  "rub",
-  "krw",
+  "JPY",
+  "CNY",
+  "AUD",
+  "CAD",
+  "CHF",
+  "SEK",
+  "NOK",
+  "DKK",
+  "RUB",
+  "KRW",
 ] as const;
 
 /**
