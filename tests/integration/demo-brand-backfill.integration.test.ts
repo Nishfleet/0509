@@ -423,4 +423,91 @@ describe("demo brand nightly backfill (issue #1449)", () => {
     const mamaearthLater = laterResult.domains.find((r) => r.domain === "mamaearth.com");
     expect(mamaearthLater?.status).toBe("skipped_stopped");
   });
+
+  it("does not overwrite a concurrent run's row when the INSERT OR IGNORE is ignored (issue #2451)", async () => {
+    // The nightly 04:00 backfill and the hourly proof-hole catch-up can
+    // overlap on the same (domain, day): both pass the SELECT existence
+    // check, both spend a capture, and one INSERT OR IGNORE wins. The loser
+    // must not run replaceAnalysisFields against the winner's row and must
+    // report the skip, not a capture it did not write.
+    const day = "2026-11-01";
+    const rowId = demoBackfillRowId("nike.com", day);
+    const stub = makeStubCapture(day, 11);
+
+    const captureStub = async (_env: unknown, url: string) => {
+      const domain = DEMO_BRAND_PAGE_DOMAINS.find((d) => url.includes(d));
+      if (!domain) return null;
+      if (domain === "nike.com") {
+        // Simulated concurrent winner: the deterministic row lands between
+        // this run's existence check and its INSERT OR IGNORE, carrying its
+        // own analysis fields.
+        await db()
+          .prepare(
+            `INSERT INTO landing_page_snapshot (
+               id, raw_url, canonical_url, raw_headline, normalized_headline,
+               normalized_headline_hash, capture_method, captured_at, created_at
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .bind(
+            rowId,
+            `https://www.nike.com/`,
+            `https://www.nike.com/`,
+            `Winner headline ${day}`,
+            `winner headline ${day}`,
+            `winner-hash-${day}`,
+            "browser_render",
+            `${day}T00:30:00.000Z`,
+            `${day}T00:30:00.000Z`,
+          )
+          .run();
+        await db()
+          .prepare(
+            `INSERT INTO analysis_field (
+               id, scope_type, scope_id, field_key, field_value,
+               provenance_source, extractor_version, confidence,
+               metadata_json, created_at, updated_at
+             ) VALUES (?, 'landing_page', ?, 'hook', ?, 'browser_render',
+               'winner-test', 0.9, NULL, ?, ?)`,
+          )
+          .bind(
+            `af-winner-${day}`,
+            rowId,
+            `WINNER-ANALYSIS-${day}`,
+            `${day}T00:30:00.000Z`,
+            `${day}T00:30:00.000Z`,
+          )
+          .run();
+      }
+      return stub(domain).snapshot;
+    };
+
+    const result = await runDemoBrandBackfill(appEnv, {
+      now: new Date(`${day}T01:00:00.000Z`),
+      capture: captureStub as never,
+      domains: ["nike.com"],
+    });
+
+    const nike = result.domains.find((r) => r.domain === "nike.com");
+    expect(nike?.status).toBe("skipped_already_captured");
+    expect(nike?.snapshotId).toBe(rowId);
+    expect(result.capturedCount).toBe(0);
+
+    // The winner's row and its analysis fields are authoritative: the
+    // loser's ignored insert must not trigger the analysis rewrite.
+    const row = await db()
+      .prepare(`SELECT raw_headline FROM landing_page_snapshot WHERE id = ?`)
+      .bind(rowId)
+      .first<{ raw_headline: string }>();
+    expect(row?.raw_headline).toBe(`Winner headline ${day}`);
+    const fields = await db()
+      .prepare(
+        `SELECT field_key, field_value FROM analysis_field
+         WHERE scope_type = 'landing_page' AND scope_id = ?`,
+      )
+      .bind(rowId)
+      .all<{ field_key: string; field_value: string }>();
+    expect(fields.results).toEqual([
+      { field_key: "hook", field_value: `WINNER-ANALYSIS-${day}` },
+    ]);
+  });
 });
