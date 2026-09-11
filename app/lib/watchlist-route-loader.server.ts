@@ -352,7 +352,7 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
     ...new Set(
       events
         .map((event) => event.proofCaptureId)
-        .filter((id): id is string => Boolean(id) && !recentCaptureIds.has(id)),
+        .filter((id): id is string => id !== null && !recentCaptureIds.has(id)),
     ),
   ];
   let mergedProofCaptures = recentProofCaptures;
