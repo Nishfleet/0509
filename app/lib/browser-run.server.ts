@@ -452,10 +452,16 @@ async function handleGuardedBrowserRequest(request: BrowserRequestLike) {
     return;
   }
 
-  if (allowed) {
-    await request.continue();
-  } else {
-    await request.abort();
+  try {
+    if (allowed) {
+      await request.continue();
+    } else {
+      await request.abort();
+    }
+  } catch {
+    // Request already resolved or the target closed while the guard's async
+    // DNS check was in flight — the race is lost, so there is nothing left to
+    // continue or abort and the rejection must not escape the void-ed handler.
   }
 }
 
