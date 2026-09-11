@@ -83,6 +83,7 @@
     "scripts/search-tier-canary.mjs",
     "scripts/canary-sneaker-resale-recall.mjs",
     "scripts/check-d1-fullsite-runs.mjs",
+    "scripts/weekly-business-metrics.mjs",
     "tests/**/*",
     "extension/lib/**/*.mjs",
     "app/**/*",
