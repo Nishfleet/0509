@@ -39,7 +39,7 @@ interface MockOptions {
   asOfState?: OfferLedgerEntry | null;
   rateLimitResponse?: Response | null;
   loadError?: Error;
-  /** /ads cohort sitemap paths the collecting/retire decision reads (#2021). */
+  /** Indexable /ads cohort paths the collecting/retire decision reads (#2021, #2881). */
   sitemapBrandPaths?: string[];
   /** Capture-backed /timeline sitemap paths the collecting/retire decision reads. */
   sitemapTimelinePaths?: string[];
@@ -74,8 +74,9 @@ function installMocks(options: MockOptions = {}) {
         appEnv.PUBLIC_OFFER_TIMELINE_SHARE?.trim() !== "0",
     };
   });
-  // Issue #2021: the collecting/retire decision reads the sitemap's timeline
-  // set. Mock at the adapter boundary; unmocked tests degrade to unlisted.
+  // Issue #2021 + #2881: the collecting/retire decision reads the tracked
+  // /ads cohort and the capture-backed timeline set. Mock at the adapter
+  // boundary; unmocked tests degrade to unlisted.
   const brandPaths = options.sitemapBrandPaths ?? [];
   const timelinePaths = options.sitemapTimelinePaths ?? [];
   vi.doMock("~/lib/sitemap.server", async (importOriginal) => {
@@ -234,7 +235,7 @@ describe("/timeline/:domain loader", () => {
     ).rejects.toMatchObject({ status: 410 });
   });
 
-  it("renders an indexable collecting 200 for a tracked /ads cohort brand with no captures yet (#2021)", async () => {
+  it("renders a collecting 200 for a tracked /ads cohort brand with no captures yet — now robots-noindex and never sitemap-listed (#2021, #2881)", async () => {
     const mocks = installMocks({
       entries: [],
       sitemapBrandPaths: ["/ads/gymshark.com"],
@@ -247,11 +248,13 @@ describe("/timeline/:domain loader", () => {
     );
 
     expect(result.collecting).toBe(true);
-    expect(result.noindex).toBe(false);
+    // Issue #2881: a zero-state page is always noindex — BET 5 "no page
+    // ships empty"; it renders honestly but is never an indexed surface.
+    expect(result.noindex).toBe(true);
     expect(result.entries).toEqual([]);
   });
 
-  it("renders the collecting state indexable when only the capture-backed timeline set lists the domain", async () => {
+  it("renders the collecting 200 (noindex) when only the capture-backed timeline set lists the domain", async () => {
     const mocks = installMocks({
       entries: [],
       sitemapTimelinePaths: ["/timeline/calendly.com"],
@@ -263,10 +266,11 @@ describe("/timeline/:domain loader", () => {
       mocks.env,
     );
 
-    // D1 read succeeded but returned zero rows while the sitemap lists the
-    // domain — collecting 200, indexable, never 410.
+    // D1 read succeeded but returned zero rows while the capture-backed
+    // sitemap set lists the domain — a transient inconsistency; collecting
+    // 200, noindex (issue #2881), never 410.
     expect(result.collecting).toBe(true);
-    expect(result.noindex).toBe(false);
+    expect(result.noindex).toBe(true);
   });
 });
 

@@ -41,6 +41,9 @@ const COMPARE_PAGES = [
   { slug: "panoramata", label: "Five to Nine vs Panoramata", href: "/compare/panoramata" },
   { slug: "adspyder", label: "Five to Nine vs AdSpyder", href: "/compare/adspyder" },
   { slug: "adspy", label: "Five to Nine vs AdSpy", href: "/compare/adspy" },
+  // Issue #2866: two verified competitors that had no compare page (both 404'd).
+  { slug: "keeptabz", label: "Five to Nine vs KeepTabz", href: "/compare/keeptabz" },
+  { slug: "gethookd", label: "Five to Nine vs GetHookd", href: "/compare/gethookd" },
 ] as const;
 
 /**
@@ -107,7 +110,7 @@ const COMPARE_TABLE: readonly CompareTableRow[] = [
     vendor: "Spyland",
     href: "/compare/spyland",
     adLibrary: NOT_PUBLISHED,
-    landingPageDiffs: "Yes — daily checks, before/after screenshots",
+    landingPageDiffs: "Yes — scheduled checks, before/after screenshots",
     proofCaptures: NOT_PUBLISHED,
     listPrice: NOT_PUBLISHED,
   },

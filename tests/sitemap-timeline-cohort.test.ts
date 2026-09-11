@@ -649,7 +649,7 @@ describe("sitemapTimelineExcludedDomains (static, no D1)", () => {
     // Sneaker seed domains (first, last, and an interior one).
     expect(excluded).toContain("nike.com");
     expect(excluded).toContain("stockx.com");
-    expect(excluded).toContain("sneakerping.com");
+    expect(excluded).toContain("finishline.com");
 
     // Length is derived from the live seed list (it grows with market-signal
     // refreshes — never hardcode it): 5 demo brands ∪ seed domains, deduped.

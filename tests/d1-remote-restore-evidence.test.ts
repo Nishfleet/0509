@@ -194,7 +194,9 @@ describe("D1 remote restore evidence automation", () => {
           [
             'const { writeFileSync } = require("node:fs");',
             "writeFileSync(process.argv[1], String(process.pid));",
-            'process.on("SIGTERM", () => setTimeout(() => process.exit(0), 250));',
+            // The SIGTERM handler leaves a marker: proof the child was asked to
+            // stop gracefully (forwarded SIGTERM), not reaped by SIGKILL.
+            'process.on("SIGTERM", () => { writeFileSync(process.argv[1] + ".sigterm", "1"); setTimeout(() => process.exit(0), 250); });',
             "setInterval(() => {}, 1_000);",
           ].join(""),
         )}, process.argv[2]]);`,
@@ -223,10 +225,19 @@ describe("D1 remote restore evidence automation", () => {
       expect(pidAlive(childPid)).toBe(true);
 
       helperProcess.kill("SIGTERM");
-      await new Promise((resolveDelay) => setTimeout(resolveDelay, 50));
-      expect(pidAlive(childPid)).toBe(true);
-
+      // Deterministic forwarding proof: the child's own SIGTERM handler ran
+      // (marker file) and the child is gone once the helper has exited. The
+      // previous "still alive 50ms after SIGTERM" probe raced the child's
+      // 250ms graceful exit under CI load and failed the merge-queue batch
+      // for #2896 (run 34582626439) without proving anything about
+      // forwarding.
       expect(await completed).toEqual({ code: null, signal: "SIGTERM" });
+      const gone = Date.now() + 5_000;
+      while (pidAlive(childPid)) {
+        if (Date.now() >= gone) break;
+        await new Promise((resolveDelay) => setTimeout(resolveDelay, 25));
+      }
+      expect(existsSync(`${childPidFile}.sigterm`)).toBe(true);
       expect(pidAlive(childPid)).toBe(false);
     } finally {
       helperProcess.kill("SIGKILL");

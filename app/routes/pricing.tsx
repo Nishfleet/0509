@@ -1,5 +1,5 @@
 import { useLoaderData, useRouteLoaderData } from "react-router";
-import type { HeadersArgs, LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
+import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { TrustProofNote } from "~/components/trust-proof-note";
 import { MarketingNav } from "~/components/marketing-nav";
@@ -10,7 +10,6 @@ import {
   billingFaqJsonLdEntries,
 } from "~/components/pricing-section";
 import type { PublicCommercialLaunchSummary } from "~/lib/commercial-launch-gate.server";
-import { noPricingPreview, pricingPreviewWithinBound } from "~/lib/pricing-preview.server";
 import {
   canonicalLinks,
   faqPageJsonLd,
@@ -21,36 +20,29 @@ import {
 } from "~/lib/seo";
 import type { RootLoaderData } from "~/root";
 
+// Issue #2694: /pricing no longer SSRs buyer-country Dodo prices. The loader
+// always returns the "no preview" sentinel and PricingSection fetches the
+// existing /api/pricing-preview from the client, so the worker can stamp the
+// shared `public, max-age=300` policy on this page.
+const noPricingPreview = { available: false } as const;
+
 const pricingTitle = "Pricing | Five to Nine";
 const pricingDescription =
   "Competitor monitoring plans: free single-competitor watch, Scout, Starter, and Agency, plus proof capture packs. Prices localize at checkout.";
 
 export const links: LinksFunction = () => canonicalLinks("/pricing");
 
-// Same reason as marketing.tsx: React Router only merges Set-Cookie from loader
-// responses into the document; without a headers export the private
-// cache-control carrying buyer-country prices would be dropped.
-export function headers({ loaderHeaders }: HeadersArgs) {
-  return loaderHeaders;
-}
-
 export const meta: MetaFunction = () =>
   publicSeoMeta({ title: pricingTitle, description: pricingDescription, pathname: "/pricing" });
 
-export async function loader({ context, request }: LoaderFunctionArgs) {
+export async function loader({ context }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const { publicCommercialLaunchSummary } = await import("~/lib/commercial-launch-gate.server");
   const env = getEnv(context);
   const commercialLaunch = publicCommercialLaunchSummary(env);
-  const pricingPreview = await pricingPreviewWithinBound({ env, request });
-
-  if (pricingPreview.available) {
-    // Buyer-country prices embedded → browser-only caching, same as home.
-    return Response.json(
-      { pricingPreview, commercialLaunch },
-      { headers: { "Cache-Control": "private, max-age=300", Vary: "cookie" } },
-    );
-  }
+  // No SSR pricing preview: PricingSection resolves buyer-country prices via
+  // the client fetch, so this document stays off the 2.5s SSR bound and the
+  // worker's PUBLIC_CACHEABLE_HTML_PATHS policy actually applies.
   return { pricingPreview: noPricingPreview, commercialLaunch };
 }
 

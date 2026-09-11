@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  COUNTRY_VARYING_PUBLIC_HOME_CACHE_CONTROL,
   EXPECTED_FONT_SRC_FONTS_HOST,
   EXPECTED_PUBLIC_HOME_CACHE_CONTROL,
   EXPECTED_SCRIPT_SRC_BEACON_HOST,
@@ -366,7 +365,11 @@ describe("Worker security headers", () => {
 
   describe("anonymous public HTML caching", () => {
     it("lets anonymous public pages carry short browser caching", () => {
+<<<<<<< HEAD
       for (const path of ["/", "/help", "/docs", "/terms", "/ads/nike.com", "/timeline/nike.com", "/compare/visualping", "/compare/visualping-ad-library", "/compare/visualping-ad-libraries", "/compare/spyland", "/compare/pulzifi", "/compare/foreplay", "/compare/foreplay-spyder", "/compare/panoramata", "/compare/adspyder", "/compare/adspy", "/switch/panoramata", "/switch/visualping", "/switch/magicbrief", "/methodology"]) {
+=======
+      for (const path of ["/", "/help", "/docs", "/terms", "/ads/nike.com", "/timeline/nike.com", "/compare/visualping", "/compare/visualping-ad-library", "/compare/visualping-ad-libraries", "/compare/spyland", "/compare/pulzifi", "/compare/foreplay", "/compare/foreplay-spyder", "/compare/panoramata", "/compare/adspyder", "/compare/adspy", "/switch/panoramata", "/switch/visualping", "/methodology/ad-aggression-score"]) {
+>>>>>>> origin/main
         const response = withSecurityHeaders(
           htmlResponse(),
           new Request(`https://0509.io${path}`),
@@ -435,17 +438,16 @@ describe("Worker security headers", () => {
       // public, max-age=300), deploys would fail on a policy that is actually
       // correct. Import both constants and assert they can never diverge.
       expect(EXPECTED_PUBLIC_HOME_CACHE_CONTROL).toBe(PUBLIC_HTML_CACHE_CONTROL);
-      // The SSR-pricing variant (private) must stay within the same bounded,
-      // SWR-free stale window the gate enforces for the shared-cache variant.
-      expect(COUNTRY_VARYING_PUBLIC_HOME_CACHE_CONTROL).toBe("private, max-age=300");
-      expect(COUNTRY_VARYING_PUBLIC_HOME_CACHE_CONTROL).not.toContain("stale-while-revalidate");
+      // The last SSR-pricing private variant is gone (#2694); no second policy
+      // is accepted by the gate anymore.
+      expect(PUBLIC_HTML_CACHE_CONTROL).not.toContain("private");
     });
 
     it("honors an explicitly-set cache-control on public cacheable HTML", () => {
-      // The marketing page embeds buyer-country Dodo prices in its SSR HTML,
-      // so it sets `private, max-age=300` itself. The worker must respect that
-      // instead of stamping the generic public policy — a shared cache must
-      // never replay one country's prices for another visitor.
+      // The worker must respect an app-set cache-control instead of stamping
+      // the generic public policy (e.g. any future page that pins itself to a
+      // browser-only variant — a shared cache must never replay one visitor's
+      // state for another).
       const response = withSecurityHeaders(
         new Response("<!doctype html>", {
           headers: {
@@ -459,7 +461,7 @@ describe("Worker security headers", () => {
 
       expect(response.headers.get("cache-control")).toBe("private, max-age=300");
       expect(response.headers.get("vary")).toBe("cookie");
-      // Security headers still apply to the private variant.
+      // Security headers still apply to the explicitly-set private variant.
       expect(response.headers.get("strict-transport-security")).toBe(
         SECURITY_HEADERS["strict-transport-security"],
       );
@@ -476,31 +478,24 @@ describe("Worker security headers", () => {
     });
 
     it("honors an app-set cache-control on cacheable HTML instead of stamping the public policy", () => {
-      // The marketing page embeds buyer-country Dodo prices in its SSR HTML
-      // and therefore serves `private, max-age=300` (browser-only: a shared
-      // cache must never replay one country's prices for another). The worker
-      // must not override that with the generic public policy, and must not
-      // fall into the no-store branch either.
+      // The worker must not override an app-set cache-control with the
+      // generic public policy, and must not fall into the no-store branch
+      // either.
       const response = withSecurityHeaders(
         htmlResponse({
           headers: {
-            "cache-control": COUNTRY_VARYING_PUBLIC_HOME_CACHE_CONTROL,
+            "cache-control": "private, max-age=300",
             vary: "cookie",
           },
         }),
         new Request("https://0509.io/"),
       );
 
-      expect(response.headers.get("cache-control")).toBe(COUNTRY_VARYING_PUBLIC_HOME_CACHE_CONTROL);
+      expect(response.headers.get("cache-control")).toBe("private, max-age=300");
       expect(response.headers.get("vary")).toBe("cookie");
       expect(response.headers.has("cloudflare-cdn-cache-control")).toBe(false);
       expect(response.headers.has("pragma")).toBe(false);
       expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
-      // The live deploy gate accepts both bounded policies so the SSR-pricing
-      // variant cannot break the deploy chain.
-      expect(
-        [EXPECTED_PUBLIC_HOME_CACHE_CONTROL, COUNTRY_VARYING_PUBLIC_HOME_CACHE_CONTROL],
-      ).toContain(response.headers.get("cache-control"));
     });
   });
 

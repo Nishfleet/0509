@@ -1,7 +1,7 @@
 {
   "cluster": "sneaker-resale",
-  "asOf": "2026-09-01",
-  "sourceNote": "Market signal 2026-09-01 sneaker-resale cluster (issue #1547): \"sneaker-resale cluster (SneakerPing 59.5% below retail + high-engagement Nike demand thread)\". Brands = the market-signal cluster names plus established sneaker/resale Meta advertisers, so the publisher can prove which domains actually carry verified/likely ad coverage before a page ships.",
+  "asOf": "2026-09-11",
+  "sourceNote": "Market-signal sneaker-resale cluster (issue #1547), refreshed to the 2026-09-11 signal: the below-retail cluster narrowed to two live sources — the Nike r/stocks thread (2026-08-30) and the StockX midyear resale report (WWD, 2026-08-12). SneakerPing dropped out of the signal and is no longer a cluster brand. Brands = the market-signal cluster names plus established sneaker/resale Meta advertisers, so the publisher can prove which domains actually carry verified/likely ad coverage before a page ships.",
   "domains": [
     { "domain": "nike.com", "brand": "Nike" },
     { "domain": "stockx.com", "brand": "StockX" },
@@ -26,7 +26,6 @@
     { "domain": "kickscrew.com", "brand": "KICKS CREW" },
     { "domain": "solesavy.com", "brand": "SoleSavy" },
     { "domain": "jdsports.com", "brand": "JD Sports" },
-    { "domain": "finishline.com", "brand": "Finish Line" },
-    { "domain": "sneakerping.com", "brand": "SneakerPing" }
+    { "domain": "finishline.com", "brand": "Finish Line" }
   ]
 }

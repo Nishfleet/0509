@@ -78,6 +78,10 @@ export default [
   route("app/onboard", "routes/app.onboard.tsx"),
   route("ops", "routes/ops.tsx"),
   route("ads/:domain", "routes/ads.$domain.tsx"),
+  // Parent-path fix (issue #2885): /ads 404'd while ~75 /ads/:domain children
+  // sit in the sitemap. /brands is the live browse index, so the parent 301s
+  // to it.
+  route("ads", "routes/ads-redirect.ts"),
   route("brands", "routes/brands.tsx"),
   // Indexable per-category brand landing pages (issue #2067). Each curated
   // category gets its own /brands/:slug page listing exactly the brands that
@@ -86,10 +90,18 @@ export default [
   // Public weekly brief of stored offer moves across sitemap-indexable
   // brands (issue #2143). Stored rows only — never triggers live scraping.
   route("briefs/weekly", "routes/briefs.weekly.tsx"),
+  // Parent-path fix (issue #2885): /briefs 404'd while /briefs/weekly is the
+  // only live brief surface, so the parent 301s to it.
+  route("briefs", "routes/briefs-redirect.ts"),
   // Public sample Monday brief (issue #2136): a real stored digest for the
   // newest indexable brand, with a signup CTA. Stored rows only.
   route("sample-brief", "routes/sample-brief.tsx"),
   route("timeline/:domain", "routes/timeline.$domain.tsx"),
+  // Parent-path fix (issue #2885): /timeline 404'd while ~77 /timeline/:domain
+  // children sit in the sitemap. The index lists the SAME capture-qualified,
+  // non-empty set `loadIndexableTimelineEntries` feeds the sitemap (#2881's
+  // non-empty gating), so the hub can never list a domain the sitemap drops.
+  route("timeline", "routes/timeline.tsx"),
   // Public full-text AEO feed (issue #2043). The body is served by
   // workers/app.ts before the router runs; this registration exists so the
   // sitemap route-registry canary accepts /llms-full.txt as a registered
@@ -97,17 +109,17 @@ export default [
   route("llms-full.txt", "routes/llms-full.txt.ts"),
   // Canonical Ad Aggression Score methodology page. Path history: issue #960
   // shipped /methodology/ad-aggression-score; #1263 promoted it to
-  // /ad-aggression; #2022 promotes the methodology page itself to /methodology
-  // (the SEO direction asks for the scoring method as its own linkable,
-  // indexable methodology page — sitemap + /ads cross-links name it as
-  // methodology). Both older paths 301 here so indexed links keep their equity.
-  route("methodology", "routes/methodology.tsx"),
-  // Legacy alias — 301 to the canonical /methodology path so existing
-  // /ad-aggression links and sitemap entries keep working (issue #1263 era).
+  // /ad-aggression; #2022 briefly promoted it to /methodology; issue #2871
+  // (transformation roadmap Q6) restores /methodology/ad-aggression-score as
+  // the citable link-magnet URL. All older paths 301 here so indexed links
+  // keep their equity.
+  route("methodology/ad-aggression-score", "routes/methodology.tsx"),
+  // Legacy alias — 301 to the canonical path so existing /ad-aggression
+  // links and sitemap entries keep working (issue #1263 era).
   route("ad-aggression", "routes/ad-aggression-redirect.ts"),
-  // Legacy alias — 301 to the canonical /methodology path so existing
-  // /methodology/ad-aggression-score links and sitemap entries keep working.
-  route("methodology/ad-aggression-score", "routes/methodology.ad-aggression-score-redirect.ts"),
+  // Legacy alias — 301 to the canonical path so existing /methodology links
+  // and sitemap entries keep working (issue #2022 era).
+  route("methodology", "routes/methodology-redirect.ts"),
   route("compare", "routes/compare.tsx"),
   // Issue #2127 wiped a vendor's compare/switch pages. The legacy compare URL
   // (and its locale twin below) 301s to the /compare hub through one loader
@@ -130,7 +142,14 @@ export default [
   route("compare/panoramata", "routes/compare.panoramata.tsx"),
   route("compare/adspyder", "routes/compare.adspyder.tsx"),
   route("compare/adspy", "routes/compare.adspy.tsx"),
+<<<<<<< HEAD
   route("switch/magicbrief", "routes/switch.magicbrief.tsx"),
+=======
+  // Issue #2866: two verified competitors that had no compare page.
+  route("compare/keeptabz", "routes/compare.keeptabz.tsx"),
+  route("compare/gethookd", "routes/compare.gethookd.tsx"),
+  route(LEGACY_VENDOR_SWITCH_PATH, "routes/legacy-vendor-redirect.ts", { id: "switch-legacy-vendor-redirect" }),
+>>>>>>> origin/main
   route("switch/panoramata", "routes/switch.panoramata.tsx"),
   route("switch/visualping", "routes/switch.visualping.tsx"),
   route("competitor-monitoring", "routes/competitor-monitoring.tsx"),
@@ -143,6 +162,9 @@ export default [
   // guide above. Ends in the no-account /search preview
   // (source=guide-monitor-ad-library).
   route("guides/how-to-monitor-meta-ad-library", "routes/guides.how-to-monitor-meta-ad-library.tsx"),
+  // Parent-path fix (issue #2885): /guides 404'd while /guides/* children sit
+  // in the sitemap. A thin index of the live guides closes the dead end.
+  route("guides", "routes/guides.tsx"),
   route("for-agencies", "routes/for-agencies.tsx"),
   route("sneaker-resale", "routes/sneaker-resale.tsx"),
   route(":locale/sneaker-resale", "routes/$locale.sneaker-resale.tsx"),
@@ -182,7 +204,13 @@ export default [
     route("compare/panoramata", "routes/$locale.compare.panoramata.tsx"),
     route("compare/adspyder", "routes/$locale.compare.adspyder.tsx"),
     route("compare/adspy", "routes/$locale.compare.adspy.tsx"),
+<<<<<<< HEAD
     route("switch/magicbrief", "routes/$locale.switch.magicbrief.tsx"),
+=======
+    route("compare/keeptabz", "routes/$locale.compare.keeptabz.tsx"),
+    route("compare/gethookd", "routes/$locale.compare.gethookd.tsx"),
+    route(LEGACY_VENDOR_SWITCH_PATH, "routes/legacy-vendor-redirect.ts", { id: "locale-switch-legacy-vendor-redirect" }),
+>>>>>>> origin/main
     route("switch/panoramata", "routes/$locale.switch.panoramata.tsx"),
     route("switch/visualping", "routes/$locale.switch.visualping.tsx"),
     // First-value search funnel + supporting trust/proof surfaces (issue 1578):

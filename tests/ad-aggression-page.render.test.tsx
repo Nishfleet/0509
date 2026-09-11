@@ -52,7 +52,7 @@ describe("Ad Aggression Score methodology page — render", () => {
     const markup = renderToStaticMarkup(createElement(MethodologyRoute));
 
     // Core formula presence
-    expect(AD_AGGRESSION_METHODOLOGY_PATH).toBe("/methodology");
+    expect(AD_AGGRESSION_METHODOLOGY_PATH).toBe("/methodology/ad-aggression-score");
     expect(markup).toContain("Ad Aggression Score");
     expect(markup).toContain(`formula version ${AGGRESSION_FORMULA_VERSION}`);
 

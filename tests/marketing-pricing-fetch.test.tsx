@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { act, createElement, type ReactNode } from "react";
+import { mockReactRouter } from "./helpers/mock-react-router";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -10,8 +11,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { pricingPlans, usageBundles } from "~/lib/pricing";
 
-type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
-type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
 
 type MockLoaderData = {
   pricingPreview: {
@@ -38,20 +37,11 @@ const emptyRootData = {
 };
 
 async function mockMarketingDependencies(rootData: typeof emptyRootData) {
-  vi.doMock("react-router", async () => {
-    const actual = await vi.importActual<typeof import("react-router")>("react-router");
-    const React = await import("react");
-    return {
-      ...actual,
-      Link: ({ children, to, ...props }: MockLinkProps) =>
-        React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
-      Form: ({ children, ...props }: MockFormProps) =>
-        React.createElement("form", props, children),
-      useLoaderData: () => loaderData,
-      useRouteLoaderData: () => rootData,
-    };
+  mockReactRouter({
+    loader: () => loaderData,
+    loaderData: () => rootData,
   });
-  vi.doMock("~/components/marketing-nav", () => ({
+vi.doMock("~/components/marketing-nav", () => ({
     MarketingNav: () => createElement("nav", { "aria-label": "Primary" }),
   }));
   vi.doMock("~/components/marketing-footer", () => ({

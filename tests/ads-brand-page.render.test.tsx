@@ -1,4 +1,5 @@
 import { createElement } from "react";
+import { mockReactRouter } from "./helpers/mock-react-router";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -13,23 +14,10 @@ let currentData: BrandPageLoaderData;
 
 beforeEach(() => {
   vi.resetModules();
-  vi.doMock("react-router", async () => {
-    const actual = await vi.importActual<typeof import("react-router")>("react-router");
-    const React = await import("react");
-    return {
-      ...actual,
-      useLoaderData: () => currentData,
-      useRouteLoaderData: () => undefined,
-      // Pinned to /methodology so the methodology-route cross-link resolution
-      // test can render the real route (issue #2052 draws the /ads page's
-      // methodology href to a 200-serving route). The /ads route never calls
-      // useLocation, so this default is inert for every other test here.
-      useLocation: () => ({ pathname: "/methodology" }),
-      Link: ({ children, to, ...props }: { children?: React.ReactNode; to?: string } & Record<string, unknown>) =>
-        React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
-      Form: ({ children, ...props }: { children?: React.ReactNode } & Record<string, unknown>) =>
-        React.createElement("form", props, children),
-    };
+  mockReactRouter({
+    loader: () => currentData,
+    loaderData: () => undefined,
+    location: () => ({ pathname: "/methodology" }),
   });
 });
 
@@ -117,10 +105,22 @@ function populated(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoade
     brandName: "Nike",
     hasCachedAds: true,
     ads: Array.from({ length: 6 }, (_v, i) => ad({ metaAdId: `ad-${i}` })),
-    // Every fixture creative links to nike.com (landing page), so the whole
-    // capture carries verified link evidence by default — mirror the loader's
-    // verifiedLinkedIds output for the same fixture set.
-    verifiedLinkedIds: Array.from({ length: 6 }, (_v, i) => `ad-${i}`),
+    // Issue #2704: the payload ships only the creatives the wall renders plus
+    // the counts that describe the FULL capture. The fixture mirrors the
+    // loader's shape: 6 cached creatives, every one verified-linked, so the
+    // counts match the array for the default fixture.
+    adCount: 6,
+    verifiedTestedCount: 0,
+    tickerAds: Array.from({ length: 6 }, (_v, i) => ad({ metaAdId: `ad-${i}` })).map(
+      (creative) => ({
+        metaAdId: creative.metaAdId,
+        previewHeadline: creative.previewHeadline,
+        hook: creative.hook,
+        source: creative.source,
+        firstSeenAt: creative.firstSeenAt,
+        lastSeenAt: creative.lastSeenAt,
+      }),
+    ),
     checkedAgo: "about 2 hours ago",
     lastCheckedAt: "2026-08-09T10:00:00.000Z",
     freshForLiveClaim: false,
@@ -381,7 +381,9 @@ describe("/ads/:domain — Case File render", () => {
     const markup = await render(
       populated({
         ads: Array.from({ length: 6 }, (_v, i) => ad({ metaAdId: `ad-${i}` })),
-        verifiedLinkedIds: Array.from({ length: 6 }, (_v, i) => `ad-${i}`),
+        adCount: 6,
+        verifiedTestedCount: 0,
+        tickerAds: [],
         brandOwnedAdCount: 5,
         partnerCampaignAdIds: ["ad-0"],
       }),
@@ -405,7 +407,12 @@ describe("/ads/:domain — Case File render", () => {
     const markup = await render(
       populated({
         ads,
-        verifiedLinkedIds: ads.map((creative) => creative.metaAdId),
+        adCount: ads.length,
+        // Two of the six creatives run more than one version — the stat
+        // strip's "Split-testing" cell counts them from the loader's number
+        // (issue #2704).
+        verifiedTestedCount: 2,
+        tickerAds: [],
         teaser: { ...teaser, totalCount: 6, activeCount: 6 },
       }),
     );
@@ -846,11 +853,12 @@ describe("/ads/:domain — Case File render", () => {
     // wall match. The H1 must not use split "X of these Y" copy — every
     // verified-linked ad is Nike's; the extra match belongs in the subline.
     const ads = Array.from({ length: 16 }, (_v, i) => ad({ metaAdId: `ad-${i}` }));
-    const verifiedLinkedIds = ads.slice(0, 15).map((creative) => creative.metaAdId);
     const markup = await render(
       populated({
         ads,
-        verifiedLinkedIds,
+        adCount: ads.length,
+        verifiedTestedCount: 0,
+        tickerAds: [],
         brandOwnedAdCount: 15,
         verifiedLinkCount: 15,
         unverifiedMatchCount: 1,
@@ -883,7 +891,9 @@ describe("/ads/:domain — Case File render", () => {
     const markup = await render(
       populated({
         ads,
-        verifiedLinkedIds: ads.slice(0, 2).map((creative) => creative.metaAdId),
+        adCount: ads.length,
+        verifiedTestedCount: 0,
+        tickerAds: [],
         brandOwnedAdCount: 2,
         verifiedLinkCount: 2,
         unverifiedMatchCount: 3,
@@ -965,7 +975,9 @@ describe("/ads/:domain — Case File render", () => {
     const stale = await render(
       populated({
         ads,
-        verifiedLinkedIds: [ads[0].metaAdId],
+        adCount: ads.length,
+        verifiedTestedCount: 0,
+        tickerAds: [],
         brandOwnedAdCount: 1,
         verifiedLinkCount: 1,
         unverifiedMatchCount: 5,
@@ -1255,14 +1267,16 @@ describe("/ads/:domain — methodology footer cross-link (issues #1552, #2022)",
     const adsMarkup = await render(
       populated({ domain: "nike.com", canonicalPath: "/ads/nike.com" }),
     );
-    const match = adsMarkup.match(/href="(\/methodology)"/);
+    const methodologyHrefPattern = new RegExp(
+      `href="${AD_AGGRESSION_METHODOLOGY_PATH.replace(/\//g, "\\/")}"`,
+    );
+    const match = adsMarkup.match(methodologyHrefPattern);
     expect(match, "the /ads page must emit a methodology cross-link").not.toBeNull();
-    const methodologyHref = match![1];
-
-    // The href must be the canonical path, not a legacy nested path
-    // (/methodology/ad-aggression-score) that served only a 301->404 chain.
+    const methodologyHref = match![0].slice("href=\"".length, -1);
+    // The href must be the canonical path (issue #2871 restored
+    // /methodology/ad-aggression-score), never a legacy 301-only path.
     expect(methodologyHref).toBe(AD_AGGRESSION_METHODOLOGY_PATH);
-    expect(AD_AGGRESSION_METHODOLOGY_PATH).toBe("/methodology");
+    expect(AD_AGGRESSION_METHODOLOGY_PATH).toBe("/methodology/ad-aggression-score");
 
     // Mock-free route check: render the real methodology route the href points
     // at and assert it serves a 200-equivalent body (non-empty, no throw), so a
@@ -1275,7 +1289,7 @@ describe("/ads/:domain — methodology footer cross-link (issues #1552, #2022)",
 
   it("hides the methodology footer on an unverified wall with no verified-linked ad (no score exists to explain)", async () => {
     const markup = await render(
-      populated({ verifiedLinkedIds: [], verifiedLinkCount: 0, aggression: null }),
+      populated({ verifiedLinkCount: 0, aggression: null }),
     );
 
     expect(markup).not.toContain(anchor);
@@ -1446,7 +1460,6 @@ describe("ads.cross.link.breadcrumb.canary — combined conditional rule (issue 
     // would render cross-links here, breaking the combined rule).
     const markup = await render(
       populated({
-        verifiedLinkedIds: [],
         verifiedLinkCount: 0,
         relatedBrands: otherBrands,
         noindex: true,

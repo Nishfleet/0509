@@ -503,7 +503,7 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Install Playwright browsers
-        run: npx playwright install chromium firefox webkit
+        run: npx playwright install --with-deps chromium firefox webkit
 
       - name: Typecheck
         env:
@@ -574,12 +574,13 @@ jobs:
           CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV: "false"
         run: npm run deploy
 
-      - name: Synchronize private canary token
+      - name: Synchronize Worker secrets
         shell: bash
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}
+          DECODO_SCRAPER_AUTH: ${{ secrets.DECODO_SCRAPER_AUTH }}
           CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV: "false"
         run: |
           set -euo pipefail
@@ -600,6 +601,10 @@ jobs:
           # token through the deploy and this step syncs the new value after.
           printf '%s' "$CANARY_BYPASS_TOKEN" |
             ./node_modules/.bin/wrangler secret put CANARY_BYPASS_TOKEN --name 0509
+          if [ -n "${DECODO_SCRAPER_AUTH:-}" ]; then
+            printf '%s' "$DECODO_SCRAPER_AUTH" |
+              ./node_modules/.bin/wrangler secret put DECODO_SCRAPER_AUTH --name 0509
+          fi
 
       - name: Verify complete release evidence set
         if: success()

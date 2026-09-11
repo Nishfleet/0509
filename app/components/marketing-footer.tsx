@@ -52,6 +52,9 @@ export function MarketingFooter() {
         <Link to="/compare/panoramata">vs Panoramata</Link>
         <Link to="/compare/adspyder">vs AdSpyder</Link>
         <Link to="/compare/adspy">vs AdSpy</Link>
+        {/* Issue #2866: two verified competitors that had no compare page. */}
+        <Link to="/compare/keeptabz">vs KeepTabz</Link>
+        <Link to="/compare/gethookd">vs GetHookd</Link>
       </nav>
       <nav className="ld-footer-compare" aria-label="Switch">
         <span className="ld-footer-group-label">Switch</span>

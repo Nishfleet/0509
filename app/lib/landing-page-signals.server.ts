@@ -6,7 +6,7 @@ import {
 import { decodeHtmlEntities } from "~/lib/decode-html.server";
 import { hashString, stripChurnTokens } from "~/lib/normalize";
 
-export const LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION = "lp-signals-v6";
+export const LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION = "lp-signals-v8";
 
 export type ExtractorSuppressionReason = "churn_stable" | "ad_slot_strip";
 
@@ -252,6 +252,96 @@ const PRICE_PATTERNS = [
   /\b((?:up to\s+)?\d+%\s*off)\b/i,
   /\b(buy\s*\d+\s*get\s*\d+)\b/i,
 ] as const;
+
+// Declared-currency anchoring (issue #2861, lp-signals-v7). A localized
+// render can carry a currency-marked string that is NOT the page's offer
+// currency — allbirds.com showed a UK-geo announcement bar ("Free shipping
+// and returns on orders over £50") ahead of its USD product prices, and
+// first-in-text matching flipped the stored price £50/$100 between renders
+// of a page whose shop currency never changed. The page's own declared
+// currency (Shopify/Shop Pay `currencyCode`, JSON-LD `priceCurrency`,
+// `og:price:currency` meta, `data-currency` attributes) is deterministic
+// per page version, so when it resolves we prefer the first candidate whose
+// marker is consistent with it. When no declaration resolves — or no
+// candidate matches it — the historical first-match behaviour applies
+// unchanged, so the anchor can only disambiguate, never blank a price.
+//
+// Codes are matched against an allowlist so arbitrary 3-letter tokens in a
+// `currency`-named field (e.g. "all", "yes") can never win a preference.
+const KNOWN_CURRENCY_CODES = new Set([
+  "USD", "EUR", "GBP", "INR", "JPY", "CNY", "AUD", "CAD", "CHF", "SEK",
+  "NOK", "DKK", "RUB", "KRW", "BRL", "MXN", "ZAR", "AED", "HKD", "SGD",
+  "NZD", "TWD", "THB", "MYR", "IDR", "PHP", "VND", "PLN", "CZK", "HUF",
+  "RON", "TRY", "ILS", "SAR", "NGN", "KES", "EGP", "PKR", "BDT", "LKR",
+  "NPR", "ARS", "CLP", "COP", "PEN", "UYU", "QAR", "KWD",
+]);
+
+const DECLARED_CURRENCY_PATTERNS = [
+  // Shopify / Shop Pay / JSON-LD blobs, quoted or bare keys:
+  //   "currencyCode":"USD", currencyCode:"USD", "priceCurrency":"USD",
+  //   "currency":"USD", currency:"USD"
+  /\b(?:currencyCode|priceCurrency|currency)["']?\s*:\s*["']([A-Za-z]{3})["']/gi,
+  // JS assignments: currency = 'USD', shopCurrency="USD"
+  /\bcurrency\s*=\s*["']([A-Za-z]{3})["']/gi,
+  // Shopify money object: currency = {"active":"USD", ...}
+  /\bcurrency\s*=\s*\{[^}]{0,200}?\bactive["']?\s*:\s*["']([A-Za-z]{3})["']/gi,
+  // Open Graph / product meta, either attribute order:
+  //   <meta property="og:price:currency" content="USD">
+  /\bproperty\s*=\s*["'](?:og:price:currency|product:price:currency)["'][^>]{0,200}?\bcontent\s*=\s*["']([A-Za-z]{3})["']/gi,
+  /\bcontent\s*=\s*["']([A-Za-z]{3})["'][^>]{0,200}?\bproperty\s*=\s*["'](?:og:price:currency|product:price:currency)["']/gi,
+] as const;
+
+// Declared-market anchoring for the capture-validity gate (issue #2889,
+// lp-signals-v8). A geo-experiment render can swap the CTA entirely —
+// allbirds.com alternated "Shop Now" (GB render) and "Sign Up" (US render)
+// between captures of the SAME canonical URL, with an identical locale
+// (en-US) and identical declared currency (USD). The only deterministic
+// difference is the page's own declared market: `Shopify.country = "GB"`
+// vs `"US"`, `"countryCode":"GB"` vs `"US"`, distinct market ids. That
+// declaration is stored on the snapshot metadata so the capture-validity
+// gate can suppress a same-URL render-variant pair instead of reporting a
+// phantom CTA transition.
+const DECLARED_MARKET_PATTERNS = [
+  // Shopify storefront scripts: Shopify.country = "GB";
+  /\bShopify\.country\s*=\s*["']([A-Za-z]{2})["']/gi,
+  // Shopify/Shop Pay JSON blobs: "countryCode":"US", countryCode:'US'
+  /\bcountryCode["']?\s*:\s*["']([A-Za-z]{2})["']/gi,
+  // Generic JSON market blocks: "country":"US"
+  /\b"country"\s*:\s*["']([A-Za-z]{2})["']/gi,
+] as const;
+
+// ISO-3166-1 alpha-2 allowlist. A 2-letter token inside a country-named
+// field can only stand for a market when it is a real country code, so
+// values like "us"-the-word or locale-shaped strings never win.
+const KNOWN_COUNTRY_CODES = new Set(
+  ("AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI " +
+    "BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN " +
+    "CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK " +
+    "FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM " +
+    "HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN " +
+    "KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK " +
+    "ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP " +
+    "NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW " +
+    "SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF " +
+    "TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI " +
+    "VN VU WF WS YE YT ZA ZM ZW").split(" "),
+);
+
+// Which ISO codes a bare symbol can stand for. "£"/"€"/"₹" are unambiguous;
+// "$" is shared by every dollar currency so a USD-declared page and an
+// AUD-declared page both keep their "$" candidates; "¥" is JPY or CNY.
+const CURRENCY_MARKER_CODES: Record<string, ReadonlySet<string>> = {
+  $: new Set([
+    "USD", "AUD", "CAD", "SGD", "NZD", "HKD", "MXN", "BRL", "ARS", "CLP",
+    "COP", "TWD",
+  ]),
+  "£": new Set(["GBP"]),
+  "€": new Set(["EUR"]),
+  "₹": new Set(["INR"]),
+  "¥": new Set(["JPY", "CNY"]),
+  "₽": new Set(["RUB"]),
+  "₩": new Set(["KRW"]),
+};
 const LEAD_FIELD_PATTERN = /\b(name|email|phone|mobile|tel|whatsapp)\b/i;
 const MAX_HTML_TAG_SCAN_LENGTH = 4_096;
 const HIDDEN_RECOVERY_TAG_NAMES = new Set(["script", "style", "template"]);
@@ -458,6 +548,11 @@ export function extractLandingPageSignals(
   // stage bails when no PRICE_PATTERN matched; the operator can then
   // see "this page never had a price" instead of guessing whether the
   // price was rotated out by the parser.
+  // Issue #2861: the page's own declared currency is read from the RAW
+  // html (the declarations live in script/head markup the normalizer
+  // strips) and anchors candidate selection, so a localized string in a
+  // different currency cannot outrank the shop's real price.
+  const declaredCurrency = pickDeclaredCurrency(rawHtml);
   const priceText = audit
     ? runLpRunAuditStage({
         context: audit,
@@ -465,9 +560,9 @@ export function extractLandingPageSignals(
         bytesIn: utf8ByteLength(normalizedHtml),
         bailReasonFor: (price) => (price === null ? "no_price_pattern" : null),
         bytesOutFor: (price) => utf8ByteLength(price ?? ""),
-        fn: () => pickPrice(normalizedHtml),
+        fn: () => pickPrice(normalizedHtml, declaredCurrency),
       })
-    : pickPrice(normalizedHtml);
+    : pickPrice(normalizedHtml, declaredCurrency);
   // form_extract stage — detectFormPresence. The stage bails when
   // the page has neither a lead input (email/phone/etc.) nor a submit
   // action — two distinct gates that both feed "no form" so the
@@ -500,11 +595,59 @@ export function extractLandingPageSignals(
     priceText,
     formPresent,
     extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+    declaredMarketCountry: pickDeclaredMarketCountry(rawHtml),
     suppressionFingerprints: computeExtractorSuppressionFingerprints(
       html ?? "",
       documentMode,
     ),
   };
+}
+
+/**
+ * Resolve the market a page declares for itself (issue #2889, lp-signals-v8):
+ * Shopify's `Shopify.country` storefront assignment, `"countryCode"` JSON
+ * fields, and generic `"country"` JSON fields. Read from the RAW html — the
+ * declarations live in script/head markup the normalizer strips. Majority
+ * vote across every declaration found, earliest occurrence winning ties —
+ * deterministic for a given page version. Returns null when nothing
+ * plausible is declared, so the capture-validity gate can only suppress a
+ * KNOWN render-variant pair, never a capture whose market is unknown.
+ */
+export function pickDeclaredMarketCountry(html: string): string | null {
+  const tally = new Map<string, { count: number; firstIndex: number }>();
+  for (const pattern of DECLARED_MARKET_PATTERNS) {
+    const global = new RegExp(
+      pattern.source,
+      pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`,
+    );
+    let match: RegExpExecArray | null;
+    while ((match = global.exec(html)) !== null) {
+      const code = match[1]?.toUpperCase();
+      if (code && KNOWN_COUNTRY_CODES.has(code)) {
+        const entry = tally.get(code) ?? { count: 0, firstIndex: match.index };
+        entry.count += 1;
+        entry.firstIndex = Math.min(entry.firstIndex, match.index);
+        tally.set(code, entry);
+      }
+      if (match[0].length === 0) {
+        global.lastIndex += 1;
+      }
+    }
+  }
+  let best: string | null = null;
+  let bestCount = 0;
+  let bestIndex = Number.POSITIVE_INFINITY;
+  for (const [code, entry] of tally) {
+    if (
+      entry.count > bestCount ||
+      (entry.count === bestCount && entry.firstIndex < bestIndex)
+    ) {
+      best = code;
+      bestCount = entry.count;
+      bestIndex = entry.firstIndex;
+    }
+  }
+  return best;
 }
 
 function hasVisibleBodyText(html: string) {
@@ -1107,9 +1250,30 @@ function isChromeAnchorText(candidate: string): boolean {
   return false;
 }
 
-function pickPrice(html: string) {
+function pickPrice(html: string, declaredCurrency: string | null = null) {
   const text = cleanText(stripTags(html));
 
+  // Pass 1 (issue #2861): when the page declares a currency, prefer the
+  // first candidate whose marker is consistent with it, keeping the
+  // existing pattern-priority order. A geo-localized string in another
+  // currency (the allbirds "£50" shipping bar on a USD shop) can sit ahead
+  // of the real price in text order; the declaration disambiguates it.
+  if (declaredCurrency !== null) {
+    for (const pattern of PRICE_PATTERNS) {
+      const preferred = firstCandidateForDeclaredCurrency(
+        text,
+        pattern,
+        declaredCurrency,
+      );
+      if (preferred !== null) {
+        return cleanText(preferred);
+      }
+    }
+  }
+
+  // Pass 2: historical behaviour — first match of the first pattern that
+  // matches. Reached when the page declares nothing or declares a currency
+  // no candidate carries, so the anchor can never blank a price.
   for (const pattern of PRICE_PATTERNS) {
     const match = text.match(pattern);
     if (match?.[1]) {
@@ -1118,6 +1282,139 @@ function pickPrice(html: string) {
   }
 
   return null;
+}
+
+/**
+ * Resolve the currency a page declares for itself: Shopify/Shop Pay
+ * `currencyCode`, JSON-LD `priceCurrency`, generic `"currency"` fields,
+ * `currency = 'USD'` assignments, Shopify's `{"active":"USD"}` money object,
+ * and `og:price:currency`/`product:price:currency` meta tags. Read from the
+ * RAW html — the declarations live in script/head markup that is stripped
+ * before visible-text matching, so this runs pre-strip.
+ *
+ * Strict plurality vote across every declaration found — deterministic for
+ * a given page version, and robust to one stray embed (a widget cart blob
+ * in another currency loses to the shop's own repeated declaration).
+ * Hardening (issue #2905): declarations inside HTML comments never vote —
+ * a commented-out or ad-slot embed can sit ahead of the shop's own
+ * declaration and must not anchor it; attribute-shaped matches
+ * (`data-currency="EUR"` and other `*-currency` names, which a
+ * currency-switcher list repeats once per option) cast one vote per code
+ * total instead of one per occurrence; and the winner must hold strictly
+ * more votes than the runner-up — a top tie resolves null, falling back to
+ * historical first-match rather than letting an earlier stray declaration
+ * anchor the price. Returns null when nothing plausible is declared.
+ */
+export function pickDeclaredCurrency(html: string): string | null {
+  // Comment ranges, collected up front so a currency match inside one can
+  // be skipped without rewriting the html (a string-strip could leave a
+  // recombined `<!--`). An unclosed `<!--` comments out the rest of the
+  // page, matching browser parsing.
+  const commentRanges: Array<readonly [number, number]> = [];
+  const commentRe = /<!--[\s\S]*?(?:-->|$)/g;
+  let commentMatch: RegExpExecArray | null;
+  while ((commentMatch = commentRe.exec(html)) !== null) {
+    commentRanges.push([
+      commentMatch.index,
+      commentMatch.index + commentMatch[0].length,
+    ]);
+  }
+  const inComment = (index: number) =>
+    commentRanges.some(([start, end]) => index >= start && index < end);
+  const tally = new Map<string, number>();
+  // Codes that already cast their one attribute-shaped vote.
+  const attributeVoteCast = new Set<string>();
+  for (const pattern of DECLARED_CURRENCY_PATTERNS) {
+    const global = new RegExp(
+      pattern.source,
+      pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`,
+    );
+    let match: RegExpExecArray | null;
+    while ((match = global.exec(html)) !== null) {
+      const code = match[1]?.toUpperCase();
+      if (code && KNOWN_CURRENCY_CODES.has(code) && !inComment(match.index)) {
+        // `data-currency="EUR"`-style hits sit at `*-currency`, so the char
+        // before the keyword is `-`. A switcher repeats them once per
+        // option — one vote per code keeps a doubled list (mobile +
+        // desktop nav) from out-voting the shop's own declaration.
+        const attributeVote = html.charAt(match.index - 1) === "-";
+        if (!attributeVote || !attributeVoteCast.has(code)) {
+          tally.set(code, (tally.get(code) ?? 0) + 1);
+          if (attributeVote) {
+            attributeVoteCast.add(code);
+          }
+        }
+      }
+      if (match[0].length === 0) {
+        global.lastIndex += 1;
+      }
+    }
+  }
+  let best: string | null = null;
+  let bestCount = 0;
+  let bestTied = false;
+  for (const [code, count] of tally) {
+    if (count > bestCount) {
+      best = code;
+      bestCount = count;
+      bestTied = false;
+    } else if (count === bestCount) {
+      bestTied = true;
+    }
+  }
+  return bestTied ? null : best;
+}
+
+/** Every candidate of `pattern` in text order, not just the first. */
+function allPatternCandidates(text: string, pattern: RegExp): string[] {
+  const global = new RegExp(pattern.source, `${pattern.flags}g`);
+  const candidates: string[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = global.exec(text)) !== null) {
+    if (match[1]) {
+      candidates.push(match[1]);
+    }
+    if (match[0].length === 0) {
+      global.lastIndex += 1;
+    }
+  }
+  return candidates;
+}
+
+function firstCandidateForDeclaredCurrency(
+  text: string,
+  pattern: RegExp,
+  declaredCurrency: string,
+): string | null {
+  for (const candidate of allPatternCandidates(text, pattern)) {
+    if (candidateMatchesCurrency(candidate, declaredCurrency)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+/**
+ * True when a matched price string's marker is consistent with the page's
+ * declared currency. Explicit codes ("USD 100") must equal it; symbols map
+ * through CURRENCY_MARKER_CODES so "$" satisfies USD/AUD/CAD/… declarations
+ * while "£" only satisfies GBP. "Rs"/"₹" candidates satisfy INR.
+ * Markerless candidates ("% off", "buy 2 get 1") never match — they fall
+ * through to the historical pass.
+ */
+function candidateMatchesCurrency(
+  candidate: string,
+  declaredCurrency: string,
+): boolean {
+  const codeMatch = /\b([a-z]{3})\b/i.exec(candidate);
+  if (codeMatch && KNOWN_CURRENCY_CODES.has(codeMatch[1]!.toUpperCase())) {
+    return codeMatch[1]!.toUpperCase() === declaredCurrency;
+  }
+  const symbolMatch = /[$€£₹¥₽₩]/.exec(candidate);
+  if (symbolMatch) {
+    return CURRENCY_MARKER_CODES[symbolMatch[0]]?.has(declaredCurrency) ?? false;
+  }
+  return /\brs\b\.?/i.test(candidate) && declaredCurrency === "INR";
 }
 
 function detectFormPresence(html: string) {

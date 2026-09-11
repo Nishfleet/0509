@@ -12,6 +12,11 @@ import { AI_TRAINING_CRAWLERS, SITEMAP_PATHS, canonicalUrl } from "~/lib/seo";
 // at the same crawl-budget ceiling the sitemap uses (issue #1929). Imported
 // from sitemap.server so we never invent a parallel cap.
 import { SITEMAP_TIMELINE_PATH_LIMIT } from "~/lib/sitemap.server";
+// brandCategoryFromSlug resolves a /brands/:slug sitemap path back to its
+// curated label so llms.txt can list the category hubs the sitemap emits
+// (issue #2925). An uncurated slug resolves to null — the route 404s on it —
+// so it is never listed.
+import { brandCategoryFromSlug } from "~/lib/brand-categories";
 // Per-page markdown bodies for the pages AI engines most need clean text for
 // (issue #2299): /methodology, /pricing, and the /compare/* pages linked from
 // the /compare hub. Each body is ASSEMBLED from the same pure-data modules the
@@ -38,6 +43,8 @@ import type { CompareCitations } from "~/components/compare-citations";
 import adspyCitations from "~/data/compare/adspy-citations.json";
 import adspyderCitations from "~/data/compare/adspyder-citations.json";
 import foreplaySpyderCitations from "~/data/compare/foreplay-spyder-citations.json";
+import gethookdCitations from "~/data/compare/gethookd-citations.json";
+import keeptabzCitations from "~/data/compare/keeptabz-citations.json";
 import metaAdLibraryCitations from "~/data/compare/meta-ad-library-citations.json";
 import panoramataCitations from "~/data/compare/panoramata-citations.json";
 import pulzifiCitations from "~/data/compare/pulzifi-citations.json";
@@ -58,13 +65,14 @@ export const PUBLIC_MARKDOWN_PATHS = [
   "/capture-rules",
   "/privacy",
   "/terms",
-  // Issue #2299: the pages AI engines most need clean text for. /methodology
-  // is the score formula, /pricing the plan data, and the /compare/* pages are
+  // Issue #2299: the pages AI engines most need clean text for. The Ad
+  // Aggression Score methodology page is the score formula, /pricing the plan
+  // data, and the /compare/* pages are
   // exactly the ones the /compare hub links (judge edit: "already linked from
   // the /compare hub" — /compare/visualping and /compare/foreplay canonicalize
   // to siblings and are deliberately not linked, so they stay out). /search
   // stays excluded (noted in the ticket, deliberately out of scope).
-  "/methodology",
+  "/methodology/ad-aggression-score",
   "/pricing",
   "/compare/meta-ad-library",
   "/compare/visualping-ad-libraries",
@@ -74,6 +82,9 @@ export const PUBLIC_MARKDOWN_PATHS = [
   "/compare/panoramata",
   "/compare/adspyder",
   "/compare/adspy",
+  // Issue #2866: two verified competitors that had no compare page (both 404'd).
+  "/compare/keeptabz",
+  "/compare/gethookd",
 ] as const;
 
 const PUBLIC_MARKDOWN_PATH_SET = new Set<string>(PUBLIC_MARKDOWN_PATHS);
@@ -195,6 +206,16 @@ const LLMS_PAGE_DETAILS = {
     title: "Five to Nine vs AdSpy",
     description:
       "How Five to Nine's source-backed change proof compares with AdSpy's $149/mo ad-spy database and its weak 2.4/5 review rating.",
+  },
+  "/compare/keeptabz": {
+    title: "Five to Nine vs KeepTabz",
+    description:
+      "How Five to Nine's source-backed change proof compares with KeepTabz's $49.99–$99.99 multi-platform creative and spend tracking.",
+  },
+  "/compare/gethookd": {
+    title: "Five to Nine vs GetHookd",
+    description:
+      "How Five to Nine's scheduled change proof compares with GetHookd's Facebook Ads Library analysis workbench (7-day free trial, API and MCP on annual plans).",
   },
   "/switch/panoramata": {
     title: "Panoramata alternative",
@@ -735,7 +756,7 @@ const LLMS_PAGE_DETAILS = {
     description:
       "Buyer guarantee: the capture-validity rule set behind no-phantom-change alerts, including geo-variance and takedown/restore suppression.",
   },
-  "/methodology": {
+  "/methodology/ad-aggression-score": {
     title: "Ad Aggression Score methodology",
     description:
       "Public formula for the 0–100 Ad Aggression Score: Velocity, Testing, Freshness, and Persistence, 0–25 each.",
@@ -876,6 +897,41 @@ export function llmsPageForTimelinePath(
   };
 }
 
+const BRANDS_CATEGORY_PATH = /^\/brands\/([^/]+)$/;
+
+/**
+ * One llms.txt index line for a curated /brands/:slug category hub (issue
+ * #2925). Callers must only pass paths the sitemap would emit (a non-empty
+ * curated category — see brandCategorySitemapEntries). Returns null for
+ * anything that is not a single-segment /brands/:slug path or a slug with no
+ * curated label — the route 404s on those, and the bare /brands hub is
+ * already a static SITEMAP_PATHS entry.
+ */
+export function llmsPageForCategoryPath(
+  path: string,
+): {
+  path: string;
+  url: string;
+  title: string;
+  description: string;
+} | null {
+  const match = BRANDS_CATEGORY_PATH.exec(path);
+  if (!match) {
+    return null;
+  }
+  const label = brandCategoryFromSlug(match[1]);
+  if (!label) {
+    return null;
+  }
+  return {
+    path,
+    url: canonicalUrl(path),
+    title: `${label} competitor Meta ads`,
+    description:
+      `Category hub listing every tracked ${label} competitor's indexable Meta ads page on Five to Nine. Listed only while the category is non-empty — an empty category page 404s.`,
+  };
+}
+
 function renderLlmsPagesSection(
   brandPages: readonly { title: string; url: string; description: string }[],
 ): string {
@@ -909,6 +965,26 @@ function renderLlmsTimelineSection(
   return [
     "Timelines:",
     ...timelinePages.map(
+      (page) => `- [${page.title}](${page.url}): ${page.description}`,
+    ),
+  ].join("\n");
+}
+
+/**
+ * Renders the curated /brands/:slug block as a sibling of the Pages: and
+ * Timelines: sections — the same one-line `- [title](url): description`
+ * format. Returns the bare block with no leading separator; the call site
+ * prefixes a `\n` (same splice contract as renderLlmsTimelineSection). Only
+ * callers with at least one surviving category page should emit it —
+ * buildLlmsText gates on categoryPages.length so the static fallback stays
+ * byte-identical (issue #2925).
+ */
+function renderLlmsCategoriesSection(
+  categoryPages: readonly { title: string; url: string; description: string }[],
+): string {
+  return [
+    "Categories:",
+    ...categoryPages.map(
       (page) => `- [${page.title}](${page.url}): ${page.description}`,
     ),
   ].join("\n");
@@ -983,26 +1059,31 @@ Use the visible product and founder contact paths on the site.
  * Render llms.txt. Pass the same brand-page sitemap entries the live sitemap
  * emits so AI answer engines see every indexable /ads/:domain URL. Pass the
  * timeline entries loadIndexableTimelineEntries returns so AI answer engines
- * see the same indexable /timeline/:domain URLs the sitemap emits. Empty
- * lists (the no-D1 / demo / missing-table fallback) keep the output
- * byte-identical to the static funnel — `LLMS_TEXT = buildLlmsText()` is the
- * canary, gated by the `Timelines:` header being suppressed when no
- * timeline page survives the regex filter (issue #1929).
+ * see the same indexable /timeline/:domain URLs the sitemap emits. Pass the
+ * curated /brands/:slug entries brandCategorySitemapEntries derives so the
+ * category hubs the sitemap emits are listed too (issue #2925 zero-parity:
+ * every sitemap URL appears here). Empty lists (the no-D1 / demo /
+ * missing-table fallback) keep the output byte-identical to the static
+ * funnel — `LLMS_TEXT = buildLlmsText()` is the canary, gated by the
+ * `Categories:` / `Timelines:` headers being suppressed when no entry
+ * survives the path filters (issue #1929).
  */
 export function buildLlmsText(
   brandEntries: readonly { path: string; adCount?: number; fetchedAt?: string }[] = [],
   timelineEntries: readonly { path: string; lastmod?: string }[] = [],
+  categoryEntries: readonly { path: string; lastmod?: string }[] = [],
 ): string {
   const brandPages = brandEntries.flatMap((entry) => {
-    // Issue #2307: a brand entry needs >=3 live Meta Ad Library ads to be
-    // worth citing — one- and two-ad pages are the weakest possible citation
-    // and dilute the file's authority. The count is the same one already
-    // rendered in each llms.txt line (adCount). Entries with no count
-    // (undefined) are unaffected.
-    if (entry.adCount !== undefined && entry.adCount < 3) {
-      return [];
-    }
+    // Issue #2925 zero-parity: every indexable /ads/:domain URL the sitemap
+    // emits is listed, regardless of live ad count — the >=3-ad citation
+    // gate (issue #2307) is superseded because dropping thin-but-indexable
+    // pages left sitemap URLs invisible to answer engines. Each line still
+    // renders the honest count via adCount.
     const page = llmsPageForBrandPath(entry.path, entry.adCount, entry.fetchedAt);
+    return page ? [page] : [];
+  });
+  const categoryPages = categoryEntries.flatMap((entry) => {
+    const page = llmsPageForCategoryPath(entry.path);
     return page ? [page] : [];
   });
   const timelinePages = timelineEntries
@@ -1012,11 +1093,17 @@ export function buildLlmsText(
     })
     .slice(0, SITEMAP_TIMELINE_PATH_LIMIT);
   const pagesSection = renderLlmsPagesSection(brandPages);
-  // Prefix the non-empty timeline block with a single `\n` so it splices
+  // Prefix each non-empty dynamic block with a single `\n` so it splices
   // cleanly between pagesSection (no trailing newline) and the template's
-  // `\n\nCurrent` — one line break before `Timelines:`, one blank line before
-  // `Current product truth:`. Empty case returns `""` so the static funnel
-  // stays byte-identical (canary: `expect(buildLlmsText()).toBe(LLMS_TEXT)`).
+  // `\n\nCurrent` — one line break before the section header, one blank line
+  // before `Current product truth:`. Empty cases return `""` so the static
+  // funnel stays byte-identical (canary:
+  // `expect(buildLlmsText()).toBe(LLMS_TEXT)`). Section order mirrors
+  // buildSitemapXml: brand pages, then curated categories, then timelines.
+  const categoriesSection =
+    categoryPages.length > 0
+      ? `\n${renderLlmsCategoriesSection(categoryPages)}`
+      : "";
   const timelineSection =
     timelinePages.length > 0
       ? `\n${renderLlmsTimelineSection(timelinePages)}`
@@ -1025,7 +1112,7 @@ export function buildLlmsText(
 
 Five to Nine turns competitor ads and visible landing-page changes into source-backed morning intelligence.
 
-${pagesSection}${timelineSection}
+${pagesSection}${categoriesSection}${timelineSection}
 
 Current product truth:
 - Market intelligence for revenue teams is the north-star product story.
@@ -1179,7 +1266,7 @@ ${sources}
  * without a dedicated body so the caller falls back to PUBLIC_MARKDOWN.
  */
 const PUBLIC_MARKDOWN_BY_PATH: Readonly<Record<string, string>> = {
-  "/methodology": METHODOLOGY_MARKDOWN,
+  "/methodology/ad-aggression-score": METHODOLOGY_MARKDOWN,
   "/pricing": PRICING_MARKDOWN,
   "/compare/meta-ad-library": compareMarkdown(
     metaAdLibraryCitations as CompareCitations,
@@ -1191,7 +1278,7 @@ const PUBLIC_MARKDOWN_BY_PATH: Readonly<Record<string, string>> = {
   ),
   "/compare/spyland": compareMarkdown(
     spylandCitations as CompareCitations,
-    "Spyland watches competitor landing pages daily and flags copy, pricing, and CTA changes. Five to Nine adds the ad source and more frequent source-backed checks.",
+    "Spyland watches competitor landing pages on a schedule and flags copy, pricing, and CTA changes. Five to Nine adds the ad source and more frequent source-backed checks.",
   ),
   "/compare/pulzifi": compareMarkdown(
     pulzifiCitations as CompareCitations,
@@ -1212,6 +1299,14 @@ const PUBLIC_MARKDOWN_BY_PATH: Readonly<Record<string, string>> = {
   "/compare/adspy": compareMarkdown(
     adspyCitations as CompareCitations,
     "AdSpy is a single-plan ad-spy database with a 2.4/5 Trustpilot rating and no self-service cancel. Five to Nine is scheduled, source-backed Meta Ad Library and landing-page change proof.",
+  ),
+  "/compare/keeptabz": compareMarkdown(
+    keeptabzCitations as CompareCitations,
+    "KeepTabz tracks Facebook, Instagram, and Google ad creative and spend from $49.99, on an August 2026 launch. Five to Nine is scheduled, source-backed Meta Ad Library and landing-page change proof.",
+  ),
+  "/compare/gethookd": compareMarkdown(
+    gethookdCitations as CompareCitations,
+    "GetHookd is a Facebook Ads Library analysis workbench with a 7-day free trial and API and MCP on annual plans. Five to Nine is scheduled, source-backed Meta Ad Library and landing-page change proof.",
   ),
 };
 
