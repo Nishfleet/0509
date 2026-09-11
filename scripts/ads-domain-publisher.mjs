@@ -224,7 +224,18 @@ async function main() {
   process.exit(published >= minPublish ? 0 : 1);
 }
 
-main().catch((error) => {
-  console.error(`seed:publisher failed: ${error.message}`);
-  process.exit(1);
-});
+const invokedDirectly =
+  process.argv[1] !== undefined &&
+  fileURLToPath(import.meta.url) === process.argv[1];
+
+export {
+  loadSeedList,
+  probeDomain,
+};
+
+if (invokedDirectly) {
+  main().catch((error) => {
+    console.error(`seed:publisher failed: ${error.message}`);
+    process.exit(1);
+  });
+}
