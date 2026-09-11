@@ -130,6 +130,9 @@ export default [
   route("compare/panoramata", "routes/compare.panoramata.tsx"),
   route("compare/adspyder", "routes/compare.adspyder.tsx"),
   route("compare/adspy", "routes/compare.adspy.tsx"),
+  // Issue #2866: two verified competitors that had no compare page.
+  route("compare/keeptabz", "routes/compare.keeptabz.tsx"),
+  route("compare/gethookd", "routes/compare.gethookd.tsx"),
   route(LEGACY_VENDOR_SWITCH_PATH, "routes/legacy-vendor-redirect.ts", { id: "switch-legacy-vendor-redirect" }),
   route("switch/panoramata", "routes/switch.panoramata.tsx"),
   route("switch/visualping", "routes/switch.visualping.tsx"),
@@ -177,6 +180,8 @@ export default [
     route("compare/panoramata", "routes/$locale.compare.panoramata.tsx"),
     route("compare/adspyder", "routes/$locale.compare.adspyder.tsx"),
     route("compare/adspy", "routes/$locale.compare.adspy.tsx"),
+    route("compare/keeptabz", "routes/$locale.compare.keeptabz.tsx"),
+    route("compare/gethookd", "routes/$locale.compare.gethookd.tsx"),
     route(LEGACY_VENDOR_SWITCH_PATH, "routes/legacy-vendor-redirect.ts", { id: "locale-switch-legacy-vendor-redirect" }),
     route("switch/panoramata", "routes/$locale.switch.panoramata.tsx"),
     route("switch/visualping", "routes/$locale.switch.visualping.tsx"),

@@ -41,6 +41,23 @@ const NEW_COMPARE_PAGES = [
     competitor: "Visualping",
     claims: [],
   },
+  {
+    slug: "keeptabz",
+    title: "Five to Nine vs KeepTabz",
+    pricing: ["$49.99", "$99.99"],
+    competitor: "KeepTabz",
+    claims: [],
+  },
+  {
+    // Issue #2866: the issue's "free tier / free-plan MCP" wording was not
+    // verifiable on gethookd.ai (2026-09-11: 7-day free trial, API & MCP with
+    // annual plans), so the page states only the observed facts — no pricing.
+    slug: "gethookd",
+    title: "Five to Nine vs GetHookd",
+    pricing: [],
+    competitor: "GetHookd",
+    claims: ["7-day free trial", "API", "MCP"],
+  },
 ] as const;
 
 beforeEach(() => {
@@ -65,6 +82,10 @@ async function loadCompareModule(slug: string) {
       return import("~/routes/compare.adspy");
     case "visualping-ad-libraries":
       return import("~/routes/compare.visualping-ad-libraries");
+    case "keeptabz":
+      return import("~/routes/compare.keeptabz");
+    case "gethookd":
+      return import("~/routes/compare.gethookd");
     default:
       throw new Error(`unknown compare slug: ${slug}`);
   }
