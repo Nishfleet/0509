@@ -339,6 +339,7 @@ function parseFeedItems(xml: string, feedUrl: string): NormalizedPresenceItem[] 
       extractTag(block, "link") ??
       feedUrl;
     const publishedAt = extractTag(block, "pubDate") ?? extractTag(block, "published") ?? extractTag(block, "updated");
+    const parsedPublishedAt = publishedAt ? new Date(publishedAt) : null;
     const author =
       extractTag(block, "author") ??
       block.match(/<name>([^<]+)<\/name>/i)?.[1] ??
@@ -353,7 +354,10 @@ function parseFeedItems(xml: string, feedUrl: string): NormalizedPresenceItem[] 
       title,
       bodyExcerpt: excerpt || null,
       author,
-      publishedAt: publishedAt ? new Date(publishedAt).toISOString() : observedAt,
+      publishedAt:
+        parsedPublishedAt && !Number.isNaN(parsedPublishedAt.getTime())
+          ? parsedPublishedAt.toISOString()
+          : observedAt,
       observedAt,
       contentHash: "",
       raw: { kind: "feed_entry", feedUrl },
