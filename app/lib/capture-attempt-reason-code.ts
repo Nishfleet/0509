@@ -13,7 +13,8 @@
  * (or skip reason) into one of the public reason codes the issue names:
  * `bot_wall`, `cloudflare_challenge`, `cookie_banner`, `partial_load`,
  * `error_page`, `timeout`, `takedown_restore`, `budget_skip`,
- * `extraction_failed`. A succeeded capture has no reason code.
+ * `budget_topup_inactive`, `extraction_failed`. A succeeded capture has no
+ * reason code.
  *
  * The mapping is read-path only — no migration, no stored-value change.
  * `proof_capture` rows stay append-only with their original internal codes.
@@ -38,6 +39,7 @@ export type CaptureAttemptReasonCode =
   | "timeout"
   | "takedown_restore"
   | "budget_skip"
+  | "budget_topup_inactive"
   | "extraction_failed";
 
 export const CAPTURE_ATTEMPT_REASON_CODES: readonly CaptureAttemptReasonCode[] = [
@@ -49,6 +51,7 @@ export const CAPTURE_ATTEMPT_REASON_CODES: readonly CaptureAttemptReasonCode[] =
   "timeout",
   "takedown_restore",
   "budget_skip",
+  "budget_topup_inactive",
   "extraction_failed",
 ];
 
@@ -108,10 +111,16 @@ export const TAKEDOWN_RESTORE_METADATA_KEY = "takedownRestore";
  *
  * `isTakedownRestore` flips an `error_page` capture into `takedown_restore`
  * when the read path has confirmed the restore half of the cycle.
+ *
+ * `budgetReason` carries the stored `capture_diagnostics.budgetReason` for
+ * `skipped_due_to_budget` rows so the sub-reason is not flattened: a skip
+ * caused by purchased credits waiting on an inactive plan reads as
+ * `budget_topup_inactive`, not the generic `budget_skip` ("plan allowance
+ * reached") — the two situations need different customer action.
  */
 export function toPublicReasonCode(
   internalCode: string | null | undefined,
-  options: { isTakedownRestore?: boolean } = {},
+  options: { isTakedownRestore?: boolean; budgetReason?: string | null } = {},
 ): CaptureAttemptReasonCode | null {
   const trimmed = internalCode?.trim();
   if (!trimmed) return null;
@@ -121,7 +130,9 @@ export function toPublicReasonCode(
   }
 
   if (trimmed === "skipped_due_to_budget") {
-    return "budget_skip";
+    return options.budgetReason === "top_up_inactive_plan"
+      ? "budget_topup_inactive"
+      : "budget_skip";
   }
 
   return INTERNAL_TO_PUBLIC[trimmed] ?? null;
@@ -152,6 +163,7 @@ const REASON_CODE_LABELS: Record<CaptureAttemptReasonCode, string> = {
   timeout: "Check timed out",
   takedown_restore: "Site was down, then restored",
   budget_skip: "Skipped — plan allowance reached",
+  budget_topup_inactive: "Skipped — purchased credits need an active plan",
   extraction_failed: "Could not read the offer",
 };
 
