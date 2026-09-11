@@ -40,8 +40,9 @@ import {
   type DigestTrustItem,
 } from "~/lib/proof-classification";
 import {
-  adChurnFootnoteLine,
+  adChurnLineLabel,
   rerankDigestBrief,
+  AD_CHURN_EVENT_TYPES,
   type AdChurnSummary,
 } from "~/lib/digest-rerank";
 import { firstBriefEmailSubject } from "~/lib/first-brief";
@@ -249,7 +250,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
   // is excluded from the "more changes in the full brief" count (it is already
   // accounted for in the footnote, not omitted).
   const adChurnSummary = summarizeAdChurn(input.items);
-  const adChurnFootnote = adChurnFootnoteLine(adChurnSummary);
+  const adChurnFootnotes = adChurnFootnotesByWatchlist(input.items, originFromDigestUrl(input.fullDigestUrl));
   const nonChurnItemCount = input.items.length - adChurnSummary.total;
   const omittedCount = Math.max(nonChurnItemCount - topItems.length, 0);
   const trendLines =
@@ -309,7 +310,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
       ${renderTrendSectionHtml(trendLines)}
       <h2 style="${EMAIL_CASE_DISPLAY_STYLE}">Top moves</h2>
       ${renderTopMoveGroupsHtml(topMoveGroups, input.periodEnd, input.timeZone, input.fullDigestUrl)}
-      ${adChurnFootnote ? `<p style="margin: 0 0 18px; font-family: ${EMAIL_MONO_FONT}; font-size: 12px; color: ${EMAIL_CASE_INK_SOFT};">${escapeHtml(adChurnFootnote)}</p>` : ""}
+      ${renderAdChurnFootnotesHtml(adChurnFootnotes)}
       ${omittedCount > 0 ? `<p style="margin: 0 0 18px; color: ${EMAIL_CASE_INK_SOFT};">${omittedCount} more change${omittedCount === 1 ? " is" : "s are"} in the full brief.</p>` : ""}
       <p style="margin: 0 0 20px;">
         <a href="${escapeHtml(input.fullDigestUrl)}" style="${EMAIL_CASE_BUTTON_STYLE}">View full brief</a>
@@ -339,7 +340,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
     "",
     "Top moves:",
     ...renderTopMoveGroupsText(topMoveGroups, input.periodEnd, input.timeZone, input.fullDigestUrl),
-    adChurnFootnote,
+    ...renderAdChurnFootnotesText(adChurnFootnotes),
     omittedCount > 0 ? `${omittedCount} more change${omittedCount === 1 ? " is" : "s are"} in the full brief.` : null,
     "",
     `View full brief: ${input.fullDigestUrl}`,
@@ -1005,6 +1006,76 @@ function rankDigestItems(items: DigestTrustItem[]) {
 
 function summarizeAdChurn(items: DigestTrustItem[]): AdChurnSummary {
   return rerankDigestBrief(items.filter((item) => isDigestDecisionCandidate(item))).adChurnSummary;
+}
+
+/**
+ * Issue 2880 (BET 1): creative churn collapses into ONE counted line per
+ * watchlist, linked to that watchlist on the watchlist page — the only wall
+ * surface derivable from a digest item (the public /ads wall needs a domain,
+ * which digest items do not carry). A bare ad_new / ad_inactive never renders
+ * its own row; it only ever appears inside its watchlist's counted line.
+ */
+export interface WatchlistAdChurnFootnote {
+  watchlistName: string;
+  watchlistId: string | null;
+  /** Counted churn copy, e.g. "2 new creatives, 1 retired — open the ad wall." */
+  line: string;
+  /** Deep link to the watchlist when an id is stored; null renders plain text. */
+  url: string | null;
+}
+
+export function adChurnFootnotesByWatchlist(
+  items: DigestTrustItem[],
+  origin = "https://0509.io",
+): WatchlistAdChurnFootnote[] {
+  const churnTypes = new Set<string>(AD_CHURN_EVENT_TYPES);
+  const groups = new Map<string, DigestTrustItem[]>();
+  for (const item of items) {
+    if (!churnTypes.has(item.eventType ?? "")) continue;
+    if (!isDigestDecisionCandidate(item)) continue;
+    const name = item.watchlistName?.trim() || "Competitor";
+    groups.set(name, [...(groups.get(name) ?? []), item]);
+  }
+  const base = origin.replace(/\/+$/, "");
+  return [...groups.entries()].map(([watchlistName, groupItems]) => {
+    const summary = rerankDigestBrief(groupItems).adChurnSummary;
+    const label = adChurnLineLabel(summary);
+    const line = `${label ?? "Creative churn"} — open the ad wall.`;
+    const watchlistId = groupItems[0]?.watchlistId?.trim() || null;
+    return {
+      watchlistName,
+      watchlistId,
+      line,
+      url: watchlistId
+        ? `${base}/app/watchlists?watchlist=${encodeURIComponent(watchlistId)}`
+        : null,
+    };
+  });
+}
+
+function renderAdChurnFootnotesHtml(footnotes: WatchlistAdChurnFootnote[]): string {
+  if (footnotes.length === 0) {
+    return "";
+  }
+  return footnotes
+    .map((footnote) => {
+      const link = footnote.url
+        ? `<a href="${escapeHtml(footnote.url)}" style="color: ${EMAIL_CASE_INK_SOFT}; text-decoration: underline;">open the ad wall</a>`
+        : null;
+      const body = link
+        ? `${escapeHtml(footnote.line.replace(" — open the ad wall.", ""))} — ${link}.`
+        : escapeHtml(footnote.line);
+      return `<p style="margin: 0 0 18px; font-family: ${EMAIL_MONO_FONT}; font-size: 12px; color: ${EMAIL_CASE_INK_SOFT};"><strong>${escapeHtml(footnote.watchlistName)}</strong> · ${body}</p>`;
+    })
+    .join("");
+}
+
+function renderAdChurnFootnotesText(footnotes: WatchlistAdChurnFootnote[]): string[] {
+  return footnotes.map((footnote) =>
+    footnote.url
+      ? `${footnote.watchlistName}: ${footnote.line.replace(" — open the ad wall.", " — open the ad wall:")} ${footnote.url}`
+      : `${footnote.watchlistName}: ${footnote.line}`,
+  );
 }
 
 /**
