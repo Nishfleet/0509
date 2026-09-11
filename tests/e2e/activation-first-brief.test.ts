@@ -45,7 +45,7 @@ const CONTRACT_SUITES = [
   "tests/activation/first-brief-same-session.test.tsx",
 ] as const;
 
-function runVitest(files: readonly string[]): { status: number } {
+function runVitest(files: readonly string[]): { status: number | null } {
   // No coverage, no typecheck: CI owns both (fleet memory budget).
   return spawnSync(
     process.execPath,
@@ -73,8 +73,9 @@ describe("activation first-brief acceptance (#3015)", () => {
       assert.equal(
         result.status,
         0,
-        `vitest exited ${result.status} for ${suite}`,
+        `vitest exited null or nonzero for ${suite} (exit ${result.status})`,
       );
+      assert.notEqual(result.status, null);
     });
   }
 
