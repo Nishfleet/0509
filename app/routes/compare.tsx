@@ -111,7 +111,7 @@ const COMPARE_TABLE: readonly CompareTableRow[] = [
     vendor: "Spyland",
     href: "/compare/spyland",
     adLibrary: NOT_PUBLISHED,
-    landingPageDiffs: "Yes — daily checks, before/after screenshots",
+    landingPageDiffs: "Yes — scheduled checks, before/after screenshots",
     proofCaptures: NOT_PUBLISHED,
     listPrice: NOT_PUBLISHED,
   },
