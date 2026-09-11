@@ -33,6 +33,26 @@ const MAX_IDENTITY_FETCH_REDIRECTS = 5;
 const MAX_IDENTITY_RESPONSE_BYTES = 250_000;
 const IDENTITY_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const IDENTITY_FETCH_TIMEOUT_MS = 10_000;
+/**
+ * Overall wall-clock budget for ONE live identity resolution (issue #2870).
+ *
+ * The per-request fetch timeout is 10 s and a redirect chain pays a
+ * DNS-over-HTTPS lookup (up to 5 s) plus a fetch (up to 10 s) on EVERY hop,
+ * so a slow/bot-walled brand homepage could legally spend 40+ s inside
+ * `buildSearchV2Context` — which runs BEFORE the search-result cache read.
+ * Live 2026-09-11: cache=hit searches for allianz.com / freshworks.com /
+ * reliance.com / ridge.com delivered their first card at 26-42 s (BET 2
+ * p95 42 s against a 5 s budget) purely on a cold-isolate identity miss.
+ *
+ * When the live fetch exceeds this budget the search stops waiting and
+ * falls back to the curated-only identity (`applyIdentityOverride(null, …)`),
+ * the same fallback a bot-blocked homepage already gets. The timeout result
+ * is cached for the normal TTL, so the cost is paid at most once per domain
+ * per isolate lifetime. This is not the streaming fix (#2403 owns the
+ * pre-warm path); it bounds the blocking segment the BET 2 first-card p95
+ * is priced from.
+ */
+export const IDENTITY_RESOLVE_DEADLINE_MS = 2_500;
 
 /**
  * Curated identity facts for brands whose homepages cannot be fetched for
@@ -147,6 +167,20 @@ const IDENTITY_OVERRIDES: Record<
   // canary was green on saucony.co.uk (8-9 verified rows) in all 39 runs
   // before #1999 shipped and red on it in every run after.
   //
+  // TCS (issue #2870). tcs.com is a recognisable brand that dead-ended the
+  // BET 2 25-domain check: live 2026-09-11, website=tcs.com settled on a
+  // confirmed 0-row empty state while q="Tata Consultancy Services" returned
+  // 7 real TCS Meta ads ("TCS Rural IT Quiz") — Meta indexes the full brand
+  // name, never the bare "TCS" acronym (q=TCS returned 0 rows too) or the
+  // registrable domain tcs.com. The curated term is the question Meta
+  // answers; the curated site name is the matching alias so those rows
+  // classify as LIKELY (advertiser name match) instead of collapsing back
+  // to an empty page. The matcher still verifies each ad's landing page —
+  // a curated term never fabricates a verified row.
+  "tcs.com": {
+    siteName: "Tata Consultancy Services",
+    providerQuery: "Tata Consultancy Services",
+  },
   // The curated brand term is the query Meta actually indexes, exactly as
   // ridge.com/zappos.com curate the alias facts that connect their ads. It
   // does not loosen the matcher: a row is still verified only by its landing
@@ -175,10 +209,27 @@ export async function resolveWebsiteIdentity(domainUrl: string): Promise<Website
     return cached.identity;
   }
 
-  const identity = applyIdentityOverride(
-    await fetchWebsiteIdentity(safeUrl, registrableDomain),
-    registrableDomain,
+  const livePromise = fetchWebsiteIdentity(safeUrl, registrableDomain).catch(
+    () => null,
   );
+  // Race the live chain against the overall deadline (issue #2870). The
+  // deadline loser falls back to the curated-only identity — the same
+  // fallback a hard-failed fetch already takes — and the loser's promise is
+  // drained so a late rejection can never surface as an unhandled one.
+  let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+  const live = await Promise.race([
+    livePromise,
+    new Promise<null>((resolveDeadline) => {
+      deadlineTimer = setTimeout(
+        () => resolveDeadline(null),
+        IDENTITY_RESOLVE_DEADLINE_MS,
+      );
+    }),
+  ]);
+  clearTimeout(deadlineTimer);
+  void livePromise.then(() => undefined, () => undefined);
+
+  const identity = applyIdentityOverride(await live, registrableDomain);
   identityCache.set(registrableDomain, {
     identity,
     expiresAt: Date.now() + IDENTITY_CACHE_TTL_MS,
