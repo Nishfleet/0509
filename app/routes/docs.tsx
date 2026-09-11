@@ -4,6 +4,7 @@ import type { LinksFunction, MetaFunction } from "react-router";
 import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
 import { appLinkTarget } from "~/lib/app-link";
 import {
+  buyerSurfaceHreflangLinks,
   canonicalLinks,
   jsonLdScriptProps,
   publicSeoMeta,
@@ -14,7 +15,10 @@ import type { RootLoaderData } from "~/root";
 const description =
   "Five to Nine product docs for setup, delivery, billing, integrations, and safety.";
 
-export const links: LinksFunction = () => canonicalLinks("/docs");
+export const links: LinksFunction = () => [
+  ...canonicalLinks("/docs"),
+  ...buyerSurfaceHreflangLinks("docs"),
+];
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({

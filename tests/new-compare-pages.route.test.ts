@@ -123,7 +123,13 @@ describe("new compare pages (issue 1107)", () => {
       expect(faqBlocks).toHaveLength(1);
       expect(faqBlocks[0].mainEntity).toHaveLength(mod.faqEntries.length);
 
-      expect(mod.links()).toEqual([{ rel: "canonical", href: `https://0509.io/compare/${slug}` }]);
+      // canonical + the reciprocal hreflang cluster (issue #2030: en self +
+      // every locale + x-default — the EN canonical must emit it too).
+      const { buyerSurfaceHreflangLinks } = await import("~/lib/seo");
+      expect(mod.links()).toEqual([
+        { rel: "canonical", href: `https://0509.io/compare/${slug}` },
+        ...buyerSurfaceHreflangLinks(`compare/${slug}`),
+      ]);
       const tags = (mod.meta({} as never) ?? []) as Array<Record<string, string>>;
       expect(tags.find((tag) => "title" in tag)?.title).toBe(title);
 

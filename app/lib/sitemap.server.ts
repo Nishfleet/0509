@@ -119,6 +119,7 @@ import { registrableDomainFromHostname } from "~/lib/search-query";
 import { CHANGELOG_ENTRY_DATES, renderSitemapXml, ROOT_SITEMAP_STATIC_ENTRIES, SITEMAP_STATIC_ENTRIES, type SitemapEntry } from "~/lib/seo";
 import {
   BUYER_SURFACE_CHILD_PATHS,
+  BUYER_SURFACE_GUIDE_PATHS,
   BUYER_SURFACE_LOCALE_IDS,
   BUYER_SURFACE_PATHS,
   type BuyerSurfaceLocaleId,
@@ -510,8 +511,7 @@ export function staticSitemapEntriesForLocale(
     ...BUYER_SURFACE_CHILD_PATHS,
     // Issue #2295: the /guides/* how-to cluster must not drop out of the
     // locale sitemaps when the guide set grows.
-    "/guides/how-to-track-competitor-ads",
-    "/guides/how-to-monitor-meta-ad-library",
+    ...BUYER_SURFACE_GUIDE_PATHS,
   ].filter((path) => path !== "/" && path !== "/sitemap.xml");
   const entries: SitemapEntry[] = [];
   for (const path of buyerSurfacePaths) {

@@ -97,6 +97,7 @@ import {
   adsSocialCardUrl,
   brandPageTimelineHasPart,
   breadcrumbListJsonLd,
+  buyerSurfaceHreflangLinks,
   canonicalUrl,
   faqPageJsonLd,
   jsonLdScriptProps,
@@ -1062,8 +1063,23 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
       ogImageAlt,
     }),
     // links() cannot see route params in this router version, so the
-    // canonical tag ships as a meta-descriptor link instead.
+    // canonical tag and the hreflang cluster ship as meta-descriptor links
+    // instead. The cluster (en + de/ja/pt-br/fr/es + x-default) is emitted
+    // only on indexable pages — a noindex shell never advertises locale
+    // alternates it cannot back (issue #2030). The locale twin
+    // (`$locale.ads.$domain`) re-exports this meta, so both sides emit the
+    // same reciprocal set.
     { tagName: "link", rel: "canonical", href: canonicalUrl(loaderData.canonicalPath) },
+    ...(loaderData.noindex
+      ? []
+      : buyerSurfaceHreflangLinks(loaderData.canonicalPath.slice(1)).map(
+          (link) => ({
+            tagName: "link" as const,
+            rel: link.rel,
+            hrefLang: link.hreflang,
+            href: link.href,
+          }),
+        )),
     ...(loaderData.noindex ? [{ name: "robots", content: "noindex" }] : []),
   ];
 };

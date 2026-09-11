@@ -741,7 +741,7 @@ describe("buildSitemapXml", () => {
   it("renders a valid static-only sitemap when there are no brand pages", () => {
     const xml = buildSitemapXml([]);
 
-    expect(xml).toContain("<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">");
+    expect(xml).toContain("<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\" xmlns:xhtml=\"http://www.w3.org/1999/xhtml\">");
     expect(xml).not.toContain("/ads/");
   });
 
@@ -837,8 +837,8 @@ describe("llms.txt parity with dynamic sitemap brand paths", () => {
       [indexable, threeAd, stale, demo, otherCountry, cacheRow()],
       now,
     );
-    const sitemapAds = [...buildSitemapXml(brandEntries).matchAll(/https:\/\/0509\.io\/ads\/[^<]+/g)].map(
-      (match) => match[0],
+    const sitemapAds = [...buildSitemapXml(brandEntries).matchAll(/<loc>https:\/\/0509\.io\/ads\/[^<]+<\/loc>/g)].map(
+      (match) => match[0].replace(/<\/?loc>/g, ""),
     );
     const llmsAds = [...buildLlmsText(brandEntries).matchAll(/https:\/\/0509\.io\/ads\/[^)]+/g)].map(
       (match) => match[0],
