@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { SearchFilters } from "~/lib/types";
+
 const hasFreshDiscoveryCacheEntry = vi.fn();
 const searchAdsViaSourceResolver = vi.fn();
 const hydrateAdsWithPersistedCreatives = vi.fn();
@@ -24,6 +26,36 @@ beforeEach(() => {
     hydrateAdsWithPersistedCreatives,
   }));
 });
+
+function buildOptions(filters: Partial<SearchFilters>) {
+  return {
+    env: { SEARCH_ROLLOUT_MODE: "v2" } as never,
+    competitorWebsite: {
+      raw: "https://www.nike.com",
+      normalizedUrl: "https://nike.com",
+      host: "nike.com",
+      displayName: "Nike",
+      searchTerm: "nike.com",
+      error: null,
+    },
+    parsed: {
+      mode: "advertiser" as const,
+      filters: {
+        query: "nike.com",
+        country: "all",
+        platform: "all",
+        creativeType: "all" as const,
+        status: "all" as const,
+        firstSeenFrom: "",
+        lastSeenFrom: "",
+        ...filters,
+      },
+      fingerprint: "legacy-fingerprint",
+    },
+    scope: "exact" as const,
+    cursor: null,
+  };
+}
 
 describe("search execution cache probing", () => {
   it("uses only the customer-visible legacy cache during shadow rollout", async () => {
@@ -409,6 +441,80 @@ describe("search execution cache probing", () => {
     expect(execution.result.ads).toHaveLength(1);
     expect(execution.result.ads[0]).not.toHaveProperty("translatedText");
     expect(execution.result.ads[0]).not.toHaveProperty("landingPage");
+  });
+
+  // Issue #2437: the real execution path must hand the resolver a different
+  // cache key per result filter. The unit test on buildSearchV2CacheKey proves
+  // the key function; this proves the wiring — a caller that keeps passing no
+  // filters would leave the production bug in place while the unit test passes.
+  it("hands the resolver a distinct v2 cache key per result filter", async () => {
+    const emptyResult = {
+      ads: [],
+      nextCursor: null,
+      source: "meta_library_browser" as const,
+      provider: "meta_library_browser" as const,
+      cacheStatus: "hit" as const,
+      discoveryStatus: "healthy" as const,
+    };
+    searchAdsViaSourceResolver.mockResolvedValue(emptyResult);
+    const { executeSearchWithRelevance } = await import("~/lib/search-execution.server");
+
+    const executeWith = async (filters: Partial<SearchFilters>) => {
+      searchAdsViaSourceResolver.mockClear();
+      await executeSearchWithRelevance(buildOptions(filters));
+      return searchAdsViaSourceResolver.mock.calls[0]?.[3]?.cacheKeyOverride;
+    };
+
+    const unfilteredKey = await executeWith({});
+    expect(unfilteredKey).toBeTruthy();
+
+    // creativeType and status reach the provider request (media_type /
+    // active_status); platform and the date bounds narrow the rows client-side
+    // (ad-source.server.ts filterAdsBySearchFilters) and the narrowed payload
+    // is what gets cached. All five must isolate.
+    for (const override of [
+      { creativeType: "video" as const },
+      { status: "active" as const },
+      { platform: "Instagram" },
+      { firstSeenFrom: "2026-01-01" },
+      { lastSeenFrom: "2026-01-01" },
+    ]) {
+      const filteredKey = await executeWith(override);
+      expect(filteredKey, `filters ${JSON.stringify(override)} must change the key`)
+        .not.toBe(unfilteredKey);
+    }
+  });
+
+  // The warm-cache probe and the execution path must build the SAME key for the
+  // same filtered search. A divergence is not cosmetic: an execution key the
+  // probe never looks for means every filtered search runs cold, and a probe
+  // key the execution never writes means the rate limit is skipped on a
+  // mismatched entry.
+  it("builds the same v2 key for the probe and the execution of one filtered search", async () => {
+    const emptyResult = {
+      ads: [],
+      nextCursor: null,
+      source: "meta_library_browser" as const,
+      provider: "meta_library_browser" as const,
+      cacheStatus: "hit" as const,
+      discoveryStatus: "healthy" as const,
+    };
+    searchAdsViaSourceResolver.mockResolvedValue(emptyResult);
+    hasFreshDiscoveryCacheEntry.mockResolvedValue(true);
+    const { executeSearchWithRelevance, hasWarmSearchCacheEntry } = await import(
+      "~/lib/search-execution.server"
+    );
+
+    const options = buildOptions({ creativeType: "video", platform: "Instagram" });
+
+    await executeSearchWithRelevance(options);
+    const executionKey = searchAdsViaSourceResolver.mock.calls[0]?.[3]?.cacheKeyOverride;
+
+    await hasWarmSearchCacheEntry(options);
+    const probeKey = hasFreshDiscoveryCacheEntry.mock.calls[0]?.[3]?.cacheKeyOverride;
+
+    expect(executionKey).toBeTruthy();
+    expect(probeKey).toBe(executionKey);
   });
 });
 

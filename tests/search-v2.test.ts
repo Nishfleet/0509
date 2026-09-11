@@ -8,7 +8,7 @@ import {
 } from "~/lib/search-v2.server";
 import { parseSearchInputFromWebsiteField } from "~/lib/search-query";
 import { clearWebsiteIdentityCacheForTests } from "~/lib/website-identity.server";
-import type { AdRecord, SearchResponse } from "~/lib/types";
+import type { AdRecord, SearchFilters, SearchResponse } from "~/lib/types";
 
 function ad(overrides: Partial<AdRecord> = {}): AdRecord {
   return {
@@ -120,6 +120,78 @@ describe("search v2 cache isolation", () => {
 
     expect(domainKey.startsWith("search-v2:domain:")).toBe(true);
     expect(textKey.startsWith("search-v2:domain:")).toBe(false);
+  });
+
+  // Issue #2437: the domain-intent key named only domain/scope/provider/country,
+  // but the provider request DOES carry the result filters (media_type from
+  // creativeType, active_status from status — meta-library-browser.server.ts
+  // buildSearchUrl). Two differently-filtered searches for one domain shared a
+  // single cache entry, so an unfiltered visitor could be served another
+  // visitor's video-only payload and vice versa.
+  it("isolates the domain key on every non-default result filter", () => {
+    const intent = parseSearchInputFromWebsiteField("nike.com");
+    const defaults: SearchFilters = {
+      query: "nike.com",
+      country: "all",
+      platform: "all",
+      creativeType: "all",
+      status: "all",
+      firstSeenFrom: "",
+      lastSeenFrom: "",
+    };
+    const keyFor = (overrides: Partial<SearchFilters>) =>
+      buildSearchV2CacheKey({
+        provider: "meta_library_browser",
+        intent,
+        scope: "exact",
+        country: "all",
+        filters: { ...defaults, ...overrides },
+      });
+
+    const unfiltered = keyFor({});
+    expect(keyFor({ creativeType: "video" })).not.toBe(unfiltered);
+    expect(keyFor({ status: "active" })).not.toBe(unfiltered);
+    expect(keyFor({ platform: "Instagram" })).not.toBe(unfiltered);
+    expect(keyFor({ firstSeenFrom: "2026-01-01" })).not.toBe(unfiltered);
+    expect(keyFor({ lastSeenFrom: "2026-01-01" })).not.toBe(unfiltered);
+
+    // Every filter must isolate independently, not merely from the unfiltered
+    // key: two different non-default values that shared a key would still
+    // cross-serve.
+    expect(keyFor({ platform: "Instagram" })).not.toBe(keyFor({ platform: "Facebook" }));
+    expect(keyFor({ creativeType: "video" })).not.toBe(keyFor({ creativeType: "image" }));
+    expect(keyFor({ status: "active" })).not.toBe(keyFor({ status: "inactive" }));
+  });
+
+  it("keeps the legacy six-segment key when every result filter is default", () => {
+    const intent = parseSearchInputFromWebsiteField("nike.com");
+    const defaults: SearchFilters = {
+      query: "nike.com",
+      country: "all",
+      platform: "all",
+      creativeType: "all",
+      status: "all",
+      firstSeenFrom: "",
+      lastSeenFrom: "",
+    };
+    const withDefaults = buildSearchV2CacheKey({
+      provider: "meta_library_browser",
+      intent,
+      scope: "exact",
+      country: "all",
+      filters: defaults,
+    });
+    const withoutFilters = buildSearchV2CacheKey({
+      provider: "meta_library_browser",
+      intent,
+      scope: "exact",
+      country: "all",
+    });
+
+    // The format-pinning canaries (ads-programmatic-seo.canary.test.tsx,
+    // sitemap.server.test.ts) hard-code this exact shape for default filters.
+    expect(withDefaults).toBe("search-v2:domain:nike.com:exact:meta_library_browser:all:page-1");
+    expect(withDefaults).toBe(withoutFilters);
   });
 });
 
