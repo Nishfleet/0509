@@ -1,6 +1,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { getPlanEntitlements } from "~/lib/plan-entitlements";
+import { pickSignupFirstBriefBrandSuggestions } from "~/lib/first-brief";
 import type { WatchEventRecord, WatchlistRecord } from "~/lib/types";
 import { mockReactRouter } from "../helpers/mock-react-router";
 
@@ -159,6 +161,23 @@ function mockNoAdsFirstBrief() {
   vi.doMock("~/lib/cron-failure-alert.server", () => ({
     reportScheduledTaskFailure: vi.fn(),
   }));
+  vi.doMock("~/lib/ads-internal-links.server", () => ({
+    loadIndexableAdsInternalLinks: vi.fn().mockResolvedValue([
+      // Same buyer category as Glowkart's `glowkart.example` fallback bucket
+      // is "More brands", so these are the deterministic alphabetical fallback
+      // — the property the issue's "already-tracked brands with live data"
+      // needs is that they come from the indexable /brands set at all.
+      //
+      // `glowkart.example` is deliberately present: it is the user's own
+      // scanned competitor, so a regression in the exclusion is caught by the
+      // test rather than silently passing against an absent domain.
+      { domain: "glowkart.example", path: "/ads/glowkart.example", name: "Glowkart" },
+      { domain: "nike.com", path: "/ads/nike.com", name: "Nike" },
+      { domain: "adidas.com", path: "/ads/adidas.com", name: "Adidas" },
+      { domain: "nykaa.com", path: "/ads/nykaa.com", name: "Nykaa" },
+      { domain: "hubspot.com", path: "/ads/hubspot.com", name: "HubSpot" },
+    ]),
+  }));
   return { createDigestRun, listDigests };
 }
 
@@ -224,6 +243,7 @@ afterEach(() => {
   vi.doUnmock("~/lib/auth.server");
   vi.doUnmock("~/lib/context.server");
   vi.doUnmock("~/lib/cron-failure-alert.server");
+  vi.doUnmock("~/lib/ads-internal-links.server");
   vi.doUnmock("react-router");
 });
 
@@ -315,6 +335,63 @@ describe("same-session first brief (issue #1487)", () => {
 
     // No digest was created because the scan produced no evidence-linked items.
     expect(createDigestRun).not.toHaveBeenCalled();
+  });
+
+  it("offers adjacent already-tracked brands and a landing-page capture in the no-ads state (issue #2411)", async () => {
+    mockNoAdsFirstBrief();
+    mockAuth();
+
+    const { loader } = await import("~/routes/app.onboard");
+    const data = (await loader({
+      context: { cloudflare: { env: { SIGNUP_FIRST_BRIEF_ENABLED: "1" } } },
+      params: {},
+      request: new Request("http://localhost/app/onboard?step=first-brief"),
+    } as never)) as Awaited<ReturnType<typeof loader>>;
+
+    if (!(typeof data === "object" && data !== null && "status" in data && data.status === "no_ads")) {
+      throw new Error("expected no_ads brief");
+    }
+
+    // (a) the loader resolved 2-3 adjacent brands from the same indexable set
+    // the /brands hub serves — never the user's own competitor, never a link
+    // the /ads/:domain route would refuse to serve.
+    expect(data.suggestedBrands.length).toBeGreaterThanOrEqual(2);
+    expect(data.suggestedBrands.length).toBeLessThanOrEqual(3);
+    // The mock indexable set below deliberately INCLUDES the user's own
+    // competitor domain, so this assertion can actually fail if the exclusion
+    // regresses (it used to assert against a domain absent from the fixture).
+    for (const brand of data.suggestedBrands) {
+      expect(brand.path).toBe(`/ads/${brand.domain}`);
+      expect(brand.domain).not.toBe("glowkart.example");
+    }
+    expect(data.suggestedBrands.map((b) => b.domain)).not.toContain(
+      "glowkart.example",
+    );
+
+    // (b) the rendered surface links every suggested brand and offers the
+    // landing-page capture, so the first session does not dead-end.
+    const { SignupFirstBriefView } = await import("~/components/signup-first-brief-view");
+    const markup = renderToStaticMarkup(<SignupFirstBriefView data={data} />);
+    for (const brand of data.suggestedBrands) {
+      expect(markup).toContain(`href="${brand.path}"`);
+    }
+    // The capture offer must deep link the EXISTING watchlist (by id), never
+    // the create-competitor form: free is `watchlists: 1`, so the activation
+    // watchlist has already spent the only slot and a second-watchlist offer
+    // would land the user this state exists for on a plan limit instead of a
+    // capture. A display label in the `website` field is also rejected by the
+    // site's own domain validator, which disables the submit button.
+    expect(markup).toContain(
+      `href="/app/watchlists/${encodeURIComponent("watch-1")}"`,
+    );
+    expect(markup).not.toContain("competitor=Glowkart");
+    // The offer must not quote the Full-Site Watch page budget: it is gated by
+    // FULLSITE_WATCH_ENABLED (default off), so a free user may not have it and
+    // the sentence would be an unsourced claim. It must also never route the
+    // display label into the `website` field, which the site's own domain
+    // validator rejects (disabling the submit button).
+    expect(markup).not.toContain("page checks");
+    expect(markup).toContain("Add a page to capture instead");
   });
 
   it("keeps waiting when filing the first brief fails, so polling can retry", async () => {

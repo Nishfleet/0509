@@ -4,7 +4,10 @@ import { useLoaderData } from "react-router";
 
 import { SignupFirstBriefView } from "~/components/signup-first-brief-view";
 import { useFirstCapturePolling } from "~/components/workspace/use-first-capture-polling";
-import type { SignupFirstBriefLoaderData } from "~/lib/first-brief";
+import type {
+  SignupFirstBriefBrandSuggestion,
+  SignupFirstBriefLoaderData,
+} from "~/lib/first-brief";
 import type { FirstBriefFileResult } from "~/lib/first-brief.server";
 
 /** Compatibility only: setup now lives in the signed-in Overview. */
@@ -60,6 +63,50 @@ export default function RetiredOnboardRoute() {
     return <SignupFirstBriefView data={data} />;
   }
   return null;
+}
+
+/**
+ * Issue #2411: resolve the adjacent already-tracked brands offered in the
+ * `no_ads` terminal state.
+ *
+ * Reuses the /brands hub's own loader (`loadIndexableAdsInternalLinks`, #1417)
+ * so every suggestion is a brand the public hub already lists and whose
+ * `/ads/:domain` page is in the sitemap's indexable set — a suggestion can
+ * never point at a page the route would refuse to serve. `pickSignupFirstBriefBrandSuggestions`
+ * then narrows to the same buyer category as the user's own competitor
+ * (`brandCategoryForDomain`) before falling back to a deterministic slice.
+ * Cache-only: never triggers live discovery or scraping, and never throws —
+ * the loaders degrade to an empty list on any hiccup, in which case the view
+ * simply hides the section.
+ */
+async function loadNoAdsBrandSuggestions(
+  env: ReturnType<typeof import("~/lib/context.server").getEnv>,
+  scannedWatchlist: { targetId?: string | null; targetLabel?: string | null },
+): Promise<SignupFirstBriefBrandSuggestion[]> {
+  try {
+    const { loadIndexableAdsInternalLinks } = await import(
+      "~/lib/ads-internal-links.server"
+    );
+    const {
+      pickSignupFirstBriefBrandSuggestions,
+      watchlistDomainForExistingHistory,
+    } = await import("~/lib/first-brief");
+    const links = await loadIndexableAdsInternalLinks(env);
+    return pickSignupFirstBriefBrandSuggestions(
+      links.map((link) => ({
+        name: link.name,
+        domain: link.domain,
+        path: link.path,
+      })),
+      // Reuse the existing target-domain resolver rather than a second URL
+      // parser — it already handles a bare domain, a full URL, and the
+      // non-domain placeholder targets (`saved-query-1`) that must resolve to
+      // null so the picker falls back to its deterministic slice.
+      watchlistDomainForExistingHistory(scannedWatchlist),
+    );
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -150,7 +197,13 @@ async function firstBriefLoader(
       return {
         step: "first-brief",
         status: "no_ads",
+        watchlistId: scanned.id ?? null,
         watchlistName: scanned.targetLabel ?? null,
+        // Issue #2411: a brand-new user's first product impression used to be
+        // a dead end. Offer the nearest real value instead — 2-3 adjacent
+        // already-tracked brands from the same public /brands surface the hub
+        // serves (cache-only, indexability-filtered, never a dead link).
+        suggestedBrands: await loadNoAdsBrandSuggestions(env, scanned),
       };
     }
     // The activation scan is still in flight. Render the waiting state — the
