@@ -145,9 +145,10 @@ export default [
   // Issue #2866: two verified competitors that had no compare page.
   route("compare/keeptabz", "routes/compare.keeptabz.tsx"),
   route("compare/gethookd", "routes/compare.gethookd.tsx"),
-  route(LEGACY_VENDOR_SWITCH_PATH, "routes/legacy-vendor-redirect.ts", { id: "switch-legacy-vendor-redirect" }),
   // Issue #2887: the MagicBrief wind-down page — the one vendor shutdown
-  // creating real switching demand (BET 8).
+  // creating real switching demand (BET 8). It replaces the legacy
+  // switch-URL 301: the path serves 200 again, only /compare/magicbrief
+  // keeps redirecting to the hub.
   route("switch/magicbrief", "routes/switch.magicbrief.tsx"),
   route("switch/panoramata", "routes/switch.panoramata.tsx"),
   route("switch/visualping", "routes/switch.visualping.tsx"),
@@ -205,7 +206,6 @@ export default [
     route("compare/adspy", "routes/$locale.compare.adspy.tsx"),
     route("compare/keeptabz", "routes/$locale.compare.keeptabz.tsx"),
     route("compare/gethookd", "routes/$locale.compare.gethookd.tsx"),
-    route(LEGACY_VENDOR_SWITCH_PATH, "routes/legacy-vendor-redirect.ts", { id: "locale-switch-legacy-vendor-redirect" }),
     // Issue #2887: the MagicBrief wind-down page (BET 8), locale twins.
     route("switch/magicbrief", "routes/$locale.switch.magicbrief.tsx"),
     route("switch/panoramata", "routes/$locale.switch.panoramata.tsx"),
