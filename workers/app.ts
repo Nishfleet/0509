@@ -42,6 +42,7 @@ import {
 } from "../app/lib/public-markdown";
 import { publicSeoFileForPathname } from "../app/lib/seo";
 import {
+  brandCategorySitemapEntries,
   loadIndexableBrandPageEntries,
   loadIndexableTimelineEntries,
   publicLocaleSitemapFile,
@@ -259,10 +260,11 @@ export default {
     }
 
     if ((request.method === "GET" || request.method === "HEAD") && url.pathname === "/llms.txt") {
-      // Same indexable /ads/:domain and /timeline/:domain sets as sitemap.xml —
-      // never list a noindex shell. Timeline loader degrades to [] when D1 or
-      // the snapshot table is missing, so the no-D1 / demo path stays byte-
-      // identical to the static funnel (issue #1929).
+      // Same indexable /ads/:domain, /brands/:slug, and /timeline/:domain
+      // sets as sitemap.xml — never list a noindex shell (issue #2925
+      // zero-parity: every sitemap URL is listed). Timeline loader degrades
+      // to [] when D1 or the snapshot table is missing, so the no-D1 / demo
+      // path stays byte-identical to the static funnel (issue #1929).
       const [brandEntries, captureBackedTimelineEntries] = await Promise.all([
         loadIndexableBrandPageEntries(env),
         loadIndexableTimelineEntries(env),
@@ -272,6 +274,7 @@ export default {
         buildLlmsText(
           brandEntries,
           timelineSitemapEntries(captureBackedTimelineEntries),
+          brandCategorySitemapEntries(brandEntries),
         ),
       );
     }
