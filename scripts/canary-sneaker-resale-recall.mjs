@@ -83,6 +83,26 @@ export const KNOWN_IDENTITY_GAPS = Object.freeze(new Map([
 export const WARMING_RETRY_LIMIT = 2;
 export const WARMING_RETRY_DELAY_MS = 15_000;
 
+// A cold domain's first /search response can legitimately take longer than
+// the 30s the sibling probes use: the route awaits identity resolution (a
+// redirect chain of homepage fetches, up to ~60s) before the warming page or
+// rows come back. finishline.com returned HTTP 200 in 30.7s on a live probe
+// (issue #2700) — inside a user's wait, outside the old 30s budget. The
+// canary asserts what a patient user sees, so the probe waits up to 90s.
+export const PROBE_REQUEST_TIMEOUT_MS = 90_000;
+
+// A transport blip — the fetch throwing (timeout, DNS, connection reset) or a
+// 5xx from the edge — means the probe could not confirm coverage, but a single
+// blip must not fail the whole 25-domain sweep: finishline.com and
+// jdsports.com each returned one-off ERRs that failed otherwise-green runs
+// (issue #2700). The probe retries a bounded number of times; a persistent
+// failure still reports requestError and fails loud — "cannot confirm" is
+// never a pass. The 60s spacing gives an in-flight server-side capture (which
+// outlives an aborted client request via waitUntil) time to land before the
+// retry asks again.
+export const REQUEST_ERROR_RETRY_LIMIT = 2;
+export const REQUEST_ERROR_RETRY_DELAY_MS = 60_000;
+
 // Anonymous /search is 20 requests per 10 minutes per IP. The canary makes 25
 // requests (one per domain), so a scheduled run can collide with other search
 // canaries on the same runner IP; a 429 is retried with the same backoff the
@@ -148,6 +168,8 @@ function defaultSleep(ms) {
  *   retryLimit?: number,
  *   retryDelayMs?: number,
  *   max429Retries?: number,
+ *   requestErrorRetryLimit?: number,
+ *   requestErrorRetryDelayMs?: number,
  * }} input
  * @returns {Promise<SneakerResaleProbe>}
  */
@@ -159,6 +181,8 @@ export async function probeSneakerResaleDomain({
   retryLimit = WARMING_RETRY_LIMIT,
   retryDelayMs = WARMING_RETRY_DELAY_MS,
   max429Retries = SEARCH_429_RETRY_LIMIT,
+  requestErrorRetryLimit = REQUEST_ERROR_RETRY_LIMIT,
+  requestErrorRetryDelayMs = REQUEST_ERROR_RETRY_DELAY_MS,
 }) {
   const url = new URL("/search", baseUrl);
   url.searchParams.set("website", domain);
@@ -168,6 +192,7 @@ export async function probeSneakerResaleDomain({
   let lastStatus = null;
   let rateLimitHits = 0;
   let warmingAttempts = 0;
+  let requestErrorAttempts = 0;
   while (true) {
     let response;
     try {
@@ -178,13 +203,18 @@ export async function probeSneakerResaleDomain({
           pragma: "no-cache",
           accept: "text/html,application/xhtml+xml",
         },
-        signal: AbortSignal.timeout(30_000),
+        signal: AbortSignal.timeout(PROBE_REQUEST_TIMEOUT_MS),
       });
     } catch (error) {
+      requestErrorAttempts += 1;
+      if (requestErrorAttempts <= requestErrorRetryLimit) {
+        await sleepImpl(requestErrorRetryDelayMs);
+        continue;
+      }
       return {
         domain,
         brand: domain,
-        status: null,
+        status: lastStatus,
         rowCount: 0,
         tierCounts: { verified: 0, likely: 0, unmatched: 0 },
         headline: null,
@@ -211,6 +241,24 @@ export async function probeSneakerResaleDomain({
       }
       await sleepImpl(parseRetryAfterMs(retryAfterHeader, SEARCH_429_DEFAULT_WAIT_MS));
       continue;
+    }
+    if (response.status >= 500) {
+      await response.text();
+      requestErrorAttempts += 1;
+      if (requestErrorAttempts <= requestErrorRetryLimit) {
+        await sleepImpl(requestErrorRetryDelayMs);
+        continue;
+      }
+      return {
+        domain,
+        brand: domain,
+        status: lastStatus,
+        rowCount: 0,
+        tierCounts: { verified: 0, likely: 0, unmatched: 0 },
+        headline: null,
+        isWarming: false,
+        requestError: `HTTP ${response.status}`,
+      };
     }
     const html = await response.text();
     lastParsed = parseSearchResponseHtml(html);
@@ -428,7 +476,9 @@ async function main() {
   for (const probe of verdict.failures) {
     const cause = probe.rateLimited
       ? "rate-limited (429) after retries"
-      : `rows=${probe.rowCount}`;
+      : probe.requestError
+        ? `request error after retries (${probe.requestError})`
+        : `rows=${probe.rowCount}`;
     emitLine(`  - ${probe.domain} (${cause}, status=${String(probe.status ?? "ERR")})`);
   }
   process.exit(1);
