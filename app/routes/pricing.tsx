@@ -18,6 +18,7 @@ import {
   publicSeoMeta,
   webPageJsonLd,
 } from "~/lib/seo";
+import { isMonitoringSourceLive } from "~/lib/monitoring-source-claims";
 import type { RootLoaderData } from "~/root";
 
 // Issue #2694: /pricing no longer SSRs buyer-country Dodo prices. The loader
@@ -88,6 +89,16 @@ export default function PricingRoute() {
         commercialLaunch={commercialLaunch}
         initialPricingPreview={routeData.pricingPreview?.available ? routeData.pricingPreview : null}
       />
+      {/* Issue #2188: the two live monitoring sources, named only while the
+          claim-table row is live — never spend, impressions, or full Google
+          Ads coverage. */}
+      {isMonitoringSourceLive("google") ? (
+        <p className="f9-wk-dim f9-ads-proof-note">
+          Paid watches read the Meta Ad Library and Google Search results —
+          the sponsored ads and organic top 10 for each watched
+          competitor&rsquo;s brand query, checked once a day.
+        </p>
+      ) : null}
       {/* Issue #2026 + #2049: the buyer-facing "no phantom changes" proof
           element sits one click from the plans — the proof claim a buyer
           evaluating a price is actually weighing — and links to both the

@@ -230,7 +230,7 @@ describe("competitor monitoring category page", () => {
     expect(source).not.toMatch(/unbeatable/i);
   });
 
-  it("positions the Meta-only ad scope against multi-platform ad-library aggregators", async () => {
+  it("scopes ad coverage to the claim table's live sources (issue #2188)", async () => {
     const { categoryFaqEntries } = await import("~/routes/competitor-monitoring");
     const { default: CompetitorMonitoringCategoryRoute } = await import(
       "~/routes/competitor-monitoring"
@@ -238,19 +238,51 @@ describe("competitor monitoring category page", () => {
     const source = readFileSync(routePath, "utf8");
     const markup = renderToStaticMarkup(createElement(CompetitorMonitoringCategoryRoute));
 
-    // Cross-platform aggregators (adlibrary.com and similar) search many
-    // platforms' ad libraries at once; this page must state the Meta-only
-    // scope plainly instead of leaving buyers to assume broad coverage.
-    expect(source).toContain("Coverage is the Meta Ad Library only");
-    expect(source).toContain("platforms&rsquo; ad libraries are not included");
+    // Issue #2188: the claim table is the only gate on which sources public
+    // copy may name. Read it here — never hardcode the live state.
+    const audit = JSON.parse(
+      readFileSync("docs/customer-claim-audit-table.json", "utf8"),
+    ) as {
+      claims: Array<{
+        claimId: string;
+        currentResult: string;
+        monitoringSource?: { sourceId: string; status: string };
+      }>;
+    };
+    const googleLive = audit.claims.some(
+      (claim) =>
+        claim.monitoringSource?.sourceId === "google" &&
+        claim.monitoringSource.status === "live" &&
+        claim.currentResult === "pass",
+    );
 
-    // The ad-spy FAQ answer names the multi-platform category explicitly.
     const spyAnswer = categoryFaqEntries.find(
       (entry) => entry.question === "How is this different from ad-spy tools?",
     )!.answer;
+    const dataAnswer = categoryFaqEntries.find(
+      (entry) => entry.question === "Where does the data come from?",
+    )!.answer;
+
+    if (googleLive) {
+      // Google Search is live: coverage copy names it, and the Meta-only
+      // phrasing must be gone everywhere on the page.
+      expect(markup).toContain(
+        "Coverage is the Meta Ad Library plus Google Search results",
+      );
+      expect(markup).not.toContain("Meta Ad Library only");
+      expect(spyAnswer).toContain(
+        "reads the Meta Ad Library and Google Search results",
+      );
+      expect(dataAnswer).toContain("Google Search results");
+    } else {
+      // No production-proofed source beyond Meta: the page stays Meta-only.
+      expect(markup).toContain("Meta Ad Library only");
+      expect(markup).not.toContain("Google Search");
+      expect(spyAnswer).toContain("Meta Ad Library only");
+      expect(dataAnswer).not.toContain("Google Search");
+    }
     expect(spyAnswer).toContain("many platforms’ ad libraries at once");
-    expect(spyAnswer).toContain("Meta Ad Library only");
-    expect(markup).toContain("Meta Ad Library only");
+    expect(source).toContain("ad libraries are not included");
 
     // Honest scoping, not superiority: no named-vendor attacks or unsupported
     // breadth claims, and no promise of other platforms coming.

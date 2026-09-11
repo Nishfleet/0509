@@ -253,7 +253,12 @@
       "currentResult": "pass",
       "resultDetail": "Seam #2218 registers the Google Search adapter as a stub (implemented: false). Coverage reports coming_soon. Production proof/status flip deferred to #2188.",
       "betOrCopyChange": "bet 10 (claim/reality reconciliation) — seam #2218 stub row; #2181 lands the real adapter, #2188 flips the claim",
-      "nishReserved": false
+      "nishReserved": false,
+      "monitoringSource": {
+        "sourceId": "google",
+        "label": "Google Search",
+        "status": "coming_soon"
+      }
     },
     {
       "claimId": "AUDIT-SOURCE-GOOGLE-ADS-STUB",
@@ -264,7 +269,12 @@
       "currentResult": "pass",
       "resultDetail": "Seam #2218 registers the Google Ads adapter as a stub (implemented: false). Coverage reports coming_soon. Production proof/status flip deferred to #2188.",
       "betOrCopyChange": "bet 10 (claim/reality reconciliation) — seam #2218 stub row; #2189 lands the real adapter, #2188 flips the claim",
-      "nishReserved": false
+      "nishReserved": false,
+      "monitoringSource": {
+        "sourceId": "google_ads",
+        "label": "Google Ads Transparency Center",
+        "status": "coming_soon"
+      }
     },
     {
       "claimId": "AUDIT-SOURCE-LINKEDIN-ADS-STUB",
@@ -275,7 +285,12 @@
       "currentResult": "pass",
       "resultDetail": "Seam #2218 registers the LinkedIn Ads adapter as a stub (implemented: false). Coverage reports coming_soon. Production proof/status flip deferred to #2188.",
       "betOrCopyChange": "bet 10 (claim/reality reconciliation) — seam #2218 stub row; #2193 lands the real adapter, #2188 flips the claim",
-      "nishReserved": false
+      "nishReserved": false,
+      "monitoringSource": {
+        "sourceId": "linkedin",
+        "label": "LinkedIn Ad Library",
+        "status": "coming_soon"
+      }
     },
     {
       "claimId": "AUDIT-SOURCE-TIKTOK-ADS-STUB",
@@ -286,7 +301,12 @@
       "currentResult": "pass",
       "resultDetail": "Seam #2218 registers the TikTok Ads adapter as a stub (implemented: false). Coverage reports coming_soon. Production proof/status flip deferred to #2188.",
       "betOrCopyChange": "bet 10 (claim/reality reconciliation) — seam #2218 stub row; #2194 lands the real adapter, #2188 flips the claim",
-      "nishReserved": false
+      "nishReserved": false,
+      "monitoringSource": {
+        "sourceId": "tiktok",
+        "label": "TikTok Commercial Content Library",
+        "status": "coming_soon"
+      }
     },
     {
       "claimId": "AUDIT-SOURCE-SUBDOMAINS-STUB",
@@ -297,7 +317,12 @@
       "currentResult": "pass",
       "resultDetail": "Seam #2218 registers the subdomains adapter as a stub (implemented: false). Coverage reports coming_soon. Production proof/status flip deferred to #2188.",
       "betOrCopyChange": "bet 10 (claim/reality reconciliation) — seam #2218 stub row; #2198 lands the real adapter, #2188 flips the claim",
-      "nishReserved": false
+      "nishReserved": false,
+      "monitoringSource": {
+        "sourceId": "subdomains",
+        "label": "New web addresses",
+        "status": "coming_soon"
+      }
     },
     {
       "claimId": "AUDIT-SOURCE-HIRING-STUB",
@@ -308,7 +333,12 @@
       "currentResult": "pass",
       "resultDetail": "Seam #2218 registers the hiring adapter as a stub (implemented: false). Coverage reports coming_soon. Production proof/status flip deferred to #2188.",
       "betOrCopyChange": "bet 10 (claim/reality reconciliation) — seam #2218 stub row; #2199 lands the real adapter, #2188 flips the claim",
-      "nishReserved": false
+      "nishReserved": false,
+      "monitoringSource": {
+        "sourceId": "hiring",
+        "label": "Hiring",
+        "status": "coming_soon"
+      }
     }
   ],
   "summary": {
