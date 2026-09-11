@@ -101,18 +101,6 @@ function ownerAuthMock() {
   vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => ({ DB: {} })) }));
 }
 
-function digestConfigDefaults() {
-  return {
-    sensitivityMode: "balanced",
-    instantEnabled: false,
-    digestEnabled: true,
-    emailEnabled: true,
-    whatsappEnabled: false,
-    slackEnabled: false,
-    teamsEnabled: false,
-  };
-}
-
 beforeEach(async () => {
   vi.resetModules();
 });
@@ -151,11 +139,9 @@ describe("notifications route (live Slack/Teams webhook surface)", () => {
 
   it("connects a Slack webhook on Starter+ and enables Slack delivery", async () => {
     ownerAuthMock();
-    const upsertWorkspaceDeliveryConfig = vi.fn();
+    const enableWorkspaceDeliveryChannel = vi.fn();
     vi.doMock("~/lib/data.server", () => ({
-      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue(null),
-      legacyWorkspaceDeliveryDefaults: vi.fn().mockReturnValue(digestConfigDefaults()),
-      upsertWorkspaceDeliveryConfig,
+      enableWorkspaceDeliveryChannel,
     }));
     vi.doMock("~/lib/slack.server", () => ({
       saveSlackWebhookTarget: vi.fn().mockResolvedValue({ id: "slack-target-1" }),
@@ -177,23 +163,21 @@ describe("notifications route (live Slack/Teams webhook surface)", () => {
 
     expect(result.ok).toBe(true);
     expect(result.message).toContain("Slack delivery connected");
-    expect(upsertWorkspaceDeliveryConfig).toHaveBeenCalledWith(
+    expect(enableWorkspaceDeliveryChannel).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({
+      {
         userId: session.user.id,
-        slackEnabled: true,
-        teamsEnabled: false,
-      }),
+        channel: "slack",
+        hasEmail: true,
+      },
     );
   });
 
   it("connects a Teams webhook on Starter+ and enables Teams delivery", async () => {
     ownerAuthMock();
-    const upsertWorkspaceDeliveryConfig = vi.fn();
+    const enableWorkspaceDeliveryChannel = vi.fn();
     vi.doMock("~/lib/data.server", () => ({
-      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue(null),
-      legacyWorkspaceDeliveryDefaults: vi.fn().mockReturnValue(digestConfigDefaults()),
-      upsertWorkspaceDeliveryConfig,
+      enableWorkspaceDeliveryChannel,
     }));
     vi.doMock("~/lib/teams.server", () => ({
       saveTeamsWebhookTarget: vi.fn().mockResolvedValue({ id: "teams-target-1" }),
@@ -214,13 +198,13 @@ describe("notifications route (live Slack/Teams webhook surface)", () => {
 
     expect(result.ok).toBe(true);
     expect(result.message).toContain("Teams delivery connected");
-    expect(upsertWorkspaceDeliveryConfig).toHaveBeenCalledWith(
+    expect(enableWorkspaceDeliveryChannel).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({
+      {
         userId: session.user.id,
-        teamsEnabled: true,
-        slackEnabled: false,
-      }),
+        channel: "teams",
+        hasEmail: true,
+      },
     );
   });
 
