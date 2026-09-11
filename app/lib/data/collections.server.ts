@@ -498,10 +498,14 @@ async function ensureTags(env: AppEnv, userId: string, labels: string[]) {
 
     const id = createId();
     const timestamp = nowIso();
+    // idx_tag_user_label is UNIQUE, so a concurrent save carrying the same new
+    // label can win between the read above and this write. INSERT OR IGNORE
+    // lets the loser fall through to the re-select and adopt the winner's row
+    // instead of failing the whole save with UNIQUE constraint failed.
     await run(
       env,
       `
-        INSERT INTO tag (id, user_id, label, created_at, updated_at)
+        INSERT OR IGNORE INTO tag (id, user_id, label, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?)
       `,
       id,
@@ -510,7 +514,14 @@ async function ensureTags(env: AppEnv, userId: string, labels: string[]) {
       timestamp,
       timestamp,
     );
-    ids.push(id);
+
+    const inserted = await one<{ id: string }>(
+      env,
+      "SELECT id FROM tag WHERE user_id = ? AND label = ?",
+      userId,
+      label,
+    );
+    ids.push(inserted?.id ?? id);
   }
 
   return ids;
