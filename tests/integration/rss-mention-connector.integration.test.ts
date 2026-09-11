@@ -313,6 +313,35 @@ describe("rss mention connector — poll", () => {
     expect(result.errorCode).toBe("feed_parse_failed");
   });
 
+  it("discovers the feed at poll time for a pending-discovery site target", async () => {
+    const fetchImpl = feedFetcher({
+      "/": { body: SITE_PAGE_WITH_FEED_LINK, contentType: "text/html" },
+      "/feed.xml": { body: RSS_FEED, contentType: "application/rss+xml" },
+    });
+    const result = await rssConnector.poll(
+      makeCtx(fetchImpl),
+      { targetUrl: FEED_HOST, metadata: {} },
+    );
+    expect(result.ok).toBe(true);
+    expect(result.items).toHaveLength(2);
+    // The discovered feed persists via the cursor so the next poll fetches it
+    // directly (the promise validateTarget makes for feedDiscovery: pending).
+    expect(result.cursor?.feedUrl).toBe(`${FEED_HOST}/feed.xml`);
+  });
+
+  it("still reports feed_parse_failed for a site page with no feed link", async () => {
+    const fetchImpl = feedFetcher({
+      "/": { body: "<html><body>just a page</body></html>", contentType: "text/html" },
+    });
+    const result = await rssConnector.poll(
+      makeCtx(fetchImpl),
+      { targetUrl: FEED_HOST, metadata: { feedDiscovery: "pending" } },
+    );
+    expect(result.ok).toBe(false);
+    expect(result.items).toEqual([]);
+    expect(result.errorCode).toBe("feed_parse_failed");
+  });
+
   it("honors a 304 Not Modified as an empty, successful poll", async () => {
     const fetchImpl = vi.fn(async (url: string | URL) => {
       const u = new URL(url.toString());
