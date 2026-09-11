@@ -145,5 +145,12 @@ describe("upsertDeliveryTarget concurrent first-time upserts (M11)", () => {
 
     expect(a?.targetValue).toBe("shared@example.com");
     expect(b?.targetValue).toBe("shared@example.com");
+
+    // Exactly one row must exist: INSERT OR IGNORE on the partial unique
+    // index means the loser's insert is dropped, not duplicated.
+    const countRow = harness.sqlite
+      .prepare("SELECT COUNT(*) AS n FROM delivery_target")
+      .get() as { n: number };
+    expect(countRow.n).toBe(1);
   });
 });
