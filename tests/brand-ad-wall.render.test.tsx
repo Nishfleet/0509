@@ -98,6 +98,13 @@ describe("BrandAdWall saved-shot chip (issue #2475, M50)", () => {
     });
     expect(container!.innerHTML).not.toContain("Screenshot saved");
   });
+
+  it("keeps a non-screenshot label (e.g. 'New') on a card rendered as the mock", () => {
+    const html = renderWall([
+      ad({ metaAdId: "m50-mock-new", creativeImageUrl: null, firstSeenAt: "2026-09-09T12:00:00Z" }),
+    ]);
+    expect(html).toContain(">New<");
+  });
 });
 
 describe("isNewlySeen future-date guard (issue #2475, M52)", () => {

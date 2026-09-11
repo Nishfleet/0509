@@ -83,8 +83,10 @@ export function AdCreative({
       <span className="f9-ads-thumb-fmt">{formatChipLabel(format)}</span>
       {/* Issue #2475 (M50 judge edit): the chip names a saved screenshot —
           once imageFailed has flipped the tile to the mock, the visible
-          artifact is not a saved shot, so the chip goes too. */}
-      {showImage && savedLabel ? (
+          artifact is not a saved shot, so the chip goes too. Gate on
+          imageFailed ONLY: a null src keeps caller-owned labels like the
+          marketing example cards' "Example" badge. */}
+      {!imageFailed && savedLabel ? (
         <span className="f9-ads-thumb-saved">{savedLabel}</span>
       ) : null}
     </span>
