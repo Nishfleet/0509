@@ -1,0 +1,13 @@
+{
+  "competitor": "keeptabz",
+  "productName": "KeepTabz",
+  "sources": [
+    {
+      "id": "keeptabz-announcement",
+      "href": "https://natlawreview.com/",
+      "label": "KeepTabz launch announcement (reported on The National Law Review)",
+      "checked": "2026-09-11",
+      "claim": "KeepTabz reached general availability on 2026-08-14 with 15 B2B customers, tracking Facebook, Instagram, and Google ad creative and spend; its public entry tiers are listed at $49.99 and $99.99."
+    }
+  ]
+}

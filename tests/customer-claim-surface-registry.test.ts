@@ -334,7 +334,7 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
     "/app/sources", "/app/support", "/app/team", "/app/watchlists",
     "/compare", "/docs", "/help", "/pricing", "/search", "/status",
   ],
-  publicMarkdownPaths: ["/", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/capture-rules", "/privacy", "/terms", "/methodology", "/pricing", "/compare/meta-ad-library", "/compare/visualping-ad-libraries", "/compare/spyland", "/compare/pulzifi", "/compare/foreplay-spyder", "/compare/panoramata", "/compare/adspyder", "/compare/adspy"],
+  publicMarkdownPaths: ["/", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/capture-rules", "/privacy", "/terms", "/methodology", "/pricing", "/compare/meta-ad-library", "/compare/visualping-ad-libraries", "/compare/spyland", "/compare/pulzifi", "/compare/foreplay-spyder", "/compare/panoramata", "/compare/adspyder", "/compare/adspy", "/compare/keeptabz", "/compare/gethookd"],
   // 2026-07-20 merge: overnight stack wins — sitemap gained /search, /auth/signup
   // and /compare/meta-ad-library (SEO-CANONICAL-INDEXING reopened for re-proof).
   // 2026-08-09: the proof-backed /competitor-monitoring category page joined the
@@ -380,6 +380,8 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
     "/compare/visualping-ad-libraries", "/compare/spyland",
     "/compare/pulzifi", "/compare/foreplay-spyder",
     "/compare/panoramata", "/compare/adspyder", "/compare/adspy",
+    // Issue #2866: two verified competitors that had no compare page.
+    "/compare/keeptabz", "/compare/gethookd",
     "/switch/panoramata", "/switch/visualping", "/competitor-monitoring",
     // Issue #2144: agency audience page (roster math + sourced Agency-vs-
     // Foreplay line), EN-only, no locale cluster.
