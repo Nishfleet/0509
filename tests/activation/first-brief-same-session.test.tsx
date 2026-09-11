@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { WatchEventRecord, WatchlistRecord } from "~/lib/types";
+import { mockReactRouter } from "../helpers/mock-react-router";
 
 /**
  * Issue #1487 — same-session first brief regression.
@@ -212,22 +213,7 @@ beforeEach(() => {
   // Stub it to a plain anchor so renderToStaticMarkup works without a
   // provider. Mocked before any route/component import so the resolved
   // module graph picks up the stub.
-  vi.doMock("react-router", async () => {
-    const actual = await vi.importActual<typeof import("react-router")>("react-router");
-    const React = await import("react");
-    return {
-      ...actual,
-      Link: ({
-        children,
-        to,
-        ...props
-      }: {
-        children?: React.ReactNode;
-        to?: string;
-      } & Record<string, unknown>) =>
-        React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
-    };
-  });
+  mockReactRouter();
 });
 
 afterEach(() => {
