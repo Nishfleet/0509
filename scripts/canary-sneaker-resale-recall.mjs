@@ -110,6 +110,15 @@ export const REQUEST_ERROR_RETRY_DELAY_MS = 60_000;
 export const SEARCH_429_RETRY_LIMIT = 3;
 export const SEARCH_429_DEFAULT_WAIT_MS = 60_000;
 
+// The retry budgets above stack: a full brownout (25 domains each burning 3
+// attempts × 90s + 2 × 60s) would run ~2h42m — past the unit's 45min
+// TimeoutStartSec, so the service would be killed with NO report at all. A
+// run-level wall budget below the unit timeout caps total retry wait: once
+// the budget is spent the probe stops retrying and fails loud on its last
+// state instead of dying silently (reviewer round on issue #2700).
+export const RUN_WALL_BUDGET_MS = 40 * 60_000;
+const RUN_START_MS = Date.now();
+
 /**
  * @typedef {Object} SneakerResaleProbe
  * @property {string} domain
@@ -183,7 +192,13 @@ export async function probeSneakerResaleDomain({
   max429Retries = SEARCH_429_RETRY_LIMIT,
   requestErrorRetryLimit = REQUEST_ERROR_RETRY_LIMIT,
   requestErrorRetryDelayMs = REQUEST_ERROR_RETRY_DELAY_MS,
+  elapsedMsImpl = () => Date.now() - RUN_START_MS,
 }) {
+  // Remaining wall budget for this run; a retry is only taken when its wait
+  // (plus a 90s attempt) still fits. Exhausted budget ⇒ no retry, terminal
+  // state, fail loud.
+  const canAffordRetry = (delayMs) =>
+    elapsedMsImpl() + delayMs + PROBE_REQUEST_TIMEOUT_MS <= RUN_WALL_BUDGET_MS;
   const url = new URL("/search", baseUrl);
   url.searchParams.set("website", domain);
   url.searchParams.set("country", "all");
@@ -207,7 +222,7 @@ export async function probeSneakerResaleDomain({
       });
     } catch (error) {
       requestErrorAttempts += 1;
-      if (requestErrorAttempts <= requestErrorRetryLimit) {
+      if (requestErrorAttempts <= requestErrorRetryLimit && canAffordRetry(requestErrorRetryDelayMs)) {
         await sleepImpl(requestErrorRetryDelayMs);
         continue;
       }
@@ -227,7 +242,7 @@ export async function probeSneakerResaleDomain({
       rateLimitHits += 1;
       const retryAfterHeader = response.headers.get("retry-after");
       await response.text();
-      if (rateLimitHits > max429Retries) {
+      if (rateLimitHits > max429Retries || !canAffordRetry(parseRetryAfterMs(retryAfterHeader, SEARCH_429_DEFAULT_WAIT_MS))) {
         return {
           domain,
           brand: domain,
@@ -245,7 +260,7 @@ export async function probeSneakerResaleDomain({
     if (response.status >= 500) {
       await response.text();
       requestErrorAttempts += 1;
-      if (requestErrorAttempts <= requestErrorRetryLimit) {
+      if (requestErrorAttempts <= requestErrorRetryLimit && canAffordRetry(requestErrorRetryDelayMs)) {
         await sleepImpl(requestErrorRetryDelayMs);
         continue;
       }
@@ -267,7 +282,7 @@ export async function probeSneakerResaleDomain({
     if (!lastParsed.isWarming || lastParsed.rowCount > 0) {
       break;
     }
-    if (warmingAttempts >= retryLimit) {
+    if (warmingAttempts >= retryLimit || !canAffordRetry(retryDelayMs)) {
       break;
     }
     warmingAttempts += 1;
