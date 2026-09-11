@@ -105,31 +105,30 @@ describe("/auth/signup WebPage JSON-LD", () => {
 });
 
 describe("/auth/signup story column plan promises", () => {
-  it("names the free first check and paid-plan additions without inventing entitlements", async () => {
+  it("keeps the retained plan-copy honest without inventing entitlements", async () => {
     const { default: SignupRoute } = await import("~/routes/auth.signup");
     const markup = renderToStaticMarkup(createElement(SignupRoute));
 
-    // Free first check: one competitor, activation scan, one proof-backed first
-    // brief, no card, nothing recurring — matches PUBLISHED_FREE_PLAN_OFFER.
-    expect(markup).toContain("Free first check");
-    expect(markup).toContain("Your free account watches one competitor");
-    expect(markup).toContain("an activation scan when you add it");
-    expect(markup).toContain("one proof-backed first brief");
-    expect(markup).toContain("No card needed");
-    expect(markup).toContain("recurring checks and briefs are a paid plan");
+    // The free first check and paid-plan detail blocks were deleted from the
+    // signup story column. Copy must not reappear here.
+    expect(markup).not.toContain("Free first check");
+    expect(markup).not.toContain("Your free account watches one competitor");
+    expect(markup).not.toContain("No card needed");
+    expect(markup).not.toContain("recurring checks and briefs are a paid plan");
     expect(markup).not.toContain("weekly email brief");
     expect(markup).not.toContain("one saved");
 
-    // Paid cadence: Scout every 6, Starter every 3, and the Agency top-25 /
-    // rest-of-6 split disclosed exactly as the pricing surface states it.
-    expect(markup).toContain("Scout every 6, Starter every 3");
-    expect(markup).toContain("top 25");
-    expect(markup).toContain("the rest every 6");
+    // Paid plan specifics ("Proof on paid plans" / "Faster checks") were
+    // deleted — the signup story column no longer asserts them. The
+    // not-contains guards below stay: wording must not reappear here.
+    expect(markup).not.toContain("Proof on paid plans");
+    expect(markup).not.toContain("Faster checks");
+    expect(markup).not.toContain("Scout every 6, Starter every 3");
+    expect(markup).not.toContain("top 25");
+    expect(markup).not.toContain("the rest every 6");
     expect(markup).not.toContain("Starter and Agency every 3");
-
-    // Collections + exports + daily briefs gate to the plans that own them.
-    expect(markup).toContain("add collections");
-    expect(markup).toContain("exports and daily briefs join on Starter and Agency");
+    expect(markup).not.toContain("add collections");
+    expect(markup).not.toContain("exports and daily briefs join on Starter and Agency");
 
     // Magic-link next step and brief schedule are plain-words and plan-true.
     expect(markup).toContain("the setup link arrives by email and verifies your work address");

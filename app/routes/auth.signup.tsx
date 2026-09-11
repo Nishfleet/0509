@@ -205,25 +205,6 @@ export default function SignupRoute() {
               <p>Use change summaries to move copy, pricing, and sales responses faster.</p>
             </div>
           </div>
-          <div className="f9-auth-proof-list">
-            <div>
-              <strong>Free first check</strong>
-              <p>Your free account watches one competitor: an activation scan when you add it, with one
-              proof-backed first brief. No card needed — recurring checks and briefs are a paid plan.</p>
-            </div>
-            <div>
-              <strong>Proof on paid plans</strong>
-              <p>Paid plans save every confirmed change with the screenshot, page text, and original link —
-              evidence your next call can cite. Free includes your first proof-backed brief; paid plans keep
-              it coming.</p>
-            </div>
-            <div>
-              <strong>Faster checks</strong>
-              <p>Paid plans check every 3–6 hours — Scout every 6, Starter every 3, and Agency with its top 25
-              competitors every 3 and the rest every 6 — and add collections; exports and daily briefs join on
-              Starter and Agency.</p>
-            </div>
-          </div>
           <p>
             No password to invent — the setup link arrives by email and verifies your work address. Open it, add one
             competitor website, and the first scan starts; the brief then arrives on your plan&rsquo;s schedule —
