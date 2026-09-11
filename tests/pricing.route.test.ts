@@ -105,7 +105,7 @@ describe("pricing route", () => {
     const mod = await import("~/routes/pricing");
     // The headers export that forwarded the loader's private cache-control
     // into the document is gone; the worker's public policy applies instead.
-    expect(mod.headers).toBeUndefined();
+    expect("headers" in mod).toBe(false);
     expect(mod.loader).toBeTypeOf("function");
     // Direct contract: /pricing is in the worker's public-cacheable path set,
     // so a stamp-less 200 HTML response from this route gets the shared
