@@ -9,7 +9,11 @@ import {
   BUYER_SURFACE_LOCALE_IDS,
   htmlLangForPathname,
 } from "~/lib/locale-markets";
-import { canonicalLinks, SITEMAP_PATHS } from "~/lib/seo";
+import {
+  canonicalLinks,
+  ROOT_SITEMAP_STATIC_ENTRIES,
+  SITEMAP_PATHS,
+} from "~/lib/seo";
 import routes from "~/routes";
 import {
   LEGACY_VENDOR_COMPARE_PATH,
@@ -31,9 +35,12 @@ type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
  * component and meta with canonical→EN + the buyer-surface hreflang cluster,
  * (c) mapped by `htmlLangForPathname` to `<html lang="en">` (issue #1570:
  * the content is byte-identical English, so no page may declare a language
- * its content does not speak), and (d) NOT listed in the public sitemap
- * (issue #1570: byte-identical English pages with canonical→EN are excluded
- * to avoid a duplicate-content doorway pattern).
+ * the buyer-surface hreflang cluster), (c) mapped by `htmlLangForPathname` to
+ * `<html lang="en">` (issue #1570: the content is byte-identical English, so
+ * no page may declare a language its content does not speak), and (d) grouped
+ * into the root sitemap's reciprocal hreflang cluster (issue #2030) rather
+ * than listed as bare byte-identical EN-dedup doorway entries (issue #1570's
+ * doorway concern, resolved by the alternate-grouped sitemap pattern).
  * A missing cell on any axis is the exact 404 the issue shipped to close.
  */
 
@@ -188,16 +195,26 @@ describe("locale compare/switch child routes (issue #1563)", () => {
     }
   });
 
-  it("does NOT list locale child URLs in the public sitemap (byte-identical English, issue #1570)", () => {
-    // Issue #1570: locale child routes serve byte-identical English copy with
-    // lang="en" and canonical→EN, so listing them as distinct indexable
-    // surfaces would be a duplicate-content doorway pattern. They stay
-    // reachable (200, canonical→EN) but are excluded from the sitemap.
+  it("lists locale child URLs in the root sitemap grouped with hreflang alternates (issue #2030)", () => {
+    // Issue #2030 reverses the #1570 doorway concern: the buyer-surface locale
+    // child pages are now discoverable from the root feed, but as part of the
+    // reciprocal sitemap-hreflang cluster (EN + every locale sibling in one
+    // `<url>` group), not as dozens of discrete byte-identical doorway `<loc>`
+    // entries. They are NOT added to SITEMAP_PATHS (the EN path list) — they
+    // live in ROOT_SITEMAP_STATIC_ENTRIES' locale catalog with alternates.
     expect(BUYER_SURFACE_CHILD_PATHS).toHaveLength(9);
     expect(BUYER_SURFACE_LOCALE_IDS).toHaveLength(5);
     for (const locale of BUYER_SURFACE_LOCALE_IDS) {
       for (const child of BUYER_SURFACE_CHILD_PATHS) {
+        // Not a bare SITEMAP_PATHS entry (the EN list stays locale-free)...
         expect(SITEMAP_PATHS as readonly string[]).not.toContain(`/${locale}${child}`);
+        // ...but it IS discoverable in the root catalog with an alternate.
+        const entry = ROOT_SITEMAP_STATIC_ENTRIES.find(
+          (e) => e.path === `/${locale}${child}`,
+        );
+        expect(entry, `/${locale}${child} missing from root sitemap catalog`).toBeDefined();
+        expect(entry?.alternates?.length).toBe(BUYER_SURFACE_LOCALE_IDS.length + 1);
+        expect(entry?.alternates?.some((a) => a.hreflang === "x-default")).toBe(true);
       }
     }
   });

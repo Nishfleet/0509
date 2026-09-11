@@ -116,7 +116,7 @@ import {
 } from "~/lib/offer-timeline.server";
 import { shouldApplySearchV2 } from "~/lib/search-rollout.server";
 import { registrableDomainFromHostname } from "~/lib/search-query";
-import { CHANGELOG_ENTRY_DATES, renderSitemapXml, ROOT_SITEMAP_STATIC_ENTRIES, SITEMAP_STATIC_ENTRIES, type SitemapEntry } from "~/lib/seo";
+import { CHANGELOG_ENTRY_DATES, renderSitemapXml, ROOT_SITEMAP_STATIC_ENTRIES, SITEMAP_STATIC_ENTRIES, buyerSurfaceSplatForEnPath, sitemapAlternatesForPath, type SitemapEntry } from "~/lib/seo";
 import {
   BUYER_SURFACE_CHILD_PATHS,
   BUYER_SURFACE_LOCALE_IDS,
@@ -517,7 +517,13 @@ export function staticSitemapEntriesForLocale(
   for (const path of buyerSurfacePaths) {
     const en = entryByPath.get(path);
     if (!en) continue;
-    entries.push({ ...en, path: `${prefix}${path.replace(/^\//, "")}` });
+    const localePath = `${prefix}${path.replace(/^\//, "")}`;
+    // Issue #2030: each locale-feed entry carries the full reciprocal hreflang
+    // alternate set so the sitemap hreflang pattern holds inside the locale
+    // feed too. Only the buyer-surface cluster has alternates — the guide
+    // paths (no locale hreflang cluster defined) stay plain.
+    const splat = buyerSurfaceSplatForEnPath(path);
+    entries.push({ ...en, path: localePath, ...(splat === null ? {} : { alternates: sitemapAlternatesForPath(splat) }) });
   }
   // The genuinely translated sneaker-resale cluster stays for the locales
   // that ship it (de, ja, pt-br). fr/es have no sneaker-resale page.
@@ -649,11 +655,13 @@ export function brandCategorySitemapEntries(
  * dynamic indexable brand-page entries (with lastmod from their cache
  * fetched_at), then the dynamic curated /brands/:slug category entries
  * (issue #2067), then the dynamic indexable /timeline/:domain entries (with
- * lastmod from their newest snapshot capture). The root feed
- * deliberately EXCLUDES every buyer-surface locale-prefixed path (those live
- * only in their own `/<locale>/sitemap.xml` — see
- * `ROOT_SITEMAP_STATIC_ENTRIES` in app/lib/seo.ts) so no URL is listed twice
- * across the root and locale sitemaps (issue #1561). The /changelog static
+ * lastmod from their newest snapshot capture). Since issue #2030 the root
+ * feed INCLUDES the buyer-surface locale subpaths, each grouped with its
+ * reciprocal hreflang alternate set (see `ROOT_SITEMAP_STATIC_ENTRIES` in
+ * app/lib/seo.ts). Non-overlap with the `/<locale>/sitemap.xml` feeds still
+ * holds (issue #1561): a locale feed carries only the translated
+ * `/<locale>/sneaker-resale` cluster, which the root feed never lists, and no
+ * buyer-surface locale URL appears in both. The /changelog static
  * entry carries a `lastmod` derived from the newest changelog entry date
  * (issue #2297); the other static paths keep no `lastmod`.
  */

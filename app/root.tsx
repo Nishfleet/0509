@@ -27,6 +27,8 @@ import {
 } from "~/lib/siterep-widget";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import { htmlLangForPathname } from "~/lib/locale-markets";
+import { buyerSurfaceHreflangLinksForPathname } from "~/lib/seo";
+import type { LinkHTMLAttributes } from "react";
 import { applyTheme, THEME_BOOT_SCRIPT, THEME_COLOR_LIGHT } from "~/lib/theme-client";
 import type { AppSession, PricingPlan, UsageBundle } from "~/lib/types";
 export {
@@ -249,6 +251,34 @@ export function cspNonceForRender(nonce: string | undefined, isServerRender: boo
   return isServerRender ? nonce : "";
 }
 
+/**
+ * Reciprocal buyer-surface hreflang `<link>` tags for canonical EN pages
+ * (issue #2030). The locale routes already emit the cluster from their own
+ * `links`; the EN side of each cluster (/, /pricing, /compare/*, /switch/*, ...)
+ * is emitted here from the current pathname so Google sees the locale cluster
+ * as one page instead of 30 duplicate-ish doorway texts. Locale-prefixed and
+ * non-buyer paths render nothing (their own routes / no cluster handle them),
+ * so no page ever gets a duplicate or a one-way annotation.
+ */
+function BuyerSurfaceHreflang() {
+  const location = useLocation();
+  const links = buyerSurfaceHreflangLinksForPathname(location.pathname);
+  if (!links) {
+    return null;
+  }
+  return (
+    <>
+      {links.map((link) => (
+        <link
+          key={`${link.hreflang}:${link.href}`}
+          rel={link.rel}
+          {...({ hreflang: link.hreflang, href: link.href } as unknown as LinkHTMLAttributes<HTMLLinkElement>)}
+        />
+      ))}
+    </>
+  );
+}
+
 export function GoogleFontsStylesheet({ nonce }: { nonce?: string } = {}) {
   return (
     <>
@@ -346,6 +376,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <meta charSet="utf-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1" />
           <Meta />
+          <BuyerSurfaceHreflang />
           <Links nonce={cspNonce} />
           <GoogleFontsStylesheet nonce={cspNonce} />
         </head>
@@ -364,6 +395,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="theme-color" content={THEME_COLOR_LIGHT} suppressHydrationWarning />
         <script nonce={cspNonce} dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
         <Meta />
+        <BuyerSurfaceHreflang />
         <Links nonce={cspNonce} />
         <GoogleFontsStylesheet nonce={cspNonce} />
       </head>

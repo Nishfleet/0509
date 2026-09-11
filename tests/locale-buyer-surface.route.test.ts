@@ -161,18 +161,22 @@ describe("locale buyer-surface sitemap + worker wiring", () => {
   });
 
   it("serves a LOCALE-SCOPED body for /<locale>/sitemap.xml, never the root body", () => {
-    // Issue #1561: each locale sitemap carries ONLY /<locale>/-prefixed URLs,
-    // and the root feed excludes them entirely. Issue #2294 adds the
-    // buyer-surface cluster to the locale feeds, so /de/pricing is now listed
-    // in the de sitemap (still never in the root).
+    // Issue #1561: each locale sitemap carries ONLY /<locale>/-prefixed URLs.
+    // Since issue #2294 the buyer-surface cluster is in the locale feeds
+    // (de/pricing listed here), and since issue #2030 those same locale URLs
+    // are also in the ROOT feed, grouped with hreflang alternates.
     const de = buildLocaleSitemapXml("de");
     expect(de).toContain("<urlset");
     expect(de).toContain(`<loc>https://0509.io/de/sneaker-resale</loc>`);
     expect(de).toContain(`<loc>https://0509.io/de/pricing</loc>`);
-    // The root body contains the EN (non-prefixed) /pricing, not /de/pricing.
+    // The root body contains the EN (non-prefixed) /pricing AND the
+    // /de/pricing locale sibling (issue #2030), grouped with alternates.
     const root = publicSeoFileForPathname("/sitemap.xml")?.body ?? "";
     expect(root).toContain("<loc>https://0509.io/pricing</loc>");
-    expect(root).not.toContain("<loc>https://0509.io/de/pricing</loc>");
+    expect(root).toContain("<loc>https://0509.io/de/pricing</loc>");
+    expect(root).toContain(
+      `<xhtml:link rel="alternate" hreflang="de" href="https://0509.io/de/pricing"/>`,
+    );
   });
 });
 

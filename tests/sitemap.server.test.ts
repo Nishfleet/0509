@@ -742,7 +742,9 @@ describe("buildSitemapXml", () => {
   it("renders a valid static-only sitemap when there are no brand pages", () => {
     const xml = buildSitemapXml([]);
 
-    expect(xml).toContain("<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">");
+    expect(xml).toContain(
+      "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\" xmlns:xhtml=\"http://www.w3.org/1999/xhtml\">",
+    );
     expect(xml).not.toContain("/ads/");
   });
 

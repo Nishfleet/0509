@@ -1,5 +1,8 @@
 import {
+  BUYER_SURFACE_CHILD_PATHS,
   BUYER_SURFACE_LOCALE_IDS,
+  BUYER_SURFACE_PATHS,
+  isBuyerSurfaceChildSplat,
   SNEAKER_RESALE_MARKETS,
   type BuyerSurfaceLocaleId,
 } from "~/lib/locale-markets";
@@ -32,6 +35,69 @@ export function canonicalUrl(pathname: string): string {
 
 export function canonicalLinks(pathname: string) {
   return [{ rel: "canonical", href: canonicalUrl(pathname) }];
+}
+
+/**
+ * EN pathname for a buyer-surface locale `splat`, mirroring the mapping in
+ * `buyerSurfaceHreflangLinks` (`""` -> `/`, `"api/docs"` -> `/api/docs`,
+ * otherwise `"/" + splat`). Shared so the root Layout's hreflang emission
+ * and the sitemap catalog never drift from the locale routes' canonical URLs.
+ */
+export function buyerSurfaceEnPathForSplat(splat: string): string {
+  if (splat === "") {
+    return "/";
+  }
+  if (splat === "api/docs") {
+    return "/api/docs";
+  }
+  return `/${splat}`;
+}
+
+/**
+ * The buyer-surface `splat` for an EN (non-locale-prefixed) pathname, or
+ * `null` when the path has no locale cluster. `"/"` maps to `""` (the locale
+ * index is canonically EN), `/api/docs` to `"api/docs"`, `/pricing` (and
+ * every other `BUYER_SURFACE_PATHS` subpath) to itself without the slash, and
+ * `/compare/magicbrief`-style child paths to their splat. Returns `null` for
+ * locale-prefixed paths (their own routes emit the cluster), non-buyer-surface
+ * paths (auth/app/404), sneaker-resale (it has its own cluster) and the
+ * `/sitemap.xml` feed (XML has no HTML hreflang).
+ */
+export function buyerSurfaceSplatForEnPath(pathname: string): string | null {
+  const pathOnly = pathname.split(/[?#]/)[0] ?? pathname;
+  const clean =
+    pathOnly === "/" ? pathOnly : pathOnly.replace(/\/+$/, "");
+  if (clean === "/") {
+    return "";
+  }
+  if (clean === "/sitemap.xml") {
+    return null;
+  }
+  const splat = clean.replace(/^\//, "");
+  if ((BUYER_SURFACE_PATHS as readonly string[]).includes(clean)) {
+    return splat;
+  }
+  if (isBuyerSurfaceChildSplat(splat)) {
+    return splat;
+  }
+  return null;
+}
+
+/**
+ * Reciprocal buyer-surface hreflang cluster for a canonical EN page, or
+ * `null` when the pathname has no locale variants. Every buyer-surface EN
+ * page (home, /pricing, /help, /compare/*, /switch/*, ...) is annotated with
+ * the same self + sibling-locale + x-default set its locale siblings emit, so
+ * Google sees the locale cluster as one page instead of 30 duplicate-ish
+ * doorway texts (issue #2030). Locale-prefixed and non-buyer paths return
+ * `null` — their own routes already emit the reciprocal set and duplicating it
+ * (or adding it to surfaces without variants) would pollute the head.
+ */
+export function buyerSurfaceHreflangLinksForPathname(
+  pathname: string,
+): { rel: "alternate"; hreflang: string; href: string }[] | null {
+  const splat = buyerSurfaceSplatForEnPath(pathname);
+  return splat === null ? null : buyerSurfaceHreflangLinks(splat);
 }
 
 /**
@@ -971,6 +1037,15 @@ export interface SitemapEntry {
   adCount?: number;
   /** ISO timestamp of the underlying cache fetch; used by llms.txt. */
   fetchedAt?: string;
+  /**
+   * Reciprocal hreflang alternates for a locale-variant cluster (issue #2030),
+   * emitted as `<xhtml:link rel="alternate" hreflang=... href=.../>` inside the
+   * `<url>` block per the sitemap hreflang pattern. Every entry in a cluster
+   * (the EN page + each locale sibling) carries the same full alternate set so
+   * Google maps the locale cluster as one page instead of duplicate doorway
+   * texts. Omitted on entries with no locale variants.
+   */
+  alternates?: { hreflang: string; href: string }[];
 }
 
 /**
@@ -1022,13 +1097,96 @@ export const SITEMAP_STATIC_ENTRIES: readonly SitemapEntry[] = SITEMAP_PATHS.map
  * URLs are reachable from a crawler entry point. The bare
  * `/{locale}` index is (and stays) absent — its canonical points at `/`.
  */
-export const ROOT_SITEMAP_STATIC_ENTRIES: readonly SitemapEntry[] =
+/**
+ * Buyer-surface subpaths (locale `splats`) that carry a locale hreflang
+ * cluster in the sitemap (issue #2030). Derived from the same EN path lists
+ * the routes and the sitemap already share, so a new buyer surface lights up
+ * with hreflang everywhere at once. Excludes the bare index (whose canonical
+ * is `/`) and `/sitemap.xml` (an XML feed, no hreflang).
+ */
+const BUYER_SURFACE_SITEMAP_SPLATS: readonly string[] = [
+  ...(BUYER_SURFACE_PATHS as readonly string[])
+    .filter((path) => path !== "/" && path !== "/sitemap.xml")
+    .map((path) => path.replace(/^\//, "")),
+  ...BUYER_SURFACE_CHILD_PATHS.map((path) => path.replace(/^\//, "")),
+];
+
+/**
+ * The reciprocal hreflang alternate set for a buyer-surface splat, in sitemap
+ * `<xhtml:link>` form. Reuses `buyerSurfaceHreflangLinks` so the sitemap
+ * alternates can never drift from the `<head>` hreflang tags the routes and
+ * root Layout emit.
+ */
+export function sitemapAlternatesForPath(splat: string): { hreflang: string; href: string }[] {
+  return buyerSurfaceHreflangLinks(splat).map((link) => ({
+    hreflang: link.hreflang,
+    href: link.href,
+  }));
+}
+
+/**
+ * A locale-variant cluster for one buyer-surface subpath: the EN entry plus
+ * one entry per buyer-surface locale, each carrying the full reciprocal
+ * hreflang alternate set (issue #2030). Only static buyer-surface subpaths are
+ * included — every one serves 200 with no noindex, so none trips the
+ * indexability gate (the dynamic /ads/:domain locale pages stay out; they are
+ * covered by the EN dynamic brand sitemap and its own noindex gates).
+ */
+function buyerSurfaceSitemapCluster(splat: string): SitemapEntry[] {
+  const alternates = sitemapAlternatesForPath(splat);
+  const enPath = buyerSurfaceEnPathForSplat(splat);
+  return [
+    { path: enPath, alternates },
+    ...BUYER_SURFACE_LOCALE_IDS.map((locale) => ({
+      path: `/${locale}/${splat}`,
+      alternates,
+    })),
+  ];
+}
+
+/**
+ * EN static sitemap entries (the non-locale-prefixed funnel) with every
+ * buyer-surface EN subpath annotated with its locale hreflang alternates
+ * (issue #2030). Non-buyer EN paths (auth, /privacy, /terms, /brands,
+ * /sneaker-resale, ...) keep their plain entry — they have no locale cluster.
+ */
+const EN_SITEMAP_ENTRIES_WITH_HREFLANG: readonly SitemapEntry[] =
   SITEMAP_STATIC_ENTRIES.filter(
     (entry) =>
       !BUYER_SURFACE_LOCALE_IDS.some((locale) =>
         entry.path.startsWith(`/${locale}/`),
       ),
+  ).map((entry) => {
+    const splat = buyerSurfaceSplatForEnPath(entry.path);
+    return splat === null ? entry : { ...entry, alternates: sitemapAlternatesForPath(splat) };
+  });
+
+/**
+ * Buyer-surface locale subpath entries appended to the root sitemap
+ * (issue #2030). Each cluster's EN entry already lives in
+ * `EN_SITEMAP_ENTRIES_WITH_HREFLANG` (with its alternates), so only the five
+ * locale siblings are appended here — a locale URL is never listed twice. The
+ * bare `/{locale}` index stays absent (its canonical points at `/`).
+ */
+const BUYER_SURFACE_LOCALE_SITEMAP_ENTRIES: readonly SitemapEntry[] =
+  BUYER_SURFACE_SITEMAP_SPLATS.flatMap((splat) =>
+    buyerSurfaceSitemapCluster(splat).slice(1),
   );
+
+/**
+ * Root sitemap static entries (issue #1561 + #2030): the EN funnel set (with
+ * buyer-surface EN subpaths carrying their hreflang alternates) PLUS the
+ * buyer-surface locale subpath entries, each grouped with the full reciprocal
+ * hreflang alternate set. The genuinely translated sneaker-resale cluster
+ * (`/de/sneaker-resale` etc.) stays OUT of the root feed — it lives only in its
+ * own `/<locale>/sitemap.xml` — so no `<loc>` is ever listed twice across the
+ * root and locale sitemaps. The bare `/{locale}` index stays absent — its
+ * canonical points at `/`.
+ */
+export const ROOT_SITEMAP_STATIC_ENTRIES: readonly SitemapEntry[] = [
+  ...EN_SITEMAP_ENTRIES_WITH_HREFLANG,
+  ...BUYER_SURFACE_LOCALE_SITEMAP_ENTRIES,
+];
 
 /**
  * Render a sitemap urlset from an ordered entry list. Single builder shared by
@@ -1043,10 +1201,15 @@ export function renderSitemapXml(entries: readonly SitemapEntry[]): string {
     if (entry.lastmod) {
       children.push(`<lastmod>${entry.lastmod}</lastmod>`);
     }
+    for (const alt of entry.alternates ?? []) {
+      children.push(
+        `<xhtml:link rel="alternate" hreflang="${alt.hreflang}" href="${alt.href}"/>`,
+      );
+    }
     return `  <url>${children.join("")}</url>`;
   });
   return `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
 ${urlBlocks.join("\n")}
 </urlset>
 `;
