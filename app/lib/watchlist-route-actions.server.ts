@@ -524,7 +524,12 @@ export async function handleWatchlistsAction(args: ActionFunctionArgs) {
             ? "Watchlist resumed. Free includes one first check; further scheduled checks are paid."
             : "Watchlist resumed. It rejoins the next scheduled scan.",
         }
-      : { ok: false, message: "We couldn't find that watchlist. Refresh the page and try again." };
+      : {
+          ok: false,
+          error: "plan_limit_exceeded" as const,
+          message:
+            "You've reached your competitor tracking limit — pause another watchlist first.",
+        };
   }
 
   if (intent === "bulk-watchlists") {
@@ -593,6 +598,11 @@ export async function handleWatchlistsAction(args: ActionFunctionArgs) {
       }
       if (await setWatchlistActive(env, workspaceUserId, watchlistId, true)) {
         resumed += 1;
+      } else {
+        // The atomic guard in setWatchlistActive rejected the write — a
+        // concurrent resume claimed the last plan slot after our gate check.
+        hitPlanLimit = true;
+        break;
       }
     }
 
