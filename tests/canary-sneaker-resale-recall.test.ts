@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  KNOWN_NO_COVERAGE,
   REQUEST_ERROR_RETRY_DELAY_MS,
   REQUEST_ERROR_RETRY_LIMIT,
   RUN_WALL_BUDGET_MS,
@@ -11,7 +10,7 @@ import {
 
 /**
  * Issue #2700: a single transport blip (fetch throw / 5xx) used to fail the
- * whole 25-domain sweep — finishline.com and jdsports.com each returned
+ * whole 24-domain sweep — finishline.com and jdsports.com each returned
  * one-off ERRs that failed otherwise-green runs. The probe now retries the
  * transient class a bounded number of times; a persistent failure still
  * reports requestError and fails loud ("cannot confirm" is never a pass).
@@ -170,21 +169,26 @@ describe("evaluateSneakerResaleRecall cannot-confirm contract", () => {
     isWarming: false,
   };
 
+  // KNOWN_NO_COVERAGE has been empty since #2926 removed the only member
+  // (sneakerping.com), so the carve-out contract is pinned with an injected
+  // set — the live classification must not grow back silently.
+  const knownNoCoverage = new Set(["nocarveout.test"]);
+
   it("fails a no-coverage carve-out domain whose probe could not confirm", () => {
-    const domain = [...KNOWN_NO_COVERAGE][0];
+    const domain = [...knownNoCoverage][0];
     const verdict = evaluateSneakerResaleRecall([
       { ...base, domain, status: null, requestError: "timeout" },
-    ]);
+    ], { knownNoCoverage });
     expect(verdict.pass).toBe(false);
     expect(verdict.noCoverage).toHaveLength(0);
     expect(verdict.failures.map((p) => p.domain)).toEqual([domain]);
   });
 
   it("still passes a no-coverage carve-out domain on a confirmed settled page", () => {
-    const domain = [...KNOWN_NO_COVERAGE][0];
+    const domain = [...knownNoCoverage][0];
     const verdict = evaluateSneakerResaleRecall([
       { ...base, domain, status: 200 },
-    ]);
+    ], { knownNoCoverage });
     expect(verdict.pass).toBe(true);
     expect(verdict.noCoverage.map((p) => p.domain)).toEqual([domain]);
   });
