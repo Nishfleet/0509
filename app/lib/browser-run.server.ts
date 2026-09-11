@@ -497,10 +497,12 @@ async function handleGuardedBrowserRequest(request: BrowserRequestLike) {
     } else {
       await request.abort();
     }
-  } catch {
+  } catch (error) {
     // Request already resolved or the target closed while the guard's async
-    // DNS check was in flight — the race is lost, so there is nothing left to
-    // continue or abort and the rejection must not escape the void-ed handler.
+    // DNS check was in flight — the race is lost, so the rejection must not
+    // escape the void-ed handler. Keep it visible: the original void bug was
+    // an invisible failure, and a silent catch would repeat that (issue #2750).
+    logRenderedCaptureWarning("guarded_request_resolved_race", error);
   }
 }
 
