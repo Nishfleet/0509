@@ -3896,6 +3896,7 @@ describe("listStaleBillingLifecycleEmailAttempts", () => {
     expect(query?.bindings).toEqual([
       "2026-07-13T08:59:00.000Z",
       4,
+      4,
       10,
     ]);
     expect(query?.sql).toContain("updated_at <= ?");

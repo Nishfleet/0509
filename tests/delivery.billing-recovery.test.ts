@@ -93,22 +93,22 @@ listStaleBillingLifecycleEmailAttempts: vi.fn(async (_env, input: { staleBefore:
 attempt.updatedAt <= input.staleBefore ? [attempt] : []),
 updateDeliveryAttemptResult,
 });
-async function expectDeferred(errorMessage: string) {
+async function expectDeferred(errorMessage: string, expectedCount: number) {
 await expect(recoverBilling()).resolves.toMatchObject({ scanned: 1, claimed: 1, sent: 0, failed: 0 });
 expect(sendMock).not.toHaveBeenCalled();
 expect(attempt).toMatchObject({
 status: "pending", webhookStatus: "pending", targetValue: "old@example.com", errorMessage,
 });
-expect(attempt.payloadSnapshot).not.toHaveProperty("recoveryAttemptCount");
+expect(attempt.payloadSnapshot).toHaveProperty("recoveryAttemptCount", expectedCount);
 }
-await expectDeferred("Billing lifecycle recovery recipient is unavailable.");
+await expectDeferred("Billing lifecycle recovery recipient is unavailable.", 1);
 vi.setSystemTime(new Date("2026-07-13T09:07:00.000Z"));
-await expectDeferred("Billing lifecycle recovery recipient is not verified.");
+await expectDeferred("Billing lifecycle recovery recipient is not verified.", 2);
 vi.setSystemTime(new Date("2026-07-13T09:09:00.000Z"));
 await expect(recoverBilling()).resolves.toMatchObject({ scanned: 1, claimed: 1, sent: 1, failed: 0 });
 expect(emailSendPayload(sendMock).to).toBe("new@example.com");
 expect(attempt).toMatchObject({ targetValue: "new@example.com", status: "sent" });
-expect(attempt.payloadSnapshot).toHaveProperty("recoveryAttemptCount", 1);
+expect(attempt.payloadSnapshot).toHaveProperty("recoveryAttemptCount", 3);
 expect(updateDeliveryAttemptResult).toHaveBeenCalledWith(
 expect.anything(), attempt.id, expect.objectContaining({ targetValue: "new@example.com", expectedStatus: "pending", expectedWebhookStatus: "pending" }),
 );
