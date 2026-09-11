@@ -1267,14 +1267,16 @@ describe("/ads/:domain — methodology footer cross-link (issues #1552, #2022)",
     const adsMarkup = await render(
       populated({ domain: "nike.com", canonicalPath: "/ads/nike.com" }),
     );
-    const match = adsMarkup.match(/href="(\/methodology)"/);
+    const methodologyHrefPattern = new RegExp(
+      `href="${AD_AGGRESSION_METHODOLOGY_PATH.replace(/\//g, "\\/")}"`,
+    );
+    const match = adsMarkup.match(methodologyHrefPattern);
     expect(match, "the /ads page must emit a methodology cross-link").not.toBeNull();
-    const methodologyHref = match![1];
-
-    // The href must be the canonical path, not a legacy nested path
-    // (/methodology/ad-aggression-score) that served only a 301->404 chain.
+    const methodologyHref = match![0].slice("href=\"".length, -1);
+    // The href must be the canonical path (issue #2871 restored
+    // /methodology/ad-aggression-score), never a legacy 301-only path.
     expect(methodologyHref).toBe(AD_AGGRESSION_METHODOLOGY_PATH);
-    expect(AD_AGGRESSION_METHODOLOGY_PATH).toBe("/methodology");
+    expect(AD_AGGRESSION_METHODOLOGY_PATH).toBe("/methodology/ad-aggression-score");
 
     // Mock-free route check: render the real methodology route the href points
     // at and assert it serves a 200-equivalent body (non-empty, no throw), so a
