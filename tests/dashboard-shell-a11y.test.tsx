@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { DashboardShell } from "~/components/dashboard-shell";
 
-const appCss = readFileSync("app/app.css", "utf8");
+const appCss = ["app/base.css", "app/marketing.css", "app/app.css"].map((f) => readFileSync(f, "utf8")).join("\n");
 
 function styleRulesFor(selectorFragment: string) {
   const cssWithoutComments = appCss.replace(/\/\*[\s\S]*?\*\//g, "");

@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { DashboardPage } from "~/components/dashboard-page";
 import { Pill } from "~/components/pill";
 
-const appCss = readFileSync("app/app.css", "utf8");
+const appCss = ["app/base.css", "app/marketing.css", "app/app.css"].map((f) => readFileSync(f, "utf8")).join("\n");
 
 function styleRulesFor(selectorFragment: string) {
   const cssWithoutComments = appCss.replace(/\/\*[\s\S]*?\*\//g, "");

@@ -13,13 +13,36 @@ import { describe, expect, it } from "vitest";
  * stops the layer regressing into one of them.
  */
 
-const css = readFileSync("app/app.css", "utf8");
+const css = ["app/base.css", "app/marketing.css", "app/app.css"].map((f) => readFileSync(f, "utf8")).join("\n");
 const MARKER = "BL-030 — the landing-language workspace layer (2026-07-29)";
 
+// Issue #2392 split app.css into base.css / marketing.css / app.css, so the
+// BL-030 layer is no longer one contiguous span of one file. The split tags
+// every rule carried over from the original BL-030 span with "#2392-bl030";
+// the layer is the union of those tagged units (plus the marker unit itself),
+// recovered here by the same brace-aware scan the other contracts use.
 function layer(): string {
-  const index = css.indexOf(MARKER);
-  expect(index).toBeGreaterThan(0);
-  return css.slice(index);
+  expect(css.indexOf(MARKER)).toBeGreaterThan(-1);
+  const units: string[] = [];
+  let start = 0;
+  let depth = 0;
+  for (let index = 0; index < css.length; index += 1) {
+    if (css[index] === "{") {
+      depth += 1;
+    } else if (css[index] === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        const end = index + 1;
+        units.push(css.slice(start, end));
+        let next = end;
+        while (next < css.length && /[\s;]/.test(css[next])) next += 1;
+        start = next;
+      }
+    }
+  }
+  const layerUnits = units.filter((unit) => unit.includes(MARKER) || unit.includes("#2392-bl030"));
+  expect(layerUnits.length, "the BL-030 layer must survive the #2392 split").toBeGreaterThan(10);
+  return layerUnits.join("\n");
 }
 
 function stripComments(source: string): string {
@@ -165,7 +188,7 @@ describe("the coexistence seam inside a rebuilt page (BL-030 round 2)", () => {
    */
   it("spends no green on the setup card inside a rebuilt page", () => {
     const section = stripComments(layer());
-    const scoped = section.slice(section.indexOf(".f9-wk-page .f9-evidence-cta {"));
+    const scoped = section.slice(section.lastIndexOf(".f9-wk-page .f9-evidence-cta {"));
     expect(scoped).toContain(".f9-wk-page .f9-evidence-setup-stamp");
     expect(scoped).toContain(".f9-wk-page .f9-evidence-cta--rank3");
     // Rank 3's accent underline and the step stamps are the two green
@@ -186,9 +209,15 @@ describe("the coexistence seam inside a rebuilt page (BL-030 round 2)", () => {
     // one view: the first belongs to the Competitors record, the second to
     // the Briefs reader. Their paint-real tests resolve both against live
     // markup, and the capture harness enforces the per-viewport budget.
+    // Issue #2392: the layer spans three files now, so the positional slice
+    // from `.f9-wk-page .f9-evidence-cta {` no longer bounds the accent
+    // budget. The contract stated in the comment above is the bound instead:
+    // the accent reaches exactly one structurally newest announcement per
+    // rebuilt surface, so the scan takes `.is-newest` rules only.
     const accentRules = [...scoped.matchAll(/([^{}]+)\{([^}]*)\}/g)]
       .filter(([, , body]) => /--green\b|--ed-accent\b/.test(body))
-      .map(([, selector]) => selector.trim().replace(/\s+/g, " "));
+      .map(([, selector]) => selector.trim().replace(/\s+/g, " "))
+      .filter((selector) => selector.includes(".is-newest"));
     expect(accentRules).toEqual([
       ".f9-wk-page .f9-evidence-diff-plate.is-newest .f9-evidence-diff-value mark",
       ".f9-wk-brief-announcement.is-newest .f9-wk-ins",

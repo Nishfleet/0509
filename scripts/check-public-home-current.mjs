@@ -9,6 +9,8 @@ const sourceFiles = [
   "app/routes/marketing.tsx",
   "app/components/pricing-section.tsx",
   "app/components/brand-wordmark.tsx",
+  "app/base.css",
+  "app/marketing.css",
   "app/app.css",
   "app/root.tsx",
   "app/routes.ts",

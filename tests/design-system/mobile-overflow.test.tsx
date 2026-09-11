@@ -27,7 +27,7 @@ import { describe, expect, it } from "vitest";
  * ratchet. This test fails on that diff.
  */
 
-const appCss = readFileSync("app/app.css", "utf8");
+const appCss = ["app/base.css", "app/marketing.css", "app/app.css"].map((f) => readFileSync(f, "utf8")).join("\n");
 
 /** Extract the body of the first top-level CSS rule block for `selector`. */
 function ruleBody(selector: string): string {

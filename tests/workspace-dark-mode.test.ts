@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-const css = readFileSync("app/app.css", "utf8");
+const css = ["app/base.css", "app/marketing.css", "app/app.css"].map((f) => readFileSync(f, "utf8")).join("\n");
 const rootTsx = readFileSync("app/root.tsx", "utf8");
 const searchRoute = readFileSync("app/routes/search.tsx", "utf8");
 const searchResultRow = readFileSync(

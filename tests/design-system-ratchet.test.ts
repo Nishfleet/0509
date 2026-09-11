@@ -552,7 +552,7 @@ describe("colour, font and radius rules", () => {
     const names = [...source.matchAll(/^\s{4}name: "([^"]+)",$/gm)].map((match) => match[1]);
     expect(names).toEqual([...PATTERN_RULES]);
     expect(source).toContain(
-      'export const DESIGN_SURFACE_PATHS = ["app/app.css", "app/components", "app/routes"]',
+      'export const DESIGN_SURFACE_PATHS = ["app/base.css", "app/marketing.css", "app/app.css", "app/components", "app/routes"]',
     );
   });
 

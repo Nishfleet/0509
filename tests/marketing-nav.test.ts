@@ -74,7 +74,7 @@ describe("MarketingNav (shared public nav)", () => {
 	});
 
 	it("hides Open app on the compact ≤860px nav so the fold stays clear", () => {
-		const css = readFileSync("app/app.css", "utf8");
+		const css = ["app/base.css", "app/marketing.css", "app/app.css"].map((f) => readFileSync(f, "utf8")).join("\n");
 		const compact = css.split("@media (max-width: 860px)")[1] ?? "";
 		expect(compact).toContain(".f9-home .ld-nav-actions .ld-nav-open-app");
 		expect(compact).toContain(".f9-legal-page .ld-nav-actions .ld-nav-open-app");
@@ -85,7 +85,7 @@ describe("MarketingNav (shared public nav)", () => {
 	});
 
 	it("wraps the compact primary nav on legal pages so six public links cannot overflow 375px (#1172)", () => {
-		const css = readFileSync("app/app.css", "utf8");
+		const css = ["app/base.css", "app/marketing.css", "app/app.css"].map((f) => readFileSync(f, "utf8")).join("\n");
 		const compact = css.split("@media (max-width: 860px)")[1] ?? "";
 		expect(compact).toMatch(/\.ld-nav-links\s*\{[^}]*flex-wrap:\s*nowrap/s);
 		expect(compact).toMatch(/\.f9-legal-page \.ld-nav-links\s*\{[^}]*flex-wrap:\s*wrap/s);

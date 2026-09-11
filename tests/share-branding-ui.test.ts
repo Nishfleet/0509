@@ -218,7 +218,7 @@ describe("shared report agency identity", () => {
 	});
 
 	it("keeps identity and attribution in print while hiding only client actions", () => {
-		const appCss = readFileSync("app/app.css", "utf8");
+		const appCss = ["app/base.css", "app/marketing.css", "app/app.css"].map((f) => readFileSync(f, "utf8")).join("\n");
 		const printCss = appCss.slice(appCss.indexOf("@media print"));
 
 		expect(printCss).toContain(".f9-share-brand-identity");

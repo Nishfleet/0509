@@ -17,7 +17,7 @@ const searchRoute = readFileSync("app/routes/search.tsx", "utf8");
 const notificationsUiRoute = readFileSync("app/routes/app.notifications.ui.tsx", "utf8");
 const dashboardRoute = readFileSync("app/routes/app.dashboard.tsx", "utf8");
 const shellSource = readFileSync("app/components/dashboard-shell.tsx", "utf8");
-const appCss = readFileSync("app/app.css", "utf8");
+const appCss = ["app/base.css", "app/marketing.css", "app/app.css"].map((f) => readFileSync(f, "utf8")).join("\n");
 
 const PRIMARY_APP_ROUTE_FILES = readdirSync("app/routes").filter(
   (name) =>

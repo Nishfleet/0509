@@ -48,7 +48,7 @@ const reportSnapshot = {
 	],
 };
 
-const appCss = readFileSync("app/app.css", "utf8");
+const appCss = ["app/base.css", "app/marketing.css", "app/app.css"].map((f) => readFileSync(f, "utf8")).join("\n");
 
 let root: Root | null = null;
 

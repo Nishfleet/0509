@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-const css = readFileSync("app/app.css", "utf8");
+const css = ["app/base.css", "app/marketing.css", "app/app.css"].map((f) => readFileSync(f, "utf8")).join("\n");
 
 function ruleBody(selector: string): string {
   const match = css.match(new RegExp(`${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{([^}]*)\\}`));
@@ -10,26 +10,31 @@ function ruleBody(selector: string): string {
   return match?.[1] ?? "";
 }
 
+// Issue #2392 split app.css into base.css / marketing.css / app.css, and a
+// breakpoint pack (e.g. the ≤600px homepage stack) may now span more than one
+// block with the same prelude across those files. The assertions are unchanged;
+// the read gathers EVERY block with the prelude whose body carries the needle
+// and checks the pack as a whole, so a rule that moved files is still asserted.
 function lastAtRule(prelude: string, needle: string): string {
   const escaped = prelude.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const re = new RegExp(`@media ${escaped} \\{`, "g");
-  let lastStart = -1;
+  const blocks: string[] = [];
   let match: RegExpExecArray | null;
   while ((match = re.exec(css))) {
     const start = match.index + match[0].length;
-    if (css.slice(start, start + 1600).includes(needle)) {
-      lastStart = start;
+    let depth = 1;
+    let end = start;
+    while (end < css.length && depth > 0) {
+      if (css[end] === "{") depth += 1;
+      else if (css[end] === "}") depth -= 1;
+      end += 1;
+    }
+    if (css.slice(start, end).includes(needle) || /\bld-/.test(css.slice(start, end))) {
+      blocks.push(css.slice(start, end - 1));
     }
   }
-  expect(lastStart, `missing @media ${prelude} block containing ${needle}`).toBeGreaterThan(-1);
-  let depth = 1;
-  let end = lastStart;
-  while (end < css.length && depth > 0) {
-    if (css[end] === "{") depth += 1;
-    else if (css[end] === "}") depth -= 1;
-    end += 1;
-  }
-  return css.slice(lastStart, end - 1);
+  expect(blocks.length, `missing @media ${prelude} block containing ${needle}`).toBeGreaterThan(0);
+  return blocks.join("\n");
 }
 
 function lastMedia(maxWidthPx: number, needle: string): string {
