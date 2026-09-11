@@ -22,6 +22,7 @@ const {
   printReleaseReadinessDiagnostics,
 } = deployPlanModule;
 const {
+  PINNED_EVIDENCE_SHA_NOT_IN_HISTORY,
   anchorPreviousHead,
   bootstrapPreviousSuccessHead,
   deployLedgerAnchor,
@@ -31,6 +32,8 @@ const {
   hasMigrationMutationAcrossCommits,
   hasRestoreCriticalChanges,
   minimumValidityMs,
+  pinnedEvidenceShaNotInHistoryIssue,
+  restoreEvidenceClassification,
   resolveRewrittenRecordedHead,
 } =
   await import("../scripts/verify-remote-restore-evidence.mjs");
@@ -1811,8 +1814,30 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       anchorPreviousHead({ recordedHead: gone }, ({} as NodeJS.ProcessEnv), collect, undefined, {
         resolveRewritten: () => null,
       }),
-    ).toThrow("remote_restore_last_successful_head_unresolvable");
-    expect(warnings.some((w) => w.includes("not reachable from HEAD"))).toBe(true);
+    ).toThrow(PINNED_EVIDENCE_SHA_NOT_IN_HISTORY);
+
+    // — Rewrite containment (main #2974/#3024 reframe, resolved to the
+    // recovery-first order of 0509#2975): a recorded head that is genuinely
+    // not in this history is recovered by tree hash before anything is
+    // thrown — the live d16b1f00 -> 20382d7e twin. Only when every recovery
+    // source fails does the helper throw the named phrase (see the terminal
+    // seam test above).
+    const vanished = "d16b1f00096d5a29db9f6ba51b32bc49db45824b";
+    const vanishedTree = spawnSync(
+      "git",
+      ["rev-parse", `${vanished}^{tree}`],
+      { encoding: "utf8" },
+    ).stdout.trim();
+    const twin = pairs.find(
+      ([sha, tree]) => tree === vanishedTree && sha !== vanished,
+    )?.[0];
+    expect(twin, "the rewritten-away deploy head must have an in-history twin").toBeTruthy();
+    expect(twin).toMatch(/^[a-f0-9]{40}$/);
+    const warningsBeforeRecovery = warnings.length;
+    expect(
+      anchorPreviousHead({ recordedHead: vanished }, ({} as NodeJS.ProcessEnv), collect),
+    ).toBe(twin);
+    expect(warnings[0]).toContain("not reachable from HEAD");
     warnings.length = 0;
 
     // Same, with a valid operator bootstrap: the bootstrap anchors this run,
@@ -2058,6 +2083,107 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(deploySteps[measureIndex].if).toBe("always()");
     expect(deploy.jobs.deploy.permissions["contents"]).toBe("write");
   });
+
+  it("fails a rewritten-away pinned SHA with regenerate-the-evidence, not Command failed (0509#2974)", async () => {
+    const vanished = "d16b1f00096d5a29db9f6ba51b32bc49db45824b";
+    const unknown = "0".repeat(40);
+    const tree = spawnSync("git", ["rev-parse", "HEAD^{tree}"], {
+      encoding: "utf8",
+    }).stdout.trim();
+    const unreachable = spawnSync(
+      "git",
+      ["commit-tree", tree, "-m", "orphaned deploy anchor probe"],
+      {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          GIT_AUTHOR_NAME: "0509 test",
+          GIT_AUTHOR_EMAIL: "test@0509.invalid",
+          GIT_COMMITTER_NAME: "0509 test",
+          GIT_COMMITTER_EMAIL: "test@0509.invalid",
+        },
+      },
+    ).stdout.trim();
+    expect(unreachable).toMatch(/^[a-f0-9]{40}$/);
+
+    const verifier = readFileSync(
+      "scripts/verify-remote-restore-evidence.mjs",
+      "utf8",
+    );
+    expect(verifier).toContain(
+      '["merge-base", "--is-ancestor", previousHead, "HEAD"]',
+    );
+    expect(verifier).not.toContain("|| true");
+
+    // The reader still runs `git merge-base --is-ancestor`; only the
+    // failure text changed. Unknown and known-but-not-ancestor both name
+    // the remedy.
+    expect(() => firstParentMigrationDiffs(vanished)).toThrow(
+      PINNED_EVIDENCE_SHA_NOT_IN_HISTORY,
+    );
+    expect(() => firstParentMigrationDiffs(unknown)).toThrow(
+      PINNED_EVIDENCE_SHA_NOT_IN_HISTORY,
+    );
+    expect(() => firstParentMigrationDiffs(unreachable)).toThrow(
+      PINNED_EVIDENCE_SHA_NOT_IN_HISTORY,
+    );
+    expect(pinnedEvidenceShaNotInHistoryIssue(vanished)).toContain(
+      "known but not an ancestor of HEAD",
+    );
+    expect(pinnedEvidenceShaNotInHistoryIssue(unknown)).toContain(
+      "unknown to this checkout",
+    );
+
+    // Classification must not crash the prepare job (exit 2). Reconciled to
+    // the recovery-first order (0509#2975): the vanish head is recovered by
+    // tree hash onto its in-history twin, so the classification resolves as
+    // a real classification, not a crash (exit 2). The orphaned-anchor
+    // verdict object is only returned by the catch when every recovery
+    // source — tree hash and the committed deploy ledger — fails.
+    // (Main #3024's orphanedDeployAnchor expectation for this SHA
+    // contradicted the decided recovery-first order; adjusted accordingly,
+    // 0509#2975 wins.)
+    const savedEnv = { ...process.env };
+    const savedFetch = globalThis.fetch;
+    const warnings: string[] = [];
+    const savedWrite = process.stderr.write;
+    process.stderr.write = ((chunk: unknown) => {
+      warnings.push(String(chunk));
+      return true;
+    }) as typeof process.stderr.write;
+    process.env.GITHUB_TOKEN = ["test", "token"].join("-");
+    process.env.GITHUB_REPOSITORY = "Nishfleet/0509";
+    process.env.GITHUB_RUN_ID = "99";
+    delete process.env.BOOTSTRAP_PREVIOUS_SUCCESS_SHA;
+    delete process.env.D1_REMOTE_RESTORE_MIGRATION_BEARING;
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          workflow_runs: [
+            { id: 41, conclusion: "success", head_sha: vanished },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      )) as unknown as typeof fetch;
+    try {
+      // The recorded head is recovered by tree hash onto its in-history
+      // twin, so the classification uses the recovered anchor: migration
+      // and restore-critical against 20382d7e..HEAD, no orphaned verdict.
+      await expect(restoreEvidenceClassification()).resolves.toEqual({
+        migrationBearing: true,
+        restoreCritical: true,
+      });
+    } finally {
+      process.env = savedEnv;
+      globalThis.fetch = savedFetch;
+      process.stderr.write = savedWrite;
+    }
+    expect(
+      warnings.some((line) =>
+        line.includes("attempting tree-hash and deploy-ledger resolution"),
+      ),
+    ).toBe(true);
+  }, 30_000);
 
   it("fetches a moved main tip before testing ancestry so drift is judged on objects, not on a stale checkout (0509#2975)", () => {
     const cas = readFileSync("scripts/ci-verify-provider-main-cas.sh", "utf8");

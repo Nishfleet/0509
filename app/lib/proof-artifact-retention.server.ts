@@ -108,13 +108,15 @@ export async function getProofArtifactInventory(
       FROM (
         SELECT watchlist.user_id AS owner_id, 'landing_page_snapshot' AS source
         FROM landing_page_snapshot
-        INNER JOIN ad_observation
+        LEFT JOIN ad_observation
           ON ad_observation.landing_page_snapshot_id = landing_page_snapshot.id
-        INNER JOIN watchlist_run
+        LEFT JOIN watchlist_run
           ON watchlist_run.id = ad_observation.watchlist_run_id
-        INNER JOIN watchlist
+        LEFT JOIN watchlist
           ON watchlist.id = watchlist_run.watchlist_id
         WHERE landing_page_snapshot.artifact_key = ?
+          OR (json_valid(landing_page_snapshot.metadata_json) AND json_extract(landing_page_snapshot.metadata_json, '$.htmlArtifactKey') = ?)
+          OR (json_valid(landing_page_snapshot.metadata_json) AND json_extract(landing_page_snapshot.metadata_json, '$.screenshotArtifactKey') = ?)
         UNION ALL
         SELECT watchlist.user_id AS owner_id, 'proof_capture' AS source
         FROM proof_capture
@@ -126,6 +128,8 @@ export async function getProofArtifactInventory(
       ) AS references_for_key
     `,
     owner,
+    parsed.key,
+    parsed.key,
     parsed.key,
     parsed.key,
   );
@@ -318,20 +322,28 @@ export async function deleteProofArtifactsForCapture(
     }
     try {
       if (await artifactReferencedOutsideCapture(env, proofCaptureId, parsed.key)) {
-        const changed = await clearCaptureProofArtifactReference(env, ownerId, proofCaptureId, parsed);
-        results.push(changed === 1
-          ? { key: parsed.key, ok: true, outcome: "revoked_shared", r2: "not_attempted", d1: "updated" }
-          : { key: parsed.key, ok: false, outcome: "d1_failed", r2: "not_attempted", d1: "failed" });
+        try {
+          const changed = await clearCaptureProofArtifactReference(env, ownerId, proofCaptureId, parsed);
+          results.push(changed === 1
+            ? { key: parsed.key, ok: true, outcome: "revoked_shared", r2: "not_attempted", d1: "updated" }
+            : { key: parsed.key, ok: false, outcome: "d1_failed", r2: "not_attempted", d1: "failed" });
+        } catch {
+          results.push({ key: parsed.key, ok: false, outcome: "d1_failed", r2: "not_attempted", d1: "failed" });
+        }
         continue;
       }
       if (!env.LANDING_PAGE_ARTIFACTS) throw new Error("r2_missing");
       const existing = await env.LANDING_PAGE_ARTIFACTS.head(parsed.key);
       const r2 = existing ? "deleted" : "missing";
       if (existing) await env.LANDING_PAGE_ARTIFACTS.delete(parsed.key);
-      const changed = await clearCaptureProofArtifactReference(env, ownerId, proofCaptureId, parsed);
-      results.push(changed === 1
-        ? { key: parsed.key, ok: true, outcome: r2, r2, d1: "updated" }
-        : { key: parsed.key, ok: false, outcome: "d1_failed", r2, d1: "failed" });
+      try {
+        const changed = await clearCaptureProofArtifactReference(env, ownerId, proofCaptureId, parsed);
+        results.push(changed === 1
+          ? { key: parsed.key, ok: true, outcome: r2, r2, d1: "updated" }
+          : { key: parsed.key, ok: false, outcome: "d1_failed", r2, d1: "failed" });
+      } catch {
+        results.push({ key: parsed.key, ok: false, outcome: "d1_failed", r2, d1: "failed" });
+      }
     } catch {
       results.push({ key: parsed.key, ok: false, outcome: "r2_failed", r2: "failed", d1: "not_updated" });
     }
@@ -421,16 +433,19 @@ export async function compensateUncommittedProofArtifacts(
     snapshot.metadata?.screenshotArtifactKey,
   ].filter((value): value is string => typeof value === "string" && value.length > 0);
   const keys = new Set<string>();
+  let failed = 0;
   for (const value of values) {
     const parsed = parseProofArtifactKey(value);
-    if (!parsed) return { ok: false, deleted: 0, failed: 1 };
+    if (!parsed) {
+      failed += 1;
+      continue;
+    }
     keys.add(parsed.key);
   }
-  if (keys.size === 0) return { ok: true, deleted: 0, failed: 0 };
-  if (!env.LANDING_PAGE_ARTIFACTS) return { ok: false, deleted: 0, failed: keys.size };
+  if (keys.size === 0) return { ok: failed === 0, deleted: 0, failed };
+  if (!env.LANDING_PAGE_ARTIFACTS) return { ok: false, deleted: 0, failed: failed + keys.size };
 
   let deleted = 0;
-  let failed = 0;
   for (const key of keys) {
     try {
       await env.LANDING_PAGE_ARTIFACTS.delete(key);

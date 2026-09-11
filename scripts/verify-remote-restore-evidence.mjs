@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -135,11 +135,18 @@ export function firstParentMigrationDiffs(previousHead) {
     throw new Error("remote_restore_migration_history_invalid");
   }
   if (head === previousHead) return [];
-  execFileSync(
-    "git",
-    ["merge-base", "--is-ancestor", previousHead, "HEAD"],
-    { stdio: ["ignore", "ignore", "pipe"] },
-  );
+  try {
+    execFileSync(
+      "git",
+      ["merge-base", "--is-ancestor", previousHead, "HEAD"],
+      { stdio: ["ignore", "ignore", "pipe"] },
+    );
+  } catch {
+    // Same assertion as before; only the failure text changed. A rewrite
+    // leaves the pinned SHA unknown (`git cat-file -e` fails) or known but
+    // not an ancestor — both must name the remedy, not a bare Command failed.
+    throw new Error(pinnedEvidenceShaNotInHistoryIssue(previousHead));
+  }
   const commits = execFileSync(
     "git",
     ["rev-list", "--first-parent", "--reverse", `${previousHead}..${head}`],
@@ -177,6 +184,27 @@ export function firstParentMigrationDiffs(previousHead) {
       { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
     ),
   );
+}
+
+export const PINNED_EVIDENCE_SHA_NOT_IN_HISTORY =
+  "pinned evidence SHA is not in this history — regenerate the evidence";
+
+/**
+ * Named failure for a pin that `git cat-file -e` cannot see, or that
+ * `--is-ancestor` rejects. The phrase is the contract 0509#2974 checks.
+ *
+ * @param {string} sha
+ */
+export function pinnedEvidenceShaNotInHistoryIssue(sha) {
+  const present = spawnSync("git", ["cat-file", "-e", `${sha}^{commit}`], {
+    stdio: ["ignore", "ignore", "ignore"],
+  });
+  if (present.error) throw present.error;
+  const kind =
+    present.status === 0
+      ? "known but not an ancestor of HEAD"
+      : "unknown to this checkout";
+  return `${PINNED_EVIDENCE_SHA_NOT_IN_HISTORY} (${sha} is ${kind})`;
 }
 
 /** Run git silently; true only on a clean exit. @param {string[]} args */
@@ -384,7 +412,7 @@ export function anchorPreviousHead(
       warn,
     );
     if (!bootstrapped) {
-      throw new Error("remote_restore_last_successful_head_unresolvable");
+      throw new Error(pinnedEvidenceShaNotInHistoryIssue(recordedHead));
     }
     return bootstrapped;
   }
@@ -508,7 +536,7 @@ export function hasRestoreCriticalChanges(diffOutput) {
     .some((name) => RESTORE_CRITICAL_PATH_PATTERN.test(name.trim()));
 }
 
-async function restoreEvidenceClassification() {
+export async function restoreEvidenceClassification() {
   const override = migrationBearingOverride();
   if (override !== null) {
     return {
@@ -540,24 +568,45 @@ async function restoreEvidenceClassification() {
     /** @type {{ workflow_runs?: Array<{ id?: number, conclusion?: string, head_sha?: string }> }} */ (
       await response.json()
     );
-  const previous = Array.isArray(payload?.workflow_runs)
-    ? payload.workflow_runs.find(
+  const recorded = Array.isArray(payload?.workflow_runs)
+    ? payload.workflow_runs.filter(
         (run) =>
           Number(run?.id) !== currentRunId &&
           run?.conclusion === "success" &&
           /^[a-f0-9]{40}$/u.test(run?.head_sha ?? ""),
       )
-    : null;
+    : [];
+  const recordedInHistory = recorded.find((run) =>
+    reachableFromHead(String(run.head_sha)),
+  );
   // Recorded run history always wins. The bootstrap anchor is consulted only
   // when this successful query found no eligible run at all, and is ignored
   // (loudly) whenever one exists — see bootstrapPreviousSuccessHead. The one
   // exception (0509#2975): a recorded head that is not in this history at all
   // (main was rewritten, fleet-ops#5385) cannot anchor anything, so it is
-  // recovered by tree hash, then by the committed deploy ledger, and only
-  // then by the operator bootstrap.
-  const previousHead = anchorPreviousHead({
-    recordedHead: previous?.head_sha ?? null,
-  });
+  // recovered by tree hash, then by the committed deploy ledger; when nothing
+  // resolves, anchorPreviousHead throws the named pinned-evidence error, the
+  // caller turns it into a verdict (exit 1) that names the remedy — never a
+  // bare Command failed infrastructure crash (exit 2) — so
+  // prepare_remote_restore_evidence can fall through to generate_restore_evidence.
+  let previousHead;
+  try {
+    previousHead = anchorPreviousHead({
+      recordedHead: recordedInHistory
+        ? String(recordedInHistory.head_sha)
+        : recorded[0]
+          ? String(recorded[0].head_sha)
+          : null,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (!message.includes(PINNED_EVIDENCE_SHA_NOT_IN_HISTORY)) throw error;
+    return {
+      migrationBearing: true,
+      restoreCritical: true,
+      orphanedDeployAnchor: String(recorded[0].head_sha),
+    };
+  }
   if (
     typeof previousHead !== "string" ||
     !/^[a-f0-9]{40}$/u.test(previousHead)
@@ -608,7 +657,7 @@ async function main() {
   const migrations = readdirSync(resolve("migrations"))
     .filter((name) => /^\d{4}_.+\.sql$/u.test(name))
     .sort();
-  const { migrationBearing, restoreCritical } =
+  const { migrationBearing, restoreCritical, orphanedDeployAnchor } =
     await restoreEvidenceClassification();
   const allowedMigrationStates = allowedProductionMigrationLedgers(
     migrations,
@@ -624,6 +673,12 @@ async function main() {
     now: verificationNow,
     minimumValidityMs: minimumValidityMs(),
   });
+  if (orphanedDeployAnchor) {
+    // Force a verdict failure (exit 1, not 2) so prepare falls through to
+    // generate_restore_evidence and produces exact evidence for this SHA.
+    verdict.ok = false;
+    verdict.issues.push(pinnedEvidenceShaNotInHistoryIssue(orphanedDeployAnchor));
+  }
   const exactEvidenceRequired = migrationBearing || restoreCritical;
   process.stdout.write(
     `${JSON.stringify({ ...verdict, policy: exactEvidenceRequired ? "fresh-exact-24h" : "verified-ledger-7d" })}\n`,
@@ -638,16 +693,20 @@ if (
   try {
     await main();
   } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "remote_restore_evidence_unavailable";
     process.stdout.write(
       `${JSON.stringify({
         ok: false,
-        issues: [
-          error instanceof Error
-            ? error.message
-            : "remote_restore_evidence_unavailable",
-        ],
+        issues: [message],
       })}\n`,
     );
-    process.exitCode = 2;
+    // Named rewrite failure is a verdict (exit 1): prepare then generates
+    // fresh exact evidence. Other throws remain infrastructure (exit 2).
+    process.exitCode = message.includes(PINNED_EVIDENCE_SHA_NOT_IN_HISTORY)
+      ? 1
+      : 2;
   }
 }
