@@ -16,7 +16,7 @@ import indexableSnapshot from "./fixtures/sneaker-resale-indexable-domains.snaps
  * This pins the array to the cluster's sitemap snapshot: the array must
  * cover every sneaker-resale domain whose /ads/ page is live and indexable
  * in the production sitemap today. A domain whose /ads/ page is absent from
- * the sitemap (goat.com, on.com, reebok.com, solesavy.com, sneakerping.com)
+ * the sitemap (goat.com, on.com, reebok.com, solesavy.com)
  * is intentionally excluded so the hub never ships a dead link. When the
  * cluster scales further, refresh the snapshot fixture AND the array
  * together — the length assertion below fails until both are updated.
