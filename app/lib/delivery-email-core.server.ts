@@ -1,6 +1,12 @@
 import type { AppEnv } from "~/lib/env.server";
 import { emailFromSender, isEmailSendingConfigured } from "~/lib/env.server";
 import { renderEmailShell } from "~/lib/email-template.server";
+import {
+	clearEmailBounceSuppression,
+	isEmailSuppressedForAddress,
+	listEmailSuppressionRows,
+	recordEmailBounceFailure,
+} from "~/lib/data/delivery-records-email-suppression.server";
 import { PromiseTimeoutError, promiseWithTimeout } from "~/lib/fetch-timeout.server";
 import { safeTimeZone } from "~/lib/safe-timezone";
 
@@ -55,6 +61,27 @@ export async function sendCloudflareEmail(
 	}
 
 	const statusSeenAt = new Date().toISOString();
+
+	// Consult the suppression ledger BEFORE every provider send (issue #2983).
+	// Best-effort by design: a deployment whose D1 has not yet run migration
+	// 0096, or a test env without a `DB` binding, must behave exactly as before
+	// this consult existed — an unreadable ledger reads as "not suppressed".
+	const suppression = await readSuppressionSafely(env, input.to);
+	if (suppression) {
+		return {
+			provider: EMAIL_PROVIDER,
+			status: "failed" as const,
+			webhookStatus: "failed" as const,
+			providerMessageId: null,
+			providerStatusLastSeenAt: statusSeenAt,
+			errorMessage:
+				suppression.reason === "complaint"
+					? "Email recipient is complaint-suppressed; no provider send was attempted."
+					: `Email recipient is bounce-suppressed after ${suppression.consecutiveFailures} consecutive provider failures; no provider send was attempted.`,
+			deliveredAt: null,
+		};
+	}
+
 	const html = renderEmailShell({
 		bodyHtml: input.html,
 		unsubscribeUrl: input.unsubscribeUrl,
@@ -83,6 +110,10 @@ export async function sendCloudflareEmail(
 			"Cloudflare Email send timed out",
 		);
 
+		// A definite provider acceptance clears this address's bounce count so
+		// transient blips self-heal (complaint rows are sticky by design).
+		await bookkeepingSafely(() => clearEmailBounceSuppression(env, input.to));
+
 		return {
 			provider: EMAIL_PROVIDER,
 			status: "sent" as const,
@@ -105,6 +136,16 @@ export async function sendCloudflareEmail(
 			};
 		}
 
+		// A definite (non-timeout) provider exception is a consecutive bounce
+		// signal: record it so the suppression ledger counts it (issue #2983).
+		await bookkeepingSafely(() =>
+			recordEmailBounceFailure(env, {
+				address: input.to,
+				source: "provider_send_failed",
+				detail: error instanceof Error ? error.message : null,
+			}),
+		);
+
 		return {
 			provider: EMAIL_PROVIDER,
 			status: "failed" as const,
@@ -114,6 +155,28 @@ export async function sendCloudflareEmail(
 			errorMessage: `Cloudflare Email send outcome is unknown after provider exception: ${error instanceof Error ? error.message : "unknown error"}.`,
 			deliveredAt: null,
 		};
+	}
+}
+
+/**
+ * Read the suppression rows for one address, treating any failure (no DB
+ * binding, pre-migration schema, provider outage) as "not suppressed" so the
+ * consult is strictly additive to the pre-#2983 behavior.
+ */
+async function readSuppressionSafely(env: AppEnv, to: string) {
+	try {
+		return isEmailSuppressedForAddress(await listEmailSuppressionRows(env, to));
+	} catch {
+		return false;
+	}
+}
+
+/** Suppression bookkeeping must never change the send outcome it records. */
+async function bookkeepingSafely(write: () => Promise<unknown>) {
+	try {
+		await write();
+	} catch {
+		// The returned provider result stays truthful either way.
 	}
 }
 
