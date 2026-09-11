@@ -154,6 +154,27 @@ function withPublicContentSignal(response: Response, request: Request): Response
   });
 }
 
+/**
+ * Issue #2979: Better Auth's cookie cache writes the signed session_data
+ * cookie during the request's session lookup (getBetterAuthSession). React
+ * Router loaders/actions can't merge Set-Cookie into the outgoing response
+ * themselves, so the buffered headers are replayed here, on the assembled
+ * app response. Best-effort: when the module (or the copy) fails, the
+ * response ships untouched and the next request re-mints via D1.
+ */
+async function replayBetterAuthSessionCookies(
+  request: Request,
+  response: Response,
+): Promise<Response> {
+  try {
+    const { applyBetterAuthSessionCookies } = await import("../app/lib/better-auth.server");
+    return applyBetterAuthSessionCookies(request, response);
+  } catch (error) {
+    console.warn("Better Auth session cookie replay failed", error);
+    return response;
+  }
+}
+
 function publicFileResponse(
   request: Request,
   file: {
@@ -397,7 +418,14 @@ export default {
       cspNonce,
     });
     const response = await requestHandler(request, routerContext);
-    return withSecurityHeaders(withPublicContentSignal(response, request), request, cspNonce);
+    return withSecurityHeaders(
+      await replayBetterAuthSessionCookies(
+        request,
+        withPublicContentSignal(response, request),
+      ),
+      request,
+      cspNonce,
+    );
   },
   async scheduled(controller, env, ctx) {
     const observationContext = Object.freeze({
