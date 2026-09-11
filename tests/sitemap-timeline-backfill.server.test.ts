@@ -316,7 +316,7 @@ describe("runSitemapTimelineBackfill (per-domain failure isolation)", () => {
   it("records a capture_failed domain without losing the other domains", async () => {
     const env = { DB: {} } as unknown as AppEnv;
     queryOne.mockResolvedValue(null);
-    execute.mockResolvedValue({});
+    execute.mockResolvedValue({ meta: { changes: 1 } });
     replaceAnalysisFields.mockResolvedValue(undefined);
 
     const capturedDomains: string[] = [];
@@ -356,6 +356,7 @@ describe("runSitemapTimelineBackfill (per-domain failure isolation)", () => {
   it("records an unexpected per-domain error without aborting the other domains", async () => {
     const env = { DB: {} } as unknown as AppEnv;
     queryOne.mockResolvedValue(null);
+    execute.mockResolvedValue({ meta: { changes: 1 } });
 
     const capturedDomains: string[] = [];
     const captureStub = vi.fn(async (_env: AppEnv, url: string) => {
@@ -440,7 +441,7 @@ describe("runSitemapTimelineBackfill (idempotency + subset paths)", () => {
   it("restricts the run to a caller-supplied, canonicalized domains subset", async () => {
     const env = { DB: {} } as unknown as AppEnv;
     queryOne.mockResolvedValue(null);
-    execute.mockResolvedValue({});
+    execute.mockResolvedValue({ meta: { changes: 1 } });
     replaceAnalysisFields.mockResolvedValue(undefined);
 
     const capturedDomains: string[] = [];
@@ -466,7 +467,7 @@ describe("runSitemapTimelineBackfill (write path shape)", () => {
   it("INSERTs the snapshot row with the deterministic id and calls replaceAnalysisFields", async () => {
     const env = { DB: {} } as unknown as AppEnv;
     queryOne.mockResolvedValue(null);
-    execute.mockResolvedValue({});
+    execute.mockResolvedValue({ meta: { changes: 1 } });
     replaceAnalysisFields.mockResolvedValue(undefined);
 
     const result = await runSitemapTimelineBackfill(env, {
@@ -499,7 +500,7 @@ describe("runSitemapTimelineBackfill (cohort derivation, default path)", () => {
   it("captures only sitemap candidates with hasCoverage — no-phantom-row on coverage false", async () => {
     const env = { DB: {} } as unknown as AppEnv;
     queryOne.mockResolvedValue(null);
-    execute.mockResolvedValue({});
+    execute.mockResolvedValue({ meta: { changes: 1 } });
     replaceAnalysisFields.mockResolvedValue(undefined);
 
     loadIndexableTimelineEntries.mockResolvedValue([
@@ -535,7 +536,7 @@ describe("runSitemapTimelineBackfill (cohort derivation, default path)", () => {
   it("keeps demo and sneaker-seed domains out via the real exclusion set", async () => {
     const env = { DB: {} } as unknown as AppEnv;
     queryOne.mockResolvedValue(null);
-    execute.mockResolvedValue({});
+    execute.mockResolvedValue({ meta: { changes: 1 } });
     replaceAnalysisFields.mockResolvedValue(undefined);
 
     loadIndexableTimelineEntries.mockResolvedValue([
@@ -578,7 +579,7 @@ describe("runSitemapTimelineBackfill (cohort derivation, default path)", () => {
   it("honors an injected exclusion set instead of the real one", async () => {
     const env = { DB: {} } as unknown as AppEnv;
     queryOne.mockResolvedValue(null);
-    execute.mockResolvedValue({});
+    execute.mockResolvedValue({ meta: { changes: 1 } });
     replaceAnalysisFields.mockResolvedValue(undefined);
 
     loadIndexableTimelineEntries.mockResolvedValue([
@@ -610,7 +611,7 @@ describe("runSitemapTimelineBackfill (CAP bound)", () => {
   it("slices the derived cohort at SITEMAP_TIMELINE_COHORT_CAP so spend is bounded", async () => {
     const env = { DB: {} } as unknown as AppEnv;
     queryOne.mockResolvedValue(null);
-    execute.mockResolvedValue({});
+    execute.mockResolvedValue({ meta: { changes: 1 } });
     replaceAnalysisFields.mockResolvedValue(undefined);
 
     const oversized = Array.from(
