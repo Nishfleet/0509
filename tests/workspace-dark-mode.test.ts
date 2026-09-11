@@ -18,7 +18,7 @@ describe("workspace dark mode (tokens + boot)", () => {
     for (const declaration of [
       "--ink: #ece9e2",
       "--ink-soft: #b5b1a6",
-      "--ink-faint: #8a867c",
+      "--ink-faint: #8c887e",
       "--line: #33312c",
       "--card: #21201c",
       "--bone: #171611",

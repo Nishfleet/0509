@@ -34,7 +34,6 @@ import {
 } from "~/lib/watchlist-detail-display";
 import { createReportId } from "~/lib/report";
 import {
-  WATCHLIST_DETAIL_TABS,
   watchlistDetailTabHref,
   type WatchlistDetailTabId,
 } from "~/lib/watchlist-detail-tabs";
@@ -129,8 +128,6 @@ export function CompetitorDetail(props: CompetitorDetailProps) {
   const targetNoun = formatWatchlistTargetNoun(trackingRole);
   const deliveryHref = watchlistDetailTabHref(watchlist.id, "delivery");
   const latestRun = data.runs[0] ?? null;
-  const panelLabel =
-    WATCHLIST_DETAIL_TABS.find((tab) => tab.id === activeTab)?.panelLabel ?? "What changed";
 
   const factRows = buildCompetitorFactRows({
     targetLabel: watchlist.targetLabel,
@@ -193,10 +190,11 @@ export function CompetitorDetail(props: CompetitorDetailProps) {
 
       <div className="f9-wk-split is-wide f9-watchdetail-split">
         <div
-          aria-label={panelLabel}
+          aria-labelledby={`competitor-tab-${activeTab}`}
           className="f9-watchdetail-main"
           id={`competitor-panel-${activeTab}`}
-          role="region"
+          role="tabpanel"
+          tabIndex={0}
         >
           {renderPanel(props, { targetNoun })}
         </div>
