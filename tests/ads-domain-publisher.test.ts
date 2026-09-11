@@ -499,6 +499,51 @@ describe("ads-domain-publisher.mjs (script module)", () => {
     expect(typeof mod.probeDomain).toBe("function");
     expect(typeof mod.loadSeedList).toBe("function");
     expect(exitSpy).not.toHaveBeenCalled();
-    expect(errorSpy).not.toHaveBeenCalled();
+  });
+
+  // M55: any non-429 HTTP error must become a "failed" outcome, not fall
+  // through to HTML parsing (a 500 body is not a search page).
+  it("probeDomain reports failed for a 500 response", async () => {
+    const mod = await import("../scripts/ads-domain-publisher.mjs");
+    const pacedFetch = vi.fn(async () => new Response("err", { status: 500 }));
+
+    const outcome = await mod.probeDomain({
+      domain: "example.com",
+      baseUrl: "https://0509.io",
+      pacedFetch,
+    });
+
+    expect(outcome.verdict).toBe("failed");
+    expect(outcome.reason).toBe("HTTP 500");
+    expect(outcome.rowCount).toBeNull();
+  });
+
+  // M55: the warming-poll loop has the same hole — a non-429 error poll
+  // must return the failed outcome instead of parsing garbage HTML.
+  it("probeDomain reports failed when a warming-settle poll errors", async () => {
+    const mod = await import("../scripts/ads-domain-publisher.mjs");
+    vi.useFakeTimers();
+    try {
+      const warmingPage =
+        '<h2 class="f9-wk-sec-title">Checking this competitor</h2>';
+      const pacedFetch = vi
+        .fn()
+        .mockResolvedValueOnce(new Response(warmingPage, { status: 200 }))
+        .mockResolvedValueOnce(new Response("err", { status: 500 }));
+
+      const outcomePromise = mod.probeDomain({
+        domain: "example.com",
+        baseUrl: "https://0509.io",
+        pacedFetch,
+      });
+      await vi.runAllTimersAsync();
+      const outcome = await outcomePromise;
+
+      expect(outcome.verdict).toBe("failed");
+      expect(outcome.reason).toBe("HTTP 500");
+      expect(outcome.rowCount).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
