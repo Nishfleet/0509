@@ -13,7 +13,10 @@ describe("auto-revert workflow", () => {
       "auto-revert"?: {
         "if"?: string;
         "timeout-minutes"?: number;
-        steps?: Array<{ name?: string; run?: string }>;
+        steps?: Array<{ name?: string; run?: string; env?: Record<string, string> }>;
+      };
+      "close-halts-on-green"?: {
+        steps?: Array<{ name?: string; run?: string; env?: Record<string, string> }>;
       };
     };
   };
@@ -39,14 +42,15 @@ describe("auto-revert workflow", () => {
     // 0509#1355: a halt files an issue and is the designed, successful
     // outcome — the filed issue is the signal. The workflow run must stay
     // green so a halt does not double a deploy-failure storm with its own
-    // GitHub failure email. All five guards (loop, freshness, repeated
-    // failure, non-assertion deploy failure, unclassifiable deploy failure)
-    // route through `halt_and_exit`, which calls `halt` then `exit 0`.
+    // GitHub failure email. All six halt paths (loop, freshness, repeated
+    // failure, unclassifiable deploy failure, non-assertion deploy failure,
+    // and the 0509#2929 revert-token GraphQL check) route through
+    // `halt_and_exit`, which calls `halt` then `exit 0`.
     expect(run).toContain("halt_and_exit ()");
 
     // Each guard calls halt_and_exit, not a bare `halt` followed by `exit 1`.
     const haltAndExitCalls = run.match(/halt_and_exit "/g) ?? [];
-    expect(haltAndExitCalls.length).toBe(5);
+    expect(haltAndExitCalls.length).toBe(6);
 
     // The loop guard (revert commit itself is red on main).
     expect(run).toContain('halt_and_exit "AUTO-REVERT HALT: revert commit itself is red on main"');
@@ -79,6 +83,7 @@ describe("auto-revert workflow", () => {
       'halt_and_exit "AUTO-REVERT HALT: $RUN_NAME failing across consecutive commits',
       'halt_and_exit "AUTO-REVERT HALT: $RUN_NAME failed in a non-assertion step',
       'halt_and_exit "AUTO-REVERT HALT: $RUN_NAME failed but the jobs API listed no failed step',
+      'halt_and_exit "AUTO-REVERT HALT: the revert token cannot use the GitHub GraphQL API"',
     ];
     for (const branch of haltBranches) {
       const idx = run.indexOf(branch);
@@ -160,9 +165,9 @@ describe("auto-revert workflow", () => {
     const haltBody = haltDef?.[1] ?? "";
     // The create step is followed by label verification.
     expect(haltBody).toContain("halt_label_ensure \"$num\"");
-    expect(haltBody.indexOf("gh issue create")).toBeGreaterThan(-1);
+    expect(haltBody.indexOf("ghi issue create")).toBeGreaterThan(-1);
     // The create branch is followed by label verification.
-    const createBranch = haltBody.slice(haltBody.indexOf("gh issue create"));
+    const createBranch = haltBody.slice(haltBody.indexOf("ghi issue create"));
     expect(createBranch).toContain("halt_label_ensure \"$num\"");
     // The verifier reads the label list back from the API and repairs via
     // --add-label when missing.
@@ -187,6 +192,40 @@ describe("auto-revert workflow", () => {
     const closeRun = closeStep?.run ?? "";
     expect(closeRun).toContain("--label auto-revert-halt");
     expect(closeRun).toContain('"AUTO-REVERT HALT in:title"');
+    // The closer is pure issue ops, so it runs under GITHUB_TOKEN — the
+    // fine-grained AUTO_REVERT_PAT cannot list or close issues at all —
+    // and it asserts GraphQL access before the `for num in $(...)` loop,
+    // which would otherwise mask a failing list as an empty one.
+    expect(closeStep?.env?.GH_TOKEN).toContain("github.token");
+    expect(closeRun).toContain("gh api graphql");
+  });
+
+  it("routes issue ops through GITHUB_TOKEN and asserts the revert token can GraphQL before filing (0509#2929)", () => {
+    // Root cause: AUTO_REVERT_PAT is a fine-grained PAT, which the GraphQL
+    // API rejects outright — and every `gh issue list/comment/edit/close`
+    // and `gh pr` call is GraphQL. Issue bookkeeping therefore runs under
+    // GITHUB_TOKEN (`ghi`), which the workflow grants issues: write.
+    expect(parsed.permissions?.issues).toBe("write");
+    expect(revertStep?.env?.ISSUE_GH_TOKEN).toContain("github.token");
+    expect(run).toContain('ghi () { GH_TOKEN="${ISSUE_GH_TOKEN:-$GH_TOKEN}" gh "$@"; }');
+    for (const call of ["ghi issue list", "ghi issue comment", "ghi issue create", "ghi issue edit"]) {
+      expect(run).toContain(call);
+    }
+    // `gh issue create` has no --json flag (gh 2.93: unknown flag) — the
+    // issue number is parsed from the printed URL.
+    const createLine = run.split("\n").find((ln) => ln.includes("ghi issue create"));
+    expect(createLine).toBeDefined();
+    expect(createLine).not.toContain("--json");
+    // The revert-path token is asserted over GraphQL BEFORE the revert push
+    // and any PR call, so a dead PAT files one labelled halt instead of
+    // dying mid-flight with the revert commit already pushed.
+    const assertIdx = run.indexOf("gh api graphql");
+    expect(assertIdx).toBeGreaterThan(-1);
+    expect(assertIdx).toBeLessThan(run.indexOf("git revert --no-edit"));
+    expect(assertIdx).toBeLessThan(run.indexOf('pr_url="$(gh pr create'));
+    expect(run).toContain(
+      'halt_and_exit "AUTO-REVERT HALT: the revert token cannot use the GitHub GraphQL API"',
+    );
   });
 
   it("removes the auto-revert label with gh pr edit --remove-label", () => {
