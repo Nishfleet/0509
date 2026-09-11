@@ -1644,9 +1644,8 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       { encoding: "utf8" },
     ).stdout.trim();
     const vanished = "d16b1f00096d5a29db9f6ba51b32bc49db45824b";
-    /** @type {string[]} */
-    const warnings = [];
-    const collect = (/** @type {string} */ message) => {
+    const warnings: string[] = [];
+    const collect = (message: string) => {
       warnings.push(message);
       return true;
     };

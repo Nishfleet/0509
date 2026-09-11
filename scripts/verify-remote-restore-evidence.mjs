@@ -199,7 +199,7 @@ export function reachableFromHead(sha) {
  * (loudly) or fail with a named reason instead of a raw git error.
  * @param {{ recordedHead: string | null }} args
  * @param {NodeJS.ProcessEnv} [env]
- * @param {(message: string) => boolean} [warn]
+ * @param {(message: string) => void} [warn]
  * @param {(sha: string) => boolean} [reachable]
  */
 export function anchorPreviousHead(
@@ -262,7 +262,7 @@ export function anchorPreviousHead(
  *
  * @param {{ hasRecordedHistory: boolean }} options
  * @param {Record<string, string | undefined>} [env]
- * @param {(message: string) => boolean} [warn]
+ * @param {(message: string) => void} [warn]
  * @returns {string | null} the bootstrap anchor, or null when none applies
  */
 export function bootstrapPreviousSuccessHead(
