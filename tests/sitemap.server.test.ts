@@ -779,7 +779,7 @@ describe("buildSitemapXml", () => {
 
     // /compare/* and /methodology have no existing per-page date field, so
     // they must NOT carry an invented <lastmod> (the judge edit on #2297).
-    for (const path of ["/methodology", "/compare", "/compare/meta-ad-library"]) {
+    for (const path of ["/methodology/ad-aggression-score", "/compare", "/compare/meta-ad-library"]) {
       const line = lines.find((l) => l.includes(`<loc>https://0509.io${path}</loc>`));
       expect(line, `expected a sitemap <url> line for ${path}`).toBeDefined();
       expect(line).not.toContain("<lastmod>");
@@ -1699,7 +1699,7 @@ describe("locale sitemap feed count matches the buyer-surface derivation (issue 
     const derivedCount =
       BUYER_SURFACE_PATHS.filter((p) => p !== "/" && p !== "/sitemap.xml").length +
       BUYER_SURFACE_CHILD_PATHS.length +
-      2; // /guides/how-to-track-competitor-ads + /guides/how-to-monitor-meta-ad-library (issue #2867)
+      2 - 1; // /guides/* pair (issue #2867); -1: /methodology locale twins stay OUT of the locale sitemaps (issue #2871/#1570 duplicate-content policy)
     for (const locale of BUYER_SURFACE_LOCALE_IDS) {
       const entries = staticSitemapEntriesForLocale(locale);
       const body = buildLocaleSitemapXml(locale);
@@ -1746,7 +1746,14 @@ describe("locale sitemap feed count matches the buyer-surface derivation (issue 
     // cross-check makes that drift fail loudly.
     const staticPaths = new Set(SITEMAP_STATIC_ENTRIES.map((e) => e.path));
     const derived = [
-      ...BUYER_SURFACE_PATHS.filter((p) => p !== "/" && p !== "/sitemap.xml"),
+      ...BUYER_SURFACE_PATHS.filter(
+        (p) =>
+          p !== "/" &&
+          p !== "/sitemap.xml" &&
+          // /methodology is a 301 to the canonical /methodology/ad-aggression-score
+          // (issue #2871); its locale twins stay out of the locale sitemaps.
+          p !== "/methodology",
+      ),
       ...BUYER_SURFACE_CHILD_PATHS,
       "/guides/how-to-track-competitor-ads",
       "/guides/how-to-monitor-meta-ad-library",

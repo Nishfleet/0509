@@ -31,6 +31,7 @@ import {
   webPageJsonLd,
 } from "~/lib/seo";
 import {
+  AD_AGGRESSION_METHODOLOGY_PATH,
   brandCategoryFromSlug,
   CURATED_BRAND_CATEGORY_SLUGS,
   groupBrandRecordsByCategory,
@@ -207,6 +208,13 @@ export default function BrandsHubRoute() {
             ))}
           </p>
         )}
+
+        <p className="ld-dim ld-browse-categories">
+          {"Scores on these pages come from a published formula — "}
+          <Link to={AD_AGGRESSION_METHODOLOGY_PATH}>
+            read the Ad Aggression Score methodology
+          </Link>
+        </p>
       </section>
 
       <MarketingFooter />
