@@ -4,6 +4,10 @@ import { createRequestHandler, RouterContextProvider } from "react-router";
 
 import { isBuyerSurfaceLocaleId } from "../app/lib/locale-markets";
 import { cloudflareRuntimeContext } from "../app/lib/cloudflare-context";
+import {
+  routesCatchAllForPath,
+  tinyNotFoundResponse,
+} from "./tiny-not-found";
 import { reportScheduledTaskFailure } from "../app/lib/cron-failure-alert.server";
 import {
   runDemoBrandBackfill,
@@ -389,6 +393,30 @@ export default {
         if (pageTextResponse) {
           return withSecurityHeaders(pageTextResponse, request);
         }
+      }
+    }
+
+    // Tiny purpose-built 404 (issue #2967): a GET/HEAD path whose only route
+    // match is the terminal `*` catch-all is a genuine 404 by construction, so
+    // serve the sub-1 KB static document instead of paying for the SSR render,
+    // the root loader, the 256 KB root stylesheet, and the hydration bundle.
+    // GET/HEAD only — actions must reach the SSR handler untouched. Runs after
+    // every public-file/Markdown/proof surface so real content still wins,
+    // and before the edge cache (#2950) so a 404 never enters the cache.
+    if (request.method === "GET" || request.method === "HEAD") {
+      try {
+        const serverBuild = await import("virtual:react-router/server-build");
+        if (routesCatchAllForPath(serverBuild.routes, url.pathname, serverBuild.basename)) {
+          return withSecurityHeaders(
+            withPublicContentSignal(tinyNotFoundResponse(request), request),
+            request,
+          );
+        }
+      } catch (error) {
+        // Never break the document path on the fast-path: fall through to the
+        // SSR handler, which still serves the full not-found page. The catch
+        // stays observable so a real matching bug cannot hide behind silence.
+        console.error("tiny-404 fast path failed; falling back to SSR not-found", error);
       }
     }
 
