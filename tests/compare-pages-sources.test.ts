@@ -105,6 +105,22 @@ describe("compare pages first-party source attribution (issue #1863)", () => {
       expect(declaredHrefs, "citations JSON must declare at least one source").not.toHaveLength(0);
       expect(declaredHrefs, `data-source-url (${url}) must be one of the page's declared sources`).toContain(url);
     });
+
+    it(`/compare/${page.slug} renders an "as of <date>" beside the primary claim (issue #2958)`, async () => {
+      const markup = await renderPage(page.module);
+      const url = extractDataSourceUrl(markup);
+
+      const citations = (await import(page.citations)) as {
+        sources: readonly { href: string; checked: string }[];
+      };
+      const source = citations.sources.find((candidate) => candidate.href === url);
+
+      expect(source, "primary source must be declared in the citations JSON").toBeTruthy();
+      expect(
+        markup,
+        `page must show the claim's as-of date (as of ${source!.checked})`,
+      ).toContain(`as of ${source!.checked}`);
+    });
   }
 });
 

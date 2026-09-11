@@ -1,0 +1,85 @@
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+
+import { describe, expect, it } from "vitest";
+
+// Issue #2958: competitor comparison pages state hard facts (AdSpy $149/mo,
+// 2.4/5 Trustpilot, no self-serve cancel) that go stale. Every claim's source
+// in app/data/compare/*-citations.json must therefore carry a "checked" date
+// — the date is rendered next to the claim as "as of <date>" by
+// CompareCitationsFooter / <Cite>. This test fails when a claim has no date,
+// a malformed date, a future date, or a date older than the re-verify window.
+// It globs the directory, so a NEW citations file is covered automatically —
+// no test registration step to forget. There is no timer: the staleness
+// tripwire fires only when the suite runs (CI), which is the "lightweight way
+// to re-verify" the issue asks for.
+
+const root = join(__dirname, "..");
+const CITATIONS_DIR = join(root, "app", "data", "compare");
+
+// How long a "checked" date may age before the claim must be re-verified.
+// Deliberately generous: the point is that dates cannot silently go ancient,
+// not that someone must hand-recheck every fortnight.
+const STALE_AFTER_DAYS = 120;
+
+interface Source {
+  id: string;
+  href: string;
+  label: string;
+  claim: string;
+  checked: string;
+}
+
+interface CitationsFile {
+  competitor: string;
+  productName: string;
+  sources: Source[];
+}
+
+function citationFiles(): string[] {
+  return readdirSync(CITATIONS_DIR)
+    .filter((name) => name.endsWith("-citations.json"))
+    .sort();
+}
+
+function ageInDays(iso: string): number {
+  const then = new Date(`${iso}T00:00:00Z`).getTime();
+  const now = Date.parse(new Date().toISOString().slice(0, 10));
+  return Math.round((now - then) / 86_400_000);
+}
+
+describe("compare citations: every claim carries a checked date (issue #2958)", () => {
+  for (const file of citationFiles()) {
+    const citations = JSON.parse(readFileSync(join(CITATIONS_DIR, file), "utf8")) as CitationsFile;
+    const competitor = `${citations.productName ?? citations.competitor} (${file})`;
+
+    it(`${competitor} has at least one source`, () => {
+      expect(citations.sources, `${competitor} sources`).not.toHaveLength(0);
+    });
+
+    for (const source of citations.sources) {
+      it(`${competitor}: "${source.id}" has a source URL, a label, and a claim`, () => {
+        expect(source.id, "stable citation id").toBeTruthy();
+        expect(source.href, "source URL").toMatch(/^https:\/\//u);
+        expect(source.label, "human link text").toBeTruthy();
+        expect(source.claim, "the claim this source backs").toBeTruthy();
+      });
+
+      it(`${competitor}: "${source.id}" has a well-formed, current checked date`, () => {
+        expect(source.checked, "checked must be present").toBeTruthy();
+        expect(source.checked, "checked must be YYYY-MM-DD").toMatch(/^\d{4}-\d{2}-\d{2}$/u);
+        const age = ageInDays(source.checked);
+        expect(age, `checked (${source.checked}) must not be in the future`).toBeGreaterThanOrEqual(0);
+        expect(
+          age,
+          `checked (${source.checked}) is ${age}d old — re-verify the source and bump the date`,
+        ).toBeLessThanOrEqual(STALE_AFTER_DAYS);
+      });
+    }
+
+    it(`${competitor}: citation ids are unique`, () => {
+      const ids = citations.sources.map((source) => source.id);
+      expect(new Set(ids).size, "duplicate citation ids").toBe(ids.length);
+    });
+  }
+});
