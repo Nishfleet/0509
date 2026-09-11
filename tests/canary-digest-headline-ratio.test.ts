@@ -33,7 +33,8 @@ describe("canary-digest-headline-ratio — fixture cannot file an incident", () 
       },
     );
 
-    expect(result.combined || result.stdout + result.stderr).not.toContain(
+    const output = result.stdout + result.stderr;
+      expect(output).not.toContain(
       "[dry-run] would run",
     );
   });
@@ -53,7 +54,8 @@ describe("canary-digest-headline-ratio — fixture cannot file an incident", () 
       },
     );
 
-    expect(result.combined || result.stdout + result.stderr).toContain(
+    const output = result.stdout + result.stderr;
+      expect(output).toContain(
       "[dry-run] would run",
     );
   });
@@ -73,7 +75,8 @@ describe("sibling canaries — --local fixture mode cannot file an incident", ()
       });
       // The script may exit non-zero (probe verdict fail); we only assert the
       // fixture run never opens a production incident path.
-      expect(result.combined || result.stdout + result.stderr).not.toContain(
+      const output = result.stdout + result.stderr;
+      expect(output).not.toContain(
         "[dry-run] would run",
       );
     });
