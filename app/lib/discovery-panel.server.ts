@@ -181,6 +181,7 @@ export async function warmDiscoveryEvalPanel(
       intent,
       scope: "exact",
       country: query.filters.country || "all",
+      filters: query.filters,
     });
 
     let alreadyWarm = false;

@@ -581,6 +581,7 @@ async function publishSeedListDomain(
     scope: "exact",
     country: "all",
     pageId: v2Context.advertiserPageId,
+    filters: query.filters,
   });
   const rawResult = await searchAdsViaSourceResolver(env, query, null, {
     purpose: "public_search",
