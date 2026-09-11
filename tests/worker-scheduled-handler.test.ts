@@ -220,6 +220,18 @@ afterEach(() => {
 });
 
 describe("Worker scheduled handler", () => {
+  async function runCron(cron: string) {
+    const loaded = await loadWorker();
+    const { ctx, pending } = createContext();
+    await loaded.worker.scheduled(
+      { cron, scheduledTime: Date.parse("2026-09-05T04:00:00.000Z") } as never,
+      {} as never,
+      ctx as never,
+    );
+    await Promise.all(pending);
+    return loaded;
+  }
+
   it("runs the per-cron gap check while preserving shared email recovery", async () => {
     const loaded = await loadWorker();
     const { ctx, pending } = createContext();
@@ -504,14 +516,7 @@ describe("Worker scheduled handler", () => {
 
   it("does not run the demo-brand backfill on the 3-hour or weekly crons", async () => {
     for (const cron of [WARMUP_CRON, NORMAL_CRON]) {
-      const loaded = await loadWorker();
-      const { ctx, pending } = createContext();
-      await loaded.worker.scheduled(
-        { cron, scheduledTime: Date.parse("2026-09-05T04:00:00.000Z") } as never,
-        {} as never,
-        ctx as never,
-      );
-      await Promise.all(pending);
+      const loaded = await runCron(cron);
       expect(loaded.runDemoBrandBackfill).not.toHaveBeenCalled();
       expect(loaded.runDemoBrandProofHoleCatchUp).not.toHaveBeenCalled();
     }
@@ -589,15 +594,7 @@ describe("Worker scheduled handler", () => {
 
   it("does not run the sneaker-resale backfill on the 3-hour or weekly crons (issue #1946)", async () => {
     for (const cron of [WARMUP_CRON, NORMAL_CRON]) {
-      const loaded = await loadWorker();
-      const { ctx, pending } = createContext();
-      await loaded.worker.scheduled(
-        { cron, scheduledTime: Date.parse("2026-09-05T04:00:00.000Z") } as never,
-        {} as never,
-        ctx as never,
-      );
-      await Promise.all(pending);
-      expect(loaded.runSneakerResaleBackfill).not.toHaveBeenCalled();
+      expect((await runCron(cron)).runSneakerResaleBackfill).not.toHaveBeenCalled();
     }
   });
 
@@ -721,15 +718,7 @@ describe("Worker scheduled handler", () => {
     // surrogates: the daily rail must be the ONLY rail that runs the
     // nightly sitemap-timeline backfill (issue #1958, phase 5).
     for (const cron of [REGULAR_MONITORING_CRON, WEEKLY_DIGEST_CRON]) {
-      const loaded = await loadWorker();
-      const { ctx, pending } = createContext();
-      await loaded.worker.scheduled(
-        { cron, scheduledTime: Date.parse("2026-09-05T04:00:00.000Z") } as never,
-        {} as never,
-        ctx as never,
-      );
-      await Promise.all(pending);
-      expect(loaded.runSitemapTimelineBackfill).not.toHaveBeenCalled();
+      expect((await runCron(cron)).runSitemapTimelineBackfill).not.toHaveBeenCalled();
     }
   });
 
@@ -760,15 +749,7 @@ describe("Worker scheduled handler", () => {
   });
 
   it("runs the rate_limit_events cleanup on the daily 04:00 cron (issue #2402)", async () => {
-    const loaded = await loadWorker();
-    const { ctx, pending } = createContext();
-
-    await loaded.worker.scheduled(
-      { cron: DAILY_DIGEST_CRON, scheduledTime: Date.parse("2026-09-05T04:00:00.000Z") } as never,
-      {} as never,
-      ctx as never,
-    );
-    await Promise.all(pending);
+    const loaded = await runCron(DAILY_DIGEST_CRON);
 
     // The request-path lottery is gone; the daily rail is what keeps the
     // table bounded now.
@@ -779,24 +760,15 @@ describe("Worker scheduled handler", () => {
 
   it("does not run the rate_limit_events cleanup on the 3-hour or weekly crons (issue #2402)", async () => {
     for (const cron of [REGULAR_MONITORING_CRON, WEEKLY_DIGEST_CRON]) {
-      const loaded = await loadWorker();
-      const { ctx, pending } = createContext();
-      await loaded.worker.scheduled(
-        { cron, scheduledTime: Date.parse("2026-09-05T04:00:00.000Z") } as never,
-        {} as never,
-        ctx as never,
-      );
-      await Promise.all(pending);
-      expect(loaded.cleanupRateLimitEvents).not.toHaveBeenCalled();
+      expect((await runCron(cron)).cleanupRateLimitEvents).not.toHaveBeenCalled();
     }
   });
 
   it("pages the operator when the rate_limit_events cleanup throws (issue #2402)", async () => {
     const loaded = await loadWorker();
-    const { ctx, pending } = createContext();
     const failure = new Error("rate_limit_events delete failed");
     loaded.cleanupRateLimitEvents.mockRejectedValueOnce(failure);
-
+    const { ctx, pending } = createContext();
     await loaded.worker.scheduled(
       { cron: DAILY_DIGEST_CRON, scheduledTime: Date.parse("2026-09-05T04:00:00.000Z") } as never,
       {} as never,
