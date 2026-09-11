@@ -1292,26 +1292,45 @@ function pickPrice(html: string, declaredCurrency: string | null = null) {
  * RAW html — the declarations live in script/head markup that is stripped
  * before visible-text matching, so this runs pre-strip.
  *
- * Majority vote across every declaration found, earliest occurrence winning
- * ties — deterministic for a given page version, and robust to one stray
- * embed (a widget cart blob in another currency loses to the shop's own
- * repeated declaration). Returns null when nothing plausible is declared.
+ * Strict plurality vote across every declaration found — deterministic for
+ * a given page version, and robust to one stray embed (a widget cart blob
+ * in another currency loses to the shop's own repeated declaration).
+ * Hardening (issue #2905): HTML comments are stripped before the scan so a
+ * commented-out or ad-slot declaration never votes; attribute-shaped
+ * matches (`data-currency="EUR"` and other `*-currency` names, which a
+ * currency-switcher list repeats once per option) cast one vote per code
+ * total instead of one per occurrence; and the winner must hold strictly
+ * more votes than the runner-up — a top tie resolves null, falling back to
+ * historical first-match rather than letting an earlier stray declaration
+ * anchor the price. Returns null when nothing plausible is declared.
  */
 export function pickDeclaredCurrency(html: string): string | null {
-  const tally = new Map<string, { count: number; firstIndex: number }>();
+  // Commented-out or ad-slot markup can declare a foreign currency ahead of
+  // the shop's own declaration; it must not vote.
+  const scannable = html.replace(/<!--[\s\S]*?-->/g, "");
+  const tally = new Map<string, number>();
+  // Codes that already cast their one attribute-shaped vote.
+  const attributeVoteCast = new Set<string>();
   for (const pattern of DECLARED_CURRENCY_PATTERNS) {
     const global = new RegExp(
       pattern.source,
       pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`,
     );
     let match: RegExpExecArray | null;
-    while ((match = global.exec(html)) !== null) {
+    while ((match = global.exec(scannable)) !== null) {
       const code = match[1]?.toUpperCase();
       if (code && KNOWN_CURRENCY_CODES.has(code)) {
-        const entry = tally.get(code) ?? { count: 0, firstIndex: match.index };
-        entry.count += 1;
-        entry.firstIndex = Math.min(entry.firstIndex, match.index);
-        tally.set(code, entry);
+        // `data-currency="EUR"`-style hits sit at `*-currency`, so the char
+        // before the keyword is `-`. A switcher repeats them once per
+        // option — one vote per code keeps a doubled list (mobile +
+        // desktop nav) from out-voting the shop's own declaration.
+        const attributeVote = scannable.charAt(match.index - 1) === "-";
+        if (!attributeVote || !attributeVoteCast.has(code)) {
+          tally.set(code, (tally.get(code) ?? 0) + 1);
+          if (attributeVote) {
+            attributeVoteCast.add(code);
+          }
+        }
       }
       if (match[0].length === 0) {
         global.lastIndex += 1;
@@ -1320,18 +1339,17 @@ export function pickDeclaredCurrency(html: string): string | null {
   }
   let best: string | null = null;
   let bestCount = 0;
-  let bestIndex = Number.POSITIVE_INFINITY;
-  for (const [code, entry] of tally) {
-    if (
-      entry.count > bestCount ||
-      (entry.count === bestCount && entry.firstIndex < bestIndex)
-    ) {
+  let bestTied = false;
+  for (const [code, count] of tally) {
+    if (count > bestCount) {
       best = code;
-      bestCount = entry.count;
-      bestIndex = entry.firstIndex;
+      bestCount = count;
+      bestTied = false;
+    } else if (count === bestCount) {
+      bestTied = true;
     }
   }
-  return best;
+  return bestTied ? null : best;
 }
 
 /** Every candidate of `pattern` in text order, not just the first. */
