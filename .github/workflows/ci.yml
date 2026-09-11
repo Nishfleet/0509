@@ -433,3 +433,95 @@ jobs:
             exit 1
           fi
           echo "No open critical Dependabot alerts on direct dependencies"
+
+  release-proof:
+    # Gate-B release proof as a merge-queue gate (issue #2840): a batch whose
+    # merge would turn `Deploy production` red at `launch:readiness:predeploy`
+    # must be rejected by the queue, never merged to main. Runs build + the
+    # canonical local release proof (journeys 1-6) with the same env the
+    # deploy job's launch_readiness step uses (E2E_RELEASE_BASE=HEAD, default
+    # gate-b-manifest path), D1 fixture prepared by e2e:prepare:local.
+    #
+    # Deliberately job-level `if:`-gated to merge_group ONLY: this is a ~10
+    # minute proof and must not run on every pull_request push (100 PRs/day
+    # would sink the runners). It is therefore exempt from the
+    # never-conclude-skipped contract documented on codex-node-checks and
+    # enforced by tests/required-context-no-skip.test.ts: it is NOT (and must
+    # not be) added to that test's REQUIRED_JOBS list. Requiredness comes from
+    # the main-merge-queue ruleset (required_status_checks), which evaluates
+    # on the gh-readonly-queue merge ref where the event is always
+    # merge_group, so the check always reports a real verdict there; on any
+    # other event the check is simply absent, and a missing required check
+    # fails closed. PR runs show the job as skipped, which the ruleset never
+    # consults for queue batches.
+    # Per-merge-group-ref concurrency is already provided by the workflow-level
+    # `concurrency: ci-<ref>` block (cancel-in-progress); no job-level block.
+    name: release-proof
+    if: github.event_name == 'merge_group'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 25
+    steps:
+      - name: Authorize exact verification candidate
+        id: authorize
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "Nishfleet/0509"
+          [[ "$GITHUB_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$GITHUB_EVENT_NAME" = "merge_group"
+          [[ "$GITHUB_REF" =~ ^refs/heads/gh-readonly-queue/ ]]
+          printf 'sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ steps.authorize.outputs.sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Verify authorized checkout
+        shell: bash
+        env:
+          AUTHORIZED_SHA: ${{ steps.authorize.outputs.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --verify HEAD)" = "$AUTHORIZED_SHA"
+          if git symbolic-ref --quiet HEAD >/dev/null 2>&1; then
+            exit 1
+          fi
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ".node-version"
+          cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' }}
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --ignore-scripts
+          else
+            npm install --ignore-scripts
+          fi
+      - name: Install Playwright browsers
+        # Same as the deploy job: install (not cache) — the deploy workflow
+        # installs chromium firefox webkit fresh each run too; the canonical
+        # proof runs on the chromium project only.
+        run: npx playwright install chromium
+      - name: Build
+        run: npm run build
+      - name: Prepare local D1 fixture
+        run: npm run e2e:prepare:local
+      - name: Gate-B local release proof (journeys 1-6)
+        env:
+          E2E_RELEASE_BASE: HEAD
+          NODE_OPTIONS: --max-old-space-size=2048
+        run: node scripts/run-local-release-proof.mjs --journeys=1,2,3,4,5,6
+      - name: Preserve failed Gate-B diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: gate-b-release-proof-diagnostics-${{ github.sha }}-${{ github.run_id }}
+          path: |
+            test-results/gate-b-manifest-*.json
+            test-results/gate-b-artifacts/**
+          if-no-files-found: warn
+          retention-days: 30
