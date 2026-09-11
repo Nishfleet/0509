@@ -48,27 +48,20 @@ on:
         type: string
 
 concurrency:
-  # Why this shared group exists: deploys are real provider mutations —
-  # `wrangler deploy`, `wrangler secret put`, the deploy plan's D1 access,
-  # and this workflow's own inline generate_restore_evidence drill all touch
-  # the same Cloudflare account. Those steps must serialize with each other
-  # and with the manual D1 migration apply in d1-remote-restore-evidence.yml
-  # (which holds this same group at JOB level), never overlap.
-  #
-  # What does NOT belong here (0509#2975): evidence verification and the
-  # restore-drill runs in d1-remote-restore-evidence.yml /
-  # d1-restore-proof-auto-refresh.yml moved to per-candidate-SHA concurrency
-  # groups — they mutate no shared provider state (read-only export,
-  # run-scoped scratch DB, run-keyed R2 objects), and sharing this serial
-  # lane made every merge evict or starve the proof the next deploy needed.
+  # This shared group serializes the steps that genuinely mutate the
+  # Cloudflare account: `wrangler deploy`, `wrangler secret put`, the deploy
+  # plan's D1 access, and the manual D1 migration apply in
+  # d1-remote-restore-evidence.yml (which holds this group at JOB level).
+  # Evidence verification and the restore drills do NOT belong here
+  # (0509#2975): they mutate no shared provider state, so they moved to
+  # per-candidate-SHA groups — sharing this serial lane let every merge
+  # evict or starve the proof the next deploy needed.
   group: 0509-production-provider-mutations
   cancel-in-progress: false
-  # Deploy order (Nish, 2026-08-25): cancel-in-progress stays false so a
-  # running deploy is never interrupted mid-flight — it ships its exact
-  # pinned SHA. `queue: max` keeps up to 100 pending deploys waiting in
-  # order instead of letting each new merge replace the waiting one, so a
-  # merge burst cannot silently drop a deploy.
-  queue: max
+  # Deploy-latest (Nish, 2026-08-25): a running deploy is never interrupted
+  # mid-flight and ships its exact pinned SHA; no `queue: max`, so a new
+  # merge cancels the superseded PENDING deploy and the newest candidate
+  # runs next.
 
 permissions: {}
 
@@ -672,16 +665,12 @@ jobs:
         env:
           GH_PUSH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         # deploy-ledger.jsonl on main is the anchor chain's last-resort
-        # recovery source (0509#2975): the recorded run head survives a
-        # history rewrite only through its tree hash, and the runs API
-        # forgets everything across a rename. The row {sha, tree,
-        # deployed_at, version_id} is appended on top of live origin/main by
-        # plumbing (no working-tree churn) and pushed with the job's
-        # GITHUB_TOKEN — which does not retrigger push workflows, so the
-        # ledger commit cannot recurse into another deploy. A merge landing
-        # mid-push retries on the new tip; after 3 attempts the step warns
-        # and succeeds, because the deploy already shipped and failing the
-        # run would trip auto-revert on a good release.
+        # recovery source (0509#2975). The row {sha, tree, deployed_at,
+        # version_id} is appended on top of live origin/main by plumbing and
+        # pushed with the job's GITHUB_TOKEN — which does not retrigger push
+        # workflows, so the ledger commit cannot recurse into another deploy.
+        # A lost fast-forward race warns and succeeds: the deploy already
+        # shipped and failing here would trip auto-revert on a good release.
         run: ./scripts/commit-deploy-ledger.sh
 
       - name: Archive permission-preserving release evidence
@@ -727,11 +716,9 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-      # The stalled-deploy detector (0509#2975 item 4). Emits the
+      # The stalled-deploy detector (0509#2975 item 4) — emits the
       # `deploy: last_success_age_h=<n> merges_since=<m> last_failure=<reason>`
-      # measure line into the step summary on every run — success AND failure
-      # (if: always()), which is exactly when the signal matters. The same
-      # script is what fleet-ops's judges' measure wires in.
+      # measure line on every run, success AND failure (if: always()).
       - name: Emit deploy-age measure line
         if: always()
         shell: bash

@@ -1,25 +1,11 @@
 #!/usr/bin/env node
 // The stalled-deploy detector (0509#2975 item 4). Prints exactly one line:
-//
 //   deploy: last_success_age_h=<n> merges_since=<m> last_failure=<reason>
-//
-// Wiring: deploy-production.yml tees this line into the step summary on every
-// run (success and failure). fleet-ops's judges' measure consumes the same
-// script — a stalled deploy must be impossible to miss.
-//
-// Data sources, in order:
-//   1. GitHub Actions API (when a token + repository context exist): newest
-//      successful deploy-production run on main = last success; newest
-//      completed non-success run = last failure.
-//   2. deploy-ledger.jsonl in HEAD's tree: the deploy job's own committed
-//      record — survives a wiped runs API and reads offline.
-// `merges_since` counts first-parent commits on HEAD since the last deployed
-// anchor, resolving a rewrite-stranded anchor by tree hash via the same
-// recovery chain the gate uses.
-//
-// This is a reporter: it always exits 0. A detector that crashes is the
-// silent-failure mode this script exists to kill, so every failure folds
-// into the line instead.
+// into the deploy-production step summary on every run (success AND
+// failure); the fleet-ops judges' measure consumes the same script.
+// Sources: the Actions runs API when a token exists, else deploy-ledger.jsonl
+// in HEAD's tree. Always exits 0 — a detector that crashes is the silent
+// failure this script exists to kill, so errors fold into the line instead.
 
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -34,63 +20,29 @@ import {
 const REPOSITORY = "Nishfleet/0509";
 const SHA_PATTERN = /^[a-f0-9]{40}$/u;
 
-function git(args) {
-  return execFileSync("git", args, {
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "ignore"],
-  }).trim();
+async function newestRun(token, repository, status, keep) {
+  try {
+    const response = await fetch(
+      `https://api.github.com/repos/${repository}/actions/workflows/deploy-production.yml/runs?branch=main&status=${status}&per_page=20`,
+      {
+        headers: {
+          Accept: "application/vnd.github+json",
+          Authorization: `Bearer ${token}`,
+          "X-GitHub-Api-Version": "2026-03-10",
+        },
+      },
+    );
+    if (!response.ok) return null;
+    const payload = await response.json();
+    return Array.isArray(payload?.workflow_runs)
+      ? (payload.workflow_runs.find(keep) ?? null)
+      : null;
+  } catch {
+    return null;
+  }
 }
 
-async function fetchJson(url, token) {
-  const response = await fetch(url, {
-    headers: {
-      Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${token}`,
-      "X-GitHub-Api-Version": "2026-03-10",
-    },
-  });
-  if (!response.ok) return null;
-  return response.json();
-}
-
-/** @returns {Promise<{ sha: string, at: string } | null>} */
-async function lastSuccessfulDeploy(token, repository) {
-  const payload = await fetchJson(
-    `https://api.github.com/repos/${repository}/actions/workflows/deploy-production.yml/runs?branch=main&status=success&per_page=5`,
-    token,
-  );
-  const run = Array.isArray(payload?.workflow_runs)
-    ? payload.workflow_runs.find(
-        (entry) =>
-          entry?.conclusion === "success" &&
-          SHA_PATTERN.test(entry?.head_sha ?? "") &&
-          Number.isFinite(Date.parse(entry?.updated_at ?? "")),
-      )
-    : null;
-  return run ? { sha: run.head_sha, at: run.updated_at } : null;
-}
-
-/** @returns {Promise<string | null>} */
-async function lastDeployFailure(token, repository) {
-  const payload = await fetchJson(
-    `https://api.github.com/repos/${repository}/actions/workflows/deploy-production.yml/runs?branch=main&status=completed&per_page=20`,
-    token,
-  );
-  const run = Array.isArray(payload?.workflow_runs)
-    ? payload.workflow_runs.find(
-        (entry) =>
-          entry?.conclusion &&
-          entry.conclusion !== "success" &&
-          Number.isInteger(entry?.id),
-      )
-    : null;
-  return run ? `${run.conclusion}@${run.id}` : null;
-}
-
-/**
- * @param {string} sha recorded deployed commit, possibly rewrite-stranded
- * @returns {string | null} an in-history anchor for it, or null
- */
+/** @param {string} sha recorded deployed commit, possibly rewrite-stranded */
 function anchorFor(sha) {
   if (reachableFromHead(sha)) return sha;
   return resolveRewrittenRecordedHead(sha, { warn: () => {} });
@@ -106,10 +58,17 @@ async function measure() {
   /** @type {string | null} */
   let lastFailure = null;
   if (token) {
-    [lastSuccess, lastFailure] = await Promise.all([
-      lastSuccessfulDeploy(token, repository),
-      lastDeployFailure(token, repository),
-    ]);
+    const successRun = await newestRun(token, repository, "success", (e) =>
+      SHA_PATTERN.test(e?.head_sha ?? "") &&
+      Number.isFinite(Date.parse(e?.updated_at ?? "")));
+    if (successRun) {
+      lastSuccess = { sha: successRun.head_sha, at: successRun.updated_at };
+    }
+    const failedRun = await newestRun(token, repository, "completed", (e) =>
+      e?.conclusion && e.conclusion !== "success" && Number.isInteger(e?.id));
+    if (failedRun) {
+      lastFailure = `${failedRun.conclusion}@${failedRun.id}`;
+    }
   }
   if (!lastSuccess) {
     // Offline/no-token path: the committed ledger is the deploy record.
@@ -128,12 +87,11 @@ async function measure() {
   let merges = "unknown";
   if (anchor) {
     try {
-      merges = git([
-        "rev-list",
-        "--count",
-        "--first-parent",
-        `${anchor}..HEAD`,
-      ]);
+      merges = execFileSync(
+        "git",
+        ["rev-list", "--count", "--first-parent", `${anchor}..HEAD`],
+        { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+      ).trim();
     } catch {
       merges = "unknown";
     }

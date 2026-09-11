@@ -23,14 +23,8 @@ on:
     # commit in between is blocked even though the schema has not moved. A
     # push trigger closes that window commit-by-commit.
     #
-    # Concurrency design (0509#2975): each push gets its own concurrency
-    # group keyed by the candidate SHA, so a new merge can never cancel or
-    # starve the evidence run the next deploy needs. The one step that truly
-    # mutates shared provider state — `wrangler d1 migrations apply` in the
-    # manual apply_and_restore job — still serializes with deploys through a
-    # job-level 0509-production-provider-mutations group. The restore drill
-    # itself (read-only D1 export, run-scoped scratch database, run-keyed R2
-    # objects) mutates nothing shared and is out of that group.
+    # Concurrency (0509#2975): per-candidate-SHA lanes, so a new merge can
+    # never cancel or starve the evidence run the next deploy needs.
     #
     # The push branch and the existing 02:17 IST schedule intentionally
     # overlap: the schedule is the safety net for any day no push lands, and
@@ -54,13 +48,11 @@ on:
     - cron: "47 20 * * *"
 
 concurrency:
-  # One lane per candidate SHA (0509#2975). The shared
-  # 0509-production-provider-mutations group held every push-triggered run in
-  # a single serial lane, so at fleet merge cadence each new merge evicted or
-  # starved the evidence run the next deploy needed — the 2026-09-11
-  # incident's runs were all cancelled. Per-SHA groups keep every run
-  # independent; the real provider mutation (the D1 migration apply in
-  # apply_and_restore) keeps the shared group at job level below.
+  # One lane per candidate SHA (0509#2975): the shared
+  # 0509-production-provider-mutations lane let each new merge evict or
+  # starve the run the next deploy needed — every 2026-09-11 run was
+  # cancelled. The real provider mutation (the D1 apply in apply_and_restore)
+  # keeps the shared group at job level below.
   group: 0509-d1-remote-restore-evidence-${{ github.sha }}
   cancel-in-progress: false
   queue: max
@@ -117,10 +109,8 @@ jobs:
     needs: authorize_release
     concurrency:
       # `wrangler d1 migrations apply` below is a production schema mutation,
-      # so it serializes with deploys and backups in the shared
-      # provider-mutations group even though the rest of this workflow runs
-      # in its own per-SHA lane. queue: max keeps a pending apply instead of
-      # replacing it.
+      # so it keeps the shared provider-mutations lane even though the rest
+      # of this workflow runs per-SHA.
       group: 0509-production-provider-mutations
       cancel-in-progress: false
       queue: max

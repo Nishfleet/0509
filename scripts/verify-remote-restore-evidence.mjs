@@ -179,17 +179,10 @@ export function firstParentMigrationDiffs(previousHead) {
   );
 }
 
-/**
- * True only when `sha` is reachable from HEAD. "Exists as an object" is not
- * enough: after a history rewrite the old commits linger unreachable in the
- * object store, and an unreachable head cannot anchor previousHead..HEAD.
- * @param {string} sha
- */
-export function reachableFromHead(sha) {
+/** Run git silently; true only on a clean exit. @param {string[]} args */
+function gitOk(args) {
   try {
-    execFileSync("git", ["merge-base", "--is-ancestor", sha, "HEAD"], {
-      stdio: ["ignore", "ignore", "ignore"],
-    });
+    execFileSync("git", args, { stdio: ["ignore", "ignore", "ignore"] });
     return true;
   } catch {
     return false;
@@ -197,31 +190,24 @@ export function reachableFromHead(sha) {
 }
 
 /**
- * Make a commit object available locally, fetching it from origin when the
- * checkout does not have it. A rewrite-stranded recorded head usually still
- * exists in the remote object store even though no ref reaches it; the fetch
- * is tolerant because a garbage-collected object is a legitimate outcome.
+ * True only when `sha` is reachable from HEAD — "exists as an object" is not
+ * enough: rewrite-stranded commits linger unreachable and cannot anchor
+ * previousHead..HEAD.
+ * @param {string} sha
+ */
+export function reachableFromHead(sha) {
+  return gitOk(["merge-base", "--is-ancestor", sha, "HEAD"]);
+}
+
+/**
+ * Fetch the commit object from origin when the checkout lacks it — a
+ * rewrite-stranded head usually still exists in the remote object store.
  * @param {string} sha
  */
 export function ensureCommitObjectPresent(sha) {
-  const present = () => {
-    try {
-      execFileSync("git", ["cat-file", "-e", `${sha}^{commit}`], {
-        stdio: ["ignore", "ignore", "ignore"],
-      });
-      return true;
-    } catch {
-      return false;
-    }
-  };
+  const present = () => gitOk(["cat-file", "-e", `${sha}^{commit}`]);
   if (present()) return true;
-  try {
-    execFileSync("git", ["fetch", "--quiet", "--no-tags", "origin", sha], {
-      stdio: ["ignore", "ignore", "ignore"],
-    });
-  } catch {
-    return false;
-  }
+  gitOk(["fetch", "--quiet", "--no-tags", "origin", sha]);
   return present();
 }
 
@@ -242,8 +228,8 @@ export function treeHashOfCommit(sha) {
 }
 
 /**
- * The newest commit on HEAD's first-parent chain whose tree equals `tree`.
- * Tree equality means identical content, so a rewritten-away deploy head and
+ * The newest commit on HEAD's first-parent chain whose tree equals `tree`:
+ * tree equality is identical content, so a rewritten-away deploy head and
  * its replacement resolve to the same anchor regardless of SHA.
  * @param {string} tree
  * @returns {string | null}
@@ -263,9 +249,8 @@ export function newestFirstParentCommitWithTree(tree) {
 }
 
 /**
- * The committed deploy ledger, read out of HEAD's own tree so it survives
- * both a history rewrite and a wiped runs API. Absent or unreadable is not an
- * error — it just contributes no rows.
+ * The committed deploy ledger, read out of HEAD's own tree so it survives a
+ * history rewrite and a wiped runs API. Absent or unreadable is not an error.
  * @returns {Array<{ sha: string, tree: string | null, deployed_at: string, version_id: string | null }>}
  */
 export function readDeployLedgerRows() {
@@ -283,15 +268,9 @@ export function readDeployLedgerRows() {
 }
 
 /**
- * Anchor on the newest deploy-ledger row that resolves in this history. A row
- * whose recorded sha is still reachable is used directly; a rewrite-stranded
- * sha is resolved by its recorded tree against first-parent HEAD.
- * @param {{
- *   rows?: Array<{ sha: string, tree: string | null }>,
- *   reachable?: (sha: string) => boolean,
- *   treeMatch?: (tree: string) => string | null,
- *   head?: string,
- * }} [args]
+ * Anchor on the newest deploy-ledger row that resolves in this history — a
+ * reachable recorded sha directly, a rewrite-stranded one by its tree.
+ * @param {{ rows?: Array<{ sha: string, tree: string | null }>, reachable?: (sha: string) => boolean, treeMatch?: (tree: string) => string | null, head?: string }} [args]
  * @returns {string | null}
  */
 export function deployLedgerAnchor({
@@ -320,24 +299,13 @@ export function deployLedgerAnchor({
 
 /**
  * Resolve a recorded last-successful head that is not reachable from HEAD —
- * the history-rewrite recovery chain (0509#2975):
- *   1. tree hash — fetch the recorded head object if the checkout lacks it,
- *      then take the newest first-parent commit on main with the same tree
- *      (the rewritten equivalent of the deployed tree, e.g. 2026-09-11
- *      d16b1f00 -> 20382d7e);
- *   2. deploy ledger — when the recorded object itself is gone (or its tree
- *      matches nothing), the committed deploy-ledger.jsonl still names every
- *      past deploy, each resolving by sha-or-tree;
- *   3. caller falls through to the operator bootstrap when both return null.
+ * the history-rewrite recovery chain (0509#2975): first by tree hash (fetch
+ * the recorded object if absent, then take the newest first-parent commit on
+ * main with the same tree — e.g. 2026-09-11 d16b1f00 -> 20382d7e), then by
+ * the committed deploy ledger when the object itself is gone; null means the
+ * caller falls through to the operator bootstrap.
  * @param {string} recordedHead
- * @param {{
- *   warn?: (message: string) => void,
- *   ensureObject?: (sha: string) => boolean,
- *   treeOf?: (sha: string) => string | null,
- *   treeMatch?: (tree: string) => string | null,
- *   ledgerRows?: () => Array<{ sha: string, tree: string | null }>,
- *   reachable?: (sha: string) => boolean,
- * }} [deps]
+ * @param {{ warn?: (message: string) => void, ensureObject?: (sha: string) => boolean, treeOf?: (sha: string) => string | null, treeMatch?: (tree: string) => string | null, ledgerRows?: () => Array<{ sha: string, tree: string | null }>, reachable?: (sha: string) => boolean }} [deps]
  * @returns {string | null}
  */
 export function resolveRewrittenRecordedHead(recordedHead, deps = {}) {
@@ -349,23 +317,18 @@ export function resolveRewrittenRecordedHead(recordedHead, deps = {}) {
     ledgerRows = readDeployLedgerRows,
     reachable = reachableFromHead,
   } = deps;
-  if (ensureObject(recordedHead)) {
-    const tree = treeOf(recordedHead);
-    const match = tree ? treeMatch(tree) : null;
-    if (match) {
-      warn(
-        `::warning::recorded last successful deploy ${recordedHead} is not reachable from HEAD after a main history rewrite; anchoring on ${match}, the newest first-parent commit carrying the identical tree ${tree}.`,
-      );
-      return match;
-    }
+  const fetched = ensureObject(recordedHead);
+  const tree = fetched ? treeOf(recordedHead) : null;
+  const match = tree ? treeMatch(tree) : null;
+  if (match) {
     warn(
-      "::warning::recorded head is present but its tree matches no first-parent commit on HEAD; consulting the committed deploy ledger.",
+      `::warning::recorded last successful deploy ${recordedHead} is not reachable from HEAD after a main history rewrite; anchoring on ${match}, the newest first-parent commit carrying the identical tree ${tree}.`,
     );
-  } else {
-    warn(
-      "::warning::recorded head object could not be fetched; consulting the committed deploy ledger.",
-    );
+    return match;
   }
+  warn(
+    `::warning::recorded head ${fetched ? "has no first-parent tree match" : "object could not be fetched"}; consulting the committed deploy ledger.`,
+  );
   const ledgerAnchor = deployLedgerAnchor({ rows: ledgerRows(), reachable, treeMatch });
   if (ledgerAnchor) {
     warn(
@@ -378,18 +341,15 @@ export function resolveRewrittenRecordedHead(recordedHead, deps = {}) {
 
 /**
  * Pick the anchor for previousHead..HEAD. A recorded last-success head wins
- * whenever it resolves in this history. If it does NOT resolve (main history
- * rewritten), it is recovered by tree hash, then by the committed deploy
- * ledger, and only then by the operator bootstrap — or the run fails with a
- * named reason instead of a raw git error.
+ * whenever it resolves in this history; a rewrite-stranded one is recovered
+ * by tree hash, then by the committed deploy ledger, and only then by the
+ * operator bootstrap — or the run fails with a named reason, not a raw git
+ * error.
  * @param {{ recordedHead: string | null }} args
  * @param {NodeJS.ProcessEnv} [env]
  * @param {(message: string) => void} [warn]
  * @param {(sha: string) => boolean} [reachable]
- * @param {{
- *   resolveRewritten?: (sha: string) => string | null,
- *   ledgerAnchor?: () => string | null,
- * }} [deps] injection seam for tests; production callers use the git defaults
+ * @param {{ resolveRewritten?: (sha: string) => string | null, ledgerAnchor?: () => string | null }} [deps] test seam; production callers use the git defaults
  */
 export function anchorPreviousHead(
   { recordedHead },
