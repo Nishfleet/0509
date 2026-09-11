@@ -190,6 +190,39 @@ export async function enforcePublicBrandPageRateLimit(
   );
 }
 
+/**
+ * Public proof brief (/api/demo-proof) budget (issue #2964).
+ *
+ * The endpoint serves a cached D1 proof brief to any anonymous visitor, but
+ * it previously had NO rate-limit policy at all (rateLimitPolicyFor never
+ * dispatched to it and the route never called a limiter), so /status's
+ * claimed limits did not cover it. A straightforward per-IP bucket, same
+ * fail-open posture as the other public read buckets (a D1 hiccup must not
+ * dead-end a buyer evaluating the product): the limit holds whenever D1 is
+ * healthy, and the limiter logs the fail-open event when it is not, so the
+ * unprotected state is observable.
+ */
+export const DEMO_PROOF_LIMIT = 30;
+const DEMO_PROOF_WINDOW_SECONDS = 10 * 60;
+export async function enforceDemoProofRateLimit(
+  request: Request,
+  env: AppEnv,
+  ctx?: ExecutionContext,
+): Promise<Response | null> {
+  return enforceRateLimitPolicy(
+    request,
+    env,
+    {
+      scope: "public-proof-brief",
+      limit: DEMO_PROOF_LIMIT,
+      windowSeconds: PUBLIC_SEARCH_WINDOW_SECONDS,
+      failClosed: false,
+      keyByIpOnly: true,
+    },
+    ctx,
+  );
+}
+
 // Plan-keyed daily live-search ceilings (UTC day). Stacked on the short
 // 10-minute burst bucket so free/Scout cannot burn Browser Rendering all day.
 const ACCOUNT_SEARCH_DAILY_LIMITS: Record<string, number> = {
@@ -401,7 +434,9 @@ async function enforceRateLimitPolicy(
     return null;
   }
   if (!env.DB) {
-    console.error("[rate-limit] D1 binding missing; request was not rate-limited.");
+    console.error(
+      `[rate-limit] D1 binding missing; scope=${policy.scope} was NOT rate-limited (fail-open).`,
+    );
     return policy.failClosed ? rateLimitUnavailableResponse() : null;
   }
 
@@ -482,7 +517,10 @@ async function enforceRateLimitPolicy(
     if (ctx) {
       ctx.waitUntil(
         recordEvent().catch((error) => {
-          console.error("[rate-limit] deferred event insert failed", error);
+          console.error(
+          `[rate-limit] deferred event insert failed; scope=${policy.scope} request counted but was not persisted.`,
+          error,
+        );
         }),
       );
     } else {
@@ -491,7 +529,7 @@ async function enforceRateLimitPolicy(
 
     return null;
   } catch (error) {
-    console.error("[rate-limit] limiter failed", error);
+    console.error(`[rate-limit] limiter failed; scope=${policy.scope} was NOT enforced (fail-open).`, error);
     if (isMissingRateLimitTableError(error)) {
       return policy.failClosed ? rateLimitUnavailableResponse() : null;
     }
