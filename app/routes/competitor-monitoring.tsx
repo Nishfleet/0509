@@ -101,9 +101,19 @@ function proofTimeLabel(iso: string | null | undefined): string {
   if (Number.isNaN(parsed.getTime())) {
     return "recently";
   }
+  // A bare clock ("6:18 AM") with no date reads as "this morning" even when
+  // the capture is a day old (issue 1467). Full-ISO stamps carry the date; a
+  // prior-year capture appends its year exactly like the date-only branch
+  // above so "Aug 27" cannot read as a same-year date for a year-old
+  // capture. Same shape as marketing.tsx's proofTimeLabel (issue 1467).
+  const includeYear = parsed.getUTCFullYear() !== new Date().getUTCFullYear();
   return parsed.toLocaleString("en", {
+    month: "short",
+    day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    ...(includeYear ? { year: "numeric" } : {}),
+    timeZone: "UTC",
   });
 }
 
