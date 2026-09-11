@@ -61,7 +61,6 @@ describe("Dodo 0509 checkout pricing validation", () => {
       env,
       request,
       fetcher: fetcher as never,
-      bypassCache: true,
     });
 
     expect(preview.annualValidation.scout).toMatchObject({
@@ -119,7 +118,6 @@ describe("Dodo 0509 checkout pricing validation", () => {
       env,
       request,
       fetcher: fetcher as never,
-      bypassCache: true,
     });
 
     expect(preview.annualValidation.scout).toMatchObject({
@@ -831,7 +829,7 @@ describe("Dodo 0509 checkout pricing validation", () => {
     });
   });
 
-  it("does not cache partial Dodo pricing preview failures", async () => {
+  it("fetches a fresh partial Dodo pricing preview on every call", async () => {
     const fetcher = vi.fn().mockImplementation((_url: string, init: RequestInit) => {
       const body = JSON.parse(String(init.body ?? "{}"));
       const productId = body.product_cart?.[0]?.product_id;

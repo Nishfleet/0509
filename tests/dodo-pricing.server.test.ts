@@ -252,124 +252,6 @@ describe("Dodo 0509 pricing", () => {
     });
   });
 
-  it("does not cache filtered partial previews as complete", async () => {
-    const fetcher = vi
-      .fn()
-      .mockResolvedValueOnce(
-        jsonResponse({
-          currency: "USD",
-          current_breakup: { total_amount: 1100 },
-          billing_country: "GB",
-          product_cart: [
-            {
-              product_id: "prod_cache_country_monthly",
-              is_subscription: true,
-              discounted_price: 1100,
-              tax_inclusive: false,
-            },
-          ],
-          total_tax: 0,
-        }),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
-          currency: "USD",
-          current_breakup: { total_amount: 1100 },
-          billing_country: "US",
-          product_cart: [
-            {
-              product_id: "prod_cache_country_monthly",
-              is_subscription: true,
-              discounted_price: 1100,
-              tax_inclusive: false,
-            },
-          ],
-          total_tax: 0,
-        }),
-      );
-
-    const env = {
-      DODO_0509_API_KEY: "secret",
-      DODO_0509_BRAND_ID: "brand_0509",
-      DODO_0509_ENVIRONMENT: "test",
-      DODO_0509_PRODUCT_SCOUT_MONTHLY_ID: "prod_cache_country_monthly",
-    };
-    const request = new Request("https://0509.io/api/pricing-preview") as Request & {
-      cf?: { country?: string };
-    };
-    request.cf = { country: "US" };
-
-    const filteredPreview = await previewDodo0509PlanPrices({
-      env,
-      request,
-      fetcher: fetcher as never,
-    });
-    const recoveredPreview = await previewDodo0509PlanPrices({
-      env,
-      request,
-      fetcher: fetcher as never,
-    });
-
-    expect(filteredPreview.prices.scout?.monthly).toBeUndefined();
-    expect(fetcher).toHaveBeenCalledTimes(2);
-    expect(recoveredPreview.prices.scout?.monthly).toMatchObject({
-      billingCountry: "US",
-      currency: "USD",
-      display: "$11",
-    });
-  });
-
-  it("bypasses the preview cache for private pricing canary requests", async () => {
-    const fetcher = vi
-      .fn()
-      .mockImplementationOnce((_url: string, init: RequestInit) => {
-        const productId = JSON.parse(String(init.body ?? "{}")).product_cart?.[0]?.product_id;
-        return jsonResponse({
-          currency: "INR",
-          current_breakup: { total_amount: 99900 },
-          product_cart: [{ product_id: productId, is_subscription: true, tax_inclusive: true }],
-        });
-      })
-      .mockImplementationOnce((_url: string, init: RequestInit) => {
-        const productId = JSON.parse(String(init.body ?? "{}")).product_cart?.[0]?.product_id;
-        return jsonResponse({
-          currency: "USD",
-          current_breakup: { total_amount: 1100 },
-          product_cart: [{ product_id: productId, is_subscription: true, tax_inclusive: true }],
-        });
-      });
-    const env = {
-      CANARY_BYPASS_TOKEN: "canary-token",
-      DODO_0509_ADAPTIVE_CURRENCY_FEES_INCLUSIVE: "true",
-      DODO_0509_API_KEY: "secret",
-      DODO_0509_BRAND_ID: "brand_0509",
-      DODO_0509_ENVIRONMENT: "test",
-      DODO_0509_PRODUCT_SCOUT_MONTHLY_ID: "prod_canary_cache",
-    };
-
-    await previewDodo0509PlanPrices({
-      env,
-      request: new Request("https://0509.io/api/pricing-preview", {
-        headers: { "cf-ipcountry": "US" },
-      }),
-      fetcher: fetcher as never,
-    });
-
-    const canaryPreview = await previewDodo0509PlanPrices({
-      env,
-      request: new Request("https://0509.io/api/pricing-preview?country=US&pricing-canary=1", {
-        headers: { "x-0509-canary-token": "canary-token" },
-      }),
-      fetcher: fetcher as never,
-    });
-
-    expect(fetcher).toHaveBeenCalledTimes(2);
-    expect(canaryPreview.prices.scout?.monthly).toMatchObject({
-      currency: "USD",
-      display: "$11",
-    });
-  });
-
   it("ignores pricing country overrides without the private canary token", async () => {
     const fetcher = vi.fn().mockImplementation((_url: string, init: RequestInit) => {
       const productId = JSON.parse(String(init.body ?? "{}")).product_cart?.[0]?.product_id;
@@ -485,7 +367,6 @@ describe("Dodo 0509 pricing", () => {
         headers: { "cf-ipcountry": "US" },
       }),
       fetcher: fetcher as never,
-      bypassCache: true,
     });
 
     expect(preview.prices.starter?.monthly).toBeUndefined();
@@ -522,7 +403,7 @@ describe("Dodo 0509 pricing", () => {
       headers: { "cf-ipcountry": "US" },
     });
 
-    const preview = await previewDodo0509PlanPrices({ env, request, fetcher: fetcher as never, bypassCache: true });
+    const preview = await previewDodo0509PlanPrices({ env, request, fetcher: fetcher as never });
 
     // Both cycles resolve sellable preview prices; only the savings guard may
     // reject the pair.
@@ -599,7 +480,6 @@ describe("Dodo 0509 pricing", () => {
       env,
       request,
       fetcher: fetcher as never,
-      bypassCache: true,
     });
 
     expect(preview.prices.scout?.monthly).toMatchObject({ amount: 905, currency: "EUR" });
@@ -663,7 +543,6 @@ describe("Dodo 0509 pricing", () => {
       env,
       request,
       fetcher: fetcher as never,
-      bypassCache: true,
     });
 
     expect(preview.annualValidation.scout).toMatchObject({
@@ -700,7 +579,7 @@ describe("Dodo 0509 pricing", () => {
       headers: { "cf-ipcountry": "US" },
     });
 
-    const preview = await previewDodo0509PlanPrices({ env, request, fetcher: fetcher as never, bypassCache: true });
+    const preview = await previewDodo0509PlanPrices({ env, request, fetcher: fetcher as never });
 
     expect(preview.prices.scout?.monthly).toMatchObject({ amount: 5900, currency: "USD" });
     expect(preview.prices.scout?.yearly).toMatchObject({ amount: 47200, currency: "INR" });
@@ -768,7 +647,6 @@ describe("Dodo 0509 pricing", () => {
       env,
       request: makeRequest(),
       fetcher: makeFetcher() as never,
-      bypassCache: true,
     });
 
     // Billing loader path — now the default too (no trustProxyHeaders override).
@@ -776,7 +654,6 @@ describe("Dodo 0509 pricing", () => {
       env,
       request: makeRequest(),
       fetcher: makeFetcher() as never,
-      bypassCache: true,
     });
 
     expect(publicPreview.country).toBe("IN");
@@ -792,7 +669,6 @@ describe("Dodo 0509 pricing", () => {
       env,
       request: makeRequest(),
       fetcher: makeFetcher() as never,
-      bypassCache: true,
       trustProxyHeaders: false,
     });
     expect(legacyBillingPreview.country).not.toBe("IN");
