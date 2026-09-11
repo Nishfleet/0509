@@ -32,9 +32,12 @@ describe("guides how-to-monitor-meta-ad-library route (issue #2867)", () => {
     expect(markup).toContain("Locale and geo variance");
     expect(markup).toContain("Interactive gates interrupt the routine");
     expect(markup).toContain("No unattended check");
-    // The free weekly watch positioned as the automated answer.
-    expect(markup).toContain("The automated answer: a free weekly watch.");
-    expect(markup).toContain("One competitor, watched weekly, free");
+    // The free first check positioned as the automated answer.
+    expect(markup).toContain("The automated answer: a free first check and brief.");
+    expect(markup).toContain("One competitor, free: one first check, one first brief");
+    expect(markup).not.toContain("watched weekly");
+    expect(markup).not.toContain("weekly email brief");
+    expect(markup).toContain("scheduled checks and recurring briefs are a paid plan");
     // CTA is the public /search preview carrying the allowlisted marker.
     expect(markup).toContain('action="/search"');
     expect(markup).toContain('name="source"');
