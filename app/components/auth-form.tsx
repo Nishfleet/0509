@@ -149,7 +149,7 @@ export function AuthForm({
         {isSignup ? (
           <label className="f9-field">
             <span>Name</span>
-            <input autoComplete="name" defaultValue={initialName ?? ""} name="name" placeholder="Your name" required />
+            <input autoComplete="name" defaultValue={initialName ?? ""} name="name" placeholder="Your name (optional)" />
           </label>
         ) : null}
 

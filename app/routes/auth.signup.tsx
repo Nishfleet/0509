@@ -88,9 +88,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const redirectTo = safeRedirectPath(String(formData.get("redirectTo") ?? ""), "/app#setup-checklist");
   const isResend = formData.get("resend") === "1";
 
-  if (!name) {
-    return signupActionError("name_required", { email, name, redirectTo });
-  }
+  // `name` is optional: the server already treats it as optional
+  // (sendBetterAuthMagicLink takes `name?: string` and sends it through as
+  // undefined when empty, mirroring the login route), so email-only signup
+  // is allowed — the name is backfilled later from the onboarding flow.
   if (!isPlausibleEmail(email)) {
     return signupActionError("email_invalid", { email, name, redirectTo });
   }
@@ -260,9 +261,6 @@ function signupErrorMessage(code: string | null) {
   }
   if (code === "send_failed") {
     return "We couldn't send the setup link. Try again in a minute.";
-  }
-  if (code === "name_required") {
-    return "Enter your name to create the account.";
   }
   if (code === "email_invalid") {
     return "Enter a valid email address.";
