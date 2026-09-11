@@ -79,6 +79,10 @@ export default [
   route("app/onboard", "routes/app.onboard.tsx"),
   route("ops", "routes/ops.tsx"),
   route("ads/:domain", "routes/ads.$domain.tsx"),
+  // Parent-path fix (issue #2885): /ads 404'd while ~75 /ads/:domain children
+  // sit in the sitemap. /brands is the live browse index, so the parent 301s
+  // to it.
+  route("ads", "routes/ads-redirect.ts"),
   route("brands", "routes/brands.tsx"),
   // Indexable per-category brand landing pages (issue #2067). Each curated
   // category gets its own /brands/:slug page listing exactly the brands that
@@ -87,10 +91,18 @@ export default [
   // Public weekly brief of stored offer moves across sitemap-indexable
   // brands (issue #2143). Stored rows only — never triggers live scraping.
   route("briefs/weekly", "routes/briefs.weekly.tsx"),
+  // Parent-path fix (issue #2885): /briefs 404'd while /briefs/weekly is the
+  // only live brief surface, so the parent 301s to it.
+  route("briefs", "routes/briefs-redirect.ts"),
   // Public sample Monday brief (issue #2136): a real stored digest for the
   // newest indexable brand, with a signup CTA. Stored rows only.
   route("sample-brief", "routes/sample-brief.tsx"),
   route("timeline/:domain", "routes/timeline.$domain.tsx"),
+  // Parent-path fix (issue #2885): /timeline 404'd while ~77 /timeline/:domain
+  // children sit in the sitemap. The index lists the SAME capture-qualified,
+  // non-empty set `loadIndexableTimelineEntries` feeds the sitemap (#2881's
+  // non-empty gating), so the hub can never list a domain the sitemap drops.
+  route("timeline", "routes/timeline.tsx"),
   // Public full-text AEO feed (issue #2043). The body is served by
   // workers/app.ts before the router runs; this registration exists so the
   // sitemap route-registry canary accepts /llms-full.txt as a registered
@@ -143,6 +155,9 @@ export default [
   // guide above. Ends in the no-account /search preview
   // (source=guide-monitor-ad-library).
   route("guides/how-to-monitor-meta-ad-library", "routes/guides.how-to-monitor-meta-ad-library.tsx"),
+  // Parent-path fix (issue #2885): /guides 404'd while /guides/* children sit
+  // in the sitemap. A thin index of the live guides closes the dead end.
+  route("guides", "routes/guides.tsx"),
   route("for-agencies", "routes/for-agencies.tsx"),
   route("sneaker-resale", "routes/sneaker-resale.tsx"),
   route(":locale/sneaker-resale", "routes/$locale.sneaker-resale.tsx"),
