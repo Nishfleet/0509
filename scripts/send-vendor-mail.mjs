@@ -39,8 +39,21 @@ const API_URL_BASE = "https://api.cloudflare.com/client/v4/accounts";
 const DEFAULT_FROM = "support@0509.io";
 
 /**
+ * @typedef {Object} ParsedDoc
+ * @property {string} [to]
+ * @property {string} [from]
+ * @property {string} [subject]
+ * @property {string} [body]
+ * @property {string[]} [errors]
+ * @property {string} [section]
+ */
+
+/**
  * Parse the prepared email out of a vendor-listing doc.
  * Returns { to, from, subject, body, section } or { errors: [...] }.
+ *
+ * @param {string} markdown
+ * @returns {ParsedDoc}
  */
 export function parseDoc(markdown) {
   const errors = [];
@@ -49,7 +62,7 @@ export function parseDoc(markdown) {
   // Scope to the "Ready-to-send" section when present so we don't grab
   // quoted subject lines from the prose above it.
   let section = lines;
-  const readyIdx = lines.findIndex((l) =>
+  const readyIdx = lines.findIndex((/** @type {string} */ l) =>
     /^#{2,3}\s.*ready-to-send/i.test(l),
   );
   if (readyIdx !== -1) {
@@ -63,11 +76,12 @@ export function parseDoc(markdown) {
     section = lines.slice(readyIdx, end);
   }
 
+  /** @param {string} label */
   const headerValue = (label) => {
     // No dynamic RegExp here: the label is compared as a plain string so
     // sgscan's ReDoS heuristic (detect-non-literal-regexp) stays quiet.
     const prefix = `${label.toLowerCase()}:`;
-    const line = section.find((l) => {
+    const line = section.find((/** @type {string} */ l) => {
       const t = l.replace(/^\*+/, "").trim().toLowerCase();
       return t.startsWith(prefix);
     });
@@ -119,8 +133,28 @@ export function parseDoc(markdown) {
  * Format the receipt block appended to the doc after a real send.
  * Pure string building — no I/O, no secrets.
  */
+/**
+ * @typedef {Object} Receipt
+ * @property {string} timestamp
+ * @property {string|undefined} to
+ * @property {string} from
+ * @property {string|undefined} subject
+ * @property {number} httpStatus
+ * @property {string[]} [delivered]
+ * @property {string[]} [queued]
+ * @property {string[]} [permanentBounces]
+ */
+
+/**
+ * Format the receipt block appended to the doc after a real send.
+ * Pure string building — no I/O, no secrets.
+ *
+ * @param {Receipt} receipt
+ * @returns {string}
+ */
 export function formatReceipt(receipt) {
-  const { timestamp, to, from, subject, httpStatus, delivered = [], queued = [], permanentBounces = [] } = receipt;
+  const { timestamp, from, httpStatus, delivered = [], queued = [], permanentBounces = [] } = receipt;
+  const { to = "", subject = "" } = receipt;
   const lines = [
     `### Send receipt — ${timestamp}`,
     "",
@@ -140,13 +174,21 @@ export function formatReceipt(receipt) {
 }
 
 /** Append the receipt to the doc's `## Receipts` section (creating it if absent). */
+/**
+ * Append the receipt to the doc's `## Receipts` section (creating it if absent).
+ *
+ * @param {string} docPath
+ * @param {string} receiptBlock
+ * @param {{ readFileSync?: (p: string, enc: string) => string, writeFileSync?: (file: string, data: string, enc: string) => void }} [io]
+ * @returns {boolean}
+ */
 export function appendReceipt(docPath, receiptBlock, { readFileSync: rf = readFileSync, writeFileSync: wf = writeFileSync } = {}) {
-  const text = rf(docPath, "utf8");
+  const text = /** @type {string} */ (rf(docPath, "utf8"));
   const heading = /^##\s+Receipts\s*$/im;
   let next;
   const m = text.match(heading);
   if (m) {
-    const at = m.index + m[0].length;
+    const at = /** @type {number} */ (m.index) + m[0].length;
     next = text.slice(0, at) + "\n\n" + receiptBlock.trimEnd() + "\n" + text.slice(at).replace(/^\n+/, "\n");
   } else {
     next = text.replace(/\n*$/, "\n\n") + "## Receipts\n\n" + receiptBlock.trimEnd() + "\n";
@@ -159,8 +201,26 @@ export function appendReceipt(docPath, receiptBlock, { readFileSync: rf = readFi
  * Send the email via the Email Sending REST API. `fetchImpl` is
  * injectable so tests can prove no network happens on the dry-run path.
  */
+/**
+ * @typedef {Object} MailMessage
+ * @property {string} to
+ * @property {string} from
+ * @property {string} subject
+ * @property {string} body
+ */
+
+/**
+ * Send the email via the Email Sending REST API. `fetchImpl` is
+ * injectable so tests can prove no network happens on the dry-run path.
+ *
+ * @param {MailMessage} message
+ * @param {{ CLOUDFLARE_API_TOKEN?: string | undefined, CLOUDFLARE_ACCOUNT_ID?: string | undefined }} env
+ * @param {typeof fetch} [fetchImpl]
+ * @returns {Promise<{ ok: boolean, httpStatus: number, delivered?: string[], queued?: string[], permanentBounces?: string[], errors: string[] }>}
+ */
 export async function sendMail(message, env, fetchImpl = globalThis.fetch) {
   const token = env.CLOUDFLARE_API_TOKEN;
+  const accountId = env.CLOUDFLARE_ACCOUNT_ID;
   const accountId = env.CLOUDFLARE_ACCOUNT_ID;
   if (!token || !accountId) {
     return {
@@ -192,6 +252,8 @@ export async function sendMail(message, env, fetchImpl = globalThis.fetch) {
     apiErrors = json.errors ?? [];
   } catch {
     apiErrors = [{ code: 0, message: `non-JSON response (HTTP ${res.status})` }];
+    // @ts-expect-error local shape, not the DOM Response
+    void 0;
   }
   const ok =
     res.status === 200 &&
@@ -216,10 +278,14 @@ export async function sendMail(message, env, fetchImpl = globalThis.fetch) {
     delivered: result?.delivered ?? [],
     queued: result?.queued ?? [],
     permanentBounces: result?.permanent_bounces ?? [],
-    errors: ok ? [] : apiErrors.map((e) => `${e.code}: ${e.message}`),
+    errors: ok ? [] : apiErrors.map((/** @type {{ code: number, message: string }} */ e) => `${e.code}: ${e.message}`),
   };
 }
 
+/**
+ * @param {string[]} argv
+ * @returns {{ doc: string | undefined, send: boolean, to: string | undefined, subject: string | undefined }}
+ */
 function parseArgs(argv) {
   const args = { doc: undefined, send: false, to: undefined, subject: undefined };
   for (let i = 0; i < argv.length; i++) {
@@ -234,6 +300,22 @@ function parseArgs(argv) {
   return args;
 }
 
+/**
+ * @typedef {Object} MainOptions
+ * @property {{ [k: string]: string | undefined }} [env]
+ * @property {(s: string) => void} [stdout]
+ * @property {(p: string) => string} [readFile]
+ * @property {(file: string, data: string, enc: string) => void} [writeFile]
+ * @property {typeof fetch} [fetchImpl]
+ */
+
+/**
+ * CLI entry point.
+ *
+ * @param {string[]} argv
+ * @param {MainOptions} [options]
+ * @returns {Promise<number>}
+ */
 export async function main(argv, { env = process.env, stdout = console.log, readFile = (p) => readFileSync(p, "utf8"), writeFile = writeFileSync, fetchImpl } = {}) {
   const args = parseArgs(argv);
   if (!args.doc) {
@@ -266,15 +348,16 @@ export async function main(argv, { env = process.env, stdout = console.log, read
   }
 
   const result = await sendMail(message, env, fetchImpl);
+  const delivery = okResult(result);
   const receipt = formatReceipt({
     timestamp: new Date().toISOString(),
     to: message.to,
     from: message.from,
     subject: message.subject,
     httpStatus: result.httpStatus,
-    delivered: result.delivered,
-    queued: result.queued,
-    permanentBounces: result.permanentBounces,
+    delivered: delivery.delivered,
+    queued: delivery.queued,
+    permanentBounces: delivery.permanentBounces,
   });
   if (result.ok) {
     appendReceipt(args.doc, receipt, { readFileSync: readFile, writeFileSync: writeFile });
@@ -287,7 +370,15 @@ export async function main(argv, { env = process.env, stdout = console.log, read
   return 1;
 }
 
+/**
+ * @param {{ ok: boolean, httpStatus: number, delivered?: string[], queued?: string[], permanentBounces?: string[], errors: string[] }} r
+ * @returns {{ delivered: string[], queued: string[], permanentBounces: string[] }}
+ */
+function okResult(r) {
+  return { delivered: r.delivered ?? [], queued: r.queued ?? [], permanentBounces: r.permanentBounces ?? [] };
+}
+
 const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop());
 if (isMain) {
-  main(process.argv.slice(2)).then((code) => process.exit(code));
+  main(process.argv.slice(2)).then((/** @type {number} */ code) => process.exit(code));
 }
