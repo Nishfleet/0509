@@ -65,7 +65,11 @@ export function duplicateMigrationPrefixes(
   for (const [prefix, files] of groupByMigrationPrefix(names)) {
     if (files.length < 2) continue;
     duplicatePrefixes.push(prefix);
-    if (!allowlist.has(prefix)) offenders.set(prefix, files);
+    // Frozen legacy duplicates are capped at their historical two files; a
+    // third file reusing a frozen prefix is a NEW duplicate and fails.
+    if (!allowlist.has(prefix) || files.length > 2) {
+      offenders.set(prefix, files);
+    }
   }
   duplicatePrefixes.sort();
   return { duplicatePrefixes, offenders };
@@ -84,7 +88,19 @@ export function migrationFileNames(migrationsDir) {
 
 /** Run the check over a directory. Returns exit-message or null when clean. */
 export function duplicatePrefixViolation(migrationsDir) {
-  const { offenders } = duplicateMigrationPrefixes(migrationFileNames(migrationsDir));
+  const names = migrationFileNames(migrationsDir);
+  // A .sql file the pattern cannot parse must never pass silently: it is the
+  // same apply-order ambiguity under a malformed name.
+  const malformed = readdirSync(migrationsDir, { withFileTypes: true })
+    .filter(
+      (entry) =>
+        entry.isFile() && entry.name.endsWith(".sql") && !PREFIX_PATTERN.test(entry.name),
+    )
+    .map((entry) => entry.name);
+  if (malformed.length > 0) {
+    return `migration file names outside the required /^\\d{4}_[A-Za-z0-9_]+\\.sql$/ pattern: ${malformed.join(", ")}`;
+  }
+  const { offenders } = duplicateMigrationPrefixes(names);
   if (offenders.size === 0) return null;
   const lines = ["duplicate migration prefixes detected:"];
   for (const [prefix, files] of offenders) lines.push(`  ${prefix}: ${files.join(", ")}`);

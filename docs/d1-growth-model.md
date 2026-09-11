@@ -44,16 +44,24 @@ The model below therefore targets ≤ 7 GiB projected steady state, leaving
   `created_at < now − 2 h` for normal scopes and
   `< now − 25 h` for `LONG_WINDOW_SCOPES` (`rate-limit.server.ts`).
 - Steady state is therefore bounded: rows = events admitted in the longest
-  window (25 h). Events are inserted only once per (scope, key, route) per
-  rate-limit window (the `WHERE NOT EXISTS` / atomic-claim inserts), so an
-  upper bound is
-  `Σ_scopes Σ_keys limit_per_window` re-armed each window:
-  e.g. `public-search`: 120/60 s per key × ~10 windows/h × 25 h ≈ 3,000
-  rows/key worst case; with webhook scope 300/60 s ≈ 7,500 rows/key. Even
-  500 distinct abusive keys × ~0.2 KB = ~0.1 GB — < 2% of budget, and the 2 h
-  default window keeps typical populations far smaller. No action needed;
-  keep the dimension guard: a new `LONG_WINDOW_SCOPE` raises the row
-  dwell time from 2 h to 25 h — think in rows, not adjectives, when adding one.
+  window (25 h). Events are inserted only once per admitted request within
+  the (scope, key, route) rate-limit window (the `WHERE NOT EXISTS` /
+  atomic-claim inserts), so the worst-case per-key population is
+  `limit × (dwell ÷ windowSeconds)`:
+
+  | scope | limit/window | window | rows/key in dwell time |
+  | --- | --- | --- | --- |
+  | public-search (2 h dwell) | 120 | 600 s | 12 × 120 = 1,440 → ~0.3 MB/key |
+  | webhook (2 h dwell) | 300 | 60 s | 120 × 300 = 36,000 → ~7 MB/key under sustained flood |
+  | share-pdf-daily / account-search-daily (25 h dwell) | daily limit | 24 h | ~1–2 × limit keys only |
+
+  A key admitted at its limit every window for the whole dwell time is the
+  worst case; the real exposure is a flooded short-window scope pinned at its
+  limit for the full 2 h. Keep the `LONG_WINDOW_SCOPES` set tight: adding one
+  raises that scope's dwell from 2 h to 25 h — for a 300/60 s scope that is
+  the difference between ~36 MB/keys-worst-case and ~450 MB/key, i.e. a
+  12.5× dwell multiplier. It is still bounded and swept every tick, but think
+  in those row numbers, not adjectives, before adding one.
 - Measured live count (runbook):
   `npx wrangler d1 execute 0509 --remote --command "SELECT COUNT(*) FROM rate_limit_events;"`
 
@@ -102,13 +110,14 @@ adds a funnel table.
 
 | Table | Typical row | Retention | Steady state (formula) | Headroom note |
 | --- | --- | --- | --- | --- |
-| proof_capture | 1.2 KB | none (rows) | captures/day × 365 × 1.2 KB/yr | centuries (row bytes only) |
-| rate_limit_events | 0.2 KB | 2 h / 25 h by scope | Σ keys × limit/window × windows | days, decays; bounded |
+| proof_capture | 1.2 KB | none (rows) | captures/day × 365 × 1.2 KB = ~2.2 MB/year @ 5,000/day | centuries (row bytes only) |
+| rate_limit_events | 0.2 KB | 2 h / 25 h by scope | per-key: limit × (dwell ÷ windowSeconds) | bounded; worst case ~7 MB/application-flooded key (2 h dwell) |
 | discovery_fetch_log | 0.8 KB | 30 d | fetches/day × 30 × 0.0008 MB | ≥ 180 d @ 10 k/day |
 | discovery_cache_entry | 12 KB | TTL + 7 d grace | entries/day × (TTL+7) × 12 KB | months; sweep ceiling 800/day |
 
 Soaks to worry about: only where steady state is unbounded — proof_capture
-rows (2.2 MB/day at 5,000/day) and the two sweep-throughput ceilings
-(2,000 discovery_fetch_log and 800 discovery_cache_entry rows per day). None
-of these threatens 10 GB this quarter; each name needs an alarm or a follow-up
-retention policy before it can.
+rows (~2.2 MB/**year** at 5,000 captures/day: 6 KB/day row bytes; the binding
+constraint is R2 artifact bytes, not D1 rows) and the two sweep-throughput
+Ceilings (2,000 discovery_fetch_log and 800 discovery_cache_entry rows per
+day). None of these threatens 10 GB this quarter; each name needs an alarm or
+a follow-up retention policy before it can.
