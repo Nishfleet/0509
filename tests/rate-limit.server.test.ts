@@ -19,6 +19,8 @@ import {
 } from "~/lib/rate-limit.server";
 import type { AppEnv } from "~/lib/env.server";
 
+import { EDGE_BINDING_LIMITS, createFakeEdgeLimiters } from "./helpers/rate-limit-edge-kit";
+
 /**
  * Issue #2985: the public hot-path scopes (auth, public search, brand pages,
  * public API reads incl. /api/demo-proof, /status) are enforced by the native
@@ -27,51 +29,6 @@ import type { AppEnv } from "~/lib/env.server";
  * selection, billing provider, share PDF) still reserve capacity in D1 via
  * the one-statement atomic claim.
  */
-
-// Mirrors the RL_* binding capacities declared in wrangler.jsonc (issue
-// #2985): capacity lives ON the binding and the runtime call is
-// `limit({ key })`, so the fake enforces the same per-binding limit the
-// platform would. Each policy's scope is part of the key, so per-binding
-// counting against the configured limit matches production semantics.
-const EDGE_BINDING_LIMITS: Record<string, number> = {
-  RL_AUTH: 2,
-  RL_SEARCH_ANON_BROWSER: 2,
-  RL_PROOF_BRIEF: 3,
-  RL_SEARCH_SELECTION: 3,
-  RL_SEARCH_IP: 10,
-  RL_BRAND_PAGE: 12,
-  RL_WRITE: 60,
-  RL_STATUS: 120,
-  RL_DELIVERY_WEBHOOK: 180,
-  RL_API_READ: 240,
-  RL_WEBHOOK: 300,
-};
-
-function createFakeEdgeLimiters(options?: {
-  failures?: (key: string) => boolean;
-  throwOn?: (key: string) => boolean;
-}): { env: AppEnv } {
-  const counts = new Map<string, number>();
-  const makeLimiter = (bindingLimit: number) => ({
-    async limit(params: { key: string }) {
-      const key = params.key;
-      if (options?.throwOn?.(key)) throw new Error("edge limiter unavailable");
-      if (options?.failures?.(key)) return { success: false };
-      const count = (counts.get(key) ?? 0) + 1;
-      counts.set(key, count);
-      if (count > bindingLimit) {
-        // Do not retain rejected bursts; matches a rolling-window counter.
-        counts.set(key, count - 1);
-        return { success: false };
-      }
-      return { success: true };
-    },
-  });
-  const env = Object.fromEntries(
-    Object.entries(EDGE_BINDING_LIMITS).map(([name, limit]) => [name, makeLimiter(limit)]),
-  ) as unknown as AppEnv;
-  return { env };
-}
 
 function searchRequest(userAgent: string) {
   return new Request("https://0509.io/search?query=nykaa", {
@@ -414,141 +371,6 @@ describe("enforcePublicBrandPageRateLimit", () => {
     expect(blocked?.status).toBe(429);
   });
 
-  // Issue #3278: the SEO canary sweeps every sitemap /ads/:domain URL in one
-  // run — at 127 URLs that exceeds the public-brand-page budget (12/60s)
-  // several times over and trips the very limiter it is supposed to be
-  // measuring. An authenticated canary request (x-0509-canary-token matching
-  // env.CANARY_BYPASS_TOKEN) bypasses the limiter so the canary can fetch
-  // every URL and report on the actual noindex/redirect drift it was built
-  // to catch.
-  it("exempts a canary-token request from the public-brand-page budget", async () => {
-    const { env } = createFakeEdgeLimiters();
-    (env as { CANARY_BYPASS_TOKEN?: string }).CANARY_BYPASS_TOKEN = "secret-token";
-
-    // 5× the budget, every request from the same IP — would 429 long before
-    // this completes if the bypass did not hold.
-    const totalRequests = PUBLIC_BRAND_PAGE_PER_MINUTE_LIMIT * 5;
-    for (let index = 0; index < totalRequests; index += 1) {
-      const response = await enforcePublicBrandPageRateLimit(
-        new Request(`https://0509.io/ads/domain-${index}.com`, {
-          headers: {
-            "cf-connecting-ip": "203.0.113.31",
-            "user-agent": "vitest",
-            "x-0509-canary-token": "secret-token",
-          },
-        }),
-        env,
-      );
-      expect(
-        response,
-        `canary request ${index} should never 429 once authenticated`,
-      ).toBeNull();
-    }
-  });
-
-  it("still 429s a canary-token request when the token does not match", async () => {
-    const { env } = createFakeEdgeLimiters();
-    (env as { CANARY_BYPASS_TOKEN?: string }).CANARY_BYPASS_TOKEN = "secret-token";
-
-    // Wrong token: same anonymous budget applies.
-    for (let index = 0; index < PUBLIC_BRAND_PAGE_PER_MINUTE_LIMIT; index += 1) {
-      await expect(
-        enforcePublicBrandPageRateLimit(
-          new Request(`https://0509.io/ads/domain-${index}.com`, {
-            headers: {
-              "cf-connecting-ip": "203.0.113.32",
-              "user-agent": "vitest",
-              "x-0509-canary-token": "wrong-token",
-            },
-          }),
-          env,
-        ),
-      ).resolves.toBeNull();
-    }
-    const blocked = await enforcePublicBrandPageRateLimit(
-      new Request("https://0509.io/ads/domain-overflow.com", {
-        headers: {
-          "cf-connecting-ip": "203.0.113.32",
-          "user-agent": "vitest",
-          "x-0509-canary-token": "wrong-token",
-        },
-      }),
-      env,
-    );
-    expect(blocked?.status).toBe(429);
-  });
-
-  it("still 429s when CANARY_BYPASS_TOKEN is unset (fail-closed on bypass)", async () => {
-    const { env } = createFakeEdgeLimiters();
-    // No CANARY_BYPASS_TOKEN on env — the bypass must NOT silently grant
-    // unlimited access if the secret is missing in production.
-
-    for (let index = 0; index < PUBLIC_BRAND_PAGE_PER_MINUTE_LIMIT; index += 1) {
-      await expect(
-        enforcePublicBrandPageRateLimit(
-          new Request(`https://0509.io/ads/domain-${index}.com`, {
-            headers: {
-              "cf-connecting-ip": "203.0.113.33",
-              "user-agent": "vitest",
-              "x-0509-canary-token": "secret-token",
-            },
-          }),
-          env,
-        ),
-      ).resolves.toBeNull();
-    }
-    const blocked = await enforcePublicBrandPageRateLimit(
-      new Request("https://0509.io/ads/domain-overflow.com", {
-        headers: {
-          "cf-connecting-ip": "203.0.113.33",
-          "user-agent": "vitest",
-          "x-0509-canary-token": "secret-token",
-        },
-      }),
-      env,
-    );
-    expect(blocked?.status).toBe(429);
-  });
-
-  it("does NOT exempt auth, write, or share-pdf scopes — the bypass is scope-scoped to public-brand-page only", async () => {
-    // The canary-token bypass is intentionally narrow: only the
-    // public-brand-page scope, so a stolen token cannot unlock auth, write,
-    // or share-pdf. This test pins the scope fence: a canary-token request
-    // on a NON-brand-page route still 429s at its own anonymous budget, so a
-    // forged header buys nothing outside the SEO canary's actual hit
-    // surface. We use /api/demo-proof (RL_PROOF_BRIEF, 3/60s) because its
-    // tight budget makes the over-budget assertion deterministic.
-    const { env } = createFakeEdgeLimiters();
-    (env as { CANARY_BYPASS_TOKEN?: string }).CANARY_BYPASS_TOKEN = "secret-token";
-
-    const proofBriefLimit = 3;
-    for (let index = 0; index < proofBriefLimit; index += 1) {
-      const response = await enforceRequestRateLimit(
-        new Request("https://0509.io/api/demo-proof", {
-          method: "GET",
-          headers: {
-            "cf-connecting-ip": "203.0.113.34",
-            "user-agent": "vitest",
-            "x-0509-canary-token": "secret-token",
-          },
-        }),
-        env,
-      );
-      expect(response, `canary-token request ${index} on /api/demo-proof should still count`).toBeNull();
-    }
-    const blocked = await enforceRequestRateLimit(
-      new Request("https://0509.io/api/demo-proof", {
-        method: "GET",
-        headers: {
-          "cf-connecting-ip": "203.0.113.34",
-          "user-agent": "vitest",
-          "x-0509-canary-token": "secret-token",
-        },
-      }),
-      env,
-    );
-    expect(blocked?.status).toBe(429);
-  });
 });
 
 describe("cost-bearing scopes keep the D1 atomic claim", () => {
