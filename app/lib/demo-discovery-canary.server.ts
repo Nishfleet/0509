@@ -37,6 +37,7 @@ import {
 import {
   resolveCommercialDiscoveryProvider,
 } from "~/lib/ad-source.server";
+import type { AdDiscoveryProvider } from "~/lib/types";
 import {
   getDiscoveryCacheEntry,
   getDiscoveryProviderState,
@@ -82,7 +83,7 @@ export interface DemoBrandDiscoveryCanaryResult {
 export function buildDemoBrandDiscoveryCacheKey(
   env: Pick<AppEnv, "BROWSER" | "BROWSERLESS_TOKEN" | "BROWSER_RUN_ACCOUNT_ID">,
   domain: string,
-): { provider: string; cacheKey: string } {
+): { provider: AdDiscoveryProvider; cacheKey: string } {
   const provider = resolveCommercialDiscoveryProvider(env, {});
   const query = normalizeSavedQuery("advertiser", {
     query: domain,
