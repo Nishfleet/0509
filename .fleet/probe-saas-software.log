@@ -1,0 +1,46 @@
+
+> 0509@0.1.0 seed:publisher
+> node scripts/ads-domain-publisher.mjs --list=saas-software --dry-run --min-publish=15
+
+seed:publisher dry-run — list=saas-software domains=36 base=https://0509.io
+publish floor: verified + likely >= 1 per domain; gate: >= 15 publishable
+
+  PUBLISH notion.so          verified 3 + likely 2
+  PUBLISH hubspot.com        verified 12 + likely 0
+  SKIP    salesforce.com     no verified/likely coverage (verified 0, likely 0, unmatched 0)
+  PUBLISH slack.com          verified 2 + likely 0
+  PUBLISH monday.com         verified 6 + likely 0
+  SKIP    mailchimp.com      no verified/likely coverage (verified 0, likely 0, unmatched 0)
+  SKIP    zendesk.com        no verified/likely coverage (verified 0, likely 0, unmatched 0)
+  SKIP    intercom.com       no verified/likely coverage (verified 0, likely 0, unmatched 0)
+  PUBLISH atlassian.com      verified 24 + likely 0
+  PUBLISH asana.com          verified 13 + likely 0
+  PUBLISH clickup.com        verified 10 + likely 0
+  PUBLISH airtable.com       verified 11 + likely 0
+  PUBLISH figma.com          verified 15 + likely 0
+  PUBLISH canva.com          verified 25 + likely 0
+  PUBLISH dropbox.com        verified 15 + likely 0
+  PUBLISH zoom.us            verified 6 + likely 0
+  PUBLISH calendly.com       verified 23 + likely 0
+  PUBLISH loom.com           verified 4 + likely 1
+  PUBLISH miro.com           verified 8 + likely 0
+  PUBLISH grammarly.com      verified 23 + likely 0
+  PUBLISH jasper.ai          verified 0 + likely 2
+  SKIP    copy.ai            no verified/likely coverage (verified 0, likely 0, unmatched 0)
+  SKIP    linear.app         no verified/likely coverage (verified 0, likely 0, unmatched 0)
+  SKIP    vercel.com         no verified/likely coverage (verified 0, likely 0, unmatched 0)
+  SKIP    netlify.com        no verified/likely coverage (verified 0, likely 0, unmatched 0)
+  PUBLISH datadoghq.com      verified 28 + likely 0
+  PUBLISH twilio.com         verified 23 + likely 0
+  PUBLISH stripe.com         verified 2 + likely 0
+  PUBLISH shopify.com        verified 27 + likely 0
+  PUBLISH klaviyo.com        verified 16 + likely 0
+  SKIP    activecampaign.com no verified/likely coverage (verified 0, likely 0, unmatched 0)
+  PUBLISH mixpanel.com       verified 5 + likely 0
+  SKIP    amplitude.com      no verified/likely coverage (verified 0, likely 0, unmatched 0)
+  SKIP    segment.com        no verified/likely coverage (verified 0, likely 0, unmatched 0)
+  SKIP    toggl.com          no verified/likely coverage (verified 0, likely 0, unmatched 0)
+  PUBLISH todoist.com        verified 10 + likely 0
+
+summary: 24 publishable / 36 domains (PASS)
+  publish=24 skip=12 failed=0 gate=15

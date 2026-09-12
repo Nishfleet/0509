@@ -266,14 +266,17 @@ describe("brand-page alias resolution (issue #1446)", () => {
 
   it("does not treat an unrelated plain domain as a canonical alias", async () => {
     const mocks = installMocks({
-      // nykaa.com is not an alias; its own page should render, not redirect.
-      byDomain: (domain) => domain === "nykaa.com",
+      // wayfair.com is not an alias; its own page should render, not redirect.
+      // (nykaa.com was the fixture until issue #3123 seeded it via the
+      // beauty-personal-care cohort — a thin seeded page 301s to /search per
+      // issue #1306, so the unrelated-domain pin needs an unseeded domain.)
+      byDomain: (domain) => domain === "wayfair.com",
     });
 
-    const { redirect, data } = await loaderResponse("nykaa.com", mocks.env);
+    const { redirect, data } = await loaderResponse("wayfair.com", mocks.env);
 
     expect(redirect).toBeNull();
-    expect(data!.domain).toBe("nykaa.com");
+    expect(data!.domain).toBe("wayfair.com");
   });
 });
 
