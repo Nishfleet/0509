@@ -22,6 +22,7 @@ const SOURCE_LABELS: Record<PresenceSourceId, string> = {
   reddit: "Reddit",
   linkedin: "LinkedIn",
   rss: "RSS / Atom / JSON Feed",
+  threads: "Threads",
   youtube: "YouTube",
   amazon: "Amazon marketplace",
   context_dev: "Context.dev (open-web provider)",
@@ -43,9 +44,10 @@ const CONNECTOR_FOR_SOURCE: Partial<Record<PresenceSourceId, PresenceConnectorId
   reddit: "reddit",
   linkedin: "linkedin",
   rss: "rss",
+  threads: "threads",
 };
 
-const SOCIAL_SOURCE_IDS = new Set<PresenceSourceId>(["x", "reddit", "linkedin"]);
+const SOCIAL_SOURCE_IDS = new Set<PresenceSourceId>(["x", "reddit", "linkedin", "threads"]);
 
 export interface PresenceSourcePlanGates {
   modeAllowed: boolean;
@@ -90,13 +92,15 @@ function statusFromConnectorGate(
         ? "PUBLIC_WEB_BEST_EFFORT"
         : sourceId === "rss"
           ? "VERIFIED_PUBLIC_FEED"
-          : sourceId === "linkedin" && trackingMode === "competitor"
-            ? "LIMITED_COVERAGE"
-            : sourceId === "x" || sourceId === "reddit"
-              ? trackingMode === "self"
-                ? "CONNECTED_ACCOUNT"
-                : "OFFICIAL_PUBLIC_API"
-              : "CONNECTED_ACCOUNT";
+          : sourceId === "threads"
+            ? "OFFICIAL_PUBLIC_API"
+            : sourceId === "linkedin" && trackingMode === "competitor"
+              ? "LIMITED_COVERAGE"
+              : sourceId === "x" || sourceId === "reddit"
+                ? trackingMode === "self"
+                  ? "CONNECTED_ACCOUNT"
+                  : "OFFICIAL_PUBLIC_API"
+                : "CONNECTED_ACCOUNT";
 
     return baseEntry(sourceId, "available", {
       coverageLabel,
@@ -416,6 +420,12 @@ export function presenceSourceCoverageForDocs(): Array<{
       label: SOURCE_LABELS.rss,
       productionStatus: "gated",
       notes: "RSS/Atom/JSON Feed connector wired in. Gated behind PRESENCE_RSS_ROLLOUT — off by default; activation is a separate rollout decision.",
+    },
+    {
+      sourceId: "threads",
+      label: SOURCE_LABELS.threads,
+      productionStatus: "gated",
+      notes: "Threads keyword-search connector wired in (Meta keyword_search; 2,200 queries per user per rolling 24h enforced via presence_poll_cursor). Gated behind PRESENCE_THREADS_ROLLOUT + THREADS_ACCESS_TOKEN and Meta app review — off by default; activation is a separate rollout decision.",
     },
     {
       sourceId: "youtube",

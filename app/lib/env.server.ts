@@ -204,6 +204,8 @@ export interface AppEnv {
   PRESENCE_LINKEDIN_ROLLOUT?: string;
   /** RSS/Atom/JSON Feed mention connector rollout: disabled | internal | pilot | ga. Defaults to disabled (gated, off by default). */
   PRESENCE_RSS_ROLLOUT?: string;
+  /** Threads keyword-search mention connector rollout: disabled | internal | pilot | ga. Defaults to disabled (gated, off by default). */
+  PRESENCE_THREADS_ROLLOUT?: string;
   /** Digest delivery rollout: disabled | internal | pilot | ga. Defaults to disabled (notifications off). */
   PRESENCE_DIGEST_ROLLOUT?: string;
   /**
@@ -234,6 +236,8 @@ export interface AppEnv {
   REDDIT_COMMERCIAL_ACCESS?: string;
   LINKEDIN_CLIENT_ID?: string;
   LINKEDIN_CLIENT_SECRET?: string;
+  /** Meta/Threads access token for the keyword_search connector (fleet-held app token; requires threads_keyword_search permission). */
+  THREADS_ACCESS_TOKEN?: string;
 }
 
 export interface CloudflareRuntimeContext {
