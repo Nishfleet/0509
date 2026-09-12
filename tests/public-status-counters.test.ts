@@ -27,6 +27,15 @@ function makeEnv(prepare: ReturnType<typeof vi.fn>) {
 }
 
 describe("getPublicStatusCounters digest query", () => {
+  // Clock-independent fixture (0509#3212): this case asserts the digest reads
+  // `recent`, so its timestamp must stay inside DIGEST_STALENESS_THRESHOLD_MS
+  // (7 days, app/lib/public-status-counters.server.ts) relative to the real
+  // clock. A hardcoded date silently ages past that window and flips the
+  // assertion to `stalled`, which is exactly how this test came to fail the
+  // required `codex-node-checks-shard-4` check for every open PR on
+  // 2026-09-12. The sibling cases below already use this same relative form.
+  const recentDigestSentAt = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+
   it("reads the last-sent digest from created_at across status='sent', never delivered_at", async () => {
     const issued: string[] = [];
     const prepare = vi.fn((sql: string) => {
@@ -34,7 +43,7 @@ describe("getPublicStatusCounters digest query", () => {
       let row: Row | null = null;
       if (sql.includes("SUM(CASE")) row = { total: 24, failed: 0 };
       else if (sql.includes("FROM watchlist_run")) row = { last_started_at: "2026-09-06T09:00:04.000Z" };
-      else if (sql.includes("FROM digest_delivery")) row = { last_digest_sent_at: "2026-09-05T04:00:52.000Z" };
+      else if (sql.includes("FROM digest_delivery")) row = { last_digest_sent_at: recentDigestSentAt };
       return {
         bind: vi.fn(() => ({ all: vi.fn().mockResolvedValue({ results: row ? [row] : [] }) })),
       };
@@ -53,7 +62,7 @@ describe("getPublicStatusCounters digest query", () => {
     expect(result).toMatchObject({
       runsInLast24h: 24,
       failedRunsInLast24h: 0,
-      lastDigestSentAt: "2026-09-05T04:00:52.000Z",
+      lastDigestSentAt: recentDigestSentAt,
       digestHealth: "recent",
     });
   });
