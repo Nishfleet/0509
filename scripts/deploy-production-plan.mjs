@@ -383,6 +383,10 @@ export function buildProductionDeployPlan({
         rollbackTargetPath,
         "--wrangler-output",
         wranglerOutputPath,
+        // Issue #3190: prefer the last GREEN version recorded on main over the
+        // pre-deploy 100% capture, which Cloudflare may no longer retain.
+        "--deploy-ledger",
+        "deploy-ledger.jsonl",
       ],
       includeCloudflareCredentials: true,
       runOnPostDeployFailure: true,

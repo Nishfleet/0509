@@ -309,6 +309,11 @@ describe("production deployment readiness gate", () => {
       includeCloudflareCredentials: true,
       runOnPostDeployFailure: true,
     });
+    // Issue #3190: the rollback step reads the on-main deploy ledger so the
+    // target is the last GREEN version, not just the pre-deploy 100% capture.
+    expect(plan[canaryIndex + 3].args).toEqual(
+      expect.arrayContaining(["--deploy-ledger", "deploy-ledger.jsonl"]),
+    );
     expect(plan[canaryIndex + 4]).toMatchObject({ id: "live_public_truth" });
     expect(plan[canaryIndex + 5]).toMatchObject({
       id: "production_public_smoke",
@@ -644,6 +649,152 @@ process.exit(Number(process.env.FAKE_WRANGLER_EXIT || 0));
       "rollback ambiguous deploy attempt",
       "--yes",
     ]);
+  });
+
+  it("rolls back to the last GREEN ledger version and keeps the captured target only as fallback (issue #3190)", () => {
+    // Class fix: run 34679399412 (2026-09-12) rolled back to the evidence's
+    // pre-deploy 100% capture (aa2fefb2) and Cloudflare answered
+    // `Version not found` — the fresh, failing Worker stayed live. The
+    // deploy ledger's newest recorded version_id is the last GREEN version,
+    // so it wins; the evidence target only covers "ledger yields nothing".
+    const root = mkdtempSync(join(tmpdir(), "0509-rollback-ledger-"));
+    roots.push(root);
+    const targetPath = join(root, "rollback-target.json");
+    const wranglerOutputPath = join(root, "wrangler-deploy-output.jsonl");
+    const ledgerPath = join(root, "deploy-ledger.jsonl");
+    const fakeWranglerPath = join(root, "fake-wrangler.mjs");
+    const invocationPath = join(root, "wrangler-invocation.json");
+    writeFileSync(
+      targetPath,
+      JSON.stringify({
+        schemaVersion: 1,
+        capturedAt: "2026-09-12T08:05:27.749Z",
+        source: "wrangler deployments status --json",
+        deploymentId: "deployment-predeploy",
+        versionId: "worker-version-prior",
+        percentage: 100,
+      }),
+    );
+    writeFileSync(
+      wranglerOutputPath,
+      `${JSON.stringify({
+        type: "deploy",
+        version: 1,
+        version_id: "worker-version-new",
+      })}\n`,
+    );
+    writeFileSync(
+      fakeWranglerPath,
+      `#!/usr/bin/env node
+import { writeFileSync } from "node:fs";
+writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.slice(2)));
+process.exit(Number(process.env.FAKE_WRANGLER_EXIT || 0));
+`,
+    );
+    chmodSync(fakeWranglerPath, 0o755);
+
+    const run = () =>
+      spawnSync(
+        process.execPath,
+        [
+          resolve("scripts/rollback-production.mjs"),
+          "--target",
+          targetPath,
+          "--wrangler-output",
+          wranglerOutputPath,
+          "--deploy-ledger",
+          ledgerPath,
+        ],
+        {
+          cwd: process.cwd(),
+          env: {
+            ...process.env,
+            WRANGLER_BIN: fakeWranglerPath,
+            FAKE_WRANGLER_INVOCATION: invocationPath,
+          },
+          encoding: "utf8",
+        },
+      );
+    const readInvocation = () => JSON.parse(readFileSync(invocationPath, "utf8"));
+
+    // Ledger's newest GREEN version wins over the pre-deploy evidence, and
+    // the message still names the failed release.
+    writeFileSync(
+      ledgerPath,
+      [
+        // The 2026-09-09 bootstrap row: green, but it predates recorded
+        // version_ids (version_id: null) — exactly production's ledger today.
+        JSON.stringify({
+          sha: "a".repeat(40),
+          tree: null,
+          deployed_at: "2026-09-09T17:03:00Z",
+          version_id: null,
+        }),
+        JSON.stringify({
+          sha: "b".repeat(40),
+          tree: "c".repeat(40),
+          deployed_at: "2026-09-12T09:00:00Z",
+          version_id: "worker-version-last-green",
+        }),
+      ].join("\n") + "\n",
+    );
+    expect(run().status).toBe(0);
+    expect(readInvocation()).toEqual([
+      "rollback",
+      "worker-version-last-green",
+      "--name",
+      "0509",
+      "--message",
+      "rollback failed release worker-version-new",
+      "--yes",
+    ]);
+
+    // No green version_id in the ledger (today's bootstrap-only reality, and
+    // a missing ledger file) → the captured evidence target still rolls back.
+    writeFileSync(
+      ledgerPath,
+      `${JSON.stringify({
+        sha: "a".repeat(40),
+        tree: null,
+        deployed_at: "2026-09-09T17:03:00Z",
+        version_id: null,
+      })}\n`,
+    );
+    expect(run().status).toBe(0);
+    expect(readInvocation()).toEqual([
+      "rollback",
+      "worker-version-prior",
+      "--name",
+      "0509",
+      "--message",
+      "rollback failed release worker-version-new",
+      "--yes",
+    ]);
+
+    expect(
+      spawnSync(
+        process.execPath,
+        [
+          resolve("scripts/rollback-production.mjs"),
+          "--target",
+          targetPath,
+          "--wrangler-output",
+          wranglerOutputPath,
+          "--deploy-ledger",
+          join(root, "absent-ledger.jsonl"),
+        ],
+        {
+          cwd: process.cwd(),
+          env: {
+            ...process.env,
+            WRANGLER_BIN: fakeWranglerPath,
+            FAKE_WRANGLER_INVOCATION: invocationPath,
+          },
+          encoding: "utf8",
+        },
+      ).status,
+    ).toBe(0);
+    expect(readInvocation()[1]).toBe("worker-version-prior");
   });
 
   it("retries the classic canary token secret put until the version is marked deployed", () => {

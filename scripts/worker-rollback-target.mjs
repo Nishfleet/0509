@@ -1,5 +1,7 @@
 const SAFE_IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 
+import { parseDeployLedgerRows } from "./deploy-ledger.mjs";
+
 /** @param {unknown} input */
 export function parseWorkerDeploymentStatus(input) {
   let value = input;
@@ -55,6 +57,37 @@ export function validateWorkerRollbackEvidence(evidence, expected = {}) {
     issues.push("worker_rollback_target_matches_new_version");
   }
   return { ok: issues.length === 0, issues };
+}
+
+/**
+ * Last GREEN deployed Worker version from the on-main deploy ledger
+ * (deploy-ledger.jsonl, one JSONL row {sha, tree, deployed_at, version_id}
+ * appended by scripts/commit-deploy-ledger.sh after every SUCCESSFUL deploy).
+ *
+ * The rollback must target a version that provably ran green, not the
+ * pre-deploy 100% capture: run 34679399412 (2026-09-12) rolled back to
+ * evidence version aa2fefb2 — the 100% deployment 30 seconds earlier — and
+ * Cloudflare answered `Version not found`, leaving the fresh (failing) Worker
+ * live with no rollback (issue #3190). The ledger's newest row that carries a
+ * usable version_id is the last GREEN version; `null` means "the ledger
+ * yields no target" and the caller keeps the captured evidence target.
+ * @param {string | null | undefined} contents raw deploy-ledger.jsonl contents
+ * @returns {string | null}
+ */
+export function readLastGreenLedgerVersionId(contents) {
+  if (typeof contents !== "string") return null;
+  // Reuse the ledger's own row parser (scripts/deploy-ledger.mjs): it already
+  // validates the {sha, tree, deployed_at, version_id} schema and skips junk
+  // lines, so this module adds only the rollback-target decision — the
+  // newest row that carries a SAFE-identifier version_id.
+  const rows = parseDeployLedgerRows(contents);
+  for (let index = rows.length - 1; index >= 0; index -= 1) {
+    const versionId = rows[index].version_id;
+    if (typeof versionId === "string" && SAFE_IDENTIFIER_PATTERN.test(versionId)) {
+      return versionId;
+    }
+  }
+  return null;
 }
 
 /** @param {string} versionId @param {string | null | undefined} [deployedVersionId] */
