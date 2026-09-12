@@ -27,6 +27,7 @@
     "scripts/d1-backup-to-r2.mjs",
     "scripts/d1-backup-local-cleanup.mjs",
     "scripts/d1-restore-transform.mjs",
+    "scripts/d1-migration-row-invariant.mjs",
     "scripts/d1-remote-restore-evidence.mjs",
     "scripts/d1-remote-restore-evidence-core.mjs",
     "scripts/find-recent-remote-restore-artifact.mjs",

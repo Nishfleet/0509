@@ -172,6 +172,199 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           D1_BACKUP_AUTOMATION_APPROVED: "0509-weekly-d1-to-r2"
         run: node scripts/d1-backup-to-r2.mjs
+      # Issue #2779. The step above proves a backup EXISTS; until now nothing
+      # looked at what the pending migrations DO. On 2026-09-09 migration 0087
+      # rebuilt `user` and 55 ON DELETE CASCADE children emptied with it
+      # (fleet-ops#4999), discovered only after the fact. This gate restores
+      # the backup that was just taken into a scratch D1, applies the pending
+      # migrations THERE, and fails on any undeclared per-table row loss, so a
+      # destructive migration never reaches the `--remote` apply below.
+      - name: Detect pending repository migrations
+        id: pending_migrations
+        if: success() && steps.pre_migration_backup.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # `wrangler d1 migrations list <db> --remote` returns the UNAPPLIED
+          # migration files, as JSON objects shaped `{ "Name": "<file>" }`.
+          # Verified against the installed wrangler: the command description is
+          # "View a list of unapplied migration files", and the emit site maps
+          # `getUnappliedMigrations(...)` to `{ Name: migration }`.
+          #
+          # Both details were wrong in the first cut of this gate, and the two
+          # mistakes cancelled into "everything is pending", which would have
+          # made the dry run apply the whole repository chain on top of a
+          # backup whose ledger already records most of it.
+          #
+          # A non-zero exit from the list command fails this step. An
+          # unreadable ledger must NOT be read as "nothing pending".
+          npx wrangler d1 migrations list 0509 --remote --json > "$RUNNER_TEMP/remote-pending.json"
+          node -e '
+            const { readdirSync, readFileSync, appendFileSync } = require("node:fs");
+            const raw = readFileSync(process.argv[1], "utf8");
+            let parsed;
+            try {
+              parsed = JSON.parse(raw);
+            } catch (error) {
+              process.stderr.write(`remote_pending_unparsable:${error.message}\n`);
+              process.exit(1);
+            }
+            const rows = Array.isArray(parsed)
+              ? parsed
+              : Array.isArray(parsed?.result) ? parsed.result : [];
+            // Only the exact wrangler field name counts. `rows` is non-empty
+            // but yields nothing recognised => the response shape drifted and
+            // an empty pending set would silently skip the gate. Fail instead.
+            const pending = rows
+              .map((row) => row?.Name)
+              .filter((name) => typeof name === "string" && name.length > 0)
+              .sort();
+            if (rows.length > 0 && pending.length === 0) {
+              process.stderr.write(
+                `remote_pending_shape_unrecognised:${JSON.stringify(rows[0])}\n`,
+              );
+              process.exit(1);
+            }
+            // Cross-check against the repository. A name wrangler reports that
+            // is not a repository migration means the response shape has
+            // drifted again, and the gate must say so rather than quietly
+            // checking the wrong set.
+            const repoMigrations = new Set(
+              readdirSync("migrations").filter((name) =>
+                /^\d{4}_.+\.sql$/u.test(name),
+              ),
+            );
+            const unknown = pending.filter((n) => !repoMigrations.has(n));
+            if (unknown.length > 0) {
+              process.stderr.write(`remote_pending_unknown:${JSON.stringify(unknown)}\n`);
+              process.exit(1);
+            }
+            appendFileSync(process.env.GITHUB_OUTPUT, `pending=${JSON.stringify(pending)}\n`);
+            process.stdout.write(`pending_migrations:${JSON.stringify(pending)}\n`);
+          ' "$RUNNER_TEMP/remote-pending.json"
+      - name: Dry-run pending migrations on a restored scratch copy
+        id: migration_dry_run
+        if: success() && steps.pre_migration_backup.outcome == 'success'
+        shell: bash
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          D1_BACKUP_AUTOMATION_APPROVED: "0509-weekly-d1-to-r2"
+          D1_REMOTE_RESTORE_AUTOMATION_APPROVED: "0509-remote-restore-evidence"
+          D1_MIGRATION_ROW_INVARIANT_SUMMARY: ${{ runner.temp }}/migration-row-invariant.md
+          PENDING_MIGRATIONS: ${{ steps.pending_migrations.outputs.pending }}
+        run: |
+          set -euo pipefail
+          backup=$(find "$D1_BACKUP_LOCAL_DIRECTORY" -maxdepth 1 -name '*.sql' -type f | sort | tail -n 1)
+          test -n "$backup"
+          node scripts/d1-remote-restore-evidence.mjs \
+            --dry-run-migrations \
+            --backup "$backup" \
+            --migrations "$PENDING_MIGRATIONS" \
+            --summary "$D1_MIGRATION_ROW_INVARIANT_SUMMARY"
+      - name: Publish migration row-count diff
+        if: always() && steps.migration_dry_run.outcome != 'skipped'
+        shell: bash
+        env:
+          SUMMARY_PATH: ${{ runner.temp }}/migration-row-invariant.md
+        run: |
+          set -euo pipefail
+          {
+            echo '## Migration row-count invariant'
+            echo
+            if [ -f "$SUMMARY_PATH" ]; then
+              cat "$SUMMARY_PATH"
+            else
+              echo 'The dry run did not produce a diff (it failed before the snapshot).'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Record D1 Time Travel bookmark before apply
+        id: time_travel
+        if: success() && steps.migration_dry_run.outcome == 'success'
+        shell: bash
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Issue #2779 step 2: make the rollback one known command. The
+          # bookmark is the point-in-time handle `wrangler d1 time-travel
+          # restore` takes, so a bad apply is undoable without guessing.
+          #
+          # Written to BOTH the run summary and the restore-evidence manifest
+          # (issue #2779 step 2). The manifest half matters: the manifest is
+          # what the deploy gate reads afterwards, so the rollback handle has
+          # to live there and not only in a transient step summary.
+          now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          npx wrangler d1 time-travel info 0509 --timestamp "$now" --json \
+            > "$RUNNER_TEMP/time-travel.json"
+          node -e '
+            const { readFileSync, writeFileSync, appendFileSync } = require("node:fs");
+            const raw = readFileSync(process.argv[1], "utf8");
+            let parsed;
+            try {
+              parsed = JSON.parse(raw);
+            } catch (error) {
+              process.stderr.write(`time_travel_unparsable:${error.message}\n`);
+              process.exit(1);
+            }
+            const entry = Array.isArray(parsed) ? parsed[0] : parsed;
+            const bookmark =
+              typeof entry?.bookmark === "string" ? entry.bookmark
+              : typeof entry?.id === "string" ? entry.id
+              : "";
+            if (!bookmark) {
+              process.stderr.write("time_travel_bookmark_missing\n");
+              process.exit(1);
+            }
+            const record = {
+              bookmark,
+              recordedAt: new Date().toISOString(),
+              database: "0509",
+              rollbackCommand:
+                `npx wrangler d1 time-travel restore 0509 --bookmark ${bookmark}`,
+            };
+            appendFileSync(process.env.GITHUB_OUTPUT, `bookmark=${bookmark}\n`);
+            // Machine-readable sidecar the archive step folds into the
+            // restore-evidence manifest.
+            writeFileSync(
+              process.argv[2],
+              JSON.stringify(record, null, 2) + "\n",
+              { mode: 0o600 },
+            );
+            appendFileSync(
+              process.env.GITHUB_STEP_SUMMARY,
+              `## D1 Time Travel bookmark (pre-apply)\n\n\`${bookmark}\`\n\n` +
+                `Rollback: \`${record.rollbackCommand}\`\n`,
+            );
+          ' "$RUNNER_TEMP/time-travel.json" "$RUNNER_TEMP/time-travel-bookmark.json"
+      - name: Attach the pre-apply bookmark to the restore-evidence manifest
+        id: bookmark_manifest
+        if: success() && steps.time_travel.outcome == 'success'
+        shell: bash
+        env:
+          BOOKMARK_SIDECAR: ${{ runner.temp }}/time-travel-bookmark.json
+          MANIFEST_PATH: test-results/d1-pre-apply-bookmark.json
+        run: |
+          set -euo pipefail
+          test -s "$BOOKMARK_SIDECAR"
+          mkdir -p test-results
+          cp "$BOOKMARK_SIDECAR" "$MANIFEST_PATH"
+          chmod 600 "$MANIFEST_PATH"
+          {
+            echo '## Pre-apply rollback handle (manifest)'
+            echo
+            echo "Recorded in \`$MANIFEST_PATH\` and uploaded with the run's artifacts."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve the pre-apply bookmark
+        if: always() && steps.time_travel.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: d1-pre-apply-bookmark-${{ github.sha }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/time-travel-bookmark.json
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 8
       - name: Remove run-scoped plaintext backup files
         if: always()
         run: node scripts/d1-backup-local-cleanup.mjs
@@ -186,7 +379,10 @@ jobs:
           TOLERATE_MAIN_DRIFT: "1"
         run: ./scripts/ci-verify-provider-main-cas.sh
       - name: Apply exact repository migrations remotely
-        if: success() && steps.pre_migration_backup.outcome == 'success'
+        # Gated on the dry run AND the bookmark (issue #2779). `success()`
+        # already fails closed when the dry run is skipped by the backup step,
+        # because `pre_migration_backup.outcome` would not be `success`.
+        if: success() && steps.pre_migration_backup.outcome == 'success' && steps.migration_dry_run.outcome == 'success' && steps.time_travel.outcome == 'success'
         shell: bash
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -196,6 +392,20 @@ jobs:
           set -euo pipefail
           test "$D1_APPLY_AND_RESTORE_AUTOMATION_APPROVED" = "0509-apply-and-restore"
           npx wrangler d1 migrations apply 0509 --remote
+      - name: Record Time Travel bookmark in the run summary
+        if: always() && steps.time_travel.outcome == 'success'
+        shell: bash
+        env:
+          BOOKMARK: ${{ steps.time_travel.outputs.bookmark }}
+        run: |
+          set -euo pipefail
+          {
+            echo '## Post-apply rollback handle'
+            echo
+            echo "\`$BOOKMARK\`"
+            echo
+            echo "Rollback: \`npx wrangler d1 time-travel restore 0509 --bookmark $BOOKMARK\`"
+          } >> "$GITHUB_STEP_SUMMARY"
   restore:
     if: "always() && needs.authorize_release.result == 'success' && (github.event_name == 'schedule' || github.event_name == 'push' || needs.apply_and_restore.result == 'success')"
     needs:
