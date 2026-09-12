@@ -25,11 +25,11 @@ const BASELINE_SITEMAP = `<?xml version="1.0" encoding="UTF-8"?>
 <url><loc>/guides/how-to-track-competitor-ads</loc></url>
 </urlset>`;
 
-function pathList(n, prefix) {
+function pathList(n: number, prefix: string) {
   return Array.from({ length: n }, (_, i) => `${prefix}/d${i}.com`);
 }
 
-function writeFixture(xml) {
+function writeFixture(xml: string) {
   const dir = mkdtempSync(join(tmpdir(), "tl-coverage-"));
   const path = join(dir, "sitemap.xml");
   writeFileSync(path, xml);

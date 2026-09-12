@@ -73,6 +73,11 @@ export const RELATES_ISSUE = 3018;
 export const GUARD_ISSUE = 3095;
 
 /**
+ * @typedef {{adsCount: number, covered: number, floorCount: number, ratio: number, verdict: "pass" | "fail"}} CoverageVerdict
+ * @typedef {{baseUrl: string, checkedAt: string, verdict: CoverageVerdict}} CoverageReport
+ */
+
+/**
  * Parse a rendered sitemap.xml body (either the raw loc list emitted by
  * buildSitemapXml or absolute URLs from the live <loc> tags) into the
  * /ads/ and /timeline/ finalist sets. Pure: no network, no filesystem.
@@ -80,16 +85,19 @@ export const GUARD_ISSUE = 3095;
  * An /ads/ URL counts only the bare /ads/:domain brand pages (the issue's
  * cohort is the tracked brand surface, not /ads/* children like receipts).
  * A /timeline/ URL counts only /timeline/:domain (not the /timeline/ index).
+ *
+ * @param {string} xml
+ * @returns {{ads: string[], timeline: string[]}}
  */
 export function entriesFromSitemapXml(xml) {
-  const locs = [];
+  const locs = /** @type {string[]} */ ([]);
   const re = /<loc>([^<]+)<\/loc>/g;
   let m;
   while ((m = re.exec(xml)) !== null) {
     locs.push(m[1].trim());
   }
-  const ads = new Set();
-  const timeline = new Set();
+  const ads = /** @type {Set<string>} */ (new Set());
+  const timeline = /** @type {Set<string>} */ (new Set());
   for (const loc of locs) {
     // Accept both relative (".../ads/nike.com") entries written by the
     // renderer and absolute URLs on the fetched body.
@@ -111,6 +119,9 @@ export function entriesFromSitemapXml(xml) {
  *
  * (The live-probe form in the issue uses `tl >= floor*ads and tl > 7`;
  * ceil is the honest reading — 0.8 * 91 = 72.8 requires >= 73 URLs.)
+ *
+ * @param {{ads: string[], timeline: string[]}} input
+ * @returns {CoverageVerdict}
  */
 export function coverageVerdict({ ads, timeline }) {
   const adsCount = ads.length;
@@ -129,6 +140,9 @@ export function coverageVerdict({ ads, timeline }) {
 /**
  * Open-incident dedupe for --file-issue (same shape as
  * canary-demo-brand-timeline.mjs's findExistingOpenIncident).
+ *
+ * @param {{repo: string, marker?: string}} input
+ * @returns {{existing: boolean}}
  */
 export function findExistingOpenIncident({ repo, marker = ISSUE_BODY_MARKER }) {
   try {
@@ -158,6 +172,10 @@ export function findExistingOpenIncident({ repo, marker = ISSUE_BODY_MARKER }) {
   }
 }
 
+/**
+ * @param {CoverageReport} report
+ * @returns {string}
+ */
 function buildIssueBody(report) {
   const { baseUrl, checkedAt, verdict } = report;
   return [
@@ -182,6 +200,10 @@ function buildIssueBody(report) {
   ].join("\n");
 }
 
+/**
+ * @param {CoverageReport} input
+ * @returns {string}
+ */
 function renderHumanReport({ baseUrl, checkedAt, verdict }) {
   const lines = [];
   lines.push(`timeline-coverage canary (${baseUrl} at ${checkedAt})`);
@@ -203,6 +225,10 @@ function renderHumanReport({ baseUrl, checkedAt, verdict }) {
   return lines.join("\n");
 }
 
+/**
+ * @param {string} baseUrl
+ * @returns {Promise<string>}
+ */
 async function fetchSitemap(baseUrl) {
   const res = await fetch(`${baseUrl}/sitemap.xml`);
   if (!res.ok) {
@@ -311,6 +337,10 @@ async function main() {
   process.exit(verdict.verdict === "pass" ? 0 : 1);
 }
 
+/**
+ * @param {string} path
+ * @returns {string}
+ */
 function readFileSyncChecked(path) {
   try {
     return readFileSync(path, "utf8");
