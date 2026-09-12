@@ -123,4 +123,4 @@ Use this framing for the first customer:
 
 ## Next Slice
 
-Confirm the uptime health workflow's alert path or UptimeRobot on `/api/health`, complete one internal Dodo plan-change/cancellation smoke after an internal paid subscription exists, add GitHub backup secrets and observe the first scheduled backup workflow object, watch the next Agency fan-out window for dispatch failures and real scan completion, confirm Cloudflare Email dashboard logs, clean up retired provider dashboard artifacts, then rerun `npm run canary:proof` and `npm run canary:prod`.
+Confirm the `0509-liveness` systemd timer's alert path or UptimeRobot on `/api/health`, complete one internal Dodo plan-change/cancellation smoke after an internal paid subscription exists, add GitHub backup secrets and observe the first scheduled backup workflow object, watch the next Agency fan-out window for dispatch failures and real scan completion, confirm Cloudflare Email dashboard logs, clean up retired provider dashboard artifacts, then rerun `npm run canary:proof` and `npm run canary:prod`.
