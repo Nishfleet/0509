@@ -224,6 +224,20 @@ describe("nonce-free variant (the #2716 condition, made mechanical)", () => {
     expect(extractInlineScriptBodies("<script>\n  a();\n</script>")).toEqual(["\n  a();\n"]);
   });
 
+  it("ends a script at a whitespace-tolerant end tag (`</script >`)", () => {
+    // HTML allows whitespace before the `>` of an end tag and browsers end the
+    // script there. Missing it would swallow the rest of the document into one
+    // "body", so the hashes we advertise would not match the bytes the browser
+    // hashes. CodeQL js/bad-html-filtering-regexp flagged the tight form.
+    expect(extractInlineScriptBodies("<script>a();</script ><script>b();</script>")).toEqual([
+      "a();",
+      "b();",
+    ]);
+    expect(extractInlineScriptBodies("<script>a();</script\n>")).toEqual(["a();"]);
+    // The bytes after the end tag are not part of any body.
+    expect(extractInlineScriptBodies("<script>a();</script ><p>tail</p>")).toEqual(["a();"]);
+  });
+
   it("hashes the extracted bodies to CSP sha256 sources, deterministically", async () => {
     const sources = await inlineScriptHashSources(document);
     expect(sources).toEqual([await sha256Source(BOOT), await sha256Source(HYDRATION)]);
@@ -499,7 +513,7 @@ async function fetchDocument(
   );
 }
 
-function scriptSrcOf(response: Response): string {
+function scriptSrcOf(response: Response): string | undefined {
   return (response.headers.get("content-security-policy") ?? "")
     .split(";")
     .map((part) => part.trim())

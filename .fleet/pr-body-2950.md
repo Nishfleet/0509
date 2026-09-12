@@ -23,7 +23,17 @@ Anonymous, cookie-free GETs of the public marketing HTML are now served from a n
 - **Noted:** country×version key fragments a per-colo cache (correctness-first; no Tiered Cache configured, so honest hit rates will be far below the gate's demonstration); `max-age=0` pins still cache 300s and the Cache-Control rewrite drops other directives (none relied on today); if `BASE_SCRIPT_SRC` ever gains `'strict-dynamic'` the variant breaks — a future one-line coupling test would lock it.
 - **Dismissed-with-reason:** adding `/compare/*` + `/guides/*` to the cacheable set in this PR — the reviewer filed it under Suggestions; after the origin/main merge `/switch/adspy` is already eligible via main, the compare/guides pages went live yesterday and deserve their own verified bake, and the eligibility check is exact-path/prefix based (locale variants need a decision first). Recorded as a loose-end below.
 
-run-proof: vitest node project --changed origin/main 9 files / 93 tests green (x2, pre- and post-main-merge); targeted 4-file/51-test suite green; sgscan --base origin/main clean; #2716 detector untouched and green; live HIT/TTFB proof wired into the deploy gate (scripts/check-live-public-home.mjs) and deferred to deploy by design
+run-proof: vitest node project --changed origin/main, 9 files / 93 tests green, run twice
+
+run-proof: targeted 4-file / 51-test suite green
+
+run-proof: sgscan --base origin/main clean
+
+run-proof: #2716 detector untouched and green
+
+run-proof: live HIT and TTFB proof wired into the deploy gate
+
+run-proof: scripts/check-live-public-home.mjs defers that proof to deploy by design
 net-positive-because: every anonymous visitor of /, pricing and the marketing pages stops paying the full Worker render (0.7-3.8s TTFB cold) once per 5 minutes per (colo, country); zero new machinery — one module + two-line hook in the existing fetch handler, fail-open, and the #2716 #2388-removal condition honoured rather than re-fought
 research: not applicable (no bin/ files added)
 help-first: not applicable (no new bin/ files)

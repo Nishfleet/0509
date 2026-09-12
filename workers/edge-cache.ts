@@ -233,11 +233,14 @@ function parseTagAttributes(raw: string): Map<string, string> {
  *
  * The open tag is scanned quote-aware (HTML tokenisation): a `>` inside a
  * quoted attribute value does not end the tag, so the captured body starts
- * where the browser's script content starts.
+ * where the browser's script content starts. The end tag permits the optional
+ * whitespace HTML allows before the `>` (`</script >`); a browser treats that
+ * as the script's end, so the extractor must too, or the missed end would
+ * swallow the rest of the document into one "body" and hash the wrong bytes.
  */
 export function extractInlineScriptBodies(html: string): string[] {
   const bodies: string[] = [];
-  const openTag = /<script\b((?:[^>"']|"[^"]*"|'[^']*')*)>([\s\S]*?)<\/script>/gi;
+  const openTag = /<script\b((?:[^>"']|"[^"]*"|'[^']*')*)>([\s\S]*?)<\/script\s*>/gi;
   for (const match of html.matchAll(openTag)) {
     const attrs = parseTagAttributes(match[1]);
     if (attrs.has("src")) {
