@@ -24,9 +24,9 @@
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-const HERE = dirname(pathToFileURL(import.meta.url).pathname);
+const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, "..");
 
 /** @param {string[]} argv */
@@ -154,7 +154,10 @@ async function r2Put(objectKey, bytes) {
   );
   await tmp.rm(path).catch(() => {});
   if (result.status !== 0) {
-    throw new Error(`r2 put failed: ${(result.stderr || result.stdout || "").split("\n")[0]}`);
+    const detail =
+      result.error?.message ??
+      (result.stderr || result.stdout || "spawnSync produced no output").split("\n")[0];
+    throw new Error(`r2 put failed (status ${result.status}): ${detail}`);
   }
 }
 
@@ -276,7 +279,12 @@ async function main() {
         await r2Put(`creatives/hash/${item.hash}`, item.bytes);
         item.r2Key = `creatives/hash/${item.hash}`;
         ok += 1;
-      } catch {
+      } catch (err) {
+        // A failed upload is named, not swallowed: the summary's r2Uploaded
+        // alone cannot tell a permission failure from a skipped item.
+        console.error(
+          `r2 put failed for ad ${item.id} (hash ${item.hash.slice(0, 12)}…): ${err?.message ?? err}`,
+        );
         item.r2Key = null;
       }
     }
