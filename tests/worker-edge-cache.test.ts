@@ -211,8 +211,9 @@ describe("edge cache eligibility (issue #2950)", () => {
     expect(staleHit?.headers.get(EDGE_PROOF_HEADER)).toBe("HIT");
     expect(await staleHit?.text()).toContain("stale-in-window");
     // The served reply keeps the origin's browser contract (the deploy gate
-    // asserts exactly `public, max-age=300`), not the stretched stored value.
-    expect(staleHit?.headers.get("cache-control")).toBe("public, max-age=300");
+    // asserts exactly `public, s-maxage=3900, max-age=300`), not the stretched
+    // stored value — plus the shared-edge s-maxage (#3308).
+    expect(staleHit?.headers.get("cache-control")).toBe("public, s-maxage=3900, max-age=300");
 
     // Aged past fresh-bound + stale window: a hard miss — the next request
     // re-renders and re-stores.
@@ -389,7 +390,7 @@ describe("edge cache storage semantics", () => {
     const hit = await matchEdgeCache(request, cache, "v1");
     expect(hit).not.toBeNull();
     expect(hit?.headers.get(EDGE_PROOF_HEADER)).toBe("HIT");
-    expect(hit?.headers.get("cache-control")).toBe("public, max-age=300");
+    expect(hit?.headers.get("cache-control")).toBe("public, s-maxage=3900, max-age=300");
     expect(hit?.headers.get("content-security-policy")).toBe(scriptSrc);
     expect(await hit?.text()).toContain("boot=1");
   });
@@ -438,10 +439,11 @@ describe("edge cache storage semantics", () => {
       "US",
     );
     // The stored copy is shared and clean; the caller's reply carries the
-    // same shared policy (it IS the variant).
-    expect(miss.headers.get("cache-control")).toBe("public, max-age=45");
+    // shared policy too (it IS the variant) — browsers on the 45s bound, the
+    // shared edge on the #3247-accepted freshness window (#3308).
+    expect(miss.headers.get("cache-control")).toBe("public, s-maxage=3645, max-age=45");
     const hit = await matchEdgeCache(request, cache, "v1", "US");
-    expect(hit?.headers.get("cache-control")).toBe("public, max-age=45");
+    expect(hit?.headers.get("cache-control")).toBe("public, s-maxage=3645, max-age=45");
     expect(hit?.headers.has("set-cookie")).toBe(false);
   });
 
