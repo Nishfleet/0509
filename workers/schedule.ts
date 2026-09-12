@@ -2,11 +2,23 @@ export const DISCOVERY_WARMUP_CRON = "17 */6 * * *";
 export const REGULAR_MONITORING_CRON = "0 */3 * * *";
 export const DAILY_DIGEST_CRON = "0 4 * * *";
 export const WEEKLY_DIGEST_CRON = "0 5 * * MON";
+/**
+ * Live status probes (app/lib/status-probes.server.ts). A control-plane cron
+ * like the hourly gap check: deliberately OUTSIDE the four-cron release-soak
+ * contract (SCHEDULED_OBSERVATION_DEADLINES stays exactly the four workload
+ * crons, so the gap alerter neither pages for this cron nor misses one of the
+ * four). Its liveness evidence is the status_probe_samples table itself — if
+ * this cron stops, checked_at stops advancing on /status.
+ */
+export const STATUS_PROBES_CRON = "*/5 * * * *";
 export { SCHEDULED_OBSERVATION_GAP_CHECK_CRON } from "../app/lib/scheduled-observation-health.server";
 
 export type ScheduledTask =
   | {
       kind: "discovery_warmup";
+    }
+  | {
+      kind: "status_probes";
     }
   | {
       kind: "monitoring";
@@ -19,6 +31,13 @@ export type ScheduledTask =
     };
 
 export function resolveScheduledTask(cron: string): ScheduledTask {
+  if (cron === STATUS_PROBES_CRON) {
+    // Must resolve to its own kind, never the monitoring fallthrough below:
+    // an unrecognized cron silently runs the full monitoring tick, so the
+    // 5-minute probe rail must be pinned here (and in tests) to stay inert.
+    return { kind: "status_probes" };
+  }
+
   if (cron === DISCOVERY_WARMUP_CRON) {
     return { kind: "discovery_warmup" };
   }

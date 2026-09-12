@@ -6,9 +6,12 @@ import {
   DAILY_DIGEST_CRON,
   DISCOVERY_WARMUP_CRON,
   REGULAR_MONITORING_CRON,
+  STATUS_PROBES_CRON,
   WEEKLY_DIGEST_CRON,
   resolveScheduledTask,
 } from "../workers/schedule";
+import { RELEASE_SCHEDULE_CRONS } from "../app/lib/release-scheduled-observation-contract";
+import { SCHEDULED_OBSERVATION_DEADLINES } from "../app/lib/scheduled-observation-health.server";
 
 describe("worker schedule", () => {
   it("keeps discovery warmup on a bounded six-hour cadence", () => {
@@ -66,5 +69,29 @@ describe("worker schedule", () => {
       includeMentionResweep: false,
       includeAutoCompetitorResweep: false,
     });
+  });
+
+  it("pins the 5-minute status-probe cron to its own inert kind, outside the four-cron soak contract", () => {
+    // The status-probe cron must be registered in wrangler and resolve to its
+    // own kind: resolveScheduledTask's fallthrough for unrecognized crons is a
+    // full monitoring tick, so an unpinned 5-minute cron would run the real
+    // workload every five minutes.
+    const wranglerConfig = readFileSync("wrangler.jsonc", "utf8");
+    expect(wranglerConfig).toContain(`"${STATUS_PROBES_CRON}"`);
+    expect(resolveScheduledTask(STATUS_PROBES_CRON)).toEqual({ kind: "status_probes" });
+
+    // Gap-check boundary (packet 2026-09-12): the deep-health gap check
+    // accepts exactly the four workload crons. The probe cron is a
+    // control-plane cron like the hourly gap check — it must neither be
+    // flagged as a gap (not added to the deadline list) nor hide one (no
+    // workload cron replaced). Its liveness evidence is the
+    // status_probe_samples table's checked_at freshness, not the soak table.
+    expect(SCHEDULED_OBSERVATION_DEADLINES.map(({ cron }) => cron)).toEqual([
+      REGULAR_MONITORING_CRON,
+      DISCOVERY_WARMUP_CRON,
+      DAILY_DIGEST_CRON,
+      WEEKLY_DIGEST_CRON,
+    ]);
+    expect(RELEASE_SCHEDULE_CRONS).not.toContain(STATUS_PROBES_CRON);
   });
 });
