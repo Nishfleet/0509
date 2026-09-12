@@ -1506,6 +1506,11 @@ describe("D1 remote restore evidence automation", () => {
     // while it was the ledger tail, then 0096_email_suppression.sql landed in
     // the repository sorting earlier. D1's ledger is append-only, so the live
     // order is fixed history the sorted repository cannot reproduce.
+    //
+    // 0097_status_health_sample.sql is in the repository but NOT yet applied
+    // on production (production deploys have been red since 2026-09-09), so
+    // the modeled production ledger excludes it too and every expected
+    // forward-suffix includes it as ordinary catch-up at the tail.
     const repository = readdirSync(resolve("migrations"))
       .filter((name) => /^\d{4}_.+\.sql$/u.test(name))
       .sort();
@@ -1516,7 +1521,9 @@ describe("D1 remote restore evidence automation", () => {
     const productionNames = [
       ...PRODUCTION_MIGRATION_LEDGER_BASELINE,
       ...repositorySuffix.filter(
-        (name) => name !== "0096_email_suppression.sql",
+        (name) =>
+          name !== "0096_email_suppression.sql" &&
+          name !== "0097_status_health_sample.sql",
       ),
     ];
     expect(productionNames.at(-1)).toBe("0096_error_reports.sql");
@@ -1533,11 +1540,15 @@ describe("D1 remote restore evidence automation", () => {
       ),
     ).toEqual({
       action: "apply_forward_suffix",
-      migrations: ["0096_email_suppression.sql"],
+      migrations: ["0096_email_suppression.sql", "0097_status_health_sample.sql"],
     });
     expect(
       planSourceBackupLedgerReconciliation(
-        namedLedger([...productionNames, "0096_email_suppression.sql"]),
+        namedLedger([
+          ...productionNames,
+          "0096_email_suppression.sql",
+          "0097_status_health_sample.sql",
+        ]),
         repository,
       ),
     ).toEqual({ action: "ok" });
@@ -1553,7 +1564,11 @@ describe("D1 remote restore evidence automation", () => {
       ),
     ).toEqual({
       action: "apply_forward_suffix",
-      migrations: ["0096_email_suppression.sql", "0096_error_reports.sql"],
+      migrations: [
+        "0096_email_suppression.sql",
+        "0096_error_reports.sql",
+        "0097_status_health_sample.sql",
+      ],
     });
   });
 
