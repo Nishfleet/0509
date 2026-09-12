@@ -162,6 +162,15 @@ export const BRAND_CATEGORIES: Readonly<Record<string, string>> = {
   // Finance & insurance — banks, insurers, financial services.
   "allianz.com": "Finance & insurance",
 
+  // SaaS & software continues:
+  "calendly.com": "SaaS & software",
+  "dropbox.com": "SaaS & software",
+  "zoom.us": "SaaS & software",
+
+  // Beauty & personal care continues:
+  "credobeauty.com": "Beauty & personal care",
+  "morphe.com": "Beauty & personal care",
+
   // Home & living — home goods and lifestyle products.
   "casper.com": "Home & living",
   "dailyobjects.com": "Home & living",

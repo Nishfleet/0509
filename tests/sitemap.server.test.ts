@@ -1797,8 +1797,6 @@ describe("brandCategorySitemapEntries (issue #2067)", () => {
     const sport = byPath("/brands/sport-footwear");
     expect(sport?.lastmod).toBe("2026-08-18");
 
-    expect(sport?.lastmod).toBe("2026-08-18");
-
     // Every curated category at or above the min-brands floor (#3126) gets
     // an entry: exactly the 2 that have brands here. The other curated
     // categories are empty/thin and omitted.

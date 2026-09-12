@@ -1,7 +1,7 @@
 {
   "capturedAt": "2026-09-12",
   "source": "https://0509.io/sitemap.xml",
-  "note": "Snapshots every live, indexable /ads/:domain in the production sitemap (114 domains on 2026-09-12). Used by tests/brand-categories-coverage.test.ts as the sitemap reference so the category registry's coverage of the published surface is pinned, per issue #3126. Update ONLY when the production sitemap genuinely adds or drops a live, indexable /ads/ page.",
+  "note": "Snapshots every live, indexable /ads/:domain in the production sitemap (119 domains on 2026-09-12). Used by tests/brand-categories-coverage.test.ts as the sitemap reference so the category registry's coverage of the published surface is pinned, per issue #3126. Update ONLY when the production sitemap genuinely adds or drops a live, indexable /ads/ page.",
   "domains": [
     "adidas.com",
     "adobe.com",
@@ -20,6 +20,7 @@
     "boat-lifestyle.com",
     "bombas.com",
     "bombayshavingcompany.com",
+    "calendly.com",
     "canva.com",
     "casper.com",
     "celonis.com",
@@ -27,6 +28,7 @@
     "clovia.com",
     "colourpop.com",
     "converse.com",
+    "credobeauty.com",
     "crocs.com",
     "dailyobjects.com",
     "damensch.com",
@@ -34,6 +36,7 @@
     "dermstore.com",
     "dotandkey.com",
     "dove.com",
+    "dropbox.com",
     "dsw.com",
     "ebay.com",
     "elfcosmetics.com",
@@ -65,6 +68,7 @@
     "mamaearth.in",
     "mcaffeine.com",
     "monday.com",
+    "morphe.com",
     "narscosmetics.com",
     "newbalance.com",
     "nike.com",
@@ -116,6 +120,7 @@
     "zebronics.com",
     "zendesk.com",
     "zivame.com",
-    "zoho.com"
+    "zoho.com",
+    "zoom.us"
   ]
 }
