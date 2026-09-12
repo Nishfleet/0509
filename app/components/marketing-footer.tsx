@@ -65,6 +65,7 @@ export function MarketingFooter() {
         <Link to="/switch/panoramata">from Panoramata</Link>
         <Link to="/switch/visualping">from Visualping</Link>
         <Link to="/switch/magicbrief">from MagicBrief</Link>
+        <Link to="/switch/adspy">from AdSpy</Link>
       </nav>
       <nav className="ld-footer-compare" aria-label="By industry">
         <span className="ld-footer-group-label">By industry</span>

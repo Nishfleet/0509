@@ -173,6 +173,24 @@ const LLMS_PAGE_DETAILS = {
     description:
       "The free by-hand check, the URL-and-condition-prompt page monitor, where pixel diffs break (Visualping's own AI calls 83% of detected changes unimportant), and the semantic-diff alternative.",
   },
+  // Issue #3093: three more guides — the offer-change alert, prove-what-
+  // changed, and one-off → standing-watch intents. In SITEMAP_PATHS, so each
+  // needs a title/description here or the _llmsDetailsCoverSitemap type fails.
+  "/guides/how-to-get-alerted-when-a-competitor-changes-their-offer": {
+    title: "How to get alerted when a competitor changes their offer",
+    description:
+      "The free by-hand check, the page-monitor alert route, why a bare 'something changed' firing is homework not an alert, and the brief that names the field that moved.",
+  },
+  "/guides/how-to-prove-what-changed-on-a-competitor-website": {
+    title: "How to prove what changed on a competitor's website",
+    description:
+      "The public archive route, your own dated record, where both break as evidence, and the captured before/after that carries its source link.",
+  },
+  "/guides/how-to-turn-a-one-off-competitor-check-into-a-standing-watch": {
+    title: "How to turn a one-off competitor check into a standing watch",
+    description:
+      "The recurring by-hand routine, the scheduled-monitor route, why a repeated check never becomes a watch, and the watch that runs itself.",
+  },
   "/compare": {
     title: "Compare Five to Nine vs the alternatives",
     description:
@@ -262,6 +280,13 @@ const LLMS_PAGE_DETAILS = {
     title: "MagicBrief alternative after the shutdown",
     description:
       "MagicBrief closed on 31 July 2026. Your competitor list imports here as watchlists; saved boards and report history do not.",
+  },
+  // Issue #3091: the AdSpy switch page. In SITEMAP_PATHS, so it needs a
+  // title/description here or the _llmsDetailsCoverSitemap type fails.
+  "/switch/adspy": {
+    title: "AdSpy alternative",
+    description:
+      "AdSpy carries a 2.4/5 Trustpilot rating, no self-service cancel, and no public API. Paste a domain for the same public Meta ads job.",
   },
   "/competitor-monitoring": {
     title: "Competitor monitoring",

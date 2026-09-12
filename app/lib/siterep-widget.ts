@@ -31,6 +31,7 @@ export const SITE_REP_PUBLIC_WIDGET_PATHS = Object.freeze([
   "/switch/panoramata",
   "/switch/visualping",
   "/switch/magicbrief",
+  "/switch/adspy",
   "/methodology",
   "/methodology/ad-aggression-score",
 ]);

@@ -86,14 +86,16 @@ afterEach(() => {
 });
 
 describe("locale compare/switch child routes (issue #1563)", () => {
-  it("ships exactly the 10 child routes (7 compare + 3 switch)", () => {
+  it("ships exactly the 11 child routes (7 compare + 4 switch)", () => {
     // The compare set is 7, not 9: /compare/visualping and
     // /compare/foreplay are canonicalized duplicates that left the locale
     // child set with the EN URLs (issue #1481). Their $locale.compare.*
     // route files stay registered so those URLs still render 200.
-    // The switch set is 3 since issue #2887: /switch/magicbrief is a live
-    // wind-down page again, so it gets a locale child like its siblings.
-    expect(BUYER_SURFACE_CHILD_PATHS).toHaveLength(10);
+    // The switch set is 4 since issue #3091: /switch/magicbrief is a live
+    // wind-down page again (issue #2887) and /switch/adspy joined as the
+    // cited-complaints AdSpy page, so both get a locale child like their
+    // siblings.
+    expect(BUYER_SURFACE_CHILD_PATHS).toHaveLength(11);
   });
 
   it("registers every locale child route under :locale in routes.ts", () => {
@@ -192,7 +194,7 @@ describe("locale compare/switch child routes (issue #1563)", () => {
     // lang="en" and canonical→EN, so listing them as distinct indexable
     // surfaces would be a duplicate-content doorway pattern. They stay
     // reachable (200, canonical→EN) but are excluded from the sitemap.
-    expect(BUYER_SURFACE_CHILD_PATHS).toHaveLength(10);
+    expect(BUYER_SURFACE_CHILD_PATHS).toHaveLength(11);
     expect(BUYER_SURFACE_LOCALE_IDS).toHaveLength(5);
     for (const locale of BUYER_SURFACE_LOCALE_IDS) {
       for (const child of BUYER_SURFACE_CHILD_PATHS) {
