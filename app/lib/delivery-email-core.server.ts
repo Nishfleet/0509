@@ -33,6 +33,42 @@ export function readString(value: unknown) {
 	return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
+/**
+ * Does this provider exception mean *this recipient* was rejected, as opposed
+ * to the send failing for a reason shared by every recipient?
+ *
+ * The Cloudflare Email binding surfaces failures as plain `Error`s with no
+ * machine-readable code (see `EmailSendingBinding` in env.server.ts, whose
+ * `send` returns `{ messageId }` or throws), so the only available signal is
+ * the message text. The classification is therefore deliberately
+ * conservative: an unrecognised error is NOT a bounce. Suppressing on an
+ * unrecognised error is the failure mode that matters — a provider outage,
+ * a rate limit or a misconfigured binding fails every recipient on the same
+ * cron tick, so mis-counting those would suppress the whole customer base at
+ * once for a fault that says nothing about any one mailbox.
+ *
+ * Recognised as a recipient rejection: text naming the recipient/mailbox/
+ * address, the provider's own "invalid recipient" family, and the standard
+ * SMTP 5xx mailbox codes (550/551/553). Everything else — 429s, 5xx with no
+ * recipient wording, timeouts handled earlier, thrown non-Errors — is left
+ * uncounted and reported truthfully to the caller instead.
+ */
+export function isRecipientRejection(error: unknown): boolean {
+	if (!(error instanceof Error)) return false;
+	const message = error.message.toLowerCase();
+	if (
+		message.includes("recipient") ||
+		message.includes("mailbox") ||
+		message.includes("no such user") ||
+		message.includes("user unknown") ||
+		message.includes("invalid address") ||
+		message.includes("address rejected")
+	) {
+		return true;
+	}
+	return /\b(550|551|553)\b/.test(message);
+}
+
 export async function sendCloudflareEmail(
 	env: AppEnv,
 	input: {
@@ -136,15 +172,21 @@ export async function sendCloudflareEmail(
 			};
 		}
 
-		// A definite (non-timeout) provider exception is a consecutive bounce
-		// signal: record it so the suppression ledger counts it (issue #2983).
-		await bookkeepingSafely(() =>
-			recordEmailBounceFailure(env, {
-				address: input.to,
-				source: "provider_send_failed",
-				detail: error instanceof Error ? error.message : null,
-			}),
-		);
+		// Only a *recipient* rejection counts as a bounce. A provider outage,
+		// rate limit or binding misconfiguration fails every recipient on the
+		// same cron tick, so counting those would suppress a large slice of the
+		// customer base at once for a fault that says nothing about any one
+		// mailbox. Unclassified exceptions are deliberately not counted; the
+		// send core reports them truthfully below either way (issue #2983).
+		if (isRecipientRejection(error)) {
+			await bookkeepingSafely(() =>
+				recordEmailBounceFailure(env, {
+					address: input.to,
+					source: "provider_recipient_rejected",
+					detail: error instanceof Error ? error.message : null,
+				}),
+			);
+		}
 
 		return {
 			provider: EMAIL_PROVIDER,

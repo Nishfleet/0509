@@ -21,6 +21,22 @@ import { execute as run, queryAll as many } from "~/lib/data/d1.server";
 
 export const EMAIL_SUPPRESS_AFTER_CONSECUTIVE_FAILURES = 3;
 
+/**
+ * How long a bounce row keeps an address suppressed before it lapses.
+ *
+ * A bounce suspension must never be absolute: nothing in this system can
+ * *prove* a mailbox is dead (this provider gives no machine-readable bounce
+ * type), and the counter cannot distinguish a dead user from a provider
+ * outage that failed every recipient on the same tick. Without an expiry those
+ * two facts compose into a lockout with no way back — the suppressed address
+ * never reaches the provider, so the success path that clears the row can
+ * never run. After this window the count is treated as stale and the address
+ * is tried again; if it is genuinely dead, three more failures re-suppress it
+ * for another window. The steady-state cost of a truly dead address is then
+ * one provider attempt per window, not a send on every cron tick.
+ */
+export const EMAIL_BOUNCE_SUPPRESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
 export type EmailSuppressionReason = "bounce" | "complaint";
 
 export type EmailSuppressionRecord = {
@@ -29,6 +45,8 @@ export type EmailSuppressionRecord = {
 	source: string;
 	detail: string | null;
 	consecutiveFailures: number;
+	/** When this row was last written; the bounce TTL is measured from here. */
+	updatedAt: string;
 };
 
 type EmailSuppressionRow = {
@@ -37,6 +55,7 @@ type EmailSuppressionRow = {
 	source: string;
 	detail: string | null;
 	consecutive_failures: number;
+	updated_at: string;
 };
 
 export function normalizeSuppressionAddress(value: unknown) {
@@ -52,6 +71,7 @@ function toRecord(row: EmailSuppressionRow): EmailSuppressionRecord {
 		source: row.source,
 		detail: row.detail,
 		consecutiveFailures: row.consecutive_failures,
+		updatedAt: row.updated_at,
 	};
 }
 
@@ -64,7 +84,7 @@ export async function listEmailSuppressionRows(
 	const rows = await many<EmailSuppressionRow>(
 		env,
 		`
-			SELECT address, reason, source, detail, consecutive_failures
+			SELECT address, reason, source, detail, consecutive_failures, updated_at
 			FROM email_suppression
 			WHERE address = ?
 		`,
@@ -76,20 +96,28 @@ export async function listEmailSuppressionRows(
 /**
  * Consulted by the send core before every provider send. A complaint
  * suppresses unconditionally; a bounce suppresses once consecutive definite
- * failures reach EMAIL_SUPPRESS_AFTER_CONSECUTIVE_FAILURES.
+ * failures reach EMAIL_SUPPRESS_AFTER_CONSECUTIVE_FAILURES, and only for
+ * EMAIL_BOUNCE_SUPPRESSION_TTL_MS after the last one so a recoverable address
+ * is never locked out forever.
  */
 export function isEmailSuppressedForAddress(
 	rows: EmailSuppressionRecord[],
+	now: number = Date.now(),
 ): false | { reason: EmailSuppressionReason; consecutiveFailures: number } {
 	const complaint = rows.find((row) => row.reason === "complaint");
 	if (complaint) {
 		return { reason: "complaint", consecutiveFailures: complaint.consecutiveFailures };
 	}
 	const bounce = rows.find((row) => row.reason === "bounce");
-	if (bounce && bounce.consecutiveFailures >= EMAIL_SUPPRESS_AFTER_CONSECUTIVE_FAILURES) {
-		return { reason: "bounce", consecutiveFailures: bounce.consecutiveFailures };
+	if (!bounce) return false;
+	if (bounce.consecutiveFailures < EMAIL_SUPPRESS_AFTER_CONSECUTIVE_FAILURES) {
+		return false;
 	}
-	return false;
+	const lastFailure = Date.parse(bounce.updatedAt);
+	if (!Number.isFinite(lastFailure)) return false;
+	return now - lastFailure < EMAIL_BOUNCE_SUPPRESSION_TTL_MS
+		? { reason: "bounce", consecutiveFailures: bounce.consecutiveFailures }
+		: false;
 }
 
 export async function recordEmailBounceFailure(

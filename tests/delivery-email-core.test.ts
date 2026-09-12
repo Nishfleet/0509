@@ -1,10 +1,25 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { sendCloudflareEmail } from "~/lib/delivery-email-core.server";
+import {
+	isRecipientRejection,
+	sendCloudflareEmail,
+} from "~/lib/delivery-email-core.server";
+
+const NOW = new Date("2026-09-12T00:00:00.000Z");
+
+/** A bounce row written recently enough to still be inside the TTL. */
+function recentBounce(consecutiveFailures: number) {
+	return {
+		reason: "bounce",
+		consecutive_failures: consecutiveFailures,
+		updated_at: NOW.toISOString(),
+	};
+}
 
 type FakeSuppressionRow = {
 	reason: string;
 	consecutive_failures: number;
+	updated_at?: string;
 };
 
 /**
@@ -76,7 +91,7 @@ describe("Cloudflare email provider boundary", () => {
 	});
 
 	it("never calls the provider once consecutive bounces reach the threshold (issue #2983)", async () => {
-		const { db, ran } = suppressionDb([{ reason: "bounce", consecutive_failures: 3 }]);
+		const { db, ran } = suppressionDb([recentBounce(3)]);
 		const send = vi.fn(async () => ({ messageId: "m2" }));
 
 		await expect(
@@ -93,7 +108,7 @@ describe("Cloudflare email provider boundary", () => {
 	});
 
 	it("still sends when consecutive bounces are below the threshold, and the acceptance clears the bounce ledger", async () => {
-		const { db, ran } = suppressionDb([{ reason: "bounce", consecutive_failures: 2 }]);
+		const { db, ran } = suppressionDb([recentBounce(2)]);
 		const send = vi.fn(async () => ({ messageId: "m3" }));
 
 		await expect(
@@ -130,11 +145,50 @@ describe("Cloudflare email provider boundary", () => {
 		expect(inserts).toHaveLength(1);
 		expect(inserts[0].bindings).toEqual([
 			"owner@example.test",
-			"provider_send_failed",
+			"provider_recipient_rejected",
 			"no such mailbox here",
 			expect.any(String),
 			expect.any(String),
 		]);
+	});
+
+	it("does NOT count a provider outage as a bounce (issue #2983 review)", async () => {
+		// A 5xx/rate-limit/misconfiguration fails every recipient on the same
+		// tick. Counting it would suppress the whole customer base at once.
+		const { db, ran } = suppressionDb([]);
+		const send = vi.fn(async () => {
+			throw new Error("502 Bad Gateway from provider");
+		});
+
+		await expect(
+			sendCloudflareEmail(
+				{ EMAIL_FROM_EMAIL: "alerts@0509.io", EMAIL: { send }, DB: db } as never,
+				{ ...baseInput },
+			),
+		).resolves.toMatchObject({
+			status: "failed",
+			errorMessage: expect.stringContaining("502 Bad Gateway"),
+		});
+
+		expect(
+			ran.filter((entry) => /INSERT INTO email_suppression/.test(entry.sql)),
+		).toHaveLength(0);
+	});
+
+	it("does NOT count an unclassified error as a bounce (issue #2983 review)", async () => {
+		const { db, ran } = suppressionDb([]);
+		const send = vi.fn(async () => {
+			throw new Error("Error: connect ECONNREFUSED");
+		});
+
+		await sendCloudflareEmail(
+			{ EMAIL_FROM_EMAIL: "alerts@0509.io", EMAIL: { send }, DB: db } as never,
+			{ ...baseInput },
+		);
+
+		expect(
+			ran.filter((entry) => /INSERT INTO email_suppression/.test(entry.sql)),
+		).toHaveLength(0);
 	});
 
 	it("keeps sending when no DB binding exists — the consult fails open (issue #2983)", async () => {
@@ -147,5 +201,37 @@ describe("Cloudflare email provider boundary", () => {
 			),
 		).resolves.toMatchObject({ status: "sent", providerMessageId: "m4" });
 		expect(send).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("isRecipientRejection — outage vs dead mailbox (issue #2983 review)", () => {
+	it("counts errors that name the recipient or mailbox", () => {
+		for (const message of [
+			"550 5.1.1 recipient address rejected",
+			"Invalid recipient: owner@example.test",
+			"no such mailbox here",
+			"User unknown",
+			"invalid address format",
+		]) {
+			expect(isRecipientRejection(new Error(message)), message).toBe(true);
+		}
+	});
+
+	it("does NOT count a provider-wide fault, so an outage cannot suppress everyone", () => {
+		for (const message of [
+			"502 Bad Gateway",
+			"503 Service Unavailable",
+			"429 Too Many Requests",
+			"connect ECONNREFUSED 127.0.0.1:443",
+			"Email sending is not configured for this environment.",
+			"upstream request timeout",
+		]) {
+			expect(isRecipientRejection(new Error(message)), message).toBe(false);
+		}
+	});
+
+	it("does not count a thrown non-Error", () => {
+		expect(isRecipientRejection("recipient rejected")).toBe(false);
+		expect(isRecipientRejection(undefined)).toBe(false);
 	});
 });

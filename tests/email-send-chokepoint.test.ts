@@ -80,6 +80,12 @@ describe("email provider chokepoint (issue #2983)", () => {
       expect(source, `${file} must feed the bounce ledger`).toMatch(
         /recordEmailBounceFailure\(env,\s*\{/,
       );
+      // ...and must gate that on a recipient rejection, so a provider-wide
+      // outage can never suppress every recipient at once.
+      expect(
+        source,
+        `${file} must classify before counting a bounce`,
+      ).toContain("isRecipientRejection(");
     }
   });
 

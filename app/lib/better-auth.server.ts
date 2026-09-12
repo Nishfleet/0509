@@ -12,6 +12,7 @@ import {
 import { promiseWithTimeout, PromiseTimeoutError } from "~/lib/fetch-timeout.server";
 import {
 	consultEmailSuppression,
+	isRecipientRejection,
 	recordEmailBounceFailure,
 } from "~/lib/delivery-email-core.server";
 import type { AppSession } from "~/lib/types";
@@ -887,11 +888,16 @@ async function recordMagicLinkBounceSafely(
   error: unknown,
 ) {
   try {
-    await recordEmailBounceFailure(env, {
-      address,
-      source: "better_auth_magic_link_send_failed",
-      detail: error instanceof Error ? error.message : null,
-    });
+    // Only a recipient rejection counts, exactly as in the send core: a
+    // provider outage must not suppress every address that tried to log in
+    // during it (issue #2983).
+    if (isRecipientRejection(error)) {
+      await recordEmailBounceFailure(env, {
+        address,
+        source: "better_auth_magic_link_recipient_rejected",
+        detail: error instanceof Error ? error.message : null,
+      });
+    }
   } catch {
     // Bookkeeping never changes the caller's outcome.
   }
