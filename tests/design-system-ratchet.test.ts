@@ -245,12 +245,40 @@ describe("the marker list itself is pinned (Sol wave-2)", () => {
       { encoding: "utf8" },
     );
     expect(tighten.status).toBe(0);
-    expect(JSON.parse(readFileSync(file, "utf8"))).toEqual(realCeilings);
+    // `--update` writes min(prior, measured), so the result is REALITY, not the
+    // checked-in file: the checked-in ceilings may legitimately sit above
+    // reality (headroom left by a sweep that removed markers), and
+    // ratchet-auto-tighten.yml is what closes that on main. Asserting equality
+    // with docs/design-system-ratchet.json therefore pinned this test to
+    // "reality happens to equal the checked-in file" and broke the moment the
+    // #2967 CSS split removed markers. Assert the actual law instead: every
+    // ceiling moved down or stayed, at least one moved down, and a second
+    // --update is a no-op because the file now equals reality.
+    const tightened = JSON.parse(readFileSync(file, "utf8")) as Record<string, number>;
+    for (const [key, value] of Object.entries(inflated)) {
+      expect(tightened[key], key).toBeLessThanOrEqual(value);
+    }
+    expect(
+      Object.keys(tightened).some((key) => tightened[key] < inflated[key]),
+      "--update must actually tighten at least one ceiling",
+    ).toBe(true);
+    const second = spawnSync(
+      process.execPath,
+      [join(root, "scripts", "design-system-ratchet.mjs"), "--update", `--ceilings=${file}`],
+      { encoding: "utf8" },
+    );
+    expect(second.status).toBe(0);
+    expect(second.stdout).toContain("already match reality");
+    expect(JSON.parse(readFileSync(file, "utf8"))).toEqual(tightened);
+    // The write-path law still holds: reality never RAISES a checked-in ceiling.
+    for (const [key, value] of Object.entries(realCeilings)) {
+      expect(tightened[key], key).toBeLessThanOrEqual(value);
+    }
 
     // The refuse-to-raise law needs a ceiling BELOW reality; with the
     // program at zero, synthesize one by setting a ceiling to -1 (below
     // any possible count).
-    const deflated = { ...realCeilings, [Object.keys(realCeilings)[0]]: -1 };
+    const deflated = { ...tightened, [Object.keys(tightened)[0]]: -1 };
     writeFileSync(file, JSON.stringify(deflated));
     const refuse = spawnSync(
       process.execPath,
@@ -259,7 +287,7 @@ describe("the marker list itself is pinned (Sol wave-2)", () => {
     );
     expect(refuse.status).toBe(2);
     const kept = JSON.parse(readFileSync(file, "utf8")) as Record<string, number>;
-    expect(kept[Object.keys(realCeilings)[0]]).toBe(-1);
+    expect(kept[Object.keys(tightened)[0]]).toBe(-1);
     rmSync(dir, { recursive: true, force: true });
   });
 });

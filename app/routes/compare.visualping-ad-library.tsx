@@ -4,6 +4,7 @@ import type { LinksFunction, LoaderFunctionArgs } from "react-router";
 import { COMPARE_CANONICAL_TARGETS, canonicalLinks } from "~/lib/seo";
 import CompareVisualpingAdLibrariesRoute, { meta } from "./compare.visualping-ad-libraries";
 
+import "~/styles/marketing.css";
 export { meta };
 
 // Canonicalized loser (issue #1548, #2085): the plural

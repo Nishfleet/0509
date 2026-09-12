@@ -9,6 +9,7 @@ import type { LinksFunction } from "react-router";
 import GuideHowToTrackCompetitorAdsRoute, { meta } from "./guides.how-to-track-competitor-ads";
 import { buyerSurfaceHreflangLinks, canonicalLinks } from "~/lib/seo";
 
+import "~/styles/marketing.css";
 export { meta };
 
 export const links: LinksFunction = () => [

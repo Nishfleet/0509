@@ -7,6 +7,7 @@
 // page.
 import CompareVisualpingRoute, { links, meta } from "./compare.visualping";
 
+import "~/styles/marketing.css";
 export { links, meta };
 
 export default CompareVisualpingRoute;

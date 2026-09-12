@@ -9,6 +9,7 @@ import type { LinksFunction } from "react-router";
 import GuideHowToMonitorMetaAdLibraryRoute, { meta } from "./guides.how-to-monitor-meta-ad-library";
 import { buyerSurfaceHreflangLinks, canonicalLinks } from "~/lib/seo";
 
+import "~/styles/marketing.css";
 export { meta };
 
 export const links: LinksFunction = () => [

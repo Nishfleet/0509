@@ -11,6 +11,7 @@ import AdAggressionMethodologyRoute, { meta } from "./methodology";
 import { buyerSurfaceHreflangLinks, canonicalLinks } from "~/lib/seo";
 import { AD_AGGRESSION_METHODOLOGY_PATH } from "~/lib/aggression-score";
 
+import "~/styles/marketing.css";
 export { meta };
 
 export const links: LinksFunction = () => [
