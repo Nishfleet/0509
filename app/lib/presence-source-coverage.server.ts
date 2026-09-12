@@ -22,6 +22,7 @@ const SOURCE_LABELS: Record<PresenceSourceId, string> = {
   reddit: "Reddit",
   linkedin: "LinkedIn",
   rss: "RSS / Atom / JSON Feed",
+  bluesky: "Bluesky",
   youtube: "YouTube",
   amazon: "Amazon marketplace",
   context_dev: "Context.dev (open-web provider)",
@@ -43,9 +44,10 @@ const CONNECTOR_FOR_SOURCE: Partial<Record<PresenceSourceId, PresenceConnectorId
   reddit: "reddit",
   linkedin: "linkedin",
   rss: "rss",
+  bluesky: "bluesky",
 };
 
-const SOCIAL_SOURCE_IDS = new Set<PresenceSourceId>(["x", "reddit", "linkedin"]);
+const SOCIAL_SOURCE_IDS = new Set<PresenceSourceId>(["x", "reddit", "linkedin", "bluesky"]);
 
 export interface PresenceSourcePlanGates {
   modeAllowed: boolean;
@@ -416,6 +418,12 @@ export function presenceSourceCoverageForDocs(): Array<{
       label: SOURCE_LABELS.rss,
       productionStatus: "gated",
       notes: "RSS/Atom/JSON Feed connector wired in. Gated behind PRESENCE_RSS_ROLLOUT — off by default; activation is a separate rollout decision.",
+    },
+    {
+      sourceId: "bluesky",
+      label: SOURCE_LABELS.bluesky,
+      productionStatus: "gated",
+      notes: "Bluesky mention connector wired in (app.bsky.feed.searchPosts, $0). Gated behind PRESENCE_BLUESKY_ROLLOUT — off by default; activation is a separate rollout decision.",
     },
     {
       sourceId: "youtube",

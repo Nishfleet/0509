@@ -1,4 +1,5 @@
 import { linkedinConnector } from "~/lib/presence-connectors/linkedin.server";
+import { blueskyConnector } from "~/lib/presence-connectors/bluesky.server";
 import { redditConnector } from "~/lib/presence-connectors/reddit.server";
 import { rssConnector } from "~/lib/presence-connectors/rss.server";
 import { websiteConnector } from "~/lib/presence-connectors/website.server";
@@ -20,6 +21,7 @@ const CONNECTORS = {
   reddit: redditConnector,
   linkedin: linkedinConnector,
   rss: rssConnector,
+  bluesky: blueskyConnector,
 } as const;
 
 export function getPresenceConnector(connectorId: PresenceConnectorId) {
@@ -93,6 +95,11 @@ export async function pollPresenceTarget(
   if (target.connectorId === "reddit") {
     return redditConnector.poll(ctx);
   }
+  if (target.connectorId === "bluesky") {
+    // The mention connector needs the entity's match phrase; it reaches the
+    // phrase surface through target_key — the connector itself decides.
+    return blueskyConnector.poll(ctx);
+  }
   return linkedinConnector.poll(ctx);
 }
 
@@ -113,7 +120,7 @@ export function coverageLabelForConnector(
   if (connectorId === "linkedin" && trackingMode === "competitor") {
     return "LIMITED_COVERAGE" as const;
   }
-  if (connectorId === "x" || connectorId === "reddit") {
+  if (connectorId === "x" || connectorId === "reddit" || connectorId === "bluesky") {
     return trackingMode === "self" ? "CONNECTED_ACCOUNT" : "OFFICIAL_PUBLIC_API";
   }
   return "UNAVAILABLE" as const;
