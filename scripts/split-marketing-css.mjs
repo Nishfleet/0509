@@ -59,8 +59,10 @@ if (moving.length === 0 && existingMarketing.length === 0) {
 // the new moves (with a blank line separator) so a re-run is genuinely
 // idempotent and never destroys an existing split.
 const newMovesBlock = moving.map((r) => r.text.trim()).join("\n\n");
-const marketingCss = existingMarketing.length === 0
-  ? `/*
+const marketingCss = moving.length === 0
+  ? existingMarketing
+  : existingMarketing.length === 0
+    ? `/*
  * Marketing-only styles (issue #2967).
  *
  * Split out of app/app.css by scripts/split-marketing-css.mjs so the root
@@ -74,7 +76,7 @@ const marketingCss = existingMarketing.length === 0
  */
 
 ${newMovesBlock}\n`
-  : `${existingMarketing.replace(/\n*$/, "")}\n\n${newMovesBlock}\n`;
+    : `${existingMarketing.replace(/\n+$/, "")}\n\n${newMovesBlock}\n`;
 
 const appCss = `${staying.map((r) => r.text.trim()).join("\n\n")}\n`;
 
