@@ -359,13 +359,18 @@ describe("account security copy and passkey removal", () => {
     expect(source).toContain('aria-live="polite"');
   });
 
-  it("describes account deletion as a support request rather than an in-app deletion", () => {
+  it("describes account deletion as an in-app flow with a 7-day grace window (issue #3168)", () => {
+    // Issue #3168 removed the support-case fallback for deletion and
+    // email change. This test now asserts the in-app copy lives in
+    // app/routes/app.account.tsx so the weakness on the /status page
+    // stays resolved.
     const source = readFileSync("app/routes/app.account.tsx", "utf8");
 
-    expect(source).toContain("support deletion request");
-    expect(source).toContain("nothing is deleted automatically or in-app");
-    expect(source).toContain("Support reviews and verifies the request");
-    expect(source).not.toContain("Permanently removes your account");
+    expect(source).toContain("Schedule deletion in-app");
+    expect(source).toContain("7-day grace window");
+    expect(source).toContain("Send confirmation link");
+    expect(source).not.toContain("support deletion request");
+    expect(source).not.toContain("Nothing is deleted automatically or in-app");
   });
 });
 

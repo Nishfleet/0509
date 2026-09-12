@@ -359,6 +359,210 @@ export async function changeDodo0509SubscriptionPlan(
   return requestDodo0509SubscriptionPlanChange({ ...options, preview: false });
 }
 
+/**
+ * Schedule a Dodo subscription to cancel at the next billing date. The
+ * Dodo webhook reconciles `cancellation_scheduled` from this call, so the
+ * UI sees the status change without a separate poll.
+ *
+ * Two endpoints exist in the Dodo API surface: a dedicated
+ * `/subscriptions/{id}/cancel` POST, and the generic PATCH/POST that toggles
+ * `cancel_at_next_billing_date`. We try the dedicated endpoint first
+ * because it returns a structured response we can verify; the generic POST
+ * is the fallback so the in-app cancel keeps working if Dodo removes the
+ * dedicated path.
+ *
+ * Returns `source: 'already_scheduled'` when the subscription already
+ * carries `cancel_at_next_billing_date=true` (idempotent re-click). The
+ * `dodoStatus` is the post-call state so the caller can decide whether to
+ * wait for the webhook or render the new state immediately.
+ */
+const DODO_CANCEL_TIMEOUT_MS = 15_000;
+const DODO_CANCEL_JSON_MAX_BYTES = 32_000;
+
+export type DodoSubscriptionCancellationOutcome = {
+  cancellationScheduled: boolean;
+  dodoStatus: string | null;
+  source: "dodo_api" | "already_scheduled" | "no_active_subscription" | "error";
+  message?: string;
+};
+
+export async function scheduleDodoSubscriptionCancellationImpl(
+  env: AppEnv,
+  options: {
+    fetcher?: typeof fetch;
+    subscriptionId: string;
+  },
+): Promise<DodoSubscriptionCancellationOutcome> {
+  const apiKey = dodo0509ApiKey(env);
+  if (!apiKey) {
+    return {
+      cancellationScheduled: false,
+      dodoStatus: null,
+      source: "error",
+      message: "Dodo API key is not configured.",
+    };
+  }
+  const cleanSubscriptionId = options.subscriptionId.trim();
+  if (!cleanSubscriptionId) {
+    return {
+      cancellationScheduled: false,
+      dodoStatus: null,
+      source: "no_active_subscription",
+    };
+  }
+
+  // Read current state first. If the flag is already true, the work is done.
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(
+      `${dodo0509BaseUrl(env)}/subscriptions/${encodeURIComponent(cleanSubscriptionId)}`,
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${apiKey}` },
+      },
+      { fetcher: options.fetcher, timeoutMs: DODO_CANCEL_TIMEOUT_MS },
+    );
+  } catch {
+    return {
+      cancellationScheduled: false,
+      dodoStatus: null,
+      source: "error",
+      message: "Could not read the current Dodo subscription state.",
+    };
+  }
+  if (!response.ok) {
+    releaseFetchTimeout(response);
+    return {
+      cancellationScheduled: false,
+      dodoStatus: null,
+      source: "error",
+      message: `Dodo subscription GET returned ${response.status}.`,
+    };
+  }
+  let currentPayload: Record<string, unknown>;
+  try {
+    currentPayload = objectOrEmpty(
+      (await readResponseJsonWithinLimit(response, DODO_CANCEL_JSON_MAX_BYTES)) ?? {},
+    );
+  } catch {
+    return {
+      cancellationScheduled: false,
+      dodoStatus: null,
+      source: "error",
+      message: "Dodo subscription response could not be parsed.",
+    };
+  }
+  const currentStatus = readString(currentPayload, "status");
+  if (!currentStatus) {
+    return {
+      cancellationScheduled: false,
+      dodoStatus: null,
+      source: "error",
+      message: "Dodo subscription state is unavailable.",
+    };
+  }
+  const alreadyCancelled = readDodoBoolean(currentPayload, "cancel_at_next_billing_date") === true;
+  if (alreadyCancelled) {
+    return {
+      cancellationScheduled: true,
+      dodoStatus: currentStatus,
+      source: "already_scheduled",
+    };
+  }
+  if (currentStatus === "cancelled" || currentStatus === "expired") {
+    return {
+      cancellationScheduled: true,
+      dodoStatus: currentStatus,
+      source: "already_scheduled",
+    };
+  }
+
+  // Try the dedicated cancel endpoint first.
+  const dedicatedUrl = new URL(
+    `${dodo0509BaseUrl(env)}/subscriptions/${encodeURIComponent(cleanSubscriptionId)}/cancel`,
+  );
+  let cancelResponse: Response;
+  try {
+    cancelResponse = await fetchWithTimeout(
+      dedicatedUrl.toString(),
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({ cancel_at_next_billing_date: true }),
+      },
+      { fetcher: options.fetcher, timeoutMs: DODO_CANCEL_TIMEOUT_MS },
+    );
+  } catch {
+    return {
+      cancellationScheduled: false,
+      dodoStatus: currentStatus,
+      source: "error",
+      message: "Dodo cancel request timed out.",
+    };
+  }
+  if (!cancelResponse.ok) {
+    // Fallback: PATCH-style update on the subscription resource. If Dodo
+    // ever removes the dedicated /cancel path, this keeps the in-app
+    // flow alive.
+    if (cancelResponse.status !== 404 && cancelResponse.status !== 405) {
+      releaseFetchTimeout(cancelResponse);
+      return {
+        cancellationScheduled: false,
+        dodoStatus: currentStatus,
+        source: "error",
+        message: `Dodo cancel returned ${cancelResponse.status}.`,
+      };
+    }
+    releaseFetchTimeout(cancelResponse);
+    const fallbackUrl = new URL(
+      `${dodo0509BaseUrl(env)}/subscriptions/${encodeURIComponent(cleanSubscriptionId)}`,
+    );
+    let fallbackResponse: Response;
+    try {
+      fallbackResponse = await fetchWithTimeout(
+        fallbackUrl.toString(),
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({ cancel_at_next_billing_date: true }),
+        },
+        { fetcher: options.fetcher, timeoutMs: DODO_CANCEL_TIMEOUT_MS },
+      );
+    } catch {
+      return {
+        cancellationScheduled: false,
+        dodoStatus: currentStatus,
+        source: "error",
+        message: "Dodo cancel fallback timed out.",
+      };
+    }
+    if (!fallbackResponse.ok) {
+      releaseFetchTimeout(fallbackResponse);
+      return {
+        cancellationScheduled: false,
+        dodoStatus: currentStatus,
+        source: "error",
+        message: `Dodo cancel fallback returned ${fallbackResponse.status}.`,
+      };
+    }
+    releaseFetchTimeout(fallbackResponse);
+  } else {
+    releaseFetchTimeout(cancelResponse);
+  }
+
+  return {
+    cancellationScheduled: true,
+    dodoStatus: currentStatus,
+    source: "dodo_api",
+  };
+}
+
 export async function getDodo0509SubscriptionCurrency({
   env,
   subscriptionId,

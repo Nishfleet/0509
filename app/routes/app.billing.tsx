@@ -1,6 +1,7 @@
 import { Form, Link, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 import type { ReactNode } from "react";
+import { useState } from "react";
 
 import { CheckoutReturnNotice } from "~/components/checkout-return-notice";
 import { Pill } from "~/components/pill";
@@ -232,6 +233,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       (billing.dodoStatus === "checkout_pending" && checkoutNotice !== "dodo"),
     invalidCheckoutTarget: checkoutNotice === "invalid-target",
     cancelledCheckout: checkoutNotice === "cancelled",
+    cancellationNotice: cleanCancellationNotice(url.searchParams.get("cancellation")),
     agencyCheckoutHeld: checkoutNotice === "agency-held",
     planCheckoutUnavailable: checkoutNotice === "plan-unavailable",
     annualCheckoutUnavailable: checkoutNotice === "annual-unavailable",
@@ -337,6 +339,33 @@ export default function BillingRoute() {
         </div>
       ) : null}
 
+      {data.cancellationNotice === "scheduled" ? (
+        <div aria-live="polite" className="f9-wk-notice is-success" role="status">
+          <p>
+            Cancellation scheduled. Your {planLabel} plan stays active until the end of the
+            current billing period; we'll move you to the free plan automatically after.
+          </p>
+        </div>
+      ) : data.cancellationNotice === "already-scheduled" ? (
+        <div aria-live="polite" className="f9-wk-notice" role="status">
+          <p>Cancellation is already scheduled — no change made.</p>
+        </div>
+      ) : data.cancellationNotice === "no-subscription" ? (
+        <div aria-live="polite" className="f9-wk-notice" role="status">
+          <p>No active subscription to cancel. Choose a plan below to start monitoring.</p>
+        </div>
+      ) : data.cancellationNotice === "terminal" ? (
+        <div aria-live="polite" className="f9-wk-notice" role="status">
+          <p>Subscription already ended — nothing to cancel.</p>
+        </div>
+      ) : data.cancellationNotice === "failed" ? (
+        <div aria-live="assertive" className="f9-wk-notice is-error" role="alert">
+          <p>
+            We couldn't schedule the cancellation just now. Refresh and try again, or email{" "}
+            <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> for help.
+          </p>
+        </div>
+      ) : null}
       {data.cancelledCheckout ? (
         <div className="f9-wk-notice" role="status">
           <p>
@@ -1030,6 +1059,15 @@ function BillingLifecycleSummary({
           <Link className="f9-wk-btn" to="/app/billing?source=billing#plans">
             Choose a plan
           </Link>
+        ) : canManageBilling && isPaid && kind === "active" ? (
+          // Issue #3168: in-app cancellation is the primary action; the
+          // portal link is the extra path for card / invoice work. The
+          // CancelSubscriptionButton renders a Confirm-submit primitive
+          // (defined inline below) so a fat-finger click does not
+          // immediately schedule cancellation. The portal link only
+          // renders when one is linked (else the route is unavailable
+          // anyway).
+          <CancelSubscriptionButton hasPortal={hasPortal} />
         ) : canManageBilling && hasPortal ? (
           <Form action="/api/billing/dodo/portal" method="post">
             <SubmitButton className="f9-wk-btn" pendingLabel="Redirecting…">
@@ -1071,6 +1109,48 @@ function cancellationAccessCopy(kind: BillingLifecycleKind) {
     return "Your current plan is active while this payment issue is resolved.";
   }
   return "Cancellation stops future renewals — you keep access until the end of the period you've paid for.";
+}
+
+function CancelSubscriptionButton({ hasPortal }: { hasPortal: boolean }) {
+  // In-app cancellation for the active-plan lifecycle (issue #3168).
+  // Uses a two-click confirmation so a fat-finger tap does NOT cancel
+  // immediately. POSTs to the new dedicated route so the hosted portal
+  // is never the only path. The portal link only renders when a portal
+  // linkage exists; for accounts without one (e.g. plan granted before
+  // linkage landed) the in-app Cancel is the sole button.
+  const [confirmed, setConfirmed] = useState(false);
+  return (
+    <span className="f9-wk-inline-actions">
+      <Form action="/api/billing/dodo/cancel-subscription" method="post">
+        {confirmed ? (
+          <SubmitButton
+            className="f9-wk-btn"
+            pendingLabel="Scheduling cancellation…"
+          >
+            Confirm cancellation
+          </SubmitButton>
+        ) : (
+          <button
+            className="f9-wk-btn-quiet"
+            onClick={(event) => {
+              event.preventDefault();
+              setConfirmed(true);
+            }}
+            type="button"
+          >
+            Cancel subscription
+          </button>
+        )}
+      </Form>
+      {hasPortal ? (
+        <Form action="/api/billing/dodo/portal" method="post" className="f9-wk-inline">
+          <SubmitButton className="f9-wk-btn-quiet" pendingLabel="Redirecting…">
+            Open billing portal
+          </SubmitButton>
+        </Form>
+      ) : null}
+    </span>
+  );
 }
 
 function PriceLoadingSkeleton() {
@@ -1316,6 +1396,17 @@ function coerceBillingCycle(value: string | null): PricingBillingCycle | null {
   if (value === "yearly") return "yearly";
   if (value === "monthly") return "monthly";
   return null;
+}
+
+function cleanCancellationNotice(value: string | null) {
+  const allowed = [
+    "scheduled",
+    "already-scheduled",
+    "no-subscription",
+    "terminal",
+    "failed",
+  ];
+  return allowed.includes(String(value ?? "")) ? String(value) : null;
 }
 
 function cleanSourceParam(value: string | null) {

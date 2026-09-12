@@ -312,7 +312,10 @@ describe("billing policy copy", () => {
     // No portal is promised when the account has none.
     expect(markup).not.toContain('action="/api/billing/dodo/portal"');
     expect(markup).not.toContain("Open billing portal");
-    // Support case and email stay the primary path for these accounts.
+    // Issue #3168: in-app cancellation is the primary path for paid
+    // accounts; the support case + email remain the secondary / fallback
+    // path for everything else.
+    expect(markup).toContain('action="/api/billing/dodo/cancel-subscription"');
     expect(markup).toContain('href="/app/support?category=billing">open a billing support case</a>');
     expect(markup).toContain('href="mailto:support@0509.io"');
   });

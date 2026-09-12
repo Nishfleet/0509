@@ -619,6 +619,30 @@ export default {
           (error) => reportScheduledTaskFailure(env, "retention_sweep", error),
         ),
       );
+      // Issue #3168: hard-delete any account whose 7-day grace window has
+      // expired. Rides the existing retention cron — no new wrangler
+      // schedule. The sweep itself is bounded and partial-indexed so the
+      // SELECT is cheap; each delete is one D1 batch (atomic per call) so
+      // a single failing row leaves the rest of the queue intact for the
+      // next tick. Failure escalates through the cron-failure alerter
+      // (task key "account_deletion_sweep") — we deliberately do NOT use
+      // observe()/the release-soak table here because that table's CHECK
+      // constrains task_name to a fixed set, and adding a fifth workload
+      // cron is exactly the constraint the deletion sweep is designed to
+      // avoid.
+      ctx.waitUntil(
+        import("../app/lib/account-self-serve.server").then(({ runAccountDeletionSweep }) =>
+          runAccountDeletionSweep(env).then(
+            (result) => {
+              if (result.hardDeleted > 0 || result.scannedDue > 0) {
+                console.log("account deletion sweep completed", result);
+              }
+            },
+            (error) =>
+              reportScheduledTaskFailure(env, "account_deletion_sweep", error),
+          ),
+        ),
+      );
       ctx.waitUntil(
         observe("presence_polling_batch", import("../app/lib/presence-service.server").then(({ runPresencePollingBatch }) =>
           runPresencePollingBatch(env, { limit: 20 }),

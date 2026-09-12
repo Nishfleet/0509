@@ -37,9 +37,21 @@ export default [
   route("api/auth/*", "routes/api.auth.$.ts"),
   route("api/billing/dodo/checkout", "routes/api.billing.dodo.checkout.ts"),
   route("api/billing/dodo/cancel", "routes/api.billing.dodo.cancel.ts"),
+  // Issue #3168: in-app cancellation scheduling. The portal link stays
+  // available for card / invoice work — this route is the *only* in-app
+  // path to cancel the subscription itself.
+  route("api/billing/dodo/cancel-subscription", "routes/api.billing.dodo.cancel-subscription.ts"),
   route("api/billing/dodo/canary", "routes/api.billing.dodo.canary.ts"),
   route("api/billing/dodo/portal", "routes/api.billing.dodo.portal.ts"),
   route("api/billing/dodo/plan-change", "routes/api.billing.dodo.plan-change.ts"),
+  // Issue #3168: self-serve account lifecycle. Two-step delete (request
+  // -> email confirm -> 7-day grace -> retention sweep) plus in-app email
+  // change (verify-new-address -> swap -> notify-old -> revoke others).
+  route("api/account/delete-request", "routes/api.account.delete-request.ts"),
+  route("api/account/delete-confirm", "routes/api.account.delete-confirm.ts"),
+  route("api/account/delete-cancel", "routes/api.account.delete-cancel.ts"),
+  route("api/account/email-change-request", "routes/api.account.email-change-request.ts"),
+  route("api/account/email-change-confirm", "routes/api.account.email-change-confirm.ts"),
   route("api/demo-proof", "routes/api.demo-proof.ts"),
   // Public capture-failure list for the /ads/:domain "What we checked, even
   // when it didn't alert" expander (issue #2249). The page lazy-fetches

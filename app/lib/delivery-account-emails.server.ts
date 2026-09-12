@@ -400,6 +400,20 @@ export async function sendAccountActionEmail(
     name: string | null;
     kind: "change_email" | "delete_account";
     actionUrl: string;
+    /**
+     * Optional secondary URLs rendered as muted links beneath the primary
+     * action button. Used for the 7-day delete-cancel link on the delete
+     * email and the "this was you" confirmation link on the email-change
+     * email. Order matters: the first entry is rendered highest.
+     */
+    extraUrls?: { label: string; url: string }[];
+    /**
+     * Number of days in the grace window after the user clicks the primary
+     * action. Only rendered for `delete_account` — the email body changes
+     * to mention the date the hard delete will run if the user takes no
+     * further action.
+     */
+    graceWindowDays?: number;
   },
 ) {
   const copy = accountActionCopy(input.kind);
@@ -618,15 +632,28 @@ export function renderAccountActionHtml(input: {
   name: string | null;
   kind: "change_email" | "delete_account";
   actionUrl: string;
+  extraUrls?: { label: string; url: string }[];
+  graceWindowDays?: number;
 }) {
   const copy = accountActionCopy(input.kind);
+  const extraBlock = (input.extraUrls ?? [])
+    .map((entry) =>
+      `<p style="margin: 0 0 8px; font-size: 13px; color: #344054;"><a href="${escapeHtml(entry.url)}" style="color: #1570ef; text-decoration: underline;">${escapeHtml(entry.label)}</a></p>`,
+    )
+    .join("");
+  const graceBlock =
+    input.kind === "delete_account" && typeof input.graceWindowDays === "number"
+      ? `<p style="margin: 0 0 16px; color: #344054; font-size: 14px;">You have <strong>${input.graceWindowDays} days</strong> to cancel this from your account settings. After that, all your watchlists, history, and evidence are gone.</p>`
+      : "";
   return `
       <div style="${ACCOUNT_BODY_STYLE}">
         <p style="margin: 0 0 12px;">${accountGreeting(input.name)}</p>
+        ${graceBlock}
         <p style="margin: 0 0 20px;">${copy.body}</p>
         <p style="margin: 0 0 24px;">
           <a href="${escapeHtml(input.actionUrl)}" style="${ACCOUNT_CTA_STYLE}">${copy.action}</a>
         </p>
+        ${extraBlock}
         <p style="${ACCOUNT_FOOTNOTE_STYLE}">
           If you didn't ask for this, ignore this email — nothing changes.
         </p>

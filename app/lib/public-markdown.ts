@@ -1211,7 +1211,7 @@ Current product truth:
 - Customer API keys support setup status plus collection, watchlist, and digest exports for account-owned data.
 - Write-enabled customer API keys support approved workspace actions: ${AUDITED_AGENT_ACTION_GROUP_SUMMARY}.
 - Restricted actions still require signed-in owner review: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.
-- Signed-in support cases cover billing changes and cancellation, account access and team changes, migration and setup help, and security and deletion requests, with email fallback when a user cannot sign in.
+- Cancellation, account deletion, and email change are in-app flows with email-link verification, a 7-day deletion grace window, and a cancel-deletion link in the confirmation email. Signed-in support cases cover the rest: account access and team changes, migration and setup help, and security requests, with email fallback when a user cannot sign in.
 - The public status page summarizes customer-facing surfaces without exposing private account activity.
 - Social connectors remain disabled. Broad public write APIs beyond approved account actions are not live yet.
 - Public copy should avoid unsupported security, compliance, traction, or model-routing claims.

@@ -16,7 +16,6 @@ import {
   normalizeCompetitorWebsiteInput,
 } from "~/lib/competitor-website";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
-import type { AppEnv } from "~/lib/env.server";
 
 export const meta = () => [{ title: "Account | Five to Nine" }];
 
@@ -78,6 +77,29 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         }),
     ]);
 
+  // Issue #3168: pending self-serve state is read by the UI below to
+  // show a real grace timer (delete) and an inbox-check banner (email
+  // change). Read it after the main payload so a slow DB read never blocks
+  // the rest of the page.
+  const [pendingDeletion, pendingEmailChange] = isE2EFixtureSession
+    ? [null, null]
+    : await Promise.all([
+        import("~/lib/account-self-serve.server").then(({ readPendingAccountDeletion }) =>
+          readPendingAccountDeletion(env, session.user.id),
+        ),
+        import("~/lib/account-self-serve.server").then(({ readPendingAccountEmailChange }) =>
+          readPendingAccountEmailChange(env, session.user.id),
+        ),
+      ]);
+
+  // The deletion/email-change confirmation routes redirect back here
+  // with one of these flags. Read them server-side so the render path
+  // does not depend on useSearchParams() (which requires a Router
+  // context that the page-level tests do not provide).
+  const url = new URL(request.url);
+  const deletionNotice = url.searchParams.get("deletion");
+  const emailChangeNotice = url.searchParams.get("email-change");
+
   return {
     email: session.user.email,
     emailVerified,
@@ -92,6 +114,24 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     passkeyControlsMessage,
     activeSessions,
     sessionControlsMessage,
+    pendingDeletion: pendingDeletion
+      ? {
+          id: pendingDeletion.id,
+          emailAtRequest: pendingDeletion.email_at_request,
+          requestedAt: pendingDeletion.requested_at,
+          scheduledFor: pendingDeletion.scheduled_for,
+        }
+      : null,
+    pendingEmailChange: pendingEmailChange
+      ? {
+          id: pendingEmailChange.id,
+          newEmail: pendingEmailChange.new_email,
+          requestedAt: pendingEmailChange.requested_at,
+          expiresAt: pendingEmailChange.expires_at,
+        }
+      : null,
+    deletionNotice,
+    emailChangeNotice,
   };
 }
 
@@ -260,148 +300,19 @@ export async function action({ context, request }: ActionFunctionArgs) {
     }
   }
 
-  if (intent === "request-account-deletion") {
-    if (isE2EFixtureSession) {
-      return { ok: false, intent, message: "Sign in with email to request account deletion." };
-    }
-
-    if (String(formData.get("confirmDeletion") ?? "") !== "yes") {
-      return {
-        ok: false,
-        intent,
-        message: "Confirm that this sends a support deletion request and does not delete anything automatically or in-app.",
-      };
-    }
-
-    const { createSupportCase } = await import("~/lib/data.server");
-
-    const supportCase = await createSupportCase(env, {
-      userId: session.user.id,
-      category: "security",
-      priority: "urgent",
-      subject: "Delete my Five to Nine account",
-      detail: [
-        "Signed-in support deletion request.",
-        `Account email: ${session.user.email}`,
-        `Account user ID: ${session.user.id}`,
-        "Nothing is deleted automatically or in-app. Support reviews and verifies the request, then communicates the feasible process.",
-      ].join("\n"),
-      context: {
-        createdFrom: "signed_in_account_deletion_request",
-        source: "app.account",
-      },
-      reopenClosed: true,
-      requestKey: `account-deletion:${session.user.id}`,
-    });
-
-    if (!supportCase) {
-      return { ok: false, intent, message: "We couldn't open the support deletion request. Email support and we'll take care of it." };
-    }
-
-    const notificationResult = await notifyAccountDeletionOperator(env, {
-      caseId: supportCase.id,
-      dedupeKey: isReopenedSupportCase(supportCase)
-        ? `support-case-reopen:${supportCase.id}:${supportCase.updatedAt}`
-        : `support-case:${supportCase.id}`,
-      requesterEmail: session.user.email,
-      userId: session.user.id,
-    });
-    if (notificationResult === "failed") {
-      return {
-        ok: true,
-        intent,
-        message: `Support deletion request opened as case ${supportCase.id}. Support notification failed, so email ${SUPPORT_EMAIL} if you need it handled urgently. Nothing is deleted automatically or in-app.`,
-      };
-    }
-
+  if (intent === "request-account-deletion" || intent === "request-email-change") {
+    // Both deletion and email change now live behind dedicated POST routes
+    // (/api/account/delete-request, /api/account/email-change-request).
+    // The forms in this page POST directly to those endpoints. If a stale
+    // tab still submits the old intent, return a friendly message so the
+    // user sees the page is current rather than a no-op success.
     return {
-      ok: true,
+      ok: false,
       intent,
-      message: supportCase.alreadyExists
-        ? `Support deletion request is already open as case ${supportCase.id}. Support will review and verify it, then communicate the feasible process.`
-        : `Support deletion request opened as case ${supportCase.id}. Support will review and verify the request, then communicate the feasible process. Nothing is deleted automatically or in-app.`,
-    };
-  }
-
-  if (intent === "request-email-change") {
-    if (isE2EFixtureSession) {
-      return { ok: false, intent, message: "Sign in with email to request an email change." };
-    }
-
-    const newEmail = String(formData.get("newEmail") ?? "").trim();
-    const normalizedNewEmail = newEmail.toLowerCase();
-    if (String(formData.get("confirmEmailChange") ?? "") !== "yes") {
-      return {
-        ok: false,
-        intent,
-        message: "Confirm that this opens a support request and that support completes the change.",
-      };
-    }
-    if (!isPlausibleEmail(newEmail)) {
-      return {
-        ok: false,
-        intent,
-        message: "Enter the new email address you'd like on the account.",
-      };
-    }
-    if (normalizedNewEmail === session.user.email.toLowerCase()) {
-      return { ok: false, intent, message: "That's already the email on this account." };
-    }
-
-    const { createSupportCase } = await import("~/lib/data.server");
-
-    const supportCase = await createSupportCase(env, {
-      userId: session.user.id,
-      category: "account",
-      priority: "normal",
-      subject: "Change my Five to Nine account email",
-      detail: [
-        "Signed-in support email-change request.",
-        `Current account email: ${session.user.email}`,
-        `Requested new email: ${newEmail}`,
-        `Account user ID: ${session.user.id}`,
-        "Support verifies ownership and completes the change; nothing changes automatically or in-app.",
-      ].join("\n"),
-      context: {
-        createdFrom: "signed_in_account_email_change_request",
-        source: "app.account",
-        requestedNewEmail: newEmail,
-      },
-      reopenClosed: true,
-      requestKey: `account-email-change:${session.user.id}:${normalizedNewEmail}`,
-    });
-
-    if (!supportCase) {
-      return {
-        ok: false,
-        intent,
-        message: "We couldn't open the email-change request. Email support and we'll take care of it.",
-      };
-    }
-
-    const notificationResult = await notifyAccountEmailChangeOperator(env, {
-      caseId: supportCase.id,
-      dedupeKey: isReopenedSupportCase(supportCase)
-        ? `support-case-reopen:${supportCase.id}:${supportCase.updatedAt}`
-        : `support-case:${supportCase.id}`,
-      requesterEmail: session.user.email,
-      requestedEmail: newEmail,
-      userId: session.user.id,
-    });
-    if (notificationResult === "failed") {
-      return {
-        ok: true,
-        intent,
-        message: `Email-change request opened as case ${supportCase.id}. Support notification failed, so email ${SUPPORT_EMAIL} if you need it handled quickly. Support completes the change; nothing changes automatically or in-app.`,
-      };
-    }
-
-    return {
-      ok: true,
-      intent,
-      message: supportCase.alreadyExists
-        ? `Email-change request is already open as case ${supportCase.id}. Support will verify ownership and complete the change.`
-        : `Email-change request opened as case ${supportCase.id}. Support will verify ownership and complete the change. Nothing changes automatically or in-app.`,
+      message:
+        intent === "request-account-deletion"
+          ? "Account deletion now lives at /app/account#deletion. Use the form there."
+          : "Email change now lives at /app/account#email. Use the form there.",
     };
   }
 
@@ -442,6 +353,13 @@ export default function AccountRoute() {
   const [passkeyPendingId, setPasskeyPendingId] = useState<string | null>(null);
   const [passkeyConfirmId, setPasskeyConfirmId] = useState<string | null>(null);
   const otherSessionCount = data.activeSessions.filter((session) => !session.isCurrent).length;
+  // /api/account/delete-confirm or /api/account/delete-cancel redirects
+  // back here with one of these flags. The Account page surfaces the
+  // matching notice instead of a generic toast so the user sees exactly
+  // which way the request went. Loader reads URL search params directly
+  // (no useSearchParams — see loader for the reason).
+  const deletionNotice = data.deletionNotice ?? null;
+  const emailChangeNotice = data.emailChangeNotice ?? null;
 
   return (
     <DashboardPage className="f9-wk-page f9-acct-page f9-acct-account">
@@ -762,16 +680,43 @@ export default function AccountRoute() {
           </Form>
         </div>
 
-        <div className="f9-acct-section-head f9-acct-subsection">
+        <div className="f9-acct-section-head f9-acct-subsection" id="email">
           <div>
             <span className="f9-acct-label">Email</span>
             <h3>Change your email</h3>
           </div>
         </div>
         <p className="f9-acct-copy">
-          Support completes email changes so we can verify it's really you. This opens a tracked
-          support request — your email doesn't change automatically or in-app.
+          We email the NEW address a one-time confirm link. After you click it, the address
+          swaps, the old address gets a heads-up, and your other sessions are revoked. Passkeys
+          stay bound to your account.
         </p>
+        {data.pendingEmailChange ? (
+          <div aria-live="polite" className="f9-wk-notice is-success" role="status">
+            <p>
+              Verification link sent to <strong>{data.pendingEmailChange.newEmail}</strong>.
+              Click it within an hour; after that, request a fresh link.
+            </p>
+          </div>
+        ) : null}
+        {emailChangeNotice === "confirmed" ? (
+          <div aria-live="polite" className="f9-wk-notice is-success" role="status">
+            <p>
+              Your email changed. Other sessions on this account were signed out; sign back in with
+              the new address.
+            </p>
+          </div>
+        ) : null}
+        {emailChangeNotice === "expired" ? (
+          <div aria-live="assertive" className="f9-wk-notice is-error" role="alert">
+            <p>That link expired. Submit the form again to get a fresh verification link.</p>
+          </div>
+        ) : null}
+        {emailChangeNotice === "already" ? (
+          <div aria-live="assertive" className="f9-wk-notice is-error" role="alert">
+            <p>That link was already used. Submit the form again if you still need to change your email.</p>
+          </div>
+        ) : null}
         {emailChangeAction?.message ? (
           <div
             aria-live={emailChangeAction.ok ? "polite" : "assertive"}
@@ -781,8 +726,7 @@ export default function AccountRoute() {
             <p>{emailChangeAction.message}</p>
           </div>
         ) : null}
-        <Form className="f9-auth-form" method="post">
-          <input name="intent" type="hidden" value="request-email-change" />
+        <Form action="/api/account/email-change-request" method="post" className="f9-auth-form">
           <label className="f9-field">
             <span>New email address</span>
             <input
@@ -797,16 +741,15 @@ export default function AccountRoute() {
           <label className="f9-checkbox-row">
             <input name="confirmEmailChange" required type="checkbox" value="yes" />
             <span>
-              I understand this opens a support request, and support verifies ownership and completes
-              the change — it doesn't change automatically or in-app.
+              I confirm the new address is mine and want the swap to happen once I click the link
+              in the verification email.
             </span>
           </label>
           <SubmitButton
             className="f9-acct-text-action"
-            intent="request-email-change"
-            pendingLabel="Sending request…"
+            pendingLabel="Sending verification link…"
           >
-            Request email change
+            Send verification link
           </SubmitButton>
         </Form>
       </section>
@@ -815,9 +758,44 @@ export default function AccountRoute() {
         <div className="f9-acct-section-head">
           <div>
             <span className="f9-wk-kick">Danger zone</span>
-            <h2>Request account deletion support</h2>
+            <h2>Delete your account</h2>
           </div>
         </div>
+        {data.pendingDeletion ? (
+          <>
+            <div aria-live="polite" className="f9-wk-notice" role="status">
+              <p>
+                Deletion is scheduled for <strong><LocalTime iso={data.pendingDeletion.scheduledFor} mode="datetime" /></strong>.
+                You have 7 days from your request to cancel — the email we sent also has a
+                cancel-deletion link. After that, your watchlists, evidence, and account are
+                permanently removed.
+              </p>
+            </div>
+            <p className="f9-wk-dim">
+              Confirmation was sent to <strong>{data.pendingDeletion.emailAtRequest}</strong>.
+              Click the link in that email if you have not yet — without it, this request stays
+              pending and nothing is deleted.
+            </p>
+          </>
+        ) : null}
+        {deletionNotice === "pending" ? (
+          <div aria-live="polite" className="f9-wk-notice is-success" role="status">
+            <p>
+              Deletion scheduled. You'll see the timer here; the link we emailed also has the
+              cancel button if you change your mind.
+            </p>
+          </div>
+        ) : null}
+        {deletionNotice === "cancelled" || deletionNotice === "cancel-already" ? (
+          <div aria-live="polite" className="f9-wk-notice is-success" role="status">
+            <p>Deletion cancelled. Your account, watchlists, and evidence are unchanged.</p>
+          </div>
+        ) : null}
+        {deletionNotice === "completed" ? (
+          <div aria-live="polite" className="f9-wk-notice" role="status">
+            <p>Deletion completed.</p>
+          </div>
+        ) : null}
         {deletionAction?.message ? (
           <div
             aria-live={deletionAction.ok ? "polite" : "assertive"}
@@ -827,25 +805,51 @@ export default function AccountRoute() {
             <p>{deletionAction.message}</p>
           </div>
         ) : null}
-        <p>
-          This sends a support deletion request. Nothing is deleted automatically or in-app.
-          Support reviews and verifies the request, then communicates the feasible process and any
-          timing. You can also email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> if you need help.
-        </p>
-        <Form className="f9-auth-form" method="post">
-          <input name="intent" type="hidden" value="request-account-deletion" />
-          <label className="f9-checkbox-row">
-            <input name="confirmDeletion" required type="checkbox" value="yes" />
-            <span>I understand this is a support request, not an in-app deletion, and support will review and verify it.</span>
-          </label>
-          <SubmitButton
-            className="f9-acct-danger-action"
-            intent="request-account-deletion"
-            pendingLabel="Sending request…"
-          >
-            Send support deletion request
-          </SubmitButton>
-        </Form>
+        {!data.pendingDeletion ? (
+          <>
+            <p>
+              Schedule deletion in-app. We email a one-time confirm link; you have 7 days to
+              cancel from this page or the email link. After that, your user row, sessions,
+              passkeys, watchlists, collections, digests, API keys, and org membership are
+              permanently removed.
+            </p>
+            <Form action="/api/account/delete-request" method="post" className="f9-auth-form">
+              <label className="f9-field">
+                <span>Confirm your password</span>
+                <input
+                  autoComplete="current-password"
+                  name="password"
+                  placeholder="Your current sign-in password"
+                  required
+                  type="password"
+                />
+              </label>
+              <label className="f9-checkbox-row">
+                <input name="confirmDeletion" required type="checkbox" value="yes" />
+                <span>
+                  I understand this schedules permanent deletion after a 7-day grace window. I
+                  can cancel during the grace from this page or the link in the email.
+                </span>
+              </label>
+              <SubmitButton
+                className="f9-acct-danger-action"
+                pendingLabel="Sending confirmation link…"
+              >
+                Send confirmation link
+              </SubmitButton>
+            </Form>
+          </>
+        ) : (
+          <Form method="post">
+            <input name="intent" type="hidden" value="dismiss-deletion" />
+            <SubmitButton
+              className="f9-acct-text-action"
+              pendingLabel="Refreshing…"
+            >
+              Refresh
+            </SubmitButton>
+          </Form>
+        )}
       </section>
     </DashboardPage>
   );
@@ -915,71 +919,6 @@ async function removePasskey(input: {
   }
 }
 
-async function notifyAccountEmailChangeOperator(
-  env: AppEnv,
-  input: {
-    caseId: string;
-    dedupeKey: string;
-    requesterEmail: string;
-    requestedEmail: string;
-    userId: string;
-  },
-): Promise<AccountDeletionOperatorNotificationResult> {
-  const idempotencyKey = input.dedupeKey;
-  const { createSupportCaseEvent, getDeliveryAttemptByIdempotencyKey } = await import("~/lib/data.server");
-  try {
-    const existingAttempt = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
-    if (existingAttempt?.status === "sent") {
-      return "already_sent";
-    }
-
-    const { sendOperatorAlertEmail } = await import("~/lib/delivery.server");
-    const notified = await sendOperatorAlertEmail(env, {
-      subject: "0509 account email change request",
-      lines: [
-        `Case: ${input.caseId}`,
-        `Requester (current email): ${input.requesterEmail}`,
-        `Requested new email: ${input.requestedEmail}`,
-        `User ID: ${input.userId}`,
-        "Category: Account",
-        "Action: support verifies ownership and completes the email change; nothing changes automatically or in-app",
-      ],
-      idempotencyKey,
-    });
-
-    await createSupportCaseEvent(env, {
-      caseId: input.caseId,
-      userId: input.userId,
-      eventType: notified ? "support_notified" : "support_notification_failed",
-      message: notified
-        ? "Support was notified about the account email change request."
-        : "Support notification failed for the account email change request.",
-      visibleToCustomer: true,
-      metadata: {
-        delivery: notified ? "sent" : "failed",
-      },
-    });
-    return notified ? "sent" : "failed";
-  } catch (error) {
-    console.error("[account] email change operator notification failed", error);
-    try {
-      await createSupportCaseEvent(env, {
-        caseId: input.caseId,
-        userId: input.userId,
-        eventType: "support_notification_failed",
-        message: "Support notification failed for the account email change request.",
-        visibleToCustomer: true,
-        metadata: {
-          delivery: "failed",
-        },
-      });
-    } catch (eventError) {
-      console.error("[account] email change notification event failed", eventError);
-    }
-    return "failed";
-  }
-}
-
 function formatSessionDevice(userAgent: string | null) {
   if (!userAgent) {
     return "Active session";
@@ -1021,79 +960,4 @@ function summarizeUserAgent(userAgent: string) {
     return "Android browser";
   }
   return "Browser session";
-}
-
-type AccountDeletionOperatorNotificationResult = "sent" | "already_sent" | "failed";
-
-function isReopenedSupportCase(value: unknown) {
-  return Boolean(
-    value &&
-      typeof value === "object" &&
-      "reopened" in value &&
-      (value as { reopened?: unknown }).reopened === true,
-  );
-}
-
-async function notifyAccountDeletionOperator(
-  env: AppEnv,
-  input: {
-    caseId: string;
-    dedupeKey: string;
-    requesterEmail: string;
-    userId: string;
-  },
-): Promise<AccountDeletionOperatorNotificationResult> {
-  const idempotencyKey = input.dedupeKey;
-  const { createSupportCaseEvent, getDeliveryAttemptByIdempotencyKey } = await import("~/lib/data.server");
-  try {
-    const existingAttempt = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
-    if (existingAttempt?.status === "sent") {
-      return "already_sent";
-    }
-
-    const { sendOperatorAlertEmail } = await import("~/lib/delivery.server");
-    const notified = await sendOperatorAlertEmail(env, {
-      subject: "0509 account deletion request",
-      lines: [
-        `Case: ${input.caseId}`,
-        `Requester: ${input.requesterEmail}`,
-        `User ID: ${input.userId}`,
-        "Category: Security, privacy, or deletion",
-        "Priority: Urgent",
-        "Action: support reviews and verifies the request, then communicates the feasible process; nothing is deleted automatically or in-app",
-      ],
-      idempotencyKey,
-    });
-
-    await createSupportCaseEvent(env, {
-      caseId: input.caseId,
-      userId: input.userId,
-      eventType: notified ? "support_notified" : "support_notification_failed",
-      message: notified
-        ? "Support was notified about the account deletion request."
-        : "Support notification failed for the account deletion request.",
-      visibleToCustomer: true,
-      metadata: {
-        delivery: notified ? "sent" : "failed",
-      },
-    });
-    return notified ? "sent" : "failed";
-  } catch (error) {
-    console.error("[account] deletion operator notification failed", error);
-    try {
-      await createSupportCaseEvent(env, {
-        caseId: input.caseId,
-        userId: input.userId,
-        eventType: "support_notification_failed",
-        message: "Support notification failed for the account deletion request.",
-        visibleToCustomer: true,
-        metadata: {
-          delivery: "failed",
-        },
-      });
-    } catch (eventError) {
-      console.error("[account] deletion notification event failed", eventError);
-    }
-    return "failed";
-  }
 }
