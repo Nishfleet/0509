@@ -13,14 +13,20 @@ import { getEnv } from "~/lib/context.server";
  */
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = getEnv(context);
+  // Anonymous per-IP budget (issues #2964 and #2985): this endpoint is
+  // rate-limited by the worker's global edge gate (enforceRequestRateLimit,
+  // scope "public-proof-brief", native Rate Limiting binding) which runs
+  // BEFORE this loader, so an exhausted bucket never reaches the D1 proof
+  // brief cache read and a degraded limiter FAILS CLOSED with 429 +
+  // Retry-After instead of silently admitting unbounded traffic.
+  const cloudflareContext = (await import("~/lib/cloudflare-context")).getOptionalCloudflareContext(context);
   // Resolve the visitor country EXACTLY like the /ads/:domain loader so this
   // endpoint reports the same total the linked brand page reports for the
   // same visitor (issue #1468). No geo header (server-to-server fetches)
   // falls back to "all", matching pre-#1468 behavior.
   const { defaultCountryForVisitor } = await import("~/lib/countries");
-  const { getOptionalCloudflareContext } = await import("~/lib/cloudflare-context");
   const visitorCountry = defaultCountryForVisitor(
-    getOptionalCloudflareContext(context)?.country ?? request.headers.get("cf-ipcountry"),
+    cloudflareContext?.country ?? request.headers.get("cf-ipcountry"),
   );
   const brief = await loadPublicProofBrief(env, { visitorCountry });
 

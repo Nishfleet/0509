@@ -77,6 +77,7 @@ describe("Site Rep widget install", () => {
       "/switch/panoramata/",
       "/switch/visualping",
       "/switch/magicbrief",
+      "/switch/adspy",
       "/methodology",
       "/methodology/ad-aggression-score",
     ]) {

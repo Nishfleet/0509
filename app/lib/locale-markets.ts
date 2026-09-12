@@ -87,7 +87,7 @@ export const BUYER_SURFACE_SEGMENT_CHILD_SLUGS: Record<string, readonly string[]
     "panoramata",
     "adspyder",
   ],
-  switch: ["panoramata", "visualping", "magicbrief"],
+  switch: ["panoramata", "visualping", "magicbrief", "adspy"],
 } as const;
 
 /**

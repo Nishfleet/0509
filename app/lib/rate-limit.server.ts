@@ -587,7 +587,9 @@ async function enforceAtomicClaimRateLimit(
     return null;
   }
   if (!env.DB) {
-    console.error("[rate-limit] D1 binding missing; request was not rate-limited.");
+    console.error(
+      `[rate-limit] D1 binding missing; scope=${policy.scope} falls back to 429 (fail closed).`,
+    );
     return rateLimitUnavailableResponse();
   }
 
@@ -635,7 +637,10 @@ async function enforceAtomicClaimRateLimit(
 
     return null;
   } catch (error) {
-    console.error("[rate-limit] limiter failed", error);
+    console.error(
+      `[rate-limit] limiter failed; scope=${policy.scope} falls back to 429 (fail closed).`,
+      error,
+    );
     if (isMissingRateLimitTableError(error)) {
       return rateLimitUnavailableResponse();
     }

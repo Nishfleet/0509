@@ -100,10 +100,12 @@ afterEach(() => {
 });
 
 describe("switchPageForDomain domain mapping", () => {
-  it("maps the two switch-target domains to their /switch/* pages", () => {
+  it("maps the switch-target domains to their /switch/* pages", () => {
     expect(switchPageForDomain("visualping.io")?.pathname).toBe("/switch/visualping");
     expect(switchPageForDomain("www.visualping.io")?.pathname).toBe("/switch/visualping");
     expect(switchPageForDomain("panoramata.co")?.pathname).toBe("/switch/panoramata");
+    expect(switchPageForDomain("adspy.com")?.pathname).toBe("/switch/adspy");
+    expect(switchPageForDomain("www.adspy.com")?.pathname).toBe("/switch/adspy");
   });
 
   it("returns null for a non-switch domain", () => {

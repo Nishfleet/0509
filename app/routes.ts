@@ -145,6 +145,11 @@ export default [
   // Issue #2866: two verified competitors that had no compare page.
   route("compare/keeptabz", "routes/compare.keeptabz.tsx"),
   route("compare/gethookd", "routes/compare.gethookd.tsx"),
+  // Issue #3092: the remaining verified ad-spy incumbents (each source-checked
+  // against a live product + pricing page before shipping).
+  route("compare/bigspy", "routes/compare.bigspy.tsx"),
+  route("compare/minea", "routes/compare.minea.tsx"),
+  route("compare/poweradspy", "routes/compare.poweradspy.tsx"),
   // Issue #2887: the MagicBrief wind-down page — the one vendor shutdown
   // creating real switching demand (BET 8). It replaces the legacy
   // switch-URL 301: the path serves 200 again, only /compare/magicbrief
@@ -152,6 +157,9 @@ export default [
   route("switch/magicbrief", "routes/switch.magicbrief.tsx"),
   route("switch/panoramata", "routes/switch.panoramata.tsx"),
   route("switch/visualping", "routes/switch.visualping.tsx"),
+  // Issue #3091: the AdSpy switch page — the documented declining incumbent
+  // (BET 8), anchored on its cited public complaints.
+  route("switch/adspy", "routes/switch.adspy.tsx"),
   route("competitor-monitoring", "routes/competitor-monitoring.tsx"),
   // Issue #2152: /guides/* how-to cluster — the honest manual/DIY/automated
   // guide for the "how to track competitor ads" query class, ending in the
@@ -170,6 +178,14 @@ export default [
   // from the two ad-library guides above. Ends in the no-account /search
   // preview (source=guide-landing-page-changes).
   route("guides/how-to-monitor-competitor-landing-page-changes", "routes/guides.how-to-monitor-competitor-landing-page-changes.tsx"),
+  // Issue #3093: three more /guides/* pages, one per uncovered differentiator
+  // query — the offer-change alert intent, the prove-what-changed evidence
+  // intent, and the one-off → standing-watch cadence intent. Each ends in the
+  // no-account /search preview (source=guide-offer-change-alert /
+  // guide-prove-what-changed / guide-standing-watch).
+  route("guides/how-to-get-alerted-when-a-competitor-changes-their-offer", "routes/guides.how-to-get-alerted-when-a-competitor-changes-their-offer.tsx"),
+  route("guides/how-to-prove-what-changed-on-a-competitor-website", "routes/guides.how-to-prove-what-changed-on-a-competitor-website.tsx"),
+  route("guides/how-to-turn-a-one-off-competitor-check-into-a-standing-watch", "routes/guides.how-to-turn-a-one-off-competitor-check-into-a-standing-watch.tsx"),
   route("for-agencies", "routes/for-agencies.tsx"),
   route("sneaker-resale", "routes/sneaker-resale.tsx"),
   route(":locale/sneaker-resale", "routes/$locale.sneaker-resale.tsx"),
@@ -211,10 +227,15 @@ export default [
     route("compare/adspy", "routes/$locale.compare.adspy.tsx"),
     route("compare/keeptabz", "routes/$locale.compare.keeptabz.tsx"),
     route("compare/gethookd", "routes/$locale.compare.gethookd.tsx"),
+    route("compare/bigspy", "routes/$locale.compare.bigspy.tsx"),
+    route("compare/minea", "routes/$locale.compare.minea.tsx"),
+    route("compare/poweradspy", "routes/$locale.compare.poweradspy.tsx"),
     // Issue #2887: the MagicBrief wind-down page (BET 8), locale twins.
     route("switch/magicbrief", "routes/$locale.switch.magicbrief.tsx"),
     route("switch/panoramata", "routes/$locale.switch.panoramata.tsx"),
     route("switch/visualping", "routes/$locale.switch.visualping.tsx"),
+    // Issue #3091: the AdSpy switch page, locale twin.
+    route("switch/adspy", "routes/$locale.switch.adspy.tsx"),
     // First-value search funnel + supporting trust/proof surfaces (issue 1578):
     // search is THE first purchase-intent moment, so the localised
     // buyer must not be flung back to EN mid-funnel. Each child re-exports
@@ -233,6 +254,11 @@ export default [
     route("guides/how-to-monitor-meta-ad-library", "routes/$locale.guides.how-to-monitor-meta-ad-library.tsx"),
     // Issue #2888: third guide in the cluster — the landing-page change watch.
     route("guides/how-to-monitor-competitor-landing-page-changes", "routes/$locale.guides.how-to-monitor-competitor-landing-page-changes.tsx"),
+    // Issue #3093: the offer-change alert, prove-what-changed, and
+    // standing-watch guides — re-exported EN guides, canonical→EN.
+    route("guides/how-to-get-alerted-when-a-competitor-changes-their-offer", "routes/$locale.guides.how-to-get-alerted-when-a-competitor-changes-their-offer.tsx"),
+    route("guides/how-to-prove-what-changed-on-a-competitor-website", "routes/$locale.guides.how-to-prove-what-changed-on-a-competitor-website.tsx"),
+    route("guides/how-to-turn-a-one-off-competitor-check-into-a-standing-watch", "routes/$locale.guides.how-to-turn-a-one-off-competitor-check-into-a-standing-watch.tsx"),
     // Programmatic /ads/:domain under every locale prefix (issue #1562):
     // the #1501 buyer-surface cluster added /de, /de/pricing, ... but not
     // the /ads/:domain Ad Aggression Score pages, so /de/ads/nike.com

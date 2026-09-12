@@ -1,3 +1,4 @@
+import type { FunctionComponent } from "react";
 import { Link } from "react-router";
 
 import { BrandWordmark } from "~/components/brand-wordmark";
@@ -7,12 +8,24 @@ import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 export const BRAND_ORIGIN_LINE =
   "Named for 05:09 — your competitor brief is filed before the workday starts.";
 
+export interface MarketingFooterProps {
+  /**
+   * Whole days of continuous scheduled-monitoring coverage (issue #2972),
+   * loaded by the route from the real observation baseline — the same
+   * figure /status publishes. When absent the footer renders the Status
+   * link alone; it never fabricates an uptime number.
+   */
+  monitoringCoverageDays?: number | null;
+}
+
 /**
  * Shared marketing footer for the public funnel: landing page, compare
  * pages, and switch pages. Keep every public marketing surface on this one
  * footer so link groups (support, legal, compare, switch) never drift apart.
  */
-export function MarketingFooter() {
+export const MarketingFooter: FunctionComponent<MarketingFooterProps> = (
+  { monitoringCoverageDays },
+) => {
   return (
     <footer className="ld-footer">
       <Link className="ld-footer-brand" to="/" aria-label="Five to Nine home">
@@ -23,6 +36,15 @@ export function MarketingFooter() {
         sales call.
       </p>
       <p className="ld-footer-origin">{BRAND_ORIGIN_LINE}</p>
+      {typeof monitoringCoverageDays === "number" ? (
+        <p className="ld-footer-status">
+          <Link to="/status">Status</Link>
+          {" — "}
+          {monitoringCoverageDays}{" "}
+          {monitoringCoverageDays === 1 ? "day" : "days"} of continuous
+          scheduled monitoring
+        </p>
+      ) : null}
       <nav aria-label="Footer">
         <Link to="/help">Help</Link>
         <Link to="/docs">Docs</Link>
@@ -55,12 +77,17 @@ export function MarketingFooter() {
         {/* Issue #2866: two verified competitors that had no compare page. */}
         <Link to="/compare/keeptabz">vs KeepTabz</Link>
         <Link to="/compare/gethookd">vs GetHookd</Link>
+        {/* Issue #3092: remaining verified ad-spy incumbents. */}
+        <Link to="/compare/bigspy">vs BigSpy</Link>
+        <Link to="/compare/minea">vs Minea</Link>
+        <Link to="/compare/poweradspy">vs PowerAdSpy</Link>
       </nav>
       <nav className="ld-footer-compare" aria-label="Switch">
         <span className="ld-footer-group-label">Switch</span>
         <Link to="/switch/panoramata">from Panoramata</Link>
         <Link to="/switch/visualping">from Visualping</Link>
         <Link to="/switch/magicbrief">from MagicBrief</Link>
+        <Link to="/switch/adspy">from AdSpy</Link>
       </nav>
       <nav className="ld-footer-compare" aria-label="By industry">
         <span className="ld-footer-group-label">By industry</span>
@@ -68,4 +95,4 @@ export function MarketingFooter() {
       </nav>
     </footer>
   );
-}
+};

@@ -709,7 +709,13 @@ export default function CompetitorMonitoringCategoryRoute() {
           breaks. Watching the page behind the ad? Read{" "}
           <Link to="/guides/how-to-monitor-competitor-landing-page-changes">how to monitor a
           competitor&rsquo;s landing page changes</Link> — the by-hand check, the page-monitor route,
-          and where pixel diffs break. Questions about
+          and where pixel diffs break. Want the alert, the proof, or the standing watch? Read{" "}
+          <Link to="/guides/how-to-get-alerted-when-a-competitor-changes-their-offer">how to get
+          alerted when a competitor changes their offer</Link>,{" "}
+          <Link to="/guides/how-to-prove-what-changed-on-a-competitor-website">how to prove what
+          changed on a competitor&rsquo;s website</Link>, or{" "}
+          <Link to="/guides/how-to-turn-a-one-off-competitor-check-into-a-standing-watch">how to
+          turn a one-off check into a standing watch</Link>. Questions about
           coverage on your competitors? Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and
           we&rsquo;ll answer honestly.
         </p>

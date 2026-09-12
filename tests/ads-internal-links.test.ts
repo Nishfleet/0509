@@ -374,6 +374,7 @@ describe("public funnel loaders reuse the sitemap indexability filter", () => {
       indexableAdsLinks: [nykaa, glossier],
       changeMark: null,
       featuredDomain: "nike.com",
+      monitoringCoverageDays: null,
     });
   });
 

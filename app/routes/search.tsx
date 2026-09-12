@@ -851,8 +851,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const enrichSelected =
     !providerDeny.enabled && Boolean(parsed.filters.query);
   const {
-    result: hydratedResult,
-    selectedAd,
+    result: hydratedResultUncut,
+    selectedAd: selectedAdUncut,
     selectionEnrichmentPending,
     landingPageCaptureFailure,
   } = await withTransientRetry(() =>
@@ -872,6 +872,22 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     },
     ),
   );
+
+  let hydratedResult = hydratedResultUncut;
+  let selectedAd = selectedAdUncut;
+  // Issue #2987 — anonymous documents get a public projection: per-field
+  // confidence, extractorVersion, classifier metadata (scriptSignals,
+  // decisionReason) and capture metadata stay server-side / behind auth. The
+  // projection keeps exactly the fields the UI renders (see
+  // search-public-projection.server.ts). Signed-in payloads are untouched.
+  if (!session) {
+    const {
+      projectAnonymousSearchPayload,
+    } = await import("~/lib/search-public-projection.server");
+    const projected = projectAnonymousSearchPayload({ result: hydratedResult, selectedAd });
+    hydratedResult = projected.result;
+    selectedAd = projected.selectedAd;
+  }
 
   emitFunnelSearchResult(env, request, hydratedResult.ads.length);
 

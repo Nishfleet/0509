@@ -11,6 +11,7 @@ import {
   type UsageBundleSlug,
 } from "~/lib/pricing";
 import { TOP_UP_PACK_DISPLAY } from "~/lib/billing-sku-catalog";
+import { SUPPORT_EMAIL } from "~/lib/support";
 
 const SITE_ORIGIN = "https://0509.io";
 const SITE_NAME = "Five to Nine";
@@ -144,6 +145,37 @@ export function switchSocialCardUrl(toolSlug: string): string {
   return canonicalUrl(`/social-card/switch/${toolSlug}.svg`);
 }
 
+/**
+ * Social card URL for a `/guides/<slug>` how-to page (issue #3098). Same
+ * stateless recipe as the ads/timeline cards: the guide's headline rides in
+ * the `n` query param so the renderer needs no per-guide lookup, and the card
+ * is served as PNG (scrapers refuse SVG). Deriving it from the slug alone
+ * keeps the mechanism route-generic — a new guide route gets a card without
+ * any per-page card code.
+ */
+export function guideSocialCardUrl(slug: string, headline: string): string {
+  const params = new URLSearchParams({ n: headline });
+  return `${canonicalUrl(`/social-card/guides/${slug}.png`)}?${params.toString()}`;
+}
+
+/**
+ * Page-specific og:image for a `/guides/<slug>` pathname, or `null` for any
+ * other surface. The card headline is the page title minus the
+ * `| Five to Nine` suffix — the same text the SERP shows.
+ */
+function guideSocialCardForPathname(
+  pathname: string,
+  title: string,
+): { url: string; alt: string } | null {
+  const slug = pathname.match(/^\/guides\/([^/]+?)\/?$/)?.[1];
+  if (!slug) return null;
+  const headline = title.replace(/\s*\|\s*Five to Nine\s*$/, "").trim() || slug;
+  return {
+    url: guideSocialCardUrl(slug, headline),
+    alt: `${headline} — Five to Nine how-to guide`,
+  };
+}
+
 export function clusterSocialCardUrl(slug: "sneaker-resale" | "competitor-monitoring"): string {
   // Served as PNG (issue #2101), so the path uses `.png` — Facebook/X/
   // LinkedIn scrapers refuse SVG og:images. The `parseSocialCardPathname`
@@ -243,7 +275,9 @@ export function publicSeoMeta(input: {
    * generic `og-image.png`, so a programmatic buyer surface (`/ads/:domain`,
    * `/compare/*`, `/switch/*`, `/sneaker-resale`, `/competitor-monitoring`)
    * renders a page-specific branded card. Falls back to `SOCIAL_IMAGE_URL`
-   * when unset so the generic card stays on truly site-wide surfaces.
+   * when unset so the generic card stays on truly site-wide surfaces —
+   * except `/guides/<slug>` pathnames, which auto-derive a page-specific
+   * guide card when no override is passed (issue #3098).
    */
   ogImageUrl?: string;
   /**
@@ -254,8 +288,15 @@ export function publicSeoMeta(input: {
   ogImageAlt?: string;
 }) {
   const url = canonicalUrl(input.pathname);
-  const overrideImage = input.ogImageUrl;
-  const overrideAlt = input.ogImageAlt;
+  // Guides auto-derive their card from the pathname + title (issue #3098) so
+  // every /guides/<slug> route — including ones added later — stamps a
+  // page-specific card through this same call with no per-page wiring. An
+  // explicit ogImageUrl/ogImageAlt always wins.
+  const guideCard = input.ogImageUrl
+    ? null
+    : guideSocialCardForPathname(input.pathname, input.title);
+  const overrideImage = input.ogImageUrl ?? guideCard?.url;
+  const overrideAlt = input.ogImageAlt ?? guideCard?.alt;
   const imageUrl = overrideImage ?? SOCIAL_IMAGE_URL;
   const imageAlt = overrideImage ? (overrideAlt ?? SOCIAL_IMAGE_ALT) : SOCIAL_IMAGE_ALT;
   const imageType =
@@ -309,6 +350,11 @@ export interface FaqJsonLdEntry {
  * schema.org Organization for the landing page. Deliberately minimal — no
  * price amounts anywhere in structured data (prices are live-loaded from
  * Dodo in the buyer's currency and must never be hardcoded).
+ *
+ * Issue #2972 enrichment: `logo` is the real 180x180 PNG touch icon already
+ * served from public/, `contactPoint` names the published support address,
+ * and `sameAs` lists only identity pages that genuinely exist (the
+ * Nishfleet GitHub org that ships this product) — no invented profiles.
  */
 export function organizationJsonLd() {
   return {
@@ -316,6 +362,14 @@ export function organizationJsonLd() {
     "@type": "Organization",
     name: SITE_NAME,
     url: SITE_ORIGIN,
+    logo: `${SITE_ORIGIN}/apple-touch-icon.png`,
+    contactPoint: {
+      "@type": "ContactPoint",
+      contactType: "customer support",
+      email: SUPPORT_EMAIL,
+      url: `${SITE_ORIGIN}/help`,
+    },
+    sameAs: ["https://github.com/Nishfleet"],
   } as const;
 }
 
@@ -909,6 +963,12 @@ export const SITEMAP_PATHS = [
   // Issue #2888: third guide — the "monitor a competitor's website/landing
   // page changes" intent. Stable long-form copy, never a noindex shell.
   "/guides/how-to-monitor-competitor-landing-page-changes",
+  // Issue #3093: three more guides — the offer-change alert, prove-what-
+  // changed, and one-off → standing-watch intents. Stable long-form copy,
+  // never a noindex shell.
+  "/guides/how-to-get-alerted-when-a-competitor-changes-their-offer",
+  "/guides/how-to-prove-what-changed-on-a-competitor-website",
+  "/guides/how-to-turn-a-one-off-competitor-check-into-a-standing-watch",
   "/compare",
   "/compare/meta-ad-library",
   // /compare/visualping, /compare/foreplay, and /compare/visualping-ad-library
@@ -925,6 +985,11 @@ export const SITEMAP_PATHS = [
   // Issue #2866: two verified competitors that had no compare page (both 404'd).
   "/compare/keeptabz",
   "/compare/gethookd",
+  // Issue #3092: the remaining verified ad-spy incumbents — bigspy, minea,
+  // poweradspy — each verified against a live product + pricing source.
+  "/compare/bigspy",
+  "/compare/minea",
+  "/compare/poweradspy",
   // BET 8 switch/intent pages (issue #2081). Production /sitemap.xml is
   // buildSitemapXml → ROOT_SITEMAP_STATIC_ENTRIES, which is this list minus
   // locale prefixes. lastmod is deliberately omitted: these pages have no
@@ -935,6 +1000,9 @@ export const SITEMAP_PATHS = [
   // Issue #2887: the MagicBrief wind-down page — the one vendor whose shutdown
   // (2026-07-31, Canva Grow successor) created real switching demand.
   "/switch/magicbrief",
+  // Issue #3091: the AdSpy switch page — the declining incumbent with a cited
+  // public complaint trail (Trustpilot 2.4/5, no self-serve cancel, no API).
+  "/switch/adspy",
   "/competitor-monitoring",
   // Issue #2144: agency audience page (roster math + sourced Agency-vs-
   // Foreplay line). EN-only; no locale cluster.

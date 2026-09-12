@@ -17,6 +17,9 @@ const PINNED_COMPARED_PRODUCT: Record<string, string> = {
   "compare.panoramata": "Panoramata",
   "compare.adspyder": "AdSpyder",
   "compare.adspy": "AdSpy",
+  "compare.bigspy": "BigSpy",
+  "compare.minea": "Minea",
+  "compare.poweradspy": "PowerAdSpy",
 };
 
 function compareRouteIds(): string[] {
