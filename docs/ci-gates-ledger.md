@@ -127,7 +127,7 @@ them.
 | `Install dependencies` (deploy) | Prerequisite for every later step | ~11 s | KEEP |
 | `Install Playwright browsers` (deploy) | Incident f2e194184 (deploy-gate browser installs); the plan's `e2e:local:release` + 3-engine diagnostic need them | ~14 s | KEEP |
 | `Typecheck` (deploy) | None for a discrete step — `launch:readiness:predeploy` inside `Deploy` re-runs `npm run typecheck`. Its NODE_OPTIONS heap fix (exit-134, 2026-08-11) targeted the retired 3 GiB VPS runner; the plan's uncapped typecheck passes on every green hosted deploy (run 34380544970) so the fix needs no re-home | 62 s | **DELETE** |
-| `Test` (deploy) | Position-pinned by the gate test + auto-revert assertion anchor (0509#1576). Duplicates the plan's `npm test` (194 s) — noted cost, kept per no-gate-weakening | 194 s | KEEP |
+| `Test` (deploy) | Ordering pin in deploy-production-gate.test.ts — `indexOf("- name: Test")` must sit between the secrets preflight and evidence materialize — plus auto-revert assertion anchor (0509#1576). Duplicates the plan's `npm test` (194 s) — noted cost, kept per no-gate-weakening | 194 s | KEEP |
 | `Materialize private remote-restore evidence` (deploy) | R1 evidence handoff; content test-pinned | ~1 s | KEEP |
 | `Verify and extract private remote-restore evidence` (deploy) | R1 archive integrity (single member, chmod 600) | ~1 s | KEEP |
 | `Reconfirm frozen main before provider mutation` (deploy) | #556/#630 drift; test-pinned to sit as `Deploy` − 1 | <1 s | KEEP |
