@@ -1,226 +1,157 @@
 import { readFileSync } from "node:fs";
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import {
   BUYER_SURFACE_LOCALE_IDS,
-  BUYER_SURFACE_PATHS,
   isBuyerSurfaceLocaleId,
 } from "~/lib/locale-markets";
-import { buyerSurfaceHreflangLinks, publicSeoFileForPathname } from "~/lib/seo";
-import { buildLocaleSitemapXml } from "~/lib/sitemap.server";
+import { publicSeoFileForPathname } from "~/lib/seo";
+import { buildLocaleSitemapXml, staticSitemapEntriesForLocale } from "~/lib/sitemap.server";
 
-beforeEach(() => {
-  vi.resetModules();
-});
+/**
+ * Regression canary for issue #2962 (orchestrator Branch B): the
+ * untranslated buyer-surface locale routes are DELETED and every
+ * buyer-surface locale path 301s to the EN pathname (query preserved),
+ * while the genuinely translated sneaker-resale locale cluster
+ * (de, ja, pt-br) keeps serving indexable, self-canonical locale pages and
+ * keeps its coverage in the de/ja/pt-br locale sitemaps. fr/es carry no
+ * sneaker-resale page, so their feeds are empty and robots.txt no longer
+ * advertises them.
+ */
 
-afterEach(() => {
-  vi.restoreAllMocks();
-  vi.resetModules();
-});
+const REDIRECT_CASES = [
+  { splat: "", enPath: "/" },
+  { splat: "pricing", enPath: "/pricing" },
+  { splat: "compare/panoramata", enPath: "/compare/panoramata" },
+  { splat: "api/docs", enPath: "/api/docs" },
+  { splat: "ads/nike.com", enPath: "/ads/nike.com" },
+] as const;
 
-describe("locale buyer-surface layout (issue #1501)", () => {
-  it("registers the layout + every buyer-surface child route in routes.ts", () => {
+const AUDIT_BUYER_ROUTES = [
+  "/pricing",
+  "/help",
+  "/docs",
+  "/api/docs",
+  "/status",
+  "/changelog",
+  "/trust",
+  "/compare",
+  "/search",
+  "/competitor-monitoring",
+  "/capture-rules",
+  "/methodology",
+  "/compare/panoramata",
+  "/switch/visualping",
+  "/ads/nike.com",
+] as const;
+
+describe("retired buyer-surface locale cluster → 301 (issue #2962)", () => {
+  it("registers the :locale splat redirect and NOT the deleted child routes", () => {
     const routes = readFileSync("app/routes.ts", "utf8");
-    expect(routes).toContain('route(":locale", "routes/$locale.tsx"');
-    for (const child of [
+    expect(routes).toContain('route(":locale/*", "routes/$locale.tsx"');
+    expect(routes).toContain(
+      'route(":locale/sneaker-resale", "routes/$locale.sneaker-resale.tsx")',
+    );
+    for (const gone of [
       "routes/$locale._index.tsx",
       "routes/$locale.pricing.tsx",
-      "routes/$locale.help.tsx",
-      "routes/$locale.docs.tsx",
-      "routes/$locale.api.docs.tsx",
-      "routes/$locale.status.tsx",
-      "routes/$locale.changelog.tsx",
-      "routes/$locale.trust.tsx",
-      "routes/$locale.compare.tsx",
-      // First-value search funnel + supporting trust surfaces (issue #1578).
       "routes/$locale.search.tsx",
-      "routes/$locale.competitor-monitoring.tsx",
-      "routes/$locale.capture-rules.tsx",
-      "routes/$locale.methodology.tsx",
-      // Programmatic /ads/:domain locale pages (issue #1562).
       "routes/$locale.ads.$domain.tsx",
+      "routes/$locale.compare.panoramata.tsx",
+      "routes/$locale.guides.how-to-track-competitor-ads.tsx",
     ]) {
-      expect(routes, `routes.ts missing ${child}`).toContain(child);
+      expect(routes, `${gone} must be gone from routes.ts`).not.toContain(`"${gone}"`);
+    }
+    expect(routes.includes("routes/$locale.pricing.tsx")).toBe(false);
+  });
+
+  it("301s every buyer-surface locale path to the EN pathname (query preserved, bare index → /)", async () => {
+    const { loader } = await import("~/routes/$locale");
+    for (const locale of BUYER_SURFACE_LOCALE_IDS) {
+      for (const { splat, enPath } of REDIRECT_CASES) {
+        const response = await loader({
+          request: new Request(
+            `http://localhost/${locale}${splat ? `/${splat}` : ""}?utm=1`,
+          ),
+          params: { locale, "*": splat },
+          context: {},
+        } as never);
+        expect(response.status, `${locale}/${splat}`).toBe(301);
+        expect(response.headers.get("location"), `${locale}/${splat}`).toBe(
+          `${enPath}?utm=1`,
+        );
+      }
+      // Bare locale index: 301 to "/" with no trailing "?".
+      const bare = await loader({
+        request: new Request(`http://localhost/${locale}`),
+        params: { locale, "*": "" },
+        context: {},
+      } as never);
+      expect(bare.status).toBe(301);
+      expect(bare.headers.get("location")).toBe("/");
     }
   });
 
-  it("404s unknown locale prefixes (en and unknown) before touching a child route", async () => {
+  it("covers the issue audit's buyer-surface route list with 301 expectations", async () => {
+    // The audit's own curl list — every formerly-200 buyer path must now be
+    // a 301 to its EN twin, so no already-indexed URL dead-ends on a 404.
     const { loader } = await import("~/routes/$locale");
-    const context = { cloudflare: { env: {} } };
-    for (const locale of ["en", "xx", "de_DE", "en-US", "kraut"]) {
+    for (const route of AUDIT_BUYER_ROUTES) {
+      const splat = route.replace(/^\//, "");
+      const response = await loader({
+        request: new Request(`http://localhost/de${route}`),
+        params: { locale: "de", "*": splat },
+        context: {},
+      } as never);
+      expect(response.status, route).toBe(301);
+      expect(response.headers.get("location")).toBe(route);
+    }
+  });
+
+  it("404s unknown locale prefixes instead of re-routing the EN page", async () => {
+    const { loader } = await import("~/routes/$locale");
+    for (const locale of ["en", "xx", "de_DE", "en-US"]) {
       await expect(
         loader({
-          context,
-          request: new Request(`http://localhost/${locale}`),
-          params: { locale },
+          request: new Request(`http://localhost/${locale}/pricing`),
+          params: { locale, "*": "pricing" },
+          context: {},
         } as never),
       ).rejects.toMatchObject({ status: 404 });
     }
   });
-
-  it("accepts every buyer-surface locale and returns it as the loader data", async () => {
-    const { loader } = await import("~/routes/$locale");
-    const context = { cloudflare: { env: {} } };
-    for (const locale of BUYER_SURFACE_LOCALE_IDS) {
-      const data = await loader({
-        context,
-        request: new Request(`http://localhost/${locale}`),
-        params: { locale },
-      } as never);
-      expect(data).toEqual({ locale });
-    }
-  });
-
-  it("emits the buyer-surface hreflang cluster from the child route's links", () => {
-    // The index page (`/de`) and a subpage (`/de/pricing`) each receive a
-    // hreflang entry pointing at themselves plus every sibling locale and
-    // the EN x-default. Self- and x-default canonicals are emitted
-    // alongside hreflang by `canonicalLinks(...)` in each child file.
-    for (const splat of ["", "pricing", "help", "docs", "api/docs", "status", "changelog", "trust", "compare", "search", "competitor-monitoring", "capture-rules", "methodology"]) {
-      const entries = buyerSurfaceHreflangLinks(splat);
-      // Every buyer-surface locale contributes a self-link; the EN
-      // x-default follows. Self-link count equals the cluster size.
-      expect(entries).toHaveLength(BUYER_SURFACE_LOCALE_IDS.length + 1);
-      const xDefault = entries.find((entry) => entry.hreflang === "x-default");
-      expect(xDefault).toBeDefined();
-      const enPath =
-        splat === ""
-          ? "/"
-          : splat === "api/docs"
-            ? "/api/docs"
-            : `/${splat}`;
-      expect(xDefault?.href).toBe(`https://0509.io${enPath}`);
-    }
-  });
-
-  it("every child route file re-exports the EN route's default component", async () => {
-    // This is the production canary: a regression that removes a default
-    // export or stops re-exporting the EN component would render an empty
-    // page under the locale prefix. The check is per-child so a missing
-    // export on one surface fails fast without dragging the rest of the
-    // cluster into the failure.
-    const { default: indexRoute } = await import("~/routes/$locale._index");
-    const { default: pricingRoute } = await import("~/routes/$locale.pricing");
-    const { default: helpRoute } = await import("~/routes/$locale.help");
-    const { default: docsRoute } = await import("~/routes/$locale.docs");
-    const { default: apiDocsRoute } = await import("~/routes/$locale.api.docs");
-    const { default: statusRoute } = await import("~/routes/$locale.status");
-    const { default: changelogRoute } = await import("~/routes/$locale.changelog");
-    const { default: trustRoute } = await import("~/routes/$locale.trust");
-    const { default: compareRoute } = await import("~/routes/$locale.compare");
-    const { default: localeSearchRoute } = await import("~/routes/$locale.search");
-    const { default: localeCompetitorMonitoringRoute } = await import(
-      "~/routes/$locale.competitor-monitoring"
-    );
-    const { default: localeCaptureRulesRoute } = await import(
-      "~/routes/$locale.capture-rules"
-    );
-    const { default: localeAdAggressionRoute } = await import(
-      "~/routes/$locale.methodology"
-    );
-    const { default: localeAdsDomainRoute } = await import(
-      "~/routes/$locale.ads.$domain"
-    );
-    expect(typeof indexRoute).toBe("function");
-    expect(typeof pricingRoute).toBe("function");
-    expect(typeof helpRoute).toBe("function");
-    expect(typeof docsRoute).toBe("function");
-    expect(typeof apiDocsRoute).toBe("function");
-    expect(typeof statusRoute).toBe("function");
-    expect(typeof changelogRoute).toBe("function");
-    expect(typeof trustRoute).toBe("function");
-    expect(typeof compareRoute).toBe("function");
-    expect(typeof localeSearchRoute).toBe("function");
-    expect(typeof localeCompetitorMonitoringRoute).toBe("function");
-    expect(typeof localeCaptureRulesRoute).toBe("function");
-    expect(typeof localeAdAggressionRoute).toBe("function");
-    expect(typeof localeAdsDomainRoute).toBe("function");
-  });
 });
 
-describe("locale buyer-surface sitemap + worker wiring", () => {
-  it("lists every buyer-surface locale subpath in the sitemap (issue #2294)", () => {
-    // Issue #2294: the buyer-surface cluster serves 200 under every locale
-    // prefix, so each locale sitemap now advertises those paths (plus the
-    // compare/switch children and the /guides/* cluster). The genuinely
-    // translated sneaker-resale cluster stays for the locales that ship it
-    // (de, ja, pt-br).
-    for (const locale of BUYER_SURFACE_LOCALE_IDS) {
+describe("locale sitemaps after the removal (issue #2962)", () => {
+  it("lists only the sneaker-resale page for de/ja/pt-br; fr/es serve empty feeds", () => {
+    for (const locale of ["de", "ja", "pt-br"] as const) {
       const body = buildLocaleSitemapXml(locale);
-      expect(body).toContain("<urlset");
-      for (const path of BUYER_SURFACE_PATHS) {
-        if (path === "/" || path === "/sitemap.xml") continue;
-        // Issue #2871: /methodology is now a 301 to the canonical
-        // /methodology/ad-aggression-score; its locale twins serve byte-identical
-        // English canonicalized to the EN page, so per the issue #1570
-        // duplicate-content policy they stay OUT of the locale sitemaps.
-        if (path === "/methodology" || path === "/search") {
-          // Issue #2871: /methodology ... issue #2965: /search is noindex
-          // (worker edge header) and out of the EN sitemap, so its locale
-          // twins drop out of the locale sitemaps too.
-          expect(body).not.toContain(`<loc>https://0509.io/${locale}${path}</loc>`);
-          continue;
-        }
-        const expected = `<loc>https://0509.io/${locale}${path}</loc>`;
-        expect(body, `sitemap must list ${expected}`).toContain(expected);
-      }
-      if (locale === "de" || locale === "ja" || locale === "pt-br") {
-        expect(body).toContain(`<loc>https://0509.io/${locale}/sneaker-resale</loc>`);
-      }
+      expect(body).toContain(`<loc>https://0509.io/${locale}/sneaker-resale</loc>`);
+      // No buyer-surface locale page remains to be advertised.
+      expect(body).not.toContain(`https://0509.io/${locale}/pricing`);
+    }
+    for (const locale of ["fr", "es"] as const) {
+      expect(staticSitemapEntriesForLocale(locale)).toEqual([]);
+      expect(buildLocaleSitemapXml(locale)).not.toContain("<loc>");
     }
   });
 
-  it("serves a LOCALE-SCOPED body for /<locale>/sitemap.xml, never the root body", () => {
-    // Issue #1561: each locale sitemap carries ONLY /<locale>/-prefixed URLs,
-    // and the root feed excludes them entirely. Issue #2294 adds the
-    // buyer-surface cluster to the locale feeds, so /de/pricing is now listed
-    // in the de sitemap (still never in the root).
+  it("still serves a locale-scoped body and never leaks locale URLs into the root feed", () => {
     const de = buildLocaleSitemapXml("de");
-    expect(de).toContain("<urlset");
-    expect(de).toContain(`<loc>https://0509.io/de/sneaker-resale</loc>`);
-    expect(de).toContain(`<loc>https://0509.io/de/pricing</loc>`);
-    // The root body contains the EN (non-prefixed) /pricing, not /de/pricing.
+    expect(de).toContain("<loc>https://0509.io/de/sneaker-resale</loc>");
     const root = publicSeoFileForPathname("/sitemap.xml")?.body ?? "";
-    expect(root).toContain("<loc>https://0509.io/pricing</loc>");
-    expect(root).not.toContain("<loc>https://0509.io/de/pricing</loc>");
+    expect(root).toContain("<loc>https://0509.io/sneaker-resale</loc>");
+    expect(root).not.toContain("/de/sneaker-resale");
+    // robots.txt advertises the de/ja/pt-br feeds but NOT the empty fr/es ones.
+    const robots = publicSeoFileForPathname("/robots.txt")?.body ?? "";
+    expect(robots).toContain("Sitemap: https://0509.io/de/sitemap.xml");
+    expect(robots).not.toContain("Sitemap: https://0509.io/fr/sitemap.xml");
+    expect(robots).not.toContain("Sitemap: https://0509.io/es/sitemap.xml");
   });
 });
 
-describe("buyerSurfaceHreflangLinks (issue #1501)", () => {
-  it("emits self + sibling hreflang entries pointing at the same subpath", () => {
-    const links = buyerSurfaceHreflangLinks("pricing");
-    const byLocale = new Map(links.map((link) => [link.hreflang, link.href]));
-    expect(byLocale.get("de")).toBe("https://0509.io/de/pricing");
-    expect(byLocale.get("ja")).toBe("https://0509.io/ja/pricing");
-    expect(byLocale.get("pt-br")).toBe("https://0509.io/pt-br/pricing");
-    expect(byLocale.get("fr")).toBe("https://0509.io/fr/pricing");
-    expect(byLocale.get("es")).toBe("https://0509.io/es/pricing");
-    expect(byLocale.get("x-default")).toBe("https://0509.io/pricing");
-  });
-
-  it("treats /api/docs as a single subpath segment", () => {
-    const links = buyerSurfaceHreflangLinks("api/docs");
-    expect(links.find((link) => link.hreflang === "de")?.href).toBe(
-      "https://0509.io/de/api/docs",
-    );
-    expect(links.find((link) => link.hreflang === "x-default")?.href).toBe(
-      "https://0509.io/api/docs",
-    );
-  });
-
-  it("treats an empty splat as the bare locale index (/<locale> and x-default /)", () => {
-    const links = buyerSurfaceHreflangLinks("");
-    expect(links.find((link) => link.hreflang === "de")?.href).toBe(
-      "https://0509.io/de",
-    );
-    expect(links.find((link) => link.hreflang === "x-default")?.href).toBe(
-      "https://0509.io/",
-    );
-  });
-});
-
-describe("isBuyerSurfaceLocaleId (issue #1501)", () => {
+describe("isBuyerSurfaceLocaleId (kept as the 301 + worker sitemap gate)", () => {
   it("accepts every buyer-surface locale id", () => {
     for (const locale of BUYER_SURFACE_LOCALE_IDS) {
       expect(isBuyerSurfaceLocaleId(locale)).toBe(true);

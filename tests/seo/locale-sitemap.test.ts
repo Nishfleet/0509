@@ -33,17 +33,21 @@ function locsFromXml(xml: string): string[] {
 const localePrefixFor = (locale: string) => `${SITE}/${locale}/`;
 
 describe("locale sitemaps are locale-scoped (issue #1561, accept #4)", () => {
-  it("serves a sitemap for every buyer-surface locale, non-empty for all (issue #2294)", () => {
-    // Issue #2294: every buyer-surface locale feed is derived from the
-    // buyer-surface cluster that serves 200 under every locale prefix, so
-    // all five locales (de, ja, pt-br, fr, es) carry a non-empty sitemap.
-    for (const locale of BUYER_SURFACE_LOCALE_IDS) {
+  it("serves de/ja/pt-br with only the sneaker-resale entry; fr/es serve empty feeds (issue #2962)", () => {
+    // Issue #2962 (orchestrator Branch B) deleted the untranslated
+    // buyer-surface locale routes, so the only indexable locale-sitemap
+    // content left is the genuinely translated sneaker-resale cluster
+    // (de, ja, pt-br — issues #1457/#1460). fr/es have no sneaker-resale
+    // page and emit empty feeds robots.txt no longer advertises.
+    for (const locale of ["de", "ja", "pt-br"] as const) {
+      const entries = staticSitemapEntriesForLocale(locale);
+      expect(entries.map((e) => e.path)).toEqual([`/${locale}/sneaker-resale`]);
       const locs = locsFromXml(buildLocaleSitemapXml(locale));
-      expect(staticSitemapEntriesForLocale(locale).length).toBe(locs.length);
-      expect(
-        locs.length,
-        `/${locale}/sitemap.xml should have buyer-surface entries`,
-      ).toBeGreaterThan(0);
+      expect(locs).toEqual([`${SITE}/${locale}/sneaker-resale`]);
+    }
+    for (const locale of ["fr", "es"] as const) {
+      expect(staticSitemapEntriesForLocale(locale)).toEqual([]);
+      expect(locsFromXml(buildLocaleSitemapXml(locale))).toEqual([]);
     }
   });
 

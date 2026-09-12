@@ -2,19 +2,14 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import {
-  BUYER_SURFACE_LOCALE_IDS,
-  htmlLangForPathname,
-  localeSearchPathname,
-} from "~/lib/locale-markets";
-import {
-  buyerSurfaceHreflangLinks,
-} from "~/lib/seo";
-import { AD_AGGRESSION_METHODOLOGY_PATH } from "~/lib/aggression-score";
-import { buildLocaleSitemapXml } from "~/lib/sitemap.server";
+import { isBuyerSurfaceLocaleId } from "~/lib/locale-markets";
 
-// First-value search funnel + supporting trust surfaces that must serve 200
-// under every buyer-surface locale prefix (issue #1578).
+/**
+ * Issue #2962 (orchestrator Branch B): the first-value locale routes
+ * (`$locale.search` etc., issue #1578) are DELETED — every buyer-surface
+ * locale path is a 301 to the EN pathname. This canary keeps the redirect
+ * contract for exactly those routes registered before the removal.
+ */
 const LOCALE_FIRST_VALUE_ROUTES = [
   "search",
   "competitor-monitoring",
@@ -22,109 +17,30 @@ const LOCALE_FIRST_VALUE_ROUTES = [
   "methodology",
 ] as const;
 
-describe("locale first-value search funnel (issue #1578)", () => {
-  it("registers every first-value route as a child of the :locale layout in routes.ts", () => {
+describe("locale first-value surfaces are EN redirects (issue #2962)", () => {
+  it("registers NO first-value child routes under :locale any more", () => {
     const routes = readFileSync("app/routes.ts", "utf8");
     const localeBlock = routes.slice(
-      routes.indexOf('route(":locale"'),
+      routes.indexOf('route(":locale/*"'),
       routes.indexOf('route("team/accept"'),
     );
     for (const route of LOCALE_FIRST_VALUE_ROUTES) {
-      expect(localeBlock, `routes.ts :locale block missing ${route}`).toContain(
-        `route("${route}", "routes/$locale.${route}.tsx")`,
+      expect(localeBlock, `${route} locale child must be gone`).not.toContain(
+        `route("${route}",`,
       );
     }
   });
 
-  it("every first-value $locale route re-exports the EN component and a functional surface", async () => {
-    // A missing default export (or one that stopped re-exporting the EN
-    // component) would render an empty page under the locale prefix — the
-    // EN surface shipped under #1501 stays in lockstep. `search` additionally
-    // re-exports its full loader/action/headers so /<locale>/search is the
-    // genuinely functional search, not a byte-identical stub.
-    const { default: searchRoute, loader, action } = await import(
-      "~/routes/$locale.search"
-    );
-    expect(typeof searchRoute).toBe("function");
-    expect(typeof loader).toBe("function");
-    expect(typeof action).toBe("function");
-    for (const route of ["competitor-monitoring", "capture-rules", "methodology"]) {
-      const mod = await import(`~/routes/$locale.${route}`);
-      expect(typeof mod.default, `${route} default`).toBe("function");
-    }
+  it("the splat redirect file still exists and exports the 301 loader", async () => {
+    const mod = await import("~/routes/$locale");
+    expect(typeof mod.loader).toBe("function");
+    expect(mod.default).toBeDefined();
   });
 
-  it("emits the canonical (EN) + reciprocal hreflang cluster for each first-value route", async () => {
-    for (const route of LOCALE_FIRST_VALUE_ROUTES) {
-      const mod = await import(`~/routes/$locale.${route}`);
-      const links = mod.links?.() ?? [];
-      const canonical = links.find((link: { rel?: string }) => link.rel === "canonical");
-      expect(canonical, `${route} canonical`).toBeDefined();
-      expect(canonical.href, `${route} canonical href`).toBe(
-        // Issue #2871: the EN methodology canonical moved to
-        // /methodology/ad-aggression-score; its locale twins canonicalize to it.
-        route === "methodology"
-          ? `https://0509.io${AD_AGGRESSION_METHODOLOGY_PATH}`
-          : `https://0509.io/${route}`,
-      );
-      const hreflang = links.some((link: { rel?: string }) => link.rel === "alternate");
-      expect(hreflang, `${route} hreflang`).toBe(true);
-      const siblings = buyerSurfaceHreflangLinks(route);
-      // self + every sibling locale + x-default.
-      expect(siblings).toHaveLength(BUYER_SURFACE_LOCALE_IDS.length + 1);
-      expect(siblings.find((s) => s.hreflang === "x-default")?.href).toBe(
-        `https://0509.io/${route}`,
-      );
+  it("isBuyerSurfaceLocaleId still gates the five legacy prefixes", () => {
+    for (const locale of ["de", "ja", "pt-br", "fr", "es"] as const) {
+      expect(isBuyerSurfaceLocaleId(locale)).toBe(true);
     }
-  });
-
-  it("reports <html lang>=\"en\" for every locale × first-value route (byte-identical English, issue #1570)", () => {
-    // Issue #1570: first-value locale routes serve byte-identical English copy
-    // (they re-export the EN component), so htmlLangForPathname returns "en".
-    // No page may declare a language its content does not speak.
-    for (const locale of BUYER_SURFACE_LOCALE_IDS) {
-      for (const route of LOCALE_FIRST_VALUE_ROUTES) {
-        expect(htmlLangForPathname(`/${locale}/${route}`), `/${locale}/${route}`).toBe("en");
-      }
-    }
-  });
-
-  it("lists locale first-value URLs in each locale sitemap (issue #2294)", () => {
-    // Issue #2294: first-value locale routes serve 200 under every locale
-    // prefix, so they are now advertised in the locale sitemaps. They stay
-    // out of the root sitemap (issue #1561) — each lives only in its own
-    // /<locale>/sitemap.xml.
-    for (const locale of BUYER_SURFACE_LOCALE_IDS) {
-      const body = buildLocaleSitemapXml(locale);
-      for (const route of LOCALE_FIRST_VALUE_ROUTES) {
-        // Issue #2871: /methodology is now a 301 to the canonical
-        // /methodology/ad-aggression-score, and the methodology locale twins
-        // serve byte-identical English canonicalized to that EN page — so per
-        // the issue #1570 duplicate-content policy they stay OUT of the locale
-        // sitemaps (reachable, not advertised as indexable).
-        if (route === "methodology" || route === "search") {
-          // Issue #2871: /methodology ... Issue #2965: /search is noindex
-          // (worker edge header) and out of the EN sitemap, so the locale
-          // twins stay OUT of the locale sitemaps too.
-          expect(body).not.toContain(`<loc>https://0509.io/${locale}/${route}</loc>`);
-          continue;
-        }
-        const loc = `<loc>https://0509.io/${locale}/${route}</loc>`;
-        expect(body, `locale sitemap should list ${loc}`).toContain(loc);
-      }
-    }
-  });
-
-  it("a localised surface funnels the search moment to the locale-prefixed /search, not EN", () => {
-    // accept #3: locale pages must link to /{locale}/search. EN pathnames
-    // keep /search unchanged.
-    for (const route of ["search", "competitor-monitoring", "capture-rules", "methodology"]) {
-      for (const locale of BUYER_SURFACE_LOCALE_IDS) {
-        expect(localeSearchPathname(`/${locale}/${route}`), `/${locale}/${route}`).toBe(
-          `/${locale}/search`,
-        );
-      }
-      expect(localeSearchPathname(`/${route}`)).toBe("/search");
-    }
+    expect(isBuyerSurfaceLocaleId("en")).toBe(false);
   });
 });

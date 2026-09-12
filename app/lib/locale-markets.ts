@@ -1,108 +1,34 @@
 /**
- * Zero-spend local-language SEO cluster for the sneaker-resale segment
- * (issue 1154). English `/sneaker-resale` is x-default. Product UI stays
- * English; these pages are indexable marketing surfaces only.
+ * Local-language SEO cluster for the sneaker-resale segment (issue 1154).
+ * English `/sneaker-resale` is x-default. Product UI stays English; these
+ * pages are indexable marketing surfaces only.
  *
  * Market pick is evidence, not vibe — see docs/locale-seo-markets.md.
  *
  * Do not import `~/lib/seo` from here: seo.ts reads SNEAKER_RESALE_PATHS
  * to publish the cluster, and a cycle would break both.
+ *
+ * The untranslated buyer-surface locale cluster (the old
+ * `BUYER_SURFACE_PATHS` / compare-child / guides `$locale.*` routes) was
+ * deleted for issue #2962 (orchestrator Branch B): those pages served
+ * byte-identical English copy, so they 301 to the EN pathname via the
+ * `:locale/*` splat route instead. This module keeps `BUYER_SURFACE_LOCALE_IDS`
+ * as the allowlist that 301 gate and the worker's `/<locale>/sitemap.xml`
+ * serving read; the surface lists members of that retired cluster are gone.
  */
 export const SNEAKER_RESALE_LOCALE_IDS = ["en", "de", "ja", "pt-br"] as const;
 export type SneakerResaleLocaleId = (typeof SNEAKER_RESALE_LOCALE_IDS)[number];
 
 /**
- * Locales that ship the full buyer-surface cluster (/, /pricing, /help, ...).
- * English (`en`) is x-default and does NOT get a prefix. Issue #1501 expanded
- * the locale list from the evidence-backed trio (de, ja, pt-br) to the five
- * markets the BET 5 distribution bet covers — EU/UK + JP + BR + FR + ES, where
- * Meta's Ad Library is the strategic coverage region. The buyer-surface
- * cluster is intentionally broader than the sneaker-resale cluster: fr/es
- * receive the marketing surface cluster with canonical→EN (no localized
- * sneaker-resale copy yet), while the sneaker-resale segment stays scoped
- * to the three translator-passed markets.
+ * Buyer-surface locale prefixes (#1501). No longer a served route cluster —
+ * issue #2962 deleted every untranslated buyer-surface locale route — but
+ * still the allowlist that decides which `/<locale>/...` paths 301 to the EN
+ * pathname (app/routes/$locale.tsx) and which `/<locale>/sitemap.xml` the
+ * worker serves (workers/app.ts). English (`en`) is x-default and does NOT
+ * get a prefix.
  */
 export const BUYER_SURFACE_LOCALE_IDS = ["de", "ja", "pt-br", "fr", "es"] as const;
 export type BuyerSurfaceLocaleId = (typeof BUYER_SURFACE_LOCALE_IDS)[number];
-
-/**
- * Buyer-surface paths that must serve 200 under every buyer-surface locale
- * prefix. The English (x-default) versions live at the same paths without a
- * locale prefix. Sourced from issue #1501's `verify:` block.
- *
- * The set is a single source of truth for the route file's splat dispatch,
- * the sitemap entries, and the prod canary probe — so a new buyer surface
- * added to the EN side cannot silently fall off the locale side.
- */
-export const BUYER_SURFACE_PATHS = [
-  "/",
-  "/pricing",
-  "/sitemap.xml",
-  "/help",
-  "/docs",
-  "/api/docs",
-  "/status",
-  "/changelog",
-  "/trust",
-  "/compare",
-  // First-value search funnel + supporting trust surfaces (issue 1578).
-  // Search is THE first purchase-intent moment (BET 2), so a non-EN buyer
-  // completing the localised funnel must reach the same functional search
-  // outcome instead of a 404 or a language jump back to EN `/search`
-  // (accept #1/#3). Competitor-monitoring, capture-rules and methodology
-  // are the surrounding trust/proof surfaces the localised buyer needs too.
-  "/search",
-  "/competitor-monitoring",
-  "/capture-rules",
-  "/methodology",
-] as const;
-export type BuyerSurfacePath = (typeof BUYER_SURFACE_PATHS)[number];
-
-/**
- * Compare child product pages that must also serve 200 under every
- * buyer-surface locale prefix (issue #1563). The EN hubs (`/compare`,
- * each `/compare/<vendor>`) exist already; the BET 5 compare pages and
- * the BET 8 switch pages were never localised, so `/de/compare/panoramata`
- * etc. 404'd while `/de/compare` (the hub) served 200. Each path here maps
- * to a `$locale.*.tsx` route that re-exports the EN sibling's meta and
- * component with canonical→EN plus the buyer-surface hreflang cluster.
- *
- * Issue #1481 removed `compare/visualping` and `compare/foreplay` from the
- * compare set: both are canonicalized duplicates of their more specific
- * siblings, so their locale variants dropped out of the sitemap and the
- * locale hub alongside the EN URLs. The `$locale.compare.*` route files
- * stay registered — the URLs still render 200 — they are just no longer
- * indexed or linked as locale surfaces.
- *
- * Kept as a single source of truth so the route file, the sitemap, and the
- * `<html lang>` helper in this module can never drift apart.
- */
-export const BUYER_SURFACE_SEGMENT_CHILD_SLUGS: Record<string, readonly string[]> = {
-  compare: [
-    "meta-ad-library",
-    "visualping-ad-libraries",
-    "spyland",
-    "pulzifi",
-    "foreplay-spyder",
-    "panoramata",
-    "adspyder",
-  ],
-  switch: ["panoramata", "visualping", "magicbrief", "adspy"],
-} as const;
-
-/**
- * The 9 locale-prefixable child routes as EN paths (`/compare/meta-ad-library`
- * ... `/switch/visualping`). Derived from `BUYER_SURFACE_SEGMENT_CHILD_SLUGS`
- * so adding a vendor in one place lights it up in every locale prefix.
- */
-export const BUYER_SURFACE_CHILD_PATHS: readonly string[] = Object.entries(
-  BUYER_SURFACE_SEGMENT_CHILD_SLUGS,
-).flatMap(([segment, slugs]) => slugs.map((slug) => `/${segment}/${slug}`));
-
-/** True when `splat` (e.g. `compare/panoramata`) is a locale-prefixable child. */
-export function isBuyerSurfaceChildSplat(splat: string): boolean {
-  return (BUYER_SURFACE_CHILD_PATHS as readonly string[]).includes(`/${splat}`);
-}
 
 export interface SneakerResaleMarket {
   id: SneakerResaleLocaleId;
@@ -178,154 +104,29 @@ export function sneakerResaleMarketForPathname(pathname: string): SneakerResaleM
   return MARKET_BY_PATH.get(withoutTrailingSlash) ?? null;
 }
 
-// NOTE(issue #1570): the buyer-surface cluster (`/de/pricing`, `/ja/help`,
-// ...) serves byte-identical English copy — it is NOT translated. A page
-// must not declare a language its content does not speak (WCAG 3.2.6
-// html-lang; Google duplicate-content doorway signal), so buyer-surface
-// locale paths report `lang="en"` and are removed from the locale sitemap
-// set. The genuinely translated sneaker-resale cluster (`/de/sneaker-resale`
-// etc.) keeps its locale lang tag below. `BUYER_SURFACE_HTML_LANG` is
-// intentionally gone: it existed only to feed `htmlLangForPathname`, and
-// that function now returns `"en"` for every buyer-surface path.
-
 /**
- * Buyer-surface locale prefix extracted from a pathname, if any. Used by
- * `htmlLangForPathname` so `/de/pricing` reports `de` even though
- * `sneakerResaleMarketForPathname` only knows the `/de/sneaker-resale` shape.
- *
- * The prefix match is strict: the splat must be empty (bare `/<locale>`
- * index), exactly one of the allowlisted buyer-surface subpaths
- * (`pricing`, `help`, `docs`, `api/docs`, `status`, `changelog`, `trust`,
- * `compare`), one of the locale-prefixable compare/switch child routes
- * (`compare/panoramata`, `switch/visualping`, ...), or a locale-prefixed
- * programmatic `/ads/:domain` path (`ads/nike.com`, ... — issue #1562).
- * Any other splat — e.g. `/fr/sneaker-resale`, where `fr` is a
- * buyer-surface locale but `sneaker-resale` is the localized
- * sneaker-resale cluster's own segment — returns `null` so the pathname
- * falls through to the sneaker-resale check (which 404s for fr/es) and
- * ultimately reports `en`. The strict match keeps the buyer-surface lang
- * tag from leaking onto 404s.
+ * `<html lang>` for a public pathname. Only the genuinely translated
+ * sneaker-resale cluster declares a non-EN lang (issue #1457/#1460); every
+ * other public path is English and reports `lang="en"` (issue #1570 /
+ * #2962: a page must never claim a language its content does not speak —
+ * every formerly-fake-locale buyer path is now an EN 301, so nothing
+ * stumbled on the old buyer-surface branch remains).
  */
-function buyerSurfaceLocaleForPathname(pathname: string): BuyerSurfaceLocaleId | null {
-  const pathOnly = pathname.split(/[?#]/)[0] ?? pathname;
-  const withoutTrailingSlash =
-    pathOnly === "/" ? pathOnly : pathOnly.replace(/\/+$/, "");
-  for (const locale of BUYER_SURFACE_LOCALE_IDS) {
-    const prefix = `/${locale}`;
-    if (withoutTrailingSlash === prefix) {
-      return locale;
-    }
-    if (withoutTrailingSlash.startsWith(`${prefix}/`)) {
-      const splat = withoutTrailingSlash.slice(prefix.length + 1);
-      // The splat must exactly match a known buyer-surface subpath. An
-      // unknown splat (`/fr/sneaker-resale`, `/fr/foo`) means the
-      // route 404s; the lang tag stays `en` so the not-found page doesn't
-      // mislabel itself as French/Spanish/etc. `/fr/ads/foo` IS a
-      // legitimate locale brand page (issue #1562) once the domain is a
-      // single non-slash segment (domains never contain `/`), so it is
-      // recognised below.
-      const splatIsAdsDomain =
-        splat !== "ads" && /^ads\/[^/]+$/.test(splat);
-      if (
-        splat === "" ||
-        (BUYER_SURFACE_PATHS as readonly string[]).some(
-          (path) => path !== "/" && path === `/${splat}`,
-        ) ||
-        isBuyerSurfaceChildSplat(splat) ||
-        splatIsAdsDomain
-      ) {
-        return locale;
-      }
-      return null;
-    }
-  }
-  return null;
-}
-
 export function htmlLangForPathname(pathname: string): string {
-  // Issue #1570: buyer-surface locale paths (`/de/pricing`, `/ja/help`, ...)
-  // serve untranslated English copy. They must declare `lang="en"` so a
-  // page never claims a language its content does not speak (WCAG 3.2.6
-  // html-lang) and so Google does not see 43 fake-locale doorway duplicates.
-  // The genuinely translated sneaker-resale cluster keeps its locale lang.
-  if (buyerSurfaceLocaleForPathname(pathname)) {
-    return "en";
-  }
   return sneakerResaleMarketForPathname(pathname)?.htmlLang ?? "en";
 }
 
 /**
- * Returns the English (canonical) pathname for a buyer-surface locale path.
- * `/de/pricing` -> `/pricing`; `/ja/` -> `/`; `/sneaker-resale` (already EN)
- * passes through unchanged. Used by the splat route to set the
- * `rel=canonical` URL to the x-default version so the locale cluster does
- * not fragment search ranking (issue #1501, accept #2). Unknown splats
- * (e.g. `/fr/sneaker-resale`) pass through unchanged — the route 404s but
- * a stray canonical rewrite must not change behavior.
+ * Whether `value` is a buyer-surface locale id (the locale prefixes the
+ * `:locale/*` 301 accepts and the worker may serve a sitemap for, distinct
+ * from `isSneakerResaleLocaleId` which is scoped to the sneaker-resale
+ * segment).
  */
-export function canonicalPathnameForLocalePath(pathname: string): string {
-  const buyerSurfaceLocale = buyerSurfaceLocaleForPathname(pathname);
-  const pathOnly = pathname.split(/[?#]/)[0] ?? pathname;
-  const withoutTrailingSlash =
-    pathOnly === "/" ? pathOnly : pathOnly.replace(/\/+$/, "");
-  if (!buyerSurfaceLocale) {
-    return withoutTrailingSlash;
-  }
-  const prefix = `/${buyerSurfaceLocale}`;
-  if (withoutTrailingSlash === prefix) {
-    return "/";
-  }
-  if (withoutTrailingSlash.startsWith(`${prefix}/`)) {
-    return withoutTrailingSlash.slice(prefix.length);
-  }
-  return withoutTrailingSlash;
-}
-
-/**
- * Whether `value` is a buyer-surface locale id (the locales that receive
- * the full cluster, distinct from `isSneakerResaleLocaleId` which is scoped
- * to the sneaker-resale segment).
- */
-/**
- * The search path a page on `pathname` should funnel its "run a search"
- * entry points toward, preserving the buyer-surface locale prefix (issue 1578,
- * accept #3). A localised surface like `/de/competitor-monitoring`
- * must hand the first-value search moment to `/de/search` — not EN
- * `/search` — so the non-EN buyer stays inside the localised funnel. EN
- * (and unknown) pathnames return `/search` unchanged.
- */
-export function localeSearchPathname(pathname: string): string {
-  const locale = buyerSurfaceLocaleForPathname(pathname);
-  return locale ? `/${locale}/search` : "/search";
-}
-
 export function isBuyerSurfaceLocaleId(value: string | undefined): value is BuyerSurfaceLocaleId {
   return (
     value !== undefined &&
     (BUYER_SURFACE_LOCALE_IDS as readonly string[]).includes(value)
   );
-}
-
-/**
- * Whether `pathname` matches a buyer-surface subpath under a locale prefix
- * (e.g. `/de/pricing`). Returns the EN subpath (without the locale prefix)
- * when it matches, or `null` otherwise. Drives the splat route's dispatch:
- * the EN subpath is the key into the component/loader/links switch, and a
- * `null` return means the splat was something other than a buyer-surface
- * (e.g. a deep /compare/* sub-page) which 404s to keep the surface
- * cluster bounded.
- */
-export function matchBuyerSurfaceSplat(splat: string): string | null {
-  if (splat === "") {
-    return "";
-  }
-  // The empty `""` maps to `/` (the marketing index). Everything else must
-  // exactly match a buyer-surface subpath; partial matches (`/pricing/...`)
-  // and unknown segments are out of scope for the cluster and 404.
-  if ((BUYER_SURFACE_PATHS as readonly string[]).includes(`/${splat}`)) {
-    return splat;
-  }
-  return null;
 }
 
 export function isSneakerResaleSignupSource(source: string | null | undefined): boolean {

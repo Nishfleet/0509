@@ -103,11 +103,9 @@ describe("guides how-to-monitor-competitor-landing-page-changes route (issue #28
     expect(routes).toContain(
       'route("guides/how-to-monitor-competitor-landing-page-changes", "routes/guides.how-to-monitor-competitor-landing-page-changes.tsx")',
     );
-    // The locale cluster registration keeps the guide serving 200 under
-    // every buyer-surface prefix, matching its locale sitemap entry.
-    expect(routes).toContain(
-      'route("guides/how-to-monitor-competitor-landing-page-changes", "routes/$locale.guides.how-to-monitor-competitor-landing-page-changes.tsx")',
-    );
+    // Issue #2962 (Branch B): the $locale.guides.* twin was deleted with the
+    // untranslated buyer-surface locale cluster — /de/guides/* now 301s to
+    // the EN guide via the $locale.tsx splat redirect.
 
     const { publicSeoFileForPathname } = await import("~/lib/seo");
     const sitemap = publicSeoFileForPathname("/sitemap.xml");
@@ -286,11 +284,8 @@ describe("guides #3093 trio — offer-change alert, prove-what-changed, standing
         expect(routes).toContain(
           `route("guides/${guide.slug}", "routes/${guide.module}.tsx")`,
         );
-        // The locale cluster registration keeps the guide serving 200 under
-        // every buyer-surface prefix, matching its locale sitemap entry.
-        expect(routes).toContain(
-          `route("guides/${guide.slug}", "routes/$locale.${guide.module}.tsx")`,
-        );
+        // Issue #2962 (Branch B): no $locale.guides.* twin — the locale
+        // path 301s to this EN route via the $locale.tsx splat redirect.
 
         const { publicSeoFileForPathname } = await import("~/lib/seo");
         const sitemap = publicSeoFileForPathname("/sitemap.xml");
@@ -445,8 +440,11 @@ describe("guides meta-ad-library-api-limitations route (issue #3127)", () => {
     expect(routes).toContain(
       'route("guides/meta-ad-library-api-limitations", "routes/guides.meta-ad-library-api-limitations.tsx")',
     );
-    expect(routes).toContain(
-      'route("guides/meta-ad-library-api-limitations", "routes/$locale.guides.meta-ad-library-api-limitations.tsx")',
+    // Issue #2962 (orchestrator Branch B): the untranslated locale cluster
+    // was deleted; /<locale>/guides/* 301s to the EN pathname via the splat
+    // route, so the locale registration must be gone.
+    expect(routes).not.toContain(
+      "routes/$locale.guides.meta-ad-library-api-limitations.tsx",
     );
 
     const { publicSeoFileForPathname } = await import("~/lib/seo");
@@ -531,8 +529,10 @@ describe("guides meta-ad-library-api-limitations route (issue #3127)", () => {
 // guide added to the sitemap without a route, or hidden from the index,
 // slipped through. This suite is mechanical: it derives the guide set from
 // the sitemap source itself and demands triple agreement —
-//   sitemap source (app/lib/sitemap.server.ts)
-//     <-> route registration (app/routes.ts, EN + $locale)
+//   sitemap source (app/lib/seo.ts SITEMAP_PATHS — since issue #2962's
+//     Branch B the locale derivation in sitemap.server.ts is gone)
+//     <-> route registration (app/routes.ts, EN-only: the $locale.guides.*
+//       twins were deleted with the untranslated locale cluster)
 //     <-> index card (GUIDE_ENTRIES in app/routes/guides.tsx)
 // — so the sitemap can never again promise a URL the Worker does not serve,
 // and the hub can never undersell the cluster.
@@ -547,7 +547,7 @@ describe("guides triple agreement: sitemap <-> route <-> index (issue #3122)", (
   it("registers a route (EN + $locale) and an index card for every /guides/* path the sitemap source lists", async () => {
     const { readFileSync } = await import("node:fs");
     const sitemapSlugs = uniqueSlugs(
-      readFileSync("app/lib/sitemap.server.ts", "utf8"),
+      readFileSync("app/lib/seo.ts", "utf8"),
       SITEMAP_GUIDE_RE,
     );
     // The cluster is 7 guides; grow this floor when the next how-to ships.
@@ -560,11 +560,10 @@ describe("guides triple agreement: sitemap <-> route <-> index (issue #3122)", (
       expect(routes, `sitemap lists /guides/${s} but no EN route registers it`).toContain(
         `route("guides/${s}", "routes/guides.${s}.tsx")`,
       );
-      // The $locale registration matches the guide's entry in the locale
-      // sitemaps (same source list); without it the /de//ja/... variants 404.
-      expect(routes, `sitemap lists /guides/${s} but no $locale route registers it`).toContain(
-        `route("guides/${s}", "routes/$locale.guides.${s}.tsx")`,
-      );
+      // Issue #2962 (Branch B): the $locale.guides.* registrations were
+      // deleted with the untranslated locale cluster; /de/guides/* 301s to
+      // the EN route via the $locale.tsx splat, so only the EN registration
+      // must exist.
     }
 
     // Converse leg (the #2295 anti-drop direction): every guides/* route

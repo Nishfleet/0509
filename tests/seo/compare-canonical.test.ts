@@ -60,20 +60,6 @@ async function importLoserRoute(slug: string) {
   }
 }
 
-/** Concrete locale loser route modules; static paths so Vite resolves them. */
-async function importLocaleLoserRoute(slug: string) {
-  switch (slug) {
-    case "visualping":
-      return import("~/routes/$locale.compare.visualping");
-    case "visualping-ad-library":
-      return import("~/routes/$locale.compare.visualping-ad-library");
-    case "foreplay":
-      return import("~/routes/$locale.compare.foreplay");
-    default:
-      throw new Error(`unknown canonicalized locale loser slug: ${slug}`);
-  }
-}
-
 describe("compare canonical consolidation (issue #1481)", () => {
   it("lists only the canonical winner of each duplicate pair in the sitemap", () => {
     const sitemapPaths = sitemapComparePaths();
@@ -140,23 +126,16 @@ describe("compare canonical consolidation (issue #1481)", () => {
       );
       expect(markup, `${loser} must render a real page`).toContain("<h1");
 
-      // The locale loser (`/de/compare/visualping`, ...) stays registered
-      // too, and inherits the EN loser's links: canonical straight at the
-      // winner, never a canonical chain through the EN loser.
+      // Issue #2962 (orchestrator Branch B): the locale loser route file was
+      // deleted with the untranslated buyer-surface locale cluster —
+      // /de/compare/<loser> now 301s straight to the EN loser via the
+      // $locale.tsx splat, and the EN loser's canonical-at-winner link is
+      // the only consolidation signal left. The splat registration must
+      // exist so the locale path never 404s.
       expect(
         routesSource,
-        `locale ${loser} route must stay registered`,
-      ).toContain(
-        `route("compare/${slug}", "routes/$locale.compare.${slug}.tsx")`,
-      );
-      const localeMod = await importLocaleLoserRoute(slug);
-      const localeLinks = (
-        localeMod as { links: () => Array<{ rel: string; href: string }> }
-      ).links;
-      expect(
-        localeLinks(),
-        `locale ${loser} must carry the ${winner} canonical directly`,
-      ).toEqual([{ rel: "canonical", href: canonicalUrl(winner) }]);
+        "locale splat redirect must stay registered",
+      ).toContain('route(":locale/*", "routes/$locale.tsx")');
     }
   });
 });

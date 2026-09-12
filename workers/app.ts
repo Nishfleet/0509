@@ -211,10 +211,13 @@ export default {
     }
 
     // Locale-prefixed /<locale>/sitemap.xml (issue #1501 + #1561): each
-    // buyer-surface locale ships a LOCALE-SCOPED sitemap body containing only
-    // paths under /<locale>/ — never the EN root body (that was the #1561
-    // bug: the locale sitemaps mirrored the root byte-for-byte, fragmenting
-    // crawl budget and splitting PageRank across duplicates). Reaching this
+    // buyer-surface locale prefix ships a LOCALE-SCOPED sitemap body
+    // containing only paths under /<locale>/ — never the EN root body (that
+    // was the #1561 bug: the locale sitemaps mirrored the root byte-for-byte,
+    // fragmenting crawl budget and splitting PageRank across duplicates).
+    // Since #2962 the only locale sitemap content is the translated
+    // sneaker-resale cluster, so de/ja/pt-br feeds carry one entry and fr/es
+    // serve an empty (unadvertised) feed. Reaching this
     // code path here avoids loading the React Router tree just to serve the
     // scoped XML under the locale prefix. `isBuyerSurfaceLocaleId` gates the
     // first segment against the allowlist so an unknown locale

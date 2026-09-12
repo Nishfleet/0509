@@ -22,6 +22,10 @@ import {
   runCanary,
 } from "./canary-locale-prefix-routes.lib.mjs";
 
+/**
+ * @param {string[]} argv
+ * @returns {{ baseUrl: string, timeoutMs: number, json: boolean }}
+ */
 function parseArgs(argv) {
   /** @type {{ baseUrl: string, timeoutMs: number, json: boolean }} */
   const parsed = {
