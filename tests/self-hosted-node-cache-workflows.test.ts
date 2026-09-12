@@ -32,7 +32,6 @@ const runnerRoutedWorkflows = [
     ["prepare_remote_restore_evidence", "deploy"],
   ],
   [".github/workflows/finalize-production-soak.yml", ["finalize"]],
-  [".github/workflows/uptime-health.yml", ["health"]],
 ] as const;
 
 type SetupNodeStep = {

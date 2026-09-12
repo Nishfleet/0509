@@ -149,6 +149,20 @@ export const PUBLIC_HTML_CACHE_CONTROL = "public, max-age=300";
 export const PUBLIC_CACHEABLE_HTML_PATHS = new Set([
   "/",
   "/pricing",
+  // Issue #3193: the rest of the public marketing route families the TTFB
+  // contract names. /brands, /brands/:category, /guides, /guides/:slug and the
+  // remaining canonical /compare and /switch pages are all anonymous public
+  // SEO surfaces; they now ride exactly the same public, max-age=300 + edge
+  // cache contract as "/" and "/pricing".
+  "/brands",
+  "/guides",
+  "/compare",
+  "/compare/keeptabz",
+  "/compare/gethookd",
+  "/compare/bigspy",
+  "/compare/minea",
+  "/compare/poweradspy",
+  "/switch/magicbrief",
   "/help",
   "/docs",
   "/terms",
@@ -174,13 +188,28 @@ export const PUBLIC_CACHEABLE_HTML_PATHS = new Set([
   "/methodology",
   "/methodology/ad-aggression-score",
 ]);
-export const PUBLIC_CACHEABLE_HTML_PREFIXES = ["/ads/", "/timeline/"] as const;
+export const PUBLIC_CACHEABLE_HTML_PREFIXES = [
+  "/ads/",
+  "/timeline/",
+  // Issue #3193: whole route families whose every entry is public marketing
+  // content, so future guides / brand categories / vendor pages are covered
+  // without touching this list again.
+  "/brands/",
+  "/guides/",
+] as const;
 
 function isPublicCacheableHtmlRequest(request: Request): boolean {
   if (request.method !== "GET" && request.method !== "HEAD") {
     return false;
   }
   if (hasSiteRepAuthCookie(request)) {
+    return false;
+  }
+  // Issue #3193 (review finding): keep the stamping gate in agreement with
+  // the edge-cache eligibility gate — an Authorization-carrying request is
+  // never anonymous, so it does not get the shared-cache license either.
+  const auth = request.headers.get("authorization");
+  if (auth && auth.trim() !== "") {
     return false;
   }
   const pathname = new URL(request.url).pathname;

@@ -1688,17 +1688,18 @@ describe("locale sitemap feed count matches the buyer-surface derivation (issue 
     // truth), not from filtering the static list. The bare index and
     // /sitemap.xml are excluded — neither is a real page. Counts shown as:
     // BUYER_SURFACE_PATHS (minus bare / and /sitemap.xml) + children
-    // + 6 for the /guides/* cluster: track-competitor-ads (issue #2152),
+    // + 7 for the /guides/* cluster: track-competitor-ads (issue #2152),
     // monitor-meta-ad-library (issue #2867), monitor-competitor-landing-
-    // page-changes (issue #2888), and the #3093 trio (offer-change alert,
-    // prove-what-changed, standing watch); -1: /methodology locale twins
+    // page-changes (issue #2888), the #3093 trio (offer-change alert,
+    // prove-what-changed, standing watch), and meta-ad-library-api-
+    // limitations (issue #3127); -1: /methodology locale twins
     // stay OUT of the locale sitemaps (issue #2871/#1570 duplicate-content
     // policy); -1: /search (issue #2965) — noindex at the edge, out of
     // every sitemap.
     const derivedCount =
       BUYER_SURFACE_PATHS.filter((p) => p !== "/" && p !== "/sitemap.xml").length +
       BUYER_SURFACE_CHILD_PATHS.length +
-      6 - 1 - 1;
+      7 - 1 - 1;
     for (const locale of BUYER_SURFACE_LOCALE_IDS) {
       const entries = staticSitemapEntriesForLocale(locale);
       const body = buildLocaleSitemapXml(locale);

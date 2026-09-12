@@ -189,6 +189,11 @@ export default [
   route("guides/how-to-get-alerted-when-a-competitor-changes-their-offer", "routes/guides.how-to-get-alerted-when-a-competitor-changes-their-offer.tsx"),
   route("guides/how-to-prove-what-changed-on-a-competitor-website", "routes/guides.how-to-prove-what-changed-on-a-competitor-website.tsx"),
   route("guides/how-to-turn-a-one-off-competitor-check-into-a-standing-watch", "routes/guides.how-to-turn-a-one-off-competitor-check-into-a-standing-watch.tsx"),
+  // Issue #3127: the seventh /guides/* page — the Meta Ad Library API
+  // coverage explainer. The category's structural factual question (what the
+  // official API returns and where); every claim cites Meta's own docs.
+  // Ends in the no-account /search preview (source=guide-api-limitations).
+  route("guides/meta-ad-library-api-limitations", "routes/guides.meta-ad-library-api-limitations.tsx"),
   route("for-agencies", "routes/for-agencies.tsx"),
   route("sneaker-resale", "routes/sneaker-resale.tsx"),
   route(":locale/sneaker-resale", "routes/$locale.sneaker-resale.tsx"),
@@ -266,6 +271,10 @@ export default [
     route("guides/how-to-get-alerted-when-a-competitor-changes-their-offer", "routes/$locale.guides.how-to-get-alerted-when-a-competitor-changes-their-offer.tsx"),
     route("guides/how-to-prove-what-changed-on-a-competitor-website", "routes/$locale.guides.how-to-prove-what-changed-on-a-competitor-website.tsx"),
     route("guides/how-to-turn-a-one-off-competitor-check-into-a-standing-watch", "routes/$locale.guides.how-to-turn-a-one-off-competitor-check-into-a-standing-watch.tsx"),
+    // Issue #3127: the API-limitations explainer — re-exported EN guide,
+    // canonical→EN, advertised in the locale sitemaps like the rest of the
+    // cluster.
+    route("guides/meta-ad-library-api-limitations", "routes/$locale.guides.meta-ad-library-api-limitations.tsx"),
     // Programmatic /ads/:domain under every locale prefix (issue #1562):
     // the #1501 buyer-surface cluster added /de, /de/pricing, ... but not
     // the /ads/:domain Ad Aggression Score pages, so /de/ads/nike.com

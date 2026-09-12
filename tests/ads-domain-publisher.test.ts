@@ -477,3 +477,76 @@ describe("runAdsDomainPublisher all-lists deadline + cursor (issue #2361)", () =
     expect(second.outcomes[0].domain).toBe(SEED_LISTS["festive-india-2026"].domains[2].domain);
   });
 });
+
+describe("ads-domain-publisher.mjs (script module)", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  // M57: importing the script (e.g. from a vitest worker) must not run
+  // main(), touch the filesystem for a seed list, or exit the process.
+  it("imports without running main / exiting", async () => {
+    const exitSpy = vi
+      .spyOn(process, "exit")
+      .mockImplementation((() => undefined) as never);
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubEnv("SEED_LIST", "");
+    vi.stubEnv("BASE_URL", "");
+
+    const mod = await import("../scripts/ads-domain-publisher.mjs");
+
+    expect(typeof mod.probeDomain).toBe("function");
+    expect(typeof mod.loadSeedList).toBe("function");
+    expect(exitSpy).not.toHaveBeenCalled();
+    // The unfixed script's import path also prints the usage error via
+    // console.error before process.exit(1) — neither may happen at import.
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
+
+  // M55: any non-429 HTTP error must become a "failed" outcome, not fall
+  // through to HTML parsing (a 500 body is not a search page).
+  it("probeDomain reports failed for a 500 response", async () => {
+    const mod = await import("../scripts/ads-domain-publisher.mjs");
+    const pacedFetch = vi.fn(async () => new Response("err", { status: 500 }));
+
+    const outcome = await mod.probeDomain({
+      domain: "example.com",
+      baseUrl: "https://0509.io",
+      pacedFetch,
+    });
+
+    expect(outcome.verdict).toBe("failed");
+    expect(outcome.reason).toBe("HTTP 500");
+    expect(outcome.rowCount).toBeNull();
+  });
+
+  // M55: the warming-poll loop has the same hole — a non-429 error poll
+  // must return the failed outcome instead of parsing garbage HTML.
+  it("probeDomain reports failed when a warming-settle poll errors", async () => {
+    const mod = await import("../scripts/ads-domain-publisher.mjs");
+    vi.useFakeTimers();
+    try {
+      const warmingPage =
+        '<h2 class="f9-wk-sec-title">Checking this competitor</h2>';
+      const pacedFetch = vi
+        .fn()
+        .mockResolvedValueOnce(new Response(warmingPage, { status: 200 }))
+        .mockResolvedValueOnce(new Response("err", { status: 500 }));
+
+      const outcomePromise = mod.probeDomain({
+        domain: "example.com",
+        baseUrl: "https://0509.io",
+        pacedFetch,
+      });
+      await vi.runAllTimersAsync();
+      const outcome = await outcomePromise;
+
+      expect(outcome.verdict).toBe("failed");
+      expect(outcome.reason).toBe("HTTP 500");
+      expect(outcome.rowCount).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

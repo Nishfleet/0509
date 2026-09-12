@@ -191,6 +191,13 @@ const LLMS_PAGE_DETAILS = {
     description:
       "The recurring by-hand routine, the scheduled-monitor route, why a repeated check never becomes a watch, and the watch that runs itself.",
   },
+  // Issue #3127: the API-limitations explainer. In SITEMAP_PATHS, so it needs
+  // a title/description here or the _llmsDetailsCoverSitemap type fails.
+  "/guides/meta-ad-library-api-limitations": {
+    title: "Meta Ad Library API limitations",
+    description:
+      "What the official Ad Library API covers — political and issue ads worldwide for 7 years, ads of any type only where delivered to the UK or EU for the past year — every claim linked to Meta's own docs, and the public-surface approach that covers the gap.",
+  },
   "/compare": {
     title: "Compare Five to Nine vs the alternatives",
     description:

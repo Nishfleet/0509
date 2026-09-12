@@ -1,38 +1,54 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { DEMO_PROOF_LIMIT } from "~/lib/rate-limit.server";
+import {
+  enforceRequestRateLimit,
+  PUBLIC_PROOF_BRIEF_PER_MINUTE_LIMIT,
+  rateLimitPolicyFor,
+} from "~/lib/rate-limit.server";
+import type { AppEnv } from "~/lib/env.server";
 
 /**
- * Proof-brief limiter gate (issue #2964).
+ * The /api/demo-proof limiter (issues #2964 and #2985).
  *
- * The deep audit found /api/demo-proof had NO rate-limit policy at all while
- * /status advertises limits on the public surfaces ("abuse BOTH, medium").
- * This file pins two things:
- *  1. an exhausted per-IP bucket for /api/demo-proof is a labeled 429 with a
- *     Retry-After, BEFORE any proof-brief cache read happens;
- *  2. when D1 errors, the public bucket fails OPEN (never dead-ends a
- *     buyer) but the fail-open event names its scope in the logs, so the
- *     "no limit applied" state is observable — the structural fail-closed
- *     replacement is #2985.
+ * #2964 found the endpoint had no limiter at all; the interim D1 bucket
+ * failed OPEN exactly when D1 was degraded. #2985 replaces it with the
+ * native Cloudflare Rate Limiting binding (scope "public-proof-brief",
+ * counted at the edge, off D1) and it now FAILS CLOSED:
+ *   1. an exhausted per-IP bucket is a labeled 429 with a Retry-After,
+ *      before any proof-brief cache read happens;
+ *   2. a degraded edge limiter (binding missing or throwing) also returns
+ *      429 + Retry-After on this public hot path — never fail-open;
+ *   3. the burst gate works with the endpoint completely intact: an
+ *      exhausted bucket does not write rate_limit_events rows.
  */
 
-type BindTarget = { bind: (..._args: unknown[]) => { first: () => Promise<unknown>; run: () => Promise<unknown> } };
-
-function fakeDbWithCount(count: number) {
-  const queries: string[] = [];
-  const db = {
-    prepare: (sql: string) => {
-      queries.push(sql);
-      const bound: BindTarget = {
-        bind: () => ({
-          first: async () => ({ count }),
-          run: async () => ({ meta: { changes: 1 } }),
-        }),
-      };
-      return bound;
+// Mirrors the RL_PROOF_BRIEF binding capacity declared in wrangler.jsonc
+// (issue #2985): capacity lives ON the binding and the runtime call is
+// `limit({ key })`, so the fake enforces the same per-binding limit the
+// platform would (PUBLIC_PROOF_BRIEF_PER_MINUTE_LIMIT per 60s).
+function createFakeEdgeLimiters(options?: {
+  throwOn?: (key: string) => boolean;
+}): { env: AppEnv } {
+  const counts = new Map<string, number>();
+  const limiter = {
+    async limit(params: { key: string }) {
+      if (options?.throwOn?.(params.key)) throw new Error("edge limiter unavailable");
+      const count = (counts.get(params.key) ?? 0) + 1;
+      if (count > PUBLIC_PROOF_BRIEF_PER_MINUTE_LIMIT) {
+        counts.set(params.key, count - 1);
+        return { success: false };
+      }
+      counts.set(params.key, count);
+      return { success: true };
     },
   };
-  return { db, queries };
+  return { env: { RL_PROOF_BRIEF: limiter } as unknown as AppEnv };
+}
+
+function demoProofRequest(ip: string) {
+  return new Request("https://0509.io/api/demo-proof", {
+    headers: { "cf-connecting-ip": ip },
+  });
 }
 
 beforeEach(() => {
@@ -44,83 +60,65 @@ afterEach(() => {
   vi.resetModules();
 });
 
-describe("the /api/demo-proof limiter (issue #2964)", () => {
-  it("an exhausted public-proof-brief bucket returns a labeled 429 with Retry-After", async () => {
-    const { db } = fakeDbWithCount(DEMO_PROOF_LIMIT);
-    const { enforceDemoProofRateLimit } = await import("~/lib/rate-limit.server");
-    const response = await enforceDemoProofRateLimit(
-      new Request("https://0509.io/api/demo-proof", {
-        headers: { "cf-connecting-ip": "203.0.113.7" },
-      }),
-      // E2E bypass is keyed off the env object; absent means production path.
-      { DB: db } as never,
-    );
-
-    expect(response).not.toBeNull();
-    expect(response?.status).toBe(429);
-    expect(Number(response?.headers.get("retry-after"))).toBeGreaterThan(0);
-    const body = (await response?.json()) as { error: string };
-    expect(body.error).toBe("rate_limited");
+describe("the /api/demo-proof edge limiter (issues #2964 and #2985)", () => {
+  it("the policy is a dedicated fail-closed edge scope with the legacy 30/10min budget as 3/60s", () => {
+    expect(rateLimitPolicyFor(demoProofRequest("203.0.113.7"))).toMatchObject({
+      scope: "public-proof-brief",
+      limit: 3,
+      periodSeconds: 60,
+      keyByIpOnly: true,
+    });
+    expect(PUBLIC_PROOF_BRIEF_PER_MINUTE_LIMIT).toBe(3);
   });
 
-  it("a request within budget is allowed and the event is counted", async () => {
-    const { db, queries } = fakeDbWithCount(0);
-    const { enforceDemoProofRateLimit } = await import("~/lib/rate-limit.server");
-    const response = await enforceDemoProofRateLimit(
-      new Request("https://0509.io/api/demo-proof", {
-        headers: { "cf-connecting-ip": "203.0.113.7" },
-      }),
-      { DB: db } as never,
-    );
+  it("an exhausted burst returns a labeled 429 with Retry-After from the edge limiter", async () => {
+    const { env } = createFakeEdgeLimiters();
 
-    expect(response).toBeNull();
-    expect(queries.some((sql) => sql.includes("rate_limit_events"))).toBe(true);
+    for (let i = 0; i < PUBLIC_PROOF_BRIEF_PER_MINUTE_LIMIT; i++) {
+      await expect(enforceRequestRateLimit(demoProofRequest("203.0.113.7"), env)).resolves.toBeNull();
+    }
+    const blocked = await enforceRequestRateLimit(demoProofRequest("203.0.113.7"), env);
+
+    expect(blocked).not.toBeNull();
+    expect(blocked?.status).toBe(429);
+    expect(blocked?.headers.get("retry-after")).toBe("60");
+    expect(await blocked?.json()).toEqual({
+      error: "rate_limited",
+      message: "Too many requests. Please try again shortly.",
+    });
   });
 
-  it("a D1 hiccup fails OPEN on the public bucket — and the log names the scope", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const brokenDb = {
-      prepare: () => {
-        throw new Error("D1 degraded");
-      },
+  it("fails CLOSED with 429 when the edge limiter is missing or throwing — a degraded edge 429s, it never admits unbounded traffic", async () => {
+    const missing = {} as AppEnv;
+    const missingResponse = await enforceRequestRateLimit(demoProofRequest("203.0.113.7"), missing);
+    expect(missingResponse?.status).toBe(429);
+    expect(missingResponse?.headers.get("retry-after")).toBe("60");
+
+    const { env } = createFakeEdgeLimiters({ throwOn: (key) => key.length > 0 });
+    const thrownResponse = await enforceRequestRateLimit(demoProofRequest("203.0.113.7"), env);
+    expect(thrownResponse?.status).toBe(429);
+    expect(thrownResponse?.headers.get("retry-after")).toBe("60");
+  });
+
+  it("across a full burst, zero rows touch the D1 hot path (the #2964 fail-open write path is gone)", async () => {
+    const writes: string[] = [];
+    const db = {
+      prepare: (sql: string) => ({
+        bind: (...args: unknown[]) => ({
+          run: async () => {
+            writes.push(sql);
+            return { meta: { changes: 1 } };
+          },
+        }),
+      }),
     };
-    const { enforceDemoProofRateLimit } = await import("~/lib/rate-limit.server");
-    const response = await enforceDemoProofRateLimit(
-      new Request("https://0509.io/api/demo-proof", {
-        headers: { "cf-connecting-ip": "203.0.113.7" },
-      }),
-      { DB: brokenDb } as never,
-    );
+    const env = { ...createFakeEdgeLimiters().env, DB: db } as unknown as AppEnv;
 
-    // Fail-open: the buyer can still evaluate the product (issue #1972
-    // posture). The structural fail-closed replacement is #2985.
-    expect(response).toBeNull();
-    const logged = errorSpy.mock.calls.map((call) => call.join(" ")).join("\n");
-    expect(logged).toContain("public-proof-brief");
-    expect(logged).toContain("NOT enforced");
-  });
-
-  it("the route enforces the limiter before reading the proof brief", async () => {
-    const limiter429 = new Response(
-      JSON.stringify({ error: "rate_limited", message: "Too many requests." }),
-      { status: 429, headers: { "retry-after": "42" } },
-    );
-    vi.doMock("~/lib/rate-limit.server", () => ({
-      enforceDemoProofRateLimit: vi.fn().mockResolvedValue(limiter429),
-    }));
-    vi.doMock("~/lib/public-proof.server", () => ({
-      loadPublicProofBrief: vi.fn(async () => {
-        throw new Error("brief must not be read once the bucket is exhausted");
-      }),
-    }));
-
-    const route = await import("~/routes/api.demo-proof");
-    const response = await route.loader({
-      request: new Request("https://0509.io/api/demo-proof"),
-      context: { cloudflare: { env: {} } },
-    } as never);
-
-    expect(response.status).toBe(429);
-    expect(response.headers.get("retry-after")).toBe("42");
+    for (let i = 0; i < PUBLIC_PROOF_BRIEF_PER_MINUTE_LIMIT; i++) {
+      await expect(enforceRequestRateLimit(demoProofRequest("203.0.113.7"), env)).resolves.toBeNull();
+    }
+    const burst = await enforceRequestRateLimit(demoProofRequest("203.0.113.7"), env);
+    expect(burst?.status).toBe(429);
+    expect(writes).toEqual([]);
   });
 });
