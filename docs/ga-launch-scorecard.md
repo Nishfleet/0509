@@ -16,7 +16,7 @@ Billing + email canaries passed on production during the 2026-06-24 integration 
 | Phase | Name | Status | Notes |
 |-------|------|--------|-------|
 | 0 | Protect & baseline | PASS | `0252461`; 1062+ tests; remote D1 through `0053` |
-| 1 | Customer journey audit | DONE | `docs/ga-customer-journey-audit.md` |
+| 1 | Customer journey audit | DONE | `docs/ga-customer-journey.md` |
 | 2 | SKU registry → Dodo | PASS | All 9 `DODO_0509_PRODUCT_*` secrets present |
 | 3 | Localized pricing | PASS | `npm run canary:pricing` ok (IN/US/GB) |
 | 4 | Purchase lifecycle | PASS | Plan + top-up grants; prod billing canary PASS |

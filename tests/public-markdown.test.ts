@@ -233,7 +233,10 @@ describe("public markdown", () => {
     expect(LLMS_TEXT).not.toContain("Automated TikTok, Google, YouTube, Reddit, X, LinkedIn, and Pinterest ingestion");
     expect(LLMS_TEXT).not.toContain("web/blog/Substack/Reddit observations");
     expect(LLMS_TEXT).not.toContain("Public analysis.");
-    expect(`${PUBLIC_MARKDOWN}\n${LLMS_TEXT}`).not.toMatch(/pilot|self-serve/i);
+    // \bpilot\b carries word boundaries so a cited source name like
+    // "Trustpilot" (issue #3091's /switch/adspy llms entry) does not trip the
+    // launch-truth ban on "pilot-readiness"-style claims.
+    expect(`${PUBLIC_MARKDOWN}\n${LLMS_TEXT}`).not.toMatch(/\bpilot\b|self-serve/i);
     // AI access policy (docs/ai-crawler-policy.md): llms.txt documents that
     // answer engines are welcome while training crawlers are denied, so the
     // file cannot be read as implying unrestricted AI participation.

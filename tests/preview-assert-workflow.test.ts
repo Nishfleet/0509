@@ -7,9 +7,9 @@ import { parse } from "yaml";
 // pre-deploy verification against the PR head and becomes a required status
 // context on main, so it must satisfy the required-context contract: no
 // job-level `if:`/`needs:`, an in-step authorizer as step 1, and a pinned
-// checkout of the authorized SHA. It also runs the deploy gate's assertion
-// commands unchanged (`npm run typecheck` + the FULL unsharded `npm run
-// test`) and uploads a preview Worker version via Cloudflare's own mechanism
+// checkout of the authorized SHA. It runs the deploy gate's assertion
+// commands unchanged (`npm run typecheck` + `npm run build`) and uploads a
+// preview Worker version via Cloudflare's own mechanism
 // (`wrangler versions upload --preview-alias`) without touching production.
 const source = readFileSync(".github/workflows/preview-assert.yml", "utf8");
 const parsed = parse(source) as {
@@ -92,13 +92,15 @@ describe("preview-assert workflow", () => {
     expect(typecheck?.env?.NODE_OPTIONS).toBe("--max-old-space-size=2048");
   });
 
-  it("runs the FULL unsharded test suite exactly as the deploy job does", () => {
-    const test = steps.find((step) => step.run === "npm run test");
-    expect(test).toBeDefined();
-    // The demonstrated failure class (run 33561746667) is a test that passes
-    // sharded in PR CI and fails when the whole suite runs together on the
-    // deploy runner. preview-assert runs the same unsharded command.
-    expect(source).toContain("npm run test");
+  it("runs no test step — ci.yml's sharded suite owns coverage on every PR", () => {
+    // The extra unsharded suite run existed only to catch a test that passed
+    // sharded and failed under full-suite load (run 33561746667,
+    // d1-remote-restore-evidence.test.ts:222 — a pidfile publish race inside
+    // the spec). The race is fixed at the source (0509#2373), so re-running
+    // the whole suite a second time per PR no longer buys anything; the
+    // deploy job's own post-merge run is unchanged.
+    expect(steps.find((step) => step.run === "npm run test")).toBeUndefined();
+    expect(source).not.toContain("npm run test");
     expect(source).not.toContain("--shard=");
   });
 

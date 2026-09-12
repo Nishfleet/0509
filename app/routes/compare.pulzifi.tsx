@@ -17,7 +17,7 @@ import { LIVE_BRAND_PROOF_DOMAIN } from "~/lib/demo-brand-pages";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import pulzifiCitations from "~/data/compare/pulzifi-citations.json";
 
-// Source verification (issue #1288, #2069, #2835): primary-source-verified —
+// Source verification (issue #1288, #2069, #2835, #3019): primary-source-verified —
 // https://pulzifi.com/ returns HTTP 200 and https://pulzifi.com/pricing names
 // real tiers (Free / Starter $27 / Professional $54) — verified live 2026-09-11.
 const citations = pulzifiCitations as CompareCitations;
