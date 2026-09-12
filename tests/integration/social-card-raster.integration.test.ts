@@ -113,6 +113,30 @@ describe("ads/timeline/cluster social card rasterization (issue #2089, issue #21
   });
 
   /**
+   * Issue #3104 — the /brands/:category cards ride the same pipeline:
+   * `/social-card/brand/<slug>.png` (and the legacy `.svg` alias) resolve
+   * to kind "brand", which the worker rasterizes to PNG exactly like the
+   * ads/timeline/cluster/guide cards.
+   */
+  it("rasterizes the brand card SVG to a valid 1200x630 PNG", async () => {
+    const card = publicSocialCardForRequest(
+      new Request("https://0509.io/social-card/brand/sport-footwear.png"),
+    );
+    expect(card?.kind).toBe("brand");
+    expect(card?.body).toContain("Sport &amp; footwear Meta ads");
+
+    const png = await rasterizeSocialCardPng(card!.body);
+    for (let i = 0; i < PNG_MAGIC.length; i += 1) {
+      expect(png[i], `PNG magic byte ${i}`).toBe(PNG_MAGIC[i]);
+    }
+    const width = (png[16] << 24) | (png[17] << 16) | (png[18] << 8) | png[19];
+    const height = (png[20] << 24) | (png[21] << 16) | (png[22] << 8) | png[23];
+    expect(width).toBe(1200);
+    expect(height).toBe(630);
+    expect(png.length).toBeGreaterThan(10_000);
+  });
+
+  /**
    * Issue #2956 — the checked-in `public/og-image.png` must be byte-identical
    * to a resvg render of `SOCIAL_CARD_SVG` (served at /social-card.svg). The
    * stale-card regression this issue fixed was exactly a drift between the

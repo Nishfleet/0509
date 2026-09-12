@@ -155,11 +155,13 @@ describe("social card URL builders", () => {
   });
 
   it("brandCategorySocialCardUrl builds the per-category landing-page card path", () => {
+    // Served as PNG (issue #3104) — social scrapers refuse SVG og:images;
+    // the .svg URL stays as an alias that also serves PNG bytes.
     expect(brandCategorySocialCardUrl("sport-footwear")).toBe(
-      canonicalUrl("/social-card/brand/sport-footwear.svg"),
+      canonicalUrl("/social-card/brand/sport-footwear.png"),
     );
     expect(brandCategorySocialCardUrl("beauty-personal-care")).toBe(
-      canonicalUrl("/social-card/brand/beauty-personal-care.svg"),
+      canonicalUrl("/social-card/brand/beauty-personal-care.png"),
     );
   });
 
@@ -216,6 +218,10 @@ describe("parseSocialCardPathname", () => {
       slug: "sneaker-resale",
     });
     expect(parseSocialCardPathname("/social-card/brand/sport-footwear.svg")).toEqual({
+      kind: "brand",
+      slug: "sport-footwear",
+    });
+    expect(parseSocialCardPathname("/social-card/brand/sport-footwear.png")).toEqual({
       kind: "brand",
       slug: "sport-footwear",
     });
@@ -312,6 +318,12 @@ describe("publicSocialCardForRequest", () => {
     expect(res?.kind).toBe("brand");
     expect(res?.contentType).toBe("image/svg+xml; charset=utf-8");
     expect(res?.body).toContain("Sport &amp; footwear Meta ads");
+    // .png resolves to the same kind (issue #3104 rasterization).
+    const resPng = publicSocialCardForRequest(
+      new Request("https://0509.io/social-card/brand/sport-footwear.png"),
+    );
+    expect(resPng?.kind).toBe("brand");
+    expect(resPng?.body).toContain("Sport &amp; footwear Meta ads");
     expect(res?.body).toContain("Competitor Meta ad libraries");
     expect(res?.body).toContain("Five to Nine");
     // Static card (no brand query params) — same branch as the cluster cards.

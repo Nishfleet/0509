@@ -192,7 +192,11 @@ export function clusterSocialCardUrl(slug: "sneaker-resale" | "competitor-monito
  * from `workers/app.ts` under `/social-card/brand/<slug>.svg`.
  */
 export function brandCategorySocialCardUrl(slug: string): string {
-  return canonicalUrl(`/social-card/brand/${slug}.svg`);
+  // Served as PNG (issue #3104), so the path uses `.png` — Facebook/X/
+  // LinkedIn scrapers refuse SVG og:images. The `parseSocialCardPathname`
+  // brand matcher accepts both extensions and the worker rasterizes both
+  // through the same #2089 pipeline, so cached `.svg` links keep rendering.
+  return canonicalUrl(`/social-card/brand/${slug}.png`);
 }
 
 /**
