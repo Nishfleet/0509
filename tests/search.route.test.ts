@@ -1960,6 +1960,94 @@ describe("search loader", () => {
     expect(setCookie ?? "").toMatch(/\bSecure\b/);
   });
 
+  function makeMockedSearchLoader(delayMs = 0) {
+    return (async () => {
+      const env = { DB: {} };
+      const sourceResult = {
+        ads: [baseAd],
+        searchIntent: "text" as const,
+        verifiedCount: 0,
+        likelyCount: 0,
+        unmatchedCount: 1,
+      };
+      vi.doMock("~/lib/auth.server", () => ({
+        getOptionalSession: vi.fn().mockResolvedValue(null),
+      }));
+      vi.doMock("~/lib/workspace.server", () => ({
+        resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+          workspaceUserId: id,
+          isMember: false,
+          ownerName: null,
+        })),
+      }));
+      vi.doMock("~/lib/context.server", () => ({
+        getEnv: vi.fn(() => env),
+      }));
+      vi.doMock("~/lib/data.server", () => ({
+        listCollections: vi.fn(),
+      }));
+      vi.doMock("~/lib/rate-limit.server", () => ({
+        enforcePublicSearchRateLimit: vi.fn().mockResolvedValue(null),
+        enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
+        enforceSearchSelectionRateLimit: vi.fn().mockResolvedValue(null),
+      }));
+      vi.doMock("~/lib/ad-source.server", () => ({
+        searchAdsViaSourceResolver: vi
+          .fn()
+          .mockImplementation(
+            () =>
+              new Promise((resolve) =>
+                setTimeout(() => resolve(sourceResult), delayMs),
+              ),
+          ),
+      }));
+      vi.doMock("~/lib/search-selection.server", () => ({
+        prepareSearchResultSelection: vi.fn().mockResolvedValue({
+          result: sourceResult,
+          selectedAd: baseAd,
+        }),
+      }));
+      const { loader } = await import("~/routes/search");
+      return loader;
+    })();
+  }
+
+  it("streams the search results document-side while the shell settles eagerly (issue #2952)", async () => {
+    // The legacy /ads/<brand> redirects land here, so first-time visitors
+    // from ads eat the whole scrape wait. The shell must return long before
+    // the search source resolves; only a browser navigation streams.
+    const loader = await makeMockedSearchLoader(2_000);
+    const start = Date.now();
+    const streamedRaw = await loader({
+      context: createContext(),
+      request: new Request("http://localhost/search?query=nykaa", {
+        headers: { "sec-fetch-mode": "navigate" },
+      }),
+    } as never);
+    const shellElapsedMs = Date.now() - start;
+    expect(shellElapsedMs).toBeLessThan(500);
+    expect(streamedRaw instanceof Response).toBe(false);
+    const streamed = (streamedRaw as { data: Record<string, unknown> }).data;
+    expect(streamed).toMatchObject({ session: null, inputError: null });
+    expect(streamed.search).toBeInstanceOf(Promise);
+    expect(await (streamed.search as Promise<Record<string, unknown>>)).toMatchObject({
+      result: { ads: [baseAd] },
+      selectedAd: baseAd,
+    });
+
+    // Every non-navigation consumer (curl, canary, other loaders) still
+    // receives the fully settled payload — the old intact contract.
+    const settled = await unwrapLoaderResult(loader, {
+      context: createContext(),
+      request: new Request("http://localhost/search?query=nykaa"),
+    } as never);
+    expect((settled as { search?: unknown }).search).toBeUndefined();
+    expect(settled).toMatchObject({
+      result: { ads: [baseAd] },
+      selectedAd: baseAd,
+    });
+  });
+
   it("forwards the limiter's Retry-After onto the 429 document response", async () => {
     // React Router only carries cookies from a thrown loader response onto
     // the final document unless the boundary route re-exports the header;
