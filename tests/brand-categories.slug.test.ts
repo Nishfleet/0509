@@ -8,15 +8,17 @@ import {
   brandCategorySlug,
 } from "~/lib/brand-categories";
 
-/** The 7 verify slugs from issue #2067 — must match exactly. */
+/** The 9 verify slugs — issues #2067 (shape) and #3126 (registry growth). */
 const VERIFY_SLUGS = [
   "sport-footwear",
   "e-commerce",
   "beauty-personal-care",
-  "optical-eyewear",
   "saas-software",
-  "wearables-health",
-  "wallet-accessories",
+  "fashion-accessories",
+  "food-beverage",
+  "consumer-electronics",
+  "finance-insurance",
+  "home-living",
 ] as const;
 
 const CURATED_LABELS = [
@@ -32,10 +34,12 @@ describe("brandCategorySlug — issue #2067 verify slugs", () => {
     "Sport & footwear": "sport-footwear",
     "E-commerce": "e-commerce",
     "Beauty & personal care": "beauty-personal-care",
-    "Optical & eyewear": "optical-eyewear",
     "SaaS & software": "saas-software",
-    "Wearables & health": "wearables-health",
-    "Wallet & accessories": "wallet-accessories",
+    "Fashion & accessories": "fashion-accessories",
+    "Food & beverage": "food-beverage",
+    "Consumer electronics": "consumer-electronics",
+    "Finance & insurance": "finance-insurance",
+    "Home & living": "home-living",
   };
 
   it.each(Object.entries(EXPECTED))(
@@ -67,7 +71,7 @@ describe("brandCategoryFromSlug round-trips", () => {
 });
 
 describe("CURATED_BRAND_CATEGORY_SLUGS", () => {
-  it("equals exactly the 7 verify slugs in order", () => {
+  it("equals exactly the 9 verify slugs in order", () => {
     expect([...CURATED_BRAND_CATEGORY_SLUGS]).toEqual([...VERIFY_SLUGS]);
   });
 

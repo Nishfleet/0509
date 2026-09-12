@@ -1778,8 +1778,10 @@ describe("brandCategorySitemapEntries (issue #2067)", () => {
       { path: "/ads/nykaa.com", lastmod: "2026-08-21" },
       { path: "/ads/sugarcosmetics.com", lastmod: "2026-08-20" },
       { path: "/ads/mcaffeine.com", lastmod: "2026-08-19" },
-      // Sport & footwear — one brand.
+      // Sport & footwear — three brands, newest lastmod 2026-08-18.
       { path: "/ads/nike.com", lastmod: "2026-08-18" },
+      { path: "/ads/adidas.com", lastmod: "2026-08-15" },
+      { path: "/ads/puma.com", lastmod: "2026-08-14" },
       // Unclassified — falls into "More brands", has no landing page.
       { path: "/ads/myexamplebrand.com", lastmod: "2026-08-16" },
     ];
@@ -1795,8 +1797,11 @@ describe("brandCategorySitemapEntries (issue #2067)", () => {
     const sport = byPath("/brands/sport-footwear");
     expect(sport?.lastmod).toBe("2026-08-18");
 
-    // Every curated category with a brand gets an entry: exactly the 2 that
-    // have brands. The other 5 curated categories are empty and omitted.
+    expect(sport?.lastmod).toBe("2026-08-18");
+
+    // Every curated category at or above the min-brands floor (#3126) gets
+    // an entry: exactly the 2 that have brands here. The other curated
+    // categories are empty/thin and omitted.
     expect(entries.map((e) => e.path).sort()).toEqual([
       "/brands/beauty-personal-care",
       "/brands/sport-footwear",
@@ -1817,42 +1822,63 @@ describe("brandCategorySitemapEntries (issue #2067)", () => {
     const entries = brandCategorySitemapEntries([
       { path: "/ads/nykaa.com" },
       { path: "/ads/sugarcosmetics.com" },
+      { path: "/ads/mcaffeine.com" },
     ]);
     const beauty = entries.find((e) => e.path === "/brands/beauty-personal-care");
     expect(beauty).toBeDefined();
     expect(beauty?.lastmod).toBeUndefined();
   });
 
-  it("buildSitemapXml threads category entries so all 7 non-empty categories + the hub render (count >= 8)", () => {
-    // One brand per curated category so every curated slug has a page.
+  it("buildSitemapXml threads category entries so brands: categories meeting the #3126 floor + the hub render", () => {
+    // Three brands per curated category so each slug clears the
+    // BRAND_CATEGORY_PAGE_MIN_BRANDS floor (#3126). Finance & insurance
+    // holds a single domain in the registry, so it stays omitted here.
     const brandEntries = [
       { path: "/ads/nike.com", lastmod: "2026-08-01" }, // Sport & footwear
-      { path: "/ads/asos.com", lastmod: "2026-08-02" }, // E-commerce
+      { path: "/ads/adidas.com", lastmod: "2026-08-01" },
+      { path: "/ads/puma.com", lastmod: "2026-08-01" },
+      { path: "/ads/amazon.com", lastmod: "2026-08-02" }, // E-commerce
+      { path: "/ads/ebay.com", lastmod: "2026-08-02" },
+      { path: "/ads/walmart.com", lastmod: "2026-08-02" },
       { path: "/ads/nykaa.com", lastmod: "2026-08-03" }, // Beauty & personal care
-      { path: "/ads/lenskart.com", lastmod: "2026-08-04" }, // Optical & eyewear
+      { path: "/ads/glossier.com", lastmod: "2026-08-03" },
+      { path: "/ads/colourpop.com", lastmod: "2026-08-03" },
       { path: "/ads/hubspot.com", lastmod: "2026-08-05" }, // SaaS & software
-      { path: "/ads/ouraring.com", lastmod: "2026-08-06" }, // Wearables & health
-      { path: "/ads/ridgewallet.com", lastmod: "2026-08-07" }, // Wallet & accessories
+      { path: "/ads/slack.com", lastmod: "2026-08-05" },
+      { path: "/ads/asana.com", lastmod: "2026-08-05" },
+      { path: "/ads/asos.com", lastmod: "2026-08-06" }, // Fashion & accessories
+      { path: "/ads/bewakoof.com", lastmod: "2026-08-06" },
+      { path: "/ads/bombas.com", lastmod: "2026-08-06" },
+      { path: "/ads/oatly.com", lastmod: "2026-08-07" }, // Food & beverage
+      { path: "/ads/epigamia.com", lastmod: "2026-08-07" },
+      { path: "/ads/bluetokaicoffee.com", lastmod: "2026-08-07" },
+      { path: "/ads/fireboltt.com", lastmod: "2026-08-08" }, // Consumer electronics
+      { path: "/ads/noisefit.com", lastmod: "2026-08-08" },
+      { path: "/ads/boat-lifestyle.com", lastmod: "2026-08-08" },
+      { path: "/ads/casper.com", lastmod: "2026-08-09" }, // Home & living
+      { path: "/ads/ikea.com", lastmod: "2026-08-09" },
+      { path: "/ads/dailyobjects.com", lastmod: "2026-08-09" },
     ];
 
     const categoryEntries = brandCategorySitemapEntries(brandEntries);
-    expect(categoryEntries).toHaveLength(7);
+    expect(categoryEntries).toHaveLength(8);
 
     // /brands (the hub) is a static root entry — so the sitemap lists the
-    // hub plus all 7 category pages: >= 8 /brands* URLs.
+    // hub plus all 8 category pages: >= 9 /brands* URLs.
     const xml = buildSitemapXml(brandEntries, [], categoryEntries);
     const brandPageUrls = [...xml.matchAll(/https:\/\/0509\.io\/brands[^<]*/g)].map((m) => m[0]);
     const categoryUrls = brandPageUrls.filter((u) => /^https:\/\/0509\.io\/brands\/[a-z-]+$/.test(u));
     expect(brandPageUrls).toContain("https://0509.io/brands");
-    expect(categoryUrls).toHaveLength(7);
+    expect(categoryUrls).toHaveLength(8);
     for (const slug of [
       "sport-footwear",
       "e-commerce",
       "beauty-personal-care",
-      "optical-eyewear",
       "saas-software",
-      "wearables-health",
-      "wallet-accessories",
+      "fashion-accessories",
+      "food-beverage",
+      "consumer-electronics",
+      "home-living",
     ]) {
       expect(xml).toContain(`<loc>https://0509.io/brands/${slug}</loc>`);
     }

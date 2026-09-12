@@ -159,6 +159,9 @@ export const BRAND_CATEGORIES: Readonly<Record<string, string>> = {
   "portronics.com": "Consumer electronics",
   "zebronics.com": "Consumer electronics",
 
+  // Finance & insurance — banks, insurers, financial services.
+  "allianz.com": "Finance & insurance",
+
   // Home & living — home goods and lifestyle products.
   "casper.com": "Home & living",
   "dailyobjects.com": "Home & living",
@@ -197,7 +200,7 @@ export function brandCategoryForDomain(domain: string): string {
  * truth — there is no separately-maintained slug map to drift. The label is
  * lowercased and every run of non-`[a-z0-9]` characters (spaces, `&`, dots,
  * apostrophes) collapses to a single `-`, with leading/trailing `-` stripped.
- * This maps the 8 curated labels to exactly the issue's verify slugs:
+ * This maps the 9 curated labels to the issue verify slugs:
  *   "Sport & footwear"        -> sport-footwear
  *   "E-commerce"              -> e-commerce
  *   "Beauty & personal care"  -> beauty-personal-care
@@ -205,6 +208,7 @@ export function brandCategoryForDomain(domain: string): string {
  *   "Fashion & accessories"   -> fashion-accessories
  *   "Food & beverage"         -> food-beverage
  *   "Consumer electronics"    -> consumer-electronics
+ *   "Finance & insurance"     -> finance-insurance
  *   "Home & living"           -> home-living
  * The single `[^a-z0-9]+` run handles `&` together with its surrounding
  * spaces so "Sport & footwear" becomes `sport-footwear` — never a stray
