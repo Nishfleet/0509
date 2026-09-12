@@ -89,6 +89,11 @@ try {
     wranglerOutputPath,
     rollbackTargetPath,
   });
+  // The workflow's discrete `Typecheck` step was trimmed in #3070; the
+  // deploy path keeps the gate here instead — an explicit `npm run
+  // typecheck` in this script, ahead of the plan's `wrangler deploy`,
+  // so the pinned tree is always type-checked before it ships.
+  run("npm", ["run", "typecheck"]);
   executeProductionDeployPlan(plan, (step) => run(step.command, step.args, step));
 } catch (error) {
   exitCode = error && typeof error.exitCode === "number" ? error.exitCode : 1;

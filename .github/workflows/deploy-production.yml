@@ -506,18 +506,6 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium firefox webkit
 
-      - name: Typecheck
-        env:
-          # Same fix ci.yml already carries, which this workflow never got:
-          # Node derives a ~1.2 GiB heap from the 3 GiB runner cgroup, while
-          # this project's composite TypeScript build needs more headroom.
-          # Without it every production deploy aborts here with exit 134
-          # (heap limit reached) - three in a row on 2026-08-11, which left
-          # 32 merged commits sitting undeployed.
-          # Keep it below MemoryHigh/MemoryMax so systemd still fails closed.
-          NODE_OPTIONS: --max-old-space-size=2048
-        run: npm run typecheck
-
       - name: Test
         run: npm run test
 
@@ -550,9 +538,11 @@ jobs:
         env:
           EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
           GH_TOKEN: ${{ github.token }}
-          # The full verification gate (typecheck, tests, restore evidence)
-          # already passed for this exact pinned SHA, and the deploy ships
-          # exactly PINNED_SHA. If main moved mid-run, record the drift and
+          # The discrete verification steps (tests, restore evidence) already
+          # passed for this exact pinned SHA — typecheck is an explicit gate
+          # inside `npm run deploy` (scripts/deploy-production.mjs) ahead of
+          # `wrangler deploy` — and the deploy ships exactly PINNED_SHA. If
+          # main moved mid-run, record the drift and
           # continue with the verified SHA instead of killing the run after a
           # fully green gate. Every other CAS failure stays fail-closed.
           TOLERATE_MAIN_DRIFT: "1"
