@@ -408,18 +408,47 @@ export function buildOfferLedger(snapshots: readonly OfferSnapshotInput[]): Offe
 }
 
 /**
+ * Is this price text a currency-zero placeholder — a `0.00`/`0,00` value
+ * wrapped in a currency marker (e.g. `$0.00`, `£0.00`, `€0,00`, `0.00 $`)?
+ * A broken regional extraction, not a real offer (issue #3128): no real
+ * product costs 0 units of the currency a real page charges in.
+ */
+export function isPlaceholderOfferPrice(priceText: string): boolean {
+  const trimmed = priceText.trim().toLowerCase();
+  if (!trimmed) return false;
+  // Zero with a decimal separator, optionally wrapped in currency symbols
+  // or 1-4 letter currency codes on either side.
+  return /^[$€£¥]?\s*(?:[a-z]{1,4}\s*)?0(?:[.,]\d{1,4})+\s*(?:[a-z]{1,4}\s*)?[$€£¥]?$/.test(trimmed);
+}
+
+/**
  * Diff the commercial fields of a previously emitted dated state against the
  * first snapshot of the next distinct run. Both arguments are uniform within
  * their own run, so comparing their representatives yields the real transition.
+ *
+ * Move-validity gate (issue #3128): a price transition whose BEFORE or AFTER
+ * is a currency-zero placeholder is not rendered as a move. This is the
+ * shared rendering path for both /timeline/:domain and /briefs/weekly, so a
+ * "$0.00 → £0.00" row can never surface on either public surface. Placeholder
+ * values also never act as the "after" half of a published move — the next
+ * real capture keeps diffing until a real (non-placeholder) state.
  */
 function diffOfferBetweenStates(
   previous: OfferLedgerEntry,
   firstInRun: OfferSnapshotInput,
 ): OfferTransition {
+  const priceChange = changeIfDifferent(previous.priceText, firstInRun.priceText);
   return {
     headline: changeIfDifferent(previous.headline, firstInRun.headline),
     ctaText: changeIfDifferent(previous.ctaText, firstInRun.ctaText),
-    priceText: changeIfDifferent(previous.priceText, firstInRun.priceText),
+    priceText:
+      priceChange &&
+      priceChange.before !== null &&
+      priceChange.after !== null &&
+      !isPlaceholderOfferPrice(priceChange.before) &&
+      !isPlaceholderOfferPrice(priceChange.after)
+        ? priceChange
+        : null,
     formPresent: changeIfDifferent(previous.formPresent, firstInRun.formPresent),
   };
 }

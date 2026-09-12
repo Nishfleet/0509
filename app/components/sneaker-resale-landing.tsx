@@ -9,6 +9,11 @@ import {
   type SneakerResaleLocaleId,
 } from "~/lib/locale-markets";
 import { sneakerResaleCopy } from "~/lib/sneaker-resale-copy";
+import {
+  SNEAKER_RESALE_BRAND_PAGE_SLUGS,
+  sneakerResaleBrandPage,
+  sneakerResaleBrandPath,
+} from "~/lib/sneaker-resale-brand-pages";
 import { faqPageJsonLd, jsonLdScriptProps, webPageJsonLd } from "~/lib/seo";
 
 /**
@@ -173,6 +178,22 @@ export function SneakerResaleLanding({
           ))}
         </ul>
       </section>
+
+      {/* Issue #3087: the four per-brand below-retail cluster pages — the hub
+          links down so the cluster is navigable from the hub as well as up. */}
+      <nav className="ld-quiet" aria-label={copy.brandsTitle + " — cluster pages"}>
+        <p className="ld-pricing-note">
+          Below retail, by brand:{" "}
+          {SNEAKER_RESALE_BRAND_PAGE_SLUGS.map((slug, index) => (
+            <span key={slug}>
+              {index > 0 ? " · " : null}
+              <Link to={sneakerResaleBrandPath(slug)}>
+                {sneakerResaleBrandPage(slug)?.name ?? slug}
+              </Link>
+            </span>
+          ))}
+        </p>
+      </nav>
 
       <section className="ld-quiet ld-reveal">
         <div className="ld-section-head">

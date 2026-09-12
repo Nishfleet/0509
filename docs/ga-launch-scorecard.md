@@ -52,7 +52,7 @@ Billing + email canaries passed on production during the 2026-06-24 integration 
 | Fan-out shadow | Simulated | PASS | vitest — no D1/workflows |
 | Fan-out 75-job dispatch | Simulated | PASS | vitest `schedules 75 eligible watchlists` |
 | Fan-out mixed fleet (75/10/3) | Simulated | PASS | vitest queue priority + slot drain |
-| Fan-out canary ladder | Simulated | PASS | `tests/monitoring-fanout-canary.test.ts` |
+| Fan-out canary ladder | Simulated | PASS | `tests/monitoring-fanout-guard.test.ts` |
 | Fan-out live (allowlist) | Prod | NOT RUN | `inline` mode; ladder not activated |
 | Agency sale gate | Code | PASS | Holds inline/shadow; opens fanout+allowlist+secret |
 | Health endpoint | Prod | PASS | `https://0509.io/api/health` → 200 |

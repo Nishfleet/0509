@@ -93,7 +93,7 @@ const RELEASE_COMPATIBLE_EMAIL_BLOCKERS = Object.freeze([
 
 /** @typedef {{ runId: string, digestRunId: string, proofCaptureId: string }} CleanupTicket */
 /** @typedef {{ runId?: unknown, digestRunId?: unknown, proofCaptureId?: unknown, proofEmail?: unknown, [key: string]: unknown }} ProofPayload */
-/** @typedef {{ ok: boolean, payload?: ProofPayload, report?: unknown, [key: string]: unknown }} GateStepResult */
+/** @typedef {{ ok: boolean, payload?: ProofPayload, response?: { status?: number }, report?: unknown, [key: string]: unknown }} GateStepResult */
 /**
  * @typedef {{
  *   healthAnchor?: (input: { workerVersionId: string }) => Promise<GateStepResult>,
@@ -123,7 +123,7 @@ const RELEASE_COMPATIBLE_EMAIL_BLOCKERS = Object.freeze([
  *   backupLifecycleSummary?: unknown,
  *   backupProofStatus?: "required" | "deferred",
  *   backupProofDisposition?: Record<string, unknown>,
- *   proofDiagnostics?: { blocker?: string, blockers?: string[], delivery?: { attempts?: number, channels?: string[], details?: Array<{ channel?: string, status?: string, webhookStatus?: string }> }, proofEmailEvidence?: Record<string, string | boolean> },
+ *   proofDiagnostics?: { blocker?: string, blockers?: string[], httpStatus?: number, bodyKind?: string, delivery?: { attempts?: number, channels?: string[], details?: Array<{ channel?: string, status?: string, webhookStatus?: string }> }, proofEmailEvidence?: Record<string, string | boolean> },
  *   completedAt?: string,
  *   ownerPid?: number
  * }} GateJournal
@@ -447,6 +447,19 @@ function safeStepError(step) {
 const DIAGNOSTIC_IDENTIFIER_PATTERN = /^[a-z0-9._-]{1,128}$/u;
 
 /**
+ * A caller-supplied status is only journaled when it is a real HTTP status
+ * code. This argument is a plain object, not a live `Response`, so a test
+ * double could otherwise journal `httpStatus: 0` (or a negative) as if it
+ * were a transport fact.
+ * @param {{ status?: number } | undefined} response
+ */
+function readHttpStatus(response) {
+  const status = response?.status;
+  if (typeof status !== "number" || !Number.isInteger(status)) return null;
+  return status >= 100 && status <= 599 ? status : null;
+}
+
+/**
  * Project a proof canary payload into identifier-safe diagnostics for the
  * journal so a proof_email failure is actionable. The route already sanitizes
  * `delivery` via sanitizeDeliveryForCanary (no recipient addresses, no message
@@ -454,15 +467,29 @@ const DIAGNOSTIC_IDENTIFIER_PATTERN = /^[a-z0-9._-]{1,128}$/u;
  * identifiers plus delivery statuses/lanes(channels)/webhookStatus — defensively
  * dropping everything else (including timestamps) so nothing address-shaped can
  * ever leak into evidence.
- * @param {ProofPayload | undefined} payload
+ * @param {ProofPayload | null | undefined} payload
+ * @param {{ status?: number } | undefined} [response]
  */
-export function sanitizeProofDiagnostics(payload) {
+export function sanitizeProofDiagnostics(payload, response) {
+  const httpStatus = readHttpStatus(response);
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-    return null;
+    // A non-JSON 5xx (an unhandled throw behind the canary route) parses to
+    // null, so before 2026-09-12 the journal recorded NEITHER a blocker NOR
+    // the HTTP status and five red runs named no field at all. Record the
+    // transport shape so "route threw" is distinguishable from "route said
+    // blocker X" without hand-reading the raw response.
+    if (httpStatus === null) return null;
+    return { httpStatus, bodyKind: "unparseable_json" };
   }
   const source = /** @type {Record<string, unknown>} */ (payload);
   /** @type {NonNullable<GateJournal["proofDiagnostics"]>} */
   const diagnostics = {};
+  // No `bodyKind` here by design: the body parsed as JSON, so its own fields
+  // (blocker/blockers/delivery) carry the reason. `bodyKind: "unparseable_json"`
+  // above is the positive signal that the route threw before answering.
+  if (httpStatus !== null) {
+    diagnostics.httpStatus = httpStatus;
+  }
   // The route's early returns (missing_db, missing_active_watchlist, ...)
   // carry a singular `blocker` string and NEITHER `blockers` nor `delivery`.
   // Before 2026-09-11 those runs (34600179872, 34602656730, ...) journaled no
@@ -680,7 +707,7 @@ async function defaultProof({ workerVersionId, runId, token }) {
     token,
   });
   const identityOk = payload?.workerVersionId === workerVersionId && payload?.gateRunId === runId;
-  return { ok: response.ok && payload?.ok === true && identityOk, payload };
+  return { ok: response.ok && payload?.ok === true && identityOk, payload, response };
 }
 
 /** @param {{ ticket: CleanupTicket | null, gateRunId: string, token: string }} input */
@@ -701,7 +728,7 @@ async function defaultCleanup({ ticket: _ticket, gateRunId: cleanupGateRunId, to
     },
     token,
   });
-  return { ok: response.ok && payload?.ok === true, payload };
+  return { ok: response.ok && payload?.ok === true, payload, response };
 }
 
 /** @param {{ workerVersionId: string, token: string }} input */
@@ -855,6 +882,7 @@ export async function runVersionBoundGateC({
       throw new Error("proof_email_failed");
     }
     const payload = proofResult.payload;
+    const proofResponse = proofResult.response;
     const cleanupTicketMissing =
       typeof payload?.runId !== "string" || payload.runId.length === 0 ||
       typeof payload.digestRunId !== "string" || payload.digestRunId.length === 0 ||
@@ -873,7 +901,7 @@ export async function runVersionBoundGateC({
       // failing, so the next red run names the field instead of "started".
       journal.steps.proof_email = { status: "failed", at: now().toISOString() };
       journal.proofDiagnostics = {
-        ...(sanitizeProofDiagnostics(payload) ?? {}),
+        ...(sanitizeProofDiagnostics(payload, proofResponse) ?? {}),
         proofEmailEvidence: proofEmailEvidence.checks,
       };
       persist();
@@ -893,7 +921,7 @@ export async function runVersionBoundGateC({
       throw new Error("proof_cleanup_ticket_missing");
     }
     if (!proofResult.ok || proofEmail.providerStatus !== "sent") {
-      const diagnostics = sanitizeProofDiagnostics(payload);
+      const diagnostics = sanitizeProofDiagnostics(payload, proofResponse);
       if (diagnostics) {
         journal.proofDiagnostics = diagnostics;
         persist();

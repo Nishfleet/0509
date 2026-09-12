@@ -30,6 +30,7 @@
     "scripts/find-recent-remote-restore-artifact.mjs",
     "scripts/deploy-ledger.mjs",
     "scripts/deploy-age.mjs",
+    "scripts/verify-deploy-chain-progress.mjs",
     "scripts/build-remote-restore-candidate-manifest.mjs",
     "scripts/dodo-billing-canary.mjs",
     "scripts/e2e-auth-capture.mjs",

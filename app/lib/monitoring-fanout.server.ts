@@ -2276,6 +2276,11 @@ export async function reconcileOrchestratedWatchlistRuns(
 export async function collectMonitoringOrchestrationMetrics(
   env: AppEnv,
 ): Promise<MonitoringOrchestrationMetrics> {
+  // started_at is stored as an ISO string, so the cutoff must be an ISO string
+  // too: datetime('now','-2 days') emits a space-separated value and string
+  // comparison would otherwise pull the whole cutoff calendar day (up to ~24h
+  // extra) into the window.
+  const windowStart = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
   const rows = await ensureDb(env)
     .prepare(
       `
@@ -2283,9 +2288,10 @@ export async function collectMonitoringOrchestrationMetrics(
         FROM watchlist_run
         WHERE trigger_type = 'scheduled'
           AND idempotency_key IS NOT NULL
-          AND started_at >= datetime('now', '-2 days')
+          AND started_at >= ?
       `,
     )
+    .bind(windowStart)
     .all<{
       status: string;
       error_code: string | null;

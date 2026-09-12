@@ -82,7 +82,12 @@ export function explainDomainMatch(
   }
 
   const snapshotHost = extractHostname(ad.adSnapshotUrl);
-  if (snapshotHost && aliases.has(comparableHostname(snapshotHost))) {
+  const snapshotComparable = snapshotHost ? comparableHostname(snapshotHost) : "";
+  if (
+    snapshotComparable &&
+    aliases.has(snapshotComparable) &&
+    comparableAliasIsBrandOwned(snapshotComparable, intent)
+  ) {
     return buildExplanation(
       ad,
       "verified_alias",
@@ -94,6 +99,23 @@ export function explainDomainMatch(
 
   for (const alias of aliases) {
     if (landingHost && comparableHostname(landingHost) === comparableHostname(alias)) {
+      // Brand-owned gate (issue #2989): an alias host only VERIFIES when it is
+      // the brand's own domain or a brand-owned property (regional site,
+      // collapsed/hyphen label, stem extension, open-ccTLD twin). A redirect
+      // hop onto an unrelated third-party domain (allbirds.co.jp's Japan
+      // storefront served by goldwin.co.jp) is not a Verified link — the ad
+      // falls through to the advertiser-name LIKELY tier instead.
+      // third-party domain carries the storefront — the ad falls through to
+      // the advertiser-name LIKELY tier instead. A stem-alias (relgewallet
+      // for ridge.com) is still accepted when the ADVERTISER name itself
+      // confirms the brand — the curated-alias regressions from #2012/#1999.
+      const aliasComparable = comparableHostname(alias);
+      if (
+        !comparableAliasIsBrandOwned(aliasComparable, intent) &&
+        !aliasStemAdvertiserConfirms(aliasComparable, ad, intent)
+      ) {
+        continue;
+      }
       return buildExplanation(
         ad,
         "verified_alias",
@@ -115,7 +137,7 @@ export function explainDomainMatch(
     );
   }
 
-  if (hasVerifiedEntityLink(ad, intent, identityAliases)) {
+  if (!capturesThirdPartyHost(ad, intent, aliases) && hasVerifiedEntityLink(ad, intent, identityAliases)) {
     return buildExplanation(
       ad,
       "verified_entity",
@@ -185,6 +207,16 @@ export function rankDomainMatches(matches: DomainMatchedAd[]) {
       return levelDelta;
     }
 
+    // Region grouping (.com queries, issue #2989): rows verified only
+    // through a regional property (Japan/ME/Nordic/AU storefronts) rank
+    // AFTER the rows that land on the searched domain itself and cluster
+    // by their landing host so each region reads as one block.
+    const leftRegion = regionalGroupKey(left);
+    const rightRegion = regionalGroupKey(right);
+    if (leftRegion !== rightRegion) {
+      return leftRegion.localeCompare(rightRegion);
+    }
+
     if (left.ad.active !== right.ad.active) {
       return left.ad.active ? -1 : 1;
     }
@@ -225,6 +257,21 @@ export function dedupeDomainMatches(matches: DomainMatchedAd[]) {
 export function rejectGeographyKeywordOnlyMatch(ad: AdRecord, intent: ParsedSearchQuery) {
   const explanation = explainDomainMatch(ad, intent);
   return explanation?.level === "unverified_text_candidate";
+}
+
+/**
+ * Region-group key for rankDomainMatches (.com queries, issue #2989). Rows
+ * verified by a brand-owned regional property sort later and cluster by
+ * landing host; everything else shares the empty core key and keeps the
+ * existing order.
+ */
+const REGIONAL_PROPERTY_SIGNALS = new Set(["regional_property", "brand_stem_property"]);
+
+function regionalGroupKey(entry: DomainMatchedAd) {
+  if (!REGIONAL_PROPERTY_SIGNALS.has(entry.match.matchedSignal)) {
+    return "";
+  }
+  return entry.match.matchedDomain ? comparableHostname(entry.match.matchedDomain) : "";
 }
 
 function domainMatchLevelRank(level: DomainMatchLevel) {
@@ -281,6 +328,93 @@ function customerLandingReason(level: DomainMatchLevel, intent: ParsedSearchQuer
 
 function displayDomain(intent: ParsedSearchQuery) {
   return intent.registrableDomain ?? intent.comparableHostname ?? intent.originalInput;
+}
+
+/**
+ * A captured landing/snapshot host on the ad that resolves but is NOT
+ * brand-owned (issue #2989). A third-party distributor host (Allbirds
+ * Japan's ads landing on goldwin.co.jp) contradicts a name-only entity
+ * link: the identity alias and the advertiser name agreeing on the same
+ * brand stem cannot outweigh a captured host the brand does not own.
+ * Acknowledges boolean short-circuit order deliberately: any brand-owned
+ * relation between a captured host and the searched domain ends the scan
+ * (that ad is already verified by an earlier branch),
+ */
+function capturesThirdPartyHost(
+  ad: AdRecord,
+  intent: ParsedSearchQuery,
+  aliases: Set<string>,
+) {
+  const capturedHosts = [extractHostname(ad.landingPageUrl), extractHostname(ad.adSnapshotUrl)].filter(
+    (host): host is string => Boolean(host),
+  );
+  if (capturedHosts.length === 0) {
+    return false;
+  }
+
+  for (const host of capturedHosts) {
+    if (hostnamesMatchDomainIntent(host, intent)) {
+      return false;
+    }
+    if (hostnamesMatchBrandVerifiedProperty(host, intent)) {
+      return false;
+    }
+    if (
+      hostnamesMatchBrandStemExtension(host, intent) &&
+      advertiserMatchesBrandStem(ad, intent)
+    ) {
+      return false;
+    }
+    if (
+      aliases.has(comparableHostname(host)) &&
+      comparableAliasIsBrandOwned(comparableHostname(host), intent)
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Stem-alias escape hatch for the curated brand-product hosts —
+ * ridgewallet.com/ridgewallet.eu against ridge.com (issue #2012),
+ * on-running.com against on.com (#1950). The alias label must share the
+ * brand stem ("ridgewallet" starts with "ridge"); goldwin.co.jp shares
+ * nothing with the allbirds label, so it stays rejected. Aliases only ever
+ * come from the brand's own redirect chain/canonical or the curated list,
+ * so a shared stem plus a known source is a brand-owned link.
+ */
+function aliasStemAdvertiserConfirms(
+  alias: string,
+  _ad: AdRecord,
+  intent: ParsedSearchQuery,
+) {
+  const stem = foldDomainLabel(stemFromDomain(intent.registrableDomain ?? ""));
+  if (!stem) {
+    return false;
+  }
+  return foldDomainLabel(alias).startsWith(stem);
+}
+
+/**
+ * Brand-owned domain set (issue #2989): an alias host VERIFIES only when it
+ * is the searched registrable domain itself, one of the brand-pattern
+ * properties (regional ccTLD, hyphen-collapsed label, open-ccTLD twin), or a
+ * stem extension. An alias host whose label shares nothing with the brand
+ * (goldwin.co.jp vs allbirds.com) is a third party — redirecting onto it does
+ * not make it a brand asset.
+ */
+function comparableAliasIsBrandOwned(alias: string, intent: ParsedSearchQuery) {
+  if (!intent.registrableDomain) {
+    return false;
+  }
+  if (registrableDomainFromHostname(alias) === intent.registrableDomain) {
+    return true;
+  }
+  return (
+    hostnamesMatchBrandVerifiedProperty(alias, { registrableDomain: intent.registrableDomain }) ||
+    hostnamesMatchBrandStemExtension(alias, { registrableDomain: intent.registrableDomain })
+  );
 }
 
 function hasVerifiedEntityLink(ad: AdRecord, intent: ParsedSearchQuery, identityAliases: string[]) {

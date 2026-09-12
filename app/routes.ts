@@ -192,6 +192,10 @@ export default [
   route("for-agencies", "routes/for-agencies.tsx"),
   route("sneaker-resale", "routes/sneaker-resale.tsx"),
   route(":locale/sneaker-resale", "routes/$locale.sneaker-resale.tsx"),
+  // Issue #3087: per-brand below-retail cluster pages for the four brands
+  // whose /ads/:domain pages the hub already links. EN-only (canonical to
+  // the English page, no hreflang). Unknown slugs 404 in the loader.
+  route("sneaker-resale/:brand", "routes/sneaker-resale.$brand.tsx"),
   // Locale-prefixed buyer-surface cluster (issue #1501): /de, /de/pricing,
   // /de/help, etc. Each child re-exports the EN route's loader/meta/links
   // so the cluster stays in lockstep with the EN surface — only the
