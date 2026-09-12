@@ -23,17 +23,23 @@ Anonymous, cookie-free GETs of the public marketing HTML are now served from a n
 - **Noted:** country×version key fragments a per-colo cache (correctness-first; no Tiered Cache configured, so honest hit rates will be far below the gate's demonstration); `max-age=0` pins still cache 300s and the Cache-Control rewrite drops other directives (none relied on today); if `BASE_SCRIPT_SRC` ever gains `'strict-dynamic'` the variant breaks — a future one-line coupling test would lock it.
 - **Dismissed-with-reason:** adding `/compare/*` + `/guides/*` to the cacheable set in this PR — the reviewer filed it under Suggestions; after the origin/main merge `/switch/adspy` is already eligible via main, the compare/guides pages went live yesterday and deserve their own verified bake, and the eligibility check is exact-path/prefix based (locale variants need a decision first). Recorded as a loose-end below.
 
-run-proof: vitest node project --changed origin/main, 9 files / 93 tests green, run twice
+run-proof: vitest node project --changed <merge-base>, 9 files / 96 tests green on the merged tree
 
-run-proof: targeted 4-file / 51-test suite green
+run-proof: targeted 4-file / 54-test suite green on the merged tree
 
-run-proof: sgscan --base origin/main clean
+run-proof: npx tsc --noEmit -p tsconfig.json exit 0
 
-run-proof: #2716 detector untouched and green
+run-proof: sgscan --base <merge-base> no new security findings
 
 run-proof: live HIT and TTFB proof wired into the deploy gate
 
 run-proof: scripts/check-live-public-home.mjs defers that proof to deploy by design
+
+## Gate fixes on this head (three red checks on the previous head)
+- **CodeQL** `js/bad-html-filtering-regexp` (1 high, `workers/edge-cache.ts:240`): the inline-script extractor ended a script at a tight `</script>` only. HTML allows whitespace before the `>` of an end tag and browsers end the script there, so a missed end would swallow the rest of the document into one "body" and advertise hashes that do not match the bytes the browser hashes. The end tag now tolerates `</script >` and `</script\n>`, with a regression test for each.
+- **codex-node-checks + preview-assert** `TS2322`: `scriptSrcOf()` was typed `string` but `Array.find` returns `string | undefined`. Return type corrected; every call site was already undefined-safe.
+- **Vale** `Std.Readability.SentenceLength`: the `run-proof` line in this body was one 196-word sentence. Split into short lines.
+- The untracked `bun.lock` the salvage hook had banked was dropped: it is not tracked on main and is not part of this issue.
 net-positive-because: every anonymous visitor of /, pricing and the marketing pages stops paying the full Worker render (0.7-3.8s TTFB cold) once per 5 minutes per (colo, country); zero new machinery — one module + two-line hook in the existing fetch handler, fail-open, and the #2716 #2388-removal condition honoured rather than re-fought
 research: not applicable (no bin/ files added)
 help-first: not applicable (no new bin/ files)
