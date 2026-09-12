@@ -183,18 +183,34 @@ describe("presence source coverage policy", () => {
     expect(gated.find((entry) => entry.sourceId === "x")?.reasonCode).toBe("social_connect_not_in_plan");
   });
 
-  it("marks x as available when rollout and creds are enabled", async () => {
+  it("marks x as available when rollout, creds and paid-read approval are enabled", async () => {
     const entry = await evaluatePresenceSourceCoverage(
       {
         ...baseEnv,
         PRESENCE_X_ROLLOUT: "ga",
         X_API_BEARER_TOKEN: "token",
         PRESENCE_X_MOCK: "1",
+        X_PAID_ACCESS: "approved",
       },
       "x",
       "competitor",
     );
     expect(entry.status).toBe("available");
+  });
+
+  it("keeps x gated as a paid source until the spend decision lands", async () => {
+    const entry = await evaluatePresenceSourceCoverage(
+      {
+        ...baseEnv,
+        PRESENCE_X_ROLLOUT: "ga",
+        X_API_BEARER_TOKEN: "token",
+      },
+      "x",
+      "competitor",
+    );
+    expect(entry.status).toBe("gated");
+    expect(entry.reasonCode).toBe("paid_source_pending_nish");
+    expect(entry.coverageLabel).toBe("UNAVAILABLE");
   });
 
   it("preserves provider-disabled truth before social plan gates", async () => {

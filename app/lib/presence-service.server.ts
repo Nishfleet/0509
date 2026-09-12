@@ -233,7 +233,7 @@ export async function pollPresenceSourceTarget(
   const pollResult = await pollPresenceTarget(env, target, entity, {
     connection,
     cursor: cursor
-      ? { etag: cursor.etag, lastModified: cursor.lastModified }
+      ? { etag: cursor.etag, lastModified: cursor.lastModified, record: cursor.cursor }
       : undefined,
     fetchImpl: options.fetchImpl,
   });
