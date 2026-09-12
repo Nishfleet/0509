@@ -5,6 +5,7 @@ import {
 import { resolveCommercialDiscoveryProvider } from "~/lib/ad-source.server";
 import { deriveHook, deriveOffer } from "~/lib/analysis.server";
 import { listWatchlists } from "~/lib/data.server";
+import { listDismissedSuggestionKeys } from "~/lib/competitor-suggestion-dismissal.server";
 import {
   fetchWithTimeout,
   releaseFetchTimeout,
@@ -43,9 +44,36 @@ import type { AdRecord } from "~/lib/types";
  * probes are pure cache hits, so Browser Rendering quota is never burned here.
  */
 
+/**
+ * The evidence source a candidate was surfaced from (onboarding slice 2,
+ * #3175). Every suggestion row must be able to state WHERE it came from, in a
+ * closed vocabulary the UI can render without parsing the provenance prose.
+ *
+ * - `ad_keyword_overlap`: the customer's own ads yielded probe keywords and a
+ *   real advertiser came back on them (co-advertising on the same terms).
+ * - `landing_page_seed`: the customer has no ads on record, so the keywords
+ *   came from their landing page instead.
+ */
+export type AutoCompetitorEvidenceSource =
+  | "ad_keyword_overlap"
+  | "landing_page_seed";
+
 export interface AutoCompetitorCandidate {
   /** Advertiser display name as returned by the discovery probe. */
   advertiser: string;
+  /**
+   * Typed evidence source (onboarding slice 2, #3175). The machine-readable
+   * counterpart of `provenance`: the UI renders `why` and links this to the
+   * underlying surface, without having to parse the provenance sentence.
+   */
+  source: AutoCompetitorEvidenceSource;
+  /**
+   * One line the customer reads: why this advertiser is a competitor. Derived
+   * from the SAME probe facts that ranked the row (the overlapping keywords and
+   * countries) — never invented, never a restatement of the score. A candidate
+   * with no probe facts cannot exist here, so this is always non-empty.
+   */
+  why: string;
   /** Numeric Meta Page id when the probe carried one; null otherwise. */
   advertiserPageId: string | null;
   /** Registrable domain inferred from the candidate's landing page URL. */
@@ -423,6 +451,89 @@ export function resolveRegistrableDomainFromUrl(
   }
 }
 
+/**
+ * How many keywords / countries the one-line `why` names before it sums the
+ * rest. Two is the useful ceiling: enough to show the row is evidence-backed
+ * ("pokemon cards", "trading cards") without turning the line into a paragraph
+ * the panel has to truncate.
+ */
+const WHY_MAX_KEYWORDS = 2;
+const WHY_MAX_COUNTRIES = 2;
+
+/**
+ * The stable, human-readable id for a suggestion row (onboarding slice 2,
+ * #3175). Lived in the panel loader until the dismissal store gave it a second
+ * consumer: a dismissal is recorded against this exact key and the next load
+ * filters on it, so it has to be built ONE way. The seed module owns it because
+ * the seed is the lower layer — the loader (and any future caller) imports it
+ * from here rather than keeping a second copy that could drift and silently
+ * un-dismiss a removed suggestion.
+ *
+ * The (advertiser, registrable domain, ad-page id) tuple is the natural key:
+ * Phase 1's candidate record carries no id, and the joined string
+ * discriminates two candidates that surfaced the same brand from different
+ * probes while staying readable in an error message.
+ */
+export function buildCandidateId(seed: {
+  advertiser: string;
+  registrableDomain: string | null;
+  advertiserPageId: string | null;
+}): string {
+  return [
+    seed.advertiser.trim().toLowerCase(),
+    (seed.registrableDomain ?? "").trim().toLowerCase(),
+    (seed.advertiserPageId ?? "").trim(),
+  ].join("|");
+}
+
+/**
+ * Build the customer-facing one-liner for a candidate from the probe facts that
+ * already ranked it (onboarding slice 2, #3175: "each with a one-line why and
+ * its source").
+ *
+ * The line is assembled ONLY from facts the probes actually returned — the
+ * keywords that surfaced the advertiser and the countries it ran in. Nothing is
+ * inferred, and a candidate always has at least one matched keyword by
+ * construction (it is in the aggregate map because a probe hit carried it), so
+ * the line is never empty and never needs a fallback.
+ *
+ * Exported so the deterministic test can pin the exact phrasing without
+ * duplicating it.
+ */
+export function buildSuggestionWhy(input: {
+  matchedKeywords: readonly string[];
+  countries: readonly string[];
+  seedSource: SeedSource;
+}): string {
+  const keywords = input.matchedKeywords.filter((k) => k.trim().length > 0);
+  const shown = keywords.slice(0, WHY_MAX_KEYWORDS);
+  const quoted = shown.map((k) => `“${k}”`).join(" and ");
+  const extra =
+    keywords.length > shown.length ? ` +${keywords.length - shown.length} more` : "";
+
+  const countryList = input.countries.map((c) => c.trim()).filter((c) => c.length > 0);
+  const countryShown = countryList.slice(0, WHY_MAX_COUNTRIES).join(", ");
+  const countryExtra =
+    countryList.length > WHY_MAX_COUNTRIES
+      ? ` +${countryList.length - WHY_MAX_COUNTRIES} more`
+      : "";
+
+  // No keyword at all is unreachable for a candidate (a probe hit carries at
+  // least one), but the line must still be honest if it ever happens rather
+  // than rendering a dangling "Runs ads on ."
+  if (shown.length === 0) {
+    return input.seedSource === "landing_page"
+      ? "Runs ads matching your site’s own pitch."
+      : "Runs ads on the same terms as you.";
+  }
+
+  const base = `Runs ads on ${quoted}${extra}`;
+  if (countryShown.length === 0) {
+    return `${base}.`;
+  }
+  return `${base} in ${countryShown}${countryExtra}.`;
+}
+
 interface AggregatedCandidate {
   advertiser: string;
   advertiserPageId: string | null;
@@ -537,10 +648,30 @@ async function runSeedProbes(
     }
   }
 
+  // Onboarding slice 2 (#3175): a suggestion the customer removed must never
+  // come back. The panel DERIVES its rows on every load, so without this the
+  // next render re-derives exactly what was just dismissed. Filtering here (the
+  // single derivation point) covers every consumer — panel, accept path,
+  // logged-out preview — rather than only the one surface that hosts the
+  // remove button.
+  const dismissed = await listDismissedSuggestionKeys(env, run.userId);
+
   const candidates: AutoCompetitorCandidate[] = [];
   for (const agg of aggregated.values()) {
     if (agg.registrableDomain && watchedDomains.has(agg.registrableDomain)) {
       continue; // already watched — dedup via website-identity holds
+    }
+    if (
+      dismissed.size > 0 &&
+      dismissed.has(
+        buildCandidateId({
+          advertiser: agg.advertiser,
+          registrableDomain: agg.registrableDomain,
+          advertiserPageId: agg.advertiserPageId,
+        }),
+      )
+    ) {
+      continue; // removed by the customer — never re-suggested
     }
     const matchedKeywords = [...agg.matchedKeywords];
     const countries = [...agg.countries];
@@ -558,6 +689,12 @@ async function runSeedProbes(
       registrableDomain: agg.registrableDomain,
       overlapScore,
       provenance,
+      source: run.seedSource === "landing_page" ? "landing_page_seed" : "ad_keyword_overlap",
+      why: buildSuggestionWhy({
+        matchedKeywords,
+        countries,
+        seedSource: run.seedSource,
+      }),
       countries,
       matchedKeywords,
     });
