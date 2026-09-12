@@ -20,6 +20,7 @@ const CONNECTOR_COPY: Record<PresenceConnectorId, string> = {
   reddit: "Reddit",
   linkedin: "LinkedIn",
   rss: "RSS / Atom / JSON Feed",
+  bluesky: "Bluesky",
   gdelt: "GDELT mainstream news",
 };
 

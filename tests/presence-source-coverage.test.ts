@@ -137,6 +137,7 @@ describe("presence source coverage policy", () => {
       "reddit",
       "linkedin",
       "rss",
+      "bluesky",
       "gdelt",
       "youtube",
       "amazon",

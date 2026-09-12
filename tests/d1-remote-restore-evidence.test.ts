@@ -1509,7 +1509,8 @@ describe("D1 remote restore evidence automation", () => {
     // the repository sorting earlier. D1's ledger is append-only, so the live
     // order is fixed history the sorted repository cannot reproduce.
     //
-    // 0097_status_probe_samples.sql, 0098_email_delivery_canary.sql and
+    // 0097_status_probe_samples.sql, 0098_email_delivery_canary.sql,
+    // 0098_widen_source_target_connector_bluesky.sql and
     // 0098_widen_source_target_connector_gdelt.sql are in the repository but
     // NOT yet applied on production (production deploys have been red since
     // 2026-09-09), so the modeled production ledger excludes them too and
@@ -1529,6 +1530,7 @@ describe("D1 remote restore evidence automation", () => {
           name !== "0096_email_suppression.sql" &&
           name !== "0097_status_probe_samples.sql" &&
           name !== "0098_email_delivery_canary.sql" &&
+          name !== "0098_widen_source_target_connector_bluesky.sql" &&
           name !== "0098_widen_source_target_connector_gdelt.sql",
       ),
     ];
@@ -1550,6 +1552,7 @@ describe("D1 remote restore evidence automation", () => {
         "0096_email_suppression.sql",
         "0097_status_probe_samples.sql",
         "0098_email_delivery_canary.sql",
+        "0098_widen_source_target_connector_bluesky.sql",
         "0098_widen_source_target_connector_gdelt.sql",
       ],
     });
@@ -1560,6 +1563,7 @@ describe("D1 remote restore evidence automation", () => {
           "0096_email_suppression.sql",
           "0097_status_probe_samples.sql",
           "0098_email_delivery_canary.sql",
+          "0098_widen_source_target_connector_bluesky.sql",
           "0098_widen_source_target_connector_gdelt.sql",
         ]),
         repository,
@@ -1582,6 +1586,7 @@ describe("D1 remote restore evidence automation", () => {
         "0096_error_reports.sql",
         "0097_status_probe_samples.sql",
         "0098_email_delivery_canary.sql",
+        "0098_widen_source_target_connector_bluesky.sql",
         "0098_widen_source_target_connector_gdelt.sql",
       ],
     });

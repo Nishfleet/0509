@@ -231,6 +231,16 @@ export interface AppEnv {
   PRESENCE_REDDIT_MOCK?: string;
   PRESENCE_LINKEDIN_MOCK?: string;
   X_API_BEARER_TOKEN?: string;
+  PRESENCE_BLUESKY_MOCK?: string;
+  /** Fleet-owned Bluesky app-password credential (issue #3252). Never logged,
+   *  never persisted outside source_connection.encrypted_credentials. */
+  BSKY_IDENTIFIER?: string;
+  BSKY_APP_PASSWORD?: string;
+  /** Integration-test overrides for the XRPC endpoints (IP-literal fixture
+   *  hosts skip the SSRF DNS hop). Unset in production. */
+  PRESENCE_BSKY_PDS_URL?: string;
+  PRESENCE_BSKY_APPVIEW_URL?: string;
+  PRESENCE_BLUESKY_ROLLOUT?: string;
   REDDIT_CLIENT_ID?: string;
   REDDIT_CLIENT_SECRET?: string;
   REDDIT_COMMERCIAL_ACCESS?: string;
