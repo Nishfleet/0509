@@ -265,10 +265,12 @@ describe("probe integration (no second scheduler)", () => {
     expect(sent.ok).toBe(true);
     expect(sent.detail).toContain("canary sent");
     const tickToken = await env.DB!.prepare(
-      "SELECT token, status, sent_at FROM email_delivery_canary ORDER BY created_at DESC LIMIT 1",
-    ).bind().first<{ token: string; status: string; sent_at: string | null }>();
+      "SELECT token, status, sent_at, error FROM email_delivery_canary ORDER BY created_at DESC LIMIT 1",
+    ).bind().first<{ token: string; status: string; sent_at: string | null; error: string | null }>();
     expect(tickToken?.status).toBe("sent");
     expect(tickToken?.sent_at).toBeTruthy();
+    // A healthy send stores no fabricated provider error.
+    expect(tickToken?.error).toBeNull();
 
     sendCloudflareEmail.mockResolvedValueOnce({ status: "failed", errorMessage: "provider 5xx" });
     const failed = await runEmailDeliveryProbe(env);
