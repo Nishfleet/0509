@@ -193,6 +193,43 @@ describe("search loader", () => {
     expect(redirect.headers.get("location")).toBe("/brands");
   });
 
+  it("302s anonymous bare /{locale}/search and .data twins to /brands (issue #2965)", async () => {
+    const env = { DB: {} };
+    const listCollections = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections,
+    }));
+
+    const { loader } = await import("~/routes/search");
+    // The locale route re-exports this loader, so anonymous bare locale
+    // search must bounce exactly like EN — otherwise /de/search stays a 200
+    // indexable empty funnel. The .data variants are what a client-side
+    // <Link to="/search"> actually fetches, so they redirect too.
+    for (const [request, params] of [
+      [new Request("http://localhost/de/search"), { locale: "de" }],
+      [new Request("http://localhost/search.data"), {}],
+      [new Request("http://localhost/pt-br/search.data"), { locale: "pt-br" }],
+    ] as const) {
+      const out = await loader({
+        context: createContext(env),
+        request,
+        params,
+      } as never);
+      expect(out).toBeInstanceOf(Response);
+      const res = out as Response;
+      expect(res.status, request.url).toBe(302);
+      expect(res.headers.get("location"), request.url).toBe("/brands");
+    }
+    expect(listCollections).not.toHaveBeenCalled();
+  });
+
   it("keeps the idle search UI for a signed-in visitor on bare /search", async () => {
     const env = { DB: {} };
     const listCollections = vi.fn().mockResolvedValue([]);
@@ -233,7 +270,13 @@ describe("search loader", () => {
 
     // The dashboard/set-up-checklist funnels link to bare /search; a signed-
     // in user must still get the search UI, not the /brands bounce.
-    expect(result).toMatchObject({ session: { user: appSession.user } });
+    expect(result).toMatchObject({
+      session: { user: appSession.user },
+      result: {
+        ads: [],
+        discoveryStatus: "disabled",
+      },
+    });
   });
 
   it("returns plan=null to the UI when the plan lookup blips for a signed-in user", async () => {

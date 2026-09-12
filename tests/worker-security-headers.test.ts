@@ -355,7 +355,7 @@ describe("Worker security headers", () => {
 			"https://0509.io/search?website=nike.com",
 			"https://0509.io/search?q=",
 			"https://0509.io/search?utm_source=x",
-			"https://0509.io/search?q=adidas.data",
+			"https://0509.io/search.data?q=adidas",
 		];
 		for (const url of noindexed) {
 			const response = withSecurityHeaders(
@@ -379,7 +379,7 @@ describe("Worker security headers", () => {
 	});
 
 	it("marks buyer-surface locale /search twins noindex when parameterised", () => {
-		for (const path of ["/de/search?q=adidas", "/ja/search?q=adidas", "/fr/search?q=nike.data"]) {
+		for (const path of ["/de/search?q=adidas", "/ja/search?q=adidas", "/fr/search.data?q=nike"]) {
 			const response = withSecurityHeaders(
 				new Response("<!doctype html>", { headers: { "content-type": "text/html; charset=utf-8" } }),
 				new Request(`https://0509.io${path}`),
