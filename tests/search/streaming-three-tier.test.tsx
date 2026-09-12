@@ -425,3 +425,83 @@ describe("streaming three-tier on /search (BET 2, issue 1482)", () => {
     expect(markup).toContain("0 verified · 1 likely · 1 unmatched");
   });
 });
+
+describe("streamed landing capture on /search (issue #3014)", () => {
+  it("paints rows and the pending landing block while the capture promise is in flight, then swaps in the captured proof", async () => {
+    // The loader defers the anonymous landing capture: selectedAd is the
+    // base ad (no snapshot yet) and selectedAdCapture is a promise the
+    // document streams. The result rows must NOT wait on it.
+    let resolveCapture: (payload: unknown) => void = () => {};
+    const capture = new Promise((resolve) => {
+      resolveCapture = resolve;
+    });
+    const selectedAd = adRow("meta-notion-1", "exact_hostname", "Notion");
+    loaderData = {
+      ...firstBatchLoaderData,
+      selectedAd,
+      selectedAdCapture: capture,
+    };
+    const { container } = await mountRoute();
+
+    // First card painted while the capture is still in flight.
+    expect(container.querySelector(".f9-wk-row")).not.toBeNull();
+    // The landing block shows the honest pending copy, not a snapshot.
+    expect(container.textContent).toContain("Checking the landing page now");
+    expect(container.textContent).not.toContain("Landing page checked");
+
+    resolveCapture({
+      ad: {
+        ...selectedAd,
+        landingPage: {
+          rawUrl: "https://notion.so/product",
+          canonicalUrl: "https://notion.so/product",
+          rawHeadline: "One workspace for your team",
+          normalizedHeadline: "one workspace for your team",
+          normalizedHeadlineHash: "hash-3014",
+          ctaText: "Get started",
+          priceText: null,
+          formPresent: false,
+          captureMethod: "landing_page_fetch",
+          capturedAt: new Date().toISOString(),
+          artifactKey: null,
+          metadata: {},
+        },
+      },
+      landingPageCaptureFailure: null,
+    });
+    await act(async () => {});
+
+    // The captured proof swapped into the SAME mount — no navigation, no
+    // re-mount, no revalidation (the capture arrived via the streamed
+    // document, the exact mechanism the anonymous free preview relies on).
+    expect(container.textContent).toContain("Landing page checked");
+    expect(container.textContent).toContain("One workspace for your team");
+  });
+
+  it("a failed streamed capture renders the honest capture-gap copy, never an error boundary", async () => {
+    const capture = Promise.resolve({
+      ad: adRow("meta-notion-1", "exact_hostname", "Notion"),
+      landingPageCaptureFailure: {
+        snapshotId: null,
+        reasonCode: "snapshot_empty",
+        canonicalUrl: null,
+        capturedAt: null,
+        error: "no signals",
+      },
+    });
+    loaderData = {
+      ...firstBatchLoaderData,
+      selectedAd: adRow("meta-notion-1", "exact_hostname", "Notion"),
+      selectedAdCapture: capture,
+    };
+    const { container } = await mountRoute();
+    await act(async () => {});
+
+    expect(container.querySelector(".f9-wk-row")).not.toBeNull();
+    // snapshot_empty falls to the default gap copy — the pane degrades
+    // honestly instead of throwing into an error boundary.
+    expect(container.textContent).toContain(
+      "Landing page check did not finish",
+    );
+  });
+});

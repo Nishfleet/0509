@@ -7,6 +7,7 @@
     "scripts/prod-canary*.mjs",
     "scripts/ads-domain-publisher.mjs",
     "scripts/bet2-live-verification.mjs",
+    "scripts/search-recall-audit.mjs",
     "scripts/bet3-live-verification.mjs",
     "scripts/bet7-activation-verification.mjs",
     "scripts/bet9-first-viewport-verification.mjs",

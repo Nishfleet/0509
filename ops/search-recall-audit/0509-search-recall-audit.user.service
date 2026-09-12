@@ -1,0 +1,36 @@
+[Unit]
+Description=0509 free-preview recall audit — 25-domain dead-end gate (issue #3014)
+# Fails (exit non-zero) when the free preview — the visit->signup front door
+# (roadmap §1.8) — dead-ends a well-known advertiser brand: the issue-#3014
+# metric is 0 dead-end "No verified ads found" empty states over the BET 2
+# 25-domain cohort and >=80% of domains returning >=1 verified row, with the
+# §1.8 observed brands (allbirds/notion/oura) non-empty on every run.
+# `canary:bet2` (scripts/bet2-live-verification.mjs --cohort=25) evaluates
+# those gates but only by hand; nothing ran it on a schedule, so a recall or
+# precision regression dead-ending a real brand surfaced only when a scout
+# happened to look.
+# Deliberately a user unit on the fleet VPS (like 0509-sneaker-resale-recall-
+# canary, issue #1945): the worker GitHub App token cannot touch
+# .github/workflows and the check needs no secrets — only outbound HTTPS.
+# Runs from a dedicated read-only checkout that self-syncs to main on every
+# run (ExecStartPre), so it never touches the shared products/0509 checkout.
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/nish/workspaces/agent-state/0509-search-recall-audit
+Environment=HOME=/home/nish
+Environment=PATH=/home/nish/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStartPre=/usr/bin/env git -C /home/nish/workspaces/agent-state/0509-search-recall-audit fetch origin main
+ExecStartPre=/usr/bin/env git -C /home/nish/workspaces/agent-state/0509-search-recall-audit reset --hard origin/main
+ExecStart=/usr/bin/env node scripts/search-recall-audit.mjs
+# Evidence: one plain-text run log; the unit's failed state is the loud
+# signal (systemctl --user list-units --failed) and the log keeps the
+# per-domain tier counts for observe-to-close.
+StandardOutput=append:/home/nish/workspaces/agent-state/cron-output/0509-search-recall-audit.log
+StandardError=inherit
+# 25 fetches (the cohort probed exactly once — every §1.8 rerun domain is a
+# BET2_DOMAINS member) with rate-limiter pacing and 429 backoff worst case
+# must still finish; generous bound.
+TimeoutStartSec=90min
+# A failed audit must stay failed for operators; do not restart into a loop.
+Restart=no

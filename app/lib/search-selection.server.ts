@@ -37,10 +37,31 @@ export type PrepareSearchResultSelectionOptions = {
    */
   waitUntil?: (promise: Promise<unknown>) => void;
   /**
+   * Issue #3014 (anonymous free preview): stream the landing capture instead
+   * of blocking the first card on it. When set, the loader returns the base
+   * ad immediately and hands back `selectedAdCapture` — a promise the route
+   * renders inside <Await> so the capture lands in the SAME document
+   * response, seconds after the result rows have already flushed. Anonymous
+   * captures stay request-scoped (nothing persisted), so in-response
+   * streaming is the only way the snapshot still reaches the HTML without
+   * gating the first card on a 15-25s Browser Rendering await.
+   */
+  deferCapture?: boolean;
+  /**
    * Resolved plan family of the signed-in actor, recorded on the
    * selection-enrichment landing telemetry rows. Anonymous visitors omit it.
    */
   planTier?: BrowserJobPlanTier | null;
+};
+
+/**
+ * Resolves (never rejects) to the capture outcome streamed into the search
+ * document: the enriched ad (landing page filled when captured) and the
+ * capture-failure detail when the capture could not run.
+ */
+export type SelectedAdCapturePayload = {
+  ad: AdRecord;
+  landingPageCaptureFailure: LandingPageCaptureFailureDetail | null;
 };
 
 type EnrichAndPersistSelectedAdOptions = {
@@ -125,6 +146,63 @@ export async function prepareSearchResultSelection(
       persistSelected: Boolean(env.DB) && options.hydratePersisted !== false,
       captureCreativeAndTranslation: options.hydratePersisted !== false,
     };
+    if (options.deferCapture) {
+      // Issue #3014: the anonymous free preview must not sit 15-25s behind
+      // an opaque spinner while the featured ad's landing page is captured.
+      // Return the base ad NOW (rows + detail pane paint with pending
+      // labels) and hand the capture back as a promise the route streams
+      // into the same document via <Await>. The promise NEVER rejects — a
+      // failed capture resolves with the failure detail so the pane renders
+      // the honest capture-gap copy instead of an error boundary.
+      if (needsWork) {
+        const selectedAdCapture: Promise<SelectedAdCapturePayload> =
+          enrichAndPersistSelectedAd(
+            env,
+            selectedAdBase,
+            providerResultIsFresh,
+            enrichOptions,
+          )
+            .then((enriched) => ({
+              ad: enriched.ad,
+              landingPageCaptureFailure: enriched.landingPageCaptureFailure,
+            }))
+            .catch((error: unknown) => ({
+              ad: selectedAdBase,
+              landingPageCaptureFailure: {
+                reasonCode: "capture_stream_failed",
+                metadata: {
+                  message:
+                    error instanceof Error
+                      ? error.message
+                      : "landing-page capture stream failed",
+                },
+              } satisfies LandingPageCaptureFailureDetail,
+            }));
+        return {
+          result: {
+            ...result,
+            ads: hydratedAds,
+          },
+          selectedAd: selectedAdBase,
+          selectionEnrichmentPending,
+          landingPageCaptureFailure,
+          selectedAdCapture,
+        };
+      }
+      // Nothing to capture: base evidence already fills the pane (cached
+      // snapshot, demo source, or no landing-page destination) — no deferred
+      // promise, the existing markup renders every field directly.
+      return {
+        result: {
+          ...result,
+          ads: hydratedAds,
+        },
+        selectedAd: selectedAdBase,
+        selectionEnrichmentPending,
+        landingPageCaptureFailure,
+        selectedAdCapture: undefined,
+      };
+    }
     if (needsWork && options.waitUntil) {
       // WP-11 paint-fast path: return base ad now; finish enrichment async.
       // FIX-13: revalidations must not schedule a second enrichment while one
@@ -174,6 +252,10 @@ export async function prepareSearchResultSelection(
     selectedAd,
     selectionEnrichmentPending,
     landingPageCaptureFailure,
+    // Present (as a promise) only on the deferCapture path; explicitly
+    // undefined here so every return shape of this union carries the key
+    // and route/test code can read it without narrowing.
+    selectedAdCapture: undefined,
   };
 }
 

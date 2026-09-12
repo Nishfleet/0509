@@ -1,4 +1,5 @@
 import {
+  Await,
   Form,
   Link,
   data,
@@ -18,7 +19,7 @@ import type {
   LoaderFunctionArgs,
   MetaFunction,
 } from "react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, Suspense } from "react";
 
 import { AdThumb } from "~/components/ad-thumb";
 import { DashboardPage } from "~/components/dashboard-page";
@@ -44,6 +45,7 @@ import {
 import { FeedbackStrip } from "~/components/workspace/feedback-strip";
 import { RuledList } from "~/components/workspace/ruled-list";
 import { WorkingHeader } from "~/components/workspace/working-header";
+import type { AdRecord } from "~/lib/types";
 import { formatAdLongevityLabel } from "~/lib/ad-display";
 import { hasValidCanaryToken } from "~/lib/canary-token.server";
 import { queueFirstWatchlistScan } from "~/lib/first-watchlist-scan.server";
@@ -152,6 +154,7 @@ import type { SuggestedCompetitorsPanelData } from "~/lib/auto-competitor-sugges
 import type { CompetitorHandoffCandidate } from "~/lib/competitor-handoff.server";
 import type { RootLoaderData } from "~/root";
 import type { SearchFilters, WatchlistTrackingRole } from "~/lib/types";
+import type { SelectedAdCapturePayload } from "~/lib/search-selection.server";
 
 // Re-exported so existing test imports from "~/routes/search" keep working
 // after the pure helpers moved to "~/lib/search-display".
@@ -449,6 +452,7 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
       stealSummary: null,
       selectionEnrichmentPending: false,
       landingPageCaptureFailure: null,
+      selectedAdCapture: undefined,
       collections: [],
       plan: null,
       session,
@@ -483,6 +487,7 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
       stealSummary: null,
       selectionEnrichmentPending: false,
       landingPageCaptureFailure: null,
+      selectedAdCapture: undefined,
       collections: [],
       plan: null,
       session,
@@ -703,6 +708,7 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
           stealSummary: null,
           selectionEnrichmentPending: false,
           landingPageCaptureFailure: null,
+          selectedAdCapture: undefined,
           collections,
           plan,
           session,
@@ -736,6 +742,7 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
       stealSummary: null,
       selectionEnrichmentPending: false,
       landingPageCaptureFailure: null,
+      selectedAdCapture: undefined,
       collections,
       plan,
       session,
@@ -879,6 +886,7 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
     selectedAd: selectedAdUncut,
     selectionEnrichmentPending,
     landingPageCaptureFailure,
+    selectedAdCapture,
   } = await withTransientRetry(() =>
     prepareSearchResultSelection(
     env,
@@ -890,9 +898,13 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
       ...(session || !enrichSelected ? {} : { allowRenderedFallback: false }),
       ...(plan ? { planTier: plan } : {}),
       // Signed-in captures persist, so waitUntil + revalidation can paint
-      // fast. Anonymous captures are request-scoped: awaiting them is the
-      // only way the snapshot reaches the HTML.
+      // fast. Anonymous captures are request-scoped: instead of blocking the
+      // first card on the 15-25s capture (issue #3014's opaque spinner), the
+      // capture STREAMS into the same document via a deferred loader promise
+      // rendered inside <Await> — the snapshot still reaches the HTML, just
+      // after the result rows have already flushed.
       ...(typeof waitUntil === "function" && session ? { waitUntil } : {}),
+      ...(!session && enrichSelected ? { deferCapture: true } : {}),
     },
     ),
   );
@@ -1029,6 +1041,9 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
     stealSummary,
     selectionEnrichmentPending: Boolean(selectionEnrichmentPending),
     landingPageCaptureFailure,
+    // Issue #3014: the anonymous landing capture streams into this document.
+    // Undefined for signed-in / cached-evidence / non-enriched searches.
+    ...(selectedAdCapture ? { selectedAdCapture } : {}),
     collections,
     plan,
     session,
@@ -1365,6 +1380,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
 export default function SearchRoute() {
   const data = useLoaderData<typeof loader>();
+  // Issue #3014: when the loader deferred the anonymous landing capture, this
+  // promise streams into the document and the capture-derived pane blocks
+  // below render inside <Await> (pending paint first, proof swaps in when
+  // the capture settles). Undefined on every other path (signed-in, cached
+  // evidence, idle, rate-limited), which keeps the legacy synchronous render.
+  const streamedCapture = data.selectedAdCapture;
   const actionData = useActionData<typeof action>();
   const location = useLocation();
   const navigate = useNavigate();
@@ -2885,10 +2906,28 @@ export default function SearchRoute() {
                   <span>{formatSearchSourceLabel(visibleResult)}</span>
                   <span>{formatSearchFreshnessLabel(visibleResult)}</span>
                   <span>
-                    {formatProofCaptureLabel(selectedAd, {
-                      pending: selectionEnrichmentUiPending,
-                      failureReason: data.landingPageCaptureFailure?.reasonCode,
-                    })}
+                    {streamedCapture ? (
+                      <Suspense
+                        fallback={
+                          formatProofCaptureLabel(selectedAd, { pending: true })
+                        }
+                      >
+                        <Await resolve={streamedCapture}>
+                          {(payload) =>
+                            formatProofCaptureLabel(payload.ad, {
+                              failureReason:
+                                payload.landingPageCaptureFailure?.reasonCode,
+                            })
+                          }
+                        </Await>
+                      </Suspense>
+                    ) : (
+                      formatProofCaptureLabel(selectedAd, {
+                        pending: selectionEnrichmentUiPending,
+                        failureReason:
+                          data.landingPageCaptureFailure?.reasonCode,
+                      })
+                    )}
                   </span>
                 </p>
                 {selectedAd.domainMatch?.reason ? (
@@ -2954,95 +2993,39 @@ export default function SearchRoute() {
                   </p>
                 </DetailBlock>
 
-                <DetailBlock kicker="Landing page">
-                  <h4 className="f9-wk-blk-head">
-                    {formatSelectedLandingHeadline({
-                      rawHeadline: selectedAd.landingPage?.rawHeadline,
-                      landingPageUrl: selectedAd.landingPageUrl,
-                      hasLandingPage: Boolean(selectedAd.landingPage),
-                      pending: selectionEnrichmentUiPending,
-                      failureReason: data.landingPageCaptureFailure?.reasonCode,
-                    })}
-                  </h4>
-                  <DetailFacts
-                    rows={[
-                      {
-                        key: "Primary CTA",
-                        value: formatSelectedLandingFactValue({
-                          capturedLabel: formatLandingPageSignalValue(
-                            selectedAd.landingPage?.ctaText,
-                          ),
-                          landingPageUrl: selectedAd.landingPageUrl,
-                          hasLandingPage: Boolean(selectedAd.landingPage),
-                          pending: selectionEnrichmentUiPending,
-                          failureReason: data.landingPageCaptureFailure?.reasonCode,
-                        }),
-                      },
-                      {
-                        key: "Visible price/offer",
-                        value: formatSelectedLandingFactValue({
-                          capturedLabel: formatLandingPageSignalValue(
-                            selectedAd.landingPage?.priceText,
-                          ),
-                          landingPageUrl: selectedAd.landingPageUrl,
-                          hasLandingPage: Boolean(selectedAd.landingPage),
-                          pending: selectionEnrichmentUiPending,
-                          failureReason: data.landingPageCaptureFailure?.reasonCode,
-                        }),
-                      },
-                      {
-                        key: "Form present",
-                        value: formatSelectedLandingFactValue({
-                          capturedLabel: formatLandingPageFormValue(
-                            selectedAd.landingPage?.formPresent,
-                          ),
-                          landingPageUrl: selectedAd.landingPageUrl,
-                          hasLandingPage: Boolean(selectedAd.landingPage),
-                          pending: selectionEnrichmentUiPending,
-                          failureReason: data.landingPageCaptureFailure?.reasonCode,
-                        }),
-                      },
-                      {
-                        key: "Page check",
-                        value: formatSelectedLandingFactValue({
-                          capturedLabel: formatCaptureMethodLabel(
-                            selectedAd.landingPage?.captureMethod,
-                          ),
-                          landingPageUrl: selectedAd.landingPageUrl,
-                          hasLandingPage: Boolean(selectedAd.landingPage),
-                          pending: selectionEnrichmentUiPending,
-                          failedPageCheck: true,
-                          failureReason: data.landingPageCaptureFailure?.reasonCode,
-                        }),
-                      },
-                    ]}
+                {streamedCapture ? (
+                  /* Issue #3014: the anonymous landing capture streams into
+                     this document — the pending block paints with the shell
+                     (first card unblocked) and the captured proof swaps in
+                     when the capture settles, seconds later, same response. */
+                  <Suspense
+                    fallback={
+                      <SelectedLandingPageBlock
+                        ad={selectedAd}
+                        pending
+                        failureReason={null}
+                      />
+                    }
+                  >
+                    <Await resolve={streamedCapture}>
+                      {(payload) => (
+                        <SelectedLandingPageBlock
+                          ad={payload.ad}
+                          pending={false}
+                          failureReason={
+                            payload.landingPageCaptureFailure?.reasonCode
+                          }
+                        />
+                      )}
+                    </Await>
+                  </Suspense>
+                ) : (
+                  <SelectedLandingPageBlock
+                    ad={selectedAd}
+                    pending={selectionEnrichmentUiPending}
+                    failureReason={data.landingPageCaptureFailure?.reasonCode}
                   />
-                  {!selectedAd.landingPage &&
-                  selectedAd.landingPageUrl &&
-                  !selectionEnrichmentUiPending ? (
-                    <p className="f9-wk-small">
-                      {
-                        formatLandingPageCaptureGap(
-                          data.landingPageCaptureFailure?.reasonCode,
-                        ).detail
-                      }
-                    </p>
-                  ) : null}
-                  {selectedAd.landingPageUrl ? (
-                    <a
-                      className="f9-wk-url"
-                      href={selectedAd.landingPageUrl}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      {selectedAd.landingPageUrl}
-                    </a>
-                  ) : (
-                    <p className="f9-wk-small">
-                      No landing-page link found on this ad.
-                    </p>
-                  )}
-                </DetailBlock>
+                )}
 
                 <DetailBlock>
                   <p className="f9-wk-small">{selectedAd.researchSummary}</p>
@@ -3392,6 +3375,104 @@ function DetailRow({ label, value }: { label: string; value: string }) {
       <dt>{label}</dt>
       <dd>{value}</dd>
     </div>
+  );
+}
+
+/**
+ * The landing-page proof block of the selected-ad detail pane. A pure
+ * function of the (possibly capture-enriched) ad, the pending flag and the
+ * capture-failure reason so the SAME markup renders:
+ *  - the legacy synchronous path (no streamed capture),
+ *  - the issue-#3014 streamed capture's fallback while the promise is in
+ *    flight (base ad + pending), and
+ *  - its resolved state (enriched ad + failure detail).
+ */
+function SelectedLandingPageBlock({
+  ad,
+  pending,
+  failureReason,
+}: {
+  ad: AdRecord;
+  pending: boolean;
+  failureReason: string | null | undefined;
+}) {
+  return (
+    <DetailBlock kicker="Landing page">
+      <h4 className="f9-wk-blk-head">
+        {formatSelectedLandingHeadline({
+          rawHeadline: ad.landingPage?.rawHeadline,
+          landingPageUrl: ad.landingPageUrl,
+          hasLandingPage: Boolean(ad.landingPage),
+          pending,
+          failureReason,
+        })}
+      </h4>
+      <DetailFacts
+        rows={[
+          {
+            key: "Primary CTA",
+            value: formatSelectedLandingFactValue({
+              capturedLabel: formatLandingPageSignalValue(
+                ad.landingPage?.ctaText,
+              ),
+              landingPageUrl: ad.landingPageUrl,
+              hasLandingPage: Boolean(ad.landingPage),
+              pending,
+              failureReason,
+            }),
+          },
+          {
+            key: "Visible price/offer",
+            value: formatSelectedLandingFactValue({
+              capturedLabel: formatLandingPageSignalValue(
+                ad.landingPage?.priceText,
+              ),
+              landingPageUrl: ad.landingPageUrl,
+              hasLandingPage: Boolean(ad.landingPage),
+              pending,
+              failureReason,
+            }),
+          },
+          {
+            key: "Form present",
+            value: formatSelectedLandingFactValue({
+              capturedLabel: formatLandingPageFormValue(
+                ad.landingPage?.formPresent,
+              ),
+              landingPageUrl: ad.landingPageUrl,
+              hasLandingPage: Boolean(ad.landingPage),
+              pending,
+              failureReason,
+            }),
+          },
+          {
+            key: "Page check",
+            value: formatSelectedLandingFactValue({
+              capturedLabel: formatCaptureMethodLabel(
+                ad.landingPage?.captureMethod,
+              ),
+              landingPageUrl: ad.landingPageUrl,
+              hasLandingPage: Boolean(ad.landingPage),
+              pending,
+              failedPageCheck: true,
+              failureReason,
+            }),
+          },
+        ]}
+      />
+      {!ad.landingPage && ad.landingPageUrl && !pending ? (
+        <p className="f9-wk-small">
+          {formatLandingPageCaptureGap(failureReason).detail}
+        </p>
+      ) : null}
+      {ad.landingPageUrl ? (
+        <a className="f9-wk-url" href={ad.landingPageUrl} rel="noreferrer" target="_blank">
+          {ad.landingPageUrl}
+        </a>
+      ) : (
+        <p className="f9-wk-small">No landing-page link found on this ad.</p>
+      )}
+    </DetailBlock>
   );
 }
 
