@@ -41,7 +41,6 @@ import {
   isEdgeCacheableHtmlRequest,
   isEdgeCacheableHtmlResponse,
   edgeCacheCopyAgeSeconds,
-  EDGE_STALE_WINDOW_SECONDS,
   matchEdgeCache,
   nonceFreeScriptSrc,
   parseEdgeCacheTtlSeconds,
