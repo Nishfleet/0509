@@ -38,6 +38,9 @@ export const DEFAULT_SELECTORS = ["cf2024-1"];
  * across several quoted chunks on separate physical lines (DNS TXT chunking),
  * so a DKIM key arrives as multiple adjacent quoted strings. Joining them
  * yields the logical record the verifier sees.
+ *
+ * @param {string} digOutput raw `dig +short TXT` stdout
+ * @returns {string[]} logical TXT records, one per record
  */
 export function parseTxtRecords(digOutput) {
   const lines = digOutput
@@ -73,7 +76,12 @@ export function parseTxtRecords(digOutput) {
   return records;
 }
 
-/** True when the accumulated string ends with a complete quoted segment. */
+/**
+ * True when the accumulated string ends with a complete quoted segment.
+ *
+ * @param {string} s accumulated record text
+ * @returns {boolean} true when the quoted chunks form a complete record
+ */
 function endsQuoteComplete(s) {
   // Quoted TXT chunks always come as `"..."` pairs; a complete record has an
   // even number of quote characters. Incomplete means the next line continues it.
@@ -81,8 +89,14 @@ function endsQuoteComplete(s) {
   return quotes % 2 === 0;
 }
 
+/**
+ * @param {string} tag policy tag being parsed (spf, dmarc, dkim)
+ * @param {string} text the TXT policy record
+ * @returns {Record<string, string>} lowercased tag -> value pairs
+ */
 function parseTxtValue(tag, text) {
   // Extract `k=v;` pairs from a TXT policy record (SPF, DMARC, DKIM).
+  /** @type {Record<string, string>} */
   const out = {};
   for (const part of text.split(";")) {
     const idx = part.indexOf("=");
@@ -95,8 +109,21 @@ function parseTxtValue(tag, text) {
 /**
  * Pure assertion over the parsed DNS state. Kept pure (no I/O) so the
  * unit test suite can pin behavior against real dig fixtures.
+ *
+ * @param {object} state parsed DNS state
+ * @param {string[]} [state.spfRecords] logical SPF TXT records
+ * @param {string[]} [state.dmarcRecords] logical DMARC TXT records
+ * @param {Map<string, string[]>} [state.dkimSelectors] selector -> logical DKIM TXT records
+ * @param {string[]} [state.requiredSelectors] selectors that must be published
+ * @returns {{ ok: boolean, failures: string[] }} verdict plus every failure reason
  */
-export function evaluateAuthState({ spfRecords = [], dmarcRecords = [], dkimSelectors = new Map(), requiredSelectors = DEFAULT_SELECTORS }) {
+export function evaluateAuthState({
+  spfRecords = /** @type {string[]} */ ([]),
+  dmarcRecords = /** @type {string[]} */ ([]),
+  dkimSelectors = /** @type {Map<string, string[]>} */ (new Map()),
+  requiredSelectors = DEFAULT_SELECTORS,
+}) {
+  /** @type {string[]} */
   const failures = [];
 
   const spf = spfRecords.find((r) => r.startsWith("v=spf1"));
@@ -142,17 +169,34 @@ export function evaluateAuthState({ spfRecords = [], dmarcRecords = [], dkimSele
   return { ok: failures.length === 0, failures };
 }
 
-async function digTxt(name, json) {
+/**
+ * @param {string} name the DNS name to query
+ * @returns {Promise<string[]>} logical TXT records at that name
+ */
+async function digTxt(name) {
+  /** @type {string} */
   let stdout;
   try {
     ({ stdout } = await run("dig", ["+short", "TXT", name], { timeout: 15_000 }));
   } catch (err) {
-    throw new Error(`dig failed for TXT ${name}: ${err.message}`);
+    throw new Error(`dig failed for TXT ${name}: ${err instanceof Error ? err.message : String(err)}`);
   }
   return parseTxtRecords(stdout);
 }
 
-export async function runLiveCheck({ domain = DEFAULT_DOMAIN, selectors = DEFAULT_SELECTORS } = {}) {
+/**
+ * Live check against the real zone.
+ *
+ * @param {object} [opts] options
+ * @param {string} [opts.domain] zone to check
+ * @param {string[]} [opts.selectors] DKIM selectors that must be published
+ * @returns {Promise<{ ok: boolean, failures: string[], domain: string, selectors: string[], checkedAt: string, spfRecord: string | null, dmarcRecord: string | null, dkimFound: string[] }>} JSON summary including ok and failures
+ */
+export async function runLiveCheck({
+  domain = DEFAULT_DOMAIN,
+  selectors = DEFAULT_SELECTORS,
+} = {}) {
+  /** @type {Map<string, string[]>} */
   const dkimSelectors = new Map();
   for (const selector of selectors) {
     dkimSelectors.set(selector, await digTxt(`${selector}._domainkey.${domain}`));
@@ -169,16 +213,18 @@ export async function runLiveCheck({ domain = DEFAULT_DOMAIN, selectors = DEFAUL
     spfRecord: spfRecords.find((r) => r.startsWith("v=spf1")) || null,
     dmarcRecord: dmarcRecords.find((r) => r.toUpperCase().startsWith("V=DMARC1")) || null,
     dkimFound: [...selectors].filter((s) => (dkimSelectors.get(s) || []).some((r) => r.startsWith("v=DKIM1"))),
-    ...evaluateAuthState({ spfRecords, dmarcRecords, dkimSelectors, requiredSelectors: selectors }),
+    ...verdict,
   };
 }
 
-const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop());
+/** @type {boolean} */
+const isMain = Boolean(process.argv[1]) && import.meta.url.endsWith(process.argv[1].split("/").pop() || "");
 if (isMain) {
+  /** @type {string[]} */
   const selectors = (process.env.CHECK_DKIM_SELECTORS || DEFAULT_SELECTORS.join(","))
     .split(",")
     .map((s) => s.trim())
-    .filter(Boolean);
+    .filter((s) => s.length > 0);
   try {
     const summary = await runLiveCheck({ selectors });
     if (process.argv.includes("--json")) {
@@ -193,7 +239,7 @@ if (isMain) {
       process.exit(1);
     }
   } catch (err) {
-    console.error(`outbound email auth check: infrastructure error — ${err.message}`);
+    console.error(`outbound email auth check: infrastructure error — ${err instanceof Error ? err.message : String(err)}`);
     process.exit(2);
   }
 }
