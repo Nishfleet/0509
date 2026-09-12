@@ -10,8 +10,9 @@ import { Children, type ReactNode } from "react";
  * source-level verify greps `href="/guides/` and Link's `to=` never produces
  * that source text (it renders the same markup, but the grep cannot see it).
  * tests/guides-routes.test.ts asserts every sibling href resolves to a
- * GUIDE_ENTRIES member, so the manifest in app/routes/guides.tsx stays the
- * canonical set.
+ * GUIDE_ENTRIES member, so the manifest in app/lib/sitemap.server.ts stays
+ * the canonical set (pinned to the hub manifest by the #3122 triple-agreement
+ * test).
  */
 export function GuideKeepReading({ children }: { children: ReactNode }) {
   return (
