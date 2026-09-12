@@ -163,6 +163,7 @@ export const PLATFORM_TABLES: ReadonlyArray<{ table: string; reason: string }> =
   { table: "cta_pipeline_bail_reason_counts", reason: "per-day pipeline telemetry aggregates (no customer rows)" },
   { table: "demo_brand_proof_hole_state", reason: "demo-brand marketing infrastructure state, not customer data" },
   { table: "error_report", reason: "ops error-report sink (route/reason telemetry, no customer rows)" },
+  { table: "status_probe_samples", reason: "status-probe telemetry samples (probe name, ok/latency, checked_at) — ops observability rows, no customer data" },
 ];
 
 /** Shadow/backup table-name shapes that migrations must never leave behind. */

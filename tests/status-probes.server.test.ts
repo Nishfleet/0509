@@ -15,7 +15,9 @@ import { applyMigration, createSqliteD1 } from "./helpers/sqlite-d1";
 function probeDb() {
   const handle = createSqliteD1();
   applyMigration(handle.sqlite, "migrations/0097_status_probe_samples.sql");
-  return handle;
+  // node:sqlite-backed stand-in: behaves like D1 at runtime but its structural
+  // type is a narrow subset of D1Database, so assert it at this single seam.
+  return { ...handle, db: handle.db as unknown as AppEnv["DB"] };
 }
 
 function insertSample(
