@@ -9,7 +9,12 @@ import {
   isEmailSendingConfigured,
   type AppEnv,
 } from "~/lib/env.server";
-import { promiseWithTimeout } from "~/lib/fetch-timeout.server";
+import { promiseWithTimeout, PromiseTimeoutError } from "~/lib/fetch-timeout.server";
+import {
+	consultEmailSuppression,
+	isRecipientRejection,
+	recordEmailBounceFailure,
+} from "~/lib/delivery-email-core.server";
 import type { AppSession } from "~/lib/types";
 
 export const BETTER_AUTH_BASE_PATH = "/api/auth";
@@ -841,19 +846,61 @@ async function sendMagicLinkEmail(
       url: input.url,
     }),
   });
-  await promiseWithTimeout(
-    Promise.resolve().then(() =>
-      env.EMAIL!.send({
-				from: emailFromSender(env),
-        html: email.html,
-        subject: email.subject,
-        text: email.text,
-        to: input.email,
-      }),
-    ),
-    BETTER_AUTH_EMAIL_SEND_TIMEOUT_MS,
-    "Better Auth magic-link email timed out.",
-  );
+
+  // Magic links go through the same suppression chokepoint as every other
+  // 0509.io email (issue #2983). A hard-bounced or complaint-marked address
+  // must not be retried here either. The caller renders the same generic
+  // "check your email" state, so an address's suppression status is never
+  // disclosed to the requester.
+  const suppression = await consultEmailSuppression(env, input.email);
+  if (suppression) {
+    return;
+  }
+
+  try {
+    await promiseWithTimeout(
+      Promise.resolve().then(() =>
+        env.EMAIL!.send({
+          from: emailFromSender(env),
+          html: email.html,
+          subject: email.subject,
+          text: email.text,
+          to: input.email,
+        }),
+      ),
+      BETTER_AUTH_EMAIL_SEND_TIMEOUT_MS,
+      "Better Auth magic-link email timed out.",
+    );
+  } catch (error) {
+    // A definite provider failure feeds the suppression ledger so a dead
+    // mailbox stops being retried. A timeout stays unknown-and-retryable,
+    // matching the send core's contract.
+    if (!(error instanceof PromiseTimeoutError)) {
+      await recordMagicLinkBounceSafely(env, input.email, error);
+    }
+    throw error;
+  }
+}
+
+async function recordMagicLinkBounceSafely(
+  env: AppEnv,
+  address: string,
+  error: unknown,
+) {
+  try {
+    // Only a recipient rejection counts, exactly as in the send core: a
+    // provider outage must not suppress every address that tried to log in
+    // during it (issue #2983).
+    if (isRecipientRejection(error)) {
+      await recordEmailBounceFailure(env, {
+        address,
+        source: "better_auth_magic_link_recipient_rejected",
+        detail: error instanceof Error ? error.message : null,
+      });
+    }
+  } catch {
+    // Bookkeeping never changes the caller's outcome.
+  }
 }
 
 async function betterAuthUserExists(env: AppEnv, email: string) {

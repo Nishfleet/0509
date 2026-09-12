@@ -120,6 +120,7 @@ only through watchlist-scoped parents; it never joins to a user directly.
 | pricing_region_preference | personal UI preference |
 | signup_source_pending | marketing attribution |
 | rate_limit_events, e2e_test_mode, retention_sweep_state, monitoring_concurrency_slot, cron_failure_alert_throttle, cron_failure_alert_accepted_window | infra/ops state |
+| email_suppression | platform deliverability ledger (issue #2983), keyed by recipient address only — no user or workspace column, so one suppression applies to every sender |
 | discovery_cache_entry, discovery_fetch_log, discovery_query_lease, discovery_provider_state, search_domain_identity_cache | globally shared caches/leases (dedup across workspaces is the point) |
 | ad, meta_integration_log, browser_job_telemetry, ads_domain_publisher_state | shared provider corpus / provider logs / SEO ops |
 | release_scheduled_observation, scheduled_observation_alert_state, scheduled_observation_health_state | release/observation ops state |
