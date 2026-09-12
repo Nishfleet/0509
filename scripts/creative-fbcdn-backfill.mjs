@@ -282,8 +282,11 @@ async function main() {
       } catch (err) {
         // A failed upload is named, not swallowed: the summary's r2Uploaded
         // alone cannot tell a permission failure from a skipped item.
+        // (This file is included in tsconfig.node.json, so the clause is
+        // type-checked: err is `{}`, narrow before touching .message.)
+        const detail = err instanceof Error ? err.message : String(err);
         console.error(
-          `r2 put failed for ad ${item.id} (hash ${item.hash.slice(0, 12)}…): ${err?.message ?? err}`,
+          `r2 put failed for ad ${item.id} (hash ${item.hash.slice(0, 12)}…): ${detail}`,
         );
         item.r2Key = null;
       }
