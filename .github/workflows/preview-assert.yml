@@ -139,8 +139,13 @@ jobs:
 
       - name: Typecheck
         env:
-          # Same heap budget as deploy-production.yml and ci.yml.
-          NODE_OPTIONS: --max-old-space-size=2048
+          # 4096 MB, uniformly with deploy-production.yml and ci.yml (the
+          # three-way parity is pinned in workflow-routing-hardening.test.ts).
+          # 2048 MB sat exactly at the measured `tsc -b` peak: run 34693260245
+          # (0509#3303) reached ~2030 MB and exited 134 probabilistically —
+          # the identical head passed unchanged on the next trigger
+          # (run 34698175521). The doubled budget gives that peak ~2x headroom.
+          NODE_OPTIONS: --max-old-space-size=4096
         run: npm run typecheck
 
       # No test step (0509#2373): the extra unsharded suite run existed only
