@@ -340,6 +340,40 @@ describe("production deployment readiness gate", () => {
     });
   });
 
+  it("runs an explicit typecheck inside the deploy script ahead of the plan's wrangler deploy", () => {
+    // #3070 (2026-09-12 re-scope): the workflow's discrete `Typecheck` step was
+    // trimmed, so the deploy path must carry the gate itself — a literal
+    // `npm run typecheck` in scripts/deploy-production.mjs before the plan
+    // (and its `wrangler deploy` step) executes. An indirect claim that the
+    // plan's launch:readiness:predeploy happens to include typecheck is not
+    // enough: it is invisible to anyone auditing this script and it broke the
+    // first trim review. Pin the call's position so a reorder that runs it
+    // after the deploy boundary fails here.
+    const deployScript = readFileSync(
+      "scripts/deploy-production.mjs",
+      "utf8",
+    );
+    const typecheckCall = deployScript.indexOf(
+      'run("npm", ["run", "typecheck"])',
+    );
+    expect(typecheckCall).toBeGreaterThan(-1);
+    const planExecution = deployScript.indexOf(
+      "executeProductionDeployPlan(plan",
+    );
+    expect(planExecution).toBeGreaterThan(-1);
+    expect(typecheckCall).toBeLessThan(planExecution);
+    // And the deploy boundary it guards is still the plan's wrangler step.
+    const plan = buildProductionDeployPlan({
+      manifestPath: "test-results/deploy-readiness-test.json",
+      remoteRestoreEvidencePath,
+      wranglerOutputPath,
+    });
+    expect(plan.find((step: any) => step.id === "deploy")).toMatchObject({
+      command: "wrangler",
+      args: ["deploy"],
+    });
+  });
+
   it("resolves the deferred-release schema baseline at run time, never from a pinned sha", () => {
     // A pinned baseline is a guarantee with an expiry date. On 2026-08-06 the
     // sha in this plan was six days old, four migrations had landed after it,
@@ -563,7 +597,17 @@ describe("production deployment readiness gate", () => {
     writeFileSync(
       fakeWranglerPath,
       `#!/usr/bin/env node
+// #3239: rollback-production.mjs probes "wrangler versions list --json"
+// before rolling back; the recorded target must still exist there.
 import { writeFileSync } from "node:fs";
+if (process.argv[2] === "versions") {
+  console.log(
+    JSON.stringify([
+      { id: "worker-version-prior", metadata: { created_on: "2026-09-10T00:00:00.000Z" }, annotations: {} },
+    ]),
+  );
+  process.exit(0);
+}
 writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.slice(2)));
 process.exit(Number(process.env.FAKE_WRANGLER_EXIT || 0));
 `,
@@ -710,7 +754,14 @@ process.stdin.on("end", () => {
     writeFileSync(
       fakeWranglerPath,
       `#!/usr/bin/env node
+// #3239: the versions-list probe is a read-only enquiry, not a rollback
+// spawn — only an actual "rollback" invocation must be recorded here so
+// the assertion below keeps proving refusal-before-rollback-spawn.
 import { writeFileSync } from "node:fs";
+if (process.argv[2] === "versions") {
+  console.log("[]");
+  process.exit(0);
+}
 writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.slice(2)));
 `,
     );

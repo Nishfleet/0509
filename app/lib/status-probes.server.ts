@@ -15,6 +15,11 @@ import {
 import { sendBetterAuthMagicLink } from "~/lib/better-auth.server";
 import { consultEmailSuppression } from "~/lib/delivery-email-core.server";
 import { isEmailSendingConfigured } from "~/lib/env.server";
+import {
+  EMAIL_DELIVERY_CANARY_EVERY_TICKS,
+  emailCanaryDueThisTick,
+  runEmailDeliveryProbe,
+} from "~/lib/email-delivery-canary.server";
 
 /**
  * Live synthetic probes for every public surface, run by the 5-minute
@@ -38,6 +43,7 @@ export const STATUS_PROBE_NAMES = [
   "billing_dodo",
   "provider_meta",
   "uptime",
+  "email_delivery",
 ] as const;
 
 export type StatusProbeName = (typeof STATUS_PROBE_NAMES)[number];
@@ -53,7 +59,10 @@ export const STATUS_PROBE_RETENTION_DAYS = 7;
  *   send_email binding, so it must not crowd the customer email budget;
  * - provider_meta: hourly at :25 — it drives one shallow Meta Ad Library
  *   capture through the real browser-provider chain, which costs browser
- *   minutes, so it stays clear of the :00 monitoring rails.
+ *   minutes, so it stays clear of the :00 monitoring rails;
+ * - email_delivery: every 15 minutes on the canary module's own budget —
+ *   it sends one real canary mail through the send_email binding and reads
+ *   the loop rows, so 5-minute sends would crowd the customer email budget.
  */
 const PROBE_EVERY_TICKS: Record<StatusProbeName, number> = {
   public_search: 1,
@@ -61,6 +70,11 @@ const PROBE_EVERY_TICKS: Record<StatusProbeName, number> = {
   billing_dodo: 1,
   provider_meta: 12,
   uptime: 1,
+  // Email-delivery canary (#3188): every 3rd tick = every 15 minutes. It
+  // sends real mail and must not crowd the customer email budget the way a
+  // 5-minute send would; :00/:15/:30/:45 UTC is the same cadence a */15
+  // cron would fire, without a second scheduler.
+  email_delivery: EMAIL_DELIVERY_CANARY_EVERY_TICKS,
 };
 
 const PROVIDER_META_TICK_OFFSET = 5; // UTC minute 25 within the hour
@@ -338,6 +352,11 @@ export function probeDueThisTick(probe: StatusProbeName, now: Date): boolean {
   if (probe === "provider_meta") {
     return utcMinute % 60 === PROVIDER_META_TICK_OFFSET * 5;
   }
+  if (probe === "email_delivery") {
+    // Owned by the canary module so the budget, the window arithmetic and
+    // the canary rows all agree on what "every 15 minutes" means.
+    return emailCanaryDueThisTick(now);
+  }
   return tickIndex % every === 0;
 }
 
@@ -347,6 +366,7 @@ const PROBE_RUNNERS: Record<StatusProbeName, (env: AppEnv) => Promise<{ ok: bool
   billing_dodo: runBillingDodoProbe,
   provider_meta: runProviderMetaProbe,
   uptime: runUptimeProbe,
+  email_delivery: runEmailDeliveryProbe,
 };
 
 /**

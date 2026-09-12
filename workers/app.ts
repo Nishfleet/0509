@@ -6,6 +6,10 @@ import { isBuyerSurfaceLocaleId } from "../app/lib/locale-markets";
 import { cloudflareRuntimeContext } from "../app/lib/cloudflare-context";
 import { reportScheduledTaskFailure } from "../app/lib/cron-failure-alert.server";
 import {
+	recordCanaryReceipt,
+} from "../app/lib/email-delivery-canary.server";
+import { reportError } from "../app/lib/error-report.server";
+import {
   runDemoBrandBackfill,
   runDemoBrandProofHoleCatchUp,
   summarizeDemoBrandBackfill,
@@ -78,6 +82,7 @@ import {
 } from "./schedule";
 import { withSecurityHeaders, generateCspNonce } from "./security-headers";
 import {
+  edgeCacheCopyIsStale,
   edgeCacheVersionId,
   edgeHtmlCacheStorage,
   isEdgeCacheableHtmlRequest,
@@ -409,44 +414,59 @@ export default {
     // In the Node test harness edgeHtmlCacheStorage() resolves to null and the
     // worker behaves exactly as before this issue (no stamps, no caching).
     const edgeCache = await edgeHtmlCacheStorage();
-    const cachedEdgeHtml = await matchEdgeCache(request, edgeCache, edgeCacheVersionId(env));
+    const edgeVersionId = edgeCacheVersionId(env);
+
+    // One render+store pipeline, run inline on a miss and in the background
+    // on a stale hit (#3247): serving a copy past its fresh bound instantly is
+    // the whole point of the serve-stale window, but leaving it stale would
+    // let probe-only traffic alternate MISS/HIT forever — the waitUntil'd
+    // refresh stores a fresh copy so the next anonymous visitor gets a recent
+    // document. Fail-open like every other edge-cache path: a refresh error
+    // never touches the served response.
+    const renderAndStore = async (): Promise<Response> => {
+      (globalThis as GlobalEnvCarrier).__APP_REQUEST_ENV__ = env;
+      // One per-request CSP nonce (issue #2348): the same value is threaded into
+      // the rendered HTML (via the cloudflare context → root loader → Layout)
+      // and into the CSP script-src 'nonce-…' directive (via withSecurityHeaders)
+      // so dropping 'unsafe-inline' does not break React Router hydration or the
+      // two inline boot scripts.
+      const cspNonce = generateCspNonce();
+      const routerContext = new RouterContextProvider();
+      routerContext.set(cloudflareRuntimeContext, {
+        env,
+        ctx,
+        country: request.headers.get("cf-ipcountry"),
+        cspNonce,
+      });
+      // React Router 8 answers a HEAD with a null document body (server.js
+      // ">if (request.method === "HEAD") return new Response(null, ..."), so an
+      // edge-cacheable HEAD is rendered through a GET-ified request instead: the
+      // cache then stores the FULL-BODY document, and the HEAD reply keeps only
+      // the stored copy's headers (the #2393 headOf pattern). Non-eligible
+      // requests keep their original request untouched. The nonce'd render is
+      // what storeEdgeCache receives; it returns the nonce-free variant it
+      // stored, so the first anonymous visitor and every cached visitor see the
+      // exact same document.
+      const routerRequest = isEdgeCacheableHtmlRequest(request)
+        ? new Request(request.url, { method: "GET", headers: request.headers })
+        : request;
+      const response = await requestHandler(routerRequest, routerContext);
+      return storeEdgeCache(
+        request,
+        edgeCache,
+        edgeVersionId,
+        withSecurityHeaders(withPublicContentSignal(response, request), request, cspNonce),
+      );
+    };
+
+    const cachedEdgeHtml = await matchEdgeCache(request, edgeCache, edgeVersionId);
     if (cachedEdgeHtml) {
+      if (edgeCacheCopyIsStale(cachedEdgeHtml)) {
+        ctx.waitUntil(renderAndStore().catch(() => {}));
+      }
       return cachedEdgeHtml;
     }
-
-    (globalThis as GlobalEnvCarrier).__APP_REQUEST_ENV__ = env;
-    // One per-request CSP nonce (issue #2348): the same value is threaded into
-    // the rendered HTML (via the cloudflare context → root loader → Layout)
-    // and into the CSP script-src 'nonce-…' directive (via withSecurityHeaders)
-    // so dropping 'unsafe-inline' does not break React Router hydration or the
-    // two inline boot scripts.
-    const cspNonce = generateCspNonce();
-    const routerContext = new RouterContextProvider();
-    routerContext.set(cloudflareRuntimeContext, {
-      env,
-      ctx,
-      country: request.headers.get("cf-ipcountry"),
-      cspNonce,
-    });
-    // React Router 8 answers a HEAD with a null document body (server.js
-    // ">if (request.method === "HEAD") return new Response(null, ..."), so an
-    // edge-cacheable HEAD is rendered through a GET-ified request instead: the
-    // cache then stores the FULL-BODY document, and the HEAD reply keeps only
-    // the stored copy's headers (the #2393 headOf pattern). Non-eligible
-    // requests keep their original request untouched. The nonce'd render is
-    // what storeEdgeCache receives; it returns the nonce-free variant it
-    // stored, so the first anonymous visitor and every cached visitor see the
-    // exact same document.
-    const routerRequest = isEdgeCacheableHtmlRequest(request)
-      ? new Request(request.url, { method: "GET", headers: request.headers })
-      : request;
-    const response = await requestHandler(routerRequest, routerContext);
-    return storeEdgeCache(
-      request,
-      edgeCache,
-      edgeCacheVersionId(env),
-      withSecurityHeaders(withPublicContentSignal(response, request), request, cspNonce),
-    );
+    return renderAndStore();
   },
   async scheduled(controller, env, ctx) {
     const observationContext = Object.freeze({
@@ -910,5 +930,22 @@ export default {
           }),
       ),
     );
+  },
+
+  async email(message, env, _ctx) {
+    // Email-delivery canary receive side: the zone's Email Routing rule
+    // delivers status-canary@0509.io back into this same Worker. Parse the
+    // token from the subject and complete the round-trip row. Never throw —
+    // an unhandled error tempfails the inbound mail and masks the very
+    // signal this handler exists to record.
+    try {
+      await recordCanaryReceipt(env, message);
+    } catch (error) {
+      await reportError(env, {
+        route: "email.canary.receipt",
+        reasonCode: "email_canary_receipt_handler_threw",
+        error,
+      });
+    }
   },
 } satisfies ExportedHandler<Env>;

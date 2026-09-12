@@ -277,3 +277,239 @@ describe("prepareSearchResultSelection deferCapture (issue #3014)", () => {
     expect(returned.selectedAdCapture).toBeUndefined();
   });
 });
+
+/**
+ * Issue #3244: the defer path used to skip the FIX-13 enrichment lease that
+ * the waitUntil path already held. A revalidation or concurrent submit
+ * during the 15-25s capture window would schedule a second concurrent
+ * capture of the same landing page and pay Browser Rendering twice. The
+ * defer path now claims (and releases) the same per-ad slot; on miss it
+ * short-circuits to a failure-labelled stream so the <Await> pane renders
+ * honest capture-gap copy instead of an indefinitely-pending spinner.
+ */
+describe("prepareSearchResultSelection deferCapture lease (issue #3244)", () => {
+  it("claims the per-ad lease and only schedules one Browser Rendering job across concurrent defer captures", async () => {
+    let resolveCapture: (snapshot: unknown) => void = () => {};
+    const captureLandingPageSnapshot = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          resolveCapture = resolve;
+        }),
+    );
+    mockCaptureModules({ captureLandingPageSnapshot });
+
+    const {
+      prepareSearchResultSelection,
+      resetSelectionEnrichmentInFlightForTests,
+    } = await import("~/lib/search-selection.server");
+    resetSelectionEnrichmentInFlightForTests();
+
+    const first = await prepareSearchResultSelection(
+      {} as never,
+      resultWith([{ ...baseAd }]),
+      null,
+      { hydratePersisted: false, deferCapture: true },
+    );
+
+    // The first call won the lease and started the capture.
+    expect(captureLandingPageSnapshot).toHaveBeenCalledTimes(1);
+    expect(first.selectedAdCapture).toBeDefined();
+
+    // A second concurrent defer for the same ad finds the lease held and
+    // short-circuits — no second Browser Rendering job.
+    const second = await prepareSearchResultSelection(
+      {} as never,
+      resultWith([{ ...baseAd }]),
+      null,
+      { hydratePersisted: false, deferCapture: true },
+    );
+    expect(captureLandingPageSnapshot).toHaveBeenCalledTimes(1);
+    const payload = await requireCapturePayload(second);
+    expect(payload.ad.metaAdId).toBe(baseAd.metaAdId);
+    expect(payload.landingPageCaptureFailure?.reasonCode).toBe(
+      "enrichment_in_flight",
+    );
+    expect(payload.landingPageCaptureFailure?.metadata.metaAdId).toBe(
+      baseAd.metaAdId,
+    );
+
+    // When the first capture finally settles, the lease releases and the
+    // next defer can claim it normally — no sticky claim past 90s.
+    resolveCapture({
+      rawUrl: "https://example.com/offer",
+      canonicalUrl: "https://example.com/offer",
+      rawHeadline: "Launch offer",
+      normalizedHeadline: "launch offer",
+      normalizedHeadlineHash: "hash",
+      ctaText: "Buy now",
+      priceText: null,
+      formPresent: false,
+      captureMethod: "landing_page_fetch",
+      capturedAt: new Date().toISOString(),
+      artifactKey: null,
+      metadata: {},
+    });
+    await requireCapturePayload(first);
+
+    const third = await prepareSearchResultSelection(
+      {} as never,
+      resultWith([{ ...baseAd }]),
+      null,
+      { hydratePersisted: false, deferCapture: true },
+    );
+    expect(captureLandingPageSnapshot).toHaveBeenCalledTimes(2);
+    expect(third.selectedAdCapture).toBeDefined();
+  });
+
+  it("releases the lease even when the deferred capture rejects", async () => {
+    const captureLandingPageSnapshot = vi
+      .fn()
+      .mockRejectedValue(new Error("browser isolate gone"));
+    mockCaptureModules({ captureLandingPageSnapshot });
+
+    const {
+      prepareSearchResultSelection,
+      resetSelectionEnrichmentInFlightForTests,
+    } = await import("~/lib/search-selection.server");
+    resetSelectionEnrichmentInFlightForTests();
+
+    const first = await prepareSearchResultSelection(
+      {} as never,
+      resultWith([{ ...baseAd }]),
+      null,
+      { hydratePersisted: false, deferCapture: true },
+    );
+    const firstPayload = await requireCapturePayload(first);
+    expect(firstPayload.landingPageCaptureFailure?.reasonCode).toBe(
+      "capture_stream_failed",
+    );
+
+    // The lease must release on the failure path too — otherwise a one-off
+    // browser isolate hiccup would lock the slot for ENRICHMENT_IN_FLIGHT_MS.
+    const second = await prepareSearchResultSelection(
+      {} as never,
+      resultWith([{ ...baseAd }]),
+      null,
+      { hydratePersisted: false, deferCapture: true },
+    );
+    expect(captureLandingPageSnapshot).toHaveBeenCalledTimes(2);
+    const secondPayload = await requireCapturePayload(second);
+    // The second call actually attempted the capture (the lease was
+    // released) and the failure path resolved with capture_stream_failed,
+    // NOT enrichment_in_flight.
+    expect(secondPayload.landingPageCaptureFailure?.reasonCode).toBe(
+      "capture_stream_failed",
+    );
+  });
+
+  it("defers across a waitUntil-claimed ad and never schedules a second Browser Rendering job", async () => {
+    let resolveWaitUntilCapture: (snapshot: unknown) => void = () => {};
+    const captureLandingPageSnapshot = vi.fn().mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveWaitUntilCapture = resolve;
+        }),
+    );
+    mockCaptureModules({ captureLandingPageSnapshot });
+    vi.doMock("~/lib/data.server", () => ({
+      hydrateAdsWithPersistedCreatives: vi.fn(
+        async (_env: unknown, ads: AdRecord[]) => ads,
+      ),
+      listAdsByIds: vi.fn(async () => []),
+      upsertAd: vi.fn(async () => undefined),
+    }));
+
+    const {
+      prepareSearchResultSelection,
+      resetSelectionEnrichmentInFlightForTests,
+    } = await import("~/lib/search-selection.server");
+    resetSelectionEnrichmentInFlightForTests();
+
+    // Signed-in path claims the lease via waitUntil; the capture is in
+    // flight.
+    const waitUntil = vi.fn((promise: Promise<unknown>) => {
+      void promise;
+    });
+    const signedIn = await prepareSearchResultSelection(
+      { DB: {} } as never,
+      resultWith([{ ...baseAd }]),
+      "meta-boat-1",
+      { waitUntil, hydratePersisted: true },
+    );
+    expect(signedIn.selectionEnrichmentPending).toBe(true);
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+    expect(captureLandingPageSnapshot).toHaveBeenCalledTimes(1);
+
+    // An anonymous defer for the same ad finds the lease already held by
+    // the signed-in waitUntil and short-circuits — no second job.
+    const anonymous = await prepareSearchResultSelection(
+      {} as never,
+      resultWith([{ ...baseAd }]),
+      null,
+      { hydratePersisted: false, deferCapture: true },
+    );
+    expect(captureLandingPageSnapshot).toHaveBeenCalledTimes(1);
+    const payload = await requireCapturePayload(anonymous);
+    expect(payload.landingPageCaptureFailure?.reasonCode).toBe(
+      "enrichment_in_flight",
+    );
+
+    // Drain the in-flight waitUntil capture so the test fixture can exit.
+    resolveWaitUntilCapture(null);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  it("a defer-claimed lease blocks the waitUntil path from scheduling a second capture", async () => {
+    let resolveDeferCapture: (snapshot: unknown) => void = () => {};
+    const captureLandingPageSnapshot = vi.fn().mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveDeferCapture = resolve;
+        }),
+    );
+    mockCaptureModules({ captureLandingPageSnapshot });
+    vi.doMock("~/lib/data.server", () => ({
+      hydrateAdsWithPersistedCreatives: vi.fn(
+        async (_env: unknown, ads: AdRecord[]) => ads,
+      ),
+      listAdsByIds: vi.fn(async () => []),
+      upsertAd: vi.fn(async () => undefined),
+    }));
+
+    const {
+      prepareSearchResultSelection,
+      resetSelectionEnrichmentInFlightForTests,
+    } = await import("~/lib/search-selection.server");
+    resetSelectionEnrichmentInFlightForTests();
+
+    // An anonymous defer claims the lease and starts the capture.
+    const waitUntil = vi.fn((promise: Promise<unknown>) => {
+      void promise;
+    });
+    const anonymous = await prepareSearchResultSelection(
+      {} as never,
+      resultWith([{ ...baseAd }]),
+      null,
+      { hydratePersisted: false, deferCapture: true },
+    );
+    expect(anonymous.selectedAdCapture).toBeDefined();
+    expect(captureLandingPageSnapshot).toHaveBeenCalledTimes(1);
+
+    // A signed-in revalidation (waitUntil path) for the same ad finds the
+    // lease already held by the defer and does NOT schedule a second
+    // Browser Rendering job — this is the canonical #3244 scenario.
+    const signedIn = await prepareSearchResultSelection(
+      { DB: {} } as never,
+      resultWith([{ ...baseAd }]),
+      "meta-boat-1",
+      { waitUntil, hydratePersisted: true },
+    );
+    expect(captureLandingPageSnapshot).toHaveBeenCalledTimes(1);
+    expect(waitUntil).not.toHaveBeenCalled();
+    expect(signedIn.selectionEnrichmentPending).toBe(true);
+
+    // Drain the in-flight defer capture so the test fixture can exit.
+    resolveDeferCapture(null);
+    await requireCapturePayload(anonymous);
+  });
+});

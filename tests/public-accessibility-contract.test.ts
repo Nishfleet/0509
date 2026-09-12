@@ -72,4 +72,14 @@ describe("public accessibility source contract", () => {
       /\.ld-rec \{\s*color: var\(--ld-red\);\s*font-weight: 600;\s*display: inline;/,
     );
   });
+
+  it("keeps join secondary copy muted above the auth-card paragraph reskin (#3173)", () => {
+    expect(css).toMatch(
+      /\.f9-auth-page \.f9-auth-card \.f9-join-card p \{\s*color: var\(--ld-ink-soft\);/,
+    );
+    // The competing reskin rule must stay at (0,2,1) or the join rule loses.
+    expect(css).toMatch(
+      /\.f9-auth-page \.f9-auth-card p \{\s*color: var\(--ld-ink\);\s*\}/,
+    );
+  });
 });

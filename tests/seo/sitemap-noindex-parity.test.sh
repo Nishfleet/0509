@@ -62,11 +62,16 @@ for url in "${ads_urls[@]:0:${MAX_SAMPLE}}"; do
 done
 
 if [ "$failures" -gt 0 ]; then
-  echo "seo-parity: FAIL — ${failures} sitemap /ads URL(s) serve noindex" >&2
-  exit 1
+  echo "seo-parity: FAIL — ${failures} sitemap /ads URL(s) failed the indexable check (non-2xx/empty body/noindex)" >&2
 fi
 
 # 2. Fixture-vs-live drift alarm (issue #3229).
+#
+# Sections in this script ACCUMULATE failures and exit once at the end —
+# never bail early. A hard failure in the noindex loop above (e.g. live
+# 429s, as seen 2026-09-12 when the sitemap grew past the rate limit) must
+# not mask the drift gate: drift is exactly what accumulates while another
+# section is red.
 #
 # The /brands and /sneaker-resale coverage tests pin the cluster's live,
 # indexable /ads/ domains to a hand-updated snapshot
@@ -91,16 +96,22 @@ fi
 # fail on unrelated non-cluster /ads domains the product publishes.
 
 drift_failures=0
-# Force byte-order collation for every sort/comm in this section: under
-# en_US.UTF-8, `sort` orders saucony.com before saucony.co.uk while comm's
-# comparison disagrees, so the set diff silently corrupts and reports live
-# fixture domains as "missing". LC_ALL=C makes sort and comm agree.
+# Force byte-order collation for every sort/comm in this section: sort's
+# last-resort tie-breaking and comm's strcoll comparison can disagree under
+# a UTF-8 locale (e.g. on saucony.co.uk vs saucony.com), silently corrupting
+# the set diff. LC_ALL=C makes sort and comm agree, on any runner.
 LC_ALL=C
 export LC_ALL
-fixture_domains=$(jq -r '.domains[]' tests/fixtures/sneaker-resale-indexable-domains.snapshot.json 2>/dev/null | tr 'A-Z' 'a-z' | sed 's#^www\.##' | sort)
-seed_domains=$(jq -r '.domains[].domain' data/seed-lists/sneaker-resale.json 2>/dev/null | tr 'A-Z' 'a-z' | sed 's#^www\.##' | sort)
-
-seed_domains=$(jq -r '.domains[].domain' data/seed-lists/sneaker-resale.json 2>/dev/null | tr 'A-Z' 'a-z' | sed 's#^www\.##' | sort)
+# `|| true` inside the substitution: a missing/malformed fixture or seed list
+# must reach the fail-closed branch below (drift_failures=1, sections keep
+# running) — under `set -euo pipefail` a failing jq would otherwise abort the
+# script silently before the message and skip the remaining sections.
+fixture_raw="$(jq -r '.domains[]' tests/fixtures/sneaker-resale-indexable-domains.snapshot.json 2>/dev/null || true)"
+seed_raw="$(jq -r '.domains[].domain' data/seed-lists/sneaker-resale.json 2>/dev/null || true)"
+# sort -u everywhere: comm treats an unpaired duplicate as a set difference,
+# so a duplicated sitemap <loc> would page a false drift alarm.
+fixture_domains="$(printf '%s\n' "$fixture_raw" | tr 'A-Z' 'a-z' | sed 's#^www\.##' | sort -u)"
+seed_domains="$(printf '%s\n' "$seed_raw" | tr 'A-Z' 'a-z' | sed 's#^www\.##' | sort -u)"
 
 if [ -z "$fixture_domains" ] || [ -z "$seed_domains" ]; then
   echo "seo-parity: FAIL — could not read the sitemap snapshot fixture or the sneaker-resale seed list; drift gate blind, failing closed" >&2
@@ -111,13 +122,13 @@ else
   # (lowercase, www. stripped).
   live_cluster="$(printf '%s\n' "${ads_urls[@]}" \
     | sed -E 's#https://0509\.io/ads/##; s#/.*##' \
-    | tr 'A-Z' 'a-z' | sed 's#^www\.##' | sort \
+    | tr 'A-Z' 'a-z' | sed 's#^www\.##' | sort -u \
     | comm -12 - <(printf '%s\n' "$seed_domains"))"
   missing_from_fixture="$(printf '%s\n' "$live_cluster" | comm -23 - <(printf '%s\n' "$fixture_domains"))" # in live (file1) but NOT in fixture (suppress col2+col3)
-  stale_in_fixture="$(printf '%s\n' "$fixture_domains" | comm -23 - <(printf '%s\n' "${ads_urls[@]}" | sed -E 's#https://0509\.io/ads/##; s#/.*##' | tr 'A-Z' 'a-z' | sed 's#^www\.##' | sort))" # in fixture (file1) but NOT live (col1 only)
+  stale_in_fixture="$(printf '%s\n' "$fixture_domains" | comm -23 - <(printf '%s\n' "${ads_urls[@]}" | sed -E 's#https://0509\.io/ads/##; s#/.*##' | tr 'A-Z' 'a-z' | sed 's#^www\.##' | sort -u))" # in fixture (file1) but NOT live (col1 only)
 
   if [ -n "$missing_from_fixture" ]; then
-    echo "seo-parity: FAIL — sneaker-resale cluster drift: these seed-list domains are LIVE and indexable in the production sitemap but missing from tests/fixtures/sneaker-resale-indexable-domains.snapshot.json (silent /brands 'More brands' + hub-array omission):" >&2
+    echo "seo-parity: FAIL — sneaker-resale cluster drift: these seed-list domains are listed in the production sitemap (indexability itself is asserted by the section above) but missing from tests/fixtures/sneaker-resale-indexable-domains.snapshot.json (silent /brands 'More brands' + hub-array omission):" >&2
     printf 'seo-parity:   %s\n' $missing_from_fixture >&2
     echo "seo-parity:       -> refresh the snapshot fixture AND SNEAKER_RESALE_BRAND_PAGES (app/components/sneaker-resale-landing.tsx) together." >&2
     drift_failures=$((drift_failures + 1))
@@ -135,7 +146,6 @@ fi
 
 if [ "$drift_failures" -gt 0 ]; then
   echo "seo-parity: FAIL — ${drift_failures} snapshot-fixture drift finding(s)" >&2
-  exit 1
 fi
 
 # 3. Live-prod check for the BET 8 MagicBrief wind-down surface (issue #3111).
@@ -176,6 +186,11 @@ fi
 
 if [ "$magicbrief_failures" -gt 0 ]; then
   echo "seo-parity: FAIL — ${magicbrief_failures} MagicBrief wind-down check(s) failed" >&2
+fi
+
+total_failures=$((failures + drift_failures + magicbrief_failures))
+if [ "$total_failures" -gt 0 ]; then
+  echo "seo-parity: FAIL — ${total_failures} finding(s): ${failures} indexable-check, ${drift_failures} fixture-drift, ${magicbrief_failures} magicbrief" >&2
   exit 1
 fi
 

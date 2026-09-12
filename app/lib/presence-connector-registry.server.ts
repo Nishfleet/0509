@@ -1,3 +1,4 @@
+import { gdeltConnector } from "~/lib/presence-connectors/gdelt.server";
 import { linkedinConnector } from "~/lib/presence-connectors/linkedin.server";
 import { blueskyConnector } from "~/lib/presence-connectors/bluesky.server";
 import { redditConnector } from "~/lib/presence-connectors/reddit.server";
@@ -22,6 +23,7 @@ const CONNECTORS = {
   linkedin: linkedinConnector,
   rss: rssConnector,
   bluesky: blueskyConnector,
+  gdelt: gdeltConnector,
 } as const;
 
 export function getPresenceConnector(connectorId: PresenceConnectorId) {
@@ -89,6 +91,9 @@ export async function pollPresenceTarget(
   if (target.connectorId === "rss") {
     return rssConnector.poll(ctx, target, options.cursor);
   }
+  if (target.connectorId === "gdelt") {
+    return gdeltConnector.poll(ctx, target as Parameters<typeof gdeltConnector.poll>[1]);
+  }
   if (target.connectorId === "x") {
     return xConnector.poll(ctx);
   }
@@ -116,6 +121,9 @@ export function coverageLabelForConnector(
   }
   if (connectorId === "rss") {
     return "VERIFIED_PUBLIC_FEED" as const;
+  }
+  if (connectorId === "gdelt") {
+    return "OFFICIAL_PUBLIC_API" as const;
   }
   if (connectorId === "linkedin" && trackingMode === "competitor") {
     return "LIMITED_COVERAGE" as const;

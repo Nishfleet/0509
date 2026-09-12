@@ -23,6 +23,7 @@ const SOURCE_LABELS: Record<PresenceSourceId, string> = {
   linkedin: "LinkedIn",
   rss: "RSS / Atom / JSON Feed",
   bluesky: "Bluesky",
+  gdelt: "GDELT mainstream news",
   youtube: "YouTube",
   amazon: "Amazon marketplace",
   context_dev: "Context.dev (open-web provider)",
@@ -45,6 +46,7 @@ const CONNECTOR_FOR_SOURCE: Partial<Record<PresenceSourceId, PresenceConnectorId
   linkedin: "linkedin",
   rss: "rss",
   bluesky: "bluesky",
+  gdelt: "gdelt",
 };
 
 const SOCIAL_SOURCE_IDS = new Set<PresenceSourceId>(["x", "reddit", "linkedin", "bluesky"]);
@@ -92,7 +94,9 @@ function statusFromConnectorGate(
         ? "PUBLIC_WEB_BEST_EFFORT"
         : sourceId === "rss"
           ? "VERIFIED_PUBLIC_FEED"
-          : sourceId === "linkedin" && trackingMode === "competitor"
+          : sourceId === "gdelt"
+            ? "OFFICIAL_PUBLIC_API"
+            : sourceId === "linkedin" && trackingMode === "competitor"
             ? "LIMITED_COVERAGE"
             : sourceId === "x" || sourceId === "reddit"
               ? trackingMode === "self"
@@ -424,6 +428,12 @@ export function presenceSourceCoverageForDocs(): Array<{
       label: SOURCE_LABELS.bluesky,
       productionStatus: "gated",
       notes: "Bluesky mention connector wired in (app.bsky.feed.searchPosts, $0). Gated behind PRESENCE_BLUESKY_ROLLOUT — off by default; activation is a separate rollout decision.",
+    },
+    {
+      sourceId: "gdelt",
+      label: SOURCE_LABELS.gdelt,
+      productionStatus: "gated",
+      notes: "GDELT DOC 2.1 mainstream-news connector wired in (free, no key, ~65 languages, rolling 3-month window). Gated behind PRESENCE_GDELT_ROLLOUT — off by default; activation is a separate rollout decision.",
     },
     {
       sourceId: "youtube",

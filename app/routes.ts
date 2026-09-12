@@ -26,6 +26,7 @@ export default [
   route("pricing", "routes/pricing.tsx"),
   route("unsubscribe", "routes/unsubscribe.tsx"),
   route("auth/login", "routes/auth.login.tsx"),
+  route("join", "routes/join.tsx"),
   route("auth/signup", "routes/auth.signup.tsx"),
   route("login", "routes/auth.login-alias.ts"),
   route("signup", "routes/auth.signup-alias.ts"),
