@@ -215,7 +215,8 @@ export function classifyProbeResponse(response) {
   return { ok: true, reason: "ok", detail: `HTTP 200 (${body.length} bytes)` };
 }
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = /** @param {number} ms */ (ms) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Probe one URL: GET with redirect:"manual" (an advertised URL must be the
@@ -248,7 +249,7 @@ export async function probeUrl(url, options = {}) {
       const retriable =
         !verdict.ok && (res.status === 429 || res.status >= 500);
       if (retriable && attempt === 0) continue;
-      return { url, ok: verdict.ok, status: res.status, ...verdict };
+      return { url, status: res.status, ...verdict };
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
     }
@@ -516,6 +517,7 @@ async function main() {
     // names both). Fixture mode probes llms only when --llms-input is given;
     // live mode always fetches it — an unreachable llms.txt is itself an
     // advertised-surface failure, recorded directly as a divergence.
+    /** @type {string[]} */
     let llmsUrls = [];
     try {
       const llms =
