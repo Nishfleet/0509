@@ -61,6 +61,7 @@ import {
   type ReleaseScheduledTaskName,
 } from "../app/lib/release-scheduled-observation.server";
 import { runRetentionSweep } from "../app/lib/retention.server";
+import { runStatusProbes } from "../app/lib/status-probes.server";
 import {
   recordScheduledObservationGapCheckHeartbeat,
   sendScheduledObservationGapAlert,
@@ -72,6 +73,7 @@ import { scheduleDigestScheduleExhaustionRecovery } from "./digest-schedule-reco
 import { primaryDomainRedirect } from "./primary-domain";
 import {
   resolveScheduledTask,
+  STATUS_PROBES_CRON,
   WEEKLY_DIGEST_CRON,
 } from "./schedule";
 import { withSecurityHeaders, generateCspNonce } from "./security-headers";
@@ -522,6 +524,23 @@ export default {
           );
           return null;
         }),
+      );
+      return;
+    }
+
+    if (controller.cron === STATUS_PROBES_CRON) {
+      // Live status probes (migration 0097): every 5 minutes, sample the
+      // public surfaces the /status page reports. Early-returned like the
+      // gap check so the cron can never fall through into the default
+      // monitoring tick — resolveScheduledTask pins it to its own kind, and
+      // the probe cron stays outside the four-cron soak contract on purpose
+      // (its liveness evidence is the samples table itself, not the soak
+      // observation rows).
+      scheduleBillingLifecycleEmailRecovery(env, ctx);
+      ctx.waitUntil(
+        runStatusProbes(env).catch((error) =>
+          reportScheduledTaskFailure(env, "status_probes", error),
+        ),
       );
       return;
     }
