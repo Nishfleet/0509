@@ -1,6 +1,6 @@
 {
   "cluster": "sneaker-resale",
-  "capturedAt": "2026-09-06",
+  "capturedAt": "2026-09-12",
   "source": "https://0509.io/sitemap.xml",
   "note": "Snapshots the sneaker-resale cluster domains whose /ads/:domain page is live and indexable in the production sitemap today. Used by tests/sneaker-resale-hub-links.test.ts as the sitemap reference so the hub array cannot go stale as the cluster scales. Update ONLY when the production sitemap genuinely adds a live, indexable cluster /ads/ page.",
   "domains": [
@@ -21,6 +21,10 @@
     "stadiumgoods.com",
     "flightclub.com",
     "kickscrew.com",
+    "goat.com",
+    "on.com",
+    "reebok.com",
+    "saucony.co.uk",
     "jdsports.com",
     "finishline.com",
     "asos.com",
