@@ -1982,6 +1982,7 @@ describe("launch readiness canary route", () => {
       gateRunId: "gate-c-worker-v1",
       runId: "run-1",
       detail: "Error: d1 rejected: UNIQUE constraint",
+      reason: "d1-rejected-unique-constraint",
     });
   });
 
@@ -2030,6 +2031,7 @@ describe("launch readiness canary route", () => {
       runId: "run-1",
       proofCaptureId: "proof-1",
       detail: "Error: d1 outage mid-event",
+      reason: "d1-outage-mid-event",
     });
   });
 
@@ -2081,7 +2083,60 @@ describe("launch readiness canary route", () => {
       proofCaptureId: "proof-1",
       digestRunId: "digest-1",
       detail: "Error: email binding timeout",
+      // #3190: the 503 now names the thrown error, sanitized — the 08:05Z run
+      // (34679399412) journaled only the blocker while the real fault (this
+      // thrown message, from inside deliverWeeklyDigest) stayed in Workers Logs.
+      reason: "email-binding-timeout",
     });
+  });
+
+  it("sanitizes the caught deliverWeeklyDigest error into the 503 reason (issue #3190, 08:05Z class)", async () => {
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DB: createDbWithTarget(),
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
+      finishWatchlistRun: vi.fn().mockResolvedValue(undefined),
+      upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-1" }),
+      createProofCapture: vi.fn().mockResolvedValue("proof-1"),
+      createWatchEvent: vi.fn().mockResolvedValue("event-1"),
+      createDigestRun: vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true }),
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({
+      // The literal production suspect: Gate C's unique-target proofEmail
+      // resolution throws inside deliverWeeklyDigest after digestRunId binds.
+      deliverWeeklyDigest: vi.fn().mockRejectedValue(
+        new Error("Gate C proof email target must resolve uniquely. (attempt 2/3)"),
+      ),
+    }));
+    vi.doMock("~/lib/proof-artifact-retention.server", () => ({
+      compensateUncommittedProofArtifacts: vi.fn().mockResolvedValue({ ok: true }),
+    }));
+    mockLandingPageCapture();
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    const response = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/api/launch-readiness/canary", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-0509-canary-token": "secret-token",
+        },
+        body: JSON.stringify({ gateRunId: "gate-c-worker-v1" }),
+      }),
+    } as never);
+
+    expect(response.status).toBe(503);
+    const payload = (await response.json()) as { reason: string; digestRunId: string };
+    expect(payload.reason).toBe("gate-c-proof-email-target-must-resolve-uniquely.-attempt-2-3");
+    // Identifier-safe, verifier-journalable: lowercase, 1-128, [a-z0-9._-].
+    expect(payload.reason).toMatch(/^[a-z0-9._-]{1,128}$/u);
+    expect(payload.digestRunId).toBe("digest-1");
   });
 
   it("re-throws a thrown Response object so existing early-return blockers stay first-class (#3146)", async () => {

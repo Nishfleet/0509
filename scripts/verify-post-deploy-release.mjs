@@ -123,7 +123,7 @@ const RELEASE_COMPATIBLE_EMAIL_BLOCKERS = Object.freeze([
  *   backupLifecycleSummary?: unknown,
  *   backupProofStatus?: "required" | "deferred",
  *   backupProofDisposition?: Record<string, unknown>,
- *   proofDiagnostics?: { blocker?: string, blockers?: string[], httpStatus?: number, bodyKind?: string, detail?: string, delivery?: { attempts?: number, channels?: string[], details?: Array<{ channel?: string, status?: string, webhookStatus?: string }> }, proofEmailEvidence?: Record<string, string | boolean> },
+ *   proofDiagnostics?: { blocker?: string, reason?: string, blockers?: string[], httpStatus?: number, bodyKind?: string, detail?: string, delivery?: { attempts?: number, channels?: string[], details?: Array<{ channel?: string, status?: string, webhookStatus?: string }> }, proofEmailEvidence?: Record<string, string | boolean> },
  *   completedAt?: string,
  *   ownerPid?: number
  * }} GateJournal
@@ -499,6 +499,13 @@ export function sanitizeProofDiagnostics(payload, response) {
   // route field at all, so the 503's own reason was invisible in evidence.
   if (typeof source.blocker === "string" && DIAGNOSTIC_IDENTIFIER_PATTERN.test(source.blocker)) {
     diagnostics.blocker = source.blocker;
+  }
+  // The canary's 503 catch (#3146) now carries a sanitized identifier-safe
+  // `reason` (app/routes/api.launch-readiness.canary.ts) naming the thrown
+  // error — the 08:05Z run (34679399412) had only `canary_proof_pipeline_failed`
+  // and the underlying deliverWeeklyDigest fault stayed in Workers Logs.
+  if (typeof source.reason === "string" && DIAGNOSTIC_IDENTIFIER_PATTERN.test(source.reason)) {
+    diagnostics.reason = source.reason;
   }
   if (Array.isArray(source.blockers)) {
     const blockers = source.blockers.filter(

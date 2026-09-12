@@ -788,6 +788,16 @@ export async function action({ context, request }: ActionFunctionArgs) {
     } catch {
       // the sink must never mask the original failure
     }
+    // #3190: the 08:05Z run (34679399412) proved the remaining diagnostic
+    // gap: the throw (inside deliverWeeklyDigest) lives only in Workers
+    // Logs. Carry a sanitized identifier-safe reason in the 503 body so the
+    // verifier journals it (proofDiagnostics.reason) and the next red run
+    // names the failing layer without log archaeology. A thrown non-Error
+    // (the only survivor besides Response) still yields its stringification —
+    // the same contract as the console.error above (review, PR #3245).
+    const reason = sanitizeCanaryFailureReason(
+      error instanceof Error ? error.message : String(error),
+    );
     return Response.json(
       {
         ok: false,
@@ -797,6 +807,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         ...(runId !== undefined ? { runId } : {}),
         ...(proofCaptureId !== undefined ? { proofCaptureId } : {}),
         ...(digestRunId !== undefined ? { digestRunId } : {}),
+        ...(reason ? { reason } : {}),
       },
       {
         status: 503,
@@ -902,6 +913,27 @@ async function hasReconciledWhatsAppDelivery(
   } catch {
     return false;
   }
+}
+
+/** Matches the verifier's DIAGNOSTIC_IDENTIFIER_PATTERN — lowercase, 1-128. */
+const CANARY_REASON_PATTERN = /^[a-z0-9._-]{1,128}$/u;
+
+/**
+ * Project a thrown error's message into an identifier-safe reason the proof
+ * verifier can journal verbatim. Spaces/runs collapse to `-`; anything the
+ * verifier would drop stays out, so the 503 body never leaks addresses or
+ * tokens. Empty string means "no trustworthy reason — omit the field".
+ */
+export function sanitizeCanaryFailureReason(value: string): string {
+  // Sanitize → truncate → strip, so a >128-char nested message truncates to a
+  // clean tail instead of a dangling `-` (review, PR #3245).
+  const sanitized = value
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+/, "")
+    .slice(0, 128)
+    .replace(/-+$/g, "");
+  return CANARY_REASON_PATTERN.test(sanitized) ? sanitized : "";
 }
 
 function cleanupErrorResponse(blocker: string, status: number) {
