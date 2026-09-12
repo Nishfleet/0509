@@ -24,7 +24,7 @@ describe("public documentation routes", () => {
     expect(markup).toContain("No recurring checks or briefs, no Collections");
     expect(markup).toContain("Use Five to Nine from Claude, ChatGPT, and AI agents");
     expect(markup).toContain("https://0509.io/api/mcp");
-    expect(markup).toContain("read-only API and MCP access are available on Free and Scout");
+    expect(markup).toContain("read-only API and MCP access are available on Scout");
     expect(markup).toContain("Starter plan scope: daily briefs, urgent alerts, evidence capture, and exports");
     expect(markup).toContain("Agency plan scope: client reports, share links, PDF delivery, branding, full API/MCP agent actions, and team seats");
     expect(markup).toContain("Live service health is measured continuously on the Status page");
@@ -95,7 +95,7 @@ describe("public documentation routes", () => {
 
     expect(markup).toContain("Account actions");
     expect(markup).toContain("Developer access");
-    expect(markup).toContain("Read-only API and connected-tool access is available on Free and Scout");
+    expect(markup).toContain("Read-only API and connected-tool access is available on Scout");
     expect(markup).toContain("Connected tools");
     expect(markup).toContain("same bearer token");
     expect(markup).toContain("POST /api/mcp");

@@ -128,7 +128,7 @@ Authorization: Bearer f9_live_...`}</code>
           </li>
         </ul>
         <p>
-          Honest boundary: read-only API and MCP access are available on Free and Scout; write
+          Honest boundary: read-only API and MCP access are available on Scout; write
           scopes and exports require Starter or above, and full agent actions require Agency.
           Read-only keys cover readiness and saved evidence; write-enabled keys unlock only the
           documented approved actions — see <Link to="/api/docs">API docs</Link> for endpoints and

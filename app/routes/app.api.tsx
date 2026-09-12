@@ -88,7 +88,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         return {
           ok: false,
 					intent,
-          message: "Write-enabled API keys require the Starter plan or above. Read-only keys are available on Free and Scout.",
+          message: "Write-enabled API keys require the Starter plan or above. Read-only keys are available on Scout.",
         };
       }
     }

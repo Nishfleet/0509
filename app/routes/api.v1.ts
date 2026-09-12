@@ -13,7 +13,7 @@ import {
 import { isSlackDeliveryCustomerFacing } from "~/lib/ga-customer-surface";
 
 const API_PLAN_REQUIREMENT = "Agency";
-const READ_API_PLAN_REQUIREMENT = "Free + Scout";
+const READ_API_PLAN_REQUIREMENT = "Scout";
 
 function customerExportFormats() {
   return isSlackDeliveryCustomerFacing() ? ["json", "csv", "slack"] : ["json", "csv"];
@@ -33,7 +33,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     {
       name: "Five to Nine Customer API",
       status: "live",
-      planRequirement: "Read-only endpoints on Free + Scout; write and account-mutation on Starter/Agency",
+      planRequirement: "Read-only endpoints on Scout; write and account-mutation on Starter/Agency",
       auth: {
         type: "bearer",
         header: "Authorization: Bearer <Five to Nine API key>",
@@ -44,7 +44,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           method: "POST",
           path: "/api/mcp",
           formats: ["mcp-json-rpc"],
-          planRequirement: "Read-only tools on Free + Scout; write tools on Agency",
+          planRequirement: "Read-only tools on Scout; write tools on Agency",
           requiresWriteEnabled: false,
           credentialRequirement:
             `Read-only tools: ${READ_ONLY_API_KEY_REQUIREMENT} Account action tools: ${WRITE_ENABLED_API_KEY_REQUIREMENT}`,
