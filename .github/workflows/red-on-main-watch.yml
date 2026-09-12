@@ -26,7 +26,8 @@ concurrency:
 jobs:
   detect:
     name: Detect red on main
-    uses: Nishfleet/fleet-ops/.github/workflows/red-on-main-detector.yml@main
+    uses: Nishfleet/fleet-ops/.github/workflows/red-on-main-detector.yml@d4ace98c8fc22a4472625dda62a7424433d11c3a
+    # main @ 2026-09-12
     permissions:
       actions: read
       contents: read
