@@ -56,22 +56,18 @@ describe("duplicate migration prefix check", () => {
     expect(offenders.get("0067")).toEqual(["0067_a.sql", "0067_b.sql"].sort());
   });
 
-  it("every legacy duplicate prefix group is recorded verbatim in the production ledger baseline (0067) so renaming stays impossible", () => {
-    // The 0067 pair is fully covered by the append-only production baseline;
-    // 0087/0090 landed after the 2026-07-30 baseline capture and are frozen
-    // via the explicit allowlist instead.
-    for (const prefix of LEGACY_DUPLICATE_PREFIX_ALLOWLIST) {
-      const filesInProd = PRODUCTION_MIGRATION_LEDGER_BASELINE.filter((name) =>
-        name.startsWith(`${prefix}_`),
-      );
-      // Either the production ledger baseline holds the pair verbatim (0067)
-      // or the duplicates applied after the capture (0087/0090) and only the
-      // allowlist documents them.
-      expect(
-        filesInProd.length === 2 ||
-          LEGACY_DUPLICATE_PREFIX_ALLOWLIST.has(prefix),
-      ).toBe(true);
-    }
+  it("the 0067 legacy pair is recorded verbatim in the production ledger baseline so renaming stays impossible", () => {
+    // 0067 is fully covered by the append-only production baseline captured
+    // 2026-07-30; 0087/0090 applied after the capture and are frozen via the
+    // explicit allowlist, so only 0067 has a ledger-provable pair to assert.
+    const filesInProd = PRODUCTION_MIGRATION_LEDGER_BASELINE.filter((name) =>
+      name.startsWith("0067_"),
+    );
+    expect(filesInProd.length).toBe(2);
+    expect(filesInProd.sort()).toEqual([
+      "0067_delivery_recovery_and_digest_jobs.sql",
+      "0067_workspace_member_invariants.sql",
+    ]);
   });
 
   it("the real migrations directory passes the gate: every surviving duplicate is a frozen legacy prefix", () => {
