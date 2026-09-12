@@ -343,7 +343,7 @@ async function signSearchCompetitorHandoff(
   });
 }
 
-export async function loader({ context, request }: LoaderFunctionArgs) {
+export async function loader({ context, request, params }: LoaderFunctionArgs) {
   const { getOptionalSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { listCollections } = await import("~/lib/data.server");
@@ -365,6 +365,27 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   ).resolveE2ELocalSearchContext(requestEnv, request);
   const env = e2eSearch.env;
   const session = await getOptionalSession(env, request);
+  const url = new URL(request.url);
+  // Issue #2965: bare /search used to render a 200 empty-q page and was
+  // advertised in sitemap.xml, so crawlers hit an indexable empty funnel
+  // page for every external link to it. Anonymous bare /search now 302s to
+  // /brands (the indexable hub) — the buyer-surface locale twins
+  // (/{locale}/search re-exports this loader) and the `.data` variants
+  // too, so an anonymous client-side nav behaves like a fresh load.
+  // Signed-in visitors keep the search UI — the dashboard/set-up-checklist
+  // funnels still link to bare /search — and crawlers are never signed
+  // in, so the SEO posture is preserved. The :locale layout already 404s
+  // unknown locales before this loader runs, so params.locale is always a
+  // real buyer-surface locale here.
+  const bareSearchPath =
+    url.pathname === "/search" ||
+    url.pathname === "/search.data" ||
+    (typeof params?.locale === "string" &&
+      (url.pathname === `/${params.locale}/search` ||
+        url.pathname === `/${params.locale}/search.data`));
+  if (!session && url.searchParams.size === 0 && bareSearchPath) {
+    return redirect("/brands", { status: 302 });
+  }
   const workspaceUserId = session
     ? (
         await (
@@ -379,7 +400,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         ).presenceNavVisible(env, workspaceUserId!),
       }
     : { showPresenceNav: false };
-  const url = new URL(request.url);
   // Anonymous per-browser search identity (issue #1972 phase 1): a fresh
   // no-cookie browser gets a brand-new id that is passed to the limiter AND,
   // when the search succeeds, persisted via Set-Cookie so the browser keeps

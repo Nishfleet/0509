@@ -45,6 +45,9 @@ const cloudflareInspectorPort = resolveLocalReleaseCloudflareInspectorPort();
 // Only read them under vitest: `npm run dev`, `build` and `preview` must not
 // pay for 70+ file reads they never use.
 const INTEGRATION_TEST_GLOB = "tests/integration/**/*.integration.test.ts";
+// `node --test`-runnable issue gates (issue #3015): they drive vitest as a
+// subprocess and must not be collected INTO the vitest run as well.
+const NODE_RUNNER_GATE_GLOB = "tests/e2e/**/*.test.ts";
 
 export default defineConfig(async ({ mode }) => ({
   plugins:
@@ -151,7 +154,7 @@ export default defineConfig(async ({ mode }) => ({
           include: ["tests/**/*.test.ts", "tests/**/*.test.tsx", "tests/integration/pricing.spec.ts"],
           // Integration suites belong to the `workers` project below; running
           // them on node would silently skip the real runtime.
-          exclude: [INTEGRATION_TEST_GLOB],
+          exclude: [INTEGRATION_TEST_GLOB, NODE_RUNNER_GATE_GLOB],
           testTimeout: 10_000,
         },
       },

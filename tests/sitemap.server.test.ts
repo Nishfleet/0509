@@ -727,7 +727,10 @@ describe("buildSitemapXml", () => {
     ]);
 
     expect(xml).toContain("<loc>https://0509.io/</loc>");
-    expect(xml).toContain("<loc>https://0509.io/search</loc>");
+    // Issue #2965: /search is deliberately NOT in the sitemap — parameterised
+    // /search?q= serves `x-robots-tag: noindex` at the worker edge and bare
+    // /search 302s to /brands, so it must never be advertised as indexable.
+    expect(xml).not.toContain("<loc>https://0509.io/search</loc>");
     expect(xml).toContain("<loc>https://0509.io/ads/nykaa.com</loc>");
     expect(xml).toContain("<loc>https://0509.io/ads/meesho.com</loc>");
     // Brand entries carry lastmod.
@@ -1683,11 +1686,19 @@ describe("locale sitemap feed count matches the buyer-surface derivation (issue 
     // Issue #2294 accept: the locale feed is derived from BUYER_SURFACE_PATHS
     // + compare/switch children + the /guides/* cluster (the single source of
     // truth), not from filtering the static list. The bare index and
-    // /sitemap.xml are excluded — neither is a real page.
+    // /sitemap.xml are excluded — neither is a real page. Counts shown as:
+    // BUYER_SURFACE_PATHS (minus bare / and /sitemap.xml) + children
+    // + 6 for the /guides/* cluster: track-competitor-ads (issue #2152),
+    // monitor-meta-ad-library (issue #2867), monitor-competitor-landing-
+    // page-changes (issue #2888), and the #3093 trio (offer-change alert,
+    // prove-what-changed, standing watch); -1: /methodology locale twins
+    // stay OUT of the locale sitemaps (issue #2871/#1570 duplicate-content
+    // policy); -1: /search (issue #2965) — noindex at the edge, out of
+    // every sitemap.
     const derivedCount =
       BUYER_SURFACE_PATHS.filter((p) => p !== "/" && p !== "/sitemap.xml").length +
       BUYER_SURFACE_CHILD_PATHS.length +
-      6 - 1; // /guides/* six: track-competitor-ads + monitor-meta-ad-library (issue #2867) + monitor-competitor-landing-page-changes (issue #2888) + the #3093 trio (offer-change alert, prove-what-changed, standing watch); -1: /methodology locale twins stay OUT of the locale sitemaps (issue #2871/#1570 duplicate-content policy)
+      6 - 1 - 1;
     for (const locale of BUYER_SURFACE_LOCALE_IDS) {
       const entries = staticSitemapEntriesForLocale(locale);
       const body = buildLocaleSitemapXml(locale);
@@ -1740,7 +1751,11 @@ describe("locale sitemap feed count matches the buyer-surface derivation (issue 
           p !== "/sitemap.xml" &&
           // /methodology is a 301 to the canonical /methodology/ad-aggression-score
           // (issue #2871); its locale twins stay out of the locale sitemaps.
-          p !== "/methodology",
+          p !== "/methodology" &&
+          // Issue #2965: /search is deliberately outside the sitemap (see
+          // SITEMAP_PATHS comment) — parameterised search noindexes at the
+          // edge and bare /search 302s to /brands.
+          p !== "/search",
       ),
       ...BUYER_SURFACE_CHILD_PATHS,
       "/guides/how-to-track-competitor-ads",

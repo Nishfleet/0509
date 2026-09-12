@@ -22,7 +22,7 @@ Use this file as the instruction entrypoint for non-Claude coding agents in this
 - Never write a shared evidence file (`.lane/report.md`, `report.md`, `docs/status.md`, or any single file other lanes also append to). One shared file makes every parallel lane's PR conflict with every other lane's PR.
 - `tests/lane-evidence-collision.test.ts` enforces this and runs in CI via `npm run test`; reintroducing a shared report path fails the build.
 - Some local clones exclude `.lane/` via `.git/info/exclude`, so a new lane record may need `git add -f .lane/reports/<branch-name>.md`.
-- Historical records from the old shared `.lane/report.md` are preserved verbatim as `.lane/reports/archived-shared-report-*.md`.
+- Historical records from the old shared `.lane/report.md` were previously kept under `.lane/reports/archived-shared-report-*.md`; the whole `.lane/` tree was retired from the working tree by #2991 and is retained in git history instead.
 
 ## D1 Integration Tests (workerd)
 
