@@ -35,7 +35,7 @@
 export const DEFAULT_BASE_URL = "https://0509.io";
 export const DEFAULT_TIMEOUT_MS = 20_000;
 
-export const LOCALE_PREFIXES = ["de", "ja", "pt-br", "fr", "es"];
+export const LOCALE_PREFIXES = /** @type {const} */ (["de", "ja", "pt-br", "fr", "es"]);
 
 /**
  * The buyer-surface routes that used to serve 200 under every locale prefix
@@ -153,6 +153,9 @@ export async function probe(url, timeoutMs, fetchImpl = globalThis.fetch) {
  * @returns {string | null}
  */
 function locationPath(location) {
+  if (location === null) {
+    return null;
+  }
   try {
     return new URL(location, "https://0509.io").pathname;
   } catch {
@@ -166,10 +169,12 @@ function locationPath(location) {
  * with `Location` equal to the EN pathname, and every translated
  * sneaker-resale probe (de/ja/pt-br) returns 200. Anything else fails
  * closed.
+ * @typedef {{ locale: string, route: string, url: string, expectedStatus: number, expectedLocation: string, status: number | null, location: string | null, ok: boolean, error?: string }} LocaleCanaryProbe
  * @param {{ baseUrl: string, timeoutMs?: number, fetchImpl?: typeof globalThis.fetch }} options
- * @returns {Promise<{ passed: boolean, generatedAt: string, baseUrl: string, probes: Array<{ locale: string, route: string, url: string, expectedStatus: number, expectedLocation: string, status: number | null, location: string | null, ok: boolean, error?: string }>, failures: Array<{ locale: string, route: string, url: string, expectedStatus: number, expectedLocation: string, status: number | null, location: string | null, ok: boolean, error?: string }> }>}
+ * @returns {Promise<{ passed: boolean, generatedAt: string, baseUrl: string, probes: LocaleCanaryProbe[], failures: LocaleCanaryProbe[] }>}
  */
 export async function runCanary(options) {
+  /** @type {LocaleCanaryProbe[]} */
   const probes = [];
 
   for (const locale of LOCALE_PREFIXES) {
@@ -192,6 +197,7 @@ export async function runCanary(options) {
         route: "/sneaker-resale",
         url,
         expectedStatus: 200,
+        expectedLocation: `/${locale}/sneaker-resale`,
         ...result,
         ok: result.status === 200,
       });
@@ -213,7 +219,7 @@ export async function runCanary(options) {
  * probes are listed in place (cluster-iteration order) so the operator can
  * see the full damage at a glance; the "first failing probe" footer mirrors
  * the issue verification loop's `exit 1` point.
- * @param {ReturnType<typeof runCanary>} report
+ * @param {Awaited<ReturnType<typeof runCanary>>} report
  * @returns {string}
  */
 export function formatReport(report) {
