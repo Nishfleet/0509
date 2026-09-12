@@ -3,6 +3,7 @@ import type { LinksFunction, MetaFunction } from "react-router";
 
 import { CompareAdsExampleLink } from "~/components/ads-internal-links";
 import { Breadcrumbs } from "~/components/breadcrumbs";
+import { CompareLiveSources } from "~/components/compare-live-sources";
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
 import { LiveBrandProof } from "~/components/live-brand-proof";
@@ -202,6 +203,8 @@ export default function CompareSpylandRoute() {
           ))}
         </div>
       </section>
+
+      <CompareLiveSources />
 
       <section className="ld-final">
         <h2>

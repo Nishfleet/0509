@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "auditId": "BET10-CLAIM-AUDIT-2026-08-25",
-  "generatedAt": "2026-09-04T22:50:00Z",
+  "generatedAt": "2026-09-12T05:45:00Z",
   "bet": "BET 10 — Say only what is true (claim/reality reconciliation)",
   "part": "3 of 3 — audit registry verification (refreshed 2026-09-04 for the funnel flip-to-off decision, issue #1278)",
   "siblingRegistry": "docs/customer-claim-surface-registry.json",
@@ -95,7 +95,7 @@
       "registryClaim": "PRESENCE-SOURCE-COVERAGE",
       "text": "Public surfaces only: the Meta Ad Library — the same public archive anyone can open in a browser — plus the public landing pages those ads link to. Five to Nine never logs in to anything and never reads anything behind a login.",
       "surface": "homepage product FAQ, competitor-monitoring category FAQ, competitor-monitoring wedge point 03",
-      "liveQueryOrTest": "tests/marketing-rebuild.test.ts → 'keeps unsupported social and internal implementation claims out of homepage copy'; tests/competitor-monitoring-category.test.ts → 'positions the Meta-only ad scope against multi-platform ad-library aggregators'; app/lib/ad-source.server.ts (browser scraping primary, Meta API fallback, honest demo mode)",
+      "liveQueryOrTest": "tests/marketing-rebuild.test.ts → 'keeps unsupported social and internal implementation claims out of homepage copy'; tests/competitor-monitoring-category.test.ts → 'scopes ad coverage to the claim table's live sources (issue #2188)'; app/lib/ad-source.server.ts (browser scraping primary, Meta API fallback, honest demo mode)",
       "currentResult": "pass",
       "resultDetail": "Public copy asserts Meta Ad Library + public landing pages only. ad-source.server.ts reads public surfaces; no login path. Tests confirm no unsupported-source claims leak into public copy.",
       "betOrCopyChange": "bet 3 (the public-surfaces-only sourcing contract)",
@@ -106,7 +106,7 @@
       "registryClaim": "PRESENCE-SOURCE-COVERAGE",
       "text": "Five to Nine monitors the Meta Ad Library only — other platforms' ad libraries are out of scope.",
       "surface": "homepage product FAQ, competitor-monitoring category FAQ",
-      "liveQueryOrTest": "tests/competitor-monitoring-category.test.ts → 'positions the Meta-only ad scope against multi-platform ad-library aggregators'; tests/marketing-rebuild.test.ts → 'keeps unsupported social and internal implementation claims out of homepage copy'",
+      "liveQueryOrTest": "tests/competitor-monitoring-category.test.ts → 'scopes ad coverage to the claim table's live sources (issue #2188)'; tests/marketing-rebuild.test.ts → 'keeps unsupported social and internal implementation claims out of homepage copy'",
       "currentResult": "pass",
       "resultDetail": "Copy explicitly scopes to Meta Ad Library only and names other platforms as out of scope. Tests assert the scoping language is present and no multi-platform-aggregator claim leaks.",
       "betOrCopyChange": "bet 3 (the public-surfaces-only sourcing contract)",
@@ -247,68 +247,98 @@
     {
       "claimId": "AUDIT-SOURCE-GOOGLE-SEARCH-STUB",
       "registryClaim": "PRESENCE-SOURCE-COVERAGE",
-      "text": "Google Search source is wired in as a stub and not live yet.",
+      "text": "The Google Search source has a real Decodo SERP adapter on the registry; it is not claimed publicly yet.",
       "surface": "presence coverage (internal), competitor detail source slot",
-      "liveQueryOrTest": "tests/sources/registry.test.ts → stub coverage equals coming_soon; app/lib/sources/google-search.server.ts → implemented: false",
+      "liveQueryOrTest": "tests/customer-claim-audit-table.test.ts -> the monitoringSource flip gate; tests/sources/registry.test.ts -> the adapter is on the registry with implemented: true",
       "currentResult": "pass",
-      "resultDetail": "Seam #2218 registers the Google Search adapter as a stub (implemented: false). Coverage reports coming_soon. Production proof/status flip deferred to #2188.",
-      "betOrCopyChange": "bet 10 (claim/reality reconciliation) — seam #2218 stub row; #2181 lands the real adapter, #2188 flips the claim",
-      "nishReserved": false
+      "resultDetail": "Real adapter shipped by #2181 (implemented: true; no longer the #2218 seam stub). Row stays NOT live: no production proof comment exists on the source issue yet — a public claim is off until production logging shows a real capture on a tracked competitor and the proof comment (github.com/Nishfleet/0509/issues/<n>#issuecomment-<id>) is cited in monitoringSource.proofUrl. Flip discipline is enforced fail-closed by tests/customer-claim-audit-table.test.ts and the claim-table-gated copy rails (issue #2188).",
+      "betOrCopyChange": "bet 10 (claim/reality reconciliation) — real adapter from #2181; public claim flip still gated on its production proof (tracked in #2188)",
+      "nishReserved": false,
+      "monitoringSource": {
+        "sourceId": "google",
+        "label": "Google Search",
+        "status": "coming_soon"
+      }
     },
     {
       "claimId": "AUDIT-SOURCE-GOOGLE-ADS-STUB",
       "registryClaim": "PRESENCE-SOURCE-COVERAGE",
-      "text": "Google Ads (Transparency Center) source is wired in as a stub and not live yet.",
+      "text": "The Google Ads (Transparency Center) source has a real direct-RPC adapter on the registry; it is not claimed publicly yet.",
       "surface": "presence coverage (internal), competitor detail source slot",
-      "liveQueryOrTest": "tests/sources/registry.test.ts → stub coverage equals coming_soon; app/lib/sources/google-ads.server.ts → implemented: false",
+      "liveQueryOrTest": "tests/customer-claim-audit-table.test.ts -> the monitoringSource flip gate; tests/sources/registry.test.ts -> the adapter is on the registry with implemented: true",
       "currentResult": "pass",
-      "resultDetail": "Seam #2218 registers the Google Ads adapter as a stub (implemented: false). Coverage reports coming_soon. Production proof/status flip deferred to #2188.",
-      "betOrCopyChange": "bet 10 (claim/reality reconciliation) — seam #2218 stub row; #2189 lands the real adapter, #2188 flips the claim",
-      "nishReserved": false
+      "resultDetail": "Real adapter shipped by #2189 (implemented: true; no longer the #2218 seam stub). Row stays NOT live: no production proof comment exists on the source issue yet — a public claim is off until production logging shows a real capture on a tracked competitor and the proof comment (github.com/Nishfleet/0509/issues/<n>#issuecomment-<id>) is cited in monitoringSource.proofUrl. Flip discipline is enforced fail-closed by tests/customer-claim-audit-table.test.ts and the claim-table-gated copy rails (issue #2188).",
+      "betOrCopyChange": "bet 10 (claim/reality reconciliation) — real adapter from #2189; public claim flip still gated on its production proof (tracked in #2188)",
+      "nishReserved": false,
+      "monitoringSource": {
+        "sourceId": "google_ads",
+        "label": "Google Ads Transparency Center",
+        "status": "coming_soon"
+      }
     },
     {
       "claimId": "AUDIT-SOURCE-LINKEDIN-ADS-STUB",
       "registryClaim": "PRESENCE-SOURCE-COVERAGE",
-      "text": "LinkedIn Ads (Ad Library) source is wired in as a stub and not live yet.",
+      "text": "The LinkedIn Ads (Ad Library) source has a real Decodo adapter on the registry; it is not claimed publicly yet.",
       "surface": "presence coverage (internal), competitor detail source slot",
-      "liveQueryOrTest": "tests/sources/registry.test.ts → stub coverage equals coming_soon; app/lib/sources/linkedin-ads.server.ts → implemented: false",
+      "liveQueryOrTest": "tests/customer-claim-audit-table.test.ts -> the monitoringSource flip gate; tests/sources/registry.test.ts -> the adapter is on the registry with implemented: true",
       "currentResult": "pass",
-      "resultDetail": "Seam #2218 registers the LinkedIn Ads adapter as a stub (implemented: false). Coverage reports coming_soon. Production proof/status flip deferred to #2188.",
-      "betOrCopyChange": "bet 10 (claim/reality reconciliation) — seam #2218 stub row; #2193 lands the real adapter, #2188 flips the claim",
-      "nishReserved": false
+      "resultDetail": "Real adapter shipped by #2193 (implemented: true; no longer the #2218 seam stub). Row stays NOT live: no production proof comment exists on the source issue yet — a public claim is off until production logging shows a real capture on a tracked competitor and the proof comment (github.com/Nishfleet/0509/issues/<n>#issuecomment-<id>) is cited in monitoringSource.proofUrl. Flip discipline is enforced fail-closed by tests/customer-claim-audit-table.test.ts and the claim-table-gated copy rails (issue #2188).",
+      "betOrCopyChange": "bet 10 (claim/reality reconciliation) — real adapter from #2193; public claim flip still gated on its production proof (tracked in #2188)",
+      "nishReserved": false,
+      "monitoringSource": {
+        "sourceId": "linkedin",
+        "label": "LinkedIn Ad Library",
+        "status": "coming_soon"
+      }
     },
     {
       "claimId": "AUDIT-SOURCE-TIKTOK-ADS-STUB",
       "registryClaim": "PRESENCE-SOURCE-COVERAGE",
-      "text": "TikTok Ads (Commercial Content Library, EU-shown) source is wired in as a stub and not live yet.",
+      "text": "The TikTok Ads (Commercial Content Library, EU-shown) source has a real Decodo adapter on the registry; it is not claimed publicly yet.",
       "surface": "presence coverage (internal), competitor detail source slot",
-      "liveQueryOrTest": "tests/sources/registry.test.ts → stub coverage equals coming_soon; app/lib/sources/tiktok-ads.server.ts → implemented: false",
+      "liveQueryOrTest": "tests/customer-claim-audit-table.test.ts -> the monitoringSource flip gate; tests/sources/registry.test.ts -> the adapter is on the registry with implemented: true",
       "currentResult": "pass",
-      "resultDetail": "Seam #2218 registers the TikTok Ads adapter as a stub (implemented: false). Coverage reports coming_soon. Production proof/status flip deferred to #2188.",
-      "betOrCopyChange": "bet 10 (claim/reality reconciliation) — seam #2218 stub row; #2194 lands the real adapter, #2188 flips the claim",
-      "nishReserved": false
+      "resultDetail": "Real adapter shipped by #2194 (implemented: true; no longer the #2218 seam stub). Row stays NOT live: no production proof comment exists on the source issue yet — a public claim is off until production logging shows a real capture on a tracked competitor and the proof comment (github.com/Nishfleet/0509/issues/<n>#issuecomment-<id>) is cited in monitoringSource.proofUrl. Flip discipline is enforced fail-closed by tests/customer-claim-audit-table.test.ts and the claim-table-gated copy rails (issue #2188).",
+      "betOrCopyChange": "bet 10 (claim/reality reconciliation) — real adapter from #2194; public claim flip still gated on its production proof (tracked in #2188)",
+      "nishReserved": false,
+      "monitoringSource": {
+        "sourceId": "tiktok",
+        "label": "TikTok Commercial Content Library",
+        "status": "coming_soon"
+      }
     },
     {
       "claimId": "AUDIT-SOURCE-SUBDOMAINS-STUB",
       "registryClaim": "PRESENCE-SOURCE-COVERAGE",
-      "text": "New web addresses (subdomains via crt.sh) source is wired in as a stub and not live yet.",
+      "text": "The new web addresses (crt.sh) source has a real adapter on the registry; it is not claimed publicly yet.",
       "surface": "presence coverage (internal), competitor detail source slot",
-      "liveQueryOrTest": "tests/sources/registry.test.ts → stub coverage equals coming_soon; app/lib/sources/subdomains.server.ts → implemented: false",
+      "liveQueryOrTest": "tests/customer-claim-audit-table.test.ts -> the monitoringSource flip gate; tests/sources/registry.test.ts -> the adapter is on the registry with implemented: true",
       "currentResult": "pass",
-      "resultDetail": "Seam #2218 registers the subdomains adapter as a stub (implemented: false). Coverage reports coming_soon. Production proof/status flip deferred to #2188.",
-      "betOrCopyChange": "bet 10 (claim/reality reconciliation) — seam #2218 stub row; #2198 lands the real adapter, #2188 flips the claim",
-      "nishReserved": false
+      "resultDetail": "Real adapter shipped by #2198 (implemented: true; no longer the #2218 seam stub). Row stays NOT live: no production proof comment exists on the source issue yet — a public claim is off until production logging shows a real capture on a tracked competitor and the proof comment (github.com/Nishfleet/0509/issues/<n>#issuecomment-<id>) is cited in monitoringSource.proofUrl. Flip discipline is enforced fail-closed by tests/customer-claim-audit-table.test.ts and the claim-table-gated copy rails (issue #2188).",
+      "betOrCopyChange": "bet 10 (claim/reality reconciliation) — real adapter from #2198; public claim flip still gated on its production proof (tracked in #2188)",
+      "nishReserved": false,
+      "monitoringSource": {
+        "sourceId": "subdomains",
+        "label": "New web addresses",
+        "status": "coming_soon"
+      }
     },
     {
       "claimId": "AUDIT-SOURCE-HIRING-STUB",
       "registryClaim": "PRESENCE-SOURCE-COVERAGE",
-      "text": "Hiring (job boards) source is wired in as a stub and not live yet.",
+      "text": "The hiring (job boards) source has a real public-job-feed adapter on the registry; it is not claimed publicly yet.",
       "surface": "presence coverage (internal), competitor detail source slot",
-      "liveQueryOrTest": "tests/sources/registry.test.ts → stub coverage equals coming_soon; app/lib/sources/hiring.server.ts → implemented: false",
+      "liveQueryOrTest": "tests/customer-claim-audit-table.test.ts -> the monitoringSource flip gate; tests/sources/registry.test.ts -> the adapter is on the registry with implemented: true",
       "currentResult": "pass",
-      "resultDetail": "Seam #2218 registers the hiring adapter as a stub (implemented: false). Coverage reports coming_soon. Production proof/status flip deferred to #2188.",
-      "betOrCopyChange": "bet 10 (claim/reality reconciliation) — seam #2218 stub row; #2199 lands the real adapter, #2188 flips the claim",
-      "nishReserved": false
+      "resultDetail": "Real adapter shipped by #2199 (implemented: true; no longer the #2218 seam stub). Row stays NOT live: no production proof comment exists on the source issue yet — a public claim is off until production logging shows a real capture on a tracked competitor and the proof comment (github.com/Nishfleet/0509/issues/<n>#issuecomment-<id>) is cited in monitoringSource.proofUrl. Flip discipline is enforced fail-closed by tests/customer-claim-audit-table.test.ts and the claim-table-gated copy rails (issue #2188).",
+      "betOrCopyChange": "bet 10 (claim/reality reconciliation) — real adapter from #2199; public claim flip still gated on its production proof (tracked in #2188)",
+      "nishReserved": false,
+      "monitoringSource": {
+        "sourceId": "hiring",
+        "label": "Hiring",
+        "status": "coming_soon"
+      }
     }
   ],
   "summary": {

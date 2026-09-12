@@ -1,6 +1,7 @@
 import { Form, Link } from "react-router";
 import type { LinksFunction, MetaFunction } from "react-router";
 
+import { CompareLiveSources } from "~/components/compare-live-sources";
 import { MarketingNav } from "~/components/marketing-nav";
 import { Breadcrumbs } from "~/components/breadcrumbs";
 import { MarketingFooter } from "~/components/marketing-footer";
@@ -218,6 +219,8 @@ export default function ComparePanoramataRoute() {
           ))}
         </div>
       </section>
+
+      <CompareLiveSources />
 
       <section className="ld-final">
         <h2>

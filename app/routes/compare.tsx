@@ -1,6 +1,7 @@
 import { Link, useParams } from "react-router";
 import type { LinksFunction, MetaFunction } from "react-router";
 
+import { CompareLiveSources } from "~/components/compare-live-sources";
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
 import { LiveBrandProof } from "~/components/live-brand-proof";
@@ -282,6 +283,8 @@ export default function CompareIndexRoute() {
           page for current plans.
         </p>
       </section>
+
+      <CompareLiveSources />
 
       <section className="ld-final">
         <h2>
