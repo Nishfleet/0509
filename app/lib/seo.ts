@@ -909,6 +909,12 @@ export const SITEMAP_PATHS = [
   // Issue #2888: third guide — the "monitor a competitor's website/landing
   // page changes" intent. Stable long-form copy, never a noindex shell.
   "/guides/how-to-monitor-competitor-landing-page-changes",
+  // Issue #3093: three more guides — the offer-change alert, prove-what-
+  // changed, and one-off → standing-watch intents. Stable long-form copy,
+  // never a noindex shell.
+  "/guides/how-to-get-alerted-when-a-competitor-changes-their-offer",
+  "/guides/how-to-prove-what-changed-on-a-competitor-website",
+  "/guides/how-to-turn-a-one-off-competitor-check-into-a-standing-watch",
   "/compare",
   "/compare/meta-ad-library",
   // /compare/visualping, /compare/foreplay, and /compare/visualping-ad-library

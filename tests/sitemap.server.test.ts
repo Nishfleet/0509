@@ -1686,7 +1686,7 @@ describe("locale sitemap feed count matches the buyer-surface derivation (issue 
     const derivedCount =
       BUYER_SURFACE_PATHS.filter((p) => p !== "/" && p !== "/sitemap.xml").length +
       BUYER_SURFACE_CHILD_PATHS.length +
-      3 - 1; // /guides/* trio: track-competitor-ads + monitor-meta-ad-library (issue #2867) + monitor-competitor-landing-page-changes (issue #2888); -1: /methodology locale twins stay OUT of the locale sitemaps (issue #2871/#1570 duplicate-content policy)
+      6 - 1; // /guides/* six: track-competitor-ads + monitor-meta-ad-library (issue #2867) + monitor-competitor-landing-page-changes (issue #2888) + the #3093 trio (offer-change alert, prove-what-changed, standing watch); -1: /methodology locale twins stay OUT of the locale sitemaps (issue #2871/#1570 duplicate-content policy)
     for (const locale of BUYER_SURFACE_LOCALE_IDS) {
       const entries = staticSitemapEntriesForLocale(locale);
       const body = buildLocaleSitemapXml(locale);
@@ -1745,6 +1745,9 @@ describe("locale sitemap feed count matches the buyer-surface derivation (issue 
       "/guides/how-to-track-competitor-ads",
       "/guides/how-to-monitor-meta-ad-library",
       "/guides/how-to-monitor-competitor-landing-page-changes",
+      "/guides/how-to-get-alerted-when-a-competitor-changes-their-offer",
+      "/guides/how-to-prove-what-changed-on-a-competitor-website",
+      "/guides/how-to-turn-a-one-off-competitor-check-into-a-standing-watch",
     ];
     for (const path of derived) {
       expect(staticPaths, `${path} missing from SITEMAP_STATIC_ENTRIES`).toContain(path);

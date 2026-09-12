@@ -170,6 +170,14 @@ export default [
   // from the two ad-library guides above. Ends in the no-account /search
   // preview (source=guide-landing-page-changes).
   route("guides/how-to-monitor-competitor-landing-page-changes", "routes/guides.how-to-monitor-competitor-landing-page-changes.tsx"),
+  // Issue #3093: three more /guides/* pages, one per uncovered differentiator
+  // query — the offer-change alert intent, the prove-what-changed evidence
+  // intent, and the one-off → standing-watch cadence intent. Each ends in the
+  // no-account /search preview (source=guide-offer-change-alert /
+  // guide-prove-what-changed / guide-standing-watch).
+  route("guides/how-to-get-alerted-when-a-competitor-changes-their-offer", "routes/guides.how-to-get-alerted-when-a-competitor-changes-their-offer.tsx"),
+  route("guides/how-to-prove-what-changed-on-a-competitor-website", "routes/guides.how-to-prove-what-changed-on-a-competitor-website.tsx"),
+  route("guides/how-to-turn-a-one-off-competitor-check-into-a-standing-watch", "routes/guides.how-to-turn-a-one-off-competitor-check-into-a-standing-watch.tsx"),
   route("for-agencies", "routes/for-agencies.tsx"),
   route("sneaker-resale", "routes/sneaker-resale.tsx"),
   route(":locale/sneaker-resale", "routes/$locale.sneaker-resale.tsx"),
@@ -233,6 +241,11 @@ export default [
     route("guides/how-to-monitor-meta-ad-library", "routes/$locale.guides.how-to-monitor-meta-ad-library.tsx"),
     // Issue #2888: third guide in the cluster — the landing-page change watch.
     route("guides/how-to-monitor-competitor-landing-page-changes", "routes/$locale.guides.how-to-monitor-competitor-landing-page-changes.tsx"),
+    // Issue #3093: the offer-change alert, prove-what-changed, and
+    // standing-watch guides — re-exported EN guides, canonical→EN.
+    route("guides/how-to-get-alerted-when-a-competitor-changes-their-offer", "routes/$locale.guides.how-to-get-alerted-when-a-competitor-changes-their-offer.tsx"),
+    route("guides/how-to-prove-what-changed-on-a-competitor-website", "routes/$locale.guides.how-to-prove-what-changed-on-a-competitor-website.tsx"),
+    route("guides/how-to-turn-a-one-off-competitor-check-into-a-standing-watch", "routes/$locale.guides.how-to-turn-a-one-off-competitor-check-into-a-standing-watch.tsx"),
     // Programmatic /ads/:domain under every locale prefix (issue #1562):
     // the #1501 buyer-surface cluster added /de, /de/pricing, ... but not
     // the /ads/:domain Ad Aggression Score pages, so /de/ads/nike.com
