@@ -49,7 +49,9 @@ import {
 import { selectRecentRemoteRestoreArtifact } from "../scripts/find-recent-remote-restore-artifact.mjs";
 import {
   allowedProductionMigrationLedgers,
+  POST_DEPLOY_CLEANUP_MIGRATIONS,
   PRODUCTION_MIGRATION_LEDGER_BASELINE,
+  PRODUCTION_MIGRATION_LEDGER_ORDER_EXCEPTIONS,
   RETIRED_PRODUCTION_MIGRATIONS,
 } from "../scripts/d1-migration-sync-check.lib.mjs";
 
@@ -1586,6 +1588,10 @@ describe("D1 remote restore evidence automation", () => {
     // 2026-09-09), so the modeled production ledger excludes them too and
     // every expected forward-suffix includes them as ordinary catch-up at the
     // tail.
+    //
+    // 2026-09-12 update: production has since caught up through
+    // 0098_widen_source_target_connector_gdelt.sql; only the bluesky file
+    // remains pending — see the adjacent live-ledger test below.
     const repository = readdirSync(resolve("migrations"))
       .filter((name) => /^\d{4}_.+\.sql$/u.test(name))
       .sort();
@@ -1660,6 +1666,121 @@ describe("D1 remote restore evidence automation", () => {
         "0098_widen_source_target_connector_gdelt.sql",
       ],
     });
+  });
+
+  it("plans the bluesky-hole catch-up for the live production ledger (run 34705843153)", () => {
+    // 0509#2996, run 34705843153 (2026-09-12T16:40Z): production had already
+    // applied 0098_widen_source_target_connector_gdelt.sql when
+    // 0098_widen_source_target_connector_bluesky.sql landed in the repository
+    // sorting earlier. The backup ledger is then a prefix of no allowed
+    // ledger — not the primary (bluesky sorts before gdelt) — so every
+    // deploy failed with source_backup_migration_ledger_stale instead of
+    // catching up. The declared 0098 exception makes the already-applied
+    // tail an allowed production order, so the prefix match returns the
+    // single pending migration and the forward apply unblocks the deploy.
+    const repository = readdirSync(resolve("migrations"))
+      .filter((name) => /^\d{4}_.+\.sql$/u.test(name))
+      .sort();
+    const repositoryBaseline = PRODUCTION_MIGRATION_LEDGER_BASELINE.filter(
+      (name) => !RETIRED_PRODUCTION_MIGRATIONS.has(name),
+    );
+    const observedProductionNames = [
+      ...PRODUCTION_MIGRATION_LEDGER_BASELINE,
+      ...repository.slice(repositoryBaseline.length).filter(
+        (name) =>
+          name !== "0096_email_suppression.sql" &&
+          name !== "0096_error_reports.sql" &&
+          name !== "0098_widen_source_target_connector_bluesky.sql",
+      ),
+    ];
+    // The 0096 pair sits in production order ahead of 0097 (0509#3174).
+    const insertAt = observedProductionNames.indexOf(
+      "0097_status_probe_samples.sql",
+    );
+    observedProductionNames.splice(
+      insertAt,
+      0,
+      "0096_error_reports.sql",
+      "0096_email_suppression.sql",
+    );
+    expect(observedProductionNames.at(-1)).toBe(
+      "0098_widen_source_target_connector_gdelt.sql",
+    );
+    const namedLedger = (names: string[]) =>
+      names.map((name, index) => ({
+        id: index + 1,
+        name,
+        appliedAt: "2026-09-12 16:40:36",
+      }));
+
+    // Before the exception this exact ledger rejected — the bug.
+    const withoutBlueskyException = {
+      baseline: PRODUCTION_MIGRATION_LEDGER_BASELINE,
+      retiredMigrations: RETIRED_PRODUCTION_MIGRATIONS,
+      orderExceptions: [
+        ["0096_error_reports.sql", "0096_email_suppression.sql"],
+      ] as const,
+    };
+    expect(
+      planSourceBackupLedgerReconciliation(
+        namedLedger(observedProductionNames),
+        repository,
+        POST_DEPLOY_CLEANUP_MIGRATIONS,
+        withoutBlueskyException,
+      ),
+    ).toEqual({
+      action: "reject",
+      reason: "source_backup_migration_ledger_stale",
+    });
+
+    // With the declared exception the plan is the single pending migration.
+    expect(
+      planSourceBackupLedgerReconciliation(
+        namedLedger(observedProductionNames),
+        repository,
+      ),
+    ).toEqual({
+      action: "apply_forward_suffix",
+      migrations: ["0098_widen_source_target_connector_bluesky.sql"],
+    });
+
+    // After the forward apply wrangler appends bluesky after the applied
+    // tail — the order the declared exception covers.
+    const postApplyNames = [
+      ...observedProductionNames,
+      "0098_widen_source_target_connector_bluesky.sql",
+    ];
+    expect(
+      planSourceBackupLedgerReconciliation(namedLedger(postApplyNames), repository),
+    ).toEqual({ action: "ok" });
+    expect(
+      assertMigrationLedgerMatchesRepository(
+        namedLedger(postApplyNames),
+        repository,
+      ),
+    ).toBe(true);
+    expect(
+      allowedProductionMigrationLedgers(repository).some(
+        (ledger) =>
+          JSON.stringify(ledger) ===
+          JSON.stringify([
+            ...repositoryBaseline,
+            ...repository.slice(repositoryBaseline.length).filter(
+              (name) => name !== "0096_email_suppression.sql" &&
+                name !== "0096_error_reports.sql",
+            ),
+          ]),
+      ),
+    ).toBe(true);
+    expect(
+      PRODUCTION_MIGRATION_LEDGER_ORDER_EXCEPTIONS.some((group) =>
+        JSON.stringify(group) ===
+        JSON.stringify([
+          "0098_widen_source_target_connector_gdelt.sql",
+          "0098_widen_source_target_connector_bluesky.sql",
+        ]),
+      ),
+    ).toBe(true);
   });
 
   it("still rejects a production ledger carrying one unknown extra name", () => {

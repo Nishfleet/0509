@@ -127,8 +127,19 @@ export const RETIRED_PRODUCTION_MIGRATIONS = new Set([
 // sorted repository listing can never reproduce. Each group declares a set
 // of repository-suffix names in the exact order the production ledger is
 // allowed to carry them. (run 34671488829, 0509#3174)
+//
+// 2026-09-12 same class again (run 34705843153, 0509#2996): production
+// applied 0098_widen_source_target_connector_gdelt.sql while it was the
+// ledger tail, then 0098_widen_source_target_connector_bluesky.sql landed in
+// the repository sorting earlier. The forward catch-up applies the remaining
+// pending migration after the already-applied tail, so the live order stays
+// gdelt-then-bluesky.
 export const PRODUCTION_MIGRATION_LEDGER_ORDER_EXCEPTIONS = Object.freeze([
   Object.freeze(["0096_error_reports.sql", "0096_email_suppression.sql"]),
+  Object.freeze([
+    "0098_widen_source_target_connector_gdelt.sql",
+    "0098_widen_source_target_connector_bluesky.sql",
+  ]),
 ]);
 
 const MIGRATION_NAME_PATTERN = /^\d{4}_[A-Za-z0-9_]+\.sql$/u;
