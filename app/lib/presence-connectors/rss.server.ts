@@ -11,7 +11,7 @@ import type {
   ValidateTargetInput,
   ValidateTargetResult,
 } from "~/lib/presence-types";
-import { resolvePublicHttpUrl } from "~/lib/public-url.server";
+import { normalizePublicHttpUrl, resolvePublicHttpUrl } from "~/lib/public-url.server";
 
 /**
  * RSS / Atom / JSON Feed presence connector.
@@ -533,14 +533,6 @@ function safeIsoDate(value: string): string | null {
   return parsed.toISOString();
 }
 
-function isGoogleNewsHost(url: string): boolean {
-  try {
-    return new URL(url).hostname.toLowerCase() === GOOGLE_NEWS_HOST;
-  } catch {
-    return false;
-  }
-}
-
 function isGoogleNewsNewsUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
@@ -607,7 +599,19 @@ function decodeGoogleNewsArticleId(link: string): string | null {
   try {
     const normalized = match[1].replace(/-/g, "+").replace(/_/g, "/");
     const decoded = atob(normalized + "=".repeat((4 - (normalized.length % 4)) % 4));
-    return decoded.match(/https?:\/\/[^\x00-\x20"'<>]+/)?.[0] ?? null;
+    const candidates = decoded.match(/https?:\/\/[^\x00-\x20"'<>]+/g) ?? [];
+    // The decoded bytes are feed-controlled, so every candidate passes the
+    // same public-URL bar as a fetched hop before it may become canonical.
+    // An id can also embed a google.com redirector ahead of the publisher
+    // URL — prefer the first candidate off Google; a Google-only result means
+    // the publisher URL was not embedded, and the fetch path decides.
+    for (const candidate of candidates) {
+      const url = normalizePublicHttpUrl(candidate);
+      if (url && !url.hostname.toLowerCase().endsWith("google.com")) {
+        return url.toString();
+      }
+    }
+    return null;
   } catch {
     return null;
   }

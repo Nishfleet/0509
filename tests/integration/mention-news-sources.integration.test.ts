@@ -39,11 +39,12 @@ import { appEnv, db, ISO_T0, seedUser, uid } from "./fixtures";
 
 const FEED_HOST = "https://1.1.1.1";
 
-function newsRedirectIdFor(url: string): string {
+function newsRedirectIdFor(url: string, prefix = "\x12"): string {
   // Google News newer-style article ids: base64url of a protobuf whose
   // `field 1` carries the publisher URL. The connector only regex-matches the
-  // http(s) URL out of the decoded bytes, so a tagged prefix is enough.
-  const bytes = new TextEncoder().encode(`\x12${url}`);
+  // http(s) URL out of the decoded bytes, so a tagged prefix is enough; a
+  // different `prefix` mints a DIFFERENT id that still decodes to `url`.
+  const bytes = new TextEncoder().encode(`${prefix}${url}`);
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -53,7 +54,7 @@ const PUBLISHER_URL = "https://publisher.example.test/acme-launch";
 
 function googleNewsFeed(extraDuplicateId = true): string {
   const id1 = newsRedirectIdFor(PUBLISHER_URL);
-  const id2 = newsRedirectIdFor(PUBLISHER_URL);
+  const id2 = newsRedirectIdFor(PUBLISHER_URL, "\x0a\x03zzz\x12");
   const entries = [
     `<item><title>Acme launches — Google News syndication</title><link>https://news.google.com/rss/articles/${id1}?oc=5</link><guid>gn-1</guid><pubDate>Mon, 01 Jun 2026 00:00:00 GMT</pubDate></item>`,
     extraDuplicateId
@@ -163,7 +164,7 @@ describe("mainstream news mentions — fixture brand, three shapes, one store (i
     const rssPoll = await rssConnectorPoll(env, publisherTarget, fetchImpl);
     expect(rssPoll.ok).toBe(true);
     expect(rssPoll.items.length).toBeGreaterThanOrEqual(1);
-    expect(rssPoll.items.every((item) => item.canonicalUrl.startsWith("https://publisher.example.test") || item.canonicalUrl.startsWith(FEED_HOST))).toBe(true);
+    expect(rssPoll.items.every((item) => item.canonicalUrl.startsWith("https://publisher.example.test"))).toBe(true);
     const rssUpsert = await upsertPresenceItems(env, { sourceTarget: publisherTarget as unknown as SourceTargetRecord, items: rssPoll.items });
     expect(rssUpsert.inserted).toBe(1);
 
@@ -203,6 +204,43 @@ describe("mainstream news mentions — fixture brand, three shapes, one store (i
     const disabledEnv = { ...activatedEnv(), PRESENCE_GDELT_ROLLOUT: "disabled", PRESENCE_RSS_ROLLOUT: "disabled" } as AppEnv;
     expect((await evaluatePresenceSourceCoverage(disabledEnv, "gdelt", "self")).status).toBe("unavailable");
     expect((await evaluatePresenceSourceCoverage(disabledEnv, "rss", "self")).coverageLabel).toBe("UNAVAILABLE");
+  });
+
+  it("bounds Google News redirect resolution to the per-poll fetch budget", async () => {
+    const env = activatedEnv();
+    // Undecodable ids: base64url bytes with no http(s) URL inside, so every
+    // link must take the bounded-fetch path or be flagged unresolved.
+    const undecodable = (n: number) =>
+      btoa(`no-url-${n}`).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    const items = Array.from({ length: 12 }, (_, i) =>
+      `<item><title>Undecodable ${i}</title><link>https://news.google.com/rss/articles/${undecodable(i)}?oc=5</link><guid>u-${i}</guid><pubDate>Mon, 01 Jun 2026 00:00:00 GMT</pubDate></item>`,
+    ).join("");
+    const feed = `<?xml version="1.0"?><rss version="2.0"><channel><title>GN</title>${items}</channel></rss>`;
+    const fetchImpl = vi.fn(async (url: string) => {
+      const path = new URL(url).pathname;
+      if (path === "/budget.xml") {
+        return new Response(feed, { status: 200, headers: { "content-type": "application/rss+xml" } });
+      }
+      return new Response("<html></html>", { status: 200, headers: { "content-type": "text/html" } });
+    }) as unknown as typeof fetch;
+
+    const poll = await rssConnector.poll(
+      { env, userId: "u", trackingMode: "self", fetchImpl },
+      { targetUrl: `${FEED_HOST}/budget.xml`, metadata: { feedUrl: `${FEED_HOST}/budget.xml`, newsQuery: true } },
+    );
+    expect(poll.ok).toBe(true);
+    // 12 undecodable redirect links; the per-poll resolve budget is 10, so
+    // news.google.com/rss/articles fetches must never exceed it.
+    const redirectFetches = (fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls.filter(
+      ([url]) => String(url).includes("news.google.com/rss/articles/"),
+    ).length;
+    expect(redirectFetches).toBeLessThanOrEqual(10);
+    // Nothing is silently dropped: unresolved redirects keep their link and
+    // carry the flag for read-time honesty.
+    expect(poll.items).toHaveLength(12);
+    expect(
+      poll.items.filter((item) => item.raw?.googleNewsRedirectUnresolved === true),
+    ).toHaveLength(12);
   });
 });
 

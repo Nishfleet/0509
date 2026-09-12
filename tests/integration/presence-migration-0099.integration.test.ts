@@ -76,8 +76,13 @@ describe("migration 0099 — source_target CHECK widened for 'gdelt'", () => {
     // because the rebuild copies current data back).
     await db.batch(statements.map((sql) => db.prepare(sql)));
 
-    // READ + preservation
+    // READ + preservation: the rebuilt table kept every row...
     expect(await count(db, "source_target", `WHERE id = '${websiteTarget}' AND connector_id = 'website'`)).toBe(1);
+    // ...and every cascaded child row set was snapshotted and restored —
+    // without these the rebuild would have wiped presence data.
+    expect(await count(db, "presence_item", `WHERE id = '${item}'`)).toBe(1);
+    expect(await count(db, "presence_poll_cursor", `WHERE source_target_id = '${websiteTarget}'`)).toBe(1);
+    expect(await count(db, "presence_item_revision", `WHERE id = '${rev}'`)).toBe(1);
 
     // WRITE: 'gdelt' is now accepted by the widened CHECK — this is the
     // mention store WRITE path for mainstream news (issue #3178).

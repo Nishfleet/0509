@@ -1,6 +1,7 @@
 import { evaluateConnectorAccessGate } from "~/lib/presence-access-gates.server";
 import { presenceContentHash } from "~/lib/presence-hash";
 import { presenceSafeFetch } from "~/lib/presence-robots.server";
+import { normalizePublicHttpUrl } from "~/lib/public-url.server";
 import type {
   CostEstimate,
   HealthCheckResult,
@@ -192,8 +193,10 @@ export const gdeltConnector = {
     const items: NormalizedPresenceItem[] = [];
     for (const article of parsed.articles.slice(0, MAX_ARTICLES_PER_POLL)) {
       if (!article || typeof article !== "object") continue;
-      const record = article as Record<string, unknown>;
-      const url = typeof article.url === "string" && article.url ? article.url : null;
+      const urlRaw = typeof article.url === "string" && article.url ? article.url : null;
+      // GDELT rows are third-party data: only a public http(s) URL may become
+      // canonical — anything else is skipped, never stored or rendered.
+      const url = urlRaw ? (normalizePublicHttpUrl(urlRaw)?.toString() ?? null) : null;
       const title = typeof article.title === "string" && article.title ? article.title : null;
       if (!url || !title) continue;
       const domain = typeof article.domain === "string" ? article.domain : null;
@@ -204,7 +207,7 @@ export const gdeltConnector = {
         title: title.slice(0, MAX_EXCERPT_CHARS),
         bodyExcerpt: null,
         author: null,
-        publishedAt: publishedAt ?? now,
+        publishedAt,
         observedAt: now,
         contentHash: "",
         raw: {
@@ -245,8 +248,11 @@ function clampInt(value: unknown, fallback: number, max: number): number {
 
 function normalizeQueryPhrase(value: string | null | undefined): string | null {
   if (!value || typeof value !== "string") return null;
-  const phrase = value.trim().replace(/\s+/g, " ");
-  if (!phrase || phrase.length > 120) return null;
+  // Strip quotes so the phrase cannot break out of the exact-match wrapper in
+  // the request URL, then fail closed on GDELT operator metacharacters
+  // (domain:, parentheses, |, etc. — a match phrase is never a query).
+  const phrase = value.trim().replace(/\s+/g, " ").replace(/"/g, "").trim();
+  if (!phrase || phrase.length > 120 || /[:()|]/.test(phrase)) return null;
   return phrase;
 }
 

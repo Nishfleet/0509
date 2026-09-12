@@ -136,6 +136,16 @@ describe("gdelt mention connector — validateTarget", () => {
     expect(result.errorCode).toBe("missing_query");
   });
 
+  it("fails closed when the phrase would break out of the exact-match quotes", async () => {
+    const result = await gdeltConnector.validateTarget(
+      { trackingMode: "competitor", targetHandle: 'Acme" domain:nytimes.com' },
+      makeCtx(activatedEnv),
+    );
+    expect(result.ok).toBe(false);
+    expect(result.errorCode).toBe("missing_query");
+    expect(mockedSafeFetch).not.toHaveBeenCalled();
+  });
+
   it("rejects on a disabled rollout gate without network calls", async () => {
     const disabledEnv = { ...activatedEnv, PRESENCE_GDELT_ROLLOUT: "disabled" } as AppEnv;
     const result = await gdeltConnector.validateTarget(
@@ -169,8 +179,8 @@ describe("gdelt mention connector — poll", () => {
       provider: "gdelt_doc_2_1",
       sourceDomain: "techrepublic.com",
     });
-    // An unparseable seendate falls back to observed-now, never to a fabricated date.
-    expect((result.items[1]?.publishedAt ?? "").endsWith("Z")).toBe(true);
+    // An unparseable seendate stays null — a fabricated date is never stored.
+    expect(result.items[1]?.publishedAt).toBeNull();
   });
 
   it("sends exactly ONE fair-use request per poll with budgeted parameters", async () => {
