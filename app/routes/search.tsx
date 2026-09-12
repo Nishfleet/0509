@@ -1380,7 +1380,7 @@ function SearchPendingResults({
         ...data,
         result: {
           ...buildIdleSearchResult(),
-          discoveryStatus: "warming",
+          discoveryStatus: "degraded",
           discoveryProgress: "warming",
         },
         selectedAd: null,
