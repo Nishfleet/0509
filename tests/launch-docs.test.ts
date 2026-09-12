@@ -107,7 +107,7 @@ describe("final launch documentation", () => {
 
   it("marks older launch scorecards as historical instead of current truth", () => {
     const historicalScorecard = readDoc("docs/ga-launch-scorecard.md");
-    const journeyAudit = readDoc("docs/ga-customer-journey-audit.md");
+    const journeyAudit = readDoc("docs/ga-customer-journey.md");
 
     expect(historicalScorecard).toContain("Historical scorecard");
     expect(historicalScorecard).toContain("SUPERSEDED");

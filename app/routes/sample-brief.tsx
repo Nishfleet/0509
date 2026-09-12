@@ -2,7 +2,8 @@
  * /sample-brief — the public "real Monday brief" page (issue #2136).
  *
  * Renders a genuine stored digest for the newest sitemap-indexable brand that
- * has at least one confirmed watch_event in the last 30 days, built through
+ * has at least one confirmed watch_event in the widest sample window that
+ * yields one (30 → 90 → 180 → 365 days — issue #2969), built through
  * the existing digest builder from stored rows only. When no brand qualifies,
  * the page renders the honest quiet-brief variant. The page never fabricates
  * a brief, never triggers live scraping, and never exposes a customer
@@ -30,7 +31,7 @@ export async function loader({ context }: LoaderFunctionArgs): Promise<SampleBri
 }
 
 const sampleBriefDescription =
-  "A real Monday brief: the last 30 days of stored competitor offer, price, CTA, and ad moves for a public brand — stored captures only, every row with its source link and capture date.";
+  "A real Monday brief: the window of stored competitor offer, price, CTA, and ad moves around this public brand's recent moves — stored captures only, every row with its source link and capture date.";
 
 export const links: LinksFunction = () => canonicalLinks("/sample-brief");
 

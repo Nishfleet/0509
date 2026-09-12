@@ -64,6 +64,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     // The sent state re-posts the same name on resend, so it round-trips
     // through the redirect the same way the email does.
     prefillName: url.searchParams.get("name")?.trim() || "",
+    // The optional "First competitor website" field pre-fills from a
+    // ?competitor= deep link the same way the email/name pre-fills do.
+    prefillCompetitor: competitor || "",
     linkSent,
     linkResent,
     ...(oauthProviders.length > 0 ? { oauthProviders } : {}),
@@ -85,7 +88,15 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const name = String(formData.get("name") ?? "").trim();
-  const redirectTo = safeRedirectPath(String(formData.get("redirectTo") ?? ""), "/app#setup-checklist");
+  const competitor = String(formData.get("competitor") ?? "").trim();
+  let redirectTo = safeRedirectPath(String(formData.get("redirectTo") ?? ""), "/app#setup-checklist");
+  // Issue #2415 — an inline competitor website on the signup form lands the
+  // new user straight in the setup checklist with that brand pre-tracked,
+  // mirroring the loader's `?competitor=` deep-link fold (only when the
+  // redirect is still the default, never over an explicit redirect).
+  if (competitor && redirectTo === "/app#setup-checklist") {
+    redirectTo = `/app?website=${encodeURIComponent(competitor)}#setup-checklist`;
+  }
   const isResend = formData.get("resend") === "1";
 
   // `name` is optional: the server already treats it as optional
@@ -93,14 +104,14 @@ export async function action({ context, request }: ActionFunctionArgs) {
   // undefined when empty, mirroring the login route), so email-only signup
   // is allowed — the name is backfilled later from the onboarding flow.
   if (!isPlausibleEmail(email)) {
-    return signupActionError("email_invalid", { email, name, redirectTo });
+    return signupActionError("email_invalid", { email, name, redirectTo, competitor });
   }
 
   if (!isBetterAuthConfigured(env)) {
-    return signupActionError("better_auth_not_configured", { email, name, redirectTo });
+    return signupActionError("better_auth_not_configured", { email, name, redirectTo, competitor });
   }
   if (!isSameOriginAuthFormPost(env, request)) {
-    return signupActionError("request_invalid", { email, name, redirectTo });
+    return signupActionError("request_invalid", { email, name, redirectTo, competitor });
   }
 
   try {
@@ -114,7 +125,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     console.warn("failed to send Better Auth signup email", {
       errorName: error instanceof Error ? error.name : typeof error,
     });
-    return signupActionError("send_failed", { email, name, redirectTo });
+    return signupActionError("send_failed", { email, name, redirectTo, competitor });
   }
 
   // CTA markers (`source=`) select an allowlisted funnel kind. The /pricing
@@ -145,6 +156,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
   next.searchParams.set("email", email);
   next.searchParams.set("name", name);
   next.searchParams.set("redirectTo", redirectTo);
+  if (competitor) {
+    next.searchParams.set("competitor", competitor);
+  }
   if (isResend) {
     next.searchParams.set("resent", "1");
   }
@@ -217,6 +231,7 @@ export default function SignupRoute() {
           error={actionData?.error ?? loaderData.error}
           initialEmail={actionData?.email ?? loaderData.prefillEmail}
           initialName={actionData?.name ?? loaderData.prefillName}
+          initialCompetitor={actionData?.competitor ?? loaderData.prefillCompetitor}
           linkResent={loaderData.linkResent && !actionData?.error}
           linkSent={loaderData.linkSent && !actionData?.error}
           message={loaderData.message}
@@ -260,7 +275,7 @@ function signupErrorMessage(code: string | null) {
 
 function signupActionError(
   code: string,
-  values: { email: string; name: string; redirectTo: string },
+  values: { email: string; name: string; redirectTo: string; competitor: string },
 ) {
   return {
     ok: false as const,

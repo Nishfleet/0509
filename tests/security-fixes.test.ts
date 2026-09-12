@@ -94,6 +94,7 @@ describe("auth open-redirect protection", () => {
       redirectTo: "/app#setup-checklist",
       prefillEmail: "",
       prefillName: "",
+      prefillCompetitor: "",
       linkSent: false,
       linkResent: false,
     });

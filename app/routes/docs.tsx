@@ -152,6 +152,9 @@ Authorization: Bearer f9_live_...`}</code>
           <Link to="/guides/how-to-track-competitor-ads">Guide: how to track competitor ads</Link>
           <Link to="/guides/how-to-monitor-meta-ad-library">Guide: how to monitor a competitor's Meta Ad Library</Link>
           <Link to="/guides/how-to-monitor-competitor-landing-page-changes">Guide: how to monitor a competitor's landing page changes</Link>
+          <Link to="/guides/how-to-get-alerted-when-a-competitor-changes-their-offer">Guide: how to get alerted when a competitor changes their offer</Link>
+          <Link to="/guides/how-to-prove-what-changed-on-a-competitor-website">Guide: how to prove what changed on a competitor's website</Link>
+          <Link to="/guides/how-to-turn-a-one-off-competitor-check-into-a-standing-watch">Guide: how to turn a one-off check into a standing watch</Link>
           <Link to="/api/docs">API docs</Link>
           <Link to="/mcp/setup">MCP setup</Link>
           <Link to="/status">Status</Link>
