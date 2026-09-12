@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 import { env } from "cloudflare:workers";
-import migrationSql from "../../migrations/0098_widen_source_target_connector_bluesky.sql?raw";
+import migrationSql from "../../migrations/0099_widen_source_target_connector_bluesky.sql?raw";
 
 import { blueskyConnector, pollBlueskyMention } from "~/lib/presence-connectors/bluesky.server";
 import { getPresenceConnector } from "~/lib/presence-connector-registry.server";
@@ -17,7 +17,7 @@ import { db, ISO_T0, uid } from "./fixtures";
  * (Nishfleet/0509#3171, source ticket Nishfleet/0509#3252).
  *
  * The suite runs on real workerd against the repo's real migrations (the
- * workers project applies the chain in setup; 0098 re-runs idempotently here)
+ * workers project applies the chain in setup; 0099 re-runs idempotently here)
  * so both the 'bluesky' READ and WRITE path through
  * `source_target.connector_id` are asserted against the real schema.
  *
@@ -339,7 +339,7 @@ describe("bluesky mention connector — healthCheck", () => {
   });
 });
 
-describe("bluesky mention connector — migration 0098 and the real substrate", () => {
+describe("bluesky mention connector — migration 0099 and the real substrate", () => {
   const statements = migrationSql
     .split("\n")
     .filter((line) => !line.trim().startsWith("--"))

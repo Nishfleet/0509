@@ -1576,16 +1576,14 @@ describe("D1 remote restore evidence automation", () => {
   it("plans catch-up when production applied a same-number migration before the repo file landed", () => {
     // Run 34671488829 (2026-09-12): production applied 0096_error_reports.sql
     // while it was the ledger tail, then 0096_email_suppression.sql landed in
-    // the repository sorting earlier. D1's ledger is append-only, so the live
-    // order is fixed history the sorted repository cannot reproduce.
-    //
-    // 0097_status_probe_samples.sql, 0098_email_delivery_canary.sql,
-    // 0098_widen_source_target_connector_bluesky.sql and
-    // 0098_widen_source_target_connector_gdelt.sql are in the repository but
-    // NOT yet applied on production (production deploys have been red since
-    // 2026-09-09), so the modeled production ledger excludes them too and
-    // every expected forward-suffix includes them as ordinary catch-up at the
-    // tail.
+    // the repository sorting earlier (run 34671488829). Worse, the other 0098
+    // (0098_widen_source_target_connector_gdelt.sql) WAS applied while
+    // 0098_widen_source_target_connector_bluesky.sql had never shipped, so
+    // production carried a ledger HOLE by repository order — the catch-up
+    // planner cannot express it and the evidence gate fired
+    // source_backup_migration_ledger_stale (run 34705843153). The latecomer
+    // renames to 0099_widen_source_target_connector_bluesky.sql so it sorts
+    // after the applied tail and becomes ordinary catch-up.
     const repository = readdirSync(resolve("migrations"))
       .filter((name) => /^\d{4}_.+\.sql$/u.test(name))
       .sort();
@@ -1593,24 +1591,31 @@ describe("D1 remote restore evidence automation", () => {
       (name) => !RETIRED_PRODUCTION_MIGRATIONS.has(name),
     );
     const repositorySuffix = repository.slice(repositoryBaseline.length);
+    // The live production ledger, exactly as the fresh backup of the failing
+    // run 34705843153 reported it: everything through 0095 in repository
+    // order, then the applied 0096/0097/0098 names in production (append)
+    // order, 0098_widen_gdelt last, the renamed 0099 not yet applied.
     const productionNames = [
       ...PRODUCTION_MIGRATION_LEDGER_BASELINE,
-      ...repositorySuffix.filter(
-        (name) =>
-          name !== "0096_email_suppression.sql" &&
-          name !== "0097_status_probe_samples.sql" &&
-          name !== "0098_email_delivery_canary.sql" &&
-          name !== "0098_widen_source_target_connector_bluesky.sql" &&
-          name !== "0098_widen_source_target_connector_gdelt.sql",
-      ),
+      ...repositorySuffix.filter((name) => name < "0096_"),
+      "0096_error_reports.sql",
+      "0096_email_suppression.sql",
+      "0097_status_probe_samples.sql",
+      "0098_email_delivery_canary.sql",
+      "0098_widen_source_target_connector_gdelt.sql",
     ];
-    expect(productionNames.at(-1)).toBe("0096_error_reports.sql");
+    expect(productionNames.at(-1)).toBe(
+      "0098_widen_source_target_connector_gdelt.sql",
+    );
     const namedLedger = (names: string[]) =>
       names.map((name, index) => ({
         id: index + 1,
         name,
         appliedAt: "2026-09-12 04:04:45",
       }));
+    // The failing run's own state: production ends at 0098_widen_gdelt, the
+    // renamed 0099 is the only unapplied repository migration — the exact
+    // catch-up the evidence step must plan (was: reject → deploy red).
     expect(
       planSourceBackupLedgerReconciliation(
         namedLedger(productionNames),
@@ -1618,32 +1623,27 @@ describe("D1 remote restore evidence automation", () => {
       ),
     ).toEqual({
       action: "apply_forward_suffix",
-      migrations: [
-        "0096_email_suppression.sql",
-        "0097_status_probe_samples.sql",
-        "0098_email_delivery_canary.sql",
-        "0098_widen_source_target_connector_bluesky.sql",
-        "0098_widen_source_target_connector_gdelt.sql",
-      ],
+      migrations: ["0099_widen_source_target_connector_bluesky.sql"],
     });
+    // After the suffix applies, the ledger matches the order-exception
+    // variant of the repository exactly.
     expect(
       planSourceBackupLedgerReconciliation(
         namedLedger([
           ...productionNames,
-          "0096_email_suppression.sql",
-          "0097_status_probe_samples.sql",
-          "0098_email_delivery_canary.sql",
-          "0098_widen_source_target_connector_bluesky.sql",
-          "0098_widen_source_target_connector_gdelt.sql",
+          "0099_widen_source_target_connector_bluesky.sql",
         ]),
         repository,
       ),
     ).toEqual({ action: "ok" });
-    // A production ledger behind the whole exception group catches up in
-    // repository order: a forward apply always appends in sorted order.
-    const behindNames = productionNames.filter(
-      (name) => name !== "0096_error_reports.sql",
-    );
+    // A production ledger behind the whole 0096 exception group catches up
+    // in repository order: a forward apply always appends in sorted order,
+    // 0099 deepest.
+    const behindNames = [
+      ...PRODUCTION_MIGRATION_LEDGER_BASELINE,
+      ...repositorySuffix.filter((name) => name < "0096_"),
+      "0096_error_reports.sql",
+    ];
     expect(
       planSourceBackupLedgerReconciliation(
         namedLedger(behindNames),
@@ -1656,8 +1656,8 @@ describe("D1 remote restore evidence automation", () => {
         "0096_error_reports.sql",
         "0097_status_probe_samples.sql",
         "0098_email_delivery_canary.sql",
-        "0098_widen_source_target_connector_bluesky.sql",
         "0098_widen_source_target_connector_gdelt.sql",
+        "0099_widen_source_target_connector_bluesky.sql",
       ],
     });
   });

@@ -9,8 +9,16 @@
 -- temp table and strand them, so the old table keeps its name until the copy
 -- is done and the rebuild re-takes the name.
 --
--- Data preservation: D1 runs with foreign keys ON and honors neither
--- PRAGMA foreign_keys = OFF nor PRAGMA defer_foreign_keys for DROP TABLE
+-- Numbered 0099 (born 0098_widen_source_target_connector_bluesky.sql): the
+-- other 0098 (0098_widen_source_target_connector_gdelt.sql, issue #3251) was
+-- already applied to production before this file landed, and a repository
+-- migration must sort AFTER the last applied production name — otherwise it
+-- is a ledger hole and the restore-evidence gate rejects the deploy with
+-- source_backup_migration_ledger_stale (run 34705843153). The file was never
+-- applied anywhere, so the rename touches no applied ledger; D1 keys the
+-- ledger by file name and applies 0099 as an ordinary unapplied migration.
+--
+-- Data preservation: D1 runs with foreign keys ON and honors neither-- PRAGMA foreign_keys = OFF nor PRAGMA defer_foreign_keys for DROP TABLE
 -- cascades — dropping a parent table implicitly deletes its rows and the
 -- ON DELETE CASCADE chains wipe presence_item, presence_poll_cursor and
 -- presence_item_revision rows (verified against the real local D1 engine).
@@ -19,19 +27,22 @@
 -- transaction D1 wraps the migration in.
 --
 -- Expand-only: every value the old CHECK accepted is still accepted, so
--- existing rows copy through unchanged, and the running old code (which only
--- writes 'website'/'x'/'reddit'/'linkedin'/'rss') is unaffected. Rollback of
--- the PR removes code, never data.
+-- existing rows copy through unchanged, and the running old code is
+-- unaffected. The CHECK unions 'gdelt' because this rebuild runs AFTER
+-- 0098_widen_source_target_connector_gdelt (both on production, which applied
+-- it via deploy 2afb80b1, and in the local integration chain, which applies
+-- migrations in sorted order) — a rebuild that dropped 'gdelt' would strand
+-- every gdelt source_target row. Rollback of the PR removes code, never data.
 
-CREATE TABLE pi_bk_0098 AS SELECT * FROM presence_item;
-CREATE TABLE pc_bk_0098 AS SELECT * FROM presence_poll_cursor;
-CREATE TABLE pir_bk_0098 AS SELECT * FROM presence_item_revision;
+CREATE TABLE pi_bk_0099 AS SELECT * FROM presence_item;
+CREATE TABLE pc_bk_0099 AS SELECT * FROM presence_poll_cursor;
+CREATE TABLE pir_bk_0099 AS SELECT * FROM presence_item_revision;
 
 CREATE TABLE source_target_bluesky_widen_new (
   id TEXT PRIMARY KEY NOT NULL,
   tracked_entity_id TEXT NOT NULL,
   user_id TEXT NOT NULL,
-  connector_id TEXT NOT NULL CHECK (connector_id IN ('website', 'x', 'reddit', 'linkedin', 'rss', 'bluesky')),
+  connector_id TEXT NOT NULL CHECK (connector_id IN ('website', 'x', 'reddit', 'linkedin', 'rss', 'gdelt', 'bluesky')),
   target_key TEXT NOT NULL,
   target_url TEXT,
   target_handle TEXT,
@@ -59,12 +70,12 @@ FROM source_target;
 DROP TABLE source_target;
 ALTER TABLE source_target_bluesky_widen_new RENAME TO source_target;
 
-INSERT INTO presence_item SELECT * FROM pi_bk_0098;
-INSERT INTO presence_poll_cursor SELECT * FROM pc_bk_0098;
-INSERT INTO presence_item_revision SELECT * FROM pir_bk_0098;
-DROP TABLE pi_bk_0098;
-DROP TABLE pc_bk_0098;
-DROP TABLE pir_bk_0098;
+INSERT INTO presence_item SELECT * FROM pi_bk_0099;
+INSERT INTO presence_poll_cursor SELECT * FROM pc_bk_0099;
+INSERT INTO presence_item_revision SELECT * FROM pir_bk_0099;
+DROP TABLE pi_bk_0099;
+DROP TABLE pc_bk_0099;
+DROP TABLE pir_bk_0099;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_source_target_entity_connector_key
   ON source_target(tracked_entity_id, connector_id, target_key)
