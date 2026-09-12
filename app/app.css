@@ -1257,6 +1257,153 @@ button[aria-busy="true"] {
   line-height: 1.45;
 }
 
+.f9-join-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.f9-join-form label {
+  grid-column: 1 / -1;
+  color: var(--f9-search-muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.f9-join-form input {
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--f9-search-line);
+  border-radius: 12px;
+  font: inherit;
+}
+
+.f9-join-form button {
+  padding: 14px 20px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--f9-search-accent, #061629);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.f9-join-card-head img {
+  border-radius: 8px;
+}
+
+.f9-join-card {
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+  border: 1px solid var(--f9-search-line);
+  border-radius: 18px;
+}
+
+.f9-join-card-head {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.f9-join-card-head p {
+  margin: 0;
+  color: var(--f9-search-muted);
+  font-size: 0.85rem;
+}
+
+.f9-join-card-facts {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.f9-join-card-facts div {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+}
+
+.f9-join-card-facts dt {
+  color: var(--f9-search-soft);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.f9-join-card-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.f9-join-candidates ul,
+.f9-join-disambiguate ul {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.f9-join-candidates li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--f9-search-line);
+  border-radius: 12px;
+}
+
+.f9-join-confirm {
+  display: grid;
+  gap: 8px;
+}
+
+.f9-join-confirm button {
+  padding: 12px 18px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--f9-search-accent, #061629);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.f9-join-confirm p,
+.f9-join-card > p {
+  margin: 0;
+  color: var(--f9-search-muted);
+  font-size: 0.82rem;
+}
+
+.f9-join-confirm-mini button,
+.f9-join-disambiguate button {
+  padding: 8px 12px;
+  border: 1px solid var(--f9-search-line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--f9-search-ink);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.f9-join-disambiguate {
+  padding: 12px;
+  border: 1px dashed var(--f9-search-line);
+  border-radius: 12px;
+}
+
+.f9-join-disambiguate p {
+  margin: 0;
+  color: var(--f9-search-muted);
+  font-size: 0.85rem;
+}
+
 .f9-checkbox-row input {
   width: 18px;
   min-width: 18px;
