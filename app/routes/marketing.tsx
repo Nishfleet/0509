@@ -549,7 +549,7 @@ export default function MarketingRoute() {
 
   const structuredFaq = faqPageJsonLd([
     ...productFaqEntries,
-    ...billingFaqJsonLdEntries(commercialLaunch.agencySaleOpen),
+    ...billingFaqJsonLdEntries(),
   ]);
 
   const heroTopHook = proofBrief?.insights.topHooks[0]?.trim() ?? null;

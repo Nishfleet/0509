@@ -3618,23 +3618,6 @@ one signal-green accent.
   font-weight: 600;
 }
 
-/* WP-A4: a neutral status note (e.g. Agency "Account review") — NOT a
-   recommendation. Outline pill, no ink fill and no green, so it can never be
-   read as the recommended pick or as a live-state fact. */
-.f9-home .f9-plan-note {
-  font-style: normal;
-  font-family: var(--ld-mono);
-  font-size: 0.68rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  background: transparent;
-  color: var(--ld-ink-soft);
-  border: 1.5px solid var(--ld-line);
-  padding: 3px 9px;
-  align-self: flex-start;
-  font-weight: 600;
-}
-
 .f9-home .f9-commerce-card h3 {
   font-family: var(--ld-display);
   font-weight: 700;

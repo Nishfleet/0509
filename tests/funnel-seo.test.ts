@@ -115,7 +115,7 @@ describe("structured data (JSON-LD)", () => {
     const { productFaqEntries, billingFaqJsonLdEntries } = await import("~/routes/marketing");
 
     const faq = JSON.parse(
-      JSON.stringify(faqPageJsonLd([...productFaqEntries, ...billingFaqJsonLdEntries(false)])),
+      JSON.stringify(faqPageJsonLd([...productFaqEntries, ...billingFaqJsonLdEntries()])),
     );
 
     expect(faq["@type"]).toBe("FAQPage");
@@ -133,7 +133,7 @@ describe("structured data (JSON-LD)", () => {
     // The held/open Agency billing question follows the launch gate.
     const heldQuestions = faq.mainEntity.map((entry: { name: string }) => entry.name);
     expect(heldQuestions).toContain("Why is Agency held?");
-    const openFaq = JSON.parse(JSON.stringify(faqPageJsonLd(billingFaqJsonLdEntries(true))));
+    const openFaq = JSON.parse(JSON.stringify(faqPageJsonLd(billingFaqJsonLdEntries())));
     expect(openFaq.mainEntity.map((entry: { name: string }) => entry.name)).toContain(
       "How does Agency checkout work?",
     );

@@ -117,10 +117,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
   if (!isSelfServePlanSlug(target.planFamily)) {
     throw redirect("/app/billing?plan-change=unavailable#plans", { status: 303 });
   }
-  const { isPlanCheckoutAllowed } = await import("~/lib/commercial-launch-gate.server");
-  if (!isPlanCheckoutAllowed(env, target.planFamily)) {
-    throw redirect("/app/billing?plan-change=unavailable#plans", { status: 303 });
-  }
   const { readProviderProductId, resolveBillingSku } = await import("~/lib/billing-sku-catalog");
   const targetSku = resolveBillingSku(target.sku);
   const targetProviderProductId = targetSku ? readProviderProductId(env, targetSku) : "";
