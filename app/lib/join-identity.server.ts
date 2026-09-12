@@ -786,6 +786,7 @@ function candidateBase(
   },
 ): JoinIdentityCandidate {
   return {
+    kind: overrides.kind,
     input: outcome.input,
     name: overrides.name,
     logoUrl: overrides.logoUrl ?? null,

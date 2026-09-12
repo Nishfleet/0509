@@ -203,34 +203,38 @@ export default function JoinRoute() {
   return (
     <main className="f9-auth-page">
       <div className="f9-container f9-auth-layout">
-        <Link className="f9-brand f9-auth-brand" to="/" aria-label="Five to Nine home">
-          <BrandWordmark />
-        </Link>
+        <section className="f9-auth-story">
+          <Link className="f9-brand f9-auth-brand" to="/" aria-label="Five to Nine home">
+            <BrandWordmark />
+          </Link>
 
-        <section>
-          <span>Start here</span>
-          <h1>Your website or your name. That&rsquo;s the whole question.</h1>
-          <p>
-            We find who you are, the ads already on record, and any public mentions — then you confirm the one
-            that&rsquo;s you. Everything after that is automatic.
-          </p>
+          <div>
+            <span>Start here</span>
+            <h1>Your website or your name. That&rsquo;s the whole question.</h1>
+            <p>
+              We find who you are, the ads already on record, and any public mentions — then you confirm the one
+              that&rsquo;s you. Everything after that is automatic.
+            </p>
+          </div>
         </section>
 
-        <div>
+        <div className="f9-auth-card">
           <fetcher.Form method="post" action="/join" className="f9-join-form">
             <input type="hidden" name="intent" value="resolve" />
             <input type="hidden" name="redirectTo" value={loaderData.redirectTo} />
-            <label htmlFor="join-input">Your website or your name</label>
-            <input
-              id="join-input"
-              type="text"
-              name="input"
-              autoComplete="off"
-              maxLength={MAX_INPUT_LENGTH}
-              placeholder="yourbrand.com, your name, or a handle"
-              required
-            />
-            <button type="submit" disabled={fetcher.state !== "idle"}>
+            <label className="f9-field">
+              <span>Your website or your name</span>
+              <input
+                id="join-input"
+                type="text"
+                name="input"
+                autoComplete="off"
+                maxLength={MAX_INPUT_LENGTH}
+                placeholder="yourbrand.com, your name, or a handle"
+                required
+              />
+            </label>
+            <button className="f9-wk-btn" type="submit" disabled={fetcher.state !== "idle"}>
               {fetcher.state !== "idle" ? "Looking…" : "Find my brand"}
             </button>
           </fetcher.Form>
@@ -310,14 +314,16 @@ function IdentityCard({
           </p>
           <enrichFetcher.Form method="post" action="/join" className="f9-join-enrich">
             <input type="hidden" name="intent" value="resolve" />
-            <input
-              type="text"
-              name="input"
-              aria-label="Disambiguating marker"
-              placeholder="linkedin.com/in/you, or your site"
-              maxLength={MAX_INPUT_LENGTH}
-            />
-            <button type="submit">Check this instead</button>
+            <div className="f9-field">
+              <input
+                type="text"
+                name="input"
+                aria-label="Disambiguating marker"
+                placeholder="linkedin.com/in/you, or your site"
+                maxLength={MAX_INPUT_LENGTH}
+              />
+            </div>
+            <button className="f9-wk-lnk" type="submit">Check this instead</button>
           </enrichFetcher.Form>
         </div>
       ) : null}
@@ -349,7 +355,7 @@ function IdentityCard({
         <input type="hidden" name="input" value={primary.input} />
         <input type="hidden" name="pinnedName" value={primary.name ?? ""} />
         <input type="hidden" name="redirectTo" value={redirectTo} />
-        <button type="submit" disabled={confirmFetcher.state !== "idle"}>
+        <button className="f9-wk-btn" type="submit" disabled={confirmFetcher.state !== "idle"}>
           {confirmFetcher.state !== "idle" ? "Confirming…" : "Yes, that’s me"}
         </button>
         <p>Confirming sets up the first watch — nothing else to configure.</p>
@@ -372,7 +378,7 @@ function ConfirmMiniForm({
       <input type="hidden" name="input" value={candidate.domain ?? candidate.name ?? candidate.input} />
       <input type="hidden" name="pinnedName" value={candidate.name ?? ""} />
       <input type="hidden" name="redirectTo" value={redirectTo} />
-      <button type="submit" disabled={fetcher.state !== "idle"}>
+      <button className="f9-wk-lnk" type="submit" disabled={fetcher.state !== "idle"}>
         Confirm “{candidate.name ?? candidate.input}”
       </button>
     </fetcher.Form>

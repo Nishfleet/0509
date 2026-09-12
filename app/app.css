@@ -1261,44 +1261,15 @@ button[aria-busy="true"] {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
-}
-
-.f9-join-form label {
-  grid-column: 1 / -1;
-  color: var(--f9-search-muted);
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-.f9-join-form input {
-  min-width: 0;
-  padding: 14px 16px;
-  border: 1px solid var(--f9-search-line);
-  border-radius: 12px;
-  font: inherit;
-}
-
-.f9-join-form button {
-  padding: 14px 20px;
-  border: 0;
-  border-radius: 12px;
-  background: var(--f9-search-accent, #061629);
-  color: #fff;
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.f9-join-card-head img {
-  border-radius: 8px;
+  align-items: end;
 }
 
 .f9-join-card {
   display: grid;
   gap: 16px;
   padding: 22px;
-  border: 1px solid var(--f9-search-line);
-  border-radius: 18px;
+  border: 1.5px solid var(--ld-ink);
+  background: var(--ld-bone);
 }
 
 .f9-join-card-head {
@@ -1309,7 +1280,7 @@ button[aria-busy="true"] {
 
 .f9-join-card-head p {
   margin: 0;
-  color: var(--f9-search-muted);
+  color: var(--ld-ink-soft);
   font-size: 0.85rem;
 }
 
@@ -1327,10 +1298,11 @@ button[aria-busy="true"] {
 }
 
 .f9-join-card-facts dt {
-  color: var(--f9-search-soft);
-  font-size: 0.8rem;
+  color: var(--ld-ink-soft);
+  font-family: var(--ld-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
 }
 
 .f9-join-card-facts dd {
@@ -1338,8 +1310,13 @@ button[aria-busy="true"] {
   overflow-wrap: anywhere;
 }
 
-.f9-join-candidates ul,
-.f9-join-disambiguate ul {
+.f9-join-candidates p {
+  margin: 0;
+  color: var(--ld-ink-soft);
+  font-size: 0.85rem;
+}
+
+.f9-join-candidates ul {
   display: grid;
   gap: 10px;
   margin: 10px 0 0;
@@ -1353,8 +1330,8 @@ button[aria-busy="true"] {
   gap: 10px;
   align-items: center;
   padding: 10px 12px;
-  border: 1px solid var(--f9-search-line);
-  border-radius: 12px;
+  border: 1px solid var(--ld-line);
+  background: var(--ld-card);
 }
 
 .f9-join-confirm {
@@ -1362,46 +1339,29 @@ button[aria-busy="true"] {
   gap: 8px;
 }
 
-.f9-join-confirm button {
-  padding: 12px 18px;
-  border: 0;
-  border-radius: 12px;
-  background: var(--f9-search-accent, #061629);
-  color: #fff;
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.f9-join-confirm p,
-.f9-join-card > p {
+.f9-join-confirm p {
   margin: 0;
-  color: var(--f9-search-muted);
+  color: var(--ld-ink-soft);
   font-size: 0.82rem;
-}
-
-.f9-join-confirm-mini button,
-.f9-join-disambiguate button {
-  padding: 8px 12px;
-  border: 1px solid var(--f9-search-line);
-  border-radius: 10px;
-  background: transparent;
-  color: var(--f9-search-ink);
-  font: inherit;
-  font-size: 0.85rem;
-  cursor: pointer;
 }
 
 .f9-join-disambiguate {
   padding: 12px;
-  border: 1px dashed var(--f9-search-line);
-  border-radius: 12px;
+  border: 1px dashed var(--ld-line);
 }
 
 .f9-join-disambiguate p {
   margin: 0;
-  color: var(--f9-search-muted);
+  color: var(--ld-ink-soft);
   font-size: 0.85rem;
+}
+
+.f9-join-enrich {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+  margin-top: 10px;
 }
 
 .f9-checkbox-row input {
