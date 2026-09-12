@@ -367,6 +367,42 @@ describe("colour, font and radius rules", () => {
         }),
       ).toBe(0);
     });
+
+    it("counts 4-digit #rgba inside a colour declaration value", () => {
+      // 0509#2482 repro: `color: #1234` is valid CSS #rgba and the 8|6|3-only
+      // pattern counted 0 of these — a permanent new-debt channel past a
+      // zero-trend gate.
+      expect(ruleCount("raw-hex-color", { "app/app.css": "a { color: #1234; }" })).toBe(1);
+      expect(
+        ruleCount("raw-hex-color", {
+          "app/app.css": "a { border: 1px solid #1234; box-shadow: 0 0 2px #abcd; }",
+        }),
+      ).toBe(2);
+      expect(
+        ruleCount("raw-hex-color", { "app/app.css": ":root { --f9-ink: #1234; }" }),
+      ).toBe(1);
+    });
+
+    it("does NOT count a 4-digit issue reference — only declaration values count", () => {
+      // 0509#2482 orchestrator decision: `#2218` in a comment is an issue
+      // reference, not a colour. A source-wide {4} alternative counts 341 of
+      // these across app/ — a reseeded ceiling gate-integrity.sh rejects —
+      // and would keep breaking CI on every later issue mention.
+      expect(
+        ruleCount("raw-hex-color", {
+          "app/app.css": "/* Issue #2218 */\na { color: var(--f9-ink); }",
+        }),
+      ).toBe(0);
+      expect(
+        ruleCount("raw-hex-color", {
+          "app/routes/page.tsx": "// fix for #2218\nexport default () => null;",
+        }),
+      ).toBe(0);
+    });
+
+    it("still counts a would-be issue number in value position — `color: #2218` is a colour", () => {
+      expect(ruleCount("raw-hex-color", { "app/app.css": "a { color: #2218; }" })).toBe(1);
+    });
   });
 
   describe("non-token-font-family", () => {
