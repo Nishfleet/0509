@@ -27,7 +27,7 @@ export const meta: MetaFunction = () =>
   publicSeoMeta({
     title: "Guides: track and monitor competitor ads | Five to Nine",
     description:
-      "The how-to guides: track competitor ads by hand, monitor a competitor's Meta Ad Library over time, and watch a landing page for offer/price/CTA changes — all ending in the free no-account search preview.",
+      "The how-to guides: track competitor ads by hand, monitor a competitor's Meta Ad Library over time, watch a landing page for offer/price/CTA changes, get alerted when an offer moves, prove what changed, and turn a one-off check into a standing watch — all ending in the free no-account search preview.",
     pathname: PATHNAME,
   });
 
@@ -52,6 +52,24 @@ export const GUIDE_ENTRIES = [
     title: "How to monitor a competitor's landing-page changes",
     blurb:
       "The offer/price/CTA watch the two ad guides don't cover: URL + condition by hand, where pixel diffs break, and the semantic-diff routine.",
+  },
+  {
+    href: "/guides/how-to-get-alerted-when-a-competitor-changes-their-offer",
+    title: "How to get alerted when a competitor changes their offer",
+    blurb:
+      "The alert half of the watch: the free by-hand check, the monitor-emails-you route, and the brief that names the field that moved.",
+  },
+  {
+    href: "/guides/how-to-prove-what-changed-on-a-competitor-website",
+    title: "How to prove what changed on a competitor's website",
+    blurb:
+      "The evidence half: the public archive, your own dated record, and the captured before/after that carries its source link.",
+  },
+  {
+    href: "/guides/how-to-turn-a-one-off-competitor-check-into-a-standing-watch",
+    title: "How to turn a one-off competitor check into a standing watch",
+    blurb:
+      "The cadence half: the recurring by-hand routine, the scheduled-monitor route, and what a watch actually is (baseline + diff + record).",
   },
 ] as const;
 
