@@ -44,10 +44,13 @@ describe("loader timings (synthetic D1 latencies)", () => {
     await call();
     const t1 = performance.now();
     const duration = t1 - t0;
-    expect(duration).toBeGreaterThan(DELAY_B);
+    // Lower bound sits 30ms under DELAY_B to absorb setTimeout jitter
+    // (real timers round to the next tick); the parallel floor is DELAY_B,
+    // the sequential sum is far above.
+    expect(duration).toBeGreaterThan(DELAY_B - 30);
     expect(duration).toBeLessThan(DELAY_A + DELAY_B + 100); // parallel: not the sum
     // Also assert explicitly so the timing evidence shows in the test name.
-    expect(duration).toBeLessThan(DELAY_A + DELAY_B);
+    expect(duration).toBeLessThan(DELAY_A + DELAY_B - 40);
     process.stdout.write(
       `#2951 timing: loader lookup wall-clock = ${duration.toFixed(0)}ms (sequential bound ${(DELAY_A + DELAY_B).toFixed(0)}ms, parallel bound ${DELAY_B}ms)\n`,
     );

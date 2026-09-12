@@ -92,8 +92,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   // null path renders the clearly labelled sample state, never a fabricated
   // "real" change). One bounded database read; never a scan or a provider call.
   // Issue #2951: the two homepage lookups are independent — both promises are
-  // started eagerly and only awaited afterwards, so the second D1 read no
-  // longer waits on the first. Each lookup keeps its own guarded fallback:
+  // started eagerly and only awaited afterwards, so the second database
+  // read no longer waits on the first. Each lookup keeps its own guarded fallback:
   // a failure in one must not touch the other (same warnings, same sentinels
   // as before).
   const changeMarkPromise = (async (): Promise<PublicChangeMark | null> => {
