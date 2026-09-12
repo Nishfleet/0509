@@ -67,6 +67,10 @@ type EdgeLimitPolicy = {
   // IPs can't reset the bucket.
   keySeed?: string;
   keyByIpOnly?: boolean;
+  // When set, a 429 from this policy renders the readable money-path page
+  // copy (issue #3317 acceptance: never a bare status or raw JSON) instead
+  // of the API JSON envelope. Retry-After is preserved either way.
+  humane429?: boolean;
 };
 
 // Preserves the #1972 per-IP abuse-presence public posture while moving the
@@ -80,6 +84,16 @@ export const PUBLIC_BRAND_PAGE_PER_MINUTE_LIMIT = 12;
 // Limiting binding only supports 10s/60s periods, so the sustained rate
 // becomes 3/60s.
 export const PUBLIC_PROOF_BRIEF_PER_MINUTE_LIMIT = 3;
+// Issue #3317: the anonymous money-path's converting step is /auth/signup,
+// and every funnel page passively prefetches /api/auth/get-session before
+// it. Those are page/session READS — availability, not spend — so they get
+// their own generous 60/60s per-IP bucket instead of sharing the tight
+// credential-POST ceiling that 429'd the signup page itself (2026-09-12
+// walk: 25 × curl /auth/signup -> 7×200 / 18×429 on the old single
+// 20/10min->2/60s bucket). 60/60s clears a 24-GET/10-min signup burst at
+// ≤1 rps plus a two-device funnel walk (~10 auth-scope GETs) inside one
+// 60s window with room to spare, while every other scope is untouched.
+export const AUTH_ANON_GET_PER_MINUTE_LIMIT = 60;
 const EDGE_LIMIT_PERIOD_SECONDS = 60;
 
 export type BillingProviderRateLimitKind = "pricing" | "mutation";
@@ -425,7 +439,28 @@ export function rateLimitPolicyFor(request: Request): EdgeLimitPolicy | null {
   }
 
   if (pathname.startsWith("/api/auth") || pathname.startsWith("/auth/")) {
-    // 20/10min legacy -> same sustained 2/min at 60s burst granularity.
+    // Issue #3317: the anonymous money-path. The /auth/signup page GET and
+    // better-auth's passive /api/auth/get-session|CSRF prefetches fired by
+    // EVERY funnel page (search -> result -> pricing -> signup-start) are
+    // availability, not spend: a stranger browsing three pages burned the
+    // old single 2/60s bucket on prefetches alone, then 429'd with a blank
+    // page before ever seeing the signup form. They now share one generous
+    // per-IP anonymous-GET budget (see AUTH_ANON_GET_PER_MINUTE_LIMIT).
+    if (method === "GET" || method === "HEAD") {
+      return {
+        scope: "auth-anon-get",
+        limit: AUTH_ANON_GET_PER_MINUTE_LIMIT,
+        periodSeconds: 60,
+        binding: "RL_AUTH_GET",
+        keyByIpOnly: true,
+        // When this does 429 a shared-NAT flood, the body stays honest for
+        // the one impression a signup visit gets (issue #3317 acceptance 4).
+        humane429: true,
+      };
+    }
+    // State-changing auth calls (sign-up, sign-in, 2FA, password) keep the
+    // #2964-legacy tight ceiling: 20/10min -> same sustained 2/min at 60s
+    // burst granularity, fail-closed via the edge binding.
     return { scope: "auth", limit: 2, periodSeconds: 60, binding: "RL_AUTH" };
   }
 
@@ -495,22 +530,23 @@ async function enforceEdgeRateLimit(
   if (isVerifiedSearchCrawler(request) && VERIFIED_BOT_EXEMPT_SCOPES.has(policy.scope)) {
     return null;
   }
+  const four29Kind = policy.humane429 ? ("html" as const) : ("json" as const);
   const limiter = env[policy.binding];
   if (!limiter) {
     console.error(
       `[rate-limit] Rate Limiting binding ${policy.binding} missing; failing closed.`,
     );
-    return tooManyRequestsResponse(policy.periodSeconds);
+    return tooManyRequestsResponse(policy.periodSeconds, four29Kind);
   }
 
   try {
     const keyHash = await requestKeyHash(request, policy);
     const result = await limiter.limit({ key: keyHash });
     if (result.success) return null;
-    return tooManyRequestsResponse(policy.periodSeconds);
+    return tooManyRequestsResponse(policy.periodSeconds, four29Kind);
   } catch (error) {
     console.error("[rate-limit] edge limiter failed", error);
-    return tooManyRequestsResponse(policy.periodSeconds);
+    return tooManyRequestsResponse(policy.periodSeconds, four29Kind);
   }
 }
 
@@ -671,7 +707,32 @@ function isMissingRateLimitTableError(error: unknown) {
   return message.toLowerCase().includes("no such table") && message.includes("rate_limit_events");
 }
 
-function tooManyRequestsResponse(retryAfterSeconds: number) {
+// Issue #3317: the money-path page-GET 429 must stay honest — readable
+// copy (the 2026-09-12 walk receipt showed the /auth/signup 429 rendering
+// effectively blank), never a bare status or raw JSON. The phrase mirrors
+// the issue's own suggestion; Retry-After stays in the header AND the copy.
+function tooManyRequestsHtmlBody(retryAfterSeconds: number) {
+  return [
+    "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">",
+    "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">",
+    '<meta name="robots" content="noindex">',
+    "<title>0509 — checking faster than we allow</title></head>",
+    "<body><h1>Checking faster than we allow</h1>",
+    `<p>Try again in a few minutes. (Retry-After: ${retryAfterSeconds} seconds)</p></body></html>`,
+  ].join("");
+}
+
+function tooManyRequestsResponse(retryAfterSeconds: number, kind: "json" | "html" = "json") {
+  if (kind === "html") {
+    return new Response(tooManyRequestsHtmlBody(retryAfterSeconds), {
+      status: 429,
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "retry-after": String(retryAfterSeconds),
+        "cache-control": "no-store",
+      },
+    });
+  }
   return new Response(
     JSON.stringify({
       error: "rate_limited",
