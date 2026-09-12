@@ -34,9 +34,20 @@ function job(name: string, id: string) {
 
 describe("workflow routing hardening", () => {
   it("pins every remote action or reusable workflow to a full commit SHA", () => {
+    // Synced verbatim from fleet-ops via repo-standards-sync: the
+    // red-on-main and stop-the-line watchers deliberately track fleet-ops
+    // main so every repo runs the latest detector — they are alerts and
+    // actuators, not gates (fleet-ops docs/ci-standard.md "Red on main";
+    // each synced file's header comments). Only these exact references are
+    // exempt; any other uses: still needs a full SHA.
+    const shaPinExemptReferences = new Set([
+      "Nishfleet/fleet-ops/.github/workflows/red-on-main-detector.yml@main",
+      "Nishfleet/fleet-ops/.github/workflows/stop-the-line-detector.yml@main",
+    ]);
     for (const filename of readdirSync(workflowsDirectory).filter((name) => /\.ya?ml$/.test(name))) {
       const { source } = workflow(filename);
       for (const reference of source.matchAll(/^\s*(?:uses:)\s*([^\s]+).*$/gm)) {
+        if (shaPinExemptReferences.has(reference[1])) continue;
         expect(reference[1], `${filename}: ${reference[1]}`).toMatch(fullSha);
       }
     }

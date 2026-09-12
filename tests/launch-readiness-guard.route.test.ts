@@ -1979,6 +1979,7 @@ describe("launch readiness canary route", () => {
     await expect(response.json()).resolves.toEqual({
       ok: false,
       blocker: "canary_proof_pipeline_failed",
+      detail: "Error: d1 rejected: UNIQUE constraint",
       gateRunId: "gate-c-worker-v1",
       runId: "run-1",
     });
@@ -2025,6 +2026,7 @@ describe("launch readiness canary route", () => {
     await expect(response.json()).resolves.toEqual({
       ok: false,
       blocker: "canary_proof_pipeline_failed",
+      detail: "Error: d1 outage mid-event",
       gateRunId: "gate-c-worker-v1",
       runId: "run-1",
       proofCaptureId: "proof-1",
@@ -2074,6 +2076,7 @@ describe("launch readiness canary route", () => {
     await expect(response.json()).resolves.toEqual({
       ok: false,
       blocker: "canary_proof_pipeline_failed",
+      detail: "Error: email binding timeout",
       gateRunId: "gate-c-worker-v1",
       runId: "run-1",
       proofCaptureId: "proof-1",

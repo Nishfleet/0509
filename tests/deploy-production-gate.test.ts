@@ -564,7 +564,12 @@ describe("production deployment readiness gate", () => {
       fakeWranglerPath,
       `#!/usr/bin/env node
 import { writeFileSync } from "node:fs";
-writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.slice(2)));
+const args = process.argv.slice(2);
+if (args.join(" ") === "versions list --json") {
+  process.stdout.write(JSON.stringify([{ id: "worker-version-prior" }]));
+} else {
+  writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(args));
+}
 process.exit(Number(process.env.FAKE_WRANGLER_EXIT || 0));
 `,
     );
@@ -771,7 +776,13 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
         }),
       ).status,
     ).not.toBe(0);
-    expect(() => readFileSync(invocationPath, "utf8")).toThrow();
+    // The script may run `wrangler versions list` while choosing a target
+    // (#3239); the refusal must still land before any `rollback` spawn.
+    expect(JSON.parse(readFileSync(invocationPath, "utf8"))).toEqual([
+      "versions",
+      "list",
+      "--json",
+    ]);
   });
 
   it("stops at the executable refund preflight before migration or deploy", () => {
