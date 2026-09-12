@@ -11,6 +11,7 @@ const FUNNEL_OPERATIONS = [
   "funnel_search_preview_error",
   "funnel_signup_start",
   "funnel_pricing_free_card_clicked",
+  "funnel_search_likely_confirm_signup_started",
   "funnel_signup_completed",
   "funnel_first_brief_generated",
   "funnel_first_brief_viewed",
@@ -455,6 +456,36 @@ describe("funnel measurement emission", () => {
     }
     // The raw marker value never appears anywhere in a record.
     expect(JSON.stringify(records)).not.toContain(PRICING_FREE_SIGNUP_SOURCE);
+  });
+
+  it("selects the search-likely-confirm kind for the /search confirm intent (issue #3306)", async () => {
+    const { emitFunnelSignupStartFromAllowlistedSource, SEARCH_LIKELY_CONFIRM_SIGNUP_SOURCE } =
+      await import("~/lib/funnel-measurement.server");
+    const env = { FUNNEL_MEASUREMENT_ENABLED: "1" };
+
+    emitFunnelSignupStartFromAllowlistedSource(
+      env,
+      makeFunnelRequest(),
+      SEARCH_LIKELY_CONFIRM_SIGNUP_SOURCE,
+    );
+    // The pricing marker must NOT be mistaken for the confirm intent.
+    emitFunnelSignupStartFromAllowlistedSource(env, makeFunnelRequest(), null);
+
+    const records = emittedFunnelRecords(logSpy);
+    expect(records).toHaveLength(2);
+    const operations = records.map((record) => (record as { operation: string }).operation);
+    expect(operations).toEqual([
+      "funnel_search_likely_confirm_signup_started",
+      "funnel_signup_start",
+    ]);
+
+    for (const record of records) {
+      const details = (record as { details: Record<string, string> }).details;
+      expect(details.route).toBe("signup");
+      expect(details.account_scope).toBe("anonymous");
+    }
+    // The raw marker value never appears anywhere in a record.
+    expect(JSON.stringify(records)).not.toContain(SEARCH_LIKELY_CONFIRM_SIGNUP_SOURCE);
   });
 });
 
