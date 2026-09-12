@@ -93,7 +93,7 @@ export default function TimelineIndex() {
         </p>
         {degraded ? (
           <p className="mt-10 text-sm text-neutral-500">
-            The timeline index is temporarily unavailable.
+            The timeline index is briefly offline. Please refresh in a moment.
           </p>
         ) : domains.length === 0 ? (
           <p className="mt-10 text-sm text-neutral-500">

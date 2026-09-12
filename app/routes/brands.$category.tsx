@@ -54,7 +54,7 @@ interface BrandCategoryItem {
   domain: string;
   path: string;
   name: string;
-  /** Non-demo ad count from the sitemap backing; null when unavailable. */
+  /** Non-demo ad count from the sitemap backing; null when not yet read. */
   adCount: number | null;
   /** Ad Aggression Score 0–100, or null when deferred. */
   score: number | null;
@@ -162,7 +162,7 @@ export async function loader({
   // Bounded: a curated category holds <= ~5 brands, and each score enrichment
   // is one cache-only snapshot read (no live provider). Any hiccup degrades
   // that one brand's score to a deferred `null` — the category page never 500s
-  // because a score is unavailable.
+  // because a brand has no recorded score.
   const scoreDomains = new Set(
     categoryLinks.slice(0, BRAND_CATEGORY_MAX_SCORE_LOOKUPS).map((link) => link.domain),
   );

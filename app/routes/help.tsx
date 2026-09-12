@@ -41,7 +41,7 @@ export const helpFaqEntries: ReadonlyArray<FaqJsonLdEntry> = [
   {
     question: "Delivery setup",
     answer:
-      "Email delivery is in product scope, but this page does not measure live email-provider availability. Paid plans add scheduled monitoring and digest features when configured for the account. Open Notifications to review delivery settings. A manual refresh confirms a fresh check only; it does not confirm recurring delivery. If a scheduled digest does not arrive, open a delivery support case.",
+      "Email delivery runs through Cloudflare Email Service, and the Status page measures it live: last digest and email accepted by the provider, plus the bounce and complaint suppression count. Paid plans add scheduled monitoring and digest features when configured for the account. Open Notifications to review delivery settings. A manual refresh confirms a fresh check only; it does not confirm recurring delivery. If a scheduled digest does not arrive, open a delivery support case.",
   },
   {
     question: "Billing help",
@@ -97,7 +97,9 @@ export default function HelpRoute() {
 
       <PublicDocBlock title="Delivery setup">
         <p>
-          Email delivery is in product scope, but this page does not measure live email-provider availability. Paid
+          Email delivery runs through Cloudflare Email Service, and the{" "}
+          <Link to="/status">Status</Link> page measures it live: the last digest and email
+          accepted by the provider, plus the bounce and complaint suppression count. Paid
           plans add scheduled monitoring and digest features when configured for the account. Open{" "}
           <Link to={appLinkTarget("/app/notifications", session)}>Notifications</Link> to review delivery settings. A manual refresh confirms a
           fresh check only; it does not confirm recurring delivery. If a scheduled digest does not arrive, open a{" "}

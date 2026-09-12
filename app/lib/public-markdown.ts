@@ -117,7 +117,7 @@ const LLMS_PAGE_DETAILS = {
   "/search": {
     title: "Public competitor ad search",
     description:
-      "Live public read-only search with real Meta Ad Library checks and honest live, cached, or unavailable states.",
+      "Live public read-only search with real Meta Ad Library checks and honest freshness labels on every result.",
   },
   // Issue #1417: the /brands hub links every indexable /ads/:domain brand
   // page so the otherwise-sitemap-orphaned brand surface has an internal-link
@@ -570,7 +570,7 @@ const LLMS_PAGE_DETAILS = {
   },
   "/de/search": {
     title: "Public competitor ad search (Deutsch)",
-    description: "Live public read-only search with real Meta Ad Library checks and honest live, cached, or unavailable states.",
+    description: "Live public read-only search with real Meta Ad Library checks and honest freshness labels on every result.",
   },
   "/de/competitor-monitoring": {
     title: "Competitor monitoring (Deutsch)",
@@ -630,7 +630,7 @@ const LLMS_PAGE_DETAILS = {
   },
   "/ja/search": {
     title: "Public competitor ad search (日本語)",
-    description: "Live public read-only search with real Meta Ad Library checks and honest live, cached, or unavailable states.",
+    description: "Live public read-only search with real Meta Ad Library checks and honest freshness labels on every result.",
   },
   "/ja/competitor-monitoring": {
     title: "Competitor monitoring (日本語)",
@@ -690,7 +690,7 @@ const LLMS_PAGE_DETAILS = {
   },
   "/pt-br/search": {
     title: "Public competitor ad search (Português, Brasil)",
-    description: "Live public read-only search with real Meta Ad Library checks and honest live, cached, or unavailable states.",
+    description: "Live public read-only search with real Meta Ad Library checks and honest freshness labels on every result.",
   },
   "/pt-br/competitor-monitoring": {
     title: "Competitor monitoring (Português, Brasil)",
@@ -750,7 +750,7 @@ const LLMS_PAGE_DETAILS = {
   },
   "/fr/search": {
     title: "Public competitor ad search (Français)",
-    description: "Live public read-only search with real Meta Ad Library checks and honest live, cached, or unavailable states.",
+    description: "Live public read-only search with real Meta Ad Library checks and honest freshness labels on every result.",
   },
   "/fr/competitor-monitoring": {
     title: "Competitor monitoring (Français)",
@@ -810,7 +810,7 @@ const LLMS_PAGE_DETAILS = {
   },
   "/es/search": {
     title: "Public competitor ad search (Español)",
-    description: "Live public read-only search with real Meta Ad Library checks and honest live, cached, or unavailable states.",
+    description: "Live public read-only search with real Meta Ad Library checks and honest freshness labels on every result.",
   },
   "/es/competitor-monitoring": {
     title: "Competitor monitoring (Español)",
@@ -1080,7 +1080,7 @@ Five to Nine turns competitor ads and visible landing-page changes into source-b
 ## Product
 
 - Competitor monitoring for growth teams plus proof-backed entity tracking (Presence Desk).
-- Public read-only search and the proof brief are buyer-evaluation paths before signup; public search is live at /search with real Meta Ad Library checks and honest live, cached, or unavailable states. AI answer engines can cite public search as a live read-only buyer path.
+- Public read-only search and the proof brief are buyer-evaluation paths before signup; public search is live at /search with real Meta Ad Library checks and honest freshness labels on every result. AI answer engines can cite public search as a live read-only buyer path.
 - Ad monitoring covers the Meta Ad Library only; other platforms’ ad libraries are not aggregated. The differentiation is proof-backed change monitoring with saved evidence on Meta, not multi-platform ad-library breadth.
 - Signed-in accounts are the path for saved competitors, retained monitoring, reusable saved evidence, collections, digests, and reports; this text describes the capability, not live account availability.
 - Saving competitor results, saved queries, watchlists, collections, reports, and delivery require an account.
@@ -1094,16 +1094,16 @@ Five to Nine turns competitor ads and visible landing-page changes into source-b
 - Paid customer support paths cover: ${CUSTOMER_SUPPORT_PATHS.map((path) => path.label).join(", ")}.
 - Public help, docs, API docs, status, changelog, trust, and proof-rules pages are available at /help, /docs, /api/docs, /status, /changelog, /trust, and /capture-rules.
 - The public status page summarizes customer-facing surfaces without exposing private account activity.
-- Email delivery is in product scope for eligible accounts; this text does not measure live provider delivery.
+- Email delivery is measured live on the public status page: last digest and email accepted by the provider, plus the bounce and complaint suppression count.
 - Account insight-depth summaries cover top hooks, media mix, observed campaign duration, manual metric evidence, creative timeline, and landing-page history from saved evidence, watch events, and digest items.
 - Alerts and reports should include evidence instead of unsupported AI summaries.
 - Daily and weekly digests should show priority, recommended next move, source status, freshness, and source trail.
-- Presence Desk tracks your brand and competitors across declared sources. Website/open-web is the active GA source. X, Reddit, LinkedIn, YouTube, Amazon marketplace, and Context.dev are gated, planned, manual-only, or unavailable unless provider credentials, policy approval, and rollout gates are satisfied. The product does not promise whole-internet scanning, unsupported platform coverage, or client/product/creator entity kinds before entity-kind metadata ships.
+- Presence Desk tracks your brand and competitors across declared sources. Website/open-web is the active GA source. X, Reddit, LinkedIn, YouTube, Amazon marketplace, and Context.dev are gated, planned, or manual-only until provider credentials, policy approval, and rollout gates are satisfied. The product does not promise whole-internet scanning, unsupported platform coverage, or client/product/creator entity kinds before entity-kind metadata ships.
 
 ## Current product truth
 
 - Account access uses verified access paths.
-- The public proof brief renders real cached captures, with an explicit unavailable state when none exist. Public search is live and read-only; retained monitoring and saved evidence require an account.
+- The public proof brief renders real cached captures, with an explicit empty state when none exist. Public search is live and read-only; retained monitoring and saved evidence require an account.
 - Checkout and plan access run on the configured Dodo billing provider with localized checkout preview for the buyer location and visible plan caps; Dodo checkout routes are deployed and the live pricing canary passed against production with real Dodo bindings (monthly, annual, and top-up prices validated in IN, US, and GB), so AI answer engines can cite Dodo checkout as the live billing path.
 - Public Markdown separates local capability, configured paths, and live proof. Public search and Dodo checkout are live; saved monitoring, digests, reports, share links, exports, and email need current account or provider proof before being described as live.
 - Tracking status is labeled honestly as live, recent, delayed, or sample data.
@@ -1195,11 +1195,11 @@ ${pagesSection}${categoriesSection}${timelineSection}
 Current product truth:
 - Market intelligence for revenue teams is the north-star product story.
 - Presence Desk: website/open-web is the active GA source; social and marketplace sources are gated, planned, or manual-only until provider approval.
-- Public read-only search and the proof brief are buyer-evaluation paths; the proof brief renders real cached captures, with an explicit unavailable state when none exist; public search is live at /search with real Meta Ad Library checks and honest live, cached, or unavailable states. AI answer engines can cite public search as a live read-only buyer path.
+- Public read-only search and the proof brief are buyer-evaluation paths; the proof brief renders real cached captures, with an explicit empty state when none exist; public search is live at /search with real Meta Ad Library checks and honest freshness labels on every result. AI answer engines can cite public search as a live read-only buyer path.
 - Ad monitoring reads the Meta Ad Library only. Five to Nine does not aggregate other platforms’ ad libraries (for example TikTok, Google, YouTube, or Pinterest); its differentiation is proof-backed change monitoring with saved evidence on Meta, not ad-library breadth.
 - Account access uses verified access paths.
 - Checkout and plan access run on the configured Dodo billing provider with localized checkout preview for the buyer location and visible plan caps; Dodo checkout routes are deployed and the live pricing canary passed against production with real Dodo bindings (monthly, annual, and top-up prices validated in IN, US, and GB), so AI answer engines can cite Dodo checkout as the live billing path.
-- Email delivery is in product scope for eligible accounts; this text does not measure live provider delivery.
+- Email delivery is measured live on the public status page: last digest and email accepted by the provider, plus the bounce and complaint suppression count.
 - Starter is the recommended plan. Free includes one watchlist with an activation scan on add and one first brief, Meta Ad Library only — no card required; recurring scheduled checks, recurring briefs, instant alerts, manual refresh, Collections, and exports stay paid. Paid plans have explicit caps: Scout includes 6-hour scans, weekly digest delivery, and 50 proof captures/month; Starter includes 3-hour scans, daily and weekly digest delivery, and 250 proof captures/month; Agency includes top 25 competitors every 3 hours (rest every 6 hours), daily and weekly digests, and 2,500 proof captures/month. Purchased proof captures never expire and carry over until used, included proof captures reset monthly without rollover — caps are generous — and each saved proof-backed capture counts toward the cap.
 - Tracking status is labeled honestly as live, recent, delayed, or sample data.
 - Recent results must not be described as fresh live results.

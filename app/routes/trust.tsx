@@ -67,8 +67,8 @@ export default function TrustRoute() {
 
       <PublicDocBlock title="External services and providers">
         <ul className="f9-doc-list">
-          <li>Cloudflare is configured for hosting, storage, Workers AI, and email delivery; live provider availability is not measured here.</li>
-          <li>Dodo Payments is configured for checkout, subscriptions, receipts, and billing portal flows; live billing availability is not guaranteed here.</li>
+          <li>Cloudflare hosts the service, stores its data, and delivers its email; the Status page measures email delivery, scheduled monitoring, and uptime live.</li>
+          <li>Dodo Payments processes checkout, subscriptions, receipts, and billing portal flows; the Status page measures the Dodo webhook ledger and the billing canary live.</li>
           <li>Meta public Ad Library surfaces and customer-provided Meta access are provider-dependent when the customer connects them.</li>
           <li>
             Site Rep provides the assistant on anonymous public pages. Using it sends the page address,

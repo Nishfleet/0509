@@ -27,7 +27,7 @@ describe("public documentation routes", () => {
     expect(markup).toContain("read-only API and MCP access are available on Free and Scout");
     expect(markup).toContain("Starter plan scope: daily briefs, urgent alerts, evidence capture, and exports");
     expect(markup).toContain("Agency plan scope: client reports, share links, PDF delivery, branding, full API/MCP agent actions, and team seats");
-    expect(markup).toContain("This documentation does not measure live provider availability");
+    expect(markup).toContain("Live service health is measured continuously on the Status page");
     expect(markup).toContain("Provider availability can vary");
     expect(markup).toContain("documented plan entitlements, not a live availability guarantee");
     expect(markup).not.toContain("live-search example");
@@ -150,8 +150,8 @@ describe("public documentation routes", () => {
     expect(trustMarkup).toContain("customer API key creation, rotation, and revocation");
     expect(trustMarkup).toContain("broad public write APIs");
     expect(trustMarkup).toContain("Cloudflare-managed storage");
-    expect(trustMarkup).toContain("configured for hosting");
-    expect(trustMarkup).toContain("configured for checkout");
+    expect(trustMarkup).toContain("Cloudflare hosts the service, stores its data");
+    expect(trustMarkup).toContain("Dodo Payments processes checkout");
     expect(trustMarkup).toContain("provider-dependent");
     expect(trustMarkup).toContain("External services and providers");
     expect(trustMarkup).toContain("Site Rep provides the assistant on anonymous public pages");

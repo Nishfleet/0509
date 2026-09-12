@@ -30,7 +30,7 @@ export default function DocsRoute() {
     <PublicDocShell
       kicker="Docs"
       title="Five to Nine docs."
-      intro="Task-focused guidance for finding one competitor, judging the proof, saving the work, and knowing what your plan actually includes. This documentation does not measure live provider availability."
+      intro="Task-focused guidance for finding one competitor, judging the proof, saving the work, and knowing what your plan actually includes. Live service health is measured continuously on the Status page."
     >
       <script
         {...jsonLdScriptProps(
@@ -85,10 +85,10 @@ export default function DocsRoute() {
       <PublicDocBlock id="troubleshoot" title="Troubleshoot empty or partial results">
         <p>
           No evidence is not proof that a competitor has no active ads. Coverage can be partial, delayed,
-          cached, or unavailable. The freshness line on a result — &quot;Fresh live result&quot;, &quot;Recent cached
+          or cached. The freshness line on a result — &quot;Fresh live result&quot;, &quot;Recent cached
           result&quot;, &quot;Older cached result&quot; — tells you when the evidence was captured; read it before
           treating a cached result as current. Try the brand name with the website, review broader candidates manually,
-          and check <Link to="/status">Status</Link> for what the public page does and does not measure.
+          and check <Link to="/status">Status</Link> for live measured service health.
           If a known active campaign still does not appear, open <Link to="/help">Help</Link> instead of
           treating the empty state as a market conclusion.
         </p>
@@ -101,7 +101,7 @@ export default function DocsRoute() {
           <li>Scout plan scope: three scheduled watchlists, a six-hour cadence, weekly email briefs, ten collections, and 50 included evidence checks each month.</li>
           <li>Starter plan scope: daily briefs, urgent alerts, evidence capture, and exports, with ten watchlists on a three-hour cadence.</li>
           <li>Agency plan scope: client reports, share links, PDF delivery, branding, full API/MCP agent actions, and team seats.</li>
-          <li>Unavailable actions should appear locked before click; server-side plan checks still apply.</li>
+          <li>Locked actions should appear locked before click; server-side plan checks still apply.</li>
         </ul>
       </PublicDocBlock>
 
@@ -141,7 +141,7 @@ Authorization: Bearer f9_live_...`}</code>
         <ul className="f9-doc-list">
           <li>Do not infer spend, reach, impressions, ROAS, or a winning creative from public evidence.</li>
           <li>Broad unsupported-channel monitoring and automatic client sends are not offered.</li>
-          <li>Social connectors and their delivery claims remain unavailable unless the signed-in product explicitly marks them ready.</li>
+          <li>Social connectors and their delivery claims stay gated until the signed-in product explicitly marks them ready.</li>
           <li>Five to Nine does not claim SOC 2, HIPAA, GDPR compliance, zero retention, or no-training guarantees.</li>
         </ul>
       </PublicDocBlock>

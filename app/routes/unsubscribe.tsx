@@ -14,9 +14,9 @@ interface UnsubscribeLoaderData {
   valid: boolean;
   alreadyUnsubscribed: boolean;
   maskedEmail: string | null;
-  // Set only when the suppression adapter itself is unavailable (an ops issue),
+  // Set only when the suppression adapter itself is down (an ops issue),
   // so we can show honest "our side broke" copy instead of blaming the link.
-  adapterUnavailable?: boolean;
+  adapterDown?: boolean;
 }
 
 function readParams(url: URL) {
@@ -91,13 +91,13 @@ export async function action({ context, request }: ActionFunctionArgs): Promise<
       | undefined;
 
     if (typeof suppressTargets !== "function") {
-      // Never claim success when the atomic suppression adapter is unavailable.
+      // Never claim success when the atomic suppression adapter is down.
       // This is our failure, not a bad link — flag it so the UI says so.
       return {
         valid: false,
         alreadyUnsubscribed: false,
         maskedEmail: maskEmail(target.targetValue),
-        adapterUnavailable: true,
+        adapterDown: true,
       };
     }
 
@@ -130,7 +130,7 @@ export default function UnsubscribeRoute() {
       <section className="f9-container f9-legal-section">
         <article className="f9-legal-card">
           <span className="f9-wk-kick">Email preferences</span>
-          {data.adapterUnavailable ? (
+          {data.adapterDown ? (
             <>
               <h1>We couldn't switch this off just now.</h1>
               <p>

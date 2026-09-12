@@ -50,6 +50,11 @@ describe("Worker scheduled handler", () => {
 
     expect(loaded.sendScheduledObservationGapAlert).toHaveBeenCalledTimes(1);
     expect(loaded.recordScheduledObservationGapCheckHeartbeat).toHaveBeenCalledTimes(1);
+    // The /status uptime rail rides every cron invocation.
+    expect(loaded.recordStatusHealthSample).toHaveBeenCalledWith(
+      expect.anything(),
+      GAP_CHECK_CRON,
+    );
     expect(loaded.runScheduledMonitoring).not.toHaveBeenCalled();
     expect(loaded.runDemoBrandBackfill).not.toHaveBeenCalled();
     expect(loaded.runDemoBrandProofHoleCatchUp).toHaveBeenCalledTimes(1);

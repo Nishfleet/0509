@@ -28,13 +28,17 @@ function makeEnv(prepare: ReturnType<typeof vi.fn>) {
 
 describe("getPublicStatusCounters digest query", () => {
   it("reads the last-sent digest from created_at across status='sent', never delivered_at", async () => {
+    // Clock-relative fixture: the digest must sit inside the 7-day freshness
+    // threshold on any run date, otherwise digestHealthState correctly reads
+    // the record as stalled and this test fails for calendar reasons.
+    const recentDigestSentAt = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const issued: string[] = [];
     const prepare = vi.fn((sql: string) => {
       issued.push(sql);
       let row: Row | null = null;
       if (sql.includes("SUM(CASE")) row = { total: 24, failed: 0 };
-      else if (sql.includes("FROM watchlist_run")) row = { last_started_at: "2026-09-06T09:00:04.000Z" };
-      else if (sql.includes("FROM digest_delivery")) row = { last_digest_sent_at: "2026-09-05T04:00:52.000Z" };
+      else if (sql.includes("FROM watchlist_run")) row = { last_started_at: recentDigestSentAt };
+      else if (sql.includes("FROM digest_delivery")) row = { last_digest_sent_at: recentDigestSentAt };
       return {
         bind: vi.fn(() => ({ all: vi.fn().mockResolvedValue({ results: row ? [row] : [] }) })),
       };
@@ -53,7 +57,7 @@ describe("getPublicStatusCounters digest query", () => {
     expect(result).toMatchObject({
       runsInLast24h: 24,
       failedRunsInLast24h: 0,
-      lastDigestSentAt: "2026-09-05T04:00:52.000Z",
+      lastDigestSentAt: recentDigestSentAt,
       digestHealth: "recent",
     });
   });
