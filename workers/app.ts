@@ -169,6 +169,27 @@ function withPublicContentSignal(response: Response, request: Request): Response
   });
 }
 
+/**
+ * Issue #2979: Better Auth's cookie cache writes the signed session_data
+ * cookie during the request's session lookup (getBetterAuthSession). React
+ * Router loaders/actions can't merge Set-Cookie into the outgoing response
+ * themselves, so the buffered headers are replayed here, on the assembled
+ * app response. Best-effort: when the module (or the copy) fails, the
+ * response ships untouched and the next request re-mints via D1.
+ */
+async function replayBetterAuthSessionCookies(
+  request: Request,
+  response: Response,
+): Promise<Response> {
+  try {
+    const { applyBetterAuthSessionCookies } = await import("../app/lib/better-auth.server");
+    return applyBetterAuthSessionCookies(request, response);
+  } catch (error) {
+    console.warn("Better Auth session cookie replay failed", error);
+    return response;
+  }
+}
+
 function publicFileResponse(
   request: Request,
   file: {
@@ -451,11 +472,23 @@ export default {
         ? new Request(request.url, { method: "GET", headers: request.headers })
         : request;
       const response = await requestHandler(routerRequest, routerContext);
+      // Issue #2979: the miss path replays Better Auth's buffered session
+      // Set-Cookie before the response is secured and stored. Authenticated
+      // requests are never edge-cacheable, so routerRequest IS this request
+      // and the WeakMap key matches; the anonymous edge-cacheable path mints
+      // no session cookie, so the stored variant ships without one.
       return storeEdgeCache(
         request,
         edgeCache,
         edgeVersionId,
-        withSecurityHeaders(withPublicContentSignal(response, request), request, cspNonce),
+        withSecurityHeaders(
+          await replayBetterAuthSessionCookies(
+            request,
+            withPublicContentSignal(response, request),
+          ),
+          request,
+          cspNonce,
+        ),
       );
     };
 
@@ -467,6 +500,7 @@ export default {
       return cachedEdgeHtml;
     }
     return renderAndStore();
+
   },
   async scheduled(controller, env, ctx) {
     const observationContext = Object.freeze({
