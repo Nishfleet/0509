@@ -886,6 +886,45 @@ interface BetterAuthMagicLinkTicketRow {
   payload: string;
 }
 
+/**
+ * Magic-link tickets are AES-GCM encrypted rows whose only user key is the
+ * decrypted payload's email (issue #2982). This bounded decrypt-and-match scan
+ * over the newest rows finds which live tickets were issued to an email so
+ * the account-erasure sweep can delete them. Tickets are transient (15-minute
+ * TTL), so a newest-first scan of a few hundred rows always covers the live
+ * set. Bad BETTER_AUTH_SECRET states surface as empty — the erasure step that
+ * consumes the ids then skips.
+ */
+export async function findBetterAuthMagicLinkTicketIdsForEmail(
+  env: AppEnv,
+  email: string,
+  options: { limit?: number } = {},
+): Promise<string[]> {
+  if (!env.DB) {
+    return [];
+  }
+  const limit = options.limit ?? 200;
+  const rows = await env.DB
+    .prepare(
+      `SELECT id, payload FROM better_auth_magic_link_ticket
+       ORDER BY created_at DESC, id DESC LIMIT ?`,
+    )
+    .bind(limit)
+    .all<{ id: string; payload: string }>();
+  const matches: string[] = [];
+  for (const row of rows.results ?? []) {
+    const parsed = await decryptBetterAuthMagicLinkPayload(env, row.payload).catch(() => null);
+    if (
+      parsed &&
+      typeof parsed.email === "string" &&
+      parsed.email.toLowerCase() === email.toLowerCase()
+    ) {
+      matches.push(row.id);
+    }
+  }
+  return matches;
+}
+
 export async function betterAuthMagicLinkConfirmationUrl(
   env: AppEnv,
   input: {

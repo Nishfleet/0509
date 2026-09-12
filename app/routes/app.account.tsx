@@ -49,7 +49,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   let sessionControlsMessage: string | null = isE2EFixtureSession
     ? "Sign in with email to manage active sessions."
     : null;
-  const [plan, reportBrandIdentity, branding, passkeys, activeSessions, emailVerified] =
+  const [plan, reportBrandIdentity, branding, passkeys, activeSessions, emailVerified, erasureRaw] =
     await Promise.all([
       getUserPlan(env, session.user.id),
       resolveWorkspaceBrandIdentity(env, session.user.id),
@@ -76,6 +76,17 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
           console.warn("[account] email verification status unavailable", error);
           return true;
         }),
+      import("~/lib/account-erasure.server")
+        .then(({ getPendingAccountErasure, ACCOUNT_ERASURE_GRACE_DAYS }) =>
+          getPendingAccountErasure(env, session.user.id).then((pending) => ({
+            pending,
+            graceDays: ACCOUNT_ERASURE_GRACE_DAYS,
+          })),
+        )
+        .catch((error) => {
+          console.warn("[account] erasure status unavailable", error);
+          return { pending: null, graceDays: 7 as const };
+        }),
     ]);
 
   return {
@@ -92,6 +103,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     passkeyControlsMessage,
     activeSessions,
     sessionControlsMessage,
+    pendingErasure: erasureRaw?.pending ?? null,
+    erasureGraceDays: erasureRaw?.graceDays ?? 7,
   };
 }
 
@@ -260,67 +273,74 @@ export async function action({ context, request }: ActionFunctionArgs) {
     }
   }
 
-  if (intent === "request-account-deletion") {
+  if (intent === "export-account-data") {
+    // GDPR/CCPA data-portability artifact: every row keyed to the user,
+    // grouped by table, credentials stripped. Returned as a JSON download.
+    const { exportAccountData } = await import("~/lib/account-erasure.server");
+    try {
+      const exportData = await exportAccountData(env, {
+        userId: session.user.id,
+        email: session.user.email,
+      });
+      const stamp = new Date().toISOString().slice(0, 10);
+      return new Response(JSON.stringify(exportData), {
+        headers: {
+          "content-type": "application/json",
+          "content-disposition": `attachment; filename="0509-account-export-${stamp}.json"`,
+          "cache-control": "no-store",
+        },
+      });
+    } catch (error) {
+      console.error("[account] data export failed", error);
+      return {
+        ok: false,
+        intent,
+        message: "We couldn't generate your data export. Refresh the page and try again.",
+      };
+    }
+  }
+
+  if (intent === "request-erasure") {
     if (isE2EFixtureSession) {
       return { ok: false, intent, message: "Sign in with email to request account deletion." };
     }
 
-    if (String(formData.get("confirmDeletion") ?? "") !== "yes") {
+    const { requestAccountErasure, ACCOUNT_ERASURE_GRACE_DAYS } = await import(
+      "~/lib/account-erasure.server"
+    );
+    if (String(formData.get("confirmErasure") ?? "") !== "yes") {
       return {
         ok: false,
         intent,
-        message: "Confirm that this sends a support deletion request and does not delete anything automatically or in-app.",
+        message: `Confirm that you want your account deleted. Erasure runs on its own ${ACCOUNT_ERASURE_GRACE_DAYS} days after you request it.`,
       };
     }
 
-    const { createSupportCase } = await import("~/lib/data.server");
-
-    const supportCase = await createSupportCase(env, {
+    const result = await requestAccountErasure(env, {
       userId: session.user.id,
-      category: "security",
-      priority: "urgent",
-      subject: "Delete my Five to Nine account",
-      detail: [
-        "Signed-in support deletion request.",
-        `Account email: ${session.user.email}`,
-        `Account user ID: ${session.user.id}`,
-        "Nothing is deleted automatically or in-app. Support reviews and verifies the request, then communicates the feasible process.",
-      ].join("\n"),
-      context: {
-        createdFrom: "signed_in_account_deletion_request",
-        source: "app.account",
-      },
-      reopenClosed: true,
-      requestKey: `account-deletion:${session.user.id}`,
+      email: session.user.email,
+      requestedVia: "app.account",
     });
-
-    if (!supportCase) {
-      return { ok: false, intent, message: "We couldn't open the support deletion request. Email support and we'll take care of it." };
-    }
-
-    const notificationResult = await notifyAccountDeletionOperator(env, {
-      caseId: supportCase.id,
-      dedupeKey: isReopenedSupportCase(supportCase)
-        ? `support-case-reopen:${supportCase.id}:${supportCase.updatedAt}`
-        : `support-case:${supportCase.id}`,
-      requesterEmail: session.user.email,
-      userId: session.user.id,
-    });
-    if (notificationResult === "failed") {
-      return {
-        ok: true,
-        intent,
-        message: `Support deletion request opened as case ${supportCase.id}. Support notification failed, so email ${SUPPORT_EMAIL} if you need it handled urgently. Nothing is deleted automatically or in-app.`,
-      };
-    }
-
+    const executeAfter = result.request?.execute_after ?? null;
     return {
       ok: true,
       intent,
-      message: supportCase.alreadyExists
-        ? `Support deletion request is already open as case ${supportCase.id}. Support will review and verify it, then communicate the feasible process.`
-        : `Support deletion request opened as case ${supportCase.id}. Support will review and verify the request, then communicate the feasible process. Nothing is deleted automatically or in-app.`,
+      message: result.created && executeAfter
+        ? `Deletion filed. Erasure runs on its own after ${formatIsoDate(executeAfter)} unless you cancel it.`
+        : "Your deletion request is already filed and counting down.",
     };
+  }
+
+  if (intent === "cancel-erasure") {
+    if (isE2EFixtureSession) {
+      return { ok: false, intent, message: "Sign in with email to manage account deletion." };
+    }
+
+    const { cancelPendingAccountErasure } = await import("~/lib/account-erasure.server");
+    const cancelled = await cancelPendingAccountErasure(env, session.user.id);
+    return cancelled
+      ? { ok: true, intent, message: "Deletion request cancelled. Nothing will be erased." }
+      : { ok: true, intent, message: "There is no pending deletion request to cancel." };
   }
 
   if (intent === "request-email-change") {
@@ -412,6 +432,10 @@ function isPlausibleEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) && value.length <= 254;
 }
 
+function formatIsoDate(iso: string) {
+  return iso.slice(0, 10);
+}
+
 export default function AccountRoute() {
   const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
@@ -431,7 +455,9 @@ export default function AccountRoute() {
       ? actionData
       : null;
   const deletionAction =
-    actionData?.intent === "request-account-deletion" ? actionData : null;
+    actionData?.intent === "request-erasure" || actionData?.intent === "cancel-erasure"
+      ? actionData
+      : null;
   const emailChangeAction =
     actionData?.intent === "request-email-change" ? actionData : null;
   const resendVerificationAction =
@@ -815,7 +841,7 @@ export default function AccountRoute() {
         <div className="f9-acct-section-head">
           <div>
             <span className="f9-wk-kick">Danger zone</span>
-            <h2>Request account deletion support</h2>
+            <h2>Delete your account and your data</h2>
           </div>
         </div>
         {deletionAction?.message ? (
@@ -828,24 +854,68 @@ export default function AccountRoute() {
           </div>
         ) : null}
         <p>
-          This sends a support deletion request. Nothing is deleted automatically or in-app.
-          Support reviews and verifies the request, then communicates the feasible process and any
-          timing. You can also email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> if you need help.
+          Take a copy of your workspace data first with <strong>Download my data</strong> — it is
+          a JSON file of everything keyed to you (credentials stripped). Then you can file a
+          deletion request: erasure runs automatically {data.erasureGraceDays} days later,
+          without support or any human step, and removes every row keyed to your account before
+          the sign-in record itself. A dated audit record with per-table counts is kept after
+          erasure; it never holds your email or user id.
         </p>
-        <Form className="f9-auth-form" method="post">
-          <input name="intent" type="hidden" value="request-account-deletion" />
-          <label className="f9-checkbox-row">
-            <input name="confirmDeletion" required type="checkbox" value="yes" />
-            <span>I understand this is a support request, not an in-app deletion, and support will review and verify it.</span>
-          </label>
-          <SubmitButton
-            className="f9-acct-danger-action"
-            intent="request-account-deletion"
-            pendingLabel="Sending request…"
-          >
-            Send support deletion request
-          </SubmitButton>
+        <Form method="post">
+          <input name="intent" type="hidden" value="export-account-data" />
+          <div className="f9-account-security-actions">
+            <SubmitButton
+              className="f9-acct-text-action"
+              intent="export-account-data"
+              pendingLabel="Preparing…"
+            >
+              Download my data (JSON)
+            </SubmitButton>
+          </div>
         </Form>
+        {data.pendingErasure ? (
+          <div className="f9-acct-entitlement" id="erasure-pending">
+            <p>
+              A deletion request is pending. Scheduled for{" "}
+              <LocalTime iso={data.pendingErasure.execute_after} />. Cancel any time before then —
+              erased means erased, and a cancelled request does not stack a second clock.
+            </p>
+            <Form method="post">
+              <input name="intent" type="hidden" value="cancel-erasure" />
+              <ConfirmSubmitButton
+                className="f9-acct-text-action"
+                confirmLabel="Confirm — cancel the deletion?"
+                intent="cancel-erasure"
+                pendingLabel="Cancelling…"
+                variant="light"
+              >
+                Cancel deletion request
+              </ConfirmSubmitButton>
+            </Form>
+          </div>
+        ) : (
+          <Form className="f9-auth-form" method="post">
+            <input name="intent" type="hidden" value="request-erasure" />
+            <label className="f9-checkbox-row">
+              <input name="confirmErasure" required type="checkbox" value="yes" />
+              <span>
+                I understand this runs without support: after{" "}
+                {data.pendingErasure ? "the pending window" : "the 7-day window"} my account, its
+                data, and sign-in are erased and this can't be undone unless I cancel first.
+              </span>
+            </label>
+            <SubmitButton
+              className="f9-acct-danger-action"
+              intent="request-erasure"
+              pendingLabel="Filing request…"
+            >
+              Delete my account
+            </SubmitButton>
+          </Form>
+        )}
+        <p className="f9-acct-copy">
+          Questions first? Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>.
+        </p>
       </section>
     </DashboardPage>
   );
@@ -924,7 +994,7 @@ async function notifyAccountEmailChangeOperator(
     requestedEmail: string;
     userId: string;
   },
-): Promise<AccountDeletionOperatorNotificationResult> {
+): Promise<OperatorNotificationResult> {
   const idempotencyKey = input.dedupeKey;
   const { createSupportCaseEvent, getDeliveryAttemptByIdempotencyKey } = await import("~/lib/data.server");
   try {
@@ -1023,7 +1093,7 @@ function summarizeUserAgent(userAgent: string) {
   return "Browser session";
 }
 
-type AccountDeletionOperatorNotificationResult = "sent" | "already_sent" | "failed";
+type OperatorNotificationResult = "sent" | "already_sent" | "failed";
 
 function isReopenedSupportCase(value: unknown) {
   return Boolean(
@@ -1032,68 +1102,4 @@ function isReopenedSupportCase(value: unknown) {
       "reopened" in value &&
       (value as { reopened?: unknown }).reopened === true,
   );
-}
-
-async function notifyAccountDeletionOperator(
-  env: AppEnv,
-  input: {
-    caseId: string;
-    dedupeKey: string;
-    requesterEmail: string;
-    userId: string;
-  },
-): Promise<AccountDeletionOperatorNotificationResult> {
-  const idempotencyKey = input.dedupeKey;
-  const { createSupportCaseEvent, getDeliveryAttemptByIdempotencyKey } = await import("~/lib/data.server");
-  try {
-    const existingAttempt = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
-    if (existingAttempt?.status === "sent") {
-      return "already_sent";
-    }
-
-    const { sendOperatorAlertEmail } = await import("~/lib/delivery.server");
-    const notified = await sendOperatorAlertEmail(env, {
-      subject: "0509 account deletion request",
-      lines: [
-        `Case: ${input.caseId}`,
-        `Requester: ${input.requesterEmail}`,
-        `User ID: ${input.userId}`,
-        "Category: Security, privacy, or deletion",
-        "Priority: Urgent",
-        "Action: support reviews and verifies the request, then communicates the feasible process; nothing is deleted automatically or in-app",
-      ],
-      idempotencyKey,
-    });
-
-    await createSupportCaseEvent(env, {
-      caseId: input.caseId,
-      userId: input.userId,
-      eventType: notified ? "support_notified" : "support_notification_failed",
-      message: notified
-        ? "Support was notified about the account deletion request."
-        : "Support notification failed for the account deletion request.",
-      visibleToCustomer: true,
-      metadata: {
-        delivery: notified ? "sent" : "failed",
-      },
-    });
-    return notified ? "sent" : "failed";
-  } catch (error) {
-    console.error("[account] deletion operator notification failed", error);
-    try {
-      await createSupportCaseEvent(env, {
-        caseId: input.caseId,
-        userId: input.userId,
-        eventType: "support_notification_failed",
-        message: "Support notification failed for the account deletion request.",
-        visibleToCustomer: true,
-        metadata: {
-          delivery: "failed",
-        },
-      });
-    } catch (eventError) {
-      console.error("[account] deletion notification event failed", eventError);
-    }
-    return "failed";
-  }
 }

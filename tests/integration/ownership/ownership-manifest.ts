@@ -128,6 +128,14 @@ export const PLATFORM_TABLES: ReadonlyArray<{ table: string; reason: string }> =
   { table: "presence_oauth_transaction", reason: "per-user OAuth handshake state" },
   { table: "pricing_region_preference", reason: "personal UI preference" },
   { table: "signup_source_pending", reason: "marketing attribution" },
+  {
+    table: "account_erasure_request",
+    reason: "GDPR erasure clock; user_id is deleted with the user data when the sweep runs",
+  },
+  {
+    table: "account_erasure_audit",
+    reason: "post-erasure proof keyed only by a one-way hash of the user id",
+  },
   { table: "rate_limit_events", reason: "infra rate-limit log" },
   { table: "e2e_test_mode", reason: "infra test sentinel" },
   { table: "retention_sweep_state", reason: "ops sweep state" },
