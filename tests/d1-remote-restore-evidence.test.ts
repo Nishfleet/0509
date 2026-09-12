@@ -1636,9 +1636,12 @@ describe("D1 remote restore evidence automation", () => {
         repository,
       ),
     ).toEqual({ action: "ok" });
-    // A production ledger behind the whole 0096 exception group catches up
-    // in repository order: a forward apply always appends in sorted order,
-    // 0099 deepest.
+    // A production ledger that already carries 0096_error_reports (applied
+    // while it was the ledger tail) but nothing after catches up by appending
+    // only UNAPPLIED names: 0096_email_suppression lands after error_reports
+    // (the exact order the 0096 exception exists to admit), then the sorted
+    // remainder with 0099 deepest (run 34671488829). error_reports itself is
+    // never re-listed — a forward apply appends only pending migrations.
     const behindNames = [
       ...PRODUCTION_MIGRATION_LEDGER_BASELINE,
       ...repositorySuffix.filter((name) => name < "0096_"),
@@ -1653,7 +1656,6 @@ describe("D1 remote restore evidence automation", () => {
       action: "apply_forward_suffix",
       migrations: [
         "0096_email_suppression.sql",
-        "0096_error_reports.sql",
         "0097_status_probe_samples.sql",
         "0098_email_delivery_canary.sql",
         "0098_widen_source_target_connector_gdelt.sql",

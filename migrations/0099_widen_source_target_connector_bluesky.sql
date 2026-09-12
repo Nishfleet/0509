@@ -18,7 +18,8 @@
 -- applied anywhere, so the rename touches no applied ledger; D1 keys the
 -- ledger by file name and applies 0099 as an ordinary unapplied migration.
 --
--- Data preservation: D1 runs with foreign keys ON and honors neither-- PRAGMA foreign_keys = OFF nor PRAGMA defer_foreign_keys for DROP TABLE
+-- Data preservation: D1 runs with foreign keys ON and honors neither
+-- PRAGMA foreign_keys = OFF nor PRAGMA defer_foreign_keys for DROP TABLE
 -- cascades — dropping a parent table implicitly deletes its rows and the
 -- ON DELETE CASCADE chains wipe presence_item, presence_poll_cursor and
 -- presence_item_revision rows (verified against the real local D1 engine).
