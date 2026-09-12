@@ -252,7 +252,7 @@ export default defineConfig({
       // against a local build.
       name: "chromium",
       testDir: "./tests",
-      testMatch: /hero-fold\.spec\.ts/,
+      testMatch: /(hero-fold|search-console-hygiene)\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 1440, height: 900 },
@@ -265,7 +265,7 @@ export default defineConfig({
     {
       name: "mobile-chromium",
       testDir: "./tests",
-      testMatch: /hero-fold\.spec\.ts/,
+      testMatch: /(hero-fold|search-console-hygiene)\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 390, height: 844 },
