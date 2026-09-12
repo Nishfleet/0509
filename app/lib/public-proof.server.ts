@@ -159,6 +159,7 @@ export async function routeableCreativeIds(
         SELECT id FROM ad
         WHERE id IN (${placeholders})
           AND json_extract(raw_json, '$.creativeImageUrl') IS NOT NULL
+          AND trim(json_extract(raw_json, '$.creativeImageUrl')) <> ''
       `,
       values: ids,
     });

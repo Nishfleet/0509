@@ -41,7 +41,15 @@ function makeEnv(): AppEnv {
           bind(...bindings: unknown[]) {
             return {
               async all() {
-                if (sql.includes("json_extract(raw_json, '$.creativeImageUrl') IS NOT NULL")) {
+                // Route-parity predicate (issue #3157 review round): the
+                // /creative/:id route rejects a stored URL that is missing or
+                // empty/whitespace, so the gate must read the same predicate.
+                if (
+                  sql.includes(
+                    "json_extract(raw_json, '$.creativeImageUrl') IS NOT NULL",
+                  ) &&
+                  sql.includes("trim(json_extract(raw_json, '$.creativeImageUrl')) <> ''")
+                ) {
                   routeableAdRows.forEach((row, i) => {
                     if (bindings[i] !== row.id) {
                       throw new Error(`unexpected binding order: ${bindings[i]}`);
