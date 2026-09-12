@@ -1,6 +1,11 @@
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 
+// Same technique as tests/helpers/sqlite-d1.ts: the D1 stub's bind() takes
+// unknown[], but node:sqlite's prepared statements want SQLInputValue, so the
+// spread is cast through the prepared statement's own parameter tuple.
+type SqliteBindings = Parameters<ReturnType<DatabaseSync["prepare"]>["run"]>;
+
 import { collectMonitoringOrchestrationMetrics } from "~/lib/monitoring-fanout.server";
 
 // Minimal D1 stub (mirrors tests/helpers/sqlite-d1.ts) that also supports
@@ -16,7 +21,11 @@ function createLocalD1() {
           bind(...bindings: unknown[]) {
             return {
               async all<T>() {
-                return { results: sqlite.prepare(sql).all(...bindings) as T[] };
+                return {
+                  results: sqlite.prepare(sql).all(
+                    ...(bindings as SqliteBindings),
+                  ) as T[],
+                };
               },
             };
           },
