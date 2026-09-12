@@ -111,7 +111,7 @@ export const faqEntries: ReadonlyArray<FaqJsonLdEntry> = [
   {
     question: "How much does BigSpy cost?",
     answer:
-      "BigSpy publishes a Free plan plus Starter at $69/month, Growth at $159/month, and Ultimate at $499/month on its site, with annual and group-buy offers. Confirm current plans on BigSpy's pricing page.",
+      "BigSpy publishes a Free plan plus paid Starter, Growth, and Ultimate tiers on its site, with annual and group-buy offers. The visible copy on this page cites the figures checked on 2026-09-12. Confirm current plans on BigSpy's pricing page.",
   },
   {
     question: "Is Five to Nine a BigSpy alternative?",

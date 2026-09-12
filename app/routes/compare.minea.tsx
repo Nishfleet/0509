@@ -105,7 +105,7 @@ export const faqEntries: ReadonlyArray<FaqJsonLdEntry> = [
   {
     question: "How much does Minea cost?",
     answer:
-      "Minea lists Starter at $49/month, Premium at $99/month, and Business at $199/month on monthly billing, with lower per-month rates when paid quarterly. Confirm current plans on Minea's pricing page.",
+      "Minea lists paid Starter, Premium, and Business tiers on monthly billing, with lower per-month rates when paid quarterly. The visible copy on this page cites the figures checked on 2026-09-12. Confirm current plans on Minea's pricing page.",
   },
   {
     question: "Is Five to Nine a Minea alternative?",

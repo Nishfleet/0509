@@ -106,7 +106,7 @@ export const faqEntries: ReadonlyArray<FaqJsonLdEntry> = [
   {
     question: "How much does PowerAdSpy cost?",
     answer:
-      "PowerAdSpy lists Standard at $99/month, Platinum at $279/month, and Palladium at $399/month on monthly billing, with 3-day trials at $1 or $7 and roughly 50–70% off on yearly billing. Confirm current plans on PowerAdSpy's pricing page.",
+      "PowerAdSpy lists paid Standard, Platinum, and Palladium tiers on monthly billing, with paid 3-day trials and a lower effective monthly rate on yearly billing. The visible copy on this page cites the figures checked on 2026-09-12. Confirm current plans on PowerAdSpy's pricing page.",
   },
   {
     question: "Is Five to Nine a PowerAdSpy alternative?",
