@@ -119,7 +119,7 @@ function loadSeedList(name) {
  *   baseUrl: string,
  *   pacedFetch: typeof fetch,
  * }} params
- * @returns {Promise<{ domain: string, verdict: string, reason: string, rowCount?: number | null, cacheStatus?: string | null }>}
+ * @returns {Promise<{ domain: string, verdict: string, reason: string, rowCount?: number | null, cacheStatus?: string | null, resultSource?: string | null }>}
  */
 async function probeDomain({ domain, baseUrl, pacedFetch }) {
   const url = `${baseUrl}/search?website=${encodeURIComponent(domain)}&country=all`;
