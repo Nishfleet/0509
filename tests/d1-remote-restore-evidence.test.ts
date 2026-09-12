@@ -1513,6 +1513,8 @@ describe("D1 remote restore evidence automation", () => {
     // on production (production deploys have been red since 2026-09-09), so
     // the modeled production ledger excludes it too and every expected
     // forward-suffix includes it as ordinary catch-up at the tail.
+    // 0098_widen_source_target_connector_gdelt.sql is likewise repo-only until
+    // a green deploy applies it, so it is excluded and expected the same way.
     const repository = readdirSync(resolve("migrations"))
       .filter((name) => /^\d{4}_.+\.sql$/u.test(name))
       .sort();
@@ -1525,7 +1527,8 @@ describe("D1 remote restore evidence automation", () => {
       ...repositorySuffix.filter(
         (name) =>
           name !== "0096_email_suppression.sql" &&
-          name !== "0097_status_probe_samples.sql",
+          name !== "0097_status_probe_samples.sql" &&
+          name !== "0098_widen_source_target_connector_gdelt.sql",
       ),
     ];
     expect(productionNames.at(-1)).toBe("0096_error_reports.sql");
@@ -1542,7 +1545,11 @@ describe("D1 remote restore evidence automation", () => {
       ),
     ).toEqual({
       action: "apply_forward_suffix",
-      migrations: ["0096_email_suppression.sql", "0097_status_probe_samples.sql"],
+      migrations: [
+        "0096_email_suppression.sql",
+        "0097_status_probe_samples.sql",
+        "0098_widen_source_target_connector_gdelt.sql",
+      ],
     });
     expect(
       planSourceBackupLedgerReconciliation(
@@ -1550,6 +1557,7 @@ describe("D1 remote restore evidence automation", () => {
           ...productionNames,
           "0096_email_suppression.sql",
           "0097_status_probe_samples.sql",
+          "0098_widen_source_target_connector_gdelt.sql",
         ]),
         repository,
       ),
@@ -1570,6 +1578,7 @@ describe("D1 remote restore evidence automation", () => {
         "0096_email_suppression.sql",
         "0096_error_reports.sql",
         "0097_status_probe_samples.sql",
+        "0098_widen_source_target_connector_gdelt.sql",
       ],
     });
   });
