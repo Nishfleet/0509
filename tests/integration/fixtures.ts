@@ -7,7 +7,24 @@ import type { AppEnv } from "~/lib/env.server";
  * `workers` project the binding is the real thing, so the only adaptation
  * needed is the shape.
  */
-export const appEnv: AppEnv = { DB: env.DB };
+export const appEnv: AppEnv = {
+  DB: env.DB,
+  // Real production wiring (issue #2985): the public hot-path limiters run on
+  // the native Rate Limiting bindings and fail closed with 429 when one is
+  // absent, so integration suites must receive the same bindings production
+  // declares (see the RL_* bindings in wrangler.test.jsonc).
+  RL_AUTH: env.RL_AUTH,
+  RL_SEARCH_ANON_BROWSER: env.RL_SEARCH_ANON_BROWSER,
+  RL_PROOF_BRIEF: env.RL_PROOF_BRIEF,
+  RL_SEARCH_SELECTION: env.RL_SEARCH_SELECTION,
+  RL_SEARCH_IP: env.RL_SEARCH_IP,
+  RL_BRAND_PAGE: env.RL_BRAND_PAGE,
+  RL_WRITE: env.RL_WRITE,
+  RL_STATUS: env.RL_STATUS,
+  RL_DELIVERY_WEBHOOK: env.RL_DELIVERY_WEBHOOK,
+  RL_API_READ: env.RL_API_READ,
+  RL_WEBHOOK: env.RL_WEBHOOK,
+};
 
 export function db() {
   return env.DB;

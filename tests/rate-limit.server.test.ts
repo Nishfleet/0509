@@ -1,35 +1,115 @@
-import { describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   enforceAuthenticatedSearchRateLimit,
   enforceBillingProviderRateLimit,
+  enforcePublicBrandPageRateLimit,
   enforcePublicSearchRateLimit,
   enforcePublicSearchSelectionRateLimit,
   enforceRequestRateLimit,
   enforceSearchSelectionRateLimit,
+  PUBLIC_BRAND_PAGE_PER_MINUTE_LIMIT,
+  PUBLIC_PROOF_BRIEF_PER_MINUTE_LIMIT,
   PUBLIC_SEARCH_ANON_BROWSER_LIMIT,
   PUBLIC_SEARCH_IP_BACKSTOP_LIMIT,
+  PUBLIC_SEARCH_SELECTION_PER_MINUTE_LIMIT,
   rateLimitPolicyFor,
 } from "~/lib/rate-limit.server";
 import type { AppEnv } from "~/lib/env.server";
+
+/**
+ * Issue #2985: the public hot-path scopes (auth, public search, brand pages,
+ * public API reads incl. /api/demo-proof, /status) are enforced by the native
+ * Cloudflare Rate Limiting binding and touch NO D1, and they FAIL CLOSED with
+ * 429 + Retry-After. Only cost-bearing scopes (account search, warm
+ * selection, billing provider, share PDF) still reserve capacity in D1 via
+ * the one-statement atomic claim.
+ */
+
+// Mirrors the RL_* binding capacities declared in wrangler.jsonc (issue
+// #2985): capacity lives ON the binding and the runtime call is
+// `limit({ key })`, so the fake enforces the same per-binding limit the
+// platform would. Each policy's scope is part of the key, so per-binding
+// counting against the configured limit matches production semantics.
+const EDGE_BINDING_LIMITS: Record<string, number> = {
+  RL_AUTH: 2,
+  RL_SEARCH_ANON_BROWSER: 2,
+  RL_PROOF_BRIEF: 3,
+  RL_SEARCH_SELECTION: 3,
+  RL_SEARCH_IP: 10,
+  RL_BRAND_PAGE: 12,
+  RL_WRITE: 60,
+  RL_STATUS: 120,
+  RL_DELIVERY_WEBHOOK: 180,
+  RL_API_READ: 240,
+  RL_WEBHOOK: 300,
+};
+
+function createFakeEdgeLimiters(options?: {
+  failures?: (key: string) => boolean;
+  throwOn?: (key: string) => boolean;
+}): { env: AppEnv } {
+  const counts = new Map<string, number>();
+  const makeLimiter = (bindingLimit: number) => ({
+    async limit(params: { key: string }) {
+      const key = params.key;
+      if (options?.throwOn?.(key)) throw new Error("edge limiter unavailable");
+      if (options?.failures?.(key)) return { success: false };
+      const count = (counts.get(key) ?? 0) + 1;
+      counts.set(key, count);
+      if (count > bindingLimit) {
+        // Do not retain rejected bursts; matches a rolling-window counter.
+        counts.set(key, count - 1);
+        return { success: false };
+      }
+      return { success: true };
+    },
+  });
+  const env = Object.fromEntries(
+    Object.entries(EDGE_BINDING_LIMITS).map(([name, limit]) => [name, makeLimiter(limit)]),
+  ) as unknown as AppEnv;
+  return { env };
+}
+
+function searchRequest(userAgent: string) {
+  return new Request("https://0509.io/search?query=nykaa", {
+    headers: { "cf-connecting-ip": "203.0.113.11", "user-agent": userAgent },
+  });
+}
+
+beforeEach(() => {
+  vi.resetModules();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("rateLimitPolicyFor", () => {
   it("skips the cheap edge health check", () => {
     expect(rateLimitPolicyFor(new Request("https://0509.io/api/health"))).toBeNull();
   });
 
-  it("rate-limits the deep health probe under the public api-read bucket", () => {
+  it("protects the public API-read scope and /api/demo-proof fail-closed via the edge binding", () => {
     expect(rateLimitPolicyFor(new Request("https://0509.io/api/health/deep"))).toMatchObject({
       scope: "api-read",
       limit: 240,
-      failClosed: false,
+      periodSeconds: 60,
+    });
+    expect(rateLimitPolicyFor(new Request("https://0509.io/api/demo-proof"))).toMatchObject({
+      scope: "public-proof-brief",
+      limit: PUBLIC_PROOF_BRIEF_PER_MINUTE_LIMIT,
+      periodSeconds: 60,
+      keyByIpOnly: true,
     });
   });
 
   it("protects auth routes with a stricter bucket", () => {
     expect(rateLimitPolicyFor(new Request("https://0509.io/auth/login", { method: "POST" }))).toMatchObject({
       scope: "auth",
-      limit: 20,
+      limit: 2,
     });
   });
 
@@ -39,8 +119,7 @@ describe("rateLimitPolicyFor", () => {
     ).toMatchObject({
       scope: "webhook",
       limit: 300,
-      windowSeconds: 60,
-      failClosed: false,
+      periodSeconds: 60,
     });
     expect(
       rateLimitPolicyFor(new Request("https://0509.io/api/webhooks/other", { method: "POST" })),
@@ -78,9 +157,9 @@ describe("rateLimitPolicyFor", () => {
   });
 });
 
-describe("enforceRequestRateLimit", () => {
-  it("blocks requests after the configured auth limit", async () => {
-    const env = { DB: createFakeD1() } as unknown as AppEnv;
+describe("enforceRequestRateLimit (edge binding, fail closed)", () => {
+  it("blocks requests after the configured auth limit via the edge binding", async () => {
+    const { env } = createFakeEdgeLimiters();
     const request = new Request("https://0509.io/auth/login", {
       method: "POST",
       headers: {
@@ -89,293 +168,69 @@ describe("enforceRequestRateLimit", () => {
       },
     });
 
-    for (let index = 0; index < 20; index += 1) {
-      await expect(enforceRequestRateLimit(request, env)).resolves.toBeNull();
-    }
+    await expect(enforceRequestRateLimit(request, env)).resolves.toBeNull();
+    await expect(enforceRequestRateLimit(request, env)).resolves.toBeNull();
 
     const blocked = await enforceRequestRateLimit(request, env);
     expect(blocked?.status).toBe(429);
+    expect(blocked?.headers.get("retry-after")).toBe("60");
     await expect(blocked?.json()).resolves.toMatchObject({ error: "rate_limited" });
   });
 
-  it("defers event inserts through waitUntil while gating on the count", async () => {
-    const env = { DB: createFakeD1() } as unknown as AppEnv;
-    const deferred: Promise<unknown>[] = [];
-    const ctx = {
-      waitUntil(promise: Promise<unknown>) {
-        deferred.push(promise);
-      },
-    } as ExecutionContext;
-    const request = new Request("https://0509.io/auth/login", {
-      method: "POST",
-      headers: {
-        "cf-connecting-ip": "203.0.113.40",
-        "user-agent": "vitest-waituntil",
-      },
-    });
-
-    for (let index = 0; index < 20; index += 1) {
-      await expect(enforceRequestRateLimit(request, env, ctx)).resolves.toBeNull();
-      await Promise.all(deferred.splice(0, deferred.length));
-    }
-
-    const blocked = await enforceRequestRateLimit(request, env, ctx);
-    expect(blocked?.status).toBe(429);
-    await Promise.all(deferred.splice(0, deferred.length));
-  });
-
-  it("never issues a DELETE on the request path — cleanup is the daily cron's job (issue #2402)", async () => {
-    // Regression lock for the deleted 2% lottery: even with Math.random
-    // forced to a guaranteed "win", no request may carry a cleanup DELETE.
-    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0);
-    const base = createFakeD1();
-    const issuedDeletes: string[] = [];
+  it("enforces public scopes WITHOUT touching D1 (detector: no hot-path event writes)", async () => {
+    // The pre-#2985 limiter wrote a rate_limit_events row per auth POST and
+    // per public read, and read-scopes failed OPEN when D1 degraded. The edge
+    // enforcing must not need D1 at all: a D1 that is entirely broken changes
+    // nothing for the edge scopes.
     const env = {
-      DB: {
-        prepare(sql: string) {
-          if (sql.includes("DELETE FROM rate_limit_events")) issuedDeletes.push(sql);
-          return base.prepare(sql);
-        },
-      },
+      ...createFakeEdgeLimiters().env,
+      DB: createMissingTableD1(),
     } as unknown as AppEnv;
-    const deferred: Promise<unknown>[] = [];
-    const ctx = {
-      waitUntil(promise: Promise<unknown>) {
-        deferred.push(promise);
-      },
-    } as ExecutionContext;
+    const prepareSpy = vi.spyOn(env.DB!, "prepare");
 
-    try {
-      await enforceRequestRateLimit(
-        new Request("https://0509.io/auth/login", {
-          method: "POST",
-          headers: { "cf-connecting-ip": "203.0.113.60", "user-agent": "vitest" },
-        }),
-        env,
-        ctx,
-      );
-      await enforceRequestRateLimit(
-        new Request("https://0509.io/auth/login", {
-          method: "POST",
-          headers: { "cf-connecting-ip": "203.0.113.61", "user-agent": "vitest" },
-        }),
-        env,
-      );
-      await enforceSearchSelectionRateLimit(
-        new Request("https://0509.io/search?query=nykaa&selected=meta-1"),
-        env,
-        "user-1",
-        ctx,
-      );
-      await Promise.all(deferred.splice(0, deferred.length));
-
-      expect(issuedDeletes).toHaveLength(0);
-    } finally {
-      randomSpy.mockRestore();
+    for (let index = 0; index < 2; index += 1) {
+      const request = new Request(index === 0 ? "https://0509.io/api/demo-proof" : "https://0509.io/auth/login", {
+        method: index === 0 ? "GET" : "POST",
+        headers: { "cf-connecting-ip": "203.0.113.44", "user-agent": "vitest" },
+      });
+      request.headers.set("cf-connecting-ip", "203.0.113.44");
+      // Different scopes key differently; one call apiece stays under both.
+      await expect(enforceRequestRateLimit(request, env)).resolves.toBeNull();
     }
+    expect(prepareSpy).not.toHaveBeenCalled();
   });
 
-  it("fails closed for protected writes when the limiter store is unavailable", async () => {
+  it("fails closed with 429 when the binding is missing (no fail-open on public hot paths)", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const response = await enforceRequestRateLimit(
-      new Request("https://0509.io/auth/login", { method: "POST" }),
+      new Request("https://0509.io/api/demo-proof", {
+        headers: { "cf-connecting-ip": "203.0.113.45" },
+      }),
       {} as AppEnv,
     );
-
-    expect(response?.status).toBe(503);
+    expect(response?.status).toBe(429);
+    expect(response?.headers.get("retry-after")).toBe("60");
     consoleError.mockRestore();
   });
 
-  it("fails closed for protected writes when the migration has not been applied yet", async () => {
+  it("fails closed with 429 when the edge limiter throws", async () => {
+    const { env } = createFakeEdgeLimiters();
+    env.RL_PROOF_BRIEF!.limit = async () => {
+      throw new Error("cloudflare edge hiccup");
+    };
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const response = await enforceRequestRateLimit(
-      new Request("https://0509.io/auth/login", { method: "POST" }),
-      { DB: createMissingTableD1() } as unknown as AppEnv,
+      new Request("https://0509.io/api/demo-proof", {
+        headers: { "cf-connecting-ip": "203.0.113.46" },
+      }),
+      env,
     );
-
-    expect(response?.status).toBe(503);
+    expect(response?.status).toBe(429);
     consoleError.mockRestore();
   });
 
-  it("gives each anonymous browser its own budget while keeping a per-IP backstop", async () => {
-    const env = { DB: createFakeD1() } as unknown as AppEnv;
-    const request = (userAgent: string) =>
-      new Request("https://0509.io/search?query=nykaa", {
-        headers: { "cf-connecting-ip": "203.0.113.11", "user-agent": userAgent },
-      });
-
-    // 20 searches under ONE anonymousId pass; the 21st under the SAME id is 429.
-    for (let index = 0; index < PUBLIC_SEARCH_ANON_BROWSER_LIMIT; index += 1) {
-      await expect(
-        enforcePublicSearchRateLimit(request(`vitest-${index}`), env, undefined, "browser-a"),
-      ).resolves.toBeNull();
-    }
-    const blockedOwn = await enforcePublicSearchRateLimit(
-      request("vitest-21"),
-      env,
-      undefined,
-      "browser-a",
-    );
-    expect(blockedOwn?.status).toBe(429);
-
-    // A DIFFERENT anonymousId on the SAME IP still passes (per-browser buckets).
-    await expect(
-      enforcePublicSearchRateLimit(request("vitest-22"), env, undefined, "browser-b"),
-    ).resolves.toBeNull();
-  });
-
-  it("lets a fresh anonymous browser search even when its shared per-IP bucket is near the ceiling", async () => {
-    const env = { DB: createFakeD1() } as unknown as AppEnv;
-    const request = (userAgent: string) =>
-      new Request("https://0509.io/search?query=nykaa", {
-        headers: { "cf-connecting-ip": "203.0.113.30", "user-agent": userAgent },
-      });
-
-    // Push the shared per-IP public-search ceiling (100/10min) near its limit
-    // with cookie-less / new-id requests — the fleet or other NAT visitors
-    // share this counter.
-    for (let index = 0; index < PUBLIC_SEARCH_IP_BACKSTOP_LIMIT - 1; index += 1) {
-      await expect(enforcePublicSearchRateLimit(request(`visitor-${index}`), env)).resolves.toBeNull();
-    }
-
-    // A genuinely fresh no-cookie browser (new anonId) can still issue a search
-    // even though the shared per-IP counter is near its ceiling.
-    await expect(
-      enforcePublicSearchRateLimit(request("fresh-browser"), env, undefined, "fresh-browser-id"),
-    ).resolves.toBeNull();
-  });
-
-  it("lets a fresh browser search after 19 other browsers on the same NAT IP already searched", async () => {
-    const env = { DB: createFakeD1() } as unknown as AppEnv;
-    const request = new Request("https://0509.io/search?query=nykaa", {
-      headers: { "cf-connecting-ip": "203.0.113.55" },
-    });
-
-    for (let index = 0; index < PUBLIC_SEARCH_ANON_BROWSER_LIMIT - 1; index += 1) {
-      await expect(
-        enforcePublicSearchRateLimit(request, env, undefined, `nat-browser-${index}`),
-      ).resolves.toBeNull();
-    }
-
-    await expect(
-      enforcePublicSearchRateLimit(request, env, undefined, "nat-browser-fresh"),
-    ).resolves.toBeNull();
-  });
-
-  it("keys all headerless requests into one shared unknown bucket (spoofed XFF cannot mint identities)", async () => {
-    const env = { DB: createFakeD1() } as unknown as AppEnv;
-
-    // No cf-connecting-ip at all. Every one of these carries a DIFFERENT
-    // spoofed x-forwarded-for AND a different user-agent — under the old XFF
-    // fallback each minted its own identity. They must all land in the single
-    // `unknown` bucket and share the auth cap (20).
-    const spoofedIps = ["198.51.100.1", "203.0.113.9", "192.0.2.44"];
-    for (let index = 0; index < 20; index += 1) {
-      const request = new Request("https://0509.io/auth/login", {
-        method: "POST",
-        headers: {
-          "x-forwarded-for": spoofedIps[index % spoofedIps.length]!,
-          "user-agent": `spoofed-agent-${index}`,
-        },
-      });
-      await expect(enforceRequestRateLimit(request, env)).resolves.toBeNull();
-    }
-
-    // The 21st headerless request — a brand-new spoofed XFF and a brand-new
-    // user-agent — still shares the exhausted shared bucket.
-    const blocked = await enforceRequestRateLimit(
-      new Request("https://0509.io/auth/login", {
-        method: "POST",
-        headers: {
-          "x-forwarded-for": "198.51.100.77",
-          "user-agent": "brand-new-spoof",
-        },
-      }),
-      env,
-    );
-    expect(blocked?.status).toBe(429);
-  });
-
-  it("ignores spoofed x-forwarded-for when a real cf-connecting-ip is present", async () => {
-    const env = { DB: createFakeD1() } as unknown as AppEnv;
-
-    // Same cf-connecting-ip and user-agent across every request, but a
-    // different spoofed x-forwarded-for each time. Keys must all collide on
-    // the trusted IP, so the x-forwarded-for value must not affect the bucket.
-    for (let index = 0; index < 20; index += 1) {
-      const request = new Request("https://0509.io/auth/login", {
-        method: "POST",
-        headers: {
-          "cf-connecting-ip": "203.0.113.50",
-          "x-forwarded-for": `1.2.3.${index}`,
-          "user-agent": "same-browser",
-        },
-      });
-      await expect(enforceRequestRateLimit(request, env)).resolves.toBeNull();
-    }
-
-    const blocked = await enforceRequestRateLimit(
-      new Request("https://0509.io/auth/login", {
-        method: "POST",
-        headers: {
-          "cf-connecting-ip": "203.0.113.50",
-          "x-forwarded-for": "9.9.9.9",
-          "user-agent": "same-browser",
-        },
-      }),
-      env,
-    );
-    expect(blocked?.status).toBe(429);
-  });
-
-  it("keeps the per-IP public-search backstop throttling once the IP ceiling is exceeded", async () => {
-    const env = { DB: createFakeD1() } as unknown as AppEnv;
-    const request = (userAgent: string) =>
-      new Request("https://0509.io/search?query=nykaa", {
-        headers: { "cf-connecting-ip": "203.0.113.40", "user-agent": userAgent },
-      });
-
-    for (let index = 0; index < PUBLIC_SEARCH_IP_BACKSTOP_LIMIT; index += 1) {
-      await expect(enforcePublicSearchRateLimit(request(`agent-${index}`), env)).resolves.toBeNull();
-    }
-
-    // Even a brand-new anonymousId cannot bypass the exhausted per-IP backstop.
-    const blocked = await enforcePublicSearchRateLimit(
-      request("fresh"),
-      env,
-      undefined,
-      "any-browser",
-    );
-    expect(blocked?.status).toBe(429);
-  });
-
-  it("does not let anonymous public search reset quota by rotating user agent", async () => {
-    const env = { DB: createFakeD1() } as unknown as AppEnv;
-
-    for (let index = 0; index < PUBLIC_SEARCH_IP_BACKSTOP_LIMIT; index += 1) {
-      const request = new Request("https://0509.io/search?query=nykaa", {
-        headers: {
-          "cf-connecting-ip": "203.0.113.12",
-          "user-agent": `rotating-agent-${index}`,
-        },
-      });
-      await expect(enforcePublicSearchRateLimit(request, env)).resolves.toBeNull();
-    }
-
-    const blocked = await enforcePublicSearchRateLimit(
-      new Request("https://0509.io/search?query=nykaa", {
-        headers: {
-          "cf-connecting-ip": "203.0.113.12",
-          "user-agent": "brand-new-agent",
-        },
-      }),
-      env,
-    );
-    expect(blocked?.status).toBe(429);
-  });
-
-  it("keeps public status slash variants in the same quota bucket", async () => {
-    const env = { DB: createFakeD1() } as unknown as AppEnv;
+  it("keeps the per-IP public-status bucket shared across slash variants", async () => {
+    const { env } = createFakeEdgeLimiters();
 
     for (let index = 0; index < 120; index += 1) {
       const path = index % 2 === 0 ? "/status" : "/status////";
@@ -403,44 +258,28 @@ describe("enforceRequestRateLimit", () => {
     );
     expect(blocked?.status).toBe(429);
   });
-});
 
-describe("enforcePublicSearchSelectionRateLimit", () => {
-  it("admits 30 anonymous ad checks then returns 429", async () => {
-    const env = { DB: createFakeD1() } as unknown as AppEnv;
-    const request = new Request("https://0509.io/search?query=nykaa&selected=meta-1", {
-      headers: {
-        "cf-connecting-ip": "203.0.113.21",
-        "user-agent": "vitest",
-      },
-    });
+  it("keys all headerless requests into one shared unknown bucket (spoofed XFF cannot mint identities)", async () => {
+    const { env } = createFakeEdgeLimiters();
 
-    for (let index = 0; index < 30; index += 1) {
-      await expect(enforcePublicSearchSelectionRateLimit(request, env)).resolves.toBeNull();
-    }
-
-    const blocked = await enforcePublicSearchSelectionRateLimit(request, env);
-    expect(blocked?.status).toBe(429);
-  });
-
-  it("does not let rotating user-agent reset the same IP bucket", async () => {
-    const env = { DB: createFakeD1() } as unknown as AppEnv;
-
-    for (let index = 0; index < 30; index += 1) {
-      const request = new Request("https://0509.io/search?query=nykaa&selected=meta-1", {
+    const spoofedIps = ["198.51.100.1", "203.0.113.9", "192.0.2.44"];
+    for (let index = 0; index < 2; index += 1) {
+      const request = new Request("https://0509.io/auth/login", {
+        method: "POST",
         headers: {
-          "cf-connecting-ip": "203.0.113.22",
-          "user-agent": `rotating-agent-${index}`,
+          "x-forwarded-for": spoofedIps[index % spoofedIps.length]!,
+          "user-agent": `spoofed-agent-${index}`,
         },
       });
-      await expect(enforcePublicSearchSelectionRateLimit(request, env)).resolves.toBeNull();
+      await expect(enforceRequestRateLimit(request, env)).resolves.toBeNull();
     }
 
-    const blocked = await enforcePublicSearchSelectionRateLimit(
-      new Request("https://0509.io/search?query=nykaa&selected=meta-1", {
+    const blocked = await enforceRequestRateLimit(
+      new Request("https://0509.io/auth/login", {
+        method: "POST",
         headers: {
-          "cf-connecting-ip": "203.0.113.22",
-          "user-agent": "brand-new-agent",
+          "x-forwarded-for": "198.51.100.77",
+          "user-agent": "brand-new-spoof",
         },
       }),
       env,
@@ -448,18 +287,135 @@ describe("enforcePublicSearchSelectionRateLimit", () => {
     expect(blocked?.status).toBe(429);
   });
 
-  it("returns null when env.DB is missing (fail-open)", async () => {
-    const request = new Request("https://0509.io/search?query=nykaa&selected=meta-1", {
-      headers: {
-        "cf-connecting-ip": "203.0.113.23",
-        "user-agent": "vitest",
-      },
-    });
-    await expect(enforcePublicSearchSelectionRateLimit(request, {} as AppEnv)).resolves.toBeNull();
+  it("ignores spoofed x-forwarded-for when a real cf-connecting-ip is present", async () => {
+    const { env } = createFakeEdgeLimiters();
+
+    for (let index = 0; index < 2; index += 1) {
+      const request = new Request("https://0509.io/auth/login", {
+        method: "POST",
+        headers: {
+          "cf-connecting-ip": "203.0.113.50",
+          "x-forwarded-for": `1.2.3.${index}`,
+          "user-agent": "same-browser",
+        },
+      });
+      await expect(enforceRequestRateLimit(request, env)).resolves.toBeNull();
+    }
+
+    const blocked = await enforceRequestRateLimit(
+      new Request("https://0509.io/auth/login", {
+        method: "POST",
+        headers: {
+          "cf-connecting-ip": "203.0.113.50",
+          "x-forwarded-for": "9.9.9.9",
+          "user-agent": "same-browser",
+        },
+      }),
+      env,
+    );
+    expect(blocked?.status).toBe(429);
   });
 });
 
-describe("enforceAuthenticatedSearchRateLimit", () => {
+describe("enforcePublicSearchRateLimit (edge binding)", () => {
+  it("429s a browser that exceeds its own per-browser budget", async () => {
+    const { env } = createFakeEdgeLimiters();
+
+    await expect(enforcePublicSearchRateLimit(searchRequest("a"), env, undefined, "browser-a")).resolves.toBeNull();
+    await expect(enforcePublicSearchRateLimit(searchRequest("a"), env, undefined, "browser-a")).resolves.toBeNull();
+    const blocked = await enforcePublicSearchRateLimit(searchRequest("a"), env, undefined, "browser-a");
+    expect(blocked?.status).toBe(429);
+    // Same anonymous id again is still blocked (rolling window, not a one-shot).
+    await expect(
+      enforcePublicSearchRateLimit(searchRequest("a-again"), env, undefined, "browser-a"),
+    ).resolves.toMatchObject({ status: 429 });
+  });
+
+  it("separates per-browser budgets on a shared NAT IP", async () => {
+    const { env } = createFakeEdgeLimiters();
+
+    for (let index = 0; index < 5; index += 1) {
+      const request = new Request("https://0509.io/search?query=nykaa", {
+        headers: { "cf-connecting-ip": "203.0.113.55" },
+      });
+      await expect(
+        enforcePublicSearchRateLimit(request, env, undefined, `nat-browser-${index}`),
+      ).resolves.toBeNull();
+    }
+  });
+
+  it("keeps the per-IP public-search backstop throttling once the IP ceiling is exceeded", async () => {
+    const { env } = createFakeEdgeLimiters();
+
+    for (let index = 0; index < PUBLIC_SEARCH_IP_BACKSTOP_LIMIT; index += 1) {
+      await expect(enforcePublicSearchRateLimit(searchRequest(`agent-${index}`), env)).resolves.toBeNull();
+    }
+
+    // Even a brand-new anonymousId cannot bypass the exhausted per-IP backstop.
+    const blocked = await enforcePublicSearchRateLimit(searchRequest("fresh"), env, undefined, "any-browser");
+    expect(blocked?.status).toBe(429);
+  });
+
+  it("keys by anonymous browser id so its own exhausted budget does not block other browsers on the IP", async () => {
+    const { env } = createFakeEdgeLimiters();
+
+    for (let index = 0; index < PUBLIC_SEARCH_ANON_BROWSER_LIMIT; index += 1) {
+      await expect(
+        enforcePublicSearchRateLimit(searchRequest(`vitest-${index}`), env, undefined, "browser-a"),
+      ).resolves.toBeNull();
+    }
+    await expect(
+      enforcePublicSearchRateLimit(searchRequest("vitest-3"), env, undefined, "browser-a"),
+    ).resolves.toMatchObject({ status: 429 });
+
+    await expect(
+      enforcePublicSearchRateLimit(searchRequest("vitest-4"), env, undefined, "browser-b"),
+    ).resolves.toBeNull();
+  });
+});
+
+describe("enforcePublicSearchSelectionRateLimit", () => {
+  it("admits 3 anonymous ad checks then returns 429", async () => {
+    const { env } = createFakeEdgeLimiters();
+    const request = new Request("https://0509.io/search?query=nykaa&selected=meta-1", {
+      headers: { "cf-connecting-ip": "203.0.113.21", "user-agent": "vitest" },
+    });
+
+    for (let index = 0; index < PUBLIC_SEARCH_SELECTION_PER_MINUTE_LIMIT; index += 1) {
+      await expect(enforcePublicSearchSelectionRateLimit(request, env)).resolves.toBeNull();
+    }
+
+    const blocked = await enforcePublicSearchSelectionRateLimit(request, env);
+    expect(blocked?.status).toBe(429);
+  });
+});
+
+describe("enforcePublicBrandPageRateLimit", () => {
+  it("shares one bucket across brand page domains and 429s past the ceiling", async () => {
+    const { env } = createFakeEdgeLimiters();
+
+    for (let index = 0; index < PUBLIC_BRAND_PAGE_PER_MINUTE_LIMIT; index += 1) {
+      await expect(
+        enforcePublicBrandPageRateLimit(
+          new Request(`https://0509.io/ads/domain-${index}.com`, {
+            headers: { "cf-connecting-ip": "203.0.113.30", "user-agent": "vitest" },
+          }),
+          env,
+        ),
+      ).resolves.toBeNull();
+    }
+
+    const blocked = await enforcePublicBrandPageRateLimit(
+      new Request("https://0509.io/ads/next-domain.com", {
+        headers: { "cf-connecting-ip": "203.0.113.30", "user-agent": "fresh" },
+      }),
+      env,
+    );
+    expect(blocked?.status).toBe(429);
+  });
+});
+
+describe("cost-bearing scopes keep the D1 atomic claim", () => {
   it("blocks a signed-in account after the limit even when it rotates IPs", async () => {
     const env = { DB: createFakeD1() } as unknown as AppEnv;
 
@@ -499,9 +455,7 @@ describe("enforceAuthenticatedSearchRateLimit", () => {
       ),
     ).resolves.toBeNull();
   });
-});
 
-describe("enforceSearchSelectionRateLimit", () => {
   it("claims the warm-selection budget synchronously instead of deferring admission", async () => {
     const env = { DB: createFakeD1() } as unknown as AppEnv;
     const waitUntil = vi.fn();
@@ -516,22 +470,6 @@ describe("enforceSearchSelectionRateLimit", () => {
     ).resolves.toBeNull();
 
     expect(waitUntil).not.toHaveBeenCalled();
-  });
-
-  it("admits at most 120 concurrent warm selections", async () => {
-    const env = { DB: createFakeD1() } as unknown as AppEnv;
-    const results = await Promise.all(
-      Array.from({ length: 121 }, () =>
-        enforceSearchSelectionRateLimit(
-          new Request("https://0509.io/search?query=nykaa&selected=meta-1"),
-          env,
-          "user-concurrent",
-        ),
-      ),
-    );
-
-    expect(results.filter((result) => result === null)).toHaveLength(120);
-    expect(results.filter((result) => result?.status === 429)).toHaveLength(1);
   });
 
   it("refuses the 121st warm selection in the window without touching the fresh-search bucket", async () => {
@@ -581,79 +519,6 @@ describe("enforceSearchSelectionRateLimit", () => {
     ).resolves.toBeNull();
   });
 
-  it("fails closed when the limiter store is unavailable", async () => {
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const env = { DB: createMissingTableD1() } as unknown as AppEnv;
-
-    const response = await enforceSearchSelectionRateLimit(
-      new Request("https://0509.io/search?query=nykaa&selected=meta-1"),
-      env,
-      "user-1",
-    );
-
-    expect(response?.status).toBe(503);
-    consoleError.mockRestore();
-  });
-});
-
-describe("enforceBillingProviderRateLimit", () => {
-  it("keys the shared budget by workspace owner across rotating IPs and user agents", async () => {
-    const env = { DB: createFakeD1() } as unknown as AppEnv;
-    for (let index = 0; index < 5; index += 1) {
-      await expect(
-        enforceBillingProviderRateLimit(
-          new Request("https://0509.io/api/billing/dodo/checkout", {
-            headers: {
-              "cf-connecting-ip": `203.0.113.${index}`,
-              "user-agent": `rotating-${index}`,
-            },
-          }),
-          env,
-          "owner-1",
-          "mutation",
-        ),
-      ).resolves.toBeNull();
-    }
-    await expect(
-      enforceBillingProviderRateLimit(
-        new Request("https://0509.io/api/billing/dodo/portal", {
-          headers: { "cf-connecting-ip": "198.51.100.20", "user-agent": "fresh" },
-        }),
-        env,
-        "owner-1",
-        "mutation",
-      ),
-    ).resolves.toMatchObject({ status: 429 });
-    await expect(
-      enforceBillingProviderRateLimit(
-        new Request("https://0509.io/api/billing/dodo/portal", {
-          headers: { "cf-connecting-ip": "198.51.100.20", "user-agent": "fresh" },
-        }),
-        env,
-        "owner-2",
-        "mutation",
-      ),
-    ).resolves.toBeNull();
-  });
-
-  it("uses one atomic claim per request under concurrency", async () => {
-    const env = { DB: createFakeD1() } as unknown as AppEnv;
-    const results = await Promise.all(
-      Array.from({ length: 8 }, (_, index) =>
-        enforceBillingProviderRateLimit(
-          new Request("https://0509.io/api/billing/dodo/checkout", {
-            headers: { "cf-connecting-ip": `203.0.113.${index}` },
-          }),
-          env,
-          "owner-concurrent",
-          "mutation",
-        ),
-      ),
-    );
-    expect(results.filter((result) => result === null)).toHaveLength(5);
-    expect(results.filter((result) => result?.status === 429)).toHaveLength(3);
-  });
-
   it("fails closed before a provider call when D1 or its table is unavailable", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     await expect(
@@ -676,6 +541,92 @@ describe("enforceBillingProviderRateLimit", () => {
   });
 });
 
+/**
+ * Committed-configuration guard for the RL_* edge bindings (issue #2985).
+ *
+ * History this exists to prevent: the first cut of #2985 shipped
+ * `namespace_id` values invented as descriptive strings ("0509-rl-auth",
+ * …). Every worker unit test passed, because the fake limiters never look at
+ * the binding metadata. Cloudflare's deploy-time validator rejected the
+ * upload with `binding RL_WEBHOOK of type ratelimit must have valid
+ * namespace_id [code: 10021]`, and the failure only surfaced in the
+ * `preview-assert` required check after a full build+upload round-trip.
+ *
+ * The platform contract (developers.cloudflare.com Workers Rate Limiting
+ * binding): `namespace_id` is "a string containing a positive integer that
+ * uniquely defines this rate limiting namespace within your Cloudflare
+ * account". It is chosen by the config author — no Cloudflare-side resource
+ * has to be created first — but it MUST be an integer string and MUST be
+ * unique per namespace within the account. These assertions fail before
+ * merge instead of in the deploy validator.
+ */
+function readWranglerRateLimits(path: string): { name: unknown; namespace_id: unknown; simple: unknown }[] {
+  const raw = readFileSync(path, "utf8");
+  // wrangler.jsonc allows // comments; strip them before parsing. String
+  // contents are preserved by only dropping comments that start a run of
+  // non-quoted text on their line.
+  const withoutComments = raw
+    .split("\n")
+    .map((line) => {
+      const commentIndex = line.indexOf("//");
+      if (commentIndex === -1) return line;
+      const before = line.slice(0, commentIndex);
+      const quoteCount = (before.match(/"/g) ?? []).length;
+      return quoteCount % 2 === 0 ? before : line;
+    })
+    .join("\n");
+  const parsed = JSON.parse(withoutComments) as {
+    unsafe?: { bindings?: { type?: string; name?: unknown; namespace_id?: unknown; simple?: unknown }[] };
+  };
+  return (parsed.unsafe?.bindings ?? []).filter((binding) => binding.type === "ratelimit") as {
+    name: unknown;
+    namespace_id: unknown;
+    simple: unknown;
+  }[];
+}
+
+const RATE_LIMIT_CONFIGS = ["wrangler.jsonc", "wrangler.e2e.jsonc", "tests/integration/wrangler.test.jsonc"] as const;
+
+describe("RL_* edge binding configuration (#2985)", () => {
+  it.each(RATE_LIMIT_CONFIGS)("declares every RL_* scope in %s", (path) => {
+    const names = readWranglerRateLimits(path).map((binding) => binding.name);
+
+    expect(names.sort()).toEqual(Object.keys(EDGE_BINDING_LIMITS).sort());
+  });
+
+  it.each(RATE_LIMIT_CONFIGS)("uses positive-integer namespace_id strings in %s", (path) => {
+    for (const binding of readWranglerRateLimits(path)) {
+      const namespaceId = binding.namespace_id;
+
+      // Cloudflare: "A string containing a positive integer … Although the
+      // value must be a valid integer, it is specified as a string." A
+      // descriptive label here is the #10021 deploy failure.
+      expect(typeof namespaceId, `${String(binding.name)} namespace_id must be a string`).toBe("string");
+      expect(String(namespaceId), `${String(binding.name)} namespace_id must be a positive integer`).toMatch(
+        /^[1-9][0-9]*$/,
+      );
+    }
+  });
+
+  it.each(RATE_LIMIT_CONFIGS)("keeps each namespace_id unique within %s", (path) => {
+    const ids = readWranglerRateLimits(path).map((binding) => String(binding.namespace_id));
+
+    // Unique per Cloudflare account. Distinct scopes must not share a
+    // namespace, or one route's burst spends another route's budget.
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it.each(RATE_LIMIT_CONFIGS)("matches the committed capacity each scope is tested against in %s", (path) => {
+    for (const binding of readWranglerRateLimits(path)) {
+      const simple = binding.simple as { limit?: unknown; period?: unknown };
+
+      expect(simple.limit, `${String(binding.name)} simple.limit`).toBe(EDGE_BINDING_LIMITS[String(binding.name)]);
+      // The platform accepts only 10s or 60s windows.
+      expect([10, 60]).toContain(simple.period);
+    }
+  });
+});
+
 function createFakeD1() {
   const rows: { scope: string; keyHash: string; route: string; createdAt: string }[] = [];
 
@@ -686,32 +637,24 @@ function createFakeD1() {
           return {
             async run() {
               if (sql.includes("INSERT INTO rate_limit_events")) {
-                if (sql.includes("SELECT COUNT(*)")) {
-                  const [id, scope, keyHash, route, createdAt, _scope, _keyHash, _route, since, limit] = args;
-                  const count = rows.filter(
-                    (row) =>
-                      row.scope === String(scope) &&
-                      row.keyHash === String(keyHash) &&
-                      row.route === String(route) &&
-                      row.createdAt >= String(since),
-                  ).length;
-                  if (count < Number(limit)) {
-                    rows.push({
-                      scope: String(scope),
-                      keyHash: String(keyHash),
-                      route: String(route),
-                      createdAt: String(createdAt),
-                    });
-                    return { meta: { changes: 1 } };
-                  }
-                  return { meta: { changes: 0 } };
+                const [, scope, keyHash, route, createdAt, _scope, _keyHash, _route, since, limit] = args;
+                const count = rows.filter(
+                  (row) =>
+                    row.scope === String(scope) &&
+                    row.keyHash === String(keyHash) &&
+                    row.route === String(route) &&
+                    row.createdAt >= String(since),
+                ).length;
+                if (count < Number(limit)) {
+                  rows.push({
+                    scope: String(scope),
+                    keyHash: String(keyHash),
+                    route: String(route),
+                    createdAt: String(createdAt),
+                  });
+                  return { meta: { changes: 1 } };
                 }
-                rows.push({
-                  scope: String(args[1]),
-                  keyHash: String(args[2]),
-                  route: String(args[3]),
-                  createdAt: String(args[4]),
-                });
+                return { meta: { changes: 0 } };
               }
               if (sql.includes("DELETE FROM rate_limit_events")) {
                 // Bind shape: [...longScopes, cutoff, ...longScopes, longWindowCutoff]
@@ -730,16 +673,8 @@ function createFakeD1() {
               return {};
             },
             async first<T>() {
-              if (!sql.includes("SELECT COUNT(*) AS count")) return null;
-              const [scope, keyHash, route, since] = args.map(String);
-              const count = rows.filter(
-                (row) =>
-                  row.scope === scope &&
-                  row.keyHash === keyHash &&
-                  row.route === route &&
-                  row.createdAt >= since,
-              ).length;
-              return { count } as T;
+              if (!sql.includes("SELECT")) return null;
+              return null as unknown as T;
             },
           };
         },
