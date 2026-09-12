@@ -563,6 +563,15 @@ jobs:
           # run, and validates it as an ancestor of the deployed commit.
           BOOTSTRAP_PREVIOUS_SUCCESS_SHA: ${{ inputs.bootstrap_previous_success_sha || '' }}
           CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV: "false"
+          # 4096 MB: the same heap budget as preview-assert.yml and ci.yml
+          # (0509#3303). This step's in-script typecheck
+          # (scripts/deploy-production.mjs -> `npm run typecheck`) previously
+          # inherited the runner's ~2.0 GB Node default — the same ceiling
+          # that OOMs the pinned 2048 MB elsewhere — so the explicit, shared
+          # budget replaces reliance on the runner's default here. Flows to
+          # every node process this step spawns; nothing today needs more
+          # than ~2 GB, so this only adds headroom.
+          NODE_OPTIONS: --max-old-space-size=4096
         run: npm run deploy
 
       - name: Synchronize Worker secrets

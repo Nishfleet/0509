@@ -87,9 +87,13 @@ describe("preview-assert workflow", () => {
   });
 
   it("runs the deploy job's typecheck unchanged, with the same heap budget", () => {
+    // 4096 MB — the budget shared across preview-assert.yml, ci.yml and
+    // deploy-production.yml (0509#3303: the old 2048 MB pin exited 134
+    // intermittently at the measured ~2030 MB `tsc -b` peak). The three-way
+    // parity itself is pinned in workflow-routing-hardening.test.ts.
     const typecheck = steps.find((step) => step.run === "npm run typecheck");
     expect(typecheck).toBeDefined();
-    expect(typecheck?.env?.NODE_OPTIONS).toBe("--max-old-space-size=2048");
+    expect(typecheck?.env?.NODE_OPTIONS).toBe("--max-old-space-size=4096");
   });
 
   it("runs no test step — ci.yml's sharded suite owns coverage on every PR", () => {

@@ -58,11 +58,31 @@ describe("workflow routing hardening", () => {
     }
   });
 
-  it("keeps the typecheck heap inside an explicit budget", () => {
+  it("keeps the typecheck heap inside an explicit, uniform budget", () => {
+    // 4096 MB everywhere (0509#3303): `tsc -b` peaked at ~2030 MB against the
+    // old 2048 MB pin and exited 134 probabilistically (run 34693260245;
+    // the identical head passed unchanged on retrigger, run 34698175521).
+    // The three workflows that share the deploy verification shape must
+    // carry the SAME budget — that parity is what lets one of them pass
+    // predict what the others will do. deploy-production.yml carries it on
+    // the `deploy` job's Deploy step, whose in-script typecheck
+    // (scripts/deploy-production.mjs -> `npm run typecheck`) previously ran
+    // on the runner's implicit ~2.0 GB default instead of a pin.
     const typecheck = job("ci.yml", "codex-node-checks").steps?.find(
       (step) => step.run === "npm run typecheck",
     );
-    expect(typecheck?.env?.NODE_OPTIONS).toBe("--max-old-space-size=2048");
+    expect(typecheck?.env?.NODE_OPTIONS).toBe("--max-old-space-size=4096");
+    const previewTypecheck = job(
+      "preview-assert.yml",
+      "preview-assert",
+    ).steps?.find((step) => step.run === "npm run typecheck");
+    expect(previewTypecheck?.env?.NODE_OPTIONS).toBe(
+      "--max-old-space-size=4096",
+    );
+    const deploy = job("deploy-production.yml", "deploy").steps?.find(
+      (step) => step.run === "npm run deploy",
+    );
+    expect(deploy?.env?.NODE_OPTIONS).toBe("--max-old-space-size=4096");
   });
 
   it("serializes every provider mutation without cancelling running work", () => {
