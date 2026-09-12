@@ -34,8 +34,19 @@ import type {
  * `presence_poll_cursor.cursor_json` under `threadsUsage` — the connector
  * reads the counters before fetching and refuses the poll once the open
  * 24h windows total the cap, so the cap is enforced in connector logic and
- * can never be silently exceeded. The counter is a fail-safe floor, not a
- * mutex: polls are already serialized upstream by `runPresencePollingBatch`.
+ * can never be silently exceeded.
+ *
+ * Two honest approximations, both landing on Meta's documented 429 rather
+ * than silent breakage: (1) the stored window is TUMBLING — all counted
+ * queries expire together at `windowStart + 24h` — which under-counts
+ * relative to Meta's per-query rolling expiry, so queries sent late in a
+ * window can be released early and Meta's own 429 then surfaces as
+ * `rate_limited` (counted, degraded poll); (2) the counter advances only
+ * because the poll orchestrator persists the returned cursor back into
+ * `presence_poll_cursor.cursor_json` (`pollPresenceSourceTarget` does) — a
+ * direct `poll` caller that drops the cursor un-counts its own queries.
+ * The counter is a fail-safe floor, not a mutex: polls are already
+ * serialized upstream by `runPresencePollingBatch`.
  *
  * Every network hop goes through `presenceSafeFetch` (SSRF hardening +
  * redirects re-validated). A raw `fetch` to the Graph endpoint is a

@@ -425,7 +425,7 @@ export function presenceSourceCoverageForDocs(): Array<{
       sourceId: "threads",
       label: SOURCE_LABELS.threads,
       productionStatus: "gated",
-      notes: "Threads keyword-search connector wired in (Meta keyword_search; 2,200 queries per user per rolling 24h enforced via presence_poll_cursor). Gated behind PRESENCE_THREADS_ROLLOUT + THREADS_ACCESS_TOKEN and Meta app review — off by default; activation is a separate rollout decision.",
+      notes: "Threads keyword-search connector wired in (Meta keyword_search; 2,200 queries per user per 24h enforced in-connector via presence_poll_cursor — tumbling-window approximation of Meta's per-query rolling count, overshoot surfaces as Meta's 429). Gated behind PRESENCE_THREADS_ROLLOUT + THREADS_ACCESS_TOKEN and Meta app review — off by default; activation is a separate rollout decision.",
     },
     {
       sourceId: "youtube",
