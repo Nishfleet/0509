@@ -129,12 +129,14 @@ export function edgeCacheCopyAgeSeconds(response: Response, now = Date.now()): n
 
 /** The copy's fresh-serve bound in seconds: the stamped origin ttl, falling
  * back to the capped parse of its stored cache-control for pre-stamp copies
- * and test doubles. Exported for the unit tests. */
+ * and test doubles. The stamp is clamped to the same 5-minute skew bound the
+ * parser enforces, so no stored copy can talk the served contract past it.
+ * Exported for the unit tests. */
 export function edgeCacheCopyTtlSeconds(response: Response): number {
   const raw = response.headers.get(EDGE_STORED_TTL_HEADER);
   const stamped = raw ? Number.parseInt(raw, 10) : NaN;
   if (Number.isFinite(stamped) && stamped > 0) {
-    return stamped;
+    return Math.min(stamped, EDGE_TTL_CAP_SECONDS);
   }
   return parseEdgeCacheTtlSeconds(response);
 }
@@ -506,6 +508,13 @@ export async function storeEdgeCache(
   }
   const storedHeaders = new Headers(response.headers);
   storedHeaders.delete("set-cookie");
+  // expires/age are platform-honoured lifetime headers too: a stray one
+  // (e.g. pinned next to a route's own `private, max-age=N`, which
+  // withSecurityHeaders deliberately leaves untouched) would let the
+  // platform expire the copy before the serve-stale window — the exact
+  // #3247 miss shape this stretch exists to fix.
+  storedHeaders.delete("expires");
+  storedHeaders.delete("age");
   // The stored copy's cache-control is the MATCH lifetime — fresh ttl plus
   // the serve-stale window — because `cache.match` enforces the stored
   // max-age itself. The browser-facing `public, max-age=<ttl>` contract is

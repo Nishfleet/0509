@@ -288,6 +288,25 @@ describe("edge cache through the real worker fetch handler (issue #2950)", () =>
     expect(tasks).toHaveLength(1);
   });
 
+  it("queues the same background refresh on a stale HEAD hit — headers only, body stays empty (#3247)", async () => {
+    const stub = memoryCache();
+    vi.stubGlobal("caches", { open: async () => stub });
+    const { worker } = await loadWorker();
+    const tasks: Promise<unknown>[] = [];
+
+    await fetchDocument(worker);
+    await overwriteStoredCopy(stub, anonymousGet(), "xx", "local", 720, "<html>stale-copy</html>");
+
+    // A stale HEAD serves the stored copy's headers with no body AND still
+    // queues the one GET-ified re-render — the probe's curl -sI shape must
+    // not bypass the re-warm.
+    const staleHead = await fetchDocument(worker, { method: "HEAD", tasks });
+    expect(staleHead.headers.get(EDGE_PROOF_HEADER)).toBe("HIT");
+    expect(staleHead.headers.get("cache-control")).toBe("public, max-age=300");
+    expect(await staleHead.text()).toBe("");
+    expect(tasks).toHaveLength(1);
+  });
+
   it("answers a HEAD after a warm GET with the stored copy's headers and no body (the curl -sI proof)", async () => {
     const stub = memoryCache();
     vi.stubGlobal("caches", { open: async () => stub });
