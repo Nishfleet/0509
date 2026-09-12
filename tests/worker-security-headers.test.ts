@@ -418,6 +418,16 @@ describe("Worker security headers", () => {
       }
     });
 
+    it("does not license the shared cache for an Authorization-carrying request", () => {
+      const response = withSecurityHeaders(
+        htmlResponse(),
+        new Request("https://0509.io/", {
+          headers: { authorization: "Bearer eye-lab-1" },
+        }),
+      );
+      expect(response.headers.get("cache-control")).toBe(HTML_NO_STORE_HEADERS["cache-control"]);
+    });
+
     it("keeps signed-in requests no-store even on public paths", () => {
       const response = withSecurityHeaders(
         htmlResponse(),

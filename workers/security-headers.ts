@@ -205,6 +205,13 @@ function isPublicCacheableHtmlRequest(request: Request): boolean {
   if (hasSiteRepAuthCookie(request)) {
     return false;
   }
+  // Issue #3193 (review finding): keep the stamping gate in agreement with
+  // the edge-cache eligibility gate — an Authorization-carrying request is
+  // never anonymous, so it does not get the shared-cache license either.
+  const auth = request.headers.get("authorization");
+  if (auth && auth.trim() !== "") {
+    return false;
+  }
   const pathname = new URL(request.url).pathname;
   return (
     PUBLIC_CACHEABLE_HTML_PATHS.has(pathname) ||
