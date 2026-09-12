@@ -1509,13 +1509,14 @@ describe("D1 remote restore evidence automation", () => {
     // the repository sorting earlier. D1's ledger is append-only, so the live
     // order is fixed history the sorted repository cannot reproduce.
     //
-    // 0097_status_probe_samples.sql, 0098_email_delivery_canary.sql,
-    // 0098_widen_source_target_connector_bluesky.sql and
-    // 0098_widen_source_target_connector_gdelt.sql are in the repository but
-    // NOT yet applied on production (production deploys have been red since
-    // 2026-09-09), so the modeled production ledger excludes them too and
-    // every expected forward-suffix includes them as ordinary catch-up at the
-    // tail.
+    // Run 34703245274 (2026-09-12, 0509#3247): the same shape again one
+    // number later. Production applied 0098_widen_source_target_connector_
+    // gdelt.sql while 0098_widen_source_target_connector_bluesky.sql had
+    // not landed in the repository; #3289 then re-added bluesky, which
+    // sorts earlier. The modeled ledger is the real production tail from
+    // that run's backup: the 0096 pair in production order, then every
+    // repository migration except bluesky, which the forward apply appends
+    // last.
     const repository = readdirSync(resolve("migrations"))
       .filter((name) => /^\d{4}_.+\.sql$/u.test(name))
       .sort();
@@ -1525,16 +1526,18 @@ describe("D1 remote restore evidence automation", () => {
     const repositorySuffix = repository.slice(repositoryBaseline.length);
     const productionNames = [
       ...PRODUCTION_MIGRATION_LEDGER_BASELINE,
+      "0096_error_reports.sql",
+      "0096_email_suppression.sql",
       ...repositorySuffix.filter(
         (name) =>
-          name !== "0096_email_suppression.sql" &&
-          name !== "0097_status_probe_samples.sql" &&
-          name !== "0098_email_delivery_canary.sql" &&
-          name !== "0098_widen_source_target_connector_bluesky.sql" &&
-          name !== "0098_widen_source_target_connector_gdelt.sql",
+          !["0096_error_reports.sql", "0096_email_suppression.sql",
+            "0098_widen_source_target_connector_bluesky.sql",
+          ].includes(name),
       ),
     ];
-    expect(productionNames.at(-1)).toBe("0096_error_reports.sql");
+    expect(productionNames.at(-1)).toBe(
+      "0098_widen_source_target_connector_gdelt.sql",
+    );
     const namedLedger = (names: string[]) =>
       names.map((name, index) => ({
         id: index + 1,
@@ -1548,47 +1551,30 @@ describe("D1 remote restore evidence automation", () => {
       ),
     ).toEqual({
       action: "apply_forward_suffix",
-      migrations: [
-        "0096_email_suppression.sql",
-        "0097_status_probe_samples.sql",
-        "0098_email_delivery_canary.sql",
-        "0098_widen_source_target_connector_bluesky.sql",
-        "0098_widen_source_target_connector_gdelt.sql",
-      ],
+      migrations: ["0098_widen_source_target_connector_bluesky.sql"],
     });
     expect(
       planSourceBackupLedgerReconciliation(
         namedLedger([
           ...productionNames,
-          "0096_email_suppression.sql",
-          "0097_status_probe_samples.sql",
-          "0098_email_delivery_canary.sql",
           "0098_widen_source_target_connector_bluesky.sql",
-          "0098_widen_source_target_connector_gdelt.sql",
         ]),
         repository,
       ),
     ).toEqual({ action: "ok" });
-    // A production ledger behind the whole exception group catches up in
-    // repository order: a forward apply always appends in sorted order.
-    const behindNames = productionNames.filter(
-      (name) => name !== "0096_error_reports.sql",
-    );
+    // A ledger still behind inside the 0098 group (gdelt not yet applied) is
+    // ambiguous once a second exception group exists: the 0096 and 0098
+    // groups resolve independently, so no contiguous suffix is provably what
+    // a forward apply would produce — fail closed.
+    const behindNames = productionNames.slice(0, -1);
     expect(
       planSourceBackupLedgerReconciliation(
         namedLedger(behindNames),
         repository,
       ),
     ).toEqual({
-      action: "apply_forward_suffix",
-      migrations: [
-        "0096_email_suppression.sql",
-        "0096_error_reports.sql",
-        "0097_status_probe_samples.sql",
-        "0098_email_delivery_canary.sql",
-        "0098_widen_source_target_connector_bluesky.sql",
-        "0098_widen_source_target_connector_gdelt.sql",
-      ],
+      action: "reject",
+      reason: "source_backup_migration_ledger_stale",
     });
   });
 
