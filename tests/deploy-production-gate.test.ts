@@ -563,7 +563,17 @@ describe("production deployment readiness gate", () => {
     writeFileSync(
       fakeWranglerPath,
       `#!/usr/bin/env node
+// #3239: rollback-production.mjs probes "wrangler versions list --json"
+// before rolling back; the recorded target must still exist there.
 import { writeFileSync } from "node:fs";
+if (process.argv[2] === "versions") {
+  console.log(
+    JSON.stringify([
+      { id: "worker-version-prior", metadata: { created_on: "2026-09-10T00:00:00.000Z" }, annotations: {} },
+    ]),
+  );
+  process.exit(0);
+}
 writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.slice(2)));
 process.exit(Number(process.env.FAKE_WRANGLER_EXIT || 0));
 `,
@@ -710,7 +720,14 @@ process.stdin.on("end", () => {
     writeFileSync(
       fakeWranglerPath,
       `#!/usr/bin/env node
+// #3239: the versions-list probe is a read-only enquiry, not a rollback
+// spawn — only an actual "rollback" invocation must be recorded here so
+// the assertion below keeps proving refusal-before-rollback-spawn.
 import { writeFileSync } from "node:fs";
+if (process.argv[2] === "versions") {
+  console.log("[]");
+  process.exit(0);
+}
 writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.slice(2)));
 `,
     );

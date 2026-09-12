@@ -1981,6 +1981,7 @@ describe("launch readiness canary route", () => {
       blocker: "canary_proof_pipeline_failed",
       gateRunId: "gate-c-worker-v1",
       runId: "run-1",
+      detail: "Error: d1 rejected: UNIQUE constraint",
     });
   });
 
@@ -2028,6 +2029,7 @@ describe("launch readiness canary route", () => {
       gateRunId: "gate-c-worker-v1",
       runId: "run-1",
       proofCaptureId: "proof-1",
+      detail: "Error: d1 outage mid-event",
     });
   });
 
@@ -2078,6 +2080,7 @@ describe("launch readiness canary route", () => {
       runId: "run-1",
       proofCaptureId: "proof-1",
       digestRunId: "digest-1",
+      detail: "Error: email binding timeout",
     });
   });
 
