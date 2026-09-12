@@ -1,5 +1,6 @@
 import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
+import type { Session as BetterAuthSessionRecord, User as BetterAuthUserRecord } from "better-auth";
 import { magicLink } from "better-auth/plugins";
 
 import {
@@ -260,6 +261,17 @@ export function getBetterAuth(env: AppEnv, request: Request) {
       }),
     ],
     secret,
+    session: {
+      // Issue #2979: cache the resolved session in a short-lived signed cookie
+      // (better-auth `session_data`) so an authenticated request serves its
+      // session from the cookie instead of serialising a D1 leader read
+      // (session JOIN user) on every dashboard render. 45s bounds staleness —
+      // plan/onboarding changes land within a minute or the next navigation.
+      cookieCache: {
+        enabled: true,
+        maxAge: 45,
+      },
+    },
     socialProviders: socialProviders(env),
     trustedOrigins,
     user: {
@@ -288,12 +300,26 @@ export async function getBetterAuthSession(
   }
 
   const auth = getBetterAuth(env, request);
-  const session = await auth.api.getSession({
+  // returnHeaders mode (dispatch sets `returnHeaders: true` internally) hands
+  // back the response headers accumulated by ctx.setHeader/ctx.setCookie —
+  // that is where the cookie-cache session_data cookie (and any refreshed
+  // session_token) lands. The outer Response must replay them or the cache
+  // never reaches the browser and every request still hits D1.
+  const { response: session, headers: authHeaders } = (await auth.api.getSession({
     headers: request.headers,
-    query: {
-      disableCookieCache: true,
-    },
-  });
+    returnHeaders: true,
+  })) as unknown as {
+    response: { session: BetterAuthSessionRecord; user: BetterAuthUserRecord } | null;
+    headers: Headers;
+  };
+  // Tripwire for the cast above: returnHeaders' `{response, headers}` shape is
+  // verified against better-auth 1.7.1's dispatch source but invisible to the
+  // compiler, so a shape change would silently degrade every session lookup.
+  // Fail loud on a malformed payload rather than pass garbage downstream.
+  if (session && typeof session.session?.userId !== "string") {
+    throw new Error("Better Auth getSession returned an unexpected payload shape");
+  }
+  rememberBetterAuthSessionCookies(request, authHeaders);
   if (!session) {
     return null;
   }
@@ -316,6 +342,60 @@ export async function getBetterAuthSession(
       onboardedAt: onboardedAt == null ? null : toIsoString(onboardedAt),
     },
   };
+}
+
+/**
+ * Per-invocation side channel: headers Better Auth accumulated during
+ * getBetterAuthSession (the cookie-cache `session_data` write, refreshed
+ * session tokens). Workers construct Response objects in the route layer, so
+ * the worker's app.ts replays these onto the outgoing response in the same
+ * request. Keyed by the Request object, which React Router keeps per
+ * invocation — no cross-request state, no cross-user leakage.
+ */
+const betterAuthResponseHeadersCache = new WeakMap<Request, Headers>();
+
+function rememberBetterAuthSessionCookies(request: Request, headers: Headers) {
+  // Last-writer-wins: a second getSession on the same Request replaces the
+  // first call's buffered headers. That matches today's single session lookup
+  // per request — never key anything else on this map.
+  if (headers.has("set-cookie")) {
+    betterAuthResponseHeadersCache.set(request, headers);
+  }
+}
+
+/**
+ * Returns (and consumes) Set-Cookie headers Better Auth produced during this
+ * request's session lookup, so the outer response can hand the cookie cache
+ * to the browser. Returns undefined when the lookup ran cookie-only.
+ */
+export function takeBetterAuthSessionResponseHeaders(request: Request): Headers | undefined {
+  const headers = betterAuthResponseHeadersCache.get(request);
+  if (headers) {
+    betterAuthResponseHeadersCache.delete(request);
+  }
+  return headers;
+}
+
+/**
+ * replays the buffered Better Auth Set-Cookie headers onto the outgoing
+ * response (workers/app.ts calls this last, on the assembled response). Only
+ * the cookie headers are replayed — Better Auth's no-store/pragma response
+ * headers stay out of the way of the security-headers layer, which owns the
+ * public caching policy. When nothing was buffered (cookie-cache hit, no
+ * cookie to refresh) the response object passes through untouched.
+ */
+export function applyBetterAuthSessionCookies(request: Request, response: Response): Response {
+  const authHeaders = takeBetterAuthSessionResponseHeaders(request);
+  if (!authHeaders) {
+    return response;
+  }
+  const headers = new Headers(response.headers);
+  appendBetterAuthSetCookieHeaders(headers, authHeaders);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 }
 
 export async function sendBetterAuthMagicLink(
