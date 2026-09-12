@@ -35,12 +35,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   EDGE_CACHE_PROOF_HEADER,
   EDGE_HTML_CACHE_NAME,
+  EDGE_STALE_WINDOW_SECONDS,
   cacheKeyUrl,
   extractInlineScriptBodies,
   inlineScriptHashSources,
   isEdgeCacheableHtmlRequest,
   isEdgeCacheableHtmlResponse,
   edgeCacheCopyAgeSeconds,
+  edgeCacheCopyIsStale,
+  edgeCacheCopyTtlSeconds,
   matchEdgeCache,
   nonceFreeScriptSrc,
   parseEdgeCacheTtlSeconds,
@@ -126,7 +129,10 @@ function anonymousGet(url = "https://0509.io/", headers: Record<string, string> 
 }
 
 /** Rewrite the stored copy's stored-at stamp to look `ageSeconds` old and its
- * body to `body` — used to age a copy in place without the test waiting. */
+ * body to `body` — used to age a copy in place without the test waiting. The
+ * headers mirror what storeEdgeCache actually writes: a cache-control
+ * stretched to ttl + the serve-stale window (the matchable lifetime) plus the
+ * fresh-ttl stamp the served reply is rewritten from. */
 async function overwriteStoredCopy(
   cache: EdgeCacheRuntime,
   request: Request,
@@ -134,6 +140,7 @@ async function overwriteStoredCopy(
   versionId: string,
   ageSeconds: number,
   body: string,
+  ttlSeconds = 300,
 ) {
   await cache.put(
     new Request(cacheKeyUrl(new URL(request.url), country, versionId)),
@@ -141,7 +148,8 @@ async function overwriteStoredCopy(
       status: 200,
       headers: {
         "content-type": "text/html; charset=utf-8",
-        "cache-control": "public, max-age=300",
+        "cache-control": `public, max-age=${ttlSeconds + EDGE_STALE_WINDOW_SECONDS}`,
+        "x-0509-edge-ttl": String(ttlSeconds),
         "x-0509-edge-stored-at": String(Math.floor(Date.now() / 1000) - ageSeconds),
       },
     }),
@@ -270,18 +278,71 @@ describe("edge cache eligibility (issue #2950)", () => {
     const storedAt = Number.parseInt(freshHit?.headers.get("x-0509-edge-stored-at") ?? "", 10);
     expect(Math.abs(Date.now() / 1000 - storedAt)).toBeLessThan(10);
 
-    // Aged 12 minutes (over the 300s max-age, inside the 1800s stale
-    // window): still a HIT — this is the probe-at-T+12min shape that
-    // produced the #3247 home_edge=NONE regression.
+    // Aged 12 minutes (over the 300s fresh bound, inside the stale window):
+    // still a HIT — this is the probe-at-T+12min shape that produced the
+    // #3247 home_edge=NONE regression. The stored copy's own stretched
+    // max-age is what keeps it matchable here at all: the platform's
+    // cache.match self-enforces the stored cache-control.
     await overwriteStoredCopy(cache, request, "US", "v1", 720, "<html>stale-in-window</html>");
     const staleHit = await matchEdgeCache(request, cache, "v1", "US");
     expect(staleHit?.headers.get(EDGE_PROOF_HEADER)).toBe("HIT");
     expect(await staleHit?.text()).toContain("stale-in-window");
+    // The served reply keeps the origin's browser contract (the deploy gate
+    // asserts exactly `public, max-age=300`), not the stretched stored value.
+    expect(staleHit?.headers.get("cache-control")).toBe("public, max-age=300");
 
-    // Aged 32 minutes (past max-age + stale window): a hard miss — the
-    // next request re-renders and re-stores.
-    await overwriteStoredCopy(cache, request, "US", "v1", 2400, "<html>hard-stale</html>");
+    // Aged past fresh-bound + stale window: a hard miss — the next request
+    // re-renders and re-stores.
+    await overwriteStoredCopy(
+      cache,
+      request,
+      "US",
+      "v1",
+      300 + EDGE_STALE_WINDOW_SECONDS + 300,
+      "<html>hard-stale</html>",
+    );
     expect(await matchEdgeCache(request, cache, "v1", "US")).toBeNull();
+  });
+
+  it("stamps the stored copy's fresh ttl and reads it back over the stretched cache-control (#3247)", async () => {
+    // The stored copy's cache-control is the matchable lifetime (ttl +
+    // window); edgeCacheCopyTtlSeconds recovers the fresh bound from the
+    // stamp, falling back to the capped parse when the stamp is absent.
+    const stamped = htmlResponse({
+      headers: {
+        "cache-control": `public, max-age=${45 + EDGE_STALE_WINDOW_SECONDS}`,
+        "x-0509-edge-ttl": "45",
+      },
+    });
+    expect(edgeCacheCopyTtlSeconds(stamped)).toBe(45);
+    expect(
+      edgeCacheCopyTtlSeconds(htmlResponse({ headers: { "cache-control": "public, max-age=45" } })),
+    ).toBe(45);
+    expect(
+      edgeCacheCopyTtlSeconds(
+        htmlResponse({ headers: { "cache-control": "public, max-age=86400" } }),
+      ),
+    ).toBe(300); // capped parse fallback
+    expect(edgeCacheCopyTtlSeconds(htmlResponse())).toBe(300);
+
+    // edgeCacheCopyIsStale: past the fresh bound but inside the window — and
+    // fail-safe on a missing stored-at stamp (never refresh-loop on it).
+    const staleCopy = htmlResponse({
+      headers: {
+        "cache-control": `public, max-age=${300 + EDGE_STALE_WINDOW_SECONDS}`,
+        "x-0509-edge-ttl": "300",
+        "x-0509-edge-stored-at": String(Math.floor(Date.now() / 1000) - 720),
+      },
+    });
+    expect(edgeCacheCopyIsStale(staleCopy)).toBe(true);
+    const freshCopy = htmlResponse({
+      headers: {
+        "x-0509-edge-ttl": "300",
+        "x-0509-edge-stored-at": String(Math.floor(Date.now() / 1000) - 60),
+      },
+    });
+    expect(edgeCacheCopyIsStale(freshCopy)).toBe(false);
+    expect(edgeCacheCopyIsStale(htmlResponse())).toBe(false);
   });
 
   it("keeps the deploy gate's proof header coupled to the worker's stamp (house rule)", () => {
@@ -390,10 +451,17 @@ describe("edge cache storage semantics", () => {
     expect(scriptSrc).toContain(await sha256Source(scriptBody));
 
     // The stored copy: unstamped (stamping happens on serve), keyed by
-    // (path, country, version), identical variant.
+    // (path, country, version), identical variant. Its cache-control is the
+    // stretched match lifetime (ttl + stale window) — what cache.match
+    // enforces — while the stamped ttl preserves the fresh bound.
     expect(cache.keys()).toHaveLength(1);
     expect(cache.keys()[0]).toContain("__edgec=");
     expect(cache.keys()[0]).toContain("__edgev=v1");
+    const stored = await cache.match(new Request(cache.keys()[0]));
+    expect(stored?.headers.get("cache-control")).toBe(
+      `public, max-age=${300 + EDGE_STALE_WINDOW_SECONDS}`,
+    );
+    expect(stored?.headers.get("x-0509-edge-ttl")).toBe("300");
 
     const hit = await matchEdgeCache(request, cache, "v1");
     expect(hit).not.toBeNull();
@@ -590,11 +658,12 @@ interface FetchOptions {
   env?: Record<string, unknown>;
   headers?: Record<string, string>;
   method?: string;
+  tasks?: Promise<unknown>[];
 }
 
 async function fetchDocument(
   worker: { fetch: unknown },
-  { path = "/", env = {}, headers = {}, method = "GET" }: FetchOptions = {},
+  { path = "/", env = {}, headers = {}, method = "GET", tasks }: FetchOptions = {},
 ) {
   return (
     worker.fetch as (request: Request, e: unknown, c: unknown) => Promise<Response>
@@ -604,7 +673,12 @@ async function fetchDocument(
       headers: { accept: "text/html", ...headers },
     }),
     env,
-    { waitUntil() {}, passThroughOnException() {} },
+    {
+      waitUntil(promise: Promise<unknown>) {
+        tasks?.push(promise);
+      },
+      passThroughOnException() {},
+    },
   );
 }
 
@@ -725,6 +799,41 @@ describe("edge cache through the real worker fetch handler (issue #2950)", () =>
     expect((await fetchDocument(worker, { env: envFor("v2") })).headers.get(EDGE_PROOF_HEADER)).toBe(
       "HIT",
     );
+  });
+
+  it("re-renders in the background when a stale copy serves, so the next hit is fresh (#3247)", async () => {
+    const stub = memoryCache();
+    vi.stubGlobal("caches", { open: async () => stub });
+    const { worker, capturedNonce: nonceSeen } = await loadWorker();
+    const tasks: Promise<unknown>[] = [];
+
+    const first = await fetchDocument(worker, { tasks });
+    expect(first.headers.get(EDGE_PROOF_HEADER)).toBe("MISS");
+    const firstNonce = nonceSeen();
+    expect(firstNonce).toBeTruthy();
+    expect(tasks).toHaveLength(0);
+
+    // Age the stored copy past its fresh bound, still inside the stale
+    // window (the anonymous wiring request has no cf-ipcountry → country
+    // "xx", and no CF_VERSION_METADATA env → version "local").
+    await overwriteStoredCopy(stub, anonymousGet(), "xx", "local", 720, "<html>stale-copy</html>");
+
+    // The stale copy serves instantly as a HIT, and exactly one background
+    // re-render is queued through ctx.waitUntil.
+    const stale = await fetchDocument(worker, { tasks });
+    expect(stale.headers.get(EDGE_PROOF_HEADER)).toBe("HIT");
+    expect(await stale.text()).toContain("stale-copy");
+    expect(tasks).toHaveLength(1);
+
+    // Running the queued refresh re-renders (a NEW nonce was minted — the
+    // router ran again) and re-stores, so the next hit serves the fresh copy.
+    await Promise.all(tasks);
+    expect(nonceSeen()).not.toBe(firstNonce);
+    const refreshed = await fetchDocument(worker, { tasks });
+    expect(refreshed.headers.get(EDGE_PROOF_HEADER)).toBe("HIT");
+    expect(await refreshed.text()).toContain("0509");
+    // A FRESH hit queues no refresh — the background render only fires stale.
+    expect(tasks).toHaveLength(1);
   });
 
   it("answers a HEAD after a warm GET with the stored copy's headers and no body (the curl -sI proof)", async () => {
