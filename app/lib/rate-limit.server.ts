@@ -166,9 +166,10 @@ export async function enforcePublicSearchSelectionRateLimit(
 
 // Public /ads/:domain brand pages are cache-read-only (no provider spend), so
 // the bucket is more generous than public search. Raise to comfortably above a
-// Googlebot-paced crawl of the BET 5 sitemap (issue #3156): at crawl pace
-// (~1 URL per 3 s with the status+noindex double-fetch pattern real crawlers
-// also do) a 1,000-URL sitemap needs ~400 requests/10min from one IP — the old
+// Googlebot-paced crawl of the BET 5 sitemap (issue #3156). Budget estimate
+// from the observed 2026-09-12 burst-crawl log in #3156: real crawlers and the
+// fleet's own sitemap verification do ~2 requests per URL (status probe +
+// noindex probe); at ~1 URL per 3 s a 1,000-URL sitemap needs ~400 requests/10min from one IP — the old
 // 120/10min bucket 429'd crawls mid-sitemap. 600/10min clears that whole
 // budget with headroom while still bounding abuse (600 cache-read-only
 // requests from one IP in 10 minutes), per-IP and fail-open. Verified search
