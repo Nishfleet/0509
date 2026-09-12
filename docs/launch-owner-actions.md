@@ -16,7 +16,7 @@ Items below are a dated owner-action ledger, not a current Gate B/C or Gate D pa
 
 **Status:** REPO CONFIGURED — FIRST RUN / ALERT PROOF STILL OWNER-VERIFIED
 
-1. `.github/workflows/uptime-health.yml` checks `https://0509.io/api/health` on an offset five-minute schedule without secrets.
+1. The `0509-liveness` systemd timer on the VPS checks `https://0509.io/api/health` on an offset five-minute cadence without secrets (`ops/liveness/`; the former `.github/workflows/uptime-health.yml` Actions cron was retired — it never delivered the five-minute cadence).
 2. Done: manual run `28540913266` passed on `main`.
 3. Dated scheduled runs `28548096175`, `28552452662`, and `28555610571` later passed on `main`.
 4. Confirm failed-run notifications reach the intended inbox; this remains Gate C external operational proof.

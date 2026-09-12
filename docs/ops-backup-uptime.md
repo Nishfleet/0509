@@ -211,29 +211,29 @@ Nish's explicit go-ahead.
 
 ## Uptime monitoring
 
-### Repo-configured GitHub health workflow
+### Production liveness — the `0509-liveness` systemd timer
 
-`.github/workflows/uptime-health.yml` checks `https://0509.io/api/health`
-on an offset five-minute schedule and can be run manually from GitHub Actions.
-It uses no secrets or private canary tokens. The check passes only when the endpoint
-returns HTTP 200 JSON with `status: "ok"` and `app: "0509"`.
+Production liveness detection runs as the `0509-liveness` systemd timer on the
+VPS (`ops/liveness/`, installed by `ops/liveness/provision-production-liveness.sh`).
+It fires on a true offset five-minute cadence (`*:2/5`) outside GitHub Actions
+entirely and probes the same two public endpoints: `https://0509.io/api/health`
+must return HTTP 200 JSON with `status: "ok"` and `app: "0509"`, and
+`https://0509.io/api/health/deep` must return `checks.d1: "ok"` and
+`checks.scheduledWork: "ok"` — so a sustained D1 outage turns the probe red even
+while the shallow edge check stays green. The probe uses no secrets or private
+canary tokens and writes one JSON record per run to
+`/var/lib/0509-liveness/probes.jsonl` on the VPS.
 
-Since 2026-07-13 the same run also probes `https://0509.io/api/health/deep`
-(a `SELECT 1` against D1) and fails unless it returns HTTP 200 with
-`checks.d1: "ok"` — so a sustained D1 outage now fails this workflow even
-while the shallow edge check stays green. curl retries (3 attempts) absorb
-single blips before a run goes red.
+Retired: `.github/workflows/uptime-health.yml` was deleted (issue #3068). Its
+5-minute Actions cron was never real liveness — scheduled runs fired about once
+an hour in practice (median 63 minutes between runs over 300 observations,
+2026-07-25..2026-08-11) and queued behind CI on the three-runner FIFO — and the
+remaining dispatch-only file was dead weight. Historical evidence: manual run
+`28540913266` passed, and scheduled runs `28548096175`, `28552452662`, and
+`28555610571` passed on `main` while the schedule existed.
 
-GitHub documents 5 minutes as the shortest scheduled workflow interval, with
-scheduled workflows running on the latest default-branch commit. GitHub also
-routes scheduled-workflow notifications based on the workflow creator or the
-user who last changes the cron schedule. Because of that, this repo-configured
-check is not fully proven until an owner/operator confirms:
-
-1. Done: the workflow exists on `main`.
-2. Done: manual run `28540913266` passed.
-3. Done: scheduled runs `28548096175`, `28552452662`, and `28555610571` passed on `main`.
-4. Failed-run notifications reach the intended inbox.
+Alert-routing proof remains owner-verified: confirm a red probe actually reaches
+the intended inbox (or keep an external monitor such as UptimeRobot, below).
 
 ### Independent external monitor option
 
