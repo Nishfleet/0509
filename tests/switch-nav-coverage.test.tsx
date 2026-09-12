@@ -123,6 +123,14 @@ async function renderMarketing(): Promise<string> {
     };
   });
   const { default: MarketingRoute } = await import("~/routes/marketing");
+  // Issue #2967: pricing-section now loads via React.lazy from the marketing
+  // route. Import it here — while THIS function's react-router mock is still
+  // the active registration — so the module's `useRouteLoaderData` binding
+  // resolves against the marketing mock. Later helpers in the same test
+  // (renderCompetitorMonitoring) mock useRouteLoaderData to return undefined,
+  // and a pricing-section module cached under THAT mock crashes PricingSection
+  // when renderPricing renders it synchronously.
+  await import("~/components/pricing-section");
   return renderToStaticMarkup(createElement(MarketingRoute));
 }
 
@@ -162,7 +170,7 @@ async function renderPricing(): Promise<string> {
     };
   });
   const { default: PricingRoute } = await import("~/routes/pricing");
-  return renderToStaticMarkup(createElement(PricingRoute));
+  try { return renderToStaticMarkup(createElement(PricingRoute)); } catch (e) { console.log("PRICING RENDER THREW", e); throw e; }
 }
 
 async function renderSearch(): Promise<string> {

@@ -23,6 +23,23 @@ function flattenRoutePaths(entries: RouteEntry[]): string[] {
   ].filter((value): value is string => Boolean(value)));
 }
 
+// Issue #2967: PricingSection mounts through React.lazy below the fold, so a
+// single synchronous renderToStaticMarkup emits only the (null) Suspense
+// fallback. Warm the chunk, then poll until the resolved component actually
+// renders — the dynamic import takes more than one event-loop turn under
+// vite-node even with the module pre-warmed (same pattern as
+// tests/marketing-pricing-latency.test.ts).
+async function renderMarketingRouteMarkup(): Promise<string> {
+  const { default: MarketingRoute } = await import("~/routes/marketing");
+  await import("~/components/pricing-section");
+  for (let i = 0; i < 40; i += 1) {
+    const markup = renderToStaticMarkup(createElement(MarketingRoute));
+    if (markup.includes("f9-commerce-card")) return markup;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  return renderToStaticMarkup(createElement(MarketingRoute));
+}
+
 beforeEach(() => {
   vi.resetModules();
 });
@@ -181,8 +198,7 @@ describe("marketing route", () => {
       };
     });
 
-    const { default: MarketingRoute } = await import("~/routes/marketing");
-    const markup = renderToStaticMarkup(createElement(MarketingRoute));
+    const markup = await renderMarketingRouteMarkup();
 
     expect(markup).toContain("$59");
     expect(markup).toContain("$499");
@@ -278,8 +294,7 @@ describe("marketing route", () => {
       };
     });
 
-    const { default: MarketingRoute } = await import("~/routes/marketing");
-    const markup = renderToStaticMarkup(createElement(MarketingRoute));
+    const markup = await renderMarketingRouteMarkup();
 
     expect(markup).not.toContain("f9-toggle-savings");
     expect(markup).not.toContain("4 months free");
@@ -341,8 +356,7 @@ describe("marketing route", () => {
       };
     });
 
-    const { default: MarketingRoute } = await import("~/routes/marketing");
-    const markup = renderToStaticMarkup(createElement(MarketingRoute));
+    const markup = await renderMarketingRouteMarkup();
 
     expect(markup).toContain(
       "/auth/signup?redirectTo=%2Fapp%2Fbilling%3Fplan%3Dstarter%26cycle%3Dmonthly%26source%3Dpricing%23plans",
@@ -442,8 +456,7 @@ describe("marketing route", () => {
       };
     });
 
-    const { default: MarketingRoute } = await import("~/routes/marketing");
-    const markup = renderToStaticMarkup(createElement(MarketingRoute));
+    const markup = await renderMarketingRouteMarkup();
 
     expect(markup).toContain("Account review");
     expect(markup).toContain("Agency is available by account review");
