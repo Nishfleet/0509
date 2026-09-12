@@ -16,6 +16,10 @@ import {
   getPublicStatusProbes,
   type PublicStatusProbe,
 } from "~/lib/status-probes.server";
+import {
+  getEmailDeliveryStatus,
+  type EmailDeliveryStatus,
+} from "~/lib/email-delivery-canary.server";
 
 export const DIGEST_STALENESS_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -287,6 +291,54 @@ const STATE_RANK: Record<SurfaceState, number> = {
 };
 
 /**
+ * Fold the email-delivery canary's public status (#3188) into the Email
+ * delivery row: the 24h send → receive loop is the strongest delivery
+ * evidence the service records, so its counts ride along when the window
+ * has activity (`getEmailDeliveryStatus()` returns the empty struct when
+ * the rail is fresh or the read fails — that is "absent", and the row then
+ * stands on its digest/attempt counters alone). A failed delivery check is
+ * measured evidence, so it joins the same counter-floor path the webhook
+ * ledger uses: the live probe may tick green between checks while the
+ * window still carries the failure. Copy is public-safe: the internal
+ * canary vocabulary never reaches the page.
+ */
+function applyEmailDeliveryStatus(
+  m: Omit<SurfaceMeasurement, "state" | "reason">,
+  status: EmailDeliveryStatus | null,
+  asOf: string,
+): { state: SurfaceState; reason: string | null } | null {
+  if (!status) return null;
+  const canary = status.canary;
+  if (canary.sends <= 0 && canary.successRate === null) return null;
+  if (canary.sends > 0) {
+    const rate = canary.successRate === null
+      ? ""
+      : ` (${Math.round(canary.successRate * 100)}% received)`;
+    m.facts = [
+      ...m.facts,
+      `${canary.received.toLocaleString()} of ${canary.sends.toLocaleString()} live delivery checks received back in the last 24 hours${rate}`,
+    ];
+    if (canary.p50LatencyMs !== null) {
+      m.facts.push(`median receipt latency ${Math.round(canary.p50LatencyMs / 1000).toLocaleString()} s`);
+    }
+    if (canary.lastReceivedAt) {
+      m.facts.push(`last receipt ${ageClause(canary.lastReceivedAt, asOf)}`);
+      if (m.checkedAt === asOf) m.checkedAt = canary.lastReceivedAt;
+    }
+    if (canary.lastFailure) {
+      m.facts.push(`last delivery check failure: ${canary.lastFailure.error}`);
+    }
+  }
+  if (canary.failed > 0) {
+    return {
+      state: "degraded",
+      reason: `${canary.failed.toLocaleString()} ${canary.failed === 1 ? "delivery check" : "delivery checks"} failed in the last 24 hours`,
+    };
+  }
+  return null;
+}
+
+/**
  * Apply a probe reading to a row: probe facts append after the counter facts,
  * and the probe's checkedAt wins. With `mode: "worst"` the counter-derived
  * state is a floor — a failed webhook or an overdue refresh stays visible even
@@ -403,6 +455,7 @@ export async function getPublicStatusSurfaces(
     signInResult,
     billingResult,
     emailResult,
+    emailStatusResult,
   ] = await Promise.allSettled([
     getPublicStatusProbes(env.DB),
     getPublicStatusCountersWithWatchlists(env, dayAgoIso),
@@ -410,7 +463,13 @@ export async function getPublicStatusSurfaces(
     measureSignIn(env, dayAgoIso),
     measureBilling(env, dayAgoIso),
     measureEmailDelivery(env, dayAgoIso),
+    // The canary loop status (#3188): public-safe counts/timestamps only,
+    // never throws (pre-migration schema reads as empty). Present data folds
+    // into the Email row below; empty data changes nothing.
+    getEmailDeliveryStatus(env),
   ]);
+  const emailCanaryStatus: EmailDeliveryStatus | null =
+    emailStatusResult.status === "fulfilled" ? emailStatusResult.value : null;
 
   // The live probe rail (status_probe_samples, written by the 5-minute
   // status-probe cron) governs the state of every surface it measures. While
@@ -544,29 +603,56 @@ export async function getPublicStatusSurfaces(
     );
   }
 
-  // Email delivery (digests, alerts, account mail, suppression).
+  // Email delivery (digests, alerts, account mail, suppression): the row's
+  // live probe is the same canary loop the email_delivery probe records into
+  // status_probe_samples, and the canary module's own 24h counts ride along
+  // when the window has activity. Customer-send failures and canary failures
+  // are floors: a green internal canary must not hide sending defects.
+  const emailSource =
+    "status_probe_samples email_delivery probe, delivery verification rows, digest_delivery and delivery_attempt send records, email_suppression ledger, edge and D1 probes";
   if (!d1Ok) {
-    surfaces.push(down(base("email", "Email delivery", "digest_delivery, delivery_attempt, email_suppression"), d1Reason));
-  } else if (emailResult.status === "fulfilled") {
-    const row = emailResult.value;
-    const m = base("email", "Email delivery", "digest_delivery and delivery_attempt send records, email_suppression ledger, edge and D1 probes");
-    const facts: string[] = [
-      row.lastDigestSentAt ? `last digest sent ${ageClause(row.lastDigestSentAt, asOf)}` : null,
-      row.lastEmailAcceptedAt
-        ? `last email accepted by the provider ${ageClause(row.lastEmailAcceptedAt, asOf)}; ${row.sent24h.toLocaleString()} accepted in the last 24 hours`
-        : null,
-      `${row.suppressed.toLocaleString()} addresses held by the bounce and complaint suppression ledger out of ${row.recipients.toLocaleString()} known recipient addresses`,
-    ].filter((v): v is string => v !== null);
-    m.facts = facts;
-    if (row.failed24h > 0) {
-      surfaces.push(degraded(m, `${row.failed24h.toLocaleString()} email sends failed in the last 24 hours`));
-    } else if (row.lastEmailAcceptedAt === null && row.suppressed === 0) {
-      surfaces.push(degraded(m, "no email send has been recorded yet"));
-    } else {
-      surfaces.push(operational(m));
-    }
+    surfaces.push(down(base("email", "Email delivery", emailSource), d1Reason));
   } else {
-    surfaces.push(degraded(base("email", "Email delivery", "digest_delivery, delivery_attempt, email_suppression"), "the email send-record probe failed"));
+    const m = base("email", "Email delivery", emailSource);
+    let counterState: { state: SurfaceState; reason: string | null } | null = null;
+    if (emailResult.status === "fulfilled") {
+      const row = emailResult.value;
+      m.facts = [
+        row.lastDigestSentAt ? `last digest sent ${ageClause(row.lastDigestSentAt, asOf)}` : null,
+        row.lastEmailAcceptedAt
+          ? `last email accepted by the provider ${ageClause(row.lastEmailAcceptedAt, asOf)}; ${row.sent24h.toLocaleString()} accepted in the last 24 hours`
+          : null,
+        `${row.suppressed.toLocaleString()} addresses held by the bounce and complaint suppression ledger out of ${row.recipients.toLocaleString()} known recipient addresses`,
+      ].filter((v): v is string => v !== null);
+      counterState =
+        row.failed24h > 0
+          ? { state: "degraded", reason: `${row.failed24h.toLocaleString()} email sends failed in the last 24 hours` }
+          : row.lastEmailAcceptedAt === null && row.suppressed === 0
+            ? { state: "degraded", reason: "no email send has been recorded yet" }
+            : { state: "operational", reason: null };
+    } else {
+      counterState = { state: "degraded", reason: "the email send-record probe failed" };
+      m.facts.push("the email send-record counter read failed");
+    }
+    const canaryState = applyEmailDeliveryStatus(m, emailCanaryStatus, asOf);
+    if (
+      canaryState &&
+      counterState &&
+      STATE_RANK[canaryState.state] > STATE_RANK[counterState.state]
+    ) {
+      counterState = canaryState;
+    } else if (canaryState && !counterState) {
+      counterState = canaryState;
+    }
+    surfaces.push(
+      applyProbeReading(
+        m,
+        probeReading(probesByName.get("email_delivery")),
+        counterState,
+        "the live email-delivery probe has not recorded a sample yet",
+        "worst",
+      ),
+    );
   }
 
   // Scheduled monitoring (crons + runs).
