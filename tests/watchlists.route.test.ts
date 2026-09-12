@@ -430,6 +430,7 @@ describe("watchlists route loader", () => {
       listRecentProofCapturesForWatchlist: vi
         .fn()
         .mockResolvedValue(recentProofCaptures),
+      listProofCapturesByIds: vi.fn().mockResolvedValue([]),
       listWatchEvents: vi.fn().mockResolvedValue(recentEvents),
       listWatchlistRuns: vi.fn().mockResolvedValue(recentRuns),
       listWatchlists: vi.fn().mockResolvedValue([watchlist]),
@@ -580,6 +581,7 @@ describe("watchlists route loader", () => {
       listDeliveryTargets: vi.fn().mockResolvedValue([]),
       listEventCandidates: vi.fn().mockResolvedValue([]),
       listRecentProofCapturesForWatchlist: vi.fn().mockResolvedValue([]),
+      listProofCapturesByIds: vi.fn().mockResolvedValue([]),
       listWatchEvents,
       listWatchlistRuns,
       listWatchlists: vi.fn().mockResolvedValue([watchlist]),
@@ -649,6 +651,7 @@ describe("watchlists route loader", () => {
       listDeliveryTargets,
       listEventCandidates: vi.fn().mockResolvedValue([]),
       listRecentProofCapturesForWatchlist: vi.fn().mockResolvedValue([]),
+      listProofCapturesByIds: vi.fn().mockResolvedValue([]),
       listWatchEvents: vi.fn().mockResolvedValue([]),
       listWatchlistRuns: vi.fn().mockResolvedValue([]),
       listWatchlists: vi.fn().mockResolvedValue([watchlist]),
