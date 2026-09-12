@@ -120,6 +120,10 @@ const COMPARE_PRODUCT_NAMES: Readonly<Record<string, string>> = {
   bigspy: "BigSpy",
   minea: "Minea",
   poweradspy: "PowerAdSpy",
+  // Issue #3302: the 15th compare surface — the sneaker-resale cluster's
+  // competitor. Without this row the route's og:image would 404 (the #3237
+  // 404 disease the fleet just cured elsewhere).
+  sneakerping: "SneakerPing",
   visualping: "Visualping",
   "visualping-ad-library": "Visualping Ad Library",
 };

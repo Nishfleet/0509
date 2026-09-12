@@ -118,7 +118,16 @@ describe("sneaker-resale locale landing pages", () => {
         expect(markup).toContain(`href="${source.url}"`);
         expect(markup).toContain(`dateTime="${source.publishedIso}"`);
       }
-      expect(markup).not.toContain("SneakerPing");
+      // #2856: SneakerPing is not presented as a current below-retail mover —
+      // neither in the swing cards nor in the cited swing sources. Issue
+      // #3302: SneakerPing returned on 2026-09-12 as the cluster's COMPARE
+      // surface, whose only presence on this page is the #3167 compare rail
+      // in the marketing footer — a comparison link, not a third mover.
+      const swingCards = markup.match(/<ul class="ld-brand-links ld-swing"[\s\S]*?<\/ul>/)?.[0] ?? "";
+      const swingSourcesList = markup.match(/<ul class="ld-swing-sources">[\s\S]*?<\/ul>/)?.[0] ?? "";
+      expect(swingCards).not.toContain("sneakerping");
+      expect(swingSourcesList).not.toContain("sneakerping");
+      expect(markup).toContain('href="/compare/sneakerping"');
     }
   });
 
