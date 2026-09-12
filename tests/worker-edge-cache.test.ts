@@ -129,6 +129,20 @@ describe("edge cache eligibility (issue #2950)", () => {
     expect(isEdgeCacheableHtmlRequest(anonymousGet("https://0509.io/"))).toBe(true);
     expect(isEdgeCacheableHtmlRequest(anonymousGet("https://0509.io/pricing"))).toBe(true);
     expect(isEdgeCacheableHtmlRequest(anonymousGet("https://0509.io/ads/notion.so"))).toBe(true);
+    // Issue #3193: the rest of the public marketing route families the TTFB
+    // contract names ride the same anonymous edge cache.
+    expect(isEdgeCacheableHtmlRequest(anonymousGet("https://0509.io/brands"))).toBe(true);
+    expect(isEdgeCacheableHtmlRequest(anonymousGet("https://0509.io/brands/eco-brands"))).toBe(true);
+    expect(isEdgeCacheableHtmlRequest(anonymousGet("https://0509.io/guides"))).toBe(true);
+    expect(
+      isEdgeCacheableHtmlRequest(anonymousGet("https://0509.io/guides/how-to-track-competitor-ads")),
+    ).toBe(true);
+    expect(isEdgeCacheableHtmlRequest(anonymousGet("https://0509.io/compare/bigspy"))).toBe(true);
+    expect(isEdgeCacheableHtmlRequest(anonymousGet("https://0509.io/compare/minea"))).toBe(true);
+    expect(isEdgeCacheableHtmlRequest(anonymousGet("https://0509.io/compare/keeptabz"))).toBe(true);
+    expect(isEdgeCacheableHtmlRequest(anonymousGet("https://0509.io/compare/gethookd"))).toBe(true);
+    expect(isEdgeCacheableHtmlRequest(anonymousGet("https://0509.io/compare/poweradspy"))).toBe(true);
+    expect(isEdgeCacheableHtmlRequest(anonymousGet("https://0509.io/switch/magicbrief"))).toBe(true);
     expect(isEdgeCacheableHtmlRequest(new Request("https://0509.io/", { method: "HEAD" }))).toBe(
       true,
     );
@@ -141,6 +155,13 @@ describe("edge cache eligibility (issue #2950)", () => {
       cookie: "better-auth.session_token=x",
     });
     expect(isEdgeCacheableHtmlRequest(authed)).toBe(false);
+    // Issue #3193: an Authorization header is a credential too — bearer/API-key
+    // traffic is never anonymous, so it bypasses the shared cache both ways.
+    expect(
+      isEdgeCacheableHtmlRequest(
+        anonymousGet("https://0509.io/", { authorization: "Bearer eye-lab-1" }),
+      ),
+    ).toBe(false);
   });
 
   it("stores only 200 text/html responses that carry a max-age and no set-cookie", () => {
