@@ -62,12 +62,12 @@ describe("canary-timeline-coverage — sitemap parsing", () => {
 });
 
 describe("canary-timeline-coverage — issue #3095 termination rule", () => {
-  it("the seeded baseline (7 covered of 91 /ads/, 2026-09-12 observation) is pending, not a regression", () => {
+  it("the seeded baseline (7 covered of 91 /ads/, 2026-09-12 observation) fails", () => {
     const verdict = coverageVerdict({
       ads: pathList(91, "/ads"),
       timeline: pathList(7, "/timeline"),
     });
-    expect(verdict.verdict).toBe("pending");
+    expect(verdict.verdict).toBe("fail");
     expect(verdict.floorCount).toBe(73);
   });
 
@@ -79,29 +79,21 @@ describe("canary-timeline-coverage — issue #3095 termination rule", () => {
     expect(verdict.verdict).toBe("pass");
   });
 
-  it("a rise only to the exact baseline count is pending, not a pass", () => {
+  it("a rise only to the exact baseline count is still a fail", () => {
     const verdict = coverageVerdict({
       ads: pathList(8, "/ads"),
       timeline: pathList(7, "/timeline"),
     });
-    expect(verdict.verdict).toBe("pending");
+    expect(verdict.verdict).toBe("fail");
   });
 
-  it("uses ceil so 72 covered URLs of 91 is pending (0.8 * 91 = 72.8)", () => {
-    expect(coverageVerdict({ ads: pathList(91, "/ads"), timeline: pathList(72, "/timeline") }).verdict).toBe("pending");
+  it("uses ceil so 72 covered URLs of 91 fails (0.8 * 91 = 72.8)", () => {
+    expect(coverageVerdict({ ads: pathList(91, "/ads"), timeline: pathList(72, "/timeline") }).verdict).toBe("fail");
     expect(coverageVerdict({ ads: pathList(91, "/ads"), timeline: pathList(73, "/timeline") }).verdict).toBe("pass");
   });
 
-  it("a degenerate sitemap is a REGRESSION — indexed proof pages vanished (< 7 covered)", () => {
-    expect(coverageVerdict({ ads: [], timeline: [] }).verdict).toBe("regression");
-  });
-
-  it("the regression/pending boundary sits exactly at the seeded baseline", () => {
-    // 6 covered of 91: below the 7-domain seeded baseline — the guard must
-    // alarm, not observe.
-    expect(coverageVerdict({ ads: pathList(91, "/ads"), timeline: pathList(6, "/timeline") }).verdict).toBe("regression");
-    // 7 covered of 91: baseline held — pending (observe), never alarm.
-    expect(coverageVerdict({ ads: pathList(91, "/ads"), timeline: pathList(7, "/timeline") }).verdict).toBe("pending");
+  it("a degenerate sitemap is still a fail — the rule demands > 7 covered", () => {
+    expect(coverageVerdict({ ads: [], timeline: [] }).verdict).toBe("fail");
   });
 
   it("the floor constant is the issue's 0.8 and baseline is 7", () => {
@@ -111,24 +103,12 @@ describe("canary-timeline-coverage — issue #3095 termination rule", () => {
 });
 
 describe("canary-timeline-coverage — CLI exit codes", () => {
-  it("alarms (exit 3, regression) when coverage drops below the seeded baseline", () => {
-    // The BASELINE_SITEMAP fixture has 1 covered of 2 ads — below baseline.
+  it("fails (exit 1, a verdict rather than a probe error) on a below-floor sitemap", () => {
     const result = spawnSync(process.execPath, [script, "--input", writeFixture(BASELINE_SITEMAP)], {
       encoding: "utf8",
     });
-    expect(result.status).toBe(3);
-    expect(result.stdout).toContain("verdict: REGRESSION");
-  });
-
-  it("observes (exit 1, pending) when the baseline holds but the floor is unreached", () => {
-    const xml =
-      pathList(91, "/ads").map((p) => `<url><loc>${p}</loc></url>`).join("") +
-      pathList(7, "/timeline").map((p) => `<url><loc>${p}</loc></url>`).join("");
-    const result = spawnSync(process.execPath, [script, "--input", writeFixture(xml)], {
-      encoding: "utf8",
-    });
     expect(result.status).toBe(1);
-    expect(result.stdout).toContain("verdict: pending");
+    expect(result.stdout).toContain("verdict: FAILED");
   });
 
   it("passes on an at-floor sitemap", () => {
@@ -164,6 +144,6 @@ describe("canary-timeline-coverage — CLI exit codes", () => {
     );
     expect(result.stdout).not.toContain("would run: gh issue create");
     expect(result.stdout).not.toContain("auto-filed");
-    expect(result.status).toBe(3);
+    expect(result.status).toBe(1);
   });
 });
