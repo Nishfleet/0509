@@ -13,9 +13,9 @@
  * proof-complete, non-ad-destination landing_page_snapshot row lands, and
  * the route renders the honest collecting (noindex) 200 for every tracked
  * /ads/:domain without one — so newly captured brands publish automatically
- * and no empty page can ship. THIS script is the scheduled, observable
- * detector on top: it fetches the live sitemap.xml, counts both cohorts,
- * and applies the issue's termination rule —
+ * and no empty page can ship. THIS script is the observable detector on top:
+ * it fetches the live sitemap.xml, counts both cohorts, and applies the
+ * issue's termination rule —
  *
  *     covered >  INITIAL_COVERED (7)
  *   AND
@@ -26,7 +26,11 @@
  * observable coverage gate over the public surface). The canary exists so
  * the day proof-complete captures land for the tracked cohort the metric
  * climbs autonomously and the guard goes green — observe-to-close — without
- * another code change.
+ * another code change. NOT armed on a systemd rail in this diff: while the
+ * verdict is expected-red (until #3018 lands) a pinned red timer adds noise,
+ * not signal; arming the runner/timer pair (ops/<guard>/ — sibling pattern
+ * ops/demo-brand-timeline-guard/) becomes a one-command follow-up once the
+ * capture pipeline is live.
  *
  * Exit codes:
  *   0 — coverage at/above the floor (>=80% of the /ads/ set, above baseline).
@@ -48,6 +52,7 @@
  */
 
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -239,7 +244,18 @@ async function main() {
     process.exit(2);
   }
 
-  const entries = entriesFromSitemapXml(xml);
+  let entries;
+  try {
+    entries = entriesFromSitemapXml(xml);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (opts.json) {
+      console.log(JSON.stringify({ ok: false, error: `sitemap parse failed: ${message}` }, null, 2));
+    } else {
+      console.error(`timeline-coverage canary: sitemap parse failed: ${message}`);
+    }
+    process.exit(2);
+  }
   const verdict = coverageVerdict(entries);
   const report = { baseUrl, checkedAt, verdict, ...entries };
 
@@ -295,7 +311,6 @@ async function main() {
   process.exit(verdict.verdict === "pass" ? 0 : 1);
 }
 
-import { readFileSync } from "node:fs";
 function readFileSyncChecked(path) {
   try {
     return readFileSync(path, "utf8");
