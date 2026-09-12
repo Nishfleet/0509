@@ -421,6 +421,7 @@ describe("compare/switch/locale route signup CTA attribution (issue #2109)", () 
           locale: "de",
           timelineDomains: [],
           pricingPreview: { available: false },
+          surfaces: { asOf: "2026-09-12T00:00:00.000Z", monitoring: null, surfaces: [] },
         }),
       };
     });
