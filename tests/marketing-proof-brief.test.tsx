@@ -34,7 +34,12 @@ const realProofBrief = {
       evidence: "Routine-first bundle — Build your routine",
       source: "Meta Ad Library — Nykaa Beauty",
       sourceUrl: "https://www.facebook.com/ads/library/?id=111",
-      capturedAt: "2026-08-11T22:17:00.000Z",
+      // Hours-ago clock instead of a hardcoded date: a fixed capture date
+      // crosses the 30-day heroCaptureStale wall in PROOF_CAPTURE_FRESH_DAYS
+      // (marketing.tsx) as real time passes and flips the attribution branch —
+      // the time-bomb this fixture walked into on 2026-09-10. Keep the capture
+      // fresh; withCaptureAge exercises the stale branch on purpose below.
+      capturedAt: new Date(Date.now() - 4 * 3_600_000).toISOString(),
     },
     {
       id: "ad-2:Ad offer",
@@ -42,7 +47,7 @@ const realProofBrief = {
       evidence: "Up to 30% off this week",
       source: "Meta Ad Library — Nykaa Beauty",
       sourceUrl: "https://www.facebook.com/ads/library/?id=222",
-      capturedAt: "2026-08-11T22:17:00.000Z",
+      capturedAt: new Date(Date.now() - 4 * 3_600_000).toISOString(),
     },
   ],
   insights: {
