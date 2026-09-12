@@ -47,7 +47,10 @@ import {
   overwriteStoredCopy,
   sha256Source,
 } from "./helpers/edge-cache-kit";
-import { EXPECTED_EDGE_CACHE_PROOF_HEADER } from "../scripts/check-live-public-home.mjs";
+import {
+  EXPECTED_EDGE_CACHE_PROOF_HEADER,
+  EXPECTED_HOME_EDGE_CACHE_STATUS,
+} from "../scripts/check-live-public-home.mjs";
 
 function htmlResponse(
   init: ResponseInit & { headers?: Record<string, string> } = {},
@@ -275,6 +278,18 @@ describe("edge cache eligibility (issue #2950)", () => {
     // scripts/check-live-public-home.mjs and the header the worker actually
     // stamps can never silently diverge.
     expect(EDGE_CACHE_PROOF_HEADER).toBe(EXPECTED_EDGE_CACHE_PROOF_HEADER);
+  });
+
+  it("keeps the deploy gate's zone-level proof coupled to the judge's home_edge semantics (#3308)", () => {
+    // #3308: the #2950 stamp is worker-internal and cannot see the zone, so
+    // the 2026-09-12 home_edge=NONE flap (every visitor paying a ~1.1s cold
+    // TTFB) shipped past the deploy gate. The gate's second proof must be the
+    // zone's own verdict — `cf-cache-status` — read EXACTLY like the judge's
+    // home_edge field (uppercased; absent = NONE). HIT is the only accepted
+    // second-request verdict: EXPIRED/STALE/UPDATING would mean the zone's
+    // copy no longer outlives the judge's 20-30-minute probe cadence, which
+    // is the regression this issue fixed.
+    expect(EXPECTED_HOME_EDGE_CACHE_STATUS).toBe("HIT");
   });
 });
 

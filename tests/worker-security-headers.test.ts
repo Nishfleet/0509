@@ -474,7 +474,10 @@ describe("Worker security headers", () => {
       // max-age could reference assets that no longer exist (2026-07-13
       // asset-skew incident class). Keep the policy SWR-free.
       expect(PUBLIC_HTML_CACHE_CONTROL).not.toContain("stale-while-revalidate");
-      expect(PUBLIC_HTML_CACHE_CONTROL).toBe("public, max-age=300");
+      // #3308: the SHARED edge gets the #3247-accepted 65-minute freshness
+      // (s-maxage = the #2950 300s bound + the 3600s serve-stale window);
+      // the #2950 browser bound itself stays exactly 300.
+      expect(PUBLIC_HTML_CACHE_CONTROL).toBe("public, s-maxage=3900, max-age=300");
     });
 
     it("keeps the live public-home deploy gate coupled to the product policy", () => {
