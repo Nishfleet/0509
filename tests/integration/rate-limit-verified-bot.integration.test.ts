@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { enforcePublicBrandPageRateLimit } from "~/lib/rate-limit.server";
+import {
+  enforcePublicBrandPageRateLimit,
+  PUBLIC_BRAND_PAGE_LIMIT,
+} from "~/lib/rate-limit.server";
 
 import { appEnv } from "./fixtures";
 
@@ -51,10 +54,13 @@ describe("rate-limit verified-bot exemption (issue #2062)", () => {
 
   it("does not let the verified-bot sweep consume the anonymous brand-page budget", async () => {
     // The crawler's 100 requests above recorded no rate-limit events, so a
-    // fresh anonymous client on the same IP still gets its full 120/10min
-    // budget before the 121st is 429. If the exemption were broken, the shared
-    // bucket would already be 100 events deep and this would trip far earlier.
-    for (let index = 0; index < 120; index += 1) {
+    // fresh anonymous client on the same IP still gets its full
+    // PUBLIC_BRAND_PAGE_LIMIT/10min budget (raised 120 -> 600 in #3156) before
+    // the one-past-the-limit request is 429. If the exemption were broken, the
+    // shared bucket would already be 100 events deep and this would trip far
+    // earlier. Derived from the exported constant so a future limit change
+    // cannot silently orphan this test again.
+    for (let index = 0; index < PUBLIC_BRAND_PAGE_LIMIT; index += 1) {
       const response = await enforcePublicBrandPageRateLimit(
         brandPageRequest(`/ads/anon-${index}.com`),
         appEnv,
