@@ -24,7 +24,7 @@ name: Programmatic SEO union canary
 # (the /search -> /ads/:domain brand-page handoff), which loads client-side on
 # the live page and is therefore not reliably assertable by a plain curl of
 # the search route — is covered by the merged unit canary
-# `tests/ads-programmatic-seo.canary.test.tsx` (issue #1455, run in `npm test`
+# `tests/ads-programmatic-seo-guard.test.tsx` (issue #1455, run in `npm test`
 # on every CI push). Together the scheduled live gate here and that
 # deterministic test assert the full three-condition union without ever
 # reporting a flaky false negative from the async search surface.
