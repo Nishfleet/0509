@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  isPlanCheckoutAllowed,
   publicCommercialLaunchSummary,
   summarizeCommercialLaunch,
   summarizeMonitoringFanoutProof,
@@ -33,7 +32,7 @@ const baseFanoutEnv = {
 } satisfies AppEnv;
 
 describe("commercial launch gate", () => {
-  it("holds Agency when fan-out stays inline in production", () => {
+  it("reports the fan-out blocker when fan-out stays inline in production", () => {
     const proof = summarizeMonitoringFanoutProof({
       MONITORING_FANOUT_MODE: "inline",
       MONITORING_WORKFLOW: workflowBinding,
@@ -42,7 +41,6 @@ describe("commercial launch gate", () => {
     expect(proof.mode).toBe("inline");
     expect(proof.agencySaleOpen).toBe(false);
     expect(proof.blocker).toBe("fanout_mode_inline");
-    expect(isPlanCheckoutAllowed({ MONITORING_FANOUT_MODE: "inline" }, "agency")).toBe(false);
   });
 
   it("holds Agency when internal workspace is undocumented even in fan-out mode", () => {
@@ -56,7 +54,7 @@ describe("commercial launch gate", () => {
     expect(proof.blocker).toBe("internal_workspace_undocumented");
   });
 
-  it("holds Agency in shadow mode even with internal workspace documented", () => {
+  it("reports the fan-out shadow-mode blocker even with internal workspace documented", () => {
     const proof = summarizeMonitoringFanoutProof({
       MONITORING_FANOUT_MODE: "shadow",
       MONITORING_FANOUT_INTERNAL_WORKSPACE_USER_ID: "user_internal",
@@ -66,13 +64,6 @@ describe("commercial launch gate", () => {
     expect(proof.mode).toBe("shadow");
     expect(proof.agencySaleOpen).toBe(false);
     expect(proof.blocker).toBe("fanout_shadow_only");
-    expect(isPlanCheckoutAllowed(
-      {
-        MONITORING_FANOUT_MODE: "shadow",
-        MONITORING_FANOUT_INTERNAL_WORKSPACE_USER_ID: "user_internal",
-      },
-      "agency",
-    )).toBe(false);
   });
 
   it("holds Agency when fan-out is allowlisted but not globally enabled without internal workspace", () => {
@@ -87,9 +78,24 @@ describe("commercial launch gate", () => {
     expect(proof.blocker).toBe("internal_workspace_undocumented");
   });
 
-  it("keeps Scout and Starter checkout permission independent of SKU env for server validation", () => {
-    expect(isPlanCheckoutAllowed({}, "scout")).toBe(true);
-    expect(isPlanCheckoutAllowed({}, "starter")).toBe(true);
+  it("measures sale flags from checkout config alone, never the fan-out proof", () => {
+    // Agency sells the same self-serve way as Scout and Starter (Nish,
+    // 2026-09-12): a configured monthly product opens the sale, even while
+    // the fan-out capacity proof still reports a blocker.
+    const env = {
+      DODO_0509_API_KEY: "secret",
+      DODO_0509_BRAND_ID: "brand_0509",
+      DODO_0509_PRODUCT_SCOUT_MONTHLY_ID: "prod_scout_m",
+      DODO_0509_PRODUCT_STARTER_MONTHLY_ID: "prod_starter_m",
+      DODO_0509_PRODUCT_AGENCY_MONTHLY_ID: "prod_agency_m",
+    } satisfies AppEnv;
+
+    expect(publicCommercialLaunchSummary(env)).toEqual({
+      scoutSaleOpen: true,
+      starterSaleOpen: true,
+      agencySaleOpen: true,
+    });
+    expect(summarizeMonitoringFanoutProof(env).blocker).toBe("workflow_binding_missing");
   });
 
   it("opens public sale flags when checkout config and fan-out proof are present", () => {
@@ -98,7 +104,7 @@ describe("commercial launch gate", () => {
     expect(summary.agencySaleOpen).toBe(true);
     expect(summary.scoutSaleOpen).toBe(true);
     expect(summary.starterSaleOpen).toBe(true);
-    expect(isPlanCheckoutAllowed(baseFanoutEnv, "agency")).toBe(true);
+    expect(summary.fanout.blocker).toBeNull();
   });
 
   it("reports missing checkout SKUs and fails public sale flags closed", () => {

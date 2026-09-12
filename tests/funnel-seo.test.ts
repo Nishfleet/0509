@@ -130,13 +130,11 @@ describe("structured data (JSON-LD)", () => {
     // No price amounts in structured data — prices are dynamic via Dodo.
     expect(JSON.stringify(faq)).not.toMatch(/[$₹€£]\s?\d/);
 
-    // The held/open Agency billing question follows the launch gate.
-    const heldQuestions = faq.mainEntity.map((entry: { name: string }) => entry.name);
-    expect(heldQuestions).toContain("Why is Agency held?");
-    const openFaq = JSON.parse(JSON.stringify(faqPageJsonLd(billingFaqJsonLdEntries())));
-    expect(openFaq.mainEntity.map((entry: { name: string }) => entry.name)).toContain(
-      "How does Agency checkout work?",
-    );
+    // Agency's billing FAQ question no longer follows a launch gate: the
+    // checkout is self-serve (Nish, 2026-09-12).
+    const faqQuestions = faq.mainEntity.map((entry: { name: string }) => entry.name);
+    expect(faqQuestions).toContain("How does Agency checkout work?");
+    expect(faqQuestions).not.toContain("Why is Agency held?");
   });
 
   it("escapes < in JSON-LD script props and wires the scripts on the landing page", async () => {

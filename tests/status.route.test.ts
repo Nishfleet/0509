@@ -121,6 +121,44 @@ describe("status route", () => {
     expect(markup).toMatch(/Checked \d+ min ago/);
   });
 
+  it("reads the Agency checkout state the same measured way as Scout and Starter", async () => {
+    await mockRouter(() => ({
+      generatedAt: "2026-06-20T09:00:00.000Z",
+      asOf: "2026-06-20T09:00:00.000Z",
+      appServed: true,
+      commercialLaunch: { scoutSaleOpen: true, starterSaleOpen: true, agencySaleOpen: true },
+      monitoring: null,
+      surfaces: {
+        asOf: "2026-06-20T09:00:00.000Z",
+        monitoring: null,
+        surfaces: [
+          {
+            id: "public-search",
+            label: "Public search",
+            state: "operational",
+            reason: null,
+            facts: ["12 cached public result sets"],
+            checkedAt: "2026-06-20T09:00:00.000Z",
+            source: "discovery_cache_entry",
+          },
+        ],
+      },
+    }));
+
+    const { default: StatusRoute } = await import("~/routes/status");
+    const markup = renderToStaticMarkup(createElement(StatusRoute));
+
+    expect(markup).toContain(
+      "Checkout enabled: Agency monthly products are configured with the billing provider.",
+    );
+    expect(markup).toContain(
+      "Checkout enabled: Scout monthly products are configured with the billing provider.",
+    );
+    expect(markup).toContain(
+      "Checkout enabled: Starter monthly products are configured with the billing provider.",
+    );
+  });
+
   it("renders the intro as one sentence about what is measured", async () => {
     await mockRouter(() => ({
       generatedAt: "2026-09-12T04:00:00.000Z",

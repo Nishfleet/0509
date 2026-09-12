@@ -445,8 +445,12 @@ describe("marketing route", () => {
     const { default: MarketingRoute } = await import("~/routes/marketing");
     const markup = renderToStaticMarkup(createElement(MarketingRoute));
 
-    expect(markup).toContain("Account review");
-    expect(markup).toContain("Agency is available by account review");
+    // Agency now sells self-serve: signed-out users get the standard signup
+    // fallback, and the marketing FAQ answers how checkout works instead of
+    // advertising an "Account review" gate.
+    expect(markup).not.toContain("Account review");
+    expect(markup).not.toContain("Why is Agency held?");
+    expect(markup).toContain("How does Agency checkout work?");
     // A2 retired the "Create account" nav link for a single "Open app";
     // signed-out users still reach signup via the final email CTA action.
     expect(markup).toContain('action="/auth/signup"');

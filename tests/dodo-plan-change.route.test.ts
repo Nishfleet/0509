@@ -602,9 +602,6 @@ function mockPlanChangeRoute({
     isDodoSubscriptionPlanChangeReconciliationDue,
     markDodoSubscriptionPlanChangeScheduled,
   }));
-  vi.doMock("~/lib/commercial-launch-gate.server", () => ({
-    isPlanCheckoutAllowed: vi.fn((_: unknown, plan: string) => plan === "scout" || plan === "starter"),
-  }));
   const validateDodo0509PlanCheckout = vi.fn().mockResolvedValue({
     valid: true,
     price: { currency: "INR" },
