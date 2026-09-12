@@ -217,16 +217,6 @@ export default function BrandsHubRoute() {
             read the Ad Aggression Score methodology
           </Link>
         </p>
-
-        {/* Issue #3167 — a guides pointer from the brand hub. Literal href=
-            anchors: the issue's source-level verify greps `href="/guides/`,
-            which Link's to= never emits. */}
-        <p className="ld-dim ld-browse-categories">
-          {"New to tracking competitor ads? "}
-          <a href="/guides/how-to-track-competitor-ads">Start with the how-to guide</a>
-          {" — the full set lives at "}
-          <a href="/guides">/guides</a>.
-        </p>
       </section>
 
       <MarketingFooter />

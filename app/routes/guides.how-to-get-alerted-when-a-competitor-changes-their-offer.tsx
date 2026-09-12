@@ -29,7 +29,6 @@ import type { LinksFunction, MetaFunction } from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
-import { GuideKeepReading } from "~/components/guide-keep-reading";
 import {
   articleJsonLd,
   canonicalLinks,
@@ -365,15 +364,6 @@ export default function GuideHowToGetAlertedWhenACompetitorChangesTheirOfferRout
           &ldquo;a calendar reminder is enough for you.&rdquo;
         </p>
       </section>
-
-      <GuideKeepReading>
-        <a href="/guides/how-to-monitor-competitor-landing-page-changes">
-          How to monitor a competitor&rsquo;s landing-page changes
-        </a>
-        <a href="/guides/how-to-turn-a-one-off-competitor-check-into-a-standing-watch">
-          How to turn a one-off check into a standing watch
-        </a>
-      </GuideKeepReading>
 
       <MarketingFooter />
     </main>

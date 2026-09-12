@@ -28,7 +28,6 @@ import type { LinksFunction, MetaFunction } from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
-import { GuideKeepReading } from "~/components/guide-keep-reading";
 import {
   articleJsonLd,
   canonicalLinks,
@@ -354,13 +353,6 @@ export default function GuideHowToTurnAOneOffCompetitorCheckIntoAStandingWatchRo
           &ldquo;the weekly calendar slot is enough for you.&rdquo;
         </p>
       </section>
-
-      <GuideKeepReading>
-        <a href="/guides/how-to-track-competitor-ads">How to track competitor ads</a>
-        <a href="/guides/how-to-monitor-competitor-landing-page-changes">
-          How to monitor a competitor&rsquo;s landing-page changes
-        </a>
-      </GuideKeepReading>
 
       <MarketingFooter />
     </main>
