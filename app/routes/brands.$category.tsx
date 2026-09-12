@@ -168,8 +168,8 @@ export async function loader({
   // Bounded: each score enrichment is one cache-only snapshot read (no live
   // provider), capped at BRAND_CATEGORY_MAX_SCORE_LOOKUPS no matter how
   // large the category grows. Any hiccup degrades that one brand's score to
-  // a deferred `null` — the category page never 500s because a score is
-  // unavailable.
+  // a deferred `null` — the category page never 500s because one score
+  // lookup fails.
   const scoreDomains = new Set(
     categoryLinks.slice(0, BRAND_CATEGORY_MAX_SCORE_LOOKUPS).map((link) => link.domain),
   );

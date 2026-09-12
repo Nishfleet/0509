@@ -52,7 +52,7 @@ const healthyRows = (): Record<string, Row | null> => ({
   "SELECT MAX(started_at)": { last_started_at: FRESH },
   "SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed\n        FROM watchlist_run": { total: 31, failed: 0 },
   "FROM digest_delivery": { last_digest_sent_at: FRESH },
-  "FROM scheduled_observation_health_state": { active_since: "2026-08-01T15:21:54.236Z" },
+  "FROM scheduled_observation_health_state": { active_since: MONTH_AGO },
   "FROM watchlist WHERE is_active": { active: 3 },
   "FROM discovery_cache_entry": { sets: 12, freshest: FRESH },
   "FROM rate_limit_events": { served: 5 },
