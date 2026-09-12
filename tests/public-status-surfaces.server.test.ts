@@ -12,9 +12,15 @@ import type { AppEnv } from "~/lib/env.server";
 
 type Row = Record<string, unknown>;
 
-const NOW = "2026-09-12T04:00:00.000Z";
-const FRESH = "2026-09-12T03:00:00.000Z";
-const DAY_AGO = "2026-09-11T04:00:00.000Z";
+// Clock-relative fixtures: the library reads the wall clock (asOf = new Date()),
+// so every timestamp below must be derived from Date.now() at run time.
+// Hardcoded 2026-09-12 fixtures age past the 3-hour uptime and 26-hour search
+// freshness windows and fail the suite on a clock tick, not on a regression
+// (same lesson as the fixture fix merged into public-status-counters.test.ts).
+const NOW_MS = Date.now();
+const NOW = new Date(NOW_MS).toISOString();
+const FRESH = new Date(NOW_MS - 60 * 60 * 1000).toISOString(); // inside every freshness window
+const DAY_AGO = new Date(NOW_MS - 24 * 60 * 60 * 1000).toISOString();
 
 /**
  * A scripted D1 binding. `rows` maps a distinctive SQL fragment to the row it
@@ -102,7 +108,8 @@ describe("getPublicStatusSurfaces state machine", () => {
   });
 
   it("marks public search degraded when the nightly cache refresh is overdue", async () => {
-    const stale = "2026-09-10T04:00:00.000Z";
+    // Older than the 26-hour SEARCH_CACHE_REFRESH_MAX_AGE_MS window, whatever day the suite runs.
+    const stale = new Date(NOW_MS - 27 * 60 * 60 * 1000).toISOString();
     const search = await surfaceById(
       makeEnv({ ...healthyRows(), "FROM discovery_cache_entry": { sets: 12, freshest: stale } }),
       "public-search",

@@ -27,6 +27,7 @@
 
 import { formatBrandPageCheckedAgo, loadBrandPageCacheSnapshot } from "~/lib/brand-page.server";
 import { ALL_COUNTRIES_VALUE } from "~/lib/countries";
+import { queryIn } from "~/lib/data/d1.server";
 import type { AppEnv } from "~/lib/env.server";
 import type { AdRecord } from "~/lib/types";
 
@@ -84,6 +85,8 @@ export interface PublicProofTrailItem {
   /**
    * Issue #2393: the ad id the `/creative/:id` edge route resolves. Null when
    * the capture has no creative, so the card keeps its honest mock fallback.
+   * Filled only when the route can actually resolve the id — see
+   * `routeableCreativeIds` in `loadPublicProofBrief` (issue #3157).
    */
   creativeId: string | null;
 }
@@ -132,6 +135,43 @@ export interface PublicProofBriefLoadOptions {
 }
 
 /**
+ * Issue #3157: the creative ids in this brief that the `/creative/:id` edge
+ * route can actually resolve. The route answers 404 for an id with no
+ * persisted `ad` row carrying a `creativeImageUrl` (it never reads
+ * discovery-cache payloads), but the brief's ads come from the
+ * `discovery_cache_entry` snapshot, which the discovery pipeline writes
+ * WITHOUT an `ad`-table row. With the payload's `creativeId` gated on a
+ * routeable row, `buildCreativeResourceUrl` returns null for the dropped ids
+ * and `AdCreative` renders its honest mock instead of a request that is
+ * guaranteed to 404 — and no raw fbcdn URL leaks (issue #2730 gate).
+ */
+export async function routeableCreativeIds(
+  env: AppEnv,
+  creativeIds: Array<string | null>,
+): Promise<Set<string>> {
+  const ids = [...new Set(creativeIds.map((id) => id?.trim() ?? "").filter(Boolean))];
+  if (ids.length === 0) {
+    return new Set();
+  }
+  try {
+    const rows = await queryIn<{ id: string }>(env, {
+      buildSql: (placeholders) => `
+        SELECT id FROM ad
+        WHERE id IN (${placeholders})
+          AND json_extract(raw_json, '$.creativeImageUrl') IS NOT NULL
+          AND trim(json_extract(raw_json, '$.creativeImageUrl')) <> ''
+      `,
+      values: ids,
+    });
+    return new Set(rows.map((row) => row.id));
+  } catch {
+    // A D1 hiccup must never take down the brief — the ids fall back to the
+    // honest mock the same way a missing row does.
+    return new Set();
+  }
+}
+
+/**
  * Cache-only read of the featured competitor's real proof. Returns null when
  * no usable real cache exists (unconfigured/demo provider, no D1, cache miss,
  * stale cache, or a D1 hiccup) — callers must render the honest empty state.
@@ -157,7 +197,7 @@ export async function loadPublicProofBrief(
     if (!snapshot) {
       return null;
     }
-    return buildPublicProofBrief(snapshot.ads, {
+    const brief = buildPublicProofBrief(snapshot.ads, {
       fetchedAt: snapshot.fetchedAt,
       country: snapshot.country,
       freshForLiveClaim: snapshot.freshForLiveClaim,
@@ -165,6 +205,24 @@ export async function loadPublicProofBrief(
       website,
       now,
     });
+    if (!brief) {
+      return null;
+    }
+    // Issue #3157: only let the payload reference a `/creative/:id` route the
+    // edge route can actually resolve (see `routeableCreativeIds`). The
+    // discovery pipeline writes ads to `discovery_cache_entry` WITHOUT a
+    // matching `ad`-table row, so an unverified creativeId meant a guaranteed
+    // hard 404 in every visitor's console on every homepage load.
+    const routeable = await routeableCreativeIds(
+      env,
+      brief.proofTrail.map((item) => item.creativeId),
+    );
+    for (const item of brief.proofTrail) {
+      if (item.creativeId !== null && !routeable.has(item.creativeId)) {
+        item.creativeId = null;
+      }
+    }
+    return brief;
   } catch (error) {
     // A cache-read hiccup degrades to the honest "no live proof yet" state,
     // never a 500 and never a live-provider fallback.

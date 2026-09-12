@@ -30,7 +30,9 @@ describe("getPublicStatusCounters digest query", () => {
   it("reads the last-sent digest from created_at across status='sent', never delivered_at", async () => {
     // Clock-relative fixture: the digest must sit inside the 7-day freshness
     // threshold on any run date, otherwise digestHealthState correctly reads
-    // the record as stalled and this test fails for calendar reasons.
+    // the record as stalled and this test fails for calendar reasons. (Both
+    // branches fixed the same aged 2026-09-05 hardcoded fixture; this merge
+    // keeps one relative fixture for both rows.)
     const recentDigestSentAt = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const issued: string[] = [];
     const prepare = vi.fn((sql: string) => {
