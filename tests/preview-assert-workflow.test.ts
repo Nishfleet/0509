@@ -92,13 +92,14 @@ describe("preview-assert workflow", () => {
     expect(typecheck?.env?.NODE_OPTIONS).toBe("--max-old-space-size=2048");
   });
 
-  it("runs no test step — ci.yml's sharded suite owns coverage on every PR", () => {
+  it("runs no test step — ci.yml's unsharded suite owns coverage on every PR", () => {
     // The extra unsharded suite run existed only to catch a test that passed
     // sharded and failed under full-suite load (run 33561746667,
     // d1-remote-restore-evidence.test.ts:222 — a pidfile publish race inside
     // the spec). The race is fixed at the source (0509#2373), so re-running
     // the whole suite a second time per PR no longer buys anything; the
-    // deploy job's own post-merge run is unchanged.
+    // deploy job's own post-merge run is unchanged. (ci.yml is unsharded as
+    // of batch 2, #3069: the shard jobs folded into codex-node-checks.)
     expect(steps.find((step) => step.run === "npm run test")).toBeUndefined();
     expect(source).not.toContain("npm run test");
     expect(source).not.toContain("--shard=");

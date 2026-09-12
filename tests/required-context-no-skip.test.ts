@@ -12,15 +12,25 @@ import { parse } from "yaml";
 // authorizer runs as the first STEP, refusing fork PRs and unapproved
 // dispatch candidates with a real failure. This regression fails on the
 // pre-fix shape (job-level `if:` + `needs: authorize_release`) and passes on
-// the healed shape (in-step authorizer, pinned SHA checkout).
+// the healed shape (in-step authorizer, trusted github.sha checkout).
+// Each row carries the checkout ref the job must pin: ci.yml's jobs were moved
+// to the trusted event commit github.sha (CodeQL cache-poisoning remediation,
+// #3069 review — the workflow_dispatch expected_sha input must never reach a
+// checkout ref in a workflow with default-branch triggers). secret-scan keeps
+// the in-step authorize-output ref: it has no cache sink after checkout and
+// was not among the flagged findings. preview-assert also keeps its current
+// ref in THIS batch (not among the flagged findings) but carries BOTH a
+// workflow_dispatch expected_sha input and a setup-node npm cache sink — the
+// same shape CodeQL flags — so its remediation is tracked on the gate-owned
+// follow-up (#3238), not declared clean here.
 const REQUIRED_JOBS = [
-  [".github/workflows/secret-scan.yml", "gitleaks"],
-  [".github/workflows/ci.yml", "codex-node-checks"],
-  [".github/workflows/ci.yml", "dependabot-critical-check"],
+  [".github/workflows/secret-scan.yml", "gitleaks", "${{ steps.authorize.outputs.sha }}"],
+  [".github/workflows/ci.yml", "codex-node-checks", "${{ github.sha }}"],
+  [".github/workflows/ci.yml", "dependabot-critical-check", "${{ github.sha }}"],
   // preview-assert (0509#1576) becomes a required context on main once the
   // orchestrator adds it to branch protection; it must satisfy the same
   // never-skipped contract from day one.
-  [".github/workflows/preview-assert.yml", "preview-assert"],
+  [".github/workflows/preview-assert.yml", "preview-assert", "${{ steps.authorize.outputs.sha }}"],
 ] as const;
 
 type WorkflowStep = {
@@ -91,14 +101,19 @@ describe("required contexts can never conclude skipped", () => {
     }
   });
 
-  it("required jobs checkout the in-step authorized SHA and re-verify it", () => {
-    for (const [workflowPath, jobId] of REQUIRED_JOBS) {
+  it("required jobs checkout the trusted event commit and re-verify it", () => {
+    for (const [workflowPath, jobId, expectedRef] of REQUIRED_JOBS) {
       const steps = requiredJob(workflowPath, jobId).steps ?? [];
       const checkout = steps.find((step) =>
         step.uses?.startsWith("actions/checkout@"),
       );
-      expect(checkout?.with, `${workflowPath} pinned checkout`).toMatchObject({
-        ref: "${{ steps.authorize.outputs.sha }}",
+      // Trusted-ref shape (CodeQL cache-poisoning remediation, #3069 review):
+      // the ref is the event commit github.sha — no dispatch input or step
+      // output can select what gets checked out. The in-step authorizer is a
+      // pure fail-closed gate; the default-branch context checkout carries
+      // contents: read and persist-credentials: false.
+      expect(checkout?.with, `${workflowPath} trusted/pinned checkout`).toMatchObject({
+        ref: expectedRef,
         "fetch-depth": 0,
         clean: true,
         "persist-credentials": false,
@@ -155,6 +170,16 @@ describe("required contexts can never conclude skipped", () => {
       );
     });
 
+  // The `semgrep` bridge job (batch 2, #3069) is DELIBERATELY exempt from the
+  // never-conclude-skipped contract above, same shape as release-proof: it is
+  // the fail-closed adapter that keeps reporting the ruleset-required
+  // `semgrep` context on merge_group while the admin-side ruleset update is
+  // pending. Job-level `if:`-gated to merge_group so PR pushes never pay the
+  // full-tree scan (the PR-side folded steps in codex-node-checks own the
+  // .github/** coverage); on the queue ref the event is always merge_group so
+  // a missing required check fails closed. These assertions pin that shape —
+  // if: removed → PR-skip of a ruleset-required context; if: broadened → a
+  // required context that can conclude SKIPPED.
     it("runs the canonical release proof over all six journeys and archives gate-b diagnostics on failure", () => {
       const runs = (job.steps ?? []).map((step) => step.run ?? "").join("\n");
       expect(runs).toContain("npm run build");
@@ -167,6 +192,40 @@ describe("required contexts can never conclude skipped", () => {
       );
       expect(upload?.if).toBe("failure()");
       expect(String(upload?.with?.path)).toContain("gate-b-manifest");
+    });
+  });
+
+  // The `semgrep` bridge job (batch 2, #3069) is DELIBERATELY exempt from the
+  // never-conclude-skipped contract above, same shape as release-proof: it is
+  // the fail-closed adapter that keeps reporting the ruleset-required
+  // `semgrep` context on merge_group while the admin-side ruleset update is
+  // pending. Job-level `if:`-gated to merge_group so PR pushes never pay the
+  // full-tree scan (the PR-side folded steps in codex-node-checks own the
+  // .github/** coverage); on the queue ref the event is always merge_group so
+  // a missing required check fails closed. These assertions pin that shape —
+  // if: removed → PR-skip of a ruleset-required context; if: broadened → a
+  // required context that can conclude SKIPPED.
+  describe("semgrep merge-queue bridge shape", () => {
+    const job = requiredJob(".github/workflows/ci.yml", "semgrep");
+
+    it("is job-level if:-gated to merge_group only", () => {
+      expect(job.if).toContain("github.event_name == 'merge_group'");
+    });
+
+    it("carries no needs, fails closed within 10 minutes, and authorizes in-step", () => {
+      expect(job.needs).toBeUndefined();
+      expect(job["timeout-minutes"]).toBeLessThanOrEqual(10);
+      const steps = job.steps ?? [];
+      expect(steps[0]?.id).toBe("authorize");
+      expect(steps[0]?.run).toContain(
+        'test "$GITHUB_EVENT_NAME" = "merge_group"',
+      );
+      expect(steps[0]?.run).toContain(
+        '[[ "$GITHUB_REF" =~ ^refs/heads/gh-readonly-queue/ ]]',
+      );
+      for (const step of steps) {
+        expect(step["continue-on-error"]).toBeUndefined();
+      }
     });
   });
 });
