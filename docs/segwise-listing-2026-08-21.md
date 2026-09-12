@@ -7,8 +7,9 @@ Competitor Tracking Tools" comparison — current-month on-call listing item
 **Status:** NEEDS-NISH — prepared and ready to send; the send step itself
 remains and requires the owner. **NEEDS-NISH: send the pitch via LinkedIn to
 Angad Singh (recommended), or email from `support@0509.io` once the owner
-confirms a Segwise vendor-facing inbox.** (No repo-local outbound mail path
-exists to fire the message — same constraint the ad-stack.ai lane recorded.)
+confirms a Segwise vendor-facing inbox.** (A repo-local outbound mail path
+exists — `scripts/send-vendor-mail.mjs`, dry-run default, credentials via
+env — but the send still stands behind this NEEDS-NISH marker.)
 This document contains a complete pitch for inclusion in
 Segwise's "Best Ad Spy and Competitor Tracking Tools in 2026" roundup
 (`https://segwise.ai/blog/best-ad-spy-competitor-tools`), grounded in the
@@ -114,13 +115,16 @@ vendor-facing inbox.**
 - **No venue form, account, or payment required** — the whole submission is
   one pitch message (LinkedIn DM recommended; see
   [Exact next step](#exact-next-step-owner-decision)).
-- **No repo-local outbound mail path exists** to fire an email from this
-  worktree: the only outbound sender in the product is the production
-  Worker's Cloudflare `send_email` binding (`EMAIL_FROM_EMAIL:
-  alerts@0509.io`, used for digests/alerts), which requires production
-  secrets/deploy and is not appropriate for a one-off vendor pitch. The
-  pitch therefore waits on the sender — same constraint the ad-stack.ai
-  lane recorded on 2026-08-11 (`docs/adstack-listing-2026-08-11.md`).
+- **A repo-local outbound mail path exists** — `scripts/send-vendor-mail.mjs`
+  sends a prepared pitch via the Cloudflare Email Sending REST API (the same
+  service that backs the production Worker's `send_email` binding); it is
+  dry-run by default, needs `--send` plus `CLOUDFLARE_API_TOKEN` and
+  `CLOUDFLARE_ACCOUNT_ID` env vars, and takes `--to` for docs like this one
+  with no `To:` line. Before the first real `--send`, the REST endpoint
+  should be verified against Cloudflare's official Email Sending docs
+  (tracked as the `vendor-mail-endpoint-docs-verify` loose-end on PR #3029).
+  The pitch still waits on the NEEDS-NISH sender decision above — LinkedIn
+  remains the recommended route.
 - **No coverage guarantee, by design** — inclusion is the author's editorial
   call; this is a submission into the next update cycle, not a confirmed
   placement.
@@ -320,4 +324,4 @@ pitch is not sent by anything in this repo.
 
 ## Receipt pass (2026-09-11, issue #2857)
 
-blocked: needs Nish's identity — the whole submission is one pitch message, delivered via LinkedIn to the article's author (Angad Singh, recommended route: https://www.linkedin.com/in/-angadsingh/) or by email from support@0509.io to a verified Segwise vendor-facing inbox (no vendor inbox is confirmed — common patterns are unverified per this doc); no repo-local outbound mail path exists and the worker holds no LinkedIn session or mailbox, so the send step cannot be fired from here. The paste-ready pitch targets the current "15 Best Ad Spy..." version (Updated September 2026); success signal stays an article change or an author reply.
+blocked: needs Nish's identity — the whole submission is one pitch message, delivered via LinkedIn to the article's author (Angad Singh, recommended route: https://www.linkedin.com/in/-angadsingh/) or by email from support@0509.io to a verified Segwise vendor-facing inbox (no vendor inbox is confirmed — common patterns are unverified per this doc); a repo-local outbound mail path exists (`scripts/send-vendor-mail.mjs`, dry-run default, credentials via env) but the worker holds no LinkedIn session and the send stands behind this doc's NEEDS-NISH marker, so the send step remains the owner step. The paste-ready pitch targets the current "15 Best Ad Spy..." version (Updated September 2026); success signal stays an article change or an author reply.
