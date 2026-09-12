@@ -204,6 +204,8 @@ export interface AppEnv {
   PRESENCE_LINKEDIN_ROLLOUT?: string;
   /** RSS/Atom/JSON Feed mention connector rollout: disabled | internal | pilot | ga. Defaults to disabled (gated, off by default). */
   PRESENCE_RSS_ROLLOUT?: string;
+  /** Hacker News mention connector (Algolia HN Search API) rollout: disabled | internal | pilot | ga. Defaults to disabled (gated, off by default). */
+  PRESENCE_HN_ROLLOUT?: string;
   /** Digest delivery rollout: disabled | internal | pilot | ga. Defaults to disabled (notifications off). */
   PRESENCE_DIGEST_ROLLOUT?: string;
   /**

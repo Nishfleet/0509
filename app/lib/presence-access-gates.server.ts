@@ -35,6 +35,8 @@ function connectorRolloutFromEnv(env: AppEnv, connectorId: PresenceConnectorId):
       return parseRolloutState(env.PRESENCE_LINKEDIN_ROLLOUT, "disabled");
     case "rss":
       return parseRolloutState(env.PRESENCE_RSS_ROLLOUT, "disabled");
+    case "hn":
+      return parseRolloutState(env.PRESENCE_HN_ROLLOUT, "disabled");
     default:
       return "disabled";
   }
@@ -54,6 +56,10 @@ function hasCredentials(env: AppEnv, connectorId: PresenceConnectorId): boolean 
       // RSS/Atom/JSON Feed polling is public-web: no account or API credentials.
       // The rollout gate (PRESENCE_RSS_ROLLOUT) is still required to activate it.
       return true;
+    case "hn":
+      // HN mentions come from the free, no-auth Algolia HN Search API. The
+      // rollout gate (PRESENCE_HN_ROLLOUT) is still required to activate it.
+      return true;
     default:
       return false;
   }
@@ -68,7 +74,7 @@ function hasCredentials(env: AppEnv, connectorId: PresenceConnectorId): boolean 
 // help-first: Only the predicate changes; the runtime gates in evaluateConnectorAccessGate
 // (rolloutState, credentials, reddit commercial access) still govern whether polling actually runs.
 export function connectorHasCustomerPollPath(connectorId: PresenceConnectorId): boolean {
-  return connectorId === "website" || connectorId === "rss" || connectorId === "x" || connectorId === "reddit";
+  return connectorId === "website" || connectorId === "rss" || connectorId === "x" || connectorId === "reddit" || connectorId === "hn";
 }
 
 export async function evaluateConnectorAccessGate(
