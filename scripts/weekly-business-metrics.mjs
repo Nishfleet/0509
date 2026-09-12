@@ -39,11 +39,17 @@
  *      one are listed as suspect, never silently counted.
  */
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { dirname } from "node:path";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
+/** Prefer the repo's pinned wrangler (node_modules/.bin) so a plain
+ * `node scripts/weekly-business-metrics.mjs` works on hosts without a global
+ * wrangler on PATH; fall back to PATH resolution when the repo has none. */
+const wranglerBin = existsSync(join(root, "node_modules", ".bin", "wrangler"))
+  ? join(root, "node_modules", ".bin", "wrangler")
+  : "wrangler";
 const databaseName = "0509";
 const driftRepo = "Nishfleet/0509";
 /** Prior daily D1 counts come from the private telemetry sink (see
@@ -167,7 +173,7 @@ function rowsFromWranglerJson(output) {
  */
 function runQuery(sql) {
   const result = spawnSync(
-    "wrangler",
+    wranglerBin,
     ["d1", "execute", databaseName, "--remote", "--command", sql, "--json"],
     { cwd: root, env: process.env, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 },
   );
@@ -511,6 +517,284 @@ WHERE w.is_active = 1
   AND we.created_at >= '${trailingWeekCutoff}'
 GROUP BY we.watchlist_id;
 `;
+}
+
+// ---------------------------------------------------------------------------
+// Direction metric (issue #3321, direction#4518): the fixture-free signup
+// meter. signups/week is the direction metric, so the count must not include
+// the fleet's own QA/canary fixture accounts, and every surviving row must be
+// checkable against the signup_completed funnel event (PR #1965).
+// ---------------------------------------------------------------------------
+
+/**
+ * The #2908 fixture enumeration, as data — no regex, no buried LIKE. Each
+ * row: which column, what value, which match rule. First match wins (list
+ * order = precedence); matching trims and lowercases both sides, because the
+ * canary's own lookup compares lower(email) (getBillingCanaryUser) — #2908's
+ * identities were read in mixed case.
+ *
+ * "owner" (the #2908 16-row read's remaining account) is deliberately NOT a
+ * fixture: the launch canary runs on that account, but it is a real, human
+ * signup — it stays counted.
+ */
+export const SIGNUP_FIXTURE_PATTERNS = [
+  // = BILLING_CANARY_DEFAULT_EMAIL (app/lib/billing-canary-identity.server.ts;
+  // #2908's newest row, 2026-09-11T09:16Z).
+  { field: "email", value: "billing-canary@0509.internal", match: "exact" },
+  // = BILLING_CANARY_USER_ID — the billing-canary-lock guard identity. Also
+  // catches the canary when BILLING_CANARY_EMAIL overrides the address,
+  // because ensureDedicatedBillingCanaryUser always binds this id.
+  { field: "id", value: "billing-canary-0509", match: "exact" },
+  // #2908 wrote "codex-qa-*" — the value keeps the #2908 spelling minus the
+  // glob, and the match rule below IS the glob's meaning (prefix).
+  { field: "email", value: "codex-qa-", match: "prefix" },
+  { field: "email", value: "codex-free-qa-", match: "prefix" },
+  // #2908 wrote "auth-QA" bare. Emails carry a domain, so the family is
+  // auth-QA…@… — a prefix, not an exact address.
+  { field: "email", value: "auth-QA", match: "prefix" },
+];
+
+/**
+ * Does one user row match one fixture pattern? The only matcher there is:
+ * trim, lowercase, exact-or-prefix. No regex, no LIKE — the pattern list
+ * above is the whole story.
+ *
+ * @param {Record<string, unknown>} row
+ * @param {{ field: string, value: string, match: string }} pattern
+ * @returns {boolean}
+ */
+function matchesSignupFixturePattern(row, pattern) {
+  const raw = pattern.field === "id" ? row?.id : row?.email;
+  const value = String(raw ?? "").trim().toLowerCase();
+  const expected = String(pattern.value).trim().toLowerCase();
+  return pattern.match === "exact" ? value === expected : value.startsWith(expected);
+}
+
+/**
+ * The one read-only D1 read behind the meter: every user row inside the
+ * baseline (30d) window. The 7d window is a subset of the 30d one, so a
+ * single round trip answers both; the evaluator applies the 7d cut, the
+ * fixture exclusion and the event cross-check. SELECT-only; no DDL/DML
+ * anywhere in this script (issue #3321 acceptance 5).
+ *
+ * @param {Date} [now]
+ * @returns {string}
+ */
+export function buildSignupsIntegrityQuery(now = new Date()) {
+  const cutoff = new Date(now.getTime() - directionWindows.baseline * DAY_MS).toISOString();
+  return `
+SELECT id, email, createdAt
+FROM "user"
+WHERE createdAt >= '${cutoff}'
+ORDER BY createdAt DESC
+LIMIT 1000;
+`;
+}
+
+/**
+ * Parse Workers Logs NDJSON (one funnel log record per line — the same
+ * contract as scripts/funnel-daily-counts.mjs) into records, counting lines
+ * that are not JSON objects instead of failing the whole read: one malformed
+ * Workers Logs line must not cost the packet its number.
+ *
+ * @param {string} text
+ * @returns {{ records: Array<Record<string, unknown>>, unparseableLines: number }}
+ */
+export function parseSignupEventRecords(text) {
+  const records = [];
+  let unparseableLines = 0;
+  for (const line of String(text ?? "").split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      const record = JSON.parse(trimmed);
+      if (record === null || typeof record !== "object") {
+        unparseableLines += 1;
+        continue;
+      }
+      records.push(record);
+    } catch {
+      unparseableLines += 1;
+    }
+  }
+  return { records, unparseableLines };
+}
+
+/**
+ * Pure meter: run it on the rows the D1 read returned (the "D1 mock" in the
+ * test) and it returns the exact JSON the packet pastes into the direction
+ * entry. `now` is injected, so no test reads the wall clock (fleet-ops
+ * #3243/#3246, #3212); the funnel events arrive as an already-parsed record
+ * bundle, or null when the caller supplied none.
+ *
+ * Counting contract:
+ *   - rows_total: rows inside the baseline window (what the read returned);
+ *     signups_30d + excluded_fixtures = rows_total, by construction.
+ *   - excluded_fixtures: fixtures among them (first-matching pattern wins;
+ *     excluded_fixtures_by_pattern sums to it).
+ *   - signups_30d: surviving (= non-fixture) rows; signups_7d: their 7d
+ *     subset. A surviving row is a signup whether or not its funnel event
+ *     survives — what the cross-check adds is the disclosure of which rows
+ *     lack one, so nothing is silently counted.
+ *   - event_cross_check: when records were supplied, every surviving row
+ *     inside the Workers Logs retention window (7d — EVENTS_RETENTION: older
+ *     events are gone from the log, their absence means nothing) must
+ *     consume one signup_completed event within 30 minutes; survivors that
+ *     could match and did not are listed in `suspect` (state
+ *     "no_event_in_window"). Rows older than retention are counted in
+ *     rows_outside_retention — they cannot be checked, so they are
+ *     disclosed, not suspected. unparseable_event_lines counts Workers Logs
+ *     lines that were not JSON records at all (the reader skipped them),
+ *     unreadable_event_records counts funnel_signup_completed records whose
+ *     timestamp could not be parsed.
+ *
+ * @param {Array<Record<string, unknown>>} rows D1 rows ({id, email, createdAt})
+ * @param {Date} now
+ * @param {{ records: Array<Record<string, unknown>>, unparseableLines?: number } | null | undefined} eventBundle
+ * @returns {Record<string, unknown>}
+ */
+export function evaluateSignupIntegrity(rows, now, eventBundle) {
+  const cutoff30 = now.getTime() - directionWindows.baseline * DAY_MS;
+  const cutoff7 = now.getTime() - directionWindows.recent * DAY_MS;
+
+  const inWindow = [];
+  for (const row of rows ?? []) {
+    const ts = Date.parse(String(row?.createdAt ?? ""));
+    if (Number.isFinite(ts) && ts >= cutoff30) inWindow.push({ row, ts });
+  }
+
+  const byPattern = {};
+  let excludedFixtures = 0;
+  const survivors = [];
+  for (const entry of inWindow) {
+    const pattern = SIGNUP_FIXTURE_PATTERNS.find((candidate) =>
+      matchesSignupFixturePattern(entry.row, candidate),
+    );
+    if (pattern) {
+      excludedFixtures += 1;
+      byPattern[pattern.value] = (byPattern[pattern.value] ?? 0) + 1;
+    } else {
+      survivors.push(entry);
+    }
+  }
+  const survivors30 = survivors.length;
+  const survivors7 = survivors.filter((entry) => entry.ts >= cutoff7).length;
+
+  const retentionCutoff = now.getTime() - EVENT_RETENTION_DAYS * DAY_MS;
+  /** @type {Record<string, unknown>} */
+  const crossCheck = {
+    evaluated: eventBundle !== null && eventBundle !== undefined,
+    retention_days: EVENT_RETENTION_DAYS,
+    match_window_minutes: SIGNUP_EVENT_MATCH_WINDOW_MS / 60_000,
+    unparseable_event_lines: 0,
+    signup_completed_events: 0,
+    non_signup_records: 0,
+    unreadable_event_records: 0,
+    rows_within_retention: 0,
+    matched: 0,
+    suspect: [],
+    rows_outside_retention: 0,
+  };
+
+  if (crossCheck.evaluated) {
+    crossCheck.unparseable_event_lines = Number(eventBundle?.unparseableLines ?? 0);
+    const events = [];
+    for (const record of eventBundle?.records ?? []) {
+      if (record?.operation !== "funnel_signup_completed") {
+        crossCheck.non_signup_records += 1;
+        continue;
+      }
+      const ts = Date.parse(String(record?.timestamp ?? ""));
+      if (!Number.isFinite(ts)) {
+        crossCheck.unreadable_event_records += 1;
+        continue;
+      }
+      events.push(ts);
+    }
+    crossCheck.signup_completed_events = events.length;
+    // Greedy nearest, one-to-one (see SIGNUP_EVENT_MATCH_WINDOW_MS): the
+    // oldest surviving row picks first, and ties keep the earlier event.
+    // ASC row order + a first-strictly-smaller scan make it deterministic.
+    const remaining = [...events].sort((a, b) => a - b);
+    const withinRetention = survivors
+      .filter((entry) => entry.ts >= retentionCutoff)
+      .sort(
+        (a, b) =>
+          a.ts - b.ts ||
+          String(a.row?.email ?? "").localeCompare(String(b.row?.email ?? "")),
+      );
+    crossCheck.rows_within_retention = withinRetention.length;
+    for (const entry of withinRetention) {
+      let bestIndex = -1;
+      let bestDelta = Infinity;
+      remaining.forEach((ts, index) => {
+        const delta = Math.abs(ts - entry.ts);
+        if (delta < bestDelta) {
+          bestDelta = delta;
+          bestIndex = index;
+        }
+      });
+      if (bestIndex >= 0 && bestDelta <= SIGNUP_EVENT_MATCH_WINDOW_MS) {
+        remaining.splice(bestIndex, 1);
+        crossCheck.matched += 1;
+      } else {
+        crossCheck.suspect.push({
+          email: entry.row?.email ?? null,
+          createdAt: entry.row?.createdAt ?? null,
+          state: "no_event_in_window",
+        });
+      }
+    }
+    crossCheck.rows_outside_retention = survivors30 - withinRetention.length;
+  }
+
+  return {
+    metric: "signups/week",
+    definition:
+      "direction#4518; trailing-7d/30d fixture-free user.createdAt; excludes the #2908 fixture enumeration plus the billing-canary guard identity; surviving rows cross-checked against signup_completed funnel events (#1872, PR #1965); documented in docs/ga-metrics.md",
+    fixture_patterns: SIGNUP_FIXTURE_PATTERNS,
+    windows_days: directionWindows,
+    signups_7d: survivors7,
+    signups_30d: survivors30,
+    excluded_fixtures: excludedFixtures,
+    excluded_fixtures_by_pattern: byPattern,
+    rows_total: inWindow.length,
+    event_cross_check: crossCheck,
+  };
+}
+
+/**
+ * Read the funnel-event NDJSON (a path, or "-" for stdin) — read-only, and
+ * skip-with-a-count for lines that are not JSON records.
+ *
+ * @param {string} eventsPath
+ * @returns {{ records: Array<Record<string, unknown>>, unparseableLines: number }}
+ */
+function readSignupEventRecords(eventsPath) {
+  const text = readFileSync(eventsPath === "-" ? 0 : eventsPath, "utf8");
+  const parsed = parseSignupEventRecords(text);
+  if (parsed.unparseableLines > 0) {
+    console.error(
+      `weekly-business-metrics: skipped ${parsed.unparseableLines} unparseable event log line(s).`,
+    );
+  }
+  return parsed;
+}
+
+/**
+ * The --json mode (issue #3321): one read-only production read, the pure
+ * meter, one JSON object. Fails honestly — any read error propagates to
+ * main() and exits 1 rather than printing partial numbers.
+ *
+ * @param {string | null} eventsPath
+ */
+function runSignupIntegrityJson(eventsPath) {
+  const rows = runQuery(buildSignupsIntegrityQuery());
+  const events = eventsPath ? readSignupEventRecords(eventsPath) : null;
+  const now = new Date();
+  const result = evaluateSignupIntegrity(rows, now, events);
+  result.generated_at = now.toISOString();
+  console.log(JSON.stringify(result, null, 2));
 }
 
 function main() {
