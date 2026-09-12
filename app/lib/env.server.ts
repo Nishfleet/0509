@@ -231,7 +231,7 @@ export interface AppEnv {
   PRESENCE_REDDIT_MOCK?: string;
   PRESENCE_LINKEDIN_MOCK?: string;
   X_API_BEARER_TOKEN?: string;
-  PRESENCE_BSKY_MOCK?: string;
+  PRESENCE_BLUESKY_MOCK?: string;
   /** Fleet-owned Bluesky app-password credential (issue #3252). Never logged,
    *  never persisted outside source_connection.encrypted_credentials. */
   BSKY_IDENTIFIER?: string;
