@@ -99,6 +99,17 @@ export async function cleanupAutomationBackupLocalDirectory(
  * an auth, local I/O, generic network, or post-export failure can start a
  * second production export after the first one actually completed.
  *
+ * Wrangler changed the export-busy wording: the currently pinned version
+ * prints exactly "Currently processing a long-running export. Cannot start
+ * a new export until that completes or times out." (observed live in
+ * 0509 run 34697921342 on 2026-09-12, where the run failed 2 s after the
+ * export started because the 16-attempt busy retry never fired). The
+ * legacy wordings below are kept because this script also runs outside CI
+ * under a globally installed wrangler, whose wording may differ. Since
+ * #2975's dedicated per-SHA concurrency group, consecutive pushes fire the
+ * evidence drill concurrently and this busy response is the common case,
+ * not the exception.
+ *
  * @param {unknown} error
  */
 export function isRetryableD1ExportBusyError(error) {
@@ -110,6 +121,8 @@ export function isRetryableD1ExportBusyError(error) {
       ? error.safeStderr
       : "";
   return (
+    /\bcurrently processing a long-running export\b/iu.test(safeStderr) ||
+    /\bcannot start a new export\b/iu.test(safeStderr) ||
     /\b(?:an(?:other)?\s+)?export(?:\s+(?:operation|job))?\s+is\s+(?:already\s+|currently\s+)?in progress\b/iu.test(
       safeStderr,
     ) ||

@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   cleanupAutomationBackupLocalDirectory,
+  isRetryableD1ExportBusyError,
   prepareBackupLocalDirectory,
 } from "../scripts/d1-backup-local-storage.mjs";
 
@@ -115,5 +116,56 @@ describe("D1 backup local storage cleanup", () => {
         GITHUB_RUN_ATTEMPT: "1",
       }),
     ).rejects.toThrow();
+  });
+});
+
+/** @param {string} safeStderr */
+function busyError(safeStderr: string): Error {
+  return Object.assign(new Error("npx_failed"), { safeStderr });
+}
+
+describe("isRetryableD1ExportBusyError", () => {
+  it("retries the pinned wrangler's current export-busy wording, ANSI-decorated as observed in run 34697921342", () => {
+    // Raw stderr captured from 0509 run 34697921342 (2026-09-12T13:59:24Z):
+    // the run failed 2 s after the export started because no legacy wording
+    // matched and the 16-attempt busy retry never fired.
+    expect(
+      isRetryableD1ExportBusyError(
+        busyError(
+          "\x1b[31m✘ \x1b[41;31m[\x1b[41;97mERROR\x1b[41;31m]\x1b[0m Currently processing a long-running export. Cannot start a new export until that completes or times out.\x1b[0m",
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it("still retries the legacy export-busy wordings", () => {
+    expect(
+      isRetryableD1ExportBusyError(
+        busyError("an export operation is already in progress"),
+      ),
+    ).toBe(true);
+    expect(
+      isRetryableD1ExportBusyError(busyError("Another export is in progress")),
+    ).toBe(true);
+    expect(
+      isRetryableD1ExportBusyError(busyError("database is being exported")),
+    ).toBe(true);
+  });
+
+  it("does not retry errors that are not the pre-start export-busy response", () => {
+    expect(
+      isRetryableD1ExportBusyError(
+        busyError("✘ [ERROR] Authentication error [code: 10000]"),
+      ),
+    ).toBe(false);
+    expect(
+      isRetryableD1ExportBusyError(
+        busyError("D1 export produced an empty file; not uploading."),
+      ),
+    ).toBe(false);
+    expect(isRetryableD1ExportBusyError(new Error("no safeStderr here"))).toBe(
+      false,
+    );
+    expect(isRetryableD1ExportBusyError(undefined)).toBe(false);
   });
 });
