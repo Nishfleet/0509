@@ -88,6 +88,8 @@ export type PublicStatusProbe = {
     detail: string | null;
     checkedAt: string;
   } | null;
+  /** Samples recorded in the trailing 24 hours (0 when the rail is fresh). */
+  samples24h: number;
   okRate24h: number | null;
   p50LatencyMs24h: number | null;
   lastFailureDetail: string | null;
@@ -523,6 +525,7 @@ export async function getPublicStatusProbes(
             checkedAt: latest.checked_at,
           }
         : null,
+      samples24h: stats ? Number(stats.n) : 0,
       okRate24h: stats && Number(stats.n) > 0 ? Number(stats.ok_rate ?? 0) : null,
       p50LatencyMs24h: p50ByProbe.get(probe) ?? null,
       lastFailureDetail: failure?.detail ?? null,

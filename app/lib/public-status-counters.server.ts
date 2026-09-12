@@ -11,11 +11,11 @@
 import { queryOne as one } from "~/lib/data/d1.server";
 import type { AppEnv } from "~/lib/env.server";
 import { monitoringCoverageDays } from "~/lib/monitoring-coverage";
+import { listScheduledObservationHealth } from "~/lib/scheduled-observation-health.server";
 import {
-  listScheduledObservationHealth,
-  readStatusUptime,
-  type StatusUptimeReading,
-} from "~/lib/scheduled-observation-health.server";
+  getPublicStatusProbes,
+  type PublicStatusProbe,
+} from "~/lib/status-probes.server";
 
 export const DIGEST_STALENESS_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -226,7 +226,98 @@ export interface PublicStatusSurfaces {
 }
 
 const SEARCH_CACHE_REFRESH_MAX_AGE_MS = 26 * 60 * 60 * 1000; // nightly publisher deadline
-const UPTIME_SAMPLE_MAX_AGE_MS = 3 * 60 * 60 * 1000; // hourly rail must not lag
+
+/**
+ * One probe's reading folded into a surface row. `checkedAt` is the probe's
+ * own latest-sample time so the row's "checked N min ago" reflects the probe
+ * cadence, not the page load.
+ */
+interface ProbeReading {
+  state: SurfaceState;
+  reason: string | null;
+  checkedAt: string;
+  facts: string[];
+}
+
+/**
+ * Reduce one probe's samples to a row reading. Returns null while the probe
+ * has never recorded a sample (fresh deployment, or the rail's table is not
+ * applied yet) so the caller falls back to its D1-counter state rather than
+ * publishing a fake red.
+ */
+function probeReading(probe: PublicStatusProbe | undefined): ProbeReading | null {
+  if (!probe?.latest) return null;
+  const facts: string[] = [];
+  if (probe.samples24h > 0 && probe.okRate24h !== null) {
+    facts.push(
+      `${Math.round(probe.okRate24h * 100)}% of ${probe.samples24h.toLocaleString()} live probe checks passed in the last 24 hours`,
+    );
+  }
+  if (probe.p50LatencyMs24h !== null) {
+    facts.push(`median probe latency ${Math.round(probe.p50LatencyMs24h).toLocaleString()} ms`);
+  }
+  if (probe.latest.detail) {
+    facts.push(`last check: ${probe.latest.detail}`);
+  }
+  if (probe.latest.ok) {
+    const clean = probe.okRate24h === null || probe.okRate24h >= 1;
+    return {
+      state: clean ? "operational" : "degraded",
+      reason: clean
+        ? null
+        : probe.lastFailureDetail
+          ? `a recent probe check failed: ${probe.lastFailureDetail}`
+          : "a recent probe check failed",
+      checkedAt: probe.latest.checkedAt,
+      facts,
+    };
+  }
+  return {
+    state: probe.okRate24h === 0 && probe.samples24h >= 3 ? "down" : "degraded",
+    reason: probe.latest.detail ?? probe.lastFailureDetail ?? "the latest live probe check failed",
+    checkedAt: probe.latest.checkedAt,
+    facts,
+  };
+}
+
+const STATE_RANK: Record<SurfaceState, number> = {
+  operational: 0,
+  degraded: 1,
+  down: 2,
+};
+
+/**
+ * Apply a probe reading to a row: probe facts append after the counter facts,
+ * and the probe's checkedAt wins. With `mode: "worst"` the counter-derived
+ * state is a floor — a failed webhook or an overdue refresh stays visible even
+ * while the live probe is green — and the counter reason wins ties because it
+ * names the more specific failure. Without a reading the counter state stands
+ * and a pending fact records the rail gap.
+ */
+function applyProbeReading(
+  m: Omit<SurfaceMeasurement, "state" | "reason">,
+  reading: ProbeReading | null,
+  counterState: { state: SurfaceState; reason: string | null } | null,
+  pendingFact: string,
+  mode: "probe" | "worst" = "probe",
+): SurfaceMeasurement {
+  if (!reading) {
+    m.facts = [...m.facts, pendingFact];
+    return counterState
+      ? { ...m, state: counterState.state, reason: counterState.reason }
+      : degraded(m, pendingFact);
+  }
+  m.checkedAt = reading.checkedAt;
+  m.facts = [...m.facts, ...reading.facts];
+  if (mode === "worst" && counterState) {
+    const worse =
+      STATE_RANK[counterState.state] >= STATE_RANK[reading.state]
+        ? counterState
+        : { state: reading.state, reason: reading.reason };
+    return { ...m, state: worse.state, reason: worse.reason };
+  }
+  return { ...m, state: reading.state, reason: reading.reason };
+}
 
 function degraded(
   base: Omit<SurfaceMeasurement, "state" | "reason">,
@@ -306,88 +397,151 @@ export async function getPublicStatusSurfaces(
   });
 
   const [
+    probesResult,
     countersResult,
     searchResult,
     signInResult,
     billingResult,
     emailResult,
-    uptimeResult,
   ] = await Promise.allSettled([
+    getPublicStatusProbes(env.DB),
     getPublicStatusCountersWithWatchlists(env, dayAgoIso),
     measurePublicSearch(env),
     measureSignIn(env, dayAgoIso),
     measureBilling(env, dayAgoIso),
     measureEmailDelivery(env, dayAgoIso),
-    measureUptime(env),
   ]);
+
+  // The live probe rail (status_probe_samples, written by the 5-minute
+  // status-probe cron) governs the state of every surface it measures. While
+  // a probe has no sample yet — fresh deployment, or the rail not applied on
+  // this deployment — the D1-counter evidence still governs that row, with a
+  // pending fact saying the rail has not sampled. A rejected probes read
+  // (table absent) lands in the same fallback.
+  const probesByName = new Map(
+    (probesResult.status === "fulfilled" ? probesResult.value : []).map(
+      (probe) => [probe.probe, probe],
+    ),
+  );
 
   const surfaces: SurfaceMeasurement[] = [];
 
   // Public search.
+  const searchSource =
+    "status_probe_samples public_search and provider_meta probes, discovery_cache_entry, edge and D1 probes";
   if (!d1Ok) {
-    surfaces.push(down(base("public-search", "Public search", "edge and D1 probes, discovery_cache_entry"), d1Reason));
-  } else if (searchResult.status === "fulfilled") {
-    const row = searchResult.value;
-    const m = base("public-search", "Public search", "edge and D1 probes, discovery_cache_entry");
-    const facts: string[] = [
-      `${row.cachedSets.toLocaleString()} cached public result sets`,
-    ];
-    if (row.freshestFetchAt) {
-      facts.push(`freshest provider fetch ${ageClause(row.freshestFetchAt, asOf)}`);
-    }
-    m.facts = facts;
-    if (row.cachedSets === 0) {
-      surfaces.push(degraded(m, "no cached search result set has been recorded yet"));
-    } else if (
-      row.freshestFetchAt &&
-      Date.parse(asOf) - Date.parse(row.freshestFetchAt) > SEARCH_CACHE_REFRESH_MAX_AGE_MS
-    ) {
-      surfaces.push(degraded(m, "the nightly result refresh is overdue"));
-    } else {
-      surfaces.push(operational(m));
-    }
+    surfaces.push(down(base("public-search", "Public search", searchSource), d1Reason));
   } else {
-    surfaces.push(degraded(base("public-search", "Public search", "edge and D1 probes, discovery_cache_entry"), "the search storage probe failed"));
+    const m = base("public-search", "Public search", searchSource);
+    let counterState: { state: SurfaceState; reason: string | null } | null = null;
+    if (searchResult.status === "fulfilled") {
+      const row = searchResult.value;
+      m.facts = [
+        `${row.cachedSets.toLocaleString()} cached public result sets`,
+        row.freshestFetchAt ? `freshest provider fetch ${ageClause(row.freshestFetchAt, asOf)}` : null,
+      ].filter((v): v is string => v !== null);
+      counterState =
+        row.cachedSets === 0
+          ? { state: "degraded", reason: "no cached search result set has been recorded yet" }
+          : row.freshestFetchAt &&
+              Date.parse(asOf) - Date.parse(row.freshestFetchAt) > SEARCH_CACHE_REFRESH_MAX_AGE_MS
+            ? { state: "degraded", reason: "the nightly result refresh is overdue" }
+            : { state: "operational", reason: null };
+    } else {
+      counterState = { state: "degraded", reason: "the search storage probe failed" };
+    }
+    let pushed = applyProbeReading(
+      m,
+      probeReading(probesByName.get("public_search")),
+      counterState,
+      "the live public-search probe has not recorded a sample yet",
+      "worst",
+    );
+    // The hourly Meta Ad Library probe feeds the search corpus: a red provider
+    // check caps the row at degraded even while cached results still serve.
+    const provider = probesByName.get("provider_meta");
+    if (provider?.latest) {
+      pushed.facts = [
+        ...pushed.facts,
+        `ad provider check ${provider.latest.ok ? "passed" : "failed"}${provider.latest.detail ? `: ${provider.latest.detail}` : ""}`,
+      ];
+      if (!provider.latest.ok && pushed.state === "operational") {
+        pushed = {
+          ...pushed,
+          state: "degraded",
+          reason: "the ad provider check failed; cached results still serve",
+        };
+      }
+    }
+    surfaces.push(pushed);
   }
 
   // Sign-in (one-time email link dispatch).
+  const signInSource =
+    "status_probe_samples signin_dispatch probe, better_auth_magic_link_ticket dispatch records, edge and D1 probes";
   if (!d1Ok) {
-    surfaces.push(down(base("sign-in", "Sign-in", "edge and D1 probes, better_auth_magic_link_ticket"), d1Reason));
-  } else if (signInResult.status === "fulfilled") {
-    const row = signInResult.value;
-    const m = base("sign-in", "Sign-in", "better_auth_magic_link_ticket dispatch records, edge and D1 probes");
-    m.facts = [
-      `${row.tickets24h.toLocaleString()} sign-in links requested in the last 24 hours`,
-      row.lastTicketEverAt ? `last dispatch ${ageClause(row.lastTicketEverAt, asOf)}` : null,
-      "email links share the delivery channel measured on the Email row",
-    ].filter((v): v is string => v !== null);
-    if (row.lastTicketEverAt === null) {
-      surfaces.push(degraded(m, "no sign-in link dispatch has been recorded yet"));
-    } else {
-      surfaces.push(operational(m));
-    }
+    surfaces.push(down(base("sign-in", "Sign-in", signInSource), d1Reason));
   } else {
-    surfaces.push(degraded(base("sign-in", "Sign-in", "better_auth_magic_link_ticket dispatch records, edge and D1 probes"), "the sign-in dispatch probe failed"));
+    const m = base("sign-in", "Sign-in", signInSource);
+    let counterState: { state: SurfaceState; reason: string | null } | null = null;
+    if (signInResult.status === "fulfilled") {
+      const row = signInResult.value;
+      m.facts = [
+        `${row.tickets24h.toLocaleString()} sign-in links requested in the last 24 hours`,
+        row.lastTicketEverAt ? `last dispatch ${ageClause(row.lastTicketEverAt, asOf)}` : null,
+        "email links share the delivery channel measured on the Email row",
+      ].filter((v): v is string => v !== null);
+      counterState =
+        row.lastTicketEverAt === null
+          ? { state: "degraded", reason: "no sign-in link dispatch has been recorded yet" }
+          : { state: "operational", reason: null };
+    } else {
+      counterState = { state: "degraded", reason: "the sign-in dispatch counter read failed" };
+    }
+    surfaces.push(
+      applyProbeReading(
+        m,
+        probeReading(probesByName.get("signin_dispatch")),
+        counterState,
+        "the live sign-in dispatch probe has not recorded a sample yet",
+      ),
+    );
   }
 
-  // Billing (Dodo webhook ledger + billing canary run records).
+  // Billing (Dodo canary probe + webhook ledger).
+  const billingSource =
+    "status_probe_samples billing_dodo probe, dodo_webhook_event ledger (Dodo payment events and billing self-check lock records), edge and D1 probes";
   if (!d1Ok) {
-    surfaces.push(down(base("billing", "Billing", "dodo_webhook_event ledger, edge and D1 probes"), d1Reason));
-  } else if (billingResult.status === "fulfilled") {
-    const row = billingResult.value;
-    const m = base("billing", "Billing", "dodo_webhook_event ledger (Dodo payment events and billing self-check lock records), edge and D1 probes");
-    m.facts = [
-      `${row.events24h.toLocaleString()} Dodo payment webhooks processed in the last 24 hours`,
-      row.lastEventAt ? `last payment event ${ageClause(row.lastEventAt, asOf)}` : null,
-      row.lastCanaryRunAt ? `billing self-check last ran ${ageClause(row.lastCanaryRunAt, asOf)}` : null,
-    ].filter((v): v is string => v !== null);
-    if (row.failed24h > 0) {
-      surfaces.push(degraded(m, `${row.failed24h.toLocaleString()} payment webhook events failed processing in the last 24 hours`));
-    } else {
-      surfaces.push(operational(m));
-    }
+    surfaces.push(down(base("billing", "Billing", billingSource), d1Reason));
   } else {
-    surfaces.push(degraded(base("billing", "Billing", "dodo_webhook_event ledger, edge and D1 probes"), "the billing ledger probe failed"));
+    const m = base("billing", "Billing", billingSource);
+    let counterState: { state: SurfaceState; reason: string | null } | null = null;
+    if (billingResult.status === "fulfilled") {
+      const row = billingResult.value;
+      m.facts = [
+        `${row.events24h.toLocaleString()} Dodo payment webhooks processed in the last 24 hours`,
+        row.lastEventAt ? `last payment event ${ageClause(row.lastEventAt, asOf)}` : null,
+        row.lastCanaryRunAt ? `billing self-check last ran ${ageClause(row.lastCanaryRunAt, asOf)}` : null,
+      ].filter((v): v is string => v !== null);
+      counterState =
+        row.failed24h > 0
+          ? {
+              state: "degraded",
+              reason: `${row.failed24h.toLocaleString()} payment webhook events failed processing in the last 24 hours`,
+            }
+          : { state: "operational", reason: null };
+    } else {
+      counterState = { state: "degraded", reason: "the billing ledger probe failed" };
+    }
+    surfaces.push(
+      applyProbeReading(
+        m,
+        probeReading(probesByName.get("billing_dodo")),
+        counterState,
+        "the live billing probe has not recorded a sample yet",
+        "worst",
+      ),
+    );
   }
 
   // Email delivery (digests, alerts, account mail, suppression).
@@ -453,38 +607,23 @@ export async function getPublicStatusSurfaces(
     surfaces.push(degraded(base("monitoring", "Scheduled monitoring", "watchlist_run counters, release_scheduled_observation freshness"), "the monitoring counter probe failed"));
   }
 
-  // Uptime (from the status_health_sample rail written by every cron).
+  // Uptime: the 5-minute uptime probe fetches the public homepage and
+  // /api/health over the real hostname, so the row reports the site's measured
+  // availability, not an internal heartbeat.
+  const uptimeSource =
+    "status_probe_samples uptime probe (5-minute homepage and /api/health fetches), edge and D1 probes";
   if (!d1Ok) {
-    surfaces.push(down(base("uptime", "Uptime", "status_health_sample written by every scheduled run"), d1Reason));
-  } else if (uptimeResult.status === "fulfilled") {
-    const row = uptimeResult.value;
-    const m = base("uptime", "Uptime", "status_health_sample rows written by every scheduled cron run", );
-    const pct = row.samples24h > 0 ? Math.round((row.okSamples24h / row.samples24h) * 100) : null;
-    m.checkedAt = row.lastSampleAt ?? asOf;
-    m.facts = [
-      pct === null ? null : `${pct}% of ${row.samples24h.toLocaleString()} scheduled checks passed in the last 24 hours`,
-      row.lastSampleAt ? `last sample ${ageClause(row.lastSampleAt, asOf)}` : null,
-    ].filter((v): v is string => v !== null);
-    if (row.samples24h === 0) {
-      surfaces.push(
-        degraded(
-          m,
-          row.lastSampleAt
-            ? "the health sample rail has not recorded a sample in the last 24 hours"
-            : "samples record on each scheduled run; the first one is pending",
-        ),
-      );
-    } else if (row.lastSampleAt && Date.parse(asOf) - Date.parse(row.lastSampleAt) > UPTIME_SAMPLE_MAX_AGE_MS) {
-      surfaces.push(degraded(m, "the health sample rail has not recorded a fresh sample"));
-    } else if (row.okSamples24h === 0) {
-      surfaces.push(down(m, "no scheduled check passed in the last 24 hours"));
-    } else if (pct !== null && pct < 100) {
-      surfaces.push(degraded(m, `${(row.samples24h - row.okSamples24h).toLocaleString()} scheduled check(s) failed in the last 24 hours`));
-    } else {
-      surfaces.push(operational(m));
-    }
+    surfaces.push(down(base("uptime", "Uptime", uptimeSource), d1Reason));
   } else {
-    surfaces.push(degraded(base("uptime", "Uptime", "status_health_sample written by every scheduled run"), "the uptime sample probe failed"));
+    const m = base("uptime", "Uptime", uptimeSource);
+    surfaces.push(
+      applyProbeReading(
+        m,
+        probeReading(probesByName.get("uptime")),
+        null,
+        "the live uptime probe has not recorded a sample yet",
+      ),
+    );
   }
 
   return {
@@ -670,8 +809,4 @@ async function measureEmailDelivery(env: AppEnv, dayAgoIso: string): Promise<Ema
     suppressed: Number(suppressionRow?.suppressed ?? 0),
     recipients: Number(recipientRow?.recipients ?? 0),
   };
-}
-
-async function measureUptime(env: AppEnv): Promise<StatusUptimeReading> {
-  return readStatusUptime(env);
 }

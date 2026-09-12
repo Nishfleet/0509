@@ -151,7 +151,6 @@ export const PLATFORM_TABLES: ReadonlyArray<{ table: string; reason: string }> =
   { table: "release_scheduled_observation", reason: "release ops state" },
   { table: "scheduled_observation_alert_state", reason: "ops alert state" },
   { table: "scheduled_observation_health_state", reason: "ops health state" },
-  { table: "status_health_sample", reason: "public /status uptime sample rail; cron-written service facts, no tenant data" },
   {
     table: "analysis_field",
     reason: "polymorphic scope_type/scope_id — follows its parent surface, never user-joined directly",

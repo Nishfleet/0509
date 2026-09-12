@@ -253,10 +253,10 @@ describe("status route", () => {
             id: "uptime",
             label: "Uptime",
             state: "degraded",
-            reason: "samples record on each scheduled run; the first one is pending",
+            reason: "the live uptime probe has not recorded a sample yet",
             facts: [],
             checkedAt: "2026-09-12T04:00:00.000Z",
-            source: "status_health_sample",
+            source: "status_probe_samples uptime probe",
           },
         ],
       },
@@ -266,7 +266,7 @@ describe("status route", () => {
     const markup = renderToStaticMarkup(createElement(StatusRoute));
 
     expect(markup).toContain("<strong>Down</strong>: the database probe failed.");
-    expect(markup).toContain("<strong>Degraded</strong>: samples record on each scheduled run; the first one is pending.");
+    expect(markup).toContain("<strong>Degraded</strong>: the live uptime probe has not recorded a sample yet.");
     expect(markup).not.toContain("Measurements unavailable");
     // A degraded state names its source in the title attribute.
     expect(markup).toContain("Source: edge and D1 probes");

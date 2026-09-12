@@ -64,7 +64,6 @@ import { runRetentionSweep } from "../app/lib/retention.server";
 import { runStatusProbes } from "../app/lib/status-probes.server";
 import {
   recordScheduledObservationGapCheckHeartbeat,
-  recordStatusHealthSample,
   sendScheduledObservationGapAlert,
   SCHEDULED_OBSERVATION_GAP_CHECK_CRON,
 } from "../app/lib/scheduled-observation-health.server";
@@ -454,12 +453,6 @@ export default {
       cron: controller.cron,
       scheduledTime: controller.scheduledTime,
     });
-
-    // Public /status uptime rail (issue: /status must measure, not confess):
-    // every scheduled invocation drops one health sample row (edge ran, D1
-    // answered SELECT 1; 7-day retention pruned in the same batch). Rides the
-    // existing cron triggers, so no new schedule is added.
-    ctx.waitUntil(recordStatusHealthSample(env, controller.cron));
 
     if (controller.cron === SCHEDULED_OBSERVATION_GAP_CHECK_CRON) {
       // This in-Worker check detects gaps among individual workload crons. The

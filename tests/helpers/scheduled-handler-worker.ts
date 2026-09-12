@@ -91,7 +91,6 @@ export async function loadWorker() {
     health: [],
   });
   const recordScheduledObservationGapCheckHeartbeat = vi.fn().mockResolvedValue(true);
-  const recordStatusHealthSample = vi.fn().mockResolvedValue(true);
   const sendMonthlyCustomerRecaps = vi.fn().mockResolvedValue({
     sent: 0,
     skipped: 0,
@@ -155,7 +154,6 @@ export async function loadWorker() {
   vi.doMock("../../app/lib/scheduled-observation-health.server", () => ({
     SCHEDULED_OBSERVATION_GAP_CHECK_CRON: GAP_CHECK_CRON,
     recordScheduledObservationGapCheckHeartbeat,
-    recordStatusHealthSample,
     sendScheduledObservationGapAlert,
   }));
   vi.doMock("../../app/lib/release-scheduled-observation.server", () => ({ observeScheduledTask }));
@@ -229,7 +227,6 @@ export async function loadWorker() {
     sendMonthlyReports,
     sendScheduledObservationGapAlert,
     recordScheduledObservationGapCheckHeartbeat,
-    recordStatusHealthSample,
     reconcileOrchestratedWatchlistRuns,
   };
 }
