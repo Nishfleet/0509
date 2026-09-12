@@ -152,6 +152,9 @@ export default [
   route("switch/magicbrief", "routes/switch.magicbrief.tsx"),
   route("switch/panoramata", "routes/switch.panoramata.tsx"),
   route("switch/visualping", "routes/switch.visualping.tsx"),
+  // Issue #3091: the AdSpy switch page — the documented declining incumbent
+  // (BET 8), anchored on its cited public complaints.
+  route("switch/adspy", "routes/switch.adspy.tsx"),
   route("competitor-monitoring", "routes/competitor-monitoring.tsx"),
   // Issue #2152: /guides/* how-to cluster — the honest manual/DIY/automated
   // guide for the "how to track competitor ads" query class, ending in the
@@ -223,6 +226,8 @@ export default [
     route("switch/magicbrief", "routes/$locale.switch.magicbrief.tsx"),
     route("switch/panoramata", "routes/$locale.switch.panoramata.tsx"),
     route("switch/visualping", "routes/$locale.switch.visualping.tsx"),
+    // Issue #3091: the AdSpy switch page, locale twin.
+    route("switch/adspy", "routes/$locale.switch.adspy.tsx"),
     // First-value search funnel + supporting trust/proof surfaces (issue 1578):
     // search is THE first purchase-intent moment, so the localised
     // buyer must not be flung back to EN mid-funnel. Each child re-exports

@@ -126,6 +126,7 @@ const SWITCH_PRODUCT_NAMES: Readonly<Record<string, string>> = {
   panoramata: "Panoramata",
   visualping: "Visualping",
   magicbrief: "MagicBrief",
+  adspy: "AdSpy",
 };
 
 /** Cluster card headlines for the standalone buyer surfaces. */

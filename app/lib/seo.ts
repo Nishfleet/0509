@@ -981,6 +981,9 @@ export const SITEMAP_PATHS = [
   // Issue #2887: the MagicBrief wind-down page — the one vendor whose shutdown
   // (2026-07-31, Canva Grow successor) created real switching demand.
   "/switch/magicbrief",
+  // Issue #3091: the AdSpy switch page — the declining incumbent with a cited
+  // public complaint trail (Trustpilot 2.4/5, no self-serve cancel, no API).
+  "/switch/adspy",
   "/competitor-monitoring",
   // Issue #2144: agency audience page (roster math + sourced Agency-vs-
   // Foreplay line). EN-only; no locale cluster.

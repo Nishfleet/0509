@@ -169,6 +169,7 @@ const PUBLIC_CACHEABLE_HTML_PATHS = new Set([
   "/switch/panoramata",
   "/switch/visualping",
   "/switch/magicbrief",
+  "/switch/adspy",
   "/methodology",
   "/methodology/ad-aggression-score",
 ]);
