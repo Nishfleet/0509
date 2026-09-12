@@ -1,3 +1,4 @@
+import { decodeHtmlEntities } from "~/lib/decode-html.server";
 import { evaluateConnectorAccessGate } from "~/lib/presence-access-gates.server";
 import { readResponseJsonWithinLimit } from "~/lib/bounded-response.server";
 import { presenceContentHash } from "~/lib/presence-hash";
@@ -133,10 +134,15 @@ export const hnConnector = {
     // Time-window slicing: an explicit numericFilters window (from the last
     // poll's newest createdAt) instead of deep paging. Deep paging is a
     // regression — Algolia caps retrievable results around ~1,000 per query.
+    // `created_at_i` is in SECONDS (unix epoch), so the cursor is emitted in
+    // seconds to match — a millisecond filter would sit in the far future and
+    // return zero hits forever.
     const window = readCursorWindow(cursor);
     let url =
       `${HN_SEARCH_BASE}?query=${encodeURIComponent(query)}` +
-      `&tags=${encodeURIComponent("story,comment")}` +
+      // Parenthesized OR form: Algolia's bare comma is AND, and a hit is
+      // either a story OR a comment — the conjunctive form matches nothing.
+      `&tags=${encodeURIComponent("(story,comment)")}` +
       `&hitsPerPage=${HN_HITS_PER_PAGE}` +
       `&page=0`;
     if (window !== null) {
@@ -188,16 +194,17 @@ export const hnConnector = {
 
     const hits = payload.hits;
     const items: NormalizedPresenceItem[] = [];
-    let maxCreatedAt = window ?? 0;
+    // `created_at_i` units are seconds; keep the cursor in seconds.
+    let maxCreatedAtSec = window ?? 0;
     for (const hit of hits) {
       if (!hit || typeof hit.objectID !== "string" || !hit.objectID) {
         continue;
       }
       const publishedAt = safeIsoDate(hit.created_at);
       if (publishedAt) {
-        const created = Date.parse(publishedAt);
-        if (Number.isFinite(created) && created > maxCreatedAt) {
-          maxCreatedAt = created;
+        const createdSec = Math.floor(Date.parse(publishedAt) / 1000);
+        if (Number.isFinite(createdSec) && createdSec > maxCreatedAtSec) {
+          maxCreatedAtSec = createdSec;
         }
       }
       items.push(await normalizeHit(hit, publishedAt, query));
@@ -208,7 +215,11 @@ export const hnConnector = {
       items,
       coverageLabel: "OFFICIAL_PUBLIC_API",
       costUnits: 1,
-      cursor: { lastCreatedAt: maxCreatedAt || null, query, completeSnapshot: true },
+      // NOT a complete snapshot: this is one bounded page (optionally a
+      // time-window slice) of a date-ordered search, not the full mention
+      // set. Reporting completeSnapshot here would mass-tombstone every
+      // previously-seen mention outside the newest window on the next poll.
+      cursor: { lastCreatedAt: maxCreatedAtSec > 0 ? maxCreatedAtSec : null, query, completeSnapshot: false },
     };
   },
 };
@@ -258,7 +269,9 @@ async function normalizeHit(
     null;
   const bodySource = isComment ? hit.comment_text : hit.story_text ?? hit.url ?? null;
   const excerpt =
-    typeof bodySource === "string" ? stripHtml(bodySource).slice(0, MAX_HN_EXCERPT_CHARS) : "";
+    typeof bodySource === "string"
+      ? decodeHtmlEntities(stripHtml(bodySource)).slice(0, MAX_HN_EXCERPT_CHARS)
+      : "";
   const title = storyTitle
     ? isComment
       ? `Comment on "${storyTitle}"`

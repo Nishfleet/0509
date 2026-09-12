@@ -216,7 +216,24 @@ describe("hn mention connector — poll", () => {
     expect(url.pathname).toBe(HN_SEARCH_PATH);
     expect(url.searchParams.get("numericFilters")).toBe(`created_at_i>${Math.floor(lastCreatedAt)}`);
     expect(url.searchParams.get("page")).toBe("0");
-    expect(url.searchParams.get("tags")).toBe("story,comment");
+    // Parenthesized OR form — Algolia's bare comma is AND, and a hit is
+    // either a story OR a comment, so the conjunctive form matches nothing
+    // (live-verified against the real API during review).
+    expect(url.searchParams.get("tags")).toBe("(story,comment)");
+  });
+
+  it("emits the cursor window in unix SECONDS and never claims a complete snapshot", async () => {
+    const { impl } = hnFetcher([{ match: () => true, body: algoliaBody(STORY_HIT) }]);
+    const result = await hnConnector.poll(
+      makeCtx(impl),
+      { targetUrl: null, metadata: { query: "tinystudio.io" } },
+    );
+    expect(result.ok).toBe(true);
+    // 2026-01-05T12:00:00Z in unix seconds (created_at_i units), not ms.
+    expect(result.cursor?.lastCreatedAt).toBe(1767614400);
+    // A bounded page (or window slice) of a date-ordered search is NOT a
+    // complete snapshot — true here would mass-tombstone older mentions.
+    expect(result.cursor?.completeSnapshot).toBe(false);
   });
 
   it("reports hn_unavailable on a non-2xx response and hn_parse_failed on garbage", async () => {
@@ -279,6 +296,28 @@ describe("hn mention connector — real D1 substrate", () => {
       .bind(targetId, entityId, userId, ISO_T0, ISO_T0)
       .run();
 
+    // Child rows for the rebuild's preservation assertion (0093 test pattern):
+    // a broken snapshot/restore line would otherwise pass silently.
+    const itemId = uid("pi");
+    const revId = uid("pir");
+    await db.batch([
+      db
+        .prepare(
+          `INSERT INTO presence_item (id, source_target_id, tracked_entity_id, user_id, connector_id, canonical_url, url_hash, title, content_hash, revision, observed_at, created_at)
+           VALUES (?, ?, ?, ?, 'hn', 'https://news.ycombinator.com/item?id=40000001', 'h1', 't', 'ch1', 1, ?, ?)`,
+        )
+        .bind(itemId, targetId, entityId, userId, ISO_T0, ISO_T0),
+      db
+        .prepare(`INSERT INTO presence_poll_cursor (source_target_id, updated_at) VALUES (?, ?)`)
+        .bind(targetId, ISO_T0),
+      db
+        .prepare(
+          `INSERT INTO presence_item_revision (id, presence_item_id, revision, content_hash, title, observed_at, created_at)
+           VALUES (?, ?, 1, 'ch1', 't', ?, ?)`,
+        )
+        .bind(revId, itemId, ISO_T0, ISO_T0),
+    ]);
+
     // READ path: the row is genuinely durable with connector_id = 'hn'.
     const row = await db
       .prepare(`SELECT connector_id, metadata_json FROM source_target WHERE id = ?`)
@@ -301,6 +340,27 @@ describe("hn mention connector — real D1 substrate", () => {
       .bind(targetId)
       .first<{ c: number }>();
     expect(after?.c).toBe(1);
+
+    // READ + preservation: every cascaded child row set was restored.
+    expect(
+      (await db.prepare(`SELECT count(*) AS c FROM presence_item WHERE id = ?`).bind(itemId).first<{ c: number }>())?.c,
+    ).toBe(1);
+    expect(
+      (
+        await db
+          .prepare(`SELECT count(*) AS c FROM presence_poll_cursor WHERE source_target_id = ?`)
+          .bind(targetId)
+          .first<{ c: number }>()
+      )?.c,
+    ).toBe(1);
+    expect(
+      (
+        await db
+          .prepare(`SELECT count(*) AS c FROM presence_item_revision WHERE id = ?`)
+          .bind(revId)
+          .first<{ c: number }>()
+      )?.c,
+    ).toBe(1);
 
     // The connector polls the same seeded target end-to-end (fixture fetch).
     const poll = await hnConnector.poll(

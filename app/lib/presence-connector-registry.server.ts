@@ -61,7 +61,7 @@ export async function pollPresenceTarget(
   entity: { trackingMode: "self" | "competitor" },
   options: {
     connection?: PresenceConnectorContext["connection"];
-    cursor?: { etag?: string | null; lastModified?: string | null };
+    cursor?: { etag?: string | null; lastModified?: string | null; lastCreatedAt?: number | string | null };
     fetchImpl?: typeof fetch;
   } = {},
 ): Promise<PollResult> {
