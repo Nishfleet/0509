@@ -55,7 +55,6 @@ const healthyRows = (): Record<string, Row | null> => ({
   "FROM scheduled_observation_health_state": { active_since: MONTH_AGO },
   "FROM watchlist WHERE is_active": { active: 3 },
   "FROM discovery_cache_entry": { sets: 12, freshest: FRESH },
-  "FROM rate_limit_events": { served: 5 },
   "COUNT(*) AS tickets": { tickets: 4 },
   "MAX(created_at) AS last_ticket": { last_ticket: FRESH },
   "event_type LIKE 'payment%'": { events: 2, failed: 0, last_event: FRESH },
