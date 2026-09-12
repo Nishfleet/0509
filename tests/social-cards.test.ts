@@ -9,6 +9,7 @@ import {
   canonicalUrl,
   clusterSocialCardUrl,
   compareSocialCardUrl,
+  guideSocialCardUrl,
   switchSocialCardUrl,
   timelineSocialCardUrl,
 } from "~/lib/seo";
@@ -83,6 +84,45 @@ describe("publicSeoMeta og:image override", () => {
     expect(ogImageAlt(meta)).toBe("Five to Nine vs Panoramata comparison card");
     expect(meta.find((e) => e.property === "og:image:type")?.content).toBe("image/svg+xml");
   });
+
+  it("auto-derives a page-specific guide card for /guides/<slug> pathnames (issue #3098)", async () => {
+    const { publicSeoMeta } = await import("~/lib/seo");
+    const meta = publicSeoMeta({
+      title: "How to track competitor ads | Five to Nine",
+      description: "desc",
+      pathname: "/guides/how-to-track-competitor-ads",
+    }) as readonly MetaEntry[];
+    const img = ogImage(meta);
+    expect(img).not.toBe(GENERIC_OG_IMAGE);
+    expect(img).toMatch(
+      /^https:\/\/0509\.io\/social-card\/guides\/how-to-track-competitor-ads\.png\?/,
+    );
+    expect(img).toContain("n=How+to+track+competitor+ads");
+    expect(twitterImage(meta)).toBe(img);
+    expect(ogImageAlt(meta)).toBe("How to track competitor ads — Five to Nine how-to guide");
+    expect(meta.find((e) => e.property === "og:image:type")?.content).toBe("image/png");
+  });
+
+  it("keeps the generic og-image.png on the /guides index and lets an explicit override win", async () => {
+    const { publicSeoMeta } = await import("~/lib/seo");
+    const indexMeta = publicSeoMeta({
+      title: "Guides | Five to Nine",
+      description: "desc",
+      pathname: "/guides",
+    }) as readonly MetaEntry[];
+    expect(ogImage(indexMeta)).toBe(GENERIC_OG_IMAGE);
+
+    const card = compareSocialCardUrl("panoramata");
+    const meta = publicSeoMeta({
+      title: "How to track competitor ads | Five to Nine",
+      description: "desc",
+      pathname: "/guides/how-to-track-competitor-ads",
+      ogImageUrl: card,
+      ogImageAlt: "explicit alt",
+    }) as readonly MetaEntry[];
+    expect(ogImage(meta)).toBe(card);
+    expect(ogImageAlt(meta)).toBe("explicit alt");
+  });
 });
 
 describe("social card URL builders", () => {
@@ -129,6 +169,16 @@ describe("social card URL builders", () => {
     expect(url).toContain("n=Nike");
     expect(url).toMatch(/^https:\/\/0509\.io\/social-card\/timeline\//);
   });
+
+  it("guideSocialCardUrl encodes the guide headline on the card path", () => {
+    const url = guideSocialCardUrl(
+      "how-to-track-competitor-ads",
+      "How to track competitor ads",
+    );
+    expect(url).toContain("/social-card/guides/how-to-track-competitor-ads.png?");
+    expect(url).toContain("n=How+to+track+competitor+ads");
+    expect(url).toMatch(/^https:\/\/0509\.io\/social-card\/guides\//);
+  });
 });
 
 describe("parseSocialCardPathname", () => {
@@ -168,6 +218,18 @@ describe("parseSocialCardPathname", () => {
     expect(parseSocialCardPathname("/social-card/brand/sport-footwear.svg")).toEqual({
       kind: "brand",
       slug: "sport-footwear",
+    });
+    expect(
+      parseSocialCardPathname("/social-card/guides/how-to-track-competitor-ads.png"),
+    ).toEqual({
+      kind: "guide",
+      slug: "how-to-track-competitor-ads",
+    });
+    expect(
+      parseSocialCardPathname("/social-card/guides/how-to-track-competitor-ads.svg"),
+    ).toEqual({
+      kind: "guide",
+      slug: "how-to-track-competitor-ads",
     });
   });
 
@@ -269,6 +331,28 @@ describe("publicSocialCardForRequest", () => {
     ).toBeNull();
   });
 
+  it("renders a guide card stamping the guide headline and how-to subline", () => {
+    const res = publicSocialCardForRequest(
+      new Request(
+        "https://0509.io/social-card/guides/how-to-track-competitor-ads.png?n=How+to+track+competitor+ads",
+      ),
+    );
+    expect(res?.kind).toBe("guide");
+    expect(res?.contentType).toBe("image/svg+xml; charset=utf-8");
+    expect(res?.body).toContain("How to track competitor ads");
+    expect(res?.body).toContain("How-to guide");
+    expect(res?.body).toContain("Five to Nine");
+    // Static page copy (no live-data params) — same branch as cluster cards.
+    expect(res?.cacheControl).toBe("public, max-age=86400");
+  });
+
+  it("renders a guide card from the humanized slug when n is omitted", () => {
+    const res = publicSocialCardForRequest(
+      new Request("https://0509.io/social-card/guides/how-to-monitor-meta-ad-library.png"),
+    );
+    expect(res?.body).toContain("How to monitor meta ad library");
+  });
+
   it("returns null for an unknown compare slug", () => {
     expect(
       publicSocialCardForRequest(new Request("https://0509.io/social-card/compare/unknown.svg")),
@@ -327,6 +411,29 @@ describe("every programmatic buyer surface stamps a non-generic og:image", () =>
     expect(img, `${routeId} still uses generic og-image.png`).not.toBe(GENERIC_OG_IMAGE);
     expect(img).toMatch(/^https:\/\/0509\.io\/social-card\//);
     expect(ogImageAlt(meta)).toBeTruthy();
+  });
+
+  // Route-generic sweep (issue #3098): every guides.*.<slug> route file —
+  // including guides added later — must stamp its own /social-card/guides
+  // og:image through the publicSeoMeta auto-derivation, with no per-page
+  // wiring. A route that regresses to the generic card fails here.
+  it.each(
+    readdirSync("app/routes")
+      .filter((name) => /^guides\.[^.]+\.tsx$/.test(name))
+      .map((name) => name.replace(/\.tsx$/, "")),
+  )("%s stamps a /social-card/guides og:image + alt", async (routeId) => {
+    const routeModule = (await import(`~/routes/${routeId}`)) as {
+      meta: () => readonly MetaEntry[];
+    };
+    const meta = routeModule.meta();
+    const img = ogImage(meta);
+    const slug = routeId.replace(/^guides\./, "");
+    expect(img, `${routeId} still uses generic og-image.png`).not.toBe(GENERIC_OG_IMAGE);
+    expect(img).toMatch(new RegExp(`^https://0509\\.io/social-card/guides/${slug}\\.png\\?`));
+    expect(img).toContain("n=");
+    expect(ogImageAlt(meta), `${routeId} missing og:image:alt`).toBeTruthy();
+    expect(meta.find((e) => e.property === "og:image:type")?.content).toBe("image/png");
+    expect(twitterImage(meta)).toBe(img);
   });
 });
 
