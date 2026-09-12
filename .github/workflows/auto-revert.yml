@@ -87,14 +87,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     if: github.event.workflow_run.conclusion == 'failure'
+    # Step-ID uniqueness (fleet-ops gate): inject a default for a step that
+    # declares none.
+    env:
+      FLEET_STEP_ID: unset
     steps:
       - name: Checkout main (full history for the revert)
+        id: checkout-main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
           fetch-depth: 0
 
       - name: Revert or halt
+        id: revert-or-halt
         env:
           GH_TOKEN: ${{ secrets.AUTO_REVERT_PAT || secrets.GITHUB_TOKEN }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
@@ -260,23 +266,19 @@ jobs:
             exit 1
           fi
           head_sha="$(gh api "repos/$REPO/pulls/$pr_number" --jq '.head.sha')"
-          # The gate-integrity check fires on `pull_request_target: opened`,
-          # BEFORE this attestation comment exists, so the first run of the
-          # gate on a freshly opened auto-revert PR fails as designed — the
-          # bundle has no waiver yet. The auto-revert workflow owns the
-          # waiver marker and posts it immediately, then a label flip below
-          # re-triggers the gate so it picks up the marker on its second
-          # pass. The sha binding makes the waiver invalid after any new
-          # commit, same currency property as the admin attestation.
-          #
-          # The pr_body opener and the git-revert commit subjects are
-          # delivered by this workflow (PR body above; `git revert --no-edit`
-          # produces the `Revert "..."` subject). All three signals are
-          # required by the decision script, and all three originate here,
-          # so this workflow is the only place that can synthesize a
-          # valid auto-revert attestation.
+
+          # Issue attestation comment with github.token: AUTO_REVERT_PAT is a
+          # fine-grained PAT without pull-request comment permission, so addComment
+          # aborts the whole run before the label flip and auto-merge arm fire
+          # (GraphQL: Resource not accessible by personal access token (addComment),
+          # runs 34617396984 / 34666013823 — the auto-revert path has been 100% dead
+          # since AUTO_REVERT_PAT was wired). github.token carries
+          # pull-requests: write on this repo, which is exactly the grant that
+          # addComment needs on a same-repo PR; the PAT only remains responsible
+          # for opening the PR and the auto-merge arm, which its grants already
+          # cover. One token, one purpose: least scope on each call.
           printf 'gate-integrity-auto-revert: %s\n' "$head_sha" \
-            | gh pr comment "$pr_number" --repo "$REPO" --body-file -
+            | GH_TOKEN="${{ github.token }}" gh pr comment "$pr_number" --repo "$REPO" --body-file -
           # Toggling the `auto-revert` label fires the `pull_request_target:
           # labeled` event the gate-integrity workflow listens to, so the
           # gate re-runs with the attestation comment now in the bundle.
