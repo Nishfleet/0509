@@ -629,12 +629,15 @@ SELECT
         OR json_extract(replay.metadata_json, '$.result.commercialProviderReplay.checkout.accepted') IS NOT 1
         OR json_extract(replay.metadata_json, '$.result.commercialProviderReplay.checkout.canonicalSku') IS NOT 'starter_monthly_v1'
         OR json_extract(replay.metadata_json, '$.result.commercialProviderReplay.checkout.safeHostedUrl') IS NOT 1
+        OR json_extract(replay.metadata_json, '$.result.commercialProviderReplay.agencyCheckout.accepted') IS NOT 1
+        OR json_extract(replay.metadata_json, '$.result.commercialProviderReplay.agencyCheckout.canonicalSku') IS NOT 'agency_monthly_v1'
+        OR json_extract(replay.metadata_json, '$.result.commercialProviderReplay.agencyCheckout.safeHostedUrl') IS NOT 1
         OR json_extract(replay.metadata_json, '$.result.commercialProviderReplay.planChange.previewed') IS NOT 1
         OR json_extract(replay.metadata_json, '$.result.commercialProviderReplay.planChange.tokenVerified') IS NOT 1
         OR json_extract(replay.metadata_json, '$.result.commercialProviderReplay.planChange.accepted') IS NOT 1
         OR json_extract(replay.metadata_json, '$.result.commercialProviderReplay.planChange.claimAccepted') IS NOT 1
         OR json_extract(replay.metadata_json, '$.result.commercialProviderReplay.planChange.canonicalSku') IS NOT 'agency_monthly_v1'
-        OR json_extract(replay.metadata_json, '$.result.commercialProviderReplay.syntheticCallCount') IS NOT 4
+        OR json_extract(replay.metadata_json, '$.result.commercialProviderReplay.syntheticCallCount') IS NOT 5
         OR json_extract(replay.metadata_json, '$.result.commercialProviderReplay.externalProviderCalled') IS NOT 0
         OR json_extract(replay.metadata_json, '$.result.commercialProviderReplay.entitlementReconciled') IS NOT 1)
   ) AS j5_replay_mismatch_count,

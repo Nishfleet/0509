@@ -119,6 +119,13 @@ async function invokeBillingReplay(page: Page, viewport: (typeof viewports)[numb
       canonicalSku: "starter_monthly_v1",
       safeHostedUrl: true,
     },
+    // The Agency self-serve proof: the same plan rail buys agency_monthly_v1
+    // straight off the Dodo test checkout, with no review step (issue #3165).
+    agencyCheckout: {
+      accepted: true,
+      canonicalSku: "agency_monthly_v1",
+      safeHostedUrl: true,
+    },
     planChange: {
       previewed: true,
       tokenVerified: true,
@@ -126,7 +133,7 @@ async function invokeBillingReplay(page: Page, viewport: (typeof viewports)[numb
       claimAccepted: true,
       canonicalSku: "agency_monthly_v1",
     },
-    syntheticCallCount: 4,
+    syntheticCallCount: 5,
     externalProviderCalled: false,
     entitlementReconciled: true,
   });

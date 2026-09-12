@@ -77,6 +77,7 @@ export interface J5TransitionEvidence {
 
 export interface J5CommercialProviderReplayEvidence {
   checkout: { accepted: boolean; canonicalSku: string; safeHostedUrl: boolean };
+  agencyCheckout: { accepted: boolean; canonicalSku: string; safeHostedUrl: boolean };
   planChange: { previewed: boolean; tokenVerified: boolean; accepted: boolean; canonicalSku: string };
   syntheticCallCount: number;
   externalProviderCalled: false;
@@ -455,23 +456,33 @@ async function runJ5CommercialProviderReplay(
       const customer = isObject(body?.customer) ? body.customer : null;
       const returnUrl = typeof body?.return_url === "string" ? new URL(body.return_url) : null;
       const cancelUrl = typeof body?.cancel_url === "string" ? new URL(body.cancel_url) : null;
-      if (
-        product?.product_id !== J5_PRODUCT_ID ||
-        metadataValue?.user_id !== activationUser ||
-        metadataValue?.sku !== "starter_monthly_v1" ||
-        metadataValue?.plan !== "starter" ||
-        customer?.email !== `${activationUser}@example.invalid` ||
-        returnUrl?.origin !== origin ||
-        returnUrl.pathname !== "/app/billing" ||
-        cancelUrl?.origin !== origin ||
-        cancelUrl.pathname !== "/api/billing/dodo/cancel"
-      ) {
+      const sharedContractHolds =
+        metadataValue?.user_id === activationUser &&
+        customer?.email === `${activationUser}@example.invalid` &&
+        returnUrl?.origin === origin &&
+        returnUrl.pathname === "/app/billing" &&
+        cancelUrl?.origin === origin &&
+        cancelUrl.pathname === "/api/billing/dodo/cancel";
+      // A self-serve plan checkout buys STARTER or AGENCY exactly the same
+      // way (no review step): the cart, sku and plan in the metadata must
+      // agree with the requested plan product.
+      const isStarterCheckout =
+        product?.product_id === J5_PRODUCT_ID &&
+        metadataValue?.sku === "starter_monthly_v1" &&
+        metadataValue?.plan === "starter" &&
+        metadataValue?.target_kind === "plan";
+      const isAgencyCheckout =
+        product?.product_id === J5_PLAN_CHANGE_PRODUCT_ID &&
+        metadataValue?.sku === "agency_monthly_v1" &&
+        metadataValue?.plan === "agency" &&
+        metadataValue?.target_kind === "plan";
+      if (!sharedContractHolds || !(isStarterCheckout || isAgencyCheckout)) {
         throw new Error("j5_checkout_request_contract_failed");
       }
-      calls.push("checkout");
+      calls.push(metadataValue?.plan === "agency" ? "agency_checkout" : "checkout");
       return Response.json({
-        checkout_url: `https://test.checkout.dodopayments.com/session/${mapping.viewport}`,
-        session_id: `e2e-j5-checkout-${mapping.viewport}`,
+        checkout_url: `https://test.checkout.dodopayments.com/session/${String(metadataValue?.plan)}-${mapping.viewport}`,
+        session_id: `e2e-j5-${String(metadataValue?.plan)}-checkout-${mapping.viewport}`,
       });
     }
 
@@ -508,23 +519,37 @@ async function runJ5CommercialProviderReplay(
     throw new Error("j5_commercial_provider_call_unexpected");
   };
 
+  const replaySession = {
+    user: {
+      id: activationUser,
+      email: `${activationUser}@example.invalid`,
+      name: "E2E Billing",
+    },
+    session: {
+      id: `e2e-j5-session-${mapping.viewport}`,
+      userId: activationUser,
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    },
+  };
   const checkout = await createDodo0509CheckoutSession({
     env: replayEnv,
     request,
-    session: {
-      user: {
-        id: activationUser,
-        email: `${activationUser}@example.invalid`,
-        name: "E2E Billing",
-      },
-      session: {
-        id: `e2e-j5-session-${mapping.viewport}`,
-        userId: activationUser,
-        expiresAt: new Date(Date.now() + 60_000).toISOString(),
-      },
-    },
+    session: replaySession,
     target: checkoutTarget,
     checkoutId: `e2e-j5-checkout-${mapping.viewport}`,
+    source: "e2e",
+    fetcher: controlledFetcher,
+  });
+  // The self-serve Agency proof: the same plan checkout rail buys the Agency
+  // product directly (no review step, Nish 2026-09-12) — the replay asserts
+  // the Provider test checkout accepts the agency cart and returns a hosted
+  // test.checkout.dodopayments.com URL.
+  const agencyCheckout = await createDodo0509CheckoutSession({
+    env: replayEnv,
+    request,
+    session: replaySession,
+    target: planChangeTarget,
+    checkoutId: `e2e-j5-agency-checkout-${mapping.viewport}`,
     source: "e2e",
     fetcher: controlledFetcher,
   });
@@ -569,14 +594,19 @@ async function runJ5CommercialProviderReplay(
     prorationBillingMode: "prorated_immediately",
     fetcher: controlledFetcher,
   });
-  if (calls.join(",") !== "checkout,subscription_currency,plan_change_preview,plan_change") {
+  if (calls.join(",") !== "checkout,agency_checkout,subscription_currency,plan_change_preview,plan_change") {
     throw new Error("j5_commercial_provider_call_order_failed");
   }
   return {
     checkout: {
-      accepted: checkout.sessionId === `e2e-j5-checkout-${mapping.viewport}`,
+      accepted: checkout.sessionId === `e2e-j5-starter-checkout-${mapping.viewport}`,
       canonicalSku: checkoutTarget.sku,
       safeHostedUrl: isDodoHostedCheckoutUrl(checkout.checkoutUrl),
+    },
+    agencyCheckout: {
+      accepted: agencyCheckout.sessionId === `e2e-j5-agency-checkout-${mapping.viewport}`,
+      canonicalSku: planChangeTarget.sku,
+      safeHostedUrl: isDodoHostedCheckoutUrl(agencyCheckout.checkoutUrl),
     },
     planChange: {
       previewed: previewSummary.amount === 129_900 && previewSummary.currency === "USD",

@@ -81,7 +81,7 @@ export default function PricingRoute() {
         )}
       />
       <script
-        {...jsonLdScriptProps(faqPageJsonLd(billingFaqJsonLdEntries(commercialLaunch.agencySaleOpen)))}
+        {...jsonLdScriptProps(faqPageJsonLd(billingFaqJsonLdEntries()))}
       />
       <script
         {...jsonLdScriptProps(

@@ -358,7 +358,7 @@ describe("Dodo checkout route", () => {
     expect(createDodo0509CheckoutSession).not.toHaveBeenCalled();
   });
 
-  it("holds Agency checkout until fan-out proof is documented", async () => {
+  it("lets a free user start an Agency checkout with no review step", async () => {
     const { createDodo0509CheckoutSession, validateDodo0509PlanCheckout } =
       mockCheckoutDependencies("free");
 
@@ -374,12 +374,14 @@ describe("Dodo checkout route", () => {
     } catch (response) {
       expect((response as Response).status).toBe(303);
       expect((response as Response).headers.get("Location")).toBe(
-        "/app/billing?checkout=agency-held",
+        "https://checkout.dodo.example/session",
       );
     }
 
-    expect(createDodo0509CheckoutSession).not.toHaveBeenCalled();
-    expect(validateDodo0509PlanCheckout).not.toHaveBeenCalled();
+    expect(createDodo0509CheckoutSession).toHaveBeenCalledTimes(1);
+    expect(validateDodo0509PlanCheckout).toHaveBeenCalledWith(
+      expect.objectContaining({ plan: "agency", cycle: "monthly" }),
+    );
   });
 
   it("lets a free user start a plan checkout", async () => {
