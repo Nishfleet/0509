@@ -226,6 +226,8 @@ export interface PresenceSafeFetchResult {
   etag: string | null;
   lastModified: string | null;
   notModified?: boolean;
+  /** The URL the response actually came from after following SSRF-validated redirects (null for failures). */
+  finalUrl?: string;
 }
 
 export async function presenceSafeFetch(
@@ -323,6 +325,7 @@ export async function presenceSafeFetch(
       contentType: response.headers.get("content-type"),
       etag: response.headers.get("etag"),
       lastModified: response.headers.get("last-modified"),
+      finalUrl: currentUrl.toString(),
     };
   }
 

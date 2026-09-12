@@ -228,6 +228,10 @@ export interface AppEnv {
   PRESENCE_X_MOCK?: string;
   PRESENCE_REDDIT_MOCK?: string;
   PRESENCE_LINKEDIN_MOCK?: string;
+  /** GDELT DOC 2.1 mention connector rollout: disabled | internal | pilot | ga. Defaults to disabled (gated, off by default). */
+  PRESENCE_GDELT_ROLLOUT?: string;
+  /** Deterministic fixture mode for the GDELT connector (tests/e2e): emits one fixture mention instead of hitting the API. */
+  PRESENCE_GDELT_MOCK?: string;
   X_API_BEARER_TOKEN?: string;
   REDDIT_CLIENT_ID?: string;
   REDDIT_CLIENT_SECRET?: string;
