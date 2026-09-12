@@ -114,7 +114,12 @@ async function loadWorker() {
   vi.doMock("../workers/monitoring-workflow", () => ({
     MonitoringWorkflow: class MonitoringWorkflow {},
   }));
-  vi.doMock("../workers/security-headers", () => ({
+  // Spread the real module: this suite stubs the two header FUNCTIONS, but
+  // the edge cache (issue #2950) imports the policy DATA (the cacheable path
+  // lists) from the same module — a wholesale replacement would hand it
+  // undefined sets and break every lookup.
+  vi.doMock("../workers/security-headers", async (importOriginal) => ({
+    ...(await importOriginal<object>()),
     withSecurityHeaders: vi.fn((response: Response) => response),
     generateCspNonce: vi.fn(() => "test-nonce-abc"),
   }));
