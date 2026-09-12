@@ -370,6 +370,15 @@ test.describe("public production-safe E2E smoke", { lock: "external-api" }, () =
 
     for (const path of publicPaths) {
       await gotoPublicPage(page, path);
+      if (path === "/status") {
+        // Issue #3189: the page renders its measured Core surfaces block —
+        // all six rows, the Email delivery row among them — drawn from the
+        // probe rail, never placeholder prose.
+        await expect(page.getByRole("heading", { name: "Core surfaces" })).toBeVisible();
+        await expect(page.getByText("Email delivery", { exact: true }).first()).toBeVisible();
+        await expect(page.getByText("Scheduled monitoring", { exact: true }).first()).toBeVisible();
+        await expect(page.getByText("Operational", { exact: true }).first()).toBeVisible();
+      }
       const controls = await collectVisiblePublicControls(page);
 
       for (const control of controls) {

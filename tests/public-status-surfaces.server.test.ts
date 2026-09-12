@@ -70,6 +70,7 @@ const healthyProbeRows = (): Record<string, Fixture> => ({
     { probe: "billing_dodo", ok: 1, latency_ms: 180, detail: "canary identity stable, catalog resolved, webhook signing ok", checked_at: FRESH },
     { probe: "provider_meta", ok: 1, latency_ms: 3400, detail: "14 ad cards parsed from the ad library surface", checked_at: FRESH },
     { probe: "uptime", ok: 1, latency_ms: 95, detail: "home 200/95ms, health 200/40ms", checked_at: FRESH },
+    { probe: "email_delivery", ok: 1, latency_ms: 15000, detail: "canary sent; 2/2 receipts in 75-min window", checked_at: FRESH },
   ],
   // 24h stats
   "AVG(ok) AS ok_rate": [
@@ -78,17 +79,37 @@ const healthyProbeRows = (): Record<string, Fixture> => ({
     { probe: "billing_dodo", n: 288, ok_rate: 1 },
     { probe: "provider_meta", n: 24, ok_rate: 1 },
     { probe: "uptime", n: 288, ok_rate: 1 },
+    { probe: "email_delivery", n: 48, ok_rate: 1 },
   ],
   // p50 latency over ok samples
   "ROW_NUMBER() OVER": [
     { probe: "public_search", latency_ms: 300 },
     { probe: "uptime", latency_ms: 90 },
+    { probe: "email_delivery", latency_ms: 15000 },
   ],
   // last failure per probe: none
   "s2.probe = status_probe_samples.probe AND s2.ok = 0": [],
 });
 
+/**
+ * The email-delivery canary rail (#3188): two canary sends received back in
+ * the 24h window, a healthy suppression window, and last customer alert and
+ * digest send timestamps. Key order matters: these fragments must come
+ * before healthyRows' broader keys ("GROUP BY reason" before "FROM
+ * email_suppression") so the canary queries resolve here first.
+ */
+const healthyCanaryRows = (): Record<string, Fixture> => ({
+  "FROM email_delivery_canary": [
+    { token: "tok-1", status: "received", sent_at: FRESH, received_at: FRESH, latency_ms: 21000, error: null, created_at: FRESH },
+    { token: "tok-2", status: "received", sent_at: FRESH, received_at: FRESH, latency_ms: 11000, error: null, created_at: FRESH },
+  ],
+  "GROUP BY reason": [{ reason: "bounce", n: 0 }],
+  "LIKE 'instant:%'": { last_sent_at: FRESH },
+  "LIKE 'digest:%:customer:email:%'": { last_sent_at: FRESH },
+});
+
 const healthyRows = (): Record<string, Fixture> => ({
+  ...healthyCanaryRows(),
   "SELECT MAX(started_at)": { last_started_at: FRESH },
   "SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed\n        FROM watchlist_run": { total: 31, failed: 0 },
   "FROM digest_delivery": { last_digest_sent_at: FRESH },
@@ -229,6 +250,65 @@ describe("getPublicStatusSurfaces state machine", () => {
     const email = await surfaceById(makeEnv(rows), "email");
     expect(email.state).toBe("degraded");
     expect(email.reason).toContain("3 email sends failed");
+  });
+
+  it("folds the email-delivery canary into the email row when canary receipts are recorded", async () => {
+    const email = await surfaceById(makeEnv(healthyRows()), "email");
+    expect(email.state).toBe("operational");
+    // checked-ago tracks the newest evidence (the canary receipt).
+    expect(email.checkedAt).toBe(FRESH);
+    expect(email.facts.some((fact) => fact.includes("2 of 2 live delivery checks received back in the last 24 hours (100% received)"))).toBe(true);
+    expect(email.facts.some((fact) => fact.includes("median receipt latency 21 s"))).toBe(true);
+    expect(email.facts.some((fact) => fact.includes("last receipt 1 h ago"))).toBe(true);
+    // The live email_delivery probe governs the row like every other rail.
+    expect(email.facts.some((fact) => fact.includes("100% of 48 live probe checks"))).toBe(true);
+    expect(email.facts.some((fact) => fact.includes("canary sent; 2/2 receipts"))).toBe(true);
+  });
+
+  it("caps the email row at degraded when a canary delivery failed even though the probe is green", async () => {
+    const rows = healthyRows();
+    rows["FROM email_delivery_canary"] = [
+      { token: "tok-1", status: "received", sent_at: FRESH, received_at: FRESH, latency_ms: 21000, error: null, created_at: FRESH },
+      { token: "tok-2", status: "failed", sent_at: FRESH, received_at: null, latency_ms: null, error: "provider rejected the send", created_at: FRESH },
+    ];
+    const email = await surfaceById(makeEnv(rows), "email");
+    expect(email.state).toBe("degraded");
+    expect(email.reason).toContain("1 delivery check failed in the last 24 hours");
+    expect(email.facts.some((fact) => fact.includes("last delivery check failure: provider rejected the send"))).toBe(true);
+  });
+
+  it("keeps the email row on counter evidence when the canary window is empty", async () => {
+    // Absent canary data: no fabricated rows, the digest/attempt counters
+    // carry the row and the probe-pending fact marks the rail gap.
+    const rows = healthyRows();
+    rows["FROM email_delivery_canary"] = [];
+    rows["s2.probe = status_probe_samples.probe)"] = (
+      rows["s2.probe = status_probe_samples.probe)"] as Row[]
+    ).filter((row) => row.probe !== "email_delivery");
+    rows["AVG(ok) AS ok_rate"] = (rows["AVG(ok) AS ok_rate"] as Row[]).filter(
+      (row) => row.probe !== "email_delivery",
+    );
+    const email = await surfaceById(makeEnv(rows), "email");
+    expect(email.state).toBe("operational");
+    expect(email.facts.some((fact) => fact.includes("live delivery checks received back"))).toBe(false);
+    expect(email.facts.some((fact) => fact.includes("the live email-delivery probe has not recorded a sample yet"))).toBe(true);
+  });
+
+  it("marks email delivery down when the email_delivery probe is red across the window", async () => {
+    const rows = healthyRows();
+    rows["s2.probe = status_probe_samples.probe)"] = (
+      rows["s2.probe = status_probe_samples.probe)"] as Row[]
+    ).map((row) =>
+      row.probe === "email_delivery"
+        ? { ...row, ok: 0, detail: "loop degraded: sends with zero receipts" }
+        : row,
+    );
+    rows["AVG(ok) AS ok_rate"] = (rows["AVG(ok) AS ok_rate"] as Row[]).map((row) =>
+      row.probe === "email_delivery" ? { ...row, n: 3, ok_rate: 0 } : row,
+    );
+    const email = await surfaceById(makeEnv(rows), "email");
+    expect(email.state).toBe("down");
+    expect(email.reason).toContain("loop degraded: sends with zero receipts");
   });
 
   it("carries the suppression count and recipient base as measured facts", async () => {
