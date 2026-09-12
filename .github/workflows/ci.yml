@@ -105,6 +105,34 @@ jobs:
           fi
       - name: Build
         run: npm run build
+      - name: npm audit (high gate)
+        # Standing rule from issue #2970: nothing fails silently. A high-or-above
+        # advisory in the dependency tree fails this required check.
+        #
+        # Deliberately NOT `--omit=dev`: the four advisories #2970 was opened
+        # for (sharp, browserslist, baseline-browser-mapping,
+        # @simplewebauthn/server) are dev/transitive in this lockfile, so an
+        # --omit=dev run cannot see sharp or browserslist at all and the gate
+        # would be decorative for the very class it exists to catch. Measured:
+        # with the vulnerable sharp 0.35.3 pinned, `--omit=dev --audit-level=high`
+        # exits 0 while `--audit-level=high` exits 1. The production-only view is
+        # still printed below as signal, not used as the gate.
+        #
+        # This step lives in codex-node-checks (shard 1) rather than in
+        # dependabot-critical-check on purpose. That job carries an extra
+        # `vulnerability-alerts: read` permission, which makes it the one job in
+        # this workflow that CodeQL's cache-poisoning/poisonable-step query
+        # (CWE-349, high) reports for running a package-manager command after a
+        # dynamic-ref checkout under workflow_dispatch. Shard 1 already installs
+        # dependencies, already runs npm, is already a required context, and is
+        # not reported — so the audit runs here and the sink is removed rather
+        # than suppressed or regex-shaped around.
+        run: |
+          set -euo pipefail
+          echo '::group::production dependencies (--omit=dev, informational)'
+          npm audit --omit=dev || true
+          echo '::endgroup::'
+          npm audit --audit-level=high
       - name: Test (shard 1 of ${{ env.VITEST_TOTAL_SHARDS }})
         run: |
           set -euo pipefail
@@ -412,34 +440,6 @@ jobs:
           if git symbolic-ref --quiet HEAD >/dev/null 2>&1; then
             exit 1
           fi
-      # Audit with NO install and NO setup-node on purpose. This is the only
-      # ci.yml job that also uses ${{ github.token }}, so it is the only one
-      # where a cache-writing step is a CodeQL cache-poisoning (CWE-349) sink:
-      # the job checks out attacker-influenced code at a dynamic ref under
-      # workflow_dispatch, and a following step that writes the npm cache
-      # (npm ci writes ~/.npm/_cacache, which is on the runner's cache paths)
-      # poisons the cache the DEFAULT BRANCH later reads. That was the high
-      # alert this job's first edition shipped (0509#2970). `npm audit` reads
-      # package.json + package-lock.json and the registry directly and needs
-      # no node_modules, so dropping the install removes the sink rather than
-      # suppressing it. The other jobs' caches stay: they carry no token.
-      - name: npm audit (high gate)
-        # Standing rule: nothing fails silently (issue #2970). A high-or-above
-        # vulnerability fails this required check.
-        #
-        # Deliberately NOT `--omit=dev`: the four advisories this issue was
-        # opened for (sharp, browserslist, baseline-browser-mapping,
-        # @simplewebauthn/server) are dev/transitive in this lockfile, so an
-        # --omit=dev run cannot see sharp or browserslist at all and the gate
-        # would be decorative for the very class it exists to catch. The
-        # production-only view is still printed, as signal, not as the gate.
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo '::group::production dependencies (--omit=dev, informational)'
-          npm audit --omit=dev || true
-          echo '::endgroup::'
-          npm audit --audit-level=high
       - name: Query open critical Dependabot alerts on direct deps
         shell: bash
         env:
