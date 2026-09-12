@@ -1006,6 +1006,10 @@ export const SITEMAP_PATHS = [
   "/compare/bigspy",
   "/compare/minea",
   "/compare/poweradspy",
+  // Issue #3302: SneakerPing — verified live 2026-09-12 (sneakerping.com 200,
+  // 40+ stores positioning, public market study). The sneaker-resale cluster's
+  // compare surface.
+  "/compare/sneakerping",
   // BET 8 switch/intent pages (issue #2081). Production /sitemap.xml is
   // buildSitemapXml → ROOT_SITEMAP_STATIC_ENTRIES, which is this list minus
   // locale prefixes. lastmod is deliberately omitted: these pages have no
