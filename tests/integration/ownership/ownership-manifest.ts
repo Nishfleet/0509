@@ -129,6 +129,11 @@ export const PLATFORM_TABLES: ReadonlyArray<{ table: string; reason: string }> =
   { table: "pricing_region_preference", reason: "personal UI preference" },
   { table: "signup_source_pending", reason: "marketing attribution" },
   { table: "rate_limit_events", reason: "infra rate-limit log" },
+  {
+    table: "email_suppression",
+    reason:
+      "platform deliverability ledger keyed by recipient address only, not by owner (issue #2983); no user or workspace column, so an address suppressed once is suppressed for every sender",
+  },
   { table: "e2e_test_mode", reason: "infra test sentinel" },
   { table: "retention_sweep_state", reason: "ops sweep state" },
   { table: "monitoring_concurrency_slot", reason: "infra concurrency lease" },
