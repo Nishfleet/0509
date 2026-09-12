@@ -412,11 +412,17 @@ jobs:
           if git symbolic-ref --quiet HEAD >/dev/null 2>&1; then
             exit 1
           fi
+      # No `cache:` here on purpose: this is the only ci.yml job that also
+      # uses ${{ github.token }}, and CodeQL's cache-poisoning (security) query
+      # flags exactly that combination — privileged checkout at a dynamic ref
+      # plus an Actions-cache write in a workflow_dispatch-triggered job
+      # (the alert this job's first edition shipped, 0509#2970). The other
+      # jobs' caches stay: they carry no token. This job is a single 31s
+      # audit; the npm cache bought nothing. Same cure as bcb37e0 (2026-08-26,
+      # "drop the actions/cache steps to clear CodeQL cache-poisoning alerts").
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: ".node-version"
-          cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' && 'npm' || '' }}
-          package-manager-cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' }}
       - name: npm audit production deps (high gate)
         # Standing rule: nothing fails silently (issue #2970). A high-or-above
         # vulnerability in production dependencies fails this required check.
