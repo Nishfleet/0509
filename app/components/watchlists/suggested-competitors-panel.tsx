@@ -144,12 +144,30 @@ export function SuggestedCompetitorsPanel(props: {
                 </p>
               </div>
               {props.caps.frozen ? (
-                <p
-                  className="f9-evidence-micro f9-evidence-suggested-frozen"
-                  data-test="suggested-frozen"
-                >
-                  Snapshot — upgrade to track these
-                </p>
+                <div className="f9-evidence-suggested-actions">
+                  <p
+                    className="f9-evidence-micro f9-evidence-suggested-frozen"
+                    data-test="suggested-frozen"
+                  >
+                    Snapshot — upgrade to track these
+                  </p>
+                  {/* Free can still remove a row: the issue's "one-tap remove"
+                      does not consume a watchlist slot, and a snapshot the
+                      customer cannot prune is worse than no snapshot. */}
+                  <Form method="post" className="f9-evidence-suggested-dismiss-form">
+                    <input name="intent" type="hidden" value={DISMISS_INTENT} />
+                    <input name="candidateId" type="hidden" value={row.candidateId} />
+                    <SubmitButton
+                      className="f9-evidence-cta f9-evidence-cta--quiet"
+                      pending={
+                        props.pending && props.pendingDismissCandidateId === row.candidateId
+                      }
+                      pendingLabel="Removing…"
+                    >
+                      Remove
+                    </SubmitButton>
+                  </Form>
+                </div>
               ) : (
                 <div className="f9-evidence-suggested-actions">
                   <Form method="post" className="f9-evidence-suggested-accept-form">

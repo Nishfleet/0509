@@ -116,8 +116,11 @@ export default defineConfig({
       // bl0\d+ pattern silently misses lettered ids such as bl033a.
       // `home-hero-viewport` (BET 9 / #1277) locks the first-viewport hero
       // composition on the same local fixture server.
+      // `suggested-competitors` (#3175, epic #3172 slice 2) needs the seeded
+      // discovery cache to assert >=5 auto-populated suggestions with a why
+      // and a source, so it rides the same authenticated fixture server.
       testMatch:
-          /(local-authenticated|surface-audit|home-hero-viewport|search-empty-state|ticker-belt-overflow|bl030-capture|bl031-capture|bl032-capture|bl033a-capture|bl033b-capture|bl034-capture|bl037-capture|bl038-capture|bl039-capture|bl040-capture|bl041-capture|bl042-capture)\.spec\.ts/,
+          /(local-authenticated|surface-audit|home-hero-viewport|search-empty-state|suggested-competitors|ticker-belt-overflow|bl030-capture|bl031-capture|bl032-capture|bl033a-capture|bl033b-capture|bl034-capture|bl037-capture|bl038-capture|bl039-capture|bl040-capture|bl041-capture|bl042-capture)\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         baseURL: localBaseURL,

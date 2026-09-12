@@ -874,18 +874,40 @@ async function handleDismissSuggestedCompetitorAction(
     };
   }
 
-  // Re-validate against the LIVE panel so a stale id cannot write a dismissal
-  // for a row the customer is not looking at. A row that has already gone is
-  // still a successful removal from the customer's point of view, so the
-  // unknown case is reported plainly rather than as a hard failure.
-  const { loadSuggestedCompetitorsPanel } = await import(
-    "~/lib/auto-competitor-suggested-loader.server"
+  // Re-validate against the LIVE seed output (not the panel's VISIBLE rows):
+  // the panel slices rows to the plan's visible cap, so validating against it
+  // would make a suggestion below the cap impossible to remove by any means
+  // (#3175 review). The seed is the same derivation the panel uses, just
+  // unsliced. A row that has already gone is still a successful removal from
+  // the customer's point of view, so the unknown case is reported plainly
+  // rather than as a hard failure.
+  const { seedAutoCompetitors, buildCandidateId } = await import(
+    "~/lib/auto-competitor-seed.server"
   );
-  const { getUserPlan } = await import("~/lib/plan.server");
-  const plan = await getUserPlan(env, workspaceUserId);
-  const panel = await loadSuggestedCompetitorsPanel(env, workspaceUserId, plan);
-  const row = panel?.rows.find((entry) => entry.candidateId === candidateId) ?? null;
-  if (!row) {
+  const { getWorkspaceBranding } = await import(
+    "~/lib/data/workspace-branding.server"
+  );
+  const { registrableDomainFromLandingPage } = await import(
+    "~/lib/competitor-website"
+  );
+  const branding = await getWorkspaceBranding(env, workspaceUserId);
+  const selfDomain = branding.brandWebsite
+    ? registrableDomainFromLandingPage(branding.brandWebsite)
+    : null;
+  if (!selfDomain) {
+    return {
+      ok: false,
+      error: "candidate_unknown",
+      message: "Add your brand's website first — suggestions are derived from it.",
+    };
+  }
+  const candidates = await seedAutoCompetitors(env, {
+    domain: selfDomain,
+    country: "all",
+    userId: workspaceUserId,
+  });
+  const candidate = candidates.find((entry) => buildCandidateId(entry) === candidateId) ?? null;
+  if (!candidate) {
     return {
       ok: false,
       error: "candidate_unknown",
@@ -895,15 +917,17 @@ async function handleDismissSuggestedCompetitorAction(
 
   await dismissCompetitorSuggestion(env, {
     userId: workspaceUserId,
-    candidateKey: row.candidateId,
-    candidateDomain: row.landingPageUrl,
-    candidateLabel: row.advertiser,
+    candidateKey: candidateId,
+    // The column is documented as the REGISTRABLE DOMAIN, not a URL, so the
+    // domain-fallback match can use it (#3175 review).
+    candidateDomain: candidate.registrableDomain,
+    candidateLabel: candidate.advertiser,
   });
 
   return {
     ok: true,
-    message: `Removed ${row.advertiser}. We won't suggest it again.`,
-    dismissedCandidateId: row.candidateId,
+    message: `Removed ${candidate.advertiser}. We won't suggest it again.`,
+    dismissedCandidateId: candidateId,
   };
 }
 
