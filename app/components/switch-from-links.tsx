@@ -13,7 +13,9 @@ import { SWITCH_PAGES, SWITCH_SLUGS, type SwitchSlug } from "~/lib/switch-pages"
  * 2. `<SwitchFromStrip>` — the same links wrapped in a `<nav>` cross-link
  *    strip rendered directly under the H1 on `/search` and
  *    `/competitor-monitoring`, the two high-traffic BET 5 surfaces whose
- *    headers do not carry the `ld-nav-links` row.
+ *    headers do not carry the `ld-nav-links` row. In the strip the label
+ *    carries the preposition ("Switch from"), so each link renders the bare
+ *    product name — never a doubled "from from".
  *
  * No link is gated behind JS, sign-in, or a cookie banner — they are plain
  * `<Link>`s in server-rendered markup.
@@ -34,8 +36,10 @@ export function SwitchFromLinks() {
 }
 
 /**
- * A standalone `<nav>` cross-link strip with the three "from <tool>" links,
- * placed directly under the H1 on `/search` and `/competitor-monitoring`.
+ * A standalone `<nav>` cross-link strip for the switch pages, placed directly
+ * under the H1 on `/search` and `/competitor-monitoring`. The label span
+ * carries the preposition ("Switch from") and each link renders only the
+ * product name, so the strip reads "Switch from Panoramata Visualping …".
  * Mirrors the `ld-hero-callouts` pattern on the home page: a small inline
  * strip that surfaces the switch pages without a footer scroll.
  */
@@ -47,7 +51,7 @@ export function SwitchFromStrip() {
         const page = SWITCH_PAGES[slug];
         return (
           <Link key={slug} className="ld-switch-from-link" to={page.pathname}>
-            from {page.productName}
+            {page.productName}
           </Link>
         );
       })}

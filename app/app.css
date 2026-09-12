@@ -4173,9 +4173,10 @@ one signal-green accent.
 }
 
 /* Inline cross-link strip under the H1 on /search and /competitor-monitoring
-   (issue #1466). A small always-visible row of the three "from <tool>" links,
-   mirroring the .ld-hero-callouts pattern on the home page. No JS, no hover,
-   no auth — plain server-rendered links visible 360–1440px. */
+   (issue #1466). A small always-visible row: a "Switch from" label plus one
+   link per switch page named by product, mirroring the .ld-hero-callouts
+   pattern on the home page. No JS, no hover, no auth — plain server-rendered
+   links visible 360–1440px. */
 .ld-switch-from {
   display: flex;
   flex-wrap: wrap;
@@ -4211,7 +4212,7 @@ one signal-green accent.
 
   /* Release Gate-B journey-2 enforces a 44x44px minimum touch target on
      phone viewports (e2e/helpers/release-experience.ts). Keep the plain
-     inline strip, but give each "from <tool>" switch link a real tap area. */
+     inline strip, but give each switch link a real tap area. */
   .ld-switch-from-link {
     display: inline-flex;
     align-items: center;
