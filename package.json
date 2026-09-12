@@ -44,6 +44,7 @@
     "gate-c:soak:finalize": "node scripts/gate-c-soak.mjs finalize",
     "gate-c:soak:restore": "node scripts/release-evidence-archive.mjs restore",
     "check:public-home": "node scripts/check-public-home-current.mjs",
+    "check:d1:duplicate-migration-prefixes": "node scripts/check-duplicate-migration-prefixes.mjs",
     "check:google-oauth-branding": "node scripts/check-google-oauth-branding.mjs",
     "check:d1:workspace-memberships": "node scripts/check-workspace-member-invariants.mjs",
     "check:d1:partial-refunds": "node scripts/check-partial-refund-invariants.mjs",
