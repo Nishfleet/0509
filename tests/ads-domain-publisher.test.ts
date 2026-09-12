@@ -499,6 +499,9 @@ describe("ads-domain-publisher.mjs (script module)", () => {
     expect(typeof mod.probeDomain).toBe("function");
     expect(typeof mod.loadSeedList).toBe("function");
     expect(exitSpy).not.toHaveBeenCalled();
+    // The unfixed script's import path also prints the usage error via
+    // console.error before process.exit(1) — neither may happen at import.
+    expect(errorSpy).not.toHaveBeenCalled();
   });
 
   // M55: any non-429 HTTP error must become a "failed" outcome, not fall
