@@ -14,7 +14,7 @@ const watchlist: WatchlistRecord = {
   targetCountry: null,
   isActive: true,
   lastScannedAt: null,
-  createdAt: "2026-03-01T00:00:00.000Z",
+  createdAt: "2026-03-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
   updatedAt: "2026-03-01T00:00:00.000Z",
 };
 

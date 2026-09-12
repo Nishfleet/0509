@@ -93,7 +93,7 @@ describe("Dodo hosted-checkout cancel clears checkout_pending (issue #2259)", ()
         `INSERT INTO user_plan (user_id, plan, dodo_status, plan_updated_at)
        VALUES (?, 'starter', 'active', ?)`,
       )
-      .bind(seededUserId, "2026-01-01T00:00:00.000Z")
+      .bind(seededUserId, "2026-01-01T00:00:00.000Z") // fixed-date: historical fixture (issue #3215 sweep)
       .run();
 
     const response = await callCancelLoader();

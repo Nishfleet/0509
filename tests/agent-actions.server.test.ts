@@ -17,7 +17,7 @@ function auditRecord(input: Partial<AgentActionAuditRecord> = {}): AgentActionAu
     errorCode: null,
     errorMessage: null,
     metadata: {},
-    createdAt: "2026-06-19T00:00:00.000Z",
+    createdAt: "2026-06-19T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     updatedAt: "2026-06-19T00:00:00.000Z",
     ...input,
   };
@@ -417,7 +417,7 @@ describe("runAuditedAgentAction", () => {
     const existing = auditRecord({
       status: "started",
       actionName: "support_case.create",
-      updatedAt: "2026-06-19T00:00:00.000Z",
+      updatedAt: "2026-06-19T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     });
     const completed = auditRecord({
       status: "succeeded",
@@ -623,7 +623,9 @@ function seedRetryableAudit(
       idempotency_key, status, result_json, error_code, error_message,
       metadata_json, created_at, updated_at
     ) VALUES (?, 'user-1', ?, 'support_case.create', 'support_case', 'case-1', ?, ?,
+      -- fixed-date: historical fixture (issue #3215 sweep)
       '{"ok":false}', 'support_notification_failed', 'Operator notification failed.',
+      -- fixed-date: historical fixture (issue #3215 sweep)
       '{"source":"mcp"}', '2026-06-18T00:00:00.000Z', ?)
   `).run(input.id, input.apiKeyId, `support-retry-${input.id}`, input.status, input.updatedAt);
 }
@@ -636,7 +638,7 @@ describe("reclaimRetryableAgentActionAudit", () => {
         id: "audit-failed",
         apiKeyId: "api-key-1",
         status: "failed",
-        updatedAt: "2026-06-20T00:00:00.000Z",
+        updatedAt: "2026-06-20T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       });
       const { reclaimRetryableAgentActionAudit } = await import(
         "~/lib/data/customer-api-agent.server"
@@ -680,7 +682,7 @@ describe("reclaimRetryableAgentActionAudit", () => {
         id: "audit-stale",
         apiKeyId: "api-key-1",
         status: "started",
-        updatedAt: "2026-06-18T00:00:00.000Z",
+        updatedAt: "2026-06-18T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       });
       const { reclaimRetryableAgentActionAudit } = await import(
         "~/lib/data/customer-api-agent.server"
@@ -712,7 +714,7 @@ describe("reclaimRetryableAgentActionAudit", () => {
         errorCode: null,
         errorMessage: null,
       });
-      expect(staleClaim?.updatedAt).not.toBe("2026-06-18T00:00:00.000Z");
+      expect(staleClaim?.updatedAt).not.toBe("2026-06-18T00:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
       expect(staleLoser).toBeNull();
       expect(harness.sqlite.prepare(`
         SELECT status, result_json, error_code, error_message, updated_at
@@ -733,7 +735,7 @@ describe("reclaimRetryableAgentActionAudit", () => {
   it("rejects an old owner after reclaim while the current owner completes", async () => {
     const harness = createAgentActionAuditHarness();
     try {
-      const oldLeaseToken = "2026-06-18T00:00:00.000Z";
+      const oldLeaseToken = "2026-06-18T00:00:00.000Z"; // fixed-date: historical fixture (issue #3215 sweep)
       seedRetryableAudit(harness, {
         id: "audit-stale-owner",
         apiKeyId: "api-key-1",
@@ -801,13 +803,13 @@ describe("reclaimRetryableAgentActionAudit", () => {
         id: "audit-keyed",
         apiKeyId: "api-key-1",
         status: "failed",
-        updatedAt: "2026-06-18T00:00:00.000Z",
+        updatedAt: "2026-06-18T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       });
       seedRetryableAudit(harness, {
         id: "audit-null-key",
         apiKeyId: null,
         status: "failed",
-        updatedAt: "2026-06-18T00:00:00.000Z",
+        updatedAt: "2026-06-18T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       });
       const { reclaimRetryableAgentActionAudit } = await import(
         "~/lib/data/customer-api-agent.server"

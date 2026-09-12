@@ -111,7 +111,7 @@ function snapshotRow(overrides: Partial<TimelineSitemapRow> = {}): TimelineSitem
   return {
     id: "snap-nykaa-001",
     canonical_url: "https://nykaa.com/glow-serum",
-    captured_at: "2026-08-01T10:00:00.000Z",
+    captured_at: "2026-08-01T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     artifact_key: HTML_KEY,
     metadata_json: JSON.stringify({ screenshotArtifactKey: SCREENSHOT_KEY }),
     is_ad_destination: 0,
@@ -996,7 +996,7 @@ describe("indexableTimelineEntriesFromRows", () => {
     // loadOfferTimeline's SQL); "newest" within the loader's per-domain window
     // is therefore the LAST row in the ASC-sorted set.
     const rows = [
-      snapshotRow({ captured_at: "2026-08-01T10:00:00.000Z" }),
+      snapshotRow({ captured_at: "2026-08-01T10:00:00.000Z" }), // fixed-date: historical fixture (issue #3215 sweep)
       snapshotRow({ captured_at: "2026-08-10T08:00:00.000Z" }),
     ];
 
@@ -1012,7 +1012,7 @@ describe("indexableTimelineEntriesFromRows", () => {
     // capture still renders an indexable ledger. Input is ASC (loader order);
     // the newest capture (2026-08-20) appears LAST in the ASC input.
     const rows = [
-      snapshotRow({ captured_at: "2026-08-01T10:00:00.000Z" }),
+      snapshotRow({ captured_at: "2026-08-01T10:00:00.000Z" }), // fixed-date: historical fixture (issue #3215 sweep)
       snapshotRow({ captured_at: "2026-08-20T08:00:00.000Z", artifact_key: null }),
     ];
 
@@ -1029,7 +1029,7 @@ describe("indexableTimelineEntriesFromRows", () => {
   // would render empty → 410). Rows past the window are unreachable on the
   // route, so they cannot back a sitemap entry either.
   it("excludes a domain whose only passing rows fall outside the loader's per-domain TIMELINE_SNAPSHOT_LIMIT window", () => {
-    const baseDayMs = Date.UTC(2026, 0, 1); // 2026-01-01T00:00:00.000Z
+    const baseDayMs = Date.UTC(2026, 0, 1); // 2026-01-01T00:00:00.000Z // fixed-date: historical fixture (issue #3215 sweep)
     const dayAt = (dayIndex: number) =>
       new Date(baseDayMs + dayIndex * DAY_MS).toISOString();
     const backfillRow = (dayIndex: number): TimelineSitemapRow =>
@@ -1078,19 +1078,19 @@ describe("indexableTimelineEntriesFromRows", () => {
     // window, so the whole bucket enters the window. The proof gate accepts
     // the middle row, so /timeline/hubspot.com lists with lastmod = the
     // passing row's date.
-    const passingCapturedAt = "2026-08-10T08:00:00.000Z";
+    const passingCapturedAt = "2026-08-10T08:00:00.000Z"; // fixed-date: historical fixture (issue #3215 sweep)
     const rows = [
       snapshotRow({
         id: "snap-hubspot-backfill-1",
         canonical_url: "https://hubspot.com/landing",
-        captured_at: "2026-08-01T08:00:00.000Z",
+        captured_at: "2026-08-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         artifact_key: null,
         metadata_json: JSON.stringify({ backfill: true }),
       }),
       snapshotRow({
         id: "snap-hubspot-backfill-2",
         canonical_url: "https://hubspot.com/landing",
-        captured_at: "2026-08-05T08:00:00.000Z",
+        captured_at: "2026-08-05T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         artifact_key: null,
         metadata_json: JSON.stringify({ backfill: true }),
       }),
@@ -1103,14 +1103,14 @@ describe("indexableTimelineEntriesFromRows", () => {
       snapshotRow({
         id: "snap-hubspot-backfill-3",
         canonical_url: "https://hubspot.com/landing",
-        captured_at: "2026-08-15T08:00:00.000Z",
+        captured_at: "2026-08-15T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         artifact_key: null,
         metadata_json: JSON.stringify({ backfill: true }),
       }),
       snapshotRow({
         id: "snap-hubspot-backfill-4",
         canonical_url: "https://hubspot.com/landing",
-        captured_at: "2026-08-20T08:00:00.000Z",
+        captured_at: "2026-08-20T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         artifact_key: null,
         metadata_json: JSON.stringify({ backfill: true }),
       }),
@@ -1137,19 +1137,19 @@ describe("indexableTimelineEntriesFromRows", () => {
       snapshotRow({
         id: "snap-adspyder-1",
         canonical_url: "https://adspyder.io/landing",
-        captured_at: "2026-08-01T08:00:00.000Z",
+        captured_at: "2026-08-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         is_ad_destination: 1,
       }),
       snapshotRow({
         id: "snap-adspyder-2",
         canonical_url: "https://adspyder.io/landing",
-        captured_at: "2026-08-10T08:00:00.000Z",
+        captured_at: "2026-08-10T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         is_ad_destination: 1,
       }),
       snapshotRow({
         id: "snap-adspyder-3",
         canonical_url: "https://adspyder.io/landing",
-        captured_at: "2026-08-20T08:00:00.000Z",
+        captured_at: "2026-08-20T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         is_ad_destination: 1,
       }),
     ];
@@ -1540,19 +1540,19 @@ describe("SITEMAP_PATHS", () => {
         path: "/ads/nykaa.com",
         lastmod: "2026-08-21",
         adCount: 3,
-        fetchedAt: "2026-08-21T10:00:00.000Z",
+        fetchedAt: "2026-08-21T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       },
       {
         path: "/ads/meesho.com",
         lastmod: "2026-08-20",
         adCount: 2,
-        fetchedAt: "2026-08-20T10:00:00.000Z",
+        fetchedAt: "2026-08-20T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       },
       {
         path: "/ads/mamaearth.in",
         lastmod: "2026-08-19",
         adCount: 4,
-        fetchedAt: "2026-08-19T10:00:00.000Z",
+        fetchedAt: "2026-08-19T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       },
     ]);
     const indexableLocs = [...xml.matchAll(
@@ -1603,19 +1603,19 @@ describe("every dynamic sitemap URL carries an honest lastmod (issue #2031)", ()
   }
 
   it("renders a W3C lastmod on every /ads and /timeline URL, and a known-stale domain's lastmod is older than a fresh one's", () => {
-    const now = new Date("2026-09-08T12:00:00.000Z");
+    const now = new Date("2026-09-08T12:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
     // Fresh capture: 6 hours old, carries real verified-linked ads for its own
     // domain. Stale capture: 5 days old (still inside the 7-day indexability
     // window, so it stays listed) but clearly older than the fresh one.
     const fresh = cacheRow({
       cache_key: "search-v2:domain:fresh.com:exact:meta_library_browser:all:page-1",
       payload: { ...basePayload, displayDomain: "fresh.com", ads: [domainAd("fresh.com")] },
-      fetched_at: "2026-09-08T06:00:00.000Z",
+      fetched_at: "2026-09-08T06:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     });
     const stale = cacheRow({
       cache_key: "search-v2:domain:stale.com:exact:meta_library_browser:all:page-1",
       payload: { ...basePayload, displayDomain: "stale.com", ads: [domainAd("stale.com")] },
-      fetched_at: "2026-09-03T06:00:00.000Z",
+      fetched_at: "2026-09-03T06:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     });
 
     const brandEntries = indexableBrandPageEntriesFromRows([fresh, stale], now, {
@@ -1623,7 +1623,7 @@ describe("every dynamic sitemap URL carries an honest lastmod (issue #2031)", ()
       useDomainV2: true,
     });
     const timelineEntries = indexableTimelineEntriesFromRows([
-      snapshotRow({ id: "snap-stale-001", canonical_url: "https://stale.com/landing", captured_at: "2026-09-03T06:00:00.000Z" }),
+      snapshotRow({ id: "snap-stale-001", canonical_url: "https://stale.com/landing", captured_at: "2026-09-03T06:00:00.000Z" }), // fixed-date: historical fixture (issue #3215 sweep)
       snapshotRow({ id: "snap-fresh-001", canonical_url: "https://fresh.com/landing", captured_at: "2026-09-08T06:00:00.000Z" }),
     ]);
 

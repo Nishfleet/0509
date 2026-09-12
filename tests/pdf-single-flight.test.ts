@@ -80,19 +80,19 @@ describe("share PDF single-flight lease", () => {
 
   it("ignores volatile generated/token wrappers but preserves material evidence", async () => {
     const first = await reportPdfContentFingerprint({
-      generatedAt: "2026-07-15T00:00:00.000Z",
+      generatedAt: "2026-07-15T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       token: "token-a",
       evidence: { sourceUrl: "https://example.com", headline: "Offer" },
       branding: { brandName: "Acme" },
     });
     const equivalent = await reportPdfContentFingerprint({
-      generatedAt: "2026-07-16T00:00:00.000Z",
+      generatedAt: "2026-07-16T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       token: "token-b",
       evidence: { sourceUrl: "https://example.com", headline: "Offer" },
       branding: { brandName: "Acme" },
     });
     const changedEvidence = await reportPdfContentFingerprint({
-      generatedAt: "2026-07-16T00:00:00.000Z",
+      generatedAt: "2026-07-16T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       token: "token-b",
       evidence: { sourceUrl: "https://example.com", headline: "New offer" },
       branding: { brandName: "Acme" },

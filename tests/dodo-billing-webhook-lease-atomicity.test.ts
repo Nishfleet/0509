@@ -103,7 +103,7 @@ describe("Dodo billing atomicity (sqlite)", () => {
   it("keeps a stale provider lease retryable while the billing canary blocks reclaim", async () => {
     const env = openEnv();
     const harness = fixtures[0]!;
-    const staleStartedAt = "2000-01-01T00:00:00.000Z";
+    const staleStartedAt = "2000-01-01T00:00:00.000Z"; // fixed-date: historical fixture (issue #3215 sweep)
     harness.sqlite.prepare(`
       INSERT INTO dodo_webhook_event (
         event_id, event_type, user_id, received_at, outcome,
@@ -197,7 +197,7 @@ describe("Dodo billing atomicity (sqlite)", () => {
     `).run(
       lockId,
       "user-1",
-      "2000-01-01T00:00:00.000Z",
+      "2000-01-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       "2000-01-01T00:00:00.000Z",
       JSON.stringify({ action: "billing_canary_active" }),
     );
@@ -281,7 +281,7 @@ describe("Dodo billing atomicity (sqlite)", () => {
     })).toEqual({ status: "claimed" });
     harness.sqlite.prepare(
       "UPDATE dodo_webhook_event SET processing_started_at = ? WHERE event_id = ?",
-    ).run("2000-01-01T00:00:00.000Z", oldLockId);
+    ).run("2000-01-01T00:00:00.000Z", oldLockId); // fixed-date: historical fixture (issue #3215 sweep)
     expect(await beginDodoWebhookEventProcessing(env, {
       eventId: newLockId,
       eventType: "billing.canary.lock",
@@ -305,7 +305,9 @@ describe("Dodo billing atomicity (sqlite)", () => {
         dodo_customer_id, dodo_plan_change_product_id, dodo_status, plan_updated_at,
         evidence_entitlement_anchor, evidence_entitlement_anchor_source
       ) VALUES (
+        -- fixed-date: historical fixture (issue #3215 sweep)
         'user-1', 'starter', 'pay-real', 'prod-starter', 'sub-1', 'cus-1', NULL,
+        -- fixed-date: historical fixture (issue #3215 sweep)
         'active', '2026-07-18T10:00:00.000Z', '2026-07-01T00:00:00.000Z', 'provider'
       );
     `);
@@ -324,14 +326,14 @@ describe("Dodo billing atomicity (sqlite)", () => {
       "evt-canary-full-snapshot",
       {
         providerPaymentId: "pay-canary",
-        grantedAt: "2026-07-18T11:00:00.000Z",
+        grantedAt: "2026-07-18T11:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         status: "payment.succeeded",
       },
       10,
       {
         billingCanaryPrecondition: {
           plan: "starter",
-          planUpdatedAt: "2026-07-18T10:00:00.000Z",
+          planUpdatedAt: "2026-07-18T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           dodoPaymentId: "pay-real",
           dodoProductId: "prod-starter",
           dodoPlanChangeProductId: null,
@@ -339,7 +341,7 @@ describe("Dodo billing atomicity (sqlite)", () => {
           dodoSubscriptionId: "sub-1",
           dodoCustomerId: "cus-1",
           dodoNextBillingAt: null,
-          evidenceEntitlementAnchor: "2026-07-01T00:00:00.000Z",
+          evidenceEntitlementAnchor: "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           evidenceEntitlementAnchorSource: "provider",
         },
       },
@@ -351,7 +353,7 @@ describe("Dodo billing atomicity (sqlite)", () => {
     ).get()).toEqual({
       dodo_payment_id: "pay-real",
       dodo_status: "cancellation_scheduled",
-      plan_updated_at: "2026-07-18T10:00:00.000Z",
+      plan_updated_at: "2026-07-18T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     });
   });
 
@@ -361,7 +363,9 @@ describe("Dodo billing atomicity (sqlite)", () => {
     harness.sqlite.exec(`
       INSERT INTO user_plan (
         user_id, plan, dodo_product_id, dodo_subscription_id, dodo_status, plan_updated_at
+      -- fixed-date: historical fixture (issue #3215 sweep)
       ) VALUES (
+        -- fixed-date: historical fixture (issue #3215 sweep)
         'user-1', 'starter', 'prod-starter', 'sub-1', 'active', '2026-07-18T10:00:00.000Z'
       );
     `);
@@ -380,7 +384,7 @@ describe("Dodo billing atomicity (sqlite)", () => {
       currentSubscriptionId: "sub-1",
       currentProductId: "prod-starter",
       currentStatus: "active",
-      currentPlanUpdatedAt: "2026-07-18T10:00:00.000Z",
+      currentPlanUpdatedAt: "2026-07-18T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     })).resolves.toBeNull();
     expect(harness.sqlite.prepare(
       "SELECT dodo_status, dodo_plan_change_product_id FROM user_plan WHERE user_id = 'user-1'",
@@ -411,7 +415,7 @@ describe("Dodo billing atomicity (sqlite)", () => {
       eventId: "evt-processed-replay",
       eventType: "payment.succeeded",
       userId: "user-1",
-      payloadTimestamp: "2026-07-18T10:00:00.000Z",
+      payloadTimestamp: "2026-07-18T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     })).toEqual({ status: "claimed" });
     expect(await applyStarterGrant(env, "evt-processed-replay")).toEqual({ changed: true });
 
@@ -438,7 +442,7 @@ describe("Dodo billing atomicity (sqlite)", () => {
       eventId: "evt-processed-replay",
       eventType: "payment.succeeded",
       userId: "user-1",
-      payloadTimestamp: "2026-07-18T10:00:00.000Z",
+      payloadTimestamp: "2026-07-18T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     })).toEqual({ status: "duplicate", outcome: "processed" });
     expect(harness.sqlite.prepare(`
       SELECT ${ledgerColumns} FROM dodo_webhook_event WHERE event_id = ?
@@ -453,7 +457,7 @@ describe("Dodo billing atomicity (sqlite)", () => {
       eventId: "evt-processed-replay",
       eventType: "payment.succeeded",
       userId: "user-1",
-      payloadTimestamp: "2026-07-18T10:00:00.000Z",
+      payloadTimestamp: "2026-07-18T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     })).toEqual({ status: "duplicate", outcome: "processed" });
     expect(harness.sqlite.prepare(
       "SELECT outcome, processed_at, processing_started_at FROM dodo_webhook_event WHERE event_id = ?",
@@ -473,7 +477,7 @@ describe("Dodo billing atomicity (sqlite)", () => {
       eventId: "evt-ignored-replay",
       eventType: "subscription.updated",
       userId: "user-1",
-      payloadTimestamp: "2026-07-18T10:00:00.000Z",
+      payloadTimestamp: "2026-07-18T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     })).toEqual({ status: "claimed" });
     await finalizeDodoWebhookLedgerOnly(env, {
       eventId: "evt-ignored-replay",
@@ -500,7 +504,7 @@ describe("Dodo billing atomicity (sqlite)", () => {
       eventId: "evt-ignored-replay",
       eventType: "subscription.updated",
       userId: "user-1",
-      payloadTimestamp: "2026-07-18T10:00:00.000Z",
+      payloadTimestamp: "2026-07-18T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     })).toEqual({ status: "duplicate", outcome: "ignored" });
     expect(harness.sqlite.prepare(`
       SELECT ${ledgerColumns} FROM dodo_webhook_event WHERE event_id = ?
@@ -511,7 +515,7 @@ describe("Dodo billing atomicity (sqlite)", () => {
       eventId: "evt-ignored-replay",
       eventType: "subscription.updated",
       userId: "user-1",
-      payloadTimestamp: "2026-07-18T10:00:00.000Z",
+      payloadTimestamp: "2026-07-18T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     })).toEqual({ status: "duplicate", outcome: "ignored" });
     expect(harness.sqlite.prepare(
       "SELECT outcome, processed_at, processing_started_at FROM dodo_webhook_event WHERE event_id = ?",

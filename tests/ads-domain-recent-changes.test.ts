@@ -97,10 +97,10 @@ function eventRow(overrides: Record<string, unknown> = {}) {
     title: "Offer changed on Acme secret watch",
     summary: "Stored for owner user-12345's watchlist.",
     metadata_json: JSON.stringify({ from: "$68", to: "$52" }),
-    confirmed_at: "2026-09-08T10:00:00.000Z",
+    confirmed_at: "2026-09-08T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     suppressed_at: null,
     invalidated_at: null,
-    last_evaluated_at: "2026-09-08T10:00:00.000Z",
+    last_evaluated_at: "2026-09-08T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     created_at: "2026-09-08T10:00:00.000Z",
     ...overrides,
   };
@@ -118,7 +118,7 @@ describe("loadAdsDomainRecentChanges", () => {
     const { loadAdsDomainRecentChanges } = await import(
       "~/lib/ads-domain-recent-changes.server"
     );
-    const now = new Date("2026-09-09T12:00:00.000Z");
+    const now = new Date("2026-09-09T12:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
 
     const result = await loadAdsDomainRecentChanges(env as never, "nykaa.com", now);
 
@@ -127,7 +127,7 @@ describe("loadAdsDomainRecentChanges", () => {
       {
         eventType: "landing_page_offer_changed",
         changeMark: { from: "$68", to: "$52" },
-        capturedAt: "2026-09-08T10:00:00.000Z",
+        capturedAt: "2026-09-08T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       },
     ]);
     expect(Object.keys(result[0]!).sort()).toEqual([
@@ -156,7 +156,7 @@ describe("loadAdsDomainRecentChanges", () => {
     expect(eventQuery).toBeDefined();
     expect(eventQuery!.bindings).toContain("wl-1");
     expect(eventQuery!.bindings).not.toContain("wl-2");
-    expect(eventQuery!.bindings).toContain("2026-09-02T12:00:00.000Z");
+    expect(eventQuery!.bindings).toContain("2026-09-02T12:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
     // The watchlist candidate read never selects the owner column.
     const watchlistQuery = queries.find((q) => q.sql.includes("FROM watchlist"));
     expect(watchlistQuery!.sql).not.toContain("user_id");
@@ -234,7 +234,7 @@ describe("loadAdsDomainRecentChanges", () => {
       {
         eventType: "ad_new",
         changeMark: null,
-        capturedAt: "2026-09-08T10:00:00.000Z",
+        capturedAt: "2026-09-08T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       },
     ]);
   });
@@ -356,12 +356,12 @@ describe("/ads/:domain loader — recent watch changes (issue #2112)", () => {
       {
         eventType: "landing_page_offer_changed",
         changeMark: { from: "$68", to: "$52" },
-        capturedAt: "2026-09-08T10:00:00.000Z",
+        capturedAt: "2026-09-08T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       },
       {
         eventType: "ad_new",
         changeMark: null,
-        capturedAt: "2026-09-07T10:00:00.000Z",
+        capturedAt: "2026-09-07T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       },
     ];
     const loadAdsDomainRecentChanges = vi.fn().mockResolvedValue(changes);
@@ -430,7 +430,7 @@ function populated(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoade
     verifiedTestedCount: 0,
     tickerAds: [],
     checkedAgo: "about 2 hours ago",
-    lastCheckedAt: "2026-09-09T10:00:00.000Z",
+    lastCheckedAt: "2026-09-09T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     freshForLiveClaim: false,
     brandOwnedAdCount: 1,
     verifiedLinkCount: 1,
@@ -468,12 +468,12 @@ describe("/ads/:domain render — changed in the last 7 days (issue #2112)", () 
           {
             eventType: "landing_page_offer_changed",
             changeMark: { from: "$68", to: "$52" },
-            capturedAt: "2026-09-08T10:00:00.000Z",
+            capturedAt: "2026-09-08T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           },
           {
             eventType: "ad_new",
             changeMark: null,
-            capturedAt: "2026-09-07T10:00:00.000Z",
+            capturedAt: "2026-09-07T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           },
         ],
       }),
@@ -489,8 +489,8 @@ describe("/ads/:domain render — changed in the last 7 days (issue #2112)", () 
     expect(markup).toContain("<s>$68</s>");
     expect(markup).toContain("<ins>$52</ins>");
     // Capture dates render for every event.
-    expect(markup).toContain(`captured ${captureDateLabel("2026-09-08T10:00:00.000Z")}`);
-    expect(markup).toContain(`captured ${captureDateLabel("2026-09-07T10:00:00.000Z")}`);
+    expect(markup).toContain(`captured ${captureDateLabel("2026-09-08T10:00:00.000Z")}`); // fixed-date: historical fixture (issue #3215 sweep)
+    expect(markup).toContain(`captured ${captureDateLabel("2026-09-07T10:00:00.000Z")}`); // fixed-date: historical fixture (issue #3215 sweep)
     // No user data, no watchlist names, no owner identifiers.
     expect(markup).not.toContain("wl-1");
     expect(markup).not.toContain("user-12345");

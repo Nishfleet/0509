@@ -74,12 +74,12 @@ describe("operator instant-alert email reconciliation", () => {
       ) VALUES (
         'instant-attempt-1', 'customer-1', 'watch-1', NULL, 'email-target-1',
         'customer', 'email', 'cloudflare_email', 'failed', 'provider_unknown',
-        'owner@example.com', '2026-07-15T18:00:30.000Z', '["event-1"]',
+        'owner@example.com', '2026-07-15T18:00:30.000Z', '["event-1"]', -- fixed-date: historical fixture (issue #3215 sweep)
         '{"kind":"instant_alert"}',
         'instant:watch-1:customer:email:owner@example.com:batch-1',
         'Cloudflare Email send outcome is unknown after provider exception.',
-        '2026-07-15T18:00:30.000Z',
-        '2026-07-15T18:00:00.000Z', '2026-07-15T18:00:30.000Z'
+        '2026-07-15T18:00:30.000Z', -- fixed-date: historical fixture (issue #3215 sweep)
+        '2026-07-15T18:00:00.000Z', '2026-07-15T18:00:30.000Z' -- fixed-date: historical fixture (issue #3215 sweep)
       )
     `).run();
     return harness;
@@ -90,11 +90,11 @@ describe("operator instant-alert email reconciliation", () => {
       operatorUserId: "operator-1",
       attemptId: "instant-attempt-1",
       idempotencyKey: "ops-instant-email-reconcile:11111111-1111-4111-8111-111111111111",
-      expectedUpdatedAt: "2026-07-15T18:00:30.000Z",
+      expectedUpdatedAt: "2026-07-15T18:00:30.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       outcome: "sent" as const,
       classification: "controlled_inbox_receipt" as const,
       evidenceReference: "instant_inbox_receipt_12345",
-      observedAt: "2026-07-15T18:01:00.000Z",
+      observedAt: "2026-07-15T18:01:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       ...overrides,
     };
   }
@@ -121,7 +121,7 @@ describe("operator instant-alert email reconciliation", () => {
     ).toMatchObject({
       status: "sent",
       webhook_status: "delivered",
-      sent_at: "2026-07-15T18:01:00.000Z",
+      sent_at: "2026-07-15T18:01:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     });
     const payload = harness.sqlite
       .prepare("SELECT payload_snapshot_json FROM delivery_attempt WHERE id = 'instant-attempt-1'")
@@ -185,8 +185,8 @@ describe("operator instant-alert email reconciliation", () => {
       listRetryableInstantAttempts(
         { DB: harness.db } as never,
         {
-          since: "2026-07-14T00:00:00.000Z",
-          stalePreDispatchBefore: "2026-07-15T17:59:00.000Z",
+          since: "2026-07-14T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
+          stalePreDispatchBefore: "2026-07-15T17:59:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           limit: 10,
         },
       ),
@@ -232,8 +232,8 @@ describe("operator instant-alert email reconciliation", () => {
       "pending",
       "instant:watch-1:customer:email:owner@example.com:pending",
       null,
-      "2026-07-15T18:00:00.000Z",
-      "2026-07-15T18:00:00.000Z",
+      "2026-07-15T18:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
+      "2026-07-15T18:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     );
 
     const attempts = await listOutstandingInstantProviderUnknownAttempts(
@@ -255,7 +255,7 @@ describe("operator instant-alert email reconciliation", () => {
       UPDATE delivery_attempt
       SET status = 'sent',
           error_message = NULL,
-          sent_at = '2026-07-15T18:00:30.000Z',
+          sent_at = '2026-07-15T18:00:30.000Z', -- fixed-date: historical fixture (issue #3215 sweep)
           failed_at = NULL
       WHERE id = 'instant-attempt-1'
     `).run();
@@ -274,7 +274,7 @@ describe("operator instant-alert email reconciliation", () => {
     ).toMatchObject({
       status: "sent",
       webhook_status: "delivered",
-      sent_at: "2026-07-15T18:00:30.000Z",
+      sent_at: "2026-07-15T18:00:30.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     });
   });
 
@@ -287,21 +287,22 @@ describe("operator instant-alert email reconciliation", () => {
         channel, provider, status, webhook_status, target_value, event_ids_json,
         payload_snapshot_json, idempotency_key, created_at, updated_at
       ) VALUES (?, 'customer-1', 'watch-1', NULL, 'email-target-1', 'customer',
-        'email', 'cloudflare_email', ?, ?, 'owner@example.com', '["event-1"]',
-        '{"kind":"instant_alert"}', ?, '2026-07-15T17:00:00.000Z', ?)
-    `);
-    insert.run("quiet", "skipped_due_to_quiet_hours", "provider_unknown", "instant:quiet", "2026-07-15T18:00:00.000Z");
-    insert.run("definite", "failed", "failed", "instant:definite", "2026-07-15T18:00:00.000Z");
-    insert.run("stale", "pending", "pending", "instant:stale", "2026-07-15T17:58:00.000Z");
-    insert.run("fresh", "pending", "pending", "instant:fresh", "2026-07-15T18:01:00.000Z");
-    insert.run("failed-unknown", "failed", "provider_unknown", "instant:failed-unknown", "2026-07-15T17:00:00.000Z");
-    insert.run("pending-unknown", "pending", "provider_unknown", "instant:pending-unknown", "2026-07-15T17:00:00.000Z");
+        'email', 'cloudflare_email', ?, ?, 'owner@example.com', '["event-1"]', 
+        -- fixed-date: historical fixture (issue #3215 sweep)
+        '{"kind":"instant_alert"}', ?, '2026-07-15T17:00:00.000Z', ?) 
+    `); 
+    insert.run("quiet", "skipped_due_to_quiet_hours", "provider_unknown", "instant:quiet", "2026-07-15T18:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
+    insert.run("definite", "failed", "failed", "instant:definite", "2026-07-15T18:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
+    insert.run("stale", "pending", "pending", "instant:stale", "2026-07-15T17:58:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
+    insert.run("fresh", "pending", "pending", "instant:fresh", "2026-07-15T18:01:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
+    insert.run("failed-unknown", "failed", "provider_unknown", "instant:failed-unknown", "2026-07-15T17:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
+    insert.run("pending-unknown", "pending", "provider_unknown", "instant:pending-unknown", "2026-07-15T17:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
 
     const retryable = await listRetryableInstantAttempts(
       { DB: harness.db } as never,
       {
-        since: "2026-07-14T00:00:00.000Z",
-        stalePreDispatchBefore: "2026-07-15T18:00:00.000Z",
+        since: "2026-07-14T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
+        stalePreDispatchBefore: "2026-07-15T18:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         limit: 20,
       },
     );
@@ -318,8 +319,8 @@ describe("operator instant-alert email reconciliation", () => {
         payload_snapshot_json, idempotency_key, created_at, updated_at
       ) VALUES (?, 'customer-1', 'watch-1', NULL, 'email-target-1', 'customer',
         'email', 'cloudflare_email', ?, ?, 'owner@example.com', '["event-1"]',
-        '{"kind":"instant_alert"}', ?, '2026-07-15T17:00:00.000Z',
-        '2026-07-15T17:00:00.000Z')
+        '{"kind":"instant_alert"}', ?, '2026-07-15T17:00:00.000Z', -- fixed-date: historical fixture (issue #3215 sweep)
+        '2026-07-15T17:00:00.000Z') -- fixed-date: historical fixture (issue #3215 sweep)
     `);
     for (let index = 0; index < 51; index += 1) {
       const prefix = `instant:watch-1:customer:email:owner@example.com:batch-${index}`;
@@ -337,8 +338,8 @@ describe("operator instant-alert email reconciliation", () => {
     const retryable = await listRetryableInstantAttempts(
       { DB: harness.db } as never,
       {
-        since: "2026-07-14T00:00:00.000Z",
-        stalePreDispatchBefore: "2026-07-15T18:00:00.000Z",
+        since: "2026-07-14T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
+        stalePreDispatchBefore: "2026-07-15T18:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         limit: 50,
       },
     );
@@ -427,11 +428,11 @@ describe.each([
       ) VALUES (
         'instant-channel-attempt-1', 'customer-1', 'watch-1', NULL, ?,
         'customer', ?, ?, 'failed', 'provider_unknown', ?,
-        '2026-07-15T18:00:30.000Z', '["event-1"]',
+        '2026-07-15T18:00:30.000Z', '["event-1"]', -- fixed-date: historical fixture (issue #3215 sweep)
         '{"kind":"instant_alert"}', ?,
         'Provider outcome is unknown after transport ambiguity.',
-        '2026-07-15T18:00:30.000Z',
-        '2026-07-15T18:00:00.000Z', '2026-07-15T18:00:30.000Z'
+        '2026-07-15T18:00:30.000Z', -- fixed-date: historical fixture (issue #3215 sweep)
+        '2026-07-15T18:00:00.000Z', '2026-07-15T18:00:30.000Z' -- fixed-date: historical fixture (issue #3215 sweep)
       )
     `).run(
       `${fixture.channel}-target-1`,
@@ -448,12 +449,12 @@ describe.each([
       operatorUserId: "operator-1",
       attemptId: "instant-channel-attempt-1",
       idempotencyKey: `ops-instant-${fixture.channel}-reconcile:11111111-1111-4111-8111-111111111111`,
-      expectedUpdatedAt: "2026-07-15T18:00:30.000Z",
+      expectedUpdatedAt: "2026-07-15T18:00:30.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       channel: fixture.channel,
       outcome: "sent" as const,
       classification: fixture.sentClassification,
       evidenceReference: `${fixture.channel}_provider_evidence_12345`,
-      observedAt: "2026-07-15T18:01:00.000Z",
+      observedAt: "2026-07-15T18:01:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       ...overrides,
     };
   }
@@ -472,7 +473,7 @@ describe.each([
     ).toMatchObject({
       status: "sent",
       webhook_status: "delivered",
-      sent_at: "2026-07-15T18:01:00.000Z",
+      sent_at: "2026-07-15T18:01:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     });
     expect(
       harness.sqlite.prepare("SELECT action_name, status FROM agent_action_audit").get(),
@@ -495,8 +496,8 @@ describe.each([
       listRetryableInstantAttempts(
         { DB: harness.db } as never,
         {
-          since: "2026-07-14T00:00:00.000Z",
-          stalePreDispatchBefore: "2026-07-15T17:59:00.000Z",
+          since: "2026-07-14T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
+          stalePreDispatchBefore: "2026-07-15T17:59:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           limit: 10,
         },
       ),
@@ -524,8 +525,8 @@ describe.each([
       listRetryableInstantAttempts(
         { DB: harness.db } as never,
         {
-          since: "2026-07-14T00:00:00.000Z",
-          stalePreDispatchBefore: "2026-07-15T18:00:00.000Z",
+          since: "2026-07-14T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
+          stalePreDispatchBefore: "2026-07-15T18:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           limit: 10,
         },
       ),
@@ -584,11 +585,11 @@ describe.each([
       ) VALUES (
         'legacy-unclassified-1', 'customer-1', 'watch-1', NULL, ?,
         'customer', ?, ?, 'failed', 'failed', ?,
-        '2026-07-14T18:00:30.000Z', '["event-1"]',
+        '2026-07-14T18:00:30.000Z', '["event-1"]', -- fixed-date: historical fixture (issue #3215 sweep)
         '{"kind":"instant_alert"}', ?,
         'Legacy failure predates durable provider-boundary classification.',
-        '2026-07-14T18:00:30.000Z',
-        '2026-07-14T18:00:00.000Z', '2026-07-14T18:00:30.000Z'
+        '2026-07-14T18:00:30.000Z', -- fixed-date: historical fixture (issue #3215 sweep)
+        '2026-07-14T18:00:00.000Z', '2026-07-14T18:00:30.000Z' -- fixed-date: historical fixture (issue #3215 sweep)
       )
     `).run(
       `${fixture.channel}-target-legacy`,
@@ -608,8 +609,8 @@ describe.each([
       listRetryableInstantAttempts(
         { DB: harness.db } as never,
         {
-          since: "2026-07-14T00:00:00.000Z",
-          stalePreDispatchBefore: "2026-07-15T18:00:00.000Z",
+          since: "2026-07-14T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
+          stalePreDispatchBefore: "2026-07-15T18:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           limit: 10,
         },
       ),
@@ -620,7 +621,7 @@ describe.each([
         { DB: harness.db } as never,
         input({
           attemptId: "legacy-unclassified-1",
-          expectedUpdatedAt: "2026-07-14T18:00:30.000Z",
+          expectedUpdatedAt: "2026-07-14T18:00:30.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           outcome: "failed",
           classification: fixture.failedClassification,
           idempotencyKey: `ops-instant-${fixture.channel}-reconcile:44444444-4444-4444-8444-444444444444`,
@@ -631,8 +632,8 @@ describe.each([
       listRetryableInstantAttempts(
         { DB: harness.db } as never,
         {
-          since: "2026-07-14T00:00:00.000Z",
-          stalePreDispatchBefore: "2026-07-15T18:00:00.000Z",
+          since: "2026-07-14T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
+          stalePreDispatchBefore: "2026-07-15T18:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           limit: 10,
         },
       ),

@@ -18,12 +18,12 @@ const session = {
     id: "user-1",
     email: "owner@example.com",
     name: "Owner",
-    onboardedAt: "2026-05-15T00:00:00.000Z",
+    onboardedAt: "2026-05-15T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
   },
   session: {
     id: "session-1",
     userId: "user-1",
-    expiresAt: "2026-05-16T00:00:00.000Z",
+    expiresAt: "2026-05-16T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
   },
 };
 
@@ -126,7 +126,7 @@ function clientRoomFixture() {
         label: "Nykaa watchlist report",
       },
     ],
-    createdAt: "2026-06-20T00:00:00.000Z",
+    createdAt: "2026-06-20T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     updatedAt: "2026-06-20T00:00:00.000Z",
   };
 }
@@ -140,7 +140,7 @@ function courtPackReportDocument() {
     title: "Nykaa watchlist",
     subtitle: "advertiser · Nykaa",
     summary: "2 verified-evidence watch events.",
-    generatedAt: "2026-07-15T08:00:00.000Z",
+    generatedAt: "2026-07-15T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     stats: [{ label: "Events", value: "2" }],
     insightDepth: {
       topHooks: [],
@@ -166,7 +166,7 @@ function courtPackReportDocument() {
           url: "https://nykaa.example/offer",
           headline: "Offer headline",
           captureLabel: "Browser proof",
-          capturedAt: "2026-07-15T07:55:00.000Z",
+          capturedAt: "2026-07-15T07:55:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           signals: [{ label: "CTA", value: "Shop now" }],
         },
         analysisFields: [{ label: "hook", value: "A proven message." }],
@@ -176,7 +176,7 @@ function courtPackReportDocument() {
           typeLabel: "Offer",
           title: "Offer changed",
           summary: "The offer changed on the landing page.",
-          createdAt: "2026-07-15T08:00:00.000Z",
+          createdAt: "2026-07-15T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           priorityScore: 80,
           priorityBand: "high",
           recommendedAction: "Review the new offer",
@@ -199,7 +199,7 @@ function approvedCourtPackFixture(): CourtPack {
     clientLabel: "Nykaa",
     preparedBy: null,
     branding: null,
-    generatedAt: "2026-08-12T08:00:00.000Z",
+    generatedAt: "2026-08-12T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     sections: [
       {
         reportId: "watchlist:watchlist-1",
@@ -225,7 +225,7 @@ function approvedCourtPackFixture(): CourtPack {
         title: report.title,
         advertiser: "Nykaa",
         headline: "New offer",
-        capturedAt: "2026-07-15T07:55:00.000Z",
+        capturedAt: "2026-07-15T07:55:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         proofStatusLabel: "Verified evidence",
         sourceUrl: "https://evidence.example/capture/1",
         event: report.rows[0].event ?? null,
@@ -259,7 +259,7 @@ function emptyCourtPackFixture(): CourtPack {
     clientLabel: "Nykaa",
     preparedBy: null,
     branding: null,
-    generatedAt: "2026-08-12T08:00:00.000Z",
+    generatedAt: "2026-08-12T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     sections: [],
     plates: [],
     excluded: [
@@ -473,7 +473,7 @@ describe("clients route agent memory", () => {
         goal: "Webhook QA review.",
       },
       resourceRefs: [],
-      createdAt: "2026-06-20T00:00:00.000Z",
+      createdAt: "2026-06-20T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       updatedAt: "2026-06-20T00:00:00.000Z",
     });
     vi.doMock("~/lib/data.server", () => ({
@@ -561,7 +561,7 @@ describe("clients route agent memory", () => {
           clientRoomId: null,
           value: { value: "https://hooks.slack.com/services/T/B/C" },
           source: "owner_ui",
-          createdAt: "2026-06-20T00:00:00.000Z",
+          createdAt: "2026-06-20T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           updatedAt: "2026-06-20T00:00:00.000Z",
         },
       ]),
@@ -601,7 +601,7 @@ describe("clients route agent memory", () => {
         clientRoomId: "room-1",
         value: { value: "Direct weekly review with evidence links." },
         source: "owner_ui",
-        createdAt: "2026-06-20T00:00:00.000Z",
+        createdAt: "2026-06-20T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         updatedAt: "2026-06-20T00:00:00.000Z",
       },
     ]);
@@ -617,7 +617,7 @@ describe("clients route agent memory", () => {
           status: "active",
           notes: {},
           resourceRefs: [],
-          createdAt: "2026-06-20T00:00:00.000Z",
+          createdAt: "2026-06-20T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           updatedAt: "2026-06-20T00:00:00.000Z",
         },
       ]),
@@ -663,7 +663,7 @@ describe("clients route agent memory", () => {
           clientRoomId: null,
           value: { value: "Weekly review." },
           source: "owner_ui",
-          createdAt: "2026-06-20T00:00:00.000Z",
+          createdAt: "2026-06-20T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           updatedAt: "2026-06-20T00:00:00.000Z",
         },
       ]),
@@ -679,7 +679,7 @@ describe("clients route agent memory", () => {
           status: "active",
           notes: {},
           resourceRefs: [],
-          createdAt: "2026-06-20T00:00:00.000Z",
+          createdAt: "2026-06-20T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           updatedAt: "2026-06-20T00:00:00.000Z",
         },
       ]),
@@ -735,7 +735,7 @@ describe("clients route agent memory", () => {
               label: "https://hooks.slack.com/services/T/B/C",
             },
           ],
-          createdAt: "2026-06-20T00:00:00.000Z",
+          createdAt: "2026-06-20T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           updatedAt: "2026-06-20T00:00:00.000Z",
         },
       ]),
@@ -801,7 +801,7 @@ describe("clients route agent memory", () => {
               label: "Nykaa watchlist report",
             },
           ],
-          createdAt: "2026-06-20T00:00:00.000Z",
+          createdAt: "2026-06-20T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           updatedAt: "2026-06-20T00:00:00.000Z",
         },
       ],
@@ -815,7 +815,7 @@ describe("clients route agent memory", () => {
           watchlistId: null,
           clientRoomId: "room-1",
           source: "owner_ui",
-          updatedAt: "2026-06-20T00:00:00.000Z",
+          updatedAt: "2026-06-20T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           preview: "Weekly client-ready review with direct tone.",
         },
       ],
@@ -928,7 +928,7 @@ describe("clients route agent memory", () => {
         watchlistId: null,
         clientRoomId: null,
         source: "owner_ui",
-        updatedAt: "2026-06-20T00:00:00.000Z",
+        updatedAt: "2026-06-20T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         preview: `Context preview ${index + 1}`,
       })),
       plan: "agency",
@@ -955,7 +955,7 @@ describe("clients route agent memory", () => {
         watchlistId: null,
         clientRoomId: null,
         source: "owner_ui",
-        updatedAt: "2026-06-20T00:00:00.000Z",
+        updatedAt: "2026-06-20T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         preview: `Context preview ${index + 1}`,
       })),
       plan: "agency",
@@ -995,7 +995,7 @@ describe("clients route agent memory", () => {
           resourceRefs: [
             { resourceType: "report", resourceId: "watchlist-watchlist-1" },
           ],
-          createdAt: "2026-06-20T00:00:00.000Z",
+          createdAt: "2026-06-20T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           updatedAt: "2026-06-20T00:00:00.000Z",
         },
       ]),
@@ -1053,7 +1053,7 @@ describe("clients route agent memory", () => {
           resourceRefs: [
             { resourceType: "report", resourceId: "watchlist:watchlist-1" },
           ],
-          createdAt: "2026-06-20T00:00:00.000Z",
+          createdAt: "2026-06-20T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           updatedAt: "2026-06-20T00:00:00.000Z",
         },
       ]),
@@ -1121,7 +1121,7 @@ describe("clients route agent memory", () => {
             { resourceType: "watchlist", resourceId: "watchlist-1" },
             { resourceType: "report", resourceId: "watchlist:watchlist-1" },
           ],
-          createdAt: "2026-06-20T00:00:00.000Z",
+          createdAt: "2026-06-20T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           updatedAt: "2026-06-20T00:00:00.000Z",
         },
       ],
@@ -1183,7 +1183,7 @@ describe("clients route agent memory", () => {
             },
           },
           resourceRefs: [],
-          createdAt: "2026-06-20T00:00:00.000Z",
+          createdAt: "2026-06-20T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           updatedAt: "2026-06-20T00:00:00.000Z",
         },
       ]),
@@ -1230,7 +1230,7 @@ describe("clients route agent memory", () => {
               label: "Synthetic",
             },
           ],
-          createdAt: "2026-06-20T00:00:00.000Z",
+          createdAt: "2026-06-20T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           updatedAt: "2026-06-20T00:00:00.000Z",
         },
       ]),
@@ -1277,7 +1277,7 @@ describe("clients route agent memory", () => {
               label: "Nykaa watchlist report",
             },
           ],
-          createdAt: "2026-06-20T00:00:00.000Z",
+          createdAt: "2026-06-20T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           updatedAt: "2026-06-20T00:00:00.000Z",
         },
       ]),
@@ -1286,7 +1286,7 @@ describe("clients route agent memory", () => {
         {
           id: "watchlist-1",
           isActive: true,
-          updatedAt: "2026-06-20T00:00:00.000Z",
+          updatedAt: "2026-06-20T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         },
       ]),
       getLatestDigestRunSummaryForWatchlist: vi.fn(),
@@ -1400,7 +1400,7 @@ describe("clients route agent memory", () => {
           status: "active",
           notes: {},
           resourceRefs: [],
-          createdAt: "2026-06-20T00:00:00.000Z",
+          createdAt: "2026-06-20T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           updatedAt: "2026-06-20T00:00:00.000Z",
         },
       ],
@@ -1536,7 +1536,7 @@ describe("clients route agent memory", () => {
               label: "Nykaa watchlist",
             },
           ],
-          createdAt: "2026-06-20T00:00:00.000Z",
+          createdAt: "2026-06-20T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           updatedAt: "2026-06-20T00:00:00.000Z",
         },
         {
@@ -1546,7 +1546,7 @@ describe("clients route agent memory", () => {
           status: "archived",
           notes: {},
           resourceRefs: [],
-          createdAt: "2026-06-20T00:00:00.000Z",
+          createdAt: "2026-06-20T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           updatedAt: "2026-06-20T00:00:00.000Z",
         },
       ],
@@ -1560,7 +1560,7 @@ describe("clients route agent memory", () => {
           watchlistId: null,
           clientRoomId: "room-1",
           source: "owner_ui",
-          updatedAt: "2026-06-20T00:00:00.000Z",
+          updatedAt: "2026-06-20T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           preview: "Direct and evidence-led.",
         },
       ],

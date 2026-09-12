@@ -44,7 +44,7 @@ const baseAd: AdRecord = {
     normalizedHeadline: "browser rendering required",
     normalizedHeadlineHash: "fnv1a-headline",
     captureMethod: "browser_render",
-    capturedAt: "2026-03-30T00:00:00.000Z",
+    capturedAt: "2026-03-30T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     artifactKey: null,
     metadata: {
       reason: "fallback_not_configured",

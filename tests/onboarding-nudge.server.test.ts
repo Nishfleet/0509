@@ -204,7 +204,7 @@ describe("onboarding nudge send window (IST default)", () => {
   it("treats an unknown timezone as IST and lands inside the 09:00-11:00 window at the 04:00 UTC daily run", async () => {
     const { isWithinSendWindow } = await import("~/lib/onboarding-nudge.server");
     // 04:00 UTC = 09:30 IST, inside 09:00-11:00.
-    const now = new Date("2026-09-10T04:00:00.000Z");
+    const now = new Date("2026-09-10T04:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
     expect(isWithinSendWindow(now, null)).toBe(true);
     expect(isWithinSendWindow(now, undefined)).toBe(true);
     expect(isWithinSendWindow(now, "Asia/Kolkata")).toBe(true);
@@ -213,7 +213,7 @@ describe("onboarding nudge send window (IST default)", () => {
   it("skips a user whose local time at the 04:00 UTC run is outside 09:00-11:00", async () => {
     const { isWithinSendWindow } = await import("~/lib/onboarding-nudge.server");
     // 04:00 UTC = 00:00 in New York (UTC-4 in September), outside the window.
-    const now = new Date("2026-09-10T04:00:00.000Z");
+    const now = new Date("2026-09-10T04:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
     expect(isWithinSendWindow(now, "America/New_York")).toBe(false);
     // 04:00 UTC = 04:00 in UTC, outside the window.
     expect(isWithinSendWindow(now, "UTC")).toBe(false);
@@ -221,7 +221,7 @@ describe("onboarding nudge send window (IST default)", () => {
 
   it("falls back to IST for an invalid timezone name", async () => {
     const { isWithinSendWindow } = await import("~/lib/onboarding-nudge.server");
-    const now = new Date("2026-09-10T04:00:00.000Z");
+    const now = new Date("2026-09-10T04:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
     expect(isWithinSendWindow(now, "Not/ARealZone")).toBe(true);
   });
 });
@@ -238,7 +238,7 @@ describe("onboarding nudge selection (sqlite)", () => {
     fixtures.push(harness);
     createNudgeTables(harness);
 
-    const now = new Date("2026-09-10T04:00:00.000Z");
+    const now = new Date("2026-09-10T04:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
     const eligible = new Date(now.getTime() - 36 * 60 * 60 * 1000).toISOString();
     const tooOld = new Date(now.getTime() - 72 * 60 * 60 * 1000).toISOString();
     const tooNew = new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString();
@@ -261,7 +261,7 @@ describe("onboarding nudge selection (sqlite)", () => {
     fixtures.push(harness);
     createNudgeTables(harness);
 
-    const now = new Date("2026-09-10T04:00:00.000Z");
+    const now = new Date("2026-09-10T04:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
     const eligible = new Date(now.getTime() - 36 * 60 * 60 * 1000).toISOString();
 
     insertUser(harness, { id: "user-with-watch", email: "a@example.com", name: "A", createdAt: eligible });
@@ -281,7 +281,7 @@ describe("onboarding nudge selection (sqlite)", () => {
     fixtures.push(harness);
     createNudgeTables(harness);
 
-    const now = new Date("2026-09-10T04:00:00.000Z");
+    const now = new Date("2026-09-10T04:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
     const eligible = new Date(now.getTime() - 36 * 60 * 60 * 1000).toISOString();
 
     insertUser(harness, { id: "user-nudged", email: "a@example.com", name: "A", createdAt: eligible });
@@ -306,7 +306,7 @@ describe("onboarding nudge selection (sqlite)", () => {
     fixtures.push(harness);
     createNudgeTables(harness);
 
-    const now = new Date("2026-09-10T04:00:00.000Z");
+    const now = new Date("2026-09-10T04:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
     const eligible = new Date(now.getTime() - 36 * 60 * 60 * 1000).toISOString();
 
     insertUser(harness, { id: "user-other-template", email: "a@example.com", name: "A", createdAt: eligible });
@@ -341,7 +341,7 @@ describe("onboarding nudge send + idempotency (sqlite)", () => {
     fixtures.push(harness);
     createNudgeTables(harness);
 
-    const now = new Date("2026-09-10T04:00:00.000Z");
+    const now = new Date("2026-09-10T04:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
     const eligible = new Date(now.getTime() - 36 * 60 * 60 * 1000).toISOString();
     insertUser(harness, { id: "user-1", email: "owner@example.com", name: "Owner", createdAt: eligible });
     insertDeliveryTarget(harness, { id: "target-1", userId: "user-1", targetValue: "owner@example.com" });
@@ -397,7 +397,7 @@ describe("onboarding nudge send + idempotency (sqlite)", () => {
     fixtures.push(harness);
     createNudgeTables(harness);
 
-    const now = new Date("2026-09-10T04:00:00.000Z");
+    const now = new Date("2026-09-10T04:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
     const eligible = new Date(now.getTime() - 36 * 60 * 60 * 1000).toISOString();
     insertUser(harness, { id: "user-1", email: "owner@example.com", name: "Owner", createdAt: eligible });
     insertDeliveryTarget(harness, { id: "target-1", userId: "user-1", targetValue: "owner@example.com" });
@@ -496,7 +496,7 @@ describe("watchlist resume selection (sqlite)", () => {
     fixtures.push(harness);
     createNudgeTables(harness);
 
-    const now = new Date("2026-09-10T04:00:00.000Z");
+    const now = new Date("2026-09-10T04:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
     const pausedLong = new Date(now.getTime() - 20 * 24 * 60 * 60 * 1000).toISOString();
     const pausedRecent = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -522,7 +522,7 @@ describe("watchlist resume selection (sqlite)", () => {
     fixtures.push(harness);
     createNudgeTables(harness);
 
-    const now = new Date("2026-09-10T04:00:00.000Z");
+    const now = new Date("2026-09-10T04:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
     const old = new Date(now.getTime() - 20 * 24 * 60 * 60 * 1000).toISOString();
 
     insertUser(harness, { id: "user-active", email: "a@example.com", name: "A", createdAt: old });
@@ -542,7 +542,7 @@ describe("watchlist resume selection (sqlite)", () => {
     fixtures.push(harness);
     createNudgeTables(harness);
 
-    const now = new Date("2026-09-10T04:00:00.000Z");
+    const now = new Date("2026-09-10T04:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
     const pausedLong = new Date(now.getTime() - 20 * 24 * 60 * 60 * 1000).toISOString();
 
     insertUser(harness, { id: "user-resumed", email: "a@example.com", name: "A", createdAt: pausedLong });
@@ -568,7 +568,7 @@ describe("watchlist resume selection (sqlite)", () => {
     fixtures.push(harness);
     createNudgeTables(harness);
 
-    const now = new Date("2026-09-10T04:00:00.000Z");
+    const now = new Date("2026-09-10T04:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
     const pausedLong = new Date(now.getTime() - 20 * 24 * 60 * 60 * 1000).toISOString();
 
     insertUser(harness, { id: "user-other-template", email: "a@example.com", name: "A", createdAt: pausedLong });
@@ -605,7 +605,7 @@ describe("watchlist resume send + idempotency (sqlite)", () => {
     fixtures.push(harness);
     createNudgeTables(harness);
 
-    const now = new Date("2026-09-10T04:00:00.000Z");
+    const now = new Date("2026-09-10T04:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
     const pausedLong = new Date(now.getTime() - 20 * 24 * 60 * 60 * 1000).toISOString();
     insertUser(harness, { id: "user-1", email: "owner@example.com", name: "Owner", createdAt: pausedLong });
     insertPausedWatchlist(harness, { id: "watch-1", userId: "user-1", pausedAt: pausedLong });
@@ -664,7 +664,7 @@ describe("watchlist resume send + idempotency (sqlite)", () => {
     fixtures.push(harness);
     createNudgeTables(harness);
 
-    const now = new Date("2026-09-10T04:00:00.000Z");
+    const now = new Date("2026-09-10T04:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
     const pausedLong = new Date(now.getTime() - 20 * 24 * 60 * 60 * 1000).toISOString();
     insertUser(harness, { id: "user-1", email: "owner@example.com", name: "Owner", createdAt: pausedLong });
     insertPausedWatchlist(harness, { id: "watch-1", userId: "user-1", pausedAt: pausedLong });

@@ -24,7 +24,7 @@ const session = {
   session: {
     id: "session-1",
     userId: "user-1",
-    expiresAt: "2026-04-03T00:00:00.000Z",
+    expiresAt: "2026-04-03T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
   },
 } as never;
 
@@ -82,7 +82,7 @@ describe("share link persistence", () => {
       isSnapshot: false,
       shareId: "link-1",
       token: "token-1",
-      createdAt: "2026-07-15T00:00:00.000Z",
+      createdAt: "2026-07-15T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       expiresAt: "2026-10-13T00:00:00.000Z",
     });
 
@@ -129,7 +129,7 @@ describe("share link persistence", () => {
         resource_id: "collection:collection-1",
         is_snapshot: 1,
         snapshot_payload_json: JSON.stringify({ reviewState: "approved" }),
-        created_at: "2026-07-15T00:00:00.000Z",
+        created_at: "2026-07-15T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         expires_at: "2099-07-15T00:00:00.000Z",
         revoked_at: null,
       },
@@ -204,7 +204,7 @@ describe("share link persistence", () => {
         resource_id: "watch-1",
         is_snapshot: 0,
         snapshot_payload_json: null,
-        created_at: "2026-01-01T00:00:00.000Z",
+        created_at: "2026-01-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         expires_at: null,
         revoked_at: null,
       },
@@ -229,7 +229,7 @@ describe("share link persistence", () => {
         resource_id: "collection-1",
         is_snapshot: 0,
         snapshot_payload_json: null,
-        created_at: "2026-01-01T00:00:00.000Z",
+        created_at: "2026-01-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         expires_at: "2026-09-19T00:00:00.000Z",
         revoked_at: null,
       },
@@ -314,9 +314,9 @@ describe("/share/:token route", () => {
         snapshotPayload: {
           id: "digest-internal-1",
           userId: "user-1",
-          periodStart: "2026-06-01T00:00:00.000Z",
+          periodStart: "2026-06-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           periodEnd: "2026-06-08T00:00:00.000Z",
-          createdAt: "2026-06-08T01:00:00.000Z",
+          createdAt: "2026-06-08T01:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           delivery: {
             recipientEmail: "owner@example.com",
             externalMessageId: "provider-msg-1",
@@ -331,7 +331,7 @@ describe("/share/:token route", () => {
               eventType: "ad_new",
               title: "New offer spotted",
               summary: "Competitor launched a new offer.",
-              createdAt: "2026-06-07T12:00:00.000Z",
+              createdAt: "2026-06-07T12:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
               metadata: {
                 priorityScore: 91,
                 recommendedAction: "Review the landing page",
@@ -344,7 +344,7 @@ describe("/share/:token route", () => {
             },
           ],
         },
-        createdAt: "2026-06-08T01:00:00.000Z",
+        createdAt: "2026-06-08T01:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         expiresAt: null,
         revokedAt: null,
       }),
@@ -365,7 +365,7 @@ describe("/share/:token route", () => {
 
     expect(payload).toMatchObject({
       kind: "digest_share_snapshot",
-      periodStart: "2026-06-01T00:00:00.000Z",
+      periodStart: "2026-06-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       periodEnd: "2026-06-08T00:00:00.000Z",
       items: [
         expect.objectContaining({
@@ -412,11 +412,11 @@ describe("/share/:token route", () => {
           title: "Proof report",
           subtitle: "Latest verified moves",
           summary: "One move included.",
-          generatedAt: "2026-06-08T01:00:00.000Z",
+          generatedAt: "2026-06-08T01:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           aiWeeklySummary: {
             paragraph:
               "Competitors concentrated this week's movement on promotional offers.",
-            generatedAt: "2026-06-08T01:05:00.000Z",
+            generatedAt: "2026-06-08T01:05:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
             periodEnd: "2026-06-08T01:00:00.000Z",
             strategyWatchlistIds: ["watch-internal-1"],
             ownerId: "owner-secret",
@@ -443,7 +443,7 @@ describe("/share/:token route", () => {
               {
                 label: "Launch",
                 detail: "New offer",
-                timestamp: "2026-06-08T01:00:00.000Z",
+                timestamp: "2026-06-08T01:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
                 secret: "timeline-secret",
               },
             ],
@@ -512,7 +512,7 @@ describe("/share/:token route", () => {
                 typeLabel: "Offer",
                 title: "New offer",
                 summary: "A new offer launched.",
-                createdAt: "2026-06-08T01:00:00.000Z",
+                createdAt: "2026-06-08T01:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
                 priorityScore: 82,
                 priorityBand: "high",
                 recommendedAction: "Review",
@@ -526,7 +526,7 @@ describe("/share/:token route", () => {
             },
           ],
         },
-        createdAt: "2026-06-08T01:00:00.000Z",
+        createdAt: "2026-06-08T01:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         expiresAt: null,
         revokedAt: null,
       }),
@@ -600,7 +600,7 @@ describe("/share/:token route", () => {
             },
           ],
         },
-        createdAt: "2026-06-08T01:00:00.000Z",
+        createdAt: "2026-06-08T01:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         expiresAt: null,
         revokedAt: null,
       }),
@@ -747,7 +747,7 @@ describe("/app/shares route", () => {
           resourceId: "collection-1",
           isSnapshot: true,
           snapshotPayload: null,
-          createdAt: "2026-06-01T00:00:00.000Z",
+          createdAt: "2026-06-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           expiresAt: "2026-09-01T00:00:00.000Z",
           revokedAt: null,
         },
@@ -769,7 +769,7 @@ describe("/app/shares route", () => {
         resourceLabel: "Collection",
         mode: "Snapshot",
         state: "Snapshot",
-        createdAt: "2026-06-01T00:00:00.000Z",
+        createdAt: "2026-06-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         expiresAt: "2026-09-01T00:00:00.000Z",
       },
     ]);
@@ -801,9 +801,9 @@ describe("/app/shares route", () => {
           snapshotPayload: {
             reviewState: "approved",
             evidenceState: "current",
-            approvalExpiresAt: "2020-01-01T00:00:00.000Z",
+            approvalExpiresAt: "2020-01-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           },
-          createdAt: "2026-07-01T00:00:00.000Z",
+          createdAt: "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           expiresAt: "2099-07-01T00:00:00.000Z",
           revokedAt: null,
         },

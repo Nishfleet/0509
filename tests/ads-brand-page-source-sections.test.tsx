@@ -50,7 +50,7 @@ function ad(overrides: Partial<AdRecord> = {}): AdRecord {
     adSnapshotUrl: null,
     countries: ["all"],
     platforms: ["Instagram"],
-    firstSeenAt: new Date("2026-06-01T00:00:00.000Z").toISOString(),
+    firstSeenAt: new Date("2026-06-01T00:00:00.000Z").toISOString(), // fixed-date: historical fixture (issue #3215 sweep)
     lastSeenAt: null,
     active: true,
     researchSummary: "",
@@ -91,7 +91,7 @@ function populated(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoade
     verifiedTestedCount: 0,
     tickerAds: [],
     checkedAgo: "about 2 hours ago",
-    lastCheckedAt: "2026-09-01T10:00:00.000Z",
+    lastCheckedAt: "2026-09-01T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     freshForLiveClaim: false,
     brandOwnedAdCount: 6,
     verifiedLinkCount: 6,
@@ -122,10 +122,10 @@ function googleAdsSnapshot(): BrandPageSourceSnapshot {
       id: "snap-google-ads-1",
       watchlistId: "wl-1",
       sourceId: "google_ads",
-      fetchedAt: "2026-09-01T08:00:00.000Z",
+      fetchedAt: "2026-09-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       payload: {
         domain: "nike.com",
-        fetchedAt: "2026-09-01T08:00:00.000Z",
+        fetchedAt: "2026-09-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         truncated: false,
         creatives: [
           {
@@ -134,7 +134,7 @@ function googleAdsSnapshot(): BrandPageSourceSnapshot {
             creativeId: "CR456",
             format: "image",
             domain: "nike.com",
-            firstShownAt: "2026-08-15T00:00:00.000Z",
+            firstShownAt: "2026-08-15T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
             lastShownAt: "2026-09-01T00:00:00.000Z",
             previewUrl: "https://example.com/preview.png",
           },
@@ -142,7 +142,7 @@ function googleAdsSnapshot(): BrandPageSourceSnapshot {
         advertiserCount: 1,
         formatMix: { text: 0, image: 1, video: 0, unknown: 0 },
       },
-      createdAt: "2026-09-01T08:00:00.000Z",
+      createdAt: "2026-09-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     },
   };
 }
@@ -155,16 +155,16 @@ function subdomainsSnapshot(): BrandPageSourceSnapshot {
       id: "snap-sub-1",
       watchlistId: "wl-1",
       sourceId: "subdomains",
-      fetchedAt: "2026-09-01T07:00:00.000Z",
+      fetchedAt: "2026-09-01T07:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       payload: {
         domain: "nike.com",
         names: [
-          { name: "new.nike.com", kind: "public", firstSeen: "2026-08-20T00:00:00.000Z" },
+          { name: "new.nike.com", kind: "public", firstSeen: "2026-08-20T00:00:00.000Z" }, // fixed-date: historical fixture (issue #3215 sweep)
           { name: "internal.nike.com", kind: "internal", firstSeen: "2026-08-22T00:00:00.000Z" },
         ],
         truncated: false,
       },
-      createdAt: "2026-09-01T07:00:00.000Z",
+      createdAt: "2026-09-01T07:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     },
   };
 }
@@ -177,7 +177,7 @@ function tiktokSnapshot(): BrandPageSourceSnapshot {
       id: "snap-tiktok-1",
       watchlistId: "wl-1",
       sourceId: "tiktok",
-      fetchedAt: "2026-09-01T06:00:00.000Z",
+      fetchedAt: "2026-09-01T06:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       payload: {
         ads: [
           {
@@ -192,7 +192,7 @@ function tiktokSnapshot(): BrandPageSourceSnapshot {
         totalAds: 5,
         legalName: "Nike",
       },
-      createdAt: "2026-09-01T06:00:00.000Z",
+      createdAt: "2026-09-01T06:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     },
   };
 }
@@ -269,16 +269,16 @@ describe("/ads/:domain source sections (issue #2200)", () => {
         id: "snap-empty",
         watchlistId: "wl-1",
         sourceId: "google_ads",
-        fetchedAt: "2026-09-01T08:00:00.000Z",
+        fetchedAt: "2026-09-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         payload: {
           domain: "nike.com",
-          fetchedAt: "2026-09-01T08:00:00.000Z",
+          fetchedAt: "2026-09-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           truncated: false,
           creatives: [],
           advertiserCount: 0,
           formatMix: { text: 0, image: 0, video: 0, unknown: 0 },
         },
-        createdAt: "2026-09-01T08:00:00.000Z",
+        createdAt: "2026-09-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       },
     };
     const markup = await render(populated({ sourceSnapshots: [emptyGoogleAds] }));
@@ -623,7 +623,7 @@ describe("loadBrandPageSourceSnapshots — the claim gate and snapshot presence 
     // `google` is a registered but NOT-implemented adapter (stub), so its
     // claim row is not live. A stored snapshot must NOT render it.
     const { env } = fakeD1(tracking, [
-      snapshotRow("google", "2026-09-01T00:00:00Z"),
+      snapshotRow("google", "2026-09-01T00:00:00Z"), // fixed-date: historical fixture (issue #3215 sweep)
       snapshotRow("google_ads", "2026-09-01T00:00:00Z"),
     ]);
     const { loadBrandPageSourceSnapshots } = await import(
@@ -644,7 +644,7 @@ describe("loadBrandPageSourceSnapshots — the claim gate and snapshot presence 
   });
 
   it("returns a live source that has a stored snapshot for the tracking watchlist", async () => {
-    const { env } = fakeD1(tracking, [snapshotRow("google_ads", "2026-09-01T00:00:00Z")]);
+    const { env } = fakeD1(tracking, [snapshotRow("google_ads", "2026-09-01T00:00:00Z")]); // fixed-date: historical fixture (issue #3215 sweep)
     const { loadBrandPageSourceSnapshots } = await import(
       "~/components/brand-page/source-snapshots.server"
     );
@@ -655,7 +655,7 @@ describe("loadBrandPageSourceSnapshots — the claim gate and snapshot presence 
   it("ignores a watchlist that tracks a different domain", async () => {
     const { env } = fakeD1(
       [{ id: "wl-1", target_id: "https://adidas.com" }],
-      [snapshotRow("google_ads", "2026-09-01T00:00:00Z")],
+      [snapshotRow("google_ads", "2026-09-01T00:00:00Z")], // fixed-date: historical fixture (issue #3215 sweep)
     );
     const { loadBrandPageSourceSnapshots } = await import(
       "~/components/brand-page/source-snapshots.server"

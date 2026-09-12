@@ -38,9 +38,9 @@ function watchlist(): WatchlistRecord {
     targetLabel: "Glowkart",
     targetCountry: "all",
     isActive: true,
-    lastScannedAt: "2026-08-26T10:05:00.000Z",
+    lastScannedAt: "2026-08-26T10:05:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     createdAt: "2026-08-26T10:00:00.000Z",
-    updatedAt: "2026-08-26T10:05:00.000Z",
+    updatedAt: "2026-08-26T10:05:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
   };
 }
 
@@ -59,10 +59,10 @@ function event(): WatchEventRecord {
     title: "Baseline captured: 1 active ad",
     summary: "We recorded 1 active ad for Glowkart as your starting point.",
     metadata: { kind: "baseline", adsSeen: 1, sourceUrl: EVIDENCE_URL, adId: "ad-1" },
-    confirmedAt: "2026-08-26T10:05:01.000Z",
+    confirmedAt: "2026-08-26T10:05:01.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     suppressedAt: null,
     invalidatedAt: null,
-    lastEvaluatedAt: "2026-08-26T10:05:01.000Z",
+    lastEvaluatedAt: "2026-08-26T10:05:01.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     createdAt: "2026-08-26T10:05:00.000Z",
   };
 }
@@ -71,9 +71,9 @@ function filedDigest() {
   return {
     id: "digest-1",
     userId: "user-1",
-    periodStart: "2026-08-26T10:00:00.000Z",
+    periodStart: "2026-08-26T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     periodEnd: "2026-09-02T10:00:00.000Z",
-    createdAt: "2026-08-26T10:05:02.000Z",
+    createdAt: "2026-08-26T10:05:02.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     summary: { kind: "first_brief" },
     items: [
       {
@@ -84,7 +84,7 @@ function filedDigest() {
         eventType: "ad_new",
         title: "Baseline captured: 1 active ad",
         summary: "We recorded 1 active ad for Glowkart as your starting point.",
-        createdAt: "2026-08-26T10:05:02.000Z",
+        createdAt: "2026-08-26T10:05:02.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         metadata: { eventId: "event-1", sourceUrl: EVIDENCE_URL, adId: "ad-1", kind: "baseline" },
       },
     ],

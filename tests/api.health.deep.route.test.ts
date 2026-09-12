@@ -83,7 +83,7 @@ function idleSoakDb() {
               "0 5 * * MON",
             ].map((cron) => ({
               cron,
-              baseline_at: "2026-01-01T00:00:00.000Z",
+              baseline_at: "2026-01-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
             })),
       }),
     };
@@ -120,7 +120,7 @@ describe("deep health route", () => {
         CF_VERSION_METADATA: {
           id: "worker-version-123",
           tag: "release-2026-07-19",
-          timestamp: "2026-07-19T06:00:00.000Z",
+          timestamp: "2026-07-19T06:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         },
         SEARCH_ROLLOUT_MODE: "v2",
         CANARY_BYPASS_TOKEN: "secret-token",
@@ -165,7 +165,7 @@ describe("deep health route", () => {
         CF_VERSION_METADATA: {
           id: "worker-version-123",
           tag: "release-2026-07-19",
-          timestamp: "2026-07-19T06:00:00.000Z",
+          timestamp: "2026-07-19T06:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         },
         SEARCH_ROLLOUT_MODE: "v2",
         CANARY_BYPASS_TOKEN: "secret-token",
@@ -189,7 +189,7 @@ describe("deep health route", () => {
       releaseIdentity: {
         workerVersionId: "worker-version-123",
         tag: "release-2026-07-19",
-        timestamp: "2026-07-19T06:00:00.000Z",
+        timestamp: "2026-07-19T06:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         searchRolloutMode: "v2",
       },
     });
@@ -224,7 +224,7 @@ describe("deep health route", () => {
         CF_VERSION_METADATA: {
           id: "worker-version-123",
           tag: "release-2026-07-19",
-          timestamp: "2026-07-19T06:00:00.000Z",
+          timestamp: "2026-07-19T06:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         },
         SEARCH_ROLLOUT_MODE: "v2",
         CANARY_BYPASS_TOKEN: "secret-token",
@@ -261,7 +261,7 @@ describe("deep health route", () => {
       releaseIdentity: {
         workerVersionId: "worker-version-123",
         tag: "release-2026-07-19",
-        timestamp: "2026-07-19T06:00:00.000Z",
+        timestamp: "2026-07-19T06:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         searchRolloutMode: "v2",
       },
     });
@@ -307,7 +307,7 @@ describe("deep health route", () => {
     const serialized = JSON.stringify(body);
     for (const privateDetail of [
       "0 */3 * * *",
-      "2026-01-01T00:00:00.000Z",
+      "2026-01-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       "customer@example.com",
       "provider_failure_detail",
       "raw error",
