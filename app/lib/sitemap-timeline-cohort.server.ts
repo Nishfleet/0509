@@ -289,7 +289,12 @@ export async function getSitemapTimelineTierByDomain(
     // hasCoverage above and never consult the fallback.
     if (verifiedCount + likelyCount === 0) {
       const fallbackVerified = (payload.ads ?? []).filter(
-        (ad) => ad !== null && typeof ad === "object"
+        (ad) =>
+          ad !== null &&
+          typeof ad === "object" &&
+          // Mirror the /ads gate's non-demo filter exactly:
+          // nonDemoAdsFromPayload in sitemap.server.ts.
+          (ad as { source?: unknown }).source !== "demo"
           ? adHasVerifiedDomainLink(ad as unknown as AdRecord, domain)
           : false,
       ).length;
