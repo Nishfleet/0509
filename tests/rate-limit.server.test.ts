@@ -26,32 +26,49 @@ import type { AppEnv } from "~/lib/env.server";
  * the one-statement atomic claim.
  */
 
-function createFakeRateLimiter(options?: {
+// Mirrors the RL_* binding capacities declared in wrangler.jsonc (issue
+// #2985): capacity lives ON the binding and the runtime call is
+// `limit({ key })`, so the fake enforces the same per-binding limit the
+// platform would. Each policy's scope is part of the key, so per-binding
+// counting against the configured limit matches production semantics.
+const EDGE_BINDING_LIMITS: Record<string, number> = {
+  RL_AUTH: 2,
+  RL_SEARCH_ANON_BROWSER: 2,
+  RL_PROOF_BRIEF: 3,
+  RL_SEARCH_SELECTION: 3,
+  RL_SEARCH_IP: 10,
+  RL_BRAND_PAGE: 12,
+  RL_WRITE: 60,
+  RL_STATUS: 120,
+  RL_DELIVERY_WEBHOOK: 180,
+  RL_API_READ: 240,
+  RL_WEBHOOK: 300,
+};
+
+function createFakeEdgeLimiters(options?: {
   failures?: (key: string) => boolean;
   throwOn?: (key: string) => boolean;
-}) {
+}): { env: AppEnv } {
   const counts = new Map<string, number>();
-  return {
-    binding: {
-      async limit(params: { key: string; rate: { requestsPerPeriod: number } }) {
-        const key = params.key;
-        if (options?.throwOn?.(key)) throw new Error("edge limiter unavailable");
-        if (options?.failures?.(key)) return { success: false };
-        const count = (counts.get(key) ?? 0) + 1;
-        counts.set(key, count);
-        if (count > params.rate.requestsPerPeriod) {
-          // Do not retain rejected bursts; matches a rolling-window counter.
-          counts.set(key, count - 1);
-          return { success: false };
-        }
-        return { success: true };
-      },
+  const makeLimiter = (bindingLimit: number) => ({
+    async limit(params: { key: string }) {
+      const key = params.key;
+      if (options?.throwOn?.(key)) throw new Error("edge limiter unavailable");
+      if (options?.failures?.(key)) return { success: false };
+      const count = (counts.get(key) ?? 0) + 1;
+      counts.set(key, count);
+      if (count > bindingLimit) {
+        // Do not retain rejected bursts; matches a rolling-window counter.
+        counts.set(key, count - 1);
+        return { success: false };
+      }
+      return { success: true };
     },
-    counts,
-    limitOfKey(key: string) {
-      return counts.get(key) ?? 0;
-    },
-  };
+  });
+  const env = Object.fromEntries(
+    Object.entries(EDGE_BINDING_LIMITS).map(([name, limit]) => [name, makeLimiter(limit)]),
+  ) as unknown as AppEnv;
+  return { env };
 }
 
 function searchRequest(userAgent: string) {
@@ -140,8 +157,7 @@ describe("rateLimitPolicyFor", () => {
 
 describe("enforceRequestRateLimit (edge binding, fail closed)", () => {
   it("blocks requests after the configured auth limit via the edge binding", async () => {
-    const { binding } = createFakeRateLimiter();
-    const env = { RATE_LIMITER: binding } as unknown as AppEnv;
+    const { env } = createFakeEdgeLimiters();
     const request = new Request("https://0509.io/auth/login", {
       method: "POST",
       headers: {
@@ -164,9 +180,8 @@ describe("enforceRequestRateLimit (edge binding, fail closed)", () => {
     // per public read, and read-scopes failed OPEN when D1 degraded. The edge
     // enforcing must not need D1 at all: a D1 that is entirely broken changes
     // nothing for the edge scopes.
-    const { binding } = createFakeRateLimiter();
     const env = {
-      RATE_LIMITER: binding,
+      ...createFakeEdgeLimiters().env,
       DB: createMissingTableD1(),
     } as unknown as AppEnv;
     const prepareSpy = vi.spyOn(env.DB!, "prepare");
@@ -197,25 +212,23 @@ describe("enforceRequestRateLimit (edge binding, fail closed)", () => {
   });
 
   it("fails closed with 429 when the edge limiter throws", async () => {
-    const { binding, counts } = createFakeRateLimiter();
-    binding.limit = async () => {
+    const { env } = createFakeEdgeLimiters();
+    env.RL_PROOF_BRIEF!.limit = async () => {
       throw new Error("cloudflare edge hiccup");
     };
-    void counts;
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const response = await enforceRequestRateLimit(
       new Request("https://0509.io/api/demo-proof", {
         headers: { "cf-connecting-ip": "203.0.113.46" },
       }),
-      { RATE_LIMITER: binding } as unknown as AppEnv,
+      env,
     );
     expect(response?.status).toBe(429);
     consoleError.mockRestore();
   });
 
   it("keeps the per-IP public-status bucket shared across slash variants", async () => {
-    const { binding } = createFakeRateLimiter();
-    const env = { RATE_LIMITER: binding } as unknown as AppEnv;
+    const { env } = createFakeEdgeLimiters();
 
     for (let index = 0; index < 120; index += 1) {
       const path = index % 2 === 0 ? "/status" : "/status////";
@@ -245,8 +258,7 @@ describe("enforceRequestRateLimit (edge binding, fail closed)", () => {
   });
 
   it("keys all headerless requests into one shared unknown bucket (spoofed XFF cannot mint identities)", async () => {
-    const { binding } = createFakeRateLimiter();
-    const env = { RATE_LIMITER: binding } as unknown as AppEnv;
+    const { env } = createFakeEdgeLimiters();
 
     const spoofedIps = ["198.51.100.1", "203.0.113.9", "192.0.2.44"];
     for (let index = 0; index < 2; index += 1) {
@@ -274,8 +286,7 @@ describe("enforceRequestRateLimit (edge binding, fail closed)", () => {
   });
 
   it("ignores spoofed x-forwarded-for when a real cf-connecting-ip is present", async () => {
-    const { binding } = createFakeRateLimiter();
-    const env = { RATE_LIMITER: binding } as unknown as AppEnv;
+    const { env } = createFakeEdgeLimiters();
 
     for (let index = 0; index < 2; index += 1) {
       const request = new Request("https://0509.io/auth/login", {
@@ -306,8 +317,7 @@ describe("enforceRequestRateLimit (edge binding, fail closed)", () => {
 
 describe("enforcePublicSearchRateLimit (edge binding)", () => {
   it("429s a browser that exceeds its own per-browser budget", async () => {
-    const { binding } = createFakeRateLimiter();
-    const env = { RATE_LIMITER: binding } as unknown as AppEnv;
+    const { env } = createFakeEdgeLimiters();
 
     await expect(enforcePublicSearchRateLimit(searchRequest("a"), env, undefined, "browser-a")).resolves.toBeNull();
     await expect(enforcePublicSearchRateLimit(searchRequest("a"), env, undefined, "browser-a")).resolves.toBeNull();
@@ -320,8 +330,7 @@ describe("enforcePublicSearchRateLimit (edge binding)", () => {
   });
 
   it("separates per-browser budgets on a shared NAT IP", async () => {
-    const { binding } = createFakeRateLimiter();
-    const env = { RATE_LIMITER: binding } as unknown as AppEnv;
+    const { env } = createFakeEdgeLimiters();
 
     for (let index = 0; index < 5; index += 1) {
       const request = new Request("https://0509.io/search?query=nykaa", {
@@ -334,8 +343,7 @@ describe("enforcePublicSearchRateLimit (edge binding)", () => {
   });
 
   it("keeps the per-IP public-search backstop throttling once the IP ceiling is exceeded", async () => {
-    const { binding } = createFakeRateLimiter();
-    const env = { RATE_LIMITER: binding } as unknown as AppEnv;
+    const { env } = createFakeEdgeLimiters();
 
     for (let index = 0; index < PUBLIC_SEARCH_IP_BACKSTOP_LIMIT; index += 1) {
       await expect(enforcePublicSearchRateLimit(searchRequest(`agent-${index}`), env)).resolves.toBeNull();
@@ -347,8 +355,7 @@ describe("enforcePublicSearchRateLimit (edge binding)", () => {
   });
 
   it("keys by anonymous browser id so its own exhausted budget does not block other browsers on the IP", async () => {
-    const { binding } = createFakeRateLimiter();
-    const env = { RATE_LIMITER: binding } as unknown as AppEnv;
+    const { env } = createFakeEdgeLimiters();
 
     for (let index = 0; index < PUBLIC_SEARCH_ANON_BROWSER_LIMIT; index += 1) {
       await expect(
@@ -367,8 +374,7 @@ describe("enforcePublicSearchRateLimit (edge binding)", () => {
 
 describe("enforcePublicSearchSelectionRateLimit", () => {
   it("admits 3 anonymous ad checks then returns 429", async () => {
-    const { binding } = createFakeRateLimiter();
-    const env = { RATE_LIMITER: binding } as unknown as AppEnv;
+    const { env } = createFakeEdgeLimiters();
     const request = new Request("https://0509.io/search?query=nykaa&selected=meta-1", {
       headers: { "cf-connecting-ip": "203.0.113.21", "user-agent": "vitest" },
     });
@@ -384,8 +390,7 @@ describe("enforcePublicSearchSelectionRateLimit", () => {
 
 describe("enforcePublicBrandPageRateLimit", () => {
   it("shares one bucket across brand page domains and 429s past the ceiling", async () => {
-    const { binding } = createFakeRateLimiter();
-    const env = { RATE_LIMITER: binding } as unknown as AppEnv;
+    const { env } = createFakeEdgeLimiters();
 
     for (let index = 0; index < PUBLIC_BRAND_PAGE_PER_MINUTE_LIMIT; index += 1) {
       await expect(

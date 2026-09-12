@@ -15,6 +15,38 @@
   "name": "0509-d1-integration-tests",
   "compatibility_date": "2026-03-29",
   "compatibility_flags": ["nodejs_compat"],
+  "unsafe": {
+    "bindings": [
+      // Real production wiring for the edge Rate Limiting bindings (issue
+      // #2985): the public hot-path limiters fail closed with 429 when a
+      // binding is missing, so integration suites that call them must run
+      // against the same bindings production declares. Capacities mirror
+      // wrangler.jsonc / app/lib/rate-limit.server.ts; the local miniflare
+      // limiters enforce them per key.
+      { "name": "RL_AUTH",
+ "type": "ratelimit", "namespace_id": "0509-rl-auth", "simple": { "limit": 2, "period": 60 } },
+      { "name": "RL_SEARCH_ANON_BROWSER",
+ "type": "ratelimit", "namespace_id": "0509-rl-search-anon-browser", "simple": { "limit": 2, "period": 60 } },
+      { "name": "RL_PROOF_BRIEF",
+ "type": "ratelimit", "namespace_id": "0509-rl-proof-brief", "simple": { "limit": 3, "period": 60 } },
+      { "name": "RL_SEARCH_SELECTION",
+ "type": "ratelimit", "namespace_id": "0509-rl-search-selection", "simple": { "limit": 3, "period": 60 } },
+      { "name": "RL_SEARCH_IP",
+ "type": "ratelimit", "namespace_id": "0509-rl-search-ip", "simple": { "limit": 10, "period": 60 } },
+      { "name": "RL_BRAND_PAGE",
+ "type": "ratelimit", "namespace_id": "0509-rl-brand-page", "simple": { "limit": 12, "period": 60 } },
+      { "name": "RL_WRITE",
+ "type": "ratelimit", "namespace_id": "0509-rl-write", "simple": { "limit": 60, "period": 60 } },
+      { "name": "RL_STATUS",
+ "type": "ratelimit", "namespace_id": "0509-rl-status", "simple": { "limit": 120, "period": 60 } },
+      { "name": "RL_DELIVERY_WEBHOOK",
+ "type": "ratelimit", "namespace_id": "0509-rl-delivery-webhook", "simple": { "limit": 180, "period": 60 } },
+      { "name": "RL_API_READ",
+ "type": "ratelimit", "namespace_id": "0509-rl-api-read", "simple": { "limit": 240, "period": 60 } },
+      { "name": "RL_WEBHOOK",
+ "type": "ratelimit", "namespace_id": "0509-rl-webhook", "simple": { "limit": 300, "period": 60 } }
+    ]
+  },
   "d1_databases": [
     {
       "binding": "DB",

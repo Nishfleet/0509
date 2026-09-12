@@ -576,20 +576,29 @@ describe("search loader", () => {
     // budget keeps the same sustained rate at 2/60s, so the 3rd distinct
     // cold query from the same browser 429s. The limiter fails closed, so
     // the fake edge binding must be present or EVERY search would 429.
+    // The #2985 edge limiters: capacity lives on each RL_* binding (mirroring
+    // wrangler.jsonc) and the runtime call is `limit({ key })`. The anonymous
+    // search path enforces the per-IP backstop (10/60s on RL_SEARCH_IP) and
+    // the per-browser budget (2/60s on RL_SEARCH_ANON_BROWSER) on separate
+    // bindings; keys embed the scope, so one shared count map stays correct.
     const rateLimiterCounts = new Map<string, number>();
-    const rateLimiter = {
-      async limit(params: { key: string; rate: { requestsPerPeriod: number } }) {
+    const fakeEdgeLimiter = (bindingLimit: number) => ({
+      async limit(params: { key: string }) {
         const count = (rateLimiterCounts.get(params.key) ?? 0) + 1;
-        if (count > params.rate.requestsPerPeriod) {
+        if (count > bindingLimit) {
           return { success: false };
         }
         rateLimiterCounts.set(params.key, count);
         return { success: true };
       },
-    };
+    });
     const harness = createSqliteD1();
     applyMigration(harness.sqlite, "migrations/0012_rate_limit_events.sql");
-    const env = { DB: harness.db, RATE_LIMITER: rateLimiter };
+    const env = {
+      DB: harness.db,
+      RL_SEARCH_IP: fakeEdgeLimiter(10),
+      RL_SEARCH_ANON_BROWSER: fakeEdgeLimiter(2),
+    };
     const getOptionalSession = vi.fn().mockResolvedValue(null);
     const listCollections = vi.fn();
     const coldResult = {

@@ -19,12 +19,24 @@ export interface EmailSendingBinding {
   }): Promise<{ messageId: string } | undefined>;
 }
 
-export interface RateLimiterBinding {
-  limit(params: {
-    key: string;
-    rate: { requestsPerPeriod: number; period: "10s" | "60s" };
-  }): Promise<{ success: boolean }>;
-}
+// Edge Rate Limiting bindings (issue #2985) use the generated runtime type
+// `RateLimit` (worker-configuration.d.ts): capacity lives ON the binding
+// (wrangler.jsonc `simple: { limit, period }`), and the call is
+// `limit({ key })` — there is no per-call rate override in this API
+// generation. One binding per scope, so each budget is enforced by the
+// platform.
+export type EdgeRateLimitBindingName =
+  | "RL_AUTH"
+  | "RL_SEARCH_ANON_BROWSER"
+  | "RL_PROOF_BRIEF"
+  | "RL_SEARCH_SELECTION"
+  | "RL_SEARCH_IP"
+  | "RL_BRAND_PAGE"
+  | "RL_WRITE"
+  | "RL_STATUS"
+  | "RL_DELIVERY_WEBHOOK"
+  | "RL_API_READ"
+  | "RL_WEBHOOK";
 
 export interface AppEnv {
   AI?: Ai;
@@ -51,13 +63,25 @@ export interface AppEnv {
   BETTER_AUTH_URL?: string;
   DB?: D1Database;
   /**
-   * Native Cloudflare Rate Limiting binding (issue #2985): counting for the
-   * public hot-path scopes happens at the edge, off D1. Declared optional
-   * only because e2e-mode fixtures and unit tests build env objects by hand;
-   * production wrangler.jsonc declares it, and the limiter fails closed
-   * (429 + Retry-After) when a production-like runtime runs without it.
+   * Native Cloudflare Rate Limiting bindings (issue #2985): counting for the
+   * public hot-path scopes happens at the edge, off D1 — one binding per
+   * scope, with the capacity configured on the binding (wrangler.jsonc
+   * `simple: { limit, period }`). Declared optional only because e2e-mode
+   * fixtures and unit tests build env objects by hand; production
+   * wrangler.jsonc declares them all, and the limiter fails closed
+   * (429 + Retry-After) when a production-like runtime runs without one.
    */
-  RATE_LIMITER?: RateLimiterBinding;
+  RL_AUTH?: RateLimit;
+  RL_SEARCH_ANON_BROWSER?: RateLimit;
+  RL_PROOF_BRIEF?: RateLimit;
+  RL_SEARCH_SELECTION?: RateLimit;
+  RL_SEARCH_IP?: RateLimit;
+  RL_BRAND_PAGE?: RateLimit;
+  RL_WRITE?: RateLimit;
+  RL_STATUS?: RateLimit;
+  RL_DELIVERY_WEBHOOK?: RateLimit;
+  RL_API_READ?: RateLimit;
+  RL_WEBHOOK?: RateLimit;
   DODO_0509_ADAPTIVE_CURRENCY?: string;
   DODO_0509_ADAPTIVE_CURRENCY_FEES_INCLUSIVE?: string;
   DODO_0509_API_KEY?: string;

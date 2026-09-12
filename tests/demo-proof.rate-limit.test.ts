@@ -22,30 +22,27 @@ import type { AppEnv } from "~/lib/env.server";
  *      exhausted bucket does not write rate_limit_events rows.
  */
 
-type Limiter = {
-  binding: { limit(this: void, params: { key: string; rate: { requestsPerPeriod: number } }): Promise<{ success: boolean }> };
-  counts: Map<string, number>;
-};
-
-function createFakeRateLimiter(options?: {
+// Mirrors the RL_PROOF_BRIEF binding capacity declared in wrangler.jsonc
+// (issue #2985): capacity lives ON the binding and the runtime call is
+// `limit({ key })`, so the fake enforces the same per-binding limit the
+// platform would (PUBLIC_PROOF_BRIEF_PER_MINUTE_LIMIT per 60s).
+function createFakeEdgeLimiters(options?: {
   throwOn?: (key: string) => boolean;
-}): Limiter {
+}): { env: AppEnv } {
   const counts = new Map<string, number>();
-  return {
-    binding: {
-      async limit(params) {
-        if (options?.throwOn?.(params.key)) throw new Error("edge limiter unavailable");
-        const count = (counts.get(params.key) ?? 0) + 1;
-        if (count > params.rate.requestsPerPeriod) {
-          counts.set(params.key, count - 1);
-          return { success: false };
-        }
-        counts.set(params.key, count);
-        return { success: true };
-      },
+  const limiter = {
+    async limit(params: { key: string }) {
+      if (options?.throwOn?.(params.key)) throw new Error("edge limiter unavailable");
+      const count = (counts.get(params.key) ?? 0) + 1;
+      if (count > PUBLIC_PROOF_BRIEF_PER_MINUTE_LIMIT) {
+        counts.set(params.key, count - 1);
+        return { success: false };
+      }
+      counts.set(params.key, count);
+      return { success: true };
     },
-    counts,
   };
+  return { env: { RL_PROOF_BRIEF: limiter } as unknown as AppEnv };
 }
 
 function demoProofRequest(ip: string) {
@@ -75,8 +72,7 @@ describe("the /api/demo-proof edge limiter (issues #2964 and #2985)", () => {
   });
 
   it("an exhausted burst returns a labeled 429 with Retry-After from the edge limiter", async () => {
-    const { binding } = createFakeRateLimiter();
-    const env = { RATE_LIMITER: binding } as unknown as AppEnv;
+    const { env } = createFakeEdgeLimiters();
 
     for (let i = 0; i < PUBLIC_PROOF_BRIEF_PER_MINUTE_LIMIT; i++) {
       await expect(enforceRequestRateLimit(demoProofRequest("203.0.113.7"), env)).resolves.toBeNull();
@@ -93,13 +89,12 @@ describe("the /api/demo-proof edge limiter (issues #2964 and #2985)", () => {
   });
 
   it("fails CLOSED with 429 when the edge limiter is missing or throwing — a degraded edge 429s, it never admits unbounded traffic", async () => {
-    const missing = { RATE_LIMITER: undefined } as unknown as AppEnv;
+    const missing = {} as AppEnv;
     const missingResponse = await enforceRequestRateLimit(demoProofRequest("203.0.113.7"), missing);
     expect(missingResponse?.status).toBe(429);
     expect(missingResponse?.headers.get("retry-after")).toBe("60");
 
-    const { binding } = createFakeRateLimiter({ throwOn: (key) => key.length > 0 });
-    const env = { RATE_LIMITER: binding } as unknown as AppEnv;
+    const { env } = createFakeEdgeLimiters({ throwOn: (key) => key.length > 0 });
     const thrownResponse = await enforceRequestRateLimit(demoProofRequest("203.0.113.7"), env);
     expect(thrownResponse?.status).toBe(429);
     expect(thrownResponse?.headers.get("retry-after")).toBe("60");
@@ -107,7 +102,6 @@ describe("the /api/demo-proof edge limiter (issues #2964 and #2985)", () => {
 
   it("across a full burst, zero rows touch the D1 hot path (the #2964 fail-open write path is gone)", async () => {
     const writes: string[] = [];
-    const { binding } = createFakeRateLimiter();
     const db = {
       prepare: (sql: string) => ({
         bind: (...args: unknown[]) => ({
@@ -118,7 +112,7 @@ describe("the /api/demo-proof edge limiter (issues #2964 and #2985)", () => {
         }),
       }),
     };
-    const env = { RATE_LIMITER: binding, DB: db } as unknown as AppEnv;
+    const env = { ...createFakeEdgeLimiters().env, DB: db } as unknown as AppEnv;
 
     for (let i = 0; i < PUBLIC_PROOF_BRIEF_PER_MINUTE_LIMIT; i++) {
       await expect(enforceRequestRateLimit(demoProofRequest("203.0.113.7"), env)).resolves.toBeNull();

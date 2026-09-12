@@ -150,14 +150,91 @@
   ],
   "unsafe": {
     "bindings": [
+      // Native Cloudflare Rate Limiting bindings (issue #2985): public
+      // hot-path scopes (auth, public search, brand pages, public API reads
+      // incl. /api/demo-proof, status) count at the edge, off D1. One
+      // binding per scope — capacity is configured HERE (simple.limit /
+      // simple.period) and must match the declared budgets in
+      // app/lib/rate-limit.server.ts (PUBLIC_* constants and
+      // rateLimitPolicyFor). Never remove one without wiring an equivalent
+      // edge counter — the limiter fails closed with 429 + Retry-After when
+      // a binding is missing.
       {
-        // Native Cloudflare Rate Limiting binding (issue #2985): public
-        // hot-path scopes (auth, public search, brand pages, public API
-        // reads incl. /api/demo-proof, status) count at the edge, off D1.
-        // Never remove it without wiring an equivalent edge counter — the
-        // limiter fails closed with 429 + Retry-After when it is missing.
-        "name": "RATE_LIMITER",
-        "type": "ratelimit"
+        "name": "RL_AUTH",
+
+        "type": "ratelimit",
+        "namespace_id": "0509-rl-auth",
+        "simple": { "limit": 2, "period": 60 }
+      },
+      {
+        "name": "RL_SEARCH_ANON_BROWSER",
+
+        "type": "ratelimit",
+        "namespace_id": "0509-rl-search-anon-browser",
+        "simple": { "limit": 2, "period": 60 }
+      },
+      {
+        "name": "RL_PROOF_BRIEF",
+
+        "type": "ratelimit",
+        "namespace_id": "0509-rl-proof-brief",
+        "simple": { "limit": 3, "period": 60 }
+      },
+      {
+        "name": "RL_SEARCH_SELECTION",
+
+        "type": "ratelimit",
+        "namespace_id": "0509-rl-search-selection",
+        "simple": { "limit": 3, "period": 60 }
+      },
+      {
+        "name": "RL_SEARCH_IP",
+
+        "type": "ratelimit",
+        "namespace_id": "0509-rl-search-ip",
+        "simple": { "limit": 10, "period": 60 }
+      },
+      {
+        "name": "RL_BRAND_PAGE",
+
+        "type": "ratelimit",
+        "namespace_id": "0509-rl-brand-page",
+        "simple": { "limit": 12, "period": 60 }
+      },
+      {
+        "name": "RL_WRITE",
+
+        "type": "ratelimit",
+        "namespace_id": "0509-rl-write",
+        "simple": { "limit": 60, "period": 60 }
+      },
+      {
+        "name": "RL_STATUS",
+
+        "type": "ratelimit",
+        "namespace_id": "0509-rl-status",
+        "simple": { "limit": 120, "period": 60 }
+      },
+      {
+        "name": "RL_DELIVERY_WEBHOOK",
+
+        "type": "ratelimit",
+        "namespace_id": "0509-rl-delivery-webhook",
+        "simple": { "limit": 180, "period": 60 }
+      },
+      {
+        "name": "RL_API_READ",
+
+        "type": "ratelimit",
+        "namespace_id": "0509-rl-api-read",
+        "simple": { "limit": 240, "period": 60 }
+      },
+      {
+        "name": "RL_WEBHOOK",
+
+        "type": "ratelimit",
+        "namespace_id": "0509-rl-webhook",
+        "simple": { "limit": 300, "period": 60 }
       }
     ]
   },

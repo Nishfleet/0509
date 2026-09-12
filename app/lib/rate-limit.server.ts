@@ -1,9 +1,9 @@
-import type { AppEnv } from "~/lib/env.server";
+import type { AppEnv, EdgeRateLimitBindingName } from "~/lib/env.server";
 
 // The Public hot paths no longer touch D1 for their rate limiting (issue
-// #2985): every scope below is enforced by the native Cloudflare Rate
-// Limiting binding (`env.RATE_LIMITER`, declared as an unsafe `ratelimit`
-// binding in wrangler.jsonc). That binding counts at the Cloudflare edge —
+// #2985): every scope below is enforced by a native Cloudflare Rate
+// Limiting binding (the RL_* bindings, declared in wrangler.jsonc with
+// their capacities). Those bindings count at the Cloudflare edge —
 // no rate_limit_events row per request, no D1 round-trip on the hot path,
 // and no dependency on D1 health: a degraded D1 can no longer switch the
 // public-search buckets off, and a degraded EDGE limiter fails CLOSED with
@@ -57,6 +57,11 @@ type EdgeLimitPolicy = {
   // (a 20/10min budget becomes 2 per any rolling 60s, not one window of 20).
   limit: number;
   periodSeconds: 10 | 60;
+  // The edge binding that enforces this policy. Capacity is configured on
+  // the binding itself (wrangler.jsonc `simple: { limit, period }`) and MUST
+  // match `limit` here — the binding is the enforcing counter, `limit` is
+  // the declared budget the tests and this file document.
+  binding: EdgeRateLimitBindingName;
   // When set, the rate-limit key is derived from this value instead of
   // IP/user-agent — e.g. an anonymous browser id or a user id, so rotating
   // IPs can't reset the bucket.
@@ -141,6 +146,7 @@ export async function enforcePublicSearchRateLimit(
       scope: "public-search-ip",
       limit: PUBLIC_SEARCH_IP_BACKSTOP_LIMIT,
       periodSeconds: EDGE_LIMIT_PERIOD_SECONDS,
+      binding: "RL_SEARCH_IP",
       keyByIpOnly: true,
     },
   );
@@ -154,6 +160,7 @@ export async function enforcePublicSearchRateLimit(
         scope: "public-search-anon-browser",
         limit: PUBLIC_SEARCH_ANON_BROWSER_LIMIT,
         periodSeconds: EDGE_LIMIT_PERIOD_SECONDS,
+        binding: "RL_SEARCH_ANON_BROWSER",
         keySeed: anonymousBrowserId,
       },
     );
@@ -175,6 +182,7 @@ export async function enforcePublicSearchSelectionRateLimit(
       scope: "public-search-selection",
       limit: PUBLIC_SEARCH_SELECTION_PER_MINUTE_LIMIT,
       periodSeconds: EDGE_LIMIT_PERIOD_SECONDS,
+      binding: "RL_SEARCH_SELECTION",
       keyByIpOnly: true,
     },
   );
@@ -195,6 +203,7 @@ export async function enforcePublicBrandPageRateLimit(
       scope: "public-brand-page",
       limit: PUBLIC_BRAND_PAGE_PER_MINUTE_LIMIT,
       periodSeconds: EDGE_LIMIT_PERIOD_SECONDS,
+      binding: "RL_BRAND_PAGE",
       keyByIpOnly: true,
     },
   );
@@ -412,26 +421,26 @@ export function rateLimitPolicyFor(request: Request): EdgeLimitPolicy | null {
   }
 
   if ((method === "GET" || method === "HEAD") && pathname === "/status") {
-    return { scope: "public-status", limit: 120, periodSeconds: 60, keyByIpOnly: true };
+    return { scope: "public-status", limit: 120, periodSeconds: 60, binding: "RL_STATUS", keyByIpOnly: true };
   }
 
   if (pathname.startsWith("/api/auth") || pathname.startsWith("/auth/")) {
     // 20/10min legacy -> same sustained 2/min at 60s burst granularity.
-    return { scope: "auth", limit: 2, periodSeconds: 60 };
+    return { scope: "auth", limit: 2, periodSeconds: 60, binding: "RL_AUTH" };
   }
 
   if (pathname.startsWith("/api/delivery-status")) {
-    return { scope: "delivery-webhook", limit: 180, periodSeconds: 60 };
+    return { scope: "delivery-webhook", limit: 180, periodSeconds: 60, binding: "RL_DELIVERY_WEBHOOK" };
   }
 
   // Provider webhooks (Dodo, etc.): higher ceiling than generic writes.
   // Signature verification remains the real auth gate for these routes.
   if (pathname.startsWith("/api/webhooks/")) {
-    return { scope: "webhook", limit: 300, periodSeconds: 60 };
+    return { scope: "webhook", limit: 300, periodSeconds: 60, binding: "RL_WEBHOOK" };
   }
 
   if (method !== "GET" && method !== "HEAD") {
-    return { scope: "write", limit: 60, periodSeconds: 60 };
+    return { scope: "write", limit: 60, periodSeconds: 60, binding: "RL_WRITE" };
   }
 
   if (pathname.startsWith("/api/")) {
@@ -444,12 +453,13 @@ export function rateLimitPolicyFor(request: Request): EdgeLimitPolicy | null {
         scope: "public-proof-brief",
         limit: PUBLIC_PROOF_BRIEF_PER_MINUTE_LIMIT,
         periodSeconds: 60,
+        binding: "RL_PROOF_BRIEF",
         keyByIpOnly: true,
       };
     }
 
     // Covers the remaining /api/* reads on the shared edge bucket.
-    return { scope: "api-read", limit: 240, periodSeconds: 60 };
+    return { scope: "api-read", limit: 240, periodSeconds: 60, binding: "RL_API_READ" };
   }
 
   // Anything else (HTML page reads such as /, /search, sample-brief) stays
@@ -468,6 +478,11 @@ function normalizeRateLimitedPathname(pathname: string) {
  * depend on D1 at all, so a D1 outage can no longer disable public-search
  * buckets, and a degraded/missing edge limiter returns 429 + Retry-After
  * rather than admitting unbounded traffic on a public hot path.
+ *
+ * The runtime contract (worker-configuration.d.ts `RateLimit`) is
+ * `limit({ key })`: the capacity lives ON the binding (wrangler.jsonc
+ * `simple: { limit, period }`, one binding per scope), so the call passes
+ * only the bucket key.
  */
 async function enforceEdgeRateLimit(
   request: Request,
@@ -480,21 +495,17 @@ async function enforceEdgeRateLimit(
   if (isVerifiedSearchCrawler(request) && VERIFIED_BOT_EXEMPT_SCOPES.has(policy.scope)) {
     return null;
   }
-  const limiter = env.RATE_LIMITER;
+  const limiter = env[policy.binding];
   if (!limiter) {
-    console.error("[rate-limit] Rate Limiting binding missing; failing closed.");
+    console.error(
+      `[rate-limit] Rate Limiting binding ${policy.binding} missing; failing closed.`,
+    );
     return tooManyRequestsResponse(policy.periodSeconds);
   }
 
   try {
     const keyHash = await requestKeyHash(request, policy);
-    const result = await limiter.limit({
-      key: keyHash,
-      rate: {
-        requestsPerPeriod: policy.limit,
-        period: policy.periodSeconds === 10 ? "10s" : "60s",
-      },
-    });
+    const result = await limiter.limit({ key: keyHash });
     if (result.success) return null;
     return tooManyRequestsResponse(policy.periodSeconds);
   } catch (error) {
@@ -565,6 +576,9 @@ type AtomicClaimRateLimitPolicy = {
   limit: number;
   windowSeconds: number;
   keySeed?: string;
+  // Key the budget by client IP alone, ignoring user-agent (share-pdf):
+  // rotating UAs must not mint fresh buckets on a cost-bearing route.
+  keyByIpOnly?: boolean;
   // When set, stored instead of the request pathname. Use for routes whose
   // pathname embeds a bearer credential (e.g. share tokens) so the token
   // never lands in the rate_limit_events table.
@@ -598,7 +612,11 @@ async function enforceAtomicClaimRateLimit(
     const route = policy.routeOverride ?? normalizeRateLimitedPathname(url.pathname);
     const now = new Date();
     const since = new Date(now.getTime() - policy.windowSeconds * 1000).toISOString();
-    const keyHash = await requestKeyHash(request, { scope: policy.scope, keySeed: policy.keySeed });
+    const keyHash = await requestKeyHash(request, {
+      scope: policy.scope,
+      keySeed: policy.keySeed,
+      keyByIpOnly: policy.keyByIpOnly,
+    });
 
     // A single conditional INSERT is the reservation and the limit check.
     // D1/SQLite serializes the statement atomically, so concurrent callers
