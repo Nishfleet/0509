@@ -26,6 +26,7 @@ import type { LinksFunction, MetaFunction } from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
+import { GuideKeepReading } from "~/components/guide-keep-reading";
 import {
   articleJsonLd,
   canonicalLinks,
@@ -404,6 +405,15 @@ export default function GuideMetaAdLibraryApiLimitationsRoute() {
           including &ldquo;the official API covers what you need.&rdquo;
         </p>
       </section>
+
+      <GuideKeepReading>
+        <a href="/guides/how-to-monitor-meta-ad-library">
+          How to monitor a competitor&rsquo;s Meta Ad Library
+        </a>
+        <a href="/guides/how-to-turn-a-one-off-competitor-check-into-a-standing-watch">
+          How to turn a one-off check into a standing watch
+        </a>
+      </GuideKeepReading>
 
       <MarketingFooter />
     </main>

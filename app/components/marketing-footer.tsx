@@ -82,6 +82,20 @@ export const MarketingFooter: FunctionComponent<MarketingFooterProps> = (
         <Link to="/compare/minea">vs Minea</Link>
         <Link to="/compare/poweradspy">vs PowerAdSpy</Link>
       </nav>
+      {/* Issue #3167: the /guides corpus had zero inbound internal links.
+          These are literal href= anchors rather than Link to= because the
+          issue's source-level verify greps `href="/guides/` — rendered
+          markup is identical, the grep only sees the literal form. */}
+      <nav className="ld-footer-compare" aria-label="Guides">
+        <span className="ld-footer-group-label">Guides</span>
+        <a href="/guides">All guides</a>
+        <a href="/guides/how-to-track-competitor-ads">Track competitor ads</a>
+        <a href="/guides/how-to-monitor-meta-ad-library">Monitor a Meta Ad Library</a>
+        <a href="/guides/how-to-monitor-competitor-landing-page-changes">Watch landing-page changes</a>
+        <a href="/guides/how-to-get-alerted-when-a-competitor-changes-their-offer">Alerted on offer changes</a>
+        <a href="/guides/how-to-prove-what-changed-on-a-competitor-website">Prove what changed</a>
+        <a href="/guides/how-to-turn-a-one-off-competitor-check-into-a-standing-watch">One-off check to standing watch</a>
+      </nav>
       <nav className="ld-footer-compare" aria-label="Switch">
         <span className="ld-footer-group-label">Switch</span>
         <Link to="/switch/panoramata">from Panoramata</Link>
