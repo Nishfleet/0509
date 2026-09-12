@@ -31,3 +31,15 @@ Selectors `cf1`, `cf2`, `cf2024-01` and `default` are intentionally empty.
 these regress: SPF softfail, DMARC without `p=`/`rua`, DKIM not published at
 `cf2024-1._domainkey` (selector list overridable via `CHECK_DKIM_SELECTORS`).
 Run it after any Cloudflare Email or zone-DNS change.
+
+Exit codes are independent of output format, so `--json` (the mode automation
+uses) still exits non-zero on a regression:
+
+| Exit | Meaning |
+| --- | --- |
+| 0 | all assertions pass |
+| 1 | one or more assertions failed (a real regression) |
+| 2 | infrastructure error — `dig` missing or unreachable, or a malformed selector |
+
+The gate is not yet wired to a runner: it runs on demand and in tests, not on a
+schedule. Wiring it to a timer or CI job is the remaining loose end.
