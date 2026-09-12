@@ -21,7 +21,26 @@ SITE="${SEO_PARITY_SITE:-https://0509.io}"
 SITEMAP_URL="${SITE}/sitemap.xml"
 # Sample up to this many /ads URLs so the PR check stays fast and bounded.
 MAX_SAMPLE="${SEO_PARITY_MAX_SAMPLE:-10}"
+# Optional canary-bearer header (issue #3278). When set, every curl below
+# sends it; the public-brand-page edge limiter returns null for an
+# authenticated canary request, so the canary can sweep the whole sitemap
+# in one run without tripping the very limiter it is supposed to be
+# measuring. Unset on local PR checks (the limiter is generous in CI and a
+# one-off local sample never trips it). Constant-time-compare is at the edge
+# limiter; this script only sets the header.
+# NOTE (issue #3278 investigation, 2026-09-12): the nine sitemap /ads URLs
+# that showed HTTP 301 in that issue's local repro (zivame.com, snitch.co.in,
+# kamaayurveda.com, dotandkey.com, thedermaco.com, newbalance.com, hoka.com,
+# mailchimp.com, nykaa.com) were the loader's transient cache-miss redirect
+# (#1282) and live-verified as HTTP 200 + indexable the same day. Nothing was
+# changed against them: the existing --retry-followed curl detects a
+# redirected URL as a non-2xx FAIL the moment one re-appears, and
+# tests/sitemap-ads-no-redirect.test.ts pins generator-vs-loader agreement at
+# the unit level.
 CURL_OPTS=(--silent --show-error --max-time 20 --retry 2 --retry-delay 2)
+if [ -n "${SEO_PARITY_CANARY_TOKEN:-}" ]; then
+  CURL_OPTS+=(-H "x-0509-canary-token: ${SEO_PARITY_CANARY_TOKEN}")
+fi
 
 # 1. Fetch the sitemap and extract the /ads/:domain URLs it lists.
 sitemap="$(curl "${CURL_OPTS[@]}" "$SITEMAP_URL")"

@@ -48,6 +48,29 @@ function isVerifiedSearchCrawler(request: Request): boolean {
   return request.headers.get("cf-verified-bot")?.trim().toLowerCase() === "true";
 }
 
+// Ops canaries that hit the public /ads/:domain surface need to sweep the
+// entire sitemap in one run (issue #3278). At 127 sitemap URLs that exceeds
+// the public-brand-page budget (12/60s) several times over — without an
+// exemption a canary from a hosted runner trips the same limiter it is
+// supposed to be measuring, and the canary goes red for a transport reason,
+// not the noindex/redirect drift it is built to catch. The /ads/:domain
+// route is cache-read-only (no provider spend) so an authenticated ops
+// caller can safely bypass the IP-only brand-page budget without weakening
+// abuse protection — every other scope (auth, write, share-pdf, account
+// search, etc.) keeps the limiter. The bypass is gated on the canonical
+// canary-token check (constant-time compare against env.CANARY_BYPASS_TOKEN,
+// fail-closed when unset/blank), the same primitive that gates every other
+// canary route — header forgery gets the same anonymous budget as today.
+const CANARY_BYPASS_SCOPES = new Set(["public-brand-page"]);
+
+async function isCanaryBypassRequest(request: Request, env: AppEnv): Promise<boolean> {
+  if (!env.CANARY_BYPASS_TOKEN?.trim()) {
+    return false;
+  }
+  const { hasValidCanaryToken } = await import("~/lib/canary-token.server");
+  return hasValidCanaryToken(request, env.CANARY_BYPASS_TOKEN);
+}
+
 type EdgeLimitPolicy = {
   scope: string;
   // The Cloudflare Rate Limiting binding supports only "10s" and "60s"
@@ -493,6 +516,15 @@ async function enforceEdgeRateLimit(
     return null;
   }
   if (isVerifiedSearchCrawler(request) && VERIFIED_BOT_EXEMPT_SCOPES.has(policy.scope)) {
+    return null;
+  }
+  // Issue #3278: the programmatic-SEO live canary (`ads-prog-seo-canary.yml`)
+  // sweeps every sitemap /ads/:domain URL in one run and trips the same
+  // public-brand-page bucket it is supposed to be measuring. An authenticated
+  // canary request — gated on the canonical CANARY_BYPASS_TOKEN header — is
+  // exempt before the binding is consulted, so the canary reports on the
+  // sitemap/noindex surface without the transport masking it.
+  if (CANARY_BYPASS_SCOPES.has(policy.scope) && await isCanaryBypassRequest(request, env)) {
     return null;
   }
   const limiter = env[policy.binding];
