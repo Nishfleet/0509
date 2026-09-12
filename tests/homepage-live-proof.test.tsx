@@ -87,7 +87,6 @@ function mockReactRouter(proofBrief: unknown) {
         indexableAdsLinks: [],
         featuredDomain: "nike.com",
         monitoringCoverageDays: null,
-        pricingPreview: { available: false },
         proofBrief,
       }),
     };
