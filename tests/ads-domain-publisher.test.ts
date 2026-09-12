@@ -161,12 +161,16 @@ describe("beauty-personal-care seed list (issue #3123)", () => {
     expect(resolveSeedList("beauty-personal-care")).not.toBeNull();
   });
 
-  it("validates clean and carries exactly 31 domains, each with a brand display name", () => {
+  it("validates clean and carries exactly 29 domains, each with a real brand display name", () => {
     const list = SEED_LISTS["beauty-personal-care"];
     expect(validateSeedList(list)).toEqual([]);
-    expect(list.domains).toHaveLength(31);
+    expect(list.domains).toHaveLength(29);
+    // A brand display name ships as published page copy, so a literal
+    // "placeholder" stub or a whitespace-only value must fail this pin —
+    // the phase-1 review caught exactly that error class on credobeauty.com.
     for (const entry of list.domains) {
-      expect(entry.brand?.trim()).toBeTruthy();
+      const brand = entry.brand?.trim() ?? "";
+      expect(brand.length > 0 && brand.toLowerCase() !== "placeholder").toBe(true);
     }
   });
 
@@ -188,12 +192,15 @@ describe("saas-software seed list (issue #3123)", () => {
     expect(resolveSeedList("saas-software")).not.toBeNull();
   });
 
-  it("validates clean and carries exactly 36 domains, each with a brand display name", () => {
+  it("validates clean and carries exactly 36 domains, each with a real brand display name", () => {
     const list = SEED_LISTS["saas-software"];
     expect(validateSeedList(list)).toEqual([]);
     expect(list.domains).toHaveLength(36);
+    // Same pin as beauty-personal-care: "placeholder" literals and
+    // whitespace-only display names must fail here, not ship as page copy.
     for (const entry of list.domains) {
-      expect(entry.brand?.trim()).toBeTruthy();
+      const brand = entry.brand?.trim() ?? "";
+      expect(brand.length > 0 && brand.toLowerCase() !== "placeholder").toBe(true);
     }
   });
 
@@ -335,7 +342,7 @@ describe("runAdsDomainPublisher all-lists deadline + cursor (issue #2361)", () =
   });
 
   // The flattened all-lists queue: festive-india-2026 (30), sneaker-resale
-  // (24), beauty-personal-care (31), saas-software (36) = 121 entries, in
+  // (24), beauty-personal-care (29), saas-software (36) = 119 entries, in
   // Object.keys(SEED_LISTS) order. Issue #3123 grew the registry past
   // ADS_DOMAIN_PUBLISHER_CAP (default 60), so a full pass spans multiple
   // nights by design — full-pass tests derive the cap from the registry
