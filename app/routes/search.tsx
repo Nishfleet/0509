@@ -19,7 +19,6 @@ import type {
   LinksFunction,
   LoaderFunctionArgs,
   MetaFunction,
-  SerializeFrom,
 } from "react-router";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 
@@ -1343,7 +1342,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 // streams the promise's resolution into the already-flushed document (single
 // fetch, turbo-stream). A payload without `search` is a flat early return
 // (idle, HEAD, invalid input, rate-limit copy) and renders exactly as before.
-type SearchRouteLoaderData = SerializeFrom<typeof loader>;
+type SearchRouteLoaderData = Awaited<ReturnType<typeof loader>>;
 type StreamedSearchRouteData = Extract<
   SearchRouteLoaderData,
   { search: Promise<unknown> }
