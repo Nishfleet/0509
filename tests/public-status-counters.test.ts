@@ -3,8 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 import {
   DIGEST_STALENESS_THRESHOLD_MS,
   digestHealthState,
+  getMonitoringCoverageDays,
   getPublicStatusCounters,
 } from "~/lib/public-status-counters.server";
+import { monitoringCoverageDays } from "~/lib/monitoring-coverage";
 
 /**
  * Regression for issue #1780: the /status "Last digest sent" counter froze at
@@ -104,6 +106,52 @@ describe("getPublicStatusCounters digest query", () => {
     expect(result!.lastDigestSentAt).toBe(stale);
     expect(result!.runsInLast24h).toBe(24);
     expect(result!.digestHealth).toBe("stalled");
+  });
+});
+
+describe("getMonitoringCoverageDays footer figure (issue #2972)", () => {
+  it("converts the earliest baseline into whole coverage days", () => {
+    expect(
+      monitoringCoverageDays("2026-09-01T00:00:00.000Z", "2026-09-12T12:00:00.000Z"),
+    ).toBe(11);
+    expect(monitoringCoverageDays(null, "2026-09-12T00:00:00.000Z")).toBeNull();
+    // A baseline in the future (skewed write) must never render a negative
+    // "uptime" figure.
+    expect(
+      monitoringCoverageDays("2026-09-13T00:00:00.000Z", "2026-09-12T00:00:00.000Z"),
+    ).toBeNull();
+  });
+
+  it("returns null when the DB is not configured", async () => {
+    const result = await getMonitoringCoverageDays({ DB: undefined } as never);
+    expect(result).toBeNull();
+  });
+
+  it("reads MIN(baseline_at) and returns whole days", async () => {
+    const issued: string[] = [];
+    const tenDaysAgo = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString();
+    const prepare = vi.fn((sql: string) => {
+      issued.push(sql);
+      return {
+        bind: vi.fn(() => ({
+          all: vi.fn().mockResolvedValue({ results: [{ active_since: tenDaysAgo }] }),
+        })),
+      };
+    });
+
+    const result = await getMonitoringCoverageDays(makeEnv(prepare));
+    expect(issued[0]).toContain("MIN(baseline_at)");
+    expect(issued[0]).toContain("scheduled_observation_health_state");
+    expect(result).toBe(10);
+  });
+
+  it("returns null when the baseline table is empty", async () => {
+    const prepare = vi.fn(() => ({
+      bind: vi.fn(() => ({ all: vi.fn().mockResolvedValue({ results: [{ active_since: null }] }) })),
+    }));
+
+    const result = await getMonitoringCoverageDays(makeEnv(prepare));
+    expect(result).toBeNull();
   });
 });
 

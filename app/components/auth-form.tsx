@@ -6,6 +6,8 @@ interface AuthFormProps {
   redirectTo: string;
   initialEmail?: string;
   initialName?: string;
+  /** ?competitor= deep-link prefill — round-trips through the magic-link redirect like name does. */
+  initialCompetitor?: string;
   message?: string | null;
   error?: string | null;
   /** WP-39: magic-link already sent — show recovery (resend / change email). */
@@ -48,6 +50,7 @@ export function AuthForm({
   redirectTo,
   initialEmail,
   initialName,
+  initialCompetitor,
   message,
   error,
   linkSent = false,
@@ -130,6 +133,9 @@ export function AuthForm({
             {isSignup ? (
               <input name="name" type="hidden" value={(initialName ?? "").trim() || "Account"} />
             ) : null}
+            {isSignup && (initialCompetitor ?? "").trim() ? (
+              <input name="competitor" type="hidden" value={(initialCompetitor ?? "").trim()} />
+            ) : null}
             <button className="f9-wk-btn" disabled={pending} type="submit">
               {emailPending ? "Sending…" : "Resend link"}
             </button>
@@ -150,6 +156,18 @@ export function AuthForm({
           <label className="f9-field">
             <span>Name</span>
             <input autoComplete="name" defaultValue={initialName ?? ""} name="name" placeholder="Your name (optional)" />
+          </label>
+        ) : null}
+        {isSignup ? (
+          <label className="f9-field">
+            <span>First competitor website</span>
+            <input
+              autoComplete="off"
+              defaultValue={initialCompetitor ?? ""}
+              name="competitor"
+              placeholder="competitor.com (optional)"
+              type="text"
+            />
           </label>
         ) : null}
 

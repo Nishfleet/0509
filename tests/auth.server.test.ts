@@ -8,7 +8,6 @@ import {
   betterAuthTrustedOrigins,
   buildBetterAuthMagicLinkEmail,
   enabledBetterAuthOAuthProviders,
-  hasBetterAuthPasskeysForEmail,
   isBetterAuthConfigured,
   isBetterAuthOAuthProviderConfigured,
   isSameOriginAuthFormPost,
@@ -1387,64 +1386,6 @@ describe("Better Auth magic links", () => {
 	});
 });
 
-describe("Better Auth passkey login gating", () => {
-  it("only exposes passkey login when the known email has registered passkeys", async () => {
-    const prepare = vi.fn((sql: string) => ({
-      bind: vi.fn(() => ({
-        first: vi.fn(async () => {
-          if (sql.includes("FROM passkey")) {
-            return { id: "passkey-1" };
-          }
-          return null;
-        }),
-      })),
-    }));
-    vi.doMock("~/lib/auth.server", () => ({
-      getOptionalSession: vi.fn().mockResolvedValue(null),
-    }));
-
-    const testEnv = env({ DB: { prepare } as unknown as D1Database });
-    const { hasBetterAuthPasskeysForEmail } = await import("~/lib/better-auth.server");
-    expect(await hasBetterAuthPasskeysForEmail(testEnv, "owner@example.com")).toBe(true);
-    expect(await hasBetterAuthPasskeysForEmail(testEnv, "")).toBe(false);
-
-    const { loader } = await import("~/routes/auth.login");
-    await expect(
-      loader({
-        context: context(testEnv),
-        params: {},
-        pattern: "/auth/login",
-        request: new Request("https://0509.io/auth/login?email=owner%40example.com"),
-        url: "https://0509.io/auth/login?email=owner%40example.com",
-      } as never),
-    ).resolves.toMatchObject({
-      passkeysEnabled: true,
-      prefillEmail: "owner@example.com",
-    });
-
-    await expect(
-      loader({
-        context: context(testEnv),
-        params: {},
-        pattern: "/auth/login",
-        request: new Request("https://0509.io/auth/login"),
-        url: "https://0509.io/auth/login",
-      } as never),
-    ).resolves.toMatchObject({
-      prefillEmail: "",
-    });
-    await expect(
-      loader({
-        context: context(testEnv),
-        params: {},
-        pattern: "/auth/login",
-        request: new Request("https://0509.io/auth/login"),
-        url: "https://0509.io/auth/login",
-      } as never),
-    ).resolves.not.toHaveProperty("passkeysEnabled");
-  });
-});
-
 describe("Better Auth auth page errors", () => {
   it("shows retry messages for Better Auth magic-link callback error codes", async () => {
     vi.doMock("~/lib/auth.server", () => ({
@@ -1794,6 +1735,7 @@ describe("Better Auth routes", () => {
       email: "owner@example.com",
       name: "Owner",
       redirectTo: "/app/onboard",
+      competitor: "",
     });
     expect(warn).toHaveBeenCalledWith("failed to send Better Auth signup email", {
       errorName: "Error",

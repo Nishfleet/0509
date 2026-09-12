@@ -41,7 +41,7 @@ type AuditTable = {
 };
 
 const audit = JSON.parse(
-  readFileSync("docs/customer-claim-audit-table.json", "utf8"),
+  readFileSync("docs/customer-claim-table.json", "utf8"), // renamed from customer-claim-audit-table (#3003)
 ) as AuditTable;
 
 const ALLOWED_RESULTS = new Set([

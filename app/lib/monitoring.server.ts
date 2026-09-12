@@ -1467,20 +1467,18 @@ export async function runWatchlist(
       recentWatchEvents,
       scanNativeEvents,
     } = await withRunLease(env, runId, options.orchestrationToken, async () => {
-      if (degraded) {
-        // Stale-cache honesty: nothing live was fetched, so no diff runs, the
-        // run is recorded as failed (cache_only), lastScannedAt stays put, and
-        // integration status reflects reality. The catch path still attempts
-        // direct-website proof, and the next scan retries live.
-        throw new CommercialDiscoveryError(
-          "Live discovery was cooling down; only cached results were available, so change detection was skipped.",
-          "rate_limited",
-        );
-      }
-
       // Full-Site Watch (feature-flagged): sitemap discovery + bounded crawl +
       // inventory manifest for competitor websites, using the run's lease.
       // Errors are recorded as honest failed manifests, never run-fatal.
+      // Issue #3103: this must run BEFORE the degraded check below. The site
+      // scan fetches sitemaps/robots directly and shares nothing with the ad
+      // discovery provider, so a cache-only cooldown on that provider —
+      // which degrades every scheduled run while the ads pipeline still
+      // shows life — must not silently suppress the inventory manifest too.
+      // It sat after the degraded throw since the feature landed
+      // (d3a645312, re-threaded through withRunLease in PR #2660), which is
+      // how the Meta discovery canary went red with website_site_scan at 0
+      // rows between 2026-09-10T23:15Z and 2026-09-11T04:52Z.
       if (isFullSiteWatchEnabled(env)) {
         try {
           await runWebsiteSiteScanForWatchlist(env, watchlist, {
@@ -1493,6 +1491,17 @@ export async function runWatchlist(
             error,
           );
         }
+      }
+
+      if (degraded) {
+        // Stale-cache honesty: nothing live was fetched, so no diff runs, the
+        // run is recorded as failed (cache_only), lastScannedAt stays put, and
+        // integration status reflects reality. The catch path still attempts
+        // direct-website proof, and the next scan retries live.
+        throw new CommercialDiscoveryError(
+          "Live discovery was cooling down; only cached results were available, so change detection was skipped.",
+          "rate_limited",
+        );
       }
 
       await persistCheapScanObservations(env, runId, ads, effectLease);

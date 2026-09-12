@@ -4,7 +4,7 @@
  * The site-wide generic `og-image.png` is shared across every page, so a
  * programmatic buyer surface (`/ads/:domain`, `/timeline/:domain`,
  * `/compare/*`, `/switch/*`, `/sneaker-resale`,
- * `/competitor-monitoring`) gets an unbranded link card
+ * `/competitor-monitoring`, `/guides/*`) gets an unbranded link card
  * indistinguishable from any other 0509 page. This module generates a
  * page-specific SVG card for each of those surfaces and serves it under
  * `/social-card/...` from `workers/app.ts`, so each surface can point its
@@ -62,6 +62,16 @@ function clampLine(value: string, max: number): string {
 }
 
 /**
+ * "how-to-track-competitor-ads" → "How to track competitor ads" — the
+ * fallback headline when a bare guide card URL carries no `n` param, so the
+ * card still names the guide instead of rendering raw slug text.
+ */
+function humanizeGuideSlug(slug: string): string {
+  const words = slug.replace(/-/g, " ").trim();
+  return words ? words[0].toUpperCase() + words.slice(1) : slug;
+}
+
+/**
  * Shared 1200×630 card frame (issue #2956): cream `--bone` field with faint
  * ledger rules, the "59" token + "Five to Nine" wordmark top-left, an ink
  * headline + muted subline, and an ink-ruled `--card` footer band carrying
@@ -107,6 +117,9 @@ const COMPARE_PRODUCT_NAMES: Readonly<Record<string, string>> = {
   foreplay: "Foreplay",
   keeptabz: "KeepTabz",
   gethookd: "GetHookd",
+  bigspy: "BigSpy",
+  minea: "Minea",
+  poweradspy: "PowerAdSpy",
   visualping: "Visualping",
   "visualping-ad-library": "Visualping Ad Library",
 };
@@ -116,6 +129,7 @@ const SWITCH_PRODUCT_NAMES: Readonly<Record<string, string>> = {
   panoramata: "Panoramata",
   visualping: "Visualping",
   magicbrief: "MagicBrief",
+  adspy: "AdSpy",
 };
 
 /** Cluster card headlines for the standalone buyer surfaces. */
@@ -136,7 +150,8 @@ export type SocialCardKind =
   | "compare"
   | "switch"
   | "cluster"
-  | "brand";
+  | "brand"
+  | "guide";
 
 export interface ParsedSocialCardPath {
   kind: SocialCardKind;
@@ -170,10 +185,10 @@ export function parseSocialCardPathname(pathname: string): ParsedSocialCardPath 
   if (!pathname.startsWith("/social-card/")) return null;
   const rest = pathname.slice("/social-card/".length);
 
-  // Ads and timeline cards are rasterized to PNG (issue #2089): the canonical
-  // URL is `.png` and the legacy `.svg` URL is kept as an alias that also
-  // serves PNG bytes, so cached links and the issue's termination probe keep
-  // working. Compare/switch/cluster cards stay SVG (issue #2083's scope).
+  // Ads, timeline, and cluster cards are rasterized to PNG (issue #2089,
+  // issue #2101): the canonical URL is `.png` and the legacy `.svg` URL is
+  // kept as an alias that also serves PNG bytes, so cached links keep
+  // working. Compare/switch/brand cards stay SVG (issue #2083's scope).
   const adsMatch = rest.match(/^ads\/(.+)\.(?:svg|png)$/);
   const adsSlug = adsMatch ? safeDecodeURIComponent(adsMatch[1]) : null;
   if (adsMatch && adsSlug !== null) return { kind: "ads", slug: adsSlug };
@@ -194,7 +209,13 @@ export function parseSocialCardPathname(pathname: string): ParsedSocialCardPath 
   const brandMatch = rest.match(/^brand\/([^/]+)\.svg$/);
   if (brandMatch) return { kind: "brand", slug: brandMatch[1] };
 
-  const clusterMatch = rest.match(/^([^/]+)\.svg$/);
+  // Guide cards (issue #3098): `/social-card/guides/<slug>.png`, rasterized
+  // like the ads/timeline/cluster cards; the `.svg` alias serves PNG too.
+  const guideMatch = rest.match(/^guides\/([^/]+)\.(?:svg|png)$/);
+  const guideSlug = guideMatch ? safeDecodeURIComponent(guideMatch[1]) : null;
+  if (guideMatch && guideSlug !== null) return { kind: "guide", slug: guideSlug };
+
+  const clusterMatch = rest.match(/^([^/]+)\.(?:svg|png)$/);
   if (clusterMatch && CLUSTER_HEADLINES[clusterMatch[1]]) {
     return { kind: "cluster", slug: clusterMatch[1] };
   }
@@ -261,6 +282,19 @@ function renderSocialCard(parsed: ParsedSocialCardPath, request: Request): strin
     });
   }
 
+  if (parsed.kind === "guide") {
+    // Same stateless recipe as the ads/timeline cards: the guide's headline
+    // rides in the `n` query param stamped by the route's meta (derived from
+    // the page title in `guideSocialCardForPathname`), so the renderer never
+    // needs a per-guide map. A bare card URL falls back to the humanized slug.
+    const params = new URL(request.url).searchParams;
+    const headline = params.get("n") ?? humanizeGuideSlug(parsed.slug);
+    return renderCard({
+      headline,
+      subline: `How-to guide \u00b7 ${SITE_NAME}`,
+    });
+  }
+
   const cluster = CLUSTER_HEADLINES[parsed.slug];
   if (!cluster) return null;
   return renderCard(cluster);
@@ -277,9 +311,9 @@ export interface SocialCardFile {
   contentType: string;
   cacheControl: string;
   /**
-   * Card kind, so the worker can rasterize the ads/timeline cards to PNG
-   * (issue #2089) while leaving the compare/switch/cluster cards as SVG
-   * (issue #2083's scope).
+   * Card kind, so the worker can rasterize the ads/timeline/cluster/guide
+   * cards to PNG (issue #2089, issue #2101, issue #3098) while leaving the
+   * compare/switch/brand cards as SVG (issue #2083's scope).
    */
   kind: SocialCardKind;
 }
@@ -293,9 +327,10 @@ export function publicSocialCardForRequest(request: Request): SocialCardFile | n
   return {
     body,
     contentType: "image/svg+xml; charset=utf-8",
-    // Ads and timeline cards carry brand query params, so a shorter cache
-    // keeps the card in step with the page. The static compare/switch/cluster
-    // cards are stable for a day.
+    // Ads and timeline cards carry brand query params that track live data
+    // (the score), so a shorter cache keeps the card in step with the page.
+    // The guide card's `n` param is page copy — static between deploys — so
+    // it caches for a day like the compare/switch/cluster cards.
     cacheControl:
       parsed.kind === "ads" || parsed.kind === "timeline"
         ? "public, max-age=3600"

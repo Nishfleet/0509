@@ -56,6 +56,7 @@ describe("public SEO files", () => {
     expect(sitemap?.body).toContain("<loc>https://0509.io/switch/panoramata</loc>");
     expect(sitemap?.body).toContain("<loc>https://0509.io/switch/visualping</loc>");
     expect(sitemap?.body).toContain("<loc>https://0509.io/switch/magicbrief</loc>");
+    expect(sitemap?.body).toContain("<loc>https://0509.io/switch/adspy</loc>");
     expect(sitemap?.body).toContain("<loc>https://0509.io/sneaker-resale</loc>");
     // Issue #1561: the locale sneaker-resale pages live ONLY in their own
     // /<locale>/sitemap.xml — they must not leak back into the root feed.

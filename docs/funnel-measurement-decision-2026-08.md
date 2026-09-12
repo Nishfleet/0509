@@ -49,7 +49,7 @@ Path B — **flip-to-off**. The 2026-09-04 change:
 - `docs/ga-metrics.md` §"Still required before enablement" now reads
   "Enablement deferred; flag currently off in production."
 - Re-enablement once the §8 gates are cleared is tracked in issue #1590; the
-  audit rows (`docs/customer-claim-audit-table.json` → AUDIT-FUNNEL-MEASUREMENT and
+  audit rows (`docs/customer-claim-table.json` → AUDIT-FUNNEL-MEASUREMENT and
   `docs/customer-claim-surface-registry.json` → rows) record the off state and point at
   #1590.
 

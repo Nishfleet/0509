@@ -8,10 +8,10 @@ import { SWITCH_PAGES } from "~/lib/switch-pages";
 type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
 type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
 
-/** Vendor-owned domains render "0 ads found" — they must never be the CTA target. magicbrief.com is dead since the 2026-07-31 shutdown, so it fails the same way. */
-const BANNED_CTA_DOMAINS = ["visualping.io", "magicbrief.com"];
+/** Vendor-owned domains render "0 ads found" — they must never be the CTA target. magicbrief.com is dead since the 2026-07-31 shutdown and adspy.com is the vendor's own site, so both fail the same way. */
+const BANNED_CTA_DOMAINS = ["visualping.io", "magicbrief.com", "adspy.com"];
 
-const IN_SCOPE_SWITCH_SLUGS = ["panoramata", "visualping", "magicbrief"] as const;
+const IN_SCOPE_SWITCH_SLUGS = ["panoramata", "visualping", "magicbrief", "adspy"] as const;
 
 // Sitemap-canonical compare pages named by issue 2123.
 const IN_SCOPE_COMPARE_SLUGS = [

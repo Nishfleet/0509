@@ -3888,6 +3888,11 @@ one signal-green accent.
   font-size: 0.82rem;
 }
 
+.ld-footer .ld-footer-status {
+  margin-top: 0;
+  font-size: 0.82rem;
+}
+
 .ld-footer .ld-footer-compare {
   margin-top: 16px;
   align-items: center;

@@ -60,6 +60,9 @@ const COMPARE_PAGES = [
   { slug: "spyland", module: "~/routes/compare.spyland", citations: "~/data/compare/spyland-citations.json" },
   { slug: "keeptabz", module: "~/routes/compare.keeptabz", citations: "~/data/compare/keeptabz-citations.json" },
   { slug: "gethookd", module: "~/routes/compare.gethookd", citations: "~/data/compare/gethookd-citations.json" },
+  { slug: "bigspy", module: "~/routes/compare.bigspy", citations: "~/data/compare/bigspy-citations.json" },
+  { slug: "minea", module: "~/routes/compare.minea", citations: "~/data/compare/minea-citations.json" },
+  { slug: "poweradspy", module: "~/routes/compare.poweradspy", citations: "~/data/compare/poweradspy-citations.json" },
 ] as const;
 
 async function renderPage(modulePath: string) {

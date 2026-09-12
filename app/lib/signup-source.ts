@@ -59,6 +59,16 @@ export const GUIDE_MONITOR_AD_LIBRARY_SIGNUP_SOURCE = "guide-monitor-ad-library"
 export const GUIDE_LANDING_PAGE_CHANGES_SIGNUP_SOURCE = "guide-landing-page-changes";
 
 /**
+ * The exact markers the issue #3093 guides carry on their /search preview
+ * CTAs: each guide is an organic-search entry point, so a signup that starts
+ * from its preview is attributed to the guide. Hyphen slugs — inside the
+ * open slug shape, so no migration literals needed.
+ */
+export const GUIDE_OFFER_CHANGE_ALERT_SIGNUP_SOURCE = "guide-offer-change-alert";
+export const GUIDE_PROVE_WHAT_CHANGED_SIGNUP_SOURCE = "guide-prove-what-changed";
+export const GUIDE_STANDING_WATCH_SIGNUP_SOURCE = "guide-standing-watch";
+
+/**
  * /for-agencies CTA marker (issue #2144): the agency landing page's signup
  * link carries `source=for_agencies` so Agency-plan funnel measurement can
  * attribute checkout starts to that page.
@@ -91,6 +101,9 @@ export const ALLOWED_SIGNUP_SOURCES = [
   GUIDE_TRACK_ADS_SIGNUP_SOURCE,
   GUIDE_MONITOR_AD_LIBRARY_SIGNUP_SOURCE,
   GUIDE_LANDING_PAGE_CHANGES_SIGNUP_SOURCE,
+  GUIDE_OFFER_CHANGE_ALERT_SIGNUP_SOURCE,
+  GUIDE_PROVE_WHAT_CHANGED_SIGNUP_SOURCE,
+  GUIDE_STANDING_WATCH_SIGNUP_SOURCE,
 ] as const;
 
 /**

@@ -36,12 +36,53 @@ export function SignupFirstBriefView({
             you to right now. Sometimes a competitor only advertises on some
             platforms, or their ads aren't publicly linkable yet.
           </p>
-          <p>
-            When {data.watchlistName ?? "this competitor"} starts running
-            publicly verifiable ads, we'll capture it and email you the first
-            brief. You can also add more competitors in the meantime.
-          </p>
         </section>
+
+        {/* Issue #2411: the terminal state used to end on a generic "Add
+            competitors" link and a promise to email later (for free, the
+            following Monday). Both blocks below give the first session
+            something real instead: brands we already track whose public ad
+            history is already on screen, and a route to capture a page for the
+            competitor the user already has. Neither invents a claim — the
+            brand links come from the same indexable set the /brands hub
+            serves, and the capture offer names only what the plan already
+            includes. */}
+        {data.suggestedBrands.length > 0 ? (
+          <section className="f9-signup-first-brief-body">
+            <h2 className="f9-wk-kick">Brands we already track</h2>
+            <p>
+              Their public ad history is already on screen, so you can look
+              around without waiting on a scan:{" "}
+              {data.suggestedBrands.map((brand, index) => (
+                <span key={brand.domain}>
+                  {index > 0 ? " · " : null}
+                  <Link to={brand.path}>{brand.name}</Link>
+                </span>
+              ))}
+            </p>
+          </section>
+        ) : null}
+
+        <section className="f9-signup-first-brief-body">
+          <h2 className="f9-wk-kick">Add a page to capture instead</h2>
+          <p>
+            {data.watchlistName ?? "Your competitor"} is already being watched.
+            Open it and point us at a product or promotion page it runs, and
+            the next check covers that page too — using the competitor you
+            already have, no second competitor needed.
+          </p>
+          <Link
+            to={
+              data.watchlistId
+                ? `/app/watchlists/${encodeURIComponent(data.watchlistId)}`
+                : "/app/watchlists"
+            }
+            className="f9-wk-btn"
+          >
+            Open {data.watchlistName ?? "your competitor"}
+          </Link>
+        </section>
+
         <footer className="f9-signup-first-brief-footer">
           <p>
             We'll keep watching and alert you when a verified ad appears.
