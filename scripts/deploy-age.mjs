@@ -1,11 +1,25 @@
 #!/usr/bin/env node
 // The stalled-deploy detector (0509#2975 item 4). Prints exactly one line:
-//   deploy: last_success_age_h=<n> merges_since=<m> last_failure=<reason>
+//   deploy: last_success_age_h=<n> merges_since=<m> last_failure=<reason> live_edge_cache=<HIT|MISS|UNREACHABLE|skipped>
 // into the deploy-production step summary on every run (success AND
 // failure); the fleet-ops judges' measure consumes the same script.
 // Sources: the Actions runs API when a token exists, else deploy-ledger.jsonl
 // in HEAD's tree. Always exits 0 — a detector that crashes is the silent
 // failure this script exists to kill, so errors fold into the line instead.
+//
+// live_edge_cache: the second-request x-0509-edge-cache: HIT probe from
+// scripts/check-live-public-home.mjs (issue #2950). The deploy workflow's
+// own `live_public_truth` post-deploy step runs that script and gates the
+// release on it, but that step only emits its verdict on a successful
+// deploy execution. This detector surfaces the same probe — cheaply, no
+// retry budget, fold-into-line on failure — on EVERY deploy run, including
+// runs that failed at an earlier gate and never reached live_public_truth.
+// A `MISS` line on a green-deploy success story means the edge cache
+// reconciliation regressed between when the gate ran and now; an
+// `UNREACHABLE` line on repeated runs means the live probe budget itself
+// is broken. Issue #3224 made this part of the chain-level detector
+// surface, complementing the fleet-ops FleetProductionStale alert
+// (fleet-ops#5785).
 
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -88,7 +102,7 @@ async function measure() {
 
   const failure = lastFailure ?? (token ? "none" : "unknown");
   if (!lastSuccess) {
-    return `deploy: last_success_age_h=unknown merges_since=unknown last_failure=${failure}`;
+    return `deploy: last_success_age_h=unknown merges_since=unknown last_failure=${failure} live_edge_cache=${await probeLiveEdgeCache()}`;
   }
   const ageHours = Math.floor(
     (Date.now() - Date.parse(lastSuccess.at)) / 3_600_000,
@@ -106,7 +120,40 @@ async function measure() {
       merges = "unknown";
     }
   }
-  return `deploy: last_success_age_h=${Number.isFinite(ageHours) ? ageHours : "unknown"} merges_since=${merges} last_failure=${failure}`;
+  return `deploy: last_success_age_h=${Number.isFinite(ageHours) ? ageHours : "unknown"} merges_since=${merges} last_failure=${failure} live_edge_cache=${await probeLiveEdgeCache()}`;
+}
+
+// probeLiveEdgeCache: second-request x-0509-edge-cache probe.
+// Returns one of:
+//   HIT         — second anonymous GET to / carries x-0509-edge-cache: HIT (PR #3054 shipped)
+//   MISS        — second GET did NOT carry the HIT stamp (a stale build, or the deploy never reached prod)
+//   UNREACHABLE — the probe itself could not connect to / timeout / DNS failure
+//   skipped     — PUBLIC_HOME_URL disabled the probe (set to an empty string)
+//
+// Two anonymous GETs of the homepage. The first warms; the second proves
+// the edge variant is in place. Each probe is bounded to 10s; the whole
+// probe is bounded to 25s in the worst case. Always exits 0 — the result
+// string folds into the measure line above. Never throws.
+async function probeLiveEdgeCache() {
+  const url = process.env.PUBLIC_HOME_URL;
+  if (url === "") return "skipped";
+  const target = url ?? "https://0509.io/";
+  /** @param {string} path @returns {Promise<Response>} */
+  const head = (path) =>
+    fetch(new URL(path, target), {
+      headers: { "user-agent": "0509-deploy-age-detector/1.0" },
+      signal: AbortSignal.timeout(10_000),
+    });
+  try {
+    const first = await head("/");
+    await first.text();
+    const second = await head("/");
+    await second.text();
+    const stamp = second.headers.get("x-0509-edge-cache");
+    return stamp === "HIT" ? "HIT" : "MISS";
+  } catch {
+    return "UNREACHABLE";
+  }
 }
 
 if (
@@ -116,8 +163,11 @@ if (
   try {
     process.stdout.write(`${await measure()}\n`);
   } catch (error) {
+    // Last-resort fallback: emit a line the parser can still read. The
+    // measure function above already folds probe failures into `live_edge_cache=UNREACHABLE`;
+    // this branch only fires on a real exception (e.g. execFileSync failure).
     process.stdout.write(
-      `deploy: last_success_age_h=unknown merges_since=unknown last_failure=detector_error:${error instanceof Error ? error.message : "unknown"}\n`,
+      `deploy: last_success_age_h=unknown merges_since=unknown last_failure=detector_error:${error instanceof Error ? error.message : "unknown"} live_edge_cache=skipped\n`,
     );
   }
 }
