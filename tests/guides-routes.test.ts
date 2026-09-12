@@ -440,8 +440,11 @@ describe("guides meta-ad-library-api-limitations route (issue #3127)", () => {
     expect(routes).toContain(
       'route("guides/meta-ad-library-api-limitations", "routes/guides.meta-ad-library-api-limitations.tsx")',
     );
-    expect(routes).toContain(
-      'route("guides/meta-ad-library-api-limitations", "routes/$locale.guides.meta-ad-library-api-limitations.tsx")',
+    // Issue #2962 (orchestrator Branch B): the untranslated locale cluster
+    // was deleted; /<locale>/guides/* 301s to the EN pathname via the splat
+    // route, so the locale registration must be gone.
+    expect(routes).not.toContain(
+      "routes/$locale.guides.meta-ad-library-api-limitations.tsx",
     );
 
     const { publicSeoFileForPathname } = await import("~/lib/seo");
