@@ -33,7 +33,9 @@ const { appRoot, groups, usedBy, rules, css } = classifySurfaces(rootDir);
 
 const marketingCssPath = path.join(appRoot, "styles", "marketing.css");
 
+/** @param {string} cssText */
 function selectorClasses(cssText) {
+  /** @type {Set<string>} */
   const classes = new Set();
   const re = /\.([a-zA-Z][a-zA-Z0-9_-]*)/g;
   // Strip comments, quoted strings and url(...) first — a `.ts`/`.css`/
@@ -62,7 +64,7 @@ const marketingCss = fs.existsSync(marketingCssPath) ? fs.readFileSync(marketing
 const marketingSelectors = selectorClasses(marketingCss);
 const rootSelectors = selectorClasses(css);
 
-const isMarketingOnlyClass = (c) =>
+const isMarketingOnlyClass = (/** @type {string} */ c) =>
   usedBy.marketing.has(c) && !usedBy.app.has(c);
 
 describe("marketing CSS split (issue #2967)", () => {
@@ -159,6 +161,7 @@ describe("marketing CSS split (issue #2967)", () => {
   });
 });
 
+/** @param {Iterable<string>} closure */
 function closureHasMarketingCssImport(closure) {
   for (const f of closure) {
     if (f.endsWith(".css")) continue;

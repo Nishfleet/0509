@@ -25,9 +25,21 @@ import { describe, expect, it } from "vitest";
  * `.ld-ticker-belt` away from `width: max-content`), the marquee belt leaks
  * 2px of horizontal overflow on 390px viewports and regresses the design
  * ratchet. This test fails on that diff.
+ *
+ * Scanned surface: `app/styles/marketing.css` + `app/app.css`, concatenated.
+ * The issue #2967 CSS split moved the marketing-only `.ld-ticker-belt` rule
+ * out of the root stylesheet, so reading `app/app.css` alone would fail on a
+ * file that is still correct — the ticker is marketing markup
+ * (`routes/marketing.tsx`, `components/ads/brand-ticker.tsx`) and the belt
+ * rule travels with it. The contract asserted here is about the mechanism
+ * (clip the container, keep the belt max-content), not about which of the
+ * two stylesheets currently owns a given rule, so this test joins both.
  */
 
-const appCss = readFileSync("app/app.css", "utf8");
+const appCss = [
+  readFileSync("app/app.css", "utf8"),
+  readFileSync("app/styles/marketing.css", "utf8"),
+].join("\n");
 
 /** Extract the body of the first top-level CSS rule block for `selector`. */
 function ruleBody(selector: string): string {
@@ -35,7 +47,7 @@ function ruleBody(selector: string): string {
   const match = new RegExp(`^${escaped} \\{[\\s\\S]*?\\n\\}`, "m").exec(appCss);
   expect(
     match,
-    `expected a top-level CSS rule for \`${selector}\` in app/app.css`,
+    `expected a top-level CSS rule for \`${selector}\` in app/app.css or app/styles/marketing.css`,
   ).not.toBeNull();
   return match![0];
 }

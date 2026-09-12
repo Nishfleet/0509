@@ -30,7 +30,68 @@ import path from "node:path";
 
 const APP_DIR_DEFAULT = "app";
 
-/** Resolve a TS/TSX import specifier to a file inside the app directory. */
+/**
+ * A byte range of the css source that forms one top-level rule or at-rule
+ * container. Yielded by `cssRuleBlocks`.
+ *
+ * @typedef {{ start: number, end: number }} CssBlock
+ */
+
+/**
+ * The classification verdict for a css rule.
+ *
+ * - `marketing` — every class it selects is used only by the marketing group,
+ *   so it can move to `app/styles/marketing.css` without a cascade hazard.
+ * - `app` — at least one selected class is used by the app (dashboard) group.
+ * - `shared` — element selectors, `:root` tokens, `@font-face`, a class both
+ *   groups use, a @keyframes with mixed referencing rules, or a marketing rule
+ *   a later root rule could override. Stays in root.
+ * - `unknown` — no group provably uses the class (dynamic construction,
+ *   markdown-rendered markup). Stays in root.
+ *
+ * @typedef {"marketing" | "app" | "shared" | "unknown"} CssGroup
+ */
+
+/**
+ * One parsed css rule or at-rule container with its classification.
+ *
+ * @typedef {object} CssRule
+ * @property {number} start       Byte offset of the block's first character.
+ * @property {number} end         Byte offset one past the block's last character.
+ * @property {string} text        The block source slice.
+ * @property {string | null} keyframes  The at-rule name, or null for a normal rule.
+ * @property {string[]} classes   Class names the rule selects.
+ * @property {string[]} anims     Animation names the rule references.
+ * @property {CssGroup} [group]   Set by `parseCssRules` on every non-at-rule block.
+ */
+
+/**
+ * Which route group can emit each class name.
+ *
+ * @typedef {{ app: Set<string>, marketing: Set<string> }} UsedBy
+ */
+
+/**
+ * The full classifier output for one repository checkout.
+ *
+ * @typedef {object} Classification
+ * @property {string} appRoot              Absolute path of the app directory.
+ * @property {Record<string, Set<string>>} groups  Group name -> reachable files.
+ * @property {UsedBy} usedBy               Group name -> class names it emits.
+ * @property {string} css                  The root stylesheet source.
+ * @property {CssRule[]} rules             Classified rules from the root stylesheet.
+ * @property {string} cssPath              Absolute path of the root stylesheet.
+ */
+
+/**
+ * Resolve a TS/TSX import specifier to a file inside the app directory.
+ *
+ * @param {string} appRoot  Absolute path of the app directory.
+ * @param {string} fromFile Absolute path of the importing module.
+ * @param {string} spec     The raw import specifier.
+ * @returns {string | null} The resolved absolute path, or null when the
+ *   specifier is not an in-app relative/`~/` path or does not resolve.
+ */
 function resolveImport(appRoot, fromFile, spec) {
   let base;
   if (spec.startsWith("~/")) base = path.join(appRoot, spec.slice(2));
@@ -53,6 +114,13 @@ function resolveImport(appRoot, fromFile, spec) {
 const IMPORT_RE =
   /(?:^|\n)\s*(?:import|export)\s[^;]*?from\s*["']([^"']+)["']|(?:^|\n)\s*(?:import|export)\s*["']([^"']+)["']|(?:^|\n)\s*import\s*\(\s*["']([^"']+)["']\s*\)/g;
 
+/**
+ * In-app imports of one module, resolved to absolute paths.
+ *
+ * @param {string} appRoot
+ * @param {string} file
+ * @returns {string[]}
+ */
 function importsOf(appRoot, file) {
   const src = fs.readFileSync(file, "utf8");
   const out = [];
@@ -68,11 +136,19 @@ function importsOf(appRoot, file) {
 }
 
 /** Route files of one group, transitively closed over in-app imports. */
+/**
+ * Route files of one group, transitively closed over in-app imports.
+ *
+ * @param {string} appRoot      Absolute path of the app directory.
+ * @param {string[]} startFiles Absolute paths of the group's entry modules.
+ * @returns {Set<string>} Every in-app module the group's entry set reaches.
+ */
 export function reachableFiles(appRoot, startFiles) {
   const seen = new Set();
   const queue = [...startFiles];
   while (queue.length) {
     const f = queue.pop();
+    if (f === undefined) continue;
     if (seen.has(f)) continue;
     seen.add(f);
     if (f.endsWith(".css")) continue;
@@ -85,12 +161,19 @@ export function reachableFiles(appRoot, startFiles) {
  * className literals a set of files can emit: className="…", className={'…'},
  * className={`…`}, ternary/conditional strings inside className={…}, and the
  * string arguments of cn()/clsx()/cx()/classNames() helpers.
+ *
+ * @param {string} src  TypeScript/JavaScript module source text.
+ * @returns {Set<string>} The class-name tokens the module can emit.
  */
 export function classNamesInSource(src) {
+  /** @type {Set<string>} */
   const out = new Set();
   // Only strict class-name tokens count. Template literals carry `${expr}`
   // code that must be stripped before splitting, and conditional strings like
   // `" is-on"` keep their leading space — whitespace-split handles both.
+  /**
+   * @param {string} s
+   */
   const push = (s) => {
     const noInterp = s.replace(/\$\{[^{}]*\}/g, " ");
     for (const t of noInterp.split(/\s+/)) {
@@ -127,7 +210,12 @@ export function classNamesInSource(src) {
   return out;
 }
 
-/** Top-level CSS blocks: one entry per rule or @media/@keyframes container. */
+/**
+ * Top-level CSS blocks: one entry per rule or @media/@keyframes container.
+ *
+ * @param {string} src  Stylesheet source text.
+ * @returns {Generator<CssBlock>}
+ */
 export function* cssRuleBlocks(src) {
   let depth = 0;
   let bufStart = 0;
@@ -173,8 +261,15 @@ const CLASS_IN_SELECTOR_RE = /\.([a-zA-Z][a-zA-Z0-9_-]*)/g;
 const KEYFRAMES_NAME_RE = /@keyframes\s+([a-zA-Z0-9_-]+)/;
 const ANIMATION_RE = /animation(?:-name)?\s*:\s*([^;}]+)/g;
 
-/** Parse css into classified rule records (see module docstring). */
+/**
+ * Parse css into classified rule records (see module docstring).
+ *
+ * @param {string} css        Stylesheet source text.
+ * @param {UsedBy} usedBy     Group name -> class names that group emits.
+ * @returns {CssRule[]} Every rule in source order, each carrying a `group`.
+ */
 export function parseCssRules(css, usedBy) {
+  /** @type {CssRule[]} */
   const rules = [];
   for (const blk of cssRuleBlocks(css)) {
     const text = css.slice(blk.start, blk.end);
@@ -238,11 +333,12 @@ export function parseCssRules(css, usedBy) {
   }
   // @keyframes follow their referencing rules: move only when every rule that
   // animates them is itself moving to marketing.css.
+  /** @type {Map<string, Set<CssGroup>>} */
   const kfRefs = new Map();
   for (const r of rules) {
     for (const a of r.anims) {
       if (!kfRefs.has(a)) kfRefs.set(a, new Set());
-      kfRefs.get(a).add(r.group);
+      kfRefs.get(a)?.add(/** @type {CssGroup} */ (r.group));
     }
   }
   for (const r of rules) {
@@ -268,7 +364,13 @@ export function parseCssRules(css, usedBy) {
   return rules;
 }
 
-/** Group reachability + className usage for the repo's two route groups. */
+/**
+ * Group reachability + className usage for the repo's two route groups.
+ *
+ * @param {string} rootDir      Absolute path of the repository root.
+ * @param {string} [appDirName] App directory name, relative to rootDir.
+ * @returns {Classification}
+ */
 export function classifySurfaces(rootDir, appDirName = APP_DIR_DEFAULT) {
   const appRoot = path.join(rootDir, appDirName);
   const routesDir = path.join(appRoot, "routes");
@@ -280,7 +382,7 @@ export function classifySurfaces(rootDir, appDirName = APP_DIR_DEFAULT) {
   // not carrying the `app.` prefix. Top-level `app.*` routes are the rest of
   // the authed product; everything else (marketing landing, public content,
   // share, auth documents) is the marketing group.
-  const isAppRoute = (f) => {
+  const isAppRoute = (/** @type {string} */ f) => {
     const b = path.basename(f);
     return b.startsWith("app.") || b === "app-layout.tsx";
   };
@@ -290,18 +392,22 @@ export function classifySurfaces(rootDir, appDirName = APP_DIR_DEFAULT) {
   // marketing-only wherever not-found.tsx also uses them, and the split would
   // strip error styling from authed surfaces.
   const shellFiles = [path.join(appRoot, "root.tsx")].filter((f) => fs.existsSync(f));
+  /** @type {Record<string, Set<string>>} */
   const groups = {
     app: reachableFiles(appRoot, [...routeFiles.filter((f) => isAppRoute(f)), ...shellFiles]),
     marketing: reachableFiles(appRoot, routeFiles.filter((f) => !isAppRoute(f))),
   };
-  const usedBy = {};
+  const usedBy = /** @type {UsedBy} */ ({ app: new Set(), marketing: new Set() });
   for (const [group, files] of Object.entries(groups)) {
+    /** @type {Set<string>} */
     const used = new Set();
     for (const f of files) {
       if (!/\.(tsx|jsx)$/.test(f)) continue;
       for (const c of classNamesInSource(fs.readFileSync(f, "utf8"))) used.add(c);
     }
-    usedBy[group] = used;
+    /** @type {"app" | "marketing"} */
+    const key = group === "app" ? "app" : "marketing";
+    usedBy[key] = used;
   }
   const cssPath = path.join(appRoot, "app.css");
   const css = fs.readFileSync(cssPath, "utf8");
@@ -309,17 +415,24 @@ export function classifySurfaces(rootDir, appDirName = APP_DIR_DEFAULT) {
   return { appRoot, groups, usedBy, css, rules, cssPath };
 }
 
-/** Which of the two css files each route module loads (root css is global). */
+/**
+ * Which of the two css files each route module loads (root css is global).
+ *
+ * @param {Classification} classification  Output of `classifySurfaces`.
+ * @param {string} routeFile               Absolute path of the route module.
+ * @returns {boolean} True when the module's import closure loads marketing.css.
+ */
 export function routeLoadsMarketingCss(classification, routeFile) {
   // A route loads marketing.css when itself or any module in its import
   // closure imports it. The closure is exactly `reachableFiles`.
   const appRoot = classification.appRoot;
   const marker = "styles/marketing.css";
-  const start = [routeFile];
+  /** @type {Set<string>} */
   const seen = new Set();
-  const queue = [...start];
+  const queue = [routeFile];
   while (queue.length) {
     const f = queue.pop();
+    if (f === undefined) continue;
     if (seen.has(f)) continue;
     seen.add(f);
     if (f.endsWith(".css")) continue;
