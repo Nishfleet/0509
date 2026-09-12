@@ -34,9 +34,14 @@ type ResultQuickSaveProps = ComponentProps<typeof ResultQuickSave>;
  * BET 2 (issue 1482): every row that carries a `domainMatch.level` renders a
  * visible tier badge — "Verified" (green), "Likely" (amber), "Unmatched"
  * (grey) — the confidence marker a first-time visitor can read at a glance.
- * A likely row also gets a one-click "Yes, that's them" trail link that
- * opens the ad's detail pane, where the track/signup CTA lives — the
- * confirmation is one click, not a dead-end.
+ * A likely row also gets a one-click "Yes, that's them" trail control. Since
+ * issue 3306 (BET 2 finish line) that control DOES the confirm instead of
+ * only opening the detail pane: when the visitor is signed out, `confirmTo`
+ * is the signup intent (the Track-wall signup path for THIS ad, attribution
+ * marker included), so the click starts signup with the confirmed brand
+ * carried through; signed in, `confirmTo` is omitted and the trail keeps the
+ * plain record href, whose selection reload records the confirmation through
+ * the existing selection persistence — repeat clicks are idempotent.
  */
 export function SearchResultRow({
   ad,
@@ -46,6 +51,7 @@ export function SearchResultRow({
   canQuickSave,
   collections,
   plan,
+  confirmTo,
 }: {
   ad: AdRecord;
   href: string;
@@ -54,7 +60,13 @@ export function SearchResultRow({
   canQuickSave: boolean;
   collections: ResultQuickSaveProps["collections"];
   plan: ResultQuickSaveProps["plan"];
-}) {
+  /**
+   * Issue 3306: when the visitor is signed out, the Likely-confirm's signup
+   * intent href (signupTrackingPath + allowlisted source marker). Omitted
+   * when signed in — the trail then keeps the plain record href.
+   */
+  confirmTo?: string;
+})) {
   const isDemo = ad.source === "demo";
   const running = ad.activeStatusObserved !== false && ad.active;
   const advertiser = formatAdvertiserLabel(ad.advertiser);
@@ -99,7 +111,7 @@ export function SearchResultRow({
       to={href}
       trail={
         tier === "likely" ? (
-          <Link className="f9-wk-lnk f9-wk-row-confirm" to={href}>
+          <Link className="f9-wk-lnk f9-wk-row-confirm" to={confirmTo ?? href}>
             Yes, that&rsquo;s them
             <span aria-hidden="true" className="f9-wk-chev">
               &rsaquo;
