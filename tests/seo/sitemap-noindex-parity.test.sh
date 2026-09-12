@@ -28,6 +28,15 @@ MAX_SAMPLE="${SEO_PARITY_MAX_SAMPLE:-10}"
 # measuring. Unset on local PR checks (the limiter is generous in CI and a
 # one-off local sample never trips it). Constant-time-compare is at the edge
 # limiter; this script only sets the header.
+# NOTE (issue #3278 investigation, 2026-09-12): the nine sitemap /ads URLs
+# that showed HTTP 301 in that issue's local repro (zivame.com, snitch.co.in,
+# kamaayurveda.com, dotandkey.com, thedermaco.com, newbalance.com, hoka.com,
+# mailchimp.com, nykaa.com) were the loader's transient cache-miss redirect
+# (#1282) and live-verified as HTTP 200 + indexable the same day. Nothing was
+# changed against them: the existing --retry-followed curl detects a
+# redirected URL as a non-2xx FAIL the moment one re-appears, and
+# tests/sitemap-ads-no-redirect.test.ts pins generator-vs-loader agreement at
+# the unit level.
 CURL_OPTS=(--silent --show-error --max-time 20 --retry 2 --retry-delay 2)
 if [ -n "${SEO_PARITY_CANARY_TOKEN:-}" ]; then
   CURL_OPTS+=(-H "x-0509-canary-token: ${SEO_PARITY_CANARY_TOKEN}")
