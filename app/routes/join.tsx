@@ -1,4 +1,4 @@
-import { useFetcher, useLoaderData } from "react-router";
+import { useActionData, useFetcher, useLoaderData } from "react-router";
 import { redirect } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link } from "react-router";
@@ -173,9 +173,20 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 export default function JoinRoute() {
   const loaderData = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
+  // Progressive enhancement: a submit that lands before hydration (or with
+  // JS unavailable) still resolves a card — the document POST's data is
+  // hydration-deserialized into useActionData; the hydrated flow reads the
+  // fetcher. Same card either way.
+  const actionData = useActionData<typeof action>();
 
   const resolution =
-    fetcher.data && !("error" in fetcher.data) ? (fetcher.data as { resolution: JoinIdentityResolution }).resolution : null;
+    fetcher.data && !("error" in fetcher.data)
+      ? (fetcher.data as { resolution: JoinIdentityResolution }).resolution
+      : actionData && !("error" in actionData)
+        ? (actionData as { resolution: JoinIdentityResolution }).resolution
+        : null;
+  const kindField = fetcher.data && !("error" in fetcher.data);
+  const formErrorSource = kindField ? "fetcher" : actionData && "error" in actionData ? "action" : null;
 
   return (
     <main className="f9-auth-page">
@@ -212,7 +223,7 @@ export default function JoinRoute() {
             </button>
           </fetcher.Form>
 
-          {fetcher.data && "error" in fetcher.data ? (
+          {formErrorSource === "fetcher" || formErrorSource === "action" ? (
             <p role="alert">Enter a website, a name, or a handle and try again.</p>
           ) : null}
 

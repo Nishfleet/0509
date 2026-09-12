@@ -583,12 +583,23 @@ function extractSocials(html: string): string[] {
   return [...found].slice(0, 8);
 }
 
-function extractMetaContent(html: string, property: string): string | null {
-  const re = new RegExp(
-    `<meta[^>]*(?:property|name)=["']${escapeRegExp(property)}["'][^>]*content=["']([^"']+)["']|<meta[^>]*content=["']([^"']+)["'][^>]*(?:property|name)=["']${escapeRegExp(property)}["']`,
-    "i",
-  );
-  const match = html.match(re);
+/** Static property constants with prebuilt patterns: no runtime RegExp()
+ * from untrusted input (sgscan detect-non-literal-regexp: ReDoS surface). */
+const META_SITE_NAME_PATTERN = /<meta[^>]*(?:property|name)=["']og:site_name["'][^>]*content=["']([^"']+)["']|<meta[^>]*content=["']([^"']+)["'][^>]*(?:property|name)=["']og:site_name["']/i;
+const META_LOGO_PATTERN = /<meta[^>]*(?:property|name)=["']og:logo["'][^>]*content=["']([^"']+)["']|<meta[^>]*content=["']([^"']+)["'][^>]*(?:property|name)=["']og:logo["']/i;
+const META_CONTENT_PATTERNS: Record<string, RegExp> = {
+  "og:site_name": META_SITE_NAME_PATTERN,
+  "og:logo": META_LOGO_PATTERN,
+};
+
+/** Only the two prebuilt properties are called today; the fallback keeps
+ * future call sites working. */
+type MetaPropertyName = keyof typeof META_CONTENT_PATTERNS;
+
+/** Property must be one of the prebuilt pattern keys (compile-time
+ * constants only — no regex is ever built from request data). */
+function extractMetaContent(html: string, property: MetaPropertyName): string | null {
+  const match = html.match(META_CONTENT_PATTERNS[property]);
   const value = match?.[1] ?? match?.[2] ?? null;
   return value && value.trim().length > 0 ? value.trim() : null;
 }
@@ -610,9 +621,6 @@ function extractLinkRelIcon(html: string): string | null {
   return null;
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
 
 function extractDomainFromInput(input: string): string | null {
   const url = tryParseUrl(input);
