@@ -45,6 +45,7 @@ import {
 import { FeedbackStrip } from "~/components/workspace/feedback-strip";
 import { RuledList } from "~/components/workspace/ruled-list";
 import { WorkingHeader } from "~/components/workspace/working-header";
+import type { AdRecord } from "~/lib/types";
 import { formatAdLongevityLabel } from "~/lib/ad-display";
 import { hasValidCanaryToken } from "~/lib/canary-token.server";
 import { queueFirstWatchlistScan } from "~/lib/first-watchlist-scan.server";
@@ -451,6 +452,7 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
       stealSummary: null,
       selectionEnrichmentPending: false,
       landingPageCaptureFailure: null,
+      selectedAdCapture: undefined,
       collections: [],
       plan: null,
       session,
@@ -485,6 +487,7 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
       stealSummary: null,
       selectionEnrichmentPending: false,
       landingPageCaptureFailure: null,
+      selectedAdCapture: undefined,
       collections: [],
       plan: null,
       session,
@@ -705,6 +708,7 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
           stealSummary: null,
           selectionEnrichmentPending: false,
           landingPageCaptureFailure: null,
+          selectedAdCapture: undefined,
           collections,
           plan,
           session,
@@ -738,6 +742,7 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
       stealSummary: null,
       selectionEnrichmentPending: false,
       landingPageCaptureFailure: null,
+      selectedAdCapture: undefined,
       collections,
       plan,
       session,

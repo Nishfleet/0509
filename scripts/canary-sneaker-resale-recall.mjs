@@ -176,6 +176,7 @@ function defaultSleep(ms) {
  *   baseUrl: string,
  *   fetchImpl?: typeof fetch,
  *   sleepImpl?: (ms: number) => Promise<void>,
+ *   userAgent?: string,
  *   retryLimit?: number,
  *   retryDelayMs?: number,
  *   max429Retries?: number,

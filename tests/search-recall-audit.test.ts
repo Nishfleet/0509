@@ -20,17 +20,28 @@ import {
  * from the BET 2 termination check and the §1.8 rerun verdict.
  */
 
-function result(domain, rowCount, tiers, extra = {}) {
+/** ProbeResult-shaped fixture (scripts/bet2-live-verification.mjs typedef). */
+function result(
+  domain: string,
+  rowCount: number,
+  tiers: { verified?: number; likely?: number; unmatched?: number },
+  extra: Record<string, unknown> = {},
+) {
   return {
     domain,
     rowCount,
     tierCounts: { verified: tiers.verified ?? 0, likely: tiers.likely ?? 0, unmatched: tiers.unmatched ?? 0 },
     url: `https://0509.io/search?website=${domain}&country=all`,
     status: 200,
+    polls: 1,
+    elapsedMs: 100,
+    headline: rowCount > 0 ? "Launch offer" : null,
+    resultSource: rowCount > 0 ? "live" : null,
+    cacheStatus: "miss",
     isWarming: false,
     isDeadEnd: rowCount === 0,
     firstCardAtMs: rowCount > 0 ? 800 : null,
-    outcome: rowCount > 0 ? "rows" : "dead_end",
+    outcome: rowCount > 0 ? ("verified" as const) : ("dead_end" as const),
     emptyReason: rowCount === 0 ? "no_results" : null,
     ...extra,
   };
@@ -72,7 +83,7 @@ describe("search recall audit (issue #3014) verdict composition", () => {
     run.summary.verifiedShare = 0.6;
     const verdict = evaluateRecallAudit(run, { results: rerun });
     expect(verdict.pass).toBe(false);
-    expect(verdict.checks.find((c) => c.name === "verified_share_at_or_above_floor").ok).toBe(false);
+    expect(verdict.checks.find((c) => c.name === "verified_share_at_or_above_floor")?.ok).toBe(false);
   });
 
   it("a dead-end empty state over the cohort fails", () => {
@@ -80,7 +91,7 @@ describe("search recall audit (issue #3014) verdict composition", () => {
     run.summary.deadEnds = 1;
     const verdict = evaluateRecallAudit(run, { results: rerun });
     expect(verdict.pass).toBe(false);
-    expect(verdict.checks.find((c) => c.name === "zero_dead_ends").ok).toBe(false);
+    expect(verdict.checks.find((c) => c.name === "zero_dead_ends")?.ok).toBe(false);
   });
 
   it("an empty §1.8 brand (allbirds/notion/oura) fails even with green aggregates", () => {
@@ -91,8 +102,8 @@ describe("search recall audit (issue #3014) verdict composition", () => {
     const verdict = evaluateRecallAudit(run, { results: rerun });
     expect(verdict.pass).toBe(false);
     const check = verdict.checks.find((c) => c.name === "section_1_8_allbirds_notion_oura_non_empty");
-    expect(check.ok).toBe(false);
-    expect(check.detail).toContain("oura");
+    expect(check?.ok).toBe(false);
+    expect(String(check?.detail)).toContain("oura");
   });
 
   it("rate-limited probes are never a pass — 'cannot confirm' is not coverage", () => {
@@ -102,7 +113,7 @@ describe("search recall audit (issue #3014) verdict composition", () => {
     ]);
     const verdict = evaluateRecallAudit({ results: [], summary }, { results: rerun });
     expect(verdict.pass).toBe(false);
-    expect(verdict.checks.find((c) => c.name === "no_rate_limit_blocks").ok).toBe(false);
+    expect(verdict.checks.find((c) => c.name === "no_rate_limit_blocks")?.ok).toBe(false);
   });
 
   it("the audit probes the 25-domain cohort exactly once — rerun domains are members, not additions", () => {

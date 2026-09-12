@@ -60,10 +60,10 @@ export const RECALL_AUDIT_USER_AGENT =
  *  - gate 2: >=80% of domains return at least one verified row;
  *  - gate 3: the §1.8 observed brands (allbirds / notion / oura) each render
  *    at least one row — the funnel's front door must not dead-end.
- * @param {{ results: unknown[], summary: Record<string, unknown> }} run
- * @param {{ results: unknown[] }} rerun
+ * @param {{ results: import("./bet2-live-verification.mjs").ProbeResult[], summary: import("./bet2-live-verification.mjs").Summary }} run
+ * @param {{ results: import("./bet2-live-verification.mjs").ProbeResult[] }} rerun
  * @param {{ verifiedShareFloor?: number }} [options] test seam for the floor
- * @returns {{ pass: boolean, checks: Record<string, unknown>[] }}
+ * @returns {{ pass: boolean, checks: { ok: boolean, name: string, detail: string }[] }}
  */
 export function evaluateRecallAudit(run, rerun, options = {}) {
   const termination = evaluateTermination(run.summary, options);
@@ -78,6 +78,9 @@ const invokedDirectly =
   process.argv[1] !== undefined &&
   fileURLToPath(import.meta.url) === process.argv[1];
 
+/**
+ * @param {string} line
+ */
 function emitLine(line) {
   writeSync(1, `${line}\n`);
 }
@@ -116,9 +119,10 @@ async function main() {
   // result array for the rerun verdict instead of re-probing (the anonymous
   // /search budget is 20 req / 10 min and the tail of the cohort 429s on a
   // second pass).
-  const rerunResults = SECTION_1_8_RERUN.map((domain) =>
-    run.results.find((probe) => probe.domain === domain),
-  );
+  const rerunResults = SECTION_1_8_RERUN.flatMap((domain) => {
+    const found = run.results.find((probe) => probe.domain === domain);
+    return found ? [found] : [];
+  });
   const verdict = evaluateRecallAudit(run, { results: rerunResults.filter(Boolean) });
   emitLine("");
   emitLine("Recall gates (issue #3014 metric over the BET 2 25-domain set):");

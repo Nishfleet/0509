@@ -169,14 +169,13 @@ export async function prepareSearchResultSelection(
             .catch((error: unknown) => ({
               ad: selectedAdBase,
               landingPageCaptureFailure: {
-                snapshotId: null,
                 reasonCode: "capture_stream_failed",
-                canonicalUrl: null,
-                capturedAt: null,
-                error:
-                  error instanceof Error
-                    ? error.message
-                    : "landing-page capture stream failed",
+                metadata: {
+                  message:
+                    error instanceof Error
+                      ? error.message
+                      : "landing-page capture stream failed",
+                },
               } satisfies LandingPageCaptureFailureDetail,
             }));
         return {
@@ -253,6 +252,10 @@ export async function prepareSearchResultSelection(
     selectedAd,
     selectionEnrichmentPending,
     landingPageCaptureFailure,
+    // Present (as a promise) only on the deferCapture path; explicitly
+    // undefined here so every return shape of this union carries the key
+    // and route/test code can read it without narrowing.
+    selectedAdCapture: undefined,
   };
 }
 

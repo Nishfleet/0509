@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { AdRecord } from "~/lib/types";
+import type { AdRecord, SearchResponse } from "~/lib/types";
 
 const baseAd: AdRecord = {
   metaAdId: "meta-boat-1",
@@ -26,13 +26,28 @@ const baseAd: AdRecord = {
   analysisFields: [],
 };
 
-function resultWith(ads: AdRecord[]) {
+function resultWith(ads: AdRecord[]): SearchResponse {
   return {
     ads,
     nextCursor: null,
     source: "meta",
     cacheStatus: "miss",
   };
+}
+
+/**
+ * The deferCapture payload is a promise on the defer path and undefined on
+ * every other return shape; these tests only exercise the defer path, so a
+ * missing payload is a test-setup bug, not an expectation to soften.
+ */
+async function requireCapturePayload(
+  returned: Awaited<ReturnType<typeof import("~/lib/search-selection.server").prepareSearchResultSelection>>,
+) {
+  const capture = await returned.selectedAdCapture;
+  if (!capture) {
+    throw new Error("deferCapture payload missing — test setup drifted from the defer path");
+  }
+  return capture;
 }
 
 function mockCaptureModules(overrides: {
@@ -112,7 +127,7 @@ describe("prepareSearchResultSelection deferCapture (issue #3014)", () => {
       artifactKey: null,
       metadata: {},
     });
-    const payload = await returned.selectedAdCapture;
+    const payload = await requireCapturePayload(returned);
     expect(payload.ad.landingPage?.rawHeadline).toBe("Launch offer");
     expect(payload.landingPageCaptureFailure).toBeNull();
   });
@@ -143,7 +158,7 @@ describe("prepareSearchResultSelection deferCapture (issue #3014)", () => {
       null,
       { hydratePersisted: false, deferCapture: true },
     );
-    const payload = await returned.selectedAdCapture;
+    const payload = await requireCapturePayload(returned);
     expect(payload.ad.metaAdId).toBe(baseAd.metaAdId);
     expect(payload.ad.landingPage).toBeNull();
     expect(payload.landingPageCaptureFailure?.reasonCode).toBe(
@@ -166,12 +181,12 @@ describe("prepareSearchResultSelection deferCapture (issue #3014)", () => {
       null,
       { hydratePersisted: false, deferCapture: true },
     );
-    const payload = await returned.selectedAdCapture;
+    const payload = await requireCapturePayload(returned);
     expect(payload.ad.metaAdId).toBe(baseAd.metaAdId);
     expect(payload.landingPageCaptureFailure?.reasonCode).toBe(
       "capture_stream_failed",
     );
-    expect(payload.landingPageCaptureFailure?.error).toContain(
+    expect(String(payload.landingPageCaptureFailure?.metadata.message)).toContain(
       "browser isolate gone",
     );
   });
