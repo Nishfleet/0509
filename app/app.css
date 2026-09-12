@@ -12673,7 +12673,6 @@ textarea.f9-wk-in {
   overflow-wrap: anywhere;
   padding: 9px 12px;
   border: 1px solid var(--wk-rule);
-  border-radius: 0;
   background: none;
   color: var(--ink);
   font-family: var(--f9-font);
