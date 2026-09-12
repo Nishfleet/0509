@@ -1,4 +1,7 @@
-export const PRESENCE_CONNECTOR_IDS = ["website", "x", "reddit", "linkedin", "rss"] as const;
+// 'hn' (Hacker News via the Algolia HN Search API, issue #3253) is added by
+// the mention fast-follow: free, no-auth public search, gated behind
+// PRESENCE_HN_ROLLOUT and migration 0098.
+export const PRESENCE_CONNECTOR_IDS = ["website", "x", "reddit", "linkedin", "rss", "hn"] as const;
 export type PresenceConnectorId = (typeof PRESENCE_CONNECTOR_IDS)[number];
 
 /**
@@ -16,6 +19,7 @@ export const PRESENCE_SOURCE_IDS = [
   "reddit",
   "linkedin",
   "rss",
+  "hn",
   "youtube",
   "amazon",
   "context_dev",

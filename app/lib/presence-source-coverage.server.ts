@@ -22,6 +22,7 @@ const SOURCE_LABELS: Record<PresenceSourceId, string> = {
   reddit: "Reddit",
   linkedin: "LinkedIn",
   rss: "RSS / Atom / JSON Feed",
+  hn: "Hacker News",
   youtube: "YouTube",
   amazon: "Amazon marketplace",
   context_dev: "Context.dev (open-web provider)",
@@ -43,6 +44,7 @@ const CONNECTOR_FOR_SOURCE: Partial<Record<PresenceSourceId, PresenceConnectorId
   reddit: "reddit",
   linkedin: "linkedin",
   rss: "rss",
+  hn: "hn",
 };
 
 const SOCIAL_SOURCE_IDS = new Set<PresenceSourceId>(["x", "reddit", "linkedin"]);
@@ -96,7 +98,9 @@ function statusFromConnectorGate(
               ? trackingMode === "self"
                 ? "CONNECTED_ACCOUNT"
                 : "OFFICIAL_PUBLIC_API"
-              : "CONNECTED_ACCOUNT";
+              : sourceId === "hn"
+                ? "OFFICIAL_PUBLIC_API"
+                : "CONNECTED_ACCOUNT";
 
     return baseEntry(sourceId, "available", {
       coverageLabel,
@@ -416,6 +420,12 @@ export function presenceSourceCoverageForDocs(): Array<{
       label: SOURCE_LABELS.rss,
       productionStatus: "gated",
       notes: "RSS/Atom/JSON Feed connector wired in. Gated behind PRESENCE_RSS_ROLLOUT — off by default; activation is a separate rollout decision.",
+    },
+    {
+      sourceId: "hn",
+      label: SOURCE_LABELS.hn,
+      productionStatus: "gated",
+      notes: "Hacker News connector wired in (Algolia HN Search API, free no-auth). Gated behind PRESENCE_HN_ROLLOUT — off by default; activation is a separate rollout decision.",
     },
     {
       sourceId: "youtube",

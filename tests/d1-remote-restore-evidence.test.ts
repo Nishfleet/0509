@@ -1513,6 +1513,12 @@ describe("D1 remote restore evidence automation", () => {
     // on production (production deploys have been red since 2026-09-09), so
     // the modeled production ledger excludes it too and every expected
     // forward-suffix includes it as ordinary catch-up at the tail.
+    //
+    // 0098_widen_source_target_connector_hn.sql (issue #3253) is the new
+    // source_target connector CHECK widen for the Hacker News presence
+    // connector. It was added to the repository AFTER production applied
+    // 0096_error_reports.sql and BEFORE production deploys resumed, so it is
+    // also "not yet applied on production" — same posture as 0097.
     const repository = readdirSync(resolve("migrations"))
       .filter((name) => /^\d{4}_.+\.sql$/u.test(name))
       .sort();
@@ -1525,7 +1531,8 @@ describe("D1 remote restore evidence automation", () => {
       ...repositorySuffix.filter(
         (name) =>
           name !== "0096_email_suppression.sql" &&
-          name !== "0097_status_probe_samples.sql",
+          name !== "0097_status_probe_samples.sql" &&
+          name !== "0098_widen_source_target_connector_hn.sql",
       ),
     ];
     expect(productionNames.at(-1)).toBe("0096_error_reports.sql");
@@ -1542,7 +1549,11 @@ describe("D1 remote restore evidence automation", () => {
       ),
     ).toEqual({
       action: "apply_forward_suffix",
-      migrations: ["0096_email_suppression.sql", "0097_status_probe_samples.sql"],
+      migrations: [
+        "0096_email_suppression.sql",
+        "0097_status_probe_samples.sql",
+        "0098_widen_source_target_connector_hn.sql",
+      ],
     });
     expect(
       planSourceBackupLedgerReconciliation(
@@ -1550,6 +1561,7 @@ describe("D1 remote restore evidence automation", () => {
           ...productionNames,
           "0096_email_suppression.sql",
           "0097_status_probe_samples.sql",
+          "0098_widen_source_target_connector_hn.sql",
         ]),
         repository,
       ),
@@ -1570,6 +1582,7 @@ describe("D1 remote restore evidence automation", () => {
         "0096_email_suppression.sql",
         "0096_error_reports.sql",
         "0097_status_probe_samples.sql",
+        "0098_widen_source_target_connector_hn.sql",
       ],
     });
   });

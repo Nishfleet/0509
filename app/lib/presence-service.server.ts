@@ -233,7 +233,17 @@ export async function pollPresenceSourceTarget(
   const pollResult = await pollPresenceTarget(env, target, entity, {
     connection,
     cursor: cursor
-      ? { etag: cursor.etag, lastModified: cursor.lastModified }
+      ? {
+          etag: cursor.etag,
+          lastModified: cursor.lastModified,
+          // Connector-specific window cursors (e.g. hn's `lastCreatedAt`, a
+          // unix-seconds time-window marker persisted in cursor_json by
+          // upsertPollCursor) ride the same record back into the connector.
+          ...(typeof cursor.cursor.lastCreatedAt === "number" ||
+          typeof cursor.cursor.lastCreatedAt === "string"
+            ? { lastCreatedAt: cursor.cursor.lastCreatedAt as number | string }
+            : {}),
+        }
       : undefined,
     fetchImpl: options.fetchImpl,
   });
