@@ -97,10 +97,10 @@ describe("canary-locale-prefix-routes (issue #2962)", () => {
       generatedAt: "2026-09-01T00:00:00.000Z",
       baseUrl: "https://0509.io",
       probes: [
-        { locale: "de", route: "/pricing", url: "https://0509.io/de/pricing", status: 200, ok: false },
+        { locale: "de", route: "/pricing", url: "https://0509.io/de/pricing", expectedStatus: 301, expectedLocation: "/pricing", status: 200, location: null, ok: false },
       ],
       failures: [
-        { locale: "de", route: "/pricing", url: "https://0509.io/de/pricing", status: 200, ok: false },
+        { locale: "de", route: "/pricing", url: "https://0509.io/de/pricing", expectedStatus: 301, expectedLocation: "/pricing", status: 200, location: null, ok: false },
       ],
     };
     const text = formatReport(report);
