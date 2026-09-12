@@ -107,4 +107,15 @@ Fill per deletion batch when merged:
 
 | PR | before (median PR CI min, required contexts) | after | delta |
 | --- | --- | --- | --- |
-| (pending) | | | |
+| batch 2 MERGE-IN #3069 (PR link recorded at merge) | before: ci.yml fired 5 PR jobs (codex-node-checks + shards 2/3/4 + dependabot-critical-check) plus standalone `semgrep-actionlint` (2 jobs), `backlog-console-refresh-test`, `gate-integrity`, ungated `content-quality` Vale, and a separate `ratchet-auto-tighten` cron — ~13 hosted jobs per code PR | after: one `codex-node-checks` required context (shards folded, unsharded single vitest run with `--project node` + coverage) + `dependabot-critical-check` = 2 ci.yml jobs; semgrep+actionlint and backlog-console are path-gated STEPS inside codex-node-checks (`.github/**`, `automation/backlog-console/**`); `content-quality` path-gated to `docs/**`, `.vale/**`, `app/**/*.md`; `gate-integrity` detector merged into `required-verifier-integrity` with a single `verifier-attest:` marker; design-system ratchet folded into weekly `quality-ratchet.yml` (ratchet-auto-tighten.yml deleted). Typical hosted jobs per PR now 6 (2 ci.yml + Gitleaks + preview-assert + auto-merge-arm + required-verifier-integrity) against the ≤8 target (was ~13). Delta: required contexts 6 → 6 (all assertions kept); hosted jobs ~13 → 6; workflow files deleted by this batch: 4 gate-integrity.yml, semgrep-actionlint.yml, backlog-console-refresh-test.yml, ratchet-auto-tighten.yml; 26 → 22 workflow files). (merge-queue head wait p50 re-measured at merge from GraphQL mergeQueue enqueuedAt) |
+
+
+**Mechanism-impossible: `docs-only ≤ 3 jobs`.** Gitleaks, codex-node-checks, dependabot-critical-check, preview-assert and required-verifier-integrity are required contexts, and the no-skip contract (tests/required-context-no-skip.test.ts and the ledger rule above: path-filtering a required workflow leaves its check Pending forever against branch protection) forbids skipping them — the true floor for any PR is 5–6 jobs, so the ≤3 row cannot be met without weakening a required check.
+
+**Admin-only follow-ups from batch 2** (the worker App token has no Administration permission; ruleset writes verified 403 on repos/rulesets PUT):
+1. Update the branch-protection / main-merge-queue ruleset required contexts to the folded names: remove `codex-node-checks-shard-2/3/4`, `semgrep`, `gate-integrity`.
+2. Delete the `semgrep` merge-queue bridge job in ci.yml once `semgrep` is out of the ruleset.
+3. Post the single admin `verifier-attest: <head sha>` PR comment that lands this CI diff (it touches gate-owned paths, so this PR can never self-attest).
+4. Measure and append the merge-queue head-wait p50 (GraphQL mergeQueue enqueuedAt) before/after to this table's delta cell at merge time.
+
+Tests standing beneath the fold: tests/required-context-no-skip.test.ts passes on the unsharded required job; .github/scripts/test-gate-integrity.sh passes 71 fixtures including the new retired-marker fixture (test counts went up; none removed).
