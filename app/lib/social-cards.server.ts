@@ -188,7 +188,9 @@ export function parseSocialCardPathname(pathname: string): ParsedSocialCardPath 
   // Ads, timeline, and cluster cards are rasterized to PNG (issue #2089,
   // issue #2101): the canonical URL is `.png` and the legacy `.svg` URL is
   // kept as an alias that also serves PNG bytes, so cached links keep
-  // working. Compare/switch/brand cards stay SVG (issue #2083's scope).
+  // kept as an alias that also serves PNG bytes, so cached links keep
+  // working. Compare/switch cards stay SVG (issue #2083's scope); brand
+  // cards are rasterized too (issue #3104).
   const adsMatch = rest.match(/^ads\/(.+)\.(?:svg|png)$/);
   const adsSlug = adsMatch ? safeDecodeURIComponent(adsMatch[1]) : null;
   if (adsMatch && adsSlug !== null) return { kind: "ads", slug: adsSlug };
@@ -206,8 +208,9 @@ export function parseSocialCardPathname(pathname: string): ParsedSocialCardPath 
   const switchMatch = rest.match(/^switch\/([^/]+)\.svg$/);
   if (switchMatch) return { kind: "switch", slug: switchMatch[1] };
 
-  const brandMatch = rest.match(/^brand\/([^/]+)\.svg$/);
-  if (brandMatch) return { kind: "brand", slug: brandMatch[1] };
+  const brandMatch = rest.match(/^brand\/([^/]+)\.(?:svg|png)$/);
+  const brandSlug = brandMatch ? safeDecodeURIComponent(brandMatch[1]) : null;
+  if (brandMatch && brandSlug !== null) return { kind: "brand", slug: brandSlug };
 
   // Guide cards (issue #3098): `/social-card/guides/<slug>.png`, rasterized
   // like the ads/timeline/cluster cards; the `.svg` alias serves PNG too.
@@ -312,8 +315,9 @@ export interface SocialCardFile {
   cacheControl: string;
   /**
    * Card kind, so the worker can rasterize the ads/timeline/cluster/guide
-   * cards to PNG (issue #2089, issue #2101, issue #3098) while leaving the
-   * compare/switch/brand cards as SVG (issue #2083's scope).
+   * brand cards to PNG (issue #2089, issue #2101, issue #3098, issue
+   * #3104) while leaving the compare/switch cards as SVG (issue #2083's
+   * scope).
    */
   kind: SocialCardKind;
 }
