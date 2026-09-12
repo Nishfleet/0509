@@ -52,19 +52,24 @@ import { appEnv, db, ISO_T0, seedUser, uid } from "./fixtures";
 
 const X_TEST_BASE_URL = "https://1.1.1.1";
 
+// fixed-date: static mocked X API payload — asserted verbatim, never compared against the wall clock
+const X_POST_A_CREATED_AT = "2026-09-12T08:00:00.000Z";
+// fixed-date: static mocked X API payload — only carried through the mapping, never aged against the wall clock
+const X_POST_B_CREATED_AT = "2026-09-12T09:30:00.000Z";
+
 const SEARCH_PAYLOAD = {
   data: [
     {
       id: "1900000000000000001",
       text: "Trying the MamaEarth vitamin C serum this week — glow is real",
-      created_at: "2026-09-12T08:00:00.000Z",
+      created_at: X_POST_A_CREATED_AT,
       author_id: "u_1",
       lang: "en",
     },
     {
       id: "1900000000000000002",
       text: "MamaEarth vs Dot & Key — an honest review",
-      created_at: "2026-09-12T09:30:00.000Z",
+      created_at: X_POST_B_CREATED_AT,
       author_id: "u_2",
       lang: "en",
     },
@@ -265,7 +270,7 @@ describe("x mention search — poll on the real D1", () => {
     const first = poll.items[0]!;
     expect(first.canonicalUrl).toBe("https://x.com/skinfan/status/1900000000000000001");
     expect(first.author).toBe("@skinfan");
-    expect(first.publishedAt).toBe("2026-09-12T08:00:00.000Z");
+    expect(first.publishedAt).toBe(X_POST_A_CREATED_AT);
     expect(first.contentHash).toBeTruthy();
     expect(first.externalId).toBe("1900000000000000001");
 

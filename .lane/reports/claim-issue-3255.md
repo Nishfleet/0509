@@ -78,3 +78,34 @@ npx vitest run tests/integration/x-mention-search.integration.test.ts
   connectors.
 - `X_PAID_ACCESS` is unset everywhere — production stays parked; activation is
   a separate spend decision recorded in `docs/mentions/PLAN.md`.
+
+## Round 2 — CI verdict + fix (same session, 2026-09-12)
+
+CI ran on head ae8addfe9: 3 of 20 checks failed. Two root causes, both
+worker-owned, both fixed:
+
+1. **`codex-node-checks` + `preview-assert`: TS4058** —
+   `app/lib/presence-connector-registry.server.ts(25,17)/(29,17)` "Return type
+   of exported function has or is using name 'XPollCursor' from external
+   module .../x.server but cannot be named". Cause: the prior round typed
+   `xConnector.poll(ctx, target?: XPollTarget, cursor?: XPollCursor)` with
+   non-exported named interfaces; declaration emit could not import them into
+   the registry's inferred return type. Fix: `export type XPollTarget` /
+   `export interface XPollCursor` from `x.server.ts` (type-only, no runtime
+   change). rss/website avoid this by inlining; here the shapes are also used
+   by module-internal helpers, so exporting the named contract is the smaller,
+   truthful fix.
+2. **`codex-node-checks-shard-4`: no-time-bomb gate (issue #3215)** —
+   "tests/integration/x-mention-search.integration.test.ts: 3 absolute
+   timestamp literal(s) in a file that reads Date.now()/new Date()". Cause: 3
+   ISO literals (2 in the mocked X payload, 1 in the publishedAt assertion)
+   in a file that also reads `new Date()` (metering "today" key). Fix: hoisted
+   both instants into module consts, each carrying `// fixed-date: <why>` on
+   the line above — the gate's documented escape for genuinely historical
+   fixtures; the payload instants are asserted verbatim and never compared
+   against the wall clock.
+
+Proof after the fix:
+
+- Termination command: `npx vitest run tests/integration/x-mention-search.integration.test.ts` → **16 passed, exit 0**.
+- `npx vitest run tests/no-time-bomb-fixtures.test.ts` → **1 passed, exit 0**.

@@ -55,14 +55,14 @@ export function xPaidAccessApproved(env: AppEnv): boolean {
   return env.X_PAID_ACCESS?.trim().toLowerCase() === "approved";
 }
 
-type XPollTarget = {
+export type XPollTarget = {
   targetKey?: string;
   targetUrl?: string | null;
   targetHandle?: string | null;
   metadata?: Record<string, unknown>;
 };
 
-interface XPollCursor {
+export interface XPollCursor {
   etag?: string | null;
   lastModified?: string | null;
   /** Prior `presence_poll_cursor.cursor_json` — carries meteredReads/sinceId forward. */
