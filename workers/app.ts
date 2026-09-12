@@ -6,6 +6,10 @@ import { isBuyerSurfaceLocaleId } from "../app/lib/locale-markets";
 import { cloudflareRuntimeContext } from "../app/lib/cloudflare-context";
 import { reportScheduledTaskFailure } from "../app/lib/cron-failure-alert.server";
 import {
+	recordCanaryReceipt,
+} from "../app/lib/email-delivery-canary.server";
+import { reportError } from "../app/lib/error-report.server";
+import {
   runDemoBrandBackfill,
   runDemoBrandProofHoleCatchUp,
   summarizeDemoBrandBackfill,
@@ -910,5 +914,22 @@ export default {
           }),
       ),
     );
+  },
+
+  async email(message, env, _ctx) {
+    // Email-delivery canary receive side: the zone's Email Routing rule
+    // delivers status-canary@0509.io back into this same Worker. Parse the
+    // token from the subject and complete the round-trip row. Never throw —
+    // an unhandled error tempfails the inbound mail and masks the very
+    // signal this handler exists to record.
+    try {
+      await recordCanaryReceipt(env, message);
+    } catch (error) {
+      await reportError(env, {
+        route: "email.canary.receipt",
+        reasonCode: "email_canary_receipt_handler_threw",
+        error,
+      });
+    }
   },
 } satisfies ExportedHandler<Env>;
