@@ -9,7 +9,7 @@ import {
 import { sha256Hex } from "~/lib/browser-job-telemetry.server";
 import { PLAN_FAMILIES } from "~/lib/plan-entitlements";
 
-import { db, ISO_T0, seedWatchlist, seedUser } from "./fixtures";
+import { appEnv, db, ISO_T0, seedWatchlist, seedUser } from "./fixtures";
 
 /**
  * Issue #2982 — self-serve GDPR/CCPA erasure against the REAL migrations and
@@ -131,7 +131,7 @@ export async function seedUserKeyedRows(userId: string) {
       `INSERT INTO signup_source_pending (email, signup_source, created_at, expires_at)
        VALUES (?, 'magicbrief-migration', ?, '2099-01-01T00:00:00.000Z')`,
     )
-    .bind(`pending.${USER_ID}@example.test`, now)
+    .bind(`${userId}@example.test`, now)
     .run();
   // Hash-keyed rows: the exact key seeds the erasure module hashes.
   const seeds = [
@@ -168,9 +168,9 @@ describe("account erasure against real D1 migrations", () => {
       requestedVia: "test",
     });
     expect(request?.status).toBe("pending");
-    expect(request?.execute_after ?? "").not.toBeLessThan(
-      new Date(Date.parse(request?.requested_at ?? "0") + 7 * 24 * 60 * 60 * 1000 - 1).toISOString(),
-    );
+    const executeAfter = Date.parse(request?.execute_after ?? "");
+    const requestedAt = Date.parse(request?.requested_at ?? "0");
+    expect(executeAfter).toBeGreaterThanOrEqual(requestedAt + 7 * 24 * 60 * 60 * 1000 - 1);
 
     // Sweeping before the grace window does nothing.
     let sweep = await runAccountErasureSweep(appEnv, { now: new Date(ISO_T0) });
@@ -180,6 +180,9 @@ describe("account erasure against real D1 migrations", () => {
       .bind(userId)
       .first<{ n: number }>();
     expect(stillThere?.n).toBe(1);
+
+    // Clean up the clock so later tests in the file only see their own sweep.
+    expect(await cancelPendingAccountErasure(appEnv, userId)).toBe(true);
   });
 
   it("erases every user-keyed row on the due sweep and leaves only a hashed audit row", async () => {

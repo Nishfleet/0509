@@ -359,13 +359,14 @@ describe("account security copy and passkey removal", () => {
     expect(source).toContain('aria-live="polite"');
   });
 
-  it("describes account deletion as a support request rather than an in-app deletion", () => {
+  it("describes account deletion as self-serve erasure on a clock", () => {
     const source = readFileSync("app/routes/app.account.tsx", "utf8");
 
-    expect(source).toContain("support deletion request");
-    expect(source).toContain("nothing is deleted automatically or in-app");
-    expect(source).toContain("Support reviews and verifies the request");
-    expect(source).not.toContain("Permanently removes your account");
+    expect(source).toContain("Download my data");
+    expect(source).toContain("erasure runs automatically");
+    expect(source).toContain("Delete my account");
+    expect(source).not.toContain("nothing is deleted automatically");
+    expect(source).toContain("confirmErasure");
   });
 });
 

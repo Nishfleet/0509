@@ -111,7 +111,7 @@ const ACCOUNT_ERASURE_STEPS: readonly ErasureStep[] = [
   {
     table: "ad_observation",
     where: `watchlist_run_id IN ${RUN_IDS}`,
-    binds: userBinds(2),
+    binds: userBinds(1),
   },
   {
     table: "watch_event",
@@ -145,7 +145,7 @@ const ACCOUNT_ERASURE_STEPS: readonly ErasureStep[] = [
     kind: "clear",
     export: false,
     where: `holder_run_id IN ${RUN_IDS}`,
-    binds: userBinds(2),
+    binds: userBinds(1),
   },
   {
     table: "watchlist_run",
@@ -289,7 +289,9 @@ const ACCOUNT_ERASURE_STEPS: readonly ErasureStep[] = [
   { table: "evidence_top_up_adjustment", where: "workspace_user_id = ?", binds: userBinds(1) },
   { table: "evidence_top_up_grant", where: "workspace_user_id = ?", binds: userBinds(1) },
   { table: "proof_usage_credit_migration", where: "workspace_user_id = ?", binds: userBinds(1), export: false },
-  { table: "proof_usage_credit", where: "workspace_user_id = ?", binds: userBinds(1) },
+  // proof_usage_credit predates the workspace_user_id convention (0014) and
+  // stays keyed by user_id.
+  { table: "proof_usage_credit", where: "user_id = ?", binds: userBinds(1) },
   // hash- and email-keyed rows (no FK to user)
   {
     table: "rate_limit_events",
@@ -441,7 +443,8 @@ function erasureStatementForStep(
     step.kind === "clear"
       ? `UPDATE ${step.table} SET holder_run_id = NULL, holder_token = NULL, leased_at = NULL WHERE ${where}`
       : `DELETE FROM ${step.table} WHERE ${where}`;
-  return db.prepare(sql).bind(...step.binds(ctx));
+  const binds = step.binds(ctx);
+  return db.prepare(sql).bind(...binds);
 }
 
 /**
@@ -618,10 +621,16 @@ export async function exportAccountData(
     if (!where) {
       continue;
     }
-    const rows = await db
-      .prepare(`SELECT * FROM ${step.table} WHERE ${where} LIMIT ?`)
-      .bind(...step.binds(ctx), EXPORT_ROW_LIMIT + 1)
-      .all<Record<string, unknown>>();
+    let rows;
+    try {
+      rows = await db
+        .prepare(`SELECT * FROM ${step.table} WHERE ${where} LIMIT ?`)
+        .bind(...step.binds(ctx), EXPORT_ROW_LIMIT + 1)
+        .all<Record<string, unknown>>();
+    } catch (err) {
+      console.error("EXPORT-DIAG", step.table, (err as Error).message);
+      throw err;
+    }
     const results = rows.results ?? [];
     const truncated = results.length > EXPORT_ROW_LIMIT;
     const visible = truncated ? results.slice(0, EXPORT_ROW_LIMIT) : results;

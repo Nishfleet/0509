@@ -844,13 +844,13 @@ export default function AccountRoute() {
             <h2>Delete your account and your data</h2>
           </div>
         </div>
-        {erasureAction?.message ? (
+        {deletionAction?.message ? (
           <div
-            aria-live={erasureAction.ok ? "polite" : "assertive"}
-            className={`f9-wk-notice ${erasureAction.ok ? "is-success" : "is-error"}`}
-            role={erasureAction.ok ? "status" : "alert"}
+            aria-live={deletionAction.ok ? "polite" : "assertive"}
+            className={`f9-wk-notice ${deletionAction.ok ? "is-success" : "is-error"}`}
+            role={deletionAction.ok ? "status" : "alert"}
           >
-            <p>{erasureAction.message}</p>
+            <p>{deletionAction.message}</p>
           </div>
         ) : null}
         <p>
