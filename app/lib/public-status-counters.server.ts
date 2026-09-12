@@ -10,6 +10,7 @@
 
 import { queryOne as one } from "~/lib/data/d1.server";
 import type { AppEnv } from "~/lib/env.server";
+import { monitoringCoverageDays } from "~/lib/monitoring-coverage";
 
 export const DIGEST_STALENESS_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -149,4 +150,31 @@ export async function getPublicStatusCounters(
     scheduledMonitoringSince: baselineRow?.active_since ?? null,
     digestHealth: digestHealthState(counters),
   };
+}
+
+/**
+ * The public coverage figure for the marketing footer (issue #2972): whole
+ * days of continuous scheduled-monitoring coverage derived from the earliest
+ * recorded baseline — the same honest figure /status publishes, never a
+ * fabricated uptime percentage. One bounded MIN() read; returns null when
+ * the DB is not configured, and a live read error propagates so the route's
+ * loader can degrade to the link-only footer explicitly.
+ */
+export async function getMonitoringCoverageDays(
+  env: AppEnv,
+): Promise<number | null> {
+  if (!env.DB) {
+    return null;
+  }
+  const baselineRow = await one<{ active_since: string | null }>(
+    env,
+    `
+      SELECT MIN(baseline_at) AS active_since
+      FROM scheduled_observation_health_state
+    `,
+  );
+  return monitoringCoverageDays(
+    baselineRow?.active_since ?? null,
+    new Date().toISOString(),
+  );
 }

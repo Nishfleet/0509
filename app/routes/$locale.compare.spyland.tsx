@@ -3,7 +3,7 @@
 // lockstep with the EN page; the locale-specific `links` keeps canonical→EN
 // (so search ranking consolidates on the EN /compare/spyland, per #1562's
 // canonicalisation rule) and emits the buyer-surface hreflang cluster.
-// primary-source-verified (issue #2069, #2835): https://spyland.ing/ returns HTTP 200 —
+// primary-source-verified (issue #2069, #2835, #3019): https://spyland.ing/ returns HTTP 200 —
 // verified live 2026-09-11.
 import type { LinksFunction } from "react-router";
 import CompareSpylandRoute, { meta } from "./compare.spyland";

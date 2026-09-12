@@ -43,7 +43,22 @@ export async function loader({ context }: LoaderFunctionArgs) {
   // No SSR pricing preview: PricingSection resolves buyer-country prices via
   // the client fetch, so this document stays off the 2.5s SSR bound and the
   // worker's PUBLIC_CACHEABLE_HTML_PATHS policy actually applies.
-  return { pricingPreview: noPricingPreview, commercialLaunch };
+
+  // Issue #2972: same footer uptime figure as the landing page — whole days
+  // of continuous scheduled-monitoring coverage, country-neutral so the
+  // shared-cached document stays identical for every market.
+  let monitoringCoverageDays: number | null = null;
+  try {
+    const { getMonitoringCoverageDays } = await import("~/lib/public-status-counters.server");
+    monitoringCoverageDays = await getMonitoringCoverageDays(env);
+  } catch (error) {
+    console.warn("Pricing monitoring-coverage figure failed; footer renders the Status link only.", {
+      errorName: error instanceof Error ? error.name : typeof error,
+    });
+    monitoringCoverageDays = null;
+  }
+
+  return { pricingPreview: noPricingPreview, commercialLaunch, monitoringCoverageDays };
 }
 
 export default function PricingRoute() {
@@ -93,7 +108,7 @@ export default function PricingRoute() {
           evaluating a price is actually weighing — and links to both the
           /no-phantom-changes guarantee and the /capture-rules rule set. */}
       <TrustProofNote />
-      <MarketingFooter />
+      <MarketingFooter monitoringCoverageDays={routeData.monitoringCoverageDays} />
     </main>
   );
 }

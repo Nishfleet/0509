@@ -25,11 +25,14 @@ describe("public SEO files", () => {
     expect(sitemap?.body).not.toContain("https://0509.io/proof");
     expect(sitemap?.body).toContain("https://0509.io/privacy");
     expect(sitemap?.body).toContain("https://0509.io/terms");
-    // Funnel entry points (feat/funnel-seo): the public search preview and
-    // all six compare pages are deliberately crawlable. /auth/signup is NOT in
-    // the sitemap — auth/action surfaces carry noindex and stay out so Google
-    // does not index the signup entry (see NOINDEX_ACTION_SURFACES in seo.ts).
-    expect(sitemap?.body).toContain("<loc>https://0509.io/search</loc>");
+    // Funnel entry points (feat/funnel-seo): all six compare pages are
+    // deliberately crawlable. /auth/signup is NOT in the sitemap —
+    // auth/action surfaces carry noindex and stay out so Google does not
+    // index the signup entry (see NOINDEX_ACTION_SURFACES in seo.ts). Issue
+    // #2965: /search is ALSO out now — parameterised /search?q= serves
+    // `x-robots-tag: noindex` at the worker edge and bare /search 302s to
+    // /brands, so the sitemap must not advertise it as indexable.
+    expect(sitemap?.body).not.toContain("<loc>https://0509.io/search</loc>");
     expect(sitemap?.body).not.toContain("<loc>https://0509.io/auth/signup</loc>");
     // Restored after the #944/#945 404s cleared (#963): /pricing must stay in
     // the published sitemap with the compare pages, never behind a later drop.
@@ -56,6 +59,7 @@ describe("public SEO files", () => {
     expect(sitemap?.body).toContain("<loc>https://0509.io/switch/panoramata</loc>");
     expect(sitemap?.body).toContain("<loc>https://0509.io/switch/visualping</loc>");
     expect(sitemap?.body).toContain("<loc>https://0509.io/switch/magicbrief</loc>");
+    expect(sitemap?.body).toContain("<loc>https://0509.io/switch/adspy</loc>");
     expect(sitemap?.body).toContain("<loc>https://0509.io/sneaker-resale</loc>");
     // Issue #1561: the locale sneaker-resale pages live ONLY in their own
     // /<locale>/sitemap.xml — they must not leak back into the root feed.

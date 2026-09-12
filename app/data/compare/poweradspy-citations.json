@@ -1,0 +1,20 @@
+{
+  "competitor": "poweradspy",
+  "productName": "PowerAdSpy",
+  "sources": [
+    {
+      "id": "poweradspy-home",
+      "href": "https://poweradspy.com/",
+      "label": "PowerAdSpy home",
+      "checked": "2026-09-12",
+      "claim": "PowerAdSpy positions itself as an AI-powered competitive ad intelligence platform indexing ads across 100+ countries on 11 networks including Facebook, Instagram, YouTube, Google, and TikTok."
+    },
+    {
+      "id": "poweradspy-pricing",
+      "href": "https://poweradspy.com/pricing",
+      "label": "PowerAdSpy pricing",
+      "checked": "2026-09-12",
+      "claim": "PowerAdSpy lists Standard at $99/month, Platinum at $279/month, and Palladium at $399/month on monthly billing, with 3-day paid trials and roughly 50–70% off on yearly billing."
+    }
+  ]
+}
