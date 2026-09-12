@@ -19,6 +19,7 @@
     "canary:proof": "node scripts/launch-readiness-canary.mjs",
     "canary:digest-headline-ratio": "node scripts/canary-digest-headline-ratio.mjs",
     "canary:proof-screenshot-rate": "node scripts/canary-proof-screenshot-rate.mjs",
+    "canary:timeline-coverage": "node scripts/canary-timeline-coverage.mjs",
     "canary:screenshot-rate": "node scripts/canary-proof-screenshot-rate.mjs --cohort paid-tier --threshold 90",
     "billing:integrity": "node scripts/plan-integrity-check.mjs",
     "canary:billing": "node scripts/dodo-billing-canary.mjs",
