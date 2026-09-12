@@ -74,28 +74,56 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   // not separate anonymous visitors — so any content here chosen from the
   // visitor's country (the #2281 featured brand, the #1468 proof brief) made
   // the edge able to replay one market's homepage to another market for the
-  // 5-minute max-age. The document now embeds NO country-resolved content:
-  // it pins the neutral flagship brand and no proof brief, and the client
-  // personalizes both after mount via the EXISTING /api/demo-proof endpoint
-  // — the same client-fetch pattern the pricing section already uses for
-  // buyer-country prices (issue #2389). /api/demo-proof resolves the visitor
-  // country per-request with the EXACT /ads/:domain ladder, so the
-  // personalized brief keeps the #1468 count parity contract the SSR path
-  // could no longer guarantee under a shared cache. Crawler-visible HTML is
-  // the neutral brand with the honest "no live proof yet" state until the
-  // fetch resolves.
-  const { PUBLIC_HOME_NEUTRAL_FEATURED_WEBSITE } = await import("~/lib/public-proof.server");
+  // 5-minute max-age. The document therefore embeds NO country-resolved
+  // content: it pins the neutral flagship brand, and the client
+  // personalizes the brief after mount via the EXISTING /api/demo-proof
+  // endpoint — the same client-fetch pattern the pricing section already
+  // uses for buyer-country prices (issue #2389). /api/demo-proof resolves
+  // the visitor country per-request with the EXACT /ads/:domain ladder, so
+  // the personalized brief keeps the #1468 count parity contract the SSR
+  // path could not guarantee under a shared cache. Since #3125 the
+  // crawler-visible HTML carries the neutral brand's REAL stored proof
+  // (resolved on the all-countries ladder — no geo input, so the cached
+  // document is identical for every market); per-market briefs swap in
+  // client-side after the fetch resolves.
+  const { PUBLIC_HOME_NEUTRAL_FEATURED_WEBSITE, loadPublicProofBrief } = await import(
+    "~/lib/public-proof.server"
+  );
+  const { ALL_COUNTRIES_VALUE } = await import("~/lib/countries");
   const featuredDomain = PUBLIC_HOME_NEUTRAL_FEATURED_WEBSITE;
-  const proofBrief: PublicProofBrief | null = null;
+
+  // Issue #3125: the SSR document ships REAL stored proof for the neutral
+  // flagship brand instead of defaulting to the empty state. The document
+  // must stay country-neutral under the #2696 shared-cache rule, so the
+  // brief is resolved on the "all" ladder — the same cache row
+  // loadBrandPageCacheSnapshot reads for a "no geo header" visitor and the
+  // same snapshot /ads/nike.com renders — with the snapshot's own fetchedAt
+  // clock and honesty labels ("captured <date>", "on record" when stale;
+  // never a fabricated recency claim). The client personalization below
+  // still swaps in the visitor's home-market brief after mount via
+  // /api/demo-proof (issue #2281), so the first paint is real proof and the
+  // hydrated page stays per-country. When no stored capture exists at all
+  // (or the read hiccups), proofBrief stays null and the genuine empty
+  // state renders as the fallback.
+  const proofBriefPromise: Promise<PublicProofBrief | null> = (async () => {
+    try {
+      return await loadPublicProofBrief(env, { visitorCountry: ALL_COUNTRIES_VALUE });
+    } catch (error) {
+      console.warn("Homepage neutral proof brief load failed; rendering the honest empty state.", {
+        errorName: error instanceof Error ? error.name : typeof error,
+      });
+      return null;
+    }
+  })();
 
   // The under-fold before/after mark: a real stored watch event or null (the
   // null path renders the clearly labelled sample state, never a fabricated
   // "real" change). One bounded database read; never a scan or a provider call.
-  // Issue #2951: the two homepage lookups are independent — both promises are
-  // started eagerly and only awaited afterwards, so the second database
-  // read no longer waits on the first. Each lookup keeps its own guarded fallback:
-  // a failure in one must not touch the other (same warnings, same sentinels
-  // as before).
+  // Issue #2951: the homepage lookups are independent — the #3125 brief read
+  // above is one of them: every promise is defined before the first await
+  // below, so no lookup waits on another. Each lookup keeps its own guarded
+  // fallback: a failure in one must not touch the other (same warnings,
+  // same sentinels as before).
   const changeMarkPromise = (async (): Promise<PublicChangeMark | null> => {
     const { loadPublicChangeMark } = await import("~/lib/public-change-mark.server");
     return loadPublicChangeMark(env);
@@ -105,6 +133,27 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     const { loadIndexableAdsInternalLinks } = await import("~/lib/ads-internal-links.server");
     return loadIndexableAdsInternalLinks(env);
   })();
+
+  // Issue #2972: the footer's public uptime figure — whole days of
+  // continuous scheduled-monitoring coverage, the same honest number /status
+  // publishes (never a fabricated percentage). Country-neutral, so it is
+  // safe inside the shared-cached document; on any read failure the footer
+  // falls back to the Status link alone. Started eager like the other
+  // homepage reads (issue #2951 concurrency).
+  const monitoringCoverageDaysPromise = (async (): Promise<number | null> => {
+    const { getMonitoringCoverageDays } = await import("~/lib/public-status-counters.server");
+    return getMonitoringCoverageDays(env);
+  })();
+
+  let proofBrief: PublicProofBrief | null = null;
+  try {
+    proofBrief = await proofBriefPromise;
+  } catch (error) {
+    console.warn("Homepage neutral proof brief load failed; rendering the honest empty state.", {
+      errorName: error instanceof Error ? error.name : typeof error,
+    });
+    proofBrief = null;
+  }
 
   let changeMark: PublicChangeMark | null = null;
   try {
@@ -126,15 +175,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     indexableAdsLinks = [];
   }
 
-  // Issue #2972: the footer's public uptime figure — whole days of
-  // continuous scheduled-monitoring coverage, the same honest number /status
-  // publishes (never a fabricated percentage). Country-neutral, so it is
-  // safe inside the shared-cached document; on any read failure the footer
-  // falls back to the Status link alone.
   let monitoringCoverageDays: number | null = null;
   try {
-    const { getMonitoringCoverageDays } = await import("~/lib/public-status-counters.server");
-    monitoringCoverageDays = await getMonitoringCoverageDays(env);
+    monitoringCoverageDays = await monitoringCoverageDaysPromise;
   } catch (error) {
     console.warn("Homepage monitoring-coverage figure failed; footer renders the Status link only.", {
       errorName: error instanceof Error ? error.name : typeof error,
@@ -149,12 +192,12 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   // checkout-preview calls per cold isolate. PricingSection fetches the
   // already-existing /api/pricing-preview from the client instead, so this
   // document carries no prices and rides the worker's shared policy. Since
-  // #2696 it also carries no country-resolved proof content: `proofBrief` is
-  // always null here and `featuredDomain` is the neutral flagship, so the
-  // shared-cached document is identical for every market and the client
-  // personalizes both via /api/demo-proof. The route still declares the
-  // `pricingPreview` field so its data shape stays identical to /pricing; it
-  // is always the "no preview" sentinel here.
+  // #2696 it carries no country-resolved proof content — the #3125 brief is
+  // resolved on the all-countries ladder and `featuredDomain` is the neutral
+  // flagship, so the shared-cached document is identical for every market and
+  // the client personalizes the brief via /api/demo-proof. The route still
+  // declares the `pricingPreview` field so its data shape stays identical to
+  // /pricing; it is always the "no preview" sentinel here.
   return { pricingPreview: noPricingPreview, commercialLaunch, proofBrief, indexableAdsLinks, changeMark, featuredDomain, monitoringCoverageDays };
 }
 
