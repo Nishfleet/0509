@@ -286,8 +286,13 @@ async function runProviderMetaProbe(env: AppEnv): Promise<{ ok: boolean; detail:
       executionContext: null,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return { ok: false, detail: `ad library capture failed: ${message.slice(0, 120)}` };
+    // Keep the raw error out of `detail` — it is published verbatim on /status
+    // and browser-provider messages can carry internal hostnames. The full
+    // message stays in worker logs instead.
+    console.warn("provider_meta probe capture failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return { ok: false, detail: "ad library capture failed" };
   }
   if (result.ads.length > 0) {
     return { ok: true, detail: `${result.ads.length} ad cards parsed from the ad library surface` };
@@ -301,24 +306,23 @@ async function runProviderMetaProbe(env: AppEnv): Promise<{ ok: boolean; detail:
  */
 async function runUptimeProbe(env: AppEnv): Promise<{ ok: boolean; detail: string }> {
   const origin = env.APP_ORIGIN?.replace(/\/+$/, "") || "https://0509.io";
-  const startedAt = Date.now();
-  const home = await fetch(`${origin}/`, {
-    redirect: "follow",
-    headers: { "user-agent": "0509-status-probe/1.0" },
-    signal: AbortSignal.timeout(STATUS_PROBE_TIMEOUT_MS),
-  });
-  const homeMs = Date.now() - startedAt;
-  const healthStartedAt = Date.now();
-  const health = await fetch(`${origin}/api/health`, {
-    redirect: "follow",
-    headers: { "user-agent": "0509-status-probe/1.0" },
-    signal: AbortSignal.timeout(STATUS_PROBE_TIMEOUT_MS),
-  });
-  const healthMs = Date.now() - healthStartedAt;
+  // Parallel inside the probe's shared 10s budget: a slow homepage must not
+  // starve the health check of its slice and turn a partial degrade into a
+  // false both-red.
+  const probeFetch = async (path: string) => {
+    const startedAt = Date.now();
+    const response = await fetch(`${origin}${path}`, {
+      redirect: "follow",
+      headers: { "user-agent": "0509-status-probe/1.0" },
+      signal: AbortSignal.timeout(STATUS_PROBE_TIMEOUT_MS),
+    });
+    return { status: response.status, ms: Date.now() - startedAt };
+  };
+  const [home, health] = await Promise.all([probeFetch("/"), probeFetch("/api/health")]);
   const ok = home.status < 400 && health.status < 400;
   return {
     ok,
-    detail: `home ${home.status}/${homeMs}ms, health ${health.status}/${healthMs}ms`,
+    detail: `home ${home.status}/${home.ms}ms, health ${health.status}/${health.ms}ms`,
   };
 }
 
