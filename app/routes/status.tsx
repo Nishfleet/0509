@@ -169,7 +169,7 @@ export default function StatusRoute() {
               </div>
               <div>
                 <dt>Last watchlist run</dt>
-                <dd>{monitoring.lastWatchlistRunAt ?? "no scheduled run in the measurement window"} — as of {asOf}</dd>
+                <dd>{monitoring.lastWatchlistRunAt ?? "no scheduled run in the measurement window"}, as of {asOf}</dd>
               </div>
               <div>
                 <dt>Last digest sent</dt>
