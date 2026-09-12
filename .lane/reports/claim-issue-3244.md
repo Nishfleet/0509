@@ -4,6 +4,22 @@ Lane: pi-issue-0509-3244
 Branch: claim/issue-3244
 Base: origin/main @ 22726db6
 
+### Reviewer round (cursor/cursor-grok-4.6-high)
+
+- Act on: none.
+- Consider / Noted (recorded, not re-delegated):
+  - Missing reverse-direction test (defer-claimed → waitUntil for the same
+    ad). Added in this round — now test 4 in the suite.
+  - `LANDING_PAGE_CAPTURE_GAPS` is typed `Record<string, ...>`, not
+    `Record<LandingPageCaptureFailureReasonCode, ...>`. Pre-existing;
+    tightening it is a separate change (out of scope for #3244).
+  - `enrichment_in_flight` metadata `metaAdId` duplicates
+    `payload.ad.metaAdId`. Kept for log/telemetry symmetry with the
+    `capture_stream_failed.message` pattern; flagged for a future cleanup.
+  - Pre-existing FIX-13 stuck-pending window when a waitUntil revalidation
+    lands while the defer-held lease blocks it (route's 4s one-shot
+    revalidation mitigates). Out of scope for #3244 — file follow-up.
+
 ### Scope
 - `app/lib/search-selection.server.ts` — defer-capture branch now claims the
   per-ad enrichment slot (the same one the waitUntil branch already used).
@@ -33,7 +49,9 @@ Base: origin/main @ 22726db6
 ### Verification
 
 `npx vitest run --configLoader runner --project node tests/search-selection.deferred-capture.test.ts`
-→ 8 tests passed (5 existing + 3 new).
+→ 9 tests passed (5 existing + 4 new — including the reverse-direction
+test added in response to the reviewer round: defer-claimed lease blocks
+the waitUntil path from scheduling a second capture).
 
 `npx vitest run --configLoader runner --project node tests/search-selection.paint-fast.test.ts`
 → 6 tests passed (existing FIX-13 lease test still green).

@@ -458,4 +458,58 @@ describe("prepareSearchResultSelection deferCapture lease (issue #3244)", () => 
     resolveWaitUntilCapture(null);
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
+
+  it("a defer-claimed lease blocks the waitUntil path from scheduling a second capture", async () => {
+    let resolveDeferCapture: (snapshot: unknown) => void = () => {};
+    const captureLandingPageSnapshot = vi.fn().mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveDeferCapture = resolve;
+        }),
+    );
+    mockCaptureModules({ captureLandingPageSnapshot });
+    vi.doMock("~/lib/data.server", () => ({
+      hydrateAdsWithPersistedCreatives: vi.fn(
+        async (_env: unknown, ads: AdRecord[]) => ads,
+      ),
+      listAdsByIds: vi.fn(async () => []),
+      upsertAd: vi.fn(async () => undefined),
+    }));
+
+    const {
+      prepareSearchResultSelection,
+      resetSelectionEnrichmentInFlightForTests,
+    } = await import("~/lib/search-selection.server");
+    resetSelectionEnrichmentInFlightForTests();
+
+    // An anonymous defer claims the lease and starts the capture.
+    const waitUntil = vi.fn((promise: Promise<unknown>) => {
+      void promise;
+    });
+    const anonymous = await prepareSearchResultSelection(
+      {} as never,
+      resultWith([{ ...baseAd }]),
+      null,
+      { hydratePersisted: false, deferCapture: true },
+    );
+    expect(anonymous.selectedAdCapture).toBeDefined();
+    expect(captureLandingPageSnapshot).toHaveBeenCalledTimes(1);
+
+    // A signed-in revalidation (waitUntil path) for the same ad finds the
+    // lease already held by the defer and does NOT schedule a second
+    // Browser Rendering job — this is the canonical #3244 scenario.
+    const signedIn = await prepareSearchResultSelection(
+      { DB: {} } as never,
+      resultWith([{ ...baseAd }]),
+      "meta-boat-1",
+      { waitUntil, hydratePersisted: true },
+    );
+    expect(captureLandingPageSnapshot).toHaveBeenCalledTimes(1);
+    expect(waitUntil).not.toHaveBeenCalled();
+    expect(signedIn.selectionEnrichmentPending).toBe(true);
+
+    // Drain the in-flight defer capture so the test fixture can exit.
+    resolveDeferCapture(null);
+    await requireCapturePayload(anonymous);
+  });
 });
