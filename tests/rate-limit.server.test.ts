@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -536,6 +538,92 @@ describe("cost-bearing scopes keep the D1 atomic claim", () => {
       ),
     ).resolves.toMatchObject({ status: 503 });
     consoleError.mockRestore();
+  });
+});
+
+/**
+ * Committed-configuration guard for the RL_* edge bindings (issue #2985).
+ *
+ * History this exists to prevent: the first cut of #2985 shipped
+ * `namespace_id` values invented as descriptive strings ("0509-rl-auth",
+ * …). Every worker unit test passed, because the fake limiters never look at
+ * the binding metadata. Cloudflare's deploy-time validator rejected the
+ * upload with `binding RL_WEBHOOK of type ratelimit must have valid
+ * namespace_id [code: 10021]`, and the failure only surfaced in the
+ * `preview-assert` required check after a full build+upload round-trip.
+ *
+ * The platform contract (developers.cloudflare.com Workers Rate Limiting
+ * binding): `namespace_id` is "a string containing a positive integer that
+ * uniquely defines this rate limiting namespace within your Cloudflare
+ * account". It is chosen by the config author — no Cloudflare-side resource
+ * has to be created first — but it MUST be an integer string and MUST be
+ * unique per namespace within the account. These assertions fail before
+ * merge instead of in the deploy validator.
+ */
+function readWranglerRateLimits(path: string): { name: unknown; namespace_id: unknown; simple: unknown }[] {
+  const raw = readFileSync(path, "utf8");
+  // wrangler.jsonc allows // comments; strip them before parsing. String
+  // contents are preserved by only dropping comments that start a run of
+  // non-quoted text on their line.
+  const withoutComments = raw
+    .split("\n")
+    .map((line) => {
+      const commentIndex = line.indexOf("//");
+      if (commentIndex === -1) return line;
+      const before = line.slice(0, commentIndex);
+      const quoteCount = (before.match(/"/g) ?? []).length;
+      return quoteCount % 2 === 0 ? before : line;
+    })
+    .join("\n");
+  const parsed = JSON.parse(withoutComments) as {
+    unsafe?: { bindings?: { type?: string; name?: unknown; namespace_id?: unknown; simple?: unknown }[] };
+  };
+  return (parsed.unsafe?.bindings ?? []).filter((binding) => binding.type === "ratelimit") as {
+    name: unknown;
+    namespace_id: unknown;
+    simple: unknown;
+  }[];
+}
+
+const RATE_LIMIT_CONFIGS = ["wrangler.jsonc", "wrangler.e2e.jsonc", "tests/integration/wrangler.test.jsonc"] as const;
+
+describe("RL_* edge binding configuration (#2985)", () => {
+  it.each(RATE_LIMIT_CONFIGS)("declares every RL_* scope in %s", (path) => {
+    const names = readWranglerRateLimits(path).map((binding) => binding.name);
+
+    expect(names.sort()).toEqual(Object.keys(EDGE_BINDING_LIMITS).sort());
+  });
+
+  it.each(RATE_LIMIT_CONFIGS)("uses positive-integer namespace_id strings in %s", (path) => {
+    for (const binding of readWranglerRateLimits(path)) {
+      const namespaceId = binding.namespace_id;
+
+      // Cloudflare: "A string containing a positive integer … Although the
+      // value must be a valid integer, it is specified as a string." A
+      // descriptive label here is the #10021 deploy failure.
+      expect(typeof namespaceId, `${String(binding.name)} namespace_id must be a string`).toBe("string");
+      expect(String(namespaceId), `${String(binding.name)} namespace_id must be a positive integer`).toMatch(
+        /^[1-9][0-9]*$/,
+      );
+    }
+  });
+
+  it.each(RATE_LIMIT_CONFIGS)("keeps each namespace_id unique within %s", (path) => {
+    const ids = readWranglerRateLimits(path).map((binding) => String(binding.namespace_id));
+
+    // Unique per Cloudflare account. Distinct scopes must not share a
+    // namespace, or one route's burst spends another route's budget.
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it.each(RATE_LIMIT_CONFIGS)("matches the committed capacity each scope is tested against in %s", (path) => {
+    for (const binding of readWranglerRateLimits(path)) {
+      const simple = binding.simple as { limit?: unknown; period?: unknown };
+
+      expect(simple.limit, `${String(binding.name)} simple.limit`).toBe(EDGE_BINDING_LIMITS[String(binding.name)]);
+      // The platform accepts only 10s or 60s windows.
+      expect([10, 60]).toContain(simple.period);
+    }
   });
 });
 

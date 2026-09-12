@@ -161,79 +161,68 @@
       // a binding is missing.
       {
         "name": "RL_AUTH",
-
         "type": "ratelimit",
-        "namespace_id": "0509-rl-auth",
+        "namespace_id": "1001",
         "simple": { "limit": 2, "period": 60 }
       },
       {
         "name": "RL_SEARCH_ANON_BROWSER",
-
         "type": "ratelimit",
-        "namespace_id": "0509-rl-search-anon-browser",
+        "namespace_id": "1002",
         "simple": { "limit": 2, "period": 60 }
       },
       {
         "name": "RL_PROOF_BRIEF",
-
         "type": "ratelimit",
-        "namespace_id": "0509-rl-proof-brief",
+        "namespace_id": "1003",
         "simple": { "limit": 3, "period": 60 }
       },
       {
         "name": "RL_SEARCH_SELECTION",
-
         "type": "ratelimit",
-        "namespace_id": "0509-rl-search-selection",
+        "namespace_id": "1004",
         "simple": { "limit": 3, "period": 60 }
       },
       {
         "name": "RL_SEARCH_IP",
-
         "type": "ratelimit",
-        "namespace_id": "0509-rl-search-ip",
+        "namespace_id": "1005",
         "simple": { "limit": 10, "period": 60 }
       },
       {
         "name": "RL_BRAND_PAGE",
-
         "type": "ratelimit",
-        "namespace_id": "0509-rl-brand-page",
+        "namespace_id": "1006",
         "simple": { "limit": 12, "period": 60 }
       },
       {
         "name": "RL_WRITE",
-
         "type": "ratelimit",
-        "namespace_id": "0509-rl-write",
+        "namespace_id": "1007",
         "simple": { "limit": 60, "period": 60 }
       },
       {
         "name": "RL_STATUS",
-
         "type": "ratelimit",
-        "namespace_id": "0509-rl-status",
+        "namespace_id": "1008",
         "simple": { "limit": 120, "period": 60 }
       },
       {
         "name": "RL_DELIVERY_WEBHOOK",
-
         "type": "ratelimit",
-        "namespace_id": "0509-rl-delivery-webhook",
+        "namespace_id": "1009",
         "simple": { "limit": 180, "period": 60 }
       },
       {
         "name": "RL_API_READ",
-
         "type": "ratelimit",
-        "namespace_id": "0509-rl-api-read",
+        "namespace_id": "1010",
         "simple": { "limit": 240, "period": 60 }
       },
       {
         "name": "RL_WEBHOOK",
-
         "type": "ratelimit",
-        "namespace_id": "0509-rl-webhook",
+        "namespace_id": "1011",
         "simple": { "limit": 300, "period": 60 }
       }
     ]
