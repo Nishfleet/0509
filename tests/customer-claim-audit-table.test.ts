@@ -294,6 +294,11 @@ describe("BET 10 claim-by-claim audit table", () => {
         }
         if (!source.proofDate || !/^\d{4}-\d{2}-\d{2}$/.test(source.proofDate)) {
           changed.push({ claimId: claim.claimId, problem: "live row needs an ISO proofDate" });
+        } else if (
+          Date.parse(source.proofDate) > Date.now() ||
+          Date.parse(source.proofDate) < Date.parse("2026-01-01")
+        ) {
+          changed.push({ claimId: claim.claimId, problem: `proofDate ${source.proofDate} is in the future or predates the fleet` });
         }
       } else if (source.proofUrl || source.proofDate) {
         changed.push({ claimId: claim.claimId, problem: "coming_soon row must not carry proofUrl/proofDate" });
