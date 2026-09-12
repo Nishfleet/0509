@@ -66,4 +66,45 @@ if [ "$failures" -gt 0 ]; then
   exit 1
 fi
 
-echo "seo-parity: PASS — all sampled sitemap /ads URLs are indexable"
+# 2. Live-prod check for the BET 8 MagicBrief wind-down surface (issue #3111).
+#
+# Regression it guards: /switch/magicbrief is the one named-vendor shutdown
+# creating real switching demand, but it re-emerged as a 301 to the bare
+# /compare hub (which never mentions MagicBrief), and the sitemap listed
+# neither /switch/magicbrief nor /compare/magicbrief. The unit tests and
+# route-registration assertions caught nothing because the code on main was
+# correct — only the deployed surface was wrong. This check hits production,
+# exactly like the /ads parity loop above:
+#
+#   /switch/magicbrief (following any 301) must resolve to a 200 page whose
+#   served HTML contains "magicbrief" case-insensitively, and that final 200
+#   URL must be listed in sitemap.xml. The bare /compare hub is NOT an
+#   acceptable landing for the trigger.
+body_file="$(mktemp)"
+# touch first: a connection-refused curl never creates the --output file,
+# and the cat below must see an empty body, not ENOENT (set -euo pipefail).
+touch "$body_file"
+meta="$(curl "${CURL_OPTS[@]}" --location --max-redirs 4 --output "$body_file" --write-out 'META %{http_code} %{url_effective}' "$SITE/switch/magicbrief" 2>/dev/null || true)"
+switch_http_code="$(printf '%s\n' "$meta" | sed -n 's/^META \([0-9]*\).*/\1/p' | tail -1)"
+effective_url="$(printf '%s\n' "$meta" | sed -n 's/^META [0-9]* *//p' | tail -1)"
+switch_body="$(cat "$body_file")"
+rm -f "$body_file"
+
+magicbrief_failures=0
+if [ "$switch_http_code" -lt 200 ] || [ "$switch_http_code" -ge 300 ] || [ -z "$switch_body" ]; then
+  echo "seo-parity: FAIL — /switch/magicbrief resolved to HTTP ${switch_http_code} (${#switch_body} bytes at ${effective_url})" >&2
+  magicbrief_failures=$((magicbrief_failures + 1))
+elif ! printf '%s\n' "$switch_body" | grep -qi 'magicbrief'; then
+  echo "seo-parity: FAIL — ${effective_url} (HTTP ${switch_http_code}) never mentions MagicBrief" >&2
+  magicbrief_failures=$((magicbrief_failures + 1))
+elif ! printf '%s\n' "$sitemap" | grep -qF "${effective_url}"; then
+  echo "seo-parity: FAIL — canonical ${effective_url} is not listed in sitemap.xml" >&2
+  magicbrief_failures=$((magicbrief_failures + 1))
+fi
+
+if [ "$magicbrief_failures" -gt 0 ]; then
+  echo "seo-parity: FAIL — ${magicbrief_failures} MagicBrief wind-down check(s) failed" >&2
+  exit 1
+fi
+
+echo "seo-parity: PASS — all sampled sitemap /ads URLs are indexable; /switch/magicbrief is a 200 MagicBrief page listed in the sitemap (${effective_url})"

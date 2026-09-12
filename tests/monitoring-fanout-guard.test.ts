@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   evaluateAllowlistStep,
+  evaluateCadenceSlipStep,
   evaluateFanoutConfigStep,
   evaluateFanoutLadderStep,
   evaluateFleet75Step,
@@ -120,6 +121,38 @@ describe("monitoring fan-out canary ladder", () => {
         pending: 0,
       }).blocker,
     ).toBe("nightly_failed_runs");
+  });
+
+  it("alerts when the schedule slips by more than one cadence (0509#2990)", () => {
+    const cadenceMs = 3 * 60 * 60 * 1000;
+    // On pace: queue age within one cadence.
+    expect(
+      evaluateCadenceSlipStep({ oldestQueuedAgeMs: cadenceMs - 1 }, { cadenceHours: 3 }).ok,
+    ).toBe(true);
+    // Past one cadence but not yet more than one cadence slipped: warn only.
+    const warning = evaluateCadenceSlipStep({ oldestQueuedAgeMs: 2 * cadenceMs });
+    expect(warning.ok).toBe(true);
+    expect(warning.notes.join(" ")).toContain("starting to slip");
+    // Exactly cadence + 1 cadence of queue age (\u2264 2\u00d7cadence, strict-greater block) is not a blocker.
+    expect(evaluateCadenceSlipStep({ oldestQueuedAgeMs: 2 * cadenceMs }).ok).toBe(true);
+    // More than one cadence of slip blocks.
+    expect(
+      evaluateCadenceSlipStep({ oldestQueuedAgeMs: 2 * cadenceMs + 1_000 }).blocker,
+    ).toBe("schedule_slipped_more_than_one_cadence");
+    // A shorter cadence tightens the alert threshold to cadence + 1 cadence (2h cadence -> 4h threshold).
+    expect(evaluateCadenceSlipStep({ oldestQueuedAgeMs: 4 * 60 * 60 * 1000 }, { cadenceHours: 2 }).ok).toBe(true);
+    expect(
+      evaluateCadenceSlipStep({ oldestQueuedAgeMs: 4 * 60 * 60 * 1000 + 1 }, { cadenceHours: 2 }).blocker,
+    ).toBe("schedule_slipped_more_than_one_cadence");
+    // A longer cadence loosens it: 5h queue age is fine on a 6h cadence.
+    expect(
+      evaluateCadenceSlipStep({ oldestQueuedAgeMs: 5 * 60 * 60 * 1000 }, { cadenceHours: 6 }).blocker,
+    ).toBeNull();
+    expect(
+      evaluateFanoutLadderStep("cadence", { metrics: { oldestQueuedAgeMs: 7 * 60 * 60 * 1000 } }).blocker,
+    ).toBe("schedule_slipped_more_than_one_cadence");
+    // Missing metrics cannot judge slip.
+    expect(evaluateCadenceSlipStep({}).blocker).toBe("cadence_metrics_missing");
   });
 
   it("routes unknown ladder steps to a blocker", () => {

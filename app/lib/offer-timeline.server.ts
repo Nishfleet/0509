@@ -14,6 +14,7 @@ import {
   backfillEvidenceNote,
   buildOfferLedger,
   canonicalUrlBelongsToDomain,
+  isPlaceholderOfferPrice,
   offerStateAsOf,
   type OfferLedgerEntry,
   type OfferSnapshotInput,
@@ -22,6 +23,12 @@ import { isValidProofPageTextKey } from "~/lib/proof-page-text";
 import { isValidProofScreenshotKey } from "~/lib/proof-screenshot";
 
 export const TIMELINE_SNAPSHOT_LIMIT = 200;
+
+/**
+ * Currency-zero placeholder probe (issue #3128), re-exported from the pure
+ * ledger module so every consumer shares one implementation.
+ */
+export { isPlaceholderOfferPrice };
 
 export interface LandingPageSnapshotRow {
   id: string;

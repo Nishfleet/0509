@@ -4,6 +4,7 @@ import { domainMatchTier, isVerifiedDomainMatchLevel } from "~/lib/search-domain
 import {
   classifyDomainMatches,
   explainDomainMatch,
+  rankDomainMatches,
   rejectGeographyKeywordOnlyMatch,
 } from "~/lib/search-domain-match.server";
 import { parseSearchInputFromWebsiteField } from "~/lib/search-query";
@@ -206,6 +207,82 @@ describe("BET 2 live gaps (issue #1202)", () => {
     });
     expect(exact).toHaveLength(1);
     expect(exact[0]?.match.confidenceCategory).toBe("verified");
+  });
+
+  it("keeps Allbirds Japan ads landing on the third-party goldwin.co.jp distributor OUT of Verified (issue #2989 regression)", () => {
+    // Live capture 2026-09-11: the allbirds.com search carried the Allbirds
+    // Japan ad (Meta id 1481868319988684) as VERIFIED with its landing page on
+    // goldwin.co.jp — the third-party distributor that operates the Japan
+    // storefront. The Verified tier is the central trust token, so an ad whose
+    // captured landing host shares nothing with the brand must not wear it:
+    // the row now classifies as LIKELY (advertiser name) instead.
+    const intent = parseSearchInputFromWebsiteField("https://allbirds.com");
+    const japanGoldwin = ad({
+      metaAdId: "1481868319988684",
+      advertiser: "Allbirds Japan",
+      landingPageUrl: "https://www.goldwin.co.jp/ap/item/i/m/ABM240066?colvar=AM14",
+    });
+
+    // Both alias routes that previously laundered the distributor host are
+    // pinned: a redirect-chain domain alias for goldwin.co.jp and the name
+    // alias "Allbirds Japan" from identity resolution.
+    const viaHostAlias = classifyDomainMatches([japanGoldwin], intent, {
+      aliases: ["goldwin.co.jp"],
+      includeUnverified: false,
+    });
+    expect(viaHostAlias).toHaveLength(0);
+
+    const viaEntityName = classifyDomainMatches([japanGoldwin], intent, {
+      identityAliases: ["Allbirds Japan"],
+      includeUnverified: false,
+    });
+    expect(viaEntityName).toHaveLength(0);
+
+    const labelled = classifyDomainMatches([japanGoldwin], intent, {
+      identityAliases: ["Allbirds Japan"],
+      includeUnverified: true,
+    });
+    expect(labelled).toHaveLength(1);
+    expect(labelled[0]?.match.level).toBe("likely_brand_name");
+    expect(labelled[0]?.match.confidenceCategory).toBe("likely");
+  });
+
+  it("groups regional-property matches after the searched-domain rows for a .com query", () => {
+    const intent = parseSearchInputFromWebsiteField("https://allbirds.com");
+    const core = ad({
+      metaAdId: "core-ad",
+      advertiser: "Allbirds",
+      landingPageUrl: "https://www.allbirds.com/products/wool-runner",
+    });
+    const nordic = ad({
+      metaAdId: "nordic-ad",
+      advertiser: "Allbirds",
+      landingPageUrl: "https://allbirdsnordic.com/collections/all",
+    });
+    const jp = ad({
+      metaAdId: "jp-ad",
+      advertiser: "Allbirds Japan",
+      landingPageUrl: "https://www.allbirds.co.jp/foo",
+    });
+
+    // The two regional-property rows (Nordic stem property, JP .co.jp
+    // regional property) must not lead the ranking and must not be broken
+    // up — they come after the core allbirds.com row, clustered together.
+    const ranked = rankDomainMatches(
+      classifyDomainMatches([nordic, core, jp], intent, { includeUnverified: false }),
+    );
+    expect(ranked[0]?.ad.metaAdId).toBe("core-ad");
+    const regionalIds = ranked
+      .filter((entry) =>
+        entry.match.matchedSignal === "regional_property" ||
+        entry.match.matchedSignal === "brand_stem_property",
+      )
+      .map((entry) => entry.ad.metaAdId);
+    expect(regionalIds).toContain("nordic-ad");
+    expect(regionalIds).toContain("jp-ad");
+    // Every regional row comes after the core searched-domain row.
+    const coreIndex = ranked.findIndex((entry) => entry.ad.metaAdId === "core-ad");
+    expect(coreIndex).toBe(0);
   });
 
   it("does not verify Notion Press Publishing just because notion.so's site name is Notion", () => {

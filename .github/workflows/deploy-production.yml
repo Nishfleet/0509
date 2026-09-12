@@ -726,3 +726,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/deploy-age.mjs | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # The deploy-chain progress detector (0509#2975 reopened accept):
+      # emits `deploy_chain: verdict=<ok|breach|unknown> ...` on every run.
+      # Deploy-latest makes cancelled-pending supersessions benign; the
+      # detector fires only on the two real stalls — a cancelled run that
+      # had started jobs (mid-flight kill) or a dead chain tip. Detector,
+      # not gate: `|| true` keeps history from reddening a good release.
+      - name: Emit deploy-chain progress line
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/verify-deploy-chain-progress.mjs | tee -a "$GITHUB_STEP_SUMMARY" || true

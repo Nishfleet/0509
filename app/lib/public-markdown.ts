@@ -298,6 +298,28 @@ const LLMS_PAGE_DETAILS = {
     description:
       "Agency roster page: the per-client Monday-check math, one brief per client, watermarked share links on Starter, agency branding on shared reports, and a sourced Agency-vs-Foreplay price line.",
   },
+  // Issue #3087: per-brand below-retail cluster pages — one llms.txt entry per
+  // SITEMAP_PATHS entry so nothing renders an `[undefined]` title.
+  "/sneaker-resale/nike": {
+    title: "Nike below retail, tracked with proof",
+    description:
+      "The Nike below-retail demand signal and the saved nike.com ad wall — screenshots with dates, not a mood-board.",
+  },
+  "/sneaker-resale/stockx": {
+    title: "StockX below retail, tracked with proof",
+    description:
+      "The StockX below-retail demand signal and the saved stockx.com ad wall — screenshots with dates, not a mood-board.",
+  },
+  "/sneaker-resale/footlocker": {
+    title: "Foot Locker below retail, tracked with proof",
+    description:
+      "The below-retail demand signal and the saved footlocker.com ad wall — screenshots with dates, not a mood-board.",
+  },
+  "/sneaker-resale/jdsports": {
+    title: "JD Sports below retail, tracked with proof",
+    description:
+      "The below-retail demand signal and the saved jdsports.com ad wall — screenshots with dates, not a mood-board.",
+  },
   "/sneaker-resale": {
     title: "Sneaker resale competitor ads",
     description:
