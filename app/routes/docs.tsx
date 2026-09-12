@@ -85,8 +85,8 @@ export default function DocsRoute() {
       <PublicDocBlock id="troubleshoot" title="Troubleshoot empty or partial results">
         <p>
           No evidence is not proof that a competitor has no active ads. Coverage can be partial, delayed,
-          or cached. The freshness line on a result — &quot;Fresh live result&quot;, &quot;Recent cached
-          result&quot;, &quot;Older cached result&quot; — tells you when the evidence was captured; read it before
+          or cached. The freshness line on a result, like &quot;Fresh live result&quot;, &quot;Recent cached
+          result&quot;, or &quot;Older cached result&quot;, tells you when the evidence was captured; read it before
           treating a cached result as current. Try the brand name with the website, review broader candidates manually,
           and check <Link to="/status">Status</Link> for live measured service health.
           If a known active campaign still does not appear, open <Link to="/help">Help</Link> instead of
