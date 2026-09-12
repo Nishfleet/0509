@@ -581,6 +581,14 @@ async function buildMentionStampPlan(
   sourceTarget: SourceTargetRecord,
 ): Promise<MentionStampPlan | null> {
   if (sourceTarget.connectorId !== "rss") return null;
+  // mention-resweep synthesizes an rss-shaped record over a `website`
+  // source_target row (the stored row's connector_id stays 'website');
+  // mention stamping applies only to targets actually registered as rss.
+  const persisted = await requireDb(env)
+    .prepare("SELECT connector_id FROM source_target WHERE id = ?")
+    .bind(sourceTarget.id)
+    .first<{ connector_id: string }>();
+  if (persisted?.connector_id !== "rss") return null;
   const feedUrl =
     typeof sourceTarget.metadata?.feedUrl === "string"
       ? sourceTarget.metadata.feedUrl
