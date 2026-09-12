@@ -192,11 +192,17 @@ describe("D1 remote restore evidence automation", () => {
         `import { runCaptured } from ${JSON.stringify(moduleUrl)};`,
         `await runCaptured(process.execPath, ["-e", ${JSON.stringify(
           [
-            'const { writeFileSync } = require("node:fs");',
-            "writeFileSync(process.argv[1], String(process.pid));",
-            // The SIGTERM handler leaves a marker: proof the child was asked to
-            // stop gracefully (forwarded SIGTERM), not reaped by SIGKILL.
+            'const { writeFileSync, renameSync } = require("node:fs");',
+            // The SIGTERM handler is installed BEFORE the pid is published:
+            // the reader must never see a pid for a child that cannot yet
+            // react to a forwarded SIGTERM.
             'process.on("SIGTERM", () => { writeFileSync(process.argv[1] + ".sigterm", "1"); setTimeout(() => process.exit(0), 250); });',
+            // Publish the pid atomically: plain writeFileSync makes the pid
+            // file exist EMPTY between its open() and its write(), and
+            // suite-wide load stretches that gap — the reader's existsSync
+            // loop would then read "" and Number("") is NaN. write-then-rename
+            // makes the pid visible complete or not at all (0509#2373).
+            'writeFileSync(process.argv[1] + ".tmp", String(process.pid)); renameSync(process.argv[1] + ".tmp", process.argv[1]);',
             "setInterval(() => {}, 1_000);",
           ].join(""),
         )}, process.argv[2]]);`,
@@ -222,6 +228,10 @@ describe("D1 remote restore evidence automation", () => {
         await new Promise((resolveDelay) => setTimeout(resolveDelay, 10));
       }
       childPid = Number(readFileSync(childPidFile, "utf8"));
+      // Keep the reader honest: the atomic publish guarantees the pid file is
+      // never observed empty (write-then-rename), so this must always be a
+      // real pid.
+      expect(Number.isInteger(childPid) && childPid > 0).toBe(true);
       expect(pidAlive(childPid)).toBe(true);
 
       helperProcess.kill("SIGTERM");

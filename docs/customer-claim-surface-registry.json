@@ -788,6 +788,17 @@
       "verify": "grep -qF 'turns competitor ads and visible landing-page changes into source-backed morning intelligence' app/lib/public-markdown.ts && grep -qF 'Presence Desk: website/open-web is the active GA source; social and marketplace sources are gated, planned, or manual-only until provider approval' app/lib/public-markdown.ts && grep -qF 'with source-linked proof' app/lib/public-markdown.ts",
       "test": "tests/customer-claim-surface-registry.test.ts",
       "followUp": null
+    },
+    {
+      "claimId": "AUDIT-SWITCH-ADSPY-CLAIMS",
+      "page": "/switch/adspy",
+      "selector": "switch page hero, complaint block, transfer/non-transfer sections, and FAQ (SWITCH_PAGES.adspy in app/lib/switch-pages.ts)",
+      "sentence": "Every /switch/adspy claim cites the public record — a 2.4/5 Trustpilot rating with charge-after-cancel reports, no self-service cancel path, and no public API on AdSpy's single $149/month plan — and the page ends in the free /search preview, not a demo form (issue #3091).",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF 'https://www.trustpilot.com/review/adspy.com' app/lib/switch-pages.ts && grep -qF '2.4 out of 5' app/lib/switch-pages.ts && grep -qF 'no self-service cancel' app/lib/switch-pages.ts && grep -qF 'no public API' app/lib/switch-pages.ts && grep -qF 'adspy' app/routes.ts && grep -qF '\"/switch/adspy\"' app/lib/seo.ts",
+      "test": "tests/switch-pages.route.test.ts",
+      "followUp": null
     }
   ],
   "rowsMetadata": {

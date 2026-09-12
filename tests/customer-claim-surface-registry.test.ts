@@ -375,15 +375,18 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
   // 2026-09-09: /guides/how-to-track-competitor-ads joined the sitemap (issue
   // #2152) — static long-form guide, no new claim text beyond the live
   // homepage/docs plan facts it restates (free weekly watch, Meta-only scope).
+  // 2026-09-12: the #3093 trio joined the sitemap — offer-change alert,
+  // prove-what-changed, and standing-watch guides; static long-form pages, no
+  // new claim text beyond the live plan facts they restate.
   sitemapPaths: [
-    "/", "/search", "/brands", "/briefs/weekly", "/sample-brief", "/llms-full.txt", "/guides/how-to-track-competitor-ads", "/guides/how-to-monitor-meta-ad-library", "/guides/how-to-monitor-competitor-landing-page-changes",
+    "/", "/search", "/brands", "/briefs/weekly", "/sample-brief", "/llms-full.txt", "/guides/how-to-track-competitor-ads", "/guides/how-to-monitor-meta-ad-library", "/guides/how-to-monitor-competitor-landing-page-changes", "/guides/how-to-get-alerted-when-a-competitor-changes-their-offer", "/guides/how-to-prove-what-changed-on-a-competitor-website", "/guides/how-to-turn-a-one-off-competitor-check-into-a-standing-watch",
     "/compare", "/compare/meta-ad-library",
     "/compare/visualping-ad-libraries", "/compare/spyland",
     "/compare/pulzifi", "/compare/foreplay-spyder",
     "/compare/panoramata", "/compare/adspyder", "/compare/adspy",
     // Issue #2866: two verified competitors that had no compare page.
     "/compare/keeptabz", "/compare/gethookd",
-    "/switch/panoramata", "/switch/visualping", "/switch/magicbrief", "/competitor-monitoring",
+    "/switch/panoramata", "/switch/visualping", "/switch/magicbrief", "/switch/adspy", "/competitor-monitoring",
     // Issue #2144: agency audience page (roster math + sourced Agency-vs-
     // Foreplay line), EN-only, no locale cluster.
     "/for-agencies",
