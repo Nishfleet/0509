@@ -155,6 +155,60 @@ describe("festive-india-2026 seed list (issue #2140)", () => {
   });
 });
 
+describe("beauty-personal-care seed list (issue #3123)", () => {
+  it("registers the beauty-personal-care list", () => {
+    expect(SEED_LISTS["beauty-personal-care"]).toBeDefined();
+    expect(resolveSeedList("beauty-personal-care")).not.toBeNull();
+  });
+
+  it("validates clean and carries exactly 31 domains, each with a brand display name", () => {
+    const list = SEED_LISTS["beauty-personal-care"];
+    expect(validateSeedList(list)).toEqual([]);
+    expect(list.domains).toHaveLength(31);
+    for (const entry of list.domains) {
+      expect(entry.brand?.trim()).toBeTruthy();
+    }
+  });
+
+  it("fits under the publisher cap so a targeted single-list run covers the whole cohort", () => {
+    const list = SEED_LISTS["beauty-personal-care"];
+    expect(list.domains.length).toBeLessThanOrEqual(ADS_DOMAIN_PUBLISHER_CAP_DEFAULT);
+  });
+
+  it("marks its domains as seeded brand domains", () => {
+    expect(isSeededBrandDomain("sephora.com")).toBe(true);
+    expect(isSeededBrandDomain("nykaa.com")).toBe(true);
+    expect(isSeededBrandDomain("ELFCOSMETICS.COM")).toBe(true);
+  });
+});
+
+describe("saas-software seed list (issue #3123)", () => {
+  it("registers the saas-software list", () => {
+    expect(SEED_LISTS["saas-software"]).toBeDefined();
+    expect(resolveSeedList("saas-software")).not.toBeNull();
+  });
+
+  it("validates clean and carries exactly 36 domains, each with a brand display name", () => {
+    const list = SEED_LISTS["saas-software"];
+    expect(validateSeedList(list)).toEqual([]);
+    expect(list.domains).toHaveLength(36);
+    for (const entry of list.domains) {
+      expect(entry.brand?.trim()).toBeTruthy();
+    }
+  });
+
+  it("fits under the publisher cap so a targeted single-list run covers the whole cohort", () => {
+    const list = SEED_LISTS["saas-software"];
+    expect(list.domains.length).toBeLessThanOrEqual(ADS_DOMAIN_PUBLISHER_CAP_DEFAULT);
+  });
+
+  it("marks its domains as seeded brand domains", () => {
+    expect(isSeededBrandDomain("hubspot.com")).toBe(true);
+    expect(isSeededBrandDomain("notion.so")).toBe(true);
+    expect(isSeededBrandDomain("SLACK.COM")).toBe(true);
+  });
+});
+
 describe("isSeededBrandDomain (issue #1306 retire-scope guard)", () => {
   // The /ads/:domain loader uses this to decide whether a thin (0
   // verified-linked ads) page retires to /search or renders noindex. The
@@ -173,7 +227,11 @@ describe("isSeededBrandDomain (issue #1306 retire-scope guard)", () => {
     expect(isSeededBrandDomain(domain)).toBe(true);
   });
 
-  it.each(["nykaa.com", "notion.so", "oura.com", "", "  ", "example.com"])(
+  // nykaa.com and notion.so used to pin the false side here, but issue #3123
+  // registered them via the beauty-personal-care and saas-software cohorts, so
+  // they resolve true by design now. Swapped for genuinely unseeded domains —
+  // the pin's job is that an UNRELATED thin domain keeps #1442 render-noindex.
+  it.each(["wayfair.com", "bestbuy.com", "oura.com", "", "  ", "example.com"])(
     "does not recognize %s as a seeded brand (keeps #1442 render-noindex)",
     (domain) => {
       expect(isSeededBrandDomain(domain)).toBe(false);
@@ -276,10 +334,18 @@ describe("runAdsDomainPublisher all-lists deadline + cursor (issue #2361)", () =
     vi.resetModules();
   });
 
-  // The flattened all-lists queue: festive-india-2026 (30) then sneaker-resale
-  // (25) = 55 entries, in Object.keys(SEED_LISTS) order.
+  // The flattened all-lists queue: festive-india-2026 (30), sneaker-resale
+  // (24), beauty-personal-care (31), saas-software (36) = 121 entries, in
+  // Object.keys(SEED_LISTS) order. Issue #3123 grew the registry past
+  // ADS_DOMAIN_PUBLISHER_CAP (default 60), so a full pass spans multiple
+  // nights by design — full-pass tests derive the cap from the registry
+  // instead of assuming one night covers the whole queue.
   const FESTIVE_COUNT = SEED_LISTS["festive-india-2026"].domains.length;
   const SNEAKER_FIRST_DOMAIN = SEED_LISTS["sneaker-resale"].domains[0].domain;
+  const TOTAL_QUEUE = Object.values(SEED_LISTS).reduce(
+    (sum, list) => sum + list.domains.length,
+    0,
+  );
 
   async function setupMocks({
     cursorOffset = 0,
@@ -422,18 +488,18 @@ describe("runAdsDomainPublisher all-lists deadline + cursor (issue #2361)", () =
     const summary = await runAdsDomainPublisher(
       { DB: {} } as never,
       { waitUntil: () => {} } as never,
-      { cap: 60, deadlineAt: Date.now() + 60_000 },
+      // Cap = the whole registry queue: since issue #3123 the flattened queue
+      // exceeds ADS_DOMAIN_PUBLISHER_CAP, so a literal 60 would truncate the
+      // pass mid-queue and this test would stop pinning the wrap-to-start.
+      { cap: TOTAL_QUEUE, deadlineAt: Date.now() + 60_000 },
     );
 
-    const totalDomains =
-      SEED_LISTS["festive-india-2026"].domains.length +
-      SEED_LISTS["sneaker-resale"].domains.length;
-    expect(summary.attempted).toBe(totalDomains);
+    expect(summary.attempted).toBe(TOTAL_QUEUE);
     expect(summary.truncated).toBe(false);
     // Every completed domain checkpointed, and the last one wrapped the
     // cursor back to 0 so the rolling window restarts.
-    expect(execute).toHaveBeenCalledTimes(totalDomains);
-    const [_env, _sql, list, offset] = execute.mock.calls[totalDomains - 1];
+    expect(execute).toHaveBeenCalledTimes(TOTAL_QUEUE);
+    const [_env, _sql, list, offset] = execute.mock.calls[TOTAL_QUEUE - 1];
     expect(offset).toBe(0);
     expect(list).toBe("festive-india-2026");
   });

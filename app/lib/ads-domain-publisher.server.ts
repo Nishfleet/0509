@@ -39,6 +39,8 @@
 
 import festiveIndia2026SeedList from "../../data/seed-lists/festive-india-2026.json";
 import sneakerResaleSeedList from "../../data/seed-lists/sneaker-resale.json";
+import beautyPersonalCareSeedList from "../../data/seed-lists/beauty-personal-care.json";
+import saasSoftwareSeedList from "../../data/seed-lists/saas-software.json";
 import { hydrateAdsWithPersistedCreatives } from "~/lib/ad-persistence.server";
 import {
   resolveCommercialDiscoveryProvider,
@@ -75,14 +77,20 @@ export interface SeedList {
  * nightly publisher run processes ALL registered lists as one flattened
  * queue (see runAdsDomainPublisher), resuming from a persisted cursor so
  * tail domains are not silently skipped when the run is truncated by its
- * wall-clock deadline. festive-india-2026 (issue #2140, 30 domains) and
- * sneaker-resale (25 domains) together sit under ADS_DOMAIN_PUBLISHER_CAP
- * (default 60), so a full uninterrupted pass covers the whole cohort in one
- * night; a deadline-truncated pass resumes the remainder the next night.
+ * wall-clock deadline. festive-india-2026 (issue #2140, 30 domains),
+ * sneaker-resale (24 domains), beauty-personal-care and saas-software
+ * (issue #3123, 31 and 36 domains) flatten to ~121 entries — larger than
+ * ADS_DOMAIN_PUBLISHER_CAP (default 60) on purpose, so a full pass spans
+ * multiple nights by design and the persisted cursor (issue #2361) resumes
+ * each night where the last one stopped. New cohorts append after the
+ * existing lists so live cursor offsets keep pointing at the same queue
+ * positions across a registry growth.
  */
 export const SEED_LISTS: Readonly<Record<string, SeedList>> = Object.freeze({
   "festive-india-2026": festiveIndia2026SeedList as SeedList,
   "sneaker-resale": sneakerResaleSeedList as SeedList,
+  "beauty-personal-care": beautyPersonalCareSeedList as SeedList,
+  "saas-software": saasSoftwareSeedList as SeedList,
 });
 
 /** Default per-run domain ceiling; override with ADS_DOMAIN_PUBLISHER_CAP. */
