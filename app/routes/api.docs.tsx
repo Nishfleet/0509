@@ -109,16 +109,11 @@ export default function ApiDocsRoute() {
           run approved account actions.
         </p>
         <p>
-          Follow the{" "}
-          <Link to="/mcp/setup">one-paste MCP setup</Link> for Claude Desktop, ChatGPT, and pi
-          connector snippets.
-        </p>
-        <p>
           One-paste connectors for Claude and ChatGPT: add{" "}
           <code>https://0509.io/api/mcp</code> as an HTTP/SSE MCP connector and
           paste the bearer token above. The{" "}
-          <Link to="/mcp/setup">setup page</Link> ships ready-made config
-          snippets for both clients.
+          <Link to="/mcp/setup">one-paste MCP setup</Link> ships ready-made
+          config snippets for Claude Desktop, ChatGPT, and pi.
         </p>
         <pre className="f9-code-block">
           <code>{`POST /api/mcp
