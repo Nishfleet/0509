@@ -11,6 +11,7 @@ import {
 import { sneakerResaleCopy } from "~/lib/sneaker-resale-copy";
 import {
   SNEAKER_RESALE_BRAND_PAGE_SLUGS,
+  sneakerResaleBrandPage,
   sneakerResaleBrandPath,
 } from "~/lib/sneaker-resale-brand-pages";
 import { faqPageJsonLd, jsonLdScriptProps, webPageJsonLd } from "~/lib/seo";
@@ -187,7 +188,7 @@ export function SneakerResaleLanding({
             <span key={slug}>
               {index > 0 ? " · " : null}
               <Link to={sneakerResaleBrandPath(slug)}>
-                {slug === "nike" ? "Nike" : slug === "stockx" ? "StockX" : slug === "footlocker" ? "Foot Locker" : "JD Sports"}
+                {sneakerResaleBrandPage(slug)?.name ?? slug}
               </Link>
             </span>
           ))}

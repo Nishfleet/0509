@@ -56,7 +56,7 @@ const BRAND_PAGES: ReadonlyArray<SneakerResaleBrandPageCopy> = [
     name: "Nike",
     domain: "nike.com",
     signal:
-      "The below-retail demand for Nike is visible in the market signal right now: the 'Just Don't Wear It' thread on r/stocks — 6,561 upvotes and 1,919 comments, posted 2026-08-30.",
+      "Nike's portion of the below-retail demand is visible in the 2026-09-11 market signal: the 'Just Don't Wear It' thread on r/stocks — 6,561 upvotes and 1,919 comments, posted 2026-08-30.",
     proof: [
       {
         title: "The Nike ad wall, saved as screenshots.",
@@ -75,7 +75,7 @@ const BRAND_PAGES: ReadonlyArray<SneakerResaleBrandPageCopy> = [
     name: "StockX",
     domain: "stockx.com",
     signal:
-      "StockX published its own midyear resale report (via WWD, 2026-08-12) — the second live source in the below-retail cluster named by the market signal on 2026-09-11.",
+      "The 2026-09-11 market signal names the StockX midyear resale report (via WWD, 2026-08-12) as the second live source in the below-retail cluster.",
     proof: [
       {
         title: "The StockX ad wall, saved as screenshots.",
@@ -128,6 +128,14 @@ const BRAND_PAGES: ReadonlyArray<SneakerResaleBrandPageCopy> = [
     ],
   },
 ];
+
+/** The cluster pages in slug order — one consumer list, no parallel arrays. */
+export function sneakerResaleBrandPages(): ReadonlyArray<SneakerResaleBrandPageCopy> {
+  return SNEAKER_RESALE_BRAND_PAGE_SLUGS.map(
+    (slug) =>
+      BRAND_PAGES.find((page) => page.slug === slug) as SneakerResaleBrandPageCopy,
+  );
+}
 
 /** Look up a brand page by URL slug; undefined for a 404. */
 export function sneakerResaleBrandPage(

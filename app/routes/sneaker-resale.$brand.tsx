@@ -22,13 +22,12 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { MarketingNav } from "~/components/marketing-nav";
 import { Breadcrumbs } from "~/components/breadcrumbs";
 import { MarketingFooter } from "~/components/marketing-footer";
-import { SNEAKER_RESALE_BRAND_PAGES } from "~/components/sneaker-resale-landing";
 import {
   sneakerResaleBrandPage,
+  sneakerResaleBrandPages,
   sneakerResaleBrandPath,
   sneakerResaleBrandSignalAsOf,
   sneakerResaleBrandSources,
-  sneakerResaleSlugForDomain,
   type SneakerResaleBrandPageCopy,
 } from "~/lib/sneaker-resale-brand-pages";
 import { sneakerResaleSignupPath } from "~/lib/locale-markets";
@@ -91,9 +90,7 @@ export default function SneakerResaleBrandRoute() {
   const data = useLoaderData<BrandPageLoaderData>();
   const sources = sneakerResaleBrandSources();
   const signalAsOf = sneakerResaleBrandSignalAsOf();
-  const siblings = SNEAKER_RESALE_BRAND_PAGES.filter((brand) =>
-    ["nike.com", "stockx.com", "footlocker.com", "jdsports.com"].includes(brand.domain),
-  );
+  const siblings = sneakerResaleBrandPages().filter((page) => page.slug !== data.page.slug);
 
   return (
     <main className="f9-home">
@@ -192,11 +189,11 @@ export default function SneakerResaleBrandRoute() {
 
       <section className="ld-quiet" aria-label="More brands in this cluster">
         <ul className="ld-brand-links">
-          {siblings.map((brand) => (
-            <li key={brand.domain}>
-              <Link to={sneakerResaleBrandPath(sneakerResaleSlugForDomain(brand.domain))}>
-                <strong>{brand.name}</strong>
-                <span>{brand.domain}</span>
+          {siblings.map((page) => (
+            <li key={page.domain}>
+              <Link to={sneakerResaleBrandPath(page.slug)}>
+                <strong>{page.name}</strong>
+                <span>{page.domain}</span>
               </Link>
             </li>
           ))}
