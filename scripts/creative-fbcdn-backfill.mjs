@@ -29,8 +29,15 @@ import { pathToFileURL } from "node:url";
 const HERE = dirname(pathToFileURL(import.meta.url).pathname);
 const ROOT = resolve(HERE, "..");
 
+/** @param {string[]} argv */
 export function parseArgs(argv) {
-  const out = { d1Json: null, emit: null, json: false, r2: false, timeoutMs: 12000 };
+  const out = {
+    d1Json: /** @type {string | null} */ (null),
+    emit: /** @type {string | null} */ (null),
+    json: false,
+    r2: false,
+    timeoutMs: 12000,
+  };
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === "--d1-json") out.d1Json = argv[++i];
     else if (argv[i] === "--emit") out.emit = argv[++i];
@@ -55,6 +62,7 @@ export function parseArgs(argv) {
   return out;
 }
 
+/** @param {string} path */
 export function loadRows(path) {
   const raw = JSON.parse(readFileSync(path, "utf8"));
   // wrangler d1 execute --json prints an array of statement result envelopes.
@@ -69,6 +77,10 @@ export function loadRows(path) {
   return rows.filter((row) => row.id && row.url);
 }
 
+/**
+ * @param {string} url @param {number} timeoutMs @param {number} [hops]
+ * @returns {Promise<{ kind: 'resolved', hash: string, contentType: string, bytes: Uint8Array } | { kind: 'dead', status: number, reason?: string } | { kind: 'transient', status: number | null, reason: string }>}
+ */
 async function fetchCreative(url, timeoutMs, hops = 0) {
   try {
     const controller = new AbortController();
@@ -90,17 +102,17 @@ async function fetchCreative(url, timeoutMs, hops = 0) {
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location");
       if (!location) {
-        return { kind: "transient", reason: "redirect without location" };
+        return { kind: "transient", status: null, reason: "redirect without location" };
       }
       let next;
       try {
         next = new URL(location, url).toString();
       } catch {
-        return { kind: "transient", reason: "unparseable redirect" };
+        return { kind: "transient", status: null, reason: "unparseable redirect" };
       }
       const nextHops = hops + 1;
       if (nextHops > 5 || !isFbcdnCreativeUrl(new URL(next))) {
-        return { kind: "transient", reason: "redirect left fbcdn" };
+        return { kind: "transient", status: null, reason: "redirect left fbcdn" };
       }
       clearTimeout(timer);
       return fetchCreative(next, timeoutMs, nextHops);
@@ -124,10 +136,12 @@ async function fetchCreative(url, timeoutMs, hops = 0) {
     const hash = createHash("sha256").update(bytes).digest("hex");
     return { kind: "resolved", hash, contentType, bytes };
   } catch (error) {
-    return { kind: "transient", status: null, reason: `network: ${error?.message ?? "unknown"}` };
+    const message = error instanceof Error ? error.message : "unknown";
+    return { kind: "transient", status: null, reason: `network: ${message}` };
   }
 }
 
+/** @param {string} objectKey @param {Uint8Array} bytes */
 async function r2Put(objectKey, bytes) {
   const { spawnSync } = await import("node:child_process");
   const tmp = await import("node:fs/promises");
@@ -158,6 +172,7 @@ export const allowed = new Set([
  * is run against prod D1 by an operator, so anything outside a conservative
  * id / MIME-type shape is refused rather than escaped by hand.
  */
+/** @param {unknown} value */
 export function isSafePlanValue(value) {
   return typeof value === "string" && /^[A-Za-z0-9._:/-]{1,128}$/.test(value);
 }
@@ -168,6 +183,7 @@ export function isSafePlanValue(value) {
  * the audit is the resolved-vs-dead split, and a hardcoded gate cannot be
  * pinned by a test (issue #2981).
  */
+/** @param {URL | null} parsed @returns {parsed is URL} */
 export function isFbcdnCreativeUrl(parsed) {
   return parsed !== null && typeof parsed?.hostname === "string" && parsed.hostname.endsWith(".fbcdn.net");
 }
@@ -177,16 +193,20 @@ export function isFbcdnCreativeUrl(parsed) {
  * injected `fetchCreative` probe, so tests can drive both branches with a
  * stub and assert the reported dead count the ticket asks for.
  */
+/** @param {{ id: string, url: string | null }} row @param {{ fetchCreative?: typeof fetchCreative, timeoutMs?: number }} [options]
+ * @returns {Promise<{ kind: 'resolved', detail: { id: string, url: string, urlHost: string, urlBucket: string, hash: string, contentType: string, bytes: Uint8Array } } | { kind: 'dead', detail: { id: string, reason: string } } | { kind: 'unusable', detail: { id: string, url: string | null, reason: string } } | { kind: 'transient', detail: { id: string, reason: string } }>}
+ */
 export async function classifyRow(row, options = {}) {
   const probe = options.fetchCreative ?? fetchCreative;
   const timeoutMs = options.timeoutMs ?? 12000;
+  /** @type {URL | null} */
   let parsed = null;
   try {
-    parsed = new URL(row.url);
+    parsed = new URL(/** @type {string} */ (row.url));
   } catch {
     /* treated as unusable below */
   }
-  if (!isFbcdnCreativeUrl(parsed)) {
+  if (!parsed || !isFbcdnCreativeUrl(parsed)) {
     // Not a dead creative — a row the audit cannot judge. Kept in its own
     // bucket so the reported dead count is not inflated by unusable URLs.
     return { kind: "unusable", detail: { ...row, reason: "unusable url" } };
@@ -219,7 +239,12 @@ export async function classifyRow(row, options = {}) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  if (!args.d1Json) {
+    throw new Error("missing --d1-json");
+  }
   const rows = loadRows(args.d1Json);
+  // Typed so the heterogeneous detail unions do not infect the R2 upload loop.
+  /** @type {{ id: string, url: string, urlHost: string, urlBucket: string, hash: string, contentType: string, bytes: Uint8Array, r2Key?: string | null }[]} */
   const resolved = [];
   const dead = [];
   const unusable = [];

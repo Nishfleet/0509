@@ -27,6 +27,7 @@
     "scripts/d1-restore-transform.mjs",
     "scripts/d1-remote-restore-evidence.mjs",
     "scripts/d1-remote-restore-evidence-core.mjs",
+    "scripts/creative-fbcdn-backfill.mjs",
     "scripts/find-recent-remote-restore-artifact.mjs",
     "scripts/deploy-ledger.mjs",
     "scripts/deploy-age.mjs",
