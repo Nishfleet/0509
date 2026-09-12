@@ -46,6 +46,24 @@ const MOBILE_VIEWPORT = {
 };
 const MOBILE_USER_AGENT =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
+
+// Issue #3105: dual-viewport proof archive. A landing-page proof now captures
+// the page at a desktop_default viewport in addition to the existing mobile
+// capture so the archived evidence matches the competitor bar (Panoramata /
+// Foreplay Spyder archive desktop + mobile). The mobile snapshot stays the
+// single extraction, diff, and alert source — the desktop leg is archived
+// evidence only.
+const DESKTOP_RENDER_MODE: ProofRenderMode = "desktop";
+const DESKTOP_DEVICE_PROFILE: ProofDeviceProfile = "desktop_default";
+const DESKTOP_VIEWPORT = {
+  width: 1280,
+  height: 800,
+  deviceScaleFactor: 1,
+  isMobile: false,
+  hasTouch: false,
+};
+const DESKTOP_USER_AGENT =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
 const BROWSERLESS_PROOF_RENDER_WAIT_MS = 5_000;
 // Flagship retail homepages legitimately render well past 1 MiB of DOM (the
 // demo brands measured 1.1–1.9 MiB), so the rendered leg is bounded at 3 MiB —
@@ -418,7 +436,28 @@ export async function captureBrowserRunSnapshot(
       return null;
     }
     await recordRun("succeeded", { captureWarningCodes });
-    return snapshot;
+
+    // Issue #3105: desktop evidence leg — but only when the capture is
+    // actually persisting proof artifacts (the browser-spend budget is spent
+    // where the archive can keep the evidence; enrichment-only captures skip
+    // the desktop leg and record why, never a phantom). Same already-open
+    // browser session (no second launch), same SSRF guard and bounded caps
+    // as the mobile leg. Best-effort: a desktop-leg failure never fails the
+    // mobile capture. Extraction, diffing, and instant alerts still run from
+    // the same one event; the desktop artifacts are archived evidence only.
+    const desktopLeg =
+      options.persistArtifacts === false
+        ? {
+            skippedReason: "desktop_capture_skipped_persist_disabled",
+            captureWarningCodes: [],
+          }
+        : !env.LANDING_PAGE_ARTIFACTS
+          ? {
+              skippedReason: "desktop_capture_skipped_no_artifact_bucket",
+              captureWarningCodes: [],
+            }
+          : await captureDesktopLegArtifacts(env, browser, targetUrl, canonicalUrl);
+    return attachDesktopLegMetadata(snapshot, desktopLeg);
   } catch (error) {
     logRenderedCaptureWarning("browser_render_failed", error);
     // Truthful attribution: a bounded provider timeout (launch/navigation
@@ -467,6 +506,163 @@ async function handleGuardedBrowserRequest(request: BrowserRequestLike) {
 
 function isBrowserInternalUrl(value: string) {
   return /^(?:about|blob|data):/i.test(value);
+}
+
+/**
+ * Issue #3105: the desktop viewport of the rendered Browser Run leg. Runs on
+ * a fresh page of the ALREADY-open session (no second binding launch),
+ * persists a separate artifact pair labelled with the desktop
+ * renderMode/deviceProfile, and records WHY it skipped whenever it could not
+ * capture — never a phantom. Callers attach the returned keys to the mobile
+ * snapshot's metadata, so retention and the proof archive can address both
+ * viewports from one evidence row.
+ */
+async function captureDesktopLegArtifacts(
+  env: AppEnv,
+  browser: Awaited<ReturnType<typeof puppeteer.launch>>,
+  targetUrl: string,
+  canonicalUrl: string,
+): Promise<DesktopLegOutcome> {
+  try {
+    const page = await browser.newPage();
+    await installPublicBrowserRequestGuard(page);
+    await page.setUserAgent(DESKTOP_USER_AGENT);
+    await page.setViewport(DESKTOP_VIEWPORT);
+    const { gotoAttempts } = await gotoWithEscalatingWaitStrategy(page, targetUrl);
+    const html = await page.content();
+    if (utf8ByteLength(html) > MAX_RENDERED_HTML_BYTES) {
+      return {
+        skippedReason: "desktop_html_oversized",
+        captureWarningCodes: ["desktop_capture_failed"],
+      };
+    }
+    // The desktop leg has its own bounded screenshot budget, mirroring the
+    // mobile leg's bounded retry so a transient provider flake cannot drop
+    // the desktop artifact silently.
+    let screenshot: Uint8Array | ArrayBuffer | Buffer | null = null;
+    const captureWarningCodes: string[] = [];
+    for (let attempt = 1; attempt <= SCREENSHOT_CAPTURE_ATTEMPTS; attempt += 1) {
+      try {
+        screenshot = await promiseWithTimeout(
+          page.screenshot({
+            type: "jpeg",
+            quality: 85,
+            fullPage: false,
+          }),
+          SCREENSHOT_CAPTURE_TIMEOUT_MS,
+          "Browser Run desktop screenshot timed out.",
+        );
+        break;
+      } catch (error) {
+        if (attempt >= SCREENSHOT_CAPTURE_ATTEMPTS) {
+          captureWarningCodes.push("screenshot_capture_failed");
+          logRenderedCaptureWarning("screenshot_capture_failed", error);
+        }
+      }
+    }
+    // Mirror the mobile leg's screenshot byte cap: an oversized desktop
+    // screenshot is dropped (and recorded), never persisted at any size.
+    if (screenshot && toUint8Array(screenshot).byteLength > MAX_RENDERED_SCREENSHOT_BYTES) {
+      screenshot = null;
+      captureWarningCodes.push("screenshot_too_large");
+    }
+    const persisted = await persistBrowserArtifacts(
+      env,
+      canonicalUrl,
+      html,
+      screenshot,
+      true,
+      false,
+      DESKTOP_RENDER_MODE,
+      DESKTOP_DEVICE_PROFILE,
+    );
+    captureWarningCodes.push(...persisted.captureWarningCodes);
+    if (!persisted.htmlArtifactKey && !persisted.screenshotArtifactKey) {
+      return {
+        skippedReason: "desktop_artifacts_not_persisted",
+        captureWarningCodes: [...captureWarningCodes, "desktop_capture_failed"],
+      };
+    }
+    return {
+      htmlArtifactKey: persisted.htmlArtifactKey ?? undefined,
+      screenshotArtifactKey: persisted.screenshotArtifactKey ?? undefined,
+      deviceProfile: DESKTOP_DEVICE_PROFILE,
+      gotoAttempts,
+      captureWarningCodes,
+    };
+  } catch (error) {
+    logRenderedCaptureWarning("desktop_capture_failed", error);
+    return {
+      skippedReason: "desktop_capture_failed",
+      captureWarningCodes: ["desktop_capture_failed"],
+    };
+  }
+}
+
+type DesktopLegOutcome = {
+  /** Artifact keys are present only when the desktop leg actually captured. */
+  htmlArtifactKey?: string;
+  screenshotArtifactKey?: string;
+  deviceProfile?: ProofDeviceProfile;
+  gotoAttempts?: number;
+  /** Set when the desktop leg could not capture — the true skip reason. */
+  skippedReason?: string;
+  captureWarningCodes: string[];
+};
+
+/**
+ * Issue #3105: fold the desktop leg's outcome into the mobile snapshot's
+ * metadata. A successful leg contributes `desktop*` artifact keys so the
+ * proof archive carries both viewports labelled by renderMode; a skipped leg
+ * contributes only an honest skip reason + warning code. `readSnapshotRenderMode`
+ * keeps reading the mobile primary renderMode — the desktop leg never becomes
+ * a second alert or diff source.
+ */
+function attachDesktopLegMetadata(
+  snapshot: LandingPageSnapshotData,
+  desktopLeg: DesktopLegOutcome,
+): LandingPageSnapshotData {
+  const mergedWarnings = [
+    ...((snapshot.metadata?.captureWarningCodes as string[] | undefined) ?? []),
+    ...desktopLeg.captureWarningCodes,
+  ];
+  if (desktopLeg.htmlArtifactKey || desktopLeg.screenshotArtifactKey) {
+    return {
+      ...snapshot,
+      metadata: {
+        ...snapshot.metadata,
+        desktopRenderMode: DESKTOP_RENDER_MODE,
+        // A succeeded desktop leg must not carry a stale skipReason (e.g. the
+        // provider-level browserless fallback marker) — this leg captured.
+        desktopCaptureFailed: undefined,
+        ...(desktopLeg.deviceProfile
+          ? { desktopDeviceProfile: desktopLeg.deviceProfile }
+          : {}),
+        ...(desktopLeg.htmlArtifactKey
+          ? { desktopHtmlArtifactKey: desktopLeg.htmlArtifactKey }
+          : {}),
+        ...(desktopLeg.screenshotArtifactKey
+          ? { desktopScreenshotArtifactKey: desktopLeg.screenshotArtifactKey }
+          : {}),
+        ...(desktopLeg.gotoAttempts && desktopLeg.gotoAttempts > 1
+          ? { desktopGotoAttempts: desktopLeg.gotoAttempts }
+          : {}),
+        ...(mergedWarnings.length > 0
+          ? { captureWarningCodes: mergedWarnings }
+          : {}),
+      },
+    };
+  }
+  return {
+    ...snapshot,
+    metadata: {
+      ...snapshot.metadata,
+      desktopCaptureFailed: desktopLeg.skippedReason ?? "desktop_capture_failed",
+      ...(mergedWarnings.length > 0
+        ? { captureWarningCodes: mergedWarnings }
+        : {}),
+    },
+  };
 }
 
 /**
@@ -923,6 +1119,8 @@ async function buildBrowserRenderedSnapshot(
     captureWarningCodes?: string[];
     pageLoadStrategy?: "networkidle2" | "load";
     gotoAttempts?: number;
+    renderMode?: ProofRenderMode;
+    deviceProfile?: ProofDeviceProfile;
   },
 ): Promise<LandingPageSnapshotData | null> {
   const html = input.html;
@@ -964,6 +1162,8 @@ async function buildBrowserRenderedSnapshot(
     screenshotBytes,
     input.persistArtifacts !== false,
     input.requireScreenshot === true,
+    input.renderMode,
+    input.deviceProfile,
   );
   const captureWarningCodes = [
     ...(input.captureWarningCodes ?? []),
@@ -1013,8 +1213,15 @@ async function buildBrowserRenderedSnapshot(
         !signals.formPresent
           ? { unreadableReasonCode: "landing_signals_not_detected" }
           : {}),
-        renderMode: MOBILE_RENDER_MODE,
-        deviceProfile: MOBILE_DEVICE_PROFILE,
+        renderMode: input.renderMode ?? MOBILE_RENDER_MODE,
+        deviceProfile: input.deviceProfile ?? MOBILE_DEVICE_PROFILE,
+        // Issue #3105: when this leg is the Browserless fallback (no browser
+        // rendering between this snapshot and the stored artifacts), the
+        // desktop viewport was not captured — record the true skip reason so
+        // the archive never implies a phantom desktop artifact.
+        ...(input.provider === "browserless_bql"
+          ? { desktopCaptureFailed: "desktop_capture_skipped_browserless_fallback" }
+          : {}),
         renderProvider: input.provider,
         pageLoadStrategy: input.pageLoadStrategy,
         ...(input.gotoAttempts && input.gotoAttempts > 1
@@ -1063,6 +1270,8 @@ async function persistBrowserArtifacts(
   screenshot: Uint8Array | null,
   persistArtifacts: boolean,
   requireScreenshot: boolean = false,
+  renderMode: ProofRenderMode = MOBILE_RENDER_MODE,
+  deviceProfile: ProofDeviceProfile = MOBILE_DEVICE_PROFILE,
 ) {
   if (!persistArtifacts || !env.LANDING_PAGE_ARTIFACTS) {
     return {
@@ -1089,8 +1298,8 @@ async function persistBrowserArtifacts(
         },
         customMetadata: {
           sourceUrl: canonicalUrl,
-          renderMode: MOBILE_RENDER_MODE,
-          deviceProfile: MOBILE_DEVICE_PROFILE,
+          renderMode,
+          deviceProfile,
         },
       });
       persistedScreenshotArtifactKey = screenshotArtifactKey;
@@ -1107,7 +1316,7 @@ async function persistBrowserArtifacts(
         },
         customMetadata: {
           sourceUrl: canonicalUrl,
-          renderMode: MOBILE_RENDER_MODE,
+          renderMode,
         },
       });
       persistedHtmlArtifactKey = htmlArtifactKey;
