@@ -142,7 +142,12 @@ export async function readDemoBrandDiscoveryFreshness(
     cacheAgeMs,
     providerCooldownUntil,
     providerFailureClass: providerState?.failureClass ?? null,
-    breached: cacheAgeMs == null || cacheAgeMs > DEMO_DISCOVERY_STALE_BREACH_MS,
+    // cache_age-less entries (fresh entry) would not alert — a fresh entry
+  // should never serve cache_only, so “freshest entry older than 1h” is the
+  // practical proxy for the issue's “cache_only for >1h” (the provider only
+  // serves a stale entry when no fresher one exists; a young cache_only state
+  // resolves itself within the 10–15 min cooldown and is not worth paging on).
+  breached: cacheAgeMs == null || cacheAgeMs > DEMO_DISCOVERY_STALE_BREACH_MS,
   };
 }
 
@@ -157,6 +162,16 @@ export async function inspectDemoBrandDiscoveryFreshness(
   now = Date.now(),
 ): Promise<DemoBrandDiscoveryCanaryResult> {
   const provider = resolveCommercialDiscoveryProvider(env, {});
+  // Config drift (missing BROWSERLESS_TOKEN etc.) resolves the provider to
+  // "demo"; with no demo-provider cache rows every brand would report null
+  // fetchedAt and page falsely every hour. A resolved "demo" provider is a
+  // deployment config problem, not a discovery freshness problem — surface
+  // it distinctly instead of paging per-brand.
+  if (provider === "demo") {
+    throw new Error(
+      "demo-brand discovery canary: provider resolved to 'demo' (missing browser-provider env config) — skipping cache freshness check",
+    );
+  }
   const brands: DemoBrandDiscoveryFreshness[] = [];
   for (const domain of DEMO_BRAND_PAGE_DOMAINS) {
     brands.push(await readDemoBrandDiscoveryFreshness(env, domain, now));

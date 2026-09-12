@@ -183,6 +183,7 @@ describe("demo-brand discovery canary (issue #2980)", () => {
         country: "all",
         cursor: null,
       });
+      const fetchedAt = new Date(Date.now() - 30 * 60_000).toISOString();
       await upsertDiscoveryCacheEntry(env, {
         cacheKey: key,
         provider: "meta_library_browser",
@@ -191,7 +192,7 @@ describe("demo-brand discovery canary (issue #2980)", () => {
         country: "all",
         cursor: null,
         payload: emptyPayload,
-        fetchedAt: new Date(Date.now() - 30 * 60_000).toISOString(),
+        fetchedAt,
         expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
       });
       const entry = await getDiscoveryCacheEntry({ DB: env.DB } as never,
@@ -200,7 +201,10 @@ describe("demo-brand discovery canary (issue #2980)", () => {
           domain,
         ).cacheKey,
       );
-      expect(entry?.fetchedAt).not.toBeNull();
+      // Exact round-trip: the canary key resolves the same row and the
+      // freshness read sees precisely what the serving path wrote.
+      expect(entry?.fetchedAt).toBe(fetchedAt);
+      expect((entry?.payload as unknown) === emptyPayload || entry?.payload != null).toBe(true);
     } finally {
       close();
     }

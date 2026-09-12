@@ -2608,7 +2608,7 @@ export default function SearchRoute() {
                         {isDelayedDiscoveryStatus(visibleResult.discoveryStatus) ? (
                           <div className="f9-wk-acts">
                             <Link className="f9-wk-lnk" to={retrySearchPath}>
-                              Retry this search{" "}
+                              Fresh checks paused about 10 minutes — retry now{" "}
                               <span aria-hidden="true" className="f9-wk-chev">
                                 &rsaquo;
                               </span>
