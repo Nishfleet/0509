@@ -48,6 +48,10 @@ const DEFAULT_MIN_PUBLISH = 15;
 const WARMING_POLL_INTERVAL_MS = 35_000;
 const WARMING_POLL_LIMIT = 2;
 
+/**
+ * @param {string[]} argv
+ * @returns {Map<string, string | boolean>}
+ */
 function parseArgs(argv) {
   const args = new Map();
   for (const arg of argv) {
@@ -58,11 +62,18 @@ function parseArgs(argv) {
   return args;
 }
 
+/**
+ * @param {number} ms
+ * @returns {Promise<void>}
+ */
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Mirror of the server-side validateSeedList rules for the file this script reads. */
+/**
+ * Mirror of the server-side validateSeedList rules for the file this script reads.
+ * @param {string} name
+ */
 function loadSeedList(name) {
   const listName = String(name ?? "").trim();
   if (!listName || /[^a-z0-9-]/.test(listName)) {
@@ -73,7 +84,8 @@ function loadSeedList(name) {
   try {
     raw = readFileSync(path, "utf8");
   } catch (error) {
-    throw new Error(`Cannot read seed list at data/seed-lists/${listName}.json: ${error.message}`);
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`Cannot read seed list at data/seed-lists/${listName}.json: ${reason}`);
   }
   const list = JSON.parse(raw);
   if (!Array.isArray(list.domains) || list.domains.length === 0) {
@@ -101,6 +113,14 @@ function loadSeedList(name) {
  * before the final call. 429s wait out the Retry-After, capped at the search
  * window, so the anonymous budget (20 req / 10 min / IP) is never violated.
  */
+/**
+ * @param {{
+ *   domain: string,
+ *   baseUrl: string,
+ *   pacedFetch: typeof fetch,
+ * }} params
+ * @returns {Promise<{ domain: string, verdict: string, reason: string, rowCount?: number | null, cacheStatus?: string | null, resultSource?: string | null }>}
+ */
 async function probeDomain({ domain, baseUrl, pacedFetch }) {
   const url = `${baseUrl}/search?website=${encodeURIComponent(domain)}&country=all`;
   let lastParsed = null;
@@ -115,7 +135,7 @@ async function probeDomain({ domain, baseUrl, pacedFetch }) {
       return {
         domain,
         verdict: "failed",
-        reason: `request error: ${error.message}`,
+        reason: `request error: ${error instanceof Error ? error.message : String(error)}`,
         rowCount: null,
       };
     }
@@ -124,6 +144,11 @@ async function probeDomain({ domain, baseUrl, pacedFetch }) {
       const retryAfterMs = parseRetryAfterMs(response.headers.get("retry-after"));
       await sleep(retryAfterMs);
       continue;
+    }
+
+    if (response.status >= 400) {
+      await response.text();
+      return { domain, verdict: "failed", reason: `HTTP ${response.status}`, rowCount: null };
     }
 
     const html = await response.text();
@@ -147,6 +172,10 @@ async function probeDomain({ domain, baseUrl, pacedFetch }) {
       if (pollResponse.status === 429) {
         await sleep(parseRetryAfterMs(pollResponse.headers.get("retry-after")));
         continue;
+      }
+      if (pollResponse.status >= 400) {
+        await pollResponse.text();
+        return { domain, verdict: "failed", reason: `HTTP ${pollResponse.status}`, rowCount: null };
       }
       const pollHtml = await pollResponse.text();
       const pollParsed = parseSearchResponseHtml(pollHtml);
@@ -224,7 +253,18 @@ async function main() {
   process.exit(published >= minPublish ? 0 : 1);
 }
 
-main().catch((error) => {
-  console.error(`seed:publisher failed: ${error.message}`);
-  process.exit(1);
-});
+const invokedDirectly =
+  process.argv[1] !== undefined &&
+  fileURLToPath(import.meta.url) === process.argv[1];
+
+export {
+  loadSeedList,
+  probeDomain,
+};
+
+if (invokedDirectly) {
+  main().catch((error) => {
+    console.error(`seed:publisher failed: ${error.message}`);
+    process.exit(1);
+  });
+}
