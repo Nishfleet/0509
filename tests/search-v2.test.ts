@@ -188,7 +188,7 @@ describe("search v2 cache isolation", () => {
       country: "all",
     });
 
-    // The format-pinning canaries (ads-programmatic-seo.canary.test.tsx,
+    // The format-pinning canaries (tests/ads-programmatic-seo-guard.test.tsx,
     // sitemap.server.test.ts) hard-code this exact shape for default filters.
     expect(withDefaults).toBe("search-v2:domain:nike.com:exact:meta_library_browser:all:page-1");
     expect(withDefaults).toBe(withoutFilters);
