@@ -40,6 +40,7 @@ import {
   inlineScriptHashSources,
   isEdgeCacheableHtmlRequest,
   isEdgeCacheableHtmlResponse,
+  edgeCacheCopyAgeSeconds,
   matchEdgeCache,
   nonceFreeScriptSrc,
   parseEdgeCacheTtlSeconds,
@@ -122,6 +123,29 @@ function memoryCache(): EdgeCacheRuntime & { keys: () => string[] } {
 
 function anonymousGet(url = "https://0509.io/", headers: Record<string, string> = {}) {
   return new Request(url, { method: "GET", headers });
+}
+
+/** Rewrite the stored copy's stored-at stamp to look `ageSeconds` old and its
+ * body to `body` — used to age a copy in place without the test waiting. */
+async function overwriteStoredCopy(
+  cache: EdgeCacheRuntime,
+  request: Request,
+  country: string,
+  versionId: string,
+  ageSeconds: number,
+  body: string,
+) {
+  await cache.put(
+    new Request(cacheKeyUrl(new URL(request.url), country, versionId)),
+    new Response(body, {
+      status: 200,
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "public, max-age=300",
+        "x-0509-edge-stored-at": String(Math.floor(Date.now() / 1000) - ageSeconds),
+      },
+    }),
+  );
 }
 
 describe("edge cache eligibility (issue #2950)", () => {
@@ -210,6 +234,54 @@ describe("edge cache eligibility (issue #2950)", () => {
       parseEdgeCacheTtlSeconds(htmlResponse({ headers: { "cache-control": "public, max-age=oops" } })),
     ).toBe(300);
     expect(parseEdgeCacheTtlSeconds(htmlResponse())).toBe(300);
+  });
+
+  it("ages a stored copy from its stored-at stamp and fails safe on a missing stamp (#3247)", () => {
+    const stamped = htmlResponse({
+      headers: { "x-0509-edge-stored-at": String(Math.floor(Date.now() / 1000) - 120) },
+    });
+    expect(edgeCacheCopyAgeSeconds(stamped)).toBe(120);
+    // No stamp (pre-#3247 copies) → never punished by the age gate.
+    expect(edgeCacheCopyAgeSeconds(htmlResponse({}, ""))).toBeNull();
+    // Broken stamp and clock skew (future stamp) → treated as missing.
+    expect(
+      edgeCacheCopyAgeSeconds(htmlResponse({ headers: { "x-0509-edge-stored-at": "oops" } })),
+    ).toBeNull();
+    expect(
+      edgeCacheCopyAgeSeconds(
+        htmlResponse({ headers: { "x-0509-edge-stored-at": String(Math.floor(Date.now() / 1000) + 60) } }),
+      ),
+    ).toBeNull();
+  });
+
+  it("serves a stale copy as HIT inside the serve-stale window and hard-expires past it (#3247)", async () => {
+    const cache = memoryCache();
+    const request = anonymousGet("https://0509.io/");
+    await storeEdgeCache(
+      request,
+      cache,
+      "v1",
+      htmlResponseWithCsp("public, max-age=300", "<html>probe</html>"),
+      "US",
+    );
+    // Fresh copy: a HIT (unchanged behaviour).
+    const freshHit = await matchEdgeCache(request, cache, "v1", "US");
+    expect(freshHit?.headers.get(EDGE_PROOF_HEADER)).toBe("HIT");
+    const storedAt = Number.parseInt(freshHit?.headers.get("x-0509-edge-stored-at") ?? "", 10);
+    expect(Math.abs(Date.now() / 1000 - storedAt)).toBeLessThan(10);
+
+    // Aged 12 minutes (over the 300s max-age, inside the 1800s stale
+    // window): still a HIT — this is the probe-at-T+12min shape that
+    // produced the #3247 home_edge=NONE regression.
+    await overwriteStoredCopy(cache, request, "US", "v1", 720, "<html>stale-in-window</html>");
+    const staleHit = await matchEdgeCache(request, cache, "v1", "US");
+    expect(staleHit?.headers.get(EDGE_PROOF_HEADER)).toBe("HIT");
+    expect(await staleHit?.text()).toContain("stale-in-window");
+
+    // Aged 32 minutes (past max-age + stale window): a hard miss — the
+    // next request re-renders and re-stores.
+    await overwriteStoredCopy(cache, request, "US", "v1", 2400, "<html>hard-stale</html>");
+    expect(await matchEdgeCache(request, cache, "v1", "US")).toBeNull();
   });
 
   it("keeps the deploy gate's proof header coupled to the worker's stamp (house rule)", () => {
