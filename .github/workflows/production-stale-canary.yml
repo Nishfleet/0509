@@ -1,0 +1,136 @@
+name: Production stale canary
+
+# Issue #3224: surface deploy staleness as a detector, not a discarded
+# observation. The deploy workflow already runs scripts/check-live-public-home.mjs
+# as its `live_public_truth` post-deploy step — that succeeds only when the
+# anonymous homepage serves the deployed nonce-free variant with
+# `x-0509-edge-cache: HIT` on the second anonymous probe. That truth only
+# reaches us WHILE a deploy runs; a deploy chain that has been red for hours
+# (every run failing source_backup_migration_ledger_stale, runs stranded
+# queued, production on a 3-day-old build) emits no measure and no canary at
+# all. This scheduled probe fills that gap.
+#
+# What "stale" means here, in concrete terms: production serves a build that
+# does not carry PR #3054's edge-cache stamp. Symptoms (any one of which
+# makes this canary red):
+#   - second-request `x-0509-edge-cache: HIT` missing
+#   - per-request CSP nonce leaked on the anonymous variant
+#   - required marketing copy / CSP / cache-control contracts regressed
+#
+# schedule(*/30): every 30 minutes. Faster than that wastes runner budget on
+# a state that already has the deploy workflow's own deploy_age measure;
+# slower than that lets a customer-visible regression sit unnoticed for over
+# an hour.
+#
+# workflow_dispatch: hand-launchable for the cheat path (the deploy-fault
+# re-verification rider and the #3193 TTFB reverification sweep both lean on
+# `npm run canary:prod` / `node scripts/check-live-public-home.mjs`; this
+# workflow gives the same contract a click-runnable surface).
+#
+# DO NOT make this a required check. It is a detector, not a gate — the
+# fleet-ops `FleetProductionStale` alert (fleet-ops#5785) is the flagship
+# repair path; this canary publishes the local green/red state artifact that
+# the alert and the judges' measure both consume.
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-stale-canary
+  cancel-in-progress: false
+
+jobs:
+  detect:
+    # Read-only header probe. No secrets, no production environment, no
+    # provider mutation. The script hits https://0509.io/ the same way a
+    # real visitor would, so any deploy-staleness regression a customer
+    # would see is also visible here — production-staleness is by nature
+    # an externally observable property and only an external probe can
+    # detect it. Exit 0 = production serving the latest build; exit 1 =
+    # production stale. A failed run is the detector working, not a script
+    # crash: the script's `console.error` JSON dump names the failing
+    # probe (missing signal / cache-control / CSP / edge-cache HIT / nonce
+    # leak) and the canary state artifact preserves it.
+    name: Detect production staleness
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ".node-version"
+
+      - name: Probe production staleness
+        id: probe
+        env:
+          PUBLIC_HOME_URL: https://0509.io
+        # The script is the canonical deploy-staleness contract — it bundles
+          # every probe a stale-build run would regress: required marketing
+          # signals, forbidden CSP tokens, Cloudflare Analytics beacon host,
+          # Google Fonts hosts, cache-control contract, second-request
+          # `x-0509-edge-cache: HIT`, and nonce-free script-src on both
+          # anonymous probes. We do not duplicate the checks here; we wrap
+          # the script in a probe step so its exit code is the canary
+          # verdict: 0 = green (production fresh), 1 = red (production
+          # stale).
+        shell: bash
+        run: |
+          set -uo pipefail
+          probe_log="$(mktemp)"
+          trap 'rm -f -- "$probe_log"' EXIT
+          if ! node scripts/check-live-public-home.mjs >"$probe_log" 2>&1; then
+            printf 'production stale canary: red (script exited non-zero)\n' >&2
+            cat "$probe_log" >&2
+            echo "state=red" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          printf 'production stale canary: green\n'
+          echo "state=green" >> "$GITHUB_OUTPUT"
+
+      - name: Persist canary state evidence
+        if: ${{ always() }}
+        shell: bash
+        env:
+          # The probe step only names its state when it reaches a verdict
+          # (green / red). Any other failure path (network down, script
+          # crash, the temporary artifact already cleaned up) exits before
+          # writing state, and the honest published state for that run is
+          # red — a canary that cannot prove a verdict must fail loud,
+          # never exit 0 as skipped (the same fail-loud rule the
+          # meta-discovery canary enforces, 2026-08-24 incident).
+          STATE: ${{ steps.probe.outputs.state || 'red' }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          with open("production-stale-canary-state.json", "w", encoding="utf-8") as f:
+              json.dump({
+                  "state": os.environ["STATE"],
+                  "runId": int(os.environ["RUN_ID"]),
+                  "generatedAt": __import__("datetime").datetime.now(
+                      __import__("datetime").timezone.utc
+                  ).isoformat(),
+              }, f, sort_keys=True, separators=(",", ":"))
+              f.write("\n")
+          PY
+
+      - name: Upload canary state evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: production-stale-canary-state
+          path: production-stale-canary-state.json
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
