@@ -44,6 +44,7 @@ import { queryAll } from "~/lib/data/d1.server";
 import { parseJson } from "~/lib/data/helpers.server";
 import type { AppEnv } from "~/lib/env.server";
 import {
+  isPlaceholderOfferPrice,
   loadOfferTimeline,
   type OfferTimelineLoad,
 } from "~/lib/offer-timeline.server";
@@ -224,7 +225,7 @@ export function watchEventRowToPublicMove(
   if (field !== WEEKLY_MOVE_FIELD.newAds && !beforeText && !afterText) {
     return null;
   }
-  return {
+  const move = {
     brand: displayNameFromDomain(domain),
     domain,
     field,
@@ -235,6 +236,36 @@ export function watchEventRowToPublicMove(
     adsPath: links.adsPath,
     timelinePath: links.timelinePath,
   };
+  return isPublishableWeeklyMove(move) ? move : null;
+}
+
+/**
+ * Move-validity gate for the public brief (issue #3128). A row renders as a
+ * move only when BOTH values are real:
+ *   - either side matching a currency-zero placeholder (`$0.00 → £0.00`)
+ *     disqualifies the move;
+ *   - a single-value row (one side null — a baseline capture) is not a move
+ *     and is excluded, never dressed up as a change.
+ * The regression test in `tests/brief-move-validity.test.ts` pins this: a
+ * placeholder row, a baseline row and a real offer change yield exactly one
+ * move row.
+ */
+export function isPublishableWeeklyMove(
+  move: Pick<WeeklyPublicMove, "field" | "beforeText" | "afterText">,
+): boolean {
+  if (move.field === WEEKLY_MOVE_FIELD.newAds) {
+    // ad_new rows legitimately have no before side.
+    return (move.afterText ?? "").trim().length > 0;
+  }
+  // A true prior capture must exist: both sides present (pre-change value
+  // and new value), neither a placeholder, neither identical.
+  if (!move.beforeText || !move.afterText) {
+    return false;
+  }
+  if (move.beforeText.trim() === move.afterText.trim()) {
+    return false;
+  }
+  return !isPlaceholderOfferPrice(move.beforeText) && !isPlaceholderOfferPrice(move.afterText);
 }
 
 /**
@@ -523,6 +554,14 @@ export async function loadWeeklyPublicMoves(
   const seen = new Set<string>();
   const moves: WeeklyPublicMove[] = [];
   for (const move of [...eventMoves, ...snapshotMoves]) {
+    // Final move-validity gate (issue #3128): a placeholder or baseline-only
+    // row can never reach the move list, whichever source produced it. The
+    // mappers already apply this rule; this pass covers future sources and
+    // the regression test pins it so a placeholder row reaching the list
+    // again fails CI.
+    if (!isPublishableWeeklyMove(move)) {
+      continue;
+    }
     const key = `${move.domain}|${move.field}|${move.beforeText ?? ""}|${move.afterText ?? ""}`;
     if (seen.has(key)) {
       continue;
