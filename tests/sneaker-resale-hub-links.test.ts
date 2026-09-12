@@ -17,7 +17,9 @@ import indexableSnapshot from "./fixtures/sneaker-resale-indexable-domains.snaps
  * cover every sneaker-resale domain whose /ads/ page is live and indexable
  * in the production sitemap today. A domain whose /ads/ page is absent from
  * the sitemap (goat.com, on.com, reebok.com, solesavy.com)
- * is intentionally excluded so the hub never ships a dead link. When the
+ * is intentionally excluded so the hub never ships a dead link (goat.com,
+ * on.com and reebok.com later went live — issue #3229's drift alarm caught
+ * them and the fixture + array were refreshed to include them). When the
  * cluster scales further, refresh the snapshot fixture AND the array
  * together — the length assertion below fails until both are updated.
  */
