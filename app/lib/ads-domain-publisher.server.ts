@@ -79,7 +79,7 @@ export interface SeedList {
  * tail domains are not silently skipped when the run is truncated by its
  * wall-clock deadline. festive-india-2026 (issue #2140, 30 domains),
  * sneaker-resale (24 domains), beauty-personal-care and saas-software
- * (issue #3123, 31 and 36 domains) flatten to ~121 entries — larger than
+ * (issue #3123, 29 and 36 domains) flatten to ~119 entries — larger than
  * ADS_DOMAIN_PUBLISHER_CAP (default 60) on purpose, so a full pass spans
  * multiple nights by design and the persisted cursor (issue #2361) resumes
  * each night where the last one stopped. New cohorts append after the
