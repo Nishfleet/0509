@@ -1,7 +1,7 @@
 {
   "cluster": "sneaker-resale",
-  "asOf": "2026-09-11",
-  "sourceNote": "Market-signal sneaker-resale cluster (issue #1547), refreshed to the 2026-09-11 signal: the below-retail cluster narrowed to two live sources — the Nike r/stocks thread (2026-08-30) and the StockX midyear resale report (WWD, 2026-08-12). SneakerPing dropped out of the signal and is no longer a cluster brand. Brands = the market-signal cluster names plus established sneaker/resale Meta advertisers, so the publisher can prove which domains actually carry verified/likely ad coverage before a page ships.",
+  "asOf": "2026-09-12",
+  "sourceNote": "Market-signal sneaker-resale cluster (issue #1547), refreshed to the 2026-09-11 signal: the below-retail cluster narrowed to two live sources — the Nike r/stocks thread (2026-08-30) and the StockX midyear resale report (WWD, 2026-08-12). SneakerPing dropped out of the signal and is no longer a cluster brand. Brands = the market-signal cluster names plus established sneaker/resale Meta advertisers, so the publisher can prove which domains actually carry verified/likely ad coverage before a page ships. Refreshed 2026-09-12 (issue #3280): established sneaker retailers asos.com and decathlon.com joined the list — they were already hub-listed on /sneaker-resale and indexable in the production sitemap, so seed-list membership makes the drift gate cover the same set the fixture and SNEAKER_RESALE_BRAND_PAGES carry.",
   "domains": [
     { "domain": "nike.com", "brand": "Nike" },
     { "domain": "stockx.com", "brand": "StockX" },
@@ -26,6 +26,8 @@
     { "domain": "kickscrew.com", "brand": "KICKS CREW" },
     { "domain": "solesavy.com", "brand": "SoleSavy" },
     { "domain": "jdsports.com", "brand": "JD Sports" },
-    { "domain": "finishline.com", "brand": "Finish Line" }
+    { "domain": "finishline.com", "brand": "Finish Line" },
+    { "domain": "asos.com", "brand": "ASOS" },
+    { "domain": "decathlon.com", "brand": "Decathlon" }
   ]
 }

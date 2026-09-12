@@ -35,9 +35,11 @@ const indexableSeedDomains = new Set(
 
 // Live + indexable sneaker-resale cluster /ads/ domains per the sitemap
 // snapshot. This is the coverage floor: the hub must link EVERY one of them.
-// The snapshot is sitemap-derived and can include domains (asos.com,
-// decathlon.com) that predate the seed list; the seed list is the cluster
-// source of truth, the snapshot is the indexable filter applied to it.
+// The snapshot is sitemap-derived: the indexable filter applied to the seed
+// list. asos.com and decathlon.com were once hub-listed without being in
+// the seed list (issue #3280 added them), so every snapshot domain is now
+// in the seed list — the seed list remains a superset (solesavy.com stays
+// seed-listed but intentionally out of the snapshot).
 const indexableClusterDomains = [...INDEXABLE_SNAPSHOT_DOMAINS].sort();
 
 describe("sneaker-resale hub links (issue #1762)", () => {
