@@ -447,6 +447,20 @@ function safeStepError(step) {
 const DIAGNOSTIC_IDENTIFIER_PATTERN = /^[a-z0-9._-]{1,128}$/u;
 
 /**
+ * A caller-supplied status is only journaled when it is a real HTTP status
+ * code. This argument is a plain object, not a live `Response`, so a test
+ * double could otherwise journal `httpStatus: 0` (or a negative) as if it
+ * were a transport fact.
+ * @param {{ status?: number } | undefined} response
+ */
+function readHttpStatus(response) {
+  const status = response?.status;
+  return Number.isInteger(status) && status >= 100 && status <= 599
+    ? /** @type {number} */ (status)
+    : null;
+}
+
+/**
  * Project a proof canary payload into identifier-safe diagnostics for the
  * journal so a proof_email failure is actionable. The route already sanitizes
  * `delivery` via sanitizeDeliveryForCanary (no recipient addresses, no message
@@ -458,25 +472,24 @@ const DIAGNOSTIC_IDENTIFIER_PATTERN = /^[a-z0-9._-]{1,128}$/u;
  * @param {{ status?: number } | undefined} [response]
  */
 export function sanitizeProofDiagnostics(payload, response) {
+  const httpStatus = readHttpStatus(response);
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     // A non-JSON 5xx (an unhandled throw behind the canary route) parses to
     // null, so before 2026-09-12 the journal recorded NEITHER a blocker NOR
     // the HTTP status and five red runs named no field at all. Record the
     // transport shape so "route threw" is distinguishable from "route said
     // blocker X" without hand-reading the raw response.
-    if (Number.isInteger(response?.status)) {
-      return {
-        httpStatus: /** @type {number} */ (response.status),
-        bodyKind: "unparseable_json",
-      };
-    }
-    return null;
+    if (httpStatus === null) return null;
+    return { httpStatus, bodyKind: "unparseable_json" };
   }
   const source = /** @type {Record<string, unknown>} */ (payload);
   /** @type {NonNullable<GateJournal["proofDiagnostics"]>} */
   const diagnostics = {};
-  if (Number.isInteger(response?.status)) {
-    diagnostics.httpStatus = /** @type {number} */ (response.status);
+  // No `bodyKind` here by design: the body parsed as JSON, so its own fields
+  // (blocker/blockers/delivery) carry the reason. `bodyKind: "unparseable_json"`
+  // above is the positive signal that the route threw before answering.
+  if (httpStatus !== null) {
+    diagnostics.httpStatus = httpStatus;
   }
   // The route's early returns (missing_db, missing_active_watchlist, ...)
   // carry a singular `blocker` string and NEITHER `blockers` nor `delivery`.

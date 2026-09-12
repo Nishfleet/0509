@@ -225,6 +225,39 @@ describe("sanitizeProofDiagnostics", () => {
     expect(sanitizeProofDiagnostics(null, {})).toBeNull();
   });
 
+  it("journals only real HTTP status codes from a caller-supplied response", () => {
+    // The argument is a plain object, not a live Response, so a test double
+    // must not be able to journal `httpStatus: 0` as a transport fact.
+    for (const status of [0, -1, 99, 600, 1.5, Number.NaN]) {
+      expect(sanitizeProofDiagnostics(null, { status })).toBeNull();
+      expect(sanitizeProofDiagnostics({ ok: false }, { status })).toBeNull();
+    }
+    // The real range survives on both branches.
+    expect(sanitizeProofDiagnostics(null, { status: 199 })).toEqual({
+      httpStatus: 199,
+      bodyKind: "unparseable_json",
+    });
+    expect(sanitizeProofDiagnostics({ ok: false }, { status: 599 })).toEqual({
+      httpStatus: 599,
+    });
+  });
+
+  it("pins both response shapes: a parsed body carries no bodyKind", () => {
+    // Contract, not accident: `bodyKind` is present ONLY when the body failed
+    // to parse. A parsed JSON body states its own reason (blocker/blockers),
+    // so a reader comparing two evidence files must not read the missing
+    // `bodyKind` as absent data.
+    const parsed = sanitizeProofDiagnostics(
+      { ok: false, blocker: "missing_active_watchlist" },
+      { status: 503 },
+    );
+    expect(parsed).toEqual({ httpStatus: 503, blocker: "missing_active_watchlist" });
+    expect(parsed).not.toHaveProperty("bodyKind");
+
+    const unparsed = sanitizeProofDiagnostics(null, { status: 503 });
+    expect(unparsed).toEqual({ httpStatus: 503, bodyKind: "unparseable_json" });
+  });
+
   it("keeps the HTTP status alongside a named blocker", () => {
     expect(
       sanitizeProofDiagnostics(
