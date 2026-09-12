@@ -17,8 +17,20 @@ import {
 const FB_URL = "https://scontent-bos5-1.xx.fbcdn.net/v/t39/creative.jpg?oh=abc&oe=6AA7C003";
 const HASH = "a".repeat(64);
 
-function probe(outcome: Record<string, unknown>) {
+/** The termination shape classifyRow accepts from the injected probe. */
+type ProbeOutcome =
+  | { kind: "resolved"; hash: string; contentType: string; bytes: Uint8Array }
+  | { kind: "dead"; status: number; reason?: string }
+  | { kind: "transient"; status: number | null; reason: string };
+
+function probe(outcome: ProbeOutcome) {
   return async () => outcome;
+}
+
+/** Locates a detail field only the asserted kind carries, after the kind check. */
+function detail<K extends string>(result: { kind: string; detail: object }, kind: K) {
+  expect(result.kind).toBe(kind);
+  return result.detail as { [k: string]: unknown } & { reason?: string; hash?: string; contentType?: string };
 }
 
 describe("creative-fbcdn-backfill classification", () => {
@@ -36,7 +48,7 @@ describe("creative-fbcdn-backfill classification", () => {
     );
 
     expect(result.kind).toBe("dead");
-    expect(result.detail.reason).toBe("status 403");
+    expect(detail(result, "dead").reason).toBe("status 403");
   });
 
   it("counts a still-signed capture as resolved and keeps its content hash", async () => {
@@ -53,13 +65,13 @@ describe("creative-fbcdn-backfill classification", () => {
     );
 
     expect(result.kind).toBe("resolved");
-    expect(result.detail.hash).toBe(HASH);
-    expect(result.detail.contentType).toBe("image/jpeg");
+    expect(detail(result, "resolved").hash).toBe(HASH);
+    expect(detail(result, "resolved").contentType).toBe("image/jpeg");
   });
 
   it("treats a non-fbcdn or unparseable URL as unusable, not dead, without probing", async () => {
     let probed = 0;
-    const countingProbe = async () => {
+    const countingProbe = async (): Promise<ProbeOutcome> => {
       probed += 1;
       return { kind: "resolved", hash: HASH, contentType: "image/jpeg", bytes: new Uint8Array() };
     };
@@ -76,7 +88,7 @@ describe("creative-fbcdn-backfill classification", () => {
     // A row the audit cannot judge is NOT a dead creative — folding it into
     // `dead` would report a false death spike.
     expect(foreign.kind).toBe("unusable");
-    expect(foreign.detail.reason).toBe("unusable url");
+    expect(detail(foreign, "unusable").reason).toBe("unusable url");
     expect(malformed.kind).toBe("unusable");
     // Neither reached the network.
     expect(probed).toBe(0);
@@ -89,7 +101,7 @@ describe("creative-fbcdn-backfill classification", () => {
     );
     const networkError = await classifyRow(
       { id: "ad_6", url: FB_URL },
-      { fetchCreative: probe({ kind: "transient", reason: "network: timeout" }) },
+      { fetchCreative: probe({ kind: "transient", status: null, reason: "network: timeout" }) },
     );
 
     expect(serverError.kind).toBe("transient");
