@@ -73,6 +73,13 @@ export type LandingPageCaptureFailureReasonCode =
   // detail pane renders the honest capture-gap copy instead of an error
   // boundary.
   | "capture_stream_failed"
+  // Issue #3244: the defer path (anonymous free preview) and the
+  // waitUntil path (signed-in revalidation) share a per-ad lease. When a
+  // second concurrent capture of the same landing page would otherwise
+  // start, the defer path short-circuits to a failure-labelled stream
+  // carrying this code so the pane renders the honest capture-gap copy
+  // instead of scheduling a duplicate Browser Rendering job.
+  | "enrichment_in_flight"
   | CaptureValidityReasonCode;
 
 export interface LandingPageCaptureFailureDetail {
