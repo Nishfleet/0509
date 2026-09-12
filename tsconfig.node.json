@@ -16,6 +16,7 @@
     "scripts/quality-ratchet.mjs",
     "scripts/d1-cleanup-0060-evidence.mjs",
     "scripts/d1-migration-sync-check*.mjs",
+    "scripts/duplicate-migration-prefix-check*.mjs",
     "scripts/seed-demo-brands.mjs",
     "scripts/workspace-member-preflight*.mjs",
     "scripts/partial-refund-preflight*.mjs",

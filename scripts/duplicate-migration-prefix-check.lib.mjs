@@ -86,7 +86,10 @@ export function migrationFileNames(migrationsDir) {
     .sort();
 }
 
-/** Run the check over a directory. Returns exit-message or null when clean. */
+/**
+ * Run the check over a directory. Returns exit-message or null when clean.
+ * @param {string} migrationsDir
+ */
 export function duplicatePrefixViolation(migrationsDir) {
   const names = migrationFileNames(migrationsDir);
   // A .sql file the pattern cannot parse must never pass silently: it is the
@@ -112,6 +115,12 @@ export function duplicatePrefixViolation(migrationsDir) {
 }
 
 /** CLI entrypoint. */
+/**
+ * CLI entry: run against argv[0] (or default migrations path). Exits 1 with a
+ * message on violation.
+ * @param {string[]} [argv]
+ * @returns {void}
+ */
 export function main(argv = process.argv.slice(2)) {
   const migrationsDir = argv[0] ?? join(process.cwd(), "migrations");
   const violation = duplicatePrefixViolation(migrationsDir);
