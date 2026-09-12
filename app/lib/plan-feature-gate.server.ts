@@ -10,9 +10,11 @@ export type ExportFormat = "csv" | "json" | "slack";
 
 /**
  * MCP tool tiering — the single source of truth for which plan feature gates
- * each MCP tool (BET 6). Read-only tools are free + Scout; write/account-
- * mutation tools are Agency. Export formats (csv/slack) ride the export
- * features (Starter+); JSON reads ride the read-only tier.
+ * each MCP tool (BET 6). Read-only tools are Scout (decision-resolved:
+ * BET-6-ungate yes for SCOUT, 2026-09-12 — Free stays without API per ledger
+ * 2026-09-10); write/account-mutation tools are Agency. Export formats
+ * (csv/slack) ride the export features (Starter+); JSON reads ride the
+ * read-only tier.
  */
 export const MCP_READ_ONLY_TOOL_NAMES: ReadonlySet<string> = new Set([
   "get_workspace_readiness",
@@ -68,7 +70,7 @@ export function mcpToolFeature(toolName: string): PlanFeature | null {
 
 /** Human tier label for a tool, used in discovery and docs. */
 export function mcpToolTierLabel(toolName: string): string {
-  if (MCP_READ_ONLY_TOOL_NAMES.has(toolName)) return "Free + Scout";
+  if (MCP_READ_ONLY_TOOL_NAMES.has(toolName)) return "Scout";
   if (MCP_WRITE_TOOL_NAMES.has(toolName)) return "Agency";
   return "Agency";
 }
@@ -76,13 +78,13 @@ export function mcpToolTierLabel(toolName: string): string {
 /** Documented denial message for a tier-gated MCP tool. */
 export function mcpTierDeniedMessage(toolName: string, plan: PlanFamily): string {
   if (MCP_WRITE_TOOL_NAMES.has(toolName)) {
-    return "Account-mutation tools require the Agency plan. Read-only tools are available on Free and Scout.";
+    return "Account-mutation tools require the Agency plan. Read-only tools are available on Scout.";
   }
   return `This tool is not included in your current plan (${plan}).`;
 }
 
 /**
- * Read-or-export gate: JSON reads ride the read-only tier (free + Scout);
+ * Read-or-export gate: JSON reads ride the read-only tier (Scout);
  * csv/slack exports ride the export features (Starter+).
  */
 export async function requireReadOrExportFeature(

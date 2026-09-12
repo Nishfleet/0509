@@ -13,7 +13,8 @@ import { appEnv, db, uid } from "./fixtures";
 const ISO_T0 = "2026-01-01T00:00:00.000Z";
 
 /**
- * BET 6 — read-only MCP/API access on Free + Scout.
+ * BET 6 — read-only MCP/API access on Scout (decision BET-6-ungate yes for
+ * SCOUT; Free stays without API).
  *
  * This suite applies the real migrations to local D1 and exercises the actual
  * MCP route action with a real customer API key, so the tier gate is proven

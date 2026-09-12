@@ -55,7 +55,7 @@ export default function McpSetupRoute() {
           hashed, and can be revoked from the same screen.
         </p>
         <p>
-          Read-only API and MCP access is available on Free and Scout — create the key from an
+          Read-only API and MCP access is available on Scout — create the key from an
           account whose plan includes{" "}
           <Link to={appLinkTarget("/app/billing", rootData?.session)}>developer access</Link>,
           then keep the key private like a password. Write-enabled keys require the Starter plan or
