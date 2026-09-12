@@ -64,8 +64,8 @@ export async function loader({
   return { page };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ data }) => {
-  if (!data) {
+export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
+  if (!loaderData) {
     return [
       { title: "Page not found | Five to Nine" },
       { name: "robots", content: "noindex" },
@@ -77,12 +77,12 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
   // ships as a meta-descriptor link (mirror /brands/:category).
   return [
     ...publicSeoMeta({
-      title: `${data.page.name} below retail, tracked with proof | Five to Nine`,
-      description: `Where the ${data.page.name} below-retail demand is visible and what the saved ${data.page.domain} ads actually show — screenshots with dates, not a mood-board.`,
-      pathname: sneakerResaleBrandPath(data.page.slug),
+      title: `${loaderData.page.name} below retail, tracked with proof | Five to Nine`,
+      description: `Where the ${loaderData.page.name} below-retail demand is visible and what the saved ${loaderData.page.domain} ads actually show — screenshots with dates, not a mood-board.`,
+      pathname: sneakerResaleBrandPath(loaderData.page.slug),
       ogLocale: "en_US",
     }),
-    { tagName: "link", rel: "canonical", href: canonicalUrl(sneakerResaleBrandPath(data.page.slug)) },
+    { tagName: "link", rel: "canonical", href: canonicalUrl(sneakerResaleBrandPath(loaderData.page.slug)) },
   ];
 };
 

@@ -67,8 +67,8 @@ describe("sneaker-resale per-brand pages (issue #3087)", () => {
 
   it("canonicals to the English page only — no spoofed hreflang (#3087, #2962)", async () => {
     const mod = await import("~/routes/sneaker-resale.$brand");
-    const meta = mod.meta({ data: { page: { slug: "nike", name: "Nike", domain: "nike.com" } } } as never);
-    const entries = [...meta] as Array<{ [key: string]: unknown }>;
+    const meta = mod.meta({ loaderData: { page: { slug: "nike", name: "Nike", domain: "nike.com" } } } as never);
+    const entries = [...(meta ?? [])] as Array<{ [key: string]: unknown }>;
     const canonical = entries.find(
       (entry) => entry.rel === "canonical",
     );
