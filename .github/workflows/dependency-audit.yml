@@ -1,0 +1,75 @@
+name: Dependency audit
+
+# Standing rule from 0509#2970: nothing fails silently. `npm audit --omit=dev
+# --audit-level=high` must run on every change so a high-or-above advisory in
+# the dependency tree cannot sit open on main unnoticed.
+#
+# Why this is its own workflow rather than a step inside ci.yml:
+#
+# ci.yml triggers on `pull_request`, `merge_group` AND `workflow_dispatch`, and
+# every job in it authorizes a dynamic checkout ref
+# (`ref: ${{ steps.authorize.outputs.sha }}`). CodeQL's
+# `actions/cache-poisoning/poisonable-step` query (CWE-349, security-severity
+# 7.5) treats exactly that combination -- a workflow_dispatch-reachable job that
+# executes checked-out code -- as a cache-poisoning surface, and its data model
+# classifies any script matching `(p)?npm\s+[a-z]` as a poisonable step. Adding
+# `npm audit` to a ci.yml job therefore raises a NEW high CodeQL alert, wherever
+# in that workflow the step is placed. Both were tried and both stayed red:
+# removing the npm cache and the `npm ci` install from dependabot-critical-check,
+# then relocating the step into codex-node-checks.
+#
+# This workflow removes the surface instead of suppressing the finding: no
+# `workflow_dispatch` trigger, and the checkout is the plain immutable
+# `github.sha` of the event -- not an expression-driven, attacker-influenceable
+# ref. Nothing here executes checked-out code in a default-branch cache-writing
+# context, so there is no cache to poison.
+#
+# Requiredness: add `dependency-audit` to branch protection and the merge-queue
+# ruleset to make it a required context. It is deliberately NOT added to
+# tests/required-context-no-skip.test.ts's REQUIRED_JOBS list in this change --
+# that test pins a job's in-step authorizer shape, and this workflow needs no
+# authorizer because it never checks out an attacker-influenceable ref.
+
+on:
+  pull_request:
+  merge_group:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-audit:
+    name: dependency-audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: npm audit (high gate)
+        # Deliberately NOT `--omit=dev`: the four advisories 0509#2970 was
+        # opened for (sharp, browserslist, baseline-browser-mapping,
+        # @simplewebauthn/server) are dev/transitive in this lockfile, so an
+        # --omit=dev run cannot see sharp or browserslist at all and the gate
+        # would be decorative for the very class it exists to catch. Measured
+        # against the real registry with the vulnerable sharp 0.35.3 pinned:
+        # `npm audit --omit=dev --audit-level=high` exits 0, while
+        # `npm audit --audit-level=high` exits 1 with GHSA-rgj7-g3m4-5g8c.
+        # The production-only view is printed below as signal, not as the gate.
+        #
+        # `npm audit` reads package.json, package-lock.json and the registry
+        # directly; it needs no `node_modules`, so there is no install step and
+        # nothing to cache.
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '::group::production dependencies (--omit=dev, informational)'
+          npm audit --omit=dev || true
+          echo '::endgroup::'
+          npm audit --audit-level=high
