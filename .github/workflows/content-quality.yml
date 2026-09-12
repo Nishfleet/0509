@@ -19,11 +19,26 @@ name: Content quality
 # This is a new workflow rather than a ci.yml job because ci.yml is a
 # protected verifier definition (required-verifier-integrity) and this
 # change does not carry the independent review needed to touch it.
+#
+# Path-gated per ci-gates-ledger batch 2 (#3069): pull_request and push only
+# fire when the diff touches the content surface Vale can actually flag —
+# docs/**, the .vale configuration/style tree, or app/**/*.md. `merge_group`
+# is dropped: `Vale (whole content tree)` is not a required context, so the
+# queue never waited on it — its merge_group runs were advisory-only hosted
+# cost. A PR that breaks prose still turns red on the PR itself (the rule
+# set is content-scoped, so a docs-touching PR still gets the full-tree lint).
 on:
   pull_request:
-  merge_group:
+    paths:
+      - "docs/**"
+      - ".vale/**"
+      - "app/**/*.md"
   push:
     branches: [main]
+    paths:
+      - "docs/**"
+      - ".vale/**"
+      - "app/**/*.md"
   workflow_dispatch:
 
 concurrency:
