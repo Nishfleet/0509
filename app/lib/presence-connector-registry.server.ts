@@ -115,9 +115,6 @@ export function coverageLabelForConnector(
   if (connectorId === "rss") {
     return "VERIFIED_PUBLIC_FEED" as const;
   }
-  if (connectorId === "rss") {
-    return "VERIFIED_PUBLIC_FEED" as const;
-  }
   if (connectorId === "gdelt") {
     return "OFFICIAL_PUBLIC_API" as const;
   }

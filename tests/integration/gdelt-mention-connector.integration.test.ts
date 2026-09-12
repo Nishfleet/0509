@@ -250,6 +250,20 @@ describe("gdelt mention connector — poll", () => {
     expect(result.items).toEqual([]);
   });
 
+  it("rejects an over-length phrase from stored metadata without calling the API", async () => {
+    const fetchImpl = gdeltFetcher(() => ({ body: GDELT_ARTLIST }));
+    const result = await gdeltConnector.poll(makeCtx(fetchImpl), {
+      targetHandle: null,
+      targetUrl: null,
+      targetKey: "",
+      metadata: { matchPhrase: "x".repeat(257) },
+    });
+    expect(result.ok).toBe(false);
+    expect(result.items).toEqual([]);
+    expect(result.errorCode).toBe("match_phrase_too_long");
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it("reports missing_match_phrase for a target without a phrase", async () => {
     const fetchImpl = gdeltFetcher(() => new Response("", { status: 500 }));
     const result = await gdeltConnector.poll(makeCtx(fetchImpl), {

@@ -159,6 +159,14 @@ export const gdeltConnector = {
         errorMessage: "GDELT target has no match phrase to search for.",
       };
     }
+    if (phrase.trim().length > 256) {
+      return {
+        ok: false,
+        items: [],
+        errorCode: "match_phrase_too_long",
+        errorMessage: "Match phrase exceeds the GDELT query API limit (max 256 characters).",
+      };
+    }
 
     const timespan =
       typeof target.metadata.timespan === "string" && target.metadata.timespan
