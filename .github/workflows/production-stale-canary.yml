@@ -22,10 +22,11 @@ name: Production stale canary
 # slower than that lets a customer-visible regression sit unnoticed for over
 # an hour.
 #
-# workflow_dispatch: hand-launchable for the cheat path (the deploy-fault
-# re-verification rider and the #3193 TTFB reverification sweep both lean on
-# `npm run canary:prod` / `node scripts/check-live-public-home.mjs`; this
-# workflow gives the same contract a click-runnable surface).
+# workflow_dispatch: hand-launchable for the cheat path. The
+# deploy-fault re-verification rider and the #3193 TTFB reverification
+# sweep both lean on `node scripts/check-live-public-home.mjs` directly;
+# this workflow gives the same contract a click-runnable surface so a
+# hand-run can verify the same probe the schedule runs every 30 minutes.
 #
 # DO NOT make this a required check. It is a detector, not a gate — the
 # fleet-ops `FleetProductionStale` alert (fleet-ops#5785) is the flagship

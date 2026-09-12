@@ -84,10 +84,17 @@ describe("Production stale canary workflow", () => {
     // meta-discovery canary enforces (2026-08-24 incident).
     expect(probeRun).toMatch(/process\.exit\(1\)|exit 1/);
     // No toleration semantics — `set -e` would exit the shell on the
-    // first non-zero; `set -uo pipefail` (without -e) only fails on
-    // unbound variables and broken pipes, leaving the script exit code
-    // in scope so we can branch on it.
-    expect(probeRun).toMatch(/set -uo pipefail|set -[a-z]*[a-z]/);
+    // first non-zero (including the `node scripts/…` line when stale);
+    // `set -uo pipefail` (without -e) only fails on unbound variables
+    // and broken pipes, leaving the script exit code in scope so we can
+    // branch on it. The exact-phrase pin prevents a future edit from
+    // reintroducing `set -e`, which would silently downgrade the
+    // fail-loud contract: a regex like /set -uo pipefail|set -[a-z]*e[a-z]*\b/
+    // would let `set -euo pipefail` sneak past the test and exit the
+    // shell on the very first probe failure, before the canary ever
+    // wrote `state=red`.
+    expect(probeRun).toContain("set -uo pipefail");
+    expect(probeRun).not.toMatch(/set -[a-z]*e[a-z]*\b/);
   });
 
   // The probe only writes its state when it reaches a verdict. Any
