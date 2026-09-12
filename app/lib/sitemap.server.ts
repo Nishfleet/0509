@@ -513,6 +513,10 @@ export function staticSitemapEntriesForLocale(
     "/guides/how-to-track-competitor-ads",
     "/guides/how-to-monitor-meta-ad-library",
     "/guides/how-to-monitor-competitor-landing-page-changes",
+    // Issue #3093: the three newest guides stay in the locale feeds too.
+    "/guides/how-to-get-alerted-when-a-competitor-changes-their-offer",
+    "/guides/how-to-prove-what-changed-on-a-competitor-website",
+    "/guides/how-to-turn-a-one-off-competitor-check-into-a-standing-watch",
   ].filter((path) => path !== "/" && path !== "/sitemap.xml");
   const entries: SitemapEntry[] = [];
   for (const path of buyerSurfacePaths) {

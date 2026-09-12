@@ -3,7 +3,7 @@
  *
  * One page that renders a genuine stored digest for the newest
  * sitemap-indexable brand that has at least one confirmed watch_event in the
- * last 30 days. The digest HTML is built through the existing digest builder
+ * last two windows. The digest HTML is built through the existing digest builder
  * (`buildDigestEmail`) from stored rows only — never a live scrape, Browser
  * Rendering run, or paid operation.
  *
@@ -42,8 +42,31 @@ import type { DigestTrustItem } from "~/lib/proof-classification";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import { formatWatchEventTypeLabel } from "~/lib/watch-event-display";
 
-/** The rolling window the sample brief covers (30 days). */
+/** The default rolling window the sample brief covers (30 days). */
 export const SAMPLE_BRIEF_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+/**
+ * Widening tiers the sample brief walks, newest-first (issue #2969).
+ *
+ * Buyers inspect /sample-brief before paying, and a 30-day window can render
+ * the all-quiet variant when the monitored brand simply has not changed
+ * recently — the page then leads with "nothing happened", which reads as a
+ * broken product. The window widens tier by tier (30 → 90 → 180 → 365 days)
+ * until some indexable brand has a stored confirmed change, and the period
+ * the brief reports is always the tier that actually produced the rows, so
+ * the honest-labelling contract holds — the page never fabricates recency.
+ */
+export const SAMPLE_BRIEF_WINDOW_TIERS_MS = [
+  SAMPLE_BRIEF_WINDOW_MS,
+  90 * 24 * 60 * 60 * 1000,
+  180 * 24 * 60 * 60 * 1000,
+  365 * 24 * 60 * 60 * 1000,
+] as const;
+
+/** Human-readable label for a window tier, used in quiet-brief copy. */
+export function sampleBriefWindowLabel(ms: number): string {
+  const days = Math.round(ms / (24 * 60 * 60 * 1000));
+  return `${days} days`;
+}
 /** Hard bound on rendered digest items per brief. */
 export const SAMPLE_BRIEF_EVENT_LIMIT = 20;
 
@@ -56,7 +79,7 @@ export interface SampleBriefData {
   digestHtml: string;
   /** True when no domain qualified and the honest quiet-brief rendered. */
   quiet: boolean;
-  /** ISO start of the 30-day window. */
+  /** ISO start of the sample window tier that produced this brief. */
   periodStart: string;
   /** ISO end of the 30-day window. */
   periodEnd: string;
@@ -141,25 +164,19 @@ function watchEventRowToDigestItem(
 
 /**
  * Load the newest sitemap-indexable domain that has at least one confirmed
- * watch_event in the last 30 days, and build its digest HTML through the
- * existing digest builder from stored rows only. When no domain qualifies,
- * returns the honest quiet-brief variant for the newest indexable domain.
+ * watch_event in the sample window, and build its digest HTML through the
+ * existing digest builder from stored rows only. The window widens tier by
+ * tier (30 → 90 → 180 → 365 days — issue #2969) until a stored change is
+ * found, so the page leads with a real detected change instead of an empty
+ * week. Every period the digest names is the tier that produced its rows;
+ * when no domain qualifies even at the widest tier, returns the honest
+ * quiet-brief variant for the newest indexable domain.
  */
 export async function loadSampleBrief(env: AppEnv): Promise<SampleBriefData> {
-  const periodEnd = new Date().toISOString();
-  const periodStart = new Date(Date.now() - SAMPLE_BRIEF_WINDOW_MS).toISOString();
-
   const links = await loadIndexableAdsInternalLinks(env);
   if (links.length === 0) {
     // No indexable brand page at all → the honest quiet-brief with no brand.
-    return {
-      domain: "",
-      brand: "",
-      digestHtml: buildQuietBriefHtml(env, "", periodStart, periodEnd),
-      quiet: true,
-      periodStart,
-      periodEnd,
-    };
+    return quietBrief(env, "", "", SAMPLE_BRIEF_WINDOW_TIERS_MS[0]);
   }
 
   // Newest-first: the sitemap's indexable set is ordered by the sitemap's own
@@ -167,47 +184,77 @@ export async function loadSampleBrief(env: AppEnv): Promise<SampleBriefData> {
   // advertiser-watchlist candidate set is loaded ONCE (not per domain) so a
   // crawl of this public page never issues a full-table scan per candidate.
   const watchlistCandidates = await loadAdvertiserWatchlistCandidates(env);
+  if (watchlistCandidates.length === 0) {
+    // Nothing for any advertiser watchlist to match → honest quiet-brief.
+    return quietBrief(env, links[0]!.domain, links[0]!.name, SAMPLE_BRIEF_WINDOW_TIERS_MS[0]);
+  }
   const baseUrl = appBaseUrl(env);
-  for (const link of links) {
-    const events = await loadRecentEventsForDomain(
-      env,
-      link.domain,
-      periodStart,
-      watchlistCandidates,
-    );
-    if (events.length > 0) {
-      const items = events.map(watchEventRowToDigestItem);
-      const digest = buildDigestEmail({
-        name: "",
-        periodStart,
-        periodEnd,
-        items,
-        cadence: "weekly",
-        baseUrl,
-        fullDigestUrl: `${baseUrl}/ads/${link.domain}`,
-        manageFrequencyUrl: `${baseUrl}/auth/signup`,
-        supportEmail: SUPPORT_EMAIL,
-        supportMailto: SUPPORT_MAILTO,
-        unsubscribeUrl: null,
-      });
-      return {
-        domain: link.domain,
-        brand: link.name,
-        digestHtml: digest.html,
-        quiet: false,
-        periodStart,
-        periodEnd,
-      };
+
+  // Walk the window tiers earliest-first: the shallowest tier that yields a
+  // stored confirmed change wins. Reads stay bounded — it is still one capped
+  // SELECT per candidate domain per tier, and the page makes at most four
+  // passes over the (small, sitemap-sized) candidate set before degrading to
+  // the honest quiet-brief.
+  for (const tier of SAMPLE_BRIEF_WINDOW_TIERS_MS) {
+    const tierEnd = new Date().toISOString();
+    const tierStart = new Date(Date.now() - tier).toISOString();
+    for (const link of links) {
+      const events = await loadRecentEventsForDomain(
+        env,
+        link.domain,
+        tierStart,
+        watchlistCandidates,
+      );
+      if (events.length > 0) {
+        const items = events.map(watchEventRowToDigestItem);
+        const digest = buildDigestEmail({
+          name: "",
+          periodStart: tierStart,
+          periodEnd: tierEnd,
+          items,
+          cadence: "weekly",
+          baseUrl,
+          fullDigestUrl: `${baseUrl}/ads/${link.domain}`,
+          manageFrequencyUrl: `${baseUrl}/auth/signup`,
+          supportEmail: SUPPORT_EMAIL,
+          supportMailto: SUPPORT_MAILTO,
+          unsubscribeUrl: null,
+        });
+        return {
+          domain: link.domain,
+          brand: link.name,
+          digestHtml: digest.html,
+          quiet: false,
+          periodStart: tierStart,
+          periodEnd: tierEnd,
+        };
+      }
     }
   }
 
-  // No domain had a stored event in the window → the honest quiet-brief for
-  // the newest indexable domain.
-  const newest = links[0]!;
+  // No domain had a stored event even at the widest tier → the honest
+  // quiet-brief for the newest indexable domain, over the widest window.
+  return quietBrief(env, links[0]!.domain, links[0]!.name, SAMPLE_BRIEF_WINDOW_TIERS_MS.at(-1)!);
+}
+
+
+/**
+ * The honest quiet-brief for a given domain over `windowMs`. The counts are
+ * honest for a public page: no scan runs are attributed, so the record
+ * states that no confirmed changes were captured in the window.
+ */
+function quietBrief(
+  env: AppEnv,
+  domain: string,
+  brand: string,
+  windowMs: number,
+): SampleBriefData {
+  const periodEnd = new Date().toISOString();
+  const periodStart = new Date(Date.now() - windowMs).toISOString();
   return {
-    domain: newest.domain,
-    brand: newest.name,
-    digestHtml: buildQuietBriefHtml(env, newest.domain, periodStart, periodEnd),
+    domain,
+    brand,
+    digestHtml: buildQuietBriefHtml(env, domain, periodStart, periodEnd, windowMs),
     quiet: true,
     periodStart,
     periodEnd,
@@ -248,8 +295,9 @@ async function loadAdvertiserWatchlistCandidates(
 }
 
 /**
- * Load confirmed watch_events for a single registrable domain captured in the
- * last 30 days, newest first, capped at SAMPLE_BRIEF_EVENT_LIMIT. Returns []
+ * Load confirmed watch_events for a single registrable domain captured in
+ * the last `since` refinement of the caller's window tier, newest first,
+ * capped at SAMPLE_BRIEF_EVENT_LIMIT. Returns []
  * when no watchlist tracks the domain or D1 is absent. The advertiser
  * candidate set is passed in (loaded once by the caller) so this never
  * re-scans the watchlist table per domain.
@@ -329,6 +377,7 @@ function buildQuietBriefHtml(
   domain: string,
   periodStart: string,
   periodEnd: string,
+  windowMs: number,
 ): string {
   const digest = buildDigestEmail({
     name: "",
@@ -343,8 +392,7 @@ function buildQuietBriefHtml(
       triage: {
         status: "all_quiet",
         label: "All quiet",
-        explanation:
-          "No confirmed competitor changes were captured for this brand in the last 30 days.",
+        explanation: `No confirmed competitor changes were captured for this brand in the last ${sampleBriefWindowLabel(windowMs)}.`,
         checkedAt: null,
         checksCompleted: 0,
         suppressedChanges: 0,

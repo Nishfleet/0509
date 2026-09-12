@@ -5,11 +5,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
 type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
 
+// The fixture's story is "a real capture checked about 4 hours ago", so its
+// capture clock must stay recent forever. A frozen calendar date rots: once
+// it passes PROOF_CAPTURE_FRESH_DAYS (30d) the homepage honestly switches to
+// "on record" copy and this suite goes red on schedule — the original
+// 2026-08-11 fixture went stale on 2026-09-10 (issue #3081).
+const CAPTURED_RECENTLY_ISO = new Date(Date.now() - 4 * 3_600_000).toISOString();
+// Loader-shaped label for the same clock, matching formatCapturedAt's
+// "Aug 11, 10:17 PM" rendering in public-proof.server.ts.
+const CAPTURED_RECENTLY_LABEL = new Date(CAPTURED_RECENTLY_ISO).toLocaleString("en", {
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+});
+
 const realProofBrief = {
   competitorName: "Nykaa",
   website: "nykaa.com",
   adLibraryCountry: "India",
-  fetchedAt: "2026-08-11T22:17:00.000Z",
+  fetchedAt: CAPTURED_RECENTLY_ISO,
   checkedAgoLabel: "about 4 hours ago",
   freshForLiveClaim: false,
   adCount: 6,
@@ -22,9 +37,9 @@ const realProofBrief = {
     whyItMatters:
       "These creatives are the angle Nykaa has on record in the Meta Ad Library — review the same pages before your next campaign refresh.",
     priority: "Review before the next campaign refresh",
-    proofStatus: "Captured from the India Ad Library on Aug 11, 10:17 PM",
+    proofStatus: `Captured from the India Ad Library on ${CAPTURED_RECENTLY_LABEL}`,
     source: "Meta Ad Library (public archive) — the India Ad Library",
-    freshness: "Last checked about 4 hours ago — captured Aug 11, 10:17 PM",
+    freshness: `Last checked about 4 hours ago — captured ${CAPTURED_RECENTLY_LABEL}`,
     nextAction: "Open the same ad in the India Ad Library",
   },
   proofTrail: [
@@ -34,7 +49,7 @@ const realProofBrief = {
       evidence: "Routine-first bundle — Build your routine",
       source: "Meta Ad Library — Nykaa Beauty",
       sourceUrl: "https://www.facebook.com/ads/library/?id=111",
-      capturedAt: "2026-08-11T22:17:00.000Z",
+      capturedAt: CAPTURED_RECENTLY_ISO,
     },
     {
       id: "ad-2:Ad offer",
@@ -42,7 +57,7 @@ const realProofBrief = {
       evidence: "Up to 30% off this week",
       source: "Meta Ad Library — Nykaa Beauty",
       sourceUrl: "https://www.facebook.com/ads/library/?id=222",
-      capturedAt: "2026-08-11T22:17:00.000Z",
+      capturedAt: CAPTURED_RECENTLY_ISO,
     },
   ],
   insights: {
@@ -210,7 +225,11 @@ describe("anonymous homepage proof brief (real proof)", () => {
   });
 
   it("renders real capture clocks and the real proof label when proof exists", async () => {
-    mockReactRouter(realProofBrief);
+    // withCaptureAge keeps the capture inside PROOF_CAPTURE_FRESH_DAYS so the
+    // strip renders the date-bearing "was the hook on" copy; a fixed fetchedAt
+    // older than 30 days flips it to "on record" (this fixture crossed that
+    // boundary on 2026-09-10).
+    mockReactRouter(withCaptureAge({ hoursAgo: 4 }));
     const markup = await renderMarketing();
 
     expect(markup).toContain("Proof-backed brief");

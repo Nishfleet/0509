@@ -91,10 +91,24 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   // The under-fold before/after mark: a real stored watch event or null (the
   // null path renders the clearly labelled sample state, never a fabricated
   // "real" change). One bounded database read; never a scan or a provider call.
+  // Issue #2951: the two homepage lookups are independent — both promises are
+  // started eagerly and only awaited afterwards, so the second database
+  // read no longer waits on the first. Each lookup keeps its own guarded fallback:
+  // a failure in one must not touch the other (same warnings, same sentinels
+  // as before).
+  const changeMarkPromise = (async (): Promise<PublicChangeMark | null> => {
+    const { loadPublicChangeMark } = await import("~/lib/public-change-mark.server");
+    return loadPublicChangeMark(env);
+  })();
+
+  const indexableAdsLinksPromise = (async (): Promise<IndexableAdsLink[]> => {
+    const { loadIndexableAdsInternalLinks } = await import("~/lib/ads-internal-links.server");
+    return loadIndexableAdsInternalLinks(env);
+  })();
+
   let changeMark: PublicChangeMark | null = null;
   try {
-    const { loadPublicChangeMark } = await import("~/lib/public-change-mark.server");
-    changeMark = await loadPublicChangeMark(env);
+    changeMark = await changeMarkPromise;
   } catch (error) {
     console.warn("Homepage change mark load failed; rendering the labelled sample state.", {
       errorName: error instanceof Error ? error.name : typeof error,
@@ -104,13 +118,28 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
   let indexableAdsLinks: IndexableAdsLink[] = [];
   try {
-    const { loadIndexableAdsInternalLinks } = await import("~/lib/ads-internal-links.server");
-    indexableAdsLinks = await loadIndexableAdsInternalLinks(env);
+    indexableAdsLinks = await indexableAdsLinksPromise;
   } catch (error) {
     console.warn("Homepage indexable ads links load failed; omitting /ads links.", {
       errorName: error instanceof Error ? error.name : typeof error,
     });
     indexableAdsLinks = [];
+  }
+
+  // Issue #2972: the footer's public uptime figure — whole days of
+  // continuous scheduled-monitoring coverage, the same honest number /status
+  // publishes (never a fabricated percentage). Country-neutral, so it is
+  // safe inside the shared-cached document; on any read failure the footer
+  // falls back to the Status link alone.
+  let monitoringCoverageDays: number | null = null;
+  try {
+    const { getMonitoringCoverageDays } = await import("~/lib/public-status-counters.server");
+    monitoringCoverageDays = await getMonitoringCoverageDays(env);
+  } catch (error) {
+    console.warn("Homepage monitoring-coverage figure failed; footer renders the Status link only.", {
+      errorName: error instanceof Error ? error.name : typeof error,
+    });
+    monitoringCoverageDays = null;
   }
 
   // Pricing is deliberately NOT resolved here (issue #2389). Buyer-country
@@ -126,7 +155,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   // personalizes both via /api/demo-proof. The route still declares the
   // `pricingPreview` field so its data shape stays identical to /pricing; it
   // is always the "no preview" sentinel here.
-  return { pricingPreview: noPricingPreview, commercialLaunch, proofBrief, indexableAdsLinks, changeMark, featuredDomain };
+  return { pricingPreview: noPricingPreview, commercialLaunch, proofBrief, indexableAdsLinks, changeMark, featuredDomain, monitoringCoverageDays };
 }
 
 /**
@@ -1026,6 +1055,10 @@ export default function MarketingRoute() {
         </div>
       </section>
 
+      {/* Customer references slot (issue #2972): RESERVED for real customer
+          names/quotes once Nish approves them — product/brand decision.
+          Nothing renders here until then; do not fill with invented quotes. */}
+
       <PricingSection
         commercialLaunch={commercialLaunch}
         initialPricingPreview={routeData.pricingPreview?.available ? routeData.pricingPreview : null}
@@ -1068,7 +1101,7 @@ export default function MarketingRoute() {
         <p>Public search preview is free — no account. Paid plans run scheduled checks every 3–6 hours and email you the proof.</p>
       </section>
 
-      <MarketingFooter />
+      <MarketingFooter monitoringCoverageDays={routeData.monitoringCoverageDays} />
     </main>
   );
 }

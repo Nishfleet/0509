@@ -4,6 +4,7 @@ import { isbot } from "isbot";
 import { renderToReadableStream } from "react-dom/server";
 
 import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
+import { reportError } from "~/lib/error-report.server";
 
 export default async function handleRequest(
   request: Request,
@@ -53,3 +54,29 @@ export default async function handleRequest(
     status: responseStatusCode,
   });
 }
+
+// Issue #2988: a loader or action that throws used to surface only as a
+// rendered ErrorBoundary — no durable record beyond a streamed worker log
+// line. React Router routes every uncaught handler error through this
+// `handleError` hook, so it is the one place where a thrown loader error
+// becomes a durable error_report row (route, reason code, stack sample)
+// without touching any route source. Degradable catch sites that want their
+// own reason codes call the same sink directly.
+export function handleError(
+  error: unknown,
+  args: { request: Request; context?: unknown },
+) {
+  const cloudflare = getOptionalCloudflareContext(args.context);
+  let route = "unknown_route";
+  try {
+    route = new URL(args.request.url).pathname;
+  } catch {
+    // Request URL parse failures are reported under the fallback name.
+  }
+  void reportError(cloudflare?.env ?? {}, {
+    route,
+    reasonCode: "loader_error",
+    error,
+  });
+}
+

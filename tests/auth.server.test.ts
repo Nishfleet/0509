@@ -1735,6 +1735,7 @@ describe("Better Auth routes", () => {
       email: "owner@example.com",
       name: "Owner",
       redirectTo: "/app/onboard",
+      competitor: "",
     });
     expect(warn).toHaveBeenCalledWith("failed to send Better Auth signup email", {
       errorName: "Error",

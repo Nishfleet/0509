@@ -19,6 +19,15 @@ type DeepHealthBody = {
   status: "ok" | "degraded";
   app: string;
   timestamp: string;
+  /**
+   * Issue #2988: informational count line the hourly judges read. Degrade
+   * catches (and thrown loader/action errors) land in the error_report sink;
+   * this surfaces the 24-hour total without flipping overall health —
+   * a single caught degrade is exactly the honest state we chose, not an
+   * outage. The detailed row-level view lives on
+   * /api/observability/error-reports.
+   */
+  errorReports?: { last24h: number; reported: boolean };
   checks: {
     edge: "ok";
     d1: DependencyStatus;
@@ -79,6 +88,21 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     scheduledGapCheck.status === "ok";
   const showReleaseIdentity = await mayReadReleaseIdentity(request, env);
 
+  let errorReports: DeepHealthBody["errorReports"];
+  if (d1 === "ok") {
+    try {
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const countRow = await env.DB!.prepare(
+        "SELECT COUNT(*) AS n FROM error_report WHERE created_at >= ?",
+      )
+        .bind(since)
+        .first<{ n: number }>();
+      errorReports = { last24h: countRow?.n ?? 0, reported: true };
+    } catch {
+      errorReports = { last24h: -1, reported: false };
+    }
+  }
+
   const body: DeepHealthBody = {
     status: healthy ? "ok" : "degraded",
     app: env.APP_NAME ?? "0509",
@@ -89,6 +113,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       scheduledWork,
       scheduledGapCheck: scheduledGapCheck.status,
     },
+    ...(errorReports ? { errorReports } : {}),
     ...(showReleaseIdentity ? { releaseIdentity } : {}),
   };
 

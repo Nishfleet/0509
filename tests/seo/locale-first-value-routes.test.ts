@@ -102,7 +102,10 @@ describe("locale first-value search funnel (issue #1578)", () => {
         // serve byte-identical English canonicalized to that EN page — so per
         // the issue #1570 duplicate-content policy they stay OUT of the locale
         // sitemaps (reachable, not advertised as indexable).
-        if (route === "methodology") {
+        if (route === "methodology" || route === "search") {
+          // Issue #2871: /methodology ... Issue #2965: /search is noindex
+          // (worker edge header) and out of the EN sitemap, so the locale
+          // twins stay OUT of the locale sitemaps too.
           expect(body).not.toContain(`<loc>https://0509.io/${locale}/${route}</loc>`);
           continue;
         }
