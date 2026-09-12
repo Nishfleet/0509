@@ -133,6 +133,9 @@ export async function getCreativeImageByHash(
   if (!key) {
     return null;
   }
+  if (!env.LANDING_PAGE_ARTIFACTS) {
+    return null;
+  }
   try {
     return await objectToImage(env.LANDING_PAGE_ARTIFACTS, key);
   } catch {
