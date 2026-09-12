@@ -24,6 +24,13 @@ type AuditClaim = {
   resultDetail: string;
   betOrCopyChange: string;
   nishReserved: boolean;
+  monitoringSource?: {
+    sourceId: string;
+    label: string;
+    status: string;
+    proofUrl?: string;
+    proofDate?: string;
+  };
 };
 
 type AuditTable = {
