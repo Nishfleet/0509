@@ -1,5 +1,12 @@
 import type { AppEnv } from "~/lib/env.server";
 import { ensureDb } from "~/lib/data/d1.server";
+import {
+  buildMentionPhrases,
+  entityPhrasesFromRecord,
+  isQueryFeedUrl,
+  mentionMatch,
+  queryPhraseForFeed,
+} from "~/lib/mention-match.server";
 import { newPresenceId, presenceContentHash, presenceUrlHash } from "~/lib/presence-hash";
 import type {
   NormalizedPresenceItem,
@@ -436,7 +443,27 @@ export async function upsertPresenceItems(
   let updated = 0;
   const changedUrlHashes: string[] = [];
 
-  for (const item of input.items) {
+  // Mention-match stamping (Nishfleet/0509#3250): for RSS source targets,
+  // either every item is a mention of the query phrase (query feed: the
+  // surface already pre-filtered) or only items naming the entity survive
+  // (publication feed). The match metadata rides on `raw_json` so no schema
+  // change is needed. Non-RSS connectors stay untouched — their match story
+  // is owned by their own connectors (x/reddit have query-driven payloads).
+  const stampPlan = await buildMentionStampPlan(env, input.sourceTarget);
+  const stampedItems =
+    stampPlan === null
+      ? input.items
+      : stampPlan.kind === "query"
+        ? input.items.map((item) => withMentionMetadata(item, {
+            matched: true,
+            matchedPhrase: stampPlan.queryPhrase,
+            matchField: "query",
+          }))
+        : stampPlan.kind === "publication"
+          ? await filterAndStampPublicationItems(input.items, stampPlan.phrases)
+          : input.items;
+
+  for (const item of stampedItems) {
     const urlHash = await presenceUrlHash(item.canonicalUrl);
     const contentHash = item.contentHash || (await presenceContentHash(item));
     const existing = await db
@@ -528,6 +555,91 @@ export async function upsertPresenceItems(
   }
 
   return { inserted, updated, changedUrlHashes };
+}
+
+interface MentionQueryStampPlan {
+  kind: "query";
+  queryPhrase: string;
+}
+
+interface MentionPublicationStampPlan {
+  kind: "publication";
+  phrases: string[];
+}
+
+type MentionStampPlan = MentionQueryStampPlan | MentionPublicationStampPlan;
+
+/**
+ * Decide how (or whether) to stamp mention-match metadata on items upserted
+ * for a given source target. `null` means "do not stamp" — used for non-RSS
+ * connectors and for RSS targets whose phrase derivation comes back empty
+ * (an entity with no label, no canonical URL, and no aliases cannot be
+ * matched; stamp nothing and let every item through as raw).
+ */
+async function buildMentionStampPlan(
+  env: AppEnv,
+  sourceTarget: SourceTargetRecord,
+): Promise<MentionStampPlan | null> {
+  if (sourceTarget.connectorId !== "rss") return null;
+  const feedUrl =
+    typeof sourceTarget.metadata?.feedUrl === "string"
+      ? sourceTarget.metadata.feedUrl
+      : null;
+  if (isQueryFeedUrl(feedUrl)) {
+    const phrase = queryPhraseForFeed(feedUrl);
+    if (!phrase) return null;
+    return { kind: "query", queryPhrase: phrase };
+  }
+  const entity = await getTrackedEntity(env, sourceTarget.userId, sourceTarget.trackedEntityId);
+  if (!entity) return null;
+  const phrases = buildMentionPhrases(entityPhrasesFromRecord(entity));
+  if (phrases.length === 0) return null;
+  return { kind: "publication", phrases };
+}
+
+async function filterAndStampPublicationItems(
+  items: NormalizedPresenceItem[],
+  phrases: string[],
+): Promise<NormalizedPresenceItem[]> {
+  const entity = { label: null, canonicalDomain: null, aliases: phrases } as const;
+  const out: NormalizedPresenceItem[] = [];
+  for (const item of items) {
+    const match = mentionMatch(
+      { title: item.title, bodyExcerpt: item.bodyExcerpt, author: item.author },
+      // `phrases` carries the same case-folded/deduped set the matcher would
+      // build; passing it through `aliases` keeps the matcher pure. (The
+      // matcher itself derives phrases from label/domain/aliases; here the
+      // upstream `buildMentionPhrases` call has already done that derivation.)
+      entity,
+    );
+    if (!match.matched) continue;
+    out.push(
+      withMentionMetadata(item, {
+        matched: true,
+        matchedPhrase: match.matchedPhrase,
+        matchField: match.matchField ?? "title",
+      }),
+    );
+  }
+  return out;
+}
+
+function withMentionMetadata(
+  item: NormalizedPresenceItem,
+  mention: { matched: boolean; matchedPhrase: string | null; matchField: string | null },
+): NormalizedPresenceItem {
+  return {
+    ...item,
+    raw: {
+      ...(item.raw ?? {}),
+      mention: {
+        matched: mention.matched,
+        matchedPhrase: mention.matchedPhrase,
+        matchField: mention.matchField,
+        stampedAt: new Date().toISOString(),
+      },
+    },
+  };
 }
 
 export async function reconcilePresenceItemsAfterPoll(

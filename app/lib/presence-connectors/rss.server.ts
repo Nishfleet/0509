@@ -1,7 +1,8 @@
 import { decodeHtmlEntities as decodeXml } from "~/lib/decode-html.server";
+import { isQueryFeedUrl } from "~/lib/mention-match.server";
 import { evaluateConnectorAccessGate } from "~/lib/presence-access-gates.server";
 import { presenceContentHash } from "~/lib/presence-hash";
-import { presenceSafeFetch } from "~/lib/presence-robots.server";
+import { presenceSafeFetch, PRESENCE_USER_AGENT } from "~/lib/presence-robots.server";
 import type {
   CostEstimate,
   HealthCheckResult,
@@ -11,7 +12,7 @@ import type {
   ValidateTargetInput,
   ValidateTargetResult,
 } from "~/lib/presence-types";
-import { resolvePublicHttpUrl } from "~/lib/public-url.server";
+import { resolvePublicHttpUrl, resolvePublicRedirectUrl } from "~/lib/public-url.server";
 
 /**
  * RSS / Atom / JSON Feed presence connector.
@@ -184,14 +185,18 @@ export const rssConnector = {
       const discovered = await resolveDiscoveredFeedUrl(fetched.body, feedUrl);
       if (discovered) {
         const retry = await fetchFeed(discovered, fetchImpl);
-        return {
-          ...retry.result,
-          cursor: { feedUrl: discovered, ...(retry.result.cursor ?? {}) },
-        };
+        return await resolveQueryFeedItemUrls(
+          {
+            ...retry.result,
+            cursor: { feedUrl: discovered, ...(retry.result.cursor ?? {}) },
+          },
+          feedUrl,
+          fetchImpl,
+        );
       }
     }
 
-    return fetched.result;
+    return await resolveQueryFeedItemUrls(fetched.result, feedUrl, fetchImpl);
   },
 };
 
@@ -341,6 +346,160 @@ function discoverFeedLink(html: string): string | null {
     }
   }
   return null;
+}
+
+/**
+ * Query-feed item URL resolution (mention backbone, Nishfleet/0509#3250).
+ *
+ * Google News query feeds (`news.google.com/rss/search?q=...`) embed article
+ * links as `https://news.google.com/rss/articles/<id>` URLs that 302-redirect
+ * to the publisher. Without resolution, the same story lands under a different
+ * `url_hash` per surface — the dedup UNIQUE on `(source_target_id, url_hash)`
+ * can't group the same publisher URL across surfaces, and the mention rank
+ * `cross-source dedup` (docs/mentions/PLAN.md §4) collapses on the redirect.
+ *
+ * Resolution runs through `presenceSafeFetch` with manual redirects so every
+ * hop is SSRF-checked by `resolvePublicHttpUrl`. The fetched body is
+ * discarded — only the final URL is captured. When resolution fails (timeout,
+ * private redirect target, SSRF block, missing Location), the original
+ * `news.google.com` URL stays as `canonicalUrl` and the redirect URL is
+ * recorded under `raw.googleNewsRedirect` so a later retry has the context.
+ *
+ * For non-query feeds this is a no-op pass-through: the items already carry
+ * their publisher URL as `canonicalUrl`. Cost stays one extra bounded fetch
+ * per query-feed item, which the issue flags as the per-poll budget trade.
+ */
+async function resolveQueryFeedItemUrls(
+  result: PollResult,
+  feedUrl: string,
+  fetchImpl: typeof fetch,
+): Promise<PollResult> {
+  if (!result.ok || result.items.length === 0) return result;
+  if (!isQueryFeedUrl(feedUrl)) return result;
+
+  const resolved = await Promise.all(
+    result.items.map((item) => resolveItemCanonicalUrl(item, fetchImpl)),
+  );
+
+  // Rehash any item whose canonicalUrl changed — the contentHash covers
+  // (title, bodyExcerpt, author, publishedAt), not the URL, so the
+  // content_hash stays the same; url_hash is what we re-derive downstream
+  // via `presenceUrlHash` (hash of canonical_url), so persisting the
+  // resolved URL is the contract.
+  const itemsWithRefreshedHash: NormalizedPresenceItem[] = [];
+  for (let i = 0; i < result.items.length; i += 1) {
+    const original = result.items[i];
+    const next = resolved[i];
+    itemsWithRefreshedHash.push({
+      ...original,
+      canonicalUrl: next.canonicalUrl,
+      raw: {
+        ...(original.raw ?? {}),
+        ...(next.rawExtras ?? {}),
+      },
+    });
+  }
+
+  return {
+    ...result,
+    items: itemsWithRefreshedHash,
+  };
+}
+
+async function resolveItemCanonicalUrl(
+  item: NormalizedPresenceItem,
+  fetchImpl: typeof fetch,
+): Promise<{ canonicalUrl: string; rawExtras?: Record<string, unknown> }> {
+  const original = item.canonicalUrl;
+  if (!isGoogleNewsRssRedirect(original)) {
+    return { canonicalUrl: original };
+  }
+
+  let currentUrl: URL | null = await resolvePublicHttpUrl(original);
+  for (let redirects = 0; currentUrl && redirects <= 5; redirects += 1) {
+    let response: Response;
+    try {
+      response = await fetchWithTimeoutForRedirect(
+        currentUrl.toString(),
+        fetchImpl,
+      );
+    } catch {
+      currentUrl = null;
+      break;
+    }
+    if (response.status >= 300 && response.status < 400) {
+      const next = resolvePublicRedirectUrl(response.headers.get("location"), currentUrl);
+      // Drain the body so the runtime can release the socket — we only want
+      // the Location header.
+      try {
+        await response.arrayBuffer();
+      } catch {
+        // ignore — body drain is best-effort
+      }
+      currentUrl = next ? await resolvePublicHttpUrl(next) : null;
+      continue;
+    }
+    // Non-redirect response (200, 404, etc.): stop following. The final URL
+    // we reached is the publisher canonical URL even if the page itself
+    // failed — the next poll will surface that via the standard poll path.
+    try {
+      await response.arrayBuffer();
+    } catch {
+      // ignore
+    }
+    break;
+  }
+
+  if (!currentUrl) {
+    return {
+      canonicalUrl: original,
+      rawExtras: { googleNewsRedirect: original, googleNewsResolved: null },
+    };
+  }
+
+  const resolvedUrl = currentUrl.toString();
+  if (resolvedUrl === original) {
+    return { canonicalUrl: original, rawExtras: { googleNewsRedirect: original } };
+  }
+  return {
+    canonicalUrl: resolvedUrl,
+    rawExtras: { googleNewsRedirect: original, googleNewsResolved: resolvedUrl },
+  };
+}
+
+function isGoogleNewsRssRedirect(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.hostname.toLowerCase() === "news.google.com" &&
+      parsed.pathname.startsWith("/rss/articles")
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A minimal HEAD-with-manual-redirect fetch used purely to learn the final
+ * URL of a Google News redirect. Re-uses `presenceSafeFetch`'s SSRF contract
+ * by going through `fetchWithTimeout` directly (the same helper
+ * `presenceSafeFetch` uses internally) — every hop is re-validated by
+ * `resolvePublicHttpUrl` in the loop above.
+ */
+async function fetchWithTimeoutForRedirect(
+  url: string,
+  fetchImpl: typeof fetch,
+): Promise<Response> {
+  const { fetchWithTimeout } = await import("~/lib/fetch-timeout.server");
+  return fetchWithTimeout(
+    url,
+    {
+      method: "GET",
+      redirect: "manual",
+      headers: { "user-agent": PRESENCE_USER_AGENT },
+    },
+    { fetcher: fetchImpl, timeoutMs: 5_000 },
+  );
 }
 
 async function parseFeedItems(body: string, feedUrl: string): Promise<NormalizedPresenceItem[]> {
