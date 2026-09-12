@@ -314,7 +314,7 @@ export async function getPublicStatusSurfaces(
     uptimeResult,
   ] = await Promise.allSettled([
     getPublicStatusCountersWithWatchlists(env, dayAgoIso),
-    measurePublicSearch(env, dayAgoIso),
+    measurePublicSearch(env),
     measureSignIn(env, dayAgoIso),
     measureBilling(env, dayAgoIso),
     measureEmailDelivery(env, dayAgoIso),
@@ -325,18 +325,15 @@ export async function getPublicStatusSurfaces(
 
   // Public search.
   if (!d1Ok) {
-    surfaces.push(down(base("public-search", "Public search", "edge and D1 probes, discovery_cache_entry, rate_limit_events"), d1Reason));
+    surfaces.push(down(base("public-search", "Public search", "edge and D1 probes, discovery_cache_entry"), d1Reason));
   } else if (searchResult.status === "fulfilled") {
     const row = searchResult.value;
-    const m = base("public-search", "Public search", "edge and D1 probes, discovery_cache_entry, rate_limit_events");
+    const m = base("public-search", "Public search", "edge and D1 probes, discovery_cache_entry");
     const facts: string[] = [
       `${row.cachedSets.toLocaleString()} cached public result sets`,
     ];
     if (row.freshestFetchAt) {
       facts.push(`freshest provider fetch ${ageClause(row.freshestFetchAt, asOf)}`);
-    }
-    if (row.searchesServed10m !== null) {
-      facts.push(`${row.searchesServed10m.toLocaleString()} searches served in the last 10 minutes`);
     }
     m.facts = facts;
     if (row.cachedSets === 0) {
@@ -350,7 +347,7 @@ export async function getPublicStatusSurfaces(
       surfaces.push(operational(m));
     }
   } else {
-    surfaces.push(degraded(base("public-search", "Public search", "edge and D1 probes, discovery_cache_entry, rate_limit_events"), "the search storage probe failed"));
+    surfaces.push(degraded(base("public-search", "Public search", "edge and D1 probes, discovery_cache_entry"), "the search storage probe failed"));
   }
 
   // Sign-in (one-time email link dispatch).
@@ -360,7 +357,7 @@ export async function getPublicStatusSurfaces(
     const row = signInResult.value;
     const m = base("sign-in", "Sign-in", "better_auth_magic_link_ticket dispatch records, edge and D1 probes");
     m.facts = [
-      `${row.tickets24h.toLocaleString()} sign-in links dispatched in the last 24 hours`,
+      `${row.tickets24h.toLocaleString()} sign-in links requested in the last 24 hours`,
       row.lastTicketEverAt ? `last dispatch ${ageClause(row.lastTicketEverAt, asOf)}` : null,
       "email links share the delivery channel measured on the Email row",
     ].filter((v): v is string => v !== null);
@@ -469,7 +466,14 @@ export async function getPublicStatusSurfaces(
       row.lastSampleAt ? `last sample ${ageClause(row.lastSampleAt, asOf)}` : null,
     ].filter((v): v is string => v !== null);
     if (row.samples24h === 0) {
-      surfaces.push(degraded(m, "samples record on each scheduled run; the first one is pending"));
+      surfaces.push(
+        degraded(
+          m,
+          row.lastSampleAt
+            ? "the health sample rail has not recorded a sample in the last 24 hours"
+            : "samples record on each scheduled run; the first one is pending",
+        ),
+      );
     } else if (row.lastSampleAt && Date.parse(asOf) - Date.parse(row.lastSampleAt) > UPTIME_SAMPLE_MAX_AGE_MS) {
       surfaces.push(degraded(m, "the health sample rail has not recorded a fresh sample"));
     } else if (row.okSamples24h === 0) {
@@ -526,35 +530,24 @@ async function getPublicStatusCountersWithWatchlists(
 interface SearchMeasurement {
   cachedSets: number;
   freshestFetchAt: string | null;
-  searchesServed10m: number | null;
 }
 
-async function measurePublicSearch(env: AppEnv, dayAgoIso: string): Promise<SearchMeasurement> {
-  const [cacheRow, servedRow] = await Promise.all([
-    one<{ sets: number; freshest: string | null }>(
-      env,
-      `
-        SELECT COUNT(*) AS sets, MAX(fetched_at) AS freshest
-        FROM discovery_cache_entry
-        WHERE route_context = 'public_search'
-      `,
-    ),
-    one<{ served: number }>(
-      env,
-      `
-        SELECT COUNT(*) AS served
-        FROM rate_limit_events
-        WHERE scope IN ('public-search-ip', 'public-search-anon-browser')
-          AND created_at >= ?
-      `,
-      new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-    ),
-  ]);
-  void dayAgoIso;
+// Public search truth comes from discovery_cache_entry only. The per-request
+// search rate-limit scopes moved to the Cloudflare edge bindings in #2985 and
+// stopped writing rate_limit_events rows, so counting that table here would
+// render a permanently-false "0 searches served" fact.
+async function measurePublicSearch(env: AppEnv): Promise<SearchMeasurement> {
+  const cacheRow = await one<{ sets: number; freshest: string | null }>(
+    env,
+    `
+      SELECT COUNT(*) AS sets, MAX(fetched_at) AS freshest
+      FROM discovery_cache_entry
+      WHERE route_context = 'public_search'
+    `,
+  );
   return {
     cachedSets: Number(cacheRow?.sets ?? 0),
     freshestFetchAt: cacheRow?.freshest ?? null,
-    searchesServed10m: servedRow ? Number(servedRow.served) : null,
   };
 }
 

@@ -64,7 +64,7 @@ const publicTruthSurfaces = [
     path: "/docs",
     heading: "Five to Nine docs.",
     truth: [
-      "This documentation does not measure live provider availability.",
+      "Live service health is measured continuously on the Status page.",
       "Provider availability can vary.",
     ],
   },
@@ -73,8 +73,8 @@ const publicTruthSurfaces = [
     path: "/status",
     heading: "Five to Nine service status.",
     truth: [
-      "Configuration and scope information",
-      "this page does not measure live search, email, billing, or provider availability.",
+      "Five to Nine measures public search, sign-in, billing, email delivery, scheduled monitoring, and uptime on this page",
+      "every number below is read from the service's own probe records each time you load it",
     ],
   },
   {
@@ -82,7 +82,7 @@ const publicTruthSurfaces = [
     path: "/help",
     heading: "Get Five to Nine working for your team.",
     truth: [
-      "Email delivery is in product scope, but this page does not measure live email-provider availability.",
+      "the last digest and email accepted by the provider, plus the bounce and complaint suppression count",
       "Free lets you watch one competitor",
     ],
   },
@@ -92,7 +92,7 @@ const publicTruthSurfaces = [
     heading: "Trust and security basics.",
     truth: [
       "This is the current lightweight trust surface. It does not make compliance claims that have not been verified.",
-      "live provider availability is not measured here.",
+      "the Status page measures email delivery, scheduled monitoring, and uptime live.",
     ],
   },
   {
