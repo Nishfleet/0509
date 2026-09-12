@@ -117,6 +117,8 @@ export async function getProofArtifactInventory(
         WHERE landing_page_snapshot.artifact_key = ?
           OR (json_valid(landing_page_snapshot.metadata_json) AND json_extract(landing_page_snapshot.metadata_json, '$.htmlArtifactKey') = ?)
           OR (json_valid(landing_page_snapshot.metadata_json) AND json_extract(landing_page_snapshot.metadata_json, '$.screenshotArtifactKey') = ?)
+          OR (json_valid(landing_page_snapshot.metadata_json) AND json_extract(landing_page_snapshot.metadata_json, '$.desktopHtmlArtifactKey') = ?)
+          OR (json_valid(landing_page_snapshot.metadata_json) AND json_extract(landing_page_snapshot.metadata_json, '$.desktopScreenshotArtifactKey') = ?)
         UNION ALL
         SELECT watchlist.user_id AS owner_id, 'proof_capture' AS source
         FROM proof_capture
@@ -128,6 +130,8 @@ export async function getProofArtifactInventory(
       ) AS references_for_key
     `,
     owner,
+    parsed.key,
+    parsed.key,
     parsed.key,
     parsed.key,
     parsed.key,
@@ -364,16 +368,25 @@ async function artifactReferencedOutsideCapture(env: AppEnv, proofCaptureId: str
         WHERE artifact_key = ?
           OR (json_valid(metadata_json) AND json_extract(metadata_json, '$.htmlArtifactKey') = ?)
           OR (json_valid(metadata_json) AND json_extract(metadata_json, '$.screenshotArtifactKey') = ?)
+          OR (json_valid(metadata_json) AND json_extract(metadata_json, '$.desktopHtmlArtifactKey') = ?)
+          OR (json_valid(metadata_json) AND json_extract(metadata_json, '$.desktopScreenshotArtifactKey') = ?)
       ) + (
         SELECT COUNT(*) FROM ad
         WHERE json_valid(raw_json) AND (
           json_extract(raw_json, '$.landingPage.artifactKey') = ?
           OR json_extract(raw_json, '$.landingPage.metadata.htmlArtifactKey') = ?
           OR json_extract(raw_json, '$.landingPage.metadata.screenshotArtifactKey') = ?
+          OR json_extract(raw_json, '$.landingPage.metadata.desktopHtmlArtifactKey') = ?
+          OR json_extract(raw_json, '$.landingPage.metadata.desktopScreenshotArtifactKey') = ?
         )
       ) AS external_references
     `,
     proofCaptureId,
+    key,
+    key,
+    key,
+    key,
+    key,
     key,
     key,
     key,
@@ -431,6 +444,10 @@ export async function compensateUncommittedProofArtifacts(
     snapshot.artifactKey,
     snapshot.metadata?.htmlArtifactKey,
     snapshot.metadata?.screenshotArtifactKey,
+    // Issue #3105: compensating cleanup must cover the desktop-viewport
+    // evidence artifacts too, or a rolled-back capture leaks them in R2.
+    snapshot.metadata?.desktopHtmlArtifactKey,
+    snapshot.metadata?.desktopScreenshotArtifactKey,
   ].filter((value): value is string => typeof value === "string" && value.length > 0);
   const keys = new Set<string>();
   let failed = 0;
