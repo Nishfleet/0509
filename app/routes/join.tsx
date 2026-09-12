@@ -186,7 +186,7 @@ export default function JoinRoute() {
   const loaderData = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   // Progressive enhancement: a submit that lands before hydration (or with
-  // JS unavailable) still resolves a card — the document POST's data is
+  // JS disabled) still resolves a card — the document POST's data is
   // hydration-deserialized into useActionData; the hydrated flow reads the
   // fetcher. Same card either way.
   const actionData = useActionData<typeof action>();

@@ -324,7 +324,7 @@ async function loadSearchCompetitorPreview(
  * Issue #2174 — sign the competitor handoff token for a logged-out search
  * preview. The token carries the searched domain + the top candidates so a
  * visitor can select several and carry them through signup into onboarding.
- * Returns null when signing is unavailable (no secret) so the search page
+ * Returns null when signing cannot run (no secret) so the search page
  * degrades to the plain `?website=` prefill path.
  */
 async function signSearchCompetitorHandoff(
@@ -356,7 +356,7 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
     await import("~/lib/e2e-provider.server");
   const providerDeny = await resolveE2EProviderDeny(runtimeEnv, request);
   if (providerDeny.failClosed && !providerDeny.enabled) {
-    throw new Response("The local release-proof environment is unavailable.", {
+    throw new Response("The local release-proof environment is not configured for this request.", {
       status: 503,
     });
   }

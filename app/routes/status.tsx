@@ -4,7 +4,12 @@ import { useLoaderData } from "react-router";
 
 import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
 import { monitoringCoverageDays } from "~/lib/monitoring-coverage";
-import { getPublicStatusCounters } from "~/lib/public-status-counters.server";
+import {
+  getPublicStatusSurfaces,
+  type PublicStatusSurfaces,
+  type SurfaceMeasurement,
+} from "~/lib/public-status-counters.server";
+import type { AppEnv } from "~/lib/env.server";
 import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
 import {
   canonicalLinks,
@@ -14,10 +19,66 @@ import {
 } from "~/lib/seo";
 
 const description =
-  "Configuration and scope information and live monitoring facts for Five to Nine; this page does not measure live search, email, billing, or provider availability.";
+  "Measured service status for Five to Nine: public search, sign-in, billing, email delivery, scheduled monitoring, and uptime, read live from the service's own probe records each time the page loads.";
 
-const degradedDescription =
-  "Configuration and scope information for Five to Nine. Live monitoring facts are unavailable right now; this page does not measure live search, email, billing, or provider availability.";
+export const links: LinksFunction = () => canonicalLinks("/status");
+
+export const meta: MetaFunction = () =>
+  publicSeoMeta({
+    title: "Status | Five to Nine",
+    description,
+    pathname: "/status",
+  });
+
+export async function loader({ context }: LoaderFunctionArgs) {
+  const { publicCommercialLaunchSummary } = await import("~/lib/commercial-launch-gate.server");
+  const cloudflare = getOptionalCloudflareContext(context);
+  const env = cloudflare?.env;
+
+  const asOf = new Date().toISOString();
+  let surfaces: PublicStatusSurfaces;
+  try {
+    surfaces = await getPublicStatusSurfaces((env ?? {}) as AppEnv);
+  } catch {
+    // The measurements module never throws by design; this guard keeps the
+    // page itself up even if that guarantee regresses.
+    surfaces = await getPublicStatusSurfaces({} as AppEnv);
+  }
+
+  return {
+    generatedAt: asOf,
+    asOf,
+    appServed: Boolean(env),
+    commercialLaunch: env ? publicCommercialLaunchSummary(env) : null,
+    surfaces,
+    monitoring: surfaces.monitoring,
+  };
+}
+
+function checkedMinutesAgo(checkedAt: string, asOf: string): number {
+  return Math.max(0, Math.round((Date.parse(asOf) - Date.parse(checkedAt)) / 60_000));
+}
+
+const STATE_LABEL: Record<SurfaceMeasurement["state"], string> = {
+  operational: "Operational",
+  degraded: "Degraded",
+  down: "Down",
+};
+
+function SurfaceRow({ surface, asOf }: { surface: SurfaceMeasurement; asOf: string }) {
+  const stateLabel = STATE_LABEL[surface.state];
+  return (
+    <div>
+      <dt>{surface.label}</dt>
+      <dd title={`Source: ${surface.source}`}>
+        <strong>{stateLabel}</strong>
+        {surface.reason ? `: ${surface.reason}. ` : ". "}
+        {surface.facts.length > 0 ? `${surface.facts.join("; ")}. ` : ""}
+        Checked {checkedMinutesAgo(surface.checkedAt, asOf)} min ago.
+      </dd>
+    </div>
+  );
+}
 
 /**
  * Pre-run bootstrap: the monitoring tables exist but no scheduled run has ever
@@ -38,51 +99,14 @@ function isPreRunBootstrap(monitoring: {
   );
 }
 
-export const links: LinksFunction = () => canonicalLinks("/status");
-
-export const meta: MetaFunction = () =>
-  publicSeoMeta({
-    title: "Status | Five to Nine",
-    description,
-    pathname: "/status",
-  });
-
-export async function loader({ context }: LoaderFunctionArgs) {
-  const { publicCommercialLaunchSummary } = await import("~/lib/commercial-launch-gate.server");
-  const cloudflare = getOptionalCloudflareContext(context);
-  const env = cloudflare?.env;
-
-  const asOf = new Date().toISOString();
-  let counters = null;
-  let measurementsUnavailable = !env;
-  if (env) {
-    try {
-      counters = await getPublicStatusCounters(env);
-    } catch {
-      counters = null;
-      measurementsUnavailable = true;
-    }
-  }
-
-  return {
-    generatedAt: asOf,
-    asOf,
-    appServed: Boolean(env),
-    commercialLaunch: env ? publicCommercialLaunchSummary(env) : null,
-    monitoring: counters,
-    measurementsUnavailable,
-  };
-}
-
 export default function StatusRoute() {
   const data = useLoaderData<typeof loader>();
   const monitoring = data.monitoring;
   const asOf = data.asOf;
-  const measurementsUnavailable = data.measurementsUnavailable;
+  const surfaces = data.surfaces.surfaces;
 
-  const intro = measurementsUnavailable
-    ? "Configuration and scope information for Five to Nine. Live monitoring facts are unavailable right now; this page does not measure live search, email, billing, or provider availability."
-    : "Configuration and scope information and live monitoring facts for Five to Nine; this page does not measure live search, email, billing, or provider availability.";
+  const intro =
+    "Five to Nine measures public search, sign-in, billing, email delivery, scheduled monitoring, and uptime on this page; every number below is read from the service's own probe records each time you load it.";
 
   return (
     <PublicDocShell
@@ -94,11 +118,19 @@ export default function StatusRoute() {
         {...jsonLdScriptProps(
           webPageJsonLd({
             name: "Status | Five to Nine",
-            description: measurementsUnavailable ? degradedDescription : description,
+            description,
             pathname: "/status",
           }),
         )}
       />
+
+      <PublicDocBlock title="Core surfaces">
+        <dl className="proof-trail-list">
+          {surfaces.map((surface) => (
+            <SurfaceRow key={surface.id} surface={surface} asOf={asOf} />
+          ))}
+        </dl>
+      </PublicDocBlock>
 
       <PublicDocBlock title="Monitoring health">
         {monitoring ? (
@@ -108,9 +140,8 @@ export default function StatusRoute() {
                 <dt>Monitoring pipeline</dt>
                 <dd>
                   Monitoring is configured and scheduled on this service.
-                  Aggregate run and digest counts will appear here after the
-                  first scheduled run is recorded; until then there is no
-                  historical activity to display. As of {asOf}.
+                  Run and digest counts appear here from the first scheduled
+                  run onward. As of {asOf}.
                 </dd>
               </div>
               {monitoring.scheduledMonitoringSince ? (
@@ -138,7 +169,7 @@ export default function StatusRoute() {
               </div>
               <div>
                 <dt>Last watchlist run</dt>
-                <dd>{monitoring.lastWatchlistRunAt ?? "no recent scheduled runs in the measurement window"} — as of {asOf}</dd>
+                <dd>{monitoring.lastWatchlistRunAt ?? "no scheduled run in the measurement window"}, as of {asOf}</dd>
               </div>
               <div>
                 <dt>Last digest sent</dt>
@@ -161,64 +192,42 @@ export default function StatusRoute() {
           )
         ) : (
           <dl className="proof-trail-list">
-            <p>Measurements unavailable right now.</p>
+            <div>
+              <dt>Monitoring counters</dt>
+              <dd>
+                The counter probe is degraded right now; the Core surfaces
+                rows above carry each surface's own state and reason.
+              </dd>
+            </div>
           </dl>
         )}
-      </PublicDocBlock>
-
-      <PublicDocBlock title="Core surfaces">
-        <dl className="proof-trail-list">
-          <div>
-            <dt>Public search</dt>
-            <dd>Free competitor ad search that runs without an account, rate limited to keep it fair.</dd>
-          </div>
-          <div>
-            <dt>Accounts</dt>
-            <dd>Sign-in is a secure one-time email link — no passwords are stored.</dd>
-          </div>
-          <div>
-            <dt>Billing</dt>
-            <dd>Checkout and plan changes run through Dodo Payments in your local currency.</dd>
-          </div>
-          <div>
-            <dt>Email delivery</dt>
-            <dd>Change alerts and digests are sent by email through Cloudflare Email Service.</dd>
-          </div>
-        </dl>
       </PublicDocBlock>
 
       <PublicDocBlock title="Commercial configuration">
         <dl className="proof-trail-list">
           <div>
             <dt>Scout</dt>
-            <dd>{data.commercialLaunch?.scoutSaleOpen ? "Configured for checkout (not live-checked)" : "Held — billing configuration"}</dd>
+            <dd>{data.commercialLaunch?.scoutSaleOpen ? "Checkout enabled: Scout monthly products are configured with the billing provider." : "Checkout held: Scout monthly products are not configured with the billing provider."}</dd>
           </div>
           <div>
             <dt>Starter</dt>
-            <dd>{data.commercialLaunch?.starterSaleOpen ? "Configured for checkout (not live-checked)" : "Held — billing configuration"}</dd>
+            <dd>{data.commercialLaunch?.starterSaleOpen ? "Checkout enabled: Starter monthly products are configured with the billing provider." : "Checkout held: Starter monthly products are not configured with the billing provider."}</dd>
           </div>
           <div>
             <dt>Agency</dt>
-            <dd>{data.commercialLaunch?.agencySaleOpen ? "Configured for account review (not live-checked)" : "Held — account configuration"}</dd>
+            <dd>{data.commercialLaunch?.agencySaleOpen ? "Checkout enabled: Agency monthly products are configured with the billing provider." : "Checkout held: Agency monthly products are not configured with the billing provider."}</dd>
           </div>
         </dl>
       </PublicDocBlock>
 
-      <PublicDocBlock title="Limited today">
-        <ul className="f9-doc-list">
-          <li>Email delivery configuration and eligible-account scope can be reviewed through support; delivery is not measured here.</li>
-          <li>Dodo-backed plan switching is configured for linked paid subscriptions; this page does not report live billing-provider health.</li>
-          <li>Recurring uptime checks are configured and reviewed by the operator; this public page is not a live uptime monitor.</li>
-          <li>Cancellation, deletion, and sensitive account changes still use the hosted portal or support path.</li>
-        </ul>
-      </PublicDocBlock>
-
       <PublicDocBlock title="Safety controls">
         <ul className="f9-doc-list">
-          <li>Sign-in, saved account data, search, and public pages are rate limited.</li>
-          <li>Plans have watchlist, collection, digest, check, and team-seat caps.</li>
-          <li>Check usage warns after 80% and hard-stops when paid volume is exhausted.</li>
-          <li>Support can review delivery failures, stale tracking, and account-volume risk when something needs attention.</li>
+          <li>Anonymous search allows 20 searches per browser per 10 minutes with a 100-per-IP backstop over the same window; brand pages allow 120 reads per IP per 10 minutes.</li>
+          <li>Signed-in search allows 60 searches per 10 minutes plus a daily plan cap: 25 (Free), 100 (Scout), 300 (Starter), 1,000 (Agency).</li>
+          <li>Sign-in and account endpoints allow 20 requests per 10 minutes; billing mutations allow 5 per 10 minutes per account; webhooks allow 300 per minute.</li>
+          <li>Plans cap watchlists at 1 (Free), 3 (Scout), 10 (Starter), and 75 (Agency), with included evidence checks of 1, 50, 250, and 2,500 per month and up to 3 team seats.</li>
+          <li>Check usage warns after 80% of the monthly included volume and hard-stops when paid volume is exhausted.</li>
+          <li>Every outbound email consults the bounce and complaint suppression ledger before sending; the suppressed count is measured on the Email delivery row above.</li>
         </ul>
       </PublicDocBlock>
     </PublicDocShell>

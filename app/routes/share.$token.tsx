@@ -324,7 +324,7 @@ export default function ShareRoute() {
         ) : "payload" in data ? (
           <article className="f9-wk-panel">
             <p className="f9-wk-kick">Shared snapshot</p>
-            <h1>Snapshot unavailable</h1>
+            <h1>Snapshot not readable</h1>
             <p className="f9-wk-dim">
               This shared snapshot uses an older format that cannot be shown safely. Ask the sender
               to create a fresh share link.
@@ -333,7 +333,7 @@ export default function ShareRoute() {
         ) : data.resourceType === "collection" ? (
           <article className="f9-wk-panel">
             <p className="f9-wk-kick">Shared collection</p>
-            <h1>{data.collection?.name ?? "Collection unavailable"}</h1>
+            <h1>{data.collection?.name ?? "Collection not found"}</h1>
             <div className="f9-wk-worklist">
               {data.items.map((item) => (
                 <div className="f9-wk-workrow" key={item.id}>
@@ -353,7 +353,7 @@ export default function ShareRoute() {
         ) : data.resourceType === "watchlist" ? (
           <article className="f9-wk-panel">
             <p className="f9-wk-kick">Shared watchlist</p>
-            <h1>{data.watchlist?.name ?? "Watchlist unavailable"}</h1>
+            <h1>{data.watchlist?.name ?? "Watchlist not found"}</h1>
             {"sourceCoverage" in data && data.sourceCoverage ? (
               <p className="f9-wk-dim">{data.sourceCoverage.note}</p>
             ) : null}
@@ -421,8 +421,8 @@ export function ErrorBoundary({ error }: { error: unknown }) {
           copy={copy}
           headline={title}
           primaryAction={{ label: "See what Five to Nine does", to: "/" }}
-          specimenLabel="SHARED REPORT · LINK UNAVAILABLE"
-          stateLabel="SHARED REPORT · LINK UNAVAILABLE"
+          specimenLabel="SHARED REPORT · LINK NOT FOUND"
+          stateLabel="SHARED REPORT · LINK NOT FOUND"
         />
         <footer className="f9-share-footer">
           <p className="f9-share-powered-by">
@@ -684,7 +684,7 @@ function sanitizeReportSourceCoverage(value: unknown): ReportDocument["sourceCov
     totalInput: readNumberValue(value.totalInput),
     included: readNumberValue(value.included),
     excluded: readNumberValue(value.excluded),
-    note: readString(value.note) ?? "Source coverage was unavailable for this shared report.",
+    note: readString(value.note) ?? "Source coverage has no record for this shared report.",
     proofMix: {
       verifiedProof: readNumberValue(proofMix.verifiedProof),
       scanSpotted: readNumberValue(proofMix.scanSpotted),

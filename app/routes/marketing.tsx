@@ -422,7 +422,7 @@ export default function MarketingRoute() {
   // re-applied client-side). The endpoint answers `private, max-age=300`,
   // so the personalized brief can never be shared-cached across visitors.
   // Eager (not the lazy pricing pattern): the brief drives the above-fold
-  // hero. Until it resolves (or when it reports "unavailable") the neutral
+  // hero. Until it resolves (or when it reports no brief) the neutral
   // SSR content stays — honest and identical for every market.
   const [personalizedProof, setPersonalizedProof] = useState<{
     proofBrief: PublicProofBrief;

@@ -238,7 +238,7 @@ describe("unsubscribe route", () => {
     expect(suppressEmailTargetsForUserAndAddress).not.toHaveBeenCalled();
   });
 
-  it("fails closed when the atomic suppression helper is unavailable", async () => {
+  it("fails closed when the atomic suppression helper is down", async () => {
     vi.doMock("~/lib/data.server", () => ({
       getDeliveryTargetById: vi.fn().mockResolvedValue(emailTarget()),
     }));
@@ -255,7 +255,7 @@ describe("unsubscribe route", () => {
       valid: false,
       alreadyUnsubscribed: false,
       maskedEmail: "ow•••@example.com",
-      adapterUnavailable: true,
+      adapterDown: true,
     });
   });
 });

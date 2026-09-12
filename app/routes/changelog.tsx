@@ -161,7 +161,7 @@ export default function ChangelogRoute() {
           <li>Brand pages at /ads/:domain now attribute every ad to its real advertiser, never label an unconfirmed creative with the brand name, and only use live wording on fresh captures.</li>
           <li>Every brief now says why the period matters, names one accountable reviewer, and gives one next action — including when a check failed or a period has no record.</li>
           <li>Monitoring periods are now told apart honestly: meaningful changes, routine activity, quiet periods, and pending or failed evidence are each named instead of being mixed into one count.</li>
-          <li>Landing-page changes can show before/after evidence in the Overview and in digests when the data supports it; otherwise the page says the evidence is pending or unavailable.</li>
+          <li>Landing-page changes can show before/after evidence in the Overview and in digests when the data supports it; otherwise the page says the evidence is pending.</li>
           <li>Monthly plan cards and the public sample brief describe only what the product currently supports.</li>
           <li>The home page loads faster by fetching the pricing preview only when the pricing section nears the viewport.</li>
           <li>Visitors now see a Sign up button in the public header, and the header keeps its touch targets on small phones.</li>

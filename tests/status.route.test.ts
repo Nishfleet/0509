@@ -68,26 +68,34 @@ describe("status route", () => {
     expect(result).toMatchObject({
       appServed: true,
     });
+    expect(JSON.stringify(result)).not.toContain("secret-token");
     expect(JSON.stringify(result)).not.toContain("canary");
     expect(JSON.stringify(result)).not.toContain("Slack");
     expect(getLaunchReadinessSignals).not.toHaveBeenCalled();
   });
 
-  it("renders customer-facing status without private launch details", async () => {
+  it("renders measured surface states without private launch details", async () => {
     await mockRouter(() => ({
       generatedAt: "2026-06-20T09:00:00.000Z",
+      asOf: "2026-06-20T09:00:00.000Z",
       appServed: true,
-      evidence: [
-        {
-          id: "slack",
-          label: "Slack delivery",
-          statusLabel: "Recent proof",
-          detail: "Recent Slack delivery proof is visible in private launch checks.",
-          timestampAt: "2026-06-20T09:00:00.000Z",
-          timestampLabel: "Last proof",
-        },
-      ],
-      evidenceUnavailableReason: null,
+      commercialLaunch: { scoutSaleOpen: true, starterSaleOpen: true, agencySaleOpen: false },
+      monitoring: null,
+      surfaces: {
+        asOf: "2026-06-20T09:00:00.000Z",
+        monitoring: null,
+        surfaces: [
+          {
+            id: "public-search",
+            label: "Public search",
+            state: "operational",
+            reason: null,
+            facts: ["12 cached public result sets"],
+            checkedAt: "2026-06-20T09:00:00.000Z",
+            source: "discovery_cache_entry",
+          },
+        ],
+      },
     }));
 
     const { default: StatusRoute } = await import("~/routes/status");
@@ -96,88 +104,43 @@ describe("status route", () => {
     expect(markup).toContain("Five to Nine service status.");
     expect(markup).toContain("Core surfaces");
     expect(markup).toContain("Public search");
-    expect(markup).toContain("Change alerts and digests are sent by email through Cloudflare Email Service.");
-    expect(markup).toContain("Recurring uptime checks are configured and reviewed by the operator");
-    expect(markup).toContain("Held — account configuration");
+    expect(markup).toContain("Operational");
+    expect(markup).toContain("Checkout held: Agency monthly products are not configured with the billing provider.");
     expect(markup).not.toContain("larger-account monitoring capacity");
     expect(markup).not.toContain("GA launch gate");
     expect(markup).not.toContain("GA launch proof");
-    expect(markup).not.toContain("broad launch still needs fresh Slack proof");
-    expect(markup).toContain("Dodo-backed plan switching is configured");
-    expect(markup).not.toContain("WhatsApp delivery is not launch-scoped yet");
-    expect(markup).toContain("Cancellation, deletion, and sensitive account changes");
     expect(markup).not.toContain("Recent Slack delivery proof is visible");
     expect(markup).not.toContain("Last proof");
-    expect(markup).not.toContain("launch-readiness canary");
-    expect(markup).not.toContain("private canary");
     expect(markup).not.toContain("secret-token");
     expect(markup).not.toContain("hooks.slack.com");
-    expect(markup).toContain("Configuration and scope information and live monitoring facts");
-    expect(markup).toContain("does not measure live search, email, billing, or provider availability");
-    expect(markup).not.toMatch(/(?:search|checkout|billing|email delivery) (?:is|are) available/i);
-    expect(markup).not.toContain("Available for checking competitor ads");
-    expect(markup).not.toContain("Digest and alert emails are available");
+    // The confession vocabulary is banned from the rendered page.
+    expect(markup).not.toContain("does not measure");
+    expect(markup).not.toContain("not live-checked");
+    expect(markup).not.toContain("Limited today");
+    expect(markup).not.toContain("unavailable");
+    expect(markup).toMatch(/Checked \d+ min ago/);
+  });
+
+  it("renders the intro as one sentence about what is measured", async () => {
+    await mockRouter(() => ({
+      generatedAt: "2026-09-12T04:00:00.000Z",
+      asOf: "2026-09-12T04:00:00.000Z",
+      appServed: true,
+      commercialLaunch: null,
+      monitoring: null,
+      surfaces: { asOf: "2026-09-12T04:00:00.000Z", monitoring: null, surfaces: [] },
+    }));
+
+    const { default: StatusRoute } = await import("~/routes/status");
+    const markup = renderToStaticMarkup(createElement(StatusRoute));
+
+    expect(markup).toContain(
+      "Five to Nine measures public search, sign-in, billing, email delivery, scheduled monitoring, and uptime on this page",
+    );
+    expect(markup).not.toContain("does not measure");
   });
 
   it("renders measured monitoring counters with an as-of timestamp when present", async () => {
-    const counters = {
-      lastWatchlistRunAt: "2026-09-01T03:00:00.000Z",
-      runsInLast24h: 31,
-      failedRunsInLast24h: 0,
-      lastDigestSentAt: "2026-09-04T00:00:00.000Z",
-    };
-
-    await mockRouter(() => ({
-      generatedAt: "2026-09-04T09:00:00.000Z",
-      asOf: "2026-09-04T09:30:00.000Z",
-      appServed: true,
-      monitoring: counters,
-      measurementsUnavailable: false,
-    }));
-
-    const { default: StatusRoute } = await import("~/routes/status");
-    const markup = renderToStaticMarkup(createElement(StatusRoute));
-
-    expect(markup).toContain("Monitoring health");
-    expect(markup).toContain("31");
-    expect(markup).toContain("0");
-    expect(markup).toContain("2026-09-01T03:00:00.000Z");
-    expect(markup).toContain("as of 2026-09-04T09:30:00.000Z");
-    expect(markup).not.toContain("Measurements unavailable right now.");
-    expect(markup).toContain("Configuration and scope information and live monitoring facts");
-  });
-
-  it("never publishes cold bootstrap zeros — prose replaces '0 runs / no digests sent yet' (issue #2963)", async () => {
-    await mockRouter(() => ({
-      generatedAt: "2026-09-11T19:00:00.000Z",
-      asOf: "2026-09-11T19:48:09.655Z",
-      appServed: true,
-      monitoring: {
-        lastWatchlistRunAt: null,
-        runsInLast24h: 0,
-        failedRunsInLast24h: 0,
-        lastDigestSentAt: null,
-        digestHealth: "unknown" as const,
-        scheduledMonitoringSince: "2026-09-01T00:00:00.000Z",
-      },
-      measurementsUnavailable: false,
-    }));
-
-    const { default: StatusRoute } = await import("~/routes/status");
-    const markup = renderToStaticMarkup(createElement(StatusRoute));
-
-    expect(markup).toContain("Monitoring pipeline");
-    expect(markup).toContain("first scheduled run is recorded");
-    expect(markup).not.toContain("no runs recorded yet");
-    expect(markup).not.toContain("no digests sent yet");
-    // The uptime-style coverage figure is derived from the real schedule
-    // baseline and rendered beside it.
-    expect(markup).toContain("Scheduled monitoring active since");
-    expect(markup).toContain("2026-09-01T00:00:00.000Z");
-    expect(markup).toMatch(/continuous scheduled monitoring coverage \(\d+ days\)/);
-  });
-
-  it("renders the real measured counters unchanged when the pipeline has activity", async () => {
     const counters = {
       lastWatchlistRunAt: "2026-09-01T03:00:00.000Z",
       runsInLast24h: 31,
@@ -191,16 +154,50 @@ describe("status route", () => {
       generatedAt: "2026-09-04T09:00:00.000Z",
       asOf: "2026-09-04T09:30:00.000Z",
       appServed: true,
+      commercialLaunch: null,
       monitoring: counters,
-      measurementsUnavailable: false,
+      surfaces: { asOf: "2026-09-04T09:30:00.000Z", monitoring: counters, surfaces: [] },
     }));
 
     const { default: StatusRoute } = await import("~/routes/status");
     const markup = renderToStaticMarkup(createElement(StatusRoute));
 
+    expect(markup).toContain("Monitoring health");
     expect(markup).toContain("31");
+    expect(markup).toContain("0");
+    expect(markup).toContain("2026-09-01T03:00:00.000Z");
+    expect(markup).toContain("as of 2026-09-04T09:30:00.000Z");
+  });
+
+  it("never publishes cold bootstrap zeros — prose replaces '0 runs / no digests sent yet' (issue #2963)", async () => {
+    await mockRouter(() => ({
+      generatedAt: "2026-09-11T19:00:00.000Z",
+      asOf: "2026-09-11T19:48:09.655Z",
+      appServed: true,
+      commercialLaunch: null,
+      monitoring: {
+        lastWatchlistRunAt: null,
+        runsInLast24h: 0,
+        failedRunsInLast24h: 0,
+        lastDigestSentAt: null,
+        digestHealth: "unknown" as const,
+        scheduledMonitoringSince: "2026-09-01T00:00:00.000Z",
+      },
+      surfaces: { asOf: "2026-09-11T19:48:09.655Z", monitoring: null, surfaces: [] },
+    }));
+
+    const { default: StatusRoute } = await import("~/routes/status");
+    const markup = renderToStaticMarkup(createElement(StatusRoute));
+
+    expect(markup).toContain("Monitoring pipeline");
+    expect(markup).toContain("Run and digest counts appear here from the first scheduled run onward.");
+    expect(markup).not.toContain("no runs recorded yet");
+    expect(markup).not.toContain("no digests sent yet");
+    // The uptime-style coverage figure is derived from the real schedule
+    // baseline and rendered beside it.
     expect(markup).toContain("Scheduled monitoring active since");
-    expect(markup).not.toContain("Monitoring pipeline");
+    expect(markup).toContain("2026-09-01T00:00:00.000Z");
+    expect(markup).toMatch(/continuous scheduled monitoring coverage \(\d+ days\)/);
   });
 
   it("honestly surfaces a stalled digest instead of re-rendering a stale date when monitoring is healthy", async () => {
@@ -210,14 +207,16 @@ describe("status route", () => {
       failedRunsInLast24h: 0,
       lastDigestSentAt: "2026-06-29T04:00:59.009Z",
       digestHealth: "stalled" as const,
+      scheduledMonitoringSince: "2026-09-01T00:00:00.000Z",
     };
 
     await mockRouter(() => ({
       generatedAt: "2026-09-06T09:00:00.000Z",
       asOf: "2026-09-06T09:30:00.000Z",
       appServed: true,
+      commercialLaunch: null,
       monitoring: counters,
-      measurementsUnavailable: false,
+      surfaces: { asOf: "2026-09-06T09:30:00.000Z", monitoring: counters, surfaces: [] },
     }));
 
     const { default: StatusRoute } = await import("~/routes/status");
@@ -230,97 +229,104 @@ describe("status route", () => {
     expect(markup).not.toContain("2026-06-29T04:00:59.009Z — as of");
   });
 
-  it("renders the raw timestamps honestly when the whole pipeline is silent (unknown digest state)", async () => {
-    const counters = {
-      lastWatchlistRunAt: null,
-      runsInLast24h: 0,
-      failedRunsInLast24h: 0,
-      lastDigestSentAt: "2026-06-29T04:00:59.009Z",
-      digestHealth: "unknown" as const,
-    };
-
+  it("renders degraded and down states with reasons when probes cannot run", async () => {
     await mockRouter(() => ({
-      generatedAt: "2026-09-06T09:00:00.000Z",
-      asOf: "2026-09-06T09:30:00.000Z",
+      generatedAt: "2026-09-12T04:00:00.000Z",
+      asOf: "2026-09-12T04:00:00.000Z",
       appServed: true,
-      monitoring: counters,
-      measurementsUnavailable: false,
-    }));
-
-    const { default: StatusRoute } = await import("~/routes/status");
-    const markup = renderToStaticMarkup(createElement(StatusRoute));
-
-    // No stall claim, and no fresh-date illusion: the run counters are 0 and
-    // the digest date is shown with its as-of caveat rather than a fabricated
-    // stall.
-    expect(markup).not.toContain("Digest sends appear stalled.");
-    expect(markup).toContain("2026-06-29T04:00:59.009Z");
-  });
-
-  it("loader propagates measured monitoring counters and renders no stale number", async () => {
-    const counters = {
-      lastWatchlistRunAt: "2026-09-01T03:00:00.000Z",
-      runsInLast24h: 31,
-      failedRunsInLast24h: 0,
-      lastDigestSentAt: null,
-    };
-    vi.doMock("~/lib/public-status-counters.server", () => ({
-      getPublicStatusCounters: vi.fn().mockResolvedValue(counters),
-    }));
-
-    const { loader } = await import("~/routes/status");
-    const result = await loader({
-      context: createContext({ DB: {} }),
-      request: new Request("https://0509.io/status"),
-    } as never);
-
-    expect(result.monitoring).toEqual(counters);
-    expect(result.measurementsUnavailable).toBe(false);
-    expect(typeof result.asOf).toBe("string");
-  });
-
-  it("degrades to honest static prose and a 200 when monitoring counters cannot be read", async () => {
-    vi.doMock("~/lib/public-status-counters.server", () => ({
-      getPublicStatusCounters: vi
-        .fn()
-        .mockRejectedValue(new Error("d1 read failed")),
-    }));
-
-    const { loader } = await import("~/routes/status");
-    const result = await loader({
-      context: createContext({ DB: {} }),
-      request: new Request("https://0509.io/status"),
-    } as never);
-
-    // A D1 read error must not throw: the route still returns 200.
-    expect(result.monitoring).toBeNull();
-    expect(result.measurementsUnavailable).toBe(true);
-
-    // Re-import the module so the render uses the degraded loader data, not a
-    // stale react-router mock cached from an earlier test.
-    vi.resetModules();
-    await mockRouter(() => ({
-      generatedAt: "2026-09-04T09:00:00.000Z",
-      asOf: "2026-09-04T09:30:00.000Z",
-      appServed: true,
+      commercialLaunch: null,
       monitoring: null,
-      measurementsUnavailable: true,
+      surfaces: {
+        asOf: "2026-09-12T04:00:00.000Z",
+        monitoring: null,
+        surfaces: [
+          {
+            id: "public-search",
+            label: "Public search",
+            state: "down",
+            reason: "the database probe failed",
+            facts: [],
+            checkedAt: "2026-09-12T04:00:00.000Z",
+            source: "edge and D1 probes",
+          },
+          {
+            id: "uptime",
+            label: "Uptime",
+            state: "degraded",
+            reason: "the live uptime probe has not recorded a sample yet",
+            facts: [],
+            checkedAt: "2026-09-12T04:00:00.000Z",
+            source: "status_probe_samples uptime probe",
+          },
+        ],
+      },
     }));
+
     const { default: StatusRoute } = await import("~/routes/status");
     const markup = renderToStaticMarkup(createElement(StatusRoute));
 
-    expect(markup).toContain("Measurements unavailable right now.");
-    expect(markup).toContain("Core surfaces");
-    expect(markup).toContain("does not measure live search, email, billing, or provider availability");
+    expect(markup).toContain("<strong>Down</strong>: the database probe failed.");
+    expect(markup).toContain("<strong>Degraded</strong>: the live uptime probe has not recorded a sample yet.");
+    expect(markup).not.toContain("Measurements unavailable");
+    // A degraded state names its source in the title attribute.
+    expect(markup).toContain("Source: edge and D1 probes");
+  });
+
+  it("loader measures every surface and keeps the page at 200 when a probe fails", async () => {
+    const surfaces = {
+      asOf: "2026-09-12T04:00:00.000Z",
+      monitoring: null,
+      surfaces: [
+        {
+          id: "billing",
+          label: "Billing",
+          state: "degraded",
+          reason: "the billing ledger probe failed",
+          facts: [],
+          checkedAt: "2026-09-12T04:00:00.000Z",
+          source: "dodo_webhook_event ledger",
+        },
+      ],
+    };
+    vi.doMock("~/lib/public-status-counters.server", () => ({
+      getPublicStatusSurfaces: vi.fn().mockResolvedValue(surfaces),
+    }));
+
+    const { loader } = await import("~/routes/status");
+    const result = await loader({
+      context: createContext({ DB: {} }),
+      request: new Request("https://0509.io/status"),
+    } as never);
+
+    expect(result.surfaces).toEqual(surfaces);
+    expect(result.monitoring).toBeNull();
+    expect(typeof result.asOf).toBe("string");
+    expect(result.appServed).toBe(true);
+  });
+
+  it("degrades every surface instead of throwing when the app runtime is missing", async () => {
+    vi.doUnmock("~/lib/public-status-counters.server");
+    const { loader } = await import("~/routes/status");
+    const result = await loader({
+      context: {},
+      request: new Request("https://0509.io/status"),
+    } as never);
+
+    expect(result.appServed).toBe(false);
+    expect(result.surfaces.surfaces.length).toBeGreaterThanOrEqual(6);
+    for (const surface of result.surfaces.surfaces) {
+      expect(surface.state).toBe("degraded");
+      expect(surface.reason).toBeTruthy();
+    }
+    expect(result.monitoring).toBeNull();
   });
 
   it("never renders account-scoped field names on the public page", async () => {
     vi.doMock("~/lib/public-status-counters.server", () => ({
-      getPublicStatusCounters: vi.fn().mockResolvedValue({
-        lastWatchlistRunAt: "2026-09-01T03:00:00.000Z",
-        runsInLast24h: 31,
-        failedRunsInLast24h: 0,
-        lastDigestSentAt: null,
+      getPublicStatusSurfaces: vi.fn().mockResolvedValue({
+        asOf: "2026-09-12T04:00:00.000Z",
+        monitoring: null,
+        surfaces: [],
       }),
     }));
 

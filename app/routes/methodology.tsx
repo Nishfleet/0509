@@ -49,7 +49,7 @@ export const adAggressionMethodologyFaqEntries: ReadonlyArray<FaqJsonLdEntry> = 
   {
     question: "Does a high score mean the brand is spending more?",
     answer:
-      "No. The score does not measure spend, impressions, reach, or Meta's own metrics. It only uses what is visible in the public Meta Ad Library capture: how often new ads appear, how much variant testing is running, how fresh the active set is, and how long ads stay in rotation.",
+      "No. The score excludes spend, impressions, reach, and Meta's own metrics. It only uses what is visible in the public Meta Ad Library capture: how often new ads appear, how much variant testing is running, how fresh the active set is, and how long ads stay in rotation.",
   },
 ] as const;
 
