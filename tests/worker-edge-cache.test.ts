@@ -225,15 +225,17 @@ describe("nonce-free variant (the #2716 condition, made mechanical)", () => {
   });
 
   it("ends a script at a whitespace-tolerant end tag (`</script >`)", () => {
-    // HTML allows whitespace before the `>` of an end tag and browsers end the
-    // script there. Missing it would swallow the rest of the document into one
-    // "body", so the hashes we advertise would not match the bytes the browser
-    // hashes. CodeQL js/bad-html-filtering-regexp flagged the tight form.
+    // HTML lets an end tag carry whitespace and ignored junk before the `>`, and
+    // browsers end the script there. Missing that would swallow the rest of the
+    // document into one "body", so the hashes we advertise would not match the
+    // bytes the browser hashes. CodeQL js/bad-html-filtering-regexp flagged the
+    // tight form; its own example is the `</script\t\n bar>` case below.
     expect(extractInlineScriptBodies("<script>a();</script ><script>b();</script>")).toEqual([
       "a();",
       "b();",
     ]);
-    expect(extractInlineScriptBodies("<script>a();</script\n>")).toEqual(["a();"]);
+    expect(extractInlineScriptBodies("<script>a();</script\t\n bar>")).toEqual(["a();"]);
+    expect(extractInlineScriptBodies("<script>a();</script foo>")).toEqual(["a();"]);
     // The bytes after the end tag are not part of any body.
     expect(extractInlineScriptBodies("<script>a();</script ><p>tail</p>")).toEqual(["a();"]);
   });
