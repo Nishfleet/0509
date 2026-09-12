@@ -546,6 +546,13 @@ export default {
     }
 
     const scheduledTask = resolveScheduledTask(controller.cron);
+    if (scheduledTask.kind === "status_probes") {
+      // Unreachable: STATUS_PROBES_CRON early-returns above. The guard pins
+      // that so a probe tick can never widen into the monitoring fallthrough
+      // if the early return moves, and narrows the union for the monitoring
+      // field reads below.
+      return;
+    }
     // Every cron also drains a bounded customer-email outbox. Keeping this
     // before the warmup early return ensures a worker that stopped after the
     // durable pre-dispatch claim cannot strand a finalized billing event.

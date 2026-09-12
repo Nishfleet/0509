@@ -33,8 +33,13 @@ describe("status_probe_samples on real D1", () => {
     await insertSample({ probe: "uptime", ok: true, latencyMs: 18, detail: "home 200/18ms, health 200/4ms", checkedAt: new Date(base).toISOString() });
     await insertSample({ probe: "public_search", ok: true, latencyMs: 55, detail: "9 ads returned (hit)", checkedAt: new Date(base).toISOString() });
 
-    // Every probe name is represented (nulls where never sampled).
-    const probes = await getPublicStatusProbes(env.DB);
+    // Every probe name is represented (nulls where never sampled). `now` is
+    // pinned to just after the newest sample: the 24h ok-rate/p50/last-failure
+    // windows are relative to it, so an unpinned clock would age this fixture
+    // out of the window and turn the test into a date-bomb.
+    const probes = await getPublicStatusProbes(env.DB, {
+      now: new Date(base + 30 * 60_000),
+    });
     expect(probes.length).toBe(5);
     const byName = new Map(probes.map((probe) => [probe.probe, probe]));
 

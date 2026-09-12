@@ -1,13 +1,8 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
-import {
-  BILLING_CANARY_USER_ID,
-  ensureDedicatedBillingCanaryUser,
-  getBillingCanaryUser,
-  getUserPlanSnapshot,
-  planForCanary,
-  resolveDedicatedBillingCanaryEmail,
-  type UserPlanSnapshot,
+import type {
+  BillingCanaryUserRow,
+  UserPlanSnapshot,
 } from "~/lib/billing-canary-identity.server";
 import { buildBillingCanaryLockId } from "~/lib/billing-canary-lock";
 import type { AppEnv } from "~/lib/env.server";
@@ -86,6 +81,16 @@ function hasCanonicalCanaryOrigin(request: Request) {
 export async function action({ context, request }: ActionFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const { hasValidCanaryToken } = await import("~/lib/canary-token.server");
+  // Route-module convention: .server helpers are dynamically imported inside
+  // the action — a static import leaves the module referenced by the client
+  // bundle (react-router dot-server build error).
+  const {
+    ensureDedicatedBillingCanaryUser,
+    getBillingCanaryUser,
+    getUserPlanSnapshot,
+    planForCanary,
+    resolveDedicatedBillingCanaryEmail,
+  } = await import("~/lib/billing-canary-identity.server");
   const env = getEnv(context);
 
   if (!(await hasValidCanaryToken(request, env.CANARY_BYPASS_TOKEN))) {
@@ -583,6 +588,7 @@ async function getWatchlistStateSnapshot(env: AppEnv, userId: string) {
 function parseBillingCanaryRecoveryMetadata(
   value: string,
   userId: string,
+  planForCanary: (value: string | null) => PricingPlanSlug | null,
 ): BillingCanaryRecoveryMetadata | null {
   try {
     const parsed = JSON.parse(value) as Partial<BillingCanaryRecoveryMetadata>;
@@ -622,6 +628,7 @@ async function recoverPreviousBillingCanaryRuns(
   currentLockEventId: string,
 ) {
   if (!env.DB) return false;
+  const { planForCanary } = await import("~/lib/billing-canary-identity.server");
   const recoveryNow = new Date().toISOString();
   const result = await env.DB.prepare(`
       SELECT event_id, metadata_json
@@ -645,7 +652,7 @@ async function recoverPreviousBillingCanaryRuns(
     ).all<RecoverableBillingCanaryRow>();
 
   for (const row of result.results ?? []) {
-    const metadata = parseBillingCanaryRecoveryMetadata(row.metadata_json, userId);
+    const metadata = parseBillingCanaryRecoveryMetadata(row.metadata_json, userId, planForCanary);
     if (!metadata) return false;
     const postCanaryWatchlists = await getWatchlistStateSnapshot(env, userId);
     const [planCleanup, creditCleanupOk] = await Promise.all([
@@ -849,6 +856,7 @@ async function cleanupCanaryPlanGrant(
 
   let planCleanupOk = false;
   try {
+    const { getUserPlanSnapshot } = await import("~/lib/billing-canary-identity.server");
     const [syntheticGrant, restoredSnapshot] = await Promise.all([
       getPlanGrant(env, userId, providerPaymentId),
       getUserPlanSnapshot(env, userId),
