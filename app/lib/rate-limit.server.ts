@@ -1,4 +1,5 @@
 import type { AppEnv, EdgeRateLimitBindingName } from "~/lib/env.server";
+import { hasValidCanaryToken } from "~/lib/canary-token.server";
 
 // The Public hot paths no longer touch D1 for their rate limiting (issue
 // #2985): every scope below is enforced by a native Cloudflare Rate
@@ -48,6 +49,17 @@ const VERIFIED_BOT_EXEMPT_SCOPES = new Set(["public-brand-page"]);
 
 function isVerifiedSearchCrawler(request: Request): boolean {
   return request.headers.get("cf-verified-bot")?.trim().toLowerCase() === "true";
+}
+
+// The sitemap-coverage canary (issue #3166) probes EVERY advertised URL,
+// including the whole /ads/:domain + /timeline/:domain cohort — ~134 URLs
+// against the 12/60s sustained #2985 brand-page budget, so a single run
+// 429s its own tail. The canary token gets the same public-brand-page
+// exemption a verified crawler has: it is exactly the crawl-parity probe
+// that budget would otherwise starve. Scope-gated identically: auth,
+// write, and API scopes keep their limits for token holders too.
+async function hasPublicCoverageCanaryToken(request: Request, env: AppEnv): Promise<boolean> {
+  return hasValidCanaryToken(request, env.CANARY_BYPASS_TOKEN);
 }
 
 type EdgeLimitPolicy = {
@@ -501,7 +513,10 @@ async function enforceEdgeRateLimit(
   if (isE2ETestMode(env)) {
     return null;
   }
-  if (isVerifiedSearchCrawler(request) && VERIFIED_BOT_EXEMPT_SCOPES.has(policy.scope)) {
+  if (
+    VERIFIED_BOT_EXEMPT_SCOPES.has(policy.scope) &&
+    (isVerifiedSearchCrawler(request) || (await hasPublicCoverageCanaryToken(request, env)))
+  ) {
     return null;
   }
   const limiter = env[policy.binding];
