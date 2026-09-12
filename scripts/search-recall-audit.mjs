@@ -39,7 +39,19 @@ import {
   SECTION_1_8_RERUN,
 } from "./bet2-live-verification.mjs";
 
-export const RECALL_AUDIT_USER_AGENT = "0509-search-recall-audit/1.0";
+/**
+ * The audit measures the VISITOR first-card experience: entry.server.tsx
+ * waits for `renderToReadableStream(...).allReady` when isbot(ua) matches
+ * (correct for crawlers — full HTML including streamed boundaries), so a
+ * bare `name/1.0` UA (bot-classed by isbot's naive pattern, along with
+ * `curl/8.5.0`) would time the crawler path and block the first card on the
+ * landing capture forever. A browser-shaped UA with the probe tag appended
+ * measures the streaming path the funnel's front door actually serves, while
+ * still identifying the probe in access logs. `audit`/`check` tokens are
+ * isbot patterns; `0509-recall-probe` is not (pinned by the unit test).
+ */
+export const RECALL_AUDIT_USER_AGENT =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36 0509-recall-probe/1.0";
 
 /**
  * Compose the issue-#3014 metric verdict from the BET 2 machinery:

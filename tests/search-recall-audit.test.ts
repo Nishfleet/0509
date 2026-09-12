@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 
+import { isbot } from "isbot";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -52,7 +53,13 @@ describe("search recall audit (issue #3014) verdict composition", () => {
       expect(BET2_DOMAINS).toContain(observed);
       expect(SECTION_1_8_RERUN).toContain(observed);
     }
-    expect(RECALL_AUDIT_USER_AGENT).toMatch(/recall-audit/);
+    // The probe UA must (a) identify the probe in access logs and (b) NOT be
+    // bot-classed by isbot — entry.server.tsx awaits renderToReadableStream's
+    // allReady for bots, which would time the crawler path and block the
+    // first card on the landing capture instead of measuring the streaming
+    // visitor path (issue #3014).
+    expect(RECALL_AUDIT_USER_AGENT).toMatch(/0509-recall-probe/);
+    expect(isbot(RECALL_AUDIT_USER_AGENT)).toBe(false);
   });
 
   it("a green cohort with all §1.8 brands non-empty passes", () => {
