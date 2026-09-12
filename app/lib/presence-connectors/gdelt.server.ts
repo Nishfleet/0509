@@ -1,6 +1,7 @@
 import { evaluateConnectorAccessGate } from "~/lib/presence-access-gates.server";
 import { presenceContentHash } from "~/lib/presence-hash";
 import { presenceSafeFetch } from "~/lib/presence-robots.server";
+import { normalizePublicHttpUrl } from "~/lib/public-url.server";
 import type {
   CostEstimate,
   HealthCheckResult,
@@ -87,10 +88,21 @@ export const gdeltConnector = {
       };
     }
 
+    const normalizedPhrase = normalizeQueryPhrase(phrase);
+    if (!normalizedPhrase) {
+      return {
+        ok: false,
+        coverageLabel: "UNAVAILABLE",
+        errorCode: "match_phrase_invalid",
+        errorMessage:
+          "Match phrase carries GDELT query syntax (quotes, : ( ) |). Enter a plain phrase — the connector adds the exact-match quoting.",
+      };
+    }
+
     // Advisory syntax mapping: the phrase is wrapped in GDELT quoted-phrase
     // syntax. The test pins output shape only.
-    const query = `"${phrase}"`;
-    const targetKey = phrase.toLowerCase().replace(/\s+/g, " ").slice(0, 256);
+    const query = `"${normalizedPhrase}"`;
+    const targetKey = normalizedPhrase.toLowerCase().slice(0, 256);
 
     return {
       ok: true,
@@ -99,7 +111,7 @@ export const gdeltConnector = {
       targetHandle: phrase,
       coverageLabel: "OFFICIAL_PUBLIC_API",
       metadata: {
-        matchPhrase: phrase,
+        matchPhrase: normalizedPhrase,
         gdeltQuery: query,
         timespan: DEFAULT_TIMESPAN,
         maxRecords: GDELT_MAX_RECORDS,
@@ -168,6 +180,20 @@ export const gdeltConnector = {
       };
     }
 
+    // Fail closed on a stored phrase that no longer normalizes (a target
+    // written before the guard, or hand-edited): honest degraded result, and
+    // the fair-use budget of one request per poll is not spent on it.
+    const normalizedPhrase = normalizeQueryPhrase(phrase);
+    if (!normalizedPhrase) {
+      return {
+        ok: false,
+        items: [],
+        errorCode: "match_phrase_invalid",
+        errorMessage:
+          "Stored GDELT match phrase carries query syntax (quotes, : ( ) |); fix the target's match phrase.",
+      };
+    }
+
     const timespan =
       typeof target.metadata.timespan === "string" && target.metadata.timespan
         ? target.metadata.timespan
@@ -177,7 +203,7 @@ export const gdeltConnector = {
     // poll — no parallel fan-out.
     const fetchImpl = ctx.fetchImpl ?? fetch;
     const response = await presenceSafeFetch(
-      buildArticleListUrl(`"${phrase.trim()}"`, timespan, GDELT_MAX_RECORDS),
+      buildArticleListUrl(`"${normalizedPhrase}"`, timespan, GDELT_MAX_RECORDS),
       fetchImpl,
       { method: "GET", maxBytes: GDELT_MAX_BYTES, accept: "application/json,text/plain,*/*" },
     );
@@ -219,7 +245,11 @@ export const gdeltConnector = {
     const articles = Array.isArray(parsed.articles) ? parsed.articles.slice(0, GDELT_MAX_RECORDS) : [];
     const items: NormalizedPresenceItem[] = [];
     for (const article of articles) {
-      const url = typeof article.url === "string" && article.url.startsWith("http") ? article.url : null;
+      const urlRaw = typeof article.url === "string" && article.url ? article.url : null;
+      // GDELT rows are third-party data: only a normalizable public http(s)
+      // URL may become canonical — anything else is skipped, never stored or
+      // rendered.
+      const url = urlRaw ? (normalizePublicHttpUrl(urlRaw)?.toString() ?? null) : null;
       if (!url) {
         // An article without a usable canonical article URL is skipped, not
         // fabricated from the request URL.
@@ -260,7 +290,7 @@ export const gdeltConnector = {
       items,
       coverageLabel: "OFFICIAL_PUBLIC_API",
       costUnits: 1,
-      cursor: { phrase, timespan },
+      cursor: { phrase: normalizedPhrase, timespan },
     };
   },
 };
@@ -281,6 +311,24 @@ export function buildArticleListUrl(query: string, timespan: string, maxRecords:
   url.searchParams.set("timespan", timespan);
   url.searchParams.set("maxrecords", String(maxRecords));
   return url.toString();
+}
+
+/**
+ * Normalize a stored/entered match phrase into the safe GDELT quoted-phrase
+ * form. A match phrase is not a query: GDELT's DOC 2.1 operator syntax
+ * (`sourcelang:`, `domain:`, parenthesized OR groups, `|` alternation) would
+ * let the phrase reshape the query, and an unbalanced quote would break out
+ * of the exact-match wrapper. Strip the quotes, collapse whitespace, then
+ * fail closed on any remaining operator metacharacter. Kept in step with the
+ * 256-character API bound that `validateTarget` and `poll` enforce first.
+ */
+export function normalizeQueryPhrase(value: string | null | undefined): string | null {
+  if (typeof value !== "string") return null;
+  const phrase = value.trim().replace(/\s+/g, " ").replace(/"/g, "").trim();
+  if (!phrase || phrase.length > 256 || /[:()|]/.test(phrase)) {
+    return null;
+  }
+  return phrase;
 }
 
 /** GDELT `seendate` format is `YYYYMMDDTHHMMSSZ` (UTC). */
