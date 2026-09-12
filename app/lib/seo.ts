@@ -176,6 +176,81 @@ function guideSocialCardForPathname(
   };
 }
 
+/**
+ * Fixed acquisition-surface cards (issue #3114) — the five hub/marketing
+ * pages that share no per-request data but were still falling back to the
+ * generic `og-image.png`: `/compare`, `/methodology/ad-aggression-score`,
+ * `/brands`, `/sample-brief`, `/briefs/weekly`. Keyed by exact page pathname;
+ * `slug` is the card's `/social-card/<slug>.png` path segment. The copy is
+ * each page's own headline + SERP subline, so the card names the surface it
+ * is shared from (the compare-hub card names the hub, not one tool — the
+ * /ads honesty rule). Single source of truth: `publicSeoMeta` derives the
+ * page's og:image from it and `social-cards.server.ts` renders the card
+ * body from the same entries, so the two cannot drift. Rendered as a
+ * rasterized PNG through the #2101 pipeline.
+ */
+export const STATIC_SURFACE_SOCIAL_CARDS: Readonly<
+  Record<string, { slug: string; headline: string; subline: string; alt: string }>
+> = {
+  "/compare": {
+    slug: "compare",
+    // The headline must fit the card frame's rendered width (~29 chars at
+    // the 68px headline size — "Compare Five to Nine vs the alternatives"
+    // clips, caught in the visual check), so the card splits the hub's own
+    // title: headline names the hub, subline carries "vs the alternatives".
+    // The compare-hub card names the hub, not one tool — the /ads honesty
+    // rule.
+    headline: "Compare Five to Nine",
+    subline: "vs the alternatives — side by side, source-backed",
+    alt: "Compare Five to Nine vs the alternatives — comparison hub",
+  },
+  "/methodology/ad-aggression-score": {
+    slug: "methodology-ad-aggression-score",
+    // Same rendered-width constraint: "Ad Aggression Score methodology"
+    // clips, so the headline names the score and the subline carries the
+    // methodology framing.
+    headline: "Ad Aggression Score",
+    subline: "The methodology: four public parts, 0–100",
+    alt: "Ad Aggression Score methodology — Five to Nine",
+  },
+  "/brands": {
+    slug: "brands",
+    headline: "Browse all tracked brands",
+    subline: "Live Meta ad libraries for every tracked domain",
+    alt: "Browse all tracked brands — Five to Nine",
+  },
+  "/sample-brief": {
+    slug: "sample-brief",
+    headline: "A real Monday brief",
+    subline: "Stored competitor moves, every row source-linked",
+    alt: "A real Monday brief — Five to Nine sample",
+  },
+  "/briefs/weekly": {
+    slug: "briefs-weekly",
+    headline: "Weekly competitor offer moves",
+    subline: "The last 7 days of offer, price, CTA, and ad moves",
+    alt: "Weekly competitor offer moves — Five to Nine briefs",
+  },
+};
+
+/**
+ * Page-specific og:image for one of the fixed hub/marketing surfaces in
+ * `STATIC_SURFACE_SOCIAL_CARDS`, or `null` for any other pathname. The card
+ * URL is static (no query params — the copy lives in the registry), served
+ * as PNG so scrapers render it.
+ */
+function staticSurfaceSocialCardForPathname(pathname: string): {
+  url: string;
+  alt: string;
+} | null {
+  const card = STATIC_SURFACE_SOCIAL_CARDS[pathname];
+  if (!card) return null;
+  return {
+    url: canonicalUrl(`/social-card/${card.slug}.png`),
+    alt: card.alt,
+  };
+}
+
 export function clusterSocialCardUrl(slug: "sneaker-resale" | "competitor-monitoring"): string {
   // Served as PNG (issue #2101), so the path uses `.png` — Facebook/X/
   // LinkedIn scrapers refuse SVG og:images. The `parseSocialCardPathname`
@@ -277,7 +352,9 @@ export function publicSeoMeta(input: {
    * renders a page-specific branded card. Falls back to `SOCIAL_IMAGE_URL`
    * when unset so the generic card stays on truly site-wide surfaces —
    * except `/guides/<slug>` pathnames, which auto-derive a page-specific
-   * guide card when no override is passed (issue #3098).
+   * guide card when no override is passed (issue #3098), and the five fixed
+   * hub/marketing surfaces in `STATIC_SURFACE_SOCIAL_CARDS`, which
+   * auto-derive their cards the same way (issue #3114).
    */
   ogImageUrl?: string;
   /**
@@ -290,13 +367,17 @@ export function publicSeoMeta(input: {
   const url = canonicalUrl(input.pathname);
   // Guides auto-derive their card from the pathname + title (issue #3098) so
   // every /guides/<slug> route — including ones added later — stamps a
-  // page-specific card through this same call with no per-page wiring. An
-  // explicit ogImageUrl/ogImageAlt always wins.
+  // page-specific card through this same call with no per-page wiring. The
+  // fixed hub/marketing surfaces derive theirs from the shared registry
+  // (issue #3114). An explicit ogImageUrl/ogImageAlt always wins.
   const guideCard = input.ogImageUrl
     ? null
     : guideSocialCardForPathname(input.pathname, input.title);
-  const overrideImage = input.ogImageUrl ?? guideCard?.url;
-  const overrideAlt = input.ogImageAlt ?? guideCard?.alt;
+  const surfaceCard = input.ogImageUrl
+    ? null
+    : staticSurfaceSocialCardForPathname(input.pathname);
+  const overrideImage = input.ogImageUrl ?? guideCard?.url ?? surfaceCard?.url;
+  const overrideAlt = input.ogImageAlt ?? guideCard?.alt ?? surfaceCard?.alt;
   const imageUrl = overrideImage ?? SOCIAL_IMAGE_URL;
   const imageAlt = overrideImage ? (overrideAlt ?? SOCIAL_IMAGE_ALT) : SOCIAL_IMAGE_ALT;
   const imageType =

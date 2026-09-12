@@ -10,6 +10,7 @@ import {
   clusterSocialCardUrl,
   compareSocialCardUrl,
   guideSocialCardUrl,
+  STATIC_SURFACE_SOCIAL_CARDS,
   switchSocialCardUrl,
   timelineSocialCardUrl,
 } from "~/lib/seo";
@@ -231,12 +232,23 @@ describe("parseSocialCardPathname", () => {
       kind: "guide",
       slug: "how-to-track-competitor-ads",
     });
+    expect(parseSocialCardPathname("/social-card/compare.png")).toEqual({
+      kind: "surface",
+      slug: "compare",
+    });
+    expect(parseSocialCardPathname("/social-card/methodology-ad-aggression-score.svg")).toEqual({
+      kind: "surface",
+      slug: "methodology-ad-aggression-score",
+    });
   });
 
   it("returns null for non-card paths", () => {
     expect(parseSocialCardPathname("/og-image.png")).toBeNull();
     expect(parseSocialCardPathname("/social-card/ads/nike.com")).toBeNull();
     expect(parseSocialCardPathname("/social-card/unknown.svg")).toBeNull();
+    // Same top-level shape as the surface/cluster cards, but not a registry
+    // slug — must 404, not render a made-up card.
+    expect(parseSocialCardPathname("/social-card/not-a-surface.png")).toBeNull();
   });
 });
 
@@ -353,6 +365,21 @@ describe("publicSocialCardForRequest", () => {
     expect(res?.body).toContain("How to monitor meta ad library");
   });
 
+  it("renders each fixed-surface card with its registry copy and static cache (issue #3114)", () => {
+    for (const card of Object.values(STATIC_SURFACE_SOCIAL_CARDS)) {
+      const res = publicSocialCardForRequest(
+        new Request(`https://0509.io/social-card/${card.slug}.png`),
+      );
+      expect(res?.kind, card.slug).toBe("surface");
+      expect(res?.body, card.slug).toContain(card.headline);
+      expect(res?.body, card.slug).toContain(card.subline);
+      expect(res?.body, card.slug).toContain("Five to Nine");
+      // Static page copy (no live-data params) — same branch as the cluster
+      // and guide cards.
+      expect(res?.cacheControl, card.slug).toBe("public, max-age=86400");
+    }
+  });
+
   it("returns null for an unknown compare slug", () => {
     expect(
       publicSocialCardForRequest(new Request("https://0509.io/social-card/compare/unknown.svg")),
@@ -435,6 +462,47 @@ describe("every programmatic buyer surface stamps a non-generic og:image", () =>
     expect(meta.find((e) => e.property === "og:image:type")?.content).toBe("image/png");
     expect(twitterImage(meta)).toBe(img);
   });
+
+  // Fixed acquisition-surface sweep (issue #3114): the five hub/marketing
+  // pages must stamp their own /social-card/<slug>.png through the
+  // publicSeoMeta registry auto-derivation, with no per-page wiring. A route
+  // that regresses to the generic og-image.png fails here — the exact
+  // silent-fallback the issue observed on live production.
+  // Page pathname → route file id for the five fixed surfaces.
+  const ROUTE_FILE_BY_PATHNAME: Record<string, string> = {
+    "/compare": "compare",
+    "/methodology/ad-aggression-score": "methodology",
+    "/brands": "brands",
+    "/sample-brief": "sample-brief",
+    "/briefs/weekly": "briefs.weekly",
+  };
+  it.each(
+    Object.entries(STATIC_SURFACE_SOCIAL_CARDS).map(([pathname, card]) => ({
+      routeId: ROUTE_FILE_BY_PATHNAME[pathname],
+      pathname,
+      ...card,
+    })),
+  )(
+    "$routeId stamps its $slug surface og:image + alt (issue #3114)",
+    async ({ routeId, slug, alt }) => {
+      const routeModule = (await import(`~/routes/${routeId}`)) as {
+        meta: () => readonly MetaEntry[];
+      };
+      const meta = routeModule.meta();
+      const img = ogImage(meta);
+      expect(img, `${routeId} still uses generic og-image.png`).not.toBe(GENERIC_OG_IMAGE);
+      expect(img).toBe(canonicalUrl(`/social-card/${slug}.png`));
+      expect(ogImageAlt(meta), `${routeId} missing og:image:alt`).toBe(alt);
+      expect(meta.find((e) => e.property === "og:image:type")?.content).toBe("image/png");
+      expect(twitterImage(meta)).toBe(img);
+      // The advertised card must actually render: the exact URL the page
+      // stamps resolves to a surface-kind PNG card (a registry/route drift
+      // fails here instead of shipping a broken share preview).
+      const served = publicSocialCardForRequest(new Request(img!));
+      expect(served?.kind).toBe("surface");
+      expect(served?.cacheControl).toBe("public, max-age=86400");
+    },
+  );
 });
 
 describe("/ads/:domain meta stamps a branded og:image", () => {
