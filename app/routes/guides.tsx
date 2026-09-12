@@ -27,7 +27,7 @@ export const meta: MetaFunction = () =>
   publicSeoMeta({
     title: "Guides: track and monitor competitor ads | Five to Nine",
     description:
-      "The how-to guides: track competitor ads by hand, monitor a competitor's Meta Ad Library over time, watch a landing page for offer/price/CTA changes, get alerted when an offer moves, prove what changed, and turn a one-off check into a standing watch — all ending in the free no-account search preview.",
+      "The how-to guides: track competitor ads by hand, monitor a competitor's Meta Ad Library over time, watch a landing page for offer/price/CTA changes, get alerted when an offer moves, prove what changed, turn a one-off check into a standing watch, and what the official Ad Library API actually covers — all ending in the free no-account search preview.",
     pathname: PATHNAME,
   });
 
@@ -70,6 +70,12 @@ export const GUIDE_ENTRIES = [
     title: "How to turn a one-off competitor check into a standing watch",
     blurb:
       "The cadence half: the recurring by-hand routine, the scheduled-monitor route, and what a watch actually is (baseline + diff + record).",
+  },
+  {
+    href: "/guides/meta-ad-library-api-limitations",
+    title: "Meta Ad Library API limitations",
+    blurb:
+      "The structural fact of the category: what the official Ad Library API covers (political ads worldwide, any ad type only where delivered to the UK/EU), with every claim linked to Meta's own docs.",
   },
 ] as const;
 

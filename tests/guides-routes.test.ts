@@ -369,6 +369,162 @@ describe("guides #3093 trio — offer-change alert, prove-what-changed, standing
   }
 });
 
+describe("guides meta-ad-library-api-limitations route (issue #3127)", () => {
+  it("renders the cited explainer: the documented coverage, the non-UK/EU gap, and the public-surface answer", async () => {
+    const { default: GuideRoute } = await import(
+      "~/routes/guides.meta-ad-library-api-limitations"
+    );
+    const markup = renderToStaticMarkup(createElement(GuideRoute));
+
+    // The documented coverage — each claim carries Meta's own URL inline.
+    expect(markup).toContain("What the official API actually returns.");
+    expect(markup).toContain("Political and issue ads — worldwide, seven years");
+    expect(markup).toContain("Ads of any type — only where delivered to the UK or EU");
+    expect(markup).toContain("ad_reached_countries");
+    expect(markup).toContain(
+      'href="https://www.facebook.com/ads/library/api/"',
+    );
+    expect(markup).toContain(
+      'href="https://developers.facebook.com/docs/graph-api/reference/ads_archive/"',
+    );
+    expect(markup).toContain('href="https://www.facebook.com/ads/library/"');
+    // The non-UK/EU gap, stated plainly.
+    expect(markup).toContain("What that boundary means outside the UK and EU.");
+    expect(markup).toContain("A US-only commercial ad does not come back");
+    expect(markup).toContain("The commercial history is one year deep");
+    // The facts-checked line (the #3019 cited-facts pattern).
+    expect(markup).toContain("Facts checked 12 September 2026");
+    // The complementary answer and the plan truth.
+    expect(markup).toContain(
+      "The complementary approach: capture the public surface on a cadence.",
+    );
+    expect(markup).toContain("One competitor, one first check, free");
+    expect(markup).toContain("Recurring checks on a schedule are a paid plan.");
+    expect(markup).toContain('href="/capture-rules"');
+    expect(markup).toContain('href="/no-phantom-changes"');
+    // CTA is the public /search preview carrying the allowlisted marker.
+    expect(markup).toContain('action="/search"');
+    expect(markup).toContain('name="source"');
+    expect(markup).toContain('value="guide-api-limitations"');
+    expect(markup).toContain('href="/search?source=guide-api-limitations"');
+    // Shared marketing chrome.
+    expect(markup).toContain("Named for 05:09");
+    // Zero uncited competitor claims: no named competitor tools anywhere in
+    // the page body (the shared chrome links the compare cluster site-wide,
+    // so scope the check between header and footer).
+    const body = markup.split("</header>")[1]?.split("<footer")[0] ?? markup;
+    expect(body).not.toMatch(/Panoramata|Foreplay|Spyder|AdSpyder|Visualping|adlibrary\.com/iu);
+  });
+
+  it("declares the canonical URL and public SEO meta", async () => {
+    const { links, meta } = await import(
+      "~/routes/guides.meta-ad-library-api-limitations"
+    );
+
+    expect(links()).toEqual([
+      {
+        rel: "canonical",
+        href: "https://0509.io/guides/meta-ad-library-api-limitations",
+      },
+    ]);
+
+    const tags = meta({} as never) as Array<Record<string, string>>;
+    const title = tags.find((tag) => "title" in tag)?.title;
+    expect(title).toBe(
+      "Meta Ad Library API limitations: what it covers and where | Five to Nine",
+    );
+    expect(tags).toContainEqual({
+      property: "og:url",
+      content: "https://0509.io/guides/meta-ad-library-api-limitations",
+    });
+  });
+
+  it("is registered as a route (EN + locale cluster) and published in the sitemap", async () => {
+    const { readFileSync } = await import("node:fs");
+    const routes = readFileSync("app/routes.ts", "utf8");
+    expect(routes).toContain(
+      'route("guides/meta-ad-library-api-limitations", "routes/guides.meta-ad-library-api-limitations.tsx")',
+    );
+    expect(routes).toContain(
+      'route("guides/meta-ad-library-api-limitations", "routes/$locale.guides.meta-ad-library-api-limitations.tsx")',
+    );
+
+    const { publicSeoFileForPathname } = await import("~/lib/seo");
+    const sitemap = publicSeoFileForPathname("/sitemap.xml");
+    expect(sitemap?.body).toContain(
+      "<loc>https://0509.io/guides/meta-ad-library-api-limitations</loc>",
+    );
+  });
+
+  it("emits one FAQPage JSON-LD block whose mainEntity count matches the visible FAQ entries", async () => {
+    const { default: GuideRoute, apiLimitationsFaqEntries } = await import(
+      "~/routes/guides.meta-ad-library-api-limitations"
+    );
+    const markup = renderToStaticMarkup(createElement(GuideRoute));
+
+    const ldBlocks = [
+      ...markup.matchAll(
+        /<script type="application\/ld\+json">([\s\S]*?)<\/script>/g,
+      ),
+    ];
+    const faqBlocks = ldBlocks
+      .map((match) => JSON.parse(match[1] ?? "{}"))
+      .filter((data) => data["@type"] === "FAQPage");
+
+    expect(faqBlocks).toHaveLength(1);
+    const mainEntity = faqBlocks[0].mainEntity as Array<{ name: string }>;
+    expect(mainEntity).toHaveLength(apiLimitationsFaqEntries.length);
+    expect(mainEntity.map((entry) => entry.name)).toEqual(
+      expect.arrayContaining(apiLimitationsFaqEntries.map((e) => e.question)),
+    );
+  });
+
+  it("emits the Article JSON-LD entity whose headline matches the visible h1", async () => {
+    const { default: GuideRoute } = await import(
+      "~/routes/guides.meta-ad-library-api-limitations"
+    );
+    const markup = renderToStaticMarkup(createElement(GuideRoute));
+
+    const ldBlocks = [
+      ...markup.matchAll(
+        /<script type="application\/ld\+json">([\s\S]*?)<\/script>/g,
+      ),
+    ];
+    const articleBlocks = ldBlocks
+      .map((match) => JSON.parse(match[1] ?? "{}"))
+      .filter((data) => data["@type"] === "Article");
+
+    expect(articleBlocks).toHaveLength(1);
+    const headline = articleBlocks[0].headline as string;
+    const h1 = (markup.match(/<h1[^>]*>([\s\S]*?)<\/h1>/)?.[1] ?? "")
+      .replace(/&#x27;/g, "'")
+      .replace(/&amp;/g, "&");
+    expect(h1).toContain(headline);
+  });
+
+  it("allowlists the guide-api-limitations signup source marker", async () => {
+    const { ALLOWED_SIGNUP_SOURCES, allowlistedSignupSource } = await import(
+      "~/lib/signup-source"
+    );
+    expect(ALLOWED_SIGNUP_SOURCES).toContain("guide-api-limitations");
+    expect(allowlistedSignupSource("guide-api-limitations")).toBe(
+      "guide-api-limitations",
+    );
+    expect(allowlistedSignupSource("guide-api-limitations&x=1")).toBeNull();
+  });
+
+  it("is internally linked from /docs and /competitor-monitoring", async () => {
+    const { readFileSync } = await import("node:fs");
+    const docs = readFileSync("app/routes/docs.tsx", "utf8");
+    const monitoring = readFileSync(
+      "app/routes/competitor-monitoring.tsx",
+      "utf8",
+    );
+    expect(docs).toContain('to="/guides/meta-ad-library-api-limitations"');
+    expect(monitoring).toContain('to="/guides/meta-ad-library-api-limitations"');
+  });
+});
+
 // Issue #3122: production 404'd the #2888 third how-to while the sitemap
 // still advertised it and the /guides hub hid it — a SPLIT deployment state.
 // The per-guide tests above are enumerated (each guide hard-coded), so a
@@ -394,8 +550,8 @@ describe("guides triple agreement: sitemap <-> route <-> index (issue #3122)", (
       readFileSync("app/lib/sitemap.server.ts", "utf8"),
       SITEMAP_GUIDE_RE,
     );
-    // The cluster is 6 guides; grow this floor when the next how-to ships.
-    expect(sitemapSlugs.length).toBeGreaterThanOrEqual(6);
+    // The cluster is 7 guides; grow this floor when the next how-to ships.
+    expect(sitemapSlugs.length).toBeGreaterThanOrEqual(7);
 
     const routes = readFileSync("app/routes.ts", "utf8");
     for (const s of sitemapSlugs) {

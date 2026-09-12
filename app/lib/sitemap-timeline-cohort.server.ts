@@ -14,6 +14,11 @@
  *     (`loadIndexableTimelineEntries`) instead of a seed list, applying the
  *     complete-proof gate + non-ad-destination gate + `SITEMAP_TIMELINE_PATH_LIMIT`
  *     bound for free.
+ *   - Issue #3095: when a cached payload's ads carry no domainMatch coverage
+ *     (legacy pre-enrichment rows), the verified-link rule the /ads page gate
+ *     already trusts (adHasVerifiedDomainLink, issue #1442) is the fall-back
+ *     evidence read — the same trust standard, so the cohort mirrors the
+ *     /ads indexable set instead of a narrower domainMatch-only slice.
  *
  * Honesty contract: no live provider calls; missing D1 → empty `Map` / `[]`
  * (degrade, never throw); `route_context = 'public_search'` and
@@ -21,8 +26,10 @@
  * most-recent-fetched wins with fall-through to the next-newest non-demo row.
  */
 
+import { adHasVerifiedDomainLink } from "~/lib/brand-page.server";
 import { queryIn } from "~/lib/data/d1.server";
 import { DEMO_BRAND_PAGE_DOMAINS } from "~/lib/demo-brand-pages";
+import type { AdRecord } from "~/lib/types";
 import type { AppEnv } from "~/lib/env.server";
 import { resolveSeedList } from "~/lib/ads-domain-publisher.server";
 import { SNEAKER_RESALE_SEED_LIST } from "~/lib/sneaker-resale-backfill.server";
@@ -57,6 +64,7 @@ interface DiscoveryCacheRow {
 interface AdvertiserPayloadShape {
   ads?: ReadonlyArray<{
     domainMatch?: { level?: unknown } | null;
+    landingPageUrl?: unknown;
   }>;
   source?: unknown;
   provider?: unknown;
@@ -262,8 +270,37 @@ export async function getSitemapTimelineTierByDomain(
       .map((ad) => (ad && typeof ad === "object" ? ad.domainMatch?.level : null))
       .filter((level): level is unknown => level !== undefined && level !== null)
       .map((level) => (typeof level === "string" ? level : ""));
-    const { verifiedCount, likelyCount, unmatchedCount } =
+    let { verifiedCount, likelyCount, unmatchedCount } =
       countSitemapTimelineTier(levels);
+
+    // Issue #3095 coverage fallback: many tracked /ads/* brands carry cached
+    // ad payloads whose ads predate the search-v2 domainMatch enrichment
+    // (meta_library_browser rows written before the enrichment shipped), so
+    // the tier count above reads 0 verified / 0 likely even though the SAME
+    // payload would back an indexable /ads/:domain page — that page's
+    // populated-vs-thin gate (issue #1442) accepts verified-link evidence
+    // straight from the ad's landing page URL, not only from domainMatch.
+    // When no domainMatch-derived coverage exists, mirror that exact rule
+    // (adHasVerifiedDomainLink) so the nightly cohort captures the tracked
+    // /ads cohort the way the /ads sitemap already trusts it: same evidence
+    // standard, so no phantom capture — a domain entering the cohort through
+    // this fallback is the same set the /ads indexable gate lists.
+    // DomainMatch-bearing payloads (search-v2 rows) are unaffected: they reach
+    // hasCoverage above and never consult the fallback.
+    if (verifiedCount + likelyCount === 0) {
+      const fallbackVerified = (payload.ads ?? []).filter(
+        (ad) =>
+          ad !== null &&
+          typeof ad === "object" &&
+          // Mirror the /ads gate's non-demo filter exactly:
+          // nonDemoAdsFromPayload in sitemap.server.ts.
+          (ad as { source?: unknown }).source !== "demo"
+          ? adHasVerifiedDomainLink(ad as unknown as AdRecord, domain)
+          : false,
+      ).length;
+      verifiedCount = fallbackVerified;
+      unmatchedCount = (payload.ads ?? []).length - fallbackVerified;
+    }
 
     result.set(domain, {
       verifiedCount,

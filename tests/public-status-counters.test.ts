@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   DIGEST_STALENESS_THRESHOLD_MS,
@@ -27,7 +27,16 @@ function makeEnv(prepare: ReturnType<typeof vi.fn>) {
 }
 
 describe("getPublicStatusCounters digest query", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("reads the last-sent digest from created_at across status='sent', never delivered_at", async () => {
+    // Pin the clock: the fixture uses a frozen sentinel digest timestamp
+    // (2026-09-05). Without a pinned clock the age comparison in
+    // digestHealthState drifts past the 7-day staleness threshold and the
+    // test time-bombs. 2026-09-08 keeps it comfortably 'recent'.
+    vi.useFakeTimers({ now: new Date("2026-09-08T00:00:00.000Z") });
     const issued: string[] = [];
     // Relative, not hardcoded: this case asserts the SQL column choice and a
     // `recent` verdict, so the fixture timestamp must sit inside the staleness

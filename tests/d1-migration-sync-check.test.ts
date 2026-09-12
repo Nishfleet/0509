@@ -128,6 +128,64 @@ Migrations to be applied:
     ]);
   });
 
+  it("emits declared order-exception variants and rejects invalid declarations", () => {
+    const baseline = ["0001_first.sql", "0002_second.sql"];
+    const repository = [
+      "0001_first.sql",
+      "0002_second.sql",
+      "0003_a.sql",
+      "0004_b.sql",
+    ];
+    const ledgers = allowedProductionMigrationLedgers(
+      repository,
+      new Set(),
+      baseline,
+      new Set(),
+      [["0004_b.sql", "0003_a.sql"]],
+    );
+    expect(ledgers).toEqual([
+      [...baseline, "0003_a.sql", "0004_b.sql"],
+      [...baseline, "0004_b.sql", "0003_a.sql"],
+    ]);
+    // A group already in repository order is a no-op: no duplicate variant.
+    expect(
+      allowedProductionMigrationLedgers(
+        repository,
+        new Set(),
+        baseline,
+        new Set(),
+        [["0003_a.sql", "0004_b.sql"]],
+      ),
+    ).toEqual([[...baseline, "0003_a.sql", "0004_b.sql"]]);
+    // A fully absent group is inert.
+    expect(
+      allowedProductionMigrationLedgers(
+        repository,
+        new Set(),
+        baseline,
+        new Set(),
+        [["0098_absent_a.sql", "0099_absent_b.sql"]],
+      ),
+    ).toEqual([[...baseline, "0003_a.sql", "0004_b.sql"]]);
+    for (const exceptions of [
+      [["0001_first.sql", "0003_a.sql"]], // baseline member
+      [["0003_a.sql", "0099_absent_b.sql"]], // partial repository presence
+      [["0003_a.sql", "0004_b.sql"], ["0004_b.sql", "0003_a.sql"]], // cross-group duplicate
+      [["0003_a.sql"]], // group too small
+      [["not a migration", "0003_a.sql"]], // invalid name
+    ]) {
+      expect(() =>
+        allowedProductionMigrationLedgers(
+          repository,
+          new Set(),
+          baseline,
+          new Set(),
+          exceptions as string[][],
+        ),
+      ).toThrow("production_migration_order_exceptions_invalid");
+    }
+  });
+
   it("fails closed on baseline drift, duplicates, and invalid retired names", () => {
     const baseline = ["0001_first.sql", "0002_retired.sql"];
     const retired = new Set(["0002_retired.sql"]);

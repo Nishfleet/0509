@@ -483,6 +483,10 @@ describe("launch readiness canary route", () => {
       createWatchEvent,
       createWatchlistRun,
       finishWatchlistRun,
+      // ensureCanaryTarget now also provisions a delivery_target so Gate C's
+      // `requireUniqueExistingTarget: true` check has something to resolve
+      // (the underlying fix for proof_email_dispatch_invalid).
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn().mockResolvedValue(null),
       upsertProofTarget,
     }));
     vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
@@ -515,6 +519,99 @@ describe("launch readiness canary route", () => {
       null,
       1,
       expect.objectContaining({ kind: "launch_readiness_canary" }),
+    );
+  }, 10_000);
+
+  it("provisions a delivery_target on first contact so Gate C's requireUniqueExistingTarget check resolves", async () => {
+    // Substrate self-provisioning now also creates a delivery_target for the
+    // canary user — without it, deliverWeeklyDigest's
+    // requireUniqueExistingTarget check throws
+    // `Gate C proof email target must resolve uniquely` and the canary
+    // route's outer guard converts that into `canary_proof_pipeline_failed`,
+    // which is the operational state we saw in the 2026-09-09→2026-09-12
+    // streak. The provisioning is idempotent (INSERT-OR-IGNORE) so re-runs
+    // do not duplicate targets.
+    const statements: string[] = [];
+    let userInserted = false;
+    let watchlistInserted = false;
+    const db = {
+      prepare(sql: string) {
+        return {
+          bind(..._args: unknown[]) {
+            return {
+              async all<T>() {
+                if (sql.includes("e2e_test_mode")) return { results: [] as T[] };
+                if (sql.includes("INNER JOIN user")) {
+                  return {
+                    results: (userInserted && watchlistInserted
+                      ? [{
+                          user_id: "launch-readiness-canary-owner",
+                          email: "owner@example.com",
+                          name: "Launch readiness canary owner",
+                          watchlist_id: "launch-readiness-canary-watchlist",
+                          watchlist_name: "Launch readiness canary",
+                          target_label: "0509.io",
+                        }]
+                      : []) as T[],
+                  };
+                }
+                if (sql.includes("FROM user")) {
+                  return { results: (userInserted ? [{ user_id: "launch-readiness-canary-owner" }] : []) as T[] };
+                }
+                throw new Error(`unexpected query: ${sql.slice(0, 80)}`);
+              },
+              async run() {
+                statements.push(sql);
+                if (sql.includes("INSERT INTO user")) userInserted = true;
+                if (sql.includes("INSERT INTO watchlist")) watchlistInserted = true;
+                return { success: true };
+              },
+            };
+          },
+        };
+      },
+    };
+
+    const provisionVerifiedAccountEmailTargetIfUnsuppressed = vi.fn().mockResolvedValue(null);
+
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DB: db,
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      createWatchlistRun: vi.fn(),
+      finishWatchlistRun: vi.fn(),
+      upsertProofTarget: vi.fn(),
+      createProofCapture: vi.fn(),
+      createWatchEvent: vi.fn(),
+      createDigestRun: vi.fn(),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed,
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest: vi.fn() }));
+    mockLandingPageCapture(null);
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    await action({
+      context: createContext(),
+      request: new Request("https://0509.io/api/launch-readiness/canary", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-0509-canary-token": "secret-token",
+        },
+        body: JSON.stringify({ gateRunId: "gate-c-worker-v1" }),
+      }),
+    } as never);
+
+    expect(provisionVerifiedAccountEmailTargetIfUnsuppressed).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        userId: "launch-readiness-canary-owner",
+        targetValue: "owner@example.com",
+      }),
     );
   }, 10_000);
 
@@ -1826,5 +1923,204 @@ describe("launch readiness canary route", () => {
       ok: false,
       blocker: "missing_launch_canary_email",
     });
+  });
+
+  // #3146 — the post-target body of this route runs many D1/R2/provider
+  // operations unguarded. An uncaught throw there used to escape as a
+  // non-JSON 5xx, leaving Gate C with only `proofEmailEvidence: { present:
+  // false, ... }` and no field name. These tests pin the fail-closed
+  // contract: any ordinary throw in the tail answers JSON with the
+  // `canary_proof_pipeline_failed` blocker and the partial-state identifiers
+  // (`runId` / `proofCaptureId` / `digestRunId`) that were reached before
+  // the throw, so Gate C names the cause without raw-log archaeology.
+  it("fails closed with canary_proof_pipeline_failed when a D1 write throws after the run was created (#3146)", async () => {
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DB: createDbWithTarget(),
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      createDigestRun: vi.fn(),
+      createProofCapture: vi.fn(),
+      createWatchEvent: vi.fn(),
+      createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
+      finishWatchlistRun: vi.fn(),
+      // The post-target body calls upsertProofTarget after a successful
+      // snapshot — make it throw an ordinary Error so the new guard kicks
+      // in (Response throws are still passed through unchanged).
+      upsertProofTarget: vi.fn().mockRejectedValue(new Error("d1 rejected: UNIQUE constraint")),
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest: vi.fn() }));
+    // The inner try/catch around the proof-target upsert calls
+    // compensateUncommittedProofArtifacts before re-throwing; mock it so
+    // the route reaches the new outer guard instead of dying inside the
+    // inner compensation branch.
+    vi.doMock("~/lib/proof-artifact-retention.server", () => ({
+      compensateUncommittedProofArtifacts: vi.fn().mockResolvedValue({ ok: true }),
+    }));
+    mockLandingPageCapture();
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    const response = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/api/launch-readiness/canary", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-0509-canary-token": "secret-token",
+        },
+        body: JSON.stringify({ gateRunId: "gate-c-worker-v1" }),
+      }),
+    } as never);
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      ok: false,
+      blocker: "canary_proof_pipeline_failed",
+      gateRunId: "gate-c-worker-v1",
+      runId: "run-1",
+    });
+  });
+
+  it("includes proofCaptureId in the canary_proof_pipeline_failed body when the throw lands after capture commit (#3146)", async () => {
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DB: createDbWithTarget(),
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
+      finishWatchlistRun: vi.fn().mockResolvedValue(undefined),
+      upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-1" }),
+      createProofCapture: vi.fn().mockResolvedValue("proof-1"),
+      // The throw lands after proofCaptureId is bound — the body must
+      // surface proofCaptureId so Gate C can name the stage that blew up.
+      createWatchEvent: vi.fn().mockRejectedValue(new Error("d1 outage mid-event")),
+      createDigestRun: vi.fn(),
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest: vi.fn() }));
+    vi.doMock("~/lib/proof-artifact-retention.server", () => ({
+      compensateUncommittedProofArtifacts: vi.fn().mockResolvedValue({ ok: true }),
+    }));
+    mockLandingPageCapture();
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    const response = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/api/launch-readiness/canary", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-0509-canary-token": "secret-token",
+        },
+        body: JSON.stringify({ gateRunId: "gate-c-worker-v1" }),
+      }),
+    } as never);
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      ok: false,
+      blocker: "canary_proof_pipeline_failed",
+      gateRunId: "gate-c-worker-v1",
+      runId: "run-1",
+      proofCaptureId: "proof-1",
+    });
+  });
+
+  it("includes digestRunId in the canary_proof_pipeline_failed body when deliverWeeklyDigest throws (#3146)", async () => {
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DB: createDbWithTarget(),
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
+      finishWatchlistRun: vi.fn().mockResolvedValue(undefined),
+      upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-1" }),
+      createProofCapture: vi.fn().mockResolvedValue("proof-1"),
+      createWatchEvent: vi.fn().mockResolvedValue("event-1"),
+      createDigestRun: vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true }),
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({
+      // Email provider outage: the tail throws AFTER digestRunId is bound,
+      // so the response must surface runId + proofCaptureId + digestRunId.
+      deliverWeeklyDigest: vi.fn().mockRejectedValue(new Error("email binding timeout")),
+    }));
+    vi.doMock("~/lib/proof-artifact-retention.server", () => ({
+      compensateUncommittedProofArtifacts: vi.fn().mockResolvedValue({ ok: true }),
+    }));
+    mockLandingPageCapture();
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    const response = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/api/launch-readiness/canary", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-0509-canary-token": "secret-token",
+        },
+        body: JSON.stringify({ gateRunId: "gate-c-worker-v1" }),
+      }),
+    } as never);
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      ok: false,
+      blocker: "canary_proof_pipeline_failed",
+      gateRunId: "gate-c-worker-v1",
+      runId: "run-1",
+      proofCaptureId: "proof-1",
+      digestRunId: "digest-1",
+    });
+  });
+
+  it("re-throws a thrown Response object so existing early-return blockers stay first-class (#3146)", async () => {
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DB: createDbWithTarget(),
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      createDigestRun: vi.fn(),
+      createProofCapture: vi.fn(),
+      createWatchEvent: vi.fn(),
+      createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
+      finishWatchlistRun: vi.fn(),
+      // A Response throw is React Router's first-class failure mode and
+      // already carries a status — the guard must NOT swallow it into the
+      // generic canary_proof_pipeline_failed blocker.
+      upsertProofTarget: vi.fn().mockImplementation(() => {
+        throw new Response("Launch readiness proof target could not be created.", { status: 500 });
+      }),
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest: vi.fn() }));
+    vi.doMock("~/lib/proof-artifact-retention.server", () => ({
+      compensateUncommittedProofArtifacts: vi.fn().mockResolvedValue({ ok: true }),
+    }));
+    mockLandingPageCapture();
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    await expect(
+      action({
+        context: createContext(),
+        request: new Request("https://0509.io/api/launch-readiness/canary", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-0509-canary-token": "secret-token",
+          },
+          body: JSON.stringify({ gateRunId: "gate-c-worker-v1" }),
+        }),
+      } as never),
+    ).rejects.toMatchObject({ status: 500 });
   });
 });

@@ -121,6 +121,16 @@ export const RETIRED_PRODUCTION_MIGRATIONS = new Set([
   "0034_passkeys.sql",
 ]);
 
+// Production applied 0096_error_reports.sql while it was still the ledger
+// tail; 0096_email_suppression.sql then landed in the repository sorting
+// earlier. D1's ledger is append-only, so the live order is fixed history a
+// sorted repository listing can never reproduce. Each group declares a set
+// of repository-suffix names in the exact order the production ledger is
+// allowed to carry them. (run 34671488829, 0509#3174)
+export const PRODUCTION_MIGRATION_LEDGER_ORDER_EXCEPTIONS = Object.freeze([
+  Object.freeze(["0096_error_reports.sql", "0096_email_suppression.sql"]),
+]);
+
 const MIGRATION_NAME_PATTERN = /^\d{4}_[A-Za-z0-9_]+\.sql$/u;
 
 /** @param {string[]} names */
@@ -222,6 +232,7 @@ export function allowedRemoteMigrationLedgers(
  * @param {Set<string>} cleanupMigrations
  * @param {readonly string[]} baseline
  * @param {Set<string>} retiredMigrations
+ * @param {readonly (readonly string[])[]} orderExceptions
  * @returns {string[][]}
  */
 export function allowedProductionMigrationLedgers(
@@ -229,6 +240,7 @@ export function allowedProductionMigrationLedgers(
   cleanupMigrations = POST_DEPLOY_CLEANUP_MIGRATIONS,
   baseline = PRODUCTION_MIGRATION_LEDGER_BASELINE,
   retiredMigrations = RETIRED_PRODUCTION_MIGRATIONS,
+  orderExceptions = PRODUCTION_MIGRATION_LEDGER_ORDER_EXCEPTIONS,
 ) {
   migrationLedgerNamesSha256([...baseline]);
   if (
@@ -255,15 +267,64 @@ export function allowedProductionMigrationLedgers(
     throw new Error("migration_repository_baseline_drift");
   }
 
-  return repositoryAllowedLedgers.map((repositoryLedger) => {
+  // An order exception names repository-suffix files only: a baseline member
+  // cannot be reordered (fixed history) and a partially present group means
+  // the declaration went stale mid-flight. A group whose names are all absent
+  // from the repository is inert — it can never reorder a suffix that does
+  // not contain them.
+  if (
+    !Array.isArray(orderExceptions) ||
+    orderExceptions.some(
+      (group) =>
+        !Array.isArray(group) ||
+        group.length < 2 ||
+        new Set(group).size !== group.length ||
+        group.some(
+          (name) =>
+            !MIGRATION_NAME_PATTERN.test(name) || baseline.includes(name),
+        ) ||
+        group.some((name) => repositoryMigrations.includes(name)) !==
+          group.every((name) => repositoryMigrations.includes(name)),
+    ) ||
+    new Set(orderExceptions.flat()).size !== orderExceptions.flat().length
+  ) {
+    throw new Error("production_migration_order_exceptions_invalid");
+  }
+
+  const allowedLedgers = [];
+  for (const repositoryLedger of repositoryAllowedLedgers) {
     if (repositoryLedger.length < repositoryBaseline.length) {
       throw new Error("post_deploy_cleanup_migration_allowlist_invalid");
     }
-    return [
-      ...baseline,
-      ...repositoryLedger.slice(repositoryBaseline.length),
-    ];
-  });
+    const suffix = repositoryLedger.slice(repositoryBaseline.length);
+    allowedLedgers.push([...baseline, ...suffix]);
+    const applicable = orderExceptions.filter((group) =>
+      group.every((/** @type {string} */ name) => suffix.includes(name)),
+    );
+    for (let mask = 1; mask < 1 << applicable.length; mask += 1) {
+      const reordered = [...suffix];
+      applicable.forEach((group, groupIndex) => {
+        if (!(mask & (1 << groupIndex))) return;
+        /** @type {number[]} */
+        const positions = [];
+        reordered.forEach((name, position) => {
+          if (group.includes(name)) positions.push(position);
+        });
+        positions.forEach((position, member) => {
+          reordered[position] = group[member];
+        });
+      });
+      const candidate = [...baseline, ...reordered];
+      if (
+        !allowedLedgers.some(
+          (ledger) => JSON.stringify(ledger) === JSON.stringify(candidate),
+        )
+      ) {
+        allowedLedgers.push(candidate);
+      }
+    }
+  }
+  return allowedLedgers;
 }
 
 /**

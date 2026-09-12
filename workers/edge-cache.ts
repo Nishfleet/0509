@@ -78,6 +78,9 @@ export const EDGE_HTML_CACHE_NAME = "public-html-edge-v1";
 /** The proof header the #2950 deploy gate asserts. */
 export const EDGE_CACHE_PROOF_HEADER = EDGE_CACHE_HEADER;
 
+/** Routes whose every entry is public marketing HTML. Covered wholesale so a
+ * new guide / brand category / vendor page is cacheable without an edit here.
+ * The exact PATHS set still owns the pages whose eligibility is deliberate. */
 function cacheablePathname(pathname: string): boolean {
   return (
     PUBLIC_CACHEABLE_HTML_PATHS.has(pathname) ||
@@ -109,6 +112,13 @@ export function isEdgeCacheableHtmlRequest(request: Request): boolean {
   }
   const cookie = request.headers.get("cookie");
   if (cookie && cookie.trim() !== "") {
+    return false;
+  }
+  // Issue #3193: an Authorization header is a credential too — a request that
+  // carries one is never anonymous, so it must never be served the shared
+  // cached document nor seed one.
+  const auth = request.headers.get("authorization");
+  if (auth && auth.trim() !== "") {
     return false;
   }
   return cacheablePathname(new URL(request.url).pathname);
