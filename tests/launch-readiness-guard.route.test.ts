@@ -2132,7 +2132,7 @@ describe("launch readiness canary route", () => {
     } as never);
 
     expect(response.status).toBe(503);
-    const payload = await response.json();
+    const payload = (await response.json()) as { reason: string; digestRunId: string };
     expect(payload.reason).toBe("gate-c-proof-email-target-must-resolve-uniquely.-attempt-2-3");
     // Identifier-safe, verifier-journalable: lowercase, 1-128, [a-z0-9._-].
     expect(payload.reason).toMatch(/^[a-z0-9._-]{1,128}$/u);
