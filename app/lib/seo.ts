@@ -977,6 +977,9 @@ export const SITEMAP_PATHS = [
   "/guides/how-to-get-alerted-when-a-competitor-changes-their-offer",
   "/guides/how-to-prove-what-changed-on-a-competitor-website",
   "/guides/how-to-turn-a-one-off-competitor-check-into-a-standing-watch",
+  // Issue #3127: seventh guide — the Meta Ad Library API coverage explainer.
+  // Stable long-form copy, never a noindex shell.
+  "/guides/meta-ad-library-api-limitations",
   "/compare",
   "/compare/meta-ad-library",
   // /compare/visualping, /compare/foreplay, and /compare/visualping-ad-library
