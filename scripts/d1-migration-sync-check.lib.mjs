@@ -129,6 +129,11 @@ export const RETIRED_PRODUCTION_MIGRATIONS = new Set([
 // allowed to carry them. (run 34671488829, 0509#3174)
 export const PRODUCTION_MIGRATION_LEDGER_ORDER_EXCEPTIONS = Object.freeze([
   Object.freeze(["0096_error_reports.sql", "0096_email_suppression.sql"]),
+  // Run 34705843153, 0509#3315: production applied 0098_gdelt before the 0098_bluesky file landed (same-number interleave).
+  Object.freeze([
+    "0098_widen_source_target_connector_gdelt.sql",
+    "0098_widen_source_target_connector_bluesky.sql",
+  ]),
 ]);
 
 const MIGRATION_NAME_PATTERN = /^\d{4}_[A-Za-z0-9_]+\.sql$/u;

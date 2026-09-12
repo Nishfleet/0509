@@ -1573,19 +1573,18 @@ describe("D1 remote restore evidence automation", () => {
     ).toEqual({ action: "ok" });
   });
 
-  it("plans catch-up when production applied a same-number migration before the repo file landed", () => {
+  it("pins 0096 interleave planner behavior: behind-tail catches up, full reordered ledger plans ok, partial interleave fails closed once the 0098 exception lands", () => {
     // Run 34671488829 (2026-09-12): production applied 0096_error_reports.sql
     // while it was the ledger tail, then 0096_email_suppression.sql landed in
     // the repository sorting earlier. D1's ledger is append-only, so the live
     // order is fixed history the sorted repository cannot reproduce.
     //
-    // 0097_status_probe_samples.sql, 0098_email_delivery_canary.sql,
-    // 0098_widen_source_target_connector_bluesky.sql and
-    // 0098_widen_source_target_connector_gdelt.sql are in the repository but
-    // NOT yet applied on production (production deploys have been red since
-    // 2026-09-09), so the modeled production ledger excludes them too and
-    // every expected forward-suffix includes them as ordinary catch-up at the
-    // tail.
+    // Modeled ledger: production applied the 0096 pair in the production
+    // order and nothing after it. That matched the live ledger when #3184
+    // wrote this test; run 34705843153 has since applied 0097, 0098 canary
+    // and 0098 gdelt (the live state is covered by the 0098 test below).
+    // The modeled state still pins planner behavior for a backup behind the
+    // whole tail.
     const repository = readdirSync(resolve("migrations"))
       .filter((name) => /^\d{4}_.+\.sql$/u.test(name))
       .sort();
@@ -1611,20 +1610,18 @@ describe("D1 remote restore evidence automation", () => {
         name,
         appliedAt: "2026-09-12 04:04:45",
       }));
+    // With the 0098 order exception declared (0509#3315) this partial
+    // interleave has two allowed futures that diverge at the 0098 pair
+    // (bluesky-first vs gdelt-first); the planner fails closed instead of
+    // guessing.
     expect(
       planSourceBackupLedgerReconciliation(
         namedLedger(productionNames),
         repository,
       ),
     ).toEqual({
-      action: "apply_forward_suffix",
-      migrations: [
-        "0096_email_suppression.sql",
-        "0097_status_probe_samples.sql",
-        "0098_email_delivery_canary.sql",
-        "0098_widen_source_target_connector_bluesky.sql",
-        "0098_widen_source_target_connector_gdelt.sql",
-      ],
+      action: "reject",
+      reason: "source_backup_migration_ledger_stale",
     });
     expect(
       planSourceBackupLedgerReconciliation(
@@ -1660,6 +1657,64 @@ describe("D1 remote restore evidence automation", () => {
         "0098_widen_source_target_connector_gdelt.sql",
       ],
     });
+  });
+
+  it("plans catch-up when production applied 0098_gdelt before 0098_bluesky landed", () => {
+    // Run 34705843153 (2026-09-12, 0509#3315): the fresh production backup
+    // ledger ends 0098_email_delivery_canary.sql,
+    // 0098_widen_source_target_connector_gdelt.sql — production applied
+    // 0098_gdelt while 0098_bluesky was still repo-only. Same-number
+    // interleave, same mechanism as the 0096 precedent above.
+    const repository = readdirSync(resolve("migrations"))
+      .filter((name) => /^\d{4}_.+\.sql$/u.test(name))
+      .sort();
+    const repositoryBaseline = PRODUCTION_MIGRATION_LEDGER_BASELINE.filter(
+      (name) => !RETIRED_PRODUCTION_MIGRATIONS.has(name),
+    );
+    const repositorySuffix = repository.slice(repositoryBaseline.length);
+    // Everything the repository sorts before the 0096 pair (later
+    // migrations sort after it, so this stays correct as they land).
+    const repositoryHead = repositorySuffix.filter(
+      (name) => name < "0096_email_suppression.sql",
+    );
+    const productionNames = [
+      ...PRODUCTION_MIGRATION_LEDGER_BASELINE,
+      ...repositoryHead,
+      // The 0096 pair in the production-applied order, then 0097, the
+      // canary, and 0098_gdelt; 0098_bluesky is still repo-only.
+      "0096_error_reports.sql",
+      "0096_email_suppression.sql",
+      "0097_status_probe_samples.sql",
+      "0098_email_delivery_canary.sql",
+      "0098_widen_source_target_connector_gdelt.sql",
+    ];
+    expect(productionNames.at(-1)).toBe(
+      "0098_widen_source_target_connector_gdelt.sql",
+    );
+    const namedLedger = (names: string[]) =>
+      names.map((name, index) => ({
+        id: index + 1,
+        name,
+        appliedAt: "2026-09-12 16:45:00",
+      }));
+    expect(
+      planSourceBackupLedgerReconciliation(
+        namedLedger(productionNames),
+        repository,
+      ),
+    ).toEqual({
+      action: "apply_forward_suffix",
+      migrations: ["0098_widen_source_target_connector_bluesky.sql"],
+    });
+    expect(
+      planSourceBackupLedgerReconciliation(
+        namedLedger([
+          ...productionNames,
+          "0098_widen_source_target_connector_bluesky.sql",
+        ]),
+        repository,
+      ),
+    ).toEqual({ action: "ok" });
   });
 
   it("still rejects a production ledger carrying one unknown extra name", () => {
