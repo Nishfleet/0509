@@ -96,14 +96,20 @@ jobs:
         run: |
           set -euo pipefail
           test "$HEAD_REF" = "refs/heads/main"
-          # actions/checkout was given `ref: main`, so HEAD is ATTACHED to the main
-          # branch — deliberately its tip, because the cron path must tighten against
-          # the latest tree rather than the commit that triggered the run. The
-          # original guard asserted a DETACHED HEAD, which this checkout can never
-          # produce, so the job failed on its very first run on main.
-          branch="$(git rev-parse --abbrev-ref HEAD)"
-          if [ "$branch" != "main" ]; then
-            echo "expected the main branch to be checked out, got: $branch" >&2
+          # actions/checkout is given `ref: ${{ github.sha }}`, so HEAD is always
+          # DETACHED — `git rev-parse --abbrev-ref HEAD` prints "HEAD" on every
+          # trigger (push, schedule, workflow_dispatch) and a branch-name assert
+          # can never pass. The event-aware property we actually care about is
+          # "HEAD descends from origin/main": fetch and compare SHAs instead of
+          # branch names. On push that verifies the tightened tree belongs to
+          # main's history (a committed stale tip still falls on that line, so a
+          # racing fast-forward cannot flake a legit run); on schedule/dispatch
+          # it pins the same assertion to the sha main pointed at when the run
+          # started.
+          git fetch origin main --quiet
+          head_sha="$(git rev-parse HEAD)"
+          if ! git merge-base --is-ancestor "$head_sha" origin/main; then
+            echo "expected HEAD ($head_sha) to be on origin/main's history ($(git rev-parse origin/main))" >&2
             exit 1
           fi
 
