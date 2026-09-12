@@ -14,6 +14,7 @@ export const appEnv: AppEnv = {
   // absent, so integration suites must receive the same bindings production
   // declares (see the RL_* bindings in wrangler.test.jsonc).
   RL_AUTH: env.RL_AUTH,
+  RL_AUTH_GET: env.RL_AUTH_GET,
   RL_SEARCH_ANON_BROWSER: env.RL_SEARCH_ANON_BROWSER,
   RL_PROOF_BRIEF: env.RL_PROOF_BRIEF,
   RL_SEARCH_SELECTION: env.RL_SEARCH_SELECTION,
