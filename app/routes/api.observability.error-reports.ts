@@ -10,7 +10,7 @@ import { summarizeErrorReports } from "~/lib/error-report.server";
  * it unattended. Rows carry no user identifiers — route, reason code, message
  * and a stack sample only, redacted by the sink's message truncation.
  */
-export async function loader({ context }: { context: unknown }) {
+export async function loader({ context }: LoaderFunctionArgs) {
   const env = getCloudflareContext(context).env;
   const summary = await summarizeErrorReports(env);
   const counts = summary.counts ?? [];

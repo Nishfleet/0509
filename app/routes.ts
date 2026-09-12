@@ -59,6 +59,9 @@ export default [
   route("api/webhooks/dodo", "routes/api.webhooks.dodo.ts"),
   route("api/health", "routes/api.health.ts"),
   route("api/health/deep", "routes/api.health.deep.ts"),
+  // Issue #2988: judge-facing roll-up behind the /api/health/deep
+  // errorReports count line.
+  route("api/observability/error-reports", "routes/api.observability.error-reports.ts"),
   route("api/release-soak", "routes/api.release-soak.ts"),
   route("api/presence/oauth/linkedin", "routes/api.presence.oauth.linkedin.ts"),
   route("api/presence/oauth/linkedin/callback", "routes/api.presence.oauth.linkedin.callback.ts"),
