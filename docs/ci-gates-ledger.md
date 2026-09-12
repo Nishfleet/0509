@@ -107,4 +107,4 @@ Fill per deletion batch when merged:
 
 | PR | before (median PR CI min, required contexts) | after | delta |
 | --- | --- | --- | --- |
-| uptime-health.yml deletion — issue #3068 (PR pending) | 4.2 min median, 6 required contexts, 26 workflow files | 4.2 min median (unchanged — the check was dispatch-only, 0 PR jobs), 6 required contexts (ruleset `main-merge-queue` verified unchanged), 25 workflow files | −1 workflow file, −1 dispatchable hosted job, 0 PR-job delta |
+| uptime-health.yml deletion — issue #3068, PR #3216 | 4.2 min median, 6 required contexts, 26 workflow files | 4.2 min median (unchanged — the check was dispatch-only, 0 PR jobs), 6 required contexts (ruleset `main-merge-queue` verified unchanged), 25 workflow files | −1 workflow file, −1 dispatchable hosted job, 0 PR-job delta |
