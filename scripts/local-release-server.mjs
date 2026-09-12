@@ -77,7 +77,7 @@ export function buildLocalReleaseServerCommand(origin) {
   // runners otherwise fail the dev server at boot with
   // `uv_interface_addresses returned Unknown system error 97` (EAFNOSUPPORT)
   // while Vite enumerates interfaces for its startup banner.
-  const server = `E2E_TEST_MODE=1 E2E_PROVIDER_NETWORK_DENY=1 E2E_SEARCH_ROLLOUT_MODE=v2 AUTH_PROVIDER=better-auth BETTER_AUTH_SECRET=local-test-secret-local-test-secret-local BETTER_AUTH_URL=${parsed.origin} APP_ORIGIN=${parsed.origin} ./node_modules/.bin/react-router dev --host 127.0.0.1 --port ${parsed.port} --strictPort`;
+  const server = `E2E_TEST_MODE=1 E2E_PROVIDER_NETWORK_DENY=1 E2E_JOIN_LIVE_LOOKUP=0 E2E_SEARCH_ROLLOUT_MODE=v2 AUTH_PROVIDER=better-auth BETTER_AUTH_SECRET=local-test-secret-local-test-secret-local BETTER_AUTH_URL=${parsed.origin} APP_ORIGIN=${parsed.origin} ./node_modules/.bin/react-router dev --host 127.0.0.1 --port ${parsed.port} --strictPort`;
   // Retry ONLY a fast boot failure. If the server stayed up for
   // LOCAL_RELEASE_SERVER_BOOT_SECONDS or longer, its exit is a real result
   // (Playwright tearing it down, or a genuine crash) and is passed straight
