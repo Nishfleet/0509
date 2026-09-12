@@ -55,7 +55,7 @@ Standing rules that earn a gate (cited per row below):
 | `required-verifier-integrity.yml` | PR touching the verifier definitions self-certifying; unverified admin bypasses | Incident: PR #694 changed both required-context producers and self-succeeded; Nish 2026-08-25 | ~1–2 min (compile + diff-owned heuristic) | **KEEP** — this is the P10-B seatbelt |
 | `required-verifier-integrity.yml` `verifier-attest:` | Admin-only fast path for verifier-definition changes | Owner decision Nish 2026-08-20; head-sha-pinned so any push invalidates | Conditional | **KEEP** (sha-pinned, non-additive) |
 | `gate-integrity.yml` | Gate-bypass *moves* RVI cannot see (copies, driver-step swaps) | Nish 2026-08-25 ("cover all our bases"); fleet-ops#828 / 0509#1273 prose-attest shape | ~1 min compile + diff gate | **KEEP** detector, **MERGE-INTO** `required-verifier-integrity` — one integrity workflow files both, and the second admin attestation (`gate-integrity-attest:`) is dropped; two admin attestations per push is not acceptable |
-| `deploy-production.yml` (728 lines, 6 jobs) push-to-main deploy + Gate A/B/C + restore-evidence + ledger | Undeployable or unrestorable state reaching prod | R1 restore-evidence-before-migrations (incidents: scratch-restore kill #630, deploy drift 0509 .lane reports) | Runs only on main | **KEEP, TRIM** — delete steps with no incident; the audit of the ~20 named steps is the deletion batch list below |
+| `deploy-production.yml` (730 lines, 6 jobs) push-to-main deploy + Gate A/B/C + restore-evidence + ledger | Undeployable or unrestorable state reaching prod | R1 restore-evidence-before-migrations (incidents: scratch-restore kill #630, deploy drift 0509 .lane reports, #2840 gate-B, #2975 concurrency) | Runs only on main | **KEPT, TRIMMED** (#3070): step audit table below — every surviving step names an incident/rule or is pinned by the gate tests; only `- name: Typecheck` (a duplicate of the deploy plan's `launch_readiness` typecheck) had none and was deleted |
 | `preview-assert.yml` | Merge lands a diff that fails the release assertion on main | Incident 0509#1576: 9 of 120 merges auto-reverted because the assertion ran only after merge | Path-gated (PR #1580 lesson) ~5 min | **KEEP** |
 | `auto-revert.yml` | Red main after merge | R4 reversibility (Nish canonical) | Runs on failure only | **KEEP** |
 | `auto-merge-arm.yml` | Un-armed merges / merge-queue misuse | fleet-ops#1457, #3532 | ~1 min, PR events only | **KEEP** |
@@ -89,8 +89,64 @@ Standing rules that earn a gate (cited per row below):
    `backlog-console-refresh-test` → path-gated steps in the one PR job;
    `content-quality` path-gated; `ratchet-auto-tighten` → one ratchet workflow;
    integrity attest → single marker.
-3. **TRIM `deploy-production.yml`**: any of the ~20 named steps that cannot name
-   an incident go in this batch.
+3. **TRIM `deploy-production.yml`** — DONE in #3070: the audit of every named
+   step is the table below. Exactly one step (`- name: Typecheck`) had no
+   incident behind it and was deleted. Every other step either names an
+   incident/rule or is pinned by `deploy-production-gate.test.ts` and
+   `production-candidate-workflow.test.ts` (step names, ordering, and run lines
+   are asserted there), so deleting it would weaken an encoded gate.
+
+### Deploy production step audit (issue #3070)
+
+Costs measured on run 34380544970 (last green deploy, 2026-09-09); steps not
+listed under a job's own name are runner scaffolding (checkout, setup-node,
+`npm ci`, `validate-d1-backup.mjs`) and stay because the job's pinned steps need
+them.
+
+| Step (job) | Incident / rule | Cost | Disposition |
+| --- | --- | --- | --- |
+| `Authorize release request` (authorize_release) | Exact-SHA release barrier (#480/#484); dispatch-resolution incident 2026-08-13 (2c6cc3eb); push auto-deploy (Nish 2026-08-25) | ~3 s | KEEP |
+| `Verify and pin exact main candidate` (pin_candidate) | #630 CAS + #2701 forward-drift tolerance | ~8 s | KEEP |
+| `Verify pinned candidate before deploy work` (prepare) | Deploy-drift re-verify; run line test-pinned | <5 s | KEEP |
+| `Bind restore evidence archive path` (prepare) | R1 evidence chain; run content test-pinned | <1 s | KEEP |
+| `Bind a clean exact-main candidate manifest` (prepare) | R1 + pinned-SHA manifest binding | <5 s | KEEP |
+| `Verify pre-generated exact R2 restore evidence` (prepare) | R1; run 32232488597 bootstrap anchor | ~20 s | KEEP |
+| `Preserve private restore evidence for this deploy only` (prepare) | R1 private-evidence retention | ~1 s | KEEP |
+| `Remove local restore evidence archive` (prepare) | Secret-material hygiene on the runner | <1 s | KEEP |
+| `Verify authorized evidence checkout` (generate) | Detached-HEAD pinned-tree proof before evidence mutation (#630 lineage) | <1 s | KEEP |
+| `Bind run-scoped backup directory` (generate, cleanup) | Run-scoped plaintext quarantine; test-pinned | <1 s | KEEP |
+| `Reconfirm frozen main before evidence mutation` (generate) | Drift CAS immediately before provider mutation (#556/#630) | <5 s | KEEP |
+| `Create fresh backup and prove an isolated remote restore` (generate) | R1 — the restore drill itself; #630 scratch-kill | ~3 min when it runs | KEEP |
+| `Remove run-scoped plaintext backup files` (generate) | Plaintext-backup hygiene; test-pinned | <5 s | KEEP |
+| `Archive permission-preserving restore evidence` (generate) | R1 permission-preserved packaging | <5 s | KEEP |
+| `Preserve private restore evidence` (generate) | R1 evidence retention | ~5 s | KEEP |
+| `Verify authorized cleanup checkout` (cleanup) | Same pinned-tree proof for the cleanup mutation | <1 s | KEEP |
+| `Delete every exact scratch database from this run` (cleanup) | #630 — a lost runner must not park production scratch DBs | ~20 s | KEEP |
+| `Verify pinned candidate before repository and secret work` (deploy) | Drift re-verify at deploy-job start; position + env test-pinned | <1 s | KEEP |
+| `Verify Cloudflare deploy secrets` (deploy) | Fail-fast secret preflight; position + env test-pinned | <1 s | KEEP |
+| `Install dependencies` (deploy) | Prerequisite for every later step | ~11 s | KEEP |
+| `Install Playwright browsers` (deploy) | Incident f2e194184 (deploy-gate browser installs); the plan's `e2e:local:release` + 3-engine diagnostic need them | ~14 s | KEEP |
+| `Typecheck` (deploy) | None for a discrete step — `launch:readiness:predeploy` inside `Deploy` re-runs `npm run typecheck`. Its NODE_OPTIONS heap fix (exit-134, 2026-08-11) targeted the retired 3 GiB VPS runner; the plan's uncapped typecheck passes on every green hosted deploy (run 34380544970) so the fix needs no re-home | 62 s | **DELETE** |
+| `Test` (deploy) | Position-pinned by the gate test + auto-revert assertion anchor (0509#1576). Duplicates the plan's `npm test` (194 s) — noted cost, kept per no-gate-weakening | 194 s | KEEP |
+| `Materialize private remote-restore evidence` (deploy) | R1 evidence handoff; content test-pinned | ~1 s | KEEP |
+| `Verify and extract private remote-restore evidence` (deploy) | R1 archive integrity (single member, chmod 600) | ~1 s | KEEP |
+| `Reconfirm frozen main before provider mutation` (deploy) | #556/#630 drift; test-pinned to sit as `Deploy` − 1 | <1 s | KEEP |
+| `Deploy` (deploy) | The release gate itself — plan re-runs launch_readiness, readiness evidence, Gate B/C, and its own CAS before `wrangler deploy` | ~17.5 min | KEEP |
+| `Synchronize Worker secrets` (deploy) | Runs 32854505876 / 31514742997 (secret-put ordering + versions-API breakage) | ~2 s | KEEP |
+| `Verify complete release evidence set` (deploy) | Runs 29767292426 / 29804405475 (flaky diagnostic manifests counted as real) | <1 s | KEEP |
+| `Record the deploy in the on-main ledger` (deploy) | #2975 last-resort anchor chain | ~1 s | KEEP |
+| `Archive permission-preserving release evidence` (deploy) | R1 release-evidence packaging | ~1 s | KEEP |
+| `Preserve release evidence` (deploy) | R1 90-day retention | ~2 s | KEEP |
+| `Preserve private immediate Gate C evidence` (deploy) | Gate C deferred-release immediate-only semantics (judge 0509#2241) | ~1 s, deferred path only | KEEP |
+| `Preserve failed release diagnostics` (deploy) | R3 — a failed deploy must not fail silently | 0 on green | KEEP |
+| `Emit deploy-age measure line` (deploy) | #2975 item 4 stalled-deploy detector | <1 s | KEEP |
+| `Emit deploy-chain progress line` (deploy) | #2975 reopened-accept chain detector | <1 s | KEEP |
+
+Note for the next auditor: `auto-revert.yml`'s assertion classifier still lists
+`"Typecheck"` — the string is test-pinned there, so it stays; after this trim a
+typecheck failure inside the plan surfaces under the `Deploy` step, which the
+same classifier already treats as an assertion step, so revert semantics are
+unchanged.
 
 Each deletion PR must update the branch-protection required-check list in the
 same PR (an orphaned required check blocks main forever — the incident the
@@ -107,4 +163,5 @@ Fill per deletion batch when merged:
 
 | PR | before (median PR CI min, required contexts) | after | delta |
 | --- | --- | --- | --- |
+| #3070 trim (deploy-production.yml) | Deploy Worker job 22.5 min — run 34380544970, 2026-09-09 | pending first green post-merge run (deploy chain red on #3174 stale-ledger blocker); expected ≈21.4 min | −62 s (Typecheck duplicate removed) |
 | (pending) | | | |
