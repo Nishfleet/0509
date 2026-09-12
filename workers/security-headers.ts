@@ -326,7 +326,12 @@ export function withSecurityHeaders(response: Response, request?: Request, nonce
         headers.delete("pragma");
         headers.delete("expires");
       }
-    } else {
+    } else if (headers.get("x-f9-tiny-404") !== "1") {
+      // The stale-cache gate stays absolute for every app-rendered HTML
+      // response: app-set cache-control is NOT honored here (the 2026-07-13
+      // asset-skew incident class). The single carve-out is the worker's own
+      // static 404 document — self-marked, immutable, and deliberately
+      // edge-cacheable to absorb junk-path traffic.
       for (const [name, value] of Object.entries(HTML_NO_STORE_HEADERS)) {
         headers.set(name, value);
       }

@@ -39,6 +39,8 @@ import {
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
+import "~/styles/marketing.css";
+
 const PATHNAME =
   "/guides/how-to-turn-a-one-off-competitor-check-into-a-standing-watch";
 

@@ -168,6 +168,19 @@ describe("marketing pricing monthly cadence note", () => {
 
   async function renderRoute(): Promise<string> {
     const { default: MarketingRoute } = await import("~/routes/marketing");
+    // Issue #2967: PricingSection is React.lazy below the fold. A static
+    // render suspends on the lazy payload (fallback=null); once the dynamic
+    // import settles the resolved component is cached and synchronous renders
+    // emit the section. Poll-render until it lands — the import takes more
+    // than one event-loop turn under vite-node even with the module warmed.
+    // Real SSR streams the boundary; prod HTML carries the cards inside
+    // React's deferred <template>.
+    await import("~/components/pricing-section");
+    for (let i = 0; i < 40; i += 1) {
+      const markup = renderToStaticMarkup(createElement(MarketingRoute));
+      if (markup.includes("f9-commerce-card")) return markup;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
     return renderToStaticMarkup(createElement(MarketingRoute));
   }
 
