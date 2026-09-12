@@ -55,7 +55,7 @@ Standing rules that earn a gate (cited per row below):
 | `required-verifier-integrity.yml` | PR touching the verifier definitions self-certifying; unverified admin bypasses | Incident: PR #694 changed both required-context producers and self-succeeded; Nish 2026-08-25 | ~1–2 min (compile + diff-owned heuristic) | **KEEP** — this is the P10-B seatbelt |
 | `required-verifier-integrity.yml` `verifier-attest:` | Admin-only fast path for verifier-definition changes | Owner decision Nish 2026-08-20; head-sha-pinned so any push invalidates | Conditional | **KEEP** (sha-pinned, non-additive) |
 | `gate-integrity.yml` | Gate-bypass *moves* RVI cannot see (copies, driver-step swaps) | Nish 2026-08-25 ("cover all our bases"); fleet-ops#828 / 0509#1273 prose-attest shape | ~1 min compile + diff gate | **KEEP** detector, **MERGE-INTO** `required-verifier-integrity` — one integrity workflow files both, and the second admin attestation (`gate-integrity-attest:`) is dropped; two admin attestations per push is not acceptable |
-| `deploy-production.yml` (730 lines, 6 jobs) push-to-main deploy + Gate A/B/C + restore-evidence + ledger | Undeployable or unrestorable state reaching prod | R1 restore-evidence-before-migrations (incidents: scratch-restore kill #630, deploy drift 0509 .lane reports, #2840 gate-B, #2975 concurrency) | Runs only on main | **KEPT, TRIMMED** (#3070): step audit table below — every surviving step names an incident/rule or is pinned by the gate tests; only `- name: Typecheck` (a duplicate of the deploy plan's `launch_readiness` typecheck) had none and was deleted |
+| `deploy-production.yml` (730 lines, 6 jobs) push-to-main deploy + Gate A/B/C + restore-evidence + ledger | Undeployable or unrestorable state reaching prod | R1 restore-evidence-before-migrations (incidents: scratch-restore kill #630, deploy drift 0509 .lane reports, #2840 gate-B, #2975 concurrency) | Runs only on main | **KEPT, TRIMMED** (#3070): step audit table below — every surviving step names an incident/rule or is pinned by the gate tests; only `- name: Typecheck` had none and was deleted, with its coverage moved into `scripts/deploy-production.mjs` as an explicit `npm run typecheck` ahead of `wrangler deploy` (2026-09-12 re-scope) |
 | `preview-assert.yml` | Merge lands a diff that fails the release assertion on main | Incident 0509#1576: 9 of 120 merges auto-reverted because the assertion ran only after merge | Path-gated (PR #1580 lesson) ~5 min | **KEEP** |
 | `auto-revert.yml` | Red main after merge | R4 reversibility (Nish canonical) | Runs on failure only | **KEEP** |
 | `auto-merge-arm.yml` | Un-armed merges / merge-queue misuse | fleet-ops#1457, #3532 | ~1 min, PR events only | **KEEP** |
@@ -91,7 +91,11 @@ Standing rules that earn a gate (cited per row below):
    integrity attest → single marker.
 3. **TRIM `deploy-production.yml`** — DONE in #3070: the audit of every named
    step is the table below. Exactly one step (`- name: Typecheck`) had no
-   incident behind it and was deleted. Every other step either names an
+   incident behind it and was deleted; per the 2026-09-12 re-scope its coverage
+   moved into `scripts/deploy-production.mjs` as an explicit `npm run
+   typecheck` ahead of `wrangler deploy`, so the deploy path keeps the gate in
+   the named script rather than relying on an inference about what
+   `launch:readiness:predeploy` contains. Every other step either names an
    incident/rule or is pinned by `deploy-production-gate.test.ts` and
    `production-candidate-workflow.test.ts` (step names, ordering, and run lines
    are asserted there), so deleting it would weaken an encoded gate.
@@ -126,7 +130,7 @@ them.
 | `Verify Cloudflare deploy secrets` (deploy) | Fail-fast secret preflight; position + env test-pinned | <1 s | KEEP |
 | `Install dependencies` (deploy) | Prerequisite for every later step | ~11 s | KEEP |
 | `Install Playwright browsers` (deploy) | Incident f2e194184 (deploy-gate browser installs); the plan's `e2e:local:release` + 3-engine diagnostic need them | ~14 s | KEEP |
-| `Typecheck` (deploy) | None for a discrete step — `launch:readiness:predeploy` inside `Deploy` re-runs `npm run typecheck`. Its NODE_OPTIONS heap fix (exit-134, 2026-08-11) targeted the retired 3 GiB VPS runner; the plan's uncapped typecheck passes on every green hosted deploy (run 34380544970) so the fix needs no re-home | 62 s | **DELETE** |
+| `Typecheck` (deploy) | None as a discrete workflow step. 2026-09-12 re-scope: the deploy path must carry a visible typecheck of its own, so coverage moved into `scripts/deploy-production.mjs` as an explicit `npm run typecheck` ahead of `wrangler deploy` (the plan's `launch:readiness:predeploy` also still runs one). Its NODE_OPTIONS heap fix (exit-134, 2026-08-11) targeted the retired 3 GiB VPS runner; uncapped typecheck passed on every green hosted deploy (run 34380544970), so the fix needs no re-home | 62 s | **DELETE** (coverage moved, not dropped) |
 | `Test` (deploy) | Ordering pin in deploy-production-gate.test.ts — `indexOf("- name: Test")` must sit between the secrets preflight and evidence materialize — plus auto-revert assertion anchor (0509#1576). Duplicates the plan's `npm test` (194 s) — noted cost, kept per no-gate-weakening | 194 s | KEEP |
 | `Materialize private remote-restore evidence` (deploy) | R1 evidence handoff; content test-pinned | ~1 s | KEEP |
 | `Verify and extract private remote-restore evidence` (deploy) | R1 archive integrity (single member, chmod 600) | ~1 s | KEEP |
@@ -164,4 +168,4 @@ Fill per deletion batch when merged:
 | PR | before (median PR CI min, required contexts) | after | delta |
 | --- | --- | --- | --- |
 | uptime-health.yml deletion — issue #3068, PR #3216 | 4.2 min median, 6 required contexts, 26 workflow files | 4.2 min median (unchanged — the check was dispatch-only, 0 PR jobs), 6 required contexts (ruleset `main-merge-queue` verified unchanged), 25 workflow files | −1 workflow file, −1 dispatchable hosted job, 0 PR-job delta |
-| #3070 trim (deploy-production.yml) | Deploy Worker job 22.5 min — run 34380544970, 2026-09-09 | pending first green post-merge run (deploy chain red on #3174 stale-ledger blocker); expected ≈21.4 min | −62 s (Typecheck duplicate removed) |
+| #3070 trim (deploy-production.yml) | Deploy Worker job 22.5 min — run 34380544970, 2026-09-09 | pending first green post-merge run (deploy chain red on #3174 stale-ledger blocker); expected ≈22 min | discrete 62 s step removed; `npm run typecheck` re-added inside `npm run deploy` per re-scope, net ≈ −0–20 s |
