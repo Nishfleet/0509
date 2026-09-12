@@ -19,6 +19,7 @@ import type { RootLoaderData } from "~/root";
 import {
   COMPETITOR_PRICE_ANCHORS,
   billingFaqJsonLdEntries,
+  formatMinorCurrency,
   planIntentPath,
   valueMathLabel,
 } from "~/components/pricing-copy";

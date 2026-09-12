@@ -79,6 +79,32 @@ describe("tiny purpose-built 404 (issue #2967)", () => {
     expect(routesCatchAllForPath(ROUTES, "/api/auth/anything-here")).toBe(false);
   });
 
+  it("accepts the production server-build manifest shape (flat Record with parentId)", () => {
+    // virtual:react-router/server-build exposes `routes` as a flat manifest
+    // Record keyed by route id — NOT the nested array the route config
+    // produces. The worker must rebuild the tree; a bare matchRoutes over the
+    // record throws and silently falls back to SSR (the 2026-09-12 dev-server
+    // finding: `routes.filter is not a function` on every request).
+    const manifest = {
+      root: { id: "root" },
+      "routes/marketing": { id: "routes/marketing", parentId: "root", index: true },
+      "routes/pricing": { id: "routes/pricing", parentId: "root", path: "pricing" },
+      "routes/$locale": { id: "routes/$locale", parentId: "root", path: ":locale" },
+      "routes/$locale.pricing": {
+        id: "routes/$locale.pricing",
+        parentId: "routes/$locale",
+        path: "pricing",
+      },
+      "routes/api.auth.$": { id: "routes/api.auth.$", parentId: "root", path: "api/auth/*" },
+      "routes/not-found": { id: "routes/not-found", parentId: "root", path: "*" },
+    };
+    expect(routesCatchAllForPath(manifest, "/definitely-not-a-page")).toBe(true);
+    expect(routesCatchAllForPath(manifest, "/pricing")).toBe(false);
+    expect(routesCatchAllForPath(manifest, "/de/pricing")).toBe(false);
+    expect(routesCatchAllForPath(manifest, "/api/auth/anything")).toBe(false);
+    expect(routesCatchAllForPath(manifest, "/")).toBe(false);
+  });
+
   it("cached decision is deterministic across repeated calls on the same tree", () => {
     // Honest scope: this proves decision STABILITY, not WeakMap identity. The
     // identity property is an implementation detail; the observable contract

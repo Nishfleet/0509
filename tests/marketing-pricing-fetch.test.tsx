@@ -131,12 +131,19 @@ function installPricingFetchMock(response: { ok: boolean; json?: () => Promise<u
 
 async function mountMarketing(): Promise<{ root: Root; container: HTMLDivElement }> {
   const { default: MarketingRoute } = await import("~/routes/marketing");
+  // Issue #2967: PricingSection mounts through React.lazy. Warm the chunk so
+  // the lazy payload resolves inside act's flush instead of landing after the
+  // test's assertions (the IntersectionObserver is registered by the section
+  // on mount).
+  await import("~/components/pricing-section");
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
   await act(async () => {
     root.render(createElement(MarketingRoute));
   });
+  // Let the lazy boundary swap in and its mount effects run.
+  await act(async () => {});
   return { root, container };
 }
 

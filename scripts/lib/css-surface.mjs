@@ -53,7 +53,7 @@ function resolveImport(appRoot, fromFile, spec) {
 const IMPORT_RE =
   /(?:^|\n)\s*(?:import|export)\s[^;]*?from\s*["']([^"']+)["']|(?:^|\n)\s*(?:import|export)\s*["']([^"']+)["']|(?:^|\n)\s*import\s*\(\s*["']([^"']+)["']\s*\)/g;
 
-function importsOf(file) {
+function importsOf(appRoot, file) {
   const src = fs.readFileSync(file, "utf8");
   const out = [];
   let m;
@@ -61,7 +61,7 @@ function importsOf(file) {
   while ((m = IMPORT_RE.exec(src))) {
     const spec = m[1] || m[2] || m[3];
     if (!spec) continue;
-    const r = resolveImport(path.dirname(file), file, spec);
+    const r = resolveImport(appRoot, file, spec);
     if (r) out.push(r);
   }
   return out;
@@ -76,7 +76,7 @@ export function reachableFiles(appRoot, startFiles) {
     if (seen.has(f)) continue;
     seen.add(f);
     if (f.endsWith(".css")) continue;
-    for (const dep of importsOf(f)) queue.push(dep);
+    for (const dep of importsOf(appRoot, f)) queue.push(dep);
   }
   return seen;
 }
@@ -88,16 +88,36 @@ export function reachableFiles(appRoot, startFiles) {
  */
 export function classNamesInSource(src) {
   const out = new Set();
+  // Only strict class-name tokens count. Template literals carry `${expr}`
+  // code that must be stripped before splitting, and conditional strings like
+  // `" is-on"` keep their leading space — whitespace-split handles both.
   const push = (s) => {
-    for (const t of s.split(/\s+/)) if (t) out.add(t);
+    const noInterp = s.replace(/\$\{[^{}]*\}/g, " ");
+    for (const t of noInterp.split(/\s+/)) {
+      // No trailing dash: `is-${tone}` leaves an `is-` fragment that is a
+      // dynamic prefix, not a class name.
+      if (/^[a-zA-Z](?:[a-zA-Z0-9_-]*[a-zA-Z0-9])?$/.test(t)) out.add(t);
+    }
   };
   let m;
   const lit = /className\s*=\s*(?:"([^"]*)"|'([^']*)'|\{`([^`]*)`\})/g;
   while ((m = lit.exec(src))) push(m[1] ?? m[2] ?? m[3] ?? "");
-  const braceRe = /className\s*=\s*\{([^}]*)\}/g;
-  while ((m = braceRe.exec(src))) {
-    for (const s of m[1].matchAll(/["'`]([^"'`]+)["'`]/g)) {
-      for (const t of s[1].split(/\s+/)) if (/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(t)) out.add(t);
+  // className={<expr>}: brace-balance the expression so a template literal's
+  // own `}` (closing `${…}`) cannot truncate it, then take the string
+  // literals inside — those are the candidate class names.
+  const braceStart = /className\s*=\s*\{/g;
+  while ((m = braceStart.exec(src))) {
+    let depth = 1;
+    let i = m.index + m[0].length;
+    const start = i;
+    while (i < src.length && depth > 0) {
+      if (src[i] === "{") depth++;
+      else if (src[i] === "}") depth--;
+      i++;
+    }
+    const expr = src.slice(start, i - 1);
+    for (const sm of expr.matchAll(/"([^"]*)"|'([^']*)'|`([^`]*)`/g)) {
+      push(sm[1] ?? sm[2] ?? sm[3] ?? "");
     }
   }
   const cnRe = /\b(?:cn|clsx|cx|classNames)\s*\(([^();]*)\)/g;
@@ -111,8 +131,32 @@ export function classNamesInSource(src) {
 export function* cssRuleBlocks(src) {
   let depth = 0;
   let bufStart = 0;
+  let inComment = false;
+  let inStr = null;
   for (let i = 0; i < src.length; i++) {
     const c = src[i];
+    if (inStr) {
+      if (c === inStr && src[i - 1] !== "\\") inStr = null;
+      continue;
+    }
+    if (inComment) {
+      // Braces inside /* … */ must not move the block boundary — a comment
+      // showing `.foo { … }` otherwise severs mid-comment and strands a `*/`.
+      if (c === "*" && src[i + 1] === "/") {
+        inComment = false;
+        i++;
+      }
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      inStr = c;
+      continue;
+    }
+    if (c === "/" && src[i + 1] === "*") {
+      inComment = true;
+      i++;
+      continue;
+    }
     if (c === "{") depth++;
     else if (c === "}") {
       depth--;
@@ -140,11 +184,28 @@ export function parseCssRules(css, usedBy) {
       continue;
     }
     const selIdx = text.indexOf("{");
-    const selector = selIdx === -1 ? text : text.slice(0, selIdx);
+    // Strip comments before extracting class tokens — a comment mentioning
+    // `.foo` or `file.ts` before a rule must not leak into the selector set.
+    const selector = (selIdx === -1 ? text : text.slice(0, selIdx)).replace(
+      /\/\*[\s\S]*?\*\//g,
+      " ",
+    );
+    // Container at-rules (@media/@supports/@layer/@container) wrap inner
+    // rules whose classes never appear in the prelude. Classify the whole
+    // container by the union of its inner classes: it moves only when EVERY
+    // class inside is provably marketing-only; a mixed container stays whole
+    // in root (conservative — splitting one would risk cascade order).
+    const isContainer = /^\s*@(media|supports|layer|container)\b/.test(selector);
+    const scanText = isContainer
+      ? text
+          .replace(/\/\*[\s\S]*?\*\//g, " ")
+          .replace(/url\([^)]*\)/g, " ")
+          .replace(/"[^"]*"|'[^']*'/g, " ")
+      : selector;
     const classes = new Set();
     CLASS_IN_SELECTOR_RE.lastIndex = 0;
     let cm;
-    while ((cm = CLASS_IN_SELECTOR_RE.exec(selector))) classes.add(cm[1]);
+    while ((cm = CLASS_IN_SELECTOR_RE.exec(scanText))) classes.add(cm[1]);
     const anims = [];
     ANIMATION_RE.lastIndex = 0;
     let am;
@@ -165,9 +226,14 @@ export function parseCssRules(css, usedBy) {
     }
     const inApp = r.classes.some((c) => usedBy.app.has(c));
     const inMkt = r.classes.some((c) => usedBy.marketing.has(c));
+    // A rule moves only when EVERY class it selects is provably
+    // marketing-used — a compound selector like `.ld-reveal.is-seen` where
+    // `is-seen` is applied via classList (invisible to this extractor) must
+    // stay in root, not be dragged to marketing.css by its visible half.
+    const allMkt = r.classes.every((c) => usedBy.marketing.has(c));
     if (inApp && inMkt) r.group = "shared";
     else if (inApp) r.group = "app";
-    else if (inMkt) r.group = "marketing";
+    else if (inMkt && allMkt) r.group = "marketing";
     else r.group = "unknown";
   }
   // @keyframes follow their referencing rules: move only when every rule that
@@ -218,8 +284,14 @@ export function classifySurfaces(rootDir, appDirName = APP_DIR_DEFAULT) {
     const b = path.basename(f);
     return b.startsWith("app.") || b === "app-layout.tsx";
   };
+  // root.tsx is the document shell (Layout + ErrorBoundary) rendered on EVERY
+  // surface — dashboard error pages included — but it is not a route file, so
+  // without this its classes (f9-error-*, f9-container) would classify as
+  // marketing-only wherever not-found.tsx also uses them, and the split would
+  // strip error styling from authed surfaces.
+  const shellFiles = [path.join(appRoot, "root.tsx")].filter((f) => fs.existsSync(f));
   const groups = {
-    app: reachableFiles(appRoot, routeFiles.filter((f) => isAppRoute(f))),
+    app: reachableFiles(appRoot, [...routeFiles.filter((f) => isAppRoute(f)), ...shellFiles]),
     marketing: reachableFiles(appRoot, routeFiles.filter((f) => !isAppRoute(f))),
   };
   const usedBy = {};
@@ -254,8 +326,7 @@ export function routeLoadsMarketingCss(classification, routeFile) {
     const src = fs.readFileSync(f, "utf8");
     if (src.includes(marker) && f !== routeFile) return true;
     if (f === routeFile && src.includes(marker)) return true;
-    for (const dep of importsOf(f)) queue.push(dep);
+    for (const dep of importsOf(appRoot, f)) queue.push(dep);
   }
-  void appRoot;
   return false;
 }

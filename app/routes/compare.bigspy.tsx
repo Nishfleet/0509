@@ -24,6 +24,8 @@ import { FREE_PREVIEW_SEARCH_DOMAIN, LIVE_BRAND_PROOF_DOMAIN } from "~/lib/demo-
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import bigspyCitations from "~/data/compare/bigspy-citations.json";
 
+import "~/styles/marketing.css";
+
 // Source verification (issue #3092): primary-source-verified —
 // https://bigspy.com/ and https://bigspy.com/pricing return HTTP 200 and name
 // real tiers (Free / Starter $69 / Growth $159 / Ultimate $499) — verified
