@@ -51,7 +51,21 @@ jobs:
     # /ads/:domain pages); it never mutates state, so it runs the default
     # token and needs `contents: read` only. Keep it on a hosted runner; a
     # scheduled live-fetch gate does not need a self-hosted seat.
+    #
+    # The canary sweeps every sitemap /ads/:domain URL (127 today) in one
+    # burst, well past the public-brand-page budget (12/60s, issue #3278).
+    # Issue #3278 adds a canary-token bypass in the edge limiter, scoped to
+    # the `public-brand-page` scope — the same scope the SEO canary hits —
+    # so the canary reports on the sitemap/noindex surface instead of
+    # tripping the limiter it is supposed to be measuring. CANARY_BYPASS_TOKEN
+    # lives in the `production` environment (the same secret the meta canary
+    # reads), so this job must declare `environment: production`; without it
+    # the secret resolves to an empty string and every request falls into the
+    # anonymous 12/60s bucket, going red for a transport reason (run
+    # 34685896915, 2026-09-12). A canary that cannot prove anything must
+    # fail LOUD, never exit 0.
     runs-on: ubuntu-latest
+    environment: production
     timeout-minutes: 15
     steps:
       - name: Checkout
@@ -62,16 +76,31 @@ jobs:
         # `bash` runs the existing live parity script; `set -euo pipefail`
         # propagates its non-zero exit when any sitemap /ads page serves
         # noindex. SEO_PARITY_MAX_SAMPLE is raised high enough to cover every
-        # /ads/:domain URL the sitemap lists (54 today) rather than the fast
+        # /ads/:domain URL the sitemap lists (127 today) rather than the fast
         # default sample of 10, satisfying acceptance #2's "fetches each
         # /ads/<domain> URL".
+        #
+        # The x-0509-canary-token header rides on every curl so the public
+        # brand-page edge limiter (#3278) returns null for an authenticated
+        # canary request — the canary can sweep all 127 in one go without
+        # tripping the very limiter it is supposed to be measuring.
         id: union
         shell: bash
         env:
           SEO_PARITY_SITE: https://0509.io
           SEO_PARITY_MAX_SAMPLE: 300
+          CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}
         run: |
           set -euo pipefail
+          if [ -z "${CANARY_BYPASS_TOKEN:-}" ]; then
+            echo "ads-prog-seo-canary: red (missing CANARY_BYPASS_TOKEN; the canary must hit /ads/:domain faster than the public 12/60s budget allows, and without the token every request is anonymous)" >&2
+            echo "state=missing-token" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          # The script picks up SEO_PARITY_CANARY_TOKEN and sends
+          # `x-0509-canary-token: <value>` on every curl, which the public
+          # brand-page edge limiter (issue #3278) trusts as the bypass header.
+          export SEO_PARITY_CANARY_TOKEN="${CANARY_BYPASS_TOKEN}"
           bash tests/seo/sitemap-noindex-parity.test.sh
           echo "state=green" >> "$GITHUB_OUTPUT"
 

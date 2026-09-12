@@ -21,7 +21,17 @@ SITE="${SEO_PARITY_SITE:-https://0509.io}"
 SITEMAP_URL="${SITE}/sitemap.xml"
 # Sample up to this many /ads URLs so the PR check stays fast and bounded.
 MAX_SAMPLE="${SEO_PARITY_MAX_SAMPLE:-10}"
+# Optional canary-bearer header (issue #3278). When set, every curl below
+# sends it; the public-brand-page edge limiter returns null for an
+# authenticated canary request, so the canary can sweep the whole sitemap
+# in one run without tripping the very limiter it is supposed to be
+# measuring. Unset on local PR checks (the limiter is generous in CI and a
+# one-off local sample never trips it). Constant-time-compare is at the edge
+# limiter; this script only sets the header.
 CURL_OPTS=(--silent --show-error --max-time 20 --retry 2 --retry-delay 2)
+if [ -n "${SEO_PARITY_CANARY_TOKEN:-}" ]; then
+  CURL_OPTS+=(-H "x-0509-canary-token: ${SEO_PARITY_CANARY_TOKEN}")
+fi
 
 # 1. Fetch the sitemap and extract the /ads/:domain URLs it lists.
 sitemap="$(curl "${CURL_OPTS[@]}" "$SITEMAP_URL")"
