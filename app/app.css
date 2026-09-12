@@ -1280,8 +1280,13 @@ button[aria-busy="true"] {
 
 .f9-join-card-head p {
   margin: 0;
-  color: var(--ld-ink-soft);
   font-size: 0.85rem;
+}
+
+/* The auth reskin's `.f9-auth-page .f9-auth-card p` (0,2,1) flattens join
+   secondary copy to full ink; one (0,3,1) rule keeps the muted hierarchy. */
+.f9-auth-page .f9-auth-card .f9-join-card p {
+  color: var(--ld-ink-soft);
 }
 
 .f9-join-card-facts {
@@ -1312,7 +1317,6 @@ button[aria-busy="true"] {
 
 .f9-join-candidates p {
   margin: 0;
-  color: var(--ld-ink-soft);
   font-size: 0.85rem;
 }
 
@@ -1341,7 +1345,6 @@ button[aria-busy="true"] {
 
 .f9-join-confirm p {
   margin: 0;
-  color: var(--ld-ink-soft);
   font-size: 0.82rem;
 }
 
@@ -1352,7 +1355,6 @@ button[aria-busy="true"] {
 
 .f9-join-disambiguate p {
   margin: 0;
-  color: var(--ld-ink-soft);
   font-size: 0.85rem;
 }
 
