@@ -96,6 +96,7 @@ export const SEEDED_OVER_800_TEST_FILES = [
   "tests/playwright-release-manifest-reporter.test.ts",
   "tests/presence.route.test.ts",
   "tests/provider-bakeoff.test.ts",
+  "tests/rate-limit.server.test.ts",
   "tests/search-answer.test.ts",
   "tests/search-submission-settle.test.tsx",
   "tests/search.route.test.ts",
