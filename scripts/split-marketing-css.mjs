@@ -42,14 +42,25 @@ const staying = rules.filter((r) => r.group !== "marketing");
 const movedBytes = moving.reduce((n, r) => n + (r.end - r.start), 0);
 const stayedBytes = staying.reduce((n, r) => n + (r.end - r.start), 0);
 
-if (moving.length === 0) {
+const existingMarketingPath = path.join(appRoot, "styles", "marketing.css");
+const existingMarketing = fs.existsSync(existingMarketingPath)
+  ? fs.readFileSync(existingMarketingPath, "utf8")
+  : "";
+
+if (moving.length === 0 && existingMarketing.length === 0) {
   console.log("split-marketing-css: nothing to move (already split or no marketing-only rules).");
   process.exit(0);
 }
 
 // Preserve the original relative order inside each output file so cascade
 // order among the moved rules (and among the kept rules) is unchanged.
-const marketingCss = `/*
+// On a re-run after the initial split, app/app.css no longer holds the
+// already-moved rules; preserve the previous marketing.css body and append
+// the new moves (with a blank line separator) so a re-run is genuinely
+// idempotent and never destroys an existing split.
+const newMovesBlock = moving.map((r) => r.text.trim()).join("\n\n");
+const marketingCss = existingMarketing.length === 0
+  ? `/*
  * Marketing-only styles (issue #2967).
  *
  * Split out of app/app.css by scripts/split-marketing-css.mjs so the root
@@ -62,7 +73,8 @@ const marketingCss = `/*
  * step with new CSS — tests/css-surface-split.test.ts gates it.
  */
 
-${moving.map((r) => r.text.trim()).join("\n\n")}\n`;
+${newMovesBlock}\n`
+  : `${existingMarketing.replace(/\n*$/, "")}\n\n${newMovesBlock}\n`;
 
 const appCss = `${staying.map((r) => r.text.trim()).join("\n\n")}\n`;
 
