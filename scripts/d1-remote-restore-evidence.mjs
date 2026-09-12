@@ -27,6 +27,10 @@ import {
   transformD1RestoreSql,
 } from "./d1-restore-transform.mjs";
 import {
+  POST_DEPLOY_CLEANUP_MIGRATIONS,
+  PRODUCTION_MIGRATION_LEDGER_BASELINE,
+  PRODUCTION_MIGRATION_LEDGER_ORDER_EXCEPTIONS,
+  RETIRED_PRODUCTION_MIGRATIONS,
   allowedProductionMigrationLedgers,
   migrationLedgerState,
 } from "./d1-migration-sync-check.lib.mjs";
@@ -75,6 +79,11 @@ export {
 } from "./d1-remote-restore-evidence-core.mjs";
 
 const PRODUCTION_DATABASE_NAME = "0509";
+const PRODUCTION_LEDGER_RECONCILIATION_OPTIONS = {
+  baseline: PRODUCTION_MIGRATION_LEDGER_BASELINE,
+  retiredMigrations: RETIRED_PRODUCTION_MIGRATIONS,
+  orderExceptions: PRODUCTION_MIGRATION_LEDGER_ORDER_EXCEPTIONS,
+};
 const SCRATCH_BINDING = "RESTORE_DB";
 const MAX_COMMAND_OUTPUT_BYTES = 64 * 1024 * 1024;
 const COMMAND_TIMEOUT_MS = 20 * 60 * 1000;
@@ -885,6 +894,8 @@ async function runAutomation(outputPath) {
     const ledgerPlan = planSourceBackupLedgerReconciliation(
       backup.aggregate.migrationLedger,
       migrations,
+      POST_DEPLOY_CLEANUP_MIGRATIONS,
+      PRODUCTION_LEDGER_RECONCILIATION_OPTIONS,
     );
     if (ledgerPlan.action === "reject") {
       rethrowWithMigrationLedgerDiagnostics(
@@ -919,6 +930,8 @@ async function runAutomation(outputPath) {
       assertMigrationLedgerMatchesRepository(
         sourceAggregate.migrationLedger,
         migrations,
+        POST_DEPLOY_CLEANUP_MIGRATIONS,
+        PRODUCTION_LEDGER_RECONCILIATION_OPTIONS,
       );
     } catch (error) {
       rethrowWithMigrationLedgerDiagnostics(
@@ -1112,6 +1125,10 @@ async function runAutomation(outputPath) {
       wranglerWorktreeSha256: candidate.wrangler.worktreeSha256,
       allowedMigrationStates: allowedProductionMigrationLedgers(
         migrations,
+        POST_DEPLOY_CLEANUP_MIGRATIONS,
+        PRODUCTION_MIGRATION_LEDGER_BASELINE,
+        RETIRED_PRODUCTION_MIGRATIONS,
+        PRODUCTION_MIGRATION_LEDGER_ORDER_EXCEPTIONS,
       ).map((ledger) => migrationLedgerState(ledger)),
       migrationBearing: true,
     });
