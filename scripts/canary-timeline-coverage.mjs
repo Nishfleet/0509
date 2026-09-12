@@ -21,23 +21,45 @@
  *   AND
  *     covered >= COVERAGE_FLOOR (0.8) * adsCount
  *
- * A fail verdict is EXPECTED until the landing_page_snapshot pipeline lands
- * (issue #3018 owns that persistence side — this issue only owns the
- * observable coverage gate over the public surface). The canary exists so
- * the day proof-complete captures land for the tracked cohort the metric
- * climbs autonomously and the guard goes green — observe-to-close — without
- * another code change. NOT armed on a systemd rail in this diff: while the
- * verdict is expected-red (until #3018 lands) a pinned red timer adds noise,
- * not signal; arming the runner/timer pair (ops/<guard>/ — sibling pattern
- * ops/demo-brand-timeline-guard/) becomes a one-command follow-up once the
- * capture pipeline is live.
+ * A pending verdict (baseline held, floor unreached) is EXPECTED until the
+ * landing_page_snapshot corpus covers the tracked cohort — the persistence
+ * side is issue #3018 (shipped) plus the nightly sitemap-timeline cohort
+ * backfill (issue #1958 phase 2) whose tier verdict now falls back to the
+ * /ads verified-link evidence (#3194), so the count climbs autonomously.
+ * THIS script is the observable detector on top:
+ * it fetches the live sitemap.xml, counts both cohorts, and applies the
+ * issue's termination rule —
  *
- * Exit codes:
- *   0 — coverage at/above the floor (>=80% of the /ads/ set, above baseline).
- *   1 — coverage below the floor (a data-side gap while #3018 is pending;
- *       never a shipping-empty regression — unlisted domains render noindex).
+ *     covered >  INITIAL_COVERED (7)
+ *   AND
+ *     covered >= COVERAGE_FLOOR (0.8) * adsCount
+ *
+ * split into three verdicts so the guard is armable while pending (see exit
+ * codes below): the daily systemd unit SUCCEEDS on pending, FAILS on a
+ * regression (covered < baseline — indexed proof pages vanished) or a probe
+ * failure, and goes green observe-to-close — the day proof-complete captures
+ * land for the tracked cohort the metric crosses the floor without another
+ * code change. ARMED on the fleet VPS rail by ops/timeline-coverage-guard/
+ * (sibling pattern ops/demo-brand-timeline-guard/):
+ * 0509-timeline-coverage-guard.timer, daily 09:47 UTC — after the 04:00 UTC
+ * capture rail, so a capture night is always counted before the verdict.
+ *
+ * Exit codes (issue #3095 guard contract, three coverage verdicts):
+ *   0 — pass: coverage at/above the floor (>=80% of the /ads/ set, above
+ *       baseline). The observe-to-close green.
+ *   1 — pending: coverage held at/above the seeded baseline (>= 7) but below
+ *       the floor — the documented expected-red while the landing_page_snapshot
+ *       population runs (issue #3018 persistence + the nightly sitemap-timeline
+ *       cohort backfill, issue #1958 phase 2/#3194 verdict fallback). Never a
+ *       shipping-empty regression — unlisted domains render noindex. The
+ *       systemd guard treats this as observe-OK: a pinned-red timer would add
+ *       noise, not signal.
  *   2 — the sitemap could not be fetched or parsed (probe failure, not a
  *       coverage verdict).
+ *   3 — regression: coverage DROPPED BELOW the seeded baseline (< 7) — indexed
+ *       proof pages vanished from the sitemap. This is a real alarm: the
+ *       systemd guard fails the unit on it and --file-issue auto-files the
+ *       incident.
  *
  * Usage:
  *   node scripts/canary-timeline-coverage.mjs                       # live probe
@@ -73,7 +95,7 @@ export const RELATES_ISSUE = 3018;
 export const GUARD_ISSUE = 3095;
 
 /**
- * @typedef {{adsCount: number, covered: number, floorCount: number, ratio: number, verdict: "pass" | "fail"}} CoverageVerdict
+ * @typedef {{adsCount: number, covered: number, floorCount: number, ratio: number, verdict: "pass" | "pending" | "regression"}} CoverageVerdict
  * @typedef {{baseUrl: string, checkedAt: string, verdict: CoverageVerdict}} CoverageReport
  */
 
@@ -114,11 +136,18 @@ export function entriesFromSitemapXml(xml) {
 /**
  * The issue's termination rule, pure so it is unit-testable from fixtures:
  *
- *     pass  <=>  covered > INITIAL_COVERED
- *            AND covered >= ceil(COVERAGE_FLOOR * ads)
+ *     pass        <=>  covered > INITIAL_COVERED
+ *                  AND covered >= ceil(COVERAGE_FLOOR * ads)
+ *     regression  <=>  covered < INITIAL_COVERED (indexed proof pages vanished)
+ *     pending     otherwise (baseline held, floor not yet reached)
  *
  * (The live-probe form in the issue uses `tl >= floor*ads and tl > 7`;
  * ceil is the honest reading — 0.8 * 91 = 72.8 requires >= 73 URLs.)
+ *
+ * The regression/pending split is what makes the guard armable while the
+ * verdict is expected-red: the daily systemd unit must SUCCEED on pending
+ * (population runs nightly on the capture pipeline) and FAIL only on a real
+ * regression or a probe failure — a pinned-red timer adds noise, not signal.
  *
  * @param {{ads: string[], timeline: string[]}} input
  * @returns {CoverageVerdict}
@@ -127,13 +156,18 @@ export function coverageVerdict({ ads, timeline }) {
   const adsCount = ads.length;
   const covered = timeline.length;
   const floorCount = Math.ceil(COVERAGE_FLOOR * adsCount);
+  const verdict =
+    covered < INITIAL_COVERED
+      ? "regression"
+      : covered > INITIAL_COVERED && covered >= floorCount
+        ? "pass"
+        : "pending";
   return {
     adsCount,
     covered,
     floorCount,
     ratio: adsCount === 0 ? 1 : covered / adsCount,
-    verdict:
-      covered > INITIAL_COVERED && covered >= floorCount ? "pass" : "fail",
+    verdict,
   };
 }
 
@@ -183,7 +217,8 @@ function buildIssueBody(report) {
     "",
     "The /timeline/ coverage gate from issue #" +
       GUARD_ISSUE +
-      " fired: the Offer Timeline's indexed share of the /ads/ brand surface is below the 80% floor.",
+      " fired: the Offer Timeline's indexed /timeline/ count DROPPED BELOW the seeded baseline of " +
+      INITIAL_COVERED + " — indexed proof pages vanished from the sitemap.",
     "",
     "- measured at: " + checkedAt,
     "- base: " + baseUrl,
@@ -194,7 +229,8 @@ function buildIssueBody(report) {
     "",
     "The cover set is data-driven (app/lib/sitemap.server.ts); snapshot",
     "population is issue #" + RELATES_ISSUE + "'s scope — this guard observes",
-    "the public-surface metric and goes green the day the captures land.",
+    "the public-surface metric; a below-baseline count is a regression, not",
+    "the documented pending state.",
     "",
     "Relates to #" + RELATES_ISSUE + ", #" + GUARD_ISSUE,
   ].join("\n");
@@ -217,9 +253,13 @@ function renderHumanReport({ baseUrl, checkedAt, verdict }) {
     lines.push(
       "verdict: ok — timeline coverage at/above the 80% floor and above the seeded baseline.",
     );
+  } else if (verdict.verdict === "regression") {
+    lines.push(
+      `verdict: REGRESSION — covered=${verdict.covered} dropped BELOW the seeded baseline (${INITIAL_COVERED}): indexed proof pages vanished from the sitemap.`,
+    );
   } else {
     lines.push(
-      `verdict: FAILED — covered=${verdict.covered} needs >${INITIAL_COVERED} and >=${verdict.floorCount}. Expected while landing_page_snapshot population (#${RELATES_ISSUE}) is pending; publishing empty pages instead is forbidden (no-empty-page rule).`,
+      `verdict: pending — covered=${verdict.covered} holds the baseline (>= ${INITIAL_COVERED}) but needs >${INITIAL_COVERED} and >=${verdict.floorCount}. Expected while landing_page_snapshot population (#${RELATES_ISSUE}) runs; publishing empty pages instead is forbidden (no-empty-page rule).`,
     );
   }
   return lines.join("\n");
@@ -297,9 +337,13 @@ async function main() {
     console.log(renderHumanReport({ baseUrl, checkedAt, verdict }));
   }
 
-  if (verdict.verdict === "fail" && opts.fileIssue && fixture === null) {
+  // Auto-filing is reserved for REGRESSIONS (covered < baseline): a pending
+  // below-floor state is the documented expected-red while the capture
+  // pipeline populates — filing an issue for it every night would be noise,
+  // exactly what the observe-to-close arming rule forbids.
+  if (verdict.verdict === "regression" && opts.fileIssue && fixture === null) {
     const repo = "Nishfleet/0509";
-    const title = `Offer Timeline coverage below floor (${verdict.covered}/${verdict.adsCount})`;
+    const title = `Offer Timeline coverage REGRESSION: below seeded baseline (${verdict.covered} covered, baseline ${INITIAL_COVERED})`;
     const body = buildIssueBody(report);
     if (opts.dryRun) {
       console.log("[dry-run] would run: gh issue create");
@@ -334,7 +378,9 @@ async function main() {
     }
   }
 
-  process.exit(verdict.verdict === "pass" ? 0 : 1);
+  process.exit(
+    verdict.verdict === "pass" ? 0 : verdict.verdict === "regression" ? 3 : 1,
+  );
 }
 
 /**

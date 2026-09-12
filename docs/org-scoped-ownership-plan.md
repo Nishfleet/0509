@@ -127,6 +127,7 @@ only through watchlist-scoped parents; it never joins to a user directly.
 | status_health_sample | public /status uptime sample rail (cron-written service facts: cron name, timestamp, D1 probe result — no tenant data) |
 | error_report | ops error-report sink — route/reason telemetry rows, no customer data |
 | analysis_field | polymorphic `scope_type`/`scope_id` — follows its parent surface; never user-joined directly |
+| status_probe_samples | status-probe telemetry samples (issue #3186) — probe name, ok/latency, checked_at; ops observability, no customer rows |
 
 ## 3. Decision: adopt 0089, extend it — no replacement
 

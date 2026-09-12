@@ -1509,7 +1509,7 @@ describe("D1 remote restore evidence automation", () => {
     // the repository sorting earlier. D1's ledger is append-only, so the live
     // order is fixed history the sorted repository cannot reproduce.
     //
-    // 0097_status_health_sample.sql is in the repository but NOT yet applied
+    // 0097_status_probe_samples.sql is in the repository but NOT yet applied
     // on production (production deploys have been red since 2026-09-09), so
     // the modeled production ledger excludes it too and every expected
     // forward-suffix includes it as ordinary catch-up at the tail.
@@ -1525,7 +1525,7 @@ describe("D1 remote restore evidence automation", () => {
       ...repositorySuffix.filter(
         (name) =>
           name !== "0096_email_suppression.sql" &&
-          name !== "0097_status_health_sample.sql",
+          name !== "0097_status_probe_samples.sql",
       ),
     ];
     expect(productionNames.at(-1)).toBe("0096_error_reports.sql");
@@ -1542,14 +1542,14 @@ describe("D1 remote restore evidence automation", () => {
       ),
     ).toEqual({
       action: "apply_forward_suffix",
-      migrations: ["0096_email_suppression.sql", "0097_status_health_sample.sql"],
+      migrations: ["0096_email_suppression.sql", "0097_status_probe_samples.sql"],
     });
     expect(
       planSourceBackupLedgerReconciliation(
         namedLedger([
           ...productionNames,
           "0096_email_suppression.sql",
-          "0097_status_health_sample.sql",
+          "0097_status_probe_samples.sql",
         ]),
         repository,
       ),
@@ -1569,7 +1569,7 @@ describe("D1 remote restore evidence automation", () => {
       migrations: [
         "0096_email_suppression.sql",
         "0096_error_reports.sql",
-        "0097_status_health_sample.sql",
+        "0097_status_probe_samples.sql",
       ],
     });
   });

@@ -141,6 +141,16 @@ export default defineConfig({
       },
     },
     {
+      name: "join-flow",
+      testDir: "./e2e",
+      testMatch: /join-identity-card\.spec\.ts/,
+      timeout: 60_000,
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: localBaseURL,
+      },
+    },
+    {
       name: "local-release",
       testMatch: journeyReleaseMatch,
       // Canonical release proof per-test budget. The shared vps-verify

@@ -1257,6 +1257,115 @@ button[aria-busy="true"] {
   line-height: 1.45;
 }
 
+.f9-join-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.f9-join-card {
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+  border: 1.5px solid var(--ld-ink);
+  background: var(--ld-bone);
+}
+
+.f9-join-card-head {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.f9-join-card-head p {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+/* The auth reskin's `.f9-auth-page .f9-auth-card p` (0,2,1) flattens join
+   secondary copy to full ink; one (0,3,1) rule keeps the muted hierarchy. */
+.f9-auth-page .f9-auth-card .f9-join-card p {
+  color: var(--ld-ink-soft);
+}
+
+.f9-join-card-facts {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.f9-join-card-facts div {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+}
+
+.f9-join-card-facts dt {
+  color: var(--ld-ink-soft);
+  font-family: var(--ld-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.f9-join-card-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.f9-join-candidates p {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.f9-join-candidates ul {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.f9-join-candidates li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--ld-line);
+  background: var(--ld-card);
+}
+
+.f9-join-confirm {
+  display: grid;
+  gap: 8px;
+}
+
+.f9-join-confirm p {
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.f9-join-disambiguate {
+  padding: 12px;
+  border: 1px dashed var(--ld-line);
+}
+
+.f9-join-disambiguate p {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.f9-join-enrich {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+  margin-top: 10px;
+}
+
 .f9-checkbox-row input {
   width: 18px;
   min-width: 18px;

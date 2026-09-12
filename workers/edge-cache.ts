@@ -69,7 +69,41 @@ import {
 
 const EDGE_TTL_CAP_SECONDS = 300;
 
+/** Serve-stale window (issue #3247): a stored copy stays a `x-0509-edge-cache:
+ * HIT` for its own max-age plus this many seconds, instead of hard-expiring at
+ * exactly the capped 5-minute TTL. Without it, the anonymous fleet visitor
+ * probes are the ONLY traffic on `/` — a probe landing more than 5 minutes
+ * after the last render (or straight after a deploy's version-id key change)
+ * was a GUARANTEED MISS plus a full-origin render, which is exactly the
+ * home_edge=NONE / multi-second-TTFB regression this issue documents. The
+ * window is bounded: past max-age+stale the copy hard-expires and the next
+ * request re-renders for real. Stale marketing-HTML staleness within the
+ * window is already the design's accepted posture — the #3125 proof brief
+ * carries its own fetchedAt clock and honesty labels ("captured <date>",
+ * "on record" when stale) precisely because stored documents outlive the
+ * data rows they summarise. Deploy invalidation is untouched: the version
+ * id in the cache key changes on every worker version upload.
+ */
+export const EDGE_STALE_WINDOW_SECONDS = 1800;
+
 const EDGE_CACHE_HEADER = "x-0509-edge-cache";
+
+/** Stored copies carry the epoch second they were rendered, so a served HIT
+ * can be checked against the serve-stale window (the Cache API exposes no
+ * Age). */
+const EDGE_STORED_AT_HEADER = "x-0509-edge-stored-at";
+
+/** Age of a stored copy in seconds from its stored-at stamp, or null when the
+ * stamp is missing/unreadable (older entries — treat as fresh, never punish
+ * a copy for a header we just introduced). Exported for the unit tests. */
+export function edgeCacheCopyAgeSeconds(response: Response, now = Date.now()): number | null {
+  const raw = response.headers.get(EDGE_STORED_AT_HEADER);
+  if (!raw) return null;
+  const storedAt = Number.parseInt(raw, 10);
+  if (!Number.isFinite(storedAt) || storedAt <= 0) return null;
+  const age = Math.floor(now / 1000) - storedAt;
+  return age >= 0 ? age : null;
+}
 
 /** Named edge cache (issue #2950). Isolated from caches.default so the
  * document cache never fights any other default-cache tenant. */
@@ -329,7 +363,11 @@ function headOf(status: number, statusText: string, headers: Headers): Response 
  * Return the cached edge copy for an eligible request, or null on a miss (or
  * when the request is ineligible, the cache is absent, or the Cache API
  * hiccups — fail-open). Cache-key construction is version-pinned so every
- * deploy self-invalidates.
+ * deploy self-invalidates. A copy older than its own max-age still serves as
+ * a HIT within the #3247 serve-stale window (EDGE_STALE_WINDOW_SECONDS); past
+ * the window the copy hard-expires and the caller re-renders.
+ *
+ * Exported for the unit tests.
  */
 export async function matchEdgeCache(
   request: Request,
@@ -347,6 +385,14 @@ export async function matchEdgeCache(
     return null;
   }
   if (!cached) {
+    return null;
+  }
+  // Serve-stale window (#3247): only expire a copy that is older than its own
+  // max-age PLUS the stale window. A missing/unreadable stored-at stamp (pre-
+  // #3247 entries) never expires early — the version-id key and the capped
+  // put TTL still bound those copies exactly as before.
+  const age = edgeCacheCopyAgeSeconds(cached);
+  if (age !== null && age > parseEdgeCacheTtlSeconds(cached) + EDGE_STALE_WINDOW_SECONDS) {
     return null;
   }
   const headers = stampedHeaders(cached, "HIT");
@@ -407,6 +453,7 @@ export async function storeEdgeCache(
   const storedHeaders = new Headers(response.headers);
   storedHeaders.delete("set-cookie");
   storedHeaders.set("cache-control", `public, max-age=${ttl}`);
+  storedHeaders.set(EDGE_STORED_AT_HEADER, String(Math.floor(Date.now() / 1000)));
   const cspHeader = response.headers.get("content-security-policy");
   if (cspHeader) {
     storedHeaders.set(

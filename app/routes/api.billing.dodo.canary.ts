@@ -1,15 +1,12 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import type {
+  BillingCanaryUserRow,
+  UserPlanSnapshot,
+} from "~/lib/billing-canary-identity.server";
 import { buildBillingCanaryLockId } from "~/lib/billing-canary-lock";
 import type { AppEnv } from "~/lib/env.server";
 import type { PricingPlanSlug } from "~/lib/pricing";
-
-interface BillingCanaryUserRow {
-  id: string;
-  email: string;
-  name: string | null;
-  plan: string | null;
-}
 
 interface PlanGrantRow {
   plan: string;
@@ -21,21 +18,6 @@ interface CreditGrantRow {
   status: string;
   granted_at: string;
   provider_payment_id: string;
-}
-
-interface UserPlanSnapshot {
-  user_id: string;
-  plan: string;
-  plan_updated_at: string;
-  dodo_payment_id: string | null;
-  dodo_product_id: string | null;
-  dodo_plan_change_product_id: string | null;
-  dodo_status: string | null;
-  dodo_subscription_id: string | null;
-  dodo_customer_id: string | null;
-  dodo_next_billing_at: string | null;
-  evidence_entitlement_anchor: string | null;
-  evidence_entitlement_anchor_source: string | null;
 }
 
 interface WatchlistStateSnapshot {
@@ -66,27 +48,11 @@ const BILLING_CANARY_RECOVERY_STALE_DAYS = 5 / (24 * 60);
 // Keep the lock-held work below the shared 5-minute webhook lease and the
 // script's 60-second request timeout; observed overruns fail closed.
 const BILLING_CANARY_MAX_RUNTIME_MS = 60_000;
-// Gate C must not borrow the launch owner's account. LAUNCH_CANARY_EMAIL is a
-// real customer identity whose live billing state changes without any deploy
-// — a lapsed subscription, a pending plan change, or a row deleted by an
-// unrelated admin action turned the release gate red for ~24h (issue #2646),
-// and because the client collapsed every non-2xx into
-// billing_canary_http_failure the evidence never named the assertion.
-//
-// The canary now runs on a dedicated non-customer identity that this endpoint
-// provisions once and nothing else mutates. The provision is INSERT OR IGNORE:
-// an existing row is never repaired, so drift on the dedicated identity still
-// fails the stability check loudly and the gate's strength is unchanged.
-const BILLING_CANARY_USER_ID = "billing-canary-0509";
-const BILLING_CANARY_DEFAULT_EMAIL = "billing-canary@0509.internal";
-
-/**
- * The address the billing canary runs as when the caller does not override it.
- * Deliberately independent of LAUNCH_CANARY_EMAIL.
- */
-function resolveDedicatedBillingCanaryEmail(env: AppEnv) {
-  return (env.BILLING_CANARY_EMAIL?.trim() || BILLING_CANARY_DEFAULT_EMAIL).toLowerCase();
-}
+// The dedicated canary identity, its provisioning, the plan snapshot reader,
+// and the canary plan allowlist live in ~/lib/billing-canary-identity.server
+// so the status probe (app/lib/status-probes.server.ts) exercises the exact
+// same helpers instead of a diverging copy. Gate C's evidence rules (never
+// borrow LAUNCH_CANARY_EMAIL, INSERT OR IGNORE provisioning) are unchanged.
 
 export function loader(_args: LoaderFunctionArgs) {
   return Response.json(
@@ -115,6 +81,16 @@ function hasCanonicalCanaryOrigin(request: Request) {
 export async function action({ context, request }: ActionFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const { hasValidCanaryToken } = await import("~/lib/canary-token.server");
+  // Route-module convention: .server helpers are dynamically imported inside
+  // the action — a static import leaves the module referenced by the client
+  // bundle (react-router dot-server build error).
+  const {
+    ensureDedicatedBillingCanaryUser,
+    getBillingCanaryUser,
+    getUserPlanSnapshot,
+    planForCanary,
+    resolveDedicatedBillingCanaryEmail,
+  } = await import("~/lib/billing-canary-identity.server");
   const env = getEnv(context);
 
   if (!(await hasValidCanaryToken(request, env.CANARY_BYPASS_TOKEN))) {
@@ -575,49 +551,6 @@ async function postSignedWebhook({
   };
 }
 
-/**
- * Provision the dedicated billing-canary identity exactly once: a `user` row
- * plus a `user_plan` baseline whose state satisfies the canary's stability
- * precondition (`plan` is a canary-supported slug, `dodo_status` is a settled
- * paid state, no pending plan change). Both writes are INSERT OR IGNORE, so an
- * existing row is never clobbered — drift on the dedicated identity still
- * fails the stability check instead of being silently repaired, which is what
- * keeps the gate's strength unchanged.
- */
-async function ensureDedicatedBillingCanaryUser(env: AppEnv, email: string) {
-  if (!env.DB) return;
-  const now = new Date().toISOString();
-  await env.DB.prepare(`
-      INSERT OR IGNORE INTO user (id, name, email, emailVerified, createdAt, updatedAt)
-      VALUES (?, ?, ?, 1, ?, ?)
-    `)
-    .bind(BILLING_CANARY_USER_ID, "Billing Canary", email, now, now)
-    .run();
-  await env.DB.prepare(`
-      INSERT OR IGNORE INTO user_plan (user_id, plan, plan_updated_at, dodo_status)
-      VALUES (?, 'scout', ?, 'payment.succeeded')
-    `)
-    .bind(BILLING_CANARY_USER_ID, now)
-    .run();
-}
-
-async function getBillingCanaryUser(env: AppEnv, email: string) {
-  const result = await env.DB?.prepare(`
-      SELECT
-        user.id,
-        user.email,
-        user.name,
-        user_plan.plan
-      FROM user
-      LEFT JOIN user_plan
-        ON user_plan.user_id = user.id
-      WHERE lower(user.email) = lower(?)
-      LIMIT 1
-    `).bind(email).all<BillingCanaryUserRow>();
-
-  return result?.results?.[0] ?? null;
-}
-
 async function getPlanGrant(env: AppEnv, userId: string, providerPaymentId: string) {
   const result = await env.DB?.prepare(`
       SELECT plan, dodo_payment_id
@@ -642,29 +575,6 @@ async function getCreditGrant(env: AppEnv, userId: string, providerPaymentId: st
   return result?.results?.[0] ?? null;
 }
 
-async function getUserPlanSnapshot(env: AppEnv, userId: string) {
-  const result = await env.DB?.prepare(`
-      SELECT
-        user_id,
-        plan,
-        plan_updated_at,
-        dodo_payment_id,
-        dodo_product_id,
-        dodo_plan_change_product_id,
-        dodo_status,
-        dodo_subscription_id,
-        dodo_customer_id,
-        dodo_next_billing_at,
-        evidence_entitlement_anchor,
-        evidence_entitlement_anchor_source
-      FROM user_plan
-      WHERE user_id = ?
-      LIMIT 1
-    `).bind(userId).all<UserPlanSnapshot>();
-
-  return result?.results?.[0] ?? null;
-}
-
 async function getWatchlistStateSnapshot(env: AppEnv, userId: string) {
   const result = await env.DB?.prepare(`
       SELECT id, is_active, paused_reason, updated_at
@@ -678,6 +588,7 @@ async function getWatchlistStateSnapshot(env: AppEnv, userId: string) {
 function parseBillingCanaryRecoveryMetadata(
   value: string,
   userId: string,
+  planForCanary: (value: string | null) => PricingPlanSlug | null,
 ): BillingCanaryRecoveryMetadata | null {
   try {
     const parsed = JSON.parse(value) as Partial<BillingCanaryRecoveryMetadata>;
@@ -717,6 +628,7 @@ async function recoverPreviousBillingCanaryRuns(
   currentLockEventId: string,
 ) {
   if (!env.DB) return false;
+  const { planForCanary } = await import("~/lib/billing-canary-identity.server");
   const recoveryNow = new Date().toISOString();
   const result = await env.DB.prepare(`
       SELECT event_id, metadata_json
@@ -740,7 +652,7 @@ async function recoverPreviousBillingCanaryRuns(
     ).all<RecoverableBillingCanaryRow>();
 
   for (const row of result.results ?? []) {
-    const metadata = parseBillingCanaryRecoveryMetadata(row.metadata_json, userId);
+    const metadata = parseBillingCanaryRecoveryMetadata(row.metadata_json, userId, planForCanary);
     if (!metadata) return false;
     const postCanaryWatchlists = await getWatchlistStateSnapshot(env, userId);
     const [planCleanup, creditCleanupOk] = await Promise.all([
@@ -944,6 +856,7 @@ async function cleanupCanaryPlanGrant(
 
   let planCleanupOk = false;
   try {
+    const { getUserPlanSnapshot } = await import("~/lib/billing-canary-identity.server");
     const [syntheticGrant, restoredSnapshot] = await Promise.all([
       getPlanGrant(env, userId, providerPaymentId),
       getUserPlanSnapshot(env, userId),
@@ -1037,14 +950,6 @@ async function cleanupCanaryCreditGrant(env: AppEnv, userId: string, providerPay
 
 function isCurrentActiveTopUpGrant(grant: CreditGrantRow) {
   return grant.status === "active" && Number(grant.quantity_granted) > 0;
-}
-
-function planForCanary(value: string | null): PricingPlanSlug | null {
-  if (value === "agency" || value === "starter" || value === "scout") {
-    return value;
-  }
-
-  return null;
 }
 
 async function readCanaryInput(request: Request) {
