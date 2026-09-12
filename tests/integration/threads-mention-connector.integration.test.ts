@@ -58,6 +58,7 @@ const KEYWORD_SEARCH_PAGE = JSON.stringify({
       is_reply: false,
     },
     {
+      // fixed-date: fixture data mirrors a captured Meta keyword_search response; the connector only parses the instant, it is not compared against a live clock
       // No permalink — must be skipped, never a fabricated canonicalUrl.
       id: "1801234567891",
       text: "permalink-less post",
