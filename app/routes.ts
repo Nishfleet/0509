@@ -156,7 +156,10 @@ export default [
   // Issue #2887: the MagicBrief wind-down page — the one vendor shutdown
   // creating real switching demand (BET 8). It replaces the legacy
   // switch-URL 301: the path serves 200 again, only /compare/magicbrief
-  // keeps redirecting to the hub.
+  // keeps redirecting to the hub. Issue #3111: a stale-edge deploy once
+  // reverted this to a 301 — the live-prod assertion in
+  // tests/seo/sitemap-noindex-parity.test.sh (ads-prog-seo-canary.yml)
+  // guards it staying a sitemap-listed 200.
   route("switch/magicbrief", "routes/switch.magicbrief.tsx"),
   route("switch/panoramata", "routes/switch.panoramata.tsx"),
   route("switch/visualping", "routes/switch.visualping.tsx"),
