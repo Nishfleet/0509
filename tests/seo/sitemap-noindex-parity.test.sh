@@ -62,11 +62,16 @@ for url in "${ads_urls[@]:0:${MAX_SAMPLE}}"; do
 done
 
 if [ "$failures" -gt 0 ]; then
-  echo "seo-parity: FAIL — ${failures} sitemap /ads URL(s) serve noindex" >&2
-  exit 1
+  echo "seo-parity: FAIL — ${failures} sitemap /ads URL(s) failed the indexable check (non-2xx/empty body/noindex)" >&2
 fi
 
 # 2. Fixture-vs-live drift alarm (issue #3229).
+#
+# Sections in this script ACCUMULATE failures and exit once at the end —
+# never bail early. A hard failure in the noindex loop above (e.g. live
+# 429s, as seen 2026-09-12 when the sitemap grew past the rate limit) must
+# not mask the drift gate: drift is exactly what accumulates while another
+# section is red.
 #
 # The /brands and /sneaker-resale coverage tests pin the cluster's live,
 # indexable /ads/ domains to a hand-updated snapshot
@@ -98,8 +103,6 @@ drift_failures=0
 LC_ALL=C
 export LC_ALL
 fixture_domains=$(jq -r '.domains[]' tests/fixtures/sneaker-resale-indexable-domains.snapshot.json 2>/dev/null | tr 'A-Z' 'a-z' | sed 's#^www\.##' | sort)
-seed_domains=$(jq -r '.domains[].domain' data/seed-lists/sneaker-resale.json 2>/dev/null | tr 'A-Z' 'a-z' | sed 's#^www\.##' | sort)
-
 seed_domains=$(jq -r '.domains[].domain' data/seed-lists/sneaker-resale.json 2>/dev/null | tr 'A-Z' 'a-z' | sed 's#^www\.##' | sort)
 
 if [ -z "$fixture_domains" ] || [ -z "$seed_domains" ]; then
@@ -135,7 +138,6 @@ fi
 
 if [ "$drift_failures" -gt 0 ]; then
   echo "seo-parity: FAIL — ${drift_failures} snapshot-fixture drift finding(s)" >&2
-  exit 1
 fi
 
 # 3. Live-prod check for the BET 8 MagicBrief wind-down surface (issue #3111).
@@ -176,6 +178,11 @@ fi
 
 if [ "$magicbrief_failures" -gt 0 ]; then
   echo "seo-parity: FAIL — ${magicbrief_failures} MagicBrief wind-down check(s) failed" >&2
+fi
+
+total_failures=$((failures + drift_failures + magicbrief_failures))
+if [ "$total_failures" -gt 0 ]; then
+  echo "seo-parity: FAIL — ${total_failures} finding(s): ${failures} indexable-check, ${drift_failures} fixture-drift, ${magicbrief_failures} magicbrief" >&2
   exit 1
 fi
 
