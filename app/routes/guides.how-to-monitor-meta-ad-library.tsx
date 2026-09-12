@@ -26,6 +26,7 @@ import type { LinksFunction, MetaFunction } from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
+import { GuideKeepReading } from "~/components/guide-keep-reading";
 import {
   canonicalLinks,
   faqPageJsonLd,
@@ -292,6 +293,13 @@ export default function GuideHowToMonitorMetaAdLibraryRoute() {
           and we&rsquo;ll answer honestly, including &ldquo;the manual routine is enough for you.&rdquo;
         </p>
       </section>
+
+      <GuideKeepReading>
+        <a href="/guides/how-to-track-competitor-ads">How to track competitor ads</a>
+        <a href="/guides/how-to-get-alerted-when-a-competitor-changes-their-offer">
+          How to get alerted when a competitor changes their offer
+        </a>
+      </GuideKeepReading>
 
       <MarketingFooter />
     </main>
