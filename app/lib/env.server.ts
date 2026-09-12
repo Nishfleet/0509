@@ -27,6 +27,7 @@ export interface EmailSendingBinding {
 // platform.
 export type EdgeRateLimitBindingName =
   | "RL_AUTH"
+  | "RL_AUTH_GET"
   | "RL_SEARCH_ANON_BROWSER"
   | "RL_PROOF_BRIEF"
   | "RL_SEARCH_SELECTION"
