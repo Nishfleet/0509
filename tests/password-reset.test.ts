@@ -164,7 +164,6 @@ describe("account page", () => {
     expect(markup).toContain("Download my data (JSON)");
     expect(markup).toContain("Delete your account and your data");
     expect(markup).toContain("Delete my account");
-    expect(markup).toContain("Download my data (JSON)");
     expect(markup).toContain("erasure runs automatically");
     expect(markup).not.toContain("Request account deletion support");
     expect(markup).toContain("support@0509.io");
