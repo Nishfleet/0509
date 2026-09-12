@@ -517,6 +517,8 @@ export function staticSitemapEntriesForLocale(
     "/guides/how-to-get-alerted-when-a-competitor-changes-their-offer",
     "/guides/how-to-prove-what-changed-on-a-competitor-website",
     "/guides/how-to-turn-a-one-off-competitor-check-into-a-standing-watch",
+    // Issue #3127: the API-limitations explainer stays in the locale feeds.
+    "/guides/meta-ad-library-api-limitations",
   ].filter((path) => path !== "/" && path !== "/sitemap.xml");
   const entries: SitemapEntry[] = [];
   for (const path of buyerSurfacePaths) {
