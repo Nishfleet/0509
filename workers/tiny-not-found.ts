@@ -39,6 +39,37 @@ export const TINY_NOT_FOUND_HTML = `<!doctype html>
 </html>
 `;
 
+/**
+ * `serverBuild.routes` is the React Router route MANIFEST — a flat
+ * `Record<id, {id, parentId, path, index, …}>` — not the nested array
+ * `matchRoutes` expects. Rebuild the tree from `parentId` links. Entries
+ * keep only the fields matching needs (path/index/caseSensitive); the
+ * manifest's own enumeration order already matches route-config order.
+ */
+function manifestToRouteObjects(
+  routes: AgnosticRouteObject[] | Record<string, { id?: string; parentId?: string; path?: string; index?: boolean; caseSensitive?: boolean }>,
+): AgnosticRouteObject[] {
+  if (Array.isArray(routes)) return routes;
+  type ManifestEntry = { parentId?: string; path?: string; index?: boolean; caseSensitive?: boolean };
+  const nodes = new Map<string, AgnosticRouteObject & { children: AgnosticRouteObject[] }>();
+  for (const [id, r] of Object.entries(routes as Record<string, ManifestEntry>)) {
+    nodes.set(id, {
+      path: r.path,
+      index: r.index === true,
+      caseSensitive: r.caseSensitive,
+      children: [],
+    } as AgnosticRouteObject & { children: AgnosticRouteObject[] });
+  }
+  const roots: AgnosticRouteObject[] = [];
+  for (const [id, r] of Object.entries(routes as Record<string, ManifestEntry>)) {
+    const node = nodes.get(id)!;
+    const parent = r.parentId && nodes.get(r.parentId);
+    if (parent) parent.children.push(node);
+    else roots.push(node);
+  }
+  return roots;
+}
+
 function stripNotFoundSplat(routes: AgnosticRouteObject[]): AgnosticRouteObject[] {
   return routes
     .filter((entry) => entry.path !== "*")
@@ -59,16 +90,20 @@ function thrownNotFoundParams(params: Record<string, string | undefined>): boole
   return keys.length === 1 && keys[0] === "locale" && !isBuyerSurfaceLocaleId(params.locale);
 }
 
-// Cache the stripped tree per imported build: the routes array is stable at
-// runtime (the server build module import is cached), so the recursive filter
-// runs once per isolate, not once per request.
+// Cache the stripped tree per imported build: the routes manifest is stable
+// at runtime (the server build module import is cached), so the manifest→tree
+// conversion and recursive filter run once per isolate, not once per request.
 const strippedRoutesCache = new WeakMap<object, AgnosticRouteObject[]>();
 
-function routesWithoutNotFoundSplat(routes: AgnosticRouteObject[]): AgnosticRouteObject[] {
-  const cached = strippedRoutesCache.get(routes);
+function routesWithoutNotFoundSplat(
+  routes: AgnosticRouteObject[] | Record<string, unknown>,
+): AgnosticRouteObject[] {
+  const cached = strippedRoutesCache.get(routes as object);
   if (cached) return cached;
-  const stripped = stripNotFoundSplat(routes);
-  strippedRoutesCache.set(routes, stripped);
+  const stripped = stripNotFoundSplat(
+    manifestToRouteObjects(routes as AgnosticRouteObject[]),
+  );
+  strippedRoutesCache.set(routes as object, stripped);
   return stripped;
 }
 
@@ -76,7 +111,11 @@ function routesWithoutNotFoundSplat(routes: AgnosticRouteObject[]): AgnosticRout
  * True when the React Router tree would serve the `not-found` catch-all for
  * this pathname — i.e. routing matched nothing but the splat.
  */
-export function routesCatchAllForPath(routes: AgnosticRouteObject[], pathname: string, basename = "/"): boolean {
+export function routesCatchAllForPath(
+  routes: AgnosticRouteObject[] | Record<string, unknown>,
+  pathname: string,
+  basename = "/",
+): boolean {
   const matches = matchRoutes(
     routesWithoutNotFoundSplat(routes),
     pathname,

@@ -40,6 +40,8 @@ import {
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
+import "~/styles/marketing.css";
+
 const PATHNAME = "/guides/how-to-get-alerted-when-a-competitor-changes-their-offer";
 
 /**

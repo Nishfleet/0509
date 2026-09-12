@@ -24,6 +24,8 @@ import { FREE_PREVIEW_SEARCH_DOMAIN, LIVE_BRAND_PROOF_DOMAIN } from "~/lib/demo-
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import poweradspyCitations from "~/data/compare/poweradspy-citations.json";
 
+import "~/styles/marketing.css";
+
 // Source verification (issue #3092): primary-source-verified —
 // https://poweradspy.com/ and https://poweradspy.com/pricing return HTTP 200
 // and name real tiers (Standard $99 / Platinum $279 / Palladium $399 monthly,

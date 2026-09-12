@@ -112,7 +112,7 @@ export function billingFaqJsonLdEntries(agencySaleOpen: boolean): FaqJsonLdEntry
   ];
 }
 
-function formatMinorCurrency(
+export function formatMinorCurrency(
   amount: number | null | undefined,
   currency: string | null | undefined,
   options: { roundWhole?: boolean } = {},
