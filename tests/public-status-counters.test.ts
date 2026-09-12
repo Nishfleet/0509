@@ -28,6 +28,13 @@ function makeEnv(prepare: ReturnType<typeof vi.fn>) {
 
 describe("getPublicStatusCounters digest query", () => {
   it("reads the last-sent digest from created_at across status='sent', never delivered_at", async () => {
+    // Pin the clock relative to the seeded digest timestamp: `digestHealth`
+    // compares `lastDigestSentAt` against Date.now() with a 7-day staleness
+    // window, so a real wall clock more than 7 days past the fixture would
+    // flip this to "stalled" even though the code under test is fine.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-06T04:00:00.000Z"));
+    try {
     const issued: string[] = [];
     const prepare = vi.fn((sql: string) => {
       issued.push(sql);
@@ -56,6 +63,9 @@ describe("getPublicStatusCounters digest query", () => {
       lastDigestSentAt: "2026-09-05T04:00:52.000Z",
       digestHealth: "recent",
     });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("reads the earliest scheduled-observation baseline for the coverage figure", async () => {

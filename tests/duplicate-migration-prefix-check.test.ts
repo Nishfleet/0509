@@ -78,8 +78,11 @@ describe("duplicate migration prefix check", () => {
     const names = migrationFileNames(migrationsDir);
     expect(names.length).toBeGreaterThan(50);
     const { duplicatePrefixes, offenders } = duplicateMigrationPrefixes(names);
-    // The three historical pairs must stay frozen and never renumbered.
-    expect(duplicatePrefixes.sort()).toEqual(["0067", "0087", "0090"]);
+    // The historical pairs must stay frozen and never renumbered: 0067/0087/0090
+    // were applied under both spellings before any guard; 0096 was a same-day
+    // double-merge (error_reports #2988 + email_suppression #2983, independent
+    // tables) frozen at the gate's landing to keep the apply ledger provable.
+    expect(duplicatePrefixes.sort()).toEqual(["0067", "0087", "0090", "0096"]);
     expect(offenders.size).toBe(0);
     expect(duplicatePrefixViolation(migrationsDir)).toBeNull();
   });
