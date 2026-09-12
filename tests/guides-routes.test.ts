@@ -368,3 +368,66 @@ describe("guides #3093 trio — offer-change alert, prove-what-changed, standing
     });
   }
 });
+
+// Issue #3122: production 404'd the #2888 third how-to while the sitemap
+// still advertised it and the /guides hub hid it — a SPLIT deployment state.
+// The per-guide tests above are enumerated (each guide hard-coded), so a
+// guide added to the sitemap without a route, or hidden from the index,
+// slipped through. This suite is mechanical: it derives the guide set from
+// the sitemap source itself and demands triple agreement —
+//   sitemap source (app/lib/sitemap.server.ts)
+//     <-> route registration (app/routes.ts, EN + $locale)
+//     <-> index card (GUIDE_ENTRIES in app/routes/guides.tsx)
+// — so the sitemap can never again promise a URL the Worker does not serve,
+// and the hub can never undersell the cluster.
+describe("guides triple agreement: sitemap <-> route <-> index (issue #3122)", () => {
+  const SITEMAP_GUIDE_RE = /"\/guides\/([a-z0-9-]+)"/g;
+  const ROUTE_GUIDE_RE = /route\("guides\/([a-z0-9-]+)"/g;
+
+  function uniqueSlugs(source: string, re: RegExp): string[] {
+    return [...new Set([...source.matchAll(re)].map((m) => m[1]!))].sort();
+  }
+
+  it("registers a route (EN + $locale) and an index card for every /guides/* path the sitemap source lists", async () => {
+    const { readFileSync } = await import("node:fs");
+    const sitemapSlugs = uniqueSlugs(
+      readFileSync("app/lib/sitemap.server.ts", "utf8"),
+      SITEMAP_GUIDE_RE,
+    );
+    // The cluster is 6 guides; grow this floor when the next how-to ships.
+    expect(sitemapSlugs.length).toBeGreaterThanOrEqual(6);
+
+    const routes = readFileSync("app/routes.ts", "utf8");
+    for (const s of sitemapSlugs) {
+      // #3122's observed failure: sitemap lists the URL, no EN route —
+      // the catch-all renders "Page not found" for every stranger.
+      expect(routes, `sitemap lists /guides/${s} but no EN route registers it`).toContain(
+        `route("guides/${s}", "routes/guides.${s}.tsx")`,
+      );
+      // The $locale registration matches the guide's entry in the locale
+      // sitemaps (same source list); without it the /de//ja/... variants 404.
+      expect(routes, `sitemap lists /guides/${s} but no $locale route registers it`).toContain(
+        `route("guides/${s}", "routes/$locale.guides.${s}.tsx")`,
+      );
+    }
+
+    // Converse leg (the #2295 anti-drop direction): every guides/* route
+    // registration is advertised by the sitemap source — a registered route
+    // absent from the sitemap is invisible to crawlers.
+    const routeSlugs = uniqueSlugs(
+      readFileSync("app/routes.ts", "utf8"),
+      ROUTE_GUIDE_RE,
+    );
+    expect(routeSlugs).toEqual(sitemapSlugs);
+
+    // Third leg: the /guides index links every sitemap guide — a hub that
+    // undersells its own cluster is the same #3122 fault from the other side.
+    const { GUIDE_ENTRIES } = await import("~/routes/guides");
+    const hubHrefs = GUIDE_ENTRIES.map((g) => g.href);
+    for (const s of sitemapSlugs) {
+      expect(hubHrefs, `/guides index hides its own sitemap guide /guides/${s}`).toContain(
+        `/guides/${s}`,
+      );
+    }
+  });
+});
