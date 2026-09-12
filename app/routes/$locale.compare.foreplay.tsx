@@ -6,6 +6,7 @@
 // through the EN loser, and no hreflang cluster on a canonicalized-away page.
 import CompareForeplayRoute, { links, meta } from "./compare.foreplay";
 
+import "~/styles/marketing.css";
 export { links, meta };
 
 export default CompareForeplayRoute;

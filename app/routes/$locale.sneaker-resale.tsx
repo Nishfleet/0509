@@ -13,6 +13,7 @@ import {
 import { sneakerResaleCopy } from "~/lib/sneaker-resale-copy";
 import { canonicalUrl, clusterSocialCardUrl, publicSeoMeta, sneakerResaleHreflangLinks } from "~/lib/seo";
 
+import "~/styles/marketing.css";
 function localeFromParams(params: LoaderFunctionArgs["params"] | { locale?: string }): SneakerResaleLocaleId {
   const locale = params.locale;
   if (!isSneakerResaleLocaleId(locale) || locale === "en") {

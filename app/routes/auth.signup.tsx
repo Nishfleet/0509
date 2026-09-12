@@ -5,6 +5,7 @@ import { AuthForm } from "~/components/auth-form";
 import { BrandWordmark } from "~/components/brand-wordmark";
 import { canonicalLinks, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
 
+import "~/styles/marketing.css";
 const signupDescription =
   "Create a Five to Nine account to search competitor ads, save useful examples, and monitor offer changes.";
 

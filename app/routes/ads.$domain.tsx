@@ -108,6 +108,7 @@ import { SUPPORT_EMAIL } from "~/lib/support";
 import type { AdRecord } from "~/lib/types";
 import type { BrandPageSourceSnapshot } from "~/components/brand-page/source-snapshots.server";
 
+import "~/styles/marketing.css";
 /**
  * The hydrated projection of one cached creative — the wall, the ticker and
  * the stat line (issue #2391).
