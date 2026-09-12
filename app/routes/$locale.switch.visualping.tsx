@@ -5,6 +5,7 @@ import type { LinksFunction } from "react-router";
 import SwitchVisualpingRoute, { meta } from "./switch.visualping";
 import { buyerSurfaceHreflangLinks, canonicalLinks } from "~/lib/seo";
 
+import "~/styles/marketing.css";
 export { meta };
 
 export const links: LinksFunction = () => [

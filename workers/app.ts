@@ -8,6 +8,7 @@ import {
   routesCatchAllForPath,
   tinyNotFoundResponse,
 } from "./tiny-not-found";
+import { maybeInlineMarketingRouteCss } from "./inline-route-css";
 import { reportScheduledTaskFailure } from "../app/lib/cron-failure-alert.server";
 import {
   runDemoBrandBackfill,
@@ -418,7 +419,12 @@ export default {
       cspNonce,
     });
     const response = await requestHandler(request, routerContext);
-    return withSecurityHeaders(withPublicContentSignal(response, request), request, cspNonce);
+    // Issue #2967: marketing documents inline their route stylesheet (no
+    // second render-blocking request on the landing cluster); every other
+    // response passes through untouched. Falls back to the original document
+    // on any error — see workers/inline-route-css.ts.
+    const documentResponse = await maybeInlineMarketingRouteCss(response, request);
+    return withSecurityHeaders(withPublicContentSignal(documentResponse, request), request, cspNonce);
   },
   async scheduled(controller, env, ctx) {
     const observationContext = Object.freeze({

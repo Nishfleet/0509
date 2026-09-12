@@ -16,6 +16,7 @@ import {
   type FaqJsonLdEntry,
 } from "~/lib/seo";
 
+import "~/styles/marketing.css";
 // Reason codes rendered below via CAPTURE_VALIDITY_PUBLIC_RULES (the source of
 // truth lives in capture-validity-public-rules.ts, which maps each to a
 // gate kind): landing_error_page, landing_challenge_page,

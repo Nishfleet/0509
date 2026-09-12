@@ -24,6 +24,7 @@ const citations = pulzifiCitations as CompareCitations;
 
 export { compareAdsExampleLoader as loader } from "~/lib/ads-internal-links.server";
 
+import "~/styles/marketing.css";
 const pageDescription =
   "Pulzifi monitors public URLs and delivers AI strategy briefs on every change. Five to Nine keeps the proof source-first and ties it to Meta Ad Library checks.";
 
