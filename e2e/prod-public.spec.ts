@@ -377,7 +377,13 @@ test.describe("public production-safe E2E smoke", { lock: "external-api" }, () =
         await expect(page.getByRole("heading", { name: "Core surfaces" })).toBeVisible();
         await expect(page.getByText("Email delivery", { exact: true }).first()).toBeVisible();
         await expect(page.getByText("Scheduled monitoring", { exact: true }).first()).toBeVisible();
-        await expect(page.getByText("Operational", { exact: true }).first()).toBeVisible();
+        const emailRow = page
+          .locator("dl.proof-trail-list > div", { hasText: "Email delivery" })
+          .first();
+        // The Email delivery row renders a measured state label, not
+        // placeholder prose (review finding, #3189: the page-wide
+        // "Operational" probe passed off any row's state, not this row's).
+        await expect(emailRow).toContainText(/Operational|Degraded|Down/);
       }
       const controls = await collectVisiblePublicControls(page);
 

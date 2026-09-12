@@ -641,8 +641,6 @@ export async function getPublicStatusSurfaces(
       STATE_RANK[canaryState.state] > STATE_RANK[counterState.state]
     ) {
       counterState = canaryState;
-    } else if (canaryState && !counterState) {
-      counterState = canaryState;
     }
     surfaces.push(
       applyProbeReading(
