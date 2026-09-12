@@ -552,6 +552,85 @@ describe("getSitemapTimelineTierByDomain (read-only D1 adapter)", () => {
     expect(tierByDomain.size).toBe(0);
   });
 
+  it("(n) falls back to the /ads verified-link evidence when the payload carries no domainMatch coverage (issue #3095)", async () => {
+    const fetchedAt = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
+    // Legacy meta_library_browser payload: ads carry NO domainMatch at all
+    // (pre-enrichment rows), but the landing page URL links to the brand —
+    // the exact shape observed live for adidas.com (2026-09-12).
+    const adidasKey =
+      "search-v2:domain:adidas.com:exact:meta_library_browser:all:page-1";
+    queryIn.mockResolvedValue([
+      {
+        cache_key: adidasKey,
+        fetched_at: fetchedAt,
+        expires_at: expiresAt,
+        payload_json: JSON.stringify({
+          ads: [
+            { landingPageUrl: "https://www.adidas.com/" },
+            { landingPageUrl: "https://www.adidas.com/us" },
+            { landingPageUrl: "https://fonts.googleapis.com/css" },
+            { landingPageUrl: "not-a-url" },
+          ],
+          source: "meta_library_browser",
+          provider: "meta_library_browser",
+        }),
+      },
+    ]);
+
+    const { getSitemapTimelineTierByDomain } = await adapter();
+
+    const env = { DB: {} } as unknown as AppEnv;
+    const tierByDomain = await getSitemapTimelineTierByDomain(env, [
+      "adidas.com",
+    ]);
+
+    // Two verified via landing-page link, two unmatched — hasCoverage flips
+    // from false (the old domainMatch-only read) to true, so the nightly
+    // cohort captures the brand the way the /ads page already trusts it.
+    expect(tierByDomain.get("adidas.com")).toEqual({
+      verifiedCount: 2,
+      likelyCount: 0,
+      unmatchedCount: 2,
+      hasCoverage: true,
+      cacheStatus: "fresh",
+    });
+  });
+
+  it("(o) the fallback does NOT mint coverage for a landing host on a different registrable domain", async () => {
+    const fetchedAt = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
+    const adidasKey =
+      "search-v2:domain:adidas.com:exact:meta_library_browser:all:page-1";
+    queryIn.mockResolvedValue([
+      {
+        cache_key: adidasKey,
+        fetched_at: fetchedAt,
+        expires_at: expiresAt,
+        payload_json: JSON.stringify({
+          ads: [{ landingPageUrl: "https://www.nike.com/" }],
+          source: "meta_library_browser",
+          provider: "meta_library_browser",
+        }),
+      },
+    ]);
+
+    const { getSitemapTimelineTierByDomain } = await adapter();
+
+    const env = { DB: {} } as unknown as AppEnv;
+    const tierByDomain = await getSitemapTimelineTierByDomain(env, [
+      "adidas.com",
+    ]);
+
+    expect(tierByDomain.get("adidas.com")).toEqual({
+      verifiedCount: 0,
+      likelyCount: 0,
+      unmatchedCount: 1,
+      hasCoverage: false,
+      cacheStatus: "fresh",
+    });
+  });
+
   it("excludes demo-source payloads so demo data never back a public cohort entry", async () => {
     const fetchedAt = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     const expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();

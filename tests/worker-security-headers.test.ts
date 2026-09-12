@@ -406,7 +406,7 @@ describe("Worker security headers", () => {
 
   describe("anonymous public HTML caching", () => {
     it("lets anonymous public pages carry short browser caching", () => {
-      for (const path of ["/", "/help", "/docs", "/terms", "/ads/nike.com", "/timeline/nike.com", "/compare/visualping", "/compare/visualping-ad-library", "/compare/visualping-ad-libraries", "/compare/spyland", "/compare/pulzifi", "/compare/foreplay", "/compare/foreplay-spyder", "/compare/panoramata", "/compare/adspyder", "/compare/adspy", "/switch/panoramata", "/switch/visualping", "/switch/magicbrief", "/switch/adspy", "/methodology", "/methodology/ad-aggression-score"]) {
+      for (const path of ["/", "/help", "/docs", "/terms", "/brands", "/brands/e-brands", "/guides", "/guides/how-to-track-competitor-ads", "/compare"  , "/compare/keeptabz", "/compare/gethookd", "/compare/bigspy", "/compare/minea", "/compare/poweradspy", "/ads/nike.com", "/timeline/nike.com", "/compare/visualping", "/compare/visualping-ad-library", "/compare/visualping-ad-libraries", "/compare/spyland", "/compare/pulzifi", "/compare/foreplay", "/compare/foreplay-spyder", "/compare/panoramata", "/compare/adspyder", "/compare/adspy", "/switch/panoramata", "/switch/visualping", "/switch/magicbrief", "/switch/adspy", "/methodology", "/methodology/ad-aggression-score"]) {
         const response = withSecurityHeaders(
           htmlResponse(),
           new Request(`https://0509.io${path}`),
@@ -416,6 +416,16 @@ describe("Worker security headers", () => {
         expect(response.headers.has("cloudflare-cdn-cache-control"), path).toBe(false);
         expect(response.headers.has("pragma"), path).toBe(false);
       }
+    });
+
+    it("does not license the shared cache for an Authorization-carrying request", () => {
+      const response = withSecurityHeaders(
+        htmlResponse(),
+        new Request("https://0509.io/", {
+          headers: { authorization: "Bearer eye-lab-1" },
+        }),
+      );
+      expect(response.headers.get("cache-control")).toBe(HTML_NO_STORE_HEADERS["cache-control"]);
     });
 
     it("keeps signed-in requests no-store even on public paths", () => {

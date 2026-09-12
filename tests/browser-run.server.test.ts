@@ -144,10 +144,19 @@ describe("captureBrowserRunSnapshot decode wiring", () => {
       .fn()
       .mockRejectedValueOnce(new Error("screenshot failed"))
       .mockResolvedValueOnce(new Uint8Array([1, 2, 3]));
+    // Issue #3105: the mobile leg owns this page; the desktop evidence leg
+    // gets its own healthy page so the mobile retry assertions stay exact.
+    const desktopPage = createPage(
+      `<html><head><title>Readable render</title></head><body><main>rendered offer body copy with enough text to count as meaningful body content for the landing page signal extractor gate</main></body></html>`,
+      "https://example.com/offer",
+    );
     const put = vi.fn().mockResolvedValue(undefined);
     const browser = {
       close: vi.fn().mockResolvedValue(undefined),
-      newPage: vi.fn().mockResolvedValue(page),
+      newPage: vi
+        .fn()
+        .mockResolvedValueOnce(page)
+        .mockResolvedValue(desktopPage),
     };
     const launch = vi.fn().mockResolvedValue(browser);
     vi.doMock("@cloudflare/puppeteer", () => ({ default: { launch } }));
@@ -180,9 +189,18 @@ describe("captureBrowserRunSnapshot decode wiring", () => {
       .fn()
       .mockRejectedValueOnce(new Error("transient r2 failure"))
       .mockResolvedValueOnce(undefined);
+    // Issue #3105: a dedicated healthy desktop page renders the second
+    // viewport leg after the mobile leg's puts count in the expectations.
+    const desktopPage = createPage(
+      `<html><head><title>Readable render</title></head><body><main>rendered offer body copy with enough text to count as meaningful body content for the landing page signal extractor gate</main></body></html>`,
+      "https://example.com/offer",
+    );
     const browser = {
       close: vi.fn().mockResolvedValue(undefined),
-      newPage: vi.fn().mockResolvedValue(page),
+      newPage: vi
+        .fn()
+        .mockResolvedValueOnce(page)
+        .mockResolvedValue(desktopPage),
     };
     const launch = vi.fn().mockResolvedValue(browser);
     vi.doMock("@cloudflare/puppeteer", () => ({ default: { launch } }));
@@ -202,8 +220,9 @@ describe("captureBrowserRunSnapshot decode wiring", () => {
       expect.stringMatching(/\.jpeg$/u),
     );
     // The screenshot put was retried once (2 attempts) plus the HTML put (1):
-    // 3 total. Without the retry it would be 2 (1 screenshot + 1 HTML).
-    expect(put).toHaveBeenCalledTimes(3);
+    // 3 mobile-leg puts, plus the desktop leg's own screenshot + HTML puts
+    // (issue #3105 dual viewport): 5 total. Without the retry it would be 4.
+    expect(put).toHaveBeenCalledTimes(5);
   });
 
   it("fails the capture when the R2 put fails on both attempts and requireScreenshot is true", async () => {

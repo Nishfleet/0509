@@ -451,20 +451,32 @@ async function artifactKeyReferencedInD1(env: AppEnv, key: string) {
       SELECT (
         SELECT COUNT(*) FROM proof_capture
         WHERE html_artifact_key = ? OR screenshot_artifact_key = ?
+          OR (json_valid(capture_metadata_json) AND json_extract(capture_metadata_json, '$.desktopHtmlArtifactKey') = ?)
+          OR (json_valid(capture_metadata_json) AND json_extract(capture_metadata_json, '$.desktopScreenshotArtifactKey') = ?)
       ) + (
         SELECT COUNT(*) FROM landing_page_snapshot
         WHERE artifact_key = ?
           OR (json_valid(metadata_json) AND json_extract(metadata_json, '$.htmlArtifactKey') = ?)
           OR (json_valid(metadata_json) AND json_extract(metadata_json, '$.screenshotArtifactKey') = ?)
+          OR (json_valid(metadata_json) AND json_extract(metadata_json, '$.desktopHtmlArtifactKey') = ?)
+          OR (json_valid(metadata_json) AND json_extract(metadata_json, '$.desktopScreenshotArtifactKey') = ?)
       ) + (
         SELECT COUNT(*) FROM ad
         WHERE json_valid(raw_json) AND (
           json_extract(raw_json, '$.landingPage.artifactKey') = ?
           OR json_extract(raw_json, '$.landingPage.metadata.htmlArtifactKey') = ?
           OR json_extract(raw_json, '$.landingPage.metadata.screenshotArtifactKey') = ?
+          OR json_extract(raw_json, '$.landingPage.metadata.desktopHtmlArtifactKey') = ?
+          OR json_extract(raw_json, '$.landingPage.metadata.desktopScreenshotArtifactKey') = ?
         )
       ) AS external_references
     `,
+    key,
+    key,
+    key,
+    key,
+    key,
+    key,
     key,
     key,
     key,
@@ -667,6 +679,10 @@ function retentionArtifactKeys(candidate: SnapshotRetentionCandidate): string[] 
     candidate.artifact_key,
     metadata.htmlArtifactKey,
     metadata.screenshotArtifactKey,
+    // Issue #3105: desktop-viewport evidence artifacts live only in snapshot
+    // metadata; they must age out WITH the snapshot, never leak as orphans.
+    metadata.desktopHtmlArtifactKey,
+    metadata.desktopScreenshotArtifactKey,
   ].filter((value): value is string => typeof value === "string" && value.length > 0);
   const keys = new Set<string>();
   for (const value of values) {
@@ -687,20 +703,31 @@ async function artifactReferencedOutsideSnapshot(env: AppEnv, snapshotId: string
           other.artifact_key = ?
           OR (json_valid(other.metadata_json) AND json_extract(other.metadata_json, '$.htmlArtifactKey') = ?)
           OR (json_valid(other.metadata_json) AND json_extract(other.metadata_json, '$.screenshotArtifactKey') = ?)
+          OR (json_valid(other.metadata_json) AND json_extract(other.metadata_json, '$.desktopHtmlArtifactKey') = ?)
+          OR (json_valid(other.metadata_json) AND json_extract(other.metadata_json, '$.desktopScreenshotArtifactKey') = ?)
         )
       ) + (
         SELECT COUNT(*) FROM proof_capture
         WHERE html_artifact_key = ? OR screenshot_artifact_key = ?
+          OR (json_valid(capture_metadata_json) AND json_extract(capture_metadata_json, '$.desktopHtmlArtifactKey') = ?)
+          OR (json_valid(capture_metadata_json) AND json_extract(capture_metadata_json, '$.desktopScreenshotArtifactKey') = ?)
       ) + (
         SELECT COUNT(*) FROM ad
         WHERE json_valid(raw_json) AND (
           json_extract(raw_json, '$.landingPage.artifactKey') = ?
           OR json_extract(raw_json, '$.landingPage.metadata.htmlArtifactKey') = ?
           OR json_extract(raw_json, '$.landingPage.metadata.screenshotArtifactKey') = ?
+          OR json_extract(raw_json, '$.landingPage.metadata.desktopHtmlArtifactKey') = ?
+          OR json_extract(raw_json, '$.landingPage.metadata.desktopScreenshotArtifactKey') = ?
         )
       ) AS external_references
     `,
     snapshotId,
+    key,
+    key,
+    key,
+    key,
+    key,
     key,
     key,
     key,
@@ -720,22 +747,34 @@ async function artifactReferencedOutsideProofCapture(env: AppEnv, proofCaptureId
       SELECT (
         SELECT COUNT(*) FROM proof_capture AS other
         WHERE other.id <> ?
-          AND (other.html_artifact_key = ? OR other.screenshot_artifact_key = ?)
+          AND (other.html_artifact_key = ? OR other.screenshot_artifact_key = ?
+            OR (json_valid(other.capture_metadata_json) AND json_extract(other.capture_metadata_json, '$.desktopHtmlArtifactKey') = ?)
+            OR (json_valid(other.capture_metadata_json) AND json_extract(other.capture_metadata_json, '$.desktopScreenshotArtifactKey') = ?)
+          )
       ) + (
         SELECT COUNT(*) FROM landing_page_snapshot
         WHERE artifact_key = ?
           OR (json_valid(metadata_json) AND json_extract(metadata_json, '$.htmlArtifactKey') = ?)
           OR (json_valid(metadata_json) AND json_extract(metadata_json, '$.screenshotArtifactKey') = ?)
+          OR (json_valid(metadata_json) AND json_extract(metadata_json, '$.desktopHtmlArtifactKey') = ?)
+          OR (json_valid(metadata_json) AND json_extract(metadata_json, '$.desktopScreenshotArtifactKey') = ?)
       ) + (
         SELECT COUNT(*) FROM ad
         WHERE json_valid(raw_json) AND (
           json_extract(raw_json, '$.landingPage.artifactKey') = ?
           OR json_extract(raw_json, '$.landingPage.metadata.htmlArtifactKey') = ?
           OR json_extract(raw_json, '$.landingPage.metadata.screenshotArtifactKey') = ?
+          OR json_extract(raw_json, '$.landingPage.metadata.desktopHtmlArtifactKey') = ?
+          OR json_extract(raw_json, '$.landingPage.metadata.desktopScreenshotArtifactKey') = ?
         )
       ) AS external_references
     `,
     proofCaptureId,
+    key,
+    key,
+    key,
+    key,
+    key,
     key,
     key,
     key,

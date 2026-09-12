@@ -69,6 +69,15 @@ export const GUIDE_PROVE_WHAT_CHANGED_SIGNUP_SOURCE = "guide-prove-what-changed"
 export const GUIDE_STANDING_WATCH_SIGNUP_SOURCE = "guide-standing-watch";
 
 /**
+ * The exact marker the /guides/meta-ad-library-api-limitations explainer
+ * carries on its /search preview CTA (issue 3127): the guide is an
+ * organic-search entry point, so a signup that starts from its preview is
+ * attributed to the guide. Hyphen slug — inside the open slug shape, so no
+ * migration literal needed.
+ */
+export const GUIDE_API_LIMITS_SIGNUP_SOURCE = "guide-api-limitations";
+
+/**
  * /for-agencies CTA marker (issue #2144): the agency landing page's signup
  * link carries `source=for_agencies` so Agency-plan funnel measurement can
  * attribute checkout starts to that page.
@@ -104,6 +113,7 @@ export const ALLOWED_SIGNUP_SOURCES = [
   GUIDE_OFFER_CHANGE_ALERT_SIGNUP_SOURCE,
   GUIDE_PROVE_WHAT_CHANGED_SIGNUP_SOURCE,
   GUIDE_STANDING_WATCH_SIGNUP_SOURCE,
+  GUIDE_API_LIMITS_SIGNUP_SOURCE,
 ] as const;
 
 /**

@@ -715,7 +715,10 @@ export default function CompetitorMonitoringCategoryRoute() {
           <Link to="/guides/how-to-prove-what-changed-on-a-competitor-website">how to prove what
           changed on a competitor&rsquo;s website</Link>, or{" "}
           <Link to="/guides/how-to-turn-a-one-off-competitor-check-into-a-standing-watch">how to
-          turn a one-off check into a standing watch</Link>. Questions about
+          turn a one-off check into a standing watch</Link>. Weighing the official API
+          route? Read{" "}
+          <Link to="/guides/meta-ad-library-api-limitations">what the Meta Ad Library API
+          actually covers</Link>. Questions about
           coverage on your competitors? Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and
           we&rsquo;ll answer honestly.
         </p>

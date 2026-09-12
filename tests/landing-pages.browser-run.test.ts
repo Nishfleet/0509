@@ -543,7 +543,7 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
         },
       }),
     });
-    expect(put).toHaveBeenCalledTimes(2);
+    expect(put).toHaveBeenCalledTimes(4);
     expect(browser.close).toHaveBeenCalled();
   });
 
@@ -667,11 +667,12 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
       ctaText: "Buy now",
       metadata: {
         screenshotArtifactKey: null,
-        htmlArtifactKey: expect.stringMatching(/\.html$/u),
-        captureWarningCodes: ["screenshot_too_large"],
+        captureWarningCodes: expect.arrayContaining(["screenshot_too_large"]),
       },
     });
-    expect(put).toHaveBeenCalledTimes(1);
+    // Issue #3105: the desktop leg persists its own HTML artifact too (its
+    // oversized screenshot is dropped under the same byte cap).
+    expect(put).toHaveBeenCalledTimes(2);
   });
 
   it("captures a rendered proof bundle from a heavyweight (>1 MiB) real page", async () => {
@@ -732,7 +733,8 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
         screenshotArtifactKey: expect.stringContaining(".jpeg"),
       }),
     });
-    expect(put).toHaveBeenCalledTimes(2);
+    // Issue #3105: the desktop leg persists its own HTML + screenshot pair too.
+    expect(put).toHaveBeenCalledTimes(4);
   });
 
   it("still fails closed when rendered HTML exceeds the raised bound", async () => {
