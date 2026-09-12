@@ -147,7 +147,7 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).toContain("Paid customer support paths cover");
     expect(PUBLIC_MARKDOWN).toContain("Public help, docs, API docs, status, changelog, trust, and proof-rules pages are available");
     expect(PUBLIC_MARKDOWN).toContain("summarizes customer-facing surfaces without exposing private account activity");
-    expect(PUBLIC_MARKDOWN).toContain("Email delivery is in product scope for eligible accounts");
+    expect(PUBLIC_MARKDOWN).toContain("Email delivery is measured live on the public status page");
     expect(PUBLIC_MARKDOWN).toContain("Public Markdown separates local capability, configured paths, and live proof");
     expect(PUBLIC_MARKDOWN).toContain("public search is live at /search with real Meta Ad Library checks");
     // Cross-platform ad-library aggregators exist (adlibrary.com and similar);
@@ -222,7 +222,7 @@ describe("public markdown", () => {
     expect(LLMS_TEXT).toContain("Signed-in support cases cover billing changes and cancellation");
     expect(LLMS_TEXT).not.toContain("Slack delivery can be connected from Integrations");
     expect(LLMS_TEXT).toContain("summarizes customer-facing surfaces without exposing private account activity");
-    expect(LLMS_TEXT).toContain("Email delivery is in product scope for eligible accounts");
+    expect(LLMS_TEXT).toContain("Email delivery is measured live on the public status page");
     expect(LLMS_TEXT).not.toMatch(/Email delivery is available/i);
     expect(LLMS_TEXT).not.toContain("WhatsApp delivery is not launch-scoped yet");
     expect(LLMS_TEXT).not.toContain("/api/mcp");

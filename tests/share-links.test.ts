@@ -650,7 +650,7 @@ describe("/share/:token route", () => {
     const { default: ShareRoute } = await import("~/routes/share.$token");
     const markup = renderToStaticMarkup(createElement(ShareRoute));
 
-    expect(markup).toContain("Snapshot unavailable");
+    expect(markup).toContain("Snapshot not readable");
     expect(markup).toContain("create a fresh share link");
     expect(markup).not.toContain("owner@example.com");
     expect(markup).not.toContain("provider-msg-1");

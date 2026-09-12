@@ -43,8 +43,8 @@ describe("customer help runtime truth", () => {
     expect(markup).toContain("Free lets you watch one competitor");
     expect(markup).toContain("an activation scan when you add it and one first brief");
     expect(markup).toContain("Paid plans add recurring checks (3–6 hour cadence), daily briefs, evidence, and more competitors");
-    expect(markup).toContain("Email delivery is in product scope");
-    expect(markup).toContain("does not measure live email-provider availability");
+    expect(markup).toContain("Email delivery runs through Cloudflare Email Service");
+    expect(markup).toContain("the Status page measures it live");
     expect(markup).toContain("A manual refresh confirms a fresh check only; it does not confirm recurring delivery.");
     expect(markup).toContain("If a scheduled digest does not arrive");
     expect(markup).not.toMatch(/email delivery is available/i);

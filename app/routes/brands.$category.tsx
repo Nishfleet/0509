@@ -58,7 +58,7 @@ interface BrandCategoryItem {
   domain: string;
   path: string;
   name: string;
-  /** Non-demo ad count from the sitemap backing; null when unavailable. */
+  /** Non-demo ad count from the sitemap backing; null when not yet read. */
   adCount: number | null;
   /** Ad Aggression Score 0–100, or null when deferred. */
   score: number | null;
