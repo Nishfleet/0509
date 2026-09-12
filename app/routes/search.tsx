@@ -285,7 +285,9 @@ async function loadSearchCompetitorPreview(
     return null;
   }
   try {
-    const { seedAutoCompetitors } = await import("~/lib/auto-competitor-seed.server");
+    const { buildCandidateId, seedAutoCompetitors } = await import(
+      "~/lib/auto-competitor-seed.server"
+    );
     const candidates = await seedAutoCompetitors(env, {
       domain: intent.registrableDomain,
       country: input.country,
@@ -296,11 +298,10 @@ async function loadSearchCompetitorPreview(
     return {
       domain: intent.registrableDomain,
       rows: candidates.slice(0, SEARCH_COMPETITOR_PREVIEW_LIMIT).map((candidate) => ({
-        candidateId: [
-          candidate.advertiser.trim().toLowerCase(),
-          (candidate.registrableDomain ?? "").trim().toLowerCase(),
-          (candidate.advertiserPageId ?? "").trim(),
-        ].join("|"),
+        // The shared builder, not a second inline copy: the dismissal store
+        // keys on this exact string, so a drift between the two would make a
+        // removed suggestion reappear (onboarding slice 2, #3175).
+        candidateId: buildCandidateId(candidate),
         advertiser: candidate.advertiser,
         pageId: candidate.advertiserPageId,
         landingPageUrl: candidate.registrableDomain
@@ -309,8 +310,13 @@ async function loadSearchCompetitorPreview(
         targetCountry: candidate.countries[0] ?? null,
         overlapScore: candidate.overlapScore,
         provenance: candidate.provenance,
+        why: candidate.why,
+        source: candidate.source,
         type: "candidate" as const,
       })),
+      // A logged-out preview is read-only by definition — the visitor has no
+      // plan and no account, so the rows are always a frozen snapshot here.
+      caps: { visible: SEARCH_COMPETITOR_PREVIEW_LIMIT, tracked: 0, frozen: true },
     };
   } catch {
     // A discovery failure must never take the public search page down —

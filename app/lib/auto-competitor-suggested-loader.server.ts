@@ -30,8 +30,15 @@
  */
 
 import type { AppEnv } from "~/lib/env.server";
-import { isPaidPlanFamily } from "~/lib/plan-entitlements";
+import {
+  getCompetitorSuggestionCaps,
+  type CompetitorSuggestionCaps,
+} from "~/lib/plan-entitlements";
 import type { PlanFamily } from "~/lib/plan-entitlements";
+import {
+  buildCandidateId,
+  type AutoCompetitorEvidenceSource,
+} from "~/lib/auto-competitor-seed.server";
 
 /**
  * The shape the panel receives. The `type` literal is a panel-internal
@@ -48,12 +55,27 @@ export interface SuggestedCompetitorRow {
   targetCountry: string | null;
   overlapScore: number;
   provenance: string;
+  /**
+   * Onboarding slice 2 (#3175): the one line the customer reads explaining why
+   * this advertiser is a competitor, and the typed evidence source it came
+   * from. Both are produced by the seed from real probe facts; the loader only
+   * carries them. Required (not optional) so a future seed change that drops
+   * them is a compile error here rather than a silently why-less row.
+   */
+  why: string;
+  source: AutoCompetitorEvidenceSource | "adjacent_brand_fallback";
   type: "candidate";
 }
 
 export interface SuggestedCompetitorsPanelData {
   domain: string;
   rows: SuggestedCompetitorRow[];
+  /**
+   * Onboarding slice 2 (#3175): the plan's suggestion caps, carried to the
+   * panel so it can render the frozen-snapshot state (Free) and the
+   * "N of M tracked" line without re-deriving the entitlement client-side.
+   */
+  caps: CompetitorSuggestionCaps;
 }
 
 /**
@@ -82,24 +104,12 @@ async function resolveWorkspaceSelfDomain(
 }
 
 /**
- * Build a deterministic candidate id from the (advertiser, domain) pair.
- * Phase 1's candidate record does not carry an id — the (advertiser,
- * registrable domain) tuple is the natural key. A SHA-style stable hash is
- * overkill; the joined string is enough to discriminate two candidates
- * that surfaced the same brand from different keyword probes, and stays
- * readable in error messages.
+ * The id builder, re-exported so the panel and the accept path keep their
+ * existing import. Defined in the seed module (see the import above) because the
+ * dismissal store keys on it too: exactly ONE definition, or the two copies
+ * could drift and silently un-dismiss a removed suggestion.
  */
-function buildCandidateId(seed: {
-  advertiser: string;
-  registrableDomain: string | null;
-  advertiserPageId: string | null;
-}): string {
-  return [
-    seed.advertiser.trim().toLowerCase(),
-    (seed.registrableDomain ?? "").trim().toLowerCase(),
-    (seed.advertiserPageId ?? "").trim(),
-  ].join("|");
-}
+export { buildCandidateId };
 
 const SUGGESTED_COMPETITOR_LIMIT = 8;
 
@@ -110,8 +120,11 @@ function shapeRowsForPanel(
     registrableDomain: string | null;
     overlapScore: number;
     provenance: string;
+    why: string;
+    source: AutoCompetitorEvidenceSource;
     countries: string[];
   }>,
+  limit: number,
 ): SuggestedCompetitorRow[] {
   // Sort by overlapScore desc, then by advertiser asc for stable order.
   const sorted = [...candidates].sort((left, right) => {
@@ -120,7 +133,7 @@ function shapeRowsForPanel(
     }
     return left.advertiser.localeCompare(right.advertiser);
   });
-  return sorted.slice(0, SUGGESTED_COMPETITOR_LIMIT).map((candidate) => {
+  return sorted.slice(0, Math.max(0, limit)).map((candidate) => {
     const candidateId = buildCandidateId(candidate);
     return {
       candidateId,
@@ -132,9 +145,66 @@ function shapeRowsForPanel(
       targetCountry: candidate.countries[0] ?? null,
       overlapScore: candidate.overlapScore,
       provenance: candidate.provenance,
+      why: candidate.why,
+      source: candidate.source,
       type: "candidate" as const,
     };
   });
+}
+
+/**
+ * Onboarding slice 2 (#3175): the zero-evidence fallback.
+ *
+ * When the customer's brand produces NO suggestion candidates at all (no ads on
+ * record, and the landing-page fallback found nothing usable), the panel must
+ * not simply be empty — the issue requires the #2411 adjacent-brand fallback
+ * instead. This function produces exactly that: the same-category tracked
+ * brands the `no_ads` state already offers, via the SAME picker
+ * (`pickSignupFirstBriefBrandSuggestions`) and the SAME indexable-links source
+ * the onboard view uses. No second adjacency engine, no second brand list.
+ *
+ * The rows carry `source: "adjacent_brand_fallback"` and a `why` that says
+ * plainly that this is a neighbouring brand rather than evidence of the
+ * customer's own ads — the honesty contract matters more here than anywhere,
+ * because this is the one path whose suggestion is NOT backed by the customer's
+ * own evidence. Returns `[]` on any failure so the caller's honest empty state
+ * still applies.
+ */
+async function loadAdjacentBrandFallbackRows(
+  env: AppEnv,
+  selfDomain: string,
+): Promise<SuggestedCompetitorRow[]> {
+  try {
+    const { loadIndexableAdsInternalLinks } = await import(
+      "~/lib/ads-internal-links.server"
+    );
+    const { pickSignupFirstBriefBrandSuggestions } = await import("~/lib/first-brief");
+    const links = await loadIndexableAdsInternalLinks(env);
+    const picked = pickSignupFirstBriefBrandSuggestions(
+      links.map((link) => ({ name: link.name, domain: link.domain, path: link.path })),
+      selfDomain,
+    );
+    return picked.map((brand) => ({
+      candidateId: buildCandidateId({
+        advertiser: brand.name,
+        registrableDomain: brand.domain,
+        advertiserPageId: null,
+      }),
+      advertiser: brand.name,
+      pageId: null,
+      landingPageUrl: `https://${brand.domain}`,
+      targetCountry: null,
+      overlapScore: 0,
+      provenance:
+        "Adjacent brand from the public /brands hub — offered because we found " +
+        "no ad or page evidence for your own brand yet. Not derived from your ads.",
+      why: "Tracks the same buyer category as you — a neighbour, not evidence from your ads.",
+      source: "adjacent_brand_fallback",
+      type: "candidate" as const,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -155,13 +225,19 @@ export async function loadSuggestedCompetitorsPanel(
   userId: string,
   plan: PlanFamily,
 ): Promise<SuggestedCompetitorsPanelData | null> {
-  if (!isPaidPlanFamily(plan)) {
-    return null;
-  }
+  // Onboarding slice 2 (#3175) reverses the old paid-only gate. Free used to
+  // get `null` (no panel at all), which threw away the one moment the evidence
+  // is most persuasive. Free now sees the discovered set as a FROZEN SNAPSHOT:
+  // every row rendered read-only, no add button. The evidence is real and
+  // visible; acting on it is what the paid plan buys. The caps carry that
+  // distinction (`frozen: true`, `tracked: 0`) rather than the loader
+  // withholding the data.
+  const caps = getCompetitorSuggestionCaps(plan);
+  const limit = Math.min(caps.visible, SUGGESTED_COMPETITOR_LIMIT);
 
   const selfDomain = await resolveWorkspaceSelfDomain(env, userId);
   if (!selfDomain) {
-    return { domain: "", rows: [] };
+    return { domain: "", rows: [], caps };
   }
 
   let raw: ReadonlyArray<{
@@ -170,6 +246,8 @@ export async function loadSuggestedCompetitorsPanel(
     registrableDomain: string | null;
     overlapScore: number;
     provenance: string;
+    why: string;
+    source: AutoCompetitorEvidenceSource;
     countries: string[];
     matchedKeywords: string[];
   }>;
@@ -184,10 +262,17 @@ export async function loadSuggestedCompetitorsPanel(
     // Seed failure degrades to empty — same posture as the loader's own
     // capture-window degrade: never let a downstream feature failure take
     // the watchlists page down.
-    return { domain: selfDomain.domain, rows: [] };
+    return { domain: selfDomain.domain, rows: [], caps };
   }
 
-  const rows = shapeRowsForPanel(raw);
-  return { domain: selfDomain.domain, rows };
+  const rows = shapeRowsForPanel(raw, limit);
+  if (rows.length === 0) {
+    // Zero evidence about the customer's own brand: fall back to the #2411
+    // adjacent brands rather than showing nothing. Capped by the same plan
+    // limit so the snapshot ceiling still holds.
+    const fallback = await loadAdjacentBrandFallbackRows(env, selfDomain.domain);
+    return { domain: selfDomain.domain, rows: fallback.slice(0, limit), caps };
+  }
+  return { domain: selfDomain.domain, rows, caps };
 }
 

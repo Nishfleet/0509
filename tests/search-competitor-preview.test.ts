@@ -179,7 +179,12 @@ function installLoaderMocks({
       selectedAd: baseAd,
     }),
   }));
-  vi.doMock("~/lib/auto-competitor-seed.server", () => ({
+  // Partial mock: `buildCandidateId` must stay REAL. The search preview route
+  // imports it from this module (the dismissal store keys on the same string),
+  // and mocking it away makes the route's own import throw — which its catch
+  // would swallow into a silent "no preview" (onboarding slice 2, #3175).
+  vi.doMock("~/lib/auto-competitor-seed.server", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("~/lib/auto-competitor-seed.server")>()),
     seedAutoCompetitors,
   }));
 
