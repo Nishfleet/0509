@@ -6,8 +6,8 @@ seed:publisher dry-run — list=beauty-personal-care domains=29 base=https://050
 publish floor: verified + likely >= 1 per domain; gate: >= 15 publishable
 
   PUBLISH elfcosmetics.com   verified 25 + likely 0
-  PUBLISH sephora.com        verified 26 + likely 0
-  PUBLISH ulta.com           verified 2 + likely 4
+  PUBLISH sephora.com        verified 24 + likely 2
+  PUBLISH ulta.com           verified 16 + likely 0
   PUBLISH glossier.com       verified 6 + likely 0
   PUBLISH fentybeauty.com    verified 7 + likely 0
   PUBLISH hudabeauty.com     verified 14 + likely 0
@@ -16,13 +16,13 @@ publish floor: verified + likely >= 1 per domain; gate: >= 15 publishable
   PUBLISH morphe.com         verified 9 + likely 0
   SKIP    urbandecay.com     no verified/likely coverage (verified 0, likely 0, unmatched 8)
   PUBLISH narscosmetics.com  verified 23 + likely 0
-  PUBLISH anastasiabeverlyhills.com verified 1 + likely 0
+  PUBLISH anastasiabeverlyhills.com verified 3 + likely 0
   PUBLISH tatcha.com         verified 8 + likely 0
   SKIP    drunkelephant.com  no verified/likely coverage (verified 0, likely 0, unmatched 2)
-  SKIP    theordinary.com    no verified/likely coverage (verified 0, likely 0, unmatched 0)
-  SKIP    paulaschoice.com   no verified/likely coverage (verified 0, likely 0, unmatched 0)
-  SKIP    cerave.com         no verified/likely coverage (verified 0, likely 0, unmatched 0)
-  SKIP    cetaphil.com       no verified/likely coverage (verified 0, likely 0, unmatched 0)
+  PUBLISH theordinary.com    verified 24 + likely 0
+  PUBLISH paulaschoice.com   verified 20 + likely 0
+  PUBLISH cerave.com         verified 10 + likely 1
+  PUBLISH cetaphil.com       verified 15 + likely 0
   PUBLISH olay.com           verified 16 + likely 2
   PUBLISH dove.com           verified 6 + likely 5
   PUBLISH birchbox.com       verified 12 + likely 0
@@ -31,3 +31,9 @@ publish floor: verified + likely >= 1 per domain; gate: >= 15 publishable
   PUBLISH bombayshavingcompany.com verified 29 + likely 0
   PUBLISH thrivemarket.com   verified 28 + likely 0
   PUBLISH glowrecipe.com     verified 3 + likely 0
+  PUBLISH summerfridays.com  verified 6 + likely 0
+  PUBLISH credobeauty.com    verified 24 + likely 0
+  PUBLISH dermstore.com      verified 24 + likely 0
+
+summary: 27 publishable / 29 domains (PASS)
+  publish=27 skip=2 failed=0 gate=15
