@@ -35,6 +35,8 @@ function connectorRolloutFromEnv(env: AppEnv, connectorId: PresenceConnectorId):
       return parseRolloutState(env.PRESENCE_LINKEDIN_ROLLOUT, "disabled");
     case "rss":
       return parseRolloutState(env.PRESENCE_RSS_ROLLOUT, "disabled");
+    case "gdelt":
+      return parseRolloutState(env.PRESENCE_GDELT_ROLLOUT, "disabled");
     default:
       return "disabled";
   }
@@ -54,6 +56,10 @@ function hasCredentials(env: AppEnv, connectorId: PresenceConnectorId): boolean 
       // RSS/Atom/JSON Feed polling is public-web: no account or API credentials.
       // The rollout gate (PRESENCE_RSS_ROLLOUT) is still required to activate it.
       return true;
+    case "gdelt":
+      // GDELT DOC 2.1 is a public data API — no key, no auth, no credentials.
+      // The rollout gate (PRESENCE_GDELT_ROLLOUT) is still required to activate it.
+      return true;
     default:
       return false;
   }
@@ -68,7 +74,7 @@ function hasCredentials(env: AppEnv, connectorId: PresenceConnectorId): boolean 
 // help-first: Only the predicate changes; the runtime gates in evaluateConnectorAccessGate
 // (rolloutState, credentials, reddit commercial access) still govern whether polling actually runs.
 export function connectorHasCustomerPollPath(connectorId: PresenceConnectorId): boolean {
-  return connectorId === "website" || connectorId === "rss" || connectorId === "x" || connectorId === "reddit";
+  return connectorId === "website" || connectorId === "rss" || connectorId === "gdelt" || connectorId === "x" || connectorId === "reddit";
 }
 
 export async function evaluateConnectorAccessGate(
