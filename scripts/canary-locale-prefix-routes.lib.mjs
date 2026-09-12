@@ -12,12 +12,6 @@
  * with `lang="en"` and `canonical → the EN twin` yet declared hreflang
  * variants — an audit defect. Every formerly-200 URL must now 301 to its EN
  * pathname so nothing already indexed dead-ends on a 404:
- * The untranslated buyer-surface locale cluster (`$locale.*` routes from
- * issue #1501) is DELETED: those pages served byte-identical English copy
- * with `lang="en"` and `canonical → the EN twin` yet declared hreflang
- * variants — an audit defect. Every formerly-200 URL must now 301 to its EN
- * pathname so nothing already indexed dead-ends on a 404:
->>>>>>> 3280a4e1a (salvage: bank uncommitted work for unit pi-issue-0509-2962)
  *
  *   for loc in de ja pt-br fr es; do
  *     for r in / /pricing /help ... /compare/panoramata /ads/nike.com; do
@@ -64,8 +58,36 @@ const REDIRECT_ROUTES = [
   "/competitor-monitoring",
   "/capture-rules",
   "/methodology",
+  // Compare children (the EN pages stay live; the locale paths 301 to them).
   "/compare/panoramata",
+  "/compare/meta-ad-library",
+  "/compare/visualping",
+  "/compare/visualping-ad-library",
+  "/compare/visualping-ad-libraries",
+  "/compare/spyland",
+  "/compare/pulzifi",
+  "/compare/foreplay",
+  "/compare/foreplay-spyder",
+  "/compare/adspyder",
+  "/compare/adspy",
+  "/compare/keeptabz",
+  "/compare/gethookd",
+  "/compare/bigspy",
+  "/compare/minea",
+  "/compare/poweradspy",
+  "/switch/panoramata",
   "/switch/visualping",
+  "/switch/magicbrief",
+  "/switch/adspy",
+  // The /guides/* how-to cluster served 200 under every locale prefix in
+  // production (issues #2294/#3093) — its locale URLs are already indexed,
+  // so each must 301 to the EN guide, never 404.
+  "/guides/how-to-track-competitor-ads",
+  "/guides/how-to-monitor-meta-ad-library",
+  "/guides/how-to-monitor-competitor-landing-page-changes",
+  "/guides/how-to-get-alerted-when-a-competitor-changes-their-offer",
+  "/guides/how-to-prove-what-changed-on-a-competitor-website",
+  "/guides/how-to-turn-a-one-off-competitor-check-into-a-standing-watch",
   "/ads/nike.com",
 ];
 

@@ -20,11 +20,7 @@ import {
   SITEMAP_PATHS,
   SITEMAP_STATIC_ENTRIES,
 } from "~/lib/seo";
-import {
-  BUYER_SURFACE_CHILD_PATHS,
-  BUYER_SURFACE_LOCALE_IDS,
-  BUYER_SURFACE_PATHS,
-} from "~/lib/locale-markets";
+import { BUYER_SURFACE_LOCALE_IDS } from "~/lib/locale-markets";
 import { SWITCH_PAGES } from "~/lib/switch-pages";
 import routes from "~/routes";
 import {
@@ -1681,93 +1677,52 @@ describe("every dynamic sitemap URL carries an honest lastmod (issue #2031)", ()
   });
 });
 
-describe("locale sitemap feed count matches the buyer-surface derivation (issue #2294)", () => {
-  it("each locale feed count equals the BUYER_SURFACE_PATHS-derived count", () => {
-    // Issue #2294 accept: the locale feed is derived from BUYER_SURFACE_PATHS
-    // + compare/switch children + the /guides/* cluster (the single source of
-    // truth), not from filtering the static list. The bare index and
-    // /sitemap.xml are excluded — neither is a real page. Counts shown as:
-    // BUYER_SURFACE_PATHS (minus bare / and /sitemap.xml) + children
-    // + 7 for the /guides/* cluster: track-competitor-ads (issue #2152),
-    // monitor-meta-ad-library (issue #2867), monitor-competitor-landing-
-    // page-changes (issue #2888), the #3093 trio (offer-change alert,
-    // prove-what-changed, standing watch), and meta-ad-library-api-
-    // limitations (issue #3127); -1: /methodology locale twins
-    // stay OUT of the locale sitemaps (issue #2871/#1570 duplicate-content
-    // policy); -1: /search (issue #2965) — noindex at the edge, out of
-    // every sitemap.
-    const derivedCount =
-      BUYER_SURFACE_PATHS.filter((p) => p !== "/" && p !== "/sitemap.xml").length +
-      BUYER_SURFACE_CHILD_PATHS.length +
-      7 - 1 - 1;
+describe("locale sitemap feed matches the Branch-B derivation (issue #2962)", () => {
+  it("de/ja/pt-br carry exactly the sneaker-resale entry; fr/es carry none", () => {
+    // Issue #2962 (orchestrator Branch B) deleted the untranslated
+    // buyer-surface locale routes, so the #2294 buyer-surface derivation is
+    // gone. The only indexable locale-sitemap content left is the genuinely
+    // translated sneaker-resale cluster (de, ja, pt-br — issues #1457/#1460);
+    // fr/es have no sneaker-resale page and emit empty feeds robots.txt no
+    // longer advertises.
     for (const locale of BUYER_SURFACE_LOCALE_IDS) {
       const entries = staticSitemapEntriesForLocale(locale);
       const body = buildLocaleSitemapXml(locale);
       const locs = [...body.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1] ?? "");
-      // The genuinely translated sneaker-resale cluster adds one for the
-      // locales that ship it (de, ja, pt-br).
-      const expected = locale === "de" || locale === "ja" || locale === "pt-br"
-        ? derivedCount + 1
-        : derivedCount;
-      expect(entries.length).toBe(expected);
-      expect(locs.length).toBe(expected);
       if (locale === "de" || locale === "ja" || locale === "pt-br") {
-        expect(locs).toContain(`https://0509.io/${locale}/sneaker-resale`);
+        expect(entries.map((e) => e.path)).toEqual([`/${locale}/sneaker-resale`]);
+        expect(locs).toEqual([`https://0509.io/${locale}/sneaker-resale`]);
+      } else {
+        expect(entries).toEqual([]);
+        expect(locs).toEqual([]);
       }
     }
   });
 
   it("every locale sitemap URL is a registered route (no entry for a non-200 path)", () => {
-    // Issue #2294 accept: no entry for a non-200 path. Every locale sitemap
-    // URL must correspond to a route registered under the `:locale` layout,
-    // so it serves 200 rather than 404. The guide route is the one the
-    // derivation adds that is not in BUYER_SURFACE_PATHS — it must be
-    // registered too.
+    // Issue #2294 accept, Branch-B form: the only locale-sitemap entry is the
+    // translated `:locale/sneaker-resale` route — assert that registration
+    // really exists so the feed can never promise a 404.
     const routesText = readFileSync("app/routes.ts", "utf8");
+    expect(routesText).toContain('route(":locale/sneaker-resale"');
     for (const locale of BUYER_SURFACE_LOCALE_IDS) {
       for (const entry of staticSitemapEntriesForLocale(locale)) {
-        const path = entry.path.replace(`/${locale}`, "");
-        // The buyer-surface cluster is registered as a `:locale` layout child;
-        // the sneaker-resale cluster is a root-level `:locale/sneaker-resale`
-        // route. Both live in routes.ts, so check the whole file.
-        expect(
-          routesText,
-          `/${locale}${path} is in the locale sitemap but not a registered route`,
-        ).toContain(`"${path.replace(/^\//, "")}"`);
+        expect(entry.path).toBe(`/${locale}/sneaker-resale`);
       }
     }
   });
 
-  it("every buyer-surface path and compare/switch child is in SITEMAP_STATIC_ENTRIES (no silent drop)", () => {
-    // The derivation reuses the EN path set from
-    // SITEMAP_STATIC_ENTRIES and skips any path missing from it. A path
-    // added to BUYER_SURFACE_PATHS / BUYER_SURFACE_CHILD_PATHS but not to
-    // SITEMAP_PATHS would silently vanish from the locale sitemap — this
-    // cross-check makes that drift fail loudly.
+  it("the sneaker-resale locale entry mirrors the EN page in SITEMAP_STATIC_ENTRIES (no silent drop)", () => {
+    // The EN /sneaker-resale page is in the root feed; the locale feeds list
+    // its translated twins. If the EN path ever drops out of
+    // SITEMAP_STATIC_ENTRIES the cluster is being retired — the locale feeds
+    // must be retired in the same change, so cross-check loudly here.
     const staticPaths = new Set(SITEMAP_STATIC_ENTRIES.map((e) => e.path));
-    const derived = [
-      ...BUYER_SURFACE_PATHS.filter(
-        (p) =>
-          p !== "/" &&
-          p !== "/sitemap.xml" &&
-          // /methodology is a 301 to the canonical /methodology/ad-aggression-score
-          // (issue #2871); its locale twins stay out of the locale sitemaps.
-          p !== "/methodology" &&
-          // Issue #2965: /search is deliberately outside the sitemap (see
-          // SITEMAP_PATHS comment) — parameterised search noindexes at the
-          // edge and bare /search 302s to /brands.
-          p !== "/search",
-      ),
-      ...BUYER_SURFACE_CHILD_PATHS,
-      "/guides/how-to-track-competitor-ads",
-      "/guides/how-to-monitor-meta-ad-library",
-      "/guides/how-to-monitor-competitor-landing-page-changes",
-      "/guides/how-to-get-alerted-when-a-competitor-changes-their-offer",
-      "/guides/how-to-prove-what-changed-on-a-competitor-website",
-      "/guides/how-to-turn-a-one-off-competitor-check-into-a-standing-watch",
-    ];
-    for (const path of derived) {
-      expect(staticPaths, `${path} missing from SITEMAP_STATIC_ENTRIES`).toContain(path);
+    expect(staticPaths.has("/sneaker-resale")).toBe(true);
+    for (const locale of ["de", "ja", "pt-br"] as const) {
+      expect(staticSitemapEntriesForLocale(locale).map((e) => e.path)).toEqual([
+        `/${locale}/sneaker-resale`,
+      ]);
     }
   });
 });

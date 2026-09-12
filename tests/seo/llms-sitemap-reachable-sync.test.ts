@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  ADVERTISED_SITEMAP_URLS,
   LOCALE_SITEMAP_LOCALES,
   publicSeoFileForPathname,
 } from "~/lib/seo";
@@ -86,14 +85,23 @@ describe("robots.txt advertises the non-empty locale sitemaps (issue #2017)", ()
       (() => {
         throw new Error("robots.txt must be served");
       })();
-    for (const url of ADVERTISED_SITEMAP_URLS) {
+    // Issue #2962 (orchestrator Branch B): LOCALE_SITEMAP_LOCALES is the
+    // single source of truth for the advertised locale feeds — the
+    // sneaker-resale-carrying de/ja/pt-br. fr/es emit empty feeds and must
+    // NOT be advertised.
+    const expected = [
+      `${SITE}/sitemap.xml`,
+      ...LOCALE_SITEMAP_LOCALES.map((locale) => `${SITE}/${locale}/sitemap.xml`),
+    ];
+    for (const url of expected) {
       expect(robots, `robots.txt must advertise ${url}`).toContain(
         `Sitemap: ${url}`,
       );
     }
-    expect(ADVERTISED_SITEMAP_URLS).toContain(`${SITE}/sitemap.xml`);
-    for (const locale of ["de", "ja", "pt-br"]) {
-      expect(ADVERTISED_SITEMAP_URLS).toContain(`${SITE}/${locale}/sitemap.xml`);
+    for (const locale of ["fr", "es"]) {
+      expect(robots, `robots.txt must NOT advertise the empty ${locale} feed`).not.toContain(
+        `Sitemap: ${SITE}/${locale}/sitemap.xml`,
+      );
     }
   });
 
@@ -104,10 +112,10 @@ describe("robots.txt advertises the non-empty locale sitemaps (issue #2017)", ()
         `/${locale}/sitemap.xml is advertised but empty`,
       ).toBeGreaterThan(0);
     }
-    // Issue #2294: every buyer-surface locale feed is non-empty, so all five
-    // locales (de, ja, pt-br, fr, es) are advertised.
-    for (const locale of BUYER_SURFACE_LOCALE_IDS) {
-      expect(LOCALE_SITEMAP_LOCALES).toContain(locale);
+    // Issue #2962 (Branch B): fr/es carry no sneaker-resale page, so their
+    // feeds are empty — they must stay OUT of the advertised set.
+    for (const locale of ["fr", "es"] as const) {
+      expect(LOCALE_SITEMAP_LOCALES).not.toContain(locale);
     }
   });
 });

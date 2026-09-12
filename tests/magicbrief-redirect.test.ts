@@ -44,24 +44,21 @@ describe("MagicBrief legacy URLs (issues #2127, #2887)", () => {
     expect(captured!.headers.get("location")).toBe("/compare");
   });
 
-  it("wires the EN compare path and its locale twin to the redirect loader in routes.ts", () => {
+  it("wires the EN compare path to the redirect loader in routes.ts", () => {
     const top = routes as unknown as RouteNode[];
-    const locale = top.find((node) => node.path === ":locale");
-    expect(locale?.children, "the :locale layout must exist").toBeTruthy();
-    for (const tree of [top, locale!.children!]) {
-      const matches = nodesFor(LEGACY_VENDOR_COMPARE_PATH, tree);
-      expect(matches, `${LEGACY_VENDOR_COMPARE_PATH} must be registered exactly once`).toHaveLength(
-        1,
-      );
-      expect(matches[0]?.file).toBe(REDIRECT_FILE);
-    }
-    // Each registration needs its own id: React Router derives ids from the
-    // file path, and two routes sharing one loader file would collide.
-    const ids = [top, locale!.children!]
-      .flatMap((tree) => tree.filter((node) => node.file === REDIRECT_FILE))
+    const matches = nodesFor(LEGACY_VENDOR_COMPARE_PATH, top);
+    expect(matches, `${LEGACY_VENDOR_COMPARE_PATH} must be registered exactly once`).toHaveLength(
+      1,
+    );
+    expect(matches[0]?.file).toBe(REDIRECT_FILE);
+    // Issue #2962 (Branch B): the locale twin registration was deleted with
+    // the untranslated buyer-surface locale cluster — /de/compare/magicbrief
+    // now 301s via the $locale.tsx splat, so only the EN redirect loader
+    // remains and the shared-file id-collision risk is gone with it.
+    const ids = top
+      .filter((node) => node.file === REDIRECT_FILE)
       .map((node) => node.id);
-    expect(ids).toHaveLength(2);
-    expect(new Set(ids).size).toBe(2);
+    expect(ids).toHaveLength(1);
     expect(ids.every((id) => typeof id === "string" && id.length > 0)).toBe(true);
   });
 
@@ -73,15 +70,11 @@ describe("MagicBrief legacy URLs (issues #2127, #2887)", () => {
 
   it("registers /switch/magicbrief as a real route, never the redirect loader", () => {
     const top = routes as unknown as RouteNode[];
-    const locale = top.find((node) => node.path === ":locale");
-    for (const [tree, file] of [
-      [top, "routes/switch.magicbrief.tsx"],
-      [locale!.children!, "routes/$locale.switch.magicbrief.tsx"],
-    ] as const) {
-      const matches = nodesFor("switch/magicbrief", tree);
-      expect(matches, "switch/magicbrief must be registered exactly once").toHaveLength(1);
-      expect(matches[0]?.file).toBe(file);
-      expect(matches[0]?.file).not.toBe(REDIRECT_FILE);
-    }
+    // Issue #2962 (Branch B): EN route only — the $locale twin was deleted;
+    // /de/switch/magicbrief 301s to the EN page via the $locale.tsx splat.
+    const matches = nodesFor("switch/magicbrief", top);
+    expect(matches, "switch/magicbrief must be registered exactly once").toHaveLength(1);
+    expect(matches[0]?.file).toBe("routes/switch.magicbrief.tsx");
+    expect(matches[0]?.file).not.toBe(REDIRECT_FILE);
   });
 });

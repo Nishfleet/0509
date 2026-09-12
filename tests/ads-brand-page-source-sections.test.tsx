@@ -535,14 +535,21 @@ describe("/ads/:domain loader source snapshots (issue #2200)", () => {
   });
 });
 
-describe("/de/ads/:domain locale route renders the same source sections (issue #2200)", () => {
-  it("the locale child re-exports the EN route, so source sections render identically", async () => {
+describe("/de/ads/:domain locale route after the Branch-B removal (issue #2962)", () => {
+  it("the locale twin is deleted — /de/ads/:domain 301s to the EN page via the $locale.tsx splat", async () => {
+    // Issue #2962 (orchestrator Branch B) deleted the untranslated
+    // buyer-surface locale routes including $locale.ads.$domain.tsx, so the
+    // #2200 "locale child renders identically" guarantee is retired with it:
+    // the EN route is the only /ads/:domain renderer left, and the locale
+    // splat redirect must stay registered so /de/ads/nike.com never 404s.
     currentData = populated({ sourceSnapshots: [googleAdsSnapshot()] });
-    const { default: LocaleAdsRoute } = await import("~/routes/$locale.ads.$domain");
-    const markup = renderToStaticMarkup(createElement(LocaleAdsRoute));
-    // The locale route renders the same Google Ads section the EN route does.
+    const { default: EnAdsRoute } = await import("~/routes/ads.$domain");
+    const markup = renderToStaticMarkup(createElement(EnAdsRoute));
     expect(markup).toContain('id="brand-google-ads-title"');
     expect(markup).toContain("Google Ads inventory");
+
+    const routesSource = (await import("node:fs")).readFileSync("app/routes.ts", "utf8");
+    expect(routesSource).toContain('route(":locale/*", "routes/$locale.tsx")');
   });
 });
 

@@ -379,30 +379,11 @@ describe("compare/switch/locale route signup CTA attribution (issue #2109)", () 
     // switch routes
     "switch.panoramata",
     "switch.visualping",
-    // locale compare/switch re-exports
-    "$locale.compare",
-    "$locale.compare.adspyder",
-    "$locale.compare.foreplay-spyder",
-    "$locale.compare.foreplay",
-    "$locale.compare.meta-ad-library",
-    "$locale.compare.panoramata",
-    "$locale.compare.pulzifi",
-    "$locale.compare.spyland",
-    "$locale.compare.visualping-ad-libraries",
-    "$locale.compare.visualping",
-    "$locale.switch.panoramata",
-    "$locale.switch.visualping",
-    // locale routes that render a page-specific signup CTA
+    // Issue #2962 (Branch B): the untranslated buyer-surface $locale.* route
+    // cluster was deleted — every buyer-surface locale path now 301s to the
+    // EN pathname via the $locale.tsx splat, so only the genuinely
+    // translated $locale.sneaker-resale route remains to attribute.
     "$locale.sneaker-resale",
-    "$locale.pricing",
-    // locale routes that render cleanly (only the shared header pill)
-    "$locale.help",
-    "$locale.docs",
-    "$locale.status",
-    "$locale.capture-rules",
-    "$locale.changelog",
-    "$locale.trust",
-    "$locale.api.docs",
   ] as const;
 
   beforeEach(() => {

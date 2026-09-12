@@ -126,7 +126,7 @@ describe("compare phantom vendors (issue #2835)", () => {
     expect(SITEMAP_PATHS).toContain("/compare/spyland");
   });
 
-  it("registers both EN routes and their locale buyer-surface children", async () => {
+  it("registers both EN routes; locale twins are retired (issue #2962 Branch B)", async () => {
     const routes = (await import("~/routes")).default;
     const routeFiles = routes.flatMap(function collect(route): string[] {
       const file = "file" in route && typeof route.file === "string" ? [route.file] : [];
@@ -134,13 +134,13 @@ describe("compare phantom vendors (issue #2835)", () => {
       return [...file, ...children];
     });
 
-    for (const file of [
-      "routes/compare.pulzifi.tsx",
-      "routes/compare.spyland.tsx",
-      "routes/$locale.compare.pulzifi.tsx",
-      "routes/$locale.compare.spyland.tsx",
-    ]) {
+    // Issue #2962 (orchestrator Branch B) deleted the untranslated
+    // buyer-surface $locale.* compare twins — /de/compare/<vendor> now 301s
+    // to the EN page via the $locale.tsx splat, so only the EN routes must
+    // be registered (and the splat must exist).
+    for (const file of ["routes/compare.pulzifi.tsx", "routes/compare.spyland.tsx"]) {
       expect(routeFiles, `${file} unregistered`).toContain(file);
     }
+    expect(routeFiles).toContain("routes/$locale.tsx");
   });
 });

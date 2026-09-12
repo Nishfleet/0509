@@ -57,17 +57,16 @@ async function renderSwitchMagicbrief(): Promise<string> {
  * /search preview.
  */
 describe("/switch/magicbrief wind-down page (issue #2887)", () => {
-  it("is registered as a real EN route and a locale twin", () => {
+  it("is registered as a real EN route; the locale twin is gone (issue #2962 Branch B)", () => {
     const top = routes as unknown as Array<{ path?: string; file?: string; children?: unknown[] }>;
-    const locale = top.find((node) => node.path === ":locale");
     const topMatch = top.filter((node) => node.path === "switch/magicbrief");
     expect(topMatch.map((node) => node.file)).toEqual(["routes/switch.magicbrief.tsx"]);
-    const localeMatch = (locale?.children as typeof top).filter(
-      (node) => node.path === "switch/magicbrief",
-    );
-    expect(localeMatch.map((node) => node.file)).toEqual([
-      "routes/$locale.switch.magicbrief.tsx",
-    ]);
+    // Issue #2962 (Branch B): the $locale.switch.magicbrief.tsx twin was
+    // deleted with the untranslated buyer-surface locale cluster —
+    // /de/switch/magicbrief now 301s to this EN page via the $locale.tsx
+    // splat redirect, which must still be registered.
+    const splat = top.filter((node) => node.path === ":locale/*");
+    expect(splat.map((node) => node.file)).toEqual(["routes/$locale.tsx"]);
   });
 
   it("renders the shutdown anchor with its own FAQ as the quoted source", async () => {
