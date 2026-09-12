@@ -61,7 +61,12 @@ export async function pollPresenceTarget(
   entity: { trackingMode: "self" | "competitor" },
   options: {
     connection?: PresenceConnectorContext["connection"];
-    cursor?: { etag?: string | null; lastModified?: string | null };
+    cursor?: {
+      etag?: string | null;
+      lastModified?: string | null;
+      /** Prior presence_poll_cursor.cursor_json — connectors that meter usage merge it forward. */
+      record?: Record<string, unknown>;
+    };
     fetchImpl?: typeof fetch;
   } = {},
 ): Promise<PollResult> {
@@ -93,7 +98,7 @@ export async function pollPresenceTarget(
     return gdeltConnector.poll(ctx, target as Parameters<typeof gdeltConnector.poll>[1]);
   }
   if (target.connectorId === "x") {
-    return xConnector.poll(ctx);
+    return xConnector.poll(ctx, target, options.cursor);
   }
   if (target.connectorId === "reddit") {
     return redditConnector.poll(ctx);

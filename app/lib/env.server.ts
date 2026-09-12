@@ -231,6 +231,15 @@ export interface AppEnv {
   PRESENCE_REDDIT_MOCK?: string;
   PRESENCE_LINKEDIN_MOCK?: string;
   X_API_BEARER_TOKEN?: string;
+  /**
+   * Money flag for X mention search (#3255). Recent search is pay-per-use;
+   * every poll is a paid call. Set to "approved" only after Nish's spend
+   * decision lands — until then the connector reports paid_source_pending_nish
+   * and never issues a paid request.
+   */
+  X_PAID_ACCESS?: string;
+  /** X API base override (default https://api.x.com) — test/ops hook only; still SSRF-checked per request via presenceSafeFetch. */
+  X_API_BASE_URL?: string;
   REDDIT_CLIENT_ID?: string;
   REDDIT_CLIENT_SECRET?: string;
   REDDIT_COMMERCIAL_ACCESS?: string;

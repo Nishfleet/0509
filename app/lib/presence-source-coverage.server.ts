@@ -3,6 +3,10 @@ import {
   connectorHasCustomerPollPath,
   evaluateConnectorAccessGate,
 } from "~/lib/presence-access-gates.server";
+import {
+  X_PAID_PENDING_REASON_CODE,
+  xPaidAccessApproved,
+} from "~/lib/presence-connectors/x.server";
 import { getSourceAdapter } from "~/lib/sources/registry.server";
 import { SOURCE_IDS } from "~/lib/sources/types";
 import type {
@@ -151,6 +155,18 @@ async function evaluateConnectorSourceCoverage(
   }
 
   const gate = await evaluateConnectorAccessGate(env, connectorId, trackingMode, workspaceUserId);
+  // MONEY flag (#3255): X mention search is pay-per-use — even with rollout and
+  // credentials configured, coverage stays gated/pending until the spend
+  // decision lands (X_PAID_ACCESS=approved). Never implied live.
+  if (sourceId === "x" && gate.allowed && !xPaidAccessApproved(env)) {
+    return baseEntry(sourceId, "gated", {
+      coverageLabel: "UNAVAILABLE",
+      reasonCode: X_PAID_PENDING_REASON_CODE,
+      reasonMessage:
+        "X mention search is a paid, metered source — activation is pending a spend decision.",
+      actionNeeded: "Pending spend decision",
+    });
+  }
   if (gate.allowed && SOCIAL_SOURCE_IDS.has(sourceId) && !connectorHasCustomerPollPath(connectorId)) {
     return baseEntry(sourceId, "unavailable", {
       coverageLabel: "UNAVAILABLE",
@@ -401,7 +417,8 @@ export function presenceSourceCoverageForDocs(): Array<{
       sourceId: "x",
       label: SOURCE_LABELS.x,
       productionStatus: "gated",
-      notes: "X connector wired in. Gated behind PRESENCE_X_ROLLOUT — off by default; activation is a separate rollout decision.",
+      notes:
+        "X connector wired in with mention search (recent-search query targets). Gated behind PRESENCE_X_ROLLOUT + X_API_BEARER_TOKEN + X_PAID_ACCESS — paid pay-per-use reads are metered per entity per day and stay pending until the spend decision lands.",
     },
     {
       sourceId: "reddit",

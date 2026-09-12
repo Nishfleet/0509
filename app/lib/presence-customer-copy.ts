@@ -39,6 +39,11 @@ const PRESENCE_ERROR_COPY: Record<string, PresenceCustomerErrorCopy> = {
     message: "This source is not available for customer checks yet.",
     action: "Use an available website source or try again after rollout.",
   },
+  paid_source_pending_nish: {
+    reasonCode: "not_available",
+    message: "This source is a paid source and is not active yet.",
+    action: "Use an available source or check back after it is activated.",
+  },
   manual_proof_required: {
     reasonCode: "manual_action_required",
     message: "This source needs a manual check.",
