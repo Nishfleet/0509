@@ -125,7 +125,7 @@ export async function runPresenceDigestSweep(
     .bind(JSON.stringify(userIds))
     .all<{ id: string; email: string }>();
   const emailByUserId = new Map(
-    (rows.results ?? []).map((row) => [String(row.id), String(row.email)]),
+    (ownerRows.results ?? []).map((row) => [String(row.id), String(row.email)]),
   );
 
   for (const userId of userIds) {

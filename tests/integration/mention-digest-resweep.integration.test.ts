@@ -143,6 +143,82 @@ async function seedPreExistingMention(sourceId: string, entityId: string, userId
   return itemId;
 }
 
+/**
+ * Epic #3171: extra mention sources ride the SAME presence substrate — one
+ * source_target row per connector, one presence_item per captured mention.
+ * These helpers mirror the website inserts above but let the caller pick the
+ * connector, so gdelt/bluesky/rss rows go through the repo's real migrations
+ * (their CHECK-widening migrations are proven by the dedicated gdelt/bluesky
+ * specs; this file proves they reach the DIGEST, not just the tables).
+ */
+async function seedSourceTarget(
+  entityId: string,
+  userId: string,
+  connector: "gdelt" | "bluesky" | "rss",
+) {
+  const sourceId = uid("st");
+  await db()
+    .prepare(
+      `INSERT INTO source_target (
+         id, tracked_entity_id, user_id, connector_id, target_key, target_url,
+         target_handle, metadata_json, coverage_label, is_active, deleted_at,
+         created_at, updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, NULL, '{}', 'PUBLIC_WEB_BEST_EFFORT', 1, NULL, ?, ?)`,
+    )
+    .bind(
+      sourceId,
+      entityId,
+      userId,
+      connector,
+      `${connector}.1.1.1`,
+      `https://${connector}.1.1.1/`,
+      ISO_T0,
+      ISO_T0,
+    )
+    .run();
+  return sourceId;
+}
+
+async function seedMentionItem(options: {
+  sourceTargetId: string;
+  entityId: string;
+  userId: string;
+  connector: "website" | "gdelt" | "bluesky" | "rss";
+  url: string;
+  title: string;
+  /** Defaults to the fixture epoch; the sweep case passes fresher stamps. */
+  observedAt?: string;
+}) {
+  const itemId = uid("pi");
+  const observedAt = options.observedAt ?? ISO_T0;
+  await db()
+    .prepare(
+      `INSERT INTO presence_item (
+         id, source_target_id, tracked_entity_id, user_id, connector_id,
+         external_id, canonical_url, url_hash, title, body_excerpt, author,
+         published_at, observed_at, content_hash, raw_json, is_tombstone,
+         created_at
+       ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, NULL, ?, ?, ?, '{}', 0, ?)`,
+    )
+    .bind(
+      itemId,
+      options.sourceTargetId,
+      options.entityId,
+      options.userId,
+      options.connector,
+      options.url,
+      await presenceUrlHash(options.url),
+      options.title,
+      `${options.title} body`,
+      observedAt,
+      observedAt,
+      uid("hash"),
+      observedAt,
+    )
+    .run();
+  return itemId;
+}
+
 beforeEach(() => {
   vi.resetModules();
   vi.clearAllMocks();
@@ -419,5 +495,98 @@ describe("mention resweep + digest", () => {
     expect(lines).toBeInstanceOf(Array);
     expect(lines.length).toBe(60);
     expect(lines.every((line) => line.includes("(new)"))).toBe(true);
+    // #3179: digests include the item's canonical link — every one of these
+    // captures resolved a canonical URL, so every line carries one.
+    expect(lines.every((line) => line.includes(" — https://1.1.1.1/posts/mention-"))).toBe(true);
+  });
+
+  it("routes gdelt/bluesky/rss mentions through the default digest connectors with coverage label and link", async () => {
+    const { userId, entityId } = await seedUserAndEntity("agency");
+    // NO mentionConnectorIds — this exercises DEFAULT_MENTION_CONNECTORS, the
+    // epic #3171 coverage list. Before this change gdelt/bluesky captures
+    // never reached a digest line even though the connectors stored them.
+    const gdeltSource = await seedSourceTarget(entityId, userId, "gdelt");
+    const blueskySource = await seedSourceTarget(entityId, userId, "bluesky");
+    const rssSource = await seedSourceTarget(entityId, userId, "rss");
+    await seedMentionItem({
+      sourceTargetId: gdeltSource,
+      entityId,
+      userId,
+      connector: "gdelt",
+      url: "https://news.1.1.1.1/gdelt-mention",
+      title: "Gdelt coverage",
+    });
+    await seedMentionItem({
+      sourceTargetId: blueskySource,
+      entityId,
+      userId,
+      connector: "bluesky",
+      url: "https://1.1.1.1/bluesky-mention",
+      title: "Bluesky post",
+    });
+    await seedMentionItem({
+      sourceTargetId: rssSource,
+      entityId,
+      userId,
+      connector: "rss",
+      url: "https://1.1.1.1/rss-mention",
+      title: "Rss post",
+    });
+
+    const { buildMentionDigestLines } = await import("~/lib/mention-digest.server");
+    const lines = await buildMentionDigestLines(makeEnv(), userId, {
+      since: ISO_T0,
+    });
+
+    expect(lines.length).toBe(3);
+    // Honest coverage copy: the connector's public label, then the #3179
+    // source+link promise — the item's canonical URL when one resolved.
+    const gdeltLine = lines.find((line) => line.includes("(GDELT mainstream news)"));
+    expect(gdeltLine).toContain("Gdelt coverage");
+    expect(gdeltLine).toContain("https://news.1.1.1.1/gdelt-mention");
+    const blueskyLine = lines.find((line) => line.includes("(Bluesky)"));
+    expect(blueskyLine).toContain("Bluesky post");
+    expect(blueskyLine).toContain("https://1.1.1.1/bluesky-mention");
+    const rssLine = lines.find((line) => line.includes("(RSS / Atom / JSON Feed)"));
+    expect(rssLine).toContain("Rss post");
+    expect(rssLine).toContain("https://1.1.1.1/rss-mention");
+  });
+
+  it("scheduled presence-digest sweep delivers a digest against real D1 (epic #3171/#3179)", async () => {
+    mocks.sendPresenceDigestEmail.mockResolvedValue({ accepted: true, delivered: true });
+    const { userId, entityId, sourceId } = await seedUserAndEntity("agency");
+    // A mention captured within the digest lookback — the sweep resolves the
+    // 168h window itself, so the item must be fresher than the fixture epoch.
+    const observedAt = new Date(Date.now() - 60_000).toISOString();
+    await seedMentionItem({
+      sourceTargetId: sourceId,
+      entityId,
+      userId,
+      connector: "website",
+      url: "https://1.1.1.1/posts/brand-new",
+      title: "Sweep mention",
+      observedAt,
+    });
+
+    const { runPresenceDigestSweep } = await import("~/lib/presence-digest.server");
+    const result = await runPresenceDigestSweep(makeEnv());
+
+    // Real workerd: listResweepUsers (oldest-work-first SQL), the owner
+    // address read (user WHERE id IN (SELECT value FROM json_each(?))) and
+    // the full digest assembly all ran against the repo's real migrations.
+    expect(result).toEqual({ swept: 1, delivered: 1, skipped: 0, errors: 0 });
+    const emailArg = mocks.sendPresenceDigestEmail.mock.calls[0]![1] as {
+      userId: string;
+      email: string;
+      lines: string[];
+      idempotencyKey: string;
+    };
+    expect(emailArg.userId).toBe(userId);
+    expect(JSON.stringify(emailArg.lines)).toContain("https://1.1.1.1/posts/brand-new");
+    // Per-workspace-per-UTC-day idempotency: the 3-hourly tick collapses to
+    // at most one digest per workspace per day because of this key.
+    expect(emailArg.idempotencyKey).toBe(
+      `presence-digest:${userId}:${emailArg.idempotencyKey.split(":")[2]}`,
+    );
   });
 });
