@@ -202,6 +202,80 @@ describe("creative-r2-hash", () => {
     expect(r2.raw.put).not.toHaveBeenCalled();
   });
 
+  it("/creative/:id prefers the R2 hash copy over a WARM Cache-API entry", async () => {
+    // The Cache API entry carries a 30-day immutable TTL. If the R2 read sat
+    // behind cache.match, a warm entry fetched from a rotting fbcdn URL would
+    // mask the hash-keyed bytes — the exact failure #2981 exists to remove.
+    const { serveCreativeResource } = await import("~/lib/creative-edge-cache.server");
+    const r2 = fakeR2();
+    await r2.raw.put(`creatives/hash/${HASH}`, new Uint8Array([5, 6, 7]));
+    const { store } = installCaches();
+    // Seed a stale cache entry, as a capture-time prime would have left behind.
+    store.set(
+      "https://creative.0509.internal/ad_1",
+      new Response(new Uint8Array([9, 9, 9]), {
+        status: 200,
+        headers: { "content-type": "image/jpeg" },
+      }),
+    );
+    const { env } = makeEnv({ url: FB_URL, hash: HASH, r2 });
+
+    const response = await serveCreativeResource(
+      env,
+      new Request("https://0509.io/creative/ad_1"),
+      "ad_1",
+    );
+
+    expect(response?.status).toBe(200);
+    // R2 bytes, not the stale cached body.
+    const body = new Uint8Array(await response!.arrayBuffer());
+    expect(Array.from(body)).toEqual([5, 6, 7]);
+  });
+
+  it("still serves the page when the R2 read throws", async () => {
+    installFetch();
+    const { serveCreativeResource } = await import("~/lib/creative-edge-cache.server");
+    const r2 = fakeR2();
+    (r2.raw.head as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("r2 unavailable"),
+    );
+    (r2.raw.get as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("r2 unavailable"),
+    );
+    installCaches();
+    const { env } = makeEnv({ url: FB_URL, hash: HASH, r2 });
+
+    const response = await serveCreativeResource(
+      env,
+      new Request("https://0509.io/creative/ad_1"),
+      "ad_1",
+    );
+
+    // A broken R2 must degrade to the fetch path, never a 500.
+    expect(response?.status).toBe(200);
+  });
+
+  it("still serves the image when persisting the hash fails", async () => {
+    installFetch();
+    const { serveCreativeResource } = await import("~/lib/creative-edge-cache.server");
+    const r2 = fakeR2();
+    installCaches();
+    const { env, statement } = makeEnv({ url: FB_URL, hash: null, r2 });
+    (statement.run as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("d1 write failed"),
+    );
+
+    const response = await serveCreativeResource(
+      env,
+      new Request("https://0509.io/creative/ad_1"),
+      "ad_1",
+    );
+
+    // The R2 mirror still landed; only the hash write failed.
+    expect(r2.raw.put).toHaveBeenCalledTimes(1);
+    expect(response?.status).toBe(200);
+  });
+
   it("/creative/:id back-fills R2 by hash and persists the hash on a live URL", async () => {
     installFetch();
     const { serveCreativeResource } = await import("~/lib/creative-edge-cache.server");
@@ -228,6 +302,12 @@ describe("creative-r2-hash", () => {
       q.includes("json_set"),
     );
     expect(hashUpdate).toContain("$.creativeHash");
+    expect(hashUpdate).toContain("$.creativeHashContentType");
     expect(statement.run).toHaveBeenCalled();
+    // The bound VALUES matter, not the SQL text: swapping two parameters would
+    // still contain both key names and pass a text-only assertion.
+    const bound = JSON.stringify(statement.bind.mock.calls.at(-1));
+    expect(bound).toContain(uploadedKey.replace("creatives/hash/", ""));
+    expect(bound).toContain("image/jpeg");
   });
 });

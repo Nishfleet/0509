@@ -73,11 +73,6 @@ const ALLOWED_RASTER_TYPES = new Set([
  * creative renders an empty frame rather than a broken-image icon and no
  * further request ever reaches fbcdn for that id.
  */
-/**
- * A 1x1 transparent PNG. Served (and cached) when fbcdn answers 4xx, so the
- * creative renders an empty frame rather than a broken-image icon and no
- * further request ever reaches fbcdn for that id.
- */
 export const DEAD_CREATIVE_PLACEHOLDER_PNG = Uint8Array.from([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
   0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
@@ -344,6 +339,27 @@ export async function serveCreativeResource(
     const key = creativeCacheKey(id);
     const cache = typeof caches === "undefined" ? null : await caches.open(CREATIVE_CACHE_NAME);
 
+    // Issue #2981: the content-hash R2 copy is checked BEFORE the Cache API.
+    // The Cache API entry carries a 30-day immutable TTL, so a creative whose
+    // bytes are already hash-keyed would otherwise be masked by a warm cache
+    // entry that still points at (or was fetched from) a rotting fbcdn URL;
+    // and the hash lookup is what lets a post-expiry first view resolve at all.
+    // A hash hit is the cheapest correct answer, so it is tested first and
+    // used to re-fill the Cache API entry for request-speed.
+    if (env.DB) {
+      try {
+        const storedHash = await lookupStoredCreativeHash(env, id);
+        const image = await getCreativeImageByHash(env, storedHash);
+        if (image) {
+          const r2Response = imageResponse(imageBody(image.bytes), image.contentType);
+          await cache?.put(key, r2Response.clone());
+          return request.method === "HEAD" ? headOf(r2Response) : r2Response;
+        }
+      } catch {
+        // A failed R2 read degrades to the cache / fetch path below.
+      }
+    }
+
     const cached = await cache?.match(key);
     if (cached) {
       return request.method === "HEAD" ? headOf(cached) : cached;
@@ -357,21 +373,6 @@ export async function serveCreativeResource(
     const resolved = resolveFetchableCreativeUrl(stored);
     if (resolved === null) {
       return new Response("Not Found", { status: 404 });
-    }
-
-    // Issue #2981: the content-hash R2 copy is served FIRST — fetch-time fbcdn
-    // URLs rot, hash-keyed bytes do not. On an R2 hit we still cache-fill the
-    // Cache API entry so the next request is free.
-    const storedHash = await lookupStoredCreativeHash(env, id);
-    try {
-      const image = await getCreativeImageByHash(env, storedHash);
-      if (image) {
-        const r2Response = imageResponse(imageBody(image.bytes), image.contentType);
-        await cache?.put(key, r2Response.clone());
-        return request.method === "HEAD" ? headOf(r2Response) : r2Response;
-      }
-    } catch {
-      // A failed R2 read degrades to the fetch path below.
     }
 
     const outcome = await fetchFbcdnCreative(resolved);
