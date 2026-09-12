@@ -22,6 +22,7 @@ import {
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import adspyCitations from "~/data/compare/adspy-citations.json";
 
+import "~/styles/marketing.css";
 const citations = adspyCitations as CompareCitations;
 
 const pageTitle = "Five to Nine vs AdSpy";

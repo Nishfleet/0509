@@ -23,6 +23,7 @@ import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import { SWITCH_PAGES, SWITCH_SLUGS } from "~/lib/switch-pages";
 import { localeSearchPathname } from "~/lib/locale-markets";
 
+import "~/styles/marketing.css";
 const publicSearchTrialPath =
   "/search?query=nykaa&mode=advertiser&website=https%3A%2F%2Fnykaa.com";
 

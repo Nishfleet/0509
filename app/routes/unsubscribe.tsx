@@ -5,6 +5,7 @@ import { BrandWordmark } from "~/components/brand-wordmark";
 import { SubmitButton } from "~/components/submit-button";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
+import "~/styles/marketing.css";
 export const meta: MetaFunction = () => [
   { title: "Unsubscribe | Five to Nine" },
   { name: "robots", content: "noindex" },

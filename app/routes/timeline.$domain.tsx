@@ -35,6 +35,7 @@ import {
   webPageJsonLd,
 } from "~/lib/seo";
 
+import "~/styles/marketing.css";
 export interface OfferTimelineLoaderData {
   domain: string;
   brandName: string;

@@ -47,6 +47,7 @@ import {
   type IndexableAdsLink,
 } from "~/lib/ads-internal-links";
 
+import "~/styles/marketing.css";
 /** Hard cap on per-brand score enrichment reads (each is one D1 read). */
 const BRAND_CATEGORY_MAX_SCORE_LOOKUPS = 5;
 
