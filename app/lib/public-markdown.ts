@@ -240,6 +240,13 @@ const LLMS_PAGE_DETAILS = {
     description:
       "MagicBrief closed on 31 July 2026. Your competitor list imports here as watchlists; saved boards and report history do not.",
   },
+  // Issue #3091: the AdSpy switch page. In SITEMAP_PATHS, so it needs a
+  // title/description here or the _llmsDetailsCoverSitemap type fails.
+  "/switch/adspy": {
+    title: "AdSpy alternative",
+    description:
+      "AdSpy carries a 2.4/5 Trustpilot rating, no self-service cancel, and no public API. Paste a domain for the same public Meta ads job.",
+  },
   "/competitor-monitoring": {
     title: "Competitor monitoring",
     description:

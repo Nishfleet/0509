@@ -144,10 +144,11 @@ describe("llms.txt ↔ reachable sitemap sync (issue #2017 canary)", () => {
 
   it("every llms.txt /switch/:slug URL is present in the root sitemap (issue #2081)", () => {
     const llmsSwitchUrls = urlsFromLlmsText(buildLlmsText([], [])).filter((url) =>
-      /\/switch\/(panoramata|visualping|magicbrief)$/.test(url),
+      /\/switch\/(panoramata|visualping|magicbrief|adspy)$/.test(url),
     );
     const sitemapLocs = locsFromXml(buildSitemapXml([], []));
     expect(llmsSwitchUrls.sort()).toEqual([
+      `${SITE}/switch/adspy`,
       `${SITE}/switch/magicbrief`,
       `${SITE}/switch/panoramata`,
       `${SITE}/switch/visualping`,

@@ -301,7 +301,7 @@ describe("every programmatic buyer surface stamps a non-generic og:image", () =>
     expect(ogImageAlt(meta), `${routeId} missing og:image:alt`).toBeTruthy();
   });
 
-  it.each(["switch.panoramata", "switch.visualping", "switch.magicbrief"])(
+  it.each(["switch.panoramata", "switch.visualping", "switch.magicbrief", "switch.adspy"])(
     "%s stamps a /social-card/switch og:image + alt",
     async (routeId) => {
       const routeModule = (await import(`~/routes/${routeId}`)) as {
