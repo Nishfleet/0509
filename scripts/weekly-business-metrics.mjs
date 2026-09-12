@@ -30,9 +30,16 @@
  *      watchlists) compared against the prior daily market-signal snapshot;
  *      any drop to <50% of the prior value emits an `unexplained-drift`
  *      marker and — on a real run only — auto-files a follow-up issue.
+ *
+ * --json (issue #3321, direction#4518): the direction metric's signup count
+ *      as machine-readable JSON. Fixture-free: excludes every #2908 QA/canary
+ *      fixture identity plus the billing-canary-lock guard rows. Surviving
+ *      rows are cross-checked against their `signup_completed` funnel event
+ *      (PR #1965) when --events-ndjson supplies event records; rows without
+ *      one are listed as suspect, never silently counted.
  */
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -50,18 +57,40 @@ const signupDays = 14;
 const topUpDays = 14;
 const usagePeriods = 12;
 const yieldWeeks = 12;
+/** Trailing windows of the direction metric (issue #3321; direction#4518). */
+const directionWindows = { recent: 7, baseline: 30 };
+/** Workers Logs retention on this account (docs/funnel-measurement-spec.md):
+ * a signup_completed event older than this can no longer be checked. */
+const EVENT_RETENTION_DAYS = 7;
+/** A surviving signup row and its signup_completed event carry no shared id
+ * (the event's spec-§4 field allowlist has no user/workspace correlation), so
+ * the cross-check matches the nearest unused event in time. 30min covers the
+ * OAuth path (the event fires inside the same request, ~0s gap) and the
+ * magic-link path (the verification click can lag the user-row insert by
+ * minutes) without letting two same-hour signups share one event: the greedy
+ * nearest match pairs rows and events one-to-one. Named, not buried. */
+const SIGNUP_EVENT_MATCH_WINDOW_MS = 30 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const helpText = `Weekly business-metrics operator report (read-only).
 
 Usage:
   node scripts/weekly-business-metrics.mjs         Query production (--remote) D1 and print the report
+  node scripts/weekly-business-metrics.mjs --json  Print the fixture-free signup meter as JSON (issue #3321)
+  node scripts/weekly-business-metrics.mjs --json --events-ndjson <path|->
+                                                   Also cross-check surviving rows against their
+                                                   signup_completed event (PR #1965); rows without a matching
+                                                   event are listed as suspect. One funnel log record per line
+                                                   (app/lib/log.server.ts AppLogRecord; operation
+                                                   "funnel_signup_completed"), the same NDJSON contract as
+                                                   scripts/funnel-daily-counts.mjs. "-" reads stdin.
   node scripts/weekly-business-metrics.mjs --help  Print this help and exit
 
 Runs the six docs/ga-metrics.md business-metric queries plus a weekly
 watch_event yield check against production D1 via
 \`wrangler d1 execute ${databaseName} --remote\` and prints one markdown table
-per metric:
+per metric. With --json it instead prints the direction metric's
+fixture-free signup count (issue #3321):
 
   1. New signups per day (last ${signupDays} days)        — "user".createdAt
   2. Paid conversions (current non-free plans)     — user_plan
@@ -88,12 +117,25 @@ function parseArgs() {
     selfTestDriftFlag();
     process.exit(0);
   }
-  if (args.length > 0) {
-    console.error(
-      `Unknown argument: ${args[0]}. Supported: --help, --self-test-drift-flag`,
-    );
-    process.exit(1);
+  const options = { json: false, eventsPath: null };
+  for (let i = 0; i < args.length; i += 1) {
+    if (args[i] === "--json") {
+      options.json = true;
+    } else if (args[i] === "--events-ndjson") {
+      options.eventsPath = args[i + 1];
+      if (options.eventsPath === undefined) {
+        console.error("--events-ndjson requires a path (or - for stdin).");
+        process.exit(1);
+      }
+      i += 1;
+    } else {
+      console.error(
+        `Unknown argument: ${args[i]}. Supported: --help, --self-test-drift-flag, --json, --events-ndjson <path|->`,
+      );
+      process.exit(1);
+    }
   }
+  return options;
 }
 
 /**
@@ -472,7 +514,16 @@ GROUP BY we.watchlist_id;
 }
 
 function main() {
-  parseArgs();
+  const options = parseArgs();
+  if (options.json) {
+    try {
+      runSignupIntegrityJson(options.eventsPath);
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : error);
+      process.exit(1);
+    }
+    return;
+  }
   try {
     console.log("# Weekly business metrics");
     console.log(`\n_Source: production D1 (\`${databaseName}\`, read-only). Generated ${new Date().toISOString()}._`);
@@ -484,6 +535,9 @@ function main() {
         { key: "signups", label: "signups" },
       ],
       runQuery(buildSignupsQuery()),
+    );
+    console.log(
+      "Direction metric (fixture-free, direction#4518): `node scripts/weekly-business-metrics.mjs --json`",
     );
 
     printSection("2. Paid conversions (current non-free plans)");
