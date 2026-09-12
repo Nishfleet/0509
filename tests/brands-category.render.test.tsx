@@ -171,7 +171,7 @@ describe("/brands/:category — per-category brand landing page (issue #2067)", 
     expect(canonical?.href).toBe("https://0509.io/brands/beauty-personal-care");
     const ogImage = entries.find((e) => e.property === "og:image");
     expect(ogImage?.content).toBe(
-      "https://0509.io/social-card/brand/beauty-personal-care.svg",
+      "https://0509.io/social-card/brand/beauty-personal-care.png",
     );
     const twitterCard = entries.find((e) => e.name === "twitter:card");
     expect(twitterCard?.content).toBe("summary_large_image");

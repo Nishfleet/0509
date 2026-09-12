@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   DIGEST_STALENESS_THRESHOLD_MS,
@@ -27,20 +27,31 @@ function makeEnv(prepare: ReturnType<typeof vi.fn>) {
 }
 
 describe("getPublicStatusCounters digest query", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("reads the last-sent digest from created_at across status='sent', never delivered_at", async () => {
-    // Clock-relative fixture: the digest must sit inside the 7-day freshness
-    // threshold on any run date, otherwise digestHealthState correctly reads
-    // the record as stalled and this test fails for calendar reasons. (Both
-    // branches fixed the same aged 2026-09-05 hardcoded fixture; this merge
-    // keeps one relative fixture for both rows.)
-    const recentDigestSentAt = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    // Pin the clock: the fixture uses a frozen sentinel digest timestamp
+    // (2026-09-05). Without a pinned clock the age comparison in
+    // digestHealthState drifts past the 7-day staleness threshold and the
+    // test time-bombs. 2026-09-08 keeps it comfortably 'recent'.
+    vi.useFakeTimers({ now: new Date("2026-09-08T00:00:00.000Z") });
     const issued: string[] = [];
+    // Relative, not hardcoded: this case asserts the SQL column choice and a
+    // `recent` verdict, so the fixture timestamp must sit inside the staleness
+    // window whenever the suite runs. The previous hardcoded 2026-09-05 aged
+    // past DIGEST_STALENESS_THRESHOLD_MS (7 days) and flipped the expected
+    // verdict to `stalled`, failing every PR on a clock tick rather than on a
+    // regression. `recent` logic itself is still covered deterministically by
+    // the `digestHealthState` cases below.
+    const recentSentAt = new Date(Date.now() - 60 * 60 * 1000).toISOString();
     const prepare = vi.fn((sql: string) => {
       issued.push(sql);
       let row: Row | null = null;
       if (sql.includes("SUM(CASE")) row = { total: 24, failed: 0 };
-      else if (sql.includes("FROM watchlist_run")) row = { last_started_at: recentDigestSentAt };
-      else if (sql.includes("FROM digest_delivery")) row = { last_digest_sent_at: recentDigestSentAt };
+      else if (sql.includes("FROM watchlist_run")) row = { last_started_at: "2026-09-06T09:00:04.000Z" };
+      else if (sql.includes("FROM digest_delivery")) row = { last_digest_sent_at: recentSentAt };
       return {
         bind: vi.fn(() => ({ all: vi.fn().mockResolvedValue({ results: row ? [row] : [] }) })),
       };
@@ -59,7 +70,7 @@ describe("getPublicStatusCounters digest query", () => {
     expect(result).toMatchObject({
       runsInLast24h: 24,
       failedRunsInLast24h: 0,
-      lastDigestSentAt: recentDigestSentAt,
+      lastDigestSentAt: recentSentAt,
       digestHealth: "recent",
     });
   });

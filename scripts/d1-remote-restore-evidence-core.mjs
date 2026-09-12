@@ -252,7 +252,7 @@ export function assertRestoreRoundTrip(source, restored) {
  * @param {DatabaseEvidence["migrationLedger"]} ledger
  * @param {string[]} repositoryMigrations
  * @param {Set<string>} cleanupMigrations
- * @param {{ baseline?: readonly string[], retiredMigrations?: Set<string> }} options
+ * @param {{ baseline?: readonly string[], retiredMigrations?: Set<string>, orderExceptions?: readonly (readonly string[])[] }} options
  */
 export function assertMigrationLedgerMatchesRepository(
   ledger,
@@ -266,6 +266,7 @@ export function assertMigrationLedgerMatchesRepository(
     cleanupMigrations,
     options.baseline,
     options.retiredMigrations,
+    options.orderExceptions,
   );
   if (
     !allowedLedgers.some(
@@ -289,7 +290,7 @@ export function assertMigrationLedgerMatchesRepository(
  * @param {string[]} ledgerNames
  * @param {string[]} repositoryMigrations
  * @param {Set<string>} cleanupMigrations
- * @param {{ baseline?: readonly string[], retiredMigrations?: Set<string> }} options
+ * @param {{ baseline?: readonly string[], retiredMigrations?: Set<string>, orderExceptions?: readonly (readonly string[])[] }} options
  * @returns {string[] | null}
  */
 export function unappliedForwardMigrationSuffix(
@@ -306,6 +307,7 @@ export function unappliedForwardMigrationSuffix(
     cleanupMigrations,
     options.baseline,
     options.retiredMigrations,
+    options.orderExceptions,
   );
   if (
     allowedLedgers.some(
@@ -316,8 +318,10 @@ export function unappliedForwardMigrationSuffix(
     return [];
   }
   /** @type {string[] | null} */
-  let found = null;
-  for (const allowedLedger of allowedLedgers) {
+  let primarySuffix = null;
+  /** @type {string[][]} */
+  const matches = [];
+  for (const [index, allowedLedger] of allowedLedgers.entries()) {
     if (ledgerNames.length >= allowedLedger.length) continue;
     const prefix = allowedLedger.slice(0, ledgerNames.length);
     if (JSON.stringify(prefix) !== JSON.stringify(ledgerNames)) continue;
@@ -329,19 +333,30 @@ export function unappliedForwardMigrationSuffix(
     ) {
       continue;
     }
-    if (found !== null && JSON.stringify(found) !== JSON.stringify(suffix)) {
-      return null;
-    }
-    found = suffix;
+    if (index === 0) primarySuffix = suffix;
+    matches.push(suffix);
   }
-  return found;
+  // A forward apply appends pending migrations in repository order, so when
+  // the primary (repository-ordered) ledger is among the prefix matches its
+  // suffix is what the apply produces — order-exception variants only matter
+  // for names production already carries out of repository order.
+  if (primarySuffix !== null) return primarySuffix;
+  if (
+    matches.length > 0 &&
+    matches.every(
+      (suffix) => JSON.stringify(suffix) === JSON.stringify(matches[0]),
+    )
+  ) {
+    return matches[0];
+  }
+  return null;
 }
 
 /**
  * @param {DatabaseEvidence["migrationLedger"]} ledger
  * @param {string[]} repositoryMigrations
  * @param {Set<string>} cleanupMigrations
- * @param {{ baseline?: readonly string[], retiredMigrations?: Set<string> }} options
+ * @param {{ baseline?: readonly string[], retiredMigrations?: Set<string>, orderExceptions?: readonly (readonly string[])[] }} options
  * @returns {{ action: "ok" } | { action: "apply_forward_suffix", migrations: string[] } | { action: "reject", reason: "source_backup_migration_ledger_stale" }}
  */
 export function planSourceBackupLedgerReconciliation(

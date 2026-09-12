@@ -6,6 +6,10 @@ import { fileURLToPath } from "node:url";
 
 import { validateRemoteRestoreEvidence } from "./deploy-production-plan.mjs";
 import {
+  POST_DEPLOY_CLEANUP_MIGRATIONS,
+  PRODUCTION_MIGRATION_LEDGER_BASELINE,
+  PRODUCTION_MIGRATION_LEDGER_ORDER_EXCEPTIONS,
+  RETIRED_PRODUCTION_MIGRATIONS,
   allowedProductionMigrationLedgers,
   migrationLedgerState,
 } from "./d1-migration-sync-check.lib.mjs";
@@ -661,6 +665,10 @@ async function main() {
     await restoreEvidenceClassification();
   const allowedMigrationStates = allowedProductionMigrationLedgers(
     migrations,
+    POST_DEPLOY_CLEANUP_MIGRATIONS,
+    PRODUCTION_MIGRATION_LEDGER_BASELINE,
+    RETIRED_PRODUCTION_MIGRATIONS,
+    PRODUCTION_MIGRATION_LEDGER_ORDER_EXCEPTIONS,
   ).map((ledger) => migrationLedgerState(ledger));
   const verificationNow = new Date();
   const verdict = validateRemoteRestoreEvidence(evidence, {

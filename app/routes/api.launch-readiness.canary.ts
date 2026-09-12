@@ -105,6 +105,22 @@ async function ensureCanaryTarget(env: { DB?: D1Database }, canaryEmail: string)
      ON CONFLICT(id) DO UPDATE SET
        user_id = excluded.user_id, is_active = 1, updated_at = excluded.updated_at`,
   ).bind(CANARY_WATCHLIST_ID, userId, nowIso, nowIso));
+  // Gate C's proof email path uses `requireUniqueExistingTarget: true`, so
+  // a missing delivery_target fails closed with
+  // `Gate C proof email target must resolve uniquely` and deliverWeeklyDigest
+  // throws — the outer guard now catches that throw and answers JSON with
+  // `canary_proof_pipeline_failed`, but the underlying gap is that the
+  // canary substrate never included an email target. Provision one here with
+  // the same idempotent upsert pattern (provisionVerifiedAccountEmailTargetIfUnsuppressed
+  // INSERT-OR-IGNORE is a no-op when one already exists) so the substrate
+  // remains operator-free and the canary route can dispatch its internal
+  // proof email without operator-seeded data.
+  const { provisionVerifiedAccountEmailTargetIfUnsuppressed } = await import("~/lib/data.server");
+  await provisionVerifiedAccountEmailTargetIfUnsuppressed(env, {
+    userId,
+    targetValue: canaryEmail,
+    optInSource: "launch_readiness_canary_substrate",
+  });
 
   const target = await getCanaryTarget(env, canaryEmail);
   return { target, provisioned: true };
@@ -429,82 +445,141 @@ export async function action({ context, request }: ActionFunctionArgs) {
     requireWhatsAppDelivery,
   };
 
-  const runId = await createWatchlistRun(env, target.watchlist_id, "manual", null, 1, {
-    ...metadata,
-    blocker: "launch_readiness_canary_incomplete",
-    proofUrl,
-  });
-  // Issue #2077: instrument the landing-page capture branch so
-  // cta_pipeline_stage_counts fills for the canary volume path. The
-  // browserless branch uses a different capture function and is not
-  // instrumented here.
-  let snapshot: Awaited<ReturnType<typeof captureLandingPageSnapshot>> | null = null;
-  if (requestedProofProvider === "browserless") {
-    snapshot = await (await import("~/lib/browser-run.server")).captureBrowserlessProofSnapshot(
-      env,
-      proofUrl,
-      { requireScreenshot: true },
-    );
-  } else {
-    const { startLandingPagePipelineVolumeInstrumentation } = await import(
-      "~/lib/cta-pipeline-stage-counts.server"
-    );
-    const instr = startLandingPagePipelineVolumeInstrumentation({
-      watchlistId: "launch_readiness_canary",
-      scanId: runId,
-      adId: null,
-    });
-    try {
-      snapshot = await captureLandingPageSnapshot(env, proofUrl, {
-        preferRendered: true,
-        requireScreenshot: true,
-        instrumentation: instr.instrumentation,
-      });
-      instr.recordCaptureOutcome(snapshot, null);
-    } finally {
-      await instr.finish(env);
-    }
-  }
-
-  if (!snapshot || !snapshotHasScreenshotArtifact(snapshot)) {
-    const blocker =
-      requestedProofProvider === "browserless"
-        ? "browserless_proof_capture_failed"
-        : "proof_capture_failed";
-    await finishWatchlistRun(env, runId, {
-      status: "failed",
-      pagesScanned: 0,
-      summary: {
-        ...metadata,
-        blocker,
-        proofUrl,
-      },
-    });
-
-    return Response.json(
-      {
-        ok: false,
-        blocker,
-        runId,
-      },
-      {
-        status: 503,
-        headers: { "cache-control": "no-store" },
-      },
-    );
-  }
-
-  const canonicalPageIdentity =
-    buildCanonicalPageIdentity(snapshot.canonicalUrl) ?? buildCanonicalPageIdentity(proofUrl) ?? "0509.io/";
-  const proofTargetIdentity = buildProofTargetIdentity({
-    watchlistId: target.watchlist_id,
-    adId: null,
-    canonicalPageIdentity,
-  });
-  let proofTarget;
-  let proofCaptureId: string;
-  let proofCaptureCommitted = false;
+  // From the proof-target upsert through the final Response.json the route
+  // runs unguarded — any D1, R2, browser-binding or provider-lane failure
+  // here would otherwise escape as a non-JSON 5xx, leaving Gate C with an
+  // empty payload and only `proofEmailEvidence: { present: false, ... }` in
+  // its journal (#3146). Wrap the entire tail in a try/catch so a throw
+  // answers JSON with a `canary_proof_pipeline_failed` blocker carrying
+  // whatever local state was reached (runId / proofCaptureId when known),
+  // and the gate can name the field without raw-log archaeology.
+  let runId: string | undefined;
+  let proofCaptureId: string | undefined;
+  let digestRunId: string | undefined;
   try {
+    runId = await createWatchlistRun(env, target.watchlist_id, "manual", null, 1, {
+      ...metadata,
+      blocker: "launch_readiness_canary_incomplete",
+      proofUrl,
+    });
+    // Issue #2077: instrument the landing-page capture branch so
+    // cta_pipeline_stage_counts fills for the canary volume path. The
+    // browserless branch uses a different capture function and is not
+    // instrumented here.
+    let snapshot: Awaited<ReturnType<typeof captureLandingPageSnapshot>> | null = null;
+    if (requestedProofProvider === "browserless") {
+      snapshot = await (await import("~/lib/browser-run.server")).captureBrowserlessProofSnapshot(
+        env,
+        proofUrl,
+        { requireScreenshot: true },
+      );
+    } else {
+      const { startLandingPagePipelineVolumeInstrumentation } = await import(
+        "~/lib/cta-pipeline-stage-counts.server"
+      );
+      const instr = startLandingPagePipelineVolumeInstrumentation({
+        watchlistId: "launch_readiness_canary",
+        scanId: runId,
+        adId: null,
+      });
+      try {
+        snapshot = await captureLandingPageSnapshot(env, proofUrl, {
+          preferRendered: true,
+          requireScreenshot: true,
+          instrumentation: instr.instrumentation,
+        });
+        instr.recordCaptureOutcome(snapshot, null);
+      } finally {
+        await instr.finish(env);
+      }
+    }
+
+    if (!snapshot || !snapshotHasScreenshotArtifact(snapshot)) {
+      const blocker =
+        requestedProofProvider === "browserless"
+          ? "browserless_proof_capture_failed"
+          : "proof_capture_failed";
+      await finishWatchlistRun(env, runId, {
+        status: "failed",
+        pagesScanned: 0,
+        summary: {
+          ...metadata,
+          blocker,
+          proofUrl,
+        },
+      });
+
+      return Response.json(
+        {
+          ok: false,
+          blocker,
+          runId,
+        },
+        {
+          status: 503,
+          headers: { "cache-control": "no-store" },
+        },
+      );
+    }
+
+    const canonicalPageIdentity =
+      buildCanonicalPageIdentity(snapshot.canonicalUrl) ?? buildCanonicalPageIdentity(proofUrl) ?? "0509.io/";
+    const proofTargetIdentity = buildProofTargetIdentity({
+      watchlistId: target.watchlist_id,
+      adId: null,
+      canonicalPageIdentity,
+    });
+    let proofTarget;
+    let proofCaptureCommitted = false;
+    try {
+      proofTarget = await upsertProofTarget(env, {
+        watchlistId: target.watchlist_id,
+        adId: null,
+        landingPageUrl: snapshot.canonicalUrl,
+        canonicalPageIdentity,
+        proofTargetIdentity,
+        lastCaptureAttemptAt: snapshot.capturedAt,
+      });
+
+      if (!proofTarget) {
+        throw new Response("Launch readiness proof target could not be created.", { status: 500 });
+      }
+
+      proofCaptureId = await createProofCapture(env, {
+        proofTargetId: proofTarget.id,
+        status: "succeeded",
+        screenshotArtifactKey: readSnapshotString(snapshot.metadata, "screenshotArtifactKey"),
+        htmlArtifactKey:
+          readSnapshotString(snapshot.metadata, "htmlArtifactKey") ?? snapshot.artifactKey ?? null,
+        extractedFields: snapshotToExtractedFields(snapshot),
+        fieldConfidence: readSnapshotConfidence(snapshot),
+        extractionWarnings: readSnapshotWarnings(snapshot),
+        captureMetadata: {
+          ...snapshot.metadata,
+          ...metadata,
+          kind: "launch_readiness_real_capture",
+          proofUrl,
+          canonicalUrl: snapshot.canonicalUrl,
+          captureMethod: snapshot.captureMethod,
+        },
+        renderMode: readSnapshotRenderMode(snapshot),
+        deviceProfile: readSnapshotDeviceProfile(snapshot),
+        extractorVersion: readSnapshotString(snapshot.metadata, "extractorVersion") ?? "launch-readiness-canary-v2",
+        idempotencyKey: `${canaryKey}:proof`,
+        attemptedAt: snapshot.capturedAt,
+        succeededAt: snapshot.capturedAt,
+      });
+      proofCaptureCommitted = true;
+    } catch (error) {
+      if (!proofCaptureCommitted) {
+        const compensated = await compensateUncommittedProofArtifacts(env, snapshot);
+        if (!compensated.ok) {
+          throw new Response("Launch readiness proof cleanup could not be completed.", { status: 500 });
+        }
+      }
+      throw error;
+    }
+
     proofTarget = await upsertProofTarget(env, {
       watchlistId: target.watchlist_id,
       adId: null,
@@ -512,218 +587,204 @@ export async function action({ context, request }: ActionFunctionArgs) {
       canonicalPageIdentity,
       proofTargetIdentity,
       lastCaptureAttemptAt: snapshot.capturedAt,
+      lastSuccessfulProofAt: snapshot.capturedAt,
+      lastSuccessfulCaptureId: proofCaptureId,
     });
 
-    if (!proofTarget) {
-      throw new Response("Launch readiness proof target could not be created.", { status: 500 });
-    }
+    const eventId = await createWatchEvent(env, {
+      watchlistId: target.watchlist_id,
+      runId,
+      eventType: "ad_new",
+      adId: null,
+      baselineFromRunId: null,
+      title,
+      summary,
+      metadata,
+      status: "confirmed",
+      importanceScore: 100,
+      proofCaptureId,
+      confirmedAt: nowIso,
+      lastEvaluatedAt: nowIso,
+    });
 
-    proofCaptureId = await createProofCapture(env, {
-      proofTargetId: proofTarget.id,
+    await finishWatchlistRun(env, runId, {
       status: "succeeded",
-      screenshotArtifactKey: readSnapshotString(snapshot.metadata, "screenshotArtifactKey"),
-      htmlArtifactKey:
-        readSnapshotString(snapshot.metadata, "htmlArtifactKey") ?? snapshot.artifactKey ?? null,
-      extractedFields: snapshotToExtractedFields(snapshot),
-      fieldConfidence: readSnapshotConfidence(snapshot),
-      extractionWarnings: readSnapshotWarnings(snapshot),
-      captureMetadata: {
-        ...snapshot.metadata,
+      pagesScanned: 1,
+      summary: {
         ...metadata,
-        kind: "launch_readiness_real_capture",
+        events: 1,
+        eventsConfirmed: 1,
+        proofsAttempted: 1,
         proofUrl,
-        canonicalUrl: snapshot.canonicalUrl,
-        captureMethod: snapshot.captureMethod,
       },
-      renderMode: readSnapshotRenderMode(snapshot),
-      deviceProfile: readSnapshotDeviceProfile(snapshot),
-      extractorVersion: readSnapshotString(snapshot.metadata, "extractorVersion") ?? "launch-readiness-canary-v2",
-      idempotencyKey: `${canaryKey}:proof`,
-      attemptedAt: snapshot.capturedAt,
-      succeededAt: snapshot.capturedAt,
     });
-    proofCaptureCommitted = true;
-  } catch (error) {
-    if (!proofCaptureCommitted) {
-      const compensated = await compensateUncommittedProofArtifacts(env, snapshot);
-      if (!compensated.ok) {
-        throw new Response("Launch readiness proof cleanup could not be completed.", { status: 500 });
-      }
-    }
-    throw error;
-  }
 
-  proofTarget = await upsertProofTarget(env, {
-    watchlistId: target.watchlist_id,
-    adId: null,
-    landingPageUrl: snapshot.canonicalUrl,
-    canonicalPageIdentity,
-    proofTargetIdentity,
-    lastCaptureAttemptAt: snapshot.capturedAt,
-    lastSuccessfulProofAt: snapshot.capturedAt,
-    lastSuccessfulCaptureId: proofCaptureId,
-  });
-
-  const eventId = await createWatchEvent(env, {
-    watchlistId: target.watchlist_id,
-    runId,
-    eventType: "ad_new",
-    adId: null,
-    baselineFromRunId: null,
-    title,
-    summary,
-    metadata,
-    status: "confirmed",
-    importanceScore: 100,
-    proofCaptureId,
-    confirmedAt: nowIso,
-    lastEvaluatedAt: nowIso,
-  });
-
-  await finishWatchlistRun(env, runId, {
-    status: "succeeded",
-    pagesScanned: 1,
-    summary: {
-      ...metadata,
-      events: 1,
-      eventsConfirmed: 1,
-      proofsAttempted: 1,
-      proofUrl,
-    },
-  });
-
-  const digestClaim = await createDigestRun(
-    env,
-    target.user_id,
-    periodStart,
-    periodEnd,
-    {
-      ...metadata,
-      totalEvents: 1,
-      watchlists: 1,
-    },
-    {
-      returnClaim: true,
-      items: [{
-        watchlistId: target.watchlist_id,
-        watchlistName: target.watchlist_name,
-        eventType: "ad_new",
-        title,
-        summary,
-        metadata: {
-          ...metadata,
-          eventId,
+    const digestClaim = await createDigestRun(
+      env,
+      target.user_id,
+      periodStart,
+      periodEnd,
+      {
+        ...metadata,
+        totalEvents: 1,
+        watchlists: 1,
+      },
+      {
+        returnClaim: true,
+        items: [{
+          watchlistId: target.watchlist_id,
+          watchlistName: target.watchlist_name,
+          eventType: "ad_new",
+          title,
+          summary,
+          metadata: {
+            ...metadata,
+            eventId,
+            proofCaptureId,
+          },
+        }],
+      },
+    );
+    if (!digestClaim.created) {
+      return Response.json(
+        {
+          ok: false,
+          blockers: ["digest_period_claim_conflict"],
+          gateRunId,
+          runId,
           proofCaptureId,
         },
-      }],
-    },
-  );
-  if (!digestClaim.created) {
+        {
+          status: 409,
+          headers: { "cache-control": "no-store" },
+        },
+      );
+    }
+    digestRunId = digestClaim.digestRunId;
+
+    const delivery = await deliverWeeklyDigest(env, {
+      userId: target.user_id,
+      userName: target.name ?? "Five to Nine",
+      accountEmail: target.email,
+      digestRunId,
+      periodStart,
+      periodEnd,
+      items: [
+        {
+          eventId,
+          watchlistId: target.watchlist_id,
+          watchlistName: target.watchlist_name,
+          eventType: "ad_new",
+          title,
+          summary,
+          metadata,
+        },
+      ],
+      cadence: "daily",
+      lane: requireWhatsAppDelivery ? "customer" : "internal",
+      ...(proofEmailSubject ? { proofEmailSubject } : {}),
+    });
+    const deliveryDetails = delivery.details as Array<CanaryDeliveryDetail>;
+    const emailAttempts = deliveryDetails.filter((attempt) => attempt.channel === "email");
+    const proofEmail = gateCProofRequested
+      ? buildPrivateProofEmail(emailAttempts, gateRunId!, proofEmailSubject!)
+      : null;
+    const proofEmailBlockers = gateCProofRequested
+      ? [
+          emailAttempts.length === 1 ? null : "proof_email_not_unique",
+          proofEmail?.subject ? null : "proof_email_subject_invalid",
+          proofEmail?.dispatchStartedAt ? null : "proof_email_dispatch_timestamp_invalid",
+        ].filter((value): value is string => Boolean(value))
+      : [];
+    const deliverySent = gateCProofRequested
+      ? proofEmail?.provider.status === "sent" && proofEmail.subject !== null && proofEmail.dispatchStartedAt !== null
+      : deliveryDetails.some((attempt) => attempt.status === "sent");
+    const slackDeliverySent = deliveryDetails.some(
+      (attempt) => attempt.channel === "slack" && attempt.status === "sent",
+    );
+    const whatsappAttempts = deliveryDetails.filter((attempt) => attempt.channel === "whatsapp");
+    const hasExplicitWebhookStatus = whatsappAttempts.some((attempt) => attempt.webhookStatus !== undefined);
+    const whatsappDeliverySent = requireWhatsAppDelivery && whatsappAttempts.length > 0
+      ? hasExplicitWebhookStatus
+        ? whatsappAttempts.some(
+            (attempt) => attempt.status === "sent" && attempt.webhookStatus === "delivered",
+          )
+        : await hasReconciledWhatsAppDelivery(env, digestRunId, target.user_id)
+      : false;
+    const deliveryBlockers = [
+      deliverySent ? null : "no_digest_delivery_sent",
+      requireSlackDelivery && !slackDeliverySent ? "no_slack_digest_sent" : null,
+      requireWhatsAppDelivery && !whatsappDeliverySent ? "no_whatsapp_digest_sent" : null,
+      ...proofEmailBlockers,
+    ].filter((value): value is string => Boolean(value));
+
+    return Response.json(
+      {
+        ok: deliveryBlockers.length === 0,
+        gateRunId,
+        workerVersionId: env.CF_VERSION_METADATA?.id ?? null,
+        blockers: deliveryBlockers,
+        runId,
+        proofCaptureId,
+        digestRunId,
+        delivery: sanitizeDeliveryForCanary(deliveryDetails, delivery.attempts, delivery.channels),
+        e2eTestModeSentinel: { enabled: e2eTestModeSentinel.enabled },
+        ...(proofEmail ? { proofEmail } : {}),
+        slackDelivery: {
+          required: requireSlackDelivery,
+          sent: slackDeliverySent,
+        },
+        whatsappDelivery: {
+          required: requireWhatsAppDelivery,
+          sent: whatsappDeliverySent,
+          lane: requireWhatsAppDelivery ? "customer" : "internal",
+        },
+        proof: {
+          capturedAt: snapshot.capturedAt,
+          canonicalUrl: snapshot.canonicalUrl,
+          captureMethod: snapshot.captureMethod,
+          renderStatus: snapshot.captureMethod === "browser_render" ? "rendered" : "captured",
+        },
+      },
+      {
+        status: deliveryBlockers.length === 0 ? 200 : 503,
+        headers: { "cache-control": "no-store" },
+      },
+    );
+  } catch (error) {
+    // Fail closed with the partial-state identifier — the gate's verifier
+    // (scripts/verify-post-deploy-release.mjs) requires the route's blocker
+    // to be an identifier-safe string, so a free-form error message never
+    // reaches the journal. Re-throw React Router Response objects unchanged
+    // (they already carry an explicit status and the framework renders them
+    // as-is) so the existing proof_capture_failed / cleanup_failed / etc.
+    // branches stay first-class; only "ordinary" exceptions become the
+    // unified `canary_proof_pipeline_failed` blocker (#3146).
+    if (error instanceof Response) {
+      throw error;
+    }
+    console.error("launch-readiness canary proof pipeline failed", {
+      kind: "canary_proof_pipeline_failed",
+      runId: runId ?? null,
+      proofCaptureId: proofCaptureId ?? null,
+      digestRunId: digestRunId ?? null,
+      message: error instanceof Error ? error.message : String(error),
+    });
     return Response.json(
       {
         ok: false,
-        blockers: ["digest_period_claim_conflict"],
+        blocker: "canary_proof_pipeline_failed",
         gateRunId,
-        runId,
-        proofCaptureId,
+        ...(runId !== undefined ? { runId } : {}),
+        ...(proofCaptureId !== undefined ? { proofCaptureId } : {}),
+        ...(digestRunId !== undefined ? { digestRunId } : {}),
       },
       {
-        status: 409,
+        status: 503,
         headers: { "cache-control": "no-store" },
       },
     );
   }
-  const digestRunId = digestClaim.digestRunId;
-
-  const delivery = await deliverWeeklyDigest(env, {
-    userId: target.user_id,
-    userName: target.name ?? "Five to Nine",
-    accountEmail: target.email,
-    digestRunId,
-    periodStart,
-    periodEnd,
-    items: [
-      {
-        eventId,
-        watchlistId: target.watchlist_id,
-        watchlistName: target.watchlist_name,
-        eventType: "ad_new",
-        title,
-        summary,
-        metadata,
-      },
-    ],
-    cadence: "daily",
-    lane: requireWhatsAppDelivery ? "customer" : "internal",
-    ...(proofEmailSubject ? { proofEmailSubject } : {}),
-  });
-  const deliveryDetails = delivery.details as Array<CanaryDeliveryDetail>;
-  const emailAttempts = deliveryDetails.filter((attempt) => attempt.channel === "email");
-  const proofEmail = gateCProofRequested
-    ? buildPrivateProofEmail(emailAttempts, gateRunId!, proofEmailSubject!)
-    : null;
-  const proofEmailBlockers = gateCProofRequested
-    ? [
-        emailAttempts.length === 1 ? null : "proof_email_not_unique",
-        proofEmail?.subject ? null : "proof_email_subject_invalid",
-        proofEmail?.dispatchStartedAt ? null : "proof_email_dispatch_timestamp_invalid",
-      ].filter((value): value is string => Boolean(value))
-    : [];
-  const deliverySent = gateCProofRequested
-    ? proofEmail?.provider.status === "sent" && proofEmail.subject !== null && proofEmail.dispatchStartedAt !== null
-    : deliveryDetails.some((attempt) => attempt.status === "sent");
-  const slackDeliverySent = deliveryDetails.some(
-    (attempt) => attempt.channel === "slack" && attempt.status === "sent",
-  );
-  const whatsappAttempts = deliveryDetails.filter((attempt) => attempt.channel === "whatsapp");
-  const hasExplicitWebhookStatus = whatsappAttempts.some((attempt) => attempt.webhookStatus !== undefined);
-  const whatsappDeliverySent = requireWhatsAppDelivery && whatsappAttempts.length > 0
-    ? hasExplicitWebhookStatus
-      ? whatsappAttempts.some(
-          (attempt) => attempt.status === "sent" && attempt.webhookStatus === "delivered",
-        )
-      : await hasReconciledWhatsAppDelivery(env, digestRunId, target.user_id)
-    : false;
-  const deliveryBlockers = [
-    deliverySent ? null : "no_digest_delivery_sent",
-    requireSlackDelivery && !slackDeliverySent ? "no_slack_digest_sent" : null,
-    requireWhatsAppDelivery && !whatsappDeliverySent ? "no_whatsapp_digest_sent" : null,
-    ...proofEmailBlockers,
-  ].filter((value): value is string => Boolean(value));
-
-  return Response.json(
-    {
-      ok: deliveryBlockers.length === 0,
-      gateRunId,
-      workerVersionId: env.CF_VERSION_METADATA?.id ?? null,
-      blockers: deliveryBlockers,
-      runId,
-      proofCaptureId,
-      digestRunId,
-      delivery: sanitizeDeliveryForCanary(deliveryDetails, delivery.attempts, delivery.channels),
-      e2eTestModeSentinel: { enabled: e2eTestModeSentinel.enabled },
-      ...(proofEmail ? { proofEmail } : {}),
-      slackDelivery: {
-        required: requireSlackDelivery,
-        sent: slackDeliverySent,
-      },
-      whatsappDelivery: {
-        required: requireWhatsAppDelivery,
-        sent: whatsappDeliverySent,
-        lane: requireWhatsAppDelivery ? "customer" : "internal",
-      },
-      proof: {
-        capturedAt: snapshot.capturedAt,
-        canonicalUrl: snapshot.canonicalUrl,
-        captureMethod: snapshot.captureMethod,
-        renderStatus: snapshot.captureMethod === "browser_render" ? "rendered" : "captured",
-      },
-    },
-    {
-      status: deliveryBlockers.length === 0 ? 200 : 503,
-      headers: { "cache-control": "no-store" },
-    },
-  );
 }
 
 interface CanaryDeliveryDetail {
