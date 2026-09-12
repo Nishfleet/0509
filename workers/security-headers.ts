@@ -144,7 +144,17 @@ export const HTML_NO_STORE_HEADERS: Record<string, string> = {
 // - Never cache a response that sets cookies.
 // - `vary: cookie` so any honoring cache revalidates when auth state changes
 //   (e.g. right after login) instead of replaying the logged-out variant.
-export const PUBLIC_HTML_CACHE_CONTROL = "public, max-age=300";
+// Issue #3308: `s-maxage` gives the SHARED edge (the Cloudflare zone cache)
+// its own freshness — 300 + the #3247 serve-stale window = the accepted
+// 65-minute posture — while browsers keep the 5-minute #2950 deploy-skew
+// bound (shared caches obey s-maxage, private caches keep obeying max-age).
+// At the plain 300s the zone's respect-origin Edge TTL expired between the
+// hourly judge probes, so home_edge flapped HIT → NONE and every visitor
+// paid a cold ~1.1s render (issue #3308). 3900s still sits inside the zone
+// rule's own 4h browser TTL, so this widens nothing the zone config has not
+// already accepted. The coupling test derives the value from
+// EDGE_STALE_WINDOW_SECONDS — they cannot drift.
+export const PUBLIC_HTML_CACHE_CONTROL = "public, s-maxage=3900, max-age=300";
 
 export const PUBLIC_CACHEABLE_HTML_PATHS = new Set([
   "/",
