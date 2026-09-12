@@ -51,6 +51,7 @@ import mineaCitations from "~/data/compare/minea-citations.json";
 import panoramataCitations from "~/data/compare/panoramata-citations.json";
 import poweradspyCitations from "~/data/compare/poweradspy-citations.json";
 import pulzifiCitations from "~/data/compare/pulzifi-citations.json";
+import sneakerpingCitations from "~/data/compare/sneakerping-citations.json";
 import spylandCitations from "~/data/compare/spyland-citations.json";
 import visualpingAdLibraryCitations from "~/data/compare/visualping-ad-library-citations.json";
 
@@ -93,6 +94,8 @@ export const PUBLIC_MARKDOWN_PATHS = [
   "/compare/bigspy",
   "/compare/minea",
   "/compare/poweradspy",
+  // Issue #3302: SneakerPing, the sneaker-resale cluster's compare surface.
+  "/compare/sneakerping",
 ] as const;
 
 const PUBLIC_MARKDOWN_PATH_SET = new Set<string>(PUBLIC_MARKDOWN_PATHS);
@@ -272,6 +275,11 @@ const LLMS_PAGE_DETAILS = {
     title: "Five to Nine vs PowerAdSpy",
     description:
       "How Five to Nine's source-backed change proof compares with PowerAdSpy's 11-network ad intelligence platform ($99–$399/month tiers, paid 3-day trials).",
+  },
+  "/compare/sneakerping": {
+    title: "Five to Nine vs SneakerPing",
+    description:
+      "How Five to Nine's source-backed change proof compares with SneakerPing's price-drop pings across 40+ sneaker stores and its free 5-pair watch tier.",
   },
   "/switch/panoramata": {
     title: "Panoramata alternative",
@@ -1404,6 +1412,10 @@ const PUBLIC_MARKDOWN_BY_PATH: Readonly<Record<string, string>> = {
   "/compare/poweradspy": compareMarkdown(
     poweradspyCitations as CompareCitations,
     "PowerAdSpy is an AI-powered ad intelligence platform across 11 networks, with plans from $99/month and paid 3-day trials. Five to Nine is scheduled, source-backed Meta Ad Library and landing-page change proof.",
+  ),
+  "/compare/sneakerping": compareMarkdown(
+    sneakerpingCitations as CompareCitations,
+    "SneakerPing pings sneaker buyers the moment a tracked pair drops to its target price across 40+ online stores. Five to Nine is scheduled, source-backed Meta Ad Library and landing-page change proof.",
   ),
 };
 
