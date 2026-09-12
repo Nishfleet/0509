@@ -155,6 +155,67 @@ describe("festive-india-2026 seed list (issue #2140)", () => {
   });
 });
 
+describe("beauty-personal-care seed list (issue #3123)", () => {
+  it("registers the beauty-personal-care list", () => {
+    expect(SEED_LISTS["beauty-personal-care"]).toBeDefined();
+    expect(resolveSeedList("beauty-personal-care")).not.toBeNull();
+  });
+
+  it("validates clean and carries exactly 29 domains, each with a real brand display name", () => {
+    const list = SEED_LISTS["beauty-personal-care"];
+    expect(validateSeedList(list)).toEqual([]);
+    expect(list.domains).toHaveLength(29);
+    // A brand display name ships as published page copy, so a literal
+    // "placeholder" stub or a whitespace-only value must fail this pin —
+    // the phase-1 review caught exactly that error class on credobeauty.com.
+    for (const entry of list.domains) {
+      const brand = entry.brand?.trim() ?? "";
+      expect(brand.length > 0 && brand.toLowerCase() !== "placeholder").toBe(true);
+    }
+  });
+
+  it("fits under the publisher cap so a targeted single-list run covers the whole cohort", () => {
+    const list = SEED_LISTS["beauty-personal-care"];
+    expect(list.domains.length).toBeLessThanOrEqual(ADS_DOMAIN_PUBLISHER_CAP_DEFAULT);
+  });
+
+  it("marks its domains as seeded brand domains", () => {
+    expect(isSeededBrandDomain("sephora.com")).toBe(true);
+    expect(isSeededBrandDomain("nykaa.com")).toBe(true);
+    expect(isSeededBrandDomain("ELFCOSMETICS.COM")).toBe(true);
+  });
+});
+
+describe("saas-software seed list (issue #3123)", () => {
+  it("registers the saas-software list", () => {
+    expect(SEED_LISTS["saas-software"]).toBeDefined();
+    expect(resolveSeedList("saas-software")).not.toBeNull();
+  });
+
+  it("validates clean and carries exactly 36 domains, each with a real brand display name", () => {
+    const list = SEED_LISTS["saas-software"];
+    expect(validateSeedList(list)).toEqual([]);
+    expect(list.domains).toHaveLength(36);
+    // Same pin as beauty-personal-care: "placeholder" literals and
+    // whitespace-only display names must fail here, not ship as page copy.
+    for (const entry of list.domains) {
+      const brand = entry.brand?.trim() ?? "";
+      expect(brand.length > 0 && brand.toLowerCase() !== "placeholder").toBe(true);
+    }
+  });
+
+  it("fits under the publisher cap so a targeted single-list run covers the whole cohort", () => {
+    const list = SEED_LISTS["saas-software"];
+    expect(list.domains.length).toBeLessThanOrEqual(ADS_DOMAIN_PUBLISHER_CAP_DEFAULT);
+  });
+
+  it("marks its domains as seeded brand domains", () => {
+    expect(isSeededBrandDomain("hubspot.com")).toBe(true);
+    expect(isSeededBrandDomain("notion.so")).toBe(true);
+    expect(isSeededBrandDomain("SLACK.COM")).toBe(true);
+  });
+});
+
 describe("isSeededBrandDomain (issue #1306 retire-scope guard)", () => {
   // The /ads/:domain loader uses this to decide whether a thin (0
   // verified-linked ads) page retires to /search or renders noindex. The
@@ -173,7 +234,11 @@ describe("isSeededBrandDomain (issue #1306 retire-scope guard)", () => {
     expect(isSeededBrandDomain(domain)).toBe(true);
   });
 
-  it.each(["nykaa.com", "notion.so", "oura.com", "", "  ", "example.com"])(
+  // nykaa.com and notion.so used to pin the false side here, but issue #3123
+  // registered them via the beauty-personal-care and saas-software cohorts, so
+  // they resolve true by design now. Swapped for genuinely unseeded domains —
+  // the pin's job is that an UNRELATED thin domain keeps #1442 render-noindex.
+  it.each(["wayfair.com", "bestbuy.com", "oura.com", "", "  ", "example.com"])(
     "does not recognize %s as a seeded brand (keeps #1442 render-noindex)",
     (domain) => {
       expect(isSeededBrandDomain(domain)).toBe(false);
@@ -250,6 +315,100 @@ describe("publishSeedListDomain warming verdict (issue #2210)", () => {
     expect(summary.outcomes[0].reason).not.toContain("No verified/likely coverage");
     expect(summary.outcomes[0].reason).toContain("warming");
   });
+
+  // Issue #3123 phase 3: pin the publish floor at the LIST-INPUT boundary, not
+  // just the classifySeedListVerdict unit. A registered-list domain whose
+  // coverage resolves to 0 verified + 0 likely (with a READY discovery, i.e.
+  // genuinely proven-empty, not still warming) must come out of the run as a
+  // skip that contributes NOTHING to the published surface, while a
+  // neighbouring ≥1-verified domain in the same list publishes. This is the
+  // boundary the nightly publisher actually gates on.
+  it("skips a proven-empty (ready, 0+0) list domain and publishes its ≥1-verified neighbour — the publish floor at the list-input boundary", async () => {
+    const [publishDomain, skipDomain] = SEED_LISTS["beauty-personal-care"]
+      .domains.slice(0, 2)
+      .map((entry) => entry.domain);
+
+    vi.doMock("~/lib/ad-source.server", () => ({
+      resolveCommercialDiscoveryProvider: vi.fn(() => "meta_library_browser"),
+      searchAdsViaSourceResolver: vi.fn().mockResolvedValue({
+        ads: [],
+        nextCursor: null,
+        source: "meta_library_browser",
+        provider: "meta_library_browser",
+        cacheStatus: "miss",
+      }),
+    }));
+    vi.doMock("~/lib/ad-persistence.server", () => ({
+      hydrateAdsWithPersistedCreatives: vi.fn(async (_env: unknown, ads: unknown[]) => ads),
+    }));
+    vi.doMock("~/lib/search-rollout.server", () => ({
+      shouldApplySearchV2: vi.fn(() => true),
+    }));
+    vi.doMock("~/lib/search-v2.server", async () => {
+      const actual = await vi.importActual<typeof import("~/lib/search-v2.server")>(
+        "~/lib/search-v2.server",
+      );
+      const countsFor = (displayDomain: string) =>
+        displayDomain === publishDomain
+          ? { verifiedCount: 1, likelyCount: 0, unmatchedCount: 0, discoveryEmptyReason: null }
+          : {
+              verifiedCount: 0,
+              likelyCount: 0,
+              unmatchedCount: 0,
+              discoveryEmptyReason: "empty_search",
+            };
+      return {
+        ...actual,
+        buildSearchV2Context: vi.fn().mockImplementation(async (domain: string) => ({
+          queryIntent: { intent: "domain", raw: domain, normalized: domain },
+          scope: "exact",
+          displayDomain: domain,
+          identityAliases: [],
+          domainAliases: [],
+          advertiserPageId: null,
+        })),
+        applySearchV2PostFilter: vi.fn().mockImplementation(async (
+          _env: unknown,
+          _result: unknown,
+          v2Context: { displayDomain: string },
+        ) => ({
+          ...countsFor(v2Context.displayDomain),
+          discoveryProgress: "ready",
+          discoveryStatus: "ok",
+          discoverySummary: null,
+          provider: "meta_library_browser",
+          source: "meta_library_browser",
+          cacheStatus: "miss",
+        })),
+      };
+    });
+
+    const { runAdsDomainPublisher } = await import("~/lib/ads-domain-publisher.server");
+    const summary = await runAdsDomainPublisher(
+      { DB: {} } as never,
+      { waitUntil: () => {} } as never,
+      { list: "beauty-personal-care", cap: 2 },
+    );
+
+    expect(summary.attempted).toBe(2);
+    expect(summary.published).toBe(1);
+    expect(summary.skipped).toBe(1);
+    expect(summary.warming).toBe(0);
+    expect(summary.failed).toBe(0);
+    // Exactly the ≥1-verified domain counts toward the published surface; the
+    // proven-empty one never does.
+    expect(
+      summary.outcomes.filter((o) => o.verdict === "publish").map((o) => o.domain),
+    ).toEqual([publishDomain]);
+    expect(summary.outcomes[0].verdict).toBe("publish");
+    expect(summary.outcomes[0].verifiedCount).toBe(1);
+    expect(summary.outcomes[1].verdict).toBe("skip");
+    expect(summary.outcomes[1].domain).toBe(skipDomain);
+    expect(summary.outcomes[1].reason).toContain(
+      `No verified/likely coverage (0 verified, 0 likely`,
+    );
+    expect(summary.outcomes[1].reason).toContain(`empty reason: empty_search`);
+  });
 });
 
 /**
@@ -276,10 +435,18 @@ describe("runAdsDomainPublisher all-lists deadline + cursor (issue #2361)", () =
     vi.resetModules();
   });
 
-  // The flattened all-lists queue: festive-india-2026 (30) then sneaker-resale
-  // (25) = 55 entries, in Object.keys(SEED_LISTS) order.
+  // The flattened all-lists queue: festive-india-2026 (30), sneaker-resale
+  // (24), beauty-personal-care (29), saas-software (36) = 119 entries, in
+  // Object.keys(SEED_LISTS) order. Issue #3123 grew the registry past
+  // ADS_DOMAIN_PUBLISHER_CAP (default 60), so a full pass spans multiple
+  // nights by design — full-pass tests derive the cap from the registry
+  // instead of assuming one night covers the whole queue.
   const FESTIVE_COUNT = SEED_LISTS["festive-india-2026"].domains.length;
   const SNEAKER_FIRST_DOMAIN = SEED_LISTS["sneaker-resale"].domains[0].domain;
+  const TOTAL_QUEUE = Object.values(SEED_LISTS).reduce(
+    (sum, list) => sum + list.domains.length,
+    0,
+  );
 
   async function setupMocks({
     cursorOffset = 0,
@@ -422,18 +589,18 @@ describe("runAdsDomainPublisher all-lists deadline + cursor (issue #2361)", () =
     const summary = await runAdsDomainPublisher(
       { DB: {} } as never,
       { waitUntil: () => {} } as never,
-      { cap: 60, deadlineAt: Date.now() + 60_000 },
+      // Cap = the whole registry queue: since issue #3123 the flattened queue
+      // exceeds ADS_DOMAIN_PUBLISHER_CAP, so a literal 60 would truncate the
+      // pass mid-queue and this test would stop pinning the wrap-to-start.
+      { cap: TOTAL_QUEUE, deadlineAt: Date.now() + 60_000 },
     );
 
-    const totalDomains =
-      SEED_LISTS["festive-india-2026"].domains.length +
-      SEED_LISTS["sneaker-resale"].domains.length;
-    expect(summary.attempted).toBe(totalDomains);
+    expect(summary.attempted).toBe(TOTAL_QUEUE);
     expect(summary.truncated).toBe(false);
     // Every completed domain checkpointed, and the last one wrapped the
     // cursor back to 0 so the rolling window restarts.
-    expect(execute).toHaveBeenCalledTimes(totalDomains);
-    const [_env, _sql, list, offset] = execute.mock.calls[totalDomains - 1];
+    expect(execute).toHaveBeenCalledTimes(TOTAL_QUEUE);
+    const [_env, _sql, list, offset] = execute.mock.calls[TOTAL_QUEUE - 1];
     expect(offset).toBe(0);
     expect(list).toBe("festive-india-2026");
   });

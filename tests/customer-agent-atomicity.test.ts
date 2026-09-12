@@ -101,7 +101,7 @@ function shareEffect(
       input.actionName === "report.share" ? "report-1" : "collection-1",
       input.actionName === "report.share" ? 1 : 0,
       input.actionName === "report.share" ? '{"reportId":"shared-report"}' : null,
-      "2026-07-15T10:00:00.000Z",
+      "2026-07-15T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       input.auditId,
       input.userId,
       input.actionName,
@@ -127,7 +127,7 @@ describe("Journey 4 atomic customer-agent effects", () => {
       title: "Client proof",
       subtitle: "Current evidence",
       summary: "One saved item.",
-      generatedAt: "2026-07-15T00:00:00.000Z",
+      generatedAt: "2026-07-15T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       stats: [],
       insightDepth: {} as ReportDocument["insightDepth"],
       rows: [{
@@ -145,7 +145,7 @@ describe("Journey 4 atomic customer-agent effects", () => {
           url: "https://example.com/offer",
           headline: "Current offer",
           captureLabel: "Browser rendered",
-          capturedAt: "2026-07-15T00:00:00.000Z",
+          capturedAt: "2026-07-15T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           signals: [],
         },
         analysisFields: [],
@@ -170,7 +170,7 @@ describe("Journey 4 atomic customer-agent effects", () => {
         snapshotPayload: payload as unknown as Record<string, unknown>,
         shareId: "approved-share-1",
         token: "approved-token-1",
-        createdAt: "2026-07-15T10:00:00.000Z",
+        createdAt: "2026-07-15T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         expiresAt: "2026-10-13T10:00:00.000Z",
       }),
       result: {
@@ -234,7 +234,7 @@ describe("Journey 4 atomic customer-agent effects", () => {
           isSnapshot: false,
           shareId: "share-1",
           token: "token-original",
-          createdAt: "2026-07-15T10:00:00.000Z",
+          createdAt: "2026-07-15T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           expiresAt: "2026-10-13T10:00:00.000Z",
         }),
         resourceType: "collection",
@@ -303,7 +303,7 @@ describe("Journey 4 atomic customer-agent effects", () => {
         isSnapshot: false,
         shareId: "member-owner-share-id",
         token: "member-owner-token",
-        createdAt: "2026-07-15T10:00:00.000Z",
+        createdAt: "2026-07-15T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         expiresAt: "2026-10-13T10:00:00.000Z",
       }),
       result: { ok: true, action: "share.create", share: { id: "member-owner-share-id", token: "member-owner-token" } },
@@ -355,7 +355,7 @@ describe("Journey 4 atomic customer-agent effects", () => {
                 isSnapshot: false,
                 shareId: "revoked-key-share-id",
                 token: "revoked-key-token",
-                createdAt: "2026-07-15T10:00:00.000Z",
+                createdAt: "2026-07-15T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
                 expiresAt: "2026-10-13T10:00:00.000Z",
               }),
               result: { ok: true, action: "share.create", share: { id: "revoked-key-share-id", token: "revoked-key-token" } },
@@ -400,7 +400,7 @@ describe("Journey 4 atomic customer-agent effects", () => {
                 isSnapshot: false,
                 shareId: "deleted-key-share-id",
                 token: "deleted-key-token",
-                createdAt: "2026-07-15T10:00:00.000Z",
+                createdAt: "2026-07-15T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
                 expiresAt: "2026-10-13T10:00:00.000Z",
               }),
               result: { ok: true, action: "share.create", share: { id: "deleted-key-share-id", token: "deleted-key-token" } },
@@ -445,7 +445,7 @@ describe("Journey 4 atomic customer-agent effects", () => {
                 isSnapshot: false,
                 shareId: "removed-member-share-id",
                 token: "removed-member-token",
-                createdAt: "2026-07-15T10:00:00.000Z",
+                createdAt: "2026-07-15T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
                 expiresAt: "2026-10-13T10:00:00.000Z",
               }),
               result: { ok: true, action: "share.create", share: { id: "removed-member-share-id", token: "removed-member-token" } },
@@ -548,7 +548,7 @@ describe("Journey 4 atomic customer-agent effects", () => {
         status: "active",
         notesJson: '{"goal":"Weekly proof review"}',
         hasNotes: true,
-        createdAt: "2026-07-15T10:00:00.000Z",
+        createdAt: "2026-07-15T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         updatedAt: "2026-07-15T10:00:00.000Z",
         isUpdate: false,
         resourceRefs: [
@@ -619,7 +619,7 @@ describe("Journey 4 atomic customer-agent effects", () => {
               status: "active",
               notesJson: "{}",
               hasNotes: false,
-              createdAt: "2026-07-15T10:00:00.000Z",
+              createdAt: "2026-07-15T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
               updatedAt: "2026-07-15T10:00:00.000Z",
               isUpdate: false,
               resourceRefs: [
@@ -669,7 +669,7 @@ describe("Journey 4 atomic customer-agent effects", () => {
         status: "active",
         notesJson: "{}",
         hasNotes: true,
-        createdAt: "2026-07-15T10:00:00.000Z",
+        createdAt: "2026-07-15T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         updatedAt: "2026-07-15T10:00:00.000Z",
         isUpdate: false,
         resourceRefs: [{

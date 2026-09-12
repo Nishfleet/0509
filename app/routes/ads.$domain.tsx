@@ -1190,6 +1190,21 @@ export default function BrandAdsRoute() {
         <Link to="/briefs/weekly">See this week&apos;s offer moves</Link>
       </p>
 
+      {/* Related-guides cross-link (issue #3167): every public brand page is
+          brand-adjacent to the how-to corpus, so the footer points at the
+          by-hand routines. Literal href= anchors — the issue's source-level
+          verify greps `href="/guides/`, which Link's to= never emits. */}
+      <p className="f9-wk-dim f9-ads-wall-foot">
+        {"Want the by-hand routine first? The guides walk it: "}
+        <a href="/guides/how-to-track-competitor-ads">how to track competitor ads</a>
+        {", "}
+        <a href="/guides/how-to-monitor-meta-ad-library">how to monitor the Meta Ad Library</a>
+        {", and "}
+        <a href="/guides/how-to-get-alerted-when-a-competitor-changes-their-offer">how to get alerted when an offer moves</a>
+        {" — the full set lives at "}
+        <a href="/guides">/guides</a>.
+      </p>
+
       <MarketingFooter />
     </main>
   );

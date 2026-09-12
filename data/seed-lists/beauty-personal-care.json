@@ -1,0 +1,123 @@
+{
+  "cluster": "beauty-personal-care",
+  "asOf": "2026-09-12",
+  "sourceNote": "Curated cohort themed on the existing /brands/ hub category promise: the /brands/beauty-personal-care category page (hub \u2192 category \u2192 brand, built from app/lib/brand-categories.ts) already groups tracked beauty-brand ad pages and cross-links them, so the cohort fills the same buyer category with established Meta-heavy beauty/personal-care advertisers (retailers, cosmetics, skincare) whose creative the publisher can verify before a page ships.",
+  "domains": [
+    {
+      "domain": "elfcosmetics.com",
+      "brand": "e.l.f. Cosmetics"
+    },
+    {
+      "domain": "sephora.com",
+      "brand": "Sephora"
+    },
+    {
+      "domain": "ulta.com",
+      "brand": "Ulta Beauty"
+    },
+    {
+      "domain": "glossier.com",
+      "brand": "Glossier"
+    },
+    {
+      "domain": "fentybeauty.com",
+      "brand": "Fenty Beauty"
+    },
+    {
+      "domain": "hudabeauty.com",
+      "brand": "Huda Beauty"
+    },
+    {
+      "domain": "kyliecosmetics.com",
+      "brand": "Kylie Cosmetics"
+    },
+    {
+      "domain": "colourpop.com",
+      "brand": "ColourPop"
+    },
+    {
+      "domain": "morphe.com",
+      "brand": "Morphe"
+    },
+    {
+      "domain": "urbandecay.com",
+      "brand": "Urban Decay"
+    },
+    {
+      "domain": "narscosmetics.com",
+      "brand": "NARS"
+    },
+    {
+      "domain": "anastasiabeverlyhills.com",
+      "brand": "Anastasia Beverly Hills"
+    },
+    {
+      "domain": "tatcha.com",
+      "brand": "Tatcha"
+    },
+    {
+      "domain": "drunkelephant.com",
+      "brand": "Drunk Elephant"
+    },
+    {
+      "domain": "theordinary.com",
+      "brand": "The Ordinary"
+    },
+    {
+      "domain": "paulaschoice.com",
+      "brand": "Paula's Choice"
+    },
+    {
+      "domain": "cerave.com",
+      "brand": "CeraVe"
+    },
+    {
+      "domain": "cetaphil.com",
+      "brand": "Cetaphil"
+    },
+    {
+      "domain": "olay.com",
+      "brand": "Olay"
+    },
+    {
+      "domain": "dove.com",
+      "brand": "Dove"
+    },
+    {
+      "domain": "birchbox.com",
+      "brand": "Birchbox"
+    },
+    {
+      "domain": "nykaa.com",
+      "brand": "Nykaa"
+    },
+    {
+      "domain": "mamaearth.in",
+      "brand": "Mamaearth"
+    },
+    {
+      "domain": "bombayshavingcompany.com",
+      "brand": "Bombay Shaving Company"
+    },
+    {
+      "domain": "thrivemarket.com",
+      "brand": "Thrive Market"
+    },
+    {
+      "domain": "glowrecipe.com",
+      "brand": "Glow Recipe"
+    },
+    {
+      "domain": "summerfridays.com",
+      "brand": "Summer Fridays"
+    },
+    {
+      "domain": "credobeauty.com",
+      "brand": "Credo Beauty"
+    },
+    {
+      "domain": "dermstore.com",
+      "brand": "Dermstore"
+    }
+  ]
+}

@@ -32,6 +32,7 @@ import {
 } from "~/lib/seo";
 import {
   brandCategoryFromSlug,
+  BRAND_CATEGORY_PAGE_MIN_BRANDS,
   CURATED_BRAND_CATEGORY_SLUGS,
   groupBrandRecordsByCategory,
 } from "~/lib/brand-categories";
@@ -98,12 +99,13 @@ export async function loader({ context }: LoaderFunctionArgs): Promise<BrandsLoa
   // /brands/:slug landing page, so the cluster is internally connected
   // (hub → category → brand → hub). The set is derived from the curated slug
   // registry + brandCategoryFromSlug, never hard-coded; a curated category
-  // with zero brands today gets no link (its page would 404).
+  // below BRAND_CATEGORY_PAGE_MIN_BRANDS brands gets no link (its page
+  // would 404 — issue #3126).
   const categoryLinks: BrandCategoryLink[] = CURATED_BRAND_CATEGORY_SLUGS.flatMap((slug) => {
     const label = brandCategoryFromSlug(slug);
     if (!label) return [];
     const group = groups.find((g) => g.category === label);
-    if (!group || group.items.length === 0) return [];
+    if (!group || group.items.length < BRAND_CATEGORY_PAGE_MIN_BRANDS) return [];
     return [{ slug, label, count: group.items.length }];
   });
 
@@ -214,6 +216,16 @@ export default function BrandsHubRoute() {
           <Link to={AD_AGGRESSION_METHODOLOGY_PATH}>
             read the Ad Aggression Score methodology
           </Link>
+        </p>
+
+        {/* Issue #3167 — a guides pointer from the brand hub. Literal href=
+            anchors: the issue's source-level verify greps `href="/guides/`,
+            which Link's to= never emits. */}
+        <p className="ld-dim ld-browse-categories">
+          {"New to tracking competitor ads? "}
+          <a href="/guides/how-to-track-competitor-ads">Start with the how-to guide</a>
+          {" — the full set lives at "}
+          <a href="/guides">/guides</a>.
         </p>
       </section>
 

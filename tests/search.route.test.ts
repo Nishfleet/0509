@@ -468,7 +468,7 @@ describe("search loader", () => {
         unmatchedCount: 1,
       }),
       null,
-      { enrichSelected: true, hydratePersisted: false, allowRenderedFallback: false },
+      { enrichSelected: true, hydratePersisted: false, allowRenderedFallback: false, deferCapture: true },
     );
     expect(result).toMatchObject({
       session: null,
@@ -999,7 +999,7 @@ describe("search loader", () => {
         unmatchedCount: 1,
       }),
       null,
-      { enrichSelected: true, hydratePersisted: false, allowRenderedFallback: false },
+      { enrichSelected: true, hydratePersisted: false, allowRenderedFallback: false, deferCapture: true },
     );
     expect(result).toMatchObject({
       session: null,
@@ -1682,7 +1682,7 @@ describe("search loader", () => {
       env,
       sourceResult,
       "meta-boat-1",
-      { enrichSelected: true, hydratePersisted: false, allowRenderedFallback: false },
+      { enrichSelected: true, hydratePersisted: false, allowRenderedFallback: false, deferCapture: true },
     );
   });
 
@@ -2388,7 +2388,7 @@ describe("search loader", () => {
       env,
       legacyResult,
       null,
-      { enrichSelected: true, hydratePersisted: false, allowRenderedFallback: false },
+      { enrichSelected: true, hydratePersisted: false, allowRenderedFallback: false, deferCapture: true },
     );
     // The success branch now returns data(...) (issue #1972 phase 1) so it can
     // Set-Cookie the anonymous /search id without a JSON Response.
@@ -2619,7 +2619,7 @@ describe("search loader", () => {
       env,
       sourceResult,
       null,
-      { enrichSelected: true, hydratePersisted: false, allowRenderedFallback: false },
+      { enrichSelected: true, hydratePersisted: false, allowRenderedFallback: false, deferCapture: true },
     );
   });
 });

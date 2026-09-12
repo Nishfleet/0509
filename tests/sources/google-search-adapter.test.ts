@@ -100,7 +100,7 @@ function decodoResponse(organic: unknown[], paid: unknown[] = []): Response {
 
 function snapshotRecord(
   payload: GoogleSerpSnapshotPayload,
-  fetchedAt = "2000-01-01T00:00:00.000Z",
+  fetchedAt = "2000-01-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 ): SourceSnapshotRecord {
   return {
     id: "snap-1",
@@ -260,7 +260,7 @@ describe("googleSearchAdapter", () => {
         domain: "nike.com",
         query: "Nike",
         provider: "decodo",
-        fetchedAt: "2000-01-01T00:00:00.000Z",
+        fetchedAt: "2000-01-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         ads: [],
         organic: [
           { position: 7, domain: "nike.com", title: "Nike", url: "https://nike.com/", snippet: "" },
@@ -313,7 +313,7 @@ describe("googleSearchAdapter", () => {
       domain: "nike.com",
       query: "Nike",
       provider: "decodo",
-      fetchedAt: "2000-01-01T00:00:00.000Z",
+      fetchedAt: "2000-01-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       ads: [
         {
           position: 1,
@@ -333,7 +333,7 @@ describe("googleSearchAdapter", () => {
         domain: "nike.com",
         query: "Nike",
         provider: "decodo",
-        fetchedAt: "2000-01-02T00:00:00.000Z",
+        fetchedAt: "2000-01-02T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         ads: [
           {
             position: 1,

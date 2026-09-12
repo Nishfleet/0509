@@ -68,6 +68,11 @@ export type LandingPageCaptureFailureReasonCode =
   | "landing_fetch_failed"
   | "landing_content_empty_or_oversized"
   | "screenshot_required"
+  // Issue #3014: the deferred anonymous-capture stream resolves (never
+  // rejects) with this code when the enrichment itself crashes, so the
+  // detail pane renders the honest capture-gap copy instead of an error
+  // boundary.
+  | "capture_stream_failed"
   | CaptureValidityReasonCode;
 
 export interface LandingPageCaptureFailureDetail {

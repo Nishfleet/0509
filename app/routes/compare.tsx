@@ -283,6 +283,26 @@ export default function CompareIndexRoute() {
         </p>
       </section>
 
+      {/* Issue #3167 — the how-to-choose section links the guides corpus
+          from the compare index. Literal href= anchors: the issue's
+          source-level verify greps `href="/guides/`, which Link's to= never
+          emits. Unprefixed EN paths match the guides' canonical→EN setup. */}
+      <section className="ld-quiet">
+        <div className="ld-section-head">
+          <span className="ld-kicker">How to choose</span>
+          <h2>Start with the workflow, not the tool.</h2>
+          <p>
+            Every row above automates some part of the same loop — check the ad library, watch the
+            landing page, keep the proof. The guides walk that loop by hand first, so you can see
+            exactly what you are paying to automate:{" "}
+            <a href="/guides/how-to-track-competitor-ads">how to track competitor ads</a>,{" "}
+            <a href="/guides/how-to-monitor-competitor-landing-page-changes">how to watch a landing page</a>, and{" "}
+            <a href="/guides/how-to-prove-what-changed-on-a-competitor-website">how to prove what changed</a>.
+            The full set lives at <a href="/guides">/guides</a>.
+          </p>
+        </div>
+      </section>
+
       <section className="ld-final">
         <h2>
           Start with the free preview <span aria-hidden="true">→</span>

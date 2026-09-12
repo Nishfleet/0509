@@ -164,7 +164,7 @@ describe("delivery attempt retry claim (sqlite)", () => {
       );
     `);
     const env = { DB: harness.db } as never;
-    const claimUpdatedAt = "2026-07-19T05:00:00.000Z";
+    const claimUpdatedAt = "2026-07-19T05:00:00.000Z"; // fixed-date: historical fixture (issue #3215 sweep)
     const attemptId = await createDeliveryAttempt(env, {
       userId: "user-1",
       watchlistId: null,
@@ -235,7 +235,7 @@ describe("delivery attempt retry claim (sqlite)", () => {
           is_validated, is_opted_in, is_paused, paused_at, opted_out_at, updated_at, metadata_json
         ) VALUES (
           'target-1', 'user-1', 'email', 'Owner@Example.com', 'account_email',
-          'validated', 1, 1, 0, NULL, NULL, '2026-07-15T00:00:00.000Z', '{}'
+          'validated', 1, 1, 0, NULL, NULL, '2026-07-15T00:00:00.000Z', '{}' -- fixed-date: historical fixture (issue #3215 sweep)
         );
         CREATE TABLE delivery_attempt (
           id TEXT PRIMARY KEY NOT NULL,
@@ -327,7 +327,7 @@ describe("delivery attempt retry claim (sqlite)", () => {
       UPDATE user SET email = 'new-owner@example.com' WHERE id = 'user-1';
       UPDATE delivery_target
       SET target_value = 'new-owner@example.com',
-          updated_at = '2026-07-19T05:02:00.000Z'
+          updated_at = '2026-07-19T05:02:00.000Z' -- fixed-date: historical fixture (issue #3215 sweep)
       WHERE id = 'target-1';
     `);
     await expect(
@@ -405,7 +405,7 @@ describe("delivery attempt retry claim (sqlite)", () => {
       );
     `);
     const env = { DB: harness.db } as never;
-    const timestamp = "2026-07-19T05:00:00.000Z";
+    const timestamp = "2026-07-19T05:00:00.000Z"; // fixed-date: historical fixture (issue #3215 sweep)
     const createAttempt = (
       channel: "slack" | "whatsapp",
       targetId: string,
@@ -452,7 +452,7 @@ describe("delivery attempt retry claim (sqlite)", () => {
     harness.sqlite.exec(`
       UPDATE delivery_target SET is_paused = 1 WHERE id = 'slack-1';
       UPDATE delivery_target
-      SET is_opted_in = 0, opted_out_at = '2026-07-19T05:01:00.000Z'
+      SET is_opted_in = 0, opted_out_at = '2026-07-19T05:01:00.000Z' -- fixed-date: historical fixture (issue #3215 sweep)
       WHERE id = 'whatsapp-1';
     `);
 
@@ -532,7 +532,7 @@ describe("delivery attempt retry claim (sqlite)", () => {
          'failed-key', 'smtp down', '${now}', '${now}', '${now}'),
         ('stale', 'user-1', 'watch-1', 'target-1', 'customer', 'email',
          'cloudflare_email', 'pending', 'pending', 'owner@example.com',
-         'stale-key', NULL, NULL, '2020-01-01T00:00:00.000Z', '2020-01-01T00:00:00.000Z'),
+         'stale-key', NULL, NULL, '2020-01-01T00:00:00.000Z', '2020-01-01T00:00:00.000Z'), -- fixed-date: historical fixture (issue #3215 sweep)
         ('active', 'user-1', 'watch-1', 'target-1', 'customer', 'email',
          'cloudflare_email', 'pending', 'pending', 'owner@example.com',
          'active-key', NULL, NULL, '${now}', '${now}')
@@ -592,7 +592,7 @@ describe("delivery attempt retry claim (sqlite)", () => {
         id, provider, status, webhook_status, failed_at, updated_at
       ) VALUES (
         'attempt-1', 'cloudflare_email', 'failed', 'failed',
-        '2026-07-13T09:00:00.000Z', '2026-07-13T09:00:00.000Z'
+        '2026-07-13T09:00:00.000Z', '2026-07-13T09:00:00.000Z' -- fixed-date: historical fixture (issue #3215 sweep)
       );
     `);
 
@@ -601,7 +601,7 @@ describe("delivery attempt retry claim (sqlite)", () => {
       status: "pending" as const,
       webhookStatus: "pending" as const,
       providerMessageId: null,
-      providerStatusLastSeenAt: "2026-07-13T09:05:00.000Z",
+      providerStatusLastSeenAt: "2026-07-13T09:05:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       errorMessage: null,
       sentAt: null,
       failedAt: null,
@@ -661,7 +661,7 @@ describe("delivery attempt retry claim (sqlite)", () => {
         id, provider, status, webhook_status, updated_at
       ) VALUES (
         'attempt-stale', 'cloudflare_email', 'pending', 'pending',
-        '2026-07-13T09:00:00.000Z'
+        '2026-07-13T09:00:00.000Z' -- fixed-date: historical fixture (issue #3215 sweep)
       );
     `);
 
@@ -674,10 +674,10 @@ describe("delivery attempt retry claim (sqlite)", () => {
       errorMessage: null,
       sentAt: null,
       failedAt: null,
-      updatedAt: "2026-07-13T09:02:00.000Z",
+      updatedAt: "2026-07-13T09:02:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       expectedStatus: "pending" as const,
       expectedWebhookStatus: "pending" as const,
-      expectedUpdatedAt: "2026-07-13T09:00:00.000Z",
+      expectedUpdatedAt: "2026-07-13T09:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     };
 
     await expect(
@@ -704,7 +704,7 @@ describe("delivery attempt retry claim (sqlite)", () => {
     ).toMatchObject({
       status: "pending",
       webhook_status: "pending",
-      updated_at: "2026-07-13T09:02:00.000Z",
+      updated_at: "2026-07-13T09:02:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     });
   });
 
@@ -743,7 +743,7 @@ describe("delivery attempt retry claim (sqlite)", () => {
         'attempt-operator', 'user-1', 'internal', 'email', 'cloudflare_email',
         'pending', 'provider_unknown', 'owner@example.com',
         'cron-failure:scheduled_monitoring:1',
-        '2026-07-12T06:00:00.000Z', '2026-07-12T06:00:01.000Z'
+        '2026-07-12T06:00:00.000Z', '2026-07-12T06:00:01.000Z' -- fixed-date: historical fixture (issue #3215 sweep)
       );
     `);
     const env = { DB: harness.db } as never;
@@ -751,37 +751,37 @@ describe("delivery attempt retry claim (sqlite)", () => {
 
     await expect(readOperatorAlertEmailOutcome(env, key)).resolves.toEqual({
       outcome: "in_flight_or_unknown",
-      observedAt: "2026-07-12T06:00:01.000Z",
+      observedAt: "2026-07-12T06:00:01.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     });
 
     harness.sqlite.prepare(`
       UPDATE delivery_attempt
       SET status = 'failed', webhook_status = 'failed',
-          failed_at = '2026-07-12T06:00:02.000Z',
-          updated_at = '2026-07-12T06:00:02.000Z'
+          failed_at = '2026-07-12T06:00:02.000Z', -- fixed-date: historical fixture (issue #3215 sweep)
+          updated_at = '2026-07-12T06:00:02.000Z' -- fixed-date: historical fixture (issue #3215 sweep)
       WHERE id = 'attempt-operator'
     `).run();
     await expect(readOperatorAlertEmailOutcome(env, key)).resolves.toEqual({
       outcome: "rejected",
-      observedAt: "2026-07-12T06:00:02.000Z",
+      observedAt: "2026-07-12T06:00:02.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     });
 
     harness.sqlite.prepare(`
       UPDATE delivery_attempt
       SET status = 'sent', webhook_status = 'provider_unknown',
-          sent_at = '2026-07-12T06:00:03.000Z',
-          updated_at = '2026-07-12T06:00:03.000Z'
+          sent_at = '2026-07-12T06:00:03.000Z', -- fixed-date: historical fixture (issue #3215 sweep)
+          updated_at = '2026-07-12T06:00:03.000Z' -- fixed-date: historical fixture (issue #3215 sweep)
       WHERE id = 'attempt-operator'
     `).run();
     await expect(readOperatorAlertEmailOutcome(env, key)).resolves.toEqual({
       outcome: "already_accepted",
-      observedAt: "2026-07-12T06:00:03.000Z",
+      observedAt: "2026-07-12T06:00:03.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     });
   });
 });
 
 describe("delivery pre-dispatch lease", () => {
-  const now = Date.parse("2026-07-13T09:02:00.000Z");
+  const now = Date.parse("2026-07-13T09:02:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
   const attempt = {
     status: "pending" as const,
     webhookStatus: "pending" as const,

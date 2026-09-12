@@ -23,7 +23,7 @@ const baseFields: BrowserJobTelemetryFields = {
   planTier: "free",
   source: "manual",
   attempt: 1,
-  startedAt: "2026-08-13T06:00:00.000Z",
+  startedAt: "2026-08-13T06:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
   endedAt: "2026-08-13T06:00:01.000Z",
   durationMs: 1000,
   browserMsUsed: 850,
@@ -64,7 +64,7 @@ describe("browser job telemetry migration (0075)", () => {
       plan_tier: "free",
       source: "manual",
       attempt: 1,
-      started_at: "2026-08-13T06:00:00.000Z",
+      started_at: "2026-08-13T06:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       ended_at: "2026-08-13T06:00:01.000Z",
       duration_ms: 1000,
       browser_ms_used: 850,

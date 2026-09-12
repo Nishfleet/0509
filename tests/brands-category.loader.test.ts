@@ -22,6 +22,8 @@ beforeEach(() => {
   brandEntries = [
     { path: "/ads/nykaa.com", lastmod: "2026-08-21", adCount: 12 },
     { path: "/ads/sugarcosmetics.com", lastmod: "2026-08-20", adCount: 8 },
+    // Third beauty domain so the category clears the #3126 min-brands floor.
+    { path: "/ads/mcaffeine.com", lastmod: "2026-08-19", adCount: 7 },
     { path: "/ads/nike.com", lastmod: "2026-08-19", adCount: 5 },
     // An unclassified domain — falls into the "More brands" bucket, never a
     // curated category, so it must not appear on any category page.
@@ -81,9 +83,10 @@ describe("/brands/:category loader (issue #2067)", () => {
 
     expect(data.label).toBe("Beauty & personal care");
     expect(data.slug).toBe("beauty-personal-care");
-    // nykaa.com + sugarcosmetics.com are Beauty & personal care; nike.com
+    // mcaffeine.com completes the three-brand beauty set (#3126 floor); nykaa.com + sugarcosmetics.com are also Beauty & personal care; nike.com
     // (Sport & footwear) and myexamplebrand.com (unclassified) are excluded.
     expect(data.brands.map((b) => b.domain).sort()).toEqual([
+      "mcaffeine.com",
       "nykaa.com",
       "sugarcosmetics.com",
     ]);

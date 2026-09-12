@@ -257,7 +257,7 @@ describe("/ads/:domain loader", () => {
   it("loads stored offer timeline states without any live capture", async () => {
     const entry: OfferLedgerEntry = {
       id: "backfill-nykaa-20260825",
-      capturedAt: "2026-08-25T00:00:00.000Z",
+      capturedAt: "2026-08-25T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       dateLabel: "25 Aug 2026",
       canonicalUrl: "https://www.nykaa.com/",
       headline: "Nykaa. Beauty and wellness.",
@@ -324,7 +324,7 @@ describe("/ads/:domain loader", () => {
     // so pin the snapshot directly with a fixed `now`: the live claim must
     // flip at EXACTLY the same 2-minute boundary the "Last checked" stamp
     // uses ("moments ago"), not one millisecond later.
-    const now = new Date("2026-08-09T12:00:00.000Z");
+    const now = new Date("2026-08-09T12:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
     const mocks = installBrandPageMocks({
       entry: cacheEntry({ fetchedAt: new Date(now.getTime() - 120 * 1000).toISOString() }),
     });
@@ -356,7 +356,7 @@ describe("/ads/:domain loader", () => {
   it("keeps the live claim and checked-ago stamp on one post-read clock across a 2ms cache-read gap", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     try {
-      const t0 = new Date("2026-08-14T12:00:00.000Z");
+      const t0 = new Date("2026-08-14T12:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
       vi.setSystemTime(t0);
       const fetchedAt = new Date(t0.getTime() - 119_999).toISOString();
       const mocks = installBrandPageMocks({
@@ -694,7 +694,7 @@ describe("/ads/:domain loader", () => {
     const { renderToStaticMarkup } = await import("react-dom/server");
     const { projectBrandPageAd } = await import("~/routes/ads.$domain");
 
-    const now = new Date("2026-09-11T08:00:00.000Z");
+    const now = new Date("2026-09-11T08:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
     const fromSlice = renderToStaticMarkup(
       createElement(BrandTicker, { ads: result.tickerAds, brandName: "Nykaa", fresh: false, now }),
     );
@@ -923,10 +923,13 @@ describe("/ads/:domain indexing flag", () => {
 
   it("noindexes a fresh capture with 0 verified-linked ads (thin page: ad wall without the score)", async () => {
     // 24 unverified text-mention matches: the provider returned them for
-    // nykaa.com, but none carries a landing-page or domainMatch verdict
+    // wayfair.com, but none carries a landing-page or domainMatch verdict
     // linking it to the domain. The wall renders, but the Ad Aggression Score
     // (the page's differentiator) cannot — so the page self-noindexes rather
     // than ship as indexable thin content.
+    // (wayfair.com, not nykaa.com: issue #3123 seeded nykaa.com via the
+    // beauty-personal-care cohort, so a thin nykaa page now 301s to /search
+    // per issue #1306 — the render-noindex pin needs an unseeded domain.)
     const mocks = installBrandPageMocks({
       entry: cacheEntry({
         payload: {
@@ -948,7 +951,7 @@ describe("/ads/:domain indexing flag", () => {
       }),
     });
 
-    const result = await runLoader("nykaa.com", mocks.env);
+    const result = await runLoader("wayfair.com", mocks.env);
 
     expect(result.hasCachedAds).toBe(true);
     expect(result.ads).toHaveLength(1);

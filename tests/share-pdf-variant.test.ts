@@ -20,11 +20,11 @@ const REPORT_BASE_PAYLOAD = {
   title: "Board evidence",
   subtitle: "Latest saved evidence",
   summary: "One saved item.",
-  generatedAt: "2026-07-01T00:00:00.000Z",
+  generatedAt: "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
   aiWeeklySummary: {
     paragraph:
       "Competitors concentrated this week's movement on promotional offers.",
-    generatedAt: "2026-07-01T00:05:00.000Z",
+    generatedAt: "2026-07-01T00:05:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     periodEnd: "2026-07-01T00:00:00.000Z",
   },
   stats: [],
@@ -53,7 +53,7 @@ const REPORT_BASE_PAYLOAD = {
         url: "https://example.com/evidence",
         headline: "Current evidence",
         captureLabel: "Browser proof",
-        capturedAt: "2026-07-01T00:00:00.000Z",
+        capturedAt: "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         signals: [],
       },
       analysisFields: [],
@@ -74,7 +74,7 @@ const REPORT_SHARE = {
   resourceId: "collection:col-1",
   isSnapshot: true,
   snapshotPayload: REPORT_SNAPSHOT_PAYLOAD,
-  createdAt: "2026-07-01T00:00:00.000Z",
+  createdAt: "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
   expiresAt: null,
   revokedAt: null,
 };
@@ -84,7 +84,7 @@ type MockShare = Omit<typeof REPORT_SHARE, "snapshotPayload"> & {
 };
 
 function collectionSnapshotPayload({
-  generatedAt = "2026-07-01T00:00:00.000Z",
+  generatedAt = "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
   title = "Board",
 }: {
   generatedAt?: string;
@@ -96,7 +96,7 @@ function collectionSnapshotPayload({
       userId: "user-1",
       name: title,
       description: null,
-      createdAt: "2026-07-01T00:00:00.000Z",
+      createdAt: "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       updatedAt: "2026-07-01T00:00:00.000Z",
     },
     items: [
@@ -105,7 +105,7 @@ function collectionSnapshotPayload({
         collectionId: "col-1",
         adId: "meta-1",
         note: "Saved evidence",
-        createdAt: "2026-07-15T00:00:00.000Z",
+        createdAt: "2026-07-15T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         updatedAt: "2026-07-15T00:00:00.000Z",
         tags: ["evidence"],
         ad: {
@@ -124,7 +124,7 @@ function collectionSnapshotPayload({
           adSnapshotUrl: null,
           countries: [],
           platforms: [],
-          firstSeenAt: "2026-07-15T00:00:00.000Z",
+          firstSeenAt: "2026-07-15T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           lastSeenAt: "2026-07-15T00:00:00.000Z",
           active: true,
           researchSummary: "",
@@ -137,7 +137,7 @@ function collectionSnapshotPayload({
             normalizedHeadline: "current offer",
             normalizedHeadlineHash: "current-offer",
             captureMethod: "browser_render",
-            capturedAt: "2026-07-15T00:00:00.000Z",
+            capturedAt: "2026-07-15T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           },
         },
       },
@@ -176,7 +176,7 @@ function collectionReviewFingerprint(
       collectionId: "col-1",
       adId: "meta-1",
       note: "Saved evidence",
-      createdAt: "2026-07-15T00:00:00.000Z",
+      createdAt: "2026-07-15T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       updatedAt: "2026-07-15T00:00:00.000Z",
       tags: ["evidence"],
       ad: {
@@ -195,7 +195,7 @@ function collectionReviewFingerprint(
         adSnapshotUrl: null,
         countries: [],
         platforms: [],
-        firstSeenAt: "2026-07-15T00:00:00.000Z",
+        firstSeenAt: "2026-07-15T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         lastSeenAt: "2026-07-15T00:00:00.000Z",
         active: true,
         researchSummary: null,
@@ -208,7 +208,7 @@ function collectionReviewFingerprint(
           normalizedHeadline: "current offer",
           normalizedHeadlineHash: "current-offer",
           captureMethod: "browser_render",
-          capturedAt: "2026-07-15T00:00:00.000Z",
+          capturedAt: "2026-07-15T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         },
       },
     },
@@ -220,11 +220,11 @@ function collectionReviewFingerprint(
         userId: "user-1",
         name: collectionName,
         description: null,
-        createdAt: "2026-07-01T00:00:00.000Z",
+        createdAt: "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         updatedAt: "2026-07-01T00:00:00.000Z",
       },
       items: items as never,
-      generatedAt: "2026-07-15T00:00:00.000Z",
+      generatedAt: "2026-07-15T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     }),
   );
 }
@@ -356,7 +356,7 @@ describe("/share/:token loader PDF affordances", () => {
         ...REPORT_SHARE,
         snapshotPayload: {
           ...REPORT_SNAPSHOT_PAYLOAD,
-          approvalExpiresAt: "2020-01-01T00:00:00.000Z",
+          approvalExpiresAt: "2020-01-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         },
       },
     });
@@ -385,7 +385,7 @@ describe("/share/:token loader PDF affordances", () => {
       aiWeeklySummary: {
         paragraph:
           "Competitors concentrated this week's movement on promotional offers.",
-        generatedAt: "2026-07-01T00:05:00.000Z",
+        generatedAt: "2026-07-01T00:05:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         periodEnd: "2026-07-01T00:00:00.000Z",
       },
       rows: [
@@ -600,7 +600,7 @@ describe("/app/reports/:id PDF wiring", () => {
             collectionId: "col-1",
             adId: "meta-1",
             note: "Saved evidence",
-            createdAt: "2026-07-15T00:00:00.000Z",
+            createdAt: "2026-07-15T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
             updatedAt: "2026-07-15T00:00:00.000Z",
             tags: ["evidence"],
             ad: {
@@ -619,7 +619,7 @@ describe("/app/reports/:id PDF wiring", () => {
               adSnapshotUrl: null,
               countries: [],
               platforms: [],
-              firstSeenAt: "2026-07-15T00:00:00.000Z",
+              firstSeenAt: "2026-07-15T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
               lastSeenAt: "2026-07-15T00:00:00.000Z",
               active: true,
               researchSummary: null,
@@ -632,7 +632,7 @@ describe("/app/reports/:id PDF wiring", () => {
                 normalizedHeadline: "current offer",
                 normalizedHeadlineHash: "current-offer",
                 captureMethod: "browser_render",
-                capturedAt: "2026-07-15T00:00:00.000Z",
+                capturedAt: "2026-07-15T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
               },
             },
           },

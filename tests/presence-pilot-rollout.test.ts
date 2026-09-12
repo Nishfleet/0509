@@ -87,7 +87,7 @@ function mockDb(state: {
               notes: null,
               is_active: 1,
               deleted_at: null,
-              created_at: "2026-07-01T00:00:00.000Z",
+              created_at: "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
               updated_at: "2026-07-01T00:00:00.000Z",
             } as T;
           }
@@ -104,7 +104,7 @@ function mockDb(state: {
               coverage_label: sourceTarget.coverage_label,
               is_active: 1,
               deleted_at: null,
-              created_at: "2026-07-01T00:00:00.000Z",
+              created_at: "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
               updated_at: "2026-07-01T00:00:00.000Z",
             } as T;
           }
@@ -328,18 +328,18 @@ describe("presence sync integrity", () => {
           cursor_json: "{}",
           etag: null,
           last_modified: null,
-          last_polled_at: "2026-07-01T00:00:00.000Z",
+          last_polled_at: "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           last_success_at: null,
           last_error_code: "robots_disallowed",
           last_error_message: "Robots.txt disallows this path.",
-          updated_at: "2026-07-01T00:00:00.000Z",
+          updated_at: "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         },
       }),
     } satisfies Partial<AppEnv> as AppEnv;
 
     await upsertPollCursor(env, "st_1", {
       cursor: { syncCycleCount: 2 },
-      lastPolledAt: "2026-07-02T00:00:00.000Z",
+      lastPolledAt: "2026-07-02T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       lastSuccessAt: "2026-07-02T00:00:00.000Z",
       lastErrorCode: null,
       lastErrorMessage: null,
@@ -348,7 +348,7 @@ describe("presence sync integrity", () => {
     const cursor = await getPollCursor(env, "st_1");
     expect(cursor?.lastErrorCode).toBeNull();
     expect(cursor?.lastErrorMessage).toBeNull();
-    expect(cursor?.lastSuccessAt).toBe("2026-07-02T00:00:00.000Z");
+    expect(cursor?.lastSuccessAt).toBe("2026-07-02T00:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
   });
 
   it("persists upgraded verified feed coverage after a successful feed poll", async () => {

@@ -282,7 +282,7 @@ describe("diffTiktokAds", () => {
         totalAds: 1,
         legalName: "NEW BALANCE ATHLETIC SHOES (U.K.) LIMITED",
       },
-      "2026-01-01T00:00:00.000Z",
+      "2026-01-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     );
     const next: SourceSnapshotInput = {
       payload: {
@@ -316,7 +316,7 @@ describe("diffTiktokAds", () => {
         totalAds: 1,
         legalName: "NEW BALANCE ATHLETIC SHOES (U.K.) LIMITED",
       },
-      "2026-01-01T00:00:00.000Z",
+      "2026-01-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     );
     const next: SourceSnapshotInput = {
       payload: {
@@ -343,7 +343,7 @@ describe("diffTiktokAds", () => {
     const nextAd = makeAd({ adId: "1", lastShown: "02/25/2026" });
     const prev = makeSnapshotRecord(
       { ads: [prevAd], totalAds: 1, legalName: "x" },
-      "2026-02-20T00:00:00.000Z",
+      "2026-02-20T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     );
     const next: SourceSnapshotInput = {
       payload: { ads: [nextAd], totalAds: 1, legalName: "x" },
@@ -355,7 +355,7 @@ describe("diffTiktokAds", () => {
   it("emits an ad_inactive total change when totalAds decreases", () => {
     const prev = makeSnapshotRecord(
       { ads: [makeAd({ adId: "1" }), makeAd({ adId: "2" })], totalAds: 2, legalName: "x" },
-      "2026-01-01T00:00:00.000Z",
+      "2026-01-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     );
     const next: SourceSnapshotInput = {
       payload: { ads: [makeAd({ adId: "1" })], totalAds: 1, legalName: "x" },

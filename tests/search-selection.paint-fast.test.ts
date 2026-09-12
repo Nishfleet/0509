@@ -54,7 +54,7 @@ describe("WP-11 paint-fast selection enrichment", () => {
                 priceText: null,
                 formPresent: false,
                 captureMethod: "fetch",
-                capturedAt: "2026-07-18T00:00:00.000Z",
+                capturedAt: "2026-07-18T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
               }),
             5,
           );
@@ -141,7 +141,7 @@ describe("WP-11 paint-fast selection enrichment", () => {
         priceText: null,
         formPresent: false,
         captureMethod: "landing_page_fetch",
-        capturedAt: "2026-07-18T00:00:00.000Z",
+        capturedAt: "2026-07-18T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       },
     };
 
@@ -196,7 +196,7 @@ describe("WP-11 paint-fast selection enrichment", () => {
       text: "Image-only OCR",
       captureMethod: "ad_snapshot_fetch",
       imageUrl: "https://cdn.example.com/creative.jpg",
-      metadata: { capturedAt: "2026-07-18T00:00:00.000Z" },
+      metadata: { capturedAt: "2026-07-18T00:00:00.000Z" }, // fixed-date: historical fixture (issue #3215 sweep)
     });
     const imageOnlyAd: AdRecord = {
       ...baseAd,

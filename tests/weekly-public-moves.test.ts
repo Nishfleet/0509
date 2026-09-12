@@ -22,7 +22,7 @@ import type { WeeklyPublicMove } from "~/lib/weekly-public-moves.server";
  *      from the fixture.
  */
 
-const SINCE = "2026-09-02T00:00:00.000Z";
+const SINCE = "2026-09-02T00:00:00.000Z"; // fixed-date: historical fixture (issue #3215 sweep)
 
 // ---------------------------------------------------------------------------
 // Loader tests — mocked D1 (queryAll) + mocked sitemap gate helpers.
@@ -38,7 +38,7 @@ function eventRow(overrides: Record<string, unknown> = {}) {
     event_type: "landing_page_offer_changed",
     title: "Landing page offer changed",
     metadata_json: JSON.stringify({ from: "₹999", to: "₹799" }),
-    created_at: "2026-09-08T04:31:00.000Z",
+    created_at: "2026-09-08T04:31:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     target_id: "https://nykaa.com",
     ...overrides,
   };
@@ -48,7 +48,7 @@ function snapshotRow(overrides: Record<string, unknown> = {}) {
   return {
     id: "snap-1",
     canonical_url: "https://nykaa.com/glow-serum",
-    captured_at: "2026-09-08T04:30:00.000Z",
+    captured_at: "2026-09-08T04:30:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     artifact_key: null,
     metadata_json: null,
     is_ad_destination: 0,
@@ -59,7 +59,7 @@ function snapshotRow(overrides: Record<string, unknown> = {}) {
 function ledgerEntry(overrides: Partial<OfferLedgerEntry> = {}): OfferLedgerEntry {
   return {
     id: "entry-1",
-    capturedAt: "2026-09-08T04:30:00.000Z",
+    capturedAt: "2026-09-08T04:30:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     dateLabel: "8 Sept 2026",
     canonicalUrl: "https://nykaa.com/glow-serum",
     headline: "Glow serum",
@@ -165,7 +165,7 @@ describe("loadWeeklyPublicMoves (issue #2143)", () => {
           metadata_json: JSON.stringify({
             from: "₹999",
             to: "₹799",
-            capturedAt: "2026-09-08T04:30:00.000Z",
+            capturedAt: "2026-09-08T04:30:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
             note: "call ravi@example.com for context",
             watchlistName: "Nish's secret watch",
           }),
@@ -174,7 +174,7 @@ describe("loadWeeklyPublicMoves (issue #2143)", () => {
         // confirmed event exists.
         eventRow({
           metadata_json: JSON.stringify({ from: "$50", to: "$40" }),
-          created_at: "2026-09-08T05:00:00.000Z",
+          created_at: "2026-09-08T05:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           target_id: "https://internal-secret.com",
         }),
         // First-scan baseline bookkeeping is not a competitor move.
@@ -182,14 +182,14 @@ describe("loadWeeklyPublicMoves (issue #2143)", () => {
           event_type: "ad_new",
           title: "Baseline captured: 12 active ads",
           metadata_json: JSON.stringify({ kind: "baseline", adsSeen: 12 }),
-          created_at: "2026-09-08T06:00:00.000Z",
+          created_at: "2026-09-08T06:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         }),
         // Aggregate new-ads event on a second indexable domain — included.
         eventRow({
           event_type: "ad_new",
           title: "3 new ads launched",
           metadata_json: JSON.stringify({ kind: "ad_new_aggregate", count: 3 }),
-          created_at: "2026-09-07T11:00:00.000Z",
+          created_at: "2026-09-07T11:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           target_id: "https://meesho.com",
         }),
       ],
@@ -213,7 +213,7 @@ describe("loadWeeklyPublicMoves (issue #2143)", () => {
         // Suppressed by the capture-validity gate — never published.
         ledgerEntry({
           id: "entry-geo",
-          capturedAt: "2026-09-07T10:00:00.000Z",
+          capturedAt: "2026-09-07T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           suppressedReason: "differs only by geo locale",
           transition: {
             headline: { before: "A", after: "B" },
@@ -225,7 +225,7 @@ describe("loadWeeklyPublicMoves (issue #2143)", () => {
         // Older than the 7-day window — excluded.
         ledgerEntry({
           id: "entry-old",
-          capturedAt: "2026-08-20T10:00:00.000Z",
+          capturedAt: "2026-08-20T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           transition: {
             headline: { before: "Old", after: "Older" },
             priceText: null,
@@ -277,7 +277,7 @@ describe("loadWeeklyPublicMoves (issue #2143)", () => {
       brand: "Nykaa",
       beforeText: "₹999",
       afterText: "₹799",
-      capturedAt: "2026-09-08T04:30:00.000Z",
+      capturedAt: "2026-09-08T04:30:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       adsPath: "/ads/nykaa.com",
       timelinePath: "/timeline/nykaa.com",
     });
@@ -325,7 +325,7 @@ describe("/briefs/weekly route (issue #2143)", () => {
         beforeText: "₹999",
         afterText: "₹799",
         sourceUrl: "https://nykaa.com/glow-serum",
-        capturedAt: "2026-09-08T04:30:00.000Z",
+        capturedAt: "2026-09-08T04:30:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         adsPath: "/ads/nykaa.com",
         timelinePath: "/timeline/nykaa.com",
       },
@@ -400,7 +400,7 @@ const { default: BriefsWeeklyRoute } = await import("~/routes/briefs.weekly");
           beforeText: "₹999",
           afterText: "₹799",
           sourceUrl: "https://nykaa.com/glow-serum",
-          capturedAt: "2026-09-08T04:30:00.000Z",
+          capturedAt: "2026-09-08T04:30:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           adsPath: "/ads/nykaa.com",
           timelinePath: "/timeline/nykaa.com",
         },
@@ -412,7 +412,7 @@ const { default: BriefsWeeklyRoute } = await import("~/routes/briefs.weekly");
     expect(markup).toContain('href="/ads/nykaa.com"');
     expect(markup).toContain('href="/timeline/nykaa.com"');
     expect(markup).toContain('href="https://nykaa.com/glow-serum"');
-    expect(markup).toContain('dateTime="2026-09-08T04:30:00.000Z"');
+    expect(markup).toContain('dateTime="2026-09-08T04:30:00.000Z"'); // fixed-date: historical fixture (issue #3215 sweep)
   });
 });
 
@@ -443,7 +443,7 @@ describe("weekly-offer-moves-report.mjs (issue #2143)", () => {
       field: "Offer / price",
       beforeText,
       afterText,
-      capturedAt: "2026-09-08T04:30:00.000Z",
+      capturedAt: "2026-09-08T04:30:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       adsPath: "/ads/nykaa.com",
       timelinePath: "/timeline/nykaa.com",
     };

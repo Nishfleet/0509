@@ -98,7 +98,7 @@ describe("getUserPlan", () => {
       planRow: {
         plan: "starter",
         dodo_status: "cancellation_scheduled",
-        dodo_next_billing_at: "2020-01-01T00:00:00.000Z",
+        dodo_next_billing_at: "2020-01-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       },
     });
     const { getUserPlan } = await import("~/lib/plan.server");

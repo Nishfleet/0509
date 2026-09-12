@@ -111,7 +111,7 @@ function snapshotRow(overrides: Partial<TimelineSitemapRow> = {}): TimelineSitem
   return {
     id: "snap-nykaa-001",
     canonical_url: "https://nykaa.com/glow-serum",
-    captured_at: "2026-08-01T10:00:00.000Z",
+    captured_at: "2026-08-01T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     artifact_key: HTML_KEY,
     metadata_json: JSON.stringify({ screenshotArtifactKey: SCREENSHOT_KEY }),
     is_ad_destination: 0,
@@ -996,7 +996,7 @@ describe("indexableTimelineEntriesFromRows", () => {
     // loadOfferTimeline's SQL); "newest" within the loader's per-domain window
     // is therefore the LAST row in the ASC-sorted set.
     const rows = [
-      snapshotRow({ captured_at: "2026-08-01T10:00:00.000Z" }),
+      snapshotRow({ captured_at: "2026-08-01T10:00:00.000Z" }), // fixed-date: historical fixture (issue #3215 sweep)
       snapshotRow({ captured_at: "2026-08-10T08:00:00.000Z" }),
     ];
 
@@ -1012,7 +1012,7 @@ describe("indexableTimelineEntriesFromRows", () => {
     // capture still renders an indexable ledger. Input is ASC (loader order);
     // the newest capture (2026-08-20) appears LAST in the ASC input.
     const rows = [
-      snapshotRow({ captured_at: "2026-08-01T10:00:00.000Z" }),
+      snapshotRow({ captured_at: "2026-08-01T10:00:00.000Z" }), // fixed-date: historical fixture (issue #3215 sweep)
       snapshotRow({ captured_at: "2026-08-20T08:00:00.000Z", artifact_key: null }),
     ];
 
@@ -1029,7 +1029,7 @@ describe("indexableTimelineEntriesFromRows", () => {
   // would render empty → 410). Rows past the window are unreachable on the
   // route, so they cannot back a sitemap entry either.
   it("excludes a domain whose only passing rows fall outside the loader's per-domain TIMELINE_SNAPSHOT_LIMIT window", () => {
-    const baseDayMs = Date.UTC(2026, 0, 1); // 2026-01-01T00:00:00.000Z
+    const baseDayMs = Date.UTC(2026, 0, 1); // 2026-01-01T00:00:00.000Z // fixed-date: historical fixture (issue #3215 sweep)
     const dayAt = (dayIndex: number) =>
       new Date(baseDayMs + dayIndex * DAY_MS).toISOString();
     const backfillRow = (dayIndex: number): TimelineSitemapRow =>
@@ -1078,19 +1078,19 @@ describe("indexableTimelineEntriesFromRows", () => {
     // window, so the whole bucket enters the window. The proof gate accepts
     // the middle row, so /timeline/hubspot.com lists with lastmod = the
     // passing row's date.
-    const passingCapturedAt = "2026-08-10T08:00:00.000Z";
+    const passingCapturedAt = "2026-08-10T08:00:00.000Z"; // fixed-date: historical fixture (issue #3215 sweep)
     const rows = [
       snapshotRow({
         id: "snap-hubspot-backfill-1",
         canonical_url: "https://hubspot.com/landing",
-        captured_at: "2026-08-01T08:00:00.000Z",
+        captured_at: "2026-08-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         artifact_key: null,
         metadata_json: JSON.stringify({ backfill: true }),
       }),
       snapshotRow({
         id: "snap-hubspot-backfill-2",
         canonical_url: "https://hubspot.com/landing",
-        captured_at: "2026-08-05T08:00:00.000Z",
+        captured_at: "2026-08-05T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         artifact_key: null,
         metadata_json: JSON.stringify({ backfill: true }),
       }),
@@ -1103,14 +1103,14 @@ describe("indexableTimelineEntriesFromRows", () => {
       snapshotRow({
         id: "snap-hubspot-backfill-3",
         canonical_url: "https://hubspot.com/landing",
-        captured_at: "2026-08-15T08:00:00.000Z",
+        captured_at: "2026-08-15T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         artifact_key: null,
         metadata_json: JSON.stringify({ backfill: true }),
       }),
       snapshotRow({
         id: "snap-hubspot-backfill-4",
         canonical_url: "https://hubspot.com/landing",
-        captured_at: "2026-08-20T08:00:00.000Z",
+        captured_at: "2026-08-20T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         artifact_key: null,
         metadata_json: JSON.stringify({ backfill: true }),
       }),
@@ -1137,19 +1137,19 @@ describe("indexableTimelineEntriesFromRows", () => {
       snapshotRow({
         id: "snap-adspyder-1",
         canonical_url: "https://adspyder.io/landing",
-        captured_at: "2026-08-01T08:00:00.000Z",
+        captured_at: "2026-08-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         is_ad_destination: 1,
       }),
       snapshotRow({
         id: "snap-adspyder-2",
         canonical_url: "https://adspyder.io/landing",
-        captured_at: "2026-08-10T08:00:00.000Z",
+        captured_at: "2026-08-10T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         is_ad_destination: 1,
       }),
       snapshotRow({
         id: "snap-adspyder-3",
         canonical_url: "https://adspyder.io/landing",
-        captured_at: "2026-08-20T08:00:00.000Z",
+        captured_at: "2026-08-20T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         is_ad_destination: 1,
       }),
     ];
@@ -1540,19 +1540,19 @@ describe("SITEMAP_PATHS", () => {
         path: "/ads/nykaa.com",
         lastmod: "2026-08-21",
         adCount: 3,
-        fetchedAt: "2026-08-21T10:00:00.000Z",
+        fetchedAt: "2026-08-21T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       },
       {
         path: "/ads/meesho.com",
         lastmod: "2026-08-20",
         adCount: 2,
-        fetchedAt: "2026-08-20T10:00:00.000Z",
+        fetchedAt: "2026-08-20T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       },
       {
         path: "/ads/mamaearth.in",
         lastmod: "2026-08-19",
         adCount: 4,
-        fetchedAt: "2026-08-19T10:00:00.000Z",
+        fetchedAt: "2026-08-19T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       },
     ]);
     const indexableLocs = [...xml.matchAll(
@@ -1603,19 +1603,19 @@ describe("every dynamic sitemap URL carries an honest lastmod (issue #2031)", ()
   }
 
   it("renders a W3C lastmod on every /ads and /timeline URL, and a known-stale domain's lastmod is older than a fresh one's", () => {
-    const now = new Date("2026-09-08T12:00:00.000Z");
+    const now = new Date("2026-09-08T12:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
     // Fresh capture: 6 hours old, carries real verified-linked ads for its own
     // domain. Stale capture: 5 days old (still inside the 7-day indexability
     // window, so it stays listed) but clearly older than the fresh one.
     const fresh = cacheRow({
       cache_key: "search-v2:domain:fresh.com:exact:meta_library_browser:all:page-1",
       payload: { ...basePayload, displayDomain: "fresh.com", ads: [domainAd("fresh.com")] },
-      fetched_at: "2026-09-08T06:00:00.000Z",
+      fetched_at: "2026-09-08T06:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     });
     const stale = cacheRow({
       cache_key: "search-v2:domain:stale.com:exact:meta_library_browser:all:page-1",
       payload: { ...basePayload, displayDomain: "stale.com", ads: [domainAd("stale.com")] },
-      fetched_at: "2026-09-03T06:00:00.000Z",
+      fetched_at: "2026-09-03T06:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     });
 
     const brandEntries = indexableBrandPageEntriesFromRows([fresh, stale], now, {
@@ -1623,7 +1623,7 @@ describe("every dynamic sitemap URL carries an honest lastmod (issue #2031)", ()
       useDomainV2: true,
     });
     const timelineEntries = indexableTimelineEntriesFromRows([
-      snapshotRow({ id: "snap-stale-001", canonical_url: "https://stale.com/landing", captured_at: "2026-09-03T06:00:00.000Z" }),
+      snapshotRow({ id: "snap-stale-001", canonical_url: "https://stale.com/landing", captured_at: "2026-09-03T06:00:00.000Z" }), // fixed-date: historical fixture (issue #3215 sweep)
       snapshotRow({ id: "snap-fresh-001", canonical_url: "https://fresh.com/landing", captured_at: "2026-09-08T06:00:00.000Z" }),
     ]);
 
@@ -1779,8 +1779,10 @@ describe("brandCategorySitemapEntries (issue #2067)", () => {
       { path: "/ads/nykaa.com", lastmod: "2026-08-21" },
       { path: "/ads/sugarcosmetics.com", lastmod: "2026-08-20" },
       { path: "/ads/mcaffeine.com", lastmod: "2026-08-19" },
-      // Sport & footwear — one brand.
+      // Sport & footwear — three brands, newest lastmod 2026-08-18.
       { path: "/ads/nike.com", lastmod: "2026-08-18" },
+      { path: "/ads/adidas.com", lastmod: "2026-08-15" },
+      { path: "/ads/puma.com", lastmod: "2026-08-14" },
       // Unclassified — falls into "More brands", has no landing page.
       { path: "/ads/myexamplebrand.com", lastmod: "2026-08-16" },
     ];
@@ -1796,8 +1798,9 @@ describe("brandCategorySitemapEntries (issue #2067)", () => {
     const sport = byPath("/brands/sport-footwear");
     expect(sport?.lastmod).toBe("2026-08-18");
 
-    // Every curated category with a brand gets an entry: exactly the 2 that
-    // have brands. The other 5 curated categories are empty and omitted.
+    // Every curated category at or above the min-brands floor (#3126) gets
+    // an entry: exactly the 2 that have brands here. The other curated
+    // categories are empty/thin and omitted.
     expect(entries.map((e) => e.path).sort()).toEqual([
       "/brands/beauty-personal-care",
       "/brands/sport-footwear",
@@ -1818,42 +1821,63 @@ describe("brandCategorySitemapEntries (issue #2067)", () => {
     const entries = brandCategorySitemapEntries([
       { path: "/ads/nykaa.com" },
       { path: "/ads/sugarcosmetics.com" },
+      { path: "/ads/mcaffeine.com" },
     ]);
     const beauty = entries.find((e) => e.path === "/brands/beauty-personal-care");
     expect(beauty).toBeDefined();
     expect(beauty?.lastmod).toBeUndefined();
   });
 
-  it("buildSitemapXml threads category entries so all 7 non-empty categories + the hub render (count >= 8)", () => {
-    // One brand per curated category so every curated slug has a page.
+  it("buildSitemapXml threads category entries so brands: categories meeting the #3126 floor + the hub render", () => {
+    // Three brands per curated category so each slug clears the
+    // BRAND_CATEGORY_PAGE_MIN_BRANDS floor (#3126). Finance & insurance
+    // holds a single domain in the registry, so it stays omitted here.
     const brandEntries = [
       { path: "/ads/nike.com", lastmod: "2026-08-01" }, // Sport & footwear
-      { path: "/ads/asos.com", lastmod: "2026-08-02" }, // E-commerce
+      { path: "/ads/adidas.com", lastmod: "2026-08-01" },
+      { path: "/ads/puma.com", lastmod: "2026-08-01" },
+      { path: "/ads/amazon.com", lastmod: "2026-08-02" }, // E-commerce
+      { path: "/ads/ebay.com", lastmod: "2026-08-02" },
+      { path: "/ads/walmart.com", lastmod: "2026-08-02" },
       { path: "/ads/nykaa.com", lastmod: "2026-08-03" }, // Beauty & personal care
-      { path: "/ads/lenskart.com", lastmod: "2026-08-04" }, // Optical & eyewear
+      { path: "/ads/glossier.com", lastmod: "2026-08-03" },
+      { path: "/ads/colourpop.com", lastmod: "2026-08-03" },
       { path: "/ads/hubspot.com", lastmod: "2026-08-05" }, // SaaS & software
-      { path: "/ads/ouraring.com", lastmod: "2026-08-06" }, // Wearables & health
-      { path: "/ads/ridgewallet.com", lastmod: "2026-08-07" }, // Wallet & accessories
+      { path: "/ads/slack.com", lastmod: "2026-08-05" },
+      { path: "/ads/asana.com", lastmod: "2026-08-05" },
+      { path: "/ads/asos.com", lastmod: "2026-08-06" }, // Fashion & accessories
+      { path: "/ads/bewakoof.com", lastmod: "2026-08-06" },
+      { path: "/ads/bombas.com", lastmod: "2026-08-06" },
+      { path: "/ads/oatly.com", lastmod: "2026-08-07" }, // Food & beverage
+      { path: "/ads/epigamia.com", lastmod: "2026-08-07" },
+      { path: "/ads/bluetokaicoffee.com", lastmod: "2026-08-07" },
+      { path: "/ads/fireboltt.com", lastmod: "2026-08-08" }, // Consumer electronics
+      { path: "/ads/noisefit.com", lastmod: "2026-08-08" },
+      { path: "/ads/boat-lifestyle.com", lastmod: "2026-08-08" },
+      { path: "/ads/casper.com", lastmod: "2026-08-09" }, // Home & living
+      { path: "/ads/ikea.com", lastmod: "2026-08-09" },
+      { path: "/ads/dailyobjects.com", lastmod: "2026-08-09" },
     ];
 
     const categoryEntries = brandCategorySitemapEntries(brandEntries);
-    expect(categoryEntries).toHaveLength(7);
+    expect(categoryEntries).toHaveLength(8);
 
     // /brands (the hub) is a static root entry — so the sitemap lists the
-    // hub plus all 7 category pages: >= 8 /brands* URLs.
+    // hub plus all 8 category pages: >= 9 /brands* URLs.
     const xml = buildSitemapXml(brandEntries, [], categoryEntries);
     const brandPageUrls = [...xml.matchAll(/https:\/\/0509\.io\/brands[^<]*/g)].map((m) => m[0]);
     const categoryUrls = brandPageUrls.filter((u) => /^https:\/\/0509\.io\/brands\/[a-z-]+$/.test(u));
     expect(brandPageUrls).toContain("https://0509.io/brands");
-    expect(categoryUrls).toHaveLength(7);
+    expect(categoryUrls).toHaveLength(8);
     for (const slug of [
       "sport-footwear",
       "e-commerce",
       "beauty-personal-care",
-      "optical-eyewear",
       "saas-software",
-      "wearables-health",
-      "wallet-accessories",
+      "fashion-accessories",
+      "food-beverage",
+      "consumer-electronics",
+      "home-living",
     ]) {
       expect(xml).toContain(`<loc>https://0509.io/brands/${slug}</loc>`);
     }

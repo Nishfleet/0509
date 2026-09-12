@@ -25,10 +25,10 @@ const isoAgo = (ms: number) => new Date(Date.now() - ms).toISOString();
 
 // Frozen "now" for the home loader so the count math is deterministic
 // regardless of when the suite runs.
-const NOW = new Date("2026-08-30T06:00:00.000Z");
+const NOW = new Date("2026-08-30T06:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
 // Two hours before the frozen now: positive-age, fresh-for-indexing capture
 // under BOTH the frozen clock and the real wall clock when the suite runs.
-const FETCHED_AT = "2026-08-30T04:00:00.000Z";
+const FETCHED_AT = "2026-08-30T04:00:00.000Z"; // fixed-date: historical fixture (issue #3215 sweep)
 
 const OWNED_ADS = 3;
 const VERIFIED_NOT_OWNED_ADS = 3;
@@ -128,7 +128,7 @@ function cacheEntry(domain = "nykaa.com") {
       cacheStatus: "hit",
     },
     fetchedAt: FETCHED_AT,
-    expiresAt: "2026-08-30T05:00:00.000Z",
+    expiresAt: "2026-08-30T05:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     browserMsUsed: 1200,
     createdAt: FETCHED_AT,
     updatedAt: FETCHED_AT,

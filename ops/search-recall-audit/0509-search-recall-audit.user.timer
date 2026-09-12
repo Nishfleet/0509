@@ -1,0 +1,19 @@
+[Unit]
+Description=Every 6h — 0509 free-preview recall audit over the BET 2 25-domain set (issue #3014)
+
+[Timer]
+# Offset from the sneaker-resale recall canary (00/3:00:00 → 00:00/03:00/06:00
+# IST) and the daily search-tier canary (06:10 IST) so the recall gates do not
+# collide on the same anonymous /search IP budget: this audit runs
+# 01:30/07:30/13:30/19:30 IST.
+# OnCalendar form matters: `07:30/6:00` would repeat the MINUTE field (every
+# 6 minutes during hour 07 — the exact incident class documented on
+# 0509-sneaker-resale-recall-canary.timer, 2026-09-11 senior auditor). The
+# hour field carries the step: `01/6:30:00` = every 6 hours at :30.
+OnCalendar=*-*-* 01/6:30:00 Asia/Kolkata
+Persistent=true
+AccuracySec=2min
+Unit=0509-search-recall-audit.service
+
+[Install]
+WantedBy=timers.target
