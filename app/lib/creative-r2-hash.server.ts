@@ -14,7 +14,7 @@
  * deduplicating: the same bytes uploaded by N captures cost one object.
  *
  * No D1 schema migration is involved: the hash rides on `ad.raw_json`
- * (`$.creativeHash` / `$.creativeHashType`), the same JSON column the rest of
+ * (`$.creativeHash` / `$.creativeHashContentType`), the same JSON column the rest of
  * the ad persistence path uses — so previous code versions keep reading their
  * own columns and nothing here can break an auto-revert.
  */
