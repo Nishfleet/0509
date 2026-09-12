@@ -247,6 +247,7 @@ interface RunScheduledMonitoringOptions {
   includeDigests?: boolean;
   includeMentionResweep?: boolean;
   includeAutoCompetitorResweep?: boolean;
+  includePresenceDigest?: boolean;
   cron?: string;
   digestCadence?: DigestCadence;
   digestLookbackDays?: number;
@@ -467,6 +468,26 @@ export async function runScheduledMonitoring(
     }
   }
 
+  // #3179: the presence digest (the #1379 mention-digest email) had no
+  // scheduled caller — only the integration fixtures exercised it, so no
+  // workspace ever received one. It rides the same tick as the mention
+  // re-sweep, after it, so freshly polled mention items are inside the
+  // lookback. Delivery is idempotent per workspace per UTC day (the
+  // presence-digest idempotency key), so the 3-hourly tick sends at most
+  // one digest per workspace per day; Free has no presence_digest_alerts
+  // and is skipped inside delivery (nothing recurring on Free, #3179).
+  // The presence polling batch (runPresencePollingBatch) runs concurrently
+  // as its own scheduled task; items it captures land in the next day's
+  // lookback — no gap, the window overlaps by design.
+  let presenceDigest: import("~/lib/presence-digest.server").PresenceDigestSweepResult | undefined;
+  if (options.includePresenceDigest) {
+    const { runPresenceDigestSweep } = await import("~/lib/presence-digest.server");
+    presenceDigest = await runPresenceDigestSweep(env);
+    if (presenceDigest && (presenceDigest.delivered > 0 || presenceDigest.errors > 0)) {
+      console.log("presence digest sweep completed", presenceDigest);
+    }
+  }
+
   let autoCompetitorResweep: AutoCompetitorResweepResult | undefined;
   if (options.includeAutoCompetitorResweep) {
     const { runAutoCompetitorResweep } = await import("~/lib/auto-competitor-resweep.server");
@@ -495,6 +516,7 @@ export async function runScheduledMonitoring(
     digestFailures: digestResult.failed,
     mentionResweep,
     autoCompetitorResweep,
+    presenceDigest,
   };
 }
 

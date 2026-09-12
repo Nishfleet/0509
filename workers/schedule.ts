@@ -26,6 +26,8 @@ export type ScheduledTask =
       includeDigests: boolean;
       includeMentionResweep: boolean;
       includeAutoCompetitorResweep: boolean;
+      /** #3179: scheduled presence-digest delivery — rides the same ticks that includeMentionResweep rides. */
+      includePresenceDigest: boolean;
       digestCadence?: "daily" | "weekly";
       digestLookbackDays?: number;
     };
@@ -56,6 +58,7 @@ export function resolveScheduledTask(cron: string): ScheduledTask {
       includeDigests: false,
       includeMentionResweep: false,
       includeAutoCompetitorResweep: false,
+      includePresenceDigest: false,
     };
   }
 
@@ -66,6 +69,9 @@ export function resolveScheduledTask(cron: string): ScheduledTask {
       includeDigests: true,
       includeMentionResweep: false,
       includeAutoCompetitorResweep: true,
+      // The three-hourly tick delivers the presence digest (idempotent per
+      // workspace per UTC day), so the daily tick does not duplicate it.
+      includePresenceDigest: false,
       digestCadence: "daily",
       digestLookbackDays: 1,
     };
@@ -82,6 +88,10 @@ export function resolveScheduledTask(cron: string): ScheduledTask {
       includeDigests: true,
       includeMentionResweep: true,
       includeAutoCompetitorResweep: false,
+      // #3179: the presence digest rides the mention-resweep ticks. Delivery
+      // is idempotent per workspace per UTC day, so this 3-hourly send
+      // collapses to at most one digest per workspace per day.
+      includePresenceDigest: true,
       digestCadence: "weekly",
       digestLookbackDays: 7,
     };
@@ -93,6 +103,7 @@ export function resolveScheduledTask(cron: string): ScheduledTask {
     includeDigests: false,
     includeMentionResweep: true,
     includeAutoCompetitorResweep: false,
+    includePresenceDigest: true,
   };
 }
 

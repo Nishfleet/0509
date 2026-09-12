@@ -909,6 +909,7 @@ export default {
         includeDigests: scheduledTask.includeDigests,
         includeMentionResweep: scheduledTask.includeMentionResweep,
         includeAutoCompetitorResweep: scheduledTask.includeAutoCompetitorResweep,
+        includePresenceDigest: scheduledTask.includePresenceDigest,
         digestCadence: scheduledTask.digestCadence,
         digestLookbackDays: scheduledTask.digestLookbackDays,
         cron: controller.cron,
