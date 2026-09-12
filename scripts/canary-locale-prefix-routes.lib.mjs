@@ -3,7 +3,7 @@
  *
  * Pure functions shared between the CLI script
  * (`scripts/canary-locale-prefix-routes.mjs`) and its unit test
- * (`tests/canary-locale-prefix-routes.test.ts`). Keeping the surface
+ * (`tests/locale-prefix-routes-guard.test.ts`). Keeping the surface
  * here lets the test exercise every probe shape without spawning a
  * child process or stubbing the entire script module.
  *

@@ -49,7 +49,7 @@
 
 | Ladder step | Simulated (vitest) | Live (owner) | Pass criteria |
 |-------------|-------------------|--------------|---------------|
-| **Config** | `tests/monitoring-fanout-canary.test.ts` | `node scripts/monitoring-fanout-canary.mjs --step config` | `fanout` default; internal workspace secret set; `GLOBAL=1` |
+| **Config** | `tests/monitoring-fanout-guard.test.ts` | `node scripts/monitoring-fanout-canary.mjs --step config` | `fanout` default; internal workspace secret set; `GLOBAL=1` |
 | **Shadow** | `tests/monitoring-fanout.test.ts` shadow mode | Set `MONITORING_FANOUT_MODE=shadow`, observe one cron window | `shadowOnly > 0`; zero `watchlist_run` rows; no deliveries |
 | **Allowlist (1 watchlist)** | dispatch + binding-missing tests | `fanout` + allowlist internal user ID, `MAX_INFLIGHT=1`, notifications off | Exactly one queued/dispatched run; `dispatchFailures = 0` |
 | **75-job fleet** | `schedules 75 eligible watchlists` | Internal workspace with 75 active agency watchlists | `queued >= 75`; `dispatchFailures = 0`; slots ≤ `MAX_INFLIGHT` |
