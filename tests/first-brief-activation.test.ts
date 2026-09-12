@@ -141,9 +141,9 @@ function watchlist(): WatchlistRecord {
     targetLabel: "Glowkart",
     targetCountry: "all",
     isActive: true,
-    lastScannedAt: "2026-09-07T10:05:00.000Z",
+    lastScannedAt: "2026-09-07T10:05:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     createdAt: "2026-09-07T10:00:00.000Z",
-    updatedAt: "2026-09-07T10:05:00.000Z",
+    updatedAt: "2026-09-07T10:05:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
   };
 }
 
@@ -162,10 +162,10 @@ function baselineEvent(): WatchEventRecord {
     title: "Baseline captured: 1 active ad",
     summary: "We recorded 1 active ad for Glowkart as your starting point.",
     metadata: { kind: "baseline", sourceUrl: SNAPSHOT, proofCaptureId: "proof-1" },
-    confirmedAt: "2026-09-07T10:05:01.000Z",
+    confirmedAt: "2026-09-07T10:05:01.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     suppressedAt: null,
     invalidatedAt: null,
-    lastEvaluatedAt: "2026-09-07T10:05:01.000Z",
+    lastEvaluatedAt: "2026-09-07T10:05:01.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     createdAt: "2026-09-07T10:05:00.000Z",
   };
 }
@@ -174,9 +174,9 @@ function filedDigest() {
   return {
     id: "digest-1",
     userId: "user-1",
-    periodStart: "2026-09-07T10:00:00.000Z",
+    periodStart: "2026-09-07T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     periodEnd: "2026-09-14T10:00:00.000Z",
-    createdAt: "2026-09-07T10:05:02.000Z",
+    createdAt: "2026-09-07T10:05:02.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     summary: { kind: "first_brief" },
     items: [
       {
@@ -187,7 +187,7 @@ function filedDigest() {
         eventType: "ad_new" as const,
         title: "Baseline captured: 1 active ad",
         summary: "We recorded 1 active ad for Glowkart as your starting point.",
-        createdAt: "2026-09-07T10:05:02.000Z",
+        createdAt: "2026-09-07T10:05:02.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         metadata: { eventId: "event-1", sourceUrl: SNAPSHOT, proofCaptureId: "proof-1" },
       },
     ],
@@ -513,7 +513,7 @@ describe("activation scan inline retry (issue #2138)", () => {
       requireWorkspaceSession: vi.fn().mockResolvedValue({
         session: {
           user: { id: "user-1", email: OWNER_ADDRESS, name: "Owner", onboardedAt: null },
-          session: { id: "session-1", userId: "user-1", expiresAt: "2026-09-09T00:00:00.000Z" },
+          session: { id: "session-1", userId: "user-1", expiresAt: "2026-09-09T00:00:00.000Z" }, // fixed-date: historical fixture (issue #3215 sweep)
         },
         workspaceUserId: "user-1",
         isMember: false,

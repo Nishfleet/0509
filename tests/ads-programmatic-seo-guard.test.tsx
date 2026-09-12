@@ -124,7 +124,7 @@ function adsPageData(): BrandPageLoaderData {
     verifiedTestedCount: 0,
     tickerAds: [],
     checkedAgo: "about 2 hours ago",
-    lastCheckedAt: "2026-08-09T10:00:00.000Z",
+    lastCheckedAt: "2026-08-09T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     freshForLiveClaim: false,
     brandOwnedAdCount: 6,
     verifiedLinkCount: 6,

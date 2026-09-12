@@ -13,24 +13,24 @@ afterEach(() => {
 
 describe("nextScheduledScanAt", () => {
   it("targets the next three-hour scan slot for Starter", () => {
-    const now = new Date("2026-06-10T01:00:00.000Z");
-    expect(nextScheduledScanAt("starter", now).toISOString()).toBe("2026-06-10T03:00:00.000Z");
+    const now = new Date("2026-06-10T01:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
+    expect(nextScheduledScanAt("starter", now).toISOString()).toBe("2026-06-10T03:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
   });
 
   it("rolls to the next three-hour slot once the current slot has passed", () => {
-    const now = new Date("2026-06-10T09:00:00.000Z");
-    expect(nextScheduledScanAt("starter", now).toISOString()).toBe("2026-06-10T12:00:00.000Z");
+    const now = new Date("2026-06-10T09:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
+    expect(nextScheduledScanAt("starter", now).toISOString()).toBe("2026-06-10T12:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
   });
 
   it("targets the next six-hour slot for Scout plans", () => {
-    const now = new Date("2026-06-10T09:00:00.000Z");
+    const now = new Date("2026-06-10T09:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
     const next = nextScheduledScanAt("scout", now);
-    expect(next.toISOString()).toBe("2026-06-10T12:00:00.000Z");
+    expect(next.toISOString()).toBe("2026-06-10T12:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
     expect(next.getUTCHours() % 6).toBe(0);
   });
 
   it("formats the label in UTC by default", () => {
-    const label = formatNextScanLabel("starter", new Date("2026-06-10T01:00:00.000Z"));
+    const label = formatNextScanLabel("starter", new Date("2026-06-10T01:00:00.000Z")); // fixed-date: historical fixture (issue #3215 sweep)
     expect(label).toContain("3:00");
     expect(label).toContain("UTC");
   });
@@ -38,7 +38,7 @@ describe("nextScheduledScanAt", () => {
   it("formats the label in the workspace timezone when provided", () => {
     const label = formatNextScanLabel(
       "starter",
-      new Date("2026-06-10T01:00:00.000Z"),
+      new Date("2026-06-10T01:00:00.000Z"), // fixed-date: historical fixture (issue #3215 sweep)
       "America/New_York",
     );
     expect(label).toContain("11:00");
@@ -57,7 +57,7 @@ describe("queueFirstWatchlistScan", () => {
     targetLabel: "nykaa",
     isActive: true,
     lastScannedAt: null,
-    createdAt: "2026-06-10T00:00:00.000Z",
+    createdAt: "2026-06-10T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     updatedAt: "2026-06-10T00:00:00.000Z",
   };
 
@@ -192,7 +192,7 @@ describe("queueFirstWatchlistScan", () => {
       await queueFirstWatchlistScan(
         {} as never,
         { waitUntil } as never,
-        { ...watchlist, lastScannedAt: "2026-06-09T04:00:00.000Z" } as never,
+        { ...watchlist, lastScannedAt: "2026-06-09T04:00:00.000Z" } as never, // fixed-date: historical fixture (issue #3215 sweep)
       ),
     ).toBe(false);
     await expect(queueFirstWatchlistScan({} as never, undefined, watchlist as never)).resolves.toBe(false);

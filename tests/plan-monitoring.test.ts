@@ -13,7 +13,7 @@ const watchlist: WatchlistRecord = {
   targetCountry: null,
   isActive: true,
   lastScannedAt: null,
-  createdAt: "2026-03-01T00:00:00.000Z",
+  createdAt: "2026-03-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
   updatedAt: "2026-03-01T00:00:00.000Z",
 };
 
@@ -72,7 +72,7 @@ function observation(overrides: Record<string, unknown> = {}) {
     landing_page_url: "https://example.com/new-url",
     normalized_headline_hash: null,
     raw_headline: null,
-    seen_at: "2026-03-28T00:00:00.000Z",
+    seen_at: "2026-03-28T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     is_active: 1,
     metadata_json: JSON.stringify({ advertiser: "Nykaa" }),
     ...overrides,
@@ -202,7 +202,7 @@ const runDirectWebsiteWatchlist = async (options: {
       lastCaptureAttemptAt: lastSuccessfulProofAt,
       lastSuccessfulProofAt,
       lastSuccessfulCaptureId: lastSuccessfulProofAt ? "proof-prev" : null,
-      createdAt: "2026-04-10T00:00:01.000Z",
+      createdAt: "2026-04-10T00:00:01.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       updatedAt: "2026-04-10T00:00:01.000Z",
     }),
   }));
@@ -409,7 +409,7 @@ describe("runWeeklyDigests", () => {
           },
         },
       } as never,
-      { periodEnd: "2026-07-13T05:00:00.000Z" },
+      { periodEnd: "2026-07-13T05:00:00.000Z" }, // fixed-date: historical fixture (issue #3215 sweep)
     );
 
     // Free is barebones: the activation scan files the one first brief, then
@@ -537,7 +537,7 @@ describe("runWeeklyDigests", () => {
           },
         },
       } as never,
-      { periodEnd: "2026-07-13T05:00:00.000Z" },
+      { periodEnd: "2026-07-13T05:00:00.000Z" }, // fixed-date: historical fixture (issue #3215 sweep)
     );
 
     expect(result).toBe(1);
@@ -651,7 +651,7 @@ describe("runWeeklyDigests", () => {
           },
         },
       } as never,
-      { periodEnd: "2026-07-15T04:00:00.000Z" },
+      { periodEnd: "2026-07-15T04:00:00.000Z" }, // fixed-date: historical fixture (issue #3215 sweep)
     );
 
     expect(result).toBe(0);
@@ -754,7 +754,7 @@ describe("runWeeklyDigests", () => {
     }));
 
     const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
-    const scheduledTime = Date.parse("2026-04-20T05:00:00.000Z");
+    const scheduledTime = Date.parse("2026-04-20T05:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
 
     const result = await runScheduledMonitoring(
       {
@@ -792,7 +792,7 @@ describe("runWeeklyDigests", () => {
     expect(getDigestByPeriod).toHaveBeenCalledWith(
       expect.anything(),
       "user-1",
-      "2026-04-13T05:00:00.000Z",
+      "2026-04-13T05:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       "2026-04-20T05:00:00.000Z",
     );
   });
@@ -936,7 +936,7 @@ describe("runWeeklyDigests", () => {
           },
         },
       } as never,
-      { periodEnd: "2026-07-13T05:00:00.000Z" },
+      { periodEnd: "2026-07-13T05:00:00.000Z" }, // fixed-date: historical fixture (issue #3215 sweep)
     );
 
     expect(result).toBe(1);
@@ -1093,7 +1093,7 @@ describe("runWatchlistManual cheap scan path", () => {
         lastCaptureAttemptAt: null,
         lastSuccessfulProofAt: null,
         lastSuccessfulCaptureId: null,
-        createdAt: "2026-04-10T00:00:01.000Z",
+        createdAt: "2026-04-10T00:00:01.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         updatedAt: "2026-04-10T00:00:01.000Z",
       }),
       upsertAd: vi.fn(),
@@ -1179,7 +1179,7 @@ describe("runWatchlistManual cheap scan path", () => {
       priceText: "Starting at ₹499",
       formPresent: true,
       captureMethod: "browser_render",
-      capturedAt: "2026-04-18T00:00:00.000Z",
+      capturedAt: "2026-04-18T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       artifactKey: "landing-pages/page.html",
       metadata: {
         htmlArtifactKey: "landing-pages/page.html",
@@ -1267,9 +1267,9 @@ describe("runWatchlistManual cheap scan path", () => {
           deviceProfile: "mobile_default",
           extractorVersion: "lp-signals-v1",
           idempotencyKey: "proof-request:watch-1",
-          attemptedAt: "2026-04-10T00:00:00.000Z",
+          attemptedAt: "2026-04-10T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           succeededAt: "2026-04-10T00:00:01.000Z",
-          createdAt: "2026-04-10T00:00:01.000Z",
+          createdAt: "2026-04-10T00:00:01.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           updatedAt: "2026-04-10T00:00:01.000Z",
         },
         {
@@ -1329,9 +1329,9 @@ describe("runWatchlistManual cheap scan path", () => {
             deviceProfile: "mobile_default",
             extractorVersion: "lp-signals-v1",
             idempotencyKey: "proof-request:watch-1",
-            attemptedAt: "2026-04-10T00:00:00.000Z",
+            attemptedAt: "2026-04-10T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
             succeededAt: "2026-04-10T00:00:01.000Z",
-            createdAt: "2026-04-10T00:00:01.000Z",
+            createdAt: "2026-04-10T00:00:01.000Z", // fixed-date: historical fixture (issue #3215 sweep)
             updatedAt: "2026-04-10T00:00:01.000Z",
           },
           {
@@ -1391,9 +1391,9 @@ describe("runWatchlistManual cheap scan path", () => {
         canonicalPageIdentity: "example.com/new-url",
         proofTargetIdentity: "watch-1:meta-nykaa-1:example.com/new-url",
         lastCaptureAttemptAt: null,
-        lastSuccessfulProofAt: "2026-04-10T00:00:01.000Z",
+        lastSuccessfulProofAt: "2026-04-10T00:00:01.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         lastSuccessfulCaptureId: "proof-prev",
-        createdAt: "2026-04-10T00:00:01.000Z",
+        createdAt: "2026-04-10T00:00:01.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         updatedAt: "2026-04-10T00:00:01.000Z",
       }),
     }));
@@ -1496,7 +1496,7 @@ describe("runWatchlistManual cheap scan path", () => {
       priceText: "Free migration and 2 months white-glove setup",
       formPresent: true,
       captureMethod: "browser_render",
-      capturedAt: "2026-04-18T00:00:00.000Z",
+      capturedAt: "2026-04-18T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       artifactKey: "landing-pages/direct.html",
       metadata: {
         htmlArtifactKey: "landing-pages/direct.html",
@@ -1590,7 +1590,7 @@ describe("runWatchlistManual cheap scan path", () => {
           idempotencyKey: "proof-request:watch-1:direct-prev",
           attemptedAt: previousProofAt,
           succeededAt: previousProofAt,
-          createdAt: "2026-04-10T00:00:01.000Z",
+          createdAt: "2026-04-10T00:00:01.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           updatedAt: "2026-04-10T00:00:01.000Z",
         },
         {
@@ -1640,7 +1640,7 @@ describe("runWatchlistManual cheap scan path", () => {
         lastCaptureAttemptAt: null,
         lastSuccessfulProofAt: previousProofAt,
         lastSuccessfulCaptureId: "proof-prev",
-        createdAt: "2026-04-10T00:00:01.000Z",
+        createdAt: "2026-04-10T00:00:01.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         updatedAt: "2026-04-10T00:00:01.000Z",
       }),
     }));
@@ -1806,7 +1806,7 @@ describe("runWatchlistManual cheap scan path", () => {
       priceText: "Free migration and 2 months white-glove setup",
       formPresent: true,
       captureMethod: "landing_page_fetch",
-      capturedAt: "2026-04-18T00:00:00.000Z",
+      capturedAt: "2026-04-18T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       artifactKey: "landing-pages/direct.html",
       metadata: {
         htmlArtifactKey: "landing-pages/direct.html",
@@ -1889,9 +1889,9 @@ describe("runWatchlistManual cheap scan path", () => {
           deviceProfile: "mobile_default",
           extractorVersion: "lp-signals-v1",
           idempotencyKey: "proof-request:watch-1:direct-prev",
-          attemptedAt: "2026-04-10T00:00:00.000Z",
+          attemptedAt: "2026-04-10T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           succeededAt: "2026-04-10T00:00:01.000Z",
-          createdAt: "2026-04-10T00:00:01.000Z",
+          createdAt: "2026-04-10T00:00:01.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           updatedAt: "2026-04-10T00:00:01.000Z",
         },
       ]),
@@ -1915,9 +1915,9 @@ describe("runWatchlistManual cheap scan path", () => {
         canonicalPageIdentity: "competitor.example/onboarding",
         proofTargetIdentity: "watch-1:none:competitor.example/onboarding",
         lastCaptureAttemptAt: null,
-        lastSuccessfulProofAt: "2026-04-10T00:00:01.000Z",
+        lastSuccessfulProofAt: "2026-04-10T00:00:01.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         lastSuccessfulCaptureId: "proof-prev",
-        createdAt: "2026-04-10T00:00:01.000Z",
+        createdAt: "2026-04-10T00:00:01.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         updatedAt: "2026-04-10T00:00:01.000Z",
       }),
     }));
@@ -2239,7 +2239,7 @@ describe("runWatchlistManual cheap scan path", () => {
         lastCaptureAttemptAt: new Date().toISOString(),
         lastSuccessfulProofAt: new Date().toISOString(),
         lastSuccessfulCaptureId: "proof-prev",
-        createdAt: "2026-04-10T00:00:01.000Z",
+        createdAt: "2026-04-10T00:00:01.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         updatedAt: "2026-04-10T00:00:01.000Z",
       }),
     }));
@@ -2294,7 +2294,7 @@ describe("runWatchlistManual cheap scan path", () => {
       lastCaptureAttemptAt: null,
       lastSuccessfulProofAt: null,
       lastSuccessfulCaptureId: null,
-      createdAt: "2026-04-10T00:00:01.000Z",
+      createdAt: "2026-04-10T00:00:01.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       updatedAt: "2026-04-10T00:00:01.000Z",
     };
     const finalTarget = {
@@ -2303,7 +2303,7 @@ describe("runWatchlistManual cheap scan path", () => {
       landingPageUrl: "https://www.competitor.example/onboarding",
       canonicalPageIdentity: "www.competitor.example/onboarding",
       proofTargetIdentity: "watch-1:none:www.competitor.example/onboarding",
-      lastSuccessfulProofAt: "2026-04-10T00:00:01.000Z",
+      lastSuccessfulProofAt: "2026-04-10T00:00:01.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       lastSuccessfulCaptureId: "proof-prev",
     };
     const upsertProofTarget = vi.fn().mockImplementation(async (_env: unknown, input: { canonicalPageIdentity: string }) =>
@@ -2336,9 +2336,9 @@ describe("runWatchlistManual cheap scan path", () => {
               deviceProfile: "mobile_default",
               extractorVersion: "lp-signals-v1",
               idempotencyKey: "proof-request:watch-1:direct-prev",
-              attemptedAt: "2026-04-10T00:00:00.000Z",
+              attemptedAt: "2026-04-10T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
               succeededAt: "2026-04-10T00:00:01.000Z",
-              createdAt: "2026-04-10T00:00:01.000Z",
+              createdAt: "2026-04-10T00:00:01.000Z", // fixed-date: historical fixture (issue #3215 sweep)
               updatedAt: "2026-04-10T00:00:01.000Z",
             },
           ]
@@ -2361,7 +2361,7 @@ describe("runWatchlistManual cheap scan path", () => {
       priceText: "Free migration and 2 months white-glove setup",
       formPresent: true,
       captureMethod: "landing_page_fetch",
-      capturedAt: "2026-04-18T00:00:00.000Z",
+      capturedAt: "2026-04-18T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       artifactKey: "landing-pages/direct.html",
       metadata: {
         htmlArtifactKey: "landing-pages/direct.html",
@@ -2566,7 +2566,7 @@ describe("runWatchlistManual cheap scan path", () => {
         lastCaptureAttemptAt: null,
         lastSuccessfulProofAt: null,
         lastSuccessfulCaptureId: null,
-        createdAt: "2026-04-10T00:00:01.000Z",
+        createdAt: "2026-04-10T00:00:01.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         updatedAt: "2026-04-10T00:00:01.000Z",
       }),
       upsertAd: vi.fn(),

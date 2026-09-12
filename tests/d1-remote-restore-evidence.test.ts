@@ -683,7 +683,7 @@ describe("D1 remote restore evidence automation", () => {
       conclusion: "success",
       head_branch: "main",
       head_sha: headSha,
-      created_at: "2026-07-29T06:00:00.000Z",
+      created_at: "2026-07-29T06:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       repository: { full_name: "Nishfleet/0509" },
       head_repository: { full_name: "Nishfleet/0509" },
       workflowFile: "deploy-production.yml",
@@ -752,25 +752,25 @@ describe("D1 remote restore evidence automation", () => {
   });
 
   it("sweeps only run-scoped scratch names older than 24 hours", () => {
-    const now = new Date("2026-07-29T06:00:00.000Z");
+    const now = new Date("2026-07-29T06:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
     expect(
       staleScratchDatabaseNames(
         [
           {
             name: "0509-restore-test-30423695493-1",
-            createdAt: "2026-07-28T05:59:59.000Z",
+            createdAt: "2026-07-28T05:59:59.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           },
           {
             name: "0509-restore-test-30423695494-1",
-            createdAt: "2026-07-29T05:00:00.000Z",
+            createdAt: "2026-07-29T05:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           },
           {
             name: "0509",
-            createdAt: "2020-01-01T00:00:00.000Z",
+            createdAt: "2020-01-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           },
           {
             name: "0509-restore-test-manual",
-            createdAt: "2020-01-01T00:00:00.000Z",
+            createdAt: "2020-01-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           },
         ],
         now,
@@ -872,7 +872,7 @@ describe("D1 remote restore evidence automation", () => {
         cleanupLocalRestoreTempDirectories({
           runId: "30423695493",
           tempDirectory: root,
-          now: new Date("2026-07-29T12:00:00.000Z"),
+          now: new Date("2026-07-29T12:00:00.000Z"), // fixed-date: historical fixture (issue #3215 sweep)
           sweepStale: true,
         }),
       ).toEqual([current, stale].sort());
@@ -979,7 +979,7 @@ describe("D1 remote restore evidence automation", () => {
           runId: "30423695493",
           tempDirectory,
           backupDirectory: currentBackupDirectory,
-          now: new Date("2026-07-29T12:00:00.000Z"),
+          now: new Date("2026-07-29T12:00:00.000Z"), // fixed-date: historical fixture (issue #3215 sweep)
           sweepStale: true,
         }),
       ).toEqual([priorAttempt, stale].sort());
@@ -1052,7 +1052,9 @@ describe("D1 remote restore evidence automation", () => {
         blob_value BLOB,
         big_integer INTEGER
       );
+      -- fixed-date: historical fixture (issue #3215 sweep)
       INSERT INTO d1_migrations VALUES
+        -- fixed-date: historical fixture (issue #3215 sweep)
         (1, '0001_first.sql', '2026-07-01T00:00:00.000Z');
       INSERT INTO user_plan VALUES
         ('plan-1', 'payment-1', NULL, NULL);
@@ -1234,7 +1236,7 @@ describe("D1 remote restore evidence automation", () => {
           {
             name: scratchName,
             uuid: "2a4e173d-34db-43c5-986d-4786efafd453",
-            createdAt: "2020-01-01T00:00:00.000Z",
+            createdAt: "2020-01-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           },
         ],
         removeDatabase: async (name) => {
@@ -1774,7 +1776,7 @@ describe("D1 remote restore evidence automation", () => {
       databaseBookmark: "bookmark-123456",
       latestMigration: "0002_second.sql",
       migrationCount: 2,
-      generatedAt: "2026-07-29T04:53:06.765Z",
+      generatedAt: "2026-07-29T04:53:06.765Z", // fixed-date: historical fixture (issue #3215 sweep)
       scratchDatabaseRemoved: true,
     });
 
@@ -1825,7 +1827,7 @@ describe("D1 remote restore evidence automation", () => {
       "  dodo_subscription_id TEXT,",
       "  dodo_customer_id TEXT",
       ");",
-      "INSERT INTO d1_migrations VALUES (1, '0001_first.sql', '2026-07-01T00:00:00.000Z');",
+      "INSERT INTO d1_migrations VALUES (1, '0001_first.sql', '2026-07-01T00:00:00.000Z');", // fixed-date: historical fixture (issue #3215 sweep)
       "INSERT INTO user_plan VALUES ('plan-1', NULL, NULL, NULL);",
     ].join("\n");
 

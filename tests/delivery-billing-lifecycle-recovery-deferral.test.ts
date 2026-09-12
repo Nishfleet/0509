@@ -88,14 +88,14 @@ describe("billing lifecycle recovery deferral", () => {
 				billingLifecycleProviderEvidence: {
 					reference: "cf-event-deferral",
 					classification: "provider_rejected",
-					observedAt: "2026-07-13T09:01:00.000Z",
+					observedAt: "2026-07-13T09:01:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 					outcome: "failed",
 				},
 			},
 			{
 				status: "failed",
 				webhookStatus: "failed",
-				providerStatusLastSeenAt: "2026-07-13T09:04:00.000Z",
+				providerStatusLastSeenAt: "2026-07-13T09:04:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 				failedAt: "2026-07-13T09:04:00.000Z",
 				errorMessage: "Provider rejected the billing email.",
 			},

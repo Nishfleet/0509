@@ -28,7 +28,7 @@ vi.mock("~/lib/data/workspace-branding.server", () => ({
 }));
 
 const env = {} as AppEnv;
-const now = "2026-07-15T08:00:00.000Z";
+const now = "2026-07-15T08:00:00.000Z"; // fixed-date: historical fixture (issue #3215 sweep)
 
 const collectionAd: AdRecord = {
   metaAdId: "ad-col-1",
@@ -62,7 +62,7 @@ const collectionAd: AdRecord = {
     normalizedHeadline: "Proof headline",
     normalizedHeadlineHash: "h",
     captureMethod: "landing_page_fetch",
-    capturedAt: "2026-07-15T07:55:00.000Z",
+    capturedAt: "2026-07-15T07:55:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
   },
   tags: [],
 };

@@ -23,11 +23,11 @@ describe("customer lifecycle billing emails", () => {
 				userId: "user-1",
 				email: "owner@example.com",
 				name: "Owner",
-				occurredAt: "2026-07-01T08:00:00.000Z",
+				occurredAt: "2026-07-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 				status: "subscription.on_hold",
 				subscriptionId: "sub_123",
 				paymentId: null,
-				stateUpdatedAt: "2026-07-01T08:00:00.000Z",
+				stateUpdatedAt: "2026-07-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 				retryWebhookOnExplicitFailure: true,
 			},
 		);
@@ -106,8 +106,8 @@ describe("customer lifecycle billing emails", () => {
 			);
 		const applyDodoPlanPaymentIssueWithLedger = vi
 			.fn()
-			.mockResolvedValueOnce({ changed: true, stateUpdatedAt: "2026-07-01T08:00:00.000Z" })
-			.mockResolvedValueOnce({ changed: false, stateUpdatedAt: "2026-07-01T08:00:00.000Z" });
+			.mockResolvedValueOnce({ changed: true, stateUpdatedAt: "2026-07-01T08:00:00.000Z" }) // fixed-date: historical fixture (issue #3215 sweep)
+			.mockResolvedValueOnce({ changed: false, stateUpdatedAt: "2026-07-01T08:00:00.000Z" }); // fixed-date: historical fixture (issue #3215 sweep)
 		const sendBillingPaymentIssueEmail = vi
 			.fn()
 			.mockRejectedValueOnce(explicitFailure)
@@ -143,7 +143,7 @@ describe("customer lifecycle billing emails", () => {
 			expect.anything(),
 			expect.objectContaining({
 				status: "subscription.on_hold", subscriptionId: "sub_123", paymentId: null,
-				stateUpdatedAt: "2026-07-01T08:00:00.000Z",
+				stateUpdatedAt: "2026-07-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 			}),
 		);
 		expect(applyDodoPlanPaymentIssueWithLedger).toHaveBeenCalledTimes(2);
@@ -164,7 +164,7 @@ describe("customer lifecycle billing emails", () => {
 						),
 					),
 				applyDodoPlanPaymentIssueWithLedger: vi.fn().mockResolvedValue({
-					changed: false, stateUpdatedAt: "2026-07-01T08:00:00.000Z",
+					changed: false, stateUpdatedAt: "2026-07-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 				}),
 			},
 			delivery: { sendBillingPaymentIssueEmail: vi.fn().mockResolvedValue(false) },
@@ -275,7 +275,7 @@ describe("customer lifecycle billing emails", () => {
 					subscriptionId: "sub_linked",
 					customerId: null,
 					status: "subscription.expired",
-					revokedAt: "2026-07-01T00:00:00.000Z",
+					revokedAt: "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 					metadata: {},
 				})),
 			},
@@ -284,13 +284,13 @@ describe("customer lifecycle billing emails", () => {
 				getUserIdForDodoLifecycle,
 				applyDodoPlanRevokeWithWatchlistReconcile: vi
 					.fn()
-					.mockResolvedValueOnce({ changed: true, stateUpdatedAt: "2026-07-01T00:00:00.000Z" })
-					.mockResolvedValueOnce({ changed: false, stateUpdatedAt: "2026-07-01T00:00:00.000Z" }),
+					.mockResolvedValueOnce({ changed: true, stateUpdatedAt: "2026-07-01T00:00:00.000Z" }) // fixed-date: historical fixture (issue #3215 sweep)
+					.mockResolvedValueOnce({ changed: false, stateUpdatedAt: "2026-07-01T00:00:00.000Z" }), // fixed-date: historical fixture (issue #3215 sweep)
 				getUserPlanBillingInfo: vi.fn().mockResolvedValue({
 					plan: "free",
 					dodoStatus: "subscription.expired",
 					dodoSubscriptionId: "sub_linked",
-					planUpdatedAt: "2026-07-01T00:00:00.000Z",
+					planUpdatedAt: "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 				}),
 			},
 			delivery: { sendBillingCancellationEmail },
@@ -308,7 +308,7 @@ describe("customer lifecycle billing emails", () => {
 			expect.anything(),
 			expect.objectContaining({
 				status: "subscription.expired", subscriptionId: "sub_linked",
-				stateUpdatedAt: "2026-07-01T00:00:00.000Z",
+				stateUpdatedAt: "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 			}),
 		);
   expect(data.getUserIdForDodoLifecycle).toHaveBeenCalledTimes(2);
@@ -318,7 +318,7 @@ describe("customer lifecycle billing emails", () => {
 		const futureIso = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
 		const { data, delivery } = mockWebhookDependencies({
 			billing: {
-				extractDodoSubscriptionGrant: subscriptionGrant({ grantedAt: "2026-07-13T08:00:00.000Z", hasProviderGrantTimestamp: true, nextBillingAt: futureIso, cancellationScheduled: true }),
+				extractDodoSubscriptionGrant: subscriptionGrant({ grantedAt: "2026-07-13T08:00:00.000Z", hasProviderGrantTimestamp: true, nextBillingAt: futureIso, cancellationScheduled: true }), // fixed-date: historical fixture (issue #3215 sweep)
 			},
 		});
 
@@ -345,7 +345,7 @@ describe("customer lifecycle billing emails", () => {
 				effectiveAt: futureIso,
 				eventId: "evt-cancel-scheduled-email",
 				subscriptionId: "sub_123",
-				stateUpdatedAt: "2026-07-13T08:00:00.000Z",
+				stateUpdatedAt: "2026-07-13T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 			}),
 		);
 		data.getUserDeliveryProfile.mockResolvedValue(unverified);
@@ -362,7 +362,7 @@ describe("customer lifecycle billing emails", () => {
 				effectiveAt: futureIso,
 				eventId: "evt-cancel-scheduled-email",
 				subscriptionId: "sub_123",
-				stateUpdatedAt: "2026-07-13T08:00:00.000Z",
+				stateUpdatedAt: "2026-07-13T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 				retryWebhookOnExplicitFailure: true,
 			},
 		);
@@ -415,10 +415,10 @@ describe("customer lifecycle billing emails", () => {
 
 	it("retries one timestamp-less scheduled-cancellation event with its original signed watermark", async () => {
 		const eventId = "evt-cancel-scheduled-no-ts-retry";
-		const firstTimestamp = Date.parse("2026-07-13T08:00:00.000Z") / 1000;
-		const secondTimestamp = Date.parse("2026-07-13T08:05:00.000Z") / 1000;
+		const firstTimestamp = Date.parse("2026-07-13T08:00:00.000Z") / 1000; // fixed-date: historical fixture (issue #3215 sweep)
+		const secondTimestamp = Date.parse("2026-07-13T08:05:00.000Z") / 1000; // fixed-date: historical fixture (issue #3215 sweep)
 		const firstWatermark = new Date(firstTimestamp * 1000).toISOString();
-		const futureIso = "2026-08-13T08:00:00.000Z";
+		const futureIso = "2026-08-13T08:00:00.000Z"; // fixed-date: historical fixture (issue #3215 sweep)
 		const explicitFailure = explicitBillingEmailFailure(
 			`billing-cancellation:user-1:${eventId}`,
 		);
@@ -471,7 +471,7 @@ describe("customer lifecycle billing emails", () => {
 	it("keeps a normal plan_changed grant active and sends no cancellation email", async () => {
 		const { data, delivery } = mockWebhookDependencies({
 			billing: {
-				extractDodoSubscriptionGrant: subscriptionGrant({ grantedAt: "2026-07-13T08:00:00.000Z", hasProviderGrantTimestamp: true, nextBillingAt: "2026-08-13T08:00:00.000Z", cancellationScheduled: false }),
+				extractDodoSubscriptionGrant: subscriptionGrant({ grantedAt: "2026-07-13T08:00:00.000Z", hasProviderGrantTimestamp: true, nextBillingAt: "2026-08-13T08:00:00.000Z", cancellationScheduled: false }), // fixed-date: historical fixture (issue #3215 sweep)
 			},
 		});
 
@@ -491,7 +491,7 @@ describe("customer lifecycle billing emails", () => {
 	it("skips a scheduled-cancellation email when the plan-change grant was rejected as stale", async () => {
 		const { delivery } = mockWebhookDependencies({
 			billing: {
-				extractDodoSubscriptionGrant: subscriptionGrant({ grantedAt: "2026-07-01T08:00:00.000Z", hasProviderGrantTimestamp: true, nextBillingAt: "2026-08-01T08:00:00.000Z", cancellationScheduled: true }),
+				extractDodoSubscriptionGrant: subscriptionGrant({ grantedAt: "2026-07-01T08:00:00.000Z", hasProviderGrantTimestamp: true, nextBillingAt: "2026-08-01T08:00:00.000Z", cancellationScheduled: true }), // fixed-date: historical fixture (issue #3215 sweep)
 			},
 			data: {
 				applyDodoPlanGrantWithWatchlistReconcile: vi.fn().mockResolvedValue({ changed: false }),
@@ -506,7 +506,7 @@ describe("customer lifecycle billing emails", () => {
 	it("does not retry a scheduled-cancellation email after the cancellation was reversed", async () => {
 		const { delivery } = mockWebhookDependencies({
 			billing: {
-				extractDodoSubscriptionGrant: subscriptionGrant({ grantedAt: "2026-07-01T08:00:00.000Z", hasProviderGrantTimestamp: true, nextBillingAt: "2026-08-01T08:00:00.000Z", cancellationScheduled: true }),
+				extractDodoSubscriptionGrant: subscriptionGrant({ grantedAt: "2026-07-01T08:00:00.000Z", hasProviderGrantTimestamp: true, nextBillingAt: "2026-08-01T08:00:00.000Z", cancellationScheduled: true }), // fixed-date: historical fixture (issue #3215 sweep)
 			},
 			data: {
 				beginDodoWebhookEventProcessing: vi
@@ -536,7 +536,7 @@ describe("customer lifecycle billing emails", () => {
 	it("retries a scheduled-cancellation email while the same subscription remains scheduled", async () => {
 		const { data, delivery } = mockWebhookDependencies({
 			billing: {
-				extractDodoSubscriptionGrant: subscriptionGrant({ grantedAt: "2026-07-01T08:00:00.000Z", hasProviderGrantTimestamp: true, nextBillingAt: "2026-08-01T08:00:00.000Z", cancellationScheduled: true }),
+				extractDodoSubscriptionGrant: subscriptionGrant({ grantedAt: "2026-07-01T08:00:00.000Z", hasProviderGrantTimestamp: true, nextBillingAt: "2026-08-01T08:00:00.000Z", cancellationScheduled: true }), // fixed-date: historical fixture (issue #3215 sweep)
 			},
 			data: {
 				beginDodoWebhookEventProcessing: vi.fn().mockResolvedValue(
@@ -551,7 +551,7 @@ describe("customer lifecycle billing emails", () => {
 					plan: "starter",
 					dodoStatus: "cancellation_scheduled",
 					dodoSubscriptionId: "sub_123",
-					dodoNextBillingAt: "2026-08-01T08:00:00.000Z",
+					dodoNextBillingAt: "2026-08-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 					planUpdatedAt: "2026-07-01T08:00:00.000Z",
 				}),
 			},
@@ -575,7 +575,7 @@ describe("customer lifecycle billing emails", () => {
 					customerEmail: "owner@example.com",
 					subscriptionId: "sub_123",
 					status: "expired",
-					revokedAt: "2026-07-01T00:00:00.000Z",
+					revokedAt: "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 					metadata: {},
 				})),
 			},
@@ -598,7 +598,7 @@ describe("customer lifecycle billing emails", () => {
 				eventId: "evt-expired-email",
 				status: "subscription.expired",
 				subscriptionId: "sub_123",
-				stateUpdatedAt: "2026-07-01T00:00:00.000Z",
+				stateUpdatedAt: "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 				retryWebhookOnExplicitFailure: true,
 			},
 		);
@@ -614,7 +614,7 @@ describe("customer lifecycle billing emails", () => {
 					customerEmail: "owner@example.com",
 					subscriptionId: "sub_123",
 					status: "expired",
-					revokedAt: "2026-07-01T00:00:00.000Z",
+					revokedAt: "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 					metadata: {},
 				})),
 			},
@@ -638,7 +638,7 @@ describe("customer lifecycle billing emails", () => {
 					customerEmail: "owner@example.com",
 					subscriptionId: "sub_123",
 					status: "expired",
-					revokedAt: "2026-07-01T00:00:00.000Z",
+					revokedAt: "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 					metadata: {},
 				})),
 			},

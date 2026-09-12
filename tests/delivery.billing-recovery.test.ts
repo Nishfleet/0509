@@ -45,7 +45,7 @@ id:"attempt-failed-old-target",
 status:"failed",
 webhookStatus:"failed",
 targetValue:"old@example.com",
-updatedAt:"2026-07-13T08:00:00.000Z",
+updatedAt:"2026-07-13T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 payloadSnapshot:reconciledFailurePayload("billing_refund_revoked",{
 refundPaymentId:"payment-current",
 refundStateUpdatedAt:scheduledWatermark,
@@ -102,9 +102,9 @@ status: "pending", webhookStatus: "pending", targetValue: "old@example.com", err
 expect(attempt.payloadSnapshot).toHaveProperty("recoveryAttemptCount", expectedCount);
 }
 await expectDeferred("Billing lifecycle recovery recipient is unavailable.", 1);
-vi.setSystemTime(new Date("2026-07-13T09:07:00.000Z"));
+vi.setSystemTime(new Date("2026-07-13T09:07:00.000Z")); // fixed-date: historical fixture (issue #3215 sweep)
 await expectDeferred("Billing lifecycle recovery recipient is not verified.", 2);
-vi.setSystemTime(new Date("2026-07-13T09:09:00.000Z"));
+vi.setSystemTime(new Date("2026-07-13T09:09:00.000Z")); // fixed-date: historical fixture (issue #3215 sweep)
 await expect(recoverBilling()).resolves.toMatchObject({ scanned: 1, claimed: 1, sent: 1, failed: 0 });
 expect(emailSendPayload(sendMock).to).toBe("new@example.com");
 expect(attempt).toMatchObject({ targetValue: "new@example.com", status: "sent" });
@@ -146,7 +146,7 @@ const attempt = mutationRecoveryAttempt("attempt-old-state", templateName, statu
 mockRecoveryAttempt(attempt, {
 getUserPlanBillingInfo: vi.fn().mockResolvedValue({
 ...currentBillingInfo, plan, dodoStatus: status,
-dodoSubscriptionId: "subscription-b", planUpdatedAt: "2026-07-14T09:00:00.000Z",
+dodoSubscriptionId: "subscription-b", planUpdatedAt: "2026-07-14T09:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 }),
 });
 await expect(recoverBilling()).resolves.toMatchObject({ sent: 0, superseded: 1 });
@@ -155,7 +155,7 @@ expect(sendMock).not.toHaveBeenCalled();
 it.each([
 ["exact payment", "payment-current", scheduledWatermark, 1],
 ["newer payment", "payment-new", scheduledWatermark, 0],
-["newer watermark", "payment-current", "2026-07-14T09:00:00.000Z", 0],
+["newer watermark", "payment-current", "2026-07-14T09:00:00.000Z", 0], // fixed-date: historical fixture (issue #3215 sweep)
 ])("matches recovered no-subscription payment.failed by %s", async (_label, currentPayment, currentAt, sent) => {
 useRecoveryClock();
 const sendMock = mockEmailSend("msg_recovered_payment_identity");
@@ -269,8 +269,8 @@ const env = { ...emailEnv, DB: {} } as never;
 await expect(recoverBilling(env)).rejects.toThrow(
 "worker crashed after the durable update",
 );
-billingInfo = { ...billingInfo, dodoPaymentId: "payment-new", planUpdatedAt: "2026-07-14T09:00:00.000Z" };
-vi.setSystemTime(new Date("2026-07-13T09:07:00.000Z"));
+billingInfo = { ...billingInfo, dodoPaymentId: "payment-new", planUpdatedAt: "2026-07-14T09:00:00.000Z" }; // fixed-date: historical fixture (issue #3215 sweep)
+vi.setSystemTime(new Date("2026-07-13T09:07:00.000Z")); // fixed-date: historical fixture (issue #3215 sweep)
 const secondSweep = await recoverBilling(env);
 expect(secondSweep).toMatchObject({ scanned: 1, claimed: 1, sent: 0, superseded: 1 });
 expect(sendMock).not.toHaveBeenCalled();
@@ -309,7 +309,7 @@ subject: "Your refund has been processed",
 expect(listStaleBillingLifecycleEmailAttempts).toHaveBeenCalledWith(
 expect.anything(),
 {
-staleBefore: "2026-07-13T09:04:00.000Z",
+staleBefore: "2026-07-13T09:04:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 limit: 10,
 maxRecoveryAttempts: 3,
 },
@@ -322,7 +322,7 @@ expect.objectContaining({
 expectedStatus: "pending",
 expectedWebhookStatus: "pending",
 expectedUpdatedAt: staleAttempt.updatedAt,
-updatedAt: "2026-07-13T09:05:00.000Z",
+updatedAt: "2026-07-13T09:05:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 }),
 );
 expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
@@ -332,7 +332,7 @@ staleAttempt.id,
 expect.objectContaining({
 status: "pending",
 webhookStatus: "provider_unknown",
-expectedUpdatedAt: "2026-07-13T09:05:00.000Z",
+expectedUpdatedAt: "2026-07-13T09:05:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 }),
 );
 expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
@@ -352,7 +352,7 @@ const legacyFailed = recoveryAttempt(
 {
 status: "failed",
 webhookStatus: "failed",
-providerStatusLastSeenAt: "2026-07-13T09:04:00.000Z",
+providerStatusLastSeenAt: "2026-07-13T09:04:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 failedAt: "2026-07-13T09:04:00.000Z",
 },
 );
@@ -420,14 +420,14 @@ recoveryAttemptCount: 1,
 billingLifecycleProviderEvidence: {
 reference: "cf-event-reconciled-failure",
 classification: "provider_rejected",
-observedAt: "2026-07-13T09:04:00.000Z",
+observedAt: "2026-07-13T09:04:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 outcome: "failed",
 },
 },
 {
 status: "failed",
 webhookStatus: "failed",
-providerStatusLastSeenAt: "2026-07-13T09:04:00.000Z",
+providerStatusLastSeenAt: "2026-07-13T09:04:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 failedAt: "2026-07-13T09:04:00.000Z",
 },
 );
@@ -455,7 +455,7 @@ const updateDeliveryAttemptResult = mockRecoveryAttempt(staleAttempt, {
 getUserPlanBillingInfo: vi.fn().mockResolvedValue({
 ...currentBillingInfo,
 dodoStatus: "active_after_recovery",
-planUpdatedAt: "2026-07-13T09:04:00.000Z",
+planUpdatedAt: "2026-07-13T09:04:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 }),
 });
 const result = await recoverBilling();
@@ -487,7 +487,7 @@ const supersededAttempt = billingAttempt({
 id: "attempt-superseded-slot",
 status: "skipped_due_to_dedupe",
 webhookStatus: "provider_unknown",
-updatedAt: "2026-07-13T08:30:00.000Z",
+updatedAt: "2026-07-13T08:30:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 });
 const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
 const mocks = mockBillingDataServer({
@@ -557,7 +557,7 @@ userId: "user-1",
 targetValue: "owner@example.com",
 templateName: "billing_refund",
 payloadSnapshot: { kind: "billing_refund" },
-updatedAt: "2026-07-13T09:03:00.000Z",
+updatedAt: "2026-07-13T09:03:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 };
 const updateDeliveryAttemptResult = mockRecoveryAttempt(staleAttempt);
 const result = await recoverBilling();
@@ -582,7 +582,7 @@ id: "attempt-pending",
 provider: "cloudflare_email",
 status: "pending",
 webhookStatus: "provider_unknown",
-updatedAt: "2026-07-13T09:04:00.000Z",
+updatedAt: "2026-07-13T09:04:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 payloadSnapshot: billingPayload("billing_refund_revoked", {}),
 };
 const failedAttempt = {
@@ -594,7 +594,7 @@ payloadSnapshot: {
 billingLifecycleProviderEvidence: {
 reference: "cf-email-event-refund-retry",
 classification: "provider_rejected",
-observedAt: "2026-07-13T09:05:00.000Z",
+observedAt: "2026-07-13T09:05:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 outcome: "failed",
 },
 },
@@ -609,7 +609,7 @@ const { reconcileBillingLifecycleEmailDelivery } = await import("~/lib/delivery.
 const providerEvidence = {
 reference: "cf-email-event-refund-retry",
 classification: "provider_rejected",
-observedAt: "2026-07-13T09:05:00.000Z",
+observedAt: "2026-07-13T09:05:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 recipient: "must-not-persist@example.com",
 bodyHtml: "<p>must not persist</p>",
 apiToken: "must-not-persist",
@@ -633,14 +633,14 @@ expect.anything(),
 expect.objectContaining({
 expectedStatus: "pending",
 expectedWebhookStatus: "provider_unknown",
-expectedUpdatedAt: "2026-07-13T09:04:00.000Z",
+expectedUpdatedAt: "2026-07-13T09:04:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 status: "failed",
 webhookStatus: "failed",
 payloadSnapshot: expect.objectContaining({
 billingLifecycleProviderEvidence: {
 reference: "cf-email-event-refund-retry",
 classification: "provider_rejected",
-observedAt: "2026-07-13T09:05:00.000Z",
+observedAt: "2026-07-13T09:05:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 outcome: "failed",
 },
 }),
@@ -652,7 +652,7 @@ expect(
 ).toEqual({
 reference: "cf-email-event-refund-retry",
 classification: "provider_rejected",
-observedAt: "2026-07-13T09:05:00.000Z",
+observedAt: "2026-07-13T09:05:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 outcome: "failed",
 });
 expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
@@ -690,7 +690,7 @@ provider: "cloudflare_email",
 status: "failed",
 webhookStatus: "provider_unknown",
 providerMessageId: null,
-providerStatusLastSeenAt: "2026-07-13T09:04:00.000Z",
+providerStatusLastSeenAt: "2026-07-13T09:04:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 updatedAt: "2026-07-13T09:04:00.000Z",
 payloadSnapshot: billingPayload("billing_refund_revoked", {}),
 };
@@ -707,7 +707,7 @@ outcome: "sent",
 evidence: {
 reference: "controlled-inbox-failed-unknown",
 classification: "controlled_inbox_receipt",
-observedAt: "2026-07-13T09:05:00.000Z",
+observedAt: "2026-07-13T09:05:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 },
 }),
 ).resolves.toBe(true);
@@ -731,7 +731,7 @@ provider: "cloudflare_email",
 status: "pending",
 webhookStatus: "provider_unknown",
 providerMessageId: null,
-updatedAt: "2026-07-13T09:04:00.000Z",
+updatedAt: "2026-07-13T09:04:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 payloadSnapshot: billingPayload("billing_refund_revoked", {}),
 };
 const updateDeliveryAttemptResult = vi.fn(
@@ -755,7 +755,7 @@ outcome: "sent",
 evidence: {
 reference: "cf-event-race-sent",
 classification: "provider_accepted",
-observedAt: "2026-07-13T09:05:00.000Z",
+observedAt: "2026-07-13T09:05:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 },
 }),
 reconcileBillingLifecycleEmailDelivery(emailEnv as never, {
@@ -764,7 +764,7 @@ outcome: "failed",
 evidence: {
 reference: "cf-event-race-failed",
 classification: "provider_rejected",
-observedAt: "2026-07-13T09:05:01.000Z",
+observedAt: "2026-07-13T09:05:01.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 },
 }),
 ]);
@@ -775,7 +775,7 @@ for (const call of updateDeliveryAttemptResult.mock.calls) {
 expect(call[2]).toEqual(expect.objectContaining({
 expectedStatus: "pending",
 expectedWebhookStatus: "provider_unknown",
-expectedUpdatedAt: "2026-07-13T09:04:00.000Z",
+expectedUpdatedAt: "2026-07-13T09:04:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 }));
 }
 expect(emailState.emailSend).not.toHaveBeenCalled();

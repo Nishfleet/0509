@@ -139,7 +139,7 @@ function createSnapshot() {
     priceText: null,
     formPresent: true,
     captureMethod: "browser_render",
-    capturedAt: "2026-06-04T10:00:00.000Z",
+    capturedAt: "2026-06-04T10:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     artifactKey: "landing-pages/2026-06-04/canary.html",
     metadata: {
       fetchStatus: 200,
@@ -464,7 +464,7 @@ describe("launch readiness canary route", () => {
           errorMessage: null,
           deliveredAt: new Date().toISOString(),
           subject: "0509 Gate C proof gate-c-worker-v1",
-          providerDispatchStartedAt: "2026-09-11T00:00:00.000Z",
+          providerDispatchStartedAt: "2026-09-11T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           providerStatusLastSeenAt: "2026-09-11T00:05:00.000Z",
         },
       ],
@@ -761,7 +761,7 @@ describe("launch readiness canary route", () => {
           errorMessage: "raw provider failure detail",
           deliveredAt: new Date().toISOString(),
           subject: "0509 Gate C proof gate-c-worker-v1",
-          providerDispatchStartedAt: "2026-08-01T00:00:00.000Z",
+          providerDispatchStartedAt: "2026-08-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           providerStatusLastSeenAt: "2026-08-01T00:05:00.000Z",
         },
       ],
@@ -827,7 +827,7 @@ describe("launch readiness canary route", () => {
       },
       proofEmail: {
         gateRunId: "gate-c-worker-v1",
-        dispatchStartedAt: "2026-08-01T00:00:00.000Z",
+        dispatchStartedAt: "2026-08-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         subject: "0509 Gate C proof gate-c-worker-v1",
         provider: {
           status: "sent",

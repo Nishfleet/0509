@@ -59,7 +59,7 @@ beforeEach(() => {
             location: { name: "London" },
             departments: [{ name: "Engineering" }],
             absolute_url: "https://boards.greenhouse.io/acme/jobs/101",
-            updated_at: "2026-09-09T00:00:00.000Z",
+            updated_at: "2026-09-09T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           },
         ],
       }),
@@ -92,14 +92,14 @@ function boardPayload(
     verified: true,
     label: "Acme",
     counts: { byDepartment: {}, byLocation: {} },
-    fetchedAt: "2026-09-10T00:00:00.000Z",
+    fetchedAt: "2026-09-10T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     ...overrides,
   };
 }
 
 function record(
   payload: Record<string, unknown>,
-  fetchedAt = "2026-09-03T00:00:00.000Z",
+  fetchedAt = "2026-09-03T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 ): SourceSnapshotRecord {
   return {
     id: "snap-1",

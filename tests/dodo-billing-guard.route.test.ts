@@ -67,20 +67,20 @@ function createCanaryDb(options: {
       id: "watchlist-1",
       is_active: 0,
       paused_reason: "plan_limit",
-      updated_at: "2026-06-01T00:00:00.000Z",
+      updated_at: "2026-06-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     },
   ];
   const initialUserPlan: CanaryUserPlan = {
     user_id: "user-1",
     plan: options.plan === undefined ? "starter" : options.plan,
-    plan_updated_at: "2026-06-01T00:00:00.000Z",
+    plan_updated_at: "2026-06-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     dodo_payment_id: "real-payment-1",
     dodo_product_id: "real-product-1",
     dodo_plan_change_product_id: null,
     dodo_status: "payment.succeeded",
     dodo_subscription_id: "real-subscription-1",
     dodo_customer_id: "real-customer-1",
-    dodo_next_billing_at: "2026-07-01T00:00:00.000Z",
+    dodo_next_billing_at: "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     evidence_entitlement_anchor: "2026-06-01T00:00:00.000Z",
     evidence_entitlement_anchor_source: "provider",
   };
@@ -137,7 +137,7 @@ function createCanaryDb(options: {
       product_cart?: Array<{ product_id?: string }>;
     }) {
       const paymentId = String(payload.payment_id ?? "");
-      const updatedAt = String(payload.updated_at ?? "2026-07-15T00:00:00.000Z");
+      const updatedAt = String(payload.updated_at ?? "2026-07-15T00:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
       if (payload.metadata?.target_kind === "plan") {
         mutationKinds.push("plan");
         userPlan = {
@@ -159,7 +159,7 @@ function createCanaryDb(options: {
         creditGrant = {
           quantity_granted: 500,
           status: "active",
-          granted_at: "2026-07-15T00:00:00.000Z",
+          granted_at: "2026-07-15T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           provider_payment_id: paymentId,
         };
       }
@@ -435,9 +435,9 @@ function createCanaryDb(options: {
         options.concurrentPlanUpdateBeforeCleanup = false;
         userPlan = {
           ...userPlan,
-          plan_updated_at: "2026-07-16T00:00:00.000Z",
+          plan_updated_at: "2026-07-16T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           dodo_status: "cancellation_scheduled",
-          dodo_next_billing_at: "2026-09-01T00:00:00.000Z",
+          dodo_next_billing_at: "2026-09-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         };
       }
       return Promise.all(statements.map((statement) => statement.run()));
@@ -724,14 +724,14 @@ describe("Dodo billing canary route", () => {
     expect(env.DB.userPlanState).toEqual({
       user_id: "user-1",
       plan: "starter",
-      plan_updated_at: "2026-06-01T00:00:00.000Z",
+      plan_updated_at: "2026-06-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       dodo_payment_id: "real-payment-1",
       dodo_product_id: "real-product-1",
       dodo_plan_change_product_id: null,
       dodo_status: "payment.succeeded",
       dodo_subscription_id: "real-subscription-1",
       dodo_customer_id: "real-customer-1",
-      dodo_next_billing_at: "2026-07-01T00:00:00.000Z",
+      dodo_next_billing_at: "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       evidence_entitlement_anchor: "2026-06-01T00:00:00.000Z",
       evidence_entitlement_anchor_source: "provider",
     });
@@ -740,7 +740,7 @@ describe("Dodo billing canary route", () => {
         id: "watchlist-1",
         is_active: 0,
         paused_reason: "plan_limit",
-        updated_at: "2026-06-01T00:00:00.000Z",
+        updated_at: "2026-06-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       },
     ]);
     expect(webhookAction).toHaveBeenCalledTimes(2);
@@ -815,7 +815,7 @@ describe("Dodo billing canary route", () => {
     });
     expect(env.DB.userPlanState).toMatchObject({
       dodo_status: "cancellation_scheduled",
-      plan_updated_at: "2026-07-16T00:00:00.000Z",
+      plan_updated_at: "2026-07-16T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       dodo_next_billing_at: "2026-09-01T00:00:00.000Z",
       dodo_payment_id: "real-payment-1",
     });
@@ -960,7 +960,7 @@ describe("Dodo billing canary route", () => {
           id: "watchlist-1",
           is_active: 1,
           paused_reason: null,
-          updated_at: "2026-07-15T00:00:00.000Z",
+          updated_at: "2026-07-15T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         },
       ],
     ],

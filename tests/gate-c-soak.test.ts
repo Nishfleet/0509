@@ -24,7 +24,7 @@ import { expectedReleaseSchedule } from "../scripts/release-scheduled-observatio
 const roots: string[] = [];
 const WORKER_VERSION = "worker-version-123";
 const HEAD = "a".repeat(40);
-const STARTED_AT = new Date("2026-07-18T00:00:00.000Z");
+const STARTED_AT = new Date("2026-07-18T00:00:00.000Z"); // fixed-date: historical fixture (issue #3215 sweep)
 const DEPLOY_RUN_ID = 9001;
 const DEPLOY_RUN_ATTEMPT = 1;
 
@@ -53,7 +53,7 @@ function validRollbackTarget() {
     deploymentId: "deployment-123",
     versionId: "worker-version-prior",
     percentage: 100,
-    capturedAt: "2026-07-18T00:00:00.000Z",
+    capturedAt: "2026-07-18T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     source: "wrangler deployments status --json",
   };
 }
@@ -319,9 +319,9 @@ describe("Gate C scheduled-work soak journal", () => {
         : [{
             id: 9003,
             run_attempt: 1,
-            created_at: "2026-07-18T03:00:00.000Z",
+            created_at: "2026-07-18T03:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
             run_started_at: "2026-07-18T03:00:00.000Z",
-            updated_at: "2026-07-18T03:01:00.000Z",
+            updated_at: "2026-07-18T03:01:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           }],
       listWorkflowArtifacts,
       now: collectionTime,
@@ -548,8 +548,8 @@ describe("Gate C scheduled-work soak journal", () => {
     expect(() => validateReleaseSoakPayload(wrongPairing, journal)).toThrow("soak_probe_invalid_payload");
 
     const mondayJournal = structuredClone(journal);
-    mondayJournal.window.startedAt = "2026-07-20T00:00:00.000Z";
-    mondayJournal.window.endedAt = "2026-07-21T00:00:00.000Z";
+    mondayJournal.window.startedAt = "2026-07-20T00:00:00.000Z"; // fixed-date: historical fixture (issue #3215 sweep)
+    mondayJournal.window.endedAt = "2026-07-21T00:00:00.000Z"; // fixed-date: historical fixture (issue #3215 sweep)
     const mondayPayload = buildPayload(mondayJournal);
     expect(mondayPayload.expectedObservations).toBe(53);
     expect(validateReleaseSoakPayload(mondayPayload, mondayJournal)).toBe(mondayPayload);

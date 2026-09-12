@@ -43,7 +43,7 @@ function mockWebhookDependencies(overrides: {
       plan: "starter",
       dodoStatus: "subscription.on_hold",
       dodoSubscriptionId: "sub_123",
-      planUpdatedAt: "2026-07-01T08:00:00.000Z",
+      planUpdatedAt: "2026-07-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     }),
     getUserIdForDodoPayment: vi.fn().mockResolvedValue(null),
     getUserIdForDodoLifecycle: vi.fn().mockResolvedValue(null),
@@ -184,9 +184,9 @@ describe("Dodo webhook route", () => {
           paymentId: "pay-delayed-success",
           productId: "prod_starter_monthly",
           status: "succeeded",
-          grantedAt: "2026-06-04T12:00:00.000Z",
+          grantedAt: "2026-06-04T12:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {
-            created_at: "2026-06-04T12:00:00.000Z",
+            created_at: "2026-06-04T12:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           },
         })),
       },
@@ -204,7 +204,7 @@ describe("Dodo webhook route", () => {
       expect.anything(),
       expect.objectContaining({
         providerPaymentId: "pay-delayed-success",
-        grantedAt: "2026-06-04T12:00:00.000Z",
+        grantedAt: "2026-06-04T12:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       }),
       expect.any(Number),
       expect.objectContaining({
@@ -223,13 +223,13 @@ describe("Dodo webhook route", () => {
           paymentId: "pay-provider",
           productId: "prod_starter_monthly",
           status: "succeeded",
-          grantedAt: "2026-06-04T12:00:00.000Z",
+          grantedAt: "2026-06-04T12:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: { canary: "billing" },
           isBillingCanary: true,
           billingCanaryLockId: "billing-canary-lock:user-1",
           billingCanaryExpectedPlanSnapshot: {
             plan: "starter",
-            planUpdatedAt: "2026-06-04T11:00:00.000Z",
+            planUpdatedAt: "2026-06-04T11:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           },
         })),
       },
@@ -264,7 +264,7 @@ describe("Dodo webhook route", () => {
           customerEmail: "owner@example.com",
           subscriptionId: "sub_123",
           status: "cancelled",
-          revokedAt: "2026-07-01T00:00:00.000Z",
+          revokedAt: "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },
@@ -284,7 +284,7 @@ describe("Dodo webhook route", () => {
         userId: "user-1",
         providerSubscriptionId: "sub_123",
         status: "subscription.cancelled",
-        revokedAt: "2026-07-01T00:00:00.000Z",
+        revokedAt: "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       }),
       1,
       expect.objectContaining({ eventId: "evt-cancel", outcome: "processed" }),
@@ -314,7 +314,7 @@ describe("Dodo webhook route", () => {
           plan: "starter",
           cycle: "monthly",
           status: "active",
-          grantedAt: "2026-07-12T00:00:00.000Z",
+          grantedAt: "2026-07-12T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           nextBillingAt: "2026-08-12T00:00:00.000Z",
           metadata: {},
         })),
@@ -336,9 +336,9 @@ describe("Dodo webhook route", () => {
         plan: "starter",
         providerSubscriptionId: "sub_123",
         providerCustomerId: "cus_123",
-        nextBillingAt: "2026-08-12T00:00:00.000Z",
+        nextBillingAt: "2026-08-12T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         status: "active",
-        grantedAt: "2026-07-12T00:00:00.000Z",
+        grantedAt: "2026-07-12T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       }),
       10,
       expect.objectContaining({ eventId: "evt-renewal", outcome: "processed" }),
@@ -358,9 +358,9 @@ describe("Dodo webhook route", () => {
           plan: "starter",
           cycle: "yearly",
           status: "active",
-          grantedAt: "2026-07-02T00:00:00.000Z",
+          grantedAt: "2026-07-02T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           hasProviderGrantTimestamp: true,
-          nextBillingAt: "2027-07-02T00:00:00.000Z",
+          nextBillingAt: "2027-07-02T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },
@@ -382,9 +382,9 @@ describe("Dodo webhook route", () => {
         providerProductId: "pdt_starter_annual",
         providerSubscriptionId: "sub_123",
         providerCustomerId: "cus_123",
-        nextBillingAt: "2027-07-02T00:00:00.000Z",
+        nextBillingAt: "2027-07-02T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         status: "active",
-        grantedAt: "2026-07-02T00:00:00.000Z",
+        grantedAt: "2026-07-02T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         forcePlanChangePending: false,
         requirePlanChangePending: false,
       }),
@@ -412,7 +412,7 @@ describe("Dodo webhook route", () => {
           status: "active",
           grantedAt: null,
           hasProviderGrantTimestamp: false,
-          nextBillingAt: "2027-07-02T00:00:00.000Z",
+          nextBillingAt: "2027-07-02T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },
@@ -423,7 +423,7 @@ describe("Dodo webhook route", () => {
       context: {},
       request: webhookRequest("evt-plan-changed-no-timestamp", {
         type: "subscription.plan_changed",
-        timestamp: "2026-07-01T09:59:00.000Z",
+        timestamp: "2026-07-01T09:59:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       }),
       params: {},
     } as never);
@@ -433,7 +433,7 @@ describe("Dodo webhook route", () => {
       expect.objectContaining({
           userId: "user-1",
           plan: "starter",
-          grantedAt: "2026-07-01T09:59:00.000Z",
+          grantedAt: "2026-07-01T09:59:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           forcePlanChangePending: true,
           requirePlanChangePending: true,
         }),
@@ -457,7 +457,7 @@ describe("Dodo webhook route", () => {
           status: "active",
           grantedAt: null,
           hasProviderGrantTimestamp: false,
-          nextBillingAt: "2027-07-02T00:00:00.000Z",
+          nextBillingAt: "2027-07-02T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },
@@ -480,7 +480,7 @@ describe("Dodo webhook route", () => {
 
     expect(data.applyDodoPlanGrantWithWatchlistReconcile).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ grantedAt: "2026-07-01T09:00:00.000Z" }),
+      expect.objectContaining({ grantedAt: "2026-07-01T09:00:00.000Z" }), // fixed-date: historical fixture (issue #3215 sweep)
       10,
       expect.objectContaining({ eventId: "evt-plan-changed-header-fallback" }),
       expect.anything(),
@@ -501,7 +501,7 @@ describe("Dodo webhook route", () => {
           status: "active",
           grantedAt: null,
           hasProviderGrantTimestamp: false,
-          nextBillingAt: "2027-07-02T00:00:00.000Z",
+          nextBillingAt: "2027-07-02T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },
@@ -545,7 +545,7 @@ describe("Dodo webhook route", () => {
           paymentId: "pay_cancelled",
           checkoutId: "checkout_1",
           status: "payment.cancelled",
-          failedAt: "2026-07-01T08:00:00.000Z",
+          failedAt: "2026-07-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },
@@ -562,7 +562,7 @@ describe("Dodo webhook route", () => {
     expect(data.clearDodoPlanCheckout).toHaveBeenCalledWith(expect.anything(), "user-1", {
       allowMissingStoredCheckoutId: true,
       checkoutId: "checkout_1",
-      occurredAt: "2026-07-01T08:00:00.000Z",
+      occurredAt: "2026-07-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       requireMissingStoredCheckoutId: false,
     });
     expect(data.finalizeDodoWebhookLedgerOnly).toHaveBeenCalledWith(
@@ -590,7 +590,7 @@ describe("Dodo webhook route", () => {
           paymentId: "pay_cancelled",
           checkoutId: null,
           status: "payment.cancelled",
-          failedAt: "2026-07-01T08:00:00.000Z",
+          failedAt: "2026-07-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },
@@ -607,7 +607,7 @@ describe("Dodo webhook route", () => {
     expect(data.clearDodoPlanCheckout).toHaveBeenCalledWith(expect.anything(), "user-1", {
       allowTimestampMatchedStoredCheckoutId: true,
       checkoutId: null,
-      occurredAt: "2026-07-01T08:00:00.000Z",
+      occurredAt: "2026-07-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     });
     expect(data.finalizeDodoWebhookLedgerOnly).toHaveBeenCalledWith(
       expect.anything(),
@@ -633,7 +633,7 @@ describe("Dodo webhook route", () => {
           customerEmail: "owner@example.com",
           subscriptionId: "sub_123",
           status: "failed",
-          revokedAt: "2026-07-01T08:00:00.000Z",
+          revokedAt: "2026-07-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },
@@ -649,7 +649,7 @@ describe("Dodo webhook route", () => {
     expect(await response.json()).toMatchObject({ ok: true, checkoutFailure: true });
     expect(data.clearDodoPlanCheckout).toHaveBeenCalledWith(expect.anything(), "user-1", {
       allowTimestampMatchedStoredCheckoutId: true,
-      occurredAt: "2026-07-01T08:00:00.000Z",
+      occurredAt: "2026-07-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     });
     expect(data.applyDodoPlanPaymentIssueWithLedger).not.toHaveBeenCalled();
     expect(data.finalizeDodoWebhookLedgerOnly).toHaveBeenCalledWith(
@@ -676,7 +676,7 @@ describe("Dodo webhook route", () => {
           paymentId: null,
           checkoutId: "checkout_failed_sub",
           status: "failed",
-          failedAt: "2026-07-01T08:00:00.000Z",
+          failedAt: "2026-07-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },
@@ -693,7 +693,7 @@ describe("Dodo webhook route", () => {
     expect(data.clearDodoPlanCheckout).toHaveBeenCalledWith(expect.anything(), "user-1", {
       allowMissingStoredCheckoutId: true,
       checkoutId: "checkout_failed_sub",
-      occurredAt: "2026-07-01T08:00:00.000Z",
+      occurredAt: "2026-07-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       requireMissingStoredCheckoutId: false,
     });
     expect(data.applyDodoPlanPaymentIssueWithLedger).not.toHaveBeenCalled();
@@ -711,7 +711,7 @@ describe("Dodo webhook route", () => {
           paymentId: null,
           checkoutId: "checkout_old",
           status: "failed",
-          failedAt: "2026-07-01T08:00:00.000Z",
+          failedAt: "2026-07-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
         extractDodoPlanRevocation: vi.fn(() => ({
@@ -721,7 +721,7 @@ describe("Dodo webhook route", () => {
           customerEmail: "owner@example.com",
           subscriptionId: "sub_123",
           status: "failed",
-          revokedAt: "2026-07-01T08:00:00.000Z",
+          revokedAt: "2026-07-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },
@@ -739,7 +739,7 @@ describe("Dodo webhook route", () => {
     expect(data.clearDodoPlanCheckout).toHaveBeenCalledWith(expect.anything(), "user-1", {
       allowMissingStoredCheckoutId: true,
       checkoutId: "checkout_old",
-      occurredAt: "2026-07-01T08:00:00.000Z",
+      occurredAt: "2026-07-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       requireMissingStoredCheckoutId: false,
     });
     expect(data.finalizeDodoWebhookLedgerOnly).not.toHaveBeenCalledWith(
@@ -753,7 +753,7 @@ describe("Dodo webhook route", () => {
       expect.objectContaining({
         userId: "user-1",
         status: "subscription.failed",
-        occurredAt: "2026-07-01T08:00:00.000Z",
+        occurredAt: "2026-07-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       }),
       expect.objectContaining({
         eventId: "evt-subscription-failed-active",
@@ -773,7 +773,7 @@ describe("Dodo webhook route", () => {
           customerEmail: "owner@example.com",
           subscriptionId: "sub_123",
           status: "failed",
-          revokedAt: "2026-07-01T08:00:00.000Z",
+          revokedAt: "2026-07-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },
@@ -792,7 +792,7 @@ describe("Dodo webhook route", () => {
       expect.objectContaining({
         userId: "user-1",
         status: "payment.failed",
-        occurredAt: "2026-07-01T08:00:00.000Z",
+        occurredAt: "2026-07-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       }),
       expect.objectContaining({
         eventId: "evt-plan-change-payment-failed",
@@ -811,7 +811,7 @@ describe("Dodo webhook route", () => {
           paymentId: "pay-downgrade",
           productId: "prod_scout_monthly",
           status: "succeeded",
-          grantedAt: "2026-07-01T00:00:00.000Z",
+          grantedAt: "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },
@@ -846,7 +846,7 @@ describe("Dodo webhook route", () => {
           customerEmail: "owner@example.com",
           subscriptionId: "sub_123",
           status: "on_hold",
-          revokedAt: "2026-07-01T00:00:00.000Z",
+          revokedAt: "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },
@@ -865,7 +865,7 @@ describe("Dodo webhook route", () => {
       expect.objectContaining({
         userId: "user-1",
         status: "subscription.on_hold",
-        occurredAt: "2026-07-01T00:00:00.000Z",
+        occurredAt: "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       }),
       expect.objectContaining({ eventId: "evt-on-hold", outcome: "processed" }),
       expect.anything(),
@@ -884,7 +884,7 @@ describe("Dodo webhook route", () => {
           customerId: "cus_123",
           subscriptionId: "sub_123",
           status: "on_hold",
-          revokedAt: "2026-07-01T00:00:00.000Z",
+          revokedAt: "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },
@@ -932,7 +932,7 @@ describe("Dodo webhook route", () => {
           bundle: "proof_500",
           quantity: 1,
           credits: 500,
-          grantedAt: "2026-06-24T12:00:00.000Z",
+          grantedAt: "2026-06-24T12:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },
@@ -956,7 +956,7 @@ describe("Dodo webhook route", () => {
         skuSlug: "burst_500_v1",
         credits: 500,
         quantity: 1,
-        grantedAt: "2026-06-24T12:00:00.000Z",
+        grantedAt: "2026-06-24T12:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       }),
       expect.objectContaining({ eventId: "evt-topup", outcome: "processed" }),
     );
@@ -970,7 +970,7 @@ describe("Dodo webhook route", () => {
           eventType: "refund.succeeded",
           paymentId: "pay-refunded",
           refundId: "ref-1",
-          refundedAt: "2026-07-05T00:00:00.000Z",
+          refundedAt: "2026-07-05T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },
@@ -991,7 +991,7 @@ describe("Dodo webhook route", () => {
       expect.anything(),
       expect.objectContaining({
         paymentId: "pay-refunded",
-        refundedAt: "2026-07-05T00:00:00.000Z",
+        refundedAt: "2026-07-05T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         userId: "user-refund",
       }),
       1,
@@ -1011,7 +1011,7 @@ describe("Dodo webhook route", () => {
           refundCurrency: "USD",
           refundReason: "requested_by_customer",
           refundType: "partial",
-          refundedAt: "2026-07-05T00:00:00.000Z",
+          refundedAt: "2026-07-05T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },
@@ -1091,7 +1091,7 @@ describe("Dodo webhook route", () => {
             brand_id: "brand_0509",
             status: "succeeded",
             is_partial: false,
-            created_at: "2026-07-05T00:00:00.000Z",
+            created_at: "2026-07-05T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           }),
           params: {},
         } as never),
@@ -1118,7 +1118,7 @@ describe("Dodo webhook route", () => {
           customerId: "cus_456",
           subscriptionId: "sub_456",
           status: "expired",
-          revokedAt: "2026-07-02T00:00:00.000Z",
+          revokedAt: "2026-07-02T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },
@@ -1167,7 +1167,7 @@ describe("Dodo webhook route", () => {
           customerId: "cus_789",
           subscriptionId: "sub_789",
           status: "cancelled",
-          revokedAt: "2026-07-03T00:00:00.000Z",
+          revokedAt: "2026-07-03T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },
@@ -1208,7 +1208,7 @@ describe("Dodo webhook route", () => {
           paymentId: "pay-1",
           productId: "prod_1",
           status: "succeeded",
-          grantedAt: "2026-06-04T12:00:00.000Z",
+          grantedAt: "2026-06-04T12:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },
@@ -1294,7 +1294,7 @@ describe("Dodo webhook route", () => {
           paymentId: "pay-1",
           productId: "prod_1",
           status: "succeeded",
-          grantedAt: "2026-06-04T12:00:00.000Z",
+          grantedAt: "2026-06-04T12:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },
@@ -1333,7 +1333,7 @@ describe("Dodo webhook route", () => {
           paymentId: "pay-1",
           productId: "prod_1",
           status: "succeeded",
-          grantedAt: "2026-06-04T12:00:00.000Z",
+          grantedAt: "2026-06-04T12:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },
@@ -1407,7 +1407,7 @@ describe("scheduled cancellation safety", () => {
   });
 
   it("revokes immediately when the cancellation is already effective", async () => {
-    const pastIso = "2026-06-01T00:00:00.000Z";
+    const pastIso = "2026-06-01T00:00:00.000Z"; // fixed-date: historical fixture (issue #3215 sweep)
     const { data } = mockWebhookDependencies({
       billing: {
         extractDodoPlanRevocation: vi.fn(() => ({
@@ -1445,7 +1445,7 @@ describe("scheduled cancellation safety", () => {
           customerEmail: "owner@example.com",
           subscriptionId: "sub_123",
           status: "cancelled",
-          revokedAt: "2026-07-14T08:00:00.000Z",
+          revokedAt: "2026-07-14T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           effectiveAt: "2026-07-14T08:00:00.000Z",
           metadata: {},
         })),
@@ -1465,7 +1465,7 @@ describe("scheduled cancellation safety", () => {
       expect.objectContaining({
         providerSubscriptionId: "sub_123",
         status: "subscription.updated",
-        revokedAt: "2026-07-14T08:00:00.000Z",
+        revokedAt: "2026-07-14T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       }),
       1,
       expect.objectContaining({ eventId: "evt-updated-immediate-cancel" }),
@@ -1484,7 +1484,7 @@ describe("customer lifecycle billing emails", () => {
       customerEmail: "owner@example.com",
       subscriptionId: "sub_123",
       status: "failed",
-      revokedAt: "2026-07-01T08:00:00.000Z",
+      revokedAt: "2026-07-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       metadata: {},
     }));
   }
@@ -1509,11 +1509,11 @@ describe("customer lifecycle billing emails", () => {
         userId: "user-1",
         email: "owner@example.com",
         name: "Owner",
-        occurredAt: "2026-07-01T08:00:00.000Z",
+        occurredAt: "2026-07-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         status: "subscription.on_hold",
         subscriptionId: "sub_123",
         paymentId: null,
-        stateUpdatedAt: "2026-07-01T08:00:00.000Z",
+        stateUpdatedAt: "2026-07-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         retryWebhookOnExplicitFailure: true,
       },
     );
@@ -1790,7 +1790,7 @@ describe("customer lifecycle billing emails", () => {
           subscriptionId: "sub_linked",
           customerId: null,
           status: "subscription.expired",
-          revokedAt: "2026-07-01T00:00:00.000Z",
+          revokedAt: "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },
@@ -1805,7 +1805,7 @@ describe("customer lifecycle billing emails", () => {
           plan: "free",
           dodoStatus: "subscription.expired",
           dodoSubscriptionId: "sub_linked",
-          planUpdatedAt: "2026-07-01T00:00:00.000Z",
+          planUpdatedAt: "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         }),
       },
       delivery: { sendBillingCancellationEmail },
@@ -1846,7 +1846,7 @@ describe("customer lifecycle billing emails", () => {
           plan: "starter",
           cycle: "monthly",
           status: "active",
-          grantedAt: "2026-07-13T08:00:00.000Z",
+          grantedAt: "2026-07-13T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           hasProviderGrantTimestamp: true,
           nextBillingAt: futureIso,
           cancellationScheduled: true,
@@ -1886,7 +1886,7 @@ describe("customer lifecycle billing emails", () => {
         effectiveAt: futureIso,
         eventId: "evt-cancel-scheduled-email",
         subscriptionId: "sub_123",
-        stateUpdatedAt: "2026-07-13T08:00:00.000Z",
+        stateUpdatedAt: "2026-07-13T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         retryWebhookOnExplicitFailure: true,
       },
     );
@@ -1966,9 +1966,9 @@ describe("customer lifecycle billing emails", () => {
           plan: "starter",
           cycle: "monthly",
           status: "active",
-          grantedAt: "2026-07-13T08:00:00.000Z",
+          grantedAt: "2026-07-13T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           hasProviderGrantTimestamp: true,
-          nextBillingAt: "2026-08-13T08:00:00.000Z",
+          nextBillingAt: "2026-08-13T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           cancellationScheduled: false,
           metadata: {},
         })),
@@ -2007,9 +2007,9 @@ describe("customer lifecycle billing emails", () => {
           plan: "starter",
           cycle: "monthly",
           status: "active",
-          grantedAt: "2026-07-14T08:00:00.000Z",
+          grantedAt: "2026-07-14T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           hasProviderGrantTimestamp: true,
-          nextBillingAt: "2026-08-14T08:00:00.000Z",
+          nextBillingAt: "2026-08-14T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           cancellationScheduled: false,
           metadata: {},
         })),
@@ -2029,7 +2029,7 @@ describe("customer lifecycle billing emails", () => {
       expect.objectContaining({
         providerSubscriptionId: "sub_123",
         status: "active",
-        grantedAt: "2026-07-14T08:00:00.000Z",
+        grantedAt: "2026-07-14T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       }),
       expect.objectContaining({
         eventId: "evt-cancel-reversal-updated",
@@ -2055,9 +2055,9 @@ describe("customer lifecycle billing emails", () => {
           plan: "starter",
           cycle: "monthly",
           status: "active",
-          grantedAt: "2026-07-14T08:00:00.000Z",
+          grantedAt: "2026-07-14T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           hasProviderGrantTimestamp: true,
-          nextBillingAt: "2026-08-14T08:00:00.000Z",
+          nextBillingAt: "2026-08-14T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           cancellationScheduled: false,
           metadata: {},
         })),
@@ -2077,7 +2077,7 @@ describe("customer lifecycle billing emails", () => {
       expect.objectContaining({
         providerSubscriptionId: "sub_123",
         status: "active",
-        grantedAt: "2026-07-14T08:00:00.000Z",
+        grantedAt: "2026-07-14T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       }),
       expect.objectContaining({
         eventId: "evt-cancel-reversal-plan-changed",
@@ -2092,7 +2092,7 @@ describe("customer lifecycle billing emails", () => {
   });
 
   it.each([
-    ["different subscription", "sub_other", "2026-07-14T08:00:00.000Z"],
+    ["different subscription", "sub_other", "2026-07-14T08:00:00.000Z"], // fixed-date: historical fixture (issue #3215 sweep)
     ["stale event", "sub_123", "2026-07-01T08:00:00.000Z"],
   ])("fails closed for a %s subscription.plan_changed reversal", async (_label, subscriptionId, grantedAt) => {
     const { data, delivery } = mockWebhookDependencies({
@@ -2111,7 +2111,7 @@ describe("customer lifecycle billing emails", () => {
           status: "active",
           grantedAt,
           hasProviderGrantTimestamp: true,
-          nextBillingAt: "2026-08-14T08:00:00.000Z",
+          nextBillingAt: "2026-08-14T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           cancellationScheduled: false,
           metadata: {},
         })),
@@ -2152,9 +2152,9 @@ describe("customer lifecycle billing emails", () => {
           plan: "starter",
           cycle: "monthly",
           status: "active",
-          grantedAt: "2026-07-14T08:00:00.000Z",
+          grantedAt: "2026-07-14T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           hasProviderGrantTimestamp: true,
-          nextBillingAt: "2026-08-14T08:00:00.000Z",
+          nextBillingAt: "2026-08-14T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           cancellationScheduled: false,
           metadata: {},
         })),
@@ -2195,9 +2195,9 @@ describe("customer lifecycle billing emails", () => {
           plan: "starter",
           cycle: "monthly",
           status: "active",
-          grantedAt: "2026-07-14T08:00:00.000Z",
+          grantedAt: "2026-07-14T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           hasProviderGrantTimestamp: true,
-          nextBillingAt: "2026-08-14T08:00:00.000Z",
+          nextBillingAt: "2026-08-14T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           cancellationScheduled: false,
           metadata: {},
         })),
@@ -2237,7 +2237,7 @@ describe("customer lifecycle billing emails", () => {
             status: "active",
             grantedAt: null,
             hasProviderGrantTimestamp: false,
-            nextBillingAt: "2026-08-14T08:00:00.000Z",
+            nextBillingAt: "2026-08-14T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
             cancellationScheduled,
             metadata: {},
           })),
@@ -2281,9 +2281,9 @@ describe("customer lifecycle billing emails", () => {
           plan: "starter",
           cycle: "monthly",
           status: "active",
-          grantedAt: "2026-07-01T08:00:00.000Z",
+          grantedAt: "2026-07-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           hasProviderGrantTimestamp: true,
-          nextBillingAt: "2026-08-01T08:00:00.000Z",
+          nextBillingAt: "2026-08-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           cancellationScheduled: true,
           metadata: {},
         })),
@@ -2315,9 +2315,9 @@ describe("customer lifecycle billing emails", () => {
           plan: "starter",
           cycle: "monthly",
           status: "active",
-          grantedAt: "2026-07-01T08:00:00.000Z",
+          grantedAt: "2026-07-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           hasProviderGrantTimestamp: true,
-          nextBillingAt: "2026-08-01T08:00:00.000Z",
+          nextBillingAt: "2026-08-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           cancellationScheduled: true,
           metadata: {},
         })),
@@ -2364,9 +2364,9 @@ describe("customer lifecycle billing emails", () => {
           plan: "starter",
           cycle: "monthly",
           status: "active",
-          grantedAt: "2026-07-01T08:00:00.000Z",
+          grantedAt: "2026-07-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           hasProviderGrantTimestamp: true,
-          nextBillingAt: "2026-08-01T08:00:00.000Z",
+          nextBillingAt: "2026-08-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           cancellationScheduled: true,
           metadata: {},
         })),
@@ -2384,7 +2384,7 @@ describe("customer lifecycle billing emails", () => {
           plan: "starter",
           dodoStatus: "cancellation_scheduled",
           dodoSubscriptionId: "sub_123",
-          dodoNextBillingAt: "2026-08-01T08:00:00.000Z",
+          dodoNextBillingAt: "2026-08-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           planUpdatedAt: "2026-07-01T08:00:00.000Z",
         }),
       },
@@ -2412,7 +2412,7 @@ describe("customer lifecycle billing emails", () => {
           customerEmail: "owner@example.com",
           subscriptionId: "sub_123",
           status: "expired",
-          revokedAt: "2026-07-01T00:00:00.000Z",
+          revokedAt: "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },
@@ -2437,7 +2437,7 @@ describe("customer lifecycle billing emails", () => {
         eventId: "evt-expired-email",
         status: "subscription.expired",
         subscriptionId: "sub_123",
-        stateUpdatedAt: "2026-07-01T00:00:00.000Z",
+        stateUpdatedAt: "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         retryWebhookOnExplicitFailure: true,
       },
     );
@@ -2453,7 +2453,7 @@ describe("customer lifecycle billing emails", () => {
           customerEmail: "owner@example.com",
           subscriptionId: "sub_123",
           status: "expired",
-          revokedAt: "2026-07-01T00:00:00.000Z",
+          revokedAt: "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },
@@ -2482,7 +2482,7 @@ describe("customer lifecycle billing emails", () => {
           customerEmail: "owner@example.com",
           subscriptionId: "sub_123",
           status: "expired",
-          revokedAt: "2026-07-01T00:00:00.000Z",
+          revokedAt: "2026-07-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },
@@ -2523,7 +2523,7 @@ describe("customer lifecycle billing emails", () => {
           eventType: "refund.succeeded",
           paymentId: "pay-refunded",
           refundId: "ref-1",
-          refundedAt: "2026-07-05T00:00:00.000Z",
+          refundedAt: "2026-07-05T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },
@@ -2541,7 +2541,7 @@ describe("customer lifecycle billing emails", () => {
           plan: "free",
           dodoStatus: "refunded",
           dodoPaymentId: "pay-refunded",
-          planUpdatedAt: "2026-07-05T00:00:00.000Z",
+          planUpdatedAt: "2026-07-05T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         }),
       },
     });
@@ -2563,7 +2563,7 @@ describe("customer lifecycle billing emails", () => {
         name: null,
         eventId: "evt-refund-email",
         paymentId: "pay-refunded",
-        stateUpdatedAt: "2026-07-05T00:00:00.000Z",
+        stateUpdatedAt: "2026-07-05T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         retryWebhookOnExplicitFailure: true,
       },
     );
@@ -2576,7 +2576,7 @@ describe("customer lifecycle billing emails", () => {
           eventType: "refund.succeeded",
           paymentId: "pay-unmatched",
           refundId: "ref-2",
-          refundedAt: "2026-07-05T00:00:00.000Z",
+          refundedAt: "2026-07-05T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },
@@ -2600,7 +2600,7 @@ describe("customer lifecycle billing emails", () => {
           eventType: "refund.succeeded",
           paymentId: "pay-already-revoked",
           refundId: "ref-noop",
-          refundedAt: "2026-07-05T00:00:00.000Z",
+          refundedAt: "2026-07-05T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },
@@ -2628,7 +2628,7 @@ describe("customer lifecycle billing emails", () => {
           eventType: "refund.succeeded",
           paymentId: "pay-refunded-before-repurchase",
           refundId: "ref-before-repurchase",
-          refundedAt: "2026-07-05T00:00:00.000Z",
+          refundedAt: "2026-07-05T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },
@@ -2686,7 +2686,7 @@ describe("customer lifecycle billing emails", () => {
           eventType: "refund.succeeded",
           paymentId: "pay_linked",
           refundId: "ref_linked",
-          refundedAt: "2026-07-05T00:00:00.000Z",
+          refundedAt: "2026-07-05T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },
@@ -2701,7 +2701,7 @@ describe("customer lifecycle billing emails", () => {
           plan: "free",
           dodoStatus: "refunded",
           dodoPaymentId: "pay_linked",
-          planUpdatedAt: "2026-07-05T00:00:00.000Z",
+          planUpdatedAt: "2026-07-05T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         }),
       },
       delivery: { sendBillingRefundEmail },
@@ -2740,7 +2740,7 @@ describe("customer lifecycle billing emails", () => {
           subscriptionId: "sub_123",
           customerId: "cus_123",
           status: "succeeded",
-          grantedAt: "2026-07-13T08:00:00.000Z",
+          grantedAt: "2026-07-13T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },
@@ -2768,7 +2768,7 @@ describe("customer lifecycle billing emails", () => {
           paymentId: "pay_cancelled",
           checkoutId: "checkout_1",
           status: "payment.cancelled",
-          failedAt: "2026-07-01T08:00:00.000Z",
+          failedAt: "2026-07-01T08:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
           metadata: {},
         })),
       },

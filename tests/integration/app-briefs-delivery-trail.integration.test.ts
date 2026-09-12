@@ -76,7 +76,7 @@ const PERIOD_MS = 7 * 24 * 60 * 60 * 1000;
 async function seedPlan(userId: string) {
 	await db()
 		.prepare(`INSERT INTO user_plan (user_id, plan, plan_updated_at) VALUES (?, 'agency', ?)`)
-		.bind(userId, "2026-01-01T00:00:00.000Z")
+		.bind(userId, "2026-01-01T00:00:00.000Z") // fixed-date: historical fixture (issue #3215 sweep)
 		.run();
 }
 
@@ -207,10 +207,10 @@ describe("briefs delivery trail outside the global attempt window (issue #2471)"
 		const selectedId = await seedSentDigest({
 			userId,
 			watchlistId,
-			periodStart: "2026-06-01T00:00:00.000Z",
+			periodStart: "2026-06-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 			periodEnd: "2026-06-08T00:00:00.000Z",
 		});
-		const OLD_ATTEMPT_AT = "2026-06-08T00:30:00.000Z";
+		const OLD_ATTEMPT_AT = "2026-06-08T00:30:00.000Z"; // fixed-date: historical fixture (issue #3215 sweep)
 		await seedDeliveryAttempt({ userId, digestRunId: selectedId, channel: "email", status: "sent", createdAt: OLD_ATTEMPT_AT });
 		await seedDeliveryAttempt({ userId, digestRunId: selectedId, channel: "slack", status: "sent", createdAt: OLD_ATTEMPT_AT });
 
@@ -219,7 +219,7 @@ describe("briefs delivery trail outside the global attempt window (issue #2471)"
 		const olderId = await seedSentDigest({
 			userId,
 			watchlistId,
-			periodStart: "2026-05-25T00:00:00.000Z",
+			periodStart: "2026-05-25T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 			periodEnd: "2026-06-01T00:00:00.000Z",
 		});
 
@@ -228,7 +228,7 @@ describe("briefs delivery trail outside the global attempt window (issue #2471)"
 		const newerId = await seedSentDigest({
 			userId,
 			watchlistId,
-			periodStart: "2026-06-15T00:00:00.000Z",
+			periodStart: "2026-06-15T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
 			periodEnd: "2026-06-22T00:00:00.000Z",
 		});
 		for (let i = 0; i < 81; i += 1) {

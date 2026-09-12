@@ -247,7 +247,7 @@ function digestDeliveryDataMocks(upsertDigestDelivery = vi.fn()) {
     isValidated: true,
     isOptedIn: true,
     optInSource: "account_email",
-    optedInAt: "2026-04-19T00:00:00.000Z",
+    optedInAt: "2026-04-19T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     isPaused: false,
     pausedAt: null,
     optedOutAt: null,
@@ -256,7 +256,7 @@ function digestDeliveryDataMocks(upsertDigestDelivery = vi.fn()) {
     lastSuccessfulAttemptId: null,
     providerIdentifier: null,
     metadata: {},
-    createdAt: "2026-04-19T00:00:00.000Z",
+    createdAt: "2026-04-19T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     updatedAt: "2026-04-19T00:00:00.000Z",
   });
 
@@ -277,7 +277,7 @@ function digestDeliveryDataMocks(upsertDigestDelivery = vi.fn()) {
       slackEnabled: false,
       quietHours: null,
       timezone: "UTC",
-      createdAt: "2026-04-19T00:00:00.000Z",
+      createdAt: "2026-04-19T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       updatedAt: "2026-04-19T00:00:00.000Z",
     }),
     legacyWorkspaceDeliveryDefaults: vi.fn(),
@@ -293,7 +293,7 @@ const digestInput = {
   userName: "Owner",
   accountEmail: "owner@example.com",
   digestRunId: "digest-1",
-  periodStart: "2026-04-12T00:00:00.000Z",
+  periodStart: "2026-04-12T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
   periodEnd: "2026-04-19T00:00:00.000Z",
   items: [
     {
@@ -310,7 +310,7 @@ const digestInput = {
         proofTrail: "Verified from a page snapshot",
         sourceStatus: "proof_backed",
         proofCaptureId: "proof-1",
-        confirmedAt: "2026-04-19T00:00:00.000Z",
+        confirmedAt: "2026-04-19T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       },
     },
   ],

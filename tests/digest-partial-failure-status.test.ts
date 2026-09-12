@@ -29,8 +29,8 @@ const emailEnv = {
   EMAIL_FROM_EMAIL: "alerts@0509.io",
 };
 
-const PERIOD_START = "2026-04-12T00:00:00.000Z";
-const PERIOD_END = "2026-04-19T00:00:00.000Z";
+const PERIOD_START = "2026-04-12T00:00:00.000Z"; // fixed-date: historical fixture (issue #3215 sweep)
+const PERIOD_END = "2026-04-19T00:00:00.000Z"; // fixed-date: historical fixture (issue #3215 sweep)
 
 function digestInput() {
   return {
@@ -64,7 +64,7 @@ function emailTarget() {
     isValidated: true,
     isOptedIn: true,
     optInSource: "account_email",
-    optedInAt: "2026-04-12T00:00:00.000Z",
+    optedInAt: "2026-04-12T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     isPaused: false,
     pausedAt: null,
     optedOutAt: null,
@@ -73,7 +73,7 @@ function emailTarget() {
     lastSuccessfulAttemptId: null,
     providerIdentifier: null,
     metadata: {},
-    createdAt: "2026-04-12T00:00:00.000Z",
+    createdAt: "2026-04-12T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     updatedAt: "2026-04-12T00:00:00.000Z",
   };
 }
@@ -116,7 +116,7 @@ function mockDataServer(options: {
       slackEnabled: true,
       quietHours: null,
       timezone: "Asia/Kolkata",
-      createdAt: "2026-04-12T00:00:00.000Z",
+      createdAt: "2026-04-12T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       updatedAt: "2026-04-12T00:00:00.000Z",
     }),
     legacyWorkspaceDeliveryDefaults: vi.fn(),
@@ -214,9 +214,9 @@ describe("issue #2450 — partial digest failure aggregate status", () => {
         status: "sent",
         webhookStatus: "delivered",
         providerMessageId: null,
-        providerStatusLastSeenAt: "2026-04-19T00:01:00.000Z",
+        providerStatusLastSeenAt: "2026-04-19T00:01:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         errorMessage: null,
-        deliveredAt: "2026-04-19T00:01:00.000Z",
+        deliveredAt: "2026-04-19T00:01:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       }),
     );
 
@@ -254,7 +254,7 @@ describe("issue #2450 — partial digest failure aggregate status", () => {
         status: "failed",
         webhookStatus: "failed",
         providerMessageId: null,
-        providerStatusLastSeenAt: "2026-04-19T00:01:00.000Z",
+        providerStatusLastSeenAt: "2026-04-19T00:01:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         errorMessage: "Slack rejected the digest payload.",
         deliveredAt: null,
       }),
@@ -283,9 +283,9 @@ describe("issue #2450 — partial digest failure aggregate status", () => {
         status: "sent",
         webhookStatus: "delivered",
         providerMessageId: null,
-        providerStatusLastSeenAt: "2026-04-19T00:01:00.000Z",
+        providerStatusLastSeenAt: "2026-04-19T00:01:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         errorMessage: null,
-        deliveredAt: "2026-04-19T00:01:00.000Z",
+        deliveredAt: "2026-04-19T00:01:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       }),
     );
 
@@ -316,7 +316,7 @@ describe("issue #2450 — partial digest failure aggregate status", () => {
         status: "failed",
         webhookStatus: "failed",
         providerMessageId: null,
-        providerStatusLastSeenAt: "2026-04-19T00:01:00.000Z",
+        providerStatusLastSeenAt: "2026-04-19T00:01:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         errorMessage: "Slack rejected the digest payload.",
         deliveredAt: null,
       }),
@@ -358,9 +358,9 @@ describe("issue #2450 — partial digest failure aggregate status", () => {
         status: "sent",
         webhookStatus: "delivered",
         providerMessageId: null,
-        providerStatusLastSeenAt: "2026-04-19T00:01:00.000Z",
+        providerStatusLastSeenAt: "2026-04-19T00:01:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
         errorMessage: null,
-        deliveredAt: "2026-04-19T00:01:00.000Z",
+        deliveredAt: "2026-04-19T00:01:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       }),
     );
 
@@ -403,7 +403,7 @@ describe("issue #2450 — partial digest failure aggregate status", () => {
       webhookStatus: "failed",
       targetValue: "owner@example.com",
       providerMessageId: null,
-      providerStatusLastSeenAt: "2026-04-19T00:00:30.000Z",
+      providerStatusLastSeenAt: "2026-04-19T00:00:30.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       templateName: null,
       eventIds: ["event-1"],
       payloadSnapshot: {
@@ -413,9 +413,9 @@ describe("issue #2450 — partial digest failure aggregate status", () => {
         "digest:digest-1:customer:email:owner@example.com",
       errorMessage: "Provider rejected the message.",
       sentAt: null,
-      failedAt: "2026-04-19T00:00:30.000Z",
+      failedAt: "2026-04-19T00:00:30.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       createdAt: "2026-04-19T00:00:00.000Z",
-      updatedAt: "2026-04-19T00:00:30.000Z",
+      updatedAt: "2026-04-19T00:00:30.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     };
     const upsertDigestDelivery = vi.fn();
     const { createDeliveryAttempt, updateDeliveryAttemptResult } = mockDataServer({
@@ -428,9 +428,9 @@ describe("issue #2450 — partial digest failure aggregate status", () => {
       status: "sent",
       webhookStatus: "delivered",
       providerMessageId: null,
-      providerStatusLastSeenAt: "2026-04-19T00:01:00.000Z",
+      providerStatusLastSeenAt: "2026-04-19T00:01:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       errorMessage: null,
-      deliveredAt: "2026-04-19T00:01:00.000Z",
+      deliveredAt: "2026-04-19T00:01:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
     });
     mockSlack(sendSlackWebhookMessage);
 

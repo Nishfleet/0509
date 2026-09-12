@@ -117,11 +117,13 @@ function eventRow(overrides: Record<string, unknown> = {}) {
       to: "$52",
       proofTargetIdentity: "wl-1:ad-1:nykaa.com",
     }),
-    confirmed_at: "2026-09-08T10:00:00.000Z",
+    // Relative, not absolute: this confirmed change must stay inside the
+    // 30-day window whenever the suite runs (issue #3215).
+    confirmed_at: isoAgo(2 * DAY_MS),
     suppressed_at: null,
     invalidated_at: null,
-    last_evaluated_at: "2026-09-08T10:00:00.000Z",
-    created_at: "2026-09-08T10:00:00.000Z",
+    last_evaluated_at: isoAgo(2 * DAY_MS),
+    created_at: isoAgo(2 * DAY_MS),
     ...overrides,
   };
 }
@@ -183,8 +185,10 @@ describe("loadSampleBrief (issue #2136)", () => {
     expect(result.digestHtml).toContain("Top moves");
     // The title is derived from the event type (system vocabulary).
     expect(result.digestHtml).toContain("Offer changed");
-    // The digest builder renders the capture date (formatted).
-    expect(result.digestHtml).toContain("8 Sept 2026");
+    // The digest builder renders the capture date (formatted). The fixture
+    // uses a relative timestamp (issue #3215), so assert the shape of the
+    // rendered date rather than a calendar day that would drift.
+    expect(result.digestHtml).toMatch(/\d{1,2} Sept(ember)? \d{4}/);
   });
 
   it("never leaks a customer workspace name, email, or watchlist id into the digest", async () => {
