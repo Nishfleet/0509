@@ -74,7 +74,28 @@ const CANARY_WATCHLIST_ID = "launch-readiness-canary-watchlist";
 /** @param {{ DB?: D1Database }} env @param {string} canaryEmail */
 async function ensureCanaryTarget(env: { DB?: D1Database }, canaryEmail: string) {
   const existing = await getCanaryTarget(env, canaryEmail);
-  if (existing) return { target: existing, provisioned: false };
+  if (existing) {
+    // Converge a HALF-provisioned substrate: the watchlist row can predate
+    // the delivery-target provisioning on this path (the 2026-09-11T21:35:47Z
+    // watchlist was written by the pre-733a96be8 code, one day before the
+    // cold path below learned to provision the email target), or a cleanup
+    // pass can have removed the delivery row while keeping the owner-scoped
+    // proof target. With the early return alone the substrate never
+    // converges: Gate C's `requireUniqueExistingTarget` lookup sees 0 usable
+    // targets, deliverWeeklyDigest throws
+    // `Gate C proof email target must resolve uniquely`, and every deploy
+    // fails closed, forever. Re-running the idempotent, unsubscribe-aware
+    // upsert each pass repairs it without duplicating targets (it no-ops
+    // when a validated target already exists) and without re-provisioning
+    // an opted-out address.
+    const { provisionVerifiedAccountEmailTargetIfUnsuppressed } = await import("~/lib/data.server");
+    await provisionVerifiedAccountEmailTargetIfUnsuppressed(env, {
+      userId: existing.user_id,
+      targetValue: canaryEmail,
+      optInSource: "launch_readiness_canary_substrate",
+    });
+    return { target: existing, provisioned: false };
+  }
   if (!env.DB) return { target: null, provisioned: false };
 
   const nowIso = new Date().toISOString();
