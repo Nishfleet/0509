@@ -86,6 +86,7 @@
     "scripts/measure-search-ttfb.mjs",
     "scripts/search-tier-canary.mjs",
     "scripts/canary-sneaker-resale-recall.mjs",
+    "scripts/canary-timeline-coverage.mjs",
     "scripts/check-d1-fullsite-runs.mjs",
     "scripts/check-outbound-email-auth.mjs",
     "scripts/weekly-business-metrics.mjs",
