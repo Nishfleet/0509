@@ -3,16 +3,21 @@ name: Preview assert
 # Run the release-gate assertion BEFORE the merge (0509#1576). 9 of the last
 # 120 merges were auto-reverted because `Deploy production` failed on main
 # AFTER merge — the check exists, it ran on the wrong side of the merge
-# (latest run 33561746667: `AssertionError: expected false to be true` in
+# (run 33561746667: `AssertionError: expected false to be true` in
 # tests/d1-remote-restore-evidence.test.ts:222, missed by sharded PR CI,
 # caught by the deploy job's full unsharded run).
+#
+# That divergence was a pidfile publish race inside the spec itself (the
+# reader could observe the child's still-empty pid file between its open()
+# and its write() once suite-wide load stretched the gap). The race is fixed
+# at the source in 0509#2373 (SIGTERM marker + atomic pid publish), so the
+# extra unsharded suite run here no longer buys anything and is gone —
+# ci.yml's sharded suite owns coverage on every PR, and the deploy job's
+# post-merge run is unchanged.
 #
 # This workflow runs the deploy job's own pre-deploy verification against the
 # PR head, invoked unchanged from deploy-production.yml:
 #   - `npm run typecheck` (same step, same NODE_OPTIONS heap budget)
-#   - `npm run test`      (the FULL unsharded suite — the demonstrated
-#                          failure class is a test that passes sharded and
-#                          fails when the whole suite runs together)
 #   - `npm run build`     (the deploy pipeline's react-router build; emits
 #                          build/server/wrangler.json + the .wrangler config
 #                          redirect that the deploy uses)
@@ -126,10 +131,10 @@ jobs:
           fi
 
       - name: Install Playwright browsers
-        # Same runner shape as the deploy job: the full suite's process-
-        # lifecycle tests spawn detached provider children that the deploy
-        # runner proves with browsers installed. Keep the shapes identical so
-        # a pass here predicts a pass on the deploy runner.
+        # Same runner shape as the deploy job: the Gate-B release proof and
+        # the deploy's own verification run browser-backed e2e. Keep the
+        # shapes identical so a pass here predicts a pass on the deploy
+        # runner.
         run: npx playwright install --with-deps chromium firefox webkit
 
       - name: Typecheck
@@ -138,12 +143,11 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=2048
         run: npm run typecheck
 
-      - name: Test
-        # The FULL unsharded suite, exactly as the deploy job runs it. PR CI
-        # shards this suite across 4 jobs; the deploy job runs it whole, and
-        # a test that passes sharded can fail when all 529 files run together
-        # (run 33561746667). This is the demonstrated failure class.
-        run: npm run test
+      # No test step (0509#2373): the extra unsharded suite run existed only
+      # to catch the sharded-vs-unsharded divergence that was a pidfile
+      # publish race inside d1-remote-restore-evidence.test.ts, fixed at the
+      # source. ci.yml's sharded suite owns coverage on every PR; the deploy
+      # job's post-merge suite run is unchanged.
 
       - name: Build
         # The deploy pipeline's own build (react-router build via the

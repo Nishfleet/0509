@@ -1,0 +1,20 @@
+{
+  "competitor": "bigspy",
+  "productName": "BigSpy",
+  "sources": [
+    {
+      "id": "bigspy-home",
+      "href": "https://bigspy.com/",
+      "label": "BigSpy home",
+      "checked": "2026-09-12",
+      "claim": "BigSpy positions itself as a free-entry ad spy and ad library tool covering 10 major platforms, with competitor ad tracking, niche market research, and a creative library it describes as over 1 billion creatives."
+    },
+    {
+      "id": "bigspy-pricing",
+      "href": "https://bigspy.com/pricing",
+      "label": "BigSpy pricing",
+      "checked": "2026-09-12",
+      "claim": "BigSpy's published plans are Free, Starter at $69/month, Growth at $159/month, and Ultimate at $499/month, with annual and group-buy offers."
+    }
+  ]
+}

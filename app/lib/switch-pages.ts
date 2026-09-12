@@ -2,7 +2,7 @@ import type { DemoBrandPageDomain } from "~/lib/demo-brand-pages";
 import { FREE_PREVIEW_SEARCH_DOMAIN } from "~/lib/demo-brand-pages";
 import type { FaqJsonLdEntry } from "~/lib/seo";
 
-export type SwitchSlug = "panoramata" | "visualping" | "magicbrief";
+export type SwitchSlug = "panoramata" | "visualping" | "magicbrief" | "adspy";
 
 export type PublishedCaptureValidityReasonCode =
   | "landing_challenge_page"
@@ -382,14 +382,126 @@ export const SWITCH_PAGES: Record<SwitchSlug, SwitchPage> = {
       },
     ],
   },
+  // Issue #3091: the AdSpy switch page — the documented declining incumbent
+  // (BET 8). Every complaint here cites a public source: the Trustpilot
+  // rating and charge-after-cancel reports, the missing self-service cancel
+  // path, and the absent public API (the last two visible on AdSpy's own
+  // site and its Trustpilot record — nothing claimed beyond the citations).
+  adspy: {
+    slug: "adspy",
+    productName: "AdSpy",
+    pathname: "/switch/adspy",
+    title: "AdSpy alternative | Five to Nine",
+    description:
+      "AdSpy carries a 2.4/5 Trustpilot rating, no self-service cancel, and no public API. Paste a domain for the same public Meta ads job. Try the free preview.",
+    ctaBrand: "adspy.com",
+    previewSearchDomain: FREE_PREVIEW_SEARCH_DOMAIN,
+    kicker: "Switch from AdSpy",
+    headline: "Same public Meta ads job. A plan you can leave.",
+    deck: "AdSpy's Trustpilot rating is 2.4 out of 5, and reviewers report being charged after they tried to cancel — there is no self-service cancel path and no public API on its single $149-a-month plan. Five to Nine does the same public Meta ads and landing-page job from a pasted domain, and paid plans cancel self-serve in the billing portal.",
+    cardLine:
+      "AdSpy: 2.4/5 on Trustpilot, no self-serve cancel, no public API. The same public Meta ads job from a pasted domain.",
+    complaint: {
+      kicker: "The public record",
+      heading: "Cited, not invented.",
+      quote:
+        "AdSpy's Trustpilot rating is 2.4 out of 5, and reviewers report being charged after they tried to cancel.",
+      source: {
+        href: "https://www.trustpilot.com/review/adspy.com",
+        label: "AdSpy on Trustpilot, checked 2026-09-10",
+        checked: "2026-09-10",
+      },
+    },
+    furtherSources: [
+      {
+        href: "https://www.adspy.com/",
+        label: "AdSpy home — one plan, no public API listed, checked 2026-09-10",
+        checked: "2026-09-10",
+      },
+    ],
+    transfers: [
+      {
+        title: "The competitor list",
+        detail:
+          "The brands you watched — domains, URLs, or brand names — import as watchlists. Paste them or upload a CSV. That is the switch.",
+      },
+      {
+        title: "Ads and landing pages from here on",
+        detail:
+          "Paid plans check public Meta ads and the live landing page on a schedule, and save page text, the source link, and a screenshot when the capture includes one.",
+      },
+      {
+        title: "A cancel path that exists",
+        detail:
+          "Paid plans cancel self-serve from the billing portal — no support email required to leave.",
+      },
+    ],
+    doesNotTransfer: [
+      {
+        title: "AdSpy searches and saved ads",
+        detail:
+          "Your AdSpy search history and saved ad cards stay in AdSpy — there is no API to export them through. Five to Nine only has history for competitors you start watching here.",
+      },
+      {
+        title: "The raw ad feed",
+        detail:
+          "Browsing a giant ad database by keyword and engagement is AdSpy's core job. Five to Nine is scheduled change detection on the competitors you name — not a raw feed of everything running.",
+      },
+      {
+        title: "The walled-garden workflow",
+        detail:
+          "AdSpy lists no public API, so nothing pipes its data into your own tooling. Five to Nine ships API and MCP access on paid plans for exactly that job.",
+      },
+    ],
+    relatedComparePath: "/compare/adspy",
+    extraSection: {
+      kicker: "Leaving AdSpy",
+      heading: "What the public record says about leaving.",
+      items: [
+        {
+          title: "No self-service cancel",
+          detail:
+            "AdSpy offers no self-service cancel path, and Trustpilot reviewers report charges landing after they tried to cancel. Keep your cancellation email thread — it is the record.",
+        },
+        {
+          title: "No public API out",
+          detail:
+            "AdSpy lists no public API, so saved searches and collections cannot be pulled out programmatically. The part that moves is the competitor list itself — a paste or a CSV.",
+        },
+        {
+          title: "The part that is yours",
+          detail:
+            "The list of competitors you watched was always yours. It imports here as watchlists in one paste.",
+        },
+      ],
+    },
+    faqEntries: [
+      {
+        question: "Is Five to Nine an AdSpy alternative?",
+        answer:
+          "For watching competitor Meta ads and landing pages from a pasted domain, yes. AdSpy carries a 2.4 out of 5 Trustpilot rating, no self-service cancel, and no public API. For browsing a raw database of millions of ads, no — Five to Nine is scheduled change detection on the brands you name, not an ad feed.",
+      },
+      {
+        question: "What transfers from AdSpy?",
+        answer:
+          "The competitor list — domains, URLs, or brand names, pasted or as a CSV — imports as watchlists. AdSpy search history, saved ads, and database access do not transfer.",
+      },
+      {
+        question: "Can I cancel Five to Nine myself?",
+        answer:
+          "Yes — paid plans cancel self-serve from the billing portal, no support email required. AdSpy reviewers report the opposite on Trustpilot: no self-service cancel path and charges after trying to leave.",
+      },
+    ],
+  },
 };
 
 export const SWITCH_SLUGS = Object.keys(SWITCH_PAGES) as SwitchSlug[];
 
 /**
  * Map a searched brand domain onto its /switch/* destination page (issue
- * 1554). Only the named switching triggers (Panoramata, Visualping, and —
- * since issue #2887 — the shut-down MagicBrief) resolve — never a
+ * 1554). Only the named switching triggers (Panoramata, Visualping, the
+ * shut-down MagicBrief since issue #2887, and — since issue #3091 — the
+ * declining incumbent AdSpy) resolve — never a
  * `<label>.com` guess from the query text alone. Same normalization as the
  * /ads/:domain resolver (trim + lowercase + strip `www.`) so a `?website=`
  * domain search and a V2-resolved brand both land here. Returns null for
@@ -404,6 +516,8 @@ export function switchPageForDomain(domain: string): SwitchPage | null {
       return SWITCH_PAGES.visualping;
     case "magicbrief.com":
       return SWITCH_PAGES.magicbrief;
+    case "adspy.com":
+      return SWITCH_PAGES.adspy;
     default:
       return null;
   }

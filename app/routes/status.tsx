@@ -3,6 +3,7 @@ import type { LinksFunction } from "react-router";
 import { useLoaderData } from "react-router";
 
 import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
+import { monitoringCoverageDays } from "~/lib/monitoring-coverage";
 import { getPublicStatusCounters } from "~/lib/public-status-counters.server";
 import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
 import {
@@ -35,19 +36,6 @@ function isPreRunBootstrap(monitoring: {
     monitoring.runsInLast24h === 0 &&
     monitoring.lastDigestSentAt === null
   );
-}
-
-/**
- * Continuous scheduled-monitoring coverage: whole days between the earliest
- * activation baseline and the as-of instant. A truthful figure derived from
- * real schedule data, not a fabricated uptime percentage.
- */
-function coverageDays(sinceIso: string | null, asOfIso: string): number | null {
-  if (!sinceIso) return null;
-  const since = new Date(sinceIso).getTime();
-  const asOf = new Date(asOfIso).getTime();
-  if (!Number.isFinite(since) || !Number.isFinite(asOf) || asOf < since) return null;
-  return Math.floor((asOf - since) / (24 * 60 * 60 * 1000));
 }
 
 export const links: LinksFunction = () => canonicalLinks("/status");
@@ -128,7 +116,7 @@ export default function StatusRoute() {
               {monitoring.scheduledMonitoringSince ? (
                 <div>
                   <dt>Scheduled monitoring active since</dt>
-                  <dd>{monitoring.scheduledMonitoringSince} — continuous scheduled monitoring coverage ({coverageDays(monitoring.scheduledMonitoringSince, asOf)} days). As of {asOf}.</dd>
+                  <dd>{monitoring.scheduledMonitoringSince} — continuous scheduled monitoring coverage ({monitoringCoverageDays(monitoring.scheduledMonitoringSince, asOf)} days). As of {asOf}.</dd>
                 </div>
               ) : null}
             </dl>
@@ -137,7 +125,7 @@ export default function StatusRoute() {
               {monitoring.scheduledMonitoringSince ? (
                 <div>
                   <dt>Scheduled monitoring active since</dt>
-                  <dd>{monitoring.scheduledMonitoringSince} — continuous scheduled monitoring coverage ({coverageDays(monitoring.scheduledMonitoringSince, asOf)} days). As of {asOf}.</dd>
+                  <dd>{monitoring.scheduledMonitoringSince} — continuous scheduled monitoring coverage ({monitoringCoverageDays(monitoring.scheduledMonitoringSince, asOf)} days). As of {asOf}.</dd>
                 </div>
               ) : null}
               <div>

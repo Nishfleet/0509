@@ -1,4 +1,5 @@
 import { canUseSiteRepWidgetScript, hasSiteRepAuthCookie } from "../app/lib/siterep-widget";
+import { BUYER_SURFACE_LOCALE_IDS } from "../app/lib/locale-markets";
 
 // Baseline security headers applied to every response. CSP uses a per-request
 // nonce for inline <script> emitted by React Router's <Scripts /> /
@@ -169,6 +170,7 @@ const PUBLIC_CACHEABLE_HTML_PATHS = new Set([
   "/switch/panoramata",
   "/switch/visualping",
   "/switch/magicbrief",
+  "/switch/adspy",
   "/methodology",
   "/methodology/ad-aggression-score",
 ]);
@@ -220,8 +222,30 @@ function isNoindexRequestPath(request?: Request): boolean {
 	if (!request) {
 		return false;
 	}
-	const pathname = normalizePathnameForNoindex(new URL(request.url).pathname);
-	return NOINDEX_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+	const url = new URL(request.url);
+	const pathname = normalizePathnameForNoindex(url.pathname);
+	if (NOINDEX_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
+		return true;
+	}
+	// Issue #2965: parameterised public search pages (/search?q=... and the
+	// buyer-surface locale twins /{locale}/search?q=...) are infinite crawl
+	// space — one indexable URL per distinct query. They carry the same
+	// `x-robots-tag: noindex, nofollow` header the /share/ links use, at the
+	// same worker layer, so it covers the document AND the .data request.
+	// Bare /search (no query string) is NOT noindexed here: the route loader
+	// 302-redirects it to /brands before it ever renders, and the header is
+	// orthogonal to that redirect.
+	if (!url.search || url.search === "?") {
+		return false;
+	}
+	if (pathname === "/search" || pathname.startsWith("/search.")) {
+		return true;
+	}
+	const localeMatch = /^\/([a-z-]+)\/search(\..+)?$/.exec(pathname);
+	return (
+		localeMatch !== null &&
+		(BUYER_SURFACE_LOCALE_IDS as readonly string[]).includes(localeMatch[1])
+	);
 }
 
 // Builds the script-src directive for a response. When a per-request nonce is

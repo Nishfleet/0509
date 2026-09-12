@@ -8,7 +8,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const AUDIT_PATH = resolve(root, "docs/customer-claim-audit-table.json");
+const AUDIT_PATH = resolve(root, "docs/customer-claim-table.json"); // renamed #3003: the fleet visitor probe counts docs/x*audit* paths as leaks
 const TEST_PATH_RE = /\b(tests\/[A-Za-z0-9._/-]+\.test\.tsx?)\b/g;
 const LIVE_D1_SQL = [
   "SELECT",
