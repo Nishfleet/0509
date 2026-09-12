@@ -124,6 +124,7 @@ only through watchlist-scoped parents; it never joins to a user directly.
 | discovery_cache_entry, discovery_fetch_log, discovery_query_lease, discovery_provider_state, search_domain_identity_cache | globally shared caches/leases (dedup across workspaces is the point) |
 | ad, meta_integration_log, browser_job_telemetry, ads_domain_publisher_state | shared provider corpus / provider logs / SEO ops |
 | release_scheduled_observation, scheduled_observation_alert_state, scheduled_observation_health_state | release/observation ops state |
+| status_health_sample | public /status uptime sample rail (cron-written service facts: cron name, timestamp, D1 probe result — no tenant data) |
 | error_report | ops error-report sink — route/reason telemetry rows, no customer data |
 | analysis_field | polymorphic `scope_type`/`scope_id` — follows its parent surface; never user-joined directly |
 | status_probe_samples | status-probe telemetry samples (issue #3186) — probe name, ok/latency, checked_at; ops observability, no customer rows |
