@@ -14,13 +14,16 @@
  * sitemap use (`loadIndexableAdsInternalLinks` → `loadIndexableBrandPageEntries`),
  * so a category page can never list a brand the hub would not show. Unknown
  * slugs and "More brands" (the fallback bucket with no curated landing page)
- * 404, and an empty curated category 404s too (mirror issue #1988).
+ * 404, and a curated category below BRAND_CATEGORY_PAGE_MIN_BRANDS live
+ * brands 404s too (issue #3126 — the #1988 empty-category 404 generalized
+ * to a real floor so no near-empty page ships).
  * Cache-only — no live provider. Per-brand Ad Aggression Score is enriched
  * from the same cache-only snapshot the /ads/:domain page reads, degrading
  * to an honest `null` on any hiccup — a deferred score renders as "score
- * pending", never a fabricated number. Score enrichment is bounded (a
- * curated category holds at most ~5 brands); one failed snapshot read only
- * defers that one brand's score, never 500s the category page.
+ * pending", never a fabricated number. Score enrichment is bounded by
+ * BRAND_CATEGORY_MAX_SCORE_LOOKUPS regardless of category size; one failed
+ * snapshot read only defers that one brand's score, never 500s the
+ * category page.
  */
 
 import { Link, useLoaderData } from "react-router";
@@ -39,6 +42,7 @@ import {
 } from "~/lib/seo";
 import type { SitemapEntry } from "~/lib/seo";
 import {
+  BRAND_CATEGORY_PAGE_MIN_BRANDS,
   brandCategoryForDomain,
   brandCategoryFromSlug,
 } from "~/lib/brand-categories";
@@ -145,9 +149,11 @@ export async function loader({
     (link) => brandCategoryForDomain(link.domain) === label,
   );
 
-  // Empty curated category — nothing to list, so it 404s (mirror #1988)
-  // rather than shipping an empty landing page.
-  if (categoryLinks.length === 0) {
+  // Thin curated category — fewer than BRAND_CATEGORY_PAGE_MIN_BRANDS live
+  // brands (issue #3126 generalizes the empty-category 404 of #1988 to a
+  // real floor) — so it 404s rather than shipping a near-empty landing
+  // page, and the sitemap omits it under the same rule.
+  if (categoryLinks.length < BRAND_CATEGORY_PAGE_MIN_BRANDS) {
     throw new Response("Not Found", { status: 404 });
   }
 
@@ -159,10 +165,11 @@ export async function loader({
     "~/lib/brand-page.server"
   );
 
-  // Bounded: a curated category holds <= ~5 brands, and each score enrichment
-  // is one cache-only snapshot read (no live provider). Any hiccup degrades
-  // that one brand's score to a deferred `null` — the category page never 500s
-  // because a score is unavailable.
+  // Bounded: each score enrichment is one cache-only snapshot read (no live
+  // provider), capped at BRAND_CATEGORY_MAX_SCORE_LOOKUPS no matter how
+  // large the category grows. Any hiccup degrades that one brand's score to
+  // a deferred `null` — the category page never 500s because a score is
+  // unavailable.
   const scoreDomains = new Set(
     categoryLinks.slice(0, BRAND_CATEGORY_MAX_SCORE_LOOKUPS).map((link) => link.domain),
   );

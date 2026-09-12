@@ -32,6 +32,7 @@ import {
 } from "~/lib/seo";
 import {
   brandCategoryFromSlug,
+  BRAND_CATEGORY_PAGE_MIN_BRANDS,
   CURATED_BRAND_CATEGORY_SLUGS,
   groupBrandRecordsByCategory,
 } from "~/lib/brand-categories";
@@ -98,12 +99,13 @@ export async function loader({ context }: LoaderFunctionArgs): Promise<BrandsLoa
   // /brands/:slug landing page, so the cluster is internally connected
   // (hub → category → brand → hub). The set is derived from the curated slug
   // registry + brandCategoryFromSlug, never hard-coded; a curated category
-  // with zero brands today gets no link (its page would 404).
+  // below BRAND_CATEGORY_PAGE_MIN_BRANDS brands gets no link (its page
+  // would 404 — issue #3126).
   const categoryLinks: BrandCategoryLink[] = CURATED_BRAND_CATEGORY_SLUGS.flatMap((slug) => {
     const label = brandCategoryFromSlug(slug);
     if (!label) return [];
     const group = groups.find((g) => g.category === label);
-    if (!group || group.items.length === 0) return [];
+    if (!group || group.items.length < BRAND_CATEGORY_PAGE_MIN_BRANDS) return [];
     return [{ slug, label, count: group.items.length }];
   });
 
