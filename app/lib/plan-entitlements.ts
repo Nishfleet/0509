@@ -405,3 +405,66 @@ export function entitlementFeatureMatrix(): Array<{
     agency: canUsePlanFeature("agency", feature),
   }));
 }
+
+/**
+ * Competitor-suggestion caps (onboarding epic slice 2, #3175).
+ *
+ * The onboarding flow auto-populates competitor suggestions from evidence. The
+ * cap is per plan, and it is expressed here rather than in the seed or the
+ * panel so there is ONE place that decides it — the same reason the rest of the
+ * plan limits live in this catalog.
+ *
+ * Two distinct things are capped, and conflating them is the easy mistake:
+ *
+ * 1. `visible` — how many suggestions the customer is SHOWN. Free sees the
+ *    whole discovered set as a frozen snapshot (read-only), which is the
+ *    deliberate upgrade trigger: the evidence is real, and acting on it is
+ *    what the paid plan buys. Paid plans see their plan cap.
+ * 2. `tracked` — how many of those the plan can actually TRACK continuously.
+ *    This is deliberately the SAME number as the plan's `watchlists` limit, so
+ *    the suggestion surface can never promise more continuous tracking than the
+ *    watchlist limit will honour. Free tracks its single activation watchlist
+ *    (the `self` brand) and nothing more, which is why `tracked` is 1 there and
+ *    every suggested row renders as frozen rather than addable.
+ */
+export interface CompetitorSuggestionCaps {
+  /** How many suggestions are shown at all. */
+  visible: number;
+  /** How many the plan can track continuously (rows beyond this are frozen). */
+  tracked: number;
+  /** True when the rows are a read-only snapshot rather than addable. */
+  frozen: boolean;
+}
+
+/**
+ * Free's snapshot ceiling. Free sees the evidence that exists, but a large
+ * discovered set must not turn the onboarding card into an unbounded list, so
+ * the snapshot is capped at this many rows. The number is a rendering bound,
+ * not an entitlement.
+ */
+export const FREE_SUGGESTION_SNAPSHOT_LIMIT = 5;
+
+/**
+ * Paid plans' suggestion ceiling. Paid plans have `watchlists` slots (Scout 3,
+ * Starter 10, Agency 75); showing more suggestions than a plan can ever track
+ * invites the customer to build a list they cannot save. So the visible cap is
+ * the plan's own watchlist limit, bounded above by this ceiling so a
+ * large-limit plan does not render an unusable wall of rows on the onboarding
+ * card.
+ */
+export const PAID_SUGGESTION_VISIBLE_CEILING = 8;
+
+export function getCompetitorSuggestionCaps(planFamily: PlanFamily): CompetitorSuggestionCaps {
+  if (planFamily === "free") {
+    return {
+      visible: FREE_SUGGESTION_SNAPSHOT_LIMIT,
+      // Free's one watchlist is the activation scan of the customer's own
+      // brand, so no SUGGESTED competitor is tracked continuously.
+      tracked: 0,
+      frozen: true,
+    };
+  }
+  const watchlists = getPlanEntitlements(planFamily).watchlists;
+  const visible = Math.max(1, Math.min(watchlists, PAID_SUGGESTION_VISIBLE_CEILING));
+  return { visible, tracked: watchlists, frozen: false };
+}

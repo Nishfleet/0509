@@ -825,6 +825,10 @@ export async function handleWatchlistsAction(args: ActionFunctionArgs) {
     return handleAcceptSuggestedCompetitorAction(env, workspaceUserId, formData);
   }
 
+  if (intent === "dismiss-suggested-competitor") {
+    return handleDismissSuggestedCompetitorAction(env, workspaceUserId, formData);
+  }
+
   if (intent === "bulk-accept-suggested-competitors") {
     return handleBulkAcceptSuggestedCompetitorsAction(env, workspaceUserId, formData);
   }
@@ -832,6 +836,74 @@ export async function handleWatchlistsAction(args: ActionFunctionArgs) {
   return {
     ok: false,
     message: "We couldn't complete that action. Refresh the page and try again.",
+  };
+}
+
+// Onboarding epic slice 2 (#3175): one-tap remove for a suggested competitor.
+//
+// The panel's rows are DERIVED on every load, so "remove" cannot be a UI-only
+// hide — the next render would re-derive the same row. This action records the
+// dismissal durably (migration 0098) and the seed filters on it, which is what
+// makes "removing one never re-suggests it" true across reloads, sweeps and
+// the logged-out preview.
+//
+// The row is re-validated against the live panel first, so a stale id is
+// refused rather than silently writing a dismissal for a candidate that is not
+// on screen. The dismissal is idempotent: removing the same row twice is a
+// no-op, not an error.
+async function handleDismissSuggestedCompetitorAction(
+  env: AppEnv,
+  workspaceUserId: string,
+  formData: FormData,
+): Promise<{
+  ok: boolean;
+  error?: "candidate_unknown";
+  message: string;
+  dismissedCandidateId?: string;
+}> {
+  const { dismissCompetitorSuggestion } = await import(
+    "~/lib/competitor-suggestion-dismissal.server"
+  );
+
+  const candidateId = String(formData.get("candidateId") ?? "").trim();
+  if (!candidateId) {
+    return {
+      ok: false,
+      error: "candidate_unknown",
+      message: "That suggestion is no longer available. Refresh and try again.",
+    };
+  }
+
+  // Re-validate against the LIVE panel so a stale id cannot write a dismissal
+  // for a row the customer is not looking at. A row that has already gone is
+  // still a successful removal from the customer's point of view, so the
+  // unknown case is reported plainly rather than as a hard failure.
+  const { loadSuggestedCompetitorsPanel } = await import(
+    "~/lib/auto-competitor-suggested-loader.server"
+  );
+  const { getUserPlan } = await import("~/lib/plan.server");
+  const plan = await getUserPlan(env, workspaceUserId);
+  const panel = await loadSuggestedCompetitorsPanel(env, workspaceUserId, plan);
+  const row = panel?.rows.find((entry) => entry.candidateId === candidateId) ?? null;
+  if (!row) {
+    return {
+      ok: false,
+      error: "candidate_unknown",
+      message: "That suggestion isn't in our latest sweep anymore. Refresh to see the current list.",
+    };
+  }
+
+  await dismissCompetitorSuggestion(env, {
+    userId: workspaceUserId,
+    candidateKey: row.candidateId,
+    candidateDomain: row.landingPageUrl,
+    candidateLabel: row.advertiser,
+  });
+
+  return {
+    ok: true,
+    message: `Removed ${row.advertiser}. We won't suggest it again.`,
+    dismissedCandidateId: row.candidateId,
   };
 }
 

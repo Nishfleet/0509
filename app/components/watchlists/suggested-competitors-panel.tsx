@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import { SubmitButton } from "~/components/submit-button";
 import type { SuggestedCompetitorRow } from "~/lib/auto-competitor-suggested-loader.server";
+import type { CompetitorSuggestionCaps } from "~/lib/plan-entitlements";
 
 /**
  * Suggested-competitors panel (auto-competitor-watch, Phase 2).
@@ -20,16 +21,35 @@ import type { SuggestedCompetitorRow } from "~/lib/auto-competitor-suggested-loa
  * 2. Paid plan + no rows → renders the empty state (no fabricated
  *    suggestion). The action is the customer editing their own
  *    `brandWebsite` in workspace branding; nothing else.
- * 3. Free plan → the loader returns `null`, this component is not
- *    rendered at all by the route.
+ * 3. Free plan → the loader returns the discovered set as a FROZEN
+ *    SNAPSHOT (`caps.frozen`). The rows render read-only with an upgrade
+ *    prompt in place of the add button. Onboarding slice 2 (#3175): the
+ *    evidence is real and worth showing; acting on it is what the plan buys.
+ *
+ * Each row carries a one-line `why` and its typed `source` (onboarding slice
+ * 2, #3175) so a suggestion always says what it is and where it came from —
+ * the row is never a bare brand name the customer has to trust.
  *
  * The accept action calls `createWatchlistWithinLimit` through
  * `handleWatchlistsAction`'s `accept-suggested-competitor` intent. Over-cap
  * responses come back as a `data.overCap` flag — the customer sees a named
- * reason, never a silent admission.
+ * reason, never a silent admission. The remove action (`dismiss-suggested-
+ * competitor`) records a durable dismissal, so a removed row never comes back.
  */
 
 const ACCEPT_INTENT = "accept-suggested-competitor";
+const DISMISS_INTENT = "dismiss-suggested-competitor";
+
+/**
+ * Human label for a row's typed evidence source. Kept as a total map (not a
+ * chain of ternaries) so adding a source to the union is a compile error here
+ * until it is named — an unnamed source would otherwise render an empty badge.
+ */
+const SOURCE_LABELS: Record<SuggestedCompetitorRow["source"], string> = {
+  ad_keyword_overlap: "From your ads",
+  landing_page_seed: "From your website",
+  adjacent_brand_fallback: "Same category",
+};
 
 export interface SuggestedCompetitorsAcceptFeedback {
   ok?: boolean | undefined;
@@ -43,9 +63,11 @@ export interface SuggestedCompetitorsAcceptFeedback {
 export function SuggestedCompetitorsPanel(props: {
   domain: string;
   rows: readonly SuggestedCompetitorRow[];
+  caps: CompetitorSuggestionCaps;
   feedback: SuggestedCompetitorsAcceptFeedback | null;
   pending: boolean;
   pendingCandidateId: string | null;
+  pendingDismissCandidateId?: string | null;
 }) {
   return (
     <section
@@ -103,6 +125,12 @@ export function SuggestedCompetitorsPanel(props: {
                   </span>
                   <span className="f9-evidence-suggested-brand">{row.advertiser}</span>
                 </p>
+                <p className="f9-evidence-suggested-why" data-test="suggested-why">
+                  {row.why}
+                </p>
+                <p className="f9-evidence-micro f9-evidence-suggested-source" data-test="suggested-source" data-source={row.source}>
+                  {SOURCE_LABELS[row.source]}
+                </p>
                 <p className="f9-evidence-micro f9-evidence-suggested-provenance" data-test="suggested-provenance">
                   {row.provenance}
                 </p>
@@ -115,17 +143,41 @@ export function SuggestedCompetitorsPanel(props: {
                   {row.targetCountry ? ` · ${row.targetCountry}` : ""}
                 </p>
               </div>
-              <Form method="post" className="f9-evidence-suggested-accept-form">
-                <input name="intent" type="hidden" value={ACCEPT_INTENT} />
-                <input name="candidateId" type="hidden" value={row.candidateId} />
-                <SubmitButton
-                  className="f9-evidence-cta f9-evidence-cta--rank2"
-                  pending={props.pending && props.pendingCandidateId === row.candidateId}
-                  pendingLabel="Adding…"
+              {props.caps.frozen ? (
+                <p
+                  className="f9-evidence-micro f9-evidence-suggested-frozen"
+                  data-test="suggested-frozen"
                 >
-                  Add as competitor
-                </SubmitButton>
-              </Form>
+                  Snapshot — upgrade to track these
+                </p>
+              ) : (
+                <div className="f9-evidence-suggested-actions">
+                  <Form method="post" className="f9-evidence-suggested-accept-form">
+                    <input name="intent" type="hidden" value={ACCEPT_INTENT} />
+                    <input name="candidateId" type="hidden" value={row.candidateId} />
+                    <SubmitButton
+                      className="f9-evidence-cta f9-evidence-cta--rank2"
+                      pending={props.pending && props.pendingCandidateId === row.candidateId}
+                      pendingLabel="Adding…"
+                    >
+                      Add as competitor
+                    </SubmitButton>
+                  </Form>
+                  <Form method="post" className="f9-evidence-suggested-dismiss-form">
+                    <input name="intent" type="hidden" value={DISMISS_INTENT} />
+                    <input name="candidateId" type="hidden" value={row.candidateId} />
+                    <SubmitButton
+                      className="f9-evidence-cta f9-evidence-cta--quiet"
+                      pending={
+                        props.pending && props.pendingDismissCandidateId === row.candidateId
+                      }
+                      pendingLabel="Removing…"
+                    >
+                      Remove
+                    </SubmitButton>
+                  </Form>
+                </div>
+              )}
             </li>
           ))}
         </ul>
