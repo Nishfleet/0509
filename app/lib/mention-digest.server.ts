@@ -17,7 +17,18 @@ export interface MentionDigestOptions {
   limit?: number;
 }
 
-const DEFAULT_MENTION_CONNECTORS: PresenceConnectorId[] = ["rss", "x", "reddit"];
+const DEFAULT_MENTION_CONNECTORS: PresenceConnectorId[] = [
+  "rss",
+  // MVP mention sources (epic #3171): the connectors that landed via #3250
+  // (rss query/publisher feeds), #3251 (GDELT) and #3252 (Bluesky) must reach
+  // the digest like every other mention connector. x/reddit stay listed —
+  // they are credential-gated and contribute nothing until their rollout
+  // gates open, which keeps the list honest without a second source of truth.
+  "gdelt",
+  "bluesky",
+  "x",
+  "reddit",
+];
 
 /**
  * Builds the mention-section lines for the presence digest.
@@ -84,8 +95,13 @@ export async function buildMentionDigestLines(
         options.since,
       );
       const newMarker = isNew ? " (new)" : "";
+      // #3179: change alerts and digests include new mentions WITH source
+      // and link. The source label is the coverage copy; the link is the
+      // item's canonical URL when the capture resolved one. No link, no
+      // pretense — the line just omits it.
+      const link = item.canonicalUrl ? ` — ${item.canonicalUrl}` : "";
       lines.push(
-        `${label} — ${item.title}${newMarker} (${formatCoverageLabel(item.connectorId)})`,
+        `${label} — ${item.title}${newMarker} (${formatCoverageLabel(item.connectorId)})${link}`,
       );
     }
   }

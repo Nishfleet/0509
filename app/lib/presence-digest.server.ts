@@ -61,3 +61,95 @@ export async function deliverPresenceDigestForUser(
       ? { delivered: false, reason: "delivery_unconfirmed" as const }
       : { delivered: false, reason: "send_failed" as const };
 }
+
+export interface PresenceDigestSweepResult {
+  /** Workspaces actually attempted (had a delivery address). */
+  swept: number;
+  delivered: number;
+  skipped: number;
+  errors: number;
+  skippedReason?:
+    | "db_unavailable"
+    | "inline_mode";
+}
+
+const SWEEP_USER_LIMIT = 100;
+
+/**
+ * Scheduled presence-digest delivery (epic #3171, #3179).
+ *
+ * #1379 shipped the digest itself, but nothing outside the integration
+ * fixtures ever CALLED it — no workspace received one. This sweep rides the
+ * same scheduled monitoring tick as the mention re-sweep (workers/schedule.ts
+ * sets includePresenceDigest on the same task) and respects the same
+ * MONITORING_FANOUT_MODE: an inline deployment skips it, exactly like
+ * runMentionResweep does.
+ *
+ * The workspace set is the SAME oldest-work-first 100 the re-sweep uses
+ * (listResweepUsers), so the heaviest-tail workspaces are swept first. Each
+ * delivery is idempotent per workspace per UTC day via the presence-digest
+ * idempotency key, so the 3-hourly tick sends at most one digest per
+ * workspace per day. Free workspaces carry no presence_digest_alerts feature
+ * and are skipped inside deliverPresenceDigestForUser — nothing recurring on
+ * Free (#3179); the entity brief on the presence page stays their surface.
+ */
+export async function runPresenceDigestSweep(
+  env: AppEnv,
+  options: { userLimit?: number } = {},
+): Promise<PresenceDigestSweepResult> {
+  const result: PresenceDigestSweepResult = { swept: 0, delivered: 0, skipped: 0, errors: 0 };
+
+  if (!env.DB) {
+    result.skippedReason = "db_unavailable";
+    return result;
+  }
+
+  const { resolveMonitoringFanoutMode } = await import("~/lib/monitoring-fanout.server");
+  if (resolveMonitoringFanoutMode(env) === "inline") {
+    result.skippedReason = "inline_mode";
+    return result;
+  }
+
+  const { listResweepUsers } = await import("~/lib/mention-resweep.server");
+  const userIds = await listResweepUsers(env, options.userLimit ?? SWEEP_USER_LIMIT);
+  if (userIds.length === 0) {
+    return result;
+  }
+
+  // ONE bounded read: the workspace owner's address, the same `user.email`
+  // column the watchlist-digest scheduling SQL resolves. Delivery targets
+  // (subscribed inboxes) are resolved later, inside the send path.
+  const ownerRows = await env.DB.prepare(
+    `SELECT id, email FROM user WHERE id IN (SELECT value FROM json_each(?))`,
+  )
+    .bind(JSON.stringify(userIds))
+    .all<{ id: string; email: string }>();
+  const emailByUserId = new Map(
+    (rows.results ?? []).map((row) => [String(row.id), String(row.email)]),
+  );
+
+  for (const userId of userIds) {
+    const email = emailByUserId.get(userId);
+    if (!email) {
+      result.skipped += 1;
+      continue;
+    }
+    result.swept += 1;
+    try {
+      const delivery = await deliverPresenceDigestForUser(env, userId, email);
+      if (delivery.delivered) {
+        result.delivered += 1;
+      } else {
+        result.skipped += 1;
+      }
+    } catch (error) {
+      result.errors += 1;
+      console.log("presence digest delivery failed", {
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return result;
+}

@@ -28,12 +28,17 @@ export interface PresenceLimits {
 }
 
 const PRESENCE_LIMITS: Record<PlanFamily, PresenceLimits> = {
+  // Epic #3171 / #3179 (Free-is-barebones decision): Free tracks ONE self
+  // brand. Its ONE "social" slot is the connectionless query-mention source
+  // (GDELT or a Google News RSS query feed — both $0); website sources stay
+  // paid-only. No recurring delivery on Free: presence_digest_alerts stays
+  // out of FREE_FEATURES, so the presence-digest eMail stays paid-only.
   free: {
-    maxTrackedEntities: 0,
-    maxSelfEntities: 0,
+    maxTrackedEntities: 1,
+    maxSelfEntities: 1,
     maxCompetitorEntities: 0,
     maxWebsiteSourcesPerEntity: 0,
-    maxSocialSourcesPerEntity: 0,
+    maxSocialSourcesPerEntity: 1,
   },
   scout: {
     maxTrackedEntities: 3,

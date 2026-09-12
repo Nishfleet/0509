@@ -130,6 +130,13 @@ export interface PlanEntitlements {
 const FREE_FEATURES: PlanFeature[] = [
   "weekly_digest",
   "email_delivery",
+  // Epic #3171 / #3179: Free tracks ONE self brand. The presence-eMail lane
+  // stays off (no presence_digest_alerts) — briefs: first_only, nothing
+  // recurring on Free. presence_social_connect is what lets the FREE
+  // self-brand attach its ONE (query-type) mention source; the count cap is
+  // PRESENCE_LIMITS.free.maxSocialSourcesPerEntity = 1.
+  "presence_self_tracking",
+  "presence_social_connect",
 ];
 
 const SCOUT_FEATURES: PlanFeature[] = [
