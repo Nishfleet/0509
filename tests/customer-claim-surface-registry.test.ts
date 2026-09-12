@@ -321,7 +321,7 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
     "presence_self_tracking", "presence_website_sources", "presence_social_connect",
     "presence_digest_alerts",
   ],
-  presenceSources: ["website", "x", "reddit", "linkedin", "rss", "youtube", "amazon", "context_dev", "google", "google_ads", "tiktok", "subdomains", "hiring"],
+  presenceSources: ["website", "x", "reddit", "linkedin", "rss", "gdelt", "youtube", "amazon", "context_dev", "google", "google_ads", "tiktok", "subdomains", "hiring"],
   // Route diet phase 1 (#2213): the rail carries seven destinations; the
   // 8-screen model folds every member route into its owning destination via
   // redirects, so the folded paths stay customer nav surface (activePaths).

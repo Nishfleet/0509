@@ -38,6 +38,21 @@ const MAX_RSS_FETCH_BYTES = 750_000;
 const MAX_FEED_EXCERPT_CHARS = 280;
 const MAX_FEED_ITEMS = 25;
 
+/**
+ * Google News RSS query-feed support (issue #3178): news.google.com item links
+ * are redirects, not canonical publisher URLs. Before hashing (dedup), the
+ * connector resolves each redirect to the publisher URL — first by decoding
+ * the base64url article id (Google embeds the target URL in it, no extra
+ * fetch), then, only when the id does not embed it, by ONE bounded fetch
+ * through `presenceSafeFetch` (SSRF-validated redirects). Budget: at most 10
+ * resolutions per poll, one request each; unresolved links keep the redirect
+ * URL and are flagged in `raw.googleNewsRedirectUnresolved` instead of being
+ * dropped — honesty over fabricated canonical URLs.
+ */
+const GOOGLE_NEWS_HOST = "news.google.com";
+const MAX_GNEWS_REDIRECTS_RESOLVED_PER_POLL = 10;
+const MAX_GNEWS_RESOLVE_FETCH_BYTES = 100_000;
+
 export const rssConnector = {
   id: "rss" as const,
   supportedModes: ["self", "competitor"] as const,
@@ -73,6 +88,7 @@ export const rssConnector = {
 
     const normalized = safeUrl.toString().replace(/\/$/, "") || safeUrl.toString();
     const targetKey = safeUrl.hostname.toLowerCase();
+    const isNewsQueryFeed = isGoogleNewsNewsUrl(safeUrl.toString());
 
     // Fetch once through the SSRF-hardened path. The response shape decides
     // whether this is a direct feed or a site page that needs feed discovery.
@@ -105,7 +121,7 @@ export const rssConnector = {
         targetKey,
         targetUrl: normalized,
         coverageLabel: "VERIFIED_PUBLIC_FEED",
-        metadata: { feedUrl: normalized, feedDiscovery: "direct" },
+        metadata: { feedUrl: normalized, feedDiscovery: "direct", ...(isNewsQueryFeed ? { newsQuery: true } : {}) },
       };
     }
 
@@ -249,7 +265,15 @@ async function fetchFeed(
   }
 
   const body = response.body;
-  const items = await parseFeedItems(body, feedUrl);
+  let items = await parseFeedItems(body, feedUrl);
+
+  // Issue #3178: resolve news.google.com redirect links to canonical publisher
+  // URLs BEFORE hashing, so the same story dedups like any other mention.
+  // Triggered per-item, so a publisher feed carrying syndicated Google News
+  // links resolves too.
+  if (items.some((item) => isGoogleNewsRedirectUrl(item.canonicalUrl))) {
+    items = await resolveGoogleNewsRedirects(items, fetchImpl);
+  }
 
   // Honesty eval 3.4: a valid feed document that simply has zero entries is
   // an honest empty result, not a fabrication. Only a document that is not a
@@ -507,4 +531,116 @@ function safeIsoDate(value: string): string | null {
     return null;
   }
   return parsed.toISOString();
+}
+
+function isGoogleNewsHost(url: string): boolean {
+  try {
+    return new URL(url).hostname.toLowerCase() === GOOGLE_NEWS_HOST;
+  } catch {
+    return false;
+  }
+}
+
+function isGoogleNewsNewsUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname.toLowerCase() !== GOOGLE_NEWS_HOST) return false;
+    return parsed.pathname === "/rss" || parsed.pathname.startsWith("/rss/");
+  } catch {
+    return false;
+  }
+}
+
+function isGoogleNewsRedirectUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname.toLowerCase() === GOOGLE_NEWS_HOST && parsed.pathname.startsWith("/rss/articles/");
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolve news.google.com redirect links to publisher URLs before hashing
+ * (issue #3178 dedup bar). Order: (1) decode the base64url article id - the
+ * newer CBMi-style ids embed the publisher URL, so no network is needed;
+ * (2) at most one bounded fetch per link through `presenceSafeFetch`, whose
+ * SSRF-validated redirect walking returns `finalUrl`; (3) when the landed
+ * page is still on news.google.com, parse the embedded `data-n-au` attribute.
+ * Unresolved links keep the redirect URL and are flagged in raw - never
+ * silently dropped.
+ */
+async function resolveGoogleNewsRedirects(
+  items: NormalizedPresenceItem[],
+  fetchImpl: typeof fetch,
+): Promise<NormalizedPresenceItem[]> {
+  let fetchBudget = MAX_GNEWS_REDIRECTS_RESOLVED_PER_POLL;
+  const cache = new Map<string, string>();
+  for (const item of items) {
+    if (!isGoogleNewsRedirectUrl(item.canonicalUrl)) continue;
+    item.raw = { ...(item.raw ?? {}), kind: "news_article", provider: "google_news_rss" };
+
+    const cached = cache.get(item.canonicalUrl);
+    if (cached) {
+      item.canonicalUrl = cached;
+      continue;
+    }
+
+    let resolved = decodeGoogleNewsArticleId(item.canonicalUrl);
+    if (!resolved && fetchBudget > 0) {
+      fetchBudget -= 1;
+      resolved = await resolveGoogleNewsRedirectByFetch(item.canonicalUrl, fetchImpl);
+    }
+    if (resolved) {
+      cache.set(item.canonicalUrl, resolved);
+      item.canonicalUrl = resolved;
+    } else {
+      item.raw.googleNewsRedirectUnresolved = true;
+    }
+  }
+  return items;
+}
+
+function decodeGoogleNewsArticleId(link: string): string | null {
+  const match = link.match(/\/rss\/articles\/([A-Za-z0-9_-]+)/);
+  if (!match?.[1]) return null;
+  try {
+    const normalized = match[1].replace(/-/g, "+").replace(/_/g, "/");
+    const decoded = atob(normalized + "=".repeat((4 - (normalized.length % 4)) % 4));
+    return decoded.match(/https?:\/\/[^\x00-\x20"'<>]+/)?.[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function resolveGoogleNewsRedirectByFetch(
+  link: string,
+  fetchImpl: typeof fetch,
+): Promise<string | null> {
+  const response = await presenceSafeFetch(link, fetchImpl, {
+    method: "GET",
+    maxBytes: MAX_GNEWS_RESOLVE_FETCH_BYTES,
+    accept: "text/html,*/*",
+  });
+  if (!response?.finalUrl) return null;
+  let finalHost = "";
+  try {
+    finalHost = new URL(response.finalUrl).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+  if (finalHost !== GOOGLE_NEWS_HOST) {
+    // At least one SSRF-validated redirect landed off news.google.com.
+    return response.finalUrl;
+  }
+  // Same-host response: the article page embeds the publisher URL in
+  // data-n-au. The body is the single bounded response we already hold.
+  const embedded = response.body?.match(/data-n-au=["']([^"']+)["']/i)?.[1];
+  if (!embedded || embedded.includes(GOOGLE_NEWS_HOST)) return null;
+  try {
+    const resolved = await resolvePublicHttpUrl(embedded);
+    return resolved ? resolved.toString() : null;
+  } catch {
+    return null;
+  }
 }
