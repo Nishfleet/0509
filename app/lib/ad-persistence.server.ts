@@ -303,6 +303,11 @@ export async function upsertAd(env: AppEnv, ad: AdRecord) {
     evidenceCapturedAt,
     canonicalRevision,
   });
+  // Issue #2981: `$.creativeHash` / `$.creativeHashContentType` are written by
+  // the creative mirror, not by a scrape, so they never appear in
+  // `excluded.raw_json`. The UPDATE below chains them off the existing
+  // `ad.raw_json` via COALESCE — without that, any re-scrape drops the hash and
+  // the row silently reverts to the rotting fbcdn URL #2981 removes.
   await run(
     env,
     `
@@ -494,6 +499,16 @@ export async function upsertAd(env: AppEnv, ad: AdRecord) {
                           json_extract(excluded.raw_json, '$.creativeImageUrl')
                         )
                       END,
+                      '$.creativeHash',
+                      COALESCE(
+                        json_extract(excluded.raw_json, '$.creativeHash'),
+                        json_extract(ad.raw_json, '$.creativeHash')
+                      ),
+                      '$.creativeHashContentType',
+                      COALESCE(
+                        json_extract(excluded.raw_json, '$.creativeHashContentType'),
+                        json_extract(ad.raw_json, '$.creativeHashContentType')
+                      ),
                       '$.creativeTextCaptureMethod',
                       CASE
                         WHEN julianday(json_extract(excluded.raw_json, '$.creativeTextMetadata.capturedAt')) IS NOT NULL
