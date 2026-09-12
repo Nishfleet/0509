@@ -5,7 +5,10 @@ import {
 import { resolveCommercialDiscoveryProvider } from "~/lib/ad-source.server";
 import { deriveHook, deriveOffer } from "~/lib/analysis.server";
 import { listWatchlists } from "~/lib/data.server";
-import { listDismissedSuggestionKeys } from "~/lib/competitor-suggestion-dismissal.server";
+import {
+  listDismissedSuggestionDomains,
+  listDismissedSuggestionKeys,
+} from "~/lib/competitor-suggestion-dismissal.server";
 import {
   fetchWithTimeout,
   releaseFetchTimeout,
@@ -136,6 +139,47 @@ interface ProbeHit {
  * unbounded crawl (that is epic (b) territory).
  */
 const LANDING_PAGE_FETCH_TIMEOUT_MS = 5_000;
+
+/**
+ * Onboarding slice 2 (#3175) hard bound PER EVIDENCE SOURCE: "3 s hard timeout
+ * per evidence source, partial results allowed".
+ *
+ * The two evidence sources are (a) the landing-page crawl and (b) the keyword
+ * probe reads against the discovery cache. Each is wrapped in this bound so a
+ * slow source degrades to a partial (possibly empty) result inside the
+ * onboarding budget instead of holding the card open — the same posture the
+ * existing fetch-timeout wrapper already takes, just tightened to the
+ * onboarding number.
+ *
+ * The crawl's own 5 s transport timeout is deliberately left alone: that is the
+ * per-REQUEST bound inside the source (each redirect hop gets it), while this is
+ * the per-SOURCE bound the issue pins. A crawl that spends 5 s on one hop
+ * therefore still returns within the source budget only if the whole crawl is
+ * bounded, which is what `withSourceTimeout` does.
+ */
+export const EVIDENCE_SOURCE_TIMEOUT_MS = 3_000;
+
+/**
+ * Run one evidence source under the 3 s hard bound. On timeout the promise is
+ * abandoned and `fallback` is returned — a partial result, never a thrown
+ * error, because a slow source must not fail the customer's onboarding.
+ */
+async function withSourceTimeout<T>(work: Promise<T>, fallback: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<T>((resolve) => {
+        timer = setTimeout(() => resolve(fallback), EVIDENCE_SOURCE_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
+  }
+}
+
 const LANDING_PAGE_MAX_BYTES = 512 * 1024;
 const LANDING_PAGE_MAX_REDIRECT_HOPS = 3;
 
@@ -651,17 +695,24 @@ async function runSeedProbes(
   // Onboarding slice 2 (#3175): a suggestion the customer removed must never
   // come back. The panel DERIVES its rows on every load, so without this the
   // next render re-derives exactly what was just dismissed. Filtering here (the
-  // single derivation point) covers every consumer — panel, accept path,
-  // logged-out preview — rather than only the one surface that hosts the
-  // remove button.
+  // single derivation point) covers every consumer that reads the seed. (The
+  // logged-out preview passes a sentinel user id that matches no rows, so it
+  // carries no dismissals by construction.)
+  //
+  // Two matches, because the key is not fully stable across sweeps: the exact
+  // candidate key, and the registrable domain. A candidate stored as
+  // `rothy's|rothys.com|` and re-derived as `rothy's|rothys.com|123456` (the
+  // ad-page id appeared on a later probe) must still stay removed, and the
+  // domain is the stable identity for that case.
   const dismissed = await listDismissedSuggestionKeys(env, run.userId);
+  const dismissedDomains = await listDismissedSuggestionDomains(env, run.userId);
 
   const candidates: AutoCompetitorCandidate[] = [];
   for (const agg of aggregated.values()) {
     if (agg.registrableDomain && watchedDomains.has(agg.registrableDomain)) {
       continue; // already watched — dedup via website-identity holds
     }
-    if (
+    const isDismissedByKey =
       dismissed.size > 0 &&
       dismissed.has(
         buildCandidateId({
@@ -669,8 +720,11 @@ async function runSeedProbes(
           registrableDomain: agg.registrableDomain,
           advertiserPageId: agg.advertiserPageId,
         }),
-      )
-    ) {
+      );
+    const isDismissedByDomain =
+      agg.registrableDomain !== null &&
+      dismissedDomains.has(agg.registrableDomain.trim().toLowerCase());
+    if (isDismissedByKey || isDismissedByDomain) {
       continue; // removed by the customer — never re-suggested
     }
     const matchedKeywords = [...agg.matchedKeywords];
@@ -781,14 +835,19 @@ export async function seedAutoCompetitors(
     if (probeCountries.length === 0) {
       probeCountries.push(options.country);
     }
-    return runSeedProbes(env, {
-      provider,
-      ownRegistrableDomain,
-      keywords,
-      probeCountries,
-      userId: options.userId,
-      seedSource: "ads",
-    });
+    return withSourceTimeout(
+      runSeedProbes(env, {
+        provider,
+        ownRegistrableDomain,
+        keywords,
+        probeCountries,
+        userId: options.userId,
+        seedSource: "ads",
+      }),
+      // Partial results allowed: a probe source that overruns returns no
+      // candidates rather than holding the onboarding card open.
+      [],
+    );
   }
 
   // No cached Meta ads: Phase 5 landing-page fallback. When disabled, honest
@@ -797,8 +856,11 @@ export async function seedAutoCompetitors(
   if (!enableLandingPageFallback) {
     return [];
   }
-  const landingPageHtml = await fetchCustomerLandingPageHtml(
-    `https://${ownRegistrableDomain}/`,
+  // Evidence source (a): the landing-page crawl, under the same 3 s per-source
+  // hard bound as the probe reads.
+  const landingPageHtml = await withSourceTimeout(
+    fetchCustomerLandingPageHtml(`https://${ownRegistrableDomain}/`),
+    null,
   );
   if (!landingPageHtml) {
     return [];
@@ -811,12 +873,15 @@ export async function seedAutoCompetitors(
     options.country.trim().toLowerCase() === "all"
       ? [...LANDING_PAGE_DEFAULT_PROBE_COUNTRIES]
       : [options.country];
-  return runSeedProbes(env, {
-    provider,
-    ownRegistrableDomain,
-    keywords,
-    probeCountries,
-    userId: options.userId,
-    seedSource: "landing_page",
-  });
+  return withSourceTimeout(
+    runSeedProbes(env, {
+      provider,
+      ownRegistrableDomain,
+      keywords,
+      probeCountries,
+      userId: options.userId,
+      seedSource: "landing_page",
+    }),
+    [],
+  );
 }

@@ -1584,7 +1584,11 @@ describe("D1 remote restore evidence automation", () => {
     // wrote this test; run 34705843153 has since applied 0097, 0098 canary
     // and 0098 gdelt (the live state is covered by the 0098 test below).
     // The modeled state still pins planner behavior for a backup behind the
-    // whole tail.
+    // whole tail. 0098_competitor_suggestion_dismissal.sql (#3175) is
+    // likewise in the repository and not yet applied on production, so it
+    // joins the not-yet-applied group. Keep this list in step with the
+    // repository tail: a new migration file that production has not applied
+    // belongs here.
     const repository = readdirSync(resolve("migrations"))
       .filter((name) => /^\d{4}_.+\.sql$/u.test(name))
       .sort();
@@ -1592,16 +1596,17 @@ describe("D1 remote restore evidence automation", () => {
       (name) => !RETIRED_PRODUCTION_MIGRATIONS.has(name),
     );
     const repositorySuffix = repository.slice(repositoryBaseline.length);
+    const NOT_YET_APPLIED_ON_PRODUCTION = new Set([
+      "0096_email_suppression.sql",
+      "0097_status_probe_samples.sql",
+      "0098_competitor_suggestion_dismissal.sql",
+      "0098_email_delivery_canary.sql",
+      "0098_widen_source_target_connector_bluesky.sql",
+      "0098_widen_source_target_connector_gdelt.sql",
+    ]);
     const productionNames = [
       ...PRODUCTION_MIGRATION_LEDGER_BASELINE,
-      ...repositorySuffix.filter(
-        (name) =>
-          name !== "0096_email_suppression.sql" &&
-          name !== "0097_status_probe_samples.sql" &&
-          name !== "0098_email_delivery_canary.sql" &&
-          name !== "0098_widen_source_target_connector_bluesky.sql" &&
-          name !== "0098_widen_source_target_connector_gdelt.sql",
-      ),
+      ...repositorySuffix.filter((name) => !NOT_YET_APPLIED_ON_PRODUCTION.has(name)),
     ];
     expect(productionNames.at(-1)).toBe("0096_error_reports.sql");
     const namedLedger = (names: string[]) =>
@@ -1629,9 +1634,13 @@ describe("D1 remote restore evidence automation", () => {
           ...productionNames,
           "0096_email_suppression.sql",
           "0097_status_probe_samples.sql",
+<<<<<<< HEAD
           "0098_email_delivery_canary.sql",
           "0098_widen_source_target_connector_bluesky.sql",
           "0098_widen_source_target_connector_gdelt.sql",
+=======
+          "0098_competitor_suggestion_dismissal.sql",
+>>>>>>> 73821d599 (wip(salvage): pi-issue-0509-3175 success/0)
         ]),
         repository,
       ),
@@ -1652,9 +1661,13 @@ describe("D1 remote restore evidence automation", () => {
         "0096_email_suppression.sql",
         "0096_error_reports.sql",
         "0097_status_probe_samples.sql",
+<<<<<<< HEAD
         "0098_email_delivery_canary.sql",
         "0098_widen_source_target_connector_bluesky.sql",
         "0098_widen_source_target_connector_gdelt.sql",
+=======
+        "0098_competitor_suggestion_dismissal.sql",
+>>>>>>> 73821d599 (wip(salvage): pi-issue-0509-3175 success/0)
       ],
     });
   });

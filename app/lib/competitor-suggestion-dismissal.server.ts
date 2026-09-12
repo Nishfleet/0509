@@ -45,15 +45,27 @@ export async function listDismissedSuggestionKeys(
   if (!env.DB || !userId) {
     return new Set();
   }
-  let rows: { candidate_key: string }[];
+  let rows: { candidate_key: string; candidate_domain: string | null }[];
   try {
     const result = await env.DB.prepare(
-      `SELECT candidate_key FROM competitor_suggestion_dismissal WHERE user_id = ?`,
+      `SELECT candidate_key, candidate_domain FROM competitor_suggestion_dismissal WHERE user_id = ?`,
     )
       .bind(userId)
-      .all<{ candidate_key: string }>();
+      .all<{ candidate_key: string; candidate_domain: string | null }>();
     rows = result.results ?? [];
-  } catch {
+  } catch (error) {
+    // A real read failure would silently RESURRECT every removed suggestion,
+    // which is the exact thing this feature guarantees. The empty set is still
+    // the only safe degrade (the alternative is taking the page down), but the
+    // failure must be observable rather than invisible (#3175 review).
+    console.warn(
+      JSON.stringify({
+        event: "competitor_suggestion_dismissal_read_failed",
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+        ts: new Date().toISOString(),
+      }),
+    );
     return new Set();
   }
   const keys = new Set<string>();
@@ -64,6 +76,52 @@ export async function listDismissedSuggestionKeys(
     }
   }
   return keys;
+}
+
+/**
+ * The set of registrable domains this user has removed. Matched IN ADDITION to
+ * the exact candidate key, because the key embeds the ad-page id and the
+ * advertiser display name and both can change between sweeps (#3175 review): a
+ * candidate stored as `rothy's|rothys.com|` and re-derived as
+ * `rothy's|rothys.com|123456` would otherwise silently come back. The domain is
+ * the stable identity, which is exactly what `candidate_domain` is for.
+ *
+ * A dismissal with no resolvable domain contributes nothing here; its exact key
+ * still matches above.
+ */
+export async function listDismissedSuggestionDomains(
+  env: AppEnv,
+  userId: string,
+): Promise<Set<string>> {
+  if (!env.DB || !userId) {
+    return new Set();
+  }
+  try {
+    const result = await env.DB.prepare(
+      `SELECT DISTINCT candidate_domain FROM competitor_suggestion_dismissal
+        WHERE user_id = ? AND candidate_domain IS NOT NULL AND candidate_domain != ''`,
+    )
+      .bind(userId)
+      .all<{ candidate_domain: string }>();
+    const domains = new Set<string>();
+    for (const row of result.results ?? []) {
+      const domain = (row.candidate_domain ?? "").trim().toLowerCase();
+      if (domain) {
+        domains.add(domain);
+      }
+    }
+    return domains;
+  } catch (error) {
+    console.warn(
+      JSON.stringify({
+        event: "competitor_suggestion_dismissal_domain_read_failed",
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+        ts: new Date().toISOString(),
+      }),
+    );
+    return new Set();
+  }
 }
 
 /**
