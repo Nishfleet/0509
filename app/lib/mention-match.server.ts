@@ -199,19 +199,22 @@ export function mentionMatch(
 }
 
 /**
- * Return the first phrase (in candidate order) found in `haystack`, using a
- * case-insensitive whole-token match when the phrase is a bare alphanumeric
- * token and a case-insensitive substring match when the phrase contains
- * non-word characters (so "acme.io" still matches "see acme.io today").
- * Returns `null` when no phrase hits.
+ * Return the longest phrase found in `haystack`, using a case-insensitive
+ * whole-token match when the phrase is a bare alphanumeric token and a
+ * case-insensitive substring match when the phrase contains non-word
+ * characters (so "acme.io" still matches "see acme.io today"). Longest-first:
+ * when a headline contains both the short label and a more specific longer
+ * phrase ("Acme Co"), the specific phrase is the stronger evidence signal and
+ * is the one reported. Returns `null` when no phrase hits.
  */
 function firstPhraseMatch(haystack: string, phrases: string[]): string | null {
+  let best: string | null = null;
   for (const phrase of phrases) {
-    if (matchesPhrase(haystack, phrase)) {
-      return phrase;
+    if (matchesPhrase(haystack, phrase) && (best === null || phrase.length > best.length)) {
+      best = phrase;
     }
   }
-  return null;
+  return best;
 }
 
 function matchesPhrase(haystack: string, phrase: string): boolean {
