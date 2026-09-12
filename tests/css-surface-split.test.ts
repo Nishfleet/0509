@@ -33,10 +33,8 @@ const { appRoot, groups, usedBy, rules, css } = classifySurfaces(rootDir);
 
 const marketingCssPath = path.join(appRoot, "styles", "marketing.css");
 
-/** @param {string} cssText */
-function selectorClasses(cssText) {
-  /** @type {Set<string>} */
-  const classes = new Set();
+function selectorClasses(cssText: string): Set<string> {
+  const classes = new Set<string>();
   const re = /\.([a-zA-Z][a-zA-Z0-9_-]*)/g;
   // Strip comments, quoted strings and url(...) first — a `.ts`/`.css`/
   // `.png` mention inside those is not a selector. Then scan the text before
@@ -64,7 +62,7 @@ const marketingCss = fs.existsSync(marketingCssPath) ? fs.readFileSync(marketing
 const marketingSelectors = selectorClasses(marketingCss);
 const rootSelectors = selectorClasses(css);
 
-const isMarketingOnlyClass = (/** @type {string} */ c) =>
+const isMarketingOnlyClass = (c: string) =>
   usedBy.marketing.has(c) && !usedBy.app.has(c);
 
 describe("marketing CSS split (issue #2967)", () => {
@@ -129,7 +127,7 @@ describe("marketing CSS split (issue #2967)", () => {
     let checked = 0;
     for (const route of routeFiles) {
       const closure = reachableFiles(appRoot, [route]);
-      const emits = new Set();
+      const emits = new Set<string>();
       for (const f of closure) {
         if (!/\.(tsx|jsx)$/.test(f)) continue;
         for (const c of classNamesInSource(fs.readFileSync(f, "utf8"))) emits.add(c);
@@ -161,8 +159,7 @@ describe("marketing CSS split (issue #2967)", () => {
   });
 });
 
-/** @param {Iterable<string>} closure */
-function closureHasMarketingCssImport(closure) {
+function closureHasMarketingCssImport(closure: Iterable<string>): boolean {
   for (const f of closure) {
     if (f.endsWith(".css")) continue;
     try {

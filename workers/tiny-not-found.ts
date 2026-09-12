@@ -4,17 +4,29 @@ import { isBuyerSurfaceLocaleId } from "../app/lib/locale-markets";
 import type { RouteObject } from "react-router";
 
 /**
- * The one shape this module reads off an entry of the route-config array the
- * server build carries (React Router's `RouteConfigEntry`, typed structurally
- * so a Worker never imports the build-tool package).
+ * The one shape this module reads off an entry of a route list: the
+ * route-config array from `~/routes` (React Router's `RouteConfigEntry`) and
+ * the id-keyed server manifest (`serverBuild.routes`) both carry these
+ * fields. Typed structurally so a Worker never imports the build-tool type.
  */
-type RouteManifestArrayEntry = {
+type RouteEntryLike = {
   id?: string;
+  parentId?: string;
   path?: string;
   index?: boolean;
   caseSensitive?: boolean;
-  children?: RouteManifestArrayEntry[];
 };
+
+/**
+ * Every route input the callers actually pass: the nested config array from
+ * `~/routes`, the id-keyed server manifest from `serverBuild.routes` (whose
+ * values may be `undefined`, matching React Router's `RouteManifest`), and a
+ * plain `RouteObject[]` from tests.
+ */
+type RouteInput =
+  | RouteObject[]
+  | RouteEntryLike[]
+  | Record<string, RouteEntryLike | undefined>;
 
 /**
  * Tiny purpose-built 404 (issue #2967).
@@ -58,23 +70,19 @@ export const TINY_NOT_FOUND_HTML = `<!doctype html>
  * `matchRoutes` expects. Rebuild the tree from `parentId` links. Entries
  * keep only the fields matching needs (path/index/caseSensitive); the
  * manifest's own enumeration order already matches route-config order.
- *
  * Both shapes React Router hands a server build are accepted: the nested
  * array from `~/routes` (a `RouteConfigEntry[]`, whose entries are a
- * structural superset of the fields read here) and the id-keyed record. The
- * parameter is typed structurally rather than as `RouteConfigEntry[]` so a
- * Worker does not import a build-tool-only type.
+ * structural superset of the fields read here) and the id-keyed record.
  */
-function manifestToRouteObjects(
-  routes: RouteManifestArrayEntry[] | Record<string, RouteManifestArrayEntry>,
-): RouteObject[] {
+function manifestToRouteObjects(routes: RouteInput): RouteObject[] {
   if (Array.isArray(routes)) return routes as RouteObject[];
-  type ManifestEntry = { parentId?: string; path?: string; index?: boolean; caseSensitive?: boolean };
   // `children` is not on every member of the RouteObject union, so the tree
   // nodes carry the widened shape and are narrowed back on return.
   type RouteNode = RouteObject & { children: RouteNode[] };
   const nodes = new Map<string, RouteNode>();
-  for (const [id, r] of Object.entries(routes as Record<string, ManifestEntry>)) {
+  const entries = Object.entries(routes as Record<string, RouteEntryLike | undefined>);
+  for (const [id, r] of entries) {
+    if (!r) continue;
     nodes.set(id, {
       path: r.path,
       index: r.index === true,
@@ -83,23 +91,22 @@ function manifestToRouteObjects(
     } as RouteNode);
   }
   const roots: RouteNode[] = [];
-  for (const [id, r] of Object.entries(routes as Record<string, ManifestEntry>)) {
+  for (const [id, r] of entries) {
+    if (!r) continue;
     const node = nodes.get(id)!;
-    const parent = r.parentId && nodes.get(r.parentId);
+    const parent = r.parentId ? nodes.get(r.parentId) : undefined;
     if (parent) parent.children.push(node);
     else roots.push(node);
   }
-  return roots as RouteObject[];
+  return roots as unknown as RouteObject[];
 }
 
 function stripNotFoundSplat(routes: RouteObject[]): RouteObject[] {
-  return routes
-    .filter((entry) => entry.path !== "*")
-    .map((entry) =>
-      Array.isArray(entry.children)
-        ? { ...entry, children: stripNotFoundSplat(entry.children) }
-        : entry,
-    );
+  return routes.flatMap((entry): RouteObject[] => {
+    if (entry.path === "*") return [];
+    if (!Array.isArray(entry.children)) return [entry];
+    return [{ ...entry, children: stripNotFoundSplat(entry.children) } as RouteObject];
+  });
 }
 
 function thrownNotFoundParams(params: Record<string, string | undefined>): boolean {
@@ -117,14 +124,10 @@ function thrownNotFoundParams(params: Record<string, string | undefined>): boole
 // conversion and recursive filter run once per isolate, not once per request.
 const strippedRoutesCache = new WeakMap<object, RouteObject[]>();
 
-function routesWithoutNotFoundSplat(
-  routes: RouteManifestArrayEntry[] | Record<string, RouteManifestArrayEntry>,
-): RouteObject[] {
+function routesWithoutNotFoundSplat(routes: RouteInput): RouteObject[] {
   const cached = strippedRoutesCache.get(routes as object);
   if (cached) return cached;
-  const stripped = stripNotFoundSplat(
-    manifestToRouteObjects(routes),
-  );
+  const stripped = stripNotFoundSplat(manifestToRouteObjects(routes));
   strippedRoutesCache.set(routes as object, stripped);
   return stripped;
 }
@@ -134,7 +137,7 @@ function routesWithoutNotFoundSplat(
  * this pathname — i.e. routing matched nothing but the splat.
  */
 export function routesCatchAllForPath(
-  routes: RouteManifestArrayEntry[] | Record<string, RouteManifestArrayEntry>,
+  routes: RouteInput,
   pathname: string,
   basename = "/",
 ): boolean {
