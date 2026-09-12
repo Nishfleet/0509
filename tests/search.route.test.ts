@@ -481,13 +481,29 @@ describe("search loader", () => {
     harness.close();
   });
 
-  it("21 distinct cold queries from the same browser still 429 on the 21st", async () => {
+  it("distinct cold queries from the same browser still 429 once the edge browser budget is spent", async () => {
     // The warm-cache exemption must not weaken genuine abuse protection: a
-    // browser issuing 21 DISTINCT cold queries (no warm cache entry) still
-    // exhausts its per-browser public-search budget and 429s on the 21st.
+    // browser issuing DISTINCT cold queries (no warm cache entry) still
+    // exhausts its per-browser public-search budget and 429s on the next
+    // one. Issue #2985 moved the count off D1 onto the edge Rate Limiting
+    // binding, which only supports 10s/60s periods: the 20/10min legacy
+    // budget keeps the same sustained rate at 2/60s, so the 3rd distinct
+    // cold query from the same browser 429s. The limiter fails closed, so
+    // the fake edge binding must be present or EVERY search would 429.
+    const rateLimiterCounts = new Map<string, number>();
+    const rateLimiter = {
+      async limit(params: { key: string; rate: { requestsPerPeriod: number } }) {
+        const count = (rateLimiterCounts.get(params.key) ?? 0) + 1;
+        if (count > params.rate.requestsPerPeriod) {
+          return { success: false };
+        }
+        rateLimiterCounts.set(params.key, count);
+        return { success: true };
+      },
+    };
     const harness = createSqliteD1();
     applyMigration(harness.sqlite, "migrations/0012_rate_limit_events.sql");
-    const env = { DB: harness.db };
+    const env = { DB: harness.db, RATE_LIMITER: rateLimiter };
     const getOptionalSession = vi.fn().mockResolvedValue(null);
     const listCollections = vi.fn();
     const coldResult = {
@@ -544,8 +560,8 @@ describe("search loader", () => {
         headers: { cookie: anonCookie, "cf-connecting-ip": "203.0.113.78" },
       });
 
-    // 20 distinct cold queries pass.
-    for (let index = 0; index < 20; index += 1) {
+    // 2 distinct cold queries pass (2/60s sustained-rate budget, #2985).
+    for (let index = 0; index < 2; index += 1) {
       const result = await unwrapLoaderResult(loader, {
         context: createContext(env),
         request: request(`https://brand-${index}.com`),
@@ -553,13 +569,14 @@ describe("search loader", () => {
       expect(result).toBeDefined();
     }
 
-    // The 21st distinct cold query from the same browser 429s.
+    // The 3rd distinct cold query from the same browser 429s.
     await expect(
       unwrapLoaderResult(loader, {
         context: createContext(env),
         request: request("https://brand-21.com"),
       } as never),
     ).rejects.toMatchObject({ status: 429 });
+    expect(rateLimiterCounts.size).toBeGreaterThan(0);
     harness.close();
   });
 
