@@ -770,10 +770,29 @@ export async function action({ context, request }: ActionFunctionArgs) {
       digestRunId: digestRunId ?? null,
       message: error instanceof Error ? error.message : String(error),
     });
+    // 2026-09-12: the console was the ONLY place this exception went, so a
+    // 2.5-day production outage had no readable cause. Report it to the D1
+    // error sink (#3082) and put a bounded, charset-safe `detail` in the JSON
+    // so the gate journal names the failure class (the verifier re-projects
+    // it under the same strict pattern).
+    const { safeCanaryDetail } = await import("~/lib/canary-detail");
+    const detail = safeCanaryDetail(error);
+    try {
+      const { reportError } = await import("~/lib/error-report.server");
+      await reportError(env, {
+        route: "api.launch-readiness.canary",
+        reasonCode: "canary_proof_pipeline_failed",
+        error,
+        requestId: gateRunId ?? null,
+      });
+    } catch {
+      // the sink must never mask the original failure
+    }
     return Response.json(
       {
         ok: false,
         blocker: "canary_proof_pipeline_failed",
+        detail,
         gateRunId,
         ...(runId !== undefined ? { runId } : {}),
         ...(proofCaptureId !== undefined ? { proofCaptureId } : {}),

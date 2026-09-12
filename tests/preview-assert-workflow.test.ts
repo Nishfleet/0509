@@ -104,37 +104,32 @@ describe("preview-assert workflow", () => {
     expect(source).not.toContain("--shard=");
   });
 
-  it("builds with the deploy pipeline's own build before uploading the preview", () => {
-    // `npm run build` (react-router build via the Cloudflare vite plugin)
-    // emits build/server/wrangler.json (no_bundle, main index.js) plus the
-    // .wrangler/deploy/config.json redirect the production deploy uses. The
-    // upload would fail to bundle the raw TS entry (~/ aliases, the
-    // react-router virtual server-build) without it — observed on the first
-    // preview-assert run of PR #1580.
+  it("builds with the deploy pipeline's own build before the bundle proof", () => {
+    // `npm run build` emits build/server/wrangler.json (no_bundle, main
+    // index.js) plus the .wrangler/deploy/config.json redirect the production
+    // deploy uses. The dry-run bundle proof would fail to bundle the raw TS
+    // entry without it — observed on the first preview-assert run of PR #1580.
     const build = steps.find((step) => step.run === "npm run build");
-    const upload = steps.find((step) =>
-      step.run?.includes("wrangler versions upload"),
-    );
+    const proof = steps.find((step) => step.run?.includes("wrangler deploy --dry-run"));
     expect(build).toBeDefined();
-    expect(upload).toBeDefined();
-    expect(steps.indexOf(build!)).toBeLessThan(steps.indexOf(upload!));
+    expect(proof).toBeDefined();
+    expect(steps.indexOf(build!)).toBeLessThan(steps.indexOf(proof!));
   });
 
-  it("uploads a preview Worker version via Cloudflare's own mechanism", () => {
-    const upload = steps.find((step) =>
-      step.run?.includes("wrangler versions upload"),
-    );
-    expect(upload).toBeDefined();
-    expect(upload?.run).toContain("--preview-alias");
-    expect(upload?.env).toMatchObject({
+  it("proves the bundle with a dry-run and never uploads a version to the production worker (2026-09-12)", () => {
+    const proof = steps.find((step) => step.run?.includes("wrangler deploy --dry-run"));
+    expect(proof).toBeDefined();
+    expect(proof?.run).toContain("--outdir");
+    expect(proof?.env).toMatchObject({
       CLOUDFLARE_ACCOUNT_ID: "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}",
       CLOUDFLARE_API_TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}",
       CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV: "false",
     });
-    // A version upload is inert and the preview URL is never requested
-    // (the version carries production bindings).
-    expect(upload?.run).toContain("wrangler versions upload");
-    expect(upload?.run).toMatch(/never requested|do not request/);
+    // ~200 `versions upload`s a day evicted every real deploy from Cloudflare's
+    // version history (run 34679399412: rollback "Version not found") and blocked
+    // `wrangler secret put`; the workflow must not upload versions anywhere.
+    expect(steps.some((step) => step.run?.includes("wrangler versions upload"))).toBe(false);
+    expect(proof?.run).toMatch(/no version uploaded/);
   });
 
   it("references no production environment and no canary secret", () => {
