@@ -29,8 +29,9 @@
 #
 #   gate-path       — any change to a gate-owned path (`.github/workflows/**`,
 #                     `.github/scripts/**`, CODEOWNERS, gitleaks/semgrep ignore
-#                     files, the design-system ratchet and its ceilings, the CI
-#                     runner scripts), a ratchet ceiling raised or dropped, or a
+#                     files, the design-system ratchet and its ceilings, the
+#                     tests/ file-size ratchet, the CI runner scripts), a
+#                     ratchet ceiling raised or dropped, or a
 #                     CI step softened with `|| true` / `continue-on-error`.
 #                     Remedy: a repository ADMIN posts a pull-request comment
 #                     containing a line that is exactly
@@ -165,6 +166,7 @@ SHELL_TEST_COND = re.compile(
 )
 
 RATCHET_CEILINGS = "docs/design-system-ratchet.json"
+RATCHET_TEST_FILE = "tests/file-size-ratchet.test.ts"
 
 TRAILER = re.compile(
     r"^[ \t]*test-removal-justified:[ \t]*(\S.*?)[ \t]*$",
@@ -290,6 +292,41 @@ def ratchet_weakened(patch):
             findings.append(f"ratchet ceiling {key!r} was deleted (was {old})")
         elif after[key] > old:
             findings.append(f"ratchet ceiling {key!r} raised {old} -> {after[key]}")
+    return findings
+
+
+def ratchet_test_file_weakened(patch):
+    """The tests/ file-size ratchet has the same hole as the JSON ceilings.
+
+    `SEEDED_OVER_800_TEST_FILES` is the allowance: adding an entry permits a
+    new oversized test file, and no test can see the addition because the
+    list IS the ceiling (the same read-back-the-same-PR blindness the
+    design-system ratchet closed on the diff). Removing or raising the
+    `TEST_FILE_MAX_LINES` pin widens every file's allowance at once. Both
+    edits are reviewed acts, so both are rejected here.
+    """
+    findings = []
+    seed = re.compile(r'["\'](tests/[^"\']+\.test\.(?:ts|tsx))["\']')
+    pin = re.compile(r"\bTEST_FILE_MAX_LINES\s*=\s*(\d+)")
+    old_pin = None
+    new_pin = None
+    for line in code_lines(removed_lines(patch)):
+        m = pin.search(line)
+        if m:
+            old_pin = int(m.group(1))
+    for line in code_lines(added_lines(patch)):
+        m = pin.search(line)
+        if m:
+            new_pin = int(m.group(1))
+        for m in seed.finditer(line):
+            findings.append(
+                f"test-size ratchet seed entry {m.group(1)!r} added — "
+                "split the file instead; the seed list only ever shrinks"
+            )
+    if old_pin is not None and new_pin is None:
+        findings.append(f"TEST_FILE_MAX_LINES pin was deleted (was {old_pin})")
+    elif old_pin is not None and new_pin > old_pin:
+        findings.append(f"TEST_FILE_MAX_LINES raised {old_pin} -> {new_pin}")
     return findings
 
 
@@ -562,6 +599,8 @@ def main():
                     break
         if name == RATCHET_CEILINGS or prev == RATCHET_CEILINGS:
             gate_violations.extend(ratchet_weakened(patch))
+        if name == RATCHET_TEST_FILE or prev == RATCHET_TEST_FILE:
+            gate_violations.extend(ratchet_test_file_weakened(patch))
 
     if assertion_delta < 0:
         test_violations.append(

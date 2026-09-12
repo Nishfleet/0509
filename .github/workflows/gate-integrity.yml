@@ -240,7 +240,8 @@ jobs:
               "scripts/design-system-ratchet.mjs",
               "docs/design-system-ratchet.json",
               "scripts/ci-vitest-run.sh",
-              "scripts/ci-verify-*.sh"
+              "scripts/ci-verify-*.sh",
+              "tests/file-size-ratchet.test.ts"
             ]' \
             '{head_sha: $head_sha, pr_body: $pr_body, files: $files[0],
               commit_messages: $commit_messages[0], comments: $comments[0],

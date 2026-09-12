@@ -20,7 +20,7 @@ trap 'rm -rf "$WORK_DIR"' EXIT
 HEAD="1111111111111111111111111111111111111111"
 OLD="2222222222222222222222222222222222222222"
 
-GATE_GLOBS='[".github/workflows/**",".github/scripts/**",".github/CODEOWNERS",".gitleaksignore",".gitleaks.toml",".semgrepignore",".semgrep.yml",".semgrep.yaml","scripts/design-system-ratchet.mjs","docs/design-system-ratchet.json","scripts/ci-vitest-run.sh","scripts/ci-verify-*.sh"]'
+GATE_GLOBS='[".github/workflows/**",".github/scripts/**",".github/CODEOWNERS",".gitleaksignore",".gitleaks.toml",".semgrepignore",".semgrep.yml",".semgrep.yaml","scripts/design-system-ratchet.mjs","docs/design-system-ratchet.json","scripts/ci-vitest-run.sh","scripts/ci-verify-*.sh","tests/file-size-ratchet.test.ts"]'
 
 # build_bundle <name> — reads a python expression from $FIXTURE_SRC.
 build_bundle() {
@@ -356,6 +356,54 @@ run_fixture ratchet_lowered PASS "gate-path waived" "raised"
 fixture ratchet_script_edited '{"files": [
   {"filename": "scripts/design-system-ratchet.mjs", "status": "modified", "patch": "+// tweak"}]}'
 run_fixture ratchet_script_edited FAIL "gate-owned path changed"
+
+# --- gate-path: tests/ file-size ratchet (issue #2683) -----------------------
+fixture test_ratchet_seed_added '{"files": [
+  {"filename": "tests/file-size-ratchet.test.ts", "status": "modified",
+   "patch": "+  \"tests/new-oversized.route.test.ts\","}]}'
+run_fixture test_ratchet_seed_added FAIL "seed entry 'tests/new-oversized.route.test.ts' added"
+
+fixture test_ratchet_pin_removed '{"files": [
+  {"filename": "tests/file-size-ratchet.test.ts", "status": "modified",
+   "patch": "-export const TEST_FILE_MAX_LINES = 800;"}]}'
+run_fixture test_ratchet_pin_removed FAIL "TEST_FILE_MAX_LINES pin was deleted (was 800)"
+
+fixture test_ratchet_pin_raised '{"files": [
+  {"filename": "tests/file-size-ratchet.test.ts", "status": "modified",
+   "patch": "-export const TEST_FILE_MAX_LINES = 800;\n+export const TEST_FILE_MAX_LINES = 1200;"}]}'
+run_fixture test_ratchet_pin_raised FAIL "TEST_FILE_MAX_LINES raised 800 -> 1200"
+
+fixture test_ratchet_seed_added_single_quoted '{"files": [
+  {"filename": "tests/file-size-ratchet.test.ts", "status": "modified",
+   "patch": "+  '"'"'tests/new-oversized.route.test.ts'"'"',"}]}'
+run_fixture test_ratchet_seed_added_single_quoted FAIL "seed entry 'tests/new-oversized.route.test.ts' added"
+
+fixture test_ratchet_pin_lowered_waived '{"files": [
+  {"filename": "tests/file-size-ratchet.test.ts", "status": "modified",
+   "patch": "-export const TEST_FILE_MAX_LINES = 800;\n+export const TEST_FILE_MAX_LINES = 700;"}],
+  "attestations": ATTEST, "permissions": ADMIN}'
+run_fixture test_ratchet_pin_lowered_waived PASS "gate-path waived" "raised"
+
+fixture test_ratchet_seed_removed_waived '{"files": [
+  {"filename": "tests/file-size-ratchet.test.ts", "status": "modified",
+   "patch": "-  \"tests/ad-source.test.ts\","}],
+  "attestations": ATTEST, "permissions": ADMIN}'
+run_fixture test_ratchet_seed_removed_waived PASS "gate-path waived" "seed entry"
+
+fixture test_ratchet_path_is_gate_owned '{"files": [
+  {"filename": "tests/file-size-ratchet.test.ts", "status": "modified",
+   "patch": "+// doc prose tweak"}]}'
+run_fixture test_ratchet_path_is_gate_owned FAIL "gate-owned path changed"
+
+fixture test_ratchet_pin_masked_by_comment '{"files": [
+  {"filename": "tests/file-size-ratchet.test.ts", "status": "modified",
+   "patch": "-export const TEST_FILE_MAX_LINES = 800;\n+// TEST_FILE_MAX_LINES = 800;"}]}'
+run_fixture test_ratchet_pin_masked_by_comment FAIL "TEST_FILE_MAX_LINES pin was deleted (was 800)"
+
+fixture test_ratchet_seed_in_comment '{"files": [
+  {"filename": "tests/file-size-ratchet.test.ts", "status": "modified",
+   "patch": "+// see \"tests/some-existing.test.ts\" for the shape"}]}'
+run_fixture test_ratchet_seed_in_comment FAIL "gate-owned path changed" "seed entry"
 
 # --- both classes at once ---------------------------------------------------
 fixture both_classes '{"files": [
