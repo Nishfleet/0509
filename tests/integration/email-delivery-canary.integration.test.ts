@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
+import type { AppEnv } from "~/lib/env.server";
 import {
 	buildCanarySubject,
 	EMAIL_DELIVERY_CANARY_ADDRESS,
@@ -7,6 +8,7 @@ import {
 	getEmailDeliveryStatus,
 	makeCanaryToken,
 	recordCanaryReceipt,
+	sendEmailDeliveryCanary,
 	sweepCanaryRows,
 } from "~/lib/email-delivery-canary.server";
 
@@ -23,11 +25,13 @@ import { appEnv, db } from "./fixtures";
  *   - READ: getEmailDeliveryStatus aggregates the real rows, excluding
  *     forged unmatched receipts from the public success rate.
  *
- * The provider send itself is a binding call already covered by the node
- * suite; the 'sent' rows here are inserted with the same SQL shape the send
- * path writes. Storage is isolated per FILE, so token-scoped assertions are
- * exact and the global-rollup assertions in the second test rely on the two
- * tests' fixtures being the only canary rows present.
+ * The provider call is a mocked `send_email` binding (the pattern
+ * email-suppression-2983.integration.test.ts established); everything below
+ * it — the send INSERT, the receipt UPDATE, the sweep, the rollup — runs on
+ * the real schema. Storage is isolated per FILE, so token-scoped assertions
+ * are exact and the global-rollup assertions in the second test rely on the
+ * two tests' fixtures being the only canary rows present (its run
+ * sequentially, like the repo's other integration suites).
  */
 
 function canaryMessage(subject: string | null) {
@@ -50,11 +54,36 @@ async function insertSentRow(token: string, sentAt: Date) {
 		.run();
 }
 
+/** Mocked send_email binding over the real D1 env — the send path runs for real. */
+function sendingEnv(send: () => Promise<{ messageId: string }>): AppEnv {
+	return {
+		...appEnv,
+		EMAIL: { send: vi.fn(send) },
+		EMAIL_FROM_EMAIL: "alerts@0509.io",
+	} as AppEnv;
+}
+
 describe("email_delivery_canary on real D1 (issue #3188)", () => {
 	it("writes a send row, completes the round trip on receipt, and reads it in the status rollup", async () => {
-		const token = makeCanaryToken();
+		// The REAL send path (suppression consult -> provider binding -> the
+		// 0098 INSERT) with only the provider boundary mocked. `now` backdates
+		// sent_at by 30s so the round trip has a measurable latency.
 		const sentAt = new Date(Date.now() - 30_000);
-		await insertSentRow(token, sentAt);
+		const send = await sendEmailDeliveryCanary(
+			sendingEnv(async () => ({ messageId: "it-canary-1" })),
+			{ now: sentAt },
+		);
+		expect(send.outcome).toBe("sent");
+		const token = send.token!;
+
+		// The honesty contract on the real table: a healthy 'sent' row stores
+		// error = NULL, never a fabricated provider-refusal message.
+		const sentRow = await db()
+			.prepare(`SELECT status, error FROM email_delivery_canary WHERE token = ?`)
+			.bind(token)
+			.first<{ status: string; error: string | null }>();
+		expect(sentRow?.status).toBe("sent");
+		expect(sentRow?.error).toBeNull();
 
 		const outcome = await recordCanaryReceipt(
 			appEnv,
@@ -89,7 +118,9 @@ describe("email_delivery_canary on real D1 (issue #3188)", () => {
 		const lateToken = makeCanaryToken();
 		await insertSentRow(lateToken, new Date(Date.now() - EMAIL_DELIVERY_CANARY_LATE_MS - 60_000));
 		const sweep = await sweepCanaryRows(appEnv);
-		expect(sweep.markedLate).toBeGreaterThanOrEqual(1);
+		// Exactly one row is sweepable: test 1's is already 'received' and the
+		// forged row does not exist yet — a wider UPDATE must trip this.
+		expect(sweep.markedLate).toBe(1);
 		const lateRow = await db()
 			.prepare(`SELECT status, error FROM email_delivery_canary WHERE token = ?`)
 			.bind(lateToken)
