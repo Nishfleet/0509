@@ -107,6 +107,9 @@ const COMPARE_PRODUCT_NAMES: Readonly<Record<string, string>> = {
   foreplay: "Foreplay",
   keeptabz: "KeepTabz",
   gethookd: "GetHookd",
+  bigspy: "BigSpy",
+  minea: "Minea",
+  poweradspy: "PowerAdSpy",
   visualping: "Visualping",
   "visualping-ad-library": "Visualping Ad Library",
 };

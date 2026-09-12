@@ -42,11 +42,14 @@ import { getPlanEntitlements } from "~/lib/plan-entitlements";
 import type { CompareCitations } from "~/components/compare-citations";
 import adspyCitations from "~/data/compare/adspy-citations.json";
 import adspyderCitations from "~/data/compare/adspyder-citations.json";
+import bigspyCitations from "~/data/compare/bigspy-citations.json";
 import foreplaySpyderCitations from "~/data/compare/foreplay-spyder-citations.json";
 import gethookdCitations from "~/data/compare/gethookd-citations.json";
 import keeptabzCitations from "~/data/compare/keeptabz-citations.json";
 import metaAdLibraryCitations from "~/data/compare/meta-ad-library-citations.json";
+import mineaCitations from "~/data/compare/minea-citations.json";
 import panoramataCitations from "~/data/compare/panoramata-citations.json";
+import poweradspyCitations from "~/data/compare/poweradspy-citations.json";
 import pulzifiCitations from "~/data/compare/pulzifi-citations.json";
 import spylandCitations from "~/data/compare/spyland-citations.json";
 import visualpingAdLibraryCitations from "~/data/compare/visualping-ad-library-citations.json";
@@ -85,6 +88,11 @@ export const PUBLIC_MARKDOWN_PATHS = [
   // Issue #2866: two verified competitors that had no compare page (both 404'd).
   "/compare/keeptabz",
   "/compare/gethookd",
+  // Issue #3092: the remaining verified ad-spy incumbents, source-checked
+  // against live product + pricing pages before shipping.
+  "/compare/bigspy",
+  "/compare/minea",
+  "/compare/poweradspy",
 ] as const;
 
 const PUBLIC_MARKDOWN_PATH_SET = new Set<string>(PUBLIC_MARKDOWN_PATHS);
@@ -224,6 +232,21 @@ const LLMS_PAGE_DETAILS = {
     title: "Five to Nine vs GetHookd",
     description:
       "How Five to Nine's scheduled change proof compares with GetHookd's Facebook Ads Library analysis workbench (7-day free trial, API and MCP on annual plans).",
+  },
+  "/compare/bigspy": {
+    title: "Five to Nine vs BigSpy",
+    description:
+      "How Five to Nine's source-backed change proof compares with BigSpy's free-entry, 10-platform ad-spy database ($69–$499/month tiers).",
+  },
+  "/compare/minea": {
+    title: "Five to Nine vs Minea",
+    description:
+      "How Five to Nine's source-backed change proof compares with Minea's e-commerce ad and shop research ($49–$199/month tiers).",
+  },
+  "/compare/poweradspy": {
+    title: "Five to Nine vs PowerAdSpy",
+    description:
+      "How Five to Nine's source-backed change proof compares with PowerAdSpy's 11-network ad intelligence platform ($99–$399/month tiers, paid 3-day trials).",
   },
   "/switch/panoramata": {
     title: "Panoramata alternative",
@@ -1315,6 +1338,18 @@ const PUBLIC_MARKDOWN_BY_PATH: Readonly<Record<string, string>> = {
   "/compare/gethookd": compareMarkdown(
     gethookdCitations as CompareCitations,
     "GetHookd is a Facebook Ads Library analysis workbench with a 7-day free trial and API and MCP on annual plans. Five to Nine is scheduled, source-backed Meta Ad Library and landing-page change proof.",
+  ),
+  "/compare/bigspy": compareMarkdown(
+    bigspyCitations as CompareCitations,
+    "BigSpy is a free-entry ad spy database covering 10 major ad platforms, with paid plans from $69/month. Five to Nine is scheduled, source-backed Meta Ad Library and landing-page change proof.",
+  ),
+  "/compare/minea": compareMarkdown(
+    mineaCitations as CompareCitations,
+    "Minea is an ad-spy tool for e-commerce and dropshipping product research, with plans from $49/month. Five to Nine is scheduled, source-backed Meta Ad Library and landing-page change proof.",
+  ),
+  "/compare/poweradspy": compareMarkdown(
+    poweradspyCitations as CompareCitations,
+    "PowerAdSpy is an AI-powered ad intelligence platform across 11 networks, with plans from $99/month and paid 3-day trials. Five to Nine is scheduled, source-backed Meta Ad Library and landing-page change proof.",
   ),
 };
 

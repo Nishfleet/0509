@@ -145,6 +145,11 @@ export default [
   // Issue #2866: two verified competitors that had no compare page.
   route("compare/keeptabz", "routes/compare.keeptabz.tsx"),
   route("compare/gethookd", "routes/compare.gethookd.tsx"),
+  // Issue #3092: the remaining verified ad-spy incumbents (each source-checked
+  // against a live product + pricing page before shipping).
+  route("compare/bigspy", "routes/compare.bigspy.tsx"),
+  route("compare/minea", "routes/compare.minea.tsx"),
+  route("compare/poweradspy", "routes/compare.poweradspy.tsx"),
   // Issue #2887: the MagicBrief wind-down page — the one vendor shutdown
   // creating real switching demand (BET 8). It replaces the legacy
   // switch-URL 301: the path serves 200 again, only /compare/magicbrief
@@ -211,6 +216,9 @@ export default [
     route("compare/adspy", "routes/$locale.compare.adspy.tsx"),
     route("compare/keeptabz", "routes/$locale.compare.keeptabz.tsx"),
     route("compare/gethookd", "routes/$locale.compare.gethookd.tsx"),
+    route("compare/bigspy", "routes/$locale.compare.bigspy.tsx"),
+    route("compare/minea", "routes/$locale.compare.minea.tsx"),
+    route("compare/poweradspy", "routes/$locale.compare.poweradspy.tsx"),
     // Issue #2887: the MagicBrief wind-down page (BET 8), locale twins.
     route("switch/magicbrief", "routes/$locale.switch.magicbrief.tsx"),
     route("switch/panoramata", "routes/$locale.switch.panoramata.tsx"),

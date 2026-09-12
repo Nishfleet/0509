@@ -925,6 +925,11 @@ export const SITEMAP_PATHS = [
   // Issue #2866: two verified competitors that had no compare page (both 404'd).
   "/compare/keeptabz",
   "/compare/gethookd",
+  // Issue #3092: the remaining verified ad-spy incumbents — bigspy, minea,
+  // poweradspy — each verified against a live product + pricing source.
+  "/compare/bigspy",
+  "/compare/minea",
+  "/compare/poweradspy",
   // BET 8 switch/intent pages (issue #2081). Production /sitemap.xml is
   // buildSitemapXml → ROOT_SITEMAP_STATIC_ENTRIES, which is this list minus
   // locale prefixes. lastmod is deliberately omitted: these pages have no

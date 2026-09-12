@@ -788,6 +788,39 @@
       "verify": "grep -qF 'turns competitor ads and visible landing-page changes into source-backed morning intelligence' app/lib/public-markdown.ts && grep -qF 'Presence Desk: website/open-web is the active GA source; social and marketplace sources are gated, planned, or manual-only until provider approval' app/lib/public-markdown.ts && grep -qF 'with source-linked proof' app/lib/public-markdown.ts",
       "test": "tests/customer-claim-surface-registry.test.ts",
       "followUp": null
+    },
+    {
+      "claimId": "AUDIT-COMPARE-BIGSPY-SCOPE-PRICING",
+      "page": "/compare/bigspy",
+      "selector": "hero deck, claim cards, FAQ",
+      "sentence": "BigSpy is a free-entry ad spy database covering 10 major platforms, with plans from Starter at $69/month up to Ultimate at $499/month — competitor scope and prices cited to bigspy.com, checked 2026-09-12; the page claims no evaluative comparisons beyond those cited facts.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF '$69' app/routes/compare.bigspy.tsx && grep -qF 'bigspy.com' app/data/compare/bigspy-citations.json",
+      "test": "tests/new-compare-pages.route.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-COMPARE-MINEA-SCOPE-PRICING",
+      "page": "/compare/minea",
+      "selector": "hero deck, claim cards, FAQ",
+      "sentence": "Minea is an ad-spy tool for e-commerce and dropshipping product research, with monthly plans at Starter $49, Premium $99, and Business $199 — competitor scope and prices cited to minea.com, checked 2026-09-12; the page claims no evaluative comparisons beyond those cited facts.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF '$49' app/routes/compare.minea.tsx && grep -qF 'minea.com/pricing' app/data/compare/minea-citations.json",
+      "test": "tests/new-compare-pages.route.test.ts",
+      "followUp": null
+    },
+    {
+      "claimId": "AUDIT-COMPARE-POWERADSPY-SCOPE-PRICING",
+      "page": "/compare/poweradspy",
+      "selector": "hero deck, claim cards, FAQ",
+      "sentence": "PowerAdSpy is an AI-powered ad intelligence platform indexing 11 networks across 100+ countries, with monthly plans at Standard $99, Platinum $279, and Palladium $399 and paid 3-day trials — competitor scope and prices cited to poweradspy.com, checked 2026-09-12; the page claims no evaluative comparisons beyond those cited facts.",
+      "claimed": true,
+      "verified": true,
+      "verify": "grep -qF '$279' app/routes/compare.poweradspy.tsx && grep -qF 'poweradspy.com/pricing' app/data/compare/poweradspy-citations.json",
+      "test": "tests/new-compare-pages.route.test.ts",
+      "followUp": null
     }
   ],
   "rowsMetadata": {

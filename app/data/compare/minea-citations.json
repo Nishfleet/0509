@@ -1,0 +1,20 @@
+{
+  "competitor": "minea",
+  "productName": "Minea",
+  "sources": [
+    {
+      "id": "minea-home",
+      "href": "https://minea.com/",
+      "label": "Minea home",
+      "checked": "2026-09-12",
+      "claim": "Minea positions itself as an ad-spy tool for e-commerce and dropshipping: a database of top-performing shops and ads to find winning products, track trends, and monitor competitors."
+    },
+    {
+      "id": "minea-pricing",
+      "href": "https://minea.com/pricing",
+      "label": "Minea pricing",
+      "checked": "2026-09-12",
+      "claim": "Minea lists Starter at $49/month, Premium at $99/month, and Business at $199/month on monthly billing, with lower per-month rates when paid quarterly."
+    }
+  ]
+}
