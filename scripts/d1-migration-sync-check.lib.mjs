@@ -129,6 +129,20 @@ export const RETIRED_PRODUCTION_MIGRATIONS = new Set([
 // allowed to carry them. (run 34671488829, 0509#3174)
 export const PRODUCTION_MIGRATION_LEDGER_ORDER_EXCEPTIONS = Object.freeze([
   Object.freeze(["0096_error_reports.sql", "0096_email_suppression.sql"]),
+  // 2026-09-12 (deploy run 34705843153, 0509#3314): production applied
+  // 0098_widen_source_target_connector_gdelt.sql while
+  // 0098_widen_source_target_connector_bluesky.sql was not yet in the
+  // repository — it merged 38 minutes later (5036afde0) and no deploy went
+  // green in between. bluesky sorts earlier than gdelt, so the append-only
+  // ledger ends ...gdelt where the sorted repository ends ...bluesky, gdelt,
+  // and the ledger prefixes only this reordered variant. Once the evidence
+  // job's catch-up applies bluesky it lands after gdelt, which is exactly the
+  // order this group declares. Same fixed-history rule as the 0096 group
+  // above.
+  Object.freeze([
+    "0098_widen_source_target_connector_gdelt.sql",
+    "0098_widen_source_target_connector_bluesky.sql",
+  ]),
 ]);
 
 const MIGRATION_NAME_PATTERN = /^\d{4}_[A-Za-z0-9_]+\.sql$/u;

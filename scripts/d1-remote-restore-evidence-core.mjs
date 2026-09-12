@@ -341,6 +341,30 @@ export function unappliedForwardMigrationSuffix(
   // suffix is what the apply produces — order-exception variants only matter
   // for names production already carries out of repository order.
   if (primarySuffix !== null) return primarySuffix;
+  // More than one allowed ledger can prefix-match the production ledger once
+  // an order-exception group sits entirely past the applied prefix: its
+  // reordered variant and the repository-order variant then disagree on what
+  // the catch-up suffix is. Resolve by wrangler's own semantics instead of a
+  // guess: `wrangler d1 migrations apply` appends the repository's pending
+  // migrations in repository (sorted) order, so the plan is the repository's
+  // missing names exactly when appending them in repository order lands on an
+  // allowed ledger — the same set the hard assert below requires. A suffix
+  // that orders an exception group differently than the repository would not
+  // be what the apply produces, so it must not be planned. (0509#3314)
+  const pendingSorted = repositoryMigrations.filter(
+    (name) => !ledgerNames.includes(name),
+  );
+  if (
+    pendingSorted.length > 0 &&
+    pendingSorted.every((name) => !cleanupMigrations.has(name)) &&
+    allowedLedgers.some(
+      (allowedLedger) =>
+        JSON.stringify(allowedLedger) ===
+        JSON.stringify([...ledgerNames, ...pendingSorted]),
+    )
+  ) {
+    return pendingSorted;
+  }
   if (
     matches.length > 0 &&
     matches.every(
