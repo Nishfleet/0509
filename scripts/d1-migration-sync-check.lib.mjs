@@ -313,7 +313,14 @@ export function allowedProductionMigrationLedgers(
           reordered[position] = group[member];
         });
       });
-      allowedLedgers.push([...baseline, ...reordered]);
+      const candidate = [...baseline, ...reordered];
+      if (
+        !allowedLedgers.some(
+          (ledger) => JSON.stringify(ledger) === JSON.stringify(candidate),
+        )
+      ) {
+        allowedLedgers.push(candidate);
+      }
     }
   }
   return allowedLedgers;

@@ -318,8 +318,10 @@ export function unappliedForwardMigrationSuffix(
     return [];
   }
   /** @type {string[] | null} */
-  let found = null;
-  for (const allowedLedger of allowedLedgers) {
+  let primarySuffix = null;
+  /** @type {string[][]} */
+  const matches = [];
+  for (const [index, allowedLedger] of allowedLedgers.entries()) {
     if (ledgerNames.length >= allowedLedger.length) continue;
     const prefix = allowedLedger.slice(0, ledgerNames.length);
     if (JSON.stringify(prefix) !== JSON.stringify(ledgerNames)) continue;
@@ -331,12 +333,23 @@ export function unappliedForwardMigrationSuffix(
     ) {
       continue;
     }
-    if (found !== null && JSON.stringify(found) !== JSON.stringify(suffix)) {
-      return null;
-    }
-    found = suffix;
+    if (index === 0) primarySuffix = suffix;
+    matches.push(suffix);
   }
-  return found;
+  // A forward apply appends pending migrations in repository order, so when
+  // the primary (repository-ordered) ledger is among the prefix matches its
+  // suffix is what the apply produces — order-exception variants only matter
+  // for names production already carries out of repository order.
+  if (primarySuffix !== null) return primarySuffix;
+  if (
+    matches.length > 0 &&
+    matches.every(
+      (suffix) => JSON.stringify(suffix) === JSON.stringify(matches[0]),
+    )
+  ) {
+    return matches[0];
+  }
+  return null;
 }
 
 /**

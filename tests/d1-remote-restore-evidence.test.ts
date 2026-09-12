@@ -1541,6 +1541,20 @@ describe("D1 remote restore evidence automation", () => {
         repository,
       ),
     ).toEqual({ action: "ok" });
+    // A production ledger behind the whole exception group catches up in
+    // repository order: a forward apply always appends in sorted order.
+    const behindNames = productionNames.filter(
+      (name) => name !== "0096_error_reports.sql",
+    );
+    expect(
+      planSourceBackupLedgerReconciliation(
+        namedLedger(behindNames),
+        repository,
+      ),
+    ).toEqual({
+      action: "apply_forward_suffix",
+      migrations: ["0096_email_suppression.sql", "0096_error_reports.sql"],
+    });
   });
 
   it("still rejects a production ledger carrying one unknown extra name", () => {
