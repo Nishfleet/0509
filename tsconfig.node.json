@@ -76,6 +76,7 @@
     "e2e/search-landing-page-capture.spec.ts",
     "e2e/search-streaming-three-tier.spec.ts",
     "e2e/watchlist-run-history.spec.ts",
+    "scripts/lib/**/*.mjs",
     "scripts/safe-command-output.mjs",
     "scripts/market-signal-snapshot.mjs",
     "scripts/validate-market-signal-report.mjs",

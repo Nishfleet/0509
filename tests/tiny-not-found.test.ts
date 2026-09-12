@@ -5,17 +5,17 @@ import {
   TINY_NOT_FOUND_HTML,
   tinyNotFoundResponse,
 } from "../workers/tiny-not-found";
-import type { AgnosticRouteObject } from "react-router";
+import type { RouteObject } from "react-router";
 
 // The real registered route tree (route() config entries are shape-compatible
-// with AgnosticRouteObject for matching): pins the worker decision to the
+// with RouteObject for matching): pins the worker decision to the
 // manifest, so a route-tree edit that changes the 404 shape fails here.
 import realRouteConfig from "~/routes";
 
 // A reduced mirror of the shape app/routes.ts produces in the built server
 // build: specific static routes, dynamic segments, a nested locale layout, an
 // apileben splat prefix, and the terminal not-found catch-all.
-const ROUTES: AgnosticRouteObject[] = [
+const ROUTES: RouteObject[] = [
   {
     id: "root",
     children: [

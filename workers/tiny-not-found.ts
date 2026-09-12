@@ -1,7 +1,20 @@
 import { matchRoutes } from "react-router";
 
 import { isBuyerSurfaceLocaleId } from "../app/lib/locale-markets";
-import type { AgnosticRouteObject } from "react-router";
+import type { RouteObject } from "react-router";
+
+/**
+ * The one shape this module reads off an entry of the route-config array the
+ * server build carries (React Router's `RouteConfigEntry`, typed structurally
+ * so a Worker never imports the build-tool package).
+ */
+type RouteManifestArrayEntry = {
+  id?: string;
+  path?: string;
+  index?: boolean;
+  caseSensitive?: boolean;
+  children?: RouteManifestArrayEntry[];
+};
 
 /**
  * Tiny purpose-built 404 (issue #2967).
@@ -45,32 +58,41 @@ export const TINY_NOT_FOUND_HTML = `<!doctype html>
  * `matchRoutes` expects. Rebuild the tree from `parentId` links. Entries
  * keep only the fields matching needs (path/index/caseSensitive); the
  * manifest's own enumeration order already matches route-config order.
+ *
+ * Both shapes React Router hands a server build are accepted: the nested
+ * array from `~/routes` (a `RouteConfigEntry[]`, whose entries are a
+ * structural superset of the fields read here) and the id-keyed record. The
+ * parameter is typed structurally rather than as `RouteConfigEntry[]` so a
+ * Worker does not import a build-tool-only type.
  */
 function manifestToRouteObjects(
-  routes: AgnosticRouteObject[] | Record<string, { id?: string; parentId?: string; path?: string; index?: boolean; caseSensitive?: boolean }>,
-): AgnosticRouteObject[] {
-  if (Array.isArray(routes)) return routes;
+  routes: RouteManifestArrayEntry[] | Record<string, RouteManifestArrayEntry>,
+): RouteObject[] {
+  if (Array.isArray(routes)) return routes as RouteObject[];
   type ManifestEntry = { parentId?: string; path?: string; index?: boolean; caseSensitive?: boolean };
-  const nodes = new Map<string, AgnosticRouteObject & { children: AgnosticRouteObject[] }>();
+  // `children` is not on every member of the RouteObject union, so the tree
+  // nodes carry the widened shape and are narrowed back on return.
+  type RouteNode = RouteObject & { children: RouteNode[] };
+  const nodes = new Map<string, RouteNode>();
   for (const [id, r] of Object.entries(routes as Record<string, ManifestEntry>)) {
     nodes.set(id, {
       path: r.path,
       index: r.index === true,
       caseSensitive: r.caseSensitive,
       children: [],
-    } as AgnosticRouteObject & { children: AgnosticRouteObject[] });
+    } as RouteNode);
   }
-  const roots: AgnosticRouteObject[] = [];
+  const roots: RouteNode[] = [];
   for (const [id, r] of Object.entries(routes as Record<string, ManifestEntry>)) {
     const node = nodes.get(id)!;
     const parent = r.parentId && nodes.get(r.parentId);
     if (parent) parent.children.push(node);
     else roots.push(node);
   }
-  return roots;
+  return roots as RouteObject[];
 }
 
-function stripNotFoundSplat(routes: AgnosticRouteObject[]): AgnosticRouteObject[] {
+function stripNotFoundSplat(routes: RouteObject[]): RouteObject[] {
   return routes
     .filter((entry) => entry.path !== "*")
     .map((entry) =>
@@ -93,15 +115,15 @@ function thrownNotFoundParams(params: Record<string, string | undefined>): boole
 // Cache the stripped tree per imported build: the routes manifest is stable
 // at runtime (the server build module import is cached), so the manifest→tree
 // conversion and recursive filter run once per isolate, not once per request.
-const strippedRoutesCache = new WeakMap<object, AgnosticRouteObject[]>();
+const strippedRoutesCache = new WeakMap<object, RouteObject[]>();
 
 function routesWithoutNotFoundSplat(
-  routes: AgnosticRouteObject[] | Record<string, unknown>,
-): AgnosticRouteObject[] {
+  routes: RouteManifestArrayEntry[] | Record<string, RouteManifestArrayEntry>,
+): RouteObject[] {
   const cached = strippedRoutesCache.get(routes as object);
   if (cached) return cached;
   const stripped = stripNotFoundSplat(
-    manifestToRouteObjects(routes as AgnosticRouteObject[]),
+    manifestToRouteObjects(routes),
   );
   strippedRoutesCache.set(routes as object, stripped);
   return stripped;
@@ -112,7 +134,7 @@ function routesWithoutNotFoundSplat(
  * this pathname — i.e. routing matched nothing but the splat.
  */
 export function routesCatchAllForPath(
-  routes: AgnosticRouteObject[] | Record<string, unknown>,
+  routes: RouteManifestArrayEntry[] | Record<string, RouteManifestArrayEntry>,
   pathname: string,
   basename = "/",
 ): boolean {

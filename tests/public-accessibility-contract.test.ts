@@ -2,7 +2,21 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-const css = readFileSync("app/app.css", "utf8");
+/**
+ * Both stylesheets, concatenated. Issue #2967 split the marketing-only rules
+ * (`.f9-auth-story h1`, `.ld-proof-actions`, `.ld-kicker`) out of
+ * `app/app.css` into `app/styles/marketing.css`, so a source contract stated
+ * against the root file alone now fails on CSS that is still correct — and is
+ * still served, just from the other sheet. These contracts describe how the
+ * public surfaces render, not which sheet owns a rule, so the assertion
+ * surface is the union. Dashboard rules (`.f9-dash-*`, `.wk-*`) still live in
+ * root and the union does not weaken that.
+ */
+
+const css = [
+  readFileSync("app/app.css", "utf8"),
+  readFileSync("app/styles/marketing.css", "utf8"),
+].join("\n");
 
 describe("public accessibility source contract", () => {
   it("uses dark focus treatments on light marketing, share, and mobile app surfaces", () => {
