@@ -6,9 +6,7 @@ import { isBuyerSurfaceLocaleId } from "../app/lib/locale-markets";
 import { cloudflareRuntimeContext } from "../app/lib/cloudflare-context";
 import { reportScheduledTaskFailure } from "../app/lib/cron-failure-alert.server";
 import {
-	EMAIL_DELIVERY_CANARY_CRON,
 	recordCanaryReceipt,
-	runEmailDeliveryCanaryTick,
 } from "../app/lib/email-delivery-canary.server";
 import { reportError } from "../app/lib/error-report.server";
 import {
@@ -546,35 +544,6 @@ export default {
       ctx.waitUntil(
         runStatusProbes(env).catch((error) =>
           reportScheduledTaskFailure(env, "status_probes", error),
-        ),
-      );
-      return;
-    }
-
-    if (controller.cron === EMAIL_DELIVERY_CANARY_CRON) {
-      // Email-delivery canary (send → receive round-trip measurement). A
-      // control-plane cron like the gap check above: it is deliberately NOT
-      // recorded in the release-soak observation tables (their CHECK accepts
-      // only the four workload crons), and it must never fall through to
-      // resolveScheduledTask — the default branch would run full monitoring
-      // scans on every 15-minute tick.
-      ctx.waitUntil(
-        runEmailDeliveryCanaryTick(env).then(
-          (result) => {
-            if (result.outcome !== "sent" || result.loop.degraded) {
-              console.log("email delivery canary tick completed", {
-                outcome: result.outcome,
-                markedLate: result.sweep.markedLate,
-                loop: result.loop,
-              });
-            }
-          },
-          (error) =>
-            reportError(env, {
-              route: "scheduled.email_delivery_canary",
-              reasonCode: "email_canary_tick_threw",
-              error,
-            }),
         ),
       );
       return;

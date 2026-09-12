@@ -40,7 +40,7 @@ describe("status_probe_samples on real D1", () => {
     const probes = await getPublicStatusProbes(env.DB, {
       now: new Date(base + 30 * 60_000),
     });
-    expect(probes.length).toBe(5);
+    expect(probes.length).toBe(6);
     const byName = new Map(probes.map((probe) => [probe.probe, probe]));
 
     const uptime = byName.get("uptime")!;
@@ -57,6 +57,12 @@ describe("status_probe_samples on real D1", () => {
     const neverRun = byName.get("provider_meta")!;
     expect(neverRun.latest).toBeNull();
     expect(neverRun.okRate24h).toBeNull();
+
+    // The email-delivery canary (#3188) is a registered probe name even when
+    // it has never fired in this fixture.
+    const emailDelivery = byName.get("email_delivery")!;
+    expect(emailDelivery.latest).toBeNull();
+    expect(emailDelivery.okRate24h).toBeNull();
   });
 
   it("keeps ok as a strict integer column and prunes by checked_at with the index", async () => {

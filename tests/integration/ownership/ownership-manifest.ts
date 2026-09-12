@@ -164,6 +164,7 @@ export const PLATFORM_TABLES: ReadonlyArray<{ table: string; reason: string }> =
   { table: "demo_brand_proof_hole_state", reason: "demo-brand marketing infrastructure state, not customer data" },
   { table: "error_report", reason: "ops error-report sink (route/reason telemetry, no customer rows)" },
   { table: "status_probe_samples", reason: "status-probe telemetry samples (probe name, ok/latency, checked_at) — ops observability rows, no customer data" },
+  { table: "email_delivery_canary", reason: "email delivery round-trip canary rows (token, sent/received/failed, latency) — ops observability, no customer data (issue #3188)" },
 ];
 
 /** Shadow/backup table-name shapes that migrations must never leave behind. */

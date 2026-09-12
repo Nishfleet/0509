@@ -6,11 +6,9 @@ import { reportError } from "~/lib/error-report.server";
 /**
  * Email delivery canary — measures the outbound send → receive loop end to end.
  *
- * Every fifteen minutes (cron "star-slash-15 star star star", a control-plane
- * cron handled before
- * `resolveScheduledTask` and therefore NOT recorded in the release-soak
- * observation tables, whose CHECK accepts only the four workload crons) the
- * Worker sends a canary email to `status-canary@0509.io` with a unique token
+ * Every fifteen minutes, as one of the live status probes (the five-minute status
+ * cron's tick budget: every 3rd tick, registered in
+ * app/lib/status-probes.server.ts — NOT a second scheduler), the Worker sends a canary email to `status-canary@0509.io` with a unique token
  * in the subject. The zone's Email Routing rule delivers that address back to
  * this same Worker's `email()` handler, which parses the token and completes
  * the row. What was previously unmeasurable — "did the mail actually arrive?"
@@ -29,7 +27,6 @@ import { reportError } from "~/lib/error-report.server";
  * (`error_report` D1 table), never a new channel.
  */
 
-export const EMAIL_DELIVERY_CANARY_CRON = "*/15 * * * *";
 export const EMAIL_DELIVERY_CANARY_ADDRESS = "status-canary@0509.io";
 export const EMAIL_DELIVERY_CANARY_SUBJECT_PREFIX = "[0509 canary]";
 /** A round trip slower than this is a failure, not a success. */
@@ -42,8 +39,13 @@ export const EMAIL_DELIVERY_CANARY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
  */
 export const EMAIL_DELIVERY_CANARY_LOOP_WINDOW_MS = 75 * 60 * 1000;
 export const EMAIL_DELIVERY_CANARY_LOOP_MIN_SENDS = 3;
+/** Unmatched receipts recorded per 24h before the write surface is capped. */
+export const EMAIL_DELIVERY_CANARY_UNMATCHED_CAP = 20;
 
 const CANARY_TAG = "email-delivery-canary";
+const UNMATCHED_ERROR = "unmatched receipt: no matching sent row";
+/** Public-safety: one error text looks like this, verbatim. */
+const UNMATCHED_ERROR_PREFIX = "unmatched receipt:";
 const TOKEN_PATTERN =
 	/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
@@ -79,6 +81,20 @@ function truncateError(error: unknown): string | null {
 	const trimmed = message.trim();
 	if (!trimmed) return null;
 	return trimmed.length > 200 ? `${trimmed.slice(0, 199)}…` : trimmed;
+}
+
+/**
+ * Public-safety scrub: provider and suppression text can embed the recipient
+ * (or another real) address. Any address-ish span becomes "[sender]" before
+ * the value reaches the status payload. Used ONLY on the public export — the
+ * error-report sink is internal and keeps full fidelity.
+ */
+export function scrubEnvelopeAddresses(text: string): string {
+	return text.replace(/[\w.:+-]+@[\w.-]+\.[\w-]+/g, "[sender]");
+}
+
+function isUnmatchedFailure(row: { status: string; error: string | null }): boolean {
+	return row.status === "failed" && (row.error ?? "").startsWith(UNMATCHED_ERROR_PREFIX);
 }
 
 /**
@@ -135,9 +151,8 @@ export async function sendEmailDeliveryCanary(
 			await execute(
 				env,
 				`INSERT INTO email_delivery_canary (token, status, sent_at, received_at, latency_ms, error, created_at)
-				 VALUES (?, 'failed', ?, NULL, NULL, ?, ?)`,
+				 VALUES (?, 'failed', NULL, NULL, NULL, ?, ?)`,
 				token,
-				now.toISOString(),
 				message,
 				now.toISOString(),
 			);
@@ -196,6 +211,9 @@ export async function recordCanaryReceipt(
 			}
 			if (existing.status === "sent" && existing.sent_at) {
 				const latencyMs = Math.max(0, now.getTime() - Date.parse(existing.sent_at));
+			// Concurrent redelivery of the same mail: both readers see status
+			// 'sent' and both compute the same latency; the loser's guarded
+			// UPDATE no-ops. Same token, same outcome — benign by design.
 				if (latencyMs > EMAIL_DELIVERY_CANARY_LATE_MS) {
 					// Arrived, but outside the deadline: honest failure with the true
 					// latency preserved in the error text.
@@ -225,16 +243,39 @@ export async function recordCanaryReceipt(
 			// Already failed (send error or swept late): nothing to complete.
 			return { kind: "unmatched", token };
 		}
-		await execute(
-			env,
-			`INSERT INTO email_delivery_canary (token, status, sent_at, received_at, latency_ms, error, created_at)
-			 VALUES (?, 'failed', NULL, ?, NULL, 'unmatched receipt: no matching sent row', ?)`,
-			token,
-			sentAt,
-			now.toISOString(),
-		);
-		return { kind: "unmatched", token };
-	} catch (error) {
+		// Cap the unauthenticated write surface: a token with no sent row can
+			// arrive from anyone (the address is guessable). Beyond a small
+			// allowance per 24h the row is NOT written and the sink is not
+			// flooded again — the first-row alerts already carry the signal, and
+			// forged rows must never drag the public success rate anyway (they
+			// are excluded from every metric below).
+			const unmatchedBrowse = await queryOne<{ n: number }>(
+				env,
+				`SELECT COUNT(*) AS n FROM email_delivery_canary
+				 WHERE error LIKE ? AND created_at >= ?`,
+				`${UNMATCHED_ERROR_PREFIX}%`,
+				new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString(),
+			);
+			const unmatchedCount = unmatchedBrowse?.n ?? 0;
+			if (unmatchedCount >= EMAIL_DELIVERY_CANARY_UNMATCHED_CAP) {
+				return { kind: "unmatched", token };
+			}
+			await execute(
+				env,
+				`INSERT INTO email_delivery_canary (token, status, sent_at, received_at, latency_ms, error, created_at)
+				 VALUES (?, 'failed', NULL, ?, NULL, ?, ?)`,
+				token,
+				sentAt,
+				UNMATCHED_ERROR,
+				now.toISOString(),
+			);
+			await reportError(env, {
+				route: "email.canary.receipt",
+				reasonCode: "email_canary_receipt_unmatched",
+				error: new Error(`canary receipt had no matching sent row (token ${token.slice(0, 4)}…)`),
+			});
+			return { kind: "unmatched", token };
+		} catch (error) {
 		// Pre-migration schema or D1 outage: report through the sink, never throw.
 		await reportError(env, {
 			route: "email.canary.receipt",
@@ -383,6 +424,45 @@ export async function runEmailDeliveryCanaryTick(
 	};
 }
 
+
+/*
+ * Status-probe integration: the canary rides the five-minute live-probe cron in
+ * app/lib/status-probes.server.ts on a 15-minute budget (every third 5-minute
+ * tick — :00, :15, :30, :45 UTC, the same minutes a star-slash-15 cron would fire).
+ * No second scheduler: the probe sample row for `email_delivery` is the
+ * cron's own public-safe evidence, while the D1 loop rows carry the metric.
+ */
+export const EMAIL_DELIVERY_CANARY_EVERY_TICKS = 3;
+
+export function emailCanaryDueThisTick(now: Date): boolean {
+	return Math.floor(now.getUTCMinutes() / 5) % EMAIL_DELIVERY_CANARY_EVERY_TICKS === 0;
+}
+
+/**
+ * Probe-shaped wrapper over the full tick (sweep + send + loop assessment).
+ * The interval detail is public-safe by construction: counts and a window
+ * label, never tokens, addresses or provider internals. Never throws.
+ */
+export async function runEmailDeliveryProbe(
+	env: AppEnv,
+	options: { now?: Date } = {},
+): Promise<{ ok: boolean; detail: string }> {
+	const result = await runEmailDeliveryCanaryTick(env, options);
+	if (result.outcome === "skipped") {
+		return { ok: true, detail: `canary send skipped (${result.error ?? "not configured"})` };
+	}
+	if (result.outcome === "send_failed") {
+		return { ok: false, detail: "canary send not accepted by provider" };
+	}
+	if (result.loop.degraded) {
+		return { ok: false, detail: "loop degraded: sends with zero receipts" };
+	}
+	return {
+		ok: true,
+		detail: `canary sent; ${result.loop.receivedInWindow}/${result.loop.sendsInWindow} receipts in ${EMAIL_DELIVERY_CANARY_LOOP_WINDOW_MS / 60000}-min window`,
+	};
+}
+
 export type EmailDeliveryStatus = {
 	/** 24-hour canary loop window. */
 	canary: {
@@ -462,17 +542,25 @@ export async function getEmailDeliveryStatus(env: AppEnv): Promise<EmailDelivery
 		]);
 
 		const receivedRows = rows.filter((row) => row.status === "received");
-		const failedRows = rows.filter((row) => row.status === "failed");
+		// Unmatched receipts are unauthenticated inbound mail, not canary
+		// attempts: they must never enter the public success rate, the failed
+		// count or the last-failure line (a forger could otherwise drag the
+		// metric to zero). They stay stored (up to the cap) for the sink.
+		const failedRows = rows.filter(
+			(row) => row.status === "failed" && !isUnmatchedFailure(row),
+		);
 		const resolved = receivedRows.length + failedRows.length;
 		const latencies = receivedRows
 			.map((row) => row.latency_ms)
 			.filter((value): value is number => typeof value === "number")
 			.sort((a, b) => a - b);
 		const p50 = latencies.length > 0 ? latencies[Math.floor(latencies.length / 2)] : null;
+		// Send-refused rows have no sent_at/received_at (see the failed-insert);
+		// their created_at is the honest time of the attempt.
 		const lastFailed = failedRows
-			.filter((row) => row.sent_at || row.received_at)
 			.sort((a, b) =>
-				Date.parse(b.received_at ?? b.sent_at ?? "") - Date.parse(a.received_at ?? a.sent_at ?? ""),
+				Date.parse(b.received_at ?? b.sent_at ?? b.created_at) -
+				Date.parse(a.received_at ?? a.sent_at ?? a.created_at),
 			)[0];
 		const lastReceivedAt = receivedRows
 			.map((row) => row.received_at)
@@ -483,7 +571,13 @@ export async function getEmailDeliveryStatus(env: AppEnv): Promise<EmailDelivery
 		return {
 			canary: {
 				windowHours: 24,
-				sends: rows.filter((row) => row.sent_at !== null || row.status === "failed").length,
+				sends: rows
+					.filter(
+						(row) =>
+							(row.sent_at !== null || row.status === "failed") &&
+							!isUnmatchedFailure(row),
+					)
+					.length,
 				received: receivedRows.length,
 				failed: failedRows.length,
 				successRate: resolved > 0 ? receivedRows.length / resolved : null,
@@ -491,7 +585,7 @@ export async function getEmailDeliveryStatus(env: AppEnv): Promise<EmailDelivery
 				lastFailure: lastFailed
 					? {
 							at: lastFailed.received_at ?? lastFailed.sent_at ?? lastFailed.created_at,
-							error: (lastFailed.error ?? "unknown failure").slice(0, 200),
+							error: scrubEnvelopeAddresses((lastFailed.error ?? "unknown failure").slice(0, 200)),
 						}
 					: null,
 				lastReceivedAt,
