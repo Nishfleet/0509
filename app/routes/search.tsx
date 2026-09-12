@@ -2589,17 +2589,33 @@ export default function SearchRoute() {
                         )}
                       </div>
                     ) : !searchAnswer ? (
-                      <p className="f9-wk-note">
-                        {isDelayedDiscoveryStatus(visibleResult.discoveryStatus)
-                          ? (discoverySummary ??
-                            "Fresh checks are delayed, so coverage may be incomplete.")
-                          : isDomainSearch &&
-                              data.relevanceApplied &&
-                              !isBroaderScope
-                            ? "We couldn't confirm any ads whose advertiser or landing page is connected to this website."
-                            : (discoverySummary ??
-                              "Try another competitor website.")}
-                      </p>
+                      /* Issue #2980: a delayed finished result already says
+                         fresh checks are delayed; without an affordance the
+                         copy is a dead end. Point at the retry (same path →
+                         re-arms the warming budget) beside the honest label. */
+                      <div>
+                        <p className="f9-wk-note">
+                          {isDelayedDiscoveryStatus(visibleResult.discoveryStatus)
+                            ? (discoverySummary ??
+                              "Fresh checks are delayed, so coverage may be incomplete.")
+                            : isDomainSearch &&
+                                data.relevanceApplied &&
+                                !isBroaderScope
+                              ? "We couldn't confirm any ads whose advertiser or landing page is connected to this website."
+                              : (discoverySummary ??
+                                "Try another competitor website.")}
+                        </p>
+                        {isDelayedDiscoveryStatus(visibleResult.discoveryStatus) ? (
+                          <div className="f9-wk-acts">
+                            <Link className="f9-wk-lnk" to={retrySearchPath}>
+                              Retry this search{" "}
+                              <span aria-hidden="true" className="f9-wk-chev">
+                                &rsaquo;
+                              </span>
+                            </Link>
+                          </div>
+                        ) : null}
+                      </div>
                     ) : null}
                     {/* Issue 2137: while an anonymous search is warming and
                         the poll budget is still live, sell the sample brief

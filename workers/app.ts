@@ -10,6 +10,7 @@ import {
   runDemoBrandProofHoleCatchUp,
   summarizeDemoBrandBackfill,
 } from "../app/lib/demo-brand-backfill.server";
+import { runDemoBrandDiscoveryCanary } from "../app/lib/demo-discovery-canary.server";
 import {
   runSneakerResaleBackfill,
   summarizeSneakerResaleBackfill,
@@ -459,6 +460,23 @@ export default {
           (error) =>
             reportScheduledTaskFailure(env, "demo_brand_proof_hole_catch_up", error),
         ),
+      );
+      // Issue #2980: the flagship demo path (/search?q=<demo brand>) is the
+      // anonymous buyer's first impression. When the discovery provider is
+      // stuck (cooldown re-arming on every failed capture) every demo search
+      // serves cache_only stale for hours while all internal organs stay
+      // green. On the same hourly rail, observe — never trigger — the five
+      // demo brands' public cache freshness and page the operator when a
+      // brand serves cache_only for more than an hour.
+      ctx.waitUntil(
+        runDemoBrandDiscoveryCanary(env).catch((error) => {
+          reportScheduledTaskFailure(
+            env,
+            "demo_brand_discovery_canary",
+            error instanceof Error ? error : new Error(String(error)),
+          );
+          return null;
+        }),
       );
       return;
     }
