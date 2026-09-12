@@ -48,6 +48,7 @@
     "scripts/canary-cta-detector.mjs",
     "scripts/canary-search-h1.mjs",
     "scripts/canary-demo-brand-timeline.mjs",
+    "scripts/canary-sitemap-coverage.mjs",
     "scripts/canary-digest-headline-ratio.mjs",
     "scripts/launch-readiness-canary-cycle.mjs",
     "scripts/local-release-server.mjs",
