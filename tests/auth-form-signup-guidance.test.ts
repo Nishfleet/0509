@@ -30,6 +30,7 @@ async function renderAuthForm(props: {
   linkResent?: boolean;
   initialEmail?: string;
   initialName?: string;
+  initialCompetitor?: string;
   redirectTo?: string;
 }) {
   const { AuthForm } = await import("~/components/auth-form");
@@ -37,6 +38,7 @@ async function renderAuthForm(props: {
     createElement(AuthForm, {
       mode: props.mode,
       redirectTo: props.redirectTo ?? "/app#setup-checklist",
+      ...(props.initialCompetitor !== undefined ? { initialCompetitor: props.initialCompetitor } : {}),
       ...(props.linkSent
         ? {
             linkSent: true,
@@ -364,11 +366,46 @@ describe("/auth/signup resend action", () => {
       email: "owner@example.com",
       name: "Nish Kumar",
       redirectTo: "/app#setup-checklist",
+      competitor: "",
     });
     // The refusal came out of the existing send path — not a bypass around it.
     expect(sendBetterAuthMagicLink).toHaveBeenCalledTimes(1);
     for (const call of warn.mock.calls) {
       expect(JSON.stringify(call)).not.toContain("owner@example.com");
     }
+  });
+
+  it("signup form shows the optional first-competitor field; login does not", async () => {
+    await mockReactRouter();
+    const signup = await renderAuthForm({ mode: "signup" });
+    expect(signup).toContain("<span>First competitor website</span>");
+    expect(signup).toContain('name="competitor"');
+
+    const login = await renderAuthForm({ mode: "login" });
+    expect(login).not.toContain("First competitor website");
+    expect(login).not.toContain('name="competitor"');
+  });
+
+  it("signup form pre-fills the competitor field, literal round-trip, and it survives the resend form", async () => {
+    await mockReactRouter();
+    const markup = await renderAuthForm({ mode: "signup", initialCompetitor: "nykaa.com" });
+    expect(markup).toContain('value="nykaa.com"');
+
+    const sent = await renderAuthForm({
+      mode: "signup",
+      linkSent: true,
+      initialEmail: "new@example.com",
+      initialCompetitor: "nykaa.com",
+    });
+    // The sent state's resend form re-posts the competitor so the value
+    // survives a resend exactly like the hidden name input does.
+    expect(sent).toContain('name="competitor" value="nykaa.com"');
+  });
+
+  it("no competitor pre-fill renders no hidden resend competitor input", async () => {
+    await mockReactRouter();
+    const markup = await renderAuthForm({ mode: "signup" });
+    expect(markup).toContain('name="competitor"');
+    expect(markup).not.toContain('name="competitor" type="hidden"');
   });
 });

@@ -90,6 +90,7 @@ describe("auth signup loader", () => {
       redirectTo: "/app#setup-checklist",
       prefillEmail: "",
       prefillName: "",
+      prefillCompetitor: "",
       linkSent: false,
       linkResent: false,
     });

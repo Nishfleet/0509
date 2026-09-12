@@ -44,6 +44,10 @@ const COMPARE_PAGES = [
   // Issue #2866: two verified competitors that had no compare page (both 404'd).
   { slug: "keeptabz", label: "Five to Nine vs KeepTabz", href: "/compare/keeptabz" },
   { slug: "gethookd", label: "Five to Nine vs GetHookd", href: "/compare/gethookd" },
+  // Issue #3092: remaining verified ad-spy incumbents, source-checked live.
+  { slug: "bigspy", label: "Five to Nine vs BigSpy", href: "/compare/bigspy" },
+  { slug: "minea", label: "Five to Nine vs Minea", href: "/compare/minea" },
+  { slug: "poweradspy", label: "Five to Nine vs PowerAdSpy", href: "/compare/poweradspy" },
 ] as const;
 
 /**

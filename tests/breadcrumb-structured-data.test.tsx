@@ -95,6 +95,7 @@ describe("BreadcrumbList on /switch/* pages (issue #1463)", () => {
   it.each([
     ["switch.panoramata", "Switch from Panoramata"],
     ["switch.magicbrief", "Switch from MagicBrief"],
+    ["switch.adspy", "Switch from AdSpy"],
   ])("%s carries the shared SwitchLanding trail", async (route, leaf) => {
     const markup = await renderDefault(route);
     expect(crumbNames(itemsOf(breadcrumb(markup)))).toEqual([

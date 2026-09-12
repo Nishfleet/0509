@@ -55,12 +55,17 @@ export function MarketingFooter() {
         {/* Issue #2866: two verified competitors that had no compare page. */}
         <Link to="/compare/keeptabz">vs KeepTabz</Link>
         <Link to="/compare/gethookd">vs GetHookd</Link>
+        {/* Issue #3092: remaining verified ad-spy incumbents. */}
+        <Link to="/compare/bigspy">vs BigSpy</Link>
+        <Link to="/compare/minea">vs Minea</Link>
+        <Link to="/compare/poweradspy">vs PowerAdSpy</Link>
       </nav>
       <nav className="ld-footer-compare" aria-label="Switch">
         <span className="ld-footer-group-label">Switch</span>
         <Link to="/switch/panoramata">from Panoramata</Link>
         <Link to="/switch/visualping">from Visualping</Link>
         <Link to="/switch/magicbrief">from MagicBrief</Link>
+        <Link to="/switch/adspy">from AdSpy</Link>
       </nav>
       <nav className="ld-footer-compare" aria-label="By industry">
         <span className="ld-footer-group-label">By industry</span>

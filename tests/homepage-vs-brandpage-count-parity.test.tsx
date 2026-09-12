@@ -170,6 +170,7 @@ function installMocks(options: MockOptions = {}) {
   }));
   vi.doMock("~/lib/rate-limit.server", () => ({
     enforcePublicBrandPageRateLimit: vi.fn().mockResolvedValue(null),
+    enforceDemoProofRateLimit: vi.fn().mockResolvedValue(null),
   }));
   vi.doMock("~/lib/offer-timeline.server", () => ({
     loadOfferTimeline: vi.fn().mockResolvedValue({ entries: [], asOfState: null }),

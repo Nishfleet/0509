@@ -58,6 +58,33 @@ const NEW_COMPARE_PAGES = [
     competitor: "GetHookd",
     claims: ["7-day free trial", "API", "MCP"],
   },
+  {
+    // Issue #3092: tiers verified live on bigspy.com 2026-09-12 (Free,
+    // Starter $69, Growth $159, Ultimate $499).
+    slug: "bigspy",
+    title: "Five to Nine vs BigSpy",
+    pricing: ["$69", "$159", "$499"],
+    competitor: "BigSpy",
+    claims: ["10 major platforms", "Free plan"],
+  },
+  {
+    // Issue #3092: tiers verified live on minea.com/pricing 2026-09-12
+    // (Starter $49, Premium $99, Business $199 monthly).
+    slug: "minea",
+    title: "Five to Nine vs Minea",
+    pricing: ["$49", "$99", "$199"],
+    competitor: "Minea",
+    claims: ["e-commerce", "dropshipping"],
+  },
+  {
+    // Issue #3092: tiers verified live on poweradspy.com/pricing 2026-09-12
+    // (Standard $99, Platinum $279, Palladium $399 monthly; 3-day trials).
+    slug: "poweradspy",
+    title: "Five to Nine vs PowerAdSpy",
+    pricing: ["$99", "$279", "$399"],
+    competitor: "PowerAdSpy",
+    claims: ["11 networks", "3-day"],
+  },
 ] as const;
 
 beforeEach(() => {
@@ -86,6 +113,12 @@ async function loadCompareModule(slug: string) {
       return import("~/routes/compare.keeptabz");
     case "gethookd":
       return import("~/routes/compare.gethookd");
+    case "bigspy":
+      return import("~/routes/compare.bigspy");
+    case "minea":
+      return import("~/routes/compare.minea");
+    case "poweradspy":
+      return import("~/routes/compare.poweradspy");
     default:
       throw new Error(`unknown compare slug: ${slug}`);
   }
