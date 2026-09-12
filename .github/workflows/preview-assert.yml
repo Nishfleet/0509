@@ -21,9 +21,9 @@ name: Preview assert
 #   - `npm run build`     (the deploy pipeline's react-router build; emits
 #                          build/server/wrangler.json + the .wrangler config
 #                          redirect that the deploy uses)
-#   - `wrangler versions upload` of the PR head with a preview alias — the
+#   - `wrangler deploy --dry-run` bundle proof of the PR head (2026-09-12: replaced the
 #     preview URL Cloudflare itself assigns (Nish, 2026-09-04: "wrangler
-#     versions upload / preview alias"), proving the PR head builds and
+#     `versions upload` that evicted real deploys from version history), proving the PR head builds and
 #     uploads as a real Worker version. The upload is inert: a version is
 #     not deployed and receives no traffic, so production D1/R2/email
 #     bindings are never touched.
@@ -209,13 +209,20 @@ jobs:
           set -euo pipefail
           upload_output="$(mktemp)"
           trap 'rm -f -- "$upload_output"' EXIT
-          if ! ./node_modules/.bin/wrangler versions upload \
-            --preview-alias "$PREVIEW_ALIAS" \
-            --message "preview-assert ${{ github.repository }}@${{ github.sha }} (event ${{ github.event_name }})" \
+          # 2026-09-12: bundle proof WITHOUT uploading a version to the production
+          # worker. `versions upload` pushed ~200 preview versions/day onto the
+          # live script, which evicted every real deploy from Cloudflare's
+          # version history (run 34679399412: rollback "Version not found") and
+          # blocks `wrangler secret put` ("latest version isn't deployed").
+          # `deploy --dry-run` builds and validates the exact same bundle and
+          # bindings, touching nothing on Cloudflare.
+          outdir="$(mktemp -d)"
+          trap 'rm -rf -- "$outdir" "$upload_output"' EXIT
+          if ! ./node_modules/.bin/wrangler deploy --dry-run --outdir "$outdir" \
             >"$upload_output" 2>&1; then
             cat "$upload_output"
             exit 1
           fi
           cat "$upload_output"
-          echo "Uploaded preview version under alias: $PREVIEW_ALIAS"
+          echo "Bundle proof: wrangler deploy --dry-run succeeded for ${{ github.sha }} (no version uploaded; alias $PREVIEW_ALIAS unused)"
           echo "Upload-only proof: the preview URL is never requested here — the version carries the worker's production bindings, so a request to it would hit production D1/email."
