@@ -205,6 +205,36 @@ describe("sanitizeProofDiagnostics", () => {
     ).toBeNull();
   });
 
+  it("journals the 503 catch's sanitized reason so the thrown layer is named (issue #3190)", () => {
+    // The 08:05Z run (34679399412) journaled blocker=canary_proof_pipeline_failed
+    // with proofEmailEvidence: {present: false, ...} — the underlying
+    // deliverWeeklyDigest throw stayed in Workers Logs. The route now answers
+    // the catch with a sanitized `reason`; the verifier journals it verbatim.
+    expect(
+      sanitizeProofDiagnostics({
+        ok: false,
+        blocker: "canary_proof_pipeline_failed",
+        reason: "gate-c-proof-email-target-must-resolve-uniquely",
+      }),
+    ).toEqual({
+      blocker: "canary_proof_pipeline_failed",
+      reason: "gate-c-proof-email-target-must-resolve-uniquely",
+    });
+
+    // Reason must keep the same identifier contract as blocker: shape-checked,
+    // never address- or body-shaped. A reason alone (no blocker) still journals.
+    expect(
+      sanitizeProofDiagnostics({
+        ok: false,
+        reason: "digest-email-delivery-claim-did-not-return-an-owned-attempt",
+        recipient: "someone@example.com",
+      }),
+    ).toEqual({ reason: "digest-email-delivery-claim-did-not-return-an-owned-attempt" });
+    expect(
+      sanitizeProofDiagnostics({ ok: false, reason: "Bad Reason! Spaces" }),
+    ).toBeNull();
+  });
+
   it("returns null when there is nothing safe to report", () => {
     expect(sanitizeProofDiagnostics(undefined)).toBeNull();
     expect(sanitizeProofDiagnostics({ ok: false })).toBeNull();
