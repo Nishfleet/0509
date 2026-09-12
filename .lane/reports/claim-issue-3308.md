@@ -73,3 +73,30 @@ a 20–30-minute-cadence judge samples that weather blind.
 - The acceptance's `home_ttfb_ms < 200 in the next measure.sh visitor line`
   is judge-produced; this PR ships the mechanical gate so the next regression
   fails deploys, not the hourly judge.
+
+## Verification receipts (final run, 2026-09-12T23:05Z, this unit)
+
+Issue step 1 receipt (`curl -sSI https://0509.io/ | grep -iE "cf-cache-status|cache-control|set-cookie|age"`, two consecutive):
+
+- 1st: MISS (no `cf-cache-status`), `cache-control: public, max-age=300` — the still-deployed pre-#3308 worker; no set-cookie.
+- 2nd: `cf-cache-status: HIT`, `age: 0`, `cache-control: public, max-age=14400` — zone replay, TTL rewritten to the 4h zone Browser-Cache-TTL; no set-cookie.
+
+Root-cause timing, corrected and pinned:
+
+- main@14:20Z = `5c15ef4b2`; main@14:50Z = `4bf178e30` (= #3289's merge, commit dated 2026-09-12T14:45:20Z; GitHub `mergedAt` 14:55:41Z lags the merge commit — the deploy trigger fired inside that gap).
+- `git diff 5c15ef4b2..4bf178e30 --name-only`: ONLY `app/lib/*` (RSS presence connector), `data/seed-lists/sneaker-resale.json`, tests, and a PR-notes file — **no** `workers/` file, so no commit changed the home route's cache headers or its Set-Cookie behaviour in the flap window. Independently verified here.
+- Live receipts (both above + every fresh render) show the worker's own emission unchanged: `public, max-age=…`, `vary: cookie`, no set-cookie. The regression is the two-layer cache under deploy churn + the 300s zone Edge TTL, as recorded above — not any commit in the window.
+
+Judge-shaped probe, this box, 2026-09-12T23:00Z:
+
+- `bin/fleet-visitor-probe` (read-only run): `visitor: https_redirect=301 home_ttfb_ms=2562 home_edge=NONE search_ttfb_ms=6431 manifest=200 dup_routes=0 public_repo_leaks=0` — the regressed shape, reproduced (zone cold).
+- Acceptance clause 1 (`cf-cache-status: HIT` on a second consecutive anonymous request): satisfied repeatedly — curl ×3: HIT/HIT/HIT with warm steady-state TTFB **67ms** (first two 306/317ms carried fresh-TLS overhead); an undici pair: MISS 918ms → HIT **265ms**.
+- Acceptance clause 2 (`home_ttfb_ms < 200 in the next measure.sh visitor line`): the 66ms-class warm-HIT steady state is exactly what this box reproduces (67ms); the judge's next post-deploy line closes it — the #3320 precedent (re-probe + record) applies.
+
+Gates run on this branch:
+
+- `npx vitest run --configLoader runner --project node --changed origin/main` → 10 files, 103 tests, pass (exit 0).
+- The 4 touched test files explicitly (`worker-security-headers`, `worker-edge-cache`, `worker-edge-cache-wiring`, `pricing.route`) → 4 files, 64 tests, pass (exit 0).
+- `sgscan --base origin/main` → "No new security findings." (exit 0).
+- Local `crgate`: CodeRabbit CLI 0.7.6 present but not signed in on this machine (exit 0, printed notice) — noted, not a failure; the senior-seat reviewer round on the PR is the substantive review for this product repo.
+- `node scripts/check-live-public-home.mjs` against TODAY's production → exit 1, and that is correct-by-design: the only failing assertion is the busted-URL MISS carrying the old worker's `public, max-age=300`, which the #3308 accepted set deliberately excludes (the set pins the NEW policy's shapes). The gate runs post-deploy (`deploy-production-plan.mjs` step `live_public_truth` after the `wrangler deploy` step), so it turns green exactly when this branch's worker ships: MISS = `public, s-maxage=3900, max-age=300` (accepted), zone HIT = one of the two accepted rewrites.
