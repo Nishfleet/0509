@@ -90,7 +90,7 @@ domains and asserts the streaming contract from issue #1858:
 `bet2-live-verification.mjs` probe machinery verbatim (streamed-body first-card detection,
 warming poll loop, rate limiter). Exits non-zero when any streaming check trips. Defaults to
 `https://0509.io`; pass `--base-url` to point it elsewhere. Unit tests in
-`tests/search-stream-canary.test.ts` cover the verdict logic with mock fetch.
+`tests/search-stream-guard.test.ts` cover the verdict logic with mock fetch.
 
 ## Signed-in extras on the same route
 
