@@ -299,12 +299,13 @@ export function allowedProductionMigrationLedgers(
     const suffix = repositoryLedger.slice(repositoryBaseline.length);
     allowedLedgers.push([...baseline, ...suffix]);
     const applicable = orderExceptions.filter((group) =>
-      group.every((name) => suffix.includes(name)),
+      group.every((/** @type {string} */ name) => suffix.includes(name)),
     );
     for (let mask = 1; mask < 1 << applicable.length; mask += 1) {
       const reordered = [...suffix];
       applicable.forEach((group, groupIndex) => {
         if (!(mask & (1 << groupIndex))) return;
+        /** @type {number[]} */
         const positions = [];
         reordered.forEach((name, position) => {
           if (group.includes(name)) positions.push(position);
