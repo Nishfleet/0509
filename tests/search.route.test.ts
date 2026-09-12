@@ -144,7 +144,7 @@ afterEach(() => {
 });
 
 describe("search loader", () => {
-  it("shows the idle public search page without calling live discovery", async () => {
+  it("302s anonymous bare /search to /brands without calling live discovery (issue #2965)", async () => {
     const env = { DB: {} };
     const getOptionalSession = vi.fn().mockResolvedValue(null);
     const listCollections = vi.fn();
@@ -175,7 +175,7 @@ describe("search loader", () => {
     }));
 
     const { loader } = await import("~/routes/search");
-    const result = await unwrapLoaderResult(loader, {
+    const out = await loader({
       context: createContext(env),
       request: new Request("http://localhost/search"),
     } as never);
@@ -184,8 +184,94 @@ describe("search loader", () => {
     expect(listCollections).not.toHaveBeenCalled();
     expect(searchAdsViaSourceResolver).not.toHaveBeenCalled();
     expect(prepareSearchResultSelection).not.toHaveBeenCalled();
+    // Issue #2965: anonymous bare /search is an empty-q page that used to be
+    // indexable — it must 302 to the indexable /brands hub instead of
+    // rendering the idle shell to crawlers.
+    expect(out).toBeInstanceOf(Response);
+    const redirect = out as Response;
+    expect(redirect.status).toBe(302);
+    expect(redirect.headers.get("location")).toBe("/brands");
+  });
+
+  it("302s anonymous bare /{locale}/search and .data twins to /brands (issue #2965)", async () => {
+    const env = { DB: {} };
+    const listCollections = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections,
+    }));
+
+    const { loader } = await import("~/routes/search");
+    // The locale route re-exports this loader, so anonymous bare locale
+    // search must bounce exactly like EN — otherwise /de/search stays a 200
+    // indexable empty funnel. The .data variants are what a client-side
+    // <Link to="/search"> actually fetches, so they redirect too.
+    for (const [request, params] of [
+      [new Request("http://localhost/de/search"), { locale: "de" }],
+      [new Request("http://localhost/search.data"), {}],
+      [new Request("http://localhost/pt-br/search.data"), { locale: "pt-br" }],
+    ] as const) {
+      const out = await loader({
+        context: createContext(env),
+        request,
+        params,
+      } as never);
+      expect(out).toBeInstanceOf(Response);
+      const res = out as Response;
+      expect(res.status, request.url).toBe(302);
+      expect(res.headers.get("location"), request.url).toBe("/brands");
+    }
+    expect(listCollections).not.toHaveBeenCalled();
+  });
+
+  it("keeps the idle search UI for a signed-in visitor on bare /search", async () => {
+    const env = { DB: {} };
+    const listCollections = vi.fn().mockResolvedValue([]);
+    const searchAdsViaSourceResolver = vi.fn();
+    const prepareSearchResultSelection = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(appSession),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections,
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver,
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection,
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue(null),
+    }));
+
+    const { loader } = await import("~/routes/search");
+    const result = await unwrapLoaderResult(loader, {
+      context: createContext(env),
+      request: new Request("http://localhost/search"),
+    } as never);
+
+    // The dashboard/set-up-checklist funnels link to bare /search; a signed-
+    // in user must still get the search UI, not the /brands bounce.
     expect(result).toMatchObject({
-      session: null,
+      session: { user: appSession.user },
       result: {
         ads: [],
         discoveryStatus: "disabled",

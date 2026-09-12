@@ -91,10 +91,24 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   // The under-fold before/after mark: a real stored watch event or null (the
   // null path renders the clearly labelled sample state, never a fabricated
   // "real" change). One bounded database read; never a scan or a provider call.
+  // Issue #2951: the two homepage lookups are independent — both promises are
+  // started eagerly and only awaited afterwards, so the second database
+  // read no longer waits on the first. Each lookup keeps its own guarded fallback:
+  // a failure in one must not touch the other (same warnings, same sentinels
+  // as before).
+  const changeMarkPromise = (async (): Promise<PublicChangeMark | null> => {
+    const { loadPublicChangeMark } = await import("~/lib/public-change-mark.server");
+    return loadPublicChangeMark(env);
+  })();
+
+  const indexableAdsLinksPromise = (async (): Promise<IndexableAdsLink[]> => {
+    const { loadIndexableAdsInternalLinks } = await import("~/lib/ads-internal-links.server");
+    return loadIndexableAdsInternalLinks(env);
+  })();
+
   let changeMark: PublicChangeMark | null = null;
   try {
-    const { loadPublicChangeMark } = await import("~/lib/public-change-mark.server");
-    changeMark = await loadPublicChangeMark(env);
+    changeMark = await changeMarkPromise;
   } catch (error) {
     console.warn("Homepage change mark load failed; rendering the labelled sample state.", {
       errorName: error instanceof Error ? error.name : typeof error,
@@ -104,8 +118,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
   let indexableAdsLinks: IndexableAdsLink[] = [];
   try {
-    const { loadIndexableAdsInternalLinks } = await import("~/lib/ads-internal-links.server");
-    indexableAdsLinks = await loadIndexableAdsInternalLinks(env);
+    indexableAdsLinks = await indexableAdsLinksPromise;
   } catch (error) {
     console.warn("Homepage indexable ads links load failed; omitting /ads links.", {
       errorName: error instanceof Error ? error.name : typeof error,

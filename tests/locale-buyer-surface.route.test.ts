@@ -155,7 +155,10 @@ describe("locale buyer-surface sitemap + worker wiring", () => {
         // /methodology/ad-aggression-score; its locale twins serve byte-identical
         // English canonicalized to the EN page, so per the issue #1570
         // duplicate-content policy they stay OUT of the locale sitemaps.
-        if (path === "/methodology") {
+        if (path === "/methodology" || path === "/search") {
+          // Issue #2871: /methodology ... issue #2965: /search is noindex
+          // (worker edge header) and out of the EN sitemap, so its locale
+          // twins drop out of the locale sitemaps too.
           expect(body).not.toContain(`<loc>https://0509.io/${locale}${path}</loc>`);
           continue;
         }
