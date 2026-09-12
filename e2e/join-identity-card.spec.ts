@@ -21,6 +21,10 @@ import { expect, test, type Page } from "@playwright/test";
 
 const JOIN_CARD_TIMEOUT_MS = 5_000;
 
+// Deterministic harness: the release web server inherits this env, and the
+// route resolves its card from captured surfaces only (no external fetch).
+process.env.E2E_JOIN_LIVE_LOOKUP = "0";
+
 async function submitJoinInput(page: Page, value: string): Promise<number> {
   await page.goto("/join", { waitUntil: "domcontentloaded" });
   const input = page.getByLabel("Your website or your name");
@@ -53,6 +57,19 @@ test("brand-name input resolves a card without a website", async ({ page }) => {
   expect(Date.now() - submittedAt).toBeLessThan(JOIN_CARD_TIMEOUT_MS);
 });
 
+test("person profile URL confirms without pinning the platform as the competitor", async ({ page }) => {
+  const submittedAt = await submitJoinInput(page, "https://x.com/nidsharma");
+
+  const card = page.getByRole("region", { name: /identity/i });
+  await expect(card).toBeVisible({ timeout: JOIN_CARD_TIMEOUT_MS });
+  expect(Date.now() - submittedAt).toBeLessThan(JOIN_CARD_TIMEOUT_MS);
+
+  await card.getByText("Yes, that’s me").click();
+  await expect(page).toHaveURL(/\/auth\/signup/, { timeout: 10_000 });
+  // The platform host must never become the signup "competitor".
+  await expect(page).not.toHaveURL(/competitor=(linkedin|x|instagram|twitter)/);
+});
+
 test("ambiguous person input: the card itself asks for a marker to disambiguate", async ({ page }) => {
   const submittedAt = await submitJoinInput(page, "Nid Sharma");
 
@@ -60,4 +77,16 @@ test("ambiguous person input: the card itself asks for a marker to disambiguate"
   await expect(card).toBeVisible({ timeout: JOIN_CARD_TIMEOUT_MS });
   expect(Date.now() - submittedAt).toBeLessThan(JOIN_CARD_TIMEOUT_MS);
   await expect(card.getByText(/linkedin\.com\/in\//, { exact: false })).toBeVisible();
+});
+
+test("JS-off document POST still renders the card (progressive enhancement)", async ({
+  browser,
+}) => {
+  const context = await browser.newContext({ javaScriptEnabled: false });
+  const page = await context.newPage();
+  await page.goto("/join", { waitUntil: "load" });
+  await page.getByLabel("Your website or your name").fill("ridge.com");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("region", { name: /identity/i })).toBeVisible({ timeout: 10_000 });
+  await context.close();
 });

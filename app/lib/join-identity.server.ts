@@ -627,6 +627,17 @@ function extractDomainFromInput(input: string): string | null {
   return url ? registrableDomainFromHostname(url.hostname) : null;
 }
 
+function isPersonProfileHost(input: string): boolean {
+  const url = tryParseUrl(input);
+  return Boolean(url && PERSON_PROFILE_HOSTS.has(url.hostname.toLowerCase()));
+}
+
+/** A person input that is a URL: true for profile platforms (those carry no
+ * self brand domain), false for a plain personal/business site. */
+function isOwnSiteUrl(input: string): boolean {
+  return tryParseUrl(input) !== null && !isPersonProfileHost(input);
+}
+
 function extractLinkedInUrl(input: string): string | null {
   return input.match(LINKEDIN_URL_PATTERN)?.[0] ?? null;
 }
@@ -664,6 +675,27 @@ function tryParseUrl(raw: string): URL | null {
 /* Card + candidate builders                                           */
 /* ------------------------------------------------------------------ */
 
+/** The card's registrable domain: the resolution's pinned domain when it is
+ * the user's own site, null when the input merely names a person-profile
+ * PLATFORM (x.com/nidsharma pinning "x.com" as the user's competitor would
+ * be wrong in the signup prefill). */
+function cardDomain(
+  classified: { kind: JoinInputKind; input: string },
+  outcome: ResolutionOutcome,
+): string | null {
+  if (classified.kind === "person") {
+    if (outcome.domain && !isPersonProfileHostByDomain(outcome.domain)) {
+      return outcome.domain;
+    }
+    return isOwnSiteUrl(classified.input) ? extractDomainFromInput(classified.input) : null;
+  }
+  return outcome.domain ?? extractDomainFromInput(classified.input);
+}
+
+function isPersonProfileHostByDomain(domain: string): boolean {
+  return PERSON_PROFILE_HOSTS.has(domain) || PERSON_PROFILE_HOSTS.has(`www.${domain}`);
+}
+
 function buildPrimaryCard(
   classified: { kind: JoinInputKind; input: string },
   outcome: ResolutionOutcome,
@@ -674,7 +706,7 @@ function buildPrimaryCard(
     name: outcome.name ?? classified.input,
     logoUrl: outcome.logoUrl,
     site: outcome.site,
-    domain: outcome.domain ?? extractDomainFromInput(classified.input),
+    domain: cardDomain(classified, outcome),
     socials: outcome.socials,
     adCount: outcome.adCount,
     adsLastSeenAt: outcome.adsLastSeenAt,

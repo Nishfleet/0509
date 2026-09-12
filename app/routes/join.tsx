@@ -60,7 +60,13 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   if (intent === "resolve") {
-    const resolution = await resolveJoinIdentity(env, input, { budgetMs: JOIN_IDENTITY_BUDGET_MS });
+    // Live web lookup is on unless the e2e harness turns it off (deterministic
+      // card time with zero external calls outside the budget).
+      const liveLookup = process.env.E2E_JOIN_LIVE_LOOKUP !== "0";
+    const resolution = await resolveJoinIdentity(env, input, {
+      budgetMs: JOIN_IDENTITY_BUDGET_MS,
+      liveLookup,
+    });
     logJoinIdentityResolve(resolution);
 
     const headers = new Headers({ "content-type": "application/json", "cache-control": "no-store" });
@@ -81,7 +87,13 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const enrichment = String(formData.get("enrichment") ?? "").trim();
     const effectiveInput = enrichment && enrichment !== input ? enrichment : input;
 
-    const resolution = await resolveJoinIdentity(env, effectiveInput, { budgetMs: JOIN_IDENTITY_BUDGET_MS });
+    // Confirm re-resolves flow-forward facts (name / domain) WITHOUT the
+    // live homepage probe: the visit already paid for the first card, and
+    // the confirm metric must measure user latency, not a second lookup.
+    const resolution = await resolveJoinIdentity(env, effectiveInput, {
+      budgetMs: JOIN_IDENTITY_BUDGET_MS,
+      liveLookup: process.env.E2E_JOIN_LIVE_LOOKUP !== "0",
+    });
 
     const firstTouchValue = await readFirstTouch(request);
     const confirmLatencyMs = firstTouchValue ? Math.max(0, Date.now() - firstTouchValue) : null;

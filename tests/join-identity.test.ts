@@ -89,6 +89,25 @@ describe("resolveJoinIdentity", () => {
     expect(resolution.primary.linkedinUrl).toBe("https://www.linkedin.com/in/nidsharma");
   });
 
+  it("never pins a person-profile PLATFORM domain as the card domain", async () => {
+    for (const input of [
+      "https://x.com/nidsharma",
+      "https://www.linkedin.com/in/nidsharma",
+      "https://instagram.com/nidsharma",
+    ]) {
+      const resolution = await resolveJoinIdentity(fakeEnv(), input, { liveLookup: false });
+      expect(resolution.kind).toBe("person");
+      // The platform host must never surface as the user's domain —
+      // confirm folds THAT into the signup prefill.
+      expect(resolution.primary.domain).not.toBe(
+        /linkedin\.com$|x\.com$|instagram\.com$|twitter\.com$|github\.com$/,
+      );
+    }
+    // A personal-site URL keeps its domain.
+    const ownSite = await resolveJoinIdentity(fakeEnv(), "https://nidsharma.dev", { liveLookup: false });
+    expect(ownSite.primary.domain).toBe("nidsharma.dev");
+  });
+
   it("surfaces captured advertiser matches as person candidates with evidence", async () => {
     queryAll.mockResolvedValue([
       { advertiser: "Nid Sharma", ad_count: 12, last_seen: "2026-08-30T10:00:00Z" },
