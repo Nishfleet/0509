@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   classifyRow,
   isFbcdnCreativeUrl,
+  isSafePlanValue,
   loadRows,
   parseArgs,
 } from "../scripts/creative-fbcdn-backfill.mjs";
@@ -56,7 +57,7 @@ describe("creative-fbcdn-backfill classification", () => {
     expect(result.detail.contentType).toBe("image/jpeg");
   });
 
-  it("treats a non-fbcdn or unparseable URL as dead without probing", async () => {
+  it("treats a non-fbcdn or unparseable URL as unusable, not dead, without probing", async () => {
     let probed = 0;
     const countingProbe = async () => {
       probed += 1;
@@ -72,11 +73,36 @@ describe("creative-fbcdn-backfill classification", () => {
       { fetchCreative: countingProbe },
     );
 
-    expect(foreign.kind).toBe("dead");
+    // A row the audit cannot judge is NOT a dead creative — folding it into
+    // `dead` would report a false death spike.
+    expect(foreign.kind).toBe("unusable");
     expect(foreign.detail.reason).toBe("unusable url");
-    expect(malformed.kind).toBe("dead");
+    expect(malformed.kind).toBe("unusable");
     // Neither reached the network.
     expect(probed).toBe(0);
+  });
+
+  it("treats a 5xx or a network error as transient, never dead", async () => {
+    const serverError = await classifyRow(
+      { id: "ad_5", url: FB_URL },
+      { fetchCreative: probe({ kind: "transient", status: 503, reason: "status 503" }) },
+    );
+    const networkError = await classifyRow(
+      { id: "ad_6", url: FB_URL },
+      { fetchCreative: probe({ kind: "transient", reason: "network: timeout" }) },
+    );
+
+    expect(serverError.kind).toBe("transient");
+    expect(networkError.kind).toBe("transient");
+  });
+
+  it("refuses SQL-unsafe ids and content types in the emitted plan", () => {
+    expect(isSafePlanValue("ad_1")).toBe(true);
+    expect(isSafePlanValue("image/jpeg")).toBe(true);
+    expect(isSafePlanValue("ad_1'; DROP TABLE ad; --")).toBe(false);
+    expect(isSafePlanValue("x".repeat(129))).toBe(false);
+    expect(isSafePlanValue(null)).toBe(false);
+    expect(isSafePlanValue({})).toBe(false);
   });
 });
 

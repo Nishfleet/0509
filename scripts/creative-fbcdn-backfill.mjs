@@ -69,7 +69,7 @@ export function loadRows(path) {
   return rows.filter((row) => row.id && row.url);
 }
 
-async function fetchCreative(url, timeoutMs) {
+async function fetchCreative(url, timeoutMs, hops = 0) {
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -80,11 +80,38 @@ async function fetchCreative(url, timeoutMs) {
         accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
         referer: "https://www.facebook.com/",
       },
-      redirect: "follow",
+      // Issue #2981: follow redirects manually and re-apply the fbcdn host gate
+      // on EVERY hop, exactly as the Worker serve path does. `redirect: "follow"`
+      // would let the probe (and, under --r2, an upload to the public bucket)
+      // end up on an unvetted host.
+      redirect: "manual",
     });
     const contentType = (response.headers.get("content-type") ?? "").toLowerCase().split(";")[0];
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      if (!location) {
+        return { kind: "transient", reason: "redirect without location" };
+      }
+      let next;
+      try {
+        next = new URL(location, url).toString();
+      } catch {
+        return { kind: "transient", reason: "unparseable redirect" };
+      }
+      const nextHops = hops + 1;
+      if (nextHops > 5 || !isFbcdnCreativeUrl(new URL(next))) {
+        return { kind: "transient", reason: "redirect left fbcdn" };
+      }
+      clearTimeout(timer);
+      return fetchCreative(next, timeoutMs, nextHops);
+    }
     if (!response.ok) {
-      return { kind: "dead", status: response.status };
+      // A real 4xx is a dead signature; a 5xx is a wobble and must not be
+      // reported as a dead creative (the serve path makes the same split).
+      if (response.status >= 400 && response.status < 500) {
+        return { kind: "dead", status: response.status };
+      }
+      return { kind: "transient", status: response.status, reason: `status ${response.status}` };
     }
     if (!contentType.startsWith("image/")) {
       return { kind: "dead", status: response.status, reason: "non-image content-type" };
@@ -93,10 +120,11 @@ async function fetchCreative(url, timeoutMs) {
     if (bytes.byteLength === 0) {
       return { kind: "dead", status: response.status, reason: "empty body" };
     }
+    clearTimeout(timer);
     const hash = createHash("sha256").update(bytes).digest("hex");
     return { kind: "resolved", hash, contentType, bytes };
   } catch (error) {
-    return { kind: "dead", status: null, reason: `network: ${error?.message ?? "unknown"}` };
+    return { kind: "transient", status: null, reason: `network: ${error?.message ?? "unknown"}` };
   }
 }
 
@@ -126,6 +154,15 @@ export const allowed = new Set([
 ]);
 
 /**
+ * True when a value is safe to interpolate into the emitted SQL plan. The plan
+ * is run against prod D1 by an operator, so anything outside a conservative
+ * id / MIME-type shape is refused rather than escaped by hand.
+ */
+export function isSafePlanValue(value) {
+  return typeof value === "string" && /^[A-Za-z0-9._:/-]{1,128}$/.test(value);
+}
+
+/**
  * True when a parsed URL is a fetchable fbcdn creative URL. Exported so the
  * classification is testable without touching the network — the whole point of
  * the audit is the resolved-vs-dead split, and a hardcoded gate cannot be
@@ -147,10 +184,12 @@ export async function classifyRow(row, options = {}) {
   try {
     parsed = new URL(row.url);
   } catch {
-    /* treated as dead below */
+    /* treated as unusable below */
   }
   if (!isFbcdnCreativeUrl(parsed)) {
-    return { kind: "dead", detail: { ...row, reason: "unusable url" } };
+    // Not a dead creative — a row the audit cannot judge. Kept in its own
+    // bucket so the reported dead count is not inflated by unusable URLs.
+    return { kind: "unusable", detail: { ...row, reason: "unusable url" } };
   }
   const outcome = await probe(parsed.toString(), timeoutMs);
   if (outcome.kind === "dead") {
@@ -158,6 +197,11 @@ export async function classifyRow(row, options = {}) {
       kind: "dead",
       detail: { id: row.id, reason: outcome.reason ?? `status ${outcome.status}` },
     };
+  }
+  if (outcome.kind === "transient") {
+    // A 5xx, timeout or network error is not a dead creative. Counting it as
+    // dead would report a false death spike off one bad afternoon.
+    return { kind: "transient", detail: { id: row.id, reason: outcome.reason } };
   }
   return {
     kind: "resolved",
@@ -178,20 +222,29 @@ async function main() {
   const rows = loadRows(args.d1Json);
   const resolved = [];
   const dead = [];
+  const unusable = [];
+  const transient = [];
   for (const row of rows) {
     const classified = await classifyRow(row, { timeoutMs: args.timeoutMs });
-    if (classified.kind === "dead") {
-      dead.push(classified.detail);
-    } else {
+    if (classified.kind === "resolved") {
       resolved.push(classified.detail);
+    } else if (classified.kind === "dead") {
+      dead.push(classified.detail);
+    } else if (classified.kind === "unusable") {
+      unusable.push(classified.detail);
+    } else {
+      transient.push(classified.detail);
     }
   }
 
   let uploaded = null;
+  let skippedMediaType = 0;
   if (args.r2) {
     let ok = 0;
     for (const item of resolved) {
       if (!allowed.has(item.contentType)) {
+        // The allow-list is a security gate, so its rejects get a number.
+        skippedMediaType += 1;
         continue;
       }
       try {
@@ -210,22 +263,39 @@ async function main() {
     resolved: resolved.length,
     dead: dead.length,
     deadDetails: dead,
+    // Reported separately so `dead` is only genuinely dead creatives: a
+    // non-fbcdn or unparseable URL is a row we cannot judge, and a 5xx or
+    // timeout is a wobble, not a death.
+    unusable: unusable.length,
+    unusableDetails: unusable,
+    transient: transient.length,
+    transientDetails: transient,
     r2Uploaded: uploaded,
+    r2SkippedMediaType: args.r2 ? skippedMediaType : null,
     sqlPlanReady: args.emit ? true : false,
   };
 
   if (args.emit) {
-    const plan = resolved.map((item) => ({
-      id: item.id,
-      hash: item.hash,
-      contentType: item.contentType,
-      r2Key: item.r2Key ?? null,
-      // Applies via: wrangler d1 execute 0509 --remote --command "<sql>"
-      // json_set touches ONLY $.creativeHash / $.creativeHashContentType.
-      sql: item.r2Key
-        ? `UPDATE ad SET raw_json = json_set(raw_json, '$.creativeHash', '${item.hash}', '$.creativeHashContentType', '${item.contentType}') WHERE id = '${item.id}';`
-        : null,
-    }));
+    const plan = resolved.map((item) => {
+      // The plan is run against prod D1 by an operator, so the id and content
+      // type are validated and escaped rather than pasted raw: both arrive from
+      // a dump and a remote header, and a `'` in either would break or inject
+      // into the emitted statement.
+      const safeId = isSafePlanValue(item.id) ? item.id : null;
+      const safeContentType = isSafePlanValue(item.contentType) ? item.contentType : null;
+      return {
+        id: item.id,
+        hash: item.hash,
+        contentType: item.contentType,
+        r2Key: item.r2Key ?? null,
+        // Applies via: wrangler d1 execute 0509 --remote --command "<sql>"
+        // json_set touches ONLY $.creativeHash / $.creativeHashContentType.
+        sql:
+          item.r2Key && safeId && safeContentType
+            ? `UPDATE ad SET raw_json = json_set(raw_json, '$.creativeHash', '${item.hash}', '$.creativeHashContentType', '${safeContentType}') WHERE id = '${safeId}';`
+            : null,
+      };
+    });
     const { writeFileSync: writeFile } = await import("node:fs");
     writeFile(args.emit, JSON.stringify({ summary, plan }, null, 2) + "\n");
   }
@@ -236,12 +306,15 @@ async function main() {
     console.log(`creative fbcdn backfill audit (issue #2981)`);
     console.log(`  total stored fbcdn-referencing ads: ${summary.total}`);
     console.log(`  resolved (still signed): ${summary.resolved}`);
-    console.log(`  dead: ${summary.dead}`);
+    console.log(`  dead (expired or 4xx): ${summary.dead}`);
     for (const item of summary.deadDetails) {
       console.log(`    - ${item.id}: ${item.reason}`);
     }
+    console.log(`  unusable url (not judgeable): ${summary.unusable}`);
+    console.log(`  transient (5xx/timeout, retry later): ${summary.transient}`);
     if (uploaded !== null) {
       console.log(`  uploaded to R2 by content hash: ${uploaded}`);
+      console.log(`  skipped (media type not allow-listed): ${summary.r2SkippedMediaType}`);
     }
   }
   return summary;
