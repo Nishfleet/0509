@@ -206,6 +206,33 @@ describe("sanitizeProofDiagnostics", () => {
     expect(sanitizeProofDiagnostics({ ok: false })).toBeNull();
     expect(sanitizeProofDiagnostics({ ok: false, blockers: [], delivery: {} })).toBeNull();
   });
+
+  it("records the transport shape when the route returns a non-JSON body", () => {
+    // An unhandled throw behind the canary route yields an HTML/plain error
+    // page, so `response.json()` resolves null and every route field is absent.
+    // Runs 34600179872 / 34660893424 journaled neither a blocker NOR the HTTP
+    // status; the gate could not tell "route threw" from "route said X".
+    expect(sanitizeProofDiagnostics(null, { status: 500 })).toEqual({
+      httpStatus: 500,
+      bodyKind: "unparseable_json",
+    });
+    expect(sanitizeProofDiagnostics(undefined, { status: 502 })).toEqual({
+      httpStatus: 502,
+      bodyKind: "unparseable_json",
+    });
+    // No response object, or a non-integer status: nothing to add.
+    expect(sanitizeProofDiagnostics(null)).toBeNull();
+    expect(sanitizeProofDiagnostics(null, {})).toBeNull();
+  });
+
+  it("keeps the HTTP status alongside a named blocker", () => {
+    expect(
+      sanitizeProofDiagnostics(
+        { ok: false, blocker: "missing_active_watchlist" },
+        { status: 503 },
+      ),
+    ).toEqual({ httpStatus: 503, blocker: "missing_active_watchlist" });
+  });
 });
 
 describe("defaultHealthAnchor (stabilized identity anchor)", () => {
