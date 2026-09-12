@@ -69,7 +69,7 @@ describe("status_probe_samples on real D1", () => {
     // Retention delete (the cron's prune) removes only old rows.
     await env.DB.prepare(
       "INSERT INTO status_probe_samples (probe, ok, latency_ms, detail, checked_at) VALUES (?, ?, ?, ?, ?)",
-    ).bind("billing_dodo", 1, 30, "canary identity stable, catalog resolved, webhook signing ok", new Date(base - 8 * 24 * 3600_000).toISOString());
+    ).bind("billing_dodo", 1, 30, "canary identity stable, catalog resolved, webhook signing ok", new Date(base - 8 * 24 * 3600_000).toISOString()).run();
     const pruneResult = await env.DB.prepare(
       "DELETE FROM status_probe_samples WHERE checked_at < ?",
     ).bind(new Date(base - 7 * 24 * 3600_000).toISOString()).run();
