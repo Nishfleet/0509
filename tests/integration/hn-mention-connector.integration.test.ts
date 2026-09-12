@@ -213,13 +213,16 @@ describe("hn mention connector — poll", () => {
     );
     expect(calls()).toBe(1);
     const url = lastUrl();
-    expect(url.pathname).toBe(HN_SEARCH_PATH);
-    expect(url.searchParams.get("numericFilters")).toBe(`created_at_i>${Math.floor(lastCreatedAt)}`);
-    expect(url.searchParams.get("page")).toBe("0");
+    // The fetcher captured `lastUrl` on the (proven) single call; the type
+    // is `URL | null` because the harness can be re-entered.
+    expect(url).not.toBeNull();
+    expect(url!.pathname).toBe(HN_SEARCH_PATH);
+    expect(url!.searchParams.get("numericFilters")).toBe(`created_at_i>${Math.floor(lastCreatedAt)}`);
+    expect(url!.searchParams.get("page")).toBe("0");
     // Parenthesized OR form — Algolia's bare comma is AND, and a hit is
     // either a story OR a comment, so the conjunctive form matches nothing
     // (live-verified against the real API during review).
-    expect(url.searchParams.get("tags")).toBe("(story,comment)");
+    expect(url!.searchParams.get("tags")).toBe("(story,comment)");
   });
 
   it("emits the cursor window in unix SECONDS and never claims a complete snapshot", async () => {
