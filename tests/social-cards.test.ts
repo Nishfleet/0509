@@ -318,7 +318,7 @@ describe("publicSocialCardForRequest", () => {
     expect(res?.kind).toBe("brand");
     expect(res?.contentType).toBe("image/svg+xml; charset=utf-8");
     expect(res?.body).toContain("Sport &amp; footwear Meta ads");
-    // .png resolves to the same kind (issue #3104 rasterization).
+    // Same parsed card as .svg; PNG output is proven by the integration test.
     const resPng = publicSocialCardForRequest(
       new Request("https://0509.io/social-card/brand/sport-footwear.png"),
     );
