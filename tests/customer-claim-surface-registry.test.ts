@@ -398,6 +398,10 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
     "/for-agencies",
     "/sneaker-resale", "/de/sneaker-resale", "/ja/sneaker-resale",
     "/pt-br/sneaker-resale",
+    // Issue #3087: per-brand below-retail cluster pages (EN-only, canonical to
+    // the English page). Inline test-file registry, not a claim-text change.
+    "/sneaker-resale/nike", "/sneaker-resale/stockx",
+    "/sneaker-resale/footlocker", "/sneaker-resale/jdsports",
     "/capture-rules", "/no-phantom-changes", "/methodology/ad-aggression-score", "/pricing", "/help", "/docs", "/api/docs",
     "/mcp/setup",
     "/status", "/changelog", "/trust", "/privacy", "/terms",

@@ -161,7 +161,7 @@ describe("llms.txt ↔ reachable sitemap sync (issue #2017 canary)", () => {
     }
   });
 
-  it("all four sneaker-resale URLs are sitemap-reachable; the root keeps exactly one (#1561)", () => {
+  it("all sneaker-resale cluster URLs are sitemap-reachable; locale twins stay locale-sitemap-only (#1561, #3087)", () => {
     const reachable = reachableSitemapLocs();
     for (const path of [
       "/sneaker-resale",
@@ -174,10 +174,16 @@ describe("llms.txt ↔ reachable sitemap sync (issue #2017 canary)", () => {
         `${path} has no sitemap path to it`,
       ).toBe(true);
     }
+    // Issue #3087: the root now carries the hub plus the four per-brand
+    // below-retail cluster pages — the landing surface for the demand signal
+    // is no longer a single URL. Still no duplicate per URL.
     const rootLocs = locsFromXml(buildSitemapXml([], []));
-    expect(rootLocs.filter((loc) => loc.includes("sneaker-resale"))).toHaveLength(
-      1,
-    );
+    const sneakerRootLocs = rootLocs.filter((loc) => loc.includes("sneaker-resale"));
+    expect(sneakerRootLocs).toHaveLength(5);
+    expect(new Set(sneakerRootLocs).size).toBe(5);
+    for (const path of ["/sneaker-resale/nike", "/sneaker-resale/stockx", "/sneaker-resale/footlocker", "/sneaker-resale/jdsports"]) {
+      expect(rootLocs).toContain(`${SITE}${path}`);
+    }
     // Each locale sneaker-resale URL lives in its own locale sitemap only.
     const translated: readonly BuyerSurfaceLocaleId[] = ["de", "ja", "pt-br"];
     for (const locale of translated) {

@@ -1016,6 +1016,12 @@ export const SITEMAP_PATHS = [
   // Foreplay line). EN-only; no locale cluster.
   "/for-agencies",
   "/sneaker-resale",
+  // Issue #3087: per-brand below-retail cluster pages (EN-only, canonical to
+  // the English page — no hreflang). Same set as the brand route's 404 guard.
+  "/sneaker-resale/nike",
+  "/sneaker-resale/stockx",
+  "/sneaker-resale/footlocker",
+  "/sneaker-resale/jdsports",
   "/de/sneaker-resale",
   "/ja/sneaker-resale",
   "/pt-br/sneaker-resale",
