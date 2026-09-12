@@ -23,6 +23,7 @@ import {
 } from "~/lib/seo";
 import type { SampleBriefData } from "~/lib/sample-brief.server";
 
+import "~/styles/marketing.css";
 export async function loader({ context }: LoaderFunctionArgs): Promise<SampleBriefData> {
   const { getEnv } = await import("~/lib/context.server");
   const env = getEnv(context);

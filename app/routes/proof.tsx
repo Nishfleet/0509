@@ -3,6 +3,7 @@ import type { LoaderFunctionArgs } from "react-router";
 
 import { CAPTURE_RULES_PUBLIC_PATH } from "~/lib/capture-validity-public-rules";
 
+import "~/styles/marketing.css";
 /**
  * /proof is a non-canonical alias for the capture-validity rules page.
  * It 301-redirects to the canonical /capture-rules path so the two URLs

@@ -13,6 +13,7 @@ import {
   webPageJsonLd,
 } from "~/lib/seo";
 
+import "~/styles/marketing.css";
 const description =
   "Configuration and scope information and live monitoring facts for Five to Nine; this page does not measure live search, email, billing, or provider availability.";
 

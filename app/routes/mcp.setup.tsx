@@ -12,6 +12,7 @@ import {
 } from "~/lib/seo";
 import type { RootLoaderData } from "~/root";
 
+import "~/styles/marketing.css";
 const description =
   "One-paste MCP setup for Claude Desktop, ChatGPT, and pi — connect Five to Nine as an agent tool with a customer API key.";
 

@@ -32,6 +32,7 @@ import {
 } from "~/lib/seo";
 import type { WeeklyPublicMove } from "~/lib/weekly-public-moves.server";
 
+import "~/styles/marketing.css";
 interface BriefsWeeklyLoaderData {
   moves: WeeklyPublicMove[];
   /** ISO timestamp of the window start (7 days before render). */

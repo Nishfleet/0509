@@ -1,11 +1,11 @@
 import { Form, Link, useLoaderData, useRouteLoaderData } from "react-router";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
 import { AdCreative } from "~/components/ads/ad-creative";
-import { PricingSection, billingFaqJsonLdEntries } from "~/components/pricing-section";
+import { billingFaqJsonLdEntries } from "~/components/pricing-copy";
 import { SubmitButton } from "~/components/submit-button";
 import {
   canonicalLinks,
@@ -25,12 +25,26 @@ import {
 import type { PublicProofBrief } from "~/lib/public-proof.server";
 import type { PublicChangeMark } from "~/lib/public-change-mark.server";
 
+// PERF (issue #2967): PricingSection is below the fold on the homepage — the
+// plans render after the hero, proof and stats sections. Mounting it through
+// React.lazy keeps the pricing-section chunk (and its pricing-display deps)
+// out of the eager hydration set; entry.server awaits `allReady`, so the
+// section still renders fully into the SSR document for crawlers and JS-off
+// visitors, and hydration of the boundary simply waits for the chunk. The
+// pure copy/JSON-LD helpers stay statically imported via the leaf module
+// (~/components/pricing-copy) so JSON-LD and the re-exported helpers never
+// pin the React chunk.
+const PricingSection = lazy(() =>
+  import("~/components/pricing-section").then((m) => ({ default: m.PricingSection })),
+);
+
 // Issue #2694: same "no preview" sentinel /pricing's loader always returns.
 const noPricingPreview = { available: false } as const;
 
-export { planIntentPath, valueMathLabel, billingFaqJsonLdEntries } from "~/components/pricing-section";
+export { planIntentPath, valueMathLabel, billingFaqJsonLdEntries } from "~/components/pricing-copy";
 export type { LocalPricingPreview } from "~/components/pricing-section";
 
+import "~/styles/marketing.css";
 // Kept under ~160 characters so search results show the whole line instead of
 // truncating mid-sentence. Screenshot coverage on live proof_capture is a
 // minority (BET 10 / 977), so this line promises source-linked proof — page
@@ -1059,10 +1073,12 @@ export default function MarketingRoute() {
           names/quotes once Nish approves them — product/brand decision.
           Nothing renders here until then; do not fill with invented quotes. */}
 
-      <PricingSection
-        commercialLaunch={commercialLaunch}
-        initialPricingPreview={routeData.pricingPreview?.available ? routeData.pricingPreview : null}
-      />
+      <Suspense fallback={null}>
+        <PricingSection
+          commercialLaunch={commercialLaunch}
+          initialPricingPreview={routeData.pricingPreview?.available ? routeData.pricingPreview : null}
+        />
+      </Suspense>
 
       <section className="ld-quiet" id="faq">
         <div className="ld-pricing-faq ld-reveal" aria-label="Product FAQ">

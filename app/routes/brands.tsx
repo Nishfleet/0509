@@ -38,6 +38,7 @@ import {
 import { AD_AGGRESSION_METHODOLOGY_PATH } from "~/lib/aggression-score";
 import type { IndexableAdsLink } from "~/lib/ads-internal-links";
 
+import "~/styles/marketing.css";
 /** A brand-page link plus whether its `/timeline/:domain` is indexable. */
 interface BrandHubItem extends IndexableAdsLink {
   /** True when the sitemap lists this domain's `/timeline/:domain` (issue #1931). */
