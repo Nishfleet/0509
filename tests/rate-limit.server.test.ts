@@ -3,10 +3,12 @@ import { describe, expect, it, vi } from "vitest";
 import {
   enforceAuthenticatedSearchRateLimit,
   enforceBillingProviderRateLimit,
+  enforcePublicBrandPageRateLimit,
   enforcePublicSearchRateLimit,
   enforcePublicSearchSelectionRateLimit,
   enforceRequestRateLimit,
   enforceSearchSelectionRateLimit,
+  PUBLIC_BRAND_PAGE_LIMIT,
   PUBLIC_SEARCH_ANON_BROWSER_LIMIT,
   PUBLIC_SEARCH_IP_BACKSTOP_LIMIT,
   rateLimitPolicyFor,
@@ -766,3 +768,53 @@ function createMissingTableD1() {
     },
   };
 }
+
+// Issue #3156 — the public brand-page bucket must cover a full BET-5 sitemap
+// crawl at Googlebot pace from one shared IP, and any 429 it does return must
+// carry Retry-After so well-behaved crawlers back off cleanly.
+describe("public brand-page crawler budget (issue #3156)", () => {
+  // BET 5 targets a >=1,000-URL sitemap. At the observed crawl shape
+  // (~1 URL per 3 s, 2 requests per URL: status probe + noindex probe)
+  // one IP needs ~400 requests per 10-minute window. The limit must be
+  // comfortably above that so a crawl-paced pass never 429s mid-sitemap.
+  it("clears the BET-5 sitemap crawl budget (1,000 URLs, 2 probes/URL, 1 URL/3s)", async () => {
+    // ~200 URLs per 10-min window at 1 URL/3 s, ×2 probes each = ~400 requests.
+    const requestsPerCrawlWindow = Math.ceil((600 / 3) * 2);
+    expect(PUBLIC_BRAND_PAGE_LIMIT).toBeGreaterThanOrEqual(requestsPerCrawlWindow);
+    expect(PUBLIC_BRAND_PAGE_LIMIT).toBe(600);
+  });
+
+  it("returns a 429 with a Retry-After header when the crawl budget is exhausted", async () => {
+    const env = { DB: createFakeD1() } as unknown as AppEnv;
+    const request = new Request("https://0509.io/ads/puma.com", {
+      headers: {
+        "cf-connecting-ip": "203.0.113.77",
+        "user-agent": "seo-crawler-sim",
+      },
+    });
+
+    for (let index = 0; index < 600; index += 1) {
+      await expect(enforcePublicBrandPageRateLimit(request, env)).resolves.toBeNull();
+    }
+
+    const blocked = await enforcePublicBrandPageRateLimit(request, env);
+    expect(blocked?.status).toBe(429);
+    expect(blocked?.headers.get("retry-after")).toBeTruthy();
+  });
+
+  it("exempts a verified search crawler using the cf-verified-bot header from the brand-page budget", async () => {
+    const env = { DB: createFakeD1() } as unknown as AppEnv;
+    const verified = new Request("https://0509.io/ads/puma.com", {
+      headers: {
+        "cf-connecting-ip": "203.0.113.78",
+        "user-agent": "Googlebot",
+        "cf-verified-bot": "true",
+      },
+    });
+
+    // More than the anonymous limit's worth of requests — all admitted.
+    for (let index = 0; index < 610; index += 1) {
+      await expect(enforcePublicBrandPageRateLimit(verified, env)).resolves.toBeNull();
+    }
+  });
+});
