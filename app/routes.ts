@@ -154,6 +154,10 @@ export default [
   route("compare/bigspy", "routes/compare.bigspy.tsx"),
   route("compare/minea", "routes/compare.minea.tsx"),
   route("compare/poweradspy", "routes/compare.poweradspy.tsx"),
+  // Issue #3302: SneakerPing — the 15th compare surface, aimed at the
+  // sneaker-resale demand cluster the 2026-09-12 market signal leads with.
+  // Domain, product, and public claims verified live 2026-09-12.
+  route("compare/sneakerping", "routes/compare.sneakerping.tsx"),
   // Issue #2887: the MagicBrief wind-down page — the one vendor shutdown
   // creating real switching demand (BET 8). It replaces the legacy
   // switch-URL 301: the path serves 200 again, only /compare/magicbrief
@@ -246,6 +250,7 @@ export default [
     route("compare/bigspy", "routes/$locale.compare.bigspy.tsx"),
     route("compare/minea", "routes/$locale.compare.minea.tsx"),
     route("compare/poweradspy", "routes/$locale.compare.poweradspy.tsx"),
+    route("compare/sneakerping", "routes/$locale.compare.sneakerping.tsx"),
     // Issue #2887: the MagicBrief wind-down page (BET 8), locale twins.
     route("switch/magicbrief", "routes/$locale.switch.magicbrief.tsx"),
     route("switch/panoramata", "routes/$locale.switch.panoramata.tsx"),

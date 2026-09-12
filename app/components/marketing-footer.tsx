@@ -81,6 +81,8 @@ export const MarketingFooter: FunctionComponent<MarketingFooterProps> = (
         <Link to="/compare/bigspy">vs BigSpy</Link>
         <Link to="/compare/minea">vs Minea</Link>
         <Link to="/compare/poweradspy">vs PowerAdSpy</Link>
+        {/* Issue #3302: SneakerPing — the sneaker-resale cluster's compare surface. */}
+        <Link to="/compare/sneakerping">vs SneakerPing</Link>
       </nav>
       {/* Issue #3167: the /guides corpus had zero inbound internal links.
           These are literal href= anchors rather than Link to= because the
