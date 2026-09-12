@@ -923,10 +923,13 @@ describe("/ads/:domain indexing flag", () => {
 
   it("noindexes a fresh capture with 0 verified-linked ads (thin page: ad wall without the score)", async () => {
     // 24 unverified text-mention matches: the provider returned them for
-    // nykaa.com, but none carries a landing-page or domainMatch verdict
+    // wayfair.com, but none carries a landing-page or domainMatch verdict
     // linking it to the domain. The wall renders, but the Ad Aggression Score
     // (the page's differentiator) cannot — so the page self-noindexes rather
     // than ship as indexable thin content.
+    // (wayfair.com, not nykaa.com: issue #3123 seeded nykaa.com via the
+    // beauty-personal-care cohort, so a thin nykaa page now 301s to /search
+    // per issue #1306 — the render-noindex pin needs an unseeded domain.)
     const mocks = installBrandPageMocks({
       entry: cacheEntry({
         payload: {
@@ -948,7 +951,7 @@ describe("/ads/:domain indexing flag", () => {
       }),
     });
 
-    const result = await runLoader("nykaa.com", mocks.env);
+    const result = await runLoader("wayfair.com", mocks.env);
 
     expect(result.hasCachedAds).toBe(true);
     expect(result.ads).toHaveLength(1);

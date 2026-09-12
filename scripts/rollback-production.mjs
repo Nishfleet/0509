@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { readDeployedWorkerVersionId } from "./deploy-production-plan.mjs";
 import {
   buildWorkerRollbackCommand,
+  chooseExistingRollbackTarget,
   validateWorkerRollbackEvidence,
 } from "./worker-rollback-target.mjs";
 
@@ -31,7 +32,24 @@ if (wranglerOutputIndex >= 0 && wranglerOutputIndex + 1 < process.argv.length) {
     // for this release attempt rather than leaving the ambiguous release live.
   }
 }
-const rollback = buildWorkerRollbackCommand(evidence.versionId, deployedVersionId);
+// 2026-09-12: verify the recorded target still exists before asking Cloudflare
+// to roll back to it; otherwise pick the newest real deploy. Fail loud if none.
+const listed = spawnSync(process.env.WRANGLER_BIN || "wrangler", ["versions", "list", "--json"], {
+  cwd: process.cwd(),
+  env: process.env,
+  encoding: "utf8",
+});
+let versionsList = [];
+if (listed.status === 0) {
+  try {
+    versionsList = JSON.parse(listed.stdout);
+  } catch {
+    versionsList = [];
+  }
+}
+const chosen = chooseExistingRollbackTarget(versionsList, evidence.versionId, deployedVersionId);
+console.log(JSON.stringify({ rollbackTarget: chosen.versionId, reason: chosen.reason, recorded: evidence.versionId }));
+const rollback = buildWorkerRollbackCommand(chosen.versionId, deployedVersionId);
 const result = spawnSync(process.env.WRANGLER_BIN || rollback.command, rollback.args, {
   cwd: process.cwd(),
   env: process.env,

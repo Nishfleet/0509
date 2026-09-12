@@ -55,7 +55,7 @@ The public `/status` page summarizes coarse launch posture without rendering acc
 - WhatsApp must stay out of launch claims while provider/customer/webhook readiness is disabled.
 - Public pricing display must come from Dodo local-price preview.
 - Dodo checkout creation and signed webhook grant canaries must remain green.
-- Uptime health workflow on `https://0509.io/api/health` must stay configured; the dated scheduled runs passed on `main`, but alert-routing proof remains owner-verified (see `docs/ops-backup-uptime.md`).
+- Production liveness detection is the `0509-liveness` systemd timer on the VPS probing `https://0509.io/api/health` on a five-minute cadence (see `docs/ops-backup-uptime.md`); the dated GitHub scheduled runs passed on `main` before the workflow was retired, but alert-routing proof remains owner-verified.
 
 ## Email Gate (required)
 
@@ -94,9 +94,9 @@ Dated blocker detail (2026-07-02): an aggregate remote D1 check found no linked 
 
 ## Uptime Monitoring Status
 
-The public health endpoint is `https://0509.io/api/health`. `.github/workflows/uptime-health.yml` now checks that endpoint on an offset five-minute schedule and fails if the response is not HTTP 200 JSON with `status: "ok"` and `app: "0509"`.
+The public health endpoint is `https://0509.io/api/health`. The `0509-liveness` systemd timer on the VPS checks that endpoint on an offset five-minute cadence and fails if the response is not HTTP 200 JSON with `status: "ok"` and `app: "0509"`.
 
-Manual uptime workflow run `28540913266` passed on `main`. Scheduled runs `28548096175`, `28552452662`, and `28555610571` passed on `main` after the offset schedule landed. The notification path remains unproven until an owner/operator confirms failed-run notifications reach the right inbox. UptimeRobot remains the stronger independent external monitor if GitHub Actions notifications are not enough.
+Historical evidence from the retired Actions workflow: manual run `28540913266` passed on `main`. Scheduled runs `28548096175`, `28552452662`, and `28555610571` passed on `main` after the offset schedule landed. The notification path remains unproven until an owner/operator confirms failed-probe notifications reach the right inbox. UptimeRobot remains the stronger independent external monitor.
 
 Owner verification steps (no API token): see `docs/ops-backup-uptime.md` § Uptime monitoring.
 
@@ -123,4 +123,4 @@ Use this framing for the first customer:
 
 ## Next Slice
 
-Confirm the uptime health workflow's alert path or UptimeRobot on `/api/health`, complete one internal Dodo plan-change/cancellation smoke after an internal paid subscription exists, add GitHub backup secrets and observe the first scheduled backup workflow object, watch the next Agency fan-out window for dispatch failures and real scan completion, confirm Cloudflare Email dashboard logs, clean up retired provider dashboard artifacts, then rerun `npm run canary:proof` and `npm run canary:prod`.
+Confirm the `0509-liveness` systemd timer's alert path or UptimeRobot on `/api/health`, complete one internal Dodo plan-change/cancellation smoke after an internal paid subscription exists, add GitHub backup secrets and observe the first scheduled backup workflow object, watch the next Agency fan-out window for dispatch failures and real scan completion, confirm Cloudflare Email dashboard logs, clean up retired provider dashboard artifacts, then rerun `npm run canary:proof` and `npm run canary:prod`.

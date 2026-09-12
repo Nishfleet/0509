@@ -115,27 +115,21 @@ jobs:
           parents="$(git rev-list --parents -n 1 "$HEAD_SHA")"
           merge_flag=()
           [ "$(printf '%s' "$parents" | wc -w)" -gt 2 ] && merge_flag=(-m 1)
-          gh label create auto-revert-halt --repo "$REPO" --color B60205 \
-            --description "Auto-revert halted — a human must look" --force >/dev/null 2>&1 || true
+          # 2026-09-12 (Nish: halts are noise; one invariant, one alert): a halt is
+          # NO LONGER an issue. The condition it recorded (production red on
+          # consecutive runs, revert declined) is exactly what the fleet alerts
+          # FleetProductionStale / DeploymentQualityStale measure from the last
+          # green deploy and dispatch to a flagship repair seat. 100+ open
+          # AUTO-REVERT HALT issues on 2026-09-12 paged judges and hid the fault.
+          # The halt is still recorded LOUD: step summary + job log; the
+          # close-halts-on-green job stays until the existing backlog is 0.
           halt () {
             title="$1"; body="$2"
-            num="$(gh issue list --repo "$REPO" --state open --label auto-revert-halt \
-              --json number --jq '.[0].number // empty' 2>/dev/null || true)"
-            if [ -n "$num" ]; then
-              gh issue comment "$num" --repo "$REPO" --body "$body"
-            else
-              gh issue create --repo "$REPO" --title "$title" --body "$body" --label auto-revert-halt
-            fi
+            {
+              printf '## %s\n\n%s\n\n_No issue filed: the FleetProductionStale alert owns this condition (fleet-ops#5785)._\n' "$title" "$body"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning title=$title::revert declined — see step summary; FleetProductionStale alert owns the follow-through"
           }
-          # A halt is a designed, successful outcome: the guard detected a
-          # situation a blind revert would worsen (a red revert, a moved main,
-          # or an infra fault across consecutive commits) and filed an issue so
-          # a human can decide. The filed issue is the signal — the workflow
-          # run must stay green so it does not double a deploy-failure storm
-          # with its own GitHub failure email (0509#1355). halt exits 0 only
-          # AFTER the issue is filed; if `gh issue create`/`comment` fails,
-          # `set -euo pipefail` aborts non-zero before `exit 0` is reached, so
-          # a halt that could not record itself still fails loud.
           halt_and_exit () {
             halt "$1" "$2"
             exit 0

@@ -188,7 +188,11 @@ describe("issue #1442 — indexability is decoupled from the 14-day Aggression w
       cacheEntry(payloadFor([unverifiedTextMatchAd()])),
     );
 
-    const result = await runLoader("nykaa.com", env);
+    // wayfair.com, not nykaa.com: issue #3123 seeded nykaa.com via the
+    // beauty-personal-care cohort, so a thin nykaa page now 301s to /search
+    // (issue #1306 retire-scope). The #1442 anti-thin pin needs an unseeded
+    // domain to keep pinning the render-noindex path.
+    const result = await runLoader("wayfair.com", env);
 
     expect(result.verifiedLinkCount).toBe(0);
     expect(result.aggression).toBeNull();

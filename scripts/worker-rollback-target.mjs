@@ -84,3 +84,26 @@ export function buildWorkerRollbackCommand(versionId, deployedVersionId) {
     ],
   };
 }
+
+/**
+ * 2026-09-12: the recorded pre-deploy version can be EVICTED from Cloudflare's
+ * version history before a rollback runs (run 34679399412: "Version not found:
+ * aa2fefb2" — 99 of the worker's last 100 versions were preview-assert uploads).
+ * Choose a target that exists: the wanted version if listed, else the newest
+ * real deploy (not a preview upload, not the version being rolled back).
+ * @param {Array<{ id?: string, metadata?: { created_on?: string }, annotations?: Record<string, unknown> }>} versions
+ * @param {string} wantedVersionId
+ * @param {string | null | undefined} deployedVersionId
+ */
+export function chooseExistingRollbackTarget(versions, wantedVersionId, deployedVersionId) {
+  if (!Array.isArray(versions)) throw new Error("worker_versions_list_invalid");
+  const ids = versions.map((v) => (v && typeof v.id === "string" ? v.id : null));
+  if (ids.includes(wantedVersionId)) return { versionId: wantedVersionId, reason: "recorded_target_present" };
+  const candidates = versions
+    .filter((v) => v && typeof v.id === "string" && SAFE_IDENTIFIER_PATTERN.test(v.id))
+    .filter((v) => v.id !== deployedVersionId)
+    .filter((v) => !String(v.annotations?.["workers/message"] ?? "").startsWith("preview-assert"))
+    .sort((a, b) => String(b.metadata?.created_on ?? "").localeCompare(String(a.metadata?.created_on ?? "")));
+  if (candidates.length === 0) throw new Error("worker_rollback_target_missing");
+  return { versionId: candidates[0].id, reason: "recorded_target_evicted_newest_real_deploy" };
+}

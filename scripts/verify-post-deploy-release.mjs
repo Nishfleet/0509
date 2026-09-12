@@ -123,7 +123,7 @@ const RELEASE_COMPATIBLE_EMAIL_BLOCKERS = Object.freeze([
  *   backupLifecycleSummary?: unknown,
  *   backupProofStatus?: "required" | "deferred",
  *   backupProofDisposition?: Record<string, unknown>,
- *   proofDiagnostics?: { blocker?: string, blockers?: string[], httpStatus?: number, bodyKind?: string, delivery?: { attempts?: number, channels?: string[], details?: Array<{ channel?: string, status?: string, webhookStatus?: string }> }, proofEmailEvidence?: Record<string, string | boolean> },
+ *   proofDiagnostics?: { blocker?: string, blockers?: string[], httpStatus?: number, bodyKind?: string, detail?: string, delivery?: { attempts?: number, channels?: string[], details?: Array<{ channel?: string, status?: string, webhookStatus?: string }> }, proofEmailEvidence?: Record<string, string | boolean> },
  *   completedAt?: string,
  *   ownerPid?: number
  * }} GateJournal
@@ -445,6 +445,9 @@ function safeStepError(step) {
 }
 
 const DIAGNOSTIC_IDENTIFIER_PATTERN = /^[a-z0-9._-]{1,128}$/u;
+// 2026-09-12: bounded human-readable failure class from the canary route's
+// catch (app/lib/canary-detail.ts renders it under this exact charset).
+const DIAGNOSTIC_DETAIL_PATTERN = /^[A-Za-z0-9 _.:/()'-]{1,160}$/u;
 
 /**
  * A caller-supplied status is only journaled when it is a real HTTP status
@@ -533,6 +536,9 @@ export function sanitizeProofDiagnostics(payload, response) {
         });
     }
     if (Object.keys(summary).length > 0) diagnostics.delivery = summary;
+  }
+  if (typeof source.detail === "string" && DIAGNOSTIC_DETAIL_PATTERN.test(source.detail)) {
+    diagnostics.detail = source.detail;
   }
   return Object.keys(diagnostics).length > 0 ? diagnostics : null;
 }

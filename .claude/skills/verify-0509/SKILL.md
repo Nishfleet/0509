@@ -74,7 +74,7 @@ curl -fsS http://127.0.0.1:4179/api/health
 `GET /api/health/deep` — assert `checks.d1 == "ok"` locally, and nothing more. Do NOT assert
 the overall `status:"ok"`: `checks.scheduledWork` is normally `missing` or `degraded` on a
 fresh local DB by design, and the route answers 503 whenever it is. Production asserts both
-(`.github/workflows/uptime-health.yml`).
+(the `0509-liveness` systemd timer under `ops/liveness/`).
 
 ```bash
 curl -s http://127.0.0.1:4179/api/health/deep | grep -o '"d1":"ok"'

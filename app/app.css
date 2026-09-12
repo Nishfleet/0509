@@ -12696,8 +12696,17 @@ textarea.f9-wk-in {
    The results section
    --------------------------------------------------------------- */
 
+/* Issue #3162: the tablet dead-zone fix (641-900px) proved the pattern —
+   when the acts toolbar does not fit beside the headings, a nowrap row
+   whose actions are flex:none squashes .f9-wk-sec-headings (min-width:0)
+   to zero width. The same collapse happens at desktop widths on /search
+   ("29 ads found" stacked one word per line beside the toolbar), so the
+   wrap treatment extends to ALL widths: headings and acts share the line
+   when they both fit, and the acts drop below the title when they do
+   not. No design tokens change. */
 .f9-wk-sec-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
@@ -12737,9 +12746,27 @@ textarea.f9-wk-in {
 
 .f9-wk-sec-acts {
   display: flex;
-  flex: none;
+  /* Issue #3162: flex:none made the toolbar unsqueezeable, so a long
+     toolbar (See all X ads · Browse all tracked brands · sort · Shortcuts)
+     overflowed instead of wrapping — clipping the Shortcuts button off
+     the right viewport edge at 390px. flex-wrap lets the toolbar break
+     onto its own lines inside its own block when it runs out of room. */
+  flex: 0 1 auto;
+  flex-wrap: wrap;
   align-items: center;
   gap: 16px;
+}
+
+/* Issue #3162: the results provenance paragraph ("12 verified, 0 likely,
+   1 unmatched for \"nike\" — …") had no rule of its own and was laid out
+   entirely by its ancestors; in a constrained flex ancestor it collapsed
+   to one word per line. Full-measure by construction: it takes the whole
+   line of any flex parent (1 1 100%) or its block parent's width, and
+   clears any max-width inherited from its ancestors. */
+.f9-tier-tail {
+  display: block;
+  flex: 1 1 100%;
+  max-width: none;
 }
 
 .f9-wk-hints {

@@ -48,3 +48,9 @@ worker-configuration.d.ts
 # Worker PR-body scratch files (fleet-ops/0509#2609)
 /pr-body.md
 /.pr-body.md
+# Same scratch files when a lane writes them beside its plan. They are the PR
+# body text, which already lives on GitHub, so committing one only adds a
+# second copy for reviewers and for the `Vale` prose gate to disagree with
+# (0509#3138: a committed `.fleet/pr-body-2985.md` failed `vale` on the word
+# "granularity" after every code check had passed).
+.fleet/pr-body-*.md

@@ -145,6 +145,10 @@ afterEach(() => {
 });
 
 describe("sanitizeProofDiagnostics", () => {
+  it("re-projects a charset-safe detail and drops an unsafe one (2026-09-12)", () => {
+    expect(sanitizeProofDiagnostics({ ok: false, blocker: "canary_proof_pipeline_failed", detail: "Error: D1_ERROR no such table proof_capture" })).toEqual({ blocker: "canary_proof_pipeline_failed", detail: "Error: D1_ERROR no such table proof_capture" });
+    expect(sanitizeProofDiagnostics({ ok: false, blocker: "canary_proof_pipeline_failed", detail: "x\ny; DROP TABLE" })).toEqual({ blocker: "canary_proof_pipeline_failed" });
+  });
   it("keeps only identifier-safe blocker/delivery fields and drops anything address-shaped", () => {
     const diagnostics = sanitizeProofDiagnostics({
       ok: false,
