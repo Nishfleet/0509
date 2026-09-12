@@ -29,10 +29,16 @@ The model below therefore targets ≤ 7 GiB projected steady state, leaving
 - Growth: one row per capture attempt (including skipped-for-budget rows,
   ~6 statuses). Model: rows/day ≈ watchlists × scans/day × proof_targets
   per scan. Steady-state bound formula:
-  `bytes = captures_per_day × 365 × 0.0012 KB`.
-  At a conservative 5,000 captures/day: 5,000 × 0.0012 KB = 6 KB/day of D1
-  bytes → ~2.2 MB/year → ~4,500 years to the ceiling from row bytes alone.
-  **D1 is not the risk for proof captures; R2 artifacts are.**
+  `bytes = captures_per_day × 365 × 0.0012 MB` (0.0012 MB = 1.2 KB).
+  At a conservative 5,000 captures/day: 5,000 × 1.2 KB = 6 MB/day of D1
+  bytes → ~2.2 GB/year → ~4.5 years to the 10 GB ceiling from row bytes
+  alone (faster at the 3 KB worst-case row: ~1.8 years). **D1 rows are a
+  real multi-year pressure for proof captures, and R2 artifact bytes are
+  the nearer-term cost.** A row-retention policy for proof_capture is the
+  top follow-up this model points at: at ~10,000 captures/day the ceiling
+  arrives in ~2 years, so an alarm on captures/day plus a retention
+  decision (archive-and-drop, or keep aggregated history only) is needed
+  before then.
 - Measured live count (runbook):
   `npx wrangler d1 execute 0509 --remote --command "SELECT COUNT(*) FROM proof_capture; -- plus AVG(LENGTH(extracted_fields_json) + LENGTH(capture_metadata_json))"`
 
@@ -73,8 +79,8 @@ The model below therefore targets ≤ 7 GiB projected steady state, leaving
   backlog drains only if deletions ≥ insertions — at sustained > 2,000
   fetches/day the 30-day retention becomes aspirational and the table grows
   at the excess rate (~0.8 KB × excess/day).
-- Steady-state bound: `fetches_per_day × 30 × 0.0008 KB`. At 10,000
-  fetches/day: 240 MB. Ingestion > 4× that rate for months would be needed
+- Steady-state bound: `fetches_per_day × 30 × 0.0008 MB` (0.0008 MB = 0.8 KB).
+  At 10,000  fetches/day: 240 MB. Ingestion > 4× that rate for months would be needed
   before this table costs 1 GiB. Watch the delete-count telemetry in the
   sweep result instead of guessing.
 - Measured live count (runbook):
@@ -110,14 +116,15 @@ adds a funnel table.
 
 | Table | Typical row | Retention | Steady state (formula) | Headroom note |
 | --- | --- | --- | --- | --- |
-| proof_capture | 1.2 KB | none (rows) | captures/day × 365 × 1.2 KB = ~2.2 MB/year @ 5,000/day | centuries (row bytes only) |
+| proof_capture | 1.2 KB | none (rows) | captures/day × 365 × 1.2 KB = ~2.2 GB/year @ 5,000/day | ~4.5 years to 10 GB; retention follow-up |
 | rate_limit_events | 0.2 KB | 2 h / 25 h by scope | per-key: limit × (dwell ÷ windowSeconds) | bounded; worst case ~7 MB/application-flooded key (2 h dwell) |
-| discovery_fetch_log | 0.8 KB | 30 d | fetches/day × 30 × 0.0008 MB | ≥ 180 d @ 10 k/day |
+| discovery_fetch_log | 0.8 KB | 30 d | fetches/day × 30 × 0.8 KB | ≥ 180 d @ 10 k/day |
 | discovery_cache_entry | 12 KB | TTL + 7 d grace | entries/day × (TTL+7) × 12 KB | months; sweep ceiling 800/day |
 
-Soaks to worry about: only where steady state is unbounded — proof_capture
-rows (~2.2 MB/**year** at 5,000 captures/day: 6 KB/day row bytes; the binding
-constraint is R2 artifact bytes, not D1 rows) and the two sweep-throughput
+Soaks to worry about: proof_capture rows first (~2.2 GB/**year** at 5,000
+captures/day: 6 MB/day row bytes, unbounded — no row deletion), then the two
+sweep-throughput
 Ceilings (2,000 discovery_fetch_log and 800 discovery_cache_entry rows per
-day). None of these threatens 10 GB this quarter; each name needs an alarm or
-a follow-up retention policy before it can.
+day). None of these threatens 10 GB this quarter, but proof_capture is a
+years-not-decades clock and needs a retention decision before captures/day
+doubles a few times; the other two need alarms or follow-up retention policy.
