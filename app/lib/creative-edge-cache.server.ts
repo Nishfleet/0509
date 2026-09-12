@@ -42,6 +42,7 @@ import {
   lookupStoredCreativeHash,
   persistCreativeHash,
   storeCreativeImageByHash,
+  type CreativeImageObject,
 } from "~/lib/creative-r2-hash.server";
 
 export const CREATIVE_CACHE_NAME = "creative-v1";
@@ -347,16 +348,25 @@ export async function serveCreativeResource(
     // A hash hit is the cheapest correct answer, so it is tested first and
     // used to re-fill the Cache API entry for request-speed.
     if (env.DB) {
+      // Reviewer finding (PR #3135 round 1): the catch below guards the R2
+      // READ only — the cache re-fill sits after it, so a failed put cannot
+      // discard the bytes we are already holding.
+      let image: CreativeImageObject | null = null;
       try {
         const storedHash = await lookupStoredCreativeHash(env, id);
-        const image = await getCreativeImageByHash(env, storedHash);
-        if (image) {
-          const r2Response = imageResponse(imageBody(image.bytes), image.contentType);
-          await cache?.put(key, r2Response.clone());
-          return request.method === "HEAD" ? headOf(r2Response) : r2Response;
-        }
+        image = await getCreativeImageByHash(env, storedHash);
       } catch {
         // A failed R2 read degrades to the cache / fetch path below.
+      }
+      if (image) {
+        const r2Response = imageResponse(imageBody(image.bytes), image.contentType);
+        try {
+          // Re-fill the Cache API entry for request-speed.
+          await cache?.put(key, r2Response.clone());
+        } catch {
+          // A failed re-fill must not cost the response we are holding.
+        }
+        return request.method === "HEAD" ? headOf(r2Response) : r2Response;
       }
     }
 
@@ -399,11 +409,18 @@ export async function serveCreativeResource(
     // fbcdn URL takes the bytes and lands them in R2 by content hash, so this
     // is the last request that ever depends on the signed URL being alive.
     if (outcome.kind === "ok") {
-      // Both halves are idempotent; their failure paths return false/null, so
-      // a failed mirror must not fail the serve that just succeeded.
-      const stored = await storeCreativeImageByHash(env, outcome.bytes, outcome.contentType);
-      if (stored) {
-        await persistCreativeHash(env, id, stored);
+      // Both halves are idempotent; their controlled failures return
+      // false/null, and (reviewer finding, PR #3135 round 1) a THROWN one
+      // must not fall to the outer 404 handler either — the successful
+      // fetch's response is already built, so the mirror cannot be allowed
+      // to cost it.
+      try {
+        const stored = await storeCreativeImageByHash(env, outcome.bytes, outcome.contentType);
+        if (stored) {
+          await persistCreativeHash(env, id, stored);
+        }
+      } catch {
+        // A failed mirror must not fail the serve that just succeeded.
       }
     }
 
