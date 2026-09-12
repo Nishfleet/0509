@@ -1,0 +1,20 @@
+{
+  "competitor": "sneakerping",
+  "productName": "SneakerPing",
+  "sources": [
+    {
+      "id": "sneakerping-home",
+      "href": "https://sneakerping.com/",
+      "label": "SneakerPing homepage (verified 2026-09-12)",
+      "checked": "2026-09-12",
+      "claim": "SneakerPing is a sneaker price-alert service: it watches StockX, GOAT, eBay, and 40+ online stores and pings the buyer when a tracked pair drops to their target price, with SMS, email, and Discord notifications and a free tier that watches 5 pairs with no credit card."
+    },
+    {
+      "id": "sneakerping-study",
+      "href": "https://sneakerping.com/sneaker-resale-market-report",
+      "label": "Sneaker Resale Market Report 2026 (SneakerPing, verified 2026-09-12)",
+      "checked": "2026-09-12",
+      "claim": "SneakerPing's published study of 3,538 sneaker releases between August 2024 and August 2026 reports 59.5% most recently sold below retail, with a median 10.6% under retail; figures are as of 18 August 2026 and are based on recorded sale prices."
+    }
+  ]
+}
