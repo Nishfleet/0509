@@ -1228,11 +1228,7 @@ export const GROUNDING_ENGINES = [
  * `Sitemap:` lines are dropped — a robots.txt line advertising an empty
  * (or redirect-only) feed would just burn crawl.
  */
-export const LOCALE_SITEMAP_LOCALES: readonly string[] = [
-  "de",
-  "ja",
-  "pt-br",
-];
+export const LOCALE_SITEMAP_LOCALES = ["de", "ja", "pt-br"] as const;
 
 const LOCALE_SITEMAP_LINES = LOCALE_SITEMAP_LOCALES.map(
   (locale) => `Sitemap: ${canonicalUrl(`/${locale}/sitemap.xml`)}`,

@@ -98,6 +98,9 @@ const TRANSLATED_LOCALE_PREFIXES = ["de", "ja", "pt-br"];
  * The URL the canary probes for a single (locale, route) pair. Trailing
  * slashes on `baseUrl` are stripped so a misconfigured
  * `--base-url https://0509.io/` does not produce `https://0509.io//de`.
+ * @param {string} baseUrl
+ * @param {string} locale
+ * @param {string} route
  */
 export function probeUrl(baseUrl, locale, route) {
   const trimmedRoute = route === "/" ? "" : route;
@@ -108,7 +111,10 @@ export function probeUrl(baseUrl, locale, route) {
  * The expected EN target for a probe. `/pricing` under any locale prefix
  * expects `Location: /pricing`; the bare index expects `/`.
  */
-export function expectedLocationFor(locale, route) {
+export function expectedLocationFor(
+  /** @type {"de" | "ja" | "pt-br" | "fr" | "es"} */ locale,
+  /** @type {string} */ route,
+) {
   void locale;
   return route === "/" ? "/" : route;
 }
@@ -117,6 +123,9 @@ export function expectedLocationFor(locale, route) {
  * Probe a single URL. Returns `{ status, location }`; network errors surface
  * as `null` fields so the report can distinguish "the server answered
  * wrong" from "the canary could not reach the server".
+ * @param {string} url
+ * @param {number} timeoutMs
+ * @param {typeof globalThis.fetch} [fetchImpl]
  */
 export async function probe(url, timeoutMs, fetchImpl = globalThis.fetch) {
   const controller = new AbortController();
@@ -139,7 +148,10 @@ export async function probe(url, timeoutMs, fetchImpl = globalThis.fetch) {
   }
 }
 
-/** Strip scheme + origin so a `Location` header can be compared to a route. */
+/** Strip scheme + origin so a `Location` header can be compared to a route.
+ * @param {string | null} location
+ * @returns {string | null}
+ */
 function locationPath(location) {
   try {
     return new URL(location, "https://0509.io").pathname;
@@ -154,6 +166,8 @@ function locationPath(location) {
  * with `Location` equal to the EN pathname, and every translated
  * sneaker-resale probe (de/ja/pt-br) returns 200. Anything else fails
  * closed.
+ * @param {{ baseUrl: string, timeoutMs?: number, fetchImpl?: typeof globalThis.fetch }} options
+ * @returns {Promise<{ passed: boolean, generatedAt: string, baseUrl: string, probes: Array<{ locale: string, route: string, url: string, expectedStatus: number, expectedLocation: string, status: number | null, location: string | null, ok: boolean, error?: string }>, failures: Array<{ locale: string, route: string, url: string, expectedStatus: number, expectedLocation: string, status: number | null, location: string | null, ok: boolean, error?: string }> }>}
  */
 export async function runCanary(options) {
   const probes = [];
@@ -199,6 +213,8 @@ export async function runCanary(options) {
  * probes are listed in place (cluster-iteration order) so the operator can
  * see the full damage at a glance; the "first failing probe" footer mirrors
  * the issue verification loop's `exit 1` point.
+ * @param {ReturnType<typeof runCanary>} report
+ * @returns {string}
  */
 export function formatReport(report) {
   const lines = [];

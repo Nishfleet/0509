@@ -125,7 +125,7 @@ describe("retired buyer-surface locale cluster → 301 (issue #2962)", () => {
 
 describe("locale sitemaps after the removal (issue #2962)", () => {
   it("lists only the sneaker-resale page for de/ja/pt-br; fr/es serve empty feeds", () => {
-    for (const locale of ["de", "ja", "pt-br" as const]) {
+    for (const locale of ["de", "ja", "pt-br"] as const) {
       const body = buildLocaleSitemapXml(locale);
       expect(body).toContain(`<loc>https://0509.io/${locale}/sneaker-resale</loc>`);
       // No buyer-surface locale page remains to be advertised.
