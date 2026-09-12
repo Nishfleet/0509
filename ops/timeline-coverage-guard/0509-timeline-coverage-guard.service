@@ -1,0 +1,25 @@
+[Unit]
+Description=0509 Offer Timeline public-surface coverage guard (issue #3095)
+Documentation=https://github.com/Nishfleet/0509/blob/main/docs/ops-backup-uptime.md
+# Independent of any GitHub Actions runner: the guard must keep firing while
+# every runner is busy or offline, and its failure must reach journald + a
+# watchdog even when GitHub's scheduled-cron lottery would skip it.
+
+[Service]
+Type=oneshot
+# Runs as nish: the guard reads the nish-owned repo checkout and needs the
+# ambient gh auth for the canary's --file-issue regression path (same shape as
+# the demo-brand timeline guard; unlike it, NO Cloudflare token is needed —
+# the canary is a public sitemap probe).
+User=nish
+Group=nish
+ExecStart=/opt/0509-timeline-coverage-guard/0509-timeline-coverage-guard-run.sh
+# One public sitemap fetch plus a possible gh issue filing must fit inside a
+# single slot; the wall-clock timer cadence is daily.
+TimeoutStartSec=120
+# A failed verdict must leave the unit failed for watchers; do not restart
+# into a tight failure loop.
+Restart=no
+
+[Install]
+WantedBy=multi-user.target
