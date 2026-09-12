@@ -84,9 +84,36 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   // could no longer guarantee under a shared cache. Crawler-visible HTML is
   // the neutral brand with the honest "no live proof yet" state until the
   // fetch resolves.
-  const { PUBLIC_HOME_NEUTRAL_FEATURED_WEBSITE } = await import("~/lib/public-proof.server");
+  const { PUBLIC_HOME_NEUTRAL_FEATURED_WEBSITE, loadPublicProofBrief } = await import(
+    "~/lib/public-proof.server"
+  );
+  const { ALL_COUNTRIES_VALUE } = await import("~/lib/countries");
   const featuredDomain = PUBLIC_HOME_NEUTRAL_FEATURED_WEBSITE;
-  const proofBrief: PublicProofBrief | null = null;
+
+  // Issue #3125: the SSR document ships REAL stored proof for the neutral
+  // flagship brand instead of defaulting to the empty state. The document
+  // must stay country-neutral under the #2696 shared-cache rule, so the
+  // brief is resolved on the "all" ladder — the same cache row
+  // loadBrandPageCacheSnapshot reads for a "no geo header" visitor and the
+  // same snapshot /ads/nike.com renders — with the snapshot's own fetchedAt
+  // clock and honesty labels ("captured <date>", "on record" when stale;
+  // never a fabricated recency claim). The client personalization below
+  // still swaps in the visitor's home-market brief after mount via
+  // /api/demo-proof (issue #2281), so the first paint is real proof and the
+  // hydrated page stays per-country. When no stored capture exists at all
+  // (or the read hiccups), proofBrief stays null and the genuine empty
+  // state renders as the fallback.
+  const proofBriefPromise: Promise<PublicProofBrief | null> = (async () => {
+    try {
+      return await loadPublicProofBrief(env, { visitorCountry: ALL_COUNTRIES_VALUE });
+    } catch (error) {
+      console.warn("Homepage neutral proof brief load failed; rendering the honest empty state.", {
+        errorName: error instanceof Error ? error.name : typeof error,
+      });
+      return null;
+    }
+  })();
+  const proofBrief: PublicProofBrief | null = await proofBriefPromise;
 
   // The under-fold before/after mark: a real stored watch event or null (the
   // null path renders the clearly labelled sample state, never a fabricated
