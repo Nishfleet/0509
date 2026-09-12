@@ -124,7 +124,11 @@ describe("ads/timeline/cluster social card rasterization (issue #2089, issue #21
       new Request("https://0509.io/social-card/compare.png"),
     );
     expect(card?.kind).toBe("surface");
-    expect(card?.body).toContain("Compare Five to Nine vs the alternatives");
+    // The card's copy is split across headline + subline text nodes (the
+    // full hub title clips the frame at the 68px headline size), so assert
+    // both halves of "Compare Five to Nine vs the alternatives".
+    expect(card?.body).toContain("Five to Nine");
+    expect(card?.body).toContain("vs the alternatives");
 
     const png = await rasterizeSocialCardPng(card!.body);
     for (let i = 0; i < PNG_MAGIC.length; i += 1) {
