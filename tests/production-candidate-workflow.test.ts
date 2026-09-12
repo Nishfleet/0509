@@ -412,10 +412,16 @@ describe("exact production candidate workflow", () => {
       );
     }
 
-    for (const [name, jobName] of [
-      ["ci.yml", "codex-node-checks"],
-      ["ci.yml", "dependabot-critical-check"],
-      ["secret-scan.yml", "gitleaks"],
+    // Per-job expected checkout ref (CodeQL cache-poisoning remediation,
+    // #3069 review): ci.yml's two required jobs pin the trusted event commit
+    // github.sha — the workflow_dispatch expected_sha input must never reach a
+    // checkout ref in a workflow with default-branch triggers — while
+    // secret-scan.yml keeps the in-step authorize-output ref (untouched:
+    // not among the flagged findings, no cache sink after checkout).
+    for (const [name, jobName, expectedRef] of [
+      ["ci.yml", "codex-node-checks", "${{ github.sha }}"],
+      ["ci.yml", "dependabot-critical-check", "${{ github.sha }}"],
+      ["secret-scan.yml", "gitleaks", "${{ steps.authorize.outputs.sha }}"],
     ] as const) {
       const job = readWorkflow(name).parsed.jobs[jobName];
       expect(job?.needs, `${name} required job must not need a job`).toBeUndefined();
@@ -427,7 +433,7 @@ describe("exact production candidate workflow", () => {
         step.uses?.startsWith("actions/checkout@"),
       );
       expect(steps[checkout]?.with, `${name} pinned checkout`).toMatchObject({
-        ref: "${{ steps.authorize.outputs.sha }}",
+        ref: expectedRef,
         "fetch-depth": 0,
         clean: true,
         "persist-credentials": false,
