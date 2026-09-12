@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   EXPECTED_FONT_SRC_FONTS_HOST,
+  EXPECTED_PUBLIC_HOME_CACHE_CONTROLS,
   EXPECTED_PUBLIC_HOME_CACHE_CONTROL,
   EXPECTED_SCRIPT_SRC_BEACON_HOST,
   EXPECTED_STYLE_SRC_FONTS_HOST,
@@ -488,9 +489,25 @@ describe("Worker security headers", () => {
       // public, max-age=300), deploys would fail on a policy that is actually
       // correct. Import both constants and assert they can never diverge.
       expect(EXPECTED_PUBLIC_HOME_CACHE_CONTROL).toBe(PUBLIC_HTML_CACHE_CONTROL);
-      // The last SSR-pricing private variant is gone (#2694); no second policy
-      // is accepted by the gate anymore.
-      expect(PUBLIC_HTML_CACHE_CONTROL).not.toContain("private");
+      // #3308: the zone may answer the plain-URL probe with its own
+      // Browser-Cache-TTL rewrite of the stored copy (observed live
+      // 2026-09-12: `public, max-age=14400` with cf-cache-status: HIT). The
+      // gate must accept exactly those rewrites of the product policy and no
+      // others — the worker's own emission stays rank-1 (the cache-busted
+      // probe, which the zone never answers, asserts it exactly), and every
+      // accepted shape keeps the #2950 contract: public, SWR-free,
+      // no-store-free.
+      expect(EXPECTED_PUBLIC_HOME_CACHE_CONTROLS).toEqual([
+        PUBLIC_HTML_CACHE_CONTROL,
+        "public, max-age=14400",
+        "public, s-maxage=3900, max-age=14400",
+      ]);
+      for (const header of EXPECTED_PUBLIC_HOME_CACHE_CONTROLS) {
+        expect(header.startsWith("public, ")).toBe(true);
+        expect(header).not.toContain("stale-while-revalidate");
+        expect(header).not.toContain("no-store");
+        expect(header).not.toContain("private");
+      }
     });
 
     it("honors an explicitly-set cache-control on public cacheable HTML", () => {

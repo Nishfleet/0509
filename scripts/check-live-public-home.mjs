@@ -34,9 +34,25 @@ const baseUrl = process.env.PUBLIC_HOME_URL ?? "https://0509.io";
 // in tests/worker-security-headers.test.ts keeps this constant and the
 // worker's PUBLIC_HTML_CACHE_CONTROL equal — they moved together in #3308.
 export const EXPECTED_PUBLIC_HOME_CACHE_CONTROL = "public, s-maxage=3900, max-age=300";
-const ACCEPTED_PUBLIC_HOME_CACHE_CONTROLS = new Set([
+// Issue #3308: when the zone holds a warm copy it answers the plain-URL probe
+// itself, and its Browser Cache TTL (zone config, outside this repo — the 4h
+// zone default) rewrites the stored copy's cache-control on replay. LIVE
+// receipt, 2026-09-12 (same run, seconds apart): the cache-busted probe got
+// the worker's own `public, max-age=300` while the plain probe got the
+// zone-rewritten `public, max-age=14400` with cf-cache-status: HIT and the
+// worker's x-0509-* stamps preserved. An exact-only accepted set would hold
+// this gate red (or green) depending on zone warmth — the flakiness the
+// #3308 flap shipped under. The set absorbs exactly the two rewrites of the
+// product policy (the TTL REPLACES the origin header, dropping s-maxage, or
+// overrides just max-age, keeping it): the security-meaningful contract —
+// public, SWR-free, no-store-free, freshness — holds in every accepted
+// shape. A response carrying anything else is still a deploy failure.
+export const EXPECTED_PUBLIC_HOME_CACHE_CONTROLS = [
   EXPECTED_PUBLIC_HOME_CACHE_CONTROL,
-]);
+  "public, max-age=14400",
+  "public, s-maxage=3900, max-age=14400",
+];
+const ACCEPTED_PUBLIC_HOME_CACHE_CONTROLS = new Set(EXPECTED_PUBLIC_HOME_CACHE_CONTROLS);
 
 // Deploy-gate contract for the Cloudflare Web Analytics beacon (PR #610).
 //
