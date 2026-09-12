@@ -43,7 +43,6 @@ import type {
 const GDELT_API_BASE = "https://api.gdeltproject.org/api/v2/doc/doc";
 const GDELT_MAX_RECORDS = 250;
 const DEFAULT_TIMESPAN = "1week";
-const MAX_GDELT_EXCERPT_CHARS = 280;
 
 interface GdeltArticle {
   url?: unknown;
