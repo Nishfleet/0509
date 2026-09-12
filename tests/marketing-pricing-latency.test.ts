@@ -31,6 +31,9 @@ describe("marketing pricing is client-fetched", () => {
     indexableAdsLinks: [],
     changeMark: null,
     featuredDomain: "nike.com",
+    // Issue #2972: no DB in this env, so the footer coverage figure degrades
+    // to null (the footer renders the Status link alone).
+    monitoringCoverageDays: null,
   };
 
   it("keeps Dodo out of the homepage loader so `/` can be shared-cached", async () => {

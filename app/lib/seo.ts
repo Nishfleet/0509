@@ -11,6 +11,7 @@ import {
   type UsageBundleSlug,
 } from "~/lib/pricing";
 import { TOP_UP_PACK_DISPLAY } from "~/lib/billing-sku-catalog";
+import { SUPPORT_EMAIL } from "~/lib/support";
 
 const SITE_ORIGIN = "https://0509.io";
 const SITE_NAME = "Five to Nine";
@@ -349,6 +350,11 @@ export interface FaqJsonLdEntry {
  * schema.org Organization for the landing page. Deliberately minimal — no
  * price amounts anywhere in structured data (prices are live-loaded from
  * Dodo in the buyer's currency and must never be hardcoded).
+ *
+ * Issue #2972 enrichment: `logo` is the real 180x180 PNG touch icon already
+ * served from public/, `contactPoint` names the published support address,
+ * and `sameAs` lists only identity pages that genuinely exist (the
+ * Nishfleet GitHub org that ships this product) — no invented profiles.
  */
 export function organizationJsonLd() {
   return {
@@ -356,6 +362,14 @@ export function organizationJsonLd() {
     "@type": "Organization",
     name: SITE_NAME,
     url: SITE_ORIGIN,
+    logo: `${SITE_ORIGIN}/apple-touch-icon.png`,
+    contactPoint: {
+      "@type": "ContactPoint",
+      contactType: "customer support",
+      email: SUPPORT_EMAIL,
+      url: `${SITE_ORIGIN}/help`,
+    },
+    sameAs: ["https://github.com/Nishfleet"],
   } as const;
 }
 

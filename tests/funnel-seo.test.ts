@@ -79,6 +79,15 @@ describe("structured data (JSON-LD)", () => {
     expect(organization["@type"]).toBe("Organization");
     expect(organization.name).toBe("Five to Nine");
     expect(organization.url).toBe("https://0509.io");
+    // Issue #2972: enriched trust signals — a real logo asset, the published
+    // support contact, and only identity pages that actually exist.
+    expect(organization.logo).toBe("https://0509.io/apple-touch-icon.png");
+    expect(organization.contactPoint).toMatchObject({
+      "@type": "ContactPoint",
+      contactType: "customer support",
+      email: "support@0509.io",
+    });
+    expect(organization.sameAs).toContain("https://github.com/Nishfleet");
 
     const webSite = JSON.parse(JSON.stringify(webSiteJsonLd()));
     expect(webSite["@type"]).toBe("WebSite");
@@ -208,8 +217,35 @@ describe("shared marketing footer", () => {
       "app/components/sneaker-resale-landing.tsx",
     ]) {
       const source = readFileSync(path, "utf8");
-      expect(source).toContain("<MarketingFooter />");
+      // Prefix match: routes may pass the monitoring-coverage prop (issue
+      // #2972) — what matters is the shared component, never a hand-rolled
+      // footer.
+      expect(source).toContain("<MarketingFooter");
       expect(source).not.toContain('<footer className="ld-footer">');
+    }
+  });
+
+  it("renders the coverage figure and status link only when real data is passed (issue #2972)", async () => {
+    const { MarketingFooter } = await import("~/components/marketing-footer");
+
+    const withFigure = renderToStaticMarkup(
+      createElement(MarketingFooter, { monitoringCoverageDays: 42 }),
+    );
+    expect(withFigure).toContain('href="/status"');
+    expect(withFigure).toContain("42 days of continuous scheduled monitoring");
+
+    // No figure is ever fabricated: without loader data the footer renders
+    // the Status link alone.
+    const bare = renderToStaticMarkup(createElement(MarketingFooter));
+    expect(bare).toContain('href="/status"');
+    expect(bare).not.toContain("continuous scheduled monitoring");
+  });
+
+  it("wires the coverage figure into the landing and pricing footers", () => {
+    for (const path of ["app/routes/marketing.tsx", "app/routes/pricing.tsx"]) {
+      const source = readFileSync(path, "utf8");
+      expect(source).toContain("getMonitoringCoverageDays");
+      expect(source).toContain("monitoringCoverageDays={");
     }
   });
 });
