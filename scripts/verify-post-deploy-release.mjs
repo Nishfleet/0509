@@ -455,9 +455,8 @@ const DIAGNOSTIC_IDENTIFIER_PATTERN = /^[a-z0-9._-]{1,128}$/u;
  */
 function readHttpStatus(response) {
   const status = response?.status;
-  return Number.isInteger(status) && status >= 100 && status <= 599
-    ? /** @type {number} */ (status)
-    : null;
+  if (typeof status !== "number" || !Number.isInteger(status)) return null;
+  return status >= 100 && status <= 599 ? status : null;
 }
 
 /**
@@ -468,7 +467,7 @@ function readHttpStatus(response) {
  * identifiers plus delivery statuses/lanes(channels)/webhookStatus — defensively
  * dropping everything else (including timestamps) so nothing address-shaped can
  * ever leak into evidence.
- * @param {ProofPayload | undefined} payload
+ * @param {ProofPayload | null | undefined} payload
  * @param {{ status?: number } | undefined} [response]
  */
 export function sanitizeProofDiagnostics(payload, response) {
