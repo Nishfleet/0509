@@ -10,6 +10,13 @@
  * `/social-card/...` from `workers/app.ts`, so each surface can point its
  * `og:image` at a distinct branded card instead of the generic PNG.
  *
+ * The fixed hub/marketing surfaces (`/compare`, `/methodology/`
+ * `ad-aggression-score`, `/brands`, `/sample-brief`, `/briefs/weekly` —
+ * issue #3114) ride the same machinery: their cards are keyed by a slug in
+ * `STATIC_SURFACE_SOCIAL_CARDS` (seo.ts owns the copy), rendered here as
+ * the `surface` kind, and rasterized to PNG like the other fixed-copy
+ * cards.
+ *
  * This extends the existing SVG og-image machinery (`SOCIAL_CARD_SVG` in
  * `app/lib/seo.ts`) rather than introducing a new image-generation service:
  * every card is a 1200×630 SVG built from the same gradient + text recipe,
@@ -28,7 +35,7 @@
  */
 
 import { brandCategoryFromSlug } from "~/lib/brand-categories";
-import { SOCIAL_CARD_COLORS } from "~/lib/seo";
+import { SOCIAL_CARD_COLORS, STATIC_SURFACE_SOCIAL_CARDS } from "~/lib/seo";
 
 const SITE_NAME = "Five to Nine";
 
@@ -151,7 +158,8 @@ export type SocialCardKind =
   | "switch"
   | "cluster"
   | "brand"
-  | "guide";
+  | "guide"
+  | "surface";
 
 export interface ParsedSocialCardPath {
   kind: SocialCardKind;
@@ -165,7 +173,8 @@ export interface ParsedSocialCardPath {
  * slugs are the raw `:domain` segment (may contain dots, e.g. `nike.com`);
  * compare/switch slugs are single segments; cluster slugs are the two
  * standalone surfaces; brand slugs are the `/brands/:category` landing
- * pages (resolved via `brandCategoryFromSlug` in renderSocialCard).
+ * pages (resolved via `brandCategoryFromSlug` in renderSocialCard); surface
+ * slugs are the fixed hub/marketing pages of `STATIC_SURFACE_SOCIAL_CARDS`.
  */
 /**
  * Safe `decodeURIComponent`: returns `null` instead of throwing `URIError` on
@@ -179,6 +188,20 @@ function safeDecodeURIComponent(value: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Registry entry for a fixed hub/marketing surface card slug (issue #3114),
+ * or `null` when the slug is not one of `STATIC_SURFACE_SOCIAL_CARDS`'s.
+ * Shared by the parser (which kinds a pathname) and the renderer (which
+ * reads the copy), so an unknown slug 404s exactly like the other
+ * registry-keyed cards.
+ */
+function staticSurfaceCardBySlug(slug: string) {
+  return (
+    Object.values(STATIC_SURFACE_SOCIAL_CARDS).find((card) => card.slug === slug) ??
+    null
+  );
 }
 
 export function parseSocialCardPathname(pathname: string): ParsedSocialCardPath | null {
@@ -214,6 +237,20 @@ export function parseSocialCardPathname(pathname: string): ParsedSocialCardPath 
   const guideMatch = rest.match(/^guides\/([^/]+)\.(?:svg|png)$/);
   const guideSlug = guideMatch ? safeDecodeURIComponent(guideMatch[1]) : null;
   if (guideMatch && guideSlug !== null) return { kind: "guide", slug: guideSlug };
+
+  // Fixed hub/marketing surface cards (issue #3114): `/social-card/<slug>.png`
+  // where <slug> is one of `STATIC_SURFACE_SOCIAL_CARDS`'s slugs. The copy is
+  // owned by the registry in seo.ts (shared with the publicSeoMeta
+  // auto-derivation), so a bare card URL renders the right card with no
+  // params. The `.svg` alias serves PNG bytes like the other rasterized
+  // kinds, so cached links keep working. Checked before the cluster matcher
+  // (same top-level shape) and only kinds registry hits, so the two
+  // standalone cluster slugs still fall through to the cluster kind below.
+  const surfaceMatch = rest.match(/^([^/]+)\.(?:svg|png)$/);
+  const surfaceSlug = surfaceMatch ? safeDecodeURIComponent(surfaceMatch[1]) : null;
+  if (surfaceSlug !== null && staticSurfaceCardBySlug(surfaceSlug)) {
+    return { kind: "surface", slug: surfaceSlug };
+  }
 
   const clusterMatch = rest.match(/^([^/]+)\.(?:svg|png)$/);
   if (clusterMatch && CLUSTER_HEADLINES[clusterMatch[1]]) {
@@ -295,6 +332,16 @@ function renderSocialCard(parsed: ParsedSocialCardPath, request: Request): strin
     });
   }
 
+  if (parsed.kind === "surface") {
+    // Copy comes straight from the shared registry — no query params, no
+    // per-request data, nothing live to keep in step. An unknown slug 404s
+    // like the other registry-keyed cards (the parser only kinds hits, so
+    // this is belt-and-braces for direct render calls).
+    const card = staticSurfaceCardBySlug(parsed.slug);
+    if (!card) return null;
+    return renderCard({ headline: card.headline, subline: card.subline });
+  }
+
   const cluster = CLUSTER_HEADLINES[parsed.slug];
   if (!cluster) return null;
   return renderCard(cluster);
@@ -311,9 +358,10 @@ export interface SocialCardFile {
   contentType: string;
   cacheControl: string;
   /**
-   * Card kind, so the worker can rasterize the ads/timeline/cluster/guide
-   * cards to PNG (issue #2089, issue #2101, issue #3098) while leaving the
-   * compare/switch/brand cards as SVG (issue #2083's scope).
+   * Card kind, so the worker can rasterize the ads/timeline/cluster/guide/
+   * surface cards to PNG (issue #2089, issue #2101, issue #3098, issue
+   * #3114) while leaving the compare/switch/brand cards as SVG (issue
+   * #2083's scope).
    */
   kind: SocialCardKind;
 }
@@ -329,8 +377,9 @@ export function publicSocialCardForRequest(request: Request): SocialCardFile | n
     contentType: "image/svg+xml; charset=utf-8",
     // Ads and timeline cards carry brand query params that track live data
     // (the score), so a shorter cache keeps the card in step with the page.
-    // The guide card's `n` param is page copy — static between deploys — so
-    // it caches for a day like the compare/switch/cluster cards.
+    // The guide and surface cards' copy is page copy — static between
+    // deploys — so they cache for a day like the compare/switch/cluster
+    // cards.
     cacheControl:
       parsed.kind === "ads" || parsed.kind === "timeline"
         ? "public, max-age=3600"

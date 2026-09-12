@@ -241,11 +241,13 @@ export default {
     // social card above, before the rate-limit gate.
     //
     // The /ads, /timeline, cluster (/sneaker-resale,
-    // /competitor-monitoring), and guide (/guides/*) cards are rasterized to
-    // PNG (issue #2089, issue #2101, issue #3098) so social scrapers render
-    // them; compare/switch/brand stay SVG (issue #2083's scope). The
-    // rasterizer lives in a worker-only module because its wasm-bindgen glue
-    // is not resolvable in the node test environment.
+    // /competitor-monitoring), guide (/guides/*), and surface (the fixed
+    // hub/marketing pages of STATIC_SURFACE_SOCIAL_CARDS) cards are
+    // rasterized to PNG (issue #2089, issue #2101, issue #3098, issue
+    // #3114) so social scrapers render them; compare/switch/brand stay SVG
+    // (issue #2083's scope). The rasterizer lives in a worker-only module
+    // because its wasm-bindgen glue is not resolvable in the node test
+    // environment.
     if (request.method === "GET" || request.method === "HEAD") {
       const { publicSocialCardForRequest } = await import(
         "../app/lib/social-cards.server"
@@ -256,7 +258,8 @@ export default {
           socialCard.kind === "ads" ||
           socialCard.kind === "timeline" ||
           socialCard.kind === "cluster" ||
-          socialCard.kind === "guide"
+          socialCard.kind === "guide" ||
+          socialCard.kind === "surface"
         ) {
           const { rasterizeSocialCardPngCached } = await import(
             "../app/lib/social-cards-raster.server"
