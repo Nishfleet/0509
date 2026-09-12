@@ -113,14 +113,15 @@ describe("pricing route", () => {
     expect(mod.loader).toBeTypeOf("function");
     // Direct contract: /pricing is in the worker's public-cacheable path set,
     // so a stamp-less 200 HTML response from this route gets the shared
-    // `public, max-age=300` policy with `vary: cookie`.
+    // #3308 policy (browsers keep the #2950 300s bound; the shared edge gets
+    // the #3247-accepted 65-minute s-maxage) with `vary: cookie`.
     const { withSecurityHeaders, PUBLIC_HTML_CACHE_CONTROL } =
       await import("../workers/security-headers");
     const stamped = withSecurityHeaders(
       new Response("<!doctype html>", { headers: { "content-type": "text/html; charset=utf-8" } }),
       new Request("https://0509.io/pricing"),
     );
-    expect(stamped.headers.get("cache-control")).toBe("public, max-age=300");
+    expect(stamped.headers.get("cache-control")).toBe("public, s-maxage=3900, max-age=300");
     expect(stamped.headers.get("cache-control")).toBe(PUBLIC_HTML_CACHE_CONTROL);
     expect(stamped.headers.get("vary")).toContain("cookie");
   });

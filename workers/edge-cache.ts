@@ -85,8 +85,9 @@ const EDGE_TTL_CAP_SECONDS = 300;
  * expired" miss), so a stale-window check against a 300-second copy can never
  * fire. storeEdgeCache therefore stores `max-age = ttl + this window` as the
  * matchable lifetime while every SERVED response keeps the origin's capped
- * `public, max-age=<ttl>` browser contract — the check-live-public-home
- * deploy gate asserts exactly `public, max-age=300`. The window is sized past
+ * `public, max-age=<ttl>` browser contract, while the shared edge reads the
+ * served s-maxage (issue #3308: the check-live-public-home deploy gate
+ * asserts exactly `public, s-maxage=3900, max-age=300`). The window is sized past
  * the hourly judge cadence so a warm copy outlives one probe interval, and a
  * stale serve triggers a background re-render (workers/app.ts) so periodic
  * probe traffic keeps the edge warm instead of alternating MISS/HIT. The
