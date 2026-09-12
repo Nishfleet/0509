@@ -1,0 +1,140 @@
+name: Sitemap coverage canary
+
+# Always-on advertised-URL guard for issue #3166.
+#
+# The 2026-09-12 incident: the live sitemap.xml and llms.txt advertised three
+# /guides/* pages and /switch/adspy that all served 404 while the deploy chain
+# was red for ~3 days. Source-side agreement tests (#3122) stayed green
+# because they never touch production — the exact gap this guard closes.
+#
+# It extends the observe-to-close pattern of the PR #3163 timeline-coverage
+# guard from cohort counting to the universal invariant:
+#
+#   - it fetches the production sitemap.xml + llms.txt and probes EVERY URL
+#     either file advertises,
+#   - each must serve HTTP 200 (redirects not followed — an advertised URL is
+#     the canonical target, matching the issue's `curl -fsS` verify), a
+#     non-empty body, and no robots noindex directive,
+#   - it runs green or red after every completed production deploy
+#     (workflow_run) and on a daily backstop schedule,
+#   - on any divergence it fails loud AND files one deduped incident issue
+#     (marker: sitemap-coverage-guard incident) so the failure is a tracked
+#     work item, never just a red check.
+#
+# Read-only live probe: it only fetches public URLs; the single write is the
+# incident issue, so the job needs issues:write plus the default contents:read.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Daily backstop. The post-deploy workflow_run trigger is the primary
+    # detector for the merged-not-deployed class; the cron covers drift with
+    # no deploy in flight (worker rollback, route-flag flips, D1 data aging a
+    # page into noindex) while keeping live-fetch load negligible.
+    - cron: "41 4 * * *"
+  workflow_run:
+    workflows: ["Deploy production"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: sitemap-coverage-canary
+  cancel-in-progress: false
+
+jobs:
+  live-coverage:
+    # Probe after every completed deploy attempt on main: a failed deploy
+    # that leaves production stale is precisely the incident class this
+    # guard exists for, so both success and failure conclusions probe.
+    # Cancelled/skipped runs changed nothing on production — skip them.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success' ||
+      github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    # environment: production is required to read CANARY_BYPASS_TOKEN — the
+    # probe must present x-0509-canary-token or the 134-URL /ads+/timeline
+    # cohort starves the 120/10min public-brand-page bucket and the canary
+    # 429s its own tail (the #3156 class, self-inflicted).
+    environment: production
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Probe every advertised sitemap + llms.txt URL
+        # A canary that cannot prove anything must fail LOUD, never exit 0.
+        # The script exits non-zero on any non-200 / noindex / empty-body
+        # divergence and auto-files one deduped incident issue; pipefail
+        # propagates that verdict so this step — and the run — go red.
+        id: coverage
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CANARY_BYPASS_TOKEN:-}" ]; then
+            echo "sitemap-coverage canary: red (missing CANARY_BYPASS_TOKEN; a canary that cannot prove full coverage must fail, not skip as success)" >&2
+            exit 1
+          fi
+          node scripts/canary-sitemap-coverage.mjs --json --file-issue \
+            | tee sitemap-coverage-report.json
+          echo "state=green" >> "$GITHUB_OUTPUT"
+
+      - name: Persist canary evidence
+        if: ${{ always() }}
+        shell: bash
+        env:
+          # Honest published state: the probe step only writes `green` when
+          # every advertised URL served an indexable 200 (set -euo pipefail
+          # aborts before the GITHUB_OUTPUT write on any divergence). Any
+          # other failure path leaves state unset, recorded as red — never a
+          # false green.
+          STATE: ${{ steps.coverage.outputs.state || 'red' }} # nosemgrep: no-hand-built-state-ledger-tombstone — a GitHub Actions step-output reference (the probe step's `state` output), not a hand-rolled state/ledger/tombstone file. The artifact is the canary evidence JSON written below, not orchestration state.
+          RUN_ID: ${{ github.run_id }}
+          HEAD_SHA: ${{ github.sha }}
+          TRIGGER: ${{ github.event_name }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import datetime
+
+          report = {}
+          try:
+              with open("sitemap-coverage-report.json", encoding="utf-8") as f:
+                  report = json.load(f)
+          except (OSError, json.JSONDecodeError):
+              report = {"unavailable": True}
+
+          with open("sitemap-coverage-evidence.json", "w", encoding="utf-8") as f:
+              json.dump({
+                  "canary": "sitemap.coverage.canary.live",
+                  "state": os.environ["STATE"],
+                  "runId": int(os.environ["RUN_ID"]),
+                  "headSha": os.environ["HEAD_SHA"],
+                  "trigger": os.environ["TRIGGER"],
+                  "advertised": report.get("advertised"),
+                  "okCount": report.get("okCount"),
+                  "divergences": report.get("divergences"),
+                  "generatedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              }, f, sort_keys=True, separators=(",", ":"))
+              f.write("\n")
+          PY
+
+      - name: Upload canary evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: sitemap-coverage-evidence
+          path: |
+            sitemap-coverage-evidence.json
+            sitemap-coverage-report.json
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
