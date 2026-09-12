@@ -122,8 +122,13 @@ describe("scheduled observation gap check", () => {
     const configuredCrons = [...cronBlock.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
     expect(configuredCrons).toContain(SCHEDULED_OBSERVATION_GAP_CHECK_CRON);
 
+    // The status-probe cron (packet 2026-09-12) is a control-plane cron, not
+    // a workload cron — it lives in workers/schedule.ts as `kind: "status_probes"`
+    // and intentionally stays OUT of the four-cron soak contract. Strip it the
+    // same way we strip the gap check so the workload set can be compared.
+    const STATUS_PROBES_CRON_STRING = "*/5 * * * *";
     const workloadCrons = configuredCrons.filter(
-      (cron) => cron !== SCHEDULED_OBSERVATION_GAP_CHECK_CRON,
+      (cron) => cron !== SCHEDULED_OBSERVATION_GAP_CHECK_CRON && cron !== STATUS_PROBES_CRON_STRING,
     );
 
     expect(workloadCrons.sort()).toEqual(
