@@ -315,6 +315,100 @@ describe("publishSeedListDomain warming verdict (issue #2210)", () => {
     expect(summary.outcomes[0].reason).not.toContain("No verified/likely coverage");
     expect(summary.outcomes[0].reason).toContain("warming");
   });
+
+  // Issue #3123 phase 3: pin the publish floor at the LIST-INPUT boundary, not
+  // just the classifySeedListVerdict unit. A registered-list domain whose
+  // coverage resolves to 0 verified + 0 likely (with a READY discovery, i.e.
+  // genuinely proven-empty, not still warming) must come out of the run as a
+  // skip that contributes NOTHING to the published surface, while a
+  // neighbouring ≥1-verified domain in the same list publishes. This is the
+  // boundary the nightly publisher actually gates on.
+  it("skips a proven-empty (ready, 0+0) list domain and publishes its ≥1-verified neighbour — the publish floor at the list-input boundary", async () => {
+    const [publishDomain, skipDomain] = SEED_LISTS["beauty-personal-care"]
+      .domains.slice(0, 2)
+      .map((entry) => entry.domain);
+
+    vi.doMock("~/lib/ad-source.server", () => ({
+      resolveCommercialDiscoveryProvider: vi.fn(() => "meta_library_browser"),
+      searchAdsViaSourceResolver: vi.fn().mockResolvedValue({
+        ads: [],
+        nextCursor: null,
+        source: "meta_library_browser",
+        provider: "meta_library_browser",
+        cacheStatus: "miss",
+      }),
+    }));
+    vi.doMock("~/lib/ad-persistence.server", () => ({
+      hydrateAdsWithPersistedCreatives: vi.fn(async (_env: unknown, ads: unknown[]) => ads),
+    }));
+    vi.doMock("~/lib/search-rollout.server", () => ({
+      shouldApplySearchV2: vi.fn(() => true),
+    }));
+    vi.doMock("~/lib/search-v2.server", async () => {
+      const actual = await vi.importActual<typeof import("~/lib/search-v2.server")>(
+        "~/lib/search-v2.server",
+      );
+      const countsFor = (displayDomain: string) =>
+        displayDomain === publishDomain
+          ? { verifiedCount: 1, likelyCount: 0, unmatchedCount: 0, discoveryEmptyReason: null }
+          : {
+              verifiedCount: 0,
+              likelyCount: 0,
+              unmatchedCount: 0,
+              discoveryEmptyReason: "empty_search",
+            };
+      return {
+        ...actual,
+        buildSearchV2Context: vi.fn().mockImplementation(async (domain: string) => ({
+          queryIntent: { intent: "domain", raw: domain, normalized: domain },
+          scope: "exact",
+          displayDomain: domain,
+          identityAliases: [],
+          domainAliases: [],
+          advertiserPageId: null,
+        })),
+        applySearchV2PostFilter: vi.fn().mockImplementation(async (
+          _env: unknown,
+          _result: unknown,
+          v2Context: { displayDomain: string },
+        ) => ({
+          ...countsFor(v2Context.displayDomain),
+          discoveryProgress: "ready",
+          discoveryStatus: "ok",
+          discoverySummary: null,
+          provider: "meta_library_browser",
+          source: "meta_library_browser",
+          cacheStatus: "miss",
+        })),
+      };
+    });
+
+    const { runAdsDomainPublisher } = await import("~/lib/ads-domain-publisher.server");
+    const summary = await runAdsDomainPublisher(
+      { DB: {} } as never,
+      { waitUntil: () => {} } as never,
+      { list: "beauty-personal-care", cap: 2 },
+    );
+
+    expect(summary.attempted).toBe(2);
+    expect(summary.published).toBe(1);
+    expect(summary.skipped).toBe(1);
+    expect(summary.warming).toBe(0);
+    expect(summary.failed).toBe(0);
+    // Exactly the ≥1-verified domain counts toward the published surface; the
+    // proven-empty one never does.
+    expect(
+      summary.outcomes.filter((o) => o.verdict === "publish").map((o) => o.domain),
+    ).toEqual([publishDomain]);
+    expect(summary.outcomes[0].verdict).toBe("publish");
+    expect(summary.outcomes[0].verifiedCount).toBe(1);
+    expect(summary.outcomes[1].verdict).toBe("skip");
+    expect(summary.outcomes[1].domain).toBe(skipDomain);
+    expect(summary.outcomes[1].reason).toContain(
+      `No verified/likely coverage (0 verified, 0 likely`,
+    );
+    expect(summary.outcomes[1].reason).toContain(`empty reason: empty_search`);
+  });
 });
 
 /**
