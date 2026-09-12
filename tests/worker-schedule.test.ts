@@ -35,6 +35,10 @@ describe("worker schedule", () => {
       includeDigests: true,
       includeMentionResweep: true,
       includeAutoCompetitorResweep: false,
+      // #3179/#3171: the scheduled presence digest rides the same 3-hourly
+      // tick as the mention re-sweep; delivery is idempotent per workspace
+      // per UTC day, so the 8 daily ticks send at most one digest each.
+      includePresenceDigest: true,
       digestCadence: "weekly",
       digestLookbackDays: 7,
     });
@@ -44,6 +48,7 @@ describe("worker schedule", () => {
       includeDigests: true,
       includeMentionResweep: false,
       includeAutoCompetitorResweep: true,
+      includePresenceDigest: false,
       digestCadence: "daily",
       digestLookbackDays: 1,
     });
@@ -53,6 +58,7 @@ describe("worker schedule", () => {
       includeDigests: false,
       includeMentionResweep: true,
       includeAutoCompetitorResweep: false,
+      includePresenceDigest: true,
     });
   });
 
@@ -68,6 +74,7 @@ describe("worker schedule", () => {
       includeDigests: false,
       includeMentionResweep: false,
       includeAutoCompetitorResweep: false,
+      includePresenceDigest: false,
     });
   });
 
