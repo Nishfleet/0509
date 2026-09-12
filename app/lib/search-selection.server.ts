@@ -155,6 +155,36 @@ export async function prepareSearchResultSelection(
       // failed capture resolves with the failure detail so the pane renders
       // the honest capture-gap copy instead of an error boundary.
       if (needsWork) {
+        // Issue #3244: the defer path was missing the FIX-13 lease. A
+        // revalidation or second submit while the first capture was still
+        // streaming (15-25s) would schedule a duplicate Browser Rendering
+        // job for the same landing page. Claim the same per-ad slot the
+        // waitUntil path uses; on miss, short-circuit to a failure-labelled
+        // promise so the pane still renders honest capture-gap copy instead
+        // of an indefinitely-pending spinner.
+        const claimed = tryClaimSelectionEnrichment(selectedAdBase.metaAdId);
+        if (!claimed) {
+          const selectedAdCapture: Promise<SelectedAdCapturePayload> =
+            Promise.resolve({
+              ad: selectedAdBase,
+              landingPageCaptureFailure: {
+                reasonCode: "enrichment_in_flight",
+                metadata: {
+                  metaAdId: selectedAdBase.metaAdId,
+                },
+              } satisfies LandingPageCaptureFailureDetail,
+            });
+          return {
+            result: {
+              ...result,
+              ads: hydratedAds,
+            },
+            selectedAd: selectedAdBase,
+            selectionEnrichmentPending,
+            landingPageCaptureFailure,
+            selectedAdCapture,
+          };
+        }
         const selectedAdCapture: Promise<SelectedAdCapturePayload> =
           enrichAndPersistSelectedAd(
             env,
@@ -177,7 +207,10 @@ export async function prepareSearchResultSelection(
                       : "landing-page capture stream failed",
                 },
               } satisfies LandingPageCaptureFailureDetail,
-            }));
+            }))
+            .finally(() => {
+              releaseSelectionEnrichment(selectedAdBase.metaAdId);
+            });
         return {
           result: {
             ...result,

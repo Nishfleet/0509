@@ -476,6 +476,16 @@ const LANDING_PAGE_CAPTURE_GAPS: Record<
     factValue: "Too little text",
     proofLabel: "Landing page had too little text",
   },
+  // Issue #3244: a revalidation or concurrent submit started a second
+  // capture while the first was still in flight; the defer path claims
+  // the per-ad lease and short-circuits to this copy instead of
+  // scheduling a duplicate Browser Rendering job.
+  enrichment_in_flight: {
+    headline: "A landing-page check is already running for this ad",
+    detail: "Open the link below to read the live offer; the next visit will finish the check.",
+    factValue: "Check in progress",
+    proofLabel: "Landing-page check already in progress",
+  },
 };
 
 const DEFAULT_LANDING_PAGE_CAPTURE_GAP = {
