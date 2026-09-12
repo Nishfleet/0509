@@ -35,7 +35,13 @@
 #                     Remedy: a repository ADMIN posts a pull-request comment
 #                     containing a line that is exactly
 #
-#                         gate-integrity-attest: <40-hex current head sha>
+#                         verifier-attest: <40-hex current head sha>
+#
+#                     (#3069: the gate-integrity detector was merged into the
+#                     required-verifier-integrity workflow and the two
+#                     attestation markers collapsed into one — a single
+#                     `verifier-attest:` line now covers both detectors; the
+#                     former `gate-integrity-attest:` marker is retired.)
 #
 # WHY AN ATTESTATION COMMENT AND NOT AN APPROVAL LABEL
 # ---------------------------------------------------
@@ -132,7 +138,11 @@ HEX40 = re.compile(r"^[0-9a-f]{40}$")
 # head sha exactly. Line-anchored matching keeps the security property
 # (prose merely mentioning the marker does not attest: the line must be the
 # marker and nothing else) while accepting the multi-line shape.
-ADMIN_ATTEST_LINE = re.compile(r"^gate-integrity-attest: ([0-9a-fA-F]{40})$")
+# The admin marker is `verifier-attest:` — shared with the required-verifier
+# decision since the two workflows merged (#3069). A single whole-body
+# `verifier-attest: <sha>` comment attests both detectors; this script accepts
+# it line-anchored so the marker may also sit inside a multi-line comment.
+ADMIN_ATTEST_LINE = re.compile(r"^verifier-attest: ([0-9a-fA-F]{40})$")
 AUTO_REVERT_ATTEST_LINE = re.compile(
     r"^gate-integrity-auto-revert: ([0-9a-fA-F]{40})$"
 )
@@ -186,7 +196,7 @@ Remedies (each violation class needs its own; neither one waives the other).
   gate-path — a repository ADMIN posts a pull-request comment containing a
      line that is exactly
 
-         gate-integrity-attest: <40-hex current head sha>
+         verifier-attest: <40-hex current head sha>
 
      then re-runs this check. Admin permission is verified through the
      collaborator-permission API by the base-branch-owned workflow, never from
@@ -625,7 +635,7 @@ def main():
         if attested is None:
             reasons.extend(gate_violations)
             reasons.append(
-                "no current `gate-integrity-attest: <head sha>` comment from a repository admin"
+                "no current `verifier-attest: <head sha>` comment from a repository admin"
             )
             reasons.extend(n for n in notes if "attest" in n)
         else:

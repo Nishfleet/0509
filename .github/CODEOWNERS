@@ -34,9 +34,10 @@
 #   * `required-verifier-integrity` — a required context that fails any PR
 #     touching the listed verifier definitions without an independent admin
 #     approval or a current sole-admin attestation.
-#   * `gate-integrity` — a required context that fails any PR which deletes or
-#     skips tests, raises a design-ratchet ceiling, widens a scanner ignore
-#     file, softens a CI step, or edits any path in this file, unless it carries
+#   * `required-verifier-integrity` (merged gate-integrity detector, #3069) —
+#     the same required context also fails any PR which deletes or skips
+#     tests, raises a design-ratchet ceiling, widens a scanner ignore file,
+#     softens a CI step, or edits any path in this file, unless it carries
 #     the matching justification.
 #
 # So this file is the DOCUMENTED OWNERSHIP MAP and the source of the gate-path

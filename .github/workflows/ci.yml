@@ -1,5 +1,28 @@
 name: CI
 
+# One required PR context (#3069 / ci-gates-ledger batch 2): codex-node-checks
+# is now the single node-checks job — the former shard-2/3/4 sibling jobs are
+# folded into one unsharded `vitest run --project node` (vitest's internal
+# fork pool already parallelises across the hosted runner's cores), plus the
+# workers project and coverage. The ledger counted ~4.2 min median ×4 shard
+# overhead and four required contexts; one context now covers all of it.
+#
+# The standalone semgrep-actionlint and backlog-console-refresh-test workflows
+# are folded in here as path-gated steps inside codex-node-checks (the shared
+# PR job): actionlint + semgrep run only when the PR diff touches `.github/**`,
+# the hermetic backlog-console test only on `automation/backlog-console/**`.
+# Semgrep keeps a merge_group-only bridge job (bottom of file) because the
+# main-merge-queue ruleset still lists `semgrep` as a required context and a
+# missing required check fails closed — the job reports the real verdict on
+# every queue batch until an admin drops the context from the ruleset.
+#
+# pull_request is deliberately NOT path-filtered: codex-node-checks and
+# dependabot-critical-check are required contexts, and a workflow skipped by
+# path filtering leaves its required checks "Pending" forever, which blocks
+# the PR from ever entering the merge queue (docs-only PRs included). The
+# docs-only savings come from the folded steps below being STEP-gated to
+# .github/** and automation/backlog-console/**, not from skipping the job.
+
 on:
   pull_request:
   merge_group:
@@ -17,9 +40,6 @@ concurrency:
 permissions:
   vulnerability-alerts: read
 
-env:
-  VITEST_TOTAL_SHARDS: "4"
-
 jobs:
   codex-node-checks:
     # Required context (branch protection). It must be structurally incapable
@@ -29,9 +49,11 @@ jobs:
     # an if: can skip on cancellation or any future condition edit). The
     # authorizer is step 1 of THIS job, so a fork PR or unapproved dispatch
     # candidate fails the required check with a real failure - a gate that
-    # cannot verify must say no, never render green or skipped. This contract
-    # is identical for the sibling shard jobs below; tests/required-context-no-skip.test.ts
-    # enforces it structurally across all of them.
+    # cannot verify must say no, never render green or skipped.
+    # tests/required-context-no-skip.test.ts enforces it structurally.
+    # Path gating lives at STEP level (the folded .github/** and
+    # automation/backlog-console/** checks below) so the required job itself
+    # always reports a real verdict when the workflow fires.
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -91,6 +113,86 @@ jobs:
           if git symbolic-ref --quiet HEAD >/dev/null 2>&1; then
             exit 1
           fi
+
+      - name: Resolve changed paths for the folded gates
+        # The folded checks (actionlint, semgrep, the backlog-console hermetic
+        # test) are path-scoped: they run only when the PR diff touches the
+        # surface they guard. Path gating is a STEP-level decision inside the
+        # required job — the job itself can never conclude skipped. Only
+        # pull_request computes a diff; merge_group and workflow_dispatch run
+        # the node suite without the folded checks (merge_group's folded-gate
+        # coverage lives in the `semgrep` bridge job below).
+        id: changes
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only "$BASE_SHA" HEAD)"
+          if printf '%s\n' "$changed" | grep -q '^\.github/'; then
+            echo "dotgithub=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "dotgithub=false" >> "$GITHUB_OUTPUT"
+          fi
+          if printf '%s\n' "$changed" | grep -q '^automation/backlog-console/'; then
+            echo "backlog_console=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "backlog_console=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run actionlint
+        # Folded from semgrep-actionlint.yml (#3069): same pinned action,
+        # same shellcheck/pyflakes-off hermeticism, now gated to PRs that
+        # touch .github/**.
+        if: github.event_name == 'pull_request' && steps.changes.outputs.dotgithub == 'true'
+        uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2.2.0
+        with:
+          shellcheck: false
+          pyflakes: false
+
+      - name: Install semgrep (pinned)
+        if: github.event_name == 'pull_request' && steps.changes.outputs.dotgithub == 'true'
+        run: |
+          set -euo pipefail
+          python3 -m pip install --upgrade pip
+          # Pinned to an exact release (published 2026-07-28, >7 days old).
+          # Bump deliberately; do not use `latest` or a floating range.
+          pip install semgrep==1.172.0
+
+      - name: Semgrep scan (canonical orchestration gate + p/default)
+        # Folded from semgrep-actionlint.yml (#3069): consumes the canonical
+        # no-hand-built-orchestration ruleset by PINNED raw URL at
+        # Nishfleet/siterep-public@4738f06 (exact commit SHA) plus p/default.
+        # Per-repo copies of the ruleset are forbidden — one canonical source.
+        # Fails only on ERROR/HIGH findings; lower-severity p/default noise is
+        # reported but does not block.
+        if: github.event_name == 'pull_request' && steps.changes.outputs.dotgithub == 'true'
+        run: |
+          set -uo pipefail
+          # The step fails only on ERROR/HIGH-tier findings (semgrep's ERROR
+          # == HIGH); lower-severity p/default findings are reported but do
+          # not block, so pre-existing MEDIUM/WARNING/INFO noise does not
+          # stall every PR.
+          CANONICAL_SHA="4738f06365012bc9f1f54c5981cedf9ddd3fa1eb"
+          CANONICAL_URL="https://raw.githubusercontent.com/Nishfleet/siterep-public/${CANONICAL_SHA}/.semgrep/no-hand-built-orchestration.yml"
+          semgrep --config "${CANONICAL_URL}" \
+                  --config p/default \
+                  --quiet --metrics=off --json > semgrep-results.json
+          jq -r '.results[] | "::" + (.extra.severity | ascii_downcase) + "::" + .path + ":" + (.start.line|tostring) + " [" + .check_id + "] " + (.extra.message | gsub("\n";" "))' semgrep-results.json 2>/dev/null || true
+          if jq -e '[.results[] | select(.extra.severity | ascii_downcase | IN("error","high"))] | length > 0' semgrep-results.json >/dev/null 2>&1; then
+            echo "::error::Semgrep found ERROR/HIGH-severity findings (listed above)."
+            exit 1
+          fi
+          echo "::notice::Semgrep clean (no ERROR/HIGH findings)."
+
+      - name: backlog-console hermetic test
+        # Folded from backlog-console-refresh-test.yml (#3069): the refresh.sh
+        # credential + fail-loud regression, now a step of the shared PR job
+        # gated to automation/backlog-console/** diffs.
+        if: github.event_name == 'pull_request' && steps.changes.outputs.backlog_console == 'true'
+        run: bash automation/backlog-console/test_refresh.sh
+
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: ".node-version"
@@ -105,12 +207,14 @@ jobs:
           fi
       - name: Build
         run: npm run build
-      - name: Test (shard 1 of ${{ env.VITEST_TOTAL_SHARDS }})
+      - name: Test
+        # Unsharded since #3069: the former shard-1..4 jobs ran the same suite
+        # split four ways across four runners; one runner's fork pool now
+        # parallelises the whole suite, so one context covers all of it.
         run: |
           set -euo pipefail
           bash ./scripts/ci-vitest-run.sh -- \
             npx --no-install vitest run --configLoader runner \
-              --shard=1/${{ env.VITEST_TOTAL_SHARDS }} \
               --project node --coverage
           bash ./scripts/ci-vitest-run.sh -- \
             npx --no-install vitest run --configLoader runner \
@@ -119,238 +223,6 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=2048
         run: npm run typecheck
-
-  codex-node-checks-shard-2:
-    # Required context (branch protection) — shard 2 of 4. Same no-skip
-    # contract as codex-node-checks above: no job-level if:/needs:, authorizer
-    # is step 1, fork PR fails with a real failure. See that job's header.
-    name: codex-node-checks-shard-2
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    timeout-minutes: 270
-    steps:
-      - name: Authorize exact verification candidate
-        id: authorize
-        shell: bash
-        env:
-          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
-          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name || '' }}
-        run: |
-          set -euo pipefail
-          sha_pattern='^[a-f0-9]{40}$'
-          test "$GITHUB_REPOSITORY" = "Nishfleet/0509"
-          [[ "$GITHUB_SHA" =~ $sha_pattern ]]
-          case "$GITHUB_EVENT_NAME" in
-            pull_request)
-              test -z "$EXPECTED_SHA"
-              test "$HEAD_REPOSITORY" = "$GITHUB_REPOSITORY"
-              [[ "$GITHUB_REF" =~ ^refs/pull/[1-9][0-9]*/merge$ ]]
-              ;;
-            workflow_dispatch)
-              test "$GITHUB_REF" = "refs/heads/main"
-              test "$GITHUB_RUN_ATTEMPT" = "1"
-              [[ "$EXPECTED_SHA" =~ $sha_pattern ]]
-              test "$EXPECTED_SHA" = "$GITHUB_SHA"
-              ;;
-            merge_group)
-              test -z "$EXPECTED_SHA"
-              [[ "$GITHUB_REF" =~ ^refs/heads/gh-readonly-queue/ ]]
-              ;;
-            *)
-              exit 1
-              ;;
-          esac
-          printf 'sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          ref: ${{ steps.authorize.outputs.sha }}
-          fetch-depth: 0
-          clean: true
-          persist-credentials: false
-      - name: Verify authorized checkout
-        shell: bash
-        env:
-          AUTHORIZED_SHA: ${{ steps.authorize.outputs.sha }}
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse --verify HEAD)" = "$AUTHORIZED_SHA"
-          if git symbolic-ref --quiet HEAD >/dev/null 2>&1; then
-            exit 1
-          fi
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: ".node-version"
-          cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' && 'npm' || '' }}
-          package-manager-cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' }}
-      - name: Install dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci --ignore-scripts
-          else
-            npm install --ignore-scripts
-          fi
-      - name: Test (shard 2 of ${{ env.VITEST_TOTAL_SHARDS }})
-        run: |
-          set -euo pipefail
-          bash ./scripts/ci-vitest-run.sh -- \
-            npx --no-install vitest run --configLoader runner \
-              --shard=2/${{ env.VITEST_TOTAL_SHARDS }} \
-              --project node
-
-  codex-node-checks-shard-3:
-    # Required context (branch protection) — shard 3 of 4. Same no-skip
-    # contract as codex-node-checks above.
-    name: codex-node-checks-shard-3
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    timeout-minutes: 270
-    steps:
-      - name: Authorize exact verification candidate
-        id: authorize
-        shell: bash
-        env:
-          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
-          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name || '' }}
-        run: |
-          set -euo pipefail
-          sha_pattern='^[a-f0-9]{40}$'
-          test "$GITHUB_REPOSITORY" = "Nishfleet/0509"
-          [[ "$GITHUB_SHA" =~ $sha_pattern ]]
-          case "$GITHUB_EVENT_NAME" in
-            pull_request)
-              test -z "$EXPECTED_SHA"
-              test "$HEAD_REPOSITORY" = "$GITHUB_REPOSITORY"
-              [[ "$GITHUB_REF" =~ ^refs/pull/[1-9][0-9]*/merge$ ]]
-              ;;
-            workflow_dispatch)
-              test "$GITHUB_REF" = "refs/heads/main"
-              test "$GITHUB_RUN_ATTEMPT" = "1"
-              [[ "$EXPECTED_SHA" =~ $sha_pattern ]]
-              test "$EXPECTED_SHA" = "$GITHUB_SHA"
-              ;;
-            merge_group)
-              test -z "$EXPECTED_SHA"
-              [[ "$GITHUB_REF" =~ ^refs/heads/gh-readonly-queue/ ]]
-              ;;
-            *)
-              exit 1
-              ;;
-          esac
-          printf 'sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          ref: ${{ steps.authorize.outputs.sha }}
-          fetch-depth: 0
-          clean: true
-          persist-credentials: false
-      - name: Verify authorized checkout
-        shell: bash
-        env:
-          AUTHORIZED_SHA: ${{ steps.authorize.outputs.sha }}
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse --verify HEAD)" = "$AUTHORIZED_SHA"
-          if git symbolic-ref --quiet HEAD >/dev/null 2>&1; then
-            exit 1
-          fi
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: ".node-version"
-          cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' && 'npm' || '' }}
-          package-manager-cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' }}
-      - name: Install dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci --ignore-scripts
-          else
-            npm install --ignore-scripts
-          fi
-      - name: Test (shard 3 of ${{ env.VITEST_TOTAL_SHARDS }})
-        run: |
-          set -euo pipefail
-          bash ./scripts/ci-vitest-run.sh -- \
-            npx --no-install vitest run --configLoader runner \
-              --shard=3/${{ env.VITEST_TOTAL_SHARDS }} \
-              --project node
-
-  codex-node-checks-shard-4:
-    # Required context (branch protection) — shard 4 of 4. Same no-skip
-    # contract as codex-node-checks above.
-    name: codex-node-checks-shard-4
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    timeout-minutes: 270
-    steps:
-      - name: Authorize exact verification candidate
-        id: authorize
-        shell: bash
-        env:
-          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
-          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name || '' }}
-        run: |
-          set -euo pipefail
-          sha_pattern='^[a-f0-9]{40}$'
-          test "$GITHUB_REPOSITORY" = "Nishfleet/0509"
-          [[ "$GITHUB_SHA" =~ $sha_pattern ]]
-          case "$GITHUB_EVENT_NAME" in
-            pull_request)
-              test -z "$EXPECTED_SHA"
-              test "$HEAD_REPOSITORY" = "$GITHUB_REPOSITORY"
-              [[ "$GITHUB_REF" =~ ^refs/pull/[1-9][0-9]*/merge$ ]]
-              ;;
-            workflow_dispatch)
-              test "$GITHUB_REF" = "refs/heads/main"
-              test "$GITHUB_RUN_ATTEMPT" = "1"
-              [[ "$EXPECTED_SHA" =~ $sha_pattern ]]
-              test "$EXPECTED_SHA" = "$GITHUB_SHA"
-              ;;
-            merge_group)
-              test -z "$EXPECTED_SHA"
-              [[ "$GITHUB_REF" =~ ^refs/heads/gh-readonly-queue/ ]]
-              ;;
-            *)
-              exit 1
-              ;;
-          esac
-          printf 'sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          ref: ${{ steps.authorize.outputs.sha }}
-          fetch-depth: 0
-          clean: true
-          persist-credentials: false
-      - name: Verify authorized checkout
-        shell: bash
-        env:
-          AUTHORIZED_SHA: ${{ steps.authorize.outputs.sha }}
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse --verify HEAD)" = "$AUTHORIZED_SHA"
-          if git symbolic-ref --quiet HEAD >/dev/null 2>&1; then
-            exit 1
-          fi
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: ".node-version"
-          cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' && 'npm' || '' }}
-          package-manager-cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' }}
-      - name: Install dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci --ignore-scripts
-          else
-            npm install --ignore-scripts
-          fi
-      - name: Test (shard 4 of ${{ env.VITEST_TOTAL_SHARDS }})
-        run: |
-          set -euo pipefail
-          bash ./scripts/ci-vitest-run.sh -- \
-            npx --no-install vitest run --configLoader runner \
-              --shard=4/${{ env.VITEST_TOTAL_SHARDS }} \
-              --project node
 
   dependabot-critical-check:
     # Required context (branch protection). Same no-skip contract as
@@ -433,6 +305,85 @@ jobs:
             exit 1
           fi
           echo "No open critical Dependabot alerts on direct dependencies"
+
+  semgrep:
+    # Merge-queue bridge for the folded semgrep+actionlint workflow (#3069).
+    # The main-merge-queue ruleset still lists `semgrep` as a required
+    # context and a required check that never reports hangs the queue for the
+    # full check_response_timeout, so this job keeps reporting the real
+    # verdict on every batch until an admin drops `semgrep` from the
+    # ruleset (the worker App token cannot write rulesets — verified 403 on
+    # repos/rulesets PUT). It runs the same pinned scans the deleted
+    # semgrep-actionlint.yml ran on merge_group: actionlint over
+    # .github/workflows plus the full-tree semgrep pass. Once the ruleset no
+    # longer requires `semgrep` this job can be deleted or kept as an
+    # advisory queue scan.
+    #
+    # Deliberately job-level `if:`-gated to merge_group ONLY, same exemption
+    # as release-proof below: requiredness comes from the merge-queue
+    # ruleset evaluating on the gh-readonly-queue ref where the event is
+    # always merge_group; on pull_request the check is simply absent (the
+    # PR-side folded steps in codex-node-checks own the .github/** coverage),
+    # and a missing required check on the queue ref fails closed.
+    name: semgrep
+    if: github.event_name == 'merge_group'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    steps:
+      - name: Authorize exact verification candidate
+        id: authorize
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "Nishfleet/0509"
+          [[ "$GITHUB_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$GITHUB_EVENT_NAME" = "merge_group"
+          [[ "$GITHUB_REF" =~ ^refs/heads/gh-readonly-queue/ ]]
+          printf 'sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ steps.authorize.outputs.sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Verify authorized checkout
+        shell: bash
+        env:
+          AUTHORIZED_SHA: ${{ steps.authorize.outputs.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --verify HEAD)" = "$AUTHORIZED_SHA"
+          if git symbolic-ref --quiet HEAD >/dev/null 2>&1; then
+            exit 1
+          fi
+      - name: Run actionlint
+        uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2.2.0
+        with:
+          shellcheck: false
+          pyflakes: false
+      - name: Install semgrep (pinned)
+        run: |
+          set -euo pipefail
+          python3 -m pip install --upgrade pip
+          # Pinned to an exact release (published 2026-07-28, >7 days old).
+          # Bump deliberately; do not use `latest` or a floating range.
+          pip install semgrep==1.172.0
+      - name: Semgrep scan (canonical orchestration gate + p/default)
+        run: |
+          set -uo pipefail
+          CANONICAL_SHA="4738f06365012bc9f1f54c5981cedf9ddd3fa1eb"
+          CANONICAL_URL="https://raw.githubusercontent.com/Nishfleet/siterep-public/${CANONICAL_SHA}/.semgrep/no-hand-built-orchestration.yml"
+          semgrep --config "${CANONICAL_URL}" \
+                  --config p/default \
+                  --quiet --metrics=off --json > semgrep-results.json
+          jq -r '.results[] | "::" + (.extra.severity | ascii_downcase) + "::" + .path + ":" + (.start.line|tostring) + " [" + .check_id + "] " + (.extra.message | gsub("\n";" "))' semgrep-results.json 2>/dev/null || true
+          if jq -e '[.results[] | select(.extra.severity | ascii_downcase | IN("error","high"))] | length > 0' semgrep-results.json >/dev/null 2>&1; then
+            echo "::error::Semgrep found ERROR/HIGH-severity findings (listed above)."
+            exit 1
+          fi
+          echo "::notice::Semgrep clean (no ERROR/HIGH findings)."
 
   release-proof:
     # Gate-B release proof as a merge-queue gate (issue #2840): a batch whose

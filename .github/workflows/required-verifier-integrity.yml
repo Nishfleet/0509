@@ -25,6 +25,21 @@ name: Required verifier integrity
 # than the PR author, OR a current sole-admin attestation comment (below).
 # Any API failure fails closed.
 #
+# MERGED GATE-INTEGRITY DETECTOR (ci-gates-ledger batch 2, #3069)
+# --------------------------------------------------------------
+# The sibling `gate-integrity` detector (formerly .github/workflows/
+# gate-integrity.yml) is folded into this single job: it reads the diff's
+# CONTENT for the gate-bypass moves the protected-file list cannot see —
+# deleted/renamed tests, new skip markers, net assertion loss, gate-owned
+# path changes (`.github/**`, ignore files, ratchet ceilings, CI runner
+# scripts), raised/dropped ratchet ceilings, and CI steps softened with
+# `|| true` / `continue-on-error`. Both detectors run in this one job and
+# both must pass for the `required-verifier-integrity` context to go green;
+# each keeps its own decision script and fixture regression fetched from the
+# base ref. Gate-integrity's remedies stay distinct per violation class:
+# test-integrity wants a `test-removal-justified:` trailer, gate-path wants
+# the admin attestation, and neither waives the other.
+#
 # Sole-admin attestation path (owner decision, Nish, 2026-08-20)
 # -------------------------------------------------------------
 # Nishfleet/0509 has exactly ONE collaborator, and GitHub forbids approving
@@ -40,9 +55,16 @@ name: Required verifier integrity
 #
 #     verifier-attest: <40-hex current head sha>
 #
-# The gate then PASSES and says so unmistakably: a `::warning::` annotation
-# plus a job-summary entry naming the attesting admin, the attested sha, and
-# the fact that no independent reviewer was involved.
+# ONE marker now covers both detectors (#3069 / ledger row "one attestation
+# marker, two detectors"): the required-verifier path requires the whole body
+# to be exactly the marker line, while the merged gate-integrity detector
+# accepts the marker as any single line of a multi-line comment (the
+# real-world #1273 shape, where prose follows the marker). A whole-body
+# `verifier-attest:` comment therefore satisfies both at once — one
+# attestation per push, never two. The gate then PASSES and says so
+# unmistakably: a `::warning::` annotation plus a job-summary entry naming
+# the attesting admin, the attested sha, and the fact that no independent
+# reviewer was involved.
 #
 # Properties that keep this honest:
 #   * Admin permission is resolved through the collaborator-permission API in
@@ -60,6 +82,13 @@ name: Required verifier integrity
 #     moment a second admin/maintainer exists on this repository, that path is
 #     the only one that should be used and this one should be deleted.
 #
+# merge_group: the required context must also report on the queue's ref or the
+# merge queue hangs forever waiting for it. The decision steps are scoped to
+# `pull_request_target` and the merge_group run is an authorizer-only
+# pass-through: a PR must already be green at the PR level (with base-branch
+# bytes) before it can be queued at all, so the PR-level run is the
+# authoritative one.
+#
 # Hygiene contract (test_required_context_hygiene.py): the required job has NO
 # job-level `if:` (authorizer is a step), no `continue-on-error`, no trailing
 # `|| true` swallow, and no mutable verifier (`uses:` must be a pinned SHA or
@@ -67,7 +96,14 @@ name: Required verifier integrity
 
 on:
   pull_request_target:
-    types: [opened, synchronize, reopened]
+    # `labeled`/`unlabeled` are included so an already-open PR can be re-checked
+    # without a force-push: toggling any label re-runs the gate. The merged
+    # gate-integrity auto-revert waiver depends on this — auto-revert.yml
+    # posts its sha-bound waiver comment then flips a label to re-fire this
+    # check. Without the label events, every PR open at the moment this check
+    # became required would sit forever with a never-reported required
+    # context.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   merge_group:
 
 # Supersede-cancel per PR. Without this the workflow was the single largest
@@ -79,7 +115,9 @@ on:
 # pull_request_target resolves to the base branch and would collapse every
 # open PR into one mutually-cancelling group) matches the behaviour ci.yml
 # and secret-scan.yml already rely on: only a superseded run for the SAME PR
-# is cancelled, and the newest run always reports the required context.
+# is cancelled, and the newest run always reports the required context. The
+# merged gate-integrity runs share this group — one context, one supersede
+# chain.
 concurrency:
   group: required-verifier-integrity-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -111,6 +149,9 @@ jobs:
           [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "bad GITHUB_SHA: $GITHUB_SHA" >&2; exit 1; }
           case "$GITHUB_EVENT_NAME" in
             pull_request_target)
+              # Fork PRs are refused outright: this gate reads the PR's own diff
+              # to judge it, and a fork head is not covered by the base-branch
+              # trust boundary the rest of this workflow relies on.
               test "$HEAD_REPOSITORY" = "$GITHUB_REPOSITORY"
               # Self-hosted runners on pull_request_target may set GITHUB_REF to
               # either refs/pull/N/merge (hosted behavior) or refs/heads/<branch>
@@ -148,31 +189,80 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_BODY: ${{ github.event.pull_request.body }}
         run: |
           set -euo pipefail
-          # Authoritative PR changed-file list. `gh api --paginate` applies
-          # --jq PER PAGE and concatenates the per-page results, so when a PR
-          # exceeds one page (>100 items) the raw output is N back-to-back
-          # arrays, which is not a single valid JSON document and would crash
-          # `--argjson` below. Emit one object per line (--jq '.[] | …') and
-          # then slurp the whole stream into one array so the result is always
-          # a single array regardless of page count. Applies to every
-          # paginated fetch in this step.
+          # Every input is read through the API in the base branch's context,
+          # so a candidate cannot shape the evidence about itself.
+          #
+          # `gh api --paginate` applies --jq PER PAGE and concatenates the
+          # per-page results, so when a PR exceeds one page (>100 items) the
+          # raw output is N back-to-back arrays, which is not a single valid
+          # JSON document and would crash `--argjson`/`jq` consumers below.
+          # Emit one object per line and slurp the whole stream into one
+          # array so the result is always a single array regardless of page
+          # count. Applies to every paginated object fetch in this step.
+          #
+          # The file list carries the RICH projection (status + stripped
+          # patch) the merged gate-integrity detector needs; the
+          # required-verifier bundle derives its slim {filename,
+          # previous_filename} projection from it below, so the single API
+          # read serves both detectors.
+          #
+          # Patches are stripped to their +/- lines before they enter the
+          # bundle. The decision script only ever reads added and removed
+          # lines, and context lines are the bulk of a diff — dropping them
+          # keeps a large PR's bundle small without losing a single signal.
           files_json="$(gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" \
-            --jq '.[] | {filename, previous_filename}' | jq -s .)"
+            --jq '.[] | {
+                    filename,
+                    previous_filename,
+                    status,
+                    patch: (
+                      if .patch == null then null
+                      else (.patch | split("\n")
+                            | map(select((startswith("+") or startswith("-"))
+                                          and (startswith("+++") or startswith("---") | not)))
+                            | join("\n"))
+                      end
+                    )
+                  }' | jq -s .)"
           # Authoritative review list (states include DISMISSED so dismissals
           # can never masquerade as approvals).
           reviews_json="$(gh api --paginate "repos/$REPO/pulls/$PR/reviews?per_page=100" \
             --jq '.[] | {state, submitted_at, user: (.user.login // ""), commit_id}' | jq -s .)"
           # Head commit date proves an approval is current, not stale.
           head_date="$(gh api "repos/$REPO/commits/$HEAD_SHA" --jq '.commit.committer.date // ""')"
-          # Sole-admin attestation comments (paginated). Only comments whose
-          # ENTIRE body (after trimming surrounding whitespace and CRs) is
-          # exactly `verifier-attest: <40-hex>` are considered candidates;
-          # prose that merely mentions the phrase is ignored, and no other
-          # comment shape can reach the decision logic. Filtering here also
-          # bounds the permission lookups below to the handful of logins that
-          # actually attested, rather than every commenter on the PR.
+          # Commit messages carry the `test-removal-justified:` trailer the
+          # merged gate-integrity detector reads.
+          #
+          # Deliberately NOT the `--jq '.[] | …' | jq -s .` idiom the other
+          # fetches use. That idiom works because they emit OBJECTS, which stay
+          # valid JSON when gh prints them raw. A commit message is a STRING,
+          # and gh's `--jq` prints strings raw (jq -r semantics), so the message
+          # arrives unquoted with its newlines intact and the slurp then chokes
+          # on the first bare word. Caught by running this against real PR data
+          # rather than fixtures — the fixtures could never have seen it.
+          #
+          # Instead: no `--jq` at all, so gh emits one JSON array per page;
+          # `jq -s` slurps the pages into an array of arrays and `.[][]`
+          # flattens them. Embedded newlines survive, which matters because the
+          # trailer lives on its own line at the end of the message.
+          commits_json="$(gh api --paginate "repos/$REPO/pulls/$PR/commits?per_page=100" \
+            | jq -s '[.[][] | .commit.message]')"
+          # Sole-admin attestation comments (paginated). Two extractions run
+          # over the same raw list:
+          #
+          #   * required-verifier: only comments whose ENTIRE body (after
+          #     trimming surrounding whitespace and CRs) is exactly
+          #     `verifier-attest: <40-hex>` — prose that merely mentions the
+          #     phrase is ignored.
+          #   * merged gate-integrity: the RAW comment list is shipped to the
+          #     decision script, which extracts the marker line-anchored (a
+          #     multi-line comment whose lines include exactly the marker
+          #     attests — the real-world #1273 shape), and separately
+          #     extracts the `gate-integrity-auto-revert:` waiver marker the
+          #     auto-revert workflow posts.
           comments_json="$(gh api --paginate "repos/$REPO/issues/$PR/comments?per_page=100" \
             --jq '.[] | {body: (.body // ""), user: (.user.login // "")}' | jq -s .)"
           attestations_json="$(printf '%s' "$comments_json" | jq -c '
@@ -184,11 +274,23 @@ jobs:
             ]')"
           # Reviewer AND attesting-commenter permissions resolved from the
           # collaborator-permission API, never from a label, an
-          # author_association, a comment body, or a candidate file.
+          # author_association, a comment body, or a candidate file. The
+          # attester scan is line-anchored, which is a strict superset of the
+          # whole-body form above, so every login either decision script can
+          # credit is resolved here. (`gate-integrity-auto-revert:` posters
+          # are intentionally not permission-checked by the decision script
+          # — the waiver is anchored by the body-opener + revert-commit
+          # combo, not identity — so they are excluded from this list.)
           perms_file="$RUNNER_TEMP/perms.tsv"
           : > "$perms_file"
           logins="$( { printf '%s' "$reviews_json" | jq -r '.[].user | select(. != "")'; \
-                       printf '%s' "$attestations_json" | jq -r '.[].user | select(. != "")'; } \
+                       printf '%s' "$attestations_json" | jq -r '.[].user | select(. != "")'; \
+                       printf '%s' "$comments_json" | jq -r '
+                         .[] | . as $c
+                         | ($c.body | gsub("\r"; "") | split("\n")
+                             | map(gsub("^\\s+"; "") | sub("\\s+$"; ""))
+                             | any(. | test("^verifier-attest: [0-9a-fA-F]{40}$")))
+                         | select(.) | $c.user'; } \
                      | sort -u )"
           for login in $logins; do
             perm="$(gh api "repos/$REPO/collaborators/$login/permission" --jq '.permission')"
@@ -196,29 +298,85 @@ jobs:
           done
           perms_json="$(awk -F'\t' 'NF==2 {print}' "$perms_file" | jq -Rn \
             '[inputs | split("\t") | select(length==2) | {key: .[0], value: .[1]}] | from_entries')"
+
+          # Every large value goes to a FILE, never argv. A long PR body plus a
+          # busy comment thread pushed a jq --arg call past the kernel's
+          # argument limit and it died with "Argument list too long" (exit
+          # 126) — the gate failing on exactly the candidates carrying the
+          # most evidence (0509#2516). --rawfile keeps pr_body byte-identical
+          # to --arg (printf '%s' adds no trailing newline); --slurpfile wraps
+          # each document in an array, hence the [0] indexes below.
+          ctx="$RUNNER_TEMP/ctx"
+          mkdir -p "$ctx"
+          printf '%s' "${PR_BODY:-}" > "$ctx/pr_body.txt"
+          printf '%s' "$files_json" > "$ctx/files.json"
+          printf '%s' "$commits_json" > "$ctx/commits.json"
+          printf '%s' "$comments_json" > "$ctx/comments.json"
+          printf '%s' "$perms_json" > "$ctx/perms.json"
+          printf '%s' "$reviews_json" > "$ctx/reviews.json"
+          printf '%s' "$attestations_json" > "$ctx/attestations.json"
+          # An empty document means an upstream API read produced nothing; keep
+          # that fail-loud instead of letting --slurpfile turn it into null.
+          for doc in files commits comments perms reviews attestations; do
+            test -s "$ctx/$doc.json" || { echo "empty context document: $doc" >&2; exit 1; }
+          done
+
+          # required-verifier bundle: slim file projection (the decision only
+          # reads filename/previous_filename), same shape as before the merge.
           jq -n \
             --arg author "$AUTHOR" \
             --arg head_commit_date "$head_date" \
             --arg head_sha "$HEAD_SHA" \
-            --argjson files "$files_json" \
-            --argjson reviews "$reviews_json" \
-            --argjson attestations "$attestations_json" \
-            --argjson permissions "$perms_json" \
+            --slurpfile files "$ctx/files.json" \
+            --slurpfile reviews "$ctx/reviews.json" \
+            --slurpfile attestations "$ctx/attestations.json" \
+            --slurpfile permissions "$ctx/perms.json" \
             --argjson protected '[
               ".github/workflows/ci.yml",
               ".github/workflows/secret-scan.yml",
               ".github/workflows/required-verifier-integrity.yml",
               ".github/scripts/required-verifier-integrity.sh",
               ".github/scripts/test-required-verifier-integrity.sh",
+              ".github/scripts/gate-integrity.sh",
+              ".github/scripts/test-gate-integrity.sh",
               ".github/workflows/deploy-production.yml",
               ".github/workflows/finalize-production-soak.yml",
               "scripts/ci-verify-production-candidate.sh",
               "scripts/ci-verify-provider-main-cas.sh"
             ]' \
             '{author: $author, head_commit_date: $head_commit_date, head_sha: $head_sha,
-              files: $files, reviews: $reviews, attestations: $attestations,
-              permissions: $permissions, protected_files: $protected}' \
+              files: [$files[0][] | {filename, previous_filename}],
+              reviews: $reviews[0], attestations: $attestations[0],
+              permissions: $permissions[0], protected_files: $protected}' \
             > "$RUNNER_TEMP/context-bundle.json"
+
+          # Merged gate-integrity bundle: rich file projection (status +
+          # stripped patch), raw comments, commit messages, pr_body.
+          jq -n \
+            --arg head_sha "$HEAD_SHA" \
+            --rawfile pr_body "$ctx/pr_body.txt" \
+            --slurpfile files "$ctx/files.json" \
+            --slurpfile commit_messages "$ctx/commits.json" \
+            --slurpfile comments "$ctx/comments.json" \
+            --slurpfile permissions "$ctx/perms.json" \
+            --argjson gate_globs '[
+              ".github/workflows/**",
+              ".github/scripts/**",
+              ".github/CODEOWNERS",
+              ".gitleaksignore",
+              ".gitleaks.toml",
+              ".semgrepignore",
+              ".semgrep.yml",
+              ".semgrep.yaml",
+              "scripts/design-system-ratchet.mjs",
+              "docs/design-system-ratchet.json",
+              "scripts/ci-vitest-run.sh",
+              "scripts/ci-verify-*.sh"
+            ]' \
+            '{head_sha: $head_sha, pr_body: $pr_body, files: $files[0],
+              commit_messages: $commit_messages[0], comments: $comments[0],
+              permissions: $permissions[0], gate_globs: $gate_globs}' \
+            > "$RUNNER_TEMP/gate-bundle.json"
 
       - name: Evaluate required-verifier integrity
         id: evaluate
@@ -243,7 +401,11 @@ jobs:
           test -s "$script"
           bash "$script" < "$RUNNER_TEMP/context-bundle.json"
 
-      - name: Run deterministic fixture regression
+      - name: Evaluate gate integrity
+        # The merged gate-integrity detector (#3069): same base-ref fetch, same
+        # fail-closed contract — a candidate cannot edit, skip, or soften the
+        # check that is judging it.
+        id: evaluate-gate
         if: github.event_name == 'pull_request_target'
         shell: bash
         env:
@@ -252,8 +414,32 @@ jobs:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
           set -euo pipefail
-          fixture="$RUNNER_TEMP/test-required-verifier-integrity.sh"
-          gh api "repos/$REPO/contents/.github/scripts/test-required-verifier-integrity.sh?ref=$BASE_REF" \
-            --jq '.content' | base64 -d > "$fixture"
-          test -s "$fixture"
-          bash "$fixture"
+          script="$RUNNER_TEMP/gate-integrity.sh"
+          gh api "repos/$REPO/contents/.github/scripts/gate-integrity.sh?ref=$BASE_REF" \
+            --jq '.content' | base64 -d > "$script"
+          test -s "$script"
+          bash "$script" < "$RUNNER_TEMP/gate-bundle.json"
+
+      - name: Run deterministic fixture regressions
+        # Both decision scripts' fixture suites run on every run, so the rules
+        # cannot rot into a permanent PASS. Each fixture resolves its decision
+        # script as a sibling of itself, so all four are staged under the same
+        # directory.
+        if: github.event_name == 'pull_request_target'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+          stage="$RUNNER_TEMP/.github/scripts"
+          mkdir -p "$stage"
+          for f in required-verifier-integrity.sh test-required-verifier-integrity.sh \
+                   gate-integrity.sh test-gate-integrity.sh; do
+            gh api "repos/$REPO/contents/.github/scripts/$f?ref=$BASE_REF" \
+              --jq '.content' | base64 -d > "$stage/$f"
+            test -s "$stage/$f"
+          done
+          bash "$stage/test-required-verifier-integrity.sh"
+          bash "$stage/test-gate-integrity.sh"

@@ -10,7 +10,7 @@
  * BELOW their ceiling pass without ceremony: a sweep that removes legacy
  * debt does not have to edit the shared JSON file in the same PR. The
  * ceiling only ever goes down, and the tightening happens automatically
- * after main absorbs a sweep (see .github/workflows/ratchet-auto-tighten.yml),
+ * after main absorbs a sweep (see .github/workflows/quality-ratchet.yml),
  * so two legal PRs that each remove debt no longer collide in the merge
  * queue over an edit to docs/design-system-ratchet.json that neither one
  * actually needed to make. The program is done when every ceiling is 0,

@@ -15,7 +15,8 @@ import { describe, expect, it } from "vitest";
  * fails CI here. Counts at or below their ceiling pass without editing
  * the shared JSON — the ceiling only ever goes down, and the tightening
  * happens automatically on main via
- * `.github/workflows/ratchet-auto-tighten.yml`, so two legal sweeps
+ * `.github/workflows/quality-ratchet.yml` (merged ratchet, #3069), so two
+ * legal sweeps
  * never collide in the merge queue over a file neither needed to touch.
  * The program's terminal condition includes every ceiling at zero, after
  * which a fourth design era is structurally impossible to ship.

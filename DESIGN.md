@@ -50,7 +50,8 @@ semantics survive verbatim; their skin does not). Enforcement is
 mechanical: `scripts/design-system-ratchet.mjs` fails CI when any
 legacy-marker count exceeds its ceiling; counts at or below pass, so two
 legal sweeps cannot collide in the merge queue. Ceilings only go down,
-tightened on main by `.github/workflows/ratchet-auto-tighten.yml`.
+tightened on main by `.github/workflows/quality-ratchet.yml` (merged
+design-system ratchet, #3069).
 
 `f9-evidence-*` is the system's evidence-document vocabulary — the
 full-volume proof surfaces (report cover, plates, diff panes) named for

@@ -35,11 +35,12 @@ GATE_GLOBS = json.loads(os.environ["GATE_GLOBS"])
 ADMIN = {"nish3451": "admin"}
 ATTEST = [{"user": "nish3451", "sha": HEAD}]
 # A multi-line attest comment body in the real-world #1273 shape: the marker
-# line first, then verifier-attest, then review prose. Built with Python
-# string concatenation so HEAD (a Python variable in this eval context) is
-# interpolated, not bash-expanded into broken quoting.
+# line first, then review prose. Built with Python string concatenation so
+# HEAD (a Python variable in this eval context) is interpolated, not
+# bash-expanded into broken quoting. (#3069: the admin marker is now the
+# single shared `verifier-attest:`; the retired `gate-integrity-attest:`
+# marker no longer attests.)
 MULTILINE_ATTEST_BODY = (
-    "gate-integrity-attest: " + HEAD + "\n"
     "verifier-attest: " + HEAD + "\n\n"
     "Orchestrator attestation after diff review: SHA-pinned codecov action "
     "(v7), per-shard tokenless uploads, non-fatal during evaluate phase (a "
@@ -49,9 +50,11 @@ MULTILINE_ATTEST_BODY = (
 )
 # A comment whose body merely mentions the marker in prose — must NOT attest.
 PROSE_MENTION_BODY = (
-    "I would post gate-integrity-attest: " + HEAD + " here but this sentence "
+    "I would post verifier-attest: " + HEAD + " here but this sentence "
     "is prose, not the marker line itself."
 )
+# The retired marker must not attest on its own (#3069).
+RETIRED_MARKER_BODY = "gate-integrity-attest: " + HEAD
 # Deterministic fixture data; eval is safe here (no untrusted input).
 bundle = eval(os.environ["FIXTURE_SRC"])
 bundle.setdefault("head_sha", HEAD)
@@ -189,11 +192,11 @@ run_fixture workflow_attested_maintainer FAIL "not admin"
 
 # --- #1273 regression: multi-line attest comment (fleet-ops#828) -------------
 # The real-world attest shape: the marker line is the FIRST line of a
-# multi-line comment that also carries `verifier-attest:` and review prose.
-# The workflow's old whole-body exact-match jq filter rejected this comment
-# entirely, so the decision script saw an empty attestations array and failed
-# with "no current gate-integrity-attest: <head sha> comment from a repository
-# admin" against a comment whose first line matched the head sha exactly.
+# multi-line comment that also carries review prose. The workflow's old
+# whole-body exact-match jq filter rejected this comment entirely, so the
+# decision script saw an empty attestations array and failed with "no current
+# attestation comment from a repository admin" against a comment whose first
+# line matched the head sha exactly.
 #
 # These fixtures exercise the line-anchored extraction path: the bundle ships
 # raw `comments` (the shape the fixed workflow delivers), and the decision
@@ -211,7 +214,7 @@ run_fixture p1273_multiline_attest PASS "gate-path waived"
 # it anywhere in the body, not only at the top.
 fixture multiline_attest_not_first_line '{
   "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
-  "comments": [{"body": "Reviewing this PR now.\n\ngate-integrity-attest: " + HEAD + "\n\nLooks good.", "user": "nish3451"}],
+  "comments": [{"body": "Reviewing this PR now.\n\nverifier-attest: " + HEAD + "\n\nLooks good.", "user": "nish3451"}],
   "permissions": ADMIN}'
 run_fixture multiline_attest_not_first_line PASS "gate-path waived"
 
@@ -222,20 +225,28 @@ fixture prose_mention_does_not_attest '{
   "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
   "comments": [{"body": PROSE_MENTION_BODY, "user": "nish3451"}],
   "permissions": ADMIN}'
-run_fixture prose_mention_does_not_attest FAIL "no current \`gate-integrity-attest:"
+run_fixture prose_mention_does_not_attest FAIL "no current \`verifier-attest:"
+
+# The retired `gate-integrity-attest:` marker must NOT attest — only the
+# single shared `verifier-attest:` marker is honoured post-merge (#3069).
+fixture retired_marker_does_not_attest '{
+  "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
+  "comments": [{"body": RETIRED_MARKER_BODY, "user": "nish3451"}],
+  "permissions": ADMIN}'
+run_fixture retired_marker_does_not_attest FAIL "no current \`verifier-attest:"
 
 # A multi-line attest whose sha is stale (does not match head) is rejected,
 # exactly like the pre-extracted shape.
 fixture multiline_attest_stale '{
   "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
-  "comments": [{"body": "gate-integrity-attest: " + OLD + "\n\nprose", "user": "nish3451"}],
+  "comments": [{"body": "verifier-attest: " + OLD + "\n\nprose", "user": "nish3451"}],
   "permissions": ADMIN}'
 run_fixture multiline_attest_stale FAIL "stale: a newer commit was pushed after it"
 
 # A multi-line attest by a non-admin is rejected.
 fixture multiline_attest_nonadmin '{
   "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
-  "comments": [{"body": "gate-integrity-attest: " + HEAD + "\n\nprose", "user": "worker"}],
+  "comments": [{"body": "verifier-attest: " + HEAD + "\n\nprose", "user": "worker"}],
   "permissions": {"worker": "write"}}'
 run_fixture multiline_attest_nonadmin FAIL "not admin"
 
@@ -243,7 +254,7 @@ run_fixture multiline_attest_nonadmin FAIL "not admin"
 # not break extraction.
 fixture multiline_attest_crlf '{
   "files": [{"filename": ".github/workflows/ci.yml", "status": "modified", "patch": "+  timeout-minutes: 30"}],
-  "comments": [{"body": "gate-integrity-attest: " + HEAD + "\r\nverifier-attest: " + HEAD + "\r\n\r\nprose", "user": "nish3451"}],
+  "comments": [{"body": "verifier-attest: " + HEAD + "\r\n\r\nprose", "user": "nish3451"}],
   "permissions": ADMIN}'
 run_fixture multiline_attest_crlf PASS "gate-path waived"
 
