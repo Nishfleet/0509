@@ -21,9 +21,9 @@ import { expect, test, type Page } from "@playwright/test";
 
 const JOIN_CARD_TIMEOUT_MS = 5_000;
 
-// Deterministic harness: the release web server inherits this env, and the
-// route resolves its card from captured surfaces only (no external fetch).
-process.env.E2E_JOIN_LIVE_LOOKUP = "0";
+// Deterministic harness: the shared local-release server is launched with
+// E2E_JOIN_LIVE_LOOKUP=0 (scripts/local-release-server.mjs), so the route
+// resolves its card from captured surfaces only (no external fetch).
 
 async function submitJoinInput(page: Page, value: string): Promise<number> {
   await page.goto("/join", { waitUntil: "domcontentloaded" });
