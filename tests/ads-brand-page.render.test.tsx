@@ -1488,8 +1488,8 @@ describe("brand categories — /brands hub grouping (issue #1417)", () => {
   it("classifies known domains and buckets unknowns under 'More brands'", async () => {
     const mod = await import("~/lib/brand-categories");
     expect(mod.brandCategoryForDomain("nike.com")).toBe("Sport & footwear");
-    expect(mod.brandCategoryForDomain("hm.com")).toBe("E-commerce");
-    expect(mod.brandCategoryForDomain("www.hm.com")).toBe("E-commerce");
+    expect(mod.brandCategoryForDomain("hm.com")).toBe("Fashion & accessories");
+    expect(mod.brandCategoryForDomain("www.hm.com")).toBe("Fashion & accessories");
     expect(mod.brandCategoryForDomain("unknownbrand.example")).toBe("More brands");
   });
 

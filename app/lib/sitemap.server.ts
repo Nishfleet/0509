@@ -104,6 +104,7 @@ import {
 import {
   brandCategoryForDomain,
   brandCategoryFromSlug,
+  BRAND_CATEGORY_PAGE_MIN_BRANDS,
   CURATED_BRAND_CATEGORY_SLUGS,
 } from "~/lib/brand-categories";
 import { ALL_COUNTRIES_VALUE } from "~/lib/countries";
@@ -601,10 +602,11 @@ function staticEntriesWithDatedLastmod(
 
 /**
  * Dynamic sitemap entries for the curated /brands/:slug category pages
- * (issue #2067). One entry per NON-EMPTY curated category, derived from the
+ * (issue #2067). One entry per curated category with at least
+ * BRAND_CATEGORY_PAGE_MIN_BRANDS live brands (issue #3126), derived from the
  * same indexable brand-page set the hub and category routes read — a category
- * page is never listed unless it would actually render brands (it 404s when
- * empty, so listing it would point crawlers at a 404). "More brands" (the
+ * page is never listed unless it would actually render (it 404s below the
+ * floor, so listing it would point crawlers at a 404). "More brands" (the
  * fallback bucket with no landing page) is never a curated slug and never
  * emitted. Each entry's `lastmod` is the newest brand lastmod in that
  * category (the honest freshness signal — when we last saw real ads for the
@@ -639,8 +641,9 @@ export function brandCategorySitemapEntries(
         newestLastmod = entry.lastmod;
       }
     }
-    // Empty curated category — its page 404s, so never list it.
-    if (count === 0) {
+    // Thin curated category — its page 404s below the min-brands floor
+    // (issue #3126), so never list it.
+    if (count < BRAND_CATEGORY_PAGE_MIN_BRANDS) {
       continue;
     }
     entries.push({

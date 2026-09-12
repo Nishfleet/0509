@@ -14,6 +14,12 @@ const allowedHistoricalReferences = new Map([
       '"0013_' + "razor" + 'pay_webhook_events.sql"',
     ],
   ],
+  // These two carry the brand's registry/category data: the domain below is a
+  // tracked advertiser on /ads (a monitored brand, not a billing provider),
+  // so only the exact public domain string is neutralized here — any other
+  // old-provider reference in these files still fails this test.
+  ["app/lib/brand-categories.ts", ["razor" + "pay.com"]],
+  ["tests/fixtures/indexable-ads-domains.snapshot.json", ["razor" + "pay.com"]],
 ]);
 function listRepoFiles(): string[] {
   return execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard"], {
