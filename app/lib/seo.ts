@@ -144,6 +144,37 @@ export function switchSocialCardUrl(toolSlug: string): string {
   return canonicalUrl(`/social-card/switch/${toolSlug}.svg`);
 }
 
+/**
+ * Social card URL for a `/guides/<slug>` how-to page (issue #3098). Same
+ * stateless recipe as the ads/timeline cards: the guide's headline rides in
+ * the `n` query param so the renderer needs no per-guide lookup, and the card
+ * is served as PNG (scrapers refuse SVG). Deriving it from the slug alone
+ * keeps the mechanism route-generic — a new guide route gets a card without
+ * any per-page card code.
+ */
+export function guideSocialCardUrl(slug: string, headline: string): string {
+  const params = new URLSearchParams({ n: headline });
+  return `${canonicalUrl(`/social-card/guides/${slug}.png`)}?${params.toString()}`;
+}
+
+/**
+ * Page-specific og:image for a `/guides/<slug>` pathname, or `null` for any
+ * other surface. The card headline is the page title minus the
+ * `| Five to Nine` suffix — the same text the SERP shows.
+ */
+function guideSocialCardForPathname(
+  pathname: string,
+  title: string,
+): { url: string; alt: string } | null {
+  const slug = pathname.match(/^\/guides\/([^/]+?)\/?$/)?.[1];
+  if (!slug) return null;
+  const headline = title.replace(/\s*\|\s*Five to Nine\s*$/, "").trim() || slug;
+  return {
+    url: guideSocialCardUrl(slug, headline),
+    alt: `${headline} — Five to Nine how-to guide`,
+  };
+}
+
 export function clusterSocialCardUrl(slug: "sneaker-resale" | "competitor-monitoring"): string {
   // Served as PNG (issue #2101), so the path uses `.png` — Facebook/X/
   // LinkedIn scrapers refuse SVG og:images. The `parseSocialCardPathname`
@@ -243,7 +274,9 @@ export function publicSeoMeta(input: {
    * generic `og-image.png`, so a programmatic buyer surface (`/ads/:domain`,
    * `/compare/*`, `/switch/*`, `/sneaker-resale`, `/competitor-monitoring`)
    * renders a page-specific branded card. Falls back to `SOCIAL_IMAGE_URL`
-   * when unset so the generic card stays on truly site-wide surfaces.
+   * when unset so the generic card stays on truly site-wide surfaces —
+   * except `/guides/<slug>` pathnames, which auto-derive a page-specific
+   * guide card when no override is passed (issue #3098).
    */
   ogImageUrl?: string;
   /**
@@ -254,8 +287,15 @@ export function publicSeoMeta(input: {
   ogImageAlt?: string;
 }) {
   const url = canonicalUrl(input.pathname);
-  const overrideImage = input.ogImageUrl;
-  const overrideAlt = input.ogImageAlt;
+  // Guides auto-derive their card from the pathname + title (issue #3098) so
+  // every /guides/<slug> route — including ones added later — stamps a
+  // page-specific card through this same call with no per-page wiring. An
+  // explicit ogImageUrl/ogImageAlt always wins.
+  const guideCard = input.ogImageUrl
+    ? null
+    : guideSocialCardForPathname(input.pathname, input.title);
+  const overrideImage = input.ogImageUrl ?? guideCard?.url;
+  const overrideAlt = input.ogImageAlt ?? guideCard?.alt;
   const imageUrl = overrideImage ?? SOCIAL_IMAGE_URL;
   const imageAlt = overrideImage ? (overrideAlt ?? SOCIAL_IMAGE_ALT) : SOCIAL_IMAGE_ALT;
   const imageType =
