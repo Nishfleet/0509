@@ -2,7 +2,7 @@
  * Live monitoring-source rows for the /compare/* pages (issue #2188).
  *
  * Renders one row per competitor-monitoring source whose claim-table row is
- * live (`docs/customer-claim-audit-table.json`, `monitoringSource.status`),
+ * live (`docs/customer-claim-table.json`, `monitoringSource.status`),
  * with the wording taken from that row. When no source row is live the
  * block omits itself entirely — a /compare page never names a source the
  * claim table does not back. Never claims spend or impressions.

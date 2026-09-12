@@ -1,7 +1,7 @@
 /**
  * Claim-table gate for public monitoring-source copy (issue #2188).
  *
- * `docs/customer-claim-audit-table.json` is the single source of truth for
+ * `docs/customer-claim-table.json` is the single source of truth for
  * which competitor-monitoring sources may be named in public copy. Each seam
  * (#2218) source row carries a `monitoringSource` block; a row is claimable
  * only when `status: "live"` AND `currentResult: "pass"` — i.e. its source
@@ -12,7 +12,7 @@
  * This module is client-safe: it imports only the audit-table JSON and never
  * a `.server` module.
  */
-import claimAuditTable from "../../docs/customer-claim-audit-table.json";
+import claimAuditTable from "../../docs/customer-claim-table.json";
 
 export interface MonitoringSourceClaimBlock {
   sourceId: string;

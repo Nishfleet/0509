@@ -91,7 +91,7 @@ describe("compare meta-ad-library route", () => {
     // per source whose claim-table row is live, so each named source is read
     // from the table instead of being hardcoded.
     const audit = JSON.parse(
-      readFileSync("docs/customer-claim-audit-table.json", "utf8"),
+      readFileSync("docs/customer-claim-table.json", "utf8"),
     ) as {
       claims: Array<{
         claimId: string;

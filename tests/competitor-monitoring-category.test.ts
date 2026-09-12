@@ -241,7 +241,7 @@ describe("competitor monitoring category page", () => {
     // Issue #2188: the claim table is the only gate on which sources public
     // copy may name. Read it here — never hardcode the live state.
     const audit = JSON.parse(
-      readFileSync("docs/customer-claim-audit-table.json", "utf8"),
+      readFileSync("docs/customer-claim-table.json", "utf8"),
     ) as {
       claims: Array<{
         claimId: string;

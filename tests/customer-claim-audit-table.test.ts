@@ -271,6 +271,40 @@ describe("BET 10 claim-by-claim audit table", () => {
     expect(header).toMatch(/CLAUDE\.md/);
   });
 
+  it("monitoringSource rows: live requires a production proof cite (issue #2188)", () => {
+    // Issue #2188 flip discipline, enforced mechanically: a source row may go
+    // live only when its monitoringSource block cites the production proof
+    // comment URL and date from the source ticket. No proof cite, no live —
+    // and no spend or impressions wording either way (issue #2188 must-not).
+    const proofUrl = /github\.com\/Nishfleet\/0509\/issues\/\d+#issuecomment-\d+/;
+    const changed: { claimId: string; problem: string }[] = [];
+    for (const claim of audit.claims) {
+      const source = claim.monitoringSource;
+      if (!source) continue;
+      if (!["live", "coming_soon"].includes(source.status)) {
+        changed.push({ claimId: claim.claimId, problem: `status ${source.status} not allowed` });
+        continue;
+      }
+      if (source.status === "live") {
+        if (claim.currentResult !== "pass") {
+          changed.push({ claimId: claim.claimId, problem: "live row's currentResult must be pass" });
+        }
+        if (!source.proofUrl || !proofUrl.test(source.proofUrl)) {
+          changed.push({ claimId: claim.claimId, problem: "live row needs monitoringSource.proofUrl (github.com/Nishfleet/0509/issues/<n>#issuecomment-<id>)" });
+        }
+        if (!source.proofDate || !/^\d{4}-\d{2}-\d{2}$/.test(source.proofDate)) {
+          changed.push({ claimId: claim.claimId, problem: "live row needs an ISO proofDate" });
+        }
+      } else if (source.proofUrl || source.proofDate) {
+        changed.push({ claimId: claim.claimId, problem: "coming_soon row must not carry proofUrl/proofDate" });
+      }
+      if (/(spend|impression)s?\b/i.test(claim.text)) {
+        changed.push({ claimId: claim.claimId, problem: "row text claims spend or impressions (issue #2188 must-not)" });
+      }
+    }
+    expect(changed).toEqual([]);
+  });
+
   it("every mapped liveQueryOrTest names at least one existing test file", () => {
     const testPath = /\b(tests\/[A-Za-z0-9._/-]+\.test\.tsx?)\b/g;
     for (const claim of audit.claims) {
