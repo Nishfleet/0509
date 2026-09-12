@@ -34,6 +34,7 @@ export type FunnelEventKind =
   | "signup_start_locale_ja"
   | "signup_start_locale_pt_br"
   | "pricing_free_card_clicked"
+  | "search_likely_confirm_signup_started"
   | "locale_segment_view_en"
   | "locale_segment_view_de"
   | "locale_segment_view_ja"
@@ -61,6 +62,18 @@ export type FunnelRoute =
  */
 export const PRICING_FREE_SIGNUP_SOURCE = "pricing-free";
 
+/**
+ * The exact signup-URL marker the /search Likely-match confirm control
+ * carries (issue #3306, BET 2 finish line): a signed-out visitor's one-click
+ * "Yes, that's them" on a Likely-match row starts the signup intent with the
+ * confirmed brand's context carried through. Recognition happens by comparing
+ * server-side against this allowlisted constant, and the raw marker value is
+ * never stored in a record or a funnel field. It selects the
+ * `search_likely_confirm_signup_started` kind so scouts can measure whether
+ * the Likely-match confirm lifts signup starts.
+ */
+export const SEARCH_LIKELY_CONFIRM_SIGNUP_SOURCE = "search-likely-confirm";
+
 export type FunnelResultBucket = "0" | "1-10" | "11-50" | "51+";
 
 export type FunnelErrorKind = "rate_limited" | "provider" | "empty_result" | "internal";
@@ -80,6 +93,7 @@ const FUNNEL_ROUTES: Record<FunnelEventKind, FunnelRoute> = {
   signup_start_locale_ja: "signup",
   signup_start_locale_pt_br: "signup",
   pricing_free_card_clicked: "signup",
+  search_likely_confirm_signup_started: "signup",
   locale_segment_view_en: "sneaker_resale",
   locale_segment_view_de: "sneaker_resale",
   locale_segment_view_ja: "sneaker_resale",
@@ -102,6 +116,7 @@ const FUNNEL_OPERATIONS: Record<FunnelEventKind, string> = {
   signup_start_locale_ja: "funnel_signup_start_locale_ja",
   signup_start_locale_pt_br: "funnel_signup_start_locale_pt_br",
   pricing_free_card_clicked: "funnel_pricing_free_card_clicked",
+  search_likely_confirm_signup_started: "funnel_search_likely_confirm_signup_started",
   locale_segment_view_en: "funnel_locale_segment_view_en",
   locale_segment_view_de: "funnel_locale_segment_view_de",
   locale_segment_view_ja: "funnel_locale_segment_view_ja",
@@ -124,6 +139,7 @@ const FUNNEL_MESSAGES: Record<FunnelEventKind, string> = {
   signup_start_locale_ja: "Anonymous signup started from the Japanese sneaker-resale page",
   signup_start_locale_pt_br: "Anonymous signup started from the Brazilian Portuguese sneaker-resale page",
   pricing_free_card_clicked: "Anonymous signup started from the pricing Free card",
+  search_likely_confirm_signup_started: "Anonymous signup started from the search Likely-match confirm",
   locale_segment_view_en: "Anonymous English sneaker-resale page view",
   locale_segment_view_de: "Anonymous German sneaker-resale page view",
   locale_segment_view_ja: "Anonymous Japanese sneaker-resale page view",
@@ -332,6 +348,10 @@ export function emitFunnelSignupStartFromAllowlistedSource(
 ) {
   if (source === PRICING_FREE_SIGNUP_SOURCE) {
     emitFunnelEvent(env, "pricing_free_card_clicked", {}, request);
+    return;
+  }
+  if (source === SEARCH_LIKELY_CONFIRM_SIGNUP_SOURCE) {
+    emitFunnelEvent(env, "search_likely_confirm_signup_started", {}, request);
     return;
   }
   const localeMarket = sneakerResaleMarketForSignupSource(source);

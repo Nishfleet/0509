@@ -64,6 +64,7 @@ import {
   normalizeCompetitorWebsiteInput,
   watchlistFingerprint,
 } from "~/lib/competitor-website";
+import { domainMatchTier } from "~/lib/search-domain-match";
 import {
   buildSearchParams,
   normalizeSavedQuery,
@@ -1606,6 +1607,19 @@ export default function SearchRoute() {
   // the page's create-account CTA (competitor prefill preserved), plus the
   // allowlisted `source=` marker so the signup is attributed.
   const warmingExhaustedSignupPath = `${signupTrackingPath}&source=search_warming_exhausted`;
+  // BET 2 finish line (issue 3306): the Likely-match confirm. Signed-out, the
+  // row's "Yes, that's them" trail IS the signup intent: the Track-wall signup
+  // path built from THIS ad, so the confirmed brand's context — the searched
+  // website when the search had one, else the confirmed ad's own landing —
+  // reaches the post-signup setup checklist, and the signup is attributed.
+  // Signed-in, the click records through the existing selection persistence,
+  // so the trail keeps the plain record href the row already carries.
+  const likelyConfirmSignupPath = (ad: AdRecord) =>
+    `${buildSignupTrackingPath({
+      competitorWebsiteRaw: competitorWebsite.raw,
+      ads: [ad],
+      country: data.filters.country,
+    })}&source=search-likely-confirm`;
   // BET 2 (issue 951): the command stays pending while the search is warming,
   // EVEN when partial results have already painted (visibleAds.length > 0).
   // The first cards landed but the scroll-and-collect passes are still
@@ -2561,6 +2575,9 @@ export default function SearchRoute() {
                         key={ad.metaAdId}
                         ad={ad}
                         href={resultCardHref(ad.metaAdId)}
+                        confirmTo={
+                          data.session ? undefined : likelyConfirmSignupPath(ad)
+                        }
                         isActive={selectedAd?.metaAdId === ad.metaAdId}
                         isKeyFocused={keyFocusedAdId === ad.metaAdId}
                         canQuickSave={Boolean(data.session)}
@@ -2935,6 +2952,28 @@ export default function SearchRoute() {
                 ) : null}
                 {formatResultTierConfidence(selectedAd) ? (
                   <p className="f9-wk-note">{formatResultTierConfidence(selectedAd)}</p>
+                ) : null}
+                {selectedAd.domainMatch &&
+                domainMatchTier(selectedAd.domainMatch.level) === "likely" ? (
+                  <div className="f9-wk-acts">
+                    {/* Issue 3306 (BET 2 finish line): the instructional note
+                        ships with the working control — signed-out, the same
+                        one-click confirm the row's trail carries; signed-in,
+                        the selection href that records it. */}
+                    <Link
+                      className="f9-wk-lnk"
+                      to={
+                        data.session
+                          ? resultCardHref(selectedAd.metaAdId)
+                          : likelyConfirmSignupPath(selectedAd)
+                      }
+                    >
+                      Yes, that&rsquo;s them
+                      <span aria-hidden="true" className="f9-wk-chev">
+                        &rsaquo;
+                      </span>
+                    </Link>
+                  </div>
                 ) : null}
 
                 <DetailBlock kicker="What the ad says">
