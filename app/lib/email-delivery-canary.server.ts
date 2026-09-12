@@ -135,7 +135,7 @@ export async function sendEmailDeliveryCanary(
 			token,
 			sent ? "sent" : "failed",
 			now.toISOString(),
-			result.errorMessage ?? "send not accepted by provider",
+			result.errorMessage ?? (sent ? null : "send not accepted by provider"),
 			now.toISOString(),
 		);
 		return {
