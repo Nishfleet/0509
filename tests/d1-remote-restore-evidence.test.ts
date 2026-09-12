@@ -1501,6 +1501,73 @@ describe("D1 remote restore evidence automation", () => {
     ).toEqual({ action: "ok" });
   });
 
+  it("plans catch-up when production applied a same-number migration before the repo file landed", () => {
+    // Run 34671488829 (2026-09-12): production applied 0096_error_reports.sql
+    // while it was the ledger tail, then 0096_email_suppression.sql landed in
+    // the repository sorting earlier. D1's ledger is append-only, so the live
+    // order is fixed history the sorted repository cannot reproduce.
+    const repository = readdirSync(resolve("migrations"))
+      .filter((name) => /^\d{4}_.+\.sql$/u.test(name))
+      .sort();
+    const repositoryBaseline = PRODUCTION_MIGRATION_LEDGER_BASELINE.filter(
+      (name) => !RETIRED_PRODUCTION_MIGRATIONS.has(name),
+    );
+    const repositorySuffix = repository.slice(repositoryBaseline.length);
+    const productionNames = [
+      ...PRODUCTION_MIGRATION_LEDGER_BASELINE,
+      ...repositorySuffix.filter(
+        (name) => name !== "0096_email_suppression.sql",
+      ),
+    ];
+    expect(productionNames.at(-1)).toBe("0096_error_reports.sql");
+    const namedLedger = (names: string[]) =>
+      names.map((name, index) => ({
+        id: index + 1,
+        name,
+        appliedAt: "2026-09-12 04:04:45",
+      }));
+    expect(
+      planSourceBackupLedgerReconciliation(
+        namedLedger(productionNames),
+        repository,
+      ),
+    ).toEqual({
+      action: "apply_forward_suffix",
+      migrations: ["0096_email_suppression.sql"],
+    });
+    expect(
+      planSourceBackupLedgerReconciliation(
+        namedLedger([...productionNames, "0096_email_suppression.sql"]),
+        repository,
+      ),
+    ).toEqual({ action: "ok" });
+  });
+
+  it("still rejects a production ledger carrying one unknown extra name", () => {
+    const repository = readdirSync(resolve("migrations"))
+      .filter((name) => /^\d{4}_.+\.sql$/u.test(name))
+      .sort();
+    const repositoryBaseline = PRODUCTION_MIGRATION_LEDGER_BASELINE.filter(
+      (name) => !RETIRED_PRODUCTION_MIGRATIONS.has(name),
+    );
+    const productionNames = [
+      ...PRODUCTION_MIGRATION_LEDGER_BASELINE,
+      ...repository
+        .slice(repositoryBaseline.length)
+        .filter((name) => name !== "0096_email_suppression.sql"),
+      "0097_never_shipped_unknown.sql",
+    ];
+    const ledger = productionNames.map((name, index) => ({
+      id: index + 1,
+      name,
+      appliedAt: "2026-09-12 04:04:45",
+    }));
+    expect(planSourceBackupLedgerReconciliation(ledger, repository)).toEqual({
+      action: "reject",
+      reason: "source_backup_migration_ledger_stale",
+    });
+  });
+
   it("applies the planned forward suffix through wrangler and rejects a bad list", async () => {
     const runCommand = vi.fn(async () => ({ stdout: "", stderr: "" }));
     const write = vi.fn();

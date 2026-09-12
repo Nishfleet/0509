@@ -252,7 +252,7 @@ export function assertRestoreRoundTrip(source, restored) {
  * @param {DatabaseEvidence["migrationLedger"]} ledger
  * @param {string[]} repositoryMigrations
  * @param {Set<string>} cleanupMigrations
- * @param {{ baseline?: readonly string[], retiredMigrations?: Set<string> }} options
+ * @param {{ baseline?: readonly string[], retiredMigrations?: Set<string>, orderExceptions?: readonly (readonly string[])[] }} options
  */
 export function assertMigrationLedgerMatchesRepository(
   ledger,
@@ -266,6 +266,7 @@ export function assertMigrationLedgerMatchesRepository(
     cleanupMigrations,
     options.baseline,
     options.retiredMigrations,
+    options.orderExceptions,
   );
   if (
     !allowedLedgers.some(
@@ -289,7 +290,7 @@ export function assertMigrationLedgerMatchesRepository(
  * @param {string[]} ledgerNames
  * @param {string[]} repositoryMigrations
  * @param {Set<string>} cleanupMigrations
- * @param {{ baseline?: readonly string[], retiredMigrations?: Set<string> }} options
+ * @param {{ baseline?: readonly string[], retiredMigrations?: Set<string>, orderExceptions?: readonly (readonly string[])[] }} options
  * @returns {string[] | null}
  */
 export function unappliedForwardMigrationSuffix(
@@ -306,6 +307,7 @@ export function unappliedForwardMigrationSuffix(
     cleanupMigrations,
     options.baseline,
     options.retiredMigrations,
+    options.orderExceptions,
   );
   if (
     allowedLedgers.some(
@@ -341,7 +343,7 @@ export function unappliedForwardMigrationSuffix(
  * @param {DatabaseEvidence["migrationLedger"]} ledger
  * @param {string[]} repositoryMigrations
  * @param {Set<string>} cleanupMigrations
- * @param {{ baseline?: readonly string[], retiredMigrations?: Set<string> }} options
+ * @param {{ baseline?: readonly string[], retiredMigrations?: Set<string>, orderExceptions?: readonly (readonly string[])[] }} options
  * @returns {{ action: "ok" } | { action: "apply_forward_suffix", migrations: string[] } | { action: "reject", reason: "source_backup_migration_ledger_stale" }}
  */
 export function planSourceBackupLedgerReconciliation(
