@@ -12,8 +12,9 @@ import { appEnv } from "./fixtures";
  * Googlebot, Bingbot) recrawling the 87-URL sitemap (/ads/:domain +
  * /timeline/:domain) must never be 429'd, while an anonymous human keeps the
  * public brand-page budget (now the #2985 edge Rate Limiting binding:
- * PUBLIC_BRAND_PAGE_PER_MINUTE_LIMIT per 60s, sustained parity with the old
- * 120/10min D1 bucket).
+ * PUBLIC_BRAND_PAGE_PER_MINUTE_LIMIT per 60s — #2964 parity with the old
+ * 120/10min D1 bucket, then #3156 raised it to 60/60s for the measured
+ * double-fetch crawl pace).
  *
  * This runs the REAL limiter (`enforcePublicBrandPageRateLimit`) against the
  * REAL edge bindings (the RL_* bindings declared in wrangler.test.jsonc, mirroring
