@@ -20,9 +20,18 @@ Proof (inner loop r2):
 - `npx vitest run --configLoader runner --project node tests/auto-competitor-suggested-panel.test.ts tests/auto-competitor-bulk-accept.test.ts --reporter=dot` → `Test Files 2 passed (2) / Tests 33 passed (33)`, exit 0.
 - Inner loop r1 (pre-fix): `npx vitest run --configLoader runner --project node --changed origin/main` → 1 file failed / 2 tests failed, 198 passed, exit 1 (the two failures above). Fixed in one round.
 
-## Phase 2 (A2) — in progress
+## Phase 2 (A2) — DONE 2026-09-14
 
-`tests/integration/monitoring-pickup.test.ts` — REAL migrations, workspace+user+watchlist via a production creation path, the pickup, a `watchlist_run` row (joined on the watchlist id) plus the digest/all-quiet outcome. See the plan file for the full contract.
+`tests/integration/monitoring-pickup.integration.test.ts` — REAL migrations (apply-migrations.ts), workspace+user seeded via fixtures, watchlist created through the REAL `bulkAcceptSuggestedCompetitors` production path; asserts the first-scan `watchlist_run` row joined on the new watchlist id, then the honest all-quiet outcome (scan `skipped` under `E2E_PROVIDER_NETWORK_DENY=1`, brief refusal `no_evidence`, zero `digest_run` rows).
+
+Two repairs vs the salvage draft (both proven by run, not vibes):
+
+1. Draft filename `monitoring-pickup.test.ts` matched NO vitest project — the workers project includes only `tests/integration/**/*.integration.test.ts`, so the file silently ran nowhere. Renamed; now discovered and green.
+2. Draft's `findCreatedWatchlist` matched `name = advertiser` exactly, but competitor-import's `prepareImportRow` names created watchlists `"<targetLabel> watch"` — lookup found null even though creation succeeded. Re-scoped to the seeded per-test user (ids unique per call, storage isolated per file).
+
+Fail-on-main proof (the acceptance's "fails against today's production behavior"): detached worktree at origin/main 65776e216, the test file copied in untracked, workers project single-file run → `Test Files 1 failed (1) / Tests 2 failed (2)`, both `AssertionError: expected null not to be null` on the run-row/watchlist lookup — main's bulk-accept loop never calls `queueFirstWatchlistScan`, so no durable run row exists. Same file on the claim branch: 2 passed. No stash of any repo was touched (temp worktree, untracked copy).
+
+Post-rebase (branch rebased onto origin/main 65776e216): integration test 2 passed; node affected-tests (`--project node --changed origin/main`) 15 files / 200 tests passed — includes the phase-1 seam tests. Commit 7f028ed80.
 
 ## Phase 3 (A3+A4) — pending
 
