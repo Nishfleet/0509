@@ -71,10 +71,61 @@ async function getCanaryTarget(env: { DB?: D1Database }, canaryEmail: string) {
 const CANARY_USER_ID = "launch-readiness-canary-owner";
 const CANARY_WATCHLIST_ID = "launch-readiness-canary-watchlist";
 
+/**
+ * #3330: the proof-email half of the canary substrate. Runs on EVERY proof
+ * path — also when the watchlist row already existed. The watchlist
+ * substrate persists across failed deploys (cleanup only runs after a fully
+ * green gate), while the 2026-09-11 provisioning recreated user+watchlist
+ * but never a delivery_target, so 748e1a7da's provisioning+repair sat
+ * forever behind the watchlist early return: the proof path threw
+ * `Gate C proof email target must resolve uniquely` on every run and
+ * returned 503 `canary_proof_pipeline_failed` (the 2026-09-11→09-13
+ * proof_email_dispatch_invalid streak, last seen on run 34745825717 08:14Z).
+ *
+ * The provisioner inserts the missing delivery_target with the same
+ * idempotent upsert pattern (provisionVerifiedAccountEmailTargetIfUnsuppressed
+ * INSERT-OR-IGNORE is a no-op when one already exists) so the substrate
+ * remains operator-free and the canary route can dispatch its internal
+ * proof email without operator-seeded data. The substrate can also drift
+ * into shapes the provisioner cannot fix: an opted-out/paused row turns the
+ * INSERT-OR-IGNORE into a no-op (zero usable rows) and byte-distinct
+ * spellings of the canary address leave more than one usable row. Both fail
+ * the `requireUniqueExistingTarget` assertion on every run, so the
+ * canary-owned row is repaired before Gate C resolves it — scope and
+ * rationale live on repairCanaryProofEmailTarget itself. Both steps are
+ * idempotent, so steady state costs a few reads.
+ *
+ * @param {{ DB?: D1Database }} env @param {string} userId @param {string} canaryEmail
+ */
+async function ensureCanaryProofEmailTarget(
+  env: { DB?: D1Database },
+  userId: string,
+  canaryEmail: string,
+) {
+  const { provisionVerifiedAccountEmailTargetIfUnsuppressed, repairCanaryProofEmailTarget } = await import("~/lib/data.server");
+  // Test doubles stub only their own duty and routinely omit these exports;
+  // the substrate-convergence tests (first-contact + substrate-exists) pin
+  // the real calls, so a missing export cannot hide. Production is covered
+  // by the typed import above — a vanished export fails the typecheck.
+  await provisionVerifiedAccountEmailTargetIfUnsuppressed?.(env, {
+    userId,
+    targetValue: canaryEmail,
+    optInSource: "launch_readiness_canary_substrate",
+  });
+  await repairCanaryProofEmailTarget?.(env, { userId, canaryEmail });
+}
+
 /** @param {{ DB?: D1Database }} env @param {string} canaryEmail */
 async function ensureCanaryTarget(env: { DB?: D1Database }, canaryEmail: string) {
   const existing = await getCanaryTarget(env, canaryEmail);
-  if (existing) return { target: existing, provisioned: false };
+  if (existing) {
+    // #3330: converge the proof-email half even when the watchlist substrate
+    // already exists — see ensureCanaryProofEmailTarget. Without this, the
+    // provisioning stayed unreachable behind this early return and every
+    // proof run 503'd on the requireUniqueExistingTarget check.
+    await ensureCanaryProofEmailTarget(env, existing.user_id, canaryEmail);
+    return { target: existing, provisioned: false };
+  }
   if (!env.DB) return { target: null, provisioned: false };
 
   const nowIso = new Date().toISOString();
@@ -105,32 +156,10 @@ async function ensureCanaryTarget(env: { DB?: D1Database }, canaryEmail: string)
      ON CONFLICT(id) DO UPDATE SET
        user_id = excluded.user_id, is_active = 1, updated_at = excluded.updated_at`,
   ).bind(CANARY_WATCHLIST_ID, userId, nowIso, nowIso));
-  // Gate C's proof email path uses `requireUniqueExistingTarget: true`, so
-  // a missing delivery_target fails closed with
-  // `Gate C proof email target must resolve uniquely` and deliverWeeklyDigest
-  // throws — the outer guard now catches that throw and answers JSON with
-  // `canary_proof_pipeline_failed`, but the underlying gap is that the
-  // canary substrate never included an email target. Provision one here with
-  // the same idempotent upsert pattern (provisionVerifiedAccountEmailTargetIfUnsuppressed
-  // INSERT-OR-IGNORE is a no-op when one already exists) so the substrate
-  // remains operator-free and the canary route can dispatch its internal
-  // proof email without operator-seeded data.
-  const { provisionVerifiedAccountEmailTargetIfUnsuppressed, repairCanaryProofEmailTarget } = await import("~/lib/data.server");
-  await provisionVerifiedAccountEmailTargetIfUnsuppressed(env, {
-    userId,
-    targetValue: canaryEmail,
-    optInSource: "launch_readiness_canary_substrate",
-  });
-
-  // The substrate persists across failed deploy runs (cleanup is skipped
-  // when a run fails), so it can drift into shapes the provisioner above
-  // cannot fix: an opted-out/paused row turns the INSERT-OR-IGNORE into a
-  // no-op (zero usable rows) and byte-distinct spellings of the canary
-  // address leave more than one usable row. Both fail the
-  // `requireUniqueExistingTarget` assertion on every run. Repair the
-  // canary-owned row before Gate C resolves it — scope and rationale live
-  // on repairCanaryProofEmailTarget itself.
-  await repairCanaryProofEmailTarget(env, { userId, canaryEmail });
+  // Same contract as the existing-substrate path above: provision + repair
+  // the proof-email half (see ensureCanaryProofEmailTarget for why both run
+  // on every proof path).
+  await ensureCanaryProofEmailTarget(env, userId, canaryEmail);
 
   const target = await getCanaryTarget(env, canaryEmail);
   return { target, provisioned: true };
