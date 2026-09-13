@@ -21,3 +21,13 @@ publish floor: verified + likely >= 1 per domain; gate: >= 26 publishable
   PUBLISH underarmour.com    verified 18 + likely 3
   PUBLISH stadiumgoods.com   verified 24 + likely 0
   PUBLISH flightclub.com     verified 3 + likely 2
+  PUBLISH kickscrew.com      verified 27 + likely 0
+  PUBLISH solesavy.com       verified 0 + likely 2
+  PUBLISH jdsports.com       verified 30 + likely 0
+  PUBLISH finishline.com     verified 15 + likely 0
+  PUBLISH asos.com           verified 30 + likely 0
+  PUBLISH decathlon.com      verified 9 + likely 12
+
+summary: 26 publishable / 26 domains (PASS)
+  publish=26 skip=0 failed=0 gate=26
+PREFLIGHT-EXIT=0
