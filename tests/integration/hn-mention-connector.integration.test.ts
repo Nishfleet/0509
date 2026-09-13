@@ -268,7 +268,7 @@ describe("hn mention connector — poll", () => {
       expect(url.hostname).toBe("hn.algolia.com");
       expect(url.pathname).toBe("/api/v1/search_by_date");
       expect(url.searchParams.get("query")).toBe(PHRASE);
-      expect(url.searchParams.get("tags")).toBe("story,comment");
+      expect(url.searchParams.get("tags")).toBe("(story,comment)");
       expect(url.searchParams.get("hitsPerPage")).toBe(String(HN_MAX_HITS_PER_PAGE));
       // First poll: no prior watermark, so no time-window bound yet.
       expect(url.searchParams.get("numericFilters")).toBe(null);
@@ -563,7 +563,7 @@ describe("hn mention connector — request shape", () => {
     expect(url.hostname).toBe("hn.algolia.com");
     expect(url.pathname).toBe("/api/v1/search_by_date");
     expect(url.searchParams.get("query")).toBe("Acme Robotics");
-    expect(url.searchParams.get("tags")).toBe("story,comment");
+    expect(url.searchParams.get("tags")).toBe("(story,comment)");
     expect(url.searchParams.get("hitsPerPage")).toBe(String(HN_MAX_HITS_PER_PAGE));
     expect(url.searchParams.has("page")).toBe(false);
     expect(url.searchParams.has("numericFilters")).toBe(false);

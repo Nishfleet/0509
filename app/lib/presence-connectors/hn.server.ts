@@ -17,7 +17,7 @@ import type {
  * post-MVP, free, no key, no auth).
  *
  * Turns a tracked entity's match phrase into an Algolia HN search
- * (`GET https://hn.algolia.com/api/v1/search_by_date?query=<phrase>&tags=story,comment`)
+ * (`GET https://hn.algolia.com/api/v1/search_by_date?query=<phrase>&tags=(story,comment)`)
  * and emits normalized `presence_item` rows whose `canonicalUrl` is the
  * public news.ycombinator.com item URL (the HN discussion page — the link an
  * HN mention is actually read at, not the story's external URL, which rides
@@ -48,7 +48,7 @@ import type {
  * redirects re-validated). A raw `fetch` to the Algolia endpoint is a
  * regression.
  *
- * Story vs comment: ONE target, one query, `tags=story,comment` — a tracked
+ * Story vs comment: ONE target, one query, `tags=(story,comment)` — a tracked
  * entity's HN presence is both its mentions inside stories AND the
  * discussions (comments) it earns. The two hit shapes differ only in which
  * Algolia fields they populate; both normalize to the same `presence_item`
@@ -115,9 +115,12 @@ export function buildSearchByDateUrl(
 ): string {
   const url = new URL(`${HN_API_BASE}/search_by_date`);
   url.searchParams.set("query", phrase);
-  // Tags: story AND comment — one target tracks both HN item kinds (issue
-  // #3253; the item's own itemType in raw_json tells them apart).
-  url.searchParams.set("tags", "story,comment");
+  // Tags: Algolia ANDs bare tags, so BOTH item kinds need the parenthesized
+  // OR form — a bare `tags=story,comment` means story AND comment, and no
+  // item is both, so every poll would honestly return zero rows. One target
+  // tracks both HN item kinds (issue #3253; the item's own itemType in
+  // raw_json tells them apart).
+  url.searchParams.set("tags", "(story,comment)");
   url.searchParams.set("hitsPerPage", String(hitsPerPage));
   if (isFiniteWatermark(watermarkSeconds)) {
     // Time-window slicing — the documented replacement for deep paging past
@@ -440,7 +443,12 @@ async function normalizeHnHit(hit: HnSearchHit): Promise<NormalizedPresenceItem 
     (typeof hit.story_title === "string" && hit.story_title.trim()) ||
     (commentText ? (commentText.split("\n")[0]?.trim() ?? "") : "");
   const title = (titleSource || "Hacker News item").slice(0, MAX_HN_TITLE_CHARS);
-  const publishedAt = safeIsoDate(hit.created_at);
+  // rss:552 house pattern — created_at is `string | null` in the Algolia
+  // hit, so the typeof guard both satisfies strict TS and keeps a missing
+  // created_at as honest null instead of safeIsoDate's new Date(null) =
+  // 1970-01-01 epoch (reviewer Act-on #2).
+  const publishedAt =
+    typeof hit.created_at === "string" ? safeIsoDate(hit.created_at) : null;
   const author = typeof hit.author === "string" && hit.author.trim() ? hit.author.trim() : null;
   const bodyExcerpt = excerptSource
     ? excerptSource.replace(/\s+/g, " ").slice(0, MAX_HN_EXCERPT_CHARS)
