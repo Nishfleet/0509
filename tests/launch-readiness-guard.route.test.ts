@@ -707,6 +707,13 @@ describe("launch readiness canary route", () => {
       },
     };
     const deliverWeeklyDigest = vi.fn();
+    // #3330: the proof-email convergence now runs even when the watchlist
+    // substrate already exists (the production deadlock: watchlist present,
+    // delivery_target absent, provisioning forever behind the early return).
+    // This substrate-exists test is exactly that production shape, so the
+    // convergence is pinned here: both steps run, exactly once.
+    const provisionVerifiedAccountEmailTargetIfUnsuppressed = vi.fn().mockResolvedValue(null);
+    const repairCanaryProofEmailTarget = vi.fn().mockResolvedValue({ kept: 1, removed: 0, repaired: true });
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => ({
         CANARY_BYPASS_TOKEN: "secret-token",
@@ -721,6 +728,11 @@ describe("launch readiness canary route", () => {
       createProofCapture: vi.fn(),
       createWatchEvent: vi.fn(),
       createDigestRun: vi.fn(),
+      // ensureCanaryProofEmailTarget awaits both; a partial mock here fails
+      // closed (ok:false, missing_active_watchlist) before any assertion —
+      // the 106275737 lesson, now also true on the existing-substrate path.
+      provisionVerifiedAccountEmailTargetIfUnsuppressed,
+      repairCanaryProofEmailTarget,
     }));
     vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
     mockLandingPageCapture(null);
@@ -743,9 +755,20 @@ describe("launch readiness canary route", () => {
       blocker: "proof_capture_failed",
     });
     // Repair, not a per-run write: the substrate INSERTs must be absent
-    // (instrumentation counters from the capture path are unrelated).
+    // (instrumentation counters from the capture path are unrelated). The
+    // proof-email convergence (INSERT-OR-IGNORE + checked deletes) is the
+    // intentional, idempotent exception — it must not recreate the watchlist.
     expect(statements.some((sql) => sql.includes("INSERT INTO user"))).toBe(false);
     expect(statements.some((sql) => sql.includes("INSERT INTO watchlist"))).toBe(false);
+    expect(provisionVerifiedAccountEmailTargetIfUnsuppressed).toHaveBeenCalledTimes(1);
+    expect(provisionVerifiedAccountEmailTargetIfUnsuppressed).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        userId: "launch-readiness-canary-owner",
+        targetValue: "owner@example.com",
+      }),
+    );
+    expect(repairCanaryProofEmailTarget).toHaveBeenCalledTimes(1);
   }, 10_000);
 
   it("creates fresh monitoring, proof, digest, and delivery signals", async () => {
