@@ -454,30 +454,54 @@ interface SeedProbeRun {
  * for the no-ads path BEFORE this function runs; this function itself is
  * still cache-only.
  */
+// Issue #3319: the probe reads are independent discovery_cache_entry lookups.
+// They used to run strictly sequentially, so a locally-placed Worker (Smart
+// Placement flap — see the issue) paid one inter-region D1 round-trip PER
+// probe on the /search TTFB path. Same reads, same keys, same hit order —
+// just executed in bounded parallel waves.
+const SEED_PROBE_READ_CONCURRENCY = 8;
+
 async function runSeedProbes(
   env: AppEnv,
   run: SeedProbeRun,
 ): Promise<AutoCompetitorCandidate[]> {
-  const hits: ProbeHit[] = [];
+  const probeTargets: Array<{ keyword: string; country: string; probeKey: string }> = [];
   for (const keyword of run.keywords) {
     for (const country of run.probeCountries) {
-      const probeKey = buildKeywordProbeCacheKey({
-        provider: run.provider,
+      probeTargets.push({
         keyword,
         country,
+        probeKey: buildKeywordProbeCacheKey({
+          provider: run.provider,
+          keyword,
+          country,
+        }),
       });
-      const entry = await readDiscoveryCacheEntryCacheOnly(env, {
-        provider: run.provider,
-        fingerprint: `text:${keyword}`,
-        country,
-        cacheKeyOverride: probeKey,
-      });
-      const ads = entry?.payload?.ads ?? [];
-      if (ads.length > 0) {
-        hits.push({ keyword, country, ads });
-      }
     }
   }
+  type ProbeEntry = Awaited<ReturnType<typeof readDiscoveryCacheEntryCacheOnly>>;
+  const probedEntries: ProbeEntry[] = [];
+  for (let i = 0; i < probeTargets.length; i += SEED_PROBE_READ_CONCURRENCY) {
+    const wave = probeTargets.slice(i, i + SEED_PROBE_READ_CONCURRENCY);
+    probedEntries.push(
+      ...await Promise.all(
+        wave.map((target) =>
+          readDiscoveryCacheEntryCacheOnly(env, {
+            provider: run.provider,
+            fingerprint: `text:${target.keyword}`,
+            country: target.country,
+            cacheKeyOverride: target.probeKey,
+          })),
+      ),
+    );
+  }
+  const hits: ProbeHit[] = [];
+  probeTargets.forEach((target, index) => {
+    const ads = probedEntries[index]?.payload?.ads ?? [];
+    if (ads.length > 0) {
+      hits.push({ keyword: target.keyword, country: target.country, ads });
+    }
+  });
 
   if (hits.length === 0) {
     return [];

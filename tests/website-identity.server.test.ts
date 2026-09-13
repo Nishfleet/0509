@@ -22,6 +22,7 @@ import {
   extractTagContent,
   getCuratedAdvertiserPageId,
   getCuratedProviderQuery,
+  prewarmWebsiteIdentity,
   resolveWebsiteIdentity,
 } from "~/lib/website-identity.server";
 
@@ -179,6 +180,75 @@ describe("website-identity decode wiring", () => {
 
     expect(identity?.registrableDomain).toBe("mamaearth.com");
     expect(identity?.domainAliases).toContain("mamaearth.in");
+  });
+});
+
+describe("identity in-flight dedup + prewarm (issue #3319)", () => {
+  /** One still-pending first-hop response, released by the test. */
+  function pendingFirstHop() {
+    let release: ((response: Response) => void) | undefined;
+    const held = new Promise<Response>((resolve) => {
+      release = resolve;
+    });
+    return { held, release: (html: string) => release?.(htmlResponse(html)) };
+  }
+
+  /** Macrotask boundary: every already-scheduled microtask has run. */
+  const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it("two concurrent resolutions for one domain share ONE fetch chain", async () => {
+    const first = pendingFirstHop();
+    mockFetch.mockImplementationOnce(() => first.held);
+
+    const viaHttps = resolveWebsiteIdentity("https://calendly.com");
+    // Let the first caller register its in-flight task (its own awaits and
+    // the module's entry promise run across microtasks).
+    await settled();
+
+    const viaBare = resolveWebsiteIdentity("calendly.com");
+    await settled();
+
+    // Both callers are parked on the SAME task: exactly one hop fired.
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    first.release(
+      '<html><head><meta property="og:site_name" content="Calendly"/></head><body></body></html>',
+    );
+    const one = await viaHttps;
+    const two = await viaBare;
+
+    expect(one).not.toBeNull();
+    expect(one?.siteName).toBe("Calendly");
+    expect(two).toEqual(one);
+    // The single chain, completed: still one hop after both settle.
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("a prewarmed keyword joins the later tier-labelling resolution to the same chain", async () => {
+    const first = pendingFirstHop();
+    mockFetch.mockImplementationOnce(() => first.held);
+
+    // What the search loader does: fire the prewarm (no await, never
+    // throws) before the discovery reads, then the later
+    // attachKeywordSearchDomainMatch resolves the SAME domain.
+    const prewarmed = prewarmWebsiteIdentity("calendly.com");
+    await settled();
+
+    const joined = resolveWebsiteIdentity("https://calendly.com");
+    await settled();
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    first.release(
+      '<html><head><meta property="og:site_name" content="Calendly"/></head><body></body></html>',
+    );
+    expect(await prewarmed).not.toBeNull();
+    expect(await joined).not.toBeNull();
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("prewarm of a non-domain input resolves null without any fetch", async () => {
+    await expect(prewarmWebsiteIdentity("")).resolves.toBeNull();
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 });
 
