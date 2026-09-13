@@ -15,8 +15,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * workers/origin-assertion + workers/security-headers. Only the heavy
  * collaborators past the gate are stubbed (the proven doMock set from
  * tests/worker-csp-nonce.test.ts): the 403 direction returns before the rate
- * limiter, and the allowed direction flows through the limiter (self-skipping
- * without D1, proven by the csp/edge suites) into a stubbed render.
+ * limiter, and the allowed direction flows THROUGH the limiter into a stubbed
+ * render. Since #2985 that limiter fails CLOSED (429) when the Rate Limiting
+ * binding is missing, so the plain-`{}` env of the csp suites no longer clears
+ * a policy-matched path; we pass the limiter's OWN documented test-mode
+ * bypass — E2E_TEST_MODE=1, checked before any binding/D1 access in
+ * rate-limit.server.ts — so this suite exercises the ORIGIN gate, not the
+ * limiter (#2985's suites own the limiter).
  *
  * Both directions of the acceptance:
  *   ALLOW — Sec-Fetch-Site: same-origin|none, a matching Origin, no headers
@@ -93,7 +98,7 @@ async function fetchWorker(
 ): Promise<Response> {
   return (worker.fetch as (r: Request, e: unknown, c: unknown) => Promise<Response>)(
     new Request(`https://0509.io${path}`, { method, headers }),
-    {},
+    { E2E_TEST_MODE: "1" },
     { waitUntil() {}, passThroughOnException() {} },
   );
 }
