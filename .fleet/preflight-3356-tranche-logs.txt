@@ -524,3 +524,5 @@ summary: 70 publishable / 90 domains (PASS)
   publish=70 skip=12 failed=8 gate=70
 TRANCHE-LEG-COMPLETE home-garden PREFLIGHT-EXIT=0
 
+
+TRANCHE-PREFLIGHT-COMPLETE (recorded by resume unit pi-issue-0509-3356, 2026-09-13T23:10Z) legs=3/3 E1_sneaker_at26=0 E2_fashion_at100=0_banked E3_home_at70=0 — the c2 continuation unit completed all three legs (the three TRANCHE-LEG-COMPLETE lines above, with .fleet/pf-3356-sneaker.log 26/26, .fleet/pf-3356-fashion.log 104/125 PASS, .fleet/pf-3356-home.log 70/90 PASS) but was stopped at its 22:34:58Z salvage before writing its own final line; this line is the resume unit's record of that verified state, not a new run.

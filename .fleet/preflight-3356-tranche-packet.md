@@ -1,5 +1,5 @@
 <!-- fleet-ops#1204 salvage resume -->
-The previous worker died. Continue from `wip/pi-issue-0509-3356-preflight-tranche-20260913T194607Z` (local). Verify that work, finish it. Do not start from zero.
+The previous worker died. Continue from `wip/pi-issue-0509-3356-preflight-tranche-c2-20260913T223450Z` (local). Verify that work, finish it. Do not start from zero.
 <!-- /fleet-ops#1204 salvage resume -->
 
 # pi-issue-0509-3356 — tranche floor preflight (detached)
