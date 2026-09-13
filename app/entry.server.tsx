@@ -23,7 +23,11 @@ export default async function handleRequest(
   // nonce>` in app/root.tsx does NOT reach them. Without it the browser blocks
   // both chunks, the client router never receives its loader data, and the
   // document renders but never hydrates: server-rendered assertions still pass
-  // while every interaction silently does nothing.
+  // while every interaction silently does nothing. Issue #3301 adds the other
+  // half: `options.nonce` on the `renderToReadableStream` call below stamps
+  // this same value onto react-dom's own continuation inline scripts (`$RT`,
+  // `$RB`/`$RV`/`$RC`) — the #2724 note above covers only ServerRouter's
+  // handoff chunks.
   const cspNonce = getOptionalCloudflareContext(loadContext)?.cspNonce;
 
   const body = await renderToReadableStream(
@@ -38,6 +42,9 @@ export default async function handleRequest(
           console.error(error);
         }
       },
+      // Issue #3301: `undefined` is the correct no-CSP value — react-dom
+      // renders bare `<script>` exactly as before when it is absent.
+      nonce: cspNonce,
     }
   );
   shellRendered = true;
