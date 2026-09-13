@@ -39,6 +39,10 @@ import {
   usageBundles,
 } from "~/lib/pricing";
 import { getPlanEntitlements } from "~/lib/plan-entitlements";
+import {
+  AD_SOURCE_COVERAGE,
+  AD_SOURCE_COVERAGE_HONESTY_LINE,
+} from "~/lib/ad-source-coverage";
 import type { CompareCitations } from "~/components/compare-citations";
 import adspyCitations from "~/data/compare/adspy-citations.json";
 import adspyderCitations from "~/data/compare/adspyder-citations.json";
@@ -1320,6 +1324,15 @@ ${pricingPlans()
 ${usageBundles()
   .map((bundle) => `- ${bundle.name}: ${bundle.priceLabel} — ${bundle.detail}`)
   .join("\n")}
+
+## Ad sources and coverage
+
+${AD_SOURCE_COVERAGE.map(
+  (entry) =>
+    `- ${entry.label}${entry.plans === "paid" ? " (paid plans)" : " (every plan)"}: ${entry.covers} Not included: ${entry.notCovered}`,
+).join("\n\n")}
+
+${AD_SOURCE_COVERAGE_HONESTY_LINE}
 
 ## Notes
 

@@ -111,6 +111,10 @@ const healthyCanaryRows = (): Record<string, Fixture> => ({
 const healthyRows = (): Record<string, Fixture> => ({
   ...healthyCanaryRows(),
   "SELECT MAX(started_at)": { last_started_at: FRESH },
+  // Issue #2992: the non-Meta ad-coverage counters read arrives with its own
+  // distinctive fragment; it must precede the broader watchlist key so the
+  // scripted binding resolves it first.
+  "json_array_length(s.payload_json": { tracked: 3, covered: 2 },
   "SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed\n        FROM watchlist_run": { total: 31, failed: 0 },
   "FROM digest_delivery": { last_digest_sent_at: FRESH },
   "FROM scheduled_observation_health_state": { active_since: MONTH_AGO },
