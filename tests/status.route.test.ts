@@ -118,10 +118,12 @@ describe("status route", () => {
     expect(markup).toContain("gated");
     expect(markup).toContain("Meta app review");
     expect(markup).toContain("wired in, waiting on its rollout decision");
-    // The whole catalog passes through untouched, including the source whose
-    // posture only exists at runtime.
+    // The whole catalog passes through untouched. #3204 wired the LinkedIn
+    // connector, flipping its row from "unavailable" to "gated" — the
+    // tracked-source catalog no longer carries an "unavailable" posture.
     expect(markup).toContain("GDELT");
-    expect(markup).toContain("unavailable");
+    expect(markup).toContain("own-organization posts of a CONNECTED account");
+    expect(markup).not.toContain("unavailable");
     // The Substack row (issue #3199's acceptance) rides the rss row, and the
     // note renders what the public surface covers — the named publication
     // feeds themselves, Substack included — and its limits, verbatim.

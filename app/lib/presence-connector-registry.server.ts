@@ -122,7 +122,7 @@ export async function pollPresenceTarget(
     // phrase surface through target_key — the connector itself decides.
     return blueskyConnector.poll(ctx, target);
   }
-  return linkedinConnector.poll(ctx);
+  return linkedinConnector.poll(ctx, target);
 }
 
 export function coverageLabelForConnector(
