@@ -233,7 +233,9 @@ describe("/ads/:domain source sections (issue #2200)", () => {
     // note now states the capture freshness next to the EU-scope copy.
     expect(markup).toContain("library.tiktok.com/ads/detail/?ad_id=tiktok-1");
     expect(markup).toContain('data-testid="brand-tiktok-ads-checked"');
-    expect(markup).toContain("Last captured: 2026-09-01");
+    // Main's shared BrandPageSourceSection stamps freshness as "Last checked
+    // <date>"; the #3195 cadence honesty lives in the note below it.
+    expect(markup).toContain("Last checked 1 Sept 2026");
     expect(markup).toContain("rechecks weekly");
   });
 
