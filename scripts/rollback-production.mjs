@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { readDeployedWorkerVersionId } from "./deploy-production-plan.mjs";
 import {
   buildWorkerRollbackCommand,
   chooseExistingRollbackTarget,
+  interpretWorkerRollbackSpawn,
   readLastGreenLedgerVersionId,
   validateWorkerRollbackEvidence,
 } from "./worker-rollback-target.mjs";
@@ -16,7 +17,8 @@ function requiredPath(name) {
   return resolve(process.cwd(), process.argv[index + 1]);
 }
 
-const evidence = JSON.parse(readFileSync(requiredPath("--target"), "utf8"));
+const evidencePath = requiredPath("--target");
+const evidence = JSON.parse(readFileSync(evidencePath, "utf8"));
 const verdict = validateWorkerRollbackEvidence(evidence);
 if (!verdict.ok) throw new Error(verdict.issues.join(","));
 
@@ -85,11 +87,44 @@ const chosen = versionsList
   ? chooseExistingRollbackTarget(versionsList, rollbackVersionId, deployedVersionId)
   : { versionId: rollbackVersionId, reason: "versions_list_unavailable" };
 console.log(JSON.stringify({ rollbackTarget: chosen.versionId, reason: chosen.reason, recorded: evidence.versionId }));
-const rollback = buildWorkerRollbackCommand(chosen.versionId, deployedVersionId);
-const result = spawnSync(process.env.WRANGLER_BIN || rollback.command, rollback.args, {
-  cwd: process.cwd(),
-  env: process.env,
-  stdio: "inherit",
+// #3390: when the resolved target IS the version the failed deploy placed at
+// 100% of traffic, the rollback would restore the worker to what already
+// serves every request — there is nothing to recover. Skip the spawn, record
+// the live version, and let the plan proceed.
+let outcome;
+if (chosen.versionId === deployedVersionId) {
+  outcome = { ok: true, liveVersionId: chosen.versionId, outcome: "rollback_target_already_live" };
+} else {
+  const rollback = buildWorkerRollbackCommand(chosen.versionId, deployedVersionId);
+  const result = spawnSync(process.env.WRANGLER_BIN || rollback.command, rollback.args, {
+    cwd: process.cwd(),
+    env: process.env,
+    // #3390: stdout is piped (and echoed below) so this child can prove, from
+    // wrangler's own final `Current Version ID:` line, that the swap landed
+    // even when the spawn exits non-zero (run 34770115098). stderr stays
+    // inherited; the echoed stdout keeps the CI log's wrangler transcript.
+    stdio: ["ignore", "pipe", "inherit"],
+  });
+  if (result.stdout) process.stdout.write(result.stdout);
+  if (result.error) throw result.error;
+  outcome = interpretWorkerRollbackSpawn(result, chosen.versionId);
+}
+if (!outcome.ok) throw new Error("worker_rollback_failed");
+// #3390: record WHICH WORKER VERSION WENT LIVE — the restored (or, when there
+// was nothing to recover, kept) 100% version — both on this stream and in the
+// rollback-target evidence, so the on-main deploy ledger can record the live
+// version id. The AggregateError path below still fails loud with no record:
+// an unproven swap leaves the live version genuinely unknown (#3190).
+const recoveredEvidence = {
+  ...evidence,
+  recoveredLiveVersionId: outcome.liveVersionId,
+  recoveredAt: new Date().toISOString(),
+  recovery: outcome.outcome,
+};
+writeFileSync(evidencePath, `${JSON.stringify(recoveredEvidence, null, 2)}\n`, {
+  encoding: "utf8",
+  mode: 0o600,
 });
-if (result.error) throw result.error;
-if (result.status !== 0) throw new Error("worker_rollback_failed");
+process.stdout.write(
+  `${JSON.stringify({ recoveredLiveVersionId: outcome.liveVersionId, recovery: outcome.outcome })}\n`,
+);
