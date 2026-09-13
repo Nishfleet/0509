@@ -879,7 +879,9 @@ test.describe("local authenticated E2E harness", { lock: "d1" }, () => {
 
     await signInAs(context, baseURL!, "e2e-free-onboarded");
     await page.goto("/app/digests");
-    await expect(page).toHaveURL(/\/app\/digests/);
+    // /app/digests is a 302 stub to /app/briefs (route diet phase 1, #2213),
+    // so the browser lands on the canonical Briefs URL.
+    await expect(page).toHaveURL(/\/app\/briefs/);
     // Free Weekly Competitor Watch: free plans now get the (empty) Briefs
     // surface instead of a paid gate.
     await expect(page.getByRole("heading", { name: "Briefs", exact: true })).toBeVisible();
