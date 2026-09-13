@@ -63,6 +63,7 @@ const COMPARE_PAGES = [
   { slug: "bigspy", module: "~/routes/compare.bigspy", citations: "~/data/compare/bigspy-citations.json" },
   { slug: "minea", module: "~/routes/compare.minea", citations: "~/data/compare/minea-citations.json" },
   { slug: "poweradspy", module: "~/routes/compare.poweradspy", citations: "~/data/compare/poweradspy-citations.json" },
+  { slug: "sneakerping", module: "~/routes/compare.sneakerping", citations: "~/data/compare/sneakerping-citations.json" },
 ] as const;
 
 async function renderPage(modulePath: string) {
