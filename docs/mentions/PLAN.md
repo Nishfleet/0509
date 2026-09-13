@@ -219,6 +219,13 @@ now ships as #3203: the documented 100-calls/day dedicated bucket, enforced
 in-connector, honest that it is a thin, low-cadence surface until the
 compliance-audit path becomes a named need.)
 
+#3203's metric reads without new instrumentation: mentions per tracked
+brand per day from YouTube count straight off `presence_item`
+(`connector_id = 'youtube'` — the deduped rows themselves), and the failure
+rate rides the poll-orchestrator's last-error record
+(`lastErrorCode`/`lastErrorMessage` on the target's presence_poll_cursor),
+the shared per-source failure surface every connector reports into.
+
 ## 8. Research log
 
 Official docs/terms read for this plan (2026-09-12):

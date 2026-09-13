@@ -111,10 +111,20 @@ describe("presence source coverage policy", () => {
     expect(entry.coverageLabel).toBe("LIMITED_COVERAGE");
   });
 
-  it("marks YouTube as planned without claiming active coverage", async () => {
+  it("marks YouTube unavailable while its rollout is off — wired in #3203, dark by default", async () => {
     const entry = await evaluatePresenceSourceCoverage(baseEnv, "youtube", "competitor");
-    expect(entry.status).toBe("planned");
-    expect(entry.reasonCode).toBe("api_not_configured");
+    expect(entry.status).toBe("unavailable");
+    expect(entry.reasonCode).toBe("connector_disabled");
+  });
+
+  it("marks YouTube gated once its rollout flag is on but the Google key is still missing", async () => {
+    const entry = await evaluatePresenceSourceCoverage(
+      { ...baseEnv, PRESENCE_YOUTUBE_ROLLOUT: "ga" },
+      "youtube",
+      "competitor",
+    );
+    expect(entry.status).toBe("gated");
+    expect(entry.reasonCode).toBe("credentials_missing");
   });
 
   it("marks Amazon as manual-only", async () => {
@@ -338,7 +348,7 @@ describe("presence source coverage policy", () => {
   it("keeps docs coverage table honest about production status", () => {
     const docs = presenceSourceCoverageForDocs();
     expect(docs.find((entry) => entry.sourceId === "website")?.productionStatus).toBe("active");
-    expect(docs.find((entry) => entry.sourceId === "youtube")?.productionStatus).toBe("planned");
+    expect(docs.find((entry) => entry.sourceId === "youtube")?.productionStatus).toBe("gated");
     expect(docs.find((entry) => entry.sourceId === "amazon")?.productionStatus).toBe("manual_only");
     expect(docs.find((entry) => entry.sourceId === "x")?.productionStatus).toBe("gated");
   });
