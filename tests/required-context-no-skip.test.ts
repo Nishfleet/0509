@@ -127,6 +127,8 @@ describe("required contexts can never conclude skipped", () => {
     expect(aggregate?.run).toContain("codex-node-checks-shard-");
     expect(aggregate?.run).toContain("exit 1");
     expect(aggregate?.env?.GH_TOKEN).toBe("${{ github.token }}");
+    expect(aggregate?.env?.RUN_ID).toBe("${{ github.run_id }}");
+    expect(aggregate?.run).toContain("runs/${RUN_ID}/");
     expect(job.permissions?.checks).toBe("read");
   });
 
