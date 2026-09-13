@@ -23,6 +23,8 @@ import { OfferTimelineLedger } from "~/components/offer-timeline-ledger";
 import type { DomainArchive } from "~/lib/archive";
 import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
 import type { OfferLedgerEntry } from "~/lib/offer-timeline";
+import type { TimelineMentionEvent } from "~/lib/presence-data.server";
+import { formatCoverageLabel } from "~/lib/presence-display";
 import type { TimelineSourceEvent } from "~/components/brand-page/timeline-source-events.server";
 import { formatWatchEventTypeLabel } from "~/lib/watch-event-display";
 import {
@@ -56,6 +58,14 @@ export interface OfferTimelineLoaderData {
    * source exists, or no source event landed — the section hides.
    */
   sourceEvents: TimelineSourceEvent[];
+  /**
+   * Issue #3179 — recent public mentions of this brand, read-only from the
+   * stored presence_item corpus (no scraping on the public path). Rendered
+   * interleaved with `sourceEvents` in the same dated list. Empty when no
+   * tracked brand maps to this domain or no mention landed — the section
+   * then shows only source events, or hides entirely.
+   */
+  mentionEvents?: TimelineMentionEvent[];
   noindex: boolean;
   /**
    * True when the ledger is empty but this domain is a tracked, sitemap-listed
@@ -181,6 +191,23 @@ export async function loader({
     sourceEvents = [];
   }
 
+  // Issue #3179 — recent public mentions of this brand, stored by the
+  // presence trackers. Same zero-cost, read-only posture as sourceEvents: a
+  // read hiccup degrades to [] (the mentions just do not render), never a
+  // 500 on a public page.
+  let mentionEvents: TimelineMentionEvent[] = [];
+  try {
+    const { listPublicMentionEventsByDomain } = await import(
+      "~/lib/presence-data.server"
+    );
+    mentionEvents = await listPublicMentionEventsByDomain(env, brand.domain);
+  } catch (error) {
+    console.warn("Timeline mention events read failed; hiding the section.", {
+      errorName: error instanceof Error ? error.name : typeof error,
+    });
+    mentionEvents = [];
+  }
+
   const canonicalPath = `/timeline/${brand.domain}`;
   const sharePath = asOf ? `${canonicalPath}?asOf=${asOf}` : canonicalPath;
   const shareUrl = asOf
@@ -202,6 +229,7 @@ export async function loader({
     entries: loaded.entries,
     archive: loaded.archive,
     sourceEvents,
+    mentionEvents,
     noindex,
     collecting,
   };
@@ -244,6 +272,7 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
 
 export default function OfferTimelineRoute() {
   const data = useLoaderData<typeof loader>();
+  const recentSourceRows = mergedRecentSourceRows(data);
   const signupPath = `/auth/signup?redirectTo=${encodeURIComponent(`/app?website=${encodeURIComponent(data.domain)}#setup-checklist`)}`;
   const adsPath = `/ads/${encodeURIComponent(data.domain)}`;
   const pageTitle =
@@ -422,39 +451,54 @@ export default function OfferTimelineRoute() {
       </section>
 
       {/*
-       * Issue #2200 — competitor-monitoring source events. Recent diffs from
-       * the new sources (a new Google creative, a new LinkedIn ad, a new
-       * public subdomain, roles opened, etc.) projected from the same
-       * watch_event stream, gated to live sources. Same public projection
-       * shape as the /ads "changed in the last 7 days" strip: event type +
-       * change mark + capture date + the source label. No account data.
-       * Hidden when empty (never an empty card).
+       * Issue #2200 — competitor-monitoring source events (a new Google
+       * creative, a new LinkedIn ad, a new public subdomain, roles opened,
+       * etc.), and issue #3179 — public mentions of this brand from the
+       * presence trackers, interleaved into the same dated list. Each row
+       * carries its source label; a mention row links the source article.
+       * Hidden when neither list has rows (never an empty card).
        */}
-      {(data.sourceEvents ?? []).length > 0 ? (
+      {recentSourceRows.length > 0 ? (
         <section className="f9-timeline-section" aria-labelledby="offer-timeline-source-events-title">
           <div className="f9-container">
             <h2 className="f9-timeline-section-title" id="offer-timeline-source-events-title">
-              Recent source changes
+              Recent changes and public mentions
             </h2>
             <ul className="f9-quiet-list" data-testid="timeline-source-events">
-              {data.sourceEvents.map((event, index) => (
-                <li
-                  key={`${event.sourceId}:${event.eventType}:${event.capturedAt}:${index}`}
-                  className="f9-quiet-list-item"
-                >
-                  <span className="f9-quiet-list-copy">
-                    {`${event.sourceLabel} · ${formatWatchEventTypeLabel(event.eventType)}`}
-                    {event.changeMark ? (
-                      <>
-                        {" — "}
-                        <s>{event.changeMark.from}</s>
-                        <span aria-hidden="true"> → </span>
-                        <ins>{event.changeMark.to}</ins>
-                      </>
-                    ) : null}
-                    {` · captured ${formatTimelineSourceDate(event.capturedAt)}`}
-                  </span>
-                </li>
+              {recentSourceRows.map((row, index) =>
+                row.kind === "mention" ? (
+                  <li
+                    key={`mention:${row.mention.canonicalUrl}:${row.mention.observedAt}:${index}`}
+                    className="f9-quiet-list-item"
+                    data-testid="timeline-mention-row"
+                  >
+                    <span className="f9-quiet-list-copy">
+                      {`${formatCoverageLabel(row.mention.connectorId)} · Mention — `}
+                      <a href={row.mention.canonicalUrl} rel="noreferrer">
+                        {row.mention.title}
+                      </a>
+                      {` · captured ${formatTimelineSourceDate(row.mention.observedAt)}`}
+                    </span>
+                  </li>
+                ) : (
+                  <li
+                    key={`${row.event.sourceId}:${row.event.eventType}:${row.event.capturedAt}:${index}`}
+                    className="f9-quiet-list-item"
+                  >
+                    <span className="f9-quiet-list-copy">
+                      {`${row.event.sourceLabel} · ${formatWatchEventTypeLabel(row.event.eventType)}`}
+                      {row.event.changeMark ? (
+                        <>
+                          {" — "}
+                          <s>{row.event.changeMark.from}</s>
+                          <span aria-hidden="true"> → </span>
+                          <ins>{row.event.changeMark.to}</ins>
+                        </>
+                      ) : null}
+                      {` · captured ${formatTimelineSourceDate(row.event.capturedAt)}`}
+                    </span>
+                  </li>
+                ),
               ))}
             </ul>
           </div>
@@ -477,4 +521,34 @@ function formatTimelineSourceDate(iso: string): string {
   } catch {
     return iso;
   }
+}
+
+/**
+ * One row of the dated recent-activity list: a monitored source's diff (a
+ * new ad creative, a new subdomain) or a public mention of the brand (issue
+ * #3179). Both render in one chronological list — the interleave — each row
+ * labeled with its source.
+ */
+type MergedTimelineSourceRow =
+  | { kind: "source-event"; at: string; event: TimelineSourceEvent }
+  | { kind: "mention"; at: string; mention: TimelineMentionEvent };
+
+function mergedRecentSourceRows(data: OfferTimelineLoaderData): MergedTimelineSourceRow[] {
+  const rows: MergedTimelineSourceRow[] = [
+    ...data.sourceEvents.map((event): MergedTimelineSourceRow => ({
+      kind: "source-event",
+      at: event.capturedAt,
+      event,
+    })),
+    ...(data.mentionEvents ?? []).map((mention): MergedTimelineSourceRow => ({
+      kind: "mention",
+      at: mention.observedAt,
+      mention,
+    })),
+  ];
+  // Newest first. Both timestamps are ISO-8601 UTC strings, so they order
+  // lexicographically — the same sort the presence brief uses. Equal
+  // timestamps keep insertion order (source events first), so the row order
+  // stays deterministic.
+  return rows.sort((a, b) => b.at.localeCompare(a.at));
 }

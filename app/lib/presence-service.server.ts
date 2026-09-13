@@ -33,6 +33,7 @@ import {
   connectorOperationalForPolling,
 } from "~/lib/presence-access-gates.server";
 import { getUserPlan } from "~/lib/plan.server";
+import { isPaidPlanFamily } from "~/lib/plan-entitlements";
 import type {
   PresenceConnectorId,
   PresenceTrackingMode,
@@ -312,10 +313,20 @@ export async function runPresencePollingBatch(env: AppEnv, options: { limit?: nu
   const targets = await listActiveSourceTargetsForPolling(env, options.limit ?? 20);
   let spentUnits = 0;
   let skippedRollout = 0;
+  let skippedPlan = 0;
   const results: Array<{ targetId: string; ok: boolean; errorCode?: string; syncCycleCount?: number }> = [];
 
   for (const target of targets) {
     if (spentUnits >= PRESENCE_POLL_BUDGET_UNITS) break;
+    // Free stays barebones (issue #3179, the Free-is-barebones decision): the
+    // scheduled poller skips Free workspaces entirely, so nothing recurring
+    // runs on Free — their one website source is checked with the manual
+    // Check now action. Same paid-plan predicate the mention resweep applies.
+    const workspacePlan = await getUserPlan(env, target.userId);
+    if (!isPaidPlanFamily(workspacePlan)) {
+      skippedPlan += 1;
+      continue;
+    }
     const entity = await getTrackedEntity(env, target.userId, target.trackedEntityId);
     if (!entity) continue;
     if (!(await connectorOperationalForPolling(env, target.connectorId, entity.trackingMode, target.userId))) {
@@ -353,7 +364,7 @@ export async function runPresencePollingBatch(env: AppEnv, options: { limit?: nu
     }
   }
 
-  return { spentUnits, skippedRollout, polled: results.length, results };
+  return { spentUnits, skippedRollout, skippedPlan, polled: results.length, results };
 }
 
 export async function getPresenceWorkspaceSnapshot(env: AppEnv, userId: string) {
