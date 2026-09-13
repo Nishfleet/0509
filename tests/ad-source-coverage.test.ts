@@ -8,6 +8,9 @@ import {
 } from "~/lib/ad-source-coverage";
 import { SOURCE_IDS } from "~/lib/sources/types";
 import { getPlanEntitlements } from "~/lib/plan-entitlements";
+import { googleAdsAdapter } from "~/lib/sources/google-ads.server";
+import { linkedinAdsAdapter } from "~/lib/sources/linkedin-ads.server";
+import { tiktokAdsAdapter } from "~/lib/sources/tiktok-ads.server";
 
 /**
  * Issue #2992: the public coverage notes are ONE shared constant, rendered by
@@ -62,8 +65,23 @@ describe("AD_SOURCE_COVERAGE", () => {
     expect(paidIds.sort()).toEqual(["google_ads", "linkedin", "tiktok"]);
   });
 
+  it("labels the sources the way the pages already do — the seam adapters' own labels, not a third variant", () => {
+    // The /ads-adjacent registries and the brand-page sections render the
+    // seam adapters' labels (components/sources/source-sections.tsx mirrors
+    // them); the constant must use the SAME words, or /pricing and /docs
+    // visibly name a source the brand page calls something else (review
+    // warning, #2992 finish session).
+    const byId = new Map(AD_SOURCE_COVERAGE.map((entry) => [entry.id, entry.label]));
+    expect(byId.get("google_ads"), "google-ads.server.ts label").toBe(googleAdsAdapter.label);
+    expect(byId.get("linkedin"), "linkedin-ads.server.ts label").toBe(linkedinAdsAdapter.label);
+    expect(byId.get("tiktok"), "tiktok-ads.server.ts label").toBe(tiktokAdsAdapter.label);
+    // "meta" is the primary pre-seam path; its public name comes from the
+    // compare citations data, not a seam adapter.
+    expect(byId.get("meta")).toBe("Meta Ad Library");
+  });
+
   it("carries the honesty line every surface renders", () => {
-    expect(AD_SOURCE_COVERAGE_HONESTY_LINE).toContain("cannot be checked");
+    expect(AD_SOURCE_COVERAGE_HONESTY_LINE).toContain("only when it captured something");
     // The phrase-ban vocabulary (tests/public-tree-phrase-ban.test.ts) stays
     // out of the shared copy the public surfaces render.
     for (const banned of ["unavailable", "not measured", "not live-checked", "does not measure", "limited today"]) {

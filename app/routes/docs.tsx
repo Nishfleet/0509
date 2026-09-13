@@ -131,8 +131,8 @@ export default function DocsRoute() {
         <p>{AD_SOURCE_COVERAGE_HONESTY_LINE}</p>
         <p>
           See <Link to="/pricing">Pricing</Link> for what each plan includes, and{" "}
-          <Link to="/status">Status</Link> for the measured share of tracked watchlists whose
-          latest Google, LinkedIn, or TikTok check captured an ad.
+          <Link to="/status">Status</Link> for the measured share of tracked watchlists with at
+          least one Google, LinkedIn, or TikTok ad captured.
         </p>
       </PublicDocBlock>
 

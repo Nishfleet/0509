@@ -22,7 +22,11 @@ export type AdSourceCoverageId = "meta" | "google_ads" | "linkedin" | "tiktok";
 export interface AdSourceCoverageEntry {
   /** The seam's source id (app/lib/sources/types.ts SOURCE_IDS). */
   id: AdSourceCoverageId;
-  /** How the public pages already name this source. */
+  /** The label the public surfaces use. For the three seam adapters this is
+   *  exactly the adapter's own label (app/lib/sources/google-ads.server.ts,
+   *  linkedin-ads.server.ts, tiktok-ads.server.ts — the /ads-adjacent
+   *  registries mirror those), pinned by tests/ad-source-coverage.test.ts;
+   *  "Meta Ad Library" is the primary pre-seam source's public name. */
   label: string;
   /** What the source covers: region and ad types, stated plainly. */
   covers: string;
@@ -46,14 +50,14 @@ export const AD_SOURCE_COVERAGE: readonly AdSourceCoverageEntry[] = [
     id: "google_ads",
     label: "Google Ads (Transparency Center)",
     covers:
-      "Creatives the public Google Ads Transparency Center lists for the tracked domain — the same listings anyone can look up there, read in order (newest 200 kept).",
+      "Creatives the public Google Ads Transparency Center lists for the tracked domain — the same listings anyone can look up there; the search's first 200 are kept, exactly as the Center returns them.",
     notCovered:
       "Spend, impressions, and targeting detail: the Transparency Center search does not return them, so they are never shown.",
     plans: "paid",
   },
   {
     id: "linkedin",
-    label: "LinkedIn (Ad Library)",
+    label: "LinkedIn Ads (Ad Library)",
     covers:
       "Publicly listed promoted posts from the LinkedIn Ad Library's United States listings: the advertiser, the promoted text, and a link to the public detail page.",
     notCovered:
@@ -62,7 +66,7 @@ export const AD_SOURCE_COVERAGE: readonly AdSourceCoverageEntry[] = [
   },
   {
     id: "tiktok",
-    label: "TikTok (Commercial Content Library, EU-shown)",
+    label: "TikTok Ads (Commercial Content Library, EU-shown)",
     covers:
       "EU-shown ads from the public TikTok Commercial Content Library: the advertiser, first- and last-shown dates, and unique-user counts, newest dozen.",
     notCovered:
@@ -72,12 +76,13 @@ export const AD_SOURCE_COVERAGE: readonly AdSourceCoverageEntry[] = [
 ] as const;
 
 /**
- * The honesty line every surface renders beneath the per-source notes: a
- * source's own section states its coverage, and a source that could not be
- * checked says so rather than silently disappearing or pretending.
+ * The honesty line every surface renders beneath the per-source notes. Every
+ * clause is implemented: the /ads section renderers return null for an empty
+ * payload, so a source with nothing captured is omitted, never shown as an
+ * empty section.
  */
 export const AD_SOURCE_COVERAGE_HONESTY_LINE =
-  "Each source appears on a brand page only when it captured something, its own section states what it covers, and when a source cannot be checked its section says so. Coverage limits above come from what each public ad library itself publishes.";
+  "Each source appears on a brand page only when it captured something — a source with nothing captured yet stays off the page rather than showing an empty section. Coverage limits above come from what each public ad library itself publishes.";
 
 /** The sources a Free plan watches (derived; the test pins this to plan-entitlements). */
 export function freePlanCoverageSources(): readonly AdSourceCoverageEntry[] {
