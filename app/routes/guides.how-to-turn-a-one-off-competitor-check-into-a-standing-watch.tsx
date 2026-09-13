@@ -31,6 +31,7 @@ import { MarketingFooter } from "~/components/marketing-footer";
 import { GuideKeepReading } from "~/components/guide-keep-reading";
 import {
   articleJsonLd,
+  buyerSurfaceHreflangLinks,
   canonicalLinks,
   faqPageJsonLd,
   jsonLdScriptProps,
@@ -64,7 +65,10 @@ const guideHeadline =
 const guideDatePublished = "2026-09-12";
 const guideDateModified = "2026-09-12";
 
-export const links: LinksFunction = () => canonicalLinks(PATHNAME);
+export const links: LinksFunction = () => [
+  ...canonicalLinks(PATHNAME),
+  ...buyerSurfaceHreflangLinks(PATHNAME.slice(1)),
+];
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({

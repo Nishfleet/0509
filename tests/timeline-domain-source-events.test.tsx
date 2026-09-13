@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { OfferTimelineLoaderData } from "~/routes/timeline.$domain";
 import type { TimelineSourceEvent } from "~/components/brand-page/timeline-source-events.server";
+import type { TimelineMentionEvent } from "~/lib/presence-data.server";
 import type { OfferLedgerEntry } from "~/lib/offer-timeline";
 import { emptyDomainArchive } from "~/lib/archive";
 
@@ -69,13 +70,23 @@ function sourceEvent(overrides: Partial<TimelineSourceEvent> = {}): TimelineSour
   };
 }
 
+function mentionEvent(overrides: Partial<TimelineMentionEvent> = {}): TimelineMentionEvent {
+  return {
+    title: "Nike launches a running shoe restoring program",
+    canonicalUrl: "https://news.example/nike-running-shoe-restore",
+    observedAt: "2026-09-01T09:00:00.000Z",
+    connectorId: "gdelt",
+    ...overrides,
+  };
+}
+
 describe("/timeline/:domain source events (issue #2200)", () => {
   it("renders the source events section when source events exist", async () => {
     const markup = await render(
       data({ sourceEvents: [sourceEvent()] }),
     );
     expect(markup).toContain('id="offer-timeline-source-events-title"');
-    expect(markup).toContain("Recent source changes");
+    expect(markup).toContain("Recent changes and public mentions");
     expect(markup).toContain('data-testid="timeline-source-events"');
     // The source label and event type render.
     expect(markup).toContain("Google Ads (Transparency Center)");
@@ -86,6 +97,54 @@ describe("/timeline/:domain source events (issue #2200)", () => {
     const markup = await render(data({ sourceEvents: [] }));
     expect(markup).not.toContain('id="offer-timeline-source-events-title"');
     expect(markup).not.toContain('data-testid="timeline-source-events"');
+  });
+
+  it("interleaves mentions with source events, newest first, each row labeled (issue #3179)", async () => {
+    const markup = await render(
+      data({
+        sourceEvents: [
+          // Older than both mentions.
+          sourceEvent({ capturedAt: "2026-09-01T08:00:00.000Z", sourceLabel: "Google Ads (Transparency Center)" }),
+        ],
+        mentionEvents: [
+          mentionEvent({ observedAt: "2026-09-01T12:00:00.000Z", title: "Nike launches a running shoe restoring program" }),
+          mentionEvent({
+            observedAt: "2026-09-01T10:00:00.000Z",
+            connectorId: "rss",
+            title: "Nike earnings: the runners respond",
+            canonicalUrl: "https://wire.example/nike-earnings",
+          }),
+        ],
+      }),
+    );
+    expect(markup).toContain('data-testid="timeline-mention-row"');
+    expect(markup).toContain("Nike launches a running shoe restoring program");
+    expect(markup).toContain("Nike earnings: the runners respond");
+    // The mention row names its source, links the article, and dates itself.
+    expect(markup).toContain("GDELT mainstream news");
+    expect(markup).toContain('href="https://news.example/nike-running-shoe-restore"');
+    expect(markup).toContain("RSS / Atom / JSON Feed");
+    expect(markup).toContain('href="https://wire.example/nike-earnings"');
+    // Newest first: the noon mention precedes the 10:00 mention, which both
+    // precede the 08:00 source event. The source-event copy still renders.
+    const noon = markup.indexOf("Nike launches a running shoe restoring program");
+    const tenAm = markup.indexOf("the runners respond");
+    const eightAm = markup.indexOf("Google Ads (Transparency Center)");
+    expect(noon).toBeGreaterThan(-1);
+    expect(tenAm).toBeGreaterThan(noon);
+    expect(eightAm).toBeGreaterThan(tenAm);
+  });
+
+  it("renders the section when only mentions exist (no source events yet)", async () => {
+    const markup = await render(
+      data({
+        sourceEvents: [],
+        mentionEvents: [mentionEvent()],
+      }),
+    );
+    expect(markup).toContain('id="offer-timeline-source-events-title"');
+    expect(markup).toContain('data-testid="timeline-mention-row"');
+    expect(markup).toContain("Nike launches a running shoe restoring program");
   });
 
   it("renders the change mark when a source event carries one", async () => {

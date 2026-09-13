@@ -12,7 +12,7 @@ import {
   type CompareCitations,
   type CompareClaimCard,
 } from "~/components/compare-citations";
-import { canonicalLinks, compareSocialCardUrl, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
+import { buyerSurfaceHreflangLinks, canonicalLinks, compareSocialCardUrl, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
 import { LIVE_BRAND_PROOF_DOMAIN } from "~/lib/demo-brand-pages";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import spylandCitations from "~/data/compare/spyland-citations.json";
@@ -29,7 +29,10 @@ import { COMPARE_PAGE_SIGNUP_SOURCE } from "~/lib/signup-source";
 const pageDescription =
   "Spyland watches competitor landing pages on a schedule and flags copy, pricing, and CTA changes. Five to Nine adds the ad source and more frequent source-backed checks.";
 
-export const links: LinksFunction = () => canonicalLinks("/compare/spyland");
+export const links: LinksFunction = () => [
+  ...canonicalLinks("/compare/spyland"),
+  ...buyerSurfaceHreflangLinks("compare/spyland"),
+];
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({

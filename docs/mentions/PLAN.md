@@ -316,6 +316,30 @@ the official Posts API the connector's stored 3-legged grant
 (`r_organization_social`) already authenticates, $0, no new dependency —
 the survey's own conclusion, applied.
 
+Reddit, #3202 (2026-09-13): the official surface was already pinned by the
+2026-09-12 log above — [Data API Terms](https://redditinc.com/policies/data-api-terms)
+(OAuth mandatory, no unauthenticated use, commercial use needs written
+approval), the [Data API Wiki](https://support.reddithelp.com/hc/en-us/articles/16160319875092-Reddit-Data-API-Wiki)
+budget (100 QPM per OAuth client id, averaged over a 10-minute window), the
+[Responsible Builder Policy](https://support.reddithelp.com/hc/en-us/articles/42728983564564-Responsible-Builder-Policy).
+This lane's fresh collector search, kept to public and unpaid surfaces
+(GitHub star-sorted, `gh search repos`, 2026-09-13): `ivucicev/redsignal`
+(25★ — hobby subreddit keyword-watcher/lead-gen), `PhillipTaylor/reddit_monitor`
+(11★ — a desktop tray notifier); the `reddit mention tracker` search tops
+out at 2★ (ThePredictiveDev/Search-Reddit-Term-Based-Scraper —
+FastAPI+Gradio app, ML sentiment, unwarranted deps). `npm search`: the
+notable hit is `@ebenova/reddit-monitor-mcp` 1.0.2 — an MCP server
+attachment, not a shardable collector; everything else is editor-mention
+plumbing (quill/tiptap), a different "mention". All **rejected**: stale,
+hobby-graded, or wrong-shaped, and each would ADD a dependency while
+bypassing the SSRF-hardened `presenceSafeFetch`/bounded-response path every
+0509 connector rides. #3202 therefore ships on the official Data API the
+connector's app-only client-credentials grant (env-held `REDDIT_CLIENT_ID`/`SECRET`)
+already authenticates — $0 free tier, 1000 reads/10 min enforced in-connector
+via the shared `presence_poll_cursor` ledger, commercial approval = the
+#1378 gate `REDDIT_COMMERCIAL_ACCESS=approved` — the survey's own
+conclusion, applied.
+
 Prior art inside the repo: `docs/epics/2026-08-28-mention-monitoring.md`
 (scout + evals + phases, shipped as #1375/#1377/#1378/#1379/#1380),
 `app/lib/presence-connectors/*.server.ts`, `migrations/0055` + `0093`,

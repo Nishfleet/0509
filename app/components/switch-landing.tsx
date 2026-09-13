@@ -4,12 +4,15 @@ import type { LinksFunction, MetaFunction } from "react-router";
 import { MarketingFooter } from "~/components/marketing-footer";
 import { MarketingNav } from "~/components/marketing-nav";
 import { Breadcrumbs } from "~/components/breadcrumbs";
-import { canonicalLinks, faqPageJsonLd, jsonLdScriptProps, publicSeoMeta, switchSocialCardUrl, webPageJsonLd } from "~/lib/seo";
+import { buyerSurfaceHreflangLinks, canonicalLinks, faqPageJsonLd, jsonLdScriptProps, publicSeoMeta, switchSocialCardUrl, webPageJsonLd } from "~/lib/seo";
 import type { SwitchPage, SwitchSource } from "~/lib/switch-pages";
 import { SWITCH_PAGE_SIGNUP_SOURCE } from "~/lib/signup-source";
 
 export function switchPageLinks(page: SwitchPage): LinksFunction {
-  return () => canonicalLinks(page.pathname);
+  return () => [
+    ...canonicalLinks(page.pathname),
+    ...buyerSurfaceHreflangLinks(page.pathname.slice(1)),
+  ];
 }
 
 export function switchPageMeta(page: SwitchPage): MetaFunction {

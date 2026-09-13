@@ -12,6 +12,7 @@ import {
   type CompareClaimCard,
 } from "~/components/compare-citations";
 import {
+  buyerSurfaceHreflangLinks,
   canonicalLinks,
   compareSocialCardUrl,
   faqPageJsonLd,
@@ -31,7 +32,10 @@ const pageTitle = "Five to Nine vs Panoramata";
 const pageDescription =
   "Panoramata monitors competitor ads and pages on listed paid plans. Five to Nine starts from a domain paste and keeps source-backed proof of what changed.";
 
-export const links: LinksFunction = () => canonicalLinks("/compare/panoramata");
+export const links: LinksFunction = () => [
+  ...canonicalLinks("/compare/panoramata"),
+  ...buyerSurfaceHreflangLinks("compare/panoramata"),
+];
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({

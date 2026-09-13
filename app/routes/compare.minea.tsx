@@ -12,6 +12,7 @@ import {
   type CompareClaimCard,
 } from "~/components/compare-citations";
 import {
+  buyerSurfaceHreflangLinks,
   canonicalLinks,
   compareSocialCardUrl,
   faqPageJsonLd,
@@ -35,7 +36,10 @@ const pageTitle = "Five to Nine vs Minea";
 const pageDescription =
   "Minea is an ad-spy tool for e-commerce and dropshipping product research. Five to Nine is scheduled, source-backed Meta Ad Library and landing-page change proof.";
 
-export const links: LinksFunction = () => canonicalLinks("/compare/minea");
+export const links: LinksFunction = () => [
+  ...canonicalLinks("/compare/minea"),
+  ...buyerSurfaceHreflangLinks("compare/minea"),
+];
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({

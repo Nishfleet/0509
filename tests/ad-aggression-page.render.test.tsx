@@ -14,7 +14,7 @@ import {
   testingCurvePoints,
   velocityCurvePoints,
 } from "~/lib/aggression-score";
-import { canonicalUrl } from "~/lib/seo";
+import { buyerSurfaceHreflangLinks, canonicalUrl } from "~/lib/seo";
 
 type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
 
@@ -118,6 +118,7 @@ describe("Ad Aggression Score methodology page — render", () => {
     });
     expect(links()).toEqual([
       { rel: "canonical", href: canonicalUrl(AD_AGGRESSION_METHODOLOGY_PATH) },
+      ...buyerSurfaceHreflangLinks("methodology"),
     ]);
   });
 

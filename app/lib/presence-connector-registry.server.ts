@@ -34,6 +34,26 @@ export function getPresenceConnector(connectorId: PresenceConnectorId) {
   return CONNECTORS[connectorId];
 }
 
+/**
+ * The connector ids whose stored `presence_item` rows count as mentions of a
+ * tracked entity (issue #3179). Everything except `website`: the website
+ * connector watches the tracked site itself; these connectors capture what
+ * the public web published ABOUT the entity. Bluesky and GDELT landed in
+ * #3251/#3250 and belong here with rss/x/reddit. Threads (#3254's
+ * keyword-search connector) belongs here too — its stored rows are public
+ * mentions of the tracked keywords, and they only exist when its env gate
+ * is on. LinkedIn stays out — its LIMITED_COVERAGE self-brand-only posture
+ * is not a general mention source.
+ */
+export const PRESENCE_MENTION_CONNECTOR_IDS: PresenceConnectorId[] = [
+  "rss",
+  "x",
+  "reddit",
+  "gdelt",
+  "bluesky",
+  "threads",
+];
+
 export function listPresenceConnectors() {
   return Object.values(CONNECTORS);
 }
@@ -115,7 +135,7 @@ export async function pollPresenceTarget(
     return xConnector.poll(ctx, target, options.cursor);
   }
   if (target.connectorId === "reddit") {
-    return redditConnector.poll(ctx);
+    return redditConnector.poll(ctx, target);
   }
   if (target.connectorId === "bluesky") {
     // The mention connector needs the entity's match phrase; it reaches the
