@@ -186,8 +186,16 @@ test.describe("public production-safe E2E smoke", { lock: "external-api" }, () =
     await expect(page.getByText("Know when competitors change the offer.")).toBeVisible();
     await expect(page.getByText("WhatsApp", { exact: false })).toHaveCount(0);
 
+    // Issue #2965: anonymous bare /search 302s to the /brands hub, so the
+    // signed-out smoke pins the bounce itself, then proves the hub the
+    // searcher actually lands on. Signed-in visitors keep the search UI's
+    // "Find competitor ads" heading — this smoke never signs in.
+    const bareSearch = await request.get(new URL("/search", baseURL).toString(), { maxRedirects: 0 });
+    expect(bareSearch.status()).toBe(302);
+    expect(bareSearch.headers().location).toBe("/brands");
+
     await gotoPublicPage(page, "/search");
-    await expect(page.getByRole("heading", { name: "Find competitor ads" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Browse (all [\d,]+ )?tracked brands/ })).toBeVisible();
 
     if (!isProductionBaseURL(baseURL)) {
       await gotoPublicPage(page, "/auth/login");
@@ -255,8 +263,10 @@ test.describe("public production-safe E2E smoke", { lock: "external-api" }, () =
       { width: 375, height: 812 },
     ]) {
       await page.setViewportSize(viewport);
+      // Issue #2965: the anonymous /search funnel lands on /brands, so the
+      // width sweep proves the hub a real signed-out visitor gets.
       await gotoPublicPage(page, "/search");
-      await expect(page.getByRole("heading", { name: "Find competitor ads" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: /Browse (all [\d,]+ )?tracked brands/ })).toBeVisible();
       await expectNoHorizontalOverflow(page);
     }
   });
@@ -348,7 +358,11 @@ test.describe("public production-safe E2E smoke", { lock: "external-api" }, () =
   });
 
   test("public buttons and links route to valid actions without sending side effects", async ({ page, baseURL, request }) => {
-    test.setTimeout(60_000);
+    // Issue #2965: bare /search now 302s to the /brands hub, whose ~130
+    // indexable brand links each get a sequential reachability probe below.
+    // Same reasoning as the diagnostic-engine 60s raise: the workload grew
+    // systematically, so the 60s budget fails on the median, not on a flake.
+    test.setTimeout(120_000);
     const publicPaths = [
       "/",
       "/search",
