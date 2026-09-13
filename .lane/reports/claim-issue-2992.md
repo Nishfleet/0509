@@ -68,3 +68,31 @@ those sources have captured, so it honestly reports 0% until they land. The cove
 notes' plan gating is pinned by tests/ad-source-coverage.test.ts against the
 authoritative plan-entitlements catalog, so the copy cannot drift when those lanes
 ship.
+
+## Continuation — 2026-09-13, finish session (pi-issue-0509-2992, second run)
+
+The unit's first run armed PR #3401 at 19:19:52Z before finishing; required
+Gitleaks failed, so the arm went BLOCKED and stayed there. This session
+finished the unit:
+
+- **Gitleaks incident (live, not vibes):** required check `Gitleaks` = FAIL,
+  exit 2, one finding — rule `linkedin-client-id` at
+  `.lane/reports/claim-issue-2992.md:31`, fingerprint
+  `b06fbcaabd29a2efb924020b95854b3d8421ecb4:.lane/reports/claim-issue-2992.md:linkedin-client-id:31`
+  (CI run 34777353800, job 103777791782; reproduced locally with gitleaks
+  8.30.1 over the PR range 522c79d4..HEAD, exit 2, same single finding).
+  Root cause: the 14-char function name `buildSearchUrl`, backticked in this
+  report's parity section, matches gitleaks' 14-alphanumeric
+  linkedin-client-id heuristic — entropy 3.52, a prose backtick, not a
+  credential. Same false-positive class as the two precedents already in
+  `.gitleaksignore`.
+- **Fix:** the documented house convention — fingerprint + why-comment
+  appended to `.gitleaksignore`, pinning the finding commit exactly. No
+  product code, no workflow, no mechanism touched.
+- **Proof:** re-run of the identical CI invocation over the extended range
+  → `no leaks found`, exit 0.
+- **Arm discipline:** PR #3401 disarmed (`gh pr merge --disable-auto`) the
+  same turn the incident was found, so the required reviewer round lands
+  BEFORE the arm re-fires the moment checks go green (fleet-ops#4557: a
+  merge 90s after its block comment has no teeth). Auto-merge re-armed only
+  after the round, its adjudication, and any Act-on fixes are in.

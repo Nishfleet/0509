@@ -25,3 +25,13 @@ b157f14f3a2989221dc52cc87a3ff1ace8f4327f:ops/netcup-browser/tests/server.test.mj
 # this one commit failed the required Gitleaks check on every open PR
 # (0509#1792). Exact commit:file:rule:line, same shape as b157f14f.
 1f285a08bba6194b26325946a14a6beef4d81a02:tests/release-hydration-bridge.test.ts:stripe-access-token:89
+
+# The 14-char function name `buildSearchUrl` quoted in the #2992 lane-evidence
+# report matches gitleaks' linkedin-client-id shape (14 alphanumeric chars,
+# entropy 3.52). It is a prose backtick, not a credential - it is the gitleaks
+# rule's own length heuristic, the same class of false positive as the two
+# precedents above. Reproduced locally with gitleaks 8.30.1 over the PR range
+# (exit 2, this one finding) before the entry; the ignore line is the documented
+# house convention: FINGERPRINT: commit:path:rule:line, pinning the finding
+# commit b06fbcaab exactly.
+b06fbcaabd29a2efb924020b95854b3d8421ecb4:.lane/reports/claim-issue-2992.md:linkedin-client-id:31
