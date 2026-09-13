@@ -109,6 +109,21 @@ describe("scripts/check-migration-numbering.mjs", () => {
     expect(result.status, result.stderr).toBe(0);
   });
 
+  it("fails when two migrations added in the same PR share a prefix above the base top", () => {
+    // The #2506 incident, one release earlier: 0090_a and 0090_b both added.
+    // Each added migration must still sort last, so the later-sorted twin fails.
+    const repo = setupRepo({
+      "migrations/0088_recreate_delivery_hot_path_indexes.sql": "SELECT 1;",
+    });
+    writeFileSync(join(repo, "migrations/0090_event_type_free_text.sql"), "SELECT 1;");
+    writeFileSync(join(repo, "migrations/0090_widen_source_target_connector.sql"), "SELECT 1;");
+    const result = runCheck(repo, "HEAD");
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("duplicate of");
+    expect(result.stderr).toContain("migrations/0090_widen_source_target_connector.sql");
+    expect(result.stderr).toContain("migrations/0090_event_type_free_text.sql");
+  });
+
   it("fails closed when the base ref cannot be resolved", () => {
     const repo = setupRepo({ "migrations/0088_top.sql": "SELECT 1;" });
     const result = spawnSync("node", [scriptPath], {

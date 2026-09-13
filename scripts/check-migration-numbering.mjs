@@ -15,7 +15,9 @@
  * base branch. Global uniqueness is NOT enforced — the repo already carries 8
  * historical duplicate numbers (0010, 0014, 0017, 0018, 0028, 0067, 0087,
  * 0088), and renumbering or renaming existing migrations is out of scope and
- * dangerous for anything already applied to D1.
+ * dangerous for anything already applied to D1. A duplicate WITHIN one PR is
+ * still caught: two added migrations sharing a prefix mean one of them cannot
+ * sort last — the #2506 incident, one release earlier.
  *
  * Fails closed: an unresolvable base ref is a failure, not a pass — an
  * unchecked migration numbering assertion must never read as safe.
@@ -94,12 +96,19 @@ function main() {
     process.exit(1);
   }
 
+  added.sort(); // deterministic order: the same-PR duplicate names the later-sorted file
+
   const offenders = [];
+  const seenInPr = new Map(); // 4-digit number -> first added file carrying it
   for (const file of added) {
     const number = migrationNumber(file);
     if (number === null) continue; // non-<NNNN>_*.sql files are not numbered migrations
     if (number <= baseTop) {
-      offenders.push({ file, number });
+      offenders.push({ file, number, duplicateOf: null });
+    } else if (seenInPr.has(number)) {
+      offenders.push({ file, number, duplicateOf: seenInPr.get(number) });
+    } else {
+      seenInPr.set(number, file);
     }
   }
 
@@ -107,9 +116,10 @@ function main() {
     console.error(
       "FAIL: newly added migration(s) do not sort last — duplicate or stale migration number blocks the PR.",
     );
-    for (const { file, number } of offenders) {
+    for (const { file, number, duplicateOf } of offenders) {
       console.error(
-        `  offending file: ${file}\n  its number: ${number}\n  required minimum: ${minimum} (highest on ${BASE_REF} is ${baseTop})`,
+        `  offending file: ${file}\n  its number: ${number}\n  required minimum: ${minimum} (highest on ${BASE_REF} is ${baseTop})` +
+          (duplicateOf ? `\n  duplicate of: ${duplicateOf} (added in this PR)` : ""),
       );
     }
     process.exit(1);
