@@ -131,6 +131,9 @@ function GoogleAdsBrandSection({ snapshot }: { snapshot: SourceSnapshotRecord })
       checkedAt={payload.fetchedAt ?? snapshot.fetchedAt}
       checkedLabel="Last checked"
     >
+      <p className="f9-wk-dim" data-testid="brand-google-ads-coverage">
+        {`Source: Google's public Ads Transparency Center — no credentials, no official-API key. Covers creatives currently published for this domain (image and text formats; video is not separately distinguishable in this capture). Region: whatever the public Transparency Center serves without sign-in — no country filter is pinned, so there is no per-country breakdown. Spend, reach and audience metrics are out of scope of this source. Freshness: the capture re-runs on this brand's regular monitoring cadence; the "Last checked" date below is the last successful capture.`}
+      </p>
       <p className="f9-wk-dim">
         {`${creatives.length} creative${creatives.length === 1 ? "" : "s"}${truncated ? " (showing first 200; more exist)" : ""} across ${advertiserCount} advertiser${advertiserCount === 1 ? "" : "s"} for ${payload.domain ?? "this brand"}.`}
       </p>
