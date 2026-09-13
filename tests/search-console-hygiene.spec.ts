@@ -136,7 +136,7 @@ async function assertRawHtmlCspHygiene(
   ).toBe(false);
 
   const html = await response.text();
-  const scriptTags = [...html.matchAll(/<script\b([^>]*)>/gu)].map((match) => match[1]);
+  const scriptTags = [...html.matchAll(/<script\b([^>]*)>/giu)].map((match) => match[1]);
   const inlineScriptTags = scriptTags.filter((attrs) => !/\bsrc\s*=/iu.test(attrs));
   expect(
     inlineScriptTags.length,
@@ -150,7 +150,7 @@ async function assertRawHtmlCspHygiene(
     `${label}: every src-less <script> in the raw HTML must carry the CSP nonce ${nonce}`,
   ).toEqual([]);
 
-  const jsonLdTag = /<script[^>]*type="application\/ld\+json"[^>]*>/u.exec(html)?.[0];
+  const jsonLdTag = /<script[^>]*type="application\/ld\+json"[^>]*>/iu.exec(html)?.[0];
   expect(jsonLdTag, `${label}: JSON-LD block (application/ld+json) must be present`).toBeTruthy();
   expect(
     jsonLdTag?.includes(nonceMarker),
