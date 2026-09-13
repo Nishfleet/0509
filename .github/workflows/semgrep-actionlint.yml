@@ -4,8 +4,9 @@ name: semgrep-actionlint
 # Kept as a separate file to avoid touching ci.yml / secret-scan.yml, whose
 # required-context jobs (codex-node-checks, Gitleaks) carry strict fork-guard
 # authorizers that must not be disturbed (smallest-diff rule for the flagship).
-# These two jobs are NOT required contexts yet; the orchestrator wires
-# protection once they are green on main.
+# semgrep is a required context now (live main-merge-queue ruleset, verified
+# 2026-09-13); actionlint is not - that asymmetry is exactly why only
+# actionlint may skip, and why semgrep keeps running on every event.
 
 on:
   pull_request:
@@ -136,9 +137,11 @@ jobs:
     # adding a second detector job: no extra check run, no extra checkout.
     # Fail-open: a missing output (non-PR event, or the detection step
     # unavailable) runs the linter, it never silently skips the gate.
+    # always() keeps that decision evaluating when semgrep itself fails, so a
+    # red run still shows whether the PR also broke the workflow wiring.
     name: actionlint
     needs: semgrep
-    if: needs.semgrep.outputs.actionlint != 'false'
+    if: always() && needs.semgrep.outputs.actionlint != 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

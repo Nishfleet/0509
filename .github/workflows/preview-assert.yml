@@ -38,8 +38,9 @@ name: Preview assert
 #
 # Required-check contract (branch protection adds `preview-assert` to main):
 # a required context must be structurally incapable of concluding SKIPPED, so
-# this job carries no job-level `if:` / `needs:` and its authorizer is step 1
-# (tests/required-context-no-skip.test.ts enforces the contract).
+# this job carries no `needs:`, its authorizer is step 1, and its job-level
+# `if:` pins the merge-queue contract (see below; issue #3263;
+# tests/required-context-no-skip.test.ts enforces the contract).
 
 on:
   pull_request:

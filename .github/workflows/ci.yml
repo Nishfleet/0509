@@ -57,8 +57,10 @@ jobs:
     # still runs on workflow_dispatch, so an authorized main-candidate
     # verification (expected_sha) keeps reporting a real verdict. This
     # contract is identical for the sibling shard jobs below;
-    # tests/required-context-no-skip.test.ts enforces it structurally across
-    # all of them.
+    # tests/required-context-no-skip.test.ts pins this job and preview-assert
+    # structurally; the shards below repeat the same pinned if: string (they
+    # are neither separately test-enforced nor ruleset-required) - keep them
+    # in sync.
     if: github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:

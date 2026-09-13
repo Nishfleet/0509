@@ -12,9 +12,10 @@ import { parse } from "yaml";
 // PR-head pushes which the ruleset never consults for queue batches. Still
 // NO `needs:`, an in-step authorizer as step 1, and a pinned checkout of the
 // authorized SHA. It runs the deploy gate's assertion commands unchanged
-// (`npm run typecheck` + `npm run build`) and uploads a preview Worker
-// version via Cloudflare's own mechanism (`wrangler versions upload
-// --preview-alias`) without touching production.
+// (`npm run typecheck` + `npm run build`) and proves the bundle with
+// `wrangler deploy --dry-run` - no version is uploaded (the versions-upload
+// mechanism evicted real deploys from version history; see the workflow's
+// 2026-09-04 note).
 const source = readFileSync(".github/workflows/preview-assert.yml", "utf8");
 const parsed = parse(source) as {
   on?: Record<string, unknown>;

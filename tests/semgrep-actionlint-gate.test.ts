@@ -50,7 +50,9 @@ describe("semgrep-actionlint actionlint gate (issue #3263)", () => {
 
   it("gates actionlint on the detector, skipping only on the literal 'false'", () => {
     expect(actionlint.needs).toBe("semgrep");
-    expect(actionlint.if).toBe("needs.semgrep.outputs.actionlint != 'false'");
+    expect(actionlint.if).toBe(
+      "always() && needs.semgrep.outputs.actionlint != 'false'",
+    );
   });
 
   it("the detector runs only on pull_request, writes both verdicts, and matches plain .github paths", () => {
@@ -71,10 +73,14 @@ describe("semgrep-actionlint actionlint gate (issue #3263)", () => {
     });
   });
 
-  it("semgrep itself stays ungated: no workflow-level paths: filter on pull_request", () => {
+  it("semgrep itself stays ungated: no workflow-level paths: on pull_request or merge_group", () => {
     // semgrep is a required-adjacent gate that must run on EVERY PR; the
     // moment someone adds a workflow-level paths: filter here, silent skips
     // become a merge-queue hazard. Expect the bare pull_request trigger.
     expect(parsed.on?.pull_request).toBeNull();
+    // Same for merge_group: the required semgrep verdict on the queue's
+    // gh-readonly-queue ref must never be narrowed there either. A bare key
+    // parses as null.
+    expect(parsed.on?.merge_group).toBeNull();
   });
 });

@@ -3,9 +3,12 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 
-// Required contexts under the main-merge-queue ruleset's required_status_checks:
-// "Gitleaks" (secret-scan.yml), "codex-node-checks" (ci.yml) and
-// "preview-assert" (preview-assert.yml). Requiredness is judged on the
+// Required contexts under the main-merge-queue ruleset's required_status_checks
+// (live ruleset, verified 2026-09-13): "Gitleaks" (secret-scan.yml),
+// "codex-node-checks" (ci.yml), "required-verifier-integrity", "semgrep",
+// "preview-assert" and "release-proof". dependabot-critical-check is NOT
+// ruleset-required despite being enforced below (this test intentionally
+// covers more than the ruleset asks). Requiredness is judged on the
 // ruleset's gh-readonly-queue merge ref, which yields TWO pinned shapes
 // (issue #3263, extending the release-proof precedent pinned below):
 //
@@ -132,6 +135,14 @@ describe("required contexts can never conclude skipped", () => {
         parsed.on?.merge_group,
         `${workflowPath} must keep its merge_group trigger`,
       ).toBeDefined();
+      // And UNFILTERED: the queue's only event is merge_group, so a paths:
+      // filter there would leave the required context unreported on queue
+      // refs - the fail-closed after 360 minutes described above, with this
+      // test still green. A bare key parses as null.
+      expect(
+        parsed.on?.merge_group,
+        `${workflowPath} merge_group must stay bare/unfiltered`,
+      ).toBeNull();
       expect(
         parsed.on?.workflow_dispatch,
         `${workflowPath} must keep its workflow_dispatch trigger`,
