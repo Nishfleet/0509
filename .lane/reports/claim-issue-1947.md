@@ -1,7 +1,7 @@
 # Lane evidence — claim/issue-1947 (issue #1947, unit pi-issue-0509-1947)
 
 Issue: gate-integrity false-positives on lockfile-only Dependabot PRs — 3 security bumps blocked, 0 mergeable PRs in repo.
-Worktree: /home/nish/workspaces/agent-worktrees/issue-0509-1947 (branch claim/issue-1947, base = origin/main f026d4248).
+Worktree: /home/nish/workspaces/agent-worktrees/issue-0509-1947 (branch claim/issue-1947, base = origin/main 271a90d87).
 
 ## What the evidence showed (2026-09-13)
 

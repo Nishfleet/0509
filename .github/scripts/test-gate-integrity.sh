@@ -109,7 +109,7 @@ run_fixture test_refactor_net_positive PASS
 # A Dependabot bump rewrites only the lockfile. Its content is machine-
 # generated version/integrity text, never gate-weakening signal, so a
 # lockfile-only PR must PASS regardless of what the lockfile bytes look like.
-# These fixtures pin the explicit LOCKFILE_PATH exclusion.
+# These fixtures pin the LOCKFILE_PATH exclusion; fails-before: pnpm only.
 
 # #1579's exact 3-line diff: a pure version bump of @simplewebauthn/server.
 fixture lockfile_only_bump '{"files": [
