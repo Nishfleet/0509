@@ -1508,19 +1508,11 @@ describe("SITEMAP_PATHS", () => {
     // The issue asked to surface all built /compare/* pages (the 4 that were
     // missing) and all indexable /ads/:domain pages. Duplicate /compare pairs
     // (visualping, foreplay) are canonicalized to their more specific winners
-    // (issue #1481/#1548); the winners below are the distinct indexable URLs
-    // that must never regress out of the static sitemap.
-    const compareWinners = [
-      "/compare",
-      "/compare/meta-ad-library",
-      "/compare/visualping-ad-libraries",
-      "/compare/spyland",
-      "/compare/pulzifi",
-      "/compare/foreplay-spyder",
-      "/compare/panoramata",
-      "/compare/adspyder",
-      "/compare/adspy",
-    ] as const;
+    // (issue #1481/#1548); the winners are now enumerated from the route
+    // files minus the pinned losers (issue #3385) — the old hardcoded 9-path
+    // list stopped diverging silently as of #2866/#3092/#3302.
+    // NO `as const`: a const-assertion on a computed .map() is a TS error.
+    const compareWinners: readonly string[] = ["/compare", ...compareRouteSlugsFromRouteFiles(EN_COMPARE_ROUTE_FILE).filter((slug) => !COMPARE_SITEMAP_LOSERS.includes("/compare/" + slug)).map((slug) => "/compare/" + slug)];
 
     const rootPaths = ROOT_SITEMAP_STATIC_ENTRIES.map((e) => e.path);
     for (const path of compareWinners) {
@@ -1532,6 +1524,8 @@ describe("SITEMAP_PATHS", () => {
     // The canonicalized losers never appear as distinct sitemap URLs.
     expect(rootPaths).not.toContain("/compare/visualping");
     expect(rootPaths).not.toContain("/compare/foreplay");
+    // #1548: the third consolidation loser, previously unasserted.
+    expect(rootPaths).not.toContain("/compare/visualping-ad-library");
   });
 
   it("lists every live /switch/:slug page in the production sitemap XML (issue #2081)", () => {
@@ -1595,6 +1589,48 @@ describe("SITEMAP_PATHS", () => {
         expect(xml).toContain("<loc>https://0509.io" + path + "</loc>");
       }
     }
+  });
+
+  it("maps every registered /compare/* ROOT_SITEMAP_STATIC_ENTRIES path to a real route file (sitemap → route, issue #3385)", () => {
+    const filenames = new Set(readdirSync("app/routes"));
+    const compareEntries = ROOT_SITEMAP_STATIC_ENTRIES.filter(
+      (e) => e.path === "/compare" || e.path.startsWith("/compare/"),
+    );
+
+    // Non-vacuous guards: an emptied registration list must not let the loop
+    // pass silently (the >=10-loc #1878-termination it() independently floors
+    // the total), and the route walk itself must be proven non-broken before
+    // any sitemap→route verdict can be trusted.
+    expect(compareEntries.length).toBeGreaterThan(0);
+    expect(filenames.has("compare.sneakerping.tsx"), "route walk found no compare.<slug>.tsx files — the walk, not the sitemap, is broken").toBe(true);
+
+    for (const { path } of compareEntries) {
+      if (path === "/compare") {
+        expect(filenames.has("compare.tsx"), "/compare is in the root sitemap but has no route file — the #2866 miss-class").toBe(true);
+        expect(filenames.has("$locale.compare.tsx"), "/compare is in the root sitemap but has no route file — the #2866 miss-class").toBe(true);
+      } else {
+        const rest = path.slice("/compare/".length).replace(/\//g, ".");
+        expect(filenames.has(`compare.${rest}.tsx`), `${path} is in the root sitemap but has no route file — the #2866 miss-class`).toBe(true);
+        expect(filenames.has(`$locale.compare.${rest}.tsx`), `${path} is in the root sitemap but has no route file — the #2866 miss-class`).toBe(true);
+      }
+    }
+  });
+
+  it("/compare/sneakerping clears both parity directions (issue #3302 miss-class, #3385)", () => {
+    // #3302 added compare.sneakerping.tsx + the seo.ts registration and
+    // touched NO test — this pins the repo-truth; the production 404 today is
+    // the #3166 deploy gap, NOT this defect — do not touch the deploy chain.
+    // Each it derives its own slug sets — no shared module state.
+    const enSlugs = compareRouteSlugsFromRouteFiles(EN_COMPARE_ROUTE_FILE);
+    const localeSlugs = compareRouteSlugsFromRouteFiles(LOCALE_COMPARE_ROUTE_FILE);
+    expect(enSlugs).toContain("sneakerping");
+    expect(localeSlugs).toContain("sneakerping");
+
+    const rootPaths = ROOT_SITEMAP_STATIC_ENTRIES.map((e) => e.path);
+    expect(rootPaths).toContain("/compare/sneakerping");
+
+    const xml = buildSitemapXml([]);
+    expect(xml).toContain("<loc>https://0509.io/compare/sneakerping</loc>");
   });
 
   it("renders at least 10 indexable /ads/:domain + /compare/* locs in the built sitemap (issue #1878 termination)", () => {
