@@ -1600,7 +1600,10 @@ describe("D1 remote restore evidence automation", () => {
           name !== "0097_status_probe_samples.sql" &&
           name !== "0098_email_delivery_canary.sql" &&
           name !== "0098_widen_source_target_connector_bluesky.sql" &&
-          name !== "0098_widen_source_target_connector_gdelt.sql",
+          name !== "0098_widen_source_target_connector_gdelt.sql" &&
+          // 0099 (epic #3171) is production-pending too — this modeled
+          // ledger still stands for "a backup behind the whole tail".
+          name !== "0099_widen_source_target_connector_gdelt_bluesky.sql",
       ),
     ];
     expect(productionNames.at(-1)).toBe("0096_error_reports.sql");
@@ -1632,6 +1635,7 @@ describe("D1 remote restore evidence automation", () => {
           "0098_email_delivery_canary.sql",
           "0098_widen_source_target_connector_bluesky.sql",
           "0098_widen_source_target_connector_gdelt.sql",
+          "0099_widen_source_target_connector_gdelt_bluesky.sql",
         ]),
         repository,
       ),
@@ -1655,6 +1659,7 @@ describe("D1 remote restore evidence automation", () => {
         "0098_email_delivery_canary.sql",
         "0098_widen_source_target_connector_bluesky.sql",
         "0098_widen_source_target_connector_gdelt.sql",
+        "0099_widen_source_target_connector_gdelt_bluesky.sql",
       ],
     });
   });
@@ -1704,7 +1709,11 @@ describe("D1 remote restore evidence automation", () => {
       ),
     ).toEqual({
       action: "apply_forward_suffix",
-      migrations: ["0098_widen_source_target_connector_bluesky.sql"],
+      migrations: [
+        "0098_widen_source_target_connector_bluesky.sql",
+        // After the 0098 pair reconciles, 0099 is still production-pending.
+        "0099_widen_source_target_connector_gdelt_bluesky.sql",
+      ],
     });
     expect(
       planSourceBackupLedgerReconciliation(
@@ -1714,7 +1723,10 @@ describe("D1 remote restore evidence automation", () => {
         ]),
         repository,
       ),
-    ).toEqual({ action: "ok" });
+    ).toEqual({
+      action: "apply_forward_suffix",
+      migrations: ["0099_widen_source_target_connector_gdelt_bluesky.sql"],
+    });
   });
 
   it("still rejects a production ledger carrying one unknown extra name", () => {

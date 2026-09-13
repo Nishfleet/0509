@@ -505,6 +505,10 @@ describe("mention resweep + digest", () => {
     // NO mentionConnectorIds — this exercises DEFAULT_MENTION_CONNECTORS, the
     // epic #3171 coverage list. Before this change gdelt/bluesky captures
     // never reached a digest line even though the connectors stored them.
+    // The helper's fixture-epoch default sits EXACTLY at `since`, and
+    // listPresenceItems filters observed_at > since (strict), so these
+    // captures must sit one step inside the window to be candidates at all.
+    const withinWindow = new Date(Date.parse(ISO_T0) + 1_000).toISOString();
     const gdeltSource = await seedSourceTarget(entityId, userId, "gdelt");
     const blueskySource = await seedSourceTarget(entityId, userId, "bluesky");
     const rssSource = await seedSourceTarget(entityId, userId, "rss");
@@ -515,6 +519,7 @@ describe("mention resweep + digest", () => {
       connector: "gdelt",
       url: "https://news.1.1.1.1/gdelt-mention",
       title: "Gdelt coverage",
+      observedAt: withinWindow,
     });
     await seedMentionItem({
       sourceTargetId: blueskySource,
@@ -523,6 +528,7 @@ describe("mention resweep + digest", () => {
       connector: "bluesky",
       url: "https://1.1.1.1/bluesky-mention",
       title: "Bluesky post",
+      observedAt: withinWindow,
     });
     await seedMentionItem({
       sourceTargetId: rssSource,
@@ -531,6 +537,7 @@ describe("mention resweep + digest", () => {
       connector: "rss",
       url: "https://1.1.1.1/rss-mention",
       title: "Rss post",
+      observedAt: withinWindow,
     });
 
     const { buildMentionDigestLines } = await import("~/lib/mention-digest.server");
@@ -554,15 +561,20 @@ describe("mention resweep + digest", () => {
 
   it("scheduled presence-digest sweep delivers a digest against real D1 (epic #3171/#3179)", async () => {
     mocks.sendPresenceDigestEmail.mockResolvedValue({ accepted: true, delivered: true });
-    const { userId, entityId, sourceId } = await seedUserAndEntity("agency");
+    const { userId, entityId } = await seedUserAndEntity("agency");
+    // The prove-it capture is a MENTION (gdelt), not a website item: #3179's
+    // digest promise — mentions arrive WITH source and link — must be proven
+    // through the real scheduled delivery, and website items ride the older
+    // website-line path that never carried a link by design.
+    const gdeltSource = await seedSourceTarget(entityId, userId, "gdelt");
     // A mention captured within the digest lookback — the sweep resolves the
     // 168h window itself, so the item must be fresher than the fixture epoch.
     const observedAt = new Date(Date.now() - 60_000).toISOString();
     await seedMentionItem({
-      sourceTargetId: sourceId,
+      sourceTargetId: gdeltSource,
       entityId,
       userId,
-      connector: "website",
+      connector: "gdelt",
       url: "https://1.1.1.1/posts/brand-new",
       title: "Sweep mention",
       observedAt,
@@ -574,8 +586,18 @@ describe("mention resweep + digest", () => {
     // Real workerd: listResweepUsers (oldest-work-first SQL), the owner
     // address read (user WHERE id IN (SELECT value FROM json_each(?))) and
     // the full digest assembly all ran against the repo's real migrations.
-    expect(result).toEqual({ swept: 1, delivered: 1, skipped: 0, errors: 0 });
-    const emailArg = mocks.sendPresenceDigestEmail.mock.calls[0]![1] as {
+    // Local storage is isolated per test FILE, not per test, so earlier
+    // cases in this file are inside the same swept population — scope the
+    // assertions to this case's workspace instead of assuming an empty
+    // ledger (the repo's integration-testing rule).
+    expect(result.errors).toBe(0);
+    expect(result.swept).toBeGreaterThanOrEqual(1);
+    expect(result.delivered).toBeGreaterThanOrEqual(1);
+    const emailCall = mocks.sendPresenceDigestEmail.mock.calls.find(
+      (call) => (call[1] as { userId: string }).userId === userId,
+    );
+    expect(emailCall).toBeDefined();
+    const emailArg = emailCall![1] as {
       userId: string;
       email: string;
       lines: string[];
