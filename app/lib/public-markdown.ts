@@ -1232,7 +1232,6 @@ Core layers:
 AI access:
 - AI answer and reference engines may use this file and public pages (search=yes, ai-input=yes, use=reference).
 - AI training/fine-tuning crawlers are denied in robots.txt (ai-train=no): ${AI_TRAINING_CRAWLERS.join(", ")}.
-- This policy is decided and recorded in docs/ai-crawler-policy.md.
 `;
 }
 
