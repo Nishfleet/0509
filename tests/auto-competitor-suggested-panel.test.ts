@@ -105,7 +105,15 @@ function installMocks({
     normalizeSearchFilters: (input: unknown) => input,
     fingerprintSavedQuery: (input: unknown) => JSON.stringify(input),
   }));
-  return { env, seedAutoCompetitors, countWatchlists, getUserPlan, createWatchlistWithinLimit };
+  // Issue #3380: the accept action now queues the activation scan on
+  // creation. The durable queue path needs a real D1 (env.DB.prepare), which
+  // the node project deliberately lacks (see the file header), so the
+  // first-scan module is mocked at the same seam as data.server.
+  const queueFirstWatchlistScan = vi.fn().mockResolvedValue(false);
+  vi.doMock("~/lib/first-watchlist-scan.server", () => ({
+    queueFirstWatchlistScan,
+  }));
+  return { env, seedAutoCompetitors, countWatchlists, getUserPlan, createWatchlistWithinLimit, queueFirstWatchlistScan };
 }
 
 function makeCandidate(overrides: Partial<SuggestedCompetitorRow> = {}): SuggestedCompetitorRow {
@@ -329,7 +337,7 @@ describe("accept-suggested-competitor action", () => {
       current: 1,
       limit: 10,
     });
-    installMocks({
+    const { queueFirstWatchlistScan } = installMocks({
       seedAutoCompetitors: vi.fn().mockResolvedValue([
         {
           advertiser: "Rothy's",
@@ -347,6 +355,8 @@ describe("accept-suggested-competitor action", () => {
 
     const result = await runAcceptAction({ candidateId: candidateIdFor("Rothy's", "rothys.com") });
     expect(createWatchlistWithinLimit).toHaveBeenCalledTimes(1);
+    // Issue #3380: creation also queues the activation scan — exactly once.
+    expect(queueFirstWatchlistScan).toHaveBeenCalledTimes(1);
     expect(createWatchlistWithinLimit).toHaveBeenCalledWith(
       expect.anything(),
       "user-1",
@@ -396,7 +406,7 @@ describe("accept-suggested-competitor action", () => {
       current: 1,
       limit: 10,
     });
-    installMocks({
+    const { queueFirstWatchlistScan } = installMocks({
       seedAutoCompetitors: vi.fn().mockResolvedValue([
         {
           advertiser: "Rothy's",
@@ -417,6 +427,9 @@ describe("accept-suggested-competitor action", () => {
     });
     expect(result.ok).toBe(true);
     expect(createWatchlistWithinLimit).toHaveBeenCalledTimes(1);
+    // Issue #3380: creation also queues the activation scan — exactly once
+    // (the second, deduped accept is "existing" and never queues).
+    expect(queueFirstWatchlistScan).toHaveBeenCalledTimes(1);
     const acceptedTarget = createWatchlistWithinLimit.mock.calls[0]![2] as {
       targetFingerprint: string;
     };
