@@ -2287,13 +2287,17 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(deploy.jobs.deploy.permissions["contents"]).toBe("write");
   });
 
-  it("runs every deploy-job ./scripts/ step against an executable checkout (0509#3330)", () => {
+  it("runs every deploy-workflow ./scripts/ step against an executable checkout (0509#3330)", () => {
     const deploy = parse(
       readFileSync(resolve(".github/workflows/deploy-production.yml"), "utf8"),
     ) as any;
-    const directRuns = (deploy.jobs.deploy.steps as Array<{ run?: string }>)
+    // Every job, not just deploy: a lost bit in the evidence/cas jobs kills the
+    // same production deploys through the same exit 126.
+    const directRuns = Object.values(deploy.jobs as Record<string, any>)
+      .flatMap((job) => (job.steps ?? []) as Array<{ run?: string }>)
       .map((step) => step.run?.trim())
-      .filter((run): run is string => !!run && run.startsWith("./scripts/"));
+      .filter((run): run is string => !!run && run.startsWith("./scripts/"))
+      .map((run) => run.split(/\s+/)[0]!); // first token: future-proof for args/multiline
     expect(directRuns).toContain("./scripts/commit-deploy-ledger.sh");
     expect(directRuns).toContain("./scripts/ci-verify-production-candidate.sh");
     for (const run of new Set(directRuns)) {
