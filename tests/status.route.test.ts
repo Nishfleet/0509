@@ -29,11 +29,18 @@ async function mockRouter(useLoaderData: MockUseLoaderData) {
   });
 }
 
+// The only wall-clock read in this file is #3197's todayDayKey() default —
+// the loader derives its own. Freezing the clock at test start makes that
+// read deterministic (test and loader compute the same UTC day key) and
+// lets the echo fixtures below stay absolute without ageing out — the
+// pinned-clock escape #3215's no-time-bomb guard grants this file.
 beforeEach(() => {
   vi.resetModules();
+  vi.useFakeTimers({ now: new Date(Date.now()) });
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.resetModules();
 });
@@ -177,6 +184,30 @@ describe("status route", () => {
     expect(markup).toContain("Medium /feed/");
     expect(markup).toContain("one bounded fetch per feed per poll");
     expect(markup).toContain("gated");
+  });
+
+  it("renders the Pinterest tracked-source row — the profile-feed surface the #3201 mentions ride", async () => {
+    await mockRouter(() => ({
+      generatedAt: "2026-09-13T16:00:00.000Z",
+      asOf: "2026-09-13T16:00:00.000Z",
+      appServed: true,
+      commercialLaunch: null,
+      monitoring: null,
+      surfaces: { asOf: "2026-09-13T16:00:00.000Z", monitoring: null, surfaces: [] },
+      mentionSources: presenceSourceCoverageForDocs(),
+    }));
+
+    const { default: StatusRoute } = await import("~/routes/status");
+    const markup = renderToStaticMarkup(createElement(StatusRoute));
+
+    expect(markup).toContain("Tracked sources");
+    // The Pinterest per-source row (issue #3201's acceptance) renders its
+    // posture verbatim from the catalog: the public profile feed it covers,
+    // its documented limits, the flag it waits behind — wired in, still gated.
+    expect(markup).toContain("Pinterest");
+    expect(markup).toContain("gated");
+    expect(markup).toContain("feed.rss");
+    expect(markup).toContain("PRESENCE_PINTEREST_ROLLOUT");
   });
 
   it("renders measured surface states without private launch details", async () => {
