@@ -133,11 +133,12 @@ run_fixture lockfile_skip_like_text PASS
 # This is the one fixture that genuinely FAILS without the LOCKFILE_PATH
 # exclusion and PASSES with it — it is the regression pin the change needs
 # (a plain `package-lock.json` never matched a content rule even on main).
-# Must NOT name a softened-CI violation for the lockfile.
+# Must NOT name a softened-CI violation for the lockfile (pinned by the
+# must-not-contain argument in the run_fixture call below).
 fixture lockfile_pnpm_ci_softener '{"files": [
   {"filename": "pnpm-lock.yaml", "status": "modified",
    "patch": "+      || true\n+      version: 1.2.3"}]}'
-run_fixture lockfile_pnpm_ci_softener PASS "no test-integrity or gate-path violation"
+run_fixture lockfile_pnpm_ci_softener PASS "no test-integrity or gate-path violation" "CI step softened in pnpm-lock.yaml"
 
 # The exclusion is scoped to lockfile CONTENT, never to filename-level suite
 # integrity: a test renamed to a lockfile name is still a test renamed out of
