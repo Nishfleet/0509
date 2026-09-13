@@ -4,6 +4,15 @@ export const PHONE_MAX_WIDTH = 600;
 export const MIN_TOUCH_TARGET_PX = 44;
 const RENDERED_BOX_EPSILON_PX = 0.001;
 const MAX_REPORTED_FAILURES = 20;
+// fleet-ops#6344: explicit settle budget for the touch-target measurements. Under
+// release-proof worker load the proof previously measured these boxes exactly
+// once, racing the settled layout (45/73 failures, controls at 21.00px-tall
+// pre-style heights, the same merged head failing 13+ merge-queue proofs). The
+// WCAG floors themselves are unchanged: a control that still sits below
+// `minimum` once the layout settles fails exactly as before, it just gets
+// this much time to settle first.
+const TOUCH_TARGET_SETTLE_TIMEOUT_MS = 10_000;
+const TOUCH_TARGET_SETTLE_INTERVALS_MS = [250, 500, 1_000] as const;
 
 export type BoxSize = {
   width: number;
@@ -202,13 +211,23 @@ export async function expectMinimumTouchTarget(
   minimum = MIN_TOUCH_TARGET_PX,
 ): Promise<void> {
   await expect(control, "touch target should be visible").toBeVisible();
-  const box = await control.boundingBox();
-  expect(box, "touch target should have a measurable bounding box").not.toBeNull();
-  if (!box) return;
-  expect(
-    hasMinimumTouchTarget(box, minimum),
-    `touch target should be at least ${minimum}x${minimum}px; measured ${box.width.toFixed(2)}x${box.height.toFixed(2)}px`,
-  ).toBe(true);
+  // fleet-ops#6344: poll until the control's box settles instead of measuring once
+  // (the once-measured boundingBox() raced the settled layout when the
+  // release-proof workers saturated the runner). The 44x44 floor is
+  // unchanged; the settle budget is TOUCH_TARGET_SETTLE_TIMEOUT_MS.
+  await expect
+    .poll(
+      async () => {
+        const box = await control.boundingBox();
+        return box ? hasMinimumTouchTarget(box, minimum) : false;
+      },
+      {
+        message: `touch target should be at least ${minimum}x${minimum}px after settle`,
+        timeout: TOUCH_TARGET_SETTLE_TIMEOUT_MS,
+        intervals: [...TOUCH_TARGET_SETTLE_INTERVALS_MS],
+      },
+    )
+    .toBe(true);
 }
 
 export async function expectSecHeadingsNonZeroWidth(page: Page): Promise<void> {
@@ -285,70 +304,83 @@ export async function expectPhoneTouchTargets(
   expect(viewport, "phone touch-target checks require a configured viewport").not.toBeNull();
   if (!viewport || viewport.width > PHONE_MAX_WIDTH) return;
 
-  const failures = await page.locator("button, a, input, select, textarea, [role='button'], [tabindex]").evaluateAll(
-    (elements, { minSize, epsilon }) => elements
-      .filter((element) => {
-        const html = element as HTMLElement;
-        const style = getComputedStyle(html);
-        const inputType = html instanceof HTMLInputElement ? html.type : "";
-        const labeledControl = inputType === "checkbox" || inputType === "radio"
-          ? html.closest("label")
-          : null;
-        const rect = (labeledControl ?? html).getBoundingClientRect();
-        const isInlineProseLink =
-          html.tagName === "A" &&
-          style.display === "inline" &&
-          Boolean(html.closest("p, li, dd"));
-        // tabindex="-1" on a non-interactive element (e.g. a heading used as
-        // a programmatic focus target) is not a pointer-operable control, so
-        // the WCAG 2.5.5 touch-target floor does not apply to it. Inherently
-        // interactive tags (button/a/input/select/textarea) and role="button"
-        // are still checked even with tabindex="-1".
-        const isInherentlyInteractive =
-          html instanceof HTMLButtonElement ||
-          html.tagName === "A" ||
-          html instanceof HTMLInputElement ||
-          html instanceof HTMLSelectElement ||
-          html instanceof HTMLTextAreaElement ||
-          html.getAttribute("role") === "button";
-        const isProgrammaticFocusTarget =
-          html.getAttribute("tabindex") === "-1" && !isInherentlyInteractive;
-        const isRendered = html.checkVisibility() && rect.width > 0 && rect.height > 0;
-        return (
-          isRendered &&
-          style.display !== "none" &&
-          style.visibility !== "hidden" &&
-          !isInlineProseLink &&
-          !isProgrammaticFocusTarget &&
-          html.getAttribute("aria-hidden") !== "true" &&
-          html.getAttribute("aria-disabled") !== "true" &&
-          !html.hasAttribute("disabled")
-        );
-      })
-      .map((element) => {
-        const html = element as HTMLElement;
-        const inputType = html instanceof HTMLInputElement ? html.type : "";
-        const labeledControl = inputType === "checkbox" || inputType === "radio"
-          ? html.closest("label")
-          : null;
-        const rect = (labeledControl ?? html).getBoundingClientRect();
-        return {
-          label: html.getAttribute("aria-label") || html.textContent?.trim().slice(0, 40) || html.tagName.toLowerCase(),
-          tag: html.tagName.toLowerCase(),
-          type: html instanceof HTMLInputElement ? html.type : null,
-          name: html.getAttribute("name"),
-          className: html.className,
-          width: rect.width,
-          height: rect.height,
-        };
-      })
-      // Use the same sub-pixel epsilon as hasMinimumTouchTarget so a control
-      // that renders at 43.99998px due to font/box rounding is not flagged.
-      .filter((box) => box.width < minSize - epsilon || box.height < minSize - epsilon),
-    { minSize: minimum, epsilon: RENDERED_BOX_EPSILON_PX },
-  );
-
-  expect(failures.slice(0, MAX_REPORTED_FAILURES), `actionable phone controls should be at least ${minimum}x${minimum}px`).toEqual([]);
+  // fleet-ops#6344: the census below previously ran exactly once, racing the
+  // settled layout under release-proof load (17 of the 45 failures in the
+  // 2026-09-13 burst, e.g. 105.64x21.00px pre-style heights). It now polls to
+  // settle with TOUCH_TARGET_SETTLE_TIMEOUT_MS of budget: the 44x44 WCAG
+  // floor and the sub-pixel epsilon are unchanged — a control that still sits
+  // below `minimum` once the layout settles fails exactly as before.
+  await expect
+    .poll(async () => {
+      const failures = await page.locator("button, a, input, select, textarea, [role='button'], [tabindex]").evaluateAll(
+        (elements, { minSize, epsilon }) => elements
+          .filter((element) => {
+            const html = element as HTMLElement;
+            const style = getComputedStyle(html);
+            const inputType = html instanceof HTMLInputElement ? html.type : "";
+            const labeledControl = inputType === "checkbox" || inputType === "radio"
+              ? html.closest("label")
+              : null;
+            const rect = (labeledControl ?? html).getBoundingClientRect();
+            const isInlineProseLink =
+              html.tagName === "A" &&
+              style.display === "inline" &&
+              Boolean(html.closest("p, li, dd"));
+            // tabindex="-1" on a non-interactive element (e.g. a heading used as
+            // a programmatic focus target) is not a pointer-operable control, so
+            // the WCAG 2.5.5 touch-target floor does not apply to it. Inherently
+            // interactive tags (button/a/input/select/textarea) and role="button"
+            // are still checked even with tabindex="-1".
+            const isInherentlyInteractive =
+              html instanceof HTMLButtonElement ||
+              html.tagName === "A" ||
+              html instanceof HTMLInputElement ||
+              html instanceof HTMLSelectElement ||
+              html instanceof HTMLTextAreaElement ||
+              html.getAttribute("role") === "button";
+            const isProgrammaticFocusTarget =
+              html.getAttribute("tabindex") === "-1" && !isInherentlyInteractive;
+            const isRendered = html.checkVisibility() && rect.width > 0 && rect.height > 0;
+            return (
+              isRendered &&
+              style.display !== "none" &&
+              style.visibility !== "hidden" &&
+              !isInlineProseLink &&
+              !isProgrammaticFocusTarget &&
+              html.getAttribute("aria-hidden") !== "true" &&
+              html.getAttribute("aria-disabled") !== "true" &&
+              !html.hasAttribute("disabled")
+            );
+          })
+          .map((element) => {
+            const html = element as HTMLElement;
+            const inputType = html instanceof HTMLInputElement ? html.type : "";
+            const labeledControl = inputType === "checkbox" || inputType === "radio"
+              ? html.closest("label")
+              : null;
+            const rect = (labeledControl ?? html).getBoundingClientRect();
+            return {
+              label: html.getAttribute("aria-label") || html.textContent?.trim().slice(0, 40) || html.tagName.toLowerCase(),
+              tag: html.tagName.toLowerCase(),
+              type: html instanceof HTMLInputElement ? html.type : null,
+              name: html.getAttribute("name"),
+              className: html.className,
+              width: rect.width,
+              height: rect.height,
+            };
+          })
+          // Use the same sub-pixel epsilon as hasMinimumTouchTarget so a control
+          // that renders at 43.99998px due to font/box rounding is not flagged.
+          .filter((box) => box.width < minSize - epsilon || box.height < minSize - epsilon),
+        { minSize: minimum, epsilon: RENDERED_BOX_EPSILON_PX },
+      );
+      return failures.slice(0, MAX_REPORTED_FAILURES);
+    }, {
+      message: `actionable phone controls should be at least ${minimum}x${minimum}px after settle`,
+      timeout: TOUCH_TARGET_SETTLE_TIMEOUT_MS,
+      intervals: [...TOUCH_TARGET_SETTLE_INTERVALS_MS],
+    })
+    .toEqual([]);
 }
 
 export async function expectReducedMotionSafe(page: Page, root: Locator = page.locator("body")): Promise<void> {
