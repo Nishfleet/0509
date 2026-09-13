@@ -14,16 +14,20 @@ backed by `scripts/duplicate-migration-prefix-check.lib.mjs` and enforced in
 CI via `tests/duplicate-migration-prefix-check.test.ts`) started failing the
 build on any pair that is not a frozen legacy duplicate.
 
-## The three frozen legacy duplicates — never rename them
+## The frozen legacy duplicates — never rename them
 
-`0067`, `0087` and `0090` each have two historical files. They are recorded in
-production D1's append-only migration ledger under these exact file names
-(`0067_delivery_recovery_and_digest_jobs.sql` +
+`0067`, `0087`, `0090`, `0096` and `0098` each have more than one historical
+file. They are recorded in production D1's append-only migration ledger under
+these exact file names (`0067_delivery_recovery_and_digest_jobs.sql` +
 `0067_workspace_member_invariants.sql` verbatim in
 `scripts/d1-migration-sync-check.lib.mjs`
 `PRODUCTION_MIGRATION_LEDGER_BASELINE`; `0087` and `0090` landed after the
-2026-07-30 baseline capture). D1's ledger is keyed by filename, so renaming an
-applied file either:
+2026-07-30 baseline capture; `0096` was a same-day double-merge of two
+independent-table migrations; `0098` is a trio whose two
+`0098_widen_source_target_connector_*.sql` files BOTH rebuild the same
+`source_target` table — lexicographic apply order is bluesky then gdelt, so the
+surviving `connector_id` CHECK is whichever applies LAST). D1's ledger is keyed
+by filename, so renaming an applied file either:
 
 - makes `wrangler d1 migrations list` report a brand-new unapplied migration,
   and a subsequent `apply` re-runs the SQL against tables/columns that already
