@@ -120,7 +120,7 @@ describe("compare sneakerping route (issue #3302)", () => {
     // canonicalisation: canonical→EN, plus the buyer-surface hreflang
     // cluster — exactly the compare.keeptabz wrapper's shape.
     const wrapper = await import("~/routes/$locale.compare.sneakerping");
-    const wrapperLinks = wrapper.links() as Array<Record<string, string>>;
+    const wrapperLinks = wrapper.links() as unknown as Array<Record<string, string>>;
     expect(wrapperLinks[0]).toEqual({ rel: "canonical", href: "https://0509.io/compare/sneakerping" });
     for (const locale of BUYER_SURFACE_LOCALE_IDS) {
       expect(wrapperLinks).toContainEqual({
