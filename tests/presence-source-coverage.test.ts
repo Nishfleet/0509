@@ -157,6 +157,7 @@ describe("presence source coverage policy", () => {
       "threads",
       "hn",
       "pinterest",
+      "podcast",
       "youtube",
       "amazon",
       "context_dev",

@@ -31,6 +31,7 @@ const SOURCE_LABELS: Record<PresenceSourceId, string> = {
   threads: "Threads",
   hn: "Hacker News",
   pinterest: "Pinterest",
+  podcast: "Podcasts",
   youtube: "YouTube",
   amazon: "Amazon marketplace",
   context_dev: "Context.dev (open-web provider)",
@@ -57,6 +58,7 @@ const CONNECTOR_FOR_SOURCE: Partial<Record<PresenceSourceId, PresenceConnectorId
   threads: "threads",
   hn: "hn",
   pinterest: "pinterest",
+  podcast: "podcast",
 };
 
 const SOCIAL_SOURCE_IDS = new Set<PresenceSourceId>(["x", "reddit", "linkedin", "bluesky", "threads", "pinterest"]);
@@ -102,7 +104,7 @@ function statusFromConnectorGate(
     const coverageLabel: PresenceCoverageLabel =
       sourceId === "website"
         ? "PUBLIC_WEB_BEST_EFFORT"
-        : sourceId === "rss"
+        : sourceId === "rss" || sourceId === "podcast"
           ? "VERIFIED_PUBLIC_FEED"
           : sourceId === "gdelt"
             ? "OFFICIAL_PUBLIC_API"
@@ -487,6 +489,12 @@ export function presenceSourceCoverageForDocs(): Array<{
       productionStatus: "gated",
       notes:
         "Pinterest mention connector wired in (profile feed — https://www.pinterest.com/<handle>/feed.rss, public RSS 2.0, no key, no auth). Covers the tracked profile's own most recent pins (~25), for the tracked brand or person, self AND Competitor. Does NOT cover keyword-wide search across all of Pinterest, boards not on the tracked profile, repin/comment activity, or engagement counts — Pinterest exposes those only through its approval-gated, OAuth-per-user API v5, which stays parked (see the plan). The feed is an undocumented public surface, verified live 2026-09-13 — the same posture as Google News RSS: it works and can change without notice. In-connector rate budget: ONE serialized request per poll — the feed itself is the bounded window, no paging, no second fetch. Gated behind PRESENCE_PINTEREST_ROLLOUT — off by default; activation is a separate rollout decision.",
+    },
+    {
+      sourceId: "podcast",
+      label: SOURCE_LABELS.podcast,
+      productionStatus: "gated",
+      notes: "Podcast show-mention connector wired in (the show's own public RSS 2.0 feed; episode transcripts are read where the show publishes them in the application/podcast+json JSON transcript format — other transcript formats (text/vtt, application/x-subrip, text/html, text/plain) are recorded in raw_json, not yet fetched). Gated behind PRESENCE_PODCAST_ROLLOUT — off by default; activation is a separate rollout decision.",
     },
     {
       sourceId: "youtube",
