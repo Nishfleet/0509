@@ -380,9 +380,27 @@ describe("presence source coverage policy", () => {
   it("lists every not-yet-configured seam source in the docs coverage table as coming_soon", () => {
     const docs = presenceSourceCoverageForDocs();
     for (const sourceId of comingSoonSeamIds) {
+      // #3195: the tiktok DOCS row carries the DECISION posture ("active" —
+      // Nish 2026-09-12: the flag is ON) while the evaluated status stays
+      // credential-conditional. Its own pinned case follows; skip it here.
+      if (sourceId === "tiktok") continue;
       const entry = docs.find((d) => d.sourceId === sourceId);
       expect(entry, sourceId).toBeDefined();
       expect(entry?.productionStatus, sourceId).toBe("coming_soon");
     }
+  });
+
+  it("surfaces the tiktok Commercial Content Library row as active with the honest EU scope (#3195)", () => {
+    const docs = presenceSourceCoverageForDocs();
+    const entry = docs.find((d) => d.sourceId === "tiktok");
+    expect(entry).toBeDefined();
+    expect(entry?.productionStatus).toBe("active");
+    // Coverage honesty (issue #3195): region, ad types, freshness, and what
+    // the library does NOT publish — and the kill flag named by its env.
+    expect(entry?.notes).toContain("EU-shown");
+    expect(entry?.notes).toContain("no spend or impressions");
+    expect(entry?.notes).toContain("weekly");
+    expect(entry?.notes).toContain("800-requests/month");
+    expect(entry?.notes).toContain("DECODO_SCRAPER_AUTH");
   });
 });

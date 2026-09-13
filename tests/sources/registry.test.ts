@@ -68,4 +68,23 @@ describe("source registry", () => {
     const enabledIds = enabled.map((a) => a.id);
     expect(enabledIds).toContain("subdomains");
   });
+
+  // Issue #3195 — the TikTok flag, both ends, pinned: the per-source kill
+  // flag IS (requiresEnv → DECODO_SCRAPER_AUTH) + (the plan's `sources`
+  // entitlement). These three pin enabled/kill on both axes; the 7-day
+  // cadence and the shared 800-requests/month Decodo budget stay covered by
+  // tests/sources/tiktok-ads-snapshot.test.ts and -library.test.ts.
+  it("tiktok ships behind its flag: enabled for scout when DECODO_SCRAPER_AUTH is set (#3195)", () => {
+    const tiktokEnv = { ...baseEnv, DECODO_SCRAPER_AUTH: "dGVzdC1hdXRo" } as AppEnv;
+    expect(getEnabledSources(tiktokEnv, "scout").map((a) => a.id)).toContain("tiktok");
+  });
+
+  it("tiktok kill flag: dropped from enabled sources when DECODO_SCRAPER_AUTH is absent (#3195)", () => {
+    expect(getEnabledSources(baseEnv, "scout").map((a) => a.id)).not.toContain("tiktok");
+  });
+
+  it("tiktok stays off the free plan (sources: [meta]) even with the flag credential present (#3195)", () => {
+    const tiktokEnv = { ...baseEnv, DECODO_SCRAPER_AUTH: "dGVzdC1hdXRo" } as AppEnv;
+    expect(getEnabledSources(tiktokEnv, "free").map((a) => a.id)).not.toContain("tiktok");
+  });
 });
