@@ -837,6 +837,9 @@ export default {
               cohort: result.domains.length,
               captured: result.capturedCount,
               failed: result.failedCount,
+              // Issue #3357: the #1549 cut signal — true when the deadline
+              // stopped the run before the ordered cohort's tail.
+              truncated: result.truncated ?? false,
               summary: summarizeSitemapTimelineBackfill(result),
             });
           },

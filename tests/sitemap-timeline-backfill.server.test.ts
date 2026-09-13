@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AppEnv } from "~/lib/env.server";
 import {
+  loadRecentSitemapTimelineCaptureDays,
+  orderSitemapTimelineCohortByCaptureStaleness,
+  parseSitemapTimelineBackfillRowId,
   runSitemapTimelineBackfill,
   sitemapTimelineBackfillRowId,
   SITEMAP_TIMELINE_COHORT_CAP,
@@ -25,13 +28,14 @@ import {
 
 const queryOne = vi.hoisted(() => vi.fn());
 const execute = vi.hoisted(() => vi.fn());
+const queryAll = vi.hoisted(() => vi.fn());
 const replaceAnalysisFields = vi.hoisted(() => vi.fn());
 const loadIndexableTimelineEntries = vi.hoisted(() => vi.fn());
 
 vi.mock("~/lib/data/d1.server", () => ({
   queryOne,
   execute,
-  queryAll: vi.fn(),
+  queryAll,
   queryIn: vi.fn(),
   ensureDb: vi.fn(),
 }));
@@ -71,6 +75,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   queryOne.mockReset();
   execute.mockReset();
+  queryAll.mockReset();
   replaceAnalysisFields.mockReset();
   loadIndexableTimelineEntries.mockReset();
 });

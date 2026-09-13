@@ -143,6 +143,14 @@ export interface SitemapTimelineBackfillResult {
   domains: SitemapTimelineBackfillDomainResult[];
   capturedCount: number;
   failedCount: number;
+  /**
+   * #1549 budget rail (issue #3357): true when the run's wall-clock deadline
+   * stopped STARTING new captures before the ordered cohort's tail — the
+   * remaining domains are provably the next run's head (stalest-first
+   * ordering), never silently swallowed. `false`/absent: the full ordered
+   * cohort ran, or the run degraded before the loop.
+   */
+  truncated?: boolean;
 }
 
 /**
@@ -201,6 +209,14 @@ export interface SitemapTimelineBackfillOptions {
    * cap is never processed.
    */
   domains?: readonly string[];
+  /**
+   * Wall-clock (epoch-ms) deadline override for tests. Defaults to
+   * `Date.now() + SITEMAP_TIMELINE_BACKFILL_DEADLINE_MS` — the #1549
+   * publisher's identical options contract (`options.deadlineAt ??:
+   * Date.now() + ADS_DOMAIN_PUBLISHER_DEADLINE_MS`), so tests pin the
+   * budget and production rides the exported constant.
+   */
+  deadlineAt?: number;
 }
 
 /**
@@ -383,6 +399,7 @@ export async function runSitemapTimelineBackfill(
       domains: [],
       capturedCount: 0,
       failedCount: 0,
+      truncated: false,
     };
   }
 
@@ -394,8 +411,31 @@ export async function runSitemapTimelineBackfill(
       domains: [],
       capturedCount: 0,
       failedCount: 0,
+      truncated: false,
     };
   }
+
+  // Issue #3357, the #1549 resume pattern with the rail's own rows as the
+  // cursor: order the cohort STALEST-FIRST by this rail's recent
+  // `timeline-<domain>-<day>` rows (degrade-to-cohort-order on any ledger
+  // hiccup), so the domains a truncated night cut — never captured, or last
+  // captured outside the lookback — are exactly the head of the next night.
+  // No new state, no migration: the ledger read IS the resume state.
+  const captureDays = await loadRecentSitemapTimelineCaptureDays(
+    env,
+    new Date(now.getTime() - SITEMAP_TIMELINE_CAPTURE_LEDGER_LOOKBACK_MS).toISOString(),
+  );
+  const orderedCohort = orderSitemapTimelineCohortByCaptureStaleness(
+    cohort,
+    captureDays,
+  );
+  // #1549 deadline contract: production rides the exported budget, tests pin
+  // it. The loop stops STARTING new captures past this instant and reports
+  // the run truncated — the ordering above makes the cut tail the next
+  // night's head (the publisher's persisted cursor, in ledger form).
+  const deadlineAt =
+    options.deadlineAt ?? (Date.now() + SITEMAP_TIMELINE_BACKFILL_DEADLINE_MS);
+  let truncated = false;
 
   const tierByDomain = new Map(cohort.map((entry) => [entry.domain, entry.tier]));
   const requested = options.domains
@@ -407,10 +447,17 @@ export async function runSitemapTimelineBackfill(
     : null;
 
   const results: SitemapTimelineBackfillDomainResult[] = [];
-  // The CAP slices the derived cohort first: Browser Run spend is bounded no
-  // matter how large the sitemap candidacy grows, and a `domains` subset
-  // cannot push past the cap either.
-  for (const entry of cohort.slice(0, SITEMAP_TIMELINE_COHORT_CAP)) {
+  // The CAP slices the ORDERED cohort first (issue #3357): Browser Run spend
+  // is bounded no matter how large the sitemap candidacy grows, a `domains`
+  // subset cannot push past the cap either — and the slice keeps the STALEST
+  // domains, ties in sitemap first-seen order.
+  for (const entry of orderedCohort.slice(0, SITEMAP_TIMELINE_COHORT_CAP)) {
+    // #1549: stop STARTING new per-domain captures past the deadline so a
+    // wall-clock kill never silently swallows the cut tail.
+    if (Date.now() >= deadlineAt) {
+      truncated = true;
+      break;
+    }
     if (requested && !requested.has(entry.domain)) {
       continue;
     }
@@ -579,6 +626,7 @@ export async function runSitemapTimelineBackfill(
           domains: [],
           capturedCount: 0,
           failedCount: 0,
+          truncated: false,
         };
       }
       results.push({
@@ -602,6 +650,7 @@ export async function runSitemapTimelineBackfill(
     failedCount: results.filter(
       (r) => r.status === "capture_failed" || r.status === "error",
     ).length,
+    truncated,
   };
 }
 
