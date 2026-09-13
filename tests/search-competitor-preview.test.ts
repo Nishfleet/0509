@@ -386,7 +386,10 @@ describe("SearchCompetitorPreviewSection rendering (issue #2113)", () => {
       makeRow({ candidateId: "cariuma|cariuma.com|", advertiser: "Cariuma", landingPageUrl: "https://cariuma.com" }),
     ];
     const html = renderSection({
-      preview: { domain: "nykaa.com", rows },
+      // Slice 2 (#3175) put caps on SuggestedCompetitorsPanelData; this
+      // mirrors the route's logged-out construction (search.tsx: a public
+      // preview is always a frozen, zero-tracked snapshot).
+      preview: { domain: "nykaa.com", rows, caps: { visible: 5, tracked: 0, frozen: true } },
       country: "all",
     });
 
@@ -414,7 +417,7 @@ describe("SearchCompetitorPreviewSection rendering (issue #2113)", () => {
 
   it("renders nothing (no fabricated suggestion) when discovery returned zero candidates", () => {
     const html = renderSection({
-      preview: { domain: "nykaa.com", rows: [] },
+      preview: { domain: "nykaa.com", rows: [], caps: { visible: 5, tracked: 0, frozen: true } },
       country: "all",
     });
 
@@ -436,7 +439,7 @@ describe("SearchCompetitorPreviewSection rendering (issue #2113)", () => {
       makeRow({ candidateId: "allbirds|allbirds.com|", advertiser: "Allbirds", landingPageUrl: "https://allbirds.com" }),
     ];
     const html = renderSection({
-      preview: { domain: "nykaa.com", rows },
+      preview: { domain: "nykaa.com", rows, caps: { visible: 5, tracked: 0, frozen: true } },
       country: "all",
       handoffToken: "signed-token-abc",
     });
