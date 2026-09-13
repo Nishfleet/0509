@@ -51,3 +51,15 @@ copy; the walk script is browser-true), and did NOT re-derive any decision.
 - Issue-verify step 2: `curl -sS -o /dev/null -D - https://0509.io/auth/signup | grep -i retry-after` → 200, no retry-after header (bucket recovered; grep no-match, not a failure).
 - sgscan (9 touched files): No new security findings, exit 0.
 - Namespace-claim verified: wrangler.jsonc carries ratelimit namespaces 1001–1011; this PR's RL_AUTH_GET = 1012 — the mirrors-1001…100N wording is true.
+
+## Final-run proof (2026-09-13T13:11Z, this unit pi-issue-0509-3317, head f72f5a8c6)
+
+Nothing re-derived; every mechanism re-WITNESSED on the final head before the PR:
+
+- Rebased the 5 commits onto 2026-09-13 main `a4d650cf4` (#3366's merge, 9 commits past the earlier pickup's `edacd4aaf`); the landed 9 touch none of this branch's 10 files — disjoint, rebase clean, accept-3 unchanged.
+- node: tests/rate-limit.server.test.ts → 38/38, exit 0 (VITEST_MAX_WORKERS=2 respected, one suite at a time, no coverage, no typecheck).
+- workers: tests/integration/rate-limit-money-path-signup.integration.test.ts → 4/4, exit 0 (real workerd, production-mirroring RL_AUTH_GET 1012 60/60s binding; each leg its own key IP so the 60s counters cannot couple).
+- Live pre-fix receipt: `bash scripts/verify-money-path-200s.sh` → walk 14/14 × 200, burst 5×200 / 19×429, `retry-after: 60` on the 429s whose header probe caught the window hot (17/19; 2 probes landed after recovery → 200, no header — window recovery, not a flake), exit 1 — the detector firing, as the issue demands (0509.io still runs the pre-fix 2/60s bucket until this deploys).
+- Issue-verify step 2: `curl -sS -o /dev/null -D - https://0509.io/auth/signup | grep -i retry-after` → 200, no retry-after header (bucket recovered; header grep no-match, not a failure).
+- sgscan (9 touched files): No new security findings, exit 0.
+- crgate: NOT RUN — the CLI is signed out on this machine and the unattended unit cannot interactive-login (`coderabbit review --light --committed` → "Non-interactive environment detected. Use --api-key for authentication"; earlier `--plain` attempt: `error: unknown option '--plain'`, this CLI build dropped the flag). Named, not papered over; reviewer round + GitHub-side review are this run's review layers. Failed commands this run, named: `gh pr list --sort -mergedAt` → `unknown flag: --sort` (this gh build; re-run without it), `coderabbit review --plain` → `unknown option '--plain'`, `crgate`/`coderabbit review` → signed-out (above), `ls bin/` → ENOENT (no-match probe, exempt).
