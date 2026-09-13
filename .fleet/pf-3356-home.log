@@ -16,13 +16,25 @@ publish floor: verified + likely >= 1 per domain; gate: >= 70 publishable
   PUBLISH castlery.com       verified 27 + likely 0
   PUBLISH cb2.com            verified 25 + likely 0
   PUBLISH coyuchi.com        verified 28 + likely 0
-  FAILED  crateandbarrel.com HTTP 500
+  PUBLISH crateandbarrel.com verified 28 + likely 0
   PUBLISH dunelm.com         verified 30 + likely 0
   PUBLISH ethanallen.com     verified 18 + likely 0
   PUBLISH fromourplace.com   verified 27 + likely 0
-  FAILED  homedepot.com      HTTP 500
+  PUBLISH homedepot.com      verified 27 + likely 0
   PUBLISH joybird.com        verified 30 + likely 0
   PUBLISH jossandmain.com    verified 29 + likely 0
   PUBLISH kirklands.com      verified 19 + likely 0
   PUBLISH lowes.com          verified 20 + likely 0
   PUBLISH minted.com         verified 3 + likely 4
+  PUBLISH mybobs.com         verified 14 + likely 0
+  PUBLISH parachutehome.com  verified 19 + likely 0
+  FAILED  potterybarn.com    HTTP 500
+  FAILED  ruggable.com       HTTP 500
+  FAILED  rh.com             HTTP 500
+  FAILED  roomandboard.com   HTTP 500
+  FAILED  serenaandlily.com  HTTP 500
+  FAILED  sonos.com          HTTP 500
+  FAILED  westelm.com        HTTP 500
+  PUBLISH williams-sonoma.com verified 23 + likely 0
+  PUBLISH 1stdibs.com        verified 5 + likely 24
+  PUBLISH arhaus.com         verified 5 + likely 0
