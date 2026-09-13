@@ -420,6 +420,10 @@ describe("waitUntil background completion (latency-nonfatal + observable)", () =
 
     expect(waitUntil).toHaveBeenCalledTimes(1);
     expect(waitUntil.mock.calls[0]?.[0]).toBeInstanceOf(Promise);
+    // Issue #3319 contract: with the write registered, the call returns
+    // without the bounded race — the CONTEXT owns delivery. Await the
+    // registered promise so the persistence assertion is deterministic.
+    await (waitUntil.mock.calls[0]?.[0] as Promise<void>);
     const row = harness.sqlite
       .prepare("SELECT job_id FROM browser_job_telemetry WHERE job_id = ?")
       .get("job-0001") as { job_id: string };

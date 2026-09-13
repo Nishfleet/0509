@@ -28,6 +28,7 @@ const SOURCE_LABELS: Record<PresenceSourceId, string> = {
   rss: "RSS / Atom / JSON Feed",
   bluesky: "Bluesky",
   gdelt: "GDELT mainstream news",
+  threads: "Threads",
   youtube: "YouTube",
   amazon: "Amazon marketplace",
   context_dev: "Context.dev (open-web provider)",
@@ -51,9 +52,10 @@ const CONNECTOR_FOR_SOURCE: Partial<Record<PresenceSourceId, PresenceConnectorId
   rss: "rss",
   bluesky: "bluesky",
   gdelt: "gdelt",
+  threads: "threads",
 };
 
-const SOCIAL_SOURCE_IDS = new Set<PresenceSourceId>(["x", "reddit", "linkedin", "bluesky"]);
+const SOCIAL_SOURCE_IDS = new Set<PresenceSourceId>(["x", "reddit", "linkedin", "bluesky", "threads"]);
 
 export interface PresenceSourcePlanGates {
   modeAllowed: boolean;
@@ -99,6 +101,8 @@ function statusFromConnectorGate(
         : sourceId === "rss"
           ? "VERIFIED_PUBLIC_FEED"
           : sourceId === "gdelt"
+            ? "OFFICIAL_PUBLIC_API"
+            : sourceId === "threads"
             ? "OFFICIAL_PUBLIC_API"
             : sourceId === "linkedin" && trackingMode === "competitor"
             ? "LIMITED_COVERAGE"
@@ -451,6 +455,12 @@ export function presenceSourceCoverageForDocs(): Array<{
       label: SOURCE_LABELS.gdelt,
       productionStatus: "gated",
       notes: "GDELT DOC 2.1 mainstream-news connector wired in (free, no key, ~65 languages, rolling 3-month window). Gated behind PRESENCE_GDELT_ROLLOUT — off by default; activation is a separate rollout decision.",
+    },
+    {
+      sourceId: "threads",
+      label: SOURCE_LABELS.threads,
+      productionStatus: "gated",
+      notes: "Threads keyword-search connector wired in (Meta keyword_search; 2,200 queries per user per 24h enforced in-connector via presence_poll_cursor — tumbling-window approximation of Meta's per-query rolling count, overshoot surfaces as Meta's 429). Gated behind PRESENCE_THREADS_ROLLOUT + THREADS_ACCESS_TOKEN and Meta app review — off by default; activation is a separate rollout decision.",
     },
     {
       sourceId: "youtube",
