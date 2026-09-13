@@ -1127,7 +1127,7 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
     });
   }
   return searchPayload;
-  } catch (error) {
+  } catch {
     // Issue #3400 catch-at-the-seam: the leg answers 200 with the honest
     // no-proof degraded state instead of escaping to the route
     // ErrorBoundary. Mirrors the limiter and warming degraded payloads.
