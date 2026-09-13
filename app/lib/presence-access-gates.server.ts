@@ -96,10 +96,12 @@ function hasCredentials(env: AppEnv, connectorId: PresenceConnectorId): boolean 
 // sufficient. `linkedin` joined the customer poll path with #3204 (self-only
 // Posts-API capture — the connector takes the stored connection + target);
 // its competitor side stays limited (the gate returns competitor_limited).
+// `appstore` joined with #3210 (public listings + Apple's most-recent
+// customer-review page — keyless, no stored grant needed, both modes).
 // help-first: Only the predicate changes; the runtime gates in evaluateConnectorAccessGate
 // (rolloutState, credentials, reddit commercial access) still govern whether polling actually runs.
 export function connectorHasCustomerPollPath(connectorId: PresenceConnectorId): boolean {
-  return connectorId === "website" || connectorId === "rss" || connectorId === "gdelt" || connectorId === "threads" || connectorId === "hn" || connectorId === "x" || connectorId === "reddit" || connectorId === "bluesky" || connectorId === "linkedin";
+  return connectorId === "website" || connectorId === "rss" || connectorId === "gdelt" || connectorId === "threads" || connectorId === "hn" || connectorId === "x" || connectorId === "reddit" || connectorId === "bluesky" || connectorId === "linkedin" || connectorId === "appstore";
 }
 
 export async function evaluateConnectorAccessGate(

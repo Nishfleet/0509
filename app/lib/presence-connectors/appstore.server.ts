@@ -70,7 +70,6 @@ import type {
 const APPSTORE_MAX_BYTES = 2_000_000;
 const MAX_LISTING_TITLE_CHARS = 120;
 const MAX_LISTING_EXCERPT_CHARS = 280;
-const MAX_REVIEW_EXCERPT_CHARS;
 const MAX_REVIEW_TITLE_CHARS = 120;
 const MAX_REVIEW_EXCERPT_CHARS = 280;
 /** Country defaulted when the target does not name one (posture verified: 200). */
