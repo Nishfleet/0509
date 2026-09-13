@@ -388,8 +388,11 @@ describe("podcast mention connector — poll", () => {
     expect(episode42?.externalId).toBe(EPISODE_42_URL);
     // fixed-date: the fixture's pubDate parsed to ISO — never a wall-clock read
     expect(episode42?.publishedAt).toBe("2026-09-10T05:42:03.000Z");
-    // No episode-level itunes:author — the channel author (the show) attributes it.
-    expect(episode42?.author).toBe("Acme Robotics Radio");
+    // No episode-level itunes:author — the connector records the show's
+    // channel author as raw.showAuthor provenance; the episode's own author
+    // stays null, so the publication-feed mention-match (title > excerpt >
+    // author) cannot match every episode of the show via the channel name.
+    expect(episode42?.author).toBeNull();
     expect(episode42?.bodyExcerpt).toContain("The week in Manufacturing.");
     // The public transcript head reached the excerpt — the match surface.
     expect(episode42?.bodyExcerpt).toContain("Today: how Acme Robotics builds the Model 9");
@@ -469,7 +472,7 @@ describe("podcast mention connector — poll", () => {
   it("refuses the poll without fetching when the rollout is off (credentials are always true — public show feed)", async () => {
     const fetchImpl = fixtureFetcher(SHOW_ROUTES);
     const result = await podcastConnector.poll(
-      makeCtx(fetchImpl, undefined),
+      makeCtx(fetchImpl, "disabled"),
       { targetUrl: SHOW_FEED_URL, metadata: { feedUrl: SHOW_FEED_URL } },
     );
     expect(result.ok).toBe(false);
@@ -508,7 +511,11 @@ describe("podcast mention connector — poll", () => {
     );
     expect(result.ok).toBe(false);
     expect(result.items).toEqual([]);
-    expect(result.errorCode).toBe("fetch_failed");
+    // A miss answers HTTP 404 — the honest degraded result is the connector's
+    // feed_unavailable ("Feed responded with HTTP 404."), the same mapping the
+    // validateTarget unreachable-feed test pins. fetch_failed is the no-response
+    // (network-layer) code, not an HTTP-error code.
+    expect(result.errorCode).toBe("feed_unavailable");
   });
 });
 
@@ -529,7 +536,7 @@ describe("podcast mention connector — episode-URL canonicalization", () => {
 
 describe("podcast mention connector — healthCheck", () => {
   it("reports pending while PRESENCE_PODCAST_ROLLOUT is unset", async () => {
-    const result = await podcastConnector.healthCheck(makeCtx(fixtureFetcher({}), undefined));
+    const result = await podcastConnector.healthCheck(makeCtx(fixtureFetcher({}), "disabled"));
     expect(result.ok).toBe(false);
     expect(result.status).toBe("pending");
     expect(result.errorCode).toBe("connector_disabled");
