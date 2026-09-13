@@ -17,12 +17,31 @@
  * Evidence age surfaces via `stale=N` (no expiry gate, phase 1); the cohort
  * is bounded by `SITEMAP_TIMELINE_COHORT_CAP` (default 200) to bound nightly
  * Browser Run spend.
+ *
+ * Budget rails (issue #3357): the #1549 publisher hit exactly this rail's
+ * failure mode — an unbounded nightly capture loop on the 04:00 rail whose
+ * deterministic order serves the cohort HEAD every night while the 15-minute
+ * Cloudflare scheduled wall kills the tail. Two #1549-shaped fixes, no new
+ * mechanism:
+ *   - an internal wall-clock deadline (SITEMAP_TIMELINE_BACKFILL_DEADLINE_MS)
+ *     stops STARTING new captures and surfaces `truncated: true`, so the run
+ *     reports its own cut instead of dying silently mid-capture; and
+ *   - the cohort is captured STALEST-FIRST: this rail's OWN
+ *     `timeline-<domain>-<day>` ledger rows are the resume cursor (the #1549
+ *     persisted-cursor pattern, satisfied by the runtime-capture path itself
+ *     — no new state, no D1 migration, issue #3357 acceptance 4). Within a
+ *     few nights every cohort domain holds a proof-complete row, which is
+ *     the #3095 coverage canary's documented observe-to-close (the
+ *     ops/timeline-coverage-guard timer runs it daily, after this rail).
+ * The #2873 capture-validity contract is unchanged: every row still comes
+ * from a real `requireScreenshot` capture, and the read-side complete-proof
+ * gate (snapshotRowHasCompleteProof) still suppresses phantom states.
  */
 
 import { buildLandingPageAnalysisFields } from "~/lib/analysis.server";
 import { extractPriceTier } from "~/lib/landing-page-price-tier.server";
 import { landingPageSnapshotContentKey, replaceAnalysisFields } from "~/lib/data/ads.server";
-import { execute, queryOne } from "~/lib/data/d1.server";
+import { execute, queryAll, queryOne } from "~/lib/data/d1.server";
 import { jsonValue, nowIso } from "~/lib/data/helpers.server";
 import type { AppEnv } from "~/lib/env.server";
 import {
@@ -48,12 +67,47 @@ import {
 
 /**
  * Hard bound on the nightly Browser Run budget: at most this many sitemap
- * domains are captured per run, in sitemap first-seen order. A future
+ * domains are captured per run. Since issue #3357 the cohort is processed
+ * stalest-#1958-capture first (see the module docblock), and the cap slices
+ * the ORDERED cohort — the least-recently-captured domains are exactly the
+ * ones the nightly spend keeps, ties in sitemap first-seen order. A future
  * sitemap coverage explosion (thousands of indexable timeline domains) can
- * never blow the nightly spend past the cap. The cap slices the cohort
+ * never blow the nightly spend past the cap, and a strained budget now
+ * delays the freshest domains, never the starved ones. The cap slices
  * before per-domain processing.
  */
 export const SITEMAP_TIMELINE_COHORT_CAP = 200;
+
+/**
+ * Internal wall-clock deadline for one nightly run (issue #3357, the #1549
+ * pattern). Cloudflare kills scheduled invocations at the 15-minute wall,
+ * and this rail rides the 04:00 cron as one of several concurrent waitUntil
+ * siblings — the #1549 publisher alone budgets 10 of those minutes. Like the
+ * publisher, the loop stops STARTING new per-domain captures at this budget,
+ * finishes the in-flight capture, and reports the run as `truncated: true`
+ * so the cohort's remaining tail is provably tomorrow's work, never a
+ * silently swallowed capture. 8 minutes leaves the shared 15-minute wall
+ * real margin beside the publisher's own 10-minute budget.
+ */
+export const SITEMAP_TIMELINE_BACKFILL_DEADLINE_MS = 8 * 60 * 1000;
+
+/**
+ * How far back the staleness ledger looks (issue #3357). Rows written by
+ * this rail (id LIKE 'timeline-%') more recently than this are honored when
+ * ordering the cohort; anything older — or never captured — reads as
+ * "stalest". 7 nights bounds the read at cohort-cap × 7 rows (≤ 1400) no
+ * matter how long the ledger grows, and 7 nights is far beyond the cadence
+ * at which the deadline budget cycles even a cap-sized cohort.
+ */
+export const SITEMAP_TIMELINE_CAPTURE_LEDGER_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Hard row bound on the ledger read itself (belt over the lookback window,
+ * which already bounds it: cohort-cap × 7 nights). Keeps the nightly rail's
+ * read cost constant even if a future writer reuses the `timeline-` id
+ * prefix at scale.
+ */
+export const SITEMAP_TIMELINE_CAPTURE_LEDGER_READ_LIMIT = 5000;
 
 export type SitemapTimelineBackfillStatus =
   | "captured"
@@ -179,6 +233,103 @@ export function sitemapTimelineBackfillRowId(
   day: string,
 ): string {
   return `timeline-${domain}-${day}`;
+}
+
+/**
+ * Parse the deterministic row id back into its (domain, UTC day). Sibling of
+ * `sitemapTimelineBackfillRowId` — the staleness ordering (issue #3357) reads
+ * rows written by THIS rail and must recover the domain without guessing:
+ * the day is the final `YYYY-MM-DD` segment, everything before it is the
+ * canonical domain (dots and dashes included, e.g.
+ * `timeline-boat-lifestyle.com-2026-09-13`). Returns `null` for anything
+ * another writer wrote (demo-…/sneaker-…/backfill-…), so the ledger read
+ * ignores other rails' rows by construction. Pure.
+ */
+export function parseSitemapTimelineBackfillRowId(
+  id: unknown,
+): { domain: string; day: string } | null {
+  if (typeof id !== "string" || !id) {
+    return null;
+  }
+  const match = /^timeline-(.+)-(\d{4}-\d{2}-\d{2})$/.exec(id);
+  if (!match) {
+    return null;
+  }
+  const domain = match[1];
+  const day = match[2];
+  if (!domain) {
+    return null;
+  }
+  return { domain, day };
+}
+
+/**
+ * Latest `timeline-<domain>-<day>` this rail wrote per domain, read from the
+ * rail's own id space in ONE bounded D1 read (rows whose `captured_at` is
+ * inside the 7-day lookback, `SITEMAP_TIMELINE_CAPTURE_LEDGER_READ_LIMIT`
+ * cap). This IS the resume state: the ledger rows are the cursor (issue
+ * #3357), so no extra state table, no migration. Honesty contract: a failed
+ * or unexpected read degrades to an EMPTY map — the run then captures in
+ * cohort (sitemap first-seen) order exactly as before this change — never
+ * thrown, so a ledger hiccup can never zero the nightly capture. Rows whose
+ * id does not parse are skipped, never guessed.
+ */
+export async function loadRecentSitemapTimelineCaptureDays(
+  env: AppEnv,
+  sinceIso: string,
+): Promise<Map<string, string>> {
+  const days = new Map<string, string>();
+  if (!env?.DB) {
+    return days;
+  }
+  try {
+    const rows = await queryAll<{ id: string }>(
+      env,
+      `SELECT id FROM landing_page_snapshot
+       WHERE id LIKE 'timeline-%' AND captured_at >= ?
+       ORDER BY captured_at ASC
+       LIMIT ${SITEMAP_TIMELINE_CAPTURE_LEDGER_READ_LIMIT}`,
+      sinceIso,
+    );
+    for (const row of Array.isArray(rows) ? rows : []) {
+      const parsed = parseSitemapTimelineBackfillRowId(row?.id);
+      if (!parsed) {
+        continue;
+      }
+      const previous = days.get(parsed.domain);
+      if (!previous || parsed.day > previous) {
+        days.set(parsed.domain, parsed.day);
+      }
+    }
+  } catch {
+    // Degrade, never throw: an unreadable ledger means an unordered cohort,
+    // not a failed night (same degrade-don't-throw contract as the no-DB
+    // and empty-cohort paths).
+  }
+  return days;
+}
+
+/**
+ * Order the cohort so its LEAST-RECENTLY-#1958-captured domains go first
+ * (issue #3357's starvation fix). A domain with no recent rail row — never
+ * captured, or last captured outside the lookback — sorts before any
+ * recently captured one; within a day bucket, orders ascend by that day
+ * (fresher = later), and ties keep the cohort's sitemap first-seen order
+ * (stable sort — the #1549 lesson: deterministic head-of-queue service is
+ * exactly what starved the tail). Pure.
+ */
+export function orderSitemapTimelineCohortByCaptureStaleness(
+  cohort: readonly SitemapTimelineCohortEntry[],
+  captureDays: ReadonlyMap<string, string>,
+): SitemapTimelineCohortEntry[] {
+  return [...cohort].sort((a, b) => {
+    const dayA = captureDays.get(a.domain) ?? "";
+    const dayB = captureDays.get(b.domain) ?? "";
+    if (dayA !== dayB) {
+      return dayA < dayB ? -1 : 1;
+    }
+    return 0;
+  });
 }
 
 /**
