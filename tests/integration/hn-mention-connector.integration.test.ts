@@ -654,9 +654,12 @@ describe("hn mention connector — presence substrate (real migrations)", () => 
       expect(healed?.target_key).toBe(`${connectorId}-phrase`);
     }
 
-    // The hn row itself survives the rebuild alongside them.
+    // The hn row itself survives the rebuild alongside them. Local storage
+    // isolates per test FILE, not per test (see fixtures), so earlier suites'
+    // hn rows persist — scope the survival count to this target's id.
     const hnRows = await db()
-      .prepare(`SELECT count(*) AS c FROM source_target WHERE connector_id = 'hn'`)
+      .prepare(`SELECT count(*) AS c FROM source_target WHERE connector_id = 'hn' AND id = ?`)
+      .bind(targetId)
       .first<{ c: number }>();
     expect(hnRows?.c).toBe(1);
 

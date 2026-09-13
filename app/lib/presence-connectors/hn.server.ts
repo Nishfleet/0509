@@ -105,14 +105,20 @@ interface HnSearchResponse {
  * becomes `numericFilters=created_at_i>W`: the documented time-window
  * slicing pattern that replaces deep paging past Algolia's ~1,000-result
  * ceiling. No `page` param: the connector always reads page 0 of the window.
+ * `hitsPerPage` (default HN_MAX_HITS_PER_PAGE) — the healthCheck probe passes
+ * 1: a one-hit search is the cheapest honest liveness question.
  */
-export function buildSearchByDateUrl(phrase: string, watermarkSeconds?: number | null): string {
+export function buildSearchByDateUrl(
+  phrase: string,
+  watermarkSeconds?: number | null,
+  hitsPerPage: number = HN_MAX_HITS_PER_PAGE,
+): string {
   const url = new URL(`${HN_API_BASE}/search_by_date`);
   url.searchParams.set("query", phrase);
   // Tags: story AND comment — one target tracks both HN item kinds (issue
   // #3253; the item's own itemType in raw_json tells them apart).
   url.searchParams.set("tags", "story,comment");
-  url.searchParams.set("hitsPerPage", String(HN_MAX_HITS_PER_PAGE));
+  url.searchParams.set("hitsPerPage", String(hitsPerPage));
   if (isFiniteWatermark(watermarkSeconds)) {
     // Time-window slicing — the documented replacement for deep paging past
     // Algolia's ~1,000-result ceiling. No `page` param is ever sent.
@@ -195,7 +201,7 @@ export const hnConnector = {
     // request). Healthy only when the endpoint answers.
     const fetchImpl = ctx.fetchImpl ?? fetch;
     const response = await presenceSafeFetch(
-      buildSearchByDateUrl(PRESENCE_HN_PROBE_PHRASE, null),
+      buildSearchByDateUrl(PRESENCE_HN_PROBE_PHRASE, null, 1),
       fetchImpl,
       { method: "GET", maxBytes: HN_MAX_BYTES, accept: "application/json" },
     );
