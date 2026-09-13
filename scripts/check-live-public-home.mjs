@@ -307,7 +307,8 @@ export const EXPECTED_HOME_EDGE_CACHE_STATUS = "HIT";
 
 /** The zone-level cache status exactly as the fleet judge's `home_edge` field
  * reads it: uppercased, and NONE when the header is absent — absence must
- * never read as an empty success. */
+ * never read as an empty success.
+ * @param {Response} response - the probe response to read. */
 function zoneCacheStatus(response) {
   return (response.headers.get("cf-cache-status") ?? "").trim().toUpperCase() || "NONE";
 }
