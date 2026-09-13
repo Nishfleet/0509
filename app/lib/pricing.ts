@@ -107,6 +107,10 @@ function planMarketingFeatures(plan: PlanFamily): string[] {
     features.push("Proof brief before signup");
   }
 
+  if (plan === "scout") {
+    features.push("Read-only API + MCP access");
+  }
+
   features.push(`${entitlements.watchlists} active watchlists`);
   features.push(`${entitlements.collections} Collections`);
 

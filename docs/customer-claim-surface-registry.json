@@ -675,6 +675,7 @@
         "6-hour scans",
         "Weekly Brief",
         "50 proof captures/month",
+        "Read-only API + MCP access",
         "Saved competitor research",
         "Email brief delivery",
         "10 active watchlists",
@@ -694,7 +695,7 @@
         "Client reports",
         "Shared report branding"
       ],
-      "verify": "grep -qF 'Proof brief before signup' app/lib/pricing.ts && grep -qF 'Landing-page change history on tracked brands with a baseline' app/lib/pricing.ts && grep -qF 'Shared report branding' app/lib/pricing.ts && grep -qF '\"Exports\"' app/lib/pricing.ts && grep -qF 'competitors every 3 hours; rest every 6 hours' app/lib/pricing.ts",
+      "verify": "grep -qF 'Proof brief before signup' app/lib/pricing.ts && grep -qF 'Landing-page change history on tracked brands with a baseline' app/lib/pricing.ts && grep -qF 'Shared report branding' app/lib/pricing.ts && grep -qF '\"Exports\"' app/lib/pricing.ts && grep -qF 'competitors every 3 hours; rest every 6 hours' app/lib/pricing.ts && grep -qF 'Read-only API + MCP access' app/lib/pricing.ts",
       "test": "tests/customer-claim-surface-registry.test.ts",
       "followUp": null
     },

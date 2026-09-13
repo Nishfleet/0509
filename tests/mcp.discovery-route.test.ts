@@ -125,7 +125,7 @@ describe("MCP route discovery", () => {
     );
 
     expect(body.status).toBe("live");
-    expect(body.planRequirement).toContain("Free + Scout");
+    expect(body.planRequirement).toContain("Scout");
     expect(body.endpoint).toBe("https://0509.io/api/mcp");
     expect(body.auth.setup).toBe("https://0509.io/mcp/setup");
     expect(body.agentActivation.firstWorkflow.map((step) => step.label)).toContain("Check readiness");
@@ -204,7 +204,7 @@ describe("MCP route discovery", () => {
     body.tools.forEach((tool) => {
       const requiresWriteEnabled = expectedWriteToolNameSet.has(tool.name);
       expect(tool).toMatchObject({
-        planRequirement: requiresWriteEnabled ? "Agency" : "Free + Scout",
+        planRequirement: requiresWriteEnabled ? "Agency" : "Scout",
         requiresWriteEnabled,
         credentialRequirement: requiresWriteEnabled
           ? WRITE_ENABLED_API_KEY_REQUIREMENT

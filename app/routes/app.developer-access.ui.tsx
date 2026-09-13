@@ -178,7 +178,7 @@ export function DeveloperAccessRoute() {
             <div>
               <h2 id="create-key-title">Create an API key</h2>
               <p>
-                Read-only keys are available on Free and Scout. Name the tool, keep it
+                Read-only keys are available on Scout. Name the tool, keep it
                 read-only by default, and revoke it here when the connection is retired.
               </p>
             </div>
