@@ -80,11 +80,21 @@ describe("status route", () => {
     const mentionSources = result.mentionSources as Array<{
       sourceId: string;
       productionStatus: string;
+      notes: string;
     }>;
     expect(Array.isArray(mentionSources)).toBe(true);
     const threadsRow = mentionSources.find((source) => source.sourceId === "threads");
     expect(threadsRow).toBeDefined();
     expect(threadsRow?.productionStatus).toBe("gated");
+
+    // Issue #3199 — the Substack public surface rides the rss connector, so
+    // its /status per-source row IS the rss row: wired in, gated, and the
+    // note names what the surface covers (Substack) and what it does not
+    // (no free global keyword search).
+    const rssRow = mentionSources.find((source) => source.sourceId === "rss");
+    expect(rssRow).toBeDefined();
+    expect(rssRow?.productionStatus).toBe("gated");
+    expect(rssRow?.notes).toContain("Substack");
   });
 
   it("renders the tracked-source rows — the Threads mention source reads gated (issue #3205)", async () => {
@@ -112,6 +122,11 @@ describe("status route", () => {
     // posture only exists at runtime.
     expect(markup).toContain("GDELT");
     expect(markup).toContain("unavailable");
+    // The Substack row (issue #3199's acceptance) rides the rss row, and the
+    // note renders what the public surface covers — the named publication
+    // feeds themselves, Substack included — and its limits, verbatim.
+    expect(markup).toContain("Substack");
+    expect(markup).toContain("no free global keyword search");
   });
 
   it("renders measured surface states without private launch details", async () => {
