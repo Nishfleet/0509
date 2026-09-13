@@ -96,6 +96,14 @@ describe("status route", () => {
     expect(rssRow?.productionStatus).toBe("gated");
     expect(rssRow?.notes).toContain("Substack");
 
+    // Issue #3202 — the Reddit mention connector owns its source row: wired
+    // in, gated, and the note names what the public surface covers (the new
+    // posts of tracked subreddit targets) and what it does not.
+    const redditRow = mentionSources.find((source) => source.sourceId === "reddit");
+    expect(redditRow).toBeDefined();
+    expect(redditRow?.productionStatus).toBe("gated");
+    expect(redditRow?.notes).toContain("tracked subreddit targets");
+
     // Issue #3198 — the X row: wired in, gated, honest about the
     // paid/no-free-tier posture of the public recent-search surface.
     const xRow = mentionSources.find((source) => source.sourceId === "x");
@@ -135,6 +143,11 @@ describe("status route", () => {
     // feeds themselves, Substack included — and its limits, verbatim.
     expect(markup).toContain("Substack");
     expect(markup).toContain("no free global keyword search");
+    // The Reddit row (issue #3202's acceptance) is its own source: the note
+    // renders what the public surface covers — the new posts of tracked
+    // subreddit targets — and its limits, verbatim.
+    expect(markup).toContain("Reddit");
+    expect(markup).toContain("tracked subreddit targets");
 
     // The X per-source row (issue #3198) renders its no-free-tier note — the
     // public recent-search surface is pay-per-use only, so the flag stays off.
