@@ -8,6 +8,7 @@ import {
   queryPhraseForFeed,
 } from "~/lib/mention-match.server";
 import { newPresenceId, presenceContentHash, presenceUrlHash } from "~/lib/presence-hash";
+import { PRESENCE_MENTION_CONNECTOR_IDS } from "~/lib/presence-connector-registry.server";
 import type {
   NormalizedPresenceItem,
   PresenceConnectorId,
@@ -580,15 +581,17 @@ async function buildMentionStampPlan(
   env: AppEnv,
   sourceTarget: SourceTargetRecord,
 ): Promise<MentionStampPlan | null> {
-  if (sourceTarget.connectorId !== "rss") return null;
+  if (sourceTarget.connectorId !== "rss" && sourceTarget.connectorId !== "podcast") return null;
   // mention-resweep synthesizes an rss-shaped record over a `website`
   // source_target row (the stored row's connector_id stays 'website');
-  // mention stamping applies only to targets actually registered as rss.
+  // mention stamping applies to the feed-target sources — publication-style
+  // rss feeds and podcast show feeds — both emit candidates that the
+  // matcher stamps and filters.
   const persisted = await requireDb(env)
     .prepare("SELECT connector_id FROM source_target WHERE id = ?")
     .bind(sourceTarget.id)
     .first<{ connector_id: string }>();
-  if (persisted?.connector_id !== "rss") return null;
+  if (persisted?.connector_id !== "rss" && persisted?.connector_id !== "podcast") return null;
   const feedUrl =
     typeof sourceTarget.metadata?.feedUrl === "string"
       ? sourceTarget.metadata.feedUrl
@@ -739,6 +742,108 @@ export async function listPresenceItems(
     .bind(...binds, limit)
     .all<Record<string, unknown>>();
   return (result.results ?? []).map(mapPresenceItem);
+}
+
+/**
+ * One mention row on the public /timeline/:domain page (issue #3179): what a
+ * source published about this brand, with the link. Plainer than
+ * PresenceItemRecord on purpose — the public page shows the mention, its
+ * source label and its date, nothing workspace-internal.
+ */
+export interface TimelineMentionEvent {
+  title: string;
+  canonicalUrl: string;
+  observedAt: string;
+  connectorId: PresenceConnectorId;
+}
+
+/**
+ * Recent stored mentions of the brand behind `domain`, newest first, for the
+ * PUBLIC timeline route (issue #3179). Zero-cost, read-only: only stored
+ * `presence_item` rows are read, never scraped, so a public request costs
+ * bounded D1 reads exactly like the rest of the timeline (issue 952's
+ * ZERO-COST CONSTRAINT).
+ *
+ * The timeline keys pages by registrable domain; tracked entities key by
+ * workspace. The bridge is the tracked entity's own website: a mention of an
+ * entity whose canonical URL sits under that domain is a mention of that
+ * brand, whoever tracks it. Mentions are public facts (title, source, URL),
+ * so cross-workspace rows are safe to publish; the same URL captured by two
+ * workspaces dedupes on url_hash, newest observation wins.
+ *
+ * `domain` arrives from the route already in registrable form
+ * (normalizeBrandPageDomain), so a plain host match with a dot boundary is
+ * the registrable-domain match, and no PSL dependency rides along.
+ */
+export async function listPublicMentionEventsByDomain(
+  env: AppEnv,
+  domain: string,
+  options: { limit?: number } = {},
+): Promise<TimelineMentionEvent[]> {
+  const db = requireDb(env);
+  // Bounded read: the newest 200 stored mention rows, then narrowed in
+  // memory to this domain. Without a registrable-domain column there is no
+  // narrower index; 200 rows is the same bound listPresenceItems (200) and
+  // the digest sweep already accept, and the route degrades to [] when this
+  // read fails.
+  const limit = Math.min(Math.max(options.limit ?? 5, 1), 20);
+  const connectorBinds = PRESENCE_MENTION_CONNECTOR_IDS;
+  const result = await db
+    .prepare(
+      `SELECT presence_item.connector_id, presence_item.title, presence_item.canonical_url,
+              presence_item.observed_at, presence_item.url_hash,
+              tracked_entity.canonical_url AS entity_canonical_url
+       FROM presence_item
+       INNER JOIN tracked_entity ON tracked_entity.id = presence_item.tracked_entity_id
+       INNER JOIN source_target ON source_target.id = presence_item.source_target_id
+       WHERE presence_item.is_tombstone = 0
+         AND presence_item.connector_id IN (${connectorBinds.map(() => "?").join(", ")})
+         AND tracked_entity.is_active = 1
+         AND tracked_entity.deleted_at IS NULL
+         AND tracked_entity.canonical_url IS NOT NULL
+         AND source_target.is_active = 1
+         AND source_target.deleted_at IS NULL
+       ORDER BY presence_item.observed_at DESC
+       LIMIT 200`,
+    )
+    .bind(...connectorBinds)
+    .all<Record<string, unknown>>();
+  const suffix = `.${domain.toLowerCase()}`;
+  const seenUrlHashes = new Set<string>();
+  const events: TimelineMentionEvent[] = [];
+  for (const row of result.results ?? []) {
+    const entityCanonicalUrl = typeof row.entity_canonical_url === "string" ? row.entity_canonical_url : "";
+    let host: string | null = null;
+    try {
+      host = new URL(entityCanonicalUrl).hostname.toLowerCase().replace(/\.$/, "");
+    } catch {
+      host = null;
+    }
+    if (!host || (host !== domain.toLowerCase() && !host.endsWith(suffix))) {
+      continue;
+    }
+    const urlHash = typeof row.url_hash === "string" ? row.url_hash : "";
+    if (urlHash && seenUrlHashes.has(urlHash)) continue;
+    if (urlHash) seenUrlHashes.add(urlHash);
+    if (typeof row.title !== "string" || typeof row.canonical_url !== "string" || typeof row.observed_at !== "string") {
+      continue;
+    }
+    events.push({
+      title: row.title,
+      canonicalUrl: row.canonical_url,
+      observedAt: row.observed_at,
+      connectorId: connectorIdFromMentionRow(row),
+    });
+    if (events.length >= limit) break;
+  }
+  return events;
+}
+
+function connectorIdFromMentionRow(row: Record<string, unknown>): PresenceConnectorId {
+  // The SELECT reads only mention-connector rows (the IN clause above), so
+  // the stored connector_id is always one of the mention connectors; the
+  // cast keeps the record mapping honest without a second round-trip.
+  return (typeof row.connector_id === "string" ? row.connector_id : "rss") as PresenceConnectorId;
 }
 
 export async function listActiveSourceTargetsForPolling(env: AppEnv, limit = 40) {

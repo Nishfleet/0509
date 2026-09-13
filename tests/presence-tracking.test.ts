@@ -48,6 +48,20 @@ describe("presence entitlements", () => {
     expect(canUsePresenceFeature("free", "presence_competitor_tracking")).toBe(false);
     expect(canUsePresenceFeature("scout", "presence_website_sources")).toBe(true);
   });
+
+  it("gives Free exactly one self brand with one website source, nothing recurring (issue #3179)", () => {
+    const limits = getPresenceLimits("free");
+    expect(limits.maxTrackedEntities).toBe(1);
+    expect(limits.maxSelfEntities).toBe(1);
+    expect(limits.maxCompetitorEntities).toBe(0);
+    expect(limits.maxWebsiteSourcesPerEntity).toBe(1);
+    expect(limits.maxSocialSourcesPerEntity).toBe(0);
+    expect(presenceModeAllowed("free", "self")).toBe(true);
+    expect(presenceModeAllowed("free", "competitor")).toBe(false);
+    expect(canUsePresenceFeature("free", "presence_website_sources")).toBe(true);
+    expect(canUsePresenceFeature("free", "presence_digest_alerts")).toBe(false);
+    expect(canUsePresenceFeature("free", "presence_social_connect")).toBe(false);
+  });
 });
 
 describe("presence access gates", () => {
@@ -119,6 +133,20 @@ describe("presence access gates", () => {
       "competitor",
     );
     expect(operational).toBe(false);
+  });
+
+  it("admits the LinkedIn connector to customer-facing polling for self once #3204 wired the Posts-API poll", async () => {
+    const operational = await connectorOperationalForPolling(
+      {
+        ...baseEnv,
+        PRESENCE_LINKEDIN_ROLLOUT: "ga",
+        LINKEDIN_CLIENT_ID: "id",
+        LINKEDIN_CLIENT_SECRET: "secret",
+      },
+      "linkedin",
+      "self",
+    );
+    expect(operational).toBe(true);
   });
 
   it("blocks Reddit without commercial access approval", async () => {

@@ -1,7 +1,9 @@
 import { gdeltConnector } from "~/lib/presence-connectors/gdelt.server";
 import { hnConnector } from "~/lib/presence-connectors/hn.server";
+import { podcastConnector } from "~/lib/presence-connectors/podcast.server";
 import { linkedinConnector } from "~/lib/presence-connectors/linkedin.server";
 import { blueskyConnector } from "~/lib/presence-connectors/bluesky.server";
+import { pinterestConnector } from "~/lib/presence-connectors/pinterest.server";
 import { redditConnector } from "~/lib/presence-connectors/reddit.server";
 import { rssConnector } from "~/lib/presence-connectors/rss.server";
 import { threadsConnector } from "~/lib/presence-connectors/threads.server";
@@ -28,11 +30,33 @@ const CONNECTORS = {
   gdelt: gdeltConnector,
   threads: threadsConnector,
   hn: hnConnector,
+  pinterest: pinterestConnector,
+  podcast: podcastConnector,
 } as const;
 
 export function getPresenceConnector(connectorId: PresenceConnectorId) {
   return CONNECTORS[connectorId];
 }
+
+/**
+ * The connector ids whose stored `presence_item` rows count as mentions of a
+ * tracked entity (issue #3179). Everything except `website`: the website
+ * connector watches the tracked site itself; these connectors capture what
+ * the public web published ABOUT the entity. Bluesky and GDELT landed in
+ * #3251/#3250 and belong here with rss/x/reddit. Threads (#3254's
+ * keyword-search connector) belongs here too — its stored rows are public
+ * mentions of the tracked keywords, and they only exist when its env gate
+ * is on. LinkedIn stays out — its LIMITED_COVERAGE self-brand-only posture
+ * is not a general mention source.
+ */
+export const PRESENCE_MENTION_CONNECTOR_IDS: PresenceConnectorId[] = [
+  "rss",
+  "x",
+  "reddit",
+  "gdelt",
+  "bluesky",
+  "threads",
+];
 
 export function listPresenceConnectors() {
   return Object.values(CONNECTORS);
@@ -115,14 +139,27 @@ export async function pollPresenceTarget(
     return xConnector.poll(ctx, target, options.cursor);
   }
   if (target.connectorId === "reddit") {
-    return redditConnector.poll(ctx);
+    return redditConnector.poll(ctx, target);
   }
   if (target.connectorId === "bluesky") {
     // The mention connector needs the entity's match phrase; it reaches the
     // phrase surface through target_key — the connector itself decides.
     return blueskyConnector.poll(ctx, target);
   }
-  return linkedinConnector.poll(ctx);
+  if (target.connectorId === "pinterest") {
+    // The mention connector tracks a Pinterest profile by handle; it reads
+    // the handle surface through target_key/metadata — the connector itself
+    // decides (same convention as the bluesky/threads dispatches; the
+    // #3386 lesson: the registry MUST pass the whole target, not just env).
+    return pinterestConnector.poll(ctx, target);
+  }
+  if (target.connectorId === "podcast") {
+    // Feed target: the connector reads its stored show feed and emits every
+    // episode as a candidate; the publication-feed mention-match step stamps
+    // which phrase each episode names (same split as rss publication feeds).
+    return podcastConnector.poll(ctx, target, options.cursor);
+  }
+  return linkedinConnector.poll(ctx, target);
 }
 
 export function coverageLabelForConnector(
@@ -136,7 +173,12 @@ export function coverageLabelForConnector(
   if (connectorId === "website") {
     return "PUBLIC_WEB_BEST_EFFORT" as const;
   }
-  if (connectorId === "rss") {
+  if (connectorId === "rss" || connectorId === "podcast") {
+    return "VERIFIED_PUBLIC_FEED" as const;
+  }
+  if (connectorId === "pinterest") {
+    // The profile feed is a public RSS 2.0 feed — same syndication class as
+    // the rss connector, not a documented paid API (issue #3201).
     return "VERIFIED_PUBLIC_FEED" as const;
   }
   if (connectorId === "gdelt" || connectorId === "threads" || connectorId === "hn") {

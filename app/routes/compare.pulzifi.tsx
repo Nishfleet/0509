@@ -12,7 +12,7 @@ import {
   type CompareCitations,
   type CompareClaimCard,
 } from "~/components/compare-citations";
-import { canonicalLinks, compareSocialCardUrl, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
+import { buyerSurfaceHreflangLinks, canonicalLinks, compareSocialCardUrl, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
 import { LIVE_BRAND_PROOF_DOMAIN } from "~/lib/demo-brand-pages";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import pulzifiCitations from "~/data/compare/pulzifi-citations.json";
@@ -27,7 +27,10 @@ export { compareAdsExampleLoader as loader } from "~/lib/ads-internal-links.serv
 const pageDescription =
   "Pulzifi monitors public URLs and delivers AI strategy briefs on every change. Five to Nine keeps the proof source-first and ties it to Meta Ad Library checks.";
 
-export const links: LinksFunction = () => canonicalLinks("/compare/pulzifi");
+export const links: LinksFunction = () => [
+  ...canonicalLinks("/compare/pulzifi"),
+  ...buyerSurfaceHreflangLinks("compare/pulzifi"),
+];
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({

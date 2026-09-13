@@ -54,10 +54,11 @@ gated on a platform review/approval), **money** (paid surface — MONEY flag),
 | **Pinterest** | [Pinterest API v5](https://developers.pinterest.com/docs/api/v5/) | **none at zero-spend** — no free public mention-search endpoint exists; reads are per-user OAuth after app approval | [Developer terms](https://developers.pinterest.com/terms/). Trial access = 1,000 req/day/app; Standard = 100 req/s/user/app — both behind app review ([access tiers](https://developers.pinterest.com/docs/key-concepts/access-tiers/), [rate limits](https://developers.pinterest.com/docs/reference/rate-limits/)). Community reports approval delays/denials | $0 surface, but approval-gated | — | Parked: `manual_only` until a grants[] decision (matches prior epic #1380) |
 | **Reddit** | [Reddit Data API](https://www.reddit.com/dev/api) — connector `reddit` exists, gated | **approval** — code shipped; commercial use needs Reddit's written approval | [Data API Terms](https://redditinc.com/policies/data-api-terms): OAuth required, no unauthenticated use; **commercial use requires explicit written approval** — serving paying customers is commercial use. Gate already exists: `REDDIT_COMMERCIAL_ACCESS=approved`. [Responsible Builder Policy](https://support.reddithelp.com/hc/en-us/articles/42728983564564-Responsible-Builder-Policy) | $0 once approved (free tier) | Near-real-time within rate limits | **100 QPM per OAuth client id**, averaged over a 10-minute window ([Data API Wiki](https://support.reddithelp.com/hc/en-us/articles/16160319875092-Reddit-Data-API-Wiki)) |
 | **YouTube** | (a) channel feed `youtube.com/feeds/videos.xml?channel_id=<id>` — free via `rss` connector; (b) [Data API v3 `search.list`](https://developers.google.com/youtube/v3/docs/search/list) for keyword mentions | (a) **today** via `rss`; (b) **approval** — free but quota-capped + Google Cloud project | [YouTube API Services ToS](https://developers.google.com/youtube/terms/api-services-terms-of-service). Default allocation per the [official quota page](https://developers.google.com/youtube/v3/determine_quota_cost): **100 `search.list` calls/day** (dedicated bucket) + 10,000 units/day for other calls; more quota requires a Google compliance audit, cannot be bought | $0 | Channel feeds: on publish. Search: near-real-time | 100 searches/day total across ALL brands — keyword search stays a thin, low-cadence surface; channel feeds carry the load |
-| **LinkedIn posts** | [Posts API](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/posts-api) | **self only** — existing `linkedin` connector covers own-org/own-member posts; competitor = `LIMITED_COVERAGE` | `r_member_social` is restricted (approval-only); `r_organization_social` requires the member to hold a company-page admin role on the target org — i.e. you can only read orgs you administer. No public keyword search of others' posts. LinkedIn ToS prohibit scraping | $0 | On read | Per-member/per-org API limits after approval; irrelevant for competitor coverage (not available) |
+| **LinkedIn posts** | [Posts API](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/posts-api) | **self only** — shipped #3204: the connector polls the tracked organization's own published posts (`GET /rest/posts?author=urn:li:organization:{id}`, `sortBy=CREATED`, `count` 25 of the documented max 100); competitor = `LIMITED_COVERAGE` | `r_member_social` is restricted (approval-only); `r_organization_social` requires the member to hold a company-page admin role on the target org — i.e. you can only read orgs you administer. No public keyword search of others' posts. LinkedIn ToS prohibit scraping — open-source collectors researched first (GitHub star-sorted, 2026-09-13): joeyism/linkedin_scraper (4.5k★), stickerdaniel/linkedin-mcp-server (3.5k★) — unofficial, undocumented, no ToS posture; Liger-Kernel (GPU kernels) and skill-assessments-quizzes (quiz answers) matched the search but are not collectors — all **rejected**; the official Posts API already authenticated by the connector's stored grant wins. Details: §8 | $0 | On read | Exactly ONE serialized request per poll, `count` 25 (documented default 10, max 100); documented per-member/per-org limits apply after platform approval; irrelevant for competitor coverage (not available) |
 | **Threads** | [Threads API keyword search](https://developers.facebook.com/docs/threads/keyword-search/) + [mentions](https://developers.facebook.com/docs/threads/threads-mentions/) | **approval** — free API, needs a Meta app with `threads_keyword_search` (and `threads_manage_mentions` advanced access for others' posts) | Meta Platform Terms. Keyword search: **2,200 queries per user per rolling 24h** (across apps). App review lead time is the real cost. [rate limits](https://developers.facebook.com/docs/threads/overview/) | $0 | Near-real-time | ≤2,200 queries/user/24h — connector must track usage in `presence_poll_cursor` |
 | **Bluesky** | `app.bsky.feed.searchPosts` XRPC ([docs](https://docs.bsky.app/docs/api/app-bsky-feed-search-posts)) | **build** — new `bluesky` connector, free | Bluesky ToS + open AT Protocol. Rate limits documented as "generous… contact us if you encounter rate-limiting" ([rate limits](https://docs.bsky.app/docs/advanced-guides/rate-limits)). Caveat: unauthenticated `searchPosts` on `public.api.bsky.app` has been intermittently 403'd upstream — use an authenticated app-password session | $0 | Near-real-time | Generous; serialize polls anyway |
 | **Hacker News** | [Algolia HN Search API](https://hn.algolia.com/api) `search` / `search_by_date` | **build** — new `hn` connector, no auth at all | Free public API operated by Algolia for HN. No published rate limit — the ~10,000 req/hr/IP figure is community-observed courtesy, not an SLA; ~1,000 retrievable results per query cap. Official alternative ([Firebase HN API](https://github.com/HackerNews/API)) has no search | $0 | Near-real-time | Courtesy budget ~10k req/hr/IP; serialized low-cadence polls are nowhere near it |
+| **Podcasts** | The show's own public RSS 2.0 feed (iTunes/podcast-namespace); episode `<podcast:transcript>` where the show publishes one — [namespace: transcript](https://github.com/Podcastindex-org/podcast-namespace/blob/main/docs/tags/transcript.md) | **build** — new `podcast` connector, no auth; the tracked target IS the show's feed URL | The publisher's own syndication surface; we store episode title/link/excerpt and, where published, the head of the public JSON transcript (other transcript formats recorded, not yet fetched). Coverage = *shows the workspace adds* — there is no single free cross-show episode search (Podcast Index needs a free signup + API key — surveyed, not adopted: see the collector survey below) | $0 | On new episodes | 1 feed fetch per poll (conditional-GET via `presence_poll_cursor`) + at most 5 bounded transcript fetches per poll — the politeness cap is connector-enforced and tested |
 
 ## 3. Data model — a "mention" beside an "ad"
 
@@ -230,6 +231,25 @@ Official docs/terms read for this plan (2026-09-12):
   developers (press/analyst coverage of the official pricing change:
   [heise](https://www.heise.de/en/news/Usage-based-instead-of-flat-rate-X-changes-costs-of-its-developer-interface-11169806.html),
   [postproxy](https://postproxy.dev/blog/x-api-pricing-2026/)).
+- X open-source collectors, searched + rejected for the fleet collector
+  (#3198; sources read directly, 2026-09-13):
+  - Nitter ([zedeus/nitter](https://github.com/zedeus/nitter), README): the
+    unofficial-API, no-developer-account front-end. Rejected: unofficial
+    surface with fragile standing — X Corp cease-and-desist letters went to
+    the project and its public instances on 2026-08-24 (the project announced
+    it will continue; details still pending), and its RSS mode is
+    "instance-specific, often disabled due to abuse". Too fragile to replace
+    a metered, contract-backed read.
+  - snscrape ([JustAnotherArchivist/snscrape](https://github.com/JustAnotherArchivist/snscrape),
+    README): scraper over the unofficial surfaces, shipped as a Python
+    CLI/library. Rejected: wrong runtime (presence collectors run inside the
+    Workers/TypeScript app, not a Python sidecar) and the same unofficial,
+    no-contract rate posture.
+  - Conclusion (unchanged, now sourced): the lawful, documented,
+    contract-backed X read surface is the official X API v2 recent search —
+    pay-per-use since Feb 2026, no free read tier. That is the documented
+    no-(free-)surface entry the epic's termination allows: the connector
+    shipped in #3255, `PRESENCE_X_ROLLOUT` stays off until the MONEY decision.
 - Reddit: [Data API Terms](https://redditinc.com/policies/data-api-terms),
   [Data API Wiki rate limits](https://support.reddithelp.com/hc/en-us/articles/16160319875092-Reddit-Data-API-Wiki)
   (100 QPM/OAuth client, 10-min averaging window, OAuth mandatory),
@@ -267,6 +287,7 @@ Official docs/terms read for this plan (2026-09-12):
   [newscatcher](https://www.newscatcherapi.com/blog-posts/google-news-rss-search-parameters-the-missing-documentaiton),
   [cloro](https://cloro.dev/blog/google-news-rss/). Treated as an
   undocumented surface in the coverage table.
+- Podcasts: the [Podcasting 2.0 podcast-namespace](https://github.com/Podcastindex-org/podcast-namespace) transcript tag ([docs/tags/transcript.md](https://github.com/Podcastindex-org/podcast-namespace/blob/main/docs/tags/transcript.md)) — item-level `<podcast:transcript>`, `url` + `type` required (`application/json`, `text/vtt`, `application/x-subrip`, `text/plain`, `text/html`), optional `language` / `rel="captions"`. The show's own RSS 2.0 feed is the publisher's public syndication surface; the connector reads the JSON transcript shape (`segments[]` with `text`) and records other formats. No Apple/Google mediation needed for this slice.
 
 Open-source collector survey (`gh search repos`, 2026-09-12): no
 production-grade general mention collector exists to adopt wholesale —
@@ -277,6 +298,61 @@ adopting a suite. Package-registry check: `rss-parser@3.13.0`,
 `@atproto/api@0.20.44` available if a connector wants them — the existing RSS
 connector already parses feeds itself, so no dependency is required for the
 MVP.
+
+LinkedIn, #3204 (2026-09-13): the official
+[Posts API](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/posts-api)
+page was re-fetched live — retrieval is
+`GET /rest/posts?author={PersonURN|OrganizationURN}` (optional `count` —
+documented default 10, maximum 100 — and `sortBy` LAST_MODIFIED|CREATED,
+descending); responses are `elements[]` carrying `id` (share/ugcPost URN),
+`author`, `commentary`, `publishedAt`/`createdAt` (epoch ms) and
+`lifecycleState`; every call needs `X-Restli-Protocol-Version: 2.0.0` plus a
+`LinkedIn-Version: YYYYMM` header (the fetched page's versioned string is
+202508). Open-source collectors searched first (GitHub star-sorted, this
+session): `Ebazhanov/linkedin-skill-assessments-quizzes` (28.8k★) and
+`linkedin/Liger-Kernel` (6.6k★) — not collectors (quiz answers, GPU kernels);
+`joeyism/linkedin_scraper` (4.5k★) and `stickerdaniel/linkedin-mcp-server`
+(3.5k★) — unofficial, undocumented surfaces with no ToS posture, **rejected**
+against the plan's public-surfaces-only + ToS rule. #3204 therefore ships on
+the official Posts API the connector's stored 3-legged grant
+(`r_organization_social`) already authenticates, $0, no new dependency —
+the survey's own conclusion, applied.
+
+Reddit, #3202 (2026-09-13): the official surface was already pinned by the
+2026-09-12 log above — [Data API Terms](https://redditinc.com/policies/data-api-terms)
+(OAuth mandatory, no unauthenticated use, commercial use needs written
+approval), the [Data API Wiki](https://support.reddithelp.com/hc/en-us/articles/16160319875092-Reddit-Data-API-Wiki)
+budget (100 QPM per OAuth client id, averaged over a 10-minute window), the
+[Responsible Builder Policy](https://support.reddithelp.com/hc/en-us/articles/42728983564564-Responsible-Builder-Policy).
+This lane's fresh collector search, kept to public and unpaid surfaces
+(GitHub star-sorted, `gh search repos`, 2026-09-13): `ivucicev/redsignal`
+(25★ — hobby subreddit keyword-watcher/lead-gen), `PhillipTaylor/reddit_monitor`
+(11★ — a desktop tray notifier); the `reddit mention tracker` search tops
+out at 2★ (ThePredictiveDev/Search-Reddit-Term-Based-Scraper —
+FastAPI+Gradio app, ML sentiment, unwarranted deps). `npm search`: the
+notable hit is `@ebenova/reddit-monitor-mcp` 1.0.2 — an MCP server
+attachment, not a shardable collector; everything else is editor-mention
+plumbing (quill/tiptap), a different "mention". All **rejected**: stale,
+hobby-graded, or wrong-shaped, and each would ADD a dependency while
+bypassing the SSRF-hardened `presenceSafeFetch`/bounded-response path every
+0509 connector rides. #3202 therefore ships on the official Data API the
+connector's app-only client-credentials grant (env-held `REDDIT_CLIENT_ID`/`SECRET`)
+already authenticates — $0 free tier, 1000 reads/10 min enforced in-connector
+via the shared `presence_poll_cursor` ledger, commercial approval = the
+#1378 gate `REDDIT_COMMERCIAL_ACCESS=approved` — the survey's own
+conclusion, applied.
+
+Podcast collector survey (`gh search repos` + `npm`, 2026-09-13, #3208): no
+production-grade podcast-mention collector exists to adopt — the
+Podcastindex-org ecosystem ships keyed-API bindings (`python-podcastindex`
+26★, `SparrowTek/PodcastIndexKit` 11★, npm `podcastindex@1.2.0`) that need a
+signup + API key/secret and bypass the SSRF-hardened `presenceSafeFetch`
+bounded-fetch path; `Podcast-Standards-Project/PSP-1-Podcast-RSS-Specification`
+(113★) is a specification, `opawg/podcast-rss-useragents` (64★) is a dataset,
+and the transcript repos (`dado3212/apple-podcast-transcripts` 183★,
+`lord-denning/Huberman-Lab-Podcast-Transcripts` 267★) are static dumps, not
+collectors. Conclusion: the connector parses the show feed itself (repo
+precedent: the rss connector), zero new dependencies.
 
 Prior art inside the repo: `docs/epics/2026-08-28-mention-monitoring.md`
 (scout + evals + phases, shipped as #1375/#1377/#1378/#1379/#1380),

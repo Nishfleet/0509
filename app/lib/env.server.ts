@@ -200,6 +200,14 @@ export interface AppEnv {
    * still renders logged out.
    */
   PUBLIC_OFFER_TIMELINE_SHARE?: string;
+  /**
+   * Google Ads (Transparency Center) source kill flag (issue #3197). Unset or
+   * "0" = the source runs (the production posture, wrangler.jsonc vars);
+   * "1" pauses it end to end — no scheduled captures, no /ads section, the
+   * coverage policy resolves the source to "coming_soon". Emergency brake
+   * only: the rollout posture is on.
+   */
+  GOOGLE_ADS_SOURCE_DISABLED?: string;
   PRESENCE_WEBSITE_ROLLOUT?: string;
   PRESENCE_X_ROLLOUT?: string;
   PRESENCE_REDDIT_ROLLOUT?: string;
@@ -212,6 +220,10 @@ export interface AppEnv {
   PRESENCE_THREADS_ROLLOUT?: string;
   /** Hacker News (Algolia HN Search) mention connector rollout: disabled | internal | pilot | ga. Defaults to disabled (gated, off by default). */
   PRESENCE_HN_ROLLOUT?: string;
+  /** Pinterest (profile feed.rss) mention connector rollout: disabled | internal | pilot | ga. Defaults to disabled (gated, off by default). */
+  PRESENCE_PINTEREST_ROLLOUT?: string;
+  /** Podcast (show public RSS 2.0 feed) mention connector rollout: disabled | internal | pilot | ga. Defaults to disabled (gated, off by default). */
+  PRESENCE_PODCAST_ROLLOUT?: string;
   /** Digest delivery rollout: disabled | internal | pilot | ga. Defaults to disabled (notifications off). */
   PRESENCE_DIGEST_ROLLOUT?: string;
   /**
@@ -391,6 +403,15 @@ export function isSignupFirstBriefEnabled(env: AppEnv) {
 /** Agency mode org-keyed ownership gate (issue #2176). Default off. */
 export function isAgencyOrgModeEnabled(env: AppEnv) {
   return parseEnvFlag(env.AGENCY_ORG_MODE_ENABLED);
+}
+
+/**
+ * Google Ads (Transparency Center) source kill flag (issue #3197). Same
+ * emergency-brake posture as PUBLIC_BRAND_PAGES_INDEXABLE: unset or "0" is
+ * the on/production posture; "1" (or any 1/true/yes/on) pauses the source.
+ */
+export function isGoogleAdsSourceKilled(env: AppEnv) {
+  return parseEnvFlag(env.GOOGLE_ADS_SOURCE_DISABLED);
 }
 
 export function emailFromAddress(env: AppEnv) {

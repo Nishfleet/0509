@@ -1,4 +1,5 @@
 import type { AppEnv } from "~/lib/env.server";
+import { PRESENCE_MENTION_CONNECTOR_IDS } from "~/lib/presence-connector-registry.server";
 import { listPresenceItems, listTrackedEntities } from "~/lib/presence-data.server";
 import { formatCoverageLabel } from "~/lib/presence-display";
 import { presenceUrlHash } from "~/lib/presence-hash";
@@ -17,7 +18,8 @@ export interface MentionDigestOptions {
   limit?: number;
 }
 
-const DEFAULT_MENTION_CONNECTORS: PresenceConnectorId[] = ["rss", "x", "reddit"];
+/** Connectors treated as mention sources; #3179 shares the registry's set. */
+const DEFAULT_MENTION_CONNECTORS = PRESENCE_MENTION_CONNECTOR_IDS;
 
 /**
  * Builds the mention-section lines for the presence digest.
@@ -26,6 +28,8 @@ const DEFAULT_MENTION_CONNECTORS: PresenceConnectorId[] = ["rss", "x", "reddit"]
  *   in the lookback; no "New mentions" header is fabricated when there are none.
  * - Marks `(new)` only when the earliest `createdAt` for the same
  *   `(tracked_entity_id, url_hash)` falls inside the lookback window.
+ * - Ends each line with the mention's canonical URL — the link — when the
+ *   item stored one (issue #3179: mentions carry source and link).
  * - Reuses `presenceUrlHash` and `presence_item.url_hash` so the marker is
  *   stable with the rest of the presence substrate.
  */
@@ -84,8 +88,11 @@ export async function buildMentionDigestLines(
         options.since,
       );
       const newMarker = isNew ? " (new)" : "";
+      // #3179: the link rides the line — the digest renders lines as plain
+      // text, so the canonical URL IS the mention's link.
+      const linkSuffix = item.canonicalUrl ? ` — ${item.canonicalUrl}` : "";
       lines.push(
-        `${label} — ${item.title}${newMarker} (${formatCoverageLabel(item.connectorId)})`,
+        `${label} — ${item.title}${newMarker} (${formatCoverageLabel(item.connectorId)})${linkSuffix}`,
       );
     }
   }

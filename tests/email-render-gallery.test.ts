@@ -485,11 +485,16 @@ describe("email render gallery", () => {
       lines: [
         "Glowkart appeared on 3 new placements: a homepage takeover on a beauty blog and two newsletter sponsorships.",
         "Tira Beauty ran a podcast read on a top lifestyle show.",
+        // Issue #3179: mention lines carry source and link — the trailing
+        // canonical URL is promoted to a real anchor.
+        "Acme Corp — Acme featured in a launch roundup (new) (GDELT mainstream news) — https://news.example/acme-roundup",
       ],
       appUrl: "https://0509.io/app/presence",
     });
     record("presence-digest", "Presence digest", true, "Where your competitors showed up this week", html, UNSUB, "case-file");
     expect(html).toContain("Open presence tracking");
+    expect(html).toContain('<a href="https://news.example/acme-roundup"');
+    expect(html).toContain("Acme featured in a launch roundup (new) (GDELT mainstream news)");
   });
 
   it("writes the browsable gallery", () => {
