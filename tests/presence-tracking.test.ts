@@ -121,6 +121,20 @@ describe("presence access gates", () => {
     expect(operational).toBe(false);
   });
 
+  it("admits the LinkedIn connector to customer-facing polling for self once #3204 wired the Posts-API poll", async () => {
+    const operational = await connectorOperationalForPolling(
+      {
+        ...baseEnv,
+        PRESENCE_LINKEDIN_ROLLOUT: "ga",
+        LINKEDIN_CLIENT_ID: "id",
+        LINKEDIN_CLIENT_SECRET: "secret",
+      },
+      "linkedin",
+      "self",
+    );
+    expect(operational).toBe(true);
+  });
+
   it("blocks Reddit without commercial access approval", async () => {
     const gate = await evaluateConnectorAccessGate(
       {

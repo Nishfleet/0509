@@ -435,8 +435,9 @@ export function presenceSourceCoverageForDocs(): Array<{
     {
       sourceId: "linkedin",
       label: SOURCE_LABELS.linkedin,
-      productionStatus: "unavailable",
-      notes: "Self-brand OAuth only when rolled out. Competitor tracking is limited.",
+      productionStatus: "gated",
+      notes:
+        "LinkedIn Posts API connector wired in (own-organization posts of a CONNECTED account via /rest/posts, $0, stored OAuth grant; the member must administer the tracked organization). Gated behind PRESENCE_LINKEDIN_ROLLOUT — off by default; activation is a separate rollout decision. Self-tracking only: there is no public keyword search of others' posts, so competitor coverage stays LIMITED_COVERAGE (the only allowed exclusion).",
     },
     {
       sourceId: "rss",

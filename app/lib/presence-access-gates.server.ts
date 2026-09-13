@@ -78,12 +78,13 @@ function hasCredentials(env: AppEnv, connectorId: PresenceConnectorId): boolean 
 // The issue (Nishfleet/0509#1378) UNKNOWNS explicitly allow opening the existing `reddit`
 // and `x` connectors as customer mention sources; app/lib/presence-access-gates.server.ts
 // only gates whether a connector has a customer poll path, so widening the predicate here is
-// sufficient. `linkedin` (no general customer poll path — limited competitor self-brand only)
-// stays closed.
+// sufficient. `linkedin` joined the customer poll path with #3204 (self-only
+// Posts-API capture — the connector takes the stored connection + target);
+// its competitor side stays limited (the gate returns competitor_limited).
 // help-first: Only the predicate changes; the runtime gates in evaluateConnectorAccessGate
 // (rolloutState, credentials, reddit commercial access) still govern whether polling actually runs.
 export function connectorHasCustomerPollPath(connectorId: PresenceConnectorId): boolean {
-  return connectorId === "website" || connectorId === "rss" || connectorId === "gdelt" || connectorId === "threads" || connectorId === "x" || connectorId === "reddit" || connectorId === "bluesky";
+  return connectorId === "website" || connectorId === "rss" || connectorId === "gdelt" || connectorId === "threads" || connectorId === "x" || connectorId === "reddit" || connectorId === "bluesky" || connectorId === "linkedin";
 }
 
 export async function evaluateConnectorAccessGate(

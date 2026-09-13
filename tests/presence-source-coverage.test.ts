@@ -111,6 +111,21 @@ describe("presence source coverage policy", () => {
     expect(entry.coverageLabel).toBe("LIMITED_COVERAGE");
   });
 
+  it("marks LinkedIn self tracking available once the rollout flag admits it (#3204)", async () => {
+    const entry = await evaluatePresenceSourceCoverage(
+      {
+        ...baseEnv,
+        PRESENCE_LINKEDIN_ROLLOUT: "internal",
+        LINKEDIN_CLIENT_ID: "id",
+        LINKEDIN_CLIENT_SECRET: "secret",
+      },
+      "linkedin",
+      "self",
+    );
+    expect(entry.status).toBe("available");
+    expect(entry.coverageLabel).toBe("CONNECTED_ACCOUNT");
+  });
+
   it("marks YouTube as planned without claiming active coverage", async () => {
     const entry = await evaluatePresenceSourceCoverage(baseEnv, "youtube", "competitor");
     expect(entry.status).toBe("planned");
@@ -340,6 +355,7 @@ describe("presence source coverage policy", () => {
     expect(docs.find((entry) => entry.sourceId === "youtube")?.productionStatus).toBe("planned");
     expect(docs.find((entry) => entry.sourceId === "amazon")?.productionStatus).toBe("manual_only");
     expect(docs.find((entry) => entry.sourceId === "x")?.productionStatus).toBe("gated");
+    expect(docs.find((entry) => entry.sourceId === "linkedin")?.productionStatus).toBe("gated");
   });
 
   // The five seam competitor-monitoring sources (#2218) report "configured"
