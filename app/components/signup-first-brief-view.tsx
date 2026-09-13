@@ -1,7 +1,10 @@
 import { Link } from "react-router";
 
 import { LocalTime } from "~/components/local-time";
-import type { SignupFirstBriefLoaderData } from "~/lib/first-brief";
+import {
+  SIGNUP_SCAN_STATUS_WORDS,
+  type SignupFirstBriefLoaderData,
+} from "~/lib/first-brief";
 
 /**
  * BET 7 (issue #1276): the inline first-brief surface rendered at
@@ -96,6 +99,14 @@ export function SignupFirstBriefView({
   }
 
   if (data.status === "waiting") {
+    // #3176: while the activation fan-out runs, the surface states exactly
+    // what is happening — the planned denominator, the finished count, and
+    // each source's own state. The 30s revalidator keeps this honest without
+    // a manual reload, and `aria-live` announces the transitions.
+    const scanProgress =
+      data.scanProgress && data.scanProgress.total > 0
+        ? data.scanProgress
+        : null;
     return (
       <article className="f9-wk-brief f9-signup-first-brief" id="signup-first-brief">
         <header className="f9-wk-brief-head">
@@ -107,6 +118,32 @@ export function SignupFirstBriefView({
           </p>
         </header>
         <div className="f9-signup-first-brief-waiting">
+          {scanProgress ? (
+            <section
+              className="f9-signup-scan-progress"
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              <p className="f9-signup-scan-progress-count">
+                Scanning {scanProgress.total} sources, {scanProgress.done} done.
+              </p>
+              <ul className="f9-signup-scan-progress-sources">
+                {scanProgress.sources.map((source, index) => (
+                  <li
+                    key={`${source.label}-${index}`}
+                    className={`f9-signup-scan-progress-source is-${source.status}`}
+                  >
+                    <span className="f9-signup-scan-progress-source-label">
+                      {source.label}
+                    </span>
+                    <span className="f9-signup-scan-progress-source-status">
+                      {SIGNUP_SCAN_STATUS_WORDS[source.status]}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
           <p>
             The activation scan takes a few minutes. We'll show your baseline
             brief here as soon as it's ready, and email it to you within the hour.

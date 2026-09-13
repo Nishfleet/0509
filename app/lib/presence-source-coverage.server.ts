@@ -20,7 +20,8 @@ import type {
   SourceTargetRecord,
 } from "~/lib/presence-types";
 
-const SOURCE_LABELS: Record<PresenceSourceId, string> = {
+// Exported for the #3176 activation fan-out's buyer-facing tick labels.
+export const SOURCE_LABELS: Record<PresenceSourceId, string> = {
   website: "Website / open web",
   x: "X",
   reddit: "Reddit",

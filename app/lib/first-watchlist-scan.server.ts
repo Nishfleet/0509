@@ -8,6 +8,11 @@ import {
 import { ensureDb } from "~/lib/data/d1.server";
 import { bindD1Named } from "~/lib/d1-bind.server";
 import type { AppEnv } from "~/lib/env.server";
+import type { PlanFamily } from "~/lib/plan-entitlements";
+import type {
+  PresenceConnectorId,
+  PresenceTrackingMode,
+} from "~/lib/presence-types";
 import {
   buildMonitoringWorkflowInstanceId,
   claimOrchestratedWatchlistRun,
@@ -393,6 +398,208 @@ export async function prepareFirstWatchlistScanRun(
   } satisfies FirstWatchlistScanRunDescriptor;
 }
 
+/**
+ * A mention source target the activation fan-out will poll (#3176, epic
+ * #3172). `sourceId` is the `source_target` row id, which is also the
+ * `sourceProgress` map key — unique per target, so two targets of the same
+ * connector never overwrite each other's ticks.
+ */
+interface ActivationMentionTarget {
+  sourceId: string;
+  connectorId: PresenceConnectorId;
+  label: string;
+  trackingMode: PresenceTrackingMode;
+}
+
+/**
+ * Enumerate the workspace's tracked mention sources (#3171) for the
+ * activation fan-out. Only what actually exists is planned: a workspace with
+ * no tracked entities (the free signup until #3179 lands self-tracking) fans
+ * out across the ad libraries alone — honest, never padded.
+ */
+async function listActivationMentionTargets(
+  env: AppEnv,
+  userId: string,
+): Promise<ActivationMentionTarget[]> {
+  const { listTrackedEntities, listSourceTargetsForEntity } = await import(
+    "~/lib/presence-data.server"
+  );
+  const { SOURCE_LABELS } = await import("~/lib/presence-source-coverage.server");
+  const entities = await listTrackedEntities(env, userId);
+  const targets: ActivationMentionTarget[] = [];
+  for (const entity of entities) {
+    if (!entity.isActive) continue;
+    const sourceTargets = await listSourceTargetsForEntity(env, userId, entity.id);
+    for (const sourceTarget of sourceTargets) {
+      targets.push({
+        sourceId: sourceTarget.id,
+        connectorId: sourceTarget.connectorId,
+        label:
+          (SOURCE_LABELS as Record<string, string | undefined>)[
+            sourceTarget.connectorId
+          ] ?? sourceTarget.connectorId,
+        trackingMode: entity.trackingMode,
+      });
+    }
+  }
+  return targets;
+}
+
+/**
+ * #3176: write the fan-out's pending denominator before the first source
+ * ticks — every enabled seam source (the #2992 ad libraries the owner's plan
+ * enables, the exact set `runSources` will run) plus every tracked mention
+ * source target (#3171). The onboard page reads this subtree off the run row
+ * as the "scanning N sources" denominator. Progress is observability, never
+ * correctness: a planning failure hides the block, never the scan.
+ */
+async function planActivationScanSources(
+  env: AppEnv,
+  watchlist: WatchlistRecord,
+  plan: PlanFamily,
+  runId: string,
+): Promise<void> {
+  try {
+    const { planScanSources } = await import("~/lib/scan-source-progress.server");
+    const { getEnabledSources } = await import("~/lib/sources/registry.server");
+    const seamSources = getEnabledSources(env, plan).map((adapter) => ({
+      sourceId: adapter.id,
+      kind: "ad_library" as const,
+      label: adapter.label,
+    }));
+    const mentionSources = (await listActivationMentionTargets(env, watchlist.userId)).map(
+      (target) => ({
+        sourceId: target.sourceId,
+        kind: "mention" as const,
+        label: target.label,
+      }),
+    );
+    await planScanSources(env, runId, [...seamSources, ...mentionSources]);
+  } catch (error) {
+    console.log("activation scan-source planning failed (progress hidden)", {
+      runId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+/**
+ * #3176: poll one mention source target inside the activation fan-out.
+ * The capture itself rides the EXISTING customer poll path
+ * (`pollPresenceSourceTarget`) — plan gates, the per-source rollout kill
+ * flag, the capture-validity gate (#2873) and dedup are all those checks;
+ * this leg adds only the progress tick and the per-source wall-clock budget.
+ * A killed or gated connector is ticked `skipped` without burning its
+ * budget; a degraded poll result is ticked `failed` with the poll path's own
+ * error code (nothing is fabricated past the validity gate).
+ */
+async function captureOneActivationMentionSource(
+  env: AppEnv,
+  userId: string,
+  runId: string,
+  target: ActivationMentionTarget,
+  options: { fetchImpl?: typeof fetch },
+): Promise<void> {
+  const { recordScanSourceTick, SCAN_SOURCE_BUDGET_MS, withScanSourceBudget } =
+    await import("~/lib/scan-source-progress.server");
+  const tick = (
+    status: Parameters<typeof recordScanSourceTick>[3]["status"],
+    detail?: string | null,
+  ) =>
+    recordScanSourceTick(env, runId, target.sourceId, {
+      kind: "mention",
+      label: target.label,
+      status,
+      detail: detail ?? null,
+    });
+
+  // Per-source kill flag / customer-poll path: the same posture
+  // `runPresencePollingBatch` uses. A connector that is not operational for
+  // customer polling never runs.
+  const { connectorOperationalForPolling } = await import(
+    "~/lib/presence-access-gates.server"
+  );
+  if (
+    !(await connectorOperationalForPolling(
+      env,
+      target.connectorId,
+      target.trackingMode,
+      userId,
+    ))
+  ) {
+    await tick("skipped", "connector_not_operational");
+    return;
+  }
+
+  await tick("running");
+  const { pollPresenceSourceTarget } = await import("~/lib/presence-service.server");
+  // #3176 per-source budget: a hung source loses the race, is ticked
+  // `timed_out`, and can never delay anything downstream.
+  const raced = await withScanSourceBudget(
+    pollPresenceSourceTarget(env, userId, target.sourceId, {
+      fetchImpl: options.fetchImpl,
+    }),
+    SCAN_SOURCE_BUDGET_MS,
+  );
+  if (raced.outcome === "timed_out") {
+    await tick("timed_out", `budget:${SCAN_SOURCE_BUDGET_MS}ms`);
+    return;
+  }
+  const { pollResult, upsertStats } = raced.value;
+  if (!pollResult.ok) {
+    await tick("failed", pollResult.errorCode ?? "poll_failed");
+    return;
+  }
+  await tick("done", `items:${upsertStats.inserted + upsertStats.updated}`);
+}
+
+/**
+ * #3176: the mention leg of the activation fan-out. Runs AFTER the ads
+ * capture, inside the same Workflow step, so the #3071 first brief never
+ * waits on a mention source: the brief files with whatever finished, and
+ * these sources' ticks land on the run row after the run finished — the
+ * "late sources append without reload" path. The leg itself never throws:
+ * a failing source is ticked `skipped` (plan/connector gates) or `failed`
+ * (poll error) and the next source runs.
+ */
+export async function captureActivationMentionSources(
+  env: AppEnv,
+  userId: string,
+  runId: string,
+  options: { fetchImpl?: typeof fetch } = {},
+): Promise<void> {
+  let targets: ActivationMentionTarget[];
+  try {
+    targets = await listActivationMentionTargets(env, userId);
+  } catch (error) {
+    console.log("activation mention enumeration failed (non-blocking)", {
+      runId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return;
+  }
+  for (const target of targets) {
+    try {
+      await captureOneActivationMentionSource(env, userId, runId, target, options);
+    } catch (error) {
+      const { recordScanSourceTick } = await import(
+        "~/lib/scan-source-progress.server"
+      );
+      const { PresenceServiceError } = await import("~/lib/presence-service.server");
+      const code =
+        error instanceof PresenceServiceError ? error.code : "poll_error";
+      await recordScanSourceTick(env, runId, target.sourceId, {
+        kind: "mention",
+        label: target.label,
+        status: "skipped",
+        detail: code,
+      }).catch(() => {
+        // Progress observability never breaks the capture.
+      });
+    }
+  }
+}
+
 export async function runFirstWatchlistScanWorkflowJob(
   env: AppEnv,
   params: FirstWatchlistScanWorkflowParams,
@@ -491,11 +698,18 @@ export async function runFirstWatchlistScanWorkflowJob(
       }
     }
 
+    // #3176: the fan-out denominator lands before the first source ticks so
+    // the page can show the true "scanning N sources" from the start.
+    await planActivationScanSources(env, watchlist, plan, params.runId);
     const { runWatchlistManual } = await import("~/lib/monitoring.server");
     await runWatchlistManual(env, watchlist, {
       existingRunId: params.runId,
       orchestrationToken: claim.processingToken,
     });
+    // #3176: the mention leg runs after the ads capture — the #3071 first
+    // brief gates on the run completing, not on a mention source. Sources
+    // finishing after the run wrote their ticks to the (outliving) run row.
+    await captureActivationMentionSources(env, watchlist.userId, params.runId);
     const state = await readFirstWatchlistScanState(env, params.runId);
     if (await requeueRetryableFirstWatchlistScanFailure(env, params.runId)) {
       throw new Error("The activation scan hit a retryable provider failure.");

@@ -388,8 +388,66 @@ function brandIsAdjacentTo(
   return brandCategoryForDomain(brand.domain) === currentCategory;
 }
 
+/**
+ * #3176: one per-source tick of the activation fan-out, as the signup
+ * first-brief surface renders it. The loader maps the D1 progress subtree
+ * (`watchlist_run.summary_json.sourceProgress`) into this buyer-facing shape;
+ * the D1 mechanics stay server-side, so this module stays component-safe.
+ */
+export type SignupScanSourceStatus =
+  | "pending"
+  | "running"
+  | "done"
+  | "unavailable"
+  | "timed_out"
+  | "failed"
+  | "skipped";
+
+export interface SignupScanSourceProgressView {
+  /** Buyer-facing source name ("Meta Ad Library", "RSS / Atom / JSON Feed"). */
+  label: string;
+  status: SignupScanSourceStatus;
+  detail: string | null;
+}
+
+export interface SignupScanProgressView {
+  /** Every source the fan-out planned — the "scanning N sources" denominator. */
+  total: number;
+  /** Sources in a terminal state. */
+  done: number;
+  /** Sources still in flight. */
+  remaining: number;
+  sources: SignupScanSourceProgressView[];
+}
+
+/**
+ * #3176: one- or two-word honest status per source. The copy states what
+ * happened, never “optimistically” — a source that did not reply says so.
+ */
+export const SIGNUP_SCAN_STATUS_WORDS: Record<SignupScanSourceStatus, string> =
+  {
+    pending: "queued",
+    running: "running",
+    done: "done",
+    unavailable: "no reply",
+    timed_out: "timed out",
+    failed: "failed",
+    skipped: "skipped",
+  };
+
 export type SignupFirstBriefLoaderData =
-  | { step: "first-brief"; status: "waiting"; watchlistName: string | null }
+  | {
+      step: "first-brief";
+      status: "waiting";
+      watchlistName: string | null;
+      /**
+       * #3176: live fan-out progress, read off the activation run row while
+       * the capture is in flight. Hidden (undefined) when the run has not
+       * planned its fan-out yet — the surface stays quiet until there is
+       * something honest to show.
+       */
+      scanProgress?: SignupScanProgressView;
+    }
   | {
       step: "first-brief";
       status: "no_ads";
