@@ -232,17 +232,32 @@ function GoogleSearchBrandSection({ snapshot }: { snapshot: SourceSnapshotRecord
 
 // --- LinkedIn ads ------------------------------------------------------
 
-interface LinkedinAdsPayload {
+/**
+ * The #2193 stored payload shape (LinkedInAdsSnapshotPayload): promoted-post
+ * cards carrying the promoted text, advertiser and public detail link. The
+ * capture has no per-ad seen dates and no fetchedAt of its own — the "Last
+ * checked" stamp falls back to the snapshot's own timestamp, and the
+ * section renders exactly the fields the adapter stores (nothing invented).
+ */
+interface LinkedinAdsPayloadView {
   totalAds: number;
-  fetchedAt: string;
-  ads: Array<{ adId: string; firstSeen: string | null; lastSeen: string | null }>;
+  /** Not present in the #2193 stored payload; the snapshot stamp wins. */
+  fetchedAt?: string;
+  ads: Array<{ id: string; advertiser: string; text: string; detailUrl: string }>;
 }
 
 function LinkedinAdsBrandSection({ snapshot }: { snapshot: SourceSnapshotRecord }) {
-  const payload = snapshot.payload as Partial<LinkedinAdsPayload>;
+  const payload = snapshot.payload as Partial<LinkedinAdsPayloadView>;
   const ads = Array.isArray(payload.ads) ? payload.ads : [];
   const total = typeof payload.totalAds === "number" ? payload.totalAds : ads.length;
   if (total === 0 && ads.length === 0) return null;
+  // Guard a malformed stored payload: an ad without an id or text must not
+  // render undefined on a public page (the same rule the Google section
+  // applies to its own payload).
+  const listable = ads.filter(
+    (a): a is LinkedinAdsPayloadView["ads"][number] =>
+      typeof a.id === "string" && typeof a.text === "string",
+  );
   return (
     <BrandPageSourceSection
       anchorId="brand-linkedin-ads"
@@ -251,19 +266,37 @@ function LinkedinAdsBrandSection({ snapshot }: { snapshot: SourceSnapshotRecord 
       checkedAt={payload.fetchedAt ?? snapshot.fetchedAt}
       checkedLabel="Last checked"
     >
+      <p className="f9-wk-dim" data-testid="brand-linkedin-ads-coverage">
+        {`Source: the public LinkedIn Ad Library, read through the monitoring seam's standard-pool public-surface fetch — no LinkedIn official-API key that bars commercial use. Covers the promoted-post cards currently published under this brand's account-owner name, matched by name exactly as the public Ad Library search serves it: their promoted text, advertiser and public detail link; the capture reads the newest results page only (up to 25 ads) and does not distinguish ad formats. Spend, reach and audience metrics are out of scope of this source. Region: the United States — the public search's verified geo=US posture; no other regions are captured. Freshness: the capture re-runs on this source's weekly cadence as the seam's runner schedules it; the "Last checked" date below is the last successful capture.`}
+      </p>
       <p className="f9-wk-dim">
         {`${total} LinkedIn ad${total === 1 ? "" : "s"} on record.`}
       </p>
-      {ads.length > 0 ? (
+      {listable.length > 0 ? (
         <ul className="f9-quiet-list" data-testid="brand-linkedin-ads-list">
-          {ads.slice(0, 6).map((ad) => (
-            <li key={ad.adId} className="f9-quiet-list-item">
-              <span className="f9-quiet-list-copy">
-                {ad.firstSeen ? `First seen ${formatCheckedDate(ad.firstSeen)}` : "Newest ad"}
-                {ad.lastSeen ? ` · last seen ${formatCheckedDate(ad.lastSeen)}` : ""}
-              </span>
-            </li>
-          ))}
+          {listable.slice(0, 6).map((ad) => {
+            const linked = typeof ad.detailUrl === "string" && /^https:\/\//i.test(ad.detailUrl);
+            return (
+              <li key={ad.id} className="f9-quiet-list-item">
+                <span className="f9-quiet-list-copy">
+                  {`${ad.text}${ad.advertiser ? ` — ${ad.advertiser}` : ""}`}
+                  {linked ? (
+                    <>
+                      {" · "}
+                      <a
+                        className="f9-wk-lnk"
+                        href={ad.detailUrl}
+                        rel="noopener noreferrer"
+                        target="_blank"
+                      >
+                        View ad
+                      </a>
+                    </>
+                  ) : null}
+                </span>
+              </li>
+            );
+          })}
         </ul>
       ) : null}
     </BrandPageSourceSection>

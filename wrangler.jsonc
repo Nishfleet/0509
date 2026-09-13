@@ -84,6 +84,9 @@
     // Issue #3197: Google Ads (Transparency Center) source kill flag. "0" = the
     // source runs (the production posture); "1" pauses captures end to end.
     "GOOGLE_ADS_SOURCE_DISABLED": "0",
+    // Issue #3196: LinkedIn Ads (Ad Library) source kill flag. "0" = the
+    // source runs (the production posture); "1" pauses captures end to end.
+    "LINKEDIN_ADS_SOURCE_DISABLED": "0",
     "PRESENCE_WEBSITE_ROLLOUT": "generally_available",
     "PRESENCE_DIGEST_ROLLOUT": "disabled",
     "PRESENCE_X_ROLLOUT": "disabled",

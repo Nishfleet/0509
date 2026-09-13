@@ -1,6 +1,8 @@
 import type { AppEnv } from "~/lib/env.server";
 import type { JsonRecord } from "~/lib/data/helpers.server";
+import { isLinkedInAdsSourceKilled } from "~/lib/env.server";
 import { reserveDecodoBudget } from "~/lib/decodo-budget.server";
+import { recordLinkedInAdsCaptureAttempt } from "~/lib/sources/linkedin-ads/linkedin-ads-usage.server";
 import type { SourceAdapter, SourceChange, SourceFetchContext, SourceFetchResult, SourceSnapshotInput, SourceSnapshotRecord } from "~/lib/sources/types";
 import {
   fetchAdsByAccountOwner,
@@ -23,6 +25,17 @@ import { LinkedinAdsSection } from "~/components/sources/linkedin-ads";
  * Meta alert path tagged with `sourceId: "linkedin"`. Three diff cases:
  * new ad ids (ad_new), ad ids gone (ad_inactive), copy changes on the same id
  * (landing_page_headline_changed — the ad's promoted text changed).
+ *
+ * #3196 posture: the LINKEDIN_ADS_SOURCE_DISABLED kill flag (unset or "0" =
+ * the production posture; the flag only exists as an emergency brake) rides
+ * requiresEnv, so the registry's env filter drops the source from scheduled
+ * runs and the public /ads + /timeline sections omit when it flips. Every
+ * Library READ (success or failure) is counted through the best-effort #2181
+ * KV counters in linkedin-ads-usage.server.ts — the /status capture-failure
+ * rate's denominator; the quota-deny below returns BEFORE any read and is
+ * not counted. The #2873 capture-validity gate is preserved: an unavailable
+ * read returns before any diff, so the previous good snapshot stays the diff
+ * base — no phantom changes.
  */
 export const linkedinAdsAdapter: SourceAdapter = {
   id: "linkedin",
@@ -30,7 +43,12 @@ export const linkedinAdsAdapter: SourceAdapter = {
   kind: "ads",
   implemented: true,
   cadence: "weekly",
-  requiresEnv: (env: unknown): boolean => Boolean((env as AppEnv).DECODO_SCRAPER_AUTH),
+  // Kill flag (issue #3196): LINKEDIN_ADS_SOURCE_DISABLED=1 pauses the source
+  // (no runs, no /ads section); unset or "0" = on. The #2193 credential
+  // requirement stays: without DECODO_SCRAPER_AUTH the source is off either
+  // way.
+  requiresEnv: (env: unknown): boolean =>
+    !isLinkedInAdsSourceKilled(env as AppEnv) && Boolean((env as AppEnv).DECODO_SCRAPER_AUTH),
 
   async fetch(env: unknown, competitor: SourceFetchContext): Promise<SourceFetchResult> {
     const appEnv = env as AppEnv;
@@ -46,6 +64,12 @@ export const linkedinAdsAdapter: SourceAdapter = {
     const result = await fetchAdsByAccountOwner(appEnv, competitor.competitorLabel, {
       maxAds: 25,
     });
+
+    // One counted attempt per Library READ — success or failure (issue
+    // #3196). The #2193 quota-deny above returned before any read, so it is
+    // not counted: the /status rate measures Library-read failures only.
+    // Best-effort: the counter's own KV errors are swallowed inside it.
+    await recordLinkedInAdsCaptureAttempt(appEnv, { failed: "unavailable" in result });
 
     // Plain `in` check on purpose: `"unavailable" in result && result.unavailable`
     // does not narrow the union in TypeScript 5.9, the negative branch keeps the

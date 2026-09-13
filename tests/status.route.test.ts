@@ -604,4 +604,126 @@ describe("status route", () => {
     // stale 24h numbers stay out of the row.
     expect(markup).not.toContain("capture failure rate");
   });
+
+  describe("status — LinkedIn Ads (Ad Library) capture facts (#3196)", () => {
+    function makeKv() {
+      const store = new Map<string, { value: string; expirationTtl?: number }>();
+      return {
+        store,
+        async get(key: string) {
+          return store.get(key)?.value ?? null;
+        },
+        async put(key: string, value: string, options?: { expirationTtl?: number }) {
+          store.set(key, { value, expirationTtl: options?.expirationTtl });
+        },
+        async delete(key: string) {
+          store.delete(key);
+        },
+      } as unknown as KVNamespace;
+    }
+
+    function linkedinDayKey(now: Date = new Date()): string {
+      return `linkedin_ads:captures:${now.toISOString().slice(0, 10)}`;
+    }
+
+    it("exposes the #3196 capture facts from the #2181 KV when the app is served", async () => {
+      const kv = makeKv();
+      await kv.put(
+        linkedinDayKey(),
+        JSON.stringify({ attempted: 4, failed: 2 }),
+        {},
+      );
+
+      const { loader } = await import("~/routes/status");
+      const result = (await loader({
+        context: createContext({
+          DB: {},
+          DECODO_BUDGET: kv,
+          LINKEDIN_ADS_SOURCE_DISABLED: "0",
+        }),
+        request: new Request("https://0509.io/status"),
+      } as never)) as Record<string, unknown>;
+
+      expect(result.linkedinAdsSourceKilled).toBe(false);
+      expect(result.linkedinAdsCaptures).toMatchObject({
+        attempted: 4,
+        failed: 2,
+        counted: true,
+      });
+    });
+
+    it("omits the measured counters (counted: false) when no KV binding is wired", async () => {
+      const { loader } = await import("~/routes/status");
+      const result = (await loader({
+        context: createContext({ DB: {} }),
+        request: new Request("https://0509.io/status"),
+      } as never)) as Record<string, unknown>;
+
+      expect(result.linkedinAdsSourceKilled).toBe(false);
+      expect(result.linkedinAdsCaptures).toMatchObject({ counted: false, rate: null });
+    });
+
+    it("renders the capture facts, rate, and flag posture when the counter reports", async () => {
+      await mockRouter(() => ({
+        generatedAt: "2026-09-13T09:00:00.000Z",
+        asOf: "2026-09-13T09:00:00.000Z",
+        appServed: true,
+        commercialLaunch: { scoutSaleOpen: true, starterSaleOpen: true, agencySaleOpen: false },
+        monitoring: null,
+        surfaces: { asOf: "2026-09-13T09:00:00.000Z", monitoring: null, surfaces: [] },
+        linkedinAdsCaptures: { attempted: 5, failed: 1, rate: 0.2, counted: true },
+        linkedinAdsSourceKilled: false,
+      }));
+
+      const { default: StatusRoute } = await import("~/routes/status");
+      const markup = renderToStaticMarkup(createElement(StatusRoute));
+
+      expect(markup).toContain("LinkedIn Ads (Ad Library) capture");
+      expect(markup).toContain("Source enabled (kill flag LINKEDIN_ADS_SOURCE_DISABLED=0).");
+      expect(markup).toContain(
+        "5 capture attempts in the last two UTC days, 1 failed — 20% capture failure rate (best-effort counter).",
+      );
+    });
+
+    it("keeps the row to the flag posture when the counter binding is not wired", async () => {
+      await mockRouter(() => ({
+        generatedAt: "2026-09-13T09:00:00.000Z",
+        asOf: "2026-09-13T09:00:00.000Z",
+        appServed: true,
+        commercialLaunch: { scoutSaleOpen: true, starterSaleOpen: true, agencySaleOpen: false },
+        monitoring: null,
+        surfaces: { asOf: "2026-09-13T09:00:00.000Z", monitoring: null, surfaces: [] },
+        linkedinAdsCaptures: { attempted: 0, failed: 0, rate: null, counted: false },
+        linkedinAdsSourceKilled: false,
+      }));
+
+      const { default: StatusRoute } = await import("~/routes/status");
+      const markup = renderToStaticMarkup(createElement(StatusRoute));
+
+      expect(markup).toContain("Source enabled (kill flag LINKEDIN_ADS_SOURCE_DISABLED=0).");
+      expect(markup).toContain("Capture failure counters report once the seam");
+      expect(markup).not.toContain("capture attempts in the last two UTC days");
+    });
+
+    it("renders the paused posture when the #3196 kill flag is 1", async () => {
+      await mockRouter(() => ({
+        generatedAt: "2026-09-13T09:00:00.000Z",
+        asOf: "2026-09-13T09:00:00.000Z",
+        appServed: true,
+        commercialLaunch: { scoutSaleOpen: true, starterSaleOpen: true, agencySaleOpen: false },
+        monitoring: null,
+        surfaces: { asOf: "2026-09-13T09:00:00.000Z", monitoring: null, surfaces: [] },
+        linkedinAdsCaptures: { attempted: 5, failed: 1, rate: 0.2, counted: true },
+        linkedinAdsSourceKilled: true,
+      }));
+
+      const { default: StatusRoute } = await import("~/routes/status");
+      const markup = renderToStaticMarkup(createElement(StatusRoute));
+
+      expect(markup).toContain("Source paused by its kill flag LINKEDIN_ADS_SOURCE_DISABLED=1");
+      // A deliberately paused source has no meaningful failure rate — the
+      // stale 24h numbers stay out of the row.
+      expect(markup).not.toContain("capture failure rate");
+    });
+  });
 });

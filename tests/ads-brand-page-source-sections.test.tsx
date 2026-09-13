@@ -298,6 +298,66 @@ describe("/ads/:domain source sections (issue #2200)", () => {
     expect(markup).not.toContain('id="brand-google-ads-title"');
   });
 
+  it("renders the #3196 LinkedIn coverage note from the #2193 stored payload shape", async () => {
+    // The #2193 stored shape is the contract: promoted-post cards with id,
+    // advertiser, promoted text and the public detail link — no per-ad seen
+    // dates, no payload-level fetchedAt (the snapshot stamp wins). This
+    // fixture mirrors it exactly, so the section is proven against what the
+    // adapter really stores.
+    const linkedinSnapshot: BrandPageSourceSnapshot = {
+      sourceId: "linkedin",
+      label: "LinkedIn Ads (Ad Library)",
+      snapshot: {
+        id: "snap-linkedin-1",
+        watchlistId: "wl-1",
+        sourceId: "linkedin",
+        fetchedAt: "2026-09-01T09:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
+        createdAt: "2026-09-01T09:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
+        payload: {
+          accountOwner: "Rival Labs",
+          totalAds: 2,
+          ambiguous: false,
+          ads: [
+            {
+              id: "411191001",
+              advertiser: "Rival Labs",
+              text: "Rival Labs launches warm-handoff tracking for revenue teams.",
+              creativeImageUrl: "https://media.licdn.com/dms/image/411191001/creative",
+              detailUrl: "https://www.linkedin.com/ad-library/detail/411191001",
+            },
+            {
+              id: "411191002",
+              advertiser: "Rival Labs",
+              text: "See every competitor motion the week it happens.",
+              creativeImageUrl: null,
+              detailUrl: "https://www.linkedin.com/ad-library/detail/411191002",
+            },
+          ],
+        },
+      },
+    };
+    const markup = await render(populated({ sourceSnapshots: [linkedinSnapshot] }));
+    expect(markup).toContain('id="brand-linkedin-ads-title"');
+    // Issue #3196: the honest coverage note — source, what is covered, what
+    // is not, region, freshness — rendered on /ads (timelines and briefs
+    // share this component).
+    expect(markup).toContain('data-testid="brand-linkedin-ads-coverage"');
+    expect(markup).toContain("public LinkedIn Ad Library");
+    expect(markup).toContain("no LinkedIn official-API key that bars commercial use");
+    expect(markup).toContain("newest results page only");
+    expect(markup).toContain("United States");
+    expect(markup).toContain("weekly cadence");
+    // The #2193 payload's real fields render; the old ghost lines (the
+    // TikTok-shaped adId/firstSeen reads) are gone.
+    expect(markup).toContain("2 LinkedIn ads on record.");
+    expect(markup).toContain("Rival Labs launches warm-handoff tracking for revenue teams.");
+    expect(markup).toContain("https://www.linkedin.com/ad-library/detail/411191001");
+    expect(markup).toContain("View ad");
+    expect(markup).not.toContain("Newest ad");
+    expect(markup).toContain('data-testid="brand-linkedin-ads-checked"');
+    expect(markup).toContain("Last checked");
+  });
+
   it("keeps the title unchanged in shape — no source counts or dates in <title>", async () => {
     const routeModule = (await import("~/routes/ads.$domain")) as unknown as {
       meta: (args: { loaderData: BrandPageLoaderData }) => ReadonlyArray<{

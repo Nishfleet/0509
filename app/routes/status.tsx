@@ -12,6 +12,7 @@ import {
 import { presenceSourceCoverageForDocs } from "~/lib/presence-source-coverage.server";
 import type { AppEnv } from "~/lib/env.server";
 import type { GoogleAdsCaptureStats } from "~/lib/sources/google-ads/google-ads-usage.server";
+import type { LinkedInAdsCaptureStats } from "~/lib/sources/linkedin-ads/linkedin-ads-usage.server";
 import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
 import {
   canonicalLinks,
@@ -67,6 +68,27 @@ export async function loader({ context }: LoaderFunctionArgs) {
     }
   }
 
+  // LinkedIn Ads (Ad Library) capture facts (issue #3196) — the #3197
+  // Google Ads facts' shape: the kill flag posture is configuration, always
+  // known when the app is served; the 24h attempt/failure counters read the
+  // #2181 seam KV namespace and are omitted when that binding is not wired
+  // (missing = no false claim, the #2200 rule). Guarded like every read on
+  // this page.
+  let linkedinAdsCaptures: LinkedInAdsCaptureStats | null = null;
+  let linkedinAdsSourceKilled = false;
+  if (env) {
+    const { getLinkedInAdsCaptureStats24h } = await import(
+      "~/lib/sources/linkedin-ads/linkedin-ads-usage.server"
+    );
+    const { isLinkedInAdsSourceKilled } = await import("~/lib/env.server");
+    linkedinAdsSourceKilled = isLinkedInAdsSourceKilled(env as AppEnv);
+    try {
+      linkedinAdsCaptures = await getLinkedInAdsCaptureStats24h(env as AppEnv);
+    } catch {
+      linkedinAdsCaptures = null;
+    }
+  }
+
   return {
     generatedAt: asOf,
     asOf,
@@ -80,6 +102,8 @@ export async function loader({ context }: LoaderFunctionArgs) {
     monitoring: surfaces.monitoring,
     googleAdsCaptures,
     googleAdsSourceKilled,
+    linkedinAdsCaptures,
+    linkedinAdsSourceKilled,
   };
 }
 
@@ -101,6 +125,35 @@ export function googleAdsCaptureLine(
     return "Source paused by its kill flag GOOGLE_ADS_SOURCE_DISABLED=1 — scheduled captures, the /ads section and coverage reporting follow it. ";
   }
   const flag = "Source enabled (kill flag GOOGLE_ADS_SOURCE_DISABLED=0). ";
+  if (captures?.counted) {
+    const rateTail =
+      captures.rate !== null
+        ? ` — ${Math.round(captures.rate * 100)}% capture failure rate`
+        : "";
+    return `${flag}${captures.attempted} capture attempts in the last two UTC days, ${captures.failed} failed${rateTail} (best-effort counter). `;
+  }
+  return `${flag}Capture failure counters report once the seam's KV namespace (DECODO_BUDGET) is wired on this deployment. `;
+}
+
+/**
+ * The one factual sentence for the /status LinkedIn Ads (Ad Library) capture
+ * row (issue #3196) — the #3197 Google Ads line's shape with the LinkedIn
+ * flag's name: the kill-flag posture, plus the 24h attempt/failure numbers
+ * when the #2181 KV binding carries them. Killed skips the counters on
+ * purpose — a deliberately paused source has no meaningful failure rate, and
+ * a 0/0 day rendered as 0% would hide that. The window is the union of
+ * today's and yesterday's UTC day counters, which the wording states instead
+ * of faking a rolling 24h. Counter facts degrade to the flag posture when
+ * the binding is not wired — nothing here is invented.
+ */
+export function linkedinAdsCaptureLine(
+  captures: LinkedInAdsCaptureStats | null | undefined,
+  killed: boolean,
+): string {
+  if (killed) {
+    return "Source paused by its kill flag LINKEDIN_ADS_SOURCE_DISABLED=1 — scheduled captures and the /ads section follow it. ";
+  }
+  const flag = "Source enabled (kill flag LINKEDIN_ADS_SOURCE_DISABLED=0). ";
   if (captures?.counted) {
     const rateTail =
       captures.rate !== null
@@ -264,6 +317,18 @@ export default function StatusRoute() {
               <dt>Google Ads (Transparency Center) capture</dt>
               <dd>
                 {googleAdsCaptureLine(data.googleAdsCaptures, data.googleAdsSourceKilled)}
+                As of {asOf}.
+              </dd>
+            </div>
+          </dl>
+        ) : null}
+
+        {data.linkedinAdsCaptures || data.linkedinAdsSourceKilled ? (
+          <dl className="proof-trail-list">
+            <div>
+              <dt>LinkedIn Ads (Ad Library) capture</dt>
+              <dd>
+                {linkedinAdsCaptureLine(data.linkedinAdsCaptures, data.linkedinAdsSourceKilled)}
                 As of {asOf}.
               </dd>
             </div>
