@@ -346,6 +346,10 @@ function makeRow(overrides: Partial<SuggestedCompetitorRow> = {}): SuggestedComp
     overlapScore: 0.84,
     provenance:
       "meta_ad_library_keyword_probe: keyword:\"glow sale\" country:\"United States\". Candidates are only advertisers with active ads on the searched terms.",
+    // Slice 2 (#3175) made why/source REQUIRED on every row, so the fixture
+    // default carries both (overridable, like every other field here).
+    why: "Runs ads on “glow sale” in United States.",
+    source: "ad_keyword_overlap" as const,
     type: "candidate" as const,
     ...overrides,
   };

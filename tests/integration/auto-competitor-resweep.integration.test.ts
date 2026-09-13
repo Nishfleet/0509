@@ -141,6 +141,10 @@ function candidate(
     provenance:
       extra?.provenance ??
       'meta_ad_library_keyword_probe: keyword:"wool runners" country:"United States". Candidates are only advertisers with active ads on the searched terms.',
+    // #3175 made why/source required on every probe candidate; the fixture
+    // mirrors exactly what the seed's keyword-probe path produces.
+    why: "Runs ads on “wool runners” in United States.",
+    source: "ad_keyword_overlap" as const,
     countries: ["United States"],
     matchedKeywords: ["wool runners"],
   };
