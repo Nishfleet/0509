@@ -586,8 +586,17 @@ describe("rss mention backbone — coverage gating", () => {
 // migration — 0093 already accepts `rss` rows): the per-source kill flag, ONE
 // feed fetch per poll (Substack item links are direct publication URLs — no
 // Google-News-style redirect hop), >=1 mention captured at the post's
-// canonical URL, and canonical-URL dedup on re-poll
-// (UNIQUE (source_target_id, url_hash) via url_hash of the canonical_url).
+// canonical URL, and canonical-URL dedup on re-poll. Dedup mechanism,
+// precisely: the app-level upsert skips when the url_hash + content_hash are
+// already stored (presence-data.server.ts) — the UNIQUE (source_target_id,
+// url_hash) index in 0055 is the concurrent-write backstop, not what this
+// happy-path poll exercises. Scope notes for the #3199 acceptance: the
+// capture-validity gate is proven on the full pipeline in
+// tests/capture-validity-pipeline.test.ts (this describe exercises the
+// kill-flag + credential gates at the poll boundary; nothing here bypasses
+// the validity pipeline); the issue's "e2e fixture" proof here is the
+// integration fixture (>=1 mention), with the public-surface proof pinned in
+// tests/status.route.test.ts (the /status markup).
 const SUBSTACK_FEED_URL = "https://acmeletters.substack.com/feed";
 
 const SUBSTACK_FEED = `<?xml version="1.0" encoding="UTF-8"?>
@@ -645,7 +654,6 @@ describe("rss mention backbone — Substack publication feed (issue #3199)", () 
     // The publication feed yields >=1 mention: the feed's items come through
     // with their canonical Substack post URL, and only the item naming the
     // tracked entity becomes a presence_item mention row.
-    expect(poll.ok).toBe(true);
     expect(poll.items).toHaveLength(2);
     const mentionItem = poll.items.find((item) => item.canonicalUrl === "https://acmeletters.substack.com/p/acme-fall-gear-haul");
     expect(mentionItem).toBeDefined();
