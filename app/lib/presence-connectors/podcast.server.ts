@@ -373,10 +373,7 @@ function parseEpisodePlans(
     const title = decodeXml(extractTag(block, "title") ?? "Untitled episode").trim() || "Untitled episode";
     const publishedRaw = extractTag(block, "pubDate");
     const publishedAt = publishedRaw ? safeIsoDate(publishedRaw) ?? observedAt : observedAt;
-    const author =
-      decodeXml(extractTag(block, "itunes:author") ?? "").trim() ||
-      (channelAuthor ? decodeXml(channelAuthor).trim() : "") ||
-      null;
+    const author = decodeXml(extractTag(block, "itunes:author") ?? "").trim() || null;
     const descriptionRaw =
       extractTag(block, "itunes:summary") ??
       extractTag(block, "description") ??
@@ -417,6 +414,12 @@ function parseEpisodePlans(
           kind: "podcast_episode",
           showFeed: feedUrl,
           ...(showTitle ? { showTitle } : {}),
+          // Provenance, not match fuel: the show's own attribution rides the
+          // raw record so the channel-level itunes:author stays inspectable
+          // without silently making every episode of the show match the
+          // tracked phrase through the author field (the publication-feed
+          // mention-match also matches against author).
+          ...(channelAuthor ? { showAuthor: channelAuthor } : {}),
           ...(chosenTranscriptOf(block) ?? {}),
         },
       },
