@@ -36,6 +36,13 @@ export const MARKETING_PRIMARY_LINKS: readonly MarketingPrimaryLink[] = [
 export interface MarketingNavProps {
   /** Show the three /switch/* "from <tool>" links in the primary nav (default true). */
   showSwitchLinks?: boolean;
+  /**
+   * #3358: the acquisition-surface family marker carried by this surface's
+   * Sign up pill — the pill becomes /auth/signup?source=<marker> so the #4518
+   * meter attributes the signup start. Only #3358 acquisition-family routes
+   * pass it; every other public surface keeps the bare pill.
+   */
+  signupSource?: string;
 }
 
 /**
@@ -54,7 +61,7 @@ export interface MarketingNavProps {
  * + Sign up only), so the compact ≤860px row never carries a second link to the
  * same login destination.
  */
-export function MarketingNav({ showSwitchLinks = true }: MarketingNavProps) {
+export function MarketingNav({ showSwitchLinks = true, signupSource }: MarketingNavProps) {
   const rootData = useRouteLoaderData("root") as RootLoaderData | undefined;
 
   return (
@@ -93,7 +100,7 @@ export function MarketingNav({ showSwitchLinks = true }: MarketingNavProps) {
             Open app
           </Link>
         ) : null}
-        <Link className="ld-nav-pill" to="/auth/signup">
+        <Link className="ld-nav-pill" to={signupSource ? `/auth/signup?source=${signupSource}` : "/auth/signup"}>
           Sign up
         </Link>
       </nav>

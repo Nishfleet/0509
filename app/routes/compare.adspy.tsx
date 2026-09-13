@@ -21,6 +21,7 @@ import {
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import adspyCitations from "~/data/compare/adspy-citations.json";
+import { COMPARE_PAGE_SIGNUP_SOURCE } from "~/lib/signup-source";
 
 const citations = adspyCitations as CompareCitations;
 
@@ -129,7 +130,7 @@ export default function CompareAdspyRoute() {
         )}
       />
       <script {...jsonLdScriptProps(structuredFaq)} />
-      <MarketingNav />
+      <MarketingNav signupSource={COMPARE_PAGE_SIGNUP_SOURCE} />
       <Breadcrumbs
         items={[
           { name: "Home", pathname: "/" },

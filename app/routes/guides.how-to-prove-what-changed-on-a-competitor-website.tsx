@@ -39,6 +39,7 @@ import {
   type FaqJsonLdEntry,
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import { GUIDE_PROVE_WHAT_CHANGED_SIGNUP_SOURCE } from "~/lib/signup-source";
 
 const PATHNAME = "/guides/how-to-prove-what-changed-on-a-competitor-website";
 
@@ -184,7 +185,7 @@ export default function GuideHowToProveWhatChangedOnACompetitorWebsiteRoute() {
         )}
       />
       <script {...jsonLdScriptProps(structuredFaq)} />
-      <MarketingNav />
+      <MarketingNav signupSource={GUIDE_PROVE_WHAT_CHANGED_SIGNUP_SOURCE} />
 
       <section className="ld-hero">
         <p className="ld-case">

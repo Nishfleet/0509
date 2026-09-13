@@ -23,6 +23,7 @@ import {
 import { FREE_PREVIEW_SEARCH_DOMAIN, LIVE_BRAND_PROOF_DOMAIN } from "~/lib/demo-brand-pages";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import poweradspyCitations from "~/data/compare/poweradspy-citations.json";
+import { COMPARE_PAGE_SIGNUP_SOURCE } from "~/lib/signup-source";
 
 // Source verification (issue #3092): primary-source-verified —
 // https://poweradspy.com/ and https://poweradspy.com/pricing return HTTP 200
@@ -136,7 +137,7 @@ export default function ComparePoweradspyRoute() {
         )}
       />
       <script {...jsonLdScriptProps(structuredFaq)} />
-      <MarketingNav />
+      <MarketingNav signupSource={COMPARE_PAGE_SIGNUP_SOURCE} />
       <Breadcrumbs
         items={[
           { name: "Home", pathname: "/" },

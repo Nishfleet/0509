@@ -23,6 +23,7 @@ import {
 import { LIVE_BRAND_PROOF_DOMAIN } from "~/lib/demo-brand-pages";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import adspyderCitations from "~/data/compare/adspyder-citations.json";
+import { COMPARE_PAGE_SIGNUP_SOURCE } from "~/lib/signup-source";
 
 const citations = adspyderCitations as CompareCitations;
 
@@ -129,7 +130,7 @@ export default function CompareAdspyderRoute() {
         )}
       />
       <script {...jsonLdScriptProps(structuredFaq)} />
-      <MarketingNav />
+      <MarketingNav signupSource={COMPARE_PAGE_SIGNUP_SOURCE} />
       <Breadcrumbs
         items={[
           { name: "Home", pathname: "/" },

@@ -39,6 +39,7 @@ import {
   type FaqJsonLdEntry,
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import { GUIDE_STANDING_WATCH_SIGNUP_SOURCE } from "~/lib/signup-source";
 
 const PATHNAME =
   "/guides/how-to-turn-a-one-off-competitor-check-into-a-standing-watch";
@@ -185,7 +186,7 @@ export default function GuideHowToTurnAOneOffCompetitorCheckIntoAStandingWatchRo
         )}
       />
       <script {...jsonLdScriptProps(structuredFaq)} />
-      <MarketingNav />
+      <MarketingNav signupSource={GUIDE_STANDING_WATCH_SIGNUP_SOURCE} />
 
       <section className="ld-hero">
         <p className="ld-case">
