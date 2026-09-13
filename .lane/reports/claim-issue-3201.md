@@ -74,8 +74,11 @@ dependency). Adopted: none — the platform's own public surface; the same
 `research:`/`help-first:` header lives in the connector source.
 
 Public surfaces only; no paid vendor; no edits to the shared interface
-(the only shared-file touches are additive id-list/registry/coverage lines —
-the #3178 extension convention). PLAN.md stays as written: its Pinterest row
+(the shared-file touches are the additive id-list/registry/coverage lines —
+the #3178 extension convention — PLUS one additive-visibility change the
+senior review called out: `rss.server.ts` gains `export` on `parseFeedItems`
+and `stripHtml` so the connector REUSES the shared parser instead of forking
+it; signatures and behavior unchanged). PLAN.md stays as written: its Pinterest row
 (§sources) already parks the OAuth-gated API v5 at zero-spend, and the
 connector's docblock explains why the feed, not the API, is the $0 surface —
 the "no lawful public surface" exclusion (PLAN.md documentation + flag-off)
