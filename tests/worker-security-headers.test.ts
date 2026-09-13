@@ -407,7 +407,7 @@ describe("Worker security headers", () => {
 
   describe("anonymous public HTML caching", () => {
     it("lets anonymous public pages carry short browser caching", () => {
-      for (const path of ["/", "/help", "/docs", "/terms", "/brands", "/brands/e-brands", "/guides", "/guides/how-to-track-competitor-ads", "/compare"  , "/compare/keeptabz", "/compare/gethookd", "/compare/bigspy", "/compare/minea", "/compare/poweradspy", "/ads/nike.com", "/timeline/nike.com", "/compare/visualping", "/compare/visualping-ad-library", "/compare/visualping-ad-libraries", "/compare/spyland", "/compare/pulzifi", "/compare/foreplay", "/compare/foreplay-spyder", "/compare/panoramata", "/compare/adspyder", "/compare/adspy", "/switch/panoramata", "/switch/visualping", "/switch/magicbrief", "/switch/adspy", "/methodology", "/methodology/ad-aggression-score"]) {
+      for (const path of ["/", "/help", "/docs", "/terms", "/brands", "/brands/e-brands", "/guides", "/guides/how-to-track-competitor-ads", "/compare"  , "/compare/keeptabz", "/compare/gethookd", "/compare/bigspy", "/compare/minea", "/compare/poweradspy", "/ads/nike.com", "/timeline/nike.com", "/compare/visualping", "/compare/visualping-ad-library", "/compare/visualping-ad-libraries", "/compare/spyland", "/compare/pulzifi", "/compare/foreplay", "/compare/foreplay-spyder", "/compare/panoramata", "/compare/adspyder", "/compare/adspy", "/switch/panoramata", "/switch/visualping", "/switch/magicbrief", "/switch/adspy", "/methodology", "/methodology/ad-aggression-score", "/search?q=calendly.com"]) {
         const response = withSecurityHeaders(
           htmlResponse(),
           new Request(`https://0509.io${path}`),
@@ -440,8 +440,11 @@ describe("Worker security headers", () => {
       expect(response.headers.get("cloudflare-cdn-cache-control")).toBe("no-store");
     });
 
-    it("keeps app, auth, search, share, and status HTML no-store", () => {
-      for (const path of ["/app", "/auth/login", "/search", "/share/abc", "/status", "/unsubscribe"]) {
+    it("keeps app, auth, search-data, share, and status HTML no-store", () => {
+      // /search rides the #3391 public stamp now; its /search.data funnel
+      // pathname (the BET-2 2s poll) deliberately does not — it must keep the
+      // fresh loader semantics, so it stays on the no-store default.
+      for (const path of ["/app", "/auth/login", "/search.data", "/share/abc", "/status", "/unsubscribe"]) {
         const response = withSecurityHeaders(
           htmlResponse(),
           new Request(`https://0509.io${path}`),

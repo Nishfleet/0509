@@ -155,6 +155,17 @@ export function edgeCacheCopyIsStale(response: Response, now = Date.now()): bool
  * document cache never fights any other default-cache tenant. */
 export const EDGE_HTML_CACHE_NAME = "public-html-edge-v1";
 
+/**
+ * App-facing marker (issue #3391): renderAndStore stamps it onto the router
+ * request when the EDGE CACHE will own the stored variant. The search loader
+ * reads it to suppress the #1972 fresh-anon Set-Cookie — a cookieless, signed
+ * read is the shared anonymous shape, and its stored copy must stay
+ * cookie-free or isEdgeCacheableHtmlResponse never licenses it and /search
+ * stays 100% origin. The loader holds the literal (no worker→app imports);
+ * the wiring test couples the two end to end.
+ */
+export const EDGE_CACHE_ELIGIBLE_HEADER = "x-0509-edge-cache-eligible";
+
 /** The proof header the #2950 deploy gate asserts. */
 export const EDGE_CACHE_PROOF_HEADER = EDGE_CACHE_HEADER;
 
