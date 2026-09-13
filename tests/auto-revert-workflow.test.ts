@@ -200,20 +200,28 @@ describe("auto-revert workflow", () => {
       .filter((ln) => !/^\s*#/.test(ln))
       .join("\n");
     const assertIdx = closerCommands.indexOf("gh api graphql");
-    // Review round 1 (0509#2929): the union is captured into `candidates`
-    // BEFORE the loop — a failing command substitution as a `for` word list
-    // does not abort under bash 5.2 `set -euo pipefail`, so the capture
-    // itself must be the assignment that `set -e` fires on. Pin the order:
-    // GraphQL probe, then the candidates assignment, then the loop over
-    // $candidates.
-    const captureIdx = closerCommands.indexOf('candidates="$({');
+    // Review round 1 (0509#2929): EACH source is its own assignment BEFORE
+    // the loop — a failing command substitution as a `for` word list does
+    // not abort under bash 5.2, and a `{ a; b; }` group's status is its
+    // LAST command (`inherit_errexit` off), so either source failure must
+    // fire on the bare `v=$(gh …)` assignment itself. Pin the order:
+    // GraphQL probe, then both captures, then the loop over $candidates —
+    // and pin the brace-group/`candidates="$({` shape AWAY: it is the
+    // silent-partial-union bug, not the fix.
+    const captureIdx = closerCommands.indexOf('label_nums="$(gh issue list');
+    const titleIdx = closerCommands.indexOf('title_nums="$(gh issue list');
     const loopIdx = closerCommands.indexOf("for num in $candidates");
     expect(captureIdx).toBeGreaterThan(-1);
-    expect(loopIdx).toBeGreaterThan(captureIdx);
+    expect(titleIdx).toBeGreaterThan(captureIdx);
+    expect(loopIdx).toBeGreaterThan(titleIdx);
+    expect(closerCommands).toContain('title_nums="$(gh issue list');
+    expect(closerCommands).toContain('candidates="$(printf');
+    expect(closerCommands).not.toContain('candidates="$({');
     expect(closerCommands).toContain("for num in $candidates");
     expect(closerCommands).not.toContain("for num in $(");
     expect(assertIdx).toBeGreaterThan(-1);
     expect(captureIdx).toBeGreaterThan(assertIdx);
+    expect(titleIdx).toBeGreaterThan(assertIdx);
     expect(closerCommands).toContain("if ! gh api graphql");
     expect(closerRun).toContain("FATAL: GH_TOKEN cannot use the GitHub GraphQL API");
     expect(closerCommands).toContain("exit 1");

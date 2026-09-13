@@ -100,16 +100,18 @@ jobs:
           # "AUTO-REVERT HALT:", so the search candidates are narrowed by a
           # startswith filter: bystander issues that merely CONTAIN the phrase
           # in their title (#3364, a scout-candidate) must not be swept.
-          # Review round 1 (0509#2929): capture the union into a variable
-          # BEFORE the loop. Under bash 5.2 `set -euo pipefail`, a failing
-          # command substitution used as a `for` word list does NOT abort —
-          # the loop runs on whatever stdout arrived and the step reports
-          # success (the silent "closed 0" class again). An assignment's
-          # exit status IS the substitution's, so pipefail fires and the
-          # step dies loud instead of closing a partial set.
-          candidates="$({ gh issue list --repo "$REPO" --state open --label auto-revert-halt --limit 500 --json number --jq '.[].number'; \
-            gh issue list --repo "$REPO" --state open --search "AUTO-REVERT HALT in:title" --limit 500 --json number,title --jq '.[] | select(.title | startswith("AUTO-REVERT HALT:")) | .number'; } \
-            | sort -u)"
+          # Review round 1 (0509#2929): EACH source is its own assignment
+          # BEFORE the loop. Under bash 5.2 `inherit_errexit` is off, so a
+          # `{ gh …; gh …; } | sort -u` group's status is its LAST command —
+          # a failed label list beside a successful title search would report
+          # success and silently close a partial set (verified:
+          # `{ false; echo 42; } | sort -u` assigns 42 and survives). A bare
+          # `v=$(gh …)` assignment's exit status IS its substitution's, so
+          # any source failure dies here, before the loop closes anything.
+          # (The for-list itself still never aborts — hence $candidates.)
+          label_nums="$(gh issue list --repo "$REPO" --state open --label auto-revert-halt --limit 500 --json number --jq '.[].number')"
+          title_nums="$(gh issue list --repo "$REPO" --state open --search "AUTO-REVERT HALT in:title" --limit 500 --json number,title --jq '.[] | select(.title | startswith("AUTO-REVERT HALT:")) | .number')"
+          candidates="$(printf '%s\n%s\n' "$label_nums" "$title_nums" | sort -u)"
           for num in $candidates; do
             gh issue close "$num" --repo "$REPO" --reason completed \
               --comment "Resolved by a green \`Deploy production\` run on main: $RUN_URL (commit $short). Every AUTO-REVERT HALT records a red-on-consecutive-commits state; that state ended with this run. Closed automatically by auto-revert.yml (close-halts-on-green)." >/dev/null
