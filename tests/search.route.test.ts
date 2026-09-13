@@ -2016,6 +2016,58 @@ describe("search loader", () => {
     });
   });
 
+  it("edge-cache-eligible render: the fresh anonymous success skips the #1972 mint (#3391)", async () => {
+    const env = { DB: {} };
+    const enforcePublicSearchRateLimit = vi.fn().mockResolvedValue(null);
+    const sourceResult = {
+      ads: [baseAd],
+      searchIntent: "text" as const,
+      verifiedCount: 0,
+      likelyCount: 0,
+      unmatchedCount: 1,
+    };
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => env) }));
+    vi.doMock("~/lib/data.server", () => ({ listCollections: vi.fn() }));
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforcePublicSearchRateLimit,
+      enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceSearchSelectionRateLimit: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver: vi.fn().mockResolvedValue(sourceResult),
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection: vi.fn().mockResolvedValue({
+        result: sourceResult,
+        selectedAd: baseAd,
+      }),
+    }));
+
+    const { loader } = await import("~/routes/search");
+    const out = await loader({
+      context: createContext(env),
+      // The marker is EDGE_CACHE_ELIGIBLE_HEADER in workers/edge-cache.ts,
+      // stamped by the worker's renderAndStore; the wiring test couples them.
+      request: new Request("http://localhost/search?query=nykaa", {
+        headers: { "x-0509-edge-cache-eligible": "1" },
+      }),
+    } as never);
+
+    // The payload stays bare: the stored document variant must be cookie-free
+    // or the edge cache never licenses it and /search stays 100% origin.
+    expect(out instanceof Response).toBe(false);
+  });
+
   it("marks the anonymous search cookie Secure", async () => {
     // Issue #2474: f9_anon_search carries the per-browser public-search budget
     // key. Without `Secure` a browser sends it on any plaintext http://0509.io
