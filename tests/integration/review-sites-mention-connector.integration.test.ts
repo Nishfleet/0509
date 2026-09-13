@@ -39,7 +39,7 @@ import { appEnv, ISO_T0, db, seedUser, uid } from "./fixtures";
  * (method, host, path) is still proven.
  *
  * The `source_target.connector_id` CHECK gains 'review_sites' by the
- * 0101 widen migration (expand-only, the 0093/0098/0099/0100 convention) —
+ * 0103 widen migration (expand-only, the 0093/0098/0099/0100 convention) —
  * this suite proves the widened schema accepts the new connector's rows.
  */
 
