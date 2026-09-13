@@ -230,6 +230,25 @@ Official docs/terms read for this plan (2026-09-12):
   developers (press/analyst coverage of the official pricing change:
   [heise](https://www.heise.de/en/news/Usage-based-instead-of-flat-rate-X-changes-costs-of-its-developer-interface-11169806.html),
   [postproxy](https://postproxy.dev/blog/x-api-pricing-2026/)).
+- X open-source collectors, searched + rejected for the fleet collector
+  (#3198; sources read directly, 2026-09-13):
+  - Nitter ([zedeus/nitter](https://github.com/zedeus/nitter), README): the
+    unofficial-API, no-developer-account front-end. Rejected: unofficial
+    surface with fragile standing — X Corp cease-and-desist letters went to
+    the project and its public instances on 2026-08-24 (the project announced
+    it will continue; details still pending), and its RSS mode is
+    "instance-specific, often disabled due to abuse". Too fragile to replace
+    a metered, contract-backed read.
+  - snscrape ([JustAnotherArchivist/snscrape](https://github.com/JustAnotherArchivist/snscrape),
+    README): scraper over the unofficial surfaces, shipped as a Python
+    CLI/library. Rejected: wrong runtime (presence collectors run inside the
+    Workers/TypeScript app, not a Python sidecar) and the same unofficial,
+    no-contract rate posture.
+  - Conclusion (unchanged, now sourced): the lawful, documented,
+    contract-backed X read surface is the official X API v2 recent search —
+    pay-per-use since Feb 2026, no free read tier. That is the documented
+    no-(free-)surface entry the epic's termination allows: the connector
+    shipped in #3255, `PRESENCE_X_ROLLOUT` stays off until the MONEY decision.
 - Reddit: [Data API Terms](https://redditinc.com/policies/data-api-terms),
   [Data API Wiki rate limits](https://support.reddithelp.com/hc/en-us/articles/16160319875092-Reddit-Data-API-Wiki)
   (100 QPM/OAuth client, 10-min averaging window, OAuth mandatory),
