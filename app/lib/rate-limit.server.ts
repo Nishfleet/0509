@@ -14,6 +14,8 @@ import type { AppEnv, EdgeRateLimitBindingName } from "~/lib/env.server";
 // keep the same long-run rate (old limit / 10, per minute) with 60s burst
 // granularity instead of the old one 10-minute window. The comments under
 // each exported gate spell out the derivation from the original budget.
+// Issue #3156 later raised public-brand-page above its parity rate to the
+// measured crawl pace — see the constant's comment.
 //
 // Cost-bearing routes (usage-billed Browser Rendering spend, billing calls,
 // share-PDF renders) keep the synchronous D1 atomicClaim: they need an
@@ -75,7 +77,14 @@ type EdgeLimitPolicy = {
 export const PUBLIC_SEARCH_IP_BACKSTOP_LIMIT = 10;
 export const PUBLIC_SEARCH_ANON_BROWSER_LIMIT = 2;
 export const PUBLIC_SEARCH_SELECTION_PER_MINUTE_LIMIT = 3;
-export const PUBLIC_BRAND_PAGE_PER_MINUTE_LIMIT = 12;
+export const PUBLIC_BRAND_PAGE_PER_MINUTE_LIMIT = 60;
+// Issue #3156 raised this above the #2964 parity rate (12/60s): this ONE
+// bucket serves /ads/:domain, /timeline/:domain AND the
+// /api/ads/capture-failures/:domain noindex probe, so the status-probe +
+// noindex-probe pattern spends 2 events per URL — at 12/60s even the
+// issue's acceptance crawl (1 req/URL, 3s apart = 20/60s) 429'd mid-sitemap.
+// 60/60s clears the measured 40/60s double-fetch pace with headroom;
+// verified crawlers stay fully exempt (#2062). RL_BRAND_PAGE must match.
 // Issue #2964 legacy budget was 30 per 10-minute window; the native Rate
 // Limiting binding only supports 10s/60s periods, so the sustained rate
 // becomes 3/60s.

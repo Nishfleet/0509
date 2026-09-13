@@ -193,7 +193,7 @@
         "name": "RL_BRAND_PAGE",
         "type": "ratelimit",
         "namespace_id": "1006",
-        "simple": { "limit": 12, "period": 60 }
+        "simple": { "limit": 60, "period": 60 }
       },
       {
         "name": "RL_WRITE",
