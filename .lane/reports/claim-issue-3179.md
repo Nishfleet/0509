@@ -49,6 +49,16 @@ the implementation + proof rounds (Threads in the mention set, timeline
 dedupe rename, fixture persona invariant 26→27, brief copy). This lane's work
 was: re-entrancy pickup, two-suite green, journey-1 proof, gates, PR.
 
+## Pickup round (2026-09-13, after the sync to main @ 522c79d4c)
+
+- Re-entrancy: resumed this worktree/branch; merged origin/main (clean); pushed 379e35592.
+- Node affected-tests: 414 files / 4987 tests, all passed (154s).
+- Workers integration (timeline-public-mentions + rss-mention-backbone): 2 files / 19 tests passed (8.5s).
+- Journey-1 proof (diagnostic-subset, retries=2 available): 3/3 viewports passed, 3.6m, no retry needed — the zero-retry round promised above.
+- Accept-3 proof: no-match probe `git diff --name-only origin/main...HEAD | grep -iE 'suppress|rate'` → empty (exit 1): suppression/rate paths untouched.
+- sgscan --base origin/main: "No new security findings."
+- crgate: CodeRabbit signed out on this machine — skill row 3: tell Nish (`coderabbit auth login`), do not sign in for him. Recorded as loose-ends in the PR body.
+
 ## Notes
 
 - Fixture: cross-workspace Nike mention seeded in `e2e/fixtures/e2e-local.sql`
