@@ -101,3 +101,20 @@ literal 0509.io URL, which only flips after deploy):
   `/social-card/brand/sport-footwear.svg` still serve `image/svg+xml`
   (#3104 scope untouched); the `/social-card/compare.svg` alias serves PNG
   like the other rasterized kinds.
+
+## Resumed run (pi-issue-0509-3114, 2026-09-13)
+
+First incarnation opened #3147 (closed unmerged during the 2026-09-13
+heartbeat releases; worktree commits survived). This run re-entrantly reused
+`claim/issue-3114`, rebased the two commits onto current main (edacd4aaf,
+after #3360/#3361) — no conflicts — and re-proved everything:
+
+- node project (`vitest --project node --changed origin/main`): 387 files /
+  4646 tests, all passed; lane-evidence-collision 2/2.
+- workers project, integration `tests/integration/social-card-raster
+  .integration.test.ts` on real workerd: 7/7 (surface kind parses, renders
+  the registry copy, rasterizes to PNG magic).
+- sgscan: no new security findings (exit 0). crgate: local CodeRabbit not
+  signed in on this box (exit 0, named); 0509 repo-side CodeRabbit
+  auto-review is disabled — senior reviewer round in the PR is the
+  substantive review.
