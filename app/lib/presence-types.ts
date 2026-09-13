@@ -1,4 +1,4 @@
-export const PRESENCE_CONNECTOR_IDS = ["website", "x", "reddit", "linkedin", "rss", "bluesky", "gdelt", "threads", "hn"] as const;
+export const PRESENCE_CONNECTOR_IDS = ["website", "x", "reddit", "linkedin", "rss", "bluesky", "gdelt", "threads", "hn", "appstore"] as const;
 
 export type PresenceConnectorId = (typeof PRESENCE_CONNECTOR_IDS)[number];
 
@@ -21,6 +21,7 @@ export const PRESENCE_SOURCE_IDS = [
   "gdelt",
   "threads",
   "hn",
+  "appstore",
 
   "youtube",
   "amazon",

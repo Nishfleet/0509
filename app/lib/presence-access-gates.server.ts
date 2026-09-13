@@ -41,6 +41,8 @@ function connectorRolloutFromEnv(env: AppEnv, connectorId: PresenceConnectorId):
       return parseRolloutState(env.PRESENCE_GDELT_ROLLOUT, "disabled");
     case "threads":
       return parseRolloutState(env.PRESENCE_THREADS_ROLLOUT, "disabled");
+    case "appstore":
+      return parseRolloutState(env.PRESENCE_APPSTORE_ROLLOUT, "disabled");
     case "hn":
       return parseRolloutState(env.PRESENCE_HN_ROLLOUT, "disabled");
     default:
@@ -71,6 +73,12 @@ function hasCredentials(env: AppEnv, connectorId: PresenceConnectorId): boolean 
       return true;
     case "threads":
       return Boolean(env.THREADS_ACCESS_TOKEN?.trim());
+    case "appstore":
+      // Apple's iTunes Search/Lookup + customer-review RSS and Google Play's
+      // public details page are public-web surfaces — no key, no auth, no
+      // credentials. The rollout gate (PRESENCE_APPSTORE_ROLLOUT) is still
+      // required to activate the connector.
+      return true;
     case "hn":
       // The Algolia HN Search API is a public data API — no key, no auth, no
       // credentials. The rollout gate (PRESENCE_HN_ROLLOUT) is still required
