@@ -115,12 +115,22 @@ async function ensureCanaryTarget(env: { DB?: D1Database }, canaryEmail: string)
   // INSERT-OR-IGNORE is a no-op when one already exists) so the substrate
   // remains operator-free and the canary route can dispatch its internal
   // proof email without operator-seeded data.
-  const { provisionVerifiedAccountEmailTargetIfUnsuppressed } = await import("~/lib/data.server");
+  const { provisionVerifiedAccountEmailTargetIfUnsuppressed, repairCanaryProofEmailTarget } = await import("~/lib/data.server");
   await provisionVerifiedAccountEmailTargetIfUnsuppressed(env, {
     userId,
     targetValue: canaryEmail,
     optInSource: "launch_readiness_canary_substrate",
   });
+
+  // The substrate persists across failed deploy runs (cleanup is skipped
+  // when a run fails), so it can drift into shapes the provisioner above
+  // cannot fix: an opted-out/paused row turns the INSERT-OR-IGNORE into a
+  // no-op (zero usable rows) and byte-distinct spellings of the canary
+  // address leave more than one usable row. Both fail the
+  // `requireUniqueExistingTarget` assertion on every run. Repair the
+  // canary-owned row before Gate C resolves it — scope and rationale live
+  // on repairCanaryProofEmailTarget itself.
+  await repairCanaryProofEmailTarget(env, { userId, canaryEmail });
 
   const target = await getCanaryTarget(env, canaryEmail);
   return { target, provisioned: true };

@@ -686,6 +686,10 @@ export const provisionVerifiedAccountEmailTargetIfUnsuppressed: typeof import("~
   ...args: Parameters<typeof import("~/lib/data/delivery-records-targets.server").provisionVerifiedAccountEmailTargetIfUnsuppressed>
 ) => import("~/lib/data/delivery-records-targets.server").then((m) => m.provisionVerifiedAccountEmailTargetIfUnsuppressed(...args));
 
+export const repairCanaryProofEmailTarget: typeof import("~/lib/data/delivery-records-targets.server").repairCanaryProofEmailTarget = (
+  ...args: Parameters<typeof import("~/lib/data/delivery-records-targets.server").repairCanaryProofEmailTarget>
+) => import("~/lib/data/delivery-records-targets.server").then((m) => m.repairCanaryProofEmailTarget(...args));
+
 export const getDeliveryTargetReadinessStats: typeof import("~/lib/data/delivery-records-targets.server").getDeliveryTargetReadinessStats = (
   ...args: Parameters<typeof import("~/lib/data/delivery-records-targets.server").getDeliveryTargetReadinessStats>
 ) => import("~/lib/data/delivery-records-targets.server").then((m) => m.getDeliveryTargetReadinessStats(...args));

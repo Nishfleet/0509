@@ -180,6 +180,83 @@ export async function provisionVerifiedAccountEmailTargetIfUnsuppressed(
   return target;
 }
 
+/**
+ * Gate C's proof path resolves the canary owner's email target with
+ * `requireUniqueExistingTarget: true`, which throws
+ * "Gate C proof email target must resolve uniquely." unless exactly one
+ * usable row matches. The canary substrate persists across failed deploy
+ * runs (its cleanup step is skipped whenever a run fails), and two shapes of
+ * drift make that assertion fail on every subsequent run:
+ * 1. an opted-out / paused / unvalidated row for the canary address makes
+ *    provisionVerifiedAccountEmailTargetIfUnsuppressed a no-op, leaving zero
+ *    usable rows; and
+ * 2. byte-distinct rows that normalize to the same address (an old spelling
+ *    of LAUNCH_CANARY_EMAIL) leave more than one usable row — the partial
+ *    unique index only deduplicates the raw value.
+ * The substrate is operator-free by design, so repair it here: keep exactly
+ * one row for the canary address and restore it to the provisioned state.
+ * Scope: only rows owned by the canary user; customer rows are untouched and
+ * the gate's uniqueness assertion itself is unchanged.
+ */
+export async function repairCanaryProofEmailTarget(
+  env: AppEnv,
+  input: { userId: string; canaryEmail: string },
+): Promise<{ kept: number; removed: number; repaired: boolean }> {
+  const normalized = input.canaryEmail.trim().toLowerCase();
+  if (!normalized) return { kept: 0, removed: 0, repaired: false };
+  const rows = await many<DeliveryTargetRow>(
+    env,
+    `
+      SELECT id, target_value, created_at
+      FROM delivery_target
+      WHERE user_id = ?
+        AND channel = 'email'
+      ORDER BY created_at ASC
+      LIMIT 100
+    `,
+    input.userId,
+  );
+  const matching = rows.filter(
+    (row) => row.target_value.trim().toLowerCase() === normalized,
+  );
+  if (matching.length === 0) return { kept: 0, removed: 0, repaired: false };
+  const keep = matching[0];
+  for (const stale of matching.slice(1)) {
+    await run(
+      env,
+      `
+        DELETE FROM delivery_target
+        WHERE id = ?
+          AND user_id = ?
+      `,
+      stale.id,
+      input.userId,
+    );
+  }
+  const timestamp = nowIso();
+  await run(
+    env,
+    `
+      UPDATE delivery_target
+      SET validation_status = 'validated',
+          is_validated = 1,
+          is_opted_in = 1,
+          opted_in_at = COALESCE(opted_in_at, ?),
+          is_paused = 0,
+          paused_at = NULL,
+          opted_out_at = NULL,
+          updated_at = ?
+      WHERE id = ?
+        AND user_id = ?
+    `,
+    timestamp,
+    timestamp,
+    keep.id,
+    input.userId,
+  );
+  return { kept: 1, removed: matching.length - 1, repaired: true };
+}
+
 export async function getDeliveryTargetReadinessStats(env: AppEnv, userId: string) {
   const channelPredicates = [
     `
