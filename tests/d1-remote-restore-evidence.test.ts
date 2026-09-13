@@ -1600,7 +1600,8 @@ describe("D1 remote restore evidence automation", () => {
           name !== "0097_status_probe_samples.sql" &&
           name !== "0098_email_delivery_canary.sql" &&
           name !== "0098_widen_source_target_connector_bluesky.sql" &&
-          name !== "0098_widen_source_target_connector_gdelt.sql",
+          name !== "0098_widen_source_target_connector_gdelt.sql" &&
+          name !== "0099_widen_source_target_connector_threads.sql",
       ),
     ];
     expect(productionNames.at(-1)).toBe("0096_error_reports.sql");
@@ -1632,6 +1633,7 @@ describe("D1 remote restore evidence automation", () => {
           "0098_email_delivery_canary.sql",
           "0098_widen_source_target_connector_bluesky.sql",
           "0098_widen_source_target_connector_gdelt.sql",
+          "0099_widen_source_target_connector_threads.sql",
         ]),
         repository,
       ),
@@ -1655,6 +1657,7 @@ describe("D1 remote restore evidence automation", () => {
         "0098_email_delivery_canary.sql",
         "0098_widen_source_target_connector_bluesky.sql",
         "0098_widen_source_target_connector_gdelt.sql",
+        "0099_widen_source_target_connector_threads.sql",
       ],
     });
   });
@@ -1681,7 +1684,9 @@ describe("D1 remote restore evidence automation", () => {
       ...PRODUCTION_MIGRATION_LEDGER_BASELINE,
       ...repositoryHead,
       // The 0096 pair in the production-applied order, then 0097, the
-      // canary, and 0098_gdelt; 0098_bluesky is still repo-only.
+      // canary, and 0098_gdelt; 0098_bluesky is still repo-only. 0099
+      // (threads widen) is repo-only too and sorts behind the 0098 pair, so
+      // every planned catch-up carries it after 0098_bluesky.
       "0096_error_reports.sql",
       "0096_email_suppression.sql",
       "0097_status_probe_samples.sql",
@@ -1704,13 +1709,17 @@ describe("D1 remote restore evidence automation", () => {
       ),
     ).toEqual({
       action: "apply_forward_suffix",
-      migrations: ["0098_widen_source_target_connector_bluesky.sql"],
+      migrations: [
+        "0098_widen_source_target_connector_bluesky.sql",
+        "0099_widen_source_target_connector_threads.sql",
+      ],
     });
     expect(
       planSourceBackupLedgerReconciliation(
         namedLedger([
           ...productionNames,
           "0098_widen_source_target_connector_bluesky.sql",
+          "0099_widen_source_target_connector_threads.sql",
         ]),
         repository,
       ),
