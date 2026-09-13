@@ -33,6 +33,7 @@ import {
   publicSeoMeta,
 } from "~/lib/seo";
 
+import "~/styles/marketing.css";
 const PATHNAME = "/timeline";
 
 export const links: LinksFunction = () => canonicalLinks(PATHNAME);

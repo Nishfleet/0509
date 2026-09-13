@@ -16,7 +16,6 @@ import { getCloudflareContext } from "~/lib/cloudflare-context";
 import type { LoaderFunctionArgs } from "react-router";
 import "./app.css";
 import type { AppEnv } from "~/lib/env.server";
-import { pricingPlans, usageBundles } from "~/lib/pricing";
 import {
   canUseSiteRepWidgetScript,
   hasSiteRepAuthCookie,
@@ -58,6 +57,12 @@ export interface RootLoaderData {
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getOptionalSession } = await import("~/lib/auth.server");
+  // PERF (issue #2967): the pricing catalogue is loader-only data. A static
+  // import here pinned `~/lib/pricing` (and its bundle) into the client root
+  // chunk on EVERY page — dashboard included — even where no pricing UI
+  // renders. The dynamic import keeps it server-side; the client manifest
+  // still ships the computed plans via the loader payload.
+  const { pricingPlans, usageBundles } = await import("~/lib/pricing");
   const cloudflare = getCloudflareContext(context);
   const env = cloudflare.env;
   const session = await getOptionalSession(env, request);

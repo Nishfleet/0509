@@ -24,6 +24,7 @@ import { LIVE_BRAND_PROOF_DOMAIN } from "~/lib/demo-brand-pages";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import adspyderCitations from "~/data/compare/adspyder-citations.json";
 
+import "~/styles/marketing.css";
 const citations = adspyderCitations as CompareCitations;
 
 const pageTitle = "Five to Nine vs AdSpyder";

@@ -7,6 +7,7 @@ import type { LinksFunction } from "react-router";
 import CaptureRulesRoute, { meta } from "./capture-rules";
 import { buyerSurfaceHreflangLinks, canonicalLinks } from "~/lib/seo";
 
+import "~/styles/marketing.css";
 export { meta };
 
 export const links: LinksFunction = () => [

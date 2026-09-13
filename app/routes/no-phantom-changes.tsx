@@ -21,6 +21,7 @@ import {
   jsonLdScriptProps,
 } from "~/lib/seo";
 
+import "~/styles/marketing.css";
 export const NO_PHANTOM_CHANGES_PUBLIC_PATH = "/no-phantom-changes";
 
 const title = "No phantom changes — if we send it, the page really changed";

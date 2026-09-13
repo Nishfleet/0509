@@ -8,6 +8,7 @@ import {
   routesCatchAllForPath,
   tinyNotFoundResponse,
 } from "./tiny-not-found";
+import { maybeInlineMarketingRouteCss } from "./inline-route-css";
 import { reportScheduledTaskFailure } from "../app/lib/cron-failure-alert.server";
 import {
 	recordCanaryReceipt,

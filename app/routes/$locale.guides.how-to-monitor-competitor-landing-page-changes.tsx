@@ -9,6 +9,7 @@ import type { LinksFunction } from "react-router";
 import GuideHowToMonitorCompetitorLandingPageChangesRoute, { meta } from "./guides.how-to-monitor-competitor-landing-page-changes";
 import { buyerSurfaceHreflangLinks, canonicalLinks } from "~/lib/seo";
 
+import "~/styles/marketing.css";
 export { meta };
 
 export const links: LinksFunction = () => [

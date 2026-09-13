@@ -15,6 +15,7 @@ import {
 } from "~/lib/seo";
 import type { RootLoaderData } from "~/root";
 
+import "~/styles/marketing.css";
 const description =
   "Five to Nine API docs for read-only evidence access and approved account actions.";
 

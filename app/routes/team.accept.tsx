@@ -3,6 +3,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { SubmitButton } from "~/components/submit-button";
 
+import "~/styles/marketing.css";
 export const meta = () => [{ title: "Join team | Five to Nine" }];
 
 export async function loader({ context, request }: LoaderFunctionArgs) {

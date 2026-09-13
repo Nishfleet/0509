@@ -10,6 +10,7 @@ import type { LinksFunction } from "react-router";
 import PricingRoute, { loader, meta } from "./pricing";
 import { buyerSurfaceHreflangLinks, canonicalLinks } from "~/lib/seo";
 
+import "~/styles/marketing.css";
 export { loader, meta };
 
 export const links: LinksFunction = () => [

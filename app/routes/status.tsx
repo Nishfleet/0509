@@ -18,6 +18,7 @@ import {
   webPageJsonLd,
 } from "~/lib/seo";
 
+import "~/styles/marketing.css";
 const description =
   "Measured service status for Five to Nine: public search, sign-in, billing, email delivery, scheduled monitoring, and uptime, read live from the service's own probe records each time the page loads.";
 

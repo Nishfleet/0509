@@ -20,6 +20,7 @@ import {
 } from "~/lib/seo";
 import type { RootLoaderData } from "~/root";
 
+import "~/styles/marketing.css";
 // Issue #2694: /pricing no longer SSRs buyer-country Dodo prices. The loader
 // always returns the "no preview" sentinel and PricingSection fetches the
 // existing /api/pricing-preview from the client, so the worker can stamp the

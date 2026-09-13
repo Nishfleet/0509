@@ -5,6 +5,7 @@
 // canonicalized-away loser.
 import CompareVisualpingAdLibraryRoute, { links, meta } from "./compare.visualping-ad-library";
 
+import "~/styles/marketing.css";
 export { links, meta };
 
 export default CompareVisualpingAdLibraryRoute;

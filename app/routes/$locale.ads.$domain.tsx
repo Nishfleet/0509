@@ -22,6 +22,7 @@
 // (see the EN `ads.$domain` meta).
 import AdsDomainRoute, { loader, meta } from "./ads.$domain";
 
+import "~/styles/marketing.css";
 export { loader, meta };
 
 export default AdsDomainRoute;

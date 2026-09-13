@@ -2,6 +2,7 @@ import type { LinksFunction } from "react-router";
 import CompareRoute, { meta } from "./compare";
 import { buyerSurfaceHreflangLinks, canonicalLinks } from "~/lib/seo";
 
+import "~/styles/marketing.css";
 export { meta };
 
 export const links: LinksFunction = () => [

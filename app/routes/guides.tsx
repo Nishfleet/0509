@@ -19,6 +19,7 @@ import {
   publicSeoMeta,
 } from "~/lib/seo";
 
+import "~/styles/marketing.css";
 const PATHNAME = "/guides";
 
 export const links: LinksFunction = () => canonicalLinks(PATHNAME);

@@ -8,6 +8,7 @@ import { ProviderObservationTimeField } from "~/components/provider-observation-
 import { SignOutButton } from "~/components/sign-out-button";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import "~/styles/marketing.css";
 export const meta = () => [{ title: "Ops | Five to Nine" }];
 
 /**

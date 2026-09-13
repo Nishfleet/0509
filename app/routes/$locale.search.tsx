@@ -16,6 +16,7 @@ import SearchRoute, {
 } from "./search";
 import { buyerSurfaceHreflangLinks, canonicalLinks } from "~/lib/seo";
 
+import "~/styles/marketing.css";
 export { action, ErrorBoundary, headers, HydrateFallback, loader, meta };
 
 export const links: LinksFunction = () => [

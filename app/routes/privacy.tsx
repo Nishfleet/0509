@@ -11,6 +11,7 @@ import {
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
+import "~/styles/marketing.css";
 const privacyDescription =
   "How Five to Nine handles account, search, monitoring, evidence, delivery, and browser-extension data.";
 

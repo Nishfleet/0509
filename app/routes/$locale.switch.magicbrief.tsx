@@ -5,6 +5,7 @@ import type { LinksFunction } from "react-router";
 import SwitchMagicbriefRoute, { meta } from "./switch.magicbrief";
 import { buyerSurfaceHreflangLinks, canonicalLinks } from "~/lib/seo";
 
+import "~/styles/marketing.css";
 export { meta };
 
 export const links: LinksFunction = () => [

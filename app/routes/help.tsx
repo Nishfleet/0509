@@ -15,6 +15,7 @@ import {
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import type { RootLoaderData } from "~/root";
 
+import "~/styles/marketing.css";
 const description =
   "Help for setting up Five to Nine competitor monitoring, delivery, billing, and support.";
 

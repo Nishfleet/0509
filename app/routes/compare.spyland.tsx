@@ -25,6 +25,7 @@ const citations = spylandCitations as CompareCitations;
 
 export { compareAdsExampleLoader as loader } from "~/lib/ads-internal-links.server";
 
+import "~/styles/marketing.css";
 const pageDescription =
   "Spyland watches competitor landing pages on a schedule and flags copy, pricing, and CTA changes. Five to Nine adds the ad source and more frequent source-backed checks.";
 

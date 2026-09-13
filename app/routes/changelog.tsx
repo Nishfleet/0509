@@ -8,6 +8,7 @@ import {
   webPageJsonLd,
 } from "~/lib/seo";
 
+import "~/styles/marketing.css";
 const description =
   "Customer-facing updates for Five to Nine, with clear product and availability boundaries.";
 

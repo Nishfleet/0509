@@ -7,6 +7,7 @@ import type { LinksFunction } from "react-router";
 import MarketingRoute, { loader, meta } from "./marketing";
 import { buyerSurfaceHreflangLinks, canonicalLinks } from "~/lib/seo";
 
+import "~/styles/marketing.css";
 export { loader, meta };
 
 export const links: LinksFunction = () => [

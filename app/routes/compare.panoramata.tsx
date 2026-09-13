@@ -24,6 +24,7 @@ import { FREE_PREVIEW_SEARCH_DOMAIN, LIVE_BRAND_PROOF_DOMAIN } from "~/lib/demo-
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import panoramataCitations from "~/data/compare/panoramata-citations.json";
 
+import "~/styles/marketing.css";
 const citations = panoramataCitations as CompareCitations;
 
 const pageTitle = "Five to Nine vs Panoramata";

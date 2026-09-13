@@ -8,6 +8,7 @@ import type { LinksFunction } from "react-router";
 import CompetitorMonitoringRoute, { loader, meta } from "./competitor-monitoring";
 import { buyerSurfaceHreflangLinks, canonicalLinks } from "~/lib/seo";
 
+import "~/styles/marketing.css";
 export { loader, meta };
 
 export const links: LinksFunction = () => [

@@ -25,6 +25,7 @@ import {
 } from "~/lib/seo";
 import { localeSearchPathname } from "~/lib/locale-markets";
 
+import "~/styles/marketing.css";
 const pageTitle = "Ad Aggression Score methodology | Five to Nine";
 const pageDescription =
   "How Five to Nine computes the Ad Aggression Score: four public parts — Velocity, Testing, Freshness, Persistence — that add up to 0–100, with no hidden weighting.";

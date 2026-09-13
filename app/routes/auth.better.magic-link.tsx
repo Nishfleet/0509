@@ -4,6 +4,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react
 import { BrandWordmark } from "~/components/brand-wordmark";
 import { noindexMetaEntry } from "~/lib/seo";
 
+import "~/styles/marketing.css";
 export const meta: MetaFunction = () => [
   { title: "Confirm sign-in | Five to Nine" },
   // The magic-link confirm page is an auth surface that renders (not a pure
