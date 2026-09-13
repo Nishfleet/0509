@@ -21,7 +21,23 @@ SITE="${SEO_PARITY_SITE:-https://0509.io}"
 SITEMAP_URL="${SITE}/sitemap.xml"
 # Sample up to this many /ads URLs so the PR check stays fast and bounded.
 MAX_SAMPLE="${SEO_PARITY_MAX_SAMPLE:-10}"
-CURL_OPTS=(--silent --show-error --max-time 20 --retry 2 --retry-delay 2)
+# Issue #3278: the /ads/:domain surface is rate-limited by the Cloudflare edge
+# binding RL_BRAND_PAGE at 12 req/60s per IP (PUBLIC_BRAND_PAGE_PER_MINUTE_LIMIT),
+# so a back-to-back burst over the now-127-URL sitemap trips it partway through
+# and the tail of the loop sees 429s. Two defenses, neither weakening any
+# assertion (every sampled URL is still fully fetched and asserted):
+#   1. Pace: sleep between requests (not before the first) so the sustained rate
+#      stays just under the 12/min budget — 5s + one fetch ≈ 11 req/min.
+#   2. Retry: curl ≥7.71 retries 429/5xx responses and honors the limiter's
+#      Retry-After header, so a missed window waits exactly as long as the
+#      app asks before retrying (--retry 4 covers a full missed 60s window).
+# --location follows redirects: the sitemap lists the canonical non-trailing-
+# slash /ads/:domain URLs (the /suffix variants 301 onto them), and what must
+# be asserted is the FINAL landed page — the one a search engine indexes. The
+# effective URL is printed whenever it differs so persistent-redirect drift
+# (a sitemap entry that no longer lands where it lists) stays visible.
+SEO_PARITY_PACE_SECONDS="${SEO_PARITY_PACE_SECONDS:-5}"
+CURL_OPTS=(--silent --show-error --max-time 20 --retry 4 --retry-delay 3 --location --max-redirs 4)
 
 # 1. Fetch the sitemap and extract the /ads/:domain URLs it lists.
 sitemap="$(curl "${CURL_OPTS[@]}" "$SITEMAP_URL")"
@@ -40,11 +56,21 @@ fi
 echo "seo-parity: sitemap lists ${#ads_urls[@]} /ads URLs; sampling up to ${MAX_SAMPLE}"
 
 failures=0
+pace=0
 for url in "${ads_urls[@]:0:${MAX_SAMPLE}}"; do
+  if [ "$pace" -gt 0 ]; then sleep "$SEO_PARITY_PACE_SECONDS"; fi
+  pace=$((pace + 1))
   body_file="$(mktemp)"
-  http_code="$(curl "${CURL_OPTS[@]}" --write-out '%{http_code}' --output "$body_file" "$url" || true)"
+  # --write-out appends one space-separated line (final HTTP code + final URL
+  # after any redirects); the body goes to --output, so they never interleave.
+  meta="$(curl "${CURL_OPTS[@]}" --write-out '%{http_code} %{url_effective}' --output "$body_file" "$url" || true)"
+  http_code="$(printf '%s\n' "$meta" | cut -d' ' -f1 | tail -1)"
+  effective_url="$(printf '%s\n' "$meta" | cut -d' ' -f2- | tail -1)"
   body="$(cat "$body_file")"
   rm -f "$body_file"
+  if [ -n "$effective_url" ] && [ "$effective_url" != "$url" ]; then
+    echo "seo-parity: note — ${url} redirects to ${effective_url} (final HTTP ${http_code})"
+  fi
   # Fail loud on a non-2xx status or an empty body: a page that errors (5xx)
   # or returns nothing might carry no noindex meta and would otherwise be
   # reported as "ok — indexable", silently green in a canary whose whole job
@@ -166,7 +192,7 @@ body_file="$(mktemp)"
 # touch first: a connection-refused curl never creates the --output file,
 # and the cat below must see an empty body, not ENOENT (set -euo pipefail).
 touch "$body_file"
-meta="$(curl "${CURL_OPTS[@]}" --location --max-redirs 4 --output "$body_file" --write-out 'META %{http_code} %{url_effective}' "$SITE/switch/magicbrief" 2>/dev/null || true)"
+meta="$(curl "${CURL_OPTS[@]}" --output "$body_file" --write-out 'META %{http_code} %{url_effective}' "$SITE/switch/magicbrief" 2>/dev/null || true)"
 switch_http_code="$(printf '%s\n' "$meta" | sed -n 's/^META \([0-9]*\).*/\1/p' | tail -1)"
 effective_url="$(printf '%s\n' "$meta" | sed -n 's/^META [0-9]* *//p' | tail -1)"
 switch_body="$(cat "$body_file")"

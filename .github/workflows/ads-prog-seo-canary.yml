@@ -51,8 +51,12 @@ jobs:
     # /ads/:domain pages); it never mutates state, so it runs the default
     # token and needs `contents: read` only. Keep it on a hosted runner; a
     # scheduled live-fetch gate does not need a self-hosted seat.
+    # timeout: the #3278 paced noindex loop sleeps SEO_PARITY_PACE_SECONDS
+    # (5s, in-script) between ~127+ sitemap /ads URLs to stay under the
+    # 12-req/60s edge rate limit — ~12-14 min of wall time — plus 429
+    # Retry-After waits, so 30 leaves real headroom over the burst-era 15.
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -62,7 +66,7 @@ jobs:
         # `bash` runs the existing live parity script; `set -euo pipefail`
         # propagates its non-zero exit when any sitemap /ads page serves
         # noindex. SEO_PARITY_MAX_SAMPLE is raised high enough to cover every
-        # /ads/:domain URL the sitemap lists (54 today) rather than the fast
+        # /ads/:domain URL the sitemap lists (127 today) rather than the fast
         # default sample of 10, satisfying acceptance #2's "fetches each
         # /ads/<domain> URL".
         id: union
