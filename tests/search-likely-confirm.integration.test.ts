@@ -21,8 +21,8 @@
 // component renders from real loader-data shape, exactly the way the
 // streaming-three-tier suite (issue 1482) does.
 
-import { act, createElement, type Root, type ReactNode } from "react";
-import { createRoot } from "react-dom/client";
+import { act, createElement, type ReactNode } from "react";
+import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AdRecord } from "~/lib/types";
