@@ -273,11 +273,13 @@ describe("presence desk routes", () => {
 
   it.each([
     {
+      // Issue #3179: Free tracks its SELF brand (1 entity, 1 website source)
+      // — the select offers only "Your brand", never "Competitor".
       plan: "free",
-      selfAllowed: false,
+      selfAllowed: true,
       competitorAllowed: false,
-      expectedAction: "Upgrade to Scout",
-      expectedOptions: 0,
+      expectedAction: "Start tracking",
+      expectedOptions: 1,
     },
     {
       plan: "scout",
@@ -308,10 +310,10 @@ describe("presence desk routes", () => {
         snapshot: { entities: [], recentItems: [] },
         plan,
         limits: {
-          maxTrackedEntities: plan === "free" ? 0 : 8,
-          maxSelfEntities: plan === "free" ? 0 : 2,
+          maxTrackedEntities: plan === "free" ? 1 : 8,
+          maxSelfEntities: plan === "free" ? 1 : 2,
           maxCompetitorEntities: plan === "free" ? 0 : 8,
-          maxWebsiteSourcesPerEntity: plan === "free" ? 0 : 4,
+          maxWebsiteSourcesPerEntity: plan === "free" ? 1 : 4,
         },
         access: { rolloutState: "ga", allowed: true },
         selfAllowed,
@@ -335,8 +337,10 @@ describe("presence desk routes", () => {
       )?.[1] ?? "";
       expect(trackingModeOptions.match(/<option/g) ?? []).toHaveLength(expectedOptions);
       if (plan === "free") {
-        expect(html).not.toContain('name="trackingMode"');
-        expect(html).toContain("read-only");
+        // Issue #3179: Free is not read-only — it tracks the SELF brand, so
+        // the only option is "Your brand"; "Competitor" stays paid-only.
+        expect(trackingModeOptions).toContain("Your brand");
+        expect(trackingModeOptions).not.toContain("Competitor");
       } else {
         expect(html).toContain('name="trackingMode"');
       }
