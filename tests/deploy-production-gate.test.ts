@@ -1120,8 +1120,8 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     ["production_public_smoke", "oauth_branding"],
     ["oauth_branding", null],
   ])(
-    "rolls back after %s fails and skips later release checks",
-    (failureStep, blockedStep) => {
+    "rolls back after %s fails and continues the success chain when recovery succeeds",
+    (failureStep, nextReleaseCheck) => {
       const plan = buildProductionDeployPlan({
         manifestPath: "test-results/deploy-readiness-test.json",
         remoteRestoreEvidencePath,
@@ -1139,12 +1139,16 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
         caught = error;
       }
 
-      expect(caught).toBe(failure);
+      // #3390: recovery succeeded — the last-green version is 100% live
+      // again, so the plan resolves (exit 0) and the later release checks
+      // run; only when the recovery itself fails does the plan rethrow
+      // post_deploy_recovery_failed.
+      expect(caught).toBeUndefined();
       expect(executed.filter((id) => id === failureStep)).toHaveLength(1);
       expect(
         executed.filter((id) => id === "rollback_failed_release"),
       ).toHaveLength(1);
-      if (blockedStep) expect(executed).not.toContain(blockedStep);
+      if (nextReleaseCheck) expect(executed).toContain(nextReleaseCheck);
     },
   );
 
@@ -1171,7 +1175,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(executed).not.toContain("rollback_failed_release");
   });
 
-  it("runs the post-canary refund invariant before rethrowing a canary failure", () => {
+  it("runs the post-canary refund invariant before continuing past a recovered canary failure", () => {
     const plan = buildProductionDeployPlan({
       manifestPath: "test-results/deploy-readiness-test.json",
       remoteRestoreEvidencePath,
@@ -1189,15 +1193,25 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       caught = error;
     }
 
-    expect(caught).toBe(canaryFailure);
+    // #3390: the refund invariant still runs BEFORE the rollback recovery,
+    // and once recovery succeeds the plan proceeds through the remaining
+    // release checks instead of rethrowing (exit 0).
+    expect(caught).toBeUndefined();
     expect(
       executed.slice(executed.indexOf("post_deploy_release_canary")),
     ).toEqual([
       "post_deploy_release_canary",
+      // first run: the recovery's own post-canary invariant, then the loop
+      // resumes and the invariant runs AGAIN against the restored version.
       "partial_refund_invariants_postcanary",
       "rollback_failed_release",
+      "partial_refund_invariants_postcanary",
+      "start_production_soak",
+      "live_public_truth",
+      "production_public_smoke",
+      "oauth_branding",
+      "canary_bypass_token_sync",
     ]);
-    expect(executed).not.toContain("live_public_truth");
   });
 
   it("preserves both failures when the canary and post-canary invariant fail", () => {
