@@ -1,0 +1,19 @@
+
+> 0509@0.1.0 seed:publisher
+> node scripts/ads-domain-publisher.mjs --list=fashion-ecommerce --dry-run --min-publish=100
+
+seed:publisher dry-run — list=fashion-ecommerce domains=125 base=https://0509.io
+publish floor: verified + likely >= 1 per domain; gate: >= 100 publishable
+
+  FAILED  abercrombie.com    HTTP 500
+  FAILED  ae.com             HTTP 500
+  FAILED  aeropostale.com    HTTP 500
+  FAILED  aliceandolivia.com HTTP 500
+  PUBLISH allsaints.com      verified 19 + likely 3
+  PUBLISH anntaylor.com      verified 24 + likely 0
+  PUBLISH anthropologie.com  verified 17 + likely 0
+  PUBLISH aritzia.com        verified 25 + likely 0
+  PUBLISH barbour.com        verified 12 + likely 0
+  PUBLISH belk.com           verified 21 + likely 2
+  PUBLISH bloomingdales.com  verified 12 + likely 5
+  PUBLISH boohoo.com         verified 15 + likely 0
