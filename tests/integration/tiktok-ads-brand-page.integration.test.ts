@@ -48,7 +48,7 @@ const tiktokPayload = () => ({
  * `target_id` decides the match) plus one stored TikTok snapshot holding
  * exactly one EU-shown ad. Returns the watchlist id for scoping.
  */
-async function seedTiktokFixture(domain: string) {
+async function seedTiktokFixture(domain: string, withSnapshot = true) {
   const userId = await seedUser();
   const watchlistId = uid("wl");
   await db()
@@ -69,13 +69,15 @@ async function seedTiktokFixture(domain: string) {
       ISO_T0,
     )
     .run();
-  await db()
-    .prepare(
-      `INSERT INTO source_snapshot (id, watchlist_id, source_id, fetched_at, payload_json, created_at)
-       VALUES (?, ?, 'tiktok', ?, ?, ?)`,
-    )
-    .bind(uid("snap"), watchlistId, ISO_T0, JSON.stringify(tiktokPayload()), ISO_T0)
-    .run();
+  if (withSnapshot) {
+    await db()
+      .prepare(
+        `INSERT INTO source_snapshot (id, watchlist_id, source_id, fetched_at, payload_json, created_at)
+         VALUES (?, ?, 'tiktok', ?, ?, ?)`,
+      )
+      .bind(uid("snap"), watchlistId, ISO_T0, JSON.stringify(tiktokPayload()), ISO_T0)
+      .run();
+  }
   return watchlistId;
 }
 
@@ -104,6 +106,18 @@ describe("tiktok /ads brand-page read path (issue #3195)", () => {
 
     const rows = await loadBrandPageSourceSnapshots(envWithoutTiktok, "puma.com");
 
+    expect(rows.find((row) => row.sourceId === "tiktok")).toBeUndefined();
+  });
+
+  it("renders no TikTok section when the capture never stored a snapshot — the #2873 no-phantom rule, even with the flag live", async () => {
+    await seedTiktokFixture("adidas.com", false);
+
+    const rows = await loadBrandPageSourceSnapshots(envWithTiktok, "adidas.com");
+
+    // The #2873 capture-validity posture at the read tier: a failed or
+    // never-run capture stores NO source_snapshot row, so the /ads page
+    // omits the section entirely — never a phantom "No EU-shown TikTok ads
+    // found" empty-ads state. (b) of the read gate: a snapshot must exist.
     expect(rows.find((row) => row.sourceId === "tiktok")).toBeUndefined();
   });
 });
