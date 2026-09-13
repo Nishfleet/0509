@@ -29,11 +29,21 @@ async function mockRouter(useLoaderData: MockUseLoaderData) {
   });
 }
 
+// #3412 (no-time-bomb gate, #3215): this file mixes 59+ absolute ISO fixture
+// literals with a wall-clock read (todayDayKey() below). Freeze the clock for
+// the whole file so the fixture literals are frozen-clock-relative and cannot
+// age out. Only Date is faked — no timers — and both todayDayKey() and the
+// loader's own clock reads see the same pinned instant, so nothing asserted
+// here changes.
+const PINNED_CLOCK_NOW = "2026-09-13T16:00:00.000Z";
+
 beforeEach(() => {
+  vi.useFakeTimers({ now: new Date(PINNED_CLOCK_NOW), toFake: ["Date"] });
   vi.resetModules();
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.resetModules();
 });

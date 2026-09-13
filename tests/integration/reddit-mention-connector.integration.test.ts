@@ -282,6 +282,7 @@ describe("reddit mention connector — poll (real Data API path)", () => {
     expect(first?.canonicalUrl).toBe(POST_A_PERMALINK);
     expect(first?.canonicalUrl).not.toContain("oauth.reddit.com");
     expect(first?.contentHash).toBeTruthy();
+    // fixed-date: static mocked Reddit API payload — asserted verbatim, never compared against the wall clock
     expect(first?.publishedAt).toBe("2026-01-01T00:00:00.000Z");
     expect(first?.author).toBe("u/sneakerfan");
     expect((first?.raw as Record<string, unknown> | null)?.score).toBe(42);
