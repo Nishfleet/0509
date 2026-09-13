@@ -30,6 +30,7 @@ const SOURCE_LABELS: Record<PresenceSourceId, string> = {
   gdelt: "GDELT mainstream news",
   threads: "Threads",
   hn: "Hacker News",
+  pinterest: "Pinterest",
   youtube: "YouTube",
   amazon: "Amazon marketplace",
   context_dev: "Context.dev (open-web provider)",
@@ -55,9 +56,10 @@ const CONNECTOR_FOR_SOURCE: Partial<Record<PresenceSourceId, PresenceConnectorId
   gdelt: "gdelt",
   threads: "threads",
   hn: "hn",
+  pinterest: "pinterest",
 };
 
-const SOCIAL_SOURCE_IDS = new Set<PresenceSourceId>(["x", "reddit", "linkedin", "bluesky", "threads"]);
+const SOCIAL_SOURCE_IDS = new Set<PresenceSourceId>(["x", "reddit", "linkedin", "bluesky", "threads", "pinterest"]);
 
 export interface PresenceSourcePlanGates {
   modeAllowed: boolean;
@@ -108,6 +110,8 @@ function statusFromConnectorGate(
             ? "OFFICIAL_PUBLIC_API"
             : sourceId === "hn"
             ? "OFFICIAL_PUBLIC_API"
+            : sourceId === "pinterest"
+            ? "VERIFIED_PUBLIC_FEED"
             : sourceId === "linkedin" && trackingMode === "competitor"
             ? "LIMITED_COVERAGE"
             : sourceId === "x" || sourceId === "reddit"
@@ -475,6 +479,13 @@ export function presenceSourceCoverageForDocs(): Array<{
       label: SOURCE_LABELS.hn,
       productionStatus: "gated",
       notes: "Hacker News mention connector wired in (Algolia HN Search API — free, no key, no auth; the ~10,000-requests/hour/IP courtesy figure is honored with one serialized search_by_date request per poll: page 0 only, time-window slicing via the prior poll's watermark instead of deep paging past the ~1,000-result ceiling). Gated behind PRESENCE_HN_ROLLOUT — off by default; activation is a separate rollout decision.",
+    },
+    {
+      sourceId: "pinterest",
+      label: SOURCE_LABELS.pinterest,
+      productionStatus: "gated",
+      notes:
+        "Pinterest mention connector wired in (profile feed — https://www.pinterest.com/<handle>/feed.rss, public RSS 2.0, no key, no auth). Covers the tracked profile's own most recent pins (~25), for the tracked brand or person, self AND competitor. Does NOT cover keyword-wide search across all of Pinterest, boards not on the tracked profile, repin/comment activity, or engagement counts — Pinterest exposes those only through its approval-gated, OAuth-per-user API v5, which stays parked (see the plan). The feed is an undocumented public surface, verified live 2026-09-13 — the same posture as Google News RSS: it works and can change without notice. In-connector rate budget: ONE serialized request per poll — the feed itself is the bounded window, no paging, no second fetch. Gated behind PRESENCE_PINTEREST_ROLLOUT — off by default; activation is a separate rollout decision.",
     },
     {
       sourceId: "youtube",

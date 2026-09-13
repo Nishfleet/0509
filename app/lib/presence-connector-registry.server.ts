@@ -2,6 +2,7 @@ import { gdeltConnector } from "~/lib/presence-connectors/gdelt.server";
 import { hnConnector } from "~/lib/presence-connectors/hn.server";
 import { linkedinConnector } from "~/lib/presence-connectors/linkedin.server";
 import { blueskyConnector } from "~/lib/presence-connectors/bluesky.server";
+import { pinterestConnector } from "~/lib/presence-connectors/pinterest.server";
 import { redditConnector } from "~/lib/presence-connectors/reddit.server";
 import { rssConnector } from "~/lib/presence-connectors/rss.server";
 import { threadsConnector } from "~/lib/presence-connectors/threads.server";
@@ -28,6 +29,7 @@ const CONNECTORS = {
   gdelt: gdeltConnector,
   threads: threadsConnector,
   hn: hnConnector,
+  pinterest: pinterestConnector,
 } as const;
 
 export function getPresenceConnector(connectorId: PresenceConnectorId) {
@@ -122,6 +124,13 @@ export async function pollPresenceTarget(
     // phrase surface through target_key — the connector itself decides.
     return blueskyConnector.poll(ctx, target);
   }
+  if (target.connectorId === "pinterest") {
+    // The mention connector tracks a Pinterest profile by handle; it reads
+    // the handle surface through target_key/metadata — the connector itself
+    // decides (same convention as the bluesky/threads dispatches; the
+    // #3386 lesson: the registry MUST pass the whole target, not just env).
+    return pinterestConnector.poll(ctx, target);
+  }
   return linkedinConnector.poll(ctx, target);
 }
 
@@ -137,6 +146,11 @@ export function coverageLabelForConnector(
     return "PUBLIC_WEB_BEST_EFFORT" as const;
   }
   if (connectorId === "rss") {
+    return "VERIFIED_PUBLIC_FEED" as const;
+  }
+  if (connectorId === "pinterest") {
+    // The profile feed is a public RSS 2.0 feed — same syndication class as
+    // the rss connector, not a documented paid API (issue #3201).
     return "VERIFIED_PUBLIC_FEED" as const;
   }
   if (connectorId === "gdelt" || connectorId === "threads" || connectorId === "hn") {
