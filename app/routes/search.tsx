@@ -155,6 +155,7 @@ import type { AppEnv } from "~/lib/env.server";
 import type { SuggestedCompetitorsPanelData } from "~/lib/auto-competitor-suggested-loader.server";
 import type { CompetitorHandoffCandidate } from "~/lib/competitor-handoff.server";
 import type { RootLoaderData } from "~/root";
+import { cspNonceForRender } from "~/root";
 import type { SearchFilters, WatchlistTrackingRole } from "~/lib/types";
 import type { SelectedAdCapturePayload } from "~/lib/search-selection.server";
 
@@ -1521,6 +1522,13 @@ export default function SearchRoute() {
   ]);
 
   const rootData = useRouteLoaderData("root") as RootLoaderData;
+  // Issue #3301: the WebPage JSON-LD <script> below ships inside the streamed
+  // HTML, so it needs the same per-request CSP nonce as every other inline
+  // script. cspNonceForRender mirrors app/root.tsx: server render gets the
+  // real nonce, the client hydration pass passes "" (browsers hide a parsed
+  // nonce, so a real value read back as a hydration attribute mismatch —
+  // tests/root-csp-nonce-hydration.test.tsx).
+  const cspNonce = cspNonceForRender(rootData?.cspNonce, typeof document === "undefined");
   const creativeTextField = selectedAd?.analysisFields.find(
     (field) => field.fieldKey === "ocr_text",
   );
@@ -2135,6 +2143,7 @@ export default function SearchRoute() {
             description: searchDescription,
             pathname: "/search",
           }),
+          { nonce: cspNonce },
         )}
       />
       <DashboardPage className="f9-wk-page">
