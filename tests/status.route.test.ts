@@ -95,6 +95,14 @@ describe("status route", () => {
     expect(rssRow).toBeDefined();
     expect(rssRow?.productionStatus).toBe("gated");
     expect(rssRow?.notes).toContain("Substack");
+
+    // Issue #3202 — the Reddit mention connector owns its source row: wired
+    // in, gated, and the note names what the public surface covers (the new
+    // posts of tracked subreddit targets) and what it does not.
+    const redditRow = mentionSources.find((source) => source.sourceId === "reddit");
+    expect(redditRow).toBeDefined();
+    expect(redditRow?.productionStatus).toBe("gated");
+    expect(redditRow?.notes).toContain("tracked subreddit targets");
   });
 
   it("renders the tracked-source rows — the Threads mention source reads gated (issue #3205)", async () => {
@@ -127,6 +135,11 @@ describe("status route", () => {
     // feeds themselves, Substack included — and its limits, verbatim.
     expect(markup).toContain("Substack");
     expect(markup).toContain("no free global keyword search");
+    // The Reddit row (issue #3202's acceptance) is its own source: the note
+    // renders what the public surface covers — the new posts of tracked
+    // subreddit targets — and its limits, verbatim.
+    expect(markup).toContain("Reddit");
+    expect(markup).toContain("tracked subreddit targets");
   });
 
   it("renders measured surface states without private launch details", async () => {
