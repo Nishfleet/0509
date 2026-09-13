@@ -1,8 +1,14 @@
 import {
+  BUYER_SURFACE_GUIDE_PATHS,
   BUYER_SURFACE_LOCALE_IDS,
+  BUYER_SURFACE_PATHS,
+  isBuyerSurfaceChildSplat,
   SNEAKER_RESALE_MARKETS,
   type BuyerSurfaceLocaleId,
 } from "~/lib/locale-markets";
+// Issue #2871 canonical EN methodology path; imported so the hreflang legs
+// can never drift from the redirect target.
+import { AD_AGGRESSION_METHODOLOGY_PATH } from "~/lib/aggression-score";
 import {
   PUBLISHED_BUNDLE_PRICES_EUR,
   PUBLISHED_FREE_PLAN_OFFER,
@@ -12,6 +18,13 @@ import {
 } from "~/lib/pricing";
 import { TOP_UP_PACK_DISPLAY } from "~/lib/billing-sku-catalog";
 import { SUPPORT_EMAIL } from "~/lib/support";
+
+/**
+ * Locale splat of the methodology buyer-surface family. The EN page's live
+ * URL moved to the deep /methodology/ad-aggression-score (issue #2871) while
+ * the locale twins stayed keyed on this splat (issue #2030).
+ */
+const METHODOLOGY_LOCALE_SPLAT = "methodology";
 
 const SITE_ORIGIN = "https://0509.io";
 const SITE_NAME = "Five to Nine";
@@ -240,21 +253,31 @@ export function sneakerResaleHreflangLinks() {
 }
 
 /**
- * Reciprocal hreflang set for the buyer-surface cluster (issue #1501).
+ * Reciprocal hreflang set for the buyer-surface cluster (issues #1501, #2030).
  *
  * `splat` is the locale-prefix subpath (e.g. `"pricing"`, `"help"`, or
- * `""` for the locale index). The function emits self + sibling locale
- * entries pointing at the same subpath in each locale, plus the EN
- * (x-default) version. The buyer-surface cluster is broader than the
+ * `""` for the locale index). The function emits the complete cluster —
+ * `en` (the canonical EN twin) + every sibling locale + `x-default`
+ * pointing at the EN version — so the same call works on a locale page
+ * (`self` = the locale entry) and on the EN canonical page (`self` =
+ * `en`). The buyer-surface cluster is broader than the
  * sneaker-resale cluster (fr/es are pre-evidence for the broader
  * marketing surface) and uses the same hreflang recipe.
  *
- * Google ignores one-way annotations, so the EN-side `rel=canonical`
- * pointing at the EN subpath does the heavy lifting; this function
- * exists so the cluster is reciprocal on both ends.
+ * Google ignores one-way annotations, so every page in the cluster —
+ * the EN canonical included — must emit the full set (issue #2030).
  */
 export function buyerSurfaceHreflangLinks(splat: string) {
-  const enPath = splat === "" ? "/" : splat === "api/docs" ? "/api/docs" : `/${splat}`;
+  // Issue #2871: the EN methodology page lives at the citable deep path
+  // while its locale twins stay at /<locale>/methodology — the old shallow
+  // /methodology is a permanent 301, so the EN legs must point at the deep
+  // canonical, never at the redirecting predecessor.
+  const enPath =
+    splat === METHODOLOGY_LOCALE_SPLAT
+      ? AD_AGGRESSION_METHODOLOGY_PATH
+      : splat === ""
+        ? "/"
+        : `/${splat}`;
   return [
     ...BUYER_SURFACE_LOCALE_IDS.map((locale) => ({
       rel: "alternate" as const,
