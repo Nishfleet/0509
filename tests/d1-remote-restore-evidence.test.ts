@@ -1604,6 +1604,7 @@ describe("D1 remote restore evidence automation", () => {
       "0098_widen_source_target_connector_bluesky.sql",
       "0098_widen_source_target_connector_gdelt.sql",
       "0099_widen_source_target_connector_threads.sql",
+      "0100_widen_source_target_connector_hn.sql",
     ]);
     const productionNames = [
       ...PRODUCTION_MIGRATION_LEDGER_BASELINE,
@@ -1640,6 +1641,7 @@ describe("D1 remote restore evidence automation", () => {
           "0098_widen_source_target_connector_bluesky.sql",
           "0098_widen_source_target_connector_gdelt.sql",
           "0099_widen_source_target_connector_threads.sql",
+          "0100_widen_source_target_connector_hn.sql",
         ]),
         repository,
       ),
@@ -1665,6 +1667,7 @@ describe("D1 remote restore evidence automation", () => {
         "0098_widen_source_target_connector_bluesky.sql",
         "0098_widen_source_target_connector_gdelt.sql",
         "0099_widen_source_target_connector_threads.sql",
+        "0100_widen_source_target_connector_hn.sql",
       ],
     });
   });
@@ -1721,6 +1724,7 @@ describe("D1 remote restore evidence automation", () => {
       migrations: [
         "0098_widen_source_target_connector_bluesky.sql",
         "0099_widen_source_target_connector_threads.sql",
+        "0100_widen_source_target_connector_hn.sql",
       ],
     });
     expect(
@@ -1729,6 +1733,7 @@ describe("D1 remote restore evidence automation", () => {
           ...productionNames,
           "0098_widen_source_target_connector_bluesky.sql",
           "0099_widen_source_target_connector_threads.sql",
+          "0100_widen_source_target_connector_hn.sql",
         ]),
         repository,
       ),

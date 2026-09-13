@@ -25,6 +25,25 @@ Run on production D1 read-only; do not export PII to docs.
 | Top-up revenue events | `evidence_top_up_grant` |
 | Churn signals | `user_plan.dodo_status` failed/on_hold/cancelled |
 
+### The direction metric: signups/week
+
+The **direction metric** (fleet-ops#4518) is signups/week — the fixture-free
+trailing-7d/30d count of production `user.createdAt` rows, emitted by:
+
+```bash
+node scripts/weekly-business-metrics.mjs --json
+```
+
+That JSON (its `signups_7d`) — not the unfiltered day-count above — is the
+number the direction entry records. The script excludes the #2908 QA/canary
+fixture identities (billing-canary, `codex-qa-*`, `codex-free-qa-*`,
+`auth-QA`) plus the billing-canary guard id, and when the caller supplies the
+Workers-Logs NDJSON (`--events-ndjson <path|->`) it cross-checks each
+surviving row against its `signup_completed` funnel event; survivors without
+one are listed as `suspect`, never silently counted. Its definition, fixture
+list, and unit test live in `scripts/weekly-business-metrics.mjs` and
+`tests/unit/weekly-business-metrics.test.ts` (issue #3321).
+
 ## Launch funnel (manual)
 
 1. Homepage → signup (no automated funnel — infer from auth tables).
