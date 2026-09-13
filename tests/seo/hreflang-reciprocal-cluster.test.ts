@@ -233,6 +233,10 @@ describe("sitemap hreflang alternates (issue #2030)", () => {
     const xml = buildSitemapXml([]);
     for (const path of BUYER_SURFACE_PATHS) {
       if (path === "/sitemap.xml") continue;
+      // #2965: bare /search 302s to /brands, so it deliberately stays out of
+      // the sitemap — its hreflang cluster is still pinned at the route
+      // level above; only its sitemap absence is (correctly) skipped here.
+      if (path === "/search") continue;
       // Issue #2871: /methodology lives at the deep canonical path in the
       // sitemap; its locale twins (/de/methodology, ...) stay in the locale
       // sitemaps keyed on the shallow splat.
