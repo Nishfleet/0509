@@ -103,6 +103,12 @@ jobs:
           else
             npm install --ignore-scripts
           fi
+      - name: Check migration numbering (a new migration must sort last)
+        # Pre-merge sibling of allowedProductionMigrationLedgers (issue #2507):
+        # a migration added in this PR whose 4-digit prefix is <= the highest
+        # prefix on origin/main fails the PR here, before the deploy flash that
+        # duplicate 0088 caused on 2026-09-10.
+        run: node scripts/check-migration-numbering.mjs
       - name: Build
         run: npm run build
       - name: Test (shard 1 of ${{ env.VITEST_TOTAL_SHARDS }})
