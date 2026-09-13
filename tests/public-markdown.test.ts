@@ -158,6 +158,10 @@ describe("public markdown", () => {
     expect(LLMS_TEXT).toContain("Ad monitoring reads the Meta Ad Library only");
     expect(LLMS_TEXT).toContain("does not aggregate other platforms’ ad libraries");
     expect(LLMS_TEXT).toContain("not ad-library breadth");
+    // Issue #3195: both public surfaces must NAME the TikTok scope — the
+    // honest coverage note (EU-shown, no spend/impressions) now ships.
+    expect(PUBLIC_MARKDOWN).toContain("public TikTok Commercial Content Library");
+    expect(LLMS_TEXT).toContain("public TikTok Commercial Content Library");
     expect(PUBLIC_MARKDOWN).not.toMatch(/Email delivery is available/i);
     expect(PUBLIC_MARKDOWN).toContain("insight-depth summaries cover top hooks, media mix, observed campaign duration, manual metric evidence, creative timeline, and landing-page history");
     expect(PUBLIC_MARKDOWN).toContain("Manual external evidence links can store user-supplied visible spend, impression, and reach values");
