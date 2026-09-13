@@ -10,6 +10,10 @@ describe("auto-revert workflow", () => {
     concurrency?: { group?: string; "cancel-in-progress"?: boolean };
     permissions?: Record<string, string>;
     jobs?: {
+      "close-halts-on-green"?: {
+        "if"?: string;
+        steps?: Array<{ name?: string; run?: string; env?: Record<string, string> }>;
+      };
       "auto-revert"?: {
         "if"?: string;
         "timeout-minutes"?: number;
@@ -21,6 +25,12 @@ describe("auto-revert workflow", () => {
   const job = parsed.jobs?.["auto-revert"];
   const revertStep = job?.steps?.find((step) => step.name === "Revert or halt");
   const run = revertStep?.run ?? "";
+
+  const closerJob = parsed.jobs?.["close-halts-on-green"];
+  const closerStep = closerJob?.steps?.find(
+    (step) => step.name === "Close open AUTO-REVERT HALT issues",
+  );
+  const closerRun = closerStep?.run ?? "";
 
   it("fires only on a failed workflow_run conclusion for main", () => {
     expect(parsed.on?.workflow_run?.types).toEqual(["completed"]);
@@ -161,5 +171,72 @@ describe("auto-revert workflow", () => {
       'gh pr edit "$pr_number" --repo "$REPO" --remove-label auto-revert',
     );
     expect(commandLines).not.toContain("gh pr remove-label");
+  });
+
+  it("close-halts-on-green runs its issue ops under GITHUB_TOKEN with issues: write granted", () => {
+    // 0509#2929: issue ops need GraphQL, which the fine-grained
+    // AUTO_REVERT_PAT cannot do. The closer therefore runs under
+    // GITHUB_TOKEN, and because the workflow's permissions block exists,
+    // every permission not granted there defaults to none — so
+    // `issues: write` must be granted explicitly.
+    expect(closerJob?.if).toBe(
+      "github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.name == 'Deploy production'",
+    );
+    expect(parsed.permissions?.["issues"]).toBe("write");
+    expect(closerStep?.env?.GH_TOKEN).toBe("${{ github.token }}");
+    expect(closerStep?.env?.GH_TOKEN).not.toContain("AUTO_REVERT_PAT");
+  });
+
+  it("close-halts-on-green asserts GraphQL before listing — a dead token fails loud, never closes 0 silently", () => {
+    // 0509#2929: `for num in $(gh issue list ...)` masks a failing query as
+    // an empty list; the closer would then echo "closed 0" and report
+    // success while the whole backlog survives. The GraphQL assert must
+    // precede the close loop and exit 1 when it fails.
+    // Compare on executed lines only: the closer's comments mention both
+    // `gh api graphql` and `for num in`, so a comment-mention would fake the
+    // ordering. Same executed-line rule as the remove-label test above.
+    const closerCommands = closerRun
+      .split("\n")
+      .filter((ln) => !/^\s*#/.test(ln))
+      .join("\n");
+    const assertIdx = closerCommands.indexOf("gh api graphql");
+    const loopIdx = closerCommands.indexOf("for num in");
+    expect(assertIdx).toBeGreaterThan(-1);
+    expect(loopIdx).toBeGreaterThan(assertIdx);
+    expect(closerRun).toContain("FATAL: GH_TOKEN cannot use the GitHub GraphQL API");
+    expect(closerRun).toContain("exit 1");
+  });
+
+  it("close-halts-on-green closes by label AND falls back to the title search", () => {
+    // 0509#2929: an unlabelled halt survivor must never survive a green
+    // deploy — the 2026-09-11 backlog was 104 open halts, 0 labelled, until
+    // they were hand-labelled. The close set is the union of the label
+    // listing and a title search, deduplicated.
+    expect(closerRun).toContain(
+      'gh issue list --repo "$REPO" --state open --label auto-revert-halt',
+    );
+    expect(closerRun).toContain(
+      'gh issue list --repo "$REPO" --state open --search "AUTO-REVERT HALT in:title"',
+    );
+    expect(closerRun).toContain("| sort -u");
+  });
+
+  it("freshness drill: 'main moved after the red commit' records itself loud and exits 0 without filing an issue", () => {
+    // 0509#2929 evidence (2026-09-11): a halt must never be silent. #3220
+    // redesigned the halt: NO issue is filed — the halt writes the step
+    // summary and a ::warning, and FleetProductionStale owns the condition.
+    // This drill walks the freshness guard's path: the guard fires
+    // "main moved after the red commit" -> halt_and_exit -> halt, and halt's
+    // own record (summary + warning) is what appears — not an issue.
+    expect(run).toContain('halt_and_exit "AUTO-REVERT HALT: main moved after the red commit"');
+    const haltIdx = run.indexOf("halt ()");
+    const haltEnd = run.indexOf("halt_and_exit ()");
+    expect(haltIdx).toBeGreaterThan(-1);
+    expect(haltEnd).toBeGreaterThan(haltIdx);
+    const haltBody = run.slice(haltIdx, haltEnd);
+    expect(haltBody).toContain("GITHUB_STEP_SUMMARY");
+    expect(haltBody).toContain("::warning title=");
+    expect(haltBody).not.toContain("gh issue create");
+    expect(haltBody).not.toContain("gh issue comment");
   });
 });

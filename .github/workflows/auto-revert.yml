@@ -41,6 +41,11 @@ permissions:
   # jobs via the Actions API. `actions: read` lets the GITHUB_TOKEN fallback
   # serve that query instead of depending on AUTO_REVERT_PAT alone.
   actions: read
+  # 0509#2929: close-halts-on-green closes and comments on the halt issues via
+  # GITHUB_TOKEN. Once any permission is granted here the rest default to
+  # none, so `issues: write` must be explicit or the closer cannot even
+  # list — which it would then report as a silent "closed 0".
+  issues: write
 
 # Parallel failures serialize: two red workflows for the same push (or two
 # pushes close together) must not race to revert. One at a time, in arrival
@@ -66,7 +71,12 @@ jobs:
     steps:
       - name: Close open AUTO-REVERT HALT issues
         env:
-          GH_TOKEN: ${{ secrets.AUTO_REVERT_PAT || github.token }}
+          # 0509#2929: this step is pure issue ops, so it runs under
+          # GITHUB_TOKEN, which always has GraphQL access — the fine-grained
+          # AUTO_REVERT_PAT dies on the first GraphQL call here, and the
+          # for-loop below would mask that as an empty list. One token, one
+          # purpose (d0dc92b08's precedent: least scope on each call).
+          GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           RUN_URL: ${{ github.event.workflow_run.html_url }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
@@ -74,8 +84,22 @@ jobs:
           set -euo pipefail
           short="${HEAD_SHA:0:7}"
           closed=0
-          # --paginate + per-page cap: the 2026-09-11 backlog was 96 issues.
-          for num in $(gh issue list --repo "$REPO" --state open --label auto-revert-halt --limit 500 --json number --jq '.[].number'); do
+          # 0509#2929: assert GraphQL access BEFORE listing. `for num in
+          # $(gh issue list ...)` masks a failing query as an empty list,
+          # which would silently close nothing and leave every halt open
+          # forever. Fail loud instead of silently closing 0.
+          if ! gh api graphql -f query='query { viewer { login } }' >/dev/null; then
+            echo "FATAL: GH_TOKEN cannot use the GitHub GraphQL API — cannot list AUTO-REVERT HALT issues to close" >&2
+            exit 1
+          fi
+          # Per-page cap: the 2026-09-11 backlog was 96+ issues.
+          # 0509#2929: close by label AND fall back to a title search, so an
+          # unlabelled halt survivor (the 2026-09-11 silent-label-drop
+          # backlog: 104 open, 0 labelled until hand-labelled) can never
+          # survive a green deploy.
+          for num in $({ gh issue list --repo "$REPO" --state open --label auto-revert-halt --limit 500 --json number --jq '.[].number'; \
+            gh issue list --repo "$REPO" --state open --search "AUTO-REVERT HALT in:title" --limit 500 --json number --jq '.[].number'; } \
+            | sort -u); do
             gh issue close "$num" --repo "$REPO" --reason completed \
               --comment "Resolved by a green \`Deploy production\` run on main: $RUN_URL (commit $short). Every AUTO-REVERT HALT records a red-on-consecutive-commits state; that state ended with this run. Closed automatically by auto-revert.yml (close-halts-on-green)." >/dev/null
             closed=$((closed + 1))
