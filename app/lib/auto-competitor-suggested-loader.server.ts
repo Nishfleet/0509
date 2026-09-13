@@ -240,6 +240,7 @@ export async function loadSuggestedCompetitorsPanel(
     return { domain: "", rows: [], caps };
   }
 
+  console.error("3175DBG selfDomain", JSON.stringify(selfDomain));
   let raw: ReadonlyArray<{
     advertiser: string;
     advertiserPageId: string | null;
@@ -258,19 +259,22 @@ export async function loadSuggestedCompetitorsPanel(
       country: selfDomain.country ?? "all",
       userId,
     });
-  } catch {
+  } catch (e) {
+    console.error("3175DBG seedAutoCompetitors THREW", (e as Error)?.message);
     // Seed failure degrades to empty — same posture as the loader's own
     // capture-window degrade: never let a downstream feature failure take
     // the watchlists page down.
     return { domain: selfDomain.domain, rows: [], caps };
   }
 
+  console.error("3175DBG rawCandidates", raw.length, raw.slice(0,2).map((r)=>r.advertiser));
   const rows = shapeRowsForPanel(raw, limit);
   if (rows.length === 0) {
     // Zero evidence about the customer's own brand: fall back to the #2411
     // adjacent brands rather than showing nothing. Capped by the same plan
     // limit so the snapshot ceiling still holds.
     const fallback = await loadAdjacentBrandFallbackRows(env, selfDomain.domain);
+    console.error("3175DBG fallbackRows", fallback.length);
     return { domain: selfDomain.domain, rows: fallback.slice(0, limit), caps };
   }
   return { domain: selfDomain.domain, rows, caps };
