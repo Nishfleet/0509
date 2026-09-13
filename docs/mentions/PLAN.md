@@ -53,6 +53,7 @@ gated on a platform review/approval), **money** (paid surface — MONEY flag),
 | **Medium** | `medium.com/feed/@user`, `medium.com/feed/<pub>`, `medium.com/feed/tag/<tag>` — [official docs](https://help.medium.com/hc/en-us/articles/214874118) | **today** — rides `rss` connector | [Medium ToS](https://medium.com/policy/medium-terms-of-service). Same syndication posture as Substack; named profiles/publications/tags only, no global free search | $0 | On new posts | 1 fetch per feed per poll |
 | **Pinterest** | [Pinterest API v5](https://developers.pinterest.com/docs/api/v5/) | **none at zero-spend** — no free public mention-search endpoint exists; reads are per-user OAuth after app approval | [Developer terms](https://developers.pinterest.com/terms/). Trial access = 1,000 req/day/app; Standard = 100 req/s/user/app — both behind app review ([access tiers](https://developers.pinterest.com/docs/key-concepts/access-tiers/), [rate limits](https://developers.pinterest.com/docs/reference/rate-limits/)). Community reports approval delays/denials | $0 surface, but approval-gated | — | Parked: `manual_only` until a grants[] decision (matches prior epic #1380) |
 | **Reddit** | [Reddit Data API](https://www.reddit.com/dev/api) — connector `reddit` exists, gated | **approval** — code shipped; commercial use needs Reddit's written approval | [Data API Terms](https://redditinc.com/policies/data-api-terms): OAuth required, no unauthenticated use; **commercial use requires explicit written approval** — serving paying customers is commercial use. Gate already exists: `REDDIT_COMMERCIAL_ACCESS=approved`. [Responsible Builder Policy](https://support.reddithelp.com/hc/en-us/articles/42728983564564-Responsible-Builder-Policy) | $0 once approved (free tier) | Near-real-time within rate limits | **100 QPM per OAuth client id**, averaged over a 10-minute window ([Data API Wiki](https://support.reddithelp.com/hc/en-us/articles/16160319875092-Reddit-Data-API-Wiki)) |
+| **Review sites — Trustpilot** | `https://www.trustpilot.com/review/<domain>` — the public business-unit review page a human reads; the connector's contract is the schema.org/Review JSON-LD the page itself publishes (committed verbatim as the 2026-09-13 fixture; the `/reviews/<review-uuid>` public permalink 301-confirmed) | **build** — new `review_sites` connector, no account, no key; shipped #3209, gated behind `PRESENCE_REVIEW_SITES_ROLLOUT` | Public web — the published structured data. The documented Business API ([developers.trustpilot.com](https://developers.trustpilot.com/), answered 200 2026-09-13) is key-gated and NOT part of this contract. G2/Capterra public pages are bot-verified (G2 = DataDome, Capterra = Cloudflare; measured 2026-09-13, challenge fixture ships with the issue) and their documented APIs are partner/paid: **not wired** — a g2/capterra target answers `provider_not_wired_yet` honestly. Collector research (searched + rejected, dated): §8 | $0 | On newly published reviews; the page exposes the ~20 newest (measured 2026-09-13) | Exactly ONE serialized GET of the review page per target per poll; no pagination — the published window is re-read per poll and deduped by canonical URL via the (source_target_id, url_hash) UNIQUE constraint |
 | **YouTube** | (a) channel feed `youtube.com/feeds/videos.xml?channel_id=<id>` — free via `rss` connector; (b) [Data API v3 `search.list`](https://developers.google.com/youtube/v3/docs/search/list) for keyword mentions | (a) **today** via `rss`; (b) **approval** — free but quota-capped + Google Cloud project | [YouTube API Services ToS](https://developers.google.com/youtube/terms/api-services-terms-of-service). Default allocation per the [official quota page](https://developers.google.com/youtube/v3/determine_quota_cost): **100 `search.list` calls/day** (dedicated bucket) + 10,000 units/day for other calls; more quota requires a Google compliance audit, cannot be bought | $0 | Channel feeds: on publish. Search: near-real-time | 100 searches/day total across ALL brands — keyword search stays a thin, low-cadence surface; channel feeds carry the load |
 | **LinkedIn posts** | [Posts API](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/posts-api) | **self only** — shipped #3204: the connector polls the tracked organization's own published posts (`GET /rest/posts?author=urn:li:organization:{id}`, `sortBy=CREATED`, `count` 25 of the documented max 100); competitor = `LIMITED_COVERAGE` | `r_member_social` is restricted (approval-only); `r_organization_social` requires the member to hold a company-page admin role on the target org — i.e. you can only read orgs you administer. No public keyword search of others' posts. LinkedIn ToS prohibit scraping — open-source collectors researched first (GitHub star-sorted, 2026-09-13): joeyism/linkedin_scraper (4.5k★), stickerdaniel/linkedin-mcp-server (3.5k★) — unofficial, undocumented, no ToS posture; Liger-Kernel (GPU kernels) and skill-assessments-quizzes (quiz answers) matched the search but are not collectors — all **rejected**; the official Posts API already authenticated by the connector's stored grant wins. Details: §8 | $0 | On read | Exactly ONE serialized request per poll, `count` 25 (documented default 10, max 100); documented per-member/per-org limits apply after platform approval; irrelevant for competitor coverage (not available) |
 | **Threads** | [Threads API keyword search](https://developers.facebook.com/docs/threads/keyword-search/) + [mentions](https://developers.facebook.com/docs/threads/threads-mentions/) | **approval** — free API, needs a Meta app with `threads_keyword_search` (and `threads_manage_mentions` advanced access for others' posts) | Meta Platform Terms. Keyword search: **2,200 queries per user per rolling 24h** (across apps). App review lead time is the real cost. [rate limits](https://developers.facebook.com/docs/threads/overview/) | $0 | Near-real-time | ≤2,200 queries/user/24h — connector must track usage in `presence_poll_cursor` |
@@ -338,7 +339,40 @@ connector's app-only client-credentials grant (env-held `REDDIT_CLIENT_ID`/`SECR
 already authenticates — $0 free tier, 1000 reads/10 min enforced in-connector
 via the shared `presence_poll_cursor` ledger, commercial approval = the
 #1378 gate `REDDIT_COMMERCIAL_ACCESS=approved` — the survey's own
-conclusion, applied.
+Review sites, #3209 (2026-09-13): the surface was pinned by the 2026-09-13
+fixture captures — Trustpilot's public business-unit page
+(`https://www.trustpilot.com/review/<domain>`, the page a human reads)
+publishes the unit's own schema.org/Review JSON-LD (the fixture's
+newest-review window: 20), no account, no key; the published
+`/reviews/<review-uuid>` permalink is 301-confirmed. A fresh re-measure the
+same day: a plain unauthenticated `curl` of the business-unit URL receives
+Trustpilot's CloudFront 403 — production admission rides the rollout
+decision, exactly like every other gated connector. This lane's fresh
+collector search, kept to public and unpaid surfaces (GitHub star-sorted,
+`gh search repos`, 2026-09-13): hakimkhalafi/trustpilot-scraper (29★,
+last pushed 2026-07), trustpilot/slack-trustpilot (26★, 2025-02 — a Slack
+notifier), irfanalidv/trustpilot_scraper (22★, 2026-08); the tail —
+dancolta/trustpilot-outreach-automation (10★, outbound cold-email
+drafts), evan-roberts/trustpilot-scrape (9★, pushed 2024),
+robertvy/TrustpilotReviewScraper (9★), PeerChristensen/trustpilot_reviews
+(6★, pushed 2020) — is older or a one-off CLI. The `g2 reviews` search
+tops out at ★10: balmasi/g2_reviews_llm_topic_modeling (an LLM
+topic-modeling experiment), factden/g2-reviews-scraper (4★, an
+Apify-actor export). `npm search trustpilot reviews` (2026-09-13):
+presentation-glue only — gatsby-plugin-trustpilot-trustbox (a Gatsby
+trustbox embed), three n8n node wrappers around the Apify Trustpilot
+scraper, and `trustpilot@4.0.1` (an HTTP client for the key-gated
+Trustpilot Business API). All **rejected**: stale, presentation-glue,
+Apify-actor exports, or wrong surface (Business-API clients), and each
+would ADD a dependency while bypassing the SSRF-hardened
+`presenceSafeFetch`/bounded-response path every 0509 connector rides —
+the published-page JSON-LD needs none of them. #3209 therefore ships on
+Trustpilot's published business-unit JSON-LD — $0, no account, no new
+dependency — the survey's own conclusion, applied. G2/Capterra: both
+public pages bot-verify (re-measured 2026-09-13: G2 = DataDome, Capterra
+= Cloudflare, 403s; the challenge fixture ships with the issue) and their
+documented APIs are partner/paid programs — documented, not wired; wiring
+them later is a grants[] decision.
 
 Prior art inside the repo: `docs/epics/2026-08-28-mention-monitoring.md`
 (scout + evals + phases, shipped as #1375/#1377/#1378/#1379/#1380),
