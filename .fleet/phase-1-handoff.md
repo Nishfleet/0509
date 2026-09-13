@@ -38,6 +38,31 @@ re-derive it. Your job: complete phase 1 **extremely well**. Read, in order:
   #1451 guard (which samples lane='customer' ONLY) cannot see them — that is the
   reason the cohort must be a real customer-lane cohort), verification=58.
 
+## Manager receipts added for THIS run (2026-09-13T14:04Z, fresh unit)
+
+- Fresh read 14:04Z: watchlist=1, watchlist_run=1 (UNCHANGED since the 09-11
+  creation), watch_event=0, digest_item=0, delivery_attempt=7, user=17. The
+  3-hourly ticks at 09:00Z and 12:00Z today did NOT add a watchlist_run row:
+  root-cause whether the tick doesn't run at all, or the scanner skips the
+  canary watchlist (plan-feature-gate? is_active? lane? last_scanned_at NULL?)
+  — that finding feeds phase 2.
+- Next scheduled tick 15:00Z is past this unit's ~42-min wall — do NOT wait
+  for it; root-cause from code + receipts.
+- You are on branch claim/issue-3322 (pushed c947b0f3d, rebased on origin/main
+  5c32a83c4). Commit here; your manager pushes. Never main, never git stash.
+  Worktree: /home/nish/workspaces/agent-worktrees/issue-0509-3322.
+- Timebox: 15 minutes HARD for phase 1 (manager amendment; precedent 42-min
+  unit). At 15 min: commit what works, write .fleet/phase-1-report.md (what
+  works / what's blocked), end. NOT perfect — extremely well within the box.
+- One heavy process at a time (unit MemoryMax=4G). No coverage, no typecheck.
+- Prod D1 reads: `set -a; source ~/.config/cloudflare/deploy-ci.env; set +a;
+  npx wrangler d1 execute 0509 --remote --json --command "..."`. Secrets never
+  printed. All spend free-tier only.
+- Return in your final message: the final cohort counts (accounts/watchlists/
+  competitors), whether a tick scan was observed or root-caused, the receipts
+  file diff-summary, and any blockers — plain sentences. EXTREMELY WELL, not
+  perfect.
+
 ## Mission (phase 1, acceptance bullet 2)
 
 Re-seed a watcher cohort of **at least 20 competitors** through the product's
