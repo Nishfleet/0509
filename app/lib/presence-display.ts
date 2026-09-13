@@ -24,6 +24,7 @@ const CONNECTOR_COPY: Record<PresenceConnectorId, string> = {
   gdelt: "GDELT mainstream news",
   threads: "Threads",
   hn: "Hacker News",
+  review_sites: "Review sites",
 };
 
 const SOURCE_COVERAGE_STATUS_COPY: Record<PresenceSourceCoverageStatus, string> = {

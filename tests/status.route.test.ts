@@ -101,6 +101,16 @@ describe("status route", () => {
     const xRow = mentionSources.find((source) => source.sourceId === "x");
     expect(xRow).toBeDefined();
     expect(xRow?.productionStatus).toBe("gated");
+
+    // Issue #3209 — the review-sites row: wired in, gated, honest about
+    // what the public surface covers (Trustpilot's published business-unit
+    // JSON-LD) and what it does not (G2/Capterra are bot-verified, their
+    // documented APIs partner/paid — documented, not silently claimed).
+    const reviewSitesRow = mentionSources.find((source) => source.sourceId === "review_sites");
+    expect(reviewSitesRow).toBeDefined();
+    expect(reviewSitesRow?.productionStatus).toBe("gated");
+    expect(reviewSitesRow?.notes).toContain("Trustpilot");
+    expect(reviewSitesRow?.notes).toContain("DataDome");
   });
 
   it("renders the tracked-source rows — the Threads mention source reads gated (issue #3205)", async () => {
