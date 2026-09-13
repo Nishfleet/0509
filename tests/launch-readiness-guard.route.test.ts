@@ -185,7 +185,9 @@ describe("launch readiness canary route", () => {
         LAUNCH_CANARY_EMAIL: "owner@example.com",
       })),
     }));
-    vi.doMock("~/lib/data.server", () => ({ createWatchlistRun }));
+    vi.doMock("~/lib/data.server", () => ({ createWatchlistRun,
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+    }));
 
     const { action } = await import("~/routes/api.launch-readiness.canary");
     const response = await action({
@@ -218,7 +220,9 @@ describe("launch readiness canary route", () => {
         LAUNCH_CANARY_EMAIL: "owner@example.com",
       })),
     }));
-    vi.doMock("~/lib/data.server", () => ({ createWatchlistRun }));
+    vi.doMock("~/lib/data.server", () => ({ createWatchlistRun,
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+    }));
 
     const { action } = await import("~/routes/api.launch-readiness.canary");
     const response = await action({
@@ -343,7 +347,9 @@ describe("launch readiness canary route", () => {
         LAUNCH_CANARY_EMAIL: "owner@example.com",
       })),
     }));
-    vi.doMock("~/lib/data.server", () => ({ createProofCapture, createWatchlistRun }));
+    vi.doMock("~/lib/data.server", () => ({ createProofCapture, createWatchlistRun,
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+    }));
     vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
     vi.doMock("~/lib/landing-pages.server", () => ({
       captureLandingPageSnapshot,
@@ -615,6 +621,114 @@ describe("launch readiness canary route", () => {
     );
   }, 10_000);
 
+  it("provisions the proof email target even when the substrate predates the provisioning step (#3330)", async () => {
+    // Run 34728198258 (sha 276db8aa, 2026-09-13T00:31Z): prod D1 had the
+    // canary user + active watchlist from 2026-09-11T21:35:47Z but ZERO
+    // delivery_target rows — the watchlist was created before #3327 added the
+    // email-target provisioning, and `ensureCanaryTarget` returned early on
+    // `existing`, so the provisioning step was unreachable. Every run 503'd
+    // `gate-c-proof-email-target-must-resolve-uniquely`. The early-return
+    // path must provision too (a no-op once the target exists).
+    const statements: string[] = [];
+    const db = {
+      prepare(sql: string) {
+        return {
+          bind(..._args: unknown[]) {
+            return {
+              async all<T>() {
+                if (sql.includes("e2e_test_mode")) return { results: [] as T[] };
+                if (sql.includes("INNER JOIN user")) {
+                  return {
+                    results: [
+                      {
+                        user_id: "launch-readiness-canary-owner",
+                        email: "owner@example.com",
+                        name: "Launch readiness canary owner",
+                        watchlist_id: "launch-readiness-canary-watchlist",
+                        watchlist_name: "Launch readiness canary",
+                        target_label: "0509.io",
+                      },
+                    ] as T[],
+                  };
+                }
+                throw new Error(`unexpected query: ${sql.slice(0, 80)}`);
+              },
+              async run() {
+                statements.push(sql);
+                return { success: true };
+              },
+            };
+          },
+        };
+      },
+    };
+
+    const provisionVerifiedAccountEmailTargetIfUnsuppressed = vi.fn().mockResolvedValue({
+      id: "proof-target-1",
+    });
+    const deliverWeeklyDigest = vi.fn().mockResolvedValue({
+      attempts: 1,
+      channels: ["email"],
+      details: [
+        {
+          channel: "email",
+          status: "sent",
+          targetValue: "owner@example.com",
+          providerMessageId: "email-1",
+          errorMessage: null,
+          deliveredAt: new Date().toISOString(),
+          subject: "0509 Gate C proof gate-c-worker-v1",
+          providerDispatchStartedAt: "2026-09-13T00:00:00.000Z",
+          providerStatusLastSeenAt: "2026-09-13T00:05:00.000Z",
+        },
+      ],
+    });
+
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DB: db,
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      createWatchlistRun: vi.fn(),
+      finishWatchlistRun: vi.fn(),
+      upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-1" }),
+      createProofCapture: vi.fn().mockResolvedValue("proof-1"),
+      createWatchEvent: vi.fn(),
+      createDigestRun: vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true }),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed,
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+    mockLandingPageCapture();
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    const response = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/api/launch-readiness/canary", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-0509-canary-token": "secret-token",
+        },
+        body: JSON.stringify({ gateRunId: "gate-c-worker-v1" }),
+      }),
+    } as never);
+
+    await expect(response.json()).resolves.toMatchObject({ ok: true, blockers: [] });
+    // The existing substrate's owner is reused; no user/watchlist re-insert.
+    expect(provisionVerifiedAccountEmailTargetIfUnsuppressed).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        userId: "launch-readiness-canary-owner",
+        targetValue: "owner@example.com",
+      }),
+    );
+    expect(statements.some((sql) => sql.includes("INSERT INTO user"))).toBe(false);
+    expect(statements.some((sql) => sql.includes("INSERT INTO watchlist"))).toBe(false);
+  }, 10_000);
+
   it("fails closed with the pre-existing blocker when substrate provisioning throws", async () => {
     const db = {
       prepare(_sql: string) {
@@ -713,7 +827,8 @@ describe("launch readiness canary route", () => {
       createProofCapture: vi.fn(),
       createWatchEvent: vi.fn(),
       createDigestRun: vi.fn(),
-    }));
+    
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),}));
     vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
     mockLandingPageCapture(null);
 
@@ -783,7 +898,8 @@ describe("launch readiness canary route", () => {
       createWatchlistRun,
       finishWatchlistRun,
       upsertProofTarget,
-    }));
+    
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),}));
     vi.doMock("~/lib/delivery.server", () => ({
       deliverWeeklyDigest,
     }));
@@ -934,7 +1050,8 @@ describe("launch readiness canary route", () => {
       createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
       finishWatchlistRun: vi.fn().mockResolvedValue(undefined),
       upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-1" }),
-    }));
+    
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),}));
     vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
     mockLandingPageCapture();
 
@@ -989,6 +1106,17 @@ describe("launch readiness canary route", () => {
           LAUNCH_CANARY_EMAIL: "owner@example.com",
         })),
       }));
+      // #3330: the substrate-present path now provisions the proof email
+      // target; the real data.server against this fake DB would throw.
+      vi.doMock("~/lib/data.server", () => ({
+        provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+        createDigestRun: vi.fn(),
+        createProofCapture: vi.fn(),
+        createWatchEvent: vi.fn(),
+        createWatchlistRun: vi.fn(),
+        finishWatchlistRun: vi.fn(),
+        upsertProofTarget: vi.fn(),
+      }));
 
       const { action } = await import("~/routes/api.launch-readiness.canary");
       const response = await action({
@@ -1032,7 +1160,8 @@ describe("launch readiness canary route", () => {
 			createWatchlistRun: vi.fn().mockResolvedValue("run-loser"),
 			finishWatchlistRun: vi.fn().mockResolvedValue(undefined),
 			upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-loser" }),
-		}));
+		
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),}));
 		vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
 		mockLandingPageCapture();
 
@@ -1071,7 +1200,9 @@ describe("launch readiness canary route", () => {
         LAUNCH_CANARY_EMAIL: "owner@example.com",
       })),
     }));
-    vi.doMock("~/lib/data.server", () => ({ createWatchlistRun }));
+    vi.doMock("~/lib/data.server", () => ({ createWatchlistRun,
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+    }));
 
     const { action } = await import("~/routes/api.launch-readiness.canary");
     const response = await action({
@@ -1124,7 +1255,9 @@ describe("launch readiness canary route", () => {
         LAUNCH_CANARY_EMAIL: "owner@example.com",
       })),
     }));
-    vi.doMock("~/lib/data.server", () => ({ cleanupLaunchReadinessCanary }));
+    vi.doMock("~/lib/data.server", () => ({ cleanupLaunchReadinessCanary,
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+    }));
 
     const { action } = await import("~/routes/api.launch-readiness.canary");
     const response = await action({
@@ -1170,7 +1303,9 @@ describe("launch readiness canary route", () => {
         LAUNCH_CANARY_EMAIL: "owner@example.com",
       })),
     }));
-    vi.doMock("~/lib/data.server", () => ({ cleanupLaunchReadinessCanary }));
+    vi.doMock("~/lib/data.server", () => ({ cleanupLaunchReadinessCanary,
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+    }));
 
     const { action } = await import("~/routes/api.launch-readiness.canary");
     const response = await action({
@@ -1213,7 +1348,9 @@ describe("launch readiness canary route", () => {
         LAUNCH_CANARY_EMAIL: "owner@example.com",
       })),
     }));
-    vi.doMock("~/lib/data.server", () => ({ cleanupLaunchReadinessCanary }));
+    vi.doMock("~/lib/data.server", () => ({ cleanupLaunchReadinessCanary,
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+    }));
 
     const { action } = await import("~/routes/api.launch-readiness.canary");
     const response = await action({
@@ -1244,7 +1381,9 @@ describe("launch readiness canary route", () => {
         LAUNCH_CANARY_EMAIL: "owner@example.com",
       })),
     }));
-    vi.doMock("~/lib/data.server", () => ({ cleanupLaunchReadinessCanary }));
+    vi.doMock("~/lib/data.server", () => ({ cleanupLaunchReadinessCanary,
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+    }));
 
     const { action } = await import("~/routes/api.launch-readiness.canary");
     const requests = [
@@ -1311,7 +1450,9 @@ describe("launch readiness canary route", () => {
         LAUNCH_CANARY_EMAIL: "owner@example.com",
       })),
     }));
-    vi.doMock("~/lib/data.server", () => ({ cleanupLaunchReadinessCanary }));
+    vi.doMock("~/lib/data.server", () => ({ cleanupLaunchReadinessCanary,
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+    }));
 
     const { action } = await import("~/routes/api.launch-readiness.canary");
     const request = () =>
@@ -1373,7 +1514,8 @@ describe("launch readiness canary route", () => {
       createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
       finishWatchlistRun: vi.fn().mockResolvedValue(undefined),
       upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-1" }),
-    }));
+    
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),}));
     vi.doMock("~/lib/delivery.server", () => ({
       deliverWeeklyDigest,
     }));
@@ -1449,7 +1591,8 @@ describe("launch readiness canary route", () => {
       createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
       finishWatchlistRun: vi.fn().mockResolvedValue(undefined),
       upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-1" }),
-    }));
+    
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),}));
     vi.doMock("~/lib/delivery.server", () => ({
       deliverWeeklyDigest,
     }));
@@ -1538,7 +1681,8 @@ describe("launch readiness canary route", () => {
       createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
       finishWatchlistRun: vi.fn().mockResolvedValue(undefined),
       upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-1" }),
-    }));
+    
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),}));
     vi.doMock("~/lib/delivery.server", () => ({
       deliverWeeklyDigest: vi.fn().mockResolvedValue({
         attempts: 1,
@@ -1596,7 +1740,8 @@ describe("launch readiness canary route", () => {
       createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
       finishWatchlistRun: vi.fn().mockResolvedValue(undefined),
       upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-1" }),
-    }));
+    
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),}));
     vi.doMock("~/lib/delivery.server", () => ({
       deliverWeeklyDigest: vi.fn().mockResolvedValue({
         attempts: 2,
@@ -1673,7 +1818,8 @@ describe("launch readiness canary route", () => {
       createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
       finishWatchlistRun: vi.fn().mockResolvedValue(undefined),
       upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-1" }),
-    }));
+    
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),}));
     vi.doMock("~/lib/delivery.server", () => ({
       deliverWeeklyDigest: vi.fn().mockResolvedValue({
         attempts: 1,
@@ -1750,7 +1896,8 @@ describe("launch readiness canary route", () => {
       createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
       finishWatchlistRun: vi.fn().mockResolvedValue(undefined),
       upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-1" }),
-    }));
+    
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),}));
     vi.doMock("~/lib/delivery.server", () => ({
       deliverWeeklyDigest: vi.fn().mockResolvedValue({
         attempts: 1,
@@ -1812,7 +1959,8 @@ describe("launch readiness canary route", () => {
       createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
       finishWatchlistRun,
       upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-1" }),
-    }));
+    
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),}));
     vi.doMock("~/lib/delivery.server", () => ({
       deliverWeeklyDigest: vi.fn(),
     }));
@@ -1873,7 +2021,8 @@ describe("launch readiness canary route", () => {
       createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
       finishWatchlistRun,
       upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-1" }),
-    }));
+    
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),}));
     vi.doMock("~/lib/delivery.server", () => ({
       deliverWeeklyDigest: vi.fn(),
     }));
@@ -1951,7 +2100,8 @@ describe("launch readiness canary route", () => {
       // snapshot — make it throw an ordinary Error so the new guard kicks
       // in (Response throws are still passed through unchanged).
       upsertProofTarget: vi.fn().mockRejectedValue(new Error("d1 rejected: UNIQUE constraint")),
-    }));
+    
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),}));
     vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest: vi.fn() }));
     // The inner try/catch around the proof-target upsert calls
     // compensateUncommittedProofArtifacts before re-throwing; mock it so
@@ -2003,7 +2153,8 @@ describe("launch readiness canary route", () => {
       // surface proofCaptureId so Gate C can name the stage that blew up.
       createWatchEvent: vi.fn().mockRejectedValue(new Error("d1 outage mid-event")),
       createDigestRun: vi.fn(),
-    }));
+    
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),}));
     vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest: vi.fn() }));
     vi.doMock("~/lib/proof-artifact-retention.server", () => ({
       compensateUncommittedProofArtifacts: vi.fn().mockResolvedValue({ ok: true }),
@@ -2050,7 +2201,8 @@ describe("launch readiness canary route", () => {
       createProofCapture: vi.fn().mockResolvedValue("proof-1"),
       createWatchEvent: vi.fn().mockResolvedValue("event-1"),
       createDigestRun: vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true }),
-    }));
+    
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),}));
     vi.doMock("~/lib/delivery.server", () => ({
       // Email provider outage: the tail throws AFTER digestRunId is bound,
       // so the response must surface runId + proofCaptureId + digestRunId.
@@ -2105,7 +2257,8 @@ describe("launch readiness canary route", () => {
       createProofCapture: vi.fn().mockResolvedValue("proof-1"),
       createWatchEvent: vi.fn().mockResolvedValue("event-1"),
       createDigestRun: vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true }),
-    }));
+    
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),}));
     vi.doMock("~/lib/delivery.server", () => ({
       // The literal production suspect: Gate C's unique-target proofEmail
       // resolution throws inside deliverWeeklyDigest after digestRunId binds.
@@ -2159,7 +2312,8 @@ describe("launch readiness canary route", () => {
       upsertProofTarget: vi.fn().mockImplementation(() => {
         throw new Response("Launch readiness proof target could not be created.", { status: 500 });
       }),
-    }));
+    
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),}));
     vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest: vi.fn() }));
     vi.doMock("~/lib/proof-artifact-retention.server", () => ({
       compensateUncommittedProofArtifacts: vi.fn().mockResolvedValue({ ok: true }),

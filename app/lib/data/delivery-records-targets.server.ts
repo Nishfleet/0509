@@ -93,11 +93,13 @@ export async function hasSuppressedEmailTargetForUserAndAddress(
 }
 
 /**
- * Lazily creates one validated workspace email target without reopening an
- * address that was unsubscribed in any target scope. The NOT EXISTS predicate
- * and insert share one SQLite statement, so a concurrent unsubscribe either
- * blocks this insert or suppresses the inserted row before the later dispatch
- * CAS can advance.
+ * Lazily creates one validated workspace email target. Idempotent: the NOT
+ * EXISTS predicate skips the insert when any row already exists for the
+ * address (active or suppressed — it never resurrects an unsubscribed or
+ * paused address, and it never duplicates an active one). The NOT EXISTS
+ * predicate and insert share one SQLite statement, so a concurrent
+ * unsubscribe either blocks this insert or suppresses the inserted row
+ * before the later dispatch CAS can advance.
  */
 export async function provisionVerifiedAccountEmailTargetIfUnsuppressed(
   env: AppEnv,
@@ -111,6 +113,16 @@ export async function provisionVerifiedAccountEmailTargetIfUnsuppressed(
   const targetValue = normalizeDeliveryTargetValue("email", input.targetValue);
   if (!targetValue) return null;
 
+  // #3330: skip when ANY row already exists for this (user, email) — active
+  // or opted-out. The previous guard only skipped opted-OUT rows, so calling
+  // this with an active row (the canary route does this on every run whose
+  // watchlist was cleaned up, and its substrate-present path now calls it on
+  // every run) inserted a fresh duplicate; the next Gate C run then saw 2
+  // matching targets and 503'd `gate-c-proof-email-target-must-resolve-
+  // uniquely` forever. Every caller already reads the address before
+  // calling, so no caller relied on re-provisioning over an existing row.
+  // Suppressed (opted-out or paused) addresses stay suppressed: this
+  // function must never gain a fresh active row over them.
   const timestamp = nowIso();
   await run(
     env,
@@ -146,7 +158,6 @@ export async function provisionVerifiedAccountEmailTargetIfUnsuppressed(
         WHERE user_id = ?
           AND channel = 'email'
           AND lower(trim(target_value)) = lower(trim(?))
-          AND opted_out_at IS NOT NULL
       )
     `,
     createId(),

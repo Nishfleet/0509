@@ -74,7 +74,18 @@ const CANARY_WATCHLIST_ID = "launch-readiness-canary-watchlist";
 /** @param {{ DB?: D1Database }} env @param {string} canaryEmail */
 async function ensureCanaryTarget(env: { DB?: D1Database }, canaryEmail: string) {
   const existing = await getCanaryTarget(env, canaryEmail);
-  if (existing) return { target: existing, provisioned: false };
+  if (existing) {
+    // #3330 (run 34728198258): prod D1 had the user + watchlist from
+    // 2026-09-11T21:35:47Z but zero delivery_target rows — the substrate was
+    // created before the proof-email-target provisioning existed, and the
+    // early return below made that provisioning unreachable. Every Deploy
+    // run then 503'd `gate-c-proof-email-target-must-resolve-uniquely`.
+    // Provision here too: with the any-row-exists guard in
+    // provisionVerifiedAccountEmailTargetIfUnsuppressed this is a no-op
+    // once the target exists, so re-runs converge instead of duplicating.
+    await ensureCanaryProofEmailTarget(env, existing.user_id, canaryEmail);
+    return { target: existing, provisioned: false };
+  }
   if (!env.DB) return { target: null, provisioned: false };
 
   const nowIso = new Date().toISOString();
@@ -108,22 +119,30 @@ async function ensureCanaryTarget(env: { DB?: D1Database }, canaryEmail: string)
   // Gate C's proof email path uses `requireUniqueExistingTarget: true`, so
   // a missing delivery_target fails closed with
   // `Gate C proof email target must resolve uniquely` and deliverWeeklyDigest
-  // throws — the outer guard now catches that throw and answers JSON with
-  // `canary_proof_pipeline_failed`, but the underlying gap is that the
-  // canary substrate never included an email target. Provision one here with
-  // the same idempotent upsert pattern (provisionVerifiedAccountEmailTargetIfUnsuppressed
-  // INSERT-OR-IGNORE is a no-op when one already exists) so the substrate
-  // remains operator-free and the canary route can dispatch its internal
-  // proof email without operator-seeded data.
+  // throws — the outer guard catches that throw and answers JSON with
+  // `canary_proof_pipeline_failed`. Provision the email target here (and on
+  // the substrate-present path above, via the shared helper) so the
+  // substrate remains operator-free and the canary route can dispatch its
+  // internal proof email without operator-seeded data.
+  await ensureCanaryProofEmailTarget(env, userId, canaryEmail);
+
+  const target = await getCanaryTarget(env, canaryEmail);
+  return { target, provisioned: true };
+}
+
+/** One provisioning entry point shared by the substrate-present and
+ * substrate-missing paths, so neither can drift back into skipping it. */
+async function ensureCanaryProofEmailTarget(
+  env: { DB?: D1Database },
+  userId: string,
+  canaryEmail: string,
+) {
   const { provisionVerifiedAccountEmailTargetIfUnsuppressed } = await import("~/lib/data.server");
   await provisionVerifiedAccountEmailTargetIfUnsuppressed(env, {
     userId,
     targetValue: canaryEmail,
     optInSource: "launch_readiness_canary_substrate",
   });
-
-  const target = await getCanaryTarget(env, canaryEmail);
-  return { target, provisioned: true };
 }
 
 async function getCanaryOwner(env: { DB?: D1Database }, canaryEmail: string) {
