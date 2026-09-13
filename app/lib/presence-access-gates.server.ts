@@ -43,6 +43,8 @@ function connectorRolloutFromEnv(env: AppEnv, connectorId: PresenceConnectorId):
       return parseRolloutState(env.PRESENCE_THREADS_ROLLOUT, "disabled");
     case "hn":
       return parseRolloutState(env.PRESENCE_HN_ROLLOUT, "disabled");
+    case "pinterest":
+      return parseRolloutState(env.PRESENCE_PINTEREST_ROLLOUT, "disabled");
     default:
       return "disabled";
   }
@@ -76,6 +78,12 @@ function hasCredentials(env: AppEnv, connectorId: PresenceConnectorId): boolean 
       // credentials. The rollout gate (PRESENCE_HN_ROLLOUT) is still required
       // to activate it.
       return true;
+    case "pinterest":
+      // The profile feed (https://www.pinterest.com/<user>/feed.rss) is
+      // public web — no key, no auth, no credentials (issue #3201). The
+      // rollout gate (PRESENCE_PINTEREST_ROLLOUT) is still required to
+      // activate it.
+      return true;
     default:
       return false;
   }
@@ -90,7 +98,7 @@ function hasCredentials(env: AppEnv, connectorId: PresenceConnectorId): boolean 
 // help-first: Only the predicate changes; the runtime gates in evaluateConnectorAccessGate
 // (rolloutState, credentials, reddit commercial access) still govern whether polling actually runs.
 export function connectorHasCustomerPollPath(connectorId: PresenceConnectorId): boolean {
-  return connectorId === "website" || connectorId === "rss" || connectorId === "gdelt" || connectorId === "threads" || connectorId === "hn" || connectorId === "x" || connectorId === "reddit" || connectorId === "bluesky";
+  return connectorId === "website" || connectorId === "rss" || connectorId === "gdelt" || connectorId === "threads" || connectorId === "hn" || connectorId === "x" || connectorId === "reddit" || connectorId === "bluesky" || connectorId === "pinterest";
 }
 
 export async function evaluateConnectorAccessGate(
