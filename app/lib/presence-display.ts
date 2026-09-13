@@ -22,6 +22,8 @@ const CONNECTOR_COPY: Record<PresenceConnectorId, string> = {
   rss: "RSS / Atom / JSON Feed",
   bluesky: "Bluesky",
   gdelt: "GDELT mainstream news",
+  threads: "Threads",
+
 };
 
 const SOURCE_COVERAGE_STATUS_COPY: Record<PresenceSourceCoverageStatus, string> = {
