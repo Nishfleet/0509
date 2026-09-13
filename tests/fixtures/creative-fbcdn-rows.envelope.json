@@ -1,0 +1,12 @@
+[
+  {
+    "results": [
+      {
+        "id": "ad_live",
+        "url": "https://scontent-bos5-1.xx.fbcdn.net/v/t39/creative.jpg?oh=abc&oe=6AA7C003"
+      },
+      { "id": "ad_dead", "url": "https://x.fbcdn.net/gone.jpg" }
+    ],
+    "success": true
+  }
+]

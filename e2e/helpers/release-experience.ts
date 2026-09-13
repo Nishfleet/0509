@@ -144,17 +144,6 @@ export function layoutViewportY(visualY: number, visualOffsetTop: number): numbe
   return visualY + visualOffsetTop;
 }
 
-async function measureActionBox(action: Locator) {
-  return action.evaluate((element) => {
-    const rect = element.getBoundingClientRect();
-    return {
-      y: rect.top,
-      height: rect.height,
-      visualOffset: window.visualViewport?.offsetTop ?? 0,
-    };
-  });
-}
-
 export async function expectPrimaryActionAboveFold(
   action: Locator,
   label = "primary next action",
@@ -163,15 +152,7 @@ export async function expectPrimaryActionAboveFold(
   const page = action.page();
   // fill() / focus auto-scrolls the visual viewport. Restore the page's
   // initial view (hash target, else document origin) and blur so nothing
-  // keeps fighting the reset, then measure layout coordinates. The restore
-  // must be INSTANT: the page sets `scroll-behavior: smooth` on <html>, so
-  // the spec-default `behavior: "auto"` animates the scroll and a fixed
-  // 2-RAF wait can sample a mid-animation frame (run 34736169021 measured
-  // box.y=-6.484375 before the eased scroll had settled). The action can
-  // also still be running an enable/press transition, so the measurement
-  // itself must agree with itself across a subsequent frame pair before it
-  // is accepted; after 20 unanswered frame pairs the last reading stands,
-  // which is no worse than the previous always-accept-anything wait.
+  // keeps fighting the reset, then measure layout coordinates.
   await page.evaluate(() => {
     const active = document.activeElement;
     if (active instanceof HTMLElement && active !== document.body) {
@@ -180,27 +161,25 @@ export async function expectPrimaryActionAboveFold(
     const id = window.location.hash.replace(/^#/u, "");
     const target = id ? document.getElementById(id) : null;
     if (target) {
-      target.scrollIntoView({ block: "start", inline: "nearest", behavior: "instant" });
+      target.scrollIntoView({ block: "start", inline: "nearest" });
       return;
     }
-    window.scrollTo({ top: 0, behavior: "instant" });
+    window.scrollTo(0, 0);
   });
-  let metrics = await measureActionBox(action);
-  for (let settle = 0; settle < 20; settle += 1) {
-    await page.evaluate(
-      () =>
-        new Promise<void>((resolve) => {
-          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-        }),
-    );
-    const next = await measureActionBox(action);
-    const settled =
-      next.y === metrics.y &&
-      next.height === metrics.height &&
-      next.visualOffset === metrics.visualOffset;
-    metrics = next;
-    if (settled) break;
-  }
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }),
+  );
+  const metrics = await action.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      y: rect.top,
+      height: rect.height,
+      visualOffset: window.visualViewport?.offsetTop ?? 0,
+    };
+  });
   const viewport = page.viewportSize();
   expect(viewport, `${label} requires a configured viewport`).not.toBeNull();
   if (!viewport) return;
