@@ -37,7 +37,11 @@ failures=0
 get() {
   local label="$1" path="$2" ua="$3" jar="${4:-}"
   local code
-  code="$(curl -sS -o /dev/null -m 20 --retry 0 -w '%{http_code}' \
+  # -L: follow redirects like a browser — a #1282 cache-miss /ads/:domain
+  # 301s onto its /search?q= result, which is exactly what a visitor's
+  # money-path step LANDS on; the measured code is that final page, not the
+  # hop.
+  code="$(curl -sSL -o /dev/null -m 20 --retry 0 -w '%{http_code}' \
     -A "$ua" \
     ${jar:+-b "$jar" -c "$jar"} \
     "$BASE_URL$path")" || code="000"
