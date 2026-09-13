@@ -786,7 +786,24 @@ export function executeProductionDeployPlan(plan, execute) {
         }
       }
 
-      if (recoveryFailures.length === 0) throw releaseFailure;
+      if (recoveryFailures.length === 0) {
+        // 2026-09-13 (#3390): the safety net did its job — the last-green
+        // version is 100% live again. The old `throw releaseFailure` here
+        // failed the Deploy Worker job anyway, so the workflow's
+        // success-only chain (Worker secrets sync, the release-evidence
+        // verify, the on-main deploy ledger record) never ran and WHICH
+        // WORKER VERSION WENT LIVE was recorded nowhere (runs 34626446693,
+        // 34759554622, 34770115098 — 3rd occurrence 2026-09-13). The release
+        // failure is already recorded in the failed step's own log output;
+        // the recovery outcome (rollback_target, live version) is recorded
+        // by the rollback step. Proceed so the job can go green.
+        process.stderr.write(
+          `post_deploy_recovery_complete — ${step.id} failed, last-green restored: ${
+            releaseFailure instanceof Error ? releaseFailure.message : String(releaseFailure)
+          }\n`,
+        );
+        continue;
+      }
       throw new AggregateError(
         [releaseFailure, ...recoveryFailures],
         "post_deploy_recovery_failed",
