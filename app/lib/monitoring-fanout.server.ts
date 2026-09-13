@@ -1110,11 +1110,21 @@ export async function finishOrchestratedWatchlistRun(
           UPDATE watchlist_run
           SET status = 'succeeded',
               pages_scanned = ?,
-              summary_json = CASE
-                WHEN COALESCE(json_extract(summary_json, '$.firstScanQuotaReserved'), 0) = 1
-                THEN json_set(?, '$.firstScanQuotaReserved', 1)
-                ELSE ?
-              END,
+              summary_json = json_set(
+                CASE
+                  WHEN COALESCE(json_extract(summary_json, '$.firstScanQuotaReserved'), 0) = 1
+                  THEN json_set(?, '$.firstScanQuotaReserved', 1)
+                  ELSE ?
+                END,
+                -- #3176: the fan-out wrote per-source progress ticks while the
+                -- scan was running; the wholesale summary replacement must not
+                -- drop them. The pre-update row's subtree always wins because
+                -- no finisher passes its own sourceProgress.
+                '$.sourceProgress',
+                COALESCE(json_extract(summary_json, '$.sourceProgress'), json('{}')),
+                '$.sourceProgressUpdatedAt',
+                COALESCE(json_extract(summary_json, '$.sourceProgressUpdatedAt'), '')
+              ),
               finished_at = ?,
               error_code = NULL,
               error_message = NULL,
@@ -1156,11 +1166,19 @@ export async function finishOrchestratedWatchlistRun(
       UPDATE watchlist_run
       SET status = ?,
           pages_scanned = ?,
-          summary_json = CASE
-            WHEN COALESCE(json_extract(summary_json, '$.firstScanQuotaReserved'), 0) = 1
-            THEN json_set(?, '$.firstScanQuotaReserved', 1)
-            ELSE ?
-          END,
+          summary_json = json_set(
+            CASE
+              WHEN COALESCE(json_extract(summary_json, '$.firstScanQuotaReserved'), 0) = 1
+              THEN json_set(?, '$.firstScanQuotaReserved', 1)
+              ELSE ?
+            END,
+            -- #3176: preserve the fan-out's per-source progress ticks; see the
+            -- succeeded+touch statement above.
+            '$.sourceProgress',
+            COALESCE(json_extract(summary_json, '$.sourceProgress'), json('{}')),
+            '$.sourceProgressUpdatedAt',
+            COALESCE(json_extract(summary_json, '$.sourceProgressUpdatedAt'), '')
+          ),
           finished_at = ?,
           error_code = ?,
           error_message = ?,

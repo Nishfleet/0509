@@ -44,6 +44,22 @@ export interface ScanSourceProgressEntry {
 
 export type ScanSourceProgressMap = Record<string, ScanSourceProgressEntry>;
 
+export interface ScanSourceTickInput {
+  kind: ScanSourceKind;
+  label: string;
+  status: ScanSourceStatus;
+  detail?: string | null;
+}
+
+/**
+ * Per-source wall-clock budget (issue #3176 "per-source budgets"). A source
+ * that exceeds it loses the race, is ticked `timed_out`, and can never delay
+ * the first brief past its own #3071 session budget. Generous enough that a
+ * HEALTHY capture never loses; tight enough that a hung one is written off
+ * within half a minute.
+ */
+export const SCAN_SOURCE_BUDGET_MS = 30_000;
+
 export interface ScanSourceProgressSummary {
   total: number;
   /** Sources in a terminal state (done, unavailable, timed_out, failed, skipped). */
@@ -79,7 +95,7 @@ export async function recordScanSourceTick(
   env: AppEnv,
   runId: string,
   sourceId: string,
-  tick: { kind: ScanSourceKind; label: string; status: ScanSourceStatus; detail?: string | null },
+  tick: ScanSourceTickInput,
 ): Promise<void> {
   const entry: ScanSourceProgressEntry = {
     kind: tick.kind,
