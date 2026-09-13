@@ -72,6 +72,7 @@ import {
   SCHEDULED_OBSERVATION_GAP_CHECK_CRON,
 } from "../app/lib/scheduled-observation-health.server";
 import { canonicalPathRedirect } from "./canonical-path";
+import { enforceOriginAssertion } from "./origin-assertion";
 import { scheduleBillingLifecycleEmailRecovery } from "./delivery-recovery";
 import { scheduleDigestScheduleExhaustionRecovery } from "./digest-schedule-recovery";
 import { primaryDomainRedirect } from "./primary-domain";
@@ -338,6 +339,21 @@ export default {
       // single PUBLIC_MARKDOWN body. publicMarkdownForPath falls back to
       // PUBLIC_MARKDOWN for any path without a dedicated body.
       return markdownResponse(request, publicMarkdownForPath(url.pathname));
+    }
+
+    // Origin / Sec-Fetch-Site assertion (issue #2986): the ONE worker-level
+    // CSRF check. State-changing requests (POST/PUT/DELETE) under /app/* and
+    // /api/v1/* must present same-site evidence — Sec-Fetch-Site:
+    // same-origin|none, or an Origin header matching this request's own
+    // scheme+host+port — or they 403 here, BEFORE the rate-limit gate so a
+    // rejected request costs no D1. The no-header client class (curl / undici
+    // / Python-requests hitting the documented Bearer-key
+    // POST /api/v1/actions) passes untouched: API-key auth, no session
+    // cookie, no CSRF surface. Both directions are proven by
+    // tests/worker-origin-assertion.test.ts. See workers/origin-assertion.ts.
+    const originGateResponse = enforceOriginAssertion(request);
+    if (originGateResponse) {
+      return withSecurityHeaders(originGateResponse, request);
     }
 
     const rateLimitResponse = await enforceRequestRateLimit(request, env, ctx);
