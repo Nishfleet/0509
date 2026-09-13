@@ -30,9 +30,6 @@ DOMAINS=(shein.com temu.com nike.com adidas.com zalando.com asos.com boohoo.com 
 
 START=${1:-1}; END=${2:-20}
 OK=0; FAIL=0
-# 16:26Z pacing fix: 429 storm on 0509.io (run 1: 0/20). Throttle every call, retry 429s.
-pc() { local o; for a in 1 2 3; do sleep 3; o=$(curl -sS --max-time 30 "$@"); case "$o" in 429*) sleep 20;; *) printf "%s" "$o"; return 0;; esac; done; printf "%s" "$o"; }
-pi() { sleep 3; local o; for a in 1 2; do o=$(curl -sS --max-time 60 "$@"); case "$o" in 429*) sleep 20;; *) printf "%s" "$o"; return 0;; esac; done; printf "%s" "$o"; }
 for i in $(seq "$START" "$END"); do
   i2=$(printf '%02d' "$i")
   EMAIL="bet1-3322-${i2}@0509.io"
@@ -41,7 +38,7 @@ for i in $(seq "$START" "$END"); do
   [ -z "${DOMAINS[$((i-1))]:-}" ] && DOMAIN="shop$i2.example"
 
   # 1. signup (fresh; prior unit's rows for 01 are expired/unconsumed)
-  SIG=$(pc  -c "$JAR" -H "Origin: https://0509.io" -X POST https://0509.io/auth/signup \
+  SIG=$(curl -sS --max-time 30 -c "$JAR" -H "Origin: https://0509.io" -X POST https://0509.io/auth/signup \
     --data-urlencode "email=$EMAIL" --data-urlencode "name=BET1 3322 $i2" --data-urlencode "redirectTo=/app" \
     -o /dev/null -w '%{http_code} %{redirect_url}' 2>&1) || { echo "[$i2] signup curl FAIL: $SIG"; FAIL=$((FAIL+1)); continue; }
   case "$SIG" in 302*) ;; *) echo "[$i2] signup NOT-302: $SIG"; FAIL=$((FAIL+1)); continue;; esac
@@ -57,19 +54,19 @@ for i in $(seq "$START" "$END"); do
   printf '#HttpOnly_0509.io\tFALSE\t/\tFALSE\t0\tf9_better_magic_state\tstate-burst-%s\n' "$i2" >> "$JAR"
 
   # 4. ?token= legacy staging -> 302 ?mode=signup (+ f9_better_magic confirmation cookie)
-  ST=$(pc  -b "$JAR" -c "$JAR" \
+  ST=$(curl -sS --max-time 30 -b "$JAR" -c "$JAR" \
     "https://0509.io/auth/better/magic-link?token=$TOKEN&mode=signup&callbackURL=/app&newUserCallbackURL=/app&state=state-burst-$i2" \
     -o /dev/null -w '%{http_code} %{redirect_url}' 2>&1) || { echo "[$i2] stage curl FAIL: $ST"; FAIL=$((FAIL+1)); continue; }
   case "$ST" in 302*mode=signup*) ;; *) echo "[$i2] stage NOT-confirm-302: $ST"; FAIL=$((FAIL+1)); continue;; esac
 
   # 5. confirm POST -> session + 302
-  CP=$(pc  -b "$JAR" -c "$JAR" -H "Origin: https://0509.io" \
+  CP=$(curl -sS --max-time 30 -b "$JAR" -c "$JAR" -H "Origin: https://0509.io" \
     -H "Content-Type: application/x-www-form-urlencoded" -X POST "https://0509.io/auth/better/magic-link?mode=signup" \
     --data "" -o /dev/null -w '%{http_code} %{redirect_url}' 2>&1) || { echo "[$i2] confirm curl FAIL: $CP"; FAIL=$((FAIL+1)); continue; }
   case "$CP" in 302*/app*) ;; *) echo "[$i2] confirm NOT-app-302: $CP"; FAIL=$((FAIL+1)); continue;; esac
 
   # 6. the import (this queues the activation first scan)
-  IMP=$(pi  -b "$JAR" -c "$JAR" -H "Origin: https://0509.io" -X POST "https://0509.io/app" \
+  IMP=$(curl -sS --max-time 60 -b "$JAR" -c "$JAR" -H "Origin: https://0509.io" -X POST "https://0509.io/app" \
     --data-urlencode "intent=create-market-desk-import" \
     --data-urlencode "competitors=$DOMAIN" \
     --data-urlencode "selectedRowIds=row-1" \
