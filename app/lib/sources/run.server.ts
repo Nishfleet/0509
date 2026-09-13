@@ -4,6 +4,11 @@ import { ensureDb } from "~/lib/data/d1.server";
 import { createWatchEvent } from "~/lib/data/watch-events.server";
 import type { PlanFamily } from "~/lib/plan-entitlements";
 import { getEnabledSources } from "~/lib/sources/registry.server";
+import {
+  recordScanSourceTick,
+  SCAN_SOURCE_BUDGET_MS,
+  withScanSourceBudget,
+} from "~/lib/scan-source-progress.server";
 import type {
   SourceAdapter,
   SourceChange,
@@ -139,15 +144,42 @@ async function runOneSource(
   runId: string,
   now: Date,
 ): Promise<void> {
+  // #3176: every enabled seam source is part of the buyer-visible fan-out, so
+  // its capture becomes a progress tick on the run row. Ticks are progress
+  // state only — a failing tick must never fail the capture, exactly like the
+  // seam's own catches below never fail the Meta path.
+  const tick = (status: ScanSourceTickInput["status"], detail?: string | null) =>
+    recordScanSourceTick(env, runId, adapter.id, {
+      kind: "ad_library",
+      label: adapter.label,
+      status,
+      detail: detail ?? null,
+    }).catch(() => {
+      // Progress observability never blocks the capture.
+    });
+  await tick("running");
+
   let result: SourceFetchResult;
   try {
-    result = await adapter.fetch(env, context);
+    // #3176: a hung source never delays the capture (and with it the first
+    // brief) past its own per-source budget — the loser loses the race, the
+    // tick says timed_out, the next source runs.
+    const raced = await withScanSourceBudget(adapter.fetch(env, context), SCAN_SOURCE_BUDGET_MS);
+    if (raced.outcome === "timed_out") {
+      await tick("timed_out", `budget:${SCAN_SOURCE_BUDGET_MS}ms`);
+      return;
+    }
+    result = raced.value;
   } catch {
     // Unavailable sources are non-blocking.
+    await tick("failed", "fetch_error");
     return;
   }
 
   if ("unavailable" in result && result.unavailable) {
+    // #2873 posture: a source that could not produce a valid capture never
+    // diffs or alerts — it reports honestly and steps aside.
+    await tick("unavailable", result.reason);
     return;
   }
 
@@ -174,6 +206,7 @@ async function runOneSource(
     await emitSourceAlert(env, context.competitorId, runId, adapter.id, change);
   }
   void stored;
+  await tick("done", `changes:${changes.length}`);
 }
 
 /**
