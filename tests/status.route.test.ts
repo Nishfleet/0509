@@ -29,11 +29,18 @@ async function mockRouter(useLoaderData: MockUseLoaderData) {
   });
 }
 
+// The only wall-clock read in this file is #3197's todayDayKey() default —
+// the loader derives its own. Freezing the clock at test start makes that
+// read deterministic (test and loader compute the same UTC day key) and
+// lets the echo fixtures below stay absolute without ageing out — the
+// pinned-clock escape #3215's no-time-bomb guard grants this file.
 beforeEach(() => {
   vi.resetModules();
+  vi.useFakeTimers({ now: new Date(Date.now()) });
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.resetModules();
 });
