@@ -27,6 +27,7 @@ export interface EmailSendingBinding {
 // platform.
 export type EdgeRateLimitBindingName =
   | "RL_AUTH"
+  | "RL_AUTH_GET"
   | "RL_SEARCH_ANON_BROWSER"
   | "RL_PROOF_BRIEF"
   | "RL_SEARCH_SELECTION"
@@ -72,6 +73,7 @@ export interface AppEnv {
    * (429 + Retry-After) when a production-like runtime runs without one.
    */
   RL_AUTH?: RateLimit;
+  RL_AUTH_GET?: RateLimit;
   RL_SEARCH_ANON_BROWSER?: RateLimit;
   RL_PROOF_BRIEF?: RateLimit;
   RL_SEARCH_SELECTION?: RateLimit;
