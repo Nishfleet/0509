@@ -24,6 +24,7 @@ import { describe, expect, it, vi } from "vitest";
  */
 
 const captured: { nonce?: string; url?: string } = {};
+const capturedStream: { element?: unknown; options?: Record<string, unknown> } = {};
 
 vi.mock("react-router", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-router")>();
@@ -33,6 +34,24 @@ vi.mock("react-router", async (importOriginal) => {
       captured.nonce = props.nonce;
       captured.url = props.url;
       return null;
+    },
+  };
+});
+
+vi.mock("react-dom/server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react-dom/server")>();
+  return {
+    ...actual,
+    // Passthrough that captures what app/entry.server.tsx hands to the
+    // streaming render: the options object is what react-dom stamps onto
+    // its own runtime inline scripts ($RT, $RB/$RV/$RC) — issue #3301.
+    renderToReadableStream: (
+      element: Parameters<typeof actual.renderToReadableStream>[0],
+      options: Parameters<typeof actual.renderToReadableStream>[1],
+    ) => {
+      capturedStream.element = element;
+      capturedStream.options = options as Record<string, unknown> | undefined;
+      return actual.renderToReadableStream(element, options);
     },
   };
 });
@@ -78,5 +97,20 @@ describe("entry.server CSP nonce handoff", () => {
     // `nonce=""` is an invalid attribute React would still render; an absent
     // value drops it. Only a real nonce may ever reach the inline chunks.
     expect(captured.nonce).toBeUndefined();
+  });
+
+  it(
+    "passes the context nonce to react-dom's streaming options so every emitted continuation script ($RT/$RB) carries it",
+    async () => {
+      capturedStream.options = undefined;
+      await renderWith("test-nonce-abc123");
+      expect(capturedStream.options?.nonce).toBe("test-nonce-abc123");
+    },
+  );
+
+  it("leaves options.nonce absent, never an empty attribute, without one", async () => {
+    capturedStream.options = undefined;
+    await renderWith(undefined);
+    expect((capturedStream.options as { nonce?: string } | undefined)?.nonce).toBeUndefined();
   });
 });
