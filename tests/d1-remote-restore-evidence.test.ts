@@ -1634,13 +1634,10 @@ describe("D1 remote restore evidence automation", () => {
           ...productionNames,
           "0096_email_suppression.sql",
           "0097_status_probe_samples.sql",
-<<<<<<< HEAD
+          "0098_competitor_suggestion_dismissal.sql",
           "0098_email_delivery_canary.sql",
           "0098_widen_source_target_connector_bluesky.sql",
           "0098_widen_source_target_connector_gdelt.sql",
-=======
-          "0098_competitor_suggestion_dismissal.sql",
->>>>>>> 73821d599 (wip(salvage): pi-issue-0509-3175 success/0)
         ]),
         repository,
       ),
@@ -1661,13 +1658,10 @@ describe("D1 remote restore evidence automation", () => {
         "0096_email_suppression.sql",
         "0096_error_reports.sql",
         "0097_status_probe_samples.sql",
-<<<<<<< HEAD
-        "0098_email_delivery_canary.sql",
-        "0098_widen_source_target_connector_bluesky.sql",
-        "0098_widen_source_target_connector_gdelt.sql",
-=======
         "0098_competitor_suggestion_dismissal.sql",
->>>>>>> 73821d599 (wip(salvage): pi-issue-0509-3175 success/0)
+        "0098_email_delivery_canary.sql",
+        "0098_widen_source_connector_bluesky.sql",
+        "0098_widen_source_target_connector_gdelt.sql",
       ],
     });
   });
