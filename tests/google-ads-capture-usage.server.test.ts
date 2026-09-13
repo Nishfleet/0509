@@ -30,7 +30,9 @@ function makeKv() {
     async delete(key: string) {
       store.delete(key);
     },
-  } as unknown as KVNamespace;
+  } as unknown as KVNamespace & {
+    store: Map<string, { value: string; expirationTtl?: number }>;
+  };
 }
 
 function envWithKv(kv: KVNamespace): AppEnv {
@@ -81,7 +83,7 @@ describe("Google Ads capture counters (issue #3197)", () => {
 
   it("reports rate null when nothing was attempted — no fabricated 0%", async () => {
     const env = envWithKv(makeKv());
-    const stats = await getGoogleAdsCaptureStats24h(env, new Date("2026-09-13T10:00:00.000Z"));
+    const stats = await getGoogleAdsCaptureStats24h(env, new Date("2026-09-13T10:00:00.000Z")); // fixed-date: #3215 sweep convention
     expect(stats.counted).toBe(true);
     expect(stats.attempted).toBe(0);
     expect(stats.rate).toBeNull();
@@ -90,7 +92,7 @@ describe("Google Ads capture counters (issue #3197)", () => {
   it("is not counted when the DECODO_BUDGET binding is absent (nothing written, nothing read)", async () => {
     const env = {} satisfies Partial<AppEnv> as AppEnv;
     await recordGoogleAdsCaptureAttempt(env, { failed: true });
-    const stats = await getGoogleAdsCaptureStats24h(env, new Date("2026-09-13T10:00:00.000Z"));
+    const stats = await getGoogleAdsCaptureStats24h(env, new Date("2026-09-13T10:00:00.000Z")); // fixed-date: #3215 sweep convention
     expect(stats.counted).toBe(false);
     expect(stats.attempted).toBe(0);
     expect(stats.rate).toBeNull();

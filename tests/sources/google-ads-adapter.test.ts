@@ -119,7 +119,7 @@ describe("googleAdsAdapter — #3197 kill flag", () => {
       "scout",
     );
     expect(getEnabledSources({} as AppEnv, "scout").some((a) => a.id === "google_ads")).toBe(true);
-    expect(getEnabledSources(enabled, "scout").some((a) => a.id === "google_ads")).toBe(true);
+    expect(enabled.some((a) => a.id === "google_ads")).toBe(true);
     expect(killed.some((a) => a.id === "google_ads")).toBe(false);
   });
 
