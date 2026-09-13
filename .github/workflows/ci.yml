@@ -191,6 +191,14 @@ jobs:
           semgrep --config "${CANONICAL_URL}" \
                   --config p/default \
                   --quiet --metrics=off --json > semgrep-results.json
+          # Fail closed when the results file is missing or not a JSON object
+          # (#3069 review round): the ERROR/HIGH jq -e check below treats a
+          # parse error as "no findings", which would render a crashed or
+          # blank scan as ::notice::Semgrep clean.
+          jq -e 'type == "object"' semgrep-results.json >/dev/null 2>&1 || {
+            echo "::error::semgrep-results.json is missing or not a JSON object - failing closed."
+            exit 1
+          }
           jq -r '.results[] | "::" + (.extra.severity | ascii_downcase) + "::" + .path + ":" + (.start.line|tostring) + " [" + .check_id + "] " + (.extra.message | gsub("\n";" "))' semgrep-results.json 2>/dev/null || true
           if jq -e '[.results[] | select(.extra.severity | ascii_downcase | IN("error","high"))] | length > 0' semgrep-results.json >/dev/null 2>&1; then
             echo "::error::Semgrep found ERROR/HIGH-severity findings (listed above)."
@@ -392,6 +400,14 @@ jobs:
           semgrep --config "${CANONICAL_URL}" \
                   --config p/default \
                   --quiet --metrics=off --json > semgrep-results.json
+          # Fail closed when the results file is missing or not a JSON object
+          # (#3069 review round): the ERROR/HIGH jq -e check below treats a
+          # parse error as "no findings", which would render a crashed or
+          # blank scan as ::notice::Semgrep clean.
+          jq -e 'type == "object"' semgrep-results.json >/dev/null 2>&1 || {
+            echo "::error::semgrep-results.json is missing or not a JSON object - failing closed."
+            exit 1
+          }
           jq -r '.results[] | "::" + (.extra.severity | ascii_downcase) + "::" + .path + ":" + (.start.line|tostring) + " [" + .check_id + "] " + (.extra.message | gsub("\n";" "))' semgrep-results.json 2>/dev/null || true
           if jq -e '[.results[] | select(.extra.severity | ascii_downcase | IN("error","high"))] | length > 0' semgrep-results.json >/dev/null 2>&1; then
             echo "::error::Semgrep found ERROR/HIGH-severity findings (listed above)."

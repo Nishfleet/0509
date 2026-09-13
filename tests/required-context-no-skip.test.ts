@@ -170,16 +170,6 @@ describe("required contexts can never conclude skipped", () => {
       );
     });
 
-  // The `semgrep` bridge job (batch 2, #3069) is DELIBERATELY exempt from the
-  // never-conclude-skipped contract above, same shape as release-proof: it is
-  // the fail-closed adapter that keeps reporting the ruleset-required
-  // `semgrep` context on merge_group while the admin-side ruleset update is
-  // pending. Job-level `if:`-gated to merge_group so PR pushes never pay the
-  // full-tree scan (the PR-side folded steps in codex-node-checks own the
-  // .github/** coverage); on the queue ref the event is always merge_group so
-  // a missing required check fails closed. These assertions pin that shape —
-  // if: removed → PR-skip of a ruleset-required context; if: broadened → a
-  // required context that can conclude SKIPPED.
     it("runs the canonical release proof over all six journeys and archives gate-b diagnostics on failure", () => {
       const runs = (job.steps ?? []).map((step) => step.run ?? "").join("\n");
       expect(runs).toContain("npm run build");
@@ -226,6 +216,83 @@ describe("required contexts can never conclude skipped", () => {
       for (const step of steps) {
         expect(step["continue-on-error"]).toBeUndefined();
       }
+    });
+
+    it("checks out the trusted event commit github.sha (CodeQL privileged-checkout, #3069)", () => {
+      const checkout = (job.steps ?? []).find((step) =>
+        step.uses?.startsWith("actions/checkout@"),
+      );
+      expect(checkout?.with, "semgrep bridge trusted/pinned checkout").toMatchObject({
+        ref: "${{ github.sha }}",
+        "fetch-depth": 0,
+        clean: true,
+        "persist-credentials": false,
+      });
+    });
+  });
+
+  // Batch-2 MERGE-IN fold (#3069): ONE codex-node-checks required context.
+  // These pins came out of the #3350 reviewer round: before them nothing
+  // locked the fold itself, so a re-added shard or a paths: filter on the
+  // required workflow would silently recreate the Pending-check hang this
+  // batch retired while every other suite stayed green.
+  describe("batch-2 MERGE-IN fold shape (#3069)", () => {
+    const FOLD_CI = ".github/workflows/ci.yml";
+    const foldWorkflow = parse(readFileSync(FOLD_CI, "utf8")) as {
+      on?: { pull_request?: { paths?: string[] } };
+      jobs: Record<string, WorkflowJob>;
+    };
+
+    it("keeps shard-2/3/4 folded away — one codex-node-checks context", () => {
+      expect(foldWorkflow.jobs["codex-node-checks"]).toBeDefined();
+      for (const shard of [
+        "codex-node-checks-shard-2",
+        "codex-node-checks-shard-3",
+        "codex-node-checks-shard-4",
+      ]) {
+        expect(
+          foldWorkflow.jobs[shard],
+          `${FOLD_CI}: ${shard} must stay folded into codex-node-checks (#3069)`,
+        ).toBeUndefined();
+      }
+    });
+
+    it("keeps the required pull_request trigger unfiltered so the context can never hang Pending", () => {
+      expect(foldWorkflow.on?.pull_request, `${FOLD_CI}: pull_request trigger`).toBeDefined();
+      expect(
+        foldWorkflow.on?.pull_request?.paths,
+        `${FOLD_CI}: a paths: filter on pull_request leaves the required context Pending on untouched paths`,
+      ).toBeUndefined();
+    });
+
+    it("keeps semgrep/actionlint folded as dotgithub-gated steps inside codex-node-checks", () => {
+      const steps = foldWorkflow.jobs["codex-node-checks"]?.steps ?? [];
+      const stepWith = (needle: string) =>
+        steps.find((step) => `${step.uses ?? ""} ${step.run ?? ""}`.includes(needle));
+      expect(
+        stepWith("raven-actions/actionlint")?.if,
+        "actionlint must stay a dotgithub-gated folded step",
+      ).toContain("steps.changes.outputs.dotgithub == 'true'");
+      const semgrepScan = stepWith("semgrep --config");
+      expect(
+        semgrepScan?.if,
+        "semgrep scan must stay a dotgithub-gated folded step",
+      ).toContain("steps.changes.outputs.dotgithub == 'true'");
+      expect(
+        semgrepScan?.run,
+        "folded scan must fail closed on a missing/invalid results JSON (#3069 review)",
+      ).toContain("jq -e 'type == \"object\"'");
+    });
+
+    it("keeps the backlog-console hermetic test folded as a backlog_console-gated step", () => {
+      const steps = foldWorkflow.jobs["codex-node-checks"]?.steps ?? [];
+      const gated = steps.filter((step) =>
+        (step.if ?? "").includes("steps.changes.outputs.backlog_console == 'true'"),
+      );
+      expect(
+        gated.length,
+        "backlog-console hermetic test must stay folded, backlog_console-gated",
+      ).toBeGreaterThanOrEqual(1);
     });
   });
 });
