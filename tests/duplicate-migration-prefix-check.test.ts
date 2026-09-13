@@ -36,11 +36,14 @@ describe("duplicate migration prefix check", () => {
   });
 
   it("fails a NEW duplicate prefix that reuses an existing number", () => {
-    const { offenders } = duplicateMigrationPrefixes([
-      "0101_second.sql",
-      "0101_alpha.sql",
-      "0100_first.sql",
-    ], new Set());
+    const { offenders } = duplicateMigrationPrefixes(
+      [
+        "0101_second.sql",
+        "0101_alpha.sql",
+        "0100_first.sql",
+      ],
+      new Map(),
+    );
     expect([...offenders.keys()]).toEqual(["0101"]);
     expect([...(offenders.get("0101") ?? [])].sort()).toEqual([
       "0101_alpha.sql",
@@ -51,9 +54,33 @@ describe("duplicate migration prefix check", () => {
   it("allows an empty-allowlist caller to fail on every duplicate", () => {
     const { offenders } = duplicateMigrationPrefixes(
       ["0067_a.sql", "0067_b.sql"],
-      new Set(),
+      new Map(),
     );
     expect(offenders.get("0067")).toEqual(["0067_a.sql", "0067_b.sql"].sort());
+  });
+
+  it("a frozen legacy prefix exceeding its frozen count fails — a 3rd 0067 or a 4th 0098 is a NEW duplicate, the cap keeps the gate's teeth", () => {
+    // 0067 is frozen at exactly its two applied files: a third file sharing
+    // the prefix would be a new ambiguous-apply-order duplicate, not history.
+    const { offenders } = duplicateMigrationPrefixes([
+      "0067_delivery_recovery_and_digest_jobs.sql",
+      "0067_workspace_member_invariants.sql",
+      "0067_third_arrival.sql",
+    ]);
+    expect(offenders.get("0067")).toEqual([
+      "0067_delivery_recovery_and_digest_jobs.sql",
+      "0067_third_arrival.sql",
+      "0067_workspace_member_invariants.sql",
+    ].sort());
+    // And the 0098 trio is frozen at exactly three — a 4th fails the same way.
+    expect(
+      duplicateMigrationPrefixes([
+        "0098_email_delivery_canary.sql",
+        "0098_widen_source_target_connector_bluesky.sql",
+        "0098_widen_source_target_connector_gdelt.sql",
+        "0098_fourth.sql",
+      ]).offenders.get("0098"),
+    ).toHaveLength(4);
   });
 
   it("the 0067 legacy pair is recorded verbatim in the production ledger baseline so renaming stays impossible", () => {
@@ -78,12 +105,18 @@ describe("duplicate migration prefix check", () => {
     const names = migrationFileNames(migrationsDir);
     expect(names.length).toBeGreaterThan(50);
     const { duplicatePrefixes, offenders } = duplicateMigrationPrefixes(names);
-    // The historical pairs must stay frozen and never renumbered: 0067/0087/0090
-    // were applied under both spellings before any guard; 0096 was a same-day
-    // double-merge (error_reports #2988 + email_suppression #2983, independent
-    // tables) frozen at the gate's landing to keep the apply ledger provable.
-    expect(duplicatePrefixes.sort()).toEqual(["0067", "0087", "0090", "0096"]);
+    // The historical duplicates must stay frozen and never renumbered:
+    // 0067/0087/0090 were applied under both spellings before any guard; 0096
+    // was a same-day double-merge (error_reports #2988 + email_suppression
+    // #2983, independent tables); 0098 is a trio (email_delivery_canary, plus
+    // the bluesky/gdelt same-table source_target widen pair #3252/#3251 whose
+    // surviving CHECK is whichever applies LAST) frozen at the count this
+    // guard adopted — see migrations/README.md.
+    expect(duplicatePrefixes.sort()).toEqual(["0067", "0087", "0090", "0096", "0098"]);
     expect(offenders.size).toBe(0);
     expect(duplicatePrefixViolation(migrationsDir)).toBeNull();
+    // The 0098 freeze is count-aware, not a blanket pass: exactly three files.
+    expect(LEGACY_DUPLICATE_PREFIX_ALLOWLIST.get("0098")).toBe(3);
+    expect(LEGACY_DUPLICATE_PREFIX_ALLOWLIST.get("0096")).toBe(2);
   });
 });
