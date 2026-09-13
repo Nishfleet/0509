@@ -12,6 +12,7 @@ import {
   type CompareClaimCard,
 } from "~/components/compare-citations";
 import {
+  buyerSurfaceHreflangLinks,
   canonicalLinks,
   compareSocialCardUrl,
   faqPageJsonLd,
@@ -30,7 +31,10 @@ const pageTitle = "Five to Nine vs AdSpyder";
 const pageDescription =
   "AdSpyder is a low-cost ad-alert tool. Five to Nine is scheduled, source-backed Meta Ad Library and landing-page change proof.";
 
-export const links: LinksFunction = () => canonicalLinks("/compare/adspyder");
+export const links: LinksFunction = () => [
+  ...canonicalLinks("/compare/adspyder"),
+  ...buyerSurfaceHreflangLinks("compare/adspyder"),
+];
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({

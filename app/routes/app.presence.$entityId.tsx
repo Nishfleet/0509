@@ -86,9 +86,13 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
   const pollableSources = canPollWebsiteSources
     ? sources.filter((source) => connectorHasCustomerPollPath(source.connectorId))
     : [];
+  // Issue #3179: the entity's public-content feed interleaves the tracked
+  // website's changes with the stored mention items (rss/x/reddit/gdelt/
+  // bluesky) — one list, each row labeled by its source. The brief receives
+  // the non-website rows as mentionItems so it summarises mentions for self
+  // and each competitor.
   const items = await listPresenceItems(env, workspaceUserId, {
     trackedEntityId: entityId,
-    connectorId: "website",
     limit: 50,
   });
   const snapshot = await getPresenceWorkspaceSnapshot(env, workspaceUserId);
@@ -127,6 +131,7 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
     items,
     sourceCoverage,
     pollCursors,
+    mentionItems: items.filter((item) => item.connectorId !== "website"),
   }));
 
   // Mention panel (Phase 2, #1377): read-only composition over the same

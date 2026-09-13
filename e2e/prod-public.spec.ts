@@ -104,9 +104,40 @@ async function expectPublicGetTargetReachable(
   // during deploy propagation (run 33531233486: GET / timed out at 5s during
   // the propagation window). The previous 5s budget was tighter than the
   // deploy-propagation tail and produced false-red release rollsbacks.
-  const response = await request.get(requestUrl.toString(), { maxRedirects: 0, timeout: 15_000 });
+  const response = await settledProbeResponse(request, requestUrl.toString());
   expect(response.status(), `${target.page} ${target.action} "${target.label}" -> ${requestUrl}`).not.toBe(404);
   expect(response.status(), `${target.page} ${target.action} "${target.label}" -> ${requestUrl}`).toBeLessThan(500);
+}
+
+// Issue #3403: one unsettled read cannot survive a concurrent Deploy
+// production rollout — run 34775660969's retry #1 read a propagation 404 on
+// /brands/sport-footwear seconds after Deploy production #3402
+// (2026-09-13T19:36:25Z) started flipping Worker versions mid-probe. A
+// settled read gives propagation 3 attempts, 1.5s apart, before the answer
+// is trusted; the final expectations in expectPublicGetTargetReachable are
+// unchanged, so a target that is really gone still fails exactly as
+// before.
+async function settledProbeResponse(
+  request: import("@playwright/test").APIRequestContext,
+  requestUrl: string,
+): Promise<import("@playwright/test").APIResponse> {
+  let settled: import("@playwright/test").APIResponse | undefined;
+  let lastFailure: unknown;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    if (attempt > 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1_500 * (attempt - 1)));
+    }
+    try {
+      const response = await request.get(requestUrl, { maxRedirects: 0, timeout: 15_000 });
+      if (response.status() < 400) return response;
+      settled = response;
+      lastFailure = response.status();
+    } catch (error) {
+      lastFailure = error;
+    }
+  }
+  if (settled) return settled;
+  throw lastFailure;
 }
 
 async function mockPricingPreview(page: import("@playwright/test").Page) {
@@ -420,9 +451,21 @@ test.describe("public production-safe E2E smoke", { lock: "external-api" }, () =
       }
     }
 
-    for (const control of getTargets.values()) {
-      await expectPublicGetTargetReachable(request, baseURL, control);
-    }
+    // Issue #3403: this walk was sequential — 217+ unique anchors at a
+    // measured 0.7-2.3s each is a 150-500s serial phase, and it blew the
+    // 420s test budget on run 34775660969 even after #3373 raised that
+    // budget from 240s. Six lanes (just under the production
+    // MONITORING_FANOUT_MAX_INFLIGHT=8 fanout guard) cut the phase to its
+    // 217/6 ≈ 37-round worst case, roughly 85s, with the same targets and
+    // the same assertions; settledProbeResponse absorbs version-flip 404s.
+    const targets = [...getTargets.values()];
+    let cursor = 0;
+    const probeNext = async () => {
+      while (cursor < targets.length) {
+        await expectPublicGetTargetReachable(request, baseURL, targets[cursor++]!);
+      }
+    };
+    await Promise.all(Array.from({ length: 6 }, () => probeNext()));
 
     expect(failures).toEqual([]);
   });

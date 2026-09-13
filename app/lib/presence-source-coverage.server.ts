@@ -31,6 +31,7 @@ const SOURCE_LABELS: Record<PresenceSourceId, string> = {
   threads: "Threads",
   hn: "Hacker News",
   appstore: "App stores",
+  pinterest: "Pinterest",
   youtube: "YouTube",
   amazon: "Amazon marketplace",
   context_dev: "Context.dev (open-web provider)",
@@ -57,9 +58,10 @@ const CONNECTOR_FOR_SOURCE: Partial<Record<PresenceSourceId, PresenceConnectorId
   threads: "threads",
   hn: "hn",
   appstore: "appstore",
+  pinterest: "pinterest",
 };
 
-const SOCIAL_SOURCE_IDS = new Set<PresenceSourceId>(["x", "reddit", "linkedin", "bluesky", "threads"]);
+const SOCIAL_SOURCE_IDS = new Set<PresenceSourceId>(["x", "reddit", "linkedin", "bluesky", "threads", "pinterest"]);
 
 export interface PresenceSourcePlanGates {
   modeAllowed: boolean;
@@ -112,6 +114,8 @@ function statusFromConnectorGate(
             ? "OFFICIAL_PUBLIC_API"
             : sourceId === "appstore"
             ? "PUBLIC_WEB_BEST_EFFORT"
+            : sourceId === "pinterest"
+            ? "VERIFIED_PUBLIC_FEED"
             : sourceId === "linkedin" && trackingMode === "competitor"
             ? "LIMITED_COVERAGE"
             : sourceId === "x" || sourceId === "reddit"
@@ -438,7 +442,8 @@ export function presenceSourceCoverageForDocs(): Array<{
       sourceId: "reddit",
       label: SOURCE_LABELS.reddit,
       productionStatus: "gated",
-      notes: "Reddit connector wired in. Gated behind PRESENCE_REDDIT_ROLLOUT — off by default; activation is a separate rollout decision.",
+      notes:
+        "Reddit Data API mention connector wired in (OAuth2 client-credentials, $0 free tier): covers the new posts of tracked subreddit targets — engagement (score/comment count) rides the item; NOT covered: comments, PMs, historicals, non-post votes. The documented 1,000-reads-per-10-minute budget (100 QPM averaged over 10 minutes, Data API Wiki) is enforced in-connector via presence_poll_cursor and shared by the one fleet OAuth client. Gated behind PRESENCE_REDDIT_ROLLOUT + REDDIT_CLIENT_ID/SECRET + REDDIT_COMMERCIAL_ACCESS=approved — off by default; activation is a separate rollout decision.",
     },
     {
       sourceId: "linkedin",
@@ -486,6 +491,13 @@ export function presenceSourceCoverageForDocs(): Array<{
       productionStatus: "gated",
       notes:
         "App-stores mention connector wired in. Apple: the documented keyless iTunes Search/Lookup API + the customer-review RSS feed (one most-recent page, never deep-paged). Google Play: the public details page's SoftwareApplication structured data. Covers the store's own listing of a tracked app (deduped by canonical URL) plus Apple's most recent customer reviews; no free public Google Play review API exists (the 2,963★ facundoolano/google-play-scraper talks to Play's private undocumented batchexecute — excluded, public surfaces only; documented in docs/mentions/PLAN.md). Gated behind PRESENCE_APPSTORE_ROLLOUT — off by default; activation is a separate rollout decision.",
+    },
+    {
+      sourceId: "pinterest",
+      label: SOURCE_LABELS.pinterest,
+      productionStatus: "gated",
+      notes:
+        "Pinterest mention connector wired in (profile feed — https://www.pinterest.com/<handle>/feed.rss, public RSS 2.0, no key, no auth). Covers the tracked profile's own most recent pins (~25), for the tracked brand or person, self AND Competitor. Does NOT cover keyword-wide search across all of Pinterest, boards not on the tracked profile, repin/comment activity, or engagement counts — Pinterest exposes those only through its approval-gated, OAuth-per-user API v5, which stays parked (see the plan). The feed is an undocumented public surface, verified live 2026-09-13 — the same posture as Google News RSS: it works and can change without notice. In-connector rate budget: ONE serialized request per poll — the feed itself is the bounded window, no paging, no second fetch. Gated behind PRESENCE_PINTEREST_ROLLOUT — off by default; activation is a separate rollout decision.",
     },
     {
       sourceId: "youtube",

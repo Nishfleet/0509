@@ -8,6 +8,7 @@ import {
 } from "~/lib/agent-action-catalog";
 import { appLinkTarget } from "~/lib/app-link";
 import {
+  buyerSurfaceHreflangLinks,
   canonicalLinks,
   jsonLdScriptProps,
   publicSeoMeta,
@@ -18,7 +19,10 @@ import type { RootLoaderData } from "~/root";
 const description =
   "Five to Nine API docs for read-only evidence access and approved account actions.";
 
-export const links: LinksFunction = () => canonicalLinks("/api/docs");
+export const links: LinksFunction = () => [
+  ...canonicalLinks("/api/docs"),
+  ...buyerSurfaceHreflangLinks("api/docs"),
+];
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({

@@ -113,8 +113,10 @@ describe("compare meta-ad-library route", () => {
   it("declares the canonical URL and public SEO meta", async () => {
     const { links, meta } = await import("~/routes/compare.meta-ad-library");
 
+    const { buyerSurfaceHreflangLinks } = await import("~/lib/seo");
     expect(links()).toEqual([
       { rel: "canonical", href: "https://0509.io/compare/meta-ad-library" },
+      ...buyerSurfaceHreflangLinks("compare/meta-ad-library"),
     ]);
 
     const tags = meta({} as never) as Array<Record<string, string>>;
