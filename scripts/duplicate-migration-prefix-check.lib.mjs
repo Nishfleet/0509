@@ -86,8 +86,10 @@ export function duplicateMigrationPrefixes(
     // A frozen legacy prefix is capped at its frozen applied-file count; a
     // third 0067 (or a 4th 0098) is a NEW duplicate and fails. A prefix not in
     // the allowlist has an expected count of 1, so any pair fails.
+    // Sorted copy: offenders must be deterministic regardless of caller
+    // input order (migrationFileNames() pre-sorts, direct callers may not).
     if (files.length > (allowlist.get(prefix) ?? 1)) {
-      offenders.set(prefix, files);
+      offenders.set(prefix, [...files].sort());
     }
   }
   duplicatePrefixes.sort();
