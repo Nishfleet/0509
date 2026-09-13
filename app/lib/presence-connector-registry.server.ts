@@ -115,7 +115,7 @@ export async function pollPresenceTarget(
     return xConnector.poll(ctx, target, options.cursor);
   }
   if (target.connectorId === "reddit") {
-    return redditConnector.poll(ctx);
+    return redditConnector.poll(ctx, target);
   }
   if (target.connectorId === "bluesky") {
     // The mention connector needs the entity's match phrase; it reaches the
