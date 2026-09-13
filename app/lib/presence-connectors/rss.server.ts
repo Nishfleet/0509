@@ -502,7 +502,7 @@ async function fetchWithTimeoutForRedirect(
   );
 }
 
-async function parseFeedItems(body: string, feedUrl: string): Promise<NormalizedPresenceItem[]> {
+export async function parseFeedItems(body: string, feedUrl: string): Promise<NormalizedPresenceItem[]> {
   if (looksLikeJsonFeed(body)) {
     try {
       const parsed = JSON.parse(body) as {
@@ -656,7 +656,12 @@ function extractTag(block: string, tag: string): string | null {
   return null;
 }
 
-function stripHtml(value: string): string {
+/** Strip tags + collapse whitespace. Shared: the rss connector uses it while
+ * parsing; the pinterest connector re-strips AFTER parsing (Pinterest
+ * double-escapes its description HTML, so one strip pass inside the parser
+ * still leaves the <a>/<img> shell behind — issue #3201). Idempotent on
+ * already-plain text. */
+export function stripHtml(value: string): string {
   return value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 }
 

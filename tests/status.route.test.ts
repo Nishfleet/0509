@@ -29,11 +29,18 @@ async function mockRouter(useLoaderData: MockUseLoaderData) {
   });
 }
 
+// The only wall-clock read in this file is #3197's todayDayKey() default —
+// the loader derives its own. Freezing the clock at test start makes that
+// read deterministic (test and loader compute the same UTC day key) and
+// lets the echo fixtures below stay absolute without ageing out — the
+// pinned-clock escape #3215's no-time-bomb guard grants this file.
 beforeEach(() => {
   vi.resetModules();
+  vi.useFakeTimers({ now: new Date(Date.now()) });
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.resetModules();
 });
@@ -96,6 +103,14 @@ describe("status route", () => {
     expect(rssRow?.productionStatus).toBe("gated");
     expect(rssRow?.notes).toContain("Substack");
 
+    // Issue #3202 — the Reddit mention connector owns its source row: wired
+    // in, gated, and the note names what the public surface covers (the new
+    // posts of tracked subreddit targets) and what it does not.
+    const redditRow = mentionSources.find((source) => source.sourceId === "reddit");
+    expect(redditRow).toBeDefined();
+    expect(redditRow?.productionStatus).toBe("gated");
+    expect(redditRow?.notes).toContain("tracked subreddit targets");
+
     // Issue #3198 — the X row: wired in, gated, honest about the
     // paid/no-free-tier posture of the public recent-search surface.
     const xRow = mentionSources.find((source) => source.sourceId === "x");
@@ -124,6 +139,9 @@ describe("status route", () => {
     expect(markup).toContain("gated");
     expect(markup).toContain("Meta app review");
     expect(markup).toContain("wired in, waiting on its rollout decision");
+    // The Podcasts row (issue #3208) renders its public-surface note verbatim.
+    expect(markup).toContain("Podcasts");
+    expect(markup).toContain("JSON transcript");
     // The whole catalog passes through untouched. #3204 wired the LinkedIn
     // connector, flipping its row from "unavailable" to "gated" — the
     // tracked-source catalog no longer carries an "unavailable" posture.
@@ -135,6 +153,11 @@ describe("status route", () => {
     // feeds themselves, Substack included — and its limits, verbatim.
     expect(markup).toContain("Substack");
     expect(markup).toContain("no free global keyword search");
+    // The Reddit row (issue #3202's acceptance) is its own source: the note
+    // renders what the public surface covers — the new posts of tracked
+    // subreddit targets — and its limits, verbatim.
+    expect(markup).toContain("Reddit");
+    expect(markup).toContain("tracked subreddit targets");
 
     // The X per-source row (issue #3198) renders its no-free-tier note — the
     // public recent-search surface is pay-per-use only, so the flag stays off.
@@ -164,6 +187,30 @@ describe("status route", () => {
     expect(markup).toContain("Medium /feed/");
     expect(markup).toContain("one bounded fetch per feed per poll");
     expect(markup).toContain("gated");
+  });
+
+  it("renders the Pinterest tracked-source row — the profile-feed surface the #3201 mentions ride", async () => {
+    await mockRouter(() => ({
+      generatedAt: "2026-09-13T16:00:00.000Z",
+      asOf: "2026-09-13T16:00:00.000Z",
+      appServed: true,
+      commercialLaunch: null,
+      monitoring: null,
+      surfaces: { asOf: "2026-09-13T16:00:00.000Z", monitoring: null, surfaces: [] },
+      mentionSources: presenceSourceCoverageForDocs(),
+    }));
+
+    const { default: StatusRoute } = await import("~/routes/status");
+    const markup = renderToStaticMarkup(createElement(StatusRoute));
+
+    expect(markup).toContain("Tracked sources");
+    // The Pinterest per-source row (issue #3201's acceptance) renders its
+    // posture verbatim from the catalog: the public profile feed it covers,
+    // its documented limits, the flag it waits behind — wired in, still gated.
+    expect(markup).toContain("Pinterest");
+    expect(markup).toContain("gated");
+    expect(markup).toContain("feed.rss");
+    expect(markup).toContain("PRESENCE_PINTEREST_ROLLOUT");
   });
 
   it("renders measured surface states without private launch details", async () => {

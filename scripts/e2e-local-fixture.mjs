@@ -10,8 +10,9 @@ export const E2E_FIXTURE_EXPECTATIONS = Object.freeze({
   billingReplayBaselines: 12,
   monitoringRecoveryPairs: 1,
   // 23 baseline personas + 1 expired paid persona (e2e-expired) + 2 WP-C2
-  // first-run personas (e2e-free-firstbrief, e2e-free-firstscan).
-  personas: 26,
+  // first-run personas (e2e-free-firstbrief, e2e-free-firstscan) + 1 #3179
+  // cross-workspace mention tracker (e2e-mention-tracker).
+  personas: 27,
   supportRecoveryCases: 1,
 });
 

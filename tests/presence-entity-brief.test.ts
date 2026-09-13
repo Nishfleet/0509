@@ -146,6 +146,111 @@ describe("buildPresenceEntityBrief", () => {
     expect(brief.proofStrength).toContain("Public web");
   });
 
+  it("summarises stored mentions alongside website changes, each with its source (issue #3179)", () => {
+    const brief = buildPresenceEntityBrief({
+      entity: entity(),
+      sources: [source()],
+      items: [item()],
+      sourceCoverage: [websiteCoverage("connected")],
+      pollCursors: [
+        {
+          sourceTargetId: "target-1",
+          cursor: cursor({
+            cursor: {
+              lastChangedAt: "2026-07-02T00:00:00.000Z",
+              lastChangeCount: 1,
+              lastChangedUrlHashes: ["hash-1"],
+            },
+            lastPolledAt: "2026-07-02T00:00:00.000Z",
+            lastSuccessAt: "2026-07-02T00:00:00.000Z",
+          }),
+        },
+      ],
+      mentionItems: [
+        item({
+          id: "mention-1",
+          sourceTargetId: "rss-target-1",
+          connectorId: "rss",
+          title: "Acme featured in a launch roundup",
+          canonicalUrl: "https://news.example/acme-roundup",
+          observedAt: "2026-07-02T06:00:00.000Z",
+        }),
+      ],
+    });
+
+    expect(brief.state).toBe("ready");
+    expect(brief.summary).toContain("website changes and public mentions");
+    const mention = brief.recentChanges.find((change) => change.id === "mention-1");
+    expect(mention).toBeDefined();
+    expect(mention?.canonicalUrl).toBe("https://news.example/acme-roundup");
+    expect(mention?.connectorId).toBe("rss");
+  });
+
+  it("reads a mention-only entity as ready with the mention summary, not a false quiet (issue #3179)", () => {
+    const brief = buildPresenceEntityBrief({
+      entity: entity(),
+      sources: [source()],
+      items: [],
+      sourceCoverage: [websiteCoverage("connected")],
+      pollCursors: [
+        {
+          sourceTargetId: "target-1",
+          cursor: cursor({
+            lastPolledAt: "2026-07-02T00:00:00.000Z",
+            lastSuccessAt: "2026-07-02T00:00:00.000Z",
+          }),
+        },
+      ],
+      mentionItems: [
+        item({
+          id: "mention-old",
+          sourceTargetId: "rss-target-1",
+          connectorId: "gdelt",
+          title: "Acme in the news",
+          canonicalUrl: "https://news.example/acme",
+          observedAt: "2026-07-01T10:00:00.000Z",
+        }),
+        item({
+          id: "mention-new",
+          sourceTargetId: "rss-target-1",
+          connectorId: "rss",
+          title: "Acme raises a round",
+          canonicalUrl: "https://wire.example/acme-raises",
+          observedAt: "2026-07-02T09:00:00.000Z",
+        }),
+      ],
+    });
+
+    expect(brief.state).toBe("ready");
+    expect(brief.summary).toBe("Found 2 public mentions of Acme Corp, each with its source.");
+    // Newest first, capped at three.
+    expect(brief.recentChanges.map((change) => change.id)).toEqual(["mention-new", "mention-old"]);
+  });
+
+  it("keeps the never-polled entity queued even when mentions exist (issue #3179)", () => {
+    const brief = buildPresenceEntityBrief({
+      entity: entity(),
+      sources: [source()],
+      items: [],
+      sourceCoverage: [websiteCoverage("connected")],
+      pollCursors: [{ sourceTargetId: "target-1", cursor: null }],
+      mentionItems: [
+        item({
+          id: "mention-1",
+          sourceTargetId: "rss-target-1",
+          connectorId: "rss",
+          title: "Acme in the news",
+          canonicalUrl: "https://news.example/acme",
+          observedAt: "2026-07-02T09:00:00.000Z",
+        }),
+      ],
+    });
+
+    // A mention is public proof, but the website source still owes its first
+    // check — the brief must not claim "ready" before that check lands.
+    expect(brief.state).toBe("queued");
+  });
+
   it("scopes proof strength to the source that produced the latest displayed change", () => {
     const brief = buildPresenceEntityBrief({
       entity: entity(),

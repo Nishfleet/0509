@@ -12,6 +12,7 @@ import {
   type CompareClaimCard,
 } from "~/components/compare-citations";
 import {
+  buyerSurfaceHreflangLinks,
   canonicalLinks,
   compareSocialCardUrl,
   faqPageJsonLd,
@@ -34,7 +35,10 @@ const pageTitle = "Five to Nine vs PowerAdSpy";
 const pageDescription =
   "PowerAdSpy is an AI-powered competitive ad intelligence platform across 11 ad networks. Five to Nine is scheduled, source-backed Meta Ad Library and landing-page change proof.";
 
-export const links: LinksFunction = () => canonicalLinks("/compare/poweradspy");
+export const links: LinksFunction = () => [
+  ...canonicalLinks("/compare/poweradspy"),
+  ...buyerSurfaceHreflangLinks("compare/poweradspy"),
+];
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({

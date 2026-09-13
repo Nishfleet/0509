@@ -104,8 +104,14 @@ describe("edge cache eligibility (issue #2950)", () => {
     expect(isEdgeCacheableHtmlRequest(new Request("https://0509.io/", { method: "HEAD" }))).toBe(
       true,
     );
+    // Issue #3391: /search — the watch's own cookieless read — now rides the
+    // anonymous cache (its ?q= rides the (path+query, country, version) key).
+    expect(isEdgeCacheableHtmlRequest(anonymousGet("https://0509.io/search"))).toBe(true);
+    expect(
+      isEdgeCacheableHtmlRequest(anonymousGet("https://0509.io/search?q=calendly.com")),
+    ).toBe(true);
     // Personalised / authenticated surfaces stay out by construction.
-    expect(isEdgeCacheableHtmlRequest(anonymousGet("https://0509.io/search"))).toBe(false);
+    expect(isEdgeCacheableHtmlRequest(anonymousGet("https://0509.io/status"))).toBe(false);
     expect(isEdgeCacheableHtmlRequest(anonymousGet("https://0509.io/compare/unknown-page"))).toBe(
       false,
     );

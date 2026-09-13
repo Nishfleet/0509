@@ -147,6 +147,10 @@ describe("public /search q= and country= SSR heading and input", () => {
 
   it("keeps the document canonical on /search without query parameters", async () => {
     const { links } = await import("~/routes/search");
-    expect(links()).toEqual([{ rel: "canonical", href: "https://0509.io/search" }]);
+    const { buyerSurfaceHreflangLinks } = await import("~/lib/seo");
+    expect(links()).toEqual([
+      { rel: "canonical", href: "https://0509.io/search" },
+      ...buyerSurfaceHreflangLinks("search"),
+    ]);
   });
 });
