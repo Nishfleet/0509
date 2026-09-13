@@ -1,8 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   buildCandidateId,
   buildSuggestionWhy,
+  EVIDENCE_SOURCE_TIMEOUT_MS,
+  withSourceTimeout,
 } from "~/lib/auto-competitor-seed.server";
 import { getCompetitorSuggestionCaps } from "~/lib/plan-entitlements";
 
@@ -19,7 +21,40 @@ import { getCompetitorSuggestionCaps } from "~/lib/plan-entitlements";
  *   - it truncates rather than growing without bound;
  *   - the candidate key is stable, so a dismissal cannot silently stop matching;
  *   - the plan caps never promise more tracking than the plan can honour.
+ *   - every evidence source runs under the issue's 3 s hard bound, and a slow
+ *     source yields its partial result instead of failing the customer's
+ *     onboarding (`required: 3 s hard timeout per evidence source, partial
+ *     results allowed` in #3175).
  */
+
+describe("withSourceTimeout (#3175 — 3 s hard bound per evidence source)", () => {
+  it("pins the bound at 3 000 ms, the number the issue states", () => {
+    expect(EVIDENCE_SOURCE_TIMEOUT_MS).toBe(3_000);
+  });
+
+  it("returns the source's value when it settles within the bound", async () => {
+    await expect(
+      withSourceTimeout(Promise.resolve("probe"), "partial"),
+    ).resolves.toBe("probe");
+  });
+
+  it("returns the fallback — a partial result, never a throw — when the source exceeds the bound", async () => {
+    vi.useFakeTimers();
+    try {
+      // A source that never settles: exactly the slow-evidence case.
+      const never: Promise<string> = new Promise(() => {});
+      let settled: string | undefined;
+      const raced = withSourceTimeout(never, "partial").then((v) => {
+        settled = v;
+      });
+      await vi.advanceTimersByTimeAsync(3_000);
+      await raced;
+      expect(settled).toBe("partial");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
 
 describe("buildSuggestionWhy (#3175)", () => {
   it("names the overlapping keywords and the country", () => {

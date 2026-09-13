@@ -164,7 +164,7 @@ export const EVIDENCE_SOURCE_TIMEOUT_MS = 3_000;
  * abandoned and `fallback` is returned — a partial result, never a thrown
  * error, because a slow source must not fail the customer's onboarding.
  */
-async function withSourceTimeout<T>(work: Promise<T>, fallback: T): Promise<T> {
+export async function withSourceTimeout<T>(work: Promise<T>, fallback: T): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
