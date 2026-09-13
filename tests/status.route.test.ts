@@ -114,6 +114,31 @@ describe("status route", () => {
     expect(markup).toContain("unavailable");
   });
 
+  it("renders the rss tracked-source row — the publication-feed surface the Medium mentions ride (issue #3200)", async () => {
+    await mockRouter(() => ({
+      generatedAt: "2026-09-13T16:00:00.000Z",
+      asOf: "2026-09-13T16:00:00.000Z",
+      appServed: true,
+      commercialLaunch: null,
+      monitoring: null,
+      surfaces: { asOf: "2026-09-13T16:00:00.000Z", monitoring: null, surfaces: [] },
+      mentionSources: presenceSourceCoverageForDocs(),
+    }));
+
+    const { default: StatusRoute } = await import("~/routes/status");
+    const markup = renderToStaticMarkup(createElement(StatusRoute));
+
+    expect(markup).toContain("Tracked sources");
+    // The rss per-source row (the #3200 acceptance) renders its posture
+    // verbatim from the catalog: the publication-feed mention backbone, what
+    // the Medium public surface covers, the rate budget, still gated.
+    expect(markup).toContain("RSS / Atom / JSON Feed");
+    expect(markup).toContain("publication-feed mention backbone");
+    expect(markup).toContain("Medium /feed/");
+    expect(markup).toContain("one bounded fetch per feed per poll");
+    expect(markup).toContain("gated");
+  });
+
   it("renders measured surface states without private launch details", async () => {
     await mockRouter(() => ({
       generatedAt: "2026-06-20T09:00:00.000Z",

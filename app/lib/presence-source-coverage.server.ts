@@ -446,7 +446,8 @@ export function presenceSourceCoverageForDocs(): Array<{
       sourceId: "rss",
       label: SOURCE_LABELS.rss,
       productionStatus: "gated",
-      notes: "RSS/Atom/JSON Feed connector wired in. Gated behind PRESENCE_RSS_ROLLOUT — off by default; activation is a separate rollout decision.",
+      notes:
+        "RSS/Atom/JSON Feed connector wired in — the publication-feed mention backbone. Covers exactly the tracked feeds the entity registers: publisher RSS, Substack /feed, Medium /feed/... (named profiles, publications and tags — there is no global free search), and Google News /rss/search query feeds built from the tracked match phrase; public surfaces cited in docs/mentions/PLAN.md §2/§8. In-connector rate budget: one bounded fetch per feed per poll, at most 25 items each, polls serialized upstream. Gated behind PRESENCE_RSS_ROLLOUT — off by default; activation is a separate rollout decision.",
     },
     {
       sourceId: "bluesky",
