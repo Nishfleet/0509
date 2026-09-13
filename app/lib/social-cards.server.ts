@@ -253,10 +253,24 @@ export function parseSocialCardPathname(pathname: string): ParsedSocialCardPath 
   // kinds, so cached links keep working. Checked before the cluster matcher
   // (same top-level shape) and only kinds registry hits, so the two
   // standalone cluster slugs still fall through to the cluster kind below.
-  const surfaceMatch = rest.match(/^([^/]+)\.(?:svg|png)$/);
-  const surfaceSlug = surfaceMatch ? safeDecodeURIComponent(surfaceMatch[1]) : null;
-  if (surfaceSlug !== null && staticSurfaceCardBySlug(surfaceSlug)) {
-    return { kind: "surface", slug: surfaceSlug };
+  //
+  // The card also resolves under its page's own path — `/social-card/
+  // briefs/weekly.png` for the `/briefs/weekly` card (issue #3383): the
+  // guides precedent, where the card URL mirrors the page path. A
+  // multi-segment rest joins to its registry slug with dashes and the parse
+  // returns the CANONICAL slug, so the renderer (which looks the copy up by
+  // slug) finds the same card. Rests that join to no registry slug still
+  // fall through to the cluster matcher / null, exactly as before.
+  const surfaceMatch = rest.match(/^(.+)\.(?:svg|png)$/);
+  const surfaceSlugRaw = surfaceMatch ? safeDecodeURIComponent(surfaceMatch[1]) : null;
+  if (surfaceSlugRaw !== null) {
+    if (staticSurfaceCardBySlug(surfaceSlugRaw)) {
+      return { kind: "surface", slug: surfaceSlugRaw };
+    }
+    const joinedSlug = surfaceSlugRaw.replace(/\//g, "-");
+    if (staticSurfaceCardBySlug(joinedSlug)) {
+      return { kind: "surface", slug: joinedSlug };
+    }
   }
 
   const clusterMatch = rest.match(/^([^/]+)\.(?:svg|png)$/);

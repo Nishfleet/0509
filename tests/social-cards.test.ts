@@ -246,6 +246,20 @@ describe("parseSocialCardPathname", () => {
       kind: "surface",
       slug: "methodology-ad-aggression-score",
     });
+    // Issue #3383: the fixed surfaces also resolve under their page's own
+    // path — the guides precedent, where the card URL mirrors the page
+    // path. The parse returns the CANONICAL registry slug so the renderer
+    // (which looks the copy up by slug) finds the same card.
+    expect(parseSocialCardPathname("/social-card/briefs/weekly.png")).toEqual({
+      kind: "surface",
+      slug: "briefs-weekly",
+    });
+    expect(
+      parseSocialCardPathname("/social-card/methodology/ad-aggression-score.png"),
+    ).toEqual({
+      kind: "surface",
+      slug: "methodology-ad-aggression-score",
+    });
   });
 
   it("returns null for non-card paths", () => {
@@ -255,6 +269,9 @@ describe("parseSocialCardPathname", () => {
     // Same top-level shape as the surface/cluster cards, but not a registry
     // slug — must 404, not render a made-up card.
     expect(parseSocialCardPathname("/social-card/not-a-surface.png")).toBeNull();
+    // The page-path alias only kinds registry hits too — a multi-segment
+    // rest that joins to no registry slug stays a 404 (issue #3383).
+    expect(parseSocialCardPathname("/social-card/briefs/unknown.png")).toBeNull();
   });
 });
 
@@ -389,6 +406,26 @@ describe("publicSocialCardForRequest", () => {
       // Static page copy (no live-data params) — same branch as the cluster
       // and guide cards.
       expect(res?.cacheControl, card.slug).toBe("public, max-age=86400");
+    }
+  });
+
+  it("resolves each fixed-surface card under its page's own path too (issue #3383)", () => {
+    for (const [pathname, card] of Object.entries(STATIC_SURFACE_SOCIAL_CARDS)) {
+      // Single-segment page paths (/compare, /brands, /sample-brief): their
+      // page-path URL IS the canonical slug URL, covered by the registry
+      // sweep above. Only the nested pages get a distinct alias.
+      if (!pathname.slice(1).includes("/")) continue;
+      const viaPagePath = publicSocialCardForRequest(
+        new Request(`https://0509.io/social-card${pathname}.png`),
+      );
+      const canonical = publicSocialCardForRequest(
+        new Request(`https://0509.io/social-card/${card.slug}.png`),
+      );
+      expect(viaPagePath?.kind, pathname).toBe("surface");
+      // The alias serves the SAME card bytes as the canonical URL — the
+      // og:image the page stamps and the aliased unfurl cannot drift.
+      expect(viaPagePath?.body, pathname).toBe(canonical?.body);
+      expect(viaPagePath?.cacheControl, pathname).toBe("public, max-age=86400");
     }
   });
 
