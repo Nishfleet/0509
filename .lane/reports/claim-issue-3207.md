@@ -65,3 +65,10 @@ connector interface already provides the capture substrate. The rejected
 OFFICIAL alternative remains the Firebase HN API (no search endpoint —
 docs/mentions/PLAN.md, source inventory). Public surfaces only, $0, no
 paid vendor, no edits to the shared interface.
+
+Metric (issue `metric:` line, mapped the way #3206 pinned it for
+bluesky — no new machinery): mentions/brand/day = `presence_item` rows
+per tracked entity where `connector_id='hn'` (the integration test counts
+exactly those rows, keyed by the canonical-URL `url_hash`); failure rate
+= `presence_poll_cursor.last_error_code` / `last_error_message`, written
+by the existing poll-cursor path (presence-data.server.ts).
