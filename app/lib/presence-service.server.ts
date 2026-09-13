@@ -75,7 +75,7 @@ export async function requirePresencePlanAccess(
     throw new PresenceServiceError(
       "mode_gated",
       mode === "self"
-        ? "Self presence tracking requires Starter or Agency."
+        ? "Self-brand presence tracking is not included in this plan."
         : "Competitor presence tracking is not available on your plan.",
       403,
     );

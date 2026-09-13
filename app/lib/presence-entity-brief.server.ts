@@ -54,6 +54,15 @@ export interface BuildPresenceEntityBriefInput {
   pollCursors?: Array<{ sourceTargetId: string; cursor: PresencePollCursorRecord | null }>;
   /** Only website/open-web sources are briefed in the first slice. */
   activeSourceIds?: Set<string>;
+  /**
+   * Stored mention items for this entity (issue #3179) — presence_item rows
+   * whose connector is one of the mention connectors (rss/x/reddit/gdelt/
+   * bluesky). The brief appends the three most recent as changes with their
+   * own source label and canonical URL, so the brief summarises mentions for
+   * self and each competitor, not just the tracked website's own changes.
+   * The caller (the entity route) passes them; the brief stays pure.
+   */
+  mentionItems?: PresenceItemRecord[];
 }
 
 function latestTimestamp(values: Array<string | null | undefined>): string | null {
@@ -168,6 +177,19 @@ export function buildPresenceEntityBrief(input: BuildPresenceEntityBriefInput): 
   const scopedItems = input.items.filter(
     (item) => activeSourceIds.has(item.connectorId) && scopedSourceTargetIds.has(item.sourceTargetId),
   );
+  const mentionChanges = (input.mentionItems ?? [])
+    .filter((item) => item.connectorId !== "website")
+    .sort((a, b) => b.observedAt.localeCompare(a.observedAt))
+    .slice(0, 3)
+    .map((item) => ({
+      id: item.id,
+      title: item.title,
+      canonicalUrl: item.canonicalUrl,
+      connectorId: item.connectorId,
+      observedAt: item.observedAt,
+      coverageLabel:
+        scopedSources.find((source) => source.id === item.sourceTargetId)?.coverageLabel ?? null,
+    }));
   const latestPollItems = scopedItems.filter((item) => {
     const cursor = cursorByTarget.get(item.sourceTargetId);
     const changedUrlHashes = cursorStringArrayValue(cursor, "lastChangedUrlHashes");
@@ -178,9 +200,8 @@ export function buildPresenceEntityBrief(input: BuildPresenceEntityBriefInput): 
     latestPollChangeCount > 0
       ? scopedSources.map((source) => cursorStringValue(cursorByTarget.get(source.id), "lastChangedAt"))
       : [];
-  const recentChanges = latestPollItems
-    .slice(0, 5)
-    .map((item) => ({
+  const recentChanges = [
+    ...latestPollItems.slice(0, 5).map((item) => ({
       id: item.id,
       title: item.title,
       canonicalUrl: item.canonicalUrl,
@@ -188,7 +209,14 @@ export function buildPresenceEntityBrief(input: BuildPresenceEntityBriefInput): 
       observedAt: item.observedAt,
       coverageLabel:
         scopedSources.find((source) => source.id === item.sourceTargetId)?.coverageLabel ?? null,
-    }));
+    })),
+    ...mentionChanges,
+  ].sort((a, b) => b.observedAt.localeCompare(a.observedAt));
+  // Proof reads the website poll's items PLUS the mention items, so a
+  // mention-only entity does not say "No proof-backed changes yet" while the
+  // change rows below it show proofs. With no mentionItems this is exactly
+  // the historical latestPollItems set — existing scenarios unchanged.
+  const proofItems = [...latestPollItems, ...mentionChanges];
   const lastChangeAt = latestTimestamp([
     ...recentChanges.map((change) => change.observedAt),
     ...latestPollCursorChangeTimes,
@@ -257,7 +285,7 @@ export function buildPresenceEntityBrief(input: BuildPresenceEntityBriefInput): 
         "The latest website poll failed or was blocked. No new proof was invented.",
       proofStrength:
         recentChanges.length > 0
-          ? proofStrengthFromItems(latestPollItems, scopedSources)
+          ? proofStrengthFromItems(proofItems, scopedSources)
           : "Stale or partial",
       sourceConfidence: sourceConfidenceFromCoverage(scopedCoverage),
       nextAction: { label: degradedSource.actionNeeded ?? "Retry source check" },
@@ -322,13 +350,21 @@ export function buildPresenceEntityBrief(input: BuildPresenceEntityBriefInput): 
 
   if (recentChanges.length > 0) {
     const includesHiddenChanges = latestPollChangeCount > latestPollItems.length;
+    const mentionCount = mentionChanges.length;
+    const displayCount = latestPollDisplayCount + mentionCount;
+    const mentionSummary =
+      mentionCount > 0 && latestPollDisplayCount === 0
+        ? `Found ${mentionCount} public mention${mentionCount === 1 ? "" : "s"} of ${input.entity.label}, each with its source.`
+        : `Found ${displayCount} proof-backed update${displayCount === 1 ? "" : "s"} for ${input.entity.label} — website changes and public mentions, each with its source.`;
     return {
       state: "ready",
       headline: "Recent public changes worth reviewing",
-      summary: includesHiddenChanges
-        ? `Found ${latestPollDisplayCount} proof-backed website change${latestPollDisplayCount === 1 ? "" : "s"}, including removals or unavailable public content.`
-        : `Found ${latestPollDisplayCount} proof-backed update${latestPollDisplayCount === 1 ? "" : "s"} from website sources.`,
-      proofStrength: proofStrengthFromItems(latestPollItems, scopedSources),
+      summary: mentionCount > 0
+        ? mentionSummary
+        : includesHiddenChanges
+          ? `Found ${latestPollDisplayCount} proof-backed website change${latestPollDisplayCount === 1 ? "" : "s"}, including removals or unavailable public content.`
+          : `Found ${latestPollDisplayCount} proof-backed update${latestPollDisplayCount === 1 ? "" : "s"} from website sources.`,
+      proofStrength: proofStrengthFromItems(proofItems, scopedSources),
       // One source succeeded, another is failing: confidence must say so —
       // a newer failure cannot hide behind an older success.
       sourceConfidence:
