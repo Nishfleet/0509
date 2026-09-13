@@ -63,6 +63,7 @@ describe("pricingPlans", () => {
     expect(scout.features).toContain("Weekly Brief");
     expect(scout.features).not.toContain("Slack");
     expect(scout.features).toContain("50 proof captures/month");
+    expect(scout.features).toContain("Read-only API + MCP access");
     expect(starter.features).toContain("10 active watchlists");
     expect(starter.features).toContain("25 Collections");
     expect(starter.features).toContain("3-hour scans");

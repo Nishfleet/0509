@@ -808,7 +808,7 @@ export function loader({ request }: LoaderFunctionArgs) {
   return jsonResponse({
     name: "Five to Nine MCP",
     status: "live",
-    planRequirement: "Read-only tools on Free + Scout; write and account-mutation tools on Starter/Agency",
+    planRequirement: "Read-only tools on Scout; write and account-mutation tools on Starter/Agency",
     endpoint: `${origin}/api/mcp`,
     transport: "streamable-http-json-rpc",
     protocolVersion: MCP_PROTOCOL_VERSION,
@@ -920,7 +920,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         version: "1.0.0",
       },
       instructions:
-        `Use these Five to Nine tools to retrieve account readiness plus account-owned collections, watchlists, digests, memory, and client rooms. Read-only tools work on Free and Scout with any active customer API key; write and account-mutation tools require a write-enabled key on Starter or Agency. Start by checking readiness, then set up or tune watchlists, package evidence, and save memory. The dated offer-history tools — get_change_history, get_offer_state_at, diff_offer, list_suppressed — read stored competitor captures for any domain and never trigger a live capture. Manual external evidence links may appear in collection exports, but do not treat the endpoint as automated TikTok, Google, LinkedIn, Pinterest, broad public write API, or these unavailable capabilities: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.`,
+        `Use these Five to Nine tools to retrieve account readiness plus account-owned collections, watchlists, digests, memory, and client rooms. Read-only tools work on Scout with any active customer API key; write and account-mutation tools require a write-enabled key on Starter or Agency. Start by checking readiness, then set up or tune watchlists, package evidence, and save memory. The dated offer-history tools — get_change_history, get_offer_state_at, diff_offer, list_suppressed — read stored competitor captures for any domain and never trigger a live capture. Manual external evidence links may appear in collection exports, but do not treat the endpoint as automated TikTok, Google, LinkedIn, Pinterest, broad public write API, or these unavailable capabilities: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.`,
     });
   }
 
@@ -979,7 +979,8 @@ async function callTool(
   } = await import("~/lib/plan-feature-gate.server");
   const workspaceUserId = await resolveWorkspaceDataUserId(env, apiKey.userId);
 
-  // BET 6 tier gate: read-only tools need mcp_read_access (free + Scout);
+  // BET 6 tier gate: read-only tools need mcp_read_access (Scout — decision
+  // BET-6-ungate yes for SCOUT; Free stays without API);
   // write/account-mutation tools need mcp_account_actions (Agency).
   const requiredFeature = mcpToolFeature(name);
   if (requiredFeature) {

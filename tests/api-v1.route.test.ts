@@ -409,7 +409,7 @@ describe("customer API v1", () => {
       notLiveYet: string[];
     };
 
-    expect(body.planRequirement).toContain("Free + Scout");
+    expect(body.planRequirement).toContain("Scout");
     expect(body.endpoints.map((endpoint) => endpoint.path)).toContain("/api/mcp");
     expect(body.endpoints.map((endpoint) => endpoint.path)).toContain("/api/v1/workspace-readiness");
     expect(body.endpoints.map((endpoint) => endpoint.path)).toContain("/api/v1/actions");
@@ -424,7 +424,7 @@ describe("customer API v1", () => {
       credentialRequirement: WRITE_ENABLED_API_KEY_REQUIREMENT,
     });
     body.endpoints.forEach((endpoint) => {
-      expect(endpoint.planRequirement).toMatch(/Free \+ Scout|Agency/);
+      expect(endpoint.planRequirement).toMatch(/Scout|Agency/);
       expect(endpoint.credentialRequirement).not.toContain("any active customer API key");
     });
     body.endpoints
@@ -486,7 +486,7 @@ describe("customer API v1", () => {
     });
   });
 
-  it("allows workspace readiness on Starter (read-only API is free + Scout and up)", async () => {
+  it("allows workspace readiness on Starter (read-only API is Scout and up)", async () => {
     setupMocks(true, true, apiKey.userId, "starter");
     const getWorkspaceReadiness = vi.fn().mockResolvedValue(readinessPayload);
     vi.doMock("~/lib/workspace-readiness.server", () => ({

@@ -27,7 +27,8 @@ export const meta: MetaFunction = () =>
     pathname: "/api/docs",
   });
 
-// BET 6: read-only tools are free + Scout; write/account-mutation tools are
+// BET 6: read-only tools are Scout (decision BET-6-ungate yes for SCOUT);
+// write/account-mutation tools are
 // Agency. This table is documentation copy; the authoritative gate lives in
 // app/lib/plan-feature-gate.server.ts.
 const READ_ONLY_TOOLS: Array<[string, string]> = [
@@ -74,7 +75,7 @@ export default function ApiDocsRoute() {
     <PublicDocShell
       kicker="Developer access"
       title="Use account-owned evidence from your tools."
-      intro="Read-only access on Free + Scout. Writes and exports on Starter+. Full agent actions on Agency."
+      intro="Read-only access on Scout. Writes and exports on Starter+. Full agent actions on Agency."
     >
       <script
         {...jsonLdScriptProps(
@@ -87,7 +88,7 @@ export default function ApiDocsRoute() {
       />
       <PublicDocBlock title="Authentication">
         <p>
-          Read-only API and connected-tool access is available on Free and Scout. Create a customer
+          Read-only API and connected-tool access is available on Scout. Create a customer
           API key inside{" "}
           <Link to={appLinkTarget("/app/developer-access", rootData?.session)}>Developer access</Link>.
           Send it as a bearer token:
@@ -96,7 +97,7 @@ export default function ApiDocsRoute() {
           <code>{`Authorization: Bearer f9_live_...`}</code>
         </pre>
         <p>
-          Read-only keys work on Free and Scout. Write-enabled keys (approved account actions)
+          Read-only keys work on Scout. Write-enabled keys (approved account actions)
           require the Starter plan or above.
         </p>
       </PublicDocBlock>
@@ -108,9 +109,11 @@ export default function ApiDocsRoute() {
           run approved account actions.
         </p>
         <p>
-          Follow the{" "}
-          <Link to="/mcp/setup">one-paste MCP setup</Link> for Claude Desktop, ChatGPT, and pi
-          connector snippets.
+          One-paste connectors for Claude and ChatGPT: add{" "}
+          <code>https://0509.io/api/mcp</code> as an HTTP/SSE MCP connector and
+          paste the bearer token above. The{" "}
+          <Link to="/mcp/setup">one-paste MCP setup</Link> ships ready-made
+          config snippets for Claude Desktop, ChatGPT, and pi.
         </p>
         <pre className="f9-code-block">
           <code>{`POST /api/mcp
@@ -127,11 +130,11 @@ Authorization: Bearer f9_live_...
 
       <PublicDocBlock title="Tool tiers">
         <p>
-          Read-only tools are available on Free and Scout. Write and account-mutation tools require
+          Read-only tools are available on Scout. Write and account-mutation tools require
           the Agency plan.
         </p>
         <p>
-          <strong>Read-only — Free + Scout</strong>
+          <strong>Read-only — Scout</strong>
         </p>
         <dl className="proof-trail-list">
           {READ_ONLY_TOOLS.map(([tool, detail]) => (
@@ -182,7 +185,7 @@ Authorization: Bearer f9_live_...
           </div>
         </dl>
         <p>
-          JSON reads are available on Free and Scout. CSV and Slack exports require the Starter plan
+          JSON reads are available on Scout. CSV and Slack exports require the Starter plan
           or above.
         </p>
       </PublicDocBlock>
