@@ -759,14 +759,32 @@ describe("hn mention source activation — capture, dedup by canonical URL, kill
       expect(item.contentHash).toBeTruthy();
     }
 
-    // A SECOND identical poll + upsert must not multiply rows: the app-level
-    // upsert skips when the stored (source_target_id, url_hash) row's
+    // Production (pollPresenceSourceTarget) persists the first poll's cursor
+    // and passes the stored record back as options.cursor.record — mirror
+    // that here so the SECOND poll happens the way it really happens:
+    // windowed by the stored watermark (numericFilters=created_at_i>W) while
+    // the page answers with the same hits again, so the app-level upsert
+    // skips because the stored (source_target_id, url_hash) row's
     // content_hash is unchanged (presence-data.server.ts) — one canonical
-    // mention, even when the page answers with the same hits again. The 0055
-    // UNIQUE (source_target_id, url_hash) index is the concurrent-write
-    // backstop, not what this happy-path poll exercises.
-    const pollAgain = await pollPresenceTarget(env, hnTarget, { trackingMode: "self" }, { fetchImpl });
+    // mention. The 0055 UNIQUE (source_target_id, url_hash) index is the
+    // concurrent-write backstop, not what this happy-path poll exercises.
+    await upsertPollCursor(env, hnTarget.id, {
+      cursor: poll.cursor,
+      lastPolledAt: new Date().toISOString(),
+      lastSuccessAt: new Date().toISOString(),
+    });
+    const storedCursor = await readCursorJson(hnTarget.id);
+    expect(storedCursor.lastItemCreatedAtI).toBe(COMMENT_CREATED_AT_I);
+    const pollAgain = await pollPresenceTarget(env, hnTarget, { trackingMode: "self" }, {
+      fetchImpl,
+      cursor: { record: storedCursor },
+    });
     expect(pollAgain.ok).toBe(true);
+    // The second hop carries the documented watermark: the prior poll's
+    // newest created_at_i folded into numericFilters — the 1,000-result
+    // ceiling is never approached, and the window never re-reads this page.
+    const secondUrl = new URL(String(mockCalls(fetchImpl)[1]?.[0])); // presenceSafeFetch passes the url: string
+    expect(secondUrl.searchParams.get("numericFilters")).toBe(`created_at_i>${COMMENT_CREATED_AT_I}`);
     const upsertAgain = await upsertPresenceItems(env, { sourceTarget: hnTarget, items: pollAgain.items });
     expect(upsertAgain.inserted).toBe(0);
     expect(await countLivePresenceItems(hnTarget.id)).toBe(poll.items.length);

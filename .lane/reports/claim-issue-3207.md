@@ -72,3 +72,21 @@ per tracked entity where `connector_id='hn'` (the integration test counts
 exactly those rows, keyed by the canonical-URL `url_hash`); failure rate
 = `presence_poll_cursor.last_error_code` / `last_error_message`, written
 by the existing poll-cursor path (presence-data.server.ts).
+
+Reviewer round (product-repo step 8, 2026-09-13): senior seat picked by the
+LIVE `find_senior_seat` — the ladder's stated heads are exhausted/walled
+today, so the #4211 fall-through returned nebius → zai-org/GLM-5.3-Flash;
+recorded by committing the `.pi/agents/reviewer.md` model line (one-line
+diff in this branch). Verdict: 0 Critical / 2 Warning / 3 Suggestion.
+Buckets (review-adjudication, none dropped): ACT ON — W1, the acceptance
+describe's second poll now persists the first poll's cursor through
+`upsertPollCursor` and passes the stored record back as
+`options.cursor.record` (the production `pollPresenceSourceTarget` shape),
+pinning `numericFilters=created_at_i>W` on the second hop — both proofs
+(watermark windowing + app-level dedup) in one flow; ACT ON — S3, this
+line. NOTED — W2 (verified: production calls reconcile only when
+`cursor.completeSnapshot` is truthy, presence-service.server.ts:265-272,
+and hn never declares it — pinned at the test file's line 351 — so the
+describe's `completeSnapshot: false` proof stays the guard-early-return
+check by design); S1/S2 (the `as SourceTargetRecord` and vi.fn-cast
+idioms are this test file's established pattern, lines 354/715/727/796).
