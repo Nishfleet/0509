@@ -821,8 +821,8 @@ export async function listPublicMentionEventsByDomain(
       continue;
     }
     const urlHash = typeof row.url_hash === "string" ? row.url_hash : "";
-    if (urlHash && seenUrlHash.has(urlHash)) continue;
-    if (urlHash) seenUrlHash.add(urlHash);
+    if (urlHash && seenUrlHashes.has(urlHash)) continue;
+    if (urlHash) seenUrlHashes.add(urlHash);
     if (typeof row.title !== "string" || typeof row.canonical_url !== "string" || typeof row.observed_at !== "string") {
       continue;
     }
