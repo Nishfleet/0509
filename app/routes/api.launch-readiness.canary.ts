@@ -21,7 +21,9 @@ interface CanaryOwnerRow {
 function hasCanonicalCanaryOrigin(request: Request) {
   try {
     const url = new URL(request.url);
-    const authority = request.url.match(/^https:\/\/([^/?#]+)/i)?.[1]?.toLowerCase();
+    const authority = request.url
+      .match(/^https:\/\/([^/?#]+)/i)?.[1]
+      ?.toLowerCase();
     return (
       url.protocol === "https:" &&
       url.origin === "https://0509.io" &&
@@ -40,7 +42,8 @@ async function getCanaryTarget(env: { DB?: D1Database }, canaryEmail: string) {
     return null;
   }
 
-  const result = await env.DB.prepare(`
+  const result = await env.DB.prepare(
+    `
       SELECT
         user.id AS user_id,
         user.email,
@@ -55,7 +58,10 @@ async function getCanaryTarget(env: { DB?: D1Database }, canaryEmail: string) {
         AND lower(user.email) = lower(?)
       ORDER BY watchlist.updated_at DESC
       LIMIT 1
-    `).bind(canaryEmail).all<CanaryTargetRow>();
+    `,
+  )
+    .bind(canaryEmail)
+    .all<CanaryTargetRow>();
 
   return result.results?.[0] ?? null;
 }
@@ -72,9 +78,48 @@ const CANARY_USER_ID = "launch-readiness-canary-owner";
 const CANARY_WATCHLIST_ID = "launch-readiness-canary-watchlist";
 
 /** @param {{ DB?: D1Database }} env @param {string} canaryEmail */
-async function ensureCanaryTarget(env: { DB?: D1Database }, canaryEmail: string) {
+/** Converges the canary's delivery_target substrate to "exactly one usable
+ * proof-email target" for `userId`. Runs on EVERY proof request, not only
+ * when the watchlist is missing: the 2026-09-13 incident (Gate C runs
+ * 34741508215 → 34752117454, all failing `gate-c-proof-email-target-must-
+ * resolve-uniquely`) froze the substrate in a shape the provisioning branch
+ * could never reach — the watchlist row survived while the canary's
+ * delivery_target row was opted back out (the proof email's own one-click
+ * List-Unsubscribe), and the early-return path skipped both the provisioner
+ * and the self-heal. Both steps are idempotent, canary-scoped, and cost two
+ * idempotent statements per proof request — negligible against the proof
+ * itself — so the substrate owner (this route) re-converges it every time. */
+async function convergeCanaryProofEmailTarget(
+  env: { DB?: D1Database },
+  userId: string,
+  canaryEmail: string,
+) {
+  const {
+    provisionVerifiedAccountEmailTargetIfUnsuppressed,
+    repairCanaryProofEmailTarget,
+  } = await import("~/lib/data.server");
+  await provisionVerifiedAccountEmailTargetIfUnsuppressed(env, {
+    userId,
+    targetValue: canaryEmail,
+    optInSource: "launch_readiness_canary_substrate",
+  });
+  await repairCanaryProofEmailTarget(env, { userId, canaryEmail });
+}
+
+async function ensureCanaryTarget(
+  env: { DB?: D1Database },
+  canaryEmail: string,
+) {
   const existing = await getCanaryTarget(env, canaryEmail);
-  if (existing) return { target: existing, provisioned: false };
+  if (existing) {
+    // A surviving watchlist no longer short-circuits the proof-target
+    // convergence: the proof email's own unsubscribe path can opt the
+    // delivery_target row back out AFTER a green run, so the next proof
+    // request must still resolve exactly one usable target (see
+    // convergeCanaryProofEmailTarget for the 2026-09-13 incident it closes).
+    await convergeCanaryProofEmailTarget(env, existing.user_id, canaryEmail);
+    return { target: existing, provisioned: false };
+  }
   if (!env.DB) return { target: null, provisioned: false };
 
   const nowIso = new Date().toISOString();
@@ -92,19 +137,23 @@ async function ensureCanaryTarget(env: { DB?: D1Database }, canaryEmail: string)
     }
   };
   if (!owner) {
-    await write(env.DB.prepare(
-      `INSERT INTO user (id, name, email, createdAt, updatedAt)
+    await write(
+      env.DB.prepare(
+        `INSERT INTO user (id, name, email, createdAt, updatedAt)
        VALUES (?, 'Launch readiness canary owner', ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET email = excluded.email, updatedAt = excluded.updatedAt`,
-    ).bind(userId, canaryEmail, nowIso, nowIso));
+      ).bind(userId, canaryEmail, nowIso, nowIso),
+    );
   }
-  await write(env.DB.prepare(
-    `INSERT INTO watchlist
+  await write(
+    env.DB.prepare(
+      `INSERT INTO watchlist
        (id, user_id, name, target_type, target_id, target_fingerprint, target_label, is_active, created_at, updated_at)
      VALUES (?, ?, 'Launch readiness canary', 'advertiser', '0509.io', 'launch-readiness-canary', '0509.io', 1, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        user_id = excluded.user_id, is_active = 1, updated_at = excluded.updated_at`,
-  ).bind(CANARY_WATCHLIST_ID, userId, nowIso, nowIso));
+    ).bind(CANARY_WATCHLIST_ID, userId, nowIso, nowIso),
+  );
   // Gate C's proof email path uses `requireUniqueExistingTarget: true`, so
   // a missing delivery_target fails closed with
   // `Gate C proof email target must resolve uniquely` and deliverWeeklyDigest
@@ -115,22 +164,12 @@ async function ensureCanaryTarget(env: { DB?: D1Database }, canaryEmail: string)
   // INSERT-OR-IGNORE is a no-op when one already exists) so the substrate
   // remains operator-free and the canary route can dispatch its internal
   // proof email without operator-seeded data.
-  const { provisionVerifiedAccountEmailTargetIfUnsuppressed, repairCanaryProofEmailTarget } = await import("~/lib/data.server");
-  await provisionVerifiedAccountEmailTargetIfUnsuppressed(env, {
-    userId,
-    targetValue: canaryEmail,
-    optInSource: "launch_readiness_canary_substrate",
-  });
-
-  // The substrate persists across failed deploy runs (cleanup is skipped
-  // when a run fails), so it can drift into shapes the provisioner above
-  // cannot fix: an opted-out/paused row turns the INSERT-OR-IGNORE into a
-  // no-op (zero usable rows) and byte-distinct spellings of the canary
-  // address leave more than one usable row. Both fail the
-  // `requireUniqueExistingTarget` assertion on every run. Repair the
-  // canary-owned row before Gate C resolves it — scope and rationale live
-  // on repairCanaryProofEmailTarget itself.
-  await repairCanaryProofEmailTarget(env, { userId, canaryEmail });
+  // Provisioning the watchlist alone does not guarantee the proof-target
+  // state, so the (re)provisioned substrate goes through the same convergence
+  // helper the early-return path uses — provision + self-heal, both
+  // idempotent and canary-scoped (rationale: convergeCanaryProofEmailTarget
+  // and repairCanaryProofEmailTarget).
+  await convergeCanaryProofEmailTarget(env, userId, canaryEmail);
 
   const target = await getCanaryTarget(env, canaryEmail);
   return { target, provisioned: true };
@@ -141,12 +180,16 @@ async function getCanaryOwner(env: { DB?: D1Database }, canaryEmail: string) {
     return null;
   }
 
-  const result = await env.DB.prepare(`
+  const result = await env.DB.prepare(
+    `
       SELECT id AS user_id
       FROM user
       WHERE lower(email) = lower(?)
       LIMIT 1
-    `).bind(canaryEmail).all<CanaryOwnerRow>();
+    `,
+  )
+    .bind(canaryEmail)
+    .all<CanaryOwnerRow>();
 
   return result.results?.[0]?.user_id ?? null;
 }
@@ -164,12 +207,16 @@ async function readE2ETestModeSentinel(env: { DB?: D1Database }) {
   }
 
   try {
-    const result = await env.DB.prepare(`
+    const result = await env.DB.prepare(
+      `
       SELECT enabled
       FROM e2e_test_mode
       WHERE id = ?
       LIMIT 1
-    `).bind(E2E_TEST_MODE_SENTINEL_ID).all<{ enabled: number | string | null }>();
+    `,
+    )
+      .bind(E2E_TEST_MODE_SENTINEL_ID)
+      .all<{ enabled: number | string | null }>();
     const enabled = result.results?.[0]?.enabled;
     return { enabled: enabled === 1 || enabled === "1", readError: false };
   } catch {
@@ -205,10 +252,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
     );
   }
 
-  const isCleanupRequest = request.headers.get(CLEANUP_OPERATION_HEADER) === "cleanup";
-  const { verifyExpectedCanaryWorkerVersion } = await import(
-    "~/lib/canary-release-identity.server"
-  );
+  const isCleanupRequest =
+    request.headers.get(CLEANUP_OPERATION_HEADER) === "cleanup";
+  const { verifyExpectedCanaryWorkerVersion } =
+    await import("~/lib/canary-release-identity.server");
   if (!verifyExpectedCanaryWorkerVersion(request, env).ok) {
     return Response.json(
       { ok: false, blocker: "worker_version_mismatch" },
@@ -241,7 +288,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
       {
         ok: false,
         blocker,
-        e2eTestModeSentinel: { enabled: e2eTestModeSentinel.enabled, readError: e2eTestModeSentinel.readError },
+        e2eTestModeSentinel: {
+          enabled: e2eTestModeSentinel.enabled,
+          readError: e2eTestModeSentinel.readError,
+        },
       },
       {
         status: 503,
@@ -269,7 +319,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
     return cleanupErrorResponse("invalid_cleanup_operation", 400);
   }
 
-  const gateRunId = cleanupOperation === "cleanup" ? null : await readGateRunId(request);
+  const gateRunId =
+    cleanupOperation === "cleanup" ? null : await readGateRunId(request);
   if (gateRunId === false) {
     return Response.json(
       { ok: false, blocker: "invalid_gate_run_id" },
@@ -278,8 +329,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   const requestUrl = new URL(request.url);
-  const requestedProofProviderParam = requestUrl.searchParams.get("proofProvider");
-  if (requestedProofProviderParam !== null && requestedProofProviderParam !== "browserless") {
+  const requestedProofProviderParam =
+    requestUrl.searchParams.get("proofProvider");
+  if (
+    requestedProofProviderParam !== null &&
+    requestedProofProviderParam !== "browserless"
+  ) {
     return Response.json(
       { ok: false, blocker: "unsupported_proof_provider" },
       { status: 400, headers: { "cache-control": "no-store" } },
@@ -306,7 +361,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
       // pre-existing blocker name (plus the failure kind) instead of a
       // silent 500. Write failures are provisioning failures; a D1 read
       // outage is substrate-unreadable so Gate C debugging is not misled.
-      const writeFailure = error instanceof Error && error.name === "canary_substrate_write_failed";
+      const writeFailure =
+        error instanceof Error &&
+        error.name === "canary_substrate_write_failed";
       console.error("launch-readiness canary substrate unavailable", {
         kind: writeFailure ? "write" : "read",
         message: error instanceof Error ? error.message : String(error),
@@ -341,7 +398,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   if (cleanupOperation === "cleanup") {
     const requestUrl = new URL(request.url);
-    if (["runId", "digestRunId", "proofCaptureId"].some((key) => requestUrl.searchParams.has(key))) {
+    if (
+      ["runId", "digestRunId", "proofCaptureId"].some((key) =>
+        requestUrl.searchParams.has(key),
+      )
+    ) {
       return cleanupErrorResponse("cleanup_ids_must_be_in_json_body", 400);
     }
 
@@ -351,7 +412,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
     }
 
     try {
-      const { cleanupLaunchReadinessCanary } = await import("~/lib/data.server");
+      const { cleanupLaunchReadinessCanary } =
+        await import("~/lib/data.server");
       const result = await cleanupLaunchReadinessCanary(env, {
         ownerUserId: canaryOwnerUserId as string,
         ...cleanupInput,
@@ -407,16 +469,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
     upsertProofTarget,
   } = await import("~/lib/data.server");
   const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
-  const { captureLandingPageSnapshot, snapshotHasScreenshotArtifact } = await import(
-    "~/lib/landing-pages.server"
-  );
-  const { compensateUncommittedProofArtifacts } = await import(
-    "~/lib/proof-artifact-retention.server"
-  );
-  const {
-    buildCanonicalPageIdentity,
-    buildProofTargetIdentity,
-  } = await import("~/lib/proof-policy.server");
+  const { captureLandingPageSnapshot, snapshotHasScreenshotArtifact } =
+    await import("~/lib/landing-pages.server");
+  const { compensateUncommittedProofArtifacts } =
+    await import("~/lib/proof-artifact-retention.server");
+  const { buildCanonicalPageIdentity, buildProofTargetIdentity } =
+    await import("~/lib/proof-policy.server");
 
   const now = new Date();
   const nowIso = now.toISOString();
@@ -424,13 +482,19 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const periodStart = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
   const canaryKey = `launch-readiness:${gateRunId ?? nowIso}`;
   const title = "Launch readiness canary";
-  const summary = "Private canary verified the monitoring, proof, and digest delivery pipeline.";
+  const summary =
+    "Private canary verified the monitoring, proof, and digest delivery pipeline.";
   const proofUrl = "https://0509.io/";
-  const requestedProofProvider = requestedProofProviderParam === "browserless"
-    ? "browserless"
-    : null;
-  const requireSlackDelivery = readBooleanSearchParam(requestUrl, "requireSlack");
-  const requireWhatsAppDelivery = readBooleanSearchParam(requestUrl, "requireWhatsApp");
+  const requestedProofProvider =
+    requestedProofProviderParam === "browserless" ? "browserless" : null;
+  const requireSlackDelivery = readBooleanSearchParam(
+    requestUrl,
+    "requireSlack",
+  );
+  const requireWhatsAppDelivery = readBooleanSearchParam(
+    requestUrl,
+    "requireWhatsApp",
+  );
   const gateCProofRequested = gateRunId !== null && !requireWhatsAppDelivery;
   const proofEmailSubject = gateCProofRequested
     ? buildGateCProofEmailSubject(gateRunId)
@@ -467,26 +531,34 @@ export async function action({ context, request }: ActionFunctionArgs) {
   let proofCaptureId: string | undefined;
   let digestRunId: string | undefined;
   try {
-    runId = await createWatchlistRun(env, target.watchlist_id, "manual", null, 1, {
-      ...metadata,
-      blocker: "launch_readiness_canary_incomplete",
-      proofUrl,
-    });
+    runId = await createWatchlistRun(
+      env,
+      target.watchlist_id,
+      "manual",
+      null,
+      1,
+      {
+        ...metadata,
+        blocker: "launch_readiness_canary_incomplete",
+        proofUrl,
+      },
+    );
     // Issue #2077: instrument the landing-page capture branch so
     // cta_pipeline_stage_counts fills for the canary volume path. The
     // browserless branch uses a different capture function and is not
     // instrumented here.
-    let snapshot: Awaited<ReturnType<typeof captureLandingPageSnapshot>> | null = null;
+    let snapshot: Awaited<
+      ReturnType<typeof captureLandingPageSnapshot>
+    > | null = null;
     if (requestedProofProvider === "browserless") {
-      snapshot = await (await import("~/lib/browser-run.server")).captureBrowserlessProofSnapshot(
-        env,
-        proofUrl,
-        { requireScreenshot: true },
-      );
+      snapshot = await (
+        await import("~/lib/browser-run.server")
+      ).captureBrowserlessProofSnapshot(env, proofUrl, {
+        requireScreenshot: true,
+      });
     } else {
-      const { startLandingPagePipelineVolumeInstrumentation } = await import(
-        "~/lib/cta-pipeline-stage-counts.server"
-      );
+      const { startLandingPagePipelineVolumeInstrumentation } =
+        await import("~/lib/cta-pipeline-stage-counts.server");
       const instr = startLandingPagePipelineVolumeInstrumentation({
         watchlistId: "launch_readiness_canary",
         scanId: runId,
@@ -533,7 +605,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
     }
 
     const canonicalPageIdentity =
-      buildCanonicalPageIdentity(snapshot.canonicalUrl) ?? buildCanonicalPageIdentity(proofUrl) ?? "0509.io/";
+      buildCanonicalPageIdentity(snapshot.canonicalUrl) ??
+      buildCanonicalPageIdentity(proofUrl) ??
+      "0509.io/";
     const proofTargetIdentity = buildProofTargetIdentity({
       watchlistId: target.watchlist_id,
       adId: null,
@@ -552,15 +626,23 @@ export async function action({ context, request }: ActionFunctionArgs) {
       });
 
       if (!proofTarget) {
-        throw new Response("Launch readiness proof target could not be created.", { status: 500 });
+        throw new Response(
+          "Launch readiness proof target could not be created.",
+          { status: 500 },
+        );
       }
 
       proofCaptureId = await createProofCapture(env, {
         proofTargetId: proofTarget.id,
         status: "succeeded",
-        screenshotArtifactKey: readSnapshotString(snapshot.metadata, "screenshotArtifactKey"),
+        screenshotArtifactKey: readSnapshotString(
+          snapshot.metadata,
+          "screenshotArtifactKey",
+        ),
         htmlArtifactKey:
-          readSnapshotString(snapshot.metadata, "htmlArtifactKey") ?? snapshot.artifactKey ?? null,
+          readSnapshotString(snapshot.metadata, "htmlArtifactKey") ??
+          snapshot.artifactKey ??
+          null,
         extractedFields: snapshotToExtractedFields(snapshot),
         fieldConfidence: readSnapshotConfidence(snapshot),
         extractionWarnings: readSnapshotWarnings(snapshot),
@@ -574,7 +656,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
         },
         renderMode: readSnapshotRenderMode(snapshot),
         deviceProfile: readSnapshotDeviceProfile(snapshot),
-        extractorVersion: readSnapshotString(snapshot.metadata, "extractorVersion") ?? "launch-readiness-canary-v2",
+        extractorVersion:
+          readSnapshotString(snapshot.metadata, "extractorVersion") ??
+          "launch-readiness-canary-v2",
         idempotencyKey: `${canaryKey}:proof`,
         attemptedAt: snapshot.capturedAt,
         succeededAt: snapshot.capturedAt,
@@ -582,9 +666,15 @@ export async function action({ context, request }: ActionFunctionArgs) {
       proofCaptureCommitted = true;
     } catch (error) {
       if (!proofCaptureCommitted) {
-        const compensated = await compensateUncommittedProofArtifacts(env, snapshot);
+        const compensated = await compensateUncommittedProofArtifacts(
+          env,
+          snapshot,
+        );
         if (!compensated.ok) {
-          throw new Response("Launch readiness proof cleanup could not be completed.", { status: 500 });
+          throw new Response(
+            "Launch readiness proof cleanup could not be completed.",
+            { status: 500 },
+          );
         }
       }
       throw error;
@@ -641,18 +731,20 @@ export async function action({ context, request }: ActionFunctionArgs) {
       },
       {
         returnClaim: true,
-        items: [{
-          watchlistId: target.watchlist_id,
-          watchlistName: target.watchlist_name,
-          eventType: "ad_new",
-          title,
-          summary,
-          metadata: {
-            ...metadata,
-            eventId,
-            proofCaptureId,
+        items: [
+          {
+            watchlistId: target.watchlist_id,
+            watchlistName: target.watchlist_name,
+            eventType: "ad_new",
+            title,
+            summary,
+            metadata: {
+              ...metadata,
+              eventId,
+              proofCaptureId,
+            },
           },
-        }],
+        ],
       },
     );
     if (!digestClaim.created) {
@@ -695,7 +787,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
       ...(proofEmailSubject ? { proofEmailSubject } : {}),
     });
     const deliveryDetails = delivery.details as Array<CanaryDeliveryDetail>;
-    const emailAttempts = deliveryDetails.filter((attempt) => attempt.channel === "email");
+    const emailAttempts = deliveryDetails.filter(
+      (attempt) => attempt.channel === "email",
+    );
     const proofEmail = gateCProofRequested
       ? buildPrivateProofEmail(emailAttempts, gateRunId!, proofEmailSubject!)
       : null;
@@ -703,28 +797,47 @@ export async function action({ context, request }: ActionFunctionArgs) {
       ? [
           emailAttempts.length === 1 ? null : "proof_email_not_unique",
           proofEmail?.subject ? null : "proof_email_subject_invalid",
-          proofEmail?.dispatchStartedAt ? null : "proof_email_dispatch_timestamp_invalid",
+          proofEmail?.dispatchStartedAt
+            ? null
+            : "proof_email_dispatch_timestamp_invalid",
         ].filter((value): value is string => Boolean(value))
       : [];
     const deliverySent = gateCProofRequested
-      ? proofEmail?.provider.status === "sent" && proofEmail.subject !== null && proofEmail.dispatchStartedAt !== null
+      ? proofEmail?.provider.status === "sent" &&
+        proofEmail.subject !== null &&
+        proofEmail.dispatchStartedAt !== null
       : deliveryDetails.some((attempt) => attempt.status === "sent");
     const slackDeliverySent = deliveryDetails.some(
       (attempt) => attempt.channel === "slack" && attempt.status === "sent",
     );
-    const whatsappAttempts = deliveryDetails.filter((attempt) => attempt.channel === "whatsapp");
-    const hasExplicitWebhookStatus = whatsappAttempts.some((attempt) => attempt.webhookStatus !== undefined);
-    const whatsappDeliverySent = requireWhatsAppDelivery && whatsappAttempts.length > 0
-      ? hasExplicitWebhookStatus
-        ? whatsappAttempts.some(
-            (attempt) => attempt.status === "sent" && attempt.webhookStatus === "delivered",
-          )
-        : await hasReconciledWhatsAppDelivery(env, digestRunId, target.user_id)
-      : false;
+    const whatsappAttempts = deliveryDetails.filter(
+      (attempt) => attempt.channel === "whatsapp",
+    );
+    const hasExplicitWebhookStatus = whatsappAttempts.some(
+      (attempt) => attempt.webhookStatus !== undefined,
+    );
+    const whatsappDeliverySent =
+      requireWhatsAppDelivery && whatsappAttempts.length > 0
+        ? hasExplicitWebhookStatus
+          ? whatsappAttempts.some(
+              (attempt) =>
+                attempt.status === "sent" &&
+                attempt.webhookStatus === "delivered",
+            )
+          : await hasReconciledWhatsAppDelivery(
+              env,
+              digestRunId,
+              target.user_id,
+            )
+        : false;
     const deliveryBlockers = [
       deliverySent ? null : "no_digest_delivery_sent",
-      requireSlackDelivery && !slackDeliverySent ? "no_slack_digest_sent" : null,
-      requireWhatsAppDelivery && !whatsappDeliverySent ? "no_whatsapp_digest_sent" : null,
+      requireSlackDelivery && !slackDeliverySent
+        ? "no_slack_digest_sent"
+        : null,
+      requireWhatsAppDelivery && !whatsappDeliverySent
+        ? "no_whatsapp_digest_sent"
+        : null,
       ...proofEmailBlockers,
     ].filter((value): value is string => Boolean(value));
 
@@ -737,7 +850,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
         runId,
         proofCaptureId,
         digestRunId,
-        delivery: sanitizeDeliveryForCanary(deliveryDetails, delivery.attempts, delivery.channels),
+        delivery: sanitizeDeliveryForCanary(
+          deliveryDetails,
+          delivery.attempts,
+          delivery.channels,
+        ),
         e2eTestModeSentinel: { enabled: e2eTestModeSentinel.enabled },
         ...(proofEmail ? { proofEmail } : {}),
         slackDelivery: {
@@ -753,7 +870,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
           capturedAt: snapshot.capturedAt,
           canonicalUrl: snapshot.canonicalUrl,
           captureMethod: snapshot.captureMethod,
-          renderStatus: snapshot.captureMethod === "browser_render" ? "rendered" : "captured",
+          renderStatus:
+            snapshot.captureMethod === "browser_render"
+              ? "rendered"
+              : "captured",
         },
       },
       {
@@ -844,7 +964,9 @@ function buildPrivateProofEmail(
   expectedSubject: string,
 ) {
   const attempt = emailAttempts.length === 1 ? emailAttempts[0] : null;
-  const dispatchStartedAt = readCanonicalUtcTimestamp(attempt?.providerDispatchStartedAt);
+  const dispatchStartedAt = readCanonicalUtcTimestamp(
+    attempt?.providerDispatchStartedAt,
+  );
   return {
     gateRunId,
     dispatchStartedAt,
@@ -896,7 +1018,9 @@ function sanitizeDeliveryForCanary(
       channel: attempt.channel,
       status: attempt.status,
       deliveredAt: attempt.deliveredAt ?? null,
-      ...(attempt.webhookStatus ? { webhookStatus: attempt.webhookStatus } : {}),
+      ...(attempt.webhookStatus
+        ? { webhookStatus: attempt.webhookStatus }
+        : {}),
     })),
   };
 }
@@ -909,7 +1033,8 @@ async function hasReconciledWhatsAppDelivery(
   if (!env.DB) return false;
 
   try {
-    const result = await env.DB.prepare(`
+    const result = await env.DB.prepare(
+      `
         SELECT 1 AS present
         FROM delivery_attempt
         WHERE digest_run_id = ?
@@ -918,7 +1043,10 @@ async function hasReconciledWhatsAppDelivery(
           AND status = 'sent'
           AND webhook_status = 'delivered'
         LIMIT 1
-      `).bind(digestRunId, userId).all<{ present: number }>();
+      `,
+    )
+      .bind(digestRunId, userId)
+      .all<{ present: number }>();
     return (result.results?.length ?? 0) > 0;
   } catch {
     return false;
@@ -962,12 +1090,21 @@ function cleanupErrorResponse(blocker: string, status: number) {
 }
 
 async function readCleanupInput(request: Request) {
-  if (!request.headers.get("content-type")?.toLowerCase().includes("application/json")) {
+  if (
+    !request.headers
+      .get("content-type")
+      ?.toLowerCase()
+      .includes("application/json")
+  ) {
     return null;
   }
 
-  const { readRequestTextWithinLimit } = await import("~/lib/bounded-response.server");
-  const rawBody = await readRequestTextWithinLimit(request, CLEANUP_BODY_MAX_BYTES);
+  const { readRequestTextWithinLimit } =
+    await import("~/lib/bounded-response.server");
+  const rawBody = await readRequestTextWithinLimit(
+    request,
+    CLEANUP_BODY_MAX_BYTES,
+  );
   if (!rawBody) return null;
 
   let parsed: unknown;
@@ -976,16 +1113,22 @@ async function readCleanupInput(request: Request) {
   } catch {
     return null;
   }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+    return null;
 
   const body = parsed as Record<string, unknown>;
   const keys = Object.keys(body).sort();
   if (keys.join(",") === "gateRunId") {
-    const gateRunId = typeof body.gateRunId === "string" ? body.gateRunId.trim() : "";
+    const gateRunId =
+      typeof body.gateRunId === "string" ? body.gateRunId.trim() : "";
     return /^[a-z0-9._-]{1,128}$/u.test(gateRunId) ? { gateRunId } : null;
   }
   if (keys.join(",") !== "digestRunId,proofCaptureId,runId") return null;
-  if (!isCleanupIdentifier(body.runId) || !isCleanupIdentifier(body.digestRunId) || !isCleanupIdentifier(body.proofCaptureId)) {
+  if (
+    !isCleanupIdentifier(body.runId) ||
+    !isCleanupIdentifier(body.digestRunId) ||
+    !isCleanupIdentifier(body.proofCaptureId)
+  ) {
     return null;
   }
 
@@ -997,11 +1140,20 @@ async function readCleanupInput(request: Request) {
 }
 
 async function readGateRunId(request: Request): Promise<string | null | false> {
-  if (!request.headers.get("content-type")?.toLowerCase().includes("application/json")) {
+  if (
+    !request.headers
+      .get("content-type")
+      ?.toLowerCase()
+      .includes("application/json")
+  ) {
     return null;
   }
-  const { readRequestTextWithinLimit } = await import("~/lib/bounded-response.server");
-  const rawBody = await readRequestTextWithinLimit(request, CLEANUP_BODY_MAX_BYTES);
+  const { readRequestTextWithinLimit } =
+    await import("~/lib/bounded-response.server");
+  const rawBody = await readRequestTextWithinLimit(
+    request,
+    CLEANUP_BODY_MAX_BYTES,
+  );
   if (!rawBody) return false;
   let parsed: unknown;
   try {
@@ -1009,15 +1161,23 @@ async function readGateRunId(request: Request): Promise<string | null | false> {
   } catch {
     return false;
   }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return false;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+    return false;
   const body = parsed as Record<string, unknown>;
   if (Object.keys(body).sort().join(",") !== "gateRunId") return false;
-  const gateRunId = typeof body.gateRunId === "string" ? body.gateRunId.trim() : "";
+  const gateRunId =
+    typeof body.gateRunId === "string" ? body.gateRunId.trim() : "";
   return /^[a-z0-9._-]{1,128}$/u.test(gateRunId) ? gateRunId : false;
 }
 
 function isCleanupIdentifier(value: unknown): value is string {
-  return typeof value === "string" && value.length > 0 && value.length <= 256 && value.trim() === value && !/[\u0000-\u001f\u007f\s]/.test(value);
+  return (
+    typeof value === "string" &&
+    value.length > 0 &&
+    value.length <= 256 &&
+    value.trim() === value &&
+    !/[\u0000-\u001f\u007f\s]/.test(value)
+  );
 }
 
 function readBooleanSearchParam(url: URL, key: string) {
@@ -1044,37 +1204,59 @@ function snapshotToExtractedFields(snapshot: {
   };
 }
 
-function readSnapshotString(metadata: Record<string, unknown> | undefined, key: string) {
+function readSnapshotString(
+  metadata: Record<string, unknown> | undefined,
+  key: string,
+) {
   const value = metadata?.[key];
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
-function readSnapshotConfidence(snapshot: { metadata?: Record<string, unknown> }) {
+function readSnapshotConfidence(snapshot: {
+  metadata?: Record<string, unknown>;
+}) {
   const confidence = snapshot.metadata?.extractedFieldConfidence;
-  if (!confidence || typeof confidence !== "object" || Array.isArray(confidence)) {
+  if (
+    !confidence ||
+    typeof confidence !== "object" ||
+    Array.isArray(confidence)
+  ) {
     return {};
   }
 
   return Object.fromEntries(
-    Object.entries(confidence).filter((entry): entry is [string, number] => typeof entry[1] === "number"),
+    Object.entries(confidence).filter(
+      (entry): entry is [string, number] => typeof entry[1] === "number",
+    ),
   );
 }
 
-function readSnapshotWarnings(snapshot: { metadata?: Record<string, unknown> }) {
+function readSnapshotWarnings(snapshot: {
+  metadata?: Record<string, unknown>;
+}) {
   const warnings = snapshot.metadata?.extractionWarnings;
   if (!Array.isArray(warnings)) {
     return [];
   }
 
-  return warnings.filter((warning): warning is string => typeof warning === "string");
+  return warnings.filter(
+    (warning): warning is string => typeof warning === "string",
+  );
 }
 
-function readSnapshotRenderMode(snapshot: { metadata?: Record<string, unknown> }) {
-  return readSnapshotString(snapshot.metadata, "renderMode") === "desktop" ? "desktop" : "mobile";
+function readSnapshotRenderMode(snapshot: {
+  metadata?: Record<string, unknown>;
+}) {
+  return readSnapshotString(snapshot.metadata, "renderMode") === "desktop"
+    ? "desktop"
+    : "mobile";
 }
 
-function readSnapshotDeviceProfile(snapshot: { metadata?: Record<string, unknown> }) {
-  return readSnapshotString(snapshot.metadata, "deviceProfile") === "desktop_default"
+function readSnapshotDeviceProfile(snapshot: {
+  metadata?: Record<string, unknown>;
+}) {
+  return readSnapshotString(snapshot.metadata, "deviceProfile") ===
+    "desktop_default"
     ? "desktop_default"
     : "mobile_default";
 }

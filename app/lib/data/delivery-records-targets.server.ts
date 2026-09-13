@@ -4,6 +4,7 @@ import {
   queryAll as many,
   queryOne as one,
 } from "~/lib/data/d1.server";
+import { clearEmailBounceSuppression } from "~/lib/data/delivery-records-email-suppression.server";
 import {
   toDeliveryTargetRecord,
   type DeliveryTargetRow,
@@ -41,7 +42,11 @@ export async function listDeliveryTargets(
   const clauses = ["user_id = ?"];
   const bindings: unknown[] = [userId];
   if (options.watchlistId !== undefined) {
-    clauses.push(options.watchlistId === null ? "watchlist_id IS NULL" : "watchlist_id = ?");
+    clauses.push(
+      options.watchlistId === null
+        ? "watchlist_id IS NULL"
+        : "watchlist_id = ?",
+    );
     if (options.watchlistId !== null) {
       bindings.push(options.watchlistId);
     }
@@ -204,6 +209,14 @@ export async function repairCanaryProofEmailTarget(
 ): Promise<{ kept: number; removed: number; repaired: boolean }> {
   const normalized = input.canaryEmail.trim().toLowerCase();
   if (!normalized) return { kept: 0, removed: 0, repaired: false };
+  // The send core consults the bounce ledger BEFORE every provider send, so
+  // a three-times-bounced canary address would suppress the proof dispatch
+  // even after the delivery_target rows below heal — the gate would stay red
+  // until the 30d TTL lapses. The canary address is code-owned substrate, so
+  // the repair clears ONLY its bounce row: every proof run retries delivery
+  // instead of failing fast for a month. Complaint rows stick by design and
+  // no complaint writer targets this address, so the scope stays bounce-only.
+  await clearEmailBounceSuppression(env, normalized);
   const rows = await many<DeliveryTargetRow>(
     env,
     `
@@ -257,7 +270,10 @@ export async function repairCanaryProofEmailTarget(
   return { kept: 1, removed: matching.length - 1, repaired: true };
 }
 
-export async function getDeliveryTargetReadinessStats(env: AppEnv, userId: string) {
+export async function getDeliveryTargetReadinessStats(
+  env: AppEnv,
+  userId: string,
+) {
   const channelPredicates = [
     `
       (
@@ -359,7 +375,10 @@ export async function upsertDeliveryTarget(
     metadata?: JsonRecord;
   },
 ) {
-  const targetValue = normalizeDeliveryTargetValue(input.channel, input.targetValue);
+  const targetValue = normalizeDeliveryTargetValue(
+    input.channel,
+    input.targetValue,
+  );
   const existingTarget = await getDeliveryTargetByUniqueFields(env, {
     userId: input.userId,
     watchlistId: input.watchlistId ?? null,
@@ -367,8 +386,15 @@ export async function upsertDeliveryTarget(
     targetValue,
   });
   const timestamp = nowIso();
-  const applyUpdate = async (existingTarget: NonNullable<Awaited<ReturnType<typeof getDeliveryTargetByUniqueFields>>>) => {
-    const inputGeneration = readMetadataString(input.metadata, "validationGeneration");
+  const applyUpdate = async (
+    existingTarget: NonNullable<
+      Awaited<ReturnType<typeof getDeliveryTargetByUniqueFields>>
+    >,
+  ) => {
+    const inputGeneration = readMetadataString(
+      input.metadata,
+      "validationGeneration",
+    );
     const existingGeneration = readMetadataString(
       existingTarget.metadata,
       "validationGeneration",
@@ -550,10 +576,22 @@ export async function reconcileWhatsAppSetupTargetFromAttempt(
     if (!existing) return null;
 
     const metadata = parseJson<JsonRecord>(existing.metadata_json, {});
-    const currentGeneration = readMetadataString(metadata, "validationGeneration");
-    const currentAttemptId = readMetadataString(metadata, "validationAttemptId");
-    const currentMessageId = readMetadataString(metadata, "validationProviderMessageId");
-    const currentStatus = readMetadataString(metadata, "validationWebhookStatus");
+    const currentGeneration = readMetadataString(
+      metadata,
+      "validationGeneration",
+    );
+    const currentAttemptId = readMetadataString(
+      metadata,
+      "validationAttemptId",
+    );
+    const currentMessageId = readMetadataString(
+      metadata,
+      "validationProviderMessageId",
+    );
+    const currentStatus = readMetadataString(
+      metadata,
+      "validationWebhookStatus",
+    );
     const replacingFailedAttempt =
       currentStatus === "failed" &&
       currentGeneration !== null &&
@@ -561,10 +599,13 @@ export async function reconcileWhatsAppSetupTargetFromAttempt(
       currentAttemptId === input.attemptId &&
       currentMessageId !== null &&
       currentMessageId !== input.providerMessageId &&
-      (existing.provider_identifier === null || existing.provider_identifier === currentMessageId);
+      (existing.provider_identifier === null ||
+        existing.provider_identifier === currentMessageId);
     if (
-      (input.validationGeneration !== null && currentGeneration !== input.validationGeneration) ||
-      (input.validationGeneration === null && currentMessageId !== input.providerMessageId) ||
+      (input.validationGeneration !== null &&
+        currentGeneration !== input.validationGeneration) ||
+      (input.validationGeneration === null &&
+        currentMessageId !== input.providerMessageId) ||
       (currentMessageId !== null &&
         currentMessageId !== input.providerMessageId &&
         !replacingFailedAttempt) ||
@@ -575,15 +616,21 @@ export async function reconcileWhatsAppSetupTargetFromAttempt(
       return toDeliveryTargetRecord(existing);
     }
 
-    const currentSeenAtValue = readMetadataString(metadata, "validationStatusLastSeenAt");
+    const currentSeenAtValue = readMetadataString(
+      metadata,
+      "validationStatusLastSeenAt",
+    );
     const currentSeenAt = currentSeenAtValue
       ? Date.parse(currentSeenAtValue)
       : Number.NEGATIVE_INFINITY;
-    const currentTerminal = currentStatus === "delivered" || currentStatus === "failed";
+    const currentTerminal =
+      currentStatus === "delivered" || currentStatus === "failed";
     const incomingTerminal = input.webhookStatus !== "pending";
     if (
       incomingSeenAt < currentSeenAt ||
-      (currentTerminal && currentStatus !== input.webhookStatus && !replacingFailedAttempt) ||
+      (currentTerminal &&
+        currentStatus !== input.webhookStatus &&
+        !replacingFailedAttempt) ||
       (currentTerminal && !incomingTerminal && !replacingFailedAttempt)
     ) {
       return toDeliveryTargetRecord(existing);
@@ -623,10 +670,18 @@ export async function reconcileWhatsAppSetupTargetFromAttempt(
            OR provider_identifier = ?
            OR (? = 1 AND provider_identifier = ?)
          )`,
-      delivered ? "validated" : failed ? "invalid" : replacingFailedAttempt ? "pending" : existing.validation_status,
+      delivered
+        ? "validated"
+        : failed
+          ? "invalid"
+          : replacingFailedAttempt
+            ? "pending"
+            : existing.validation_status,
       delivered ? 1 : failed ? 0 : existing.is_validated,
       delivered ? 1 : failed ? 0 : existing.template_eligible,
-      delivered ? input.providerStatusLastSeenAt : existing.last_successful_delivery_at,
+      delivered
+        ? input.providerStatusLastSeenAt
+        : existing.last_successful_delivery_at,
       delivered ? input.attemptId : existing.last_successful_attempt_id,
       input.providerMessageId,
       jsonValue(nextMetadata),
@@ -708,11 +763,13 @@ export async function reconcileWhatsAppSetupTargetByProviderMessageId(
     return toDeliveryTargetRecord(existing);
   }
   const incomingSeenAt = Date.parse(input.providerStatusLastSeenAt);
-  const currentSeenAt = typeof metadata.validationStatusLastSeenAt === "string"
-    ? Date.parse(metadata.validationStatusLastSeenAt)
-    : Number.NEGATIVE_INFINITY;
+  const currentSeenAt =
+    typeof metadata.validationStatusLastSeenAt === "string"
+      ? Date.parse(metadata.validationStatusLastSeenAt)
+      : Number.NEGATIVE_INFINITY;
   const currentStatus = metadata.validationWebhookStatus;
-  const currentTerminal = currentStatus === "delivered" || currentStatus === "failed";
+  const currentTerminal =
+    currentStatus === "delivered" || currentStatus === "failed";
   if (
     !Number.isFinite(incomingSeenAt) ||
     incomingSeenAt < currentSeenAt ||
@@ -739,7 +796,9 @@ export async function reconcileWhatsAppSetupTargetByProviderMessageId(
     delivered ? "validated" : "invalid",
     boolToInt(delivered),
     boolToInt(delivered),
-    delivered ? input.providerStatusLastSeenAt : existing.last_successful_delivery_at,
+    delivered
+      ? input.providerStatusLastSeenAt
+      : existing.last_successful_delivery_at,
     jsonValue(nextMetadata),
     nowIso(),
     existing.id,
@@ -846,7 +905,10 @@ export async function suppressEmailTargetsForUserAndAddress(
     )
     .bind(timestamp, timestamp, input.userId, input.userId, input.targetValue);
 
-  const [targetResult] = await db.batch([targetSuppression, pendingAttemptSuppression]);
+  const [targetResult] = await db.batch([
+    targetSuppression,
+    pendingAttemptSuppression,
+  ]);
   return Number(targetResult?.meta?.changes ?? 0);
 }
 

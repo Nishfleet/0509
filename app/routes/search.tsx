@@ -149,6 +149,7 @@ import {
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
 import { resolveSearchBrandPageDomain } from "~/lib/ads-internal-links";
 import { switchPageForDomain } from "~/lib/switch-pages";
+import { prewarmWebsiteIdentity } from "~/lib/website-identity.server";
 import { localeSearchPathname } from "~/lib/locale-markets";
 import type { AppEnv } from "~/lib/env.server";
 import type { SuggestedCompetitorsPanelData } from "~/lib/auto-competitor-suggested-loader.server";
@@ -513,6 +514,18 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
       ...navFlags,
     };
   }
+
+  // Issue #3319 — start the identity resolution BEFORE the awaited
+  // rate-limit / funnel / lookup / preview work so the 2.5s-capped resolve
+  // (DoH + redirect-alias fetch chain) overlaps that work instead of
+  // serialising after it. Both later consumers — `attachKeywordSearch-
+  // DomainMatch` (a `q=` keyword search) and `buildSearchV2Context` (a
+  // `website=` search) — join this SAME in-flight task via the per-domain
+  // dedup, so this is one extra chain started early, never a second one.
+  // A non-domain keyword (e.g. `q=oura`) resolves to null here for free and
+  // the later bare-keyword classifier keeps its own resolution. The promise
+  // never rejects and the 6h per-isolate result cache bounds the cost.
+  void prewarmWebsiteIdentity(competitorWebsite.raw || parsed.filters.query || "");
 
   // One parallel wave for the independent per-account lookups (customer Meta
   // token, collections, plan) instead of three serial awaits. Anonymous

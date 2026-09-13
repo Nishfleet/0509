@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildCanaryUrl, parseArgs } from "../scripts/launch-readiness-canary.mjs";
+import {
+  buildCanaryUrl,
+  parseArgs,
+} from "../scripts/launch-readiness-canary.mjs";
 
 function createContext(env = {}) {
   return {
@@ -114,7 +117,9 @@ afterEach(() => {
   vi.doUnmock("~/lib/landing-pages.server");
 });
 
-function mockLandingPageCapture(snapshot: Record<string, unknown> | null = createSnapshot()) {
+function mockLandingPageCapture(
+  snapshot: Record<string, unknown> | null = createSnapshot(),
+) {
   const captureLandingPageSnapshot = vi.fn().mockResolvedValue(snapshot);
   vi.doMock("~/lib/landing-pages.server", () => ({
     captureLandingPageSnapshot,
@@ -123,7 +128,9 @@ function mockLandingPageCapture(snapshot: Record<string, unknown> | null = creat
   return captureLandingPageSnapshot;
 }
 
-function snapshotHasScreenshotArtifact(snapshot: { metadata?: Record<string, unknown> } | null) {
+function snapshotHasScreenshotArtifact(
+  snapshot: { metadata?: Record<string, unknown> } | null,
+) {
   const key = snapshot?.metadata?.screenshotArtifactKey;
   return typeof key === "string" && key.length > 0;
 }
@@ -185,7 +192,11 @@ describe("launch readiness canary route", () => {
         LAUNCH_CANARY_EMAIL: "owner@example.com",
       })),
     }));
-    vi.doMock("~/lib/data.server", () => ({ createWatchlistRun }));
+    vi.doMock("~/lib/data.server", () => ({
+      createWatchlistRun,
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+      repairCanaryProofEmailTarget: vi.fn(),
+    }));
 
     const { action } = await import("~/routes/api.launch-readiness.canary");
     const response = await action({
@@ -218,7 +229,11 @@ describe("launch readiness canary route", () => {
         LAUNCH_CANARY_EMAIL: "owner@example.com",
       })),
     }));
-    vi.doMock("~/lib/data.server", () => ({ createWatchlistRun }));
+    vi.doMock("~/lib/data.server", () => ({
+      createWatchlistRun,
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+      repairCanaryProofEmailTarget: vi.fn(),
+    }));
 
     const { action } = await import("~/routes/api.launch-readiness.canary");
     const response = await action({
@@ -247,57 +262,63 @@ describe("launch readiness canary route", () => {
     "https://preview.0509.io/api/launch-readiness/canary",
     "https://www.0509.io/api/launch-readiness/canary",
     "https://0509.io.evil.example/api/launch-readiness/canary",
-  ])("rejects a valid token on non-canonical origin %s before reading the database", async (url) => {
-    const prepare = vi.fn();
-    vi.doMock("~/lib/context.server", () => ({
-      getEnv: vi.fn(() => ({
-        CANARY_BYPASS_TOKEN: "secret-token",
-        DB: { prepare },
-        LAUNCH_CANARY_EMAIL: "owner@example.com",
-      })),
-    }));
+  ])(
+    "rejects a valid token on non-canonical origin %s before reading the database",
+    async (url) => {
+      const prepare = vi.fn();
+      vi.doMock("~/lib/context.server", () => ({
+        getEnv: vi.fn(() => ({
+          CANARY_BYPASS_TOKEN: "secret-token",
+          DB: { prepare },
+          LAUNCH_CANARY_EMAIL: "owner@example.com",
+        })),
+      }));
 
-    const { action } = await import("~/routes/api.launch-readiness.canary");
+      const { action } = await import("~/routes/api.launch-readiness.canary");
 
-    await expect(
-      action({
-        context: createContext(),
-        request: new Request(url, {
-          method: "POST",
-          headers: { "x-0509-canary-token": "secret-token" },
-        }),
-      } as never),
-    ).rejects.toMatchObject({ status: 404 });
-    expect(prepare).not.toHaveBeenCalled();
-  });
+      await expect(
+        action({
+          context: createContext(),
+          request: new Request(url, {
+            method: "POST",
+            headers: { "x-0509-canary-token": "secret-token" },
+          }),
+        } as never),
+      ).rejects.toMatchObject({ status: 404 });
+      expect(prepare).not.toHaveBeenCalled();
+    },
+  );
 
   it.each([
     "https://0509.io:443/api/launch-readiness/canary",
     "https://user:pass@0509.io/api/launch-readiness/canary",
-  ])("rejects non-canonical raw request authority %s before reading the database", async (url) => {
-    const prepare = vi.fn();
-    vi.doMock("~/lib/context.server", () => ({
-      getEnv: vi.fn(() => ({
-        CANARY_BYPASS_TOKEN: "secret-token",
-        DB: { prepare },
-        LAUNCH_CANARY_EMAIL: "owner@example.com",
-      })),
-    }));
+  ])(
+    "rejects non-canonical raw request authority %s before reading the database",
+    async (url) => {
+      const prepare = vi.fn();
+      vi.doMock("~/lib/context.server", () => ({
+        getEnv: vi.fn(() => ({
+          CANARY_BYPASS_TOKEN: "secret-token",
+          DB: { prepare },
+          LAUNCH_CANARY_EMAIL: "owner@example.com",
+        })),
+      }));
 
-    const { action } = await import("~/routes/api.launch-readiness.canary");
+      const { action } = await import("~/routes/api.launch-readiness.canary");
 
-    await expect(
-      action({
-        context: createContext(),
-        request: {
-          url,
-          method: "POST",
-          headers: new Headers({ "x-0509-canary-token": "secret-token" }),
-        },
-      } as never),
-    ).rejects.toMatchObject({ status: 404 });
-    expect(prepare).not.toHaveBeenCalled();
-  });
+      await expect(
+        action({
+          context: createContext(),
+          request: {
+            url,
+            method: "POST",
+            headers: new Headers({ "x-0509-canary-token": "secret-token" }),
+          },
+        } as never),
+      ).rejects.toMatchObject({ status: 404 });
+      expect(prepare).not.toHaveBeenCalled();
+    },
+  );
 
   it("rejects non-POST canary requests before reading the target", async () => {
     const prepare = vi.fn();
@@ -343,7 +364,12 @@ describe("launch readiness canary route", () => {
         LAUNCH_CANARY_EMAIL: "owner@example.com",
       })),
     }));
-    vi.doMock("~/lib/data.server", () => ({ createProofCapture, createWatchlistRun }));
+    vi.doMock("~/lib/data.server", () => ({
+      createProofCapture,
+      createWatchlistRun,
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+      repairCanaryProofEmailTarget: vi.fn(),
+    }));
     vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
     vi.doMock("~/lib/landing-pages.server", () => ({
       captureLandingPageSnapshot,
@@ -397,7 +423,10 @@ describe("launch readiness canary route", () => {
     } as never);
 
     expect(response.status).toBe(503);
-    await expect(response.json()).resolves.toEqual({ ok: false, blocker: "missing_db" });
+    await expect(response.json()).resolves.toEqual({
+      ok: false,
+      blocker: "missing_db",
+    });
   });
 
   it("self-provisions the canary user and active watchlist when the substrate was wiped", async () => {
@@ -414,30 +443,38 @@ describe("launch readiness canary route", () => {
           bind(..._args: unknown[]) {
             return {
               async all<T>() {
-                if (sql.includes("e2e_test_mode")) return { results: [] as T[] };
+                if (sql.includes("e2e_test_mode"))
+                  return { results: [] as T[] };
                 if (sql.includes("INNER JOIN user")) {
                   return {
                     results: (userInserted && watchlistInserted
-                      ? [{
-                          user_id: "launch-readiness-canary-owner",
-                          email: "owner@example.com",
-                          name: "Launch readiness canary owner",
-                          watchlist_id: "launch-readiness-canary-watchlist",
-                          watchlist_name: "Launch readiness canary",
-                          target_label: "0509.io",
-                        }]
+                      ? [
+                          {
+                            user_id: "launch-readiness-canary-owner",
+                            email: "owner@example.com",
+                            name: "Launch readiness canary owner",
+                            watchlist_id: "launch-readiness-canary-watchlist",
+                            watchlist_name: "Launch readiness canary",
+                            target_label: "0509.io",
+                          },
+                        ]
                       : []) as T[],
                   };
                 }
                 if (sql.includes("FROM user")) {
-                  return { results: (userInserted ? [{ user_id: "launch-readiness-canary-owner" }] : []) as T[] };
+                  return {
+                    results: (userInserted
+                      ? [{ user_id: "launch-readiness-canary-owner" }]
+                      : []) as T[],
+                  };
                 }
                 throw new Error(`unexpected query: ${sql.slice(0, 80)}`);
               },
               async run() {
                 statements.push(sql);
                 if (sql.includes("INSERT INTO user")) userInserted = true;
-                if (sql.includes("INSERT INTO watchlist")) watchlistInserted = true;
+                if (sql.includes("INSERT INTO watchlist"))
+                  watchlistInserted = true;
                 return { success: true };
               },
             };
@@ -448,10 +485,14 @@ describe("launch readiness canary route", () => {
 
     const createWatchlistRun = vi.fn().mockResolvedValue("run-1");
     const finishWatchlistRun = vi.fn().mockResolvedValue(undefined);
-    const upsertProofTarget = vi.fn().mockResolvedValue({ id: "proof-target-1" });
+    const upsertProofTarget = vi
+      .fn()
+      .mockResolvedValue({ id: "proof-target-1" });
     const createProofCapture = vi.fn().mockResolvedValue("proof-1");
     const createWatchEvent = vi.fn().mockResolvedValue("event-1");
-    const createDigestRun = vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true });
+    const createDigestRun = vi
+      .fn()
+      .mockResolvedValue({ digestRunId: "digest-1", created: true });
     const deliverWeeklyDigest = vi.fn().mockResolvedValue({
       attempts: 1,
       channels: ["email"],
@@ -486,7 +527,9 @@ describe("launch readiness canary route", () => {
       // ensureCanaryTarget now also provisions a delivery_target so Gate C's
       // `requireUniqueExistingTarget: true` check has something to resolve
       // (the underlying fix for proof_email_dispatch_invalid).
-      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn().mockResolvedValue(null),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi
+        .fn()
+        .mockResolvedValue(null),
       // 748e1a7da (#2662) made ensureCanaryTarget also self-heal the proof
       // email target after provisioning; the route awaits it, so the mock
       // must export it or the route fails closed (ok:false, blocker
@@ -513,10 +556,17 @@ describe("launch readiness canary route", () => {
     await expect(response.json()).resolves.toMatchObject({
       ok: true,
       blockers: [],
-      proofEmail: { gateRunId: "gate-c-worker-v1", provider: { status: "sent" } },
+      proofEmail: {
+        gateRunId: "gate-c-worker-v1",
+        provider: { status: "sent" },
+      },
     });
-    expect(statements.some((sql) => sql.includes("INSERT INTO user"))).toBe(true);
-    expect(statements.some((sql) => sql.includes("INSERT INTO watchlist"))).toBe(true);
+    expect(statements.some((sql) => sql.includes("INSERT INTO user"))).toBe(
+      true,
+    );
+    expect(
+      statements.some((sql) => sql.includes("INSERT INTO watchlist")),
+    ).toBe(true);
     expect(createWatchlistRun).toHaveBeenCalledWith(
       expect.anything(),
       "launch-readiness-canary-watchlist",
@@ -545,30 +595,38 @@ describe("launch readiness canary route", () => {
           bind(..._args: unknown[]) {
             return {
               async all<T>() {
-                if (sql.includes("e2e_test_mode")) return { results: [] as T[] };
+                if (sql.includes("e2e_test_mode"))
+                  return { results: [] as T[] };
                 if (sql.includes("INNER JOIN user")) {
                   return {
                     results: (userInserted && watchlistInserted
-                      ? [{
-                          user_id: "launch-readiness-canary-owner",
-                          email: "owner@example.com",
-                          name: "Launch readiness canary owner",
-                          watchlist_id: "launch-readiness-canary-watchlist",
-                          watchlist_name: "Launch readiness canary",
-                          target_label: "0509.io",
-                        }]
+                      ? [
+                          {
+                            user_id: "launch-readiness-canary-owner",
+                            email: "owner@example.com",
+                            name: "Launch readiness canary owner",
+                            watchlist_id: "launch-readiness-canary-watchlist",
+                            watchlist_name: "Launch readiness canary",
+                            target_label: "0509.io",
+                          },
+                        ]
                       : []) as T[],
                   };
                 }
                 if (sql.includes("FROM user")) {
-                  return { results: (userInserted ? [{ user_id: "launch-readiness-canary-owner" }] : []) as T[] };
+                  return {
+                    results: (userInserted
+                      ? [{ user_id: "launch-readiness-canary-owner" }]
+                      : []) as T[],
+                  };
                 }
                 throw new Error(`unexpected query: ${sql.slice(0, 80)}`);
               },
               async run() {
                 statements.push(sql);
                 if (sql.includes("INSERT INTO user")) userInserted = true;
-                if (sql.includes("INSERT INTO watchlist")) watchlistInserted = true;
+                if (sql.includes("INSERT INTO watchlist"))
+                  watchlistInserted = true;
                 return { success: true };
               },
             };
@@ -577,7 +635,9 @@ describe("launch readiness canary route", () => {
       },
     };
 
-    const provisionVerifiedAccountEmailTargetIfUnsuppressed = vi.fn().mockResolvedValue(null);
+    const provisionVerifiedAccountEmailTargetIfUnsuppressed = vi
+      .fn()
+      .mockResolvedValue(null);
 
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => ({
@@ -598,7 +658,9 @@ describe("launch readiness canary route", () => {
       // this export on the module the route fails closed before provisioning.
       repairCanaryProofEmailTarget: vi.fn().mockResolvedValue(null),
     }));
-    vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest: vi.fn() }));
+    vi.doMock("~/lib/delivery.server", () => ({
+      deliverWeeklyDigest: vi.fn(),
+    }));
     mockLandingPageCapture(null);
 
     const { action } = await import("~/routes/api.launch-readiness.canary");
@@ -614,7 +676,9 @@ describe("launch readiness canary route", () => {
       }),
     } as never);
 
-    expect(provisionVerifiedAccountEmailTargetIfUnsuppressed).toHaveBeenCalledWith(
+    expect(
+      provisionVerifiedAccountEmailTargetIfUnsuppressed,
+    ).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         userId: "launch-readiness-canary-owner",
@@ -674,7 +738,7 @@ describe("launch readiness canary route", () => {
     expect(deliverWeeklyDigest).not.toHaveBeenCalled();
   }, 10_000);
 
-  it("issues no substrate writes when the target already exists", async () => {
+  it("re-converges the proof target without recreating the watchlist when the target already exists", async () => {
     const statements: string[] = [];
     const db = {
       prepare(sql: string) {
@@ -682,17 +746,20 @@ describe("launch readiness canary route", () => {
           bind(..._args: unknown[]) {
             return {
               async all<T>() {
-                if (sql.includes("e2e_test_mode")) return { results: [] as T[] };
+                if (sql.includes("e2e_test_mode"))
+                  return { results: [] as T[] };
                 if (sql.includes("INNER JOIN user")) {
                   return {
-                    results: [{
-                      user_id: "launch-readiness-canary-owner",
-                      email: "owner@example.com",
-                      name: "Launch readiness canary owner",
-                      watchlist_id: "launch-readiness-canary-watchlist",
-                      watchlist_name: "Launch readiness canary",
-                      target_label: "0509.io",
-                    }] as T[],
+                    results: [
+                      {
+                        user_id: "launch-readiness-canary-owner",
+                        email: "owner@example.com",
+                        name: "Launch readiness canary owner",
+                        watchlist_id: "launch-readiness-canary-watchlist",
+                        watchlist_name: "Launch readiness canary",
+                        target_label: "0509.io",
+                      },
+                    ] as T[],
                   };
                 }
                 throw new Error(`unexpected query: ${sql.slice(0, 80)}`);
@@ -714,6 +781,8 @@ describe("launch readiness canary route", () => {
         LAUNCH_CANARY_EMAIL: "owner@example.com",
       })),
     }));
+    const provisionVerifiedAccountEmailTargetIfUnsuppressed = vi.fn();
+    const repairCanaryProofEmailTarget = vi.fn();
     vi.doMock("~/lib/data.server", () => ({
       createWatchlistRun: vi.fn(),
       finishWatchlistRun: vi.fn(),
@@ -721,6 +790,8 @@ describe("launch readiness canary route", () => {
       createProofCapture: vi.fn(),
       createWatchEvent: vi.fn(),
       createDigestRun: vi.fn(),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed,
+      repairCanaryProofEmailTarget,
     }));
     vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
     mockLandingPageCapture(null);
@@ -744,17 +815,35 @@ describe("launch readiness canary route", () => {
     });
     // Repair, not a per-run write: the substrate INSERTs must be absent
     // (instrumentation counters from the capture path are unrelated).
-    expect(statements.some((sql) => sql.includes("INSERT INTO user"))).toBe(false);
-    expect(statements.some((sql) => sql.includes("INSERT INTO watchlist"))).toBe(false);
+    expect(statements.some((sql) => sql.includes("INSERT INTO user"))).toBe(
+      false,
+    );
+    expect(
+      statements.some((sql) => sql.includes("INSERT INTO watchlist")),
+    ).toBe(false);
+    // But the delivery_target convergence DOES run on the early-return path:
+    // the proof email's own one-click unsubscribe can opt the row back out
+    // after a green run, so the next proof request must re-converge the
+    // substrate (runs 34741508215 → 34752117454 froze exactly here). Both
+    // calls are canary-scoped and idempotent; the watchlist/user INSERTs
+    // asserted above stay untouched.
+    expect(
+      provisionVerifiedAccountEmailTargetIfUnsuppressed,
+    ).toHaveBeenCalledTimes(1);
+    expect(repairCanaryProofEmailTarget).toHaveBeenCalledTimes(1);
   }, 10_000);
 
   it("creates fresh monitoring, proof, digest, and delivery signals", async () => {
     const createWatchlistRun = vi.fn().mockResolvedValue("run-1");
     const finishWatchlistRun = vi.fn().mockResolvedValue(undefined);
-    const upsertProofTarget = vi.fn().mockResolvedValue({ id: "proof-target-1" });
+    const upsertProofTarget = vi
+      .fn()
+      .mockResolvedValue({ id: "proof-target-1" });
     const createProofCapture = vi.fn().mockResolvedValue("proof-1");
     const createWatchEvent = vi.fn().mockResolvedValue("event-1");
-		const createDigestRun = vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true });
+    const createDigestRun = vi
+      .fn()
+      .mockResolvedValue({ digestRunId: "digest-1", created: true });
     const clearDigestItems = vi.fn().mockResolvedValue(undefined);
     const addDigestItem = vi.fn().mockResolvedValue(undefined);
     const deliverWeeklyDigest = vi.fn().mockResolvedValue({
@@ -791,6 +880,8 @@ describe("launch readiness canary route", () => {
       createWatchlistRun,
       finishWatchlistRun,
       upsertProofTarget,
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+      repairCanaryProofEmailTarget: vi.fn(),
     }));
     vi.doMock("~/lib/delivery.server", () => ({
       deliverWeeklyDigest,
@@ -810,10 +901,16 @@ describe("launch readiness canary route", () => {
       }),
     } as never);
 
-    const responseBody = (await response.clone().json()) as { delivery: unknown };
-    expect(JSON.stringify(responseBody.delivery)).not.toContain("owner@example.com");
+    const responseBody = (await response.clone().json()) as {
+      delivery: unknown;
+    };
+    expect(JSON.stringify(responseBody.delivery)).not.toContain(
+      "owner@example.com",
+    );
     expect(JSON.stringify(responseBody.delivery)).not.toContain("email-1");
-    expect(JSON.stringify(responseBody.delivery)).not.toContain("raw provider failure detail");
+    expect(JSON.stringify(responseBody.delivery)).not.toContain(
+      "raw provider failure detail",
+    );
     await expect(response.json()).resolves.toMatchObject({
       ok: true,
       blockers: [],
@@ -894,20 +991,20 @@ describe("launch readiness canary route", () => {
         status: "succeeded",
       }),
     );
-		expect(createDigestRun).toHaveBeenCalledWith(
-			expect.anything(),
-			"user-1",
-			expect.any(String),
-			expect.any(String),
-			expect.objectContaining({ totalEvents: 1, watchlists: 1 }),
-			expect.objectContaining({
-				returnClaim: true,
-				items: [expect.objectContaining({ title: expect.any(String) })],
-			}),
-		);
-		expect(clearDigestItems).not.toHaveBeenCalled();
-		expect(addDigestItem).not.toHaveBeenCalled();
-	});
+    expect(createDigestRun).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      expect.any(String),
+      expect.any(String),
+      expect.objectContaining({ totalEvents: 1, watchlists: 1 }),
+      expect.objectContaining({
+        returnClaim: true,
+        items: [expect.objectContaining({ title: expect.any(String) })],
+      }),
+    );
+    expect(clearDigestItems).not.toHaveBeenCalled();
+    expect(addDigestItem).not.toHaveBeenCalled();
+  });
 
   it("rejects malformed Gate C T0 while keeping provider details out of the public delivery projection", async () => {
     const deliverWeeklyDigest = vi.fn().mockResolvedValue({
@@ -936,12 +1033,16 @@ describe("launch readiness canary route", () => {
     vi.doMock("~/lib/data.server", () => ({
       addDigestItem: vi.fn().mockResolvedValue(undefined),
       clearDigestItems: vi.fn().mockResolvedValue(undefined),
-      createDigestRun: vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true }),
+      createDigestRun: vi
+        .fn()
+        .mockResolvedValue({ digestRunId: "digest-1", created: true }),
       createProofCapture: vi.fn().mockResolvedValue("proof-1"),
       createWatchEvent: vi.fn().mockResolvedValue("event-1"),
       createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
       finishWatchlistRun: vi.fn().mockResolvedValue(undefined),
       upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-1" }),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+      repairCanaryProofEmailTarget: vi.fn(),
     }));
     vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
     mockLandingPageCapture();
@@ -997,6 +1098,21 @@ describe("launch readiness canary route", () => {
           LAUNCH_CANARY_EMAIL: "owner@example.com",
         })),
       }));
+      // The early-return path now re-converges the proof-target substrate
+      // (provision + self-heal) through ~/lib/data.server: without this
+      // barrel mock the real provisioner's SQL escapes createDbWithTarget's
+      // answering fixture and the route answers 503 instead of the 400 these
+      // subject-uniqueness cases assert.
+      vi.doMock("~/lib/data.server", () => ({
+        createDigestRun: vi.fn(),
+        createProofCapture: vi.fn(),
+        createWatchEvent: vi.fn(),
+        createWatchlistRun: vi.fn(),
+        finishWatchlistRun: vi.fn(),
+        provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+        repairCanaryProofEmailTarget: vi.fn(),
+        upsertProofTarget: vi.fn(),
+      }));
 
       const { action } = await import("~/routes/api.launch-readiness.canary");
       const response = await action({
@@ -1021,53 +1137,57 @@ describe("launch readiness canary route", () => {
   );
 
   it("fails closed without delivery when another canary owns the digest period", async () => {
-		const deliverWeeklyDigest = vi.fn();
+    const deliverWeeklyDigest = vi.fn();
 
-		vi.doMock("~/lib/context.server", () => ({
-			getEnv: vi.fn(() => ({
-				CANARY_BYPASS_TOKEN: "secret-token",
-				DB: createDbWithTarget(),
-				LAUNCH_CANARY_EMAIL: "owner@example.com",
-			})),
-		}));
-		vi.doMock("~/lib/data.server", () => ({
-			createDigestRun: vi.fn().mockResolvedValue({
-				digestRunId: "digest-winning-canary",
-				created: false,
-			}),
-			createProofCapture: vi.fn().mockResolvedValue("proof-loser"),
-			createWatchEvent: vi.fn().mockResolvedValue("event-loser"),
-			createWatchlistRun: vi.fn().mockResolvedValue("run-loser"),
-			finishWatchlistRun: vi.fn().mockResolvedValue(undefined),
-			upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-loser" }),
-		}));
-		vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
-		mockLandingPageCapture();
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DB: createDbWithTarget(),
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      createDigestRun: vi.fn().mockResolvedValue({
+        digestRunId: "digest-winning-canary",
+        created: false,
+      }),
+      createProofCapture: vi.fn().mockResolvedValue("proof-loser"),
+      createWatchEvent: vi.fn().mockResolvedValue("event-loser"),
+      createWatchlistRun: vi.fn().mockResolvedValue("run-loser"),
+      finishWatchlistRun: vi.fn().mockResolvedValue(undefined),
+      upsertProofTarget: vi
+        .fn()
+        .mockResolvedValue({ id: "proof-target-loser" }),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+      repairCanaryProofEmailTarget: vi.fn(),
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+    mockLandingPageCapture();
 
-		const { action } = await import("~/routes/api.launch-readiness.canary");
-		const response = await action({
-			context: createContext(),
-			request: new Request("https://0509.io/api/launch-readiness/canary", {
-				method: "POST",
-				headers: {
-					"content-type": "application/json",
-					"x-0509-canary-token": "secret-token",
-				},
-				body: JSON.stringify({ gateRunId: "gate-loser" }),
-			}),
-		} as never);
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    const response = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/api/launch-readiness/canary", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-0509-canary-token": "secret-token",
+        },
+        body: JSON.stringify({ gateRunId: "gate-loser" }),
+      }),
+    } as never);
 
-		expect(response.status).toBe(409);
-		const payload = await response.json();
-			expect(payload).toMatchObject({
-				ok: false,
-				blockers: ["digest_period_claim_conflict"],
-				gateRunId: "gate-loser",
-			runId: "run-loser",
-			proofCaptureId: "proof-loser",
-		});
-		expect(payload).not.toHaveProperty("digestRunId");
-		expect(deliverWeeklyDigest).not.toHaveBeenCalled();
+    expect(response.status).toBe(409);
+    const payload = await response.json();
+    expect(payload).toMatchObject({
+      ok: false,
+      blockers: ["digest_period_claim_conflict"],
+      gateRunId: "gate-loser",
+      runId: "run-loser",
+      proofCaptureId: "proof-loser",
+    });
+    expect(payload).not.toHaveProperty("digestRunId");
+    expect(deliverWeeklyDigest).not.toHaveBeenCalled();
   });
 
   it("rejects unsupported proof providers before creating canary evidence", async () => {
@@ -1079,15 +1199,22 @@ describe("launch readiness canary route", () => {
         LAUNCH_CANARY_EMAIL: "owner@example.com",
       })),
     }));
-    vi.doMock("~/lib/data.server", () => ({ createWatchlistRun }));
+    vi.doMock("~/lib/data.server", () => ({
+      createWatchlistRun,
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+      repairCanaryProofEmailTarget: vi.fn(),
+    }));
 
     const { action } = await import("~/routes/api.launch-readiness.canary");
     const response = await action({
       context: createContext(),
-      request: new Request("https://0509.io/api/launch-readiness/canary?proofProvider=unknown", {
-        method: "POST",
-        headers: { "x-0509-canary-token": "secret-token" },
-      }),
+      request: new Request(
+        "https://0509.io/api/launch-readiness/canary?proofProvider=unknown",
+        {
+          method: "POST",
+          headers: { "x-0509-canary-token": "secret-token" },
+        },
+      ),
     } as never);
 
     expect(response.status).toBe(400);
@@ -1102,12 +1229,14 @@ describe("launch readiness canary route", () => {
     expect(() => parseArgs(["--proof-provider", "unknown"])).toThrow(
       "Unsupported launch proof provider",
     );
-    expect(() => buildCanaryUrl({
-      baseUrl: "https://0509.io",
-      proofProvider: "unknown",
-      requireSlack: false,
-      requireWhatsApp: false,
-    })).toThrow("Unsupported launch proof provider");
+    expect(() =>
+      buildCanaryUrl({
+        baseUrl: "https://0509.io",
+        proofProvider: "unknown",
+        requireSlack: false,
+        requireWhatsApp: false,
+      }),
+    ).toThrow("Unsupported launch proof provider");
   });
 
   it("runs cleanup only for an explicit bounded post-evidence request", async () => {
@@ -1132,7 +1261,11 @@ describe("launch readiness canary route", () => {
         LAUNCH_CANARY_EMAIL: "owner@example.com",
       })),
     }));
-    vi.doMock("~/lib/data.server", () => ({ cleanupLaunchReadinessCanary }));
+    vi.doMock("~/lib/data.server", () => ({
+      cleanupLaunchReadinessCanary,
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+      repairCanaryProofEmailTarget: vi.fn(),
+    }));
 
     const { action } = await import("~/routes/api.launch-readiness.canary");
     const response = await action({
@@ -1145,7 +1278,11 @@ describe("launch readiness canary route", () => {
           "x-0509-canary-token": "secret-token",
           "x-0509-expected-worker-version": "worker-v1",
         },
-        body: JSON.stringify({ runId: "run-1", digestRunId: "digest-1", proofCaptureId: "proof-1" }),
+        body: JSON.stringify({
+          runId: "run-1",
+          digestRunId: "digest-1",
+          proofCaptureId: "proof-1",
+        }),
       }),
     } as never);
 
@@ -1178,7 +1315,11 @@ describe("launch readiness canary route", () => {
         LAUNCH_CANARY_EMAIL: "owner@example.com",
       })),
     }));
-    vi.doMock("~/lib/data.server", () => ({ cleanupLaunchReadinessCanary }));
+    vi.doMock("~/lib/data.server", () => ({
+      cleanupLaunchReadinessCanary,
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+      repairCanaryProofEmailTarget: vi.fn(),
+    }));
 
     const { action } = await import("~/routes/api.launch-readiness.canary");
     const response = await action({
@@ -1195,10 +1336,13 @@ describe("launch readiness canary route", () => {
     } as never);
 
     expect(response.status).toBe(200);
-    expect(cleanupLaunchReadinessCanary).toHaveBeenCalledWith(expect.anything(), {
-      ownerUserId: "user-1",
-      gateRunId: "gate-c-worker-v1",
-    });
+    expect(cleanupLaunchReadinessCanary).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        ownerUserId: "user-1",
+        gateRunId: "gate-c-worker-v1",
+      },
+    );
   });
 
   it("derives cleanup ownership from the configured user without an active watchlist", async () => {
@@ -1221,7 +1365,11 @@ describe("launch readiness canary route", () => {
         LAUNCH_CANARY_EMAIL: "owner@example.com",
       })),
     }));
-    vi.doMock("~/lib/data.server", () => ({ cleanupLaunchReadinessCanary }));
+    vi.doMock("~/lib/data.server", () => ({
+      cleanupLaunchReadinessCanary,
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+      repairCanaryProofEmailTarget: vi.fn(),
+    }));
 
     const { action } = await import("~/routes/api.launch-readiness.canary");
     const response = await action({
@@ -1233,14 +1381,21 @@ describe("launch readiness canary route", () => {
           "x-0509-canary-operation": "cleanup",
           "x-0509-canary-token": "secret-token",
         },
-        body: JSON.stringify({ runId: "run-1", digestRunId: "digest-1", proofCaptureId: "proof-1" }),
+        body: JSON.stringify({
+          runId: "run-1",
+          digestRunId: "digest-1",
+          proofCaptureId: "proof-1",
+        }),
       }),
     } as never);
 
     expect(response.status).toBe(200);
-    expect(cleanupLaunchReadinessCanary).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-      ownerUserId: "user-1",
-    }));
+    expect(cleanupLaunchReadinessCanary).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        ownerUserId: "user-1",
+      }),
+    );
   });
 
   it("rejects malformed cleanup input without calling the cleanup leaf", async () => {
@@ -1252,14 +1407,25 @@ describe("launch readiness canary route", () => {
         LAUNCH_CANARY_EMAIL: "owner@example.com",
       })),
     }));
-    vi.doMock("~/lib/data.server", () => ({ cleanupLaunchReadinessCanary }));
+    vi.doMock("~/lib/data.server", () => ({
+      cleanupLaunchReadinessCanary,
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+      repairCanaryProofEmailTarget: vi.fn(),
+    }));
 
     const { action } = await import("~/routes/api.launch-readiness.canary");
     const requests = [
       new Request("https://0509.io/api/launch-readiness/canary", {
         method: "POST",
-        headers: { "x-0509-canary-operation": "cleanup", "x-0509-canary-token": "secret-token" },
-        body: JSON.stringify({ runId: "run-1", digestRunId: "digest-1", proofCaptureId: "proof-1" }),
+        headers: {
+          "x-0509-canary-operation": "cleanup",
+          "x-0509-canary-token": "secret-token",
+        },
+        body: JSON.stringify({
+          runId: "run-1",
+          digestRunId: "digest-1",
+          proofCaptureId: "proof-1",
+        }),
       }),
       new Request("https://0509.io/api/launch-readiness/canary", {
         method: "POST",
@@ -1268,7 +1434,12 @@ describe("launch readiness canary route", () => {
           "x-0509-canary-operation": "cleanup",
           "x-0509-canary-token": "secret-token",
         },
-        body: JSON.stringify({ runId: "run-1", digestRunId: "digest-1", proofCaptureId: "proof-1", ownerUserId: "user-1" }),
+        body: JSON.stringify({
+          runId: "run-1",
+          digestRunId: "digest-1",
+          proofCaptureId: "proof-1",
+          ownerUserId: "user-1",
+        }),
       }),
       new Request("https://0509.io/api/launch-readiness/canary?runId=run-1", {
         method: "POST",
@@ -1277,7 +1448,11 @@ describe("launch readiness canary route", () => {
           "x-0509-canary-operation": "cleanup",
           "x-0509-canary-token": "secret-token",
         },
-        body: JSON.stringify({ runId: "run-1", digestRunId: "digest-1", proofCaptureId: "proof-1" }),
+        body: JSON.stringify({
+          runId: "run-1",
+          digestRunId: "digest-1",
+          proofCaptureId: "proof-1",
+        }),
       }),
       new Request("https://0509.io/api/launch-readiness/canary", {
         method: "POST",
@@ -1286,12 +1461,19 @@ describe("launch readiness canary route", () => {
           "x-0509-canary-operation": "cleanup",
           "x-0509-canary-token": "secret-token",
         },
-        body: JSON.stringify({ runId: "x".repeat(5_000), digestRunId: "digest-1", proofCaptureId: "proof-1" }),
+        body: JSON.stringify({
+          runId: "x".repeat(5_000),
+          digestRunId: "digest-1",
+          proofCaptureId: "proof-1",
+        }),
       }),
     ];
 
     for (const request of requests) {
-      const response = await action({ context: createContext(), request } as never);
+      const response = await action({
+        context: createContext(),
+        request,
+      } as never);
       expect(response.status).toBe(400);
       expect(response.headers.get("cache-control")).toBe("no-store");
     }
@@ -1319,7 +1501,11 @@ describe("launch readiness canary route", () => {
         LAUNCH_CANARY_EMAIL: "owner@example.com",
       })),
     }));
-    vi.doMock("~/lib/data.server", () => ({ cleanupLaunchReadinessCanary }));
+    vi.doMock("~/lib/data.server", () => ({
+      cleanupLaunchReadinessCanary,
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+      repairCanaryProofEmailTarget: vi.fn(),
+    }));
 
     const { action } = await import("~/routes/api.launch-readiness.canary");
     const request = () =>
@@ -1330,18 +1516,30 @@ describe("launch readiness canary route", () => {
           "x-0509-canary-operation": "cleanup",
           "x-0509-canary-token": "secret-token",
         },
-        body: JSON.stringify({ runId: "run-1", digestRunId: "digest-1", proofCaptureId: "proof-1" }),
+        body: JSON.stringify({
+          runId: "run-1",
+          digestRunId: "digest-1",
+          proofCaptureId: "proof-1",
+        }),
       });
 
-    const noOp = await action({ context: createContext(), request: request() } as never);
+    const noOp = await action({
+      context: createContext(),
+      request: request(),
+    } as never);
     expect(noOp.status).toBe(409);
     const noOpBody = await noOp.text();
     expect(noOpBody).toContain("shared_rows_present");
     expect(noOpBody).toContain("R2 artifacts");
     expect(noOpBody).not.toContain("owner@example.com");
 
-    cleanupLaunchReadinessCanary.mockRejectedValueOnce(new Error("raw cleanup sentinel"));
-    const failure = await action({ context: createContext(), request: request() } as never);
+    cleanupLaunchReadinessCanary.mockRejectedValueOnce(
+      new Error("raw cleanup sentinel"),
+    );
+    const failure = await action({
+      context: createContext(),
+      request: request(),
+    } as never);
     expect(failure.status).toBe(500);
     const failureBody = await failure.text();
     expect(failureBody).toContain("cleanup_failed");
@@ -1375,12 +1573,16 @@ describe("launch readiness canary route", () => {
     vi.doMock("~/lib/data.server", () => ({
       addDigestItem: vi.fn().mockResolvedValue(undefined),
       clearDigestItems: vi.fn().mockResolvedValue(undefined),
-			createDigestRun: vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true }),
+      createDigestRun: vi
+        .fn()
+        .mockResolvedValue({ digestRunId: "digest-1", created: true }),
       createProofCapture: vi.fn().mockResolvedValue("proof-1"),
       createWatchEvent: vi.fn().mockResolvedValue("event-1"),
       createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
       finishWatchlistRun: vi.fn().mockResolvedValue(undefined),
       upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-1" }),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+      repairCanaryProofEmailTarget: vi.fn(),
     }));
     vi.doMock("~/lib/delivery.server", () => ({
       deliverWeeklyDigest,
@@ -1390,12 +1592,15 @@ describe("launch readiness canary route", () => {
     const { action } = await import("~/routes/api.launch-readiness.canary");
     const response = await action({
       context: createContext(),
-      request: new Request("https://0509.io/api/launch-readiness/canary?requireWhatsApp=1", {
-        method: "POST",
-        headers: {
-          "x-0509-canary-token": "secret-token",
+      request: new Request(
+        "https://0509.io/api/launch-readiness/canary?requireWhatsApp=1",
+        {
+          method: "POST",
+          headers: {
+            "x-0509-canary-token": "secret-token",
+          },
         },
-      }),
+      ),
     } as never);
 
     expect(response.status).toBe(503);
@@ -1451,12 +1656,16 @@ describe("launch readiness canary route", () => {
     vi.doMock("~/lib/data.server", () => ({
       addDigestItem: vi.fn().mockResolvedValue(undefined),
       clearDigestItems: vi.fn().mockResolvedValue(undefined),
-			createDigestRun: vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true }),
+      createDigestRun: vi
+        .fn()
+        .mockResolvedValue({ digestRunId: "digest-1", created: true }),
       createProofCapture: vi.fn().mockResolvedValue("proof-1"),
       createWatchEvent: vi.fn().mockResolvedValue("event-1"),
       createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
       finishWatchlistRun: vi.fn().mockResolvedValue(undefined),
       upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-1" }),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+      repairCanaryProofEmailTarget: vi.fn(),
     }));
     vi.doMock("~/lib/delivery.server", () => ({
       deliverWeeklyDigest,
@@ -1466,12 +1675,15 @@ describe("launch readiness canary route", () => {
     const { action } = await import("~/routes/api.launch-readiness.canary");
     const response = await action({
       context: createContext(),
-      request: new Request("https://0509.io/api/launch-readiness/canary?requireWhatsApp=true", {
-        method: "POST",
-        headers: {
-          "x-0509-canary-token": "secret-token",
+      request: new Request(
+        "https://0509.io/api/launch-readiness/canary?requireWhatsApp=true",
+        {
+          method: "POST",
+          headers: {
+            "x-0509-canary-token": "secret-token",
+          },
         },
-      }),
+      ),
     } as never);
 
     expect(response.status).toBe(503);
@@ -1510,10 +1722,13 @@ describe("launch readiness canary route", () => {
     });
     const reconciledResponse = await action({
       context: createContext(),
-      request: new Request("https://0509.io/api/launch-readiness.canary?requireWhatsApp=true", {
-        method: "POST",
-        headers: { "x-0509-canary-token": "secret-token" },
-      }),
+      request: new Request(
+        "https://0509.io/api/launch-readiness.canary?requireWhatsApp=true",
+        {
+          method: "POST",
+          headers: { "x-0509-canary-token": "secret-token" },
+        },
+      ),
     } as never);
     expect(reconciledResponse.status).toBe(200);
     await expect(reconciledResponse.json()).resolves.toMatchObject({
@@ -1540,12 +1755,16 @@ describe("launch readiness canary route", () => {
     vi.doMock("~/lib/data.server", () => ({
       addDigestItem: vi.fn().mockResolvedValue(undefined),
       clearDigestItems: vi.fn().mockResolvedValue(undefined),
-			createDigestRun: vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true }),
+      createDigestRun: vi
+        .fn()
+        .mockResolvedValue({ digestRunId: "digest-1", created: true }),
       createProofCapture: vi.fn().mockResolvedValue("proof-1"),
       createWatchEvent: vi.fn().mockResolvedValue("event-1"),
       createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
       finishWatchlistRun: vi.fn().mockResolvedValue(undefined),
       upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-1" }),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+      repairCanaryProofEmailTarget: vi.fn(),
     }));
     vi.doMock("~/lib/delivery.server", () => ({
       deliverWeeklyDigest: vi.fn().mockResolvedValue({
@@ -1568,12 +1787,15 @@ describe("launch readiness canary route", () => {
     const { action } = await import("~/routes/api.launch-readiness.canary");
     const response = await action({
       context: createContext(),
-      request: new Request("https://0509.io/api/launch-readiness/canary?requireSlack=1", {
-        method: "POST",
-        headers: {
-          "x-0509-canary-token": "secret-token",
+      request: new Request(
+        "https://0509.io/api/launch-readiness/canary?requireSlack=1",
+        {
+          method: "POST",
+          headers: {
+            "x-0509-canary-token": "secret-token",
+          },
         },
-      }),
+      ),
     } as never);
 
     expect(response.status).toBe(503);
@@ -1598,12 +1820,16 @@ describe("launch readiness canary route", () => {
     vi.doMock("~/lib/data.server", () => ({
       addDigestItem: vi.fn().mockResolvedValue(undefined),
       clearDigestItems: vi.fn().mockResolvedValue(undefined),
-			createDigestRun: vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true }),
+      createDigestRun: vi
+        .fn()
+        .mockResolvedValue({ digestRunId: "digest-1", created: true }),
       createProofCapture: vi.fn().mockResolvedValue("proof-1"),
       createWatchEvent: vi.fn().mockResolvedValue("event-1"),
       createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
       finishWatchlistRun: vi.fn().mockResolvedValue(undefined),
       upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-1" }),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+      repairCanaryProofEmailTarget: vi.fn(),
     }));
     vi.doMock("~/lib/delivery.server", () => ({
       deliverWeeklyDigest: vi.fn().mockResolvedValue({
@@ -1634,12 +1860,15 @@ describe("launch readiness canary route", () => {
     const { action } = await import("~/routes/api.launch-readiness.canary");
     const response = await action({
       context: createContext(),
-      request: new Request("https://0509.io/api/launch-readiness/canary?requireSlack=true", {
-        method: "POST",
-        headers: {
-          "x-0509-canary-token": "secret-token",
+      request: new Request(
+        "https://0509.io/api/launch-readiness/canary?requireSlack=true",
+        {
+          method: "POST",
+          headers: {
+            "x-0509-canary-token": "secret-token",
+          },
         },
-      }),
+      ),
     } as never);
 
     expect(response.status).toBe(200);
@@ -1675,12 +1904,16 @@ describe("launch readiness canary route", () => {
     vi.doMock("~/lib/data.server", () => ({
       addDigestItem: vi.fn().mockResolvedValue(undefined),
       clearDigestItems: vi.fn().mockResolvedValue(undefined),
-			createDigestRun: vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true }),
+      createDigestRun: vi
+        .fn()
+        .mockResolvedValue({ digestRunId: "digest-1", created: true }),
       createProofCapture,
       createWatchEvent: vi.fn().mockResolvedValue("event-1"),
       createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
       finishWatchlistRun: vi.fn().mockResolvedValue(undefined),
       upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-1" }),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+      repairCanaryProofEmailTarget: vi.fn(),
     }));
     vi.doMock("~/lib/delivery.server", () => ({
       deliverWeeklyDigest: vi.fn().mockResolvedValue({
@@ -1709,12 +1942,15 @@ describe("launch readiness canary route", () => {
     const { action } = await import("~/routes/api.launch-readiness.canary");
     const response = await action({
       context: createContext(),
-      request: new Request("https://0509.io/api/launch-readiness/canary?proofProvider=browserless", {
-        method: "POST",
-        headers: {
-          "x-0509-canary-token": "secret-token",
+      request: new Request(
+        "https://0509.io/api/launch-readiness/canary?proofProvider=browserless",
+        {
+          method: "POST",
+          headers: {
+            "x-0509-canary-token": "secret-token",
+          },
         },
-      }),
+      ),
     } as never);
 
     expect(captureBrowserlessProofSnapshot).toHaveBeenCalledWith(
@@ -1752,12 +1988,16 @@ describe("launch readiness canary route", () => {
     vi.doMock("~/lib/data.server", () => ({
       addDigestItem: vi.fn().mockResolvedValue(undefined),
       clearDigestItems: vi.fn().mockResolvedValue(undefined),
-			createDigestRun: vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true }),
+      createDigestRun: vi
+        .fn()
+        .mockResolvedValue({ digestRunId: "digest-1", created: true }),
       createProofCapture: vi.fn().mockResolvedValue("proof-1"),
       createWatchEvent: vi.fn().mockResolvedValue("event-1"),
       createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
       finishWatchlistRun: vi.fn().mockResolvedValue(undefined),
       upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-1" }),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+      repairCanaryProofEmailTarget: vi.fn(),
     }));
     vi.doMock("~/lib/delivery.server", () => ({
       deliverWeeklyDigest: vi.fn().mockResolvedValue({
@@ -1814,12 +2054,16 @@ describe("launch readiness canary route", () => {
     vi.doMock("~/lib/data.server", () => ({
       addDigestItem: vi.fn().mockResolvedValue(undefined),
       clearDigestItems: vi.fn().mockResolvedValue(undefined),
-			createDigestRun: vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true }),
+      createDigestRun: vi
+        .fn()
+        .mockResolvedValue({ digestRunId: "digest-1", created: true }),
       createProofCapture: vi.fn().mockResolvedValue("proof-1"),
       createWatchEvent: vi.fn().mockResolvedValue("event-1"),
       createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
       finishWatchlistRun,
       upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-1" }),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+      repairCanaryProofEmailTarget: vi.fn(),
     }));
     vi.doMock("~/lib/delivery.server", () => ({
       deliverWeeklyDigest: vi.fn(),
@@ -1875,12 +2119,16 @@ describe("launch readiness canary route", () => {
     vi.doMock("~/lib/data.server", () => ({
       addDigestItem: vi.fn().mockResolvedValue(undefined),
       clearDigestItems: vi.fn().mockResolvedValue(undefined),
-      createDigestRun: vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true }),
+      createDigestRun: vi
+        .fn()
+        .mockResolvedValue({ digestRunId: "digest-1", created: true }),
       createProofCapture,
       createWatchEvent: vi.fn().mockResolvedValue("event-1"),
       createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
       finishWatchlistRun,
       upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-1" }),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+      repairCanaryProofEmailTarget: vi.fn(),
     }));
     vi.doMock("~/lib/delivery.server", () => ({
       deliverWeeklyDigest: vi.fn(),
@@ -1958,15 +2206,23 @@ describe("launch readiness canary route", () => {
       // The post-target body calls upsertProofTarget after a successful
       // snapshot — make it throw an ordinary Error so the new guard kicks
       // in (Response throws are still passed through unchanged).
-      upsertProofTarget: vi.fn().mockRejectedValue(new Error("d1 rejected: UNIQUE constraint")),
+      upsertProofTarget: vi
+        .fn()
+        .mockRejectedValue(new Error("d1 rejected: UNIQUE constraint")),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+      repairCanaryProofEmailTarget: vi.fn(),
     }));
-    vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest: vi.fn() }));
+    vi.doMock("~/lib/delivery.server", () => ({
+      deliverWeeklyDigest: vi.fn(),
+    }));
     // The inner try/catch around the proof-target upsert calls
     // compensateUncommittedProofArtifacts before re-throwing; mock it so
     // the route reaches the new outer guard instead of dying inside the
     // inner compensation branch.
     vi.doMock("~/lib/proof-artifact-retention.server", () => ({
-      compensateUncommittedProofArtifacts: vi.fn().mockResolvedValue({ ok: true }),
+      compensateUncommittedProofArtifacts: vi
+        .fn()
+        .mockResolvedValue({ ok: true }),
     }));
     mockLandingPageCapture();
 
@@ -2009,12 +2265,20 @@ describe("launch readiness canary route", () => {
       createProofCapture: vi.fn().mockResolvedValue("proof-1"),
       // The throw lands after proofCaptureId is bound — the body must
       // surface proofCaptureId so Gate C can name the stage that blew up.
-      createWatchEvent: vi.fn().mockRejectedValue(new Error("d1 outage mid-event")),
+      createWatchEvent: vi
+        .fn()
+        .mockRejectedValue(new Error("d1 outage mid-event")),
       createDigestRun: vi.fn(),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+      repairCanaryProofEmailTarget: vi.fn(),
     }));
-    vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest: vi.fn() }));
+    vi.doMock("~/lib/delivery.server", () => ({
+      deliverWeeklyDigest: vi.fn(),
+    }));
     vi.doMock("~/lib/proof-artifact-retention.server", () => ({
-      compensateUncommittedProofArtifacts: vi.fn().mockResolvedValue({ ok: true }),
+      compensateUncommittedProofArtifacts: vi
+        .fn()
+        .mockResolvedValue({ ok: true }),
     }));
     mockLandingPageCapture();
 
@@ -2057,15 +2321,23 @@ describe("launch readiness canary route", () => {
       upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-1" }),
       createProofCapture: vi.fn().mockResolvedValue("proof-1"),
       createWatchEvent: vi.fn().mockResolvedValue("event-1"),
-      createDigestRun: vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true }),
+      createDigestRun: vi
+        .fn()
+        .mockResolvedValue({ digestRunId: "digest-1", created: true }),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+      repairCanaryProofEmailTarget: vi.fn(),
     }));
     vi.doMock("~/lib/delivery.server", () => ({
       // Email provider outage: the tail throws AFTER digestRunId is bound,
       // so the response must surface runId + proofCaptureId + digestRunId.
-      deliverWeeklyDigest: vi.fn().mockRejectedValue(new Error("email binding timeout")),
+      deliverWeeklyDigest: vi
+        .fn()
+        .mockRejectedValue(new Error("email binding timeout")),
     }));
     vi.doMock("~/lib/proof-artifact-retention.server", () => ({
-      compensateUncommittedProofArtifacts: vi.fn().mockResolvedValue({ ok: true }),
+      compensateUncommittedProofArtifacts: vi
+        .fn()
+        .mockResolvedValue({ ok: true }),
     }));
     mockLandingPageCapture();
 
@@ -2112,17 +2384,27 @@ describe("launch readiness canary route", () => {
       upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-1" }),
       createProofCapture: vi.fn().mockResolvedValue("proof-1"),
       createWatchEvent: vi.fn().mockResolvedValue("event-1"),
-      createDigestRun: vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true }),
+      createDigestRun: vi
+        .fn()
+        .mockResolvedValue({ digestRunId: "digest-1", created: true }),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+      repairCanaryProofEmailTarget: vi.fn(),
     }));
     vi.doMock("~/lib/delivery.server", () => ({
       // The literal production suspect: Gate C's unique-target proofEmail
       // resolution throws inside deliverWeeklyDigest after digestRunId binds.
-      deliverWeeklyDigest: vi.fn().mockRejectedValue(
-        new Error("Gate C proof email target must resolve uniquely. (attempt 2/3)"),
-      ),
+      deliverWeeklyDigest: vi
+        .fn()
+        .mockRejectedValue(
+          new Error(
+            "Gate C proof email target must resolve uniquely. (attempt 2/3)",
+          ),
+        ),
     }));
     vi.doMock("~/lib/proof-artifact-retention.server", () => ({
-      compensateUncommittedProofArtifacts: vi.fn().mockResolvedValue({ ok: true }),
+      compensateUncommittedProofArtifacts: vi
+        .fn()
+        .mockResolvedValue({ ok: true }),
     }));
     mockLandingPageCapture();
 
@@ -2140,8 +2422,13 @@ describe("launch readiness canary route", () => {
     } as never);
 
     expect(response.status).toBe(503);
-    const payload = (await response.json()) as { reason: string; digestRunId: string };
-    expect(payload.reason).toBe("gate-c-proof-email-target-must-resolve-uniquely.-attempt-2-3");
+    const payload = (await response.json()) as {
+      reason: string;
+      digestRunId: string;
+    };
+    expect(payload.reason).toBe(
+      "gate-c-proof-email-target-must-resolve-uniquely.-attempt-2-3",
+    );
     // Identifier-safe, verifier-journalable: lowercase, 1-128, [a-z0-9._-].
     expect(payload.reason).toMatch(/^[a-z0-9._-]{1,128}$/u);
     expect(payload.digestRunId).toBe("digest-1");
@@ -2165,12 +2452,21 @@ describe("launch readiness canary route", () => {
       // already carries a status — the guard must NOT swallow it into the
       // generic canary_proof_pipeline_failed blocker.
       upsertProofTarget: vi.fn().mockImplementation(() => {
-        throw new Response("Launch readiness proof target could not be created.", { status: 500 });
+        throw new Response(
+          "Launch readiness proof target could not be created.",
+          { status: 500 },
+        );
       }),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn(),
+      repairCanaryProofEmailTarget: vi.fn(),
     }));
-    vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest: vi.fn() }));
+    vi.doMock("~/lib/delivery.server", () => ({
+      deliverWeeklyDigest: vi.fn(),
+    }));
     vi.doMock("~/lib/proof-artifact-retention.server", () => ({
-      compensateUncommittedProofArtifacts: vi.fn().mockResolvedValue({ ok: true }),
+      compensateUncommittedProofArtifacts: vi
+        .fn()
+        .mockResolvedValue({ ok: true }),
     }));
     mockLandingPageCapture();
 
