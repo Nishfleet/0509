@@ -358,11 +358,14 @@ test.describe("public production-safe E2E smoke", { lock: "external-api" }, () =
   });
 
   test("public buttons and links route to valid actions without sending side effects", async ({ page, baseURL, request }) => {
-    // Issue #2965: bare /search now 302s to the /brands hub, whose ~130
-    // indexable brand links each get a sequential reachability probe below.
-    // Same reasoning as the diagnostic-engine 60s raise: the workload grew
-    // systematically, so the 60s budget fails on the median, not on a flake.
-    test.setTimeout(120_000);
+    // Issue #2965: bare /search now 302s to the /brands hub, whose 217
+    // unique anchors (measured 2026-09-13) each get a sequential
+    // reachability probe below, the /ads/<domain> ones at a measured
+    // 0.7-2.3s each. Same reasoning as the diagnostic-engine 60s raise: the
+    // workload grew systematically, so the budget fails on the median, not
+    // on a flake — 60s died in CI, the 120s interim also exceeded the same
+    // day mid-probe at /ads/figma.com; 240s carries ~2x the measured need.
+    test.setTimeout(240_000);
     const publicPaths = [
       "/",
       "/search",

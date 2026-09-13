@@ -24,7 +24,15 @@ for (const brand of MAJOR_BRANDS) {
   test(`${brand.label} search links to its indexable brand page`, { lock: "external-api" }, async ({
     page,
   }) => {
-    await page.goto(brand.path, { waitUntil: "domcontentloaded" });
+    // #3373: this test promises one navigation plus three 30s locator
+    // waits, a sum the 30s global test cap can never honour — on
+    // 2026-09-13 the nike leg died at that 30s cap and the adidas leg at
+    // the 20s navigationTimeout. Same reasoning as the diagnostic-engine
+    // raise: once the slow path is systematically over budget, every
+    // attempt fails. 30s goto (matching its own waits), 180s test ceiling
+    // (promised worst case ~150s + slack).
+    test.setTimeout(180_000);
+    await page.goto(brand.path, { waitUntil: "domcontentloaded", timeout: 30_000 });
 
     // Wait for at least one result row to render before asserting on the
     // results-header cross-link so a warming search cannot race it.

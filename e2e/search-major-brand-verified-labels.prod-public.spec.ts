@@ -24,7 +24,14 @@ for (const brand of MAJOR_BRANDS) {
   test(`${brand.label} search shows at least one verified/likely row, not all Unmatched`, { lock: "external-api" }, async ({
     page,
   }) => {
-    await page.goto(brand.path, { waitUntil: "domcontentloaded" });
+    // #3373: the /search?q= slow path (upstream Ad Library warming) can
+    // pass its 20s navigationTimeout before domcontentloaded — 2026-09-13
+    // the adidas leg did, minutes after passing. Same reasoning as the
+    // diagnostic-engine raise: once the slow path is systematically over
+    // budget, every attempt fails. 30s goto, 90s test = this test's
+    // promised worst case (30s goto + 30s result-row wait) + slack.
+    test.setTimeout(90_000);
+    await page.goto(brand.path, { waitUntil: "domcontentloaded", timeout: 30_000 });
 
     // Wait for at least one result row to render before asserting on labels.
     await expect(page.locator(".f9-wk-say").first()).toBeVisible({
