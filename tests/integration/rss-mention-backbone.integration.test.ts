@@ -575,6 +575,122 @@ describe("rss mention backbone — coverage gating", () => {
   });
 });
 
+// --- Substack publication feed (issue #3199) --------------------------------
+//
+// PLAN.md §2 verdict for Substack: "today — rides `rss` connector". The
+// publication's own public syndication feed (`https://<pub>.substack.com/feed`,
+// official Substack help doc cited in PLAN.md §8) is the lawful public
+// surface; there is no free global Substack keyword search, so coverage = the
+// named publication feeds a customer registers. This describe pins that
+// contract end-to-end on the EXISTING `rss` connector (no new connector, no
+// migration — 0093 already accepts `rss` rows): the per-source kill flag, ONE
+// feed fetch per poll (Substack item links are direct publication URLs — no
+// Google-News-style redirect hop), >=1 mention captured at the post's
+// canonical URL, and canonical-URL dedup on re-poll
+// (UNIQUE (source_target_id, url_hash) via url_hash of the canonical_url).
+const SUBSTACK_FEED_URL = "https://acmeletters.substack.com/feed";
+
+const SUBSTACK_FEED = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel>
+  <title>Acme Letters</title>
+  <link>https://acmeletters.substack.com</link>
+  <item>
+    <title>Acme ships its fall gear haul</title>
+    <link>https://acmeletters.substack.com/p/acme-fall-gear-haul</link>
+    <guid>https://acmeletters.substack.com/p/acme-fall-gear-haul</guid>
+    <pubDate>Mon, 01 Jan 2024 00:00:00 GMT</pubDate>
+    <description>A subscriber post naming Acme and its new gear line.</description>
+  </item>
+  <item>
+    <title>Industry notes nobody tracked</title>
+    <link>https://acmeletters.substack.com/p/industry-notes</link>
+    <guid>https://acmeletters.substack.com/p/industry-notes</guid>
+    <pubDate>Tue, 02 Jan 2024 00:00:00 GMT</pubDate>
+    <description>General logistics commentary with no tracked entity.</description>
+  </item>
+</channel></rss>`;
+
+describe("rss mention backbone — Substack publication feed (issue #3199)", () => {
+  it("captures >=1 mention behind the kill flag, one fetch per poll, deduped by canonical URL on re-poll", async () => {
+    const { userId, entityId } = await seedAcmeEntity();
+    const target = await seedFeedTarget({
+      userId,
+      entityId,
+      connectorId: "rss",
+      targetKey: "acme-substack-feed",
+      feedUrl: SUBSTACK_FEED_URL,
+      metadata: { feedUrl: SUBSTACK_FEED_URL, feedDiscovery: "direct" },
+    });
+
+    const fetchImpl = feedFetcher({
+      [SUBSTACK_FEED_URL]: { body: SUBSTACK_FEED, contentType: "application/rss+xml" },
+    });
+
+    // Kill flag: the per-source PRESENCE_RSS_ROLLOUT rollout gate. Flag off
+    // (the shipped default) → the poll boundary refuses BEFORE any network
+    // hop, so a sidelined source stays completely silent.
+    const off = await pollPresenceTarget(makeEnv(undefined), target, { trackingMode: "self" }, { fetchImpl });
+    expect(off.ok).toBe(false);
+    expect(off.errorCode).toBe("connector_not_operational");
+    expect(fetchImpl).not.toHaveBeenCalled();
+
+    // Flag on: exactly ONE fetch per feed per poll — the PLAN.md rate budget
+    // for this surface. Substack items link straight to the publication, so
+    // there is no second (redirect-resolution) hop inside the poll.
+    const env = makeEnv("internal");
+    const poll = await pollPresenceTarget(env, target, { trackingMode: "self" }, { fetchImpl });
+    expect(poll.ok).toBe(true);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+    // The publication feed yields >=1 mention: the feed's items come through
+    // with their canonical Substack post URL, and only the item naming the
+    // tracked entity becomes a presence_item mention row.
+    expect(poll.ok).toBe(true);
+    expect(poll.items).toHaveLength(2);
+    const mentionItem = poll.items.find((item) => item.canonicalUrl === "https://acmeletters.substack.com/p/acme-fall-gear-haul");
+    expect(mentionItem).toBeDefined();
+    expect(mentionItem?.title).toBe("Acme ships its fall gear haul");
+    expect(mentionItem?.publishedAt).toBe("2024-01-01T00:00:00.000Z");
+    expect(mentionItem?.contentHash).toBeTruthy();
+
+    const inserted = await upsertPresenceItems(env, { sourceTarget: target, items: poll.items });
+    expect(inserted.inserted).toBe(1); // the industry item names nobody
+    expect(await countLiveItems(target.id)).toBe(1);
+
+    // The captured mention is stamped against the tracked phrase at the
+    // Substack post's canonical URL (readMentionRow hits by canonical_url —
+    // a hit here also proves the canonical post URL was kept, not rewritten).
+    const mentionRow = await readMentionRow(target.id, "https://acmeletters.substack.com/p/acme-fall-gear-haul");
+    expect(mentionRow).not.toBeNull();
+    const mention = mentionRow?.mention as Record<string, unknown>;
+    expect(mention?.matched).toBe(true);
+    expect(mention?.matchedPhrase).toBe("Acme");
+
+    // Re-poll the same feed: the same post canonical URL hashes to the same
+    // url_hash, so the second upsert inserts NOTHING — the mention is deduped
+    // by canonical URL, exactly one presence_item row for the post. The repoll
+    // itself is still exactly ONE fetch (the rate budget is per poll).
+    const repoll = await pollPresenceTarget(env, target, { trackingMode: "self" }, { fetchImpl });
+    expect(repoll.ok).toBe(true);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(repoll.items).toHaveLength(2);
+    const reinserted = await upsertPresenceItems(env, { sourceTarget: target, items: repoll.items });
+    expect(reinserted.inserted).toBe(0);
+    expect(await countLiveItems(target.id)).toBe(1);
+  });
+
+  it("coverage note states what the Substack public surface covers (per-source row)", () => {
+    const docs = presenceSourceCoverageForDocs();
+    const rss = docs.find((entry) => entry.sourceId === "rss");
+    expect(rss).toBeDefined();
+    expect(rss?.productionStatus).toBe("gated");
+    // Honest coverage: the note names what the public surface covers — the
+    // publication feeds themselves (incl. Substack) — and its limits.
+    expect(rss?.notes).toContain("Substack");
+    expect(rss?.notes).toContain("no free global keyword search");
+  });
+});
+
 describe("mention-match.server.ts — pure matcher unit checks (no DB)", () => {
   it("matches case-insensitively with word-boundary safety", async () => {
     const { mentionMatch, entityPhrasesFromRecord } = await import("~/lib/mention-match.server");
