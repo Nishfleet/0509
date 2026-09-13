@@ -12,6 +12,24 @@ import type {
   ValidateTargetResult,
 } from "~/lib/presence-types";
 
+// research: (issue #3201 — existing open-source collectors, searched +
+// rejected, 2026-09-13): GitHub search "pinterest rss" by stars —
+// iatek/jquery-socialist (626★, last pushed 2015-10; a browser-side jQuery
+// widget, not a server-side collector), didats/DTSocialMedia (PHP, 2015,
+// dead), pinLarge/pinLarge (Go→Heroku, 2019, dead), and the actively
+// maintained xyonium/reach-mcp (Python, MCP server aggregating 33 sources) —
+// rejected: a second language and a running sidecar for one public GET; this
+// connector reuses the shared rss parser and the presenceSafeFetch
+// SSRF/redirect path instead. Also verified: RSS-Bridge/RSS-Bridge (9,233★,
+// active; bridges/PinterestBridge.php confirmed present 2026-09-13) —
+// rejected: a PHP bridge-framework dependency that re-scrapes the HTML
+// profile page when Pinterest itself publishes the first-party public
+// feed.rss this connector reads. Adopted: none — the platform's own public
+// surface, no new dependency.
+// help-first: the deterministic test entry point is
+// `npx vitest run --configLoader runner --project workers
+// tests/integration/pinterest-mention-connector.integration.test.ts`.
+
 /**
  * Pinterest presence connector (issue #3201 — mentions-epic split of #3171,
  * disjoint from #3178's shared interface: new connector + flag + tests +
