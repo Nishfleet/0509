@@ -3,26 +3,30 @@
 // Two migration files sharing a 4-digit prefix have an ambiguous apply order:
 // `wrangler d1 migrations apply` orders by file name, so on a tie the ordering
 // depends on lexicographic filename tiebreaks rather than the intended
-// sequence. Three such pairs already exist (0067 x2, 0087 x2, 0090 x2) and are
-// deliberately NOT renumbered: D1's migration ledger is append-only and keyed
-// by exact filename, so renaming an already-applied file makes wrangler see a
+// sequence. Five such cases already existed before/while this guard landed
+// (0067/0087/0090/0096 pairs, then the 0098 trio) and are deliberately NOT
+// renumbered: D1's migration ledger is append-only and keyed by exact
+// filename, so renaming an already-applied file makes wrangler see a
 // brand-new unapplied migration and either blocks every deploy on
-// `migration_repository_baseline_drift` or re-runs the SQL against tables that
-// already exist. Those prefixes are frozen in
-// LEGACY_DUPLICATE_PREFIX_ALLOWLIST; every NEW migration must take the next
-// unused number (max existing prefix + 1) and may never reuse one.
+// `migration_repository_baseline_drift` or re-runs the SQL against tables
+// that already exist. Those prefixes are frozen in
+// LEGACY_DUPLICATE_PREFIX_ALLOWLIST, capped at the number of files that were
+// actually applied under them; every NEW migration must take the next unused
+// number (max existing prefix + 1) and may never reuse one. If two lanes
+// unavoidably land the same number again, freeze that prefix here WITH the
+// reasoning and its applied-file count — never by widening the rule.
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const PREFIX_PATTERN = /^(\d{4})_[A-Za-z0-9_]+\.sql$/u;
 
 /**
- * Prefixes that were already applied to production D1 under both spellings
- * before this guard existed. See the header comment: these cannot be renamed
- * without desyncing the production migration ledger.
- * @type {Set<string>}
+ * Prefixes that were already applied to production D1 under more than one
+ * file before this guard existed. See the header comment: these cannot be
+ * renamed without desyncing the production migration ledger.
+ * @type {Map<string, number>} 4-digit prefix -> applied-file count it is frozen at
  */
-export const LEGACY_DUPLICATE_PREFIX_ALLOWLIST = new Set([
+export const LEGACY_DUPLICATE_PREFIX_ALLOWLIST = new Map([
   // 0067_delivery_recovery_and_digest_jobs.sql + 0067_workspace_member_invariants.sql
   // (both recorded verbatim in PRODUCTION_MIGRATION_LEDGER_BASELINE).
   "0067",
@@ -34,9 +38,16 @@ export const LEGACY_DUPLICATE_PREFIX_ALLOWLIST = new Set([
   // 0096_error_reports.sql + 0096_email_suppression.sql — both merged to main
   // 2026-09-12 (issues #2988 / #2983), independent tables, apply order between
   // them causally irrelevant. Frozen the same way as 0067/0087/0090 so a
-  // rename cannot desync the production apply ledger; every prefix 0097+ must
-  // stay unique.
-  "0096",
+  // rename cannot desync the production apply ledger.
+  ["0096", 2],
+  // 0098 trio: 0098_email_delivery_canary.sql (email tables — independent) +
+  // 0098_widen_source_target_connector_bluesky.sql +
+  // 0098_widen_source_target_connector_gdelt.sql (#3252 / #3251). The two
+  // widen migrations both rebuild the SAME source_target table with a
+  // different final CHECK, so the surviving CHECK is whichever applies LAST
+  // (lexicographic: bluesky, then gdelt) — see migrations/README.md. All
+  // three were merged to main, so all three are ledger-frozen, not renumbered.
+  ["0098", 3],
 ]);
 
 /**
@@ -57,10 +68,11 @@ export function groupByMigrationPrefix(names) {
 
 /**
  * @param {string[]} names
- * @param {Set<string>} [allowlist] prefixes already applied to production
+ * @param {Map<string, number>} [allowlist] frozen prefix -> its applied-file count
  * @returns {{ duplicatePrefixes: string[], offenders: Map<string, string[]> }}
  *   `duplicatePrefixes` is every prefix with more than one file;
- *   `offenders` only holds the failed-on groups (duplicates NOT in the allowlist).
+ *   `offenders` only holds the failed-on groups (duplicates NOT in the allowlist,
+ *   or a frozen prefix that exceeded its frozen count).
  */
 export function duplicateMigrationPrefixes(
   names,
@@ -71,9 +83,10 @@ export function duplicateMigrationPrefixes(
   for (const [prefix, files] of groupByMigrationPrefix(names)) {
     if (files.length < 2) continue;
     duplicatePrefixes.push(prefix);
-    // Frozen legacy duplicates are capped at their historical two files; a
-    // third file reusing a frozen prefix is a NEW duplicate and fails.
-    if (!allowlist.has(prefix) || files.length > 2) {
+    // A frozen legacy prefix is capped at its frozen applied-file count; a
+    // third 0067 (or a 4th 0098) is a NEW duplicate and fails. A prefix not in
+    // the allowlist has an expected count of 1, so any pair fails.
+    if (files.length > (allowlist.get(prefix) ?? 1)) {
       offenders.set(prefix, files);
     }
   }
