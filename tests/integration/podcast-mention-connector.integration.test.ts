@@ -17,7 +17,7 @@ import { PRESENCE_USER_AGENT } from "~/lib/presence-robots.server";
 import type { AppEnv } from "~/lib/env.server";
 import type { PresenceConnectorContext } from "~/lib/presence-types";
 
-import migrationSql from "../../migrations/0101_widen_source_target_connector_podcast.sql?raw";
+import migrationSql from "../../migrations/0102_widen_source_target_connector_podcast.sql?raw";
 
 import { appEnv, db, ISO_T0, uid } from "./fixtures";
 
@@ -647,7 +647,7 @@ describe("podcast mention connector — capture into the mention table (issue #3
 
 describe("podcast mention connector — presence substrate (real migrations)", () => {
   it("writes connector_id = 'podcast' via the CHECK-widened migration and reads it back", async () => {
-    // The real migrations — including 0101_widen_source_target_connector_podcast
+    // The real migrations — including 0102_widen_source_target_connector_podcast
     // — ran in the test setup, so the seeded write only succeeds when the CHECK
     // genuinely accepts 'podcast'.
     const { userId, entityId, targetId } = await seedPodcastTarget();
@@ -664,7 +664,7 @@ describe("podcast mention connector — presence substrate (real migrations)", (
     expect(entityId).toBeTruthy();
   });
 
-  it("re-applies the 0101 migration cleanly and preserves child rows and every predecessor connector's rows", async () => {
+  it("re-applies the 0102 migration cleanly and preserves child rows and every predecessor connector's rows", async () => {
     // Seed a full target + child rows, then re-run the real migration
     // statements in place — the rebuild must copy the podcast row through and
     // restore every cascaded child row set (0093 rebuild convention).
@@ -685,13 +685,14 @@ describe("podcast mention connector — presence substrate (real migrations)", (
       ).bind(revisionId, itemId),
     ]);
 
-    // Predecessor rows must survive the copy too: 0101's CHECK is a superset
-    // of 0100's (which itself healed every value back through the 0098 pair),
-    // so these writes through the chain-final CHECK — one per non-podcast
-    // value 0100 accepted — are the order-proof, and they must predate the
-    // re-application to prove the COPY keeps them through the rebuild.
+    // Predecessor rows must survive the copy too: 0102's CHECK is a superset
+    // of 0101-pinterest's (which itself healed every value back through the
+    // 0100/0098 chain), so these writes through the chain-final CHECK — one per
+    // non-podcast value the 0101 CHECK accepts — are the order-proof, and they
+    // must predate the re-application to prove the COPY keeps them through the
+    // rebuild.
     const predecessorIds: Record<string, string> = {};
-    for (const connectorId of ["website", "x", "reddit", "linkedin", "rss", "gdelt", "bluesky", "threads", "hn"]) {
+    for (const connectorId of ["website", "x", "reddit", "linkedin", "rss", "gdelt", "bluesky", "threads", "hn", "pinterest"]) {
       const predecessorTargetId = uid("target");
       predecessorIds[connectorId] = predecessorTargetId;
       await db().prepare(
@@ -715,8 +716,8 @@ describe("podcast mention connector — presence substrate (real migrations)", (
       .first<{ connector_id: string }>();
     expect(kept?.connector_id).toBe("podcast");
 
-    // Every predecessor row (nine connectors) survives the copy — the CHECK
-    // union is order-proof whichever of 0100/0101 applied when.
+    // Every predecessor row (ten connectors) survives the copy — the CHECK
+    // union is order-proof whichever of 0100/0101-pinterest applied when.
     for (const [connectorId, predecessorTargetId] of Object.entries(predecessorIds)) {
       const healed = await db()
         .prepare(`SELECT connector_id, target_key FROM source_target WHERE id = ?`)

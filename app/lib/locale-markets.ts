@@ -104,6 +104,28 @@ export function isBuyerSurfaceChildSplat(splat: string): boolean {
   return (BUYER_SURFACE_CHILD_PATHS as readonly string[]).includes(`/${splat}`);
 }
 
+/**
+ * The /guides/* how-to paths that serve 200 under every buyer-surface locale
+ * prefix (issues #2294, #2295). Single source of truth for the locale
+ * sitemap set and the sitemap hreflang cluster map, so a new guide cannot
+ * silently fall off the locale side.
+ */
+export const BUYER_SURFACE_GUIDE_PATHS = [
+  // Issue #2152: the first guide — the track-competitor-ads how-to.
+  "/guides/how-to-track-competitor-ads",
+  // Issue #2867: second guide — the watch-over-time intent.
+  "/guides/how-to-monitor-meta-ad-library",
+  // Issue #2888: third guide — the landing-page change watch.
+  "/guides/how-to-monitor-competitor-landing-page-changes",
+  // Issue #3093: the offer-change alert, prove-what-changed, and
+  // standing-watch guides.
+  "/guides/how-to-get-alerted-when-a-competitor-changes-their-offer",
+  "/guides/how-to-prove-what-changed-on-a-competitor-website",
+  "/guides/how-to-turn-a-one-off-competitor-check-into-a-standing-watch",
+  // Issue #3127: the API-limitations explainer stays in the locale feeds.
+  "/guides/meta-ad-library-api-limitations",
+] as const;
+
 export interface SneakerResaleMarket {
   id: SneakerResaleLocaleId;
   hreflang: string;

@@ -41,7 +41,7 @@ import { resolvePublicHttpUrl } from "~/lib/public-url.server";
  *
  * The connector is wired into the registry but gated behind
  * `PRESENCE_PODCAST_ROLLOUT` (off by default); activation requires the
- * rollout flag (and, before migration 0101, the `source_target.connector_id`
+ * rollout flag (and, before migration 0102, the `source_target.connector_id`
  * CHECK widened to accept 'podcast'), not a code change in this connector.
  */
 const MAX_PODCAST_FEED_BYTES = 750_000;

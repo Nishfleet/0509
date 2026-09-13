@@ -70,10 +70,14 @@ describe("locale first-value search funnel (issue #1578)", () => {
       const hreflang = links.some((link: { rel?: string }) => link.rel === "alternate");
       expect(hreflang, `${route} hreflang`).toBe(true);
       const siblings = buyerSurfaceHreflangLinks(route);
-      // self + every sibling locale + x-default.
-      expect(siblings).toHaveLength(BUYER_SURFACE_LOCALE_IDS.length + 1);
+      // en self + every sibling locale + x-default (issue #2030 added en).
+      expect(siblings).toHaveLength(BUYER_SURFACE_LOCALE_IDS.length + 2);
       expect(siblings.find((s) => s.hreflang === "x-default")?.href).toBe(
-        `https://0509.io/${route}`,
+        route === "methodology"
+          // Issue #2871: the shallow /methodology hreflang leg must point at
+          // the citable EN canonical, not the permanent 301.
+          ? `https://0509.io${AD_AGGRESSION_METHODOLOGY_PATH}`
+          : `https://0509.io/${route}`,
       );
     }
   });

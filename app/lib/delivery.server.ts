@@ -3469,11 +3469,24 @@ export function renderPresenceDigestHtml(input: {
   lines: string[];
   appUrl: string;
 }) {
+  // #3179: mention lines end with ` — <canonicalUrl>`; that trailing URL is
+  // the mention's link, so the renderer promotes it to a real anchor. The
+  // escaped text keeps the URL readable even when a line carries no URL —
+  // a website-change line renders as plain text exactly as before.
+  const trailingUrlPattern = / — (https?:\/\/\S+)$/;
   const htmlLines = input.lines
-    .map(
-      (line) =>
-        `<li style="margin: 0 0 8px; color: ${EMAIL_CASE_INK_SOFT};">${escapeHtml(line)}</li>`,
-    )
+    .map((line) => {
+      const escaped = escapeHtml(line);
+      const match = trailingUrlPattern.exec(escaped);
+      if (!match) {
+        return `<li style="margin: 0 0 8px; color: ${EMAIL_CASE_INK_SOFT};">${escaped}</li>`;
+      }
+      const linked = escaped.replace(
+        trailingUrlPattern,
+        `— <a href="$1" style="color: ${EMAIL_CASE_INK_SOFT};">$1</a>`,
+      );
+      return `<li style="margin: 0 0 8px; color: ${EMAIL_CASE_INK_SOFT};">${linked}</li>`;
+    })
     .join("");
   return `
       <div style="font-family: Inter, system-ui, sans-serif; background-color: ${EMAIL_CASE_CARD}; color: ${EMAIL_CASE_INK}; font-size: 15px; line-height: 1.6;">

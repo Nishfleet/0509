@@ -140,6 +140,7 @@ import {
   withTrackingContext,
 } from "~/lib/search-display";
 import {
+  buyerSurfaceHreflangLinks,
   canonicalLinks,
   jsonLdScriptProps,
   publicSeoMeta,
@@ -223,7 +224,10 @@ function buildAnonSearchSetCookie(value: string): string {
   return `${ANON_SEARCH_COOKIE}=${value}; HttpOnly; SameSite=Lax; Secure; Path=/; Max-Age=${ANON_SEARCH_COOKIE_MAX_AGE_SECONDS}`;
 }
 
-export const links: LinksFunction = () => canonicalLinks("/search");
+export const links: LinksFunction = () => [
+  ...canonicalLinks("/search"),
+  ...buyerSurfaceHreflangLinks("search"),
+];
 
 export const meta: MetaFunction<typeof loader> = (args) => {
   // The existing tests invoke `meta()` with no loader args (idle page), so
@@ -1084,7 +1088,21 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
   // Response (which broke funnel tests and would serialize the payload).
   // Idle/validation/HEAD/invalid early returns never set the cookie, and
   // signed-in requests (session set) never do either.
-  if (!session && isFreshAnonymousId) {
+  // Issue #3391: when the worker marks this render edge-cache-eligible
+  // (x-0509-edge-cache-eligible — EDGE_CACHE_ELIGIBLE_HEADER in
+  // workers/edge-cache.ts; the wiring test couples the literal) the document
+  // is the SHARED anonymous variant: the stored copy must stay cookie-free or
+  // isEdgeCacheableHtmlResponse never licenses it and /search stays 100%
+  // origin. A cookieless read has no #1972 per-browser identity to persist —
+  // the IP backstop still limits it, the .data funnel poll still mints (its
+  // /search.data pathname never rides the edge gates), and the first cold
+  // post-deploy read mints the cookie again. Idle/HEAD/signed-in reads are
+  // never marked and keep minting exactly as before.
+  if (
+    !session &&
+    isFreshAnonymousId &&
+    !request.headers.has("x-0509-edge-cache-eligible")
+  ) {
     return data(searchPayload, {
       headers: { "Set-Cookie": buildAnonSearchSetCookie(anonymousSearchId) },
     });

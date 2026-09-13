@@ -1,7 +1,8 @@
 -- Widen source_target.connector_id CHECK to accept 'podcast' (issue #3208).
 --
 -- Same table-rebuild convention as 0093 (rss widen), the 0098 pair, 0099
--- (threads) and 0100 (hn): SQLite cannot ALTER a CHECK in place, so the table
+-- (threads), 0100 (hn) and 0101 (pinterest): SQLite cannot ALTER a CHECK in
+-- place, so the table
 -- is rebuilt — create the replacement, copy rows, drop the old table, rename
 -- the replacement. Children (presence_item, presence_poll_cursor,
 -- presence_item_revision) hold REFERENCES source_target(id) and D1's ON
@@ -10,28 +11,28 @@
 -- after the rebuild, all inside the single transaction D1 wraps the
 -- migration in.
 --
--- The new CHECK carries the full ten-connector union: every value the 0100
--- CHECK ('website','x','reddit','linkedin','rss','gdelt','bluesky','threads',
--- 'hn') accepted plus 'podcast'. 0100 sorts before this file, so any
--- production catch-up that carries both applies the hn widen first; this
--- CHECK is a strict superset of 0100's, so the INSERT..SELECT copy accepts
--- every row that existed under the previous CHECK whichever of the two
--- applied last.
+-- The new CHECK carries the full eleven-connector union: every value the
+-- 0101 CHECK ('website','x','reddit','linkedin','rss','gdelt','bluesky',
+-- 'threads','hn','pinterest') accepted plus 'podcast'. 0101 (pinterest)
+-- sorts before this file, so any production catch-up that carries both
+-- applies the pinterest widen first; this CHECK is a strict superset of
+-- 0101's, so the INSERT..SELECT copy accepts every row that existed under
+-- the previous CHECK whichever of the two applied last.
 --
 -- Expand-only: every value the previous CHECK accepted is still accepted, so
 -- existing rows copy through unchanged, and the running old code is
 -- unaffected. No drops of data tables, no renames of production columns, no
 -- NOT NULL without a DEFAULT. Rollback of the PR removes code, never data.
 
-CREATE TABLE pi_bk_0101 AS SELECT * FROM presence_item;
-CREATE TABLE pc_bk_0101 AS SELECT * FROM presence_poll_cursor;
-CREATE TABLE pir_bk_0101 AS SELECT * FROM presence_item_revision;
+CREATE TABLE pi_bk_0102 AS SELECT * FROM presence_item;
+CREATE TABLE pc_bk_0102 AS SELECT * FROM presence_poll_cursor;
+CREATE TABLE pir_bk_0102 AS SELECT * FROM presence_item_revision;
 
 CREATE TABLE source_target_podcast_widen_new (
   id TEXT PRIMARY KEY NOT NULL,
   tracked_entity_id TEXT NOT NULL,
   user_id TEXT NOT NULL,
-  connector_id TEXT NOT NULL CHECK (connector_id IN ('website', 'x', 'reddit', 'linkedin', 'rss', 'gdelt', 'bluesky', 'threads', 'hn', 'podcast')),
+  connector_id TEXT NOT NULL CHECK (connector_id IN ('website', 'x', 'reddit', 'linkedin', 'rss', 'gdelt', 'bluesky', 'threads', 'hn', 'pinterest', 'podcast')),
   target_key TEXT NOT NULL,
   target_url TEXT,
   target_handle TEXT,
@@ -59,12 +60,12 @@ FROM source_target;
 DROP TABLE source_target;
 ALTER TABLE source_target_podcast_widen_new RENAME TO source_target;
 
-INSERT INTO presence_item SELECT * FROM pi_bk_0101;
-INSERT INTO presence_poll_cursor SELECT * FROM pc_bk_0101;
-INSERT INTO presence_item_revision SELECT * FROM pir_bk_0101;
-DROP TABLE pi_bk_0101;
-DROP TABLE pc_bk_0101;
-DROP TABLE pir_bk_0101;
+INSERT INTO presence_item SELECT * FROM pi_bk_0102;
+INSERT INTO presence_poll_cursor SELECT * FROM pc_bk_0102;
+INSERT INTO presence_item_revision SELECT * FROM pir_bk_0102;
+DROP TABLE pi_bk_0102;
+DROP TABLE pc_bk_0102;
+DROP TABLE pir_bk_0102;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_source_target_entity_connector_key
   ON source_target(tracked_entity_id, connector_id, target_key)
