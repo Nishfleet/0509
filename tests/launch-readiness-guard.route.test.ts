@@ -487,6 +487,11 @@ describe("launch readiness canary route", () => {
       // `requireUniqueExistingTarget: true` check has something to resolve
       // (the underlying fix for proof_email_dispatch_invalid).
       provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn().mockResolvedValue(null),
+      // 748e1a7da (#2662) made ensureCanaryTarget also self-heal the proof
+      // email target after provisioning; the route awaits it, so the mock
+      // must export it or the route fails closed (ok:false, blocker
+      // missing_active_watchlist, substrateUnreadable) before its assertions.
+      repairCanaryProofEmailTarget: vi.fn().mockResolvedValue(null),
       upsertProofTarget,
     }));
     vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
@@ -589,6 +594,9 @@ describe("launch readiness canary route", () => {
       createWatchEvent: vi.fn(),
       createDigestRun: vi.fn(),
       provisionVerifiedAccountEmailTargetIfUnsuppressed,
+      // 748e1a7da (#2662) added the post-provision self-heal call; without
+      // this export on the module the route fails closed before provisioning.
+      repairCanaryProofEmailTarget: vi.fn().mockResolvedValue(null),
     }));
     vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest: vi.fn() }));
     mockLandingPageCapture(null);
