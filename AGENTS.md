@@ -16,6 +16,10 @@ Use this file as the instruction entrypoint for non-Claude coding agents in this
 - Prefer shipping-focused changes over speculative infrastructure unless explicitly requested.
 - All Playwright e2e specs live in `e2e/`. Do not add specs under `tests/e2e/` — it no longer exists (issue #2379).
 
+## Test conventions
+
+- Issue `verify:`/`termination:` vitest lines run bare — `npx vitest run <path>` — or with `--reporter=dot` for a one-line summary. Vitest 4 removed the built-in `basic` reporter, so the old long spelling of that flag fails its own command before any test runs (issue #3370). Guard: `tests/vitest-reporter-convention.test.ts`.
+
 ## Lane Evidence Records
 
 - Parallel lanes must each write evidence to a lane-unique path: `.lane/reports/<branch-name>.md`.
