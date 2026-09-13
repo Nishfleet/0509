@@ -20,7 +20,7 @@ import { appEnv, db, seedUser } from "./fixtures";
  * iTunes Search/Lookup API plus its customer-review RSS feed (page=1 only,
  * never deep-paged), and Google Play's public details page
  * (SoftwareApplication ld+json). The suite pins the #3210 acceptance on real
- * workerd against the repo's real migrations — including migration 0101,
+ * workerd against the repo's real migrations — including migration 0102,
  * which widened the source_target connector_id CHECK to accept
  * `connector_id = 'appstore'`: the seeded row below only inserts because the
  * widen is applied, so the write path through the rebuilt table is proven,

@@ -416,7 +416,10 @@ async function pollAppleTarget(
   }
   let lookup: ItunesLookupResponse;
   try {
-    lookup = (await lookupRes.json()) as ItunesLookupResponse;
+    // presenceSafeFetch hands back a PresenceSafeFetchResult whose `body` is
+    // the already-bounded string — there is no .json() on it (the hn
+    // contract). An empty/absent body throws and answers lookup_error.
+    lookup = JSON.parse(lookupRes.body ?? "") as ItunesLookupResponse;
   } catch {
     return { ok: false, items: [], errorCode: "appstore_lookup_error", costUnits: 1 };
   }
@@ -451,7 +454,8 @@ async function pollAppleTarget(
   }
   let feed: ItunesReviewsFeed;
   try {
-    feed = (await reviewsRes.json()) as ItunesReviewsFeed;
+    // Same PresenceSafeFetchResult contract — JSON.parse the bounded body.
+    feed = JSON.parse(reviewsRes.body ?? "") as ItunesReviewsFeed;
   } catch {
     return { ok: false, items: [], errorCode: "appstore_reviews_error", costUnits: 2 };
   }
@@ -569,12 +573,10 @@ async function pollGoogleTarget(fetchImpl: typeof fetch, appId: string): Promise
       costUnits: 1,
     };
   }
-  let html: string;
-  try {
-    html = await res.text();
-  } catch {
-    return { ok: false, items: [], errorCode: "appstore_play_error", costUnits: 1 };
-  }
+  // The bounded body already rode the PresenceSafeFetchResult — no second
+  // read, no Response contract. An empty body (a 304 with no conditional
+  // request, say) yields no structured block → the honest empty poll.
+  const html = res.body ?? "";
 
   const ld = extractSoftwareApplication(html);
   if (!ld || !ld.name) {
