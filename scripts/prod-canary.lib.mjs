@@ -15,7 +15,15 @@ export const DEFAULT_CANARY_HEALTH_BASE_URLS = Object.freeze([
   DEFAULT_CANARY_API_BASE_URL,
 ]);
 export const DEFAULT_CANARY_EXPECTED_APP = "0509";
-export const DEFAULT_CANARY_FRESH_LIVE_SEARCH_TIMEOUT_MS = 60_000;
+// One clock for the private fresh-live proof: it wraps the whole production
+// search pipeline (provider fanout, browser pool, upstream scrape) in a single
+// abort. Run 34759554622 (2026-09-13T14:33Z, head 5c32a83c4) aborted at exactly
+// 60_000ms while the same probe passed the 13:07Z gate and scheduled monitoring
+// succeeded 4458/4460 over 7d — the budget, not the pipeline, was the binding
+// constraint, and every deploy since 09-12 concluded failure on it. 120s doubles
+// the headroom and stays fail-closed: a dead search still aborts, and the
+// unhealthy case still reports freshLiveBypass.proved = false.
+export const DEFAULT_CANARY_FRESH_LIVE_SEARCH_TIMEOUT_MS = 120_000;
 export const DEFAULT_CANARY_HEALTH_CONVERGENCE_TIMEOUT_MS = 90_000;
 export const DEFAULT_CANARY_HEALTH_CONVERGENCE_INTERVAL_MS = 5_000;
 

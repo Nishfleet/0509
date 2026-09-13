@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  DEFAULT_CANARY_FRESH_LIVE_SEARCH_TIMEOUT_MS,
   checkHealthEndpoint,
   formatProductionCanaryReport,
   runProductionCanary,
@@ -450,6 +451,42 @@ describe("production canary", () => {
     );
   });
 
+  it("gives the private fresh-live probe the 120s search budget unless overridden", async () => {
+    // Run 34759554622 (2026-09-13T14:33Z) aborted the probe at exactly 60s
+    // while scheduled monitoring succeeded 4458/4460 over 7d — the budget, not
+    // the pipeline, was the binding constraint, and every deploy since 09-12
+    // concluded failure on it. The budget must still be injectable so tests
+    // (and future gates) can tighten it without touching production timing.
+    const fetchImpl = createHealthyCanaryFetchImpl();
+    const benchmarkImpl = vi.fn().mockResolvedValue([current0509Result("ok")]);
+
+    await runProductionCanary({
+      baseUrl: "https://0509.io",
+      queries: ["nykaa"],
+      fetchImpl,
+      benchmarkImpl,
+      canaryBypassToken: "secret-token",
+    });
+
+    expect(benchmarkImpl).toHaveBeenCalledWith(
+      expect.objectContaining({ forceLive: true, timeoutMs: 120_000 }),
+    );
+
+    const overridden = vi.fn().mockResolvedValue([current0509Result("ok")]);
+    await runProductionCanary({
+      baseUrl: "https://0509.io",
+      queries: ["nykaa"],
+      fetchImpl,
+      benchmarkImpl: overridden,
+      canaryBypassToken: "secret-token",
+      searchTimeoutMs: 1,
+    });
+
+    expect(overridden).toHaveBeenCalledWith(
+      expect.objectContaining({ forceLive: true, timeoutMs: 1 }),
+    );
+  });
+
   it("can still run Meta ads as a strict provider gate when explicitly requested", async () => {
     const fetchImpl = createHealthyCanaryFetchImpl();
     const benchmarkImpl = vi
@@ -499,7 +536,7 @@ describe("production canary", () => {
     expect(benchmarkImpl).toHaveBeenCalledWith(
       expect.objectContaining({
         forceLive: true,
-        timeoutMs: 60_000,
+        timeoutMs: DEFAULT_CANARY_FRESH_LIVE_SEARCH_TIMEOUT_MS,
       }),
     );
   });
@@ -675,7 +712,7 @@ describe("production canary", () => {
       expect.objectContaining({
         forceLive: true,
         canaryBypassToken: "secret-token",
-        timeoutMs: 60_000,
+        timeoutMs: DEFAULT_CANARY_FRESH_LIVE_SEARCH_TIMEOUT_MS,
       }),
     );
   });
