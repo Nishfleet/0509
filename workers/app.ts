@@ -72,6 +72,7 @@ import {
   SCHEDULED_OBSERVATION_GAP_CHECK_CRON,
 } from "../app/lib/scheduled-observation-health.server";
 import { canonicalPathRedirect } from "./canonical-path";
+import { csrfOriginGuardResponse } from "./csrf-origin";
 import { scheduleBillingLifecycleEmailRecovery } from "./delivery-recovery";
 import { scheduleDigestScheduleExhaustionRecovery } from "./digest-schedule-recovery";
 import { primaryDomainRedirect } from "./primary-domain";
@@ -204,6 +205,17 @@ export default {
     const canonicalPathResponse = canonicalPathRedirect(request);
     if (canonicalPathResponse) {
       return withSecurityHeaders(canonicalPathResponse, request);
+    }
+
+    // Cross-site request guard (issue #2986): POST/PUT/DELETE under /app/* and
+    // /api/v1/* must be same-origin (Sec-Fetch-Site same-origin/none or a
+    // matching Origin header) — SameSite=Lax alone is not a CSRF backstop.
+    // Runs here, before any route handling, so no state-changing handler can
+    // be reached by a forged cross-site submission. Bearer-authenticated
+    // machine clients are exempt (see workers/csrf-origin.ts).
+    const csrfOriginResponse = csrfOriginGuardResponse(request);
+    if (csrfOriginResponse) {
+      return withSecurityHeaders(csrfOriginResponse, request);
     }
 
     // /sitemap.xml is dynamic: the static funnel paths plus the indexable
