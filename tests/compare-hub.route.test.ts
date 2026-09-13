@@ -25,6 +25,7 @@ const COMPARE_PAGES = [
   "compare/bigspy",
   "compare/minea",
   "compare/poweradspy",
+  "compare/sneakerping",
 ] as const;
 
 beforeEach(() => {
