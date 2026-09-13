@@ -245,3 +245,52 @@ clean (4/4, no conflicts).
   all present.
 - Pre-merge live state unchanged: /compare/sneakerping → 404, sitemap.xml 0
   `compare/sneakerping`; the two issue verify curls are post-merge checks.
+
+## Sixth pickup — pi-issue-0509-3302, 2026-09-13 (PR #3365 armed but BLOCKED: one tsc error)
+
+PR #3365 (head 599ba8eed = fifth pickup) already OPEN, auto-merge armed
+2026-09-13T11:33:38Z by the prior unit, but mergeState=BLOCKED: exactly two
+checks failing, both on the SAME single error —
+
+- `codex-node-checks` → Typecheck step, exit 2
+- `preview-assert` → Typecheck step, exit 2 (its Build/proof steps skipped)
+
+Annotation (both runs): "Conversion of type 'LinkDescriptor[]' to type
+'Record<string, string>[]' may be a mistake because neither type sufficiently
+overlaps with the other. If this was intentional, convert the expression to
+'unknown' first." — tests/compare-sneakerping.route.test.ts#123. The fifth
+pickup's local runs were vitest (esbuild, no typecheck); CI's tsc step was the
+first typecheck this file ever saw.
+
+Fix (the only code change of this pickup): line 123's cast becomes
+`as unknown as Array<Record<string, string>>` — the compiler's own suggested
+route. Downstream assertions and runtime behavior unchanged.
+
+Inner-loop verification (this tree, sixth pickup):
+- Termination AS WRITTEN in the issue (`npx vitest run
+  tests/compare-sneakerping.route.test.ts --reporter=basic`): FAILED, exit 1 —
+  "Startup Error: Error: Failed to load custom Reporter from basic"
+  ([cause]: Failed to load url basic) — vitest 4.1.11 dropped the built-in
+  `basic` reporter; the fifth pickup's finding, still true. Queued as its own
+  plain issue (no labels).
+- Same file, `--reporter=dot`: 1 file / 5 tests, passed, exit 0.
+- Scoped touched suite (node project, `--configLoader runner`,
+  VITEST_MAX_WORKERS=2 from the unit env): 6 files / 98 tests, ALL passed,
+  exit 0.
+- Typecheck NOT run locally per the memory-budget rule (CI owns it); the PR
+  CI round-trip is the typecheck.
+
+Acceptance 1-5 re-verified on artifacts, not vibes: the $locale wrapper uses
+the same two builders as the compare.keeptabz wrapper (canonicalLinks +
+buyerSurfaceHreflangLinks; canonical→EN asserted by the green route test);
+sneakerping-citations.json = 2 dated sneakerping.com sources (sneakerping-home,
+sneakerping-study), 0 bare $N price literals; /compare/sneakerping present in
+COMPARE_PAGES (app/routes/compare.tsx), the marketing-footer vs-SneakerPing
+rail, app/lib/seo.ts SITEMAP_PATHS (:1012) and the llms.txt
+PUBLIC_MARKDOWN_PATHS (:98); #3147 and #3183 re-checked 2026-09-13 — both
+CLOSED, mergedAt:null, so the adopt-if-landed clauses stay untriggered.
+
+Post-merge: the armed auto-merge fires once codex-node-checks +
+preview-assert go green; the issue's two verify curls are the post-merge
+live checks (pre-merge live state: /compare/sneakerping → 404, sitemap 0
+`compare/sneakerping`).
