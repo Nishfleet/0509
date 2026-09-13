@@ -43,6 +43,8 @@ function connectorRolloutFromEnv(env: AppEnv, connectorId: PresenceConnectorId):
       return parseRolloutState(env.PRESENCE_THREADS_ROLLOUT, "disabled");
     case "hn":
       return parseRolloutState(env.PRESENCE_HN_ROLLOUT, "disabled");
+    case "podcast":
+      return parseRolloutState(env.PRESENCE_PODCAST_ROLLOUT, "disabled");
     default:
       return "disabled";
   }
@@ -71,6 +73,11 @@ function hasCredentials(env: AppEnv, connectorId: PresenceConnectorId): boolean 
       return true;
     case "threads":
       return Boolean(env.THREADS_ACCESS_TOKEN?.trim());
+    case "podcast":
+      // Show RSS is the publisher's own public feed — no key, no auth, no
+      // credentials. The rollout gate (PRESENCE_PODCAST_ROLLOUT) is still
+      // required to activate it.
+      return true;
     case "hn":
       // The Algolia HN Search API is a public data API — no key, no auth, no
       // credentials. The rollout gate (PRESENCE_HN_ROLLOUT) is still required
@@ -90,7 +97,7 @@ function hasCredentials(env: AppEnv, connectorId: PresenceConnectorId): boolean 
 // help-first: Only the predicate changes; the runtime gates in evaluateConnectorAccessGate
 // (rolloutState, credentials, reddit commercial access) still govern whether polling actually runs.
 export function connectorHasCustomerPollPath(connectorId: PresenceConnectorId): boolean {
-  return connectorId === "website" || connectorId === "rss" || connectorId === "gdelt" || connectorId === "threads" || connectorId === "hn" || connectorId === "x" || connectorId === "reddit" || connectorId === "bluesky";
+  return connectorId === "website" || connectorId === "rss" || connectorId === "podcast" || connectorId === "gdelt" || connectorId === "threads" || connectorId === "hn" || connectorId === "x" || connectorId === "reddit" || connectorId === "bluesky";
 }
 
 export async function evaluateConnectorAccessGate(

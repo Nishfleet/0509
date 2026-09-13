@@ -58,6 +58,7 @@ gated on a platform review/approval), **money** (paid surface — MONEY flag),
 | **Threads** | [Threads API keyword search](https://developers.facebook.com/docs/threads/keyword-search/) + [mentions](https://developers.facebook.com/docs/threads/threads-mentions/) | **approval** — free API, needs a Meta app with `threads_keyword_search` (and `threads_manage_mentions` advanced access for others' posts) | Meta Platform Terms. Keyword search: **2,200 queries per user per rolling 24h** (across apps). App review lead time is the real cost. [rate limits](https://developers.facebook.com/docs/threads/overview/) | $0 | Near-real-time | ≤2,200 queries/user/24h — connector must track usage in `presence_poll_cursor` |
 | **Bluesky** | `app.bsky.feed.searchPosts` XRPC ([docs](https://docs.bsky.app/docs/api/app-bsky-feed-search-posts)) | **build** — new `bluesky` connector, free | Bluesky ToS + open AT Protocol. Rate limits documented as "generous… contact us if you encounter rate-limiting" ([rate limits](https://docs.bsky.app/docs/advanced-guides/rate-limits)). Caveat: unauthenticated `searchPosts` on `public.api.bsky.app` has been intermittently 403'd upstream — use an authenticated app-password session | $0 | Near-real-time | Generous; serialize polls anyway |
 | **Hacker News** | [Algolia HN Search API](https://hn.algolia.com/api) `search` / `search_by_date` | **build** — new `hn` connector, no auth at all | Free public API operated by Algolia for HN. No published rate limit — the ~10,000 req/hr/IP figure is community-observed courtesy, not an SLA; ~1,000 retrievable results per query cap. Official alternative ([Firebase HN API](https://github.com/HackerNews/API)) has no search | $0 | Near-real-time | Courtesy budget ~10k req/hr/IP; serialized low-cadence polls are nowhere near it |
+| **Podcasts** | The show's own public RSS 2.0 feed (iTunes/podcast-namespace); episode `<podcast:transcript>` where the show publishes one — [namespace: transcript](https://github.com/Podcastindex-org/podcast-namespace/blob/main/docs/tags/transcript.md) | **build** — new `podcast` connector, no auth; the tracked target IS the show's feed URL | The publisher's own syndication surface; we store episode title/link/excerpt and, where published, the head of the public JSON transcript (other transcript formats recorded, not yet fetched). Coverage = *shows the workspace adds* — there is no single free cross-show episode search (Podcast Index needs a free signup + API key — surveyed, not adopted: see the collector survey below) | $0 | On new episodes | 1 feed fetch per poll (conditional-GET via `presence_poll_cursor`) + at most 5 bounded transcript fetches per poll — the politeness cap is connector-enforced and tested |
 
 ## 3. Data model — a "mention" beside an "ad"
 
@@ -267,6 +268,7 @@ Official docs/terms read for this plan (2026-09-12):
   [newscatcher](https://www.newscatcherapi.com/blog-posts/google-news-rss-search-parameters-the-missing-documentaiton),
   [cloro](https://cloro.dev/blog/google-news-rss/). Treated as an
   undocumented surface in the coverage table.
+- Podcasts: the [Podcasting 2.0 podcast-namespace](https://github.com/Podcastindex-org/podcast-namespace) transcript tag ([docs/tags/transcript.md](https://github.com/Podcastindex-org/podcast-namespace/blob/main/docs/tags/transcript.md)) — item-level `<podcast:transcript>`, `url` + `type` required (`application/json`, `text/vtt`, `application/x-subrip`, `text/plain`, `text/html`), optional `language` / `rel="captions"`. The show's own RSS 2.0 feed is the publisher's public syndication surface; the connector reads the JSON transcript shape (`segments[]` with `text`) and records other formats. No Apple/Google mediation needed for this slice.
 
 Open-source collector survey (`gh search repos`, 2026-09-12): no
 production-grade general mention collector exists to adopt wholesale —
@@ -277,6 +279,18 @@ adopting a suite. Package-registry check: `rss-parser@3.13.0`,
 `@atproto/api@0.20.44` available if a connector wants them — the existing RSS
 connector already parses feeds itself, so no dependency is required for the
 MVP.
+
+Podcast collector survey (`gh search repos` + `npm`, 2026-09-13, #3208): no
+production-grade podcast-mention collector exists to adopt — the
+Podcastindex-org ecosystem ships keyed-API bindings (`python-podcastindex`
+26★, `SparrowTek/PodcastIndexKit` 11★, npm `podcastindex@1.2.0`) that need a
+signup + API key/secret and bypass the SSRF-hardened `presenceSafeFetch`
+bounded-fetch path; `Podcast-Standards-Project/PSP-1-Podcast-RSS-Specification`
+(113★) is a specification, `opawg/podcast-rss-useragents` (64★) is a dataset,
+and the transcript repos (`dado3212/apple-podcast-transcripts` 183★,
+`lord-denning/Huberman-Lab-Podcast-Transcripts` 267★) are static dumps, not
+collectors. Conclusion: the connector parses the show feed itself (repo
+precedent: the rss connector), zero new dependencies.
 
 Prior art inside the repo: `docs/epics/2026-08-28-mention-monitoring.md`
 (scout + evals + phases, shipped as #1375/#1377/#1378/#1379/#1380),
