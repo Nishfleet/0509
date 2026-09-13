@@ -1,0 +1,23 @@
+
+Running 17 tests using 4 workers
+
+  ✓   1 [prod-public] › e2e/ads-wall-verified-label.prod-public.spec.ts:17:1 › ads wall labels verified-link cards and separates them from search-only matches (1.7s)
+  ✓   2 [prod-public] › e2e/homepage-react-418-hydration.prod-public.spec.ts:20:1 › homepage hydrates with zero React #418 page errors at 360x844 (3.0s)
+  ✓   3 [prod-public] › e2e/prod-public.spec.ts:183:3 › public production-safe E2E smoke › public pages and machine-readable surfaces render without auth (5.9s)
+  ✓   4 [prod-public] › e2e/prod-public.spec.ts:259:3 › public production-safe E2E smoke › public search stays usable at tablet and mobile widths (2.1s)
+  -   5 [prod-public] › e2e/prod-public.spec.ts:274:3 › public production-safe E2E smoke › first-value journey shows a verified proof and preserves signup intent
+  -   6 [prod-public] › e2e/prod-public.spec.ts:330:3 › public production-safe E2E smoke › public pricing preserves monthly and annual plan intent for signed-out buyers
+  ✓   7 [prod-public] › e2e/prod-public.spec.ts:360:3 › public production-safe E2E smoke › public buttons and links route to valid actions without sending side effects (1.4m)
+  -   8 [prod-public] › e2e/prod-public.spec.ts:426:3 › public production-safe E2E smoke › auth action buttons preserve redirects and block empty required submissions
+  ✓   9 [prod-public] › e2e/search-brand-page-link.prod-public.spec.ts:24:3 › nike search links to its indexable brand page (5.3s)
+  ✓  10 [prod-public] › e2e/search-brand-page-link.prod-public.spec.ts:24:3 › adidas search links to its indexable brand page (2.9s)
+  ✓  11 [prod-public] › e2e/search-brand-page-link.prod-public.spec.ts:24:3 › shopify search links to its indexable brand page (2.0s)
+  ✓  12 [prod-public] › e2e/search-major-brand-verified-labels.prod-public.spec.ts:24:3 › nike search shows at least one verified/likely row, not all Unmatched (1.6s)
+  ✓  13 [prod-public] › e2e/search-major-brand-verified-labels.prod-public.spec.ts:24:3 › adidas search shows at least one verified/likely row, not all Unmatched (2.2s)
+  ✓  14 [prod-public] › e2e/search-major-brand-verified-labels.prod-public.spec.ts:24:3 › shopify search shows at least one verified/likely row, not all Unmatched (1.7s)
+  ✓  15 [prod-public] › e2e/search-results-header-layout.prod-public.spec.ts:63:1 › results lead renders normal measure at 1280×800 /search?q=nike (3.8s)
+  ✓  16 [prod-public] › e2e/search-results-header-layout.prod-public.spec.ts:76:1 › provenance paragraph renders full-measure at 1280×800 /search?q=nike (1.6s)
+  ✓  17 [prod-public] › e2e/search-results-header-layout.prod-public.spec.ts:96:1 › at 390×844 no toolbar control is clipped and there is no horizontal scroll (1.7s)
+
+  3 skipped
+  14 passed (2.0m)
