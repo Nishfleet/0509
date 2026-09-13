@@ -177,11 +177,11 @@ export function buildPresenceEntityBrief(input: BuildPresenceEntityBriefInput): 
   const scopedItems = input.items.filter(
     (item) => activeSourceIds.has(item.connectorId) && scopedSourceTargetIds.has(item.sourceTargetId),
   );
-  const mentionChanges = (input.mentionItems ?? [])
+  const mentionRecords = (input.mentionItems ?? [])
     .filter((item) => item.connectorId !== "website")
     .sort((a, b) => b.observedAt.localeCompare(a.observedAt))
-    .slice(0, 3)
-    .map((item) => ({
+    .slice(0, 3);
+  const mentionChanges = mentionRecords.map((item) => ({
       id: item.id,
       title: item.title,
       canonicalUrl: item.canonicalUrl,
@@ -216,7 +216,9 @@ export function buildPresenceEntityBrief(input: BuildPresenceEntityBriefInput): 
   // mention-only entity does not say "No proof-backed changes yet" while the
   // change rows below it show proofs. With no mentionItems this is exactly
   // the historical latestPollItems set — existing scenarios unchanged.
-  const proofItems = [...latestPollItems, ...mentionChanges];
+  // Proof uses the records themselves (not the six-field display rows below):
+  // proofStrengthFromItems looks each item's source up by sourceTargetId.
+  const proofItems = [...latestPollItems, ...mentionRecords];
   const lastChangeAt = latestTimestamp([
     ...recentChanges.map((change) => change.observedAt),
     ...latestPollCursorChangeTimes,
