@@ -93,7 +93,6 @@ export const REDDIT_RATE_BUDGET_PER_WINDOW = 1_000;
 const REDDIT_WINDOW_MS = 10 * 60 * 1000;
 /** Re-grant slightly before the documented ~1h expiry. */
 const TOKEN_EXPIRY_SAFETY_MS = 60_000;
-const REDDIT_DEFAULT_TOKEN_TTL_MS = 60 * 60 * 1000;
 
 export interface RedditPollTarget {
   id: string;
@@ -123,20 +122,6 @@ let cachedAccessToken: CachedAccessToken | null = null;
 
 export function resetRedditAccessTokenCacheForTests() {
   cachedAccessToken = null;
-}
-
-interface RedditListingPost {
-  data?: {
-    id?: string;
-    title?: string;
-    selftext?: string;
-    author?: string;
-    permalink?: string;
-    created_utc?: number;
-    score?: number;
-    num_comments?: number;
-    subreddit?: string;
-  };
 }
 
 export const redditConnector = {
