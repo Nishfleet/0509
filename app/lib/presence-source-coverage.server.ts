@@ -511,7 +511,7 @@ export function presenceSourceCoverageForDocs(): Array<{
       label: SOURCE_LABELS.tiktok,
       productionStatus: "active",
       notes:
-        "TikTok Commercial Content Library wired in and live behind its flag (#2194; Nish decision 2026-09-12): EU-shown ads only — the public library publishes what reached the EU, never spend or impressions; the newest 12 ads per tracked competitor, refreshed weekly with one 90-second capture attempt (a failed capture skips silently to the next week and never becomes an event). Shares the 800-requests/month Decodo render budget; requires DECODO_SCRAPER_AUTH.",
+        "TikTok Commercial Content Library wired in and live behind its flag (#2194; Nish decision 2026-09-12): EU-shown ads only — the public library publishes what reached the EU, no spend or impressions; the newest 12 ads per tracked brand, refreshed weekly with one 90-second capture attempt (a failed capture skips silently to the next week and never becomes an event). Shares the 800-requests/month Decodo render budget; requires DECODO_SCRAPER_AUTH.",
     },
     {
       sourceId: "subdomains",

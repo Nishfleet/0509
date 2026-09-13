@@ -326,7 +326,9 @@ function TiktokAdsBrandSection({ snapshot }: { snapshot: SourceSnapshotRecord })
         <p className="f9-wk-dim">No EU-shown TikTok ads found.</p>
       )}
       <p className="f9-wk-dim">
-        EU-shown ads only. TikTok's Commercial Content Library does not expose spend or impressions.
+        EU-shown ads only. TikTok's Commercial Content Library does not expose spend or
+        impressions. This source rechecks weekly; a failed capture skips silently to the next
+        week and never becomes an event.
       </p>
     </BrandPageSourceSection>
   );
