@@ -8,6 +8,7 @@ import {
   isBuyerSurfaceLocaleId,
 } from "~/lib/locale-markets";
 import { buyerSurfaceHreflangLinks, publicSeoFileForPathname } from "~/lib/seo";
+import { AD_AGGRESSION_METHODOLOGY_PATH } from "~/lib/aggression-score";
 import { buildLocaleSitemapXml } from "~/lib/sitemap.server";
 
 beforeEach(() => {
@@ -89,7 +90,11 @@ describe("locale buyer-surface layout (issue #1501)", () => {
           ? "/"
           : splat === "api/docs"
             ? "/api/docs"
-            : `/${splat}`;
+            : splat === "methodology"
+              // Issue #2871: the shallow /methodology is a permanent 301 to
+              // the citable EN page, so x-default points there (issue #2030).
+              ? AD_AGGRESSION_METHODOLOGY_PATH
+              : `/${splat}`;
       expect(xDefault?.href).toBe(`https://0509.io${enPath}`);
     }
   });
