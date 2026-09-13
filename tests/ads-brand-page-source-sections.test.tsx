@@ -207,6 +207,19 @@ describe("/ads/:domain source sections (issue #2200)", () => {
     // One factual sentence + the data (creative count, advertiser).
     expect(markup).toContain("1 creative");
     expect(markup).toContain("across 1 advertiser");
+    // Issue #3197: the fixture brand's /ads page shows its Google ad — the
+    // creative tile renders with the fixture creative's preview URL (>=1 ad).
+    expect(markup).toContain('class="f9-creative-tile"');
+    expect(markup).toContain("https://example.com/preview.png");
+    // Issue #3197: the honest coverage note — source, what is covered (ad
+    // types), what is not, region, and freshness — rendered on /ads.
+    expect(markup).toContain('data-testid="brand-google-ads-coverage"');
+    expect(markup).toContain("public Ads Transparency Center — no credentials, no official-API key");
+    expect(markup).toContain("image and text formats; video is not separately distinguishable in this capture");
+    expect(markup).toContain("no country filter is pinned");
+    expect(markup).toContain("Spend, reach and audience metrics are out of scope of this source");
+    expect(markup).toContain("the capture re-runs on this brand");
+    expect(markup).toContain("regular monitoring cadence");
     // "Last checked" line in the body, not in title/description.
     expect(markup).toContain('data-testid="brand-google-ads-checked"');
     expect(markup).toContain("Last checked");

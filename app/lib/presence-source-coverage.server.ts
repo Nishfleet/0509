@@ -500,8 +500,9 @@ export function presenceSourceCoverageForDocs(): Array<{
     {
       sourceId: "google_ads",
       label: SOURCE_LABELS.google_ads,
-      productionStatus: "coming_soon",
-      notes: "Google Ads Transparency Center source wired in as a stub (seam #2218). Live adapter lands in #2189.",
+      productionStatus: "active",
+      notes:
+        "Live (issue #3197; #2189): Google's public Ads Transparency Center, the no-credential SearchCreatives RPC — no official-API key that bars commercial use. Covers creatives currently published for the tracked domain; image and text formats (video is not separately distinguishable in this capture); no spend, reach or audience metrics. Region: whatever the public Transparency Center serves without sign-in — no country filter is pinned, so there is no per-country breakdown. Freshness: re-read on the regular monitoring cadence (the cadence label is a hint; the seam runs it on every scheduled check). Killed via GOOGLE_ADS_SOURCE_DISABLED=1 (kill flag; 0/unset = on). Capture attempts and failures feed the /status capture-failure rate when the #2181 DECODO_BUDGET KV binding is wired; without it the /status line states the flag posture only.",
     },
     {
       sourceId: "tiktok",
