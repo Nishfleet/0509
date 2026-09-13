@@ -150,7 +150,7 @@ describe("dashboard first 15 minutes activation", () => {
       await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain('href="/app/digests?firstrun=1"');
+    expect(markup).toContain('href="/app/briefs?firstrun=1"');
     expect(markup).toContain("Read latest brief");
     expect(markup).toContain('class="f9-evidence-cta f9-evidence-cta--rank2"');
     expect(markup.match(/f9-evidence-cta--rank1/g)?.length ?? 0).toBe(1);

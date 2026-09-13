@@ -26,7 +26,7 @@ const SURFACES = [
     user: "e2e-starter",
     current: "/app/watchlists",
   },
-  { name: "briefs", url: "/app/digests", user: "e2e-starter", current: "/app/digests" },
+  { name: "briefs", url: "/app/digests", user: "e2e-starter", current: "/app/briefs" },
 ] as const;
 const DESKTOP_SURFACES = [
   {
@@ -45,7 +45,7 @@ const COMMON_ROUTE_HREFS = [
   "/app",
   "/app/watchlists",
   "/search",
-  "/app/digests",
+  "/app/briefs",
   "/app/collections",
   "/app/reports",
   "/app/shares",
