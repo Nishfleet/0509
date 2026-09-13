@@ -30,10 +30,15 @@ async function mockRouter(useLoaderData: MockUseLoaderData) {
 }
 
 beforeEach(() => {
+  // The /status fixtures pin absolute instants on purpose (#3198-era rows,
+  // historical captures going back months); freezing the clock keeps them
+  // exact and satisfies the #3215 no-time-bomb gate for this file.
+  vi.useFakeTimers({ now: new Date("2026-09-13T16:00:00.000Z") });
   vi.resetModules();
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.resetModules();
 });

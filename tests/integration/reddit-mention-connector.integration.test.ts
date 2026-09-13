@@ -282,7 +282,10 @@ describe("reddit mention connector — poll (real Data API path)", () => {
     expect(first?.canonicalUrl).toBe(POST_A_PERMALINK);
     expect(first?.canonicalUrl).not.toContain("oauth.reddit.com");
     expect(first?.contentHash).toBeTruthy();
-    expect(first?.publishedAt).toBe("2026-01-01T00:00:00.000Z");
+    // fixed-date: the capture copies the fixture's created_utc through unchanged —
+    // this assertion compares verbatim, never against the wall clock (staleness
+    // paths in this file use relative Date.now() offsets).
+    expect(first?.publishedAt).toBe("2026-01-01T00:00:00.000Z"); // fixed-date: fixture created_utc, compared verbatim, not against the clock
     expect(first?.author).toBe("u/sneakerfan");
     expect((first?.raw as Record<string, unknown> | null)?.score).toBe(42);
     expect((first?.raw as Record<string, unknown> | null)?.numComments).toBe(7);
