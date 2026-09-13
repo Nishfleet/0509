@@ -148,3 +148,34 @@ ccca0c94e landed clean (2/2, no conflicts).
 - Pre-merge live state (the gap this PR closes): /compare/sneakerping → 404,
   sitemap.xml 0 `compare/sneakerping`. The issue's two verify curls are
   post-merge checks by nature and cannot pass before deploy.
+
+## Continuation — pi-issue-0509-3302, 2026-09-13 (rebase + re-verification)
+
+- Resumed from the 2 salvaged commits (feature 5b26560ac + evidence
+  32c206129, both on the old-main base ccca0c94e). Rebase onto origin/main
+  f026d4248 clean: `git diff --stat <base> origin/main -- <touched paths>`
+  is EMPTY (zero drift under any touched file). Pushed as af8f6f242 +
+  b98a1c2b8, fast-forward, no force (origin/claim/issue-3302 was exactly
+  origin/main; the 6 stale-remote commits are all ancestors of main).
+- Termination re-run: `npx vitest run tests/compare-sneakerping.route.test.ts`
+  (no reporter flag) 5/5, exit 0. First attempt with the issue's literal
+  `--reporter=basic` died at Vitest 4.1.11 startup: "Failed to load custom
+  Reporter from basic" (Failed to load url basic) — the issue's flag predates
+  the toolchain; the bare run is the same termination, reporter aside.
+- Affected: `npx vitest run --configLoader runner --project node --changed
+  origin/main` 389 files, 4648/4648, exit 0, 101.7s. No coverage, no
+  typecheck locally (fleet-ops#4891); CI owns both.
+- `sgscan --base origin/main` (f026d4248): "No new security findings." (exit 0).
+- #3183 / #3147 re-checked 2026-09-13T15:39Z: both CLOSED, `mergedAt:null` —
+  the adopt-if-landed clauses stay untriggered; no duplication.
+- Acceptance re-check on the rebased tree (unchanged by the rebase): route
+  pair per compare.keeptabz (canonical→EN, #1562), cited claims
+  (sneakerping-citations.json: 2 dated sneakerping.com sources), switch
+  framing ends in the free /search preview (GET Form → /search, "search
+  preview — no account"; no demo form), #3167 footer compare rail gains
+  /compare/sneakerping (renders on /sneaker-resale/* and /brands/*),
+  SITEMAP_PATHS + PUBLIC_MARKDOWN_PATHS wiring, COMPARE_PRODUCT_NAMES
+  og:image, G11 registry maps both new paths, #2856 mover guard scoped.
+- Pre-merge live state unchanged: the two issue verify curls are post-merge
+  checks by nature (see prior line); the termination vitest is the only
+  pre-merge termination check and it is green.
