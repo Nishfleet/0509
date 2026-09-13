@@ -23,13 +23,14 @@
  * line, so raw or oversized material can never be persisted even by accident.
  *
  * Telemetry failures are never fatal to the product job and never add
- * unbounded latency: the D1 write races a short timeout (default
- * `BROWSER_JOB_TELEMETRY_WRITE_TIMEOUT_MS`) and the product path never awaits
- * a slow write past it. When the caller has a request ExecutionContext
- * (`executionContext` option), the write is also registered with `waitUntil`
- * so it still completes after the response (background completion preserved).
- * Missing tables, unusable envs, and write errors all degrade to a warn line
- * at most.
+ * unbounded latency. Without a request ExecutionContext the D1 write races a
+ * short timeout (default `BROWSER_JOB_TELEMETRY_WRITE_TIMEOUT_MS`). With a
+ * ExecutionContext the write is registered with `waitUntil` and the call
+ * returns immediately (issue #3319: the context keeps the isolate alive until
+ * the row lands, so the caller never needs to block on it — awaiting it made
+ * every discovery-cache serve wait out one more D1 round-trip on the /search
+ * TTFB path). Missing tables, unusable envs, and write errors all degrade to
+ * a warn line at most.
  */
 
 import { execute } from "~/lib/data/d1.server";
@@ -435,13 +436,21 @@ export async function recordBrowserJobTelemetry(
   // race below wins. Registration never blocks and never throws; the product
   // path still waits at most `BROWSER_JOB_TELEMETRY_WRITE_TIMEOUT_MS`.
   const executionContext = options.executionContext;
+  let registeredWithWaitUntil = false;
   if (executionContext && typeof executionContext.waitUntil === "function") {
     try {
       executionContext.waitUntil(write);
+      // Issue #3319: the registration keeps the isolate alive until the write
+      // settles, so the caller returns immediately instead of also racing the
+      // bounded wait. Callers WITHOUT a context still get the bounded race so
+      // a slow D1 write cannot stall a response indefinitely.
+      registeredWithWaitUntil = true;
     } catch {
       // A context that refuses the registration must not break the job.
     }
   }
 
-  await boundedWrite(write, options.timeoutMs ?? BROWSER_JOB_TELEMETRY_WRITE_TIMEOUT_MS);
+  if (!registeredWithWaitUntil) {
+    await boundedWrite(write, options.timeoutMs ?? BROWSER_JOB_TELEMETRY_WRITE_TIMEOUT_MS);
+  }
 }

@@ -1,7 +1,7 @@
 import { decodeHtmlEntities } from "~/lib/decode-html.server";
 import { fetchWithTimeout, releaseFetchTimeout } from "~/lib/fetch-timeout.server";
 import { resolvePublicHttpUrl, resolvePublicRedirectUrl } from "~/lib/public-url.server";
-import { registrableDomainFromHostname } from "~/lib/search-query";
+import { parseSearchInputFromWebsiteField, registrableDomainFromHostname } from "~/lib/search-query";
 import { stripScriptAndStyle } from "~/lib/sanitize-text.server";
 
 export interface WebsiteIdentity {
@@ -192,30 +192,27 @@ const IDENTITY_OVERRIDES: Record<
 };
 
 const identityCache = new Map<string, { expiresAt: number; identity: WebsiteIdentity | null }>();
+// Issue #3319: one in-flight resolution per registrable domain. A keyword
+// search now pre-warms the identity BEFORE the discovery reads (see
+// `prewarmWebsiteIdentity`), and the later tier-labelling call must join
+// that same task instead of starting a second fetch chain for the domain.
+const identityInFlight = new Map<string, Promise<WebsiteIdentity | null>>();
 
-export async function resolveWebsiteIdentity(domainUrl: string): Promise<WebsiteIdentity | null> {
-  const safeUrl = await resolvePublicHttpUrl(domainUrl.startsWith("http") ? domainUrl : `https://${domainUrl}`);
-  if (!safeUrl) {
-    return null;
-  }
-
-  const registrableDomain = registrableDomainFromHostname(safeUrl.hostname);
-  if (!registrableDomain) {
-    return null;
-  }
-
-  const cached = identityCache.get(registrableDomain);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.identity;
-  }
-
+/**
+ * One live resolution: the redirect-alias fetch chain raced against the
+ * overall deadline (issue #2870), then the curated-override merge, then the
+ * 6h result-cache write. Deadline losers fall back to the curated-only
+ * identity — the same fallback a hard-failed fetch takes — and the loser's
+ * promise is drained so a late rejection can never surface as an unhandled
+ * one. Exactly ONE task per domain runs at a time via `identityInFlight`.
+ */
+async function resolveWebsiteIdentityUncached(
+  safeUrl: URL,
+  registrableDomain: string,
+): Promise<WebsiteIdentity | null> {
   const livePromise = fetchWebsiteIdentity(safeUrl, registrableDomain).catch(
     () => null,
   );
-  // Race the live chain against the overall deadline (issue #2870). The
-  // deadline loser falls back to the curated-only identity — the same
-  // fallback a hard-failed fetch already takes — and the loser's promise is
-  // drained so a late rejection can never surface as an unhandled one.
   let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
   const live = await Promise.race([
     livePromise,
@@ -236,6 +233,58 @@ export async function resolveWebsiteIdentity(domainUrl: string): Promise<Website
   });
 
   return identity;
+}
+
+export async function resolveWebsiteIdentity(domainUrl: string): Promise<WebsiteIdentity | null> {
+  const safeUrl = await resolvePublicHttpUrl(domainUrl.startsWith("http") ? domainUrl : `https://${domainUrl}`);
+  if (!safeUrl) {
+    return null;
+  }
+
+  const registrableDomain = registrableDomainFromHostname(safeUrl.hostname);
+  if (!registrableDomain) {
+    return null;
+  }
+
+  const cached = identityCache.get(registrableDomain);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.identity;
+  }
+
+  // Concurrent callers for the same domain share ONE deadline race, one
+  // fetch chain, and one result-cache write. Sequential callers after a
+  // settled resolution hit the result cache above; a settled null also
+  // landed there (the 6h TTL applies either way), so the in-flight map only
+  // ever bridges the same request's pre-warm → consume window.
+  const inFlight = identityInFlight.get(registrableDomain);
+  if (inFlight) {
+    return inFlight;
+  }
+  const task = resolveWebsiteIdentityUncached(safeUrl, registrableDomain);
+  identityInFlight.set(registrableDomain, task);
+  try {
+    return await task;
+  } finally {
+    identityInFlight.delete(registrableDomain);
+  }
+}
+
+/**
+ * Issue #3319 — warm the per-isolate identity cache BEFORE the value is
+ * needed. Keyword tier-labelling resolves the searched domain's identity (a
+ * live redirect-alias chain, 2.5s deadline); when that resolution started
+ * only after the discovery lookup, a locally-placed Worker paid the whole
+ * chain as extra first-byte time. This fires the SAME resolution (same
+ * deadline, result cache, and in-flight dedup) early so it overlaps the
+ * search's own work; the later `resolveWebsiteIdentity` joins the in-flight
+ * task instead of restarting it. Never throws.
+ */
+export function prewarmWebsiteIdentity(websiteInput: string): Promise<WebsiteIdentity | null> {
+  const intent = parseSearchInputFromWebsiteField(websiteInput);
+  if (intent.intent !== "domain" || !intent.normalizedUrl) {
+    return Promise.resolve(null);
+  }
+  return resolveWebsiteIdentity(intent.normalizedUrl).catch(() => null);
 }
 
 /**
