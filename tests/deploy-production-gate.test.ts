@@ -7,6 +7,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -2284,6 +2285,24 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(measureIndex).toBeGreaterThan(ledgerIndex);
     expect(deploySteps[measureIndex].if).toBe("always()");
     expect(deploy.jobs.deploy.permissions["contents"]).toBe("write");
+  });
+
+  it("runs every deploy-job ./scripts/ step against an executable checkout (0509#3330)", () => {
+    const deploy = parse(
+      readFileSync(resolve(".github/workflows/deploy-production.yml"), "utf8"),
+    ) as any;
+    const directRuns = (deploy.jobs.deploy.steps as Array<{ run?: string }>)
+      .map((step) => step.run?.trim())
+      .filter((run): run is string => !!run && run.startsWith("./scripts/"));
+    expect(directRuns).toContain("./scripts/commit-deploy-ledger.sh");
+    expect(directRuns).toContain("./scripts/ci-verify-production-candidate.sh");
+    for (const run of new Set(directRuns)) {
+      const script = statSync(resolve(run.slice(2)));
+      expect(
+        (script.mode & 0o111) !== 0,
+        `${run} lost its +x bit — the Actions checkout runs it as ${run} and dies with exit 126 (0509#3330)`,
+      ).toBe(true);
+    }
   });
 
   it("fails a rewritten-away pinned SHA with regenerate-the-evidence, not Command failed (0509#2974)", async () => {
