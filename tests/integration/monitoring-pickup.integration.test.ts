@@ -66,16 +66,22 @@ async function bulkAcceptOneCandidate(options: { workspaceUserId: string; advert
   );
 }
 
-async function findCreatedWatchlist(options: { workspaceUserId: string; advertiser: string }) {
+/**
+ * The import-backed creation path names the watchlist `"${targetLabel} watch"
+ * (competitor-import's prepareImportRow), not the raw advertiser string, so
+ * the lookup is scoped to the per-test seeded user (ids are unique per call
+ * and storage is isolated per file) and takes that user's newest watchlist.
+ */
+async function findCreatedWatchlist(options: { workspaceUserId: string }) {
   const row = await db()
     .prepare(
       `SELECT id, name, user_id, is_active, last_scanned_at
        FROM watchlist
-       WHERE user_id = ? AND name = ?
+       WHERE user_id = ?
        ORDER BY created_at DESC
        LIMIT 1`,
     )
-    .bind(options.workspaceUserId, options.advertiser)
+    .bind(options.workspaceUserId)
     .first<{
       id: string;
       name: string;
@@ -123,7 +129,7 @@ describe("monitoring pickup — first-scan queue on a production watchlist-creat
 
     // The watchlist itself must exist no matter how the dispatch handoff
     // resolved — creation is the production path's own effect.
-    const watchlist = await findCreatedWatchlist({ workspaceUserId: userId, advertiser });
+    const watchlist = await findCreatedWatchlist({ workspaceUserId: userId });
     expect(watchlist).not.toBeNull();
     expect(watchlist!.user_id).toBe(userId);
     expect(watchlist!.is_active).toBe(1);
@@ -159,7 +165,7 @@ describe("monitoring pickup — first-scan queue on a production watchlist-creat
 
     // Precondition (the same mechanism as the first test): the production
     // path already queued the run before anything else in this test runs.
-    const watchlistRow = await findCreatedWatchlist({ workspaceUserId: userId, advertiser });
+    const watchlistRow = await findCreatedWatchlist({ workspaceUserId: userId });
     expect(watchlistRow).not.toBeNull();
     const queued = await readFirstScanRun(watchlistRow!.id);
     expect(queued).not.toBeNull();
