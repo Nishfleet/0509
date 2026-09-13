@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MockInstance } from "vitest";
 
 import { CommercialDiscoveryError } from "~/lib/meta-library-browser.server";
+import { PUBLIC_SEARCH_TRANSIENT_DEGRADED_MESSAGE } from "~/lib/customer-route-error";
 import { writeAppLog } from "~/lib/log.server";
 
 const FUNNEL_OPERATIONS = [
@@ -833,7 +834,7 @@ describe("funnel measurement route boundaries", () => {
     expect(emittedFunnelRecords(logSpy)).toHaveLength(0);
   }, 30_000);
 
-  it("emits a coarse error event and rethrows the same failure from the search loader", async () => {
+  it("emits a coarse error event and answers the honest degraded 200 from the search loader (issue #3400)", async () => {
     const env = { FUNNEL_MEASUREMENT_ENABLED: "1" };
     const searchAdsViaSourceResolver = vi
       .fn()
@@ -873,14 +874,18 @@ describe("funnel measurement route boundaries", () => {
       "http://localhost/search?query=nykaa&mode=advertiser&website=https%3A%2F%2Fnykaa.com",
     );
 
-    let thrown: unknown;
-    try {
-      await loader({ context: createContext(env), request } as never);
-    } catch (error) {
-      thrown = error;
-    }
-    expect(thrown).toBeInstanceOf(CommercialDiscoveryError);
-    expect((thrown as Error).message).toBe("provider down");
+    // Issue #3400: the money path's result leg no longer rethrows the
+    // failure into the route ErrorBoundary (a 500) — it funnel-records the
+    // coarse error (asserted below) and answers the honest degraded 200:
+    // the leg must answer with either the proof or the honest no-proof
+    // state, never a 500. The scrub contract below is unchanged.
+    const result = await loader({ context: createContext(env), request } as never);
+    expect(result).toMatchObject({
+      inputError: PUBLIC_SEARCH_TRANSIENT_DEGRADED_MESSAGE,
+      selectedAd: null,
+      session: null,
+      result: expect.objectContaining({ ads: [] }),
+    });
 
     const records = emittedFunnelRecords(logSpy);
     const errorRecord = records.find(
