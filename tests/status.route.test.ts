@@ -109,6 +109,15 @@ describe("status route", () => {
     const xRow = mentionSources.find((source) => source.sourceId === "x");
     expect(xRow).toBeDefined();
     expect(xRow?.productionStatus).toBe("gated");
+
+    // Issue #3207 — the Hacker News mention source's /status row: wired in,
+    // still gated behind PRESENCE_HN_ROLLOUT, and the note states what the
+    // public surface covers (public HN stories and comments whose stored
+    // text/URL/title matches the tracked phrase).
+    const hnRow = mentionSources.find((source) => source.sourceId === "hn");
+    expect(hnRow).toBeDefined();
+    expect(hnRow?.productionStatus).toBe("gated");
+    expect(hnRow?.notes).toContain("Hacker News");
   });
 
   it("renders the tracked-source rows — the Threads mention source reads gated (issue #3205)", async () => {
@@ -152,6 +161,11 @@ describe("status route", () => {
     // The X per-source row (issue #3198) renders its no-free-tier note — the
     // public recent-search surface is pay-per-use only, so the flag stays off.
     expect(markup).toContain("pay-per-use");
+    // The Hacker News row (issue #3207's acceptance) renders its honest
+    // coverage note verbatim — what the surface covers, and what only rides
+    // in raw_json.
+    expect(markup).toContain("Hacker News");
+    expect(markup).toContain("rides raw_json, never the mention");
   });
 
   it("renders the rss tracked-source row — the publication-feed surface the Medium mentions ride (issue #3200)", async () => {

@@ -693,6 +693,12 @@ describe("hn mention connector — presence substrate (real migrations)", () => 
   });
 });
 
+// Scope notes for the #3207 acceptance: the capture-validity gate is proven
+// on the full pipeline in tests/capture-validity-pipeline.test.ts (this
+// describe exercises the kill-flag gate at the poll boundary; nothing here
+// bypasses the validity pipeline); the issue's "e2e fixture" proof here is
+// the integration fixture (>=1 mention), with the public-surface proof
+// pinned in tests/status.route.test.ts (the /status markup).
 describe("hn mention source activation — capture, dedup by canonical URL, kill flag, rate budget (#3207)", () => {
   async function countLivePresenceItems(sourceTargetId: string): Promise<number> {
     const row = await db()
@@ -753,9 +759,12 @@ describe("hn mention source activation — capture, dedup by canonical URL, kill
       expect(item.contentHash).toBeTruthy();
     }
 
-    // A SECOND identical poll + upsert must not multiply rows: the substrate
-    // dedups on (source_target_id, url_hash) — one canonical mention, even
-    // when the page answers with the same hits again.
+    // A SECOND identical poll + upsert must not multiply rows: the app-level
+    // upsert skips when the stored (source_target_id, url_hash) row's
+    // content_hash is unchanged (presence-data.server.ts) — one canonical
+    // mention, even when the page answers with the same hits again. The 0055
+    // UNIQUE (source_target_id, url_hash) index is the concurrent-write
+    // backstop, not what this happy-path poll exercises.
     const pollAgain = await pollPresenceTarget(env, hnTarget, { trackingMode: "self" }, { fetchImpl });
     expect(pollAgain.ok).toBe(true);
     const upsertAgain = await upsertPresenceItems(env, { sourceTarget: hnTarget, items: pollAgain.items });
