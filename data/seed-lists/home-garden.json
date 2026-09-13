@@ -1,0 +1,211 @@
+{
+  "cluster": "home-garden",
+  "asOf": "2026-09-13",
+  "sourceNote": "Home and garden / furniture-and-remodel retail tranche (issue #3356): 51 real, currently-advertised home, furniture, decor, bedding, mattress, garden and home-improvement brands, appended after the existing lists (cursor-safe, issue #2361). Same honesty rule as the other lists: every domain either passes the #1549 publish floor (verified+likely >= 1) within the tranche window or is removed, with the ads_domain_published/ads_domain_skipped/ads_domain_failed telemetry rows as the record. An alphabetical-prefix sample was probed via the #1549 preflight (see the .fleet/ probe log, 2026-09-13); those probes also prime the production discovery cache, so the sampled domains publish on the next 04:00 nightly run.",
+  "domains": [
+    {
+      "domain": "article.com",
+      "brand": "Article"
+    },
+    {
+      "domain": "balsamhill.com",
+      "brand": "Balsam Hill"
+    },
+    {
+      "domain": "ballarddesigns.com",
+      "brand": "Ballard Designs"
+    },
+    {
+      "domain": "bedbathbeyond.com",
+      "brand": "Bed Bath & Beyond"
+    },
+    {
+      "domain": "birchlane.com",
+      "brand": "Birch Lane"
+    },
+    {
+      "domain": "bollandbranch.com",
+      "brand": "Boll & Branch"
+    },
+    {
+      "domain": "brooklinen.com",
+      "brand": "Brooklinen"
+    },
+    {
+      "domain": "burrow.com",
+      "brand": "Burrow"
+    },
+    {
+      "domain": "castlery.com",
+      "brand": "Castlery"
+    },
+    {
+      "domain": "cb2.com",
+      "brand": "CB2"
+    },
+    {
+      "domain": "coyuchi.com",
+      "brand": "Coyuchi"
+    },
+    {
+      "domain": "crateandbarrel.com",
+      "brand": "Crate & Barrel"
+    },
+    {
+      "domain": "dunelm.com",
+      "brand": "Dunelm"
+    },
+    {
+      "domain": "ethanallen.com",
+      "brand": "Ethan Allen"
+    },
+    {
+      "domain": "fromourplace.com",
+      "brand": "From Our Place"
+    },
+    {
+      "domain": "homedepot.com",
+      "brand": "The Home Depot"
+    },
+    {
+      "domain": "joybird.com",
+      "brand": "Joybird"
+    },
+    {
+      "domain": "jossandmain.com",
+      "brand": "Joss & Main"
+    },
+    {
+      "domain": "kirklands.com",
+      "brand": "Kirkland's"
+    },
+    {
+      "domain": "lowes.com",
+      "brand": "Lowe's"
+    },
+    {
+      "domain": "minted.com",
+      "brand": "Minted"
+    },
+    {
+      "domain": "mybobs.com",
+      "brand": "Bob's Discount Furniture"
+    },
+    {
+      "domain": "parachutehome.com",
+      "brand": "Parachute"
+    },
+    {
+      "domain": "potterybarn.com",
+      "brand": "Pottery Barn"
+    },
+    {
+      "domain": "ruggable.com",
+      "brand": "Ruggable"
+    },
+    {
+      "domain": "rh.com",
+      "brand": "RH"
+    },
+    {
+      "domain": "roomandboard.com",
+      "brand": "Room & Board"
+    },
+    {
+      "domain": "serenaandlily.com",
+      "brand": "Serena & Lily"
+    },
+    {
+      "domain": "sonos.com",
+      "brand": "Sonos"
+    },
+    {
+      "domain": "westelm.com",
+      "brand": "West Elm"
+    },
+    {
+      "domain": "williams-sonoma.com",
+      "brand": "Williams Sonoma"
+    },
+    {
+      "domain": "1stdibs.com",
+      "brand": "1stDibs"
+    },
+    {
+      "domain": "arhaus.com",
+      "brand": "Arhaus"
+    },
+    {
+      "domain": "athome.com",
+      "brand": "At Home"
+    },
+    {
+      "domain": "biglots.com",
+      "brand": "Big Lots"
+    },
+    {
+      "domain": "burpee.com",
+      "brand": "Burpee"
+    },
+    {
+      "domain": "casper.com",
+      "brand": "Casper"
+    },
+    {
+      "domain": "costco.com",
+      "brand": "Costco"
+    },
+    {
+      "domain": "flooranddecor.com",
+      "brand": "Floor & Decor"
+    },
+    {
+      "domain": "gardeners.com",
+      "brand": "Gardener's Supply"
+    },
+    {
+      "domain": "harborfreight.com",
+      "brand": "Harbor Freight Tools"
+    },
+    {
+      "domain": "ikea.com",
+      "brand": "IKEA"
+    },
+    {
+      "domain": "lovesac.com",
+      "brand": "Lovesac"
+    },
+    {
+      "domain": "menards.com",
+      "brand": "Menards"
+    },
+    {
+      "domain": "purple.com",
+      "brand": "Purple"
+    },
+    {
+      "domain": "saatva.com",
+      "brand": "Saatva"
+    },
+    {
+      "domain": "sleepnumber.com",
+      "brand": "Sleep Number"
+    },
+    {
+      "domain": "target.com",
+      "brand": "Target"
+    },
+    {
+      "domain": "tractorsupply.com",
+      "brand": "Tractor Supply Co."
+    },
+    {
+      "domain": "walmart.com",
+      "brand": "Walmart"
+    },
+    {
+      "domain": "worldmarket.com",
+      "brand": "World Market"
+    }
+  ]
+}
