@@ -101,6 +101,7 @@ export const SEEDED_OVER_800_TEST_FILES = [
   "tests/search.route.test.ts",
   "tests/share-links.test.ts",
   "tests/share-pdf-variant.test.ts",
+  "tests/sitemap-timeline-backfill.server.test.ts",
   "tests/sitemap.server.test.ts",
   "tests/support.route.test.ts",
   "tests/verify-post-deploy-release.test.ts",
