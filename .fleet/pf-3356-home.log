@@ -1,0 +1,28 @@
+
+> 0509@0.1.0 seed:publisher
+> node scripts/ads-domain-publisher.mjs --list=home-garden --dry-run --min-publish=70
+
+seed:publisher dry-run — list=home-garden domains=90 base=https://0509.io
+publish floor: verified + likely >= 1 per domain; gate: >= 70 publishable
+
+  SKIP    article.com        no verified/likely coverage (verified 0, likely 0, unmatched 0)
+  PUBLISH balsamhill.com     verified 8 + likely 9
+  PUBLISH ballarddesigns.com verified 8 + likely 0
+  PUBLISH bedbathbeyond.com  verified 0 + likely 13
+  PUBLISH birchlane.com      verified 26 + likely 1
+  PUBLISH bollandbranch.com  verified 26 + likely 0
+  PUBLISH brooklinen.com     verified 24 + likely 0
+  PUBLISH burrow.com         verified 5 + likely 0
+  PUBLISH castlery.com       verified 27 + likely 0
+  PUBLISH cb2.com            verified 25 + likely 0
+  PUBLISH coyuchi.com        verified 28 + likely 0
+  FAILED  crateandbarrel.com HTTP 500
+  PUBLISH dunelm.com         verified 30 + likely 0
+  PUBLISH ethanallen.com     verified 18 + likely 0
+  PUBLISH fromourplace.com   verified 27 + likely 0
+  FAILED  homedepot.com      HTTP 500
+  PUBLISH joybird.com        verified 30 + likely 0
+  PUBLISH jossandmain.com    verified 29 + likely 0
+  PUBLISH kirklands.com      verified 19 + likely 0
+  PUBLISH lowes.com          verified 20 + likely 0
+  PUBLISH minted.com         verified 3 + likely 4
