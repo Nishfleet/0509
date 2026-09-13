@@ -29,12 +29,12 @@ const PREFIX_PATTERN = /^(\d{4})_[A-Za-z0-9_]+\.sql$/u;
 export const LEGACY_DUPLICATE_PREFIX_ALLOWLIST = new Map([
   // 0067_delivery_recovery_and_digest_jobs.sql + 0067_workspace_member_invariants.sql
   // (both recorded verbatim in PRODUCTION_MIGRATION_LEDGER_BASELINE).
-  "0067",
+  ["0067", 2],
   // 0087_cta_pipeline_bail_reason_counts.sql + 0087_signup_source_open_allowlist.sql
   // (the latter is itself a historical-file rebuild migration).
-  "0087",
+  ["0087", 2],
   // 0090_competitor_source_fields.sql + 0090_event_type_free_text.sql
-  "0090",
+  ["0090", 2],
   // 0096_error_reports.sql + 0096_email_suppression.sql — both merged to main
   // 2026-09-12 (issues #2988 / #2983), independent tables, apply order between
   // them causally irrelevant. Frozen the same way as 0067/0087/0090 so a
