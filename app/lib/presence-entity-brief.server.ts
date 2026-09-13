@@ -355,7 +355,7 @@ export function buildPresenceEntityBrief(input: BuildPresenceEntityBriefInput): 
     const mentionSummary =
       mentionCount > 0 && latestPollDisplayCount === 0
         ? `Found ${mentionCount} public mention${mentionCount === 1 ? "" : "s"} of ${input.entity.label}, each with its source.`
-        : `Found ${displayCount} proof-backed update${displayCount === 1 ? "" : "s"} for ${input.entity.label} — website changes and public mentions, each with its source.`;
+        : `Found ${displayCount} proof-backed update${displayCount === 1 ? "" : "s"} for ${input.entity.label}: website changes and public mentions, each with its source.`;
     return {
       state: "ready",
       headline: "Recent public changes worth reviewing",
