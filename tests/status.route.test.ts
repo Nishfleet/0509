@@ -87,6 +87,7 @@ describe("status route", () => {
     expect(threadsRow).toBeDefined();
     expect(threadsRow?.productionStatus).toBe("gated");
 
+<<<<<<< HEAD
     // Issue #3199 — the Substack public surface rides the rss connector, so
     // its /status per-source row IS the rss row: wired in, gated, and the
     // note names what the surface covers (Substack) and what it does not
@@ -95,6 +96,16 @@ describe("status route", () => {
     expect(rssRow).toBeDefined();
     expect(rssRow?.productionStatus).toBe("gated");
     expect(rssRow?.notes).toContain("Substack");
+=======
+    // Issue #3203 — the YouTube row reads wired-but-gated the same way: the
+    // connector ships in, but stays dark until its rollout flag and the
+    // Google API key land. The note names what the surface covers.
+    const youtubeRow = mentionSources.find((source) => source.sourceId === "youtube");
+    expect(youtubeRow).toBeDefined();
+    expect(youtubeRow?.productionStatus).toBe("gated");
+    expect(youtubeRow?.notes).toContain("YouTube Data API v3 search.list");
+    expect(youtubeRow?.notes).toContain("PRESENCE_YOUTUBE_ROLLOUT");
+>>>>>>> 8909a1591 (wip(salvage): pi-issue-0509-3203 success/0)
   });
 
   it("renders the tracked-source rows — the Threads mention source reads gated (issue #3205)", async () => {
@@ -118,9 +129,20 @@ describe("status route", () => {
     expect(markup).toContain("gated");
     expect(markup).toContain("Meta app review");
     expect(markup).toContain("wired in, waiting on its rollout decision");
+<<<<<<< HEAD
     // The whole catalog passes through untouched. #3204 wired the LinkedIn
     // connector, flipping its row from "unavailable" to "gated" — the
     // tracked-source catalog no longer carries an "unavailable" posture.
+=======
+    // The YouTube per-source row (issue #3203's acceptance) renders its
+    // posture verbatim from the catalog — wired in, waiting on its rollout
+    // flag and key, with its 100-calls/day documented rate budget named.
+    expect(markup).toContain("YouTube");
+    expect(markup).toContain("PRESENCE_YOUTUBE_ROLLOUT");
+    expect(markup).toContain("100 search.list calls/day");
+    // The whole catalog passes through untouched, including the source whose
+    // posture only exists at runtime.
+>>>>>>> 8909a1591 (wip(salvage): pi-issue-0509-3203 success/0)
     expect(markup).toContain("GDELT");
     expect(markup).toContain("own-organization posts of a CONNECTED account");
     expect(markup).not.toContain("unavailable");
