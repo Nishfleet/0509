@@ -63,3 +63,19 @@ Nothing re-derived; every mechanism re-WITNESSED on the final head before the PR
 - Issue-verify step 2: `curl -sS -o /dev/null -D - https://0509.io/auth/signup | grep -i retry-after` → 200, no retry-after header (bucket recovered; header grep no-match, not a failure).
 - sgscan (9 touched files): No new security findings, exit 0.
 - crgate: NOT RUN — the CLI is signed out on this machine and the unattended unit cannot interactive-login (`coderabbit review --light --committed` → "Non-interactive environment detected. Use --api-key for authentication"; earlier `--plain` attempt: `error: unknown option '--plain'`, this CLI build dropped the flag). Named, not papered over; reviewer round + GitHub-side review are this run's review layers. Failed commands this run, named: `gh pr list --sort -mergedAt` → `unknown flag: --sort` (this gh build; re-run without it), `coderabbit review --plain` → `unknown option '--plain'`, `crgate`/`coderabbit review` → signed-out (above), `ls bin/` → ENOENT (no-match probe, exempt).
+
+## Witness proof (2026-09-13T15:01Z, this unit, shipping head 4f9dd5452)
+
+Nothing re-derived; every receipt re-WITNESSED on the head that ships (the unit's
+10 code files are identical f72f5a8c6 → 4f9dd5452 — the delta between those
+heads is #3371's main-side sneakerping/seo work, reversed, plus this unit's own
+lane/pr-body docs).
+
+- node: tests/rate-limit.server.test.ts → 38/38, exit 0 (VITEST_MAX_WORKERS=2 respected, one suite at a time, no coverage, no typecheck).
+- workers: tests/integration/rate-limit-money-path-signup.integration.test.ts → 4/4, exit 0 (real workerd, production-mirroring RL_AUTH_GET 1012 60/60s binding).
+- Live pre-fix receipt: `bash scripts/verify-money-path-200s.sh` → walk 14/14 × 200; burst 24 GETs → 4×200 / 20×429, `retry-after: 60` on all twenty 429s; script exit 1 — the detector firing, as the issue demands (0509.io still runs the pre-fix shared 2/60s bucket until this deploys).
+- Issue-verify step 2: `curl -sS -o /dev/null -D - https://0509.io/auth/signup | grep -iE '^(HTTP|retry-after)'` → `HTTP/2 200`, no retry-after header (the burst's window had recovered by the probe; grep no-match on that line, not a failure).
+- sgscan (9 code files): No new security findings, exit 0.
+- crgate re-attempted: identical signout, `set -o pipefail` confirms exit 1; no CPR_/CODERABBIT_ key in the environment (no-match). Mechanism unchanged: Nish's one-time `coderabbit auth login`.
+- Namespace claim re-verified on this base: wrangler.jsonc carries `1012` beside `1011`.
+- Failed command, named: `gh pr list --sort -updatedAt` → `unknown flag: --sort` (this gh build; re-run without the flag, exit 0).
