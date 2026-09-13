@@ -362,7 +362,7 @@ export const hnConnector = {
   },
 };
 
-function isFiniteWatermark(value: number | null | undefined): value is number {
+function isFiniteWatermark(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
 }
 

@@ -40,9 +40,9 @@ import { appEnv, db, ISO_T0, uid } from "./fixtures";
  */
 
 const PHRASE = "Acme Robotics";
-/** fixed-date: 2026-09-10T05:42:03Z as epoch seconds — fixture-internal, never a wall-clock read. */
+// fixed-date: 2026-09-10T05:42:03Z as epoch seconds — fixture-internal, never a wall-clock read.
 const STORY_CREATED_AT_I = 1789018923;
-/** fixed-date: 2026-09-10T06:00:00Z as epoch seconds — the comment ran later, so this is the watermark. */
+// fixed-date: 2026-09-10T06:00:00Z as epoch seconds — the comment ran later, so this is the watermark.
 const COMMENT_CREATED_AT_I = 1789020000;
 
 const STORY_OBJECT_ID = "42632691";
@@ -55,7 +55,7 @@ const SEARCH_PAGE = JSON.stringify({
     {
       // fixed-date: fixture mirrors a captured Algolia search_by_date story hit; the connector only parses the instant, it is never compared against a live clock
       objectID: STORY_OBJECT_ID,
-      created_at: "2026-09-10T05:42:03Z",
+      created_at: "2026-09-10T05:42:03Z", // fixed-date: the captured fixture instant, parsed only, never compared to the wall clock
       created_at_i: STORY_CREATED_AT_I,
       title: "Acme Robotics ships its first assembly plant",
       story_text: null,
@@ -69,7 +69,7 @@ const SEARCH_PAGE = JSON.stringify({
     {
       // fixed-date: fixture mirrors a captured Algolia search_by_date comment hit — a comment hit ranks 0/0 and references its story
       objectID: COMMENT_OBJECT_ID,
-      created_at: "2026-09-10T06:00:00Z",
+      created_at: "2026-09-10T06:00:00Z", // fixed-date: the captured fixture instant, parsed only, never compared to the wall clock
       created_at_i: COMMENT_CREATED_AT_I,
       title: null,
       story_text: null,
@@ -98,7 +98,7 @@ const MANY_PAGES_PAGE = JSON.stringify({
     {
       // fixed-date: same captured-shape story hit, served under an nbPages=25 response — only the pagination envelope differs
       objectID: STORY_OBJECT_ID,
-      created_at: "2026-09-10T05:42:03Z",
+      created_at: "2026-09-10T05:42:03Z", // fixed-date: the captured fixture instant, parsed only, never compared to the wall clock
       created_at_i: STORY_CREATED_AT_I,
       title: "Acme Robotics ships its first assembly plant",
       story_text: null,
@@ -342,8 +342,8 @@ describe("hn mention connector — poll", () => {
   });
 
   it("keeps the fixture's created_at_i consistent with its created_at (fixed-date, no wall clock)", () => {
-    expect(Math.floor(Date.parse("2026-09-10T05:42:03Z") / 1000)).toBe(STORY_CREATED_AT_I);
-    expect(Math.floor(Date.parse("2026-09-10T06:00:00Z") / 1000)).toBe(COMMENT_CREATED_AT_I);
+    expect(Math.floor(Date.parse("2026-09-10T05:42:03Z") / 1000)).toBe(STORY_CREATED_AT_I); // fixed-date: the 2026-09-10 fixture instant, parsed against Date.parse, never a wall-clock read
+    expect(Math.floor(Date.parse("2026-09-10T06:00:00Z") / 1000)).toBe(COMMENT_CREATED_AT_I); // fixed-date: the 2026-09-10 fixture instant, parsed against Date.parse, never a wall-clock read
   });
 
   it("returns ok: true, items: [] for an empty result set (honest empty)", async () => {
