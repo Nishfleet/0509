@@ -29,6 +29,7 @@ const SOURCE_LABELS: Record<PresenceSourceId, string> = {
   bluesky: "Bluesky",
   gdelt: "GDELT mainstream news",
   threads: "Threads",
+  hn: "Hacker News",
   youtube: "YouTube",
   amazon: "Amazon marketplace",
   context_dev: "Context.dev (open-web provider)",
@@ -53,6 +54,7 @@ const CONNECTOR_FOR_SOURCE: Partial<Record<PresenceSourceId, PresenceConnectorId
   bluesky: "bluesky",
   gdelt: "gdelt",
   threads: "threads",
+  hn: "hn",
 };
 
 const SOCIAL_SOURCE_IDS = new Set<PresenceSourceId>(["x", "reddit", "linkedin", "bluesky", "threads"]);
@@ -103,6 +105,8 @@ function statusFromConnectorGate(
           : sourceId === "gdelt"
             ? "OFFICIAL_PUBLIC_API"
             : sourceId === "threads"
+            ? "OFFICIAL_PUBLIC_API"
+            : sourceId === "hn"
             ? "OFFICIAL_PUBLIC_API"
             : sourceId === "linkedin" && trackingMode === "competitor"
             ? "LIMITED_COVERAGE"
@@ -461,6 +465,12 @@ export function presenceSourceCoverageForDocs(): Array<{
       label: SOURCE_LABELS.threads,
       productionStatus: "gated",
       notes: "Threads keyword-search connector wired in (Meta keyword_search; 2,200 queries per user per 24h enforced in-connector via presence_poll_cursor — tumbling-window approximation of Meta's per-query rolling count, overshoot surfaces as Meta's 429). Gated behind PRESENCE_THREADS_ROLLOUT + THREADS_ACCESS_TOKEN and Meta app review — off by default; activation is a separate rollout decision.",
+    },
+    {
+      sourceId: "hn",
+      label: SOURCE_LABELS.hn,
+      productionStatus: "gated",
+      notes: "Hacker News mention connector wired in (Algolia HN Search API — free, no key, no auth; the ~10,000-requests/hour/IP courtesy figure is honored with one serialized search_by_date request per poll: page 0 only, time-window slicing via the prior poll's watermark instead of deep paging past the ~1,000-result ceiling). Gated behind PRESENCE_HN_ROLLOUT — off by default; activation is a separate rollout decision.",
     },
     {
       sourceId: "youtube",
