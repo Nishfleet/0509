@@ -203,6 +203,32 @@ describe("presence source coverage policy", () => {
     expect(gated.find((entry) => entry.sourceId === "x")?.reasonCode).toBe("social_connect_not_in_plan");
   });
 
+  it("overrides available pinterest coverage when social sources are not on the plan (issue #3201 — the classification, locked)", () => {
+    const gated = applyPresenceSourcePlanGates(
+      [
+        {
+          sourceId: "pinterest",
+          label: "Pinterest",
+          status: "available",
+          coverageLabel: "VERIFIED_PUBLIC_FEED",
+          reasonCode: null,
+          reasonMessage: null,
+          actionNeeded: "Add a source target",
+          connectorId: "pinterest",
+        },
+      ],
+      {
+        modeAllowed: true,
+        websiteSourcesAllowed: true,
+        socialConnectAllowed: false,
+      },
+    );
+    expect(gated.find((entry) => entry.sourceId === "pinterest")?.status).toBe("gated");
+    expect(gated.find((entry) => entry.sourceId === "pinterest")?.reasonCode).toBe(
+      "social_connect_not_in_plan",
+    );
+  });
+
   it("marks x as available when rollout, creds and paid-read approval are enabled", async () => {
     const entry = await evaluatePresenceSourceCoverage(
       {

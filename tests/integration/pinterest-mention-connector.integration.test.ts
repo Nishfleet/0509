@@ -421,16 +421,47 @@ describe("pinterest mention connector — poll", () => {
     expect((init.headers as Record<string, string>)["user-agent"]).toBe(PRESENCE_USER_AGENT);
   });
 
+  it("drops items whose pin URL does not survive public-URL normalization (capture-validity) — connector-level: 3 parsed, 2 returned, the relative-link pin absent", async () => {
+    const { targetId } = await seedPinterestTarget();
+    const fetchImpl = pinterestFetcher((url) => {
+      expect(url.hostname).toBe("www.pinterest.com");
+      expect(url.pathname).toBe(`/${HANDLE}/feed.rss`);
+      return { body: PINTEREST_FEED };
+    });
+    const result = await pinterestConnector.poll(makeCtx(fetchImpl, "internal"), {
+      id: targetId,
+      userId: "user-pin-1",
+      targetKey: HANDLE.toLowerCase(),
+      targetUrl: `https://www.pinterest.com/${HANDLE}/`,
+      targetHandle: HANDLE,
+      metadata: { handle: HANDLE },
+    });
+    expect(result.ok).toBe(true);
+    // The #3201 review: the capture-validity PROOF, not just the happy
+    // path's comment — pin C's <link> is relative and never survives
+    // normalizePublicHttpUrl (the guid does not rescue it: the gate keys on
+    // the link), so only A and B come back. No fabricated rows.
+    expect(result.items).toHaveLength(2);
+    const dropped = result.items.find(
+      (item) => item.canonicalUrl === "https://www.pinterest.com/pin/8585055536940755/",
+    );
+    expect(dropped).toBeUndefined();
+    expect(result.items.map((item) => item.canonicalUrl).sort()).toEqual(
+      [PIN_A_URL, PIN_B_URL].sort(),
+    );
+  });
+
   it("keeps the fixture's pubDate consistent with its publishedAt (fixed-date, no wall clock)", () => {
     expect(Date.parse("Tue, 25 Aug 2026 13:52:20 GMT")).toBe(Date.parse(PIN_A_PUBLISHED)); // fixed-date: the 2026-08-25 fixture instant, parsed against Date.parse, never a wall-clock read
   });
 
-  it("drops items whose pin URL does not survive public-URL normalization (capture-validity), not keyed to the profile", () => {
+  it("keeps the tracked key the handle even when the profile URL carries extra path segments — the unit-level sanitizer leg of capture-validity; the connector-level drop has its own it + the happy-path fixture-C assertion, not keyed to the profile", () => {
     const segment = sanitizePinterestHandle(`https://www.pinterest.com/${HANDLE}/boards/`);
     expect(segment).toBe(HANDLE);
     // The relative-link fixture item is the capture-validity case: pin C
-    // never reaches the returned items (asserted in the happy-path test —
-    // three pins parsed, two returned).
+    // never reaches the returned items — proven by the connector, not this
+    // sanitizer: the connector-level it + the happy-path fixture-C
+    // assertion (three pins parsed, two returned).
   });
 
   it("returns ok: true, items: [] for an empty feed (honest empty), with completeSnapshot false so reconcile never mass-tombstones on a transiently empty public feed", async () => {
