@@ -53,7 +53,7 @@ gated on a platform review/approval), **money** (paid surface — MONEY flag),
 | **Medium** | `medium.com/feed/@user`, `medium.com/feed/<pub>`, `medium.com/feed/tag/<tag>` — [official docs](https://help.medium.com/hc/en-us/articles/214874118) | **today** — rides `rss` connector | [Medium ToS](https://medium.com/policy/medium-terms-of-service). Same syndication posture as Substack; named profiles/publications/tags only, no global free search | $0 | On new posts | 1 fetch per feed per poll |
 | **Pinterest** | [Pinterest API v5](https://developers.pinterest.com/docs/api/v5/) | **none at zero-spend** — no free public mention-search endpoint exists; reads are per-user OAuth after app approval | [Developer terms](https://developers.pinterest.com/terms/). Trial access = 1,000 req/day/app; Standard = 100 req/s/user/app — both behind app review ([access tiers](https://developers.pinterest.com/docs/key-concepts/access-tiers/), [rate limits](https://developers.pinterest.com/docs/reference/rate-limits/)). Community reports approval delays/denials | $0 surface, but approval-gated | — | Parked: `manual_only` until a grants[] decision (matches prior epic #1380) |
 | **Reddit** | [Reddit Data API](https://www.reddit.com/dev/api) — connector `reddit` exists, gated | **approval** — code shipped; commercial use needs Reddit's written approval | [Data API Terms](https://redditinc.com/policies/data-api-terms): OAuth required, no unauthenticated use; **commercial use requires explicit written approval** — serving paying customers is commercial use. Gate already exists: `REDDIT_COMMERCIAL_ACCESS=approved`. [Responsible Builder Policy](https://support.reddithelp.com/hc/en-us/articles/42728983564564-Responsible-Builder-Policy) | $0 once approved (free tier) | Near-real-time within rate limits | **100 QPM per OAuth client id**, averaged over a 10-minute window ([Data API Wiki](https://support.reddithelp.com/hc/en-us/articles/16160319875092-Reddit-Data-API-Wiki)) |
-| **YouTube** | (a) channel feed `youtube.com/feeds/videos.xml?channel_id=<id>` — free via `rss` connector; (b) [Data API v3 `search.list`](https://developers.google.com/youtube/v3/docs/search/list) for keyword mentions | (a) **today** via `rss`; (b) **approval** — free but quota-capped + Google Cloud project | [YouTube API Services ToS](https://developers.google.com/youtube/terms/api-services-terms-of-service). Default allocation per the [official quota page](https://developers.google.com/youtube/v3/determine_quota_cost): **100 `search.list` calls/day** (dedicated bucket) + 10,000 units/day for other calls; more quota requires a Google compliance audit, cannot be bought | $0 | Channel feeds: on publish. Search: near-real-time | 100 searches/day total across ALL brands — keyword search stays a thin, low-cadence surface; channel feeds carry the load |
+| **YouTube** | (a) channel feed `youtube.com/feeds/videos.xml?channel_id=<id>` — free via `rss` connector; (b) [Data API v3 `search.list`](https://developers.google.com/youtube/v3/docs/search/list) for keyword mentions | (a) **today** via `rss`; (b) **build (shipped #3203)** — connector wired in, gated behind `PRESENCE_YOUTUBE_ROLLOUT` + `YOUTUBE_API_KEY`, off by default; more quota than the documented default requires a Google compliance audit, cannot be bought | [YouTube API Services ToS](https://developers.google.com/youtube/terms/api-services-terms-of-service). Default allocation per the [official quota page](https://developers.google.com/youtube/v3/determine_quota_cost): **100 `search.list` calls/day** (dedicated bucket) + 10,000 units/day for other calls | $0 | Channel feeds: on publish. Search: near-real-time | 100 search.list calls/day total across ALL brands — enforced in-connector via `presence_poll_cursor` (#3203); keyword search stays a thin, low-cadence surface; channel feeds carry the load |
 | **LinkedIn posts** | [Posts API](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/posts-api) | **self only** — shipped #3204: the connector polls the tracked organization's own published posts (`GET /rest/posts?author=urn:li:organization:{id}`, `sortBy=CREATED`, `count` 25 of the documented max 100); competitor = `LIMITED_COVERAGE` | `r_member_social` is restricted (approval-only); `r_organization_social` requires the member to hold a company-page admin role on the target org — i.e. you can only read orgs you administer. No public keyword search of others' posts. LinkedIn ToS prohibit scraping — open-source collectors researched first (GitHub star-sorted, 2026-09-13): joeyism/linkedin_scraper (4.5k★), stickerdaniel/linkedin-mcp-server (3.5k★) — unofficial, undocumented, no ToS posture; Liger-Kernel (GPU kernels) and skill-assessments-quizzes (quiz answers) matched the search but are not collectors — all **rejected**; the official Posts API already authenticated by the connector's stored grant wins. Details: §8 | $0 | On read | Exactly ONE serialized request per poll, `count` 25 (documented default 10, max 100); documented per-member/per-org limits apply after platform approval; irrelevant for competitor coverage (not available) |
 | **Threads** | [Threads API keyword search](https://developers.facebook.com/docs/threads/keyword-search/) + [mentions](https://developers.facebook.com/docs/threads/threads-mentions/) | **approval** — free API, needs a Meta app with `threads_keyword_search` (and `threads_manage_mentions` advanced access for others' posts) | Meta Platform Terms. Keyword search: **2,200 queries per user per rolling 24h** (across apps). App review lead time is the real cost. [rate limits](https://developers.facebook.com/docs/threads/overview/) | $0 | Near-real-time | ≤2,200 queries/user/24h — connector must track usage in `presence_poll_cursor` |
 | **Bluesky** | `app.bsky.feed.searchPosts` XRPC ([docs](https://docs.bsky.app/docs/api/app-bsky-feed-search-posts)) | **build** — new `bluesky` connector, free | Bluesky ToS + open AT Protocol. Rate limits documented as "generous… contact us if you encounter rate-limiting" ([rate limits](https://docs.bsky.app/docs/advanced-guides/rate-limits)). Caveat: unauthenticated `searchPosts` on `public.api.bsky.app` has been intermittently 403'd upstream — use an authenticated app-password session | $0 | Near-real-time | Generous; serialize polls anyway |
@@ -206,14 +206,25 @@ credential check.
 | #3252 | bluesky (searchPosts) | $0, app-password session | MVP 3/3 |
 | #3253 | hn (Algolia HN Search) | $0, ~10k req/hr courtesy | fast-follow |
 | #3254 | threads (keyword_search) | $0, 2,200 queries/user/24h, Meta app review | fast-follow, approval-gated |
+| #3203 | youtube (Data API v3 search.list) | $0, 100 search.list calls/day documented default | fast-follow, shipped behind PRESENCE_YOUTUBE_ROLLOUT + YOUTUBE_API_KEY |
 | #3255 | x (recent search) | ~$0.005/post read — **MONEY flag** | parked |
 
 Not filed (decisions, not work items): Reddit mention activation (blocked on
 `REDDIT_COMMERCIAL_ACCESS` approval — connector shipped), Pinterest
 (no free surface — prior epic #1380 parked it), LinkedIn competitor posts
-(no API exists), YouTube keyword search (100/day quota is too thin to matter
-until the audit path is a named need), free open-web mention search for the
+(no API exists), free open-web mention search for the
 blog long tail (prior epic's Phase 5 — parked pending a proven free provider).
+(YouTube keyword search — the last line of this paragraph when #3170 wrote it —
+now ships as #3203: the documented 100-calls/day dedicated bucket, enforced
+in-connector, honest that it is a thin, low-cadence surface until the
+compliance-audit path becomes a named need.)
+
+#3203's metric reads without new instrumentation: mentions per tracked
+brand per day from YouTube count straight off `presence_item`
+(`connector_id = 'youtube'` — the deduped rows themselves), and the failure
+rate rides the poll-orchestrator's last-error record
+(`lastErrorCode`/`lastErrorMessage` on the target's presence_poll_cursor),
+the shared per-source failure surface every connector reports into.
 
 ## 8. Research log
 
@@ -315,6 +326,32 @@ against the plan's public-surfaces-only + ToS rule. #3204 therefore ships on
 the official Posts API the connector's stored 3-legged grant
 (`r_organization_social`) already authenticates, $0, no new dependency —
 the survey's own conclusion, applied.
+
+YouTube-specific collector survey for #3203 (`gh search repos`, 2026-09-13):
+no production-grade general YouTube mention collector exists to adopt
+wholesale — `keshprad/youtube-mentions` (★2, hackathon video-metadata
+analyzer, effectively stale), `SentryScript/SentryScript` (★0) and
+`Yusu-f/Youtube-Mentions` (★1, subtitle-scanning) are toy scale; the reference
+open-source surfaces are `iv-org/invidious` (★24,419, pushed 2026-09-11) and
+`yt-dlp/yt-dlp` (★190,847, pushed 2026-08-30) — both **rejected as
+dependencies**: they proxy/scrape YouTube's undocumented internals, so their
+availability and correctness ride on unofficial surfaces, while the issue
+constrains us to public documented surfaces only (`yt-dlp` additionally pulls
+a heavyweight CLI/runtime into a Workers connector). Conclusion: speak the
+official documented YouTube Data API v3 `search.list` surface directly — zero
+new dependencies. Official facts re-verified 2026-09-13 by reading
+[the quota page](https://developers.google.com/youtube/v3/determine_quota_cost)
+and the [getting-started page](https://developers.google.com/youtube/v3/getting-started)
+— both state verbatim: "default quota allocation of 100 search.list calls,
+100 videos.insert calls, and 10,000 units per day combined for all other
+endpoints" — and the
+[search.list reference](https://developers.google.com/youtube/v3/docs/search/list):
+`publishedAfter` = "resources created at or after the specified time … an
+RFC 3339 formatted date-time value"; `maxResults` = "Acceptable values are 0
+to 50, inclusive"; `order=date` = reverse-chronological by creation date.
+No documented reset-time guarantee appears on those pages, so the connector's
+rolling-24h usage window is our own conservative overcount, never a claim
+about Google's reset semantics.
 
 Prior art inside the repo: `docs/epics/2026-08-28-mention-monitoring.md`
 (scout + evals + phases, shipped as #1375/#1377/#1378/#1379/#1380),

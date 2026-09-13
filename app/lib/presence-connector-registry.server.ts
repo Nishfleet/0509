@@ -7,6 +7,7 @@ import { rssConnector } from "~/lib/presence-connectors/rss.server";
 import { threadsConnector } from "~/lib/presence-connectors/threads.server";
 import { websiteConnector } from "~/lib/presence-connectors/website.server";
 import { xConnector } from "~/lib/presence-connectors/x.server";
+import { youtubeConnector } from "~/lib/presence-connectors/youtube.server";
 import { connectorOperationalForPolling, evaluateConnectorAccessGate } from "~/lib/presence-access-gates.server";
 import type {
   ConnectorRolloutState,
@@ -28,6 +29,7 @@ const CONNECTORS = {
   gdelt: gdeltConnector,
   threads: threadsConnector,
   hn: hnConnector,
+  youtube: youtubeConnector,
 } as const;
 
 export function getPresenceConnector(connectorId: PresenceConnectorId) {
@@ -111,6 +113,12 @@ export async function pollPresenceTarget(
     // (lastItemCreatedAtI) — same wrapper the x/website/rss connectors read.
     return hnConnector.poll(ctx, target, options.cursor);
   }
+  if (target.connectorId === "youtube") {
+    // The prior cursor_json carries the publishedAfter watermark
+    // (lastItemPublishedAt) AND the counted-usage window — same wrapper hn
+    // reads for its Algolia watermark (issue #3203).
+    return youtubeConnector.poll(ctx, target, options.cursor);
+  }
   if (target.connectorId === "x") {
     return xConnector.poll(ctx, target, options.cursor);
   }
@@ -139,7 +147,7 @@ export function coverageLabelForConnector(
   if (connectorId === "rss") {
     return "VERIFIED_PUBLIC_FEED" as const;
   }
-  if (connectorId === "gdelt" || connectorId === "threads" || connectorId === "hn") {
+  if (connectorId === "gdelt" || connectorId === "threads" || connectorId === "hn" || connectorId === "youtube") {
     return "OFFICIAL_PUBLIC_API" as const;
   }
   if (connectorId === "linkedin" && trackingMode === "competitor") {
