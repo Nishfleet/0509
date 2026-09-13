@@ -156,6 +156,7 @@ describe("presence source coverage policy", () => {
       "gdelt",
       "threads",
       "hn",
+      "pinterest",
       "youtube",
       "amazon",
       "context_dev",
