@@ -118,6 +118,9 @@ describe("status route", () => {
     expect(markup).toContain("gated");
     expect(markup).toContain("Meta app review");
     expect(markup).toContain("wired in, waiting on its rollout decision");
+    // The Podcasts row (issue #3208) renders its public-surface note verbatim.
+    expect(markup).toContain("Podcasts");
+    expect(markup).toContain("JSON transcript");
     // The whole catalog passes through untouched, including the source whose
     // posture only exists at runtime.
     expect(markup).toContain("GDELT");

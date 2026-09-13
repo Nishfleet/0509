@@ -30,6 +30,7 @@ const SOURCE_LABELS: Record<PresenceSourceId, string> = {
   gdelt: "GDELT mainstream news",
   threads: "Threads",
   hn: "Hacker News",
+  podcast: "Podcasts",
   youtube: "YouTube",
   amazon: "Amazon marketplace",
   context_dev: "Context.dev (open-web provider)",
@@ -55,6 +56,7 @@ const CONNECTOR_FOR_SOURCE: Partial<Record<PresenceSourceId, PresenceConnectorId
   gdelt: "gdelt",
   threads: "threads",
   hn: "hn",
+  podcast: "podcast",
 };
 
 const SOCIAL_SOURCE_IDS = new Set<PresenceSourceId>(["x", "reddit", "linkedin", "bluesky", "threads"]);
@@ -100,7 +102,7 @@ function statusFromConnectorGate(
     const coverageLabel: PresenceCoverageLabel =
       sourceId === "website"
         ? "PUBLIC_WEB_BEST_EFFORT"
-        : sourceId === "rss"
+        : sourceId === "rss" || sourceId === "podcast"
           ? "VERIFIED_PUBLIC_FEED"
           : sourceId === "gdelt"
             ? "OFFICIAL_PUBLIC_API"
@@ -473,6 +475,12 @@ export function presenceSourceCoverageForDocs(): Array<{
       label: SOURCE_LABELS.hn,
       productionStatus: "gated",
       notes: "Hacker News mention connector wired in (Algolia HN Search API — free, no key, no auth; the ~10,000-requests/hour/IP courtesy figure is honored with one serialized search_by_date request per poll: page 0 only, time-window slicing via the prior poll's watermark instead of deep paging past the ~1,000-result ceiling). Gated behind PRESENCE_HN_ROLLOUT — off by default; activation is a separate rollout decision.",
+    },
+    {
+      sourceId: "podcast",
+      label: SOURCE_LABELS.podcast,
+      productionStatus: "gated",
+      notes: "Podcast show-mention connector wired in (the show's own public RSS 2.0 feed; episode transcripts are read where the show publishes them in the application/podcast+json JSON transcript format — other transcript formats (text/vtt, application/x-subrip, text/html, text/plain) are recorded in raw_json, not yet fetched). Gated behind PRESENCE_PODCAST_ROLLOUT — off by default; activation is a separate rollout decision.",
     },
     {
       sourceId: "youtube",

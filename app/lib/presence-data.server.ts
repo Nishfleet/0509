@@ -580,15 +580,17 @@ async function buildMentionStampPlan(
   env: AppEnv,
   sourceTarget: SourceTargetRecord,
 ): Promise<MentionStampPlan | null> {
-  if (sourceTarget.connectorId !== "rss") return null;
+  if (sourceTarget.connectorId !== "rss" && sourceTarget.connectorId !== "podcast") return null;
   // mention-resweep synthesizes an rss-shaped record over a `website`
   // source_target row (the stored row's connector_id stays 'website');
-  // mention stamping applies only to targets actually registered as rss.
+  // mention stamping applies to the feed-target sources — publication-style
+  // rss feeds and podcast show feeds — both emit candidates that the
+  // matcher stamps and filters.
   const persisted = await requireDb(env)
     .prepare("SELECT connector_id FROM source_target WHERE id = ?")
     .bind(sourceTarget.id)
     .first<{ connector_id: string }>();
-  if (persisted?.connector_id !== "rss") return null;
+  if (persisted?.connector_id !== "rss" && persisted?.connector_id !== "podcast") return null;
   const feedUrl =
     typeof sourceTarget.metadata?.feedUrl === "string"
       ? sourceTarget.metadata.feedUrl
