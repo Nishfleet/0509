@@ -83,7 +83,7 @@ describe("publicSeoMeta og:image override", () => {
     expect(ogImage(meta)).toBe(card);
     expect(twitterImage(meta)).toBe(card);
     expect(ogImageAlt(meta)).toBe("Five to Nine vs Panoramata comparison card");
-    expect(meta.find((e) => e.property === "og:image:type")?.content).toBe("image/svg+xml");
+    expect(meta.find((e) => e.property === "og:image:type")?.content).toBe("image/png");
   });
 
   it("auto-derives a page-specific guide card for /guides/<slug> pathnames (issue #3098)", async () => {
@@ -142,8 +142,10 @@ describe("social card URL builders", () => {
   });
 
   it("compareSocialCardUrl and switchSocialCardUrl build the card path", () => {
-    expect(compareSocialCardUrl("panoramata")).toBe(canonicalUrl("/social-card/compare/panoramata.svg"));
-    expect(switchSocialCardUrl("panoramata")).toBe(canonicalUrl("/social-card/switch/panoramata.svg"));
+    // Compare/switch cards are served as PNG (issue #3414) — social scrapers
+    // refuse SVG og:images (the #2101, #3098, #3104 finding).
+    expect(compareSocialCardUrl("panoramata")).toBe(canonicalUrl("/social-card/compare/panoramata.png"));
+    expect(switchSocialCardUrl("panoramata")).toBe(canonicalUrl("/social-card/switch/panoramata.png"));
   });
 
   it("clusterSocialCardUrl builds the standalone surface card path", () => {
@@ -206,7 +208,15 @@ describe("parseSocialCardPathname", () => {
       kind: "compare",
       slug: "panoramata",
     });
+    expect(parseSocialCardPathname("/social-card/compare/panoramata.png")).toEqual({
+      kind: "compare",
+      slug: "panoramata",
+    });
     expect(parseSocialCardPathname("/social-card/switch/panoramata.svg")).toEqual({
+      kind: "switch",
+      slug: "panoramata",
+    });
+    expect(parseSocialCardPathname("/social-card/switch/panoramata.png")).toEqual({
       kind: "switch",
       slug: "panoramata",
     });
@@ -316,17 +326,27 @@ describe("publicSocialCardForRequest", () => {
   });
 
   it("renders a compare card naming both tools", () => {
-    const res = publicSocialCardForRequest(
+    // The canonical `.png` URL (issue #3414) and the legacy `.svg` alias
+    // both resolve through the same read path.
+    const png = publicSocialCardForRequest(
+      new Request("https://0509.io/social-card/compare/panoramata.png"),
+    );
+    expect(png?.body).toContain("Five to Nine vs Panoramata");
+    const legacy = publicSocialCardForRequest(
       new Request("https://0509.io/social-card/compare/panoramata.svg"),
     );
-    expect(res?.body).toContain("Five to Nine vs Panoramata");
+    expect(legacy?.body).toBe(png?.body);
   });
 
   it("renders a switch card naming the source tool", () => {
     const res = publicSocialCardForRequest(
-      new Request("https://0509.io/social-card/switch/panoramata.svg"),
+      new Request("https://0509.io/social-card/switch/panoramata.png"),
     );
     expect(res?.body).toContain("Switch from Panoramata");
+    const legacy = publicSocialCardForRequest(
+      new Request("https://0509.io/social-card/switch/panoramata.svg"),
+    );
+    expect(legacy?.body).toBe(res?.body);
   });
 
   it("renders cluster cards for the standalone buyer surfaces", () => {
@@ -457,7 +477,7 @@ describe("every programmatic buyer surface stamps a non-generic og:image", () =>
     const img = ogImage(meta);
     expect(img, `${routeId} still uses generic og-image.png`).not.toBe(GENERIC_OG_IMAGE);
     expect(img).toMatch(/^https:\/\/0509\.io\/social-card\/compare\//);
-    expect(img).toMatch(/\.svg$/);
+    expect(img).toMatch(/\.png$/);
     expect(ogImageAlt(meta), `${routeId} missing og:image:alt`).toBeTruthy();
   });
 
@@ -471,6 +491,7 @@ describe("every programmatic buyer surface stamps a non-generic og:image", () =>
       const img = ogImage(meta);
       expect(img, `${routeId} still uses generic og-image.png`).not.toBe(GENERIC_OG_IMAGE);
       expect(img).toMatch(/^https:\/\/0509\.io\/social-card\/switch\//);
+      expect(img).toMatch(/\.png$/);
       expect(ogImageAlt(meta)).toMatch(/^Switch from .+ to Five to Nine$/);
     },
   );
