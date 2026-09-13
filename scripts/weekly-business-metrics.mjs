@@ -123,6 +123,7 @@ function parseArgs() {
     selfTestDriftFlag();
     process.exit(0);
   }
+  /** @type {{ json: boolean, eventsPath: string | null }} */
   const options = { json: false, eventsPath: null };
   for (let i = 0; i < args.length; i += 1) {
     if (args[i] === "--json") {
@@ -682,6 +683,7 @@ export function evaluateSignupIntegrity(rows, now, eventBundle) {
     if (Number.isFinite(ts) && ts >= cutoff30) inWindow.push({ row, ts });
   }
 
+  /** @type {Record<string, number>} */
   const byPattern = {};
   let excludedFixtures = 0;
   const survivors = [];
@@ -700,7 +702,7 @@ export function evaluateSignupIntegrity(rows, now, eventBundle) {
   const survivors7 = survivors.filter((entry) => entry.ts >= cutoff7).length;
 
   const retentionCutoff = now.getTime() - EVENT_RETENTION_DAYS * DAY_MS;
-  /** @type {Record<string, unknown>} */
+  /** @type {{ evaluated: boolean, retention_days: number, match_window_minutes: number, unparseable_event_lines: number, signup_completed_events: number, non_signup_records: number, unreadable_event_records: number, rows_within_retention: number, matched: number, suspect: Array<{ email: unknown, createdAt: unknown, state: string }>, rows_outside_retention: number }} */
   const crossCheck = {
     evaluated: eventBundle !== null && eventBundle !== undefined,
     retention_days: EVENT_RETENTION_DAYS,
