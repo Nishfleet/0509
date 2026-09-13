@@ -29,11 +29,18 @@ async function mockRouter(useLoaderData: MockUseLoaderData) {
   });
 }
 
+// The only wall-clock read in this file is #3197's todayDayKey() default —
+// the loader derives its own. Freezing the clock at test start makes that
+// read deterministic (test and loader compute the same UTC day key) and
+// lets the echo fixtures below stay absolute without ageing out — the
+// pinned-clock escape #3215's no-time-bomb guard grants this file.
 beforeEach(() => {
   vi.resetModules();
+  vi.useFakeTimers({ now: new Date(Date.now()) });
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.resetModules();
 });
@@ -132,6 +139,9 @@ describe("status route", () => {
     expect(markup).toContain("gated");
     expect(markup).toContain("Meta app review");
     expect(markup).toContain("wired in, waiting on its rollout decision");
+    // The Podcasts row (issue #3208) renders its public-surface note verbatim.
+    expect(markup).toContain("Podcasts");
+    expect(markup).toContain("JSON transcript");
     // The whole catalog passes through untouched. #3204 wired the LinkedIn
     // connector, flipping its row from "unavailable" to "gated" — the
     // tracked-source catalog no longer carries an "unavailable" posture.

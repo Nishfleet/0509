@@ -59,6 +59,7 @@ gated on a platform review/approval), **money** (paid surface — MONEY flag),
 | **Bluesky** | `app.bsky.feed.searchPosts` XRPC ([docs](https://docs.bsky.app/docs/api/app-bsky-feed-search-posts)) | **build** — new `bluesky` connector, free | Bluesky ToS + open AT Protocol. Rate limits documented as "generous… contact us if you encounter rate-limiting" ([rate limits](https://docs.bsky.app/docs/advanced-guides/rate-limits)). Caveat: unauthenticated `searchPosts` on `public.api.bsky.app` has been intermittently 403'd upstream — use an authenticated app-password session | $0 | Near-real-time | Generous; serialize polls anyway |
 | **Hacker News** | [Algolia HN Search API](https://hn.algolia.com/api) `search` / `search_by_date` | **build** — new `hn` connector, no auth at all | Free public API operated by Algolia for HN. No published rate limit — the ~10,000 req/hr/IP figure is community-observed courtesy, not an SLA; ~1,000 retrievable results per query cap. Official alternative ([Firebase HN API](https://github.com/HackerNews/API)) has no search | $0 | Near-real-time | Courtesy budget ~10k req/hr/IP; serialized low-cadence polls are nowhere near it |
 | **App stores — Apple + Google Play** | Apple: the documented keyless [iTunes Search/Lookup API](https://performance-partners.apple.com/search-api) (`GET itunes.apple.com/lookup?id=<trackId>&country=<cc>`) + the customer-review feed `itunes.apple.com/<cc>/rss/customerreviews/page=1/id=<trackId>/sortby=mostrecent/json`; Google Play: the public details page's own `SoftwareApplication` structured data | **build** — shipped #3210: new `appstore` connector, keyless, both tracking modes | Apple: the Search/Lookup API is documented and keyless; the customer-review feed is an undocumented-but-long-lived public surface, given the same honest posture as Google News RSS above (works, no contract, never deep-paged past page=1). Google Play: only the page's own schema.org structured data is read; `/store/apps/details` is not Disallow-listed in Play's robots.txt (verified live 2026-09-13). Open-source collectors researched first (GitHub star-sorted, live 2026-09-13): facundoolano/google-play-scraper (2,963★), oxylabs/google-play-scraper (1,757★), JoMingyu/google-play-scraper (1,011★) all talk to Play's private undocumented `batchexecute` endpoint — **rejected**, public surfaces only; grych/AppStoreReviews (164★) and cowboy-bebug/app-store-scraper (102★) wrap the same Apple surfaces we read directly — also rejected. No free public Google Play review API exists: Play REVIEWS are the documented exclusion the issue allows (the listing itself stays captured). Details: §8 | $0 — no key, no account, no vendor | Listing on read; Apple reviews = the most-recent page | 2 requests per Apple poll (1 lookup + 1 reviews page=1 — Apple's ~20 calls/minute guidance cannot be stressed by serialized polls), 1 per Google Play poll |
+| **Podcasts** | The show's own public RSS 2.0 feed (iTunes/podcast-namespace); episode `<podcast:transcript>` where the show publishes one — [namespace: transcript](https://github.com/Podcastindex-org/podcast-namespace/blob/main/docs/tags/transcript.md) | **build** — new `podcast` connector, no auth; the tracked target IS the show's feed URL | The publisher's own syndication surface; we store episode title/link/excerpt and, where published, the head of the public JSON transcript (other transcript formats recorded, not yet fetched). Coverage = *shows the workspace adds* — there is no single free cross-show episode search (Podcast Index needs a free signup + API key — surveyed, not adopted: see the collector survey below) | $0 | On new episodes | 1 feed fetch per poll (conditional-GET via `presence_poll_cursor`) + at most 5 bounded transcript fetches per poll — the politeness cap is connector-enforced and tested |
 
 ## 3. Data model — a "mention" beside an "ad"
 
@@ -287,6 +288,7 @@ Official docs/terms read for this plan (2026-09-12):
   [newscatcher](https://www.newscatcherapi.com/blog-posts/google-news-rss-search-parameters-the-missing-documentaiton),
   [cloro](https://cloro.dev/blog/google-news-rss/). Treated as an
   undocumented surface in the coverage table.
+- Podcasts: the [Podcasting 2.0 podcast-namespace](https://github.com/Podcastindex-org/podcast-namespace) transcript tag ([docs/tags/transcript.md](https://github.com/Podcastindex-org/podcast-namespace/blob/main/docs/tags/transcript.md)) — item-level `<podcast:transcript>`, `url` + `type` required (`application/json`, `text/vtt`, `application/x-subrip`, `text/plain`, `text/html`), optional `language` / `rel="captions"`. The show's own RSS 2.0 feed is the publisher's public syndication surface; the connector reads the JSON transcript shape (`segments[]` with `text`) and records other formats. No Apple/Google mediation needed for this slice.
 
 Open-source collector survey (`gh search repos`, 2026-09-12): no
 production-grade general mention collector exists to adopt wholesale —
@@ -341,6 +343,7 @@ via the shared `presence_poll_cursor` ledger, commercial approval = the
 #1378 gate `REDDIT_COMMERCIAL_ACCESS=approved` — the survey's own
 conclusion, applied.
 
+
 App stores, #3210 (2026-09-13): the three public surfaces were fetched live
 this session, all HTTP 200. Apple's documented
 [iTunes Search API](https://performance-partners.apple.com/search-api)
@@ -368,6 +371,18 @@ we read directly — also rejected, unofficial and undocumented. No free
 public Google Play review API exists, so Play REVIEWS are the documented
 exclusion the issue allows (the listing itself stays captured); #3210 ships
 on the three public surfaces above, $0, no new dependency.
+
+Podcast collector survey (`gh search repos` + `npm`, 2026-09-13, #3208): no
+production-grade podcast-mention collector exists to adopt — the
+Podcastindex-org ecosystem ships keyed-API bindings (`python-podcastindex`
+26★, `SparrowTek/PodcastIndexKit` 11★, npm `podcastindex@1.2.0`) that need a
+signup + API key/secret and bypass the SSRF-hardened `presenceSafeFetch`
+bounded-fetch path; `Podcast-Standards-Project/PSP-1-Podcast-RSS-Specification`
+(113★) is a specification, `opawg/podcast-rss-useragents` (64★) is a dataset,
+and the transcript repos (`dado3212/apple-podcast-transcripts` 183★,
+`lord-denning/Huberman-Lab-Podcast-Transcripts` 267★) are static dumps, not
+collectors. Conclusion: the connector parses the show feed itself (repo
+precedent: the rss connector), zero new dependencies.
 
 Prior art inside the repo: `docs/epics/2026-08-28-mention-monitoring.md`
 (scout + evals + phases, shipped as #1375/#1377/#1378/#1379/#1380),

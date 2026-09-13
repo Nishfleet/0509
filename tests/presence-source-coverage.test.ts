@@ -171,6 +171,7 @@ describe("presence source coverage policy", () => {
       "hn",
       "appstore",
       "pinterest",
+      "podcast",
       "youtube",
       "amazon",
       "context_dev",
