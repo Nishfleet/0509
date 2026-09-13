@@ -20,6 +20,19 @@ export const PUBLIC_SEARCH_RATE_LIMIT_MESSAGE =
 export const PUBLIC_SEARCH_SELECTION_RATE_LIMIT_MESSAGE =
   "You've hit the anonymous ad-check limit. Free search allows 30 ad checks per 10 minutes — wait a few minutes and try again.";
 
+/**
+ * Truthful recovery message for the money path's selected= proof leg when
+ * the live search or the evidence selection behind it transiently fails
+ * (issue #3400, the #2810 contract: the leg answers 200 with the honest
+ * no-proof degraded state — never a 500 — so this copy lands in the
+ * degraded payload's inputError hint, not in a thrown error). Buyer
+ * language only, same voice as the limiter messages above. Single source
+ * of truth: the /search loader puts it in the degraded payload and both
+ * #3400 regression tests pin it verbatim.
+ */
+export const PUBLIC_SEARCH_TRANSIENT_DEGRADED_MESSAGE =
+  "We couldn't finish that search just now — give it a few seconds and try again.";
+
 const INTERNAL_INFRA_PATTERN =
   /\b(d1|sql|sqlite|workflow|binding|wrangler|cloudflare|oauth|token|secret|stack trace)\b/i;
 const INTERNAL_ROLLOUT_PATTERN = /\binternal\b.*\b(workspace|pilot|rollout)\b/i;
