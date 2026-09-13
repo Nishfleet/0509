@@ -4,13 +4,14 @@ import { env } from "cloudflare:workers";
 import migrationSql from "../../migrations/0098_widen_source_target_connector_bluesky.sql?raw";
 
 import { blueskyConnector, pollBlueskyMention } from "~/lib/presence-connectors/bluesky.server";
-import { getPresenceConnector } from "~/lib/presence-connector-registry.server";
+import { getPresenceConnector, pollPresenceTarget } from "~/lib/presence-connector-registry.server";
+import { listSourceTargetsForEntity, upsertPresenceItems } from "~/lib/presence-data.server";
 import { presenceSourceCoverageForDocs } from "~/lib/presence-source-coverage.server";
 import { evaluateConnectorAccessGate, connectorOperationalForPolling } from "~/lib/presence-access-gates.server";
 import type { AppEnv } from "~/lib/env.server";
 import type { PresenceConnectorContext } from "~/lib/presence-types";
 
-import { db, ISO_T0, uid } from "./fixtures";
+import { appEnv, db, ISO_T0, uid } from "./fixtures";
 
 /**
  * Bluesky mention connector — MVP source 3/3 of the mention-monitoring epic
@@ -296,10 +297,100 @@ describe("bluesky mention connector — poll", () => {
     expect((result.cursor as { cursor?: string } | undefined)?.cursor).toBeUndefined();
   });
 
+  it("keeps the rate budget bounded: a third page is never requested (MAX_PAGES=2)", async () => {
+    const routes = {
+      ...AUTHED_SESSION,
+      "/xrpc/app.bsky.feed.searchPosts": { status: 200, body: searchPostsFixture(3, "cursor-1") },
+      "/xrpc/app.bsky.feed.searchPosts?cursor=cursor-1": { status: 200, body: searchPostsFixture(3, "cursor-2") },
+      "/xrpc/app.bsky.feed.searchPosts?cursor=cursor-2": { status: 200, body: searchPostsFixture(3) },
+    };
+    const fetchImpl = xrpcFetcher(routes) as unknown as Mock;
+    const result = await pollBlueskyMention(makeCtx(fetchImpl), "Brand X makes a comeback");
+
+    expect(result.ok).toBe(true);
+    // Exactly two result pages of the three-post fixture — never a third.
+    expect(result.items).toHaveLength(6);
+    const searchCalls = (fetchImpl as Mock).mock.calls.filter((call) =>
+      String(call[0]).includes("searchPosts"),
+    );
+    expect(searchCalls).toHaveLength(2);
+    // The unconsumed remainder (page 3's continuation) is returned, not dropped.
+    expect((result.cursor as { cursor?: string } | undefined)?.cursor).toBe("cursor-2");
+  });
+
   it("is gated at poll when the rollout is off", async () => {
     const result = await pollBlueskyMention(makeCtx(xrpcFetcher(AUTHED_SESSION), { PRESENCE_BLUESKY_ROLLOUT: undefined }), "phrase");
     expect(result.ok).toBe(false);
     expect(result.errorCode).toBe("connector_disabled");
+  });
+});
+
+describe("bluesky mention connector — the registry dispatch (issue #3206)", () => {
+  /** The real bindings (DB included) with the connector pinned to the fixture hosts. */
+  const dispatchEnv = (): AppEnv =>
+    ({
+      ...appEnv,
+      PRESENCE_BLUESKY_ROLLOUT: "internal",
+      BSKY_IDENTIFIER: "fleet.bsky.social",
+      BSKY_APP_PASSWORD: "app-password-fixture-never-real",
+      PRESENCE_BSKY_PDS_URL: FIXTURE_HOST,
+      PRESENCE_BSKY_APPVIEW_URL: FIXTURE_HOST,
+    }) as AppEnv;
+
+  async function countLivePresenceItems(sourceTargetId: string): Promise<number> {
+    const row = await db()
+      .prepare(
+        `SELECT count(*) AS n FROM presence_item
+       WHERE source_target_id = ? AND is_tombstone = 0`,
+      )
+      .bind(sourceTargetId)
+      .first<{ n: number }>();
+    return row?.n ?? 0;
+  }
+
+  it("captures mentions through the real dispatch: the target's phrase reaches the search, items land, a second identical poll+upsert dedups by canonical URL", async () => {
+    const routes = {
+      ...AUTHED_SESSION,
+      "/xrpc/app.bsky.feed.searchPosts": { status: 200, body: searchPostsFixture(2) },
+    };
+    const fetchImpl = xrpcFetcher(routes) as unknown as Mock;
+
+    const { userId, entityId } = await seedSourceTarget("bluesky", "Brand X makes a comeback");
+    const targets = await listSourceTargetsForEntity(dispatchEnv(), userId, entityId);
+    const target = targets.find((row) => row.connectorId === "bluesky");
+    expect(target?.targetKey).toBe("Brand X makes a comeback");
+    if (!target) throw new Error("expected the seeded bluesky source_target");
+
+    // ONE dispatch, the way the polling batch runs it: the phrase comes from
+    // the source target, not from a direct pollBlueskyMention call. Before
+    // #3206 the dispatch dropped the target, so every dispatched poll
+    // answered missing_match_phrase and no mention was ever captured.
+    const poll = await pollPresenceTarget(dispatchEnv(), target, { trackingMode: "competitor" }, {
+      fetchImpl,
+    });
+    expect(poll.ok).toBe(true);
+    expect(poll.items.length).toBeGreaterThanOrEqual(1);
+    expect(poll.items[0]?.canonicalUrl).toBe(`https://bsky.app/profile/${handle}/post/post1`);
+    expect(poll.costUnits).toBe(0);
+
+    const upsert = await upsertPresenceItems(dispatchEnv(), { sourceTarget: target, items: poll.items });
+    expect(upsert.inserted).toBe(poll.items.length);
+    expect(await countLivePresenceItems(target.id)).toBe(poll.items.length);
+
+    // A second identical poll + upsert must NOT multiply rows (urlHash dedup).
+    const pollAgain = await pollPresenceTarget(dispatchEnv(), target, { trackingMode: "competitor" }, {
+      fetchImpl,
+    });
+    expect(pollAgain.ok).toBe(true);
+    const upsertAgain = await upsertPresenceItems(dispatchEnv(), { sourceTarget: target, items: pollAgain.items });
+    expect(upsertAgain.inserted).toBe(0);
+    expect(await countLivePresenceItems(target.id)).toBe(poll.items.length);
+
+    // Rate budget across both polls: one session + one search per poll, nothing else.
+    const searchCalls = (fetchImpl as Mock).mock.calls.filter((call) =>
+      String(call[0]).includes("searchPosts"),
+    );
+    expect(searchCalls).toHaveLength(2);
   });
 });
 
