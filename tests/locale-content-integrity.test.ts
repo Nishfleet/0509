@@ -98,7 +98,7 @@ describe("locale content integrity (issue #1570)", () => {
     }
 
     it("every buyer-surface locale route ships an hreflang x-default alternate", () => {
-      // Accept #1: a complete hreflang cluster (5 locales + x-default -> EN)
+      // Accept #1: a complete hreflang cluster (en + 5 locales + x-default -> EN)
       // on every locale-prefixed buyer page, from one helper.
       for (const splat of [
         "",

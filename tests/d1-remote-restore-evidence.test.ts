@@ -1603,6 +1603,7 @@ describe("D1 remote restore evidence automation", () => {
           name !== "0098_widen_source_target_connector_gdelt.sql" &&
           name !== "0099_widen_source_target_connector_threads.sql" &&
           name !== "0100_widen_source_target_connector_hn.sql" &&
+          name !== "0101_widen_source_target_connector_pinterest.sql" &&
           name !== "0101_widen_source_target_connector_review_sites.sql",
       ),
     ];
@@ -1637,6 +1638,7 @@ describe("D1 remote restore evidence automation", () => {
           "0098_widen_source_target_connector_gdelt.sql",
           "0099_widen_source_target_connector_threads.sql",
           "0100_widen_source_target_connector_hn.sql",
+          "0101_widen_source_target_connector_pinterest.sql",
           "0101_widen_source_target_connector_review_sites.sql",
         ]),
         repository,
@@ -1663,6 +1665,7 @@ describe("D1 remote restore evidence automation", () => {
         "0098_widen_source_target_connector_gdelt.sql",
         "0099_widen_source_target_connector_threads.sql",
         "0100_widen_source_target_connector_hn.sql",
+        "0101_widen_source_target_connector_pinterest.sql",
         "0101_widen_source_target_connector_review_sites.sql",
       ],
     });
@@ -1719,6 +1722,7 @@ describe("D1 remote restore evidence automation", () => {
         "0098_widen_source_target_connector_bluesky.sql",
         "0099_widen_source_target_connector_threads.sql",
         "0100_widen_source_target_connector_hn.sql",
+        "0101_widen_source_target_connector_pinterest.sql",
         "0101_widen_source_target_connector_review_sites.sql",
       ],
     });
@@ -1729,6 +1733,7 @@ describe("D1 remote restore evidence automation", () => {
           "0098_widen_source_target_connector_bluesky.sql",
           "0099_widen_source_target_connector_threads.sql",
           "0100_widen_source_target_connector_hn.sql",
+          "0101_widen_source_target_connector_pinterest.sql",
           "0101_widen_source_target_connector_review_sites.sql",
         ]),
         repository,

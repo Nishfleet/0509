@@ -12,6 +12,7 @@ import {
   type CompareClaimCard,
 } from "~/components/compare-citations";
 import {
+  buyerSurfaceHreflangLinks,
   canonicalLinks,
   compareSocialCardUrl,
   faqPageJsonLd,
@@ -30,7 +31,10 @@ const pageTitle = "Five to Nine vs Visualping for ad libraries";
 const pageDescription =
   "Visualping can watch a Meta Ad Library URL on a free plan and paid check bundles. Five to Nine starts from a domain paste and diffs the commercial fields, not the pixels.";
 
-export const links: LinksFunction = () => canonicalLinks("/compare/visualping-ad-libraries");
+export const links: LinksFunction = () => [
+  ...canonicalLinks("/compare/visualping-ad-libraries"),
+  ...buyerSurfaceHreflangLinks("compare/visualping-ad-libraries"),
+];
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({

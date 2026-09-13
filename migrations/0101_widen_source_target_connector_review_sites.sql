@@ -10,13 +10,15 @@
 -- backup tables first and restored after the rebuild, all inside the single
 -- transaction D1 wraps the migration in.
 --
--- The new CHECK carries the full ten-connector union: every value the 0100
--- CHECK ('website','x','reddit','linkedin','rss','gdelt','bluesky',
--- 'threads','hn') accepted plus 'review_sites'. 0100 sorts before this
--- file, so any production catch-up that carries both applies the hn widen
--- first; this CHECK is a strict superset of 0100's, so the INSERT..SELECT
--- copy accepts every row that existed under the previous CHECK whichever of
--- the two applied last.
+-- The new CHECK carries the full eleven-connector union: every value the
+-- 0101 pinterest CHECK ('website','x','reddit','linkedin','rss','gdelt',
+-- 'bluesky','threads','hn','pinterest') accepted plus 'review_sites'. The
+-- 0101 pinterest widen sorts before this file (pinterest < review_sites
+-- alphabetically), so any production catch-up that carries all three
+-- applies the hn widen, then the pinterest widen, then this one; this CHECK
+-- is a strict superset of both, so the INSERT..SELECT copy accepts every
+-- row that existed under the previous CHECK whichever of the three applied
+-- last — the final schema state keeps every widen's connector.
 --
 -- Expand-only: every value the previous CHECK accepted is still accepted, so
 -- existing rows copy through unchanged, and the running old code is
@@ -31,7 +33,7 @@ CREATE TABLE source_target_review_sites_widen_new (
   id TEXT PRIMARY KEY NOT NULL,
   tracked_entity_id TEXT NOT NULL,
   user_id TEXT NOT NULL,
-  connector_id TEXT NOT NULL CHECK (connector_id IN ('website', 'x', 'reddit', 'linkedin', 'rss', 'gdelt', 'bluesky', 'threads', 'hn', 'review_sites')),
+  connector_id TEXT NOT NULL CHECK (connector_id IN ('website', 'x', 'reddit', 'linkedin', 'rss', 'gdelt', 'bluesky', 'threads', 'hn', 'pinterest', 'review_sites')),
   target_key TEXT NOT NULL,
   target_url TEXT,
   target_handle TEXT,

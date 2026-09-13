@@ -38,7 +38,10 @@ const WIRING_MODULE_SCRIPT = `window.__wired = true;`;
 
 async function loadWorker() {
   let capturedNonce: string | undefined;
-  const htmlDocument = () =>
+  // Issue #3391: mirror the production loader's #1972 rule — the marked
+  // (edge-eligible) render is the shared anonymous variant and does NOT mint
+  // f9_anon_search; an unmarked one still does.
+  const htmlDocument = (mintAnonSearchCookie: boolean) =>
     new Response(
       [
         "<!doctype html><html><head>",
@@ -48,15 +51,27 @@ async function loadWorker() {
         `<script type="module" async="" nonce="${capturedNonce ?? ""}">${WIRING_MODULE_SCRIPT}</script>`,
         "</head><body>0509</body></html>",
       ].join(""),
-      { headers: { "content-type": "text/html; charset=utf-8" } },
+      {
+        headers: {
+          "content-type": "text/html; charset=utf-8",
+          ...(mintAnonSearchCookie
+            ? {
+                "set-cookie":
+                  "f9_anon_search=22222222-2222-4222-8222-222222222222; HttpOnly; SameSite=Lax; Secure; Path=/; Max-Age=2592000",
+              }
+            : {}),
+        },
+      },
     );
 
   vi.doMock("react-router", () => ({
     createRequestHandler:
-      () => async (_request: Request, context: { get: (k: unknown) => unknown }) => {
+      () => async (request: Request, context: { get: (k: unknown) => unknown }) => {
         const value = context.get(SYMBOL_FOR_TEST) as { cspNonce?: string } | undefined;
         capturedNonce = value?.cspNonce;
-        return htmlDocument();
+        return htmlDocument(
+          request.headers.get("x-0509-edge-cache-eligible") !== "1",
+        );
       },
     RouterContextProvider: class RouterContextProvider {
       private readonly store = new Map<unknown, unknown>();
@@ -343,5 +358,36 @@ describe("edge cache through the real worker fetch handler (issue #2950)", () =>
     expect(outsider.headers.has(EDGE_PROOF_HEADER)).toBe(false);
     expect(cspNonceOf(outsider)).toBeTruthy(); // untouched path keeps its nonce
     expect(stub.keys()).toHaveLength(1);
+  });
+
+  it("caches /search: the anonymous variant is stored cookie-free and replayed (#3391)", async () => {
+    const stub = memoryCache();
+    vi.stubGlobal("caches", { open: async () => stub });
+    const { worker, capturedNonce: nonceSeen } = await loadWorker();
+
+    const first = await fetchDocument(worker, { path: "/search?q=calendly.com" });
+    expect(first.headers.get(EDGE_PROOF_HEADER)).toBe("MISS");
+    // The stored variant is the SHARED anonymous shape: no #1972 mint, no nonce.
+    expect(first.headers.get("set-cookie")).toBeNull();
+    expect(cspNonceOf(first)).toBeUndefined();
+    const firstBody = await first.text();
+    const firstNonce = nonceSeen();
+
+    const second = await fetchDocument(worker, { path: "/search?q=calendly.com" });
+    expect(second.headers.get(EDGE_PROOF_HEADER)).toBe("HIT");
+    expect(nonceSeen()).toBe(firstNonce); // the router never rendered again
+    expect(await second.text()).toBe(firstBody);
+
+    // A different query is a different (path+query, country, version) key.
+    const other = await fetchDocument(worker, { path: "/search?q=hubspot.com" });
+    expect(other.headers.get(EDGE_PROOF_HEADER)).toBe("MISS");
+
+    // The BET-2 funnel polls /search.data — a DIFFERENT pathname, so it never
+    // rides the edge gates: it keeps its fresh loader semantics AND its #1972
+    // mint, so the poll (not the cached document) persists the visitor id.
+    const data = await fetchDocument(worker, { path: "/search.data" });
+    expect(data.headers.has(EDGE_PROOF_HEADER)).toBe(false);
+    expect(data.headers.get("set-cookie") ?? "").toMatch(/f9_anon_search=/);
+    expect(stub.keys()).toHaveLength(2); // the two ?q= variants, nothing else
   });
 });

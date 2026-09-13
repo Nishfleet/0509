@@ -33,10 +33,14 @@ describe("plan entitlements catalog", () => {
     expect(entitlements.briefs).toBe("first_only");
     expect(planAllowsDigestCadence("free", "weekly")).toBe(false);
     expect(planAllowsDigestCadence("free", "daily")).toBe(false);
-    // Meta-only sources; no exports, no API/MCP, no team.
+    // Meta-only sources; no exports, no API/MCP, no team. Presence stays
+    // barebones on Free too (issue #3179): the SELF brand only — one entity,
+    // one website source, manual checks, no recurring digest or polling.
     expect(entitlements.sources).toEqual(["meta"]);
     expect([...entitlements.features].sort()).toEqual([
       "email_delivery",
+      "presence_self_tracking",
+      "presence_website_sources",
       "weekly_digest",
     ]);
     // A Friday 00:00 UTC tick is a 6h-aligned slot for paid plans but must
