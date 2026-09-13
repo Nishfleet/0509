@@ -471,7 +471,7 @@ export function presenceSourceCoverageForDocs(): Array<{
       sourceId: "hn",
       label: SOURCE_LABELS.hn,
       productionStatus: "gated",
-      notes: "Hacker News mention connector wired in (Algolia HN Search API — free, no key, no auth; the ~10,000-requests/hour/IP courtesy figure is honored with one serialized search_by_date request per poll: page 0 only, time-window slicing via the prior poll's watermark instead of deep paging past the ~1,000-result ceiling). Gated behind PRESENCE_HN_ROLLOUT — off by default; activation is a separate rollout decision.",
+      notes: "Hacker News mention connector wired in (Algolia HN Search API — free, no key, no auth; the ~10,000-requests/hour/IP courtesy figure is honored with one serialized search_by_date request per poll: page 0 only, time-window slicing via the prior poll's watermark instead of deep paging past the ~1,000-result ceiling). Gated behind PRESENCE_HN_ROLLOUT — off by default; activation is a separate rollout decision. Coverage: only public HN stories and comments whose stored text/URL/title matches the tracked phrase become mentions — the connector pins the Algolia query to tags=(story,comment) — while ranking metadata (points, comment counts, the story's external URL) rides raw_json, never the mention.",
     },
     {
       sourceId: "youtube",

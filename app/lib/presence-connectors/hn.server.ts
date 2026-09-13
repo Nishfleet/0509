@@ -56,6 +56,19 @@ import type {
  * (issue UNKNOWN: one target vs two — pinned by the integration test as ONE
  * target whose hits carry both kinds).
  *
+ * Research (issue #3207 — required: research existing open-source collectors
+ * first, cite searched + rejected): surveyed 2026-09-13 via
+ * `gh search repos "hacker news mentions"` — Bemmu/hnfirstmention (pushed
+ * 2018-02), ltranco/TheHackerNewsBump (pushed 2014-08),
+ * mihailgaberov/hacker-news-scraper (pushed 2021-02), all 0-star dormant
+ * one-shot scrapers with no dedup substrate — and via npm ("hacker news" +
+ * mentions: only generic mention/parse libraries, no live HN-mention
+ * collector). All rejected: adopting a dormant 2014–2021 scraper adds a
+ * dependency without removing anything, while the in-repo #3178 connector
+ * interface already provides the capture substrate. The rejected OFFICIAL
+ * alternative remains the Firebase HN API (no search endpoint —
+ * docs/mentions/PLAN.md, source inventory).
+ *
  * The connector ships dark behind `PRESENCE_HN_ROLLOUT` (off by default);
  * activation needs the flag and the 0100 CHECK widen for
  * `source_target.connector_id = 'hn'` — not a code change here.
