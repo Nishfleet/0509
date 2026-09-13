@@ -430,7 +430,8 @@ export function presenceSourceCoverageForDocs(): Array<{
       sourceId: "reddit",
       label: SOURCE_LABELS.reddit,
       productionStatus: "gated",
-      notes: "Reddit connector wired in. Gated behind PRESENCE_REDDIT_ROLLOUT — off by default; activation is a separate rollout decision.",
+      notes:
+        "Reddit Data API mention connector wired in (OAuth2 client-credentials, $0 free tier): covers the new posts of tracked subreddit targets — engagement (score/comment count) rides the item; NOT covered: comments, PMs, historicals, non-post votes. The documented 1,000-reads-per-10-minute budget (100 QPM averaged over 10 minutes, Data API Wiki) is enforced in-connector via presence_poll_cursor and shared by the one fleet OAuth client. Gated behind PRESENCE_REDDIT_ROLLOUT + REDDIT_CLIENT_ID/SECRET + REDDIT_COMMERCIAL_ACCESS=approved — off by default; activation is a separate rollout decision.",
     },
     {
       sourceId: "linkedin",
