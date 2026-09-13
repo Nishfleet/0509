@@ -1,0 +1,150 @@
+# Lane evidence — claim/issue-3302 (Nishfleet/0509#3302)
+
+## Task
+
+Ship `/compare/sneakerping` — the 15th `/compare/*` surface — aimed at the
+sneaker-resale demand cluster the 2026-09-12 market signal leads with
+(SneakerPing's 59.5%-below-retail study is back, the Nike r/stocks thread still
+growing). Acceptance: EN + $locale route pair on the compare.keeptabz pattern
+(canonical→EN, #1562); claims only from SneakerPing's public pages, each cited,
+switch framing ending in the free /search preview; sitemap + internal links from
+the sneaker-resale cluster and /brands/sport-footwear; tests in the
+compare-family conventions; #3147 adoption only if landed.
+
+## Shipped
+
+- `app/routes/compare.sneakerping.tsx` + `app/routes/$locale.compare.sneakerping.tsx`
+  (canonical→EN, buyer-surface hreflang cluster, WebPage + exactly one FAQPage
+  JSON-LD, #1863 data-source-url, CompareCitationsFooter).
+- `app/data/compare/sneakerping-citations.json` — two cited sources, both
+  verified live 2026-09-12: sneakerping.com (40+ store price-alert job, free
+  5-pair tier) and sneakerping.com/sneaker-resale-market-report (3,538-release
+  study: 59.5% below retail, median 10.6% under, figures as of 18 Aug 2026).
+  Paid-tier pricing hedged; no uncited price numbers.
+- Distribution: `SITEMAP_PATHS` + `PUBLIC_MARKDOWN_PATHS` + llms.txt entry
+  (`app/lib/seo.ts`, `app/lib/public-markdown.ts`), the #3167 footer compare
+  rail `vs SneakerPing` (`app/components/marketing-footer.tsx` — the rail
+  renders on every /sneaker-resale/* page incl. the hub via
+  SneakerResaleLanding, and on /brands/* incl. /brands/sport-footwear via
+  brands.$category.tsx), `COMPARE_PRODUCT_NAMES` row so the og:image resolves
+  (`app/lib/social-cards.server.ts`, the #3237 404 lesson), routes.ts
+  registration (EN + $locale).
+- Tests: `tests/compare-sneakerping.route.test.ts` (5 cases: route-module
+  posture, /search-preview CTA, sitemap <loc> + llms.txt, #1562 canonical
+  pair, internal links + og:image resolution) plus the registry updates the
+  new paths require (`tests/customer-claim-surface-registry.test.ts`,
+  `tests/sneaker-resale.route.test.ts` swing-scoped #2856 assertion).
+
+## Receipts (2026-09-13, this worktree @ claim/issue-3302)
+
+- Issue termination `npx vitest run tests/compare-sneakerping.route.test.ts
+  --reporter=basic`: FAILED once — vitest 4.1.11 dropped the `basic` reporter
+  (`Error: Failed to load custom Reporter from basic`); re-run with the
+  vitest-4 spelling `--reporter=dot`: 5/5 passed.
+- Affected suite `npx vitest run --configLoader runner --project node --changed
+  origin/main`: 386 files / 4,624 tests, all passed (~100s, VITEST_MAX_WORKERS=2).
+- Scoped touched-test run (compare-sneakerping + customer-claim-surface-registry
+  + sneaker-resale, node project): 3 files / 24 tests, all passed.
+- `sgscan --base origin/main`: "No new security findings." (exit 0).
+- Pre-merge live state (the gap this PR closes): sitemap.xml contains 0
+  `compare/sneakerping`; https://0509.io/compare/sneakerping → 404. The issue's
+  two verify curls are post-merge checks by nature and cannot pass before deploy.
+
+## Recovery receipts (2026-09-13, post-rebase onto f8ec9e8e2 = current origin/main)
+
+The unit's first run died (success/0) after the work commits; the salvage banked
+`wip/pi-issue-0509-3302-20260912T172653Z` and this worktree held the 4 work
+commits. This recovery session: rebased the 4 commits onto f8ec9e8e2 (clean,
+zero upstream drift on the 12 touched files), then re-verified everything:
+
+- Termination, as written in the issue (`--reporter=basic`): STILL fails —
+  vitest 4.1.11 dropped the built-in `basic` reporter (`Error: Failed to load
+  custom Reporter from basic` / `Failed to load url basic`, Startup Error,
+  exit 1). Same file, vitest-4 spelling (`--reporter=dot`): 5/5 passed, exit 0
+  (1.89s). The issue's vitest command predates the vitest-4 bump; the test
+  itself is what the criterion means and it passes.
+- Affected suite post-rebase (`npx vitest run --configLoader runner --project
+  node --changed origin/main`, VITEST_MAX_WORKERS=2): 4,623/4,625 passed
+  (386 files). 2 failures, both in `tests/launch-readiness-guard.route.test.ts`
+  (self-provision + delivery_target provisioning) — PRE-EXISTING, not this
+  diff: the same 2 tests fail at pristine f8ec9e8e2 in a detached worktree
+  (`/tmp/issue-3302-basecheck`, 2 failed / 41 passed, exit 1), the test's
+  import graph (`scripts/launch-readiness-canary.mjs`) touches none of the 12
+  files this issue changes, and the redness is already tracked upstream
+  (#3264 "main is red: … launch-readiness-guard … at origin/main HEAD",
+  #3261). No duplicate issue filed.
+- Scoped touched-test run post-rebase (compare-sneakerping +
+  customer-claim-surface-registry + sneaker-resale + lane-evidence-collision,
+  node project): 4 files / 26 tests, all passed (2.76s).
+- `sgscan --base origin/main` (f8ec9e8e): "No new security findings." (exit 0).
+- Pre-merge live state (the gap this PR closes): sitemap.xml contains 0
+  `compare/sneakerping`; https://0509.io/compare/sneakerping → 404. The issue's
+  two verify curls are post-merge checks by nature and cannot pass before
+  deploy.
+
+## Third recovery (2026-09-13, unit pi-issue-0509-3302, rebased onto 1cc79b200 = current origin/main)
+
+Main moved 9 commits past f8ec9e8e2 (#3332, #3334, #3336, #3339). Squashed the
+two banked wip(salvage) commits into the growth + lane-docs commits during the
+rebase. Fidelity proven, not assumed: the old-branch diff
+(`git diff f8ec9e8e2..afd6e2479`) and the rebased diff
+(`git diff 1cc79b200..HEAD`) hash-identical via `git hash-object --stdin`
+(both `ca9fddebbb8594f136426098f34e12dbbe8d13aa`), and main's 9 intervening
+commits intersect the 12 touched files in ZERO paths (`comm -12`).
+
+- Termination, as written in the issue (`--reporter=basic`): STILL fails, exit
+  1 — `Startup Error: Error: Failed to load custom Reporter from basic`
+  (vitest 4.1.11 dropped the built-in `basic` reporter; the issue's command
+  predates the vitest-4 bump). Same file, vitest-4 spelling
+  (`--reporter=dot`): 5/5 passed, exit 0 (1.78s).
+- Affected suite (`npx vitest run --configLoader runner --project node
+  --changed origin/main`, VITEST_MAX_WORKERS=2): 388 files / 4,637 tests, ALL
+  passed (~105s). The 2 launch-readiness-guard failures the previous receipts
+  proved PRE-EXISTING at f8ec9e8e2 are fixed on the new base by #3332
+  (106275737, 24ce68312) — the affected suite is now fully green at 1cc79b200;
+  no tracked failure remains.
+- Scoped touched-test run (compare-sneakerping + customer-claim-surface-registry
+  + sneaker-resale + lane-evidence-collision, node project): 4 files / 26
+  tests, all passed (2.91s).
+- `sgscan --base origin/main` (1cc79b20): "No new security findings." (exit 0).
+- Workers project not rerun: the diff touches neither `migrations/**` nor
+  `tests/integration/**` (memory-budget rule, fleet-ops#4891).
+- Pre-merge live state (the gap this PR closes): sitemap.xml contains 0
+  `compare/sneakerping`; https://0509.io/compare/sneakerping → 404. The
+  issue's two verify curls are post-merge checks by nature and cannot pass
+  before deploy.
+
+## Issue-conditional dispositions (re-checked 2026-09-13)
+
+- #3183 (claim-table rails): CLOSED, not merged — nothing to consume; no
+  duplication.
+- #3147 (per-surface og:image): CLOSED, not merged — adoption not triggered;
+  this PR ships the compare-family social-card row, not #3147's per-surface
+  pattern.
+
+## Fourth recovery (2026-09-13, this unit, rebased onto ccca0c94e = current origin/main)
+
+Main moved past 1cc79b200 (PR #3348's revert of #3345 + #3135's #2981 merge).
+Fidelity proven, not assumed: `comm -12` of the 12 touched paths against
+`git diff --name-only 1cc79b200..ccca0c94e` = ZERO intersection; rebase onto
+ccca0c94e landed clean (2/2, no conflicts).
+
+- Scoped touched-test run (compare-sneakerping + customer-claim-surface-registry
+  + sneaker-resale + lane-evidence-collision, node project, `--reporter=dot` —
+  the vitest-4 spelling; `basic` still dead in vitest 4.1.11): 4 files / 26
+  tests, ALL passed (2.68s).
+- Affected suite (`npx vitest run --configLoader runner --project node --changed
+  origin/main`, VITEST_MAX_WORKERS=2): 388 files / 4,638 tests, ALL passed
+  (112s) — fully green at ccca0c94e; the #3348 revert re-broke nothing.
+- `sgscan --base origin/main` (ccca0c94e): "No new security findings." (exit 0).
+- Workers project not run: diff touches neither `migrations/**` nor
+  `tests/integration/**` (memory-budget rule, fleet-ops#4891).
+- #3183 / #3147 re-checked 2026-09-13T08:02Z (`gh pr view --json state,mergedAt`):
+  both CLOSED, `mergedAt:null` — the only-to-adopt-if-landed clauses stay
+  untriggered; no duplication.
+- Host-gh note: `gh pr list --sort -mergedAt` → `unknown flag: --sort` (exit 1,
+  this host's gh predates the flag); merged-recent read with
+  `gh pr list --state merged -L` instead.
+- Pre-merge live state (the gap this PR closes): /compare/sneakerping → 404,
+  sitemap.xml 0 `compare/sneakerping`. The issue's two verify curls are
+  post-merge checks by nature and cannot pass before deploy.
