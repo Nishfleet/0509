@@ -32,6 +32,13 @@ function createDbWithTarget() {
                     : ([] as T[]),
               };
             },
+            // #3330: the substrate convergence (provision INSERT OR IGNORE +
+            // repair) now runs on the existing-substrate path too, so the
+            // it.each tests that import the REAL data.server need the write
+            // half of the double, not just the read half.
+            async run() {
+              return { meta: {} };
+            },
           };
         },
       };

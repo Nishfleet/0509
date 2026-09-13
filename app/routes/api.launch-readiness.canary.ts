@@ -102,11 +102,29 @@ async function ensureCanaryProofEmailTarget(
   userId: string,
   canaryEmail: string,
 ) {
-  const { provisionVerifiedAccountEmailTargetIfUnsuppressed, repairCanaryProofEmailTarget } = await import("~/lib/data.server");
+  const dataServer = await import("~/lib/data.server");
+  // #3330: vi.doMock factory doubles in this suite list only the exports they
+  // stub, and this vitest THROWS on reading an export the factory omitted —
+  // it does not read back as undefined — so each read must tolerate a missing
+  // export. In production the namespace is a plain module object and these
+  // reads never throw; the typed reads below still fail the typecheck if the
+  // export vanishes from ~/lib/data.server.
+  const readOptionalExport = <T>(read: () => T): T | undefined => {
+    try {
+      return read();
+    } catch {
+      return undefined;
+    }
+  };
+  const provisionVerifiedAccountEmailTargetIfUnsuppressed = readOptionalExport(
+    () => dataServer.provisionVerifiedAccountEmailTargetIfUnsuppressed,
+  );
+  const repairCanaryProofEmailTarget = readOptionalExport(
+    () => dataServer.repairCanaryProofEmailTarget,
+  );
   // Test doubles stub only their own duty and routinely omit these exports;
   // the substrate-convergence tests (first-contact + substrate-exists) pin
-  // the real calls, so a missing export cannot hide. Production is covered
-  // by the typed import above — a vanished export fails the typecheck.
+  // the real calls, so a missing export cannot hide.
   await provisionVerifiedAccountEmailTargetIfUnsuppressed?.(env, {
     userId,
     targetValue: canaryEmail,
