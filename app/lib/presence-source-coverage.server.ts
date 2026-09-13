@@ -442,7 +442,8 @@ export function presenceSourceCoverageForDocs(): Array<{
       sourceId: "rss",
       label: SOURCE_LABELS.rss,
       productionStatus: "gated",
-      notes: "RSS/Atom/JSON Feed connector wired in. Gated behind PRESENCE_RSS_ROLLOUT — off by default; activation is a separate rollout decision.",
+      notes:
+        "RSS/Atom/JSON Feed connector wired in. Gated behind PRESENCE_RSS_ROLLOUT — off by default; activation is a separate rollout decision. Covers the publication feeds the sources themselves syndicate — publisher RSS, Substack, Medium, YouTube channel feeds (named feeds you register; those platforms have no free global keyword search).",
     },
     {
       sourceId: "bluesky",
