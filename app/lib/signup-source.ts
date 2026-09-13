@@ -1,6 +1,9 @@
 import { execute, queryOne } from "~/lib/data/d1.server";
 import type { AppEnv } from "~/lib/env.server";
-import { PRICING_FREE_SIGNUP_SOURCE } from "~/lib/funnel-measurement.server";
+import {
+  PRICING_FREE_SIGNUP_SOURCE,
+  SEARCH_LIKELY_CONFIRM_SIGNUP_SOURCE,
+} from "~/lib/funnel-measurement.server";
 import { registrableDomainFromHostname } from "~/lib/search-query";
 
 /**
@@ -34,6 +37,16 @@ export const LOCALE_SNEAKER_RESALE_SIGNUP_SOURCES = [
  */
 export const SEARCH_WARMING_EXHAUSTED_SIGNUP_SOURCE = "search_warming_exhausted";
 
+/**
+ * The exact marker the /search Likely-match confirm control carries on its
+ * signup link (issue 3306, BET 2 finish line): a signed-out visitor's
+ * one-click "Yes, that's them" on a Likely-match row starts the signup intent
+ * with the confirmed brand's context carried through, so the signup is
+ * attributed to the search preview. Hyphen slug — inside the open slug
+ * shape, so no migration literal needed. The constant itself lives next to
+ * its funnel kind in funnel-measurement.server.ts (same module split as the
+ * pricing-Free marker); only the allowlist membership is recorded here.
+ */
 /**
  * The exact marker the /guides/how-to-track-competitor-ads guide carries on
  * its /search preview CTA (issue 2152): the guide is an organic-search entry
@@ -107,6 +120,7 @@ export const ALLOWED_SIGNUP_SOURCES = [
   DIGEST_FOOTER_SIGNUP_SOURCE,
   ...LOCALE_SNEAKER_RESALE_SIGNUP_SOURCES,
   SEARCH_WARMING_EXHAUSTED_SIGNUP_SOURCE,
+  SEARCH_LIKELY_CONFIRM_SIGNUP_SOURCE,
   GUIDE_TRACK_ADS_SIGNUP_SOURCE,
   GUIDE_MONITOR_AD_LIBRARY_SIGNUP_SOURCE,
   GUIDE_LANDING_PAGE_CHANGES_SIGNUP_SOURCE,
