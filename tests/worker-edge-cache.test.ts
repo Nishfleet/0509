@@ -47,7 +47,10 @@ import {
   overwriteStoredCopy,
   sha256Source,
 } from "./helpers/edge-cache-kit";
-import { EXPECTED_EDGE_CACHE_PROOF_HEADER } from "../scripts/check-live-public-home.mjs";
+import {
+  EXPECTED_EDGE_CACHE_PROOF_HEADER,
+  EXPECTED_HOME_EDGE_CACHE_STATUS,
+} from "../scripts/check-live-public-home.mjs";
 
 function htmlResponse(
   init: ResponseInit & { headers?: Record<string, string> } = {},
@@ -211,8 +214,9 @@ describe("edge cache eligibility (issue #2950)", () => {
     expect(staleHit?.headers.get(EDGE_PROOF_HEADER)).toBe("HIT");
     expect(await staleHit?.text()).toContain("stale-in-window");
     // The served reply keeps the origin's browser contract (the deploy gate
-    // asserts exactly `public, max-age=300`), not the stretched stored value.
-    expect(staleHit?.headers.get("cache-control")).toBe("public, max-age=300");
+    // asserts exactly `public, s-maxage=3900, max-age=300`), not the stretched
+    // stored value — plus the shared-edge s-maxage (#3308).
+    expect(staleHit?.headers.get("cache-control")).toBe("public, s-maxage=3900, max-age=300");
 
     // Aged past fresh-bound + stale window: a hard miss — the next request
     // re-renders and re-stores.
@@ -274,6 +278,18 @@ describe("edge cache eligibility (issue #2950)", () => {
     // scripts/check-live-public-home.mjs and the header the worker actually
     // stamps can never silently diverge.
     expect(EDGE_CACHE_PROOF_HEADER).toBe(EXPECTED_EDGE_CACHE_PROOF_HEADER);
+  });
+
+  it("keeps the deploy gate's zone-level proof coupled to the judge's home_edge semantics (#3308)", () => {
+    // #3308: the #2950 stamp is worker-internal and cannot see the zone, so
+    // the 2026-09-12 home_edge=NONE flap (every visitor paying a ~1.1s cold
+    // TTFB) shipped past the deploy gate. The gate's second proof must be the
+    // zone's own verdict — `cf-cache-status` — read EXACTLY like the judge's
+    // home_edge field (uppercased; absent = NONE). HIT is the only accepted
+    // second-request verdict: EXPIRED/STALE/UPDATING would mean the zone's
+    // copy no longer outlives the judge's 20-30-minute probe cadence, which
+    // is the regression this issue fixed.
+    expect(EXPECTED_HOME_EDGE_CACHE_STATUS).toBe("HIT");
   });
 });
 
@@ -389,7 +405,7 @@ describe("edge cache storage semantics", () => {
     const hit = await matchEdgeCache(request, cache, "v1");
     expect(hit).not.toBeNull();
     expect(hit?.headers.get(EDGE_PROOF_HEADER)).toBe("HIT");
-    expect(hit?.headers.get("cache-control")).toBe("public, max-age=300");
+    expect(hit?.headers.get("cache-control")).toBe("public, s-maxage=3900, max-age=300");
     expect(hit?.headers.get("content-security-policy")).toBe(scriptSrc);
     expect(await hit?.text()).toContain("boot=1");
   });
@@ -438,10 +454,11 @@ describe("edge cache storage semantics", () => {
       "US",
     );
     // The stored copy is shared and clean; the caller's reply carries the
-    // same shared policy (it IS the variant).
-    expect(miss.headers.get("cache-control")).toBe("public, max-age=45");
+    // shared policy too (it IS the variant) — browsers on the 45s bound, the
+    // shared edge on the #3247-accepted freshness window (#3308).
+    expect(miss.headers.get("cache-control")).toBe("public, s-maxage=3645, max-age=45");
     const hit = await matchEdgeCache(request, cache, "v1", "US");
-    expect(hit?.headers.get("cache-control")).toBe("public, max-age=45");
+    expect(hit?.headers.get("cache-control")).toBe("public, s-maxage=3645, max-age=45");
     expect(hit?.headers.has("set-cookie")).toBe(false);
   });
 

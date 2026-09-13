@@ -302,7 +302,7 @@ describe("edge cache through the real worker fetch handler (issue #2950)", () =>
     // not bypass the re-warm.
     const staleHead = await fetchDocument(worker, { method: "HEAD", tasks });
     expect(staleHead.headers.get(EDGE_PROOF_HEADER)).toBe("HIT");
-    expect(staleHead.headers.get("cache-control")).toBe("public, max-age=300");
+    expect(staleHead.headers.get("cache-control")).toBe("public, s-maxage=3900, max-age=300");
     expect(await staleHead.text()).toBe("");
     expect(tasks).toHaveLength(1);
   });
@@ -317,7 +317,7 @@ describe("edge cache through the real worker fetch handler (issue #2950)", () =>
     expect(headHit.headers.get(EDGE_PROOF_HEADER)).toBe("HIT");
     expect(headHit.status).toBe(200);
     expect(headHit.headers.get("content-type")).toContain("text/html");
-    expect(headHit.headers.get("cache-control")).toBe("public, max-age=300");
+    expect(headHit.headers.get("cache-control")).toBe("public, s-maxage=3900, max-age=300");
     expect(scriptSrcOf(headHit)).not.toContain("'nonce-");
     expect(await headHit.text()).toBe("");
 

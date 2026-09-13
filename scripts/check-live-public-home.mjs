@@ -25,10 +25,34 @@ const baseUrl = process.env.PUBLIC_HOME_URL ?? "https://0509.io";
 // the worker's shared policy exclusively. The only accepted policy is the
 // public one below — a stale `private, max-age=300` variant is a deploy
 // failure, not an accepted shape.
-export const EXPECTED_PUBLIC_HOME_CACHE_CONTROL = "public, max-age=300";
-const ACCEPTED_PUBLIC_HOME_CACHE_CONTROLS = new Set([
+// Issue #3308: the SHARED edge (Cloudflare's zone cache, whose Edge TTL
+// respects the origin) reads `s-maxage` ahead of `max-age`, so it now holds
+// the anonymous home copy for 3900s = 300 (the unchanged #2950 browser bound)
+// + the #3247-accepted 3600s serve-stale window. Under the plain 300 the
+// zone's copy expired between the judge's 20-30-minute probes and home_edge
+// flapped HIT -> NONE with a ~1.1s cold TTFB (2026-09-12). The coupling test
+// in tests/worker-security-headers.test.ts keeps this constant and the
+// worker's PUBLIC_HTML_CACHE_CONTROL equal — they moved together in #3308.
+export const EXPECTED_PUBLIC_HOME_CACHE_CONTROL = "public, s-maxage=3900, max-age=300";
+// Issue #3308: when the zone holds a warm copy it answers the plain-URL probe
+// itself, and its Browser Cache TTL (zone config, outside this repo — the 4h
+// zone default) rewrites the stored copy's cache-control on replay. LIVE
+// receipt, 2026-09-12 (same run, seconds apart): the cache-busted probe got
+// the worker's own `public, max-age=300` while the plain probe got the
+// zone-rewritten `public, max-age=14400` with cf-cache-status: HIT and the
+// worker's x-0509-* stamps preserved. An exact-only accepted set would hold
+// this gate red (or green) depending on zone warmth — the flakiness the
+// #3308 flap shipped under. The set absorbs exactly the two rewrites of the
+// product policy (the TTL REPLACES the origin header, dropping s-maxage, or
+// overrides just max-age, keeping it): the security-meaningful contract —
+// public, SWR-free, no-store-free, freshness — holds in every accepted
+// shape. A response carrying anything else is still a deploy failure.
+export const EXPECTED_PUBLIC_HOME_CACHE_CONTROLS = [
   EXPECTED_PUBLIC_HOME_CACHE_CONTROL,
-]);
+  "public, max-age=14400",
+  "public, s-maxage=3900, max-age=14400",
+];
+const ACCEPTED_PUBLIC_HOME_CACHE_CONTROLS = new Set(EXPECTED_PUBLIC_HOME_CACHE_CONTROLS);
 
 // Deploy-gate contract for the Cloudflare Web Analytics beacon (PR #610).
 //
@@ -252,12 +276,43 @@ async function checkUrl(url) {
 // ("x-0509-edge-cache") is coupled to the worker's stamp by
 // tests/worker-edge-cache.test.ts so the gate and product cannot diverge.
 //
+// Issue #3308: the second probe must ALSO be a ZONE hit (cf-cache-status) —
+// what outside visitors and the judge's home_edge field measure. The #2950
+// stamp is the worker's OWN Cache API and cannot see the zone, which is
+// exactly how the 2026-09-12 home_edge=NONE flap kept this gate green.
+//
 // Both probes must also carry a NONCE-FREE script-src: the anonymous public
 // variant is the stored nonce-free copy (issue #2950's answer to the #2716
 // nonce condition — no nonce is ever shared between visitors). A nonce in
 // script-src on an anonymous marketing response means the variant was
 // bypassed; that is a deploy failure, not a warning.
 export const EXPECTED_EDGE_CACHE_PROOF_HEADER = "x-0509-edge-cache";
+
+// Issue #3308: the second proof. `x-0509-edge-cache` is the WORKER-INTERNAL
+// stamp — it proves the worker's own Cache API answered and says nothing
+// about the Cloudflare ZONE cache, which is what `cf-cache-status` reports
+// and what every outside visitor (and the fleet judge's `home_edge` field:
+// cf-cache-status, uppercased, NONE when the header is absent — the #3308
+// observations show a zone-MISS pass on 0509.io emits no header at all)
+// actually experiences. The 2026-09-12 home_edge flap (HIT -> NONE, home
+// TTFB 66ms -> 1096ms) shipped past this gate precisely because the #2950
+// proof kept passing while the zone's copy expired between the judge's
+// 20-30-minute probes. With the #3308 `s-maxage=3900` widening the zone's
+// respect-origin Edge TTL covers that cadence, and this constant makes the
+// zone's HIT itself a deploy-gate requirement: a second consecutive
+// anonymous GET that is not a zone HIT — because the zone's Cache Rule
+// stopped matching the home route, or the origin started emitting no-store
+// or a Set-Cookie — now fails the deploy, not the next judge.
+export const EXPECTED_HOME_EDGE_CACHE_STATUS = "HIT";
+
+/** The zone-level cache status exactly as the fleet judge's `home_edge` field
+ * reads it: uppercased, and NONE when the header is absent — absence must
+ * never read as an empty success.
+ * @param {Response} response - the probe response to read. */
+function zoneCacheStatus(response) {
+  return (response.headers.get("cf-cache-status") ?? "").trim().toUpperCase() || "NONE";
+}
+
 const EDGE_CACHE_PROOF_ATTEMPTS = 3;
 const EDGE_CACHE_PROOF_ATTEMPT_INTERVAL_MS = 5_000;
 
@@ -273,9 +328,11 @@ async function proveEdgeCacheHit() {
       });
       const headerMs = Math.round(performance.now() - startedAt);
       await response.text();
+      const zoneStatus = zoneCacheStatus(response);
       const scriptSrc = cspDirective(response.headers.get("content-security-policy") ?? "", "script-src");
       lastProbes.push({
         stamp: response.headers.get(EXPECTED_EDGE_CACHE_PROOF_HEADER),
+        zoneStatus,
         headerMs,
         scriptSrcHasNonce: /'nonce-/.test(scriptSrc),
       });
@@ -286,12 +343,15 @@ async function proveEdgeCacheHit() {
           JSON.stringify(lastProbes),
       );
     }
-    if (lastProbes[1].stamp === "HIT") {
+    if (
+      lastProbes[1].stamp === "HIT" &&
+      lastProbes[1].zoneStatus === EXPECTED_HOME_EDGE_CACHE_STATUS
+    ) {
       const [maybeMiss, mustHit] = lastProbes;
       console.log(
         `edge-cache proof passed (attempt ${attempt}): second-request ` +
-          `${EXPECTED_EDGE_CACHE_PROOF_HEADER}: HIT — ` +
-          `${maybeMiss.stamp ?? "none"} ${maybeMiss.headerMs}ms (render) → ` +
+          `${EXPECTED_EDGE_CACHE_PROOF_HEADER}: HIT, cf-cache-status: ${mustHit.zoneStatus} — ` +
+          `${maybeMiss.stamp ?? "none"}/${maybeMiss.zoneStatus} ${maybeMiss.headerMs}ms (render) → ` +
           `HIT ${mustHit.headerMs}ms (edge); script-src nonce-free on both probes`,
       );
       return;
@@ -301,7 +361,9 @@ async function proveEdgeCacheHit() {
     }
   }
   throw new Error(
-    `no second-request ${EXPECTED_EDGE_CACHE_PROOF_HEADER}: HIT after ${EDGE_CACHE_PROOF_ATTEMPTS} attempts: ` +
+    `no second-request ${EXPECTED_EDGE_CACHE_PROOF_HEADER}: HIT / ` +
+      `cf-cache-status: ${EXPECTED_HOME_EDGE_CACHE_STATUS} after ${EDGE_CACHE_PROOF_ATTEMPTS} attempts ` +
+      "(issue #3308: the zone stopped serving the anonymous home route): " +
       JSON.stringify(lastProbes),
   );
 }

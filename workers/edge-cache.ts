@@ -85,8 +85,9 @@ const EDGE_TTL_CAP_SECONDS = 300;
  * expired" miss), so a stale-window check against a 300-second copy can never
  * fire. storeEdgeCache therefore stores `max-age = ttl + this window` as the
  * matchable lifetime while every SERVED response keeps the origin's capped
- * `public, max-age=<ttl>` browser contract — the check-live-public-home
- * deploy gate asserts exactly `public, max-age=300`. The window is sized past
+ * `public, max-age=<ttl>` browser contract, while the shared edge reads the
+ * served s-maxage (issue #3308: the check-live-public-home deploy gate
+ * asserts exactly `public, s-maxage=3900, max-age=300`). The window is sized past
  * the hourly judge cadence so a warm copy outlives one probe interval, and a
  * stale serve triggers a background re-render (workers/app.ts) so periodic
  * probe traffic keeps the edge warm instead of alternating MISS/HIT. The
@@ -447,9 +448,17 @@ export async function matchEdgeCache(
   }
   const headers = stampedHeaders(cached, "HIT");
   // The stored copy's cache-control is the stretched match lifetime; the
-  // browser/deploy-gate contract is the origin's own capped ttl — restore it
-  // on every serve.
-  headers.set("cache-control", `public, max-age=${ttl}`);
+  // browser contract is the origin's own capped ttl, and the SHARED edge
+  // (the Cloudflare zone cache, which stores this very response) gets the
+  // #3247-accepted freshness window as its own s-maxage (issue #3308: at a
+  // 300s Edge TTL the zone expired between the hourly judge probes and
+  // home_edge flapped HIT → NONE). The worker-internal Cache API copy stays
+  // plain-#3247 — its stored cache-control above is the match lifetime and
+  // needs no second clock.
+  headers.set(
+    "cache-control",
+    `public, s-maxage=${ttl + EDGE_STALE_WINDOW_SECONDS}, max-age=${ttl}`,
+  );
   if (request.method === "HEAD") {
     return headOf(cached.status, cached.statusText, headers);
   }
@@ -544,9 +553,15 @@ export async function storeEdgeCache(
     // misses again, which the MISS stamp keeps visible.
   }
   const headers = stampedHeaders(stored, "MISS");
-  // The served reply keeps the origin's capped browser contract even though
-  // the stored copy carries the stretched match lifetime.
-  headers.set("cache-control", `public, max-age=${ttl}`);
+  // The served reply keeps the origin's capped browser contract for BROWSERS
+  // even though the stored copy carries the stretched match lifetime, and —
+  // issue #3308, same shape as the matchEdgeCache restore — hands the shared
+  // edge its own #3247-accepted freshness via s-maxage (the zone stores the
+  // MISS reply, so this is the FIRST response the zone ever sees).
+  headers.set(
+    "cache-control",
+    `public, s-maxage=${ttl + EDGE_STALE_WINDOW_SECONDS}, max-age=${ttl}`,
+  );
   if (request.method === "HEAD") {
     return headOf(stored.status, stored.statusText, headers);
   }
