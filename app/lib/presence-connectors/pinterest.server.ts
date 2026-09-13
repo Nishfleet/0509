@@ -318,6 +318,12 @@ export const pinterestConnector = {
       // buyer-readable sentence, not the markup (issue #3201). Idempotent on
       // already-plain excerpts.
       const excerpt = item.bodyExcerpt ? stripHtml(item.bodyExcerpt) : null;
+      // Hash honesty (issue #3201 review): the stored `content_hash` comes
+      // from the shared parser (rss.server) hashing the MARKUP-SUFFUSED
+      // pre-strip excerpt, while the STORED excerpt is this post-strip text.
+      // Deterministic across polls — dedup/revision semantics are sound —
+      // but any future code that recomputes the hash from the STORED columns
+      // must hash the pre-strip text, or revisions bump spuriously.
       items.push({ ...item, canonicalUrl: canonical.toString(), bodyExcerpt: excerpt || null });
     }
 
