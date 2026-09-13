@@ -22,20 +22,25 @@ SITEMAP_URL="${SITE}/sitemap.xml"
 # Sample up to this many /ads URLs so the PR check stays fast and bounded.
 MAX_SAMPLE="${SEO_PARITY_MAX_SAMPLE:-10}"
 # Issue #3278: the /ads/:domain surface is rate-limited by the Cloudflare edge
-# binding RL_BRAND_PAGE at 12 req/60s per IP (PUBLIC_BRAND_PAGE_PER_MINUTE_LIMIT),
-# so a back-to-back burst over the now-127-URL sitemap trips it partway through
-# and the tail of the loop sees 429s. Two defenses, neither weakening any
+# binding RL_BRAND_PAGE (PUBLIC_BRAND_PAGE_PER_MINUTE_LIMIT — 12 req/60s when
+# the canary's 429s were first observed, 60/60s since #3156), so a back-to-back
+# burst over the 127-URL sitemap outran the then-12/60s bucket partway through
+# and the tail of the loop saw 429s. Two defenses, neither weakening any
 # assertion (every sampled URL is still fully fetched and asserted):
-#   1. Pace: sleep between requests (not before the first) so the sustained rate
-#      stays just under the 12/min budget — 5s + one fetch ≈ 11 req/min.
-#   2. Retry: curl ≥7.71 retries 429/5xx responses and honors the limiter's
+#   1. Pace: sleep between requests (not before the first) so the sustained
+#      rate stays under the smallest bucket this surface has ever had —
+#      5s + one fetch ≈ 11 req/min.
+#   2. Retry: curl ≥7.71 treats 429/5xx as transient and honors the limiter's
 #      Retry-After header, so a missed window waits exactly as long as the
 #      app asks before retrying (--retry 4 covers a full missed 60s window).
-# --location follows redirects: the sitemap lists the canonical non-trailing-
-# slash /ads/:domain URLs (the /suffix variants 301 onto them), and what must
-# be asserted is the FINAL landed page — the one a search engine indexes. The
-# effective URL is printed whenever it differs so persistent-redirect drift
-# (a sitemap entry that no longer lands where it lists) stays visible.
+# --location follows redirects: the sitemap lists the canonical, non-trailing-
+# slash /ads/:domain URLs and the app 301s the trailing-slash variants onto
+# them (verified 2026-09-13: /ads/zivame.com/ -> 301 -> /ads/zivame.com; the 9
+# redirecting URLs the issue's 09-12 local repro saw had all settled to 200).
+# What must be asserted is the FINAL landed page — the one a search engine
+# indexes. The effective URL is printed whenever it differs so persistent-
+# redirect drift (a sitemap entry that no longer lands where it lists) stays
+# visible.
 SEO_PARITY_PACE_SECONDS="${SEO_PARITY_PACE_SECONDS:-5}"
 CURL_OPTS=(--silent --show-error --max-time 20 --retry 4 --retry-delay 3 --location --max-redirs 4)
 
