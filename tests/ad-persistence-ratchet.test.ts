@@ -64,6 +64,28 @@ describe("upsertAd seen-window ratchet", () => {
       .get(adId) as unknown as AdDateRow;
   }
 
+  it("preserves the issue #2981 creative hash across a re-scrape", async () => {
+    // The mirror writes `$.creativeHash` into raw_json; a scrape never does.
+    // Before the chaining fix, the next upsert started from `excluded.raw_json`
+    // and silently dropped the hash, reverting the row to the rotting fbcdn URL.
+    await upsertAd(env, buildAd());
+    harness.sqlite
+      .prepare(
+        "UPDATE ad SET raw_json = json_set(raw_json, '$.creativeHash', ?, '$.creativeHashContentType', ?) WHERE id = ?",
+      )
+      .run("a".repeat(64), "image/jpeg", "1280520150312258");
+
+    // A later scan of the same ad, carrying no hash of its own.
+    await upsertAd(env, buildAd({ body: "Re-scraped copy" }));
+
+    const raw = JSON.parse(readAdRow("1280520150312258").raw_json) as Record<string, unknown>;
+    expect(raw.creativeHash).toBe("a".repeat(64));
+    expect(raw.creativeHashContentType).toBe("image/jpeg");
+    // ...and the scrape's own field still won, so the chaining did not freeze
+    // the rest of the row.
+    expect(readAdRow("1280520150312258").body).toBe("Re-scraped copy");
+  });
+
   it("a later scan writing null never clobbers a real date", async () => {
     await upsertAd(env, buildAd({ firstSeenAt: "2026-07-01", lastSeenAt: "2026-07-10T04:00:00.000Z" }));
     await upsertAd(env, buildAd({ firstSeenAt: null, lastSeenAt: null }));
