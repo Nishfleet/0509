@@ -31,6 +31,12 @@ async function loadRoute() {
   return import("~/routes/compare.sneakerping");
 }
 
+// Visible-copy assertions normalize the entities React emits for
+// apostrophes, per tests/switch-pages.route.test.ts convention.
+function visibleText(markup: string) {
+  return markup.replace(/&#x27;/g, "'").replace(/&apos;/g, "'").replace(/&rsquo;/g, "'");
+}
+
 describe("compare sneakerping route (issue #3302)", () => {
   it("is registered as the 15th compare surface and renders the cited, honest comparison", async () => {
     const routes = readFileSync("app/routes.ts", "utf8");
@@ -58,7 +64,7 @@ describe("compare sneakerping route (issue #3302)", () => {
     expect(markup).toContain("59.5%");
     expect(markup).toContain("10.6%");
     expect(markup).toContain("5 pairs");
-    expect(markup).toContain("Confirm current plans on SneakerPing's site");
+    expect(visibleText(markup)).toContain("Confirm current plans on SneakerPing's site");
 
     // The #1863 posture: the primary claim section points its
     // data-source-url at SneakerPing's own first-party page, and both cited
@@ -139,8 +145,10 @@ describe("compare sneakerping route (issue #3302)", () => {
     const { MarketingFooter } = await import("~/components/marketing-footer");
     const footerMarkup = renderToStaticMarkup(createElement(MarketingFooter));
     expect(footerMarkup).toContain('href="/compare/sneakerping"');
-    // The demanded surfaces really render that footer.
+    // The demanded surfaces really render that footer: the hub, every
+    // per-brand cluster page, and the /brands category pages.
     expect(readFileSync("app/components/sneaker-resale-landing.tsx", "utf8")).toContain("<MarketingFooter");
+    expect(readFileSync("app/routes/sneaker-resale.$brand.tsx", "utf8")).toContain("<MarketingFooter");
     expect(readFileSync("app/routes/brands.$category.tsx", "utf8")).toContain("<MarketingFooter");
 
     // #3167 reciprocity: the new page cross-links the compare family.

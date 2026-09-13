@@ -179,3 +179,42 @@ ccca0c94e landed clean (2/2, no conflicts).
 - Pre-merge live state unchanged: the two issue verify curls are post-merge
   checks by nature (see prior line); the termination vitest is the only
   pre-merge termination check and it is green.
+
+## Reviewer round + rebase — 2026-09-13 (onto 271a90d87 = origin/main after #3360)
+
+Main gained #3360 (Threads presence connector, issue #3254) which touches
+`tests/customer-claim-surface-registry.test.ts` (presenceSources `threads`
+row) — disjoint hunks from this diff's two list additions; rebase clean.
+`fleet-review-arm-check` exit 0 → reviewer round ran on `devin/swe-2-max`
+(the resume seat; subagent reviewer, independent of the authoring seat).
+
+Reviewer adjudication (every finding in one bucket):
+
+- ACT ON — `/compare` hub omitted the page: `COMPARE_PAGES` in
+  `app/routes/compare.tsx` (the ItemList JSON-LD derives from it) and the
+  mirror list in `tests/compare-hub.route.test.ts` both gained
+  `compare/sneakerping`; stale "7 indexed" docstring corrected to 14.
+- ACT ON — the rescoped #2856 guard in `tests/sneaker-resale.route.test.ts`
+  was weaker than the assertion it replaced (lowercase-only, `?? ""`
+  vacuous-pass, swing kicker/title/deck/source-note outside scope). Now:
+  non-vacuous `toBeTruthy` on both matched regions, `/sneakerping/i`
+  case-insensitive, plus data-level assertions over `copy.swingKicker/
+  swingTitle/swingDeck/swingSource`, `copy.swing[]`, `copy.swingSources[]`.
+- ACT ON (suggestions applied) — `sneakerping-home` citation claim extended
+  to cover the 7–365-day outlook and the 7-day free trial the page cites it
+  for; `sourceId` added to `sneakerpingDifferences[0]`; sneakerping row
+  added to the durable #1863 canary `tests/compare-pages-sources.test.ts`;
+  internal-links test now also asserts `sneaker-resale.$brand.tsx` renders
+  `<MarketingFooter`; apostrophe assertion moved to the `visibleText`
+  entity-normalizing convention (tests/switch-pages.route.test.ts).
+- NOTED — `COMPARE_TABLE` row skipped: the hub table is a curated subset
+  (keeptabz/gethookd/bigspy/minea/poweradspy are also absent); `not
+  published` cells need no row.
+- Pre-merge live state unchanged: /compare/sneakerping → 404, sitemap.xml 0
+  `compare/sneakerping`; the two verify curls are post-merge checks.
+
+Post-fix verification (this tree, 271a90d87 base):
+- Scoped touched tests (compare-sneakerping + customer-claim-surface-registry
+  + sneaker-resale + lane-evidence-collision + compare-hub +
+  compare-pages-sources, node project, `--reporter=dot`): 6 files / 98
+  tests, ALL passed (3.86s).

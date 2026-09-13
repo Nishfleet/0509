@@ -67,6 +67,7 @@ const sneakerpingDifferences: readonly CompareClaimCard[] = [
     title: "Pings, not proofs",
     detail:
       "SneakerPing's described job ends at the ping: price, availability, and forecasts. It does not claim to save the before-and-after of a competitor's ads or landing pages. Five to Nine's whole job is the saved, source-linked before-and-after.",
+    sourceId: "sneakerping-home",
   },
   {
     title: "A shopper's tool, not a marketer's",
