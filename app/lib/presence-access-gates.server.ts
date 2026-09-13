@@ -45,6 +45,8 @@ function connectorRolloutFromEnv(env: AppEnv, connectorId: PresenceConnectorId):
       return parseRolloutState(env.PRESENCE_HN_ROLLOUT, "disabled");
     case "pinterest":
       return parseRolloutState(env.PRESENCE_PINTEREST_ROLLOUT, "disabled");
+    case "youtube":
+      return parseRolloutState(env.PRESENCE_YOUTUBE_ROLLOUT, "disabled");
     default:
       return "disabled";
   }
@@ -84,6 +86,14 @@ function hasCredentials(env: AppEnv, connectorId: PresenceConnectorId): boolean 
       // rollout gate (PRESENCE_PINTEREST_ROLLOUT) is still required to
       // activate it.
       return true;
+    case "youtube":
+      // The YouTube Data API v3 search.list read uses a single Google API key
+      // (YOUTUBE_API_KEY, issue #3203). The documented default allocation
+      // (developers.google.com/youtube/v3/determine_quota_cost) is 100
+      // search.list calls/day — the connector enforces that count in-connector
+      // via presence_poll_cursor. The rollout gate (PRESENCE_YOUTUBE_ROLLOUT)
+      // is also required to activate it.
+      return Boolean(env.YOUTUBE_API_KEY?.trim());
     default:
       return false;
   }
