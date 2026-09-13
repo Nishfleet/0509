@@ -365,7 +365,11 @@ test.describe("public production-safe E2E smoke", { lock: "external-api" }, () =
     // workload grew systematically, so the budget fails on the median, not
     // on a flake — 60s died in CI, the 120s interim also exceeded the same
     // day mid-probe at /ads/figma.com; 240s carries ~2x the measured need.
-    test.setTimeout(240_000);
+    // Both shapes measured 2026-09-13 (#3373): quiet 4-worker proof 84s,
+    // but a 1-worker run during a concurrent Deploy production rollout hit
+    // the 240s cap mid-probe; the sequential worst case (217 x 2.3s) is
+    // ~500s. 420s clears every measured shape with headroom.
+    test.setTimeout(420_000);
     const publicPaths = [
       "/",
       "/search",

@@ -49,3 +49,17 @@ The acceptance's "green Deploy production run on current main" = the run this me
 the Deploy step itself has not failed once (the issue's evidence: SUCCESS Worker Version 100% of
 traffic on every red run); the only red leg was e2e:prod:public, proven green above against the
 same production target CI uses.
+
+## Continuation (resume 2026-09-13T18:05Z, this unit)
+
+- Rebased the salvaged 3 commits onto current main 368f761f9 (#3388): zero conflicts —
+  #3388/#3370/#3253/#3205/#3206 touched no e2e file, so the 3-spec red stands on current main
+  (ac5602d40's Deploy run failed it again 17:36Z: the A/B on the real gate).
+- Inner loop round 1 (240s budget): 13 passed / 1 failed — the buttons/links probe hit its 240s
+  cap while #3388's Deploy production run (in_progress) had its own proof hammering production.
+- Fix: 240s→420s, both shapes measured (quiet 4-worker 84s; 1-worker mid-deploy >240s; sequential
+  worst case 217 x 2.3s = ~500s; 420s clears every measured shape).
+- Inner loop round 2: `npm run e2e:prod:public` -> EXIT 0, 14 passed / 3 skipped / 0 failed, 4.1m
+  (PLAYWRIGHT_WORKERS=1, https://0509.io — the deploy's own failing command, exactly).
+- Coupling: tests/search-display.test.ts (readFileSync's the spec) -> 37/37. sgscan -> no new
+  security findings. #3262 rider: unchanged from the proof above (hunks still need a rebase).
