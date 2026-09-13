@@ -28,11 +28,13 @@ describe("presence GA rollout", () => {
     expect(presenceWebsiteRolloutState(env)).toBe("ga");
   });
 
-  it("denies free plan under GA rollout", async () => {
+  it("allows the free plan under GA rollout — one self brand since #3179", async () => {
+    // #3179: FREE_FEATURES now carries presence_self_tracking (one self
+    // brand), so the workspace gate that used to plan-gate free admits it.
     vi.mocked(getUserPlan).mockResolvedValue("free");
     const result = await evaluatePresenceWorkspaceAccess(baseEnv, "ws-free");
-    expect(result.allowed).toBe(false);
-    expect(result.reasonCode).toBe("plan_gated");
+    expect(result.allowed).toBe(true);
+    expect(result.rolloutState).toBe("ga");
   });
 
   it("allows scout plan under GA rollout", async () => {

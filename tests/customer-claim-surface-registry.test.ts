@@ -163,8 +163,16 @@ function uniqueSorted(values: readonly string[]) {
 
 const expectedPlanFeaturesByPlan: Record<string, readonly string[]> = {
   // 2026-09-10: barebones free — one first brief plus the email lane it rides
-  // on, nothing else. No API/MCP, no exports, no team.
-  free: ["weekly_digest", "email_delivery"],
+  // on. No API/MCP, no exports, no team.
+  // 2026-09-13 (#3179): Free tracks ONE self brand (presence_self_tracking)
+  // with its one $0 query-mention source (presence_social_connect); the
+  // digest eMail lane stays paid-only — nothing recurring on Free.
+  free: [
+    "weekly_digest",
+    "email_delivery",
+    "presence_self_tracking",
+    "presence_social_connect",
+  ],
   scout: [
     "competitor_research", "weekly_digest", "email_delivery",
     "presence_competitor_tracking", "presence_website_sources", "presence_digest_alerts",
