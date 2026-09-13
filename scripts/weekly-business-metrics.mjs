@@ -150,11 +150,27 @@ function parseArgs() {
  * @param {string} output raw `wrangler d1 execute --json` stdout
  * @returns {Array<Record<string, unknown>>}
  */
-function rowsFromWranglerJson(output) {
+export function rowsFromWranglerJson(output) {
   const trimmed = output.trim();
   if (!trimmed) return [];
-  const parsed = JSON.parse(trimmed);
+  let parsed;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch {
+    throw new Error("wrangler d1 execute returned malformed JSON");
+  }
   const statements = Array.isArray(parsed) ? parsed : [parsed];
+  // An API error envelope can ride on stdout as valid JSON with no results
+  // array; parsed naively that reads as "zero rows" and the meter would
+  // print a false zero — exactly the corruption this meter exists to
+  // prevent. An `error` key at statement level is always a failure: fail
+  // loudly instead (issue #3321 — the meter must never manufacture a zero).
+  for (const statement of statements) {
+    const err = statement?.error;
+    const text =
+      typeof err === "string" ? err : (err?.text ?? err?.message ?? null);
+    if (text) throw new Error(`wrangler d1 execute API error: ${text}`);
+  }
   return statements.flatMap((statement) => {
     if (Array.isArray(statement?.results)) return statement.results;
     if (Array.isArray(statement?.result?.results)) return statement.result.results;
@@ -181,13 +197,16 @@ function runQuery(sql) {
     throw new Error(`wrangler could not run: ${result.error.message}`);
   }
   if (result.status !== 0) {
-    throw new Error((result.stderr || "").trim() || "wrangler d1 execute failed");
+    const stderr = (result.stderr || "").trim();
+    const stdout = (result.stdout || "").trim();
+    // stderr usually carries only the config warning; the real API error
+    // envelope rides on stdout as JSON. Include both so the thrown failure
+    // names its cause instead of a bare exit code.
+    throw new Error(
+      [stderr, stdout].filter(Boolean).join("\n") || "wrangler d1 execute failed",
+    );
   }
-  try {
-    return rowsFromWranglerJson(result.stdout ?? "");
-  } catch {
-    throw new Error("wrangler d1 execute returned malformed JSON");
-  }
+  return rowsFromWranglerJson(result.stdout ?? "");
 }
 
 /**

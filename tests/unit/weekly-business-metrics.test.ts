@@ -5,6 +5,7 @@ import {
   buildSignupsIntegrityQuery,
   evaluateSignupIntegrity,
   parseSignupEventRecords,
+  rowsFromWranglerJson,
 } from "../../scripts/weekly-business-metrics.mjs";
 
 // Fixed, injected instants only — no wall-clock-reading assertions
@@ -252,5 +253,20 @@ describe("weekly-business-metrics signup integrity (issue #3321)", () => {
     );
     expect(parsed.records).toHaveLength(2);
     expect(parsed.unparseableLines).toBe(2);
+  });
+
+  it("rowsFromWranglerJson unwraps the standard shapes and rejects an error envelope", () => {
+    expect(
+      rowsFromWranglerJson(JSON.stringify([{ results: [{ n: 2 }], success: true }])),
+    ).toEqual([{ n: 2 }]);
+    expect(rowsFromWranglerJson("")).toEqual([]);
+    // A failed read must never read as a successful zero — the meter's whole
+    // job is proving a true zero, so an API envelope on stdout throws.
+    expect(() =>
+      rowsFromWranglerJson(
+        JSON.stringify({ error: { text: "not authorized [code: 7403]" } }),
+      ),
+    ).toThrowError(/7403/);
+    expect(() => rowsFromWranglerJson("not json")).toThrowError(/malformed/);
   });
 });
