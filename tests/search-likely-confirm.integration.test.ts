@@ -56,10 +56,27 @@ function mockRouter() {
       Form: ({ children, ...props }: MockFormProps) =>
         React.createElement("form", props, children),
       Link: ({ children, to, ...props }: MockLinkProps) =>
-        React.createElement("a", {
-          ...props,
-          href: typeof to === "string" ? to : "",
-        }),
+        React.createElement(
+          "a",
+          {
+            ...props,
+            href: typeof to === "string" ? to : "",
+          },
+          // The trail's text ("Yes, that's them" + chevron) must survive the
+          // mock, or the keyboard-reachable control renders EMPTY — the exact
+          // failure mode this suite exists to catch.
+          children,
+        ),
+      // The signed-in fixture renders ResultQuickSave on the unmatched row,
+      // whose useFetcher needs a router context (house pattern: the
+      // dashboard.route.test.ts stub).
+      useFetcher: vi.fn().mockReturnValue({
+        Form: ({ children, ...props }: MockFormProps) =>
+          React.createElement("form", props, children),
+        data: undefined,
+        state: "idle",
+        submit: vi.fn(),
+      }),
       useActionData: () => undefined,
       useLoaderData: () => loaderData,
       useLocation: () => locationObj,
@@ -276,8 +293,14 @@ describe("Likely-match confirm control on /search (issue 3306, BET 2 finish line
     expect(href!.endsWith("&source=search-likely-confirm")).toBe(true);
     const decoded = decodeURIComponent(href!);
     expect(decoded).toContain("redirectTo=/app?website=");
-    expect(decoded).toContain("https://notion.so");
-    expect(decoded).toContain("#setup-checklist");
+    // Track-wall shape (extension-domain.test.ts precedent): redirectTo is
+    // encoded once and the website inside it again, so the readable domain
+    // needs a second decode — exactly what the setup checklist does.
+    const setupQuery = decodeURIComponent(
+      decoded.split("redirectTo=")[1]!.split("&")[0]!,
+    );
+    expect(setupQuery).toContain("website=https://notion.so");
+    expect(setupQuery).toContain("#setup-checklist");
 
     // The instructional note never ships without its working control: the
     // detail pane's note is joined by the same confirm control.

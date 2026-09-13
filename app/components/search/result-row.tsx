@@ -66,7 +66,7 @@ export function SearchResultRow({
    * when signed in — the trail then keeps the plain record href.
    */
   confirmTo?: string;
-})) {
+}) {
   const isDemo = ad.source === "demo";
   const running = ad.activeStatusObserved !== false && ad.active;
   const advertiser = formatAdvertiserLabel(ad.advertiser);
