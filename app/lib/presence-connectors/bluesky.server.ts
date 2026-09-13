@@ -9,6 +9,7 @@ import type {
   NormalizedPresenceItem,
   PollResult,
   PresenceConnectorContext,
+  SourceTargetRecord,
   ValidateTargetInput,
   ValidateTargetResult,
 } from "~/lib/presence-types";
@@ -120,7 +121,7 @@ export const blueskyConnector = {
     return { ok: true, status: "healthy", summary: "Bluesky appview search answered." };
   },
 
-  async poll(ctx: PresenceConnectorContext): Promise<PollResult> {
+  async poll(ctx: PresenceConnectorContext, target?: SourceTargetRecord): Promise<PollResult> {
     if (ctx.env.PRESENCE_BLUESKY_MOCK === "1") {
       const now = new Date().toISOString();
       return {
@@ -150,15 +151,24 @@ export const blueskyConnector = {
         errorMessage: gate.reasonMessage ?? "Bluesky connector is not enabled.",
       };
     }
-    // The live poll path resolves the tracked entity's match phrase through
-    // pollBlueskyMention below. A bare context (no phrase) fails fast rather
-    // than searching an empty query.
-    return {
-      ok: false,
-      items: [],
-      errorCode: "missing_match_phrase",
-      errorMessage: "No match phrase configured for this Bluesky source target.",
-    };
+    // The tracked entity's match phrase rides the source target —
+    // validateTarget stores it as target_key (and target_handle). A bare
+    // context (no target phrase) fails fast rather than searching an empty
+    // query. The live path delegates to pollBlueskyMention so the registry
+    // dispatch and any direct caller share ONE poll body — the same gate,
+    // phrase normalization, session handling and rate budget. Before #3206
+    // this connector ignored the target entirely and every dispatched poll
+    // answered missing_match_phrase, so no Bluesky mention was ever captured.
+    const phrase = normalizeMatchPhrase(target?.targetKey ?? target?.targetHandle);
+    if (!phrase) {
+      return {
+        ok: false,
+        items: [],
+        errorCode: "missing_match_phrase",
+        errorMessage: "No match phrase configured for this Bluesky source target.",
+      };
+    }
+    return pollBlueskyMention(ctx, phrase);
   },
 };
 

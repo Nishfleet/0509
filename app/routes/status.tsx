@@ -9,6 +9,7 @@ import {
   type PublicStatusSurfaces,
   type SurfaceMeasurement,
 } from "~/lib/public-status-counters.server";
+import { presenceSourceCoverageForDocs } from "~/lib/presence-source-coverage.server";
 import type { AppEnv } from "~/lib/env.server";
 import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
 import {
@@ -51,6 +52,10 @@ export async function loader({ context }: LoaderFunctionArgs) {
     appServed: Boolean(env),
     commercialLaunch: env ? publicCommercialLaunchSummary(env) : null,
     surfaces,
+    // The tracked-source catalog: every mention source with its honest
+    // activation posture, straight from the coverage module (issue #3205).
+    // Pure, environment-free: no probe, no D1, cannot throw.
+    mentionSources: presenceSourceCoverageForDocs(),
     monitoring: surfaces.monitoring,
   };
 }
@@ -201,6 +206,26 @@ export default function StatusRoute() {
             </div>
           </dl>
         )}
+      </PublicDocBlock>
+
+      <PublicDocBlock title="Tracked sources">
+        <p>
+          Every tracked mention arrives through one of the sources below, and
+          each row's posture comes straight from the source catalog in code —
+          active = capturing; gated = wired in, waiting on its rollout
+          decision; every other posture's note says what it waits on.
+        </p>
+        <dl className="proof-trail-list">
+          {(data.mentionSources ?? []).map((source) => (
+            <div key={source.sourceId}>
+              <dt>{source.label}</dt>
+              <dd>
+                <strong>{source.productionStatus}</strong>
+                {`. ${source.notes}`}
+              </dd>
+            </div>
+          ))}
+        </dl>
       </PublicDocBlock>
 
       <PublicDocBlock title="Commercial configuration">

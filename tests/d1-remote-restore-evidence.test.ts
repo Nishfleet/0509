@@ -1601,7 +1601,8 @@ describe("D1 remote restore evidence automation", () => {
           name !== "0098_email_delivery_canary.sql" &&
           name !== "0098_widen_source_target_connector_bluesky.sql" &&
           name !== "0098_widen_source_target_connector_gdelt.sql" &&
-          name !== "0099_widen_source_target_connector_threads.sql",
+          name !== "0099_widen_source_target_connector_threads.sql" &&
+          name !== "0100_widen_source_target_connector_hn.sql",
       ),
     ];
     expect(productionNames.at(-1)).toBe("0096_error_reports.sql");
@@ -1634,6 +1635,7 @@ describe("D1 remote restore evidence automation", () => {
           "0098_widen_source_target_connector_bluesky.sql",
           "0098_widen_source_target_connector_gdelt.sql",
           "0099_widen_source_target_connector_threads.sql",
+          "0100_widen_source_target_connector_hn.sql",
         ]),
         repository,
       ),
@@ -1658,6 +1660,7 @@ describe("D1 remote restore evidence automation", () => {
         "0098_widen_source_target_connector_bluesky.sql",
         "0098_widen_source_target_connector_gdelt.sql",
         "0099_widen_source_target_connector_threads.sql",
+        "0100_widen_source_target_connector_hn.sql",
       ],
     });
   });
@@ -1712,6 +1715,7 @@ describe("D1 remote restore evidence automation", () => {
       migrations: [
         "0098_widen_source_target_connector_bluesky.sql",
         "0099_widen_source_target_connector_threads.sql",
+        "0100_widen_source_target_connector_hn.sql",
       ],
     });
     expect(
@@ -1720,6 +1724,7 @@ describe("D1 remote restore evidence automation", () => {
           ...productionNames,
           "0098_widen_source_target_connector_bluesky.sql",
           "0099_widen_source_target_connector_threads.sql",
+          "0100_widen_source_target_connector_hn.sql",
         ]),
         repository,
       ),

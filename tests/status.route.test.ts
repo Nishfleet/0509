@@ -2,6 +2,8 @@ import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { presenceSourceCoverageForDocs } from "~/lib/presence-source-coverage.server";
+
 type MockUseLoaderData = () => unknown;
 
 function createContext(env = {}) {
@@ -72,6 +74,44 @@ describe("status route", () => {
     expect(JSON.stringify(result)).not.toContain("canary");
     expect(JSON.stringify(result)).not.toContain("Slack");
     expect(getLaunchReadinessSignals).not.toHaveBeenCalled();
+
+    // Issue #3205 — the loader publishes the tracked-source catalog, and the
+    // Threads row stays honest: wired in, still gated.
+    const mentionSources = result.mentionSources as Array<{
+      sourceId: string;
+      productionStatus: string;
+    }>;
+    expect(Array.isArray(mentionSources)).toBe(true);
+    const threadsRow = mentionSources.find((source) => source.sourceId === "threads");
+    expect(threadsRow).toBeDefined();
+    expect(threadsRow?.productionStatus).toBe("gated");
+  });
+
+  it("renders the tracked-source rows — the Threads mention source reads gated (issue #3205)", async () => {
+    await mockRouter(() => ({
+      generatedAt: "2026-09-13T16:00:00.000Z",
+      asOf: "2026-09-13T16:00:00.000Z",
+      appServed: true,
+      commercialLaunch: null,
+      monitoring: null,
+      surfaces: { asOf: "2026-09-13T16:00:00.000Z", monitoring: null, surfaces: [] },
+      mentionSources: presenceSourceCoverageForDocs(),
+    }));
+
+    const { default: StatusRoute } = await import("~/routes/status");
+    const markup = renderToStaticMarkup(createElement(StatusRoute));
+
+    expect(markup).toContain("Tracked sources");
+    // The Threads per-source row (issue #3205's acceptance) renders its
+    // posture verbatim from the catalog — wired in, waiting on its rollout.
+    expect(markup).toContain("Threads");
+    expect(markup).toContain("gated");
+    expect(markup).toContain("Meta app review");
+    expect(markup).toContain("wired in, waiting on its rollout decision");
+    // The whole catalog passes through untouched, including the source whose
+    // posture only exists at runtime.
+    expect(markup).toContain("GDELT");
+    expect(markup).toContain("unavailable");
   });
 
   it("renders measured surface states without private launch details", async () => {
