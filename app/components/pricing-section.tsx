@@ -12,7 +12,6 @@ import {
   PUBLISHED_BUNDLE_PRICES_USD,
   PUBLISHED_PLAN_PRICES_USD,
 } from "~/lib/pricing";
-import type { FaqJsonLdEntry } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import type { PublicCommercialLaunchSummary } from "~/lib/commercial-launch-gate.server";
 import type { RootLoaderData } from "~/root";
@@ -62,37 +61,6 @@ export interface LocalPricingPreview {
   >;
   annualValidation?: Partial<Record<PricingPlanSlug, LocalAnnualValidation>>;
   usageBundles?: Partial<Record<UsageBundleSlug, LocalDisplayPrice>>;
-}
-
-// Plain-text mirror of the rendered billing FAQ block for FAQPage JSON-LD.
-// Keep in sync with the "Common billing questions" markup below.
-export function billingFaqJsonLdEntries(): FaqJsonLdEntry[] {
-  return [
-    {
-      question: "What uses proof captures?",
-      answer:
-        "Scheduled scans are included with your plan and never touch your cap. A proof capture is used when Five to Nine saves a confirmed change with page text, the original link, and a screenshot when the capture includes one.",
-    },
-    {
-      question: "Do unused proof captures roll over?",
-      answer:
-        "Included proof captures reset every month and do not roll over — the caps are generous. Purchased proof captures never expire and carry over until you use them.",
-    },
-    {
-      question: "What changes on Agency?",
-      answer:
-        "Agency includes 75 watchlists, 250 Collections, 2,500 proof captures/month, team seats, API/MCP access, client reports, and shared report branding.",
-    },
-    {
-      question: "How does Agency checkout work?",
-      answer: `Agency checkout is available when pricing loads in your region. Email ${SUPPORT_EMAIL} if you want help before buying.`,
-    },
-    {
-      question: "Where do prices come from?",
-      answer:
-        "Published plan prices are shown on this page. Checkout shows the exact amount in your local currency, loaded from Dodo Payments at preview time.",
-    },
-  ];
 }
 
 function priceLabel(

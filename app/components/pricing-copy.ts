@@ -78,7 +78,7 @@ export const COMPETITOR_PRICE_ANCHORS: readonly CompetitorPriceAnchor[] = [
 
 // Plain-text mirror of the rendered billing FAQ block for FAQPage JSON-LD.
 // Keep in sync with the "Common billing questions" markup below.
-export function billingFaqJsonLdEntries(agencySaleOpen: boolean): FaqJsonLdEntry[] {
+export function billingFaqJsonLdEntries(): FaqJsonLdEntry[] {
   return [
     {
       question: "What uses proof captures?",
@@ -95,15 +95,10 @@ export function billingFaqJsonLdEntries(agencySaleOpen: boolean): FaqJsonLdEntry
       answer:
         "Agency includes 75 watchlists, 250 Collections, 2,500 proof captures/month, team seats, API/MCP access, client reports, and shared report branding.",
     },
-    agencySaleOpen
-      ? {
-          question: "How does Agency checkout work?",
-          answer: `Agency checkout is available when pricing loads in your region. Email ${SUPPORT_EMAIL} if you want an account review before buying.`,
-        }
-      : {
-          question: "Why is Agency held?",
-          answer: `Agency is available by account review. Email ${SUPPORT_EMAIL} and we will confirm fit directly.`,
-        },
+    {
+      question: "How does Agency checkout work?",
+      answer: `Agency checkout is available when pricing loads in your region. Email ${SUPPORT_EMAIL} if you want help before buying.`,
+    },
     {
       question: "Where do prices come from?",
       answer:
