@@ -185,6 +185,7 @@ export function classifyScheduledTaskResult(
       polled: safeCount(result.polled),
       failed: countTrueResults(result.results, false),
       skippedRollout: safeCount(result.skippedRollout),
+      skippedPlan: safeCount(result.skippedPlan),
       spentUnits: safeCount(result.spentUnits),
     };
     return {

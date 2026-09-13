@@ -28,11 +28,15 @@ export interface PresenceLimits {
 }
 
 const PRESENCE_LIMITS: Record<PlanFamily, PresenceLimits> = {
+  // Free (issue #3179, the Free-is-barebones decision): ONE tracked entity,
+  // the SELF brand, one website source. The first check and first brief come
+  // from the manual source check; the scheduled resweep and polling batch
+  // stay paid-only, so nothing recurring runs on Free.
   free: {
-    maxTrackedEntities: 0,
-    maxSelfEntities: 0,
+    maxTrackedEntities: 1,
+    maxSelfEntities: 1,
     maxCompetitorEntities: 0,
-    maxWebsiteSourcesPerEntity: 0,
+    maxWebsiteSourcesPerEntity: 1,
     maxSocialSourcesPerEntity: 0,
   },
   scout: {

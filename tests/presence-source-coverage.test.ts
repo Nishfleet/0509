@@ -111,6 +111,21 @@ describe("presence source coverage policy", () => {
     expect(entry.coverageLabel).toBe("LIMITED_COVERAGE");
   });
 
+  it("marks LinkedIn self tracking available once the rollout flag admits it (#3204)", async () => {
+    const entry = await evaluatePresenceSourceCoverage(
+      {
+        ...baseEnv,
+        PRESENCE_LINKEDIN_ROLLOUT: "internal",
+        LINKEDIN_CLIENT_ID: "id",
+        LINKEDIN_CLIENT_SECRET: "secret",
+      },
+      "linkedin",
+      "self",
+    );
+    expect(entry.status).toBe("available");
+    expect(entry.coverageLabel).toBe("CONNECTED_ACCOUNT");
+  });
+
   it("marks YouTube as planned without claiming active coverage", async () => {
     const entry = await evaluatePresenceSourceCoverage(baseEnv, "youtube", "competitor");
     expect(entry.status).toBe("planned");
@@ -141,6 +156,7 @@ describe("presence source coverage policy", () => {
       "gdelt",
       "threads",
       "hn",
+      "pinterest",
       "youtube",
       "amazon",
       "context_dev",
@@ -185,6 +201,32 @@ describe("presence source coverage policy", () => {
     );
     expect(gated.find((entry) => entry.sourceId === "x")?.status).toBe("gated");
     expect(gated.find((entry) => entry.sourceId === "x")?.reasonCode).toBe("social_connect_not_in_plan");
+  });
+
+  it("overrides available pinterest coverage when social sources are not on the plan (issue #3201 — the classification, locked)", () => {
+    const gated = applyPresenceSourcePlanGates(
+      [
+        {
+          sourceId: "pinterest",
+          label: "Pinterest",
+          status: "available",
+          coverageLabel: "VERIFIED_PUBLIC_FEED",
+          reasonCode: null,
+          reasonMessage: null,
+          actionNeeded: "Add a source target",
+          connectorId: "pinterest",
+        },
+      ],
+      {
+        modeAllowed: true,
+        websiteSourcesAllowed: true,
+        socialConnectAllowed: false,
+      },
+    );
+    expect(gated.find((entry) => entry.sourceId === "pinterest")?.status).toBe("gated");
+    expect(gated.find((entry) => entry.sourceId === "pinterest")?.reasonCode).toBe(
+      "social_connect_not_in_plan",
+    );
   });
 
   it("marks x as available when rollout, creds and paid-read approval are enabled", async () => {
@@ -341,6 +383,7 @@ describe("presence source coverage policy", () => {
     expect(docs.find((entry) => entry.sourceId === "youtube")?.productionStatus).toBe("planned");
     expect(docs.find((entry) => entry.sourceId === "amazon")?.productionStatus).toBe("manual_only");
     expect(docs.find((entry) => entry.sourceId === "x")?.productionStatus).toBe("gated");
+    expect(docs.find((entry) => entry.sourceId === "linkedin")?.productionStatus).toBe("gated");
   });
 
   // The five seam competitor-monitoring sources (#2218) report "configured"

@@ -11,6 +11,7 @@ import {
   type CompareClaimCard,
 } from "~/components/compare-citations";
 import {
+  buyerSurfaceHreflangLinks,
   canonicalLinks,
   compareSocialCardUrl,
   faqPageJsonLd,
@@ -28,7 +29,10 @@ const pageTitle = "Five to Nine vs AdSpy";
 const pageDescription =
   "AdSpy is a single-plan ad-spy database with a 2.4/5 Trustpilot rating and no self-service cancel. Five to Nine is scheduled, source-backed Meta Ad Library and landing-page change proof.";
 
-export const links: LinksFunction = () => canonicalLinks("/compare/adspy");
+export const links: LinksFunction = () => [
+  ...canonicalLinks("/compare/adspy"),
+  ...buyerSurfaceHreflangLinks("compare/adspy"),
+];
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({

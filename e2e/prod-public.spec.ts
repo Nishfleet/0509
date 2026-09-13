@@ -104,9 +104,40 @@ async function expectPublicGetTargetReachable(
   // during deploy propagation (run 33531233486: GET / timed out at 5s during
   // the propagation window). The previous 5s budget was tighter than the
   // deploy-propagation tail and produced false-red release rollsbacks.
-  const response = await request.get(requestUrl.toString(), { maxRedirects: 0, timeout: 15_000 });
+  const response = await settledProbeResponse(request, requestUrl.toString());
   expect(response.status(), `${target.page} ${target.action} "${target.label}" -> ${requestUrl}`).not.toBe(404);
   expect(response.status(), `${target.page} ${target.action} "${target.label}" -> ${requestUrl}`).toBeLessThan(500);
+}
+
+// Issue #3403: one unsettled read cannot survive a concurrent Deploy
+// production rollout — run 34775660969's retry #1 read a propagation 404 on
+// /brands/sport-footwear seconds after Deploy production #3402
+// (2026-09-13T19:36:25Z) started flipping Worker versions mid-probe. A
+// settled read gives propagation 3 attempts, 1.5s apart, before the answer
+// is trusted; the final expectations in expectPublicGetTargetReachable are
+// unchanged, so a target that is really gone still fails exactly as
+// before.
+async function settledProbeResponse(
+  request: import("@playwright/test").APIRequestContext,
+  requestUrl: string,
+): Promise<import("@playwright/test").APIResponse> {
+  let settled: import("@playwright/test").APIResponse | undefined;
+  let lastFailure: unknown;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    if (attempt > 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1_500 * (attempt - 1)));
+    }
+    try {
+      const response = await request.get(requestUrl, { maxRedirects: 0, timeout: 15_000 });
+      if (response.status() < 400) return response;
+      settled = response;
+      lastFailure = response.status();
+    } catch (error) {
+      lastFailure = error;
+    }
+  }
+  if (settled) return settled;
+  throw lastFailure;
 }
 
 async function mockPricingPreview(page: import("@playwright/test").Page) {
@@ -186,8 +217,16 @@ test.describe("public production-safe E2E smoke", { lock: "external-api" }, () =
     await expect(page.getByText("Know when competitors change the offer.")).toBeVisible();
     await expect(page.getByText("WhatsApp", { exact: false })).toHaveCount(0);
 
+    // Issue #2965: anonymous bare /search 302s to the /brands hub, so the
+    // signed-out smoke pins the bounce itself, then proves the hub the
+    // searcher actually lands on. Signed-in visitors keep the search UI's
+    // "Find competitor ads" heading — this smoke never signs in.
+    const bareSearch = await request.get(new URL("/search", baseURL).toString(), { maxRedirects: 0 });
+    expect(bareSearch.status()).toBe(302);
+    expect(bareSearch.headers().location).toBe("/brands");
+
     await gotoPublicPage(page, "/search");
-    await expect(page.getByRole("heading", { name: "Find competitor ads" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Browse (all [\d,]+ )?tracked brands/ })).toBeVisible();
 
     if (!isProductionBaseURL(baseURL)) {
       await gotoPublicPage(page, "/auth/login");
@@ -255,8 +294,10 @@ test.describe("public production-safe E2E smoke", { lock: "external-api" }, () =
       { width: 375, height: 812 },
     ]) {
       await page.setViewportSize(viewport);
+      // Issue #2965: the anonymous /search funnel lands on /brands, so the
+      // width sweep proves the hub a real signed-out visitor gets.
       await gotoPublicPage(page, "/search");
-      await expect(page.getByRole("heading", { name: "Find competitor ads" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: /Browse (all [\d,]+ )?tracked brands/ })).toBeVisible();
       await expectNoHorizontalOverflow(page);
     }
   });
@@ -348,7 +389,18 @@ test.describe("public production-safe E2E smoke", { lock: "external-api" }, () =
   });
 
   test("public buttons and links route to valid actions without sending side effects", async ({ page, baseURL, request }) => {
-    test.setTimeout(60_000);
+    // Issue #2965: bare /search now 302s to the /brands hub, whose 217
+    // unique anchors (measured 2026-09-13) each get a sequential
+    // reachability probe below, the /ads/<domain> ones at a measured
+    // 0.7-2.3s each. Same reasoning as the diagnostic-engine 60s raise: the
+    // workload grew systematically, so the budget fails on the median, not
+    // on a flake — 60s died in CI, the 120s interim also exceeded the same
+    // day mid-probe at /ads/figma.com; 240s carries ~2x the measured need.
+    // Both shapes measured 2026-09-13 (#3373): quiet 4-worker proof 84s,
+    // but a 1-worker run during a concurrent Deploy production rollout hit
+    // the 240s cap mid-probe; the sequential worst case (217 x 2.3s) is
+    // ~500s. 420s clears every measured shape with headroom.
+    test.setTimeout(420_000);
     const publicPaths = [
       "/",
       "/search",
@@ -399,9 +451,21 @@ test.describe("public production-safe E2E smoke", { lock: "external-api" }, () =
       }
     }
 
-    for (const control of getTargets.values()) {
-      await expectPublicGetTargetReachable(request, baseURL, control);
-    }
+    // Issue #3403: this walk was sequential — 217+ unique anchors at a
+    // measured 0.7-2.3s each is a 150-500s serial phase, and it blew the
+    // 420s test budget on run 34775660969 even after #3373 raised that
+    // budget from 240s. Six lanes (just under the production
+    // MONITORING_FANOUT_MAX_INFLIGHT=8 fanout guard) cut the phase to its
+    // 217/6 ≈ 37-round worst case, roughly 85s, with the same targets and
+    // the same assertions; settledProbeResponse absorbs version-flip 404s.
+    const targets = [...getTargets.values()];
+    let cursor = 0;
+    const probeNext = async () => {
+      while (cursor < targets.length) {
+        await expectPublicGetTargetReachable(request, baseURL, targets[cursor++]!);
+      }
+    };
+    await Promise.all(Array.from({ length: 6 }, () => probeNext()));
 
     expect(failures).toEqual([]);
   });

@@ -400,6 +400,21 @@ for (const viewport of viewports) {
     expect(screenshotResponse.headers()["content-type"] ?? "").toContain("image/");
     // The "no screenshot" string must never appear on any public timeline page.
     await expect(page.getByText("no screenshot", { exact: false })).toHaveCount(0);
+    // Issue #3179: a stored public mention of nike.com interleaves into the
+    // same dated list — labeled by its source and linking the source article.
+    // The fixture seeds it under a different workspace on purpose: the public
+    // page projects mentions of the brand whoever tracks it.
+    const mentionRows = page.locator('[data-testid="timeline-mention-row"]');
+    await expect(mentionRows).toHaveCount(1);
+    await expect(mentionRows.first()).toContainText("RSS / Atom / JSON Feed · Mention");
+    await expect(mentionRows.first()).toContainText("Nike running-shoe restore program makes the rounds");
+    const mentionLink = mentionRows.first().getByRole("link", {
+      name: "Nike running-shoe restore program makes the rounds",
+    });
+    await expect(mentionLink).toHaveAttribute(
+      "href",
+      "https://news.example.invalid/nike-mention-roundup",
+    );
     await attachReleaseStateArtifacts({ page, testInfo, prefix: "j1", state: "timeline" });
 
     // Return to the search proof page to continue the value-to-signup flow.

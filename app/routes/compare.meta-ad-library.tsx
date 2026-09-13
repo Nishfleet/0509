@@ -13,6 +13,7 @@ import {
   type CompareClaimCard,
 } from "~/components/compare-citations";
 import {
+  buyerSurfaceHreflangLinks,
   canonicalLinks,
   compareSocialCardUrl,
   faqPageJsonLd,
@@ -32,7 +33,10 @@ export { compareAdsExampleLoader as loader } from "~/lib/ads-internal-links.serv
 const pageDescription =
   "The Meta Ad Library is free and public — it's the source Five to Nine reads. What manual checking costs you, and what scheduled checks, diffs, saved screenshots, and email briefs add.";
 
-export const links: LinksFunction = () => canonicalLinks("/compare/meta-ad-library");
+export const links: LinksFunction = () => [
+  ...canonicalLinks("/compare/meta-ad-library"),
+  ...buyerSurfaceHreflangLinks("compare/meta-ad-library"),
+];
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({

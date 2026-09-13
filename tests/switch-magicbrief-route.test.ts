@@ -3,7 +3,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { FREE_PREVIEW_SEARCH_DOMAIN } from "~/lib/demo-brand-pages";
-import { ROOT_SITEMAP_STATIC_ENTRIES, SITEMAP_PATHS } from "~/lib/seo";
+import {
+  buyerSurfaceHreflangLinks,
+  ROOT_SITEMAP_STATIC_ENTRIES,
+  SITEMAP_PATHS,
+} from "~/lib/seo";
 import { buildSitemapXml } from "~/lib/sitemap.server";
 import { SWITCH_PAGES, switchPageForDomain } from "~/lib/switch-pages";
 import routes from "~/routes";
@@ -131,6 +135,9 @@ describe("/switch/magicbrief wind-down page (issue #2887)", () => {
 
     expect(routeModule.links()).toEqual([
       { rel: "canonical", href: "https://0509.io/switch/magicbrief" },
+      // reciprocal hreflang cluster (issue #2030) — the EN wind-down page has
+      // $locale twins, so it emits the complete set itself.
+      ...buyerSurfaceHreflangLinks("switch/magicbrief"),
     ]);
 
     const tags = routeModule.meta();

@@ -12,6 +12,7 @@ import {
   type CompareClaimCard,
 } from "~/components/compare-citations";
 import {
+  buyerSurfaceHreflangLinks,
   canonicalLinks,
   compareSocialCardUrl,
   faqPageJsonLd,
@@ -34,7 +35,10 @@ const pageTitle = "Five to Nine vs BigSpy";
 const pageDescription =
   "BigSpy is a free-entry ad spy database covering 10 major ad platforms. Five to Nine is scheduled, source-backed Meta Ad Library and landing-page change proof.";
 
-export const links: LinksFunction = () => canonicalLinks("/compare/bigspy");
+export const links: LinksFunction = () => [
+  ...canonicalLinks("/compare/bigspy"),
+  ...buyerSurfaceHreflangLinks("compare/bigspy"),
+];
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({
