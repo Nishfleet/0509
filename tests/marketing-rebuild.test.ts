@@ -248,12 +248,13 @@ describe("marketing rebuild", () => {
     }
   });
 
-  it("keeps Agency checkout held unless the commercial capacity proof opens it", () => {
-    expect(marketingRoute).toContain("Account review");
-    expect(marketingRoute).toContain("Agency is available by account review");
+  it("sells Agency through the shared plan checkout rail with no review step (issue #3165)", () => {
+    expect(marketingRoute).not.toContain("Account review");
+    expect(marketingRoute).not.toContain("account review");
+    expect(marketingRoute).not.toContain("Why is Agency held?");
+    expect(marketingRoute).toContain("How does Agency checkout work?");
     expect(marketingRoute).toContain("Common billing questions");
     expect(marketingRoute).toContain("What changes on Agency?");
-    expect(marketingRoute).toContain("Why is Agency held?");
     expect(marketingRoute).not.toContain("capacity review");
     expect(marketingRoute).not.toContain("higher-volume monitoring coverage");
     expect(marketingRoute).not.toContain("fan-out workflow path");

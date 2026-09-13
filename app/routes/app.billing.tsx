@@ -11,7 +11,6 @@ import { SubmitButton } from "~/components/submit-button";
 import { WorkingHeader } from "~/components/workspace/working-header";
 import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
 import { billingSkuForPlanCheckout, TOP_UP_PACK_DISPLAY } from "~/lib/billing-sku-catalog";
-import { agencyCheckoutHeldCustomerCopy } from "~/lib/customer-billing-copy";
 import {
   DODO_ANNUAL_SAVINGS_LABEL,
   dodoAnnualSavingsIsValid,
@@ -232,7 +231,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       (billing.dodoStatus === "checkout_pending" && checkoutNotice !== "dodo"),
     invalidCheckoutTarget: checkoutNotice === "invalid-target",
     cancelledCheckout: checkoutNotice === "cancelled",
-    agencyCheckoutHeld: checkoutNotice === "agency-held",
     planCheckoutUnavailable: checkoutNotice === "plan-unavailable",
     annualCheckoutUnavailable: checkoutNotice === "annual-unavailable",
     topUpRequiresPlan: checkoutNotice === "top-up-requires-plan",
@@ -344,12 +342,6 @@ export default function BillingRoute() {
             active, finish it or let it expire; a new monthly or annual checkout opens after Dodo
             confirms cancellation or the link expires.
           </p>
-        </div>
-      ) : null}
-
-      {data.agencyCheckoutHeld ? (
-        <div aria-live="assertive" className="f9-wk-notice is-error" role="alert">
-          <p>{agencyCheckoutHeldCustomerCopy()}</p>
         </div>
       ) : null}
 

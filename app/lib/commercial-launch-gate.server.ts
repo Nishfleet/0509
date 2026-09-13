@@ -8,10 +8,7 @@ import {
   isMonitoringWorkflowBindingAvailable,
   resolveMonitoringFanoutMode,
 } from "~/lib/monitoring-fanout.server";
-import type { PlanFamily } from "~/lib/plan-entitlements";
 import type { PricingPlanSlug } from "~/lib/pricing";
-
-export type PlanSaleState = "open" | "held_fanout";
 
 export interface MonitoringFanoutProofSummary {
   mode: ReturnType<typeof resolveMonitoringFanoutMode>;
@@ -35,8 +32,6 @@ export type PublicCommercialLaunchSummary = Pick<
   CommercialLaunchSummary,
   "scoutSaleOpen" | "starterSaleOpen" | "agencySaleOpen"
 >;
-
-const PAID_PLAN_SLUGS: PricingPlanSlug[] = ["scout", "starter", "agency"];
 
 export function monitoringFanoutInternalWorkspaceUserId(env: AppEnv) {
   return env.MONITORING_FANOUT_INTERNAL_WORKSPACE_USER_ID?.trim() ?? "";
@@ -109,25 +104,15 @@ export function summarizeMonitoringFanoutProof(env: AppEnv): MonitoringFanoutPro
   };
 }
 
-export function planSaleState(env: AppEnv, plan: PricingPlanSlug): PlanSaleState {
-  if (plan === "agency" && !isAgencySaleOpen(env)) {
-    return "held_fanout";
-  }
-
-  return "open";
-}
-
-export function isPlanCheckoutAllowed(env: AppEnv, plan: PricingPlanSlug | PlanFamily) {
-  return planSaleState(env, plan as PricingPlanSlug) === "open";
-}
-
 function planSaleOpenSummary(env: AppEnv): PublicCommercialLaunchSummary {
-  const agencyOpen =
-    hasMonthlyPlanCheckoutConfiguration(env, "agency") && planSaleState(env, "agency") === "open";
+  // Every paid plan sells the same way: priced, and checked out through Dodo
+  // whenever its monthly product is configured. There is no Agency review
+  // step (Nish, 2026-09-12); the monitoring-fanout proof stays a capacity
+  // measure in summarizeMonitoringFanoutProof, not a sale gate.
   return {
     scoutSaleOpen: hasMonthlyPlanCheckoutConfiguration(env, "scout"),
     starterSaleOpen: hasMonthlyPlanCheckoutConfiguration(env, "starter"),
-    agencySaleOpen: agencyOpen,
+    agencySaleOpen: hasMonthlyPlanCheckoutConfiguration(env, "agency"),
   };
 }
 
@@ -142,19 +127,4 @@ export function summarizeCommercialLaunch(env: AppEnv): CommercialLaunchSummary 
 
 export function publicCommercialLaunchSummary(env: AppEnv): PublicCommercialLaunchSummary {
   return planSaleOpenSummary(env);
-}
-
-import { agencyCheckoutHeldCustomerCopy } from "~/lib/customer-billing-copy";
-
-export { agencyCheckoutHeldCustomerCopy };
-
-export function planCheckoutHeldCustomerCopy(plan: PricingPlanSlug) {
-  if (plan === "agency") {
-    return agencyCheckoutHeldCustomerCopy();
-  }
-  return `${plan.charAt(0).toUpperCase() + plan.slice(1)} checkout is temporarily unavailable. Email support and we will help.`;
-}
-
-export function publicPricingPlansForSale(env: AppEnv) {
-  return PAID_PLAN_SLUGS.filter((plan) => isPlanCheckoutAllowed(env, plan));
 }

@@ -166,7 +166,6 @@ function billingRenderData(overrides: Record<string, unknown> = {}) {
     blockedCheckout: false,
     pendingCheckout: false,
     invalidCheckoutTarget: false,
-    agencyCheckoutHeld: false,
     planCheckoutUnavailable: false,
     annualCheckoutUnavailable: false,
     topUpRequiresPlan: false,
@@ -618,7 +617,7 @@ describe("billing page", () => {
     });
   });
 
-  it("flags agency-held checkout from the query string", async () => {
+  it("tolerates the stale agency-held checkout param from the query string", async () => {
     mockBillingLoaderDependencies({
       billing: {
         plan: "free",
@@ -635,7 +634,14 @@ describe("billing page", () => {
       params: {},
     } as never);
 
-    expect(result).toMatchObject({ agencyCheckoutHeld: true });
+    expect(result).toMatchObject({
+      checkoutReturned: false,
+      blockedCheckout: false,
+      pendingCheckout: false,
+      invalidCheckoutTarget: false,
+      cancelledCheckout: false,
+      planCheckoutUnavailable: false,
+    });
   });
 
   it("flags annual-unavailable checkout from the query string", async () => {
@@ -1326,7 +1332,7 @@ describe("billing page", () => {
     expect(markup).toContain("Your plan is unchanged");
   });
 
-  it("renders the stale agency-held checkout fallback banner", async () => {
+  it("renders no agency-held banner now that Agency checks out self-serve", async () => {
     mockReactRouterRender({
       email: "owner@example.com",
       billing: { plan: "free", dodoStatus: null, dodoProductId: null, planUpdatedAt: null },
@@ -1338,7 +1344,6 @@ describe("billing page", () => {
       creditGrants: [],
       blockedCheckout: false,
       pendingCheckout: false,
-      agencyCheckoutHeld: true,
       planCheckoutUnavailable: false,
       portalUnavailable: false,
       hasPortal: false,
@@ -1347,8 +1352,8 @@ describe("billing page", () => {
     const { default: BillingRoute } = await import("~/routes/app.billing");
     const markup = renderToStaticMarkup(createElement(BillingRoute));
 
-    expect(markup).toContain("Agency is available by account review");
-    expect(markup).toContain("confirm fit directly");
+    expect(markup).not.toContain("Agency is available by account review");
+    expect(markup).not.toContain("confirm fit directly");
     expect(markup).not.toContain("capacity review");
     expect(markup).not.toContain("higher-volume monitoring coverage");
     expect(markup).not.toContain("Agency checkout is not available from that checkout link");
@@ -1392,7 +1397,6 @@ describe("billing page", () => {
       ],
       blockedCheckout: false,
       pendingCheckout: false,
-      agencyCheckoutHeld: false,
       planCheckoutUnavailable: false,
       portalUnavailable: false,
       hasPortal: true,

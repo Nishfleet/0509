@@ -45,12 +45,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
       throw redirect("/app/billing?checkout=already-subscribed", { status: 303 });
     }
 
-    const { isPlanCheckoutAllowed } = await import("~/lib/commercial-launch-gate.server");
-    if (!isPlanCheckoutAllowed(env, target.planFamily)) {
-      const heldParam = target.planFamily === "agency" ? "agency-held" : "plan-unavailable";
-      throw redirect(`/app/billing?checkout=${heldParam}`, { status: 303 });
-    }
-
     const { validateDodo0509PlanCheckout } = await import("~/lib/dodo-pricing.server");
     const pricingLimitResponse = await enforceBillingProviderRateLimit(
       request,
