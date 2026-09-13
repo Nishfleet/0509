@@ -1660,7 +1660,7 @@ describe("D1 remote restore evidence automation", () => {
         "0097_status_probe_samples.sql",
         "0098_competitor_suggestion_dismissal.sql",
         "0098_email_delivery_canary.sql",
-        "0098_widen_source_connector_bluesky.sql",
+        "0098_widen_source_target_connector_bluesky.sql",
         "0098_widen_source_target_connector_gdelt.sql",
       ],
     });
@@ -1688,10 +1688,12 @@ describe("D1 remote restore evidence automation", () => {
       ...PRODUCTION_MIGRATION_LEDGER_BASELINE,
       ...repositoryHead,
       // The 0096 pair in the production-applied order, then 0097, the
-      // canary, and 0098_gdelt; 0098_bluesky is still repo-only.
+      // 0098 competitor dismissal (it sorts first), the canary, and
+      // 0098_gdelt; 0098_bluesky is still repo-only.
       "0096_error_reports.sql",
       "0096_email_suppression.sql",
       "0097_status_probe_samples.sql",
+      "0098_competitor_suggestion_dismissal.sql",
       "0098_email_delivery_canary.sql",
       "0098_widen_source_target_connector_gdelt.sql",
     ];
