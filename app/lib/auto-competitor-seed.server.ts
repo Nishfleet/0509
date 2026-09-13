@@ -628,7 +628,6 @@ async function runSeedProbes(
         cacheKeyOverride: probeKey,
       });
       const ads = entry?.payload?.ads ?? [];
-      console.error("3175DBG probeKey", probeKey, "ads", ads.length);
       if (ads.length > 0) {
         hits.push({ keyword, country, ads });
       }
@@ -814,7 +813,6 @@ export async function seedAutoCompetitors(
     cacheKeyOverride: ownCacheKey,
   });
   const ownAds = ownEntry?.payload?.ads ?? [];
-  console.error("3175DBG ownCacheKey", ownCacheKey, "ownAds", ownAds.length);
 
   // The customer has cached Meta ads: the ads path takes precedence and the
   // landing-page fallback is NOT used (issue acceptance: "given a domain that
