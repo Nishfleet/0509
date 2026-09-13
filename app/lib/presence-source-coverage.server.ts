@@ -428,7 +428,7 @@ export function presenceSourceCoverageForDocs(): Array<{
       label: SOURCE_LABELS.x,
       productionStatus: "gated",
       notes:
-        "X connector wired in with mention search (recent-search query targets). Gated behind PRESENCE_X_ROLLOUT + X_API_BEARER_TOKEN + X_PAID_ACCESS — paid pay-per-use reads are metered per entity per day and stay pending until the spend decision lands.",
+        "X connector wired in with mention search (recent-search query targets). Gated behind PRESENCE_X_ROLLOUT + X_API_BEARER_TOKEN + X_PAID_ACCESS — paid pay-per-use reads are metered per entity per day and stay pending until the spend decision lands. No free read tier: recent search is pay-per-use only since Feb 2026 (collector research: docs/mentions/PLAN.md §8), so the flag stays off until the MONEY decision.",
     },
     {
       sourceId: "reddit",

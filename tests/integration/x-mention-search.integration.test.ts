@@ -294,6 +294,54 @@ describe("x mention search — poll on the real D1", () => {
     expect(ours.every((item) => item.contentHash && item.author?.startsWith("@"))).toBe(true);
   });
 
+  it("dedupes re-observed posts by canonical URL — no second row, no revision churn", async () => {
+    const { userId, entityId, target } = await seedXQueryTarget("MamaEarth");
+    const { fn } = searchFetcher(SEARCH_PAYLOAD);
+
+    const first = await pollPresenceTarget(
+      activatedEnv(),
+      target,
+      { trackingMode: "competitor" },
+      { fetchImpl: fn },
+    );
+    expect(first.ok).toBe(true);
+    const firstUpsert = await upsertPresenceItems(activatedEnv(), {
+      sourceTarget: target,
+      items: first.items,
+    });
+    expect(firstUpsert.inserted).toBe(2);
+
+    // Termination for issue #3198: mentions are deduped by canonical URL —
+    // the (source_target_id, url_hash) UNIQUE identity on the real table.
+    // A later poll re-observing the same posts (fresh poll, no since_id: the
+    // fixture returns the identical page) must therefore be a table no-op:
+    // nothing inserted, nothing updated (the contentHash covers
+    // title+excerpt+author+publishedAt, which the identical fixture pins),
+    // and the target still owns exactly the two original rows.
+    const second = await pollPresenceTarget(
+      activatedEnv(),
+      target,
+      { trackingMode: "competitor" },
+      { fetchImpl: fn },
+    );
+    expect(second.ok).toBe(true);
+    expect(second.items.map((item) => item.canonicalUrl).sort()).toEqual(
+      first.items.map((item) => item.canonicalUrl).sort(),
+    );
+    const reUpsert = await upsertPresenceItems(activatedEnv(), {
+      sourceTarget: target,
+      items: second.items,
+    });
+    expect(reUpsert.inserted).toBe(0);
+    expect(reUpsert.updated).toBe(0);
+
+    const still = await listPresenceItems(activatedEnv(), userId, {
+      trackedEntityId: entityId,
+      connectorId: "x",
+    });
+    expect(still.filter((item) => item.sourceTargetId === target.id)).toHaveLength(2);
+  });
+
   it("returns ok:true with an empty item set when the search finds nothing", async () => {
     const { target } = await seedXQueryTarget("MamaEarth");
     const { fn } = searchFetcher(EMPTY_SEARCH_PAYLOAD);

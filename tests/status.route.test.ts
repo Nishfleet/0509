@@ -85,6 +85,12 @@ describe("status route", () => {
     const threadsRow = mentionSources.find((source) => source.sourceId === "threads");
     expect(threadsRow).toBeDefined();
     expect(threadsRow?.productionStatus).toBe("gated");
+
+    // Issue #3198 — the X row: wired in, gated, honest about the
+    // paid/no-free-tier posture of the public recent-search surface.
+    const xRow = mentionSources.find((source) => source.sourceId === "x");
+    expect(xRow).toBeDefined();
+    expect(xRow?.productionStatus).toBe("gated");
   });
 
   it("renders the tracked-source rows — the Threads mention source reads gated (issue #3205)", async () => {
@@ -112,6 +118,9 @@ describe("status route", () => {
     // posture only exists at runtime.
     expect(markup).toContain("GDELT");
     expect(markup).toContain("unavailable");
+    // The X per-source row (issue #3198) renders its no-free-tier note — the
+    // public recent-search surface is pay-per-use only, so the flag stays off.
+    expect(markup).toContain("pay-per-use");
   });
 
   it("renders measured surface states without private launch details", async () => {
