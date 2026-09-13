@@ -77,9 +77,35 @@ Evidence (this session, 2026-09-14):
         tests/production-candidate-workflow.test.ts \
         tests/workspace-member-preflight.test.ts
     Test Files  8 passed (8)
-    Tests  146 passed (146)
+    Tests  147 passed (147)
 
 Acceptance note: the 17:36Z-signature test passes on this PR. The next real
 Deploy Worker run completes the issue's second acceptance (green, or exits 0
 when there is nothing to recover) — that run is only possible after this PR
 merges, so it is a post-merge verification, not this PR's.
+
+Second salvage resume (this session, 2026-09-14, unit restart #4): resumed
+`wip/pi-issue-0509-3390-20260913T213429Z` @ 72b38191f per the packet stamp.
+Rebased onto origin/main 65776e216 (was 59 behind; clean, 3 commits
+replayed — carries 896793d87, the ledger-script exec bit from #3330, so the
+salvage's #3413 exec-bit note is stale). Delta added this session:
+
+- MOD `scripts/commit-deploy-ledger.sh` — the ledger half of mechanic 4 was
+  dead code: `deploy-ledger.mjs` read `--rollback-evidence` but no caller
+  passed it. The script now appends the flag when
+  `test-results/worker-rollback-target-*.json` exists (same nullglob
+  pattern as the wrangler output). Load-bearing, not bookkeeping: the row's
+  version_id anchors the NEXT rollback via `readLastGreenLedgerVersionId`,
+  and with the plan now continuing past a recovered release the ledger step
+  actually runs — unwired it would anchor on the rolled-back FAILING
+  version. An evidence file without a recovery outcome changes nothing
+  (already tested); no file means no flag.
+- Red-before re-proven live: the new test file at origin/main 65776e216 →
+  8 failed / 2 passed (`expected 1 to be +0`, the plan rethrow, ledger
+  recording the rolled-back id); 147/147 on this branch.
+- run 34787898963 (22:49Z, latest main deploy) still dies at the Test step,
+  but on #3314's d1-remote-restore set-equality red — not on the ledger
+  exec bit (fixed) and not on #3412's no-time-bomb gate (passes there).
+  The PR body's loose-ends now name #3314 as the only remaining pre-merge
+  red for the second acceptance.
+- sgscan --base origin/main: no new security findings.
