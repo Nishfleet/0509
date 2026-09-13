@@ -104,7 +104,9 @@ describe("entry.server CSP nonce handoff", () => {
     async () => {
       capturedStream.options = undefined;
       await renderWith("test-nonce-abc123");
-      expect(capturedStream.options?.nonce).toBe("test-nonce-abc123");
+      expect(
+        (capturedStream.options as { nonce?: string } | undefined)?.nonce,
+      ).toBe("test-nonce-abc123");
     },
   );
 

@@ -73,7 +73,8 @@ const CSP_VIOLATION_COLLECTOR = () => {
     stored = [];
   }
   const violations = stored;
-  window[KEY] = violations;
+  (window as unknown as { __cspViolations?: CspViolation[] }).__cspViolations =
+    violations;
   window.addEventListener("securitypolicyviolation", (event) => {
     violations.push({
       blockedURI: event.blockedURI,
