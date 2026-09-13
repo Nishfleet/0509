@@ -247,6 +247,24 @@ export function getBetterAuth(env: AppEnv, request: Request) {
         expiresIn: 15 * 60,
         storeToken: "hashed",
         sendMagicLink: async ({ email, url, metadata }) => {
+          // Issue #3322: since better-auth 1.7.1 stores the verification
+          // token hashed, the verification.identifier in D1 is no longer the
+          // redeemable token — the confirmation URL only ever existed in the
+          // outbound email. Emit the #1500-class structured line so unattended
+          // signups (fleet burst, smoke, support) have a stock, queryable
+          // record of the exact redeem target. Never throws.
+          try {
+            console.log(
+              JSON.stringify({
+                event: "magic_link_dispatched",
+                email,
+                mode: authModeFromMetadata(metadata),
+                url,
+              }),
+            );
+          } catch {
+            // A logging failure must never break a signup.
+          }
           await sendMagicLinkEmail(env, {
             email,
             mode: authModeFromMetadata(metadata),
