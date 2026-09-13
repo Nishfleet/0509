@@ -39,6 +39,7 @@ type WorkflowJob = {
   needs?: string | string[];
   "runs-on"?: string | string[];
   "timeout-minutes"?: number;
+  permissions?: Record<string, unknown>;
   steps?: WorkflowStep[];
 };
 
@@ -113,6 +114,20 @@ describe("required contexts can never conclude skipped", () => {
         'test "$(git rev-parse --verify HEAD)" = "$AUTHORIZED_SHA"',
       );
     }
+  });
+
+  it("the required codex-node-checks job fails when any sibling shard fails (0509#3261)", () => {
+    const job = requiredJob(".github/workflows/ci.yml", "codex-node-checks");
+    const steps = job.steps ?? [];
+    const aggregate = steps.find((step) => /sibling shard/i.test(step.name ?? ""));
+    expect(
+      aggregate,
+      "only codex-node-checks is a required context, so it must itself turn red when shard-2/3/4 turns red (0509#3261)",
+    ).toBeDefined();
+    expect(aggregate?.run).toContain("codex-node-checks-shard-");
+    expect(aggregate?.run).toContain("exit 1");
+    expect(aggregate?.env?.GH_TOKEN).toBe("${{ github.token }}");
+    expect(job.permissions?.checks).toBe("read");
   });
 
   // The Gate-B release proof (issue #2840) is a merge-queue gate but is
