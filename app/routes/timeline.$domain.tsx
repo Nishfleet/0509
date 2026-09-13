@@ -499,7 +499,7 @@ export default function OfferTimelineRoute() {
                     </span>
                   </li>
                 ),
-              ))}
+              )}
             </ul>
           </div>
         </section>
@@ -535,7 +535,7 @@ type MergedTimelineSourceRow =
 
 function mergedRecentSourceRows(data: OfferTimelineLoaderData): MergedTimelineSourceRow[] {
   const rows: MergedTimelineSourceRow[] = [
-    ...data.sourceEvents.map((event): MergedTimelineSourceRow => ({
+    ...(data.sourceEvents ?? []).map((event): MergedTimelineSourceRow => ({
       kind: "source-event",
       at: event.capturedAt,
       event,

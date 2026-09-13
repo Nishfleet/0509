@@ -163,8 +163,9 @@ function uniqueSorted(values: readonly string[]) {
 
 const expectedPlanFeaturesByPlan: Record<string, readonly string[]> = {
   // 2026-09-10: barebones free — one first brief plus the email lane it rides
-  // on, nothing else. No API/MCP, no exports, no team.
-  free: ["weekly_digest", "email_delivery"],
+  // on, nothing else. No API/MCP, no exports, no team. Issue #3179 adds the
+  // SELF-brand presence slice: one entity, one website source, manual checks.
+  free: ["weekly_digest", "email_delivery", "presence_self_tracking", "presence_website_sources"],
   scout: [
     "competitor_research", "weekly_digest", "email_delivery",
     "presence_competitor_tracking", "presence_website_sources", "presence_digest_alerts",
