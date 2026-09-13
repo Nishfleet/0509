@@ -253,6 +253,12 @@ export default defineConfig({
       name: "chromium",
       testDir: "./tests",
       testMatch: /(hero-fold|search-console-hygiene)\.spec\.ts/,
+      // The (c) selected-proof journey pays the first-hit Vite cold-compile of
+      // the facet+selected proof module chain on a freshly-booted local server
+      // (E2E_START_LOCAL_SERVER=1): measured 2×30s timeouts on the cold path,
+      // 5.7s/test warm (issue #3301, 2026-09-13). Same posture as the
+      // diagnosticEngineProject above: 60s so first-attempt proof completes.
+      timeout: 60_000,
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 1440, height: 900 },
@@ -266,6 +272,8 @@ export default defineConfig({
       name: "mobile-chromium",
       testDir: "./tests",
       testMatch: /(hero-fold|search-console-hygiene)\.spec\.ts/,
+      // Same 60s cold-compile posture as the chromium project above (#3301).
+      timeout: 60_000,
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 390, height: 844 },
