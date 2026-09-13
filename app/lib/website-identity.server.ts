@@ -343,6 +343,7 @@ function applyIdentityOverride(
 
 export function clearWebsiteIdentityCacheForTests() {
   identityCache.clear();
+  identityInFlight.clear();
 }
 
 /**
