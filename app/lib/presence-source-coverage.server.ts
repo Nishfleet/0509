@@ -439,15 +439,17 @@ export function presenceSourceCoverageForDocs(): Array<{
     {
       sourceId: "linkedin",
       label: SOURCE_LABELS.linkedin,
-      productionStatus: "unavailable",
-      notes: "Self-brand OAuth only when rolled out. Competitor tracking is limited.",
+      productionStatus: "gated",
+      notes:
+        "LinkedIn Posts API connector wired in (own-organization posts of a CONNECTED account via /rest/posts, $0, stored OAuth grant; the member must administer the tracked organization). Gated behind PRESENCE_LINKEDIN_ROLLOUT — off by default; activation is a separate rollout decision. Self-tracking only: there is no public keyword search of others' posts, so Competitor coverage stays LIMITED_COVERAGE (the only allowed exclusion).",
     },
     {
       sourceId: "rss",
       label: SOURCE_LABELS.rss,
       productionStatus: "gated",
       notes:
-        "RSS/Atom/JSON Feed connector wired in. Gated behind PRESENCE_RSS_ROLLOUT — off by default; activation is a separate rollout decision. Covers the publication feeds the sources themselves syndicate — publisher RSS, Substack, Medium, YouTube channel feeds (named feeds you register; those platforms have no free global keyword search).",
+        "RSS/Atom/JSON Feed connector wired in — the publication-feed mention backbone. Covers the publication feeds the sources themselves syndicate — publisher RSS, Substack, Medium, YouTube channel feeds (named feeds you register; those platforms have no free global keyword search). Covers exactly the tracked feeds the entity registers: publisher RSS, Substack /feed, Medium /feed/... (named profiles, publications and tags — there is no global free search), and Google News /rss/search query feeds built from the tracked match phrase; public surfaces cited in docs/mentions/PLAN.md §2/§8. In-connector rate budget: one bounded fetch per feed per poll, at most 25 items each, polls serialized upstream. Gated behind PRESENCE_RSS_ROLLOUT — off by default; activation is a separate rollout decision.",
+
     },
     {
       sourceId: "bluesky",

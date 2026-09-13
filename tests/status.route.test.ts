@@ -118,15 +118,42 @@ describe("status route", () => {
     expect(markup).toContain("gated");
     expect(markup).toContain("Meta app review");
     expect(markup).toContain("wired in, waiting on its rollout decision");
-    // The whole catalog passes through untouched, including the source whose
-    // posture only exists at runtime.
+    // The whole catalog passes through untouched. #3204 wired the LinkedIn
+    // connector, flipping its row from "unavailable" to "gated" — the
+    // tracked-source catalog no longer carries an "unavailable" posture.
     expect(markup).toContain("GDELT");
-    expect(markup).toContain("unavailable");
+    expect(markup).toContain("own-organization posts of a CONNECTED account");
+    expect(markup).not.toContain("unavailable");
     // The Substack row (issue #3199's acceptance) rides the rss row, and the
     // note renders what the public surface covers — the named publication
     // feeds themselves, Substack included — and its limits, verbatim.
     expect(markup).toContain("Substack");
     expect(markup).toContain("no free global keyword search");
+  });
+
+  it("renders the rss tracked-source row — the publication-feed surface the Medium mentions ride (issue #3200)", async () => {
+    await mockRouter(() => ({
+      generatedAt: "2026-09-13T16:00:00.000Z",
+      asOf: "2026-09-13T16:00:00.000Z",
+      appServed: true,
+      commercialLaunch: null,
+      monitoring: null,
+      surfaces: { asOf: "2026-09-13T16:00:00.000Z", monitoring: null, surfaces: [] },
+      mentionSources: presenceSourceCoverageForDocs(),
+    }));
+
+    const { default: StatusRoute } = await import("~/routes/status");
+    const markup = renderToStaticMarkup(createElement(StatusRoute));
+
+    expect(markup).toContain("Tracked sources");
+    // The rss per-source row (the #3200 acceptance) renders its posture
+    // verbatim from the catalog: the publication-feed mention backbone, what
+    // the Medium public surface covers, the rate budget, still gated.
+    expect(markup).toContain("RSS / Atom / JSON Feed");
+    expect(markup).toContain("publication-feed mention backbone");
+    expect(markup).toContain("Medium /feed/");
+    expect(markup).toContain("one bounded fetch per feed per poll");
+    expect(markup).toContain("gated");
   });
 
   it("renders measured surface states without private launch details", async () => {
