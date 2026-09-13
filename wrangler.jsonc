@@ -166,6 +166,12 @@
         "simple": { "limit": 2, "period": 60 }
       },
       {
+        "name": "RL_AUTH_GET",
+        "type": "ratelimit",
+        "namespace_id": "1012",
+        "simple": { "limit": 60, "period": 60 }
+      },
+      {
         "name": "RL_SEARCH_ANON_BROWSER",
         "type": "ratelimit",
         "namespace_id": "1002",

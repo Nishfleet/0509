@@ -10,6 +10,7 @@ import {
   enforcePublicSearchSelectionRateLimit,
   enforceRequestRateLimit,
   enforceSearchSelectionRateLimit,
+  AUTH_ANON_GET_PER_MINUTE_LIMIT,
   PUBLIC_BRAND_PAGE_PER_MINUTE_LIMIT,
   PUBLIC_PROOF_BRIEF_PER_MINUTE_LIMIT,
   PUBLIC_SEARCH_ANON_BROWSER_LIMIT,
@@ -35,6 +36,7 @@ import type { AppEnv } from "~/lib/env.server";
 // counting against the configured limit matches production semantics.
 const EDGE_BINDING_LIMITS: Record<string, number> = {
   RL_AUTH: 2,
+  RL_AUTH_GET: 60,
   RL_SEARCH_ANON_BROWSER: 2,
   RL_PROOF_BRIEF: 3,
   RL_SEARCH_SELECTION: 3,
@@ -111,6 +113,60 @@ describe("rateLimitPolicyFor", () => {
       scope: "auth",
       limit: 2,
     });
+  });
+
+  it("gives anonymous money-path page GETs + passive /api/auth prefetch their own generous budget (issue #3317)", () => {
+    // The converting step's own page read and better-auth's passive
+    // session/CSRF prefetch (fired by EVERY funnel page) are page READS:
+    // they share one generous anonymous-GET budget keyed by IP, and neither
+    // touches the credential-POST ceiling (#3160's brand-page bucket and
+    // every other scope are untouched).
+    expect(rateLimitPolicyFor(new Request("https://0509.io/auth/signup"))).toMatchObject({
+      scope: "auth-anon-get",
+      limit: AUTH_ANON_GET_PER_MINUTE_LIMIT,
+      periodSeconds: 60,
+      binding: "RL_AUTH_GET",
+      keyByIpOnly: true,
+      humane429: true,
+    });
+    expect(rateLimitPolicyFor(new Request("https://0509.io/api/auth/get-session"))).toMatchObject({
+      scope: "auth-anon-get",
+    });
+    // State-changing auth calls keep the tight fail-closed legacy ceiling.
+    expect(
+      rateLimitPolicyFor(new Request("https://0509.io/api/auth/sign-up/email", { method: "POST" })),
+    ).toMatchObject({ scope: "auth", limit: 2, periodSeconds: 60 });
+    expect(
+      rateLimitPolicyFor(new Request("https://0509.io/auth/login", { method: "POST" })),
+    ).toMatchObject({ scope: "auth", limit: 2 });
+  });
+
+  it("keeps the auth-scope anonymous-GET 429 honest: readable page copy, preserved Retry-After (issue #3317)", async () => {
+    const { env } = createFakeEdgeLimiters();
+
+    // The shared-NAT flood case (issue #3317 acceptance 4): when the
+    // anonymous-GET budget does 429 a signup visitor, that one impression
+    // must show readable copy — never a bare status or raw JSON.
+    let blocked: Response | null = null;
+    const overshootCap = AUTH_ANON_GET_PER_MINUTE_LIMIT + 8;
+    for (let index = 0; index < overshootCap && !blocked; index += 1) {
+      blocked = await enforceRequestRateLimit(
+        new Request("https://0509.io/auth/signup", {
+          headers: { "cf-connecting-ip": "203.0.113.71", "user-agent": "flood" },
+        }),
+        env,
+      );
+    }
+    expect(blocked, `expected a 429 within ${overshootCap} over-budget requests`).not.toBeNull();
+    expect(blocked?.status).toBe(429);
+    expect(blocked?.headers.get("retry-after")).toBe("60");
+    expect(blocked?.headers.get("content-type")).toContain("text/html");
+    const body = await blocked!.text();
+    expect(body).toContain("Checking faster than we allow");
+    expect(body).toContain("Try again");
+    // NOT a bare status or the API JSON envelope.
+    expect(body).not.toContain("rate_limited");
+    expect(body).not.toContain(`<${"{"}`);
   });
 
   it("gives provider webhooks a dedicated higher write ceiling before generic writes", () => {
@@ -257,6 +313,35 @@ describe("enforceRequestRateLimit (edge binding, fail closed)", () => {
       env,
     );
     expect(blocked?.status).toBe(429);
+  });
+
+  it("admits a 24-GET/10-min signup burst at ≤1 rps even with the funnel's prefetches already spent (issue #3317)", async () => {
+    const { env } = createFakeEdgeLimiters();
+    const request = (path: string, ua: string) =>
+      new Request(`https://0509.io${path}`, {
+        headers: { "cf-connecting-ip": "203.0.113.72", "user-agent": ua },
+      });
+
+    // The funnel walks first: 4 pages × 2 devices of passive session
+    // prefetches, then both devices' signup page reads — all on the
+    // anonymous-GET budget (keyByIpOnly, so both devices share one IP key).
+    for (const device of ["desktop", "mobile"]) {
+      for (let step = 0; step < 4; step += 1) {
+        await expect(enforceRequestRateLimit(request("/api/auth/get-session", device), env)).resolves.toBeNull();
+      }
+      await expect(enforceRequestRateLimit(request("/auth/signup", device), env)).resolves.toBeNull();
+    }
+
+    // Then the issue's 24-GET burst leg. The fake limiter has no clock, so
+    // these fire FASTER than ≤1 rps and all land inside one 60s window —
+    // the strictest case for the anonymous-GET budget, and therefore the
+    // strongest pass: a paced 24-GET/10-min burst can only be easier.
+    let four29s = 0;
+    for (let index = 0; index < 24; index += 1) {
+      const response = await enforceRequestRateLimit(request("/auth/signup", "burst"), env);
+      if (response) four29s += 1;
+    }
+    expect(four29s, "24-GET signup burst must not 429 (issue #3317)").toBe(0);
   });
 
   it("keys all headerless requests into one shared unknown bucket (spoofed XFF cannot mint identities)", async () => {
