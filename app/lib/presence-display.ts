@@ -23,7 +23,7 @@ const CONNECTOR_COPY: Record<PresenceConnectorId, string> = {
   bluesky: "Bluesky",
   gdelt: "GDELT mainstream news",
   threads: "Threads",
-
+  hn: "Hacker News",
 };
 
 const SOURCE_COVERAGE_STATUS_COPY: Record<PresenceSourceCoverageStatus, string> = {

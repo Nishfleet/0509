@@ -104,6 +104,8 @@ function statusFromConnectorGate(
             ? "OFFICIAL_PUBLIC_API"
             : sourceId === "threads"
             ? "OFFICIAL_PUBLIC_API"
+            : sourceId === "hn"
+            ? "OFFICIAL_PUBLIC_API"
             : sourceId === "linkedin" && trackingMode === "competitor"
             ? "LIMITED_COVERAGE"
             : sourceId === "x" || sourceId === "reddit"
