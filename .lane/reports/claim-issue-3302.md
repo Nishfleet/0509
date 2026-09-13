@@ -218,3 +218,30 @@ Post-fix verification (this tree, 271a90d87 base):
   + sneaker-resale + lane-evidence-collision + compare-hub +
   compare-pages-sources, node project, `--reporter=dot`): 6 files / 98
   tests, ALL passed (3.86s).
+
+## Fifth pickup — pi-issue-0509-3302, 2026-09-13 (rebase onto edacd4aaf = origin/main after #3361)
+
+Main gained #3361 (drill/repair-queue-jump-5810, `docs/merge-queue-jump-5810.md`
+only) — `comm -12` against the 15 touched paths: ZERO intersection; rebase
+clean (4/4, no conflicts).
+
+- Termination, as written in the issue (`--reporter=basic`): FAILED, exit 1 —
+  `Startup Error: Error: Failed to load custom Reporter from basic` /
+  `Failed to load url basic` (vitest 4.1.11 dropped the built-in `basic`
+  reporter; the issue's command predates the vitest-4 bump). Same file, bare
+  run (no reporter flag): 5/5 passed, exit 0.
+- Affected suite, post-reviewer-fixes — the receipt this pickup adds
+  (`npx vitest run --configLoader runner --project node --changed origin/main`,
+  VITEST_MAX_WORKERS=2): 390 files / 4,713 tests, ALL passed (117.2s), exit 0.
+- `sgscan --base origin/main` (edacd4aa): "No new security findings." (exit 0).
+- #3183 / #3147 re-checked 2026-09-13: both CLOSED, `mergedAt:null` —
+  adopt-if-landed clauses stay untriggered.
+- Acceptance 1–3 re-verified on the artifacts, not just tests: $locale wrapper
+  = canonicalLinks + buyerSurfaceHreflangLinks, canonical→EN; citations JSON =
+  2 dated sneakerping.com sources, paid tier hedged, no bare price numbers; EN
+  switch framing = `<Form method=get action=/search aria-label="Public search
+  preview">` + "search preview — no account" (no demo form); SITEMAP_PATHS +
+  PUBLIC_MARKDOWN_PATHS + COMPARE_PRODUCT_NAMES + footer `vs SneakerPing` rail
+  all present.
+- Pre-merge live state unchanged: /compare/sneakerping → 404, sitemap.xml 0
+  `compare/sneakerping`; the two issue verify curls are post-merge checks.
