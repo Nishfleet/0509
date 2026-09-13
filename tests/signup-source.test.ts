@@ -515,64 +515,89 @@ describe("acquisition-family signup attribution (issue #3358)", () => {
     }
   });
 
-  // The #2109 harness above strips the shared nav pill; this one pins it: the
-  // pill IS the only signup CTA on the compare, switch, /guides and /timeline
-  // surfaces, so it must carry exactly the route's family marker. $locale.*
-  // buyer-surface children re-export these EN route components (#1562), so
-  // four representative re-exports ride along — the pill they render is the
-  // EN pill by construction.
-  const FAMILY_PILLS: Array<[string, string]> = [
-    ["ads.$domain", ADS_PAGE_SIGNUP_SOURCE],
-    ["compare", COMPARE_PAGE_SIGNUP_SOURCE],
-    ["compare.adspy", COMPARE_PAGE_SIGNUP_SOURCE],
-    ["compare.adspyder", COMPARE_PAGE_SIGNUP_SOURCE],
-    ["compare.bigspy", COMPARE_PAGE_SIGNUP_SOURCE],
-    ["compare.foreplay", COMPARE_PAGE_SIGNUP_SOURCE],
-    ["compare.foreplay-spyder", COMPARE_PAGE_SIGNUP_SOURCE],
-    ["compare.gethookd", COMPARE_PAGE_SIGNUP_SOURCE],
-    ["compare.keeptabz", COMPARE_PAGE_SIGNUP_SOURCE],
-    ["compare.meta-ad-library", COMPARE_PAGE_SIGNUP_SOURCE],
-    ["compare.minea", COMPARE_PAGE_SIGNUP_SOURCE],
-    ["compare.panoramata", COMPARE_PAGE_SIGNUP_SOURCE],
-    ["compare.poweradspy", COMPARE_PAGE_SIGNUP_SOURCE],
-    ["compare.pulzifi", COMPARE_PAGE_SIGNUP_SOURCE],
-    ["compare.sneakerping", COMPARE_PAGE_SIGNUP_SOURCE],
-    ["compare.spyland", COMPARE_PAGE_SIGNUP_SOURCE],
-    ["compare.visualping", COMPARE_PAGE_SIGNUP_SOURCE],
-    ["compare.visualping-ad-libraries", COMPARE_PAGE_SIGNUP_SOURCE],
+  // The pill IS the only signup CTA on the compare, switch, /guides and
+  // /timeline surfaces, so it must carry exactly the family marker. Rendering
+  // all ~40 acquisition routes in one fork OOMs the 2GB vitest fork heap
+  // (measured: one route module + deps is ~40MB), so full coverage here is
+  // STATIC — every acquisition file must wire its family marker into its
+  // signup CTA, the same shape as the issue's own grep termination check —
+  // and a one-per-family render spot-check pins the runtime href.
+  const FAMILY_WIRING: Array<[string, string[]]> = [
+    // The shared pill construction itself must keep the source param.
+    [
+      "app/components/marketing-nav.tsx",
+      ['to={signupSource ? `/auth/signup?source=${signupSource}` : "/auth/signup"}'],
+    ],
+    // Every switch route renders SwitchLanding, which passes the marker.
+    ["app/components/switch-landing.tsx", ["signupSource={SWITCH_PAGE_SIGNUP_SOURCE}"]],
+    [
+      "app/routes/ads.$domain.tsx",
+      [
+        "signupSource={ADS_PAGE_SIGNUP_SOURCE}",
+        // Both /ads CTA URLs (plain + Track CTA) carry the marker.
+        "/auth/signup?source=ads-page&redirectTo=",
+        "&source=ads-page&redirectTo=",
+      ],
+    ],
+    [
+      "app/routes/timeline.$domain.tsx",
+      [
+        "signupSource={TIMELINE_PAGE_SIGNUP_SOURCE}",
+        "/auth/signup?source=timeline-page&redirectTo=",
+      ],
+    ],
+    ["app/routes/timeline.tsx", ["signupSource={TIMELINE_PAGE_SIGNUP_SOURCE}"]],
+    ["app/routes/guides.tsx", ["signupSource={GUIDES_HUB_SIGNUP_SOURCE}"]],
+    ["app/routes/compare.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
+    ["app/routes/compare.adspy.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
+    ["app/routes/compare.adspyder.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
+    ["app/routes/compare.bigspy.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
+    ["app/routes/compare.foreplay.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
+    ["app/routes/compare.foreplay-spyder.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
+    ["app/routes/compare.gethookd.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
+    ["app/routes/compare.keeptabz.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
+    ["app/routes/compare.meta-ad-library.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
+    ["app/routes/compare.minea.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
+    ["app/routes/compare.panoramata.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
+    ["app/routes/compare.poweradspy.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
+    ["app/routes/compare.pulzifi.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
+    ["app/routes/compare.sneakerping.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
+    ["app/routes/compare.spyland.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
+    ["app/routes/compare.visualping.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
+    ["app/routes/compare.visualping-ad-libraries.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
     // The singular /compare/visualping-ad-library 301-redirects to the plural
     // winner (#2085), so it never renders its own pill.
-    ["switch.adspy", SWITCH_PAGE_SIGNUP_SOURCE],
-    ["switch.magicbrief", SWITCH_PAGE_SIGNUP_SOURCE],
-    ["switch.panoramata", SWITCH_PAGE_SIGNUP_SOURCE],
-    ["switch.visualping", SWITCH_PAGE_SIGNUP_SOURCE],
-    ["timeline", TIMELINE_PAGE_SIGNUP_SOURCE],
-    ["timeline.$domain", TIMELINE_PAGE_SIGNUP_SOURCE],
-    ["guides", GUIDES_HUB_SIGNUP_SOURCE],
-    ["guides.how-to-track-competitor-ads", GUIDE_TRACK_ADS_SIGNUP_SOURCE],
     [
-      "guides.how-to-get-alerted-when-a-competitor-changes-their-offer",
-      GUIDE_OFFER_CHANGE_ALERT_SIGNUP_SOURCE,
+      "app/routes/guides.how-to-track-competitor-ads.tsx",
+      ["signupSource={GUIDE_TRACK_ADS_SIGNUP_SOURCE}"],
     ],
     [
-      "guides.how-to-monitor-competitor-landing-page-changes",
-      GUIDE_LANDING_PAGE_CHANGES_SIGNUP_SOURCE,
-    ],
-    ["guides.how-to-monitor-meta-ad-library", GUIDE_MONITOR_AD_LIBRARY_SIGNUP_SOURCE],
-    [
-      "guides.how-to-prove-what-changed-on-a-competitor-website",
-      GUIDE_PROVE_WHAT_CHANGED_SIGNUP_SOURCE,
+      "app/routes/guides.how-to-get-alerted-when-a-competitor-changes-their-offer.tsx",
+      ["signupSource={GUIDE_OFFER_CHANGE_ALERT_SIGNUP_SOURCE}"],
     ],
     [
-      "guides.how-to-turn-a-one-off-competitor-check-into-a-standing-watch",
-      GUIDE_STANDING_WATCH_SIGNUP_SOURCE,
+      "app/routes/guides.how-to-monitor-competitor-landing-page-changes.tsx",
+      ["signupSource={GUIDE_LANDING_PAGE_CHANGES_SIGNUP_SOURCE}"],
     ],
-    ["guides.meta-ad-library-api-limitations", GUIDE_API_LIMITS_SIGNUP_SOURCE],
-    // $locale re-export spot checks (one per re-exported family component).
-    ["$locale.ads.$domain", ADS_PAGE_SIGNUP_SOURCE],
-    ["$locale.compare", COMPARE_PAGE_SIGNUP_SOURCE],
-    ["$locale.switch.adspy", SWITCH_PAGE_SIGNUP_SOURCE],
-    ["$locale.guides.how-to-track-competitor-ads", GUIDE_TRACK_ADS_SIGNUP_SOURCE],
+    [
+      "app/routes/guides.how-to-monitor-meta-ad-library.tsx",
+      ["signupSource={GUIDE_MONITOR_AD_LIBRARY_SIGNUP_SOURCE}"],
+    ],
+    [
+      "app/routes/guides.how-to-prove-what-changed-on-a-competitor-website.tsx",
+      ["signupSource={GUIDE_PROVE_WHAT_CHANGED_SIGNUP_SOURCE}"],
+    ],
+    [
+      "app/routes/guides.how-to-turn-a-one-off-competitor-check-into-a-standing-watch.tsx",
+      ["signupSource={GUIDE_STANDING_WATCH_SIGNUP_SOURCE}"],
+    ],
+    [
+      "app/routes/guides.meta-ad-library-api-limitations.tsx",
+      ["signupSource={GUIDE_API_LIMITS_SIGNUP_SOURCE}"],
+    ],
+    // The $locale buyer-surface children re-export the EN route components
+    // (#1562): the pill they render is the EN pill by construction.
+    ["app/routes/$locale.compare.tsx", ['import CompareRoute, { meta } from "./compare"']],
   ];
 
   beforeEach(() => {
@@ -614,8 +639,30 @@ describe("acquisition-family signup attribution (issue #3358)", () => {
     vi.resetModules();
   });
 
-  it("every acquisition surface's Sign up pill carries exactly its family marker", async () => {
-    for (const [route, expected] of FAMILY_PILLS) {
+  it("every acquisition surface file wires its family marker into its signup CTA", () => {
+    for (const [file, expectedSubstrings] of FAMILY_WIRING) {
+      const source = readFileSync(path.join(process.cwd(), file), "utf8");
+      for (const expected of expectedSubstrings) {
+        expect(source, `${file} must contain ${JSON.stringify(expected)}`).toContain(expected);
+      }
+    }
+  });
+
+  // One rendered surface per family: the pill href shape end-to-end at a
+  // memory cost the 2GB fork survives (7 route imports, not 40).
+  const FAMILY_RENDER_SPOT: Array<[string, string]> = [
+    ["ads.$domain", ADS_PAGE_SIGNUP_SOURCE],
+    ["compare", COMPARE_PAGE_SIGNUP_SOURCE],
+    ["switch.adspy", SWITCH_PAGE_SIGNUP_SOURCE],
+    ["timeline", TIMELINE_PAGE_SIGNUP_SOURCE],
+    ["guides", GUIDES_HUB_SIGNUP_SOURCE],
+    ["guides.how-to-track-competitor-ads", GUIDE_TRACK_ADS_SIGNUP_SOURCE],
+    // A $locale re-export renders the EN component, so the marker rides.
+    ["$locale.compare", COMPARE_PAGE_SIGNUP_SOURCE],
+  ];
+
+  it("the Sign up pill carries exactly its family marker (one render per family)", async () => {
+    for (const [route, expected] of FAMILY_RENDER_SPOT) {
       const { default: Route } = await import(`~/routes/${route}`);
       const markup = renderToStaticMarkup(createElement(Route));
       const pills =
