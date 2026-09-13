@@ -859,6 +859,9 @@ async function handleAcceptSuggestedCompetitorAction(
     "~/lib/auto-competitor-suggested-loader.server"
   );
   const { createWatchlistWithinLimit } = await import("~/lib/data.server");
+  const { queueFirstWatchlistScan } = await import(
+    "~/lib/first-watchlist-scan.server"
+  );
   const { getUserPlan } = await import("~/lib/plan.server");
   const { checkPlanLimit } = await import("~/lib/plan.server");
 
@@ -958,6 +961,13 @@ async function handleAcceptSuggestedCompetitorAction(
       message:
         "You've reached your competitor tracking limit — pause another watchlist before adding this one.",
     };
+  }
+
+  if (result.status === "created") {
+    // First scan on creation (issue #3380) — the same enqueue the other
+    // watchlist-creation paths already perform. No ExecutionContext reaches
+    // this signature; the durable (env.DB) queue path never needs it.
+    await queueFirstWatchlistScan(env, undefined, result.watchlist);
   }
 
   return {
