@@ -148,13 +148,19 @@ describe("runPresenceDigestSweep", () => {
     );
 
     const { runPresenceDigestSweep } = await import("~/lib/presence-digest.server");
-    const result = await runPresenceDigestSweep({ DB: makeDb([
-      { id: "user-1", email: "one@example.com" },
-      // user-2 deliberately missing from the owner read -> skipped.
-      { id: "user-3", email: "three@example.com" },
-    ]) } as never);
+    const result = await runPresenceDigestSweep({
+      DB: makeDb([
+        { id: "user-1", email: "one@example.com" },
+        // user-2 deliberately missing from the owner read -> skipped.
+        { id: "user-3", email: "three@example.com" },
+      ]),
+      PRESENCE_DIGEST_ROLLOUT: "enabled",
+    } as never);
 
-    expect(result).toEqual({ swept: 1, delivered: 1, skipped: 2, errors: 0 });
+    // swept counts workspaces actually attempted (had a delivery address):
+    // user-1 (delivered) and user-3 (no_items skip) — only addressless
+    // user-2 is skipped before the attempt.
+    expect(result).toEqual({ swept: 2, delivered: 1, skipped: 2, errors: 0 });
     expect(mocks.listResweepUsers).toHaveBeenCalledWith(expect.anything(), 100);
     expect(mocks.sendPresenceDigestEmail).toHaveBeenCalledTimes(1);
     expect(mocks.sendPresenceDigestEmail.mock.calls[0]![1]).toMatchObject({
@@ -169,10 +175,13 @@ describe("runPresenceDigestSweep", () => {
     send.mockRejectedValueOnce(new Error("rate limited"));
 
     const { runPresenceDigestSweep } = await import("~/lib/presence-digest.server");
-    const result = await runPresenceDigestSweep({ DB: makeDb([
-      { id: "user-1", email: "one@example.com" },
-      { id: "user-2", email: "two@example.com" },
-    ]) } as never);
+    const result = await runPresenceDigestSweep({
+      DB: makeDb([
+        { id: "user-1", email: "one@example.com" },
+        { id: "user-2", email: "two@example.com" },
+      ]),
+      PRESENCE_DIGEST_ROLLOUT: "enabled",
+    } as never);
 
     expect(result).toEqual({ swept: 2, delivered: 1, skipped: 0, errors: 1 });
     expect(send).toHaveBeenCalledTimes(2);

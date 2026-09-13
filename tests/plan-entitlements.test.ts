@@ -35,8 +35,14 @@ describe("plan entitlements catalog", () => {
     expect(planAllowsDigestCadence("free", "daily")).toBe(false);
     // Meta-only sources; no exports, no API/MCP, no team.
     expect(entitlements.sources).toEqual(["meta"]);
+    // #3179: Free tracks ONE self brand (presence_self_tracking) with its
+    // one $0 query-mention source (presence_social_connect); the digest
+    // eMail lane (presence_digest_alerts) stays paid-only — nothing
+    // recurring on Free.
     expect([...entitlements.features].sort()).toEqual([
       "email_delivery",
+      "presence_self_tracking",
+      "presence_social_connect",
       "weekly_digest",
     ]);
     // A Friday 00:00 UTC tick is a 6h-aligned slot for paid plans but must
