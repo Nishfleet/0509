@@ -200,11 +200,23 @@ describe("auto-revert workflow", () => {
       .filter((ln) => !/^\s*#/.test(ln))
       .join("\n");
     const assertIdx = closerCommands.indexOf("gh api graphql");
-    const loopIdx = closerCommands.indexOf("for num in");
+    // Review round 1 (0509#2929): the union is captured into `candidates`
+    // BEFORE the loop — a failing command substitution as a `for` word list
+    // does not abort under bash 5.2 `set -euo pipefail`, so the capture
+    // itself must be the assignment that `set -e` fires on. Pin the order:
+    // GraphQL probe, then the candidates assignment, then the loop over
+    // $candidates.
+    const captureIdx = closerCommands.indexOf('candidates="$({');
+    const loopIdx = closerCommands.indexOf("for num in $candidates");
+    expect(captureIdx).toBeGreaterThan(-1);
+    expect(loopIdx).toBeGreaterThan(captureIdx);
+    expect(closerCommands).toContain("for num in $candidates");
+    expect(closerCommands).not.toContain("for num in $(");
     expect(assertIdx).toBeGreaterThan(-1);
-    expect(loopIdx).toBeGreaterThan(assertIdx);
+    expect(captureIdx).toBeGreaterThan(assertIdx);
+    expect(closerCommands).toContain("if ! gh api graphql");
     expect(closerRun).toContain("FATAL: GH_TOKEN cannot use the GitHub GraphQL API");
-    expect(closerRun).toContain("exit 1");
+    expect(closerCommands).toContain("exit 1");
   });
 
   it("close-halts-on-green closes by label AND falls back to the title search", () => {
@@ -214,17 +226,23 @@ describe("auto-revert workflow", () => {
     // listing and a title search, deduplicated. Every halt title begins
     // "AUTO-REVERT HALT:", so the search candidates are narrowed by a
     // startswith filter — bystander issues that merely CONTAIN the phrase
-    // (#3364, a scout-candidate) must not be swept.
-    expect(closerRun).toContain(
+    // (#3364, a scout-candidate) must not be swept. Assertions run on
+    // executed lines only, the same comment-proof rule as the GraphQL
+    // ordering test above.
+    const closerCommands = closerRun
+      .split("\n")
+      .filter((ln) => !/^\s*#/.test(ln))
+      .join("\n");
+    expect(closerCommands).toContain(
       'gh issue list --repo "$REPO" --state open --label auto-revert-halt',
     );
-    expect(closerRun).toContain(
+    expect(closerCommands).toContain(
       'gh issue list --repo "$REPO" --state open --search "AUTO-REVERT HALT in:title"',
     );
-    expect(closerRun).toContain(
+    expect(closerCommands).toContain(
       `select(.title | startswith("AUTO-REVERT HALT:"))`,
     );
-    expect(closerRun).toContain("| sort -u");
+    expect(closerCommands).toContain("| sort -u)");
   });
 
   it("freshness drill: 'main moved after the red commit' records itself loud and exits 0 without filing an issue", () => {
