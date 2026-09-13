@@ -1,7 +1,7 @@
 {
   "cluster": "home-garden",
   "asOf": "2026-09-13",
-  "sourceNote": "Home and garden / furniture-and-remodel retail tranche (issue #3356): 51 real, currently-advertised home, furniture, decor, bedding, mattress, garden and home-improvement brands, appended after the existing lists (cursor-safe, issue #2361). Same honesty rule as the other lists: every domain either passes the #1549 publish floor (verified+likely >= 1) within the tranche window or is removed, with the ads_domain_published/ads_domain_skipped/ads_domain_failed telemetry rows as the record. An alphabetical-prefix sample was probed via the #1549 preflight (see the .fleet/ probe log, 2026-09-13); those probes also prime the production discovery cache, so the sampled domains publish on the next 04:00 nightly run.",
+  "sourceNote": "Home and garden / furniture-and-remodel retail tranche (issue #3356): 90 real, currently-advertised home, furniture, decor, bedding, mattress, garden and home-improvement brands, appended after the existing lists (cursor-safe, issue #2361). Same honesty rule as the other lists: every domain either passes the #1549 publish floor (verified+likely >= 1) within the tranche window or is removed, with the ads_domain_published/ads_domain_skipped/ads_domain_failed telemetry rows as the record — the #1549 nightly's own floor telemetry is the evidence, and non-passing domains come off the list in the tranche-window prune.",
   "domains": [
     {
       "domain": "article.com",
@@ -206,6 +206,162 @@
     {
       "domain": "worldmarket.com",
       "brand": "World Market"
+    },
+    {
+      "domain": "acehardware.com",
+      "brand": "Ace Hardware"
+    },
+    {
+      "domain": "allmodern.com",
+      "brand": "AllModern"
+    },
+    {
+      "domain": "apt2b.com",
+      "brand": "Apt2B"
+    },
+    {
+      "domain": "ashleyfurniture.com",
+      "brand": "Ashley"
+    },
+    {
+      "domain": "avocadogreenmattress.com",
+      "brand": "Avocado Green Mattress"
+    },
+    {
+      "domain": "bearmattress.com",
+      "brand": "Bear Mattress"
+    },
+    {
+      "domain": "blueland.com",
+      "brand": "Blueland"
+    },
+    {
+      "domain": "companystore.com",
+      "brand": "The Company Store"
+    },
+    {
+      "domain": "dreamcloudsleep.com",
+      "brand": "DreamCloud"
+    },
+    {
+      "domain": "dyson.com",
+      "brand": "Dyson"
+    },
+    {
+      "domain": "ferguson.com",
+      "brand": "Ferguson"
+    },
+    {
+      "domain": "garnethill.com",
+      "brand": "Garnet Hill"
+    },
+    {
+      "domain": "generac.com",
+      "brand": "Generac"
+    },
+    {
+      "domain": "grandinroad.com",
+      "brand": "Grandin Road"
+    },
+    {
+      "domain": "grove.co",
+      "brand": "Grove"
+    },
+    {
+      "domain": "havertys.com",
+      "brand": "Havertys"
+    },
+    {
+      "domain": "helixsleep.com",
+      "brand": "Helix Sleep"
+    },
+    {
+      "domain": "husqvarna.com",
+      "brand": "Husqvarna"
+    },
+    {
+      "domain": "jcpenney.com",
+      "brand": "JCPenney"
+    },
+    {
+      "domain": "la-z-boy.com",
+      "brand": "La-Z-Boy"
+    },
+    {
+      "domain": "leesa.com",
+      "brand": "Leesa"
+    },
+    {
+      "domain": "miraclegro.com",
+      "brand": "Miracle-Gro"
+    },
+    {
+      "domain": "nectarsleep.com",
+      "brand": "Nectar"
+    },
+    {
+      "domain": "northerntool.com",
+      "brand": "Northern Tool"
+    },
+    {
+      "domain": "overstock.com",
+      "brand": "Overstock"
+    },
+    {
+      "domain": "perigold.com",
+      "brand": "Perigold"
+    },
+    {
+      "domain": "rejuvenation.com",
+      "brand": "Rejuvenation"
+    },
+    {
+      "domain": "roborock.com",
+      "brand": "Roborock"
+    },
+    {
+      "domain": "roomstogo.com",
+      "brand": "Rooms To Go"
+    },
+    {
+      "domain": "scotts.com",
+      "brand": "Scotts"
+    },
+    {
+      "domain": "sherwin-williams.com",
+      "brand": "Sherwin-Williams"
+    },
+    {
+      "domain": "sharkninja.com",
+      "brand": "SharkNinja"
+    },
+    {
+      "domain": "thuma.co",
+      "brand": "Thuma"
+    },
+    {
+      "domain": "tileshop.com",
+      "brand": "Tile Shop"
+    },
+    {
+      "domain": "toro.com",
+      "brand": "Toro"
+    },
+    {
+      "domain": "traeger.com",
+      "brand": "Traeger"
+    },
+    {
+      "domain": "tuftandneedle.com",
+      "brand": "Tuft & Needle"
+    },
+    {
+      "domain": "weber.com",
+      "brand": "Weber"
+    },
+    {
+      "domain": "whiteflowerfarm.com",
+      "brand": "White Flower Farm"
     }
   ]
 }

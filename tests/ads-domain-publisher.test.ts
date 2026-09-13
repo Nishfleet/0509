@@ -216,6 +216,59 @@ describe("saas-software seed list (issue #3123)", () => {
   });
 });
 
+describe("fashion-ecommerce and home-garden seed lists (issue #3356)", () => {
+  it("registers both #3356 lists after the existing cohorts (cursor-safe append, issue #2361)", () => {
+    // The #2361 cursor is an index into the FLATTENED work queue, whose order
+    // is exactly Object.keys(SEED_LISTS). The #3356 cohorts must therefore
+    // come AFTER the four existing lists — inserting before or reordering
+    // would silently repoint the persisted nightly cursor at wrong domains.
+    expect(Object.keys(SEED_LISTS)).toEqual([
+      "festive-india-2026",
+      "sneaker-resale",
+      "beauty-personal-care",
+      "saas-software",
+      "fashion-ecommerce",
+      "home-garden",
+    ]);
+    expect(resolveSeedList("fashion-ecommerce")).not.toBeNull();
+    expect(resolveSeedList("home-garden")).not.toBeNull();
+  });
+
+  it("every registered list validates clean (whole-registry invariant)", () => {
+    for (const [name, list] of Object.entries(SEED_LISTS)) {
+      expect(validateSeedList(list), `seed list ${name}`).toEqual([]);
+    }
+  });
+
+  it("fashion-ecommerce carries exactly 125 domains, each with a real brand display name", () => {
+    const list = SEED_LISTS["fashion-ecommerce"];
+    expect(list.domains).toHaveLength(125);
+    expect(list.domains.length).toBeLessThanOrEqual(PUBLISHER_SEED_LIST_MAX_DOMAINS);
+    for (const entry of list.domains) {
+      const brand = entry.brand?.trim() ?? "";
+      expect(brand.length > 0 && brand.toLowerCase() !== "placeholder").toBe(true);
+    }
+  });
+
+  it("home-garden carries exactly 90 domains, each with a real brand display name", () => {
+    const list = SEED_LISTS["home-garden"];
+    expect(list.domains).toHaveLength(90);
+    expect(list.domains.length).toBeLessThanOrEqual(PUBLISHER_SEED_LIST_MAX_DOMAINS);
+    for (const entry of list.domains) {
+      const brand = entry.brand?.trim() ?? "";
+      expect(brand.length > 0 && brand.toLowerCase() !== "placeholder").toBe(true);
+    }
+  });
+
+  it("marks its domains as seeded brand domains", () => {
+    expect(isSeededBrandDomain("abercrombie.com")).toBe(true);
+    expect(isSeededBrandDomain("JCPENNEY.COM")).toBe(true);
+    expect(isSeededBrandDomain("patagonia.com")).toBe(true);
+    expect(isSeededBrandDomain("WESTELM.COM")).toBe(true);
+    expect(isSeededBrandDomain("acehardware.com")).toBe(true);
+  });
+});
+
 describe("isSeededBrandDomain (issue #1306 retire-scope guard)", () => {
   // The /ads/:domain loader uses this to decide whether a thin (0
   // verified-linked ads) page retires to /search or renders noindex. The

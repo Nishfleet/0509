@@ -1,7 +1,7 @@
 {
   "cluster": "fashion-ecommerce",
   "asOf": "2026-09-13",
-  "sourceNote": "Fashion and apparel / department-store tranche (issue #3356): 100 real, currently-advertised fashion, apparel, footwear, jewelry and department-store brands, appended after the existing #3123/#2140/#1547 cohorts so the persisted #2361 cursor offsets keep pointing at the same queue positions. Same honesty rule as the other lists: every domain either passes the #1549 publish floor (verified+likely >= 1) within the tranche window or is removed, with the ads_domain_published/ads_domain_skipped/ads_domain_failed telemetry rows as the record. An alphabetical-prefix sample was probed via the #1549 preflight (see the .fleet/ probe log, 2026-09-13); those probes also prime the production discovery cache, so the sampled domains publish on the next 04:00 nightly run.",
+  "sourceNote": "Fashion and apparel / department-store tranche (issue #3356): 125 real, currently-advertised fashion, apparel, footwear, jewelry and department-store brands, appended after the existing #3123/#2140/#1547 cohorts so the persisted #2361 cursor offsets keep pointing at the same queue positions. Same honesty rule as the other lists: every domain either passes the #1549 publish floor (verified+likely >= 1) within the tranche window or is removed, with the ads_domain_published/ads_domain_skipped/ads_domain_failed telemetry rows as the record — the #1549 nightly's own floor telemetry is the evidence, and non-passing domains come off the list in the tranche-window prune.",
   "domains": [
     {
       "domain": "abercrombie.com",
@@ -402,6 +402,106 @@
     {
       "domain": "cos.com",
       "brand": "COS"
+    },
+    {
+      "domain": "allbirds.com",
+      "brand": "Allbirds"
+    },
+    {
+      "domain": "arcteryx.com",
+      "brand": "Arc'teryx"
+    },
+    {
+      "domain": "armani.com",
+      "brand": "Giorgio Armani"
+    },
+    {
+      "domain": "brooksrunning.com",
+      "brand": "Brooks Running"
+    },
+    {
+      "domain": "columbia.com",
+      "brand": "Columbia"
+    },
+    {
+      "domain": "diesel.com",
+      "brand": "Diesel"
+    },
+    {
+      "domain": "dolcegabbana.com",
+      "brand": "Dolce & Gabbana"
+    },
+    {
+      "domain": "endclothing.com",
+      "brand": "END. Clothing"
+    },
+    {
+      "domain": "fjallraven.com",
+      "brand": "Fjallraven"
+    },
+    {
+      "domain": "filson.com",
+      "brand": "Filson"
+    },
+    {
+      "domain": "huckberry.com",
+      "brand": "Huckberry"
+    },
+    {
+      "domain": "marinelayer.com",
+      "brand": "Marine Layer"
+    },
+    {
+      "domain": "merrell.com",
+      "brand": "Merrell"
+    },
+    {
+      "domain": "mizzenandmain.com",
+      "brand": "Mizzen+Main"
+    },
+    {
+      "domain": "mrporter.com",
+      "brand": "MR PORTER"
+    },
+    {
+      "domain": "patagonia.com",
+      "brand": "Patagonia"
+    },
+    {
+      "domain": "prettylittlething.com",
+      "brand": "PrettyLittleThing"
+    },
+    {
+      "domain": "salomon.com",
+      "brand": "Salomon"
+    },
+    {
+      "domain": "stoneisland.com",
+      "brand": "Stone Island"
+    },
+    {
+      "domain": "taylorstitch.com",
+      "brand": "Taylor Stitch"
+    },
+    {
+      "domain": "thenorthface.com",
+      "brand": "The North Face"
+    },
+    {
+      "domain": "toddsnyder.com",
+      "brand": "Todd Snyder"
+    },
+    {
+      "domain": "versace.com",
+      "brand": "Versace"
+    },
+    {
+      "domain": "vuoriclothing.com",
+      "brand": "Vuori"
+    },
+    {
+      "domain": "woolrich.com",
+      "brand": "Woolrich"
     }
   ]
 }

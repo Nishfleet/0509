@@ -41,6 +41,8 @@ import festiveIndia2026SeedList from "../../data/seed-lists/festive-india-2026.j
 import sneakerResaleSeedList from "../../data/seed-lists/sneaker-resale.json";
 import beautyPersonalCareSeedList from "../../data/seed-lists/beauty-personal-care.json";
 import saasSoftwareSeedList from "../../data/seed-lists/saas-software.json";
+import fashionEcommerceSeedList from "../../data/seed-lists/fashion-ecommerce.json";
+import homeGardenSeedList from "../../data/seed-lists/home-garden.json";
 import { hydrateAdsWithPersistedCreatives } from "~/lib/ad-persistence.server";
 import {
   resolveCommercialDiscoveryProvider,
@@ -79,18 +81,23 @@ export interface SeedList {
  * tail domains are not silently skipped when the run is truncated by its
  * wall-clock deadline. festive-india-2026 (issue #2140, 30 domains),
  * sneaker-resale (24 domains), beauty-personal-care and saas-software
- * (issue #3123, 29 and 36 domains) flatten to ~119 entries — larger than
- * ADS_DOMAIN_PUBLISHER_CAP (default 60) on purpose, so a full pass spans
- * multiple nights by design and the persisted cursor (issue #2361) resumes
- * each night where the last one stopped. New cohorts append after the
- * existing lists so live cursor offsets keep pointing at the same queue
- * positions across a registry growth.
+ * festive-india-2026 (issue #2140, 30 domains), sneaker-resale (26 domains
+ * after #3280's asos.com/decathlon.com additions), beauty-personal-care and
+ * saas-software (issue #3123, 29 and 36 domains), and fashion-ecommerce and
+ * home-garden (issue #3356, 125 and 90 domains) flatten to ~336 entries —
+ * far larger than ADS_DOMAIN_PUBLISHER_CAP (default 60) on purpose, so a full
+ * pass spans multiple nights by design and the persisted cursor (issue
+ * #2361) resumes each night where the last one stopped. New cohorts append
+ * after the existing lists so live cursor offsets keep pointing at the same
+ * queue positions across a registry growth.
  */
 export const SEED_LISTS: Readonly<Record<string, SeedList>> = Object.freeze({
   "festive-india-2026": festiveIndia2026SeedList as SeedList,
   "sneaker-resale": sneakerResaleSeedList as SeedList,
   "beauty-personal-care": beautyPersonalCareSeedList as SeedList,
   "saas-software": saasSoftwareSeedList as SeedList,
+  "fashion-ecommerce": fashionEcommerceSeedList as SeedList,
+  "home-garden": homeGardenSeedList as SeedList,
 });
 
 /** Default per-run domain ceiling; override with ADS_DOMAIN_PUBLISHER_CAP. */

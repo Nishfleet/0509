@@ -122,6 +122,35 @@ const FASHION_C = [
   ["cos.com", "COS"],
 ];
 
+// wave 4 — confident, currently-advertised fashion additions (issue #3356 wave 4).
+const FASHION_D = [
+  ["allbirds.com", "Allbirds"],
+  ["arcteryx.com", "Arc'teryx"],
+  ["armani.com", "Giorgio Armani"],
+  ["brooksrunning.com", "Brooks Running"],
+  ["columbia.com", "Columbia"],
+  ["diesel.com", "Diesel"],
+  ["dolcegabbana.com", "Dolce & Gabbana"],
+  ["endclothing.com", "END. Clothing"],
+  ["fjallraven.com", "Fjallraven"],
+  ["filson.com", "Filson"],
+  ["huckberry.com", "Huckberry"],
+  ["marinelayer.com", "Marine Layer"],
+  ["merrell.com", "Merrell"],
+  ["mizzenandmain.com", "Mizzen+Main"],
+  ["mrporter.com", "MR PORTER"],
+  ["patagonia.com", "Patagonia"],
+  ["prettylittlething.com", "PrettyLittleThing"],
+  ["salomon.com", "Salomon"],
+  ["stoneisland.com", "Stone Island"],
+  ["taylorstitch.com", "Taylor Stitch"],
+  ["thenorthface.com", "The North Face"],
+  ["toddsnyder.com", "Todd Snyder"],
+  ["versace.com", "Versace"],
+  ["vuoriclothing.com", "Vuori"],
+  ["woolrich.com", "Woolrich"],
+];
+
 const HOME_A = [
   ["article.com", "Article"],
   ["balsamhill.com", "Balsam Hill"],
@@ -179,6 +208,49 @@ const HOME_B = [
   ["worldmarket.com", "World Market"],
 ];
 
+// wave 3 — big-box, home-furniture and mattress/garden fill (issue #3356).
+const HOME_C = [
+  ["acehardware.com", "Ace Hardware"],
+  ["allmodern.com", "AllModern"],
+  ["apt2b.com", "Apt2B"],
+  ["ashleyfurniture.com", "Ashley"],
+  ["avocadogreenmattress.com", "Avocado Green Mattress"],
+  ["bearmattress.com", "Bear Mattress"],
+  ["blueland.com", "Blueland"],
+  ["companystore.com", "The Company Store"],
+  ["dreamcloudsleep.com", "DreamCloud"],
+  ["dyson.com", "Dyson"],
+  ["ferguson.com", "Ferguson"],
+  ["garnethill.com", "Garnet Hill"],
+  ["generac.com", "Generac"],
+  ["grandinroad.com", "Grandin Road"],
+  ["grove.co", "Grove"],
+  ["havertys.com", "Havertys"],
+  ["helixsleep.com", "Helix Sleep"],
+  ["husqvarna.com", "Husqvarna"],
+  ["jcpenney.com", "JCPenney"],
+  ["la-z-boy.com", "La-Z-Boy"],
+  ["leesa.com", "Leesa"],
+  ["miraclegro.com", "Miracle-Gro"],
+  ["nectarsleep.com", "Nectar"],
+  ["northerntool.com", "Northern Tool"],
+  ["overstock.com", "Overstock"],
+  ["perigold.com", "Perigold"],
+  ["rejuvenation.com", "Rejuvenation"],
+  ["roborock.com", "Roborock"],
+  ["roomstogo.com", "Rooms To Go"],
+  ["scotts.com", "Scotts"],
+  ["sherwin-williams.com", "Sherwin-Williams"],
+  ["sharkninja.com", "SharkNinja"],
+  ["thuma.co", "Thuma"],
+  ["tileshop.com", "Tile Shop"],
+  ["toro.com", "Toro"],
+  ["traeger.com", "Traeger"],
+  ["tuftandneedle.com", "Tuft & Needle"],
+  ["weber.com", "Weber"],
+  ["whiteflowerfarm.com", "White Flower Farm"],
+];
+
 const EXISTING = [
   "beauty-personal-care",
   "festive-india-2026",
@@ -187,9 +259,9 @@ const EXISTING = [
 ];
 
 const fNote =
-  "Fashion and apparel / department-store tranche (issue #3356): 100 real, currently-advertised fashion, apparel, footwear, jewelry and department-store brands, appended after the existing #3123/#2140/#1547 cohorts so the persisted #2361 cursor offsets keep pointing at the same queue positions. Same honesty rule as the other lists: every domain either passes the #1549 publish floor (verified+likely >= 1) within the tranche window or is removed, with the ads_domain_published/ads_domain_skipped/ads_domain_failed telemetry rows as the record. An alphabetical-prefix sample was probed via the #1549 preflight (see the .fleet/ probe log, 2026-09-13); those probes also prime the production discovery cache, so the sampled domains publish on the next 04:00 nightly run.";
+  "Fashion and apparel / department-store tranche (issue #3356): 125 real, currently-advertised fashion, apparel, footwear, jewelry and department-store brands, appended after the existing #3123/#2140/#1547 cohorts so the persisted #2361 cursor offsets keep pointing at the same queue positions. Same honesty rule as the other lists: every domain either passes the #1549 publish floor (verified+likely >= 1) within the tranche window or is removed, with the ads_domain_published/ads_domain_skipped/ads_domain_failed telemetry rows as the record — the #1549 nightly's own floor telemetry is the evidence, and non-passing domains come off the list in the tranche-window prune.";
 const hNote =
-  "Home and garden / furniture-and-remodel retail tranche (issue #3356): 51 real, currently-advertised home, furniture, decor, bedding, mattress, garden and home-improvement brands, appended after the existing lists (cursor-safe, issue #2361). Same honesty rule as the other lists: every domain either passes the #1549 publish floor (verified+likely >= 1) within the tranche window or is removed, with the ads_domain_published/ads_domain_skipped/ads_domain_failed telemetry rows as the record. An alphabetical-prefix sample was probed via the #1549 preflight (see the .fleet/ probe log, 2026-09-13); those probes also prime the production discovery cache, so the sampled domains publish on the next 04:00 nightly run.";
+  "Home and garden / furniture-and-remodel retail tranche (issue #3356): 90 real, currently-advertised home, furniture, decor, bedding, mattress, garden and home-improvement brands, appended after the existing lists (cursor-safe, issue #2361). Same honesty rule as the other lists: every domain either passes the #1549 publish floor (verified+likely >= 1) within the tranche window or is removed, with the ads_domain_published/ads_domain_skipped/ads_domain_failed telemetry rows as the record — the #1549 nightly's own floor telemetry is the evidence, and non-passing domains come off the list in the tranche-window prune.";
 
 const existingDomains = new Set(
   EXISTING.flatMap((f) =>
@@ -221,8 +293,8 @@ function build(cluster, rows) {
   return { cluster, asOf: "2026-09-13", sourceNote: "", domains };
 }
 
-const fashion = build("fashion-ecommerce", [...FASHION_A, ...FASHION_B, ...FASHION_C]);
-const home = build("home-garden", [...HOME_A, ...HOME_B]);
+const fashion = build("fashion-ecommerce", [...FASHION_A, ...FASHION_B, ...FASHION_C, ...FASHION_D]);
+const home = build("home-garden", [...HOME_A, ...HOME_B, ...HOME_C]);
 fashion.sourceNote = fNote;
 home.sourceNote = hNote;
 
