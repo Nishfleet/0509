@@ -11,6 +11,7 @@ import {
 } from "~/lib/public-status-counters.server";
 import { presenceSourceCoverageForDocs } from "~/lib/presence-source-coverage.server";
 import type { AppEnv } from "~/lib/env.server";
+import type { GoogleAdsCaptureStats } from "~/lib/sources/google-ads/google-ads-usage.server";
 import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
 import {
   canonicalLinks,
@@ -46,6 +47,26 @@ export async function loader({ context }: LoaderFunctionArgs) {
     surfaces = await getPublicStatusSurfaces({} as AppEnv);
   }
 
+  // Google Ads (Transparency Center) capture facts (issue #3197). The kill
+  // flag posture is configuration, always known when the app is served; the
+  // 24h attempt/failure counters read the #2181 seam KV namespace and are
+  // omitted when that binding is not wired (missing = no false claim, the
+  // #2200 rule). Guarded like every read on this page.
+  let googleAdsCaptures: GoogleAdsCaptureStats | null = null;
+  let googleAdsSourceKilled = false;
+  if (env) {
+    const { getGoogleAdsCaptureStats24h } = await import(
+      "~/lib/sources/google-ads/google-ads-usage.server"
+    );
+    const { isGoogleAdsSourceKilled } = await import("~/lib/env.server");
+    googleAdsSourceKilled = isGoogleAdsSourceKilled(env as AppEnv);
+    try {
+      googleAdsCaptures = await getGoogleAdsCaptureStats24h(env as AppEnv);
+    } catch {
+      googleAdsCaptures = null;
+    }
+  }
+
   return {
     generatedAt: asOf,
     asOf,
@@ -57,7 +78,37 @@ export async function loader({ context }: LoaderFunctionArgs) {
     // Pure, environment-free: no probe, no D1, cannot throw.
     mentionSources: presenceSourceCoverageForDocs(),
     monitoring: surfaces.monitoring,
+    googleAdsCaptures,
+    googleAdsSourceKilled,
   };
+}
+
+/**
+ * The one factual sentence for the /status Google Ads capture row (issue
+ * #3197): the kill flag posture, plus the 24h attempt/failure numbers when
+ * the #2181 KV binding carries them. Killed skips the counters on purpose —
+ * a deliberately paused source has no meaningful failure rate, and a 0/0
+ * day rendered as 0% would hide that. The window is the union of today's and
+ * yesterday's UTC day counters, which the wording states instead of faking a
+ * rolling 24h. Counter facts degrade to the flag posture when the binding is
+ * not wired — nothing here is invented.
+ */
+export function googleAdsCaptureLine(
+  captures: GoogleAdsCaptureStats | null | undefined,
+  killed: boolean,
+): string {
+  if (killed) {
+    return "Source paused by its kill flag GOOGLE_ADS_SOURCE_DISABLED=1 — scheduled captures, the /ads section and coverage reporting follow it. ";
+  }
+  const flag = "Source enabled (kill flag GOOGLE_ADS_SOURCE_DISABLED=0). ";
+  if (captures?.counted) {
+    const rateTail =
+      captures.rate !== null
+        ? ` — ${Math.round(captures.rate * 100)}% capture failure rate`
+        : "";
+    return `${flag}${captures.attempted} capture attempts in the last two UTC days, ${captures.failed} failed${rateTail} (best-effort counter). `;
+  }
+  return `${flag}Capture failure counters report once the seam's KV namespace (DECODO_BUDGET) is wired on this deployment. `;
 }
 
 function checkedMinutesAgo(checkedAt: string, asOf: string): number {
@@ -206,6 +257,18 @@ export default function StatusRoute() {
             </div>
           </dl>
         )}
+
+        {data.googleAdsCaptures || data.googleAdsSourceKilled ? (
+          <dl className="proof-trail-list">
+            <div>
+              <dt>Google Ads (Transparency Center) capture</dt>
+              <dd>
+                {googleAdsCaptureLine(data.googleAdsCaptures, data.googleAdsSourceKilled)}
+                As of {asOf}.
+              </dd>
+            </div>
+          </dl>
+        ) : null}
       </PublicDocBlock>
 
       <PublicDocBlock title="Tracked sources">
