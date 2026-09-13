@@ -211,12 +211,18 @@ describe("auto-revert workflow", () => {
     // 0509#2929: an unlabelled halt survivor must never survive a green
     // deploy — the 2026-09-11 backlog was 104 open halts, 0 labelled, until
     // they were hand-labelled. The close set is the union of the label
-    // listing and a title search, deduplicated.
+    // listing and a title search, deduplicated. Every halt title begins
+    // "AUTO-REVERT HALT:", so the search candidates are narrowed by a
+    // startswith filter — bystander issues that merely CONTAIN the phrase
+    // (#3364, a scout-candidate) must not be swept.
     expect(closerRun).toContain(
       'gh issue list --repo "$REPO" --state open --label auto-revert-halt',
     );
     expect(closerRun).toContain(
       'gh issue list --repo "$REPO" --state open --search "AUTO-REVERT HALT in:title"',
+    );
+    expect(closerRun).toContain(
+      `select(.title | startswith("AUTO-REVERT HALT:"))`,
     );
     expect(closerRun).toContain("| sort -u");
   });

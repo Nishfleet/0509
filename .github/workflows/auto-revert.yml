@@ -96,9 +96,12 @@ jobs:
           # 0509#2929: close by label AND fall back to a title search, so an
           # unlabelled halt survivor (the 2026-09-11 silent-label-drop
           # backlog: 104 open, 0 labelled until hand-labelled) can never
-          # survive a green deploy.
+          # survive a green deploy. Every halt title begins
+          # "AUTO-REVERT HALT:", so the search candidates are narrowed by a
+          # startswith filter: bystander issues that merely CONTAIN the phrase
+          # in their title (#3364, a scout-candidate) must not be swept.
           for num in $({ gh issue list --repo "$REPO" --state open --label auto-revert-halt --limit 500 --json number --jq '.[].number'; \
-            gh issue list --repo "$REPO" --state open --search "AUTO-REVERT HALT in:title" --limit 500 --json number --jq '.[].number'; } \
+            gh issue list --repo "$REPO" --state open --search "AUTO-REVERT HALT in:title" --limit 500 --json number,title --jq '.[] | select(.title | startswith("AUTO-REVERT HALT:")) | .number'; } \
             | sort -u); do
             gh issue close "$num" --repo "$REPO" --reason completed \
               --comment "Resolved by a green \`Deploy production\` run on main: $RUN_URL (commit $short). Every AUTO-REVERT HALT records a red-on-consecutive-commits state; that state ended with this run. Closed automatically by auto-revert.yml (close-halts-on-green)." >/dev/null
