@@ -267,6 +267,15 @@ export interface AppEnv {
   PRESENCE_BSKY_APPVIEW_URL?: string;
   PRESENCE_BLUESKY_ROLLOUT?: string;
   /**
+   * Rollout kill flag for the YouTube mention connector (issue #3203).
+   * Off by default; activation is a separate rollout decision. See the
+   * documented default quota facts on the connector itself.
+   */
+  PRESENCE_YOUTUBE_ROLLOUT?: string;
+  /** Google API key for the YouTube Data API v3 search.list read (issue
+   *  #3203). Never logged, never persisted outside env. */
+  YOUTUBE_API_KEY?: string;
+  /**
    * Money flag for X mention search (#3255). Recent search is pay-per-use;
    * every poll is a paid call. Set to "approved" only after Nish's spend
    * decision lands — until then the connector reports paid_source_pending_nish
