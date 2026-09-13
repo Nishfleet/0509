@@ -59,7 +59,7 @@
       { "name": "RL_SEARCH_IP",
  "type": "ratelimit", "namespace_id": "1005", "simple": { "limit": 10, "period": 60 } },
       { "name": "RL_BRAND_PAGE",
- "type": "ratelimit", "namespace_id": "1006", "simple": { "limit": 12, "period": 60 } },
+ "type": "ratelimit", "namespace_id": "1006", "simple": { "limit": 60, "period": 60 } },
       { "name": "RL_WRITE",
  "type": "ratelimit", "namespace_id": "1007", "simple": { "limit": 60, "period": 60 } },
       { "name": "RL_STATUS",

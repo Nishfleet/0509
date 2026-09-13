@@ -39,6 +39,8 @@ function connectorRolloutFromEnv(env: AppEnv, connectorId: PresenceConnectorId):
       return parseRolloutState(env.PRESENCE_BLUESKY_ROLLOUT, "disabled");
     case "gdelt":
       return parseRolloutState(env.PRESENCE_GDELT_ROLLOUT, "disabled");
+    case "threads":
+      return parseRolloutState(env.PRESENCE_THREADS_ROLLOUT, "disabled");
     default:
       return "disabled";
   }
@@ -65,6 +67,8 @@ function hasCredentials(env: AppEnv, connectorId: PresenceConnectorId): boolean 
       // GDELT DOC 2.1 is a public data API — no key, no auth, no credentials.
       // The rollout gate (PRESENCE_GDELT_ROLLOUT) is still required to activate it.
       return true;
+    case "threads":
+      return Boolean(env.THREADS_ACCESS_TOKEN?.trim());
     default:
       return false;
   }
@@ -79,7 +83,7 @@ function hasCredentials(env: AppEnv, connectorId: PresenceConnectorId): boolean 
 // help-first: Only the predicate changes; the runtime gates in evaluateConnectorAccessGate
 // (rolloutState, credentials, reddit commercial access) still govern whether polling actually runs.
 export function connectorHasCustomerPollPath(connectorId: PresenceConnectorId): boolean {
-  return connectorId === "website" || connectorId === "rss" || connectorId === "gdelt" || connectorId === "x" || connectorId === "reddit" || connectorId === "bluesky";
+  return connectorId === "website" || connectorId === "rss" || connectorId === "gdelt" || connectorId === "threads" || connectorId === "x" || connectorId === "reddit" || connectorId === "bluesky";
 }
 
 export async function evaluateConnectorAccessGate(
