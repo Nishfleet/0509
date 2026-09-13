@@ -39,8 +39,17 @@ import { expect, test, type APIRequestContext, type Page } from "@playwright/tes
  * assertion and no touch-target/focus checks — console/CSP hygiene only.
  */
 
-const EMPTY_SEARCH_PATH = "/search?q=zzqqxx9noresult&country=all";
-const POPULATED_SEARCH_PATH = "/search?q=nike&country=all";
+// Journey surfaces. The defaults are the production paths exactly — the
+// issue #3301 termination command runs this spec as-is. The local release
+// harness (phase 3, E2E_START_LOCAL_SERVER=1) overrides both: the local D1
+// fixture's discovery cache is seeded with fresh-empty.example (empty) and
+// nykaa.com (populated) — e2e/fixtures/e2e-local.sql — and has no nike
+// cache, so the populated journey must use the seeded surface there. Same
+// assertions, never weakened; only the URL the journeys drive changes.
+const EMPTY_SEARCH_PATH =
+  process.env.E2E_SEARCH_EMPTY_PATH ?? "/search?q=zzqqxx9noresult&country=all";
+const POPULATED_SEARCH_PATH =
+  process.env.E2E_SEARCH_POPULATED_PATH ?? "/search?q=nike&country=all";
 const FIRST_RESULT_ROW = ".f9-results-panel .f9-wk-row .f9-wk-rowlink";
 const PROOF_STATE = "#selected-proof.f9-proof-summary";
 
