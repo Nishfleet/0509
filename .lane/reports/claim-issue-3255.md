@@ -109,3 +109,26 @@ Proof after the fix:
 
 - Termination command: `npx vitest run tests/integration/x-mention-search.integration.test.ts` → **16 passed, exit 0**.
 - `npx vitest run tests/no-time-bomb-fixtures.test.ts` → **1 passed, exit 0**.
+
+## Round 3 — rebase onto 2026-09-13 main (this session)
+
+origin/claim/issue-3255 had been reset to a main snapshot (1cc79b200, +123
+commits since the work base 351f011a1: Bluesky #3252, GDELT #3251, #3306 test
+fixes, #3178 salvage). Rebased both commits; single conflict in
+app/lib/env.server.ts (main's Bluesky block vs this issue's X_PAID_ACCESS /
+X_API_BASE_URL block — both kept, Bluesky first as on main). Bluesky/GDELT
+seams in registry + coverage + coverage tests auto-merged.
+
+Proof on the rebased base:
+
+- Termination command: `npx vitest run tests/integration/x-mention-search.integration.test.ts` → **16 passed, exit 0**.
+- `npx vitest run --configLoader runner --project node --changed origin/main` → 370 files / 4603 tests, exit 0.
+- `npx vitest run tests/no-time-bomb-fixtures.test.ts` → 1 passed, exit 0 (2 `fixed-date:` markers in the integration test).
+- Targeted workers project (x + bluesky + gdelt mention, mention-source-activation, presence-poll-targets, mention-digest-resweep): 6 files / 70 tests, exit 0.
+
+Acceptance walk (against code, not memory): poll() gates on rollout+token, then
+`X_PAID_ACCESS` — `paidPendingPoll()` before any paid request; meteredReads
+ledger (per-UTC-day, prior cursor_json merged, old days pruned) written to
+presence_poll_cursor.cursor_json; healthCheck returns pending +
+paid_source_pending_nish until approved; coverage + customer copy say
+"paid... pending a spend decision" — nothing implies live.
