@@ -37,6 +37,7 @@ import {
   type FaqJsonLdEntry,
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import { GUIDE_API_LIMITS_SIGNUP_SOURCE } from "~/lib/signup-source";
 
 const PATHNAME = "/guides/meta-ad-library-api-limitations";
 
@@ -235,7 +236,7 @@ export default function GuideMetaAdLibraryApiLimitationsRoute() {
         )}
       />
       <script {...jsonLdScriptProps(structuredFaq)} />
-      <MarketingNav />
+      <MarketingNav signupSource={GUIDE_API_LIMITS_SIGNUP_SOURCE} />
 
       <section className="ld-hero">
         <p className="ld-case">

@@ -23,6 +23,7 @@ import {
 import { FREE_PREVIEW_SEARCH_DOMAIN, LIVE_BRAND_PROOF_DOMAIN } from "~/lib/demo-brand-pages";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import mineaCitations from "~/data/compare/minea-citations.json";
+import { COMPARE_PAGE_SIGNUP_SOURCE } from "~/lib/signup-source";
 
 // Source verification (issue #3092): primary-source-verified —
 // https://minea.com/ and https://minea.com/pricing return HTTP 200 and name
@@ -135,7 +136,7 @@ export default function CompareMineaRoute() {
         )}
       />
       <script {...jsonLdScriptProps(structuredFaq)} />
-      <MarketingNav />
+      <MarketingNav signupSource={COMPARE_PAGE_SIGNUP_SOURCE} />
       <Breadcrumbs
         items={[
           { name: "Home", pathname: "/" },

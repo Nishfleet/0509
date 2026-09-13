@@ -40,6 +40,7 @@ import {
   type FaqJsonLdEntry,
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import { GUIDE_OFFER_CHANGE_ALERT_SIGNUP_SOURCE } from "~/lib/signup-source";
 
 const PATHNAME = "/guides/how-to-get-alerted-when-a-competitor-changes-their-offer";
 
@@ -185,7 +186,7 @@ export default function GuideHowToGetAlertedWhenACompetitorChangesTheirOfferRout
         )}
       />
       <script {...jsonLdScriptProps(structuredFaq)} />
-      <MarketingNav />
+      <MarketingNav signupSource={GUIDE_OFFER_CHANGE_ALERT_SIGNUP_SOURCE} />
 
       <section className="ld-hero">
         <p className="ld-case">

@@ -28,6 +28,7 @@ import metaAdLibraryCitations from "~/data/compare/meta-ad-library-citations.jso
 const citations = metaAdLibraryCitations as CompareCitations;
 
 export { compareAdsExampleLoader as loader } from "~/lib/ads-internal-links.server";
+import { COMPARE_PAGE_SIGNUP_SOURCE } from "~/lib/signup-source";
 
 const pageDescription =
   "The Meta Ad Library is free and public — it's the source Five to Nine reads. What manual checking costs you, and what scheduled checks, diffs, saved screenshots, and email briefs add.";
@@ -149,7 +150,7 @@ export default function CompareMetaAdLibraryRoute() {
         )}
       />
       <script {...jsonLdScriptProps(structuredFaq)} />
-      <MarketingNav />
+      <MarketingNav signupSource={COMPARE_PAGE_SIGNUP_SOURCE} />
       <Breadcrumbs
         items={[
           { name: "Home", pathname: "/" },

@@ -34,6 +34,7 @@ import {
   timelineSocialCardUrl,
   webPageJsonLd,
 } from "~/lib/seo";
+import { TIMELINE_PAGE_SIGNUP_SOURCE } from "~/lib/signup-source";
 
 export interface OfferTimelineLoaderData {
   domain: string;
@@ -244,7 +245,7 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
 
 export default function OfferTimelineRoute() {
   const data = useLoaderData<typeof loader>();
-  const signupPath = `/auth/signup?redirectTo=${encodeURIComponent(`/app?website=${encodeURIComponent(data.domain)}#setup-checklist`)}`;
+  const signupPath = `/auth/signup?source=timeline-page&redirectTo=${encodeURIComponent(`/app?website=${encodeURIComponent(data.domain)}#setup-checklist`)}`;
   const adsPath = `/ads/${encodeURIComponent(data.domain)}`;
   const pageTitle =
     data.entries.length > 0
@@ -313,7 +314,7 @@ export default function OfferTimelineRoute() {
           ) : null}
         </>
       ) : null}
-      <MarketingNav />
+      <MarketingNav signupSource={TIMELINE_PAGE_SIGNUP_SOURCE} />
 
       <section className="f9-ads-hero" aria-labelledby="offer-timeline-title">
         <div className="f9-container">

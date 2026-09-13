@@ -91,6 +91,22 @@ export const GUIDE_STANDING_WATCH_SIGNUP_SOURCE = "guide-standing-watch";
 export const GUIDE_API_LIMITS_SIGNUP_SOURCE = "guide-api-limitations";
 
 /**
+ * Acquisition-surface-family markers (issue #3358): every public acquisition
+ * family's signup CTA — the shared nav pill and each family's own signup
+ * links — carries its ONE distinct family marker, so the #4518 signups/week
+ * meter can slice signups by the surface that drove them. Hyphen slugs, on
+ * purpose: they ride the open #2108 shape (and 0087's open CHECK class
+ * [a-z0-9:.-]) — underscore spellings would need a 0087 CHECK literal, and
+ * #3358 ships no migration. The guides family's per-article markers remain
+ * the guide-<name> constants above; `guides-hub` marks the /guides hub.
+ */
+export const ADS_PAGE_SIGNUP_SOURCE = "ads-page";
+export const COMPARE_PAGE_SIGNUP_SOURCE = "compare-page";
+export const SWITCH_PAGE_SIGNUP_SOURCE = "switch-page";
+export const TIMELINE_PAGE_SIGNUP_SOURCE = "timeline-page";
+export const GUIDES_HUB_SIGNUP_SOURCE = "guides-hub";
+
+/**
  * /for-agencies CTA marker (issue #2144): the agency landing page's signup
  * link carries `source=for_agencies` so Agency-plan funnel measurement can
  * attribute checkout starts to that page.
@@ -128,6 +144,11 @@ export const ALLOWED_SIGNUP_SOURCES = [
   GUIDE_PROVE_WHAT_CHANGED_SIGNUP_SOURCE,
   GUIDE_STANDING_WATCH_SIGNUP_SOURCE,
   GUIDE_API_LIMITS_SIGNUP_SOURCE,
+  ADS_PAGE_SIGNUP_SOURCE,
+  COMPARE_PAGE_SIGNUP_SOURCE,
+  SWITCH_PAGE_SIGNUP_SOURCE,
+  TIMELINE_PAGE_SIGNUP_SOURCE,
+  GUIDES_HUB_SIGNUP_SOURCE,
 ] as const;
 
 /**

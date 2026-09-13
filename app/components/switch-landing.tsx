@@ -6,6 +6,7 @@ import { MarketingNav } from "~/components/marketing-nav";
 import { Breadcrumbs } from "~/components/breadcrumbs";
 import { canonicalLinks, faqPageJsonLd, jsonLdScriptProps, publicSeoMeta, switchSocialCardUrl, webPageJsonLd } from "~/lib/seo";
 import type { SwitchPage, SwitchSource } from "~/lib/switch-pages";
+import { SWITCH_PAGE_SIGNUP_SOURCE } from "~/lib/signup-source";
 
 export function switchPageLinks(page: SwitchPage): LinksFunction {
   return () => canonicalLinks(page.pathname);
@@ -187,7 +188,7 @@ export function SwitchLanding({ page }: { page: SwitchPage }) {
       {page.faqEntries.length > 0 ? (
         <script {...jsonLdScriptProps(faqPageJsonLd(page.faqEntries))} />
       ) : null}
-      <MarketingNav />
+      <MarketingNav signupSource={SWITCH_PAGE_SIGNUP_SOURCE} />
       <Breadcrumbs
         items={[
           { name: "Home", pathname: "/" },
