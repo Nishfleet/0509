@@ -186,8 +186,17 @@ test.describe("public production-safe E2E smoke", { lock: "external-api" }, () =
     await expect(page.getByText("Know when competitors change the offer.")).toBeVisible();
     await expect(page.getByText("WhatsApp", { exact: false })).toHaveCount(0);
 
+    // Issue #2965 (PR #3130): bare /search 302s to /brands — the indexable
+    // hub — for anonymous visitors, so production (never signed in) must
+    // follow the redirect and find the hub, not the signed-in search UI.
+    // Deployed for the first time in the 2026-09-09..13 red window, this
+    // contract change stranded the prod-public expectations on the old
+    // 200-with-heading page and sank six consecutive deploy-production runs
+    // (issue #3166). The URL assertion IS the #2965 contract: bare /search
+    // redirects, it does not render.
     await gotoPublicPage(page, "/search");
-    await expect(page.getByRole("heading", { name: "Find competitor ads" })).toBeVisible();
+    await expect(page).toHaveURL(/\/brands\/?$/);
+    await expect(page.getByRole("heading", { name: /Browse (all \d+ )?tracked brands/ })).toBeVisible();
 
     if (!isProductionBaseURL(baseURL)) {
       await gotoPublicPage(page, "/auth/login");
@@ -255,8 +264,12 @@ test.describe("public production-safe E2E smoke", { lock: "external-api" }, () =
       { width: 375, height: 812 },
     ]) {
       await page.setViewportSize(viewport);
+      // Issue #2965: bare /search 302s to /brands for anonymous visitors —
+      // the hub the redirect lands on is the public search funnel's landing
+      // surface, so it is what must stay usable at every width.
       await gotoPublicPage(page, "/search");
-      await expect(page.getByRole("heading", { name: "Find competitor ads" })).toBeVisible();
+      await expect(page).toHaveURL(/\/brands\/?$/);
+      await expect(page.getByRole("heading", { name: /Browse (all \d+ )?tracked brands/ })).toBeVisible();
       await expectNoHorizontalOverflow(page);
     }
   });
@@ -348,7 +361,19 @@ test.describe("public production-safe E2E smoke", { lock: "external-api" }, () =
   });
 
   test("public buttons and links route to valid actions without sending side effects", async ({ page, baseURL, request }) => {
-    test.setTimeout(60_000);
+    // 240s: issue #2965 (PR #3130) made bare /search 302 to /brands, whose
+    // hub carries one /ads/:domain link per tracked brand (~127 today and
+    // growing), all of which this test GETs sequentially (15s cap each, per
+    // the propagation note in expectPublicGetTargetReachable). The old 60s
+    // budget covered the pre-#2965 search UI's handful of links and exceeded
+    // on every 2026-09-13 deploy run ("Test timeout of 60000ms exceeded" →
+    // "Request context disposed", runs 34756884695/34755829768/34759458763).
+    // Sequential, not parallel, on purpose: the shared-resource lock (issue
+    // #1727) serializes this spec against the other external-API specs, and
+    // production search/crawl 429s (#3156) punish concurrency. 429s pass
+    // (only 404/5xx fail), so the loop stays honest while absorbing the
+    // rate-limited tail. 240s keeps ~3x headroom at today's brand count.
+    test.setTimeout(240_000);
     const publicPaths = [
       "/",
       "/search",
