@@ -5,12 +5,28 @@ import {
   HN_MAX_HITS_PER_PAGE,
   hnConnector,
 } from "~/lib/presence-connectors/hn.server";
-import { getPresenceConnector } from "~/lib/presence-connector-registry.server";
-import { upsertPollCursor } from "~/lib/presence-data.server";
-import { presenceSourceCoverageForDocs } from "~/lib/presence-source-coverage.server";
+import {
+  getPresenceConnector,
+  pollPresenceTarget,
+} from "~/lib/presence-connector-registry.server";
+import {
+  listPresenceItems,
+  listSourceTargetsForEntity,
+  reconcilePresenceItemsAfterPoll,
+  upsertPollCursor,
+  upsertPresenceItems,
+} from "~/lib/presence-data.server";
+import { presenceUrlHash } from "~/lib/presence-hash";
+import {
+  evaluatePresenceSourceCoverage,
+  presenceSourceCoverageForDocs,
+} from "~/lib/presence-source-coverage.server";
 import { PRESENCE_USER_AGENT } from "~/lib/presence-robots.server";
 import type { AppEnv } from "~/lib/env.server";
-import type { PresenceConnectorContext } from "~/lib/presence-types";
+import type {
+  PresenceConnectorContext,
+  SourceTargetRecord,
+} from "~/lib/presence-types";
 
 import migrationSql from "../../migrations/0100_widen_source_target_connector_hn.sql?raw";
 
@@ -674,5 +690,114 @@ describe("hn mention connector — presence substrate (real migrations)", () => 
         .first<{ c: number }>();
       expect(row?.c).toBe(1);
     }
+  });
+});
+
+describe("hn mention source activation — capture, dedup by canonical URL, kill flag, rate budget (#3207)", () => {
+  async function countLivePresenceItems(sourceTargetId: string): Promise<number> {
+    const row = await db()
+      .prepare(
+        `SELECT count(*) AS n FROM presence_item
+         WHERE source_target_id = ? AND is_tombstone = 0`,
+      )
+      .bind(sourceTargetId)
+      .first<{ n: number }>();
+    return row?.n ?? 0;
+  }
+
+  function mockCalls(fetchImpl: typeof fetch) {
+    return (fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls;
+  }
+
+  it("captures a tracked brand's hn mentions end-to-end: registry poll -> presence_item, deduped by canonical URL", async () => {
+    const seeded = await seedHnTarget();
+    const env = makeEnv("internal");
+
+    // The target rides the REAL data layer (a mapped SourceTargetRecord) —
+    // the shape the poll orchestrator actually sees, not a hand-built stub.
+    const rows = await listSourceTargetsForEntity(env, seeded.userId, seeded.entityId);
+    const target = rows.find((row) => row.connectorId === "hn");
+    expect(target).toBeDefined();
+    const hnTarget = target as SourceTargetRecord;
+
+    const fetchImpl = algoliaFetcher(() => ({ body: SEARCH_PAGE }));
+
+    // FIRST capture: tracked brand -> the public search surface -> the
+    // mention substrate. The rollout gate (PRESENCE_HN_ROLLOUT=internal) is
+    // the only credential: hn needs no key and no secret. The fixture
+    // answers with one story + one comment naming the brand.
+    const poll = await pollPresenceTarget(env, hnTarget, { trackingMode: "self" }, { fetchImpl });
+    expect(poll.ok).toBe(true);
+    expect(poll.items.length).toBeGreaterThanOrEqual(1); // acceptance: fixture returns >=1 mention
+
+    // Rate budget THROUGH the orchestration: one poll = exactly ONE courtesy
+    // request. No parallel fan-out, no retries, no second fetch.
+    expect(mockCalls(fetchImpl)).toHaveLength(1);
+
+    const upsert = await upsertPresenceItems(env, { sourceTarget: hnTarget, items: poll.items });
+    expect(upsert.inserted).toBeGreaterThanOrEqual(1);
+    expect(await countLivePresenceItems(hnTarget.id)).toBe(poll.items.length);
+
+    // The stored dedup key IS the canonical-URL hash: url_hash =
+    // presenceUrlHash(canonicalUrl), unique per (source_target_id, url_hash)
+    // — the epic's "deduped by canonical URL", enforced by the substrate.
+    const stored = await listPresenceItems(env, seeded.userId, {
+      trackedEntityId: seeded.entityId,
+      connectorId: "hn",
+    });
+    const mine = stored.filter((item) => item.sourceTargetId === hnTarget.id);
+    expect(mine).toHaveLength(poll.items.length);
+    for (const item of mine) {
+      expect(item.urlHash).toBe(await presenceUrlHash(item.canonicalUrl));
+      expect(item.canonicalUrl).toMatch(/^https:\/\/news\.ycombinator\.com\/item\?id=/);
+      expect(item.contentHash).toBeTruthy();
+    }
+
+    // A SECOND identical poll + upsert must not multiply rows: the substrate
+    // dedups on (source_target_id, url_hash) — one canonical mention, even
+    // when the page answers with the same hits again.
+    const pollAgain = await pollPresenceTarget(env, hnTarget, { trackingMode: "self" }, { fetchImpl });
+    expect(pollAgain.ok).toBe(true);
+    const upsertAgain = await upsertPresenceItems(env, { sourceTarget: hnTarget, items: pollAgain.items });
+    expect(upsertAgain.inserted).toBe(0);
+    expect(await countLivePresenceItems(hnTarget.id)).toBe(poll.items.length);
+
+    // And the courtesy budget stays serialized: exactly one request per
+    // poll — two polls, two requests, never more.
+    expect(mockCalls(fetchImpl)).toHaveLength(2);
+
+    // search_by_date is a bounded, date-ordered WINDOW, not a complete
+    // snapshot: the connector declares no completeSnapshot, so reconcile
+    // must never tombstone — absence from a result page is not a deletion.
+    const reconcile = await reconcilePresenceItemsAfterPoll(env, {
+      sourceTarget: hnTarget,
+      observedUrlHashes: mine.map((item) => item.urlHash),
+      completeSnapshot: false,
+    });
+    expect(reconcile.tombstoned).toBe(0);
+  });
+
+  it("captures nothing and fabricates nothing while the kill flag (PRESENCE_HN_ROLLOUT) is off — and /status stays honest", async () => {
+    const seeded = await seedHnTarget();
+    const disabled = makeEnv(undefined);
+
+    const rows = await listSourceTargetsForEntity(disabled, seeded.userId, seeded.entityId);
+    const target = rows.find((row) => row.connectorId === "hn");
+    expect(target).toBeDefined();
+    const hnTarget = target as SourceTargetRecord;
+
+    const fetchImpl = algoliaFetcher(() => ({ body: SEARCH_PAGE }));
+    const poll = await pollPresenceTarget(disabled, hnTarget, { trackingMode: "self" }, { fetchImpl });
+    expect(poll.ok).toBe(false);
+    expect(poll.items).toEqual([]); // the capture-validity gate: no items, never fabricated
+    expect(mockCalls(fetchImpl)).toHaveLength(0); // no courtesy spend while gated
+    expect(await countLivePresenceItems(hnTarget.id)).toBe(0);
+
+    // A disabled source can never render as "no data": the coverage stays
+    // UNAVAILABLE (connector_disabled) — the mention-panel /status honesty
+    // the epic's activation contract pins (same clause as #1378's phases).
+    const coverage = await evaluatePresenceSourceCoverage(disabled, "hn", "self");
+    expect(coverage.coverageLabel).toBe("UNAVAILABLE");
+    expect(coverage.reasonCode).toBe("connector_disabled");
   });
 });
