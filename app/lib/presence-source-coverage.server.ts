@@ -448,7 +448,8 @@ export function presenceSourceCoverageForDocs(): Array<{
       sourceId: "bluesky",
       label: SOURCE_LABELS.bluesky,
       productionStatus: "gated",
-      notes: "Bluesky mention connector wired in (app.bsky.feed.searchPosts, $0). Gated behind PRESENCE_BLUESKY_ROLLOUT — off by default; activation is a separate rollout decision.",
+      notes:
+        "Bluesky mention connector wired in (app.bsky.feed.searchPosts, $0). Covers the public posts the Bluesky AppView post search returns for the tracked match phrase (near-real-time, sort=latest) — no engagement counts or follow-graph, and the AppView index's completeness is Bluesky's, not ours. In-connector rate budget: 1 authenticated session + at most 2 result pages of 100 posts per poll, polls serialized upstream. Gated behind PRESENCE_BLUESKY_ROLLOUT — off by default; activation is a separate rollout decision.",
     },
     {
       sourceId: "gdelt",

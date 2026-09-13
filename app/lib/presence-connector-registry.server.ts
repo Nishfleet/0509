@@ -113,7 +113,7 @@ export async function pollPresenceTarget(
   if (target.connectorId === "bluesky") {
     // The mention connector needs the entity's match phrase; it reaches the
     // phrase surface through target_key — the connector itself decides.
-    return blueskyConnector.poll(ctx);
+    return blueskyConnector.poll(ctx, target);
   }
   return linkedinConnector.poll(ctx);
 }
