@@ -5,8 +5,16 @@ import {
   THREADS_DAILY_QUERY_CAP,
   threadsConnector,
 } from "~/lib/presence-connectors/threads.server";
-import { getPresenceConnector } from "~/lib/presence-connector-registry.server";
-import { upsertPollCursor } from "~/lib/presence-data.server";
+import {
+  getPresenceConnector,
+  pollPresenceTarget,
+} from "~/lib/presence-connector-registry.server";
+import {
+  listPresenceItems,
+  listSourceTargetsForEntity,
+  upsertPollCursor,
+  upsertPresenceItems,
+} from "~/lib/presence-data.server";
 import { presenceSourceCoverageForDocs } from "~/lib/presence-source-coverage.server";
 import { PRESENCE_USER_AGENT } from "~/lib/presence-robots.server";
 import type { AppEnv } from "~/lib/env.server";
@@ -157,6 +165,17 @@ async function seedThreadsTarget(
     )
     .run();
   return { userId, entityId, targetId, phrase };
+}
+
+async function countLivePresenceItems(sourceTargetId: string): Promise<number> {
+  const row = await db()
+    .prepare(
+      `SELECT count(*) AS n FROM presence_item
+       WHERE source_target_id = ? AND is_tombstone = 0`,
+    )
+    .bind(sourceTargetId)
+    .first<{ n: number }>();
+  return row?.n ?? 0;
 }
 
 async function readCursorJson(targetId: string): Promise<Record<string, unknown>> {
@@ -350,6 +369,109 @@ describe("threads mention connector — poll", () => {
     expect(result.ok).toBe(false);
     expect(result.errorCode).toBe("missing_match_phrase");
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+});
+
+
+/**
+ * Issue #3205 — the acceptance this suite closes: the fixture mention must
+ * reach the mention TABLE through the real end-to-end path
+ * (pollPresenceTarget -> upsertPresenceItems -> listPresenceItems), deduped
+ * by canonical URL, behind the per-source kill flag, with the
+ * capture-validity gates proven on the full path — not just at the connector.
+ *
+ * Runs BEFORE the 2,200-cap describe (same storage contract the cap suite's
+ * header note records): the cap sums every target's OPEN window, so the
+ * capture polls need a principal with no at-cap window seeded yet.
+ */
+describe("threads mention connector — capture into the mention table (issue #3205)", () => {
+  it("captures the fixture mention into presence_item through the full poll -> upsert -> list path (>=1 mention), and dedupes by canonical URL", async () => {
+    const { userId, entityId } = await seedThreadsTarget();
+    const env = makeEnv("internal", TOKEN);
+
+    // Refetch through the data layer so we operate on the real mapped record.
+    const targets = await listSourceTargetsForEntity(env, userId, entityId);
+    const target = targets.find((t) => t.connectorId === "threads");
+    expect(target).toBeDefined();
+    if (!target) throw new Error("expected the seeded threads source_target");
+
+    const poll = await pollPresenceTarget(env, target, { trackingMode: "self" }, {
+      fetchImpl: graphFetcher(() => ({ body: KEYWORD_SEARCH_PAGE })),
+    });
+    expect(poll.ok, `poll: ${JSON.stringify(poll)}`).toBe(true);
+    expect(poll.items).toHaveLength(1);
+
+    const upsert = await upsertPresenceItems(env, { sourceTarget: target, items: poll.items });
+    expect(upsert.inserted).toBeGreaterThanOrEqual(1);
+
+    // Exactly one live presence_item row for this source_target.
+    expect(await countLivePresenceItems(target.id)).toBe(1);
+
+    const items = await listPresenceItems(env, userId, {
+      trackedEntityId: target.trackedEntityId,
+      connectorId: "threads",
+    });
+    expect(items).toHaveLength(1);
+    const mention = items[0];
+    expect(mention?.connectorId).toBe("threads");
+    // The mention's canonicalUrl IS the dedup key: the threads.net permalink,
+    // hashed into a unique-per-target url_hash.
+    expect(mention?.canonicalUrl).toBe(THREADS_POST_URL);
+    expect(mention?.urlHash).toBeTruthy();
+    expect(mention?.contentHash).toBeTruthy();
+    expect(mention?.isTombstone).toBe(false);
+
+    // A second identical poll + upsert must NOT multiply rows — the same
+    // canonical URL hashes to the same url_hash and updates the existing row.
+    const pollAgain = await pollPresenceTarget(env, target, { trackingMode: "self" }, {
+      fetchImpl: graphFetcher(() => ({ body: KEYWORD_SEARCH_PAGE })),
+    });
+    expect(pollAgain.ok).toBe(true);
+    expect(pollAgain.items).toHaveLength(1);
+    await upsertPresenceItems(env, { sourceTarget: target, items: pollAgain.items });
+    expect(await countLivePresenceItems(target.id)).toBe(1);
+
+    const after = await listPresenceItems(env, userId, {
+      trackedEntityId: target.trackedEntityId,
+      connectorId: "threads",
+    });
+    expect(after).toHaveLength(1);
+    expect(after[0]?.id).toBe(mention?.id);
+  });
+
+  it("capture-validity gate: with the rollout kill flag off, the full path captures nothing and never fetches", async () => {
+    const { userId, entityId } = await seedThreadsTarget();
+    // The target is listed through the live gate (data reads are passive); the
+    // poll itself runs with PRESENCE_THREADS_ROLLOUT unset -> disabled.
+    const listed = await listSourceTargetsForEntity(makeEnv("internal", TOKEN), userId, entityId);
+    const target = listed.find((t) => t.connectorId === "threads");
+    expect(target).toBeDefined();
+    if (!target) throw new Error("expected the seeded threads source_target");
+
+    const fetchImpl = graphFetcher(() => ({ body: KEYWORD_SEARCH_PAGE }));
+    const poll = await pollPresenceTarget(makeEnv(undefined, TOKEN), target, { trackingMode: "self" }, { fetchImpl });
+    expect(poll.ok).toBe(false);
+    expect(poll.errorCode).toBe("connector_not_operational");
+    expect(poll.items).toHaveLength(0);
+    // The kill flag stops capture before any network hop.
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(await countLivePresenceItems(target.id)).toBe(0);
+  });
+
+  it("capture-validity gate: a missing Meta token stops the poll through the full path, before any fetch", async () => {
+    const { userId, entityId } = await seedThreadsTarget();
+    const listed = await listSourceTargetsForEntity(makeEnv("internal", TOKEN), userId, entityId);
+    const target = listed.find((t) => t.connectorId === "threads");
+    expect(target).toBeDefined();
+    if (!target) throw new Error("expected the seeded threads source_target");
+
+    const fetchImpl = graphFetcher(() => ({ body: KEYWORD_SEARCH_PAGE }));
+    const poll = await pollPresenceTarget(makeEnv("internal", undefined), target, { trackingMode: "self" }, { fetchImpl });
+    expect(poll.ok).toBe(false);
+    expect(poll.errorCode).toBe("connector_not_operational");
+    expect(poll.items).toHaveLength(0);
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(await countLivePresenceItems(target.id)).toBe(0);
   });
 });
 

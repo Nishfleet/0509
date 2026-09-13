@@ -28,7 +28,7 @@ export const meta: MetaFunction = () =>
     pathname: "/compare",
   });
 
-/** The 7 indexed /compare/* product pages the hub links. */
+/** The 14 indexed /compare/* product pages the hub links. */
 const COMPARE_PAGES = [
   { slug: "meta-ad-library", label: "vs checking the Meta Ad Library by hand", href: "/compare/meta-ad-library" },
   // /compare/visualping and /compare/foreplay are not linked here (issue
@@ -48,6 +48,8 @@ const COMPARE_PAGES = [
   { slug: "bigspy", label: "Five to Nine vs BigSpy", href: "/compare/bigspy" },
   { slug: "minea", label: "Five to Nine vs Minea", href: "/compare/minea" },
   { slug: "poweradspy", label: "Five to Nine vs PowerAdSpy", href: "/compare/poweradspy" },
+  // Issue #3302: the sneaker-resale cluster's compare surface.
+  { slug: "sneakerping", label: "Five to Nine vs SneakerPing", href: "/compare/sneakerping" },
 ] as const;
 
 /**

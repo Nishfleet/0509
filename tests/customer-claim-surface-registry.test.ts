@@ -321,7 +321,7 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
     "presence_self_tracking", "presence_website_sources", "presence_social_connect",
     "presence_digest_alerts",
   ],
-  presenceSources: ["website", "x", "reddit", "linkedin", "rss", "bluesky", "gdelt", "threads", "youtube", "amazon", "context_dev", "google", "google_ads", "tiktok", "subdomains", "hiring"],
+  presenceSources: ["website", "x", "reddit", "linkedin", "rss", "bluesky", "gdelt", "threads", "hn", "youtube", "amazon", "context_dev", "google", "google_ads", "tiktok", "subdomains", "hiring"],
   // Route diet phase 1 (#2213): the rail carries seven destinations; the
   // 8-screen model folds every member route into its owning destination via
   // redirects, so the folded paths stay customer nav surface (activePaths).
@@ -334,7 +334,8 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
     "/app/sources", "/app/support", "/app/team", "/app/watchlists",
     "/compare", "/docs", "/help", "/pricing", "/search", "/status",
   ],
-  publicMarkdownPaths: ["/", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/capture-rules", "/privacy", "/terms", "/methodology/ad-aggression-score", "/pricing", "/compare/meta-ad-library", "/compare/visualping-ad-libraries", "/compare/spyland", "/compare/pulzifi", "/compare/foreplay-spyder", "/compare/panoramata", "/compare/adspyder", "/compare/adspy", "/compare/keeptabz", "/compare/gethookd", "/compare/bigspy", "/compare/minea", "/compare/poweradspy"],
+  publicMarkdownPaths: ["/", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/capture-rules", "/privacy", "/terms", "/methodology/ad-aggression-score", "/pricing", "/compare/meta-ad-library", "/compare/visualping-ad-libraries", "/compare/spyland", "/compare/pulzifi", "/compare/foreplay-spyder", "/compare/panoramata", "/compare/adspyder", "/compare/adspy", "/compare/keeptabz", "/compare/gethookd", "/compare/bigspy", "/compare/minea", "/compare/poweradspy", // Issue #3302: the 15th compare surface — the sneaker-resale cluster's competitor; its copy cites SneakerPing's own public pages, no new 0509 claim text beyond the existing compare-copy pattern.
+    "/compare/sneakerping"],
   // 2026-07-20 merge: overnight stack wins — sitemap gained /search, /auth/signup
   // and /compare/meta-ad-library (SEO-CANONICAL-INDEXING reopened for re-proof).
   // 2026-08-09: the proof-backed /competitor-monitoring category page joined the
@@ -396,6 +397,10 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
     "/compare/keeptabz", "/compare/gethookd",
     // Issue #3092: remaining verified ad-spy incumbents.
     "/compare/bigspy", "/compare/minea", "/compare/poweradspy",
+    // 2026-09-13: /compare/sneakerping joined the sitemap (issue #3302) — the
+    // sneaker-resale cluster's compare surface; claims cite SneakerPing's own
+    // public pages (verified live 2026-09-12), no new 0509 claim text.
+    "/compare/sneakerping",
     "/switch/panoramata", "/switch/visualping", "/switch/magicbrief", "/switch/adspy", "/competitor-monitoring",
     // Issue #2144: agency audience page (roster math + sourced Agency-vs-
     // Foreplay line), EN-only, no locale cluster.

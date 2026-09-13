@@ -29,6 +29,7 @@ const SOURCE_LABELS: Record<PresenceSourceId, string> = {
   bluesky: "Bluesky",
   gdelt: "GDELT mainstream news",
   threads: "Threads",
+  hn: "Hacker News",
   youtube: "YouTube",
   amazon: "Amazon marketplace",
   context_dev: "Context.dev (open-web provider)",
@@ -53,6 +54,7 @@ const CONNECTOR_FOR_SOURCE: Partial<Record<PresenceSourceId, PresenceConnectorId
   bluesky: "bluesky",
   gdelt: "gdelt",
   threads: "threads",
+  hn: "hn",
 };
 
 const SOCIAL_SOURCE_IDS = new Set<PresenceSourceId>(["x", "reddit", "linkedin", "bluesky", "threads"]);
@@ -103,6 +105,8 @@ function statusFromConnectorGate(
           : sourceId === "gdelt"
             ? "OFFICIAL_PUBLIC_API"
             : sourceId === "threads"
+            ? "OFFICIAL_PUBLIC_API"
+            : sourceId === "hn"
             ? "OFFICIAL_PUBLIC_API"
             : sourceId === "linkedin" && trackingMode === "competitor"
             ? "LIMITED_COVERAGE"
@@ -424,7 +428,7 @@ export function presenceSourceCoverageForDocs(): Array<{
       label: SOURCE_LABELS.x,
       productionStatus: "gated",
       notes:
-        "X connector wired in with mention search (recent-search query targets). Gated behind PRESENCE_X_ROLLOUT + X_API_BEARER_TOKEN + X_PAID_ACCESS — paid pay-per-use reads are metered per entity per day and stay pending until the spend decision lands.",
+        "X connector wired in with mention search (recent-search query targets). Gated behind PRESENCE_X_ROLLOUT + X_API_BEARER_TOKEN + X_PAID_ACCESS — paid pay-per-use reads are metered per entity per day and stay pending until the spend decision lands. No free read tier: recent search is pay-per-use only since Feb 2026 (collector research: docs/mentions/PLAN.md §8), so the flag stays off until the MONEY decision.",
     },
     {
       sourceId: "reddit",
@@ -435,20 +439,24 @@ export function presenceSourceCoverageForDocs(): Array<{
     {
       sourceId: "linkedin",
       label: SOURCE_LABELS.linkedin,
-      productionStatus: "unavailable",
-      notes: "Self-brand OAuth only when rolled out. Competitor tracking is limited.",
+      productionStatus: "gated",
+      notes:
+        "LinkedIn Posts API connector wired in (own-organization posts of a CONNECTED account via /rest/posts, $0, stored OAuth grant; the member must administer the tracked organization). Gated behind PRESENCE_LINKEDIN_ROLLOUT — off by default; activation is a separate rollout decision. Self-tracking only: there is no public keyword search of others' posts, so Competitor coverage stays LIMITED_COVERAGE (the only allowed exclusion).",
     },
     {
       sourceId: "rss",
       label: SOURCE_LABELS.rss,
       productionStatus: "gated",
-      notes: "RSS/Atom/JSON Feed connector wired in. Gated behind PRESENCE_RSS_ROLLOUT — off by default; activation is a separate rollout decision.",
+      notes:
+        "RSS/Atom/JSON Feed connector wired in — the publication-feed mention backbone. Covers the publication feeds the sources themselves syndicate — publisher RSS, Substack, Medium, YouTube channel feeds (named feeds you register; those platforms have no free global keyword search). Covers exactly the tracked feeds the entity registers: publisher RSS, Substack /feed, Medium /feed/... (named profiles, publications and tags — there is no global free search), and Google News /rss/search query feeds built from the tracked match phrase; public surfaces cited in docs/mentions/PLAN.md §2/§8. In-connector rate budget: one bounded fetch per feed per poll, at most 25 items each, polls serialized upstream. Gated behind PRESENCE_RSS_ROLLOUT — off by default; activation is a separate rollout decision.",
+
     },
     {
       sourceId: "bluesky",
       label: SOURCE_LABELS.bluesky,
       productionStatus: "gated",
-      notes: "Bluesky mention connector wired in (app.bsky.feed.searchPosts, $0). Gated behind PRESENCE_BLUESKY_ROLLOUT — off by default; activation is a separate rollout decision.",
+      notes:
+        "Bluesky mention connector wired in (app.bsky.feed.searchPosts, $0). Covers the public posts the Bluesky AppView post search returns for the tracked match phrase (near-real-time, sort=latest) — no engagement counts or follow-graph, and the AppView index's completeness is Bluesky's, not ours. In-connector rate budget: 1 authenticated session + at most 2 result pages of 100 posts per poll, polls serialized upstream. Gated behind PRESENCE_BLUESKY_ROLLOUT — off by default; activation is a separate rollout decision.",
     },
     {
       sourceId: "gdelt",
@@ -461,6 +469,12 @@ export function presenceSourceCoverageForDocs(): Array<{
       label: SOURCE_LABELS.threads,
       productionStatus: "gated",
       notes: "Threads keyword-search connector wired in (Meta keyword_search; 2,200 queries per user per 24h enforced in-connector via presence_poll_cursor — tumbling-window approximation of Meta's per-query rolling count, overshoot surfaces as Meta's 429). Gated behind PRESENCE_THREADS_ROLLOUT + THREADS_ACCESS_TOKEN and Meta app review — off by default; activation is a separate rollout decision.",
+    },
+    {
+      sourceId: "hn",
+      label: SOURCE_LABELS.hn,
+      productionStatus: "gated",
+      notes: "Hacker News mention connector wired in (Algolia HN Search API — free, no key, no auth; the ~10,000-requests/hour/IP courtesy figure is honored with one serialized search_by_date request per poll: page 0 only, time-window slicing via the prior poll's watermark instead of deep paging past the ~1,000-result ceiling). Gated behind PRESENCE_HN_ROLLOUT — off by default; activation is a separate rollout decision.",
     },
     {
       sourceId: "youtube",
@@ -489,8 +503,9 @@ export function presenceSourceCoverageForDocs(): Array<{
     {
       sourceId: "google_ads",
       label: SOURCE_LABELS.google_ads,
-      productionStatus: "coming_soon",
-      notes: "Google Ads Transparency Center source wired in as a stub (seam #2218). Live adapter lands in #2189.",
+      productionStatus: "active",
+      notes:
+        "Live (issue #3197; #2189): Google's public Ads Transparency Center, the no-credential SearchCreatives RPC — no official-API key that bars commercial use. Covers creatives currently published for the tracked domain; image and text formats (video is not separately distinguishable in this capture); no spend, reach or audience metrics. Region: whatever the public Transparency Center serves without sign-in — no country filter is pinned, so there is no per-country breakdown. Freshness: re-read on the regular monitoring cadence (the cadence label is a hint; the seam runs it on every scheduled check). Killed via GOOGLE_ADS_SOURCE_DISABLED=1 (kill flag; 0/unset = on). Capture attempts and failures feed the /status capture-failure rate when the #2181 DECODO_BUDGET KV binding is wired; without it the /status line states the flag posture only.",
     },
     {
       sourceId: "tiktok",

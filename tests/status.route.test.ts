@@ -2,6 +2,8 @@ import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { presenceSourceCoverageForDocs } from "~/lib/presence-source-coverage.server";
+
 type MockUseLoaderData = () => unknown;
 
 function createContext(env = {}) {
@@ -72,6 +74,96 @@ describe("status route", () => {
     expect(JSON.stringify(result)).not.toContain("canary");
     expect(JSON.stringify(result)).not.toContain("Slack");
     expect(getLaunchReadinessSignals).not.toHaveBeenCalled();
+
+    // Issue #3205 — the loader publishes the tracked-source catalog, and the
+    // Threads row stays honest: wired in, still gated.
+    const mentionSources = result.mentionSources as Array<{
+      sourceId: string;
+      productionStatus: string;
+      notes: string;
+    }>;
+    expect(Array.isArray(mentionSources)).toBe(true);
+    const threadsRow = mentionSources.find((source) => source.sourceId === "threads");
+    expect(threadsRow).toBeDefined();
+    expect(threadsRow?.productionStatus).toBe("gated");
+
+    // Issue #3199 — the Substack public surface rides the rss connector, so
+    // its /status per-source row IS the rss row: wired in, gated, and the
+    // note names what the surface covers (Substack) and what it does not
+    // (no free global keyword search).
+    const rssRow = mentionSources.find((source) => source.sourceId === "rss");
+    expect(rssRow).toBeDefined();
+    expect(rssRow?.productionStatus).toBe("gated");
+    expect(rssRow?.notes).toContain("Substack");
+
+    // Issue #3198 — the X row: wired in, gated, honest about the
+    // paid/no-free-tier posture of the public recent-search surface.
+    const xRow = mentionSources.find((source) => source.sourceId === "x");
+    expect(xRow).toBeDefined();
+    expect(xRow?.productionStatus).toBe("gated");
+  });
+
+  it("renders the tracked-source rows — the Threads mention source reads gated (issue #3205)", async () => {
+    await mockRouter(() => ({
+      generatedAt: "2026-09-13T16:00:00.000Z",
+      asOf: "2026-09-13T16:00:00.000Z",
+      appServed: true,
+      commercialLaunch: null,
+      monitoring: null,
+      surfaces: { asOf: "2026-09-13T16:00:00.000Z", monitoring: null, surfaces: [] },
+      mentionSources: presenceSourceCoverageForDocs(),
+    }));
+
+    const { default: StatusRoute } = await import("~/routes/status");
+    const markup = renderToStaticMarkup(createElement(StatusRoute));
+
+    expect(markup).toContain("Tracked sources");
+    // The Threads per-source row (issue #3205's acceptance) renders its
+    // posture verbatim from the catalog — wired in, waiting on its rollout.
+    expect(markup).toContain("Threads");
+    expect(markup).toContain("gated");
+    expect(markup).toContain("Meta app review");
+    expect(markup).toContain("wired in, waiting on its rollout decision");
+    // The whole catalog passes through untouched. #3204 wired the LinkedIn
+    // connector, flipping its row from "unavailable" to "gated" — the
+    // tracked-source catalog no longer carries an "unavailable" posture.
+    expect(markup).toContain("GDELT");
+    expect(markup).toContain("own-organization posts of a CONNECTED account");
+    expect(markup).not.toContain("unavailable");
+    // The Substack row (issue #3199's acceptance) rides the rss row, and the
+    // note renders what the public surface covers — the named publication
+    // feeds themselves, Substack included — and its limits, verbatim.
+    expect(markup).toContain("Substack");
+    expect(markup).toContain("no free global keyword search");
+
+    // The X per-source row (issue #3198) renders its no-free-tier note — the
+    // public recent-search surface is pay-per-use only, so the flag stays off.
+    expect(markup).toContain("pay-per-use");
+  });
+
+  it("renders the rss tracked-source row — the publication-feed surface the Medium mentions ride (issue #3200)", async () => {
+    await mockRouter(() => ({
+      generatedAt: "2026-09-13T16:00:00.000Z",
+      asOf: "2026-09-13T16:00:00.000Z",
+      appServed: true,
+      commercialLaunch: null,
+      monitoring: null,
+      surfaces: { asOf: "2026-09-13T16:00:00.000Z", monitoring: null, surfaces: [] },
+      mentionSources: presenceSourceCoverageForDocs(),
+    }));
+
+    const { default: StatusRoute } = await import("~/routes/status");
+    const markup = renderToStaticMarkup(createElement(StatusRoute));
+
+    expect(markup).toContain("Tracked sources");
+    // The rss per-source row (the #3200 acceptance) renders its posture
+    // verbatim from the catalog: the publication-feed mention backbone, what
+    // the Medium public surface covers, the rate budget, still gated.
+    expect(markup).toContain("RSS / Atom / JSON Feed");
+    expect(markup).toContain("publication-feed mention backbone");
+    expect(markup).toContain("Medium /feed/");
+    expect(markup).toContain("one bounded fetch per feed per poll");
+    expect(markup).toContain("gated");
   });
 
   it("renders measured surface states without private launch details", async () => {
@@ -379,5 +471,137 @@ describe("status route", () => {
     expect(serialized).not.toContain("@");
     expect(serialized).not.toContain("watchlist_id");
     expect(serialized).not.toContain("competitor");
+  });
+
+  // Issue #3197: the Google Ads (Transparency Center) capture facts. The
+  // loader exposes the kill-flag posture plus the 24h counters when the #2181
+  // KV binding carries them; the page renders the one factual line.
+  function makeKv() {
+    const store = new Map<string, { value: string; expirationTtl?: number }>();
+    return {
+      store,
+      async get(key: string) {
+        return store.get(key)?.value ?? null;
+      },
+      async put(key: string, value: string, options?: { expirationTtl?: number }) {
+        store.set(key, { value, expirationTtl: options?.expirationTtl });
+      },
+      async delete(key: string) {
+        store.delete(key);
+      },
+    } as unknown as KVNamespace;
+  }
+
+  function todayDayKey(now: Date = new Date()): string {
+    return `google_ads:captures:${now.toISOString().slice(0, 10)}`;
+  }
+
+  it("exposes the #3197 capture facts from the #2181 KV when the app is served", async () => {
+    const kv = makeKv();
+    await kv.put(
+      todayDayKey(),
+      JSON.stringify({ attempted: 3, failed: 1 }),
+      {},
+    );
+
+    const { loader } = await import("~/routes/status");
+    const result = (await loader({
+      context: createContext({
+        DB: {},
+        DECODO_BUDGET: kv,
+        GOOGLE_ADS_SOURCE_DISABLED: "0",
+      }),
+      request: new Request("https://0509.io/status"),
+    } as never)) as Record<string, unknown>;
+
+    expect(result.googleAdsSourceKilled).toBe(false);
+    expect(result.googleAdsCaptures).toMatchObject({
+      attempted: 3,
+      failed: 1,
+      counted: true,
+    });
+  });
+
+  it("omits the measured counters (counted: false) when no KV binding is wired", async () => {
+    vi.doMock("~/lib/public-status-counters.server", () => ({
+      getPublicStatusSurfaces: vi.fn().mockResolvedValue({
+        asOf: "2026-09-12T04:00:00.000Z",
+        monitoring: null,
+        surfaces: [],
+      }),
+    }));
+
+    const { loader } = await import("~/routes/status");
+    const result = (await loader({
+      context: createContext({ DB: {} }),
+      request: new Request("https://0509.io/status"),
+    } as never)) as Record<string, unknown>;
+
+    expect(result.googleAdsSourceKilled).toBe(false);
+    expect(result.googleAdsCaptures).toMatchObject({ counted: false, rate: null });
+  });
+
+  it("renders the capture facts, rate, and flag posture when the counter reports", async () => {
+    await mockRouter(() => ({
+      generatedAt: "2026-09-13T09:00:00.000Z",
+      asOf: "2026-09-13T09:00:00.000Z",
+      appServed: true,
+      commercialLaunch: { scoutSaleOpen: true, starterSaleOpen: true, agencySaleOpen: false },
+      monitoring: null,
+      surfaces: { asOf: "2026-09-13T09:00:00.000Z", monitoring: null, surfaces: [] },
+      googleAdsCaptures: { attempted: 5, failed: 1, rate: 0.2, counted: true },
+      googleAdsSourceKilled: false,
+    }));
+
+    const { default: StatusRoute } = await import("~/routes/status");
+    const markup = renderToStaticMarkup(createElement(StatusRoute));
+
+    expect(markup).toContain("Google Ads (Transparency Center) capture");
+    expect(markup).toContain("Source enabled (kill flag GOOGLE_ADS_SOURCE_DISABLED=0).");
+    expect(markup).toContain(
+      "5 capture attempts in the last two UTC days, 1 failed — 20% capture failure rate (best-effort counter).",
+    );
+  });
+
+  it("keeps the row to the flag posture when the counter binding is not wired", async () => {
+    await mockRouter(() => ({
+      generatedAt: "2026-09-13T09:00:00.000Z",
+      asOf: "2026-09-13T09:00:00.000Z",
+      appServed: true,
+      commercialLaunch: { scoutSaleOpen: true, starterSaleOpen: true, agencySaleOpen: false },
+      monitoring: null,
+      surfaces: { asOf: "2026-09-13T09:00:00.000Z", monitoring: null, surfaces: [] },
+      googleAdsCaptures: { attempted: 0, failed: 0, rate: null, counted: false },
+      googleAdsSourceKilled: false,
+    }));
+
+    const { default: StatusRoute } = await import("~/routes/status");
+    const markup = renderToStaticMarkup(createElement(StatusRoute));
+
+    expect(markup).toContain("Source enabled (kill flag GOOGLE_ADS_SOURCE_DISABLED=0).");
+    expect(markup).toContain("Capture failure counters report once the seam");
+    expect(markup).toContain("KV namespace (DECODO_BUDGET) is wired on this deployment");
+    expect(markup).not.toContain("capture attempts in the last two UTC days");
+  });
+
+  it("renders the paused posture when the #3197 kill flag is 1", async () => {
+    await mockRouter(() => ({
+      generatedAt: "2026-09-13T09:00:00.000Z",
+      asOf: "2026-09-13T09:00:00.000Z",
+      appServed: true,
+      commercialLaunch: { scoutSaleOpen: true, starterSaleOpen: true, agencySaleOpen: false },
+      monitoring: null,
+      surfaces: { asOf: "2026-09-13T09:00:00.000Z", monitoring: null, surfaces: [] },
+      googleAdsCaptures: { attempted: 5, failed: 1, rate: 0.2, counted: true },
+      googleAdsSourceKilled: true,
+    }));
+
+    const { default: StatusRoute } = await import("~/routes/status");
+    const markup = renderToStaticMarkup(createElement(StatusRoute));
+
+    expect(markup).toContain("Source paused by its kill flag GOOGLE_ADS_SOURCE_DISABLED=1");
+    // A deliberately paused source has no meaningful failure rate — the
+    // stale 24h numbers stay out of the row.
+    expect(markup).not.toContain("capture failure rate");
   });
 });

@@ -1,4 +1,5 @@
 import { gdeltConnector } from "~/lib/presence-connectors/gdelt.server";
+import { hnConnector } from "~/lib/presence-connectors/hn.server";
 import { linkedinConnector } from "~/lib/presence-connectors/linkedin.server";
 import { blueskyConnector } from "~/lib/presence-connectors/bluesky.server";
 import { redditConnector } from "~/lib/presence-connectors/reddit.server";
@@ -26,6 +27,7 @@ const CONNECTORS = {
   bluesky: blueskyConnector,
   gdelt: gdeltConnector,
   threads: threadsConnector,
+  hn: hnConnector,
 } as const;
 
 export function getPresenceConnector(connectorId: PresenceConnectorId) {
@@ -104,6 +106,11 @@ export async function pollPresenceTarget(
   if (target.connectorId === "threads") {
     return threadsConnector.poll(ctx, target);
   }
+  if (target.connectorId === "hn") {
+    // The prior cursor_json carries the time-window watermark
+    // (lastItemCreatedAtI) — same wrapper the x/website/rss connectors read.
+    return hnConnector.poll(ctx, target, options.cursor);
+  }
   if (target.connectorId === "x") {
     return xConnector.poll(ctx, target, options.cursor);
   }
@@ -113,9 +120,9 @@ export async function pollPresenceTarget(
   if (target.connectorId === "bluesky") {
     // The mention connector needs the entity's match phrase; it reaches the
     // phrase surface through target_key — the connector itself decides.
-    return blueskyConnector.poll(ctx);
+    return blueskyConnector.poll(ctx, target);
   }
-  return linkedinConnector.poll(ctx);
+  return linkedinConnector.poll(ctx, target);
 }
 
 export function coverageLabelForConnector(
@@ -132,7 +139,7 @@ export function coverageLabelForConnector(
   if (connectorId === "rss") {
     return "VERIFIED_PUBLIC_FEED" as const;
   }
-  if (connectorId === "gdelt" || connectorId === "threads") {
+  if (connectorId === "gdelt" || connectorId === "threads" || connectorId === "hn") {
     return "OFFICIAL_PUBLIC_API" as const;
   }
   if (connectorId === "linkedin" && trackingMode === "competitor") {

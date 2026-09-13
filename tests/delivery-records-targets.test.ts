@@ -34,6 +34,16 @@ function openHarness() {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+    CREATE TABLE email_suppression (
+      address TEXT NOT NULL,
+      reason TEXT NOT NULL CHECK (reason IN ('bounce', 'complaint')),
+      source TEXT NOT NULL,
+      detail TEXT,
+      consecutive_failures INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (address, reason)
+    );
   `);
   return harness;
 }
@@ -93,30 +103,28 @@ describe("upsertDeliveryTarget read-back (M10)", () => {
 
 // GREEN-only: not RED evidence. With the fix, each concurrent upsert's
 // read-back filters on its own targetValue, so both must return their own row.
-describe("upsertDeliveryTarget concurrent same-channel upserts",
-  () => {
-    it("returns each call's own target value", async () => {
-      const harness = openHarness();
-      const env = { DB: harness.db } as never;
-      const input = {
-        userId: "user-1",
-        watchlistId: null,
-        channel: "email" as const,
-        isOptedIn: true,
-        isValidated: true,
-        validationStatus: "validated" as const,
-      };
+describe("upsertDeliveryTarget concurrent same-channel upserts", () => {
+  it("returns each call's own target value", async () => {
+    const harness = openHarness();
+    const env = { DB: harness.db } as never;
+    const input = {
+      userId: "user-1",
+      watchlistId: null,
+      channel: "email" as const,
+      isOptedIn: true,
+      isValidated: true,
+      validationStatus: "validated" as const,
+    };
 
-      const [a, b] = await Promise.all([
-        upsertDeliveryTarget(env, { ...input, targetValue: "a@example.com" }),
-        upsertDeliveryTarget(env, { ...input, targetValue: "b@example.com" }),
-      ]);
+    const [a, b] = await Promise.all([
+      upsertDeliveryTarget(env, { ...input, targetValue: "a@example.com" }),
+      upsertDeliveryTarget(env, { ...input, targetValue: "b@example.com" }),
+    ]);
 
-      expect(a?.targetValue).toBe("a@example.com");
-      expect(b?.targetValue).toBe("b@example.com");
-    });
-  },
-);
+    expect(a?.targetValue).toBe("a@example.com");
+    expect(b?.targetValue).toBe("b@example.com");
+  });
+});
 
 describe("upsertDeliveryTarget concurrent first-time upserts (M11)", () => {
   it("both resolve to the target when no row exists yet", async () => {
@@ -206,19 +214,36 @@ describe("repairCanaryProofEmailTarget (Gate C canary substrate self-heal)", () 
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
-        row.id, row.user_id, row.watchlist_id, row.channel, row.target_value,
-        row.validation_status, row.is_validated, row.is_opted_in, row.opt_in_source,
-        row.opted_in_at, row.is_paused, row.paused_at, row.opted_out_at,
-        row.template_eligible, row.last_successful_delivery_at,
-        row.last_successful_attempt_id, row.provider_identifier, row.metadata_json,
-        row.created_at, row.updated_at,
+        row.id,
+        row.user_id,
+        row.watchlist_id,
+        row.channel,
+        row.target_value,
+        row.validation_status,
+        row.is_validated,
+        row.is_opted_in,
+        row.opt_in_source,
+        row.opted_in_at,
+        row.is_paused,
+        row.paused_at,
+        row.opted_out_at,
+        row.template_eligible,
+        row.last_successful_delivery_at,
+        row.last_successful_attempt_id,
+        row.provider_identifier,
+        row.metadata_json,
+        row.created_at,
+        row.updated_at,
       );
     return row;
   }
 
   it("repairs an opted-out canary row back to the provisioned state (zero-usable-rows drift)", async () => {
     const harness = openHarness();
-    seedRow(harness, { id: "opted-out", opted_out_at: "2026-09-09T17:03:00.000Z" });
+    seedRow(harness, {
+      id: "opted-out",
+      opted_out_at: "2026-09-09T17:03:00.000Z",
+    });
     const env = { DB: harness.db } as never;
 
     const result = await repairCanaryProofEmailTarget(env, {
@@ -245,8 +270,16 @@ describe("repairCanaryProofEmailTarget (Gate C canary substrate self-heal)", () 
 
   it("collapses byte-distinct rows that normalize to the same address to one usable row", async () => {
     const harness = openHarness();
-    seedRow(harness, { id: "old-spelling", target_value: "Canary@0509.io", created_at: "2026-09-01T00:00:00.000Z" });
-    seedRow(harness, { id: "new-spelling", target_value: "canary@0509.io", created_at: "2026-09-10T00:00:00.000Z" });
+    seedRow(harness, {
+      id: "old-spelling",
+      target_value: "Canary@0509.io",
+      created_at: "2026-09-01T00:00:00.000Z",
+    });
+    seedRow(harness, {
+      id: "new-spelling",
+      target_value: "canary@0509.io",
+      created_at: "2026-09-10T00:00:00.000Z",
+    });
     const env = { DB: harness.db } as never;
 
     const result = await repairCanaryProofEmailTarget(env, {
@@ -257,7 +290,11 @@ describe("repairCanaryProofEmailTarget (Gate C canary substrate self-heal)", () 
     expect(result).toEqual({ kept: 1, removed: 1, repaired: true });
     const rows = harness.sqlite
       .prepare("SELECT id, opted_out_at, is_validated FROM delivery_target")
-      .all() as Array<{ id: string; opted_out_at: string | null; is_validated: number }>;
+      .all() as Array<{
+      id: string;
+      opted_out_at: string | null;
+      is_validated: number;
+    }>;
     expect(rows).toHaveLength(1);
     expect(rows[0].id).toBe("old-spelling");
     expect(rows[0].opted_out_at).toBeNull();
@@ -276,8 +313,16 @@ describe("repairCanaryProofEmailTarget (Gate C canary substrate self-heal)", () 
 
     expect(result).toEqual({ kept: 1, removed: 0, repaired: true });
     const row = harness.sqlite
-      .prepare("SELECT target_value, validation_status, is_paused, opted_out_at, opted_in_at FROM delivery_target WHERE id = 'healthy'")
-      .get() as { target_value: string; validation_status: string; is_paused: number; opted_out_at: string | null; opted_in_at: string };
+      .prepare(
+        "SELECT target_value, validation_status, is_paused, opted_out_at, opted_in_at FROM delivery_target WHERE id = 'healthy'",
+      )
+      .get() as {
+      target_value: string;
+      validation_status: string;
+      is_paused: number;
+      opted_out_at: string | null;
+      opted_in_at: string;
+    };
     expect(row.target_value).toBe("canary@0509.io");
     expect(row.validation_status).toBe("validated");
     expect(row.is_paused).toBe(0);

@@ -81,6 +81,9 @@
     "BROWSER_RUN_SESSION_REUSE": "0",
     "SEARCH_ROLLOUT_MODE": "v2",
     "ADS_DOMAIN_PUBLISHER_CAP": "60",
+    // Issue #3197: Google Ads (Transparency Center) source kill flag. "0" = the
+    // source runs (the production posture); "1" pauses captures end to end.
+    "GOOGLE_ADS_SOURCE_DISABLED": "0",
     "PRESENCE_WEBSITE_ROLLOUT": "generally_available",
     "PRESENCE_DIGEST_ROLLOUT": "disabled",
     "PRESENCE_X_ROLLOUT": "disabled",
@@ -164,6 +167,12 @@
         "type": "ratelimit",
         "namespace_id": "1001",
         "simple": { "limit": 2, "period": 60 }
+      },
+      {
+        "name": "RL_AUTH_GET",
+        "type": "ratelimit",
+        "namespace_id": "1012",
+        "simple": { "limit": 60, "period": 60 }
       },
       {
         "name": "RL_SEARCH_ANON_BROWSER",
