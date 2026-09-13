@@ -14,7 +14,17 @@ import {
   type UsageBundleSlug,
 } from "~/lib/pricing";
 import { TOP_UP_PACK_DISPLAY } from "~/lib/billing-sku-catalog";
+// Issue #2871 canonical EN methodology path; imported so the hreflang legs
+// can never drift from the redirect target.
+import { AD_AGGRESSION_METHODOLOGY_PATH } from "~/lib/aggression-score";
 import { SUPPORT_EMAIL } from "~/lib/support";
+
+/**
+ * Locale splat of the methodology buyer-surface family. The EN page's live
+ * URL moved to the deep /methodology/ad-aggression-score (issue #2871) while
+ * the locale twins stayed keyed on this splat (issue #2030).
+ */
+const METHODOLOGY_LOCALE_SPLAT = "methodology";
 
 const SITE_ORIGIN = "https://0509.io";
 const SITE_NAME = "Five to Nine";
@@ -258,7 +268,16 @@ export function sneakerResaleHreflangLinks() {
  * the EN canonical included — must emit the full set (issue #2030).
  */
 export function buyerSurfaceHreflangLinks(splat: string) {
-  const enPath = splat === "" ? "/" : `/${splat}`;
+  // Issue #2871: the EN methodology page lives at the citable deep path
+  // while its locale twins stay at /<locale>/methodology — the old shallow
+  // /methodology is a permanent 301, so the EN legs must point at the deep
+  // canonical, never at the redirecting predecessor.
+  const enPath =
+    splat === METHODOLOGY_LOCALE_SPLAT
+      ? AD_AGGRESSION_METHODOLOGY_PATH
+      : splat === ""
+        ? "/"
+        : `/${splat}`;
   return [
     {
       rel: "alternate" as const,
@@ -1206,6 +1225,9 @@ export function sitemapHreflangAlternates(path: string) {
       : pathOnly.slice(locale.length + 1)
     : pathOnly;
   const splat = enPath === "/" ? "" : enPath.replace(/^\//, "");
+  // For sub-pages the EN splat is the first segment (e.g. /fr/methodology →
+  // "methodology"); methodology is the only two-segment EN canonical.
+  const enSplat = splat.split("/")[0] ?? splat;
 
   // The genuinely translated sneaker-resale cluster ships in de/ja/pt-br
   // only — fr/es have no sneaker-resale page to point at.
@@ -1221,13 +1243,22 @@ export function sitemapHreflangAlternates(path: string) {
   }
   if (
     splat === "" ||
+    // #2871/#2030: the EN methodology page lives at the citable deep path
+    // while its locale twins stay at /<locale>/methodology — the old shallow
+    // /methodology is a permanent 301 and never sitemap-listed.
+    (enPath === AD_AGGRESSION_METHODOLOGY_PATH && locale === null) ||
+    (locale !== null && enSplat === "methodology") ||
     (BUYER_SURFACE_PATHS as readonly string[]).includes(enPath) ||
     isBuyerSurfaceChildSplat(splat) ||
     (BUYER_SURFACE_GUIDE_PATHS as readonly string[]).includes(enPath) ||
     /^ads\/[^/]+$/.test(splat)
   ) {
-    return buyerSurfaceHreflangLinks(splat);
+    return buyerSurfaceHreflangLinks(
+      enPath === AD_AGGRESSION_METHODOLOGY_PATH ? METHODOLOGY_LOCALE_SPLAT : splat,
+    );
   }
+  // Paths with no live locale variant — /privacy, canonicalized-away compare
+  // losers, and every non-buyer-surface route — get no alternates.
   return undefined;
 }
 

@@ -42,7 +42,7 @@ describe("EN canonical pages emit the reciprocal hreflang cluster (issue #2030)"
   // One representative EN route per surface family — every one of these has
   // live /<locale>/ twins and previously emitted ZERO hreflang, so Google
   // ignored the whole one-way cluster.
-  const cases: Array<{ name: string; load: () => Promise<{ links: () => LinkDescriptorLike[] }>; enPath: string }> = [
+  const cases: Array<{ name: string; load: () => Promise<{ links: () => LinkDescriptorLike[] }>; enPath: string; /** Only /methodology: the locale twins' splat differs from the EN canonical path (issue #2871). */ localePath?: string }> = [
     { name: "/", load: () => import("~/routes/marketing") as never, enPath: "/" },
     { name: "/pricing", load: () => import("~/routes/pricing") as never, enPath: "/pricing" },
     { name: "/search", load: () => import("~/routes/search") as never, enPath: "/search" },
@@ -62,10 +62,10 @@ describe("EN canonical pages emit the reciprocal hreflang cluster (issue #2030)"
       load: () => import("~/routes/guides.how-to-track-competitor-ads") as never,
       enPath: "/guides/how-to-track-competitor-ads",
     },
-    { name: "/methodology", load: () => import("~/routes/methodology") as never, enPath: "/methodology" },
+    { name: "/methodology", load: () => import("~/routes/methodology") as never, enPath: "/methodology/ad-aggression-score", localePath: "/methodology" },
   ];
 
-  for (const { name, load, enPath } of cases) {
+  for (const { name, load, enPath, localePath } of cases) {
     it(`${name} emits en self + every locale + x-default`, async () => {
       const mod = await load();
       const links = mod.links() as LinkDescriptorLike[];
@@ -73,8 +73,9 @@ describe("EN canonical pages emit the reciprocal hreflang cluster (issue #2030)"
 
       expect(byHreflang.get("en")).toBe(`${SITE}${enPath}`);
       for (const locale of BUYER_SURFACE_LOCALE_IDS) {
+        const enSurfacePath = localePath ?? enPath;
         const expected =
-          enPath === "/" ? `${SITE}/${locale}` : `${SITE}/${locale}${enPath}`;
+          enSurfacePath === "/" ? `${SITE}/${locale}` : `${SITE}/${locale}${enSurfacePath}`;
         expect(byHreflang.get(locale), `${name} missing ${locale}`).toBe(expected);
       }
       expect(byHreflang.get("x-default")).toBe(`${SITE}${enPath}`);
@@ -232,9 +233,13 @@ describe("sitemap hreflang alternates (issue #2030)", () => {
     const xml = buildSitemapXml([]);
     for (const path of BUYER_SURFACE_PATHS) {
       if (path === "/sitemap.xml") continue;
+      // Issue #2871: /methodology lives at the deep canonical path in the
+      // sitemap; its locale twins (/de/methodology, ...) stay in the locale
+      // sitemaps keyed on the shallow splat.
+      const locPath = path === "/methodology" ? "/methodology/ad-aggression-score" : path;
       const block = xml
         .split("<url>")
-        .find((b) => b.includes(`<loc>${SITE}${path === "/" ? "/" : path}</loc>`));
+        .find((b) => b.includes(`<loc>${SITE}${locPath === "/" ? "/" : locPath}</loc>`));
       expect(block, `sitemap block for ${path}`).toBeDefined();
       expect(block, `${path} must carry xhtml:link alternates`).toContain(
         "xhtml:link",
