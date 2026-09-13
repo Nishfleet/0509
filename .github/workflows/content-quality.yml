@@ -37,12 +37,12 @@ on:
       - '**.md'
       - '.vale/**'
       - '.vale.ini'
+  # merge_group stays BARE: GitHub supports paths: only on push,
+  # pull_request and pull_request_target - actionlint's [events] rule is
+  # correct and CI proved it (issue #3263 review round). Vale is not a
+  # required context, so an unfiltered queue-ref run costs one fast job and
+  # a skip is free.
   merge_group:
-    paths:
-      - 'content/**'
-      - '**.md'
-      - '.vale/**'
-      - '.vale.ini'
   push:
     branches: [main]
     paths:
