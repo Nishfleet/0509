@@ -79,11 +79,13 @@ describe("guides how-to-monitor-competitor-landing-page-changes route (issue #28
       "~/routes/guides.how-to-monitor-competitor-landing-page-changes"
     );
 
+    const { buyerSurfaceHreflangLinks } = await import("~/lib/seo");
     expect(links()).toEqual([
       {
         rel: "canonical",
         href: "https://0509.io/guides/how-to-monitor-competitor-landing-page-changes",
       },
+      ...buyerSurfaceHreflangLinks("guides/how-to-monitor-competitor-landing-page-changes"),
     ]);
 
     const tags = meta({} as never) as Array<Record<string, string>>;
@@ -264,11 +266,13 @@ describe("guides #3093 trio — offer-change alert, prove-what-changed, standing
       it("declares the canonical URL and public SEO meta", async () => {
         const { links, meta } = await import(`~/routes/${guide.module}`);
 
+        const { buyerSurfaceHreflangLinks } = await import("~/lib/seo");
         expect(links()).toEqual([
           {
             rel: "canonical",
             href: `https://0509.io/guides/${guide.slug}`,
           },
+          ...buyerSurfaceHreflangLinks(`guides/${guide.slug}`),
         ]);
 
         const tags = meta({} as never) as Array<Record<string, string>>;
@@ -421,11 +425,13 @@ describe("guides meta-ad-library-api-limitations route (issue #3127)", () => {
       "~/routes/guides.meta-ad-library-api-limitations"
     );
 
+    const { buyerSurfaceHreflangLinks } = await import("~/lib/seo");
     expect(links()).toEqual([
       {
         rel: "canonical",
         href: "https://0509.io/guides/meta-ad-library-api-limitations",
       },
+      ...buyerSurfaceHreflangLinks("guides/meta-ad-library-api-limitations"),
     ]);
 
     const tags = meta({} as never) as Array<Record<string, string>>;

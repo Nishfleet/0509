@@ -62,6 +62,13 @@ describe("EN canonical pages emit the reciprocal hreflang cluster (issue #2030)"
       load: () => import("~/routes/guides.how-to-track-competitor-ads") as never,
       enPath: "/guides/how-to-track-competitor-ads",
     },
+    // #2030 follow-up: the #2888/#3093/#3127 guide routes also have $locale
+    // twins — one representative of the five keeps the EN side reciprocal.
+    {
+      name: "/guides/meta-ad-library-api-limitations",
+      load: () => import("~/routes/guides.meta-ad-library-api-limitations") as never,
+      enPath: "/guides/meta-ad-library-api-limitations",
+    },
     { name: "/methodology", load: () => import("~/routes/methodology") as never, enPath: "/methodology/ad-aggression-score", localePath: "/methodology" },
   ];
 
