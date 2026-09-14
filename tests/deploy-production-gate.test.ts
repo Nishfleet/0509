@@ -1530,6 +1530,66 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     ).toEqual({ ok: true, issues: [] });
   });
 
+  it("accepts a post-baseline reorder and a leftover rename alias the repository explains", () => {
+    const validateRemoteRestoreEvidence = (
+      deployPlanModule as Record<string, unknown>
+    ).validateRemoteRestoreEvidence;
+    expect(typeof validateRemoteRestoreEvidence).toBe("function");
+    if (typeof validateRemoteRestoreEvidence !== "function") return;
+    // The derived ledger rule (0509#3512): post-baseline order is production
+    // apply history the repository cannot enumerate — a regression back to
+    // exact ordered-suffix matching must fail this test, so the reorder and
+    // the leftover alias live past the baseline prefix, not inside it.
+    const baseline = ["0001_first.sql", "0002_second.sql"];
+    const repository = [
+      "0001_first.sql",
+      "0002_second.sql",
+      "0003_a.sql",
+      "0004_b.sql",
+      "0005_renamed.sql",
+    ];
+    // Production applied 0004_b before 0003_a landed (interleave) and ran
+    // 0004_renamed before the file shipped as 0005_renamed (rename alias);
+    // a later catch-up applied 0005_renamed, so the stale name and the
+    // canonical name coexist on the ledger.
+    const ledger = [
+      "0001_first.sql",
+      "0002_second.sql",
+      "0004_b.sql",
+      "0004_renamed.sql",
+      "0003_a.sql",
+      "0005_renamed.sql",
+    ];
+    const migrationLedgerRule = productionMigrationLedgerRule(
+      repository,
+      new Set(),
+      {
+        baseline,
+        retiredMigrations: new Set<string>(),
+      },
+    );
+    const expected = {
+      candidateFingerprint: fingerprint,
+      wranglerWorktreeSha256: wranglerHash,
+      migrationLedgerRule,
+      now: new Date("2026-07-16T12:00:00.000Z"),
+    };
+    const evidence = {
+      ...passingRemoteRestoreEvidence(),
+      migrationLedgerNames: ledger,
+      migrationLedgerNamesSha256: createHash("sha256")
+        .update(JSON.stringify(ledger))
+        .digest("hex"),
+      migrationLedgerBaselineSha256: migrationLedgerRule.baselineSha256,
+      latestMigration: "0005_renamed.sql",
+      migrationCount: ledger.length,
+    };
+    expect(validateRemoteRestoreEvidence(evidence, expected)).toEqual({
+      ok: true,
+      issues: [],
+    });
+  });
+
   it("tiers EXACTNESS by migration/restore-critical, and applies one 14-day age bound to both", () => {
     const validateRemoteRestoreEvidence = (
       deployPlanModule as Record<string, unknown>
