@@ -28,9 +28,9 @@ function entry(
     label: "Label",
     status,
     detail: null,
-    // fixed-date: display-only progress timestamp — summarizeScanProgress
-    // never compares it against the wall clock.
-    updatedAt: "2026-09-14T00:00:00.000Z",
+    // Display-only progress timestamp: summarizeScanProgress never compares
+    // it against the wall clock.
+    updatedAt: "2026-09-14T00:00:00.000Z", // fixed-date: display-only, never wall-clock-compared
     ...overrides,
   };
 }
