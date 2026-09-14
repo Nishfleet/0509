@@ -1,6 +1,9 @@
-import { ensureDb, queryAll, queryOne } from "~/lib/data/d1.server";
+import { ensureDb, execute, queryAll, queryOne } from "~/lib/data/d1.server";
 import type { AppEnv } from "~/lib/env.server";
-import { deleteProofArtifactsForCapture } from "~/lib/proof-artifact-retention.server";
+import {
+  deleteProofArtifactsForCapture,
+  isKnownProofArtifactKey,
+} from "~/lib/proof-artifact-retention.server";
 
 const CANARY_KIND = "launch_readiness_canary";
 const CANARY_CAPTURE_KIND = "launch_readiness_real_capture";
@@ -214,24 +217,79 @@ async function proofArtifactReferencesAreCleared(
   );
 }
 
+interface SurvivingCanaryArtifactKeys {
+  html: string | null;
+  screenshot: string | null;
+}
+
+/**
+ * Issue #3473: the canary capture archives a second (desktop-viewport)
+ * artifact pair whose keys live only in capture_metadata_json and whose R2
+ * objects survive cleanup — the orphan sweep protects them via the metadata
+ * reference. Promoting those keys onto the row keeps the preserved audit
+ * capture attached to a live screenshot instead of a stripped NULL.
+ */
+function survivingCanaryArtifactKeys(metadataJson: string): SurvivingCanaryArtifactKeys {
+  const metadata = parseObject(metadataJson);
+  const read = (key: "desktopHtmlArtifactKey" | "desktopScreenshotArtifactKey") => {
+    const value = metadata?.[key];
+    return isKnownProofArtifactKey(value) ? value : null;
+  };
+  return {
+    html: read("desktopHtmlArtifactKey"),
+    screenshot: read("desktopScreenshotArtifactKey"),
+  };
+}
+
+async function promoteSurvivingCanaryArtifactKeys(
+  env: AppEnv,
+  proofCaptureId: string,
+  surviving: SurvivingCanaryArtifactKeys,
+) {
+  if (!surviving.html && !surviving.screenshot) return;
+  await execute(
+    env,
+    `
+      UPDATE proof_capture
+      SET html_artifact_key = COALESCE(?, html_artifact_key),
+          screenshot_artifact_key = COALESCE(?, screenshot_artifact_key),
+          updated_at = ?
+      WHERE id = ?
+        AND json_extract(capture_metadata_json, '$.kind') = ?
+    `,
+    surviving.html,
+    surviving.screenshot,
+    new Date().toISOString(),
+    proofCaptureId,
+    CANARY_CAPTURE_KIND,
+  );
+}
+
 async function cleanupCanaryProofArtifacts(
   env: AppEnv,
   ownerUserId: string,
   proof: CanaryProofRow,
 ) {
+  const surviving = survivingCanaryArtifactKeys(proof.capture_metadata_json);
   const artifactKeys = [proof.html_artifact_key, proof.screenshot_artifact_key]
-    .filter((key): key is string => typeof key === "string");
-  if (artifactKeys.length === 0) return true;
-  const artifactResults = await deleteProofArtifactsForCapture(
-    env,
-    ownerUserId,
-    proof.id,
-    artifactKeys,
-  );
-  return (
-    artifactResults.every((result) => result.ok) ||
-    proofArtifactReferencesAreCleared(env, ownerUserId, proof.id)
-  );
+    .filter((key): key is string => typeof key === "string")
+    .filter((key) => key !== surviving.html && key !== surviving.screenshot);
+  if (artifactKeys.length > 0) {
+    const artifactResults = await deleteProofArtifactsForCapture(
+      env,
+      ownerUserId,
+      proof.id,
+      artifactKeys,
+    );
+    if (
+      !artifactResults.every((result) => result.ok) &&
+      !(await proofArtifactReferencesAreCleared(env, ownerUserId, proof.id))
+    ) {
+      return false;
+    }
+  }
+  await promoteSurvivingCanaryArtifactKeys(env, proof.id, surviving);
+  return true;
 }
 
 function buildProofCleanupClaimStatement(
