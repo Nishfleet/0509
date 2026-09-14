@@ -120,3 +120,61 @@ npx vitest run --configLoader runner --project node --changed origin/main --repo
 Remaining accept gate is unchanged: a green `deploy-production` run, a
 `0 */3 * * *` monitoring tick writing `website_site_scan` rows, then the
 next `meta-discovery-canary` scheduled run (`23 */3 * * *`).
+
+## Follow-up 2 (2026-09-14 ~13:00Z) — production D1 migration ledger hole
+
+The sitemap-drill fix landed (#3495 + #3503/#3510 fixture-HOME drills), but
+deploys kept failing — now one step later, at `generate_restore_evidence` /
+the standalone `d1-remote-restore-evidence` restore job, with
+`source_backup_migration_ledger_stale` (runs 34839539920, 34840895993,
+34844447445, 34844527222 and every `d1-restore-proof-auto-refresh` run).
+
+Root cause: a mid-ledger hole in the append-only production D1 ledger.
+Production applied `0098_widen_source_target_connector_gdelt.sql` while
+`0098_widen_source_target_connector_bluesky.sql` was still repo-only
+(run 34705843153, #3315), then appended the sorted `0098_bluesky`→`0102`
+tail while `0098_competitor_suggestion_dismissal.sql` (#3175) and
+`0103_widen_source_target_connector_youtube.sql` (#3203) had not yet landed
+on main. The live ledger (117 names, verified from run 34844527222's
+`source_backup_migration_ledger_names` dump) ends at
+`0102_widen_source_target_connector_podcast.sql` with the two names absent.
+No declared order exception covered that arrangement, so
+`planSourceBackupLedgerReconciliation` rejected the ledger instead of
+planning the catch-up, and every restore-evidence run — the standalone
+workflow, the auto-refresh, and the deploy's own `generate_restore_evidence`
+job — failed closed. Deploys could not ship the site-scan fix.
+
+Fix (this PR): extend `PRODUCTION_MIGRATION_LEDGER_ORDER_EXCEPTIONS` in
+`scripts/d1-migration-sync-check.lib.mjs` — the 0098 gdelt/bluesky pair group
+becomes the full nine-name group declaring the live order
+(`0098_email_delivery_canary`, `0098_gdelt`, `0098_bluesky`, `0099`→`0102`,
+then `0098_competitor_suggestion_dismissal`, `0103_youtube` at the tail).
+Under it the live ledger is a clean prefix of exactly one allowed ledger and
+the planner emits `apply_forward_suffix` for the two pending names; the
+restore drill then applies them via the sanctioned
+`wrangler d1 migrations apply 0509 --remote` path (scratch dry-run +
+per-table row-count invariant + Time Travel bookmark first), the re-backed
+ledger matches, and the deploy gate clears. Simulation against the real
+production ledger dump (run 34844527222, replayed through
+`planSourceBackupLedgerReconciliation` locally): plan =
+`apply_forward_suffix [0098_competitor_suggestion_dismissal,
+0103_widen_source_target_connector_youtube]`; post-apply
+`assertMigrationLedgerMatchesRepository` = true.
+
+`tests/d1-remote-restore-evidence.test.ts` updated: the 0098 catch-up test
+now models the live ledger (ends `0102`, two pending names) and asserts the
+planned suffix is exactly the two missing migrations; a ledger carrying
+`0103` ahead of the still-pending `0098` dismissal matches no declared order
+and stays `reject` — fail-closed, no invented interleave.
+
+Runs:
+
+```
+npx vitest run --configLoader runner --project node \
+  tests/d1-remote-restore-evidence.test.ts tests/d1-migration-sync-check.test.ts
+  Test Files 2 passed (2) / Tests 45 passed (45)
+```
+
+Remaining accept gate: a green `deploy-production` run, a `0 */3 * * *`
+monitoring tick writing `website_site_scan` rows, then the next
+`meta-discovery-canary` scheduled run (`23 */3 * * *`).
