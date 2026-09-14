@@ -69,8 +69,16 @@ export interface PublicStatusCounters {
   lastWatchlistRunAt: string | null;
   /** Number of watchlist runs started in the last 24 hours. */
   runsInLast24h: number;
-  /** Number of watchlist runs in the last 24 hours whose status is `failed`. */
+  /** Number of watchlist runs whose status is `failed` in the last 24 hours. */
   failedRunsInLast24h: number;
+  /**
+   * Distinct watchlists with a stored TikTok (EU Ad Library) source_snapshot
+   * in the last 8 days (issue #3195). Weekly cadence: the count missing from
+   * the active-watchlist denominator IS the capture-failure gap, read live
+   * from the service's own capture records — the same read-live contract as
+   * every other number on /status.
+   */
+  tiktokCapturesInLast8d: number;
   /** ISO timestamp of the most recently sent digest, or null. */
   lastDigestSentAt: string | null;
   /**
@@ -114,8 +122,13 @@ export async function getPublicStatusCounters(
   const dayAgoIso = new Date(
     Date.now() - 24 * 60 * 60 * 1000,
   ).toISOString();
+  // The TikTok source rechecks weekly (#3195); an 8-day window = this week's
+  // expected capture plus one day of scheduling slack.
+  const eightDaysAgoIso = new Date(
+    Date.now() - 8 * 24 * 60 * 60 * 1000,
+  ).toISOString();
 
-  const [lastRunRow, countsRow, digestRow, baselineRow, coverageRow] = await Promise.all([
+  const [lastRunRow, countsRow, digestRow, baselineRow, coverageRow, tiktokRow] = await Promise.all([
     one<{ last_started_at: string | null }>(
       env,
       `SELECT MAX(started_at) AS last_started_at FROM watchlist_run`,
@@ -163,6 +176,13 @@ export async function getPublicStatusCounters(
           ) AS covered
       `,
     ),
+    one<{ tiktok_captures: number }>(
+      env,
+      `SELECT COUNT(DISTINCT watchlist_id) AS tiktok_captures
+       FROM source_snapshot
+       WHERE source_id = 'tiktok' AND fetched_at >= ?`,
+      eightDaysAgoIso,
+    ),
   ]);
 
   const counters = {
@@ -174,6 +194,7 @@ export async function getPublicStatusCounters(
       tracked: Number(coverageRow?.tracked ?? 0),
       covered: Number(coverageRow?.covered ?? 0),
     },
+    tiktokCapturesInLast8d: Number(tiktokRow?.tiktok_captures ?? 0),
   };
 
   // The `lastDigestSentAt` timestamp MUST never be read from `delivered_at`:
@@ -695,6 +716,11 @@ export async function getPublicStatusSurfaces(
       `${counters.runsInLast24h.toLocaleString()} watchlist runs in the last 24 hours, ${counters.failedRunsInLast24h.toLocaleString()} failed`,
       counters.lastWatchlistRunAt ? `last run started ${ageClause(counters.lastWatchlistRunAt, asOf)}` : null,
       `${activeWatchlists.toLocaleString()} active watchlists scheduled`,
+      // Issue #3195: the TikTok (EU Ad Library) capture-failure gap, read
+      // live from source_snapshot. Weekly cadence → the denominator's misses
+      // ARE the capture failures. Missing/empty capture rows degrade to 0 —
+      // the page never throws on this read.
+      `TikTok (EU Ad Library): ${counters.tiktokCapturesInLast8d.toLocaleString()} of ${activeWatchlists.toLocaleString()} active watchlists captured in the last 8 days — ${Math.max(0, activeWatchlists - counters.tiktokCapturesInLast8d).toLocaleString()} missed this weekly window (the capture-failure gap)`,
       counters.scheduledMonitoringSince ? `continuous coverage since ${counters.scheduledMonitoringSince}` : null,
     ].filter((v): v is string => v !== null);
     m.facts = facts;
@@ -774,6 +800,7 @@ async function getPublicStatusCountersWithWatchlists(
       lastWatchlistRunAt: null,
       runsInLast24h: 0,
       failedRunsInLast24h: 0,
+      tiktokCapturesInLast8d: 0,
       lastDigestSentAt: null,
       digestHealth: "unknown",
       scheduledMonitoringSince: null,

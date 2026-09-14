@@ -284,7 +284,7 @@
       "surface": "presence coverage (internal), competitor detail source slot",
       "liveQueryOrTest": "tests/sources/registry.test.ts → stub coverage equals coming_soon; app/lib/sources/tiktok-ads.server.ts → implemented: false",
       "currentResult": "pass",
-      "resultDetail": "Seam #2218 registers the TikTok Ads adapter as a stub (implemented: false). Coverage reports coming_soon. Production proof/status flip deferred to #2188.",
+      "resultDetail": "Seam #2218 registers the TikTok Ads adapter as a stub (implemented: false). Coverage reports coming_soon. Production proof/status flip deferred to #2188. Coverage flipped to ACTIVE 2026-09-13 by #3195 (Nish 2026-09-12: the flag is ON); the production proof, the implemented flip and this row's status flip stay #2188's.",
       "betOrCopyChange": "bet 10 (claim/reality reconciliation) — seam #2218 stub row; #2194 lands the real adapter, #2188 flips the claim",
       "nishReserved": false
     },

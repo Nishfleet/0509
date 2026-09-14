@@ -89,7 +89,7 @@ async function expectNoFixedAppChrome(page: Page) {
 const conditionalPrimaryRoutes = new Set([
   "/app/clients",
   "/app/collections",
-  "/app/digests",
+  "/app/briefs",
   "/app/notifications",
   "/app/presence",
   "/app/reports",
@@ -604,11 +604,11 @@ test.describe("local authenticated E2E harness", { lock: "d1" }, () => {
         copy: ["Account & security", "Billing & usage"],
       },
       // The agency fixture intentionally ships with zero filed briefs, so
-      // /app/digests renders the empty state ("Your first brief lands after
+      // /app/briefs renders the empty state ("Your first brief lands after
       // the first scan") rather than the "Brief history" rail. The page
       // heading is the durable customer-visible contract for the route; the
       // empty-state copy is the second durable contract for this persona.
-      { label: "Deliver", path: "/app/digests", heading: "Briefs", copy: ["Your first brief lands after the first scan"], direct: true },
+      { label: "Deliver", path: "/app/briefs", heading: "Briefs", copy: ["Your first brief lands after the first scan"], direct: true },
       { label: "Today", path: "/search", heading: "Find competitor ads", copy: ["Competitor website", "See ads"], direct: true },
       {
         label: "Deliver",
@@ -879,7 +879,7 @@ test.describe("local authenticated E2E harness", { lock: "d1" }, () => {
 
     await signInAs(context, baseURL!, "e2e-free-onboarded");
     await page.goto("/app/digests");
-    await expect(page).toHaveURL(/\/app\/digests/);
+    await expect(page).toHaveURL(/\/app\/briefs/);
     // Free Weekly Competitor Watch: free plans now get the (empty) Briefs
     // surface instead of a paid gate.
     await expect(page.getByRole("heading", { name: "Briefs", exact: true })).toBeVisible();

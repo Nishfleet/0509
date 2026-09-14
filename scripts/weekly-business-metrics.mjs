@@ -447,11 +447,17 @@ export function fetchPriorSnapshot(maxAgeMs = 26 * 60 * 60 * 1000) {
         detail: `prior snapshot is stale (generatedAt ${generatedAt || "missing"}, freshness gate 26h); not valid drift evidence`,
       };
     }
+    // schemaVersion-2 snapshots (issue #3471) report customer-facing counts
+    // as organic-only with the fleet's own rows under synthetic_*. The drift
+    // detector compares headline totals, so it re-adds the synthetic share —
+    // otherwise the organic-only cutover reads as a >50% drop and auto-files
+    // a false unexplained-drift incident.
     return {
       unavailable: false,
       generatedAt,
-      users_total: Number(product.users_total ?? 0),
-      active_watchlists: Number(product.active_watchlists ?? 0),
+      users_total: Number(product.users_total ?? 0) + Number(product.synthetic_users_total ?? 0),
+      active_watchlists:
+        Number(product.active_watchlists ?? 0) + Number(product.synthetic_active_watchlists ?? 0),
     };
   } catch (error) {
     return {

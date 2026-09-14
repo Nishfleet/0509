@@ -106,6 +106,23 @@ describe("getPublicStatusCounters digest query", () => {
     expect(result!.scheduledMonitoringSince).toBeNull();
   });
 
+  it("counts distinct watchlists with a stored TikTok capture for the /status failure-gap figure (issue #3195)", async () => {
+    const prepare = vi.fn((sql: string) => {
+      let row: Row | null = null;
+      if (sql.includes("FROM source_snapshot")) row = { tiktok_captures: 3 };
+      else if (sql.includes("SUM(CASE")) row = { total: 24, failed: 0 };
+      else if (sql.includes("FROM watchlist_run")) row = { last_started_at: "2026-09-06T09:00:04.000Z" };
+      else if (sql.includes("FROM digest_delivery")) row = { last_digest_sent_at: null };
+      else if (sql.includes("scheduled_observation_health_state")) row = { active_since: "2026-09-01T00:00:00.000Z" };
+      return {
+        bind: vi.fn(() => ({ all: vi.fn().mockResolvedValue({ results: row ? [row] : [] }) })),
+      };
+    });
+
+    const result = await getPublicStatusCounters(makeEnv(prepare));
+    expect(result!.tiktokCapturesInLast8d).toBe(3);
+  });
+
   it("flags a stall when no digest has been sent in 7 days while monitoring is healthy", async () => {
     const stale = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString();
     const prepare = vi.fn((sql: string) => {
