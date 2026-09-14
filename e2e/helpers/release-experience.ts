@@ -215,11 +215,18 @@ export async function expectMinimumTouchTarget(
   // (the once-measured boundingBox() raced the settled layout when the
   // release-proof workers saturated the runner). The 44x44 floor is
   // unchanged; the settle budget is TOUCH_TARGET_SETTLE_TIMEOUT_MS.
+  // fleet-ops#6344 review Act-on: the poll returns the measured box, not a bare
+  // boolean, so a timeout still prints the measured WxH in the red output (the
+  // 93.45x21.00px receipt is what diagnosed the 09-13 burst). A null box
+  // (detached/zero-size control) reports null dimensions instead of collapsing
+  // into the same shape as a too-small control.
   await expect
     .poll(
       async () => {
         const box = await control.boundingBox();
-        return box ? hasMinimumTouchTarget(box, minimum) : false;
+        return box
+          ? { ok: hasMinimumTouchTarget(box, minimum), width: box.width, height: box.height }
+          : { ok: false, width: null, height: null };
       },
       {
         message: `touch target should be at least ${minimum}x${minimum}px after settle`,
@@ -227,7 +234,7 @@ export async function expectMinimumTouchTarget(
         intervals: [...TOUCH_TARGET_SETTLE_INTERVALS_MS],
       },
     )
-    .toBe(true);
+    .toEqual(expect.objectContaining({ ok: true }));
 }
 
 export async function expectSecHeadingsNonZeroWidth(page: Page): Promise<void> {
