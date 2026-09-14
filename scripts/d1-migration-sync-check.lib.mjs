@@ -194,6 +194,36 @@ export function allowedRemoteMigrationLedgers(
 }
 
 /**
+ * Fail closed when the repository no longer ships the recorded baseline:
+ * every non-retired baseline name must still be the sorted prefix of
+ * `repositoryMigrations`. Without this guard a baseline file deleted
+ * without retiring leaves the ledger explainable while the repository
+ * silently loses an applied migration, and a new file sorting into the
+ * baseline range — the same class of hole that renumbered
+ * 0104_competitor_suggestion_dismissal.sql — goes unseen.
+ *
+ * @param {string[]} repositoryMigrations
+ * @param {readonly string[]} baseline
+ * @param {Set<string>} retiredMigrations
+ */
+function assertRepositoryBaselinePrefix(
+  repositoryMigrations,
+  baseline,
+  retiredMigrations,
+) {
+  const repositoryBaseline = baseline.filter(
+    (name) => !retiredMigrations.has(name),
+  );
+  if (
+    JSON.stringify(
+      repositoryMigrations.slice(0, repositoryBaseline.length),
+    ) !== JSON.stringify(repositoryBaseline)
+  ) {
+    throw new Error("migration_repository_baseline_drift");
+  }
+}
+
+/**
  * Decide whether a production migration ledger is explainable from the
  * repository and report the repository migrations still pending on it.
  *
@@ -247,6 +277,11 @@ export function inspectProductionMigrationLedger(
   ) {
     throw new Error("retired_production_migration_set_invalid");
   }
+  assertRepositoryBaselinePrefix(
+    repositoryMigrations,
+    baseline,
+    retiredMigrations,
+  );
   if (
     !Array.isArray(ledgerNames) ||
     ledgerNames.length === 0 ||
@@ -321,6 +356,11 @@ export function productionMigrationLedgerRule(
   ) {
     throw new Error("retired_production_migration_set_invalid");
   }
+  assertRepositoryBaselinePrefix(
+    repositoryMigrations,
+    baseline,
+    retiredMigrations,
+  );
   return Object.freeze({
     baselineSha256,
     baseline: Object.freeze([...baseline]),

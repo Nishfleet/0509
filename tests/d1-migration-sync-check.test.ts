@@ -216,6 +216,24 @@ Migrations to be applied:
       reason: "unexplained",
       unexplained: ["0004_renamed.sql"],
     });
+    // The intended end state of a rename: production keeps the stale
+    // 0004_renamed name, a forward catch-up applies the canonical
+    // 0005_renamed file, and both names stay on the ledger — the leftover
+    // alias and the member coexist with nothing pending.
+    expect(
+      inspectProductionMigrationLedger(
+        [
+          ...baseline,
+          "0003_a.sql",
+          "0004_b.sql",
+          "0004_renamed.sql",
+          "0005_renamed.sql",
+        ],
+        repository,
+        new Set(),
+        options,
+      ),
+    ).toEqual({ ok: true, pending: [], blockingPending: [] });
     // A post-baseline name the repository deleted is explainable only while
     // the retire list declares it.
     expect(
@@ -301,5 +319,57 @@ Migrations to be applied:
         "0001_first.sql",
       ]),
     ).toThrow("migration_ledger_names_invalid");
+  });
+
+  it("fails closed when the repository drops a non-retired baseline file or a file sorts into the baseline range", () => {
+    const baseline = ["0001_first.sql", "0002_second.sql", "0003_third.sql"];
+    const options = { baseline, retiredMigrations: new Set<string>() };
+    const ledger = [...baseline, "0004_next.sql"];
+    // A baseline file deleted without retiring: the ledger still carries it
+    // inside the recorded prefix, so without the drift guard the contract
+    // returns ok while the repository silently loses an applied migration.
+    expect(() =>
+      inspectProductionMigrationLedger(
+        ledger,
+        ["0001_first.sql", "0002_second.sql", "0004_next.sql"],
+        new Set(),
+        options,
+      ),
+    ).toThrow("migration_repository_baseline_drift");
+    // A repository file sorting into the recorded baseline range shifts the
+    // prefix the same way — the anomaly must throw, not pass as a new tail.
+    expect(() =>
+      inspectProductionMigrationLedger(
+        ledger,
+        [
+          "0001_first.sql",
+          "0002_alpha.sql",
+          "0002_second.sql",
+          "0003_third.sql",
+          "0004_next.sql",
+        ],
+        new Set(),
+        options,
+      ),
+    ).toThrow("migration_repository_baseline_drift");
+    // Both entry points enforce it — the rule builder feeds the deploy gate.
+    expect(() =>
+      productionMigrationLedgerRule(
+        ["0001_first.sql", "0002_second.sql", "0004_next.sql"],
+        new Set(),
+        options,
+      ),
+    ).toThrow("migration_repository_baseline_drift");
+    // A baseline file leaves the repository legally only through the retire
+    // list — which also keeps it explained on the ledger.
+    const retired = new Set(["0003_third.sql"]);
+    expect(
+      inspectProductionMigrationLedger(
+        ledger,
+        ["0001_first.sql", "0002_second.sql", "0004_next.sql"],
+        new Set(),
+        { baseline, retiredMigrations: retired },
+      ),
+    ).toEqual({ ok: true, pending: [], blockingPending: [] });
   });
 });
