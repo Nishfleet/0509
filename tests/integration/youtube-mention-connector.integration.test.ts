@@ -820,16 +820,15 @@ describe("youtube mention connector — presence substrate (real migrations)", (
     ]);
 
     // Predecessor rows must survive the copy too: 0103's CHECK is a superset
-    // of every CHECK that could precede it in any environment — 0101's
-    // (which carries 0100's, 0099's, 0098's and 0093's unions) here, and the
-    // reverted 0102_podcast's elsewhere — so these writes — one per
-    // non-youtube value any predecessor CHECK accepted — are the order-proof,
-    // and they must predate the re-application to prove the COPY keeps them
-    // through the rebuild. 'pinterest' is the regression proof for the
-    // 0101 era; 'podcast' (#3208, merged then auto-reverted from the repo)
-    // is the one for this widen: an environment that applied the podcast
-    // widen must keep podcast rows alive through this rebuild — a CHECK
-    // missing 'podcast' would fail the INSERT..SELECT copy outright.
+    // of 0102_podcast's (which itself carries 0101's, 0100's, 0099's, 0098's,
+    // and 0093's unions), so these writes — one per non-youtube value the
+    // 0102_podcast CHECK accepted — are the order-proof, and they must
+    // predate the re-application to prove the COPY keeps them through the
+    // rebuild. 'pinterest' is the regression proof for the pre-0102 era and
+    // 'podcast' is the one for this widen: 0103_youtube applies AFTER
+    // 0102_podcast (podcast < youtube, prod already carries podcast rows)
+    // and its CHECK must keep podcast rows alive — a CHECK missing
+    // 'podcast' would fail the INSERT..SELECT copy outright.
     const predecessorIds: Record<string, string> = {};
     for (const connectorId of ["website", "x", "reddit", "linkedin", "rss", "gdelt", "bluesky", "threads", "hn", "pinterest", "podcast"]) {
       const predecessorTargetId = uid("target");
@@ -856,8 +855,7 @@ describe("youtube mention connector — presence substrate (real migrations)", (
 
     // Every predecessor row (eleven connectors, pinterest and podcast
     // included) survives the copy — the CHECK union is order-proof whichever
-    // predecessor widen (0101 here, the reverted 0102 elsewhere) applied
-    // before it.
+    // of 0102_podcast/0103_youtube applied when.
     for (const [connectorId, predecessorTargetId] of Object.entries(predecessorIds)) {
       const healed = await appEnv.DB.prepare(`SELECT connector_id, target_key FROM source_target WHERE id = ?`)
         .bind(predecessorTargetId)
