@@ -1111,13 +1111,13 @@ export default function BrandAdsRoute() {
   const data = useLoaderData<typeof loader>();
   const liveSearchPath = `/search?website=${encodeURIComponent(data.domain)}`;
   const postSignupPath = `/app?website=${encodeURIComponent(data.domain)}#setup-checklist`;
-  const signupPath = `/auth/signup?redirectTo=${encodeURIComponent(postSignupPath)}`;
+  const signupPath = `/auth/signup?source=ads-page&redirectTo=${encodeURIComponent(postSignupPath)}`;
   // Issue #2051 — the primary acquisition CTA deep-links into signup with the
   // viewed competitor prefilled (`?competitor=<domain>`), so the SEO landing
   // page carries the brand the visitor just read about straight into
   // onboarding. `redirectTo` keeps the existing `website=` prefill wiring so
   // the first thing the new user tracks is the brand on this page.
-  const trackSignupPath = `/auth/signup?competitor=${encodeURIComponent(data.domain)}&redirectTo=${encodeURIComponent(postSignupPath)}`;
+  const trackSignupPath = `/auth/signup?competitor=${encodeURIComponent(data.domain)}&source=ads-page&redirectTo=${encodeURIComponent(postSignupPath)}`;
   const allBrandOwned =
     data.adCount > 0 && data.brandOwnedAdCount === data.adCount;
 
@@ -1209,7 +1209,7 @@ export default function BrandAdsRoute() {
           fresh={data.freshForLiveClaim}
         />
       ) : null}
-      <MarketingNav />
+      <MarketingNav signupSource="ads-page" />
 
       {data.hasCachedAds ? (
         <BrandAdsResults

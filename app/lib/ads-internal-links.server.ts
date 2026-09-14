@@ -20,6 +20,7 @@ import {
   loadIndexableTimelineEntries,
   timelineSitemapEntries,
 } from "~/lib/sitemap.server";
+import { reportError } from "~/lib/error-report.server";
 import type { AppEnv } from "~/lib/env.server";
 
 export async function loadIndexableAdsInternalLinks(env: AppEnv): Promise<IndexableAdsLink[]> {
@@ -36,6 +37,15 @@ export async function loadIndexableAdsInternalLinks(env: AppEnv): Promise<Indexa
   } catch (error) {
     console.warn("Indexable ads internal-link load failed; omitting /ads links.", {
       errorName: error instanceof Error ? error.name : typeof error,
+    });
+    // Issue #3476: the degrade must leave a durable record — the edge cache
+    // serves the link-less render for the whole serve-stale window, so a
+    // transient read failure looks exactly like a persistent cross-link
+    // regression unless the error_report sink can see it.
+    await reportError(env, {
+      route: "loader.ads_internal_links",
+      reasonCode: "indexable_ads_links_read_failed",
+      error,
     });
     return [];
   }
@@ -120,6 +130,14 @@ export async function loadIndexableTimelineDomains(env: AppEnv): Promise<Set<str
   } catch (error) {
     console.warn("Indexable timeline internal-link load failed; omitting /timeline links.", {
       errorName: error instanceof Error ? error.name : typeof error,
+    });
+    // Issue #3476: same observability rule — a silent degrade here is what
+    // made the check-ads-timeline-links sweep failure unverifiable until the
+    // edge cache happened to refresh.
+    await reportError(env, {
+      route: "loader.ads_internal_links",
+      reasonCode: "indexable_timeline_domains_read_failed",
+      error,
     });
     return new Set<string>();
   }

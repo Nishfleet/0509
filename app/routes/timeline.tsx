@@ -83,7 +83,7 @@ export default function TimelineIndex() {
   return (
     <div className="min-h-dvh bg-neutral-50 text-neutral-900">
       <script {...jsonLdScriptProps(itemListJsonLdValue)} />
-      <MarketingNav />
+      <MarketingNav signupSource="timeline-page" />
       <main className="mx-auto max-w-3xl px-4 py-16">
         <h1 className="text-3xl font-semibold tracking-tight">Offer Timelines</h1>
         <p className="mt-3 text-neutral-600">

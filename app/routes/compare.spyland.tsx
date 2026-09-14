@@ -119,7 +119,7 @@ export default function CompareSpylandRoute() {
           }),
         )}
       />
-      <MarketingNav />
+      <MarketingNav signupSource="compare-page" />
       <Breadcrumbs
         items={[
           { name: "Home", pathname: "/" },

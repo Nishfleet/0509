@@ -8,6 +8,7 @@ import { rssConnector } from "~/lib/presence-connectors/rss.server";
 import { threadsConnector } from "~/lib/presence-connectors/threads.server";
 import { websiteConnector } from "~/lib/presence-connectors/website.server";
 import { xConnector } from "~/lib/presence-connectors/x.server";
+import { youtubeConnector } from "~/lib/presence-connectors/youtube.server";
 import { connectorOperationalForPolling, evaluateConnectorAccessGate } from "~/lib/presence-access-gates.server";
 import type {
   ConnectorRolloutState,
@@ -30,6 +31,7 @@ const CONNECTORS = {
   threads: threadsConnector,
   hn: hnConnector,
   pinterest: pinterestConnector,
+  youtube: youtubeConnector,
 } as const;
 
 export function getPresenceConnector(connectorId: PresenceConnectorId) {
@@ -45,7 +47,9 @@ export function getPresenceConnector(connectorId: PresenceConnectorId) {
  * keyword-search connector) belongs here too — its stored rows are public
  * mentions of the tracked keywords, and they only exist when its env gate
  * is on. LinkedIn stays out — its LIMITED_COVERAGE self-brand-only posture
- * is not a general mention source.
+ * is not a general mention source. YouTube (#3203's search.list keyword
+ * connector) is the same shape as Threads — public keyword mentions — so it
+ * belongs here too.
  */
 export const PRESENCE_MENTION_CONNECTOR_IDS: PresenceConnectorId[] = [
   "rss",
@@ -54,6 +58,7 @@ export const PRESENCE_MENTION_CONNECTOR_IDS: PresenceConnectorId[] = [
   "gdelt",
   "bluesky",
   "threads",
+  "youtube",
 ];
 
 export function listPresenceConnectors() {
@@ -133,6 +138,12 @@ export async function pollPresenceTarget(
     // (lastItemCreatedAtI) — same wrapper the x/website/rss connectors read.
     return hnConnector.poll(ctx, target, options.cursor);
   }
+  if (target.connectorId === "youtube") {
+    // The prior cursor_json carries the publishedAfter watermark
+    // (lastItemPublishedAt) AND the counted-usage window — same wrapper hn
+    // reads for its Algolia watermark (issue #3203).
+    return youtubeConnector.poll(ctx, target, options.cursor);
+  }
   if (target.connectorId === "x") {
     return xConnector.poll(ctx, target, options.cursor);
   }
@@ -173,7 +184,7 @@ export function coverageLabelForConnector(
     // the rss connector, not a documented paid API (issue #3201).
     return "VERIFIED_PUBLIC_FEED" as const;
   }
-  if (connectorId === "gdelt" || connectorId === "threads" || connectorId === "hn") {
+  if (connectorId === "gdelt" || connectorId === "threads" || connectorId === "hn" || connectorId === "youtube") {
     return "OFFICIAL_PUBLIC_API" as const;
   }
   if (connectorId === "linkedin" && trackingMode === "competitor") {

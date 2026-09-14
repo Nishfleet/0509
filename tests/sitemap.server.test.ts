@@ -1368,12 +1368,27 @@ describe("loadIndexableTimelineEntries (D1 read)", () => {
     queryAll.mockRejectedValue(new Error("D1_ERROR: no such table: landing_page_snapshot"));
 
     await expect(runLoader({ DB: {} })).resolves.toEqual([]);
+    // A missing table is a schema state, not a hiccup — no retry.
+    expect(queryAll).toHaveBeenCalledTimes(1);
   });
 
   it("propagates genuine D1 failures instead of silently hiding them", async () => {
     queryAll.mockRejectedValue(new Error("connection lost"));
 
     await expect(runLoader({ DB: {} })).rejects.toThrow("connection lost");
+    // Issue #3476: one retry on transient failure, then the error propagates.
+    expect(queryAll).toHaveBeenCalledTimes(2);
+  });
+
+  it("recovers on the retry when the first read hits a transient D1 error (issue #3476)", async () => {
+    queryAll
+      .mockRejectedValueOnce(new Error("D1_NETWORK_ERROR: connection reset"))
+      .mockResolvedValue([snapshotRow()]);
+
+    const entries = await runLoader({ DB: {} });
+
+    expect(queryAll).toHaveBeenCalledTimes(2);
+    expect(entries.map((e: { path: string }) => e.path)).toEqual(["/timeline/nykaa.com"]);
   });
 });
 

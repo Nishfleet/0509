@@ -101,6 +101,31 @@ export const GUIDE_API_LIMITS_SIGNUP_SOURCE = "guide-api-limitations";
 export const GUIDE_CAN_CHATGPT_MONITOR_ADS_SIGNUP_SOURCE = "guide-can-chatgpt-monitor-ads";
 
 /**
+ * Acquisition-surface-family markers (issue #3358): every public acquisition
+ * family's signup CTA — the shared nav pill and each family's own signup
+ * links — carries its ONE distinct family marker, so the #4518 signups/week
+ * meter can slice signups by the surface that drove them. Hyphen slugs, on
+ * purpose: they ride the open #2108 shape (and 0087's open CHECK class
+ * [a-z0-9:.-]) — underscore spellings would need a 0087 CHECK literal, and
+ * #3358 ships no migration. The guides family's per-article markers remain
+ * the guide-<name> constants above; `guides-hub` marks the /guides hub.
+ *
+ * These constants are allowlist documentation for SERVER callers only —
+ * client-rendered surfaces carry the same strings as literals. This module
+ * statically imports d1.server, so a top-level `import ... from
+ * "~/lib/signup-source"` in a route component or shared component pulls a
+ * server-only module into the client graph and fails the react-router
+ * dot-server build check. Same convention as `source=pricing-free` in
+ * pricing-section.tsx: the literal ships in markup, the constant guards the
+ * allowlist, and the #3358 wiring test pins every surface's literal.
+ */
+export const ADS_PAGE_SIGNUP_SOURCE = "ads-page";
+export const COMPARE_PAGE_SIGNUP_SOURCE = "compare-page";
+export const SWITCH_PAGE_SIGNUP_SOURCE = "switch-page";
+export const TIMELINE_PAGE_SIGNUP_SOURCE = "timeline-page";
+export const GUIDES_HUB_SIGNUP_SOURCE = "guides-hub";
+
+/**
  * /for-agencies CTA marker (issue #2144): the agency landing page's signup
  * link carries `source=for_agencies` so Agency-plan funnel measurement can
  * attribute checkout starts to that page.
@@ -139,6 +164,11 @@ export const ALLOWED_SIGNUP_SOURCES = [
   GUIDE_STANDING_WATCH_SIGNUP_SOURCE,
   GUIDE_API_LIMITS_SIGNUP_SOURCE,
   GUIDE_CAN_CHATGPT_MONITOR_ADS_SIGNUP_SOURCE,
+  ADS_PAGE_SIGNUP_SOURCE,
+  COMPARE_PAGE_SIGNUP_SOURCE,
+  SWITCH_PAGE_SIGNUP_SOURCE,
+  TIMELINE_PAGE_SIGNUP_SOURCE,
+  GUIDES_HUB_SIGNUP_SOURCE,
 ] as const;
 
 /**
