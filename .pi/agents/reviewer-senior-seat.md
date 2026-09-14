@@ -1,7 +1,7 @@
 ---
 name: reviewer-senior-seat
 description: Stock reviewer prompt on the resolved senior seat (fleet-ops step 8) — byte-identical body to ~/.pi/agent/agents/reviewer.md, frontmatter seat only
-model: nebius/zai-org/GLM-5.3-Flash
+model: litellm/senior
 tools: read, grep, find, ls, bash
 ---
 

@@ -36,3 +36,13 @@ Post-rebase (branch rebased onto origin/main 65776e216): integration test 2 pass
 ## Phase 3 (A3+A4) — pending
 
 PR-body records: no-migration justification, #2919-answered-by-#2908, cross-links, the physically-real termination date-gate (next Monday 03:00Z tick after deploy).
+
+## Phase 3 (A3+A4) — DONE 2026-09-14 (ship)
+
+- Rebased onto fresh origin/main ce9fe551 (6 new main commits — presence/podcast + a revert; zero file overlap with this branch, verified via `git diff --name-only HEAD...origin/main`). Post-rebase re-verification, both green:
+  - `npx vitest run --configLoader runner --project workers tests/integration/monitoring-pickup.integration.test.ts --reporter=dot` → 1 file / 2 tests passed, 7.14s.
+  - `npx vitest run --configLoader runner --project node --changed origin/main` → 15 files / 200 tests passed.
+- sgscan --base origin/main → "No new security findings", exit 0. (First probe `sgscan --diff /tmp/...` failed with `unknown flag: --diff` — real failed command, flagged; --help then gave the correct interface.)
+- Local crgate exit 3 — CodeRabbit not signed in on this box; `coderabbit auth login` is interactive, not possible unattended. Flagged; the repo's `.coderabbit.yaml` still runs the GitHub-side review on the PR.
+- Reviewer seat re-resolved (fleet-ops step 8): `find_senior_seat` → `litellm	senior`; banked project-local `.pi/agents/reviewer-senior-seat.md` frontmatter updated to `model: litellm/senior` (was the stale `nebius/zai-org/GLM-5.3-Flash`). Body remains byte-identical to the stock reviewer agent (verified by diff).
+- No migrations touched: `git diff --name-only origin/main...HEAD | grep -c '^migrations/'` = 0. No new bin/ files. No gate-owned paths touched.
