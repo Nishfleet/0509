@@ -47,7 +47,9 @@ export function getPresenceConnector(connectorId: PresenceConnectorId) {
  * keyword-search connector) belongs here too — its stored rows are public
  * mentions of the tracked keywords, and they only exist when its env gate
  * is on. LinkedIn stays out — its LIMITED_COVERAGE self-brand-only posture
- * is not a general mention source.
+ * is not a general mention source. YouTube (#3203's search.list keyword
+ * connector) is the same shape as Threads — public keyword mentions — so it
+ * belongs here too.
  */
 export const PRESENCE_MENTION_CONNECTOR_IDS: PresenceConnectorId[] = [
   "rss",
@@ -56,6 +58,7 @@ export const PRESENCE_MENTION_CONNECTOR_IDS: PresenceConnectorId[] = [
   "gdelt",
   "bluesky",
   "threads",
+  "youtube",
 ];
 
 export function listPresenceConnectors() {

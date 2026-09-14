@@ -1,3 +1,4 @@
+import { decodeHtmlEntities } from "~/lib/decode-html.server";
 import { evaluateConnectorAccessGate } from "~/lib/presence-access-gates.server";
 import { presenceContentHash } from "~/lib/presence-hash";
 import { presenceSafeFetch } from "~/lib/presence-robots.server";
@@ -603,9 +604,14 @@ async function normalizeYouTubeSearchResult(
   }
 
   const observedAt = new Date().toISOString();
+  // Data API v3 snippet fields are HTML-escaped (title, description,
+  // channelTitle — the same escaping rss.server.ts's decodeXml pass exists
+  // for). Decode BEFORE trim/store/hash so the stored text and its
+  // contentHash carry the readable form; a later decode would look like a
+  // content change and re-revise the row.
   const title =
-    typeof result.snippet?.title === "string" && result.snippet.title.trim()
-      ? result.snippet.title.trim().slice(0, MAX_YOUTUBE_TITLE_CHARS)
+    typeof result.snippet?.title === "string" && decodeHtmlEntities(result.snippet.title).trim()
+      ? decodeHtmlEntities(result.snippet.title).trim().slice(0, MAX_YOUTUBE_TITLE_CHARS)
       : "YouTube video";
   // The documented RFC 3339 publishedAt, carried VERBATIM — the #3198
   // x-connector precedent (post.createdAt, no normalization) and this
@@ -621,10 +627,12 @@ async function normalizeYouTubeSearchResult(
     ? publishedAtRaw
     : null;
   const description =
-    typeof result.snippet?.description === "string" ? result.snippet.description.trim() : "";
+    typeof result.snippet?.description === "string"
+      ? decodeHtmlEntities(result.snippet.description).trim()
+      : "";
   const author =
-    typeof result.snippet?.channelTitle === "string" && result.snippet.channelTitle.trim()
-      ? result.snippet.channelTitle.trim()
+    typeof result.snippet?.channelTitle === "string" && decodeHtmlEntities(result.snippet.channelTitle).trim()
+      ? decodeHtmlEntities(result.snippet.channelTitle).trim()
       : null;
 
   const item: NormalizedPresenceItem = {

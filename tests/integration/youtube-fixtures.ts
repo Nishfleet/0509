@@ -133,6 +133,26 @@ export const SEARCH_PAGE_BOUNDARY_REREAD = JSON.stringify({
 
 export const EMPTY_PAGE = JSON.stringify({ kind: "youtube#searchListResponse", items: [] });
 
+// Data API v3 snippet fields are HTML-escaped: a search for a phrase with
+// an ampersand comes back as `&amp;`, quotes as `&quot;`/`&#39;`. The
+// connector decodes before trim/store/hash (rss.server.ts's decodeXml
+// precedent) so the stored mention reads like the page, not the wire.
+export const SEARCH_PAGE_ESCAPED = JSON.stringify({
+  kind: "youtube#searchListResponse",
+  items: [
+    {
+      id: { kind: "youtube#video", videoId: VIDEO_A_ID },
+      snippet: {
+        publishedAt: VIDEO_A_PUBLISHED_AT,
+        channelId: "UCfixture0002",
+        title: "Acme Robotics &amp; the &quot;warehouse&quot; bet",
+        description: "Tom &amp; Dana walk the floor &#8212; Acme Robotics inside.",
+        channelTitle: "Fixture &amp; Co",
+      },
+    },
+  ],
+});
+
 export function makeYoutubeEnv(
   rollout: string | undefined,
   apiKey: string | undefined = "fixture-youtube-key-1",

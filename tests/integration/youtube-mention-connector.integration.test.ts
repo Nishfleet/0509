@@ -24,6 +24,7 @@ import {
   readYoutubeCursorJson,
   SEARCH_PAGE,
   SEARCH_PAGE_BOUNDARY_REREAD,
+  SEARCH_PAGE_ESCAPED,
   SEARCH_PAGE_WITH_UNUSABLE,
   seedYoutubeTarget,
   VIDEO_A_ID,
@@ -157,6 +158,24 @@ describe("youtube mention connector — poll", () => {
       windowStart: expect.any(String),
       count: 1,
     });
+  });
+
+  it("decodes the Data API's HTML-escaped snippet fields before store and hash", async () => {
+    const target = await seedYoutubeTarget();
+    const fetchImpl = youtubeFetcher(() => ({ body: SEARCH_PAGE_ESCAPED }));
+
+    const poll = await youtubeConnector.poll(makeYoutubeCtx(fetchImpl, "ga"), target);
+    expect(poll.ok).toBe(true);
+    expect(poll.items).toHaveLength(1);
+
+    const item = poll.items[0];
+    // Stored text reads like the page, not the wire — `&amp;` never lands
+    // in the mention table (the rss decodeXml precedent), and the hash is
+    // computed over the DECODED text so a later decode is not a revision.
+    expect(item?.title).toBe('Acme Robotics & the "warehouse" bet');
+    expect(item?.bodyExcerpt).toBe("Tom & Dana walk the floor — Acme Robotics inside.");
+    expect(item?.author).toBe("Fixture & Co");
+    expect(item?.contentHash).not.toBe("");
   });
 
   it("capture-validity: a result without id.videoId is skipped, never fabricated, and the watermark still advances past it", async () => {
