@@ -117,6 +117,16 @@ describe("status route", () => {
     expect(xRow).toBeDefined();
     expect(xRow?.productionStatus).toBe("gated");
 
+    // Issue #3209 — the review-sites row: wired in, gated, honest about
+    // what the public surface covers (Trustpilot's published business-unit
+    // JSON-LD) and what it does not (G2/Capterra are bot-verified, their
+    // documented APIs partner/paid — documented, not silently claimed).
+    const reviewSitesRow = mentionSources.find((source) => source.sourceId === "review_sites");
+    expect(reviewSitesRow).toBeDefined();
+    expect(reviewSitesRow?.productionStatus).toBe("gated");
+    expect(reviewSitesRow?.notes).toContain("Trustpilot");
+    expect(reviewSitesRow?.notes).toContain("DataDome");
+
     // Issue #3207 — the Hacker News mention source's /status row: wired in,
     // still gated behind PRESENCE_HN_ROLLOUT, and the note states what the
     // public surface covers (public HN stories and comments whose stored

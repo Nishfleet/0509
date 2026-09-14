@@ -31,6 +31,7 @@ const SOURCE_LABELS: Record<PresenceSourceId, string> = {
   threads: "Threads",
   hn: "Hacker News",
   pinterest: "Pinterest",
+  review_sites: "Review sites",
   youtube: "YouTube",
   amazon: "Amazon marketplace",
   context_dev: "Context.dev (open-web provider)",
@@ -57,6 +58,7 @@ const CONNECTOR_FOR_SOURCE: Partial<Record<PresenceSourceId, PresenceConnectorId
   threads: "threads",
   hn: "hn",
   pinterest: "pinterest",
+  review_sites: "review_sites",
 };
 
 const SOCIAL_SOURCE_IDS = new Set<PresenceSourceId>(["x", "reddit", "linkedin", "bluesky", "threads", "pinterest"]);
@@ -112,6 +114,8 @@ function statusFromConnectorGate(
             ? "OFFICIAL_PUBLIC_API"
             : sourceId === "pinterest"
             ? "VERIFIED_PUBLIC_FEED"
+            : sourceId === "review_sites"
+            ? "PUBLIC_WEB_BEST_EFFORT"
             : sourceId === "linkedin" && trackingMode === "competitor"
             ? "LIMITED_COVERAGE"
             : sourceId === "x" || sourceId === "reddit"
@@ -487,6 +491,13 @@ export function presenceSourceCoverageForDocs(): Array<{
       productionStatus: "gated",
       notes:
         "Pinterest mention connector wired in (profile feed — https://www.pinterest.com/<handle>/feed.rss, public RSS 2.0, no key, no auth). Covers the tracked profile's own most recent pins (~25), for the tracked brand or person, self AND Competitor. Does NOT cover keyword-wide search across all of Pinterest, boards not on the tracked profile, repin/comment activity, or engagement counts — Pinterest exposes those only through its approval-gated, OAuth-per-user API v5, which stays parked (see the plan). The feed is an undocumented public surface, verified live 2026-09-13 — the same posture as Google News RSS: it works and can change without notice. In-connector rate budget: ONE serialized request per poll — the feed itself is the bounded window, no paging, no second fetch. Gated behind PRESENCE_PINTEREST_ROLLOUT — off by default; activation is a separate rollout decision.",
+    },
+    {
+      sourceId: "review_sites",
+      label: SOURCE_LABELS.review_sites,
+      productionStatus: "gated",
+      notes:
+        "Review-sites mention connector wired in (issue #3209), first provider Trustpilot: the tracked brand's public business-unit review page (trustpilot.com/review/<domain> — the page a human reads) and the schema.org/Review JSON-LD it itself publishes — no account, no API key, no vendor. Covers exactly the published page window: the ~20 newest reviews (measured 2026-09-13, fixture) with star ratings in raw_json; each mention's canonical URL is the public /reviews/<uuid> permalink (path 301-confirmed 2026-09-14), so re-polls dedupe by canonical URL and captured reviews stay. What it does NOT cover, stated: G2/Capterra public pages are bot-verified (G2 = DataDome, Capterra = Cloudflare — measured 2026-09-13/14, challenge fixture ships with the issue) and their documented APIs are partner/paid — not captured; a g2/capterra target answers provider_not_wired_yet. In-connector rate budget: one serialized GET of the review page per target per poll; a challenge page or an unparsable body records an honest failure (review_site_challenge / review_site_parse_failed) — never a fabricated mention. Gated behind PRESENCE_REVIEW_SITES_ROLLOUT — off by default; activation is a separate rollout decision. Collector research (searched + rejected, dated): docs/mentions/PLAN.md §8.",
     },
     {
       sourceId: "youtube",

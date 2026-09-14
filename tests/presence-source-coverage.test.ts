@@ -126,6 +126,23 @@ describe("presence source coverage policy", () => {
     expect(entry.coverageLabel).toBe("CONNECTED_ACCOUNT");
   });
 
+  it("marks review-sites tracking available once the rollout flag admits it (#3209) — the public-web source needs no credentials", async () => {
+    const entry = await evaluatePresenceSourceCoverage(
+      {
+        ...baseEnv,
+        PRESENCE_REVIEW_SITES_ROLLOUT: "internal",
+      },
+      "review_sites",
+      "self",
+    );
+    expect(entry.status).toBe("available");
+    // The tracked brand's Trustpilot business-unit review page is the public
+    // web, read best-effort — the website-connector posture, not an
+    // official-public-API one (bot-verification interstitials are an
+    // honestly recorded failure, never a fabricated capture).
+    expect(entry.coverageLabel).toBe("PUBLIC_WEB_BEST_EFFORT");
+  });
+
   it("marks YouTube as planned without claiming active coverage", async () => {
     const entry = await evaluatePresenceSourceCoverage(baseEnv, "youtube", "competitor");
     expect(entry.status).toBe("planned");
@@ -157,6 +174,7 @@ describe("presence source coverage policy", () => {
       "threads",
       "hn",
       "pinterest",
+      "review_sites",
       "youtube",
       "amazon",
       "context_dev",
@@ -384,6 +402,7 @@ describe("presence source coverage policy", () => {
     expect(docs.find((entry) => entry.sourceId === "amazon")?.productionStatus).toBe("manual_only");
     expect(docs.find((entry) => entry.sourceId === "x")?.productionStatus).toBe("gated");
     expect(docs.find((entry) => entry.sourceId === "linkedin")?.productionStatus).toBe("gated");
+    expect(docs.find((entry) => entry.sourceId === "review_sites")?.productionStatus).toBe("gated");
   });
 
   // The five seam competitor-monitoring sources (#2218) report "configured"

@@ -231,6 +231,8 @@ export interface AppEnv {
   PRESENCE_HN_ROLLOUT?: string;
   /** Pinterest (profile feed.rss) mention connector rollout: disabled | internal | pilot | ga. Defaults to disabled (gated, off by default). */
   PRESENCE_PINTEREST_ROLLOUT?: string;
+  /** Review-sites (Trustpilot public business-unit pages) mention connector rollout: disabled | internal | pilot | ga. Defaults to disabled (gated, off by default). */
+  PRESENCE_REVIEW_SITES_ROLLOUT?: string;
   /** Digest delivery rollout: disabled | internal | pilot | ga. Defaults to disabled (notifications off). */
   PRESENCE_DIGEST_ROLLOUT?: string;
   /**

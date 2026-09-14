@@ -4,6 +4,7 @@ import { linkedinConnector } from "~/lib/presence-connectors/linkedin.server";
 import { blueskyConnector } from "~/lib/presence-connectors/bluesky.server";
 import { pinterestConnector } from "~/lib/presence-connectors/pinterest.server";
 import { redditConnector } from "~/lib/presence-connectors/reddit.server";
+import { reviewSitesConnector } from "~/lib/presence-connectors/review-sites.server";
 import { rssConnector } from "~/lib/presence-connectors/rss.server";
 import { threadsConnector } from "~/lib/presence-connectors/threads.server";
 import { websiteConnector } from "~/lib/presence-connectors/website.server";
@@ -30,6 +31,7 @@ const CONNECTORS = {
   threads: threadsConnector,
   hn: hnConnector,
   pinterest: pinterestConnector,
+  review_sites: reviewSitesConnector,
 } as const;
 
 export function getPresenceConnector(connectorId: PresenceConnectorId) {
@@ -133,6 +135,12 @@ export async function pollPresenceTarget(
     // (lastItemCreatedAtI) — same wrapper the x/website/rss connectors read.
     return hnConnector.poll(ctx, target, options.cursor);
   }
+  if (target.connectorId === "review_sites") {
+    // The connector re-reads the published page window each poll; the
+    // (source_target_id, url_hash) UNIQUE constraint dedupes the overlap, so
+    // no cursor is carried (bluesky/threads precedent).
+    return reviewSitesConnector.poll(ctx, target);
+  }
   if (target.connectorId === "x") {
     return xConnector.poll(ctx, target, options.cursor);
   }
@@ -175,6 +183,12 @@ export function coverageLabelForConnector(
   }
   if (connectorId === "gdelt" || connectorId === "threads" || connectorId === "hn") {
     return "OFFICIAL_PUBLIC_API" as const;
+  }
+  if (connectorId === "review_sites") {
+    // A public business-unit review page — the same page a human reads,
+    // fetched best-effort (bot-verification interstitials are an honestly
+    // recorded failure, never a fabricated capture).
+    return "PUBLIC_WEB_BEST_EFFORT" as const;
   }
   if (connectorId === "linkedin" && trackingMode === "competitor") {
     return "LIMITED_COVERAGE" as const;
