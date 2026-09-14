@@ -30,7 +30,9 @@ function makeKv() {
     async delete(key: string) {
       store.delete(key);
     },
-  } as unknown as KVNamespace;
+  } as unknown as KVNamespace & {
+    store: Map<string, { value: string; expirationTtl?: number }>;
+  };
 }
 
 function envWithKv(kv: KVNamespace): AppEnv {
