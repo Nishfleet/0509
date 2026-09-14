@@ -51,6 +51,17 @@
   "ai": {
     "binding": "AI"
   },
+  // Issue #3521: spec-§4 funnel events land here via writeDataPoint in
+  // app/lib/funnel-measurement.server.ts so trailing-7d/30d counts per kind
+  // are queryable (console logs alone are ephemeral). Dataset auto-creates
+  // on first write; read path is the Analytics Engine SQL API from
+  // scripts/weekly-business-metrics.mjs (docs/ga-metrics.md).
+  "analytics_engine_datasets": [
+    {
+      "binding": "FUNNEL_ANALYTICS",
+      "dataset": "funnel_events"
+    }
+  ],
   "send_email": [
     {
       "name": "EMAIL"

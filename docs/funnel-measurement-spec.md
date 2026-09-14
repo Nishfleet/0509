@@ -203,17 +203,24 @@ is forbidden.
 
 ## 7. Storage and query plan
 
-No new storage exists and none is authorized by this document. The plan for a future
-implementation uses only existing surfaces:
+Storage uses only the surfaces below; no further storage is authorized by this
+document. The Analytics Engine `funnel_events` dataset was added under issue #3521
+(the spec's "existing surfaces" already named Workers observability; the dataset is
+that surface's queryable tier, carrying only §4-allowlisted fields):
 
-1. **Structured JSON logs (existing).** Anonymous funnel events (`funnel_home_view`,
-   `funnel_search_preview_*`, `funnel_signup_start`) are written as structured JSON log
-   records via the existing `app/lib/log.server.ts` mechanism (`operation: funnel_*`),
-   which scrubs values under credential-named keys (`secret`, `password`, `token`,
-   `signature`, `cookie`, `authorization`, `api_key`, etc.). That scrubbing is narrow
-   key-based redaction of credential material, not a privacy allowlist: the privacy
-   controls are the §4 field allowlist and the redaction tests in §8. This keeps
-   anonymous pre-auth measurement out of any new database.
+1. **Structured JSON logs + Analytics Engine (existing, no new schema).** Anonymous
+   funnel events (`funnel_home_view`, `funnel_search_preview_*`, `funnel_signup_start`)
+   are written as structured JSON log records via the existing
+   `app/lib/log.server.ts` mechanism (`operation: funnel_*`), which scrubs values
+   under credential-named keys (`secret`, `password`, `token`, `signature`, `cookie`,
+   `authorization`, `api_key`, etc.). That scrubbing is narrow key-based redaction of
+   credential material, not a privacy allowlist: the privacy controls are the §4 field
+   allowlist and the redaction tests in §8. The same already-filtered record is also
+   written to the Workers Analytics Engine dataset `funnel_events` (issue #3521) via
+   `writeDataPoint`, carrying only §4-allowlisted values as blobs plus the `event_id`
+   as the sampling index — the queryable sink that makes trailing-7d/30d counts per
+   kind readable (console logs are ephemeral). This keeps anonymous pre-auth
+   measurement out of any new database table.
 2. **Existing D1 records (existing, read-only).** Account/workspace-scoped activation
    measures (signup completion, first watchlist, first proof, paid conversion; §3.2)
    are derived from existing business tables (`user`, `user_plan`, `watchlist`,
@@ -268,27 +275,39 @@ enabled only when **all** pass:
 
 **This PR passes none of the above gates. It only writes this specification.**
 
-### 8.7 Retention window (2026-09-09)
+_2026-09-14 (issue #3521): the line above describes the original spec PR.
+Collection was enabled later under the gated rollout (`FUNNEL_MEASUREMENT_ENABLED`
+in `wrangler.jsonc`). The 2026-09-14 change adds only the queryable Analytics
+Engine sink for the same already-emitted §4 records — no new collection, no
+allowlist change (§7.1, §8.7)._
 
-Funnel events are structured JSON lines written through `app/lib/log.server.ts`
-(`console.log`). Workers Logs (Cloudflare Workers observability) is the only store.
-There is no D1 table, KV key, or R2 object for funnel events.
+### 8.7 Retention window (2026-09-09; sink updated 2026-09-14, issue #3521)
 
-The retention bound is that platform window. It is not a product retention period
+Funnel events live in two bounded stores: structured JSON lines written through
+`app/lib/log.server.ts` (`console.log`) into Workers Logs (Cloudflare Workers
+observability), and the Workers Analytics Engine dataset `funnel_events`
+(`writeDataPoint` on the `FUNNEL_ANALYTICS` binding). There is no D1 table, KV key,
+or R2 object for funnel events.
+
+The retention bound is the platform windows. It is not a product retention period
 Nish has approved (§6 still requires that approval before enablement):
 
-- Workers Paid (this account): 7 days
-- Workers Free: 3 days
-- Platform maximum: 7 days
+- Workers Logs — Workers Paid (this account): 7 days; Workers Free: 3 days;
+  platform maximum: 7 days
+- Workers Analytics Engine: fixed 3-month retention — materially the 90-day bound
+  approved 2026-09-09 (issue #2106); the ~2-day edge on long months is inherent to
+  the platform window, not a product setting
 
-Source: Cloudflare Workers Logs Limits and Pricing,
+Sources: Cloudflare Workers Logs Limits and Pricing,
 https://developers.cloudflare.com/workers/observability/logs/workers-logs/
-(docs last updated 2026-08-11).
+(docs last updated 2026-08-11); Workers Analytics Engine Limits,
+https://developers.cloudflare.com/analytics/analytics-engine/limits/
+(data retention: three months).
 
-Account deletion has no funnel residue to clean. Events are request-scoped log
-lines with no per-user row, so existing account-deletion flows have nothing extra
-to delete. Tests in `tests/funnel-measurement.test.ts` prove logs-only emission
-and the absence of per-user funnel rows.
+Account deletion has no funnel residue to clean. Events are request-scoped records
+with no per-user row, so existing account-deletion flows have nothing extra to
+delete. Tests in `tests/funnel-measurement.test.ts` prove emission stays within
+the §4 allowlist on both sinks and the absence of per-user funnel rows.
 
 ## 9. Review checklist against current surfaces
 

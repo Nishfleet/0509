@@ -133,6 +133,14 @@ export interface AppEnv {
    * deliberately set.
    */
   FUNNEL_MEASUREMENT_ENABLED?: string;
+  /**
+   * Workers Analytics Engine dataset (`funnel_events`) for the spec-§4
+   * funnel records (issue #3521): each emitted event also lands here via
+   * writeDataPoint so trailing-7d/30d counts per kind are queryable
+   * (console logs are ephemeral). Optional because tests and dev envs
+   * build env objects by hand; absent means log-only emission.
+   */
+  FUNNEL_ANALYTICS?: AnalyticsEngineDataset;
   LANDING_PAGE_ARTIFACTS?: R2Bucket;
   /**
    * Explicit gate for the R2 -> D1 orphan reconciliation delete path. Absent or

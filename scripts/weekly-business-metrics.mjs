@@ -40,9 +40,18 @@
  *      against their `signup_completed` funnel event (PR #1965) when
  *      --events-ndjson supplies event records; rows without one are listed as
  *      suspect, never silently counted.
+ *
+ * --json also carries `funnel` (issue #3521): trailing-7d/30d counts per
+ *      emitted funnel event kind, read from the Workers Analytics Engine
+ *      `funnel_events` dataset — the queryable sink the emit path writes via
+ *      writeDataPoint (binding FUNNEL_ANALYTICS, wrangler.jsonc). Counts are
+ *      sample-corrected (`sumIf`/`SUM(_sample_interval)`). When the
+ *      Analytics Engine read cannot run, `funnel.available` is false with the
+ *      reason — never a manufactured zero.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -68,6 +77,27 @@ const usagePeriods = 12;
 const yieldWeeks = 12;
 /** Trailing windows of the direction metric (issue #3321; direction#4518). */
 const directionWindows = { recent: 7, baseline: 30 };
+/** Issue #3521 — the queryable funnel sink: the Workers Analytics Engine
+ * dataset the emit path writes via writeDataPoint (binding FUNNEL_ANALYTICS
+ * in wrangler.jsonc). Read through the account-level SQL API; the same
+ * deploy/operator Cloudflare credentials the D1 reads use already carry
+ * Account Analytics Read on this account. */
+const FUNNEL_DATASET = "funnel_events";
+const FUNNEL_WINDOWS = { recent: 7, baseline: 30 };
+/** The visit→signup stage kinds the issue names; every other emitted kind is
+ * still counted and listed under `kinds`. */
+const FUNNEL_HEADLINE_KINDS = [
+  "home_view",
+  "search_preview_submit",
+  "search_preview_result",
+  "search_preview_error",
+  "signup_start",
+];
+/** Credential files consulted for the Analytics Engine read, in order. */
+const CLOUDFLARE_CREDENTIAL_ENV_FILES = [
+  join(homedir(), ".config", "cloudflare", "deploy.env"),
+  join(homedir(), ".config", "cloudflare", "analytics.env"),
+];
 /** Workers Logs retention on this account (docs/funnel-measurement-spec.md):
  * a signup_completed event older than this can no longer be checked. */
 const EVENT_RETENTION_DAYS = 7;
@@ -94,6 +124,12 @@ Usage:
                                                    "funnel_signup_completed"), the same NDJSON contract as
                                                    scripts/funnel-daily-counts.mjs. "-" reads stdin.
   node scripts/weekly-business-metrics.mjs --help  Print this help and exit
+
+--json output carries \`funnel\` (issue #3521): per-kind trailing-7d/30d event
+counts from the Workers Analytics Engine \`${FUNNEL_DATASET}\` dataset
+(credential lookup: CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN env, then
+~/.config/cloudflare/deploy.env, then analytics.env). \`funnel.available\`
+false means the read could not run — counts are then absent, never zeroed.
 
 Runs the six docs/ga-metrics.md business-metric queries plus a weekly
 watch_event yield check against production D1 via
@@ -831,27 +867,244 @@ function readSignupEventRecords(eventsPath) {
   return parsed;
 }
 
+// ---------------------------------------------------------------------------
+// Funnel read path (issue #3521): the emitted funnel_* events land in the
+// Workers Analytics Engine `funnel_events` dataset (writeDataPoint inside
+// emitFunnelEvent). One SQL-API round trip yields trailing-7d and -30d
+// counts per kind; evaluateFunnelCounts turns the rows into the JSON shape.
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a simple KEY=VALUE env file (same convention as
+ * scripts/cf-traffic-report.mjs). Blank lines and `#` comments are ignored;
+ * an optional `export ` prefix and surrounding quotes are stripped.
+ *
+ * @param {string} path
+ * @returns {Record<string, string>}
+ */
+function parseEnvFile(path) {
+  /** @type {Record<string, string>} */
+  const values = {};
+  for (const rawLine of readFileSync(path, "utf8").split("\n")) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const match = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
+    if (!match) continue;
+    let value = match[2].trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    values[match[1]] = value;
+  }
+  return values;
+}
+
+/**
+ * Credentials for the Analytics Engine SQL API (Account Analytics Read).
+ * Resolution order: exported CLOUDFLARE_ACCOUNT_ID/CLOUDFLARE_API_TOKEN,
+ * then ~/.config/cloudflare/deploy.env (the deploy token already carries
+ * the account-analytics read on this account), then
+ * ~/.config/cloudflare/analytics.env (the narrower analytics token, same
+ * convention as scripts/cf-traffic-report.mjs).
+ *
+ * @returns {{ accountId: string, token: string, source: string } | null}
+ */
+function funnelReadCredentials() {
+  const sources = [
+    {
+      accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
+      token: process.env.CLOUDFLARE_API_TOKEN,
+      source: "CLOUDFLARE_* environment",
+    },
+  ];
+  for (const path of CLOUDFLARE_CREDENTIAL_ENV_FILES) {
+    if (!existsSync(path)) continue;
+    try {
+      const parsed = parseEnvFile(path);
+      sources.push({
+        accountId: parsed.CLOUDFLARE_ACCOUNT_ID ?? parsed.CF_ACCOUNT_ID,
+        token: parsed.CLOUDFLARE_API_TOKEN ?? parsed.CF_ANALYTICS_API_TOKEN,
+        source: path,
+      });
+    } catch {
+      // An unreadable credential file is skipped, not fatal — the next
+      // source may still supply credentials.
+    }
+  }
+  const found = sources.find(
+    (candidate) =>
+      typeof candidate.accountId === "string" &&
+      candidate.accountId.trim() &&
+      typeof candidate.token === "string" &&
+      candidate.token.trim(),
+  );
+  if (!found) return null;
+  return {
+    accountId: String(found.accountId).trim(),
+    token: String(found.token).trim(),
+    source: found.source,
+  };
+}
+
+/**
+ * One Analytics Engine SQL API round trip. Success answers the
+ * {meta, data, rows} envelope; a rejected query or bad credential answers
+ * plain text ("Input was invalid: ...") with a non-2xx status.
+ *
+ * @param {string} sql
+ * @param {{ accountId: string, token: string }} credentials
+ * @returns {Promise<{ data?: Array<Record<string, unknown>> }>}
+ */
+async function runAnalyticsEngineQuery(sql, credentials) {
+  const url = `https://api.cloudflare.com/client/v4/accounts/${credentials.accountId}/analytics_engine/sql`;
+  let response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${credentials.token}` },
+      body: sql,
+    });
+  } catch (error) {
+    throw new Error(
+      `could not reach the Analytics Engine SQL API: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(
+      `Analytics Engine SQL API HTTP ${response.status}: ${text.trim().slice(0, 300)}`,
+    );
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(
+      `Analytics Engine SQL API returned a non-JSON response: ${text.trim().slice(0, 300)}`,
+    );
+  }
+}
+
+/**
+ * The funnel-counts query. `SUM(_sample_interval)` (not COUNT(*)) is the
+ * documented sample-corrected event count: when the engine samples, each
+ * row's interval is >1 and a bare COUNT underreports. `sumIf` splits the
+ * recent window inside the same round trip. blob1 is the emitted operation
+ * (`funnel_<kind>`) — see writeFunnelDataPoint in
+ * app/lib/funnel-measurement.server.ts.
+ *
+ * @returns {string}
+ */
+export function buildFunnelCountsQuery() {
+  return `SELECT blob1 AS kind, sumIf(_sample_interval, timestamp >= NOW() - INTERVAL '${FUNNEL_WINDOWS.recent}' DAY) AS events_7d, SUM(_sample_interval) AS events_30d FROM ${FUNNEL_DATASET} WHERE timestamp >= NOW() - INTERVAL '${FUNNEL_WINDOWS.baseline}' DAY GROUP BY kind ORDER BY kind`;
+}
+
+/**
+ * Pure mapper: AE rows ({kind, events_7d, events_30d}) → the `funnel` JSON
+ * object. Every headline kind is present even at zero events — an absent
+ * `funnel_*` row means none were written, an honest zero; a row whose kind
+ * does not start with `funnel_` cannot enter the report.
+ *
+ * @param {Array<Record<string, unknown>>} rows
+ * @returns {{ kinds: Array<{ kind: string, events_7d: number, events_30d: number }> } & Record<string, unknown>}
+ */
+export function evaluateFunnelCounts(rows) {
+  /** @type {Map<string, { kind: string, events_7d: number, events_30d: number }>} */
+  const perKind = new Map();
+  for (const kind of FUNNEL_HEADLINE_KINDS) {
+    perKind.set(`funnel_${kind}`, {
+      kind: `funnel_${kind}`,
+      events_7d: 0,
+      events_30d: 0,
+    });
+  }
+  for (const row of rows ?? []) {
+    const kind = String(row?.kind ?? "");
+    if (!kind.startsWith("funnel_")) continue;
+    perKind.set(kind, {
+      kind,
+      events_7d: Number(row?.events_7d ?? 0),
+      events_30d: Number(row?.events_30d ?? 0),
+    });
+  }
+  /** @type {{ kinds: Array<{ kind: string, events_7d: number, events_30d: number }> } & Record<string, unknown>} */
+  const funnel = {
+    kinds: [...perKind.values()].sort((a, b) => a.kind.localeCompare(b.kind)),
+  };
+  for (const kind of FUNNEL_HEADLINE_KINDS) {
+    const cell = perKind.get(`funnel_${kind}`);
+    funnel[`${kind}_7d`] = cell?.events_7d ?? 0;
+    funnel[`${kind}_30d`] = cell?.events_30d ?? 0;
+  }
+  return funnel;
+}
+
+/**
+ * The funnel section: `available` is honest. Missing credentials or a failed
+ * query reports `available: false` + the reason — the report never prints a
+ * manufactured zero. A not-yet-created dataset is NOT an error: the SQL API
+ * answers an empty result set for an unwritten dataset, which maps to real
+ * zeros (no events written yet).
+ *
+ * @returns {Promise<{ available: boolean, detail?: string, dataset?: string, credential_source?: string, windows_days?: { recent: number, baseline: number }, kinds?: Array<{ kind: string, events_7d: number, events_30d: number }> } & Record<string, unknown>>}
+ */
+async function readFunnelCounts() {
+  const credentials = funnelReadCredentials();
+  if (!credentials) {
+    return {
+      available: false,
+      detail:
+        "no Cloudflare API credentials found — set CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN, or store them in ~/.config/cloudflare/deploy.env or analytics.env",
+    };
+  }
+  try {
+    const response = await runAnalyticsEngineQuery(
+      buildFunnelCountsQuery(),
+      credentials,
+    );
+    const rows = Array.isArray(response?.data) ? response.data : [];
+    return {
+      available: true,
+      dataset: FUNNEL_DATASET,
+      credential_source: credentials.source,
+      windows_days: FUNNEL_WINDOWS,
+      ...evaluateFunnelCounts(rows),
+    };
+  } catch (error) {
+    return {
+      available: false,
+      credential_source: credentials.source,
+      detail: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
 /**
  * The --json mode (issue #3321): one read-only production read, the pure
  * meter, one JSON object. Fails honestly — any read error propagates to
- * main() and exits 1 rather than printing partial numbers.
+ * main() and exits 1 rather than printing partial numbers. The `funnel`
+ * section degrades to `available: false` with its reason instead of failing
+ * the direction metric.
  *
  * @param {string | null} eventsPath
  */
-function runSignupIntegrityJson(eventsPath) {
+async function runSignupIntegrityJson(eventsPath) {
   const rows = runQuery(buildSignupsIntegrityQuery());
   const events = eventsPath ? readSignupEventRecords(eventsPath) : null;
   const now = new Date();
   const result = evaluateSignupIntegrity(rows, now, events);
   result.generated_at = now.toISOString();
+  result.funnel = await readFunnelCounts();
   console.log(JSON.stringify(result, null, 2));
 }
 
-function main() {
+async function main() {
   const options = parseArgs();
   if (options.json) {
     try {
-      runSignupIntegrityJson(options.eventsPath);
+      await runSignupIntegrityJson(options.eventsPath);
     } catch (error) {
       console.error(error instanceof Error ? error.message : error);
       process.exit(1);
@@ -975,6 +1228,24 @@ function main() {
 
     printSection("8. Drift check — headline counts vs prior daily snapshot");
     runDriftCheck();
+
+    printSection("9. Funnel events — visit→signup (Workers Analytics Engine)");
+    const funnel = await readFunnelCounts();
+    if (!funnel.available) {
+      console.log(`funnel unavailable: ${String(funnel.detail)}`);
+    } else {
+      printTable(
+        [
+          { key: "kind", label: "kind" },
+          { key: "events_7d", label: "events_7d" },
+          { key: "events_30d", label: "events_30d" },
+        ],
+        funnel.kinds ?? [],
+      );
+      console.log(
+        `\n_Source: Analytics Engine dataset \`${FUNNEL_DATASET}\`, sample-corrected counts; credentials from ${String(funnel.credential_source)}._\n`,
+      );
+    }
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);
     process.exit(1);
@@ -1050,5 +1321,8 @@ function runDriftCheck() {
 }
 
 if (invokedDirectly) {
-  main();
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exit(1);
+  });
 }

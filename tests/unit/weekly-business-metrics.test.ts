@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   SYNTHETIC_USER_PATTERNS,
+  buildFunnelCountsQuery,
   buildSignupsIntegrityQuery,
+  evaluateFunnelCounts,
   evaluateSignupIntegrity,
   parseSignupEventRecords,
   rowsFromWranglerJson,
@@ -332,5 +334,51 @@ describe("weekly-business-metrics signup integrity (issue #3321)", () => {
       ),
     ).toThrowError(/7403/);
     expect(() => rowsFromWranglerJson("not json")).toThrowError(/malformed/);
+  });
+});
+
+describe("weekly-business-metrics funnel section (issue #3521)", () => {
+  it("queries the funnel_events Analytics Engine dataset with both windows, sample-corrected", () => {
+    const sql = buildFunnelCountsQuery();
+    expect(sql).toContain("FROM funnel_events");
+    expect(sql).toContain("INTERVAL '7' DAY");
+    expect(sql).toContain("INTERVAL '30' DAY");
+    expect(sql).toContain("sumIf(_sample_interval");
+    expect(sql).toContain("SUM(_sample_interval)");
+    expect(sql).not.toContain("COUNT(*)");
+  });
+
+  it("maps funnel_* rows to per-kind 7d/30d counts and zero-fills the headline kinds", () => {
+    const funnel = evaluateFunnelCounts([
+      { kind: "funnel_home_view", events_7d: 12, events_30d: 40 },
+      { kind: "funnel_signup_start", events_7d: 2, events_30d: 9 },
+      { kind: "funnel_signup_completed", events_7d: 1, events_30d: 4 },
+      { kind: "not_funnel", events_7d: 999, events_30d: 999 },
+    ]);
+    expect(funnel.home_view_7d).toBe(12);
+    expect(funnel.home_view_30d).toBe(40);
+    expect(funnel.signup_start_7d).toBe(2);
+    expect(funnel.signup_start_30d).toBe(9);
+    expect(funnel.search_preview_submit_7d).toBe(0);
+    expect(funnel.search_preview_result_7d).toBe(0);
+    expect(funnel.search_preview_error_7d).toBe(0);
+    const kindNames = funnel.kinds.map((entry) => entry.kind);
+    expect(kindNames).toContain("funnel_signup_completed");
+    expect(kindNames).not.toContain("not_funnel");
+  });
+
+  it("zero-fills every headline kind on an empty dataset — a not-yet-created dataset is an honest zero, not an error", () => {
+    const funnel = evaluateFunnelCounts([]);
+    for (const key of [
+      "home_view",
+      "search_preview_submit",
+      "search_preview_result",
+      "search_preview_error",
+      "signup_start",
+    ]) {
+      expect(funnel[`${key}_7d`]).toBe(0);
+      expect(funnel[`${key}_30d`]).toBe(0);
+    }
+    expect(funnel.kinds).toHaveLength(5);
   });
 });
