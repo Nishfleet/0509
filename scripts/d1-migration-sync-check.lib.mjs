@@ -129,10 +129,25 @@ export const RETIRED_PRODUCTION_MIGRATIONS = new Set([
 // allowed to carry them. (run 34671488829, 0509#3174)
 export const PRODUCTION_MIGRATION_LEDGER_ORDER_EXCEPTIONS = Object.freeze([
   Object.freeze(["0096_error_reports.sql", "0096_email_suppression.sql"]),
-  // Run 34705843153, 0509#3315: production applied 0098_gdelt before the 0098_bluesky file landed (same-number interleave).
+  // Runs 34705843153 (0509#3315) and 34838655854+ (0509#3415): production
+  // applied 0098_gdelt while 0098_bluesky was still repo-only, and the
+  // ledger then ran ahead through 0102 before
+  // 0098_competitor_suggestion_dismissal.sql and
+  // 0103_widen_source_target_connector_youtube.sql first landed on main.
+  // D1's ledger is append-only, so this merge-vs-apply skew is fixed
+  // history: the nine names below are the live order, and the forward
+  // catch-up appends the two pending names after 0102 in repository
+  // order — the same tail this group declares.
   Object.freeze([
+    "0098_email_delivery_canary.sql",
     "0098_widen_source_target_connector_gdelt.sql",
     "0098_widen_source_target_connector_bluesky.sql",
+    "0099_widen_source_target_connector_threads.sql",
+    "0100_widen_source_target_connector_hn.sql",
+    "0101_widen_source_target_connector_pinterest.sql",
+    "0102_widen_source_target_connector_podcast.sql",
+    "0098_competitor_suggestion_dismissal.sql",
+    "0103_widen_source_target_connector_youtube.sql",
   ]),
 ]);
 

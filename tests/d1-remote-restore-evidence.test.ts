@@ -1631,10 +1631,10 @@ describe("D1 remote restore evidence automation", () => {
         name,
         appliedAt: "2026-09-12 04:04:45",
       }));
-    // With the 0098 order exception declared (0509#3315) this partial
-    // interleave has two allowed futures that diverge at the 0098 pair
-    // (bluesky-first vs gdelt-first); the planner fails closed instead of
-    // guessing.
+    // With the 0098/0103 order exception declared (0509#3315, extended by
+    // 0509#3415) this partial interleave has two allowed futures that
+    // diverge at the rotated 0098 tail (sorted order vs the production
+    // order); the planner fails closed instead of guessing.
     expect(
       planSourceBackupLedgerReconciliation(
         namedLedger(productionNames),
@@ -1669,12 +1669,16 @@ describe("D1 remote restore evidence automation", () => {
     });
   });
 
-  it("plans catch-up when production applied 0098_gdelt before 0098_bluesky landed", () => {
-    // Run 34705843153 (2026-09-12, 0509#3315): the fresh production backup
-    // ledger ends 0098_email_delivery_canary.sql,
-    // 0098_widen_source_target_connector_gdelt.sql — production applied
-    // 0098_gdelt while 0098_bluesky was still repo-only. Same-number
-    // interleave, same mechanism as the 0096 precedent above.
+  it("plans catch-up for the live 0098/0103 ledger hole: production ran ahead through 0102 while two migrations were still repo-only", () => {
+    // Runs 34705843153 (2026-09-12, 0509#3315) and 34838655854 (2026-09-14,
+    // 0509#3415): production applied 0098_gdelt while 0098_bluesky was still
+    // repo-only, then appended the sorted 0098_bluesky→0102 tail while
+    // 0098_competitor_suggestion_dismissal.sql and
+    // 0103_widen_source_target_connector_youtube.sql had not yet landed on
+    // main. Their later landing leaves a mid-ledger hole: production's live
+    // order is the declared exception group, and a forward apply appends the
+    // two pending names after 0102 in repository order — the same tail the
+    // group declares.
     const repository = readdirSync(resolve("migrations"))
       .filter((name) => /^\d{4}_.+\.sql$/u.test(name))
       .sort();
@@ -1687,17 +1691,19 @@ describe("D1 remote restore evidence automation", () => {
     const repositoryHead = repositorySuffix.filter(
       (name) => name < "0096_email_suppression.sql",
     );
-    // This modeled state has applied five of the module const's names (plus
-    // 0096_error_reports, which production applied while it was the tail and
-    // the const never lists). Everything else the const lists — 0098_bluesky
-    // and every later migration — is still repo-only here, so both the
-    // planned catch-up and the full ledger derive from REPO_ONLY_MIGRATIONS.
+    // The names the live production ledger has already applied, in the order
+    // production carries them: the 0096 pair in applied order, then the
+    // declared exception group minus the two still-pending names.
     const appliedFromRepoOnly = [
       "0096_email_suppression.sql",
       "0097_status_probe_samples.sql",
-      "0098_competitor_suggestion_dismissal.sql",
       "0098_email_delivery_canary.sql",
       "0098_widen_source_target_connector_gdelt.sql",
+      "0098_widen_source_target_connector_bluesky.sql",
+      "0099_widen_source_target_connector_threads.sql",
+      "0100_widen_source_target_connector_hn.sql",
+      "0101_widen_source_target_connector_pinterest.sql",
+      "0102_widen_source_target_connector_podcast.sql",
     ];
     const stillRepoOnly = REPO_ONLY_MIGRATIONS.filter(
       (name) => !appliedFromRepoOnly.includes(name),
@@ -1706,21 +1712,23 @@ describe("D1 remote restore evidence automation", () => {
       ...PRODUCTION_MIGRATION_LEDGER_BASELINE,
       ...repositoryHead,
       // The 0096 pair in the production-applied order (error_reports was the
-      // tail when production applied it), then 0097, the 0098 competitor
-      // dismissal (it sorts first), the canary, and 0098_gdelt. Every
-      // planned catch-up carries the still-repo-only names after
-      // 0098_bluesky.
+      // tail when production applied it), then the applied members of the
+      // 0098/0103 exception group in the order production holds them.
       "0096_error_reports.sql",
       ...appliedFromRepoOnly,
     ];
     expect(productionNames.at(-1)).toBe(
-      "0098_widen_source_target_connector_gdelt.sql",
+      "0102_widen_source_target_connector_podcast.sql",
     );
+    expect(stillRepoOnly).toEqual([
+      "0098_competitor_suggestion_dismissal.sql",
+      "0103_widen_source_target_connector_youtube.sql",
+    ]);
     const namedLedger = (names: string[]) =>
       names.map((name, index) => ({
         id: index + 1,
         name,
-        appliedAt: "2026-09-12 16:45:00",
+        appliedAt: "2026-09-14 11:45:00",
       }));
     expect(
       planSourceBackupLedgerReconciliation(
@@ -1737,6 +1745,21 @@ describe("D1 remote restore evidence automation", () => {
         repository,
       ),
     ).toEqual({ action: "ok" });
+    // A ledger that already carries 0103 ahead of the still-pending
+    // 0098_competitor_suggestion_dismissal matches no declared order — the
+    // planner stays fail-closed instead of inventing an interleave.
+    expect(
+      planSourceBackupLedgerReconciliation(
+        namedLedger([
+          ...productionNames,
+          "0103_widen_source_target_connector_youtube.sql",
+        ]),
+        repository,
+      ),
+    ).toEqual({
+      action: "reject",
+      reason: "source_backup_migration_ledger_stale",
+    });
   });
 
   it("still rejects a production ledger carrying one unknown extra name", () => {
