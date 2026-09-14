@@ -31,9 +31,9 @@
 -- unaffected. No drops of data tables, no renames of production columns, no
 -- NOT NULL without a DEFAULT. Rollback of the PR removes code, never data.
 
-CREATE TABLE pi_bk_0102 AS SELECT * FROM presence_item;
-CREATE TABLE pc_bk_0102 AS SELECT * FROM presence_poll_cursor;
-CREATE TABLE pir_bk_0102 AS SELECT * FROM presence_item_revision;
+CREATE TABLE pi_bk_0103 AS SELECT * FROM presence_item;
+CREATE TABLE pc_bk_0103 AS SELECT * FROM presence_poll_cursor;
+CREATE TABLE pir_bk_0103 AS SELECT * FROM presence_item_revision;
 
 CREATE TABLE source_target_appstore_widen_new (
   id TEXT PRIMARY KEY NOT NULL,
@@ -67,12 +67,12 @@ FROM source_target;
 DROP TABLE source_target;
 ALTER TABLE source_target_appstore_widen_new RENAME TO source_target;
 
-INSERT INTO presence_item SELECT * FROM pi_bk_0102;
-INSERT INTO presence_poll_cursor SELECT * FROM pc_bk_0102;
-INSERT INTO presence_item_revision SELECT * FROM pir_bk_0102;
-DROP TABLE pi_bk_0102;
-DROP TABLE pc_bk_0102;
-DROP TABLE pir_bk_0102;
+INSERT INTO presence_item SELECT * FROM pi_bk_0103;
+INSERT INTO presence_poll_cursor SELECT * FROM pc_bk_0103;
+INSERT INTO presence_item_revision SELECT * FROM pir_bk_0103;
+DROP TABLE pi_bk_0103;
+DROP TABLE pc_bk_0103;
+DROP TABLE pir_bk_0103;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_source_target_entity_connector_key
   ON source_target(tracked_entity_id, connector_id, target_key)

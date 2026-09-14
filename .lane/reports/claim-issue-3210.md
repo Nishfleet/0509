@@ -59,3 +59,16 @@ conflicts (appstore kept, podcast dropped — main's revert wins), and shipped.
   Play-reviews exclusion.
 - `sgscan` → no new security findings.
 - No typecheck/coverage run in-workspace (CI owns both; fleet-ops#4891).
+
+## Resume pass (this unit, 2026-09-14)
+
+- Merged `origin/main` @ `16bd92843` (16 commits incl. tiktok source +
+  coverage-golden additions) — clean, no conflicts.
+- Fixed the leftover `0102` staleness the last salvage left: migration
+  backup tables renamed `*_bk_0102` → `*_bk_0103` (the convention is
+  suffix = own migration number; 0102 is podcast's live production file)
+  and the connector doc comment now names 0103.
+- Re-ran on this worktree: `npx vitest run --configLoader runner
+  --project node --changed origin/main` → 376 files, 4728/4728 pass;
+  `npx vitest run --configLoader runner --project workers` → 89 files,
+  539/539 pass; the appstore file alone after the rename → 8/8.
