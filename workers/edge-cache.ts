@@ -51,8 +51,8 @@ import {
 //   manifest (the 2026-07-13 asset-skew incident class). Invalidation on
 //   deploy is implicit: old keys are simply never asked for again, and the
 //   stored copy's stretched TTL bound (fresh ttl + the #3247 serve-stale
-//   window) stays as a nested defense — a stale serve can never cross a
-//   deploy because the key changes underneath it.
+//   window + the #3522 rewarm grace) stays as a nested defense — a stale
+//   serve can never cross a deploy because the key changes underneath it.
 // - Store only 200, text/html, no set-cookie, has-max-age responses.
 //   Logged-in and personalised routes never reach the store: their responses
 //   are no-store HTML and their requests carry cookies.
@@ -83,16 +83,17 @@ const EDGE_TTL_CAP_SECONDS = 300;
  * the match-side age check: `cache.match` returns `undefined` for entries past
  * their stored max-age (the platform's own expiry — the documented "missing or
  * expired" miss), so a stale-window check against a 300-second copy can never
- * fire. storeEdgeCache therefore stores `max-age = ttl + this window` as the
- * matchable lifetime while every SERVED response keeps the origin's capped
- * `public, max-age=<ttl>` browser contract, while the shared edge reads the
- * served s-maxage (issue #3308: the check-live-public-home deploy gate
- * asserts exactly `public, s-maxage=3900, max-age=300`). The window is sized past
- * the hourly judge cadence so a warm copy outlives one probe interval, and a
- * stale serve triggers a background re-render (workers/app.ts) so periodic
- * probe traffic keeps the edge warm instead of alternating MISS/HIT. The
- * bound stays real: past max-age+window the copy hard-expires and the next
- * request re-renders for real.
+ * fire. storeEdgeCache therefore stores `max-age = ttl + this window +
+ * EDGE_ZONE_REWARM_GRACE_SECONDS` as the matchable lifetime while every SERVED
+ * response keeps the origin's capped `public, max-age=<ttl>` browser contract,
+ * while the shared edge reads the served s-maxage (issue #3308: the
+ * check-live-public-home deploy gate asserts exactly
+ * `public, s-maxage=3900, max-age=300`). The window is sized past the hourly
+ * judge cadence so a warm copy outlives one probe interval, and a stale serve
+ * triggers a background re-render (workers/app.ts) so periodic probe traffic
+ * keeps the edge warm instead of alternating MISS/HIT. The bound stays real:
+ * past max-age+window+grace the copy hard-expires and the next request
+ * re-renders for real.
  *
  * Stale marketing-HTML staleness within the window is already the design's
  * accepted posture — the #3125 proof brief carries its own fetchedAt clock
@@ -102,6 +103,30 @@ const EDGE_TTL_CAP_SECONDS = 300;
  * worker version upload, so a stale serve can never cross a deploy.
  */
 export const EDGE_STALE_WINDOW_SECONDS = 3600;
+
+/** Rewarm grace (issue #3522): extra matchable lifetime BEYOND the window the
+ * shared edge is told to hold a copy. The served `s-maxage = ttl + window`
+ * (3900) is the zone's hold on the very response the worker served — so the
+ * zone entry and the worker's stored copy used to expire at the SAME instant
+ * (both stored `ttl + window`). Every request past that boundary was a
+ * guaranteed double-MISS full render — the 2026-09-14 home_edge=NONE +
+ * 3662ms TTFB — because the serve-stale machinery above can only fire while
+ * a request reaches the worker, and the zone shielded it for the entire
+ * window. With the copy matchable this much longer than the zone's hold, a
+ * zone expiry always lands on a stale-but-serveable copy: it answers in ~ms
+ * and the waitUntil'd background re-render (workers/app.ts) re-arms a fresh
+ * copy underneath the zone's next hold. The stale serve itself carries the
+ * same `s-maxage`, so the zone re-holds for the full window each boundary —
+ * a stale serve never collapses the zone's coverage of the probe cadence
+ * back to a short hold (a short stale-serve s-maxage would expire the zone
+ * between hourly probes again, which is the #3308 flap shape).
+ * The grace is sized at the window so a copy stays serveable for the whole
+ * probe cadence even when it only ever sees anonymous traffic: a boundary
+ * request landing anywhere inside the next judge interval still stale-serves
+ * instead of cold-rendering. It does not widen what the zone is told — the
+ * served contract is untouched — only how long the WORKER keeps the copy
+ * available to answer the zone's expiry. */
+export const EDGE_ZONE_REWARM_GRACE_SECONDS = 3600;
 
 const EDGE_CACHE_HEADER = "x-0509-edge-cache";
 
@@ -421,8 +446,11 @@ function headOf(status: number, statusText: string, headers: Headers): Response 
  * when the request is ineligible, the cache is absent, or the Cache API
  * hiccups — fail-open). Cache-key construction is version-pinned so every
  * deploy self-invalidates. A copy older than its own max-age still serves as
- * a HIT within the #3247 serve-stale window (EDGE_STALE_WINDOW_SECONDS); past
- * the window the copy hard-expires and the caller re-renders.
+ * a HIT within the #3247 serve-stale window plus the #3522 rewarm grace
+ * (EDGE_STALE_WINDOW_SECONDS + EDGE_ZONE_REWARM_GRACE_SECONDS — the grace is
+ * what keeps the copy alive past the zone's own hold so a zone expiry lands
+ * on this serve instead of a synchronized double-miss); past that the copy
+ * hard-expires and the caller re-renders.
  *
  * Exported for the unit tests.
  */
@@ -445,16 +473,18 @@ export async function matchEdgeCache(
     return null;
   }
   // Serve-stale window (#3247): only expire a copy that is older than its
-  // fresh bound PLUS the stale window. The stored copy's own stretched
-  // max-age is what keeps it matchable this long at all — `cache.match`
-  // self-enforces the stored cache-control, so the explicit check is the
-  // semantic authority and nested defence, not the expiry mechanism. A
-  // missing/unreadable stored-at stamp (pre-#3247 entries) never expires
-  // early — the version-id key and the stretched put TTL still bound those
-  // copies exactly as before.
+  // fresh bound PLUS the stale window PLUS the #3522 rewarm grace — the copy
+  // must still be here when the zone's own ttl+window hold expires, or both
+  // layers miss together and the boundary request pays a full cold render.
+  // The stored copy's own stretched max-age is what keeps it matchable this
+  // long at all — `cache.match` self-enforces the stored cache-control, so
+  // the explicit check is the semantic authority and nested defence, not the
+  // expiry mechanism. A missing/unreadable stored-at stamp (pre-#3247
+  // entries) never expires early — the version-id key and the stretched put
+  // TTL still bound those copies exactly as before.
   const age = edgeCacheCopyAgeSeconds(cached);
   const ttl = edgeCacheCopyTtlSeconds(cached);
-  if (age !== null && age > ttl + EDGE_STALE_WINDOW_SECONDS) {
+  if (age !== null && age > ttl + EDGE_STALE_WINDOW_SECONDS + EDGE_ZONE_REWARM_GRACE_SECONDS) {
     return null;
   }
   const headers = stampedHeaders(cached, "HIT");
@@ -486,11 +516,12 @@ export async function matchEdgeCache(
  * for HEAD requests). The body is buffered once and reused for the hash
  * computation, the stored copy, and the caller's reply, so the stored CSP
  * header authorises exactly the stored bytes. The stored copy drops
- * set-cookie and pins `cache-control: public, max-age=<ttl + stale window>`
- * so the shared edge copy stays matchable through the #3247 serve-stale
- * window even when the original browser directive was the conservative
- * `private`; the served reply always restores the origin's capped
- * `public, max-age=<ttl>` contract. Never throws: a body or hash failure returns the
+ * set-cookie and pins `cache-control: public, max-age=<ttl + stale window +
+ * rewarm grace>` so the shared edge copy stays matchable through the #3247
+ * serve-stale window AND past the zone's own ttl+window hold (#3522) even
+ * when the original browser directive was the conservative `private`; the
+ * served reply always restores the origin's capped `public, max-age=<ttl>`
+ * contract. Never throws: a body or hash failure returns the
  * ORIGINAL response untouched (still nonce'd — exactly today's behaviour) and
  * stores nothing; a put failure returns the nonce-free variant unstamped by
  * the cache (still a MISS in truth). No 5xx path exists.
@@ -536,12 +567,15 @@ export async function storeEdgeCache(
   storedHeaders.delete("expires");
   storedHeaders.delete("age");
   // The stored copy's cache-control is the MATCH lifetime — fresh ttl plus
-  // the serve-stale window — because `cache.match` enforces the stored
-  // max-age itself. The browser-facing `public, max-age=<ttl>` contract is
-  // restored on every serve from the stamped ttl below.
+  // the serve-stale window plus the #3522 rewarm grace — because
+  // `cache.match` enforces the stored max-age itself, and the copy must
+  // outlive the zone's own ttl+window hold (the served s-maxage below) or
+  // both layers expire together and the boundary request re-renders cold.
+  // The browser-facing `public, max-age=<ttl>` contract is restored on every
+  // serve from the stamped ttl below.
   storedHeaders.set(
     "cache-control",
-    `public, max-age=${ttl + EDGE_STALE_WINDOW_SECONDS}`,
+    `public, max-age=${ttl + EDGE_STALE_WINDOW_SECONDS + EDGE_ZONE_REWARM_GRACE_SECONDS}`,
   );
   storedHeaders.set(EDGE_STORED_AT_HEADER, String(Math.floor(Date.now() / 1000)));
   storedHeaders.set(EDGE_STORED_TTL_HEADER, String(ttl));
