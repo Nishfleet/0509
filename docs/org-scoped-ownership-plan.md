@@ -81,6 +81,7 @@ is authoritative when the two disagree; PRs that move a table update both.
 | agent_action_audit | user_id (append-only audit) | no | P3, P4 |
 | proof_usage_credit | user_id | no | P3, P4 |
 | evidence_usage_period / evidence_usage_reservation / evidence_top_up_grant / evidence_top_up_ledger_entry / evidence_top_up_adjustment | workspace_user_id (already workspace-proxy keyed) | no | P3, P4 (add org_id for uniformity) |
+| competitor_suggestion_dismissal | user_id | no | P3, P4 (#3175 slice 2: which suggested competitors a user dismissed) |
 
 ### 2b. Via-parent product tables — scoped through an org-keyed parent
 

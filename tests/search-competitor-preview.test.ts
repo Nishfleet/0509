@@ -179,7 +179,12 @@ function installLoaderMocks({
       selectedAd: baseAd,
     }),
   }));
-  vi.doMock("~/lib/auto-competitor-seed.server", () => ({
+  // Partial mock: `buildCandidateId` must stay REAL. The search preview route
+  // imports it from this module (the dismissal store keys on the same string),
+  // and mocking it away makes the route's own import throw — which its catch
+  // would swallow into a silent "no preview" (onboarding slice 2, #3175).
+  vi.doMock("~/lib/auto-competitor-seed.server", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("~/lib/auto-competitor-seed.server")>()),
     seedAutoCompetitors,
   }));
 
@@ -341,6 +346,10 @@ function makeRow(overrides: Partial<SuggestedCompetitorRow> = {}): SuggestedComp
     overlapScore: 0.84,
     provenance:
       "meta_ad_library_keyword_probe: keyword:\"glow sale\" country:\"United States\". Candidates are only advertisers with active ads on the searched terms.",
+    // Slice 2 (#3175) made why/source REQUIRED on every row, so the fixture
+    // default carries both (overridable, like every other field here).
+    why: "Runs ads on “glow sale” in United States.",
+    source: "ad_keyword_overlap" as const,
     type: "candidate" as const,
     ...overrides,
   };
@@ -377,7 +386,10 @@ describe("SearchCompetitorPreviewSection rendering (issue #2113)", () => {
       makeRow({ candidateId: "cariuma|cariuma.com|", advertiser: "Cariuma", landingPageUrl: "https://cariuma.com" }),
     ];
     const html = renderSection({
-      preview: { domain: "nykaa.com", rows },
+      // Slice 2 (#3175) put caps on SuggestedCompetitorsPanelData; this
+      // mirrors the route's logged-out construction (search.tsx: a public
+      // preview is always a frozen, zero-tracked snapshot).
+      preview: { domain: "nykaa.com", rows, caps: { visible: 5, tracked: 0, frozen: true } },
       country: "all",
     });
 
@@ -405,7 +417,7 @@ describe("SearchCompetitorPreviewSection rendering (issue #2113)", () => {
 
   it("renders nothing (no fabricated suggestion) when discovery returned zero candidates", () => {
     const html = renderSection({
-      preview: { domain: "nykaa.com", rows: [] },
+      preview: { domain: "nykaa.com", rows: [], caps: { visible: 5, tracked: 0, frozen: true } },
       country: "all",
     });
 
@@ -427,7 +439,7 @@ describe("SearchCompetitorPreviewSection rendering (issue #2113)", () => {
       makeRow({ candidateId: "allbirds|allbirds.com|", advertiser: "Allbirds", landingPageUrl: "https://allbirds.com" }),
     ];
     const html = renderSection({
-      preview: { domain: "nykaa.com", rows },
+      preview: { domain: "nykaa.com", rows, caps: { visible: 5, tracked: 0, frozen: true } },
       country: "all",
       handoffToken: "signed-token-abc",
     });

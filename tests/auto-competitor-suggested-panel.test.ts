@@ -87,7 +87,13 @@ function installMocks({
       brandLogo: null,
     }),
   }));
-  vi.doMock("~/lib/auto-competitor-seed.server", () => ({
+  // Partial mock: only `seedAutoCompetitors` is stubbed. `buildCandidateId`
+  // is the REAL export from this module, because the dismissal store keys on
+  // it and the panel loader imports it from here — mocking it away would make
+  // the suite pass against a fabrication rather than the shipping key shape
+  // (onboarding slice 2, #3175).
+  vi.doMock("~/lib/auto-competitor-seed.server", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("~/lib/auto-competitor-seed.server")>()),
     seedAutoCompetitors,
   }));
   vi.doMock("~/lib/plan.server", () => ({
@@ -125,6 +131,8 @@ function makeCandidate(overrides: Partial<SuggestedCompetitorRow> = {}): Suggest
     targetCountry: "United States",
     overlapScore: 0.82,
     provenance: "Keyword probe: 'wool runners' \u00d7 United States",
+    why: "Runs ads on \u201cwool runners\u201d in United States.",
+    source: "ad_keyword_overlap" as const,
     type: "candidate" as const,
     ...overrides,
   };
@@ -147,13 +155,34 @@ function renderPanel(props: Parameters<typeof SuggestedCompetitorsPanel>[0]) {
 }
 
 describe("loadSuggestedCompetitorsPanel", () => {
-  it("returns null on free plans so the panel omits itself (paid-tier gate)", async () => {
-    installMocks({ getUserPlan: vi.fn().mockResolvedValue("free") });
+  it("shows free plans a FROZEN snapshot instead of nothing (slice 2, #3175)", async () => {
+    // Free used to get `null` (no panel at all). Slice 2 reverses that: the
+    // evidence is real and worth showing, so free sees the discovered set with
+    // `frozen: true` and `tracked: 0`, and the panel renders it read-only.
+    installMocks({
+      getUserPlan: vi.fn().mockResolvedValue("free"),
+      seedAutoCompetitors: vi.fn().mockResolvedValue([
+        {
+          advertiser: "Rothy's",
+          advertiserPageId: null,
+          registrableDomain: "rothys.com",
+          overlapScore: 3,
+          provenance: "Keyword probe: 'wool runners' \u00d7 United States",
+          why: "Runs ads on \u201cwool runners\u201d in United States.",
+          source: "ad_keyword_overlap" as const,
+          countries: ["United States"],
+          matchedKeywords: ["wool runners"],
+        },
+      ]),
+    });
     const { loadSuggestedCompetitorsPanel: fresh } = await import(
       "~/lib/auto-competitor-suggested-loader.server"
     );
     const result = await fresh({} as AppEnv, "user-1", "free");
-    expect(result).toBeNull();
+    expect(result).not.toBeNull();
+    expect(result!.caps.frozen).toBe(true);
+    expect(result!.caps.tracked).toBe(0);
+    expect(result!.rows.length).toBe(1);
   });
 
   it("returns only candidates (type 'candidate') — never 'confirmed' rows", async () => {
@@ -164,6 +193,8 @@ describe("loadSuggestedCompetitorsPanel", () => {
         registrableDomain: "rothys.com",
         overlapScore: 0.84,
         provenance: "Keyword probe: 'wool runners' \u00d7 United States",
+        why: "Runs ads on the same terms as you.",
+        source: "ad_keyword_overlap" as const,
         countries: ["United States"],
         matchedKeywords: ["wool runners"],
       },
@@ -173,6 +204,8 @@ describe("loadSuggestedCompetitorsPanel", () => {
         registrableDomain: "vivaia.com",
         overlapScore: 0.71,
         provenance: "Keyword probe: 'wool shoes' \u00d7 United States",
+        why: "Runs ads on the same terms as you.",
+        source: "ad_keyword_overlap" as const,
         countries: ["United States"],
         matchedKeywords: ["wool shoes"],
       },
@@ -198,6 +231,8 @@ describe("loadSuggestedCompetitorsPanel", () => {
         registrableDomain: "rothys.com",
         overlapScore: 0.84,
         provenance: "Keyword probe: 'wool runners' \u00d7 United States",
+        why: "Runs ads on the same terms as you.",
+        source: "ad_keyword_overlap" as const,
         countries: ["United States"],
         matchedKeywords: ["wool runners"],
       },
@@ -261,6 +296,8 @@ describe("loadSuggestedCompetitorsPanel", () => {
         // Lower index = HIGHER score so desc order = ascending index, easy to read.
         overlapScore: 1 - index * 0.05,
         provenance: `Keyword probe: 'term ${index}' \u00d7 United States`,
+        why: "Runs ads on the same terms as you.",
+        source: "ad_keyword_overlap" as const,
         countries: ["United States"],
         matchedKeywords: [`term ${index}`],
       })),
@@ -345,6 +382,8 @@ describe("accept-suggested-competitor action", () => {
           registrableDomain: "rothys.com",
           overlapScore: 0.84,
           provenance: "Keyword probe: 'wool runners' \u00d7 United States",
+          why: "Runs ads on the same terms as you.",
+          source: "ad_keyword_overlap" as const,
           countries: ["United States"],
           matchedKeywords: ["wool runners"],
         },
@@ -414,6 +453,8 @@ describe("accept-suggested-competitor action", () => {
           registrableDomain: "rothys.com",
           overlapScore: 0.84,
           provenance: "Keyword probe: 'wool runners' × United States",
+          why: "Runs ads on the same terms as you.",
+          source: "ad_keyword_overlap" as const,
           countries: ["United States"],
           matchedKeywords: ["wool runners"],
         },
@@ -460,6 +501,8 @@ describe("accept-suggested-competitor action", () => {
           registrableDomain: "rothys.com",
           overlapScore: 0.84,
           provenance: "Keyword probe: 'wool runners' \u00d7 United States",
+          why: "Runs ads on the same terms as you.",
+          source: "ad_keyword_overlap" as const,
           countries: ["United States"],
           matchedKeywords: ["wool runners"],
         },
@@ -487,6 +530,8 @@ describe("accept-suggested-competitor action", () => {
           registrableDomain: "rothys.com",
           overlapScore: 0.84,
           provenance: "Keyword probe: 'wool runners' \u00d7 United States",
+          why: "Runs ads on the same terms as you.",
+          source: "ad_keyword_overlap" as const,
           countries: ["United States"],
           matchedKeywords: ["wool runners"],
         },
@@ -509,6 +554,8 @@ describe("accept-suggested-competitor action", () => {
           registrableDomain: "rothys.com",
           overlapScore: 0.84,
           provenance: "Keyword probe: 'wool runners' \u00d7 United States",
+          why: "Runs ads on the same terms as you.",
+          source: "ad_keyword_overlap" as const,
           countries: ["United States"],
           matchedKeywords: ["wool runners"],
         },
@@ -542,6 +589,7 @@ describe("SuggestedCompetitorsPanel rendering (honesty eval 3.4)", () => {
             overlapScore: 0.71,
           }),
         ],
+        caps: { visible: 8, tracked: 10, frozen: false },
         feedback: null,
         pending: false,
         pendingCandidateId: null,
@@ -568,6 +616,7 @@ describe("SuggestedCompetitorsPanel rendering (honesty eval 3.4)", () => {
     const html = renderPanel({
       domain: "allbirds.com",
       rows: [],
+      caps: { visible: 8, tracked: 10, frozen: false },
       feedback: null,
       pending: false,
       pendingCandidateId: null,
@@ -582,6 +631,7 @@ describe("SuggestedCompetitorsPanel rendering (honesty eval 3.4)", () => {
     const html = renderPanel({
       domain: "allbirds.com",
       rows: [makeCandidate()],
+      caps: { visible: 8, tracked: 10, frozen: false },
       feedback: {
         ok: undefined,
         error: "plan_limit_exceeded",
@@ -599,6 +649,7 @@ describe("SuggestedCompetitorsPanel rendering (honesty eval 3.4)", () => {
     const html = renderPanel({
       domain: "allbirds.com",
       rows: [makeCandidate()],
+      caps: { visible: 8, tracked: 10, frozen: false },
       feedback: {
         ok: true,
         message: "Now watching Rothy's.",
