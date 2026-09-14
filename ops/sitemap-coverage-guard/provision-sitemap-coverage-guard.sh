@@ -54,8 +54,8 @@ require_root() {
   [[ "$(id -u)" -eq 0 ]] || die "run as root"
 }
 
-# Resolve the toolchain bin dir for the nish user. systemd does not source
-# the nish user's login shell, so node/gh (which live under the nish
+# Resolve the toolchain bin dir(s) for the nish user. systemd does not
+# source the nish user's login shell, so node/gh (which live under the nish
 # toolchain, not /usr/bin) are not on the default service PATH.
 #
 # A login-shell lookup is NOT reliable here: this host's ~/.bash_profile is
@@ -63,9 +63,14 @@ require_root() {
 # ~/.local/bin entirely. Worse, a stale root-owned /usr/local/bin/node
 # exists, so `command -v node` alone can resolve to a dir the guard still
 # cannot file an issue from. Instead, scan candidate dirs and pick the
-# first that contains BOTH an executable node AND gh. Fails (non-zero) if
-# no such dir exists.
-resolve_node_bin_dir() {
+# first that contains BOTH an executable node AND gh — the single-dir shape
+# the nish toolchain has (~/.local/bin). On hosts where the tools are split
+# across dirs (CI runners keep node in a toolcache dir and gh in /usr/bin),
+# emit a "<node-dir>:<gh-dir>" prefix from the same candidate order rather
+# than failing — the leading node dir is still the toolchain dir, so the
+# stale /usr/local/bin/node can only win when nothing earlier carries node.
+# Fails (non-zero) if node or gh cannot be resolved at all.
+resolve_toolchain_prefix() {
   local nish_home dir
   local -a candidates=()
   if [[ "$(id -u)" -eq 0 ]]; then
@@ -93,16 +98,29 @@ resolve_node_bin_dir() {
       return 0
     fi
   done
-  return 1
+  local node_dir="" gh_dir=""
+  for dir in "${candidates[@]}"; do
+    if [[ -z "${node_dir}" && -x "${dir}/node" ]]; then node_dir="${dir}"; fi
+    if [[ -z "${gh_dir}" && -x "${dir}/gh" ]]; then gh_dir="${dir}"; fi
+  done
+  if [[ -z "${node_dir}" || -z "${gh_dir}" ]]; then
+    return 1
+  fi
+  if [[ "${node_dir}" == "${gh_dir}" ]]; then
+    printf '%s\n' "${node_dir}"
+  else
+    printf '%s:%s\n' "${node_dir}" "${gh_dir}"
+  fi
 }
 
-# The full PATH the guard unit runs with: the nish toolchain bin dir first,
-# then the standard systemd PATH. Fails (non-zero) if node cannot be
+# The full PATH the guard unit runs with: the resolved toolchain prefix
+# (one dir, or <node-dir>:<gh-dir> on split-toolchain hosts) followed by
+# the standard systemd PATH. Fails (non-zero) if node or gh cannot be
 # resolved.
 guard_path() {
-  local node_bin_dir
-  node_bin_dir="$(resolve_node_bin_dir)" || return 1
-  printf '%s:/usr/local/bin:/usr/bin:/bin' "${node_bin_dir}"
+  local prefix
+  prefix="$(resolve_toolchain_prefix)" || return 1
+  printf '%s:/usr/local/bin:/usr/bin:/bin' "${prefix}"
 }
 
 # Assert that node AND gh both resolve within the given PATH for the user
@@ -131,13 +149,13 @@ install_files() {
   # provision time, substituting the __NODE_BIN_DIR__ placeholder in the
   # repo template. Fail loud (with the resolved PATH) if node/gh are still
   # not resolvable.
-  local guard_path node_bin_dir
+  local guard_path toolchain_prefix
   guard_path="$(guard_path)" \
     || die "could not resolve node/gh on PATH (is the toolchain installed for the nish user?)"
   verify_guard_path "${guard_path}" \
     || die "node/gh not resolvable on resolved PATH: ${guard_path}"
-  node_bin_dir="${guard_path%%:*}"
-  sed "s|__NODE_BIN_DIR__|${node_bin_dir}|" \
+  toolchain_prefix="${guard_path%:/usr/local/bin:/usr/bin:/bin}"
+  sed "s|__NODE_BIN_DIR__|${toolchain_prefix}|" \
     "${SOURCE_DIR}/0509-sitemap-coverage-guard.service" \
     > /etc/systemd/system/0509-sitemap-coverage-guard.service
   install -o root -g root -m 0644 \

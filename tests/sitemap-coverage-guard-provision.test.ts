@@ -23,9 +23,13 @@ describe("sitemap-coverage guard provision PATH resolution (issue #3166)", () =>
     expect(res.status).toBe(0);
     expect(res.stderr).toBe("");
     const guardPath = res.stdout.trim();
-    // The resolved PATH must be a colon-joined list starting with a
-    // toolchain bin dir and ending with the standard systemd PATH.
-    expect(guardPath).toMatch(/^\/[^:]+:\/usr\/local\/bin:\/usr\/bin:\/bin$/);
+    // The resolved PATH must be a colon-joined list starting with one or
+    // two toolchain bin dirs (a single dir carrying both node and gh, or a
+    // <node-dir>:<gh-dir> pair on hosts where the tools are split, e.g. CI
+    // runners) and ending with the standard systemd PATH.
+    expect(guardPath).toMatch(
+      /^\/[^:]+(:\/[^:]+)?:\/usr\/local\/bin:\/usr\/bin:\/bin$/,
+    );
   });
 
   it("resolves node and gh within the resolved guard PATH", () => {
@@ -48,37 +52,51 @@ describe("sitemap-coverage guard provision PATH resolution (issue #3166)", () =>
     expect(gh.stdout.trim()).toMatch(/\/gh$/);
   });
 
-  it("picks a toolchain bin dir containing BOTH node and gh executables", () => {
+  it("emits a toolchain prefix leading with a real node bin dir", () => {
     // A lone `node` binary can exist in a dir with no gh (this host has a
     // stale root-owned /usr/local/bin/node and an empty ~/.bash_profile
-    // that hides ~/.local/bin from login shells). The resolver must choose
-    // a dir where BOTH tools are executable, not the first dir where
-    // `command -v node` resolves.
+    // that hides ~/.local/bin from login shells). The resolver must lead
+    // with a dir carrying an executable node — preferring ONE dir with both
+    // node and gh, falling back to a <node-dir>:<gh-dir> prefix on hosts
+    // where the tools are split (CI: node in a toolcache, gh in /usr/bin).
+    // Either way every emitted dir must be a real bin dir carrying at least
+    // one of the tools.
     const res = spawnSync("bash", [PROVISION, "--resolve-path"], {
       encoding: "utf8",
     });
     expect(res.status).toBe(0);
-    const nodeBinDir = res.stdout.trim().split(":")[0];
-    for (const bin of ["node", "gh"]) {
-      const check = spawnSync("test", ["-x", `${nodeBinDir}/${bin}`]);
-      expect(check.status).toBe(0);
+    const prefix = res.stdout
+      .trim()
+      .replace(/:\/usr\/local\/bin:\/usr\/bin:\/bin$/, "");
+    const dirs = prefix.split(":");
+    expect(
+      spawnSync("test", ["-x", `${dirs[0]}/node`]).status,
+    ).toBe(0);
+    for (const dir of dirs) {
+      const carriesTool =
+        spawnSync("test", ["-x", `${dir}/node`]).status === 0 ||
+        spawnSync("test", ["-x", `${dir}/gh`]).status === 0;
+      expect(carriesTool).toBe(true);
     }
   });
 
-  it("renders the service unit with the discovered bin dir substituted", () => {
+  it("renders the service unit with the discovered prefix substituted", () => {
     const res = spawnSync("bash", [PROVISION, "--resolve-path"], {
       encoding: "utf8",
     });
     expect(res.status).toBe(0);
     const guardPath = res.stdout.trim();
-    const nodeBinDir = guardPath.split(":")[0];
+    const prefix = guardPath.replace(
+      /:\/usr\/local\/bin:\/usr\/bin:\/bin$/,
+      "",
+    );
     const service = spawnSync("bash", [
       "-c",
-      `sed "s|__NODE_BIN_DIR__|${nodeBinDir}|" "${SERVICE}"`,
+      `sed "s|__NODE_BIN_DIR__|${prefix}|" "${SERVICE}"`,
     ], { encoding: "utf8" });
     expect(service.status).toBe(0);
     expect(service.stdout).toContain(
-      `Environment=PATH=${nodeBinDir}:/usr/local/bin:/usr/bin:/bin`,
+      `Environment=PATH=${prefix}:/usr/local/bin:/usr/bin:/bin`,
     );
     // The placeholder must never survive into a rendered unit.
     expect(service.stdout).not.toContain("__NODE_BIN_DIR__");
