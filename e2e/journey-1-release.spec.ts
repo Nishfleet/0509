@@ -375,14 +375,23 @@ for (const viewport of viewports) {
       "ridgewallet.com", "sephora.com", "shopify.com", "sugarcosmetics.com",
       "ulta.com", "walmart.com", "zoho.com",
     ] as const;
-    for (const domain of demoSeedTimelineDomains) {
-      // Pull the same server-rendered body a visitor's curl would. A
-      // proof-less-only timeline 410s (issue #1309 retire path); a populated
-      // one 200s. Either way the body must never contain the "no screenshot"
-      // string — the exact proof-betrayal this gate prevents.
-      const timelineResponse = await page.request.get(`/timeline/${domain}`);
-      const timelineBody = await timelineResponse.text();
-      expect(timelineBody.toLowerCase()).not.toContain("no screenshot");
+    // The 30 fetches run in bounded parallel batches: fully sequential
+    // requests pushed the slowest diagnostic engine (iPhone-emulated WebKit)
+    // past the per-test budget on the saturated runner (issue #3406).
+    const timelineFetchBatchSize = 6;
+    for (let start = 0; start < demoSeedTimelineDomains.length; start += timelineFetchBatchSize) {
+      const batch = demoSeedTimelineDomains.slice(start, start + timelineFetchBatchSize);
+      await Promise.all(
+        batch.map(async (domain) => {
+          // Pull the same server-rendered body a visitor's curl would. A
+          // proof-less-only timeline 410s (issue #1309 retire path); a populated
+          // one 200s. Either way the body must never contain the "no screenshot"
+          // string — the exact proof-betrayal this gate prevents.
+          const timelineResponse = await page.request.get(`/timeline/${domain}`);
+          const timelineBody = await timelineResponse.text();
+          expect(timelineBody.toLowerCase(), `timeline page for ${domain}`).not.toContain("no screenshot");
+        }),
+      );
     }
     // nike.com is the one demo-seed domain the e2e fixture seeds with a real
     // landing_page_snapshot carrying both artifacts, so it must render exactly
