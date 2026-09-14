@@ -175,6 +175,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
 export default function SignupRoute() {
   const loaderData = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  // Issue #3177: the join path already asked its one question and folded the
+  // answer into `source=join` + prefill params, so the story stops telling the
+  // visitor to paste a competitor.
+  const isJoinSignup = loaderData.signupSource === "join";
 
   return (
     <main className="f9-auth-page">
@@ -197,12 +201,25 @@ export default function SignupRoute() {
           </Link>
 
           <div>
-            <span>First competitor</span>
-            <h1>Start with the competitor your team keeps checking by hand.</h1>
-            <p>
-              Paste a competitor website, find the ads behind it, and keep offer changes and landing-page evidence in
-              one place.
-            </p>
+            {isJoinSignup ? (
+              <>
+                <span>One step left</span>
+                <h1>Confirm your work email to start tracking.</h1>
+                <p>
+                  The competitor is already picked. We send a setup link to your inbox — open it and the first
+                  scan starts.
+                </p>
+              </>
+            ) : (
+              <>
+                <span>First competitor</span>
+                <h1>Start with the competitor your team keeps checking by hand.</h1>
+                <p>
+                  Paste a competitor website, find the ads behind it, and keep offer changes and landing-page
+                  evidence in one place.
+                </p>
+              </>
+            )}
           </div>
 
           <div className="f9-auth-proof-list">
@@ -220,10 +237,12 @@ export default function SignupRoute() {
             </div>
           </div>
           <p>
-            No password to invent — the setup link arrives by email and verifies your work address. Open it, add one
-            competitor website, and the first scan starts; the brief then arrives on your plan&rsquo;s schedule —
-            weekly on free and Scout, daily and weekly on Starter and Agency. You can pause or remove a watchlist any
-            time.
+            No password to invent — the setup link arrives by email and verifies your work address. Open it,{" "}
+            {isJoinSignup
+              ? "and the first scan starts on the competitor you confirmed"
+              : "add one competitor website, and the first scan starts"}
+            ; the brief then arrives on your plan&rsquo;s schedule — weekly on free and Scout, daily and weekly on
+            Starter and Agency. You can pause or remove a watchlist any time.
           </p>
         </section>
 

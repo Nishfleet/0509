@@ -146,7 +146,7 @@ export default defineConfig({
     {
       name: "join-flow",
       testDir: "./e2e",
-      testMatch: /join-identity-card\.spec\.ts/,
+      testMatch: /join-(identity-card|path-questions)\.spec\.ts/,
       timeout: 60_000,
       use: {
         ...devices["Desktop Chrome"],
