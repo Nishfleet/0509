@@ -1,0 +1,1801 @@
+{
+  "schemaVersion": 3,
+  "candidateFingerprint": "a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9",
+  "environment": "local",
+  "runOrigin": "http://127.0.0.1:35879",
+  "serverIdentity": "local-89a886e889f5eaa56821a7318ad4570c",
+  "status": "failed",
+  "strict": true,
+  "entries": [
+    {
+      "sourceFile": "journey-1-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "anonymous",
+      "scenario": "first visit → value → signup",
+      "viewport": "1440x900",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-1-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "anonymous",
+      "scenario": "first visit → value → signup",
+      "viewport": "375x812",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-1-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "anonymous",
+      "scenario": "first visit → value → signup",
+      "viewport": "768x900",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-2-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-activation",
+      "scenario": "onboarding → watchlist → first scan state",
+      "viewport": "375x812",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-2-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-activation-desktop",
+      "scenario": "onboarding → watchlist → first scan state",
+      "viewport": "1440x900",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-2-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-activation-tablet",
+      "scenario": "onboarding → watchlist → first scan state",
+      "viewport": "768x900",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-2-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-free",
+      "scenario": "onboarding → search → credible proof",
+      "viewport": "1440x900",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-2-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-free",
+      "scenario": "onboarding → search → credible proof",
+      "viewport": "375x812",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-2-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-free",
+      "scenario": "onboarding → search → credible proof",
+      "viewport": "768x900",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-2-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-free-onboarded",
+      "scenario": "first-run-beat-1-empty-free",
+      "viewport": "1440x900",
+      "finalUrl": "/app",
+      "status": "passed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "passed",
+        "passed": true,
+        "retry": 0
+      },
+      "artifacts": [
+        {
+          "kind": "aria",
+          "state": "first-run-empty-free",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j2-first-run-beat-1-1440x900-first-run-empty-free.aria.json",
+          "contentType": "application/json",
+          "bytes": 8611,
+          "sha256": "3e97826d82d0c931ada9e045ec094d6d6ac5036da5e653ab72be3dedfb5ee4eb"
+        },
+        {
+          "kind": "screenshot",
+          "state": "first-run-empty-free",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j2-first-run-beat-1-1440x900-first-run-empty-free.png",
+          "contentType": "image/png",
+          "bytes": 110164,
+          "sha256": "d042c9c856b2e0b821dcc35de4f7904fc5cbf1247fa2835e7ea3117f4792725f"
+        }
+      ]
+    },
+    {
+      "sourceFile": "journey-3-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-agency,e2e-active-member",
+      "scenario": "owner-member-delivery-privacy",
+      "viewport": "1440x900",
+      "finalUrl": "/app/watchlists?watchlist=e2e-watchlist-agency-1&tab=delivery",
+      "status": "passed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "passed",
+        "passed": true,
+        "retry": 0
+      },
+      "artifacts": [
+        {
+          "kind": "aria",
+          "state": "owner-member-privacy",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j3-privacy-1440x900-owner-member-privacy.aria.json",
+          "contentType": "application/json",
+          "bytes": 8633,
+          "sha256": "7c998da45d8afbdf1decf02a5227f10e6c430c92933f02c40e1d8b8c2233f854"
+        },
+        {
+          "kind": "screenshot",
+          "state": "owner-member-privacy",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j3-privacy-1440x900-owner-member-privacy.png",
+          "contentType": "image/png",
+          "bytes": 85431,
+          "sha256": "974dd32841b879331ee362d4c2568658c79139dd0fb936c067b8271757c187c6"
+        }
+      ]
+    },
+    {
+      "sourceFile": "journey-3-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-agency,e2e-active-member",
+      "scenario": "owner-member-delivery-privacy",
+      "viewport": "375x812",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-3-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-agency,e2e-active-member",
+      "scenario": "owner-member-delivery-privacy",
+      "viewport": "768x900",
+      "finalUrl": "/app/watchlists?watchlist=e2e-watchlist-agency-1&tab=delivery",
+      "status": "passed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "passed",
+        "passed": true,
+        "retry": 0
+      },
+      "artifacts": [
+        {
+          "kind": "aria",
+          "state": "owner-member-privacy",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j3-privacy-768x900-owner-member-privacy.aria.json",
+          "contentType": "application/json",
+          "bytes": 8633,
+          "sha256": "7c998da45d8afbdf1decf02a5227f10e6c430c92933f02c40e1d8b8c2233f854"
+        },
+        {
+          "kind": "screenshot",
+          "state": "owner-member-privacy",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j3-privacy-768x900-owner-member-privacy.png",
+          "contentType": "image/png",
+          "bytes": 81247,
+          "sha256": "d432f51375e79f23f06013df6f3837c261d3e96315b3ed92b0ce2934ff61e73d"
+        }
+      ]
+    },
+    {
+      "sourceFile": "journey-3-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-free-firstbrief,e2e-scout",
+      "scenario": "first-brief-front-page-and-cadence",
+      "viewport": "1440x900",
+      "finalUrl": "/app/briefs?firstrun=1",
+      "status": "passed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "passed",
+        "passed": true,
+        "retry": 0
+      },
+      "artifacts": [
+        {
+          "kind": "aria",
+          "state": "first-brief-front-page",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j3-first-brief-1440x900-first-brief-front-page.aria.json",
+          "contentType": "application/json",
+          "bytes": 14100,
+          "sha256": "a52e3f86756c97169ec464077cc2787ebc491565fcc1582b78a74e3685da6d99"
+        },
+        {
+          "kind": "screenshot",
+          "state": "first-brief-front-page",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j3-first-brief-1440x900-first-brief-front-page.png",
+          "contentType": "image/png",
+          "bytes": 95622,
+          "sha256": "71ab083f16d06c5a0f9944998b200c5742ef3420c41878eb3010a15c2cb85fef"
+        }
+      ]
+    },
+    {
+      "sourceFile": "journey-3-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-free-firstbrief,e2e-scout",
+      "scenario": "first-brief-front-page-and-cadence",
+      "viewport": "375x812",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-3-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-free-firstbrief,e2e-scout",
+      "scenario": "first-brief-front-page-and-cadence",
+      "viewport": "768x900",
+      "finalUrl": "/app/briefs?firstrun=1",
+      "status": "passed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "passed",
+        "passed": true,
+        "retry": 0
+      },
+      "artifacts": [
+        {
+          "kind": "aria",
+          "state": "first-brief-front-page",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j3-first-brief-768x900-first-brief-front-page.aria.json",
+          "contentType": "application/json",
+          "bytes": 14100,
+          "sha256": "a52e3f86756c97169ec464077cc2787ebc491565fcc1582b78a74e3685da6d99"
+        },
+        {
+          "kind": "screenshot",
+          "state": "first-brief-front-page",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j3-first-brief-768x900-first-brief-front-page.png",
+          "contentType": "image/png",
+          "bytes": 91416,
+          "sha256": "78a348f2d05b424714248a099ad0481f9ac8eb754fdb9df00ff1039b14160d25"
+        }
+      ]
+    },
+    {
+      "sourceFile": "journey-3-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-free-firstscan",
+      "scenario": "first-run-wait-arc-and-free-capacity",
+      "viewport": "1440x900",
+      "finalUrl": "/app/watchlists?watchlist=e2e-watchlist-firstscan",
+      "status": "passed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "passed",
+        "passed": true,
+        "retry": 0
+      },
+      "artifacts": [
+        {
+          "kind": "aria",
+          "state": "first-run-wait",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j3-first-run-wait-1440x900-first-run-wait.aria.json",
+          "contentType": "application/json",
+          "bytes": 8838,
+          "sha256": "1c9f51e4fd5b019b943e0d1c4b3230eb8e8da1a8a81b8c2422b866987889c8af"
+        },
+        {
+          "kind": "screenshot",
+          "state": "first-run-wait",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j3-first-run-wait-1440x900-first-run-wait.png",
+          "contentType": "image/png",
+          "bytes": 86752,
+          "sha256": "12546c7d49b2f1e4933cc2e400942f85ea0dda952b722daa851d4d810f87cc1b"
+        }
+      ]
+    },
+    {
+      "sourceFile": "journey-3-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-free-firstscan",
+      "scenario": "first-run-wait-arc-and-free-capacity",
+      "viewport": "375x812",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-3-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-free-firstscan",
+      "scenario": "first-run-wait-arc-and-free-capacity",
+      "viewport": "768x900",
+      "finalUrl": "/app/watchlists?watchlist=e2e-watchlist-firstscan",
+      "status": "passed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "passed",
+        "passed": true,
+        "retry": 0
+      },
+      "artifacts": [
+        {
+          "kind": "aria",
+          "state": "first-run-wait",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j3-first-run-wait-768x900-first-run-wait.aria.json",
+          "contentType": "application/json",
+          "bytes": 8838,
+          "sha256": "1c9f51e4fd5b019b943e0d1c4b3230eb8e8da1a8a81b8c2422b866987889c8af"
+        },
+        {
+          "kind": "screenshot",
+          "state": "first-run-wait",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j3-first-run-wait-768x900-first-run-wait.png",
+          "contentType": "image/png",
+          "bytes": 82731,
+          "sha256": "4925d9de4c2b62296bae076a60eb44213f8b30ef53ab94c4d3260c50412ecd1b"
+        }
+      ]
+    },
+    {
+      "sourceFile": "journey-3-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-free-onboarded,e2e-scout",
+      "scenario": "empty-gated-recovery-before-delivery",
+      "viewport": "1440x900",
+      "finalUrl": "/app/watchlists?watchlist=e2e-watchlist-scout-1&tab=delivery",
+      "status": "passed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "passed",
+        "passed": true,
+        "retry": 0
+      },
+      "artifacts": [
+        {
+          "kind": "aria",
+          "state": "empty-gated-recovery",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j3-gated-1440x900-empty-gated-recovery.aria.json",
+          "contentType": "application/json",
+          "bytes": 9368,
+          "sha256": "57ab103bbae917072f8db28d8702da308d7d5bec4fe975c22a16e9ba256afb3e"
+        },
+        {
+          "kind": "screenshot",
+          "state": "empty-gated-recovery",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j3-gated-1440x900-empty-gated-recovery.png",
+          "contentType": "image/png",
+          "bytes": 90467,
+          "sha256": "60d2586cfb708068c38fbab58dda2d18b8a29f3e844fee514148e4cd743f34a9"
+        }
+      ]
+    },
+    {
+      "sourceFile": "journey-3-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-free-onboarded,e2e-scout",
+      "scenario": "empty-gated-recovery-before-delivery",
+      "viewport": "375x812",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-3-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-free-onboarded,e2e-scout",
+      "scenario": "empty-gated-recovery-before-delivery",
+      "viewport": "768x900",
+      "finalUrl": "/app/watchlists?watchlist=e2e-watchlist-scout-1&tab=delivery",
+      "status": "passed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "passed",
+        "passed": true,
+        "retry": 0
+      },
+      "artifacts": [
+        {
+          "kind": "aria",
+          "state": "empty-gated-recovery",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j3-gated-768x900-empty-gated-recovery.aria.json",
+          "contentType": "application/json",
+          "bytes": 9368,
+          "sha256": "57ab103bbae917072f8db28d8702da308d7d5bec4fe975c22a16e9ba256afb3e"
+        },
+        {
+          "kind": "screenshot",
+          "state": "empty-gated-recovery",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j3-gated-768x900-empty-gated-recovery.png",
+          "contentType": "image/png",
+          "bytes": 86710,
+          "sha256": "bd33e9f4d0619e4e700ff0b73f61c415b0df7298149d9e1c8ee7dd51819479dd"
+        }
+      ]
+    },
+    {
+      "sourceFile": "journey-3-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-free-onboarded,e2e-starter",
+      "scenario": "preseeded-empty-and-recovered-monitoring-states",
+      "viewport": "1440x900",
+      "finalUrl": "/app/watchlists?watchlist=e2e-watchlist-starter-1",
+      "status": "passed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "passed",
+        "passed": true,
+        "retry": 0
+      },
+      "artifacts": [
+        {
+          "kind": "aria",
+          "state": "empty-recovered",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j3-preseeded-1440x900-empty-recovered.aria.json",
+          "contentType": "application/json",
+          "bytes": 12686,
+          "sha256": "de28255ad15f7e2e641c76cc7a5173e926524a3397f36d42c3fe8800db8dc3e9"
+        },
+        {
+          "kind": "screenshot",
+          "state": "empty-recovered",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j3-preseeded-1440x900-empty-recovered.png",
+          "contentType": "image/png",
+          "bytes": 85289,
+          "sha256": "4f4ea398c45842045f021d70d6986b08810a1b086c6e1b2258ad4465ca0b8693"
+        }
+      ]
+    },
+    {
+      "sourceFile": "journey-3-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-free-onboarded,e2e-starter",
+      "scenario": "preseeded-empty-and-recovered-monitoring-states",
+      "viewport": "375x812",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-3-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-free-onboarded,e2e-starter",
+      "scenario": "preseeded-empty-and-recovered-monitoring-states",
+      "viewport": "768x900",
+      "finalUrl": "/app/watchlists?watchlist=e2e-watchlist-starter-1",
+      "status": "passed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "passed",
+        "passed": true,
+        "retry": 0
+      },
+      "artifacts": [
+        {
+          "kind": "aria",
+          "state": "empty-recovered",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j3-preseeded-768x900-empty-recovered.aria.json",
+          "contentType": "application/json",
+          "bytes": 12686,
+          "sha256": "de28255ad15f7e2e641c76cc7a5173e926524a3397f36d42c3fe8800db8dc3e9"
+        },
+        {
+          "kind": "screenshot",
+          "state": "empty-recovered",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j3-preseeded-768x900-empty-recovered.png",
+          "contentType": "image/png",
+          "bytes": 80585,
+          "sha256": "be4df76d8f95af8623a503598ad680cda0682b60991a2e19da6d0535bb208e53"
+        }
+      ]
+    },
+    {
+      "sourceFile": "journey-3-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-starter",
+      "scenario": "digest-notifications-accessibility",
+      "viewport": "1440x900",
+      "finalUrl": "/app/notifications",
+      "status": "passed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "passed",
+        "passed": true,
+        "retry": 0
+      },
+      "artifacts": [
+        {
+          "kind": "aria",
+          "state": "digest-notifications",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j3-digest-1440x900-digest-notifications.aria.json",
+          "contentType": "application/json",
+          "bytes": 8122,
+          "sha256": "bb008f25e755c864bc9074dabd441429d6485ed618d6c568f5f3d4cd3e0dced2"
+        },
+        {
+          "kind": "screenshot",
+          "state": "digest-notifications",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j3-digest-1440x900-digest-notifications.png",
+          "contentType": "image/png",
+          "bytes": 98247,
+          "sha256": "dd1d741f2d72ff72880d3acfcd4f42290716330c12792ae0036eb43801538b12"
+        }
+      ]
+    },
+    {
+      "sourceFile": "journey-3-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-starter",
+      "scenario": "digest-notifications-accessibility",
+      "viewport": "375x812",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-3-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-starter",
+      "scenario": "digest-notifications-accessibility",
+      "viewport": "768x900",
+      "finalUrl": "/app/notifications",
+      "status": "passed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "passed",
+        "passed": true,
+        "retry": 0
+      },
+      "artifacts": [
+        {
+          "kind": "aria",
+          "state": "digest-notifications",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j3-digest-768x900-digest-notifications.aria.json",
+          "contentType": "application/json",
+          "bytes": 8122,
+          "sha256": "bb008f25e755c864bc9074dabd441429d6485ed618d6c568f5f3d4cd3e0dced2"
+        },
+        {
+          "kind": "screenshot",
+          "state": "digest-notifications",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j3-digest-768x900-digest-notifications.png",
+          "contentType": "image/png",
+          "bytes": 92589,
+          "sha256": "0904906d4e5b47de4228692b5c958dbb75c00b247c9dbfdd3da3a40843b6a9af"
+        }
+      ]
+    },
+    {
+      "sourceFile": "journey-3-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-starter",
+      "scenario": "monitoring-proof-freshness-delivery",
+      "viewport": "1440x900",
+      "finalUrl": "/app/watchlists?watchlist=e2e-watchlist-starter-1",
+      "status": "passed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "passed",
+        "passed": true,
+        "retry": 0
+      },
+      "artifacts": [
+        {
+          "kind": "aria",
+          "state": "monitoring",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j3-monitoring-1440x900-monitoring.aria.json",
+          "contentType": "application/json",
+          "bytes": 12686,
+          "sha256": "de28255ad15f7e2e641c76cc7a5173e926524a3397f36d42c3fe8800db8dc3e9"
+        },
+        {
+          "kind": "screenshot",
+          "state": "monitoring",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j3-monitoring-1440x900-monitoring.png",
+          "contentType": "image/png",
+          "bytes": 85289,
+          "sha256": "4f4ea398c45842045f021d70d6986b08810a1b086c6e1b2258ad4465ca0b8693"
+        }
+      ]
+    },
+    {
+      "sourceFile": "journey-3-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-starter",
+      "scenario": "monitoring-proof-freshness-delivery",
+      "viewport": "375x812",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-3-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-starter",
+      "scenario": "monitoring-proof-freshness-delivery",
+      "viewport": "768x900",
+      "finalUrl": "/app/watchlists?watchlist=e2e-watchlist-starter-1",
+      "status": "passed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "passed",
+        "passed": true,
+        "retry": 0
+      },
+      "artifacts": [
+        {
+          "kind": "aria",
+          "state": "monitoring",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j3-monitoring-768x900-monitoring.aria.json",
+          "contentType": "application/json",
+          "bytes": 12686,
+          "sha256": "de28255ad15f7e2e641c76cc7a5173e926524a3397f36d42c3fe8800db8dc3e9"
+        },
+        {
+          "kind": "screenshot",
+          "state": "monitoring",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j3-monitoring-768x900-monitoring.png",
+          "contentType": "image/png",
+          "bytes": 80585,
+          "sha256": "be4df76d8f95af8623a503598ad680cda0682b60991a2e19da6d0535bb208e53"
+        }
+      ]
+    },
+    {
+      "sourceFile": "journey-4-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-agency",
+      "scenario": "client-room-approval-recovery",
+      "viewport": "1440x900",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-4-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-agency",
+      "scenario": "client-room-approval-recovery",
+      "viewport": "375x812",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-4-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-agency",
+      "scenario": "client-room-approval-recovery",
+      "viewport": "768x900",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-4-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-agency",
+      "scenario": "missing-report-recovery",
+      "viewport": "1440x900",
+      "finalUrl": "/app/reports/watchlist:e2e-watchlist-agency-1",
+      "status": "passed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "passed",
+        "passed": true,
+        "retry": 0
+      },
+      "artifacts": [
+        {
+          "kind": "aria",
+          "state": "missing-recovery",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j4-missing-1440x900-missing-recovery.aria.json",
+          "contentType": "application/json",
+          "bytes": 13071,
+          "sha256": "b4320605f28759293e28ce419f81cf732a19fb98cf746f3c3f86886bc417bd48"
+        },
+        {
+          "kind": "screenshot",
+          "state": "missing-recovery",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j4-missing-1440x900-missing-recovery.png",
+          "contentType": "image/png",
+          "bytes": 71975,
+          "sha256": "61d4c44c60b0699cb5148c2244a56e5d102870c6d32fc531850a4741d87fc56a"
+        }
+      ]
+    },
+    {
+      "sourceFile": "journey-4-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-agency",
+      "scenario": "missing-report-recovery",
+      "viewport": "375x812",
+      "finalUrl": "/app/reports/watchlist:e2e-watchlist-agency-1",
+      "status": "passed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "passed",
+        "passed": true,
+        "retry": 0
+      },
+      "artifacts": [
+        {
+          "kind": "aria",
+          "state": "missing-recovery",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j4-missing-375x812-missing-recovery.aria.json",
+          "contentType": "application/json",
+          "bytes": 13071,
+          "sha256": "b4320605f28759293e28ce419f81cf732a19fb98cf746f3c3f86886bc417bd48"
+        },
+        {
+          "kind": "screenshot",
+          "state": "missing-recovery",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j4-missing-375x812-missing-recovery.png",
+          "contentType": "image/png",
+          "bytes": 53428,
+          "sha256": "6bf32cc9c12a834ff3daef1cb629e872b64acecc00304ac48c7bd42ad9e6c420"
+        }
+      ]
+    },
+    {
+      "sourceFile": "journey-4-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-agency",
+      "scenario": "missing-report-recovery",
+      "viewport": "768x900",
+      "finalUrl": "/app/reports/watchlist:e2e-watchlist-agency-1",
+      "status": "passed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "passed",
+        "passed": true,
+        "retry": 0
+      },
+      "artifacts": [
+        {
+          "kind": "aria",
+          "state": "missing-recovery",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j4-missing-768x900-missing-recovery.aria.json",
+          "contentType": "application/json",
+          "bytes": 13071,
+          "sha256": "b4320605f28759293e28ce419f81cf732a19fb98cf746f3c3f86886bc417bd48"
+        },
+        {
+          "kind": "screenshot",
+          "state": "missing-recovery",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j4-missing-768x900-missing-recovery.png",
+          "contentType": "image/png",
+          "bytes": 68465,
+          "sha256": "577af3a8728b14e22aebcb056585c0ba7ff8ec7bd13f2e97ff9531450056fda2"
+        }
+      ]
+    },
+    {
+      "sourceFile": "journey-4-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-agency",
+      "scenario": "report-proof-freshness-client-readable",
+      "viewport": "1440x900",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-4-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-agency",
+      "scenario": "report-proof-freshness-client-readable",
+      "viewport": "375x812",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-4-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-agency",
+      "scenario": "report-proof-freshness-client-readable",
+      "viewport": "768x900",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-4-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-agency;anonymous-client",
+      "scenario": "review-share-anonymous-open-revoke-re-review",
+      "viewport": "1440x900",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-4-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-agency;anonymous-client",
+      "scenario": "review-share-anonymous-open-revoke-re-review",
+      "viewport": "375x812",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-4-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-agency;anonymous-client",
+      "scenario": "review-share-anonymous-open-revoke-re-review",
+      "viewport": "768x900",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-4-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-agency;e2e-starter",
+      "scenario": "client-room-empty-gated-delivery",
+      "viewport": "1440x900",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-4-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-agency;e2e-starter",
+      "scenario": "client-room-empty-gated-delivery",
+      "viewport": "375x812",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-4-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-agency;e2e-starter",
+      "scenario": "client-room-empty-gated-delivery",
+      "viewport": "768x900",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-4-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-agency;e2e-starter",
+      "scenario": "export-share-plan-truth",
+      "viewport": "1440x900",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-4-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-agency;e2e-starter",
+      "scenario": "export-share-plan-truth",
+      "viewport": "375x812",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-4-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-agency;e2e-starter",
+      "scenario": "export-share-plan-truth",
+      "viewport": "768x900",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-5-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-free-onboarded,e2e-starter",
+      "scenario": "journey-5-plan-boundary-entitlement",
+      "viewport": "1440x900",
+      "finalUrl": "/app/billing",
+      "status": "passed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "passed",
+        "passed": true,
+        "retry": 0
+      },
+      "artifacts": [
+        {
+          "kind": "aria",
+          "state": "plan-boundary-entitlement",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j5-plan-1440x900-plan-boundary-entitlement.aria.json",
+          "contentType": "application/json",
+          "bytes": 15278,
+          "sha256": "23037b4fd69ddcd06b69b7875e6d53585ca183963c25830101c9880afafdf905"
+        },
+        {
+          "kind": "screenshot",
+          "state": "plan-boundary-entitlement",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j5-plan-1440x900-plan-boundary-entitlement.png",
+          "contentType": "image/png",
+          "bytes": 85308,
+          "sha256": "5a2ef6ec0248f38873ef2b8852bc4226854f07a7bd7c9c4aa6a34f135a130205"
+        }
+      ]
+    },
+    {
+      "sourceFile": "journey-5-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-free-onboarded,e2e-starter",
+      "scenario": "journey-5-plan-boundary-entitlement",
+      "viewport": "375x812",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-5-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-free-onboarded,e2e-starter",
+      "scenario": "journey-5-plan-boundary-entitlement",
+      "viewport": "768x900",
+      "finalUrl": "/app/billing",
+      "status": "passed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "passed",
+        "passed": true,
+        "retry": 0
+      },
+      "artifacts": [
+        {
+          "kind": "aria",
+          "state": "plan-boundary-entitlement",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j5-plan-768x900-plan-boundary-entitlement.aria.json",
+          "contentType": "application/json",
+          "bytes": 15278,
+          "sha256": "23037b4fd69ddcd06b69b7875e6d53585ca183963c25830101c9880afafdf905"
+        },
+        {
+          "kind": "screenshot",
+          "state": "plan-boundary-entitlement",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j5-plan-768x900-plan-boundary-entitlement.png",
+          "contentType": "image/png",
+          "bytes": 81401,
+          "sha256": "5ab41e9e72cbe4e19ac1cde02fafaa3627dea34e92fe7be6b565809e1de993ca"
+        }
+      ]
+    },
+    {
+      "sourceFile": "journey-5-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-payment-issue,e2e-cancelled,e2e-refunded",
+      "scenario": "journey-5-signed-lifecycle-readback",
+      "viewport": "375x812",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-5-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-payment-issue-desktop,e2e-cancelled-desktop,e2e-refunded-desktop",
+      "scenario": "journey-5-signed-lifecycle-readback",
+      "viewport": "1440x900",
+      "finalUrl": "/app/billing",
+      "status": "passed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "passed",
+        "passed": true,
+        "retry": 0
+      },
+      "artifacts": [
+        {
+          "kind": "aria",
+          "state": "cancelled",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j5-lifecycle-1440x900-cancelled.aria.json",
+          "contentType": "application/json",
+          "bytes": 14876,
+          "sha256": "3e4765b171b0ffc8698c3edba6dd8407e75706a3b8d33243a3226347d8364655"
+        },
+        {
+          "kind": "screenshot",
+          "state": "cancelled",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j5-lifecycle-1440x900-cancelled.png",
+          "contentType": "image/png",
+          "bytes": 90361,
+          "sha256": "718b03814bd112bfb4cff6b3cd8db1b543df2c197465028712cf37687d7fb7b8"
+        },
+        {
+          "kind": "aria",
+          "state": "payment-recovered",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j5-lifecycle-1440x900-payment-recovered.aria.json",
+          "contentType": "application/json",
+          "bytes": 15121,
+          "sha256": "8ab19980c177b3402cd5ee92fbe31cc9220aad5719b26aeb226aa7e65fb88493"
+        },
+        {
+          "kind": "screenshot",
+          "state": "payment-recovered",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j5-lifecycle-1440x900-payment-recovered.png",
+          "contentType": "image/png",
+          "bytes": 87335,
+          "sha256": "10c78fa71a4786242f90fbffcc41c55b905f324372e49cc521abe598c7a411ba"
+        },
+        {
+          "kind": "aria",
+          "state": "refunded",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j5-lifecycle-1440x900-refunded.aria.json",
+          "contentType": "application/json",
+          "bytes": 14896,
+          "sha256": "982e220dec4c28eceffa1709dbac761692217ec11ef9f7aaedbd17bae8390e2b"
+        },
+        {
+          "kind": "screenshot",
+          "state": "refunded",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j5-lifecycle-1440x900-refunded.png",
+          "contentType": "image/png",
+          "bytes": 90843,
+          "sha256": "a86114da33e0bfdee8798568ebdda64b2888208f6c09d242439e0258b613d48e"
+        }
+      ]
+    },
+    {
+      "sourceFile": "journey-5-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-payment-issue-tablet,e2e-cancelled-tablet,e2e-refunded-tablet",
+      "scenario": "journey-5-signed-lifecycle-readback",
+      "viewport": "768x900",
+      "finalUrl": "/app/billing",
+      "status": "passed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "passed",
+        "passed": true,
+        "retry": 0
+      },
+      "artifacts": [
+        {
+          "kind": "aria",
+          "state": "cancelled",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j5-lifecycle-768x900-cancelled.aria.json",
+          "contentType": "application/json",
+          "bytes": 14873,
+          "sha256": "e193e08baf7d1b68758335eb08cc74f7dbce04475e85aaae9b6c1a3e44b14d48"
+        },
+        {
+          "kind": "screenshot",
+          "state": "cancelled",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j5-lifecycle-768x900-cancelled.png",
+          "contentType": "image/png",
+          "bytes": 85835,
+          "sha256": "17b7c8e8c3277fa00759e2f871ff155337065c6c5b82c1f12a4bb3e00f19485c"
+        },
+        {
+          "kind": "aria",
+          "state": "payment-recovered",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j5-lifecycle-768x900-payment-recovered.aria.json",
+          "contentType": "application/json",
+          "bytes": 15118,
+          "sha256": "0bbe7aea01686c4b3865797e59ee6aee95dd290b2c61e3de34ea1069ea54c307"
+        },
+        {
+          "kind": "screenshot",
+          "state": "payment-recovered",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j5-lifecycle-768x900-payment-recovered.png",
+          "contentType": "image/png",
+          "bytes": 83043,
+          "sha256": "bd2d39638f24191238d137c11b0e75a516aae55d75f92d6fb870fc68749f12f4"
+        },
+        {
+          "kind": "aria",
+          "state": "refunded",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j5-lifecycle-768x900-refunded.aria.json",
+          "contentType": "application/json",
+          "bytes": 14893,
+          "sha256": "1d959f808cbef64b5e0f1abf750742646de2fb76559022bfbaafed5b13f768a1"
+        },
+        {
+          "kind": "screenshot",
+          "state": "refunded",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j5-lifecycle-768x900-refunded.png",
+          "contentType": "image/png",
+          "bytes": 86452,
+          "sha256": "05c4ad9a8e49bc642ba27a85d41cb4db17a3f464a75edf07b0c2eb57052bb659"
+        }
+      ]
+    },
+    {
+      "sourceFile": "journey-6-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-agency",
+      "scenario": "journey-6-owner-member-invite-concurrency-stale-conflicts",
+      "viewport": "1440x900",
+      "finalUrl": "/app/team",
+      "status": "passed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "passed",
+        "passed": true,
+        "retry": 0
+      },
+      "artifacts": [
+        {
+          "kind": "aria",
+          "state": "invite-concurrency-recovery",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j6-team-1440x900-invite-concurrency-recovery.aria.json",
+          "contentType": "application/json",
+          "bytes": 4155,
+          "sha256": "db2a7e50dc3a744775c3fc833b26ef119c6ca9e88d75c9109d1a3b7b70a1ff6e"
+        },
+        {
+          "kind": "screenshot",
+          "state": "invite-concurrency-recovery",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j6-team-1440x900-invite-concurrency-recovery.png",
+          "contentType": "image/png",
+          "bytes": 54281,
+          "sha256": "9281ad2c5e9a839dba674c038f0b6c4a8c98b97065c8835b90bbeae5e8b67775"
+        }
+      ]
+    },
+    {
+      "sourceFile": "journey-6-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-agency",
+      "scenario": "journey-6-owner-member-invite-concurrency-stale-conflicts",
+      "viewport": "375x812",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-6-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-agency",
+      "scenario": "journey-6-owner-member-invite-concurrency-stale-conflicts",
+      "viewport": "768x900",
+      "finalUrl": "/app/team",
+      "status": "passed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "passed",
+        "passed": true,
+        "retry": 0
+      },
+      "artifacts": [
+        {
+          "kind": "aria",
+          "state": "invite-concurrency-recovery",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j6-team-768x900-invite-concurrency-recovery.aria.json",
+          "contentType": "application/json",
+          "bytes": 4155,
+          "sha256": "db2a7e50dc3a744775c3fc833b26ef119c6ca9e88d75c9109d1a3b7b70a1ff6e"
+        },
+        {
+          "kind": "screenshot",
+          "state": "invite-concurrency-recovery",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j6-team-768x900-invite-concurrency-recovery.png",
+          "contentType": "image/png",
+          "bytes": 50919,
+          "sha256": "8dbca6c4861d540b881cad3fa7fe4140ae0ca8a5d4d58fe1a876e566fdfc7d88"
+        }
+      ]
+    },
+    {
+      "sourceFile": "journey-6-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-starter",
+      "scenario": "journey-6-account-validation-recovery",
+      "viewport": "1440x900",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-6-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-starter",
+      "scenario": "journey-6-account-validation-recovery",
+      "viewport": "375x812",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-6-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-starter",
+      "scenario": "journey-6-account-validation-recovery",
+      "viewport": "768x900",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-6-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-starter",
+      "scenario": "journey-6-auth-backend-outage-recovery",
+      "viewport": "1440x900",
+      "finalUrl": "/app",
+      "status": "passed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "passed",
+        "passed": true,
+        "retry": 0
+      },
+      "artifacts": [
+        {
+          "kind": "aria",
+          "state": "auth-outage-recovery",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j6-auth-1440x900-auth-outage-recovery.aria.json",
+          "contentType": "application/json",
+          "bytes": 7506,
+          "sha256": "dd9e566110e3144e693a1629fea0fcaf2b12cd20c85165dfa3a02bd362d501ed"
+        },
+        {
+          "kind": "screenshot",
+          "state": "auth-outage-recovery",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j6-auth-1440x900-auth-outage-recovery.png",
+          "contentType": "image/png",
+          "bytes": 120306,
+          "sha256": "53e55e7ddb392fbf189f1b9296b2fb552a2105b6a974c9873a1b74a8622f77e0"
+        }
+      ]
+    },
+    {
+      "sourceFile": "journey-6-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-starter",
+      "scenario": "journey-6-auth-backend-outage-recovery",
+      "viewport": "375x812",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-6-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-starter",
+      "scenario": "journey-6-auth-backend-outage-recovery",
+      "viewport": "768x900",
+      "finalUrl": "/app",
+      "status": "passed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "passed",
+        "passed": true,
+        "retry": 0
+      },
+      "artifacts": [
+        {
+          "kind": "aria",
+          "state": "auth-outage-recovery",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j6-auth-768x900-auth-outage-recovery.aria.json",
+          "contentType": "application/json",
+          "bytes": 7506,
+          "sha256": "dd9e566110e3144e693a1629fea0fcaf2b12cd20c85165dfa3a02bd362d501ed"
+        },
+        {
+          "kind": "screenshot",
+          "state": "auth-outage-recovery",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j6-auth-768x900-auth-outage-recovery.png",
+          "contentType": "image/png",
+          "bytes": 115727,
+          "sha256": "90eae2f9c25260b8462f6438b229fa832e8bdc42c29ca746f40212d11e07be10"
+        }
+      ]
+    },
+    {
+      "sourceFile": "journey-6-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-starter",
+      "scenario": "journey-6-retention-scratch-restore-integrity",
+      "viewport": "1440x900",
+      "finalUrl": "/app",
+      "status": "passed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "passed",
+        "passed": true,
+        "retry": 0
+      },
+      "artifacts": [
+        {
+          "kind": "aria",
+          "state": "retention-restore-integrity",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j6-retention-1440x900-retention-restore-integrity.aria.json",
+          "contentType": "application/json",
+          "bytes": 7543,
+          "sha256": "f4e8085d99e80bd5a7f0db77060c83e36515c26fa45b0fadc88069b05f51a57c"
+        },
+        {
+          "kind": "screenshot",
+          "state": "retention-restore-integrity",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j6-retention-1440x900-retention-restore-integrity.png",
+          "contentType": "image/png",
+          "bytes": 121596,
+          "sha256": "78e8662cc6a9fffda7bf7e8e5f283b02331e7053695b5bd9f51aefedffbdcafd"
+        }
+      ]
+    },
+    {
+      "sourceFile": "journey-6-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-starter",
+      "scenario": "journey-6-retention-scratch-restore-integrity",
+      "viewport": "375x812",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-6-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-starter",
+      "scenario": "journey-6-retention-scratch-restore-integrity",
+      "viewport": "768x900",
+      "finalUrl": "/app",
+      "status": "passed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "passed",
+        "passed": true,
+        "retry": 0
+      },
+      "artifacts": [
+        {
+          "kind": "aria",
+          "state": "retention-restore-integrity",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j6-retention-768x900-retention-restore-integrity.aria.json",
+          "contentType": "application/json",
+          "bytes": 7543,
+          "sha256": "f4e8085d99e80bd5a7f0db77060c83e36515c26fa45b0fadc88069b05f51a57c"
+        },
+        {
+          "kind": "screenshot",
+          "state": "retention-restore-integrity",
+          "name": "gate-b-artifacts/a7c04924e6c497aa15950d4c91a6a4ef3df9461bfd696204587584e888dfe9d9/local-89a886e889f5eaa56821a7318ad4570c/j6-retention-768x900-retention-restore-integrity.png",
+          "contentType": "image/png",
+          "bytes": 117057,
+          "sha256": "2ad100633a788142904b4d44bc6b9fa48f5f63654997b7319350fc52f3812137"
+        }
+      ]
+    },
+    {
+      "sourceFile": "journey-6-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-starter",
+      "scenario": "journey-6-returning-dashboard-account",
+      "viewport": "1440x900",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-6-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-starter",
+      "scenario": "journey-6-returning-dashboard-account",
+      "viewport": "375x812",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-6-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-starter",
+      "scenario": "journey-6-returning-dashboard-account",
+      "viewport": "768x900",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-6-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-support-recovery",
+      "scenario": "journey-6-support-persistence-failure-recovery",
+      "viewport": "1440x900",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-6-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-support-recovery",
+      "scenario": "journey-6-support-persistence-failure-recovery",
+      "viewport": "375x812",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    },
+    {
+      "sourceFile": "journey-6-release.spec.ts",
+      "browser": "chromium",
+      "project": "local-release",
+      "persona": "e2e-support-recovery",
+      "scenario": "journey-6-support-persistence-failure-recovery",
+      "viewport": "768x900",
+      "finalUrl": null,
+      "status": "failed",
+      "retry": 0,
+      "firstAttempt": {
+        "status": "failed",
+        "passed": false,
+        "retry": 0
+      },
+      "artifacts": []
+    }
+  ],
+  "strictIssues": [
+    "annotation:finalUrl",
+    "artifact_count",
+    "artifact_missing",
+    "browser_run_failed",
+    "coverage_unexpected_entry",
+    "run:failed",
+    "status:failed"
+  ]
+}
