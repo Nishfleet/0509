@@ -1101,7 +1101,9 @@ export const SITEMAP_PATHS = [
   "/guides/meta-ad-library-api-limitations",
   // Issue #3421: eighth guide — the buyer's first-question explainer (can an
   // AI chat just check this?). Stable long-form copy, never a noindex shell.
-  "/guides/can-ChatGPT-monitor-competitor-ads",
+  // Lowercase canonical: the issue's exact /guides/can-ChatGPT-… slug stays
+  // registered in routes.ts and 301s here (issue #2955).
+  "/guides/can-chatgpt-monitor-competitor-ads",
   "/compare",
   "/compare/meta-ad-library",
   // /compare/visualping, /compare/foreplay, and /compare/visualping-ad-library

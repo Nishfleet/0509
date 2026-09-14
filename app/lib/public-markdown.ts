@@ -204,7 +204,7 @@ const LLMS_PAGE_DETAILS = {
   // Issue #3421: the ChatGPT first-question explainer. In SITEMAP_PATHS, so
   // it needs a title/description here or the _llmsDetailsCoverSitemap type
   // fails. Description sourced from the page's own copy (pageDescription).
-  "/guides/can-ChatGPT-monitor-competitor-ads": {
+  "/guides/can-chatgpt-monitor-competitor-ads": {
     title: "Can ChatGPT monitor competitor ads?",
     description:
       "What an AI chat genuinely does well — summarising what it finds, drafting angles, explaining a diff — and the three things only an always-on watch owns: the 03:00 check, the dated record, and the before/after evidence.",

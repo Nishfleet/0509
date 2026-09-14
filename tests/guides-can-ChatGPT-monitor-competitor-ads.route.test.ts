@@ -14,19 +14,25 @@ afterEach(() => {
   vi.resetModules();
 });
 
-// Issue #3421 — /guides/can-ChatGPT-monitor-competitor-ads, the buyer's
-// first-question explainer ("can my AI just check this?"). The PATH slug is
-// EXACT: uppercase `ChatGPT` stays in the path; only the signup-source MARKER
-// is lowercase (`/^[a-z0-9][a-z0-9-]{0,39}$/` forbids uppercase). Every
-// slug-bearing assertion below pins that exact casing.
+// Issue #3421 — the buyer's first-question explainer ("can my AI just check
+// this?"). The contract in one breath: the issue's EXACT slug
+// `guides/can-ChatGPT-monitor-competitor-ads` stays registered verbatim in
+// app/routes.ts (EN + $locale) via a tiny re-export shim, and the #2955 path
+// canonicalization 301s it to the served lowercase canonical
+// `/guides/can-chatgpt-monitor-competitor-ads` — the URL every canonical /
+// og / JSON-LD / sitemap assertion below pins. The signup-source MARKER was
+// always lowercase (`/^[a-z0-9][a-z0-9-]{0,39}$/` forbids uppercase); the
+// served path now is too.
 describe("guides can-ChatGPT-monitor-competitor-ads route", () => {
-  const SLUG_PATH = "/guides/can-ChatGPT-monitor-competitor-ads";
+  // The served canonical is lowercase per #2955 — the issue's exact
+  // mixed-case slug 301s to it (pinned below via canonicalPathFor).
+  const SLUG_PATH = "/guides/can-chatgpt-monitor-competitor-ads";
   const CANONICAL = `https://0509.io${SLUG_PATH}`;
   const SOURCE_MARKER = "guide-can-chatgpt-monitor-ads";
 
   it("renders the honest guide: three structural limits, AI strengths, watch ownership, free /search preview CTA", async () => {
     const { default: GuideRoute } = await import(
-      "~/routes/guides.can-ChatGPT-monitor-competitor-ads"
+      "~/routes/guides.can-chatgpt-monitor-competitor-ads"
     );
     const markup = renderToStaticMarkup(createElement(GuideRoute));
 
@@ -63,9 +69,9 @@ describe("guides can-ChatGPT-monitor-competitor-ads route", () => {
     expect(markup).toContain("Named for 05:09");
   });
 
-  it("declares the canonical URL and public SEO meta with the exact uppercase slug", async () => {
+  it("declares the canonical URL and public SEO meta at the served lowercase slug", async () => {
     const { links, meta } = await import(
-      "~/routes/guides.can-ChatGPT-monitor-competitor-ads"
+      "~/routes/guides.can-chatgpt-monitor-competitor-ads"
     );
 
     const { buyerSurfaceHreflangLinks } = await import("~/lib/seo");
@@ -84,7 +90,7 @@ describe("guides can-ChatGPT-monitor-competitor-ads route", () => {
     const {
       default: GuideRoute,
       canChatGPTMonitorCompetitorAdsFaqEntries,
-    } = await import("~/routes/guides.can-ChatGPT-monitor-competitor-ads");
+    } = await import("~/routes/guides.can-chatgpt-monitor-competitor-ads");
     const markup = renderToStaticMarkup(createElement(GuideRoute));
 
     const ldBlocks = [
@@ -101,8 +107,8 @@ describe("guides can-ChatGPT-monitor-competitor-ads route", () => {
     expect(byType("Article")).toHaveLength(1);
     expect(byType("FAQPage")).toHaveLength(1);
 
-    // The WebPage entity's @id/url is the canonical URL with the exact
-    // uppercase slug — the rendered HTML itself pins the casing.
+    // The WebPage entity's @id/url is the served lowercase canonical — the
+    // rendered HTML itself pins the casing the sitemap and links declare.
     const webPage = byType("WebPage")[0];
     expect(webPage["@id"]).toBe(CANONICAL);
     expect(webPage.url).toBe(CANONICAL);
@@ -122,23 +128,41 @@ describe("guides can-ChatGPT-monitor-competitor-ads route", () => {
     );
   });
 
-  it("is registered as a route (EN + locale cluster) and published in the sitemap with the exact uppercase slug", async () => {
+  it("registers BOTH slugs verbatim (EN + locale cluster) and publishes the lowercase canonical in the sitemap", async () => {
     const { readFileSync } = await import("node:fs");
     const routes = readFileSync("app/routes.ts", "utf8");
+    // The issue's EXACT mixed-case slug stays registered verbatim (the
+    // re-export shim), AND the lowercase canonical is registered as the
+    // served URL — both literals, in both the EN and $locale blocks.
     expect(routes).toContain(
       `route("guides/can-ChatGPT-monitor-competitor-ads", "routes/guides.can-ChatGPT-monitor-competitor-ads.tsx")`,
     );
     expect(routes).toContain(
+      `route("guides/can-chatgpt-monitor-competitor-ads", "routes/guides.can-chatgpt-monitor-competitor-ads.tsx")`,
+    );
+    expect(routes).toContain(
       `route("guides/can-ChatGPT-monitor-competitor-ads", "routes/$locale.guides.can-ChatGPT-monitor-competitor-ads.tsx")`,
+    );
+    expect(routes).toContain(
+      `route("guides/can-chatgpt-monitor-competitor-ads", "routes/$locale.guides.can-chatgpt-monitor-competitor-ads.tsx")`,
+    );
+
+    // The 301 contract: the exact mixed-case slug canonicalizes to the
+    // served lowercase path (issue #2955 — same import
+    // tests/canonical-path.test.ts uses).
+    const { canonicalPathFor } = await import("../workers/canonical-path");
+    expect(canonicalPathFor("/guides/can-ChatGPT-monitor-competitor-ads")).toBe(
+      SLUG_PATH,
     );
 
     const { publicSeoFileForPathname } = await import("~/lib/seo");
     const sitemap = publicSeoFileForPathname("/sitemap.xml");
     expect(sitemap?.body).toContain(`<loc>${CANONICAL}</loc>`);
-    // The all-lowercase variant must never appear — the uppercase ChatGPT
-    // path IS the pinned contract.
+    // The mixed-case slug must never appear as a <loc> — renderSitemapXml
+    // lowercases every loc (pinned by tests/canonical-path.test.ts), and a
+    // canonical pointing at a 301 is a broken SEO contract.
     expect(sitemap?.body).not.toContain(
-      "<loc>https://0509.io/guides/can-chatgpt-monitor-competitor-ads</loc>",
+      "<loc>https://0509.io/guides/can-ChatGPT-monitor-competitor-ads</loc>",
     );
   });
 

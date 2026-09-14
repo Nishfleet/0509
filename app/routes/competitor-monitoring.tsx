@@ -723,7 +723,7 @@ export default function CompetitorMonitoringCategoryRoute() {
           route? Read{" "}
           <Link to="/guides/meta-ad-library-api-limitations">what the Meta Ad Library API
           actually covers</Link>. Wondering if your AI can just do the checking? Read{" "}
-          <Link to="/guides/can-ChatGPT-monitor-competitor-ads">can ChatGPT monitor
+          <Link to="/guides/can-chatgpt-monitor-competitor-ads">can ChatGPT monitor
           competitor ads</Link> — what an AI chat genuinely does well, and the three things
           only an always-on watch owns. Questions about
           coverage on your competitors? Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and

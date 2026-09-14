@@ -534,7 +534,7 @@ describe("guides meta-ad-library-api-limitations route (issue #3127)", () => {
 describe("guides can-ChatGPT-monitor-competitor-ads route (issue #3421)", () => {
   it("renders the honest answer: the three structural limits, what an AI chat does well, and what only a watch owns", async () => {
     const { default: GuideRoute } = await import(
-      "~/routes/guides.can-ChatGPT-monitor-competitor-ads"
+      "~/routes/guides.can-chatgpt-monitor-competitor-ads"
     );
     const markup = renderToStaticMarkup(createElement(GuideRoute));
 
@@ -573,8 +573,8 @@ describe("guides can-ChatGPT-monitor-competitor-ads route (issue #3421)", () => 
     expect(markup).toContain("free plan watches one competitor");
     expect(markup).toContain("scheduled checks are a paid plan");
     // CTA is the public /search preview carrying the allowlisted marker —
-    // the MARKER is lowercase even though the PATH slug keeps uppercase
-    // ChatGPT (the marker pattern forbids uppercase; the path is deliberate).
+    // the MARKER is lowercase (its pattern forbids uppercase) and the served
+    // PATH is the lowercase canonical too; the exact mixed-case slug 301s.
     expect(markup).toContain('action="/search"');
     expect(markup).toContain('name="source"');
     expect(markup).toContain('value="guide-can-chatgpt-monitor-ads"');
@@ -594,16 +594,16 @@ describe("guides can-ChatGPT-monitor-competitor-ads route (issue #3421)", () => 
 
   it("declares the canonical URL and public SEO meta", async () => {
     const { links, meta } = await import(
-      "~/routes/guides.can-ChatGPT-monitor-competitor-ads"
+      "~/routes/guides.can-chatgpt-monitor-competitor-ads"
     );
 
     const { buyerSurfaceHreflangLinks } = await import("~/lib/seo");
     expect(links()).toEqual([
       {
         rel: "canonical",
-        href: "https://0509.io/guides/can-ChatGPT-monitor-competitor-ads",
+        href: "https://0509.io/guides/can-chatgpt-monitor-competitor-ads",
       },
-      ...buyerSurfaceHreflangLinks("guides/can-ChatGPT-monitor-competitor-ads"),
+      ...buyerSurfaceHreflangLinks("guides/can-chatgpt-monitor-competitor-ads"),
     ]);
 
     const tags = meta({} as never) as Array<Record<string, string>>;
@@ -611,25 +611,45 @@ describe("guides can-ChatGPT-monitor-competitor-ads route (issue #3421)", () => 
     expect(title).toBe("Can ChatGPT monitor competitor ads? | Five to Nine");
     expect(tags).toContainEqual({
       property: "og:url",
-      content: "https://0509.io/guides/can-ChatGPT-monitor-competitor-ads",
+      content: "https://0509.io/guides/can-chatgpt-monitor-competitor-ads",
     });
   });
 
   it("is registered as a route (EN + locale cluster) and published in the sitemap", async () => {
     const { readFileSync } = await import("node:fs");
     const routes = readFileSync("app/routes.ts", "utf8");
-    // The EXACT uppercase slug is the pinned contract — ChatGPT stays
-    // uppercase in the PATH (only the signup-source MARKER is lowercase).
+    // BOTH literals are the pinned contract: the issue's EXACT uppercase
+    // slug stays registered verbatim (a re-export shim), and the lowercase
+    // canonical is the registration that actually serves 200.
     expect(routes).toContain(
       'route("guides/can-ChatGPT-monitor-competitor-ads", "routes/guides.can-ChatGPT-monitor-competitor-ads.tsx")',
     );
     expect(routes).toContain(
+      'route("guides/can-chatgpt-monitor-competitor-ads", "routes/guides.can-chatgpt-monitor-competitor-ads.tsx")',
+    );
+    expect(routes).toContain(
       'route("guides/can-ChatGPT-monitor-competitor-ads", "routes/$locale.guides.can-ChatGPT-monitor-competitor-ads.tsx")',
+    );
+    expect(routes).toContain(
+      'route("guides/can-chatgpt-monitor-competitor-ads", "routes/$locale.guides.can-chatgpt-monitor-competitor-ads.tsx")',
+    );
+
+    // The 301 contract: the exact mixed-case slug canonicalizes to the
+    // served lowercase path (issue #2955 — same import
+    // tests/canonical-path.test.ts uses).
+    const { canonicalPathFor } = await import("../workers/canonical-path");
+    expect(canonicalPathFor("/guides/can-ChatGPT-monitor-competitor-ads")).toBe(
+      "/guides/can-chatgpt-monitor-competitor-ads",
     );
 
     const { publicSeoFileForPathname } = await import("~/lib/seo");
     const sitemap = publicSeoFileForPathname("/sitemap.xml");
     expect(sitemap?.body).toContain(
+      "<loc>https://0509.io/guides/can-chatgpt-monitor-competitor-ads</loc>",
+    );
+    // The mixed-case slug can never be a <loc> — renderSitemapXml
+    // lowercases every loc (pinned by tests/canonical-path.test.ts).
+    expect(sitemap?.body).not.toContain(
       "<loc>https://0509.io/guides/can-ChatGPT-monitor-competitor-ads</loc>",
     );
   });
@@ -638,7 +658,7 @@ describe("guides can-ChatGPT-monitor-competitor-ads route (issue #3421)", () => 
     const {
       default: GuideRoute,
       canChatGPTMonitorCompetitorAdsFaqEntries,
-    } = await import("~/routes/guides.can-ChatGPT-monitor-competitor-ads");
+    } = await import("~/routes/guides.can-chatgpt-monitor-competitor-ads");
     const markup = renderToStaticMarkup(createElement(GuideRoute));
 
     const ldBlocks = [
@@ -664,7 +684,7 @@ describe("guides can-ChatGPT-monitor-competitor-ads route (issue #3421)", () => 
 
   it("emits the Article JSON-LD entity whose headline matches the visible h1", async () => {
     const { default: GuideRoute } = await import(
-      "~/routes/guides.can-ChatGPT-monitor-competitor-ads"
+      "~/routes/guides.can-chatgpt-monitor-competitor-ads"
     );
     const markup = renderToStaticMarkup(createElement(GuideRoute));
 
@@ -703,8 +723,8 @@ describe("guides can-ChatGPT-monitor-competitor-ads route (issue #3421)", () => 
       "app/routes/competitor-monitoring.tsx",
       "utf8",
     );
-    expect(docs).toContain('to="/guides/can-ChatGPT-monitor-competitor-ads"');
-    expect(monitoring).toContain('to="/guides/can-ChatGPT-monitor-competitor-ads"');
+    expect(docs).toContain('to="/guides/can-chatgpt-monitor-competitor-ads"');
+    expect(monitoring).toContain('to="/guides/can-chatgpt-monitor-competitor-ads"');
   });
 });
 
