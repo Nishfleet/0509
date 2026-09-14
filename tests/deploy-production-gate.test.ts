@@ -2323,6 +2323,54 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     }
   });
 
+  it("runs every evidence-workflow ./scripts/ step against an executable checkout (0509#3442)", () => {
+    // The scheduled evidence workflows carry the same direct-exec pattern as
+    // deploy-production; a lost +x bit on any referenced script kills the run
+    // with exit 126 — the 09-13 deploy-outage class (0509#3409, #3413).
+    const evidenceWorkflows = [
+      ".github/workflows/d1-remote-restore-evidence.yml",
+      ".github/workflows/d1-backup-r2.yml",
+      ".github/workflows/d1-restore-proof-auto-refresh.yml",
+    ] as const;
+    // Named refs per workflow: keeps this test self-checking — if a workflow
+    // stops naming its script (rename/rewrite), it fails loudly instead of
+    // passing on an empty walk.
+    const namedRefs: Record<(typeof evidenceWorkflows)[number], string[]> = {
+      ".github/workflows/d1-remote-restore-evidence.yml": [
+        "./scripts/ci-verify-provider-main-cas.sh",
+      ],
+      ".github/workflows/d1-backup-r2.yml": [
+        "./scripts/ci-verify-production-candidate.sh",
+      ],
+      ".github/workflows/d1-restore-proof-auto-refresh.yml": [
+        "./scripts/ci-verify-production-candidate.sh",
+      ],
+    };
+    for (const workflowPath of evidenceWorkflows) {
+      const workflow = parse(
+        readFileSync(resolve(workflowPath), "utf8"),
+      ) as any;
+      const directRuns = Object.values(workflow.jobs as Record<string, any>)
+        .flatMap((job) => (job.steps ?? []) as Array<{ run?: string }>)
+        .map((step) => step.run?.trim())
+        .filter((run): run is string => !!run && run.startsWith("./scripts/"))
+        .map((run) => run.split(/\s+/)[0]!); // first token: future-proof for args/multiline
+      for (const named of namedRefs[workflowPath]) {
+        expect(
+          directRuns,
+          `${workflowPath} no longer runs ${named} directly — update this gate`,
+        ).toContain(named);
+      }
+      for (const run of new Set(directRuns)) {
+        const script = statSync(resolve(run.slice(2)));
+        expect(
+          (script.mode & 0o111) !== 0,
+          `${workflowPath}: ${run} lost its +x bit — the Actions checkout runs it as ${run} and dies with exit 126 (0509#3442)`,
+        ).toBe(true);
+      }
+    }
+  });
+
   it("fails a rewritten-away pinned SHA with regenerate-the-evidence, not Command failed (0509#2974)", async () => {
     const vanished = "d16b1f00096d5a29db9f6ba51b32bc49db45824b";
     const unknown = "0".repeat(40);
