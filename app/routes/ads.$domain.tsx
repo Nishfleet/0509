@@ -340,18 +340,9 @@ export const LEGACY_BRAND_SLUG_DOMAINS: Readonly<Record<string, string>> = {
 export async function loader({ context, params, request }: LoaderFunctionArgs): Promise<BrandPageLoaderData> {
   // The legacy-slug 301 fires before normalization, rate limiting and any
   // cache read — a pre-move external link costs one static map lookup.
-  // Object.hasOwn gates the lookup: inherited Object.prototype members
-  // (toString, constructor, __proto__, …) are not legacy slugs and must fall
-  // through to the 404 below (issue #3457 review).
-  const legacySlug = (params.domain ?? "").trim().toLowerCase();
-  const legacyDomain = Object.hasOwn(LEGACY_BRAND_SLUG_DOMAINS, legacySlug)
-    ? LEGACY_BRAND_SLUG_DOMAINS[legacySlug]
-    : undefined;
+  const legacyDomain = LEGACY_BRAND_SLUG_DOMAINS[(params.domain ?? "").trim().toLowerCase()];
   if (legacyDomain) {
-    // Preserve the query so a deep-linked tracker param survives the hop —
-    // the same treatment the /ads → /brands redirect gives it (#2885).
-    const search = new URL(request.url).search;
-    throw redirect(`/ads/${encodeURIComponent(legacyDomain)}${search}`, 301);
+    throw redirect(`/ads/${encodeURIComponent(legacyDomain)}`, 301);
   }
 
   const { normalizeBrandPageDomain } = await import("~/lib/brand-page.server");
