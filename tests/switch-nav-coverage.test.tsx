@@ -268,11 +268,11 @@ describe("switch-page nav coverage (issue #1466)", () => {
     expect(hasSwitch, "/ must surface /switch/panoramata in a <nav> region before the footer").toBe(true);
   });
 
-  it("renders a 'from Panoramata' link in a primary nav region on /competitor-monitoring", async () => {
+  it("renders a Panoramata switch link in a nav region on /competitor-monitoring", async () => {
     const markup = beforeFooter(await renderCompetitorMonitoring());
     const blocks = navBlocks(markup);
     const hasSwitch = blocks.some(
-      (block) => block.includes('href="/switch/panoramata"') && block.includes("from Panoramata"),
+      (block) => block.includes('href="/switch/panoramata"') && block.includes(">Panoramata</a>"),
     );
     expect(
       hasSwitch,
@@ -289,11 +289,11 @@ describe("switch-page nav coverage (issue #1466)", () => {
     expect(hasSwitch, "/pricing must surface /switch/panoramata in a <nav> region before the footer").toBe(true);
   });
 
-  it("renders a 'from Panoramata' link in a nav region on /search", async () => {
+  it("renders a Panoramata switch link in a nav region on /search", async () => {
     const markup = beforeFooter(await renderSearch());
     const blocks = navBlocks(markup);
     const hasSwitch = blocks.some(
-      (block) => block.includes('href="/switch/panoramata"') && block.includes("from Panoramata"),
+      (block) => block.includes('href="/switch/panoramata"') && block.includes(">Panoramata</a>"),
     );
     expect(hasSwitch, "/search must surface /switch/panoramata in a <nav> region before the footer").toBe(true);
   });
@@ -304,9 +304,9 @@ describe("switch-page nav coverage (issue #1466)", () => {
     for (const slug of SWITCH_SLUGS) {
       const page = SWITCH_PAGES[slug];
       expect(searchMarkup).toContain(`href="${page.pathname}"`);
-      expect(searchMarkup).toContain(`from ${page.productName}`);
+      expect(searchMarkup).toContain(`>${page.productName}</a>`);
       expect(cmMarkup).toContain(`href="${page.pathname}"`);
-      expect(cmMarkup).toContain(`from ${page.productName}`);
+      expect(cmMarkup).toContain(`>${page.productName}</a>`);
     }
   });
 
