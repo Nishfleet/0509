@@ -51,3 +51,25 @@ squashed the 5 commits to one, rebased onto origin/main, and ran the tests:
 
 `VITEST_MAX_WORKERS=2` respected; one suite at a time; no coverage/typecheck
 (CI owns both).
+
+## Resume pass (unit died post-PR, salvage resume 2026-09-14)
+
+PR #3468 was already open and armed. Found `codex-node-checks` red:
+`tests/status.route.test.ts` crossed the 800-line file-size ratchet
+(802 lines). Moved the YouTube /status row pins into
+`tests/status-route-youtube.test.ts` (ratchet's own docstring prescribes
+the split); status.route.test.ts back to 787.
+
+Reviewer round ran on senior seat `cursor/cursor-grok-4.6-high` (stock
+reviewer, one round): no BLOCKING. Two act-on findings fixed and pushed
+(3fe527b19): `youtube` added to `PRESENCE_MENTION_CONNECTOR_IDS` so digest
++ public timeline read the captured rows; Data API v3 snippet fields now
+`decodeHtmlEntities` before trim/store/hash (rss decodeXml precedent), with
+a new `SEARCH_PAGE_ESCAPED` integration pin (25/25 workers suite green).
+Consider/Noted/Dismissed buckets recorded in the PR body.
+
+CI then surfaced a fleet-wide blocker unrelated to this diff:
+`tests/sitemap-coverage-guard-provision.test.ts` fails on GitHub runners
+(`--resolve-path` needs one dir with BOTH node and gh) on every queued
+branch — filed as #3502. PR is queued (merge queue, position 8 at push
+time); it merges once main is green again.
