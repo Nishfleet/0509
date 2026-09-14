@@ -8,7 +8,7 @@ import { PUBLIC_SEARCH_TRANSIENT_DEGRADED_MESSAGE } from "~/lib/customer-route-e
 // state, never a 500. The 2026-09-13T18:45Z money-path walk caught the
 // mobile leg answering 500 on the result step while the desktop leg of the
 // same walk answered 200 for the identical URL (200 x5 by 19:01Z), and the
-// fault was reproduced live 2026-09-14T23:33Z (2/10 and 1/18 paced fresh
+// fault was reproduced live 2026-09-13T23:33Z (2/10 and 1/18 paced fresh
 // anonymous curls; the captured 500 body is the route ErrorBoundary
 // document). Every seam BEFORE the leg guard fails safe already (cache
 // probe, both anonymous limiters, plan lookup), so the throw comes from

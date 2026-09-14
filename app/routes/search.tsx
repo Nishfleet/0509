@@ -792,7 +792,7 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
   // (the #2810 no-ErrorBoundary-escape contract for this leg). The
   // 2026-09-13T18:45Z walk caught this leg answering 500 on the mobile
   // session while the desktop leg of the same walk answered 200 for the
-  // identical URL (200 x5 by 19:01Z), and the 2026-09-14T23:33Z live probe
+  // identical URL (200 x5 by 19:01Z), and the 2026-09-13T23:33Z live probe
   // reproduced it (2/10 and 1/18 paced fresh anonymous curls; the captured
   // 500 body is this route's ErrorBoundary document). Every seam BEFORE
   // this guard fails safe already (cache probe, both anonymous limiters,
