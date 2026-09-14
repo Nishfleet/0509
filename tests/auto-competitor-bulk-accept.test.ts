@@ -128,7 +128,12 @@ function installMocks({
       brandLogo: null,
     }),
   }));
-  vi.doMock("~/lib/auto-competitor-seed.server", () => ({
+  // Partial mock: `buildCandidateId` stays REAL — the loader imports it from
+  // this module and the dismissal store keys on the same string, so mocking it
+  // away fails the import rather than testing the shipping key shape
+  // (onboarding slice 2, #3175).
+  vi.doMock("~/lib/auto-competitor-seed.server", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("~/lib/auto-competitor-seed.server")>()),
     seedAutoCompetitors,
   }));
   vi.doMock("~/lib/plan.server", () => ({

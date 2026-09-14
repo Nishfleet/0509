@@ -4,16 +4,16 @@
   "sources": [
     {
       "id": "pulzifi-home",
-      "href": "https://pulzifi.com",
+      "href": "https://pulzifi.com/",
       "label": "Pulzifi home",
-      "checked": "2026-09-14",
+      "checked": "2026-09-11",
       "claim": "Pulzifi monitors any public URL 24/7 and turns every detected change into an AI strategy brief."
     },
     {
       "id": "pulzifi-pricing",
       "href": "https://pulzifi.com/pricing",
       "label": "Pulzifi pricing",
-      "checked": "2026-09-14",
+      "checked": "2026-09-11",
       "claim": "Pulzifi publishes a Free tier, Starter at $27/month, and Professional at $54/month, with check frequency available from 30 minutes."
     }
   ]
