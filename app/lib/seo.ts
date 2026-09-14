@@ -151,11 +151,16 @@ export function searchShareMeta(input: {
 }
 
 export function compareSocialCardUrl(toolSlug: string): string {
-  return canonicalUrl(`/social-card/compare/${toolSlug}.svg`);
+  // Served as PNG through the #2089 raster pipeline (issue #3414) —
+  // Facebook/X/LinkedIn scrapers refuse SVG og:images (the #2101, #3098,
+  // #3104 finding). The legacy `.svg` path stays as an alias, so cached
+  // links keep rendering.
+  return canonicalUrl(`/social-card/compare/${toolSlug}.png`);
 }
 
 export function switchSocialCardUrl(toolSlug: string): string {
-  return canonicalUrl(`/social-card/switch/${toolSlug}.svg`);
+  // Same recipe as compareSocialCardUrl (issue #3414).
+  return canonicalUrl(`/social-card/switch/${toolSlug}.png`);
 }
 
 /**

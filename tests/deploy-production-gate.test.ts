@@ -68,6 +68,24 @@ afterEach(() => {
     rmSync(roots.pop()!, { recursive: true, force: true });
 });
 
+function collectDeployWorkflowScriptTokens(jobs: unknown): string[] {
+  // Tokenize per line, not per run (issue #3441): a `run: |` block's script
+  // invocation can sit on any line, so first-token-of-run let line-2+
+  // ./scripts/ calls escape the +x net entirely.
+  return Object.values(jobs as Record<string, any>)
+    .flatMap((job) => (job.steps ?? []) as Array<{ run?: string }>)
+    .flatMap((step) => (step.run ?? "").split("\n"))
+    .flatMap((line) => line.split(/\s+/))
+    .filter((token) => token.startsWith("./scripts/"));
+}
+
+function expectScriptExecutable(token: string, script: { mode: number }) {
+  expect(
+    (script.mode & 0o111) !== 0,
+    `${token} lost its +x bit — the Actions checkout runs it as ${token} and dies with exit 126 (0509#3330)`,
+  ).toBe(true);
+}
+
 function finalUrl(expected: any, viewport: string) {
   if (expected.exact) return expected.exact;
   const query = expected.search
@@ -1121,8 +1139,8 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     ["production_public_smoke", "oauth_branding"],
     ["oauth_branding", null],
   ])(
-    "rolls back after %s fails and skips later release checks",
-    (failureStep, blockedStep) => {
+    "rolls back after %s fails and continues the success chain when recovery succeeds",
+    (failureStep, nextReleaseCheck) => {
       const plan = buildProductionDeployPlan({
         manifestPath: "test-results/deploy-readiness-test.json",
         remoteRestoreEvidencePath,
@@ -1140,12 +1158,16 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
         caught = error;
       }
 
-      expect(caught).toBe(failure);
+      // #3390: recovery succeeded — the last-green version is 100% live
+      // again, so the plan resolves (exit 0) and the later release checks
+      // run; only when the recovery itself fails does the plan rethrow
+      // post_deploy_recovery_failed.
+      expect(caught).toBeUndefined();
       expect(executed.filter((id) => id === failureStep)).toHaveLength(1);
       expect(
         executed.filter((id) => id === "rollback_failed_release"),
       ).toHaveLength(1);
-      if (blockedStep) expect(executed).not.toContain(blockedStep);
+      if (nextReleaseCheck) expect(executed).toContain(nextReleaseCheck);
     },
   );
 
@@ -1172,7 +1194,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(executed).not.toContain("rollback_failed_release");
   });
 
-  it("runs the post-canary refund invariant before rethrowing a canary failure", () => {
+  it("runs the post-canary refund invariant before continuing past a recovered canary failure", () => {
     const plan = buildProductionDeployPlan({
       manifestPath: "test-results/deploy-readiness-test.json",
       remoteRestoreEvidencePath,
@@ -1190,15 +1212,25 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       caught = error;
     }
 
-    expect(caught).toBe(canaryFailure);
+    // #3390: the refund invariant still runs BEFORE the rollback recovery,
+    // and once recovery succeeds the plan proceeds through the remaining
+    // release checks instead of rethrowing (exit 0).
+    expect(caught).toBeUndefined();
     expect(
       executed.slice(executed.indexOf("post_deploy_release_canary")),
     ).toEqual([
       "post_deploy_release_canary",
+      // first run: the recovery's own post-canary invariant, then the loop
+      // resumes and the invariant runs AGAIN against the restored version.
       "partial_refund_invariants_postcanary",
       "rollback_failed_release",
+      "partial_refund_invariants_postcanary",
+      "start_production_soak",
+      "live_public_truth",
+      "production_public_smoke",
+      "oauth_branding",
+      "canary_bypass_token_sync",
     ]);
-    expect(executed).not.toContain("live_public_truth");
   });
 
   it("preserves both failures when the canary and post-canary invariant fail", () => {
@@ -2287,22 +2319,53 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(deploy.jobs.deploy.permissions["contents"]).toBe("write");
   });
 
-  it("runs every deploy-job ./scripts/ step against an executable checkout (0509#3330)", () => {
+  it("runs every deploy-workflow ./scripts/ step against an executable checkout (0509#3330)", () => {
     const deploy = parse(
       readFileSync(resolve(".github/workflows/deploy-production.yml"), "utf8"),
     ) as any;
-    const directRuns = (deploy.jobs.deploy.steps as Array<{ run?: string }>)
-      .map((step) => step.run?.trim())
-      .filter((run): run is string => !!run && run.startsWith("./scripts/"));
+    // Every job, not just deploy: a lost bit in the evidence/cas jobs kills the
+    // same production deploys through the same exit 126.
+    const directRuns = collectDeployWorkflowScriptTokens(deploy.jobs);
     expect(directRuns).toContain("./scripts/commit-deploy-ledger.sh");
     expect(directRuns).toContain("./scripts/ci-verify-production-candidate.sh");
     for (const run of new Set(directRuns)) {
-      const script = statSync(resolve(run.slice(2)));
-      expect(
-        (script.mode & 0o111) !== 0,
-        `${run} lost its +x bit — the Actions checkout runs it as ${run} and dies with exit 126 (0509#3330)`,
-      ).toBe(true);
+      expectScriptExecutable(run, statSync(resolve(run.slice(2))));
     }
+  });
+
+  it("catches a ./scripts/ invocation on line 2+ of a multiline run block (issue #3441)", () => {
+    // The old net took the first token of each `run:` string, so a `run: |`
+    // block whose script call sat on line 2 escaped the +x check entirely and
+    // production — not this gate — found the lost bit.
+    const synthetic = parse(
+      `
+jobs:
+  evidence:
+    steps:
+      - name: restore evidence
+        run: |
+          set -euo pipefail
+          ./scripts/multiline-probe.sh --flag
+`,
+    ) as any;
+    expect(collectDeployWorkflowScriptTokens(synthetic.jobs)).toContain(
+      "./scripts/multiline-probe.sh",
+    );
+
+    // And the caught token still fails with the gate's exit-126 message, not
+    // a raw ENOENT, when the bit is lost.
+    const root = mkdtempSync(join(tmpdir(), "0509-multiline-plusx-"));
+    roots.push(root);
+    const probe = join(root, "multiline-probe.sh");
+    writeFileSync(probe, "#!/bin/sh\nexit 0\n");
+    chmodSync(probe, 0o644);
+    expect(() =>
+      expectScriptExecutable("./scripts/multiline-probe.sh", statSync(probe)),
+    ).toThrow(/exit 126/);
+    chmodSync(probe, 0o755);
+    expect(() =>
+      expectScriptExecutable("./scripts/multiline-probe.sh", statSync(probe)),
+    ).not.toThrow();
   });
 
   it("fails a rewritten-away pinned SHA with regenerate-the-evidence, not Command failed (0509#2974)", async () => {

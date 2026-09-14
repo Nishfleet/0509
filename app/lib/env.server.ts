@@ -208,6 +208,15 @@ export interface AppEnv {
    * only: the rollout posture is on.
    */
   GOOGLE_ADS_SOURCE_DISABLED?: string;
+  /**
+   * LinkedIn Ads (Ad Library) source kill flag (issue #3196). Same posture as
+   * GOOGLE_ADS_SOURCE_DISABLED: unset or "0" = the source runs (the
+   * production posture, wrangler.jsonc vars); "1" pauses it end to end — no
+   * scheduled captures, the public /ads section omits, the /status row
+   * reports the paused posture. Emergency brake only: the rollout posture is
+   * on.
+   */
+  LINKEDIN_ADS_SOURCE_DISABLED?: string;
   PRESENCE_WEBSITE_ROLLOUT?: string;
   PRESENCE_X_ROLLOUT?: string;
   PRESENCE_REDDIT_ROLLOUT?: string;
@@ -222,8 +231,6 @@ export interface AppEnv {
   PRESENCE_HN_ROLLOUT?: string;
   /** Pinterest (profile feed.rss) mention connector rollout: disabled | internal | pilot | ga. Defaults to disabled (gated, off by default). */
   PRESENCE_PINTEREST_ROLLOUT?: string;
-  /** Podcast (show public RSS 2.0 feed) mention connector rollout: disabled | internal | pilot | ga. Defaults to disabled (gated, off by default). */
-  PRESENCE_PODCAST_ROLLOUT?: string;
   /** Review-sites (Trustpilot public business-unit pages) mention connector rollout: disabled | internal | pilot | ga. Defaults to disabled (gated, off by default). */
   PRESENCE_REVIEW_SITES_ROLLOUT?: string;
   /** Digest delivery rollout: disabled | internal | pilot | ga. Defaults to disabled (notifications off). */
@@ -414,6 +421,15 @@ export function isAgencyOrgModeEnabled(env: AppEnv) {
  */
 export function isGoogleAdsSourceKilled(env: AppEnv) {
   return parseEnvFlag(env.GOOGLE_ADS_SOURCE_DISABLED);
+}
+
+/**
+ * LinkedIn Ads (Ad Library) source kill flag (issue #3196). Same
+ * emergency-brake posture as GOOGLE_ADS_SOURCE_DISABLED: unset or "0" is the
+ * on/production posture; "1" (or any 1/true/yes/on) pauses the source.
+ */
+export function isLinkedInAdsSourceKilled(env: AppEnv) {
+  return parseEnvFlag(env.LINKEDIN_ADS_SOURCE_DISABLED);
 }
 
 export function emailFromAddress(env: AppEnv) {
