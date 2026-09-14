@@ -17,11 +17,12 @@
 -- this file, so any production catch-up that carries both applies the
 -- pinterest widen first; this CHECK is a strict superset of 0101's, so the
 -- INSERT..SELECT copy accepts every row that existed under the previous
--- CHECK whichever of the two applied last. (The 0101/0102 number split is
--- the two-lanes-both-chose-0101 outcome: 0101_appstore and 0101_pinterest
--- each rebuilt this table from the 0100 state, so whichever ran second
--- silently dropped the other's CHECK value — the integration test caught
--- it; the rename keeps the final CHECK the honest union.)
+-- CHECK whichever of the two applied last. (Numbering history: this widen
+-- was first written as 0101_appstore and collided with 0101_pinterest —
+-- two lanes each rebuilding this table from the 0100 state, whichever ran
+-- second silently dropping the other's CHECK value, caught by the
+-- integration test — so it became 0102. The podcast slice's own 0102 was
+-- reverted from main (0509#3434 revert), leaving 0102 solely this widen.)
 --
 -- Expand-only: every value the previous CHECK accepted is still accepted, so
 -- existing rows copy through unchanged, and the running old code is
