@@ -110,7 +110,9 @@ conflicts (appstore kept, podcast dropped — main's revert wins), and shipped.
 - **preview-assert TS2345**: the Play-only stub needed no `lookup` — the
   fetcher's `lookup` responder is now optional with the same 404 fallback as
   `reviews`/`play`.
-- Re-verified on this worktree: `npx vitest run --configLoader runner
-  --project node --changed origin/main` → pass (see below); `npx vitest run
-  --configLoader runner --project workers` → pass — migrations changed so
-  the full real-workerd project ran.
+- Re-verified on this worktree at `839874fec`+ (merged head): `npx vitest run
+  --configLoader runner --project node --changed origin/main --reporter=dot`
+  → 384 files, 4784/4784 pass (127s); `npx vitest run --configLoader runner
+  --project workers --reporter=dot` → 94 files, 575/575 pass (182s) —
+  migrations changed so the full real-workerd project ran, 0104 applied to
+  real D1 (read + write path asserted, podcast + youtube rows preserved).

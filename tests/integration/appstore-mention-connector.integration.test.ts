@@ -67,9 +67,10 @@ const APPLE_LISTING_URL = `https://apps.apple.com/${APPLE_COUNTRY}/app/id${APPLE
 const APPLE_LOOKUP_URL = buildItunesLookupUrl(APPLE_APP_ID, APPLE_COUNTRY);
 const APPLE_REVIEWS_URL = buildItunesReviewsUrl(APPLE_APP_ID, APPLE_COUNTRY);
 const APPLE_REVIEW_1_URL = "https://apps.apple.com/us/app/acme-notes/id544007664?review=1015309951";
-// fixed-date: feed `updated` instants are fixture payload — stored verbatim
-// as published_at and only ever compared to literal strings, never to the
-// wall clock (the digest's `since` filter reads created_at, not these).
+// The feed `updated` instants are fixture payload — stored verbatim as
+// published_at and only ever compared to literal strings, never to the wall
+// clock (the digest's `since` filter reads created_at, not these).
+// fixed-date: fixture instant, not wall-clock-relative.
 const REVIEW_ONE_UPDATED = "2026-09-10T12:00:00-07:00";
 // fixed-date: the edited review's later `updated` instant — same fixture role.
 const REVIEW_ONE_EDITED_UPDATED = "2026-09-11T09:30:00-07:00";
