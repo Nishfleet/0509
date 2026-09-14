@@ -1033,7 +1033,7 @@ export default function AppDashboardRoute() {
           />
           {digests.length > 0 ? (
             <p className="f9-wk-note">
-              <Link className="f9-wk-lnk" to="/app/digests?firstrun=1">
+              <Link className="f9-wk-lnk" to="/app/briefs?firstrun=1">
                 Read latest brief <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
               </Link>
             </p>
