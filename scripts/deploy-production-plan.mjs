@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 
+import { inspectProductionMigrationLedger } from "./d1-migration-sync-check.lib.mjs";
+
 export const BACKUP_PROOF_REQUIRED = "required";
 export const BACKUP_PROOF_DEFERRED = "deferred";
 
@@ -447,13 +449,13 @@ export function buildProductionDeployPlan({
  *   migrationCount?: number,
  *   migrationLedgerNamesSha256?: string,
  *   migrationLedgerBaselineSha256?: string,
- *   allowedMigrationStates?: Array<{
- *     latestMigration: string,
- *     migrationCount: number,
- *     migrationLedgerNames: string[],
- *     migrationLedgerNamesSha256: string,
- *     migrationLedgerBaselineSha256: string,
- *   }>,
+ *   migrationLedgerRule?: {
+ *     baselineSha256: string,
+ *     baseline: readonly string[],
+ *     repositoryMigrations: readonly string[],
+ *     retiredMigrations: readonly string[],
+ *     cleanupMigrations: readonly string[],
+ *   },
  *   migrationBearing?: boolean,
  *   restoreCritical?: boolean,
  *   now?: Date,
@@ -540,30 +542,52 @@ export function validateRemoteRestoreEvidence(evidence, expected) {
   }
   if (value.productionSearchRolloutMode !== "v2")
     issues.push("remote_restore_rollout_mode");
-  if (expected.allowedMigrationStates) {
-    const migrationBaselineMatches = expected.allowedMigrationStates.some(
-      (state) =>
-        state?.migrationLedgerBaselineSha256 ===
-        value.migrationLedgerBaselineSha256,
-    );
-    if (!migrationBaselineMatches) {
+  if (expected.migrationLedgerRule) {
+    // The rule is the repository-derived ledger contract (0509#3512): the
+    // recorded ledger is valid iff it begins with the recorded baseline
+    // exactly and every later name is explainable — a repository migration,
+    // a declared retired migration, or a rename alias of exactly one
+    // repository file — then covers every non-cleanup repository file.
+    const rule = expected.migrationLedgerRule;
+    if (value.migrationLedgerBaselineSha256 !== rule.baselineSha256) {
       issues.push("remote_restore_migration_baseline_mismatch");
-    }
-    const migrationStateMatches = expected.allowedMigrationStates.some(
-      (state) =>
-        state?.latestMigration === value.latestMigration &&
-        state?.migrationCount === value.migrationCount &&
-        state?.migrationLedgerNamesSha256 ===
-          value.migrationLedgerNamesSha256 &&
-        state?.migrationLedgerBaselineSha256 ===
-          value.migrationLedgerBaselineSha256 &&
-        JSON.stringify(state?.migrationLedgerNames) ===
-          JSON.stringify(value.migrationLedgerNames),
-    );
-    if (!migrationStateMatches) {
-      issues.push("remote_restore_migration_mismatch");
-      issues.push("remote_restore_migration_count");
-      issues.push("remote_restore_migration_ledger_order");
+    } else {
+      const recordedNames = Array.isArray(value.migrationLedgerNames)
+        ? value.migrationLedgerNames
+        : [];
+      let inspection;
+      try {
+        inspection = inspectProductionMigrationLedger(
+          recordedNames,
+          [...rule.repositoryMigrations],
+          new Set(rule.cleanupMigrations),
+          {
+            baseline: rule.baseline,
+            retiredMigrations: new Set(rule.retiredMigrations),
+          },
+        );
+      } catch {
+        inspection = { ok: false, reason: "invalid" };
+      }
+      if (!inspection.ok) {
+        issues.push("remote_restore_migration_mismatch");
+        if (inspection.reason === "baseline_prefix") {
+          issues.push("remote_restore_migration_ledger_order");
+        }
+      } else {
+        if (
+          inspection.blockingPending.length > 0 ||
+          value.latestMigration !== recordedNames.at(-1)
+        ) {
+          issues.push("remote_restore_migration_mismatch");
+        }
+        if (
+          inspection.blockingPending.length > 0 ||
+          value.migrationCount !== recordedNames.length
+        ) {
+          issues.push("remote_restore_migration_count");
+        }
+      }
     }
   } else {
     if (
