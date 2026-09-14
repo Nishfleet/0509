@@ -10,6 +10,10 @@
 
 import { queryOne as one } from "~/lib/data/d1.server";
 import type { AppEnv } from "~/lib/env.server";
+import {
+  getJoinPipelineMetrics,
+  type JoinPipelineMetrics,
+} from "~/lib/join-pipeline-metrics.server";
 import { monitoringCoverageDays } from "~/lib/monitoring-coverage";
 import { listScheduledObservationHealth } from "~/lib/scheduled-observation-health.server";
 import {
@@ -248,6 +252,14 @@ export interface PublicStatusSurfaces {
   surfaces: SurfaceMeasurement[];
   /** Detailed monitoring counters for the "Monitoring health" block. */
   monitoring: PublicStatusCounters | null;
+  /**
+   * Join-path latency metrics for the "Join path" block (issue #3177):
+   * time-to-first-confirm and time-to-first-brief p50/p95 over the last
+   * 24 h and 7 d, read from status_probe_samples and the first-brief
+   * digest rows. Null when the DB binding is absent or the read failed —
+   * the block renders its own degraded line, never a fake number.
+   */
+  joinPipeline: JoinPipelineMetrics | null;
 }
 
 const SEARCH_CACHE_REFRESH_MAX_AGE_MS = 26 * 60 * 60 * 1000; // nightly publisher deadline
@@ -435,6 +447,7 @@ export async function getPublicStatusSurfaces(
     return {
       asOf,
       monitoring: null,
+      joinPipeline: null,
       surfaces: [
         degraded(base("public-search", "Public search", "edge probe"),
           "the page is being served without the application database binding"),
@@ -477,6 +490,7 @@ export async function getPublicStatusSurfaces(
     billingResult,
     emailResult,
     emailStatusResult,
+    joinPipelineResult,
   ] = await Promise.allSettled([
     getPublicStatusProbes(env.DB),
     getPublicStatusCountersWithWatchlists(env, dayAgoIso),
@@ -488,6 +502,9 @@ export async function getPublicStatusSurfaces(
     // never throws (pre-migration schema reads as empty). Present data folds
     // into the Email row below; empty data changes nothing.
     getEmailDeliveryStatus(env),
+    // Join-path latency metrics (#3177): confirm samples + first-brief
+    // digests. A rejected read renders as the block's degraded line.
+    getJoinPipelineMetrics(env),
   ]);
   const emailCanaryStatus: EmailDeliveryStatus | null =
     emailStatusResult.status === "fulfilled" ? emailStatusResult.value : null;
@@ -742,6 +759,8 @@ export async function getPublicStatusSurfaces(
     asOf,
     surfaces,
     monitoring: countersResult.status === "fulfilled" ? countersResult.value.counters : null,
+    joinPipeline:
+      d1Ok && joinPipelineResult.status === "fulfilled" ? joinPipelineResult.value : null,
   };
 }
 

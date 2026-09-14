@@ -3,6 +3,10 @@ import type { LinksFunction } from "react-router";
 import { useLoaderData } from "react-router";
 
 import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
+import {
+  formatJoinLatencyMs,
+  type JoinPipelineLatencyMetric,
+} from "~/lib/join-pipeline-metrics.server";
 import { monitoringCoverageDays } from "~/lib/monitoring-coverage";
 import {
   getPublicStatusSurfaces,
@@ -104,6 +108,7 @@ export async function loader({ context }: LoaderFunctionArgs) {
     // Pure, environment-free: no probe, no D1, cannot throw.
     mentionSources: presenceSourceCoverageForDocs(),
     monitoring: surfaces.monitoring,
+    joinPipeline: surfaces.joinPipeline,
     googleAdsCaptures,
     googleAdsSourceKilled,
     linkedinAdsCaptures,
@@ -166,6 +171,32 @@ export function linkedinAdsCaptureLine(
     return `${flag}${captures.attempted} capture attempts in the last two UTC days, ${captures.failed} failed${rateTail} (best-effort counter). `;
   }
   return `${flag}Capture failure counters report once the seam's KV namespace (DECODO_BUDGET) is wired on this deployment. `;
+}
+
+/**
+ * One factual sentence for a join-path metric row (issue #3177): p50 and
+ * p95 for each window with the sample counts, or an honest empty-window
+ * statement. `noun` is the counted event ("join confirms", "first briefs").
+ */
+export function joinPipelineMetricLine(
+  metric: JoinPipelineLatencyMetric | null | undefined,
+  noun: string,
+): string {
+  if (!metric || metric.last7d.samples === 0) {
+    return `No ${noun} recorded in the last 7 days.`;
+  }
+  const windowClause = (stats: JoinPipelineLatencyMetric["last24h"], windowLabel: string) =>
+    stats.p50Ms === null || stats.p95Ms === null
+      ? `no timed ${noun} in the last ${windowLabel}`
+      : `p50 ${formatJoinLatencyMs(stats.p50Ms)}, p95 ${formatJoinLatencyMs(stats.p95Ms)} across ${stats.samples.toLocaleString()} ${noun} in the last ${windowLabel}`;
+  const parts: string[] = [];
+  if (metric.last24h.samples > 0) {
+    parts.push(windowClause(metric.last24h, "24 hours"));
+  } else {
+    parts.push(`no ${noun} in the last 24 hours`);
+  }
+  parts.push(windowClause(metric.last7d, "7 days"));
+  return `${parts.join("; ")}.`;
 }
 
 function checkedMinutesAgo(checkedAt: string, asOf: string): number {
@@ -338,6 +369,41 @@ export default function StatusRoute() {
             </div>
           </dl>
         ) : null}
+      </PublicDocBlock>
+
+      <PublicDocBlock title="Join path">
+        <p>
+          How fast a new visitor moves through the join path, measured from the rows the
+          pipeline writes — the confirm sample and the first-brief digest rows.
+        </p>
+        {data.joinPipeline ? (
+          <dl className="proof-trail-list">
+            <div>
+              <dt>Time to first confirm</dt>
+              <dd title="Source: status_probe_samples join_first_confirm samples — identity card shown on /join to visitor confirm">
+                {joinPipelineMetricLine(data.joinPipeline.firstConfirm, "join confirms")}{" "}
+                Identity card shown to confirmed, measured at /join. As of {asOf}.
+              </dd>
+            </div>
+            <div>
+              <dt>Time to first brief</dt>
+              <dd title="Source: user signup timestamp to the first digest_run row filed with kind first_brief">
+                {joinPipelineMetricLine(data.joinPipeline.firstBrief, "first briefs")}{" "}
+                Signup completed to the first brief filed. As of {asOf}.
+              </dd>
+            </div>
+          </dl>
+        ) : (
+          <dl className="proof-trail-list">
+            <div>
+              <dt>Join-path metrics</dt>
+              <dd>
+                The join-path metric read is degraded right now; the Core surfaces rows
+                above carry each surface's own state and reason.
+              </dd>
+            </div>
+          </dl>
+        )}
       </PublicDocBlock>
 
       <PublicDocBlock title="Tracked sources">

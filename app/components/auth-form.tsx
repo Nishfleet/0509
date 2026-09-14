@@ -77,6 +77,15 @@ export function AuthForm({
   const changeEmailHref = isSignup
     ? `/auth/signup?redirectTo=${encodeURIComponent(redirectTo)}`
     : `/auth/login?redirectTo=${encodeURIComponent(redirectTo)}`;
+  const prefilledName = (initialName ?? "").trim();
+  const prefilledCompetitor = (initialCompetitor ?? "").trim();
+  // Issue #3177: the join path asks exactly one question (the /join input)
+  // and ends in one confirm — the signup step it redirects into must not
+  // re-ask anything. When the confirm folded its answers into `source=join`
+  // + prefill params, optional fields render as hidden inputs (prefilled)
+  // or are omitted entirely (unanswered); the visitor can edit them later
+  // in settings. Direct signups keep the guided optional fields.
+  const joinPath = isSignup && signupSource === "join";
 
   return (
     <div className="f9-auth-card">
@@ -94,7 +103,9 @@ export function AuthForm({
             ? "We sent a setup link. Open it to verify and create the account."
             : "If an account exists for that address, the sign-in link is on the way."
           : isSignup
-            ? "Use a work email. We'll send a setup link to that inbox — open it to verify, then add a competitor and start tracking."
+            ? joinPath && prefilledCompetitor
+              ? `Use a work email. We'll send a setup link to that inbox — open it to verify, then start tracking ${prefilledCompetitor}.`
+              : "Use a work email. We'll send a setup link to that inbox — open it to verify, then add a competitor and start tracking."
             : "Enter your work email and we'll send a one-time link to your inbox."}
       </p>
 
@@ -153,22 +164,34 @@ export function AuthForm({
           <input name="signupSource" type="hidden" value={signupSource} />
         ) : null}
         {isSignup ? (
-          <label className="f9-field">
-            <span>Name</span>
-            <input autoComplete="name" defaultValue={initialName ?? ""} name="name" placeholder="Your name (optional)" />
-          </label>
+          joinPath ? (
+            prefilledName ? (
+              <input name="name" type="hidden" value={prefilledName} />
+            ) : null
+          ) : (
+            <label className="f9-field">
+              <span>Name</span>
+              <input autoComplete="name" defaultValue={initialName ?? ""} name="name" placeholder="Your name (optional)" />
+            </label>
+          )
         ) : null}
         {isSignup ? (
-          <label className="f9-field">
-            <span>First competitor website</span>
-            <input
-              autoComplete="off"
-              defaultValue={initialCompetitor ?? ""}
-              name="competitor"
-              placeholder="competitor.com (optional)"
-              type="text"
-            />
-          </label>
+          joinPath ? (
+            prefilledCompetitor ? (
+              <input name="competitor" type="hidden" value={prefilledCompetitor} />
+            ) : null
+          ) : (
+            <label className="f9-field">
+              <span>First competitor website</span>
+              <input
+                autoComplete="off"
+                defaultValue={initialCompetitor ?? ""}
+                name="competitor"
+                placeholder="competitor.com (optional)"
+                type="text"
+              />
+            </label>
+          )
         ) : null}
 
         <label className="f9-field">
