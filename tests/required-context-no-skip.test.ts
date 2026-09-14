@@ -3,25 +3,51 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 
-// Required contexts under branch protection: "Gitleaks" (secret-scan.yml) and
-// "codex-node-checks" (ci.yml). A required job must be structurally incapable
-// of concluding SKIPPED - GitHub counts a skipped required context as
-// satisfying branch protection. So a required job carries no job-level `if:`
-// (an if: can skip on cancellation or any future condition edit) and no
-// `needs` (a job with needs is skipped when its dependency fails), and its
-// authorizer runs as the first STEP, refusing fork PRs and unapproved
-// dispatch candidates with a real failure. This regression fails on the
-// pre-fix shape (job-level `if:` + `needs: authorize_release`) and passes on
-// the healed shape (in-step authorizer, pinned SHA checkout).
+// Required contexts under the main-merge-queue ruleset's required_status_checks
+// (live ruleset, verified 2026-09-13): "Gitleaks" (secret-scan.yml),
+// "codex-node-checks" (ci.yml), "required-verifier-integrity", "semgrep",
+// "preview-assert" and "release-proof". dependabot-critical-check is NOT
+// ruleset-required despite being enforced below (this test intentionally
+// covers more than the ruleset asks). Requiredness is judged on the
+// ruleset's gh-readonly-queue merge ref, which yields TWO pinned shapes
+// (issue #3263, extending the release-proof precedent pinned below):
+//
+// 1. NEVER-CONCLUDE-SKIPPED (a real verdict on BOTH the PR and the queue
+//    ref): the job carries no job-level `if:` (an if: can skip on
+//    cancellation or any future condition edit) and no `needs` (a job with
+//    needs is skipped when its dependency fails), and its authorizer runs as
+//    the first STEP, refusing fork PRs and unapproved dispatch candidates
+//    with a real failure. This regression fails on the pre-fix shape
+//    (job-level `if:` + `needs: authorize_release`) and passes on the
+//    healed shape (in-step authorizer, pinned SHA checkout).
+//
+// 2. MERGE_GROUP-ONLY (issue #3263, the release-proof shape): the heavy
+//    contexts (codex-node-checks, preview-assert) carry a job-level `if:`
+//    that reports a real verdict on merge_group (the queue's only event)
+//    and keeps workflow_dispatch verification alive, and reports skipped on
+//    PR-head pushes, which the ruleset never consults for queue batches.
+//    The `if:` is pinned to the EXACT proven string so the skip surface
+//    cannot widen silently, and there is still NO `needs` anywhere.
+//
+// Both shapes keep the in-step authorizer as the first STEP, refusing fork
+// PRs and unapproved dispatch candidates with a real failure - a gate that
+// cannot verify must say no, never render green or skipped.
 const REQUIRED_JOBS = [
   [".github/workflows/secret-scan.yml", "gitleaks"],
-  [".github/workflows/ci.yml", "codex-node-checks"],
   [".github/workflows/ci.yml", "dependabot-critical-check"],
-  // preview-assert (0509#1576) becomes a required context on main once the
-  // orchestrator adds it to branch protection; it must satisfy the same
-  // never-skipped contract from day one.
+  // preview-assert (0509#1576) became a required context on main; it
+  // migrates to the merge-queue contract (issue #3263) from day one.
   [".github/workflows/preview-assert.yml", "preview-assert"],
 ] as const;
+
+// The EXACT job-level `if:` a merge-queue-required heavy context may carry
+// (issue #3263): a real verdict on the queue ref (merge_group) and on
+// authorized dispatch candidates, skipped on PR-head pushes. Pinned exactly
+// so no future event, or event deletion, can silently change when the
+// required context reports. MUST stay in sync with ci.yml's
+// codex-node-checks + shard jobs and preview-assert.yml's job.
+const MERGE_GROUP_ONLY_IF =
+  "github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch'";
 
 type WorkflowStep = {
   name?: string;
@@ -52,8 +78,19 @@ function requiredJob(workflowPath: string, jobId: string) {
 }
 
 describe("required contexts can never conclude skipped", () => {
-  it("required jobs carry no job-level if: and no needs", () => {
-    for (const [workflowPath, jobId] of REQUIRED_JOBS) {
+  // The two shapes a required context may take (see REQUIRED_JOBS above):
+  // always-run (no if:) or the pinned merge-queue if: from issue #3263.
+  const NEVER_SKIP_JOBS: (typeof REQUIRED_JOBS)[number][] = [
+    [".github/workflows/secret-scan.yml", "gitleaks"],
+    [".github/workflows/ci.yml", "dependabot-critical-check"],
+  ];
+  const MERGE_GROUP_ONLY_JOBS: (typeof REQUIRED_JOBS)[number][] = [
+    [".github/workflows/ci.yml", "codex-node-checks"],
+    [".github/workflows/preview-assert.yml", "preview-assert"],
+  ];
+
+  it("never-skip required jobs carry no job-level if: and no needs", () => {
+    for (const [workflowPath, jobId] of NEVER_SKIP_JOBS) {
       const job = requiredJob(workflowPath, jobId);
       expect(
         job.if,
@@ -66,8 +103,62 @@ describe("required contexts can never conclude skipped", () => {
     }
   });
 
+  it("merge-group-only required jobs carry the EXACT #3263 if: and no needs", () => {
+    for (const [workflowPath, jobId] of MERGE_GROUP_ONLY_JOBS) {
+      const job = requiredJob(workflowPath, jobId);
+      // release-proof precedent: requiredness is judged on the queue's
+      // gh-readonly-queue ref, where the event is always merge_group, so the
+      // context always reports a real verdict when the queue consults it. A
+      // skipped PR-head run is exactly the state the ruleset never reads.
+      expect(
+        job.if,
+        `${workflowPath}:${jobId} must carry the pinned merge-queue if: (issue #3263)`,
+      ).toBe(MERGE_GROUP_ONLY_IF);
+      expect(
+        job.needs,
+        `${workflowPath}:${jobId} \`needs\` skips the job when its dependency fails`,
+      ).toBeUndefined();
+    }
+  });
+
+  it("merge-group-only required workflows still trigger on the queue ref and dispatch", () => {
+    // The pinned if: is only load-bearing while the workflow still fires on
+    // the merge-group ref (where the ruleset's required check is judged) and
+    // on authorized dispatch candidates. If a trigger were removed, the
+    // required context would never report and the queue would fail closed
+    // after its 360-minute check_response_timeout.
+    for (const [workflowPath] of MERGE_GROUP_ONLY_JOBS) {
+      const parsed = parse(readFileSync(workflowPath, "utf8")) as {
+        on: Record<string, unknown>;
+      };
+      expect(
+        parsed.on?.merge_group,
+        `${workflowPath} must keep its merge_group trigger`,
+      ).toBeDefined();
+      // And UNFILTERED: the queue's only event is merge_group, so a paths:
+      // filter there would leave the required context unreported on queue
+      // refs - the fail-closed after 360 minutes described above, with this
+      // test still green. A bare key parses as null.
+      expect(
+        parsed.on?.merge_group,
+        `${workflowPath} merge_group must stay bare/unfiltered`,
+      ).toBeNull();
+      expect(
+        parsed.on?.workflow_dispatch,
+        `${workflowPath} must keep its workflow_dispatch trigger`,
+      ).toBeDefined();
+    }
+  });
+
+  // The authorize/checkout contracts below hold for BOTH shapes, so they
+  // iterate the union of never-skip and merge-group-only required jobs.
+  const ALL_REQUIRED_JOBS: (typeof REQUIRED_JOBS)[number][] = [
+    ...NEVER_SKIP_JOBS,
+    ...MERGE_GROUP_ONLY_JOBS,
+  ];
+
   it("required jobs authorize in-step, first step, and never swallow failure", () => {
-    for (const [workflowPath, jobId] of REQUIRED_JOBS) {
+    for (const [workflowPath, jobId] of ALL_REQUIRED_JOBS) {
       const steps = requiredJob(workflowPath, jobId).steps ?? [];
       const authorize = steps[0];
       expect(
@@ -92,7 +183,7 @@ describe("required contexts can never conclude skipped", () => {
   });
 
   it("required jobs checkout the in-step authorized SHA and re-verify it", () => {
-    for (const [workflowPath, jobId] of REQUIRED_JOBS) {
+    for (const [workflowPath, jobId] of ALL_REQUIRED_JOBS) {
       const steps = requiredJob(workflowPath, jobId).steps ?? [];
       const checkout = steps.find((step) =>
         step.uses?.startsWith("actions/checkout@"),

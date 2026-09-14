@@ -4,13 +4,18 @@ import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 
 // The `preview-assert` workflow (0509#1576) runs the deploy job's own
-// pre-deploy verification against the PR head and becomes a required status
-// context on main, so it must satisfy the required-context contract: no
-// job-level `if:`/`needs:`, an in-step authorizer as step 1, and a pinned
-// checkout of the authorized SHA. It runs the deploy gate's assertion
-// commands unchanged (`npm run typecheck` + `npm run build`) and uploads a
-// preview Worker version via Cloudflare's own mechanism
-// (`wrangler versions upload --preview-alias`) without touching production.
+// pre-deploy verification and is a required status context of the
+// main-merge-queue ruleset. From issue #3263 it shares the release-proof
+// merge-queue contract: a job-level `if:` pinned to the exact
+// `merge_group || workflow_dispatch` string, judged on the ruleset's
+// gh-readonly-queue ref (where the event is always merge_group), skipped on
+// PR-head pushes which the ruleset never consults for queue batches. Still
+// NO `needs:`, an in-step authorizer as step 1, and a pinned checkout of the
+// authorized SHA. It runs the deploy gate's assertion commands unchanged
+// (`npm run typecheck` + `npm run build`) and proves the bundle with
+// `wrangler deploy --dry-run` - no version is uploaded (the versions-upload
+// mechanism evicted real deploys from version history; see the workflow's
+// 2026-09-04 note).
 const source = readFileSync(".github/workflows/preview-assert.yml", "utf8");
 const parsed = parse(source) as {
   on?: Record<string, unknown>;
@@ -55,8 +60,13 @@ describe("preview-assert workflow", () => {
     });
   });
 
-  it("carries no job-level if: and no needs (a required context must never conclude SKIPPED)", () => {
-    expect(job.if).toBeUndefined();
+  it("carries the pinned merge-queue if: and no needs (issue #3263)", () => {
+    // Same pinned string as tests/required-context-no-skip.test.ts: a real
+    // verdict on the queue's merge_group ref and on authorized dispatch
+    // candidates; PR-head runs skip, which the ruleset never consults.
+    expect(job.if).toBe(
+      "github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch'",
+    );
     expect(job.needs).toBeUndefined();
     for (const step of steps) {
       expect(step["continue-on-error"]).toBeUndefined();

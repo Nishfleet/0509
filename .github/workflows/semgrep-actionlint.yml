@@ -4,8 +4,9 @@ name: semgrep-actionlint
 # Kept as a separate file to avoid touching ci.yml / secret-scan.yml, whose
 # required-context jobs (codex-node-checks, Gitleaks) carry strict fork-guard
 # authorizers that must not be disturbed (smallest-diff rule for the flagship).
-# These two jobs are NOT required contexts yet; the orchestrator wires
-# protection once they are green on main.
+# semgrep is a required context now (live main-merge-queue ruleset, verified
+# 2026-09-13); actionlint is not - that asymmetry is exactly why only
+# actionlint may skip, and why semgrep keeps running on every event.
 
 on:
   pull_request:
@@ -39,13 +40,61 @@ jobs:
     name: semgrep
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # pull-requests: read lets the changed-file detector below call the PR
+    # files API; without it the GITHUB_TOKEN (workflow grants only
+    # contents: read) would 403 and the detector would always fall back to
+    # running actionlint unconditionally (fail-open, but with no saving).
+    # Job-level permissions replace the inherited set, so contents: read is
+    # re-declared explicitly.
     permissions:
       contents: read
+      pull-requests: read
+    # Issue #3263: exports the changed-file detector's verdict so the
+    # actionlint job can gate on it via needs.semgrep.outputs.actionlint.
+    # Without this block the expression reads an empty string and the gate
+    # always runs.
+    outputs:
+      actionlint: ${{ steps.changes.outputs.actionlint }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Detect .github changes (gates the actionlint job)
+        id: changes
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          # Issue #3263: actionlint's entire input is `.github/**` (workflow
+          # and job wiring), so on a pull_request that touches no `.github/**`
+          # file its verdict cannot differ from the previous run. This step
+          # records whether the PR touches that tree and the actionlint job's
+          # job-level `if` skips itself when it does not. Non-PR events (push
+          # to main, merge_group) set no output, so actionlint keeps running
+          # exactly as before there. Fail-open: when the files API is
+          # unavailable the step reports "true" so the linter still runs —
+          # skipping a gate is the weaker failure mode, and this keeps the
+          # required semgrep verdict unaffected either way.
+          if ! files="$(gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" \
+            --jq '.[] | .filename' 2>/dev/null)"; then
+            echo "::warning::files API unavailable; running actionlint unconditionally"
+            echo "actionlint=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Bracket form (no escaping): matches paths like
+          # .github/workflows/ci.yml. A '\\.' pattern would require a literal
+          # backslash in the filename and never match.
+          if printf '%s' "$files" | grep -q '^[.]github/'; then
+            echo "actionlint=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "actionlint=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::PR touches no .github/** files; actionlint job will skip"
+          fi
       - name: Install semgrep (pinned)
         run: |
           set -euo pipefail
@@ -77,7 +126,22 @@ jobs:
     # acceptable — only the semgrep ruleset stays canonical. Same job shape
     # as aiconverter-app / siterep-public: SHA-pinned action, shellcheck/
     # pyflakes off for hermeticism.
+    #
+    # Issue #3263: this job only judges `.github/**`, so it is gated by a
+    # job-level `if` on the semgrep job's changed-file detection. This
+    # workflow cannot carry a workflow-level `paths:` filter without also
+    # gating semgrep (a required context that must run on EVERY PR), and this
+    # context is not required, so a skipped run costs nothing. Unlike
+    # release-proof, the skip decision needs the PR's changed-file list, so
+    # it reads the output of the (always-running) semgrep job rather than
+    # adding a second detector job: no extra check run, no extra checkout.
+    # Fail-open: a missing output (non-PR event, or the detection step
+    # unavailable) runs the linter, it never silently skips the gate.
+    # always() keeps that decision evaluating when semgrep itself fails, so a
+    # red run still shows whether the PR also broke the workflow wiring.
     name: actionlint
+    needs: semgrep
+    if: always() && needs.semgrep.outputs.actionlint != 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

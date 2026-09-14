@@ -20,10 +20,36 @@ name: Content quality
 # protected verifier definition (required-verifier-integrity) and this
 # change does not carry the independent review needed to touch it.
 on:
+  # Path-gated (issue #3263): Vale only runs when the tree it lints can change
+  # its verdict. Vale's only configured target is the `[*.md]` section in
+  # .vale.ini (any markdown file, not just content/**), so the matching set is
+  # every .md file plus the content tree plus Vale's own style/config files —
+  # a style or vocab edit can flip the verdict on existing content exactly
+  # like a content edit can. Non-markdown changes under content/** (images,
+  # data) cannot alter a Vale verdict, so they do not trigger the job. On any
+  # other PR the workflow does not start at all, so no check run is reported —
+  # "Vale (whole content tree)" is NOT in the merge-queue ruleset's
+  # required_status_checks (verified live 2026-09-12), so the queue never
+  # waits on an absent context.
   pull_request:
+    paths:
+      - 'content/**'
+      - '**.md'
+      - '.vale/**'
+      - '.vale.ini'
+  # merge_group stays BARE: GitHub supports paths: only on push,
+  # pull_request and pull_request_target - actionlint's [events] rule is
+  # correct and CI proved it (issue #3263 review round). Vale is not a
+  # required context, so an unfiltered queue-ref run costs one fast job and
+  # a skip is free.
   merge_group:
   push:
     branches: [main]
+    paths:
+      - 'content/**'
+      - '**.md'
+      - '.vale/**'
+      - '.vale.ini'
   workflow_dispatch:
 
 concurrency:

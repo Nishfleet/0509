@@ -38,8 +38,9 @@ name: Preview assert
 #
 # Required-check contract (branch protection adds `preview-assert` to main):
 # a required context must be structurally incapable of concluding SKIPPED, so
-# this job carries no job-level `if:` / `needs:` and its authorizer is step 1
-# (tests/required-context-no-skip.test.ts enforces the contract).
+# this job carries no `needs:`, its authorizer is step 1, and its job-level
+# `if:` pins the merge-queue contract (see below; issue #3263;
+# tests/required-context-no-skip.test.ts enforces the contract).
 
 on:
   pull_request:
@@ -60,6 +61,16 @@ permissions:
 
 jobs:
   preview-assert:
+    # Required context, judged on the merge-queue ref (issue #3263, same
+    # precedent as ci.yml's release-proof and codex-node-checks): the
+    # main-merge-queue ruleset evaluates required_status_checks on the
+    # gh-readonly-queue merge ref where the event is always merge_group, so
+    # the check always reports a real verdict there; PR-head runs are
+    # skipped, which the ruleset never consults for queue batches. The job
+    # keeps its in-step authorizer (fork PRs and unapproved dispatches fail
+    # with a real failure) and still runs on workflow_dispatch so an
+    # authorized main-candidate preview keeps working.
+    if: github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 270
     steps:

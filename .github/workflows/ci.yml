@@ -1,7 +1,26 @@
 name: CI
 
 on:
+  # Issue #3263: the pull_request trigger is path-gated to the dependency
+  # surface (manifests, lockfiles, Dependabot's own config) — dependabot-
+  # critical-check is the only job in this workflow that still reports on a
+  # PR head, and its verdict input is exactly that surface. The merge_group
+  # trigger deliberately carries NO paths filter: the main-merge-queue
+  # ruleset judges required_status_checks on the gh-readonly-queue ref where
+  # the event is always merge_group, so the required verdicts (dependabot-
+  # critical-check, codex-node-checks + shards, release-proof) must never be
+  # narrowed there. A filtered merge_group could leave a required context
+  # unreported on a queue ref and fail the batch closed after the check
+  # response timeout.
   pull_request:
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - '**/package.json'
+      - '**/package-lock.json'
+      - '**/npm-shrinkwrap.json'
+      - '.github/dependabot.yml'
+      - '.github/dependabot.yaml'
   merge_group:
   workflow_dispatch:
     inputs:
@@ -22,16 +41,27 @@ env:
 
 jobs:
   codex-node-checks:
-    # Required context (branch protection). It must be structurally incapable
-    # of concluding SKIPPED: GitHub counts a skipped required context as
-    # satisfying branch protection, so there is NO job-level `if:` and NO
-    # `needs` here (a job with needs is skipped when its dependency fails;
-    # an if: can skip on cancellation or any future condition edit). The
-    # authorizer is step 1 of THIS job, so a fork PR or unapproved dispatch
-    # candidate fails the required check with a real failure - a gate that
-    # cannot verify must say no, never render green or skipped. This contract
-    # is identical for the sibling shard jobs below; tests/required-context-no-skip.test.ts
-    # enforces it structurally across all of them.
+    # Required context, now judged on the merge-queue ref (issue #3263).
+    # Requiredness comes from the main-merge-queue ruleset, which evaluates
+    # required_status_checks on the gh-readonly-queue merge ref where the
+    # event is always merge_group - exactly the precedent release-proof
+    # (below) already ships and documents. PR-head runs of this job are
+    # skipped (which the ruleset never consults for queue batches; a skipped
+    # required context still satisfies the enqueue gate), so the ~25-30
+    # minutes of hosted lanes this job and its shards need no longer burn
+    # once per PR head against the 20-concurrent hosted-job cap. The job
+    # still carries NO `needs` (a needs-dependency failing would skip it) and
+    # keeps its in-step authorizer, so a fork PR or unapproved dispatch
+    # candidate still fails the required check with a real failure - a gate
+    # that cannot verify must say no, never render green or skipped. It also
+    # still runs on workflow_dispatch, so an authorized main-candidate
+    # verification (expected_sha) keeps reporting a real verdict. This
+    # contract is identical for the sibling shard jobs below;
+    # tests/required-context-no-skip.test.ts pins this job and preview-assert
+    # structurally; the shards below repeat the same pinned if: string (they
+    # are neither separately test-enforced nor ruleset-required) - keep them
+    # in sync.
+    if: github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -125,9 +155,11 @@ jobs:
         run: npm run typecheck
 
   codex-node-checks-shard-2:
-    # Required context (branch protection) — shard 2 of 4. Same no-skip
-    # contract as codex-node-checks above: no job-level if:/needs:, authorizer
-    # is step 1, fork PR fails with a real failure. See that job's header.
+    # Required context — shard 2 of 4. Same merge-queue contract as
+    # codex-node-checks above: reports a real verdict on the merge-group ref,
+    # no needs, authorizer is step 1, fork PR fails with a real failure. See
+    # that job's header.
+    if: github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch'
     name: codex-node-checks-shard-2
     runs-on: ubuntu-latest
     permissions:
@@ -203,8 +235,9 @@ jobs:
               --project node
 
   codex-node-checks-shard-3:
-    # Required context (branch protection) — shard 3 of 4. Same no-skip
-    # contract as codex-node-checks above.
+    # Required context — shard 3 of 4. Same merge-queue contract as
+    # codex-node-checks above.
+    if: github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch'
     name: codex-node-checks-shard-3
     runs-on: ubuntu-latest
     permissions:
@@ -280,8 +313,9 @@ jobs:
               --project node
 
   codex-node-checks-shard-4:
-    # Required context (branch protection) — shard 4 of 4. Same no-skip
-    # contract as codex-node-checks above.
+    # Required context — shard 4 of 4. Same merge-queue contract as
+    # codex-node-checks above.
+    if: github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch'
     name: codex-node-checks-shard-4
     runs-on: ubuntu-latest
     permissions:
