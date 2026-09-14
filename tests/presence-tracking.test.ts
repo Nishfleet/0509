@@ -149,6 +149,19 @@ describe("presence access gates", () => {
     expect(operational).toBe(true);
   });
 
+  it("admits the App-store connector to customer-facing polling for self and competitor once #3210 wired the public listings + reviews poll", async () => {
+    const env = {
+      ...baseEnv,
+      PRESENCE_APPSTORE_ROLLOUT: "ga",
+    };
+    const selfOperational = await connectorOperationalForPolling(env, "appstore", "self");
+    expect(selfOperational).toBe(true);
+    // The keyless public listing + review surfaces carry competitor tracking
+    // too — no connected account stands between the poll and the surface.
+    const competitorOperational = await connectorOperationalForPolling(env, "appstore", "competitor");
+    expect(competitorOperational).toBe(true);
+  });
+
   it("blocks Reddit without commercial access approval", async () => {
     const gate = await evaluateConnectorAccessGate(
       {

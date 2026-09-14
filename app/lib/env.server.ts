@@ -229,6 +229,8 @@ export interface AppEnv {
   PRESENCE_THREADS_ROLLOUT?: string;
   /** Hacker News (Algolia HN Search) mention connector rollout: disabled | internal | pilot | ga. Defaults to disabled (gated, off by default). */
   PRESENCE_HN_ROLLOUT?: string;
+  /** App stores (Apple iTunes keyless + customer-review RSS, Play structured data) mention connector rollout: disabled | internal | pilot | ga. Defaults to disabled (gated, off by default). */
+  PRESENCE_APPSTORE_ROLLOUT?: string;
   /** Pinterest (profile feed.rss) mention connector rollout: disabled | internal | pilot | ga. Defaults to disabled (gated, off by default). */
   PRESENCE_PINTEREST_ROLLOUT?: string;
   /** Digest delivery rollout: disabled | internal | pilot | ga. Defaults to disabled (notifications off). */

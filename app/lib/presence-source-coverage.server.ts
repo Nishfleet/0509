@@ -30,6 +30,7 @@ const SOURCE_LABELS: Record<PresenceSourceId, string> = {
   gdelt: "GDELT mainstream news",
   threads: "Threads",
   hn: "Hacker News",
+  appstore: "App stores",
   pinterest: "Pinterest",
   youtube: "YouTube",
   amazon: "Amazon marketplace",
@@ -56,6 +57,7 @@ const CONNECTOR_FOR_SOURCE: Partial<Record<PresenceSourceId, PresenceConnectorId
   gdelt: "gdelt",
   threads: "threads",
   hn: "hn",
+  appstore: "appstore",
   pinterest: "pinterest",
   youtube: "youtube",
 };
@@ -111,6 +113,8 @@ function statusFromConnectorGate(
             ? "OFFICIAL_PUBLIC_API"
             : sourceId === "hn"
             ? "OFFICIAL_PUBLIC_API"
+            : sourceId === "appstore"
+            ? "PUBLIC_WEB_BEST_EFFORT"
             : sourceId === "pinterest"
             ? "VERIFIED_PUBLIC_FEED"
             : sourceId === "youtube"
@@ -474,6 +478,13 @@ export function presenceSourceCoverageForDocs(): Array<{
       label: SOURCE_LABELS.hn,
       productionStatus: "gated",
       notes: "Hacker News mention connector wired in (Algolia HN Search API — free, no key, no auth; the ~10,000-requests/hour/IP courtesy figure is honored with one serialized search_by_date request per poll: page 0 only, time-window slicing via the prior poll's watermark instead of deep paging past the ~1,000-result ceiling). Gated behind PRESENCE_HN_ROLLOUT — off by default; activation is a separate rollout decision. Coverage: only public HN stories and comments whose stored text/URL/title matches the tracked phrase become mentions — the connector pins the Algolia query to tags=(story,comment) — while ranking metadata (points, comment counts, the story's external URL) rides raw_json, never the mention.",
+    },
+    {
+      sourceId: "appstore",
+      label: SOURCE_LABELS.appstore,
+      productionStatus: "gated",
+      notes:
+        "App-stores mention connector wired in. Apple: the documented keyless iTunes Search/Lookup API + the customer-review RSS feed (one most-recent page, never deep-paged). Google Play: the public details page's SoftwareApplication structured data. Covers the store's own listing of a tracked app (deduped by canonical URL) plus Apple's most recent customer reviews; no free public Google Play review API exists (the 2,963★ facundoolano/google-play-scraper talks to Play's private undocumented batchexecute — excluded, public surfaces only; documented in docs/mentions/PLAN.md). Gated behind PRESENCE_APPSTORE_ROLLOUT — off by default; activation is a separate rollout decision.",
     },
     {
       sourceId: "pinterest",

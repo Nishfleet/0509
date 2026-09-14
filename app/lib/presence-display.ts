@@ -24,6 +24,7 @@ const CONNECTOR_COPY: Record<PresenceConnectorId, string> = {
   gdelt: "GDELT mainstream news",
   threads: "Threads",
   hn: "Hacker News",
+  appstore: "App stores",
   pinterest: "Pinterest",
   youtube: "YouTube",
 };

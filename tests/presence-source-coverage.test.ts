@@ -126,6 +126,19 @@ describe("presence source coverage policy", () => {
     expect(entry.coverageLabel).toBe("CONNECTED_ACCOUNT");
   });
 
+  it("marks the App-store surface available once the rollout flag admits it (#3210)", async () => {
+    const entry = await evaluatePresenceSourceCoverage(
+      {
+        ...baseEnv,
+        PRESENCE_APPSTORE_ROLLOUT: "internal",
+      },
+      "appstore",
+      "self",
+    );
+    expect(entry.status).toBe("available");
+    expect(entry.coverageLabel).toBe("PUBLIC_WEB_BEST_EFFORT");
+  });
+
   it("marks YouTube unavailable while its rollout is off — wired in #3203, dark by default", async () => {
     const entry = await evaluatePresenceSourceCoverage(baseEnv, "youtube", "competitor");
     expect(entry.status).toBe("unavailable");
@@ -166,6 +179,7 @@ describe("presence source coverage policy", () => {
       "gdelt",
       "threads",
       "hn",
+      "appstore",
       "pinterest",
       "youtube",
       "amazon",
@@ -394,6 +408,7 @@ describe("presence source coverage policy", () => {
     expect(docs.find((entry) => entry.sourceId === "amazon")?.productionStatus).toBe("manual_only");
     expect(docs.find((entry) => entry.sourceId === "x")?.productionStatus).toBe("gated");
     expect(docs.find((entry) => entry.sourceId === "linkedin")?.productionStatus).toBe("gated");
+    expect(docs.find((entry) => entry.sourceId === "appstore")?.productionStatus).toBe("gated");
   });
 
   // The five seam competitor-monitoring sources (#2218) report "configured"

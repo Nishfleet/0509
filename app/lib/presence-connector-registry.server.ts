@@ -1,3 +1,4 @@
+import { appstoreConnector } from "~/lib/presence-connectors/appstore.server";
 import { gdeltConnector } from "~/lib/presence-connectors/gdelt.server";
 import { hnConnector } from "~/lib/presence-connectors/hn.server";
 import { linkedinConnector } from "~/lib/presence-connectors/linkedin.server";
@@ -30,6 +31,7 @@ const CONNECTORS = {
   gdelt: gdeltConnector,
   threads: threadsConnector,
   hn: hnConnector,
+  appstore: appstoreConnector,
   pinterest: pinterestConnector,
   youtube: youtubeConnector,
 } as const;
@@ -58,6 +60,7 @@ export const PRESENCE_MENTION_CONNECTOR_IDS: PresenceConnectorId[] = [
   "gdelt",
   "bluesky",
   "threads",
+  "appstore",
   "youtube",
 ];
 
@@ -138,6 +141,11 @@ export async function pollPresenceTarget(
     // (lastItemCreatedAtI) — same wrapper the x/website/rss connectors read.
     return hnConnector.poll(ctx, target, options.cursor);
   }
+  if (target.connectorId === "appstore") {
+    // Stateless: dedup is the table's UNIQUE (source_target_id, url_hash);
+    // the connector takes no prior cursor (the gdelt posture).
+    return appstoreConnector.poll(ctx, target);
+  }
   if (target.connectorId === "youtube") {
     // The prior cursor_json carries the publishedAfter watermark
     // (lastItemPublishedAt) AND the counted-usage window — same wrapper hn
@@ -186,6 +194,9 @@ export function coverageLabelForConnector(
   }
   if (connectorId === "gdelt" || connectorId === "threads" || connectorId === "hn" || connectorId === "youtube") {
     return "OFFICIAL_PUBLIC_API" as const;
+  }
+  if (connectorId === "appstore") {
+    return "PUBLIC_WEB_BEST_EFFORT" as const;
   }
   if (connectorId === "linkedin" && trackingMode === "competitor") {
     return "LIMITED_COVERAGE" as const;

@@ -196,6 +196,7 @@ const REPO_ONLY_MIGRATIONS = Object.freeze([
   "0101_widen_source_target_connector_pinterest.sql",
   "0102_widen_source_target_connector_podcast.sql",
   "0103_widen_source_target_connector_youtube.sql",
+  "0104_widen_source_target_connector_appstore.sql",
 ]);
 
 describe("D1 remote restore evidence automation", () => {

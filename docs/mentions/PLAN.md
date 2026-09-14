@@ -58,6 +58,7 @@ gated on a platform review/approval), **money** (paid surface — MONEY flag),
 | **Threads** | [Threads API keyword search](https://developers.facebook.com/docs/threads/keyword-search/) + [mentions](https://developers.facebook.com/docs/threads/threads-mentions/) | **approval** — free API, needs a Meta app with `threads_keyword_search` (and `threads_manage_mentions` advanced access for others' posts) | Meta Platform Terms. Keyword search: **2,200 queries per user per rolling 24h** (across apps). App review lead time is the real cost. [rate limits](https://developers.facebook.com/docs/threads/overview/) | $0 | Near-real-time | ≤2,200 queries/user/24h — connector must track usage in `presence_poll_cursor` |
 | **Bluesky** | `app.bsky.feed.searchPosts` XRPC ([docs](https://docs.bsky.app/docs/api/app-bsky-feed-search-posts)) | **build** — new `bluesky` connector, free | Bluesky ToS + open AT Protocol. Rate limits documented as "generous… contact us if you encounter rate-limiting" ([rate limits](https://docs.bsky.app/docs/advanced-guides/rate-limits)). Caveat: unauthenticated `searchPosts` on `public.api.bsky.app` has been intermittently 403'd upstream — use an authenticated app-password session | $0 | Near-real-time | Generous; serialize polls anyway |
 | **Hacker News** | [Algolia HN Search API](https://hn.algolia.com/api) `search` / `search_by_date` | **build** — new `hn` connector, no auth at all | Free public API operated by Algolia for HN. No published rate limit — the ~10,000 req/hr/IP figure is community-observed courtesy, not an SLA; ~1,000 retrievable results per query cap. Official alternative ([Firebase HN API](https://github.com/HackerNews/API)) has no search | $0 | Near-real-time | Courtesy budget ~10k req/hr/IP; serialized low-cadence polls are nowhere near it |
+| **App stores — Apple + Google Play** | Apple: the documented keyless [iTunes Search/Lookup API](https://performance-partners.apple.com/search-api) (`GET itunes.apple.com/lookup?id=<trackId>&country=<cc>`) + the customer-review feed `itunes.apple.com/<cc>/rss/customerreviews/page=1/id=<trackId>/sortby=mostrecent/json`; Google Play: the public details page's own `SoftwareApplication` structured data | **build** — shipped #3210: new `appstore` connector, keyless, both tracking modes | Apple: the Search/Lookup API is documented and keyless; the customer-review feed is an undocumented-but-long-lived public surface, given the same honest posture as Google News RSS above (works, no contract, never deep-paged past page=1). Google Play: only the page's own schema.org structured data is read; `/store/apps/details` is not Disallow-listed in Play's robots.txt (verified live 2026-09-13). Open-source collectors researched first (GitHub star-sorted, live 2026-09-13): facundoolano/google-play-scraper (2,963★), oxylabs/google-play-scraper (1,757★), JoMingyu/google-play-scraper (1,011★) all talk to Play's private undocumented `batchexecute` endpoint — **rejected**, public surfaces only; grych/AppStoreReviews (164★) and cowboy-bebug/app-store-scraper (102★) wrap the same Apple surfaces we read directly — also rejected. No free public Google Play review API exists: Play REVIEWS are the documented exclusion the issue allows (the listing itself stays captured). Details: §8 | $0 — no key, no account, no vendor | Listing on read; Apple reviews = the most-recent page | 2 requests per Apple poll (1 lookup + 1 reviews page=1 — Apple's ~20 calls/minute guidance cannot be stressed by serialized polls), 1 per Google Play poll |
 
 ## 3. Data model — a "mention" beside an "ad"
 
@@ -350,6 +351,35 @@ already authenticates — $0 free tier, 1000 reads/10 min enforced in-connector
 via the shared `presence_poll_cursor` ledger, commercial approval = the
 #1378 gate `REDDIT_COMMERCIAL_ACCESS=approved` — the survey's own
 conclusion, applied.
+
+
+App stores, #3210 (2026-09-13): the three public surfaces were fetched live
+this session, all HTTP 200. Apple's documented
+[iTunes Search API](https://performance-partners.apple.com/search-api)
+answers `GET https://itunes.apple.com/lookup?id=<trackId>&country=<cc>`
+keyless — `results[0]` carries `trackId`, `trackName`, `description`,
+`sellerName`/`artistName`, `releaseDate`, `averageUserRating`,
+`userRatingCount` (probe `id=544007664`: HTTP 200, 11.7 KB). The
+customer-review feed
+`GET https://itunes.apple.com/<cc>/rss/customerreviews/page=1/id=<trackId>/sortby=mostrecent/json`
+returned 50 entries with the connector-parsed shape (`author.name.label`,
+`updated.label`, `id.label`, `link.attributes.rel="related"` + `href`) —
+an undocumented-but-long-lived public surface, given the same posture as
+Google News RSS: works, no contract, page=1 only, never deep-paged. Google
+Play's public details page (`play.google.com/store/apps/details?id=<pkg>&hl=en&gl=US`,
+1.25 MB probe) embeds a schema.org `SoftwareApplication` ld+json block
+(name, author, description, aggregateRating); `/store/apps/details` is not
+Disallow-listed in Play's robots.txt (checked live 2026-09-13). Open-source
+collectors searched first (GitHub star-sorted, this session):
+`facundoolano/google-play-scraper` (2,963★), `oxylabs/google-play-scraper`
+(1,757★) and `JoMingyu/google-play-scraper` (1,011★) all talk to Play's
+private undocumented `batchexecute` endpoint — **rejected** against the
+public-surfaces-only rule; `grych/AppStoreReviews` (164★) and
+`cowboy-bebug/app-store-scraper` (102★) wrap the same Apple review surfaces
+we read directly — also rejected, unofficial and undocumented. No free
+public Google Play review API exists, so Play REVIEWS are the documented
+exclusion the issue allows (the listing itself stays captured); #3210 ships
+on the three public surfaces above, $0, no new dependency.
 
 YouTube-specific collector survey for #3203 (`gh search repos`, 2026-09-13):
 no production-grade general YouTube mention collector exists to adopt
