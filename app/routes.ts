@@ -209,8 +209,13 @@ export default [
   // (source=guide-can-chatgpt-monitor-ads; the signup marker is lowercase).
   // The issue-specified slug keeps its uppercase ChatGPT and 301s to the
   // lowercase canonical (issue #2955) — the lowercase registration is the
-  // URL the sitemap, canonical, and every internal link declare.
-  route("guides/can-ChatGPT-monitor-competitor-ads", "routes/guides.can-ChatGPT-monitor-competitor-ads.tsx"),
+  // URL the sitemap, canonical, and every internal link declare. The exact
+  // slug stays registered verbatim as an { id }-aliased entry on the SAME
+  // module file (the LEGACY_VENDOR_COMPARE_PATH id pattern below): a
+  // separate shim module would differ from the real one only in filename
+  // casing, and react-router typegen emits one +types/<file>.ts per module
+  // file — two case-twins is a TS1149 hard error under tsc -b.
+  route("guides/can-ChatGPT-monitor-competitor-ads", "routes/guides.can-chatgpt-monitor-competitor-ads.tsx", { id: "guides.can-ChatGPT-monitor-competitor-ads" }),
   route("guides/can-chatgpt-monitor-competitor-ads", "routes/guides.can-chatgpt-monitor-competitor-ads.tsx"),
   route("for-agencies", "routes/for-agencies.tsx"),
   route("sneaker-resale", "routes/sneaker-resale.tsx"),
@@ -298,8 +303,10 @@ export default [
     // guide, canonical→EN, advertised in the locale sitemaps like the rest
     // of the cluster. Same exact-slug + lowercase-canonical pair as the EN
     // block above: the uppercase slug 301s (issue #2955), the lowercase
-    // registration is the URL that serves 200.
-    route("guides/can-ChatGPT-monitor-competitor-ads", "routes/$locale.guides.can-ChatGPT-monitor-competitor-ads.tsx"),
+    // registration is the URL that serves 200, and the exact slug is an
+    // { id }-aliased entry on the same module — a case-twin shim file
+    // would collide in generated +types (TS1149).
+    route("guides/can-ChatGPT-monitor-competitor-ads", "routes/$locale.guides.can-chatgpt-monitor-competitor-ads.tsx", { id: "$locale.guides.can-ChatGPT-monitor-competitor-ads" }),
     route("guides/can-chatgpt-monitor-competitor-ads", "routes/$locale.guides.can-chatgpt-monitor-competitor-ads.tsx"),
     // Programmatic /ads/:domain under every locale prefix (issue #1562):
     // the #1501 buyer-surface cluster added /de, /de/pricing, ... but not

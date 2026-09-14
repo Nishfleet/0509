@@ -17,8 +17,10 @@ afterEach(() => {
 // Issue #3421 — the buyer's first-question explainer ("can my AI just check
 // this?"). The contract in one breath: the issue's EXACT slug
 // `guides/can-ChatGPT-monitor-competitor-ads` stays registered verbatim in
-// app/routes.ts (EN + $locale) via a tiny re-export shim, and the #2955 path
-// canonicalization 301s it to the served lowercase canonical
+// app/routes.ts (EN + $locale) as an `{ id }`-aliased route() entry pointing
+// at the SAME lowercase module — a separate shim module would differ only in
+// filename casing and collide in generated +types (TS1149) — and the #2955
+// path canonicalization 301s it to the served lowercase canonical
 // `/guides/can-chatgpt-monitor-competitor-ads` — the URL every canonical /
 // og / JSON-LD / sitemap assertion below pins. The signup-source MARKER was
 // always lowercase (`/^[a-z0-9][a-z0-9-]{0,39}$/` forbids uppercase); the
@@ -43,15 +45,22 @@ describe("guides can-ChatGPT-monitor-competitor-ads route", () => {
     expect(markup).toContain("Unattended vigilance — somebody has to be there at 03:00");
     // The 403 fact carries its checked date and linked source (#3019 pattern).
     expect(markup).toContain("re-checked live on 13 September 2026");
+    expect(markup).toContain("The 403 re-checked 13 September 2026:");
     expect(markup).toContain('href="https://www.facebook.com/ads/library/"');
+    expect(markup).toContain("returns HTTP 403.");
     // The one-point-in-time fact and the 03:00 vigilance fact.
     expect(markup).toContain("what the offer said on 12 June");
+    expect(markup).toContain("History is not in the window.");
     expect(markup).toContain("We checked 24 ads at 03:00 and nothing moved");
+    expect(markup).toContain("only a system that actually ran can make");
     // The honest AI-strengths and watch-ownership halves.
     expect(markup).toContain("What an AI chat does well.");
     expect(markup).toContain("Summarising what it finds");
     expect(markup).toContain("Drafting angles");
+    expect(markup).toContain("Explaining a diff once someone hands it one");
     expect(markup).toContain("What only an always-on watch owns.");
+    expect(markup).toContain("The 03:00 check");
+    expect(markup).toContain("The dated record");
     expect(markup).toContain("Before/after evidence with source links");
     // Honest plan truth: free first check + first brief, scheduled is paid.
     expect(markup).toContain("free plan watches one competitor");
@@ -67,6 +76,11 @@ describe("guides can-ChatGPT-monitor-competitor-ads route", () => {
     expect(markup).not.toMatch(/all (major )?platforms/iu);
     // Shared marketing chrome.
     expect(markup).toContain("Named for 05:09");
+    // No named competitor tools in the guide's own copy (the shared chrome
+    // links the compare/switch cluster site-wide, so scope the check to the
+    // page body between the header and footer).
+    const body = markup.split("</header>")[1]?.split("<footer")[0] ?? markup;
+    expect(body).not.toMatch(/Panoramata|Foreplay|Spyder|Visualping|AdSpyder/iu);
   });
 
   it("declares the canonical URL and public SEO meta at the served lowercase slug", async () => {
@@ -121,27 +135,37 @@ describe("guides can-ChatGPT-monitor-competitor-ads route", () => {
       .replace(/&amp;/g, "&");
     expect(h1).toContain(article.headline as string);
 
-    // The FAQPage mainEntity count matches the visible FAQ entries.
+    // The FAQPage mainEntity count matches the visible FAQ entries, and the
+    // entity names are the rendered questions — not a generic set.
     const faq = byType("FAQPage")[0];
     expect(faq.mainEntity).toHaveLength(
       canChatGPTMonitorCompetitorAdsFaqEntries.length,
+    );
+    const mainEntity = faq.mainEntity as Array<{ name: string }>;
+    expect(mainEntity.map((entry) => entry.name)).toEqual(
+      expect.arrayContaining(
+        canChatGPTMonitorCompetitorAdsFaqEntries.map((e) => e.question),
+      ),
     );
   });
 
   it("registers BOTH slugs verbatim (EN + locale cluster) and publishes the lowercase canonical in the sitemap", async () => {
     const { readFileSync } = await import("node:fs");
     const routes = readFileSync("app/routes.ts", "utf8");
-    // The issue's EXACT mixed-case slug stays registered verbatim (the
-    // re-export shim), AND the lowercase canonical is registered as the
-    // served URL — both literals, in both the EN and $locale blocks.
+    // The issue's EXACT mixed-case slug stays registered verbatim — an
+    // `{ id }`-aliased entry on the same module file, not a case-twin shim
+    // (a shim module's +types filename would collide with the real module's
+    // under tsc's case-insensitive file identity — TS1149). The lowercase
+    // canonical is the registration that actually serves — both literals,
+    // in both the EN and $locale blocks.
     expect(routes).toContain(
-      `route("guides/can-ChatGPT-monitor-competitor-ads", "routes/guides.can-ChatGPT-monitor-competitor-ads.tsx")`,
+      `route("guides/can-ChatGPT-monitor-competitor-ads", "routes/guides.can-chatgpt-monitor-competitor-ads.tsx", { id: "guides.can-ChatGPT-monitor-competitor-ads" })`,
     );
     expect(routes).toContain(
       `route("guides/can-chatgpt-monitor-competitor-ads", "routes/guides.can-chatgpt-monitor-competitor-ads.tsx")`,
     );
     expect(routes).toContain(
-      `route("guides/can-ChatGPT-monitor-competitor-ads", "routes/$locale.guides.can-ChatGPT-monitor-competitor-ads.tsx")`,
+      `route("guides/can-ChatGPT-monitor-competitor-ads", "routes/$locale.guides.can-chatgpt-monitor-competitor-ads.tsx", { id: "$locale.guides.can-ChatGPT-monitor-competitor-ads" })`,
     );
     expect(routes).toContain(
       `route("guides/can-chatgpt-monitor-competitor-ads", "routes/$locale.guides.can-chatgpt-monitor-competitor-ads.tsx")`,
@@ -173,5 +197,16 @@ describe("guides can-ChatGPT-monitor-competitor-ads route", () => {
     expect(ALLOWED_SIGNUP_SOURCES).toContain(SOURCE_MARKER);
     expect(allowlistedSignupSource(SOURCE_MARKER)).toBe(SOURCE_MARKER);
     expect(allowlistedSignupSource(`${SOURCE_MARKER}&x=1`)).toBeNull();
+  });
+
+  it("is internally linked from /docs and /competitor-monitoring", async () => {
+    const { readFileSync } = await import("node:fs");
+    const docs = readFileSync("app/routes/docs.tsx", "utf8");
+    const monitoring = readFileSync(
+      "app/routes/competitor-monitoring.tsx",
+      "utf8",
+    );
+    expect(docs).toContain(`to="${SLUG_PATH}"`);
+    expect(monitoring).toContain(`to="${SLUG_PATH}"`);
   });
 });

@@ -74,3 +74,43 @@ VITEST_MAX_WORKERS=2 npx vitest run tests/guides-routes.test.ts \
   paths (0 matches across the 9 protected verifier/deploy files).
 - Rollback: single-PR revert — route files + test + registry/sitemap lines,
   no data.
+
+## Phase 3c — CI red fix (2026-09-14, codex-node-checks + preview-assert)
+
+Two CI failures on head `4b983a9e6`:
+
+1. **preview-assert / typecheck — TS1149 ×4.** The mixed-case shim modules
+   (`guides.can-ChatGPT-monitor-competitor-ads.tsx`,
+   `$locale.guides.can-ChatGPT-monitor-competitor-ads.tsx`) differed from the
+   served lowercase modules only in filename casing. react-router typegen
+   emits `+types/<file>.ts` keyed on the module FILE (`fileToRoutes` in
+   `@react-router/dev`), so each pair produced a case-twin .ts — TS1149 under
+   `tsc -b`. Fix: deleted both shims; the exact slug stays registered
+   verbatim as an `{ id }`-aliased `route()` entry pointing at the same
+   lowercase module (EN `{ id: "guides.can-ChatGPT-monitor-competitor-ads" }`,
+   locale `{ id: "$locale.guides.can-ChatGPT-monitor-competitor-ads" }`) —
+   the repo's own LEGACY_VENDOR_COMPARE_PATH pattern. `npx react-router
+   typegen` → exactly one +types file per module, both route ids present in
+   the generated Matches union.
+2. **codex-node-checks — file-size ratchet.** `tests/guides-routes.test.ts`
+   hit 903 > 800 (unseeded). Fix: moved the #3421 describe's coverage into
+   `tests/guides-can-ChatGPT-monitor-competitor-ads.route.test.ts` (the file
+   the issue designated for this guide's contract tests) — inbound-link it()
+   verbatim, stricter render + FAQPage-name assertions merged into the
+   existing tests, duplicates dropped; `guides-routes.test.ts` back to 706.
+   `test-removal-justified:` trailer on the commit (#3414 convention).
+
+Post-fix verification (worktree, bare vitest):
+
+```
+npx vitest run tests/guides-routes.test.ts \
+  tests/guides-can-ChatGPT-monitor-competitor-ads.route.test.ts \
+  tests/file-size-ratchet.test.ts tests/canonical-path.test.ts \
+  tests/section-parents.test.ts tests/social-cards.routes.test.ts
+  Test Files 6 passed (6) / Tests 119 passed (119)
+
+npx vitest run tests/sitemap.server.test.ts \
+  tests/guides-how-to-track.route.test.ts \
+  tests/guides-how-to-monitor.route.test.ts
+  Test Files 3 passed (3) / Tests 103 passed (103)
+```
