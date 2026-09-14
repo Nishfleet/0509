@@ -1602,7 +1602,9 @@ describe("D1 remote restore evidence automation", () => {
           name !== "0098_widen_source_target_connector_bluesky.sql" &&
           name !== "0098_widen_source_target_connector_gdelt.sql" &&
           name !== "0099_widen_source_target_connector_threads.sql" &&
-          name !== "0100_widen_source_target_connector_hn.sql",
+          name !== "0100_widen_source_target_connector_hn.sql" &&
+          name !== "0101_widen_source_target_connector_pinterest.sql" &&
+          name !== "0102_widen_source_target_connector_podcast.sql",
       ),
     ];
     expect(productionNames.at(-1)).toBe("0096_error_reports.sql");
@@ -1636,6 +1638,8 @@ describe("D1 remote restore evidence automation", () => {
           "0098_widen_source_target_connector_gdelt.sql",
           "0099_widen_source_target_connector_threads.sql",
           "0100_widen_source_target_connector_hn.sql",
+          "0101_widen_source_target_connector_pinterest.sql",
+          "0102_widen_source_target_connector_podcast.sql",
         ]),
         repository,
       ),
@@ -1661,6 +1665,8 @@ describe("D1 remote restore evidence automation", () => {
         "0098_widen_source_target_connector_gdelt.sql",
         "0099_widen_source_target_connector_threads.sql",
         "0100_widen_source_target_connector_hn.sql",
+        "0101_widen_source_target_connector_pinterest.sql",
+        "0102_widen_source_target_connector_podcast.sql",
       ],
     });
   });
@@ -1716,6 +1722,8 @@ describe("D1 remote restore evidence automation", () => {
         "0098_widen_source_target_connector_bluesky.sql",
         "0099_widen_source_target_connector_threads.sql",
         "0100_widen_source_target_connector_hn.sql",
+        "0101_widen_source_target_connector_pinterest.sql",
+        "0102_widen_source_target_connector_podcast.sql",
       ],
     });
     expect(
@@ -1725,6 +1733,8 @@ describe("D1 remote restore evidence automation", () => {
           "0098_widen_source_target_connector_bluesky.sql",
           "0099_widen_source_target_connector_threads.sql",
           "0100_widen_source_target_connector_hn.sql",
+          "0101_widen_source_target_connector_pinterest.sql",
+          "0102_widen_source_target_connector_podcast.sql",
         ]),
         repository,
       ),

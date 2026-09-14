@@ -197,6 +197,14 @@ export const PUBLIC_CACHEABLE_HTML_PATHS = new Set([
   "/switch/adspy",
   "/methodology",
   "/methodology/ad-aggression-score",
+  // Issue #3391 (the TTFB watch): /search was the last anonymous public HTML
+  // surface on the no-store default — the hourly judge/measure reads it
+  // cookieless and paid 100% origin (probe 2026-09-13T21:01Z: home=HIT
+  // 316-635ms vs /search 1856-6268ms, bimodal by smart placement). The
+  // (path+query, country, version) key keeps ?q=/?website= variants apart;
+  // the #1972 mint suppression lives on the marked render (see
+  // EDGE_CACHE_ELIGIBLE_HEADER), so the stored copy stays cookie-free.
+  "/search",
 ]);
 export const PUBLIC_CACHEABLE_HTML_PREFIXES = [
   "/ads/",

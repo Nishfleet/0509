@@ -79,11 +79,13 @@ describe("guides how-to-monitor-competitor-landing-page-changes route (issue #28
       "~/routes/guides.how-to-monitor-competitor-landing-page-changes"
     );
 
+    const { buyerSurfaceHreflangLinks } = await import("~/lib/seo");
     expect(links()).toEqual([
       {
         rel: "canonical",
         href: "https://0509.io/guides/how-to-monitor-competitor-landing-page-changes",
       },
+      ...buyerSurfaceHreflangLinks("guides/how-to-monitor-competitor-landing-page-changes"),
     ]);
 
     const tags = meta({} as never) as Array<Record<string, string>>;
@@ -264,11 +266,13 @@ describe("guides #3093 trio — offer-change alert, prove-what-changed, standing
       it("declares the canonical URL and public SEO meta", async () => {
         const { links, meta } = await import(`~/routes/${guide.module}`);
 
+        const { buyerSurfaceHreflangLinks } = await import("~/lib/seo");
         expect(links()).toEqual([
           {
             rel: "canonical",
             href: `https://0509.io/guides/${guide.slug}`,
           },
+          ...buyerSurfaceHreflangLinks(`guides/${guide.slug}`),
         ]);
 
         const tags = meta({} as never) as Array<Record<string, string>>;
@@ -421,11 +425,13 @@ describe("guides meta-ad-library-api-limitations route (issue #3127)", () => {
       "~/routes/guides.meta-ad-library-api-limitations"
     );
 
+    const { buyerSurfaceHreflangLinks } = await import("~/lib/seo");
     expect(links()).toEqual([
       {
         rel: "canonical",
         href: "https://0509.io/guides/meta-ad-library-api-limitations",
       },
+      ...buyerSurfaceHreflangLinks("guides/meta-ad-library-api-limitations"),
     ]);
 
     const tags = meta({} as never) as Array<Record<string, string>>;
@@ -547,7 +553,11 @@ describe("guides triple agreement: sitemap <-> route <-> index (issue #3122)", (
   it("registers a route (EN + $locale) and an index card for every /guides/* path the sitemap source lists", async () => {
     const { readFileSync } = await import("node:fs");
     const sitemapSlugs = uniqueSlugs(
-      readFileSync("app/lib/sitemap.server.ts", "utf8"),
+      // #2030: the guide list's single source of truth now lives in
+      // BUYER_SURFACE_GUIDE_PATHS (app/lib/locale-markets.ts); the #3122
+      // gate reads both files so the move cannot blind it.
+      readFileSync("app/lib/sitemap.server.ts", "utf8") +
+        readFileSync("app/lib/locale-markets.ts", "utf8"),
       SITEMAP_GUIDE_RE,
     );
     // The cluster is 7 guides; grow this floor when the next how-to ships.
@@ -657,7 +667,8 @@ describe("guides inbound-link invariant (issue #3167)", () => {
   it("keeps every sitemap guide's EN route file linked to at least one sibling guide", async () => {
     const { readFileSync } = await import("node:fs");
     const sitemapSlugs = uniqueSlugs(
-      readFileSync("app/lib/sitemap.server.ts", "utf8"),
+      readFileSync("app/lib/sitemap.server.ts", "utf8") +
+        readFileSync("app/lib/locale-markets.ts", "utf8"),
       SITEMAP_GUIDE_RE,
     );
 
@@ -675,7 +686,9 @@ describe("guides inbound-link invariant (issue #3167)", () => {
   it("never links a /guides/* path the corpus does not serve", async () => {
     const { readFileSync } = await import("node:fs");
     const sitemapSlugs = uniqueSlugs(
-      readFileSync("app/lib/sitemap.server.ts", "utf8"),
+      // #2030: same source move as the #3122 gate above — read both files.
+      readFileSync("app/lib/sitemap.server.ts", "utf8") +
+        readFileSync("app/lib/locale-markets.ts", "utf8"),
       SITEMAP_GUIDE_RE,
     );
     const knownPaths = new Set(sitemapSlugs.map((s) => `/guides/${s}`));

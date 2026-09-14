@@ -10,6 +10,7 @@ import type { AppEnv } from "~/lib/env.server";
 import type { IndexableAdsLink } from "~/lib/ads-internal-links";
 import type { PublicProofBrief } from "~/lib/public-proof.server";
 import {
+  buyerSurfaceHreflangLinks,
   canonicalLinks,
   clusterSocialCardUrl,
   faqPageJsonLd,
@@ -124,7 +125,10 @@ function proofTimeLabel(iso: string | null | undefined): string {
 const pageDescription =
   "Competitor monitoring software that watches Meta ads and landing pages, then files source-linked proof when something changes. Free preview, no account.";
 
-export const links: LinksFunction = () => canonicalLinks("/competitor-monitoring");
+export const links: LinksFunction = () => [
+  ...canonicalLinks("/competitor-monitoring"),
+  ...buyerSurfaceHreflangLinks("competitor-monitoring"),
+];
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({

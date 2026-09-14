@@ -14,6 +14,7 @@ import type { AppEnv } from "~/lib/env.server";
 import type { GoogleAdsCaptureStats } from "~/lib/sources/google-ads/google-ads-usage.server";
 import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
 import {
+  buyerSurfaceHreflangLinks,
   canonicalLinks,
   jsonLdScriptProps,
   publicSeoMeta,
@@ -23,7 +24,10 @@ import {
 const description =
   "Measured service status for Five to Nine: public search, sign-in, billing, email delivery, scheduled monitoring, and uptime, read live from the service's own probe records each time the page loads.";
 
-export const links: LinksFunction = () => canonicalLinks("/status");
+export const links: LinksFunction = () => [
+  ...canonicalLinks("/status"),
+  ...buyerSurfaceHreflangLinks("status"),
+];
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({
