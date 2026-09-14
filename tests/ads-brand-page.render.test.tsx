@@ -287,9 +287,10 @@ describe("/ads/:domain — Case File render", () => {
     expect(markup).toContain("+1");
     expect(markup).toContain("more ads on record");
     // Primary CTA carries the domain into the Overview setup card
-    // (issue #2051: the CTA also deep-links with ?competitor=<domain>).
+    // (issue #2051: the CTA also deep-links with ?competitor=<domain>;
+    // issue #3358: it also carries the /ads family signup-source marker).
     expect(markup).toContain(
-      "/auth/signup?competitor=nike.com&amp;redirectTo=%2Fapp%3Fwebsite%3Dnike.com%23setup-checklist",
+      "/auth/signup?competitor=nike.com&amp;source=ads-page&amp;redirectTo=%2Fapp%3Fwebsite%3Dnike.com%23setup-checklist",
     );
   });
 

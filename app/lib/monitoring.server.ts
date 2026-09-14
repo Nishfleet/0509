@@ -1452,6 +1452,37 @@ export async function runWatchlist(
     ));
 
   try {
+    // Full-Site Watch (feature-flagged): sitemap discovery + bounded crawl +
+    // inventory manifest for competitor websites, under the run's lease.
+    // Errors are recorded as honest failed manifests, never run-fatal.
+    // Issue #3103: this must not sit behind the degraded check. Issue #3415:
+    // it must not sit behind scan() at all — a hard provider throw (no usable
+    // cache, no customer Meta token) skips everything below and used to leave
+    // website_site_scan permanently empty while the run recorded the provider
+    // failure. The site scan fetches sitemaps/robots/pages directly and
+    // shares nothing with the ad discovery provider, so provider health must
+    // never gate the inventory manifest.
+    if (isFullSiteWatchEnabled(env)) {
+      await withRunLease(env, runId, options.orchestrationToken, async () => {
+        try {
+          await runWebsiteSiteScanForWatchlist(env, watchlist, {
+            runId,
+            processingToken: options.orchestrationToken ?? null,
+          });
+        } catch (error) {
+          console.error(
+            JSON.stringify({
+              event: "fullsite_watch_scan_failed",
+              watchlist_id: watchlist.id,
+              run_id: runId,
+              error: error instanceof Error ? error.message : String(error),
+              ts: new Date().toISOString(),
+            }),
+          );
+        }
+      });
+    }
+
     const { ads, pagesScanned, degraded } = await scan();
 
     // Provider work can outlive a reclaimed lease. Revalidate before the first
@@ -1467,32 +1498,6 @@ export async function runWatchlist(
       recentWatchEvents,
       scanNativeEvents,
     } = await withRunLease(env, runId, options.orchestrationToken, async () => {
-      // Full-Site Watch (feature-flagged): sitemap discovery + bounded crawl +
-      // inventory manifest for competitor websites, using the run's lease.
-      // Errors are recorded as honest failed manifests, never run-fatal.
-      // Issue #3103: this must run BEFORE the degraded check below. The site
-      // scan fetches sitemaps/robots directly and shares nothing with the ad
-      // discovery provider, so a cache-only cooldown on that provider —
-      // which degrades every scheduled run while the ads pipeline still
-      // shows life — must not silently suppress the inventory manifest too.
-      // It sat after the degraded throw since the feature landed
-      // (d3a645312, re-threaded through withRunLease in PR #2660), which is
-      // how the Meta discovery canary went red with website_site_scan at 0
-      // rows between 2026-09-10T23:15Z and 2026-09-11T04:52Z.
-      if (isFullSiteWatchEnabled(env)) {
-        try {
-          await runWebsiteSiteScanForWatchlist(env, watchlist, {
-            runId,
-            processingToken: options.orchestrationToken ?? null,
-          });
-        } catch (error) {
-          console.error(
-            `Full-Site Watch scan failed for watchlist ${watchlist.id}; ad scan unaffected.`,
-            error,
-          );
-        }
-      }
-
       if (degraded) {
         // Stale-cache honesty: nothing live was fetched, so no diff runs, the
         // run is recorded as failed (cache_only), lastScannedAt stays put, and
@@ -4234,17 +4239,34 @@ async function runWebsiteSiteScanForWatchlist(
     processingToken: string | null;
   },
 ) {
+  // Skips were previously silent — a scan gated out here left no trace, which
+  // is how an ineligible rollout could look identical to a broken write path
+  // (issue #3415). Each gate logs a structured reason so prod logs answer
+  // "why no manifest" without a D1 query.
+  const skip = (reason: string) => {
+    console.info(
+      JSON.stringify({
+        event: "fullsite_watch_scan_skipped",
+        watchlist_id: watchlist.id,
+        run_id: options.runId,
+        reason,
+        ts: new Date().toISOString(),
+      }),
+    );
+    return null;
+  };
+
   const websiteUrl = directWebsiteUrlForWatchlist(watchlist);
   if (!websiteUrl) {
-    return null;
+    return skip("no_public_website_url");
   }
   if (!isFullSiteWatchAllowedForHost(env, websiteUrl)) {
-    return null;
+    return skip("host_not_in_canary_allowlist");
   }
   if (!options.processingToken) {
     // The lease-fenced scan layer requires a processing token; without one
     // (manual refresh) the site scan is skipped rather than written unfenced.
-    return null;
+    return skip("no_processing_token");
   }
 
   const pageBudget = await resolveWebsiteSitePageBudget(env, watchlist.userId);

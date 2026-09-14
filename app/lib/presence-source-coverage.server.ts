@@ -57,6 +57,7 @@ const CONNECTOR_FOR_SOURCE: Partial<Record<PresenceSourceId, PresenceConnectorId
   threads: "threads",
   hn: "hn",
   pinterest: "pinterest",
+  youtube: "youtube",
 };
 
 const SOCIAL_SOURCE_IDS = new Set<PresenceSourceId>(["x", "reddit", "linkedin", "bluesky", "threads", "pinterest"]);
@@ -112,6 +113,8 @@ function statusFromConnectorGate(
             ? "OFFICIAL_PUBLIC_API"
             : sourceId === "pinterest"
             ? "VERIFIED_PUBLIC_FEED"
+            : sourceId === "youtube"
+            ? "OFFICIAL_PUBLIC_API"
             : sourceId === "linkedin" && trackingMode === "competitor"
             ? "LIMITED_COVERAGE"
             : sourceId === "x" || sourceId === "reddit"
@@ -196,15 +199,6 @@ function evaluatePlannedSourceCoverage(
   env: AppEnv,
   sourceId: PresenceSourceId,
 ): PresenceSourceCoverageEntry {
-  if (sourceId === "youtube") {
-    return baseEntry(sourceId, "planned", {
-      coverageLabel: "UNAVAILABLE",
-      reasonCode: "api_not_configured",
-      reasonMessage: "YouTube tracking requires official API credentials, quota approval, and a rollout decision.",
-      actionNeeded: "Not available yet — requires API key and product approval",
-    });
-  }
-
   if (sourceId === "amazon") {
     return baseEntry(sourceId, "manual_only", {
       coverageLabel: "LIMITED_COVERAGE",
@@ -491,8 +485,8 @@ export function presenceSourceCoverageForDocs(): Array<{
     {
       sourceId: "youtube",
       label: SOURCE_LABELS.youtube,
-      productionStatus: "planned",
-      notes: "Requires official API key, quota, and product approval before any active claim.",
+      productionStatus: "gated",
+      notes: "YouTube mention connector wired in (YouTube Data API v3 search.list — keyword search for the tracked match phrase, type=video, newest first, ONE page of 50 results per poll, documented publishedAfter time-window instead of paging). Covers the videos the search returns for the tracked phrase — no channel feeds here (those ride the rss connector, PLAN §2a), no comments, and the search index's completeness is YouTube's, not ours. In-connector rate budget: the documented default allocation of 100 search.list calls/day, counted as CALLS (empty results still count — there is no documented Threads-style exemption) in presence_poll_cursor across every youtube target; one Google project = one principal. Gated behind PRESENCE_YOUTUBE_ROLLOUT + YOUTUBE_API_KEY — off by default; activation is a separate rollout decision.",
     },
     {
       sourceId: "amazon",

@@ -299,7 +299,9 @@ async function loadSearchCompetitorPreview(
     return null;
   }
   try {
-    const { seedAutoCompetitors } = await import("~/lib/auto-competitor-seed.server");
+    const { buildCandidateId, seedAutoCompetitors } = await import(
+      "~/lib/auto-competitor-seed.server"
+    );
     const candidates = await seedAutoCompetitors(env, {
       domain: intent.registrableDomain,
       country: input.country,
@@ -310,11 +312,10 @@ async function loadSearchCompetitorPreview(
     return {
       domain: intent.registrableDomain,
       rows: candidates.slice(0, SEARCH_COMPETITOR_PREVIEW_LIMIT).map((candidate) => ({
-        candidateId: [
-          candidate.advertiser.trim().toLowerCase(),
-          (candidate.registrableDomain ?? "").trim().toLowerCase(),
-          (candidate.advertiserPageId ?? "").trim(),
-        ].join("|"),
+        // The shared builder, not a second inline copy: the dismissal store
+        // keys on this exact string, so a drift between the two would make a
+        // removed suggestion reappear (onboarding slice 2, #3175).
+        candidateId: buildCandidateId(candidate),
         advertiser: candidate.advertiser,
         pageId: candidate.advertiserPageId,
         landingPageUrl: candidate.registrableDomain
@@ -323,8 +324,13 @@ async function loadSearchCompetitorPreview(
         targetCountry: candidate.countries[0] ?? null,
         overlapScore: candidate.overlapScore,
         provenance: candidate.provenance,
+        why: candidate.why,
+        source: candidate.source,
         type: "candidate" as const,
       })),
+      // A logged-out preview is read-only by definition — the visitor has no
+      // plan and no account, so the rows are always a frozen snapshot here.
+      caps: { visible: SEARCH_COMPETITOR_PREVIEW_LIMIT, tracked: 0, frozen: true },
     };
   } catch {
     // A discovery failure must never take the public search page down —
@@ -808,7 +814,10 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
   // warming paths already standardise. The designed limiter 429 Responses
   // above this seam keep their own rate-limit UX. Search failures were
   // already funnel-errored by the inner catch; later-stage failures stay
-  // #3129's (reportError epic) concern, not this guard's.
+  // #3129's (reportError epic) concern, not this guard's. Issue #3456: the
+  // guard is leg-wide, so the base `?q=` leg shares it — the 2026-09-14
+  // 00:45Z/06:25Z 500 windows on /search?q=<brand>&country=all degrade to
+  // the same honest 200; tests/search-base-leg-honest-state.test.ts pins it.
   // Issue #2952 merge note: the guarded region below holds the eager shell
   // and the streamed `search` promise — for browser navigations the promise
   // leaves this loader un-awaited, so its rejection surfaces through the
@@ -3187,7 +3196,12 @@ function SearchRouteResults({ data }: { data: ResolvedSearchRouteData }) {
                           formatProofCaptureLabel(selectedAd, { pending: true })
                         }
                       >
-                        <Await resolve={streamedCapture}>
+                        <Await
+                          resolve={streamedCapture}
+                          errorElement={formatProofCaptureLabel(selectedAd, {
+                            failureReason: "capture_stream_failed",
+                          })}
+                        >
                           {(payload) =>
                             formatProofCaptureLabel(payload.ad, {
                               failureReason:
@@ -3304,7 +3318,16 @@ function SearchRouteResults({ data }: { data: ResolvedSearchRouteData }) {
                       />
                     }
                   >
-                    <Await resolve={streamedCapture}>
+                    <Await
+                      resolve={streamedCapture}
+                      errorElement={
+                        <SelectedLandingPageBlock
+                          ad={selectedAd}
+                          pending={false}
+                          failureReason="capture_stream_failed"
+                        />
+                      }
+                    >
                       {(payload) => (
                         <SelectedLandingPageBlock
                           ad={payload.ad}

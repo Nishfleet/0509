@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  loadIndexableAdsInternalLinks,
   loadIndexableTimelineDomains,
   resolveIndexableTimelineLinkForDomain,
 } from "~/lib/ads-internal-links.server";
@@ -41,6 +42,7 @@ function mockTimelineEntries(
 
 afterEach(() => {
   vi.doUnmock("~/lib/sitemap.server");
+  vi.doUnmock("~/lib/error-report.server");
   vi.restoreAllMocks();
   vi.resetModules();
 });
@@ -97,6 +99,70 @@ describe("loadIndexableTimelineDomains", () => {
     );
     const domains = await loadIndexableTimelineDomains({} as never);
     expect(domains.size).toBe(0);
+  });
+
+  // Issue #3476: a silent degrade made the check-ads-timeline-links failure
+  // unverifiable — the link-less render left no durable record and the edge
+  // cache served it for the whole serve-stale window. The catch must write
+  // an error_report row so /api/observability/error-reports sees it.
+  it("reports the degrade to the error_report sink before returning the empty set", async () => {
+    const reportError = vi
+      .fn()
+      .mockResolvedValue({ written: true, reason: "written" });
+    vi.resetModules();
+    vi.doMock("~/lib/error-report.server", () => ({ reportError }));
+    vi.doMock("~/lib/sitemap.server", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("~/lib/sitemap.server")>();
+      return {
+        ...actual,
+        loadIndexableTimelineEntries: vi.fn().mockRejectedValue(new Error("D1 down")),
+      };
+    });
+    const { loadIndexableTimelineDomains } = await import(
+      "~/lib/ads-internal-links.server"
+    );
+    const env = { DB: {} };
+    const domains = await loadIndexableTimelineDomains(env as never);
+    expect(domains.size).toBe(0);
+    expect(reportError).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({
+        route: "loader.ads_internal_links",
+        reasonCode: "indexable_timeline_domains_read_failed",
+      }),
+    );
+  });
+});
+
+describe("loadIndexableAdsInternalLinks", () => {
+  it("reports the degrade to the error_report sink before returning [] (issue #3476)", async () => {
+    const reportError = vi
+      .fn()
+      .mockResolvedValue({ written: true, reason: "written" });
+    vi.resetModules();
+    vi.doMock("~/lib/error-report.server", () => ({ reportError }));
+    vi.doMock("~/lib/sitemap.server", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("~/lib/sitemap.server")>();
+      return {
+        ...actual,
+        loadIndexableBrandPageEntries: vi
+          .fn()
+          .mockRejectedValue(new Error("D1 down")),
+      };
+    });
+    const { loadIndexableAdsInternalLinks } = await import(
+      "~/lib/ads-internal-links.server"
+    );
+    const env = { DB: {} };
+    const links = await loadIndexableAdsInternalLinks(env as never);
+    expect(links).toEqual([]);
+    expect(reportError).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({
+        route: "loader.ads_internal_links",
+        reasonCode: "indexable_ads_links_read_failed",
+      }),
+    );
   });
 });
 

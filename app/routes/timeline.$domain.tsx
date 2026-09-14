@@ -273,7 +273,7 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
 export default function OfferTimelineRoute() {
   const data = useLoaderData<typeof loader>();
   const recentSourceRows = mergedRecentSourceRows(data);
-  const signupPath = `/auth/signup?redirectTo=${encodeURIComponent(`/app?website=${encodeURIComponent(data.domain)}#setup-checklist`)}`;
+  const signupPath = `/auth/signup?source=timeline-page&redirectTo=${encodeURIComponent(`/app?website=${encodeURIComponent(data.domain)}#setup-checklist`)}`;
   const adsPath = `/ads/${encodeURIComponent(data.domain)}`;
   const pageTitle =
     data.entries.length > 0
@@ -342,7 +342,7 @@ export default function OfferTimelineRoute() {
           ) : null}
         </>
       ) : null}
-      <MarketingNav />
+      <MarketingNav signupSource="timeline-page" />
 
       <section className="f9-ads-hero" aria-labelledby="offer-timeline-title">
         <div className="f9-container">

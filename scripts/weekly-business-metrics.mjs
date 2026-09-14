@@ -32,11 +32,14 @@
  *      marker and — on a real run only — auto-files a follow-up issue.
  *
  * --json (issue #3321, direction#4518): the direction metric's signup count
- *      as machine-readable JSON. Fixture-free: excludes every #2908 QA/canary
- *      fixture identity plus the billing-canary-lock guard rows. Surviving
- *      rows are cross-checked against their `signup_completed` funnel event
- *      (PR #1965) when --events-ndjson supplies event records; rows without
- *      one are listed as suspect, never silently counted.
+ *      as machine-readable JSON. Fixture-free: excludes every fleet-synthetic
+ *      identity on the shared SYNTHETIC_USER_PATTERNS list — the #2908
+ *      QA/canary fixture enumeration, the billing-canary-lock guard rows, the
+ *      launch-readiness canary owner, every 0509.internal-domain mailbox, and the
+ *      BET-1 burst cohort (issue #3486). Surviving rows are cross-checked
+ *      against their `signup_completed` funnel event (PR #1965) when
+ *      --events-ndjson supplies event records; rows without one are listed as
+ *      suspect, never silently counted.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -447,11 +450,17 @@ export function fetchPriorSnapshot(maxAgeMs = 26 * 60 * 60 * 1000) {
         detail: `prior snapshot is stale (generatedAt ${generatedAt || "missing"}, freshness gate 26h); not valid drift evidence`,
       };
     }
+    // schemaVersion-2 snapshots (issue #3471) report customer-facing counts
+    // as organic-only with the fleet's own rows under synthetic_*. The drift
+    // detector compares headline totals, so it re-adds the synthetic share —
+    // otherwise the organic-only cutover reads as a >50% drop and auto-files
+    // a false unexplained-drift incident.
     return {
       unavailable: false,
       generatedAt,
-      users_total: Number(product.users_total ?? 0),
-      active_watchlists: Number(product.active_watchlists ?? 0),
+      users_total: Number(product.users_total ?? 0) + Number(product.synthetic_users_total ?? 0),
+      active_watchlists:
+        Number(product.active_watchlists ?? 0) + Number(product.synthetic_active_watchlists ?? 0),
     };
   } catch (error) {
     return {
@@ -547,17 +556,25 @@ GROUP BY we.watchlist_id;
 // ---------------------------------------------------------------------------
 
 /**
- * The #2908 fixture enumeration, as data — no regex, no buried LIKE. Each
+ * The fleet's synthetic user identities, as data — the ONE list every
+ * customer-facing count shares (issue #3486). No regex, no buried LIKE. Each
  * row: which column, what value, which match rule. First match wins (list
- * order = precedence); matching trims and lowercases both sides, because the
- * canary's own lookup compares lower(email) (getBillingCanaryUser) — #2908's
- * identities were read in mixed case.
+ * order = precedence — exact/id guards sit ahead of the 0509.internal
+ * suffix so a canary row is attributed to its specific pattern); matching
+ * trims and lowercases both sides, because the canary's own lookup compares
+ * lower(email) (getBillingCanaryUser) — #2908's identities were read in
+ * mixed case.
+ *
+ * The market-signal snapshot imports this same list
+ * (scripts/market-signal-snapshot.mjs): when a new synthetic family appears,
+ * it is added HERE once and both reads exclude it — the #3471 split-list
+ * drift is what let burst/canary signups through this metric.
  *
  * "owner" (the #2908 16-row read's remaining account) is deliberately NOT a
  * fixture: the launch canary runs on that account, but it is a real, human
  * signup — it stays counted.
  */
-export const SIGNUP_FIXTURE_PATTERNS = [
+export const SYNTHETIC_USER_PATTERNS = [
   // = BILLING_CANARY_DEFAULT_EMAIL (app/lib/billing-canary-identity.server.ts;
   // #2908's newest row, 2026-09-11T09:16Z).
   { field: "email", value: "billing-canary@0509.internal", match: "exact" },
@@ -572,22 +589,34 @@ export const SIGNUP_FIXTURE_PATTERNS = [
   // #2908 wrote "auth-QA" bare. Emails carry a domain, so the family is
   // auth-QA…@… — a prefix, not an exact address.
   { field: "email", value: "auth-QA", match: "prefix" },
+  // CANARY_USER_ID (app/routes/api.launch-readiness.canary.ts) — the launch
+  // canary self-provisions this user; its email varies, the id does not.
+  { field: "id", value: "launch-readiness-canary-owner", match: "exact" },
+  // The fleet's never-routable mailbox domain — covers every current and
+  // future *@0509.internal fixture (billing-canary-staging@, codex-qa-*@, …).
+  { field: "email", value: "@0509.internal", match: "suffix" },
+  // BET-1 cohort burst (#3429, .fleet/burst-3322.sh): bet1-3322-<NN>@0509.io.
+  { field: "email", value: "bet1-3322-", match: "prefix" },
 ];
 
 /**
- * Does one user row match one fixture pattern? The only matcher there is:
- * trim, lowercase, exact-or-prefix. No regex, no LIKE — the pattern list
- * above is the whole story.
+ * Does one user row match one synthetic-identity pattern? The only matcher
+ * there is: trim, lowercase, then exact / prefix / suffix. No regex, no
+ * LIKE — the pattern list above is the whole story. An unknown match rule
+ * throws rather than silently degrading to prefix (issue #3486).
  *
  * @param {Record<string, unknown>} row
  * @param {{ field: string, value: string, match: string }} pattern
  * @returns {boolean}
  */
-function matchesSignupFixturePattern(row, pattern) {
+function matchesSyntheticUserPattern(row, pattern) {
   const raw = pattern.field === "id" ? row?.id : row?.email;
   const value = String(raw ?? "").trim().toLowerCase();
   const expected = String(pattern.value).trim().toLowerCase();
-  return pattern.match === "exact" ? value === expected : value.startsWith(expected);
+  if (pattern.match === "exact") return value === expected;
+  if (pattern.match === "prefix") return value.startsWith(expected);
+  if (pattern.match === "suffix") return value.endsWith(expected);
+  throw new Error(`unsupported synthetic-identity match rule: ${pattern.match}`);
 }
 
 /**
@@ -688,8 +717,8 @@ export function evaluateSignupIntegrity(rows, now, eventBundle) {
   let excludedFixtures = 0;
   const survivors = [];
   for (const entry of inWindow) {
-    const pattern = SIGNUP_FIXTURE_PATTERNS.find((candidate) =>
-      matchesSignupFixturePattern(entry.row, candidate),
+    const pattern = SYNTHETIC_USER_PATTERNS.find((candidate) =>
+      matchesSyntheticUserPattern(entry.row, candidate),
     );
     if (pattern) {
       excludedFixtures += 1;
@@ -772,8 +801,8 @@ export function evaluateSignupIntegrity(rows, now, eventBundle) {
   return {
     metric: "signups/week",
     definition:
-      "direction#4518; trailing-7d/30d fixture-free user.createdAt; excludes the #2908 fixture enumeration plus the billing-canary guard identity; surviving rows cross-checked against signup_completed funnel events (#1872, PR #1965); documented in docs/ga-metrics.md",
-    fixture_patterns: SIGNUP_FIXTURE_PATTERNS,
+      "direction#4518; trailing-7d/30d fixture-free user.createdAt; excludes the shared fleet-synthetic identity list (#2908 enumeration, billing-canary guard, launch-readiness canary owner, *@0509.internal, bet1-3322-*; issue #3486); surviving rows cross-checked against signup_completed funnel events (#1872, PR #1965); documented in docs/ga-metrics.md",
+    fixture_patterns: SYNTHETIC_USER_PATTERNS,
     windows_days: directionWindows,
     signups_7d: survivors7,
     signups_30d: survivors30,

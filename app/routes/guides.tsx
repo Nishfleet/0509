@@ -86,7 +86,7 @@ export default function GuidesIndex() {
   return (
     <div className="min-h-dvh bg-neutral-50 text-neutral-900">
       <script {...jsonLdScriptProps(itemListJsonLdValue)} />
-      <MarketingNav />
+      <MarketingNav signupSource="guides-hub" />
       <main className="mx-auto max-w-3xl px-4 py-16">
         <h1 className="text-3xl font-semibold tracking-tight">Guides</h1>
         <p className="mt-3 text-neutral-600">

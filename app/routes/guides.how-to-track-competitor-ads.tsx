@@ -177,7 +177,7 @@ export default function GuideHowToTrackCompetitorAdsRoute() {
         )}
       />
       <script {...jsonLdScriptProps(structuredFaq)} />
-      <MarketingNav />
+      <MarketingNav signupSource="guide_track_ads" />
 
       <section className="ld-hero">
         <p className="ld-case">

@@ -156,7 +156,7 @@ export default function GuideHowToMonitorMetaAdLibraryRoute() {
         )}
       />
       <script {...jsonLdScriptProps(structuredFaq)} />
-      <MarketingNav />
+      <MarketingNav signupSource="guide-monitor-ad-library" />
 
       <section className="ld-hero">
         <p className="ld-case">

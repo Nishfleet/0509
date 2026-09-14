@@ -2,12 +2,73 @@ import { execFileSync } from "node:child_process";
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
+import { SYNTHETIC_USER_PATTERNS } from "./weekly-business-metrics.mjs";
+
 const DATABASE = "0509";
 const REPOSITORY = "Nishfleet/0509";
+
+// ---------------------------------------------------------------------------
+// Synthetic-identity exclusion (issues #3471, #3486). Every customer-facing
+// count in the snapshot must exclude the fleet's own canary/QA/burst
+// identities: the 2026-09-13 signal reported three fleet rows (two canaries +
+// one BET-1 burst signup) as the first organic movement in days.
+// ---------------------------------------------------------------------------
+
+/**
+ * Fleet-synthetic user identities — the ONE shared list, owned by
+ * weekly-business-metrics.mjs so the direction metric and this snapshot can
+ * never drift apart again (the #3471 split-list drift is what let canaries
+ * through the direction metric). {field, value, match} rows; match rules
+ * compile to substr/= comparisons, no LIKE. Re-exported so this script's
+ * consumers keep one import site.
+ */
+export { SYNTHETIC_USER_PATTERNS };
+
+/**
+ * Canary watchlist ids that stay synthetic even when a real account owns the
+ * row — CANARY_WATCHLIST_ID (app/routes/api.launch-readiness.canary.ts) binds
+ * `owner ?? CANARY_USER_ID`, so its user_id can be a real signup.
+ */
+export const SYNTHETIC_WATCHLIST_IDS = ["launch-readiness-canary-watchlist"];
+
+/** @param {string} value */
+function sqlStringLiteral(value) {
+  return `'${value.replace(/'/g, "''")}'`;
+}
+
+/**
+ * Compile one {field, value, match} pattern into a SQL predicate over a user
+ * row. substr/= comparisons only — no LIKE, so no wildcard escaping to get
+ * wrong. Mirrors matchesSyntheticUserPattern's trim + lowercase semantics.
+ *
+ * @param {{ field: string, value: string, match: string }} pattern
+ */
+function syntheticPatternSql({ field, value, match }) {
+  const column = `lower(trim(${field === "id" ? "id" : "email"}))`;
+  const expected = String(value).trim().toLowerCase();
+  const literal = sqlStringLiteral(expected);
+  if (match === "exact") return `${column} = ${literal}`;
+  if (match === "prefix") return `substr(${column}, 1, ${expected.length}) = ${literal}`;
+  if (match === "suffix") return `substr(${column}, -${expected.length}) = ${literal}`;
+  throw new Error(`unsupported synthetic-identity match rule: ${match}`);
+}
+
+/** The WHERE clause that marks a user row as fleet-synthetic. */
+export function syntheticUserWhereSql() {
+  return SYNTHETIC_USER_PATTERNS.map(syntheticPatternSql).join(" OR ");
+}
 
 /** @param {Date} generatedAt */
 export function buildSignalSql(generatedAt) {
   const end = generatedAt.toISOString();
+  const organicUser = "id NOT IN (SELECT id FROM synthetic_user)";
+  const syntheticUser = "id IN (SELECT id FROM synthetic_user)";
+  const organicOwner = "user_id NOT IN (SELECT id FROM synthetic_user)";
+  const organicBillingUser = `(user_id IS NULL OR ${organicOwner})`;
+  const organicWatchlistRow = "id IN (SELECT id FROM organic_watchlist)";
+  const syntheticWatchlistRow = "id NOT IN (SELECT id FROM organic_watchlist)";
+  const organicWatchlistChild = "watchlist_id IN (SELECT id FROM organic_watchlist)";
+  const organicDigest = `digest_run_id IN (SELECT id FROM digest_run WHERE ${organicOwner})`;
   return `
 WITH bounds AS (
   SELECT
@@ -16,31 +77,45 @@ WITH bounds AS (
     datetime('${end}', '-2 day') AS previous_24h,
     datetime('${end}', '-7 day') AS recent_7d,
     datetime('${end}', '-14 day') AS previous_7d
+),
+synthetic_user AS (
+  SELECT id FROM user
+  WHERE ${syntheticUserWhereSql()}
+),
+organic_watchlist AS (
+  SELECT id FROM watchlist
+  WHERE id NOT IN (${SYNTHETIC_WATCHLIST_IDS.map(sqlStringLiteral).join(", ")})
+    AND user_id NOT IN (SELECT id FROM synthetic_user)
 )
 SELECT
-  (SELECT COUNT(*) FROM user) AS users_total,
-  (SELECT COUNT(*) FROM user WHERE datetime(createdAt) >= (SELECT recent_24h FROM bounds) AND datetime(createdAt) < (SELECT end_at FROM bounds)) AS users_24h,
-  (SELECT COUNT(*) FROM user WHERE datetime(createdAt) >= (SELECT previous_24h FROM bounds) AND datetime(createdAt) < (SELECT recent_24h FROM bounds)) AS users_previous_24h,
-  (SELECT COUNT(*) FROM user WHERE datetime(createdAt) >= (SELECT recent_7d FROM bounds) AND datetime(createdAt) < (SELECT end_at FROM bounds)) AS users_7d,
-  (SELECT COUNT(*) FROM user WHERE datetime(createdAt) >= (SELECT previous_7d FROM bounds) AND datetime(createdAt) < (SELECT recent_7d FROM bounds)) AS users_previous_7d,
-  (SELECT COUNT(*) FROM watchlist WHERE is_active = 1) AS active_watchlists,
-  (SELECT COUNT(*) FROM watchlist WHERE datetime(created_at) >= (SELECT recent_7d FROM bounds) AND datetime(created_at) < (SELECT end_at FROM bounds)) AS watchlists_7d,
-  (SELECT COUNT(*) FROM watchlist WHERE datetime(created_at) >= (SELECT previous_7d FROM bounds) AND datetime(created_at) < (SELECT recent_7d FROM bounds)) AS watchlists_previous_7d,
-  (SELECT COUNT(*) FROM watchlist_run WHERE datetime(created_at) >= (SELECT recent_24h FROM bounds) AND datetime(created_at) < (SELECT end_at FROM bounds)) AS runs_24h,
-  (SELECT COUNT(*) FROM watchlist_run WHERE datetime(created_at) >= (SELECT previous_24h FROM bounds) AND datetime(created_at) < (SELECT recent_24h FROM bounds)) AS runs_previous_24h,
-  (SELECT COUNT(*) FROM watchlist_run WHERE datetime(created_at) >= (SELECT recent_24h FROM bounds) AND datetime(created_at) < (SELECT end_at FROM bounds) AND status = 'failed') AS failed_runs_24h,
-  (SELECT COUNT(*) FROM watch_event WHERE datetime(created_at) >= (SELECT recent_24h FROM bounds) AND datetime(created_at) < (SELECT end_at FROM bounds)) AS events_24h,
-  (SELECT COUNT(*) FROM watch_event WHERE datetime(created_at) >= (SELECT previous_24h FROM bounds) AND datetime(created_at) < (SELECT recent_24h FROM bounds)) AS events_previous_24h,
-  (SELECT COUNT(*) FROM digest_delivery WHERE datetime(created_at) >= (SELECT recent_24h FROM bounds) AND datetime(created_at) < (SELECT end_at FROM bounds) AND status = 'sent') AS digests_sent_24h,
-  (SELECT COUNT(*) FROM digest_delivery WHERE datetime(created_at) >= (SELECT recent_24h FROM bounds) AND datetime(created_at) < (SELECT end_at FROM bounds) AND status = 'failed') AS digests_failed_24h,
-  (SELECT COUNT(*) FROM support_case WHERE status = 'open') AS support_open,
-  (SELECT COUNT(*) FROM support_case WHERE datetime(created_at) >= (SELECT recent_7d FROM bounds) AND datetime(created_at) < (SELECT end_at FROM bounds)) AS support_7d,
-  (SELECT COUNT(*) FROM support_case WHERE datetime(created_at) >= (SELECT previous_7d FROM bounds) AND datetime(created_at) < (SELECT recent_7d FROM bounds)) AS support_previous_7d,
+  (SELECT COUNT(*) FROM user WHERE ${organicUser}) AS users_total,
+  (SELECT COUNT(*) FROM user WHERE ${organicUser} AND datetime(createdAt) >= (SELECT recent_24h FROM bounds) AND datetime(createdAt) < (SELECT end_at FROM bounds)) AS users_24h,
+  (SELECT COUNT(*) FROM user WHERE ${organicUser} AND datetime(createdAt) >= (SELECT previous_24h FROM bounds) AND datetime(createdAt) < (SELECT recent_24h FROM bounds)) AS users_previous_24h,
+  (SELECT COUNT(*) FROM user WHERE ${organicUser} AND datetime(createdAt) >= (SELECT recent_7d FROM bounds) AND datetime(createdAt) < (SELECT end_at FROM bounds)) AS users_7d,
+  (SELECT COUNT(*) FROM user WHERE ${organicUser} AND datetime(createdAt) >= (SELECT previous_7d FROM bounds) AND datetime(createdAt) < (SELECT recent_7d FROM bounds)) AS users_previous_7d,
+  (SELECT COUNT(*) FROM user WHERE ${syntheticUser}) AS synthetic_users_total,
+  (SELECT COUNT(*) FROM user WHERE ${syntheticUser} AND datetime(createdAt) >= (SELECT recent_24h FROM bounds) AND datetime(createdAt) < (SELECT end_at FROM bounds)) AS synthetic_users_24h,
+  (SELECT COUNT(*) FROM user WHERE ${syntheticUser} AND datetime(createdAt) >= (SELECT recent_7d FROM bounds) AND datetime(createdAt) < (SELECT end_at FROM bounds)) AS synthetic_users_7d,
+  (SELECT COUNT(*) FROM watchlist WHERE is_active = 1 AND ${organicWatchlistRow}) AS active_watchlists,
+  (SELECT COUNT(*) FROM watchlist WHERE ${organicWatchlistRow} AND datetime(created_at) >= (SELECT recent_7d FROM bounds) AND datetime(created_at) < (SELECT end_at FROM bounds)) AS watchlists_7d,
+  (SELECT COUNT(*) FROM watchlist WHERE ${organicWatchlistRow} AND datetime(created_at) >= (SELECT previous_7d FROM bounds) AND datetime(created_at) < (SELECT recent_7d FROM bounds)) AS watchlists_previous_7d,
+  (SELECT COUNT(*) FROM watchlist WHERE is_active = 1 AND ${syntheticWatchlistRow}) AS synthetic_active_watchlists,
+  (SELECT COUNT(*) FROM watchlist WHERE ${syntheticWatchlistRow} AND datetime(created_at) >= (SELECT recent_7d FROM bounds) AND datetime(created_at) < (SELECT end_at FROM bounds)) AS synthetic_watchlists_7d,
+  (SELECT COUNT(*) FROM watchlist_run WHERE ${organicWatchlistChild} AND datetime(created_at) >= (SELECT recent_24h FROM bounds) AND datetime(created_at) < (SELECT end_at FROM bounds)) AS runs_24h,
+  (SELECT COUNT(*) FROM watchlist_run WHERE ${organicWatchlistChild} AND datetime(created_at) >= (SELECT previous_24h FROM bounds) AND datetime(created_at) < (SELECT recent_24h FROM bounds)) AS runs_previous_24h,
+  (SELECT COUNT(*) FROM watchlist_run WHERE ${organicWatchlistChild} AND datetime(created_at) >= (SELECT recent_24h FROM bounds) AND datetime(created_at) < (SELECT end_at FROM bounds) AND status = 'failed') AS failed_runs_24h,
+  (SELECT COUNT(*) FROM watch_event WHERE ${organicWatchlistChild} AND datetime(created_at) >= (SELECT recent_24h FROM bounds) AND datetime(created_at) < (SELECT end_at FROM bounds)) AS events_24h,
+  (SELECT COUNT(*) FROM watch_event WHERE ${organicWatchlistChild} AND datetime(created_at) >= (SELECT previous_24h FROM bounds) AND datetime(created_at) < (SELECT recent_24h FROM bounds)) AS events_previous_24h,
+  (SELECT COUNT(*) FROM digest_delivery WHERE ${organicDigest} AND datetime(created_at) >= (SELECT recent_24h FROM bounds) AND datetime(created_at) < (SELECT end_at FROM bounds) AND status = 'sent') AS digests_sent_24h,
+  (SELECT COUNT(*) FROM digest_delivery WHERE ${organicDigest} AND datetime(created_at) >= (SELECT recent_24h FROM bounds) AND datetime(created_at) < (SELECT end_at FROM bounds) AND status = 'failed') AS digests_failed_24h,
+  (SELECT COUNT(*) FROM support_case WHERE status = 'open' AND ${organicOwner}) AS support_open,
+  (SELECT COUNT(*) FROM support_case WHERE ${organicOwner} AND datetime(created_at) >= (SELECT recent_7d FROM bounds) AND datetime(created_at) < (SELECT end_at FROM bounds)) AS support_7d,
+  (SELECT COUNT(*) FROM support_case WHERE ${organicOwner} AND datetime(created_at) >= (SELECT previous_7d FROM bounds) AND datetime(created_at) < (SELECT recent_7d FROM bounds)) AS support_previous_7d,
   (SELECT COUNT(*) FROM dodo_webhook_event WHERE datetime(received_at) >= (SELECT recent_24h FROM bounds) AND datetime(received_at) < (SELECT end_at FROM bounds)) AS billing_events_24h,
-  (SELECT COUNT(*) FROM dodo_webhook_event WHERE datetime(received_at) >= (SELECT recent_24h FROM bounds) AND datetime(received_at) < (SELECT end_at FROM bounds) AND outcome NOT IN ('processed', 'success', 'received') AND event_type NOT LIKE 'billing.canary.%') AS billing_problem_events_24h,
-  (SELECT COUNT(*) FROM user_plan WHERE plan != 'free' AND COALESCE(dodo_status, '') IN ('active', 'on_hold', 'trialing')) AS paid_accounts,
-  COALESCE((SELECT json_group_object(plan, total) FROM (SELECT plan, COUNT(*) AS total FROM user_plan GROUP BY plan)), '{}') AS plan_mix_json,
-  COALESCE((SELECT json_group_object(category, total) FROM (SELECT category, COUNT(*) AS total FROM support_case WHERE datetime(created_at) >= (SELECT recent_7d FROM bounds) AND datetime(created_at) < (SELECT end_at FROM bounds) GROUP BY category)), '{}') AS support_categories_json,
+  (SELECT COUNT(*) FROM dodo_webhook_event WHERE ${organicBillingUser} AND datetime(received_at) >= (SELECT recent_24h FROM bounds) AND datetime(received_at) < (SELECT end_at FROM bounds) AND outcome NOT IN ('processed', 'success', 'received') AND event_type NOT LIKE 'billing.canary.%') AS billing_problem_events_24h,
+  (SELECT COUNT(*) FROM user_plan WHERE plan != 'free' AND COALESCE(dodo_status, '') IN ('active', 'on_hold', 'trialing') AND ${organicOwner}) AS paid_accounts,
+  COALESCE((SELECT json_group_object(plan, total) FROM (SELECT plan, COUNT(*) AS total FROM user_plan WHERE ${organicOwner} GROUP BY plan)), '{}') AS plan_mix_json,
+  COALESCE((SELECT json_group_object(category, total) FROM (SELECT category, COUNT(*) AS total FROM support_case WHERE ${organicOwner} AND datetime(created_at) >= (SELECT recent_7d FROM bounds) AND datetime(created_at) < (SELECT end_at FROM bounds) GROUP BY category)), '{}') AS support_categories_json,
   COALESCE((SELECT json_group_object(event_type, total) FROM (SELECT event_type, COUNT(*) AS total FROM dodo_webhook_event WHERE datetime(received_at) >= (SELECT recent_7d FROM bounds) AND datetime(received_at) < (SELECT end_at FROM bounds) GROUP BY event_type)), '{}') AS billing_event_types_json;
 `;
 }
@@ -212,7 +287,7 @@ export function buildSnapshot({ d1, issues, generatedAt = new Date() }) {
   const day = 86_400_000;
   const githubUnavailable = "unavailable" in issues && issues.unavailable === true;
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt: generatedAt.toISOString(),
     windows: {
       timezone: "UTC",
@@ -230,6 +305,11 @@ export function buildSnapshot({ d1, issues, generatedAt = new Date() }) {
       githubIssues: githubUnavailable ? "unavailable" : "ok",
     },
     privacy: "Aggregate product metrics and repository issue metadata only; no customer identity or message body.",
+    countScope:
+      "Customer-facing counts are organic only: they exclude fleet-synthetic identities " +
+      "(canary user ids, *@0509.internal mailboxes, codex-qa-*/codex-free-qa-*/auth-QA*/bet1-3322-* " +
+      "addresses) and canary-owned watchlists. synthetic_* fields carry that excluded fleet " +
+      "activity so it stays visible but can never be read as organic growth.",
   };
 }
 

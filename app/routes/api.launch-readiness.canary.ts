@@ -3,7 +3,7 @@ import type { ActionFunctionArgs } from "react-router";
 const CLEANUP_OPERATION_HEADER = "x-0509-canary-operation";
 const CLEANUP_BODY_MAX_BYTES = 4_096;
 const CLEANUP_TRUTH =
-  "Cleanup removes verified canary-owned R2 artifacts and reconciles their D1 references before removing watchlist, digest, and delivery rows; the proof capture and proof target remain as owner-scoped audit evidence with null artifact keys.";
+  "Cleanup removes verified canary-owned R2 artifacts and reconciles their D1 references before removing watchlist, digest, and delivery rows; the proof capture and proof target remain as owner-scoped audit evidence carrying the surviving desktop-viewport artifact references.";
 
 interface CanaryTargetRow {
   user_id: string;

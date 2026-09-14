@@ -134,7 +134,7 @@ export default function CompareGethookdRoute() {
         )}
       />
       <script {...jsonLdScriptProps(structuredFaq)} />
-      <MarketingNav />
+      <MarketingNav signupSource="compare-page" />
       <Breadcrumbs
         items={[
           { name: "Home", pathname: "/" },

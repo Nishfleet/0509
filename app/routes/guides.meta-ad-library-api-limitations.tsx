@@ -239,7 +239,7 @@ export default function GuideMetaAdLibraryApiLimitationsRoute() {
         )}
       />
       <script {...jsonLdScriptProps(structuredFaq)} />
-      <MarketingNav />
+      <MarketingNav signupSource="guide-api-limitations" />
 
       <section className="ld-hero">
         <p className="ld-case">

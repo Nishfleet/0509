@@ -189,7 +189,7 @@ export default function GuideHowToGetAlertedWhenACompetitorChangesTheirOfferRout
         )}
       />
       <script {...jsonLdScriptProps(structuredFaq)} />
-      <MarketingNav />
+      <MarketingNav signupSource="guide-offer-change-alert" />
 
       <section className="ld-hero">
         <p className="ld-case">
