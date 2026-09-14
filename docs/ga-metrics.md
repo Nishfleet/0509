@@ -64,9 +64,10 @@ Nish's gates 1-2 approval recorded on issue #2106 — and `wrangler.jsonc` sets
 `FUNNEL_MEASUREMENT_ENABLED: "1"`.
 
 **Approved retention period: 90 days** (Nish, 2026-09-09, issue #2106). Funnel events
-exist only as structured JSON lines in Workers Logs, whose platform window is 7 days
-on this Workers Paid account (spec §8.7) — inside the approved bound; no funnel event
-is kept longer.
+live in two bounded stores: structured JSON lines in Workers Logs (platform window
+7 days on this Workers Paid account, spec §8.7) and the Workers Analytics Engine
+`funnel_events` dataset (platform retention ~3 months — materially the approved
+90-day bound; no funnel event is kept longer).
 
 > **[NISH] CONTRADICTION RESOLVED (2026-09-04, issue #1278):** the production config
 > once set `FUNNEL_MEASUREMENT_ENABLED: "1"` while this section said collection was
@@ -101,6 +102,23 @@ is kept longer.
   lines from stdin (e.g. `wrangler tail --format json`) and prints bounded daily counts
   per event with bucket/error-kind distributions. It never prints raw records and flags
   any record carrying keys outside the allowlist.
+- **Queryable sink (issue #3521).** Every emitted record also lands in the Workers
+  Analytics Engine dataset `funnel_events` (binding `FUNNEL_ANALYTICS` in
+  `wrangler.jsonc`), written inside `emitFunnelEvent` from the already-filtered §4
+  record: `funnel_<kind>` in `blob1`, `route`/`account_scope`/`result_count_bucket`/
+  `error_kind` in `blob2`–`blob5`, the `event_id` as the sampling index. No field
+  outside the §4 allowlist can reach the dataset, and a missing binding degrades to
+  log-only emission — never a request failure.
+- **Read path.** `node scripts/weekly-business-metrics.mjs --json` prints the funnel
+  section as `.funnel`: `<kind>_7d`/`<kind>_30d` counts for the visit→signup kinds
+  (`home_view`, `search_preview_submit`, `search_preview_result`,
+  `search_preview_error`, `signup_start`) plus a `kinds` table covering every emitted
+  kind — the visit→signup conversion read the direction metric was blind to. The
+  markdown report prints the same table as section 9. Both modes query the account
+  Analytics Engine SQL API with `sumIf`/`SUM(_sample_interval)` (sample-corrected);
+  credentials resolve from `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN`, then
+  `~/.config/cloudflare/deploy.env`, then `analytics.env`. `funnel.available: false`
+  means the read could not run — counts are absent, never zeroed.
 - **Account-scoped measures.** Signup completion, first watchlist, first proof, and
   paid conversion remain read-only aggregate queries over existing D1 records (`user`,
   `watchlist`, `proof_capture`, `user_plan`); they are never emitted as anonymous

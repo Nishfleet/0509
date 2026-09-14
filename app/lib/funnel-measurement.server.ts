@@ -271,6 +271,51 @@ const WORKSPACE_SCOPED_KINDS = new Set<FunnelEventKind>([
   "first_brief_email_sent",
 ]);
 
+/**
+ * Issue #3521: the emitted record also lands in the Workers Analytics Engine
+ * dataset (`funnel_events`, binding `FUNNEL_ANALYTICS`) so trailing-7d/30d
+ * counts per kind are queryable — console logs alone are ephemeral. The
+ * input is the already-filtered §4 record, so nothing outside the allowlist
+ * can reach the sink: operation, route, account_scope, result_count_bucket
+ * and error_kind ride as ordered blobs, the event_id rides as the sampling
+ * index. Never throws: an absent binding (dev, tests) or a platform write
+ * failure must not break the request path — a failed write only logs a
+ * warning and the console record still stands.
+ */
+function writeFunnelDataPoint(
+  env: AppEnv,
+  kind: FunnelEventKind,
+  emitted: Record<string, string>,
+) {
+  try {
+    env.FUNNEL_ANALYTICS?.writeDataPoint({
+      blobs: [
+        FUNNEL_OPERATIONS[kind],
+        emitted.route ?? "",
+        emitted.account_scope ?? "",
+        emitted.result_count_bucket ?? "",
+        emitted.error_kind ?? "",
+      ],
+      doubles: [1],
+      indexes: [emitted.event_id ?? ""],
+    });
+  } catch (error) {
+    // Named outside the reserved `funnel_` operation namespace so the
+    // aggregate readers (funnel-daily-counts, the Analytics Engine funnel
+    // section) can never count a sink failure as a funnel event.
+    logAppEvent(
+      "warn",
+      "analytics_funnel_write_failed",
+      "Funnel Analytics Engine write failed",
+      {
+        details: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      },
+    );
+  }
+}
+
 function emitFunnelEvent(
   env: AppEnv,
   kind: FunnelEventKind,
@@ -299,9 +344,11 @@ function emitFunnelEvent(
     details.error_kind = extra.errorKind;
   }
 
+  const emitted = allowlistedFunnelDetails(details);
   logAppEvent("info", FUNNEL_OPERATIONS[kind], FUNNEL_MESSAGES[kind], {
-    details: allowlistedFunnelDetails(details),
+    details: emitted,
   });
+  writeFunnelDataPoint(env, kind, emitted);
 }
 
 export function emitFunnelHomeView(env: AppEnv, request: Request) {

@@ -490,6 +490,105 @@ describe("funnel measurement emission", () => {
   });
 });
 
+describe("funnel measurement Analytics Engine sink (issue #3521)", () => {
+  let logSpy: MockInstance;
+
+  beforeEach(() => {
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function makeAnalyticsBinding() {
+    return { writeDataPoint: vi.fn() };
+  }
+
+  it("commits the analytics_engine_datasets binding in wrangler.jsonc — without it the emit path silently degrades to log-only", async () => {
+    // Same committed-config guard pattern as the FUNNEL_MEASUREMENT_ENABLED
+    // test above: if this binding is dropped, the read path
+    // (weekly-business-metrics .funnel) reports real zeros forever and no
+    // other check catches it.
+    const { readFileSync } = await import("node:fs");
+    const raw = readFileSync("wrangler.jsonc", "utf8");
+    const withoutComments = raw
+      .split("\n")
+      .map((line) => {
+        const commentIndex = line.indexOf("//");
+        if (commentIndex === -1) return line;
+        const before = line.slice(0, commentIndex);
+        const quoteCount = (before.match(/"/g) ?? []).length;
+        return quoteCount % 2 === 0 ? before : line;
+      })
+      .join("\n");
+    const parsed = JSON.parse(withoutComments) as {
+      analytics_engine_datasets?: Array<{ binding?: string; dataset?: string }>;
+    };
+    expect(parsed.analytics_engine_datasets).toContainEqual({
+      binding: "FUNNEL_ANALYTICS",
+      dataset: "funnel_events",
+    });
+  });
+
+  it("writes the same allowlisted record to the Analytics Engine dataset", async () => {
+    const { emitFunnelSearchResult } = await import("~/lib/funnel-measurement.server");
+    const analytics = makeAnalyticsBinding();
+    emitFunnelSearchResult(
+      { FUNNEL_MEASUREMENT_ENABLED: "1", FUNNEL_ANALYTICS: analytics },
+      makeFunnelRequest(),
+      42,
+    );
+    expect(analytics.writeDataPoint).toHaveBeenCalledTimes(1);
+    const point = analytics.writeDataPoint.mock.calls[0]?.[0] as {
+      blobs: string[];
+      doubles: number[];
+      indexes: string[];
+    };
+    const [record] = emittedFunnelRecords(logSpy) as [
+      { details: Record<string, string> },
+    ];
+    // Ordered blobs: operation, route, account_scope, result_count_bucket,
+    // error_kind — the §4 allowlist and nothing else.
+    expect(point.blobs).toEqual([
+      "funnel_search_preview_result",
+      "search_preview",
+      "anonymous",
+      "11-50",
+      "",
+    ]);
+    expect(point.doubles).toEqual([1]);
+    expect(point.indexes).toEqual([record.details.event_id]);
+  });
+
+  it("writes nothing to the sink when the gate is off or GPC is set", async () => {
+    const { emitFunnelHomeView } = await import("~/lib/funnel-measurement.server");
+    const analytics = makeAnalyticsBinding();
+    emitFunnelHomeView({ FUNNEL_ANALYTICS: analytics }, makeFunnelRequest());
+    const gpc = new Request("http://localhost/", { headers: { "sec-gpc": "1" } });
+    emitFunnelHomeView(
+      { FUNNEL_MEASUREMENT_ENABLED: "1", FUNNEL_ANALYTICS: analytics },
+      gpc,
+    );
+    expect(analytics.writeDataPoint).not.toHaveBeenCalled();
+  });
+
+  it("still emits the console record when the binding is absent or its write throws", async () => {
+    const { emitFunnelHomeView } = await import("~/lib/funnel-measurement.server");
+    emitFunnelHomeView({ FUNNEL_MEASUREMENT_ENABLED: "1" }, makeFunnelRequest());
+    const throwing = {
+      writeDataPoint: vi.fn(() => {
+        throw new Error("platform unavailable");
+      }),
+    };
+    emitFunnelHomeView(
+      { FUNNEL_MEASUREMENT_ENABLED: "1", FUNNEL_ANALYTICS: throwing },
+      makeFunnelRequest(),
+    );
+    expect(emittedFunnelRecords(logSpy)).toHaveLength(2);
+  });
+});
+
 describe("funnel measurement redaction", () => {
   let logSpy: MockInstance;
 
