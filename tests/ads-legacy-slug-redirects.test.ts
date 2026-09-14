@@ -67,6 +67,13 @@ describe("legacy dotless /ads slugs (issue #3457)", () => {
   // Issue #3457 review: a plain-object lookup would treat inherited
   // Object.prototype members as map hits and 301 them to a garbage Location.
   // Object.hasOwn gates the lookup so these names keep the pinned 404.
+  //
+  // Precision note (review round on PR #3479): the loader lowercases the slug
+  // before lookup, so the mixed-case names below (toString, valueOf, …) were
+  // never real map hits — they lowercase to inert strings and 404'd even on
+  // the pre-gate code. The two case-stable names that actually discriminate
+  // the gate are "constructor" and "__proto__"; the rest pin the acceptance
+  // contract for these URL shapes.
   it.each([
     "toString",
     "constructor",
@@ -88,6 +95,15 @@ describe("legacy dotless /ads slugs (issue #3457)", () => {
 
     expect(response!.status).toBe(301);
     expect(response!.headers.get("Location")).toBe("/ads/nike.com?utm_source=newsletter");
+  });
+
+  it("preserves multi-param, percent-encoded queries verbatim across the 301", async () => {
+    const response = await runLoader("mamaearth", "?utm_source=x&utm_campaign=hello%20world");
+
+    expect(response!.status).toBe(301);
+    expect(response!.headers.get("Location")).toBe(
+      "/ads/mamaearth.com?utm_source=x&utm_campaign=hello%20world",
+    );
   });
 
   it("normalizes case/whitespace on the mapped slugs (URL params arrive un-normalized)", async () => {
