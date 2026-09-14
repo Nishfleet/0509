@@ -1,6 +1,16 @@
 -- Onboarding epic slice 2 (Nishfleet/0509#3175): a removed competitor
 -- suggestion must never come back.
 --
+-- Renumbered 0098 -> 0104 (2026-09-14, deploy repair for #3512): the file
+-- merged after 0099-0102 were already applied to production D1, whose
+-- ledger is append-only. A migration sorting before applied history leaves
+-- a ledger hole that the restore-evidence gate must reject
+-- (source_backup_migration_ledger_stale), so the file now sorts after
+-- every live production migration and the forward catch-up applies it in
+-- plain repository order. Production never applied the 0098 name, so the
+-- rename leaves no ledger trace. SQL is byte-identical apart from this
+-- comment.
+--
 -- Suggested competitors are DERIVED on every panel load (auto-competitor-seed
 -- re-runs the keyword probes and re-ranks), so "remove" had nowhere to be
 -- recorded and the next load simply re-derived the same row. This table is the

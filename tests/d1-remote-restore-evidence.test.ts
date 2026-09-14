@@ -187,7 +187,6 @@ function processGroupHasMember(pid: number): boolean {
 const REPO_ONLY_MIGRATIONS = Object.freeze([
   "0096_email_suppression.sql",
   "0097_status_probe_samples.sql",
-  "0098_competitor_suggestion_dismissal.sql",
   "0098_email_delivery_canary.sql",
   "0098_widen_source_target_connector_bluesky.sql",
   "0098_widen_source_target_connector_gdelt.sql",
@@ -196,6 +195,12 @@ const REPO_ONLY_MIGRATIONS = Object.freeze([
   "0101_widen_source_target_connector_pinterest.sql",
   "0102_widen_source_target_connector_podcast.sql",
   "0103_widen_source_target_connector_youtube.sql",
+  // #3175's dismissal migration renumbered 0098 -> 0104 (deploy repair,
+  // #3512): it merged after 0099-0102 were already applied to production,
+  // and a migration sorting before applied history is a ledger hole the
+  // restore-evidence gate must reject. Production never applied the 0098
+  // name, so the rename leaves no ledger trace.
+  "0104_competitor_suggestion_dismissal.sql",
 ]);
 
 describe("D1 remote restore evidence automation", () => {
@@ -1608,11 +1613,11 @@ describe("D1 remote restore evidence automation", () => {
     // wrote this test; run 34705843153 has since applied 0097, 0098 canary
     // and 0098 gdelt (the live state is covered by the 0098 test below).
     // The modeled state still pins planner behavior for a backup behind the
-    // whole tail. 0098_competitor_suggestion_dismissal.sql (#3175) is
-    // likewise in the repository and not yet applied on production, so it
-    // joins the not-yet-applied group. Keep this list in step with the
-    // repository tail: a new migration file that production has not applied
-    // belongs here.
+    // whole tail. 0104_competitor_suggestion_dismissal.sql (#3175, renumbered
+    // from 0098 by the #3512 deploy repair) is likewise in the repository and
+    // not yet applied on production, so it joins the not-yet-applied group.
+    // Keep this list in step with the repository tail: a new migration file
+    // that production has not applied belongs here.
     const repository = readdirSync(resolve("migrations"))
       .filter((name) => /^\d{4}_.+\.sql$/u.test(name))
       .sort();
@@ -1695,7 +1700,6 @@ describe("D1 remote restore evidence automation", () => {
     const appliedFromRepoOnly = [
       "0096_email_suppression.sql",
       "0097_status_probe_samples.sql",
-      "0098_competitor_suggestion_dismissal.sql",
       "0098_email_delivery_canary.sql",
       "0098_widen_source_target_connector_gdelt.sql",
     ];
@@ -1706,10 +1710,11 @@ describe("D1 remote restore evidence automation", () => {
       ...PRODUCTION_MIGRATION_LEDGER_BASELINE,
       ...repositoryHead,
       // The 0096 pair in the production-applied order (error_reports was the
-      // tail when production applied it), then 0097, the 0098 competitor
-      // dismissal (it sorts first), the canary, and 0098_gdelt. Every
-      // planned catch-up carries the still-repo-only names after
-      // 0098_bluesky.
+      // tail when production applied it), then 0097, the canary, and
+      // 0098_gdelt. (0098_competitor_suggestion_dismissal.sql was renumbered
+      // to 0104 by the #3512 deploy repair, so in this modeled world it is
+      // still-repo-only and sorts at the tail.) Every planned catch-up
+      // carries the still-repo-only names after 0098_bluesky.
       "0096_error_reports.sql",
       ...appliedFromRepoOnly,
     ];
