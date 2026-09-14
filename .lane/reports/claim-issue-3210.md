@@ -72,3 +72,18 @@ conflicts (appstore kept, podcast dropped — main's revert wins), and shipped.
   --project node --changed origin/main` → 376 files, 4728/4728 pass;
   `npx vitest run --configLoader runner --project workers` → 89 files,
   539/539 pass; the appstore file alone after the rename → 8/8.
+
+## Ship pass (this unit, 2026-09-14)
+
+- The remote claim branch had been reset to plain main by the
+  claim-release/re-claim cycle; the salvaged work lived only on the local
+  branch. Merged `origin/main` @ `e039762f1` (clean, no conflicts) so the
+  push is a fast-forward carrying the whole slice.
+- Re-verified on the merged head `f0030d880`: `npx vitest run
+  --configLoader runner --project node --changed origin/main
+  --reporter=dot` → 378 files, 4747/4747 pass (186s); `npx vitest run
+  --configLoader runner --project workers --reporter=dot` → 91 files,
+  545/545 pass (158s) — migrations changed, so the full real-workerd
+  project ran. `sgscan --base origin/main` → no new findings.
+- Migration numbering re-checked against live main tail: `0102_podcast` is
+  the last file on origin/main; our `0103_appstore` is next, no collision.
