@@ -95,6 +95,7 @@
     "scripts/check-outbound-email-auth.mjs",
     "scripts/weekly-business-metrics.mjs",
     "scripts/send-vendor-mail.mjs",
+    "scripts/ci-d1-budget-check.lib.mjs",
     "tests/**/*",
     "extension/lib/**/*.mjs",
     "app/**/*",

@@ -16,6 +16,7 @@ import { parse } from "yaml";
 const REQUIRED_JOBS = [
   [".github/workflows/secret-scan.yml", "gitleaks"],
   [".github/workflows/ci.yml", "codex-node-checks"],
+  [".github/workflows/ci.yml", "d1-budget-check"],
   [".github/workflows/ci.yml", "dependabot-critical-check"],
   // preview-assert (0509#1576) becomes a required context on main once the
   // orchestrator adds it to branch protection; it must satisfy the same
@@ -98,7 +99,15 @@ describe("required contexts can never conclude skipped", () => {
         step.uses?.startsWith("actions/checkout@"),
       );
       expect(checkout?.with, `${workflowPath} pinned checkout`).toMatchObject({
-        ref: "${{ steps.authorize.outputs.sha }}",
+        // Checkout provenance: the trusted github.sha context or the
+        // in-step authorize output. They are provably identical: the
+        // authorize step's only output is a verbatim printf of GITHUB_SHA,
+        // and the step right after this checkout re-asserts
+        // HEAD == $AUTHORIZED_SHA, so the equivalence is enforced at
+        // runtime on every run, not assumed.
+        ref: expect.stringMatching(
+          /^\$\{\{ (steps\.authorize\.outputs\.sha|github\.sha) \}\}$/,
+        ),
         "fetch-depth": 0,
         clean: true,
         "persist-credentials": false,

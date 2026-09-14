@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// d1-budget: reads=10 writes=0 runs_per_day=1
 /**
  * Offer Timeline public-surface coverage canary (issue #3095).
  *

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// d1-budget: reads=300 writes=0 runs_per_day=4
 /**
  * Live regression guard for issue #1327: the proof-capture screenshot success
  * rate ("saves the screenshots" is the product's headline proof promise).

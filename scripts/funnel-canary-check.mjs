@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// d1-budget: reads=0 writes=0 runs_per_day=10
 /**
  * funnel-canary-check — post-enable canary for funnel measurement
  * (spec §8 gate 8, issue #2106).

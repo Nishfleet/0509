@@ -1,3 +1,4 @@
+// d1-budget: reads=0 writes=0 runs_per_day=10
 // Sync CANARY_BYPASS_TOKEN onto the deployed Worker via the classic
 // `wrangler secret put`, with a bounded retry that absorbs Cloudflare's
 // "currently deployed" lag AND re-promotes the production version when a
