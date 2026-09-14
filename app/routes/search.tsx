@@ -80,6 +80,7 @@ import { scrubBrokenUnicode } from "~/lib/text-safe";
 import {
   PUBLIC_SEARCH_RATE_LIMIT_MESSAGE,
   PUBLIC_SEARCH_SELECTION_RATE_LIMIT_MESSAGE,
+  PUBLIC_SEARCH_TRANSIENT_DEGRADED_MESSAGE,
 } from "~/lib/customer-route-error";
 import {
   formatAdvertiserLabel,
@@ -260,12 +261,18 @@ export const meta: MetaFunction<typeof loader> = (args) => {
 // React Router already merges Set-Cookie from a successful loader `data()`
 // result onto the HTML document. Other loader headers are NOT merged unless
 // this export copies them. A thrown 429 is still a JSON Response; do not copy
-// its Content-Type onto the HTML document. Only forward Set-Cookie plus
-// Retry-After from the 429.
+// its Content-Type onto the HTML document. Only forward Set-Cookie,
+// Retry-After from the 429, and Cache-Control: the #3400 degraded return
+// (`data(..., { headers: { "Cache-Control": "no-store" } })`) must reach the
+// document so a transient-failure page is never cached (edge or browser) —
+// the only Cache-Control any loader/429 path sets today is `no-store`.
 export const headers: HeadersFunction = ({ errorHeaders, loaderHeaders }) => {
   const documentHeaders: Record<string, string> = {};
   const retryAfter = errorHeaders?.get("retry-after");
   if (retryAfter) documentHeaders["Retry-After"] = retryAfter;
+  const cacheControl =
+    errorHeaders?.get("cache-control") ?? loaderHeaders?.get("cache-control");
+  if (cacheControl) documentHeaders["Cache-Control"] = cacheControl;
   const setCookie =
     errorHeaders?.get("set-cookie") ?? loaderHeaders?.get("set-cookie");
   if (setCookie) documentHeaders["Set-Cookie"] = setCookie;
@@ -780,6 +787,28 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
     };
   }
 
+  // Issue #3400 — the money path's selected= proof leg answers 200 with
+  // either the proof or the honest no-proof degraded state, never a 500
+  // (the #2810 no-ErrorBoundary-escape contract for this leg). The
+  // 2026-09-13T18:45Z walk caught this leg answering 500 on the mobile
+  // session while the desktop leg of the same walk answered 200 for the
+  // identical URL (200 x5 by 19:01Z), and the 2026-09-13T23:33Z live probe
+  // reproduced it (2/10 and 1/18 paced fresh anonymous curls; the captured
+  // 500 body is this route's ErrorBoundary document). Every seam BEFORE
+  // this guard fails safe already (cache probe, both anonymous limiters,
+  // plan lookup — each catches and degrades), so the throw comes from
+  // inside the guarded region. mechanism-impossible: WHICH upstream step
+  // threw cannot be pinned (funnel/app logs are Worker stdout, unreachable
+  // without Cloudflare tail access), so the leg-wide guard ships per
+  // acceptance #1. A transient failure in the live search, the
+  // evidence hydration/selection (withTransientRetry exhausts and
+  // rethrows), the anonymous projection, or any derivation between them
+  // now degrades to the same honest idle+inputError 200 the limiter and
+  // warming paths already standardise. The designed limiter 429 Responses
+  // above this seam keep their own rate-limit UX. Search failures were
+  // already funnel-errored by the inner catch; later-stage failures stay
+  // #3129's (reportError epic) concern, not this guard's.
+  try { // #3400 leg guard (catch below)
   const { executeSearchWithRelevance } =
     await import("~/lib/search-execution.server");
   const { shouldApplySearchV2, shouldRunSearchV2Shadow } =
@@ -1108,6 +1137,56 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
     });
   }
   return searchPayload;
+  } catch (error) {
+    // Issue #3400 catch-at-the-seam: the leg answers 200 with the honest
+    // no-proof degraded state instead of escaping to the route
+    // ErrorBoundary. Mirrors the limiter and warming degraded payloads.
+    // A returned payload renders as a 200; only a thrown loader error
+    // becomes the ErrorBoundary document (the 500 this leg must never
+    // answer). No funnel error here: search failures were funnel-errored
+    // by the inner catch above, and later-stage failures are #3129's.
+    // One internal console.error (reviewer Act-on, house precedent:
+    // hasWarmSearchCacheEntry / rate-limit.server.ts) so a degraded leg
+    // leaves a Worker-stdout trace instead of vanishing silently.
+    console.error("[search] selected-proof leg degraded", error);
+    // `no-store` on the degraded document (reviewer Act-on): the guard's 200
+    // must never be edge- or browser-cached, or one visitor's transient
+    // failure becomes the shared degraded page for every same-query visitor
+    // while its own "try again" copy keeps hitting the stored copy.
+    // headers() above forwards it; withSecurityHeaders honors an explicit
+    // cache-control; isEdgeCacheableHtmlResponse refuses `no-store`.
+    return data(
+      {
+      mode: parsed.mode,
+      filters: parsed.filters,
+      fingerprint: parsed.fingerprint,
+      result: buildIdleSearchResult(),
+      selectedAd: null,
+      resultCaptureAgeLabel: null,
+      stealSummary: null,
+      selectionEnrichmentPending: false,
+      landingPageCaptureFailure: null,
+      selectedAdCapture: undefined,
+      collections,
+      plan,
+      session,
+      competitorWebsite,
+      trackingRole,
+      inputError: PUBLIC_SEARCH_TRANSIENT_DEGRADED_MESSAGE,
+      searchScope,
+      displayDomain: null,
+      brandPageLink: null,
+      switchPage: null,
+      relevanceApplied: false,
+      watchedWatchlist: null,
+      competitorPreview: null,
+      competitorHandoff: null,
+      suggestedBrands: [],
+      ...navFlags,
+      },
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  }
 }
 
 export async function action({ context, request }: ActionFunctionArgs) {
