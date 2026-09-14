@@ -104,10 +104,12 @@ describe("signup_source against real D1", () => {
   });
 
   it("writes every #3358 acquisition-family marker through remember+apply and reads it back (issue #3358)", async () => {
-    // One marker per acquisition-surface family (#3358): the WRITE path here
-    // is the production signup+OAuth persistence path — remember drops the
-    // pending row, apply copies it onto the user row through 0087's CHECK, so
-    // each passing read both proves the round-trip and proves the CHECK
+    // One marker per acquisition-surface family (#3358), run through the
+    // whole chain the issue's accept asks for: the ?source=<marker> query
+    // param → signupSourceFromRequest (the signup route's own resolver, used
+    // by both the password and OAuth persistence paths) → remember drops the
+    // pending row → apply copies it onto the user row through 0087's CHECK →
+    // read. Each passing read proves the round-trip AND proves the CHECK
     // accepts every new marker with no migration.
     const FAMILY_MARKERS = [
       ADS_PAGE_SIGNUP_SOURCE,
@@ -123,8 +125,12 @@ describe("signup_source against real D1", () => {
       emails.push(email);
       await db().prepare("UPDATE user SET email = ? WHERE id = ?").bind(email, userId).run();
 
+      const request = new Request(`https://0509.io/auth/signup?source=${marker}`);
+      const derived = signupSourceFromRequest(request);
+      expect(derived).toBe(marker);
+
       expect(
-        await rememberAllowlistedSignupSource(appEnv, { email, source: marker }),
+        await rememberAllowlistedSignupSource(appEnv, { email, source: derived }),
       ).toBe(marker);
       expect(
         await applySignupSourceToNewUser(appEnv, { user: { id: userId, email } }),

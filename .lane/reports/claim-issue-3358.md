@@ -56,6 +56,32 @@ repo `tests/helpers/mock-react-router` helper instead of an inline doMock.
   'auth/signup?source='`); the shipped markup contains
   `/auth/signup?source=ads-page` on the pill and both /ads CTAs.
 
+## Reviewer round (2026-09-14, senior seat litellm/senior)
+
+Independent reviewer on the `origin/main...HEAD` diff: **approve**, 11
+findings, none blocking. Adjudication:
+
+- CONSIDER — guides ship hidden `source=` inputs into `/search`, which never
+  reads them (guide→preview→signup records NULL). Out of scope (`/search` is
+  not an enumerated family); filed as Nishfleet/0509#3514.
+- CONSIDER — adjacent unmarked surfaces outside the five families
+  (`/brands`, `/briefs/weekly`, `/`, `/competitor-monitoring`, bare pills on
+  `/for-agencies`, `/sample-brief`, `/sneaker-resale*`); filed as
+  Nishfleet/0509#3515.
+- CONSIDER — accept bullet 4's "query param → persisted row" chain was
+  covered piecewise; acted on: the integration test now runs each marker
+  through `Request(?source=)` → `signupSourceFromRequest` → remember → apply
+  → read on real D1.
+- CONSIDER — PR body named one compare 301; three exist (`visualping`,
+  `foreplay`, `visualping-ad-library`). Body corrected; the markers in the
+  two dead EN components still serve their `$locale` twins, which re-export
+  only the component.
+- NOTED — bare-pill regression safety, unvalidated `signupSource` prop
+  (server-side allowlist is the gate), `switchHref`/`changeEmailHref`
+  dropping `source=` (pre-existing, rescued by pending row + cookie), static
+  pin passing on a comment (mitigated by the pill render test), stale
+  `COMPARE_CANONICAL_TARGETS` comment (pre-existing rot).
+
 ## Fix round 2 (2026-09-14): dot-server build break
 
 - First PR head failed CI at `react-router build`: the route/component
