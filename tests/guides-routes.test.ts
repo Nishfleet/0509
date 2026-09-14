@@ -560,8 +560,8 @@ describe("guides triple agreement: sitemap <-> route <-> index (issue #3122)", (
         readFileSync("app/lib/locale-markets.ts", "utf8"),
       SITEMAP_GUIDE_RE,
     );
-    // The cluster is 7 guides; grow this floor when the next how-to ships.
-    expect(sitemapSlugs.length).toBeGreaterThanOrEqual(7);
+    // The cluster is 8 guides; grow this floor when the next guide ships.
+    expect(sitemapSlugs.length).toBeGreaterThanOrEqual(8);
 
     const routes = readFileSync("app/routes.ts", "utf8");
     for (const s of sitemapSlugs) {

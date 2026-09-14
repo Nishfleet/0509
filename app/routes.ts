@@ -202,6 +202,21 @@ export default [
   // official API returns and where); every claim cites Meta's own docs.
   // Ends in the no-account /search preview (source=guide-api-limitations).
   route("guides/meta-ad-library-api-limitations", "routes/guides.meta-ad-library-api-limitations.tsx"),
+  // Issue #3421: the eighth /guides/* page — the buyer's first-question
+  // explainer: can an AI (ChatGPT/an agent) just check this? The honest
+  // two-half answer — what an AI chat genuinely does well, the three things
+  // only an always-on watch owns. Ends in the no-account /search preview
+  // (source=guide-can-chatgpt-monitor-ads; the signup marker is lowercase).
+  // The issue-specified slug keeps its uppercase ChatGPT and 301s to the
+  // lowercase canonical (issue #2955) — the lowercase registration is the
+  // URL the sitemap, canonical, and every internal link declare. The exact
+  // slug stays registered verbatim as an { id }-aliased entry on the SAME
+  // module file (the LEGACY_VENDOR_COMPARE_PATH id pattern below): a
+  // separate shim module would differ from the real one only in filename
+  // casing, and react-router typegen emits one +types/<file>.ts per module
+  // file — two case-twins is a TS1149 hard error under tsc -b.
+  route("guides/can-ChatGPT-monitor-competitor-ads", "routes/guides.can-chatgpt-monitor-competitor-ads.tsx", { id: "guides.can-ChatGPT-monitor-competitor-ads" }),
+  route("guides/can-chatgpt-monitor-competitor-ads", "routes/guides.can-chatgpt-monitor-competitor-ads.tsx"),
   route("for-agencies", "routes/for-agencies.tsx"),
   route("sneaker-resale", "routes/sneaker-resale.tsx"),
   route(":locale/sneaker-resale", "routes/$locale.sneaker-resale.tsx"),
@@ -284,6 +299,15 @@ export default [
     // canonical→EN, advertised in the locale sitemaps like the rest of the
     // cluster.
     route("guides/meta-ad-library-api-limitations", "routes/$locale.guides.meta-ad-library-api-limitations.tsx"),
+    // Issue #3421: the ChatGPT first-question explainer — re-exported EN
+    // guide, canonical→EN, advertised in the locale sitemaps like the rest
+    // of the cluster. Same exact-slug + lowercase-canonical pair as the EN
+    // block above: the uppercase slug 301s (issue #2955), the lowercase
+    // registration is the URL that serves 200, and the exact slug is an
+    // { id }-aliased entry on the same module — a case-twin shim file
+    // would collide in generated +types (TS1149).
+    route("guides/can-ChatGPT-monitor-competitor-ads", "routes/$locale.guides.can-chatgpt-monitor-competitor-ads.tsx", { id: "$locale.guides.can-ChatGPT-monitor-competitor-ads" }),
+    route("guides/can-chatgpt-monitor-competitor-ads", "routes/$locale.guides.can-chatgpt-monitor-competitor-ads.tsx"),
     // Programmatic /ads/:domain under every locale prefix (issue #1562):
     // the #1501 buyer-surface cluster added /de, /de/pricing, ... but not
     // the /ads/:domain Ad Aggression Score pages, so /de/ads/nike.com

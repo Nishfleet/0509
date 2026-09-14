@@ -18,6 +18,7 @@ import { canonicalUrl, STATIC_SURFACE_SOCIAL_CARDS } from "~/lib/seo";
 import type { BrandPageLoaderData } from "~/routes/ads.$domain";
 import type { OfferTimelineLoaderData } from "~/routes/timeline.$domain";
 import { emptyDomainArchive } from "~/lib/archive";
+import { canonicalPathFor } from "../workers/canonical-path";
 
 type MetaEntry = { property?: string; name?: string; content?: string; title?: string };
 
@@ -120,7 +121,11 @@ describe("every programmatic buyer surface stamps a non-generic og:image", () =>
     };
     const meta = routeModule.meta();
     const img = ogImage(meta);
-    const slug = routeId.replace(/^guides\./, "");
+    // Filename slug ≠ served slug when the file is an uppercase exact-slug
+    // registration (#3421): #2955 canonicalizes to lowercase and og:image
+    // carries that canonical form, so derive the expected slug the same way.
+    const slug = canonicalPathFor(`/guides/${routeId.replace(/^guides\./, "")}`)
+      .replace(/^\/guides\//, "");
     expect(img, `${routeId} still uses generic og-image.png`).not.toBe(GENERIC_OG_IMAGE);
     expect(img).toMatch(new RegExp(`^https://0509\\.io/social-card/guides/${slug}\\.png\\?`));
     expect(img).toContain("n=");

@@ -91,6 +91,16 @@ export const GUIDE_STANDING_WATCH_SIGNUP_SOURCE = "guide-standing-watch";
 export const GUIDE_API_LIMITS_SIGNUP_SOURCE = "guide-api-limitations";
 
 /**
+ * The exact marker the /guides/can-ChatGPT-monitor-competitor-ads guide
+ * carries on its /search preview CTA (issue 3421): the guide is an
+ * organic-search entry point, so a signup that starts from its preview is
+ * attributed to the guide. Hyphen slug — inside the open slug shape, so no
+ * migration literal needed. Lowercase only: the marker pattern forbids
+ * uppercase — the ChatGPT capitalisation lives in the PATH slug, never here.
+ */
+export const GUIDE_CAN_CHATGPT_MONITOR_ADS_SIGNUP_SOURCE = "guide-can-chatgpt-monitor-ads";
+
+/**
  * Acquisition-surface-family markers (issue #3358): every public acquisition
  * family's signup CTA — the shared nav pill and each family's own signup
  * links — carries its ONE distinct family marker, so the #4518 signups/week
@@ -153,6 +163,7 @@ export const ALLOWED_SIGNUP_SOURCES = [
   GUIDE_PROVE_WHAT_CHANGED_SIGNUP_SOURCE,
   GUIDE_STANDING_WATCH_SIGNUP_SOURCE,
   GUIDE_API_LIMITS_SIGNUP_SOURCE,
+  GUIDE_CAN_CHATGPT_MONITOR_ADS_SIGNUP_SOURCE,
   ADS_PAGE_SIGNUP_SOURCE,
   COMPARE_PAGE_SIGNUP_SOURCE,
   SWITCH_PAGE_SIGNUP_SOURCE,
