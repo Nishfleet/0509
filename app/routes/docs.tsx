@@ -160,6 +160,7 @@ Authorization: Bearer f9_live_...`}</code>
           <Link to="/guides/how-to-prove-what-changed-on-a-competitor-website">Guide: how to prove what changed on a competitor's website</Link>
           <Link to="/guides/how-to-turn-a-one-off-competitor-check-into-a-standing-watch">Guide: how to turn a one-off check into a standing watch</Link>
           <Link to="/guides/meta-ad-library-api-limitations">Guide: Meta Ad Library API limitations</Link>
+          <Link to="/guides/can-ChatGPT-monitor-competitor-ads">Guide: can ChatGPT monitor competitor ads</Link>
           <Link to="/api/docs">API docs</Link>
           <Link to="/mcp/setup">MCP setup</Link>
           <Link to="/status">Status</Link>

@@ -77,6 +77,12 @@ export const GUIDE_ENTRIES = [
     blurb:
       "The structural fact of the category: what the official Ad Library API covers (political ads worldwide, any ad type only where delivered to the UK/EU), with every claim linked to Meta's own docs.",
   },
+  {
+    href: "/guides/can-ChatGPT-monitor-competitor-ads",
+    title: "Can ChatGPT monitor competitor ads?",
+    blurb:
+      "The buyer's first question: what an AI chat genuinely does well — summarising, drafting angles, explaining a diff — and the three things only an always-on watch owns (the 03:00 check, the dated record, the before/after evidence).",
+  },
 ] as const;
 
 export default function GuidesIndex() {
