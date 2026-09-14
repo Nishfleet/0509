@@ -17,10 +17,10 @@ import { LIVE_BRAND_PROOF_DOMAIN } from "~/lib/demo-brand-pages";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import spylandCitations from "~/data/compare/spyland-citations.json";
 
-// Source verification (issue #1288, #2069, #2835, #3019): primary-source-verified —
+// Source verification (issue #1288, #2069, #2835, #3019, #3477): primary-source-verified —
 // https://spyland.ing/ returns HTTP 200 and names the product with a Free plan
-// ($0, weekly checks) and paid Solo / Business tiers with daily checks; dollar
-// prices are not published on the page — verified live 2026-09-11.
+// ($0, weekly checks) and paid Solo ($10/mo) / Business ($49/mo) tiers with
+// daily checks — verified live 2026-09-14.
 const citations = spylandCitations as CompareCitations;
 
 export { compareAdsExampleLoader as loader } from "~/lib/ads-internal-links.server";

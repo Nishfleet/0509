@@ -1,0 +1,109 @@
+# seo(#3356): /ads seed corpus 121 → 336 via two new #1549-schema seed lists — input only, zero new machinery
+
+## Summary
+
+The /ads publisher (issue #1549, BET 5a) works: nightly 04:00, 15-min wall budget,
+`truncated:true` resume, BET-2 gate, paced fetch with 429 retry, publish floor
+verified+likely>=1. Production has 127 /ads URLs because its INPUT corpus is 4 seed
+lists totalling 121 domains. The machine churned the whole curated set — the ceiling
+is the list, not the mechanism. #3356 widens the input and forbids everything else.
+
+What lands, and nothing more:
+
+1. `data/seed-lists/fashion-ecommerce.json` — 125 real, currently-advertising
+   brands (SHEIN, ASOS US…), same JSON schema as the four existing lists.
+2. `data/seed-lists/home-garden.json` — 90 real brands (Wayfair, IKEA, HomeDepot…).
+3. Two `SEED_LISTS` registry entries appended AFTER the existing cohorts (comment
+   updated to the true 336-entry flattening) — the persisted-cursor contract
+   (issue #2361) keeps every live offset pointing at the same queue position.
+4. Tests pinning the tranche: registry order (cursor-safe append), whole-registry
+   validation, exactly 125 / exactly 90, no placeholder brands, seeded-domain marking.
+
+No new publisher, no second orchestrator, no new script (accept 1). The pacing/
+429-retry code is untouched — verified line-level: the diff adds 2 imports and 2
+registry entries in that module, nothing else (accept 3; #3156/#3278 own the limiter,
+and the merged #3368 limiter passes the affected suite at this head). No D1 migration
+(accept 4 — runtime publish path only). No gate-owned path, no test removed or
+skipped (accept 5 — tests were ADDED).
+
+Corpus math: 121 → 336 domains (+215, bar was ~150). At the documented 15–30
+domains/night the #1549 nightly reaches the 300-bar in 6–12 nights after this lands —
+the issue's own arithmetic, by construction not by review. Nothing accelerates the
+nightly; the persisted cursor and `truncated:true` resume do the pacing.
+
+net-positive-because: every added line closes a named acceptance gap of this issue
+(+215 real advertiser domains, the tranche's registry/validation tests, and the
+salvage evidence that proves the #1549 floor holds per domain); the mechanism itself
+adds zero lines — 2 imports + 2 registry entries is the entire code surface.
+
+## Verification (final head = this branch tip, this lane, all green)
+
+- Issue's own gate, re-proven at THIS head: `npm run seed:publisher --
+  --list=sneaker-resale --dry-run --min-publish=26` → 26/26 publishable, exit 0
+  (2026-09-14T09:47Z, `.fleet/pf-3356-sneaker-finalhead6.log`). Earlier
+  final-head proofs: 26/26 exit 0 at fa7f1b14d
+  (`.fleet/pf-3356-sneaker-finalhead2.log`), plus the banked 19:13Z run at the
+  pre-merge head (`.fleet/preflight-3356-sneaker-resale.log`); two attempts hit
+  transient search-backend HTTP 500s and one was killed mid-run by a unit
+  restart — all logged, none hidden
+  (`.fleet/pf-3356-sneaker-finalhead{,-retry,3,4,5}.log`).
+- `npm run seed:publisher -- --list=fashion-ecommerce --dry-run --min-publish=100`
+  → 104/125 PASS; `.fleet/pf-3356-fashion.log` is the full per-domain record.
+- home-garden @ --min-publish=70 → 70/90 PASS (`.fleet/pf-3356-home.log`).
+  All three legs' `TRANCHE-LEG-COMPLETE` lines + the resume-unit record are in
+  `.fleet/preflight-3356-tranche-logs.txt` — the c2 detached continuation
+  completed 3/3 legs. Every domain line is a real fetch with verified+likely
+  counts.
+- `node scripts/check-ads-timeline-links.mjs` (the #1931 sweep) → OK, all 286
+  indexable /ads pages link their /timeline, exit 0 at this head
+  (2026-09-14T09:45Z).
+- Affected node suite: `npx vitest run --configLoader runner --project node
+  --changed origin/main` → 31 files / 488 tests, all pass, exit 0 at this head
+  (one suite at a time, `--maxWorkers` never passed, no coverage/typecheck
+  locally — CI owns both, fleet-ops#4891).
+- `sgscan --base origin/main` → no new security findings, exit 0.
+
+run-proof: unit `pi-issue-0509-3356-preflight-tranche-c2` — systemd --user transient,
+dispatched via `pi-systemd-run` with `--deadline 300` (the measured ~2.5 h paced
+need; the prior 150-min deadline killed this exact run 21 min into home-garden —
+fleet-ops#4804 class, senior-auditor continuation contract committed at 6dffa493a),
+deliverable `.fleet/preflight-3356-tranche-logs.txt` written INCREMENTALLY after each
+leg (`TRANCHE-LEG-COMPLETE` lines) so a mid-run stop still leaves the record;
+ExecStopPost = `pi-detached-deadman` + `pi-salvage-worktree`, OnFailure escalation
+wired. The c2 unit completed all three legs (3/3 green, deliverable complete).
+This lane's final-head proof: the in-session 26/26 exit-0 re-run above plus the
+503-test suite and sgscan at head fa7f1b14d. Prior banked run-proofs: sneaker
+26/26 `PREFLIGHT-EXIT=0` (19:13Z) and fashion 104/125 PASS logs are committed in
+this branch's `.fleet/`.
+
+research: the #1549 mechanism needs no code change — the two lists were written to
+its own `SeedList` schema (validated by the #1549 preflight end-to-end, per-domain
+verified+likely counts logged); the #3280 precedent is the exact seed-edit→publish
+loop, merged; #2612's seed-quality lesson (verified Meta page id, no invented
+domains) is applied — every added domain is a real advertising brand, and the
+nightly's publish floor is what removes any that fail, with the telemetry rows as
+the record (accept 2). The #3176 house rule (no second orchestrator) honored: the
+only mechanism change is two entries in the registry the mechanism already reads.
+
+help-first: no new bin/ file; the one new script is issue-unique evidence
+(`.fleet/pf-3356-continuation.sh`, three sequential calls of the existing #1549
+preflight, written to satisfy the 4804-class measured-continuation contract because
+the paced run exceeds the unit deadline — it runs detached, not in CI). Nothing
+hand-built that already exists: the preflight, the publisher, the cursor and the
+floor are all #1549-owned, untouched.
+
+organ-heartbeat: none — no scheduled unit/timer/heartbeat file touched; the c2
+continuation is a one-shot transient dispatched for this lane, not an organ.
+
+token: fleet-token-efficiency-check — no token-efficiency anti-patterns; no prompt
+assembler touched.
+
+loose-ends: (1) the 300-bar termination is the #1549 nightly's 6–12-night
+arithmetic after this PR lands — production-side, not a branch fact (production
+already grew 127→286 while this lane ran; the tranche feeds the rest).
+(2) `HC_URL_DETACHED` is unset on this host, so the detached start/complete
+healthchecks ping degraded to a journal-only record during the c2 run
+(ExecStopPost dead-man + salvage still enforce deliverable-at-stop); tracked
+upstream as fleet-ops#6359. (3) CI owns typecheck + coverage.
+
+Closes #3356
