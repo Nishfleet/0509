@@ -21,8 +21,10 @@
 -- was first written as 0101_appstore and collided with 0101_pinterest —
 -- two lanes each rebuilding this table from the 0100 state, whichever ran
 -- second silently dropping the other's CHECK value, caught by the
--- integration test — so it became 0102. The podcast slice's own 0102 was
--- reverted from main (0509#3434 revert), leaving 0102 solely this widen.)
+-- integration test — so it became 0102. The podcast slice's 0102 was
+-- reverted from main but then RESTORED (e15f7ec77: production had already
+-- applied it before the revert landed), so 0102_podcast is live history
+-- this unapplied file must not reuse — renumbered 0103.)
 --
 -- Expand-only: every value the previous CHECK accepted is still accepted, so
 -- existing rows copy through unchanged, and the running old code is

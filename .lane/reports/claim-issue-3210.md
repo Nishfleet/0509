@@ -16,11 +16,13 @@ conflicts (appstore kept, podcast dropped — main's revert wins), and shipped.
   (`SoftwareApplication` ld+json). Google Play REVIEWS are the documented
   exclusion (no free public API — `batchexecute` is private), listed in
   `docs/mentions/PLAN.md` per the issue's only-allowed-exclusion clause.
-- `migrations/0102_widen_source_target_connector_appstore.sql` — expand-only
+- `migrations/0103_widen_source_target_connector_appstore.sql` — expand-only
   CHECK widen via the 0093/0098/0100/0101 table-rebuild convention; child
-  tables snapshotted and restored inside the transaction. Numbered 0102: the
+  tables snapshotted and restored inside the transaction. Numbered 0103: the
   file was first 0101 (collided with 0101_pinterest, caught by the
-  integration test), and the podcast slice's 0102 was reverted from main.
+  integration test), then 0102 — but the podcast slice's 0102 was restored
+  to main (e15f7ec77: production had applied it before the revert landed),
+  so the unapplied appstore widen renumbered to 0103.
 - Registry/coverage/env/status wiring: `appstore` joins
   `PRESENCE_CONNECTOR_IDS`, the dispatched poll path (stateless, no cursor —
   gdelt posture), `coverageLabelForConnector` → `PUBLIC_WEB_BEST_EFFORT`,
