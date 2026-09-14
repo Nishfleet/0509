@@ -17541,6 +17541,41 @@ a.f9-wk-workrow:hover, .f9-wk-workrow.is-selected { background: var(--wk-sunk); 
   margin: 0 0 20px;
 }
 
+/* #3176: the activation fan-out's live progress — the planned denominator,
+   the finished count, and one honest line per source. No spinners: a source
+   that did not reply says so. */
+.f9-signup-scan-progress {
+  margin: 0 0 20px;
+  text-align: left;
+}
+
+.f9-signup-scan-progress-count {
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0 0 8px;
+}
+
+.f9-signup-scan-progress-sources {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.f9-signup-scan-progress-source {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.9375rem;
+}
+
+.f9-signup-scan-progress-source-status {
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
 .f9-signup-first-brief-body {
   padding: 16px 0;
 }

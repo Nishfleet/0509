@@ -7,6 +7,7 @@ import { useFirstCapturePolling } from "~/components/workspace/use-first-capture
 import type {
   SignupFirstBriefBrandSuggestion,
   SignupFirstBriefLoaderData,
+  SignupScanProgressView,
 } from "~/lib/first-brief";
 import type { FirstBriefFileResult } from "~/lib/first-brief.server";
 
@@ -207,12 +208,45 @@ async function firstBriefLoader(
       };
     }
     // The activation scan is still in flight. Render the waiting state — the
-    // client polls the dashboard's first-scan status endpoint.
+    // client polls via the bounded revalidator, so this payload (and the
+    // #3176 progress below) refreshes every 30s without a manual reload.
     const activeWatchlist = watchlists.find((w) => w.isActive);
+    // #3176: the activation run's per-source fan-out progress, read straight
+    // off D1 (the run's summary_json.sourceProgress subtree). A run that has
+    // not planned its fan-out yet (or a read hiccup) yields no progress and
+    // the surface stays quiet — never a padded or fabricated count.
+    let scanProgress: SignupScanProgressView | undefined;
+    if (activeWatchlist?.id) {
+      try {
+        const { readLatestScanProgressForWatchlist } = await import(
+          "~/lib/scan-source-progress.server"
+        );
+        const summary = await readLatestScanProgressForWatchlist(
+          env,
+          activeWatchlist.id,
+        );
+        if (summary.total > 0) {
+          scanProgress = {
+            total: summary.total,
+            done: summary.done,
+            remaining: summary.remaining,
+            sources: summary.entries.map((entry) => ({
+              label: entry.label,
+              status: entry.status,
+              detail: entry.detail,
+            })),
+          };
+        }
+      } catch {
+        // Progress is observability: a read failure hides the block, it
+        // never breaks the waiting state.
+      }
+    }
     return {
       step: "first-brief",
       status: "waiting",
       watchlistName: activeWatchlist?.targetLabel ?? null,
+      ...(scanProgress ? { scanProgress } : {}),
     };
   }
 
