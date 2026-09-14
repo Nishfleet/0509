@@ -5,6 +5,7 @@ import {
   data,
   redirect,
   useActionData,
+  useAsyncError,
   useLoaderData,
   useLocation,
   useNavigate,
@@ -817,17 +818,19 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
   // guard is leg-wide, so the base `?q=` leg shares it — the 2026-09-14
   // 00:45Z/06:25Z 500 windows on /search?q=<brand>&country=all degrade to
   // the same honest 200; tests/search-base-leg-honest-state.test.ts pins it.
+  // Issue #2952 merge note: the guarded region below holds the eager shell
+  // and the streamed `search` promise — for browser navigations the promise
+  // leaves this loader un-awaited, so its rejection surfaces through the
+  // route's `Await` errorElement inside the already-200 document (never a
+  // 500, the same contract); for every non-navigation consumer `await
+  // search` runs INSIDE this try and degrades exactly as #3400 specifies.
   try { // #3400 leg guard (catch below)
-  const { executeSearchWithRelevance } =
-    await import("~/lib/search-execution.server");
-  const { shouldApplySearchV2, shouldRunSearchV2Shadow } =
-    await import("~/lib/search-rollout.server");
-  const { prepareSearchResultSelection } =
-    await import("~/lib/search-selection.server");
 
   // Cross-link (workflow-friction pass): if the signed-in user already
   // watches this competitor, the results page links straight to its dossier.
   // One indexed D1 list per searched query — never blocks the search itself.
+  // Issue #2952 — computed in the shell (not in the streamed promise) so the
+  // watchlist cross-link is page furniture, not streamed content.
   const watchedWatchlist = session
     ? await (async () => {
         try {
@@ -843,6 +846,20 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
         }
       })()
     : null;
+
+  // Issue #2952 — the results stream: the loader settles as soon as the
+  // shell fields exist (session, plan, filters, collections) and the
+  // discovery + selection + enrichment chain keeps running inside this
+  // promise, which React Router serializes (single fetch, turbo-stream) and
+  // streams into the already-flushed HTML. The component's pending state is
+  // the route's own warming view.
+  const search = (async () => {
+  const { executeSearchWithRelevance } =
+    await import("~/lib/search-execution.server");
+  const { shouldApplySearchV2, shouldRunSearchV2Shadow } =
+    await import("~/lib/search-rollout.server");
+  const { prepareSearchResultSelection } =
+    await import("~/lib/search-selection.server");
 
   const useSearchV2 =
     Boolean(competitorWebsite.raw) &&
@@ -1084,10 +1101,13 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
         })
       : [];
 
-  const searchPayload = {
-    mode: parsed.mode,
+  // Issue #2952 — everything the visitor sees BELOW the shell: the searched
+  // results, the proof pane, the cross-links, the "what next" chips. The
+  // shell (mode / parsed filters / fingerprint / collections / plan / session
+  // / competitorWebsite / trackingRole / inputError / watchedWatchlist /
+  // navFlags) settles above so the document can flush while this runs.
+  return {
     filters: filtersForForms,
-    fingerprint: parsed.fingerprint,
     result: hydratedResult,
     selectedAd,
     resultCaptureAgeLabel: formatSearchCaptureAgeLabel(
@@ -1100,23 +1120,46 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
     // Issue #3014: the anonymous landing capture streams into this document.
     // Undefined for signed-in / cached-evidence / non-enriched searches.
     ...(selectedAdCapture ? { selectedAdCapture } : {}),
-    collections,
-    plan,
-    session,
-    competitorWebsite,
-    trackingRole,
     searchScope: searchExecution.searchScope,
     displayDomain: searchExecution.displayDomain,
     brandPageLink,
     switchPage,
     relevanceApplied: searchExecution.relevanceApplied,
-    inputError: null,
-    watchedWatchlist,
     competitorPreview,
     competitorHandoff,
     suggestedBrands,
+  };
+  })();
+
+  // The shell settles eagerly; everything that depends on the heavy search
+  // chain rides inside the streamed `search` promise above.
+  const searchShellPayload = {
+    mode: parsed.mode,
+    filters: parsed.filters,
+    fingerprint: parsed.fingerprint,
+    competitorWebsite,
+    trackingRole,
+    collections,
+    plan,
+    session,
+    inputError: null,
+    watchedWatchlist,
     ...navFlags,
   };
+
+  // Issue #2952 — only a real browser navigation (initial document or SPA
+  // single-fetch) streams: those requests send `sec-fetch-mode: navigate`.
+  // Every other consumer of this loader (curl, canary probes, other routes,
+  // tests) gets the classic fully settled payload with the exact same shape
+  // it always had — the promise resolves in place before the payload
+  // returns, so JSON callers never see a pending entry. A document request
+  // failing inside the promise surfaces through the Await errorElement, not
+  // a loader-level throw.
+  const isBrowserNavigation =
+    request.headers.get("sec-fetch-mode") === "navigate";
+  const searchPayload = isBrowserNavigation
+    ? { ...searchShellPayload, search }
+    : { ...searchShellPayload, ...(await search) };
   // Issue #1972 phase 1: when an anonymous visitor's very first search
   // succeeded and there was NO incoming anonymous cookie, persist the fresh
   // browser identity via Set-Cookie so that browser keeps its own per-browser
@@ -1498,8 +1541,113 @@ export async function action({ context, request }: ActionFunctionArgs) {
   };
 }
 
+// Issue #2952 — the streamed /search payload. The loader settles the shell
+// fields eagerly and hands the search results to this promise; React Router
+// streams the promise's resolution into the already-flushed document (single
+// fetch, turbo-stream). A payload without `search` is a flat early return
+// (idle, HEAD, invalid input, rate-limit copy) and renders exactly as before.
+type StreamedSearchRouteData = Extract<
+  Awaited<ReturnType<typeof loader>>,
+  { search: Promise<unknown> }
+>;
+type SearchStreamPayload = Awaited<StreamedSearchRouteData["search"]>;
+type ResolvedSearchRouteData = Omit<StreamedSearchRouteData, "search"> &
+  SearchStreamPayload;
+
+// `data` is the turbo-stream-deserialized loader value, not the loader's raw
+// return union (SerializeFrom unwraps the data() envelopes the raw union
+// still carries), so the guard takes unknown and narrows onto the raw
+// streamed member the streamed/resolved shapes below are built from.
+function isStreamedSearchData(
+  data: unknown,
+): data is StreamedSearchRouteData {
+  return typeof data === "object" && data !== null && "search" in data;
+}
+
+function streamedSearchFastFields(
+  data: StreamedSearchRouteData,
+): Omit<StreamedSearchRouteData, "search"> {
+  const { search: _search, ...fast } = data;
+  return fast;
+}
+
+// While the results promise is still running, the page shows this exact
+// component rendering the route's own warming state — the existing
+// "we're completing the first check" view — inside the fully resolved
+// shell. When the promise settles, the very same component renders the
+// results (fresh mount, identical to the settled mount).
+function SearchPendingResults({
+  data,
+}: {
+  data: Omit<StreamedSearchRouteData, "search">;
+}) {
+  return (
+    <SearchRouteResults
+      data={{
+        ...data,
+        result: {
+          ...buildIdleSearchResult(),
+          discoveryStatus: "degraded",
+          discoveryProgress: "warming",
+        },
+        selectedAd: null,
+        resultCaptureAgeLabel: null,
+        stealSummary: null,
+        selectionEnrichmentPending: false,
+        landingPageCaptureFailure: null,
+        relevanceApplied: false,
+        searchScope: "exact",
+        displayDomain: data.competitorWebsite.host ?? null,
+        brandPageLink: null,
+        switchPage: null,
+        competitorPreview: null,
+        competitorHandoff: null,
+        suggestedBrands: [],
+      }}
+    />
+  );
+}
+
+function SearchErrorView({ error }: { error: unknown }) {
+  // Use the rate-limit-specific error UI when the loader threw a 429
+  // with a retryAfter value in the body.
+  const isRateLimitError =
+    error &&
+    typeof error === "object" &&
+    "data" in error &&
+    (error as { data?: { error?: string; retryAfter?: number } }).data?.error ===
+      "rate_limited";
+  if (isRateLimitError) {
+    return <PublicSearchRateLimitError error={error} />;
+  }
+  return <PublicSearchError error={error} />;
+}
+
+// A search failure inside the streamed promise surfaces through the
+// `Await` boundary with the same UI the route ErrorBoundary renders.
+function SearchStreamError() {
+  const error = useAsyncError();
+  return <SearchErrorView error={error} />;
+}
+
 export default function SearchRoute() {
   const data = useLoaderData<typeof loader>();
+  if (isStreamedSearchData(data)) {
+    const fastFields = streamedSearchFastFields(data);
+    return (
+      <Suspense fallback={<SearchPendingResults data={fastFields} />}>
+        <Await resolve={data.search} errorElement={<SearchStreamError />}>
+          {(search) => {
+            return <SearchRouteResults data={{ ...fastFields, ...search }} />;
+          }}
+        </Await>
+      </Suspense>
+    );
+  }
+  return <SearchRouteResults data={data as ResolvedSearchRouteData} />;
+}
+
+function SearchRouteResults({ data }: { data: ResolvedSearchRouteData }) {
   // Issue #3014: when the loader deferred the anonymous landing capture, this
   // promise streams into the document and the capture-derived pane blocks
   // below render inside <Await> (pending paint first, proof swaps in when

@@ -83,7 +83,7 @@ const appSession = {
   session: {
     id: "session-1",
     userId: "user-1",
-    expiresAt: "2026-04-03T00:00:00.000Z",
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
   },
 };
 
@@ -475,6 +475,155 @@ describe("search loader", () => {
       result: hydratedResult,
       selectedAd: baseAd,
     });
+  });
+
+  it("streams the search results: the shell settles while the source is still running (issue #2952)", async () => {
+    // The legacy /ads/<brand> redirects land here, so first-time visitors
+    // from ads eat the whole source wait when the loader settles late. A
+    // browser navigation (sec-fetch-mode: navigate) must get the shell plus
+    // the streamed search promise; every other consumer of this loader
+    // (curl, canary probes, tests) keeps the fully settled payload.
+    const env = { DB: {} };
+    const getOptionalSession = vi.fn().mockResolvedValue(null);
+    const listCollections = vi.fn();
+    const sourceResult = {
+      ads: [baseAd],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+      discoverySummary: null,
+      discoveryFailureClass: null,
+    };
+    const hydratedResult = {
+      ...sourceResult,
+      cacheStatus: "miss",
+    };
+    const searchAdsViaSourceResolver = vi.fn().mockImplementation(
+      () =>
+        new Promise((resolve) =>
+          setTimeout(() => resolve(sourceResult), 1_000),
+        ),
+    );
+    const prepareSearchResultSelection = vi.fn().mockResolvedValue({
+      result: hydratedResult,
+      selectedAd: baseAd,
+    });
+    const enforcePublicSearchRateLimit = vi.fn().mockResolvedValue(null);
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession,
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections,
+    }));
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforcePublicSearchRateLimit,
+      enforceAuthenticatedSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceSearchSelectionRateLimit: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver,
+      hasFreshDiscoveryCacheEntry: vi.fn().mockResolvedValue(false),
+    }));
+    vi.doMock("~/lib/search-execution.server", async (importOriginal) => {
+      const actual =
+        await importOriginal<typeof import("~/lib/search-execution.server")>();
+      return {
+        ...actual,
+        attachKeywordSearchDomainMatch: vi.fn(
+          async (_env: unknown, result: unknown) => result,
+        ),
+      };
+    });
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection,
+    }));
+
+    const { loader } = await import("~/routes/search");
+    const start = Date.now();
+    const streamedRaw = await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search?q=nike&country=all", {
+        headers: { "sec-fetch-mode": "navigate" },
+      }),
+    } as never);
+    // The shell settles while the mocked 1s source is still running: the
+    // issue's 500ms visitor-TTFB budget, pinned at the loader level.
+    const shellElapsedMs = Date.now() - start;
+    expect(shellElapsedMs).toBeLessThan(500);
+
+    // Fresh anonymous + streamed → the #1972 Set-Cookie `data()` wrapper.
+    // Either way the payload carries the streamed promise, not the results.
+    expect(streamedRaw instanceof Response).toBe(false);
+    const streamed = (streamedRaw as { data: Record<string, unknown> }).data;
+    expect(streamed).toMatchObject({ session: null, inputError: null });
+    const streamedSearch = streamed.search as Promise<Record<string, unknown>>;
+    expect(streamedSearch).toBeInstanceOf(Promise);
+    expect(await streamedSearch).toMatchObject({
+      result: { ads: [baseAd] },
+      selectedAd: baseAd,
+      relevanceApplied: false,
+      suggestedBrands: [],
+    });
+
+    // A JSON consumer without the navigation header keeps the classic fully
+    // settled payload — the promise resolves in place, shape unchanged.
+    const settled = await unwrapLoaderResult(loader, {
+      context: createContext(env),
+      request: new Request("http://localhost/search?q=nike&country=all"),
+    } as never);
+    expect(settled).toMatchObject({
+      session: null,
+      result: { ads: [baseAd] },
+      selectedAd: baseAd,
+    });
+    expect("search" in settled).toBe(false);
+    // The settled payload must carry the EXACT field set the pre-stream
+    // contract exposed — a regression that drops any one of these keys is
+    // what the issue's "results still correct" acceptance protects against.
+    // (selectedAdCapture stays conditional: it is only present when an
+    // anonymous deferred capture exists, which this path does not seed.)
+    expect(Object.keys(settled).sort()).toEqual(
+      [
+        "brandPageLink",
+        "collections",
+        "competitorHandoff",
+        "competitorPreview",
+        "competitorWebsite",
+        "displayDomain",
+        "filters",
+        "fingerprint",
+        "inputError",
+        "landingPageCaptureFailure",
+        "mode",
+        "plan",
+        "relevanceApplied",
+        "result",
+        "resultCaptureAgeLabel",
+        "searchScope",
+        "selectedAd",
+        "selectionEnrichmentPending",
+        "session",
+        "showPresenceNav",
+        "stealSummary",
+        "suggestedBrands",
+        "switchPage",
+        "trackingRole",
+        "watchedWatchlist",
+      ].sort(),
+    );
   });
 
   it("anonymous warming re-poll does not burn the public-search budget", async () => {
@@ -3195,7 +3344,7 @@ describe("search status copy", () => {
       ...baseAd,
       metaAdId: "likely-active",
       active: true,
-      firstSeenAt: "2025-01-01T00:00:00.000Z",
+      firstSeenAt: "2025-01-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       domainMatch: {
         level: "likely_brand_name",
         reason: "brand name fits",
@@ -3206,7 +3355,7 @@ describe("search status copy", () => {
       ...baseAd,
       metaAdId: "verified-inactive",
       active: false,
-      firstSeenAt: "2026-01-01T00:00:00.000Z",
+      firstSeenAt: "2026-01-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       domainMatch: {
         level: "exact_hostname",
         reason: "landing page links to brand domain",
