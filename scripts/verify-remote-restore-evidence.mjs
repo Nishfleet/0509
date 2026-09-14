@@ -8,10 +8,8 @@ import { validateRemoteRestoreEvidence } from "./deploy-production-plan.mjs";
 import {
   POST_DEPLOY_CLEANUP_MIGRATIONS,
   PRODUCTION_MIGRATION_LEDGER_BASELINE,
-  PRODUCTION_MIGRATION_LEDGER_ORDER_EXCEPTIONS,
   RETIRED_PRODUCTION_MIGRATIONS,
-  allowedProductionMigrationLedgers,
-  migrationLedgerState,
+  productionMigrationLedgerRule,
 } from "./d1-migration-sync-check.lib.mjs";
 import {
   DEPLOY_LEDGER_PATH,
@@ -663,19 +661,20 @@ async function main() {
     .sort();
   const { migrationBearing, restoreCritical, orphanedDeployAnchor } =
     await restoreEvidenceClassification();
-  const allowedMigrationStates = allowedProductionMigrationLedgers(
+  const migrationLedgerRule = productionMigrationLedgerRule(
     migrations,
     POST_DEPLOY_CLEANUP_MIGRATIONS,
-    PRODUCTION_MIGRATION_LEDGER_BASELINE,
-    RETIRED_PRODUCTION_MIGRATIONS,
-    PRODUCTION_MIGRATION_LEDGER_ORDER_EXCEPTIONS,
-  ).map((ledger) => migrationLedgerState(ledger));
+    {
+      baseline: PRODUCTION_MIGRATION_LEDGER_BASELINE,
+      retiredMigrations: RETIRED_PRODUCTION_MIGRATIONS,
+    },
+  );
   const verificationNow = new Date();
   const verdict = validateRemoteRestoreEvidence(evidence, {
     candidateFingerprint: manifest.candidateFingerprint,
     wranglerWorktreeSha256:
       manifest.postflight?.launchConfig?.wranglerWorktreeSha256,
-    allowedMigrationStates,
+    migrationLedgerRule,
     migrationBearing,
     restoreCritical,
     now: verificationNow,

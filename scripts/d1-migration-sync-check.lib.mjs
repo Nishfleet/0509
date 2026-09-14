@@ -102,6 +102,10 @@ export const PRODUCTION_MIGRATION_LEDGER_BASELINE = Object.freeze([
   "0070_release_scheduled_observations.sql",
 ]);
 
+// The retire list: names the production ledger may still carry that the
+// repository no longer ships. Baseline-resident entries document which
+// recorded names left the repository; post-baseline entries explain ledger
+// names inspectProductionMigrationLedger cannot otherwise derive.
 export const RETIRED_PRODUCTION_MIGRATIONS = new Set([
   "0010_discovery_browserless_provider.sql",
   "0011_share_report_resource.sql",
@@ -121,22 +125,8 @@ export const RETIRED_PRODUCTION_MIGRATIONS = new Set([
   "0034_passkeys.sql",
 ]);
 
-// Production applied 0096_error_reports.sql while it was still the ledger
-// tail; 0096_email_suppression.sql then landed in the repository sorting
-// earlier. D1's ledger is append-only, so the live order is fixed history a
-// sorted repository listing can never reproduce. Each group declares a set
-// of repository-suffix names in the exact order the production ledger is
-// allowed to carry them. (run 34671488829, 0509#3174)
-export const PRODUCTION_MIGRATION_LEDGER_ORDER_EXCEPTIONS = Object.freeze([
-  Object.freeze(["0096_error_reports.sql", "0096_email_suppression.sql"]),
-  // Run 34705843153, 0509#3315: production applied 0098_gdelt before the 0098_bluesky file landed (same-number interleave).
-  Object.freeze([
-    "0098_widen_source_target_connector_gdelt.sql",
-    "0098_widen_source_target_connector_bluesky.sql",
-  ]),
-]);
-
 const MIGRATION_NAME_PATTERN = /^\d{4}_[A-Za-z0-9_]+\.sql$/u;
+const MIGRATION_NAME_NUMBER_PREFIX = /^\d{4}_/u;
 
 /** @param {string[]} names */
 export function migrationLedgerNamesSha256(names) {
@@ -155,31 +145,6 @@ export function migrationLedgerNamesSha256(names) {
 
 export const PRODUCTION_MIGRATION_LEDGER_BASELINE_SHA256 =
   migrationLedgerNamesSha256([...PRODUCTION_MIGRATION_LEDGER_BASELINE]);
-
-/**
- * @param {string[]} names
- * @returns {{
- *   latestMigration: string,
- *   migrationCount: number,
- *   migrationLedgerNames: string[],
- *   migrationLedgerNamesSha256: string,
- *   migrationLedgerBaselineSha256: string,
- * }}
- */
-export function migrationLedgerState(names) {
-  const migrationLedgerNamesSha256Value =
-    migrationLedgerNamesSha256(names);
-  const latestMigration = names.at(-1);
-  if (!latestMigration) throw new Error("migration_ledger_names_invalid");
-  return {
-    latestMigration,
-    migrationCount: names.length,
-    migrationLedgerNames: [...names],
-    migrationLedgerNamesSha256: migrationLedgerNamesSha256Value,
-    migrationLedgerBaselineSha256:
-      PRODUCTION_MIGRATION_LEDGER_BASELINE_SHA256,
-  };
-}
 
 /**
  * A cleanup allowlist may remove only a contiguous migration suffix. Accept
@@ -229,107 +194,140 @@ export function allowedRemoteMigrationLedgers(
 }
 
 /**
- * Reconcile the append-only production ledger with the current repository.
- * Historical files may disappear only through the explicit retired set, while
- * new migrations may be appended only as the repository's ordered suffix.
+ * Decide whether a production migration ledger is explainable from the
+ * repository and report the repository migrations still pending on it.
  *
+ * D1's `d1_migrations` ledger is append-only and
+ * `wrangler d1 migrations apply` appends pending migrations in repository
+ * sort order, so the ORDER of names applied after the recorded baseline is
+ * production-side apply history the repository cannot re-enumerate: a file
+ * may land while it sorts anywhere in migrations/ and is still appended at
+ * the tail. Enumerating allowed orders is what re-staled this check on
+ * every added or renumbered migration (0509#3174/#3184/#3315, then
+ * 0509#3512). The derived contract instead:
+ *
+ *   1. the ledger begins with `baseline` exactly — the recorded prefix is
+ *      the single fixed-history anchor and already carries every retired
+ *      name at its applied position, so no order-exception list is needed;
+ *   2. every later name is explained by the repository alone: a repository
+ *      migration, a declared retired migration, or a rename alias of
+ *      exactly one repository file (same name body after the NNNN_ prefix);
+ *   3. no name repeats.
+ *
+ * `pending` is every repository name absent from the ledger — the exact set
+ * a forward apply appends, in repository order — and `blockingPending` is
+ * that minus the post-deploy cleanup allowlist.
+ *
+ * @param {string[]} ledgerNames
  * @param {string[]} repositoryMigrations
  * @param {Set<string>} cleanupMigrations
- * @param {readonly string[]} baseline
- * @param {Set<string>} retiredMigrations
- * @param {readonly (readonly string[])[]} orderExceptions
- * @returns {string[][]}
+ * @param {{ baseline?: readonly string[], retiredMigrations?: Set<string> }} options
+ * @returns {{ ok: true, pending: string[], blockingPending: string[] } | { ok: false, reason: "invalid" | "baseline_prefix" | "unexplained", unexplained?: string[] }}
  */
-export function allowedProductionMigrationLedgers(
+export function inspectProductionMigrationLedger(
+  ledgerNames,
   repositoryMigrations,
   cleanupMigrations = POST_DEPLOY_CLEANUP_MIGRATIONS,
-  baseline = PRODUCTION_MIGRATION_LEDGER_BASELINE,
-  retiredMigrations = RETIRED_PRODUCTION_MIGRATIONS,
-  orderExceptions = PRODUCTION_MIGRATION_LEDGER_ORDER_EXCEPTIONS,
+  {
+    baseline = PRODUCTION_MIGRATION_LEDGER_BASELINE,
+    retiredMigrations = RETIRED_PRODUCTION_MIGRATIONS,
+  } = {},
 ) {
+  // Validation only — throws on a malformed repository list or cleanup
+  // allowlist before any ledger is judged.
+  allowedRemoteMigrationLedgers(repositoryMigrations, cleanupMigrations);
   migrationLedgerNamesSha256([...baseline]);
   if (
     !(retiredMigrations instanceof Set) ||
     [...retiredMigrations].some(
-      (name) => !baseline.includes(name) || repositoryMigrations.includes(name),
+      (name) =>
+        !MIGRATION_NAME_PATTERN.test(name) ||
+        repositoryMigrations.includes(name),
     )
   ) {
     throw new Error("retired_production_migration_set_invalid");
   }
-
-  const repositoryBaseline = baseline.filter(
-    (name) => !retiredMigrations.has(name),
-  );
-  const repositoryAllowedLedgers = allowedRemoteMigrationLedgers(
-    repositoryMigrations,
-    cleanupMigrations,
-  );
   if (
-    JSON.stringify(
-      repositoryMigrations.slice(0, repositoryBaseline.length),
-    ) !== JSON.stringify(repositoryBaseline)
+    !Array.isArray(ledgerNames) ||
+    ledgerNames.length === 0 ||
+    ledgerNames.some((name) => !MIGRATION_NAME_PATTERN.test(name)) ||
+    new Set(ledgerNames).size !== ledgerNames.length
   ) {
-    throw new Error("migration_repository_baseline_drift");
+    return { ok: false, reason: "invalid" };
   }
-
-  // An order exception names repository-suffix files only: a baseline member
-  // cannot be reordered (fixed history) and a partially present group means
-  // the declaration went stale mid-flight. A group whose names are all absent
-  // from the repository is inert — it can never reorder a suffix that does
-  // not contain them.
   if (
-    !Array.isArray(orderExceptions) ||
-    orderExceptions.some(
-      (group) =>
-        !Array.isArray(group) ||
-        group.length < 2 ||
-        new Set(group).size !== group.length ||
-        group.some(
-          (name) =>
-            !MIGRATION_NAME_PATTERN.test(name) || baseline.includes(name),
-        ) ||
-        group.some((name) => repositoryMigrations.includes(name)) !==
-          group.every((name) => repositoryMigrations.includes(name)),
-    ) ||
-    new Set(orderExceptions.flat()).size !== orderExceptions.flat().length
+    ledgerNames.length < baseline.length ||
+    JSON.stringify(ledgerNames.slice(0, baseline.length)) !==
+      JSON.stringify([...baseline])
   ) {
-    throw new Error("production_migration_order_exceptions_invalid");
+    return { ok: false, reason: "baseline_prefix" };
   }
+  const repositorySet = new Set(repositoryMigrations);
+  /** @type {Map<string, number>} */
+  const nameBodyCounts = new Map();
+  for (const name of repositoryMigrations) {
+    const body = name.replace(MIGRATION_NAME_NUMBER_PREFIX, "");
+    nameBodyCounts.set(body, (nameBodyCounts.get(body) ?? 0) + 1);
+  }
+  const unexplained = ledgerNames.slice(baseline.length).filter(
+    (name) =>
+      !repositorySet.has(name) &&
+      !retiredMigrations.has(name) &&
+      nameBodyCounts.get(name.replace(MIGRATION_NAME_NUMBER_PREFIX, "")) !== 1,
+  );
+  if (unexplained.length > 0) {
+    return { ok: false, reason: "unexplained", unexplained };
+  }
+  const ledgerSet = new Set(ledgerNames);
+  const pending = repositoryMigrations.filter(
+    (name) => !ledgerSet.has(name),
+  );
+  return {
+    ok: true,
+    pending,
+    blockingPending: pending.filter((name) => !cleanupMigrations.has(name)),
+  };
+}
 
-  const allowedLedgers = [];
-  for (const repositoryLedger of repositoryAllowedLedgers) {
-    if (repositoryLedger.length < repositoryBaseline.length) {
-      throw new Error("post_deploy_cleanup_migration_allowlist_invalid");
-    }
-    const suffix = repositoryLedger.slice(repositoryBaseline.length);
-    allowedLedgers.push([...baseline, ...suffix]);
-    const applicable = orderExceptions.filter((group) =>
-      group.every((/** @type {string} */ name) => suffix.includes(name)),
-    );
-    for (let mask = 1; mask < 1 << applicable.length; mask += 1) {
-      const reordered = [...suffix];
-      applicable.forEach((group, groupIndex) => {
-        if (!(mask & (1 << groupIndex))) return;
-        /** @type {number[]} */
-        const positions = [];
-        reordered.forEach((name, position) => {
-          if (group.includes(name)) positions.push(position);
-        });
-        positions.forEach((position, member) => {
-          reordered[position] = group[member];
-        });
-      });
-      const candidate = [...baseline, ...reordered];
-      if (
-        !allowedLedgers.some(
-          (ledger) => JSON.stringify(ledger) === JSON.stringify(candidate),
-        )
-      ) {
-        allowedLedgers.push(candidate);
-      }
-    }
+/**
+ * The rule object the restore-evidence drill and the deploy gate share
+ * (0509#3512): the recorded baseline anchor, the live repository list, and
+ * the declared retire/cleanup lists — everything
+ * `inspectProductionMigrationLedger` needs to judge a recorded production
+ * ledger. Both consumers build it through this one path so the derived set
+ * can never drift between evidence generation and verification.
+ *
+ * @param {string[]} repositoryMigrations
+ * @param {Set<string>} cleanupMigrations
+ * @param {{ baseline?: readonly string[], retiredMigrations?: Set<string> }} options
+ */
+export function productionMigrationLedgerRule(
+  repositoryMigrations,
+  cleanupMigrations = POST_DEPLOY_CLEANUP_MIGRATIONS,
+  {
+    baseline = PRODUCTION_MIGRATION_LEDGER_BASELINE,
+    retiredMigrations = RETIRED_PRODUCTION_MIGRATIONS,
+  } = {},
+) {
+  allowedRemoteMigrationLedgers(repositoryMigrations, cleanupMigrations);
+  const baselineSha256 = migrationLedgerNamesSha256([...baseline]);
+  if (
+    !(retiredMigrations instanceof Set) ||
+    [...retiredMigrations].some(
+      (name) =>
+        !MIGRATION_NAME_PATTERN.test(name) ||
+        repositoryMigrations.includes(name),
+    )
+  ) {
+    throw new Error("retired_production_migration_set_invalid");
   }
-  return allowedLedgers;
+  return Object.freeze({
+    baselineSha256,
+    baseline: Object.freeze([...baseline]),
+    repositoryMigrations: Object.freeze([...repositoryMigrations]),
+    retiredMigrations: Object.freeze([...retiredMigrations]),
+    cleanupMigrations: Object.freeze([...cleanupMigrations]),
+  });
 }
 
 /**

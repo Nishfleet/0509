@@ -48,7 +48,6 @@ import {
 } from "../scripts/d1-remote-restore-evidence-core.mjs";
 import { selectRecentRemoteRestoreArtifact } from "../scripts/find-recent-remote-restore-artifact.mjs";
 import {
-  allowedProductionMigrationLedgers,
   PRODUCTION_MIGRATION_LEDGER_BASELINE,
   RETIRED_PRODUCTION_MIGRATIONS,
 } from "../scripts/d1-migration-sync-check.lib.mjs";
@@ -173,35 +172,6 @@ function processGroupHasMember(pid: number): boolean {
   }
   return false;
 }
-
-/**
- * Migrations present in the repository that the frozen modeled production
- * states below have not applied — production's ledger tail predates them.
- * Every new migration registers here FIRST (a one-site edit: append it, keep
- * the list sorted); the 0096 interleave test's exclusion filter, its
- * full-ledger and behind-tail catch-up arrays, and the 0098-gdelt test's
- * still-repo-only filter all derive from this list, so a new migration needs
- * no per-test edits. Names must stay in repository (sorted) order — the
- * derived arrays rely on it.
- */
-const REPO_ONLY_MIGRATIONS = Object.freeze([
-  "0096_email_suppression.sql",
-  "0097_status_probe_samples.sql",
-  "0098_email_delivery_canary.sql",
-  "0098_widen_source_target_connector_bluesky.sql",
-  "0098_widen_source_target_connector_gdelt.sql",
-  "0099_widen_source_target_connector_threads.sql",
-  "0100_widen_source_target_connector_hn.sql",
-  "0101_widen_source_target_connector_pinterest.sql",
-  "0102_widen_source_target_connector_podcast.sql",
-  "0103_widen_source_target_connector_youtube.sql",
-  // #3175's dismissal migration renumbered 0098 -> 0104 (deploy repair,
-  // #3512): it merged after 0099-0102 were already applied to production,
-  // and a migration sorting before applied history is a ledger hole the
-  // restore-evidence gate must reject. Production never applied the 0098
-  // name, so the rename leaves no ledger trace.
-  "0104_competitor_suggestion_dismissal.sql",
-]);
 
 describe("D1 remote restore evidence automation", () => {
   afterEach(() => {
