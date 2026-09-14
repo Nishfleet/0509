@@ -22,6 +22,7 @@ Manual fallback (never the daily driver): if the committed snapshot is missing o
 ## Interpretation rules
 
 - Look for changes, not totals. Use the 24-hour comparison for daily operational signals and the 7-day comparison for sparse commercial/customer signals. Record the selected window, UTC timezone, and exact start/end boundaries from the snapshot, then compare it with the immediately preceding equal window.
+- `product.*` customer-facing counts are organic only: fleet-synthetic identities (canary users, `*@0509.internal`, `bet1-3322-*`, `codex-qa-*`/`codex-free-qa-*`/`auth-QA*` addresses) and canary-owned watchlists are already excluded, and the `synthetic_*` fields carry that fleet activity separately. Report `synthetic_*` movement as the fleet's own canary/burst activity — never as new signups, watchlists, or organic usage.
 - Prefer product behaviour and commercial evidence over social chatter.
 - Never invent causality. Label a plausible explanation as a hypothesis.
 - Include a confidence level: low, medium, or high.
