@@ -35,9 +35,13 @@ node scripts/weekly-business-metrics.mjs --json
 ```
 
 That JSON (its `signups_7d`) — not the unfiltered day-count above — is the
-number the direction entry records. The script excludes the #2908 QA/canary
+number the direction entry records. The script excludes the shared
+fleet-synthetic identity list `SYNTHETIC_USER_PATTERNS`: the #2908 QA/canary
 fixture identities (billing-canary, `codex-qa-*`, `codex-free-qa-*`,
-`auth-QA`) plus the billing-canary guard id, and when the caller supplies the
+`auth-QA`), the billing-canary guard id, the launch-readiness canary owner
+id, every `*@0509.internal` mailbox, and the `bet1-3322-*` burst cohort — the
+same list `scripts/market-signal-snapshot.mjs` consumes, so the two reads
+cannot drift (issues #3471, #3486). When the caller supplies the
 Workers-Logs NDJSON (`--events-ndjson <path|->`) it cross-checks each
 surviving row against its `signup_completed` funnel event; survivors without
 one are listed as `suspect`, never silently counted. Its definition, fixture
