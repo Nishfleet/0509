@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AppEnv } from "~/lib/env.server";
 import {
+  loadRecentSitemapTimelineCaptureDays,
+  orderSitemapTimelineCohortByCaptureStaleness,
+  parseSitemapTimelineBackfillRowId,
   runSitemapTimelineBackfill,
   sitemapTimelineBackfillRowId,
   SITEMAP_TIMELINE_COHORT_CAP,
@@ -25,13 +28,14 @@ import {
 
 const queryOne = vi.hoisted(() => vi.fn());
 const execute = vi.hoisted(() => vi.fn());
+const queryAll = vi.hoisted(() => vi.fn());
 const replaceAnalysisFields = vi.hoisted(() => vi.fn());
 const loadIndexableTimelineEntries = vi.hoisted(() => vi.fn());
 
 vi.mock("~/lib/data/d1.server", () => ({
   queryOne,
   execute,
-  queryAll: vi.fn(),
+  queryAll,
   queryIn: vi.fn(),
   ensureDb: vi.fn(),
 }));
@@ -71,6 +75,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   queryOne.mockReset();
   execute.mockReset();
+  queryAll.mockReset();
   replaceAnalysisFields.mockReset();
   loadIndexableTimelineEntries.mockReset();
 });
@@ -79,6 +84,19 @@ beforeEach(() => {
   replaceAnalysisFields.mockResolvedValue(undefined);
   loadIndexableTimelineEntries.mockResolvedValue([]);
 });
+
+/**
+ * Every fixture instant in this suite is a fixed, injected clock (#3215's
+ * no-time-bomb guard): the rail reads time only through `options.now` /
+ * `options.deadlineAt` and these constants, never the wall clock, so they
+ * cannot age out. The deadline tests at the bottom deliberately use the real
+ * clock and construct their deadline relative to `Date.now()`.
+ */
+const PINNED_NOW = "2026-09-05T01:00:00.000Z"; // fixed-date: the rail's injected `now` — deterministic by construction
+const PINNED_NEXT_DAY = "2026-09-06T01:00:00.000Z"; // fixed-date: PINNED_NOW +1d — the second capture day
+const PINNED_DAY_3 = "2026-09-07T01:00:00.000Z"; // fixed-date: PINNED_NOW +2d — the third capture day
+const PINNED_LATER = "2026-09-13T01:00:00.000Z"; // fixed-date: PINNED_NOW +8d — the stalest-first head instant
+const CAPTURED_AT = "2026-09-05T01:30:00.000Z"; // fixed-date: row payload, passed through; the #2873 freshness check is read-side
 
 function tier(overrides: Partial<SitemapTimelineTier>): SitemapTimelineTier {
   return {
@@ -150,7 +168,7 @@ function snapshotForUrl(url: string) {
     priceText: null,
     formPresent: false,
     captureMethod: "browser_render",
-    capturedAt: "2026-09-05T01:30:00.000Z",
+    capturedAt: CAPTURED_AT,
     artifactKey: `artifacts/${domain}.html`,
     metadata: { captureMethod: "browser_render" },
   };
@@ -171,7 +189,7 @@ describe("summarizeSitemapTimelineBackfill", () => {
   it("matches the sneaker summarize shape: day, cohort, captured, failed, per-domain tags", () => {
     const summary = summarizeSitemapTimelineBackfill({
       day: "2026-09-05",
-      startedAt: "2026-09-05T01:00:00.000Z",
+      startedAt: PINNED_NOW,
       capturedCount: 2,
       failedCount: 1,
       domains: [
@@ -195,7 +213,7 @@ describe("summarizeSitemapTimelineBackfill", () => {
   it("renders an :error:<name> tag for unexpected per-domain exceptions", () => {
     const summary = summarizeSitemapTimelineBackfill({
       day: "2026-09-06",
-      startedAt: "2026-09-06T01:00:00.000Z",
+      startedAt: PINNED_NEXT_DAY,
       capturedCount: 0,
       failedCount: 1,
       domains: [dom("calendly.com", "error", { error: "BoomError" })],
@@ -207,7 +225,7 @@ describe("summarizeSitemapTimelineBackfill", () => {
   it("surfaces evidence age as stale=N (phase-1 reviewer carry-forward)", () => {
     const summary = summarizeSitemapTimelineBackfill({
       day: "2026-09-05",
-      startedAt: "2026-09-05T01:00:00.000Z",
+      startedAt: PINNED_NOW,
       capturedCount: 1,
       failedCount: 0,
       domains: [
@@ -228,7 +246,7 @@ describe("summarizeSitemapTimelineBackfill", () => {
   it("returns the bare log line with empty brackets when no domains are processed", () => {
     const summary = summarizeSitemapTimelineBackfill({
       day: "2026-09-07",
-      startedAt: "2026-09-07T01:00:00.000Z",
+      startedAt: PINNED_DAY_3,
       capturedCount: 0,
       failedCount: 0,
       domains: [],
@@ -245,14 +263,14 @@ describe("runSitemapTimelineBackfill (no-D1 path)", () => {
     const result = await runSitemapTimelineBackfill(
       {} as unknown as AppEnv,
       {
-        now: new Date("2026-09-05T01:00:00.000Z"),
+        now: new Date(PINNED_NOW),
         cohort: cohort({ domain: "calendly.com" }),
         capture: vi.fn(),
       },
     );
 
     expect(result.day).toBe("2026-09-05");
-    expect(result.startedAt).toBe("2026-09-05T01:00:00.000Z");
+    expect(result.startedAt).toBe(PINNED_NOW);
     expect(result.domains).toEqual([]);
     expect(result.capturedCount).toBe(0);
     expect(result.failedCount).toBe(0);
@@ -265,7 +283,7 @@ describe("runSitemapTimelineBackfill (no-cohort path)", () => {
   it("returns an empty degraded result when the cohort is empty", async () => {
     const env = { DB: {} } as unknown as AppEnv;
     const result = await runSitemapTimelineBackfill(env, {
-      now: new Date("2026-09-05T01:00:00.000Z"),
+      now: new Date(PINNED_NOW),
       cohort: [],
       capture: vi.fn(),
     });
@@ -282,7 +300,7 @@ describe("runSitemapTimelineBackfill (no-cohort path)", () => {
     const env = { DB: {} } as unknown as AppEnv;
 
     const result = await runSitemapTimelineBackfill(env, {
-      now: new Date("2026-09-05T01:00:00.000Z"),
+      now: new Date(PINNED_NOW),
       cohort: [],
       tierLookup,
       capture: vi.fn(),
@@ -297,7 +315,7 @@ describe("runSitemapTimelineBackfill (no-cohort path)", () => {
     const env = { DB: {} } as unknown as AppEnv;
 
     const result = await runSitemapTimelineBackfill(env, {
-      now: new Date("2026-09-05T01:00:00.000Z"),
+      now: new Date(PINNED_NOW),
       tierLookup,
       capture: vi.fn(),
     });
@@ -317,7 +335,7 @@ describe("runSitemapTimelineBackfill (missing snapshot table)", () => {
     );
 
     const result = await runSitemapTimelineBackfill(env, {
-      now: new Date("2026-09-05T01:00:00.000Z"),
+      now: new Date(PINNED_NOW),
       cohort: cohort({ domain: "calendly.com" }),
       capture: vi.fn(),
     });
@@ -347,7 +365,7 @@ describe("runSitemapTimelineBackfill (per-domain failure isolation)", () => {
     });
 
     const result = await runSitemapTimelineBackfill(env, {
-      now: new Date("2026-09-05T01:00:00.000Z"),
+      now: new Date(PINNED_NOW),
       cohort: cohort(
         { domain: "calendly.com" },
         { domain: "adspyder.io" },
@@ -386,7 +404,7 @@ describe("runSitemapTimelineBackfill (per-domain failure isolation)", () => {
     });
 
     const result = await runSitemapTimelineBackfill(env, {
-      now: new Date("2026-09-05T01:00:00.000Z"),
+      now: new Date(PINNED_NOW),
       cohort: cohort({ domain: "calendly.com" }, { domain: "notion.com" }),
       capture: captureStub as never,
     });
@@ -423,7 +441,7 @@ describe("runSitemapTimelineBackfill (per-domain failure isolation)", () => {
     );
 
     const result = await runSitemapTimelineBackfill(env, {
-      now: new Date("2026-09-05T01:00:00.000Z"),
+      now: new Date(PINNED_NOW),
       cohort: cohort({ domain: "calendly.com" }),
       capture: captureStub as never,
     });
@@ -441,7 +459,7 @@ describe("runSitemapTimelineBackfill (idempotency + subset paths)", () => {
     const captureStub = vi.fn();
 
     const result = await runSitemapTimelineBackfill(env, {
-      now: new Date("2026-09-05T01:00:00.000Z"),
+      now: new Date(PINNED_NOW),
       cohort: cohort({ domain: "calendly.com" }),
       capture: captureStub as never,
     });
@@ -469,7 +487,7 @@ describe("runSitemapTimelineBackfill (idempotency + subset paths)", () => {
     });
 
     const result = await runSitemapTimelineBackfill(env, {
-      now: new Date("2026-09-05T01:00:00.000Z"),
+      now: new Date(PINNED_NOW),
       cohort: cohort({ domain: "calendly.com" }, { domain: "adspyder.io" }),
       domains: ["WWW.Calendly.com."],
       capture: captureStub as never,
@@ -488,7 +506,7 @@ describe("runSitemapTimelineBackfill (write path shape)", () => {
     replaceAnalysisFields.mockResolvedValue(undefined);
 
     const result = await runSitemapTimelineBackfill(env, {
-      now: new Date("2026-09-05T01:00:00.000Z"),
+      now: new Date(PINNED_NOW),
       cohort: cohort({ domain: "calendly.com" }),
       capture: (async (_env: AppEnv, url: string) =>
         snapshotForUrl(url)) as never,
@@ -523,7 +541,7 @@ describe("runSitemapTimelineBackfill (write path shape)", () => {
     replaceAnalysisFields.mockResolvedValue(undefined);
 
     await runSitemapTimelineBackfill(env, {
-      now: new Date("2026-09-05T01:00:00.000Z"),
+      now: new Date(PINNED_NOW),
       cohort: cohort({ domain: "calendly.com" }),
       capture: (async (_env: AppEnv, url: string) => ({
         ...snapshotForUrl(url),
@@ -548,7 +566,7 @@ describe("runSitemapTimelineBackfill (write path shape)", () => {
     replaceAnalysisFields.mockResolvedValue(undefined);
 
     await runSitemapTimelineBackfill(env, {
-      now: new Date("2026-09-05T01:00:00.000Z"),
+      now: new Date(PINNED_NOW),
       cohort: cohort({ domain: "calendly.com" }),
       capture: (async (_env: AppEnv, url: string) =>
         snapshotForUrl(url)) as never,
@@ -580,7 +598,7 @@ describe("runSitemapTimelineBackfill (cohort derivation, default path)", () => {
     });
 
     const result = await runSitemapTimelineBackfill(env, {
-      now: new Date("2026-09-05T01:00:00.000Z"),
+      now: new Date(PINNED_NOW),
       tierLookup,
       capture: captureStub as never,
     });
@@ -625,7 +643,7 @@ describe("runSitemapTimelineBackfill (cohort derivation, default path)", () => {
     });
 
     const result = await runSitemapTimelineBackfill(env, {
-      now: new Date("2026-09-05T01:00:00.000Z"),
+      now: new Date(PINNED_NOW),
       tierLookup,
       capture: captureStub as never,
     });
@@ -659,7 +677,7 @@ describe("runSitemapTimelineBackfill (cohort derivation, default path)", () => {
     });
 
     const result = await runSitemapTimelineBackfill(env, {
-      now: new Date("2026-09-05T01:00:00.000Z"),
+      now: new Date(PINNED_NOW),
       tierLookup,
       excludedDomains: new Set(["calendly.com"]),
       capture: captureStub as never,
@@ -697,7 +715,7 @@ describe("runSitemapTimelineBackfill (CAP bound)", () => {
     });
 
     const result = await runSitemapTimelineBackfill(env, {
-      now: new Date("2026-09-05T01:00:00.000Z"),
+      now: new Date(PINNED_NOW),
       cohort: oversized,
       capture: captureStub as never,
     });
@@ -714,3 +732,11 @@ describe("runSitemapTimelineBackfill (CAP bound)", () => {
     );
   });
 });
+
+// Issue #3357: the nightly rail's own `timeline-<domain>-<day>` ledger rows
+// are the resume cursor. The rail must (a) recover (domain, day) from the
+// ids it wrote, (b) order the cohort stalest-first so a truncated night's
+// tail becomes the next night's head, (c) read that ledger in ONE bounded
+// D1 read that degrades to cohort order, never throws, and (d) honor the
+// #1549 internal-dedeadline + `truncated: true` budget contract so the
+// 15-minute scheduled wall never silently swallows the cut tail.
