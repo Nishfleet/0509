@@ -97,7 +97,7 @@ const aiChatLimits = [
   {
     title: "One point in time — history is not in the window",
     detail:
-      "An AI chat can see what the Ad Library shows it now — the ads running the moment it looks. It has no idea what the offer said on 12 June, or whether it changed since. The Ad Library lists currently running ads; once a competitor pauses one, it is gone, and nothing nobody captured while it ran can be recovered. History is not in the window.",
+      "An AI chat can see what the Ad Library shows it now — the ads running the moment it looks. It has no idea what the offer said on 12 June, or whether it changed since. The Ad Library lists currently running ads; once a competitor pauses one, it is gone — anything not captured while it ran cannot be recovered. History is not in the window.",
   },
   {
     title: "Unattended vigilance — somebody has to be there at 03:00",
