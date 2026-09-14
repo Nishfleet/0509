@@ -1,0 +1,26 @@
+
+> 0509@0.1.0 seed:publisher
+> node scripts/ads-domain-publisher.mjs --list=sneaker-resale --dry-run --min-publish=26
+
+seed:publisher dry-run — list=sneaker-resale domains=26 base=https://0509.io
+publish floor: verified + likely >= 1 per domain; gate: >= 26 publishable
+
+  PUBLISH nike.com           verified 12 + likely 0
+  PUBLISH stockx.com         verified 22 + likely 0
+  PUBLISH goat.com           verified 30 + likely 0
+  PUBLISH saucony.com        verified 5 + likely 3
+  PUBLISH saucony.co.uk      verified 5 + likely 3
+  PUBLISH asics.com          verified 11 + likely 6
+  PUBLISH hoka.com           verified 24 + likely 0
+  PUBLISH on.com             verified 27 + likely 0
+  PUBLISH adidas.com         verified 15 + likely 0
+  PUBLISH puma.com           verified 8 + likely 7
+  PUBLISH newbalance.com     verified 20 + likely 1
+  PUBLISH reebok.com         verified 2 + likely 0
+  PUBLISH crocs.com          verified 4 + likely 1
+  PUBLISH footlocker.com     verified 18 + likely 4
+  PUBLISH dsw.com            verified 7 + likely 0
+  PUBLISH vans.com           verified 8 + likely 0
+  PUBLISH converse.com       verified 2 + likely 0
+  PUBLISH underarmour.com    verified 18 + likely 3
+  PUBLISH stadiumgoods.com   verified 33 + likely 0
