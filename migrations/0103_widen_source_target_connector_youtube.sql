@@ -1,8 +1,8 @@
 -- Widen source_target.connector_id CHECK to accept 'youtube' (issue #3203).
 --
 -- Same table-rebuild convention as 0093 (rss widen), the 0098 pair, 0099
--- (threads widen), 0100 (hn widen) and 0101 (pinterest widen): SQLite cannot
--- ALTER a CHECK in place, so the table is
+-- (threads widen), 0100 (hn widen), 0101 (pinterest widen) and 0102
+-- (podcast widen): SQLite cannot ALTER a CHECK in place, so the table is
 -- rebuilt — create the replacement, copy rows, drop the old table, rename
 -- the replacement. Children (presence_item,
 -- presence_poll_cursor, presence_item_revision) hold REFERENCES
@@ -11,16 +11,17 @@
 -- backup tables first and restored after the rebuild, all inside the single
 -- transaction D1 wraps the migration in.
 --
--- The new CHECK carries every value the 0101 CHECK
--- ('website','x','reddit','linkedin','rss','gdelt','bluesky','threads','hn',
--- 'pinterest') accepted, plus 'youtube' — and ALSO keeps 'podcast' (#3208):
--- the podcast widen was merged and auto-reverted from the repo, but a
--- production catch-up ledger or an environment that applied it must still
--- copy through — a CHECK without 'podcast' would fail the INSERT..SELECT
--- copy of existing podcast rows. This CHECK is therefore a strict superset
--- of every CHECK that could precede it in any environment (0101's here,
--- the reverted 0102's elsewhere), so the copy accepts every row that
--- existed under the previous CHECK whichever widened last. (Convention: the
+-- The new CHECK carries the full twelve-connector union: every value the
+-- 0102 CHECK ('website','x','reddit','linkedin','rss','gdelt','bluesky',
+-- 'threads','hn','pinterest','podcast') accepted, plus 'youtube'. 0102
+-- (podcast, #3208 — auto-reverted once, then restored byte-identical
+-- because production D1 had already applied it; D1 has no down-migrations)
+-- sorts BEFORE this file, so any production catch-up that carries both
+-- applies the podcast widen first and this CHECK must keep its rows — a
+-- CHECK without 'podcast' would fail the INSERT..SELECT copy of the
+-- existing podcast rows. This CHECK is therefore a strict superset of
+-- 0102's, so the INSERT..SELECT copy accepts every row that existed under
+-- the previous CHECK whichever of the two applied last. (Convention: the
 -- last-applied widen's CHECK is the final one — the next splitter's widen
 -- must carry every predecessor value, here 'podcast' AND 'youtube'.)
 --
