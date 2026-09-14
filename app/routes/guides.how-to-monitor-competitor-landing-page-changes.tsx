@@ -44,7 +44,6 @@ import {
   type FaqJsonLdEntry,
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
-import { GUIDE_LANDING_PAGE_CHANGES_SIGNUP_SOURCE } from "~/lib/signup-source";
 
 const PATHNAME = "/guides/how-to-monitor-competitor-landing-page-changes";
 
@@ -193,7 +192,7 @@ export default function GuideHowToMonitorCompetitorLandingPageChangesRoute() {
         )}
       />
       <script {...jsonLdScriptProps(structuredFaq)} />
-      <MarketingNav signupSource={GUIDE_LANDING_PAGE_CHANGES_SIGNUP_SOURCE} />
+      <MarketingNav signupSource="guide-landing-page-changes" />
 
       <section className="ld-hero">
         <p className="ld-case">

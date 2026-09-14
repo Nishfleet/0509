@@ -99,6 +99,15 @@ export const GUIDE_API_LIMITS_SIGNUP_SOURCE = "guide-api-limitations";
  * [a-z0-9:.-]) — underscore spellings would need a 0087 CHECK literal, and
  * #3358 ships no migration. The guides family's per-article markers remain
  * the guide-<name> constants above; `guides-hub` marks the /guides hub.
+ *
+ * These constants are allowlist documentation for SERVER callers only —
+ * client-rendered surfaces carry the same strings as literals. This module
+ * statically imports d1.server, so a top-level `import ... from
+ * "~/lib/signup-source"` in a route component or shared component pulls a
+ * server-only module into the client graph and fails the react-router
+ * dot-server build check. Same convention as `source=pricing-free` in
+ * pricing-section.tsx: the literal ships in markup, the constant guards the
+ * allowlist, and the #3358 wiring test pins every surface's literal.
  */
 export const ADS_PAGE_SIGNUP_SOURCE = "ads-page";
 export const COMPARE_PAGE_SIGNUP_SOURCE = "compare-page";

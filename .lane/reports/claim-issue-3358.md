@@ -55,3 +55,18 @@ repo `tests/helpers/mock-react-router` helper instead of an inline doMock.
 - Termination check is post-deploy (`curl .../ads/nike.com | grep
   'auth/signup?source='`); the shipped markup contains
   `/auth/signup?source=ads-page` on the pill and both /ads CTAs.
+
+## Fix round 2 (2026-09-14): dot-server build break
+
+- First PR head failed CI at `react-router build`: the route/component
+  `import { X_SIGNUP_SOURCE } from "~/lib/signup-source"` lines pulled
+  `~/lib/data/d1.server` into the client graph — `signup-source.ts` is
+  server-only by convention (routes reach it via `await import()` inside
+  loaders; client CTAs carry marker literals — `pricing-section.tsx`
+  `source=pricing-free`, `sample-brief.tsx` `source=sample_brief`).
+- Fix: all 28 client files now pass the marker as a literal
+  (`signupSource="compare-page"` etc.); the constants stay server-side as
+  allowlist documentation. FAMILY_WIRING now pins the literal per file —
+  stronger than the constant-name pin it replaced.
+- `npm run build` → clean (dot-server passes; 5.5s).
+- Re-run: node project 6 files / 101 tests pass; workers project 9/9.

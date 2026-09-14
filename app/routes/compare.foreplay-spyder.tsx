@@ -24,7 +24,6 @@ import {
 import { FREE_PREVIEW_SEARCH_DOMAIN, LIVE_BRAND_PROOF_DOMAIN } from "~/lib/demo-brand-pages";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import foreplaySpyderCitations from "~/data/compare/foreplay-spyder-citations.json";
-import { COMPARE_PAGE_SIGNUP_SOURCE } from "~/lib/signup-source";
 
 const citations = foreplaySpyderCitations as CompareCitations;
 
@@ -135,7 +134,7 @@ export default function CompareForeplaySpyderRoute() {
         )}
       />
       <script {...jsonLdScriptProps(structuredFaq)} />
-      <MarketingNav signupSource={COMPARE_PAGE_SIGNUP_SOURCE} />
+      <MarketingNav signupSource="compare-page" />
       <Breadcrumbs
         items={[
           { name: "Home", pathname: "/" },

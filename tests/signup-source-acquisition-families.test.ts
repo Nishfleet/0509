@@ -89,12 +89,20 @@ describe("acquisition-family signup attribution (issue #3358)", () => {
       "app/components/marketing-nav.tsx",
       ['to={signupSource ? `/auth/signup?source=${signupSource}` : "/auth/signup"}'],
     ],
+    // Client-rendered CTAs carry the markers as LITERALS, never the
+    // signup-source.ts constants: that module statically imports d1.server,
+    // so a top-level import in a route component pulls a server-only module
+    // into the client graph and fails the react-router dot-server build
+    // check (the exact break CI caught on the first #3358 PR head). The
+    // literals below are therefore the pin — same convention as
+    // source=pricing-free in pricing-section.tsx and source=sample_brief in
+    // sample-brief.tsx.
     // Every switch route renders SwitchLanding, which passes the marker.
-    ["app/components/switch-landing.tsx", ["signupSource={SWITCH_PAGE_SIGNUP_SOURCE}"]],
+    ["app/components/switch-landing.tsx", ['signupSource="switch-page"']],
     [
       "app/routes/ads.$domain.tsx",
       [
-        "signupSource={ADS_PAGE_SIGNUP_SOURCE}",
+        'signupSource="ads-page"',
         // Both /ads CTA URLs (plain + Track CTA) carry the marker.
         "/auth/signup?source=ads-page&redirectTo=",
         "&source=ads-page&redirectTo=",
@@ -103,58 +111,58 @@ describe("acquisition-family signup attribution (issue #3358)", () => {
     [
       "app/routes/timeline.$domain.tsx",
       [
-        "signupSource={TIMELINE_PAGE_SIGNUP_SOURCE}",
+        'signupSource="timeline-page"',
         "/auth/signup?source=timeline-page&redirectTo=",
       ],
     ],
-    ["app/routes/timeline.tsx", ["signupSource={TIMELINE_PAGE_SIGNUP_SOURCE}"]],
-    ["app/routes/guides.tsx", ["signupSource={GUIDES_HUB_SIGNUP_SOURCE}"]],
-    ["app/routes/compare.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
-    ["app/routes/compare.adspy.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
-    ["app/routes/compare.adspyder.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
-    ["app/routes/compare.bigspy.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
-    ["app/routes/compare.foreplay.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
-    ["app/routes/compare.foreplay-spyder.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
-    ["app/routes/compare.gethookd.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
-    ["app/routes/compare.keeptabz.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
-    ["app/routes/compare.meta-ad-library.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
-    ["app/routes/compare.minea.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
-    ["app/routes/compare.panoramata.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
-    ["app/routes/compare.poweradspy.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
-    ["app/routes/compare.pulzifi.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
-    ["app/routes/compare.sneakerping.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
-    ["app/routes/compare.spyland.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
-    ["app/routes/compare.visualping.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
-    ["app/routes/compare.visualping-ad-libraries.tsx", ["signupSource={COMPARE_PAGE_SIGNUP_SOURCE}"]],
+    ["app/routes/timeline.tsx", ['signupSource="timeline-page"']],
+    ["app/routes/guides.tsx", ['signupSource="guides-hub"']],
+    ["app/routes/compare.tsx", ['signupSource="compare-page"']],
+    ["app/routes/compare.adspy.tsx", ['signupSource="compare-page"']],
+    ["app/routes/compare.adspyder.tsx", ['signupSource="compare-page"']],
+    ["app/routes/compare.bigspy.tsx", ['signupSource="compare-page"']],
+    ["app/routes/compare.foreplay.tsx", ['signupSource="compare-page"']],
+    ["app/routes/compare.foreplay-spyder.tsx", ['signupSource="compare-page"']],
+    ["app/routes/compare.gethookd.tsx", ['signupSource="compare-page"']],
+    ["app/routes/compare.keeptabz.tsx", ['signupSource="compare-page"']],
+    ["app/routes/compare.meta-ad-library.tsx", ['signupSource="compare-page"']],
+    ["app/routes/compare.minea.tsx", ['signupSource="compare-page"']],
+    ["app/routes/compare.panoramata.tsx", ['signupSource="compare-page"']],
+    ["app/routes/compare.poweradspy.tsx", ['signupSource="compare-page"']],
+    ["app/routes/compare.pulzifi.tsx", ['signupSource="compare-page"']],
+    ["app/routes/compare.sneakerping.tsx", ['signupSource="compare-page"']],
+    ["app/routes/compare.spyland.tsx", ['signupSource="compare-page"']],
+    ["app/routes/compare.visualping.tsx", ['signupSource="compare-page"']],
+    ["app/routes/compare.visualping-ad-libraries.tsx", ['signupSource="compare-page"']],
     // The singular /compare/visualping-ad-library 301-redirects to the plural
     // winner (#2085), so it never renders its own pill.
     [
       "app/routes/guides.how-to-track-competitor-ads.tsx",
-      ["signupSource={GUIDE_TRACK_ADS_SIGNUP_SOURCE}"],
+      ['signupSource="guide_track_ads"'],
     ],
     [
       "app/routes/guides.how-to-get-alerted-when-a-competitor-changes-their-offer.tsx",
-      ["signupSource={GUIDE_OFFER_CHANGE_ALERT_SIGNUP_SOURCE}"],
+      ['signupSource="guide-offer-change-alert"'],
     ],
     [
       "app/routes/guides.how-to-monitor-competitor-landing-page-changes.tsx",
-      ["signupSource={GUIDE_LANDING_PAGE_CHANGES_SIGNUP_SOURCE}"],
+      ['signupSource="guide-landing-page-changes"'],
     ],
     [
       "app/routes/guides.how-to-monitor-meta-ad-library.tsx",
-      ["signupSource={GUIDE_MONITOR_AD_LIBRARY_SIGNUP_SOURCE}"],
+      ['signupSource="guide-monitor-ad-library"'],
     ],
     [
       "app/routes/guides.how-to-prove-what-changed-on-a-competitor-website.tsx",
-      ["signupSource={GUIDE_PROVE_WHAT_CHANGED_SIGNUP_SOURCE}"],
+      ['signupSource="guide-prove-what-changed"'],
     ],
     [
       "app/routes/guides.how-to-turn-a-one-off-competitor-check-into-a-standing-watch.tsx",
-      ["signupSource={GUIDE_STANDING_WATCH_SIGNUP_SOURCE}"],
+      ['signupSource="guide-standing-watch"'],
     ],
     [
       "app/routes/guides.meta-ad-library-api-limitations.tsx",
-      ["signupSource={GUIDE_API_LIMITS_SIGNUP_SOURCE}"],
+      ['signupSource="guide-api-limitations"'],
     ],
     // The $locale buyer-surface children re-export the EN route components
     // (#1562): the pill they render is the EN pill by construction.

@@ -108,7 +108,6 @@ import type { BreadcrumbJsonLdItem, FaqJsonLdEntry } from "~/lib/seo";
 import { SUPPORT_EMAIL } from "~/lib/support";
 import type { AdRecord } from "~/lib/types";
 import type { BrandPageSourceSnapshot } from "~/components/brand-page/source-snapshots.server";
-import { ADS_PAGE_SIGNUP_SOURCE } from "~/lib/signup-source";
 
 /**
  * The hydrated projection of one cached creative — the wall, the ticker and
@@ -1210,7 +1209,7 @@ export default function BrandAdsRoute() {
           fresh={data.freshForLiveClaim}
         />
       ) : null}
-      <MarketingNav signupSource={ADS_PAGE_SIGNUP_SOURCE} />
+      <MarketingNav signupSource="ads-page" />
 
       {data.hasCachedAds ? (
         <BrandAdsResults

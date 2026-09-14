@@ -16,7 +16,6 @@ import {
   webPageJsonLd,
 } from "~/lib/seo";
 import { LIVE_BRAND_PROOF_DOMAIN } from "~/lib/demo-brand-pages";
-import { COMPARE_PAGE_SIGNUP_SOURCE } from "~/lib/signup-source";
 
 const pageDescription =
   "Five to Nine vs the alternatives: source-backed competitor ad and landing-page change monitoring compared to Visualping, Panoramata, Foreplay, Spyland, Pulzifi, and more.";
@@ -209,7 +208,7 @@ export default function CompareIndexRoute() {
         )}
       />
       <script {...jsonLdScriptProps(itemList)} />
-      <MarketingNav signupSource={COMPARE_PAGE_SIGNUP_SOURCE} />
+      <MarketingNav signupSource="compare-page" />
 
       <section className="ld-hero">
         <p className="ld-case">

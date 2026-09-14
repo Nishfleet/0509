@@ -37,7 +37,6 @@ import {
   type FaqJsonLdEntry,
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
-import { GUIDE_MONITOR_AD_LIBRARY_SIGNUP_SOURCE } from "~/lib/signup-source";
 
 const PATHNAME = "/guides/how-to-monitor-meta-ad-library";
 
@@ -157,7 +156,7 @@ export default function GuideHowToMonitorMetaAdLibraryRoute() {
         )}
       />
       <script {...jsonLdScriptProps(structuredFaq)} />
-      <MarketingNav signupSource={GUIDE_MONITOR_AD_LIBRARY_SIGNUP_SOURCE} />
+      <MarketingNav signupSource="guide-monitor-ad-library" />
 
       <section className="ld-hero">
         <p className="ld-case">

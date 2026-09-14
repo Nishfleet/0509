@@ -23,7 +23,6 @@ import pulzifiCitations from "~/data/compare/pulzifi-citations.json";
 const citations = pulzifiCitations as CompareCitations;
 
 export { compareAdsExampleLoader as loader } from "~/lib/ads-internal-links.server";
-import { COMPARE_PAGE_SIGNUP_SOURCE } from "~/lib/signup-source";
 
 const pageDescription =
   "Pulzifi monitors public URLs and delivers AI strategy briefs on every change. Five to Nine keeps the proof source-first and ties it to Meta Ad Library checks.";
@@ -118,7 +117,7 @@ export default function ComparePulzifiRoute() {
           }),
         )}
       />
-      <MarketingNav signupSource={COMPARE_PAGE_SIGNUP_SOURCE} />
+      <MarketingNav signupSource="compare-page" />
       <Breadcrumbs
         items={[
           { name: "Home", pathname: "/" },

@@ -22,7 +22,6 @@ import {
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import foreplayCitations from "~/data/compare/foreplay-citations.json";
-import { COMPARE_PAGE_SIGNUP_SOURCE } from "~/lib/signup-source";
 
 const citations = foreplayCitations as CompareCitations;
 
@@ -153,7 +152,7 @@ export default function CompareForeplayRoute() {
         )}
       />
       <script {...jsonLdScriptProps(structuredFaq)} />
-      <MarketingNav signupSource={COMPARE_PAGE_SIGNUP_SOURCE} />
+      <MarketingNav signupSource="compare-page" />
 
       <section className="ld-hero">
         <p className="ld-case">

@@ -34,7 +34,6 @@ import {
   type FaqJsonLdEntry,
 } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
-import { GUIDE_TRACK_ADS_SIGNUP_SOURCE } from "~/lib/signup-source";
 
 const PATHNAME = "/guides/how-to-track-competitor-ads";
 
@@ -178,7 +177,7 @@ export default function GuideHowToTrackCompetitorAdsRoute() {
         )}
       />
       <script {...jsonLdScriptProps(structuredFaq)} />
-      <MarketingNav signupSource={GUIDE_TRACK_ADS_SIGNUP_SOURCE} />
+      <MarketingNav signupSource="guide_track_ads" />
 
       <section className="ld-hero">
         <p className="ld-case">

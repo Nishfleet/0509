@@ -36,7 +36,6 @@ import {
   timelineSocialCardUrl,
   webPageJsonLd,
 } from "~/lib/seo";
-import { TIMELINE_PAGE_SIGNUP_SOURCE } from "~/lib/signup-source";
 
 export interface OfferTimelineLoaderData {
   domain: string;
@@ -343,7 +342,7 @@ export default function OfferTimelineRoute() {
           ) : null}
         </>
       ) : null}
-      <MarketingNav signupSource={TIMELINE_PAGE_SIGNUP_SOURCE} />
+      <MarketingNav signupSource="timeline-page" />
 
       <section className="f9-ads-hero" aria-labelledby="offer-timeline-title">
         <div className="f9-container">
