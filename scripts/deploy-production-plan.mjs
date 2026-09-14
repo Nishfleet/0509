@@ -555,6 +555,7 @@ export function validateRemoteRestoreEvidence(evidence, expected) {
       const recordedNames = Array.isArray(value.migrationLedgerNames)
         ? value.migrationLedgerNames
         : [];
+      /** @type {ReturnType<typeof inspectProductionMigrationLedger>} */
       let inspection;
       try {
         inspection = inspectProductionMigrationLedger(
