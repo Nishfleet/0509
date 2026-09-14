@@ -32,6 +32,18 @@ if [ "${#wrangler_outs[@]}" -ge 1 ]; then
   wrangler_arg=(--wrangler-output "${wrangler_outs[0]}")
 fi
 
+# #3390: after a RECOVERED release the predeploy rollback-target evidence
+# carries recoveredLiveVersionId — the version that actually runs at 100% —
+# and the ledger must record THAT, not the deployed-then-rolled-back id:
+# readLastGreenLedgerVersionId anchors the NEXT rollback on this row's
+# version_id, so a poisoned row would aim the safety net at the failing
+# release. An evidence file without a recovery outcome changes nothing
+# (deploy-ledger.mjs keeps the wrangler-output id), and no file means no flag.
+rollback_evidence_outs=(test-results/worker-rollback-target-*.json)
+if [ "${#rollback_evidence_outs[@]}" -ge 1 ]; then
+  wrangler_arg+=(--rollback-evidence "${rollback_evidence_outs[0]}")
+fi
+
 row="$(node scripts/deploy-ledger.mjs row --sha "$PINNED_SHA" "${wrangler_arg[@]}")"
 
 git config user.name "github-actions[bot]"

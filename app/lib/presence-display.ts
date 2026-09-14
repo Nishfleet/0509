@@ -25,7 +25,6 @@ const CONNECTOR_COPY: Record<PresenceConnectorId, string> = {
   threads: "Threads",
   hn: "Hacker News",
   pinterest: "Pinterest",
-  podcast: "Podcasts",
 };
 
 const SOURCE_COVERAGE_STATUS_COPY: Record<PresenceSourceCoverageStatus, string> = {
