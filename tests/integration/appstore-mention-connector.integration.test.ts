@@ -56,16 +56,16 @@ import { appEnv, db, seedUser } from "./fixtures";
  *   docs/mentions/PLAN.md), productionStatus pinned "gated".
  *
  * Hermetic network: a mock `fetchImpl` serves the fixtures at the
- * `presenceSafeFetch` seam with real public hostnames (no IP literal needed —
- * the URL validation never resolves DNS on this path, the #3204 linkedin
- * posture).
+ * `presenceSafeFetch` seam with real public hostnames — the only real
+ * network touched is the public DNS answer for those hostnames
+ * (resolvePublicHttpUrl's DoH lookup), matching the hn/pinterest suites.
  */
 
 const APPLE_APP_ID = "544007664";
 const APPLE_COUNTRY = "us";
 const APPLE_LISTING_URL = `https://apps.apple.com/${APPLE_COUNTRY}/app/id${APPLE_APP_ID}`;
 const APPLE_LOOKUP_URL = buildItunesLookupUrl(APPLE_APP_ID, APPLE_COUNTRY);
-const APPLE_REVIEWS_URL = buildItunesReviewsUrl(APPLE_COUNTRY, APPLE_APP_ID);
+const APPLE_REVIEWS_URL = buildItunesReviewsUrl(APPLE_APP_ID, APPLE_COUNTRY);
 const APPLE_REVIEW_1_URL = "https://apps.apple.com/us/app/acme-notes/id544007664?review=1015309951";
 const PLAY_PACKAGE_ID = "test.acme.notes";
 const PLAY_LISTING_URL = "https://play.google.com/store/apps/details?id=test.acme.notes";

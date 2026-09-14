@@ -158,7 +158,7 @@ export function buildItunesLookupUrl(appId: string, countryCode: string): string
 }
 
 /** The customer-review RSS feed — page=1 ONLY, never read past it. */
-export function buildItunesReviewsUrl(countryCode: string, appId: string): string {
+export function buildItunesReviewsUrl(appId: string, countryCode: string): string {
   const cc = (countryCode || DEFAULT_COUNTRY).toLowerCase();
   return new URL(
     `https://${APPLE_FEED_HOST}/${cc}/rss/customerreviews/page=1/id=${encodeURIComponent(appId)}/sortby=mostrecent/json`,
@@ -430,7 +430,9 @@ async function pollAppleTarget(
   }
 
   const results = Array.isArray(lookup.results) ? lookup.results : [];
-  const app = results[0];
+  // An id lookup can resolve to a non-software entity (e.g. an artist id from
+  // a legacy itunes.apple.com URL) — only a software result is a listing.
+  const app = results.find((r) => r.wrapperType === "software" || r.kind === "software");
   if (!app) {
     // The listing no longer answers the lookup — an honest empty poll. The
     // second request is not even spent: there is nothing to hash against.
@@ -441,7 +443,7 @@ async function pollAppleTarget(
   // page=1: the Apple-side guidance is ~20 calls/minute, polls are
   // serialized upstream, and the newest-reviews page is the freshness the
   // mention table needs. Everything older stays unreaped by design.
-  const reviewsRes = await presenceSafeFetch(buildItunesReviewsUrl(country, appId), fetchImpl, {
+  const reviewsRes = await presenceSafeFetch(buildItunesReviewsUrl(appId, country), fetchImpl, {
     method: "GET",
     maxBytes: APPSTORE_MAX_BYTES,
     accept: "application/json",
