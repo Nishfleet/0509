@@ -139,9 +139,6 @@ describe("status route", () => {
     expect(markup).toContain("gated");
     expect(markup).toContain("Meta app review");
     expect(markup).toContain("wired in, waiting on its rollout decision");
-    // The Podcasts row (issue #3208) renders its public-surface note verbatim.
-    expect(markup).toContain("Podcasts");
-    expect(markup).toContain("JSON transcript");
     // The whole catalog passes through untouched. #3204 wired the LinkedIn
     // connector, flipping its row from "unavailable" to "gated" — the
     // tracked-source catalog no longer carries an "unavailable" posture.

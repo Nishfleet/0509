@@ -1,7 +1,6 @@
 import { appstoreConnector } from "~/lib/presence-connectors/appstore.server";
 import { gdeltConnector } from "~/lib/presence-connectors/gdelt.server";
 import { hnConnector } from "~/lib/presence-connectors/hn.server";
-import { podcastConnector } from "~/lib/presence-connectors/podcast.server";
 import { linkedinConnector } from "~/lib/presence-connectors/linkedin.server";
 import { blueskyConnector } from "~/lib/presence-connectors/bluesky.server";
 import { pinterestConnector } from "~/lib/presence-connectors/pinterest.server";
@@ -33,7 +32,6 @@ const CONNECTORS = {
   hn: hnConnector,
   appstore: appstoreConnector,
   pinterest: pinterestConnector,
-  podcast: podcastConnector,
 } as const;
 
 export function getPresenceConnector(connectorId: PresenceConnectorId) {
@@ -160,12 +158,6 @@ export async function pollPresenceTarget(
     // #3386 lesson: the registry MUST pass the whole target, not just env).
     return pinterestConnector.poll(ctx, target);
   }
-  if (target.connectorId === "podcast") {
-    // Feed target: the connector reads its stored show feed and emits every
-    // episode as a candidate; the publication-feed mention-match step stamps
-    // which phrase each episode names (same split as rss publication feeds).
-    return podcastConnector.poll(ctx, target, options.cursor);
-  }
   return linkedinConnector.poll(ctx, target);
 }
 
@@ -180,7 +172,7 @@ export function coverageLabelForConnector(
   if (connectorId === "website") {
     return "PUBLIC_WEB_BEST_EFFORT" as const;
   }
-  if (connectorId === "rss" || connectorId === "podcast") {
+  if (connectorId === "rss") {
     return "VERIFIED_PUBLIC_FEED" as const;
   }
   if (connectorId === "pinterest") {
