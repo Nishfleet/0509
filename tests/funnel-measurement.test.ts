@@ -879,7 +879,15 @@ describe("funnel measurement route boundaries", () => {
     // coarse error (asserted below) and answers the honest degraded 200:
     // the leg must answer with either the proof or the honest no-proof
     // state, never a 500. The scrub contract below is unchanged.
-    const result = await loader({ context: createContext(env), request } as never);
+    const raw = await loader({ context: createContext(env), request } as never);
+    // The degraded 200 ships with Cache-Control: no-store so a transient
+    // failure is never edge- or browser-cached (issue #3400).
+    expect(
+      (raw as { init?: { headers?: Record<string, string> } }).init?.headers?.[
+        "Cache-Control"
+      ],
+    ).toBe("no-store");
+    const result = unwrapSearchLoaderData(raw);
     expect(result).toMatchObject({
       inputError: PUBLIC_SEARCH_TRANSIENT_DEGRADED_MESSAGE,
       selectedAd: null,
