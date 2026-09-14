@@ -243,9 +243,16 @@ for (const viewport of viewports) {
     await attachReleaseStateArtifacts({ page, testInfo, prefix: "j1", state: "home" });
 
     // Failure/empty state: the form accepts focus and explains a malformed domain.
+    // Every client-side /search commit below gets the same explicit budget the
+    // trial-CTA nav got in 6bf7f07d (issue #3406): on the saturated verify
+    // runner a search SSR can hold the URL commit past the 5s expect default
+    // (local-release tablet run here died at this exact class on
+    // fresh-empty.example). The assertions are unchanged — only the commit
+    // budget is real.
+    const searchNavBudget = { timeout: 20_000 } as const;
     await homeWebsite.fill("not-a-domain");
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/\/search\?website=not-a-domain/);
+    await expect(page).toHaveURL(/\/search\?website=not-a-domain/, searchNavBudget);
     await expect(page.getByRole("heading", { name: "Find competitor ads" })).toBeVisible();
     await expectPublicSearchNavigation(page);
     const inputAlert = page.getByRole("alert");
@@ -266,7 +273,7 @@ for (const viewport of viewports) {
     const searchWebsite = page.getByLabel("Competitor website").first();
     await searchWebsite.fill("fresh-empty.example");
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/website=fresh-empty\.example/);
+    await expect(page).toHaveURL(/website=fresh-empty\.example/, searchNavBudget);
     await expect(page.getByRole("heading", { name: "No verified ads found for fresh-empty.example" })).toBeVisible();
     // Issue #1842: at tablet (768px) .f9-wk-sec-acts can overflow and collapse
     // .f9-wk-sec-headings to width: 0, hiding this exact heading. Pin the
@@ -294,7 +301,7 @@ for (const viewport of viewports) {
     await expectPhoneTouchTargets(page);
     await attachReleaseStateArtifacts({ page, testInfo, prefix: "j1", state: "empty" });
     await nextActionLink.press("Enter");
-    await expect(page).toHaveURL(/\/search\?.*mode=keyword.*query=fresh-empty/);
+    await expect(page).toHaveURL(/\/search\?.*mode=keyword.*query=fresh-empty/, searchNavBudget);
     const keywordUrl = new URL(page.url());
     expect(keywordUrl.searchParams.get("mode")).toBe("keyword");
     expect(keywordUrl.searchParams.get("query")).toBe("fresh-empty");
@@ -303,7 +310,7 @@ for (const viewport of viewports) {
 
     await searchWebsite.fill("stale.example");
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/website=stale\.example/);
+    await expect(page).toHaveURL(/website=stale\.example/, searchNavBudget);
     await expect(page.getByRole("heading", { name: "Search preview is temporarily unavailable" })).toBeVisible();
     await expect(
       page.getByText(
@@ -323,7 +330,7 @@ for (const viewport of viewports) {
     await expectMinimumTouchTarget(searchWebsite);
     await expectVisibleKeyboardFocus(searchWebsite);
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/\/search\?.*website=nykaa\.com/);
+    await expect(page).toHaveURL(/\/search\?.*website=nykaa\.com/, searchNavBudget);
     const result = page.getByRole("link", { name: /Nykaa.*Festive glow/i }).first();
     await expect(result).toBeVisible();
     await expectMinimumTouchTarget(result);
@@ -331,7 +338,7 @@ for (const viewport of viewports) {
     const resultStatus = page.locator('[role="status"][aria-live="polite"]').filter({ hasText: /1 search result loaded/i });
     await expectStatusAnnouncement(resultStatus, "1 search result loaded. No more results. Search checks have recovered.");
     await result.press("Enter");
-    await expect(page).toHaveURL(/\/search\?.*selected=e2e-nykaa-live-1/);
+    await expect(page).toHaveURL(/\/search\?.*selected=e2e-nykaa-live-1/, searchNavBudget);
     const selectedUrl = new URL(page.url());
     expect(selectedUrl.searchParams.get("selected")).toBe("e2e-nykaa-live-1");
     expect(selectedUrl.searchParams.get("website")).toBe("nykaa.com");
@@ -375,15 +382,38 @@ for (const viewport of viewports) {
       "ridgewallet.com", "sephora.com", "shopify.com", "sugarcosmetics.com",
       "ulta.com", "walmart.com", "zoho.com",
     ] as const;
-    for (const domain of demoSeedTimelineDomains) {
-      // Pull the same server-rendered body a visitor's curl would. A
-      // proof-less-only timeline 410s (issue #1309 retire path); a populated
-      // one 200s. Either way the body must never contain the "no screenshot"
-      // string — the exact proof-betrayal this gate prevents.
-      const timelineResponse = await page.request.get(`/timeline/${domain}`);
-      const timelineBody = await timelineResponse.text();
-      expect(timelineBody.toLowerCase()).not.toContain("no screenshot");
-    }
+    // Issue #3406: the fetches run through a small bounded pool instead of
+    // strictly sequential — they are independent negative assertions, so the
+    // wall cost drops to ~domains/pool batches of the slowest responses. The
+    // sequential loop pushed the slowest diagnostic engine (desktop under
+    // iPhone-emulated WebKit) past its 60s per-test budget on the saturated
+    // verify runner — matrix runs 34743504461 and 34816041723 both died
+    // inside this loop. Fully-parallel Promise.all is NOT safe here either:
+    // 30 concurrent SSR renders starve every request past the 10s action
+    // timeout on the same runner. 8 in flight plus a real 30s per-request
+    // budget keeps each fetch inside its own bound while cutting the sweep
+    // to roughly a quarter of the sequential wall. The sweep stays inside
+    // the journey test on purpose: the release manifest matrix keys every
+    // j1 artifact state to the "first visit → value → signup" scenario, so
+    // extracting it would fail coverage with artifact_missing +
+    // coverage_unexpected_entry.
+    let nextTimelineDomain = 0;
+    await Promise.all(
+      Array.from({ length: 8 }, async () => {
+        while (nextTimelineDomain < demoSeedTimelineDomains.length) {
+          const domain = demoSeedTimelineDomains[nextTimelineDomain];
+          nextTimelineDomain += 1;
+          // Pull the same server-rendered body a visitor's curl would. A
+          // proof-less-only timeline 410s (issue #1309 retire path); a
+          // populated one 200s. Either way the body must never contain the
+          // "no screenshot" string — the exact proof-betrayal this gate
+          // prevents.
+          const timelineResponse = await page.request.get(`/timeline/${domain}`, { timeout: 30_000 });
+          const timelineBody = await timelineResponse.text();
+          expect(timelineBody.toLowerCase(), `timeline page for ${domain}`).not.toContain("no screenshot");
+        }
+      }),
+    );
     // nike.com is the one demo-seed domain the e2e fixture seeds with a real
     // landing_page_snapshot carrying both artifacts, so it must render exactly
     // one entry with working receipt links and a resolving screenshot. The
@@ -441,7 +471,7 @@ for (const viewport of viewports) {
     expect(signupUrl.pathname).toBe("/auth/signup");
     expect(signupUrl.searchParams.get("redirectTo")).toBe("/app?website=nykaa.com#setup-checklist");
     await createAccount.press("Enter");
-    await expect(page).toHaveURL(/\/auth\/signup\?redirectTo=/);
+    await expect(page).toHaveURL(/\/auth\/signup\?redirectTo=/, searchNavBudget);
     await expect(page.getByRole("heading", { name: "Verify your work email to start." })).toBeVisible();
     await expect(page.getByRole("textbox", { name: "Email" })).toBeVisible();
     const email = page.getByRole("textbox", { name: "Email" });
