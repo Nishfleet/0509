@@ -213,3 +213,54 @@ Assertion unchanged — `mode=advertiser` still required.
 | #2797 | FIXED-BY-7533fc018 | 9/9 local; duplicate plan.server mock race removed |
 | #2703 | FIXED BY THIS PR | journey-3:552 fixed by 0e783c6d5; local-authenticated:882 + :611 path + conditionalPrimaryRoutes membership + dashboard link + its unit-test pin all fixed here |
 | #2944 | FIXED-BY-602b86723 | run 34779307565 passed journey-2 mobile (3.1s) |
+
+---
+
+## Close-out — production proof + the last two closes (2026-09-14, lane resume)
+
+`Deploy production` run
+[34798996355](https://github.com/Nishfleet/0509/actions/runs/34798996355)
+completed **success** on head `16bd92843` (the #3463 merge, 2026-09-14T02:22Z) —
+all six jobs green including `Deploy Worker` (unit `Test` step +
+`launch:readiness:predeploy` e2e gate). That head contains every fix commit in
+this cluster:
+
+- `602b86723` (#2944 fix) — `git merge-base --is-ancestor 602b86723 16bd92843` passes
+- `5b6dcc811` (#2865 fix) — ancestor, same check
+- `dba1669df` (#2703 fix) — ancestor, same check
+
+Seven of eight leaves closed and stayed closed. The two reopened by the
+deploy-fault gate (fleet-ops#5785) — #2944 and #2865 — bounce for a bookkeeping
+reason, not a product one: the gate resolves each issue's delivery as the
+merged PR's *merge commit* (PR #2947 → `9cc3f3bab`, PR #2874 → `61e3cae75`),
+and both SHAs compare `diverged` against the rebuilt main line — the fix
+commits re-entered on a later lineage, so no green run can ever contain those
+merge SHAs. Verified by running the gate's own check live
+(`lib/deploy-fault-gate.sh::deploy_fault_has_proof "Nishfleet/0509" <n>`):
+rc=1, fix_shas={9cc3f3bab} / {61e3cae75}, no qualifying run, check_failed=0.
+
+The legal close the gate defines: a green `Deploy production` run whose head
+contains a *delivery merge* for the issue — a merged PR on `claim/issue-<N>`
+or any merged PR body carrying `Closes #N`. This close-out PR carries
+`Closes #2944` and `Closes #2865` so its squash merge lands a fresh delivery
+SHA on the current main line; every subsequent green run contains it. The
+substance is already true in production — the fixes ran green inside run
+34798996355 — this lands the bookkeeping the gate can verify.
+
+If the lifecycle sweep's reopen pass lands inside the window between this
+merge and the first green run containing it, the re-close afterwards is legal
+unchanged: cite the first green `Deploy production` run on-or-after this PR's
+merge SHA.
+
+### Final scoreboard
+
+| issue | final state | proof |
+|---|---|---|
+| #3081 | closed 01:40Z | PROOF-GREEN (marketing-proof-brief 13/13) |
+| #3097 | closed 01:40Z | PROOF-GREEN (same file) |
+| #3124 | closed 01:40Z | PROOF-GREEN (same file) |
+| #3212 | closed 01:40Z | PROOF-GREEN (15/15, fake-timers pin) |
+| #2797 | closed 01:40Z | FIXED-BY-7533fc018 (mock race removed) |
+| #2703 | closed 02:22Z | PR #3463 merge auto-close; green run 34798996355 |
+| #2944 | closed by this PR | FIXED-BY-602b86723; green run 34798996355; delivery re-minted here |
+| #2865 | closed by this PR | FIXED-BY-5b6dcc811; green run 34798996355; delivery re-minted here |
