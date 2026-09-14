@@ -50,6 +50,13 @@
  * Cloudflare token — it is a plain public curl — so it can run in CI
  * without the `production` environment. Combine with `--file-issue` to
  * auto-file when the public surface regresses.
+ *
+ * A 200-body failure (the shell the route renders for degraded/empty reads)
+ * is retried at the verdict level (issue #3454): the route deliberately
+ * degrades a transient D1 read failure to a 200 no-index shell, and curl's
+ * `--retry` never re-fetches a 200, so the script itself re-probes that
+ * class (default 5 attempts, 10s backoff) before failing loud. Persistent
+ * regressions fail every attempt and still trip.
  */
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
@@ -96,6 +103,22 @@ export const TIMELINE_LEDGER_ENTRY_MARKER = "f9-timeline-entry";
 
 /** HTTP probe timeout per brand (seconds). Matches the meta-discovery canary. */
 export const TIMELINE_HTTP_TIMEOUT_SECONDS = 20;
+
+/** Attempts per brand for the 200-body shell failure class (issue #3454).
+ * The timeline route deliberately degrades a transient D1 read failure to a
+ * 200 no-index shell ("As of" label, no entries), so a single 200-shell
+ * fetch is not proof of a persistent regression — the route's own comment:
+ * "a transient D1 read FAILURE ... degrades to the no-index shell below,
+ * never a 410". curl's --retry only covers transport errors and 5xx, never
+ * a 200 response body, so the verdict layer does its own bounded retry for
+ * this class. A persistent regression fails every attempt and still trips;
+ * a mid-deploy read blip passes on a later attempt. Worst case per brand:
+ * 5 x 20s timeout + 4 x 10s backoff (~2m20s); all five brands ~12min —
+ * inside the unit's 30min TimeoutStartSec budget. */
+export const TIMELINE_SHELL_RETRY_ATTEMPTS = 5;
+
+/** Backoff between verdict-level shell-retry attempts (seconds). */
+export const TIMELINE_SHELL_RETRY_DELAY_SECONDS = 10;
 
 /**
  * @param {string[]} argv
@@ -286,55 +309,120 @@ export function validateTimelineProbe(input) {
 }
 
 /**
+ * A failed verdict whose HTTP status is 200 is the shell class the route
+ * renders for degraded/empty reads (the loadFailed no-index shell or the
+ * collecting shell) — retryable at the verdict level (issue #3454).
+ * 410 (proof-gate dark state), 5xx, and transport errors are NOT retried
+ * here: curl --retry already covers transport + 5xx, and 410 is a genuine
+ * persistent state by the route's own design.
+ *
+ * @param {number} status
+ * @returns {boolean}
+ */
+export function isRetryableShellStatus(status) {
+  return status === 200;
+}
+
+/**
+ * One public timeline fetch (curl, same convention as the meta-discovery
+ * canary: a plain public fetch, no Cloudflare token). Split out of
+ * probeTimelineUrls so the verdict-level retry loop (issue #3454) and the
+ * tests can drive single fetches.
+ *
+ * @param {{url: string, timeoutSeconds: number, env: NodeJS.ProcessEnv}} input
+ * @returns {{status: number, body: string, error: string | null}}
+ */
+export function fetchTimelineOnce({ url, timeoutSeconds, env }) {
+  const curlResult = spawnSync(
+    "curl",
+    [
+      "--silent",
+      "--show-error",
+      "--max-time",
+      String(timeoutSeconds),
+      "--retry",
+      "2",
+      "--retry-delay",
+      "5",
+      "--write-out",
+      "\n%{http_code}",
+      url,
+    ],
+    { cwd: root, env, encoding: "utf8", maxBuffer: 1024 * 1024 * 4 },
+  );
+  if (curlResult.error) {
+    const message =
+      curlResult.error instanceof Error
+        ? curlResult.error.message
+        : String(curlResult.error);
+    return { status: 0, body: "", error: message };
+  }
+  const out = curlResult.stdout ?? "";
+  const lastNewline = out.lastIndexOf("\n");
+  const body = lastNewline >= 0 ? out.slice(0, lastNewline) : "";
+  const statusToken = lastNewline >= 0 ? out.slice(lastNewline + 1).trim() : "";
+  const status = Number(statusToken) || 0;
+  return { status, body, error: null };
+}
+
+/**
  * Run the HTTP probe for every demo brand using curl (same convention as
  * the meta-discovery canary: a plain public fetch, no Cloudflare token).
+ * A 200-shell failure is retried at the verdict level (issue #3454) before
+ * failing loud; `fetchOnce` is injectable for tests and defaults to the
+ * real curl fetch.
  *
- * @param {{origin: string, timeoutSeconds?: number, env?: NodeJS.ProcessEnv}} input
- * @returns {{results: Array<{domain: string, status: number, body: string, error: string | null}>, validation: {verdict: "pass" | "fail", failures: string[]}}}
+ * @param {{origin: string, timeoutSeconds?: number, env?: NodeJS.ProcessEnv, retryAttempts?: number, retryDelaySeconds?: number, fetchOnce?: typeof fetchTimelineOnce}} input
+ * @returns {{results: Array<{domain: string, status: number, body: string, error: string | null, attempts: number}>, validation: {verdict: "pass" | "fail", failures: string[]}}}
  */
 export function probeTimelineUrls(input) {
   const origin = input.origin || DEFAULT_TIMELINE_ORIGIN;
   const timeoutSeconds = input.timeoutSeconds ?? TIMELINE_HTTP_TIMEOUT_SECONDS;
   const env = input.env ?? process.env;
+  const retryAttempts = Math.max(
+    1,
+    input.retryAttempts ?? TIMELINE_SHELL_RETRY_ATTEMPTS,
+  );
+  const retryDelaySeconds =
+    input.retryDelaySeconds ?? TIMELINE_SHELL_RETRY_DELAY_SECONDS;
+  const fetchOnce = input.fetchOnce ?? fetchTimelineOnce;
   const results = [];
   const failures = [];
   for (const domain of DEMO_BRAND_PAGE_DOMAINS) {
     const url = buildTimelineUrl(origin, domain);
-    const curlResult = spawnSync(
-      "curl",
-      [
-        "--silent",
-        "--show-error",
-        "--max-time",
-        String(timeoutSeconds),
-        "--retry",
-        "2",
-        "--retry-delay",
-        "5",
-        "--write-out",
-        "\n%{http_code}",
-        url,
-      ],
-      { cwd: root, env, encoding: "utf8", maxBuffer: 1024 * 1024 * 4 },
-    );
-    if (curlResult.error) {
-      const message =
-        curlResult.error instanceof Error
-          ? curlResult.error.message
-          : String(curlResult.error);
-      results.push({ domain, status: 0, body: "", error: message });
-      failures.push(`/timeline/${domain} probe failed: ${message}`);
-      continue;
+    let attempts = 0;
+    /** @type {{status: number, body: string, error: string | null}} */
+    let fetched = { status: 0, body: "", error: null };
+    /** @type {{verdict: "pass" | "fail", reason: string | null}} */
+    let probe = { verdict: "fail", reason: null };
+    while (attempts < retryAttempts) {
+      attempts += 1;
+      fetched = fetchOnce({ url, timeoutSeconds, env });
+      if (fetched.error !== null) break;
+      probe = validateTimelineProbe({
+        domain,
+        status: fetched.status,
+        body: fetched.body,
+      });
+      if (probe.verdict === "pass") break;
+      if (!isRetryableShellStatus(fetched.status)) break;
+      if (attempts < retryAttempts && retryDelaySeconds > 0) {
+        spawnSync("sleep", [String(retryDelaySeconds)], { env });
+      }
     }
-    const out = curlResult.stdout ?? "";
-    const lastNewline = out.lastIndexOf("\n");
-    const body = lastNewline >= 0 ? out.slice(0, lastNewline) : "";
-    const statusToken = lastNewline >= 0 ? out.slice(lastNewline + 1).trim() : "";
-    const status = Number(statusToken) || 0;
-    results.push({ domain, status, body, error: null });
-    const probe = validateTimelineProbe({ domain, status, body });
-    if (probe.verdict === "fail" && probe.reason) {
-      failures.push(probe.reason);
+    results.push({
+      domain,
+      status: fetched.status,
+      body: fetched.body,
+      error: fetched.error,
+      attempts,
+    });
+    if (fetched.error !== null) {
+      failures.push(`/timeline/${domain} probe failed: ${fetched.error}`);
+    } else if (probe.verdict === "fail" && probe.reason) {
+      failures.push(
+        attempts > 1 ? `${probe.reason} (after ${attempts} attempts)` : probe.reason,
+      );
     }
   }
   return {
@@ -508,6 +596,7 @@ function main() {
         domain: r.domain,
         status: r.status,
         error: r.error,
+        attempts: r.attempts,
       })),
       failures: validation.failures,
       checkedAt,
