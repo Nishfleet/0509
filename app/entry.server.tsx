@@ -6,6 +6,21 @@ import { renderToReadableStream } from "react-dom/server";
 import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
 import { reportError } from "~/lib/error-report.server";
 
+// Issue #3456: without this export React Router defaults the loader-data
+// handoff stream timeout to 4,950ms — every deferred still pending ~5s after
+// render starts gets its slot serialized as a SanitizedError ("Unexpected
+// Server Error") instead of its value. The /search anonymous landing capture
+// (#3014 deferCapture) is DESIGNED to take 15-25s (its internal bound is
+// ~40s: 10s browser launch + 30s proof fetch), so the default was amputating
+// healthy cold-path captures mid-flight: the streamed `E<slot>` rejection
+// rethrew inside the pane's <Await> and landed the visitor on the route
+// ErrorBoundary shell on an HTTP-200 document — the exact "Unexpected Server
+// Error" experience this contract forbids. 60s covers the capture's worst
+// internal bound plus queue headroom; a genuinely stuck deferred still
+// fails safe — the pane's <Await> errorElement renders the honest
+// capture-gap copy, never the boundary.
+export const streamTimeout = 60_000;
+
 export default async function handleRequest(
   request: Request,
   responseStatusCode: number,
