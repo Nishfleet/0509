@@ -36,15 +36,17 @@ net-positive-because: every added line closes a named acceptance gap of this iss
 salvage evidence that proves the #1549 floor holds per domain); the mechanism itself
 adds zero lines — 2 imports + 2 registry entries is the entire code surface.
 
-## Verification (final head fa7f1b14d, this lane, all green)
+## Verification (final head = this branch tip, this lane, all green)
 
 - Issue's own gate, re-proven at THIS head: `npm run seed:publisher --
   --list=sneaker-resale --dry-run --min-publish=26` → 26/26 publishable, exit 0
-  (2026-09-14T00:14Z, `.fleet/pf-3356-sneaker-finalhead2.log`). Two earlier
-  final-head attempts hit transient search-backend HTTP 500s — logged, not
-  hidden (`.fleet/pf-3356-sneaker-finalhead{,-retry}.log`); the clean re-run is
-  the proof, consistent with the banked 19:13Z run at the pre-merge head
-  (`.fleet/preflight-3356-sneaker-resale.log`).
+  (2026-09-14T09:47Z, `.fleet/pf-3356-sneaker-finalhead6.log`). Earlier
+  final-head proofs: 26/26 exit 0 at fa7f1b14d
+  (`.fleet/pf-3356-sneaker-finalhead2.log`), plus the banked 19:13Z run at the
+  pre-merge head (`.fleet/preflight-3356-sneaker-resale.log`); two attempts hit
+  transient search-backend HTTP 500s and one was killed mid-run by a unit
+  restart — all logged, none hidden
+  (`.fleet/pf-3356-sneaker-finalhead{,-retry,3,4,5}.log`).
 - `npm run seed:publisher -- --list=fashion-ecommerce --dry-run --min-publish=100`
   → 104/125 PASS; `.fleet/pf-3356-fashion.log` is the full per-domain record.
 - home-garden @ --min-publish=70 → 70/90 PASS (`.fleet/pf-3356-home.log`).
@@ -53,11 +55,12 @@ adds zero lines — 2 imports + 2 registry entries is the entire code surface.
   completed 3/3 legs. Every domain line is a real fetch with verified+likely
   counts.
 - `node scripts/check-ads-timeline-links.mjs` (the #1931 sweep) → OK, all 286
-  indexable /ads pages link their /timeline, exit 0, this head.
+  indexable /ads pages link their /timeline, exit 0 at this head
+  (2026-09-14T09:45Z).
 - Affected node suite: `npx vitest run --configLoader runner --project node
-  --changed origin/main` → 30 files / 503 tests, all pass, exit 0. One suite at a
-  time, `--maxWorkers` never passed, no coverage/typecheck locally (CI owns both,
-  fleet-ops#4891).
+  --changed origin/main` → 31 files / 488 tests, all pass, exit 0 at this head
+  (one suite at a time, `--maxWorkers` never passed, no coverage/typecheck
+  locally — CI owns both, fleet-ops#4891).
 - `sgscan --base origin/main` → no new security findings, exit 0.
 
 run-proof: unit `pi-issue-0509-3356-preflight-tranche-c2` — systemd --user transient,

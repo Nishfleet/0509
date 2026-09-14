@@ -61,6 +61,27 @@ Five prior runs of this same unit banked into this worktree (issue comments
    PR-body gates: `fleet-no-agent-names-check` OK, `prove-one-run-check` OK,
    `fleet-exec-review-canary` OK.
 
+## Resume run added (head = branch tip after the 4-commit origin/main merge)
+
+1. Fixed a garbled doc-comment in `ads-domain-publisher.server.ts` — the prior
+   edit duplicated the sentence start; the comment now reads correctly.
+2. Merged origin/main again (4 commits: ads.$domain route + legacy-slug tests,
+   none touching the publisher paths).
+3. Re-proved the issue's hard gate at THIS head:
+   `npm run seed:publisher -- --list=sneaker-resale --dry-run --min-publish=26`
+   → 26/26 publishable, summary PASS, `PREFLIGHT-EXIT=0`
+   (2026-09-14T09:47Z, `.fleet/pf-3356-sneaker-finalhead6.log`). The prior
+   finalhead5 attempt was killed mid-run at 20/26 by the unit restart — its
+   truncated log stays committed, not hidden.
+4. `node scripts/check-ads-timeline-links.mjs` → OK, 286 indexable /ads pages
+   link their /timeline, exit 0 (2026-09-14T09:45Z).
+5. Affected node suite at this head: 31 files / 488 tests, all pass, exit 0
+   (`npx vitest run --configLoader runner --project node --changed origin/main`).
+   No coverage, no typecheck (CI owns both, fleet-ops#4891).
+6. `.pr-body-3356.md` moved to `.fleet/pr-body-3356.md` — root-level pr-body
+   files were already cleaned off main once (d3266323a); `.fleet/pr-body-*` is
+   the landed convention.
+
 ## Honest limits
 
 - The issue's termination (production sitemap >= 300 /ads) is the #1549 NIGHTLY's

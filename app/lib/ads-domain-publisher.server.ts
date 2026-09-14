@@ -80,9 +80,8 @@ export interface SeedList {
  * queue (see runAdsDomainPublisher), resuming from a persisted cursor so
  * tail domains are not silently skipped when the run is truncated by its
  * wall-clock deadline. festive-india-2026 (issue #2140, 30 domains),
- * sneaker-resale (24 domains), beauty-personal-care and saas-software
- * festive-india-2026 (issue #2140, 30 domains), sneaker-resale (26 domains
- * after #3280's asos.com/decathlon.com additions), beauty-personal-care and
+ * sneaker-resale (26 domains after #3280's asos.com/decathlon.com
+ * additions), beauty-personal-care and
  * saas-software (issue #3123, 29 and 36 domains), and fashion-ecommerce and
  * home-garden (issue #3356, 125 and 90 domains) flatten to ~336 entries —
  * far larger than ADS_DOMAIN_PUBLISHER_CAP (default 60) on purpose, so a full
