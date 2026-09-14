@@ -146,6 +146,9 @@ export async function bulkAcceptSuggestedCompetitors(
   const capped = candidates.slice(0, COMPETITOR_IMPORT_MAX_ROWS);
 
   const { createWatchlistWithinLimit } = await import("~/lib/data.server");
+  const { queueFirstWatchlistScan } = await import(
+    "~/lib/first-watchlist-scan.server"
+  );
 
   let admittedCount = 0;
   let existingCount = 0;
@@ -242,6 +245,10 @@ export async function bulkAcceptSuggestedCompetitors(
       admittedCount += 1;
       groupAdmitted += 1;
       createdWatchlistIds.push(result.watchlist.id);
+      // First scan on creation (issue #3380) — the same enqueue the other
+      // watchlist-creation paths already perform. No ExecutionContext reaches
+      // this signature; the durable (env.DB) queue path never needs it.
+      await queueFirstWatchlistScan(env, undefined, result.watchlist);
     } else if (result.status === "existing") {
       // INSERT OR IGNORE backstop: a candidate accepted between panel render
       // and bulk accept is caught here, not duplicated.

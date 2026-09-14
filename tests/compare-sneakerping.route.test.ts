@@ -161,12 +161,12 @@ describe("compare sneakerping route (issue #3302)", () => {
     // COMPARE_PRODUCT_NAMES row 404s the card (the #3237 404 disease).
     const { publicSocialCardForRequest } = await import("~/lib/social-cards.server");
     const card = publicSocialCardForRequest(
-      new Request("https://0509.io/social-card/compare/sneakerping.svg"),
+      new Request("https://0509.io/social-card/compare/sneakerping.png"),
     );
     expect(card).not.toBeNull();
     expect(card?.body).toContain("Five to Nine vs SneakerPing");
     const tags = (mod.meta({} as never) ?? []) as Array<{ property?: string; content?: string }>;
     const ogImage = tags.find((entry) => entry.property === "og:image")?.content;
-    expect(ogImage).toBe("https://0509.io/social-card/compare/sneakerping.svg");
+    expect(ogImage).toBe("https://0509.io/social-card/compare/sneakerping.png");
   });
 });
