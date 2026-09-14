@@ -241,6 +241,15 @@ describe("/ads/:domain source sections (issue #2200)", () => {
     expect(markup).toContain('id="brand-tiktok-ads-title"');
     expect(markup).toContain("TikTok ads");
     expect(markup).toContain("EU-shown");
+    // Issue #3195 acceptance: the fixture brand yields >=1 rendered TikTok ad
+    // (the "View ad" detail link carries the library ad_id), and the coverage
+    // note now states the capture freshness next to the EU-scope copy.
+    expect(markup).toContain("library.tiktok.com/ads/detail/?ad_id=tiktok-1");
+    expect(markup).toContain('data-testid="brand-tiktok-ads-checked"');
+    // Main's shared BrandPageSourceSection stamps freshness as "Last checked
+    // <date>"; the #3195 cadence honesty lives in the note below it.
+    expect(markup).toContain("Last checked 1 Sept 2026");
+    expect(markup).toContain("rechecks weekly");
   });
 
   it("renders sections in the fixed order: Google Ads, Google Search, LinkedIn, TikTok, subdomains, hiring", async () => {
