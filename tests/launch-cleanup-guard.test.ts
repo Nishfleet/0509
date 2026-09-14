@@ -561,6 +561,51 @@ describe("cleanupLaunchReadinessCanary", () => {
     ).get()).toEqual({ html_artifact_key: null });
   });
 
+  it("keeps the surviving screenshot reference on the preserved proof capture", async () => {
+    const harness = createHarness();
+    seedCanary(harness);
+    const mobileHtml = "landing-pages/2026-07-15/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.html";
+    const mobileShot = "landing-pages/2026-07-15/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpeg";
+    const deskHtml = "landing-pages/2026-07-15/cccccccccccccccccccccccccccccccc.html";
+    const deskShot = "landing-pages/2026-07-15/dddddddddddddddddddddddddddddddd.jpeg";
+    harness.sqlite.prepare(
+      "UPDATE proof_capture SET html_artifact_key = ?, screenshot_artifact_key = ?, capture_metadata_json = ? WHERE id = 'proof-1'",
+    ).run(
+      mobileHtml,
+      mobileShot,
+      JSON.stringify({
+        kind: "launch_readiness_real_capture",
+        proofUrl: "https://0509.io/",
+        gateRunId: "2026-07-15",
+        desktopHtmlArtifactKey: deskHtml,
+        desktopScreenshotArtifactKey: deskShot,
+      }),
+    );
+    const deleted: string[] = [];
+    const bucket = {
+      head: async (key: string) => ({ key }),
+      delete: async (key: string) => { deleted.push(key); },
+    };
+    const input = { ownerUserId: "owner-1", gateRunId: "2026-07-15" };
+
+    await expect(
+      cleanupLaunchReadinessCanary({ DB: harness.db, LANDING_PAGE_ARTIFACTS: bucket } as never, input),
+    ).resolves.toMatchObject({ cleaned: true, preservedProofCaptureId: "proof-1" });
+
+    expect([...deleted].sort()).toEqual([mobileHtml, mobileShot].sort());
+    expect(harness.sqlite.prepare(
+      "SELECT screenshot_artifact_key, html_artifact_key FROM proof_capture WHERE id = 'proof-1'",
+    ).get()).toEqual({ screenshot_artifact_key: deskShot, html_artifact_key: deskHtml });
+
+    await expect(
+      cleanupLaunchReadinessCanary({ DB: harness.db, LANDING_PAGE_ARTIFACTS: bucket } as never, input),
+    ).resolves.toMatchObject({ cleaned: true, preservedProofCaptureId: "proof-1" });
+    expect([...deleted].sort()).toEqual([mobileHtml, mobileShot].sort());
+    expect(harness.sqlite.prepare(
+      "SELECT screenshot_artifact_key, html_artifact_key FROM proof_capture WHERE id = 'proof-1'",
+    ).get()).toEqual({ screenshot_artifact_key: deskShot, html_artifact_key: deskHtml });
+  });
+
   it("aborts instead of deleting a shared non-canary event in the same run", async () => {
     const harness = createHarness();
     seedCanary(harness);
