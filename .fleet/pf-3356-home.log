@@ -1,0 +1,100 @@
+
+> 0509@0.1.0 seed:publisher
+> node scripts/ads-domain-publisher.mjs --list=home-garden --dry-run --min-publish=70
+
+seed:publisher dry-run — list=home-garden domains=90 base=https://0509.io
+publish floor: verified + likely >= 1 per domain; gate: >= 70 publishable
+
+  SKIP    article.com        no verified/likely coverage (verified 0, likely 0, unmatched 0)
+  PUBLISH balsamhill.com     verified 8 + likely 9
+  PUBLISH ballarddesigns.com verified 8 + likely 0
+  PUBLISH bedbathbeyond.com  verified 0 + likely 13
+  PUBLISH birchlane.com      verified 26 + likely 1
+  PUBLISH bollandbranch.com  verified 26 + likely 0
+  PUBLISH brooklinen.com     verified 24 + likely 0
+  PUBLISH burrow.com         verified 5 + likely 0
+  PUBLISH castlery.com       verified 27 + likely 0
+  PUBLISH cb2.com            verified 25 + likely 0
+  PUBLISH coyuchi.com        verified 28 + likely 0
+  PUBLISH crateandbarrel.com verified 28 + likely 0
+  PUBLISH dunelm.com         verified 30 + likely 0
+  PUBLISH ethanallen.com     verified 18 + likely 0
+  PUBLISH fromourplace.com   verified 27 + likely 0
+  PUBLISH homedepot.com      verified 27 + likely 0
+  PUBLISH joybird.com        verified 30 + likely 0
+  PUBLISH jossandmain.com    verified 29 + likely 0
+  PUBLISH kirklands.com      verified 19 + likely 0
+  PUBLISH lowes.com          verified 20 + likely 0
+  PUBLISH minted.com         verified 3 + likely 4
+  PUBLISH mybobs.com         verified 14 + likely 0
+  PUBLISH parachutehome.com  verified 19 + likely 0
+  FAILED  potterybarn.com    HTTP 500
+  FAILED  ruggable.com       HTTP 500
+  FAILED  rh.com             HTTP 500
+  FAILED  roomandboard.com   HTTP 500
+  FAILED  serenaandlily.com  HTTP 500
+  FAILED  sonos.com          HTTP 500
+  FAILED  westelm.com        HTTP 500
+  PUBLISH williams-sonoma.com verified 23 + likely 0
+  PUBLISH 1stdibs.com        verified 5 + likely 24
+  PUBLISH arhaus.com         verified 5 + likely 0
+  SKIP    athome.com         no verified/likely coverage (verified 0, likely 0, unmatched 0)
+  SKIP    biglots.com        no verified/likely coverage (verified 0, likely 0, unmatched 0)
+  SKIP    burpee.com         no verified/likely coverage (verified 0, likely 0, unmatched 3)
+  PUBLISH casper.com         verified 13 + likely 0
+  PUBLISH costco.com         verified 12 + likely 0
+  PUBLISH flooranddecor.com  verified 24 + likely 0
+  SKIP    gardeners.com      no verified/likely coverage (verified 0, likely 0, unmatched 0)
+  PUBLISH harborfreight.com  verified 20 + likely 0
+  PUBLISH ikea.com           verified 22 + likely 6
+  PUBLISH lovesac.com        verified 0 + likely 28
+  PUBLISH menards.com        verified 4 + likely 0
+  SKIP    purple.com         no verified/likely coverage (verified 0, likely 0, unmatched 0)
+  SKIP    saatva.com         no verified/likely coverage (verified 0, likely 0, unmatched 0)
+  PUBLISH sleepnumber.com    verified 23 + likely 0
+  FAILED  target.com         HTTP 500
+  PUBLISH tractorsupply.com  verified 12 + likely 8
+  PUBLISH walmart.com        verified 14 + likely 0
+  PUBLISH worldmarket.com    verified 26 + likely 0
+  PUBLISH acehardware.com    verified 26 + likely 0
+  SKIP    allmodern.com      no verified/likely coverage (verified 0, likely 0, unmatched 0)
+  SKIP    apt2b.com          no verified/likely coverage (verified 0, likely 0, unmatched 0)
+  PUBLISH ashleyfurniture.com verified 30 + likely 0
+  PUBLISH avocadogreenmattress.com verified 20 + likely 1
+  PUBLISH bearmattress.com   verified 28 + likely 2
+  PUBLISH blueland.com       verified 10 + likely 4
+  PUBLISH companystore.com   verified 0 + likely 1
+  PUBLISH dreamcloudsleep.com verified 30 + likely 0
+  PUBLISH dyson.com          verified 18 + likely 0
+  SKIP    ferguson.com       no verified/likely coverage (verified 0, likely 0, unmatched 3)
+  PUBLISH garnethill.com     verified 29 + likely 0
+  PUBLISH generac.com        verified 6 + likely 0
+  PUBLISH grandinroad.com    verified 29 + likely 0
+  PUBLISH grove.co           verified 0 + likely 5
+  PUBLISH havertys.com       verified 26 + likely 0
+  PUBLISH helixsleep.com     verified 29 + likely 0
+  PUBLISH husqvarna.com      verified 19 + likely 1
+  PUBLISH jcpenney.com       verified 17 + likely 2
+  PUBLISH la-z-boy.com       verified 9 + likely 13
+  PUBLISH leesa.com          verified 23 + likely 0
+  PUBLISH miraclegro.com     verified 0 + likely 12
+  PUBLISH nectarsleep.com    verified 27 + likely 0
+  PUBLISH northerntool.com   verified 21 + likely 0
+  PUBLISH overstock.com      verified 8 + likely 1
+  PUBLISH perigold.com       verified 29 + likely 1
+  PUBLISH rejuvenation.com   verified 2 + likely 0
+  PUBLISH roborock.com       verified 15 + likely 0
+  PUBLISH roomstogo.com      verified 18 + likely 0
+  PUBLISH scotts.com         verified 4 + likely 4
+  PUBLISH sherwin-williams.com verified 28 + likely 0
+  PUBLISH sharkninja.com     verified 15 + likely 0
+  PUBLISH thuma.co           verified 25 + likely 0
+  PUBLISH tileshop.com       verified 19 + likely 0
+  SKIP    toro.com           no verified/likely coverage (verified 0, likely 0, unmatched 20)
+  PUBLISH traeger.com        verified 0 + likely 4
+  PUBLISH tuftandneedle.com  verified 23 + likely 0
+  PUBLISH weber.com          verified 10 + likely 2
+  SKIP    whiteflowerfarm.com no verified/likely coverage (verified 0, likely 0, unmatched 0)
+
+summary: 70 publishable / 90 domains (PASS)
+  publish=70 skip=12 failed=8 gate=70
