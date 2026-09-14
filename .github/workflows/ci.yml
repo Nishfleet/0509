@@ -35,6 +35,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # The sibling-shard aggregate step (0509#3261) reads the Checks API.
+      checks: read
     # The 270m job cap bounds setup plus all per-step waits. Each heavy step has
     # one 180m total budget shared between its lane slot and the deploy gate.
     timeout-minutes: 270
@@ -123,6 +125,64 @@ jobs:
           # exited 134 intermittently and unpredictably on retrigger.
           NODE_OPTIONS: --max-old-space-size=4096
         run: npm run typecheck
+      - name: Fail if any sibling shard failed (aggregate, 0509#3261)
+        # ONLY "codex-node-checks" (this job) is in required_status_checks;
+        # shards 2-4 are not, so before this step a red shard merged red
+        # (0509#3261: #3336 merged while codex-node-checks-shard-4 was failing).
+        # The never-conclude-skipped contract (tests/required-context-no-skip.test.ts)
+        # bans `needs:` on this required job, so the aggregate polls the Checks
+        # API for the three sibling shard check-runs of the SAME head SHA and
+        # fails this required context when any concludes non-success. A
+        # conclusion that never arrives fails closed at the deadline: a gate
+        # that cannot verify must say no, never render green or skipped. The
+        # 200m deadline covers a sibling's 180m lane-slot budget (see the job
+        # cap comment); the 270m job cap bounds setup + own work + this wait.
+        # Latest check-run per name: the endpoint returns the most recent
+        # first. On a same-SHA re-run the PREVIOUS attempt's completed
+        # check-run shadows this run's until this run's job starts, so the
+        # read is pinned to this run: Actions check-run URLs are
+        # .../actions/runs/<run_id>/job/<job_id>, and a URL without this
+        # RUN_ID counts as pending, never as evidence (observed 2026-09-13:
+        # details_url/html_url = https://github.com/Nishfleet/0509/actions/runs/34741105487/job/103680845696).
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.authorize.outputs.sha }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          deadline=$((SECONDS + 200 * 60))
+          while :; do
+            pending=0
+            bad=""
+            for shard in 2 3 4; do
+              state="$(gh api -H "Accept: application/vnd.github+json" \
+                "/repos/${REPO}/commits/${SHA}/check-runs?check_name=codex-node-checks-shard-${shard}&per_page=1" \
+                --jq "(.check_runs[0] // {}) | (if ((.html_url // \"\") + (.details_url // \"\") | test(\"runs/${RUN_ID}/\")) then \"thisrun\" else \"other-run\" end) + \" \" + (.status // \"missing\") + \" \" + (.conclusion // \"pending\")" \
+                2>/dev/null || echo "other-run missing pending")"
+              read -r fromrun status conclusion <<<"${state}"
+              echo "codex-node-checks-shard-${shard}: ${fromrun} status=${status} conclusion=${conclusion}"
+              if [ "${fromrun}" != "thisrun" ] || [ "${status}" != "completed" ]; then
+                pending=$((pending + 1))
+              elif [ "${conclusion}" != "success" ]; then
+                bad="${bad} shard-${shard}=${conclusion}"
+              fi
+            done
+            if [ -n "${bad}" ]; then
+              echo "::error::Aggregate: a sibling shard did not conclude success on ${SHA}:${bad} (0509#3261)"
+              exit 1
+            fi
+            if [ "${pending}" -eq 0 ]; then
+              echo "Aggregate: all three sibling shards concluded success on ${SHA}"
+              exit 0
+            fi
+            if [ "${SECONDS}" -ge "${deadline}" ]; then
+              echo "::error::Aggregate: ${pending} sibling shard(s) unresolved at the 200m deadline - failing closed (0509#3261)"
+              exit 1
+            fi
+            sleep 60
+          done
 
   codex-node-checks-shard-2:
     # Required context (branch protection) — shard 2 of 4. Same no-skip
