@@ -56,6 +56,7 @@ export const PRESENCE_MENTION_CONNECTOR_IDS: PresenceConnectorId[] = [
   "gdelt",
   "bluesky",
   "threads",
+  "appstore",
 ];
 
 export function listPresenceConnectors() {

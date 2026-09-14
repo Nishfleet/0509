@@ -11,20 +11,20 @@
 -- backup tables first and restored after the rebuild, all inside the single
 -- transaction D1 wraps the migration in.
 --
--- The new CHECK carries the full eleven-connector union: every value the
--- 0101 CHECK ('website','x','reddit','linkedin','rss','gdelt','bluesky',
--- 'threads','hn','pinterest') accepted plus 'appstore'. 0101 sorts before
--- this file, so any production catch-up that carries both applies the
--- pinterest widen first; this CHECK is a strict superset of 0101's, so the
--- INSERT..SELECT copy accepts every row that existed under the previous
--- CHECK whichever of the two applied last. (Numbering history: this widen
--- was first written as 0101_appstore and collided with 0101_pinterest —
--- two lanes each rebuilding this table from the 0100 state, whichever ran
--- second silently dropping the other's CHECK value, caught by the
--- integration test — so it became 0102. The podcast slice's 0102 was
--- reverted from main but then RESTORED (e15f7ec77: production had already
--- applied it before the revert landed), so 0102_podcast is live history
--- this unapplied file must not reuse — renumbered 0103.)
+-- The new CHECK carries the full twelve-connector union: every value the
+-- LIVE prior CHECK accepted plus 'appstore'. The live prior CHECK is
+-- 0102_podcast's — that file was reverted from main but then RESTORED
+-- (e15f7ec77: production had already applied it before the revert landed),
+-- so production's source_target accepts 'podcast' today even though the
+-- podcast connector code is not on main. Dropping 'podcast' here would
+-- break the INSERT..SELECT copy on any live podcast row and narrow the
+-- CHECK for the next podcast reland — the union below is a strict superset
+-- of BOTH 0101's and 0102's. (Numbering history: this widen was first
+-- written as 0101_appstore and collided with 0101_pinterest — two lanes
+-- each rebuilding this table from the 0100 state, whichever ran second
+-- silently dropping the other's CHECK value, caught by the integration
+-- test — so it became 0102, then 0103 once 0102_podcast was restored as
+-- live history.)
 --
 -- Expand-only: every value the previous CHECK accepted is still accepted, so
 -- existing rows copy through unchanged, and the running old code is
@@ -39,7 +39,7 @@ CREATE TABLE source_target_appstore_widen_new (
   id TEXT PRIMARY KEY NOT NULL,
   tracked_entity_id TEXT NOT NULL,
   user_id TEXT NOT NULL,
-  connector_id TEXT NOT NULL CHECK (connector_id IN ('website', 'x', 'reddit', 'linkedin', 'rss', 'gdelt', 'bluesky', 'threads', 'hn', 'pinterest', 'appstore')),
+  connector_id TEXT NOT NULL CHECK (connector_id IN ('website', 'x', 'reddit', 'linkedin', 'rss', 'gdelt', 'bluesky', 'threads', 'hn', 'pinterest', 'podcast', 'appstore')),
   target_key TEXT NOT NULL,
   target_url TEXT,
   target_handle TEXT,

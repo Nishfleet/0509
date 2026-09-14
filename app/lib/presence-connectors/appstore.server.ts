@@ -112,13 +112,18 @@ interface ItunesLookupResponse {
   results?: ItunesApp[];
 }
 
+interface ItunesReviewLink {
+  attributes?: { rel?: string | null; href?: string | null };
+}
+
 interface ItunesReviewEntry {
   author?: { name?: { label?: string | null } };
   updated?: { label?: string | null };
   id?: { label?: string | null };
   title?: { label?: string | null };
   content?: { label?: string | null };
-  link?: { attributes?: { rel?: string | null; href?: string | null } };
+  // Apple returns `link` as one object on some feeds and an array on others.
+  link?: ItunesReviewLink | ItunesReviewLink[] | null;
   "im:rating"?: { label?: string | null };
   "im:version"?: { label?: string | null };
   "im:voteSum"?: { label?: string | null };
@@ -376,7 +381,7 @@ export const appstoreConnector = {
         errorMessage: "The target names neither an Apple (id) nor a Google Play (package) listing.",
       };
     }
-    if (!country) {
+    if (!country || !APPLE_COUNTRY_RE.test(country)) {
       country = DEFAULT_COUNTRY;
     }
 
@@ -509,7 +514,9 @@ async function appleReviewItem(
   appId: string,
   observedAt: string,
 ): Promise<NormalizedPresenceItem | null> {
-  const href = entry.link?.attributes?.rel === "related" ? entry.link.attributes.href ?? null : null;
+  const links = Array.isArray(entry.link) ? entry.link : entry.link ? [entry.link] : [];
+  const relatedLink = links.find((link) => link?.attributes?.rel === "related");
+  const href = relatedLink?.attributes?.href ?? null;
   const reviewId = typeof entry.id?.label === "string" ? entry.id.label.trim() : "";
   if (!href || !reviewId) {
     return null;

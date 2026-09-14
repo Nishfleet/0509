@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 
 import { pollPresenceTarget } from "~/lib/presence-connector-registry.server";
+import { buildMentionDigestLines } from "~/lib/mention-digest.server";
 import { createTrackedEntity, listPresenceItems, upsertPresenceItems, upsertSourceTarget } from "~/lib/presence-data.server";
 import { presenceSourceCoverageForDocs } from "~/lib/presence-source-coverage.server";
 import {
@@ -257,6 +258,13 @@ describe("App-stores mention connector (#3210) — the public-listing + review s
     const listed = await listPresenceItems(makeEnv("internal"), userId, { trackedEntityId: entityId });
     expect(listed).toHaveLength(3);
 
+    // The captured rows reach the mention surfaces: the digest's default
+    // connector set (PRESENCE_MENTION_CONNECTOR_IDS) includes appstore.
+    const digest = await buildMentionDigestLines(makeEnv("internal"), userId, {
+      since: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    });
+    expect(digest.some((line) => line.includes(APPLE_LISTING_URL))).toBe(true);
+
     // The listing row: canonical id-form URL, the raw rating fields ride along.
     const listing = await readItemRow(target.id, APPLE_LISTING_URL);
     expect(listing?.title).toBe("Acme Notes");
@@ -442,6 +450,70 @@ describe("App-stores mention connector (#3210) — the public-listing + review s
     expect(secondUpsert.inserted).toBe(0);
     expect(secondUpsert.updated).toBe(0);
     expect(await countLiveItems(target.id)).toBe(1);
+  });
+
+  it("capture-validity: entries without a rel=related href or an id are skipped — the listing still stores, the bad rows never land", async () => {
+    const { target } = await seedAppstoreEntityAndTarget(makeEnv("internal"), {
+      store: "apple",
+      appId: APPLE_APP_ID,
+      listingUrl: APPLE_LISTING_URL,
+    });
+    const fetchImpl = appstoreFetcher({
+      lookup: () => jsonResponse(APPLE_LOOKUP_BODY),
+      reviews: () =>
+        jsonResponse({
+          feed: {
+            entry: [
+              // Apple's real feed prepends THE APP as entry[0]: its link is
+              // rel=alternate (not related) — it must not land as a review.
+              {
+                id: { label: "https://itunes.apple.com/us/app/id544007664" },
+                title: { label: "Acme Notes" },
+                link: { attributes: { rel: "alternate", href: APPLE_LISTING_URL } },
+              },
+              // A review-shaped entry with no id — no canonicalUrl exists,
+              // never fabricate one.
+              {
+                author: { name: { label: "NoId" } },
+                updated: { label: "2026-09-10T12:00:00-07:00" },
+                title: { label: "Missing id" },
+                link: { attributes: { rel: "related", href: APPLE_REVIEW_RELATED_HREF } },
+              },
+              // A review-shaped entry whose only link is rel=self — same skip.
+              {
+                author: { name: { label: "NoRelated" } },
+                updated: { label: "2026-09-10T12:00:00-07:00" },
+                id: { label: "9999999999" },
+                title: { label: "Missing related link" },
+                link: { attributes: { rel: "self", href: APPLE_REVIEW_RELATED_HREF } },
+              },
+              // The one good review — link as an ARRAY (the other real
+              // Apple shape) still resolves its rel=related member.
+              {
+                author: { name: { label: "Riley328" } },
+                updated: { label: "2026-09-10T12:00:00-07:00" },
+                id: { label: "1015309951" },
+                title: { label: "Acme Notes saved my week" },
+                link: [
+                  { attributes: { rel: "self", href: "https://itunes.apple.com/us/rss/customerreviews/id544007664" } },
+                  { attributes: { rel: "related", href: APPLE_REVIEW_RELATED_HREF } },
+                ],
+              },
+            ],
+          },
+        }),
+    });
+
+    const poll = await pollPresenceTarget(makeEnv("internal"), target, { trackingMode: "self" }, { fetchImpl });
+    expect(poll.ok).toBe(true);
+    // The listing + exactly ONE review; the three invalid entries skipped.
+    expect(poll.items).toHaveLength(2);
+    expect(poll.items[0]?.canonicalUrl).toBe(APPLE_LISTING_URL);
+    expect(poll.items[1]?.canonicalUrl).toBe(APPLE_REVIEW_1_URL);
+
+    const upsert = await upsertPresenceItems(makeEnv("internal"), { sourceTarget: target, items: poll.items });
+    expect(upsert.inserted).toBe(2);
+    expect(await countLiveItems(target.id)).toBe(2);
   });
 
   it("capture-validity: the PRESENCE_APPSTORE_ROLLOUT kill flag unset stops the dispatched path before any request — gated answer, zero hops, zero rows", async () => {
