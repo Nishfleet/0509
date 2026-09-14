@@ -1,0 +1,14 @@
+[Unit]
+Description=Run the 0509 advertised-URL coverage guard daily
+Documentation=https://github.com/Nishfleet/0509/blob/main/docs/ops-backup-uptime.md
+
+[Timer]
+# Daily at 10:07 UTC — after the sibling guards' 09:37/09:47/09:53 slots (the
+# :07 offset follows the guard convention of avoiding whole-minute and
+# sibling collisions) and comfortably inside the daily window so a stale
+# production is caught within a day, not the ~3 days the #3166 incident ran.
+Persistent=true
+Unit=0509-sitemap-coverage-guard.service
+
+[Install]
+WantedBy=timers.target
