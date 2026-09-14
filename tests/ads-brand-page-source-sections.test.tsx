@@ -207,6 +207,19 @@ describe("/ads/:domain source sections (issue #2200)", () => {
     // One factual sentence + the data (creative count, advertiser).
     expect(markup).toContain("1 creative");
     expect(markup).toContain("across 1 advertiser");
+    // Issue #3197: the fixture brand's /ads page shows its Google ad — the
+    // creative tile renders with the fixture creative's preview URL (>=1 ad).
+    expect(markup).toContain('class="f9-creative-tile"');
+    expect(markup).toContain("https://example.com/preview.png");
+    // Issue #3197: the honest coverage note — source, what is covered (ad
+    // types), what is not, region, and freshness — rendered on /ads.
+    expect(markup).toContain('data-testid="brand-google-ads-coverage"');
+    expect(markup).toContain("public Ads Transparency Center — no credentials, no official-API key");
+    expect(markup).toContain("image and text formats; video is not separately distinguishable in this capture");
+    expect(markup).toContain("no country filter is pinned");
+    expect(markup).toContain("Spend, reach and audience metrics are out of scope of this source");
+    expect(markup).toContain("the capture re-runs on this brand");
+    expect(markup).toContain("regular monitoring cadence");
     // "Last checked" line in the body, not in title/description.
     expect(markup).toContain('data-testid="brand-google-ads-checked"');
     expect(markup).toContain("Last checked");
@@ -228,6 +241,15 @@ describe("/ads/:domain source sections (issue #2200)", () => {
     expect(markup).toContain('id="brand-tiktok-ads-title"');
     expect(markup).toContain("TikTok ads");
     expect(markup).toContain("EU-shown");
+    // Issue #3195 acceptance: the fixture brand yields >=1 rendered TikTok ad
+    // (the "View ad" detail link carries the library ad_id), and the coverage
+    // note now states the capture freshness next to the EU-scope copy.
+    expect(markup).toContain("library.tiktok.com/ads/detail/?ad_id=tiktok-1");
+    expect(markup).toContain('data-testid="brand-tiktok-ads-checked"');
+    // Main's shared BrandPageSourceSection stamps freshness as "Last checked
+    // <date>"; the #3195 cadence honesty lives in the note below it.
+    expect(markup).toContain("Last checked 1 Sept 2026");
+    expect(markup).toContain("rechecks weekly");
   });
 
   it("renders sections in the fixed order: Google Ads, Google Search, LinkedIn, TikTok, subdomains, hiring", async () => {
@@ -283,6 +305,66 @@ describe("/ads/:domain source sections (issue #2200)", () => {
     };
     const markup = await render(populated({ sourceSnapshots: [emptyGoogleAds] }));
     expect(markup).not.toContain('id="brand-google-ads-title"');
+  });
+
+  it("renders the #3196 LinkedIn coverage note from the #2193 stored payload shape", async () => {
+    // The #2193 stored shape is the contract: promoted-post cards with id,
+    // advertiser, promoted text and the public detail link — no per-ad seen
+    // dates, no payload-level fetchedAt (the snapshot stamp wins). This
+    // fixture mirrors it exactly, so the section is proven against what the
+    // adapter really stores.
+    const linkedinSnapshot: BrandPageSourceSnapshot = {
+      sourceId: "linkedin",
+      label: "LinkedIn Ads (Ad Library)",
+      snapshot: {
+        id: "snap-linkedin-1",
+        watchlistId: "wl-1",
+        sourceId: "linkedin",
+        fetchedAt: "2026-09-01T09:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
+        createdAt: "2026-09-01T09:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
+        payload: {
+          accountOwner: "Rival Labs",
+          totalAds: 2,
+          ambiguous: false,
+          ads: [
+            {
+              id: "411191001",
+              advertiser: "Rival Labs",
+              text: "Rival Labs launches warm-handoff tracking for revenue teams.",
+              creativeImageUrl: "https://media.licdn.com/dms/image/411191001/creative",
+              detailUrl: "https://www.linkedin.com/ad-library/detail/411191001",
+            },
+            {
+              id: "411191002",
+              advertiser: "Rival Labs",
+              text: "See every competitor motion the week it happens.",
+              creativeImageUrl: null,
+              detailUrl: "https://www.linkedin.com/ad-library/detail/411191002",
+            },
+          ],
+        },
+      },
+    };
+    const markup = await render(populated({ sourceSnapshots: [linkedinSnapshot] }));
+    expect(markup).toContain('id="brand-linkedin-ads-title"');
+    // Issue #3196: the honest coverage note — source, what is covered, what
+    // is not, region, freshness — rendered on /ads (timelines and briefs
+    // share this component).
+    expect(markup).toContain('data-testid="brand-linkedin-ads-coverage"');
+    expect(markup).toContain("public LinkedIn Ad Library");
+    expect(markup).toContain("no LinkedIn official-API key that bars commercial use");
+    expect(markup).toContain("newest results page only");
+    expect(markup).toContain("United States");
+    expect(markup).toContain("weekly cadence");
+    // The #2193 payload's real fields render; the old ghost lines (the
+    // TikTok-shaped adId/firstSeen reads) are gone.
+    expect(markup).toContain("2 LinkedIn ads on record.");
+    expect(markup).toContain("Rival Labs launches warm-handoff tracking for revenue teams.");
+    expect(markup).toContain("https://www.linkedin.com/ad-library/detail/411191001");
+    expect(markup).toContain("View ad");
+    expect(markup).not.toContain("Newest ad");
+    expect(markup).toContain('data-testid="brand-linkedin-ads-checked"');
+    expect(markup).toContain("Last checked");
   });
 
   it("keeps the title unchanged in shape — no source counts or dates in <title>", async () => {

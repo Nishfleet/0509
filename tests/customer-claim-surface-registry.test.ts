@@ -163,8 +163,9 @@ function uniqueSorted(values: readonly string[]) {
 
 const expectedPlanFeaturesByPlan: Record<string, readonly string[]> = {
   // 2026-09-10: barebones free — one first brief plus the email lane it rides
-  // on, nothing else. No API/MCP, no exports, no team.
-  free: ["weekly_digest", "email_delivery"],
+  // on, nothing else. No API/MCP, no exports, no team. Issue #3179 adds the
+  // SELF-brand presence slice: one entity, one website source, manual checks.
+  free: ["weekly_digest", "email_delivery", "presence_self_tracking", "presence_website_sources"],
   scout: [
     "competitor_research", "weekly_digest", "email_delivery",
     "presence_competitor_tracking", "presence_website_sources", "presence_digest_alerts",
@@ -321,7 +322,7 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
     "presence_self_tracking", "presence_website_sources", "presence_social_connect",
     "presence_digest_alerts",
   ],
-  presenceSources: ["website", "x", "reddit", "linkedin", "rss", "bluesky", "gdelt", "threads", "hn", "youtube", "amazon", "context_dev", "google", "google_ads", "tiktok", "subdomains", "hiring"],
+  presenceSources: ["website", "x", "reddit", "linkedin", "rss", "bluesky", "gdelt", "threads", "hn", "pinterest", "youtube", "amazon", "context_dev", "google", "google_ads", "tiktok", "subdomains", "hiring"],
   // Route diet phase 1 (#2213): the rail carries seven destinations; the
   // 8-screen model folds every member route into its owning destination via
   // redirects, so the folded paths stay customer nav surface (activePaths).

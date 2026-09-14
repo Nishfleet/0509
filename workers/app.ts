@@ -83,6 +83,7 @@ import {
 } from "./schedule";
 import { withSecurityHeaders, generateCspNonce } from "./security-headers";
 import {
+  EDGE_CACHE_ELIGIBLE_HEADER,
   edgeCacheCopyIsStale,
   edgeCacheVersionId,
   edgeHtmlCacheStorage,
@@ -257,11 +258,11 @@ export default {
     // social card above, before the rate-limit gate.
     //
     // The /ads, /timeline, cluster (/sneaker-resale,
-    // /competitor-monitoring), guide (/guides/*), brand (/brands/*), and
-    // surface (the fixed hub/marketing pages of STATIC_SURFACE_SOCIAL_CARDS)
-    // cards are rasterized to PNG (issue #2089, issue #2101, issue #3098,
-    // issue #3104, issue #3114) so social scrapers render them;
-    // compare/switch stay SVG (issue #2083's scope). The rasterizer lives
+    // /competitor-monitoring), guide (/guides/*), brand (/brands/*),
+    // surface (the fixed hub/marketing pages of STATIC_SURFACE_SOCIAL_CARDS),
+    // and compare/switch cards are rasterized to PNG (issue #2089,
+    // issue #2101, issue #3098, issue #3104, issue #3114, issue #3414) so
+    // social scrapers render them. The rasterizer lives
     // in a worker-only module because its wasm-bindgen glue is not
     // resolvable in the node test environment.
     if (request.method === "GET" || request.method === "HEAD") {
@@ -276,7 +277,9 @@ export default {
           socialCard.kind === "cluster" ||
           socialCard.kind === "guide" ||
           socialCard.kind === "brand" ||
-          socialCard.kind === "surface"
+          socialCard.kind === "surface" ||
+          socialCard.kind === "compare" ||
+          socialCard.kind === "switch"
         ) {
           const { rasterizeSocialCardPngCached } = await import(
             "../app/lib/social-cards-raster.server"
@@ -466,9 +469,15 @@ export default {
       // what storeEdgeCache receives; it returns the nonce-free variant it
       // stored, so the first anonymous visitor and every cached visitor see the
       // exact same document.
-      const routerRequest = isEdgeCacheableHtmlRequest(request)
-        ? new Request(request.url, { method: "GET", headers: request.headers })
-        : request;
+      let routerRequest: Request = request;
+      if (isEdgeCacheableHtmlRequest(request)) {
+        const routerHeaders = new Headers(request.headers);
+        // Issue #3391: the router learns it is rendering the SHARED anonymous
+        // variant, so the loader suppresses the #1972 fresh-anon Set-Cookie (a
+        // stored copy must stay cookie-free — see EDGE_CACHE_ELIGIBLE_HEADER).
+        routerHeaders.set(EDGE_CACHE_ELIGIBLE_HEADER, "1");
+        routerRequest = new Request(request.url, { method: "GET", headers: routerHeaders });
+      }
       const response = await requestHandler(routerRequest, routerContext);
       return storeEdgeCache(
         request,

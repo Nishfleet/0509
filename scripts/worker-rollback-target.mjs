@@ -140,3 +140,42 @@ export function chooseExistingRollbackTarget(versions, wantedVersionId, deployed
   if (candidates.length === 0) throw new Error("worker_rollback_target_missing");
   return { versionId: candidates[0].id, reason: "recorded_target_evicted_newest_real_deploy" };
 }
+
+/**
+ * 2026-09-13 (#3390): wrangler rollback intermittently exits non-zero AFTER
+ * performing the version swap — the 17:36Z occurrence (run 34770115098) printed
+ * `Current Version ID: 515fb9d2-…` with no SUCCESS box and still failed the
+ * Deploy Worker job; the 09-11 occurrence's child threw
+ * `worker_rollback_failed` at scripts/rollback-production.mjs:41:32
+ * (runs 34626446693, 34759554622, 34770115098 — 3rd occurrence 2026-09-13).
+ * The only proof that matters is wrangler's own final `Current Version ID:`
+ * line: when it names the chosen target, the swap landed and the run must not
+ * fail. Everything else keeps the historical behavior — exit 0 succeeds, and a
+ * non-zero exit without a matching marker fails loud (#3190: never trust an
+ * unproven rollback, the fresh failing Worker must not stay live silently).
+ * @param {{ status: number | null, error?: Error | null, stdout?: string | null }} result
+ *   the spawnSync result of the rollback spawn (stdout captured, not inherited)
+ * @param {string} expectedVersionId the version the rollback asked Cloudflare to make 100% live
+ * @returns {{ ok: boolean, liveVersionId: string | null, outcome: string }}
+ *   ok + the version that is now 100% live, or not-ok when the swap is unproven
+ */
+export function interpretWorkerRollbackSpawn(result, expectedVersionId) {
+  const expected = typeof expectedVersionId === "string" ? expectedVersionId : "";
+  if (
+    !result ||
+    typeof result !== "object" ||
+    result.error ||
+    !SAFE_IDENTIFIER_PATTERN.test(expected)
+  ) {
+    return { ok: false, liveVersionId: null, outcome: "worker_rollback_not_confirmed" };
+  }
+  if (result.status === 0) {
+    return { ok: true, liveVersionId: expected, outcome: "rolled_back" };
+  }
+  const markerPattern = /Current Version ID:\s*([A-Za-z0-9._-]+)/gu;
+  const reported = [...String(result.stdout ?? "").matchAll(markerPattern)].at(-1)?.[1] ?? "";
+  if (reported === expected) {
+    return { ok: true, liveVersionId: reported, outcome: "rolled_back_although_spawn_exited_nonzero" };
+  }
+  return { ok: false, liveVersionId: null, outcome: "worker_rollback_not_confirmed" };
+}

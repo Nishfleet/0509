@@ -8,6 +8,7 @@ import { AdCreative } from "~/components/ads/ad-creative";
 import { PricingSection, billingFaqJsonLdEntries } from "~/components/pricing-section";
 import { SubmitButton } from "~/components/submit-button";
 import {
+  buyerSurfaceHreflangLinks,
   canonicalLinks,
   faqPageJsonLd,
   jsonLdScriptProps,
@@ -52,7 +53,10 @@ function publicSearchTrialPathFor(domain: string): string {
   return `/search?query=${query}&mode=advertiser&website=${encodeURIComponent(`https://${host}`)}`;
 }
 
-export const links: LinksFunction = () => canonicalLinks("/");
+export const links: LinksFunction = () => [
+  ...canonicalLinks("/"),
+  ...buyerSurfaceHreflangLinks(""),
+];
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({

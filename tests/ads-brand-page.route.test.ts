@@ -783,7 +783,11 @@ describe("/ads/:domain loader", () => {
     const mocks = installBrandPageMocks({ entry: cacheEntry() });
     const malformed = [
       "not a domain",
-      "nykaa",
+      // "nykaa" was the dotless-slug pin here until issue #3457 mapped it
+      // (with nike/allbirds/lenskart/mamaearth) to its dotted canonical via a
+      // 301 — see tests/ads-legacy-slug-redirects.test.ts. An UNMAPPED
+      // dotless slug keeps this 404.
+      "adidas",
       "foo..com",
       "-nykaa.com",
       "nykaa.com-",

@@ -5,6 +5,7 @@ import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
 import { CUSTOMER_SUPPORT_PATHS } from "~/lib/agent-action-catalog";
 import { appLinkTarget } from "~/lib/app-link";
 import {
+  buyerSurfaceHreflangLinks,
   canonicalLinks,
   faqPageJsonLd,
   jsonLdScriptProps,
@@ -18,7 +19,10 @@ import type { RootLoaderData } from "~/root";
 const description =
   "Help for setting up Five to Nine competitor monitoring, delivery, billing, and support.";
 
-export const links: LinksFunction = () => canonicalLinks("/help");
+export const links: LinksFunction = () => [
+  ...canonicalLinks("/help"),
+  ...buyerSurfaceHreflangLinks("help"),
+];
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({

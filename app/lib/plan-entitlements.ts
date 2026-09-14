@@ -127,9 +127,15 @@ export interface PlanEntitlements {
 // digest is generated (monitoring-fanout skips free after firstScanQuotaReserved;
 // planAllowsDigestCadence returns false for first_only). No Collections, no
 // exports, no API/MCP, no team. The email lane rides the first brief.
+// Free presence (issue #3179, the Free-is-barebones decision): the SELF brand
+// only — one self-tracked entity with one website source, checked manually.
+// No recurring presence: competitor tracking, social connects and the
+// recurring presence digest stay paid (Scout+; Starter+ for social).
 const FREE_FEATURES: PlanFeature[] = [
   "weekly_digest",
   "email_delivery",
+  "presence_self_tracking",
+  "presence_website_sources",
 ];
 
 const SCOUT_FEATURES: PlanFeature[] = [

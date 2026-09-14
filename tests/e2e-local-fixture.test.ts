@@ -66,7 +66,7 @@ const validRow = {
   foreign_key_violation_count: 0,
   monitoring_recovery_pair_count: 1,
   obsolete_sku_count: 0,
-  persona_count: 26,
+  persona_count: 27,
   support_recovery_case_count: 1,
   unexpected_no_cache_count: 0,
   unlinked_paid_persona_count: 0,
@@ -193,7 +193,7 @@ describe("isolated local E2E fixture", () => {
     const sql = readFileSync("e2e/fixtures/e2e-local.sql", "utf8");
     expect(sql).toContain("('e2e-expired'");
     expect(sql).toMatch(/'e2e-expired', 'starter'[\s\S]*?'subscription\.expired'/);
-    expect(E2E_FIXTURE_EXPECTATIONS.personas).toBe(26);
+    expect(E2E_FIXTURE_EXPECTATIONS.personas).toBe(27);
   });
 
   it("distinguishes pristine seed invariants from Journey 5 terminal lifecycle state", () => {

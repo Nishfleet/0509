@@ -340,6 +340,20 @@ INSERT INTO presence_poll_cursor (source_target_id, cursor_json, etag, last_modi
 INSERT INTO presence_item (id, source_target_id, tracked_entity_id, user_id, connector_id, external_id, canonical_url, url_hash, title, body_excerpt, author, published_at, observed_at, content_hash, raw_json, is_tombstone, created_at, revision) VALUES
   ('e2e-presence-item-1', 'e2e-source-competitor', 'e2e-presence-competitor', 'e2e-starter', 'website', 'e2e-presence-item-1', 'https://okara.example.invalid/blog/workflow-launch', 'e2e-presence-hash-1', 'Workflow launch post', 'Fixture website mention for Presence QA.', 'Okara Team', strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-2 days'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour'), 'e2e-content-hash-1', '{"fixture":true}', 0, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour'), 1);
 
+-- Issue #3179: a public mention of nike.com stored by ANOTHER workspace's
+-- presence trackers. The public /timeline/nike.com page projects stored
+-- mentions of any tracked entity whose canonical URL sits under the domain —
+-- whoever tracks it — so this row is the e2e proof that a mention lands in
+-- the interleaved "Recent changes and public mentions" list.
+INSERT INTO user (id, name, email, emailVerified, image, createdAt, updatedAt, onboardedAt) VALUES
+  ('e2e-mention-tracker', 'E2E Mention Tracker', 'e2e-mention-tracker@example.invalid', 1, NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-14 days'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-14 days'));
+INSERT INTO tracked_entity (id, user_id, tracking_mode, label, canonical_url, notes, is_active, deleted_at, created_at, updated_at) VALUES
+  ('e2e-entity-nike-mentions', 'e2e-mention-tracker', 'competitor', 'Nike', 'https://www.nike.com', 'Fixture entity bridging public mentions to the nike.com timeline.', 1, NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-14 days'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour'));
+INSERT INTO source_target (id, tracked_entity_id, user_id, connector_id, target_key, target_url, target_handle, metadata_json, coverage_label, is_active, deleted_at, created_at, updated_at) VALUES
+  ('e2e-source-nike-rss', 'e2e-entity-nike-mentions', 'e2e-mention-tracker', 'rss', 'nike-mentions', 'https://news.example.invalid/nike.rss', NULL, '{"health":"ok"}', 'VERIFIED_PUBLIC_FEED', 1, NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-14 days'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour'));
+INSERT INTO presence_item (id, source_target_id, tracked_entity_id, user_id, connector_id, external_id, canonical_url, url_hash, title, body_excerpt, author, published_at, observed_at, content_hash, raw_json, is_tombstone, created_at, revision) VALUES
+  ('e2e-mention-item-nike-1', 'e2e-source-nike-rss', 'e2e-entity-nike-mentions', 'e2e-mention-tracker', 'rss', 'e2e-mention-ext-1', 'https://news.example.invalid/nike-mention-roundup', 'e2e-mention-hash-1', 'Nike running-shoe restore program makes the rounds', 'Fixture public mention of nike.com for the timeline interleave.', 'Fixture News Desk', strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 day'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-6 hours'), 'e2e-mention-content-1', '{"fixture":true}', 0, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-6 hours'), 1);
+
 INSERT INTO customer_api_key (id, user_id, name, key_prefix, key_hash, last_used_at, revoked_at, created_at, updated_at, actions_write_enabled) VALUES
   ('e2e-api-key-agency', 'e2e-agency', 'Fixture read-only key', 'f9_e2e', 'e2e_api_key_hash', strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour'), NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-14 days'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour'), 0);
 

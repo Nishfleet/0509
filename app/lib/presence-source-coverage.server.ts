@@ -30,6 +30,7 @@ const SOURCE_LABELS: Record<PresenceSourceId, string> = {
   gdelt: "GDELT mainstream news",
   threads: "Threads",
   hn: "Hacker News",
+  pinterest: "Pinterest",
   youtube: "YouTube",
   amazon: "Amazon marketplace",
   context_dev: "Context.dev (open-web provider)",
@@ -55,9 +56,10 @@ const CONNECTOR_FOR_SOURCE: Partial<Record<PresenceSourceId, PresenceConnectorId
   gdelt: "gdelt",
   threads: "threads",
   hn: "hn",
+  pinterest: "pinterest",
 };
 
-const SOCIAL_SOURCE_IDS = new Set<PresenceSourceId>(["x", "reddit", "linkedin", "bluesky", "threads"]);
+const SOCIAL_SOURCE_IDS = new Set<PresenceSourceId>(["x", "reddit", "linkedin", "bluesky", "threads", "pinterest"]);
 
 export interface PresenceSourcePlanGates {
   modeAllowed: boolean;
@@ -108,6 +110,8 @@ function statusFromConnectorGate(
             ? "OFFICIAL_PUBLIC_API"
             : sourceId === "hn"
             ? "OFFICIAL_PUBLIC_API"
+            : sourceId === "pinterest"
+            ? "VERIFIED_PUBLIC_FEED"
             : sourceId === "linkedin" && trackingMode === "competitor"
             ? "LIMITED_COVERAGE"
             : sourceId === "x" || sourceId === "reddit"
@@ -428,26 +432,29 @@ export function presenceSourceCoverageForDocs(): Array<{
       label: SOURCE_LABELS.x,
       productionStatus: "gated",
       notes:
-        "X connector wired in with mention search (recent-search query targets). Gated behind PRESENCE_X_ROLLOUT + X_API_BEARER_TOKEN + X_PAID_ACCESS — paid pay-per-use reads are metered per entity per day and stay pending until the spend decision lands.",
+        "X connector wired in with mention search (recent-search query targets). Gated behind PRESENCE_X_ROLLOUT + X_API_BEARER_TOKEN + X_PAID_ACCESS — paid pay-per-use reads are metered per entity per day and stay pending until the spend decision lands. No free read tier: recent search is pay-per-use only since Feb 2026 (collector research: docs/mentions/PLAN.md §8), so the flag stays off until the MONEY decision.",
     },
     {
       sourceId: "reddit",
       label: SOURCE_LABELS.reddit,
       productionStatus: "gated",
-      notes: "Reddit connector wired in. Gated behind PRESENCE_REDDIT_ROLLOUT — off by default; activation is a separate rollout decision.",
+      notes:
+        "Reddit Data API mention connector wired in (OAuth2 client-credentials, $0 free tier): covers the new posts of tracked subreddit targets — engagement (score/comment count) rides the item; NOT covered: comments, PMs, historicals, non-post votes. The documented 1,000-reads-per-10-minute budget (100 QPM averaged over 10 minutes, Data API Wiki) is enforced in-connector via presence_poll_cursor and shared by the one fleet OAuth client. Gated behind PRESENCE_REDDIT_ROLLOUT + REDDIT_CLIENT_ID/SECRET + REDDIT_COMMERCIAL_ACCESS=approved — off by default; activation is a separate rollout decision.",
     },
     {
       sourceId: "linkedin",
       label: SOURCE_LABELS.linkedin,
-      productionStatus: "unavailable",
-      notes: "Self-brand OAuth only when rolled out. Competitor tracking is limited.",
+      productionStatus: "gated",
+      notes:
+        "LinkedIn Posts API connector wired in (own-organization posts of a CONNECTED account via /rest/posts, $0, stored OAuth grant; the member must administer the tracked organization). Gated behind PRESENCE_LINKEDIN_ROLLOUT — off by default; activation is a separate rollout decision. Self-tracking only: there is no public keyword search of others' posts, so Competitor coverage stays LIMITED_COVERAGE (the only allowed exclusion). Competitor-ads coverage also rides this source id (issue #3196): the public LinkedIn Ad Library — the tracked brand's currently published promoted-post cards (promoted text, advertiser, public detail link; no spend, reach or audience metrics), matched by the account-owner name exactly as the public Ad Library search serves it, the newest results page only (up to 25 ads), no ad-format distinction. Region: the United States (the public search's verified geo=US posture); no other regions are captured. Freshness: the regular monitoring cadence (the weekly label is the seam's scheduling hint). Killed via LINKEDIN_ADS_SOURCE_DISABLED=1 (kill flag; 0/unset = on) — scheduled runs and the public /ads section follow it. Capture attempts and failures feed the /status capture-failure rate when the #2181 DECODO_BUDGET KV binding is wired; without it the /status line states the flag posture only.",
     },
     {
       sourceId: "rss",
       label: SOURCE_LABELS.rss,
       productionStatus: "gated",
       notes:
-        "RSS/Atom/JSON Feed connector wired in. Gated behind PRESENCE_RSS_ROLLOUT — off by default; activation is a separate rollout decision. Covers the publication feeds the sources themselves syndicate — publisher RSS, Substack, Medium, YouTube channel feeds (named feeds you register; those platforms have no free global keyword search).",
+        "RSS/Atom/JSON Feed connector wired in — the publication-feed mention backbone. Covers the publication feeds the sources themselves syndicate — publisher RSS, Substack, Medium, YouTube channel feeds (named feeds you register; those platforms have no free global keyword search). Covers exactly the tracked feeds the entity registers: publisher RSS, Substack /feed, Medium /feed/... (named profiles, publications and tags — there is no global free search), and Google News /rss/search query feeds built from the tracked match phrase; public surfaces cited in docs/mentions/PLAN.md §2/§8. In-connector rate budget: one bounded fetch per feed per poll, at most 25 items each, polls serialized upstream. Gated behind PRESENCE_RSS_ROLLOUT — off by default; activation is a separate rollout decision.",
+
     },
     {
       sourceId: "bluesky",
@@ -472,7 +479,14 @@ export function presenceSourceCoverageForDocs(): Array<{
       sourceId: "hn",
       label: SOURCE_LABELS.hn,
       productionStatus: "gated",
-      notes: "Hacker News mention connector wired in (Algolia HN Search API — free, no key, no auth; the ~10,000-requests/hour/IP courtesy figure is honored with one serialized search_by_date request per poll: page 0 only, time-window slicing via the prior poll's watermark instead of deep paging past the ~1,000-result ceiling). Gated behind PRESENCE_HN_ROLLOUT — off by default; activation is a separate rollout decision.",
+      notes: "Hacker News mention connector wired in (Algolia HN Search API — free, no key, no auth; the ~10,000-requests/hour/IP courtesy figure is honored with one serialized search_by_date request per poll: page 0 only, time-window slicing via the prior poll's watermark instead of deep paging past the ~1,000-result ceiling). Gated behind PRESENCE_HN_ROLLOUT — off by default; activation is a separate rollout decision. Coverage: only public HN stories and comments whose stored text/URL/title matches the tracked phrase become mentions — the connector pins the Algolia query to tags=(story,comment) — while ranking metadata (points, comment counts, the story's external URL) rides raw_json, never the mention.",
+    },
+    {
+      sourceId: "pinterest",
+      label: SOURCE_LABELS.pinterest,
+      productionStatus: "gated",
+      notes:
+        "Pinterest mention connector wired in (profile feed — https://www.pinterest.com/<handle>/feed.rss, public RSS 2.0, no key, no auth). Covers the tracked profile's own most recent pins (~25), for the tracked brand or person, self AND Competitor. Does NOT cover keyword-wide search across all of Pinterest, boards not on the tracked profile, repin/comment activity, or engagement counts — Pinterest exposes those only through its approval-gated, OAuth-per-user API v5, which stays parked (see the plan). The feed is an undocumented public surface, verified live 2026-09-13 — the same posture as Google News RSS: it works and can change without notice. In-connector rate budget: ONE serialized request per poll — the feed itself is the bounded window, no paging, no second fetch. Gated behind PRESENCE_PINTEREST_ROLLOUT — off by default; activation is a separate rollout decision.",
     },
     {
       sourceId: "youtube",
@@ -501,14 +515,16 @@ export function presenceSourceCoverageForDocs(): Array<{
     {
       sourceId: "google_ads",
       label: SOURCE_LABELS.google_ads,
-      productionStatus: "coming_soon",
-      notes: "Google Ads Transparency Center source wired in as a stub (seam #2218). Live adapter lands in #2189.",
+      productionStatus: "active",
+      notes:
+        "Live (issue #3197; #2189): Google's public Ads Transparency Center, the no-credential SearchCreatives RPC — no official-API key that bars commercial use. Covers creatives currently published for the tracked domain; image and text formats (video is not separately distinguishable in this capture); no spend, reach or audience metrics. Region: whatever the public Transparency Center serves without sign-in — no country filter is pinned, so there is no per-country breakdown. Freshness: re-read on the regular monitoring cadence (the cadence label is a hint; the seam runs it on every scheduled check). Killed via GOOGLE_ADS_SOURCE_DISABLED=1 (kill flag; 0/unset = on). Capture attempts and failures feed the /status capture-failure rate when the #2181 DECODO_BUDGET KV binding is wired; without it the /status line states the flag posture only.",
     },
     {
       sourceId: "tiktok",
       label: SOURCE_LABELS.tiktok,
-      productionStatus: "coming_soon",
-      notes: "TikTok Commercial Content Library source wired in as a stub (seam #2218). Live adapter lands in #2194.",
+      productionStatus: "active",
+      notes:
+        "TikTok Commercial Content Library wired in and live behind its flag (#2194; Nish decision 2026-09-12): EU-shown ads only — the public library publishes what reached the EU, no spend or impressions; the newest 12 ads per tracked brand, refreshed weekly with one 90-second capture attempt (a failed capture skips silently to the next week and never becomes an event). Shares the 800-requests/month Decodo render budget; requires DECODO_SCRAPER_AUTH.",
     },
     {
       sourceId: "subdomains",

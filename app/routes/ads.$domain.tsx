@@ -97,6 +97,7 @@ import {
   adsSocialCardUrl,
   brandPageTimelineHasPart,
   breadcrumbListJsonLd,
+  buyerSurfaceHreflangLinks,
   canonicalUrl,
   faqPageJsonLd,
   jsonLdScriptProps,
@@ -320,7 +321,30 @@ export interface BrandPageLoaderData {
   sourceSnapshots: BrandPageSourceSnapshot[];
 }
 
+/**
+ * Issue #3457 — legacy dotless /ads slugs. The 2026-08-25 transformation
+ * campaign shipped five bare-brand URLs (/ads/nike, /ads/allbirds,
+ * /ads/nykaa, /ads/lenskart, /ads/mamaearth) and the corpus has since moved
+ * to domain-keyed pages, so each slug 301s to its dotted canonical — the
+ * ad-aggression-redirect.ts pattern. Dotless slugs NOT in this map keep
+ * their 404: a bare slug never guesses a TLD.
+ */
+export const LEGACY_BRAND_SLUG_DOMAINS: Readonly<Record<string, string>> = {
+  nike: "nike.com",
+  allbirds: "allbirds.com",
+  nykaa: "nykaa.com",
+  lenskart: "lenskart.com",
+  mamaearth: "mamaearth.com",
+};
+
 export async function loader({ context, params, request }: LoaderFunctionArgs): Promise<BrandPageLoaderData> {
+  // The legacy-slug 301 fires before normalization, rate limiting and any
+  // cache read — a pre-move external link costs one static map lookup.
+  const legacyDomain = LEGACY_BRAND_SLUG_DOMAINS[(params.domain ?? "").trim().toLowerCase()];
+  if (legacyDomain) {
+    throw redirect(`/ads/${encodeURIComponent(legacyDomain)}`, 301);
+  }
+
   const { normalizeBrandPageDomain } = await import("~/lib/brand-page.server");
   const brand = normalizeBrandPageDomain(params.domain);
   if (!brand) {
@@ -1062,8 +1086,23 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
       ogImageAlt,
     }),
     // links() cannot see route params in this router version, so the
-    // canonical tag ships as a meta-descriptor link instead.
+    // canonical tag and the hreflang cluster ship as meta-descriptor links
+    // instead. The cluster (en + de/ja/pt-br/fr/es + x-default) is emitted
+    // only on indexable pages — a noindex shell never advertises locale
+    // alternates it cannot back (issue #2030). The locale twin
+    // (`$locale.ads.$domain`) re-exports this meta, so both sides emit the
+    // same reciprocal set.
     { tagName: "link", rel: "canonical", href: canonicalUrl(loaderData.canonicalPath) },
+    ...(loaderData.noindex
+      ? []
+      : buyerSurfaceHreflangLinks(loaderData.canonicalPath.slice(1)).map(
+          (link) => ({
+            tagName: "link" as const,
+            rel: link.rel,
+            hrefLang: link.hreflang,
+            href: link.href,
+          }),
+        )),
     ...(loaderData.noindex ? [{ name: "robots", content: "noindex" }] : []),
   ];
 };

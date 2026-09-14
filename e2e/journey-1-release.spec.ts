@@ -204,8 +204,15 @@ for (const viewport of viewports) {
     expect(trialHrefUrl.searchParams.get("mode")).toBe("advertiser");
     expect(trialHrefUrl.searchParams.get("website")).toMatch(/^https:\/\/[^\s]+$/);
     expect(trialHrefUrl.searchParams.get("query")).toBeTruthy();
-    await trialLink.click();
-    await expect(page).toHaveURL(/\/search\?.*mode=advertiser/);
+    // The first client-side nav to /search makes react-router fetch and
+    // vite-transform the whole search route module graph before committing
+    // the URL (dev server only; production ships pre-built chunks). On the
+    // shared verify runner that commit lands at 13s+ (deploy run
+    // 34786485796: toHaveURL default 5s timed out at :208; local repro:
+    // click 13s on a cold server, 3s warm). Give the click and the URL
+    // commit an explicit budget — the assertion still requires mode=advertiser.
+    await trialLink.click({ timeout: 20_000 });
+    await expect(page).toHaveURL(/\/search\?.*mode=advertiser/, { timeout: 20_000 });
     const trialUrl = new URL(page.url());
     expect(trialUrl.searchParams.get("mode")).toBe("advertiser");
     expect(trialUrl.searchParams.get("website")).toBe(trialHrefUrl.searchParams.get("website"));
@@ -400,6 +407,21 @@ for (const viewport of viewports) {
     expect(screenshotResponse.headers()["content-type"] ?? "").toContain("image/");
     // The "no screenshot" string must never appear on any public timeline page.
     await expect(page.getByText("no screenshot", { exact: false })).toHaveCount(0);
+    // Issue #3179: a stored public mention of nike.com interleaves into the
+    // same dated list — labeled by its source and linking the source article.
+    // The fixture seeds it under a different workspace on purpose: the public
+    // page projects mentions of the brand whoever tracks it.
+    const mentionRows = page.locator('[data-testid="timeline-mention-row"]');
+    await expect(mentionRows).toHaveCount(1);
+    await expect(mentionRows.first()).toContainText("RSS / Atom / JSON Feed · Mention");
+    await expect(mentionRows.first()).toContainText("Nike running-shoe restore program makes the rounds");
+    const mentionLink = mentionRows.first().getByRole("link", {
+      name: "Nike running-shoe restore program makes the rounds",
+    });
+    await expect(mentionLink).toHaveAttribute(
+      "href",
+      "https://news.example.invalid/nike-mention-roundup",
+    );
     await attachReleaseStateArtifacts({ page, testInfo, prefix: "j1", state: "timeline" });
 
     // Return to the search proof page to continue the value-to-signup flow.

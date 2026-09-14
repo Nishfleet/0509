@@ -174,6 +174,29 @@ function processGroupHasMember(pid: number): boolean {
   return false;
 }
 
+/**
+ * Migrations present in the repository that the frozen modeled production
+ * states below have not applied — production's ledger tail predates them.
+ * Every new migration registers here FIRST (a one-site edit: append it, keep
+ * the list sorted); the 0096 interleave test's exclusion filter, its
+ * full-ledger and behind-tail catch-up arrays, and the 0098-gdelt test's
+ * still-repo-only filter all derive from this list, so a new migration needs
+ * no per-test edits. Names must stay in repository (sorted) order — the
+ * derived arrays rely on it.
+ */
+const REPO_ONLY_MIGRATIONS = Object.freeze([
+  "0096_email_suppression.sql",
+  "0097_status_probe_samples.sql",
+  "0098_competitor_suggestion_dismissal.sql",
+  "0098_email_delivery_canary.sql",
+  "0098_widen_source_target_connector_bluesky.sql",
+  "0098_widen_source_target_connector_gdelt.sql",
+  "0099_widen_source_target_connector_threads.sql",
+  "0100_widen_source_target_connector_hn.sql",
+  "0101_widen_source_target_connector_pinterest.sql",
+  "0102_widen_source_target_connector_podcast.sql",
+]);
+
 describe("D1 remote restore evidence automation", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
@@ -1596,19 +1619,9 @@ describe("D1 remote restore evidence automation", () => {
       (name) => !RETIRED_PRODUCTION_MIGRATIONS.has(name),
     );
     const repositorySuffix = repository.slice(repositoryBaseline.length);
-    const NOT_YET_APPLIED_ON_PRODUCTION = new Set([
-      "0096_email_suppression.sql",
-      "0097_status_probe_samples.sql",
-      "0098_competitor_suggestion_dismissal.sql",
-      "0098_email_delivery_canary.sql",
-      "0098_widen_source_target_connector_bluesky.sql",
-      "0098_widen_source_target_connector_gdelt.sql",
-      "0099_widen_source_target_connector_threads.sql",
-      "0100_widen_source_target_connector_hn.sql",
-    ]);
     const productionNames = [
       ...PRODUCTION_MIGRATION_LEDGER_BASELINE,
-      ...repositorySuffix.filter((name) => !NOT_YET_APPLIED_ON_PRODUCTION.has(name)),
+      ...repositorySuffix.filter((name) => !REPO_ONLY_MIGRATIONS.includes(name)),
     ];
     expect(productionNames.at(-1)).toBe("0096_error_reports.sql");
     const namedLedger = (names: string[]) =>
@@ -1632,17 +1645,7 @@ describe("D1 remote restore evidence automation", () => {
     });
     expect(
       planSourceBackupLedgerReconciliation(
-        namedLedger([
-          ...productionNames,
-          "0096_email_suppression.sql",
-          "0097_status_probe_samples.sql",
-          "0098_competitor_suggestion_dismissal.sql",
-          "0098_email_delivery_canary.sql",
-          "0098_widen_source_target_connector_bluesky.sql",
-          "0098_widen_source_target_connector_gdelt.sql",
-          "0099_widen_source_target_connector_threads.sql",
-          "0100_widen_source_target_connector_hn.sql",
-        ]),
+        namedLedger([...productionNames, ...REPO_ONLY_MIGRATIONS]),
         repository,
       ),
     ).toEqual({ action: "ok" });
@@ -1658,17 +1661,10 @@ describe("D1 remote restore evidence automation", () => {
       ),
     ).toEqual({
       action: "apply_forward_suffix",
-      migrations: [
-        "0096_email_suppression.sql",
-        "0096_error_reports.sql",
-        "0097_status_probe_samples.sql",
-        "0098_competitor_suggestion_dismissal.sql",
-        "0098_email_delivery_canary.sql",
-        "0098_widen_source_target_connector_bluesky.sql",
-        "0098_widen_source_target_connector_gdelt.sql",
-        "0099_widen_source_target_connector_threads.sql",
-        "0100_widen_source_target_connector_hn.sql",
-      ],
+      // The const's names plus 0096_error_reports (which production applied
+      // while it was the tail, so the const never lists it), in repository
+      // sorted order — same comparison the repository list uses.
+      migrations: ["0096_error_reports.sql", ...REPO_ONLY_MIGRATIONS].sort(),
     });
   });
 
@@ -1690,20 +1686,31 @@ describe("D1 remote restore evidence automation", () => {
     const repositoryHead = repositorySuffix.filter(
       (name) => name < "0096_email_suppression.sql",
     );
-    const productionNames = [
-      ...PRODUCTION_MIGRATION_LEDGER_BASELINE,
-      ...repositoryHead,
-      // The 0096 pair in the production-applied order, then 0097, the
-      // 0098 competitor dismissal (it sorts first), the canary, and
-      // 0098_gdelt; 0098_bluesky is still repo-only. 0099 (threads widen)
-      // is repo-only too and sorts behind the 0098 pair, so every planned
-      // catch-up carries it after 0098_bluesky.
-      "0096_error_reports.sql",
+    // This modeled state has applied five of the module const's names (plus
+    // 0096_error_reports, which production applied while it was the tail and
+    // the const never lists). Everything else the const lists — 0098_bluesky
+    // and every later migration — is still repo-only here, so both the
+    // planned catch-up and the full ledger derive from REPO_ONLY_MIGRATIONS.
+    const appliedFromRepoOnly = [
       "0096_email_suppression.sql",
       "0097_status_probe_samples.sql",
       "0098_competitor_suggestion_dismissal.sql",
       "0098_email_delivery_canary.sql",
       "0098_widen_source_target_connector_gdelt.sql",
+    ];
+    const stillRepoOnly = REPO_ONLY_MIGRATIONS.filter(
+      (name) => !appliedFromRepoOnly.includes(name),
+    );
+    const productionNames = [
+      ...PRODUCTION_MIGRATION_LEDGER_BASELINE,
+      ...repositoryHead,
+      // The 0096 pair in the production-applied order (error_reports was the
+      // tail when production applied it), then 0097, the 0098 competitor
+      // dismissal (it sorts first), the canary, and 0098_gdelt. Every
+      // planned catch-up carries the still-repo-only names after
+      // 0098_bluesky.
+      "0096_error_reports.sql",
+      ...appliedFromRepoOnly,
     ];
     expect(productionNames.at(-1)).toBe(
       "0098_widen_source_target_connector_gdelt.sql",
@@ -1721,20 +1728,11 @@ describe("D1 remote restore evidence automation", () => {
       ),
     ).toEqual({
       action: "apply_forward_suffix",
-      migrations: [
-        "0098_widen_source_target_connector_bluesky.sql",
-        "0099_widen_source_target_connector_threads.sql",
-        "0100_widen_source_target_connector_hn.sql",
-      ],
+      migrations: [...stillRepoOnly],
     });
     expect(
       planSourceBackupLedgerReconciliation(
-        namedLedger([
-          ...productionNames,
-          "0098_widen_source_target_connector_bluesky.sql",
-          "0099_widen_source_target_connector_threads.sql",
-          "0100_widen_source_target_connector_hn.sql",
-        ]),
+        namedLedger([...productionNames, ...stillRepoOnly]),
         repository,
       ),
     ).toEqual({ action: "ok" });
