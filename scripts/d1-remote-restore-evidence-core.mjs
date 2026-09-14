@@ -5,7 +5,7 @@ import { sha256CanonicalJson } from "./d1-backup-lifecycle-canary.mjs";
 import {
   POST_DEPLOY_CLEANUP_MIGRATIONS,
   PRODUCTION_MIGRATION_LEDGER_BASELINE_SHA256,
-  allowedProductionMigrationLedgers,
+  inspectProductionMigrationLedger,
   migrationLedgerNamesSha256,
 } from "./d1-migration-sync-check.lib.mjs";
 
@@ -247,12 +247,15 @@ export function assertRestoreRoundTrip(source, restored) {
 }
 
 /**
- * Require the complete ordered D1 ledger to equal the repository migration
- * set. Comparing only the latest name can hide a missing earlier migration.
+ * Require the production D1 ledger to be explainable and complete against
+ * the repository: recorded-baseline prefix, every later name a repository,
+ * retired, or renamed file, and every non-cleanup repository migration
+ * applied. Comparing only the latest name can hide a missing earlier
+ * migration.
  * @param {DatabaseEvidence["migrationLedger"]} ledger
  * @param {string[]} repositoryMigrations
  * @param {Set<string>} cleanupMigrations
- * @param {{ baseline?: readonly string[], retiredMigrations?: Set<string>, orderExceptions?: readonly (readonly string[])[] }} options
+ * @param {{ baseline?: readonly string[], retiredMigrations?: Set<string> }} options
  */
 export function assertMigrationLedgerMatchesRepository(
   ledger,
@@ -260,37 +263,33 @@ export function assertMigrationLedgerMatchesRepository(
   cleanupMigrations = POST_DEPLOY_CLEANUP_MIGRATIONS,
   options = {},
 ) {
-  const ledgerNames = ledger.map((entry) => entry.name);
-  const allowedLedgers = allowedProductionMigrationLedgers(
+  const inspection = inspectProductionMigrationLedger(
+    ledger.map((entry) => entry.name),
     repositoryMigrations,
     cleanupMigrations,
-    options.baseline,
-    options.retiredMigrations,
-    options.orderExceptions,
+    options,
   );
-  if (
-    !allowedLedgers.some(
-      (allowedLedger) =>
-        JSON.stringify(ledgerNames) === JSON.stringify(allowedLedger),
-    )
-  ) {
+  if (!inspection.ok || inspection.blockingPending.length > 0) {
     throw new Error("source_backup_migration_ledger_stale");
   }
   return true;
 }
 
 /**
- * If the backup ledger is a proper prefix of an allowed production ledger,
- * return the missing contiguous repository suffix so restore-evidence can
- * apply those forward migrations and re-backup. A hole, extra name, or
- * reorder is not catch-up — return null so the stale-ledger gate still fires.
+ * If the backup ledger is explainable, return the repository migrations
+ * still pending on it — the exact set `wrangler d1 migrations apply`
+ * appends, in repository order — so restore-evidence can apply them and
+ * re-backup. A ledger outside the derived contract (bad shape, a reordered
+ * recorded baseline, or a name no repository file, retire entry, or rename
+ * explains) returns null so the stale-ledger gate still fires.
  *
- * Empty array means the backup already matches an allowed ledger.
+ * Empty array means nothing blocking is pending — at most the post-deploy
+ * cleanup allowlist is unapplied.
  *
  * @param {string[]} ledgerNames
  * @param {string[]} repositoryMigrations
  * @param {Set<string>} cleanupMigrations
- * @param {{ baseline?: readonly string[], retiredMigrations?: Set<string>, orderExceptions?: readonly (readonly string[])[] }} options
+ * @param {{ baseline?: readonly string[], retiredMigrations?: Set<string> }} options
  * @returns {string[] | null}
  */
 export function unappliedForwardMigrationSuffix(
@@ -302,61 +301,22 @@ export function unappliedForwardMigrationSuffix(
   if (!Array.isArray(ledgerNames) || ledgerNames.length === 0) {
     return null;
   }
-  const allowedLedgers = allowedProductionMigrationLedgers(
+  const inspection = inspectProductionMigrationLedger(
+    ledgerNames,
     repositoryMigrations,
     cleanupMigrations,
-    options.baseline,
-    options.retiredMigrations,
-    options.orderExceptions,
+    options,
   );
-  if (
-    allowedLedgers.some(
-      (allowedLedger) =>
-        JSON.stringify(ledgerNames) === JSON.stringify(allowedLedger),
-    )
-  ) {
-    return [];
-  }
-  /** @type {string[] | null} */
-  let primarySuffix = null;
-  /** @type {string[][]} */
-  const matches = [];
-  for (const [index, allowedLedger] of allowedLedgers.entries()) {
-    if (ledgerNames.length >= allowedLedger.length) continue;
-    const prefix = allowedLedger.slice(0, ledgerNames.length);
-    if (JSON.stringify(prefix) !== JSON.stringify(ledgerNames)) continue;
-    const suffix = allowedLedger.slice(ledgerNames.length);
-    if (
-      suffix.length === 0 ||
-      suffix.some((name) => cleanupMigrations.has(name)) ||
-      suffix.some((name) => !repositoryMigrations.includes(name))
-    ) {
-      continue;
-    }
-    if (index === 0) primarySuffix = suffix;
-    matches.push(suffix);
-  }
-  // A forward apply appends pending migrations in repository order, so when
-  // the primary (repository-ordered) ledger is among the prefix matches its
-  // suffix is what the apply produces — order-exception variants only matter
-  // for names production already carries out of repository order.
-  if (primarySuffix !== null) return primarySuffix;
-  if (
-    matches.length > 0 &&
-    matches.every(
-      (suffix) => JSON.stringify(suffix) === JSON.stringify(matches[0]),
-    )
-  ) {
-    return matches[0];
-  }
-  return null;
+  if (!inspection.ok) return null;
+  if (inspection.blockingPending.length === 0) return [];
+  return inspection.pending;
 }
 
 /**
  * @param {DatabaseEvidence["migrationLedger"]} ledger
  * @param {string[]} repositoryMigrations
  * @param {Set<string>} cleanupMigrations
- * @param {{ baseline?: readonly string[], retiredMigrations?: Set<string>, orderExceptions?: readonly (readonly string[])[] }} options
+ * @param {{ baseline?: readonly string[], retiredMigrations?: Set<string> }} options
  * @returns {{ action: "ok" } | { action: "apply_forward_suffix", migrations: string[] } | { action: "reject", reason: "source_backup_migration_ledger_stale" }}
  */
 export function planSourceBackupLedgerReconciliation(
