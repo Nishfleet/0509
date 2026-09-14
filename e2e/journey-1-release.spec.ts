@@ -169,7 +169,7 @@ async function expectPublicTruthSurface(
   await attachReleaseStateArtifacts({ page, testInfo, prefix: "j1", state: surface.state });
 }
 
-for (const viewport of viewports) {
+for (const [viewportIndex, viewport] of viewports.entries()) {
   // Shared-resource lock (issue #1727): the journey signs up personas and
   // writes the shared local fixture D1, and the same spec runs under five
   // engine projects — without the lock two engines can mutate the same
@@ -244,12 +244,12 @@ for (const viewport of viewports) {
 
     // Failure/empty state: the form accepts focus and explains a malformed domain.
     // Every client-side /search commit below gets the same explicit budget the
-    // trial-CTA nav got in 6bf7f07d (issue #3406): on the saturated verify
-    // runner a search SSR can hold the URL commit past the 5s expect default
-    // (local-release tablet run here died at this exact class on
-    // fresh-empty.example). The assertions are unchanged — only the commit
-    // budget is real.
-    const searchNavBudget = { timeout: 20_000 } as const;
+    // trial-CTA nav got in 6bf7f07d (issue #3406), raised further on measured
+    // evidence: on the saturated verify runner the search loader can hold the
+    // URL commit past 20s — a local-release rerun here showed the submit fire
+    // ("Searching…" disabled button, value held) with no URL change inside
+    // 20s. The assertions are unchanged — only the commit budget is real.
+    const searchNavBudget = { timeout: 45_000 } as const;
     await homeWebsite.fill("not-a-domain");
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/\/search\?website=not-a-domain/, searchNavBudget);
@@ -382,26 +382,35 @@ for (const viewport of viewports) {
       "ridgewallet.com", "sephora.com", "shopify.com", "sugarcosmetics.com",
       "ulta.com", "walmart.com", "zoho.com",
     ] as const;
-    // Issue #3406: the fetches run through a small bounded pool instead of
-    // strictly sequential — they are independent negative assertions, so the
-    // wall cost drops to ~domains/pool batches of the slowest responses. The
-    // sequential loop pushed the slowest diagnostic engine (desktop under
-    // iPhone-emulated WebKit) past its 60s per-test budget on the saturated
-    // verify runner — matrix runs 34743504461 and 34816041723 both died
-    // inside this loop. Fully-parallel Promise.all is NOT safe here either:
-    // 30 concurrent SSR renders starve every request past the 10s action
-    // timeout on the same runner. 8 in flight plus a real 30s per-request
-    // budget keeps each fetch inside its own bound while cutting the sweep
-    // to roughly a quarter of the sequential wall. The sweep stays inside
-    // the journey test on purpose: the release manifest matrix keys every
-    // j1 artifact state to the "first visit → value → signup" scenario, so
-    // extracting it would fail coverage with artifact_missing +
-    // coverage_unexpected_entry.
+    // Issue #3406: the "no screenshot" assertion is viewport-independent —
+    // it checks the server-rendered body, which does not change with page
+    // width. The journey runs once per viewport, so each variant checks its
+    // own interleaved third of the list (i % 3 === viewportIndex): every
+    // demo-seed domain is still fetched exactly once per project run while
+    // each test carries ~10 requests instead of 30. Within the slice the
+    // fetches run through a small bounded pool instead of strictly
+    // sequential — they are independent negative assertions, so the wall
+    // cost drops to ~domains/pool batches of the slowest responses. The
+    // sequential all-30 loop pushed the slowest diagnostic engine (desktop
+    // under iPhone-emulated WebKit) past its 60s per-test budget on the
+    // saturated verify runner — matrix runs 34743504461 and 34816041723
+    // both died inside this loop, and a local-release rerun on this box
+    // showed the pre-sweep journey alone already at ~58s. Fully-parallel
+    // Promise.all is NOT safe either: 30 concurrent SSR renders starve
+    // every request on the same runner. 8 in flight plus a real 30s
+    // per-request budget keeps each fetch inside its own bound. The sweep
+    // stays inside the journey test on purpose: the release manifest
+    // matrix keys every j1 artifact state to the "first visit → value →
+    // signup" scenario, so extracting it would fail coverage with
+    // artifact_missing + coverage_unexpected_entry.
+    const viewportTimelineDomains = demoSeedTimelineDomains.filter(
+      (_domain, index) => index % viewports.length === viewportIndex,
+    );
     let nextTimelineDomain = 0;
     await Promise.all(
       Array.from({ length: 8 }, async () => {
-        while (nextTimelineDomain < demoSeedTimelineDomains.length) {
-          const domain = demoSeedTimelineDomains[nextTimelineDomain];
+        while (nextTimelineDomain < viewportTimelineDomains.length) {
+          const domain = viewportTimelineDomains[nextTimelineDomain];
           nextTimelineDomain += 1;
           // Pull the same server-rendered body a visitor's curl would. A
           // proof-less-only timeline 410s (issue #1309 retire path); a
@@ -432,7 +441,7 @@ for (const viewport of viewports) {
     const pageTextHref = await pageTextLink.getAttribute("href");
     expect(pageTextHref).toMatch(/\/artifacts\/page-text\//);
     // The screenshot artifact must actually resolve (R2 serves the seeded PNG).
-    const screenshotResponse = await page.request.get(screenshotHref!);
+    const screenshotResponse = await page.request.get(screenshotHref!, { timeout: 30_000 });
     expect(screenshotResponse.status()).toBe(200);
     expect(screenshotResponse.headers()["content-type"] ?? "").toContain("image/");
     // The "no screenshot" string must never appear on any public timeline page.

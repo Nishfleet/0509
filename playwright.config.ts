@@ -31,14 +31,26 @@ const outputDir = strictReleaseProof
 // slow path is systematically over budget, every attempt fails. The spec then
 // accreted the 30-domain timeline sweep and the iPhone-emulated WebKit variant
 // exceeded 60s (matrix runs 34743504461 + 34816041723: Journey-1 desktop 1.0m
-// ×3 retries) — #3406 parallelized the fetches and 90s covers the remaining
-// first-attempt proof on the saturated runner. Chromium local-release — the
-// actual release gate — is untouched at 60s with retries: 0.
+// ×3 retries) — #3406 split the sweep across the viewport variants and pooled
+// the fetches, and 120s covers the remaining first-attempt proof on the
+// saturated runner (WebKit runs ~1.3-1.5× the chromium wall). Chromium
+// local-release — the actual release gate — is at 120s with retries: 0.
 const diagnosticEngineProject = {
   testMatch: journeyReleaseMatch,
-  timeout: 90_000,
+  timeout: 120_000,
   retries: 2,
   workers: 1,
+} as const;
+// #3406: on the saturated vps-verify runner every network wait in the
+// journey specs is marginal — a cold vite transform can hold a page.goto
+// past the 20s navigationTimeout (seen on /docs) and a single R2 artifact
+// fetch past the 10s actionTimeout (seen on the timeline screenshot
+// receipt). Scoped to the release/diagnostic projects only: the other
+// e2e projects keep the global 10s/20s bounds so their waits still catch
+// real stalls.
+const releaseNetworkBudgets = {
+  actionTimeout: 30_000,
+  navigationTimeout: 45_000,
 } as const;
 
 export default defineConfig({
@@ -163,15 +175,21 @@ export default defineConfig({
       // runner is saturated by other fleet/CI services (run 31798456838:
       // Journey 1 mobile 34.0s, tablet 1.5m under a 30s budget), and the
       // Aug 8 cross-browser escalation measured journeys needing 31-33s
-      // even when the host was healthier. 60s gives slow-but-correct
-      // journeys room to complete while the harness wall still bounds
-      // hangs. retries stay 0: proof must be first-attempt.
-      timeout: 60_000,
+      // even when the host was healthier. Since then the journey accreted
+      // six public-truth surfaces, thirteen artifact states and the
+      // 30-domain timeline sweep: a 2026-09-14 local run on this runner
+      // (#3406) measured ~58s BEFORE the sweep on chromium alone — the
+      // whole spec no longer fits 60s under load. 120s restores the same
+      // ~2x headroom 60s originally had over a ~30s journey while the
+      // harness wall still bounds hangs. retries stay 0: proof must be
+      // first-attempt.
+      timeout: 120_000,
       retries: 0,
       workers: 1,
       use: {
         ...devices["Desktop Chrome"],
         baseURL: localBaseURL,
+        ...releaseNetworkBudgets,
       },
     },
     {
@@ -180,6 +198,7 @@ export default defineConfig({
       use: {
         ...devices["Desktop Firefox"],
         baseURL: localBaseURL,
+        ...releaseNetworkBudgets,
       },
     },
     {
@@ -188,6 +207,7 @@ export default defineConfig({
       use: {
         ...devices["Desktop Safari"],
         baseURL: localBaseURL,
+        ...releaseNetworkBudgets,
       },
     },
     {
@@ -196,6 +216,7 @@ export default defineConfig({
       use: {
         ...devices["iPhone 15"],
         baseURL: localBaseURL,
+        ...releaseNetworkBudgets,
       },
     },
     {
@@ -204,6 +225,7 @@ export default defineConfig({
       use: {
         ...devices["Pixel 7"],
         baseURL: localBaseURL,
+        ...releaseNetworkBudgets,
       },
     },
     {
