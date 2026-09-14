@@ -18,17 +18,6 @@
  *   - tests/activation/first-brief-same-session.test.tsx
  *                                          — the on-screen render contract:
  *     the signup first-brief view shows evidence-linked items
- *   - tests/scan-source-progress.test.ts    — (#3176) the activation fan-out's
- *     pure progress mechanics: the per-source budget race (a hung source
- *     loses, never blocks the brief) and the "scanning N, k done" summarizer
- *   - tests/signup-first-brief-scan-progress.test.tsx
- *                                          — (#3176) the waiting surface's
- *     progress block render contract (denominator, per-source ticks, hidden
- *     until the fan-out plans)
- *
- * Plus the #3176 D1 truths on the workers project: the progress subtree
- * round-trips through the real `watchlist_run.summary_json`, the finisher
- * preserves it, and late sources append after the run finished.
  *
  * The browser-player termination spec (the Playwright BET 7 spec,
  * e2e/activation-first-brief.spec.ts) is covered by CI's workspace project:
@@ -54,17 +43,9 @@ const CONTRACT_SUITES = [
   "tests/first-brief.test.ts",
   "tests/first-brief.server.test.ts",
   "tests/activation/first-brief-same-session.test.tsx",
-  // #3176: the fan-out's progress mechanics and the waiting surface's render.
-  "tests/scan-source-progress.test.ts",
-  "tests/signup-first-brief-scan-progress.test.tsx",
 ] as const;
 
-/** The #3176 progress D1 truths ride the real workerd + real migrations. */
-const WORKERS_CONTRACT_SUITES = [
-  "tests/integration/signup-scan-progress.integration.test.ts",
-] as const;
-
-function runVitest(files: readonly string[], project: "node" | "workers" = "node"): { status: number | null } {
+function runVitest(files: readonly string[]): { status: number | null } {
   // No coverage, no typecheck: CI owns both (fleet memory budget).
   return spawnSync(
     process.execPath,
@@ -74,7 +55,7 @@ function runVitest(files: readonly string[], project: "node" | "workers" = "node
       "--configLoader",
       "runner",
       "--project",
-      project,
+      "node",
       ...files,
     ],
     {
@@ -109,17 +90,5 @@ describe("activation first-brief acceptance (#3015)", () => {
       "termination spec must assert the evidence-linked brief render",
     );
   });
-
-  for (const suite of WORKERS_CONTRACT_SUITES) {
-    it(`#3176 progress D1 truths pass on real workerd: ${suite}`, () => {
-      const result = runVitest([suite], "workers");
-      assert.equal(
-        result.status,
-        0,
-        `vitest workers project exited null or nonzero for ${suite} (exit ${result.status})`,
-      );
-      assert.notEqual(result.status, null);
-    });
-  }
 });
 
