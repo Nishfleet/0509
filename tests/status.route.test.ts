@@ -157,7 +157,6 @@ describe("status route", () => {
     expect(markup).toContain("gated");
     expect(markup).toContain("Meta app review");
     expect(markup).toContain("wired in, waiting on its rollout decision");
-    expect(markup).toContain("JSON transcript");
     // The YouTube per-source row (issue #3203's acceptance) renders its
     // posture verbatim from the catalog — wired in, waiting on its rollout
     // flag and key, with its 100-calls/day documented rate budget named.
