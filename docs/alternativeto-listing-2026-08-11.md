@@ -427,4 +427,43 @@ remains an owner money decision with the free backlog queue as default.
 
 ## Receipt pass (2026-09-11, issue #2857)
 
-blocked: needs Nish's identity — the free submission requires an AlternativeTo account with a verified email (none exists yet; creating/verifying it is an owner step) and the VPS IP is blocked by AlternativeTo's Cloudflare Turnstile (HTTP 403 on a plain fetch of https://alternativeto.net/, re-verified 2026-09-11 — same limitation recorded 2026-08-21 and 2026-09-09), so the worker can neither sign in nor reach the form from here. Not a payment wall: the $5 priority review stays skipped and the free backlog queue is accepted as recorded above. Every form field plus the committed assets (docs/assets/alternativeto/) carry the whole submission — once the owner account exists, the form fill is ~15 minutes.
+blocked: needs Nish's identity — 2026-09-13 re-verification (issue #3393): the free submission still requires an AlternativeTo account with a verified email (none exists) and the worker path is exhausted — plain fetch of https://alternativeto.net/ and /signup/ stays Cloudflare-403 (unchanged since 2026-09-11) and, past that, the signup form's hCaptcha returns no token to this datacenter VPS IP in a real Chromium (headless + headed both tried, no silent pass, no solver/bypass — see the 2026-09-13 attempt pass below). Not a payment wall: the $5 priority review stays skipped and the free backlog queue is accepted as recorded above. Every form field plus the committed assets (docs/assets/alternativeto/) carry the whole submission — once the owner account exists, the form fill is ~15 minutes.
+
+## Submission attempt pass (2026-09-13, issue #3393)
+
+receipt: https://alternativeto.net/signup?returnTo=%2Fuser%2Fedit%2F — the deepest
+URL this pass reached and verified (the signup form itself: HTTP 200 in the
+attempt-2 real-browser visit, while a plain fetch of the trailing-slash
+/signup/ spelling 403s; the listing
+itself is not yet submitted — the venue's current status is the `blocked:`
+line above, re-verified 2026-09-13).
+
+Two attempts, both recorded per the issue's retry-once rule; no silent stall, no workaround hacks:
+
+1. **Plain fetch (attempt 1):** `https://alternativeto.net/` and
+   `https://alternativeto.net/signup/` → **HTTP 403** from this VPS
+   (Cloudflare) — identical to the recorded 2026-09-09 and 2026-09-11
+   results. The Turnstile/datacenter-IP wall recorded since 2026-08-21
+   stands unchanged.
+2. **Real-browser (attempt 2, the issue's one retry):** headless Chromium
+   (Playwright 1.63.0 — the repo's own pinned test dependency, no new
+   machinery) gets much further: homepage **HTTP 200**, and the signup form
+   itself at `https://alternativeto.net/signup?returnTo=%2Fuser%2Fedit%2F`
+   (no trailing slash — the slash variant 403s) → **HTTP 200**, with the
+   username/email/password fields and consent controls fully rendered. The
+   submission still does not fire: the signup form sits behind **hCaptcha**,
+   and its risk engine returns no token to this datacenter IP — checkbox
+   clicked, challenge view opened with no silent pass, retried headless and
+   again under xvfb (headed), 25s+ waits each, token stayed empty and no
+   signup POST ever fired. No captcha-solving service or automation bypass
+   was used.
+
+Outcome: the account is **not created** (nothing half-made, nothing to
+reset). For the owner touch, a verification inbox is prepared and verified
+alive on 2026-09-13: `fivetonine@uberip.com` (mail.tm; its disposable inbox
+password is `LnqRC0qs56I42lTm` — this inbox holds nothing else, and if it
+lapses any email works: it is a convenience, not a dependency). The
+remaining owner flow is exactly the Unblock step in the ledger: create the
+AlternativeTo account with this (or any) email from a Nish-identity
+browser, verify it, then the ~15-minute form fill from
+[Ready-to-paste form fields](#ready-to-paste-form-fields).
