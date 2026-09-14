@@ -14,7 +14,8 @@ import {
   upsertPresenceItems,
 } from "~/lib/presence-data.server";
 import { presenceSourceCoverageForDocs } from "~/lib/presence-source-coverage.server";
-import type { AppEnv, SourceTargetRecord } from "~/lib/presence-types";
+import type { AppEnv } from "~/lib/env.server";
+import type { SourceTargetRecord } from "~/lib/presence-types";
 
 import { appEnv, ISO_T0, db, seedUser, uid } from "./fixtures";
 
