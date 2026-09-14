@@ -140,7 +140,15 @@ function installMocks({
     createWatchlistWithinLimit,
     listWatchlists,
   }));
-  return { env, seedAutoCompetitors, countWatchlists, getUserPlan, createWatchlistWithinLimit, listWatchlists };
+  // Issue #3380: bulk-accept now queues the activation scan on creation. The
+  // durable queue path needs a real D1 (env.DB.prepare), which the node
+  // project deliberately lacks (see the file header), so the first-scan
+  // module is mocked at the same seam as data.server.
+  const queueFirstWatchlistScan = vi.fn().mockResolvedValue(false);
+  vi.doMock("~/lib/first-watchlist-scan.server", () => ({
+    queueFirstWatchlistScan,
+  }));
+  return { env, seedAutoCompetitors, countWatchlists, getUserPlan, createWatchlistWithinLimit, listWatchlists, queueFirstWatchlistScan };
 }
 
 async function runBulkAcceptAction(fields: Record<string, string | string[]>) {
@@ -566,7 +574,7 @@ describe("bulk-accept-suggested-competitors route action", () => {
         limit: 10,
       }),
     );
-    installMocks({
+    const { queueFirstWatchlistScan } = installMocks({
       seedAutoCompetitors: vi.fn().mockResolvedValue([
         makeSeedCandidate({ advertiser: "Rothy's", registrableDomain: "rothys.com" }),
         makeSeedCandidate({ advertiser: "Vivaia", registrableDomain: "vivaia.com" }),
@@ -584,6 +592,9 @@ describe("bulk-accept-suggested-competitors route action", () => {
     expect(result.ok).toBe(true);
     expect(result.admittedCount).toBe(2);
     expect(createWatchlistWithinLimit).toHaveBeenCalledTimes(2);
+    // Issue #3380: creation also queues the activation scan — exactly once
+    // per newly created watchlist.
+    expect(queueFirstWatchlistScan).toHaveBeenCalledTimes(2);
   });
 
   it("returns plan_limit_exceeded on free plans (paid-tier gate)", async () => {
@@ -642,7 +653,7 @@ describe("bulk-accept-suggested-competitors route action", () => {
         limit: 2,
       }),
     );
-    installMocks({
+    const { queueFirstWatchlistScan } = installMocks({
       seedAutoCompetitors: vi.fn().mockResolvedValue(
         Array.from({ length: 4 }).map((_, index) =>
           makeSeedCandidate({
@@ -664,6 +675,8 @@ describe("bulk-accept-suggested-competitors route action", () => {
     });
 
     expect(result.admittedCount).toBe(1);
+    // Exactly the admitted row queues a scan — over-cap rows never do.
+    expect(queueFirstWatchlistScan).toHaveBeenCalledTimes(1);
     expect(result.overCapCount).toBe(3);
     expect(result.overCapRows).toHaveLength(3);
     expect(result.error).toBe("plan_limit_exceeded");
