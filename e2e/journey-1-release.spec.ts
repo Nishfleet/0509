@@ -352,20 +352,72 @@ for (const viewport of viewports) {
     await expectNoHorizontalOverflow(page);
     await attachReleaseStateArtifacts({ page, testInfo, prefix: "j1", state: "proof" });
 
-    // Issue #1284: public /timeline/:domain render check across EVERY demo-seed
-    // brand. A non-empty timeline row must link to a real screenshot artifact
-    // and a real page-text extract — never the "no screenshot" string. The
-    // proof gate in loadOfferTimeline filters proof-less backfill rows
-    // (migrations 0079/0081), so every demo-seed domain except nike.com (seeded
-    // with both artifacts in the e2e R2 fixture) renders an empty/410 timeline.
-    // The prevention loop loads every demo-seed domain's server-rendered output
-    // and asserts the "no screenshot" string never ships on any of them; nike.com
-    // additionally gets a full browser render proving the entry links to a real,
-    // resolving screenshot and page-text artifact. The domain set is the full
-    // backfill seed (5 demo brands from migration 0079 + 25 sitemap brands from
-    // migration 0081) — the exact rows that could reintroduce the string if a
-    // future populate pass bypasses the gate.
-    const proofPageUrl = page.url();
+    // The demo-seed timeline sweep that used to run here now lives in its own
+    // test below (issue #3406): it is a standalone #1284 regression gate, not
+    // a funnel step, and carrying it inside this journey pushed the slowest
+    // diagnostic engine past the per-test budget on the saturated runner.
+    // The journey never left the search proof page, so the flow continues
+    // straight into value-to-signup.
+    await expect(proofSummary).toBeVisible();
+
+    // Value to signup: preserve the search context in the account handoff.
+    const createAccount = page
+      .locator(".f9-search-signup-cta")
+      .getByRole("link", { name: "Create account" });
+    await expect(createAccount).toBeVisible();
+    await expectMinimumTouchTarget(createAccount);
+    await expectVisibleKeyboardFocus(createAccount);
+    const signupHref = await createAccount.getAttribute("href");
+    expect(signupHref).toBeTruthy();
+    const signupUrl = new URL(signupHref!, page.url());
+    expect(signupUrl.pathname).toBe("/auth/signup");
+    expect(signupUrl.searchParams.get("redirectTo")).toBe("/app?website=nykaa.com#setup-checklist");
+    await createAccount.press("Enter");
+    await expect(page).toHaveURL(/\/auth\/signup\?redirectTo=/);
+    await expect(page.getByRole("heading", { name: "Verify your work email to start." })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Email" })).toBeVisible();
+    const email = page.getByRole("textbox", { name: "Email" });
+    await expectVisibleKeyboardFocus(email);
+    const sendSetupLink = page.getByRole("button", { name: "Send setup link" });
+    await expectMinimumTouchTarget(sendSetupLink);
+    await expectPhoneTouchTargets(page);
+    await expectNoHorizontalOverflow(page);
+    const finalUrl = new URL(page.url());
+    expect(finalUrl.searchParams.get("redirectTo")).toBe("/app?website=nykaa.com#setup-checklist");
+    await attachReleaseStateArtifacts({ page, testInfo, prefix: "j1", state: "signup" });
+    test.info().annotations.push({
+      type: "finalUrl",
+      description: `${finalUrl.pathname}${finalUrl.search}`,
+    });
+  });
+
+  // Issue #1284 (extracted from the journey test by #3406): public
+  // /timeline/:domain render check across EVERY demo-seed brand. A non-empty
+  // timeline row must link to a real screenshot artifact and a real page-text
+  // extract — never the "no screenshot" string. The proof gate in
+  // loadOfferTimeline filters proof-less backfill rows (migrations 0079/0081),
+  // so every demo-seed domain except nike.com (seeded with both artifacts in
+  // the e2e R2 fixture) renders an empty/410 timeline. The sweep loads every
+  // demo-seed domain's server-rendered output and asserts the "no screenshot"
+  // string never ships on any of them; nike.com additionally gets a full
+  // browser render proving the entry links to a real, resolving screenshot
+  // and page-text artifact. The domain set is the full backfill seed (5 demo
+  // brands from migration 0079 + 25 sitemap brands from migration 0081) — the
+  // exact rows that could reintroduce the string if a future populate pass
+  // bypasses the gate. Read-only over public pages: no d1 lock needed.
+  test(`Gate-B Journey 1: demo-seed timeline proof sweep (${viewport.name})`, async ({ page }, testInfo) => {
+    await page.setViewportSize(viewport);
+    expect(page.viewportSize()).toEqual({ width: viewport.width, height: viewport.height });
+    await page.setExtraHTTPHeaders({
+      "x-0509-e2e-test-mode": "1",
+      "x-0509-e2e-search-rollout": "v2",
+    });
+    test.info().annotations.push(
+      { type: "persona", description: "anonymous" },
+      { type: "viewport", description: `${viewport.width}x${viewport.height}` },
+      { type: "scenario", description: "demo-seed timeline proof sweep" },
+    );
+
     const demoSeedTimelineDomains = [
       "nike.com", "nykaa.com", "allbirds.com", "lenskart.com", "mamaearth.com",
       "adidas.com", "adobe.com", "amazon.com", "asos.com", "atlassian.com",
@@ -375,24 +427,22 @@ for (const viewport of viewports) {
       "ridgewallet.com", "sephora.com", "shopify.com", "sugarcosmetics.com",
       "ulta.com", "walmart.com", "zoho.com",
     ] as const;
-    // The 30 fetches run in bounded parallel batches: fully sequential
-    // requests pushed the slowest diagnostic engine (iPhone-emulated WebKit)
-    // past the per-test budget on the saturated runner (issue #3406).
-    const timelineFetchBatchSize = 6;
-    for (let start = 0; start < demoSeedTimelineDomains.length; start += timelineFetchBatchSize) {
-      const batch = demoSeedTimelineDomains.slice(start, start + timelineFetchBatchSize);
-      await Promise.all(
-        batch.map(async (domain) => {
-          // Pull the same server-rendered body a visitor's curl would. A
-          // proof-less-only timeline 410s (issue #1309 retire path); a populated
-          // one 200s. Either way the body must never contain the "no screenshot"
-          // string — the exact proof-betrayal this gate prevents.
-          const timelineResponse = await page.request.get(`/timeline/${domain}`);
-          const timelineBody = await timelineResponse.text();
-          expect(timelineBody.toLowerCase(), `timeline page for ${domain}`).not.toContain("no screenshot");
-        }),
-      );
-    }
+    // The 30 fetches run fully parallel: they are independent negative
+    // assertions, so the wall cost is the slowest single response (~7s on
+    // the saturated verify runner) instead of 30 sequential SSR renders
+    // (~60s+ there — matrix runs 34743504461 + 34816041723 died inside this
+    // loop, issue #3406).
+    await Promise.all(
+      demoSeedTimelineDomains.map(async (domain) => {
+        // Pull the same server-rendered body a visitor's curl would. A
+        // proof-less-only timeline 410s (issue #1309 retire path); a populated
+        // one 200s. Either way the body must never contain the "no screenshot"
+        // string — the exact proof-betrayal this gate prevents.
+        const timelineResponse = await page.request.get(`/timeline/${domain}`);
+        const timelineBody = await timelineResponse.text();
+        expect(timelineBody.toLowerCase(), `timeline page for ${domain}`).not.toContain("no screenshot");
+      }),
+    );
     // nike.com is the one demo-seed domain the e2e fixture seeds with a real
     // landing_page_snapshot carrying both artifacts, so it must render exactly
     // one entry with working receipt links and a resolving screenshot. The
@@ -432,39 +482,5 @@ for (const viewport of viewports) {
       "https://news.example.invalid/nike-mention-roundup",
     );
     await attachReleaseStateArtifacts({ page, testInfo, prefix: "j1", state: "timeline" });
-
-    // Return to the search proof page to continue the value-to-signup flow.
-    await page.goto(proofPageUrl);
-    await expect(proofSummary).toBeVisible();
-
-    // Value to signup: preserve the search context in the account handoff.
-    const createAccount = page
-      .locator(".f9-search-signup-cta")
-      .getByRole("link", { name: "Create account" });
-    await expect(createAccount).toBeVisible();
-    await expectMinimumTouchTarget(createAccount);
-    await expectVisibleKeyboardFocus(createAccount);
-    const signupHref = await createAccount.getAttribute("href");
-    expect(signupHref).toBeTruthy();
-    const signupUrl = new URL(signupHref!, page.url());
-    expect(signupUrl.pathname).toBe("/auth/signup");
-    expect(signupUrl.searchParams.get("redirectTo")).toBe("/app?website=nykaa.com#setup-checklist");
-    await createAccount.press("Enter");
-    await expect(page).toHaveURL(/\/auth\/signup\?redirectTo=/);
-    await expect(page.getByRole("heading", { name: "Verify your work email to start." })).toBeVisible();
-    await expect(page.getByRole("textbox", { name: "Email" })).toBeVisible();
-    const email = page.getByRole("textbox", { name: "Email" });
-    await expectVisibleKeyboardFocus(email);
-    const sendSetupLink = page.getByRole("button", { name: "Send setup link" });
-    await expectMinimumTouchTarget(sendSetupLink);
-    await expectPhoneTouchTargets(page);
-    await expectNoHorizontalOverflow(page);
-    const finalUrl = new URL(page.url());
-    expect(finalUrl.searchParams.get("redirectTo")).toBe("/app?website=nykaa.com#setup-checklist");
-    await attachReleaseStateArtifacts({ page, testInfo, prefix: "j1", state: "signup" });
-    test.info().annotations.push({
-      type: "finalUrl",
-      description: `${finalUrl.pathname}${finalUrl.search}`,
-    });
   });
 }

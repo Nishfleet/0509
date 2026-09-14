@@ -28,12 +28,13 @@ const outputDir = strictReleaseProof
 // regularly needs ~31–33s (run 31236680609: mobile 25.9s pass, tablet 29.5s
 // pass, desktop 31.6s fail ×3). The previous retries:2 fix only recovered
 // intermittent single-timeout flakes when median stayed under 30s; once the
-// slow path is systematically over budget, every attempt fails. The spec has
-// since accreted the 30-domain timeline gate, and the same iPhone-emulated
-// WebKit desktop variant now exceeds 60s (matrix runs 34743504461 +
-// 34816041723: Journey-1 desktop 1.0m ×3 retries). 90s keeps first-attempt
-// proof possible on the saturated runner. Chromium local-release — the
-// actual release gate — is untouched at 60s with retries: 0.
+// slow path is systematically over budget, every attempt fails. The spec then
+// accreted the 30-domain timeline gate and the same iPhone-emulated WebKit
+// variant exceeded 60s (matrix runs 34743504461 + 34816041723: Journey-1
+// desktop 1.0m ×3 retries) — #3406 split that sweep into its own test and
+// 90s covers the journey's remaining first-attempt proof on the saturated
+// runner. Chromium local-release — the actual release gate — is untouched
+// at 60s with retries: 0.
 const diagnosticEngineProject = {
   testMatch: journeyReleaseMatch,
   timeout: 90_000,
