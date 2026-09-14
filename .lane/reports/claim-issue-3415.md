@@ -81,3 +81,42 @@ npx vitest run --configLoader runner --project node --changed origin/main
   if rows remain 0, the new `fullsite_watch_scan_skipped` log lines name the
   gate that kept the workload out.
 - Next Meta discovery canary on main green — post-merge, CI-owned.
+
+## Follow-up (2026-09-14 ~11:00Z) — deploy pipeline blocker
+
+PR #3488 merged 10:18Z but never reached production: every
+`deploy-production.yml` run since 09:56Z fails at the `Test` step on
+`tests/sitemap-coverage-guard-provision.test.ts` (introduced by #3475 for
+issue #3166, merged over a red `codex-node-checks-shard-2`). Failed runs:
+34830559963, 34832681451, 34833352325, 34834157339.
+
+Root cause of the test failure: the drill ran the real
+`provision-sitemap-coverage-guard.sh --resolve-path` against the host's own
+layout and asserted a single candidate dir containing BOTH node and gh. True
+on the VPS (`~/.local/bin`), impossible on `ubuntu-latest` — node resolves in
+hostedtoolcache, gh in `/usr/bin`, so `resolve_node_bin_dir` correctly found
+no both-tools dir and exited 1 (all four `--resolve-path` assertions red at
+lines 23/35/60/72 of the original file).
+
+Fix (this PR): the test now builds a `$HOME` fixture per case — a DECOY
+`$HOME/.local/bin/node` with no gh (the stale-binary failure mode the
+resolver exists to skip) and the real node+gh pair in `$HOME/bin`. The
+resolver's candidate order makes the outcome deterministic on any host with
+node and gh installed, and the picked dir is asserted to be exactly
+`$HOME/bin` — the decoy-skip coverage is stronger than before, not weaker.
+The provision script itself is untouched: failing loud on a host without the
+precondition is correct behavior for VPS provisioning tooling.
+
+Runs:
+
+```
+npx vitest run tests/sitemap-coverage-guard-provision.test.ts --reporter=dot
+  Test Files 1 passed (1) / Tests 7 passed (7)
+
+npx vitest run --configLoader runner --project node --changed origin/main --reporter=dot
+  Test Files 1 passed (1) / Tests 7 passed (7)
+```
+
+Remaining accept gate is unchanged: a green `deploy-production` run, a
+`0 */3 * * *` monitoring tick writing `website_site_scan` rows, then the
+next `meta-discovery-canary` scheduled run (`23 */3 * * *`).

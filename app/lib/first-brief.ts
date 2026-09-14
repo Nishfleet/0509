@@ -377,8 +377,13 @@ function normalizeBrandDomain(domain: string | null | undefined): string {
  * True when a suggested brand shares the current target's buyer category.
  * A null/unknown current domain is never adjacent to anything, so the caller
  * falls back to the deterministic alphabetical slice.
+ *
+ * Exported so the suggestions panel can make an HONEST adjacency claim: when
+ * this returns false the picker's alphabetical fallback has still offered the
+ * brand, and calling it "same category" would be a fabrication (#3175 review).
+ * One definition of adjacency, used by both surfaces.
  */
-function brandIsAdjacentTo(
+export function brandIsAdjacentTo(
   brand: SignupFirstBriefBrandSuggestion,
   currentDomain: string,
 ): boolean {

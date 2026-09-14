@@ -1,4 +1,7 @@
 import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, symlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -15,23 +18,60 @@ const RUN = "ops/sitemap-coverage-guard/0509-sitemap-coverage-guard-run.sh";
 // gh both resolve within it (the canary's --file-issue path needs gh), and
 // that the timer actually carries a schedule — same drill coverage as
 // tests/digest-headline-ratio-guard-provision.test.ts.
+//
+// The drill runs against a HOME fixture, never the real host layout: on the
+// VPS node and gh share ~/.local/bin, but on the CI runner node sits in
+// hostedtoolcache and gh in /usr/bin, so no real candidate dir holds both
+// and --resolve-path correctly fails there (deploy-blocking red, #3415
+// follow-up). The fixture puts a DECOY lone node in $HOME/.local/bin — the
+// stale-binary failure mode the resolver exists to skip — and the real
+// node+gh pair in $HOME/bin, so the picked dir is deterministic everywhere.
+function realBin(name: string): string {
+  const res = spawnSync("bash", ["-c", `command -v ${name}`], {
+    encoding: "utf8",
+  });
+  const found = res.stdout.trim();
+  if (res.status !== 0 || !found) {
+    throw new Error(`fixture: ${name} is not on this host's PATH`);
+  }
+  return found;
+}
+
+function fixtureHome(): { home: string; pairDir: string } {
+  const home = mkdtempSync(join(tmpdir(), "sitemap-guard-home-"));
+  const decoyDir = join(home, ".local", "bin");
+  const pairDir = join(home, "bin");
+  mkdirSync(decoyDir, { recursive: true });
+  mkdirSync(pairDir, { recursive: true });
+  symlinkSync(realBin("node"), join(decoyDir, "node"));
+  symlinkSync(realBin("node"), join(pairDir, "node"));
+  symlinkSync(realBin("gh"), join(pairDir, "gh"));
+  return { home, pairDir };
+}
+
+function resolveGuardPath(home: string) {
+  return spawnSync("bash", [PROVISION, "--resolve-path"], {
+    encoding: "utf8",
+    env: { ...process.env, HOME: home },
+  });
+}
+
 describe("sitemap-coverage guard provision PATH resolution (issue #3166)", () => {
   it("resolves a guard PATH via --resolve-path without root or systemd", () => {
-    const res = spawnSync("bash", [PROVISION, "--resolve-path"], {
-      encoding: "utf8",
-    });
+    const { home, pairDir } = fixtureHome();
+    const res = resolveGuardPath(home);
     expect(res.status).toBe(0);
     expect(res.stderr).toBe("");
-    const guardPath = res.stdout.trim();
-    // The resolved PATH must be a colon-joined list starting with a
-    // toolchain bin dir and ending with the standard systemd PATH.
-    expect(guardPath).toMatch(/^\/[^:]+:\/usr\/local\/bin:\/usr\/bin:\/bin$/);
+    // The decoy $HOME/.local/bin (lone node, no gh) must be skipped; the
+    // resolved PATH is the pair dir plus the standard systemd PATH.
+    expect(res.stdout.trim()).toBe(
+      `${pairDir}:/usr/local/bin:/usr/bin:/bin`,
+    );
   });
 
   it("resolves node and gh within the resolved guard PATH", () => {
-    const res = spawnSync("bash", [PROVISION, "--resolve-path"], {
-      encoding: "utf8",
-    });
+    const { home, pairDir } = fixtureHome();
+    const res = resolveGuardPath(home);
     expect(res.status).toBe(0);
     const guardPath = res.stdout.trim();
     const node = spawnSync("bash", ["-c", `command -v node`], {
@@ -43,9 +83,9 @@ describe("sitemap-coverage guard provision PATH resolution (issue #3166)", () =>
       env: { ...process.env, PATH: guardPath },
     });
     expect(node.status).toBe(0);
-    expect(node.stdout.trim()).toMatch(/\/node$/);
+    expect(node.stdout.trim()).toBe(`${pairDir}/node`);
     expect(gh.status).toBe(0);
-    expect(gh.stdout.trim()).toMatch(/\/gh$/);
+    expect(gh.stdout.trim()).toBe(`${pairDir}/gh`);
   });
 
   it("picks a toolchain bin dir containing BOTH node and gh executables", () => {
@@ -53,12 +93,12 @@ describe("sitemap-coverage guard provision PATH resolution (issue #3166)", () =>
     // stale root-owned /usr/local/bin/node and an empty ~/.bash_profile
     // that hides ~/.local/bin from login shells). The resolver must choose
     // a dir where BOTH tools are executable, not the first dir where
-    // `command -v node` resolves.
-    const res = spawnSync("bash", [PROVISION, "--resolve-path"], {
-      encoding: "utf8",
-    });
+    // `command -v node` resolves — the fixture's decoy .local/bin proves it.
+    const { home, pairDir } = fixtureHome();
+    const res = resolveGuardPath(home);
     expect(res.status).toBe(0);
     const nodeBinDir = res.stdout.trim().split(":")[0];
+    expect(nodeBinDir).toBe(pairDir);
     for (const bin of ["node", "gh"]) {
       const check = spawnSync("test", ["-x", `${nodeBinDir}/${bin}`]);
       expect(check.status).toBe(0);
@@ -66,19 +106,16 @@ describe("sitemap-coverage guard provision PATH resolution (issue #3166)", () =>
   });
 
   it("renders the service unit with the discovered bin dir substituted", () => {
-    const res = spawnSync("bash", [PROVISION, "--resolve-path"], {
-      encoding: "utf8",
-    });
+    const { home, pairDir } = fixtureHome();
+    const res = resolveGuardPath(home);
     expect(res.status).toBe(0);
-    const guardPath = res.stdout.trim();
-    const nodeBinDir = guardPath.split(":")[0];
     const service = spawnSync("bash", [
       "-c",
-      `sed "s|__NODE_BIN_DIR__|${nodeBinDir}|" "${SERVICE}"`,
+      `sed "s|__NODE_BIN_DIR__|${pairDir}|" "${SERVICE}"`,
     ], { encoding: "utf8" });
     expect(service.status).toBe(0);
     expect(service.stdout).toContain(
-      `Environment=PATH=${nodeBinDir}:/usr/local/bin:/usr/bin:/bin`,
+      `Environment=PATH=${pairDir}:/usr/local/bin:/usr/bin:/bin`,
     );
     // The placeholder must never survive into a rendered unit.
     expect(service.stdout).not.toContain("__NODE_BIN_DIR__");
