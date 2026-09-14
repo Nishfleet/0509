@@ -120,3 +120,38 @@ npx vitest run --configLoader runner --project node --changed origin/main --repo
 Remaining accept gate is unchanged: a green `deploy-production` run, a
 `0 */3 * * *` monitoring tick writing `website_site_scan` rows, then the
 next `meta-discovery-canary` scheduled run (`23 */3 * * *`).
+
+## Close-out (2026-09-14 ~16:00Z) — both acceptance conditions met on live evidence
+
+The remaining gate cleared end to end after this record was written:
+
+1. **Deploy green.** `Deploy production` run 34849114422 (2026-09-14T13:25Z,
+   carries #3488's fix) succeeded; run 34852199275 (13:54Z, main tip
+   `eae7acac5`) also succeeded — current main is fully deployed.
+2. **Rows landing.** `Meta discovery canary` run 34846932941 (scheduled
+   2026-09-14T13:03:54Z): `node scripts/check-d1-fullsite-runs.mjs` in remote
+   mode printed `website_site_scan rows: 21` and
+   `verdict: ok — full-site scans are landing rows.` Every prior canary run
+   in the listing (2026-09-12T23:05Z through 2026-09-14T05:08Z) was red on
+   0 rows, so the flip is real, not flake.
+3. **Canary green.** Same run 34846932941 is the first green
+   `meta-discovery-canary` on main since the regression — `fullsite-runs`
+   and `meta-readiness` both success.
+
+Full landed chain: **#3488** (root fix — the site scan runs in its own
+`withRunLease` before `scan()` resolves; provider rethrows can no longer skip
+the insert, and gated scans emit `fullsite_watch_scan_skipped`),
+**#3495** (host-independent provision drill unblocking deploy CI), **#3517**
+(Nish — renumbered `0098_competitor_suggestion_dismissal.sql` → `0104`,
+closing the append-only ledger hole that kept every deploy red). PR #3520
+(declared-order exception approach) was closed as superseded by #3517 — its
+diff would have re-created the hole.
+
+Inference, flagged as such: the 21 rows landed on the 12:00Z scheduled tick
+while production still ran pre-#3488 code — this cycle the provider took the
+degraded-payload path (#3103's fix) rather than rethrowing, so the
+post-`scan()` block executed and wrote. The merged fix removes the rethrow
+mode entirely, so future provider outages cannot starve the manifest.
+
+This PR closes the issue: the only missing step was a merged PR carrying the
+close keyword — #3488 used a merge commit whose auto-close did not fire.
