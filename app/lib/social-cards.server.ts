@@ -216,8 +216,8 @@ export function parseSocialCardPathname(pathname: string): ParsedSocialCardPath 
   // issue #2101): the canonical URL is `.png` and the legacy `.svg` URL is
   // kept as an alias that also serves PNG bytes, so cached links keep
   // kept as an alias that also serves PNG bytes, so cached links keep
-  // working. Compare/switch cards stay SVG (issue #2083's scope); brand
-  // cards are rasterized too (issue #3104).
+  // working. Compare/switch cards are rasterized too (issue #3414); brand
+  // cards are as well (issue #3104).
   const adsMatch = rest.match(/^ads\/(.+)\.(?:svg|png)$/);
   const adsSlug = adsMatch ? safeDecodeURIComponent(adsMatch[1]) : null;
   if (adsMatch && adsSlug !== null) return { kind: "ads", slug: adsSlug };
@@ -229,10 +229,13 @@ export function parseSocialCardPathname(pathname: string): ParsedSocialCardPath 
     slug: timelineSlug,
   };
 
-  const compareMatch = rest.match(/^compare\/([^/]+)\.svg$/);
+  // Compare/switch (issue #3414): the canonical URL is `.png` and the
+  // legacy `.svg` URL is an alias that serves the same card — the same
+  // both-extensions shape as the ads/timeline/brand/guide matchers above.
+  const compareMatch = rest.match(/^compare\/([^/]+)\.(?:svg|png)$/);
   if (compareMatch) return { kind: "compare", slug: compareMatch[1] };
 
-  const switchMatch = rest.match(/^switch\/([^/]+)\.svg$/);
+  const switchMatch = rest.match(/^switch\/([^/]+)\.(?:svg|png)$/);
   if (switchMatch) return { kind: "switch", slug: switchMatch[1] };
 
   const brandMatch = rest.match(/^brand\/([^/]+)\.(?:svg|png)$/);
@@ -380,9 +383,8 @@ export interface SocialCardFile {
   cacheControl: string;
   /**
    * Card kind, so the worker can rasterize the ads/timeline/cluster/guide/
-   * brand/surface cards to PNG (issue #2089, issue #2101, issue #3098,
-   * issue #3104, issue #3114) while leaving the compare/switch cards as SVG
-   * (issue #2083's scope).
+   * brand/surface/compare/switch cards to PNG (issue #2089, issue #2101,
+   * issue #3098, issue #3104, issue #3114, issue #3414).
    */
   kind: SocialCardKind;
 }
