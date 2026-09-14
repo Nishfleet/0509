@@ -29,10 +29,12 @@ import type {
  *   allocation of 100 search.list calls, 100 videos.insert calls, and 10,000
  *   units per day combined for all other endpoints."
  *   (developers.google.com/youtube/v3/determine_quota_cost — the same
- *   allocation statement appears on the getting-started page.) There is no
- *   documented reset-time guarantee on those pages, so the connector uses a
- *   rolling-24h usage window (below): it can only OVERCOUNT a daily bucket,
- *   so it can only under-use the documented 100-call allocation.
+ *   allocation statement appears on the getting-started page.) The same
+ *   page documents the reset — "Daily quotas reset at midnight Pacific
+ *   Time (PT)" — but the connector still uses a rolling-24h usage window
+ *   (below) rather than trusting the boundary: it can only OVERCOUNT a
+ *   daily bucket, so it can only under-use the documented 100-call
+ *   allocation.
  * - `publishedAfter`: "The publishedAfter parameter indicates that the API
  *   response should only contain resources created at or after the specified
  *   time. The value is an RFC 3339 formatted date-time value."

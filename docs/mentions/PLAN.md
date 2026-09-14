@@ -373,9 +373,10 @@ endpoints" — and the
 `publishedAfter` = "resources created at or after the specified time … an
 RFC 3339 formatted date-time value"; `maxResults` = "Acceptable values are 0
 to 50, inclusive"; `order=date` = reverse-chronological by creation date.
-No documented reset-time guarantee appears on those pages, so the connector's
-rolling-24h usage window is our own conservative overcount, never a claim
-about Google's reset semantics.
+The same quota page documents the reset — "Daily quotas reset at midnight
+Pacific Time (PT)" — but the connector still counts a rolling-24h usage
+window rather than trusting the boundary: it can only overcount the
+documented allocation, never claim a reset Google has not applied yet.
 
 
 Prior art inside the repo: `docs/epics/2026-08-28-mention-monitoring.md`
