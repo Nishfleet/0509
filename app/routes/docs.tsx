@@ -2,6 +2,11 @@ import { Link, useRouteLoaderData } from "react-router";
 import type { LinksFunction, MetaFunction } from "react-router";
 
 import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
+import {
+  AD_SOURCE_COVERAGE,
+  AD_SOURCE_COVERAGE_HONESTY_LINE,
+  freePlanCoverageSources,
+} from "~/lib/ad-source-coverage";
 import { appLinkTarget } from "~/lib/app-link";
 import {
   buyerSurfaceHreflangLinks,
@@ -48,6 +53,7 @@ export default function DocsRoute() {
           <li><a href="#proof-labels">Understand the proof labels</a></li>
           <li><a href="#troubleshoot">Troubleshoot empty or partial results</a></li>
           <li><a href="#plan-boundaries">Plan boundaries</a></li>
+          <li><a href="#ad-sources">Where the ads come from</a></li>
           <li><a href="#ai-agents">Use Five to Nine from AI agents</a></li>
           <li><a href="#coverage-trust">Coverage and trust boundaries</a></li>
           <li><a href="#key-docs">Key docs</a></li>
@@ -107,6 +113,31 @@ export default function DocsRoute() {
           <li>Agency plan scope: client reports, share links, PDF delivery, branding, full API/MCP agent actions, and team seats.</li>
           <li>Locked actions should appear locked before click; server-side plan checks still apply.</li>
         </ul>
+      </PublicDocBlock>
+
+      {/* Issue #2992: the honest per-source coverage notes, rendered from the ONE
+          shared AD_SOURCE_COVERAGE constant (the same constant /pricing renders
+          and the /pricing markdown assembles), so no surface can drift. */}
+      <PublicDocBlock id="ad-sources" title="Where the ads come from">
+        <p>
+          Brand pages, timelines, and briefs combine several public ad libraries. The Free plan
+          watches the {freePlanCoverageSources()[0].label}; paid plans also watch the other
+          libraries below. Each source states what it covers and what it does not.
+        </p>
+        <ul className="f9-doc-list">
+          {AD_SOURCE_COVERAGE.map((entry) => (
+            <li key={entry.id}>
+              <strong>{entry.label}</strong> — {entry.covers} Not included: {entry.notCovered}
+              {entry.plans === "paid" ? " (paid plans)" : " (every plan)"}
+            </li>
+          ))}
+        </ul>
+        <p>{AD_SOURCE_COVERAGE_HONESTY_LINE}</p>
+        <p>
+          See <Link to="/pricing">Pricing</Link> for what each plan includes, and{" "}
+          <Link to="/status">Status</Link> for the measured share of tracked watchlists with at
+          least one Google, LinkedIn, or TikTok ad captured.
+        </p>
       </PublicDocBlock>
 
       <PublicDocBlock id="ai-agents" title="Use Five to Nine from Claude, ChatGPT, and AI agents">

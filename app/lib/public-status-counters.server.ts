@@ -94,6 +94,15 @@ export interface PublicStatusCounters {
    * uptime percentage; null when the table is unreadable or empty.
    */
   scheduledMonitoringSince: string | null;
+  /**
+   * Issue #2992: the share of tracked brands with >=1 non-Meta ad captured.
+   * `tracked` counts active watchlists (the same `is_active = 1` rows the
+   * Scheduled-monitoring surface reports); `covered` counts those watchlists
+   * whose captured source snapshots include at least one ad from a non-Meta
+   * ad source (google_ads, linkedin, tiktok), judged on the payload the
+   * adapter itself stored. Read live with the other counters.
+   */
+  nonMetaAdCoverage: { tracked: number; covered: number };
 }
 
 /**
@@ -119,7 +128,7 @@ export async function getPublicStatusCounters(
     Date.now() - 8 * 24 * 60 * 60 * 1000,
   ).toISOString();
 
-  const [lastRunRow, countsRow, digestRow, baselineRow, tiktokRow] = await Promise.all([
+  const [lastRunRow, countsRow, digestRow, baselineRow, coverageRow, tiktokRow] = await Promise.all([
     one<{ last_started_at: string | null }>(
       env,
       `SELECT MAX(started_at) AS last_started_at FROM watchlist_run`,
@@ -150,6 +159,23 @@ export async function getPublicStatusCounters(
         FROM scheduled_observation_health_state
       `,
     ),
+    one<{ tracked: number; covered: number }>(
+      env,
+      `
+        SELECT
+          (SELECT COUNT(*) FROM watchlist WHERE is_active = 1) AS tracked,
+          (
+            SELECT COUNT(DISTINCT s.watchlist_id)
+            FROM source_snapshot s
+            WHERE s.watchlist_id IN (SELECT id FROM watchlist WHERE is_active = 1)
+              AND json_valid(s.payload_json)
+              AND (
+                (s.source_id = 'google_ads' AND COALESCE(json_array_length(s.payload_json, '$.creatives'), 0) > 0)
+                OR (s.source_id IN ('linkedin', 'tiktok') AND COALESCE(json_array_length(s.payload_json, '$.ads'), 0) > 0)
+              )
+          ) AS covered
+      `,
+    ),
     one<{ tiktok_captures: number }>(
       env,
       `SELECT COUNT(DISTINCT watchlist_id) AS tiktok_captures
@@ -164,6 +190,10 @@ export async function getPublicStatusCounters(
     runsInLast24h: Number(countsRow?.total ?? 0),
     failedRunsInLast24h: Number(countsRow?.failed ?? 0),
     lastDigestSentAt: digestRow?.last_digest_sent_at ?? null,
+    nonMetaAdCoverage: {
+      tracked: Number(coverageRow?.tracked ?? 0),
+      covered: Number(coverageRow?.covered ?? 0),
+    },
     tiktokCapturesInLast8d: Number(tiktokRow?.tiktok_captures ?? 0),
   };
 
@@ -774,6 +804,7 @@ async function getPublicStatusCountersWithWatchlists(
       lastDigestSentAt: null,
       digestHealth: "unknown",
       scheduledMonitoringSince: null,
+      nonMetaAdCoverage: { tracked: 0, covered: 0 },
     },
     activeWatchlists: Number(activeRow?.active ?? 0),
   };

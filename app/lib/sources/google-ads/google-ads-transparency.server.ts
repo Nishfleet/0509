@@ -238,6 +238,9 @@ export async function fetchCreativesByDomain(
   domain: string,
   options: FetchCreativesOptions = {},
 ): Promise<GoogleAdsFetchResult | GoogleAdsUnavailable> {
+  // Results are kept in the SearchCreatives stream's own order — no
+  // client-side sort — which the #2992 coverage copy mirrors ("the search's
+  // first 200 are kept, exactly as the Center returns them").
   const maxCreatives = options.maxCreatives ?? 200;
   const fetchImpl = options.fetchImpl ?? fetch;
   // Hard page cap, derived from the request. A page can carry a next-page

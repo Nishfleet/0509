@@ -212,6 +212,12 @@ function isPreRunBootstrap(monitoring: {
   );
 }
 
+/** Whole-percent share of tracked watchlists with >=1 captured non-Meta ad. */
+function nonMetaSharePercent(coverage: { tracked: number; covered: number }): number {
+  if (coverage.tracked <= 0) return 0;
+  return Math.round((coverage.covered / coverage.tracked) * 100);
+}
+
 export default function StatusRoute() {
   const data = useLoaderData<typeof loader>();
   const monitoring = data.monitoring;
@@ -280,6 +286,15 @@ export default function StatusRoute() {
                 <dt>Failed watchlist runs in the last 24 hours</dt>
                 <dd>{monitoring.failedRunsInLast24h.toLocaleString()} — as of {asOf}</dd>
               </div>
+              {monitoring.nonMetaAdCoverage ? (
+                <div>
+                  <dt>Non-Meta ad coverage</dt>
+                  <dd>
+                    {monitoring.nonMetaAdCoverage.covered.toLocaleString()} of{" "}
+                    {monitoring.nonMetaAdCoverage.tracked.toLocaleString()} active watchlists ({nonMetaSharePercent(monitoring.nonMetaAdCoverage)}%) have at least one captured ad from the Google, LinkedIn, or TikTok sources — as of {asOf}
+                  </dd>
+                </div>
+              ) : null}
               <div>
                 <dt>Last watchlist run</dt>
                 <dd>{monitoring.lastWatchlistRunAt ?? "no scheduled run in the measurement window"}, as of {asOf}</dd>

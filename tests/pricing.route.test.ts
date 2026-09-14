@@ -188,6 +188,29 @@ describe("pricing section render smoke", () => {
     expect(markup).not.toMatch(/<h1\b/);
   });
 
+  it("renders the issue-#2992 Ad sources coverage notes — the surfaces the acceptance names, guarded against silent disappearance", async () => {
+    const { PricingSection } = await import("~/components/pricing-section");
+    const markup = renderToStaticMarkup(
+      createElement(PricingSection, {
+        commercialLaunch: {
+          scoutSaleOpen: false,
+          starterSaleOpen: false,
+          agencySaleOpen: false,
+        },
+        initialPricingPreview: null,
+      }),
+    );
+
+    expect(markup).toContain('aria-label="Ad sources and coverage"');
+    expect(markup).toContain("Where the ads come from");
+    expect(markup).toContain("Meta Ad Library");
+    expect(markup).toContain("LinkedIn Ads (Ad Library)");
+    expect(markup).toContain("TikTok Ads (Commercial Content Library, EU-shown)");
+    expect(markup).toContain("Not included:");
+    // The honesty line renders beneath the notes.
+    expect(markup).toContain("only when it captured something");
+  });
+
   it("renders the barebones Free column with exactly the five bullets", async () => {
     const { PricingSection } = await import("~/components/pricing-section");
     const markup = renderToStaticMarkup(
