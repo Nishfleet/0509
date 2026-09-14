@@ -154,6 +154,11 @@ export const HTML_NO_STORE_HEADERS: Record<string, string> = {
 // rule's own 4h browser TTL, so this widens nothing the zone config has not
 // already accepted. The coupling test derives the value from
 // EDGE_STALE_WINDOW_SECONDS — they cannot drift.
+// Issue #3522: this zone hold is deliberately SHORTER than the stored copy's
+// matchable lifetime (ttl + window + EDGE_ZONE_REWARM_GRACE_SECONDS). Raising
+// the served s-maxage to match the stored lifetime would re-synchronize the
+// two expiries — the zone would shield the worker for the whole stale window
+// and every boundary request would be a double-MISS cold render again.
 export const PUBLIC_HTML_CACHE_CONTROL = "public, s-maxage=3900, max-age=300";
 
 export const PUBLIC_CACHEABLE_HTML_PATHS = new Set([

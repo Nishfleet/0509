@@ -26,6 +26,7 @@ import { describe, expect, it } from "vitest";
 import {
   EDGE_CACHE_PROOF_HEADER,
   EDGE_STALE_WINDOW_SECONDS,
+  EDGE_ZONE_REWARM_GRACE_SECONDS,
   cacheKeyUrl,
   extractInlineScriptBodies,
   inlineScriptHashSources,
@@ -224,14 +225,37 @@ describe("edge cache eligibility (issue #2950)", () => {
     // stored value — plus the shared-edge s-maxage (#3308).
     expect(staleHit?.headers.get("cache-control")).toBe("public, s-maxage=3900, max-age=300");
 
-    // Aged past fresh-bound + stale window: a hard miss — the next request
-    // re-renders and re-stores.
+    // Issue #3522 shape: aged past the ZONE's own hold (fresh ttl + the
+    // stale window = the served s-maxage) but inside the rewarm grace — the
+    // copy still answers instantly. This is exactly the request the zone
+    // misses to the worker at each ~65-minute boundary; under the old
+    // synchronized expiry this was the guaranteed double-MISS cold render
+    // (home_edge=NONE + 3662ms TTFB, 2026-09-14).
     await overwriteStoredCopy(
       cache,
       request,
       "US",
       "v1",
-      300 + EDGE_STALE_WINDOW_SECONDS + 300,
+      300 + EDGE_STALE_WINDOW_SECONDS + 60,
+      "<html>past-zone-hold</html>",
+    );
+    const boundaryHit = await matchEdgeCache(request, cache, "v1", "US");
+    expect(boundaryHit?.headers.get(EDGE_PROOF_HEADER)).toBe("HIT");
+    expect(await boundaryHit?.text()).toContain("past-zone-hold");
+    // The served contract is untouched by the grace: the zone still re-arms
+    // for the full window, never a short hold (#3308's coverage preserved).
+    expect(boundaryHit?.headers.get("cache-control")).toBe(
+      "public, s-maxage=3900, max-age=300",
+    );
+
+    // Aged past fresh-bound + stale window + rewarm grace: a hard miss —
+    // the next request re-renders and re-stores.
+    await overwriteStoredCopy(
+      cache,
+      request,
+      "US",
+      "v1",
+      300 + EDGE_STALE_WINDOW_SECONDS + EDGE_ZONE_REWARM_GRACE_SECONDS + 300,
       "<html>hard-stale</html>",
     );
     expect(await matchEdgeCache(request, cache, "v1", "US")).toBeNull();
@@ -397,14 +421,16 @@ describe("edge cache storage semantics", () => {
 
     // The stored copy: unstamped (stamping happens on serve), keyed by
     // (path, country, version), identical variant. Its cache-control is the
-    // stretched match lifetime (ttl + stale window) — what cache.match
-    // enforces — while the stamped ttl preserves the fresh bound.
+    // stretched match lifetime (ttl + stale window + rewarm grace — the
+    // #3522 decoupling that keeps the copy alive past the zone's own hold)
+    // — what cache.match enforces — while the stamped ttl preserves the
+    // fresh bound.
     expect(cache.keys()).toHaveLength(1);
     expect(cache.keys()[0]).toContain("__edgec=");
     expect(cache.keys()[0]).toContain("__edgev=v1");
     const stored = await cache.match(new Request(cache.keys()[0]));
     expect(stored?.headers.get("cache-control")).toBe(
-      `public, max-age=${300 + EDGE_STALE_WINDOW_SECONDS}`,
+      `public, max-age=${300 + EDGE_STALE_WINDOW_SECONDS + EDGE_ZONE_REWARM_GRACE_SECONDS}`,
     );
     expect(stored?.headers.get("x-0509-edge-ttl")).toBe("300");
 
