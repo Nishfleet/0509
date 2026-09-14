@@ -35,7 +35,7 @@
  *      as machine-readable JSON. Fixture-free: excludes every fleet-synthetic
  *      identity on the shared SYNTHETIC_USER_PATTERNS list — the #2908
  *      QA/canary fixture enumeration, the billing-canary-lock guard rows, the
- *      launch-readiness canary owner, every *@0509.internal mailbox, and the
+ *      launch-readiness canary owner, every 0509.internal-domain mailbox, and the
  *      BET-1 burst cohort (issue #3486). Surviving rows are cross-checked
  *      against their `signup_completed` funnel event (PR #1965) when
  *      --events-ndjson supplies event records; rows without one are listed as
@@ -559,7 +559,7 @@ GROUP BY we.watchlist_id;
  * The fleet's synthetic user identities, as data — the ONE list every
  * customer-facing count shares (issue #3486). No regex, no buried LIKE. Each
  * row: which column, what value, which match rule. First match wins (list
- * order = precedence — exact/id guards sit ahead of the @0509.internal
+ * order = precedence — exact/id guards sit ahead of the 0509.internal
  * suffix so a canary row is attributed to its specific pattern); matching
  * trims and lowercases both sides, because the canary's own lookup compares
  * lower(email) (getBillingCanaryUser) — #2908's identities were read in
