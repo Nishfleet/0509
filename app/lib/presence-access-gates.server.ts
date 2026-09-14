@@ -109,7 +109,7 @@ function hasCredentials(env: AppEnv, connectorId: PresenceConnectorId): boolean 
 // help-first: Only the predicate changes; the runtime gates in evaluateConnectorAccessGate
 // (rolloutState, credentials, reddit commercial access) still govern whether polling actually runs.
 export function connectorHasCustomerPollPath(connectorId: PresenceConnectorId): boolean {
-  return connectorId === "website" || connectorId === "rss" || connectorId === "gdelt" || connectorId === "threads" || connectorId === "hn" || connectorId === "x" || connectorId === "reddit" || connectorId === "bluesky" || connectorId === "linkedin" || connectorId === "pinterest";
+  return connectorId === "website" || connectorId === "rss" || connectorId === "gdelt" || connectorId === "threads" || connectorId === "hn" || connectorId === "x" || connectorId === "reddit" || connectorId === "bluesky" || connectorId === "linkedin" || connectorId === "pinterest" || connectorId === "youtube";
 }
 
 export async function evaluateConnectorAccessGate(
