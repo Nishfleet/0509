@@ -28,6 +28,8 @@ function entry(
     label: "Label",
     status,
     detail: null,
+    // fixed-date: display-only progress timestamp — summarizeScanProgress
+    // never compares it against the wall clock.
     updatedAt: "2026-09-14T00:00:00.000Z",
     ...overrides,
   };

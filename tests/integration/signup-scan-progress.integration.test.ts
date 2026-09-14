@@ -215,7 +215,7 @@ describe("signup scan-source progress on real D1 (#3176)", () => {
     expect(claim.claimed).toBe(true);
     const finalized = await finishOrchestratedWatchlistRun(appEnv, {
       runId,
-      processingToken: claim.processingToken,
+      processingToken: claim.processingToken!,
       status: "succeeded",
       pagesScanned: 1,
       summary: { adsSeen: 2, events: 0 },

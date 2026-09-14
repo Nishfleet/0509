@@ -8,6 +8,7 @@ import {
   recordScanSourceTick,
   SCAN_SOURCE_BUDGET_MS,
   withScanSourceBudget,
+  type ScanSourceTickInput,
 } from "~/lib/scan-source-progress.server";
 import type {
   SourceAdapter,
