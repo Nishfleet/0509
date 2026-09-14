@@ -1094,6 +1094,9 @@ export const SITEMAP_PATHS = [
   // Issue #3127: seventh guide — the Meta Ad Library API coverage explainer.
   // Stable long-form copy, never a noindex shell.
   "/guides/meta-ad-library-api-limitations",
+  // Issue #3421: eighth guide — the buyer's first-question explainer (can an
+  // AI chat just check this?). Stable long-form copy, never a noindex shell.
+  "/guides/can-ChatGPT-monitor-competitor-ads",
   "/compare",
   "/compare/meta-ad-library",
   // /compare/visualping, /compare/foreplay, and /compare/visualping-ad-library
