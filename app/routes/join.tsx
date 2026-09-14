@@ -13,6 +13,7 @@ import {
   type JoinIdentityResolution,
   type JoinInputKind,
 } from "~/lib/join-identity.server";
+import { recordJoinConfirmSample } from "~/lib/join-pipeline-metrics.server";
 import { safeRedirectPath } from "~/lib/safe-redirect";
 import { publicSeoMeta } from "~/lib/seo";
 
@@ -31,10 +32,11 @@ import { publicSeoMeta } from "~/lib/seo";
  * person input resolves to nothing, the card offers to enrich the input
  * with one of those markers and re-resolves server-side.
  *
- * time-to-first-confirm is recorded per signup as a structured log line
- * (`join_identity_confirm`) whose latency spans resolve-start → confirm
- * receipt, measured server-side via a first-touch cookie — the metric
- * source the /status counters pick up in a later epic slice.
+ * time-to-first-confirm is recorded per confirm as a structured log line
+ * (`join_identity_confirm`) AND as a `status_probe_samples` row under the
+ * `join_first_confirm` probe (issue #3177) whose latency spans
+ * resolve → confirm receipt, measured server-side via a first-touch
+ * cookie — the metric /status reports p50/p95 over 24 h and 7 d.
  */
 
 export const meta: MetaFunction = () => [
@@ -112,10 +114,23 @@ export async function action({ context, request }: ActionFunctionArgs) {
       }),
     );
 
+    // D1 sample for the /status time-to-first-confirm metric (issue
+    // #3177): the funnel measurement flag + GPC posture gate inside
+    // recordJoinConfirmSample; a write failure can never block the
+    // signup redirect below.
+    await recordJoinConfirmSample(env, request, {
+      latencyMs: confirmLatencyMs,
+      kind: resolution.kind,
+    });
+
     // Fold into the existing signup path: prefill params mirror what
     // #2415/#2414 already accept, and #3045's setup card keeps resolving
-    // the target (and inferring the self role) on the next screen.
+    // the target (and inferring the self role) on the next screen. The
+    // `source=join` slug does double duty (issue #3177): it attributes the
+    // signup AND tells the signup form the join path already answered its
+    // optional questions, so the step asks only for the email.
     const signupUrl = new URL("/auth/signup", new URL(request.url).origin);
+    signupUrl.searchParams.set("source", "join");
     if (confirmedDomain) {
       signupUrl.searchParams.set("competitor", confirmedDomain);
       if (confirmedName && confirmedName !== confirmedDomain) {
