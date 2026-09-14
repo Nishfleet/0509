@@ -12,13 +12,13 @@ import { LEGACY_BRAND_SLUG_DOMAINS } from "~/routes/ads.$domain";
  * limiting or any cache read, so this test needs no module mocks: both the
  * 301 and the 404 throw before the loader reaches env resolution.
  */
-async function runLoader(domain: string): Promise<Response | null> {
+async function runLoader(domain: string, query = ""): Promise<Response | null> {
   const { loader } = await import("~/routes/ads.$domain");
   try {
     await loader({
       context: { cloudflare: { env: {} } },
       params: { domain },
-      request: new Request(`http://localhost/ads/${encodeURIComponent(domain)}`),
+      request: new Request(`http://localhost/ads/${encodeURIComponent(domain)}${query}`),
     } as never);
     return null;
   } catch (error) {
@@ -63,6 +63,32 @@ describe("legacy dotless /ads slugs (issue #3457)", () => {
       expect(response!.status).toBe(404);
     },
   );
+
+  // Issue #3457 review: a plain-object lookup would treat inherited
+  // Object.prototype members as map hits and 301 them to a garbage Location.
+  // Object.hasOwn gates the lookup so these names keep the pinned 404.
+  it.each([
+    "toString",
+    "constructor",
+    "valueOf",
+    "hasOwnProperty",
+    "toLocaleString",
+    "propertyIsEnumerable",
+    "isPrototypeOf",
+    "__proto__",
+  ])("keeps the 404 for Object.prototype member name %s", async (slug) => {
+    const response = await runLoader(slug);
+
+    expect(response).toBeInstanceOf(Response);
+    expect(response!.status).toBe(404);
+  });
+
+  it("preserves the query string across the 301 (the /ads → /brands treatment, #2885)", async () => {
+    const response = await runLoader("nike", "?utm_source=newsletter");
+
+    expect(response!.status).toBe(301);
+    expect(response!.headers.get("Location")).toBe("/ads/nike.com?utm_source=newsletter");
+  });
 
   it("normalizes case/whitespace on the mapped slugs (URL params arrive un-normalized)", async () => {
     const response = await runLoader("Nike");
