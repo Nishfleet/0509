@@ -57,7 +57,7 @@ import type {
  * gated connector.
  *
  * The connector ships dark behind `PRESENCE_REVIEW_SITES_ROLLOUT` (off by
- * default); activation needs the flag and the 0101 CHECK widen for
+ * default); activation needs the flag and the 0103 CHECK widen for
  * `source_target.connector_id = 'review_sites'` — not a code change here.
  */
 const TRUSTPILOT_BUSINESS_UNIT_URL_BASE = "https://www.trustpilot.com/review";
