@@ -202,6 +202,13 @@ export default [
   // official API returns and where); every claim cites Meta's own docs.
   // Ends in the no-account /search preview (source=guide-api-limitations).
   route("guides/meta-ad-library-api-limitations", "routes/guides.meta-ad-library-api-limitations.tsx"),
+  // Issue #3421: the eighth /guides/* page — the buyer's first-question
+  // explainer: can an AI (ChatGPT/an agent) just check this? The honest
+  // two-half answer — what an AI chat genuinely does well, the three things
+  // only an always-on watch owns. Ends in the no-account /search preview
+  // (source=guide-can-chatgpt-monitor-ads; the uppercase ChatGPT in the PATH
+  // slug is deliberate, only the signup marker is lowercase).
+  route("guides/can-ChatGPT-monitor-competitor-ads", "routes/guides.can-ChatGPT-monitor-competitor-ads.tsx"),
   route("for-agencies", "routes/for-agencies.tsx"),
   route("sneaker-resale", "routes/sneaker-resale.tsx"),
   route(":locale/sneaker-resale", "routes/$locale.sneaker-resale.tsx"),
@@ -284,6 +291,10 @@ export default [
     // canonical→EN, advertised in the locale sitemaps like the rest of the
     // cluster.
     route("guides/meta-ad-library-api-limitations", "routes/$locale.guides.meta-ad-library-api-limitations.tsx"),
+    // Issue #3421: the ChatGPT first-question explainer — re-exported EN
+    // guide, canonical→EN, advertised in the locale sitemaps like the rest
+    // of the cluster.
+    route("guides/can-ChatGPT-monitor-competitor-ads", "routes/$locale.guides.can-ChatGPT-monitor-competitor-ads.tsx"),
     // Programmatic /ads/:domain under every locale prefix (issue #1562):
     // the #1501 buyer-surface cluster added /de, /de/pricing, ... but not
     // the /ads/:domain Ad Aggression Score pages, so /de/ads/nike.com

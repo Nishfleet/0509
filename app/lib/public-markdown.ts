@@ -201,6 +201,14 @@ const LLMS_PAGE_DETAILS = {
     description:
       "What the official Ad Library API covers — political and issue ads worldwide for 7 years, ads of any type only where delivered to the UK or EU for the past year — every claim linked to Meta's own docs, and the public-surface approach that covers the gap.",
   },
+  // Issue #3421: the ChatGPT first-question explainer. In SITEMAP_PATHS, so
+  // it needs a title/description here or the _llmsDetailsCoverSitemap type
+  // fails. Description sourced from the page's own copy (pageDescription).
+  "/guides/can-ChatGPT-monitor-competitor-ads": {
+    title: "Can ChatGPT monitor competitor ads?",
+    description:
+      "What an AI chat genuinely does well — summarising what it finds, drafting angles, explaining a diff — and the three things only an always-on watch owns: the 03:00 check, the dated record, and the before/after evidence.",
+  },
   "/compare": {
     title: "Compare Five to Nine vs the alternatives",
     description:
