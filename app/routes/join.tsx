@@ -98,7 +98,13 @@ export async function action({ context, request }: ActionFunctionArgs) {
     });
 
     const firstTouchValue = await readFirstTouch(request);
-    const confirmLatencyMs = firstTouchValue ? Math.max(0, Date.now() - firstTouchValue) : null;
+    // The first-touch cookie is unsigned: a planted or stale value must not
+    // reach the public p95. A delta past the cookie's own Max-Age cannot be
+    // a live first touch — record the confirm with no latency sample.
+    const confirmLatencyMs =
+      firstTouchValue !== null && Date.now() - firstTouchValue <= MAX_COOKIE_AGE_SECONDS * 1000
+        ? Math.max(0, Date.now() - firstTouchValue)
+        : null;
 
     const confirmedName =
       String(formData.get("pinnedName") ?? "").trim() || resolution.primary.name || effectiveInput;

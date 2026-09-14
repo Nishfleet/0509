@@ -41,5 +41,29 @@ e2e acceptance spec.
 
 - `npx vitest run --configLoader runner --project node tests/join-pipeline-metrics.test.ts tests/status.route.test.ts` — 34/34 pass.
 - `npx vitest run --configLoader runner --project workers tests/integration/join-pipeline-metrics.integration.test.ts` — 1/1 pass (real D1: write + read path).
-- `npx vitest run --configLoader runner --project node --changed origin/main` — 42 files / 453 tests pass.
+- `npx vitest run --configLoader runner --project node --changed origin/main` — 43 files / 456 tests pass.
 - `E2E_START_LOCAL_SERVER=1 npx playwright test --project=join-flow` — 8/8 pass (5 slice-1 + 3 new); no server-module client leak in the log.
+
+## Resume pass (pi-issue-0509-3177, 2026-09-14 ~18:30 IST)
+
+- PR #3508 existed but CI was red: `codex-node-checks` + `preview-assert`
+  both failed `tsc -b` on `tests/join-pipeline-metrics.test.ts` — Vitest 4
+  types a bare `vi.fn()`'s `mock.calls` as `[]` (empty tuple). Typed the
+  prepare/bind mocks with explicit signatures; vitest stayed green.
+- The earlier commit + PR body carried agent attribution trailers; amended
+  out (hard rule) and force-pushed with lease.
+- Reviewer round on senior seat `cursor/cursor-grok-4.6-high` (one round,
+  stock reviewer): no BLOCKING findings. Three Act-on items fixed:
+  1. Unsigned `f9_join_touch` cookie could inject a multi-year latency into
+     the public p95 — confirm leg now bounds the delta by the cookie's own
+     Max-Age (1 h); forged/stale values record the event with null latency.
+     Pinned by new `tests/join-confirm-latency.test.ts` (route-action test,
+     3 cases: real delta, forged cookie, absent cookie).
+  2. `/status` "Join path" copy rewritten in plain words (unslop accept
+     line): honest degraded line, no pipeline/sample jargon.
+  3. `/auth/signup` story column told join-path visitors to "paste a
+     competitor" — gated on `signupSource === "join"`; the join variant
+     confirms the competitor is already picked. Default copy unchanged
+     (prod-public spec asserts it).
+- Consider/Noted/Dismissed findings recorded in the PR body.
+- `npx vitest run --configLoader runner --project node tests/join-confirm-latency.test.ts tests/join-pipeline-metrics.test.ts tests/status.route.test.ts tests/auth-signup-structured-data.test.ts` — 40/40 pass; `--changed origin/main` sweep 43 files / 456 pass.

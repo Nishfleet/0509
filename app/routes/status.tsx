@@ -373,8 +373,8 @@ export default function StatusRoute() {
 
       <PublicDocBlock title="Join path">
         <p>
-          How fast a new visitor moves through the join path, measured from the rows the
-          pipeline writes — the confirm sample and the first-brief digest rows.
+          How long new visitors take to confirm who they are and to receive a first
+          brief, measured from the product&rsquo;s own records.
         </p>
         {data.joinPipeline ? (
           <dl className="proof-trail-list">
@@ -382,14 +382,14 @@ export default function StatusRoute() {
               <dt>Time to first confirm</dt>
               <dd title="Source: status_probe_samples join_first_confirm samples — identity card shown on /join to visitor confirm">
                 {joinPipelineMetricLine(data.joinPipeline.firstConfirm, "join confirms")}{" "}
-                Identity card shown to confirmed, measured at /join. As of {asOf}.
+                From the identity card on /join to the visitor&rsquo;s confirm. As of {asOf}.
               </dd>
             </div>
             <div>
               <dt>Time to first brief</dt>
               <dd title="Source: user signup timestamp to the first digest_run row filed with kind first_brief">
                 {joinPipelineMetricLine(data.joinPipeline.firstBrief, "first briefs")}{" "}
-                Signup completed to the first brief filed. As of {asOf}.
+                From completed signup to the first brief. As of {asOf}.
               </dd>
             </div>
           </dl>
@@ -398,8 +398,8 @@ export default function StatusRoute() {
             <div>
               <dt>Join-path metrics</dt>
               <dd>
-                The join-path metric read is degraded right now; the Core surfaces rows
-                above carry each surface's own state and reason.
+                We could not read these metrics just now. The sections above still
+                report each surface&rsquo;s own state.
               </dd>
             </div>
           </dl>
