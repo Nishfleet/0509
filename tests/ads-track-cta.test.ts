@@ -98,13 +98,17 @@ describe("issue #2051 — /ads/:domain Track CTA", () => {
 
   it("encodes the onboarding prefill in redirectTo so onboarding honors it", async () => {
     const html = await renderAdsPage(fixture());
-    const href = html.match(/href="(\/auth\/signup\?[^"]*)"/)?.[1];
+    // The nav Sign up pill (#3358: source=ads-page) also links into signup, so
+    // anchor on the Track CTA's href — the one carrying the competitor prefill.
+    const href = html.match(/href="(\/auth\/signup\?[^"]*competitor=nike\.com[^"]*)"/)?.[1];
     expect(href).toBeTruthy();
     const params = new URLSearchParams(
       href!.replace("/auth/signup?", "").replaceAll("&amp;", "&"),
     );
     expect(params.get("competitor")).toBe("nike.com");
     expect(params.get("redirectTo")).toBe("/app?website=nike.com#setup-checklist");
+    // #3358: the Track CTA carries the /ads family marker alongside the prefill.
+    expect(params.get("source")).toBe("ads-page");
   });
 
   it("interpolates the viewed domain into the CTA label", async () => {

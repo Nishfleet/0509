@@ -189,7 +189,7 @@ export default function GuideHowToTurnAOneOffCompetitorCheckIntoAStandingWatchRo
         )}
       />
       <script {...jsonLdScriptProps(structuredFaq)} />
-      <MarketingNav />
+      <MarketingNav signupSource="guide-standing-watch" />
 
       <section className="ld-hero">
         <p className="ld-case">
