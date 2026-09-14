@@ -12,8 +12,8 @@ import { appEnv } from "./fixtures";
  * Issue #3166 — the sitemap-coverage canary probes EVERY advertised URL,
  * including the whole /ads/:domain + /timeline/:domain cohort (~134 URLs)
  * in one run. That exceeds the enforced public-brand-page budget
- * (PUBLIC_BRAND_PAGE_PER_MINUTE_LIMIT per 60s — #2985's sustained parity
- * with the old 120/10min D1 bucket), so the canary would 429 its own tail
+ * (PUBLIC_BRAND_PAGE_PER_MINUTE_LIMIT per 60s — #3156's raise of the
+ * #2985/#2964 parity rate), so the canary would 429 its own tail
  * and report false-red. The x-0509-canary-token header gets the same
  * scoped exemption a verified crawler (cf-verified-bot, issue #2062) has —
  * and only that scope.

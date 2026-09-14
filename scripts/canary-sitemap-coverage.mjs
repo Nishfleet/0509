@@ -63,12 +63,15 @@ export const ISSUE_BODY_MARKER = "sitemap-coverage-guard incident";
 export const GUARD_ISSUE = 3166;
 
 /**
- * The /ads + /timeline cohort shares one 120/10min per-IP public-brand-page
- * budget, and a full-sitemap probe (~134 brand URLs) exceeds it — so when
- * CANARY_BYPASS_TOKEN is configured the probe presents x-0509-canary-token,
- * which the limiter exempts on public-brand-page scope exactly like a
- * verified crawler. Absent the token the run still works; it just risks
- * 429s on the brand tail (fail-open, real divergences still reported).
+ * The /ads + /timeline cohort shares one 60/60s per-IP public-brand-page
+ * edge budget (#2985, raised from 12/60s by #3156), and a full-sitemap
+ * probe (~134 brand URLs) at the default burst pacing exceeds it inside
+ * seconds — so when CANARY_BYPASS_TOKEN is configured the probe presents
+ * x-0509-canary-token, which the limiter exempts on public-brand-page
+ * scope exactly like a verified crawler. Absent the token the caller must
+ * pace below the budget (the guard's run script passes
+ * --concurrency 1 --delay-ms 5200); a token-less fast run 429s its own
+ * brand tail and reports self-inflicted divergences.
  */
 function canaryHeaders() {
   const token = process.env.CANARY_BYPASS_TOKEN?.trim();

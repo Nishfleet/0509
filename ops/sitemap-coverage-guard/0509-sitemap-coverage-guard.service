@@ -9,21 +9,31 @@ Documentation=https://github.com/Nishfleet/0509/blob/main/docs/ops-backup-uptime
 
 [Service]
 Type=oneshot
-# Runs as nish: the guard reads the nish-owned repo checkout and needs the
-# ambient gh auth for the canary's --file-issue divergence path (same shape
-# as the timeline-coverage guard; NO Cloudflare token is needed — the canary
-# is a public-surface probe).
+# Runs as nish: the guard owns an origin/main-synced checkout under
+# ~/.local/state/0509-sitemap-coverage/checkout and needs the ambient gh
+# auth for the canary's --file-issue divergence path (same shape as the
+# digest headline-ratio guard; NO Cloudflare token is needed — the canary
+# is a zero-cost public-surface probe).
 User=nish
 Group=nish
 # Optional operator-provided env (root-owned 0600), e.g.
 #   CANARY_BYPASS_TOKEN=<token>
-# which switches the run from crawl-parity slow pacing (~17 min) to the
+# which switches the run from crawl-parity slow pacing (~31 min) to the
 # canary's fast default pacing. The file is OPTIONAL — the "-" prefix means
 # the unit starts fine without it and simply paces slowly.
 EnvironmentFile=-/etc/0509-sitemap-coverage-guard/env
+# systemd does not source the nish user's login shell, so node/gh (which
+# live under the nish toolchain, not /usr/bin) are not on the default
+# service PATH. The provision script discovers the node bin dir at
+# provision time and substitutes it for __NODE_BIN_DIR__ in the installed
+# unit; the placeholder below is never installed verbatim. Fail-loud PATH
+# resolution lives in the run script (it prints the resolved PATH to the
+# journal if node/gh are still missing).
+Environment=PATH=__NODE_BIN_DIR__:/usr/local/bin:/usr/bin:/bin
 ExecStart=/opt/0509-sitemap-coverage-guard/0509-sitemap-coverage-guard-run.sh
-# Full token-less pass: ~180 URLs at 1 req / 5.2s plus retries ≈ 17-20 min.
-TimeoutStartSec=1800
+# Full token-less pass: ~360 advertised URLs at 1 req / 5.2s plus retries ≈
+# 31-35 min; an hour bounds a wedged crawl without false-failing it.
+TimeoutStartSec=3600
 # A failed verdict must leave the unit failed for watchers; do not restart
 # into a tight failure loop.
 Restart=no

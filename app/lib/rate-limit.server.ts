@@ -53,11 +53,12 @@ function isVerifiedSearchCrawler(request: Request): boolean {
 
 // The sitemap-coverage canary (issue #3166) probes EVERY advertised URL,
 // including the whole /ads/:domain + /timeline/:domain cohort — ~134 URLs
-// against the 12/60s sustained #2985 brand-page budget, so a single run
-// 429s its own tail. The canary token gets the same public-brand-page
-// exemption a verified crawler has: it is exactly the crawl-parity probe
-// that budget would otherwise starve. Scope-gated identically: auth,
-// write, and API scopes keep their limits for token holders too.
+// against the 60/60s sustained brand-page edge budget (#2985, raised from
+// 12/60s by #3156), so a single fast-paced run 429s its own tail. The
+// canary token gets the same public-brand-page exemption a verified
+// crawler has: it is exactly the crawl-parity probe that budget would
+// otherwise starve. Scope-gated identically: auth, write, and API scopes
+// keep their limits for token holders too.
 async function hasPublicCoverageCanaryToken(request: Request, env: AppEnv): Promise<boolean> {
   return hasValidCanaryToken(request, env.CANARY_BYPASS_TOKEN);
 }
