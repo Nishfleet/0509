@@ -531,6 +531,183 @@ describe("guides meta-ad-library-api-limitations route (issue #3127)", () => {
   });
 });
 
+describe("guides can-ChatGPT-monitor-competitor-ads route (issue #3421)", () => {
+  it("renders the honest answer: the three structural limits, what an AI chat does well, and what only a watch owns", async () => {
+    const { default: GuideRoute } = await import(
+      "~/routes/guides.can-ChatGPT-monitor-competitor-ads"
+    );
+    const markup = renderToStaticMarkup(createElement(GuideRoute));
+
+    // The three fact blocks — structural limits, not effort or prompting
+    // problems, stated as facts that hold for any AI chat.
+    expect(markup).toContain("Three things an AI chat structurally cannot do.");
+    expect(markup).toContain("A plain HTTP client gets a 403");
+    expect(markup).toContain("One point in time — history is not in the window");
+    expect(markup).toContain("Unattended vigilance — somebody has to be there at 03:00");
+    // Fact (a) carries its checked date on the page (the #3019 cited-facts
+    // pattern) with the checked source linked inline.
+    expect(markup).toContain("re-checked live on 13 September 2026");
+    expect(markup).toContain("The 403 re-checked 13 September 2026:");
+    expect(markup).toContain('href="https://www.facebook.com/ads/library/"');
+    expect(markup).toContain("returns HTTP 403.");
+    // Fact (b): the Ad Library is one point in time — history is never in
+    // the window, and a paused ad is gone for good.
+    expect(markup).toContain("what the offer said on 12 June");
+    expect(markup).toContain("History is not in the window.");
+    // Fact (c): unattended vigilance — the 03:00 claim only a system that
+    // actually ran can truthfully make.
+    expect(markup).toContain("We checked 24 ads at 03:00 and nothing moved");
+    expect(markup).toContain("only a system that actually ran can make");
+    // The honest AI-strengths half — the AI is never disguised as useless.
+    expect(markup).toContain("What an AI chat does well.");
+    expect(markup).toContain("Summarising what it finds");
+    expect(markup).toContain("Drafting angles");
+    expect(markup).toContain("Explaining a diff once someone hands it one");
+    // What only an always-on watch owns.
+    expect(markup).toContain("What only an always-on watch owns.");
+    expect(markup).toContain("The 03:00 check");
+    expect(markup).toContain("The dated record");
+    expect(markup).toContain("Before/after evidence with source links");
+    // The honest plan truth: the free plan is one first check + one first
+    // brief; scheduled checks are a paid plan.
+    expect(markup).toContain("free plan watches one competitor");
+    expect(markup).toContain("scheduled checks are a paid plan");
+    // CTA is the public /search preview carrying the allowlisted marker —
+    // the MARKER is lowercase even though the PATH slug keeps uppercase
+    // ChatGPT (the marker pattern forbids uppercase; the path is deliberate).
+    expect(markup).toContain('action="/search"');
+    expect(markup).toContain('name="source"');
+    expect(markup).toContain('value="guide-can-chatgpt-monitor-ads"');
+    expect(markup).toContain('href="/search?source=guide-can-chatgpt-monitor-ads"');
+    // Honest scope: Meta Ad Library only — no multi-platform claim.
+    expect(markup).toContain("Meta Ad Library only");
+    expect(markup).not.toMatch(/multi-platform/iu);
+    expect(markup).not.toMatch(/all (major )?platforms/iu);
+    // Shared marketing chrome.
+    expect(markup).toContain("Named for 05:09");
+    // No named competitor tools in the guide's own copy (the shared chrome
+    // links the compare/switch cluster site-wide, so scope the check to the
+    // page body between the header and footer).
+    const body = markup.split("</header>")[1]?.split("<footer")[0] ?? markup;
+    expect(body).not.toMatch(/Panoramata|Foreplay|Spyder|Visualping|AdSpyder/iu);
+  });
+
+  it("declares the canonical URL and public SEO meta", async () => {
+    const { links, meta } = await import(
+      "~/routes/guides.can-ChatGPT-monitor-competitor-ads"
+    );
+
+    const { buyerSurfaceHreflangLinks } = await import("~/lib/seo");
+    expect(links()).toEqual([
+      {
+        rel: "canonical",
+        href: "https://0509.io/guides/can-ChatGPT-monitor-competitor-ads",
+      },
+      ...buyerSurfaceHreflangLinks("guides/can-ChatGPT-monitor-competitor-ads"),
+    ]);
+
+    const tags = meta({} as never) as Array<Record<string, string>>;
+    const title = tags.find((tag) => "title" in tag)?.title;
+    expect(title).toBe("Can ChatGPT monitor competitor ads? | Five to Nine");
+    expect(tags).toContainEqual({
+      property: "og:url",
+      content: "https://0509.io/guides/can-ChatGPT-monitor-competitor-ads",
+    });
+  });
+
+  it("is registered as a route (EN + locale cluster) and published in the sitemap", async () => {
+    const { readFileSync } = await import("node:fs");
+    const routes = readFileSync("app/routes.ts", "utf8");
+    // The EXACT uppercase slug is the pinned contract — ChatGPT stays
+    // uppercase in the PATH (only the signup-source MARKER is lowercase).
+    expect(routes).toContain(
+      'route("guides/can-ChatGPT-monitor-competitor-ads", "routes/guides.can-ChatGPT-monitor-competitor-ads.tsx")',
+    );
+    expect(routes).toContain(
+      'route("guides/can-ChatGPT-monitor-competitor-ads", "routes/$locale.guides.can-ChatGPT-monitor-competitor-ads.tsx")',
+    );
+
+    const { publicSeoFileForPathname } = await import("~/lib/seo");
+    const sitemap = publicSeoFileForPathname("/sitemap.xml");
+    expect(sitemap?.body).toContain(
+      "<loc>https://0509.io/guides/can-ChatGPT-monitor-competitor-ads</loc>",
+    );
+  });
+
+  it("emits one FAQPage JSON-LD block whose mainEntity count matches the visible FAQ entries", async () => {
+    const {
+      default: GuideRoute,
+      canChatGPTMonitorCompetitorAdsFaqEntries,
+    } = await import("~/routes/guides.can-ChatGPT-monitor-competitor-ads");
+    const markup = renderToStaticMarkup(createElement(GuideRoute));
+
+    const ldBlocks = [
+      ...markup.matchAll(
+        /<script type="application\/ld\+json">([\s\S]*?)<\/script>/g,
+      ),
+    ];
+    const faqBlocks = ldBlocks
+      .map((match) => JSON.parse(match[1] ?? "{}"))
+      .filter((data) => data["@type"] === "FAQPage");
+
+    expect(faqBlocks).toHaveLength(1);
+    const mainEntity = faqBlocks[0].mainEntity as Array<{ name: string }>;
+    expect(mainEntity).toHaveLength(
+      canChatGPTMonitorCompetitorAdsFaqEntries.length,
+    );
+    expect(mainEntity.map((entry) => entry.name)).toEqual(
+      expect.arrayContaining(
+        canChatGPTMonitorCompetitorAdsFaqEntries.map((e) => e.question),
+      ),
+    );
+  });
+
+  it("emits the Article JSON-LD entity whose headline matches the visible h1", async () => {
+    const { default: GuideRoute } = await import(
+      "~/routes/guides.can-ChatGPT-monitor-competitor-ads"
+    );
+    const markup = renderToStaticMarkup(createElement(GuideRoute));
+
+    const ldBlocks = [
+      ...markup.matchAll(
+        /<script type="application\/ld\+json">([\s\S]*?)<\/script>/g,
+      ),
+    ];
+    const articleBlocks = ldBlocks
+      .map((match) => JSON.parse(match[1] ?? "{}"))
+      .filter((data) => data["@type"] === "Article");
+
+    expect(articleBlocks).toHaveLength(1);
+    const headline = articleBlocks[0].headline as string;
+    const h1 = (markup.match(/<h1[^>]*>([\s\S]*?)<\/h1>/)?.[1] ?? "")
+      .replace(/&#x27;/g, "'")
+      .replace(/&amp;/g, "&");
+    expect(h1).toContain(headline);
+  });
+
+  it("allowlists the guide-can-chatgpt-monitor-ads signup source marker", async () => {
+    const { ALLOWED_SIGNUP_SOURCES, allowlistedSignupSource } = await import(
+      "~/lib/signup-source"
+    );
+    expect(ALLOWED_SIGNUP_SOURCES).toContain("guide-can-chatgpt-monitor-ads");
+    expect(allowlistedSignupSource("guide-can-chatgpt-monitor-ads")).toBe(
+      "guide-can-chatgpt-monitor-ads",
+    );
+    expect(allowlistedSignupSource("guide-can-chatgpt-monitor-ads&x=1")).toBeNull();
+  });
+
+  it("is internally linked from /docs and /competitor-monitoring", async () => {
+    const { readFileSync } = await import("node:fs");
+    const docs = readFileSync("app/routes/docs.tsx", "utf8");
+    const monitoring = readFileSync(
+      "app/routes/competitor-monitoring.tsx",
+      "utf8",
+    );
+    expect(docs).toContain('to="/guides/can-ChatGPT-monitor-competitor-ads"');
+    expect(monitoring).toContain('to="/guides/can-ChatGPT-monitor-competitor-ads"');
+  });
+});
+
 // Issue #3122: production 404'd the #2888 third how-to while the sitemap
 // still advertised it and the /guides hub hid it — a SPLIT deployment state.
 // The per-guide tests above are enumerated (each guide hard-coded), so a
