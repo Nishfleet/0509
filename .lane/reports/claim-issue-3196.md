@@ -31,6 +31,10 @@ LinkedIn ad coverage via the public LinkedIn Ad Library (split of #2992).
 
 Touches only the LinkedIn adapter, its flag, its usage counter, its tests, its coverage copy and its /status row — plus this lane record. No shared adapter interface edited (the only `requiresEnv` change rides the flag; the source-sections edit is the LinkedIn section's own body inside the shared file, the #3394 precedent). No migrations — the workers project untouched. No new bin/ files, no new checks, net mechanism: one counter module riding the #2181 pattern.
 
+## CI fix round (resume, 2026-09-14)
+
+The PR (#3424, opened + senior-reviewed + auto-merge armed by the 21:51:30Z run before it died) went red on CI: `codex-node-checks` and `preview-assert` both failed on one root cause — `tests/linkedin-ads-capture-usage.server.test.ts(61,16): error TS2339: Property 'store' does not exist on type 'KVNamespace<string>'` (the TTL assertion reads `.store`; the stub was cast to bare `KVNamespace`, dropping the intersection the merged #3197 precedent has). Fixed in 3c2299702 (one cast, byte-shape of the #3197 file); scoped 6-file acceptance set re-run → 72/72 passed; `sgscan --base origin/main` → "No new security findings." (exit 0) at 3c2299702. The one reviewer round was already spent on this PR (ship-ready, Act-on fixed) — a type-cast alignment to a merged precedent is not a second round.
+
 ## Honest limits
 
 - The measured /status counters render once #2181's DECODO_BUDGET KV binding is wired on the deployment; until then the row states the flag posture (the #2200 rule). #2181 owns the wiring decision.
