@@ -12,6 +12,11 @@ import { ctaPipelineStageCountsFromCounters } from "~/lib/cta-pipeline-stage-cou
 /**
  * Issue #2443 (finding M9): `diff_computed` counted `baseline_established`.
  *
+ * Fixed in PR #2748 (merged 2026-09-11). The fix excludes `baseline_established`
+ * from `diff_computed` because a first-ever capture has no prior capture to
+ * diff against. The module's own contract documents `diff_computed` as the
+ * stage that "ran against a prior capture".
+ *
  * The module documents `diff_computed` as "the change-diff stage ran against a
  * prior capture". `baseline_established` is by definition the no-prior-capture
  * case (`recordDiffStage`'s `ctaUnchanged` doc: "Null when there was no prior
