@@ -402,11 +402,7 @@ describe("scheduled monitoring D1_TYPE_ERROR incident", () => {
         status: "failed",
         pages_scanned: 0,
         baseline_from_run_id: null,
-        // #3176: the finisher's wholesale summary write always carries the
-        // (here empty) fan-out progress subtree — see
-        // tests/integration/signup-scan-progress.integration.test.ts.
-        summary_json:
-          '{"adsSeen":0,"events":0,"sourceProgress":{},"sourceProgressUpdatedAt":""}',
+        summary_json: '{"adsSeen":0,"events":0}',
         attempt_count: 1,
         error_code: "monitoring_failed",
         error_message:
