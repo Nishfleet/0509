@@ -648,31 +648,34 @@ describe("acquisition-family signup attribution (issue #3358)", () => {
     }
   });
 
-  // One rendered surface per family: the pill href shape end-to-end at a
-  // memory cost the 2GB fork survives (7 route imports, not 40).
-  const FAMILY_RENDER_SPOT: Array<[string, string]> = [
-    ["ads.$domain", ADS_PAGE_SIGNUP_SOURCE],
-    ["compare", COMPARE_PAGE_SIGNUP_SOURCE],
-    ["switch.adspy", SWITCH_PAGE_SIGNUP_SOURCE],
-    ["timeline", TIMELINE_PAGE_SIGNUP_SOURCE],
-    ["guides", GUIDES_HUB_SIGNUP_SOURCE],
-    ["guides.how-to-track-competitor-ads", GUIDE_TRACK_ADS_SIGNUP_SOURCE],
-    // A $locale re-export renders the EN component, so the marker rides.
-    ["$locale.compare", COMPARE_PAGE_SIGNUP_SOURCE],
-  ];
-
-  it("the Sign up pill carries exactly its family marker (one render per family)", async () => {
-    for (const [route, expected] of FAMILY_RENDER_SPOT) {
-      const { default: Route } = await import(`~/routes/${route}`);
-      const markup = renderToStaticMarkup(createElement(Route));
-      const pills =
-        markup.match(/<a[^>]*class="[^"]*ld-nav-pill[^"]*"[^>]*>[\s\S]*?<\/a>/g) ?? [];
-      expect(pills, `/${route} must render exactly one Sign up pill`).toHaveLength(1);
-      const href = pills[0].match(/href="([^"]*)"/)?.[1] ?? "";
-      const source = new URL(href, "https://0509.io").searchParams.get("source");
-      expect(source, `/${route} Sign up pill must carry source=${expected}`).toBe(
-        expected,
+  // The pill href construction lives in ONE place — marketing-nav's Sign up
+  // pill — so the runtime proof is a component render per family marker.
+  // Rendering whole route modules here OOMed the 2GB vitest fork heap
+  // (measured 2026-09-13/14: 7 sequential route imports + renders in one fork
+  // died at the heap limit; one route module + deps is ~40MB), so the
+  // per-file wiring above stays static and only the pill mechanism renders.
+  it("the Sign up pill carries exactly its family marker, per family (component render)", async () => {
+    const { MarketingNav } = await import("~/components/marketing-nav");
+    for (const expected of [...FAMILY_MARKERS, GUIDE_TRACK_ADS_SIGNUP_SOURCE]) {
+      const markup = renderToStaticMarkup(
+        createElement(MarketingNav, { signupSource: expected }),
       );
+      const href =
+        markup.match(/<a[^>]*class="[^"]*ld-nav-pill[^"]*"[^>]*>[\s\S]*?<\/a>/)?.[0]?.match(
+          /href="([^"]*)"/,
+        )?.[1] ?? "";
+      expect(href.startsWith("/auth/signup"), `pill stays on /auth/signup for ${expected}`).toBe(
+        true,
+      );
+      expect(
+        new URL(href, "https://0509.io").searchParams.get("source"),
+        `the Sign up pill must carry source=${expected}`,
+      ).toBe(expected);
     }
-  }, 60_000);
+    // Surfaces with no family marker keep the bare pill — the default must
+    // not leak a marker onto non-acquisition surfaces.
+    const bare = renderToStaticMarkup(createElement(MarketingNav));
+    expect(bare).toContain('href="/auth/signup"');
+    expect(bare).not.toContain("source=");
+  });
 });
