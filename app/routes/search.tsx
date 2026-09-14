@@ -807,7 +807,10 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
   // warming paths already standardise. The designed limiter 429 Responses
   // above this seam keep their own rate-limit UX. Search failures were
   // already funnel-errored by the inner catch; later-stage failures stay
-  // #3129's (reportError epic) concern, not this guard's.
+  // #3129's (reportError epic) concern, not this guard's. Issue #3456: the
+  // guard is leg-wide, so the base `?q=` leg shares it — the 2026-09-14
+  // 00:45Z/06:25Z 500 windows on /search?q=<brand>&country=all degrade to
+  // the same honest 200; tests/search-base-leg-honest-state.test.ts pins it.
   try { // #3400 leg guard (catch below)
   const { executeSearchWithRelevance } =
     await import("~/lib/search-execution.server");
@@ -3039,7 +3042,12 @@ export default function SearchRoute() {
                           formatProofCaptureLabel(selectedAd, { pending: true })
                         }
                       >
-                        <Await resolve={streamedCapture}>
+                        <Await
+                          resolve={streamedCapture}
+                          errorElement={formatProofCaptureLabel(selectedAd, {
+                            failureReason: "capture_stream_failed",
+                          })}
+                        >
                           {(payload) =>
                             formatProofCaptureLabel(payload.ad, {
                               failureReason:
@@ -3156,7 +3164,16 @@ export default function SearchRoute() {
                       />
                     }
                   >
-                    <Await resolve={streamedCapture}>
+                    <Await
+                      resolve={streamedCapture}
+                      errorElement={
+                        <SelectedLandingPageBlock
+                          ad={selectedAd}
+                          pending={false}
+                          failureReason="capture_stream_failed"
+                        />
+                      }
+                    >
                       {(payload) => (
                         <SelectedLandingPageBlock
                           ad={payload.ad}
