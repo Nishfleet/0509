@@ -48,6 +48,9 @@ const { validateDeployReadiness } =
   await import("../scripts/verify-deploy-readiness.mjs");
 const { RELEASE_COVERAGE_MATRIX, expectedReleaseArtifacts } =
   await import("../scripts/playwright-release-manifest-reporter.mjs");
+const { productionMigrationLedgerRule } = await import(
+  "../scripts/d1-migration-sync-check.lib.mjs"
+);
 
 const fingerprint = "a".repeat(64);
 const wranglerHash = "b".repeat(64);
@@ -1483,22 +1486,31 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
         .update(JSON.stringify(reorderedNames))
         .digest("hex"),
     };
+    // The derived ledger rule (0509#3512): the in-order two-name ledger is
+    // both baseline and repository, so the reversal fails the recorded
+    // baseline prefix — a reorder the repository alone cannot explain.
+    const migrationLedgerRule = productionMigrationLedgerRule(
+      migrationLedgerNames,
+      new Set(),
+      {
+        baseline: migrationLedgerNames,
+        retiredMigrations: new Set<string>(),
+      },
+    );
+    const expected = {
+      candidateFingerprint: fingerprint,
+      wranglerWorktreeSha256: wranglerHash,
+      migrationLedgerRule,
+      now: new Date("2026-07-16T12:00:00.000Z"),
+    };
     expect(
-      validateRemoteRestoreEvidence(reorderedEvidence, {
-        candidateFingerprint: fingerprint,
-        wranglerWorktreeSha256: wranglerHash,
-        allowedMigrationStates: [
-          {
-            latestMigration: evidence.latestMigration,
-            migrationCount: evidence.migrationCount,
-            migrationLedgerNames,
-            migrationLedgerNamesSha256: migrationLedgerNamesHash,
-            migrationLedgerBaselineSha256:
-              evidence.migrationLedgerBaselineSha256,
-          },
-        ],
-        now: new Date("2026-07-16T12:00:00.000Z"),
-      }),
+      validateRemoteRestoreEvidence(
+        {
+          ...reorderedEvidence,
+          migrationLedgerBaselineSha256: migrationLedgerRule.baselineSha256,
+        },
+        expected,
+      ),
     ).toMatchObject({
       ok: false,
       issues: expect.arrayContaining([
@@ -1506,6 +1518,16 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
         "remote_restore_migration_ledger_order",
       ]),
     });
+    // The same rule accepts the exact in-order ledger.
+    expect(
+      validateRemoteRestoreEvidence(
+        {
+          ...evidence,
+          migrationLedgerBaselineSha256: migrationLedgerRule.baselineSha256,
+        },
+        expected,
+      ),
+    ).toEqual({ ok: true, issues: [] });
   });
 
   it("tiers EXACTNESS by migration/restore-critical, and applies one 14-day age bound to both", () => {

@@ -5,12 +5,13 @@ import {
   PRODUCTION_MIGRATION_LEDGER_BASELINE,
   PRODUCTION_MIGRATION_LEDGER_BASELINE_SHA256,
   RETIRED_PRODUCTION_MIGRATIONS,
-  allowedProductionMigrationLedgers,
   allowedRemoteMigrationLedgers,
   blockingPendingMigrationNames,
   hasOnlyPostDeployCleanupMigrations,
+  inspectProductionMigrationLedger,
   migrationLedgerNamesSha256,
   pendingMigrationNames,
+  productionMigrationLedgerRule,
 } from "../scripts/d1-migration-sync-check.lib.mjs";
 
 describe("D1 migration sync check", () => {
@@ -74,17 +75,36 @@ Migrations to be applied:
     ).toThrow("post_deploy_cleanup_migration_allowlist_invalid");
   });
 
-  it("reconciles the immutable production baseline with retired files and new suffixes", () => {
+  it("derives the production ledger contract from baseline, repository, and retire list", () => {
     const repositoryBaseline = PRODUCTION_MIGRATION_LEDGER_BASELINE.filter(
       (name) => !RETIRED_PRODUCTION_MIGRATIONS.has(name),
     );
     const next = "0071_next_migration.sql";
+    const repository = [...repositoryBaseline, next];
     expect(
-      allowedProductionMigrationLedgers([...repositoryBaseline, next], new Set()),
-    ).toEqual([[...PRODUCTION_MIGRATION_LEDGER_BASELINE, next]]);
+      inspectProductionMigrationLedger(
+        [...PRODUCTION_MIGRATION_LEDGER_BASELINE, next],
+        repository,
+        new Set(),
+      ),
+    ).toEqual({ ok: true, pending: [], blockingPending: [] });
+    expect(
+      inspectProductionMigrationLedger(
+        [...PRODUCTION_MIGRATION_LEDGER_BASELINE],
+        repository,
+        new Set(),
+      ),
+    ).toEqual({ ok: true, pending: [next], blockingPending: [next] });
     expect(PRODUCTION_MIGRATION_LEDGER_BASELINE_SHA256).toBe(
       migrationLedgerNamesSha256([...PRODUCTION_MIGRATION_LEDGER_BASELINE]),
     );
+    expect(productionMigrationLedgerRule(repository, new Set())).toMatchObject({
+      baselineSha256: PRODUCTION_MIGRATION_LEDGER_BASELINE_SHA256,
+      baseline: [...PRODUCTION_MIGRATION_LEDGER_BASELINE],
+      repositoryMigrations: repository,
+      retiredMigrations: [...RETIRED_PRODUCTION_MIGRATIONS],
+      cleanupMigrations: [],
+    });
   });
 
   it("matches the production ledger exactly with no cleanup allowance", () => {
@@ -107,13 +127,28 @@ Migrations to be applied:
     ];
     // POST_DEPLOY_CLEANUP_MIGRATIONS is empty (2026-08-26 auditor fix):
     // 0077 was never a destructive cleanup — it is a live migration still
-    // present in the repo and applied to production. With an empty set the
-    // only allowed ledger is the exact repository ledger; a production ledger
-    // trailing 0077 is a genuine drift that must block (the migration must be
-    // applied, not silently waved through as "cleanup").
+    // present in the repo and applied to production. With an empty set a
+    // production ledger trailing 0077 is a genuine drift that must block
+    // (the migration must be applied, not silently waved through as
+    // "cleanup").
     expect(
-      allowedProductionMigrationLedgers(repository, POST_DEPLOY_CLEANUP_MIGRATIONS),
-    ).toEqual([productionLedger]);
+      inspectProductionMigrationLedger(
+        productionLedger,
+        repository,
+        POST_DEPLOY_CLEANUP_MIGRATIONS,
+      ),
+    ).toEqual({ ok: true, pending: [], blockingPending: [] });
+    expect(
+      inspectProductionMigrationLedger(
+        productionLedger.slice(0, -1),
+        repository,
+        POST_DEPLOY_CLEANUP_MIGRATIONS,
+      ),
+    ).toEqual({
+      ok: true,
+      pending: ["0077_competitor_site_monitoring.sql"],
+      blockingPending: ["0077_competitor_site_monitoring.sql"],
+    });
     const output = `
 Migrations to be applied:
 ┌────────────────────────────────────────────────────┐
@@ -128,89 +163,136 @@ Migrations to be applied:
     ]);
   });
 
-  it("emits declared order-exception variants and rejects invalid declarations", () => {
+  it("explains post-baseline names by membership, rename alias, or retire list and rejects the rest", () => {
     const baseline = ["0001_first.sql", "0002_second.sql"];
+    const options = { baseline, retiredMigrations: new Set<string>() };
     const repository = [
       "0001_first.sql",
       "0002_second.sql",
       "0003_a.sql",
       "0004_b.sql",
+      "0005_renamed.sql",
     ];
-    const ledgers = allowedProductionMigrationLedgers(
-      repository,
-      new Set(),
-      baseline,
-      new Set(),
-      [["0004_b.sql", "0003_a.sql"]],
-    );
-    expect(ledgers).toEqual([
-      [...baseline, "0003_a.sql", "0004_b.sql"],
-      [...baseline, "0004_b.sql", "0003_a.sql"],
-    ]);
-    // A group already in repository order is a no-op: no duplicate variant.
+    // Production applied 0004_b before 0003_a landed — an order the sorted
+    // repository cannot enumerate, explainable by membership alone. No
+    // per-incident order declaration is needed.
     expect(
-      allowedProductionMigrationLedgers(
+      inspectProductionMigrationLedger(
+        [...baseline, "0004_b.sql", "0003_a.sql"],
         repository,
         new Set(),
-        baseline,
-        new Set(),
-        [["0003_a.sql", "0004_b.sql"]],
+        options,
       ),
-    ).toEqual([[...baseline, "0003_a.sql", "0004_b.sql"]]);
-    // A fully absent group is inert.
+    ).toEqual({
+      ok: true,
+      pending: ["0005_renamed.sql"],
+      blockingPending: ["0005_renamed.sql"],
+    });
+    // A renumbered file explains its stale production name: 0004_renamed
+    // was applied before the file shipped as 0005_renamed.
     expect(
-      allowedProductionMigrationLedgers(
+      inspectProductionMigrationLedger(
+        [...baseline, "0004_renamed.sql"],
         repository,
         new Set(),
-        baseline,
-        new Set(),
-        [["0098_absent_a.sql", "0099_absent_b.sql"]],
+        options,
       ),
-    ).toEqual([[...baseline, "0003_a.sql", "0004_b.sql"]]);
-    for (const exceptions of [
-      [["0001_first.sql", "0003_a.sql"]], // baseline member
-      [["0003_a.sql", "0099_absent_b.sql"]], // partial repository presence
-      [["0003_a.sql", "0004_b.sql"], ["0004_b.sql", "0003_a.sql"]], // cross-group duplicate
-      [["0003_a.sql"]], // group too small
-      [["not a migration", "0003_a.sql"]], // invalid name
-    ]) {
-      expect(() =>
-        allowedProductionMigrationLedgers(
-          repository,
-          new Set(),
-          baseline,
-          new Set(),
-          exceptions as string[][],
-        ),
-      ).toThrow("production_migration_order_exceptions_invalid");
-    }
+    ).toEqual({
+      ok: true,
+      pending: ["0003_a.sql", "0004_b.sql", "0005_renamed.sql"],
+      blockingPending: ["0003_a.sql", "0004_b.sql", "0005_renamed.sql"],
+    });
+    // An ambiguous name body (two repository files share it) explains
+    // nothing — fail closed.
+    expect(
+      inspectProductionMigrationLedger(
+        [...baseline, "0004_renamed.sql"],
+        [...repository, "0006_renamed.sql"],
+        new Set(),
+        options,
+      ),
+    ).toEqual({
+      ok: false,
+      reason: "unexplained",
+      unexplained: ["0004_renamed.sql"],
+    });
+    // A post-baseline name the repository deleted is explainable only while
+    // the retire list declares it.
+    expect(
+      inspectProductionMigrationLedger(
+        [...baseline, "0009_deleted.sql"],
+        repository,
+        new Set(),
+        { baseline, retiredMigrations: new Set(["0009_deleted.sql"]) },
+      ),
+    ).toEqual({
+      ok: true,
+      pending: ["0003_a.sql", "0004_b.sql", "0005_renamed.sql"],
+      blockingPending: ["0003_a.sql", "0004_b.sql", "0005_renamed.sql"],
+    });
+    expect(
+      inspectProductionMigrationLedger(
+        [...baseline, "0009_deleted.sql"],
+        repository,
+        new Set(),
+        options,
+      ),
+    ).toEqual({
+      ok: false,
+      reason: "unexplained",
+      unexplained: ["0009_deleted.sql"],
+    });
   });
 
-  it("fails closed on baseline drift, duplicates, and invalid retired names", () => {
+  it("fails closed on a reordered baseline prefix, duplicates, and invalid retired names", () => {
     const baseline = ["0001_first.sql", "0002_retired.sql"];
     const retired = new Set(["0002_retired.sql"]);
+    const options = { baseline, retiredMigrations: retired };
+    const repository = ["0001_first.sql", "0003_next.sql"];
     expect(
-      allowedProductionMigrationLedgers(
-        ["0001_first.sql", "0003_next.sql"],
+      inspectProductionMigrationLedger(
+        ["0001_first.sql", "0002_retired.sql"],
+        repository,
         new Set(),
-        baseline,
-        retired,
+        options,
       ),
-    ).toEqual([["0001_first.sql", "0002_retired.sql", "0003_next.sql"]]);
-    expect(() =>
-      allowedProductionMigrationLedgers(
-        ["0000_reordered.sql", "0001_first.sql"],
+    ).toEqual({
+      ok: true,
+      pending: ["0003_next.sql"],
+      blockingPending: ["0003_next.sql"],
+    });
+    // A reordered, truncated, or foreign recorded prefix is not explainable.
+    expect(
+      inspectProductionMigrationLedger(
+        ["0002_retired.sql", "0001_first.sql", "0003_next.sql"],
+        repository,
         new Set(),
-        baseline,
-        retired,
+        options,
       ),
-    ).toThrow("migration_repository_baseline_drift");
+    ).toEqual({ ok: false, reason: "baseline_prefix" });
+    expect(
+      inspectProductionMigrationLedger(
+        ["0001_first.sql"],
+        repository,
+        new Set(),
+        options,
+      ),
+    ).toEqual({ ok: false, reason: "baseline_prefix" });
+    expect(
+      inspectProductionMigrationLedger(
+        ["0001_first.sql", "0002_retired.sql", "0002_retired.sql"],
+        repository,
+        new Set(),
+        options,
+      ),
+    ).toEqual({ ok: false, reason: "invalid" });
+    // A retired name still shipping in the repository is a stale declaration.
     expect(() =>
-      allowedProductionMigrationLedgers(
+      inspectProductionMigrationLedger(
+        [...baseline],
         ["0001_first.sql", "0002_retired.sql"],
         new Set(),
-        baseline,
-        retired,
+        options,
       ),
     ).toThrow("retired_production_migration_set_invalid");
     expect(() =>

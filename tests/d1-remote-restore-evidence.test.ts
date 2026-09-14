@@ -48,7 +48,6 @@ import {
 } from "../scripts/d1-remote-restore-evidence-core.mjs";
 import { selectRecentRemoteRestoreArtifact } from "../scripts/find-recent-remote-restore-artifact.mjs";
 import {
-  allowedProductionMigrationLedgers,
   PRODUCTION_MIGRATION_LEDGER_BASELINE,
   RETIRED_PRODUCTION_MIGRATIONS,
 } from "../scripts/d1-migration-sync-check.lib.mjs";
@@ -173,35 +172,6 @@ function processGroupHasMember(pid: number): boolean {
   }
   return false;
 }
-
-/**
- * Migrations present in the repository that the frozen modeled production
- * states below have not applied — production's ledger tail predates them.
- * Every new migration registers here FIRST (a one-site edit: append it, keep
- * the list sorted); the 0096 interleave test's exclusion filter, its
- * full-ledger and behind-tail catch-up arrays, and the 0098-gdelt test's
- * still-repo-only filter all derive from this list, so a new migration needs
- * no per-test edits. Names must stay in repository (sorted) order — the
- * derived arrays rely on it.
- */
-const REPO_ONLY_MIGRATIONS = Object.freeze([
-  "0096_email_suppression.sql",
-  "0097_status_probe_samples.sql",
-  "0098_email_delivery_canary.sql",
-  "0098_widen_source_target_connector_bluesky.sql",
-  "0098_widen_source_target_connector_gdelt.sql",
-  "0099_widen_source_target_connector_threads.sql",
-  "0100_widen_source_target_connector_hn.sql",
-  "0101_widen_source_target_connector_pinterest.sql",
-  "0102_widen_source_target_connector_podcast.sql",
-  "0103_widen_source_target_connector_youtube.sql",
-  // #3175's dismissal migration renumbered 0098 -> 0104 (deploy repair,
-  // #3512): it merged after 0099-0102 were already applied to production,
-  // and a migration sorting before applied history is a ledger hole the
-  // restore-evidence gate must reject. Production never applied the 0098
-  // name, so the rename leaves no ledger trace.
-  "0104_competitor_suggestion_dismissal.sql",
-]);
 
 describe("D1 remote restore evidence automation", () => {
   afterEach(() => {
@@ -1579,7 +1549,17 @@ describe("D1 remote restore evidence automation", () => {
     const repository = readdirSync(resolve("migrations"))
       .filter((name) => /^\d{4}_.+\.sql$/u.test(name))
       .sort();
-    const allowed = allowedProductionMigrationLedgers(repository)[0];
+    const repositoryBaseline = PRODUCTION_MIGRATION_LEDGER_BASELINE.filter(
+      (name) => !RETIRED_PRODUCTION_MIGRATIONS.has(name),
+    );
+    // Under the derived contract (0509#3512) a matching production ledger is
+    // the recorded baseline prefix — retired names included at their applied
+    // positions — followed by the repository's post-baseline names; with an
+    // empty cleanup allowlist the exact-match ledger uses repository order.
+    const allowed = [
+      ...PRODUCTION_MIGRATION_LEDGER_BASELINE,
+      ...repository.slice(repositoryBaseline.length),
+    ];
     const last = allowed.at(-1);
     expect(last).toMatch(/^\d{4}_[A-Za-z0-9_]+\.sql$/u);
     const namedLedger = (names: string[]) =>
@@ -1602,22 +1582,15 @@ describe("D1 remote restore evidence automation", () => {
     ).toEqual({ action: "ok" });
   });
 
-  it("pins 0096 interleave planner behavior: behind-tail catches up, full reordered ledger plans ok, partial interleave fails closed once the 0098 exception lands", () => {
+  it("plans forward catch-up for the 0096 interleave without per-incident order declarations", () => {
     // Run 34671488829 (2026-09-12): production applied 0096_error_reports.sql
     // while it was the ledger tail, then 0096_email_suppression.sql landed in
     // the repository sorting earlier. D1's ledger is append-only, so the live
-    // order is fixed history the sorted repository cannot reproduce.
-    //
-    // Modeled ledger: production applied the 0096 pair in the production
-    // order and nothing after it. That matched the live ledger when #3184
-    // wrote this test; run 34705843153 has since applied 0097, 0098 canary
-    // and 0098 gdelt (the live state is covered by the 0098 test below).
-    // The modeled state still pins planner behavior for a backup behind the
-    // whole tail. 0104_competitor_suggestion_dismissal.sql (#3175, renumbered
-    // from 0098 by the #3512 deploy repair) is likewise in the repository and
-    // not yet applied on production, so it joins the not-yet-applied group.
-    // Keep this list in step with the repository tail: a new migration file
-    // that production has not applied belongs here.
+    // order is fixed history the sorted repository cannot reproduce. The
+    // derived contract (0509#3512) explains any post-baseline order by
+    // membership alone and plans the repository names the ledger lacks — no
+    // per-incident exception list, so a new or renumbered migration file can
+    // never re-stale this planner.
     const repository = readdirSync(resolve("migrations"))
       .filter((name) => /^\d{4}_.+\.sql$/u.test(name))
       .sort();
@@ -1625,41 +1598,57 @@ describe("D1 remote restore evidence automation", () => {
       (name) => !RETIRED_PRODUCTION_MIGRATIONS.has(name),
     );
     const repositorySuffix = repository.slice(repositoryBaseline.length);
+    // Modeled production: everything through 0095 applied in repository
+    // order, then 0096_error_reports applied while it was the tail, and
+    // every later repository file still pending. Derived from the live
+    // listing, so the model survives new migrations without edits.
+    const appliedHead = repositorySuffix.filter(
+      (name) => name < "0096_email_suppression.sql",
+    );
     const productionNames = [
       ...PRODUCTION_MIGRATION_LEDGER_BASELINE,
-      ...repositorySuffix.filter((name) => !REPO_ONLY_MIGRATIONS.includes(name)),
+      ...appliedHead,
+      "0096_error_reports.sql",
     ];
     expect(productionNames.at(-1)).toBe("0096_error_reports.sql");
+    const pending = repository.filter(
+      (name) => !new Set(productionNames).has(name),
+    );
     const namedLedger = (names: string[]) =>
       names.map((name, index) => ({
         id: index + 1,
         name,
         appliedAt: "2026-09-12 04:04:45",
       }));
-    // With the 0098 order exception declared (0509#3315) this partial
-    // interleave has two allowed futures that diverge at the 0098 pair
-    // (bluesky-first vs gdelt-first); the planner fails closed instead of
-    // guessing.
     expect(
       planSourceBackupLedgerReconciliation(
         namedLedger(productionNames),
         repository,
       ),
     ).toEqual({
-      action: "reject",
-      reason: "source_backup_migration_ledger_stale",
+      action: "apply_forward_suffix",
+      migrations: pending,
     });
+    // The fully-applied-but-reordered ledger plans ok: every name is a
+    // repository member, so no order exception is needed.
     expect(
       planSourceBackupLedgerReconciliation(
-        namedLedger([...productionNames, ...REPO_ONLY_MIGRATIONS]),
+        namedLedger([...productionNames, ...pending]),
         repository,
       ),
     ).toEqual({ action: "ok" });
-    // A production ledger behind the whole exception group catches up in
-    // repository order: a forward apply always appends in sorted order.
+    // A production ledger behind the whole tail catches up in repository
+    // order: a forward apply always appends pending migrations in sorted
+    // order, 0096_email_suppression before the 0096_error_reports name
+    // production already carried out of repository order.
     const behindNames = productionNames.filter(
       (name) => name !== "0096_error_reports.sql",
     );
+    const behindPending = repository.filter(
+      (name) => !new Set(behindNames).has(name),
+    );
+    expect(behindPending.at(0)).toBe("0096_email_suppression.sql");
+    expect(behindPending).toContain("0096_error_reports.sql");
     expect(
       planSourceBackupLedgerReconciliation(
         namedLedger(behindNames),
@@ -1667,10 +1656,7 @@ describe("D1 remote restore evidence automation", () => {
       ),
     ).toEqual({
       action: "apply_forward_suffix",
-      // The const's names plus 0096_error_reports (which production applied
-      // while it was the tail, so the const never lists it), in repository
-      // sorted order — same comparison the repository list uses.
-      migrations: ["0096_error_reports.sql", ...REPO_ONLY_MIGRATIONS].sort(),
+      migrations: behindPending,
     });
   });
 
@@ -1692,32 +1678,30 @@ describe("D1 remote restore evidence automation", () => {
     const repositoryHead = repositorySuffix.filter(
       (name) => name < "0096_email_suppression.sql",
     );
-    // This modeled state has applied five of the module const's names (plus
-    // 0096_error_reports, which production applied while it was the tail and
-    // the const never lists). Everything else the const lists — 0098_bluesky
-    // and every later migration — is still repo-only here, so both the
-    // planned catch-up and the full ledger derive from REPO_ONLY_MIGRATIONS.
+    // This modeled state applied the repository head through 0098_gdelt in
+    // the production order — the 0096 pair error_reports-first, then 0097,
+    // the canary, and 0098_gdelt. Every later repository name (0098_bluesky
+    // onward, including the renumbered 0104_competitor_suggestion_dismissal)
+    // is still repo-only here, derived from the live listing so a new
+    // migration never re-stales the model.
     const appliedFromRepoOnly = [
       "0096_email_suppression.sql",
       "0097_status_probe_samples.sql",
       "0098_email_delivery_canary.sql",
       "0098_widen_source_target_connector_gdelt.sql",
     ];
-    const stillRepoOnly = REPO_ONLY_MIGRATIONS.filter(
-      (name) => !appliedFromRepoOnly.includes(name),
-    );
     const productionNames = [
       ...PRODUCTION_MIGRATION_LEDGER_BASELINE,
       ...repositoryHead,
-      // The 0096 pair in the production-applied order (error_reports was the
-      // tail when production applied it), then 0097, the canary, and
-      // 0098_gdelt. (0098_competitor_suggestion_dismissal.sql was renumbered
-      // to 0104 by the #3512 deploy repair, so in this modeled world it is
-      // still-repo-only and sorts at the tail.) Every planned catch-up
-      // carries the still-repo-only names after 0098_bluesky.
       "0096_error_reports.sql",
       ...appliedFromRepoOnly,
     ];
+    const stillRepoOnly = repository.filter(
+      (name) => !new Set(productionNames).has(name),
+    );
+    expect(stillRepoOnly.at(0)).toBe(
+      "0098_widen_source_target_connector_bluesky.sql",
+    );
     expect(productionNames.at(-1)).toBe(
       "0098_widen_source_target_connector_gdelt.sql",
     );
