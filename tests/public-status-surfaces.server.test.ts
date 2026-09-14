@@ -114,6 +114,10 @@ const healthyRows = (): Record<string, Fixture> => ({
   "SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed\n        FROM watchlist_run": { total: 31, failed: 0 },
   "FROM digest_delivery": { last_digest_sent_at: FRESH },
   "FROM scheduled_observation_health_state": { active_since: MONTH_AGO },
+  // Issue #3195: the weekly TikTok (EU Ad Library) capture read. 2 of the 3
+  // active watchlists have a stored snapshot inside the 8-day window → the
+  // monitoring fact reads 2 captured, 1 missed (the capture-failure gap).
+  "FROM source_snapshot": { tiktok_captures: 2 },
   "FROM watchlist WHERE is_active": { active: 3 },
   "FROM discovery_cache_entry": { sets: 12, freshest: FRESH },
   "COUNT(*) AS tickets": { tickets: 4 },
@@ -323,6 +327,23 @@ describe("getPublicStatusSurfaces state machine", () => {
     const monitoring = await surfaceById(makeEnv(rows), "monitoring");
     expect(monitoring.state).toBe("down");
     expect(monitoring.reason).toContain("every watchlist run");
+  });
+
+  it("reads the TikTok capture-failure gap onto the monitoring facts (issue #3195)", async () => {
+    const monitoring = await surfaceById(makeEnv(healthyRows()), "monitoring");
+    expect(monitoring.facts).toContainEqual(
+      "TikTok (EU Ad Library): 2 of 3 active watchlists captured in the last 8 days — 1 missed this weekly window (the capture-failure gap)",
+    );
+  });
+
+  it("degrades the TikTok gap to 0 captured when no capture rows exist yet (issue #3195)", async () => {
+    const rows = healthyRows();
+    delete rows["FROM source_snapshot"];
+    const monitoring = await surfaceById(makeEnv(rows), "monitoring");
+    expect(monitoring.state).toBe("operational");
+    expect(monitoring.facts).toContainEqual(
+      "TikTok (EU Ad Library): 0 of 3 active watchlists captured in the last 8 days — 3 missed this weekly window (the capture-failure gap)",
+    );
   });
 
   it("keeps scheduled monitoring operational at zero runs with zero watchlists", async () => {

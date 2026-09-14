@@ -4,12 +4,12 @@ import type { AppEnv } from "~/lib/env.server";
 import type { SourceSnapshotRecord, SourceSnapshotInput } from "~/lib/sources/types";
 import { fetchAdsByAccountOwner, type LinkedInAdCard, type LinkedInAdLibraryFetchResult } from "~/lib/sources/linkedin-ads/linkedin-ad-library.server";
 
-/**
- * Mock the Decodo budget helper so the adapter's budget gate is controllable
- * without a real KV namespace. `budgetOk` flips the gate per test.
- */
 let budgetOk = true;
-vi.mock("~/lib/decodo-budget.server", () => ({
+vi.mock("~/lib/decodo-budget.server", async (importOriginal) => ({
+  // Spread the original so the #3196 registry/coverage import-graph (the
+  // #2181 seam's other consumers) keeps its exports; only the helper the
+  // adapter calls is overridden.
+  ...(await importOriginal<typeof import("~/lib/decodo-budget.server")>()),
   reserveDecodoBudget: vi.fn(async (): Promise<{ ok: boolean }> => ({ ok: budgetOk })),
 }));
 
@@ -19,7 +19,12 @@ vi.mock("~/lib/decodo-budget.server", () => ({
  * value the mocked fetchAdsByAccountOwner returns.
  */
 let fetchResult: LinkedInAdLibraryFetchResult = { unavailable: true, reason: "no_credentials" };
-vi.mock("~/lib/sources/linkedin-ads/linkedin-ad-library.server", () => ({
+vi.mock("~/lib/sources/linkedin-ads/linkedin-ad-library.server", async (importOriginal) => ({
+  // Spread the original so type-adjacent exports keep working; the mocked
+  // fetch is the one network boundary these tests control.
+  ...(await importOriginal<
+    typeof import("~/lib/sources/linkedin-ads/linkedin-ad-library.server")
+  >()),
   fetchAdsByAccountOwner: vi.fn(async (): Promise<LinkedInAdLibraryFetchResult> => fetchResult),
 }));
 
@@ -171,5 +176,184 @@ describe("linkedinAdsAdapter.diff", () => {
     expect(byType.ad_new).toEqual(["1004"]);
     expect(byType.ad_inactive).toEqual(["1002"]);
     expect(byType.copy).toEqual(["1003"]);
+  });
+});
+
+describe("linkedinAdsAdapter — #3196 kill flag", () => {
+  it("stays on for the production posture when the #2193 credential is present (unset, 0, blank)", () => {
+    expect(linkedinAdsAdapter.requiresEnv(envWithAuth)).toBe(true);
+    expect(
+      linkedinAdsAdapter.requiresEnv({ ...envWithAuth, LINKEDIN_ADS_SOURCE_DISABLED: "0" } as AppEnv),
+    ).toBe(true);
+    expect(
+      linkedinAdsAdapter.requiresEnv({ ...envWithAuth, LINKEDIN_ADS_SOURCE_DISABLED: "" } as AppEnv),
+    ).toBe(true);
+  });
+
+  it("reports killed for 1 / true / yes / on (credential still present)", () => {
+    for (const value of ["1", "true", "yes", "on"]) {
+      expect(
+        linkedinAdsAdapter.requiresEnv({ ...envWithAuth, LINKEDIN_ADS_SOURCE_DISABLED: value } as AppEnv),
+      ).toBe(false);
+    }
+  });
+
+  it("still requires the #2193 credential: without DECODO_SCRAPER_AUTH the source is off either way", () => {
+    expect(linkedinAdsAdapter.requiresEnv({} as AppEnv)).toBe(false);
+    expect(linkedinAdsAdapter.requiresEnv({ LINKEDIN_ADS_SOURCE_DISABLED: "0" } as AppEnv)).toBe(false);
+  });
+
+  it("drops the source from the scheduled-run path when killed (registry env filter)", async () => {
+    const { getEnabledSources } = await import("~/lib/sources/registry.server");
+    // scout grants all sources, so what changes between these two calls is
+    // exactly the #3196 kill flag (the #2193 credential stays present).
+    const enabled = getEnabledSources(
+      { DECODO_SCRAPER_AUTH: "dXNlcjpwYXNz", LINKEDIN_ADS_SOURCE_DISABLED: "0" } as AppEnv,
+      "scout",
+    );
+    const killed = getEnabledSources(
+      { DECODO_SCRAPER_AUTH: "dXNlcjpwYXNz", LINKEDIN_ADS_SOURCE_DISABLED: "1" } as AppEnv,
+      "scout",
+    );
+    expect(enabled.some((a) => a.id === "linkedin")).toBe(true);
+    expect(killed.some((a) => a.id === "linkedin")).toBe(false);
+  });
+
+  it("keeps the docs coverage row honest: the connector posture plus the #3196 ads facts", async () => {
+    const { presenceSourceCoverageForDocs } = await import(
+      "~/lib/presence-source-coverage.server"
+    );
+    const row = presenceSourceCoverageForDocs().find((entry) => entry.sourceId === "linkedin");
+    // The row's posture is the PRESENCE connector's (PRESENCE_LINKEDIN_ROLLOUT
+    // gates it; #3196 does not flip it) — the #3196 ads facts ride the notes.
+    expect(row?.productionStatus).toBe("gated");
+    expect(row?.notes).toContain("LINKEDIN_ADS_SOURCE_DISABLED=1");
+    expect(row?.notes).toContain("public LinkedIn Ad Library");
+    expect(row?.notes).toContain("United States");
+    expect(row?.notes).toContain("capture-failure rate");
+  });
+});
+
+describe("linkedinAdsAdapter.fetch — counted attempts (#3196)", () => {
+  /** The e2e fixture watchlist's tracked brand (e2e-watchlist-firstbrief). */
+  const COMPETITOR = { competitorId: "e2e-watchlist-firstbrief", competitorLabel: "Rival Labs" };
+
+  function makeKv() {
+    const store = new Map<string, { value: string; expirationTtl?: number }>();
+    return {
+      async get(key: string) {
+        return store.get(key)?.value ?? null;
+      },
+      async put(key: string, value: string, options?: { expirationTtl?: number }) {
+        store.set(key, { value, expirationTtl: options?.expirationTtl });
+      },
+      async delete(key: string) {
+        store.delete(key);
+      },
+    } as unknown as KVNamespace;
+  }
+
+  function fixtureAds(): LinkedInAdLibraryFetchResult {
+    return {
+      accountOwner: "Rival Labs",
+      totalAds: 2,
+      ambiguous: false,
+      ads: [
+        {
+          id: "411191001",
+          advertiser: "Rival Labs",
+          text: "Rival Labs launches warm-handoff tracking for revenue teams.",
+          creativeImageUrl: "https://media.licdn.com/dms/image/411191001/creative",
+          detailUrl: "https://www.linkedin.com/ad-library/detail/411191001",
+        },
+        {
+          id: "411191002",
+          advertiser: "Rival Labs",
+          text: "See every competitor motion the week it happens.",
+          creativeImageUrl: null,
+          detailUrl: "https://www.linkedin.com/ad-library/detail/411191002",
+        },
+      ],
+    };
+  }
+
+  beforeEach(() => {
+    budgetOk = true;
+    vi.mocked(fetchAdsByAccountOwner).mockClear();
+  });
+
+  it("counts a successful capture and returns its payload (>=1 LinkedIn ad for the e2e fixture watchlist's tracked brand)", async () => {
+    const kv = makeKv();
+    fetchResult = fixtureAds();
+    const { getLinkedInAdsCaptureStats24h } = await import(
+      "~/lib/sources/linkedin-ads/linkedin-ads-usage.server"
+    );
+
+    const result = await linkedinAdsAdapter.fetch(
+      { ...envWithAuth, DECODO_BUDGET: kv } as AppEnv,
+      { competitorId: "e2e-watchlist-firstbrief", competitorLabel: "Rival Labs" },
+    );
+
+    expect("unavailable" in result).toBe(false);
+    const payload = (result as { payload: { ads: unknown[] } }).payload;
+    expect(payload.ads.length).toBeGreaterThanOrEqual(1);
+
+    const stats = await getLinkedInAdsCaptureStats24h({ DECODO_BUDGET: kv } as AppEnv);
+    expect(stats.counted).toBe(true);
+    expect(stats.attempted).toBe(1);
+    expect(stats.failed).toBe(0);
+    expect(stats.rate).toBe(0);
+  });
+
+  it("counts a failed capture and returns unavailable before anything is diffed (#2873 posture)", async () => {
+    const kv = makeKv();
+    fetchResult = { unavailable: true, reason: "decodo_status_613" };
+    const { getLinkedInAdsCaptureStats24h } = await import(
+      "~/lib/sources/linkedin-ads/linkedin-ads-usage.server"
+    );
+
+    const result = await linkedinAdsAdapter.fetch(
+      { ...envWithAuth, DECODO_BUDGET: kv } as AppEnv,
+      { competitorId: "e2e-watchlist-firstbrief", competitorLabel: "Rival Labs" },
+    );
+
+    expect(result).toEqual({ unavailable: true, reason: "decodo_status_613" });
+
+    const stats = await getLinkedInAdsCaptureStats24h({ DECODO_BUDGET: kv } as AppEnv);
+    expect(stats.counted).toBe(true);
+    expect(stats.attempted).toBe(1);
+    expect(stats.failed).toBe(1);
+    expect(stats.rate).toBe(1);
+  });
+
+  it("still returns the capture result when no KV binding is wired (counter no-ops)", async () => {
+    fetchResult = fixtureAds();
+    const result = await linkedinAdsAdapter.fetch(envWithAuth, {
+      competitorId: "e2e-watchlist-firstbrief",
+      competitorLabel: "Rival Labs",
+    });
+
+    expect("unavailable" in result).toBe(false);
+  });
+
+  it("does not count the #2193 quota-deny: it returns before any Library read", async () => {
+    const kv = makeKv();
+    budgetOk = false;
+    fetchResult = fixtureAds(); // would succeed — proves the deny precedes the read
+    const { getLinkedInAdsCaptureStats24h } = await import(
+      "~/lib/sources/linkedin-ads/linkedin-ads-usage.server"
+    );
+
+    const result = await linkedinAdsAdapter.fetch(
+      { ...envWithAuth, DECODO_BUDGET: kv } as AppEnv,
+      { competitorId: "e2e-watchlist-firstbrief", competitorLabel: "Rival Labs" },
+    );
+
+    expect(result).toEqual({ unavailable: true, reason: "quota" });
+
+    const stats = await getLinkedInAdsCaptureStats24h({ DECODO_BUDGET: kv } as AppEnv);
+    expect(stats.counted).toBe(true);
+    expect(stats.attempted).toBe(0);
+    expect(stats.rate).toBeNull();
   });
 });

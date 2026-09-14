@@ -86,6 +86,14 @@ export function TiktokAdsSection({
         EU-shown ads only. TikTok's Commercial Content Library does not expose
         spend or impressions; counts reflect EU-shown ads in the lookback window.
       </p>
+      {/* Coverage honesty (issue #3195): the note must state region, ad types
+          AND freshness. The negative space above states region + what the
+          library does not publish; this line states the capture freshness —
+          the weekly cadence the adapter itself enforces (7-day skip). */}
+      <p className="f9-wk-dim" data-testid="brand-tiktok-ads-checked">
+        Last captured: {snapshot.fetchedAt.slice(0, 10)} — this source rechecks
+        weekly.
+      </p>
     </section>
   );
 }
