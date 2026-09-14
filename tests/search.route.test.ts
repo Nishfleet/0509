@@ -83,7 +83,7 @@ const appSession = {
   session: {
     id: "session-1",
     userId: "user-1",
-    expiresAt: "2026-04-03T00:00:00.000Z",
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
   },
 };
 
@@ -3344,7 +3344,7 @@ describe("search status copy", () => {
       ...baseAd,
       metaAdId: "likely-active",
       active: true,
-      firstSeenAt: "2025-01-01T00:00:00.000Z",
+      firstSeenAt: "2025-01-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       domainMatch: {
         level: "likely_brand_name",
         reason: "brand name fits",
@@ -3355,7 +3355,7 @@ describe("search status copy", () => {
       ...baseAd,
       metaAdId: "verified-inactive",
       active: false,
-      firstSeenAt: "2026-01-01T00:00:00.000Z",
+      firstSeenAt: "2026-01-01T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       domainMatch: {
         level: "exact_hostname",
         reason: "landing page links to brand domain",

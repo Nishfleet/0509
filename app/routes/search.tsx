@@ -1537,19 +1537,22 @@ export async function action({ context, request }: ActionFunctionArgs) {
 // streams the promise's resolution into the already-flushed document (single
 // fetch, turbo-stream). A payload without `search` is a flat early return
 // (idle, HEAD, invalid input, rate-limit copy) and renders exactly as before.
-type SearchRouteLoaderData = Awaited<ReturnType<typeof loader>>;
 type StreamedSearchRouteData = Extract<
-  SearchRouteLoaderData,
+  Awaited<ReturnType<typeof loader>>,
   { search: Promise<unknown> }
 >;
 type SearchStreamPayload = Awaited<StreamedSearchRouteData["search"]>;
 type ResolvedSearchRouteData = Omit<StreamedSearchRouteData, "search"> &
   SearchStreamPayload;
 
+// `data` is the turbo-stream-deserialized loader value, not the loader's raw
+// return union (SerializeFrom unwraps the data() envelopes the raw union
+// still carries), so the guard takes unknown and narrows onto the raw
+// streamed member the streamed/resolved shapes below are built from.
 function isStreamedSearchData(
-  data: SearchRouteLoaderData,
+  data: unknown,
 ): data is StreamedSearchRouteData {
-  return "search" in data;
+  return typeof data === "object" && data !== null && "search" in data;
 }
 
 function streamedSearchFastFields(
