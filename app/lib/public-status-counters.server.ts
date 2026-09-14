@@ -770,6 +770,7 @@ async function getPublicStatusCountersWithWatchlists(
       lastWatchlistRunAt: null,
       runsInLast24h: 0,
       failedRunsInLast24h: 0,
+      tiktokCapturesInLast8d: 0,
       lastDigestSentAt: null,
       digestHealth: "unknown",
       scheduledMonitoringSince: null,
