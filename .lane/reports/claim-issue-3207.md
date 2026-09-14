@@ -90,3 +90,15 @@ and hn never declares it — pinned at the test file's line 351 — so the
 describe's `completeSnapshot: false` proof stays the guard-early-return
 check by design); S1/S2 (the `as SourceTargetRecord` and vi.fn-cast
 idioms are this test file's established pattern, lines 354/715/727/796).
+
+CI fix (2026-09-13, resume unit): the first PR head tripped the #2376
+file-size ratchet — the #3207 describe pushed
+hn-mention-connector.integration.test.ts to 830 lines (unseeded over-800;
+all four ratchet its scan the real tree). Fix: the describe moved verbatim
+to tests/integration/hn-mention-activation.integration.test.ts (297 lines,
+private per-file fixtures per the bluesky/gdelt/threads sibling pattern)
+and the connector file was restored to its exact main shape (678 lines —
+the branch's diff on it is now empty). Proven at the new head: activation
+2/2 + connector 21/21 (workers, real workerd + real migrations), ratchet
+9/9, node --changed origin/main 106 files / 1273 tests. Same coverage,
+23 its, two right-sized files.
