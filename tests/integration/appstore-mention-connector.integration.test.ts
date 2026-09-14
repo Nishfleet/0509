@@ -21,7 +21,7 @@ import { appEnv, db, seedUser } from "./fixtures";
  * iTunes Search/Lookup API plus its customer-review RSS feed (page=1 only,
  * never deep-paged), and Google Play's public details page
  * (SoftwareApplication ld+json). The suite pins the #3210 acceptance on real
- * workerd against the repo's real migrations — including migration 0103,
+ * workerd against the repo's real migrations — including migration 0104,
  * which widened the source_target connector_id CHECK to accept
  * `connector_id = 'appstore'`: the seeded row below only inserts because the
  * widen is applied, so the write path through the rebuilt table is proven,
@@ -67,6 +67,12 @@ const APPLE_LISTING_URL = `https://apps.apple.com/${APPLE_COUNTRY}/app/id${APPLE
 const APPLE_LOOKUP_URL = buildItunesLookupUrl(APPLE_APP_ID, APPLE_COUNTRY);
 const APPLE_REVIEWS_URL = buildItunesReviewsUrl(APPLE_APP_ID, APPLE_COUNTRY);
 const APPLE_REVIEW_1_URL = "https://apps.apple.com/us/app/acme-notes/id544007664?review=1015309951";
+// fixed-date: feed `updated` instants are fixture payload — stored verbatim
+// as published_at and only ever compared to literal strings, never to the
+// wall clock (the digest's `since` filter reads created_at, not these).
+const REVIEW_ONE_UPDATED = "2026-09-10T12:00:00-07:00";
+// fixed-date: the edited review's later `updated` instant — same fixture role.
+const REVIEW_ONE_EDITED_UPDATED = "2026-09-11T09:30:00-07:00";
 const PLAY_PACKAGE_ID = "test.acme.notes";
 const PLAY_LISTING_URL = "https://play.google.com/store/apps/details?id=test.acme.notes";
 const PLAY_DETAILS_URL = buildPlayDetailsUrl(PLAY_PACKAGE_ID);
@@ -81,6 +87,7 @@ const APPLE_LOOKUP_BODY = {
       trackName: "Acme Notes",
       description: "The Acme edge, pocket edition — notes that sync offline-first.",
       sellerName: "Acme Engineering Ltd",
+      // fixed-date: Apple's documented releaseDate shape — fixture payload.
       releaseDate: "2023-06-15T00:00:00Z",
       averageUserRating: 4.5,
       userRatingCount: 1234,
@@ -113,6 +120,7 @@ function appleReviewsBody(reviewOneUpdated: string) {
         },
         {
           author: { name: { label: "DriveByNight" } },
+          // fixed-date: second review's feed instant — fixture payload.
           updated: { label: "2026-09-09T08:00:00-07:00" },
           id: { label: "1015298877" },
           title: { label: "Slow since the redesign" },
@@ -151,7 +159,7 @@ function jsonResponse(body: unknown): Response {
  * and never touches the network. Anything unexpected 404s loudly.
  */
 function appstoreFetcher(responders: {
-  lookup: () => Response;
+  lookup?: () => Response;
   reviews?: () => Response;
   play?: () => Response;
 }) {
@@ -159,7 +167,7 @@ function appstoreFetcher(responders: {
     const url = new URL(input.toString());
     const hostPath = `${url.hostname}${url.pathname}`;
     if (url.hostname === "itunes.apple.com" && url.pathname === "/lookup") {
-      return responders.lookup();
+      return responders.lookup ? responders.lookup() : new Response("missing lookup", { status: 404 });
     }
     if (url.hostname === "itunes.apple.com" && url.pathname.includes("/rss/customerreviews/page=1/")) {
       return responders.reviews ? responders.reviews() : new Response("missing reviews", { status: 404 });
@@ -239,7 +247,7 @@ describe("App-stores mention connector (#3210) — the public-listing + review s
     });
     const fetchImpl = appstoreFetcher({
       lookup: () => jsonResponse(APPLE_LOOKUP_BODY),
-      reviews: () => jsonResponse(appleReviewsBody("2026-09-10T12:00:00-07:00")),
+      reviews: () => jsonResponse(appleReviewsBody(REVIEW_ONE_UPDATED)),
     });
 
     const poll = await pollPresenceTarget(makeEnv("internal"), target, { trackingMode: "self" }, { fetchImpl });
@@ -269,6 +277,7 @@ describe("App-stores mention connector (#3210) — the public-listing + review s
     const listing = await readItemRow(target.id, APPLE_LISTING_URL);
     expect(listing?.title).toBe("Acme Notes");
     expect(listing?.author).toBe("Acme Engineering Ltd");
+    // fixed-date: exact string match on the stored fixture instant.
     expect(listing?.published_at).toBe("2023-06-15T00:00:00.000Z");
     const listingRaw = JSON.parse(listing?.raw_json ?? "{}") as Record<string, unknown>;
     expect(listingRaw.kind).toBe("appstore_listing");
@@ -282,6 +291,7 @@ describe("App-stores mention connector (#3210) — the public-listing + review s
     const review = await readItemRow(target.id, APPLE_REVIEW_1_URL);
     expect(review?.title).toBe("Acme Notes saved my week");
     expect(review?.author).toBe("Riley328");
+    // fixed-date: exact string match on the stored fixture instant.
     expect(review?.published_at).toBe("2026-09-10T19:00:00.000Z");
     const reviewRaw = JSON.parse(review?.raw_json ?? "{}") as Record<string, unknown>;
     expect(reviewRaw.kind).toBe("appstore_review");
@@ -296,7 +306,7 @@ describe("App-stores mention connector (#3210) — the public-listing + review s
     });
     const fetchImpl = appstoreFetcher({
       lookup: () => jsonResponse(APPLE_LOOKUP_BODY),
-      reviews: () => jsonResponse(appleReviewsBody("2026-09-10T12:00:00-07:00")),
+      reviews: () => jsonResponse(appleReviewsBody(REVIEW_ONE_UPDATED)),
     });
 
     const first = await pollPresenceTarget(makeEnv("internal"), target, { trackingMode: "self" }, { fetchImpl });
@@ -324,11 +334,11 @@ describe("App-stores mention connector (#3210) — the public-listing + review s
     });
     const firstFetch = appstoreFetcher({
       lookup: () => jsonResponse(APPLE_LOOKUP_BODY),
-      reviews: () => jsonResponse(appleReviewsBody("2026-09-10T12:00:00-07:00")),
+      reviews: () => jsonResponse(appleReviewsBody(REVIEW_ONE_UPDATED)),
     });
     const editedFetch = appstoreFetcher({
       lookup: () => jsonResponse(APPLE_LOOKUP_BODY),
-      reviews: () => jsonResponse(appleReviewsBody("2026-09-11T09:30:00-07:00")),
+      reviews: () => jsonResponse(appleReviewsBody(REVIEW_ONE_EDITED_UPDATED)),
     });
 
     const first = await pollPresenceTarget(makeEnv("internal"), target, { trackingMode: "self" }, { fetchImpl: firstFetch });
@@ -347,6 +357,7 @@ describe("App-stores mention connector (#3210) — the public-listing + review s
     expect(await countLiveItems(target.id)).toBe(3);
 
     const edited = await readItemRow(target.id, APPLE_REVIEW_1_URL);
+    // fixed-date: exact string match on the stored fixture instant.
     expect(edited?.published_at).toBe("2026-09-11T16:30:00.000Z");
     expect(edited?.revision).toBe(2);
     const revisions = await db()
@@ -364,7 +375,7 @@ describe("App-stores mention connector (#3210) — the public-listing + review s
     });
     const fetchImpl = appstoreFetcher({
       lookup: () => jsonResponse(APPLE_LOOKUP_BODY),
-      reviews: () => jsonResponse(appleReviewsBody("2026-09-10T12:00:00-07:00")),
+      reviews: () => jsonResponse(appleReviewsBody(REVIEW_ONE_UPDATED)),
     });
 
     const poll = await pollPresenceTarget(makeEnv("internal"), target, { trackingMode: "self" }, { fetchImpl });
@@ -391,7 +402,7 @@ describe("App-stores mention connector (#3210) — the public-listing + review s
     });
     const fetchImpl = appstoreFetcher({
       lookup: () => jsonResponse({ resultCount: 0, results: [] }),
-      reviews: () => jsonResponse(appleReviewsBody("2026-09-10T12:00:00-07:00")),
+      reviews: () => jsonResponse(appleReviewsBody(REVIEW_ONE_UPDATED)),
     });
 
     const poll = await pollPresenceTarget(makeEnv("internal"), target, { trackingMode: "self" }, { fetchImpl });
@@ -475,14 +486,14 @@ describe("App-stores mention connector (#3210) — the public-listing + review s
               // never fabricate one.
               {
                 author: { name: { label: "NoId" } },
-                updated: { label: "2026-09-10T12:00:00-07:00" },
+                updated: { label: REVIEW_ONE_UPDATED },
                 title: { label: "Missing id" },
                 link: { attributes: { rel: "related", href: APPLE_REVIEW_RELATED_HREF } },
               },
               // A review-shaped entry whose only link is rel=self — same skip.
               {
                 author: { name: { label: "NoRelated" } },
-                updated: { label: "2026-09-10T12:00:00-07:00" },
+                updated: { label: REVIEW_ONE_UPDATED },
                 id: { label: "9999999999" },
                 title: { label: "Missing related link" },
                 link: { attributes: { rel: "self", href: APPLE_REVIEW_RELATED_HREF } },
@@ -491,7 +502,7 @@ describe("App-stores mention connector (#3210) — the public-listing + review s
               // Apple shape) still resolves its rel=related member.
               {
                 author: { name: { label: "Riley328" } },
-                updated: { label: "2026-09-10T12:00:00-07:00" },
+                updated: { label: REVIEW_ONE_UPDATED },
                 id: { label: "1015309951" },
                 title: { label: "Acme Notes saved my week" },
                 link: [
@@ -524,7 +535,7 @@ describe("App-stores mention connector (#3210) — the public-listing + review s
     });
     const fetchImpl = appstoreFetcher({
       lookup: () => jsonResponse(APPLE_LOOKUP_BODY),
-      reviews: () => jsonResponse(appleReviewsBody("2026-09-10T12:00:00-07:00")),
+      reviews: () => jsonResponse(appleReviewsBody(REVIEW_ONE_UPDATED)),
     });
 
     const poll = await pollPresenceTarget(makeEnv(undefined), target, { trackingMode: "self" }, { fetchImpl });

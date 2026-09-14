@@ -152,7 +152,7 @@ export default function CompareForeplayRoute() {
         )}
       />
       <script {...jsonLdScriptProps(structuredFaq)} />
-      <MarketingNav />
+      <MarketingNav signupSource="compare-page" />
 
       <section className="ld-hero">
         <p className="ld-case">

@@ -65,7 +65,7 @@ import type {
  *
  * The connector ships dark behind `PRESENCE_APPSTORE_ROLLOUT` (off by
  * default); writing `connector_id = 'appstore'` into source_target requires
- * the 0103 CHECK-widen migration — the code changes nothing else.
+ * the 0104 CHECK-widen migration — the code changes nothing else.
  */
 const APPSTORE_MAX_BYTES = 2_000_000;
 const MAX_LISTING_TITLE_CHARS = 120;

@@ -456,3 +456,4 @@ describe("compare/switch/locale route signup CTA attribution (issue #2109)", () 
     }
   }, 60_000);
 });
+

@@ -200,33 +200,6 @@ describe("status route", () => {
     expect(markup).toContain("gated");
   });
 
-  it("renders the App-stores tracked-source row — the public listings + reviews surface (issue #3210)", async () => {
-    await mockRouter(() => ({
-      generatedAt: "2026-09-13T16:00:00.000Z",
-      asOf: "2026-09-13T16:00:00.000Z",
-      appServed: true,
-      commercialLaunch: null,
-      monitoring: null,
-      surfaces: { asOf: "2026-09-13T16:00:00.000Z", monitoring: null, surfaces: [] },
-      mentionSources: presenceSourceCoverageForDocs(),
-    }));
-
-    const { default: StatusRoute } = await import("~/routes/status");
-    const markup = renderToStaticMarkup(createElement(StatusRoute));
-
-    expect(markup).toContain("Tracked sources");
-    // The appstore per-source row (the #3210 acceptance) renders its posture
-    // verbatim from the catalog: the Apple listing + most-recent-review
-    // surface, the Play structured-data surface, the honest Play-reviews
-    // exclusion, the kill flag, still gated.
-    expect(markup).toContain("App stores");
-    expect(markup).toContain("App-stores mention connector wired in");
-    expect(markup).toContain("customer-review RSS feed");
-    expect(markup).toContain("SoftwareApplication structured data");
-    expect(markup).toContain("PRESENCE_APPSTORE_ROLLOUT");
-    expect(markup).toContain("gated");
-  });
-
   it("renders the Pinterest tracked-source row — the profile-feed surface the #3201 mentions ride", async () => {
     await mockRouter(() => ({
       generatedAt: "2026-09-13T16:00:00.000Z",

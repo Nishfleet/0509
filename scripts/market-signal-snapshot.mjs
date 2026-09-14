@@ -2,36 +2,27 @@ import { execFileSync } from "node:child_process";
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
-import { SIGNUP_FIXTURE_PATTERNS } from "./weekly-business-metrics.mjs";
+import { SYNTHETIC_USER_PATTERNS } from "./weekly-business-metrics.mjs";
 
 const DATABASE = "0509";
 const REPOSITORY = "Nishfleet/0509";
 
 // ---------------------------------------------------------------------------
-// Synthetic-identity exclusion (issue #3471). Every customer-facing count in
-// the snapshot must exclude the fleet's own canary/QA/burst identities: the
-// 2026-09-13 signal reported three fleet rows (two canaries + one BET-1 burst
-// signup) as the first organic movement in days. The base list is imported
-// from weekly-business-metrics.mjs so the two signup reads can never drift
-// apart again — the drift is what let the canaries through.
+// Synthetic-identity exclusion (issues #3471, #3486). Every customer-facing
+// count in the snapshot must exclude the fleet's own canary/QA/burst
+// identities: the 2026-09-13 signal reported three fleet rows (two canaries +
+// one BET-1 burst signup) as the first organic movement in days.
 // ---------------------------------------------------------------------------
 
 /**
- * Fleet-synthetic user identities, as data — the #2908 fixture enumeration
- * plus the identities the market signal must also exclude. {field, value,
- * match} rows; match rules compile to substr/= comparisons, no LIKE.
+ * Fleet-synthetic user identities — the ONE shared list, owned by
+ * weekly-business-metrics.mjs so the direction metric and this snapshot can
+ * never drift apart again (the #3471 split-list drift is what let canaries
+ * through the direction metric). {field, value, match} rows; match rules
+ * compile to substr/= comparisons, no LIKE. Re-exported so this script's
+ * consumers keep one import site.
  */
-export const SYNTHETIC_USER_PATTERNS = [
-  ...SIGNUP_FIXTURE_PATTERNS,
-  // CANARY_USER_ID (app/routes/api.launch-readiness.canary.ts) — the launch
-  // canary self-provisions this user; its email varies, the id does not.
-  { field: "id", value: "launch-readiness-canary-owner", match: "exact" },
-  // The fleet's never-routable mailbox domain — covers every current and
-  // future *@0509.internal fixture (billing-canary-staging@, codex-qa-*@, …).
-  { field: "email", value: "@0509.internal", match: "suffix" },
-  // BET-1 cohort burst (#3429, .fleet/burst-3322.sh): bet1-3322-<NN>@0509.io.
-  { field: "email", value: "bet1-3322-", match: "prefix" },
-];
+export { SYNTHETIC_USER_PATTERNS };
 
 /**
  * Canary watchlist ids that stay synthetic even when a real account owns the
@@ -48,7 +39,7 @@ function sqlStringLiteral(value) {
 /**
  * Compile one {field, value, match} pattern into a SQL predicate over a user
  * row. substr/= comparisons only — no LIKE, so no wildcard escaping to get
- * wrong. Mirrors matchesSignupFixturePattern's trim + lowercase semantics.
+ * wrong. Mirrors matchesSyntheticUserPattern's trim + lowercase semantics.
  *
  * @param {{ field: string, value: string, match: string }} pattern
  */

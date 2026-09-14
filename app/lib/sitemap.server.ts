@@ -842,8 +842,8 @@ export async function loadIndexableTimelineEntries(
     return [];
   }
 
-  try {
-    const rows = await queryAll<TimelineSitemapRow>(
+  const readRows = () =>
+    queryAll<TimelineSitemapRow>(
       env,
       `
         SELECT
@@ -864,13 +864,24 @@ export async function loadIndexableTimelineEntries(
       `,
       SITEMAP_TIMELINE_READ_LIMIT,
     );
-    return indexableTimelineEntriesFromRows(rows);
+
+  let rows: TimelineSitemapRow[];
+  try {
+    rows = await readRows();
   } catch (error) {
     if (isMissingTimelineTableError(error)) {
       return [];
     }
-    throw error;
+    // Issue #3476: this is the heaviest read in a public render (up to
+    // SITEMAP_TIMELINE_READ_LIMIT rows). A single transient D1 failure here
+    // silently strips every /timeline cross-link from the render, and the
+    // edge cache then serves that degraded copy for the whole serve-stale
+    // window — one hiccup becomes an hour of missing links. Retry once so a
+    // momentary fault cannot poison a cached page; a persistent failure still
+    // propagates to the caller's degrade-and-report path.
+    rows = await readRows();
   }
+  return indexableTimelineEntriesFromRows(rows);
 }
 
 /**

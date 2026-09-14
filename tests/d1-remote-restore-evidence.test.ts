@@ -187,6 +187,7 @@ function processGroupHasMember(pid: number): boolean {
 const REPO_ONLY_MIGRATIONS = Object.freeze([
   "0096_email_suppression.sql",
   "0097_status_probe_samples.sql",
+  "0098_competitor_suggestion_dismissal.sql",
   "0098_email_delivery_canary.sql",
   "0098_widen_source_target_connector_bluesky.sql",
   "0098_widen_source_target_connector_gdelt.sql",
@@ -194,7 +195,8 @@ const REPO_ONLY_MIGRATIONS = Object.freeze([
   "0100_widen_source_target_connector_hn.sql",
   "0101_widen_source_target_connector_pinterest.sql",
   "0102_widen_source_target_connector_podcast.sql",
-  "0103_widen_source_target_connector_appstore.sql",
+  "0103_widen_source_target_connector_youtube.sql",
+  "0104_widen_source_target_connector_appstore.sql",
 ]);
 
 describe("D1 remote restore evidence automation", () => {
@@ -1607,7 +1609,11 @@ describe("D1 remote restore evidence automation", () => {
     // wrote this test; run 34705843153 has since applied 0097, 0098 canary
     // and 0098 gdelt (the live state is covered by the 0098 test below).
     // The modeled state still pins planner behavior for a backup behind the
-    // whole tail.
+    // whole tail. 0098_competitor_suggestion_dismissal.sql (#3175) is
+    // likewise in the repository and not yet applied on production, so it
+    // joins the not-yet-applied group. Keep this list in step with the
+    // repository tail: a new migration file that production has not applied
+    // belongs here.
     const repository = readdirSync(resolve("migrations"))
       .filter((name) => /^\d{4}_.+\.sql$/u.test(name))
       .sort();
@@ -1682,7 +1688,7 @@ describe("D1 remote restore evidence automation", () => {
     const repositoryHead = repositorySuffix.filter(
       (name) => name < "0096_email_suppression.sql",
     );
-    // This modeled state has applied four of the module const's names (plus
+    // This modeled state has applied five of the module const's names (plus
     // 0096_error_reports, which production applied while it was the tail and
     // the const never lists). Everything else the const lists — 0098_bluesky
     // and every later migration — is still repo-only here, so both the
@@ -1690,6 +1696,7 @@ describe("D1 remote restore evidence automation", () => {
     const appliedFromRepoOnly = [
       "0096_email_suppression.sql",
       "0097_status_probe_samples.sql",
+      "0098_competitor_suggestion_dismissal.sql",
       "0098_email_delivery_canary.sql",
       "0098_widen_source_target_connector_gdelt.sql",
     ];
@@ -1700,9 +1707,10 @@ describe("D1 remote restore evidence automation", () => {
       ...PRODUCTION_MIGRATION_LEDGER_BASELINE,
       ...repositoryHead,
       // The 0096 pair in the production-applied order (error_reports was the
-      // tail when production applied it), then 0097, the canary, and
-      // 0098_gdelt. Every planned catch-up carries the still-repo-only names
-      // after 0098_bluesky.
+      // tail when production applied it), then 0097, the 0098 competitor
+      // dismissal (it sorts first), the canary, and 0098_gdelt. Every
+      // planned catch-up carries the still-repo-only names after
+      // 0098_bluesky.
       "0096_error_reports.sql",
       ...appliedFromRepoOnly,
     ];

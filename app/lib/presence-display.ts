@@ -26,6 +26,7 @@ const CONNECTOR_COPY: Record<PresenceConnectorId, string> = {
   hn: "Hacker News",
   appstore: "App stores",
   pinterest: "Pinterest",
+  youtube: "YouTube",
 };
 
 const SOURCE_COVERAGE_STATUS_COPY: Record<PresenceSourceCoverageStatus, string> = {

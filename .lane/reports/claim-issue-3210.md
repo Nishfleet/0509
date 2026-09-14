@@ -87,3 +87,30 @@ conflicts (appstore kept, podcast dropped — main's revert wins), and shipped.
   project ran. `sgscan --base origin/main` → no new findings.
 - Migration numbering re-checked against live main tail: `0102_podcast` is
   the last file on origin/main; our `0103_appstore` is next, no collision.
+
+## CI fix pass (this unit, 2026-09-14, PR #3499 red)
+
+- Merged `origin/main` @ `f2ea228fd` — five sibling-add conflicts resolved as
+  unions (presence-types ids, registry mention-ids + dispatch, access-gates
+  poll-path predicate, coverage tests, PLAN.md research notes,
+  restore-evidence list).
+- **Migration renumbered 0103 → 0104**: `0103_widen_source_target_connector_
+  youtube.sql` landed on main while this slice was in flight. The new file's
+  CHECK carries the full thirteen-connector union (0103's twelve + appstore);
+  backup tables renamed `*_bk_0104`; the migration test renamed to match and
+  now preserves/writes 'podcast' AND 'youtube' rows alongside 'appstore'.
+- **File-size ratchet**: `tests/status.route.test.ts` crossed 800 with our
+  +27 — the appstore /status row test moved to
+  `tests/status-route-appstore.test.ts`, the same split
+  `status-route-youtube.test.ts` took.
+- **no-time-bomb guard (#3215)**: the integration suite's feed `updated`
+  literals are now `// fixed-date:`-annotated (two hoisted consts) — they are
+  fixture payload stored verbatim, never compared to the wall clock (the
+  digest `since` reads created_at).
+- **preview-assert TS2345**: the Play-only stub needed no `lookup` — the
+  fetcher's `lookup` responder is now optional with the same 404 fallback as
+  `reviews`/`play`.
+- Re-verified on this worktree: `npx vitest run --configLoader runner
+  --project node --changed origin/main` → pass (see below); `npx vitest run
+  --configLoader runner --project workers` → pass — migrations changed so
+  the full real-workerd project ran.

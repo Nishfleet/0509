@@ -192,7 +192,7 @@ export default function GuideHowToMonitorCompetitorLandingPageChangesRoute() {
         )}
       />
       <script {...jsonLdScriptProps(structuredFaq)} />
-      <MarketingNav />
+      <MarketingNav signupSource="guide-landing-page-changes" />
 
       <section className="ld-hero">
         <p className="ld-case">

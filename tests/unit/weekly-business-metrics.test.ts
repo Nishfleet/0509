@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  SIGNUP_FIXTURE_PATTERNS,
+  SYNTHETIC_USER_PATTERNS,
   buildSignupsIntegrityQuery,
   evaluateSignupIntegrity,
   parseSignupEventRecords,
@@ -123,8 +123,72 @@ describe("weekly-business-metrics signup integrity (issue #3321)", () => {
     );
     // The applied pattern list is echoed, so the output always names the
     // exclusion rules that produced it.
-    expect(result.fixture_patterns).toBe(SIGNUP_FIXTURE_PATTERNS);
-    expect(SIGNUP_FIXTURE_PATTERNS).toHaveLength(5);
+    expect(result.fixture_patterns).toBe(SYNTHETIC_USER_PATTERNS);
+    expect(SYNTHETIC_USER_PATTERNS).toHaveLength(8);
+  });
+
+  // Issue #3486 verify step: the direction metric excludes the same
+  // synthetic-identity families the market signal excludes — the shared list
+  // (not a second copy) is what makes drift impossible.
+  it("counts the #3471 synthetic families out of signups_7d — bet1-3322-*, canary owner, *@0509.internal", () => {
+    const result = evaluateSignupIntegrity(
+      [
+        // BET-1 cohort burst row (#3429, .fleet/burst-3322.sh) — the signup
+        // that inflated the 2026-09-13 signal.
+        {
+          id: "usr-bet1-07",
+          email: "bet1-3322-07@0509.io",
+          createdAt: "2026-09-12T09:00:00.000Z",
+        },
+        // CANARY_USER_ID — the launch-readiness canary's self-provisioned
+        // user; the email varies, the id does not.
+        {
+          id: "launch-readiness-canary-owner",
+          email: "canary-9f2a@example.com",
+          createdAt: "2026-09-12T10:00:00.000Z",
+        },
+        // A fixture mailbox on the never-routable fleet domain that no
+        // earlier pattern names — only the suffix rule catches it.
+        {
+          id: "usr-internal-fixture",
+          email: "codex-zz-1@0509.internal",
+          createdAt: "2026-09-12T11:00:00.000Z",
+        },
+      ],
+      NOW,
+      null,
+    );
+
+    expect(result.rows_total).toBe(3);
+    expect(result.signups_7d).toBe(0);
+    expect(result.signups_30d).toBe(0);
+    expect(result.excluded_fixtures).toBe(3);
+    expect(result.excluded_fixtures_by_pattern).toEqual({
+      "bet1-3322-": 1,
+      "launch-readiness-canary-owner": 1,
+      "@0509.internal": 1,
+    });
+  });
+
+  it("attributes a canary row to its specific pattern, not the @0509.internal suffix", () => {
+    // First match wins: billing-canary@0509.internal also ends with the
+    // fleet domain, but its exact pattern sits earlier in the list, so the
+    // by-pattern breakdown names the specific identity.
+    const result = evaluateSignupIntegrity(
+      [
+        {
+          id: "billing-canary-0509",
+          email: "billing-canary@0509.internal",
+          createdAt: "2026-09-12T09:00:00.000Z",
+        },
+      ],
+      NOW,
+      null,
+    );
+    expect(result.excluded_fixtures).toBe(1);
+    expect(result.excluded_fixtures_by_pattern).toEqual({
+      "billing-canary@0509.internal": 1,
+    });
   });
 
   it("lists surviving rows without a consumable signup_completed event as suspect, not silently counted", () => {
