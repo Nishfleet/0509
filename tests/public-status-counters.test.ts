@@ -141,6 +141,39 @@ describe("getPublicStatusCounters digest query", () => {
     expect(result!.runsInLast24h).toBe(24);
     expect(result!.digestHealth).toBe("stalled");
   });
+
+  it("reads the non-Meta ad coverage share with a json_valid-guarded payload probe (issue #2992)", async () => {
+    const issued: string[] = [];
+    const prepare = vi.fn((sql: string) => {
+      issued.push(sql);
+      let row: Row | null = null;
+      if (sql.includes("json_array_length(s.payload_json")) row = { tracked: 3, covered: 2 };
+      else if (sql.includes("SUM(CASE")) row = { total: 24, failed: 0 };
+      else if (sql.includes("FROM watchlist_run")) row = { last_started_at: "2026-09-06T09:00:04.000Z" };
+      else if (sql.includes("FROM digest_delivery")) row = { last_digest_sent_at: null };
+      return {
+        bind: vi.fn(() => ({ all: vi.fn().mockResolvedValue({ results: row ? [row] : [] }) })),
+      };
+    });
+
+    const result = await getPublicStatusCounters(makeEnv(prepare));
+    expect(result!.nonMetaAdCoverage).toEqual({ tracked: 3, covered: 2 });
+
+    const coverageSql = issued.find((sql) => sql.includes("json_array_length(s.payload_json"));
+    expect(coverageSql).toBeTruthy();
+    // The denominator is the same active-watchlist set the monitoring facts
+    // report; the numerator reads the payload key each adapter actually
+    // stores (creatives for Google, ads for LinkedIn/TikTok).
+    expect(coverageSql).toContain("FROM watchlist WHERE is_active = 1");
+    expect(coverageSql).toContain("'$.creatives'");
+    expect(coverageSql).toContain("'$.ads'");
+    expect(coverageSql).toContain("json_valid(s.payload_json)");
+    // A malformed stored payload must degrade that row, not poison the count:
+    // json_valid gates every json_array_length call on it.
+    expect(coverageSql!.indexOf("json_valid(s.payload_json)")).toBeLessThan(
+      coverageSql!.indexOf("json_array_length(s.payload_json"),
+    );
+  });
 });
 
 describe("getMonitoringCoverageDays footer figure (issue #2972)", () => {

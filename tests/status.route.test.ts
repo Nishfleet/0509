@@ -357,6 +357,58 @@ describe("status route", () => {
     expect(markup).toContain("as of 2026-09-04T09:30:00.000Z");
   });
 
+  it("reports the measured share of tracked watchlists with a non-Meta ad captured, with its denominator (issue #2992)", async () => {
+    await mockRouter(() => ({
+      generatedAt: "2026-09-13T09:00:00.000Z",
+      asOf: "2026-09-13T09:30:00.000Z",
+      appServed: true,
+      commercialLaunch: null,
+      monitoring: {
+        lastWatchlistRunAt: "2026-09-13T03:00:00.000Z",
+        runsInLast24h: 12,
+        failedRunsInLast24h: 0,
+        lastDigestSentAt: "2026-09-12T00:00:00.000Z",
+        digestHealth: "recent" as const,
+        scheduledMonitoringSince: "2026-09-01T00:00:00.000Z",
+        nonMetaAdCoverage: { tracked: 4, covered: 2 },
+      },
+      surfaces: { asOf: "2026-09-13T09:30:00.000Z", monitoring: null, surfaces: [] },
+    }));
+
+    const { default: StatusRoute } = await import("~/routes/status");
+    const markup = renderToStaticMarkup(createElement(StatusRoute));
+
+    expect(markup).toContain("Non-Meta ad coverage");
+    expect(markup).toContain(
+      "2 of 4 active watchlists (50%) have at least one captured ad from the Google, LinkedIn, or TikTok sources",
+    );
+    expect(markup).toContain("as of 2026-09-13T09:30:00.000Z");
+  });
+
+  it("renders the non-Meta ad coverage share as 0% while no watchlist is tracked (issue #2992)", async () => {
+    await mockRouter(() => ({
+      generatedAt: "2026-09-13T09:00:00.000Z",
+      asOf: "2026-09-13T09:30:00.000Z",
+      appServed: true,
+      commercialLaunch: null,
+      monitoring: {
+        lastWatchlistRunAt: "2026-09-13T03:00:00.000Z",
+        runsInLast24h: 3,
+        failedRunsInLast24h: 0,
+        lastDigestSentAt: "2026-09-12T00:00:00.000Z",
+        digestHealth: "recent" as const,
+        scheduledMonitoringSince: "2026-09-01T00:00:00.000Z",
+        nonMetaAdCoverage: { tracked: 0, covered: 0 },
+      },
+      surfaces: { asOf: "2026-09-13T09:30:00.000Z", monitoring: null, surfaces: [] },
+    }));
+
+    const { default: StatusRoute } = await import("~/routes/status");
+    const markup = renderToStaticMarkup(createElement(StatusRoute));
+
+    expect(markup).toContain("0 of 0 active watchlists (0%)");
+  });
+
   it("never publishes cold bootstrap zeros — prose replaces '0 runs / no digests sent yet' (issue #2963)", async () => {
     await mockRouter(() => ({
       generatedAt: "2026-09-11T19:00:00.000Z",

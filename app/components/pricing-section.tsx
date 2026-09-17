@@ -15,6 +15,11 @@ import {
 import type { FaqJsonLdEntry } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import type { PublicCommercialLaunchSummary } from "~/lib/commercial-launch-gate.server";
+import {
+  AD_SOURCE_COVERAGE,
+  AD_SOURCE_COVERAGE_HONESTY_LINE,
+  freePlanCoverageSources,
+} from "~/lib/ad-source-coverage";
 import type { RootLoaderData } from "~/root";
 
 /**
@@ -552,6 +557,28 @@ export function PricingSection({
             </article>
           );
         })}
+      </div>
+
+      {/* Issue #2992: the honest per-source coverage notes, rendered from the ONE
+          shared AD_SOURCE_COVERAGE constant (the same constant /docs renders and
+          the /pricing markdown assembles), so no surface can drift from another. */}
+      <div className="f9-price-anchors ld-reveal" aria-label="Ad sources and coverage">
+        <span className="ld-kicker">Ad sources</span>
+        <h3>Where the ads come from — and what each source covers.</h3>
+        <p className="ld-pricing-note">
+          The Free plan watches the {freePlanCoverageSources()[0].label}. Paid plans also watch
+          the other public ad libraries below. Every source states what it covers and what it
+          does not — the limits are what each public ad library itself publishes.
+        </p>
+        <ul className="f9-doc-list">
+          {AD_SOURCE_COVERAGE.map((entry) => (
+            <li key={entry.id}>
+              <strong>{entry.label}</strong> — {entry.covers} Not included: {entry.notCovered}
+              {entry.plans === "paid" ? " (paid plans)" : " (every plan)"}
+            </li>
+          ))}
+        </ul>
+        <p className="ld-pricing-note">{AD_SOURCE_COVERAGE_HONESTY_LINE}</p>
       </div>
 
       <div className="f9-price-anchors ld-reveal" aria-label="Price of knowing">

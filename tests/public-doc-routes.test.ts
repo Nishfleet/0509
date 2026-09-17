@@ -76,6 +76,7 @@ describe("public documentation routes", () => {
       "proof-labels",
       "troubleshoot",
       "plan-boundaries",
+      "ad-sources",
       "ai-agents",
       "coverage-trust",
       "key-docs",
@@ -83,6 +84,12 @@ describe("public documentation routes", () => {
       expect(docsMarkup).toContain(`href="#${id}"`);
       expect(docsMarkup).toContain(`id="${id}"`);
     }
+
+    // Issue #2992: the coverage notes themselves render, not just the TOC —
+    // the /docs block, its per-source labels and its honesty line.
+    expect(docsMarkup).toContain("Where the ads come from");
+    expect(docsMarkup).toContain("LinkedIn Ads (Ad Library)");
+    expect(docsMarkup).toContain("only when it captured something");
 
     const { default: HelpRoute } = await import("~/routes/help");
     const helpMarkup = renderToStaticMarkup(createElement(HelpRoute));

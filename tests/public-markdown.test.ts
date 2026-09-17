@@ -86,6 +86,17 @@ describe("public markdown", () => {
     expect(pricing).toContain("Agency");
     expect(pricing).toContain("proof captures/month");
     expect(pricing).toContain("Proof capture packs");
+    // Issue #2992: the same AD_SOURCE_COVERAGE constant the /pricing page
+    // renders also assembles this section — the markdown cannot drift from
+    // the HTML, and every source's honest limit is stated here.
+    expect(pricing).toContain("Ad sources and coverage");
+    expect(pricing).toContain("Meta Ad Library");
+    expect(pricing).toContain("Google Ads (Transparency Center) (paid plans)");
+    expect(pricing).toContain("LinkedIn Ads (Ad Library) (paid plans)");
+    expect(pricing).toContain("TikTok Ads (Commercial Content Library, EU-shown) (paid plans)");
+    expect(pricing).toContain("EU-shown ads only");
+    expect(pricing).toContain("United States listings only");
+    expect(pricing).toContain("only when it captured something");
     expect(pricing).not.toBe(PUBLIC_MARKDOWN);
 
     // Each /compare/* page gets a body assembled from its source citations.
