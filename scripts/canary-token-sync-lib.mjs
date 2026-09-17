@@ -11,10 +11,8 @@
 // deploy re-promotes. A plain retry of `secret put` can therefore NEVER
 // succeed once a preview upload landed between the deploy and the put (runs
 // 34192323408, 34196632642, 34198106528 all failed 10/10 attempts this way).
-// The sync must detect the polluted state and RE-PROMOTE the currently
-// deployed version (`wrangler versions deploy <id>@100`) before retrying
-// the put. `wrangler deploy` is forbidden here: it uploads a new candidate
-// from the runner worktree (run 35253974918).
+// The sync must detect the polluted state and RE-PROMOTE the production
+// version (`wrangler deploy`) before retrying the put.
 
 /**
  * True when the script's latest uploaded version is NOT the version the active
@@ -48,7 +46,7 @@ export function latestVersionIsStale(latestVersionId, deployedVersionId) {
  *   latestVersionId?: string | null,
  *   deployedVersionId?: string | null,
  * }} state
- * @returns {"put" | "repromote_deployed" | "give_up"}
+ * @returns {"put" | "repromote" | "give_up"}
  */
 export function planNextAction(state) {
   const {
@@ -60,15 +58,13 @@ export function planNextAction(state) {
     deployedVersionId = null,
   } = state;
   if (putAttempts >= maxAttempts) return "give_up";
-  // A stale latest version makes the put deterministically fail. Re-promote
-  // the currently deployed version (never `wrangler deploy`, which uploads a
-  // fresh candidate from the runner worktree — run 35253974918 re-shipped a
-  // failed release that rollback had already taken off 100%).
+  // A stale latest version makes the put deterministically fail — re-promote
+  // instead of burning attempts on an impossible put.
   if (
     latestVersionIsStale(latestVersionId, deployedVersionId) &&
     repromotes < maxRepromotes
   ) {
-    return "repromote_deployed";
+    return "repromote";
   }
   return "put";
 }

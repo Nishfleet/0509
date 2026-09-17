@@ -417,9 +417,9 @@ export function buildProductionDeployPlan({
       // upload (preview-assert on pull_request/merge_group) advanced the
       // script's latest version without deploying it (#1981). Sync the token
       // here first with a bounded retry — the retry is the poll for the mark
-      // and re-promotes the currently deployed version when the latest
-      // version is a stale preview upload — and once a put lands, the
-      // workflow step's identical put is a no-op rewrite.
+      // and re-promotes via `wrangler deploy` when the latest version is a
+      // stale preview upload — and once a put lands, the workflow step's
+      // identical put is a no-op rewrite.
       // Classic `secret put` only; `wrangler versions secret put` stays
       // rejected ("Failed to parse body as FormData", run 31514742997).
       //
@@ -428,11 +428,9 @@ export function buildProductionDeployPlan({
       // worker_propagation_stabilization, post_deploy_release_canary and
       // start_production_soak, all pinned to the deploy's version id — must
       // run before it or they would see the post-secret version and fail.
-      // Non-blocking by design on a GREEN release only: an exhausted retry
-      // is lag, not a failed deploy — it must never trigger
-      // rollback_failed_release, and the workflow step still gets the final
-      // word after the plan. After a recovered rollback the plan rethrows,
-      // so this step never runs against a failed candidate (run 35253974918).
+      // Non-blocking by design: an exhausted retry is lag, not a failed
+      // deploy — it must never trigger rollback_failed_release, and the
+      // workflow step still gets the final word after the plan.
       id: "canary_bypass_token_sync",
       command: "node",
       args: ["scripts/sync-canary-bypass-token.mjs"],
@@ -802,18 +800,22 @@ export function executeProductionDeployPlan(plan, execute) {
       }
 
       if (recoveryFailures.length === 0) {
-        // Run 35253974918: #3390's continue-after-rollback let the later
-        // canary_bypass_token_sync step `wrangler deploy` the failed
-        // candidate back to 100% after last-green was restored. The rollback
-        // step already records the live version id; rethrow the original
-        // release failure so later checks and secret-sync never run
-        // (issue #3535 accept #4: honest failure reporting).
+        // 2026-09-13 (#3390): the safety net did its job — the last-green
+        // version is 100% live again. The old `throw releaseFailure` here
+        // failed the Deploy Worker job anyway, so the workflow's
+        // success-only chain (Worker secrets sync, the release-evidence
+        // verify, the on-main deploy ledger record) never ran and WHICH
+        // WORKER VERSION WENT LIVE was recorded nowhere (runs 34626446693,
+        // 34759554622, 34770115098 — 3rd occurrence 2026-09-13). The release
+        // failure is already recorded in the failed step's own log output;
+        // the recovery outcome (rollback_target, live version) is recorded
+        // by the rollback step. Proceed so the job can go green.
         process.stderr.write(
           `post_deploy_recovery_complete — ${step.id} failed, last-green restored: ${
             releaseFailure instanceof Error ? releaseFailure.message : String(releaseFailure)
           }\n`,
         );
-        throw releaseFailure;
+        continue;
       }
       throw new AggregateError(
         [releaseFailure, ...recoveryFailures],

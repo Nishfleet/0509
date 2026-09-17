@@ -1145,7 +1145,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     ["production_public_smoke", "oauth_branding"],
     ["oauth_branding", null],
   ])(
-    "rolls back after %s fails and stops so secret-sync cannot re-promote the failed candidate",
+    "rolls back after %s fails and continues the success chain when recovery succeeds",
     (failureStep, nextReleaseCheck) => {
       const plan = buildProductionDeployPlan({
         manifestPath: "test-results/deploy-readiness-test.json",
@@ -1164,19 +1164,16 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
         caught = error;
       }
 
-      // Run 35253974918: #3390's continue-after-rollback let canary_bypass_token_sync
-      // `wrangler deploy` the failed candidate back to 100% after last-green was
-      // restored. Honest failure reporting (issue #3535 accept #4): rollback,
-      // then rethrow the original release failure so later steps including
-      // secret-sync never run. Only a failed rollback itself becomes
+      // #3390: recovery succeeded — the last-green version is 100% live
+      // again, so the plan resolves (exit 0) and the later release checks
+      // run; only when the recovery itself fails does the plan rethrow
       // post_deploy_recovery_failed.
-      expect(caught).toBe(failure);
+      expect(caught).toBeUndefined();
       expect(executed.filter((id) => id === failureStep)).toHaveLength(1);
       expect(
         executed.filter((id) => id === "rollback_failed_release"),
       ).toHaveLength(1);
-      expect(executed).not.toContain("canary_bypass_token_sync");
-      if (nextReleaseCheck) expect(executed).not.toContain(nextReleaseCheck);
+      if (nextReleaseCheck) expect(executed).toContain(nextReleaseCheck);
     },
   );
 
@@ -1221,16 +1218,24 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       caught = error;
     }
 
-    // Run 35253974918: the refund invariant still runs BEFORE rollback, then
-    // the original canary failure is rethrown so later checks and secret-sync
-    // cannot re-promote the failed candidate (issue #3535 accept #4).
-    expect(caught).toBe(canaryFailure);
+    // #3390: the refund invariant still runs BEFORE the rollback recovery,
+    // and once recovery succeeds the plan proceeds through the remaining
+    // release checks instead of rethrowing (exit 0).
+    expect(caught).toBeUndefined();
     expect(
       executed.slice(executed.indexOf("post_deploy_release_canary")),
     ).toEqual([
       "post_deploy_release_canary",
+      // first run: the recovery's own post-canary invariant, then the loop
+      // resumes and the invariant runs AGAIN against the restored version.
       "partial_refund_invariants_postcanary",
       "rollback_failed_release",
+      "partial_refund_invariants_postcanary",
+      "start_production_soak",
+      "live_public_truth",
+      "production_public_smoke",
+      "oauth_branding",
+      "canary_bypass_token_sync",
     ]);
   });
 
