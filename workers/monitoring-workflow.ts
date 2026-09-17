@@ -32,20 +32,21 @@ import {
 // (with MONITORING_FANOUT_GLOBAL=1). Do not delete this as "dead code" — the
 // inline path is only the unset-var fallback in resolveMonitoringFanoutMode().
 
-// The longest capacity sleep is 2 minutes (see the last branch of
+// The longest capacity sleep is 15 minutes (see the last branch of
 // concurrencySleepDuration below). Capping the wait at
 // MONITORING_ORCHESTRATION_MAX_AGE_MS means a queued run can never keep waiting
 // past the age at which the reconciler cancels it as stale.
-const CONCURRENCY_WAIT_LONGEST_SLEEP_MS = 2 * 60 * 1000;
+// Cost: every claim step + sleep step pair persists workflow state to the
+// instance SQLite storage, which Cloudflare bills as "D1 rows written"
+// (USD 1/million past the plan allowance). Longer sleeps = fewer billed
+// transitions; the overall wait bound (MAX_AGE) is unchanged.
+const CONCURRENCY_WAIT_LONGEST_SLEEP_MS = 15 * 60 * 1000;
 
-function concurrencySleepDuration(waitRound: number) {
-  if (waitRound < 10) {
-    return "30 seconds";
-  }
-  if (waitRound < 40) {
-    return "60 seconds";
-  }
-  return "2 minutes";
+function concurrencySleepDuration(_waitRound: number) {
+  // Uniform 15-minute sleeps keep maxWaitRounds x sleep == MAX_AGE exactly,
+  // so queued runs neither give up early nor wait past the stale-cancel age,
+  // while cutting per-instance billed step transitions by ~7.5x.
+  return "15 minutes";
 }
 
 function resolveMonitoringConcurrencyWaitMaxRounds(env: AppEnv) {
