@@ -148,12 +148,39 @@ function populated(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoade
 }
 
 describe("/ads/:domain — Case File render", () => {
+  // #3593: nike.com, observed 2026-09-17 21:20–21:30 UTC: 14 stored, 5 active.
+  // Remaining rows are status edge cases, not additional live observations.
+  it.each([
+    ["observed Nike capture", 5, true],
+    ["all inactive", 0, true],
+    ["all active", 14, true],
+    ["unknown status", 0, false],
+  ] as const)("labels stored totals without claiming activity: %s", async (_label, activeCount, activeStatusObserved) => {
+    for (const freshForLiveClaim of [false, true]) {
+      const ads = Array.from({ length: 14 }, (_, i) => ad({
+        metaAdId: `nike-${i}`,
+        active: i < activeCount,
+        activeStatusObserved,
+      }));
+      const markup = await render(populated({
+        ads, adCount: 14, verifiedLinkCount: 14, brandOwnedAdCount: 14,
+        freshForLiveClaim,
+        teaser: { ...teaser, totalCount: 14, activeCount },
+      }));
+      const h1 = markup.match(/<h1[^>]*id="brand-ads-title"[^>]*>([\s\S]*?)<\/h1>/)?.[1] ?? "";
+      expect(h1).toBe("Nike has 14 Meta ads on record.");
+      expect(h1).not.toMatch(/running|right now/);
+      expect(markup).toContain(`${activeCount} ads active${freshForLiveClaim ? "" : " at last check"} (14 brand-owned)`);
+      expect(markup).toContain("All 14 ads, on the wall");
+    }
+  });
+
   it("renders every section of the populated page in the briefed order", async () => {
     const markup = await render(populated());
 
     // Sections present.
     expect(markup).toContain("ld-ticker"); // capture ticker
-    expect(markup).toContain("Nike was running");
+    expect(markup).toContain("Nike has 6 Meta ads on record.");
     expect(markup).toContain("6 Meta ads");
     expect(markup).toContain("Ad Aggression Score");
     expect(markup).toContain(`href="${AD_AGGRESSION_METHODOLOGY_PATH}"`);
@@ -167,7 +194,7 @@ describe("/ads/:domain — Case File render", () => {
     // what-changed → ad wall → closer.
     const order = [
       "ld-ticker",
-      "Nike was running",
+      "Nike has 6 Meta ads on record.",
       "Ad Aggression Score · last",
       "f9-ads-watch-strip",
       "f9-ads-statline",
@@ -675,19 +702,19 @@ describe("/ads/:domain — Case File render", () => {
     );
     const stale = await render(populated());
 
-    // Fresh capture: the present-tense acquisition claims are kept.
-    expect(fresh).toContain("Nike is running ");
-    expect(fresh).toContain("right now.");
+    // Fresh capture: the ticker/panel keep their present-tense labels; the
+    // stored total stays time-stable on record (issue #3593).
+    expect(fresh).toContain("Nike has 6 Meta ads on record.");
     expect(fresh).toContain("Running right now");
     expect(fresh).toContain("Nike · live");
     expect(fresh).toContain("Ads live");
     expect(fresh).toContain("more ads live");
 
-    // Hours-old capture: every claim flips to an honest past tense, and the
-    // freshness stamp stays the page's only time claim.
-    expect(stale).toContain("Nike was running ");
-    expect(stale).toContain("at the last check.");
+    // Hours-old capture: the stored headline stays stable and the panel row
+    // carries the active count with its own "at the last check" qualifier;
+    // the freshness stamp stays the page's only time claim.
     expect(stale).toContain("From the last check");
+    expect(stale).toContain("6 ads active at last check (6 brand-owned)");
     expect(stale).toContain("Nike · on record");
     expect(stale).toContain("Ads on record");
     expect(stale).toContain("more ads on record");
@@ -791,12 +818,8 @@ describe("/ads/:domain — Case File render", () => {
       populated({ brandOwnedAdCount: 2, checkedAgo: "moments ago", freshForLiveClaim: true }),
     );
 
-    expect(stale).toContain("Nike was running ");
-    expect(stale).toContain("2 of these 6 Meta ads");
-    expect(stale).toContain("at the last check.");
-    expect(fresh).toContain("Nike is running ");
-    expect(fresh).toContain("2 of these 6 Meta ads");
-    expect(fresh).toContain("right now.");
+    expect(stale).toContain("Nike has 2 of these 6 Meta ads on record.");
+    expect(fresh).toContain("Nike has 2 of these 6 Meta ads on record.");
 
     // The closer states exactly who runs what.
     expect(stale).toContain(
@@ -868,9 +891,7 @@ describe("/ads/:domain — Case File render", () => {
     );
 
     const h1 = markup.match(/<h1[^>]*id="brand-ads-title"[^>]*>([\s\S]*?)<\/h1>/)?.[1] ?? "";
-    expect(h1).toContain("Nike was running ");
-    expect(h1).toContain("15 Meta ads");
-    expect(h1).toContain("at the last check.");
+    expect(h1).toBe("Nike has 15 Meta ads on record.");
     expect(h1).not.toContain("of these");
     expect(markup).toContain(
       "Another 1 ad matched the search without a verified link to nike.com.",
@@ -989,9 +1010,7 @@ describe("/ads/:domain — Case File render", () => {
 
     // The headline speaks about the verified capture; the subline names the
     // unverified matches instead of folding them into the link count.
-    expect(stale).toContain("Nike was running ");
-    expect(stale).toContain("1 Meta ad");
-    expect(stale).toContain("at the last check.");
+    expect(stale).toContain("Nike has 1 Meta ad on record.");
     expect(stale).not.toContain("of these");
     expect(stale).toContain(
       "Another 5 ads matched the search without a verified link to nike.com.",
@@ -1045,8 +1064,7 @@ describe("/ads/:domain — Case File render", () => {
 
     // The unconfirmed creative is counted as other advertisers' — never
     // brand-owned — and its card is labeled honestly, not with the brand name.
-    expect(markup).toContain("Nike was running ");
-    expect(markup).toContain("4 of these 5 Meta ads");
+    expect(markup).toContain("Nike has 4 of these 5 Meta ads on record.");
     expect(markup).toContain("Advertiser unconfirmed · nike.com");
     expect((markup.match(/Nike · nike\.com/g) ?? []).length).toBe(4);
   });
@@ -1056,7 +1074,7 @@ describe("/ads/:domain — Case File render", () => {
     const h1Matches = markup.match(/<h1\b[^>]*>[^<]+<\/h1>/g) ?? [];
     expect(h1Matches).toHaveLength(1);
     expect(h1Matches[0]).toBe(
-      '<h1 class="f9-ads-headline" id="brand-ads-title">Nike was running 6 Meta ads at the last check.</h1>',
+      '<h1 class="f9-ads-headline" id="brand-ads-title">Nike has 6 Meta ads on record.</h1>',
     );
   });
 

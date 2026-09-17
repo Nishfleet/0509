@@ -1979,6 +1979,9 @@ function BrandAdsResults({
  *
  * This must return a plain string: the page <h1> is the document topic
  * heading and must not contain nested markup.
+ *
+ * Stored counts say "on record", not "running" (issue #3593). The active
+ * count has its own labeled panel row. Mixed ownership keeps its split.
  */
 function brandHeadline(
   data: BrandPageLoaderData,
@@ -2001,9 +2004,7 @@ function brandHeadline(
   const verifiedAdWord = data.verifiedLinkCount === 1 ? "ad" : "ads";
   const verifiedPhrase = `${data.verifiedLinkCount} Meta ${verifiedAdWord}`;
   if (allBrandOwned) {
-    return data.freshForLiveClaim
-      ? `${data.brandName} is running ${verifiedPhrase} right now.`
-      : `${data.brandName} was running ${verifiedPhrase} at the last check.`;
+    return `${data.brandName} has ${verifiedPhrase} on record.`;
   }
 
   if (noneBrandOwned) {
@@ -2023,9 +2024,7 @@ function brandHeadline(
   }
 
   const splitPhrase = `${data.brandOwnedAdCount} of these ${verifiedPhrase}`;
-  return data.freshForLiveClaim
-    ? `${data.brandName} is running ${splitPhrase} right now.`
-    : `${data.brandName} was running ${splitPhrase} at the last check.`;
+  return `${data.brandName} has ${splitPhrase} on record.`;
 }
 
 /**
