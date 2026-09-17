@@ -23,12 +23,15 @@
 //
 // The fix: after a failed put, read the script's latest version and the
 // active deployment from the Cloudflare API. When they diverge (a preview
-// upload moved `latest`), re-run `wrangler deploy` — the same promotion the
-// deploy step performed — so latest == deployed again, then retry the put.
-// The retry IS the poll; the re-promote is bounded. Once a put lands here,
-// the workflow step's identical put is a no-op rewrite that cannot hit the
-// precondition. Classic `secret put` only; `wrangler versions secret put`
-// stays rejected ("Failed to parse body as FormData", run 31514742997).
+// upload moved `latest`), re-promote the CURRENTLY DEPLOYED version with
+// `wrangler versions deploy <deployed>@100` so latest == deployed again,
+// then retry the put. Do NOT `wrangler deploy`: that uploads a fresh
+// candidate from the runner worktree and can put a failed release back on
+// 100% after rollback (run 35253974918). The retry IS the poll; the
+// re-promote is bounded. Once a put lands here, the workflow step's
+// identical put is a no-op rewrite that cannot hit the precondition.
+// Classic `secret put` only; `wrangler versions secret put` stays rejected
+// ("Failed to parse body as FormData", run 31514742997).
 //
 // Failure posture: this step runs non-blocking in the deploy plan. An
 // exhausted retry must never roll back a good deploy — the workflow step
@@ -126,19 +129,39 @@ for (;;) {
     process.exit(1);
   }
 
-  if (action === "repromote") {
-    // The latest version is an undeployed preview upload. Re-run the same
-    // promotion the deploy step performed (`wrangler deploy`) so the put's
-    // precondition holds again. Same cwd/config as the plan's deploy step.
+  if (action === "repromote_deployed") {
+    // The latest version is an undeployed preview upload. Put 100% traffic
+    // back on the version the active deployment already serves so classic
+    // `secret put` sees latest == deployed. Never `wrangler deploy` here.
+    const deployedVersionId = state.deployedVersionId;
+    if (typeof deployedVersionId !== "string" || deployedVersionId.length === 0) {
+      lastDetail = "repromote_deployed missing deployedVersionId";
+      console.error(`canary token sync ${lastDetail}`);
+      sleepSync(retryDelayMs);
+      continue;
+    }
     repromotes += 1;
     console.error(
-      `canary token sync: latest version is not the deployed version (preview upload advanced it); re-promoting with wrangler deploy (repromote ${repromotes}/${maxRepromotes})`,
+      `canary token sync: latest version is not the deployed version (preview upload advanced it); re-promoting deployed ${deployedVersionId} (repromote ${repromotes}/${maxRepromotes})`,
     );
-    const promote = spawnSync(wranglerBin, ["deploy"], {
-      cwd: root,
-      env: process.env,
-      stdio: "inherit",
-    });
+    const promote = spawnSync(
+      wranglerBin,
+      [
+        "versions",
+        "deploy",
+        `${deployedVersionId}@100`,
+        "--name",
+        workerName,
+        "--yes",
+        "--message",
+        `re-promote currently deployed ${deployedVersionId} so secret put can proceed`,
+      ],
+      {
+        cwd: root,
+        env: process.env,
+        stdio: "inherit",
+      },
+    );
     if (promote.status !== 0) {
       lastDetail = `repromote exit ${promote.status ?? "signal " + promote.signal}`;
       console.error(`canary token sync repromote failed (${lastDetail})`);

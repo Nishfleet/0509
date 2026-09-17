@@ -64,6 +64,18 @@ describe("D1 backup lifecycle Gate C canary", () => {
       deleteConditionType: "Age",
       deleteMaxAge: 180 * 86_400,
     }))).toBe(true);
+    // Cloudflare's default abort-incomplete-multipart rule has no object
+    // delete transition. Run 35253974918 failed Gate C on
+    // r2_lifecycle_unsafe_overlap because a real Age delete on
+    // landing-pages/ overlapped the protected prefix; abort-only rules
+    // must not be treated as that class.
+    expect(assertExpectedLifecyclePolicy(policy, canonical.concat({
+      id: "Default Multipart Abort Rule",
+      enabled: true,
+      prefix: "",
+      deleteConditionType: null,
+      deleteMaxAge: null,
+    }))).toBe(true);
   });
 
   it("accepts only Wrangler's exact object-missing result as absence", () => {

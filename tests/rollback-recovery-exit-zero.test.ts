@@ -206,7 +206,7 @@ describe("rollback-production.mjs replays the 17:36Z failure end-to-end (#3390)"
   });
 });
 
-describe("executeProductionDeployPlan (#3390: a recovered release must exit 0)", () => {
+describe("executeProductionDeployPlan (run 35253974918: recovered release must not re-promote)", () => {
   const plan = (rollbackSucceeds: boolean) => [
     { id: "deploy" },
     { id: "post_deploy_release_canary" },
@@ -217,23 +217,27 @@ describe("executeProductionDeployPlan (#3390: a recovered release must exit 0)",
     { id: "canary_bypass_token_sync", nonBlockingDiagnostic: true },
   ];
 
-  it("continues past a recovered canary failure instead of rethrowing it", async () => {
+  it("rethrows a recovered canary failure so secret-sync never re-promotes the failed candidate", async () => {
     const { executeProductionDeployPlan } = await import("../scripts/deploy-production-plan.mjs");
     const called: string[] = [];
+    const failure = new Error(
+      "node scripts/verify-post-deploy-release.mjs --wrangler-output test-results/wrangler-deploy-output-x.jsonl failed",
+    ) as Error & { exitCode: number };
+    failure.exitCode = 1;
     expect(() =>
       executeProductionDeployPlan(plan(true) as never, (step: { id: string }) => {
         called.push(step.id);
-        if (step.id === "post_deploy_release_canary") {
-          const failure = new Error(
-            "node scripts/verify-post-deploy-release.mjs --wrangler-output test-results/wrangler-deploy-output-x.jsonl failed",
-          ) as Error & { exitCode: number };
-          failure.exitCode = 1;
-          throw failure;
-        }
+        if (step.id === "post_deploy_release_canary") throw failure;
       }),
-    ).not.toThrow();
-    expect(called.indexOf("live_public_truth")).toBeGreaterThan(called.indexOf("post_deploy_release_canary"));
-    expect(called.at(-1)).toBe("canary_bypass_token_sync");
+    ).toThrow(failure);
+    expect(called).toEqual([
+      "deploy",
+      "post_deploy_release_canary",
+      "partial_refund_invariants_postcanary",
+      "rollback_failed_release",
+    ]);
+    expect(called).not.toContain("canary_bypass_token_sync");
+    expect(called).not.toContain("live_public_truth");
   });
 
   it("keeps the AggregateError when recovery itself fails", async () => {
