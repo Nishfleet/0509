@@ -48,6 +48,9 @@ const { validateDeployReadiness } =
   await import("../scripts/verify-deploy-readiness.mjs");
 const { RELEASE_COVERAGE_MATRIX, expectedReleaseArtifacts } =
   await import("../scripts/playwright-release-manifest-reporter.mjs");
+const { productionMigrationLedgerRule } = await import(
+  "../scripts/d1-migration-sync-check.lib.mjs"
+);
 
 const fingerprint = "a".repeat(64);
 const wranglerHash = "b".repeat(64);
@@ -67,6 +70,24 @@ afterEach(() => {
   while (roots.length > 0)
     rmSync(roots.pop()!, { recursive: true, force: true });
 });
+
+function collectDeployWorkflowScriptTokens(jobs: unknown): string[] {
+  // Tokenize per line, not per run (issue #3441): a `run: |` block's script
+  // invocation can sit on any line, so first-token-of-run let line-2+
+  // ./scripts/ calls escape the +x net entirely.
+  return Object.values(jobs as Record<string, any>)
+    .flatMap((job) => (job.steps ?? []) as Array<{ run?: string }>)
+    .flatMap((step) => (step.run ?? "").split("\n"))
+    .flatMap((line) => line.split(/\s+/))
+    .filter((token) => token.startsWith("./scripts/"));
+}
+
+function expectScriptExecutable(token: string, script: { mode: number }) {
+  expect(
+    (script.mode & 0o111) !== 0,
+    `${token} lost its +x bit — the Actions checkout runs it as ${token} and dies with exit 126 (0509#3330)`,
+  ).toBe(true);
+}
 
 function finalUrl(expected: any, viewport: string) {
   if (expected.exact) return expected.exact;
@@ -1121,8 +1142,8 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     ["production_public_smoke", "oauth_branding"],
     ["oauth_branding", null],
   ])(
-    "rolls back after %s fails and skips later release checks",
-    (failureStep, blockedStep) => {
+    "rolls back after %s fails and continues the success chain when recovery succeeds",
+    (failureStep, nextReleaseCheck) => {
       const plan = buildProductionDeployPlan({
         manifestPath: "test-results/deploy-readiness-test.json",
         remoteRestoreEvidencePath,
@@ -1140,12 +1161,16 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
         caught = error;
       }
 
-      expect(caught).toBe(failure);
+      // #3390: recovery succeeded — the last-green version is 100% live
+      // again, so the plan resolves (exit 0) and the later release checks
+      // run; only when the recovery itself fails does the plan rethrow
+      // post_deploy_recovery_failed.
+      expect(caught).toBeUndefined();
       expect(executed.filter((id) => id === failureStep)).toHaveLength(1);
       expect(
         executed.filter((id) => id === "rollback_failed_release"),
       ).toHaveLength(1);
-      if (blockedStep) expect(executed).not.toContain(blockedStep);
+      if (nextReleaseCheck) expect(executed).toContain(nextReleaseCheck);
     },
   );
 
@@ -1172,7 +1197,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(executed).not.toContain("rollback_failed_release");
   });
 
-  it("runs the post-canary refund invariant before rethrowing a canary failure", () => {
+  it("runs the post-canary refund invariant before continuing past a recovered canary failure", () => {
     const plan = buildProductionDeployPlan({
       manifestPath: "test-results/deploy-readiness-test.json",
       remoteRestoreEvidencePath,
@@ -1190,15 +1215,25 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       caught = error;
     }
 
-    expect(caught).toBe(canaryFailure);
+    // #3390: the refund invariant still runs BEFORE the rollback recovery,
+    // and once recovery succeeds the plan proceeds through the remaining
+    // release checks instead of rethrowing (exit 0).
+    expect(caught).toBeUndefined();
     expect(
       executed.slice(executed.indexOf("post_deploy_release_canary")),
     ).toEqual([
       "post_deploy_release_canary",
+      // first run: the recovery's own post-canary invariant, then the loop
+      // resumes and the invariant runs AGAIN against the restored version.
       "partial_refund_invariants_postcanary",
       "rollback_failed_release",
+      "partial_refund_invariants_postcanary",
+      "start_production_soak",
+      "live_public_truth",
+      "production_public_smoke",
+      "oauth_branding",
+      "canary_bypass_token_sync",
     ]);
-    expect(executed).not.toContain("live_public_truth");
   });
 
   it("preserves both failures when the canary and post-canary invariant fail", () => {
@@ -1451,28 +1486,107 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
         .update(JSON.stringify(reorderedNames))
         .digest("hex"),
     };
+    // The derived ledger rule (0509#3512): the in-order two-name ledger is
+    // both baseline and repository, so the reversal fails the recorded
+    // baseline prefix — a reorder the repository alone cannot explain.
+    const migrationLedgerRule = productionMigrationLedgerRule(
+      migrationLedgerNames,
+      new Set(),
+      {
+        baseline: migrationLedgerNames,
+        retiredMigrations: new Set<string>(),
+      },
+    );
+    const expected = {
+      candidateFingerprint: fingerprint,
+      wranglerWorktreeSha256: wranglerHash,
+      migrationLedgerRule,
+      now: new Date("2026-07-16T12:00:00.000Z"),
+    };
     expect(
-      validateRemoteRestoreEvidence(reorderedEvidence, {
-        candidateFingerprint: fingerprint,
-        wranglerWorktreeSha256: wranglerHash,
-        allowedMigrationStates: [
-          {
-            latestMigration: evidence.latestMigration,
-            migrationCount: evidence.migrationCount,
-            migrationLedgerNames,
-            migrationLedgerNamesSha256: migrationLedgerNamesHash,
-            migrationLedgerBaselineSha256:
-              evidence.migrationLedgerBaselineSha256,
-          },
-        ],
-        now: new Date("2026-07-16T12:00:00.000Z"),
-      }),
+      validateRemoteRestoreEvidence(
+        {
+          ...reorderedEvidence,
+          migrationLedgerBaselineSha256: migrationLedgerRule.baselineSha256,
+        },
+        expected,
+      ),
     ).toMatchObject({
       ok: false,
       issues: expect.arrayContaining([
         "remote_restore_migration_mismatch",
         "remote_restore_migration_ledger_order",
       ]),
+    });
+    // The same rule accepts the exact in-order ledger.
+    expect(
+      validateRemoteRestoreEvidence(
+        {
+          ...evidence,
+          migrationLedgerBaselineSha256: migrationLedgerRule.baselineSha256,
+        },
+        expected,
+      ),
+    ).toEqual({ ok: true, issues: [] });
+  });
+
+  it("accepts a post-baseline reorder and a leftover rename alias the repository explains", () => {
+    const validateRemoteRestoreEvidence = (
+      deployPlanModule as Record<string, unknown>
+    ).validateRemoteRestoreEvidence;
+    expect(typeof validateRemoteRestoreEvidence).toBe("function");
+    if (typeof validateRemoteRestoreEvidence !== "function") return;
+    // The derived ledger rule (0509#3512): post-baseline order is production
+    // apply history the repository cannot enumerate — a regression back to
+    // exact ordered-suffix matching must fail this test, so the reorder and
+    // the leftover alias live past the baseline prefix, not inside it.
+    const baseline = ["0001_first.sql", "0002_second.sql"];
+    const repository = [
+      "0001_first.sql",
+      "0002_second.sql",
+      "0003_a.sql",
+      "0004_b.sql",
+      "0005_renamed.sql",
+    ];
+    // Production applied 0004_b before 0003_a landed (interleave) and ran
+    // 0004_renamed before the file shipped as 0005_renamed (rename alias);
+    // a later catch-up applied 0005_renamed, so the stale name and the
+    // canonical name coexist on the ledger.
+    const ledger = [
+      "0001_first.sql",
+      "0002_second.sql",
+      "0004_b.sql",
+      "0004_renamed.sql",
+      "0003_a.sql",
+      "0005_renamed.sql",
+    ];
+    const migrationLedgerRule = productionMigrationLedgerRule(
+      repository,
+      new Set(),
+      {
+        baseline,
+        retiredMigrations: new Set<string>(),
+      },
+    );
+    const expected = {
+      candidateFingerprint: fingerprint,
+      wranglerWorktreeSha256: wranglerHash,
+      migrationLedgerRule,
+      now: new Date("2026-07-16T12:00:00.000Z"),
+    };
+    const evidence = {
+      ...passingRemoteRestoreEvidence(),
+      migrationLedgerNames: ledger,
+      migrationLedgerNamesSha256: createHash("sha256")
+        .update(JSON.stringify(ledger))
+        .digest("hex"),
+      migrationLedgerBaselineSha256: migrationLedgerRule.baselineSha256,
+      latestMigration: "0005_renamed.sql",
+      migrationCount: ledger.length,
+    };
+    expect(validateRemoteRestoreEvidence(evidence, expected)).toEqual({
+      ok: true,
+      issues: [],
     });
   });
 
@@ -2287,22 +2401,53 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(deploy.jobs.deploy.permissions["contents"]).toBe("write");
   });
 
-  it("runs every deploy-job ./scripts/ step against an executable checkout (0509#3330)", () => {
+  it("runs every deploy-workflow ./scripts/ step against an executable checkout (0509#3330)", () => {
     const deploy = parse(
       readFileSync(resolve(".github/workflows/deploy-production.yml"), "utf8"),
     ) as any;
-    const directRuns = (deploy.jobs.deploy.steps as Array<{ run?: string }>)
-      .map((step) => step.run?.trim())
-      .filter((run): run is string => !!run && run.startsWith("./scripts/"));
+    // Every job, not just deploy: a lost bit in the evidence/cas jobs kills the
+    // same production deploys through the same exit 126.
+    const directRuns = collectDeployWorkflowScriptTokens(deploy.jobs);
     expect(directRuns).toContain("./scripts/commit-deploy-ledger.sh");
     expect(directRuns).toContain("./scripts/ci-verify-production-candidate.sh");
     for (const run of new Set(directRuns)) {
-      const script = statSync(resolve(run.slice(2)));
-      expect(
-        (script.mode & 0o111) !== 0,
-        `${run} lost its +x bit — the Actions checkout runs it as ${run} and dies with exit 126 (0509#3330)`,
-      ).toBe(true);
+      expectScriptExecutable(run, statSync(resolve(run.slice(2))));
     }
+  });
+
+  it("catches a ./scripts/ invocation on line 2+ of a multiline run block (issue #3441)", () => {
+    // The old net took the first token of each `run:` string, so a `run: |`
+    // block whose script call sat on line 2 escaped the +x check entirely and
+    // production — not this gate — found the lost bit.
+    const synthetic = parse(
+      `
+jobs:
+  evidence:
+    steps:
+      - name: restore evidence
+        run: |
+          set -euo pipefail
+          ./scripts/multiline-probe.sh --flag
+`,
+    ) as any;
+    expect(collectDeployWorkflowScriptTokens(synthetic.jobs)).toContain(
+      "./scripts/multiline-probe.sh",
+    );
+
+    // And the caught token still fails with the gate's exit-126 message, not
+    // a raw ENOENT, when the bit is lost.
+    const root = mkdtempSync(join(tmpdir(), "0509-multiline-plusx-"));
+    roots.push(root);
+    const probe = join(root, "multiline-probe.sh");
+    writeFileSync(probe, "#!/bin/sh\nexit 0\n");
+    chmodSync(probe, 0o644);
+    expect(() =>
+      expectScriptExecutable("./scripts/multiline-probe.sh", statSync(probe)),
+    ).toThrow(/exit 126/);
+    chmodSync(probe, 0o755);
+    expect(() =>
+      expectScriptExecutable("./scripts/multiline-probe.sh", statSync(probe)),
+    ).not.toThrow();
   });
 
   it("fails a rewritten-away pinned SHA with regenerate-the-evidence, not Command failed (0509#2974)", async () => {

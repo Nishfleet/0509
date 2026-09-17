@@ -79,6 +79,9 @@ export const OWNED_PROBE_PENDING: ReadonlyArray<{ table: string; phaseIssue: num
   { table: "evidence_top_up_grant", phaseIssue: PHASE_ISSUES.orgIdCoverageBackfill },
   { table: "evidence_top_up_ledger_entry", phaseIssue: PHASE_ISSUES.orgIdCoverageBackfill },
   { table: "evidence_top_up_adjustment", phaseIssue: PHASE_ISSUES.orgIdCoverageBackfill },
+  // #3175 (slice 2): per-user dismissal ledger for suggested competitors; the
+  // derivation consults it so a removed suggestion is never re-suggested.
+  { table: "competitor_suggestion_dismissal", phaseIssue: PHASE_ISSUES.orgIdCoverageBackfill },
 ];
 
 /**

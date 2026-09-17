@@ -57,6 +57,7 @@ const CONNECTOR_FOR_SOURCE: Partial<Record<PresenceSourceId, PresenceConnectorId
   threads: "threads",
   hn: "hn",
   pinterest: "pinterest",
+  youtube: "youtube",
 };
 
 const SOCIAL_SOURCE_IDS = new Set<PresenceSourceId>(["x", "reddit", "linkedin", "bluesky", "threads", "pinterest"]);
@@ -112,6 +113,8 @@ function statusFromConnectorGate(
             ? "OFFICIAL_PUBLIC_API"
             : sourceId === "pinterest"
             ? "VERIFIED_PUBLIC_FEED"
+            : sourceId === "youtube"
+            ? "OFFICIAL_PUBLIC_API"
             : sourceId === "linkedin" && trackingMode === "competitor"
             ? "LIMITED_COVERAGE"
             : sourceId === "x" || sourceId === "reddit"
@@ -196,15 +199,6 @@ function evaluatePlannedSourceCoverage(
   env: AppEnv,
   sourceId: PresenceSourceId,
 ): PresenceSourceCoverageEntry {
-  if (sourceId === "youtube") {
-    return baseEntry(sourceId, "planned", {
-      coverageLabel: "UNAVAILABLE",
-      reasonCode: "api_not_configured",
-      reasonMessage: "YouTube tracking requires official API credentials, quota approval, and a rollout decision.",
-      actionNeeded: "Not available yet — requires API key and product approval",
-    });
-  }
-
   if (sourceId === "amazon") {
     return baseEntry(sourceId, "manual_only", {
       coverageLabel: "LIMITED_COVERAGE",
@@ -446,7 +440,7 @@ export function presenceSourceCoverageForDocs(): Array<{
       label: SOURCE_LABELS.linkedin,
       productionStatus: "gated",
       notes:
-        "LinkedIn Posts API connector wired in (own-organization posts of a CONNECTED account via /rest/posts, $0, stored OAuth grant; the member must administer the tracked organization). Gated behind PRESENCE_LINKEDIN_ROLLOUT — off by default; activation is a separate rollout decision. Self-tracking only: there is no public keyword search of others' posts, so Competitor coverage stays LIMITED_COVERAGE (the only allowed exclusion).",
+        "LinkedIn Posts API connector wired in (own-organization posts of a CONNECTED account via /rest/posts, $0, stored OAuth grant; the member must administer the tracked organization). Gated behind PRESENCE_LINKEDIN_ROLLOUT — off by default; activation is a separate rollout decision. Self-tracking only: there is no public keyword search of others' posts, so Competitor coverage stays LIMITED_COVERAGE (the only allowed exclusion). Competitor-ads coverage also rides this source id (issue #3196): the public LinkedIn Ad Library — the tracked brand's currently published promoted-post cards (promoted text, advertiser, public detail link; no spend, reach or audience metrics), matched by the account-owner name exactly as the public Ad Library search serves it, the newest results page only (up to 25 ads), no ad-format distinction. Region: the United States (the public search's verified geo=US posture); no other regions are captured. Freshness: the regular monitoring cadence (the weekly label is the seam's scheduling hint). Killed via LINKEDIN_ADS_SOURCE_DISABLED=1 (kill flag; 0/unset = on) — scheduled runs and the public /ads section follow it. Capture attempts and failures feed the /status capture-failure rate when the #2181 DECODO_BUDGET KV binding is wired; without it the /status line states the flag posture only.",
     },
     {
       sourceId: "rss",
@@ -479,7 +473,7 @@ export function presenceSourceCoverageForDocs(): Array<{
       sourceId: "hn",
       label: SOURCE_LABELS.hn,
       productionStatus: "gated",
-      notes: "Hacker News mention connector wired in (Algolia HN Search API — free, no key, no auth; the ~10,000-requests/hour/IP courtesy figure is honored with one serialized search_by_date request per poll: page 0 only, time-window slicing via the prior poll's watermark instead of deep paging past the ~1,000-result ceiling). Gated behind PRESENCE_HN_ROLLOUT — off by default; activation is a separate rollout decision.",
+      notes: "Hacker News mention connector wired in (Algolia HN Search API — free, no key, no auth; the ~10,000-requests/hour/IP courtesy figure is honored with one serialized search_by_date request per poll: page 0 only, time-window slicing via the prior poll's watermark instead of deep paging past the ~1,000-result ceiling). Gated behind PRESENCE_HN_ROLLOUT — off by default; activation is a separate rollout decision. Coverage: only public HN stories and comments whose stored text/URL/title matches the tracked phrase become mentions — the connector pins the Algolia query to tags=(story,comment) — while ranking metadata (points, comment counts, the story's external URL) rides raw_json, never the mention.",
     },
     {
       sourceId: "pinterest",
@@ -491,8 +485,8 @@ export function presenceSourceCoverageForDocs(): Array<{
     {
       sourceId: "youtube",
       label: SOURCE_LABELS.youtube,
-      productionStatus: "planned",
-      notes: "Requires official API key, quota, and product approval before any active claim.",
+      productionStatus: "gated",
+      notes: "YouTube mention connector wired in (YouTube Data API v3 search.list — keyword search for the tracked match phrase, type=video, newest first, ONE page of 50 results per poll, documented publishedAfter time-window instead of paging). Covers the videos the search returns for the tracked phrase — no channel feeds here (those ride the rss connector, PLAN §2a), no comments, and the search index's completeness is YouTube's, not ours. In-connector rate budget: the documented default allocation of 100 search.list calls/day, counted as CALLS (empty results still count — there is no documented Threads-style exemption) in presence_poll_cursor across every youtube target; one Google project = one principal. Gated behind PRESENCE_YOUTUBE_ROLLOUT + YOUTUBE_API_KEY — off by default; activation is a separate rollout decision.",
     },
     {
       sourceId: "amazon",
@@ -522,8 +516,9 @@ export function presenceSourceCoverageForDocs(): Array<{
     {
       sourceId: "tiktok",
       label: SOURCE_LABELS.tiktok,
-      productionStatus: "coming_soon",
-      notes: "TikTok Commercial Content Library source wired in as a stub (seam #2218). Live adapter lands in #2194.",
+      productionStatus: "active",
+      notes:
+        "TikTok Commercial Content Library wired in and live behind its flag (#2194; Nish decision 2026-09-12): EU-shown ads only — the public library publishes what reached the EU, no spend or impressions; the newest 12 ads per tracked brand, refreshed weekly with one 90-second capture attempt (a failed capture skips silently to the next week and never becomes an event). Shares the 800-requests/month Decodo render budget; requires DECODO_SCRAPER_AUTH.",
     },
     {
       sourceId: "subdomains",

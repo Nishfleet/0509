@@ -1,0 +1,135 @@
+
+> 0509@0.1.0 seed:publisher
+> node scripts/ads-domain-publisher.mjs --list=fashion-ecommerce --dry-run --min-publish=100
+
+seed:publisher dry-run — list=fashion-ecommerce domains=125 base=https://0509.io
+publish floor: verified + likely >= 1 per domain; gate: >= 100 publishable
+
+  FAILED  abercrombie.com    HTTP 500
+  FAILED  ae.com             HTTP 500
+  FAILED  aeropostale.com    HTTP 500
+  FAILED  aliceandolivia.com HTTP 500
+  PUBLISH allsaints.com      verified 19 + likely 3
+  PUBLISH anntaylor.com      verified 24 + likely 0
+  PUBLISH anthropologie.com  verified 17 + likely 0
+  PUBLISH aritzia.com        verified 25 + likely 0
+  PUBLISH barbour.com        verified 12 + likely 0
+  PUBLISH belk.com           verified 21 + likely 2
+  PUBLISH bloomingdales.com  verified 12 + likely 5
+  PUBLISH boohoo.com         verified 15 + likely 0
+  PUBLISH bostonproper.com   verified 27 + likely 0
+  FAILED  burberry.com       HTTP 500
+  FAILED  burlington.com     HTTP 500
+  PUBLISH calvinklein.com    verified 11 + likely 0
+  PUBLISH carhartt.com       verified 12 + likely 0
+  PUBLISH cettire.com        verified 29 + likely 1
+  SKIP    chicos.com         no verified/likely coverage (verified 0, likely 0, unmatched 0)
+  PUBLISH clarks.com         verified 15 + likely 8
+  SKIP    clubmonaco.com     no verified/likely coverage (verified 0, likely 0, unmatched 1)
+  PUBLISH dillards.com       verified 18 + likely 8
+  PUBLISH drmartens.com      verified 30 + likely 0
+  PUBLISH eileenfisher.com   verified 23 + likely 0
+  PUBLISH everlane.com       verified 16 + likely 2
+  PUBLISH fabletics.com      verified 29 + likely 0
+  PUBLISH fahertybrand.com   verified 26 + likely 0
+  PUBLISH forever21.com      verified 22 + likely 1
+  PUBLISH freepeople.com     verified 27 + likely 0
+  PUBLISH gap.com            verified 0 + likely 1
+  PUBLISH gymshark.com       verified 19 + likely 7
+  PUBLISH hollisterco.com    verified 30 + likely 0
+  PUBLISH jjill.com          verified 30 + likely 0
+  PUBLISH jockey.com         verified 9 + likely 5
+  FAILED  jcrew.com          HTTP 500
+  PUBLISH kohls.com          verified 16 + likely 0
+  PUBLISH lacoste.com        verified 21 + likely 3
+  PUBLISH landsend.com       verified 27 + likely 0
+  PUBLISH levi.com           verified 10 + likely 0
+  PUBLISH lids.com           verified 1 + likely 0
+  PUBLISH lululemon.com      verified 14 + likely 1
+  PUBLISH macys.com          verified 23 + likely 2
+  SKIP    mango.com          no verified/likely coverage (verified 0, likely 0, unmatched 2)
+  PUBLISH modcloth.com       verified 21 + likely 0
+  PUBLISH nastygal.com       verified 3 + likely 0
+  PUBLISH nordstrom.com      verified 17 + likely 1
+  PUBLISH nordstromrack.com  verified 19 + likely 1
+  PUBLISH oldnavy.com        verified 0 + likely 8
+  PUBLISH princesspolly.com  verified 15 + likely 15
+  SKIP    quince.com         no verified/likely coverage (verified 0, likely 0, unmatched 0)
+  PUBLISH ralphlauren.com    verified 14 + likely 0
+  PUBLISH reformation.com    verified 0 + likely 27
+  PUBLISH revolve.com        verified 18 + likely 3
+  PUBLISH saksfifthavenue.com verified 26 + likely 0
+  PUBLISH shein.com          verified 30 + likely 0
+  PUBLISH skechers.com       verified 4 + likely 6
+  PUBLISH talbots.com        verified 21 + likely 0
+  SKIP    theory.com         no verified/likely coverage (verified 0, likely 0, unmatched 2)
+  PUBLISH timberland.com     verified 20 + likely 0
+  PUBLISH tommyjohn.com      verified 8 + likely 20
+  PUBLISH uniqlo.com         verified 29 + likely 0
+  PUBLISH verabradley.com    verified 14 + likely 0
+  PUBLISH victoriassecret.com verified 24 + likely 0
+  PUBLISH zales.com          verified 27 + likely 2
+  PUBLISH zara.com           verified 19 + likely 0
+  PUBLISH whitehouseblackmarket.com verified 28 + likely 0
+  PUBLISH bananarepublic.com verified 0 + likely 10
+  SKIP    express.com        no verified/likely coverage (verified 0, likely 0, unmatched 24)
+  PUBLISH basspro.com        verified 28 + likely 0
+  PUBLISH wrangler.com       verified 5 + likely 0
+  PUBLISH duluthtrading.com  verified 6 + likely 0
+  PUBLISH llbean.com         verified 11 + likely 0
+  PUBLISH reitmans.com       verified 23 + likely 5
+  PUBLISH davidsbridal.com   verified 30 + likely 0
+  SKIP    charlotterusse.com no verified/likely coverage (verified 0, likely 0, unmatched 0)
+  PUBLISH tillys.com         verified 26 + likely 0
+  PUBLISH zumiez.com         verified 3 + likely 0
+  PUBLISH pacsun.com         verified 26 + likely 0
+  SKIP    buckle.com         no verified/likely coverage (verified 0, likely 0, unmatched 0)
+  PUBLISH hannaandersson.com verified 29 + likely 0
+  PUBLISH coach.com          verified 2 + likely 0
+  PUBLISH michaelkors.com    verified 5 + likely 8
+  PUBLISH katespade.com      verified 11 + likely 0
+  PUBLISH toryburch.com      verified 24 + likely 0
+  PUBLISH gucci.com          verified 20 + likely 0
+  PUBLISH louisvuitton.com   verified 22 + likely 1
+  PUBLISH prada.com          verified 2 + likely 2
+  PUBLISH gstar.com          verified 15 + likely 0
+  PUBLISH hottopic.com       verified 8 + likely 0
+  PUBLISH torrid.com         verified 30 + likely 0
+  PUBLISH lanebryant.com     verified 25 + likely 0
+  SKIP    ssense.com         no verified/likely coverage (verified 0, likely 0, unmatched 0)
+  PUBLISH farfetch.com       verified 29 + likely 1
+  PUBLISH bonobos.com        verified 23 + likely 0
+  PUBLISH untuckit.com       verified 23 + likely 0
+  PUBLISH luckybrand.com     verified 18 + likely 0
+  PUBLISH madewell.com       verified 13 + likely 0
+  PUBLISH mytheresa.com      verified 30 + likely 0
+  PUBLISH net-a-porter.com   verified 25 + likely 0
+  SKIP    cos.com            no verified/likely coverage (verified 0, likely 0, unmatched 0)
+  PUBLISH allbirds.com       verified 15 + likely 4
+  PUBLISH arcteryx.com       verified 28 + likely 0
+  PUBLISH armani.com         verified 0 + likely 10
+  PUBLISH brooksrunning.com  verified 29 + likely 0
+  SKIP    columbia.com       no verified/likely coverage (verified 0, likely 0, unmatched 0)
+  SKIP    diesel.com         no verified/likely coverage (verified 0, likely 0, unmatched 0)
+  PUBLISH dolcegabbana.com   verified 15 + likely 4
+  PUBLISH endclothing.com    verified 27 + likely 0
+  PUBLISH fjallraven.com     verified 24 + likely 0
+  SKIP    filson.com         no verified/likely coverage (verified 0, likely 0, unmatched 0)
+  PUBLISH huckberry.com      verified 22 + likely 0
+  PUBLISH marinelayer.com    verified 22 + likely 0
+  PUBLISH merrell.com        verified 20 + likely 7
+  PUBLISH mizzenandmain.com  verified 29 + likely 0
+  PUBLISH mrporter.com       verified 28 + likely 0
+  PUBLISH patagonia.com      verified 1 + likely 0
+  PUBLISH prettylittlething.com verified 29 + likely 0
+  PUBLISH salomon.com        verified 15 + likely 2
+  PUBLISH stoneisland.com    verified 24 + likely 0
+  SKIP    taylorstitch.com   no verified/likely coverage (verified 0, likely 0, unmatched 0)
+  PUBLISH thenorthface.com   verified 4 + likely 23
+  PUBLISH toddsnyder.com     verified 22 + likely 0
+  PUBLISH versace.com        verified 1 + likely 9
+  PUBLISH vuoriclothing.com  verified 30 + likely 0
+  PUBLISH woolrich.com       verified 19 + likely 3
+
+summary: 104 publishable / 125 domains (PASS)
+  publish=104 skip=14 failed=7 gate=100

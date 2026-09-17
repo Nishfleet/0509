@@ -825,6 +825,10 @@ export async function handleWatchlistsAction(args: ActionFunctionArgs) {
     return handleAcceptSuggestedCompetitorAction(env, workspaceUserId, formData);
   }
 
+  if (intent === "dismiss-suggested-competitor") {
+    return handleDismissSuggestedCompetitorAction(env, workspaceUserId, formData);
+  }
+
   if (intent === "bulk-accept-suggested-competitors") {
     return handleBulkAcceptSuggestedCompetitorsAction(env, workspaceUserId, formData);
   }
@@ -832,6 +836,98 @@ export async function handleWatchlistsAction(args: ActionFunctionArgs) {
   return {
     ok: false,
     message: "We couldn't complete that action. Refresh the page and try again.",
+  };
+}
+
+// Onboarding epic slice 2 (#3175): one-tap remove for a suggested competitor.
+//
+// The panel's rows are DERIVED on every load, so "remove" cannot be a UI-only
+// hide — the next render would re-derive the same row. This action records the
+// dismissal durably (migration 0098) and the seed filters on it, which is what
+// makes "removing one never re-suggests it" true across reloads, sweeps and
+// the logged-out preview.
+//
+// The row is re-validated against the live panel first, so a stale id is
+// refused rather than silently writing a dismissal for a candidate that is not
+// on screen. The dismissal is idempotent: removing the same row twice is a
+// no-op, not an error.
+async function handleDismissSuggestedCompetitorAction(
+  env: AppEnv,
+  workspaceUserId: string,
+  formData: FormData,
+): Promise<{
+  ok: boolean;
+  error?: "candidate_unknown";
+  message: string;
+  dismissedCandidateId?: string;
+}> {
+  const { dismissCompetitorSuggestion } = await import(
+    "~/lib/competitor-suggestion-dismissal.server"
+  );
+
+  const candidateId = String(formData.get("candidateId") ?? "").trim();
+  if (!candidateId) {
+    return {
+      ok: false,
+      error: "candidate_unknown",
+      message: "That suggestion is no longer available. Refresh and try again.",
+    };
+  }
+
+  // Re-validate against the LIVE seed output (not the panel's VISIBLE rows):
+  // the panel slices rows to the plan's visible cap, so validating against it
+  // would make a suggestion below the cap impossible to remove by any means
+  // (#3175 review). The seed is the same derivation the panel uses, just
+  // unsliced. A row that has already gone is still a successful removal from
+  // the customer's point of view, so the unknown case is reported plainly
+  // rather than as a hard failure.
+  const { seedAutoCompetitors, buildCandidateId } = await import(
+    "~/lib/auto-competitor-seed.server"
+  );
+  const { getWorkspaceBranding } = await import(
+    "~/lib/data/workspace-branding.server"
+  );
+  const { registrableDomainFromLandingPage } = await import(
+    "~/lib/competitor-website"
+  );
+  const branding = await getWorkspaceBranding(env, workspaceUserId);
+  const selfDomain = branding.brandWebsite
+    ? registrableDomainFromLandingPage(branding.brandWebsite)
+    : null;
+  if (!selfDomain) {
+    return {
+      ok: false,
+      error: "candidate_unknown",
+      message: "Add your brand's website first — suggestions are derived from it.",
+    };
+  }
+  const candidates = await seedAutoCompetitors(env, {
+    domain: selfDomain,
+    country: "all",
+    userId: workspaceUserId,
+  });
+  const candidate = candidates.find((entry) => buildCandidateId(entry) === candidateId) ?? null;
+  if (!candidate) {
+    return {
+      ok: false,
+      error: "candidate_unknown",
+      message: "That suggestion isn't in our latest sweep anymore. Refresh to see the current list.",
+    };
+  }
+
+  await dismissCompetitorSuggestion(env, {
+    userId: workspaceUserId,
+    candidateKey: candidateId,
+    // The column is documented as the REGISTRABLE DOMAIN, not a URL, so the
+    // domain-fallback match can use it (#3175 review).
+    candidateDomain: candidate.registrableDomain,
+    candidateLabel: candidate.advertiser,
+  });
+
+  return {
+    ok: true,
+    message: `Removed ${candidate.advertiser}. We won't suggest it again.`,
+    dismissedCandidateId: candidateId,
   };
 }
 
@@ -859,6 +955,9 @@ async function handleAcceptSuggestedCompetitorAction(
     "~/lib/auto-competitor-suggested-loader.server"
   );
   const { createWatchlistWithinLimit } = await import("~/lib/data.server");
+  const { queueFirstWatchlistScan } = await import(
+    "~/lib/first-watchlist-scan.server"
+  );
   const { getUserPlan } = await import("~/lib/plan.server");
   const { checkPlanLimit } = await import("~/lib/plan.server");
 
@@ -958,6 +1057,13 @@ async function handleAcceptSuggestedCompetitorAction(
       message:
         "You've reached your competitor tracking limit — pause another watchlist before adding this one.",
     };
+  }
+
+  if (result.status === "created") {
+    // First scan on creation (issue #3380) — the same enqueue the other
+    // watchlist-creation paths already perform. No ExecutionContext reaches
+    // this signature; the durable (env.DB) queue path never needs it.
+    await queueFirstWatchlistScan(env, undefined, result.watchlist);
   }
 
   return {

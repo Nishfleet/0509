@@ -10,6 +10,10 @@
 
 import { queryOne as one } from "~/lib/data/d1.server";
 import type { AppEnv } from "~/lib/env.server";
+import {
+  getJoinPipelineMetrics,
+  type JoinPipelineMetrics,
+} from "~/lib/join-pipeline-metrics.server";
 import { monitoringCoverageDays } from "~/lib/monitoring-coverage";
 import { listScheduledObservationHealth } from "~/lib/scheduled-observation-health.server";
 import {
@@ -69,8 +73,16 @@ export interface PublicStatusCounters {
   lastWatchlistRunAt: string | null;
   /** Number of watchlist runs started in the last 24 hours. */
   runsInLast24h: number;
-  /** Number of watchlist runs in the last 24 hours whose status is `failed`. */
+  /** Number of watchlist runs whose status is `failed` in the last 24 hours. */
   failedRunsInLast24h: number;
+  /**
+   * Distinct watchlists with a stored TikTok (EU Ad Library) source_snapshot
+   * in the last 8 days (issue #3195). Weekly cadence: the count missing from
+   * the active-watchlist denominator IS the capture-failure gap, read live
+   * from the service's own capture records — the same read-live contract as
+   * every other number on /status.
+   */
+  tiktokCapturesInLast8d: number;
   /** ISO timestamp of the most recently sent digest, or null. */
   lastDigestSentAt: string | null;
   /**
@@ -105,8 +117,13 @@ export async function getPublicStatusCounters(
   const dayAgoIso = new Date(
     Date.now() - 24 * 60 * 60 * 1000,
   ).toISOString();
+  // The TikTok source rechecks weekly (#3195); an 8-day window = this week's
+  // expected capture plus one day of scheduling slack.
+  const eightDaysAgoIso = new Date(
+    Date.now() - 8 * 24 * 60 * 60 * 1000,
+  ).toISOString();
 
-  const [lastRunRow, countsRow, digestRow, baselineRow] = await Promise.all([
+  const [lastRunRow, countsRow, digestRow, baselineRow, tiktokRow] = await Promise.all([
     one<{ last_started_at: string | null }>(
       env,
       `SELECT MAX(started_at) AS last_started_at FROM watchlist_run`,
@@ -137,6 +154,13 @@ export async function getPublicStatusCounters(
         FROM scheduled_observation_health_state
       `,
     ),
+    one<{ tiktok_captures: number }>(
+      env,
+      `SELECT COUNT(DISTINCT watchlist_id) AS tiktok_captures
+       FROM source_snapshot
+       WHERE source_id = 'tiktok' AND fetched_at >= ?`,
+      eightDaysAgoIso,
+    ),
   ]);
 
   const counters = {
@@ -144,6 +168,7 @@ export async function getPublicStatusCounters(
     runsInLast24h: Number(countsRow?.total ?? 0),
     failedRunsInLast24h: Number(countsRow?.failed ?? 0),
     lastDigestSentAt: digestRow?.last_digest_sent_at ?? null,
+    tiktokCapturesInLast8d: Number(tiktokRow?.tiktok_captures ?? 0),
   };
 
   // The `lastDigestSentAt` timestamp MUST never be read from `delivered_at`:
@@ -227,6 +252,14 @@ export interface PublicStatusSurfaces {
   surfaces: SurfaceMeasurement[];
   /** Detailed monitoring counters for the "Monitoring health" block. */
   monitoring: PublicStatusCounters | null;
+  /**
+   * Join-path latency metrics for the "Join path" block (issue #3177):
+   * time-to-first-confirm and time-to-first-brief p50/p95 over the last
+   * 24 h and 7 d, read from status_probe_samples and the first-brief
+   * digest rows. Null when the DB binding is absent or the read failed —
+   * the block renders its own degraded line, never a fake number.
+   */
+  joinPipeline: JoinPipelineMetrics | null;
 }
 
 const SEARCH_CACHE_REFRESH_MAX_AGE_MS = 26 * 60 * 60 * 1000; // nightly publisher deadline
@@ -414,6 +447,7 @@ export async function getPublicStatusSurfaces(
     return {
       asOf,
       monitoring: null,
+      joinPipeline: null,
       surfaces: [
         degraded(base("public-search", "Public search", "edge probe"),
           "the page is being served without the application database binding"),
@@ -456,6 +490,7 @@ export async function getPublicStatusSurfaces(
     billingResult,
     emailResult,
     emailStatusResult,
+    joinPipelineResult,
   ] = await Promise.allSettled([
     getPublicStatusProbes(env.DB),
     getPublicStatusCountersWithWatchlists(env, dayAgoIso),
@@ -467,6 +502,9 @@ export async function getPublicStatusSurfaces(
     // never throws (pre-migration schema reads as empty). Present data folds
     // into the Email row below; empty data changes nothing.
     getEmailDeliveryStatus(env),
+    // Join-path latency metrics (#3177): confirm samples + first-brief
+    // digests. A rejected read renders as the block's degraded line.
+    getJoinPipelineMetrics(env),
   ]);
   const emailCanaryStatus: EmailDeliveryStatus | null =
     emailStatusResult.status === "fulfilled" ? emailStatusResult.value : null;
@@ -665,6 +703,11 @@ export async function getPublicStatusSurfaces(
       `${counters.runsInLast24h.toLocaleString()} watchlist runs in the last 24 hours, ${counters.failedRunsInLast24h.toLocaleString()} failed`,
       counters.lastWatchlistRunAt ? `last run started ${ageClause(counters.lastWatchlistRunAt, asOf)}` : null,
       `${activeWatchlists.toLocaleString()} active watchlists scheduled`,
+      // Issue #3195: the TikTok (EU Ad Library) capture-failure gap, read
+      // live from source_snapshot. Weekly cadence → the denominator's misses
+      // ARE the capture failures. Missing/empty capture rows degrade to 0 —
+      // the page never throws on this read.
+      `TikTok (EU Ad Library): ${counters.tiktokCapturesInLast8d.toLocaleString()} of ${activeWatchlists.toLocaleString()} active watchlists captured in the last 8 days — ${Math.max(0, activeWatchlists - counters.tiktokCapturesInLast8d).toLocaleString()} missed this weekly window (the capture-failure gap)`,
       counters.scheduledMonitoringSince ? `continuous coverage since ${counters.scheduledMonitoringSince}` : null,
     ].filter((v): v is string => v !== null);
     m.facts = facts;
@@ -716,6 +759,8 @@ export async function getPublicStatusSurfaces(
     asOf,
     surfaces,
     monitoring: countersResult.status === "fulfilled" ? countersResult.value.counters : null,
+    joinPipeline:
+      d1Ok && joinPipelineResult.status === "fulfilled" ? joinPipelineResult.value : null,
   };
 }
 
@@ -744,6 +789,7 @@ async function getPublicStatusCountersWithWatchlists(
       lastWatchlistRunAt: null,
       runsInLast24h: 0,
       failedRunsInLast24h: 0,
+      tiktokCapturesInLast8d: 0,
       lastDigestSentAt: null,
       digestHealth: "unknown",
       scheduledMonitoringSince: null,

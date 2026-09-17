@@ -133,6 +133,14 @@ export interface AppEnv {
    * deliberately set.
    */
   FUNNEL_MEASUREMENT_ENABLED?: string;
+  /**
+   * Workers Analytics Engine dataset (`funnel_events`) for the spec-§4
+   * funnel records (issue #3521): each emitted event also lands here via
+   * writeDataPoint so trailing-7d/30d counts per kind are queryable
+   * (console logs are ephemeral). Optional because tests and dev envs
+   * build env objects by hand; absent means log-only emission.
+   */
+  FUNNEL_ANALYTICS?: AnalyticsEngineDataset;
   LANDING_PAGE_ARTIFACTS?: R2Bucket;
   /**
    * Explicit gate for the R2 -> D1 orphan reconciliation delete path. Absent or
@@ -208,6 +216,15 @@ export interface AppEnv {
    * only: the rollout posture is on.
    */
   GOOGLE_ADS_SOURCE_DISABLED?: string;
+  /**
+   * LinkedIn Ads (Ad Library) source kill flag (issue #3196). Same posture as
+   * GOOGLE_ADS_SOURCE_DISABLED: unset or "0" = the source runs (the
+   * production posture, wrangler.jsonc vars); "1" pauses it end to end — no
+   * scheduled captures, the public /ads section omits, the /status row
+   * reports the paused posture. Emergency brake only: the rollout posture is
+   * on.
+   */
+  LINKEDIN_ADS_SOURCE_DISABLED?: string;
   PRESENCE_WEBSITE_ROLLOUT?: string;
   PRESENCE_X_ROLLOUT?: string;
   PRESENCE_REDDIT_ROLLOUT?: string;
@@ -257,6 +274,15 @@ export interface AppEnv {
   PRESENCE_BSKY_PDS_URL?: string;
   PRESENCE_BSKY_APPVIEW_URL?: string;
   PRESENCE_BLUESKY_ROLLOUT?: string;
+  /**
+   * Rollout kill flag for the YouTube mention connector (issue #3203).
+   * Off by default; activation is a separate rollout decision. See the
+   * documented default quota facts on the connector itself.
+   */
+  PRESENCE_YOUTUBE_ROLLOUT?: string;
+  /** Google API key for the YouTube Data API v3 search.list read (issue
+   *  #3203). Never logged, never persisted outside env. */
+  YOUTUBE_API_KEY?: string;
   /**
    * Money flag for X mention search (#3255). Recent search is pay-per-use;
    * every poll is a paid call. Set to "approved" only after Nish's spend
@@ -410,6 +436,15 @@ export function isAgencyOrgModeEnabled(env: AppEnv) {
  */
 export function isGoogleAdsSourceKilled(env: AppEnv) {
   return parseEnvFlag(env.GOOGLE_ADS_SOURCE_DISABLED);
+}
+
+/**
+ * LinkedIn Ads (Ad Library) source kill flag (issue #3196). Same
+ * emergency-brake posture as GOOGLE_ADS_SOURCE_DISABLED: unset or "0" is the
+ * on/production posture; "1" (or any 1/true/yes/on) pauses the source.
+ */
+export function isLinkedInAdsSourceKilled(env: AppEnv) {
+  return parseEnvFlag(env.LINKEDIN_ADS_SOURCE_DISABLED);
 }
 
 export function emailFromAddress(env: AppEnv) {

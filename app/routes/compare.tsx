@@ -208,7 +208,7 @@ export default function CompareIndexRoute() {
         )}
       />
       <script {...jsonLdScriptProps(itemList)} />
-      <MarketingNav />
+      <MarketingNav signupSource="compare-page" />
 
       <section className="ld-hero">
         <p className="ld-case">

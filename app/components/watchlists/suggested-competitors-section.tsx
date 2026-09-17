@@ -21,13 +21,15 @@ type NavigationResult = ReturnType<typeof useNavigation>;
  * 800-line ceiling before this PR) does not grow past the ceiling. The
  * wrapper:
  *
- * 1. Hides itself when the loader returns `null` (free plan — paid gate).
+ * 1. Hides itself when the loader returns `null` (no self-brand domain
+ *    resolvable — the panel needs a domain to seed from).
  * 2. Hides itself on the deep view (one selected competitor) — the panel
  *    is about "things you haven't tracked yet", not the one you're
  *    currently inspecting.
  * 3. Translates the route's `useNavigation()` shape into the panel's
- *    pending prop, and translates the generic `{ ok, error, message, ... }`
- *    action-data shape into the panel's typed feedback.
+ *    pending props (both the accept and the remove leg), and translates the
+ *    generic `{ ok, error, message, ... }` action-data shape into the panel's
+ *    typed feedback.
  *
  * Returns `null` in any branch where the panel should not render, so the
  * route just drops the section in with one JSX line.
@@ -52,14 +54,23 @@ export function WatchlistsSuggestedCompetitorsSection(props: {
     pending && props.navigation.formData
       ? String(props.navigation.formData.get("candidateId") ?? "")
       : null;
+  const pendingDismiss =
+    props.navigation.state !== "idle" &&
+    props.navigation.formData?.get("intent") === "dismiss-suggested-competitor";
+  const pendingDismissCandidateId =
+    pendingDismiss && props.navigation.formData
+      ? String(props.navigation.formData.get("candidateId") ?? "")
+      : null;
 
   return (
     <SuggestedCompetitorsPanel
       domain={props.panel.domain}
       rows={props.panel.rows}
+      caps={props.panel.caps}
       feedback={resolveSuggestedPanelFeedback(props.routeActionData)}
       pending={pending}
       pendingCandidateId={pendingCandidateId}
+      pendingDismissCandidateId={pendingDismissCandidateId}
     />
   );
 }
@@ -90,7 +101,11 @@ export function resolveSuggestedPanelFeedback(
   const isPanelOk =
     isOk &&
     (typeof candidate.acceptedCandidateId === "string" ||
-      typeof candidate.acceptedAdvertiser === "string");
+      typeof candidate.acceptedAdvertiser === "string" ||
+      // Onboarding slice 2 (#3175): the remove leg's success shape. Without
+      // this the removal succeeded server-side but the panel showed nothing,
+      // which is exactly the silent-success the feedback contract forbids.
+      typeof candidate.dismissedCandidateId === "string");
   if (!isPanelOk && !isPanelError) {
     return null;
   }

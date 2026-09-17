@@ -188,7 +188,7 @@ export default function GuideHowToProveWhatChangedOnACompetitorWebsiteRoute() {
         )}
       />
       <script {...jsonLdScriptProps(structuredFaq)} />
-      <MarketingNav />
+      <MarketingNav signupSource="guide-prove-what-changed" />
 
       <section className="ld-hero">
         <p className="ld-case">

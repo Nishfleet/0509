@@ -108,6 +108,27 @@ function main() {
       versionId = null;
     }
   }
+  // #3390: a RECOVERED release's live version is not the deployed one — the
+  // failed release was rolled back, so the version that actually went live is
+  // the recovery outcome recorded in the rollback-target evidence. It
+  // supersedes the wrangler-output id (the 17:36Z run: deployed f55c34ef,
+  // rolled back, live 515fb9d2 — the ledger's last-green anchor must name the
+  // version that provably ran green, not the one the canary just failed).
+  // Informational, same as the wrangler output: unreadable evidence keeps
+  // the deployed id and never blocks the row.
+  const rollbackEvidencePath = readArg("--rollback-evidence");
+  if (rollbackEvidencePath) {
+    try {
+      const recovered = JSON.parse(readFileSync(resolve(rollbackEvidencePath), "utf8"));
+      const recoveredId =
+        typeof recovered?.recoveredLiveVersionId === "string"
+          ? recovered.recoveredLiveVersionId.trim()
+          : "";
+      if (SAFE_VERSION_PATTERN.test(recoveredId)) versionId = recoveredId;
+    } catch {
+      // keep the wrangler-output id
+    }
+  }
   const row = buildDeployLedgerRow({
     sha,
     tree,

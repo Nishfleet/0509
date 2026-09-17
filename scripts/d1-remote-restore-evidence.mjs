@@ -30,10 +30,8 @@ import {
 import {
   POST_DEPLOY_CLEANUP_MIGRATIONS,
   PRODUCTION_MIGRATION_LEDGER_BASELINE,
-  PRODUCTION_MIGRATION_LEDGER_ORDER_EXCEPTIONS,
   RETIRED_PRODUCTION_MIGRATIONS,
-  allowedProductionMigrationLedgers,
-  migrationLedgerState,
+  productionMigrationLedgerRule,
 } from "./d1-migration-sync-check.lib.mjs";
 import { validateRemoteRestoreEvidence } from "./deploy-production-plan.mjs";
 import { redactSensitiveOutput } from "./safe-command-output.mjs";
@@ -89,7 +87,6 @@ const PRODUCTION_DATABASE_NAME = "0509";
 const PRODUCTION_LEDGER_RECONCILIATION_OPTIONS = {
   baseline: PRODUCTION_MIGRATION_LEDGER_BASELINE,
   retiredMigrations: RETIRED_PRODUCTION_MIGRATIONS,
-  orderExceptions: PRODUCTION_MIGRATION_LEDGER_ORDER_EXCEPTIONS,
 };
 const SCRATCH_BINDING = "RESTORE_DB";
 const MAX_COMMAND_OUTPUT_BYTES = 64 * 1024 * 1024;
@@ -1522,13 +1519,11 @@ async function runAutomation(outputPath) {
     const verdict = validateRemoteRestoreEvidence(evidence, {
       candidateFingerprint: candidate.fingerprint,
       wranglerWorktreeSha256: candidate.wrangler.worktreeSha256,
-      allowedMigrationStates: allowedProductionMigrationLedgers(
+      migrationLedgerRule: productionMigrationLedgerRule(
         migrations,
         POST_DEPLOY_CLEANUP_MIGRATIONS,
-        PRODUCTION_MIGRATION_LEDGER_BASELINE,
-        RETIRED_PRODUCTION_MIGRATIONS,
-        PRODUCTION_MIGRATION_LEDGER_ORDER_EXCEPTIONS,
-      ).map((ledger) => migrationLedgerState(ledger)),
+        PRODUCTION_LEDGER_RECONCILIATION_OPTIONS,
+      ),
       migrationBearing: true,
     });
     if (!verdict.ok) {

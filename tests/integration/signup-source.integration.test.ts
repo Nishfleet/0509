@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ADS_PAGE_SIGNUP_SOURCE,
+  ALLOWED_SIGNUP_SOURCES,
+  COMPARE_PAGE_SIGNUP_SOURCE,
   applySignupSourceToNewUser,
+  GUIDES_HUB_SIGNUP_SOURCE,
   readUserSignupSource,
   rememberAllowlistedSignupSource,
+  SWITCH_PAGE_SIGNUP_SOURCE,
   signupSourceFromRequest,
+  TIMELINE_PAGE_SIGNUP_SOURCE,
 } from "~/lib/signup-source";
 
 import { appEnv, db, ISO_T0, seedUser, uid } from "./fixtures";
@@ -93,6 +99,49 @@ describe("signup_source against real D1", () => {
     const pending = await db()
       .prepare("SELECT email FROM signup_source_pending WHERE email IN (?, ?)")
       .bind(magicEmail, localeEmail)
+      .all<{ email: string }>();
+    expect(pending.results ?? []).toEqual([]);
+  });
+
+  it("writes every #3358 acquisition-family marker through remember+apply and reads it back (issue #3358)", async () => {
+    // One marker per acquisition-surface family (#3358), run through the
+    // whole chain the issue's accept asks for: the ?source=<marker> query
+    // param → signupSourceFromRequest (the signup route's own resolver, used
+    // by both the password and OAuth persistence paths) → remember drops the
+    // pending row → apply copies it onto the user row through 0087's CHECK →
+    // read. Each passing read proves the round-trip AND proves the CHECK
+    // accepts every new marker with no migration.
+    const FAMILY_MARKERS = [
+      ADS_PAGE_SIGNUP_SOURCE,
+      COMPARE_PAGE_SIGNUP_SOURCE,
+      SWITCH_PAGE_SIGNUP_SOURCE,
+      TIMELINE_PAGE_SIGNUP_SOURCE,
+      GUIDES_HUB_SIGNUP_SOURCE,
+    ];
+    const emails: string[] = [];
+    for (const marker of FAMILY_MARKERS) {
+      const userId = await seedUser(uid("src_fam"));
+      const email = `${userId}@example.test`;
+      emails.push(email);
+      await db().prepare("UPDATE user SET email = ? WHERE id = ?").bind(email, userId).run();
+
+      const request = new Request(`https://0509.io/auth/signup?source=${marker}`);
+      const derived = signupSourceFromRequest(request);
+      expect(derived).toBe(marker);
+
+      expect(
+        await rememberAllowlistedSignupSource(appEnv, { email, source: derived }),
+      ).toBe(marker);
+      expect(
+        await applySignupSourceToNewUser(appEnv, { user: { id: userId, email } }),
+      ).toBe(marker);
+      expect(await readUserSignupSource(appEnv, userId)).toBe(marker);
+    }
+
+    const placeholders = emails.map(() => "?").join(", ");
+    const pending = await db()
+      .prepare(`SELECT email FROM signup_source_pending WHERE email IN (${placeholders})`)
+      .bind(...emails)
       .all<{ email: string }>();
     expect(pending.results ?? []).toEqual([]);
   });

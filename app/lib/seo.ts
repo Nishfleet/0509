@@ -151,11 +151,16 @@ export function searchShareMeta(input: {
 }
 
 export function compareSocialCardUrl(toolSlug: string): string {
-  return canonicalUrl(`/social-card/compare/${toolSlug}.svg`);
+  // Served as PNG through the #2089 raster pipeline (issue #3414) —
+  // Facebook/X/LinkedIn scrapers refuse SVG og:images (the #2101, #3098,
+  // #3104 finding). The legacy `.svg` path stays as an alias, so cached
+  // links keep rendering.
+  return canonicalUrl(`/social-card/compare/${toolSlug}.png`);
 }
 
 export function switchSocialCardUrl(toolSlug: string): string {
-  return canonicalUrl(`/social-card/switch/${toolSlug}.svg`);
+  // Same recipe as compareSocialCardUrl (issue #3414).
+  return canonicalUrl(`/social-card/switch/${toolSlug}.png`);
 }
 
 /**
@@ -1094,6 +1099,11 @@ export const SITEMAP_PATHS = [
   // Issue #3127: seventh guide — the Meta Ad Library API coverage explainer.
   // Stable long-form copy, never a noindex shell.
   "/guides/meta-ad-library-api-limitations",
+  // Issue #3421: eighth guide — the buyer's first-question explainer (can an
+  // AI chat just check this?). Stable long-form copy, never a noindex shell.
+  // Lowercase canonical: the issue's exact /guides/can-ChatGPT-… slug stays
+  // registered in routes.ts and 301s here (issue #2955).
+  "/guides/can-chatgpt-monitor-competitor-ads",
   "/compare",
   "/compare/meta-ad-library",
   // /compare/visualping, /compare/foreplay, and /compare/visualping-ad-library

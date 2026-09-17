@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 
 import {
   applyWebsiteSearchFallback,
@@ -1368,12 +1368,27 @@ describe("loadIndexableTimelineEntries (D1 read)", () => {
     queryAll.mockRejectedValue(new Error("D1_ERROR: no such table: landing_page_snapshot"));
 
     await expect(runLoader({ DB: {} })).resolves.toEqual([]);
+    // A missing table is a schema state, not a hiccup — no retry.
+    expect(queryAll).toHaveBeenCalledTimes(1);
   });
 
   it("propagates genuine D1 failures instead of silently hiding them", async () => {
     queryAll.mockRejectedValue(new Error("connection lost"));
 
     await expect(runLoader({ DB: {} })).rejects.toThrow("connection lost");
+    // Issue #3476: one retry on transient failure, then the error propagates.
+    expect(queryAll).toHaveBeenCalledTimes(2);
+  });
+
+  it("recovers on the retry when the first read hits a transient D1 error (issue #3476)", async () => {
+    queryAll
+      .mockRejectedValueOnce(new Error("D1_NETWORK_ERROR: connection reset"))
+      .mockResolvedValue([snapshotRow()]);
+
+    const entries = await runLoader({ DB: {} });
+
+    expect(queryAll).toHaveBeenCalledTimes(2);
+    expect(entries.map((e: { path: string }) => e.path)).toEqual(["/timeline/nykaa.com"]);
   });
 });
 
@@ -1419,6 +1434,47 @@ function collectRoutePatterns(routes: PlainRoute[], parent = ""): RegExp[] {
     }
   }
   return patterns;
+}
+
+// The #1481/#1548 consolidation losers are live-200 route files deliberately
+// ABSENT from the sitemap (each canonicals to its more specific winner); this
+// pinned exemption means a silent drop of a winner OR a silent re-add of a
+// loser both fail. Plain `readonly string[]` (no `as const`) so
+// `.includes(routePath)` typechecks against derived strings.
+const COMPARE_SITEMAP_LOSERS: readonly string[] = [
+  "/compare/visualping",
+  "/compare/foreplay",
+  "/compare/visualping-ad-library",
+];
+
+// The #3385 enumeration universe: `compare.<slug>.tsx` +
+// `$locale.compare.<slug>.tsx` ONLY — the `.+` conveniently excludes the
+// `compare.tsx` / `$locale.compare.tsx` index files. /compare/magicbrief is
+// NOT here: it is a 301 redirect (`app/routes/legacy-vendor-redirect.ts`,
+// `LEGACY_VENDOR_COMPARE_PATH`, issue #2127) and stays out of the sitemap by
+// design; do not "fix" it.
+const EN_COMPARE_ROUTE_FILE = /^compare\..+\.tsx$/;
+const LOCALE_COMPARE_ROUTE_FILE = /^\$locale\.compare\..+\.tsx$/;
+
+// Mirrors the house precedent in `tests/compare-structured-data.test.ts`
+// (`compareRouteIds()`); Vitest runs from repo root so the relative
+// `app/routes` path resolves. Enumerated from the physical route files —
+// never a second hand list.
+function compareRouteSlugsFromRouteFiles(filePattern: RegExp): string[] {
+  return readdirSync("app/routes")
+    .filter((name) => filePattern.test(name))
+    .map((name) =>
+      // Strip the trailing `.tsx`, then the leading `compare.` /
+      // `$locale.compare.` — the captured compare slug remains. Any remaining
+      // `.` in the captured slug is a path separator (identity today;
+      // future-proof for dotted slugs).
+      name
+        .replace(/\.tsx$/, "")
+        .replace(/^\$locale\.compare\./, "compare.")
+        .replace(/^compare\./, "")
+        .replace(/\./g, "/"),
+    )
+    .sort();
 }
 
 describe("SITEMAP_PATHS", () => {
@@ -1467,19 +1523,11 @@ describe("SITEMAP_PATHS", () => {
     // The issue asked to surface all built /compare/* pages (the 4 that were
     // missing) and all indexable /ads/:domain pages. Duplicate /compare pairs
     // (visualping, foreplay) are canonicalized to their more specific winners
-    // (issue #1481/#1548); the winners below are the distinct indexable URLs
-    // that must never regress out of the static sitemap.
-    const compareWinners = [
-      "/compare",
-      "/compare/meta-ad-library",
-      "/compare/visualping-ad-libraries",
-      "/compare/spyland",
-      "/compare/pulzifi",
-      "/compare/foreplay-spyder",
-      "/compare/panoramata",
-      "/compare/adspyder",
-      "/compare/adspy",
-    ] as const;
+    // (issue #1481/#1548); the winners are now enumerated from the route
+    // files minus the pinned losers (issue #3385) — the old hardcoded 9-path
+    // list stopped diverging silently as of #2866/#3092/#3302.
+    // NO `as const`: a const-assertion on a computed .map() is a TS error.
+    const compareWinners: readonly string[] = ["/compare", ...compareRouteSlugsFromRouteFiles(EN_COMPARE_ROUTE_FILE).filter((slug) => !COMPARE_SITEMAP_LOSERS.includes("/compare/" + slug)).map((slug) => "/compare/" + slug)];
 
     const rootPaths = ROOT_SITEMAP_STATIC_ENTRIES.map((e) => e.path);
     for (const path of compareWinners) {
@@ -1491,6 +1539,8 @@ describe("SITEMAP_PATHS", () => {
     // The canonicalized losers never appear as distinct sitemap URLs.
     expect(rootPaths).not.toContain("/compare/visualping");
     expect(rootPaths).not.toContain("/compare/foreplay");
+    // #1548: the third consolidation loser, previously unasserted.
+    expect(rootPaths).not.toContain("/compare/visualping-ad-library");
   });
 
   it("lists every live /switch/:slug page in the production sitemap XML (issue #2081)", () => {
@@ -1526,6 +1576,76 @@ describe("SITEMAP_PATHS", () => {
     }
     expect(rootPaths.filter((path) => path === "/switch")).toHaveLength(0);
     expect(xml).not.toContain("<loc>https://0509.io/switch</loc>");
+  });
+
+  it("maps every /compare/* route file to a ROOT_SITEMAP_STATIC_ENTRIES path (route → sitemap, issue #3385)", () => {
+    // Each it derives its own slug sets — no shared module state.
+    const enSlugs = compareRouteSlugsFromRouteFiles(EN_COMPARE_ROUTE_FILE);
+    const localeSlugs = compareRouteSlugsFromRouteFiles(LOCALE_COMPARE_ROUTE_FILE);
+
+    // Non-vacuous guards: a broken readdirSync/regex must not walk nothing and
+    // pass this parity leg silently. sneakerping is acceptance 3's sentinel;
+    // the EN↔$locale equality pins both families to the same slug set, so a
+    // #3302-style add of one family without the other fails.
+    expect(enSlugs.length).toBeGreaterThan(0);
+    expect(enSlugs).toContain("sneakerping");
+    expect(localeSlugs).toEqual(enSlugs);
+
+    // Pin the rendered production XML, not just the list (the #2081 precedent).
+    const xml = buildSitemapXml([]);
+    const rootPaths = ROOT_SITEMAP_STATIC_ENTRIES.map((e) => e.path);
+
+    for (const slug of enSlugs) {
+      const path = "/compare/" + slug;
+      if (COMPARE_SITEMAP_LOSERS.includes(path)) {
+        expect(rootPaths, `${path} (#1481/#1548 loser) unexpectedly registered`).not.toContain(path);
+      } else {
+        expect(rootPaths, `${path} has a route file but no ROOT_SITEMAP_STATIC_ENTRIES path`).toContain(path);
+        expect(xml).toContain("<loc>https://0509.io" + path + "</loc>");
+      }
+    }
+  });
+
+  it("maps every registered /compare/* ROOT_SITEMAP_STATIC_ENTRIES path to a real route file (sitemap → route, issue #3385)", () => {
+    const filenames = new Set(readdirSync("app/routes"));
+    const compareEntries = ROOT_SITEMAP_STATIC_ENTRIES.filter(
+      (e) => e.path === "/compare" || e.path.startsWith("/compare/"),
+    );
+
+    // Non-vacuous guards: an emptied registration list must not let the loop
+    // pass silently (the >=10-loc #1878-termination it() independently floors
+    // the total), and the route walk itself must be proven non-broken before
+    // any sitemap→route verdict can be trusted.
+    expect(compareEntries.length).toBeGreaterThan(0);
+    expect(filenames.has("compare.sneakerping.tsx"), "route walk found no compare.<slug>.tsx files — the walk, not the sitemap, is broken").toBe(true);
+
+    for (const { path } of compareEntries) {
+      if (path === "/compare") {
+        expect(filenames.has("compare.tsx"), "/compare is in the root sitemap but has no route file — the #2866 miss-class").toBe(true);
+        expect(filenames.has("$locale.compare.tsx"), "/compare is in the root sitemap but has no route file — the #2866 miss-class").toBe(true);
+      } else {
+        const rest = path.slice("/compare/".length).replace(/\//g, ".");
+        expect(filenames.has(`compare.${rest}.tsx`), `${path} is in the root sitemap but has no route file — the #2866 miss-class`).toBe(true);
+        expect(filenames.has(`$locale.compare.${rest}.tsx`), `${path} is in the root sitemap but has no route file — the #2866 miss-class`).toBe(true);
+      }
+    }
+  });
+
+  it("/compare/sneakerping clears both parity directions (issue #3302 miss-class, #3385)", () => {
+    // #3302 added compare.sneakerping.tsx + the seo.ts registration and
+    // touched NO test — this pins the repo-truth; the production 404 today is
+    // the #3166 deploy gap, NOT this defect — do not touch the deploy chain.
+    // Each it derives its own slug sets — no shared module state.
+    const enSlugs = compareRouteSlugsFromRouteFiles(EN_COMPARE_ROUTE_FILE);
+    const localeSlugs = compareRouteSlugsFromRouteFiles(LOCALE_COMPARE_ROUTE_FILE);
+    expect(enSlugs).toContain("sneakerping");
+    expect(localeSlugs).toContain("sneakerping");
+
+    const rootPaths = ROOT_SITEMAP_STATIC_ENTRIES.map((e) => e.path);
+    expect(rootPaths).toContain("/compare/sneakerping");
+
+    const xml = buildSitemapXml([]);
+    expect(xml).toContain("<loc>https://0509.io/compare/sneakerping</loc>");
   });
 
   it("renders at least 10 indexable /ads/:domain + /compare/* locs in the built sitemap (issue #1878 termination)", () => {
@@ -1688,18 +1808,21 @@ describe("locale sitemap feed count matches the buyer-surface derivation (issue 
     // truth), not from filtering the static list. The bare index and
     // /sitemap.xml are excluded — neither is a real page. Counts shown as:
     // BUYER_SURFACE_PATHS (minus bare / and /sitemap.xml) + children
-    // + 7 for the /guides/* cluster: track-competitor-ads (issue #2152),
+    // + 8 for the /guides/* cluster: track-competitor-ads (issue #2152),
     // monitor-meta-ad-library (issue #2867), monitor-competitor-landing-
     // page-changes (issue #2888), the #3093 trio (offer-change alert,
-    // prove-what-changed, standing watch), and meta-ad-library-api-
-    // limitations (issue #3127); -1: /methodology locale twins
+    // prove-what-changed, standing watch), meta-ad-library-api-
+    // limitations (issue #3127), and can-chatgpt-monitor-competitor-ads
+    // (issue #3421 — the served lowercase canonical; the issue's exact
+    // mixed-case slug stays registered and 301s under #2955);
+    // -1: /methodology locale twins
     // stay OUT of the locale sitemaps (issue #2871/#1570 duplicate-content
     // policy); -1: /search (issue #2965) — noindex at the edge, out of
     // every sitemap.
     const derivedCount =
       BUYER_SURFACE_PATHS.filter((p) => p !== "/" && p !== "/sitemap.xml").length +
       BUYER_SURFACE_CHILD_PATHS.length +
-      7 - 1 - 1;
+      8 - 1 - 1;
     for (const locale of BUYER_SURFACE_LOCALE_IDS) {
       const entries = staticSitemapEntriesForLocale(locale);
       const body = buildLocaleSitemapXml(locale);

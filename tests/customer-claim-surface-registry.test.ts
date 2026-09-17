@@ -390,6 +390,11 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
   sitemapPaths: [
     "/", "/brands", "/briefs/weekly", "/sample-brief", "/llms-full.txt", "/guides/how-to-track-competitor-ads", "/guides/how-to-monitor-meta-ad-library", "/guides/how-to-monitor-competitor-landing-page-changes", "/guides/how-to-get-alerted-when-a-competitor-changes-their-offer", "/guides/how-to-prove-what-changed-on-a-competitor-website", "/guides/how-to-turn-a-one-off-competitor-check-into-a-standing-watch",
     "/guides/meta-ad-library-api-limitations",
+    // 2026-09-14: /guides/can-chatgpt-monitor-competitor-ads joined the sitemap (issue
+    // #3421) — static explainer; its Meta-Ad-Library facts (403 to a plain client,
+    // one point in time, no unattended vigilance) were verified live 2026-09-13 and
+    // restate existing product facts; no new claim text.
+    "/guides/can-chatgpt-monitor-competitor-ads",
     "/compare", "/compare/meta-ad-library",
     "/compare/visualping-ad-libraries", "/compare/spyland",
     "/compare/pulzifi", "/compare/foreplay-spyder",

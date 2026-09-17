@@ -51,6 +51,17 @@
   "ai": {
     "binding": "AI"
   },
+  // Issue #3521: spec-§4 funnel events land here via writeDataPoint in
+  // app/lib/funnel-measurement.server.ts so trailing-7d/30d counts per kind
+  // are queryable (console logs alone are ephemeral). Dataset auto-creates
+  // on first write; read path is the Analytics Engine SQL API from
+  // scripts/weekly-business-metrics.mjs (docs/ga-metrics.md).
+  "analytics_engine_datasets": [
+    {
+      "binding": "FUNNEL_ANALYTICS",
+      "dataset": "funnel_events"
+    }
+  ],
   "send_email": [
     {
       "name": "EMAIL"
@@ -84,6 +95,9 @@
     // Issue #3197: Google Ads (Transparency Center) source kill flag. "0" = the
     // source runs (the production posture); "1" pauses captures end to end.
     "GOOGLE_ADS_SOURCE_DISABLED": "0",
+    // Issue #3196: LinkedIn Ads (Ad Library) source kill flag. "0" = the
+    // source runs (the production posture); "1" pauses captures end to end.
+    "LINKEDIN_ADS_SOURCE_DISABLED": "0",
     "PRESENCE_WEBSITE_ROLLOUT": "generally_available",
     "PRESENCE_DIGEST_ROLLOUT": "disabled",
     "PRESENCE_X_ROLLOUT": "disabled",

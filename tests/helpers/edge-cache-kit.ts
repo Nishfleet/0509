@@ -1,5 +1,6 @@
 import {
   EDGE_STALE_WINDOW_SECONDS,
+  EDGE_ZONE_REWARM_GRACE_SECONDS,
   cacheKeyUrl,
   type EdgeCacheRuntime,
 } from "../../workers/edge-cache";
@@ -53,8 +54,9 @@ export function anonymousGet(url = "https://0509.io/", headers: Record<string, s
 /** Rewrite the stored copy's stored-at stamp to look `ageSeconds` old and its
  * body to `body` — used to age a copy in place without the test waiting. The
  * headers mirror what storeEdgeCache actually writes: a cache-control
- * stretched to ttl + the serve-stale window (the matchable lifetime) plus the
- * fresh-ttl stamp the served reply is rewritten from. */
+ * stretched to ttl + the serve-stale window + the rewarm grace (the
+ * matchable lifetime) plus the fresh-ttl stamp the served reply is
+ * rewritten from. */
 export async function overwriteStoredCopy(
   cache: EdgeCacheRuntime,
   request: Request,
@@ -70,7 +72,7 @@ export async function overwriteStoredCopy(
       status: 200,
       headers: {
         "content-type": "text/html; charset=utf-8",
-        "cache-control": `public, max-age=${ttlSeconds + EDGE_STALE_WINDOW_SECONDS}`,
+        "cache-control": `public, max-age=${ttlSeconds + EDGE_STALE_WINDOW_SECONDS + EDGE_ZONE_REWARM_GRACE_SECONDS}`,
         "x-0509-edge-ttl": String(ttlSeconds),
         "x-0509-edge-stored-at": String(Math.floor(Date.now() / 1000) - ageSeconds),
       },

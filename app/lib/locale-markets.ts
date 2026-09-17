@@ -124,6 +124,11 @@ export const BUYER_SURFACE_GUIDE_PATHS = [
   "/guides/how-to-turn-a-one-off-competitor-check-into-a-standing-watch",
   // Issue #3127: the API-limitations explainer stays in the locale feeds.
   "/guides/meta-ad-library-api-limitations",
+  // Issue #3421: the ChatGPT first-question explainer stays in the locale
+  // feeds at its lowercase canonical — the issue-specified uppercase slug
+  // stays registered in routes.ts and 301s here (issue #2955); only the
+  // signup marker was always lowercase.
+  "/guides/can-chatgpt-monitor-competitor-ads",
 ] as const;
 
 export interface SneakerResaleMarket {

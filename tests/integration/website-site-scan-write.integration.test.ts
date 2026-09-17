@@ -1,5 +1,6 @@
 import { expect, it, describe } from "vitest";
 
+import { CommercialDiscoveryError } from "~/lib/meta-library-browser.server";
 import { runWatchlist } from "~/lib/monitoring.server";
 import { getWatchlist } from "~/lib/data/watchlists-core.server";
 import type { AppEnv } from "~/lib/env.server";
@@ -124,6 +125,43 @@ describe("website_site_scan orchestrator write path against real D1 (issue #3103
     expect(
       row,
       "a cache-only cooldown must not silence the full-site inventory manifest (issue #3103)",
+    ).not.toBeNull();
+  });
+
+  it("still lands a manifest row when the ad scan throws before returning — issue #3415 regression", async () => {
+    const { watchlistId } = await seedAdvertiserWatchlistWithWebsite();
+    const runId = await seedRunningClaimedRun(watchlistId, "token-provider-throw");
+    const watchlist = await getWatchlist(siteScanEnv, watchlistId);
+    if (!watchlist) {
+      throw new Error(`fixture watchlist ${watchlistId} missing`);
+    }
+    try {
+      await runWatchlist(
+        siteScanEnv,
+        watchlist,
+        "scheduled",
+        async () => {
+          throw new CommercialDiscoveryError(
+            "Live discovery provider failed hard.",
+            "rate_limited",
+          );
+        },
+        { existingRunId: runId, orchestrationToken: "token-provider-throw" },
+      );
+    } catch (error) {
+      console.warn(
+        "runWatchlist provider-failure path rejected on fixture bindings (not under test)",
+        error,
+      );
+    }
+
+    const row = await db()
+      .prepare("SELECT * FROM website_site_scan WHERE watchlist_run_id = ?")
+      .bind(runId)
+      .first();
+    expect(
+      row,
+      "a hard ad-discovery throw must not silence the full-site inventory manifest (issue #3415)",
     ).not.toBeNull();
   });
 });

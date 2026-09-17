@@ -321,7 +321,30 @@ export interface BrandPageLoaderData {
   sourceSnapshots: BrandPageSourceSnapshot[];
 }
 
+/**
+ * Issue #3457 — legacy dotless /ads slugs. The 2026-08-25 transformation
+ * campaign shipped five bare-brand URLs (/ads/nike, /ads/allbirds,
+ * /ads/nykaa, /ads/lenskart, /ads/mamaearth) and the corpus has since moved
+ * to domain-keyed pages, so each slug 301s to its dotted canonical — the
+ * ad-aggression-redirect.ts pattern. Dotless slugs NOT in this map keep
+ * their 404: a bare slug never guesses a TLD.
+ */
+export const LEGACY_BRAND_SLUG_DOMAINS: Readonly<Record<string, string>> = {
+  nike: "nike.com",
+  allbirds: "allbirds.com",
+  nykaa: "nykaa.com",
+  lenskart: "lenskart.com",
+  mamaearth: "mamaearth.com",
+};
+
 export async function loader({ context, params, request }: LoaderFunctionArgs): Promise<BrandPageLoaderData> {
+  // The legacy-slug 301 fires before normalization, rate limiting and any
+  // cache read — a pre-move external link costs one static map lookup.
+  const legacyDomain = LEGACY_BRAND_SLUG_DOMAINS[(params.domain ?? "").trim().toLowerCase()];
+  if (legacyDomain) {
+    throw redirect(`/ads/${encodeURIComponent(legacyDomain)}`, 301);
+  }
+
   const { normalizeBrandPageDomain } = await import("~/lib/brand-page.server");
   const brand = normalizeBrandPageDomain(params.domain);
   if (!brand) {
@@ -1088,13 +1111,13 @@ export default function BrandAdsRoute() {
   const data = useLoaderData<typeof loader>();
   const liveSearchPath = `/search?website=${encodeURIComponent(data.domain)}`;
   const postSignupPath = `/app?website=${encodeURIComponent(data.domain)}#setup-checklist`;
-  const signupPath = `/auth/signup?redirectTo=${encodeURIComponent(postSignupPath)}`;
+  const signupPath = `/auth/signup?source=ads-page&redirectTo=${encodeURIComponent(postSignupPath)}`;
   // Issue #2051 — the primary acquisition CTA deep-links into signup with the
   // viewed competitor prefilled (`?competitor=<domain>`), so the SEO landing
   // page carries the brand the visitor just read about straight into
   // onboarding. `redirectTo` keeps the existing `website=` prefill wiring so
   // the first thing the new user tracks is the brand on this page.
-  const trackSignupPath = `/auth/signup?competitor=${encodeURIComponent(data.domain)}&redirectTo=${encodeURIComponent(postSignupPath)}`;
+  const trackSignupPath = `/auth/signup?competitor=${encodeURIComponent(data.domain)}&source=ads-page&redirectTo=${encodeURIComponent(postSignupPath)}`;
   const allBrandOwned =
     data.adCount > 0 && data.brandOwnedAdCount === data.adCount;
 
@@ -1186,7 +1209,7 @@ export default function BrandAdsRoute() {
           fresh={data.freshForLiveClaim}
         />
       ) : null}
-      <MarketingNav />
+      <MarketingNav signupSource="ads-page" />
 
       {data.hasCachedAds ? (
         <BrandAdsResults

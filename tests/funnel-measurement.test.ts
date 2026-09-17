@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MockInstance } from "vitest";
 
 import { CommercialDiscoveryError } from "~/lib/meta-library-browser.server";
+import { PUBLIC_SEARCH_TRANSIENT_DEGRADED_MESSAGE } from "~/lib/customer-route-error";
 import { writeAppLog } from "~/lib/log.server";
 
 const FUNNEL_OPERATIONS = [
@@ -489,6 +490,105 @@ describe("funnel measurement emission", () => {
   });
 });
 
+describe("funnel measurement Analytics Engine sink (issue #3521)", () => {
+  let logSpy: MockInstance;
+
+  beforeEach(() => {
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function makeAnalyticsBinding() {
+    return { writeDataPoint: vi.fn() };
+  }
+
+  it("commits the analytics_engine_datasets binding in wrangler.jsonc — without it the emit path silently degrades to log-only", async () => {
+    // Same committed-config guard pattern as the FUNNEL_MEASUREMENT_ENABLED
+    // test above: if this binding is dropped, the read path
+    // (weekly-business-metrics .funnel) reports real zeros forever and no
+    // other check catches it.
+    const { readFileSync } = await import("node:fs");
+    const raw = readFileSync("wrangler.jsonc", "utf8");
+    const withoutComments = raw
+      .split("\n")
+      .map((line) => {
+        const commentIndex = line.indexOf("//");
+        if (commentIndex === -1) return line;
+        const before = line.slice(0, commentIndex);
+        const quoteCount = (before.match(/"/g) ?? []).length;
+        return quoteCount % 2 === 0 ? before : line;
+      })
+      .join("\n");
+    const parsed = JSON.parse(withoutComments) as {
+      analytics_engine_datasets?: Array<{ binding?: string; dataset?: string }>;
+    };
+    expect(parsed.analytics_engine_datasets).toContainEqual({
+      binding: "FUNNEL_ANALYTICS",
+      dataset: "funnel_events",
+    });
+  });
+
+  it("writes the same allowlisted record to the Analytics Engine dataset", async () => {
+    const { emitFunnelSearchResult } = await import("~/lib/funnel-measurement.server");
+    const analytics = makeAnalyticsBinding();
+    emitFunnelSearchResult(
+      { FUNNEL_MEASUREMENT_ENABLED: "1", FUNNEL_ANALYTICS: analytics },
+      makeFunnelRequest(),
+      42,
+    );
+    expect(analytics.writeDataPoint).toHaveBeenCalledTimes(1);
+    const point = analytics.writeDataPoint.mock.calls[0]?.[0] as {
+      blobs: string[];
+      doubles: number[];
+      indexes: string[];
+    };
+    const [record] = emittedFunnelRecords(logSpy) as [
+      { details: Record<string, string> },
+    ];
+    // Ordered blobs: operation, route, account_scope, result_count_bucket,
+    // error_kind — the §4 allowlist and nothing else.
+    expect(point.blobs).toEqual([
+      "funnel_search_preview_result",
+      "search_preview",
+      "anonymous",
+      "11-50",
+      "",
+    ]);
+    expect(point.doubles).toEqual([1]);
+    expect(point.indexes).toEqual([record.details.event_id]);
+  });
+
+  it("writes nothing to the sink when the gate is off or GPC is set", async () => {
+    const { emitFunnelHomeView } = await import("~/lib/funnel-measurement.server");
+    const analytics = makeAnalyticsBinding();
+    emitFunnelHomeView({ FUNNEL_ANALYTICS: analytics }, makeFunnelRequest());
+    const gpc = new Request("http://localhost/", { headers: { "sec-gpc": "1" } });
+    emitFunnelHomeView(
+      { FUNNEL_MEASUREMENT_ENABLED: "1", FUNNEL_ANALYTICS: analytics },
+      gpc,
+    );
+    expect(analytics.writeDataPoint).not.toHaveBeenCalled();
+  });
+
+  it("still emits the console record when the binding is absent or its write throws", async () => {
+    const { emitFunnelHomeView } = await import("~/lib/funnel-measurement.server");
+    emitFunnelHomeView({ FUNNEL_MEASUREMENT_ENABLED: "1" }, makeFunnelRequest());
+    const throwing = {
+      writeDataPoint: vi.fn(() => {
+        throw new Error("platform unavailable");
+      }),
+    };
+    emitFunnelHomeView(
+      { FUNNEL_MEASUREMENT_ENABLED: "1", FUNNEL_ANALYTICS: throwing },
+      makeFunnelRequest(),
+    );
+    expect(emittedFunnelRecords(logSpy)).toHaveLength(2);
+  });
+});
+
 describe("funnel measurement redaction", () => {
   let logSpy: MockInstance;
 
@@ -833,7 +933,7 @@ describe("funnel measurement route boundaries", () => {
     expect(emittedFunnelRecords(logSpy)).toHaveLength(0);
   }, 30_000);
 
-  it("emits a coarse error event and rethrows the same failure from the search loader", async () => {
+  it("emits a coarse error event and answers the honest degraded 200 from the search loader (issue #3400)", async () => {
     const env = { FUNNEL_MEASUREMENT_ENABLED: "1" };
     const searchAdsViaSourceResolver = vi
       .fn()
@@ -873,14 +973,26 @@ describe("funnel measurement route boundaries", () => {
       "http://localhost/search?query=nykaa&mode=advertiser&website=https%3A%2F%2Fnykaa.com",
     );
 
-    let thrown: unknown;
-    try {
-      await loader({ context: createContext(env), request } as never);
-    } catch (error) {
-      thrown = error;
-    }
-    expect(thrown).toBeInstanceOf(CommercialDiscoveryError);
-    expect((thrown as Error).message).toBe("provider down");
+    // Issue #3400: the money path's result leg no longer rethrows the
+    // failure into the route ErrorBoundary (a 500) — it funnel-records the
+    // coarse error (asserted below) and answers the honest degraded 200:
+    // the leg must answer with either the proof or the honest no-proof
+    // state, never a 500. The scrub contract below is unchanged.
+    const raw = await loader({ context: createContext(env), request } as never);
+    // The degraded 200 ships with Cache-Control: no-store so a transient
+    // failure is never edge- or browser-cached (issue #3400).
+    expect(
+      (raw as { init?: { headers?: Record<string, string> } }).init?.headers?.[
+        "Cache-Control"
+      ],
+    ).toBe("no-store");
+    const result = unwrapSearchLoaderData(raw);
+    expect(result).toMatchObject({
+      inputError: PUBLIC_SEARCH_TRANSIENT_DEGRADED_MESSAGE,
+      selectedAd: null,
+      session: null,
+      result: expect.objectContaining({ ads: [] }),
+    });
 
     const records = emittedFunnelRecords(logSpy);
     const errorRecord = records.find(

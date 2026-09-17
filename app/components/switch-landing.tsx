@@ -190,7 +190,7 @@ export function SwitchLanding({ page }: { page: SwitchPage }) {
       {page.faqEntries.length > 0 ? (
         <script {...jsonLdScriptProps(faqPageJsonLd(page.faqEntries))} />
       ) : null}
-      <MarketingNav />
+      <MarketingNav signupSource="switch-page" />
       <Breadcrumbs
         items={[
           { name: "Home", pathname: "/" },

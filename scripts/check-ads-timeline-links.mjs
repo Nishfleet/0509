@@ -15,6 +15,15 @@
  * unit suite (`tests/ads-brand-page.internal-links.test.ts`) catches at the
  * resolver level, here proven against the real deployed surface.
  *
+ * Issue #3476: asserted pages are fetched with a per-run `__sweep` query
+ * param. Marketing HTML is served from the worker edge cache with a
+ * ~65-minute serve-stale window (workers/edge-cache.ts), and both cache
+ * layers key on the full URL — a served copy can legitimately predate a
+ * domain's recent qualification. The param forces a MISS at both layers so
+ * the sweep asserts the CURRENT origin render, not a designed-stale copy;
+ * a red result then means the render pipeline really dropped the link. The
+ * sitemap itself is never edge-cached, so it needs no busting.
+ *
  * Exit codes:
  *   0 — every indexable /ads page links its /timeline, and /brands links
  *       timelines for qualifying domains.
@@ -71,6 +80,12 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const verbose = args.get("verbose") === true;
 
+  // Per-run cache-bust token for asserted page fetches (issue #3476 — see
+  // header comment). Distinct per invocation so repeat runs never read their
+  // own stored copy either.
+  const sweepBust = `__sweep=${Date.now().toString(36)}`;
+  const freshPageUrl = (path) => `${baseUrl}${path}?${sweepBust}`;
+
   // 1. Fetch the sitemap and split the two indexable sets.
   let sitemapXml;
   try {
@@ -126,7 +141,7 @@ async function main() {
     const adsUrl = `${baseUrl}/ads/${encodeURIComponent(domain)}`;
     let html;
     try {
-      const res = await fetchWithTimeout(adsUrl);
+      const res = await fetchWithTimeout(freshPageUrl(`/ads/${encodeURIComponent(domain)}`));
       if (!res.ok) {
         // A non-200 /ads page is itself a defect, but not this sweep's job —
         // flag it so the operator sees it, but don't fail on it (the sitemap
@@ -166,7 +181,7 @@ async function main() {
   //    timeline domains and brand-hub domains is asserted.
   let brandsHtml;
   try {
-    const res = await fetchWithTimeout(`${baseUrl}/brands`);
+    const res = await fetchWithTimeout(freshPageUrl("/brands"));
     if (res.ok) {
       brandsHtml = await res.text();
     }

@@ -126,10 +126,20 @@ describe("presence source coverage policy", () => {
     expect(entry.coverageLabel).toBe("CONNECTED_ACCOUNT");
   });
 
-  it("marks YouTube as planned without claiming active coverage", async () => {
+  it("marks YouTube unavailable while its rollout is off — wired in #3203, dark by default", async () => {
     const entry = await evaluatePresenceSourceCoverage(baseEnv, "youtube", "competitor");
-    expect(entry.status).toBe("planned");
-    expect(entry.reasonCode).toBe("api_not_configured");
+    expect(entry.status).toBe("unavailable");
+    expect(entry.reasonCode).toBe("connector_disabled");
+  });
+
+  it("marks YouTube gated once its rollout flag is on but the Google key is still missing", async () => {
+    const entry = await evaluatePresenceSourceCoverage(
+      { ...baseEnv, PRESENCE_YOUTUBE_ROLLOUT: "ga" },
+      "youtube",
+      "competitor",
+    );
+    expect(entry.status).toBe("gated");
+    expect(entry.reasonCode).toBe("credentials_missing");
   });
 
   it("marks Amazon as manual-only", async () => {
@@ -380,7 +390,7 @@ describe("presence source coverage policy", () => {
   it("keeps docs coverage table honest about production status", () => {
     const docs = presenceSourceCoverageForDocs();
     expect(docs.find((entry) => entry.sourceId === "website")?.productionStatus).toBe("active");
-    expect(docs.find((entry) => entry.sourceId === "youtube")?.productionStatus).toBe("planned");
+    expect(docs.find((entry) => entry.sourceId === "youtube")?.productionStatus).toBe("gated");
     expect(docs.find((entry) => entry.sourceId === "amazon")?.productionStatus).toBe("manual_only");
     expect(docs.find((entry) => entry.sourceId === "x")?.productionStatus).toBe("gated");
     expect(docs.find((entry) => entry.sourceId === "linkedin")?.productionStatus).toBe("gated");
@@ -423,9 +433,27 @@ describe("presence source coverage policy", () => {
   it("lists every not-yet-configured seam source in the docs coverage table as coming_soon", () => {
     const docs = presenceSourceCoverageForDocs();
     for (const sourceId of comingSoonSeamIds) {
+      // #3195: the tiktok DOCS row carries the DECISION posture ("active" —
+      // Nish 2026-09-12: the flag is ON) while the evaluated status stays
+      // credential-conditional. Its own pinned case follows; skip it here.
+      if (sourceId === "tiktok") continue;
       const entry = docs.find((d) => d.sourceId === sourceId);
       expect(entry, sourceId).toBeDefined();
       expect(entry?.productionStatus, sourceId).toBe("coming_soon");
     }
+  });
+
+  it("surfaces the tiktok Commercial Content Library row as active with the honest EU scope (#3195)", () => {
+    const docs = presenceSourceCoverageForDocs();
+    const entry = docs.find((d) => d.sourceId === "tiktok");
+    expect(entry).toBeDefined();
+    expect(entry?.productionStatus).toBe("active");
+    // Coverage honesty (issue #3195): region, ad types, freshness, and what
+    // the library does NOT publish — and the kill flag named by its env.
+    expect(entry?.notes).toContain("EU-shown");
+    expect(entry?.notes).toContain("no spend or impressions");
+    expect(entry?.notes).toContain("weekly");
+    expect(entry?.notes).toContain("800-requests/month");
+    expect(entry?.notes).toContain("DECODO_SCRAPER_AUTH");
   });
 });
