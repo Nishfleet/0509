@@ -32,14 +32,14 @@ describe("planNextAction", () => {
     maxRepromotes: 3,
   };
 
-  it("re-promotes when a preview upload moved the latest version", () => {
+  it("re-promotes the currently deployed version when a preview upload moved latest", () => {
     expect(
       planNextAction({
         ...base,
         latestVersionId: "9acdca1d",
         deployedVersionId: "09de873e",
       }),
-    ).toBe("repromote");
+    ).toBe("repromote_deployed");
   });
 
   it("keeps putting when the state is clean (plain lag, not pollution)", () => {
