@@ -21,9 +21,13 @@ Committed evidence:
 - `scripts/bench/jev-score-ads-2026-09.mjs`: exact question and text construction used in this run. Later changes only preserve quarter/state hashes and return nonzero for failed calls.
 - `scripts/bench/jev-fetch-mentions-2026-09.mjs`: the one-off fetcher used for the 112 records. It is not imported by the product.
 
-The model saw only advertiser name, the first 400 characters of current and prior copy, prior date and elapsed days. It did **not** see media, stored format, separate CTA, full metadata or the labels. Therefore format accuracy measures prediction of a stored field from short copy, not visual classification. Missing separate CTA and truncated copy also limit every other question. Provider input is untrusted public text; these are measurement calls without action tools.
+The model saw advertiser, stored format hint, language, up to 1,000 characters of current copy, stored hook and offer fields, CTA, up to 400 characters of prior copy, prior date and elapsed days. It did not see media or the frozen label files. Provider input is untrusted public text; these were measurement calls without action tools.
 
-Labels were frozen before any benchmark prediction. Quarters 1–3 were inherited; quarter 4 was completed in this run. Labels are independent model-assisted judgments, not human-verified truth. Quarter 4 introduced `bundle`, `free_trial` and `question` more explicitly than earlier quarters. No labels were changed after predictions. This rubric drift is a reason to withhold rollout, not to inflate agreement by remapping categories.
+**Input leakage invalidates the format result as classification evidence.** The stored format supplied to the model equals the blind format label on all 132 rows. Stored hook and offer fields also make this an assisted-input experiment, not a copy-only benchmark. The figures below are historical agreement, not proof of independent classification quality. All rollout verdicts remain no-go.
+
+On pickup, rebuilding the committed scorer's state with the local quarter files reproduced all 132 historical `state_sha256` receipts. This disproved the earlier draft's copy-only description. The script hash is `dd6c24896e8b943a952e359b357c7b09132960d2b60e0beb7e315ccb45bc30d7`. Scores and frozen labels were preserved, not replaced with a post-hoc rerun.
+
+Labels were frozen before any benchmark prediction. All four quarters and predictions were inherited from the saved run. Labels are independent model-assisted judgments, not human-verified truth. Quarter 4 introduced `bundle`, `free_trial` and `question` more explicitly than earlier quarters. No labels were changed after predictions. This rubric drift is a reason to withhold rollout, not to inflate agreement by remapping categories.
 
 ## Ads results
 
@@ -31,7 +35,7 @@ Accuracy is exact agreement with non-null blind labels. Null labels are excluded
 
 | Question | Correct / labeled | Accuracy | Null labels | Audit disagreements / 30 | Go/no-go |
 |---|---:|---:|---:|---:|---|
-| format | 97 / 132 | 73.48% | 0 | 0 | No-go: copy-only, not visual truth |
+| format | 97 / 132 | 73.48% | 0 | 0 | No-go: stored format label leaked into input |
 | offer_type | 120 / 131 | 91.60% | 1 | 4 | No-go: exploratory, rubric drift and no held-out acceptance threshold |
 | hook | 101 / 130 | 77.69% | 2 | 6 | No-go: 20% label disagreement exceeds 15% gate |
 | funnel_stage | 116 / 132 | 87.88% | 0 | 0 | No-go: exploratory, incomplete input and no held-out threshold |
@@ -83,10 +87,10 @@ The collector uses the public Algolia HN search endpoint documented at <https://
 | Dashboard on-read tags, 100 ms budget | No-go: model p50 368 ms before request overhead |
 | Free-tier tracking volume | Not evaluated as product capacity; scoring-only cost is $0.04445/1k ads |
 
-No go children were filed and nothing was deployed. A future acceptance run needs one frozen rubric, reviewer audit, full input suited to the question, and held-out thresholds. Preserve these results rather than silently replacing them with a better-looking run.
+No go children were filed and nothing was deployed. A future acceptance run needs one frozen rubric, reviewer audit, inputs without target-label leakage, and held-out thresholds. Preserve these results rather than silently replacing them with a better-looking run.
 
 ## Reproduce the measured calculations
 
-Run each quarter through the committed score script with the corresponding local `ads-quarter-N.json` and a separate output directory. This incurs fresh evaluation cost; results can vary. The original raw helper receipts are at `~/.local/state/pi-packet/jev/0509-3531-ads-score.jsonl` and include real ad refs, timestamps and state hashes.
+The committed score script preserves the historical, leaked-input experiment. Do not use it for a clean acceptance benchmark. Replaying a quarter with its local `ads-quarter-N.json` and a separate output directory incurs fresh evaluation cost; results can vary. The original raw helper receipts are at `~/.local/state/pi-packet/jev/0509-3531-ads-score.jsonl` and include real ad refs, timestamps and state hashes.
 
 The committed JSON already contains everything needed to recompute accuracy, Brier, calibration, audit disagreements, cost and latency without another model call. The regression test `tests/jev-benchmark-evidence.test.ts` recalculates these from real rows and checks null handling, quarter sizes and denominators.

@@ -71,6 +71,16 @@ describe('3531 real benchmark evidence', () => {
     });
   }
 
+  it('pins the evidence to the scoring script that produced it', async () => {
+    const { createHash } = await import('node:crypto');
+    const { readFile } = await import('node:fs/promises');
+    const scorerPath = new URL('../scripts/bench/jev-score-ads-2026-09.mjs', import.meta.url);
+    const scorerSha256 = createHash('sha256').update(await readFile(scorerPath)).digest('hex');
+    expect(evidence.scoring_source_sha256).toBe(scorerSha256);
+    expect(evidence.notes.join(' ')).toContain('leakage');
+    expect(String(evidence.summary.scored)).toBe('132');
+  });
+
   it('recomputes measured token cost and nearest-rank latency', () => {
     const tokens = evidence.rows.reduce((sum, row) => sum + row.input_tokens, 0);
     expect(tokens).toBe(evidence.summary.input_tokens);

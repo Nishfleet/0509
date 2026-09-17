@@ -43,6 +43,7 @@
   "scoring_source_sha256": "dd6c24896e8b943a952e359b357c7b09132960d2b60e0beb7e315ccb45bc30d7",
   "notes": [
     "Scoring state/question construction unchanged from executed run; later changes only record cohort/hash and exit nonzero on failures.",
+    "Input leakage: stored format hint equals the blind format label on all 132 rows; stored hook and offer fields were also supplied. Format accuracy is not independent classification evidence.",
     "Independent audit performed by stock worker after stock reviewer refused writes; formal reviewer audit acceptance remains unmet.",
     "No raw creative copy, media URLs or label rationale text committed."
   ],
