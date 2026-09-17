@@ -46,7 +46,7 @@ function concurrencySleepDuration(_waitRound: number) {
   // Uniform 15-minute sleeps keep maxWaitRounds x sleep == MAX_AGE exactly,
   // so queued runs neither give up early nor wait past the stale-cancel age,
   // while cutting per-instance billed step transitions by ~7.5x.
-  return "15 minutes";
+  return "15 minutes" as const;
 }
 
 function resolveMonitoringConcurrencyWaitMaxRounds(env: AppEnv) {
