@@ -2374,6 +2374,21 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     const refresh = parse(refreshWorkflow) as any;
     const deploy = parse(deployWorkflow) as any;
 
+    // Only the evidence workflow owns the per-push drill. Auto-refresh
+    // keeps the 3-hour safety net and manual recovery without doubling writes.
+    expect(evidence.on.push.branches).toEqual(["main"]);
+    expect(refresh.on).not.toHaveProperty("push");
+    expect(Object.keys(refresh.on).sort()).toEqual([
+      "schedule",
+      "workflow_dispatch",
+    ]);
+    expect(refresh.on.schedule).toEqual([{ cron: "17 */3 * * *" }]);
+    expect(refresh.on.workflow_dispatch.inputs.expected_sha).toMatchObject({
+      required: false,
+      default: "",
+      type: "string",
+    });
+
     // Only push drills can cancel superseded work (0509#3576).
     expect(evidence.concurrency.group).toBe(
       "${{ github.event_name == 'push' && '0509-d1-remote-restore-evidence-push' || format('0509-d1-remote-restore-evidence-{0}', github.sha) }}",
