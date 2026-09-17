@@ -57,7 +57,7 @@ Brier score is squared error against the truth distribution. For choice question
 | funnel_stage | 0.0764 | 0.1940 |
 | is_new_campaign | 0.0728 | 0.0814 |
 
-Full bin counts, confidence and accuracy are in the evidence JSON. For example, format's 0.8–0.9 bin contains 54 rows: mean confidence 0.8483 but accuracy 0.5000. Offer's 0.9–1.0 bin contains 109 rows: confidence 0.9855 versus accuracy 0.9725. Campaign's 0.9–1.0 bin contains 55 rows with 100% observed agreement, but its failed label-agreement gate still blocks use. No threshold was tuned into a deployment go decision on this same sample.
+Full bin counts, confidence and accuracy are in the evidence JSON. For example, format's 0.8–0.9 bin contains 27 rows: mean confidence 0.8381 and accuracy 1.0000. This agreement is still contaminated by the stored format input. Offer's 0.9–1.0 bin contains 109 rows: confidence 0.9855 versus accuracy 0.9725. Campaign's 0.9–1.0 bin contains 55 rows with 100% observed agreement, but its failed label-agreement gate still blocks use. No threshold was tuned into a deployment go decision on this same sample.
 
 ## Latency and cost
 
@@ -91,6 +91,6 @@ No go children were filed and nothing was deployed. A future acceptance run need
 
 ## Reproduce the measured calculations
 
-The committed score script preserves the historical, leaked-input experiment. Do not use it for a clean acceptance benchmark. Replaying a quarter with its local `ads-quarter-N.json` and a separate output directory incurs fresh evaluation cost; results can vary. The original raw helper receipts are at `~/.local/state/pi-packet/jev/0509-3531-ads-score.jsonl` and include real ad refs, timestamps and state hashes.
+The committed score script preserves the historical, leaked-input experiment. Do not use it for a clean acceptance benchmark. Replaying a quarter with its local `ads-quarter-N.json` and a separate output directory incurs fresh evaluation cost; results can vary. The scorer buffers results until completion and overwrites output files. An interrupted replay can lose completed-call output; never reuse a directory containing evidence. The original raw helper receipts are at `~/.local/state/pi-packet/jev/0509-3531-ads-score.jsonl` and include real ad refs, timestamps and state hashes.
 
 The committed JSON already contains everything needed to recompute accuracy, Brier, calibration, audit disagreements, cost and latency without another model call. The regression test `tests/jev-benchmark-evidence.test.ts` recalculates these from real rows and checks null handling, quarter sizes and denominators.
