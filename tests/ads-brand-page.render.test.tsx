@@ -148,6 +148,22 @@ function populated(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoade
 }
 
 describe("/ads/:domain — Case File render", () => {
+  it("limits the Free signup pitch and email FAQ to the first check and brief", async () => {
+    const markup = await render(populated());
+    const pitch = markup.match(/class="f9-ads-watch-copy">[\s\S]*?<p>([\s\S]*?)<\/p>/)?.[1];
+    const faq = markup.match(/<dt>Can I get an email when Nike&#x27;s ads or offer change\?<\/dt><dd>([\s\S]*?)<\/dd>/)?.[1];
+
+    for (const copy of [pitch, faq]) {
+      expect(copy).toBeDefined();
+      expect(copy).toContain("one first check and one first brief");
+      expect(copy).toContain("Meta Ad Library only");
+      expect(copy).toContain("No automatic checks");
+      expect(copy).toContain("Ongoing checks and briefs require a paid plan");
+      expect(copy).toContain("screenshot when the capture includes one");
+      expect(copy).not.toMatch(/every .*change hits your inbox|quiet periods.*heartbeat|first scan runs the moment/i);
+    }
+  });
+
   it("renders every section of the populated page in the briefed order", async () => {
     const markup = await render(populated());
 
