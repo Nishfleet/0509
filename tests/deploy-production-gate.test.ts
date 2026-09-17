@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import {
   chmodSync,
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -16,6 +17,7 @@ import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { parse } from "yaml";
 
+const { schemaFingerprint } = await import("../scripts/d1-schema-fingerprint.mjs");
 const deployPlanModule = await import("../scripts/deploy-production-plan.mjs");
 const {
   buildProductionDeployPlan,
@@ -192,6 +194,7 @@ function passingEvidence() {
 function passingRemoteRestoreEvidence() {
   return {
     schemaVersion: 2,
+    schemaFingerprint: fingerprint,
     candidateFingerprint: fingerprint,
     generatedAt: "2026-07-16T10:00:00.000Z",
     databaseIdentitySha256: "1".repeat(64),
@@ -1403,6 +1406,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     if (typeof validateRemoteRestoreEvidence !== "function") return;
     const expected = {
       candidateFingerprint: fingerprint,
+      schemaFingerprint: fingerprint,
       wranglerWorktreeSha256: wranglerHash,
       now: new Date("2026-07-16T12:00:00.000Z"),
     };
@@ -1436,7 +1440,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       validateRemoteRestoreEvidence(
         {
           ...passingRemoteRestoreEvidence(),
-          candidateFingerprint: "9".repeat(64),
+          schemaFingerprint: "9".repeat(64),
           scratchDatabaseRemoved: false,
         },
         expected,
@@ -1444,7 +1448,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     ).toMatchObject({
       ok: false,
       issues: expect.arrayContaining([
-        "remote_restore_candidate_mismatch",
+        "remote_restore_schema_mismatch",
         "remote_restore_scratch_cleanup",
       ]),
     });
@@ -1469,6 +1473,29 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(
       validateRemoteRestoreEvidence(passingRemoteRestoreEvidence(), expected),
     ).toEqual({ ok: true, issues: [] });
+  });
+
+  it("reuses proof after a non-schema edit but rejects a migration edit and missing fingerprint metadata (#3576)", () => {
+    const root = mkdtempSync(join(tmpdir(), "0509-schema-gate-"));
+    roots.push(root);
+    mkdirSync(join(root, "scripts"));
+    cpSync(resolve("migrations"), join(root, "migrations"), { recursive: true });
+    for (const path of ["wrangler.jsonc", "scripts/d1-restore-transform.mjs", "scripts/d1-remote-restore-evidence.mjs", "scripts/d1-remote-restore-evidence-core.mjs"]) {
+      cpSync(resolve(path), join(root, path));
+    }
+    const evidence = { ...passingRemoteRestoreEvidence(), schemaFingerprint: schemaFingerprint(root) };
+    const expected = () => ({
+      candidateFingerprint: "f".repeat(64),
+      schemaFingerprint: schemaFingerprint(root),
+      wranglerWorktreeSha256: wranglerHash,
+      now: new Date("2026-07-16T12:00:00.000Z"),
+      minimumValidityMs: 12 * 60 * 60 * 1000,
+    });
+    writeFileSync(join(root, "README.md"), "Non-schema edit\n");
+    expect(deployPlanModule.validateRemoteRestoreEvidence(evidence, expected())).toEqual({ ok: true, issues: [] });
+    expect(deployPlanModule.validateRemoteRestoreEvidence({ ...evidence, schemaFingerprint: undefined }, expected())).toMatchObject({ ok: false, issues: ["remote_restore_schema_mismatch"] });
+    writeFileSync(join(root, "migrations/9999_fingerprint_test.sql"), "CREATE TABLE fingerprint_test (id TEXT);\n");
+    expect(deployPlanModule.validateRemoteRestoreEvidence(evidence, expected())).toMatchObject({ ok: false, issues: ["remote_restore_schema_mismatch"] });
   });
 
   it("rejects a reordered same-count ledger even when its self-hash is valid", () => {
@@ -1501,6 +1528,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       candidateFingerprint: fingerprint,
       wranglerWorktreeSha256: wranglerHash,
       migrationLedgerRule,
+      schemaFingerprint: fingerprint,
       now: new Date("2026-07-16T12:00:00.000Z"),
     };
     expect(
@@ -1572,6 +1600,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       candidateFingerprint: fingerprint,
       wranglerWorktreeSha256: wranglerHash,
       migrationLedgerRule,
+      schemaFingerprint: fingerprint,
       now: new Date("2026-07-16T12:00:00.000Z"),
     };
     const evidence = {
@@ -1590,7 +1619,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     });
   });
 
-  it("tiers EXACTNESS by migration/restore-critical, and applies one 14-day age bound to both", () => {
+  it("accepts other commits only with matching schema and fresh evidence, including restore-critical releases", () => {
     const validateRemoteRestoreEvidence = (
       deployPlanModule as Record<string, unknown>
     ).validateRemoteRestoreEvidence;
@@ -1599,12 +1628,13 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
 
     const codeOnlyEvidence = {
       ...passingRemoteRestoreEvidence(),
-      generatedAt: "2026-07-10T13:00:00.000Z",
+      generatedAt: "2026-07-16T10:00:00.000Z",
       candidateFingerprint: "7".repeat(64),
       wranglerWorktreeSha256: wranglerHash,
     };
     const expected = {
       candidateFingerprint: fingerprint,
+      schemaFingerprint: fingerprint,
       wranglerWorktreeSha256: wranglerHash,
       latestMigration: "0002_second.sql",
       migrationCount: 2,
@@ -1633,10 +1663,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
         ...expected,
         restoreCritical: true,
       }),
-    ).toMatchObject({
-      ok: false,
-      issues: expect.arrayContaining(["remote_restore_candidate_mismatch"]),
-    });
+    ).toEqual({ ok: true, issues: [] });
     expect(
       validateRemoteRestoreEvidence(
         { ...codeOnlyEvidence, generatedAt: "2026-07-01T11:59:59.999Z" },
@@ -1670,6 +1697,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
 
     const expected = {
       candidateFingerprint: fingerprint,
+      schemaFingerprint: fingerprint,
       wranglerWorktreeSha256: wranglerHash,
       migrationBearing: false,
       now: new Date("2026-07-16T12:00:00.000Z"),
@@ -1679,7 +1707,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       validateRemoteRestoreEvidence(
         {
           ...passingRemoteRestoreEvidence(),
-          generatedAt: "2026-07-02T18:00:00.000Z",
+          generatedAt: "2026-07-15T18:00:00.001Z",
         },
         expected,
       ),
@@ -1688,7 +1716,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       validateRemoteRestoreEvidence(
         {
           ...passingRemoteRestoreEvidence(),
-          generatedAt: "2026-07-02T17:59:59.999Z",
+          generatedAt: "2026-07-15T18:00:00.000Z",
         },
         expected,
       ),
@@ -2246,7 +2274,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(parsed[1].sha).toBe(ancestor);
   });
 
-  it("selects restore evidence only for the deploy's pinned SHA, never for a newer main tip (0509#2975)", () => {
+  it("selects matching schema proof across SHAs without a newer different schema shadowing it (0509#3576)", () => {
     const pinnedSha = "a".repeat(40);
     const newerSha = "b".repeat(40);
     const runFor = (id: number, sha: string, created_at: string) => ({
@@ -2276,15 +2304,15 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       "300": [artifactFor(300, newerSha)],
     };
 
-    // The newer run's artifact is shadowed, never silently substituted: the
-    // deploy consumes the proof produced for ITS pinned candidate.
+    // A newer different-schema run must not hide the older matching proof.
     expect(
       selectRecentRemoteRestoreArtifact({
         currentRunId: 999,
         runs,
         artifactsByRun,
         repository: "Nishfleet/0509",
-        pinnedSha,
+        expectedFingerprint: fingerprint,
+        fingerprintsBySha: { [pinnedSha]: fingerprint, [newerSha]: "b".repeat(64) },
       }),
     ).toEqual({
       artifactId: 2000,
@@ -2293,26 +2321,27 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       sizeInBytes: 1024,
     });
 
-    // Pinned to the newer tip instead: that run's artifact is selected.
+    // Either SHA can supply proof when the schema matches.
     expect(
       selectRecentRemoteRestoreArtifact({
         currentRunId: 999,
         runs,
         artifactsByRun,
         repository: "Nishfleet/0509",
-        pinnedSha: newerSha,
+        expectedFingerprint: fingerprint,
+        fingerprintsBySha: { [pinnedSha]: fingerprint, [newerSha]: fingerprint },
       }),
     ).toMatchObject({ runId: 300 });
 
-    // Pinned to a sha with no evidence at all: null, so the deploy's inline
-    // generate path runs — never a wrong-sha artifact.
+    // No matching schema: null, never a wrong-schema artifact.
     expect(
       selectRecentRemoteRestoreArtifact({
         currentRunId: 999,
         runs,
         artifactsByRun,
         repository: "Nishfleet/0509",
-        pinnedSha: "c".repeat(40),
+        expectedFingerprint: "c".repeat(64),
+        fingerprintsBySha: { [pinnedSha]: fingerprint, [newerSha]: fingerprint },
       }),
     ).toBeNull();
 
@@ -2322,7 +2351,8 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
         runs,
         artifactsByRun,
         repository: "Nishfleet/0509",
-        pinnedSha: "main",
+        expectedFingerprint: "main",
+        fingerprintsBySha: {},
       }),
     ).toThrow("remote_restore_artifact_selection_invalid");
   });
@@ -2359,13 +2389,11 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       type: "string",
     });
 
-    // Per-candidate lanes, never cancel-in-progress: a merge landing while
-    // an evidence run is in flight can no longer cancel or starve the proof
-    // the next deploy needs.
+    // Only push drills can cancel superseded work (0509#3576).
     expect(evidence.concurrency.group).toBe(
-      "0509-d1-remote-restore-evidence-${{ github.sha }}",
+      "${{ github.event_name == 'push' && '0509-d1-remote-restore-evidence-push' || format('0509-d1-remote-restore-evidence-{0}', github.sha) }}",
     );
-    expect(evidence.concurrency["cancel-in-progress"]).toBe(false);
+    expect(evidence.concurrency["cancel-in-progress"]).toBe("${{ github.event_name == 'push' }}");
     expect(refresh.concurrency.group).toBe(
       "0509-d1-restore-proof-auto-refresh-${{ github.sha }}",
     );

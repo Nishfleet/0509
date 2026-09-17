@@ -363,6 +363,7 @@ export function assertConfiguredProductionDatabase(
 /**
  * @param {{
  *   candidate: Record<string, any>,
+ *   schemaFingerprint: string,
  *   aggregate: DatabaseEvidence,
  *   sourceDumpSha256: string,
  *   transformedSqlSha256: string,
@@ -377,6 +378,7 @@ export function assertConfiguredProductionDatabase(
  */
 export function buildRemoteRestoreEvidence({
   candidate,
+  schemaFingerprint,
   aggregate,
   sourceDumpSha256,
   transformedSqlSha256,
@@ -393,6 +395,7 @@ export function buildRemoteRestoreEvidence({
     productionDatabase,
   );
   if (
+    !SHA256_PATTERN.test(schemaFingerprint ?? "") ||
     !SHA256_PATTERN.test(candidate?.fingerprint ?? "") ||
     !SHA256_PATTERN.test(candidate?.wrangler?.worktreeSha256 ?? "") ||
     candidate?.wrangler?.worktreeSearchRolloutMode !== "v2" ||
@@ -416,6 +419,7 @@ export function buildRemoteRestoreEvidence({
   );
   return {
     schemaVersion: 2,
+    schemaFingerprint,
     candidateFingerprint: candidate.fingerprint,
     generatedAt,
     databaseIdentitySha256: sha256CanonicalJson(productionDatabase),

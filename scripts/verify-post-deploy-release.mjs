@@ -798,6 +798,7 @@ export async function runVersionBoundGateC({
   const backupLifecycleRecheck = dependencies.backupLifecycleRecheck ?? defaultBackupLifecycleRecheck;
   const backupLifecycleCleanup = dependencies.backupLifecycleCleanup ?? defaultBackupLifecycleCleanup;
   const pricing = /** @type {(input: { workerVersionId: string, token: string }) => Promise<GateStepResult>} */ (dependencies.pricing ?? defaultPricing);
+  /** @type {NonNullable<GateDependencies["billing"]>} */
   const billing = dependencies.billing ?? defaultBilling;
   const proof = dependencies.proof ?? defaultProof;
   const cleanup = dependencies.cleanup ?? defaultCleanup;

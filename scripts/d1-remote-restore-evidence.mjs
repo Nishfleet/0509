@@ -34,6 +34,7 @@ import {
   productionMigrationLedgerRule,
 } from "./d1-migration-sync-check.lib.mjs";
 import { validateRemoteRestoreEvidence } from "./deploy-production-plan.mjs";
+import { schemaFingerprint } from "./d1-schema-fingerprint.mjs";
 import { redactSensitiveOutput } from "./safe-command-output.mjs";
 import {
   UUID_PATTERN,
@@ -1504,7 +1505,9 @@ async function runAutomation(outputPath) {
     const latestMigration = sourceMigrationNames.at(-1);
     const migrationCount = sourceMigrationNames.length;
     if (!latestMigration) throw new Error("latest_migration_missing");
+    const fingerprint = schemaFingerprint();
     const evidence = buildRemoteRestoreEvidence({
+      schemaFingerprint: fingerprint,
       candidate,
       aggregate: sourceAggregate,
       sourceDumpSha256: sha256(sourceSql),
@@ -1517,6 +1520,7 @@ async function runAutomation(outputPath) {
       scratchDatabaseRemoved: scratchRemoved,
     });
     const verdict = validateRemoteRestoreEvidence(evidence, {
+      schemaFingerprint: fingerprint,
       candidateFingerprint: candidate.fingerprint,
       wranglerWorktreeSha256: candidate.wrangler.worktreeSha256,
       migrationLedgerRule: productionMigrationLedgerRule(
@@ -1533,7 +1537,7 @@ async function runAutomation(outputPath) {
     process.stdout.write(
       `${JSON.stringify({
         ok: true,
-        policy: "fresh-exact-24h",
+        policy: "fresh-schema-24h",
         backupFile: ownedBackup.fileName,
         remoteObjectKey,
         scratchRemoved: true,

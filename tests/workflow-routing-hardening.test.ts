@@ -100,29 +100,18 @@ describe("workflow routing hardening", () => {
         queue: "max",
       });
     }
-    // Evidence workflows mutate no shared provider state (0509#2975): each
-    // runs in its own per-candidate-SHA lane so a new merge can never cancel
-    // or starve the proof the next deploy needs — the 2026-09-11 incident's
-    // runs were all cancelled inside the shared lane. `queue: max` keeps a
-    // second run for the SAME sha (push + dispatch, or a re-run) queued
-    // rather than colliding.
-    for (const [filename, group] of [
-      [
-        "d1-remote-restore-evidence.yml",
-        "0509-d1-remote-restore-evidence-${{ github.sha }}",
-      ],
-      [
-        "d1-restore-proof-auto-refresh.yml",
-        "0509-d1-restore-proof-auto-refresh-${{ github.sha }}",
-      ],
-    ] as const) {
-      const concurrency = workflow(filename).parsed.concurrency;
-      expect(concurrency, filename).toEqual({
-        group,
-        "cancel-in-progress": false,
-        queue: "max",
-      });
-    }
+    // Only push drills cancel superseded runs. queue takes literal single/max
+    // only (Actions docs), so it is omitted; default pending semantics plus
+    // the cancelling push group replace the old max queue (0509#3576).
+    expect(workflow("d1-remote-restore-evidence.yml").parsed.concurrency).toEqual({
+      group: "${{ github.event_name == 'push' && '0509-d1-remote-restore-evidence-push' || format('0509-d1-remote-restore-evidence-{0}', github.sha) }}",
+      "cancel-in-progress": "${{ github.event_name == 'push' }}",
+    });
+    expect(workflow("d1-restore-proof-auto-refresh.yml").parsed.concurrency).toEqual({
+      group: "0509-d1-restore-proof-auto-refresh-${{ github.sha }}",
+      "cancel-in-progress": false,
+      queue: "max",
+    });
     // The one step that does mutate shared provider state — the manual
     // `wrangler d1 migrations apply` — keeps the shared serial lane at JOB
     // level inside the otherwise per-SHA workflow.
