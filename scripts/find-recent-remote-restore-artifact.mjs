@@ -1,30 +1,15 @@
 #!/usr/bin/env node
 
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
+import { schemaFingerprint } from "./d1-schema-fingerprint.mjs";
 
 const REPOSITORY = "Nishfleet/0509";
-// Every workflow in this set is held to the SAME thresholds the gate applies
-// to any artifact it accepts: exact-commit match (sha embedded in the
-// artifact name) and freshness within `D1_REMOTE_RESTORE_EVIDENCE_MIN_VALIDITY_MS`
-// (12h freshness headroom in the deploy; absolute max 14 days in
-// `validateRemoteRestoreEvidence`). Adding a workflow to this set does NOT
-// relax those thresholds — it only extends the set of producers whose
-// artifacts the gate is allowed to consider.
-//
-//   - deploy-production.yml — the gate's own deploy workflow. Its inline
-//     `generate_restore_evidence` job uploads an artifact with the same
-//     name shape, so the gate can self-verify its own freshly produced
-//     evidence on the fast path.
-//   - d1-remote-restore-evidence.yml — the nightly isolated remote restore
-//     drill (cron "47 20 * * *"). Produces one artifact per run, named for
-//     the run's pinned SHA, used as the primary evidence source.
-//   - d1-restore-proof-auto-refresh.yml — P9-C self-refreshing backup
-//     proof. Fires on every push to main plus a 3-hourly safety-net
-//     schedule, so the gate always has a verified artifact for the exact
-//     deploy SHA without having to fall back to the deploy's own inline
-//     `generate_restore_evidence` job (which has been failing on
-//     production schema drift since auto-deploy-on-green went live).
+// The artifact name still binds it to its producing run, not the deploy SHA.
+// Fingerprints are computed from Git, never inferred from an artifact name:
+// commits absent from this checkout are skipped quietly, present commits that
+// fail to hash emit a warning so reuse cannot silently degrade.
 const TRUSTED_WORKFLOWS = new Set([
   "deploy-production.yml",
   "d1-remote-restore-evidence.yml",
@@ -63,18 +48,15 @@ const MAX_ARTIFACT_SIZE_BYTES = 10 * 1024 * 1024;
 
 /**
  * Select only an artifact whose producing run is a completed successful main
- * run of one of the two trusted workflow files in this exact repository.
- * When `pinnedSha` is supplied the producing run's head must equal it: the
- * deploy consumes evidence for ITS pinned candidate, not for whatever main
- * tip was newest (0509#2975 — at fleet merge cadence a newer different-sha
- * artifact would otherwise shadow the pinned candidate's proof and force the
- * inline-generation fallback every time).
+ * run of a trusted workflow in this repository, with matching schema inputs.
+ * Fingerprints are computed from Git, never inferred from an artifact name.
  * @param {{
  *   currentRunId: number,
  *   runs: WorkflowRun[],
  *   artifactsByRun: Record<string, ActionsArtifact[]>,
  *   repository?: string,
- *   pinnedSha?: string,
+ *   expectedFingerprint: string,
+ *   fingerprintsBySha: Record<string, string>,
  * }} input
  */
 export function selectRecentRemoteRestoreArtifact({
@@ -82,7 +64,8 @@ export function selectRecentRemoteRestoreArtifact({
   runs,
   artifactsByRun,
   repository = REPOSITORY,
-  pinnedSha,
+  expectedFingerprint,
+  fingerprintsBySha,
 }) {
   if (
     !Number.isInteger(currentRunId) ||
@@ -91,7 +74,8 @@ export function selectRecentRemoteRestoreArtifact({
     !Array.isArray(runs) ||
     !artifactsByRun ||
     typeof artifactsByRun !== "object" ||
-    (pinnedSha !== undefined && !SHA_PATTERN.test(pinnedSha))
+    !/^[a-f0-9]{64}$/u.test(expectedFingerprint ?? "") ||
+    !fingerprintsBySha || typeof fingerprintsBySha !== "object"
   ) {
     throw new Error("remote_restore_artifact_selection_invalid");
   }
@@ -106,7 +90,7 @@ export function selectRecentRemoteRestoreArtifact({
         run?.conclusion === "success" &&
         run?.head_branch === "main" &&
         SHA_PATTERN.test(run?.head_sha ?? "") &&
-        (pinnedSha === undefined || run?.head_sha === pinnedSha) &&
+        fingerprintsBySha[run.head_sha ?? ""] === expectedFingerprint &&
         run?.repository?.full_name === repository &&
         run?.head_repository?.full_name === repository &&
         Number.isFinite(Date.parse(run?.created_at ?? "")),
@@ -207,14 +191,15 @@ async function main() {
     );
   }
 
+  const expectedFingerprint = schemaFingerprint(process.cwd(), pinnedSha);
+  /** @type {Record<string, string>} */
+  const fingerprintsBySha = { [pinnedSha]: expectedFingerprint };
   /** @type {Record<string, ActionsArtifact[]>} */
   const artifactsByRun = {};
-  // Only runs for the pinned candidate can produce an artifact this deploy
-  // accepts; skipping the rest also skips their artifacts-list API calls.
+  // A newer run with a different schema must not hide a matching older run.
   const orderedRunIds = [
     ...new Set(
       runs
-        .filter((run) => run?.head_sha === pinnedSha)
         .sort(
           (left, right) =>
             Date.parse(right.created_at ?? "") -
@@ -225,6 +210,34 @@ async function main() {
     ),
   ];
   for (const runId of orderedRunIds) {
+    const sha = runs.find((run) => run.id === runId)?.head_sha ?? "";
+    if (!SHA_PATTERN.test(sha) || runId === currentRunId) continue;
+    if (fingerprintsBySha[sha] === undefined) {
+      let absent = false;
+      try {
+        execFileSync("git", ["cat-file", "-e", `${sha}^{commit}`], {
+          cwd: process.cwd(),
+          stdio: "ignore",
+        });
+      } catch {
+        absent = true;
+      }
+      if (absent) {
+        // Producers newer than the pinned candidate are routinely outside
+        // this checkout's history; absence cannot establish a match.
+        fingerprintsBySha[sha] = "";
+      } else {
+        try {
+          fingerprintsBySha[sha] = schemaFingerprint(process.cwd(), sha);
+        } catch {
+          process.stderr.write(
+            `::warning::Schema fingerprint unavailable for ${sha}; its artifacts cannot be reused this deploy.\n`,
+          );
+          fingerprintsBySha[sha] = "";
+        }
+      }
+    }
+    if (fingerprintsBySha[sha] !== expectedFingerprint) continue;
     const payload = await fetchJson(
       `https://api.github.com/repos/${repository}/actions/runs/${runId}/artifacts?per_page=100`,
       token,
@@ -238,7 +251,8 @@ async function main() {
       runs,
       artifactsByRun,
       repository,
-      pinnedSha,
+      expectedFingerprint,
+      fingerprintsBySha,
     });
     if (selected) {
       process.stdout.write(

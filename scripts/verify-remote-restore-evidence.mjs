@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { validateRemoteRestoreEvidence } from "./deploy-production-plan.mjs";
+import { schemaFingerprint } from "./d1-schema-fingerprint.mjs";
 import {
   POST_DEPLOY_CLEANUP_MIGRATIONS,
   PRODUCTION_MIGRATION_LEDGER_BASELINE,
@@ -671,6 +672,7 @@ async function main() {
   );
   const verificationNow = new Date();
   const verdict = validateRemoteRestoreEvidence(evidence, {
+    schemaFingerprint: schemaFingerprint(),
     candidateFingerprint: manifest.candidateFingerprint,
     wranglerWorktreeSha256:
       manifest.postflight?.launchConfig?.wranglerWorktreeSha256,
@@ -686,9 +688,8 @@ async function main() {
     verdict.ok = false;
     verdict.issues.push(pinnedEvidenceShaNotInHistoryIssue(orphanedDeployAnchor));
   }
-  const exactEvidenceRequired = migrationBearing || restoreCritical;
   process.stdout.write(
-    `${JSON.stringify({ ...verdict, policy: exactEvidenceRequired ? "fresh-exact-24h" : "verified-ledger-7d" })}\n`,
+    `${JSON.stringify({ ...verdict, policy: "fresh-schema-24h" })}\n`,
   );
   if (!verdict.ok) process.exitCode = 1;
 }

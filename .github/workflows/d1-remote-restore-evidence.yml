@@ -14,23 +14,14 @@ on:
         options:
           - apply_and_restore
   push:
-    # Every push to main produces fresh, exact-commit evidence for the commit
-    # that just landed. The deploy gate's fresh-exact-24h policy refuses
-    # anything older than 24h, and refuses to match a different commit even
-    # when the migration ledger and the workflow shape are unchanged. A daily
-    # 02:17 IST schedule (below) therefore still leaves a race window: a push
-    # at 02:18 IST waits 24h for the next schedule, and any deploy of that
-    # commit in between is blocked even though the schema has not moved. A
-    # push trigger closes that window commit-by-commit.
-    #
-    # Concurrency (0509#2975): per-candidate-SHA lanes, so a new merge can
-    # never cancel or starve the evidence run the next deploy needs.
-    #
-    # The push branch and the existing 02:17 IST schedule intentionally
-    # overlap: the schedule is the safety net for any day no push lands, and
-    # the push branch is what makes a deploy of a just-merged commit able to
-    # pass without first waiting for the next schedule.
+    # 0509#3576: code-only merges reuse fresh proof of the same schema.
     branches: [main]
+    paths:
+      - 'migrations/**'
+      - 'scripts/d1-restore-transform.mjs'
+      - 'scripts/d1-remote-restore-evidence*.mjs'
+      - 'wrangler.jsonc'
+      - '.github/workflows/d1-remote-restore-evidence.yml'
   schedule:
     # Daily, 02:17 IST - the same low-traffic window the twice-weekly schedule
     # used, now every night (Nish, 2026-08-07).
@@ -48,14 +39,13 @@ on:
     - cron: "47 20 * * *"
 
 concurrency:
-  # One lane per candidate SHA (0509#2975): the shared
-  # 0509-production-provider-mutations lane let each new merge evict or
-  # starve the run the next deploy needed — every 2026-09-11 run was
-  # cancelled. The real provider mutation (the D1 apply in apply_and_restore)
-  # keeps the shared group at job level below.
-  group: 0509-d1-remote-restore-evidence-${{ github.sha }}
-  cancel-in-progress: false
-  queue: max
+  # Superseded push drills stop; schedule/dispatch retain their per-SHA lane.
+  # Production migration apply keeps its non-cancelling job group below.
+  # queue is omitted: Actions documents literal single/max for it, and
+  # max cannot combine with a cancelling run — default pending semantics
+  # (a newer run replaces a queued one) fit both lanes (0509#3576).
+  group: ${{ github.event_name == 'push' && '0509-d1-remote-restore-evidence-push' || format('0509-d1-remote-restore-evidence-{0}', github.sha) }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 
 permissions:
   contents: read

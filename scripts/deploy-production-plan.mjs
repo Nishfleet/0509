@@ -444,6 +444,7 @@ export function buildProductionDeployPlan({
  * @param {unknown} evidence
  * @param {{
  *   candidateFingerprint: string,
+ *   schemaFingerprint: string,
  *   wranglerWorktreeSha256: string,
  *   latestMigration?: string,
  *   migrationCount?: number,
@@ -474,30 +475,13 @@ export function validateRemoteRestoreEvidence(evidence, expected) {
       : Number.NaN;
   const now =
     expected.now instanceof Date ? expected.now.getTime() : Date.now();
-  const migrationBearing = expected.migrationBearing !== false;
-  const exactEvidenceRequired =
-    migrationBearing || expected.restoreCritical === true;
-  // Nish's call, 2026-08-07: one bound of 14 days, replacing 24h for
-  // migration/restore-critical releases and 7d for everything else.
-  //
-  // 14 rather than the 90 first considered. 90 would have matched how long the
-  // backups themselves are kept (config/r2-retention-policy.json, expireDays
-  // 90), but retention and freshness measure different things: retention is how
-  // long the FILE survives, freshness is how recently the restore was PROVEN to
-  // work. A backup that exists but has not been restored in three months is
-  // exactly the one that fails when it is needed. 14 days tolerates a bad week
-  // of drill failures without pretending a quarter-old proof is current, and
-  // stays well inside retention so evidence never outlives its own backup.
-  //
-  // The nightly drill (d1-remote-restore-evidence.yml) keeps real evidence
-  // under a day old, so this bound should almost never be what decides a
-  // release. If it starts deciding releases, the drill is broken - fix that
-  // rather than raising this.
-  //
-  // The other bound is unchanged and still binds hard: a migration-bearing or
-  // restore-critical release must match the candidate EXACTLY, so age is not the
-  // only thing between a schema change and production.
+  // 0509#3576: schema identity replaces whole-commit identity, not freshness.
+  // Evidence must stay under 24h INCLUDING the deploy's freshness headroom
+  // (D1_REMOTE_RESTORE_EVIDENCE_MIN_VALIDITY_MS, 12h in the deploy), so the
+  // effective acceptance window is headroom-bounded. The 14d absolute ceiling
+  // is retained beneath it and can only bind if the 24h bound is ever raised.
   const maxAgeMs = 14 * 24 * 60 * 60 * 1000;
+  const freshnessMs = 24 * 60 * 60 * 1000;
   const minimumValidityMs =
     Number.isSafeInteger(expected.minimumValidityMs) &&
     Number(expected.minimumValidityMs) >= 0
@@ -506,7 +490,8 @@ export function validateRemoteRestoreEvidence(evidence, expected) {
   if (
     !Number.isFinite(generatedAt) ||
     generatedAt > now + 5 * 60 * 1000 ||
-    now + minimumValidityMs - generatedAt > maxAgeMs
+    now + minimumValidityMs - generatedAt > maxAgeMs ||
+    now + minimumValidityMs - generatedAt >= freshnessMs
   ) {
     issues.push("remote_restore_evidence_stale");
   }
@@ -530,10 +515,13 @@ export function validateRemoteRestoreEvidence(evidence, expected) {
     issues.push("remote_restore_config_fingerprint");
   }
   if (
-    exactEvidenceRequired &&
-    value.candidateFingerprint !== expected.candidateFingerprint
+    !FINGERPRINT_PATTERN.test(expected.schemaFingerprint ?? "") ||
+    !FINGERPRINT_PATTERN.test(
+      typeof value.schemaFingerprint === "string" ? value.schemaFingerprint : "",
+    ) ||
+    value.schemaFingerprint !== expected.schemaFingerprint
   ) {
-    issues.push("remote_restore_candidate_mismatch");
+    issues.push("remote_restore_schema_mismatch");
   }
   if (
     value.wranglerWorktreeSha256 !== expected.wranglerWorktreeSha256

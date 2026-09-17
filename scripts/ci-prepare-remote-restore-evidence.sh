@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Verify pre-generated exact R2 restore evidence and package it for upload.
+# Verify pre-generated schema-matched R2 restore evidence and package it for upload.
 #
 # Called directly as a `run:` step from deploy-production.yml.
 #
@@ -17,8 +17,8 @@ umask 077
 : "${GITHUB_RUN_ATTEMPT:?GITHUB_RUN_ATTEMPT is required}"
 : "${GITHUB_JOB:?GITHUB_JOB is required}"
 : "${GITHUB_SHA:?GITHUB_SHA is required}"
-# The artifact finder only accepts evidence produced for the deploy's exact
-# pinned candidate, never for whatever main tip was newest.
+# The finder compares the pinned candidate's schema inputs to each producer.
+# The verifier then checks the recorded fingerprint, freshness and integrity.
 : "${PINNED_SHA:?PINNED_SHA is required}"
 
 MAX_ARTIFACT_SIZE_BYTES=10485760
@@ -343,9 +343,9 @@ fi
 rm -rf -- "$cache"
 if [ "$evidence_valid" != true ]; then
   # No usable pre-generated evidence exists (none found, or the newest
-  # artifact does not verify against this exact candidate). This is not an
-  # infrastructure failure: the deploy workflow generates fresh exact-SHA
-  # evidence in this same run, and the exact verifier still gates the deploy.
+  # artifact does not verify against this schema). This is not an
+  # infrastructure failure: the deploy workflow generates fresh evidence
+  # in this same run, and the schema/freshness verifier still gates the deploy.
   # Only the exit-2 infrastructure failures above remain hard stops.
   printf '::warning::No valid pre-generated restore evidence is available; this deploy will generate fresh exact evidence before release.\n' >&2
   report_evidence_available false

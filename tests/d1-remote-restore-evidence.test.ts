@@ -281,7 +281,7 @@ describe("D1 remote restore evidence automation", () => {
           }>;
         };
         schedule?: Array<{ cron?: string }>;
-        push?: { branches?: string[] };
+        push?: { branches?: string[]; paths?: string[] };
       };
       permissions?: Record<string, string>;
       jobs?: {
@@ -362,7 +362,10 @@ describe("D1 remote restore evidence automation", () => {
     // 24h race window between push and next schedule cannot block a deploy
     // of a just-merged commit. Still pinned exactly: a silent drop of the
     // push trigger should fail here.
-    expect(workflow.on?.push?.branches).toEqual(["main"]);
+    expect(workflow.on?.push).toEqual({
+      branches: ["main"],
+      paths: ["migrations/**", "scripts/d1-restore-transform.mjs", "scripts/d1-remote-restore-evidence*.mjs", "wrangler.jsonc", ".github/workflows/d1-remote-restore-evidence.yml"],
+    });
     expect(workflow.permissions).toEqual({ contents: "read" });
     expect(workflow.on?.workflow_dispatch?.inputs?.operation).toMatchObject({
       required: true,
@@ -773,6 +776,8 @@ describe("D1 remote restore evidence automation", () => {
       selectRecentRemoteRestoreArtifact({
         currentRunId: 30423695500,
         runs: [trustedRun],
+        expectedFingerprint: fingerprint,
+        fingerprintsBySha: { [headSha]: fingerprint },
         artifactsByRun: { [runId]: [artifact] },
       }),
     ).toEqual({
@@ -784,6 +789,8 @@ describe("D1 remote restore evidence automation", () => {
     expect(() =>
       selectRecentRemoteRestoreArtifact({
         currentRunId: 30423695500,
+        expectedFingerprint: fingerprint,
+        fingerprintsBySha: { [headSha]: fingerprint },
         runs: [trustedRun],
         artifactsByRun: {
           [runId]: [{ ...artifact, size_in_bytes: 10 * 1024 * 1024 + 1 }],
@@ -793,6 +800,8 @@ describe("D1 remote restore evidence automation", () => {
     expect(
       selectRecentRemoteRestoreArtifact({
         currentRunId: 30423695500,
+        expectedFingerprint: fingerprint,
+        fingerprintsBySha: { [headSha]: fingerprint },
         runs: [{ ...trustedRun, workflowFile: "ci.yml" }],
         artifactsByRun: { [runId]: [artifact] },
       }),
@@ -800,6 +809,8 @@ describe("D1 remote restore evidence automation", () => {
     expect(
       selectRecentRemoteRestoreArtifact({
         currentRunId: 30423695500,
+        expectedFingerprint: fingerprint,
+        fingerprintsBySha: { [headSha]: fingerprint },
         runs: [
           {
             ...trustedRun,
@@ -812,6 +823,8 @@ describe("D1 remote restore evidence automation", () => {
     expect(
       selectRecentRemoteRestoreArtifact({
         currentRunId: 30423695500,
+        expectedFingerprint: fingerprint,
+        fingerprintsBySha: { [headSha]: fingerprint },
         runs: [trustedRun],
         artifactsByRun: {
           [runId]: [{ ...artifact, name: `${name}-forged` }],
@@ -1919,6 +1932,7 @@ describe("D1 remote restore evidence automation", () => {
   it("builds strict candidate-bound evidence after verified cleanup", () => {
     const aggregate = aggregateEvidence();
     const evidence = buildRemoteRestoreEvidence({
+      schemaFingerprint: fileHash,
       candidate: {
         fingerprint,
         wrangler: {
@@ -1951,6 +1965,7 @@ describe("D1 remote restore evidence automation", () => {
 
     expect(evidence).toMatchObject({
       schemaVersion: 2,
+      schemaFingerprint: fileHash,
       candidateFingerprint: fingerprint,
       wranglerWorktreeSha256: wranglerHash,
       latestMigration: "0002_second.sql",
