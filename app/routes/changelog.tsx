@@ -40,6 +40,12 @@ export default function ChangelogRoute() {
           }),
         )}
       />
+      <PublicDocBlock title="2026-09-18">
+        <ul className="f9-doc-list">
+          <li>/robots.txt now states the training-deny list itself (GPTBot, ClaudeBot, and the rest of the AI-training crawlers, plus Content-Signal ai-train=no). Search and AI-answer engines stay welcome. The public file no longer depends on a Cloudflare dashboard toggle that had drifted off.</li>
+        </ul>
+      </PublicDocBlock>
+
       <PublicDocBlock title="2026-09-11">
         <ul className="f9-doc-list">
           <li>A new /switch/magicbrief page gives teams displaced by MagicBrief&apos;s 31 July 2026 shutdown an honest migration landing — what transfers (your competitor list as watchlists), what does not (saved boards and report history), sourced to MagicBrief&apos;s own FAQ and Canva&apos;s pricing page — ending in the free /search preview instead of a demo form.</li>
