@@ -38,5 +38,7 @@ this doc gets fixed.
 - Deployed state + bindings: `CLAUDE.md` → "Production Reality" and `wrangler.jsonc`.
 - Claim-by-claim reality check: `docs/customer-claim-table.json` +
   `docs/customer-claim-surface-registry.json` → `rows` (mechanical check:
-  `npm run verify:claims`).
+  `npm run verify:claims`). Live-data layer for the 2026-09-18 audit drifts:
+  `docs/claim-registry.json` (mechanical check:
+  `npx vitest run tests/claim-registry.test.ts`, issue #3602).
 - `docs/ga-launch-scorecard.md` is SUPERSEDED — do not use it as the live verdict.
