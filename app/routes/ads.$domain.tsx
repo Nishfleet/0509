@@ -1027,7 +1027,7 @@ export function brandPageFaqEntries(data: BrandPageLoaderData): ReadonlyArray<Fa
     },
     {
       question: `Can I get an email when ${brandName}'s ads or offer change?`,
-      answer: `Yes. The "Track ${domain} — free" button on this page starts a free account, and the first scan runs the moment you land. After that, every ad, offer, CTA, and form change hits your inbox with a screenshot when the capture includes one, the page text, and the source link. Quiet periods still send a heartbeat so silence always means we looked.`,
+      answer: `Yes, on a paid plan. The "Track ${domain} — free" button starts a free account with one first check and one first brief, Meta Ad Library only. No automatic checks. Ongoing checks and briefs require a paid plan. Alerts include a screenshot when the capture includes one, the page text, and the source link.`,
     },
   ];
 }
@@ -1703,8 +1703,9 @@ function BrandAdsResults({
                 {" — free"}
               </h2>
               <p>
-                Create a free account and the first scan runs the moment you land. Every ad, offer,
-                CTA and form change hits your inbox with a screenshot when the capture includes one, the page text, and the link.
+                Create a free account for one first check and one first brief, Meta Ad Library only.
+                No automatic checks. Ongoing checks and briefs require a paid plan. Alerts include
+                a screenshot when the capture includes one, the page text, and the link.
               </p>
             </div>
             {/* Issue #2051: the primary CTA carries the viewed brand into

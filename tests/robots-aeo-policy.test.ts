@@ -5,7 +5,7 @@ import {
   publicSeoFileForPathname,
 } from "~/lib/seo";
 
-// Regression test for the AEO robots.txt policy matrix (issue #2061).
+// Regression test for the AEO robots.txt policy matrix (issue #2061 / #3535).
 //
 // Worker-served robots.txt must:
 //   - name grounding / AI-answer engines (Google-Extended, OAI-SearchBot,
@@ -15,13 +15,13 @@ import {
 //     /timeline/**, /compare/**, /switch/**, /methodology, /brands, /llms.txt,
 //     /llms-full.txt) while keeping /app/**, /api/**, /export/** out;
 //   - keep Google-Extended OUT of AI_TRAINING_CRAWLERS (ai-train=no is not
-//     weakened: the remaining training-only bots stay denied).
-//
-// Cloudflare managed robots prepends `User-agent: Google-Extended / Disallow: /`
-// (live 0509.io, 2026-09-09). Google merges same-agent groups and, on equal
-// path length, uses the least restrictive rule, so an explicit `Allow: /` in
-// the worker file overrides that prepended Disallow. This test asserts both
-// the worker body and the composed (prepend + worker) file.
+//     weakened: the remaining training-only bots stay denied);
+//   - emit the training-deny block and Content-Signal itself (issue #3535).
+//     Cloudflare managed robots used to prepend that block; the prepend
+//     drifted off and production smoke rolled every deploy back. The worker
+//     file is now the source of truth. If the zone prepend returns, it is
+//     additive: training crawlers stay denied, and Google-Extended still
+//     reaches public paths via Google's merge + least-restrictive rule.
 
 interface RobotsRule {
   allow: boolean;
@@ -127,8 +127,8 @@ const PRIVATE_PATHS = [
 ];
 
 // Observed Cloudflare managed-robots prepend on https://0509.io/robots.txt
-// (2026-09-09). Kept as a fixture so the composed-file assertion does not
-// depend on a live fetch.
+// (2026-09-09). Kept as a fixture so the composed-file assertion still
+// proves a restored zone prepend is additive and harmless, not a live fetch.
 const CLOUDFLARE_MANAGED_PREFIX = `# BEGIN Cloudflare Managed content
 
 User-agent: *
@@ -218,9 +218,17 @@ describe("robots.txt AEO/AI policy matrix (issue #2061)", () => {
       ]),
     );
     for (const bot of AI_TRAINING_CRAWLERS) {
-      const group = mergedGroupFor(composedGroups, bot);
+      const workerGroup = mergedGroupFor(workerGroups, bot);
+      const composedGroup = mergedGroupFor(composedGroups, bot);
       for (const path of [...PUBLIC_PATHS, ...PRIVATE_PATHS]) {
-        expect(isPathAllowed(group, path), `${bot} must not reach ${path}`).toBe(false);
+        expect(
+          isPathAllowed(workerGroup, path),
+          `${bot} must not reach ${path} from the worker file alone`,
+        ).toBe(false);
+        expect(
+          isPathAllowed(composedGroup, path),
+          `${bot} must not reach ${path} if Cloudflare prepends the same deny`,
+        ).toBe(false);
       }
     }
   });
@@ -231,9 +239,10 @@ describe("robots.txt AEO/AI policy matrix (issue #2061)", () => {
     expect(workerBody).not.toContain("User-agent: Google-Extended\nDisallow: /");
   });
 
-  it("does not re-duplicate the Cloudflare training deny block (issue #1459)", () => {
+  it("emits the training deny block and Content-Signal as worker output (issue #3535)", () => {
+    expect(workerBody).toContain("Content-Signal: search=yes,ai-train=no,use=reference");
     for (const bot of AI_TRAINING_CRAWLERS) {
-      expect(workerBody, `${bot} must not be re-denied in the worker file`).not.toContain(
+      expect(workerBody, `${bot} must be training-denied in the worker file`).toContain(
         `User-agent: ${bot}\nDisallow: /`,
       );
     }

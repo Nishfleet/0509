@@ -162,6 +162,31 @@ describe("adsPageServiceJsonLd", () => {
 });
 
 describe("/ads/:domain JSON-LD", () => {
+  it("keeps the Free limit and paid qualification in the visible FAQ and FAQPage", async () => {
+    const data = cachedIndexable();
+    const markup = await render(data);
+    const { brandPageFaqEntries } = await import("~/routes/ads.$domain");
+    const entries = brandPageFaqEntries(data);
+    const emailFaq = entries?.find((entry) => entry.question === "Can I get an email when Nike's ads or offer change?");
+    expect(emailFaq).toBeDefined();
+    expect(emailFaq?.answer).toContain('"Track nike.com — free"');
+    expect(emailFaq?.answer).toContain("one first check and one first brief");
+    expect(emailFaq?.answer).toContain("Meta Ad Library only");
+    expect(emailFaq?.answer).toContain("No automatic checks");
+    expect(emailFaq?.answer).toContain("Ongoing checks and briefs require a paid plan");
+    expect(emailFaq?.answer).toContain("screenshot when the capture includes one");
+    expect(emailFaq?.answer).not.toMatch(/every .*change hits your inbox|quiet periods.*heartbeat|first scan runs the moment/i);
+
+    const faq = parseLdJsonBlocks(markup).find((block) => block["@type"] === "FAQPage");
+    expect(faq?.mainEntity).toEqual(entries?.map((entry) => ({
+      "@type": "Question",
+      name: entry.question,
+      acceptedAnswer: { "@type": "Answer", text: entry.answer },
+    })));
+    const escapedAnswer = renderToStaticMarkup(createElement("dd", null, emailFaq?.answer));
+    expect(markup).toContain(escapedAnswer);
+  }, 20_000);
+
   it("emits BreadcrumbList, FAQPage, Service and WebPage on a cached, indexable brand page", async () => {
     const data = cachedIndexable();
     const markup = await render(data);
