@@ -109,7 +109,7 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain('to="/capture-rules"');
     expect(marketingRoute).toContain("What we refuse to alert on");
     expect(marketingRoute).toContain("For growth teams who track competitors");
-    expect(marketingRoute).toContain("Then Five to Nine keeps watching the offer behind those ads");
+    expect(marketingRoute).toContain("Five to Nine watches competitors’ Meta ads and the offer behind them");
     expect(marketingRoute).toContain("before-and-after with the page text and source link");
     expect(marketingRoute).toContain("plus a screenshot when the capture includes one");
     expect(marketingRoute).not.toContain("Sample proof-backed brief");
