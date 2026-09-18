@@ -11,7 +11,8 @@ No account, no session.
 
 1. `GET /` — expect 200.
 2. Read the hero heading. It is one `<h1 class="ld-wall">` split across spans, so match it as a
-   pattern: `/They cut.*price/i`.
+   pattern: `/growth teams.*competitor|competitor.*growth teams/i` (buyer + job; the wording
+   itself may shift with voice passes, but the H1 must keep naming both).
 3. The hero form is `<Form method="get" action="/search" aria-label="Public search preview">`:
    - text input, `aria-label="Competitor website"`, `name="website"`,
      placeholder `paste-their-website.com…`
@@ -31,7 +32,7 @@ grep -c '/search?query=nykaa&amp;mode=advertiser&amp;website=https%3A%2F%2Fnykaa
 ## What proves success
 
 - HTTP 200.
-- Hero heading matching `/They cut.*price/i` is visible.
+- Hero heading matching `/growth teams.*competitor|competitor.*growth teams/i` is visible.
 - The `role="note"` paragraph is visible and its bolded lead reads exactly `No account needed.`
 - `Try with Nykaa` carries the exact href above.
 - Both the `Competitor website` input and the `Preview available ads →` button are present and

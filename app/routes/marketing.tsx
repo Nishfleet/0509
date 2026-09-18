@@ -579,10 +579,10 @@ export default function MarketingRoute() {
   // true, so a stale/on-record proof never claims "right now".
   const heroWall = (
     <h1 className="ld-wall">
+      <span className="ld-row">Growth teams —</span>
       <span className="ld-row">See the Meta ads</span>
-      <span className="ld-row">any competitor is</span>
       <span className="ld-row ld-row-indent">
-        running{" "}
+        any competitor is running{" "}
         <ins className="ld-ins">
           right now.
           {heroProofLive ? <i className="ld-flag">live</i> : null}
@@ -801,9 +801,9 @@ export default function MarketingRoute() {
             {heroProofStrip}
 
             <p className="ld-deck-copy">
-              Then Five to Nine keeps watching the offer behind those ads. When it moves, you get the
-              before-and-after with the page text and source link — plus a screenshot when the capture
-              includes one.
+              Five to Nine watches competitors’ Meta ads and the offer behind them. When it
+              moves, you get the before-and-after with the page text and source link — plus a
+              screenshot when the capture includes one.
             </p>
 
             <div className="f9-hero-proof-actions" aria-label="Proof brief before signup">
