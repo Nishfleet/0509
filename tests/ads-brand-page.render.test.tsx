@@ -169,7 +169,7 @@ describe("/ads/:domain — Case File render", () => {
 
     // Sections present.
     expect(markup).toContain("ld-ticker"); // capture ticker
-    expect(markup).toContain("Nike was running");
+    expect(markup).toContain("Nike has ");
     expect(markup).toContain("6 Meta ads");
     expect(markup).toContain("Ad Aggression Score");
     expect(markup).toContain(`href="${AD_AGGRESSION_METHODOLOGY_PATH}"`);
@@ -183,7 +183,7 @@ describe("/ads/:domain — Case File render", () => {
     // what-changed → ad wall → closer.
     const order = [
       "ld-ticker",
-      "Nike was running",
+      'id="brand-ads-title">Nike has ', // the H1, not the meta description that now carries the same copy
       "Ad Aggression Score · last",
       "f9-ads-watch-strip",
       "f9-ads-statline",
@@ -685,6 +685,8 @@ describe("/ads/:domain — Case File render", () => {
     expect(markup).toContain("/timeline/nike.com");
   });
 
+  // issue #3593 (PR #3601): the H1 states stored ads "on record" in both states;
+  // only the live cues (ticker, stat strip) still flip with capture freshness.
   it("claims right now/live only while the capture is fresh, and flips to past-tense honesty when it is hours old", async () => {
     const fresh = await render(
       populated({ checkedAgo: "moments ago", freshForLiveClaim: true }),
@@ -692,8 +694,8 @@ describe("/ads/:domain — Case File render", () => {
     const stale = await render(populated());
 
     // Fresh capture: the present-tense acquisition claims are kept.
-    expect(fresh).toContain("Nike is running ");
-    expect(fresh).toContain("right now.");
+    expect(fresh).toContain("Nike has ");
+    expect(fresh).toContain("on record.");
     expect(fresh).toContain("Running right now");
     expect(fresh).toContain("Nike · live");
     expect(fresh).toContain("Ads live");
@@ -701,8 +703,8 @@ describe("/ads/:domain — Case File render", () => {
 
     // Hours-old capture: every claim flips to an honest past tense, and the
     // freshness stamp stays the page's only time claim.
-    expect(stale).toContain("Nike was running ");
-    expect(stale).toContain("at the last check.");
+    expect(stale).toContain("Nike has ");
+    expect(stale).toContain("on record.");
     expect(stale).toContain("From the last check");
     expect(stale).toContain("Nike · on record");
     expect(stale).toContain("Ads on record");
@@ -807,12 +809,12 @@ describe("/ads/:domain — Case File render", () => {
       populated({ brandOwnedAdCount: 2, checkedAgo: "moments ago", freshForLiveClaim: true }),
     );
 
-    expect(stale).toContain("Nike was running ");
+    expect(stale).toContain("Nike has ");
     expect(stale).toContain("2 of these 6 Meta ads");
-    expect(stale).toContain("at the last check.");
-    expect(fresh).toContain("Nike is running ");
+    expect(stale).toContain("on record.");
+    expect(fresh).toContain("Nike has ");
     expect(fresh).toContain("2 of these 6 Meta ads");
-    expect(fresh).toContain("right now.");
+    expect(fresh).toContain("on record.");
 
     // The closer states exactly who runs what.
     expect(stale).toContain(
@@ -884,9 +886,9 @@ describe("/ads/:domain — Case File render", () => {
     );
 
     const h1 = markup.match(/<h1[^>]*id="brand-ads-title"[^>]*>([\s\S]*?)<\/h1>/)?.[1] ?? "";
-    expect(h1).toContain("Nike was running ");
+    expect(h1).toContain("Nike has ");
     expect(h1).toContain("15 Meta ads");
-    expect(h1).toContain("at the last check.");
+    expect(h1).toContain("on record.");
     expect(h1).not.toContain("of these");
     expect(markup).toContain(
       "Another 1 ad matched the search without a verified link to nike.com.",
@@ -1005,9 +1007,9 @@ describe("/ads/:domain — Case File render", () => {
 
     // The headline speaks about the verified capture; the subline names the
     // unverified matches instead of folding them into the link count.
-    expect(stale).toContain("Nike was running ");
+    expect(stale).toContain("Nike has ");
     expect(stale).toContain("1 Meta ad");
-    expect(stale).toContain("at the last check.");
+    expect(stale).toContain("on record.");
     expect(stale).not.toContain("of these");
     expect(stale).toContain(
       "Another 5 ads matched the search without a verified link to nike.com.",
@@ -1061,7 +1063,7 @@ describe("/ads/:domain — Case File render", () => {
 
     // The unconfirmed creative is counted as other advertisers' — never
     // brand-owned — and its card is labeled honestly, not with the brand name.
-    expect(markup).toContain("Nike was running ");
+    expect(markup).toContain("Nike has ");
     expect(markup).toContain("4 of these 5 Meta ads");
     expect(markup).toContain("Advertiser unconfirmed · nike.com");
     expect((markup.match(/Nike · nike\.com/g) ?? []).length).toBe(4);
@@ -1072,7 +1074,7 @@ describe("/ads/:domain — Case File render", () => {
     const h1Matches = markup.match(/<h1\b[^>]*>[^<]+<\/h1>/g) ?? [];
     expect(h1Matches).toHaveLength(1);
     expect(h1Matches[0]).toBe(
-      '<h1 class="f9-ads-headline" id="brand-ads-title">Nike was running 6 Meta ads at the last check.</h1>',
+      '<h1 class="f9-ads-headline" id="brand-ads-title">Nike has 6 Meta ads on record.</h1>',
     );
   });
 
