@@ -1241,6 +1241,7 @@ export interface SitemapEntry {
  * enforces that the two never drift.
  */
 export const CHANGELOG_ENTRY_DATES: readonly string[] = [
+  "2026-09-18",
   "2026-09-11",
   "2026-09-06",
   "2026-09-05",
