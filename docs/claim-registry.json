@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "issue": "https://github.com/Nishfleet/0509/issues/3602",
+  "generatedAt": "2026-09-18T00:00:00Z",
+  "purpose": "Claim registry for the 2026-09-18 live-data audit (issue #3602): every public customer-facing claim raised by that audit maps to a verifiable live source — a shipped test, a code path, or a recorded D1 baseline — and to the copy rule that keeps the sentence inside the data. No claim may be added to this registry without a source entry that actually runs. Sentence-level auditing for the whole site lives in the sibling BET 10 registries (docs/customer-claim-table.json and docs/customer-claim-surface-registry.json, run mechanically by `npm run verify:claims`); this file is the live-data layer for the drifts that audit surfaced. tests/claim-registry.test.ts fails when a source stops existing or when public copy drifts from its claim's copy rule.",
+  "siblingRegistries": {
+    "sentenceAudit": "docs/customer-claim-table.json",
+    "surfaceRows": "docs/customer-claim-surface-registry.json",
+    "mechanicalRunner": "npm run verify:claims"
+  },
+  "claims": [
+    {
+      "id": "CLAIM-SAVES-SCREENSHOTS",
+      "sentence": "…each confirmed change saved with page text, the source link, and a screenshot when the capture includes one, then summarized in the brief.",
+      "surface": "app/routes/marketing.tsx hero deck and FAQ, app/routes/competitor-monitoring.tsx, homepage proof-brief trail note",
+      "source": {
+        "kind": "test",
+        "ref": "tests/customer-claim-audit-table.test.ts",
+        "assert": "AUDIT-SAVES-SCREENSHOTS row: screenshot copy is qualified to captures that include one; the site never promises a screenshot on every capture"
+      },
+      "liveBasis": {
+        "kind": "d1",
+        "table": "proof_capture",
+        "measure": "share of successful proof_capture rows carrying a screenshot_artifact_key",
+        "measured": "115/598 (19%)",
+        "measuredAt": "2026-09-18"
+      },
+      "copyRule": "Every screenshot mention is qualified as 'a screenshot when the capture includes one'. While coverage is partial (19% at the 2026-09-18 audit), no public sentence may claim screenshots unconditionally.",
+      "copyAnchors": {
+        "app/routes/marketing.tsx": ["screenshot when the capture includes one"],
+        "app/routes/competitor-monitoring.tsx": ["screenshot when the capture includes one"]
+      }
+    },
+    {
+      "id": "CLAIM-LANDING-PAGE-HISTORY",
+      "sentence": "Landing-page change history on tracked brands with a baseline.",
+      "surface": "app/lib/pricing.ts Starter/Agency feature list",
+      "source": {
+        "kind": "test",
+        "ref": "tests/customer-claim-audit-table.test.ts",
+        "assert": "AUDIT-LANDING-PAGE-CHANGE-HISTORY: pricing feature string is scoped to brands with a baseline — no 'with screenshots' promise and no 'as scheduled watches complete' promise"
+      },
+      "liveBasis": {
+        "kind": "d1",
+        "table": "landing_page_snapshot",
+        "measure": "landing_page_snapshot row count and website_watch_target row count (no tracked brand carries a baseline yet; growth tracked in issue #2021)",
+        "measured": "landing_page_snapshot rows = 0; website_watch_target rows = 0",
+        "measuredAt": "2026-09-18"
+      },
+      "copyRule": "Landing-page change history is advertised only as 'on tracked brands with a baseline'. While the baseline is empty, no public sentence may promise change history for a brand that has no baseline, and the pricing bullet stays scope-qualified.",
+      "copyAnchors": {
+        "app/lib/pricing.ts": ["Landing-page change history on tracked brands with a baseline"]
+      }
+    },
+    {
+      "id": "CLAIM-FREE-PREVIEW",
+      "sentence": "No account needed. Preview one competitor now.",
+      "surface": "app/routes/marketing.tsx hero honest note and final CTA; empty state on /search",
+      "source": {
+        "kind": "test",
+        "ref": "tests/marketing-rebuild.test.ts",
+        "assert": "labels public search as a coverage-qualified preview before account"
+      },
+      "liveBasis": {
+        "kind": "live-product-test",
+        "table": "creative",
+        "measure": "free preview outcome across recognised brands on 0509.io (2026-09-18 live test, issue #3602 §1.8)",
+        "measured": "3 of 6 recognised brands (allbirds, notion, oura) returned 'No verified ads found' after a 16-25s wait",
+        "measuredAt": "2026-09-18"
+      },
+      "copyRule": "The preview claim is coverage-qualified: the preview always runs, but the empty state honestly says 'No verified ads found for <domain>' and copy never promises verified ads for every brand. The hero keeps 'No account needed.' only while the preview runs without an account.",
+      "copyAnchors": {
+        "app/routes/marketing.tsx": ["No account needed.", "Preview one competitor now."],
+        "app/lib/search-display.ts": ["No verified ads found for"]
+      }
+    },
+    {
+      "id": "CLAIM-ADS-ON-RECORD",
+      "sentence": "Brand pages state stored ads as 'on record', with ads active at the last check shown separately.",
+      "surface": "app/routes/ads.$domain.tsx headline, count panels, and structured data",
+      "source": {
+        "kind": "test",
+        "ref": "tests/ads-brand-page.render.test.tsx",
+        "assert": "issue #3593: the H1 states stored ads 'on record' in both states, and tests/ads-brand-page.structured-data.test.ts asserts structured data describes stored ads as on record, never running"
+      },
+      "liveBasis": {
+        "kind": "d1",
+        "table": "creative",
+        "measure": "stored creative rows for nike.com vs ads active at the last check",
+        "measured": "nike.com ads page 2026-09-18 showed 14 ads on record but only 5 active at the last check",
+        "measuredAt": "2026-09-18"
+      },
+      "copyRule": "Stored counts are phrased 'on record', never presented as currently running; the active-at-the-last-check count gets its own labeled panel copy. The home proof brief and the brand page report the same total for the same day (AUDIT-HOME-BRANDPAGE-COUNT-PARITY).",
+      "copyAnchors": {
+        "app/routes/ads.$domain.tsx": ["on record", "at the last check"]
+      }
+    }
+  ]
+}
