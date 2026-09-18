@@ -371,6 +371,12 @@ export default function GuideMetaAdLibraryApiLimitationsRoute() {
             </p>
           </article>
         </div>
+        <p className="ld-trail-note" role="note">
+          The same capture, published:{" "}
+          <a href="/ads/adidas.com">Five to Nine&rsquo;s public Adidas page</a> — what
+          the public library showed on each scheduled read, filed with its date and
+          source, no API and no auth involved.
+        </p>
       </section>
 
       <section className="ld-quiet" id="faq">
