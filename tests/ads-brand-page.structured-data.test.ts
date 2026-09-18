@@ -322,4 +322,35 @@ describe("/ads/:domain JSON-LD", () => {
     expect(markup).not.toContain('"@type":"FAQPage"');
     expect(markup).not.toContain("Common questions about Nike&#x27;s ads");
   }, 20_000);
+
+  it("describes stored ads as on record, never running, across title and descriptions (issue #3593)", async () => {
+    // The observed 2026-09-17 nike.com capture: 14 stored creatives, only 5
+    // active at the last check. The indexed surfaces must state the stored
+    // size and keep the check stamp; "running N" is a live-activity claim.
+    const { brandPageTitle, brandPageDescription } = await import("~/routes/ads.$domain");
+    const data = cachedIndexable({
+      ads: Array.from({ length: 14 }, (_v, i) => ad({ metaAdId: `nike-${i}`, active: i < 5 })),
+      adCount: 14,
+      verifiedLinkCount: 14,
+      brandOwnedAdCount: 14,
+      teaser: {
+        totalCount: 14, activeCount: 5, longestRunningDays: null,
+        longestRunningHook: null, formats: ["image"],
+      },
+    });
+    const markup = await render(data);
+
+    expect(markup).toContain("Nike has 14 Meta ads on record.");
+    const title = brandPageTitle(data);
+    expect(title).toBe("Nike Facebook & Instagram ads | Five to Nine");
+    const blocks = parseLdJsonBlocks(markup);
+    expect(blocks.find((b) => b["@type"] === "WebPage")?.name).toBe(title);
+    const description = brandPageDescription(data);
+    expect(description).toContain("See 14 Meta ads from Nike");
+    expect(description).toContain("from a public check");
+    expect(description).not.toMatch(/running|active|right now/);
+    for (const type of ["WebPage", "Service"]) {
+      expect(blocks.find((b) => b["@type"] === type)?.description).toBe(description);
+    }
+  }, 20_000);
 });
