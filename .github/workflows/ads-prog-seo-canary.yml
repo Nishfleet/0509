@@ -52,12 +52,14 @@ jobs:
     # token and needs `contents: read` only. Keep it on a hosted runner; a
     # scheduled live-fetch gate does not need a self-hosted seat.
     # timeout: the #3278 paced noindex loop sleeps SEO_PARITY_PACE_SECONDS
-    # (5s, in-script) between ~127+ sitemap /ads URLs to stay under the
-    # RL_BRAND_PAGE edge rate limit (12/60s when #3278 went red; 60/60s since
-    # #3156) — ~12-14 min of wall time — plus 429 Retry-After waits, so 30
-    # leaves real headroom over the burst-era 15.
+    # (5s, in-script) between the sitemap /ads URLs to stay under the
+    # RL_BRAND_PAGE edge rate limit, plus 429 Retry-After waits. The 30-minute
+    # ceiling stopped fitting once the sitemap grew: runs 34834999485,
+    # 34956635648, 35083017956, 35208892355 and 35331933597 (2026-09-14..18)
+    # all ended `cancelled` at exactly 30m00s in the noindex step, so the
+    # canary measured nothing for five straight days. 60 restores headroom.
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
