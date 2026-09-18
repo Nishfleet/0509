@@ -40,6 +40,16 @@ export default function ChangelogRoute() {
           }),
         )}
       />
+      <PublicDocBlock title="2026-09-18">
+        <ul className="f9-doc-list">
+          <li>ads: no more "recurring alerts" promise after free signup (PR #3594)</li>
+          <li>funnel: weekly metrics 7d/30d counts now queryable via Analytics Engine (PR #3526)</li>
+          <li>growth guide: "can ChatGPT monitor competitor ads" — new /guides/can-chatgpt-monitor-competitor-ads page (PR #3511)</li>
+          <li>search: base ?q= leg degrades honestly, never the error shell (PR #3494)</li>
+          <li>ads: legacy dotless /ads slugs 301 to domain-keyed pages (PR #3469/#3479)</li>
+        </ul>
+      </PublicDocBlock>
+
       <PublicDocBlock title="2026-09-11">
         <ul className="f9-doc-list">
           <li>A new /switch/magicbrief page gives teams displaced by MagicBrief&apos;s 31 July 2026 shutdown an honest migration landing — what transfers (your competitor list as watchlists), what does not (saved boards and report history), sourced to MagicBrief&apos;s own FAQ and Canva&apos;s pricing page — ending in the free /search preview instead of a demo form.</li>
