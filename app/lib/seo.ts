@@ -1418,14 +1418,16 @@ const SITEMAP_XML = renderSitemapXml(ROOT_SITEMAP_STATIC_ENTRIES);
 // AI crawler policy — decision recorded in docs/ai-crawler-policy.md
 // ("answers yes, training no"): search and AI-answer/reference engines are
 // welcome, while AI training/fine-tuning crawlers are denied (ai-train=no).
-// The Cloudflare edge managed robots.txt is the SOLE source for the AI-training
-// deny list (issue #1459). Do not re-add an AI-training Disallow block here.
+// The worker file is the source of truth for the AI-training deny list
+// (issue #3535). Cloudflare managed robots used to prepend that block; the
+// prepend drifted off and production smoke rolled every deploy back. If the
+// zone prepend returns, it is additive and harmless.
 // Google-Extended is a control token for Gemini Apps / Vertex grounding AND
 // Gemini training (Google crawler docs). It is NOT in AI_TRAINING_CRAWLERS:
 // issue #2061 allows it on the public proof surface so Gemini grounding / AI
 // Overviews can use the Search index. Grounding is search/reference use, which
 // the content-signal already grants (`search=yes, use=reference`). ai-train=no
-// is not weakened: training-only bots stay denied at the zone.
+// is not weakened: training-only bots stay denied in this file.
 // Single source of truth for the training-crawler deny list (shared with the
 // llms.txt "AI access" section in app/lib/public-markdown.ts).
 export const AI_TRAINING_CRAWLERS = [
@@ -1440,8 +1442,8 @@ export const AI_TRAINING_CRAWLERS = [
 ] as const;
 
 // Explicit AEO allow-list (issue #2061). Named groups, not just the wildcard,
-// so the posture is intentional. Cloudflare managed robots prepends
-// `User-agent: Google-Extended / Disallow: /`; Google merges same-agent groups
+// so the posture is intentional. If Cloudflare managed robots prepends
+// `User-agent: Google-Extended / Disallow: /`, Google merges same-agent groups
 // and, on equal path length, uses the least restrictive rule, so `Allow: /`
 // here overrides that prepended Disallow.
 export const GROUNDING_ENGINES = [
@@ -1500,24 +1502,33 @@ const GROUNDING_BLOCKS = GROUNDING_ENGINES.map(
 ${PUBLIC_ALLOW_RULES}`,
 ).join("\n\n");
 
+const TRAINING_DENY_BLOCKS = AI_TRAINING_CRAWLERS.map(
+  (agent) => `User-agent: ${agent}
+Disallow: /`,
+).join("\n\n");
+
 const ROBOTS_TXT = `# Grounding / AI-answer engines (Google-Extended, OAI-SearchBot, PerplexityBot)
 # are allowed on the public proof surface. Grounding is search/reference use
 # (content-signal search=yes, use=reference), not training. AI training crawlers
-# stay denied at the zone by Cloudflare managed robots (ai-train=no). Policy:
-# docs/ai-crawler-policy.md. Issue #2061 / #1459: do not re-add a training
-# Disallow block here.
+# are denied here (ai-train=no). Policy: docs/ai-crawler-policy.md. Issue #3535:
+# the worker file owns this block so production smoke does not depend on a
+# Cloudflare managed-robots prepend that can silently drift off.
 #
 # Issue #2043: /llms-full.txt is the full-text AEO feed of tracked-brand dated
 # offer/proof/change records. Allowed below by Allow: / and listed in the
 # sitemap; AI answer engines may fetch it for citation.
 
 User-agent: *
+Content-Signal: search=yes,ai-train=no,use=reference
 ${PUBLIC_ALLOW_RULES}
 Sitemap: ${canonicalUrl("/sitemap.xml")}
 ${LOCALE_SITEMAP_LINES}
 
+# Training / fine-tuning crawlers — denied on every path (issue #3535).
+${TRAINING_DENY_BLOCKS}
+
 # Grounding / AI-answer engines — explicit, not just wildcard (issue #2061).
-# Google-Extended Allow: / overrides the Cloudflare managed Disallow: / because
+# Google-Extended Allow: / overrides a Cloudflare managed Disallow: / because
 # Google merges same-agent groups and prefers the least restrictive equal-length rule.
 ${GROUNDING_BLOCKS}
 `;

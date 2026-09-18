@@ -33,10 +33,12 @@ Scope: public surface only (`robots.txt`, `/llms.txt`, public markdown pages)
 - Public pages carry marketing and product-truth content only; account,
   competitor, and evidence data live behind auth and are never public. There
   is no customer data at stake in the public crawl surface.
-- The live edge already declares `Content-Signal: search=yes, ai-train=no,
-  use=reference` via the Cloudflare managed robots.txt. This decision makes
-  the repo robots.txt, the content-signal headers, and llms.txt consistent
-  with that edge stance instead of silently contradicting it.
+- The worker-served `/robots.txt` declares `Content-Signal: search=yes,
+  ai-train=no, use=reference` and names the training-deny list itself
+  (issue #3535). Cloudflare managed robots used to prepend that block; the
+  prepend drifted off and production smoke rolled every deploy back. This
+  decision keeps the repo robots.txt, the content-signal headers, and
+  llms.txt consistent instead of depending on a dashboard toggle.
 - Before issue #2061, `Google-Extended` was grouped with the training deny
   list, which hid Gemini grounding / AI Overviews (the largest AI answer
   surface) from the public proof pages the direction#4518 AEO bet and the
@@ -53,23 +55,23 @@ Scope: public surface only (`robots.txt`, `/llms.txt`, public markdown pages)
 ## What it means
 
 - `app/lib/seo.ts` robots.txt is the explicit worker-served matrix: the
-  wildcard group (public allow, `/app$` + `/app/` + `/api/` + `/export/`
-  disallow, Sitemap), plus explicit grounding-engine groups (`Google-Extended`,
-  `OAI-SearchBot`, `PerplexityBot`) with the same public-allow/private-disallow
-  shape. The Cloudflare edge managed-robots feature remains the source of
-  truth for the training deny list so that block is not duplicated
-  (issue #1459).
+  wildcard group (`Content-Signal`, public allow, `/app$` + `/app/` + `/api/`
+  + `/export/` disallow, Sitemap), the training-deny groups derived from
+  `AI_TRAINING_CRAWLERS`, plus explicit grounding-engine groups
+  (`Google-Extended`, `OAI-SearchBot`, `PerplexityBot`) with the same
+  public-allow/private-disallow shape. The worker file is the source of truth
+  for the training deny list (issue #3535). A restored Cloudflare managed
+  prepend is additive and harmless.
 - `GROUNDING_ENGINES` and `AI_TRAINING_CRAWLERS` are shared constants so
   robots.txt and the `/llms.txt` "AI access" section cannot drift apart.
 - The worker sets `content-signal: search=yes, ai-input=yes, ai-train=no,
   use=reference` on `/llms.txt` and public markdown responses, matching the
   robots.txt declaration.
-- Cloudflare managed robots prepends `User-agent: Google-Extended / Disallow: /`
-  at the zone. Google merges same-agent groups and, on equal path length, uses
-  the least restrictive rule, so the worker `Allow: /` overrides that prepend
-  for public paths. Removing the zone-side Google-Extended Disallow is a
-  Cloudflare zone change, outside repo deploy scope; the worker Allow is the
-  repo-owned override.
+- If Cloudflare managed robots prepends `User-agent: Google-Extended /
+  Disallow: /` at the zone, Google merges same-agent groups and, on equal
+  path length, uses the least restrictive rule, so the worker `Allow: /`
+  still overrides that prepend for public paths. Zone settings are outside
+  repo deploy scope; the worker file is correct on its own.
 
 ## Reference for the traction loop
 

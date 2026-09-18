@@ -92,18 +92,23 @@ describe("public SEO files", () => {
 		expect(robots?.body).not.toContain("Disallow: /share");
 	});
 
-	it("does not duplicate the AI-training deny block in repo robots.txt; edge is the sole source (issue #1459)", () => {
+	it("emits the AI-training deny block from the worker; Google-Extended stays a grounding allow (issue #3535)", () => {
 		const robots = publicSeoFileForPathname("/robots.txt");
 
-		// The Cloudflare managed-robots zone feature is the source of truth for
-		// the AI-training deny list. The worker file must not re-add a Disallow: /
-		// group for those bots (issue #1459). Google-Extended is a grounding
-		// engine as of issue #2061 — still no Disallow here.
-		for (const agent of [...AI_TRAINING_CRAWLERS, "Google-Extended"]) {
-			expect(robots?.body, `${agent} should not be training-denied in repo robots.txt`).not.toContain(
+		// The worker file is the source of truth for the AI-training deny list
+		// (issue #3535). Cloudflare managed robots used to prepend this block;
+		// that prepend drifted off and production smoke rolled every deploy
+		// back. Google-Extended is a grounding engine as of issue #2061 — still
+		// no Disallow here.
+		expect(robots?.body).toContain("Content-Signal: search=yes,ai-train=no,use=reference");
+		for (const agent of AI_TRAINING_CRAWLERS) {
+			expect(robots?.body, `${agent} must be training-denied in repo robots.txt`).toContain(
 				`User-agent: ${agent}\nDisallow: /`,
 			);
 		}
+		expect(robots?.body, "Google-Extended must not be training-denied").not.toContain(
+			"User-agent: Google-Extended\nDisallow: /",
+		);
 
 		// Grounding / AI-answer engines are named explicitly (issue #2061),
 		// not left as a wildcard accident. Other answer engines still fall
