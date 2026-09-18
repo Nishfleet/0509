@@ -285,6 +285,12 @@ export default function GuideHowToProveWhatChangedOnACompetitorWebsiteRoute() {
             </article>
           ))}
         </div>
+        <p className="ld-trail-note" role="note">
+          What proof looks like when a watch keeps it:{" "}
+          <a href="/ads/casper.com">Five to Nine&rsquo;s public Casper page</a> —
+          confirmed offer moves filed with their dates and sources as they happened,
+          not reconstructed after the fact.
+        </p>
       </section>
 
       <section className="ld-how">

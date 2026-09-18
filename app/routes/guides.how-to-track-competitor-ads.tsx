@@ -280,6 +280,12 @@ export default function GuideHowToTrackCompetitorAdsRoute() {
             </article>
           ))}
         </div>
+        <p className="ld-trail-note" role="note">
+          What a kept record looks like in public:{" "}
+          <a href="/ads/nike.com">Nike&rsquo;s Meta ads on Five to Nine</a> — the ads on
+          record, the offer timeline, and the landing pages they point to, kept by a
+          schedule instead of memory.
+        </p>
       </section>
 
       <section className="ld-how">

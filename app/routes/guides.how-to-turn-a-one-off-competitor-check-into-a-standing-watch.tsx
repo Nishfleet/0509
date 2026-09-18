@@ -285,6 +285,12 @@ export default function GuideHowToTurnAOneOffCompetitorCheckIntoAStandingWatchRo
             </article>
           ))}
         </div>
+        <p className="ld-trail-note" role="note">
+          What accumulation looks like:{" "}
+          <a href="/ads/hoka.com">Five to Nine&rsquo;s public Hoka page</a> — the ads
+          and offer moves a scheduled watch has on record, each dated, from checks
+          nobody had to remember to run.
+        </p>
       </section>
 
       <section className="ld-how">

@@ -301,6 +301,12 @@ export default function GuideHowToMonitorCompetitorLandingPageChangesRoute() {
           — &ldquo;across Visualping&rsquo;s platform, the AI classifies 83% of detected changes as
           not important,&rdquo; checked 11 September 2026.
         </p>
+        <p className="ld-trail-note" role="note">
+          And the landing-page half, kept instead of remembered:{" "}
+          <a href="/ads/allbirds.com">Five to Nine&rsquo;s public Allbirds page</a> — the
+          ads on record, the landing pages they point to, and the recent offer moves
+          filed with their dates.
+        </p>
       </section>
 
       <section className="ld-how">

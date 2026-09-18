@@ -298,6 +298,12 @@ export default function GuideHowToGetAlertedWhenACompetitorChangesTheirOfferRout
           — &ldquo;across Visualping&rsquo;s platform, the AI classifies 83% of detected changes as
           not important,&rdquo; checked 12 September 2026.
         </p>
+        <p className="ld-trail-note" role="note">
+          What an alert history looks like when a watch keeps it:{" "}
+          <a href="/ads/gymshark.com">Five to Nine&rsquo;s public Gymshark page</a> — the
+          offer moves its checks confirmed, each filed with its date, alongside the
+          ads on record.
+        </p>
       </section>
 
       <section className="ld-how">

@@ -302,6 +302,12 @@ export default function GuideCanChatGPTMonitorCompetitorAdsRoute() {
             </article>
           ))}
         </div>
+        <p className="ld-trail-note" role="note">
+          The record a schedule kept while the chat was closed:{" "}
+          <a href="/ads/figma.com">Five to Nine&rsquo;s public Figma page</a> — the Meta
+          ads on record and the offer timeline. That is the watch&rsquo;s output, not the
+          model&rsquo;s.
+        </p>
       </section>
 
       <section className="ld-how">

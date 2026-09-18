@@ -232,6 +232,12 @@ export default function GuideHowToMonitorMetaAdLibraryRoute() {
             </article>
           ))}
         </div>
+        <p className="ld-trail-note" role="note">
+          Monitoring is only as good as the record it leaves:{" "}
+          <a href="/ads/zara.com">Five to Nine&rsquo;s public Zara page</a> shows what
+          that looks like — the Meta ads on record with the offer timeline
+          underneath, rebuilt from scheduled reads of the public library.
+        </p>
       </section>
 
       <section className="ld-how">
