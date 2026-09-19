@@ -368,7 +368,9 @@ export async function checkLaunchReadinessEndpoint(options = {}) {
     });
     const payload = await response.json().catch(() => ({}));
     const declaredBlockers = Array.isArray(payload?.blockers)
-      ? payload.blockers.filter((blocker) => typeof blocker === "string" && blocker)
+      ? payload.blockers.filter(
+          (/** @type {unknown} */ blocker) => typeof blocker === "string" && blocker,
+        )
       : [];
     // A route that threw before answering journals a non-JSON 5xx — before
     // #3392 that surfaced here as blockers:[], indistinguishable from a clean
