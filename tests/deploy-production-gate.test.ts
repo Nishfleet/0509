@@ -3887,8 +3887,19 @@ describe("backup proof split: 6-hourly export record vs weekly restore drill (05
       (step) => step.name === "Fetch fresh backup export record",
     );
     const deployIndex = steps.findIndex((step) => step.name === "Deploy");
+    const recomfirmIndex = steps.findIndex(
+      (step) => step.name === "Reconfirm frozen main before provider mutation",
+    );
     expect(fetchIndex).toBeGreaterThanOrEqual(0);
-    expect(fetchIndex).toBeLessThan(deployIndex);
+    // The read sits ABOVE the final main reconfirm, so nothing at all stands
+    // between that check and the first provider mutation.
+    expect(fetchIndex).toBeLessThan(recomfirmIndex);
+    expect(recomfirmIndex).toBe(deployIndex - 1);
+    expect(fetchIndex).toBeGreaterThan(
+      steps.findIndex(
+        (step) => step.name === "Verify and extract private remote-restore evidence",
+      ),
+    );
     expect(steps[fetchIndex].if).toBe("env.BACKUP_PROOF_STATUS == 'required'");
     expect(steps[fetchIndex].run).toContain(
       "node scripts/fetch-d1-backup-export-record.mjs",

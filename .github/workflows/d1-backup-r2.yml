@@ -1,26 +1,27 @@
 name: D1 backup to R2
 
 on:
+  # 0509#3576: NO schedule here any more. Scheduled backup freshness moved to
+  # d1-restore-proof-auto-refresh.yml, which owns both cadences the deploy gate
+  # reads (export-only every 6 hours -> `backups/d1/export-record.json`, full
+  # drill weekly -> restore evidence). A second nightly export here would write
+  # the same fixed record key from the same D1 export for no extra coverage.
+  #
+  # The lesson that once made this schedule necessary is still honoured: this
+  # workflow was dispatch-only, and before that ran on push, where it failed at
+  # startup every time because the authorize step below demands
+  # GITHUB_EVENT_NAME = workflow_dispatch and an expected_sha that a push can
+  # never supply. That left the repo with NO scheduled backup at all (last
+  # successful run 2026-07-30), with only the drill's side effect writing to
+  # backups/d1/. So `schedule` is gone but the workflow stays as the manual
+  # break-glass backup: something else must own scheduled backups, and
+  # tests/d1-backup-workflow.test.ts pins that split.
   workflow_dispatch:
     inputs:
       expected_sha:
         description: Exact main commit authorized for the production backup
         required: true
         type: string
-  schedule:
-    # Nightly at 01:37 IST, inside the same low-traffic window the restore drill
-    # uses, and 40 minutes ahead of it so a fresh backup exists before the drill
-    # proves a restore. Both share the 0509-production-provider-mutations
-    # concurrency group, so they queue rather than collide.
-    #
-    # This workflow was dispatch-only, and before that ran on push, where it
-    # failed at startup every time: the authorize step below demanded
-    # GITHUB_EVENT_NAME = workflow_dispatch and an expected_sha that a push can
-    # never supply. The push trigger was removed to stop the noise, which left
-    # the repo with no scheduled backup at all - its last successful run was
-    # 2026-07-30. Since then the only thing writing to backups/d1/ has been the
-    # restore-evidence drill, as a side effect.
-    - cron: "7 20 * * *"
 
 concurrency:
   group: 0509-production-provider-mutations
@@ -49,10 +50,11 @@ jobs:
           test "$GITHUB_REF" = "refs/heads/main"
           test "$GITHUB_RUN_ATTEMPT" = "1"
           [[ "$GITHUB_SHA" =~ $sha_pattern ]]
-          # Same shape as d1-remote-restore-evidence.yml: a scheduled run backs
-          # up whatever main is and must NOT carry an expected_sha, so nothing
-          # can smuggle a chosen commit into an unattended run. A manual run
-          # still has to name the exact commit and have it match.
+          # A dispatch-only workflow now (0509#3576), but the `schedule` arm
+          # stays: event name is what SHAPE arrives, not which crons are
+          # declared, and an empty expected_sha must always be refused on
+          # dispatch. Scheduled backups are owned by
+          # d1-restore-proof-auto-refresh.yml.
           case "$GITHUB_EVENT_NAME" in
             schedule)
               test -z "$EXPECTED_SHA"
