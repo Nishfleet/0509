@@ -17,7 +17,7 @@ name: D1 restore proof auto-refresh
 #
 # Push-to-main restore evidence is owned solely by
 # `d1-remote-restore-evidence.yml`, which already has the push trigger.
-# This workflow keeps only the 3-hourly safety net and manual dispatch,
+# This workflow keeps only the 6-hourly safety net and manual dispatch,
 # so the two workflows no longer double-run the drill on every merge.
 # Its artifacts remain accepted via `TRUSTED_WORKFLOWS`; exact-commit
 # and freshness checks are unchanged.
@@ -26,8 +26,10 @@ name: D1 restore proof auto-refresh
 # ------------------------------------
 # Backup freshness is inherently time-based. Even with a push drill in
 # the evidence workflow, a failed run or missed webhook could strand the
-# next deploy. The 3-hourly cron at minute :17 is the named safety net: it
-# is one quarter of the deploy's 12-hour freshness window, deliberately
+# next deploy. The 6-hourly cron at minute :17 is the named safety net: it
+# is one half of the deploy's 12-hour freshness window (two shots per
+# window; each drill imports ~400k D1 rows at $1/M, so 3-hourly cost ~$25/mo
+# past the free tier, 0509#3576), deliberately
 # offset from the nightly drill (`:47`) and the busy hourly marks, and runs
 # on a hosted runner (free for this public repository) so provider work
 # never touches a self-hosted runner. This matches Nish's standing rule:
@@ -66,12 +68,12 @@ name: D1 restore proof auto-refresh
 
 on:
   schedule:
-    # 3-hourly safety net: one quarter of the deploy's 12h freshness
+    # 6-hourly safety net: one half of the deploy's 12h freshness
     # window. Minute ":17" deliberately offset so it never collides with
     # the nightly `d1-remote-restore-evidence.yml` ("47 20 * * *") or the
     # busy hourly marks where the upstream Cloudflare D1 export queue is
     # busiest.
-    - cron: "17 */3 * * *"
+    - cron: "17 */6 * * *"
   workflow_dispatch:
     inputs:
       expected_sha:
