@@ -57,16 +57,23 @@ export const INPUT_SCREEN_EVIDENCE_LEVELS = [
  * — see `docs/jev-input-screen-2026-09.md` §4. The cookbook's four numbers
  * (0.70 / 0.70 / 0.45 / 0.55) are reproduced there beside these for contrast.
  */
-export const INPUT_SCREEN_THRESHOLDS = {
+export interface InputScreenThresholds {
   /** At or above: never reaches the prompt. Security decision, tested first. */
-  injectionExcludeMin: 0.9,
+  injectionExcludeMin: number;
   /** At or above: goes to the prompt as conflicting evidence, not as fact. */
-  contradictsMin: 0.7,
+  contradictsMin: number;
   /** Below: dropped as off topic. */
-  relevantMin: 0.45,
+  relevantMin: number;
   /** At or above: kept as evidence. */
+  evidenceMin: number;
+}
+
+export const INPUT_SCREEN_THRESHOLDS: InputScreenThresholds = {
+  injectionExcludeMin: 0.9,
+  contradictsMin: 0.7,
+  relevantMin: 0.45,
   evidenceMin: 1.5,
-} as const;
+};
 
 /** Where a passage came from. Never customer data — public pages and ads. */
 export type InputScreenSource = "ad_copy" | "landing_page" | "mention" | "digest";
@@ -285,7 +292,7 @@ export function validateInputScreenAnswer(raw: unknown): InputScreenAnswers {
  */
 export function routeInputScreenPassage(
   answers: Pick<InputScreenAnswers, "injection" | "contradicts" | "relevant" | "evidenceValue">,
-  thresholds: typeof INPUT_SCREEN_THRESHOLDS = INPUT_SCREEN_THRESHOLDS,
+  thresholds: InputScreenThresholds = INPUT_SCREEN_THRESHOLDS,
 ): InputScreenRoute {
   if (answers.injection >= thresholds.injectionExcludeMin) return "exclude";
   if (answers.contradicts >= thresholds.contradictsMin) return "conflicting_evidence";

@@ -64,8 +64,10 @@ function fakeAi(
   };
 }
 
-function requestOf(ai: InputScreenAi) {
-  return ai.run("m", { state: null, questions: null });
+function requestOf(ai: InputScreenAi): Promise<{ answers: Record<string, unknown> }> {
+  return ai.run("m", { state: null, questions: null }) as Promise<{
+    answers: Record<string, unknown>;
+  }>;
 }
 
 describe("input screen request (issue #3621)", () => {
@@ -259,7 +261,7 @@ describe("input screen rows", () => {
 
   it("defaults the model when the service does not report one", async () => {
     const { row } = await decideInputScreen(
-      { async run() { return { answers: (await requestOf(fakeAi()))!.answers }; } },
+      { async run() { return { answers: (await requestOf(fakeAi())).answers }; } },
       { passage: PASSAGE },
     );
     expect(row.model).toBe(INPUT_SCREEN_API_MODEL);

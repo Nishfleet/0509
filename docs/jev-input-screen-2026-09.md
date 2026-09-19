@@ -138,15 +138,21 @@ Evidence floor sweep (Score mean on the three levels):
 |---:|---:|---:|---|
 | 0.50 | 7 | 0 | none |
 | 1.00 | 7 | 0 | none |
-| 1.20 | 5 | 2 | none |
+| 1.20 | 6 | 1 | none |
 | **1.50** | **5** | **2** | **none** |
-| 1.75 | 4 | 3 | `ad-library:759390623731858` |
+| 1.75 | 5 | 2 | none |
 | 2.00 | 2 | 5 | `ad-library:759390623731858`, `landing-page:nykaa.com/glow-serum` |
 
-1.5 is the largest floor that drops the boilerplate probe (1.24) while dropping **no**
-captured row. 1.75 starts eating a real Ad Library creative (1.79). That is the measured
-basis for 1.5, and it is why the number is not the RAG cookbook's 0.55: on this scale
-0.55 keeps everything, so it measures nothing.
+The two probes the floor is meant to drop are the boilerplate (1.24) and the
+contradiction probe (1.15); the captured rows start at 1.79. Every floor in the
+open interval (1.24, 1.79] drops both probes and **no** captured row, so the sweep
+does not choose between them; the code keeps a round **1.5** inside that gap. It is
+not the largest such floor (1.75 also qualifies) and it is a *picked* floor, not an
+optimised one — seven rows cannot optimise a threshold, and §6 says so plainly.
+
+The next captured row down is the Ad Library creative at 1.79, and a floor of 2.00
+is what first drops it. That is why 1.5 is not the RAG cookbook's 0.55: on this
+scale 0.55 keeps everything, so it measures nothing.
 
 The contradiction floor stays at the cookbook's 0.70: the planted denial scores 0.97 and
 the highest captured row is 0.56, so 0.70 sits in the middle of a clear gap. The

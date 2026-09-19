@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   INPUT_SCREEN_QUESTIONS,
+  sweepEvidenceThresholds,
   type InputScreenRow,
 } from "../app/lib/input-screen-jev.server";
 
@@ -101,6 +102,39 @@ describe("input-screen evidence (issue #3621)", () => {
     }
     for (const row of rows.filter((row) => !row.synthetic)) {
       expect(row.planted).toBeUndefined();
+    }
+  });
+
+  it("recomputes the report's evidence floor sweep from the committed rows", () => {
+    // The report's §4 table is a claim about these rows. Recompute it with the
+    // same function the bench script uses, then parse the table out of the
+    // report and compare it cell for cell. A re-worded or stale table is exactly
+    // the drift this guard exists to catch (found by review on #3632).
+    const sweep = sweepEvidenceThresholds(rows);
+    expect(sweep).toEqual([
+      { threshold: 0.5, kept: 7, dropped: 0, realDropped: [] },
+      { threshold: 1.0, kept: 7, dropped: 0, realDropped: [] },
+      { threshold: 1.2, kept: 6, dropped: 1, realDropped: [] },
+      { threshold: 1.5, kept: 5, dropped: 2, realDropped: [] },
+      { threshold: 1.75, kept: 5, dropped: 2, realDropped: [] },
+      { threshold: 2.0, kept: 2, dropped: 5, realDropped: ["ad-library:759390623731858", "landing-page:nykaa.com/glow-serum"] },
+    ]);
+
+    // Parse the report's evidence sweep table. Cell form: | **1.50** | **5** | **2** | none |
+    const section = report.split("Evidence floor sweep")[1] ?? "";
+    const documented = section
+      .split("\n")
+      .map((line) => line.replace(/\*/g, "").match(/^\| ([0-9]+\.[0-9]+) \| ([0-9]+) \| ([0-9]+) \|/))
+      .filter((match): match is RegExpMatchArray => match !== null)
+      .map((match) => ({ threshold: Number(match[1]), kept: Number(match[2]), dropped: Number(match[3]) }));
+    expect(documented).toEqual(
+      sweep.map((row) => ({ threshold: row.threshold, kept: row.kept, dropped: row.dropped })),
+    );
+    // The only rows the floor may drop are the probes; a captured row in the
+    // "dropped" cell at any documented floor would make the floor statement false.
+    for (const row of documented) {
+      const match = sweep.find((entry) => entry.threshold === row.threshold)!;
+      if (row.dropped < 5) expect(match.realDropped).toEqual([]);
     }
   });
 
