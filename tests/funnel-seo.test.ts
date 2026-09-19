@@ -148,6 +148,7 @@ describe("structured data (JSON-LD)", () => {
     const marketingSource = readFileSync("app/routes/marketing.tsx", "utf8");
     expect(marketingSource).toContain("jsonLdScriptProps(organizationJsonLd())");
     expect(marketingSource).toContain("jsonLdScriptProps(webSiteJsonLd())");
+    expect(marketingSource).toContain("jsonLdScriptProps(webApplicationJsonLd())");
     expect(marketingSource).toContain("faqPageJsonLd([");
   });
 });

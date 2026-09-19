@@ -539,6 +539,91 @@ export function webSiteJsonLd() {
 }
 
 /**
+ * schema.org WebApplication for Five to Nine on `/` (issue #3372).
+ *
+ * The homepage already says the product is free. This entity is the
+ * machine-readable twin of that claim: `offers.price` is `"0"` with
+ * `priceCurrency: "USD"` (Google's SoftwareApplication reference shape)
+ * and `applicationCategory: "BusinessApplication"`. Organization and
+ * WebSite stay priceless — live checkout amounts still live in Dodo.
+ */
+export function webApplicationJsonLd() {
+  return {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    name: SITE_NAME,
+    url: SITE_ORIGIN,
+    applicationCategory: "BusinessApplication",
+    offers: {
+      "@type": "Offer",
+      price: "0",
+      priceCurrency: "USD",
+    },
+  } as const;
+}
+
+/** Numeric offer copied from a `/compare/*` page's visible list price. */
+export type ComparedProductOffer = {
+  priceCurrency: "USD" | "EUR";
+  price?: string;
+  lowPrice?: string;
+  highPrice?: string;
+};
+
+/** Star rating copied from a `/compare/*` page's visible rating string. */
+export type ComparedProductRating = {
+  ratingValue: string;
+  bestRating?: string;
+  worstRating?: string;
+};
+
+function comparedSoftwareOfferJsonLd(offer: ComparedProductOffer) {
+  if (offer.lowPrice !== undefined && offer.highPrice !== undefined) {
+    return {
+      "@type": "AggregateOffer" as const,
+      lowPrice: offer.lowPrice,
+      highPrice: offer.highPrice,
+      priceCurrency: offer.priceCurrency,
+    };
+  }
+  return {
+    "@type": "Offer" as const,
+    price: offer.price,
+    priceCurrency: offer.priceCurrency,
+  };
+}
+
+function comparedSoftwareApplicationJsonLd(input: {
+  name: string;
+  applicationCategory?: string;
+  offer?: ComparedProductOffer;
+  rating?: ComparedProductRating;
+}) {
+  return {
+    "@type": "SoftwareApplication" as const,
+    name: input.name,
+    ...(input.applicationCategory
+      ? { applicationCategory: input.applicationCategory }
+      : {}),
+    ...(input.offer ? { offers: comparedSoftwareOfferJsonLd(input.offer) } : {}),
+    ...(input.rating
+      ? {
+          aggregateRating: {
+            "@type": "AggregateRating" as const,
+            ratingValue: input.rating.ratingValue,
+            ...(input.rating.bestRating
+              ? { bestRating: input.rating.bestRating }
+              : {}),
+            ...(input.rating.worstRating
+              ? { worstRating: input.rating.worstRating }
+              : {}),
+          },
+        }
+      : {}),
+  };
+}
+
+/**
  * schema.org FAQPage. Pass every FAQ block on the page in one call — Google
  * expects a single FAQPage entity per page, so the landing page combines the
  * product and billing FAQ entries into one mainEntity list.
@@ -640,8 +725,11 @@ export function itemListJsonLd(entries: ReadonlyArray<ItemListJsonLdEntry>) {
  * - `aboutName`: the subject of the page when it is about a specific brand
  *   (e.g. the /ads/:domain brand pages). Must match a name the page shows.
  * - `comparedProductName`: the competitor product a `/compare/*` page is
- *   about. Emitted as `SoftwareApplication` `mainEntity` with only the name
- *   the page already shows — never ratings, prices, or review counts.
+ *   about. Emitted as `SoftwareApplication` `mainEntity`. Optional
+ *   `comparedProductOffer` / `comparedProductRating` copy the same list
+ *   price and rating the page already shows (issue #3372) — numeric
+ *   `price` plus `priceCurrency`, never a `$` in the JSON-LD, and never
+ *   an invented `reviewCount`.
  */
 export function webPageJsonLd(input: {
   name: string;
@@ -651,6 +739,9 @@ export function webPageJsonLd(input: {
   datePublished?: string;
   aboutName?: string;
   comparedProductName?: string;
+  comparedProductCategory?: string;
+  comparedProductOffer?: ComparedProductOffer;
+  comparedProductRating?: ComparedProductRating;
   /**
    * A `Dataset` (or other `CreativeWork`) this page has as a citable part.
    * The `/ads/:domain` brand page sets this to its Offer Timeline `Dataset`
@@ -679,10 +770,12 @@ export function webPageJsonLd(input: {
       : {}),
     ...(input.comparedProductName
       ? {
-          mainEntity: {
-            "@type": "SoftwareApplication",
+          mainEntity: comparedSoftwareApplicationJsonLd({
             name: input.comparedProductName,
-          },
+            applicationCategory: input.comparedProductCategory,
+            offer: input.comparedProductOffer,
+            rating: input.comparedProductRating,
+          }),
         }
       : {}),
     ...(input.hasPart ? { hasPart: input.hasPart } : {}),

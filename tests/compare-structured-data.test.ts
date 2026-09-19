@@ -114,10 +114,27 @@ describe("every /compare/* page emits schema.org JSON-LD", () => {
     }
 
     const serialized = JSON.stringify(blocks);
-    expect(serialized).not.toMatch(/aggregateRating|reviewCount|ratingValue/i);
-    expect(serialized).not.toContain('"@type":"AggregateRating"');
-    expect(serialized).not.toContain('"@type":"Offer"');
+    const offers = mainEntity?.offers as Record<string, unknown> | undefined;
+    if (offers) {
+      expect(offers["@type"]).toMatch(/^(Offer|AggregateOffer)$/);
+      expect(typeof offers.priceCurrency).toBe("string");
+      for (const amount of [offers.price, offers.lowPrice, offers.highPrice]) {
+        if (typeof amount !== "string") continue;
+        if (amount === "0") {
+          expect(markup.toLowerCase()).toMatch(/free/);
+        } else {
+          expect(markup).toContain(amount);
+        }
+      }
+    }
+    const rating = mainEntity?.aggregateRating as Record<string, unknown> | undefined;
+    if (rating) {
+      expect(rating["@type"]).toBe("AggregateRating");
+      expect(markup).toContain(String(rating.ratingValue));
+      if (rating.bestRating) expect(markup).toContain(String(rating.bestRating));
+    }
     expect(serialized).not.toContain('"@type":"Review"');
+    expect(serialized).not.toMatch(/reviewCount/i);
     expect(serialized).not.toMatch(/[$₹€£]\s?\d/);
   });
 

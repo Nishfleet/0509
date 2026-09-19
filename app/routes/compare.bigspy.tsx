@@ -141,6 +141,12 @@ export default function CompareBigspyRoute() {
             description: pageDescription,
             pathname: "/compare/bigspy",
             comparedProductName: "BigSpy",
+            comparedProductCategory: "BusinessApplication",
+            comparedProductOffer: {
+              lowPrice: "69",
+              highPrice: "499",
+              priceCurrency: "USD",
+            },
           }),
         )}
       />

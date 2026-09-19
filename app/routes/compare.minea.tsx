@@ -135,6 +135,12 @@ export default function CompareMineaRoute() {
             description: pageDescription,
             pathname: "/compare/minea",
             comparedProductName: "Minea",
+            comparedProductCategory: "BusinessApplication",
+            comparedProductOffer: {
+              lowPrice: "49",
+              highPrice: "199",
+              priceCurrency: "USD",
+            },
           }),
         )}
       />

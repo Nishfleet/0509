@@ -129,6 +129,12 @@ export default function CompareAdspyderRoute() {
             description: pageDescription,
             pathname: "/compare/adspyder",
             comparedProductName: "AdSpyder",
+            comparedProductCategory: "BusinessApplication",
+            comparedProductOffer: {
+              lowPrice: "10",
+              highPrice: "99",
+              priceCurrency: "USD",
+            },
           }),
         )}
       />
