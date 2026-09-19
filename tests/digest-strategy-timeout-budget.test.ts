@@ -41,6 +41,6 @@ describe("digest strategy call budget", () => {
 		await vi.advanceTimersByTimeAsync(1);
 		expect(settled).toBe(true);
 		await expect(result).resolves.toBeNull();
-		expect(run.mock.calls.some((call) => call[0] === DIGEST_STRATEGY_MODEL)).toBe(true);
+		expect((run.mock.calls as unknown as unknown[][]).some((call) => call[0] === DIGEST_STRATEGY_MODEL)).toBe(true);
 	});
 });
