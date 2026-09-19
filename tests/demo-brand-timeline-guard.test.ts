@@ -5,6 +5,8 @@ import {
   ISSUE_BODY_MARKER,
   TIMELINE_AS_OF_MARKER,
   TIMELINE_LEDGER_ENTRY_MARKER,
+  TIMELINE_SHELL_RETRY_ATTEMPTS,
+  TIMELINE_SHELL_RETRY_DELAY_SECONDS,
   buildCorpusQuery,
   buildGhIssueCommand,
   buildHttpIssueBody,
@@ -12,7 +14,9 @@ import {
   buildTimelineUrl,
   canonicalUrlBelongsToDomain,
   countRowsPerBrand,
+  isRetryableShellStatus,
   parseArgs,
+  probeTimelineUrls,
   rowsFromWranglerJson,
   validateBrandCounts,
   validateTimelineProbe,
@@ -273,6 +277,94 @@ describe("canary-demo-brand-timeline (#1449)", () => {
         expect(body).toContain("`allbirds.com`: HTTP 200");
         expect(body).toContain("2026-09-07T11:40:04.000Z");
         expect(body).toContain("issue #1899 guard");
+      });
+    });
+
+    describe("shell retry (issue #3454)", () => {
+      const goodPage = `<html>As of 2026-09-14<div class="f9-timeline-entry">dated state</div></html>`;
+      // The shell the route renders for degraded/empty reads: "As of" label
+      // present, no rendered ledger entry (the exact 2026-09-14 00:40Z trip).
+      const emptyShell = `<html><label for="offer-timeline-asof">As of</label>collecting — no offer states recorded yet</html>`;
+
+      it("defaults to 5 attempts with a 10s backoff", () => {
+        expect(TIMELINE_SHELL_RETRY_ATTEMPTS).toBe(5);
+        expect(TIMELINE_SHELL_RETRY_DELAY_SECONDS).toBe(10);
+      });
+
+      it("isRetryableShellStatus: only 200-body failures are retryable", () => {
+        expect(isRetryableShellStatus(200)).toBe(true);
+        expect(isRetryableShellStatus(410)).toBe(false);
+        expect(isRetryableShellStatus(500)).toBe(false);
+        expect(isRetryableShellStatus(0)).toBe(false);
+      });
+
+      it("retries a 200-shell failure and passes when a later attempt renders the ledger", () => {
+        let allbirdsFetches = 0;
+        const fetchOnce = ({ url }: { url: string }) => {
+          if (url.endsWith("/timeline/allbirds.com")) {
+            allbirdsFetches += 1;
+            return allbirdsFetches < 3
+              ? { status: 200, body: emptyShell, error: null }
+              : { status: 200, body: goodPage, error: null };
+          }
+          return { status: 200, body: goodPage, error: null };
+        };
+        const { results, validation } = probeTimelineUrls({
+          origin: "https://0509.io",
+          retryDelaySeconds: 0,
+          fetchOnce,
+        });
+        expect(validation.verdict).toBe("pass");
+        expect(validation.failures).toEqual([]);
+        const allbirds = results.find((r) => r.domain === "allbirds.com");
+        expect(allbirds?.attempts).toBe(3);
+        const nike = results.find((r) => r.domain === "nike.com");
+        expect(nike?.attempts).toBe(1);
+      });
+
+      it("fails loud after the attempt budget when every fetch renders the shell", () => {
+        const fetchOnce = () => ({ status: 200, body: emptyShell, error: null });
+        const { results, validation } = probeTimelineUrls({
+          origin: "https://0509.io",
+          retryAttempts: 3,
+          retryDelaySeconds: 0,
+          fetchOnce,
+        });
+        expect(validation.verdict).toBe("fail");
+        expect(results.every((r) => r.attempts === 3)).toBe(true);
+        expect(
+          validation.failures.every((f) => f.includes("after 3 attempts")),
+        ).toBe(true);
+      });
+
+      it("does not retry a 410 (proof-gate dark state) — single attempt", () => {
+        const fetchOnce = () => ({ status: 410, body: "", error: null });
+        const { results, validation } = probeTimelineUrls({
+          origin: "https://0509.io",
+          retryAttempts: 5,
+          retryDelaySeconds: 0,
+          fetchOnce,
+        });
+        expect(validation.verdict).toBe("fail");
+        expect(results.every((r) => r.attempts === 1)).toBe(true);
+        expect(
+          validation.failures.every((f) => !f.includes("after ")),
+        ).toBe(true);
+      });
+
+      it("does not retry a transport error — single attempt, probe-failed reason", () => {
+        const fetchOnce = () => ({ status: 0, body: "", error: "curl: (28) timed out" });
+        const { results, validation } = probeTimelineUrls({
+          origin: "https://0509.io",
+          retryAttempts: 5,
+          retryDelaySeconds: 0,
+          fetchOnce,
+        });
+        expect(validation.verdict).toBe("fail");
+        expect(results.every((r) => r.attempts === 1)).toBe(true);
+        expect(
+          validation.failures.every((f) => f.includes("probe failed")),
+        ).toBe(true);
       });
     });
   });
