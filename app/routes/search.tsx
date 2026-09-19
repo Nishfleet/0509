@@ -113,6 +113,7 @@ import {
   formatCreativeFormatLabel,
   formatDiscoverySummary,
   formatEmptyResultHeadline,
+  formatCountryFilterDeliveryNote,
   formatHookLabel,
   formatOfferLabel,
   formatProofCaptureLabel,
@@ -2126,6 +2127,16 @@ export default function SearchRoute() {
   // telling" — it names the market the search ran in, which the H1 no longer
   // does. Idle (no query) keeps the "Public Meta Ad Library search…" line.
   const searchScopeAnnotation = formatSearchScopeAnnotation(data.filters.country);
+  // Issue #3613: the `country=all` default discloses the EU/UK served scope
+  // in the header annotation, but a named-country filter rendered a silent
+  // empty wall — no delivery note, no explanation — one filter-click in.
+  // Every country-filtered result wall with no ads to show now carries the
+  // same honest served-scope fact, naming the selected market. Null for the
+  // unscoped default and a missing country, so the annotation is not told
+  // twice.
+  const countryFilterDeliveryNote = formatCountryFilterDeliveryNote(
+    data.filters.country,
+  );
   const headerContext = instrumentUsed
     ? searchScopeAnnotation
     : rootData.session
@@ -2785,6 +2796,15 @@ export default function SearchRoute() {
                           </div>
                         ) : null}
                       </div>
+                    ) : null}
+                    {/* Issue #3613: a country-filtered wall with no ads to show
+                        names the selected market and states the same Meta
+                        EU/UK delivery fact the country=all default carries, so
+                        the filter never lands on a bare wall with zero cards
+                        and zero explanation. The state's own honest sentence
+                        (checking / delayed / not evidence) renders above it. */}
+                    {countryFilterDeliveryNote ? (
+                      <p className="f9-wk-note">{countryFilterDeliveryNote}</p>
                     ) : null}
                     {/* Issue 2137: while an anonymous search is warming and
                         the poll budget is still live, sell the sample brief

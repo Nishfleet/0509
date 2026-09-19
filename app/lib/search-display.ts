@@ -80,6 +80,30 @@ export const ALL_COUNTRIES_SERVED_SCOPE_DISCLOSURE =
   "commercial ads are shown only where Meta delivered them in the EU/UK";
 
 /**
+ * Honest served-scope note for a country-filtered /search result wall that
+ * has no ads to show (issue #3613). The `country=all` default and the
+ * /ads/:brand pages already carry `ALL_COUNTRIES_SERVED_SCOPE_DISCLOSURE`,
+ * but a named-country empty page shipped neither the delivery note nor any
+ * explanation — a silent dead wall one filter-click in. This names the
+ * selected market and states the same Meta EU/UK delivery fact, so a buyer
+ * who picked a country understands why the wall may be empty (the Ad
+ * Library API surfaces commercial ads only where Meta delivered them in the
+ * EU/UK). Returns null for the unscoped `all` default and for a missing
+ * country, where the header annotation already carries the disclosure.
+ */
+export function formatCountryFilterDeliveryNote(
+  country: string | null | undefined,
+): string | null {
+  const market = formatSearchMarketScope(country);
+  if (!market) {
+    return null;
+  }
+  // `formatSearchMarketScope` returns "in <canonical>"; the note reads as a
+  // standalone sentence naming that market.
+  return `In ${market.slice("in ".length)}, ${ALL_COUNTRIES_SERVED_SCOPE_DISCLOSURE}.`;
+}
+
+/**
  * H1 scope phrase for a shared `/search` URL. Named markets stay "in India"
  * / "in United States". `country=all` renders the honest served-scope
  * disclosure (`ALL_COUNTRIES_SERVED_SCOPE_DISCLOSURE`) — the API's commercial
