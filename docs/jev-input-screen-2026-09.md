@@ -6,18 +6,18 @@ Issue: Nishfleet/0509#3621 (epic Nishfleet/0509#3530). Docs followed:
 [Noul](https://docs.typesafe.ai/primitives/noul.md), [Score](https://docs.typesafe.ai/primitives/score.md),
 [API](https://docs.typesafe.ai/api.md).
 
-**Measurement only. No production caller, no behaviour change, nothing wired into
-generation.** `app/lib/input-screen-jev.server.ts` decides nothing and drops nothing;
-`runGuardedGeneration` and the three call sites named in the issue
-(`search-steal-summary.server.ts`, `counter-brief.server.ts`,
-`digest-strategy.server.ts`) are untouched. The row shape is the fleet one
+**Measurement only. Shadow callers at steal-summary and digest-strategy log
+rows and never exclude a passage; generation is unchanged.** `app/lib/input-screen-jev.server.ts` decides nothing and drops nothing;
+`runGuardedGeneration` is untouched. `search-steal-summary.server.ts` and
+`digest-strategy.server.ts` pass `env.AI` into `shadowLogInputScreen`.
+`counter-brief.server.ts` is not wired. The row shape is the fleet one
 (`{ts, site, ref, state_sha256, answers, probabilities, usage, ms}`) so
 Nishfleet/fleet-ops#7754 can score it later.
 
 ## 1. The runtime path in the issue cannot run production
 
-The issue names the Workers path `env.AI.run("typesafe/jev", …)`. Run live this run
-with the deploy token against the account's own AI gateway:
+The issue names the Workers path `env.AI.run("typesafe/jev", …)`. Re-verified live
+2026-09-19 with the deploy token against the account's own AI gateway:
 
 ```
 POST https://api.cloudflare.com/client/v4/accounts/<acct>/ai/run   model=typesafe/jev
@@ -234,13 +234,17 @@ could be settled without production.
   pre-`noul` key. The run therefore went to the TypeSafe API directly. That is an
   inference about the proxy's schema from one error, not a read of its config.
 
-## 7. Switch-on (not done)
+## 7. Switch-on (shadow wired; flip not done)
 
-Nothing calls the screen. To flip it, a caller would:
+Shadow callers now pass `env.AI` into `shadowLogInputScreen` at steal-summary
+(search-selection) and digest-strategy. They log, drop nothing, and share an
+isolate circuit that opens on the unpaid-gateway 402 so generation does not
+stack failed Jev round-trips. `counter-brief.server.ts` is not wired.
 
-1. pass `env.AI` (Workers path) or the host client into `shadowLogInputScreen` at the
-   three call sites, run-only first (log, drop nothing);
-2. collect real rows until the floors have precision/recall on real traffic;
+To flip exclusion later, a caller would:
+
+1. ~~pass `env.AI` into `shadowLogInputScreen` at the three call sites, run-only first (log, drop nothing)~~ — steal-summary and digest-strategy done (issue #3648);
+2. collect real rows until the floors have precision/recall on real traffic — still blocked by the unpaid Workers AI binding (402 / error 2021);
 3. then change routing to drop at `injectionExcludeMin` and below `evidenceMin`.
 
 Until step 2 has real rows, step 3 is a guess. The helper is written so step 3 is a

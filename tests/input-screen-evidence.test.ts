@@ -235,7 +235,8 @@ describe("input-screen evidence (issue #3621)", () => {
 
   it("the report states the measurement-only verdict and the measured floors", () => {
     expect(report).toMatch(/Measurement only/);
-    expect(report).toMatch(/no production caller/i);
+    expect(report).toMatch(/never exclude/i);
+    expect(report).toContain("shadowLogInputScreen");
     expect(report).toContain("injectionExcludeMin");
     expect(report).toContain("evidenceMin");
     expect(report).toContain("env.AI.run(\"typesafe/jev\"");

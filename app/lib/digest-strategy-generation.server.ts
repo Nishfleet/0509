@@ -109,6 +109,7 @@ export async function settleDigestStrategyGeneration(
 					periodStart: input.periodStart,
 					periodEnd: input.periodEnd,
 					timeoutMs: remainingBudgetMs,
+					digestRunId: input.digestRunId,
 				})
 			: null;
 	const readySummary: Record<string, unknown> = {

@@ -6,14 +6,19 @@
  * `digest-strategy.server.ts`; #3548 filters spam and bots, nothing screens for
  * instructions aimed at the model.
  *
- * This module is MEASUREMENT ONLY. It has no production caller: it decides
- * nothing, drops nothing, and is not on any request path. `runGuardedGeneration`
- * is untouched. The production Worker path named in the issue
- * (`env.AI.run("typesafe/jev", …)`) cannot be exercised at all on the current
- * Cloudflare account (no AI credits — see `docs/jev-input-screen-2026-09.md`),
- * so the measurement runs through the paid host path
- * (`/jev` LiteLLM pass-through and the TypeSafe HTTP API) and the row shape is
- * the fleet one so fleet-ops#7754 can score it later.
+ * This module is MEASUREMENT ONLY: it decides nothing and drops nothing.
+ * Shadow callers at `search-steal-summary.server.ts` and
+ * `digest-strategy.server.ts` pass `env.AI` into `shadowLogInputScreen` so a
+ * row can appear from a real search-selection or digest run. They log and
+ * never exclude a passage. `runGuardedGeneration` is untouched.
+ * `counter-brief.server.ts` is not wired — the issue asked for one of the
+ * three sites; those two are the named capture paths.
+ *
+ * The production Worker path (`env.AI.run("typesafe/jev", …)`) still cannot
+ * return rows on this Cloudflare account (no AI credits — see
+ * `docs/jev-input-screen-2026-09.md`). An unpaid binding opens an isolate
+ * circuit so later passages skip instead of stacking 402s onto generation.
+ * Host-path measurement still uses the paid TypeSafe HTTP API.
  *
  * Question decomposition follows the TypeSafe RAG-passages cookbook
  * (https://docs.typesafe.ai/cookbooks/classifying_rag_passages.md): one request
@@ -28,14 +33,71 @@
  * a literal, so re-routing every stored row costs no API call.
  */
 
+import { promiseWithTimeout } from "~/lib/fetch-timeout.server";
+
 /** Shared site name for every shadow row. */
 export const INPUT_SCREEN_SITE = "input-screen";
+
+/** Issue that asked for Worker-path rows from real search-selection / digest runs. */
+export const INPUT_SCREEN_ISSUE_REF = "Nishfleet/0509#3648";
 
 /** Workers AI binding model id named in the issue. */
 export const INPUT_SCREEN_BINDING_MODEL = "typesafe/jev";
 
 /** Default model alias on the TypeSafe HTTP API / host pass-through. */
 export const INPUT_SCREEN_API_MODEL = "jev-latest";
+
+/**
+ * Isolate-scoped circuit. Once Workers AI has told us the Jev binding is
+ * unpaid, later shadow calls in this isolate skip instead of stacking 402s
+ * onto steal-summary / digest latency.
+ */
+let unpaidBinding = false;
+
+/** Test hook: each unit test starts with a closed circuit. */
+export function resetInputScreenBindingCircuitForTests(): void {
+  unpaidBinding = false;
+}
+
+export function inputScreenBindingCircuitIsOpen(): boolean {
+  return unpaidBinding;
+}
+
+export class InputScreenUnpaidBindingError extends Error {
+  constructor(message = "Workers AI typesafe/jev unpaid (insufficient balance)") {
+    super(message);
+    this.name = "InputScreenUnpaidBindingError";
+  }
+}
+
+function unpaidBindingHaystack(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "string" || typeof value === "number") return String(value);
+  if (value instanceof Error) {
+    return [value.name, value.message, unpaidBindingHaystack(value.cause)].join(" ");
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+/** True when Cloudflare (or a wrapper) reported the unpaid-gateway 402/2021. */
+export function isUnpaidWorkersAiJev(value: unknown): boolean {
+  if (value instanceof InputScreenUnpaidBindingError) return true;
+  const text = unpaidBindingHaystack(value);
+  return (
+    /insufficient balance/i.test(text) ||
+    /add money to your gateway/i.test(text) ||
+    /\bBYOK\b/.test(text) ||
+    /HTTP\s*402/i.test(text)
+  );
+}
+
+function openUnpaidBindingCircuit(): void {
+  unpaidBinding = true;
+}
 
 /** Question ids. Code owns these; the model never sees them. */
 export const INPUT_SCREEN_QUESTIONS = {
@@ -357,8 +419,10 @@ export interface InputScreenInput {
   passage: InputScreenPassage;
   brandFacts?: readonly string[];
   brand?: string;
-  /** Traceability ref, e.g. Nishfleet/0509#3621. */
+  /** Traceability ref, e.g. Nishfleet/0509#3648. */
   ref?: string;
+  /** Bound the Workers AI call so shadow cannot outlive generation. */
+  timeoutMs?: number;
 }
 
 /** Ask the screen, validate, and build both the answers and the log row. */
@@ -369,7 +433,14 @@ export async function decideInputScreen(
 ): Promise<{ answers: InputScreenAnswers; row: InputScreenRow }> {
   const { state, questions } = buildInputScreenRequest(input);
   const startedAt = Date.now();
-  const raw = await ai.run(model, { state, questions });
+  const run = ai.run(model, { state, questions });
+  const raw =
+    typeof input.timeoutMs === "number" && input.timeoutMs > 0
+      ? await promiseWithTimeout(run, input.timeoutMs, "input screen timed out.")
+      : await run;
+  if (isUnpaidWorkersAiJev(raw)) {
+    throw new InputScreenUnpaidBindingError(unpaidBindingHaystack(raw));
+  }
   const ms = Date.now() - startedAt;
   const answers = validateInputScreenAnswer(raw);
   const row: InputScreenRow = {
@@ -411,23 +482,63 @@ export async function shadowLogInputScreen(
   input: InputScreenInput,
   log: (row: InputScreenRow) => void = logInputScreenRow,
 ): Promise<InputScreenRow | null> {
-  if (!ai) return null;
+  if (!ai || unpaidBinding) return null;
   try {
-    const { row } = await decideInputScreen(ai, input);
+    const { row } = await decideInputScreen(ai, input, INPUT_SCREEN_BINDING_MODEL);
     log(row);
     return row;
   } catch (error) {
+    const unpaid = isUnpaidWorkersAiJev(error);
+    if (unpaid) openUnpaidBindingCircuit();
     console.info(
       JSON.stringify({
-        event: "input_screen_shadow_failed",
+        event: unpaid ? "input_screen_binding_unpaid" : "input_screen_shadow_failed",
         ts: new Date().toISOString(),
         site: INPUT_SCREEN_SITE,
-        ref: input.ref ?? "Nishfleet/0509#3621",
+        ref: input.ref ?? INPUT_SCREEN_ISSUE_REF,
         passage_id: input.passage.id,
         message: error instanceof Error ? error.message : String(error),
       }),
     );
     return null;
+  }
+}
+
+/**
+ * Screen every passage, sequentially, under one shared budget. First unpaid
+ * 402 opens the isolate circuit and the rest skip. Never throws.
+ */
+export async function shadowLogInputScreenPassages(
+  ai: InputScreenAi | undefined,
+  passages: readonly InputScreenPassage[],
+  options: {
+    ref?: string;
+    brand?: string;
+    brandFacts?: readonly string[];
+    timeoutMs?: number;
+    log?: (row: InputScreenRow) => void;
+  } = {},
+): Promise<void> {
+  if (!ai || passages.length === 0 || unpaidBinding) return;
+  const started = Date.now();
+  const budget = options.timeoutMs;
+  for (const passage of passages) {
+    if (!passage.text) continue;
+    const remaining =
+      typeof budget === "number" ? budget - (Date.now() - started) : undefined;
+    if (typeof remaining === "number" && remaining <= 0) break;
+    await shadowLogInputScreen(
+      ai,
+      {
+        passage,
+        ref: options.ref ?? INPUT_SCREEN_ISSUE_REF,
+        brand: options.brand,
+        brandFacts: options.brandFacts,
+        timeoutMs: remaining,
+      },
+      options.log,
+    );
+    if (unpaidBinding) break;
   }
 }
 

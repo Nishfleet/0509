@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { DIGEST_STRATEGY_MODEL } from "~/lib/digest-strategy";
+import { resetInputScreenBindingCircuitForTests } from "~/lib/input-screen-jev.server";
+
 /**
  * Wiring tests for the AI weekly strategy paragraph in runDigests:
  * generation gating (plan/cadence), persistence BEFORE delivery, and the
@@ -170,6 +173,7 @@ vi.resetModules();
 afterEach(() => {
 vi.restoreAllMocks();
 vi.resetModules();
+resetInputScreenBindingCircuitForTests();
 });
 
 describe("weekly digest strategy paragraph flow", () => {
@@ -187,7 +191,7 @@ const { runWeeklyDigests } = await import("~/lib/monitoring.server");
 const result = await runWeeklyDigests(envWith(aiRun), { periodEnd: "2026-07-13T05:00:00.000Z" });
 
 expect(result).toBe(1);
-expect(aiRun).toHaveBeenCalledTimes(1);
+expect(aiRun.mock.calls.filter((call) => call[0] === DIGEST_STRATEGY_MODEL)).toHaveLength(1);
 expect(data.createDigestRun).toHaveBeenCalledWith(
 expect.anything(),
 "user-1",
@@ -309,7 +313,7 @@ vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
 const { runWeeklyDigests } = await import("~/lib/monitoring.server");
 await expect(runWeeklyDigests(envWith(aiRun), { periodEnd: "2026-07-13T05:00:00.000Z" })).resolves.toBe(1);
 
-const request = aiRun.mock.calls[0]?.[1] as {
+const request = aiRun.mock.calls.find((call) => call[0] === DIGEST_STRATEGY_MODEL)?.[1] as {
 messages: Array<{ role: string; content: string }>;
 };
 const userPrompt = request.messages.find((message) => message.role === "user")?.content ?? "";
@@ -499,7 +503,7 @@ const { runWeeklyDigests } = await import("~/lib/monitoring.server");
 const result = await runWeeklyDigests(envWith(aiRun), { periodEnd: "2026-07-13T05:00:00.000Z" });
 
 expect(result).toBe(1);
-expect(aiRun).toHaveBeenCalledTimes(1);
+expect(aiRun.mock.calls.filter((call) => call[0] === DIGEST_STRATEGY_MODEL)).toHaveLength(1);
 expect(data.updateDigestRunSummary).not.toHaveBeenCalled();
 expect(data.completeDigestStrategyGeneration).toHaveBeenCalledWith(
 expect.anything(),

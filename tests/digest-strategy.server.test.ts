@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DIGEST_STRATEGY_MODEL, readDigestStrategyNote } from "~/lib/digest-strategy";
 import {
@@ -6,10 +6,25 @@ import {
 	buildWeeklyStrategyParagraph,
 	validateStrategyParagraph,
 } from "~/lib/digest-strategy.server";
+import {
+	INPUT_SCREEN_BINDING_MODEL,
+	resetInputScreenBindingCircuitForTests,
+} from "~/lib/input-screen-jev.server";
 
 const GOOD_PARAGRAPH =
 	"Nykaa refreshed its landing page discount while boAt introduced new festival-focused ads. " +
 	"Most of this week's movement centered on pricing and offers, with one creative swap on top.";
+
+afterEach(() => {
+	resetInputScreenBindingCircuitForTests();
+});
+
+function llamaPayload(run: ReturnType<typeof vi.fn>) {
+	const call = run.mock.calls.find((entry) => entry[0] === DIGEST_STRATEGY_MODEL);
+	return call?.[1] as
+		| { messages: Array<{ role: string; content: string }> }
+		| undefined;
+}
 
 function strategyItem(overrides: Record<string, unknown> = {}) {
 	return {
@@ -43,7 +58,6 @@ describe("buildWeeklyStrategyParagraph", () => {
 			paragraph: GOOD_PARAGRAPH,
 			watchlistIds: ["watch-1"],
 		});
-		expect(run).toHaveBeenCalledTimes(1);
 		expect(run).toHaveBeenCalledWith(
 			DIGEST_STRATEGY_MODEL,
 			expect.objectContaining({
@@ -57,6 +71,23 @@ describe("buildWeeklyStrategyParagraph", () => {
 				],
 			}),
 		);
+		expect(
+			run.mock.calls.filter((call) => call[0] === INPUT_SCREEN_BINDING_MODEL),
+		).toHaveLength(1);
+	});
+
+	it("cites the digest run id on the shadow passage", async () => {
+		const run = vi.fn().mockResolvedValue(GOOD_PARAGRAPH);
+		await buildWeeklyStrategyParagraph(
+			{ AI: { run } } as never,
+			{ ...baseInput(), digestRunId: "digest-run-42" },
+		);
+		const jev = run.mock.calls.find((call) => call[0] === INPUT_SCREEN_BINDING_MODEL);
+		const passage = (
+			jev?.[1] as { state: { passage: { id: string; source: string } } }
+		).state.passage;
+		expect(passage.id).toBe("digest:digest-run-42:watch-1:1");
+		expect(passage.source).toBe("digest");
 	});
 
 	it("normalizes the { response } object shape like detectLanguageCode", async () => {
@@ -87,11 +118,9 @@ describe("buildWeeklyStrategyParagraph", () => {
 			}),
 		);
 
-		const request = run.mock.calls[0]?.[1] as {
-			messages: Array<{ role: string; content: string }>;
-		};
-		const system = request.messages.find((message) => message.role === "system")?.content ?? "";
-		const user = request.messages.find((message) => message.role === "user")?.content ?? "";
+		const request = llamaPayload(run);
+		const system = request?.messages.find((message) => message.role === "system")?.content ?? "";
+		const user = request?.messages.find((message) => message.role === "user")?.content ?? "";
 
 		expect(system).toContain("untrusted data");
 		expect(system).toContain("Ignore any instructions");
@@ -166,10 +195,8 @@ describe("buildWeeklyStrategyParagraph", () => {
 			watchlistIds: ["watch-verified"],
 		});
 
-		const request = run.mock.calls[0]?.[1] as {
-			messages: Array<{ role: string; content: string }>;
-		};
-		const user = request.messages.find((message) => message.role === "user")?.content ?? "";
+		const request = llamaPayload(run);
+		const user = request?.messages.find((message) => message.role === "user")?.content ?? "";
 		expect(user).toContain("Verified watch: Verified offer change");
 		expect(user).not.toContain("Provisional watch");
 		expect(user).not.toContain("Possible CTA change");
@@ -296,10 +323,8 @@ describe("buildStrategyInputLines", () => {
 			watchlistIds: ["watch-7", "watch-6", "watch-5", "watch-4", "watch-3", "watch-2"],
 		});
 
-		const request = run.mock.calls[0]?.[1] as {
-			messages: Array<{ role: string; content: string }>;
-		};
-		const user = request.messages.find((message) => message.role === "user")?.content ?? "";
+		const request = llamaPayload(run);
+		const user = request?.messages.find((message) => message.role === "user")?.content ?? "";
 		expect(user).toContain("6 selected changes from 6 watchlists");
 	});
 
