@@ -43,7 +43,8 @@ export type FunnelEventKind =
   | "first_brief_generated"
   | "first_brief_viewed"
   | "activation_scan_started"
-  | "first_brief_email_sent";
+  | "first_brief_email_sent"
+  | "suggestion_accepted";
 
 export type FunnelRoute =
   | "home"
@@ -103,6 +104,7 @@ const FUNNEL_ROUTES: Record<FunnelEventKind, FunnelRoute> = {
   first_brief_viewed: "activation",
   activation_scan_started: "activation",
   first_brief_email_sent: "activation",
+  suggestion_accepted: "activation",
 };
 
 const FUNNEL_OPERATIONS: Record<FunnelEventKind, string> = {
@@ -126,6 +128,7 @@ const FUNNEL_OPERATIONS: Record<FunnelEventKind, string> = {
   first_brief_viewed: "funnel_first_brief_viewed",
   activation_scan_started: "funnel_activation_scan_started",
   first_brief_email_sent: "funnel_first_brief_email_sent",
+  suggestion_accepted: "funnel_suggestion_accepted",
 };
 
 const FUNNEL_MESSAGES: Record<FunnelEventKind, string> = {
@@ -149,6 +152,7 @@ const FUNNEL_MESSAGES: Record<FunnelEventKind, string> = {
   first_brief_viewed: "First brief viewed in session",
   activation_scan_started: "Activation scan started for a signup workspace",
   first_brief_email_sent: "First brief email dispatched",
+  suggestion_accepted: "Suggestion accepted",
 };
 
 const LOCALE_SEGMENT_VIEW_KIND: Record<SneakerResaleLocaleId, FunnelEventKind> = {
@@ -269,6 +273,7 @@ const WORKSPACE_SCOPED_KINDS = new Set<FunnelEventKind>([
   "first_brief_viewed",
   "activation_scan_started",
   "first_brief_email_sent",
+  "suggestion_accepted",
 ]);
 
 /**
@@ -455,6 +460,19 @@ export function emitFunnelActivationScanStarted(env: AppEnv, request: Request) {
  */
 export function emitFunnelFirstBriefEmailSent(env: AppEnv) {
   emitFunnelEvent(env, "first_brief_email_sent");
+}
+
+/**
+ * Issue #3367 (epic #3172 slice 2 follow-up): a suggested competitor was
+ * accepted onto a watchlist. Fires once per newly created watchlist from
+ * the panel's accept intent (one-click or each bulk-admit), never for a
+ * hand-add and never for an already-watched / over-cap row. Coarse
+ * workspace-scoped count only — no candidate id, advertiser, URL, or
+ * workspace id ever reaches a record. GPC applies because the accept
+ * runs inside the same request that created the watchlist.
+ */
+export function emitFunnelSuggestionAccepted(env: AppEnv, request: Request) {
+  emitFunnelEvent(env, "suggestion_accepted", {}, request);
 }
 
 /**

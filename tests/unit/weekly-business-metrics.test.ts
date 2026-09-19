@@ -4,8 +4,10 @@ import {
   SYNTHETIC_USER_PATTERNS,
   buildFunnelCountsQuery,
   buildSignupsIntegrityQuery,
+  buildTrackedCompetitorsGte3Query,
   evaluateFunnelCounts,
   evaluateSignupIntegrity,
+  evaluateTrackedCompetitorsGte3,
   parseSignupEventRecords,
   rowsFromWranglerJson,
 } from "../../scripts/weekly-business-metrics.mjs";
@@ -367,6 +369,26 @@ describe("weekly-business-metrics funnel section (issue #3521)", () => {
     expect(kindNames).not.toContain("not_funnel");
   });
 
+  it("computes suggestions-accepted-per-signup from the two kinds and leaves the rate null when there are no signups (issue #3367)", () => {
+    const funnel = evaluateFunnelCounts([
+      { kind: "funnel_suggestion_accepted", events_7d: 6, events_30d: 12 },
+      { kind: "funnel_signup_completed", events_7d: 2, events_30d: 4 },
+    ]);
+    expect(funnel.suggestion_accepted_7d).toBe(6);
+    expect(funnel.suggestion_accepted_30d).toBe(12);
+    expect(funnel.signup_completed_7d).toBe(2);
+    expect(funnel.signup_completed_30d).toBe(4);
+    expect(funnel.suggestions_accepted_per_signup_7d).toBe(3);
+    expect(funnel.suggestions_accepted_per_signup_30d).toBe(3);
+
+    const emptySignups = evaluateFunnelCounts([
+      { kind: "funnel_suggestion_accepted", events_7d: 4, events_30d: 8 },
+    ]);
+    expect(emptySignups.suggestions_accepted_per_signup_7d).toBeNull();
+    expect(emptySignups.suggestions_accepted_per_signup_30d).toBeNull();
+    expect(emptySignups.suggestion_accepted_7d).toBe(4);
+  });
+
   it("zero-fills every headline kind on an empty dataset — a not-yet-created dataset is an honest zero, not an error", () => {
     const funnel = evaluateFunnelCounts([]);
     for (const key of [
@@ -379,6 +401,92 @@ describe("weekly-business-metrics funnel section (issue #3521)", () => {
       expect(funnel[`${key}_7d`]).toBe(0);
       expect(funnel[`${key}_30d`]).toBe(0);
     }
-    expect(funnel.kinds).toHaveLength(5);
+    expect(funnel.kinds).toHaveLength(7);
+    expect(funnel.suggestion_accepted_7d).toBe(0);
+    expect(funnel.suggestion_accepted_30d).toBe(0);
+    expect(funnel.signup_completed_7d).toBe(0);
+    expect(funnel.suggestions_accepted_per_signup_7d).toBeNull();
+    expect(funnel.suggestions_accepted_per_signup_30d).toBeNull();
+  });
+});
+
+describe("weekly-business-metrics tracked-competitors >=3 share (issue #3367)", () => {
+  it("queries active competitor watchlists joined to user_plan over the 30d signup window", () => {
+    const sql = buildTrackedCompetitorsGte3Query(NOW);
+    expect(sql).toContain("FROM \"user\" u");
+    expect(sql).toContain("LEFT JOIN user_plan up ON up.user_id = u.id");
+    expect(sql).toContain("tracking_role = 'competitor'");
+    expect(sql).toContain("is_active = 1");
+    expect(sql).toContain(`WHERE u.createdAt >= '${new Date(NOW.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()}'`);
+    expect(sql).not.toContain("INSERT");
+    expect(sql).not.toContain("UPDATE");
+    expect(sql).not.toContain("DELETE");
+  });
+
+  it("counts the share of fixture-free signups that currently track >=3 competitors, per plan", () => {
+    const rows = [
+      {
+        id: "usr-starter-hit",
+        email: "starter-hit@example.com",
+        createdAt: "2026-09-11T12:00:00.000Z",
+        plan: "starter",
+        competitor_count: 4,
+      },
+      {
+        id: "usr-starter-miss",
+        email: "starter-miss@example.com",
+        createdAt: "2026-09-11T13:00:00.000Z",
+        plan: "starter",
+        competitor_count: 2,
+      },
+      {
+        id: "usr-scout-old",
+        email: "scout-old@example.com",
+        createdAt: "2026-08-20T12:00:00.000Z",
+        plan: "scout",
+        competitor_count: 3,
+      },
+      {
+        id: "usr-free",
+        email: "free@example.com",
+        createdAt: "2026-09-10T12:00:00.000Z",
+        plan: "free",
+        competitor_count: 0,
+      },
+      {
+        id: "billing-canary-0509",
+        email: "billing-canary@0509.internal",
+        createdAt: "2026-09-11T09:16:00.000Z",
+        plan: "agency",
+        competitor_count: 10,
+      },
+    ];
+    const result = evaluateTrackedCompetitorsGte3(rows, NOW);
+    const byPlan = Object.fromEntries(result.by_plan.map((row) => [row.plan, row]));
+
+    expect(byPlan.starter.signups_7d).toBe(2);
+    expect(byPlan.starter.reached_gte3_7d).toBe(1);
+    expect(byPlan.starter.share_7d).toBe(0.5);
+    expect(byPlan.starter.signups_30d).toBe(2);
+    expect(byPlan.starter.share_30d).toBe(0.5);
+
+    expect(byPlan.scout.signups_7d).toBe(0);
+    expect(byPlan.scout.share_7d).toBeNull();
+    expect(byPlan.scout.signups_30d).toBe(1);
+    expect(byPlan.scout.reached_gte3_30d).toBe(1);
+    expect(byPlan.scout.share_30d).toBe(1);
+
+    expect(byPlan.free.signups_7d).toBe(1);
+    expect(byPlan.free.reached_gte3_7d).toBe(0);
+    expect(byPlan.free.share_7d).toBe(0);
+
+    expect(byPlan.agency.signups_7d).toBe(0);
+    expect(byPlan.agency.share_7d).toBeNull();
+
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("@example.com");
+    expect(serialized).not.toContain("usr-starter");
+    expect(serialized).not.toMatch(/billing-canary/);
+    expect(SYNTHETIC_USER_PATTERNS.length).toBeGreaterThan(0);
   });
 });

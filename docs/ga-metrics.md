@@ -113,7 +113,12 @@ live in two bounded stores: structured JSON lines in Workers Logs (platform wind
   section as `.funnel`: `<kind>_7d`/`<kind>_30d` counts for the visit→signup kinds
   (`home_view`, `search_preview_submit`, `search_preview_result`,
   `search_preview_error`, `signup_start`) plus a `kinds` table covering every emitted
-  kind — the visit→signup conversion read the direction metric was blind to. The
+  kind — the visit→signup conversion read the direction metric was blind to. Issue
+  #3367 adds `suggestion_accepted_*`, `signup_completed_*`, and
+  `suggestions_accepted_per_signup_*` on that object (the rate is null when the
+  signup_completed denominator is zero) and `.tracked_competitors_gte3` for the
+  share of fixture-free signups that currently hold ≥3 active competitor
+  watchlists, grouped by plan. The
   markdown report prints the same table as section 9. Both modes query the account
   Analytics Engine SQL API with `sumIf`/`SUM(_sample_interval)` (sample-corrected);
   credentials resolve from `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN`, then

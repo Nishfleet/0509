@@ -822,7 +822,7 @@ export async function handleWatchlistsAction(args: ActionFunctionArgs) {
   }
 
   if (intent === "accept-suggested-competitor") {
-    return handleAcceptSuggestedCompetitorAction(env, workspaceUserId, formData);
+    return handleAcceptSuggestedCompetitorAction(env, workspaceUserId, formData, request);
   }
 
   if (intent === "dismiss-suggested-competitor") {
@@ -830,7 +830,7 @@ export async function handleWatchlistsAction(args: ActionFunctionArgs) {
   }
 
   if (intent === "bulk-accept-suggested-competitors") {
-    return handleBulkAcceptSuggestedCompetitorsAction(env, workspaceUserId, formData);
+    return handleBulkAcceptSuggestedCompetitorsAction(env, workspaceUserId, formData, request);
   }
 
   return {
@@ -943,6 +943,7 @@ async function handleAcceptSuggestedCompetitorAction(
   env: AppEnv,
   workspaceUserId: string,
   formData: FormData,
+  request: Request,
 ): Promise<{
   ok: boolean;
   error?: "plan_limit_exceeded" | "candidate_unknown";
@@ -1064,6 +1065,13 @@ async function handleAcceptSuggestedCompetitorAction(
     // watchlist-creation paths already perform. No ExecutionContext reaches
     // this signature; the durable (env.DB) queue path never needs it.
     await queueFirstWatchlistScan(env, undefined, result.watchlist);
+    // Issue #3367: one funnel event per newly created suggestion-accept,
+    // never for an already-watched row and never for a hand-add. The
+    // emit helper owns the gate, GPC opt-out, and field allowlist.
+    const { emitFunnelSuggestionAccepted } = await import(
+      "~/lib/funnel-measurement.server"
+    );
+    emitFunnelSuggestionAccepted(env, request);
   }
 
   return {
@@ -1092,6 +1100,7 @@ async function handleBulkAcceptSuggestedCompetitorsAction(
   env: AppEnv,
   workspaceUserId: string,
   formData: FormData,
+  request: Request,
 ): Promise<{
   ok: boolean;
   error?: "plan_limit_exceeded" | "candidate_unknown";
@@ -1173,7 +1182,7 @@ async function handleBulkAcceptSuggestedCompetitorsAction(
     .filter((watchlist) => watchlist.isActive)
     .map((watchlist) => watchlist.targetFingerprint);
 
-  return bulkAcceptSuggestedCompetitors({
+  const result = await bulkAcceptSuggestedCompetitors({
     env,
     workspaceUserId,
     candidates,
@@ -1181,6 +1190,18 @@ async function handleBulkAcceptSuggestedCompetitorsAction(
     currentCount: limit.current,
     existingFingerprints,
   });
+  // Issue #3367: one funnel event per newly created watchlist. Existing
+  // and over-cap rows are not accepts. Hand-adds never reach this intent.
+  const admitted = result.admittedCount ?? 0;
+  if (admitted > 0) {
+    const { emitFunnelSuggestionAccepted } = await import(
+      "~/lib/funnel-measurement.server"
+    );
+    for (let index = 0; index < admitted; index += 1) {
+      emitFunnelSuggestionAccepted(env, request);
+    }
+  }
+  return result;
 }
 
 /**
