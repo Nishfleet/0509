@@ -259,8 +259,11 @@ function registryContractSha256() {
 // 2026-09-10: re-pinned after issue #2370 deleted the DAILY-MONITORING-ALIAS
 // exclusion — the deprecated schedule alias it documented is gone, so the
 // registry freeze is thawed for this entry (deprecation completed).
+// 2026-09-20: re-pinned after #3679 (stock deploy) repointed OP-BACKUP-RESTORE to
+// d1-backup-weekly.yml and stated the weekly-export + Time Travel truth; the
+// restore-evidence validator it used to cite was deleted.
 const EXPECTED_REGISTRY_CONTRACT_SHA256 =
-  "c4a28a52b5b0126c37ca57be4d3c5b82b6c3dfd9f799a9cdaa8264e04e77923d";
+  "02f6af87705a0d56b2c78f92c0a4efc2bf57fa372a6ecec09af3d4887bc6946f";
 
 type Catalogs = {
   agentActions: string[];
