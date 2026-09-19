@@ -151,7 +151,7 @@ describe("locale compare/switch child routes (issue #1563)", () => {
       expect(hreflang).toHaveLength(BUYER_SURFACE_LOCALE_IDS.length + 2);
       expect(hreflang).toContainEqual({
         rel: "alternate",
-        hreflang: "x-default",
+        hrefLang: "x-default",
         href: `https://0509.io${child}`,
       });
 

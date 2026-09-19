@@ -1099,7 +1099,7 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
           (link) => ({
             tagName: "link" as const,
             rel: link.rel,
-            hrefLang: link.hreflang,
+            hrefLang: link.hrefLang,
             href: link.href,
           }),
         )),
