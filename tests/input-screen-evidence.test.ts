@@ -14,10 +14,16 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, "..");
 
 const evidencePath = join(repoRoot, "docs", "benchmarks", "jev-input-screen-2026-09.jsonl");
+const replayPath = join(
+  repoRoot,
+  "docs",
+  "benchmarks",
+  "jev-input-screen-2026-09-replay.jsonl",
+);
 const reportPath = join(repoRoot, "docs", "jev-input-screen-2026-09.md");
 
-function loadRows(): InputScreenRow[] {
-  return readFileSync(evidencePath, "utf8")
+function loadRows(path: string = evidencePath): InputScreenRow[] {
+  return readFileSync(path, "utf8")
     .split("\n")
     .filter((line) => line.trim() !== "")
     .map((line) => JSON.parse(line) as InputScreenRow);
@@ -138,10 +144,57 @@ describe("input-screen evidence (issue #3621)", () => {
     }
   });
 
+  it("holds the two-run result: identical state hashes, identical routing, drifted scores", () => {
+    // The report's §4 replay claim is a claim about this second run. Re-derive
+    // it from the two committed files so the claim cannot outlive the evidence.
+    const replay = loadRows(replayPath);
+    expect(replay).toHaveLength(rows.length);
+
+    const byId = new Map(rows.map((row) => [row.passage_id, row]));
+    for (const row of replay) {
+      const first = byId.get(row.passage_id);
+      expect(first, `replay row ${row.passage_id} has no first-run row`).toBeDefined();
+      // Same state, byte for byte: a stored row can be replayed and compared.
+      expect(row.state_sha256).toBe(first!.state_sha256);
+      // Same decision on every passage, including the planted probe.
+      expect(row.route).toBe(first!.route);
+    }
+
+    const routes = (list: InputScreenRow[]) =>
+      list.reduce<Record<string, number>>((counts, row) => {
+        counts[row.route] = (counts[row.route] ?? 0) + 1;
+        return counts;
+      }, {});
+    expect(routes(replay)).toEqual({ include: 4, conflicting_evidence: 1, exclude: 2 });
+
+    // The injection probe clears the issue's bar on the replay too.
+    const planted = replay.find((row) => row.passage_id === "planted:nykaa.com/glow-serum")!;
+    expect(planted.synthetic).toBe(true);
+    expect(noul(planted, INPUT_SCREEN_QUESTIONS.injection)).toBeGreaterThanOrEqual(0.9);
+
+    // The picked evidence floor still sits in the gap on the replay: 1.75 keeps
+    // every captured row, 1.80 first drops one. A floor that only held on the
+    // first run's exact scores would fail here.
+    const captured = replay.filter((row) => !row.synthetic);
+    for (const floor of [1.2, 1.5, 1.75]) {
+      for (const row of captured) {
+        expect(
+          score(row, INPUT_SCREEN_QUESTIONS.evidence),
+          `${row.passage_id} at replay floor ${floor}`,
+        ).toBeGreaterThanOrEqual(floor);
+      }
+    }
+    expect(
+      captured.some((row) => score(row, INPUT_SCREEN_QUESTIONS.evidence) < 1.8),
+    ).toBe(true);
+  });
+
   it("holds no credentials or customer data", () => {
-    const raw = readFileSync(evidencePath, "utf8");
-    expect(raw).not.toMatch(/Bearer|Authorization|api[_-]?key|TYPESAFE_API_KEY|VERCEL_AI_GATEWAY/i);
-    expect(raw).not.toMatch(/\bsk-[A-Za-z0-9]/);
+    for (const path of [evidencePath, replayPath]) {
+      const raw = readFileSync(path, "utf8");
+      expect(raw).not.toMatch(/Bearer|Authorization|api[_-]?key|TYPESAFE_API_KEY|VERCEL_AI_GATEWAY/i);
+      expect(raw).not.toMatch(/\bsk-[A-Za-z0-9]/);
+    }
   });
 
   it("the report states the measurement-only verdict and the measured floors", () => {
@@ -150,6 +203,11 @@ describe("input-screen evidence (issue #3621)", () => {
     expect(report).toContain("injectionExcludeMin");
     expect(report).toContain("evidenceMin");
     expect(report).toContain("env.AI.run(\"typesafe/jev\"");
+  });
+
+  it("the report describes the two committed runs", () => {
+    expect(report).toContain("jev-input-screen-2026-09-replay.jsonl");
+    expect(report).toContain("state_sha256` is identical for all seven passages");
   });
 
   it("the report's per-row table matches the committed answers", () => {

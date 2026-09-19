@@ -150,14 +150,36 @@ does not choose between them; the code keeps a round **1.5** inside that gap. It
 not the largest such floor (1.75 also qualifies) and it is a *picked* floor, not an
 optimised one — seven rows cannot optimise a threshold, and §6 says so plainly.
 
-The next captured row down is the Ad Library creative at 1.79, and a floor of 2.00
-is what first drops it. That is why 1.5 is not the RAG cookbook's 0.55: on this
-scale 0.55 keeps everything, so it measures nothing.
+The next captured row down is the Ad Library creative at 1.79 (1.76 on the replay), and a
+floor of 2.00 is what first drops it (1.80 on the replay). That is why 1.5 is not the RAG
+cookbook's 0.55: on this scale 0.55 keeps everything, so it measures nothing.
 
 The contradiction floor stays at the cookbook's 0.70: the planted denial scores 0.97 and
 the highest captured row is 0.56, so 0.70 sits in the middle of a clear gap. The
 relevance floor stays at the cookbook's 0.45: the boilerplate probe scores 0.04 and every
 captured row scores 0.53 or above.
+
+### The run repeated (2026-09-19 10:17Z)
+
+Every number above is one run. A second run of the same command, same fixtures, same
+model, 3h36m later is committed beside it as
+`docs/benchmarks/jev-input-screen-2026-09-replay.jsonl`.
+
+`state_sha256` is identical for all seven passages across both runs — the state built
+from a fixture is byte-stable, so a stored row can be re-computed and compared later.
+The answers are not identical: every noul and score moved a little (largest noul move
+0.02, largest score move 0.07; the ad creatives 1.79 -> 1.76). What did not move is the
+**decision**: 4 include / 1 conflicting_evidence / 2 exclude, the same seven routes, the
+planted row at 0.99 both times, and the boilerplate probe still the lowest-evidence row.
+The evidence floor sweep of §4 was recomputed on the replay and the picked floor still
+sits inside the (1.24, 1.79] gap: floors 1.20 through 1.75 keep all four captured rows,
+and 1.80 is what first drops the Ad Library creative. p50 286 ms, max 793 ms, the same
+6,569 in / 623 out tokens, $0.00028.
+
+That is the useful shape of a two-run result: the *scores* are not reproducible on this
+model, and the *routing and the chosen floors* are. A floor picked on the gap between
+probes and captured rows survives the drift; a floor picked on a score to two decimals
+would not have.
 
 ## 5. The rejecting number for a generation-time flip
 
