@@ -1,16 +1,23 @@
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { summarizeCrawlerChoiceRows, type CrawlerChoiceRow } from "../app/lib/crawler-choice-jev.server";
+import {
+  CRAWLER_CHOICE_API_MODEL,
+  CRAWLER_CHOICE_MODEL,
+  summarizeCrawlerChoiceRows,
+  type CrawlerChoiceRow,
+} from "../app/lib/crawler-choice-jev.server";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, "..");
 
 const evidencePath = join(repoRoot, "docs", "benchmarks", "jev-crawler-choice-2026-09.jsonl");
 const reportPath = join(repoRoot, "docs", "jev-crawler-choice-2026-09.md");
+const benchPath = join(repoRoot, "scripts", "bench", "jev-crawler-choice-2026-09.mjs");
 
 function loadRows(): CrawlerChoiceRow[] {
   return readFileSync(evidencePath, "utf8")
@@ -75,6 +82,31 @@ describe("crawler-choice evidence (issue #3618)", () => {
       (row) => row.choice_point === "fullsite_crawl_frontier",
     );
     expect(frontierMove?.jev_choice).toBe("https://www.cloudflare.com/products/");
+  });
+
+  it("every row records the model the answer came from", () => {
+    // The report names jev-1.13.0. Without the row's own model field that claim
+    // is un-auditable, which the previous head shipped.
+    expect(rows.every((row) => typeof row.model === "string" && row.model !== "")).toBe(true);
+    expect(report).toContain("jev-1.13.0");
+  });
+
+  it("the bench script parses and never sends the Workers binding id to the HTTP API", () => {
+    // A duplicate `const MODEL` shipped on the previous head; the bench was a
+    // syntax error that no test ran. `node --check` is the cheap gate for that.
+    const check = spawnSync("node", ["--check", benchPath], { encoding: "utf8" });
+    expect(check.stderr).toBe("");
+    expect(check.status).toBe(0);
+
+    // The bench talks HTTP; the binding id is not a valid HTTP model selector
+    // (the API answers `Unknown model: typesafe/jev`), and `typesafe/jev` is
+    // imported by name only for the doc reference — it must never be the value
+    // sent in the request body.
+    const source = readFileSync(benchPath, "utf8");
+    expect(CRAWLER_CHOICE_MODEL).toBe("typesafe/jev");
+    expect(CRAWLER_CHOICE_API_MODEL).not.toBe(CRAWLER_CHOICE_MODEL);
+    expect(source).toContain("process.env.TYPESAFE_MODEL ?? CRAWLER_CHOICE_API_MODEL");
+    expect(source).not.toContain("?? CRAWLER_CHOICE_MODEL");
   });
 
   it("holds no credentials or customer data", () => {

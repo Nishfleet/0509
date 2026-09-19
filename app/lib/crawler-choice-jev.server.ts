@@ -18,8 +18,20 @@
 /** Shared site name for every shadow row. */
 export const CRAWLER_CHOICE_SITE = "crawler-choice";
 
-/** Workers AI binding model id. */
+/**
+ * Workers AI binding model id — what a wired crawl path passes to
+ * `env.AI.run(...)`. This is NOT a valid model id for the TypeSafe HTTP API
+ * (that endpoint rejects it with `Unknown model`), so the HTTP bench uses
+ * `CRAWLER_CHOICE_API_MODEL` instead.
+ */
 export const CRAWLER_CHOICE_MODEL = "typesafe/jev";
+
+/**
+ * TypeSafe HTTP API model selector, used by the measurement bench. The API
+ * resolves it (currently to `jev-1.13.0`) and echoes the resolved id in the
+ * response `model` field, which the row records.
+ */
+export const CRAWLER_CHOICE_API_MODEL = "jev-latest";
 
 /** Always appended to the candidate list. */
 export const CRAWLER_CHOICE_STOP = "stop";
@@ -73,6 +85,8 @@ export interface CrawlerChoiceRow {
   answers: { action: { type: "choice"; choice: string } };
   probabilities: Record<string, number>;
   usage: { input_tokens: number; output_tokens: number };
+  /** Model the answer actually came from, when the provider reports one. */
+  model?: string;
   ms: number;
   choice_point: string;
   page_url: string;
@@ -267,6 +281,19 @@ function readUsage(raw: unknown): { input_tokens: number; output_tokens: number 
   };
 }
 
+/**
+ * Model id the provider reports it answered with. The bench asks for
+ * `jev-latest` and the API resolves it to a pinned id (`jev-1.13.0`); without
+ * this the row cannot be audited against the model the report names.
+ */
+function readModel(raw: unknown): string | null {
+  const model =
+    typeof raw === "object" && raw !== null
+      ? (raw as Record<string, unknown>).model
+      : undefined;
+  return typeof model === "string" && model !== "" ? model : null;
+}
+
 /** Ask Jev, validate, and build both the decision and the log row. */
 export async function decideCrawlerChoice(
   ai: CrawlerChoiceAi,
@@ -278,6 +305,7 @@ export async function decideCrawlerChoice(
   const raw = await ai.run(CRAWLER_CHOICE_MODEL, { state, questions });
   const ms = Date.now() - startedAt;
   const decision = validateCrawlerChoiceAnswer(raw, offeredIds);
+  const model = readModel(raw);
   const row: CrawlerChoiceRow = {
     ts: new Date().toISOString(),
     site: CRAWLER_CHOICE_SITE,
@@ -286,6 +314,7 @@ export async function decideCrawlerChoice(
     answers: { action: { type: "choice", choice: decision.choice } },
     probabilities: decision.probabilities,
     usage: readUsage(raw),
+    ...(model ? { model } : {}),
     ms,
     choice_point: input.choicePoint,
     page_url: input.page.url,

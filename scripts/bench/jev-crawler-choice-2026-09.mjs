@@ -22,7 +22,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  CRAWLER_CHOICE_MODEL,
+  CRAWLER_CHOICE_API_MODEL,
   decideCrawlerChoice,
   summarizeCrawlerChoiceRows,
 } from "../../app/lib/crawler-choice-jev.server.ts";
@@ -31,20 +31,23 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..", "..");
 
 const API_URL = "https://api.typesafe.ai/v1/systemone";
-const MODEL = process.env.TYPESAFE_MODEL ?? "jev-latest";
 
 /**
- * The model actually sent to the API. Defaults to the model id the helper
- * itself uses, so the bench cannot silently measure a different model than the
- * one the shadow helper would wire in production.
+ * The model selector sent to the HTTP API. Defaults to the id the API accepts
+ * (`jev-latest`, which it resolves to a pinned version such as `jev-1.13.0`),
+ * never the Workers-AI binding id `typesafe/jev` — that endpoint rejects it
+ * with `Unknown model: typesafe/jev`.
  */
-const MODEL = process.env.TYPESAFE_MODEL ?? CRAWLER_CHOICE_MODEL;
+const MODEL = process.env.TYPESAFE_MODEL ?? CRAWLER_CHOICE_API_MODEL;
 
 /**
  * A CrawlerChoiceAi backed by the live TypeSafe HTTP API.
  * @type {import("../../app/lib/crawler-choice-jev.server.ts").CrawlerChoiceAi}
  */
 const httpAi = {
+  // `_model` is the Workers-AI binding id the helper passes; this HTTP endpoint
+  // needs its own selector, so MODEL replaces it. The response's own `model`
+  // field is what the row records.
   async run(_model, { state, questions }) {
     const response = await fetch(API_URL, {
       method: "POST",
@@ -162,7 +165,6 @@ async function metaLibraryApiCursor() {
             : `Page ${page + 1} returned ads with no further cursor.`,
           candidates: [
             { id: "follow_cursor", label: "Fetch the next page using the returned after-cursor" },
-            { id: "cursor_exhausted", label: "Stop: no further cursor to follow" },
           ],
         },
         scripted,

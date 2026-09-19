@@ -40,8 +40,13 @@ plus `stop`:
 
 One Jev `choice` question per point. The row shape matches the fleet helper so
 Nishfleet/fleet-ops#7754 can score it:
-`{ts, site, ref, state_sha256, answers, probabilities, usage, ms, choice_point,
-page_url, scripted, scripted_reason, jev_choice, jev_confidence, agreed, candidates}`.
+`{ts, site, ref, state_sha256, answers, probabilities, usage, model, ms,
+choice_point, page_url, scripted, scripted_reason, jev_choice, jev_confidence,
+agreed, candidates}`.
+
+`model` is the id the provider reports it answered with, read from the response —
+not the selector that was asked for — so the row is auditable against the model
+name below.
 
 ## 3. Run record
 
@@ -52,8 +57,10 @@ Real records only (no invented samples):
   captured 2026-09-09).
 - Choice points 4-5 use a live sitemap and live link fetch of
   `https://www.cloudflare.com` (captured 2026-09-19).
-- Every Jev call is on the live API (`typesafe-ai/jev`, model `jev-1.13.0`) through
-  the Jev-only key; `state_sha256` per row pins the exact state.
+- Every Jev call is on the live API (`typesafe-ai/jev`) through the Jev-only key;
+  the bench asks for the selector `jev-latest`, the API resolves it, and each row
+  records the resolved id (`jev-1.13.0`); `state_sha256` per row pins the exact
+  state.
 
 Command:
 
@@ -62,6 +69,12 @@ set -a; . ~/.config/fleet-ops/seats/typesafe-jev.env; set +a
 node scripts/bench/jev-crawler-choice-2026-09.mjs \
   --out docs/benchmarks/jev-crawler-choice-2026-09.jsonl
 ```
+
+Note the two model ids and where each applies: the bench talks HTTP, so it sends
+`jev-latest` to `api.typesafe.ai`; the Workers binding a wired crawl path would
+call uses `typesafe/jev`. The HTTP endpoint rejects `typesafe/jev` with
+`Unknown model`, and the binding knows nothing of `jev-latest` —
+`CRAWLER_CHOICE_API_MODEL` and `CRAWLER_CHOICE_MODEL` keep them apart.
 
 Result (15 rows, one file `docs/benchmarks/jev-crawler-choice-2026-09.jsonl`):
 
@@ -74,7 +87,7 @@ Result (15 rows, one file `docs/benchmarks/jev-crawler-choice-2026-09.jsonl`):
 | **Total** | **15** | **12** | **0.80** |
 
 Cost and latency (from the rows' own `usage`/`ms`): 9,361 input tokens, 1,450 output
-tokens, p50 299 ms, max 791 ms. At the recorded TypeSafe list price
+tokens, p50 263 ms, max 700 ms. At the recorded TypeSafe list price
 ($0.042/MTok in, $0 out) the whole run cost **$0.00039**. Per-item: ~$0.000026 and
 ~0.3 s.
 
