@@ -352,12 +352,11 @@ describe("D1 remote restore evidence automation", () => {
     );
     expect(core).toContain("fresh_r2_backup_hash_mismatch");
     expect(workflow.on?.workflow_dispatch).toBeDefined();
-    // Nightly, not twice weekly (2026-08-07). Evidence is only accepted while
-    // it is under the age bound, so SUN,WED left most of the week with no
-    // usable proof - on 2026-08-06 that stranded 14 merged changes for a day.
-    // Still pinned exactly: the hour is a deliberate low-traffic window and a
-    // silent drift out of it should fail here.
-    expect(workflow.on?.schedule).toEqual([{ cron: "47 20 * * *" }]);
+    // No schedule (0509#3576, 2026-09-19): the 6-hourly safety net in
+    // d1-restore-proof-auto-refresh.yml owns scheduled freshness. A nightly
+    // drill here doubled the D1 rows-written bill for nothing; a silent
+    // re-add should fail here.
+    expect(workflow.on?.schedule).toBeUndefined();
     // Push to main: every merge produces fresh, exact-commit evidence so the
     // 24h race window between push and next schedule cannot block a deploy
     // of a just-merged commit. Still pinned exactly: a silent drop of the

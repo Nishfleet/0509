@@ -41,8 +41,9 @@ The 2026-07-26 weekly backup failed because the GitHub-hosted minutes were exhau
 ### VPS-assisted remote restore evidence
 
 The `D1 remote restore evidence` workflow performs the restore drill on the
-GitHub-hosted runner during explicit low-traffic recovery windows (Monday and
-Thursday at 02:17 IST) or by manual dispatch. It reuses the protected
+GitHub-hosted runner on pushes that touch the schema surface or by manual
+dispatch; scheduled freshness is owned by the 6-hourly
+`D1 restore proof auto-refresh` workflow (0509#3576). It reuses the protected
 branch-restricted `production` environment so provider credentials are not
 available as repository-level secrets or to pull-request jobs.
 The workflow creates a fresh D1 export, uploads it to private R2,
