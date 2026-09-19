@@ -1,6 +1,6 @@
 {
   "capturedAt": "2026-09-06",
-  "note": "Per-table row estimates for the D1 budget trip-wire (issue #1731). Values are order-of-magnitude estimates pending the first manual refresh: wrangler d1 execute 0509 --remote --command \"SELECT COUNT(*) ...\" per table, then update capturedAt. A SCAN/SEARCH of a table absent from `tables` fails the check, so every table in the migrated schema must stay listed.",
+  "note": "Per-table row estimates for the D1 budget trip-wire (issue #1731). Values are order-of-magnitude estimates pending the first manual refresh: wrangler d1 execute 0509 --remote --command \"SELECT COUNT(*) ...\" per table, then update capturedAt. Listing is fail-closed on touch: a SCAN/SEARCH whose plan reaches a table absent from `tables` hard-fails the check, so the tables listed here are those the curated queries or canary-run paths in scripts/d1-budget-queries.json can touch — other migrated tables may be absent.",
   "dailyLimits": { "rowsRead": 5000000, "rowsWritten": 100000 },
   "tripFraction": 0.1,
   "rowsPerIndexedSearch": 25,

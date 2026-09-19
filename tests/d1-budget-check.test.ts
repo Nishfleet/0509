@@ -186,6 +186,14 @@ describe("ci-d1-budget-check", () => {
     const result = runBudgetCheck(REPO_ROOT);
     expect(result.errors).toEqual([]);
     expect(result.ok).toBe(true);
+    // Pinned review finding: the runbook rule "never raise tripFraction to
+    // silence a red check" needs teeth. A bumped dailyLimits, a raised
+    // tripFraction, or a tripFraction typo silently falling back to the 0.1
+    // default (invalid values are not rejected at parse time) would all drift
+    // these floors — so the trip numbers themselves must not move without a
+    // test edit.
+    expect(result.totals.readTrip).toBe(500_000);
+    expect(result.totals.writeTrip).toBe(10_000);
     expect(result.totals.readsPerDay).toBeGreaterThan(0);
     expect(result.totals.readsPerDay).toBeLessThanOrEqual(result.totals.readTrip);
     expect(result.totals.writesPerDay).toBeLessThanOrEqual(result.totals.writeTrip);

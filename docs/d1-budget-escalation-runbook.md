@@ -30,10 +30,13 @@ rolls over.
    `DAILY_DIGEST_CRON` 04:00, `WEEKLY_DIGEST_CRON` Mon 05:00) and recent
    canary runs.
 2. **Throttle the offender.** The monitoring fan-out is the largest scheduled
-   reader. Set `MONITORING_FANOUT_MODE=inline` (or reduce
-   `MONITORING_FANOUT_MAX_INFLIGHT`) in `wrangler.jsonc` to shrink per-tick D1
-   work, or widen the cron interval in `workers/schedule.ts`. Ship through the
-   normal PR path — the budget check must stay green.
+   reader. The daily-volume knobs are `MONITORING_FANOUT_MODE=inline` in
+   `wrangler.jsonc` and the cron interval in `workers/schedule.ts`;
+   `MONITORING_FANOUT_MAX_INFLIGHT` only caps concurrency per tick (burst
+   rate), not rows/day — treat it as a secondary lever. The job still drains
+   its queue each tick, so shrinking inflight alone does not shrink the daily
+   footprint. Ship through the normal PR path — the budget check must stay
+   green.
 3. **Decide wait-vs-upgrade.** The limit resets at UTC midnight; reads and
    writes are metered separately. If the breach is a one-off spike, wait for
    reset. If `scripts/ci-d1-budget-check.sh` is approaching the trip threshold
