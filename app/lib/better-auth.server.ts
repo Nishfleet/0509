@@ -1,5 +1,5 @@
 import { passkey } from "@better-auth/passkey";
-import { betterAuth } from "better-auth";
+import { betterAuth, type Auth } from "better-auth";
 import { magicLink } from "better-auth/plugins";
 
 import {
@@ -123,7 +123,31 @@ export function isBetterAuthPasskeyEnabled(env: AppEnv) {
   return isBetterAuthConfigured(env);
 }
 
-export function getBetterAuth(env: AppEnv, request: Request) {
+// Type annotation on purpose (issue #1948): the inferred type of the
+// `betterAuth` instance reaches zod schema types through the plugin and
+// verification options. When npm splits zod into package-private copies
+// (e.g. @better-auth/passkey's ^4.5.4 floor above the root zod after a
+// Dependabot bump), the inferred type references
+// `better-auth/node_modules/zod/...` — a path the compiler cannot name in a
+// declaration, so this export fails typecheck (TS2742) on any such lock
+// layout. Naming the instance type with the library's own public exports
+// keeps it portable on every tree. $Infer is never read by app code; api
+// endpoints and session user shape derive from the plugins tuple and
+// user.additionalFields, so this annotation preserves the exact surface.
+type AppBetterAuthInstance = Auth<{
+  plugins: [ReturnType<typeof magicLink>, ReturnType<typeof passkey>];
+  user: {
+    additionalFields: {
+      onboardedAt: {
+        type: "string";
+        required: false;
+        input: false;
+      };
+    };
+  };
+}>;
+
+export function getBetterAuth(env: AppEnv, request: Request): AppBetterAuthInstance {
   const secret = env.BETTER_AUTH_SECRET?.trim();
   if (!isBetterAuthEnabled(env) || !env.DB || !secret) {
     throw new Error("Better Auth is not configured.");
