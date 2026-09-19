@@ -31,7 +31,7 @@ const citations = metaAdLibraryCitations as CompareCitations;
 export { compareAdsExampleLoader as loader } from "~/lib/ads-internal-links.server";
 
 const pageDescription =
-  "The Meta Ad Library is free and public — it's the source Five to Nine reads. What manual checking costs you, and what scheduled checks, diffs, saved screenshots, and email briefs add.";
+  "The Meta Ad Library is free and public — it's the source Five to Nine reads. What manual checking costs you, and what scheduled checks, diffs, saved proof, and email briefs add.";
 
 export const links: LinksFunction = () => [
   ...canonicalLinks("/compare/meta-ad-library"),
@@ -86,7 +86,7 @@ const manualCosts: readonly CompareClaimCard[] = [
   {
     title: "Scheduled scraper or MCP call",
     detail:
-      "A DIY pipeline can poll the library for you: Apify's jy-labs/meta-ad-library-multi-search-scraper runs at $10 per 1,000 results, and scheduled with onlyNewAds it delivers new-ad detection. It does not deliver a landing-page diff, an offer timeline, screenshot proof, or a worth-action verdict.",
+      "A DIY pipeline can poll the library for you: Apify's jy-labs/meta-ad-library-multi-search-scraper runs at $10 per 1,000 results, and scheduled with onlyNewAds it delivers new-ad detection. It does not deliver a landing-page diff, an offer timeline, proof captures, or a worth-action verdict.",
     sourceId: "apify-meta-ad-library-scraper",
   },
 ];

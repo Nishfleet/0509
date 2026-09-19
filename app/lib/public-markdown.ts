@@ -326,22 +326,22 @@ const LLMS_PAGE_DETAILS = {
   "/sneaker-resale/nike": {
     title: "Nike below retail, tracked with proof",
     description:
-      "The Nike below-retail demand signal and the saved nike.com ad wall — screenshots with dates, not a mood-board.",
+      "The Nike below-retail demand signal and the saved nike.com ad wall — dated captures with page text and the source link, plus a screenshot when the capture includes one — not a mood-board.",
   },
   "/sneaker-resale/stockx": {
     title: "StockX below retail, tracked with proof",
     description:
-      "The StockX below-retail demand signal and the saved stockx.com ad wall — screenshots with dates, not a mood-board.",
+      "The StockX below-retail demand signal and the saved stockx.com ad wall — dated captures with page text and the source link, plus a screenshot when the capture includes one — not a mood-board.",
   },
   "/sneaker-resale/footlocker": {
     title: "Foot Locker below retail, tracked with proof",
     description:
-      "The below-retail demand signal and the saved footlocker.com ad wall — screenshots with dates, not a mood-board.",
+      "The below-retail demand signal and the saved footlocker.com ad wall — dated captures with page text and the source link, plus a screenshot when the capture includes one — not a mood-board.",
   },
   "/sneaker-resale/jdsports": {
     title: "JD Sports below retail, tracked with proof",
     description:
-      "The below-retail demand signal and the saved jdsports.com ad wall — screenshots with dates, not a mood-board.",
+      "The below-retail demand signal and the saved jdsports.com ad wall — dated captures with page text and the source link, plus a screenshot when the capture includes one — not a mood-board.",
   },
   "/sneaker-resale": {
     title: "Sneaker resale competitor ads",
@@ -1371,7 +1371,7 @@ const PUBLIC_MARKDOWN_BY_PATH: Readonly<Record<string, string>> = {
   "/pricing": PRICING_MARKDOWN,
   "/compare/meta-ad-library": compareMarkdown(
     metaAdLibraryCitations as CompareCitations,
-    "The Meta Ad Library is free and public — it's the source Five to Nine reads. What manual checking costs you, and what scheduled checks, diffs, saved screenshots, and email briefs add.",
+    "The Meta Ad Library is free and public — it's the source Five to Nine reads. What manual checking costs you, and what scheduled checks, diffs, saved proof, and email briefs add.",
   ),
   "/compare/visualping-ad-libraries": compareMarkdown(
     visualpingAdLibraryCitations as CompareCitations,

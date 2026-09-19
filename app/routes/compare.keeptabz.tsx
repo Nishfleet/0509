@@ -81,7 +81,7 @@ const keeptabzCosts: readonly CompareClaimCard[] = [
   {
     title: "No public change-history claims",
     detail:
-      "KeepTabz's public materials do not claim the diff-and-save behavior Five to Nine ships — offer, price, CTA, and hook diffs with page text, source link, and screenshot proof.",
+      "KeepTabz's public materials do not claim the diff-and-save behavior Five to Nine ships — offer, price, CTA, and hook diffs with page text, source link, and a screenshot when the capture includes one.",
   },
 ];
 

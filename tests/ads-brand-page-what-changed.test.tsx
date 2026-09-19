@@ -275,9 +275,11 @@ describe("/ads/:domain — What changed this week surface (issue #1951)", () => 
     expect(tlRows[0]).toBe('class="f9-ads-tl-row"');
     expect(tlRows[1]).toBe('class="f9-ads-tl-row f9-ads-tl-row-churn"');
 
-    // The headline meta string stays as it was: "1 move · each with a saved
-    // screenshot" (one headline move, not the count of raw change events).
-    expect(markup).toContain("1 move · each with a saved screenshot");
+    // The headline meta counts headline moves, and the screenshot is scoped
+    // to capture-includes-one (issue #2546) — not promised on every move.
+    expect(markup).toContain(
+      "1 move · each saved with page text and the link — plus a screenshot when the capture includes one",
+    );
   });
 
   it("renders the honest 'No offer changes this week' footnote with no headline card when only ad_new events exist (issue #1951)", async () => {

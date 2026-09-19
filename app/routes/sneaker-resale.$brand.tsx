@@ -78,7 +78,7 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
   return [
     ...publicSeoMeta({
       title: `${loaderData.page.name} below retail, tracked with proof | Five to Nine`,
-      description: `Where the ${loaderData.page.name} below-retail demand is visible and what the saved ${loaderData.page.domain} ads actually show — screenshots with dates, not a mood-board.`,
+      description: `Where the ${loaderData.page.name} below-retail demand is visible and what the saved ${loaderData.page.domain} ads actually show — dated captures with page text and the source link, plus a screenshot when the capture includes one — not a mood-board.`,
       pathname: sneakerResaleBrandPath(loaderData.page.slug),
       ogLocale: "en_US",
     }),

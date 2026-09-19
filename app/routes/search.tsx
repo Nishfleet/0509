@@ -3483,9 +3483,10 @@ export default function SearchRoute() {
                   Keep this competitor under watch
                 </p>
                 <p className="f9-wk-retain-say">
-                  We&rsquo;ll check {competitorWatchLabel} on a schedule, save
-                  the screenshots, and email you when the ads, the offer, or the
-                  landing page moves.
+                  We&rsquo;ll check {competitorWatchLabel} on a schedule and email
+                  you when the ads, the offer, or the landing page moves — each
+                  confirmed change saved with the page text and the source link,
+                  plus a screenshot when the capture includes one.
                 </p>
                 <div className="f9-wk-acts is-row">
                   <Form className="f9-quick-track-form" method="post">

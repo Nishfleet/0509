@@ -93,7 +93,7 @@ const COMPARE_TABLE: readonly CompareTableRow[] = [
     vendor: "Five to Nine",
     adLibrary: "Yes — reads the public Meta Ad Library",
     landingPageDiffs: "Yes — offer, price, CTA, and hook diffs",
-    proofCaptures: "Yes — page text, source link, and screenshot",
+    proofCaptures: "Yes — page text, source link, and a screenshot when the capture includes one",
     listPrice: `From $${PUBLISHED_PLAN_PRICES_USD.scout.monthly}/mo (Scout)`,
   },
   // MagicBrief's row links /switch/magicbrief (issue #2887): the wind-down

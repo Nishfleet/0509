@@ -3094,8 +3094,10 @@ async function evaluateSelectiveProofCandidates(
       const freshSnapshot = replayedSnapshot
         ? null
         : await captureLandingPageSnapshot(env, observation.landing_page_url!, {
-            // Proof captures must save a screenshot (the homepage promises
-            // "saves the screenshots"). preferRendered runs the Browser
+            // Proof captures must save a screenshot (the proof-capture
+            // contract — a successful capture here carries the screenshot the
+            // renderer produced; public copy only ever scopes screenshots to
+            // when the capture includes one). preferRendered runs the Browser
             // Rendering → Browserless chain first so the snapshot carries a
             // screenshotArtifactKey; requireScreenshot guarantees the capture
             // is not considered successful without one. The direct-website

@@ -55,10 +55,10 @@ export interface SneakerResaleCopy {
 const EN: SneakerResaleCopy = {
   title: "Sneakers below retail, tracked with proof | Five to Nine",
   description:
-    "See the sneaker below retail swing with proof. Watch competitors' Meta ads and landing pages, saved as screenshots — not a swipe file. Public search is free.",
+    "See the sneaker below retail swing with proof. Competitors' Meta ads and landing pages, saved with page text and the original link — plus a screenshot when the capture includes one. Public search is free.",
   kicker: "Sneaker resale · competitor ads",
   h1: "See the drop they posted before you price yours.",
-  deck: "Five to Nine watches the Meta ads and landing pages of other resellers. When the offer, the CTA, or the page copy moves, you get the screenshot and the original link — not a mood-board of creatives.",
+  deck: "Five to Nine watches the Meta ads and landing pages of other resellers. When the offer, the CTA, or the page copy moves, you get the page text and the original link — plus a screenshot when the capture includes one — not a mood-board of creatives.",
   searchLabel: "Public search preview",
   searchPlaceholder: "paste-a-competitor-website.com…",
   searchButton: "Try it free, no account",
@@ -97,7 +97,7 @@ const EN: SneakerResaleCopy = {
     {
       title: "The original link stays",
       detail:
-        "Confirmed changes keep the screenshot, the page text, and the source URL. Close the tab and the receipt is still there.",
+        "Confirmed changes keep the page text and the source URL — plus a screenshot when the capture includes one. Close the tab and the receipt is still there.",
     },
   ],
   brandsKicker: "Brands we watch",
@@ -190,10 +190,10 @@ const EN: SneakerResaleCopy = {
 const DE: SneakerResaleCopy = {
   title: "Konkurrenzanzeigen für Reseller | Five to Nine",
   description:
-    "Meta-Anzeigen und Landingpages anderer Sneaker-Reseller beobachten. Mit Screenshot, nicht als Moodboard. Suche ohne Konto. Die App ist englisch; die Kasse folgt deiner Währung.",
+    "Meta-Anzeigen und Landingpages anderer Sneaker-Reseller beobachten. Mit Seitentext und Originallink — Screenshot, wenn die Aufnahme einen enthält — nicht als Moodboard. Suche ohne Konto. Die App ist englisch; die Kasse folgt deiner Währung.",
   kicker: "Sneaker-Resale · Konkurrenzanzeigen",
   h1: "Sieh die Anzeige, bevor du deinen Preis setzt.",
-  deck: "Five to Nine prüft Meta-Anzeigen und Seiten anderer Reseller. Wenn Angebot, Button oder Seitentext kippt, bleibt der Screenshot und der Originallink — kein weiteres Board voller Creatives.",
+  deck: "Five to Nine prüft Meta-Anzeigen und Seiten anderer Reseller. Wenn Angebot, Button oder Seitentext kippt, bleiben Seitentext und Originallink — plus ein Screenshot, wenn die Aufnahme einen enthält — kein weiteres Board voller Creatives.",
   searchLabel: "Öffentliche Suche",
   searchPlaceholder: "konkurrent-website.de…",
   searchButton: "Kostenlos testen, ohne Konto",
@@ -232,7 +232,7 @@ const DE: SneakerResaleCopy = {
     {
       title: "Der Originallink bleibt",
       detail:
-        "Bestätigte Änderungen behalten Screenshot, Seitentext und Quell-URL. Tab zu, Beleg da.",
+        "Bestätigte Änderungen behalten Seitentext und Quell-URL — plus einen Screenshot, wenn die Aufnahme einen enthält. Tab zu, Beleg da.",
     },
   ],
   brandsKicker: "Marken, die wir beobachten",
@@ -325,10 +325,10 @@ const DE: SneakerResaleCopy = {
 const JA: SneakerResaleCopy = {
   title: "スニーカー再販の競合広告 | Five to Nine",
   description:
-    "他店のMeta広告とランディングページの変化を、スクリーンショット付きで残す。検索は無料。アプリは英語。決済の通貨は買い手に合わせる。",
+    "他店のMeta広告とランディングページの変化を、ページ本文と元リンクで残す — 撮影にスクリーンショットが含まれる場合は画像付き。検索は無料。アプリは英語。決済の通貨は買い手に合わせる。",
   kicker: "スニーカー再販 · 競合広告",
   h1: "ライバルの告知を、値付けの前に。",
-  deck: "Five to Nine は、他の再販店の Meta 広告とページを見ます。オファー、ボタン、本文が動いたとき、スクショと元リンクが残ります。クリエイティブを集めるボードではありません。",
+  deck: "Five to Nine は、他の再販店の Meta 広告とページを見ます。オファー、ボタン、本文が動いたとき、ページ本文と元リンクが残り、撮影にスクリーンショットが含まれるときは画像も残ります。クリエイティブを集めるボードではありません。",
   searchLabel: "公開検索",
   searchPlaceholder: "競合のサイトを貼る…",
   searchButton: "無料で試す（アカウント不要）",
@@ -367,7 +367,7 @@ const JA: SneakerResaleCopy = {
     {
       title: "元リンクが残る",
       detail:
-        "確定した変化には、スクショ、ページ本文、出典 URL が付きます。タブを閉じても残ります。",
+        "確定した変化には、ページ本文と出典 URL が付き、撮影にスクリーンショットが含まれる場合は画像も付きます。タブを閉じても残ります。",
     },
   ],
   brandsKicker: "監視しているブランド",
@@ -460,10 +460,10 @@ const JA: SneakerResaleCopy = {
 const PT_BR: SneakerResaleCopy = {
   title: "Anúncios de concorrentes no resale | Five to Nine",
   description:
-    "Veja anúncios e landing pages de outros resellers no Meta, com print. Busca pública grátis. O app é em inglês; o checkout usa a moeda de quem compra.",
+    "Veja anúncios e landing pages de outros resellers no Meta, com texto da página e link original — mais um print quando a captura inclui um. Busca pública grátis. O app é em inglês; o checkout usa a moeda de quem compra.",
   kicker: "Resale de sneakers · anúncios de concorrentes",
   h1: "Veja o anúncio deles antes de precificar o seu.",
-  deck: "A Five to Nine acompanha anúncios e páginas de outros resellers no Meta. Quando a oferta, o botão ou o texto da página mudam, ficam o print e o link original — não mais um mural de criativos.",
+  deck: "A Five to Nine acompanha anúncios e páginas de outros resellers no Meta. Quando a oferta, o botão ou o texto da página mudam, ficam o texto da página e o link original — mais um print quando a captura inclui um — não mais um mural de criativos.",
   searchLabel: "Busca pública",
   searchPlaceholder: "cole-o-site-do-concorrente.com…",
   searchButton: "Testar grátis, sem conta",
@@ -502,7 +502,7 @@ const PT_BR: SneakerResaleCopy = {
     {
       title: "O link original permanece",
       detail:
-        "Mudança confirmada leva print, texto da página e URL da fonte. Fecha a aba, o comprovante continua.",
+        "Mudança confirmada leva texto da página e URL da fonte — mais um print quando a captura inclui um. Fecha a aba, o comprovante continua.",
     },
   ],
   brandsKicker: "Marcas que observamos",
