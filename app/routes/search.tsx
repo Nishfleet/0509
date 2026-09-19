@@ -33,6 +33,7 @@ import { SearchResultRow } from "~/components/search/result-row";
 import { SwitchFromStrip } from "~/components/switch-from-links";
 import { SearchAnswerPanel } from "~/components/search-answer-panel";
 import { SwitchCtaCard } from "~/components/switch-cta-card";
+import { Pill } from "~/components/pill";
 import { SubmitButton } from "~/components/submit-button";
 import { TrustProofNote } from "~/components/trust-proof-note";
 import { SearchCompetitorPreviewSection } from "~/components/watchlists/suggested-competitors-section";
@@ -156,6 +157,7 @@ import { prewarmWebsiteIdentity } from "~/lib/website-identity.server";
 import { localeSearchPathname } from "~/lib/locale-markets";
 import type { AppEnv } from "~/lib/env.server";
 import type { SuggestedCompetitorsPanelData } from "~/lib/auto-competitor-suggested-loader.server";
+import type { CompetitorGraphPeer } from "~/lib/competitor-graph.server";
 import type { CompetitorHandoffCandidate } from "~/lib/competitor-handoff.server";
 import type { RootLoaderData } from "~/root";
 import type { SearchFilters, WatchlistTrackingRole } from "~/lib/types";
@@ -488,6 +490,7 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
       competitorPreview: null,
       competitorHandoff: null,
       suggestedBrands: [],
+      relatedPeers: null,
       ...navFlags,
     };
   }
@@ -523,6 +526,7 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
       competitorPreview: null,
       competitorHandoff: null,
       suggestedBrands: [],
+      relatedPeers: null,
       ...navFlags,
     };
   }
@@ -757,6 +761,7 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
           competitorPreview: null,
           competitorHandoff: null,
           suggestedBrands: [],
+          relatedPeers: null,
           ...navFlags,
         };
       }
@@ -790,6 +795,7 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
       competitorPreview: null,
       competitorHandoff: null,
       suggestedBrands: [],
+      relatedPeers: null,
       ...navFlags,
     };
   }
@@ -1085,6 +1091,38 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
         })
       : [];
 
+  // Issue #1258 — `?related=1` renders the curated brand→peer-category map
+  // under the results: the table the P18 v2 spike named the dominant missing
+  // signal. The key is the search's own resolved domain (a `website=` search,
+  // or a keyword search's matched domain), then the raw query as a last
+  // resort — brandToPeers normalizes slugs/hosts and returns [] for unmapped
+  // brands, so the section degrades to an honest empty state rather than
+  // fabricating peers.
+  const relatedBrandQuery =
+    url.searchParams.get("related") === "1"
+      ? searchExecution.displayDomain ??
+        competitorWebsite.host ??
+        parsed.filters.query
+      : null;
+  const relatedPeers: {
+    brand: string;
+    peers: Array<CompetitorGraphPeer & { categoryLabel: string }>;
+  } | null = relatedBrandQuery
+    ? await (async () => {
+        const { brandToPeers, competitorGraphCategoryLabel } = await import(
+          "~/lib/competitor-graph.server"
+        );
+        const peers = await brandToPeers(env, relatedBrandQuery);
+        return {
+          brand: peers[0]?.brand ?? relatedBrandQuery,
+          peers: peers.map((peer) => ({
+            ...peer,
+            categoryLabel: competitorGraphCategoryLabel(peer.categoryId),
+          })),
+        };
+      })()
+    : null;
+
   const searchPayload = {
     mode: parsed.mode,
     filters: filtersForForms,
@@ -1115,6 +1153,7 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
     watchedWatchlist,
     competitorPreview,
     competitorHandoff,
+    relatedPeers,
     suggestedBrands,
     ...navFlags,
   };
@@ -1192,6 +1231,7 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
       competitorPreview: null,
       competitorHandoff: null,
       suggestedBrands: [],
+      relatedPeers: null,
       ...navFlags,
       },
       { headers: { "Cache-Control": "no-store" } },
@@ -3024,6 +3064,41 @@ export default function SearchRoute() {
                   </Form>
                 ) : null}
 
+                {/* Issue #1258 — `?related=1` renders the curated
+                    brand→peer-category map UNDER the results. Each peer chip
+                    re-runs /search for that peer's domain (keeping
+                    `related=1` so the map follows the hop); the badge names
+                    the curated category, not a live-evidence claim. An
+                    unmapped brand says so plainly — no fabricated peers. */}
+                {data.relatedPeers ? (
+                  <div
+                    aria-label={`Curated competitors of ${data.relatedPeers.brand}`}
+                    className="f9-wk-suggest"
+                    role="list"
+                  >
+                    <span className="f9-wk-suggest-label">
+                      {data.relatedPeers.peers.length > 0
+                        ? `Curated peers of ${data.relatedPeers.brand}:`
+                        : `No curated peers mapped for ${data.relatedPeers.brand} yet.`}
+                    </span>
+                    {data.relatedPeers.peers.map((peer) => (
+                      <span key={peer.peer} role="listitem">
+                        <Link
+                          className="f9-wk-chip"
+                          to={`${searchPath}?website=${encodeURIComponent(peer.peer)}&related=1`}
+                        >
+                          {peer.peer}
+                        </Link>{" "}
+                        <Pill
+                          title={`Curated category: ${peer.categoryId} · confidence ${peer.confidence}`}
+                          variant="status"
+                        >
+                          {peer.categoryLabel}
+                        </Pill>
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
               </section>
             </div>
 
