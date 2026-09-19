@@ -4,7 +4,10 @@ import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { validateRemoteRestoreEvidence } from "./deploy-production-plan.mjs";
+import {
+  validateBackupExport,
+  validateRemoteRestoreEvidence,
+} from "./deploy-production-plan.mjs";
 import { schemaFingerprint } from "./d1-schema-fingerprint.mjs";
 import {
   POST_DEPLOY_CLEANUP_MIGRATIONS,
@@ -649,6 +652,12 @@ async function main() {
   const evidencePath = readArg("--remote-evidence");
   if (!manifestPath || !evidencePath)
     throw new Error("remote_restore_evidence_arguments_missing");
+  // 0509#3576: optional, and deliberately absent from the prepare job. Prepare
+  // runs without Cloudflare credentials and cannot fetch the record, so a
+  // missing flag there must NOT read as "no fresh backup" — it just skips the
+  // backup half, which stays the deploy gate's job (`npm run deploy` always
+  // passes it).
+  const backupExportPath = readArg("--backup-export");
   const manifest = JSON.parse(readFileSync(resolve(manifestPath), "utf8"));
   let evidence = null;
   try {
@@ -656,6 +665,16 @@ async function main() {
   } catch {
     // A missing or malformed evidence file is validation failure, not a
     // verifier-infrastructure failure, and may trigger a protected refresh.
+  }
+  let backupExport = null;
+  if (backupExportPath) {
+    try {
+      backupExport = JSON.parse(readFileSync(resolve(backupExportPath), "utf8"));
+    } catch {
+      // Same rule as the evidence above: an absent export record is a failed
+      // verdict (`remote_backup_export_missing`), never a crash, so a stalled
+      // 6-hourly export job blocks the deploy loudly instead of erroring out.
+    }
   }
   const migrations = readdirSync(resolve("migrations"))
     .filter((name) => /^\d{4}_.+\.sql$/u.test(name))
@@ -682,6 +701,15 @@ async function main() {
     now: verificationNow,
     minimumValidityMs: minimumValidityMs(),
   });
+  if (backupExportPath) {
+    const exportVerdict = validateBackupExport(backupExport, {
+      now: verificationNow,
+    });
+    if (!exportVerdict.ok) {
+      verdict.ok = false;
+      verdict.issues.push(...exportVerdict.issues);
+    }
+  }
   if (orphanedDeployAnchor) {
     // Force a verdict failure (exit 1, not 2) so prepare falls through to
     // generate_restore_evidence and produces exact evidence for this SHA.
@@ -689,7 +717,7 @@ async function main() {
     verdict.issues.push(pinnedEvidenceShaNotInHistoryIssue(orphanedDeployAnchor));
   }
   process.stdout.write(
-    `${JSON.stringify({ ...verdict, policy: "fresh-schema-24h" })}\n`,
+    `${JSON.stringify({ ...verdict, policy: "fresh-export-12h-reusable-schema-proof-7d" })}\n`,
   );
   if (!verdict.ok) process.exitCode = 1;
 }

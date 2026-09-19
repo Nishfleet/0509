@@ -28,6 +28,14 @@ export function resolveBackupLocalDirectory(
   return resolve(home, ".local", "state", "0509", "backups", "d1");
 }
 
+/**
+ * 0509#3576: the deploy gate's backup-freshness record lives at ONE fixed R2
+ * key, next to the dated dumps but never among them. Fixed on purpose: the
+ * deploy reads it with the same plain `r2 object get` the drill already proves,
+ * so it needs no bucket-listing permission and no artifact index to search.
+ */
+export const BACKUP_EXPORT_RECORD_KEY = "backups/d1/export-record.json";
+
 /** @param {string} databaseName @param {string} stamp */
 export function buildBackupObjectKey(databaseName, stamp) {
   if (!/^[a-z0-9._-]{1,64}$/u.test(databaseName) || !/^[0-9TZ._-]{1,96}$/u.test(stamp)) {

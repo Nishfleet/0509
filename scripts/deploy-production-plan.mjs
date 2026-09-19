@@ -118,8 +118,6 @@ const MANIFEST_PATH_PATTERN =
   /^test-results\/deploy-readiness-[a-z0-9-]{1,96}\.json$/u;
 const REMOTE_RESTORE_PATH_PATTERN =
   /^test-results\/d1-remote-restore-evidence(?:-[a-z0-9-]{1,64})?\.json$/u;
-const BACKUP_EXPORT_PATH_PATTERN =
-  /^test-results\/d1-backup-export(?:-[a-z0-9-]{1,64})?\.json$/u;
 
 // 0509#3576: the BACKUP and the RESTORE PROOF are two different freshness
 // questions, and only the backup has to be recent. A D1 export costs nothing
@@ -139,6 +137,12 @@ export const BACKUP_EXPORT_FRESHNESS_MS = 12 * 60 * 60 * 1000;
 export const RESTORE_PROOF_FRESHNESS_MS = 7 * 24 * 60 * 60 * 1000;
 export const RESTORE_PROOF_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 const BACKUP_BUCKET = "0509-landing-page-artifacts";
+// Where the deploy job materializes the record the 6-hourly export-only job
+// published. The deploy gate reads this exact path; a test pins the workflow to
+// the same literal so the fetch step and the gate cannot drift apart.
+const BACKUP_EXPORT_PATH = "test-results/d1-backup-export.json";
+const BACKUP_EXPORT_PATH_PATTERN =
+  /^test-results\/d1-backup-export(?:\.json|-[a-z0-9-]{1,64}\.json)$/u;
 const WRANGLER_OUTPUT_PATH_PATTERN =
   /^test-results\/wrangler-deploy-output(?:-[a-z0-9-]{1,64})?\.jsonl$/u;
 const ROLLBACK_TARGET_PATH_PATTERN =
@@ -146,14 +150,7 @@ const ROLLBACK_TARGET_PATH_PATTERN =
 const FINGERPRINT_PATTERN = /^[a-f0-9]{64}$/u;
 const SAFE_IDENTIFIER_PATTERN = /^[A-Za-z0-9._-]{1,128}$/u;
 
-/**
- * The export record is what the cheap 6-hourly export-only job publishes: the
- * R2 object key it wrote plus when it wrote it. It carries no restore claim at
- * all, so it can never be mistaken for, or substituted for, restore proof.
- *
- * @param {unknown} record
- * @param {unknown} expected
- */
+/** @param {unknown} record @param {unknown} expected */
 export function validateBackupExport(record, expected) {
   const value =
     record && typeof record === "object" && !Array.isArray(record)
@@ -163,7 +160,7 @@ export function validateBackupExport(record, expected) {
   const issues = [];
   const expectedOptions =
     expected && typeof expected === "object"
-      ? /** @type {{ now?: Date, minimumValidityMs?: number }} */ (expected)
+      ? /** @type {{ now?: Date }} */ (expected)
       : {};
   const generatedAt =
     typeof value.generatedAt === "string"
@@ -173,15 +170,13 @@ export function validateBackupExport(record, expected) {
     expectedOptions.now instanceof Date
       ? expectedOptions.now.getTime()
       : Date.now();
-  const minimumValidityMs =
-    Number.isSafeInteger(expectedOptions.minimumValidityMs) &&
-    Number(expectedOptions.minimumValidityMs) >= 0
-      ? Number(expectedOptions.minimumValidityMs)
-      : 0;
+  // No extra headroom term: the 6-hourly cadence IS the headroom. Two missed
+  // runs still clear the 12h window, so a stalled schedule surfaces as a stale
+  // record instead of as a one-off flake.
   if (
     !Number.isFinite(generatedAt) ||
     generatedAt > now + 5 * 60 * 1000 ||
-    now + minimumValidityMs - generatedAt >= BACKUP_EXPORT_FRESHNESS_MS
+    now - generatedAt >= BACKUP_EXPORT_FRESHNESS_MS
   ) {
     issues.push("remote_backup_export_stale");
   }
@@ -190,7 +185,7 @@ export function validateBackupExport(record, expected) {
   // path that could escape the backups prefix.
   if (
     typeof value.remoteKey !== "string" ||
-    !/^backups\/d1\/0509-[0-9TZ-]+\.sql$/u.test(value.remoteKey)
+    !/^backups\/d1\/0509-[0-9TZ._-]{1,96}\.sql$/u.test(value.remoteKey)
   ) {
     issues.push("remote_backup_export_key");
   }
@@ -245,6 +240,11 @@ export function buildProductionDeployPlan({
   }
   const normalizedBackupProofStatus =
     normalizeBackupProofStatus(backupProofStatus);
+  // The export record only ever lives at one canonical path: the deploy job
+  // fetches the fixed R2 key there (BACKUP_EXPORT_PATH, pinned against the
+  // workflow by test). A caller may still override it for a one-off run, but
+  // the default is the path the workflow actually materializes.
+  const resolvedBackupExportPath = backupExportPath ?? BACKUP_EXPORT_PATH;
   if (normalizedBackupProofStatus === BACKUP_PROOF_REQUIRED) {
     if (
       typeof remoteRestoreEvidencePath !== "string" ||
@@ -252,15 +252,15 @@ export function buildProductionDeployPlan({
     ) {
       throw new Error("invalid_remote_restore_evidence_path");
     }
-    // The export record is the cheap half of the same requirement: a deferred
-    // release carries no evidence of either kind, so it must not carry a path
-    // for one either.
     if (
-      typeof backupExportPath !== "string" ||
-      !BACKUP_EXPORT_PATH_PATTERN.test(backupExportPath)
+      typeof resolvedBackupExportPath !== "string" ||
+      !BACKUP_EXPORT_PATH_PATTERN.test(resolvedBackupExportPath)
     ) {
       throw new Error("invalid_backup_export_path");
     }
+    // The export record is the cheap half of the same requirement: a deferred
+    // release carries no evidence of either kind, so it must not carry a path
+    // for one either.
   } else if (remoteRestoreEvidencePath || backupExportPath) {
     throw new Error("deferred_backup_restore_evidence_conflict");
   }
@@ -357,7 +357,7 @@ export function buildProductionDeployPlan({
             "--remote-evidence",
             /** @type {string} */ (remoteRestoreEvidencePath),
             "--backup-export",
-            /** @type {string} */ (backupExportPath),
+            resolvedBackupExportPath,
           ],
         }]
       : []),
@@ -593,7 +593,7 @@ export function validateRemoteRestoreEvidence(evidence, expected) {
   if (
     !Number.isFinite(generatedAt) ||
     generatedAt > now + 5 * 60 * 1000 ||
-    now + minimumValidityMs - generatedAt > maxAgeMs ||
+    now + minimumValidityMs - generatedAt >= maxAgeMs ||
     now + minimumValidityMs - generatedAt >= freshnessMs
   ) {
     issues.push("remote_restore_evidence_stale");

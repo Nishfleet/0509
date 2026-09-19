@@ -6,14 +6,22 @@
 //
 // 0509#3576: this is also the cheap half of the deploy gate's backup proof.
 // The export imports nothing and creates no scratch database, so it is the only
-// part of the old drill that has to be run often. When the caller sets
-// `D1_BACKUP_EXPORT_RECORD`, the script writes the R2 object key it just
-// uploaded plus its byte size and digest as the export record the deploy gate
-// reads (`validateBackupExport` in deploy-production-plan.mjs). The record is
-// written only after the upload returns, so it can never name an object that
-// is not in R2.
+// part of the old drill that has to be run often. After the dump is safely in
+// R2 this script publishes the export record the deploy gate reads
+// (`validateBackupExport` in deploy-production-plan.mjs): the object key it
+// just wrote, its byte size and its digest, at one fixed R2 key. The record is
+// staged in a throwaway temp file and uploaded only after the dump's own
+// upload returned, so it can never name an object that is not in R2.
 import { createHash } from "node:crypto";
-import { readdir, readFile, unlink, stat, writeFile } from "node:fs/promises";
+import { mkdtempSync, rmSync } from "node:fs";
+import {
+  readdir,
+  readFile,
+  unlink,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
 import {
   assertBackupAutomationApproval,
@@ -21,6 +29,7 @@ import {
   buildD1ExportArgs,
   buildBackupObjectKey,
   buildR2PutArgs,
+  BACKUP_EXPORT_RECORD_KEY,
   resolveBackupLocalDirectory,
 } from "./d1-backup-command-args.mjs";
 import {
@@ -40,11 +49,6 @@ const localPath = join(localDir, fileName);
 const remoteKey = buildBackupObjectKey(databaseName, stamp);
 const localManifestPath =
   process.env.D1_BACKUP_LOCAL_MANIFEST?.trim() || null;
-// The deploy gate's export record (0509#3576). Distinct from the local manifest
-// above: that one tracks the private plaintext dump for cleanup, this one is
-// the public-safe freshness record (key, size, digest) the gate reads.
-const exportRecordPath =
-  process.env.D1_BACKUP_EXPORT_RECORD?.trim() || null;
 const KEEP_LOCAL = 8;
 const PROVIDER_ATTEMPTS = 4;
 const D1_EXPORT_ATTEMPTS = 16;
@@ -185,15 +189,20 @@ try {
   throw uploadError;
 }
 
-// The object is in R2 now; record what the gate must verify. `wx` refuses to
-// overwrite a record from an earlier attempt, so a re-run cannot leave a stale
-// timestamp looking fresh.
-if (exportRecordPath) {
+// The object is in R2 now; publish what the gate must verify. A failure here
+// fails the run rather than silently leaving the gate unable to see a fresh
+// backup. The record is staged in a throwaway temp directory: the dated dump
+// stays the only file this script leaves in the backup directory.
+const exportRecordDirectory = mkdtempSync(
+  join(tmpdir(), "0509-d1-export-record-"),
+);
+try {
+  const exportRecordPath = join(exportRecordDirectory, "export-record.json");
   const digest = createHash("sha256")
     .update(await readFile(localPath))
     .digest("hex");
   await writeFile(
-    resolve(exportRecordPath),
+    exportRecordPath,
     `${JSON.stringify({
       schemaVersion: 1,
       generatedAt: new Date().toISOString(),
@@ -202,8 +211,16 @@ if (exportRecordPath) {
       objectBytes: exported.size,
       sha256: digest,
     })}\n`,
-    { encoding: "utf8", mode: 0o600, flag: "wx" },
+    { encoding: "utf8", mode: 0o600 },
   );
+  await runProviderOperationWithRetry("R2 export record upload", async () => {
+    await runCommandRedacted(
+      "npx",
+      buildR2PutArgs(bucketName, BACKUP_EXPORT_RECORD_KEY, exportRecordPath),
+    );
+  });
+} finally {
+  rmSync(exportRecordDirectory, { recursive: true, force: true });
 }
 
 if (automationApproved && !localManifestPath) {
