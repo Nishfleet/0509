@@ -502,6 +502,7 @@ describe("production deployment readiness gate", () => {
       backupProof: "not_obtained",
       productionD1RecoveryProof: "absent",
       releaseControlBaseSha:
+        // dead-sha: recorded provenance constant from deploy-production-plan.mjs — compared by string equality, never resolved through git
         "048e8a5991c6560a15cba485a7a4ba27af9d5004",
       candidateSha: "f".repeat(40),
       migrationFileCount: 0,

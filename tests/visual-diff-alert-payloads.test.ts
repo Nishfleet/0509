@@ -5,7 +5,7 @@ import type { WatchEventRecord } from "~/lib/types";
 /**
  * Visual diff alert payloads (2026-08-17): the alert payloads half of
  * "Before/after VISUAL diffs on change events". The watchlist-events half
- * shipped in PR #715 (commit `feb1d460`); this suite covers the write side
+ * shipped in PR #715 (commit feb1d460); this suite covers the write side
  * that wires the stored proof-capture screenshot pair into alert metadata
  * so the existing digest-email renderers and the instant-alert
  * `renderEventDiffHtml` can pick it up.

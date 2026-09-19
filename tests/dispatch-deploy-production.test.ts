@@ -7,8 +7,10 @@ import { describe, expect, it, beforeAll, afterAll } from "vitest";
 
 const scriptPath = "scripts/dispatch-deploy-production.sh";
 const placeholder = "a".repeat(40);
-const realSha = "389c0e550e3e335c386c498ce59779868088a5b7";
-const otherRealSha = "c24e9735d73499977d4faa79d03c47c3f2a89ee2";
+// dead-sha: opaque format-test strings — is_valid_candidate_sha checks the
+// shape only and never resolves the object through git.
+const realSha = "389c0e550e3e335c386c498ce59779868088a5b7"; // dead-sha: opaque format-test string
+const otherRealSha = "c24e9735d73499977d4faa79d03c47c3f2a89ee2"; // dead-sha: opaque format-test string
 
 let stubBinDir: string;
 
@@ -76,7 +78,7 @@ describe("dispatch-deploy-production.sh", () => {
       "f".repeat(40),
       "1".repeat(40),
       "",
-      "389c0e5",
+      "389c0e5", // dead-sha: truncated prefix of the opaque string above — rejected for length, never resolved
       `${realSha.slice(0, 39)}A`,
       "zzzz",
       "$(git rev-parse HEAD)",
