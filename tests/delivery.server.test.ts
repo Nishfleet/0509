@@ -287,7 +287,8 @@ expectedWebhookStatus:"provider_unknown",
     const createShareLink = vi.fn().mockResolvedValue({
       id: "share-1",
       token: "digestforwardtoken",
-      expiresAt: "2026-09-01T00:00:00.000Z",
+      // Real links mint through createShareLink with the 90-day default TTL.
+      expiresAt: "2026-10-30T00:00:00.000Z",
     });
 
     vi.doMock("~/lib/data.server", () => ({
@@ -364,6 +365,7 @@ expectedWebhookStatus:"provider_unknown",
     );
 
     expect(result).toMatchObject({ attempts: 1, channels: ["email"] });
+    expect(listActiveShareLinks).toHaveBeenCalledWith(expect.anything(), "user-1", 50);
     expect(createShareLink).toHaveBeenCalledTimes(1);
     expect(createShareLink).toHaveBeenCalledWith(
       expect.anything(),
@@ -371,8 +373,13 @@ expectedWebhookStatus:"provider_unknown",
       { resourceType: "digest", resourceId: "digest-1", isSnapshot: false },
     );
     expect(sendMock).toHaveBeenCalledTimes(1);
+    // Both HTML renderers consume forwardUrl — pin each line to the URL so a
+    // dropped share-line can't hide behind the surviving forward-line.
     expect(emailSendPayload(sendMock).html).toContain(
-      "https://app.0509.test/share/digestforwardtoken",
+      'Share this brief: <a href="https://app.0509.test/share/digestforwardtoken"',
+    );
+    expect(emailSendPayload(sendMock).html).toContain(
+      'Forward this brief to a teammate or client: <a href="https://app.0509.test/share/digestforwardtoken"',
     );
     expect(emailSendPayload(sendMock).text).toContain(
       "Share this brief: https://app.0509.test/share/digestforwardtoken",
@@ -389,6 +396,20 @@ expectedWebhookStatus:"provider_unknown",
     const upsertDigestDelivery = vi.fn();
     const upsertDeliveryTarget = mockAtomicEmailProvision();
     const listActiveShareLinks = vi.fn().mockResolvedValue([
+      {
+        // A link for a different digest must not be picked up — the reuse
+        // matcher keys on resourceType + resourceId, not on recency.
+        id: "share-other",
+        token: "otherdigesttoken",
+        userId: "user-1",
+        resourceType: "digest",
+        resourceId: "digest-9",
+        isSnapshot: false,
+        snapshotPayload: null,
+        createdAt: "2026-07-02T00:00:00.000Z",
+        expiresAt: "2026-10-01T00:00:00.000Z",
+        revokedAt: null,
+      },
       {
         id: "share-existing",
         token: "existingdigesttoken",
@@ -583,6 +604,100 @@ expectedWebhookStatus:"provider_unknown",
       "Forward this to whoever needs it; every claim keeps its source link.",
     );
     expect(emailSendPayload(sendMock).text).toContain("Brief by Five to Nine.");
+  });
+
+  it("never resolves a digest share URL on the internal lane", async () => {
+    const sendMock = mockEmailSend("msg_1");
+    const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
+    const updateDeliveryAttemptResult = vi.fn();
+    const upsertDigestDelivery = vi.fn();
+    const upsertDeliveryTarget = mockAtomicEmailProvision();
+    const listActiveShareLinks = vi.fn().mockResolvedValue([]);
+    const createShareLink = vi.fn();
+
+    vi.doMock("~/lib/data.server", () => ({
+      listAdsByIds: vi.fn().mockResolvedValue([]),
+      createDeliveryAttempt,
+      updateDeliveryAttemptResult,
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
+      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
+        id: "workspace-1",
+        userId: "user-1",
+        sensitivityMode: "balanced",
+        instantEnabled: false,
+        digestEnabled: true,
+        digestCadencePreference: "plan_default",
+        emailEnabled: true,
+        whatsappEnabled: false,
+        slackEnabled: false,
+        quietHours: null,
+        timezone: "Asia/Kolkata",
+        createdAt: "2026-04-19T00:00:00.000Z",
+        updatedAt: "2026-04-19T00:00:00.000Z",
+      }),
+      legacyWorkspaceDeliveryDefaults: vi.fn(),
+      listDeliveryTargets: vi.fn().mockResolvedValue([]),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: upsertDeliveryTarget,
+      upsertDeliveryTarget,
+      upsertDigestDelivery,
+      listActiveShareLinks,
+      createShareLink,
+    }));
+    vi.doMock("~/lib/whatsapp.server", () => ({
+      sendDigestWhatsApp: vi.fn(),
+    }));
+
+    const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+
+    const result = await deliverWeeklyDigest(
+      {
+        ...emailEnv,
+        APP_ORIGIN: "https://app.0509.test/",
+        BETTER_AUTH_SECRET: "test-secret-with-at-least-32-characters",
+        BETTER_AUTH_URL: "https://0509.io",
+      } as never,
+      {
+        userId: "user-1",
+        userName: "Owner",
+        accountEmail: "owner@example.com",
+        digestRunId: "digest-1",
+        periodStart: "2026-04-12T00:00:00.000Z",
+        periodEnd: "2026-04-19T00:00:00.000Z",
+        lane: "internal",
+        totalEligibleEvents: 1,
+        includedEvents: 1,
+        omittedEvents: 0,
+        items: [
+          {
+            eventId: "event-1",
+            watchlistId: "watch-1",
+            watchlistName: "boAt watch",
+            eventType: "landing_page_offer_changed",
+            title: "Landing page offer changed",
+            summary: "Offer changed on the landing page.",
+            metadata: {
+              priorityScore: 90,
+              priorityBand: "High priority",
+              recommendedAction: "Today: review the offer shift.",
+              proofTrail: "Verified from a page snapshot",
+              sourceStatus: "proof_backed",
+              proofCaptureId: "proof-1",
+              confirmedAt: "2026-04-19T00:00:00.000Z",
+            },
+          },
+        ],
+      },
+    );
+
+    // The lane clause of the share-URL gate: internal digests (Gate C proofs,
+    // operator surfaces) never mint or reuse a share link even on Starter+.
+    expect(result).toMatchObject({ attempts: 1, channels: ["email"] });
+    expect(listActiveShareLinks).not.toHaveBeenCalled();
+    expect(createShareLink).not.toHaveBeenCalled();
+    expect(emailSendPayload(sendMock).text).not.toContain("Share this brief:");
+    expect(emailSendPayload(sendMock).text).not.toContain(
+      "Forward this brief to a teammate or client:",
+    );
   });
 
   it("uses the Gate C subject and the pre-provider T0 in the durable proof summary", async () => {
