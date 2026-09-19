@@ -31,15 +31,6 @@ describe("discovery eval panel", () => {
     expect(DISCOVERY_EVAL_PANEL).toHaveLength(12);
   });
 
-  it("keeps the coverage script on the same panel", () => {
-    const script = readFileSync(
-      new URL("../scripts/discovery-panel-coverage.mjs", import.meta.url),
-      "utf8",
-    );
-    for (const domain of SPIKE_V2_DOMAINS) {
-      expect(script).toContain(`"${domain}"`);
-    }
-  });
 });
 
 describe("scoreDiscoveryPanelCoverage", () => {

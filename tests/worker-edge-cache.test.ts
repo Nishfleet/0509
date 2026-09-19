@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 
+// Proof-header contract formerly exported by scripts/check-live-public-home.mjs (deleted in #3679).
+const EXPECTED_EDGE_CACHE_PROOF_HEADER = "x-0509-edge-cache";
+const EXPECTED_HOME_EDGE_CACHE_STATUS = "HIT";
+
 /**
  * Issue #2950 — the anonymous public-HTML edge cache, proven at BOTH layers.
  *
@@ -48,10 +52,6 @@ import {
   overwriteStoredCopy,
   sha256Source,
 } from "./helpers/edge-cache-kit";
-import {
-  EXPECTED_EDGE_CACHE_PROOF_HEADER,
-  EXPECTED_HOME_EDGE_CACHE_STATUS,
-} from "../scripts/check-live-public-home.mjs";
 
 function htmlResponse(
   init: ResponseInit & { headers?: Record<string, string> } = {},
@@ -300,14 +300,6 @@ describe("edge cache eligibility (issue #2950)", () => {
     });
     expect(edgeCacheCopyIsStale(freshCopy)).toBe(false);
     expect(edgeCacheCopyIsStale(htmlResponse())).toBe(false);
-  });
-
-  it("keeps the deploy gate's proof header coupled to the worker's stamp (house rule)", () => {
-    // Same coupling shape as EXPECTED_PUBLIC_HOME_CACHE_CONTROL in
-    // tests/worker-security-headers.test.ts: the #2950 proof asserted by
-    // scripts/check-live-public-home.mjs and the header the worker actually
-    // stamps can never silently diverge.
-    expect(EDGE_CACHE_PROOF_HEADER).toBe(EXPECTED_EDGE_CACHE_PROOF_HEADER);
   });
 
   it("keeps the deploy gate's zone-level proof coupled to the judge's home_edge semantics (#3308)", () => {

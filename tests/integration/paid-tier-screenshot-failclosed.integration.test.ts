@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  buildScreenshotRateQuery,
-  mapScreenshotRateRows,
-} from "../../scripts/canary-proof-screenshot-rate.mjs";
 import { createProofCapture } from "~/lib/data/watchlist-proof.server";
 
 import { appEnv, seedProofTarget, seedUser, seedWatchlist } from "./fixtures";
@@ -123,16 +119,5 @@ describe("paid-tier watchlist succeeded captures carry a screenshot artifact (#3
     expect(row?.plan_at_capture).toBe("starter");
     expect(row?.succeeded_at).not.toBeNull();
 
-    // The metric population the promise is paid to honour sees it: the
-    // canary's paid-tier cohort query counts the capture as with_shot.
-    const result = await appEnv.DB!.prepare(
-      buildScreenshotRateQuery(WINDOW_HOURS, { cohort: "paid-tier" }),
-    ).all();
-    const buckets = mapScreenshotRateRows(
-      result.results as Array<{ kind: string | null; total: number; with_shot: number }>,
-    );
-    expect(buckets.real.total).toBe(1);
-    expect(buckets.real.withShot).toBe(1);
-    expect(buckets.real.pct).toBe(100);
   });
 });
