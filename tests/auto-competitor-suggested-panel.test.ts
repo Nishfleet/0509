@@ -122,6 +122,24 @@ function installMocks({
   return { env, seedAutoCompetitors, countWatchlists, getUserPlan, createWatchlistWithinLimit, queueFirstWatchlistScan };
 }
 
+function funnelOperationsFromLog(logSpy: ReturnType<typeof vi.spyOn>): string[] {
+  return logSpy.mock.calls
+    .map((call) => call[0])
+    .filter((line): line is string => typeof line === "string")
+    .map((line) => {
+      try {
+        return JSON.parse(line) as { operation?: string };
+      } catch {
+        return null;
+      }
+    })
+    .filter(
+      (record): record is { operation: string } =>
+        typeof record?.operation === "string" && record.operation.startsWith("funnel_"),
+    )
+    .map((record) => record.operation);
+}
+
 function makeCandidate(overrides: Partial<SuggestedCompetitorRow> = {}): SuggestedCompetitorRow {
   return {
     candidateId: "allbirds-com-123",
@@ -568,6 +586,118 @@ describe("accept-suggested-competitor action", () => {
     expect(result.ok).toBe(false);
     expect(result.error).toBe("plan_limit_exceeded");
     expect(result.message).toMatch(/paid feature/i);
+  });
+
+  it("emits funnel_suggestion_accepted once when a suggestion creates a watchlist (issue #3367)", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const { env } = installMocks({
+      seedAutoCompetitors: vi.fn().mockResolvedValue([
+        {
+          advertiser: "Rothy's",
+          advertiserPageId: null,
+          registrableDomain: "rothys.com",
+          overlapScore: 0.84,
+          provenance: "Keyword probe: 'wool runners' \u00d7 United States",
+          why: "Runs ads on the same terms as you.",
+          source: "ad_keyword_overlap" as const,
+          countries: ["United States"],
+          matchedKeywords: ["wool runners"],
+        },
+      ]),
+      createWatchlistWithinLimit: vi.fn().mockResolvedValue({
+        status: "created",
+        watchlist: {
+          id: "wl-new",
+          userId: "user-1",
+          name: "Rothy's",
+          targetType: "advertiser",
+          targetId: "https://rothys.com",
+          targetFingerprint: "fp-rothys",
+          targetLabel: "Rothy's",
+          targetCountry: "United States",
+          isActive: true,
+          lastScannedAt: null,
+          createdAt: "2026-08-28T00:00:00.000Z",
+          updatedAt: "2026-08-28T00:00:00.000Z",
+        },
+        current: 1,
+        limit: 10,
+      }),
+    });
+    env.FUNNEL_MEASUREMENT_ENABLED = "1";
+
+    const result = await runAcceptAction({ candidateId: candidateIdFor("Rothy's", "rothys.com") });
+    expect(result.ok).toBe(true);
+    expect(funnelOperationsFromLog(logSpy)).toEqual(["funnel_suggestion_accepted"]);
+  });
+
+  it("does not emit funnel_suggestion_accepted for an already-watched suggestion", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const { env } = installMocks({
+      seedAutoCompetitors: vi.fn().mockResolvedValue([
+        {
+          advertiser: "Rothy's",
+          advertiserPageId: null,
+          registrableDomain: "rothys.com",
+          overlapScore: 0.84,
+          provenance: "Keyword probe: 'wool runners' \u00d7 United States",
+          why: "Runs ads on the same terms as you.",
+          source: "ad_keyword_overlap" as const,
+          countries: ["United States"],
+          matchedKeywords: ["wool runners"],
+        },
+      ]),
+      createWatchlistWithinLimit: vi.fn().mockResolvedValue({
+        status: "existing",
+        watchlist: {
+          id: "wl-already",
+          userId: "user-1",
+          name: "Rothy's",
+          targetType: "advertiser",
+          targetId: "https://rothys.com",
+          targetFingerprint: "fp-rothys",
+          targetLabel: "Rothy's",
+          targetCountry: "United States",
+          isActive: true,
+          lastScannedAt: null,
+          createdAt: "2026-08-28T00:00:00.000Z",
+          updatedAt: "2026-08-28T00:00:00.000Z",
+        },
+        current: 1,
+        limit: 10,
+      }),
+    });
+    env.FUNNEL_MEASUREMENT_ENABLED = "1";
+
+    const result = await runAcceptAction({ candidateId: candidateIdFor("Rothy's", "rothys.com") });
+    expect(result.ok).toBe(true);
+    expect(funnelOperationsFromLog(logSpy)).toEqual([]);
+  });
+
+  it("does not emit funnel_suggestion_accepted when the plan cap refuses the accept", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const { env } = installMocks({
+      seedAutoCompetitors: vi.fn().mockResolvedValue([
+        {
+          advertiser: "Rothy's",
+          advertiserPageId: null,
+          registrableDomain: "rothys.com",
+          overlapScore: 0.84,
+          provenance: "Keyword probe: 'wool runners' \u00d7 United States",
+          why: "Runs ads on the same terms as you.",
+          source: "ad_keyword_overlap" as const,
+          countries: ["United States"],
+          matchedKeywords: ["wool runners"],
+        },
+      ]),
+      countWatchlists: vi.fn().mockResolvedValue(10),
+      createWatchlistWithinLimit: vi.fn(),
+    });
+    env.FUNNEL_MEASUREMENT_ENABLED = "1";
+
+    const result = await runAcceptAction({ candidateId: candidateIdFor("Rothy's", "rothys.com") });
+    expect(result.ok).toBe(false);
+    expect(funnelOperationsFromLog(logSpy)).toEqual([]);
   });
 });
 

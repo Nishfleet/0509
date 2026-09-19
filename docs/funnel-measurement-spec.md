@@ -64,6 +64,7 @@ The account/workspace measures in §3.2 are **derived metrics, not emitted event
 | `funnel_first_brief_viewed` | Authenticated Overview or Briefs renders a first brief with ≥1 evidence-linked item | Measure same-session activation (signup → first brief on screen) | `event_id`, `timestamp`, `route` | Watchlist names, ad URLs, proof content, `workspace_id` |
 | `funnel_activation_scan_started` | The BET 7 onboarding flow queues the first activation scan for a signup workspace (request that created the watchlist) | Measure activation step 1 — the scan that produces the first brief | `event_id`, `timestamp`, `route` | Watchlist ids, competitor names/URLs, ad content, `workspace_id` |
 | `funnel_first_brief_email_sent` | The "Your first brief" email is dispatched (digest path with `firstBrief: true`), in-session or from the async scan-completion path | Measure the within-the-hour email promise | `event_id`, `timestamp`, `route` | Email addresses, watchlist names, ad URLs, digest content, `workspace_id` |
+| `funnel_suggestion_accepted` | Authenticated workspace accepts a suggested competitor (one-click, or each newly created bulk-admit). Does not fire for hand-adds, already-watched rows, or over-cap refusals | Count suggestion-accepts distinctly from hand-adds; suggestions-accepted-per-signup is this count over `funnel_signup_completed` | `event_id`, `timestamp`, `route` | Watchlist ids, competitor names/URLs, candidate ids, `workspace_id` |
 
 All v1 emitted events are request-scoped: they carry no identifier that
 can join one request to another or connect them to an account (see §4).
@@ -77,7 +78,10 @@ it fires after sign-in; it still stores no `workspace_id` and is not joinable to
 `funnel_activation_scan_started` and `funnel_first_brief_email_sent` use the same
 workspace scope and `activation` route; neither stores a `workspace_id` or any watchlist,
 competitor, or email field, so none of the activation events join to an account or to each
-other. `funnel_first_brief_email_sent` is the one event that may be server-emitted without
+other. `funnel_suggestion_accepted` (issue #3367) uses the same workspace scope and
+`activation` route, and the same no-join field set; it fires once per newly created
+suggestion-accept so the count is distinguishable from a hand-add, which never emits
+this kind. `funnel_first_brief_email_sent` is the one event that may be server-emitted without
 a user request: it fires from the async scan-completion delivery path (and in-session), so
 there is no request header to carry GPC — the GPC opt-out cannot apply when no request
 exists. Its field allowlist and account-scope rules are unchanged, and it fires only for a
@@ -95,6 +99,7 @@ records and are never dual-logged alongside the events in §3.1.
 | First watchlist | `watchlist` rows | Measure activation step 1 | Watchlist query, competitor names, watchlist content |
 | First proof | `proof_capture` rows | Measure activation step 2 | Ad text, ad URLs, proof content |
 | Paid conversion | `user_plan` free → paid transitions | Future metric; reconcile against existing `user_plan` records; never duplicates billing data | Payment details, card data, invoice content, provider credentials |
+| Signups reaching ≥3 tracked competitors | `user` ⋈ `user_plan` ⋈ active `watchlist` rows with `tracking_role = 'competitor'` (issue #3367) | Share of fixture-free signups, per plan, that currently track ≥3 competitors | Email, name, watchlist content, competitor identities |
 
 Notes:
 
@@ -243,6 +248,9 @@ that surface's queryable tier, carrying only §4-allowlisted fields):
   start → complete conversion is not measurable in v1.
 - Median time from signup completion to first watchlist, and from first watchlist to
   first proof (derived from D1 timestamps; §3.2).
+- Suggestions accepted per signup (`funnel_suggestion_accepted` count over
+  `funnel_signup_completed`, 7d/30d) and the share of signups reaching ≥3 tracked
+  competitors, per plan (derived from D1; issue #3367).
 - Free → paid conversion count per period (derived from `user_plan` transitions,
   read-only).
 

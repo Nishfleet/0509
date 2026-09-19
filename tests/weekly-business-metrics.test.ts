@@ -5,6 +5,7 @@ import {
   buildEvidenceUsageQuery,
   buildSignupsQuery,
   buildTopUpsQuery,
+  buildTrackedCompetitorsGte3Query,
   buildYieldPerWatchlistQuery,
   buildYieldWeeklyQuery,
   evaluateDrift,
@@ -42,6 +43,13 @@ describe("weekly business-metrics windowed series", () => {
   it("keeps the per-watchlist yield query floored at the trailing 7 days", () => {
     const sql = buildYieldPerWatchlistQuery(NOW);
     expect(sql).toContain(`we.created_at >= '${isoDaysAgo(7)}'`);
+  });
+
+  it("floors the >=3 tracked-competitors share at the 30d signup window (issue #3367)", () => {
+    const sql = buildTrackedCompetitorsGte3Query(NOW);
+    expect(sql).toContain(`WHERE u.createdAt >= '${isoDaysAgo(30)}'`);
+    expect(sql).toContain("tracking_role = 'competitor'");
+    expect(sql).toContain("LIMIT 1000");
   });
 });
 

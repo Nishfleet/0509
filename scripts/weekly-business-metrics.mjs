@@ -47,7 +47,11 @@
  *      writeDataPoint (binding FUNNEL_ANALYTICS, wrangler.jsonc). Counts are
  *      sample-corrected (`sumIf`/`SUM(_sample_interval)`). When the
  *      Analytics Engine read cannot run, `funnel.available` is false with the
- *      reason — never a manufactured zero.
+ *      reason — never a manufactured zero. Issue #3367 adds
+ *      `suggestion_accepted` counts and `suggestions_accepted_per_signup_*`
+ *      rates on that same object, plus `tracked_competitors_gte3`: the
+ *      share of (fixture-free) signups that currently track >=3 competitors,
+ *      grouped by plan, from a read-only D1 join.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -93,6 +97,14 @@ const FUNNEL_HEADLINE_KINDS = [
   "search_preview_error",
   "signup_start",
 ];
+/** Issue #3367 — always present on the funnel JSON so a week with zero
+ * suggestion-accepts is an honest zero, not a missing key. signup_completed
+ * is the denominator for suggestions-accepted-per-signup. */
+const FUNNEL_RATE_KINDS = ["suggestion_accepted", "signup_completed"];
+const FUNNEL_ZERO_FILL_KINDS = [...FUNNEL_HEADLINE_KINDS, ...FUNNEL_RATE_KINDS];
+/** Plans the >=3-tracked-competitors share zero-fills so a plan with no
+ * recent signups still appears. Unknown plan strings from D1 are kept. */
+const TRACKED_COMPETITORS_PLANS = ["free", "scout", "starter", "agency"];
 /** Credential files consulted for the Analytics Engine read, in order. */
 const CLOUDFLARE_CREDENTIAL_ENV_FILES = [
   join(homedir(), ".config", "cloudflare", "deploy.env"),
@@ -130,6 +142,10 @@ counts from the Workers Analytics Engine \`${FUNNEL_DATASET}\` dataset
 (credential lookup: CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN env, then
 ~/.config/cloudflare/deploy.env, then analytics.env). \`funnel.available\`
 false means the read could not run — counts are then absent, never zeroed.
+Issue #3367 adds \`funnel.suggestion_accepted_*\` and
+\`funnel.suggestions_accepted_per_signup_*\` on that object, plus
+\`tracked_competitors_gte3\` (share of fixture-free signups with >=3 active
+competitor watchlists, per plan).
 
 Runs the six docs/ga-metrics.md business-metric queries plus a weekly
 watch_event yield check against production D1 via
@@ -1013,7 +1029,7 @@ export function buildFunnelCountsQuery() {
 export function evaluateFunnelCounts(rows) {
   /** @type {Map<string, { kind: string, events_7d: number, events_30d: number }>} */
   const perKind = new Map();
-  for (const kind of FUNNEL_HEADLINE_KINDS) {
+  for (const kind of FUNNEL_ZERO_FILL_KINDS) {
     perKind.set(`funnel_${kind}`, {
       kind: `funnel_${kind}`,
       events_7d: 0,
@@ -1038,6 +1054,18 @@ export function evaluateFunnelCounts(rows) {
     funnel[`${kind}_7d`] = cell?.events_7d ?? 0;
     funnel[`${kind}_30d`] = cell?.events_30d ?? 0;
   }
+  const accepted7 = perKind.get("funnel_suggestion_accepted")?.events_7d ?? 0;
+  const accepted30 = perKind.get("funnel_suggestion_accepted")?.events_30d ?? 0;
+  const signups7 = perKind.get("funnel_signup_completed")?.events_7d ?? 0;
+  const signups30 = perKind.get("funnel_signup_completed")?.events_30d ?? 0;
+  funnel.suggestion_accepted_7d = accepted7;
+  funnel.suggestion_accepted_30d = accepted30;
+  funnel.signup_completed_7d = signups7;
+  funnel.signup_completed_30d = signups30;
+  funnel.suggestions_accepted_per_signup_7d =
+    signups7 > 0 ? accepted7 / signups7 : null;
+  funnel.suggestions_accepted_per_signup_30d =
+    signups30 > 0 ? accepted30 / signups30 : null;
   return funnel;
 }
 
@@ -1082,6 +1110,126 @@ async function readFunnelCounts() {
 }
 
 /**
+ * Issue #3367: one read-only D1 join answering "share of signups that
+ * currently track >=3 competitors, per plan". The 7d window is a subset of
+ * the 30d one, so a single round trip answers both. Email/id ride so the
+ * evaluator can apply SYNTHETIC_USER_PATTERNS; they never appear in the
+ * JSON. SELECT-only.
+ *
+ * @param {Date} [now]
+ * @returns {string}
+ */
+export function buildTrackedCompetitorsGte3Query(now = new Date()) {
+  const cutoff = new Date(now.getTime() - directionWindows.baseline * DAY_MS).toISOString();
+  return `
+SELECT u.id, u.email, u.createdAt, COALESCE(up.plan, 'free') AS plan,
+       COALESCE(c.n, 0) AS competitor_count
+FROM "user" u
+LEFT JOIN user_plan up ON up.user_id = u.id
+LEFT JOIN (
+  SELECT user_id, COUNT(*) AS n
+  FROM watchlist
+  WHERE is_active = 1 AND tracking_role = 'competitor'
+  GROUP BY user_id
+) c ON c.user_id = u.id
+WHERE u.createdAt >= '${cutoff}'
+ORDER BY u.createdAt DESC
+LIMIT 1000;
+`;
+}
+
+/**
+ * @param {number} reached
+ * @param {number} signups
+ * @returns {number | null}
+ */
+function shareOrNull(reached, signups) {
+  if (!signups) return null;
+  return reached / signups;
+}
+
+/**
+ * Pure mapper: D1 rows → per-plan 7d/30d signup counts and the share that
+ * currently hold >=3 active competitor watchlists. Fixtures are excluded
+ * with the same SYNTHETIC_USER_PATTERNS the direction meter uses. Output
+ * never carries email, id, or watchlist content.
+ *
+ * @param {Array<Record<string, unknown>>} rows
+ * @param {Date} now
+ * @returns {{ windows_days: { recent: number, baseline: number }, by_plan: Array<Record<string, unknown>> }}
+ */
+export function evaluateTrackedCompetitorsGte3(rows, now) {
+  const cutoff30 = now.getTime() - directionWindows.baseline * DAY_MS;
+  const cutoff7 = now.getTime() - directionWindows.recent * DAY_MS;
+  /** @type {Map<string, { plan: string, signups_7d: number, reached_gte3_7d: number, signups_30d: number, reached_gte3_30d: number }>} */
+  const byPlan = new Map();
+  for (const plan of TRACKED_COMPETITORS_PLANS) {
+    byPlan.set(plan, {
+      plan,
+      signups_7d: 0,
+      reached_gte3_7d: 0,
+      signups_30d: 0,
+      reached_gte3_30d: 0,
+    });
+  }
+
+  for (const row of rows ?? []) {
+    if (SYNTHETIC_USER_PATTERNS.some((pattern) => matchesSyntheticUserPattern(row, pattern))) {
+      continue;
+    }
+    const ts = Date.parse(String(row?.createdAt ?? ""));
+    if (!Number.isFinite(ts) || ts < cutoff30) continue;
+    const plan = String(row?.plan ?? "free").trim() || "free";
+    if (!byPlan.has(plan)) {
+      byPlan.set(plan, {
+        plan,
+        signups_7d: 0,
+        reached_gte3_7d: 0,
+        signups_30d: 0,
+        reached_gte3_30d: 0,
+      });
+    }
+    const cell = byPlan.get(plan);
+    const reached = Number(row?.competitor_count ?? 0) >= 3;
+    cell.signups_30d += 1;
+    if (reached) cell.reached_gte3_30d += 1;
+    if (ts >= cutoff7) {
+      cell.signups_7d += 1;
+      if (reached) cell.reached_gte3_7d += 1;
+    }
+  }
+
+  const by_plan = [...byPlan.values()]
+    .sort((a, b) => a.plan.localeCompare(b.plan))
+    .map((cell) => ({
+      ...cell,
+      share_7d: shareOrNull(cell.reached_gte3_7d, cell.signups_7d),
+      share_30d: shareOrNull(cell.reached_gte3_30d, cell.signups_30d),
+    }));
+
+  return {
+    windows_days: { ...directionWindows },
+    by_plan,
+  };
+}
+
+/**
+ * @param {Date} now
+ * @returns {{ available: boolean, detail?: string } & Record<string, unknown>}
+ */
+function readTrackedCompetitorsGte3(now) {
+  try {
+    const rows = runQuery(buildTrackedCompetitorsGte3Query(now));
+    return { available: true, ...evaluateTrackedCompetitorsGte3(rows, now) };
+  } catch (error) {
+    return {
+      available: false,
+      detail: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
  * The --json mode (issue #3321): one read-only production read, the pure
  * meter, one JSON object. Fails honestly — any read error propagates to
  * main() and exits 1 rather than printing partial numbers. The `funnel`
@@ -1097,6 +1245,7 @@ async function runSignupIntegrityJson(eventsPath) {
   const result = evaluateSignupIntegrity(rows, now, events);
   result.generated_at = now.toISOString();
   result.funnel = await readFunnelCounts();
+  result.tracked_competitors_gte3 = readTrackedCompetitorsGte3(now);
   console.log(JSON.stringify(result, null, 2));
 }
 
@@ -1244,6 +1393,36 @@ async function main() {
       );
       console.log(
         `\n_Source: Analytics Engine dataset \`${FUNNEL_DATASET}\`, sample-corrected counts; credentials from ${String(funnel.credential_source)}._\n`,
+      );
+      if (
+        funnel.suggestions_accepted_per_signup_7d != null ||
+        funnel.suggestions_accepted_per_signup_30d != null
+      ) {
+        console.log(
+          `_Suggestions accepted per signup: 7d ${formatCell(funnel.suggestions_accepted_per_signup_7d)} (${formatCell(funnel.suggestion_accepted_7d)} / ${formatCell(funnel.signup_completed_7d)}), 30d ${formatCell(funnel.suggestions_accepted_per_signup_30d)} (${formatCell(funnel.suggestion_accepted_30d)} / ${formatCell(funnel.signup_completed_30d)})._\n`,
+        );
+      }
+    }
+
+    printSection("10. Signups reaching >=3 tracked competitors, per plan");
+    const tracked = readTrackedCompetitorsGte3(new Date());
+    if (!tracked.available) {
+      console.log(`tracked_competitors_gte3 unavailable: ${String(tracked.detail)}`);
+    } else {
+      printTable(
+        [
+          { key: "plan", label: "plan" },
+          { key: "signups_7d", label: "signups_7d" },
+          { key: "reached_gte3_7d", label: "reached_gte3_7d" },
+          { key: "share_7d", label: "share_7d" },
+          { key: "signups_30d", label: "signups_30d" },
+          { key: "reached_gte3_30d", label: "reached_gte3_30d" },
+          { key: "share_30d", label: "share_30d" },
+        ],
+        tracked.by_plan ?? [],
+      );
+      console.log(
+        "\n_Fixture-free signups (same SYNTHETIC_USER_PATTERNS as the direction metric). A competitor is an active watchlist with tracking_role = competitor. Share is null when a plan has zero signups in the window._\n",
       );
     }
   } catch (error) {

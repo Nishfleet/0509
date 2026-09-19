@@ -156,6 +156,24 @@ function installMocks({
   return { env, seedAutoCompetitors, countWatchlists, getUserPlan, createWatchlistWithinLimit, listWatchlists, queueFirstWatchlistScan };
 }
 
+function funnelOperationsFromLog(logSpy: ReturnType<typeof vi.spyOn>): string[] {
+  return logSpy.mock.calls
+    .map((call) => call[0])
+    .filter((line): line is string => typeof line === "string")
+    .map((line) => {
+      try {
+        return JSON.parse(line) as { operation?: string };
+      } catch {
+        return null;
+      }
+    })
+    .filter(
+      (record): record is { operation: string } =>
+        typeof record?.operation === "string" && record.operation.startsWith("funnel_"),
+    )
+    .map((record) => record.operation);
+}
+
 async function runBulkAcceptAction(fields: Record<string, string | string[]>) {
   const { action } = await import("~/routes/app.watchlists");
   const body = new FormData();
@@ -600,6 +618,85 @@ describe("bulk-accept-suggested-competitors route action", () => {
     // Issue #3380: creation also queues the activation scan — exactly once
     // per newly created watchlist.
     expect(queueFirstWatchlistScan).toHaveBeenCalledTimes(2);
+  });
+
+  it("emits funnel_suggestion_accepted once per newly created watchlist (issue #3367)", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const createWatchlistWithinLimit = vi.fn().mockImplementation(
+      async (_env: unknown, _userId: string, _target: unknown, _limit: number) => ({
+        status: "created",
+        watchlist: { id: `wl-${Math.random()}`, targetLabel: "" },
+        current: 0,
+        limit: 10,
+      }),
+    );
+    const { env } = installMocks({
+      seedAutoCompetitors: vi.fn().mockResolvedValue([
+        makeSeedCandidate({ advertiser: "Rothy's", registrableDomain: "rothys.com" }),
+        makeSeedCandidate({ advertiser: "Vivaia", registrableDomain: "vivaia.com" }),
+      ]),
+      createWatchlistWithinLimit,
+    });
+    env.FUNNEL_MEASUREMENT_ENABLED = "1";
+
+    const result = await runBulkAcceptAction({
+      candidateIds: [
+        candidateIdFor("Rothy's", "rothys.com"),
+        candidateIdFor("Vivaia", "vivaia.com"),
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.admittedCount).toBe(2);
+    expect(funnelOperationsFromLog(logSpy)).toEqual([
+      "funnel_suggestion_accepted",
+      "funnel_suggestion_accepted",
+    ]);
+  });
+
+  it("does not emit funnel_suggestion_accepted when bulk-accept admits nothing", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const { env } = installMocks({ createWatchlistWithinLimit: vi.fn() });
+    env.FUNNEL_MEASUREMENT_ENABLED = "1";
+
+    const result = await runBulkAcceptAction({ candidateIds: [] });
+    expect(result.ok).toBe(true);
+    expect(result.admittedCount).toBe(0);
+    expect(funnelOperationsFromLog(logSpy)).toEqual([]);
+  });
+
+  it("emits only for admitted rows when the rest are over_cap (issue #3367)", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const createWatchlistWithinLimit = vi.fn().mockImplementation(async () => ({
+      status: "created",
+      watchlist: { id: `wl-${Math.random()}`, targetLabel: "" },
+      current: 0,
+      limit: 2,
+    }));
+    const { env } = installMocks({
+      seedAutoCompetitors: vi.fn().mockResolvedValue(
+        Array.from({ length: 4 }).map((_, index) =>
+          makeSeedCandidate({
+            advertiser: `Brand ${index}`,
+            registrableDomain: `brand${index}.com`,
+          }),
+        ),
+      ),
+      countWatchlists: vi.fn().mockResolvedValue(1),
+      createWatchlistWithinLimit,
+      checkPlanLimit: vi.fn().mockResolvedValue({ allowed: false, limit: 2, current: 1 }),
+    });
+    env.FUNNEL_MEASUREMENT_ENABLED = "1";
+
+    const result = await runBulkAcceptAction({
+      candidateIds: Array.from({ length: 4 }).map((_, index) =>
+        candidateIdFor(`Brand ${index}`, `brand${index}.com`),
+      ),
+    });
+
+    expect(result.admittedCount).toBe(1);
+    expect(result.overCapCount).toBe(3);
+    expect(funnelOperationsFromLog(logSpy)).toEqual(["funnel_suggestion_accepted"]);
   });
 
   it("returns plan_limit_exceeded on free plans (paid-tier gate)", async () => {

@@ -18,6 +18,7 @@ const FUNNEL_OPERATIONS = [
   "funnel_first_brief_viewed",
   "funnel_activation_scan_started",
   "funnel_first_brief_email_sent",
+  "funnel_suggestion_accepted",
 ];
 
 function emittedFunnelRecords(logSpy: MockInstance): Record<string, unknown>[] {
@@ -229,6 +230,50 @@ describe("funnel activation events (BET 7, issue #1487)", () => {
       "~/lib/funnel-measurement.server"
     );
     emitFunnelFirstBriefEmailSent({});
+    expect(emittedFunnelRecords(logSpy)).toHaveLength(0);
+  });
+});
+
+describe("funnel suggestion-accept events (issue #3367)", () => {
+  let logSpy: MockInstance;
+
+  beforeEach(() => {
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("emits a workspace-scoped activation event with only the allowlisted fields", async () => {
+    const { emitFunnelSuggestionAccepted } = await import(
+      "~/lib/funnel-measurement.server"
+    );
+    emitFunnelSuggestionAccepted(
+      { FUNNEL_MEASUREMENT_ENABLED: "1" },
+      makeFunnelRequest(),
+    );
+    const [record] = emittedFunnelRecords(logSpy) as [
+      { operation: string; details: Record<string, string> },
+    ];
+    expect(record.operation).toBe("funnel_suggestion_accepted");
+    expect(record.details.route).toBe("activation");
+    expect(record.details.account_scope).toBe("workspace");
+    expect(Object.keys(record.details).sort()).toEqual(
+      ["account_scope", "event_id", "route"].sort(),
+    );
+    expect(JSON.stringify(record.details)).not.toMatch(
+      /watchlist|competitor|workspace_id|candidate|advertiser|@/i,
+    );
+  });
+
+  it("stays silent when the gate is off or GPC is set", async () => {
+    const { emitFunnelSuggestionAccepted } = await import(
+      "~/lib/funnel-measurement.server"
+    );
+    emitFunnelSuggestionAccepted({}, makeFunnelRequest());
+    const gpc = new Request("http://localhost/", { headers: { "sec-gpc": "1" } });
+    emitFunnelSuggestionAccepted({ FUNNEL_MEASUREMENT_ENABLED: "1" }, gpc);
     expect(emittedFunnelRecords(logSpy)).toHaveLength(0);
   });
 });
@@ -1377,6 +1422,7 @@ describe("funnel measurement retention and deletion (spec §8 gate 7)", () => {
       emitFunnelSignupCompleted,
       emitFunnelSignupStart,
       emitFunnelSignupStartFromAllowlistedSource,
+      emitFunnelSuggestionAccepted,
     } = await import("~/lib/funnel-measurement.server");
 
     const request = makeFunnelRequest();
@@ -1392,6 +1438,7 @@ describe("funnel measurement retention and deletion (spec §8 gate 7)", () => {
     emitFunnelActivationScanStarted(env, request);
     emitFunnelFirstBriefGenerated(env);
     emitFunnelFirstBriefEmailSent(env);
+    emitFunnelSuggestionAccepted(env, request);
 
     expect(storageTouches).toEqual([]);
     const records = emittedFunnelRecords(logSpy);
