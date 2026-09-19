@@ -332,7 +332,7 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
   customerNavPaths: [
     "/app", "/app/account", "/app/api", "/app/billing", "/app/briefs",
     "/app/collections",
-    "/app/c", "/app/clients", "/app/deliver", "/app/developer-access",
+    "/app/c", "/app/clients", "/app/competitors", "/app/deliver", "/app/developer-access",
     "/app/digests", "/app/help", "/app/notifications", "/app/presence",
     "/app/reports", "/app/settings", "/app/shares", "/app/source-access",
     "/app/sources", "/app/support", "/app/team", "/app/watchlists",

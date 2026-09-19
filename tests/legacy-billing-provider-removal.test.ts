@@ -20,6 +20,11 @@ const allowedHistoricalReferences = new Map([
   // old-provider reference in these files still fails this test.
   ["app/lib/brand-categories.ts", ["razor" + "pay.com"]],
   ["tests/fixtures/indexable-ads-domains.snapshot.json", ["razor" + "pay.com"]],
+  // #1258: the curated competitor graph names the domain as a monitored peer
+  // brand in the India B2B SaaS vertical — same "tracked advertiser, not a
+  // billing provider" case as the brand-categories entries above.
+  ["app/data/competitor-graph-curated.json", ["razor" + "pay.com"]],
+  ["migrations/0105_competitor_graph.sql", ["razor" + "pay.com"]],
 ]);
 function listRepoFiles(): string[] {
   return execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard"], {

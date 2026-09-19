@@ -129,6 +129,7 @@ only through watchlist-scoped parents; it never joins to a user directly.
 | analysis_field | polymorphic `scope_type`/`scope_id` — follows its parent surface; never user-joined directly |
 | status_probe_samples | status-probe telemetry samples (issue #3186) — probe name, ok/latency, checked_at; ops observability, no customer rows |
 | email_delivery_canary | email delivery round-trip canary rows (issue #3188) — token, sent/received/failed, latency; ops observability, no customer rows |
+| competitor_graph | curated global brand→peer reference map (issue #1258) — shared seed corpus written by migrations/curation; no user or workspace columns |
 
 ## 3. Decision: adopt 0089, extend it — no replacement
 
