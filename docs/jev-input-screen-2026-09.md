@@ -168,13 +168,14 @@ model, 3h36m later is committed beside it as
 `state_sha256` is identical for all seven passages across both runs — the state built
 from a fixture is byte-stable, so a stored row can be re-computed and compared later.
 The answers are not identical: every noul and score moved a little (largest noul move
-0.02, largest score move 0.07; the ad creatives 1.79 -> 1.76). What did not move is the
-**decision**: 4 include / 1 conflicting_evidence / 2 exclude, the same seven routes, the
-planted row at 0.99 both times, and the boilerplate probe still the lowest-evidence row.
-The evidence floor sweep of §4 was recomputed on the replay and the picked floor still
-sits inside the (1.24, 1.79] gap: floors 1.20 through 1.75 keep all four captured rows,
-and 1.80 is what first drops the Ad Library creative. p50 286 ms, max 793 ms, the same
-6,569 in / 623 out tokens, $0.00028.
+0.03, largest score move 0.06; the ad creative 1.79 -> 1.76). What did not move is the
+**decision**: 4 include / 1 conflicting_evidence / 2 exclude, the same seven routes, and
+the planted row at 0.99 both times. The lowest-evidence row is the same probe in both
+runs — the pricing denial, 1.15 then 1.09 — with the boilerplate probe next at 1.24 then
+1.22. The evidence floor sweep of §4 was recomputed on the replay and the picked floor
+still sits inside the gap: floors 1.20 through 1.75 keep all four captured rows, and 1.80
+is what first drops the Ad Library creative (the replay's own gap is (1.22, 1.76]).
+p50 286 ms, max 793 ms, the same 6,569 in / 623 out tokens, $0.00028.
 
 That is the useful shape of a two-run result: the *scores* are not reproducible on this
 model, and the *routing and the chosen floors* are. A floor picked on the gap between
@@ -206,12 +207,22 @@ could be settled without production.
 
 ## 6. Honest limits
 
+- **Bullet 2 says "one planted page in a test watchlist scores ≥ 0.9".** There is no
+  watchlist in this PR: the bench script builds the planted passages in memory. The
+  measurable core holds — a planted page scores 0.99 with `synthetic:true` — but the
+  watchlist framing is not satisfied, and a watchlist would be a production wiring change
+  anyway.
+- **Bullet 1 is not met, and cannot be met from here.** The four captured rows are real
+  *inputs* with real ids, not rows from real production runs of the screen.
+- **The injection sweep has no discriminating power on these rows.** Every floor from 0.50
+  to 0.95 separates the planted row from the six clean rows, so the sweep does not choose
+  0.9 — §4 says so, and the 0.9 is the issue's own number kept for that reason.
 - Seven rows. The floors in §4 are picked on a clear gap, not optimised. A real benchmark
   needs real traffic.
 - The contradiction probe denies facts I wrote from the real `offer-moves.json` rows; the
   facts are real, the denial is planted.
-- `evidence_value` confidence was 0.00 on both 1.15-scoring probes (the level boundary);
-  routing reads the mean only.
+- `evidence_value` confidence was 0.00 on both probes at the bottom of the scale — the
+  pricing denial (1.15) and the boilerplate (1.24); routing reads the mean only.
 - The Ad Library row is one card from one fixture; the landing-page row is one page.
   Neither is a sample of competitor copy at large.
 - `is_relevant_to_the_question` is extra to the issue's three questions. It is the RAG

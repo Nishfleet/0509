@@ -184,9 +184,45 @@ describe("input-screen evidence (issue #3621)", () => {
         ).toBeGreaterThanOrEqual(floor);
       }
     }
-    expect(
-      captured.some((row) => score(row, INPUT_SCREEN_QUESTIONS.evidence) < 1.8),
-    ).toBe(true);
+    // The report's prose numbers, recomputed. Two of them were false when this
+    // test was written (largest score move claimed 0.07, largest noul move 0.02;
+    // actual 0.06 and 0.03) and the boilerplate was called the lowest-evidence
+    // row when the pricing denial is. Re-derive each from the rows, then assert
+    // the report literally contains it, so prose cannot drift from evidence.
+    let maxNoulMove = 0;
+    let maxScoreMove = 0;
+    for (const row of replay) {
+      const first = byId.get(row.passage_id)!;
+      maxNoulMove = Math.max(
+        maxNoulMove,
+        Math.abs(noul(row, INPUT_SCREEN_QUESTIONS.injection) - noul(first, INPUT_SCREEN_QUESTIONS.injection)),
+        Math.abs(noul(row, INPUT_SCREEN_QUESTIONS.contradicts) - noul(first, INPUT_SCREEN_QUESTIONS.contradicts)),
+        Math.abs(noul(row, INPUT_SCREEN_QUESTIONS.relevant) - noul(first, INPUT_SCREEN_QUESTIONS.relevant)),
+      );
+      maxScoreMove = Math.max(
+        maxScoreMove,
+        Math.abs(
+          score(row, INPUT_SCREEN_QUESTIONS.evidence) - score(first, INPUT_SCREEN_QUESTIONS.evidence),
+        ),
+      );
+    }
+    expect(Number(maxNoulMove.toFixed(2))).toBe(0.03);
+    expect(Number(maxScoreMove.toFixed(2))).toBe(0.06);
+    const lowest = (list: InputScreenRow[]) =>
+      list.reduce((low, row) =>
+        score(row, INPUT_SCREEN_QUESTIONS.evidence) < score(low, INPUT_SCREEN_QUESTIONS.evidence) ? row : low,
+      );
+    expect(lowest(rows).passage_id).toBe("planted:nykaa.com/pricing-denial");
+    expect(lowest(replay).passage_id).toBe("planted:nykaa.com/pricing-denial");
+    expect(report).toContain("largest noul move\n0.03, largest score move 0.06");
+    expect(report).toContain("the pricing denial, 1.15 then 1.09");
+
+    // The replay's own gap is (1.22, 1.76]: the doc used to carry the first
+    // run's (1.24, 1.79].
+    const probeMax = Math.max(...replay.filter((row) => row.synthetic).map((row) => score(row, INPUT_SCREEN_QUESTIONS.evidence)));
+    const capturedMin = Math.min(...replay.filter((row) => !row.synthetic).map((row) => score(row, INPUT_SCREEN_QUESTIONS.evidence)));
+    expect([probeMax, capturedMin]).toEqual([1.88, 1.76]);
+    expect(report).toContain("(1.22, 1.76]");
   });
 
   it("holds no credentials or customer data", () => {
