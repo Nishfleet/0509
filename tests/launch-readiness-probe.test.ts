@@ -73,6 +73,48 @@ describe("checkLaunchReadinessEndpoint", () => {
     expect(result.blockers).toEqual(["launch_readiness_http_503"]);
   });
 
+  it("refuses to echo a non-identifier blocker string into the journal", async () => {
+    const result = await checkLaunchReadinessEndpoint({
+      canaryBypassToken: "secret-token",
+      fetchImpl: vi.fn().mockResolvedValue(
+        Response.json(
+          { ok: false, blocker: "DROP TABLE user; -- <script>" },
+          { status: 503 },
+        ),
+      ),
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.blockers).toEqual(["launch_readiness_http_503"]);
+  });
+
+  it("synthesizes a blocker when a 200 body is not a clean pass", async () => {
+    const result = await checkLaunchReadinessEndpoint({
+      canaryBypassToken: "secret-token",
+      fetchImpl: vi.fn().mockResolvedValue(
+        Response.json({ ok: false, blocker: "DROP TABLE user; -- <script>" }, { status: 200 }),
+      ),
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.blockers).toEqual(["launch_readiness_unspecified_blocker"]);
+  });
+
+  it("drops non-string entries from a declared blockers array", async () => {
+    const result = await checkLaunchReadinessEndpoint({
+      canaryBypassToken: "secret-token",
+      fetchImpl: vi.fn().mockResolvedValue(
+        Response.json(
+          { ok: false, blockers: ["missing_db", 42, null, { evil: true }] },
+          { status: 503 },
+        ),
+      ),
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.blockers).toEqual(["missing_db"]);
+  });
+
   it("keeps blockers empty only on a healthy 200 response", async () => {
     const result = await checkLaunchReadinessEndpoint({
       canaryBypassToken: "secret-token",

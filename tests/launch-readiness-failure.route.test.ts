@@ -70,6 +70,7 @@ afterEach(() => {
   vi.doUnmock("~/lib/ga-customer-surface");
   vi.doUnmock("~/lib/meta-ads-readiness.server");
   vi.doUnmock("~/lib/error-report.server");
+  vi.doUnmock("~/lib/canary-detail");
 });
 
 describe("launch readiness route failure path (issue #3392)", () => {
@@ -173,5 +174,42 @@ describe("launch readiness route failure path (issue #3392)", () => {
       blocker: "launch_readiness_signals_failed",
       blockers: ["launch_readiness_signals_failed"],
     });
+  });
+
+  it("still answers the honest 503 when the diagnostics import itself fails", async () => {
+    mockHappyPath();
+    vi.doMock("~/lib/data.server", () => ({
+      getLaunchReadinessSignals: vi.fn().mockRejectedValue(new Error("D1_ERROR")),
+    }));
+    vi.doMock("~/lib/canary-detail", () => {
+      throw new Error("chunk load failed");
+    });
+    const reportError = vi.fn().mockResolvedValue({ written: true, reason: "written" });
+    vi.doMock("~/lib/error-report.server", () => ({ reportError }));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const { loader } = await import("~/routes/api.launch-readiness");
+    const response = await loader({
+      context: createContext(),
+      request: canaryRequest(),
+    } as never);
+
+    expect(response.status).toBe(503);
+    const body = await response.json();
+    expect(body).toMatchObject({
+      ok: false,
+      blocker: "launch_readiness_signals_failed",
+      blockers: ["launch_readiness_signals_failed"],
+      detail: "unrenderable_error",
+    });
+    expect(body).not.toHaveProperty("reason");
+    expect(reportError).toHaveBeenCalledWith(
+      expect.objectContaining({ DB: {} }),
+      expect.objectContaining({
+        route: "api.launch-readiness",
+        reasonCode: "launch_readiness_signals_failed",
+        requestId: null,
+      }),
+    );
   });
 });

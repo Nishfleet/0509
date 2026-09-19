@@ -121,23 +121,33 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       kind: "launch_readiness_signals_failed",
       message: error instanceof Error ? error.message : String(error),
     });
-    const { safeCanaryDetail, sanitizeCanaryFailureReason } = await import(
-      "~/lib/canary-detail"
-    );
-    const detail = safeCanaryDetail(error);
+    // The catch's own diagnostics must never re-throw — a failed dynamic
+    // import or a pathological error object would re-arm the bare 500 this
+    // block exists to kill, so detail/reason degrade to fixed fallbacks.
+    let detail = "unrenderable_error";
+    let reason = "";
+    try {
+      const { safeCanaryDetail, sanitizeCanaryFailureReason } = await import(
+        "~/lib/canary-detail"
+      );
+      detail = safeCanaryDetail(error);
+      reason = sanitizeCanaryFailureReason(
+        error instanceof Error ? error.message : String(error),
+      );
+    } catch {
+      // keep the fixed fallbacks; the honest 503 below still ships
+    }
     try {
       const { reportError } = await import("~/lib/error-report.server");
       await reportError(env, {
         route: "api.launch-readiness",
         reasonCode: "launch_readiness_signals_failed",
         error,
+        requestId: null,
       });
     } catch {
       // the sink must never mask the original failure
     }
-    const reason = sanitizeCanaryFailureReason(
-      error instanceof Error ? error.message : String(error),
-    );
     return Response.json(
       {
         ok: false,
