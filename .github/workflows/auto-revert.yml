@@ -41,11 +41,6 @@ permissions:
   # jobs via the Actions API. `actions: read` lets the GITHUB_TOKEN fallback
   # serve that query instead of depending on AUTO_REVERT_PAT alone.
   actions: read
-  # 0509#2929: close-halts-on-green closes and comments on the halt issues via
-  # GITHUB_TOKEN. Once any permission is granted here the rest default to
-  # none, so `issues: write` must be explicit or the closer cannot even
-  # list — which it would then report as a silent "closed 0".
-  issues: write
 
 # Parallel failures serialize: two red workflows for the same push (or two
 # pushes close together) must not race to revert. One at a time, in arrival
@@ -55,70 +50,6 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # A green "Deploy production" run on main is the terminus for every open
-  # AUTO-REVERT HALT issue: each halt was filed because the same workflow
-  # was red on consecutive commits ("infra fault, a human must look"). Once
-  # the workflow is green again the halts are resolved by definition, and
-  # leaving them open only pages the judges (96 open halts by 2026-09-11
-  # after two days of red deploys — every one of them stale the moment the
-  # first green deploy landed). Closing them here is the mechanism; nobody
-  # sweeps by hand.
-  close-halts-on-green:
-    name: close halts on green
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.name == 'Deploy production'
-    steps:
-      - name: Close open AUTO-REVERT HALT issues
-        env:
-          # 0509#2929: this step is pure issue ops, so it runs under
-          # GITHUB_TOKEN, which always has GraphQL access — the fine-grained
-          # AUTO_REVERT_PAT dies on the first GraphQL call here, and the
-          # for-loop below would mask that as an empty list. One token, one
-          # purpose (d0dc92b08's precedent: least scope on each call).
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          RUN_URL: ${{ github.event.workflow_run.html_url }}
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-        run: |
-          set -euo pipefail
-          short="${HEAD_SHA:0:7}"
-          closed=0
-          # 0509#2929: assert GraphQL access BEFORE listing. `for num in
-          # $(gh issue list ...)` masks a failing query as an empty list,
-          # which would silently close nothing and leave every halt open
-          # forever. Fail loud instead of silently closing 0.
-          if ! gh api graphql -f query='query { viewer { login } }' >/dev/null; then
-            echo "FATAL: GH_TOKEN cannot use the GitHub GraphQL API — cannot list AUTO-REVERT HALT issues to close" >&2
-            exit 1
-          fi
-          # Per-page cap: the 2026-09-11 backlog was 96+ issues.
-          # 0509#2929: close by label AND fall back to a title search, so an
-          # unlabelled halt survivor (the 2026-09-11 silent-label-drop
-          # backlog: 104 open, 0 labelled until hand-labelled) can never
-          # survive a green deploy. Every halt title begins
-          # "AUTO-REVERT HALT:", so the search candidates are narrowed by a
-          # startswith filter: bystander issues that merely CONTAIN the phrase
-          # in their title (#3364, a scout-candidate) must not be swept.
-          # Review round 1 (0509#2929): EACH source is its own assignment
-          # BEFORE the loop. Under bash 5.2 `inherit_errexit` is off, so a
-          # `{ gh …; gh …; } | sort -u` group's status is its LAST command —
-          # a failed label list beside a successful title search would report
-          # success and silently close a partial set (verified:
-          # `{ false; echo 42; } | sort -u` assigns 42 and survives). A bare
-          # `v=$(gh …)` assignment's exit status IS its substitution's, so
-          # any source failure dies here, before the loop closes anything.
-          # (The for-list itself still never aborts — hence $candidates.)
-          label_nums="$(gh issue list --repo "$REPO" --state open --label auto-revert-halt --limit 500 --json number --jq '.[].number')"
-          title_nums="$(gh issue list --repo "$REPO" --state open --search "AUTO-REVERT HALT in:title" --limit 500 --json number,title --jq '.[] | select(.title | startswith("AUTO-REVERT HALT:")) | .number')"
-          candidates="$(printf '%s\n%s\n' "$label_nums" "$title_nums" | sort -u)"
-          for num in $candidates; do
-            gh issue close "$num" --repo "$REPO" --reason completed \
-              --comment "Resolved by a green \`Deploy production\` run on main: $RUN_URL (commit $short). Every AUTO-REVERT HALT records a red-on-consecutive-commits state; that state ended with this run. Closed automatically by auto-revert.yml (close-halts-on-green)." >/dev/null
-            closed=$((closed + 1))
-          done
-          echo "closed $closed AUTO-REVERT HALT issue(s) after green $short"
-
   auto-revert:
     name: auto-revert
     runs-on: ubuntu-latest
@@ -158,8 +89,10 @@ jobs:
           # FleetProductionStale / DeploymentQualityStale measure from the last
           # green deploy and dispatch to a flagship repair seat. 100+ open
           # AUTO-REVERT HALT issues on 2026-09-12 paged judges and hid the fault.
-          # The halt is still recorded LOUD: step summary + job log; the
-          # close-halts-on-green job stays until the existing backlog is 0.
+          # The halt is still recorded LOUD: step summary + job log.
+          # 0509#3364: the close-halts-on-green job was deleted once the
+          # backlog reached 0 — do not resurrect it; any future halt-filing
+          # mechanism owes its own fresh closer.
           halt () {
             title="$1"; body="$2"
             {
