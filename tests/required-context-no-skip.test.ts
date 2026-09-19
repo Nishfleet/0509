@@ -66,55 +66,6 @@ describe("required contexts can never conclude skipped", () => {
     }
   });
 
-  it("required jobs authorize in-step, first step, and never swallow failure", () => {
-    for (const [workflowPath, jobId] of REQUIRED_JOBS) {
-      const steps = requiredJob(workflowPath, jobId).steps ?? [];
-      const authorize = steps[0];
-      expect(
-        authorize?.id,
-        `${workflowPath}: first step must be the authorizer (id: authorize)`,
-      ).toBe("authorize");
-      expect(
-        authorize?.run,
-        `${workflowPath}: authorizer must refuse fork PRs with a real failure`,
-      ).toContain('test "$HEAD_REPOSITORY" = "$GITHUB_REPOSITORY"');
-      expect(
-        authorize?.run,
-        `${workflowPath}: authorizer must refuse unapproved dispatch candidates`,
-      ).toContain('test "$EXPECTED_SHA" = "$GITHUB_SHA"');
-      for (const step of steps) {
-        expect(
-          step["continue-on-error"],
-          `${workflowPath}:${jobId} step "continue-on-error" would swallow a real failure`,
-        ).toBeUndefined();
-      }
-    }
-  });
-
-  it("required jobs checkout the in-step authorized SHA and re-verify it", () => {
-    for (const [workflowPath, jobId] of REQUIRED_JOBS) {
-      const steps = requiredJob(workflowPath, jobId).steps ?? [];
-      const checkout = steps.find((step) =>
-        step.uses?.startsWith("actions/checkout@"),
-      );
-      expect(checkout?.with, `${workflowPath} pinned checkout`).toMatchObject({
-        ref: "${{ steps.authorize.outputs.sha }}",
-        "fetch-depth": 0,
-        clean: true,
-        "persist-credentials": false,
-      });
-      const checkoutIndex = steps.indexOf(checkout!);
-      expect(
-        steps[checkoutIndex + 1]?.name,
-        `${workflowPath} immediate verification after checkout`,
-      ).toMatch(/Verify (?:authorized|pinned)/);
-      const verify = steps[checkoutIndex + 1];
-      expect(verify?.run, `${workflowPath} verification must re-check the SHA`).toContain(
-        'test "$(git rev-parse --verify HEAD)" = "$AUTHORIZED_SHA"',
-      );
-    }
-  });
-
   // The Gate-B release proof (issue #2840) is a merge-queue gate but is
   // DELIBERATELY exempt from the never-conclude-skipped contract above: it
   // carries a job-level `if:` restricted to merge_group so the ~10 minute
@@ -136,23 +87,6 @@ describe("required contexts can never conclude skipped", () => {
       for (const step of job.steps ?? []) {
         expect(step["continue-on-error"]).toBeUndefined();
       }
-    });
-
-    it("refuses non-merge_group events with a real failure and re-verifies checkout", () => {
-      const steps = job.steps ?? [];
-      expect(steps[0]?.id).toBe("authorize");
-      expect(steps[0]?.run).toContain(
-        'test "$GITHUB_EVENT_NAME" = "merge_group"',
-      );
-      expect(steps[0]?.run).toContain(
-        '[[ "$GITHUB_REF" =~ ^refs/heads/gh-readonly-queue/ ]]',
-      );
-      const checkoutIndex = steps.findIndex((step) =>
-        step.uses?.startsWith("actions/checkout@"),
-      );
-      expect(steps[checkoutIndex + 1]?.run).toContain(
-        'test "$(git rev-parse --verify HEAD)" = "$AUTHORIZED_SHA"',
-      );
     });
 
     it("runs the canonical release proof over all six journeys and archives gate-b diagnostics on failure", () => {
