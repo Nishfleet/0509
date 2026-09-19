@@ -9,8 +9,30 @@ import type { SourceSnapshotRecord, SourceChange } from "~/lib/sources/types";
  * payload type guard, existing f9 classes, zero-ad state rendered rather than
  * hidden.
  *
+ * The #3196 coverage note (region, ad types, freshness) lives here too
+ * (#3430): the watchlist competitor-detail uses this section, not the
+ * brand-page source-sections copy. Same facts, same Last-checked stamp.
+ *
  * Client-safe: imports only types, no `.server.ts` modules.
  */
+
+/** Same facts as the brand-page LinkedIn coverage note (#3196 / #3430). */
+const LINKEDIN_ADS_COVERAGE_NOTE =
+  "Source: the public LinkedIn Ad Library, read through the monitoring seam's standard-pool public-surface fetch — no LinkedIn official-API key that bars commercial use. Covers the promoted-post cards currently published under this brand's account-owner name, matched by name exactly as the public Ad Library search serves it: their promoted text, advertiser and public detail link; the capture reads the newest results page only (up to 25 ads) and does not distinguish ad formats. Spend, reach and audience metrics are out of scope of this source. Region: the United States — the public search's verified geo=US posture; no other regions are captured. Freshness: the capture re-runs on this source's weekly cadence as the seam's runner schedules it; the \"Last checked\" date below is the last successful capture.";
+
+/** ISO → "d MMM yyyy" (UTC), the same shape the brand-page sections use. */
+function formatCheckedDate(iso: string | null | undefined): string {
+  if (!iso || typeof iso !== "string") return "";
+  try {
+    return new Intl.DateTimeFormat("en-GB", {
+      dateStyle: "medium",
+      timeZone: "UTC",
+    }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
+}
+
 interface LinkedinAdView {
   id: string;
   advertiser: string;
@@ -71,6 +93,7 @@ export function LinkedinAdsSection({
   const ads = renderableAds(snapshot.payload.ads);
   const newCount = diff.filter((c) => c.eventType === "ad_new").length;
   const previews = ads.slice(0, 12);
+  const checked = formatCheckedDate(snapshot.fetchedAt);
 
   return (
     <section aria-label="LinkedIn ads (Ad Library)">
@@ -120,10 +143,14 @@ export function LinkedinAdsSection({
           })}
         </div>
       )}
-      <p className="f9-wk-dim">
-        LinkedIn's Ad Library does not expose spend; counts cover the ads the
-        library shows for this advertiser.
+      <p className="f9-wk-dim" data-testid="linkedin-ads-coverage">
+        {LINKEDIN_ADS_COVERAGE_NOTE}
       </p>
+      {checked ? (
+        <p className="f9-wk-dim" data-testid="linkedin-ads-checked">
+          {`Last checked ${checked}`}
+        </p>
+      ) : null}
     </section>
   );
 }

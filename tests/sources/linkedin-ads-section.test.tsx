@@ -5,10 +5,12 @@ import { LinkedinAdsSection } from "~/components/sources/linkedin-ads";
 import type { SourceChange, SourceSnapshotRecord } from "~/lib/sources/types";
 
 /**
- * Section coverage for #2193 do:4. The Section is a seam slot: it must render
- * advertiser / total ads / new-since-last-check / up to 12 previews from a
- * stored payload, render nothing on a missing or malformed payload, and never
- * emit a non-https creative url.
+ * Section coverage for #2193 do:4 plus the #3196 coverage note on this
+ * surface (#3430). The Section is a seam slot: it must render advertiser /
+ * total ads / new-since-last-check / up to 12 previews from a stored
+ * payload, render nothing on a missing or malformed payload, never emit a
+ * non-https creative url, and state the same region / ad-types / freshness
+ * facts as /ads.
  */
 function ad(id: string, creative: string | null = `https://media.licdn.com/dms/image/ad${id}/creative`) {
   return {
@@ -96,5 +98,32 @@ describe("LinkedinAdsSection", () => {
       <LinkedinAdsSection snapshot={record(payload([broken]))} diff={[]} />,
     );
     expect(html).toContain("No LinkedIn ads found for Notion.");
+  });
+
+  it("renders the #3196 coverage note: region, ad types, freshness, and Last checked (#3430)", () => {
+    const html = renderToStaticMarkup(
+      <LinkedinAdsSection snapshot={record(payload([ad("1001")]))} diff={[]} />,
+    );
+    expect(html).toContain('data-testid="linkedin-ads-coverage"');
+    expect(html).toContain("public LinkedIn Ad Library");
+    expect(html).toContain("no LinkedIn official-API key that bars commercial use");
+    expect(html).toContain("newest results page only");
+    expect(html).toContain("does not distinguish ad formats");
+    expect(html).toContain("United States");
+    expect(html).toContain("weekly cadence");
+    expect(html).toContain("Spend, reach and audience metrics are out of scope");
+    expect(html).toContain('data-testid="linkedin-ads-checked"');
+    expect(html).toContain("Last checked 9 Sept 2026");
+    expect(html).not.toContain("does not expose spend; counts cover");
+  });
+
+  it("keeps the coverage note and Last checked on the zero-ad state", () => {
+    const html = renderToStaticMarkup(
+      <LinkedinAdsSection snapshot={record(payload([]))} diff={[]} />,
+    );
+    expect(html).toContain("No LinkedIn ads found for Notion.");
+    expect(html).toContain('data-testid="linkedin-ads-coverage"');
+    expect(html).toContain("United States");
+    expect(html).toContain("Last checked 9 Sept 2026");
   });
 });
