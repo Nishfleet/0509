@@ -49,13 +49,22 @@ describe("manual D1 backup workflow", () => {
       required: true,
       type: "string",
     });
-    // Nightly, from 2026-08-07. This previously asserted NO schedule, which is
-    // why the repo went a week with no automated backup at all: the workflow
-    // ran on push, failed at startup every time because the authorization below
-    // demands workflow_dispatch, and the push trigger was removed to stop the
-    // noise. Nothing then took its place. Pinned exactly, so the hour cannot
-    // drift out of the low-traffic window unnoticed.
-    expect(parsed.on.schedule).toEqual([{ cron: "7 20 * * *" }]);
+    // NO schedule (0509#3576). Scheduled backup freshness is owned by
+    // d1-restore-proof-auto-refresh.yml, which runs the same
+    // `node scripts/d1-backup-to-r2.mjs` every 6 hours as its export-only job
+    // and the full scratch-restore drill weekly. This workflow keeps its
+    // schedule-less shape as the manual break-glass backup.
+    //
+    // History this pin must not forget: this previously asserted NO schedule,
+    // which is how the repo went a week with no automated backup at all — the
+    // workflow ran on push, failed at startup every time because the
+    // authorization below demands workflow_dispatch, and the push trigger was
+    // removed to stop the noise. Nothing then took its place until a nightly
+    // schedule was added. Removing the schedule here is only safe because
+    // another workflow now owns it, so a re-add here (or a silent loss of the
+    // auto-refresh cadence) must fail loudly. tests/deploy-production-gate.ts
+    // pins the replacement crons exactly.
+    expect(parsed.on.schedule).toBeUndefined();
     const authorize = parsed.jobs.authorize_release;
     expect(authorize?.permissions).toEqual({});
     expect(authorize?.outputs?.sha).toBe("${{ steps.authorize.outputs.sha }}");
@@ -70,14 +79,11 @@ describe("manual D1 backup workflow", () => {
       'test "$GITHUB_REF" = "refs/heads/main"',
       'test "$GITHUB_RUN_ATTEMPT" = "1"',
       '[[ "$GITHUB_SHA" =~ $sha_pattern ]]',
-      '# Same shape as d1-remote-restore-evidence.yml: a scheduled run backs',
-      '# up whatever main is and must NOT carry an expected_sha, so nothing',
-      '# can smuggle a chosen commit into an unattended run. A manual run',
-      '# still has to name the exact commit and have it match.',
-      // Scheduled runs back up whatever main is and must carry NO expected_sha,
-      // so nothing can smuggle a chosen commit into an unattended run. Manual
-      // runs still have to name the exact commit and have it match. Same shape
-      // as d1-remote-restore-evidence.yml, which has always had both triggers.
+      '# A dispatch-only workflow now (0509#3576), but the `schedule` arm',
+      '# stays: event name is what SHAPE arrives, not which crons are',
+      '# declared, and an empty expected_sha must always be refused on',
+      '# dispatch. Scheduled backups are owned by',
+      '# d1-restore-proof-auto-refresh.yml.',
       'case "$GITHUB_EVENT_NAME" in',
       '  schedule)',
       '    test -z "$EXPECTED_SHA"',

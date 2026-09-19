@@ -1688,12 +1688,27 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     });
   });
 
-  it("applies freshness headroom without widening future clock-skew tolerance", () => {
+  it("applies the 7-day restore-proof window and its headroom without widening future clock-skew tolerance", () => {
     const validateRemoteRestoreEvidence = (
       deployPlanModule as Record<string, unknown>
     ).validateRemoteRestoreEvidence;
     expect(typeof validateRemoteRestoreEvidence).toBe("function");
     if (typeof validateRemoteRestoreEvidence !== "function") return;
+
+    // 0509#3576: the proof window is a week now. The export record
+    // (validateBackupExport, separate verdict) is what keeps the BACKUP fresh;
+    // a schema-matching restore proof is reusable for seven days, and the 14d
+    // absolute ceiling is retained beneath it so the wider window can never
+    // grow past it silently.
+    expect(
+      deployPlanModule.RESTORE_PROOF_FRESHNESS_MS,
+    ).toBe(7 * 24 * 60 * 60 * 1000);
+    expect(deployPlanModule.RESTORE_PROOF_MAX_AGE_MS).toBe(
+      14 * 24 * 60 * 60 * 1000,
+    );
+    expect(deployPlanModule.RESTORE_PROOF_FRESHNESS_MS).toBeLessThan(
+      deployPlanModule.RESTORE_PROOF_MAX_AGE_MS,
+    );
 
     const expected = {
       candidateFingerprint: fingerprint,
@@ -1703,11 +1718,14 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       now: new Date("2026-07-16T12:00:00.000Z"),
       minimumValidityMs: 6 * 60 * 60 * 1000,
     };
+    // now + 6h headroom - 7d == 2026-07-09T18:00:00.000Z. One millisecond
+    // inside is accepted, exactly on the bound is refused, and a future
+    // timestamp stays refused.
     expect(
       validateRemoteRestoreEvidence(
         {
           ...passingRemoteRestoreEvidence(),
-          generatedAt: "2026-07-15T18:00:00.001Z",
+          generatedAt: "2026-07-09T18:00:00.001Z",
         },
         expected,
       ),
@@ -1716,9 +1734,24 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       validateRemoteRestoreEvidence(
         {
           ...passingRemoteRestoreEvidence(),
-          generatedAt: "2026-07-15T18:00:00.000Z",
+          generatedAt: "2026-07-09T18:00:00.000Z",
         },
         expected,
+      ),
+    ).toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining(["remote_restore_evidence_stale"]),
+    });
+    // A proof just past the 7-day window is stale even though it is still
+    // inside the 14-day ceiling: the ceiling is a floor under the rule, never
+    // a second, looser acceptance window.
+    expect(
+      validateRemoteRestoreEvidence(
+        {
+          ...passingRemoteRestoreEvidence(),
+          generatedAt: "2026-07-09T11:59:59.999Z",
+        },
+        { ...expected, minimumValidityMs: 0 },
       ),
     ).toMatchObject({
       ok: false,
@@ -1736,6 +1769,22 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       ok: false,
       issues: expect.arrayContaining(["remote_restore_evidence_stale"]),
     });
+    // Still well inside the week with the deploy's own 12h headroom, and a
+    // row import that costs real money is not thrown away for being a day
+    // old — the whole point of the split.
+    expect(
+      validateRemoteRestoreEvidence(
+        {
+          ...passingRemoteRestoreEvidence(),
+          generatedAt: "2026-07-15T10:00:00.000Z",
+        },
+        {
+          ...expected,
+          migrationBearing: true,
+          minimumValidityMs: 12 * 60 * 60 * 1000,
+        },
+      ),
+    ).toEqual({ ok: true, issues: [] });
     expect(
       validateRemoteRestoreEvidence(passingRemoteRestoreEvidence(), {
         ...expected,
@@ -2374,15 +2423,23 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     const refresh = parse(refreshWorkflow) as any;
     const deploy = parse(deployWorkflow) as any;
 
-    // Only the evidence workflow owns the per-push drill. Auto-refresh
-    // keeps the 3-hour safety net and manual recovery without doubling writes.
+    // Only the evidence workflow owns the per-push drill. Auto-refresh owns
+    // the two SCHEDULED cadences the gate reads (0509#3576): the 6-hourly
+    // export-only record and the weekly full drill.
     expect(evidence.on.push.branches).toEqual(["main"]);
     expect(refresh.on).not.toHaveProperty("push");
     expect(Object.keys(refresh.on).sort()).toEqual([
       "schedule",
       "workflow_dispatch",
     ]);
-    expect(refresh.on.schedule).toEqual([{ cron: "17 */6 * * *" }]);
+    // Pinned exactly, both of them: the 6-hourly export and the weekly drill
+    // are the two halves of the deploy gate's backup proof, and the deploy
+    // gate's 12h export window only holds if the export cadence stays inside
+    // it.
+    expect(refresh.on.schedule).toEqual([
+      { cron: "17 */6 * * *" },
+      { cron: "47 4 * * 0" },
+    ]);
     expect(refresh.on.workflow_dispatch.inputs.expected_sha).toMatchObject({
       required: false,
       default: "",
@@ -3518,5 +3575,388 @@ exec /bin/mv "$@"
       ok: false,
       issues: expect.arrayContaining(["candidate_not_protected_main"]),
     });
+  });
+});
+describe("backup proof split: 6-hourly export record vs weekly restore drill (0509#3576)", () => {
+  const remoteRestoreEvidencePath = "test-results/d1-remote-restore-evidence.json";
+  const wranglerOutputPath = "test-results/wrangler-deploy-output-test.jsonl";
+
+  function passingBackupExport() {
+    return {
+      schemaVersion: 1,
+      generatedAt: "2026-07-16T10:00:00.000Z",
+      bucket: "0509-landing-page-artifacts",
+      remoteKey: "backups/d1/0509-2026-07-16T10-00-00Z.sql",
+      objectBytes: 1_048_576,
+      sha256: "c".repeat(64),
+    };
+  }
+
+  it("accepts a fresh export record and refuses every way it can be wrong, each with its own code", () => {
+    const validateBackupExport = (
+      deployPlanModule as Record<string, unknown>
+    ).validateBackupExport;
+    expect(typeof validateBackupExport).toBe("function");
+    if (typeof validateBackupExport !== "function") return;
+    const now = new Date("2026-07-16T12:00:00.000Z");
+    // 12h is the whole window; the 6-hourly cadence is the headroom, so two
+    // missed runs still clear it and the stale case surfaces on the third.
+    expect(validateBackupExport(passingBackupExport(), { now })).toEqual({
+      ok: true,
+      issues: [],
+    });
+    expect(
+      validateBackupExport(
+        { ...passingBackupExport(), generatedAt: "2026-07-16T00:00:00.001Z" },
+        { now },
+      ),
+    ).toEqual({ ok: true, issues: [] });
+    expect(
+      validateBackupExport(
+        { ...passingBackupExport(), generatedAt: "2026-07-16T00:00:00.000Z" },
+        { now },
+      ),
+    ).toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining(["remote_backup_export_stale"]),
+    });
+    expect(
+      validateBackupExport(
+        { ...passingBackupExport(), generatedAt: "2026-07-16T12:05:00.001Z" },
+        { now },
+      ),
+    ).toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining(["remote_backup_export_stale"]),
+    });
+    // An absent record is a verdict, not a crash: a stalled export job must
+    // block the deploy loudly instead of erroring out.
+    expect(validateBackupExport(null, { now })).toEqual({
+      ok: false,
+      issues: ["remote_backup_export_missing"],
+    });
+
+    const cases: Array<[Record<string, unknown>, string]> = [
+      [{ schemaVersion: 2 }, "remote_backup_export_schema"],
+      [
+        { remoteKey: "backups/d1/export-record.json" },
+        "remote_backup_export_key",
+      ],
+      [{ remoteKey: "../0509-x.sql" }, "remote_backup_export_key"],
+      [{ remoteKey: undefined }, "remote_backup_export_key"],
+      [{ bucket: "someone-elses-bucket" }, "remote_backup_export_bucket"],
+      [{ objectBytes: 0 }, "remote_backup_export_bytes"],
+      [{ objectBytes: 1.5 }, "remote_backup_export_bytes"],
+      [{ objectBytes: undefined }, "remote_backup_export_bytes"],
+      [{ sha256: "not-a-digest" }, "remote_backup_export_digest"],
+      [{ sha256: undefined }, "remote_backup_export_digest"],
+    ];
+    for (const [patch, issue] of cases) {
+      const verdict = validateBackupExport(
+        { ...passingBackupExport(), ...patch },
+        { now },
+      );
+      expect(verdict.ok, JSON.stringify(patch)).toBe(false);
+      expect(verdict.issues, JSON.stringify(patch)).toContain(issue);
+    }
+    // Distinct codes, deliberately: "the backup record is stale" and "the
+    // restore proof is stale" need different responses (wait for the next
+    // export vs run a drill), so they can never share one string.
+    expect("remote_backup_export_stale").not.toBe(
+      "remote_restore_evidence_stale",
+    );
+  });
+
+  it("requires the export record whenever backup proof is required, and never on a deferred release", () => {
+    const plan = buildProductionDeployPlan({
+      manifestPath: "test-results/deploy-readiness-test.json",
+      remoteRestoreEvidencePath,
+      wranglerOutputPath,
+    });
+    const step = plan.find((entry) => entry.id === "remote_restore_evidence");
+    expect(step).toBeDefined();
+    // The gate reads the record at the one path the deploy workflow
+    // materializes. Test-and-workflow literals are pinned together so the
+    // fetch step and the gate cannot drift apart.
+    expect(step?.args).toEqual([
+      "scripts/verify-remote-restore-evidence.mjs",
+      "--manifest",
+      "test-results/deploy-readiness-test.json",
+      "--remote-evidence",
+      remoteRestoreEvidencePath,
+      "--backup-export",
+      "test-results/d1-backup-export.json",
+    ]);
+    const deployWorkflow = readFileSync(
+      resolve(".github/workflows/deploy-production.yml"),
+      "utf8",
+    );
+    expect(deployWorkflow).toContain(
+      "--output test-results/d1-backup-export.json",
+    );
+
+    expect(
+      buildProductionDeployPlan({
+        manifestPath: "test-results/deploy-readiness-test.json",
+        remoteRestoreEvidencePath,
+        backupExportPath: "test-results/d1-backup-export-one-off.json",
+        wranglerOutputPath,
+      }).find((entry) => entry.id === "remote_restore_evidence")?.args,
+    ).toContain("test-results/d1-backup-export-one-off.json");
+
+    for (const bad of [
+      "",
+      "test-results/../escape.json",
+      "test-results/deploy-readiness-x.json",
+      "/tmp/d1-backup-export.json",
+    ]) {
+      expect(() =>
+        buildProductionDeployPlan({
+          manifestPath: "test-results/deploy-readiness-test.json",
+          remoteRestoreEvidencePath,
+          backupExportPath: bad,
+          wranglerOutputPath,
+        }),
+      ).toThrow("invalid_backup_export_path");
+    }
+
+    // A deferred release carries no backup proof of either kind.
+    const deferred = buildProductionDeployPlan({
+      manifestPath: "test-results/deploy-readiness-test.json",
+      backupProofStatus: "deferred",
+      wranglerOutputPath,
+    });
+    expect(
+      deferred.find((entry) => entry.id === "remote_restore_evidence"),
+    ).toBeUndefined();
+    expect(() =>
+      buildProductionDeployPlan({
+        manifestPath: "test-results/deploy-readiness-test.json",
+        backupExportPath: "test-results/d1-backup-export.json",
+        backupProofStatus: "deferred",
+        wranglerOutputPath,
+      }),
+    ).toThrow("deferred_backup_restore_evidence_conflict");
+  });
+
+  it("runs the export-only backup on the 6-hourly cron and the full scratch restore weekly, from the same workflow", () => {
+    const workflow = readFileSync(
+      resolve(".github/workflows/d1-restore-proof-auto-refresh.yml"),
+      "utf8",
+    );
+    const parsed = parse(workflow) as any;
+    expect(parsed.on.schedule).toEqual([
+      { cron: "17 */6 * * *" },
+      { cron: "47 4 * * 0" },
+    ]);
+
+    // The mode is derived from GITHUB_EVENT_SCHEDULE, which GitHub sets from
+    // the cron declarations in this file. Nothing a caller can supply picks
+    // the cheap path or the expensive one.
+    const authorize = parsed.jobs.authorize_release;
+    expect(authorize.outputs.mode).toBe("${{ steps.authorize.outputs.mode }}");
+    const authorizeScript = authorize.steps[0].run as string;
+    expect(authorizeScript).toContain('"17 */6 * * *")');
+    expect(authorizeScript).toContain("mode=export");
+    expect(authorizeScript).toContain('"47 4 * * 0")');
+    expect(authorizeScript).toContain("mode=full");
+    // A manual dispatch is the prove-it-now button, never the cheap path.
+    expect(authorizeScript).toMatch(/workflow_dispatch\)\n[\s\S]*?mode=full/);
+    expect(authorizeScript).toContain("GITHUB_EVENT_SCHEDULE");
+    // An unrecognized cron is refused rather than silently defaulted.
+    expect(authorizeScript).toMatch(/\\*\)\n\s+exit 1/);
+    expect(authorizeScript).toContain(
+      "printf 'mode=%s\\n' \"$mode\" >> \"$GITHUB_OUTPUT\"",
+    );
+
+    const exportJob = parsed.jobs.backup_export;
+    expect(exportJob.if).toContain(
+      "needs.authorize_release.outputs.mode == 'export'",
+    );
+    expect(parsed.jobs.restore.if).toContain(
+      "needs.authorize_release.outputs.mode == 'full'",
+    );
+    expect(parsed.jobs.cleanup.if).toContain(
+      "needs.authorize_release.outputs.mode == 'full'",
+    );
+
+    // The cheap job is the PROVEN backup script, with no scratch database and
+    // no restore drill anywhere in it.
+    const exportRuns = (exportJob.steps as any[])
+      .map((step) => step.run)
+      .filter(Boolean) as string[];
+    expect(exportRuns).toContain("node scripts/d1-backup-to-r2.mjs");
+    expect(
+      exportJob.steps.some(
+        (step: any) => step.run === "node scripts/validate-d1-backup.mjs",
+      ),
+    ).toBe(true);
+    expect(JSON.stringify(exportJob)).not.toContain(
+      "d1-remote-restore-evidence.mjs",
+    );
+    expect(exportJob.env.D1_DATABASE_NAME).toBe("0509");
+    expect(exportJob.env.R2_BACKUP_BUCKET).toBe(
+      "0509-landing-page-artifacts",
+    );
+    expect(exportJob.environment).toBe("production");
+    expect(exportJob["timeout-minutes"]).toBeLessThan(
+      parsed.jobs.restore["timeout-minutes"],
+    );
+    const exportSecretSteps = (exportJob.steps as any[]).filter(
+      (step) => step.env?.CLOUDFLARE_API_TOKEN !== undefined,
+    );
+    expect(exportSecretSteps).toHaveLength(1);
+    expect(exportSecretSteps[0].env.D1_BACKUP_AUTOMATION_APPROVED).toBe(
+      "0509-weekly-d1-to-r2",
+    );
+
+    // The drill itself is unchanged, and only it touches the scratch path.
+    const restoreRuns = (parsed.jobs.restore.steps as any[])
+      .map((step) => step.run)
+      .filter(Boolean) as string[];
+    expect(
+      restoreRuns.some((run) => run.includes("d1-remote-restore-evidence.mjs")),
+    ).toBe(true);
+
+    // Scheduled backups have exactly one owner now.
+    const backupWorkflow = parse(
+      readFileSync(resolve(".github/workflows/d1-backup-r2.yml"), "utf8"),
+    ) as any;
+    expect(backupWorkflow.on.schedule).toBeUndefined();
+    expect(backupWorkflow.on.workflow_dispatch).toBeDefined();
+  });
+
+  it("publishes the export record to one fixed R2 key, after the dump upload, and reds the run if it cannot", () => {
+    const backupScript = readFileSync(
+      resolve("scripts/d1-backup-to-r2.mjs"),
+      "utf8",
+    );
+    const argsModule = readFileSync(
+      resolve("scripts/d1-backup-command-args.mjs"),
+      "utf8",
+    );
+    // One fixed key, never among the dated dumps: the gate reads it with the
+    // same plain `r2 object get` the drill already proves, so no bucket
+    // listing permission and no artifact index are needed.
+    expect(argsModule).toContain(
+      'export const BACKUP_EXPORT_RECORD_KEY = "backups/d1/export-record.json"',
+    );
+    expect(backupScript).toContain(
+      "buildR2PutArgs(bucketName, BACKUP_EXPORT_RECORD_KEY, exportRecordPath)",
+    );
+    // Written only after the dump's own `r2 object put` returned, so the
+    // record can never name an object that is not in R2.
+    expect(
+      backupScript.indexOf(
+        "buildR2PutArgs(bucketName, remoteKey, localPath)",
+      ),
+    ).toBeLessThan(
+      backupScript.indexOf("BACKUP_EXPORT_RECORD_KEY, exportRecordPath"),
+    );
+    expect(backupScript).toContain("generatedAt: new Date().toISOString()");
+    expect(backupScript).toContain("objectBytes: exported.size");
+    expect(backupScript).toContain(".update(await readFile(localPath))");
+    // Every published field the gate validates is produced here.
+    for (const field of [
+      "schemaVersion: 1",
+      "bucket: bucketName",
+      "remoteKey,",
+      "sha256: digest",
+    ]) {
+      expect(backupScript, field).toContain(field);
+    }
+    // Fail closed: a failed record upload reds the run rather than leaving a
+    // successful backup the gate cannot see.
+    expect(backupScript).toContain(
+      'runProviderOperationWithRetry("R2 export record upload"',
+    );
+    // The record is staged outside the backup directory, so the dated dump
+    // stays the only file this script leaves behind.
+    expect(backupScript).toContain("mkdtempSync");
+    expect(backupScript).not.toContain("D1_BACKUP_EXPORT_RECORD");
+  });
+
+  it("fetches the record in the credentialed deploy job only, so the verifier and the prepare job stay credential-free", () => {
+    const deployWorkflow = readFileSync(
+      resolve(".github/workflows/deploy-production.yml"),
+      "utf8",
+    );
+    const parsed = parse(deployWorkflow) as any;
+    const steps = parsed.jobs.deploy.steps as any[];
+    const fetchIndex = steps.findIndex(
+      (step) => step.name === "Fetch fresh backup export record",
+    );
+    const deployIndex = steps.findIndex((step) => step.name === "Deploy");
+    expect(fetchIndex).toBeGreaterThanOrEqual(0);
+    expect(fetchIndex).toBeLessThan(deployIndex);
+    expect(steps[fetchIndex].if).toBe("env.BACKUP_PROOF_STATUS == 'required'");
+    expect(steps[fetchIndex].run).toContain(
+      "node scripts/fetch-d1-backup-export-record.mjs",
+    );
+    expect(steps[fetchIndex].run).toContain(
+      "--output test-results/d1-backup-export.json",
+    );
+    expect(steps[fetchIndex].env.CLOUDFLARE_API_TOKEN).toBe(
+      "${{ secrets.CLOUDFLARE_API_TOKEN }}",
+    );
+
+    // The prepare job is the unprivileged one. It must have no way to read R2
+    // (or it could skip generating fresh exact evidence), and the verifier it
+    // calls must not be handed the record.
+    const prepare = parsed.jobs.prepare_remote_restore_evidence;
+    expect(JSON.stringify(prepare)).not.toContain(
+      "fetch-d1-backup-export-record",
+    );
+    const prepareScript = readFileSync(
+      resolve("scripts/ci-prepare-remote-restore-evidence.sh"),
+      "utf8",
+    );
+    expect(prepareScript).not.toContain("--backup-export");
+
+    const verifyScript = readFileSync(
+      resolve("scripts/verify-remote-restore-evidence.mjs"),
+      "utf8",
+    );
+    expect(verifyScript).toContain('readArg("--backup-export")');
+    expect(verifyScript).toContain("validateBackupExport(backupExport, {");
+    // Optional on purpose: prepare has no record, and a missing flag there
+    // must NOT read as "the backup is stale".
+    expect(verifyScript).toMatch(
+      /if \(backupExportPath\) \{\n\s+const exportVerdict/,
+    );
+    expect(verifyScript).toContain(
+      'policy: "fresh-export-12h-reusable-schema-proof-7d"',
+    );
+    expect(verifyScript).not.toContain('"fresh-schema-24h"');
+
+    const fetchScript = readFileSync(
+      resolve("scripts/fetch-d1-backup-export-record.mjs"),
+      "utf8",
+    );
+    expect(fetchScript).toContain("buildR2GetArgs(");
+    expect(fetchScript).toContain("BACKUP_EXPORT_RECORD_KEY");
+    // A record that cannot be fetched must fail the step loudly, so a deploy
+    // can never mistake an unreachable R2 for a stale backup.
+    expect(fetchScript).toContain("backup_export_record_unavailable");
+    expect(fetchScript).toContain("MAX_RECORD_BYTES");
+  });
+
+  it("archives the accepted export record with the release, without ever requiring it", () => {
+    const archive = readFileSync(
+      resolve("scripts/release-evidence-archive.mjs"),
+      "utf8",
+    );
+    const allowedBlock = archive.slice(
+      archive.indexOf("const ALLOWED_EVIDENCE"),
+      archive.indexOf("const REQUIRED_EVIDENCE"),
+    );
+    const requiredBlock = archive.slice(
+      archive.indexOf("const REQUIRED_EVIDENCE"),
+      archive.indexOf("function hasCompleteEvidenceSet"),
+    );
+    expect(allowedBlock).toContain("d1-backup-export");
+    // A deferred release has no backup proof at all, so the record can never
+    // be part of the required set.
+    expect(requiredBlock).not.toContain("d1-backup-export");
   });
 });
