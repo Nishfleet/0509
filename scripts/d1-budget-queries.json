@@ -17,7 +17,7 @@
     },
     {
       "name": "rate-limit-window-count",
-      "source": "app/lib/rate-limit.server.ts",
+      "source": "app/lib/rate-limit.server.ts: the post-#2985 atomic claim runs this COUNT as a subquery inside its single INSERT (... WHERE (SELECT COUNT(*) ...) < ?), once per admitted/attempted claim on the persisted cost-bearing scopes; entry books the same predicates standalone so the plan is inspectable. Binding-gated scopes (workers/app.ts global gate) issue no rate_limit_events SQL, so 1500x50 is deliberately padded",
       "sql": "SELECT COUNT(*) AS count FROM rate_limit_events WHERE scope = ? AND key_hash = ? AND route = ? AND created_at >= ?",
       "callsPerDay": 1500,
       "rowsPerIndexedSearch": 50
@@ -31,7 +31,7 @@
     },
     {
       "name": "rate-limit-sweep",
-      "source": "app/lib/rate-limit.server.ts retention sweep",
+      "source": "cleanupRateLimitEvents retention sweep (app/lib/rate-limit.server.ts): the shipped DELETE is two-branch (scope NOT IN long-window list below cutoff OR scope IN list below long-window cutoff); entry books the simplified same-index shape at the sweep cadence derived from CleanupWindowSeconds",
       "sql": "DELETE FROM rate_limit_events WHERE created_at < ?",
       "callsPerDay": 24,
       "writesPerCall": 200
@@ -89,7 +89,7 @@
     },
     {
       "name": "meta-readiness-aggregate",
-      "source": "app/lib/meta-ads-readiness.server.ts backing /api/launch-readiness (meta canary + readiness page)",
+      "source": "meta-ads beta readiness aggregate in app/lib/meta-ads-readiness.server.ts, one of the queries the /api/launch-readiness loader fans out to (meta canary + readiness page); it is one curated representative, not the whole getLaunchReadinessSignals surface",
       "sql": "SELECT provider, COUNT(*) AS attempts, SUM(CASE WHEN status = 'succeeded' THEN 1 ELSE 0 END) AS successes, MAX(CASE WHEN status = 'succeeded' THEN created_at ELSE NULL END) AS latest_success_at FROM discovery_fetch_log WHERE (provider = 'meta_library_browser' OR (provider = 'meta_api' AND json_extract(metadata_json, '$.customerOwned') = 1)) AND created_at >= ? GROUP BY provider",
       "callsPerDay": 250,
       "rowsPerIndexedSearch": 150
