@@ -26,11 +26,11 @@ export type CtaFunnelStage = "reached" | "bailed";
 // bail-out (issue #1401 accept 4).
 //   - no_cta_candidates: no <button>, no submit input, and no <a> at all.
 //   - only_chrome_buttons: buttons existed but every one was UI chrome
-//     (CTA_CHROME_BUTTON_TEXTS), no priority verb matched, and no usable
-//     anchor fallback.
+//     (CTA_CHROME_BUTTON_TEXTS or a class-name-shaped token, issue #2564),
+//     no priority verb matched, and no usable anchor fallback.
 //   - only_chrome_anchors: action links existed but every one was navigation
-//     chrome (CTA_CHROME_ANCHOR_TEXTS), no priority verb matched, and no
-//     usable button fallback.
+//     chrome (CTA_CHROME_ANCHOR_TEXTS or a class-name-shaped token, issue
+//     #2564), no priority verb matched, and no usable button fallback.
 //   - empty_capture: the HTML fed to extraction had no visible text content
 //     (a shell / challenge body that slipped past the capture-validity gate).
 export type CtaFunnelReasonCode =
@@ -1131,12 +1131,30 @@ function extractActionLinks(html: string) {
   return [...html.matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/gi)].map((match) => stripTags(match[1] ?? ""));
 }
 
+// Issue #2564: the exact class-name predicate the public timeline's display
+// guard applies (issue #2320, judge-edited binding). A no-space `ic-*`/`js-*`
+// token or an all-lowercase dashed token with 3+ segments is a leaked CSS
+// class name, never a CTA — the extractor must not emit a value the display
+// guard would reject, so every pickBestCta tier treats the shape as chrome.
+function isClassLikeCtaCandidate(candidate: string): boolean {
+  return (
+    !/\s/.test(candidate) &&
+    (/^(ic|js)-/.test(candidate) || /^[a-z]+(-[a-z]+){2,}$/.test(candidate))
+  );
+}
+
 function pickBestCta(
   candidates: string[],
   buttonCandidates: string[] = [],
   anchorCandidates: string[] = [],
 ): { ctaText: string | null; funnel: CtaFunnel } {
-  const unique = [...new Set(candidates.filter(Boolean))];
+  const unique = [
+    ...new Set(
+      candidates.filter(
+        (candidate) => candidate && !isClassLikeCtaCandidate(candidate),
+      ),
+    ),
+  ];
 
   for (const pattern of CTA_PRIORITY_PATTERNS) {
     const match = unique.find((candidate) => pattern.test(candidate));
@@ -1225,6 +1243,8 @@ function normalizeChromeText(candidate: string): string {
 function isChromeButtonText(candidate: string): boolean {
   const lower = normalizeChromeText(candidate);
   if (!lower) return true;
+  // Issue #2564: a leaked CSS class name is chrome, never a CTA.
+  if (isClassLikeCtaCandidate(candidate)) return true;
   if (CTA_CHROME_BUTTON_TEXTS.has(lower)) return true;
   // Digit-only calendar cells.
   if (/^\d{1,2}$/.test(lower)) return true;
@@ -1242,6 +1262,8 @@ function isChromeButtonText(candidate: string): boolean {
 function isChromeAnchorText(candidate: string): boolean {
   const lower = normalizeChromeText(candidate);
   if (!lower) return true;
+  // Issue #2564: a leaked CSS class name is chrome, never a CTA.
+  if (isClassLikeCtaCandidate(candidate)) return true;
   if (CTA_CHROME_ANCHOR_TEXTS.has(lower)) return true;
   // Same cookie / password / search chrome that can appear as <a> text.
   if (/^cookie\b/.test(lower)) return true;
