@@ -20,6 +20,21 @@ import type {
   ValidateTargetResult,
 } from "~/lib/presence-types";
 
+function livePresenceConnector(connectorId: string) {
+  return Object.hasOwn(CONNECTORS, connectorId)
+    ? CONNECTORS[connectorId as PresenceConnectorId]
+    : undefined;
+}
+
+function unknownConnectorResult(connectorId: string): PollResult {
+  return {
+    ok: false,
+    items: [],
+    errorCode: "unknown_connector",
+    errorMessage: `${connectorId} is not a live presence connector.`,
+  };
+}
+
 const CONNECTORS = {
   website: websiteConnector,
   x: xConnector,
@@ -80,7 +95,15 @@ export async function validatePresenceTarget(
   input: ValidateTargetInput,
   ctx: Omit<PresenceConnectorContext, "env">,
 ): Promise<ValidateTargetResult> {
-  const connector = getPresenceConnector(connectorId);
+  const connector = livePresenceConnector(connectorId);
+  if (!connector) {
+    return {
+      ok: false,
+      coverageLabel: "UNAVAILABLE",
+      errorCode: "unknown_connector",
+      errorMessage: `${connectorId} is not a live presence connector.`,
+    };
+  }
   const fullCtx: PresenceConnectorContext = { ...ctx, env };
   if (connectorId === "website") {
     return websiteConnector.validateTarget(input);
@@ -103,7 +126,9 @@ export async function pollPresenceTarget(
     fetchImpl?: typeof fetch;
   } = {},
 ): Promise<PollResult> {
-  const connector = getPresenceConnector(target.connectorId);
+  if (!livePresenceConnector(target.connectorId)) {
+    return unknownConnectorResult(target.connectorId);
+  }
   if (!(await connectorOperationalForPolling(env, target.connectorId, entity.trackingMode, target.userId))) {
     return {
       ok: false,

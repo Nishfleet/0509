@@ -1,9 +1,10 @@
-import type {
-  PresenceItemRecord,
-  PresencePollCursorRecord,
-  PresenceSourceCoverageEntry,
-  SourceTargetRecord,
-  TrackedEntityRecord,
+import {
+  isPresenceConnectorId,
+  type PresenceItemRecord,
+  type PresencePollCursorRecord,
+  type PresenceSourceCoverageEntry,
+  type SourceTargetRecord,
+  type TrackedEntityRecord,
 } from "~/lib/presence-types";
 
 export const PRESENCE_ENTITY_BRIEF_STATES = [
@@ -178,7 +179,7 @@ export function buildPresenceEntityBrief(input: BuildPresenceEntityBriefInput): 
     (item) => activeSourceIds.has(item.connectorId) && scopedSourceTargetIds.has(item.sourceTargetId),
   );
   const mentionRecords = (input.mentionItems ?? [])
-    .filter((item) => item.connectorId !== "website")
+    .filter((item) => item.connectorId !== "website" && isPresenceConnectorId(item.connectorId))
     .sort((a, b) => b.observedAt.localeCompare(a.observedAt))
     .slice(0, 3);
   const mentionChanges = mentionRecords.map((item) => ({

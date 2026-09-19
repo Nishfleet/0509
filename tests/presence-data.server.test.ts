@@ -218,6 +218,61 @@ describe("presence-data listPresenceItems clause builder", () => {
     expect(query.bindings[0]).toBe("user_b");
     expect(query.bindings.at(-1)).toBe(50);
   });
+
+  it("drops leftover connector_id='podcast' rows from the read path (issue #3447)", async () => {
+    const { env } = createMockDb({
+      allResults: [
+        {
+          sqlIncludes: "SELECT presence_item.* FROM presence_item",
+          results: [
+            {
+              id: "pitem_podcast",
+              source_target_id: "st_podcast",
+              tracked_entity_id: "te_1",
+              user_id: "user_a",
+              connector_id: "podcast",
+              external_id: null,
+              canonical_url: "https://example.com/ep",
+              url_hash: "uhp",
+              title: "Episode",
+              body_excerpt: null,
+              author: null,
+              published_at: null,
+              observed_at: "2026-09-13T22:50:00.000Z",
+              content_hash: "chp",
+              raw_json: null,
+              is_tombstone: 0,
+              revision: 1,
+              created_at: "2026-09-13T22:50:00.000Z",
+            },
+            {
+              id: "pitem_web",
+              source_target_id: "st_1",
+              tracked_entity_id: "te_1",
+              user_id: "user_a",
+              connector_id: "website",
+              external_id: null,
+              canonical_url: "https://example.com/a",
+              url_hash: "uh1",
+              title: "A",
+              body_excerpt: null,
+              author: null,
+              published_at: null,
+              observed_at: "2026-07-13T00:00:00.000Z",
+              content_hash: "ch1",
+              raw_json: null,
+              is_tombstone: 0,
+              revision: 1,
+              created_at: "2026-07-13T00:00:00.000Z",
+            },
+          ],
+        },
+      ],
+    });
+
+    const items = await listPresenceItems(env, "user_a");
+    expect(items.map((item) => item.id)).toEqual(["pitem_web"]);
+  });
 });
 
 describe("presence-data observation aggregation scoping", () => {

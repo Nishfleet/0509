@@ -2,6 +2,13 @@ export const PRESENCE_CONNECTOR_IDS = ["website", "x", "reddit", "linkedin", "rs
 
 export type PresenceConnectorId = (typeof PRESENCE_CONNECTOR_IDS)[number];
 
+const PRESENCE_CONNECTOR_ID_SET: ReadonlySet<string> = new Set(PRESENCE_CONNECTOR_IDS);
+
+/** Runtime guard for D1 values the live code union no longer names (issue #3447: leftover `podcast`). */
+export function isPresenceConnectorId(value: string): value is PresenceConnectorId {
+  return PRESENCE_CONNECTOR_ID_SET.has(value);
+}
+
 /**
  * Catalog sources include live connectors plus planned/manual-only entries.
  *
