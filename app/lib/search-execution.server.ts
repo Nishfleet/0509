@@ -22,6 +22,7 @@ import {
   buildSearchObservabilityEvent,
   recordSearchObservabilityEvent,
 } from "~/lib/search-observability.server";
+import { resolveCuratedKeywordBrandDomain } from "~/lib/website-identity.server";
 import {
   resolveSearchRolloutMode,
   shouldApplySearchV2,
@@ -375,6 +376,18 @@ function resolveBareKeywordBrandDomain(
   }
   if (best) {
     return best;
+  }
+
+  // Curated alias recall (issue #2075): a bare keyword naming a curated brand
+  // promotes to that registrable domain when a returned row lands on the
+  // brand's curated host set — the ridge → ridgewallet.com/.eu case, where
+  // neither the landing label nor an exact advertiser name equals the
+  // keyword, so both rails above and below miss. The landing evidence gate
+  // is what keeps a generic word that is also a curated brand term (q=goat
+  // mouth-tape ads on unrelated hosts) on the unmatched fallback.
+  const curated = resolveCuratedKeywordBrandDomain(trimmed, tally.keys());
+  if (curated) {
+    return curated;
   }
 
   // No landing page in the result set carries the brand. Fall back to the
