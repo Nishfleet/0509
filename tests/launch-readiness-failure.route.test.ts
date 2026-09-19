@@ -34,15 +34,19 @@ const GREEN_SIGNALS = {
   },
 };
 
-function mockHappyPath() {
+function mockHappyPath(options?: { metaAdsBetaError?: Error }) {
   vi.doMock("~/lib/context.server", () => ({
     getEnv: vi.fn(() => ({
       CANARY_BYPASS_TOKEN: "secret-token",
       DB: {},
     })),
   }));
+  // Each module path is registered exactly once per test — per-test behaviour
+  // threads through this helper's options (tests/mock-registration-race.test.ts).
   vi.doMock("~/lib/meta-ads-readiness.server", () => ({
-    getMetaAdsBetaReadiness: vi.fn().mockResolvedValue({ ok: true, blockers: [] }),
+    getMetaAdsBetaReadiness: options?.metaAdsBetaError
+      ? vi.fn().mockRejectedValue(options.metaAdsBetaError)
+      : vi.fn().mockResolvedValue({ ok: true, blockers: [] }),
   }));
 }
 
@@ -109,14 +113,9 @@ describe("launch readiness route failure path (issue #3392)", () => {
   });
 
   it("answers the same honest 503 when the Meta ads readiness leg throws", async () => {
-    mockHappyPath();
+    mockHappyPath({ metaAdsBetaError: new Error("D1_ERROR: network connection lost") });
     vi.doMock("~/lib/data.server", () => ({
       getLaunchReadinessSignals: vi.fn().mockResolvedValue(GREEN_SIGNALS),
-    }));
-    vi.doMock("~/lib/meta-ads-readiness.server", () => ({
-      getMetaAdsBetaReadiness: vi
-        .fn()
-        .mockRejectedValue(new Error("D1_ERROR: network connection lost")),
     }));
     vi.spyOn(console, "error").mockImplementation(() => {});
 
