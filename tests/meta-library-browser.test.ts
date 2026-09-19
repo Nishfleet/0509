@@ -2415,8 +2415,18 @@ describe("searchMetaLibraryByBrowser", () => {
       const result = await resultPromise;
 
       expect(result.ads.map((ad) => ad.metaAdId)).toEqual(["100", "200"]);
-      // first extract + scroll/re-extract cycles
-      expect(evaluate.mock.calls.length).toBeGreaterThan(1);
+      const scrollCalls = evaluate.mock.calls.filter(
+        (call) =>
+          typeof call[0] === "function" && String(call[0]).includes("scrollTo"),
+      );
+      const extractionCalls = evaluate.mock.calls.filter(
+        (call) =>
+          typeof call[0] === "function" && !String(call[0]).includes("scrollTo"),
+      );
+      // Pass 1 adds a card so scrolling continues; pass 2 adds none and the
+      // loop stops before pass 3 — an unconditional break would pass 1 scroll.
+      expect(scrollCalls).toHaveLength(2);
+      expect(extractionCalls).toHaveLength(3);
     } finally {
       vi.useRealTimers();
     }
