@@ -20,7 +20,6 @@ const hostedWorkflows = [
 ] as const;
 
 const runnerRoutedWorkflows = [
-  [".github/workflows/cross-browser-matrix.yml", ["matrix"]],
   [".github/workflows/deploy-production.yml", ["verify", "deploy"]],
   [".github/workflows/d1-backup-weekly.yml", ["export"]],
 ] as const;

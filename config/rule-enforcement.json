@@ -323,15 +323,15 @@
     {
       "id": "sr-gates-lifted",
       "source": "global-standing-rules.md: Merge and deploy gates LIFTED on the canonical fleet repo (Nish, 2026-08-24)",
-      "mechanism": "auto-merge-arm + deploy-production on siterep-public; auto-revert on red main",
-      "proof": ".github/workflows/auto-merge-arm.yml; siterep-public deploy-production.yml",
+      "mechanism": "GitHub merge queue (ruleset main-merge-queue) + deploy-production on siterep-public; auto-revert on red main",
+      "proof": "ruleset 21391031 merge_queue rule; siterep-public deploy-production.yml",
       "status": "enforced"
     },
     {
       "id": "sr-prs-self-land",
       "source": "global-standing-rules.md: Agent-authored PRs land themselves (Nish, 2026-08-25 — \"automatic / autonomous ... for all repos, current and future\")",
-      "mechanism": "auto-merge-arm.yml on every active repo; repo-standards-sync enables allow_auto_merge",
-      "proof": ".github/workflows/auto-merge-arm.yml; .github/workflows/repo-standards-sync.yml",
+      "mechanism": "repo allow_auto_merge=true + GitHub merge queue (ruleset main-merge-queue, HEADGREEN grouping) lands a PR once the four required checks pass",
+      "proof": "gh api repos/Nishfleet/0509 allow_auto_merge=true; ruleset 21391031 merge_queue rule; 11 PRs merged 2026-09-19 08:47Z-18:45Z with auto-merge-arm.yml disabled since 08:28Z",
       "status": "enforced"
     },
     {

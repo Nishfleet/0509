@@ -58,17 +58,17 @@ Standing rules that earn a gate (cited per row below):
 | `deploy-production.yml` (732 lines, 6 jobs) push-to-main deploy + Gate A/B/C + restore-evidence + ledger | Undeployable or unrestorable state reaching prod | R1 restore-evidence-before-migrations (incidents: scratch-restore kill #630, deploy drift 0509 .lane reports, #2840 gate-B, #2975 concurrency) | Runs only on main | **KEPT, TRIMMED** (#3070): step audit table below — every surviving step names an incident/rule or is pinned by the gate tests; only `- name: Typecheck` had none and was deleted, with its coverage moved into `scripts/deploy-production.mjs` as an explicit `npm run typecheck` ahead of `wrangler deploy` (2026-09-12 re-scope) |
 | `preview-assert.yml` | Merge lands a diff that fails the release assertion on main | Incident 0509#1576: 9 of 120 merges auto-reverted because the assertion ran only after merge | Path-gated (PR #1580 lesson) ~5 min | **KEEP** |
 | `auto-revert.yml` | Red main after merge | R4 reversibility (Nish canonical) | Runs on failure only | **KEEP** |
-| `auto-merge-arm.yml` | Un-armed merges / merge-queue misuse | fleet-ops#1457, #3532 | ~1 min, PR events only | **KEEP** |
-| `review-gate.yml` | Greptile review budget burn | Incident 2026-08-03: 50/month budget ran dry across 185 PRs/30d | Conditional (`review:deep` only) | **KEEP** |
+| ~~`auto-merge-arm.yml`~~ | Un-armed merges / merge-queue misuse | fleet-ops#1457, #3532 | — | **REMOVED 2026-09-20** — the merge queue is the stock replacement. `allow_auto_merge=true` on the repo plus ruleset 21391031's `merge_queue` rule (HEADGREEN) lands a PR once the four required checks pass. Proof: 11 PRs merged 09-19 08:47Z–18:45Z while this workflow was already disabled since 08:28Z. |
+| ~~`review-gate.yml`~~ | Greptile review budget burn | Incident 2026-08-03: 50/month budget ran dry across 185 PRs/30d | — | **REMOVED 2026-09-20** — the Copilot pull-request reviewer is active on this repo and unmetered, so there is no budget left to ration. A hand-built backpressure tier ladder around a reviewer we no longer pay per-review for is pure overhead. |
 | `semgrep-actionlint.yml` | Malformed/miswritten workflow + TS checks | Purpose-built for the smallest-diff rule (fork-guard authorizers); not yet a required context | ~2 min per PR | **MERGE-INTO** the one PR job as a path-gated step (`.github/**`) so it is one context, not a fourth workflow |
 | `content-quality.yml` (Vale) | Prose regressions repo-wide | Incident #1728 | Full-tree Vale on every PR | **KEEP**, path-gate to `docs/**`, `.vale/**`, `app/**/*.md` |
 | ~~`quality-ratchet.yml`~~ | Sentence-length ceiling drift | Incident #1728 | — | **REMOVED 2026-09-18** — 2 runs, 0 successes, never once tightened, while wired to `git push origin HEAD:main`. `scripts/quality-ratchet.mjs` stays and is runnable by hand. |
-| `ratchet-auto-tighten.yml` | Design-system banned-marker drift | Background: monotone ratchet purpose; separate ceiling for markers in `app/` | Weekly on main | **KEEP** — the only ratchet workflow that has ever run green (10/10). The former MERGE-INTO target `quality-ratchet.yml` was removed 2026-09-18. |
-| `cross-browser-matrix.yml` | (nothing blocking — diagnostic) | Diagnostic only, nightly | Nightly | **KEEP** as nightly diagnostic (does not belong in the PR path) |
-| `stale-unarmed-prs.yml` | Forgotten PRs drifting unarmed | fleet-ops#4146 replacement; nudge only, never closes | Daily, non-blocking | **KEEP** |
+| ~~`ratchet-auto-tighten.yml`~~ | Design-system banned-marker drift | Background: monotone ratchet purpose | — | **REMOVED 2026-09-20** — 88/100 green, but nothing enforces the ceiling it maintains: `scripts/design-system-ratchet.mjs` is referenced by no PR check and no `package.json` script, so the weekly bot commit tightened a number no gate ever read. The script and `docs/design-system-ratchet.json` stay (read by `verify-claims.mjs` and `file-size-ratchet.test.ts`); the actuator goes. |
+| ~~`cross-browser-matrix.yml`~~ | (nothing blocking — diagnostic) | Diagnostic only, nightly | — | **REMOVED 2026-09-20** — 39 failures in 69 runs (57%). A diagnostic that is wrong more often than it is right is anti-signal: it trains everyone to ignore it. The chromium 66-journey proof in the deploy remains the release gate. |
+| ~~`stale-unarmed-prs.yml`~~ | Forgotten PRs drifting unarmed | fleet-ops#4146 replacement; nudge only, never closes | — | **REMOVED 2026-09-20** — with the merge queue arming PRs there is no unarmed state to nudge about, and a daily nag at 230 merges/week is noise. |
 | `uptime-health.yml` | Production down unnoticed | Runtime-described: the 5-min Actions cron was never real liveness (median 63 min, 300 obs 2026-07-25..08-11); VPS systemd timer owns liveness now | 0 by default (dispatch-only) | **DELETE** the file — the 0509-liveness systemd timer is the detector; a dispatch-only workflow is dead weight (deletion PR carries this row) |
 | `ads-prog-seo-canary.yml` | /ads/:domain union regression (noindex/sitemap parity) | Issue #1455 (BET 5 surface-live bet) | Nightly | **KEEP** (nightly canary row of the target shape) |
-| `meta-discovery-canary.yml` | Meta discovery / full-site run liveness | Issue #2110 | Nightly | **KEEP** |
+| ~~`meta-discovery-canary.yml`~~ | Meta discovery / full-site run liveness | Issue #2110 | — | **REMOVED 2026-09-20** — its own header says Gate C verifies the Meta lane after every successful deploy. At the current merge rate main deploys many times a day, so a 3-hourly between-deploys check adds nothing Gate C has not just proved. |
 | `market-signal-snapshot.yml` | Missing daily market-signal D1 snapshot | Incident: cron OAuth expiry left it stale 5 mornings (PR #557) | Daily | **KEEP** |
 | `market-signal-snapshot-age.yml` | A missed daily snapshot being silent | R3 + issue #1894 (2026-09-06 miss) | Daily | **KEEP** |
 | `d1-backup-r2.yml` | No restorable D1 backup | R1 | Daily | **KEEP** |
@@ -169,3 +169,58 @@ Fill per deletion batch when merged:
 | --- | --- | --- | --- |
 | uptime-health.yml deletion — issue #3068, PR #3216 | 4.2 min median, 6 required contexts, 26 workflow files | 4.2 min median (unchanged — the check was dispatch-only, 0 PR jobs), 6 required contexts (ruleset `main-merge-queue` verified unchanged), 25 workflow files | −1 workflow file, −1 dispatchable hosted job, 0 PR-job delta |
 | #3070 trim (deploy-production.yml) | Deploy Worker job 22.5 min — run 34380544970, 2026-09-09 | pending first green post-merge run (deploy chain red on #3174 stale-ledger blocker); expected ≈22 min | discrete 62 s step removed; `npm run typecheck` re-added inside `npm run deploy` per re-scope, net ≈ −0–20 s |
+
+| ~~`red-on-main-watch.yml`~~ | Red main going unnoticed | 15-min sweep for a first-run failure | — | **REMOVED 2026-09-20** — 32 failures in 45 runs (71%): the alert failed more often than the thing it watched. It filed 16 `red-on-main` issues and 6 are still open, so its output was not acted on either. `auto-revert.yml` and `stop-the-line-watch.yml` cover red main with clean records. |
+| ~~`stop-the-line-watch.yml`~~ | Consecutive red pair on main | Gate C / freeze doctrine | — | **REMOVED 2026-09-20** — broken by PR #3670, which deleted `.github/scripts/`. The fleet-ops reusable workflow it calls runs `.github/scripts/stop-the-line-detector.mjs` **from the caller's checkout**, so a dispatched run now dies with MODULE_NOT_FOUND. Making it work again means reinstating 51 KB of detector glue in this repo to run a second-order watcher, when `auto-revert.yml` already covers the primary undo with 0 failures in 100 runs. |
+
+## Disabled-state audit, 2026-09-20
+
+Twelve workflow files on main were `disabled_manually` on GitHub while this
+ledger still carried **KEEP** rows for most of them, each citing a named
+incident. A ledger that disagrees with the runtime is worse than no ledger, so
+every one was resolved to on or gone. The same drift is what left production
+with no liveness detector: `uptime-health.yml` was deleted on the premise that
+the `0509-liveness` systemd timer owned liveness, and that timer was never
+installed on netcup. It was installed and proven on 2026-09-20.
+
+**Re-enabled (3)** — each guards something with no stock replacement and has a
+clean record:
+
+| workflow | record | why it earns its place |
+| --- | --- | --- |
+| `auto-revert.yml` | 100 runs, 0 failures, 30 reverts | R4 reversibility on a repo that deploys to production on every merge. 30 `auto-revert-halt` issues filed, 0 still open — its output gets acted on. |
+| `market-signal-snapshot-age.yml` | 42 runs, 42 green | R3. Its parent `market-signal-snapshot.yml` is active, so the job it watches was running unwatched — the precise shape of the #1894 miss. |
+| `ads-prog-seo-canary.yml` | recently unblocked (#3619) | Guards `/ads/:domain` noindex/sitemap parity. The SEO surface is the acquisition channel, and there is no stock equivalent. |
+
+**Removed (7)** — rows struck through above.
+
+Two of the four first re-enabled failed on their proving dispatch, which is why
+every re-enable here carries a green run and not a run-history average:
+
+- `stop-the-line-watch` died with MODULE_NOT_FOUND — PR #3670 deleted
+  `.github/scripts/`, and the fleet-ops reusable workflow runs the detector from
+  the CALLER's checkout. Disabled again and removed.
+- `market-signal-snapshot-age` died with `market_signal_monitor_missing_deploy_key`.
+  `TELEMETRY_DEPLOY_KEY` had been removed from the repo secrets after the
+  publisher's own 04:31Z run that morning, and the private half was gone from
+  disk with `~/workspaces/agent-state/0509-telemetry-keys/`. **The publisher
+  would have failed at 04:3xZ the next morning**, publishing nothing while
+  reporting success — the exact #1894 shape. A replacement ed25519 deploy key
+  was minted into the credential store, registered write-enabled on the sink and
+  set as the repo secret; the monitor then ran green (run 35463181664). The
+  superseded deploy key is still registered on `0509-telemetry` and should be
+  revoked by hand.
+
+A run-history average is not evidence a workflow works today. Its last green run
+was under a configuration that no longer exists.
+
+**Resolved elsewhere (1)** — `d1-restore-proof-auto-refresh.yml` was parked here
+rather than cut, because `wrangler d1 time-travel` replaces the whole
+restore-evidence family and the file was woven into `deploy-production-gate.test.ts`;
+cutting it alone meant rewriting those assertions twice. PR #3684 landed the
+stock deploy pipeline for #3679 and deleted it along with the other four
+backup/restore/soak workflows, which is the coherent version of that change.
+
+**Rule for the next add:** a gate is `active` on GitHub or it is not in the tree.
+A third state — present, documented, switched off — is how the liveness gap
+happened.
