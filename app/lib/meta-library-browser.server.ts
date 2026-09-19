@@ -542,6 +542,7 @@ async function collectCardsWithInteractiveScroll(
     if (elapsed >= INTERACTIVE_SCROLL_BUDGET_MS) {
       break;
     }
+    const cardCountBeforePass = cards.length;
 
     await page.evaluate(() => {
       window.scrollTo(0, document.body.scrollHeight);
@@ -561,6 +562,9 @@ async function collectCardsWithInteractiveScroll(
       ? (passExtraction as ExtractedAdCard[])
       : ((passExtraction as { cards?: ExtractedAdCard[] }).cards ?? []);
     cards = dedupeExtractedCardsByLibraryId([...cards, ...passCards]);
+    if (cards.length === cardCountBeforePass) {
+      break;
+    }
   }
 
   return cards;

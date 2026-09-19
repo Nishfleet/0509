@@ -2415,8 +2415,84 @@ describe("searchMetaLibraryByBrowser", () => {
       const result = await resultPromise;
 
       expect(result.ads.map((ad) => ad.metaAdId)).toEqual(["100", "200"]);
-      // first extract + scroll/re-extract cycles
-      expect(evaluate.mock.calls.length).toBeGreaterThan(1);
+      const scrollCalls = evaluate.mock.calls.filter(
+        (call) =>
+          typeof call[0] === "function" && String(call[0]).includes("scrollTo"),
+      );
+      const extractionCalls = evaluate.mock.calls.filter(
+        (call) =>
+          typeof call[0] === "function" && !String(call[0]).includes("scrollTo"),
+      );
+      // Pass 1 adds a card so scrolling continues; pass 2 adds none and the
+      // loop stops before pass 3 — an unconditional break would pass 1 scroll.
+      expect(scrollCalls).toHaveLength(2);
+      expect(extractionCalls).toHaveLength(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("interactive mode stops scrolling once a pass adds no new library ids (#3626)", async () => {
+    const { browser, page } = createBrowserHarness();
+    const evaluate = page.evaluate as ReturnType<typeof vi.fn>;
+    evaluate.mockResolvedValue({
+      cards: [
+        {
+          libraryId: "100",
+          advertiser: "Nike",
+          body: "Run",
+          previewHeadline: "Run",
+          previewSubhead: null,
+          cta: "Shop",
+          adSnapshotUrl: "https://www.facebook.com/ads/library/?id=100",
+          landingPageUrl: null,
+          platforms: ["Facebook"],
+          active: true,
+        },
+      ],
+      pageText: "results",
+      loginWall: false,
+      noResults: false,
+      rateLimited: false,
+    });
+    const launch = vi.fn().mockResolvedValue(browser);
+    const sessions = vi.fn().mockResolvedValue([]);
+    const limits = vi.fn().mockResolvedValue({
+      activeSessions: [],
+      maxConcurrentSessions: 2,
+      allowedBrowserAcquisitions: 1,
+      timeUntilNextAllowedBrowserAcquisition: 0,
+    });
+    const connect = vi.fn();
+
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch, sessions, limits, connect },
+    }));
+
+    vi.useFakeTimers();
+    try {
+      const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+      const resultPromise = searchMetaLibraryByBrowser(
+        { BROWSER: {} as Fetcher },
+        buildQuery(),
+        { mode: "interactive" },
+      );
+      await vi.runAllTimersAsync();
+      const result = await resultPromise;
+
+      expect(result.ads.map((ad) => ad.metaAdId)).toEqual(["100"]);
+      const scrollCalls = evaluate.mock.calls.filter(
+        (call) =>
+          typeof call[0] === "function" && String(call[0]).includes("scrollTo"),
+      );
+      const extractionCalls = evaluate.mock.calls.filter(
+        (call) =>
+          typeof call[0] === "function" && !String(call[0]).includes("scrollTo"),
+      );
+      // One scroll pass ran, found zero new library ids, and stopped: the
+      // remaining passes never scrolled or re-extracted.
+      expect(scrollCalls).toHaveLength(1);
+      expect(extractionCalls).toHaveLength(2);
     } finally {
       vi.useRealTimers();
     }
