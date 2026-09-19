@@ -1,7 +1,7 @@
 import { decodeHtmlEntities } from "~/lib/decode-html.server";
 import { fetchWithTimeout, releaseFetchTimeout } from "~/lib/fetch-timeout.server";
 import { resolvePublicHttpUrl, resolvePublicRedirectUrl } from "~/lib/public-url.server";
-import { parseSearchInputFromWebsiteField, registrableDomainFromHostname } from "~/lib/search-query";
+import { foldDomainLabel, parseSearchInputFromWebsiteField, registrableDomainFromHostname } from "~/lib/search-query";
 import { stripScriptAndStyle } from "~/lib/sanitize-text.server";
 
 export interface WebsiteIdentity {
@@ -368,6 +368,68 @@ export function getCuratedAdvertiserPageId(registrableDomain: string): string | 
  */
 export function getCuratedProviderQuery(registrableDomain: string): string | null {
   return IDENTITY_OVERRIDES[registrableDomain]?.providerQuery ?? null;
+}
+
+/**
+ * Sync lookup of the curated registrable domain a bare keyword names, gated
+ * on the returned rows carrying evidence of that brand (issue #2075).
+ *
+ * A bare `q=<brand>` keyword search never calls `resolveWebsiteIdentity`, so
+ * the curated `domainAliases` rail from #2012/#2059 was invisible to the
+ * text-intent path: `q=ridge` returned every row unmatched even though the
+ * ads land on ridgewallet.com/ridgewallet.eu. This maps the keyword to the
+ * curated domain so the v2 classifier can connect those landings.
+ *
+ * Promotion is evidence-gated the same way the landing-label tally is: the
+ * keyword must equal a curated brand term (the override's siteName or the
+ * domain's own label, folded) AND at least one returned row must land on a
+ * registrable domain the entry owns (the domain itself or a curated alias).
+ * No landing evidence, no promotion — a generic word that happens to be a
+ * curated brand term (q=goat returning mouth-tape ads on unrelated hosts)
+ * still falls through to the unmatched label, and the classifier still only
+ * marks a row verified/likely when it actually connects to the domain.
+ */
+export function resolveCuratedKeywordBrandDomain(
+  keyword: string,
+  landingRegistrableDomains: Iterable<string>,
+): string | null {
+  const stem = foldDomainLabel(keyword.trim());
+  if (!stem || stem.length < 3) {
+    return null;
+  }
+
+  const landings = new Set<string>();
+  for (const host of landingRegistrableDomains) {
+    const registrable = registrableDomainFromHostname(host);
+    if (registrable) {
+      landings.add(registrable);
+    }
+  }
+  if (landings.size === 0) {
+    return null;
+  }
+
+  for (const [registrableDomain, override] of Object.entries(IDENTITY_OVERRIDES)) {
+    const brandTerms = new Set([foldDomainLabel(registrableDomain.split(".")[0] ?? "")]);
+    if (override.siteName) {
+      brandTerms.add(foldDomainLabel(override.siteName));
+    }
+    if (!brandTerms.has(stem)) {
+      continue;
+    }
+
+    const ownedDomains = new Set(
+      [registrableDomain, ...(override.domainAliases ?? [])]
+        .map((host) => registrableDomainFromHostname(host))
+        .filter((host): host is string => Boolean(host)),
+    );
+    for (const landing of landings) {
+      if (ownedDomains.has(landing)) {
+        return registrableDomain;
+      }
+    }
+  }
+  return null;
 }
 
 async function fetchWebsiteIdentity(safeUrl: URL, registrableDomain: string): Promise<WebsiteIdentity | null> {

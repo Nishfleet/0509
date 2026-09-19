@@ -8,7 +8,8 @@ import type { WebsiteIdentity } from "~/lib/website-identity.server";
 // tests mock it to return a minimal identity so the v2 classifier runs; the
 // final regression test resets it to reject so a non-brand keyword still falls
 // back to unmatched.
-vi.mock("~/lib/website-identity.server", () => ({
+vi.mock("~/lib/website-identity.server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/lib/website-identity.server")>()),
   resolveWebsiteIdentity: vi.fn(),
 }));
 

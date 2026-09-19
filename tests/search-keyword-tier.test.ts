@@ -7,7 +7,8 @@ import type { AdRecord, SearchResponse } from "~/lib/types";
 // search on a network hiccup, so the domain-like keyword path is exercised
 // with the identity resolver mocked to reject — proving the fallback labels
 // every row instead of throwing.
-vi.mock("~/lib/website-identity.server", () => ({
+vi.mock("~/lib/website-identity.server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/lib/website-identity.server")>()),
   resolveWebsiteIdentity: vi
     .fn()
     .mockRejectedValue(new Error("network unavailable in test")),
