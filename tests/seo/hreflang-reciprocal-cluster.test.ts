@@ -26,7 +26,7 @@ const SITE = "https://0509.io";
 
 interface LinkDescriptorLike {
   rel?: string;
-  hreflang?: string;
+  hrefLang?: string;
   href?: string;
 }
 
@@ -34,7 +34,7 @@ function hreflangMap(links: LinkDescriptorLike[]) {
   return new Map(
     links
       .filter((link) => link.rel === "alternate")
-      .map((link) => [link.hreflang, link.href]),
+      .map((link) => [link.hrefLang, link.href]),
   );
 }
 
@@ -163,7 +163,7 @@ describe("sitemap hreflang alternates (issue #2030)", () => {
       const alternates = sitemapHreflangAlternates(path);
       expect(alternates).toHaveLength(BUYER_SURFACE_LOCALE_IDS.length + 2);
       const byHreflang = new Map(
-        (alternates ?? []).map((alt) => [alt.hreflang, alt.href]),
+        (alternates ?? []).map((alt) => [alt.hrefLang, alt.href]),
       );
       expect(byHreflang.get("en")).toBe(`${SITE}/pricing`);
       expect(byHreflang.get("de")).toBe(`${SITE}/de/pricing`);
@@ -181,7 +181,7 @@ describe("sitemap hreflang alternates (issue #2030)", () => {
   it("sneaker-resale keeps its own translated 3-locale cluster", () => {
     const en = sitemapHreflangAlternates("/sneaker-resale");
     const de = sitemapHreflangAlternates("/de/sneaker-resale");
-    expect(en?.map((alt) => alt.hreflang)).toEqual([
+    expect(en?.map((alt) => alt.hrefLang)).toEqual([
       "en",
       "de",
       "ja",
