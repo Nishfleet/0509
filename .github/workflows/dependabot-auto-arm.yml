@@ -75,11 +75,16 @@ jobs:
         run: |
           set -euo pipefail
 
-          pr_info="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json author,title,isDraft,labels,mergeStateStatus,autoMergeRequest)"
+          pr_info="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json author,title,state,isDraft,labels,mergeStateStatus,autoMergeRequest)"
 
           # Only open PRs are armable; workflow_dispatch may target a PR that
           # has since merged or closed. Guard first, before any derived checks.
-          pr_state="$(jq -r '.state' <<<"$pr_info")"
+          # gh pr view --json state returns the GraphQL enum (OPEN/CLOSED/MERGED,
+          # uppercase) — verified live against this repo (state=OPEN for #3666,
+          # state=MERGED for #3707, state=CLOSED for #3700) — so normalize to
+          # lowercase instead of comparing against the uppercase value and
+          # exiting 0 with "no longer open" on every Dependabot event.
+          pr_state="$(jq -r '.state | ascii_downcase' <<<"$pr_info")"
           if [ "$pr_state" != "open" ]; then
             echo "PR #$PR_NUMBER is no longer open (state=$pr_state); nothing to arm."
             exit 0
@@ -100,8 +105,13 @@ jobs:
             echo "PR carries the no-auto-merge label; not arming."
             exit 0
           fi
-          if [ "$(jq -r '.author.login' <<<"$pr_info")" != "dependabot[bot]" ]; then
-            echo "PR author is not dependabot[bot]; not arming."
+          # gh pr view's GraphQL author.login for Dependabot is "app/dependabot"
+          # (verified live: #3666), while the YAML `if:` above sees the REST event
+          # payload's "dependabot[bot]". Accept both spellings here or the guard
+          # rejects every real Dependabot PR with "not dependabot[bot]".
+          login="$(jq -r '.author.login' <<<"$pr_info")"
+          if [ "$login" != "dependabot[bot]" ] && [ "$login" != "app/dependabot" ]; then
+            echo "PR author is not Dependabot (login=$login); not arming."
             exit 0
           fi
 
