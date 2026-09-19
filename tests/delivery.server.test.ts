@@ -272,6 +272,319 @@ expectedWebhookStatus:"provider_unknown",
     );
   });
 
+  // Issue #2237: the delivery layer resolves the digest's share URL once per
+  // run (reuse-or-create through the existing share-link machinery, plan-gated
+  // on share_links) and threads it through deliverDigestToEmailTarget ->
+  // renderDigestEmail -> buildDigestEmail as forwardUrl. These prove the
+  // pass-through from the delivery side — renderer tests cannot see it.
+  it("threads a created digest share URL into the Starter+ email brief", async () => {
+    const sendMock = mockEmailSend("msg_1");
+    const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
+    const updateDeliveryAttemptResult = vi.fn();
+    const upsertDigestDelivery = vi.fn();
+    const upsertDeliveryTarget = mockAtomicEmailProvision();
+    const listActiveShareLinks = vi.fn().mockResolvedValue([]);
+    const createShareLink = vi.fn().mockResolvedValue({
+      id: "share-1",
+      token: "digestforwardtoken",
+      expiresAt: "2026-09-01T00:00:00.000Z",
+    });
+
+    vi.doMock("~/lib/data.server", () => ({
+      listAdsByIds: vi.fn().mockResolvedValue([]),
+      createDeliveryAttempt,
+      updateDeliveryAttemptResult,
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
+      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
+        id: "workspace-1",
+        userId: "user-1",
+        sensitivityMode: "balanced",
+        instantEnabled: false,
+        digestEnabled: true,
+        digestCadencePreference: "plan_default",
+        emailEnabled: true,
+        whatsappEnabled: false,
+        slackEnabled: false,
+        quietHours: null,
+        timezone: "Asia/Kolkata",
+        createdAt: "2026-04-19T00:00:00.000Z",
+        updatedAt: "2026-04-19T00:00:00.000Z",
+      }),
+      legacyWorkspaceDeliveryDefaults: vi.fn(),
+      listDeliveryTargets: vi.fn().mockResolvedValue([]),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: upsertDeliveryTarget,
+      upsertDeliveryTarget,
+      upsertDigestDelivery,
+      listActiveShareLinks,
+      createShareLink,
+    }));
+    vi.doMock("~/lib/whatsapp.server", () => ({
+      sendDigestWhatsApp: vi.fn(),
+    }));
+
+    const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+
+    const result = await deliverWeeklyDigest(
+      {
+        ...emailEnv,
+        APP_ORIGIN: "https://app.0509.test/",
+        BETTER_AUTH_SECRET: "test-secret-with-at-least-32-characters",
+        BETTER_AUTH_URL: "https://0509.io",
+      } as never,
+      {
+        userId: "user-1",
+        userName: "Owner",
+        accountEmail: "owner@example.com",
+        digestRunId: "digest-1",
+        periodStart: "2026-04-12T00:00:00.000Z",
+        periodEnd: "2026-04-19T00:00:00.000Z",
+        totalEligibleEvents: 3,
+        includedEvents: 1,
+        omittedEvents: 2,
+        items: [
+          {
+            eventId: "event-1",
+            watchlistId: "watch-1",
+            watchlistName: "boAt watch",
+            eventType: "landing_page_offer_changed",
+            title: "Landing page offer changed",
+            summary: "Offer changed on the landing page.",
+            metadata: {
+              priorityScore: 90,
+              priorityBand: "High priority",
+              recommendedAction: "Today: review the offer shift.",
+              proofTrail: "Verified from a page snapshot",
+              sourceStatus: "proof_backed",
+              proofCaptureId: "proof-1",
+              confirmedAt: "2026-04-19T00:00:00.000Z",
+            },
+          },
+        ],
+      },
+    );
+
+    expect(result).toMatchObject({ attempts: 1, channels: ["email"] });
+    expect(createShareLink).toHaveBeenCalledTimes(1);
+    expect(createShareLink).toHaveBeenCalledWith(
+      expect.anything(),
+      { user: { id: "user-1" } },
+      { resourceType: "digest", resourceId: "digest-1", isSnapshot: false },
+    );
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(emailSendPayload(sendMock).html).toContain(
+      "https://app.0509.test/share/digestforwardtoken",
+    );
+    expect(emailSendPayload(sendMock).text).toContain(
+      "Share this brief: https://app.0509.test/share/digestforwardtoken",
+    );
+    expect(emailSendPayload(sendMock).text).toContain(
+      "Forward this brief to a teammate or client: https://app.0509.test/share/digestforwardtoken",
+    );
+  });
+
+  it("reuses an active digest share link instead of minting a second one", async () => {
+    const sendMock = mockEmailSend("msg_1");
+    const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
+    const updateDeliveryAttemptResult = vi.fn();
+    const upsertDigestDelivery = vi.fn();
+    const upsertDeliveryTarget = mockAtomicEmailProvision();
+    const listActiveShareLinks = vi.fn().mockResolvedValue([
+      {
+        id: "share-existing",
+        token: "existingdigesttoken",
+        userId: "user-1",
+        resourceType: "digest",
+        resourceId: "digest-1",
+        isSnapshot: false,
+        snapshotPayload: null,
+        createdAt: "2026-07-01T00:00:00.000Z",
+        expiresAt: "2026-10-01T00:00:00.000Z",
+        revokedAt: null,
+      },
+    ]);
+    const createShareLink = vi.fn();
+
+    vi.doMock("~/lib/data.server", () => ({
+      listAdsByIds: vi.fn().mockResolvedValue([]),
+      createDeliveryAttempt,
+      updateDeliveryAttemptResult,
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
+      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
+        id: "workspace-1",
+        userId: "user-1",
+        sensitivityMode: "balanced",
+        instantEnabled: false,
+        digestEnabled: true,
+        digestCadencePreference: "plan_default",
+        emailEnabled: true,
+        whatsappEnabled: false,
+        slackEnabled: false,
+        quietHours: null,
+        timezone: "Asia/Kolkata",
+        createdAt: "2026-04-19T00:00:00.000Z",
+        updatedAt: "2026-04-19T00:00:00.000Z",
+      }),
+      legacyWorkspaceDeliveryDefaults: vi.fn(),
+      listDeliveryTargets: vi.fn().mockResolvedValue([]),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: upsertDeliveryTarget,
+      upsertDeliveryTarget,
+      upsertDigestDelivery,
+      listActiveShareLinks,
+      createShareLink,
+    }));
+    vi.doMock("~/lib/whatsapp.server", () => ({
+      sendDigestWhatsApp: vi.fn(),
+    }));
+
+    const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+
+    const result = await deliverWeeklyDigest(
+      {
+        ...emailEnv,
+        APP_ORIGIN: "https://app.0509.test/",
+        BETTER_AUTH_SECRET: "test-secret-with-at-least-32-characters",
+        BETTER_AUTH_URL: "https://0509.io",
+      } as never,
+      {
+        userId: "user-1",
+        userName: "Owner",
+        accountEmail: "owner@example.com",
+        digestRunId: "digest-1",
+        periodStart: "2026-04-12T00:00:00.000Z",
+        periodEnd: "2026-04-19T00:00:00.000Z",
+        totalEligibleEvents: 1,
+        includedEvents: 1,
+        omittedEvents: 0,
+        items: [
+          {
+            eventId: "event-1",
+            watchlistId: "watch-1",
+            watchlistName: "boAt watch",
+            eventType: "landing_page_offer_changed",
+            title: "Landing page offer changed",
+            summary: "Offer changed on the landing page.",
+            metadata: {
+              priorityScore: 90,
+              priorityBand: "High priority",
+              recommendedAction: "Today: review the offer shift.",
+              proofTrail: "Verified from a page snapshot",
+              sourceStatus: "proof_backed",
+              proofCaptureId: "proof-1",
+              confirmedAt: "2026-04-19T00:00:00.000Z",
+            },
+          },
+        ],
+      },
+    );
+
+    expect(result).toMatchObject({ attempts: 1, channels: ["email"] });
+    expect(listActiveShareLinks).toHaveBeenCalledWith(expect.anything(), "user-1", 50);
+    expect(createShareLink).not.toHaveBeenCalled();
+    expect(emailSendPayload(sendMock).text).toContain(
+      "Share this brief: https://app.0509.test/share/existingdigesttoken",
+    );
+  });
+
+  it("never resolves a digest share URL on the Free plan", async () => {
+    const sendMock = mockEmailSend("msg_1");
+    const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
+    const updateDeliveryAttemptResult = vi.fn();
+    const upsertDigestDelivery = vi.fn();
+    const upsertDeliveryTarget = mockAtomicEmailProvision();
+    const listActiveShareLinks = vi.fn().mockResolvedValue([]);
+    const createShareLink = vi.fn();
+
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("free"),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listAdsByIds: vi.fn().mockResolvedValue([]),
+      createDeliveryAttempt,
+      updateDeliveryAttemptResult,
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
+      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
+        id: "workspace-1",
+        userId: "user-1",
+        sensitivityMode: "balanced",
+        instantEnabled: false,
+        digestEnabled: true,
+        digestCadencePreference: "plan_default",
+        emailEnabled: true,
+        whatsappEnabled: false,
+        slackEnabled: false,
+        quietHours: null,
+        timezone: "Asia/Kolkata",
+        createdAt: "2026-04-19T00:00:00.000Z",
+        updatedAt: "2026-04-19T00:00:00.000Z",
+      }),
+      legacyWorkspaceDeliveryDefaults: vi.fn(),
+      listDeliveryTargets: vi.fn().mockResolvedValue([]),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: upsertDeliveryTarget,
+      upsertDeliveryTarget,
+      upsertDigestDelivery,
+      listActiveShareLinks,
+      createShareLink,
+    }));
+    vi.doMock("~/lib/whatsapp.server", () => ({
+      sendDigestWhatsApp: vi.fn(),
+    }));
+
+    const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+
+    const result = await deliverWeeklyDigest(
+      {
+        ...emailEnv,
+        APP_ORIGIN: "https://app.0509.test/",
+        BETTER_AUTH_SECRET: "test-secret-with-at-least-32-characters",
+        BETTER_AUTH_URL: "https://0509.io",
+      } as never,
+      {
+        userId: "user-1",
+        userName: "Owner",
+        accountEmail: "owner@example.com",
+        digestRunId: "digest-1",
+        periodStart: "2026-04-12T00:00:00.000Z",
+        periodEnd: "2026-04-19T00:00:00.000Z",
+        totalEligibleEvents: 1,
+        includedEvents: 1,
+        omittedEvents: 0,
+        items: [
+          {
+            eventId: "event-1",
+            watchlistId: "watch-1",
+            watchlistName: "boAt watch",
+            eventType: "landing_page_offer_changed",
+            title: "Landing page offer changed",
+            summary: "Offer changed on the landing page.",
+            metadata: {
+              priorityScore: 90,
+              priorityBand: "High priority",
+              recommendedAction: "Today: review the offer shift.",
+              proofTrail: "Verified from a page snapshot",
+              sourceStatus: "proof_backed",
+              proofCaptureId: "proof-1",
+              confirmedAt: "2026-04-19T00:00:00.000Z",
+            },
+          },
+        ],
+      },
+    );
+
+    expect(result).toMatchObject({ attempts: 1, channels: ["email"] });
+    expect(listActiveShareLinks).not.toHaveBeenCalled();
+    expect(createShareLink).not.toHaveBeenCalled();
+    expect(emailSendPayload(sendMock).text).not.toContain("Share this brief:");
+    expect(emailSendPayload(sendMock).text).not.toContain(
+      "Forward this brief to a teammate or client:",
+    );
+    // The free brief still rendered — the all-plan forward line and the
+    // free-plan attribution footer prove this was a send, not a skip.
+    expect(emailSendPayload(sendMock).text).toContain(
+      "Forward this to whoever needs it; every claim keeps its source link.",
+    );
+    expect(emailSendPayload(sendMock).text).toContain("Brief by Five to Nine.");
+  });
+
   it("uses the Gate C subject and the pre-provider T0 in the durable proof summary", async () => {
     const t0 = "2026-08-01T00:00:00.000Z";
     const t1 = "2026-08-01T00:05:00.000Z";
