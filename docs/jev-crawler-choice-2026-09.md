@@ -96,22 +96,22 @@ tokens, p50 263 ms, max 700 ms. At the recorded TypeSafe list price
 Three disagreements, all with a scripted branch that kept going when Jev said stop or
 change target:
 
-1. **`meta_library_scroll` → Jev `stop` (p=0.72), script `scroll_pass`.**
+1. **`meta_library_scroll` → Jev `stop` (p=0.80), script `scroll_pass`.**
    The page text showed a single card with no further content, so a second scroll
    pass cannot add anything. The script's loop condition (`pass < 3`) does not check
    whether the previous pass produced new cards — it scrolls regardless, burning a
    2s wait and a re-extraction. **This is a real wasted-work case.**
-2. **`meta_library_scroll` → Jev `stop` (p=0.80), script `scroll_pass`.** Same shape,
+2. **`meta_library_scroll` → Jev `stop` (p=0.77), script `scroll_pass`.** Same shape,
    later pass. Jev's confidence rose on the repeated no-new-content state.
-3. **`fullsite_crawl_frontier` → Jev `https://www.cloudflare.com/products/` (p=0.54),
+3. **`fullsite_crawl_frontier` → Jev `https://www.cloudflare.com/products/` (p=0.52),
    script `https://www.cloudflare.com/`.** The script spends its budget in link order;
-   Jev preferred a higher-value product page over the homepage. A near-tie (0.54), so
+   Jev preferred a higher-value product page over the homepage. A near-tie (0.52), so
    weak evidence — recorded, not acted on.
 
 No case was found where the script **looped** or **failed** in a way Jev would have
 prevented: every loop is hard-bounded. The actionable finding is the opposite — the
 scroll loop **keeps going after the page stops producing cards**, and Jev detects that
-at p=0.72-0.80.
+at p=0.77-0.80.
 
 ## 5. Verdict
 
