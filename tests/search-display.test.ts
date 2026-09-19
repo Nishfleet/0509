@@ -9,6 +9,7 @@ import {
   formatResultCardSummary,
   formatSearchCaptureAgeLabel,
   ALL_COUNTRIES_SERVED_SCOPE_DISCLOSURE,
+  formatCountryFilterDeliveryNote,
   formatSearchCommandTitle,
   formatSearchMarketScope,
   formatSearchPageScope,
@@ -457,6 +458,41 @@ describe("formatSearchPageScope", () => {
     expect(formatSearchPageScope(undefined)).toBeNull();
     expect(formatSearchPageScope("")).toBeNull();
     expect(formatSearchPageScope("   ")).toBeNull();
+  });
+});
+
+describe("formatCountryFilterDeliveryNote (issue #3613)", () => {
+  it("names the selected market and states the Meta EU/UK delivery fact", () => {
+    const note = formatCountryFilterDeliveryNote("Germany");
+    expect(note).toContain("Germany");
+    expect(note).toContain("EU");
+    expect(note).toContain("UK");
+    expect(note).toContain("Meta delivered");
+  });
+
+  it("canonicalizes an ISO code and a lowercase country name", () => {
+    expect(formatCountryFilterDeliveryNote("DE")).toContain("Germany");
+    expect(formatCountryFilterDeliveryNote("united kingdom")).toContain(
+      "United Kingdom",
+    );
+    expect(formatCountryFilterDeliveryNote("us")).toContain(
+      "United States",
+    );
+  });
+
+  it("returns null for the unscoped default so the annotation is not told twice", () => {
+    expect(formatCountryFilterDeliveryNote("all")).toBeNull();
+    expect(formatCountryFilterDeliveryNote("ALL")).toBeNull();
+    expect(formatCountryFilterDeliveryNote(null)).toBeNull();
+    expect(formatCountryFilterDeliveryNote(undefined)).toBeNull();
+    expect(formatCountryFilterDeliveryNote("   ")).toBeNull();
+  });
+
+  it("never claims universal coverage or a universal empty cause", () => {
+    const note = formatCountryFilterDeliveryNote("Brazil") ?? "";
+    expect(note).not.toContain("across all countries");
+    expect(note).not.toContain("all countries");
+    expect(note).not.toContain("in all countries");
   });
 });
 
