@@ -1,9 +1,8 @@
-
-
 import { ErrorPageRecovery } from "~/components/error-page-recovery";
 import {
   NOT_FOUND_DESCRIPTION,
   NOT_FOUND_TITLE,
+  noindexMetaEntry,
   publicSeoMeta,
 } from "~/lib/seo";
 
@@ -15,13 +14,19 @@ import {
 // (og-image.png, site name, site origin) are the whole input; only the title
 // and description are page-specific. `pathname` is the canonical site root
 // rather than the requested path, so the canonical/og:url never advertise a
-// URL that does not exist.
-export const meta = () =>
-  publicSeoMeta({
+// URL that does not exist. `noindexMetaEntry()` is appended because the
+// recovery row now adds a canonical (og:url) for a URL that will never be a
+// real page: indexable + canonicalised-to-root is a soft-duplicate signal for
+// the site root. The 404 document must stay out of the index, exactly as the
+// auth surfaces already do with the same helper.
+export const meta = () => [
+  ...publicSeoMeta({
     title: NOT_FOUND_TITLE,
     description: NOT_FOUND_DESCRIPTION,
     pathname: "/",
-  });
+  }),
+  noindexMetaEntry(),
+];
 
 export function loader() {
   return new Response(null, { status: 404 });

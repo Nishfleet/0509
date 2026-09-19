@@ -33,6 +33,7 @@ import {
   GONE_PAGE_TITLE,
   NOT_FOUND_DESCRIPTION,
   NOT_FOUND_TITLE,
+  noindexMetaEntry,
   publicSeoMeta,
 } from "~/lib/seo";
 import { applyTheme, THEME_BOOT_SCRIPT, THEME_COLOR_LIGHT } from "~/lib/theme-client";
@@ -106,21 +107,34 @@ export const meta = (args: { data?: RootLoaderData; error?: unknown }) => {
   // browser actually receives, and it emits the full share-meta block so the
   // page every rotated-away brand URL lands on (#3496) renders like the
   // marketing pages. Titles/descriptions come from app/lib/seo.ts so both
-  // renderers read one source; tests/error-page-recovery.test.ts pins them.
+  // renderers read one source; tests/error-page-recovery.test.tsx pins them.
+  //
+  // `noindexMetaEntry()` is appended to both error branches: the recovery row
+  // now adds a canonical (og:url) pointing at the site root, and a 404 that is
+  // shareable *and* indexable would let Google surface the empty error shell as
+  // a soft duplicate of `/` — the exact failure `noindexMetaEntry` already
+  // prevents for the auth surfaces. The 404/410 document is a dead URL by
+  // definition; its crawler signal must match.
   if (args.error !== undefined && isRouteErrorResponse(args.error)) {
     if (args.error.status === 404) {
-      return publicSeoMeta({
-        title: NOT_FOUND_TITLE,
-        description: NOT_FOUND_DESCRIPTION,
-        pathname: "/",
-      });
+      return [
+        ...publicSeoMeta({
+          title: NOT_FOUND_TITLE,
+          description: NOT_FOUND_DESCRIPTION,
+          pathname: "/",
+        }),
+        noindexMetaEntry(),
+      ];
     }
     if (args.error.status === 410) {
-      return publicSeoMeta({
-        title: GONE_PAGE_TITLE,
-        description: GONE_PAGE_DESCRIPTION,
-        pathname: "/",
-      });
+      return [
+        ...publicSeoMeta({
+          title: GONE_PAGE_TITLE,
+          description: GONE_PAGE_DESCRIPTION,
+          pathname: "/",
+        }),
+        noindexMetaEntry(),
+      ];
     }
   }
 
@@ -523,7 +537,7 @@ export function ErrorBoundary({ error }: { error: unknown }) {
                   branch renders the recovery row alone, which is what
                   app/routes/not-found.tsx renders too — the two renderers of
                   this one page stay pinned by
-                  tests/error-page-recovery.test.ts. */}
+                  tests/error-page-recovery.test.tsx. */}
               {isGone && goneDomain ? (
                 <div className="f9-action-row">
                   <Link

@@ -8,8 +8,9 @@ import {
   GONE_PAGE_TITLE,
   NOT_FOUND_DESCRIPTION,
   NOT_FOUND_TITLE,
+  noindexMetaEntry,
 } from "~/lib/seo";
-import NotFoundRoute from "~/routes/not-found";
+import NotFoundRoute, { meta as notFoundMeta } from "~/routes/not-found";
 
 /**
  * Issue #3617 — the 404/410 error page is the one surface on the site with no
@@ -58,6 +59,11 @@ function metaForError(status: number, data: unknown = null): MetaEntry[] {
   return (meta as unknown as (args: { error: unknown }) => MetaEntry[])({
     error: routeError(status, data),
   });
+}
+
+function notFoundRouteMeta(): MetaEntry[] {
+  // The matched catch-all's own `meta`, the second renderer of this page.
+  return notFoundMeta();
 }
 
 describe("error page recovery (issue #3617)", () => {
@@ -119,6 +125,18 @@ describe("error page recovery (issue #3617)", () => {
           tag.content === NOT_FOUND_DESCRIPTION,
       ),
     ).toBe(true);
+    // A shareable 404 is also a dead URL, so it must not be indexable: the
+    // reviewer round on #3634 caught the og:url=".../" (canonicalised to the
+    // site root) landing without a matching robots signal, which lets a
+    // crawler treat the empty error shell as a soft duplicate of `/`.
+    expect(tags).toContainEqual(noindexMetaEntry());
+  });
+
+  it("keeps the 404 out of the index on the matched route too", () => {
+    expect(notFoundRouteMeta()).toContainEqual(noindexMetaEntry());
+    expect(notFoundRouteMeta().find((tag) => "title" in tag)?.title).toBe(
+      NOT_FOUND_TITLE,
+    );
   });
 
   it("keeps the branded recovery row on a 410 while the brand pair comes first", () => {
@@ -134,6 +152,18 @@ describe("error page recovery (issue #3617)", () => {
     expect(html).toMatch(/<a[^>]+href="\/brands"[^>]*>/);
     expect(html).toMatch(/<a[^>]+href="\/auth\/signup\?source=error-page"[^>]*>/);
     expect(metaForError(410).find((tag) => "title" in tag)?.title).toBe(GONE_PAGE_TITLE);
+    // A 410 carries no indexable document either.
+    expect(metaForError(410)).toContainEqual(noindexMetaEntry());
+  });
+
+  it("renders the recovery row alone on a 410 that carries no domain", () => {
+    const html = renderBoundary(routeError(410, null, "Gone"));
+
+    // No brand to name, so no empty brand pair — just the catalog + signup
+    // recovery, which is the whole point of the issue on this branch.
+    expect(html).toMatch(/<a[^>]+href="\/brands"[^>]*>/);
+    expect(html).toMatch(/<a[^>]+href="\/auth\/signup\?source=error-page"[^>]*>/);
+    expect(html).not.toMatch(/<a[^>]+href="\/search\?q="[^>]*>/);
   });
 
   it("registers the error-page signup marker on the allowlist", async () => {
