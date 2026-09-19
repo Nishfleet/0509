@@ -29,12 +29,12 @@ describe("sneaker-resale locale landing pages", () => {
     });
     expect(headLinks).toContainEqual({
       rel: "alternate",
-      hreflang: "de",
+      hrefLang: "de",
       href: "https://0509.io/de/sneaker-resale",
     });
     expect(headLinks).toContainEqual({
       rel: "alternate",
-      hreflang: "x-default",
+      hrefLang: "x-default",
       href: "https://0509.io/sneaker-resale",
     });
 
@@ -152,12 +152,12 @@ describe("sneaker-resale locale landing pages", () => {
     const headLinks = links();
     expect(headLinks).toContainEqual({
       rel: "alternate",
-      hreflang: "de",
+      hrefLang: "de",
       href: "https://0509.io/de/sneaker-resale",
     });
     expect(headLinks).toContainEqual({
       rel: "alternate",
-      hreflang: "x-default",
+      hrefLang: "x-default",
       href: "https://0509.io/sneaker-resale",
     });
 
