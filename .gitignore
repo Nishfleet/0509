@@ -54,3 +54,21 @@ worker-configuration.d.ts
 # (0509#3138: a committed `.fleet/pr-body-2985.md` failed `vale` on the word
 # "granularity" after every code check had passed).
 .fleet/pr-body-*.md
+
+# 0509#3682: the whole .fleet/ directory is agent scratch — plans, phase
+# handoffs, reviewer packets, burst scripts, salvage records, per-PR bodies.
+# 55 of them had accumulated on main. None is read by app, workers, scripts,
+# tests or any workflow; the one code reference (weekly-business-metrics.mjs)
+# is a comment citing a burst script by name.
+#
+# NOT ignored, deliberately: .lane/reports/<branch>.md. Those are the lane
+# evidence records, and tests/lane-evidence-collision.test.ts enforces the
+# one-file-per-lane shape by listing them with `git ls-files --cached --others
+# --exclude-standard`. Ignoring that path would empty the guard's input and
+# make it pass on nothing.
+.fleet/
+
+# Per-PR body drafts at the repo root. /pr-body.md and /.pr-body.md were
+# already covered; the numbered form was not, so .pr-body-3095.md and six
+# siblings were committed to main.
+/.pr-body-*.md
