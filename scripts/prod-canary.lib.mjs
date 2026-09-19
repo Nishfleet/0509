@@ -367,17 +367,48 @@ export async function checkLaunchReadinessEndpoint(options = {}) {
       signal: AbortSignal.timeout(10_000),
     });
     const payload = await response.json().catch(() => ({}));
-    const blockers = Array.isArray(payload?.blockers) ? payload.blockers : [];
+    const declaredBlockers = Array.isArray(payload?.blockers)
+      ? payload.blockers.filter(
+          (/** @type {unknown} */ blocker) => typeof blocker === "string" && blocker,
+        )
+      : [];
+    // A route that threw before answering journals a non-JSON 5xx — before
+    // #3392 that surfaced here as blockers:[], indistinguishable from a clean
+    // readiness pass ("0 blockers"). Fall back to the route's singular
+    // `blocker` field (the missing_db early return's shape), then to the HTTP
+    // status itself, so an errored readiness response never disguises as
+    // "0 blockers" downstream. The singular field is pattern-gated to the
+    // identifier shape the verifier re-projects (its
+    // DIAGNOSTIC_IDENTIFIER_PATTERN, /^[a-z0-9._-]{1,128}$/u) — an interposed
+    // or malformed body must not echo an arbitrary string into the journal.
+    const payloadBlocker =
+      typeof payload?.blocker === "string" &&
+      /^[a-z0-9._-]{1,128}$/u.test(payload.blocker)
+        ? payload.blocker
+        : null;
+    const passed = response.ok && payload?.ok === true;
+    const blockers =
+      declaredBlockers.length > 0
+        ? declaredBlockers
+        : payloadBlocker
+          ? [payloadBlocker]
+          : !response.ok
+            ? [
+                `launch_readiness_http_${Number.isInteger(response.status) ? response.status : "error"}`,
+              ]
+            : !passed
+              ? ["launch_readiness_unspecified_blocker"]
+              : [];
     const metaAdsBeta =
       payload?.metaAdsBeta && typeof payload.metaAdsBeta === "object"
         ? payload.metaAdsBeta
         : null;
 
     return {
-      ok: response.ok && payload?.ok === true,
+      ok: passed,
       status: response.status,
       message:
-        response.ok && payload?.ok === true
+        passed
           ? null
           : (payload?.message ?? (blockers.join(", ") || `Launch readiness returned ${response.status}.`)),
       url,
