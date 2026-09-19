@@ -261,4 +261,46 @@ describe("CTA class-name extractor guard (issue #2564)", () => {
     const { ctaText } = extractLandingPageSignals(html);
     expect(ctaText).toBe("buy-now");
   });
+
+  it("skips a class-like button candidate even when it carries a priority verb", () => {
+    // Button-tier twin of the anchor case above: `js-submit` also matches
+    // /\bsubmit\b/ as a <button>, i.e. through isChromeButtonText's early
+    // return on the button fallback — the gate must fire there too.
+    const html = "<button>js-submit</button>";
+    const { ctaText, ctaFunnel } = extractLandingPageSignals(html);
+    expect(ctaText).toBeNull();
+    expect(ctaFunnel).toEqual({ stage: "bailed", reasonCode: "only_chrome_buttons" });
+  });
+
+  it("lockstep: the extractor's class-like net matches the #2320 display guard", () => {
+    // The predicate exists as two intentional copies (route -> lib layering
+    // forbids importing the route's guard), so this corpus pins every branch
+    // on both sides. A copy drifting on either side fails here.
+    const rejected = [
+      "ic-left-nav", // ic-* prefix branch
+      "js-submit", // js-* prefix branch
+      "js-track-click", // js-* prefix, longer tail
+      "promo-banner-title", // pure 3+ dashed lowercase segments branch
+      "footer-links-row",
+    ];
+    for (const value of rejected) {
+      // These must genuinely be class-like at display time (the binding guard).
+      expect(isClassLikeCtaText(value)).toBe(true);
+      for (const html of [
+        `<button>${value}</button>`,
+        `<a href="/x">${value}</a>`,
+        `<form><input type="submit" value="${value}"></form>`,
+      ]) {
+        expect(extractLandingPageSignals(html).ctaText).toBeNull();
+      }
+    }
+    const retained = [
+      "buy-now", // two segments sit below the binding 3-segment bar
+      "IC-LEFT-NAV", // the binding guard is case-sensitive, so is the extractor
+    ];
+    for (const value of retained) {
+      expect(isClassLikeCtaText(value)).toBe(false);
+    }
+    expect(extractLandingPageSignals("<button>buy-now</button>").ctaText).toBe("buy-now");
+  });
 });
