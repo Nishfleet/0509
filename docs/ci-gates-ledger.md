@@ -171,6 +171,7 @@ Fill per deletion batch when merged:
 | #3070 trim (deploy-production.yml) | Deploy Worker job 22.5 min — run 34380544970, 2026-09-09 | pending first green post-merge run (deploy chain red on #3174 stale-ledger blocker); expected ≈22 min | discrete 62 s step removed; `npm run typecheck` re-added inside `npm run deploy` per re-scope, net ≈ −0–20 s |
 
 | ~~`red-on-main-watch.yml`~~ | Red main going unnoticed | 15-min sweep for a first-run failure | — | **REMOVED 2026-09-20** — 32 failures in 45 runs (71%): the alert failed more often than the thing it watched. It filed 16 `red-on-main` issues and 6 are still open, so its output was not acted on either. `auto-revert.yml` and `stop-the-line-watch.yml` cover red main with clean records. |
+| ~~`stop-the-line-watch.yml`~~ | Consecutive red pair on main | Gate C / freeze doctrine | — | **REMOVED 2026-09-20** — broken by PR #3670, which deleted `.github/scripts/`. The fleet-ops reusable workflow it calls runs `.github/scripts/stop-the-line-detector.mjs` **from the caller's checkout**, so a dispatched run now dies with MODULE_NOT_FOUND. Making it work again means reinstating 51 KB of detector glue in this repo to run a second-order watcher, when `auto-revert.yml` already covers the primary undo with 0 failures in 100 runs. |
 
 ## Disabled-state audit, 2026-09-20
 
@@ -182,22 +183,43 @@ with no liveness detector: `uptime-health.yml` was deleted on the premise that
 the `0509-liveness` systemd timer owned liveness, and that timer was never
 installed on netcup. It was installed and proven on 2026-09-20.
 
-**Re-enabled (4)** — each guards something with no stock replacement and has a
+**Re-enabled (3)** — each guards something with no stock replacement and has a
 clean record:
 
 | workflow | record | why it earns its place |
 | --- | --- | --- |
 | `auto-revert.yml` | 100 runs, 0 failures, 30 reverts | R4 reversibility on a repo that deploys to production on every merge. 30 `auto-revert-halt` issues filed, 0 still open — its output gets acted on. |
-| `stop-the-line-watch.yml` | 47 runs, 47 green | Freezes the line on a consecutive red pair, i.e. exactly when auto-revert's one level of undo was not enough. Complementary, not duplicate. |
 | `market-signal-snapshot-age.yml` | 42 runs, 42 green | R3. Its parent `market-signal-snapshot.yml` is active, so the job it watches was running unwatched — the precise shape of the #1894 miss. |
 | `ads-prog-seo-canary.yml` | recently unblocked (#3619) | Guards `/ads/:domain` noindex/sitemap parity. The SEO surface is the acquisition channel, and there is no stock equivalent. |
 
-**Removed (6)** — rows struck through above.
+**Removed (7)** — rows struck through above.
 
-**Deferred (1)** — `d1-restore-proof-auto-refresh.yml` stays disabled pending
-issue #3679. `wrangler d1 time-travel` is the stock replacement for the whole
-restore-evidence family, and this file is woven into `deploy-production-gate.test.ts`;
-cutting it alone would mean rewriting those assertions twice.
+Two of the four first re-enabled failed on their proving dispatch, which is why
+every re-enable here carries a green run and not a run-history average:
+
+- `stop-the-line-watch` died with MODULE_NOT_FOUND — PR #3670 deleted
+  `.github/scripts/`, and the fleet-ops reusable workflow runs the detector from
+  the CALLER's checkout. Disabled again and removed.
+- `market-signal-snapshot-age` died with `market_signal_monitor_missing_deploy_key`.
+  `TELEMETRY_DEPLOY_KEY` had been removed from the repo secrets after the
+  publisher's own 04:31Z run that morning, and the private half was gone from
+  disk with `~/workspaces/agent-state/0509-telemetry-keys/`. **The publisher
+  would have failed at 04:3xZ the next morning**, publishing nothing while
+  reporting success — the exact #1894 shape. A replacement ed25519 deploy key
+  was minted into the credential store, registered write-enabled on the sink and
+  set as the repo secret; the monitor then ran green (run 35463181664). The
+  superseded deploy key is still registered on `0509-telemetry` and should be
+  revoked by hand.
+
+A run-history average is not evidence a workflow works today. Its last green run
+was under a configuration that no longer exists.
+
+**Resolved elsewhere (1)** — `d1-restore-proof-auto-refresh.yml` was parked here
+rather than cut, because `wrangler d1 time-travel` replaces the whole
+restore-evidence family and the file was woven into `deploy-production-gate.test.ts`;
+cutting it alone meant rewriting those assertions twice. PR #3684 landed the
+stock deploy pipeline for #3679 and deleted it along with the other four
+backup/restore/soak workflows, which is the coherent version of that change.
 
 **Rule for the next add:** a gate is `active` on GitHub or it is not in the tree.
 A third state — present, documented, switched off — is how the liveness gap
