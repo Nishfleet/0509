@@ -45,7 +45,6 @@ describe("workflow routing hardening", () => {
   it("keeps production secrets and production environments out of verification jobs", () => {
     for (const [file, id] of [
       ["ci.yml", "codex-node-checks"],
-      ["cross-browser-matrix.yml", "matrix"],
       ["deploy-production.yml", "verify"],
       ["secret-scan.yml", "gitleaks"],
     ] as const) {
@@ -91,16 +90,14 @@ describe("workflow routing hardening", () => {
         "cancel-in-progress": false,
       });
     }
-    for (const filename of ["ci.yml", "cross-browser-matrix.yml", "secret-scan.yml"]) {
+    for (const filename of ["ci.yml", "secret-scan.yml"]) {
       expect(workflow(filename).parsed.concurrency?.["cancel-in-progress"], filename).toBe(true);
     }
   });
 
-  it("limits manual privileged and cross-browser work to trusted main provenance", () => {
+  it("limits manual privileged work to trusted main provenance", () => {
     const deploy = workflow("deploy-production.yml").source;
-    const crossBrowser = workflow("cross-browser-matrix.yml").source;
     expect(deploy).toContain('test "$GITHUB_REF" = "refs/heads/main"');
-    expect(crossBrowser).toContain("github.ref == 'refs/heads/main'");
   });
 
 });

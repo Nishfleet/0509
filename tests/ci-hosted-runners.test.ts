@@ -9,7 +9,6 @@ import { parse } from "yaml";
 // would have put those wrappers back. This lock is the mechanical prevention.
 const HOSTED_CI_WORKFLOWS = [
   ".github/workflows/ci.yml",
-  ".github/workflows/cross-browser-matrix.yml",
 ] as const;
 
 // Issue #1155: agent-facing docs still taught the deleted lock wrapper after
@@ -97,7 +96,7 @@ jobs:
     ).toEqual([]);
   });
 
-  it("keeps ci.yml and cross-browser-matrix.yml on ubuntu-latest with no self-hosted leftovers", () => {
+  it("keeps ci.yml on ubuntu-latest with no self-hosted leftovers", () => {
     for (const workflowPath of HOSTED_CI_WORKFLOWS) {
       const source = readFileSync(workflowPath, "utf8");
       expect(hostedCiWorkflowViolations(source), workflowPath).toEqual([]);

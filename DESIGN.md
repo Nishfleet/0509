@@ -49,8 +49,10 @@ earlier era are being wiped, report documents included (their proof
 semantics survive verbatim; their skin does not). Enforcement is
 mechanical: `scripts/design-system-ratchet.mjs` fails CI when any
 legacy-marker count exceeds its ceiling; counts at or below pass, so two
-legal sweeps cannot collide in the merge queue. Ceilings only go down,
-tightened on main by `.github/workflows/ratchet-auto-tighten.yml`.
+legal sweeps cannot collide in the merge queue. Ceilings are a recorded
+floor in `docs/design-system-ratchet.json`, tightened by hand: the weekly
+auto-tighten workflow was removed 2026-09-20 because no PR check ever
+enforced the ceiling, so the bot was maintaining a number nothing read.
 
 `f9-evidence-*` is the system's evidence-document vocabulary — the
 full-volume proof surfaces (report cover, plates, diff panes) named for
