@@ -103,11 +103,26 @@ export class CrawlerChoiceAnswerError extends Error {
 const MAX_CANDIDATES = 40;
 const MAX_TEXT_CHARS = 4_000;
 
-/** Candidate ids offered to Jev, `stop` last. */
+/**
+ * Candidate ids offered to Jev, `stop` last.
+ *
+ * Duplicate ids collapse to their FIRST occurrence. The question is a JSON
+ * object keyed by candidate id, so a repeated id can only carry one label —
+ * emitting it twice would offer a choice that cannot be distinguished from its
+ * twin and would double-count it in the probability map.
+ */
 export function crawlerChoiceOfferedIds(
   candidates: readonly CrawlerChoiceCandidate[],
 ): string[] {
-  return [...candidates.slice(0, MAX_CANDIDATES).map((c) => c.id), CRAWLER_CHOICE_STOP];
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  for (const candidate of candidates.slice(0, MAX_CANDIDATES)) {
+    if (seen.has(candidate.id)) continue;
+    seen.add(candidate.id);
+    ids.push(candidate.id);
+  }
+  ids.push(CRAWLER_CHOICE_STOP);
+  return ids;
 }
 
 /** Build the single choice question. One question per call keeps the shadow cheap. */
@@ -117,10 +132,14 @@ export function buildCrawlerChoiceQuestion(input: {
   scripted: CrawlerChoiceScripted;
   recent?: readonly string[];
 }): { state: unknown; questions: Record<string, unknown> } {
-  const candidates = input.page.candidates.slice(0, MAX_CANDIDATES);
   const criteria: Record<string, string> = {};
-  for (const candidate of candidates) {
-    criteria[candidate.id] = candidate.detail
+  // Keyed the same way as `crawlerChoiceOfferedIds` (first occurrence wins) so
+  // the offered ids and the criteria can never disagree.
+  for (const id of crawlerChoiceOfferedIds(input.page.candidates)) {
+    if (id === CRAWLER_CHOICE_STOP) continue;
+    const candidate = input.page.candidates.find((c) => c.id === id);
+    if (!candidate) continue;
+    criteria[id] = candidate.detail
       ? `${candidate.label} — ${candidate.detail}`
       : candidate.label;
   }

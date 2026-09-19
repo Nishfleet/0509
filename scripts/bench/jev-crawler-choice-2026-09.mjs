@@ -22,6 +22,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  CRAWLER_CHOICE_MODEL,
   decideCrawlerChoice,
   summarizeCrawlerChoiceRows,
 } from "../../app/lib/crawler-choice-jev.server.ts";
@@ -31,6 +32,13 @@ const repoRoot = resolve(here, "..", "..");
 
 const API_URL = "https://api.typesafe.ai/v1/systemone";
 const MODEL = process.env.TYPESAFE_MODEL ?? "jev-latest";
+
+/**
+ * The model actually sent to the API. Defaults to the model id the helper
+ * itself uses, so the bench cannot silently measure a different model than the
+ * one the shadow helper would wire in production.
+ */
+const MODEL = process.env.TYPESAFE_MODEL ?? CRAWLER_CHOICE_MODEL;
 
 /**
  * A CrawlerChoiceAi backed by the live TypeSafe HTTP API.
@@ -47,7 +55,13 @@ const httpAi = {
       body: JSON.stringify({ model: MODEL, state, questions }),
     });
     if (!response.ok) throw new Error(`TypeSafe HTTP ${response.status}`);
-    return response.json();
+    const body = await response.json();
+    // Carry the model the API actually resolved, so the row records what ran
+    // rather than what was asked for (the earlier run could not be audited).
+    if (body && typeof body === "object" && !("model" in body)) {
+      return { ...body, model: MODEL };
+    }
+    return body;
   },
 };
 
@@ -148,7 +162,7 @@ async function metaLibraryApiCursor() {
             : `Page ${page + 1} returned ads with no further cursor.`,
           candidates: [
             { id: "follow_cursor", label: "Fetch the next page using the returned after-cursor" },
-            { id: "stop", label: "Stop: no further cursor to follow" },
+            { id: "cursor_exhausted", label: "Stop: no further cursor to follow" },
           ],
         },
         scripted,
