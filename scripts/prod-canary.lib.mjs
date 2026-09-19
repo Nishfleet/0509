@@ -367,9 +367,7 @@ export async function checkLaunchReadinessEndpoint(options = {}) {
       signal: AbortSignal.timeout(10_000),
     });
     const payload = await response.json().catch(() => ({}));
-    const declaredBlockers = Array.isArray(payload?.blockers)
-      ? payload.blockers.filter((value) => typeof value === "string")
-      : [];
+    const declaredBlockers = Array.isArray(payload?.blockers) ? payload.blockers : [];
     // A route that threw before answering journals a non-JSON 5xx — before
     // #3392 that surfaced here as blockers:[], indistinguishable from a clean
     // readiness pass ("0 blockers"). Fall back to the route's singular
