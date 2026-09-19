@@ -107,9 +107,9 @@ jobs:
         # Cloudflare vite plugin, part of "launch:readiness:predeploy"). It
         # emits build/server/index.js + build/server/wrangler.json
         # (no_bundle, main index.js) and the .wrangler/deploy/config.json
-        # redirect that `wrangler deploy` uses in production. The preview
-        # upload uploads the SAME built artifacts; without this step the
-        # upload would bundle workers/app.ts raw and fail on the project's
+        # redirect that `wrangler deploy` uses in production. The dry-run
+        # bundle proof below builds the SAME artifacts; without this step
+        # wrangler would bundle workers/app.ts raw and fail on the project's
         # ~/ path aliases and the react-router virtual server-build (seen on
         # the first preview-assert run of PR #1580).
         run: npm run build
@@ -158,14 +158,14 @@ jobs:
           CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV: "false"
         run: |
           set -euo pipefail
-          upload_output="$(mktemp)"
-          trap 'rm -f -- "$upload_output"' EXIT
+          dry_run_output="$(mktemp)"
+          trap 'rm -f -- "$dry_run_output"' EXIT
           outdir="$(mktemp -d)"
-          trap 'rm -rf -- "$outdir" "$upload_output"' EXIT
+          trap 'rm -rf -- "$outdir" "$dry_run_output"' EXIT
           if ! ./node_modules/.bin/wrangler deploy --dry-run --outdir "$outdir" \
-            >"$upload_output" 2>&1; then
-            cat "$upload_output"
+            >"$dry_run_output" 2>&1; then
+            cat "$dry_run_output"
             exit 1
           fi
-          cat "$upload_output"
+          cat "$dry_run_output"
           echo "Bundle proof: wrangler deploy --dry-run succeeded for ${{ github.sha }} (no version uploaded; production script's latest version untouched)"
