@@ -17,6 +17,12 @@ import {
   sanitizePromptText,
 } from "~/lib/ai-guarded-generation.server";
 import type { AppEnv } from "~/lib/env.server";
+import {
+  INPUT_SCREEN_ISSUE_REF,
+  shadowLogInputScreenPassages,
+  type InputScreenAi,
+  type InputScreenPassage,
+} from "~/lib/input-screen-jev.server";
 import type { SearchStealSummary } from "~/lib/search-answer";
 import type { AdRecord, SearchResponse } from "~/lib/types";
 
@@ -61,8 +67,29 @@ const PROMPT_ECHO_FRAGMENTS = [
 
 export type StealSummaryAdInput = Pick<
   AdRecord,
-  "hook" | "offer" | "cta" | "firstSeenAt" | "lastSeenAt" | "variantCount" | "format"
+  | "metaAdId"
+  | "hook"
+  | "offer"
+  | "cta"
+  | "firstSeenAt"
+  | "lastSeenAt"
+  | "variantCount"
+  | "format"
 >;
+
+function stealSummaryScreenPassages(
+  ads: readonly StealSummaryAdInput[],
+  lines: readonly string[],
+): InputScreenPassage[] {
+  return lines.map((text, index) => {
+    const metaAdId = ads[index]?.metaAdId?.trim();
+    return {
+      id: metaAdId ? `ad-library:${metaAdId}` : `steal-summary:${index + 1}`,
+      source: "ad_copy" as const,
+      text,
+    };
+  });
+}
 
 /**
  * Cost gate. The summary is computed synchronously in the search loader, only
@@ -108,6 +135,11 @@ export async function buildSearchStealSummary(
     AI_STEAL_TIMEOUT_MS,
     Math.max(1, Math.floor(options.timeoutMs ?? AI_STEAL_TIMEOUT_MS)),
   );
+  const shadow = shadowLogInputScreenPassages(
+    env.AI as InputScreenAi | undefined,
+    stealSummaryScreenPassages(ads, lines),
+    { timeoutMs, ref: INPUT_SCREEN_ISSUE_REF },
+  );
   const raw = await runGuardedGeneration(env, {
     model: STEAL_SUMMARY_MODEL,
     systemPrompt: SYSTEM_PROMPT,
@@ -116,6 +148,7 @@ export async function buildSearchStealSummary(
     timeoutMs,
     timeoutMessage: "Steal summary generation timed out.",
   });
+  await shadow;
   if (raw === null) {
     return null;
   }

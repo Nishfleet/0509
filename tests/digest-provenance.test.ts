@@ -2,9 +2,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { buildWeeklyStrategyParagraph } from "~/lib/digest-strategy.server";
 import { readDigestSourceEventId } from "~/lib/digest-provenance";
+import { resetInputScreenBindingCircuitForTests } from "~/lib/input-screen-jev.server";
 
 afterEach(() => {
   vi.useRealTimers();
+  resetInputScreenBindingCircuitForTests();
 });
 
 describe("digest provenance and bounded strategy generation", () => {

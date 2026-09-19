@@ -1,5 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import {
+  INPUT_SCREEN_BINDING_MODEL,
+  INPUT_SCREEN_QUESTIONS,
+  resetInputScreenBindingCircuitForTests,
+} from "~/lib/input-screen-jev.server";
 import {
   buildSearchStealSummary,
   buildStealSummaryAdLines,
@@ -11,6 +16,31 @@ import {
 import type { AdRecord } from "~/lib/types";
 
 const NOW = new Date("2026-07-19T00:00:00.000Z");
+
+afterEach(() => {
+  resetInputScreenBindingCircuitForTests();
+});
+
+function jevAnswers() {
+  return {
+    answers: {
+      [INPUT_SCREEN_QUESTIONS.injection]: { type: "noul", noul: 0.05 },
+      [INPUT_SCREEN_QUESTIONS.contradicts]: { type: "noul", noul: 0.1 },
+      [INPUT_SCREEN_QUESTIONS.relevant]: { type: "noul", noul: 0.8 },
+      [INPUT_SCREEN_QUESTIONS.evidence]: { type: "score", score: 1.8, confidence: 0.9 },
+    },
+    usage: { input_tokens: 10, output_tokens: 4 },
+    model: "jev-1.13.0",
+  };
+}
+
+function llamaCalls(run: ReturnType<typeof vi.fn>) {
+  return run.mock.calls.filter(([model]) => model === STEAL_SUMMARY_MODEL);
+}
+
+function jevCalls(run: ReturnType<typeof vi.fn>) {
+  return run.mock.calls.filter(([model]) => model === INPUT_SCREEN_BINDING_MODEL);
+}
 
 function makeAd(overrides: Partial<AdRecord> = {}): AdRecord {
   return {
@@ -249,13 +279,74 @@ describe("buildSearchStealSummary", () => {
         "Buy now is the CTA across the ads",
       ],
     });
-    expect(run).toHaveBeenCalledTimes(1);
-    const [model, payload] = run.mock.calls[0] as [string, { messages: Array<{ content: string }> }];
-    expect(model).toBe(STEAL_SUMMARY_MODEL);
+    expect(llamaCalls(run)).toHaveLength(1);
+    expect(jevCalls(run)).toHaveLength(3);
+    const payload = llamaCalls(run)[0]![1] as { messages: Array<{ content: string }> };
     const userMessage = payload.messages[1]?.content ?? "";
     expect(userMessage).toContain("running: 65 days");
     expect(userMessage).not.toContain("SecretBrandCo");
     expect(userMessage).not.toContain("secret.example.com");
+    const passageIds = jevCalls(run).map(
+      ([, input]) =>
+        (input as { state: { passage: { id: string } } }).state.passage.id,
+    );
+    expect(passageIds).toEqual(["ad-library:meta-1", "ad-library:meta-2", "ad-library:meta-3"]);
+  });
+
+  it("still returns bullets when the Jev binding is unpaid, after one 402", async () => {
+    const run = vi.fn(async (model: string) => {
+      if (model === INPUT_SCREEN_BINDING_MODEL) {
+        throw new Error("Insufficient balance; add money to your gateway or use BYOK");
+      }
+      return {
+        response: [
+          "- Every hook leads with battery claims",
+          "- Bass bhi. Battery bhi. has run 65 days with 3 variants",
+          "- Buy now is the CTA across the ads",
+        ].join("\n"),
+      };
+    });
+
+    const summary = await buildSearchStealSummary(
+      { AI: { run } } as never,
+      threeAds(),
+      { now: NOW },
+    );
+    expect(summary?.bullets).toHaveLength(3);
+    expect(llamaCalls(run)).toHaveLength(1);
+    expect(jevCalls(run)).toHaveLength(1);
+  });
+
+  it("logs a screen row per ad when the binding answers", async () => {
+    const seen: Array<{ passage_id: string }> = [];
+    const run = vi.fn(async (model: string) => {
+      if (model === INPUT_SCREEN_BINDING_MODEL) return jevAnswers();
+      return {
+        response: [
+          "- Every hook leads with battery claims",
+          "- Bass bhi. Battery bhi. has run 65 days with 3 variants",
+          "- Buy now is the CTA across the ads",
+        ].join("\n"),
+      };
+    });
+    const info = vi.spyOn(console, "info").mockImplementation((value: unknown) => {
+      if (typeof value === "string") {
+        try {
+          const parsed = JSON.parse(value) as { passage_id?: string; site?: string };
+          if (parsed.site === "input-screen" && parsed.passage_id) seen.push({ passage_id: parsed.passage_id });
+        } catch {
+          /* not a row */
+        }
+      }
+    });
+
+    await buildSearchStealSummary({ AI: { run } } as never, threeAds(), { now: NOW });
+    info.mockRestore();
+    expect(seen.map((row) => row.passage_id)).toEqual([
+      "ad-library:meta-1",
+      "ad-library:meta-2",
+      "ad-library:meta-3",
+    ]);
   });
 
   it("returns null when the model fabricates ungrounded content", async () => {

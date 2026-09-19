@@ -18,6 +18,12 @@ import { readDigestIntelligence } from "~/lib/change-intelligence";
 import { DIGEST_STRATEGY_MODEL } from "~/lib/digest-strategy";
 import type { AppEnv } from "~/lib/env.server";
 import {
+	INPUT_SCREEN_ISSUE_REF,
+	shadowLogInputScreenPassages,
+	type InputScreenAi,
+	type InputScreenPassage,
+} from "~/lib/input-screen-jev.server";
+import {
 	classifyDigestItemSource,
 	isDigestDecisionCandidate,
 } from "~/lib/proof-classification";
@@ -37,6 +43,8 @@ export interface BuildWeeklyStrategyParagraphInput {
 	periodEnd: string;
 	/** Optional caller budget; the module's own timeout remains the hard cap. */
 	timeoutMs?: number;
+	/** Digest run id, cited on shadow rows when present. */
+	digestRunId?: string;
 }
 
 export interface GeneratedDigestStrategy {
@@ -88,30 +96,39 @@ export async function buildWeeklyStrategyParagraph(
     return null;
   }
 
-  const { lines, watchlistIds } = buildStrategyInput(input.items);
-  if (lines.length === 0) {
-    return null;
-  }
+	const { lines, watchlistIds, passages } = buildStrategyInput(
+		input.items,
+		input.digestRunId,
+	);
+	if (lines.length === 0) {
+		return null;
+	}
 
-  const timeoutMs = Math.min(
-    AI_STRATEGY_TIMEOUT_MS,
-    Math.max(1, Math.floor(input.timeoutMs ?? AI_STRATEGY_TIMEOUT_MS)),
-  );
-  const raw = await runGuardedGeneration(env, {
-    model: DIGEST_STRATEGY_MODEL,
-    systemPrompt: SYSTEM_PROMPT,
-    userContent: buildDataEnvelope([
-      `This week (${input.periodStart.slice(0, 10)} to ${input.periodEnd.slice(0, 10)}) the evidence below contains ${lines.length} selected change${lines.length === 1 ? "" : "s"} from ${watchlistIds.length} watchlist${watchlistIds.length === 1 ? "" : "s"}.`,
-      "Change lines:",
-      ...lines,
-    ]),
-    maxTokens: MAX_OUTPUT_TOKENS,
-    timeoutMs,
-    timeoutMessage: "Digest strategy generation timed out.",
-  });
-  if (raw === null) {
-    return null;
-  }
+	const timeoutMs = Math.min(
+		AI_STRATEGY_TIMEOUT_MS,
+		Math.max(1, Math.floor(input.timeoutMs ?? AI_STRATEGY_TIMEOUT_MS)),
+	);
+	const shadow = shadowLogInputScreenPassages(
+		env.AI as InputScreenAi | undefined,
+		passages,
+		{ timeoutMs, ref: INPUT_SCREEN_ISSUE_REF },
+	);
+	const raw = await runGuardedGeneration(env, {
+		model: DIGEST_STRATEGY_MODEL,
+		systemPrompt: SYSTEM_PROMPT,
+		userContent: buildDataEnvelope([
+			`This week (${input.periodStart.slice(0, 10)} to ${input.periodEnd.slice(0, 10)}) the evidence below contains ${lines.length} selected change${lines.length === 1 ? "" : "s"} from ${watchlistIds.length} watchlist${watchlistIds.length === 1 ? "" : "s"}.`,
+			"Change lines:",
+			...lines,
+		]),
+		maxTokens: MAX_OUTPUT_TOKENS,
+		timeoutMs,
+		timeoutMessage: "Digest strategy generation timed out.",
+	});
+	await shadow;
+	if (raw === null) {
+		return null;
+	}
   const paragraph = validateStrategyParagraph(raw, lines);
   return paragraph ? { paragraph, watchlistIds } : null;
 }
@@ -126,7 +143,10 @@ export function buildStrategyInputLines(items: DigestStrategyItemInput[]) {
   return buildStrategyInput(items).lines;
 }
 
-function buildStrategyInput(items: readonly DigestStrategyItemInput[]) {
+function buildStrategyInput(
+	items: readonly DigestStrategyItemInput[],
+	digestRunId?: string,
+) {
   const ranked = items
     .filter((item) => classifyDigestItemSource(item).status === "verified_proof")
     .map((item, index) => ({
@@ -145,6 +165,7 @@ function buildStrategyInput(items: readonly DigestStrategyItemInput[]) {
 
   const lines: string[] = [];
   const watchlistIds: string[] = [];
+  const passages: InputScreenPassage[] = [];
   let totalLength = 0;
   for (const entry of ranked) {
     const watchlistId = collapseWhitespace(entry.item.watchlistId);
@@ -159,9 +180,16 @@ function buildStrategyInput(items: readonly DigestStrategyItemInput[]) {
     if (!watchlistIds.includes(watchlistId)) {
       watchlistIds.push(watchlistId);
     }
+    const runKey = digestRunId?.trim() || "run";
+    passages.push({
+      id: `digest:${runKey}:${watchlistId}:${passages.length + 1}`,
+      source: "digest",
+      title: entry.item.title,
+      text: line,
+    });
     totalLength += line.length;
   }
-  return { lines, watchlistIds };
+  return { lines, watchlistIds, passages };
 }
 
 function formatStrategyLine(item: DigestStrategyItemInput) {

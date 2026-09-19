@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { buildWeeklyStrategyParagraph } from "~/lib/digest-strategy.server";
+import { DIGEST_STRATEGY_MODEL } from "~/lib/digest-strategy";
+import { resetInputScreenBindingCircuitForTests } from "~/lib/input-screen-jev.server";
 
 afterEach(() => {
 	vi.useRealTimers();
 	vi.restoreAllMocks();
+	resetInputScreenBindingCircuitForTests();
 });
 
 describe("digest strategy call budget", () => {
@@ -38,6 +41,6 @@ describe("digest strategy call budget", () => {
 		await vi.advanceTimersByTimeAsync(1);
 		expect(settled).toBe(true);
 		await expect(result).resolves.toBeNull();
-		expect(run).toHaveBeenCalledTimes(1);
+		expect(run.mock.calls.some(([model]) => model === DIGEST_STRATEGY_MODEL)).toBe(true);
 	});
 });

@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import {
   INPUT_SCREEN_API_MODEL,
+  INPUT_SCREEN_BINDING_MODEL,
   INPUT_SCREEN_EVIDENCE_LEVELS,
   INPUT_SCREEN_QUESTIONS,
   INPUT_SCREEN_SITE,
@@ -9,9 +10,12 @@ import {
   InputScreenAnswerError,
   buildInputScreenRequest,
   decideInputScreen,
+  inputScreenBindingCircuitIsOpen,
   inputScreenStateSha256,
+  resetInputScreenBindingCircuitForTests,
   routeInputScreenPassage,
   shadowLogInputScreen,
+  shadowLogInputScreenPassages,
   stableJson,
   summarizeInputScreenRows,
   sweepEvidenceThresholds,
@@ -28,6 +32,10 @@ const PASSAGE = {
   title: "K-Beauty Finds on Nykaa",
   text: "Unlock the secret to radiant skin with top Korean beauty brands on Nykaa.",
 };
+
+afterEach(() => {
+  resetInputScreenBindingCircuitForTests();
+});
 
 /** A service that answers all four questions validly. */
 function fakeAi(
@@ -296,6 +304,32 @@ describe("input screen shadow wrapper", () => {
     const row = await shadowLogInputScreen(fakeAi(), { passage: PASSAGE }, (value) => seen.push(value));
     expect(seen).toHaveLength(1);
     expect(seen[0]).toEqual(row);
+  });
+
+  it("asks the Workers binding id, not the HTTP alias", async () => {
+    let seen = "";
+    const inner = fakeAi();
+    const ai: InputScreenAi = {
+      async run(model, input) {
+        seen = model;
+        return inner.run(model, input);
+      },
+    };
+    await shadowLogInputScreen(ai, { passage: PASSAGE });
+    expect(seen).toBe(INPUT_SCREEN_BINDING_MODEL);
+  });
+
+  it("opens the unpaid circuit after one 402 and skips the rest", async () => {
+    let calls = 0;
+    const ai: InputScreenAi = {
+      async run() {
+        calls += 1;
+        throw new Error("Insufficient balance; add money to your gateway or use BYOK");
+      },
+    };
+    await shadowLogInputScreenPassages(ai, [PASSAGE, { ...PASSAGE, id: "ad-library:2" }]);
+    expect(calls).toBe(1);
+    expect(inputScreenBindingCircuitIsOpen()).toBe(true);
   });
 });
 

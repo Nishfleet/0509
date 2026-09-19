@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { DIGEST_STRATEGY_MODEL } from "~/lib/digest-strategy";
+import { resetInputScreenBindingCircuitForTests } from "~/lib/input-screen-jev.server";
+
 const GOOD_PARAGRAPH =
 	"boAt refreshed its landing page offer while the remaining monitored competitors stayed stable. " +
 	"The weekly evidence therefore concentrates on that one verified change.";
@@ -138,6 +141,7 @@ beforeEach(() => {
 afterEach(() => {
 	vi.restoreAllMocks();
 	vi.resetModules();
+	resetInputScreenBindingCircuitForTests();
 });
 
 describe("scheduled digest strategy budget", () => {
@@ -148,8 +152,8 @@ describe("scheduled digest strategy budget", () => {
 		const deliverWeeklyDigest = vi
 			.fn()
 			.mockResolvedValue({ attempts: 1, channels: ["email"] });
-		const aiRun = vi.fn().mockImplementation(async () => {
-			now += 30_000;
+		const aiRun = vi.fn().mockImplementation(async (model: string) => {
+			if (model === DIGEST_STRATEGY_MODEL) now += 30_000;
 			return GOOD_PARAGRAPH;
 		});
 
@@ -169,7 +173,7 @@ describe("scheduled digest strategy budget", () => {
 		expect(result.digests).toBe(4);
 		expect(deliverWeeklyDigest).toHaveBeenCalledTimes(4);
 		expect(data.completeDigestStrategyGeneration).toHaveBeenCalledTimes(4);
-		expect(aiRun).toHaveBeenCalledTimes(2);
+		expect(aiRun.mock.calls.filter(([model]) => model === DIGEST_STRATEGY_MODEL)).toHaveLength(2);
 		expect(
 			data.completeDigestStrategyGeneration.mock.calls.slice(2).map((call) => call[2]),
 		).toEqual([
