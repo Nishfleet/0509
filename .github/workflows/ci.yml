@@ -16,6 +16,32 @@ env:
   VITEST_TOTAL_SHARDS: "4"
 
 jobs:
+  d1-budget-check:
+    # Required context (issue #1731). Same no-skip contract as
+    # codex-node-checks: no job-level `if:`/`needs`, so the context can never
+    # conclude SKIPPED. Runs the D1 query budget trip-wire as its own required
+    # context; the codex-node-checks job also runs it as a step ahead of the D1
+    # (workers-project) vitest suites so the check gates the schema before
+    # those suites exercise it. The check applies migrations/*.sql to a
+    # scratch SQLite and fails when the estimated daily row footprint (hot
+    # queries + declared canary budgets) exceeds 10% of the D1 free-tier
+    # daily limit.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ".node-version"
+      - name: D1 query budget check
+        run: bash ./scripts/ci-d1-budget-check.sh
+
   codex-node-checks:
     # Required context (branch protection). It must be structurally incapable
     # of concluding SKIPPED: GitHub counts a skipped required context as
@@ -53,6 +79,12 @@ jobs:
           fi
       - name: Build
         run: npm run build
+      - name: D1 query budget check (before D1 test runs)
+        # Issue #1731: the trip-wire must pass before this job's test shards
+        # run — the D1 (workers-project) suites in the shard jobs could not
+        # pass on an unpriced schema regression either; this step plus the
+        # dedicated d1-budget-check job above are the two write-offs CI pays.
+        run: bash ./scripts/ci-d1-budget-check.sh
       - name: Test (shard 1 of ${{ env.VITEST_TOTAL_SHARDS }})
         run: |
           set -euo pipefail

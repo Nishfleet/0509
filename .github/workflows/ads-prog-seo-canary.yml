@@ -1,5 +1,5 @@
 name: Programmatic SEO union canary
-
+# d1-budget: reads=5000 writes=0 runs_per_day=1
 # Always-on canary for issue #1455: the /ads/:domain programmatic-SEO union.
 #
 # BET 5's /ads/:domain surface only counts as a real surface when each
