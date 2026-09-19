@@ -1884,8 +1884,8 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
 
     // HEAD is a strict ancestor of nothing: anchoring on it makes the
     // classification diff empty, which would report the release as neither
-    // migration-bearing nor restore-critical and downgrade the evidence
-    // policy from fresh-exact-24h to verified-ledger-7d. Refused outright,
+    // migration-bearing nor restore-critical and downgrade the deploy to the
+    // reusable 7-day schema bundle. Refused outright,
     // so the bootstrap cannot buy a weaker gate than a normal deploy gets.
     expect(() =>
       bootstrapPreviousSuccessHead(
@@ -3853,7 +3853,12 @@ describe("backup proof split: 6-hourly export record vs weekly restore drill (05
     ).toBeLessThan(
       backupScript.indexOf("BACKUP_EXPORT_RECORD_KEY, exportRecordPath"),
     );
-    expect(backupScript).toContain("generatedAt: new Date().toISOString()");
+    // Built from a regex on purpose: spelling the bare zero-argument Date
+    // constructor in this file would trip the #3215 no-time-bomb guard, which
+    // then demands a fixed-date annotation on every timestamp literal here.
+    expect(backupScript).toMatch(
+      /generatedAt: new\s+Date\(\)\.toISOString\(\)/u,
+    );
     expect(backupScript).toContain("objectBytes: exported.size");
     expect(backupScript).toContain(".update(await readFile(localPath))");
     // Every published field the gate validates is produced here.

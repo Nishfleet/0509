@@ -2,9 +2,9 @@
 
 ## D1 backup posture
 
-- `npm run backup:d1:r2` is the owner-operated backup command. It exports the remote D1 database (`0509`) to `$HOME/.local/state/0509/backups/d1/<timestamp>.sql` and uploads it to the R2 bucket under `backups/d1/` when production auth is available. Keeping retained copies outside the checkout prevents Actions cleanup from deleting them.
+- `npm run backup:d1:r2` is the owner-operated backup command. It exports the remote D1 database (`0509`) to `$HOME/.local/state/0509/backups/d1/<timestamp>.sql` and uploads it to the R2 bucket under `backups/d1/` when production auth is available, then publishes the small export record at the fixed key `backups/d1/export-record.json` describing exactly that upload. Keeping retained copies outside the checkout prevents Actions cleanup from deleting them.
 - The repository validation gate is `node scripts/validate-d1-backup.mjs`. It dry-runs backup-script prerequisites, the D1 binding, and the current migration chain through the latest migration; it does not prove that a fresh production R2 object exists.
-- `.github/workflows/d1-backup-r2.yml` is the explicit backup-only fallback: it supports `workflow_dispatch`, runs only on protected `main`, uses the branch-restricted `production` GitHub Environment, validates with `node scripts/validate-d1-backup.mjs`, then runs `npm run backup:d1:r2` with `D1_BACKUP_AUTOMATION_APPROVED=0509-weekly-d1-to-r2`. Scheduled off-machine backups are produced by the restore-evidence workflow below, so a second independent export cron is intentionally disabled.
+- `.github/workflows/d1-backup-r2.yml` is the explicit backup-only fallback: it supports `workflow_dispatch`, runs only on protected `main`, uses the branch-restricted `production` GitHub Environment, validates with `node scripts/validate-d1-backup.mjs`, then runs `npm run backup:d1:r2` with `D1_BACKUP_AUTOMATION_APPROVED=0509-weekly-d1-to-r2`. Scheduled off-machine backups are produced every 6 hours by the export-only job of `d1-restore-proof-auto-refresh.yml`, which also publishes the fixed-key export record the deploy gate reads; the nightly cron that used to live here was retired on 2026-09-19 (0509#3576) so one database export cannot be scheduled twice for the same coverage. This workflow stays as the manual break-glass path.
 - **Unblocked 2026-07-13:** repository secrets `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` (scoped custom token: D1 Edit + Workers R2 Storage Edit) were added by the owner, and dispatch run `29225583866` completed the full validate → export → upload chain ("Upload complete. Backup complete.", fresh timestamped object under the private R2 backup prefix). Historical context: the former weekly backup-only cron produced runs `28339411098`, `28758345164`, and `29212868653` while the secrets were missing; that redundant cron is now retired in favor of the scheduled restore-evidence proof.
 - **Mac-side scheduled backup (the currently-live automated path):** a Claude scheduled task `0509-weekly-d1-backup` on Nish's Mac runs the manual-approved backup weekly (Sunday mornings, local). Caveat found 2026-07-13: its runs on 2026-07-05/12 silently produced no artifact because the task prompt predated the `D1_BACKUP_MANUAL_APPROVED` interlock; the prompt now sets the marker and verifies a fresh `$HOME/.local/state/0509/backups/d1/` file plus `validate-d1-backup.mjs` before reporting success. This path depends on the Mac being awake/app open — the Actions path above remains the wanted off-machine redundancy.
 - Cloudflare documents that D1 export blocks other database requests while it runs. Keep this schedule in a low-traffic window and move it if real customer traffic shows a better quiet period.
@@ -42,8 +42,11 @@ The 2026-07-26 weekly backup failed because the GitHub-hosted minutes were exhau
 
 The `D1 remote restore evidence` workflow performs the restore drill on the
 GitHub-hosted runner on pushes that touch the schema surface or by manual
-dispatch; scheduled freshness is owned by the 6-hourly
-`D1 restore proof auto-refresh` workflow (0509#3576). It reuses the protected
+dispatch; scheduled freshness is owned by the `D1 restore proof auto-refresh`
+workflow (0509#3576), which runs two cadences: every 6 hours it does the cheap
+export-only job (fresh D1 export, upload to private R2, plus the fixed-key
+export record the deploy gate reads) and weekly on Sunday it does the full
+scratch restore drill. It reuses the protected
 branch-restricted `production` environment so provider credentials are not
 available as repository-level secrets or to pull-request jobs.
 The workflow creates a fresh D1 export, uploads it to private R2,
@@ -68,13 +71,45 @@ or lost-runner drill cannot leave production data parked. Mandatory provider
 list/delete operations retry three times with bounded backoff; exhausted
 cleanup failures remain deploy-blocking.
 
+**The two backup questions are answered separately (0509#3576).** Backup
+FRESHNESS and restore-proof freshness are not the same question, and paying for
+a full scratch restore every few hours to answer the cheap one was the waste.
+The deploy gate now wants both:
+
+- An **export record** — a small JSON file at the fixed R2 key
+  `backups/d1/export-record.json`, written by the 6-hourly export-only job
+  after the dump upload succeeded. It carries `schemaVersion`, `generatedAt`,
+  `bucket`, `remoteKey`, `objectBytes` and `sha256` of the dump it describes.
+  The gate refuses it when it is missing, the wrong schema version, names a
+  key outside `backups/d1/0509-*.sql`, names a bucket that is not the backup
+  bucket, has no usable size or digest, or is **12 hours old or older**
+  (`remote_backup_export_stale`). The 6-hourly cadence IS the headroom: two
+  missed runs still pass.
+- A **restore proof** — the existing schema-fingerprint-matching evidence, now
+  accepted for **7 days** (`remote_restore_evidence_stale`), with the 14-day
+  absolute ceiling retained underneath.
+
+The two codes are distinct on purpose. "The backup record is stale" means wait
+for the next export or re-run it; "the restore proof is stale" means run a
+drill. A deploy operator who cannot tell which one fired cannot tell which fix
+to use.
+
+Only the credentialed deploy job reads the record
+(`scripts/fetch-d1-backup-export-record.mjs`, one `wrangler r2 object get` on
+the proven path — no bucket listing needed). The verifier stays
+credential-free: the file is passed to it as a path, and the preparation job
+gets no such flag, so it can never use a fresh export record to skip generating
+the exact evidence a migration-bearing deploy needs.
+
 Production deploys never export D1 or create scratch databases in their
 unprivileged preparation job, and the deploy itself still performs no restore
 mutation. The unprivileged preparation job downloads and verifies the newest
 private restore-evidence artifact from the preceding eight days. Code-only
-deploys can reuse a verified drill for the full 14-day freshness bound while
-the Wrangler configuration hash and migration ledger still match. A
-migration-bearing deploy or any change to restore workflows, scripts, runtime
+deploys can reuse a verified drill while the schema fingerprint, Wrangler
+configuration hash and migration ledger still match — for seven days since
+0509#3576 (it was 14 days; the reference artifact is still uploaded with
+`retention-days: 8`). A migration-bearing deploy or any change to restore
+workflows, scripts, runtime
 dependencies, or Wrangler configuration requires candidate-bound evidence that
 matches the pinned candidate exactly.
 If no matching artifact exists, the deploy no longer blocks waiting for a
@@ -86,7 +121,7 @@ deploy job's exact verifier. An independent `if: always()` cleanup job then
 deletes every run-scoped scratch database, including any left by a hard-killed
 generation attempt. Only when that generated evidence passes the same exact
 verifier does the protected deploy job proceed; a failed drill or a failed
-cleanup still blocks the deploy. The nightly drill remains the primary
+cleanup still blocks the deploy. The weekly full drill remains the primary
 evidence source, so the first deploy of a new migration-bearing or
 restore-critical main commit is the only one that normally pays for fresh
 generation.

@@ -320,7 +320,7 @@ export function deployLedgerAnchor({
     // The ledger file is committed content, so a row is weaker evidence than
     // a recorded run head. Never let it anchor on HEAD itself: that would
     // make the classification diff empty and silently downgrade the release
-    // to the weaker verified-ledger-7d policy (the same failure the
+    // to the reusable 7-day policy (the same failure the
     // bootstrap's is-head refusal exists to prevent).
     if (reachable(row.sha) && row.sha !== head) return row.sha;
     if (row.tree) {
@@ -459,8 +459,8 @@ export function anchorPreviousHead(
  *   point in this branch's history — never a fabricated or future anchor, and
  *   never HEAD itself. HEAD would make the classification diff empty, which
  *   would report the release as neither migration-bearing nor
- *   restore-critical and silently downgrade the evidence policy from
- *   fresh-exact-24h to verified-ledger-7d. Recorded history may legitimately
+ *   restore-critical and silently downgrade the evidence policy to the
+ *   reusable 7-day bundle. Recorded history may legitimately
  *   equal HEAD (nothing shipped since the last deploy); an operator-supplied
  *   anchor may not.
  *
@@ -507,7 +507,7 @@ export function bootstrapPreviousSuccessHead(
   if (resolved === head) {
     // An anchor of HEAD makes previousHead..HEAD empty, so the release would
     // classify as neither migration-bearing nor restore-critical and accept
-    // the weaker verified-ledger-7d evidence policy. Refuse it outright.
+    // the reusable 7-day evidence policy. Refuse it outright.
     throw new Error("remote_restore_bootstrap_previous_head_is_head");
   }
   try {
