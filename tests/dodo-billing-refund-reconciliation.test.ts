@@ -5,7 +5,6 @@ import {
   partialRefundLedgerKey,
   reconcilePartialRefundWithAudit,
 } from "~/lib/data.server";
-import { PARTIAL_REFUND_PREFLIGHT_QUERY } from "../scripts/partial-refund-preflight.lib.mjs";
 import { createSqliteD1 } from "./helpers/sqlite-d1";
 
 function seedSchema(sqlite: ReturnType<typeof createSqliteD1>["sqlite"]) {
@@ -201,26 +200,7 @@ describe("partial-refund operator reconciliation", () => {
       SELECT json_extract(metadata_json, '$.appliedQuantity') AS appliedQuantity
       FROM agent_action_audit
     `).get()).toEqual({ appliedQuantity: 10 });
-    expect(harness.sqlite.prepare(PARTIAL_REFUND_PREFLIGHT_QUERY).get()).toEqual({
-      negative_partial_refund_ledger_count: 0,
-      orphan_partial_refund_ledger_count: 0,
-      linked_partial_refund_legacy_credit_count: 0,
-      unresolvable_partial_refund_event_count: 0,
-      unclassified_refund_event_count: 0,
-      unsafe_partial_refund_policy_count: 0,
-      pending_partial_refund_reconciliation_count: 0,
-      unhandled_refund_event_count: 0,
-      inflight_refund_event_count: 0,
-    });
 
-    harness.sqlite.exec(`
-      UPDATE evidence_top_up_grant
-      SET provider_payment_id = 'pay-wrong'
-      WHERE id = 'grant-1'
-    `);
-    expect(harness.sqlite.prepare(PARTIAL_REFUND_PREFLIGHT_QUERY).get()).toMatchObject({
-      unresolvable_partial_refund_event_count: 1,
-    });
   });
 
   it("fails closed when concurrent consumption invalidates the observed balance", async () => {

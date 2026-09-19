@@ -17,8 +17,6 @@ const HOSTED_CI_WORKFLOWS = [
 // instruction surface. Historical mentions belong in PROJECT-HISTORY.md.
 const NO_LOCK_WRAPPER_DOCS = [
   "CLAUDE.md",
-  "scripts/ci-prepare-remote-restore-evidence.sh",
-  "scripts/ci-bind-remote-restore-candidate.sh",
   "docs/undici-dependabot-ci-root-cause.md",
 ] as const;
 

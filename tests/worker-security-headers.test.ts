@@ -1,15 +1,33 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  EXPECTED_FONT_SRC_FONTS_HOST,
-  EXPECTED_PUBLIC_HOME_CACHE_CONTROLS,
+// Policy constants formerly exported by scripts/check-live-public-home.mjs (deleted in #3679);
+// they describe the product policy the Worker must keep.
+const EXPECTED_PUBLIC_HOME_CACHE_CONTROL = "public, s-maxage=3900, max-age=300";
+const EXPECTED_PUBLIC_HOME_CACHE_CONTROLS = [
   EXPECTED_PUBLIC_HOME_CACHE_CONTROL,
-  EXPECTED_SCRIPT_SRC_BEACON_HOST,
-  EXPECTED_STYLE_SRC_FONTS_HOST,
-  FORBIDDEN_CONNECT_SRC_WILDCARD,
-  FORBIDDEN_SCRIPT_SRC_KEYWORD,
-  cspContract,
-} from "../scripts/check-live-public-home.mjs";
+  "public, max-age=14400",
+  "public, s-maxage=3900, max-age=14400",
+];
+const ACCEPTED_PUBLIC_HOME_CACHE_CONTROLS = new Set(EXPECTED_PUBLIC_HOME_CACHE_CONTROLS);
+
+// Deploy-gate contract for the Cloudflare Web Analytics beacon (PR #610).
+//
+// Web Analytics is enabled for the zone with automatic (edge) injection, so
+// Cloudflare inserts https://static.cloudflareinsights.com/beacon.min.js into
+// HTML responses as it passes the edge. If the beacon host ever drops out of
+// the live script-src directive, the CSP blocks the beacon and analytics
+// silently records zero page views — no crash, no log, just a silent zero.
+// That silent failure is exactly what the coupling test in
+// tests/worker-security-headers.test.ts guards: it imports this constant and
+// CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC from workers/security-headers.ts and
+// asserts they are equal, so the gate and the product policy can never
+// silently diverge again.
+const EXPECTED_SCRIPT_SRC_BEACON_HOST = "https://static.cloudflareinsights.com/beacon.min.js";
+const FORBIDDEN_SCRIPT_SRC_KEYWORD = "'unsafe-inline'";
+const FORBIDDEN_CONNECT_SRC_WILDCARD = "https:";
+const EXPECTED_STYLE_SRC_FONTS_HOST = "https://fonts.googleapis.com";
+const EXPECTED_FONT_SRC_FONTS_HOST = "https://fonts.gstatic.com";
+
 import {
   CLOUDFLARE_WEB_ANALYTICS_BEACON_SRC,
   CONNECT_SRC,
@@ -153,56 +171,6 @@ describe("Worker security headers", () => {
     expect(productScriptSrc).not.toContain(FORBIDDEN_SCRIPT_SRC_KEYWORD);
     // The bare scheme token must be absent while full-URL hosts remain allowed.
     expect(CONNECT_SRC.split(/\s+/)).not.toContain(FORBIDDEN_CONNECT_SRC_WILDCARD);
-  });
-
-  it("the deploy gate's cspContract flags the exact holes issue #2348 closed", () => {
-    // A gate that cannot fail is not a gate. Pin the REAL header 0509.io served
-    // when the issue was filed (curled 2026-09-09) and assert the gate flags
-    // both holes, then assert the shipped policy passes. Without this, a future
-    // edit could neuter cspContract and every other test would stay green.
-    const liveHeader =
-      "default-src 'self'; " +
-      "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com/beacon.min.js https://siterep.net; " +
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
-      "font-src 'self' https://fonts.gstatic.com; " +
-      "img-src 'self' data: https:; " +
-      "connect-src 'self' https:; " +
-      "frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
-    const liveVerdict = cspContract(liveHeader);
-    expect(liveVerdict.unsafeInlineScriptSrc).toBe(true);
-    expect(liveVerdict.connectSrcWildcard).toBe(true);
-    // ...and the fonts paths were already fine, so the gate is not just always-fail.
-    expect(liveVerdict.fontsStyleSrc).toBe(true);
-    expect(liveVerdict.fontsFontSrc).toBe(true);
-
-    const shipped = SECURITY_HEADERS["content-security-policy"];
-    const shippedVerdict = cspContract(shipped);
-    expect(shippedVerdict.unsafeInlineScriptSrc).toBe(false);
-    expect(shippedVerdict.connectSrcWildcard).toBe(false);
-    expect(shippedVerdict.fontsStyleSrc).toBe(true);
-    expect(shippedVerdict.fontsFontSrc).toBe(true);
-
-    // A full-URL host must never be mistaken for the bare scheme wildcard, or
-    // the gate would fail on a correct policy.
-    expect(
-      cspContract("connect-src 'self' https://fonts.gstatic.com").connectSrcWildcard,
-    ).toBe(false);
-
-    // Sources are matched as whole tokens, never as substrings of a longer
-    // token: a host smuggled inside another source's query string is NOT that
-    // host. A substring match would credit it and let the gate pass a policy
-    // that blocks the real fonts host. (CodeQL js/incomplete-url-substring-sanitization.)
-    const smuggled = cspContract(
-      "script-src 'self'; style-src 'self' https://evil.example/?u=https://fonts.googleapis.com; " +
-        "font-src 'self' https://evil.example/#https://fonts.gstatic.com; connect-src 'self'",
-    );
-    expect(smuggled.fontsStyleSrc).toBe(false);
-    expect(smuggled.fontsFontSrc).toBe(false);
-    // ...and the same rule applies to the forbidden tokens, so an injected
-    // keyword cannot hide inside a legitimately-shaped source either.
-    expect(
-      cspContract("script-src 'self' https://evil.example/?u='unsafe-inline'").unsafeInlineScriptSrc,
-    ).toBe(false);
   });
 
   it("generates a fresh base64 nonce on each call", () => {

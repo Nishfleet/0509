@@ -7,13 +7,6 @@ import { isolatedGitEnv } from "./helpers/git-env";
 
 const allowedFiles = new Set(["migrations/0060_remove_legacy_billing_provider.sql"]);
 const allowedHistoricalReferences = new Map([
-  [
-    "scripts/d1-migration-sync-check.lib.mjs",
-    [
-      '"0010_' + "razor" + 'pay_billing.sql"',
-      '"0013_' + "razor" + 'pay_webhook_events.sql"',
-    ],
-  ],
   // These two carry the brand's registry/category data: the domain below is a
   // tracked advertiser on /ads (a monitored brand, not a billing provider),
   // so only the exact public domain string is neutralized here — any other
