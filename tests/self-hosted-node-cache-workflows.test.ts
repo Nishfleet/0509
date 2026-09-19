@@ -21,17 +21,8 @@ const hostedWorkflows = [
 
 const runnerRoutedWorkflows = [
   [".github/workflows/cross-browser-matrix.yml", ["matrix"]],
-  [".github/workflows/d1-backup-r2.yml", ["backup"]],
-  [".github/workflows/d1-backup-validate.yml", ["validate"]],
-  [
-    ".github/workflows/d1-remote-restore-evidence.yml",
-    ["restore", "cleanup", "apply_and_restore"],
-  ],
-  [
-    ".github/workflows/deploy-production.yml",
-    ["prepare_remote_restore_evidence", "deploy"],
-  ],
-  [".github/workflows/finalize-production-soak.yml", ["finalize"]],
+  [".github/workflows/deploy-production.yml", ["verify", "deploy"]],
+  [".github/workflows/d1-backup-weekly.yml", ["export"]],
 ] as const;
 
 type SetupNodeStep = {

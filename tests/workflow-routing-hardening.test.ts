@@ -46,8 +46,7 @@ describe("workflow routing hardening", () => {
     for (const [file, id] of [
       ["ci.yml", "codex-node-checks"],
       ["cross-browser-matrix.yml", "matrix"],
-      ["d1-backup-validate.yml", "validate"],
-      ["deploy-production.yml", "prepare_remote_restore_evidence"],
+      ["deploy-production.yml", "verify"],
       ["secret-scan.yml", "gitleaks"],
     ] as const) {
       const candidate = job(file, id);
@@ -86,66 +85,21 @@ describe("workflow routing hardening", () => {
   });
 
   it("serializes every provider mutation without cancelling running work", () => {
-    // Backup and soak workflows still mutate shared provider state, so they
-    // keep the shared serial lane and `queue: max` — every queued run
-    // eventually executes, none are superseded or cancelled.
-    for (const filename of [
-      "d1-backup-r2.yml",
-      "finalize-production-soak.yml",
-    ]) {
-      const concurrency = workflow(filename).parsed.concurrency;
-      expect(concurrency, filename).toEqual({
+    for (const filename of ["deploy-production.yml", "d1-backup-weekly.yml"]) {
+      expect(workflow(filename).parsed.concurrency, filename).toEqual({
         group: "0509-production-provider-mutations",
         "cancel-in-progress": false,
-        queue: "max",
       });
     }
-    // Only push drills cancel superseded runs. queue takes literal single/max
-    // only (Actions docs), so it is omitted; default pending semantics plus
-    // the cancelling push group replace the old max queue (0509#3576).
-    expect(workflow("d1-remote-restore-evidence.yml").parsed.concurrency).toEqual({
-      group: "${{ github.event_name == 'push' && '0509-d1-remote-restore-evidence-push' || format('0509-d1-remote-restore-evidence-{0}', github.sha) }}",
-      "cancel-in-progress": "${{ github.event_name == 'push' }}",
-    });
-    expect(workflow("d1-restore-proof-auto-refresh.yml").parsed.concurrency).toEqual({
-      group: "0509-d1-restore-proof-auto-refresh-${{ github.sha }}",
-      "cancel-in-progress": false,
-      queue: "max",
-    });
-    // The one step that does mutate shared provider state — the manual
-    // `wrangler d1 migrations apply` — keeps the shared serial lane at JOB
-    // level inside the otherwise per-SHA workflow.
-    expect(
-      job("d1-remote-restore-evidence.yml", "apply_and_restore").concurrency,
-    ).toEqual({
-      group: "0509-production-provider-mutations",
-      "cancel-in-progress": false,
-      queue: "max",
-    });
-    // Deploy production uses deploy-latest semantics (Nish, 2026-08-25):
-    // cancel-in-progress: false (a running deploy is never interrupted) but
-    // no `queue: max`, so superseded queued deploys are cancelled and only
-    // the newest queued deploy runs after the current one finishes. This
-    // does not weaken any gate — the deploy that proceeds runs the full
-    // release gate at full strength.
-    const deployConcurrency =
-      workflow("deploy-production.yml").parsed.concurrency;
-    expect(deployConcurrency).toEqual({
-      group: "0509-production-provider-mutations",
-      "cancel-in-progress": false,
-    });
-    for (const filename of ["ci.yml", "cross-browser-matrix.yml", "d1-backup-validate.yml", "secret-scan.yml"]) {
+    for (const filename of ["ci.yml", "cross-browser-matrix.yml", "secret-scan.yml"]) {
       expect(workflow(filename).parsed.concurrency?.["cancel-in-progress"], filename).toBe(true);
     }
   });
 
   it("limits manual privileged and cross-browser work to trusted main provenance", () => {
     const deploy = workflow("deploy-production.yml").source;
-    const finalize = workflow("finalize-production-soak.yml").source;
     const crossBrowser = workflow("cross-browser-matrix.yml").source;
     expect(deploy).toContain('test "$GITHUB_REF" = "refs/heads/main"');
-    expect(finalize).toContain("run.head_branch === \"main\"");
-    expect(finalize).toContain("run.head_sha === expectedSha");
     expect(crossBrowser).toContain("github.ref == 'refs/heads/main'");
   });
 
