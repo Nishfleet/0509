@@ -59,9 +59,9 @@ const BRAND_PAGES: ReadonlyArray<SneakerResaleBrandPageCopy> = [
       "Nike's portion of the below-retail demand is visible in the 2026-09-11 market signal: the 'Just Don't Wear It' thread on r/stocks — 6,561 upvotes and 1,919 comments, posted 2026-08-30.",
     proof: [
       {
-        title: "The Nike ad wall, saved as screenshots.",
+        title: "The Nike ad wall, saved as proof.",
         detail:
-          "Five to Nine watches nike.com's Meta Ad Library surface and saves every ad and landing page it serves as a screenshot with the original link and a timestamp — so when the offer or the CTA moves, you can put the old one next to the new one.",
+          "Five to Nine watches nike.com's Meta Ad Library surface and saves every ad and landing page it serves — with the original link, a timestamp, and a screenshot when the capture includes one — so when the offer or the CTA moves, you can put the old one next to the new one.",
       },
       {
         title: "Real captures, real dates.",
@@ -78,9 +78,9 @@ const BRAND_PAGES: ReadonlyArray<SneakerResaleBrandPageCopy> = [
       "The 2026-09-11 market signal names the StockX midyear resale report (via WWD, 2026-08-12) as the second live source in the below-retail cluster.",
     proof: [
       {
-        title: "The StockX ad wall, saved as screenshots.",
+        title: "The StockX ad wall, saved as proof.",
         detail:
-          "Five to Nine watches stockx.com's Meta Ad Library surface and saves every ad and landing page it serves as a screenshot with the original link and a timestamp — the offer copy you can diff against what it said yesterday.",
+          "Five to Nine watches stockx.com's Meta Ad Library surface and saves every ad and landing page it serves — with the original link, a timestamp, and a screenshot when the capture includes one — the offer copy you can diff against what it said yesterday.",
       },
       {
         title: "Real captures, real dates.",
@@ -97,9 +97,9 @@ const BRAND_PAGES: ReadonlyArray<SneakerResaleBrandPageCopy> = [
       "Foot Locker sells the same below-retail market the signal sources name — the r/stocks thread (2026-08-30) and the StockX midyear resale report (WWD, 2026-08-12) — and the article-level demand the signal tracks names the market, not the retailer.",
     proof: [
       {
-        title: "The Foot Locker ad wall, saved as screenshots.",
+        title: "The Foot Locker ad wall, saved as proof.",
         detail:
-          "Five to Nine watches footlocker.com's Meta Ad Library surface and saves every ad and landing page it serves as a screenshot with the original link and a timestamp.",
+          "Five to Nine watches footlocker.com's Meta Ad Library surface and saves every ad and landing page it serves — with the original link, a timestamp, and a screenshot when the capture includes one.",
       },
       {
         title: "Real captures, real dates.",
@@ -116,9 +116,9 @@ const BRAND_PAGES: ReadonlyArray<SneakerResaleBrandPageCopy> = [
       "JD Sports sells into the same below-retail sneaker market the signal sources name — the r/stocks thread (2026-08-30) and the StockX midyear resale report (WWD, 2026-08-12). The public sources track the market, not the retailer.",
     proof: [
       {
-        title: "The JD Sports ad wall, saved as screenshots.",
+        title: "The JD Sports ad wall, saved as proof.",
         detail:
-          "Five to Nine watches jdsports.com's Meta Ad Library surface and saves every ad and landing page it serves as a screenshot with the original link and a timestamp.",
+          "Five to Nine watches jdsports.com's Meta Ad Library surface and saves every ad and landing page it serves — with the original link, a timestamp, and a screenshot when the capture includes one.",
       },
       {
         title: "Real captures, real dates.",

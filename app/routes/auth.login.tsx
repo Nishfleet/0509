@@ -159,7 +159,7 @@ export default function LoginRoute() {
           <div className="f9-auth-proof-list">
             <div>
               <strong>Digests</strong>
-              <p>A scheduled email that recaps what changed across your watchlists — new ads, offer moves, and landing-page edits — each change with its screenshot proof attached.</p>
+              <p>A scheduled email that recaps what changed across your watchlists — new ads, offer moves, and landing-page edits — each confirmed change saved with the page text and the source link, plus a screenshot when the capture includes one.</p>
             </div>
             <div>
               <strong>Reports</strong>

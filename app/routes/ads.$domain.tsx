@@ -1760,7 +1760,7 @@ function BrandAdsResults({
                 </div>
                 <span className="f9-ads-sec-meta">
                   {hasHeadline
-                    ? `${headlineItems.length} ${headlineItems.length === 1 ? "move" : "moves"} · each with a saved screenshot`
+                    ? `${headlineItems.length} ${headlineItems.length === 1 ? "move" : "moves"} · each saved with page text and the link — plus a screenshot when the capture includes one`
                     : "No offer changes this week"}
                 </span>
               </div>

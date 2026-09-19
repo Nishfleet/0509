@@ -224,9 +224,18 @@ describe("BET 10 claim-by-claim audit table", () => {
       "app/routes/marketing.tsx",
       "app/routes/competitor-monitoring.tsx",
       "app/routes/compare.meta-ad-library.tsx",
+      "app/routes/compare.tsx",
+      "app/routes/compare.keeptabz.tsx",
       "app/components/pricing-section.tsx",
       "app/routes/timeline.$domain.tsx",
+      "app/routes/ads.$domain.tsx",
+      "app/routes/auth.signup.tsx",
+      "app/routes/auth.login.tsx",
+      "app/routes/search.tsx",
       "app/lib/pricing.ts",
+      "app/lib/sneaker-resale-copy.ts",
+      "app/lib/sneaker-resale-brand-pages.ts",
+      "app/lib/public-markdown.ts",
     ];
     const banned = [
       "saves the screenshots",
@@ -241,9 +250,34 @@ describe("BET 10 claim-by-claim audit table", () => {
       "with screenshots, page text, and the original link",
       "the screenshot and page text for each state",
       "each with the stored screenshot and page text",
+      // Issue #2546 — the same overclaim class on surfaces outside #2308's
+      // files: scope (signup/login/search/ads digest stat, sneaker-resale
+      // copy in all four locales, brand proof blocks, compare hub + keeptabz,
+      // and the public-markdown mirror).
+      "screenshot proof attached",
+      "save the screenshots",
+      "each with a saved screenshot",
+      "saved as screenshots",
+      "you get the screenshot and the original link",
+      "keep the screenshot, the page text",
+      "with the screenshot and the original link",
+      "saved screenshots",
+      "source link, and screenshot proof",
+      "serves as a screenshot",
+      "Mit Screenshot, nicht als Moodboard",
+      "der Screenshot und der Originallink",
+      "behalten Screenshot, Seitentext",
+      "スクリーンショット付きで残す",
+      "スクショと元リンクが残ります",
+      "スクショ、ページ本文、出典 URL",
+      "no Meta, com print",
+      "o print e o link original",
+      "leva print",
     ];
     for (const surface of surfaces) {
-      const source = readFileSync(resolve(surface), "utf8");
+      // Whitespace-normalized so JSX-wrapped copy cannot evade the gate
+      // (the #2546 search.tsx overclaim was split across three lines).
+      const source = readFileSync(resolve(surface), "utf8").replace(/\s+/g, " ");
       for (const phrase of banned) {
         expect(source.includes(phrase), `${surface} still contains ${JSON.stringify(phrase)}`).toBe(false);
       }

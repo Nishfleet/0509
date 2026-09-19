@@ -642,8 +642,9 @@ export default function CompetitorMonitoringCategoryRoute() {
             </h3>
             <p>
               Resellers price around drops other shops post. See the offer, CTA, and landing-page
-              moves the other resellers ran — with the screenshot and the original link, not a
-              swipe file. Available in English, German, Japanese, and Brazilian Portuguese.
+              moves the other resellers ran — with the page text and the original link, plus a
+              screenshot when the capture includes one — not a swipe file. Available in English,
+              German, Japanese, and Brazilian Portuguese.
             </p>
           </article>
         </div>
