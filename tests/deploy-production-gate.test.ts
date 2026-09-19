@@ -2382,7 +2382,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       "schedule",
       "workflow_dispatch",
     ]);
-    expect(refresh.on.schedule).toEqual([{ cron: "17 */3 * * *" }]);
+    expect(refresh.on.schedule).toEqual([{ cron: "17 */6 * * *" }]);
     expect(refresh.on.workflow_dispatch.inputs.expected_sha).toMatchObject({
       required: false,
       default: "",
