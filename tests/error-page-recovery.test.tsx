@@ -134,6 +134,12 @@ describe("error page recovery (issue #3617)", () => {
 
   it("keeps the 404 out of the index on the matched route too", () => {
     expect(notFoundRouteMeta()).toContainEqual(noindexMetaEntry());
+    // The acceptance's literal title, not just the constant it happens to
+    // hold — someone changing the constant must notice they are changing
+    // the accepted page title.
+    expect(notFoundRouteMeta().find((tag) => "title" in tag)?.title).toBe(
+      "Page not found | Five to Nine",
+    );
     expect(notFoundRouteMeta().find((tag) => "title" in tag)?.title).toBe(
       NOT_FOUND_TITLE,
     );
@@ -164,6 +170,12 @@ describe("error page recovery (issue #3617)", () => {
     expect(html).toMatch(/<a[^>]+href="\/brands"[^>]*>/);
     expect(html).toMatch(/<a[^>]+href="\/auth\/signup\?source=error-page"[^>]*>/);
     expect(html).not.toMatch(/<a[^>]+href="\/search\?q="[^>]*>/);
+    // The honest 410 copy and its titled head are still the 410's, never the
+    // 404's — the two status semantics stay distinct (acceptance line 4).
+    expect(html).toContain("This page is gone");
+    expect(html).not.toContain("The page you asked for does not exist.");
+    expect(metaForError(410).find((tag) => "title" in tag)?.title).toBe("This page is gone | Five to Nine");
+    expect(metaForError(410)).toContainEqual(noindexMetaEntry());
   });
 
   it("registers the error-page signup marker on the allowlist", async () => {

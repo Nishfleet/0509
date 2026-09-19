@@ -109,12 +109,12 @@ export const meta = (args: { data?: RootLoaderData; error?: unknown }) => {
   // marketing pages. Titles/descriptions come from app/lib/seo.ts so both
   // renderers read one source; tests/error-page-recovery.test.tsx pins them.
   //
-  // `noindexMetaEntry()` is appended to both error branches: the recovery row
-  // now adds a canonical (og:url) pointing at the site root, and a 404 that is
-  // shareable *and* indexable would let Google surface the empty error shell as
-  // a soft duplicate of `/` — the exact failure `noindexMetaEntry` already
-  // prevents for the auth surfaces. The 404/410 document is a dead URL by
-  // definition; its crawler signal must match.
+  // `noindexMetaEntry()` is appended to both error branches: `publicSeoMeta`
+  // below now emits a canonical (og:url) pointing at the site root, and a 404
+  // that is shareable *and* indexable would let Google surface the empty error
+  // shell as a soft duplicate of `/` — the exact failure `noindexMetaEntry`
+  // already prevents for the auth surfaces. The 404/410 document is a dead URL
+  // by definition; its crawler signal must match.
   if (args.error !== undefined && isRouteErrorResponse(args.error)) {
     if (args.error.status === 404) {
       return [

@@ -14,11 +14,17 @@ import {
 // (og-image.png, site name, site origin) are the whole input; only the title
 // and description are page-specific. `pathname` is the canonical site root
 // rather than the requested path, so the canonical/og:url never advertise a
-// URL that does not exist. `noindexMetaEntry()` is appended because the
-// recovery row now adds a canonical (og:url) for a URL that will never be a
+// URL that does not exist. `noindexMetaEntry()` is appended because
+// `publicSeoMeta` emits a canonical (og:url) for a URL that will never be a
 // real page: indexable + canonicalised-to-root is a soft-duplicate signal for
 // the site root. The 404 document must stay out of the index, exactly as the
 // auth surfaces already do with the same helper.
+//
+// This route is the *second* renderer of the same page: React Router throws on
+// the 404 loader `Response` below, so a live 404 bubbles to the root
+// `ErrorBoundary` in app/root.tsx and only the boundary's `meta` reaches the
+// browser. Both renderers carry the same head, and
+// tests/error-page-recovery.test.tsx asserts both so they cannot drift.
 export const meta = () => [
   ...publicSeoMeta({
     title: NOT_FOUND_TITLE,
