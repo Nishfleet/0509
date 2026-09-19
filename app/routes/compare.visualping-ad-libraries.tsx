@@ -131,6 +131,12 @@ export default function CompareVisualpingAdLibraryRoute() {
             description: pageDescription,
             pathname: "/compare/visualping-ad-libraries",
             comparedProductName: "Visualping",
+            comparedProductCategory: "BusinessApplication",
+            comparedProductOffer: {
+              lowPrice: "0",
+              highPrice: "350",
+              priceCurrency: "USD",
+            },
           }),
         )}
       />

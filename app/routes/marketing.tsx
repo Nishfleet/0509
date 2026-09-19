@@ -14,6 +14,7 @@ import {
   jsonLdScriptProps,
   organizationJsonLd,
   publicSeoMeta,
+  webApplicationJsonLd,
   webSiteJsonLd,
   type FaqJsonLdEntry,
 } from "~/lib/seo";
@@ -749,6 +750,7 @@ export default function MarketingRoute() {
     <main className="f9-home">
       <script {...jsonLdScriptProps(organizationJsonLd())} />
       <script {...jsonLdScriptProps(webSiteJsonLd())} />
+      <script {...jsonLdScriptProps(webApplicationJsonLd())} />
       <script {...jsonLdScriptProps(structuredFaq)} />
       <div className="ld-ticker" aria-hidden="true">
         <div className="ld-ticker-belt">

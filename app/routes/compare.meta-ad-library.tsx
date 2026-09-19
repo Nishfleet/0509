@@ -149,6 +149,8 @@ export default function CompareMetaAdLibraryRoute() {
             description: pageDescription,
             pathname: "/compare/meta-ad-library",
             comparedProductName: "Meta Ad Library",
+            comparedProductCategory: "BusinessApplication",
+            comparedProductOffer: { price: "0", priceCurrency: "USD" },
           }),
         )}
       />

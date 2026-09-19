@@ -130,6 +130,12 @@ export default function CompareKeeptabzRoute() {
             description: pageDescription,
             pathname: "/compare/keeptabz",
             comparedProductName: "KeepTabz",
+            comparedProductCategory: "BusinessApplication",
+            comparedProductOffer: {
+              lowPrice: "49.99",
+              highPrice: "99.99",
+              priceCurrency: "USD",
+            },
           }),
         )}
       />

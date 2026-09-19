@@ -130,6 +130,12 @@ export default function CompareForeplaySpyderRoute() {
             description: pageDescription,
             pathname: "/compare/foreplay-spyder",
             comparedProductName: "Foreplay Spyder",
+            comparedProductCategory: "BusinessApplication",
+            comparedProductOffer: {
+              lowPrice: "59",
+              highPrice: "459",
+              priceCurrency: "USD",
+            },
           }),
         )}
       />

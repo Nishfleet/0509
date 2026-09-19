@@ -136,6 +136,12 @@ export default function ComparePoweradspyRoute() {
             description: pageDescription,
             pathname: "/compare/poweradspy",
             comparedProductName: "PowerAdSpy",
+            comparedProductCategory: "BusinessApplication",
+            comparedProductOffer: {
+              lowPrice: "99",
+              highPrice: "399",
+              priceCurrency: "USD",
+            },
           }),
         )}
       />

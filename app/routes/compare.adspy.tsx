@@ -129,6 +129,9 @@ export default function CompareAdspyRoute() {
             description: pageDescription,
             pathname: "/compare/adspy",
             comparedProductName: "AdSpy",
+            comparedProductCategory: "BusinessApplication",
+            comparedProductOffer: { price: "149", priceCurrency: "USD" },
+            comparedProductRating: { ratingValue: "2.4", bestRating: "5" },
           }),
         )}
       />

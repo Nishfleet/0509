@@ -130,6 +130,12 @@ export default function ComparePanoramataRoute() {
             description: pageDescription,
             pathname: "/compare/panoramata",
             comparedProductName: "Panoramata",
+            comparedProductCategory: "BusinessApplication",
+            comparedProductOffer: {
+              lowPrice: "99",
+              highPrice: "379",
+              priceCurrency: "EUR",
+            },
           }),
         )}
       />
