@@ -460,6 +460,24 @@ export function noindexMetaEntry() {
   return { name: "robots", content: "noindex" } as const;
 }
 
+/**
+ * Issue #3617: the 404/410 surface is where every rotated-away brand URL
+ * lands (the /ads catalog rotates by design, #3496). It carried the bare site
+ * title "Five to Nine" and no share meta at all, so it never matched the
+ * site-wide `<page> | Five to Nine` pattern and had no link preview. The
+ * titles/descriptions live here — not in the two renderers — so the matched
+ * catch-all (`app/routes/not-found.tsx`) and the thrown-404/410 root
+ * `ErrorBoundary` branch (`app/root.tsx`) cannot drift apart again; the two
+ * are the same page by construction and are pinned together by
+ * tests/error-page-recovery.test.ts.
+ */
+export const NOT_FOUND_TITLE = "Page not found | Five to Nine";
+export const NOT_FOUND_DESCRIPTION =
+  "This page does not exist. Browse the competitor brands Five to Nine tracks, or start a free watch.";
+export const GONE_PAGE_TITLE = "This page is gone | Five to Nine";
+export const GONE_PAGE_DESCRIPTION =
+  "Five to Nine has no stored offer history for this brand yet. Browse the brands we track, or start a free watch.";
+
 export interface FaqJsonLdEntry {
   question: string;
   answer: string;

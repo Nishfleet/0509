@@ -31,8 +31,13 @@ describe("root ErrorBoundary HTTP 410", () => {
 
     expect(html).not.toContain("Something broke on our side");
     expect(html).toMatch(/<h1[^>]*>.*(?:This page is gone|Not stored yet).*<\/h1>/i);
-    expect(html).toMatch(/<a[^>]+href="\/"[^>]*>/);
-    expect(html).toMatch(/<a[^>]+href="\/search"[^>]*>/);
+    // Issue #3617 replaced the old dead-end row ("Back to Five to Nine" "/" +
+    // "Open search" "/search" — which 302s to /brands for an empty query) with
+    // the shared catalog + signup recovery row, so this page no longer
+    // dead-ends a visitor arriving from a rotated-away URL. The row is pinned
+    // by tests/error-page-recovery.test.tsx.
+    expect(html).toMatch(/<a[^>]+href="\/brands"[^>]*>/);
+    expect(html).toMatch(/<a[^>]+href="\/auth\/signup\?source=error-page"[^>]*>/);
   });
 
   it("names the brand and points at /search and /ads for a timeline 410", () => {

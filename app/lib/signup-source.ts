@@ -126,6 +126,16 @@ export const TIMELINE_PAGE_SIGNUP_SOURCE = "timeline-page";
 export const GUIDES_HUB_SIGNUP_SOURCE = "guides-hub";
 
 /**
+ * The 404/410 error-page marker (issue #3617). The error page is a genuine
+ * acquisition surface: it is where every rotated-away /ads/<brand> link from a
+ * directory, bio, or AI answer lands (#3496), and it now carries the signup
+ * CTA. Its own marker keeps those signups out of the generic untagged bucket,
+ * so the #4518 meter can say whether the recovery row actually converts.
+ * Hyphen slug — inside the open #2108 shape, so no migration literal needed.
+ */
+export const ERROR_PAGE_SIGNUP_SOURCE = "error-page";
+
+/**
  * /for-agencies CTA marker (issue #2144): the agency landing page's signup
  * link carries `source=for_agencies` so Agency-plan funnel measurement can
  * attribute checkout starts to that page.
@@ -169,6 +179,7 @@ export const ALLOWED_SIGNUP_SOURCES = [
   SWITCH_PAGE_SIGNUP_SOURCE,
   TIMELINE_PAGE_SIGNUP_SOURCE,
   GUIDES_HUB_SIGNUP_SOURCE,
+  ERROR_PAGE_SIGNUP_SOURCE,
 ] as const;
 
 /**
