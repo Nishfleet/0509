@@ -2078,6 +2078,11 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     // a commit object unreachable from HEAD but carrying a tree that occurs
     // exactly once on the first-parent chain. The real resolve path — no
     // injected seams — must land on the in-history twin.
+    // Fabricated, not named: the live stranded head's object survives only on
+    // disposable claim branches, so a PR checkout can legitimately not have it
+    // (that is how this fixture went red on 0509#3576 while passing locally).
+    // Shapes, not historical SHAs — a fixture that needs an object nobody keeps
+    // is a time bomb.
     const listing = spawnSync(
       "git",
       ["log", "--first-parent", "--format=%H %T", "HEAD"],
@@ -2209,30 +2214,6 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
         resolveRewritten: () => null,
       }),
     ).toThrow(PINNED_EVIDENCE_SHA_NOT_IN_HISTORY);
-
-    // — Rewrite containment (main #2974/#3024 reframe, resolved to the
-    // recovery-first order of 0509#2975): a recorded head that is genuinely
-    // not in this history is recovered by tree hash before anything is
-    // thrown — the live d16b1f00 -> 20382d7e twin. Only when every recovery
-    // source fails does the helper throw the named phrase (see the terminal
-    // seam test above).
-    const vanished = "d16b1f00096d5a29db9f6ba51b32bc49db45824b";
-    const vanishedTree = spawnSync(
-      "git",
-      ["rev-parse", `${vanished}^{tree}`],
-      { encoding: "utf8" },
-    ).stdout.trim();
-    const twin = pairs.find(
-      ([sha, tree]) => tree === vanishedTree && sha !== vanished,
-    )?.[0];
-    expect(twin, "the rewritten-away deploy head must have an in-history twin").toBeTruthy();
-    expect(twin).toMatch(/^[a-f0-9]{40}$/);
-    const warningsBeforeRecovery = warnings.length;
-    expect(
-      anchorPreviousHead({ recordedHead: vanished }, ({} as NodeJS.ProcessEnv), collect),
-    ).toBe(twin);
-    expect(warnings[0]).toContain("not reachable from HEAD");
-    warnings.length = 0;
 
     // Same, with a valid operator bootstrap: the bootstrap anchors this run,
     // and both warnings are emitted so the override is visible in the log.
@@ -2591,26 +2572,71 @@ jobs:
   });
 
   it("fails a rewritten-away pinned SHA with regenerate-the-evidence, not Command failed (0509#2974)", async () => {
-    const vanished = "d16b1f00096d5a29db9f6ba51b32bc49db45824b";
     const unknown = "0".repeat(40);
+    const identity = {
+      ...process.env,
+      GIT_AUTHOR_NAME: "0509 test",
+      GIT_AUTHOR_EMAIL: "test@0509.invalid",
+      GIT_COMMITTER_NAME: "0509 test",
+      GIT_COMMITTER_EMAIL: "test@0509.invalid",
+    };
+    // The live rewrite stranded d16b1f00 onto 20382d7e; that object now
+    // survives only on disposable claim branches, so a PR checkout may not
+    // have it at all (the reason this fixture went red on 0509#3576).
+    // Fabricate the same shape from objects every checkout has: an unreachable
+    // commit carrying the tree of a deep, tree-unique first-parent ancestor —
+    // its in-history twin.
+    const chain = spawnSync(
+      "git",
+      ["log", "--first-parent", "--format=%H %T", "HEAD"],
+      { encoding: "utf8" },
+    )
+      .stdout.trim()
+      .split("\n")
+      .map((line) => line.split(" "));
+    const treeCounts = new Map<string, number>();
+    for (const [, tree] of chain) {
+      treeCounts.set(tree, (treeCounts.get(tree) ?? 0) + 1);
+    }
+    // Deep enough that the anchor's diff to HEAD spans real migration and
+    // restore-critical work; tree-unique so tree-hash recovery has exactly one
+    // candidate.
+    const deepUnique = chain
+      .slice(100)
+      .filter(([, tree]) => treeCounts.get(tree) === 1);
+    expect(
+      deepUnique.length,
+      "first-parent history must reach 100 commits with a tree-unique ancestor",
+    ).toBeGreaterThan(0);
+    const [twin, twinTree] = deepUnique[0];
+    expect(twin).toMatch(/^[a-f0-9]{40}$/);
+    const vanished = spawnSync(
+      "git",
+      ["commit-tree", twinTree, "-m", "rewritten-away deploy head probe"],
+      { encoding: "utf8", env: identity },
+    ).stdout.trim();
+    expect(vanished).toMatch(/^[a-f0-9]{40}$/);
+    expect(vanished).not.toBe(twin);
+
     const tree = spawnSync("git", ["rev-parse", "HEAD^{tree}"], {
       encoding: "utf8",
     }).stdout.trim();
     const unreachable = spawnSync(
       "git",
       ["commit-tree", tree, "-m", "orphaned deploy anchor probe"],
-      {
-        encoding: "utf8",
-        env: {
-          ...process.env,
-          GIT_AUTHOR_NAME: "0509 test",
-          GIT_AUTHOR_EMAIL: "test@0509.invalid",
-          GIT_COMMITTER_NAME: "0509 test",
-          GIT_COMMITTER_EMAIL: "test@0509.invalid",
-        },
-      },
+      { encoding: "utf8", env: identity },
     ).stdout.trim();
     expect(unreachable).toMatch(/^[a-f0-9]{40}$/);
+
+    // The fabricated stranded head resolves by tree hash onto its twin before
+    // anything is thrown (the recovery-first order of 0509#2975).
+    expect(
+      anchorPreviousHead(
+        { recordedHead: vanished },
+        ({} as NodeJS.ProcessEnv),
+        () => true,
+      ),
+    ).toBe(twin);
 
     const verifier = readFileSync(
       "scripts/verify-remote-restore-evidence.mjs",
@@ -2633,7 +2659,7 @@ jobs:
     expect(() => firstParentMigrationDiffs(unreachable)).toThrow(
       PINNED_EVIDENCE_SHA_NOT_IN_HISTORY,
     );
-    expect(pinnedEvidenceShaNotInHistoryIssue(vanished)).toContain(
+    expect(pinnedEvidenceShaNotInHistoryIssue(unreachable)).toContain(
       "known but not an ancestor of HEAD",
     );
     expect(pinnedEvidenceShaNotInHistoryIssue(unknown)).toContain(
