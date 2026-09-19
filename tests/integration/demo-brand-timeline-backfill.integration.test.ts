@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { DEMO_BRAND_SEED_SQL } from "../../scripts/seed-demo-brands.mjs";
+import DEMO_BRAND_SEED_SQL from "../../db/seed/demo-brands.sql?raw";
 import { DEMO_BRAND_PAGE_DOMAINS } from "~/lib/demo-brand-pages";
 import { loadOfferTimeline } from "~/lib/offer-timeline.server";
 
