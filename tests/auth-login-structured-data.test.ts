@@ -28,6 +28,10 @@ beforeEach(() => {
       Link: ({ children, to, ...props }: MockLinkProps) =>
         React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
       useLoaderData: vi.fn().mockReturnValue(loginLoaderData),
+      // No root-route context exists in this standalone render, so the
+      // root loader data (and its cspNonce) is absent — the JSON-LD script
+      // then renders without a nonce attribute, matching pre-#3379 markup.
+      useRouteLoaderData: vi.fn().mockReturnValue(undefined),
       useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
     };
   });
