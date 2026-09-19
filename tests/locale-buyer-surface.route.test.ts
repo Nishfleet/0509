@@ -83,7 +83,7 @@ describe("locale buyer-surface layout (issue #1501)", () => {
       // Every buyer-surface locale contributes a link; the EN self entry
       // and the EN x-default complete the cluster (issue #2030 added en).
       expect(entries).toHaveLength(BUYER_SURFACE_LOCALE_IDS.length + 2);
-      const xDefault = entries.find((entry) => entry.hreflang === "x-default");
+      const xDefault = entries.find((entry) => entry.hrefLang === "x-default");
       expect(xDefault).toBeDefined();
       const enPath =
         splat === ""
@@ -195,7 +195,7 @@ describe("locale buyer-surface sitemap + worker wiring", () => {
 describe("buyerSurfaceHreflangLinks (issue #1501)", () => {
   it("emits self + sibling hreflang entries pointing at the same subpath", () => {
     const links = buyerSurfaceHreflangLinks("pricing");
-    const byLocale = new Map(links.map((link) => [link.hreflang, link.href]));
+    const byLocale = new Map(links.map((link) => [link.hrefLang, link.href]));
     expect(byLocale.get("de")).toBe("https://0509.io/de/pricing");
     expect(byLocale.get("ja")).toBe("https://0509.io/ja/pricing");
     expect(byLocale.get("pt-br")).toBe("https://0509.io/pt-br/pricing");
@@ -206,20 +206,20 @@ describe("buyerSurfaceHreflangLinks (issue #1501)", () => {
 
   it("treats /api/docs as a single subpath segment", () => {
     const links = buyerSurfaceHreflangLinks("api/docs");
-    expect(links.find((link) => link.hreflang === "de")?.href).toBe(
+    expect(links.find((link) => link.hrefLang === "de")?.href).toBe(
       "https://0509.io/de/api/docs",
     );
-    expect(links.find((link) => link.hreflang === "x-default")?.href).toBe(
+    expect(links.find((link) => link.hrefLang === "x-default")?.href).toBe(
       "https://0509.io/api/docs",
     );
   });
 
   it("treats an empty splat as the bare locale index (/<locale> and x-default /)", () => {
     const links = buyerSurfaceHreflangLinks("");
-    expect(links.find((link) => link.hreflang === "de")?.href).toBe(
+    expect(links.find((link) => link.hrefLang === "de")?.href).toBe(
       "https://0509.io/de",
     );
-    expect(links.find((link) => link.hreflang === "x-default")?.href).toBe(
+    expect(links.find((link) => link.hrefLang === "x-default")?.href).toBe(
       "https://0509.io/",
     );
   });

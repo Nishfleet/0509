@@ -1,9 +1,11 @@
-import { Link, redirect, useLoaderData } from "react-router";
+import { Link, redirect, useLoaderData, useRouteLoaderData } from "react-router";
 import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { AuthForm } from "~/components/auth-form";
 import { BrandWordmark } from "~/components/brand-wordmark";
 import { canonicalLinks, jsonLdScriptProps, noindexMetaEntry, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
+import { cspNonceForRender } from "~/root";
+import type { RootLoaderData } from "~/root";
 
 const loginDescription =
   "Sign in to access saved competitors, alerts, reports, and useful ad examples in Five to Nine.";
@@ -113,6 +115,14 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
 export default function LoginRoute() {
   const loaderData = useLoaderData<typeof loader>();
+  const rootData = useRouteLoaderData("root") as RootLoaderData;
+  // Issue #3379: the WebPage JSON-LD <script> below ships inside the streamed
+  // HTML, so it needs the same per-request CSP nonce as every other inline
+  // script. cspNonceForRender mirrors app/root.tsx: server render gets the
+  // real nonce, the client hydration pass passes "" (browsers hide a parsed
+  // nonce, so a real value read back as a hydration attribute mismatch —
+  // tests/root-csp-nonce-hydration.test.tsx).
+  const cspNonce = cspNonceForRender(rootData?.cspNonce, typeof document === "undefined");
 
   return (
     <main className="f9-auth-page">
@@ -126,6 +136,7 @@ export default function LoginRoute() {
             description: loginDescription,
             pathname: "/auth/login",
           }),
+          { nonce: cspNonce },
         )}
       />
       <div className="f9-container f9-auth-layout">
