@@ -227,6 +227,45 @@ describe("buildPresenceEntityBrief", () => {
     expect(brief.recentChanges.map((change) => change.id)).toEqual(["mention-new", "mention-old"]);
   });
 
+  it("does not treat leftover connector_id='podcast' mention rows as live mentions (issue #3447)", () => {
+    const brief = buildPresenceEntityBrief({
+      entity: entity(),
+      sources: [source()],
+      items: [],
+      sourceCoverage: [websiteCoverage("connected")],
+      pollCursors: [
+        {
+          sourceTargetId: "target-1",
+          cursor: cursor({
+            lastPolledAt: "2026-07-02T00:00:00.000Z",
+            lastSuccessAt: "2026-07-02T00:00:00.000Z",
+          }),
+        },
+      ],
+      mentionItems: [
+        item({
+          id: "mention-podcast",
+          sourceTargetId: "podcast-target-1",
+          connectorId: "podcast" as PresenceItemRecord["connectorId"],
+          title: "Leftover podcast capture",
+          canonicalUrl: "https://show.example/ep-1",
+          observedAt: "2026-09-13T22:50:00.000Z",
+        }),
+        item({
+          id: "mention-rss",
+          sourceTargetId: "rss-target-1",
+          connectorId: "rss",
+          title: "Acme in a roundup",
+          canonicalUrl: "https://news.example/acme",
+          observedAt: "2026-07-02T09:00:00.000Z",
+        }),
+      ],
+    });
+
+    expect(brief.recentChanges.map((change) => change.id)).toEqual(["mention-rss"]);
+    expect(brief.recentChanges.some((change) => change.connectorId === "podcast")).toBe(false);
+  });
+
   it("keeps the never-polled entity queued even when mentions exist (issue #3179)", () => {
     const brief = buildPresenceEntityBrief({
       entity: entity(),

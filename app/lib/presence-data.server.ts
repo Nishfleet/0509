@@ -9,6 +9,7 @@ import {
 } from "~/lib/mention-match.server";
 import { newPresenceId, presenceContentHash, presenceUrlHash } from "~/lib/presence-hash";
 import { PRESENCE_MENTION_CONNECTOR_IDS } from "~/lib/presence-connector-registry.server";
+import { isPresenceConnectorId } from "~/lib/presence-types";
 import type {
   NormalizedPresenceItem,
   PresenceConnectorId,
@@ -739,7 +740,12 @@ export async function listPresenceItems(
     )
     .bind(...binds, limit)
     .all<Record<string, unknown>>();
-  return (result.results ?? []).map(mapPresenceItem);
+  // Issue #3447: migration 0102 still accepts connector_id='podcast' on D1, but
+  // main's live union does not. Leave those rows in place (no delete); drop
+  // them from the read path so digest/display never treat them as live.
+  return (result.results ?? [])
+    .map(mapPresenceItem)
+    .filter((item) => isPresenceConnectorId(item.connectorId));
 }
 
 /**

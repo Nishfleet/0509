@@ -223,6 +223,37 @@ describe("mention panel loader", () => {
     expect(result.enabledConnectorIds).toEqual([]);
   });
 
+  it("treats a leftover connector_id='podcast' source as disabled, not a live mention source (issue #3447)", async () => {
+    vi.resetModules();
+    const PODCAST = "podcast" as PresenceConnectorId;
+    await mockLoaderDeps({
+      sources: [sourceTarget({ connectorId: PODCAST, coverageLabel: "VERIFIED_PUBLIC_FEED" })],
+      coverage: [coverageEntry("website", "PUBLIC_WEB_BEST_EFFORT", "available")],
+      itemsByConnector: {
+        [PODCAST]: [
+          presenceItem({
+            connectorId: PODCAST,
+            publishedAt: "2026-09-13T22:50:00.000Z",
+            observedAt: "2026-09-13T22:50:00.000Z",
+          }),
+        ],
+      },
+    });
+
+    const { loadMentionPanel } = await import("~/lib/mention-panel-loader.server");
+    const result = await loadMentionPanel({
+      env: makeEnv() as never,
+      workspaceUserId: "user_1",
+      trackedEntityId: "te_1",
+      trackingMode: "competitor",
+      planFamily: "agency",
+    });
+
+    expect(result.state).toBe("empty-no-sources");
+    expect(result.items).toEqual([]);
+    expect(result.enabledConnectorIds).toEqual([]);
+  });
+
   it("renders the honest empty state when enabled sources exist but zero polled items", async () => {
     vi.resetModules();
     await mockLoaderDeps({
