@@ -273,7 +273,7 @@ const storedParagraph = storedSummary.strategyParagraph;
 const initialDeliveries = mockState.deliverWeeklyDigest.mock.calls.map((call) => call[1]);
 
 expect(storedParagraph).toBe(OVERLAP_PARAGRAPHS[0]);
-expect(aiRun.mock.calls.filter(([model]) => model === DIGEST_STRATEGY_MODEL)).toHaveLength(1);
+expect(aiRun.mock.calls.filter((call) => call[0] === DIGEST_STRATEGY_MODEL)).toHaveLength(1);
 expect(
 harness.sqlite.prepare("SELECT COUNT(*) AS count FROM digest_run").get(),
 ).toMatchObject({ count: 1 });
@@ -350,7 +350,7 @@ mockState.deliverWeeklyDigest.mockResolvedValue({ attempts: 1, channels: ["email
 const { runWeeklyDigests } = await import("~/lib/monitoring.server");
 await expect(runWeeklyDigests(env, { periodEnd })).resolves.toBe(1);
 
-expect(aiRun.mock.calls.filter(([model]) => model === DIGEST_STRATEGY_MODEL)).toHaveLength(1);
+expect(aiRun.mock.calls.filter((call) => call[0] === DIGEST_STRATEGY_MODEL)).toHaveLength(1);
 expect(mockState.data.claimDigestStrategyGenerationLease).toHaveBeenCalledTimes(1);
 expect(mockState.deliverWeeklyDigest).toHaveBeenCalledWith(
 expect.anything(),
@@ -428,7 +428,7 @@ await runWeeklyDigests(env, options);
 firstDeliveryGate.resolve();
 await winner;
 
-expect(aiRun.mock.calls.filter(([model]) => model === DIGEST_STRATEGY_MODEL)).toHaveLength(1);
+expect(aiRun.mock.calls.filter((call) => call[0] === DIGEST_STRATEGY_MODEL)).toHaveLength(1);
 expect(mutations.createDigestRun).toHaveBeenCalledTimes(1);
 expect(mockState.deliverWeeklyDigest).toHaveBeenCalledTimes(2);
 expect(mockState.deliverWeeklyDigest.mock.calls[1]?.[1]).toMatchObject({

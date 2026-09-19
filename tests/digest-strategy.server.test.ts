@@ -20,7 +20,7 @@ afterEach(() => {
 });
 
 function llamaPayload(run: ReturnType<typeof vi.fn>) {
-	const call = run.mock.calls.find(([model]) => model === DIGEST_STRATEGY_MODEL);
+	const call = run.mock.calls.find((entry) => entry[0] === DIGEST_STRATEGY_MODEL);
 	return call?.[1] as
 		| { messages: Array<{ role: string; content: string }> }
 		| undefined;
@@ -72,7 +72,7 @@ describe("buildWeeklyStrategyParagraph", () => {
 			}),
 		);
 		expect(
-			run.mock.calls.filter(([model]) => model === INPUT_SCREEN_BINDING_MODEL),
+			run.mock.calls.filter((call) => call[0] === INPUT_SCREEN_BINDING_MODEL),
 		).toHaveLength(1);
 	});
 
@@ -82,7 +82,7 @@ describe("buildWeeklyStrategyParagraph", () => {
 			{ AI: { run } } as never,
 			{ ...baseInput(), digestRunId: "digest-run-42" },
 		);
-		const jev = run.mock.calls.find(([model]) => model === INPUT_SCREEN_BINDING_MODEL);
+		const jev = run.mock.calls.find((call) => call[0] === INPUT_SCREEN_BINDING_MODEL);
 		const passage = (
 			jev?.[1] as { state: { passage: { id: string; source: string } } }
 		).state.passage;

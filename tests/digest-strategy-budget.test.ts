@@ -173,7 +173,7 @@ describe("scheduled digest strategy budget", () => {
 		expect(result.digests).toBe(4);
 		expect(deliverWeeklyDigest).toHaveBeenCalledTimes(4);
 		expect(data.completeDigestStrategyGeneration).toHaveBeenCalledTimes(4);
-		expect(aiRun.mock.calls.filter(([model]) => model === DIGEST_STRATEGY_MODEL)).toHaveLength(2);
+		expect(aiRun.mock.calls.filter((call) => call[0] === DIGEST_STRATEGY_MODEL)).toHaveLength(2);
 		expect(
 			data.completeDigestStrategyGeneration.mock.calls.slice(2).map((call) => call[2]),
 		).toEqual([

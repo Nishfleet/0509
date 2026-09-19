@@ -35,11 +35,11 @@ function jevAnswers() {
 }
 
 function llamaCalls(run: ReturnType<typeof vi.fn>) {
-  return run.mock.calls.filter(([model]) => model === STEAL_SUMMARY_MODEL);
+  return run.mock.calls.filter((call) => call[0] === STEAL_SUMMARY_MODEL);
 }
 
 function jevCalls(run: ReturnType<typeof vi.fn>) {
-  return run.mock.calls.filter(([model]) => model === INPUT_SCREEN_BINDING_MODEL);
+  return run.mock.calls.filter((call) => call[0] === INPUT_SCREEN_BINDING_MODEL);
 }
 
 function makeAd(overrides: Partial<AdRecord> = {}): AdRecord {
@@ -287,8 +287,8 @@ describe("buildSearchStealSummary", () => {
     expect(userMessage).not.toContain("SecretBrandCo");
     expect(userMessage).not.toContain("secret.example.com");
     const passageIds = jevCalls(run).map(
-      ([, input]) =>
-        (input as { state: { passage: { id: string } } }).state.passage.id,
+      (call) =>
+        (call[1] as { state: { passage: { id: string } } }).state.passage.id,
     );
     expect(passageIds).toEqual(["ad-library:meta-1", "ad-library:meta-2", "ad-library:meta-3"]);
   });
