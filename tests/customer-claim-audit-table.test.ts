@@ -238,6 +238,11 @@ describe("BET 10 claim-by-claim audit table", () => {
       "app/lib/sneaker-resale-brand-pages.ts",
       "app/lib/public-markdown.ts",
     ];
+    // Banned phrases target Five to Nine save-promises only. Deliberately
+    // NOT banned, because they are different classes: reader instructions
+    // (guides telling the user to save their own screenshots), third-party
+    // feature characterizations (/compare rows describing other vendors),
+    // and code comments.
     const banned = [
       "saves the screenshots",
       "sends screenshot evidence",
@@ -276,6 +281,12 @@ describe("BET 10 claim-by-claim audit table", () => {
       "leva print",
       "screenshots with dates",
       "with the screenshot, page text, and original link",
+      // Revert-closers from the #2546 reviewer round: compare.tsx's old F9 row
+      // ended "...source link, and screenshot" WITHOUT "proof", and
+      // compare.meta-ad-library.tsx's old manual-costs row used the bare
+      // phrase — both reverted strings evade the longer banned phrases alone.
+      "page text, source link, and screenshot",
+      "screenshot proof",
     ];
     for (const surface of surfaces) {
       // Whitespace-normalized so JSX-wrapped copy cannot evade the gate
