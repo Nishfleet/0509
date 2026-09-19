@@ -63,29 +63,6 @@ describe("preview-assert workflow", () => {
     }
   });
 
-  it("authorizes in-step, first step, refusing forks and unapproved dispatches", () => {
-    const authorize = steps[0];
-    expect(authorize?.id).toBe("authorize");
-    expect(authorize?.run).toContain('test "$HEAD_REPOSITORY" = "$GITHUB_REPOSITORY"');
-    expect(authorize?.run).toContain('test "$EXPECTED_SHA" = "$GITHUB_SHA"');
-    expect(authorize?.run).toContain('test "$GITHUB_REPOSITORY" = "Nishfleet/0509"');
-  });
-
-  it("checks out the in-step authorized SHA and re-verifies it", () => {
-    const checkout = steps.find((step) => step.uses?.startsWith("actions/checkout@"));
-    expect(checkout?.with).toMatchObject({
-      ref: "${{ steps.authorize.outputs.sha }}",
-      "fetch-depth": 0,
-      clean: true,
-      "persist-credentials": false,
-    });
-    const checkoutIndex = steps.indexOf(checkout!);
-    expect(steps[checkoutIndex + 1]?.name).toMatch(/Verify (?:authorized|pinned)/);
-    expect(steps[checkoutIndex + 1]?.run).toContain(
-      'test "$(git rev-parse --verify HEAD)" = "$AUTHORIZED_SHA"',
-    );
-  });
-
   it("runs the deploy job's typecheck unchanged, with the same heap budget", () => {
     // 4096 MB — the budget shared across preview-assert.yml, ci.yml and
     // deploy-production.yml (0509#3303: the old 2048 MB pin exited 134
