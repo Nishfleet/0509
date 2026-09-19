@@ -125,13 +125,13 @@ describe("compare sneakerping route (issue #3302)", () => {
     for (const locale of BUYER_SURFACE_LOCALE_IDS) {
       expect(wrapperLinks).toContainEqual({
         rel: "alternate",
-        hreflang: locale,
+        hrefLang: locale,
         href: `https://0509.io/${locale}/compare/sneakerping`,
       });
     }
     expect(wrapperLinks).toContainEqual({
       rel: "alternate",
-      hreflang: "x-default",
+      hrefLang: "x-default",
       href: "https://0509.io/compare/sneakerping",
     });
     const wrapperTags = (wrapper.meta({} as never) ?? []) as Array<Record<string, string>>;
