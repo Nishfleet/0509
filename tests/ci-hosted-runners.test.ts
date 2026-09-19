@@ -19,7 +19,6 @@ const NO_LOCK_WRAPPER_DOCS = [
   "CLAUDE.md",
   "scripts/ci-prepare-remote-restore-evidence.sh",
   "scripts/ci-bind-remote-restore-candidate.sh",
-  "tests/d1-remote-restore-evidence.test.ts",
   "docs/undici-dependabot-ci-root-cause.md",
 ] as const;
 
