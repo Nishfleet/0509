@@ -229,6 +229,7 @@ describe("BET 10 claim-by-claim audit table", () => {
       "app/components/pricing-section.tsx",
       "app/routes/timeline.$domain.tsx",
       "app/routes/ads.$domain.tsx",
+      "app/routes/sneaker-resale.$brand.tsx",
       "app/routes/auth.signup.tsx",
       "app/routes/auth.login.tsx",
       "app/routes/search.tsx",
@@ -273,6 +274,8 @@ describe("BET 10 claim-by-claim audit table", () => {
       "no Meta, com print",
       "o print e o link original",
       "leva print",
+      "screenshots with dates",
+      "with the screenshot, page text, and original link",
     ];
     for (const surface of surfaces) {
       // Whitespace-normalized so JSX-wrapped copy cannot evade the gate

@@ -460,7 +460,7 @@ const JA: SneakerResaleCopy = {
 const PT_BR: SneakerResaleCopy = {
   title: "Anúncios de concorrentes no resale | Five to Nine",
   description:
-    "Veja anúncios e landing pages de outros resellers no Meta, com texto da página e link original — mais print quando a captura inclui um. Busca pública grátis. O app é em inglês; o checkout usa a moeda de quem compra.",
+    "Veja anúncios e landing pages de outros resellers no Meta, com texto da página e link original — mais um print quando a captura inclui um. Busca pública grátis. O app é em inglês; o checkout usa a moeda de quem compra.",
   kicker: "Resale de sneakers · anúncios de concorrentes",
   h1: "Veja o anúncio deles antes de precificar o seu.",
   deck: "A Five to Nine acompanha anúncios e páginas de outros resellers no Meta. Quando a oferta, o botão ou o texto da página mudam, ficam o texto da página e o link original — mais um print quando a captura inclui um — não mais um mural de criativos.",
