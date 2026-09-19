@@ -388,6 +388,11 @@ export function getCuratedProviderQuery(registrableDomain: string): string | nul
  * curated brand term (q=goat returning mouth-tape ads on unrelated hosts)
  * still falls through to the unmatched label, and the classifier still only
  * marks a row verified/likely when it actually connects to the domain.
+ *
+ * Two contracts keep the promotion honest: `IDENTITY_OVERRIDES` entries must
+ * not share a folded brand term (the first entry in insertion order wins an
+ * ambiguous keyword), and the stem-length floor mirrors the matcher's own
+ * brand-name/keyword floors (`>= 3`) so a 2-char stem cannot over-promote.
  */
 export function resolveCuratedKeywordBrandDomain(
   keyword: string,
