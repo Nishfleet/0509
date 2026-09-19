@@ -72,7 +72,7 @@ describe("locale first-value search funnel (issue #1578)", () => {
       const siblings = buyerSurfaceHreflangLinks(route);
       // en self + every sibling locale + x-default (issue #2030 added en).
       expect(siblings).toHaveLength(BUYER_SURFACE_LOCALE_IDS.length + 2);
-      expect(siblings.find((s) => s.hreflang === "x-default")?.href).toBe(
+      expect(siblings.find((s) => s.hrefLang === "x-default")?.href).toBe(
         route === "methodology"
           // Issue #2871: the shallow /methodology hreflang leg must point at
           // the citable EN canonical, not the permanent 301.

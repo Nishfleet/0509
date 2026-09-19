@@ -255,7 +255,12 @@ export default defineConfig({
       // against a local build.
       name: "chromium",
       testDir: "./tests",
-      testMatch: /hero-fold\.spec\.ts/,
+      testMatch: /(hero-fold|console-hygiene)\.spec\.ts/,
+      // Issue #3379: the console-hygiene journeys pay the first-hit Vite
+      // cold-compile of each surface's route module chain on a freshly-booted
+      // local server — same posture as diagnosticEngineProject: 60s so
+      // first-attempt proof completes.
+      timeout: 60_000,
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 1440, height: 900 },
@@ -268,7 +273,9 @@ export default defineConfig({
     {
       name: "mobile-chromium",
       testDir: "./tests",
-      testMatch: /hero-fold\.spec\.ts/,
+      testMatch: /(hero-fold|console-hygiene)\.spec\.ts/,
+      // Same 60s cold-compile posture as the chromium project above (#3379).
+      timeout: 60_000,
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 390, height: 844 },
