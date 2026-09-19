@@ -905,7 +905,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
     // error sink (#3082) and put a bounded, charset-safe `detail` in the JSON
     // so the gate journal names the failure class (the verifier re-projects
     // it under the same strict pattern).
-    const { safeCanaryDetail } = await import("~/lib/canary-detail");
+    const { safeCanaryDetail, sanitizeCanaryFailureReason } = await import(
+      "~/lib/canary-detail"
+    );
     const detail = safeCanaryDetail(error);
     try {
       const { reportError } = await import("~/lib/error-report.server");
@@ -1051,27 +1053,6 @@ async function hasReconciledWhatsAppDelivery(
   } catch {
     return false;
   }
-}
-
-/** Matches the verifier's DIAGNOSTIC_IDENTIFIER_PATTERN — lowercase, 1-128. */
-const CANARY_REASON_PATTERN = /^[a-z0-9._-]{1,128}$/u;
-
-/**
- * Project a thrown error's message into an identifier-safe reason the proof
- * verifier can journal verbatim. Spaces/runs collapse to `-`; anything the
- * verifier would drop stays out, so the 503 body never leaks addresses or
- * tokens. Empty string means "no trustworthy reason — omit the field".
- */
-export function sanitizeCanaryFailureReason(value: string): string {
-  // Sanitize → truncate → strip, so a >128-char nested message truncates to a
-  // clean tail instead of a dangling `-` (review, PR #3245).
-  const sanitized = value
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/^-+/, "")
-    .slice(0, 128)
-    .replace(/-+$/g, "");
-  return CANARY_REASON_PATTERN.test(sanitized) ? sanitized : "";
 }
 
 function cleanupErrorResponse(blocker: string, status: number) {
