@@ -109,6 +109,17 @@ describe("crawler-choice evidence (issue #3618)", () => {
     expect(source).not.toContain("?? CRAWLER_CHOICE_MODEL");
   });
 
+  it("holds no stale probability prose: report numbers match the rows", () => {
+    // The report is hand-written prose; a re-run moves the numbers under it.
+    // Every p= figure it quotes must be a probability in the committed rows.
+    const quoted = [...report.matchAll(/p=(\d\.\d+)/g)].map((m) => Number(m[1]));
+    expect(quoted.length).toBeGreaterThan(0);
+    const rowProbabilities = new Set(
+      rows.flatMap((row) => Object.values(row.probabilities).map((p) => p.toFixed(2))),
+    );
+    for (const p of quoted) expect(rowProbabilities.has(p.toFixed(2))).toBe(true);
+  });
+
   it("holds no credentials or customer data", () => {
     const raw = readFileSync(evidencePath, "utf8");
     expect(raw).not.toMatch(/Bearer|Authorization|api[_-]?key|TYPESAFE_API_KEY/i);
