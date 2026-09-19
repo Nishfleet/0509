@@ -321,12 +321,12 @@ export function sneakerResaleHreflangLinks() {
   return [
     ...SNEAKER_RESALE_MARKETS.map((market) => ({
       rel: "alternate" as const,
-      hreflang: market.hreflang,
+      hrefLang: market.hreflang,
       href: canonicalUrl(market.pathname),
     })),
     {
       rel: "alternate" as const,
-      hreflang: "x-default",
+      hrefLang: "x-default",
       href: canonicalUrl("/sneaker-resale"),
     },
   ];
@@ -361,17 +361,17 @@ export function buyerSurfaceHreflangLinks(splat: string) {
   return [
     {
       rel: "alternate" as const,
-      hreflang: "en",
+      hrefLang: "en",
       href: canonicalUrl(enPath),
     },
     ...BUYER_SURFACE_LOCALE_IDS.map((locale) => ({
       rel: "alternate" as const,
-      hreflang: locale,
+      hrefLang: locale,
       href: canonicalUrl(splat === "" ? `/${locale}` : `/${locale}/${splat}`),
     })),
     {
       rel: "alternate" as const,
-      hreflang: "x-default",
+      hrefLang: "x-default",
       href: canonicalUrl(enPath),
     },
   ];
@@ -1056,10 +1056,17 @@ export function brandPageTimelineHasPart(input: {
 /**
  * Props for a JSON-LD <script> tag. Escapes `<` so page data can never break
  * out of the script element.
+ *
+ * The nonce must be the per-request CSP nonce on the server (issue #3379);
+ * the client hydration pass passes `""` — browsers hide a parsed nonce, so a
+ * real value read back as a hydration attribute mismatch
+ * (tests/root-csp-nonce-hydration.test.tsx contract). The nonce attribute is
+ * included whenever `options.nonce` is defined, `""` included.
  */
-export function jsonLdScriptProps(data: unknown) {
+export function jsonLdScriptProps(data: unknown, options?: { nonce?: string }) {
   return {
     type: "application/ld+json",
+    ...(options?.nonce !== undefined ? { nonce: options.nonce } : {}),
     dangerouslySetInnerHTML: {
       __html: JSON.stringify(data).replace(/</g, "\\u003c"),
     },
@@ -1392,7 +1399,7 @@ export function renderSitemapXml(entries: readonly SitemapEntry[]): string {
     const children = [`<loc>${canonicalUrl(entry.path.toLowerCase())}</loc>`];
     for (const alternate of sitemapHreflangAlternates(entry.path) ?? []) {
       children.push(
-        `<xhtml:link rel="alternate" hreflang="${alternate.hreflang}" href="${alternate.href}"/>`,
+        `<xhtml:link rel="alternate" hreflang="${alternate.hrefLang}" href="${alternate.href}"/>`,
       );
     }
     if (entry.lastmod) {

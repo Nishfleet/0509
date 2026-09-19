@@ -36,6 +36,9 @@ async function mockReactRouter() {
         prefillEmail: "",
         linkSent: false,
       }),
+      // Standalone render without a root-route context: no cspNonce, so the
+      // JSON-LD script renders nonce-free as it did before issue #3379.
+      useRouteLoaderData: vi.fn().mockReturnValue(undefined),
       useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
     };
   });
