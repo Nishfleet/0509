@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// d1-budget: reads=500 writes=0 runs_per_day=8
 
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
