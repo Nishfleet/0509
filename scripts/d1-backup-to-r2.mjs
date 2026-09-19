@@ -3,7 +3,17 @@
 // Run via `npm run backup:d1:r2`. It can be scheduled by launchd outside the
 // repo, but this script does not prove that scheduling is currently active.
 // R2 copies are never pruned by this script.
-import { readdir, unlink, stat, writeFile } from "node:fs/promises";
+//
+// 0509#3576: this is also the cheap half of the deploy gate's backup proof.
+// The export imports nothing and creates no scratch database, so it is the only
+// part of the old drill that has to be run often. When the caller sets
+// `D1_BACKUP_EXPORT_RECORD`, the script writes the R2 object key it just
+// uploaded plus its byte size and digest as the export record the deploy gate
+// reads (`validateBackupExport` in deploy-production-plan.mjs). The record is
+// written only after the upload returns, so it can never name an object that
+// is not in R2.
+import { createHash } from "node:crypto";
+import { readdir, readFile, unlink, stat, writeFile } from "node:fs/promises";
 import { resolve, join } from "node:path";
 import {
   assertBackupAutomationApproval,
@@ -30,6 +40,11 @@ const localPath = join(localDir, fileName);
 const remoteKey = buildBackupObjectKey(databaseName, stamp);
 const localManifestPath =
   process.env.D1_BACKUP_LOCAL_MANIFEST?.trim() || null;
+// The deploy gate's export record (0509#3576). Distinct from the local manifest
+// above: that one tracks the private plaintext dump for cleanup, this one is
+// the public-safe freshness record (key, size, digest) the gate reads.
+const exportRecordPath =
+  process.env.D1_BACKUP_EXPORT_RECORD?.trim() || null;
 const KEEP_LOCAL = 8;
 const PROVIDER_ATTEMPTS = 4;
 const D1_EXPORT_ATTEMPTS = 16;
@@ -168,6 +183,27 @@ try {
     );
   }
   throw uploadError;
+}
+
+// The object is in R2 now; record what the gate must verify. `wx` refuses to
+// overwrite a record from an earlier attempt, so a re-run cannot leave a stale
+// timestamp looking fresh.
+if (exportRecordPath) {
+  const digest = createHash("sha256")
+    .update(await readFile(localPath))
+    .digest("hex");
+  await writeFile(
+    resolve(exportRecordPath),
+    `${JSON.stringify({
+      schemaVersion: 1,
+      generatedAt: new Date().toISOString(),
+      bucket: bucketName,
+      remoteKey,
+      objectBytes: exported.size,
+      sha256: digest,
+    })}\n`,
+    { encoding: "utf8", mode: 0o600, flag: "wx" },
+  );
 }
 
 if (automationApproved && !localManifestPath) {
