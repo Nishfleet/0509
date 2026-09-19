@@ -19,8 +19,9 @@
 # fetch/clean gate instead of silently killing it there.
 #
 # Usage: scripts/check-market-signal-workdir.sh [WORKDIR]
-#   WORKDIR defaults to $WORKDIR then $PWD. The market-signal unit sets
-#   WORKDIR=/home/nish/workspaces/products/0509.
+#   WORKDIR defaults to $WORKDIR then $PWD. The market-signal unit runs from
+#   the dedicated worktree
+#   WORKDIR=/home/nish/workspaces/agent-state/0509-daily-market-signal-worktree.
 #
 # Exit codes:
 #   0  no blocker — the workdir may fetch and fast-forward
