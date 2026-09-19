@@ -419,20 +419,20 @@
     },
     {
       "claimId": "OP-BACKUP-RESTORE",
-      "text": "Scheduled D1 exports are retained in R2 and can be restored with migration, integrity, row-count and billing linkage intact.",
+      "text": "Weekly D1 exports are retained in R2 under a 90-day lifecycle rule; point-in-time restore is D1 Time Travel.",
       "surface": "backup workflow and operator runbook",
       "audience": "operators",
       "owner": "data operations",
       "source": [
         "docs/ops-backup-uptime.md",
-        "scripts/validate-d1-backup.mjs"
+        ".github/workflows/d1-backup-weekly.yml"
       ],
       "requiredGate": "G360-P1-OPS,G11-DATA-RIGHTS",
       "requiredEvidence": "current scheduled export plus remote-scratch restore, actual-path R2 lifecycle/deletion and rollback proof; Time Travel bookmark only before a database-changing release",
       "status": "assessed_open_missing_r2_lifecycle",
       "assessment": "A fresh exact-fingerprint remote D1 export/import scratch restore passed integrity, rows and billing linkage. This product has not proved a Time Travel runbook and does not claim it for this source-only closeout; actual-path R2 lifecycle/deletion and closeout-version rollback proof remain open.",
       "classification": "known",
-      "expiry": "migration, backup, R2, restore or billing-schema change"
+      "expiry": "backup workflow, R2 lifecycle or D1 Time Travel change"
     },
     {
       "claimId": "OP-MONITORING-CAPACITY",
