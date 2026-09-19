@@ -367,7 +367,23 @@ export async function checkLaunchReadinessEndpoint(options = {}) {
       signal: AbortSignal.timeout(10_000),
     });
     const payload = await response.json().catch(() => ({}));
-    const blockers = Array.isArray(payload?.blockers) ? payload.blockers : [];
+    const declaredBlockers = Array.isArray(payload?.blockers) ? payload.blockers : [];
+    // A route that threw before answering journals a non-JSON 5xx — before
+    // #3392 that surfaced here as blockers:[], indistinguishable from a clean
+    // readiness pass ("0 blockers"). Fall back to the route's singular
+    // `blocker` field (the missing_db early return's shape), then to the HTTP
+    // status itself, so an errored readiness response never disguises as
+    // "0 blockers" downstream.
+    const blockers =
+      declaredBlockers.length > 0
+        ? declaredBlockers
+        : typeof payload?.blocker === "string" && payload.blocker
+          ? [payload.blocker]
+          : !response.ok
+            ? [
+                `launch_readiness_http_${Number.isInteger(response.status) ? response.status : "error"}`,
+              ]
+            : [];
     const metaAdsBeta =
       payload?.metaAdsBeta && typeof payload.metaAdsBeta === "object"
         ? payload.metaAdsBeta
