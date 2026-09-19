@@ -6,11 +6,12 @@ import { parse } from "yaml";
 // The `preview-assert` workflow (0509#1576) runs the deploy job's own
 // pre-deploy verification against the PR head and becomes a required status
 // context on main, so it must satisfy the required-context contract: no
-// job-level `if:`/`needs:`, an in-step authorizer as step 1, and a pinned
-// checkout of the authorized SHA. It runs the deploy gate's assertion
-// commands unchanged (`npm run typecheck` + `npm run build`) and uploads a
-// preview Worker version via Cloudflare's own mechanism
-// (`wrangler versions upload --preview-alias`) without touching production.
+// job-level `if:`/`needs:` and a pinned checkout. It runs the deploy gate's
+// assertion
+// commands unchanged (`npm run typecheck` + `npm run build`) and proves the
+// bundle with `wrangler deploy --dry-run` — uploading no version anywhere
+// (0509#2000: preview uploads advanced the production script's latest
+// version and broke `wrangler secret put`).
 const source = readFileSync(".github/workflows/preview-assert.yml", "utf8");
 const parsed = parse(source) as {
   on?: Record<string, unknown>;
@@ -110,6 +111,7 @@ describe("preview-assert workflow", () => {
     // version history (run 34679399412: rollback "Version not found") and blocked
     // `wrangler secret put`; the workflow must not upload versions anywhere.
     expect(steps.some((step) => step.run?.includes("wrangler versions upload"))).toBe(false);
+    expect(proof?.env?.PREVIEW_ALIAS).toBeUndefined();
     expect(proof?.run).toMatch(/no version uploaded/);
   });
 

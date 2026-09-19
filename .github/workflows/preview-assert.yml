@@ -21,12 +21,13 @@ name: Preview assert
 #   - `npm run build`     (the deploy pipeline's react-router build; emits
 #                          build/server/wrangler.json + the .wrangler config
 #                          redirect that the deploy uses)
-#   - `wrangler deploy --dry-run` bundle proof of the PR head (2026-09-12: replaced the
-#     preview URL Cloudflare itself assigns (Nish, 2026-09-04: "wrangler
-#     `versions upload` that evicted real deploys from version history), proving the PR head builds and
-#     uploads as a real Worker version. The upload is inert: a version is
-#     not deployed and receives no traffic, so production D1/R2/email
-#     bindings are never touched.
+#   - `wrangler deploy --dry-run` bundle proof of the PR head (2026-09-12:
+#     replaced `wrangler versions upload`, which pushed ~200 preview
+#     versions/day onto the production script — evicting real deploys from
+#     version history and holding `wrangler secret put`'s
+#     latest-version-is-deployed precondition false between deploys;
+#     0509#2000). The dry run builds and validates the same bundle and
+#     bindings while uploading nothing to Cloudflare.
 #
 # The post-deploy release-gate canaries (Gate C, scripts/verify-post-deploy-
 # release.mjs) CANNOT run against a preview "unchanged": they hardcode
@@ -138,36 +139,27 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Upload preview version
-        # Cloudflare's own preview mechanism ("wrangler versions upload /
-        # preview alias", Nish 2026-09-04). Uploads the PR head as a Worker
-        # version with a preview alias and prints the preview URL. A version
-        # upload is inert: it is not deployed, receives no traffic, and never
-        # touches the production D1/R2/email bindings of the worker it
-        # belongs to. Credentials are org-level secrets (visibility: all),
-        # already readable by every workflow in the org; no production
-        # environment is referenced, so the PR branch is allowed.
-        #
-        # Do not fetch the preview URL here: the version carries the worker's
-        # production bindings, and a request to it would hit production
-        # D1/email bindings. Upload-only proof.
+      - name: Bundle proof (dry-run deploy, no upload)
+        # `wrangler deploy --dry-run` builds and validates the exact bundle
+        # and bindings the production deploy ships, touching nothing on
+        # Cloudflare. It replaced `wrangler versions upload` on 2026-09-12
+        # (0509#2000): the uploads pushed ~200 preview versions/day onto the
+        # production script, evicting every real deploy from Cloudflare's
+        # version history (run 34679399412: rollback "Version not found")
+        # and keeping `wrangler secret put`'s latest-is-deployed
+        # precondition false between deploys. Credentials are org-level
+        # secrets (visibility: all), already readable by every workflow in
+        # the org; no production environment is referenced, so the PR branch
+        # is allowed.
         shell: bash
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV: "false"
-          PREVIEW_ALIAS: preview-assert-${{ github.sha }}
         run: |
           set -euo pipefail
           upload_output="$(mktemp)"
           trap 'rm -f -- "$upload_output"' EXIT
-          # 2026-09-12: bundle proof WITHOUT uploading a version to the production
-          # worker. `versions upload` pushed ~200 preview versions/day onto the
-          # live script, which evicted every real deploy from Cloudflare's
-          # version history (run 34679399412: rollback "Version not found") and
-          # blocks `wrangler secret put` ("latest version isn't deployed").
-          # `deploy --dry-run` builds and validates the exact same bundle and
-          # bindings, touching nothing on Cloudflare.
           outdir="$(mktemp -d)"
           trap 'rm -rf -- "$outdir" "$upload_output"' EXIT
           if ! ./node_modules/.bin/wrangler deploy --dry-run --outdir "$outdir" \
@@ -176,5 +168,4 @@ jobs:
             exit 1
           fi
           cat "$upload_output"
-          echo "Bundle proof: wrangler deploy --dry-run succeeded for ${{ github.sha }} (no version uploaded; alias $PREVIEW_ALIAS unused)"
-          echo "Upload-only proof: the preview URL is never requested here — the version carries the worker's production bindings, so a request to it would hit production D1/email."
+          echo "Bundle proof: wrangler deploy --dry-run succeeded for ${{ github.sha }} (no version uploaded; production script's latest version untouched)"
