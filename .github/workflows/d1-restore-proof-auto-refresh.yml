@@ -4,60 +4,75 @@ name: D1 restore proof auto-refresh
 #
 # Why this exists
 # ----------------
-# The deploy gate's "backup proof" is the D1 remote restore evidence
-# artifact (`d1-remote-restore-evidence-<sha>-<run_id>.tar.gz`) produced
-# by this repo's `d1-remote-restore-evidence.yml`. The gate reads it via
-# `scripts/find-recent-remote-restore-artifact.mjs`, which enforces two
-# thresholds on every artifact it accepts, regardless of which workflow
-# produced it:
-#   1. EXACT COMMIT MATCH — the artifact's SHA, embedded in its name, must
-#      equal the deploy's pinned SHA.
-#   2. FRESHNESS — the deploy adds a 12-hour freshness headroom on top of
-#      the absolute 14-day max age in `validateRemoteRestoreEvidence`.
+# The deploy gate's "backup proof" used to be ONE thing: the D1 remote restore
+# evidence artifact (`d1-remote-restore-evidence-<sha>-<run_id>.tar.gz`)
+# produced by this repo's `d1-remote-restore-evidence.yml`, found via
+# `scripts/find-recent-remote-restore-artifact.mjs`. That conflated two
+# different questions, and answered the cheap one with the expensive drill:
+#
+#   1. Is there a RECENT BACKUP?  Needs a fresh D1 export. Cheap: an export
+#      imports nothing and creates no scratch database.
+#   2. Is that backup RESTORABLE?  Needs an isolated scratch restore. Expensive:
+#      each drill imports ~400k rows into a scratch D1, and past the free tier
+#      that is ~$1/M rows (0509#3576).
+#
+# So the gate now reads two records, and this workflow publishes both at
+# different cadences (0509#3576):
+#
+#   * EXPORT-ONLY, every 6 hours (`17 */6 * * *`) — `node
+#     scripts/d1-backup-to-r2.mjs`, unchanged and already proven, publishes the
+#     export record at the fixed R2 key `backups/d1/export-record.json`. The
+#     deploy gate requires it to be under 12h old.
+#   * FULL DRILL, weekly (`47 4 * * 0`) — the same scratch-restore drill as
+#     before. The deploy gate requires its schemaFingerprint-matching evidence
+#     to be under 7 days old (14-day absolute ceiling retained).
+#
+# `mode` is derived from `github.event.schedule`, never from anything a caller
+# can set, so the two schedules cannot be confused for each other: the cheap
+# command cannot reach the drill's job and the drill cannot be run without its
+# own authorized SHA.
 #
 # Push-to-main restore evidence is owned solely by
-# `d1-remote-restore-evidence.yml`, which already has the push trigger.
-# This workflow keeps only the 6-hourly safety net and manual dispatch,
-# so the two workflows no longer double-run the drill on every merge.
-# Its artifacts remain accepted via `TRUSTED_WORKFLOWS`; exact-commit
-# and freshness checks are unchanged.
+# `d1-remote-restore-evidence.yml`, which already has the push trigger, so the
+# two workflows do not double-run the drill on every merge. Its artifacts
+# remain accepted via `TRUSTED_WORKFLOWS`.
 #
 # Named reason for the schedule (P9-C)
 # ------------------------------------
-# Backup freshness is inherently time-based. Even with a push drill in
-# the evidence workflow, a failed run or missed webhook could strand the
-# next deploy. The 6-hourly cron at minute :17 is the named safety net: it
-# is one half of the deploy's 12-hour freshness window (two shots per
-# window; each drill imports ~400k D1 rows at $1/M, so 3-hourly cost ~$25/mo
-# past the free tier, 0509#3576), deliberately
-# offset from the nightly drill (`:47`) and the busy hourly marks, and runs
-# on a hosted runner (free for this public repository) so provider work
-# never touches a self-hosted runner. This matches Nish's standing rule:
-# "Schedule a cron, don't sit and wait."
+# Backup freshness is inherently time-based. Even with a push drill in the
+# evidence workflow, a failed run or missed webhook could strand the next
+# deploy. The 6-hourly cron at minute :17 is the named safety net: it is one
+# half of the deploy's 12-hour freshness window, deliberately offset from the
+# weekly drill (`47 4 * * 0`, Sunday) and the busy hourly marks, and runs on a
+# hosted runner (free for this public repository) so provider work never
+# touches a self-hosted runner. This matches Nish's standing rule: "Schedule a
+# cron, don't sit and wait."
 #
-# What the workflow does (same proven drill as the nightly workflow)
-# -------------------------------------------------------------------
-#   1. `authorize_release` — pin the exact SHA and refuse any unexpected
-#      shape (push/schedule leave `expected_sha` empty; `workflow_dispatch`
-#      must name a SHA that equals `GITHUB_SHA`).
-#   2. `restore` — checkout the pinned SHA, run the same
-#      `node scripts/d1-remote-restore-evidence.mjs` drill the nightly
-#      workflow runs: fresh D1 export to R2, transform, isolated remote
-#      restore on a fresh scratch D1, aggregate round-trip, evidence
-#      JSON, then upload as
+# What the workflow does
+# ----------------------
+#   1. `authorize_release` — pin the exact SHA, derive `mode`, and refuse any
+#      unexpected shape (schedule leaves `expected_sha` empty;
+#      `workflow_dispatch` must name a SHA that equals `GITHUB_SHA`).
+#   2. `backup_export` (mode `export`) — checkout the pinned SHA and run
+#      `node scripts/d1-backup-to-r2.mjs`. No scratch database, no row import.
+#   3. `restore` (mode `full`) — the proven drill:
+#      `node scripts/d1-remote-restore-evidence.mjs` exports fresh, transforms,
+#      restores into a fresh scratch D1, checks the aggregate round-trip,
+#      writes evidence JSON, and uploads
 #      `d1-remote-restore-evidence-<sha>-<run_id>.tar.gz` (mode 0600).
-#   3. `cleanup` — independent `if: always()` job that deletes every
-#      run-scoped scratch database, so a hard-killed generation attempt
-#      cannot leave production data parked.
+#   4. `cleanup` (mode `full`) — independent `if: always()` job that deletes
+#      every run-scoped scratch database, so a hard-killed drill cannot leave
+#      production data parked. Export-only runs create no scratch database, so
+#      they skip it rather than paying for an empty sweep.
 #
-# Drift tolerance (same rationale as the nightly workflow's post-pin CAS)
+# Drift tolerance (same rationale as the evidence workflow's post-pin CAS)
 # -----------------------------------------------------------------------
 # A restore run and a deploy can race against each other on the same
 # SHA. A *mid-run* move of main does not change what
 # THIS run is producing evidence for — the SHA is already pinned. We
 # record drift loudly and continue. Any other CAS failure stays
 # fail-closed, and the authorize step's empty-`expected_sha` contract on
-# push/schedule still forbids smuggling a chosen commit into an unattended
+# schedule still forbids smuggling a chosen commit into an unattended
 # run.
 #
 # Secrets used
@@ -68,12 +83,15 @@ name: D1 restore proof auto-refresh
 
 on:
   schedule:
-    # 6-hourly safety net: one half of the deploy's 12h freshness
-    # window. Minute ":17" deliberately offset so it never collides with
-    # the nightly `d1-remote-restore-evidence.yml` ("47 20 * * *") or the
-    # busy hourly marks where the upstream Cloudflare D1 export queue is
-    # busiest.
+    # 6-hourly EXPORT-ONLY safety net: one half of the deploy's 12h backup
+    # freshness window. Minute ":17" deliberately offset so it never collides
+    # with the weekly drill below or the busy hourly marks where the upstream
+    # Cloudflare D1 export queue is busiest.
     - cron: "17 */6 * * *"
+    # Weekly FULL DRILL: Sunday 04:47. The only job that pays for a scratch
+    # restore, and the only thing that keeps the restore proof inside the
+    # gate's 7-day window.
+    - cron: "47 4 * * 0"
   workflow_dispatch:
     inputs:
       expected_sha:
@@ -101,6 +119,7 @@ jobs:
     permissions: {}
     outputs:
       sha: ${{ steps.authorize.outputs.sha }}
+      mode: ${{ steps.authorize.outputs.mode }}
     steps:
       - name: Authorize auto-refresh request
         id: authorize
@@ -120,25 +139,101 @@ jobs:
               # is about to run for exactly this SHA. No expected_sha
               # allowed on an unattended push.
               test -z "$EXPECTED_SHA"
+              mode=full
               ;;
             schedule)
               # Scheduled runs backup whatever main is at run start. No
               # expected_sha allowed on an unattended schedule.
               test -z "$EXPECTED_SHA"
+              # 0509#3576: which schedule fired decides which command runs,
+              # and GITHUB_EVENT_SCHEDULE is set by GitHub from the cron in
+              # this file — not by anything a caller can supply. An
+              # unrecognized cron is refused outright rather than defaulting
+              # to either side.
+              case "$GITHUB_EVENT_SCHEDULE" in
+                "17 */6 * * *")
+                  mode=export
+                  ;;
+                "47 4 * * 0")
+                  mode=full
+                  ;;
+                *)
+                  exit 1
+                  ;;
+              esac
               ;;
             workflow_dispatch)
               [[ "$EXPECTED_SHA" =~ $sha_pattern ]]
               test "$EXPECTED_SHA" = "$GITHUB_SHA"
+              # A manual run is the "prove it now" button, so it buys the
+              # full drill, never just the export.
+              mode=full
               ;;
             *)
               exit 1
               ;;
           esac
           printf 'sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          printf 'mode=%s\n' "$mode" >> "$GITHUB_OUTPUT"
+
+  backup_export:
+    name: Refresh backup export record
+    # 0509#3576: the cheap half. The export-only runs (four a day) stop here
+    # instead of paying for a scratch D1 restore they do not need.
+    if: >-
+      needs.authorize_release.result == 'success' &&
+      needs.authorize_release.outputs.mode == 'export'
+    needs: authorize_release
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: production
+    permissions:
+      contents: read
+    env:
+      D1_DATABASE_NAME: "0509"
+      R2_BACKUP_BUCKET: "0509-landing-page-artifacts"
+      PINNED_SHA: ${{ needs.authorize_release.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.authorize_release.outputs.sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Verify pinned candidate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/ci-verify-production-candidate.sh
+      - name: Bind run-scoped backup directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'D1_BACKUP_LOCAL_DIRECTORY=%s\n' \
+            "$RUNNER_TEMP/0509-d1-backups-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            >> "$GITHUB_ENV"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ".node-version"
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' }}
+      - run: npm ci --ignore-scripts
+      - run: node scripts/validate-d1-backup.mjs
+      - name: Export D1 to R2 and publish the export record
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          D1_BACKUP_AUTOMATION_APPROVED: "0509-weekly-d1-to-r2"
+        run: node scripts/d1-backup-to-r2.mjs
+      - name: Remove run-scoped plaintext backup files
+        if: always()
+        run: node scripts/d1-backup-local-cleanup.mjs
 
   restore:
     name: Prove isolated remote restore
-    if: needs.authorize_release.result == 'success'
+    if: >-
+      needs.authorize_release.result == 'success' &&
+      needs.authorize_release.outputs.mode == 'full'
     needs: authorize_release
     runs-on: ubuntu-latest
     timeout-minutes: 300
@@ -224,7 +319,12 @@ jobs:
 
   cleanup:
     name: Confirm scratch D1 cleanup
-    if: "always() && needs.authorize_release.result == 'success'"
+    # Export-only runs create no scratch database, so there is nothing to
+    # sweep. Full drills keep the independent always-run sweep so a
+    # hard-killed drill cannot leave production data parked.
+    if: >-
+      always() && needs.authorize_release.result == 'success' &&
+      needs.authorize_release.outputs.mode == 'full'
     needs:
       - authorize_release
       - restore

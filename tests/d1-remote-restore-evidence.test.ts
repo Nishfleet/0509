@@ -741,6 +741,24 @@ describe("D1 remote restore evidence automation", () => {
     expect(backupScript).toContain(
       "buildR2PutArgs(bucketName, remoteKey, localPath)",
     );
+    // 0509#3576: the same run also publishes the export record the deploy
+    // gate reads, at ONE fixed key, after the dated object exists. The key is
+    // a constant in the args module so the writer and the fetcher cannot
+    // disagree about it.
+    expect(backupScript).toContain("BACKUP_EXPORT_RECORD_KEY");
+    expect(
+      readFileSync("scripts/d1-backup-command-args.mjs", "utf8"),
+    ).toContain(
+      'export const BACKUP_EXPORT_RECORD_KEY = "backups/d1/export-record.json"',
+    );
+    // The backup job in auto-refresh runs the same script, so the record is
+    // published by the 6-hourly export-only drill and by the manual
+    // break-glass workflow alike.
+    const refreshWorkflow = readFileSync(
+      ".github/workflows/d1-restore-proof-auto-refresh.yml",
+      "utf8",
+    );
+    expect(refreshWorkflow).toContain("node scripts/d1-backup-to-r2.mjs");
     expect(deployWorkflow).not.toContain("gh secret set");
   });
 

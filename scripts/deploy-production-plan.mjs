@@ -118,12 +118,95 @@ const MANIFEST_PATH_PATTERN =
   /^test-results\/deploy-readiness-[a-z0-9-]{1,96}\.json$/u;
 const REMOTE_RESTORE_PATH_PATTERN =
   /^test-results\/d1-remote-restore-evidence(?:-[a-z0-9-]{1,64})?\.json$/u;
+
+// 0509#3576: the BACKUP and the RESTORE PROOF are two different freshness
+// questions, and only the backup has to be recent. A D1 export costs nothing
+// (no scratch database, no row import); a restore drill imports ~400k rows
+// into a scratch D1 at $1/M past the free tier. Requiring the expensive proof
+// to be under 24h meant re-running the whole drill four times a day purely to
+// keep `generatedAt` inside the deploy's window.
+//
+// So the gate now requires BOTH, and both fail closed with their own issue
+// code:
+//   1. a fresh export record under 12h `remote_backup_export_stale`
+//   2. a schemaFingerprint-matching restore proof under 7 days
+//      `remote_restore_evidence_stale`
+// The 14-day absolute ceiling under the proof is retained, so the widened
+// 7-day window can never silently grow past it.
+export const BACKUP_EXPORT_FRESHNESS_MS = 12 * 60 * 60 * 1000;
+export const RESTORE_PROOF_FRESHNESS_MS = 7 * 24 * 60 * 60 * 1000;
+export const RESTORE_PROOF_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+const BACKUP_BUCKET = "0509-landing-page-artifacts";
+// Where the deploy job materializes the record the 6-hourly export-only job
+// published. The deploy gate reads this exact path; a test pins the workflow to
+// the same literal so the fetch step and the gate cannot drift apart.
+const BACKUP_EXPORT_PATH = "test-results/d1-backup-export.json";
+const BACKUP_EXPORT_PATH_PATTERN =
+  /^test-results\/d1-backup-export(?:\.json|-[a-z0-9-]{1,64}\.json)$/u;
 const WRANGLER_OUTPUT_PATH_PATTERN =
   /^test-results\/wrangler-deploy-output(?:-[a-z0-9-]{1,64})?\.jsonl$/u;
 const ROLLBACK_TARGET_PATH_PATTERN =
   /^test-results\/worker-rollback-target(?:-[a-z0-9-]{1,64})?\.json$/u;
 const FINGERPRINT_PATTERN = /^[a-f0-9]{64}$/u;
 const SAFE_IDENTIFIER_PATTERN = /^[A-Za-z0-9._-]{1,128}$/u;
+
+/** @param {unknown} record @param {unknown} expected */
+export function validateBackupExport(record, expected) {
+  const value =
+    record && typeof record === "object" && !Array.isArray(record)
+      ? /** @type {Record<string, unknown>} */ (record)
+      : null;
+  if (!value) return { ok: false, issues: ["remote_backup_export_missing"] };
+  const issues = [];
+  const expectedOptions =
+    expected && typeof expected === "object"
+      ? /** @type {{ now?: Date }} */ (expected)
+      : {};
+  const generatedAt =
+    typeof value.generatedAt === "string"
+      ? Date.parse(value.generatedAt)
+      : Number.NaN;
+  const now =
+    expectedOptions.now instanceof Date
+      ? expectedOptions.now.getTime()
+      : Date.now();
+  // No extra headroom term: the 6-hourly cadence IS the headroom. Two missed
+  // runs still clear the 12h window, so a stalled schedule surfaces as a stale
+  // record instead of as a one-off flake.
+  if (
+    !Number.isFinite(generatedAt) ||
+    generatedAt > now + 5 * 60 * 1000 ||
+    now - generatedAt >= BACKUP_EXPORT_FRESHNESS_MS
+  ) {
+    issues.push("remote_backup_export_stale");
+  }
+  if (value.schemaVersion !== 1) issues.push("remote_backup_export_schema");
+  // The key must be a plain dated dump, never the manifest itself and never a
+  // path that could escape the backups prefix.
+  if (
+    typeof value.remoteKey !== "string" ||
+    !/^backups\/d1\/0509-[0-9TZ._-]{1,96}\.sql$/u.test(value.remoteKey)
+  ) {
+    issues.push("remote_backup_export_key");
+  }
+  if (value.bucket !== BACKUP_BUCKET) {
+    issues.push("remote_backup_export_bucket");
+  }
+  if (
+    !Number.isSafeInteger(value.objectBytes) ||
+    Number(value.objectBytes) < 1
+  ) {
+    issues.push("remote_backup_export_bytes");
+  }
+  if (
+    !FINGERPRINT_PATTERN.test(
+      typeof value.sha256 === "string" ? value.sha256 : "",
+    )
+  ) {
+    issues.push("remote_backup_export_digest");
+  }
+  return { ok: issues.length === 0, issues };
+}
 
 /**
  * @typedef {{
@@ -138,12 +221,13 @@ const SAFE_IDENTIFIER_PATTERN = /^[A-Za-z0-9._-]{1,128}$/u;
  */
 
 /**
- * @param {{ manifestPath: string, remoteRestoreEvidencePath?: string, backupProofStatus?: string, wranglerOutputPath: string, rollbackTargetPath?: string }} input
+ * @param {{ manifestPath: string, remoteRestoreEvidencePath?: string, backupExportPath?: string, backupProofStatus?: string, wranglerOutputPath: string, rollbackTargetPath?: string }} input
  * @returns {ProductionDeployStep[]}
  */
 export function buildProductionDeployPlan({
   manifestPath,
   remoteRestoreEvidencePath,
+  backupExportPath,
   backupProofStatus = BACKUP_PROOF_REQUIRED,
   wranglerOutputPath,
   rollbackTargetPath = "test-results/worker-rollback-target.json",
@@ -156,6 +240,11 @@ export function buildProductionDeployPlan({
   }
   const normalizedBackupProofStatus =
     normalizeBackupProofStatus(backupProofStatus);
+  // The export record only ever lives at one canonical path: the deploy job
+  // fetches the fixed R2 key there (BACKUP_EXPORT_PATH, pinned against the
+  // workflow by test). A caller may still override it for a one-off run, but
+  // the default is the path the workflow actually materializes.
+  const resolvedBackupExportPath = backupExportPath ?? BACKUP_EXPORT_PATH;
   if (normalizedBackupProofStatus === BACKUP_PROOF_REQUIRED) {
     if (
       typeof remoteRestoreEvidencePath !== "string" ||
@@ -163,7 +252,16 @@ export function buildProductionDeployPlan({
     ) {
       throw new Error("invalid_remote_restore_evidence_path");
     }
-  } else if (remoteRestoreEvidencePath) {
+    if (
+      typeof resolvedBackupExportPath !== "string" ||
+      !BACKUP_EXPORT_PATH_PATTERN.test(resolvedBackupExportPath)
+    ) {
+      throw new Error("invalid_backup_export_path");
+    }
+    // The export record is the cheap half of the same requirement: a deferred
+    // release carries no evidence of either kind, so it must not carry a path
+    // for one either.
+  } else if (remoteRestoreEvidencePath || backupExportPath) {
     throw new Error("deferred_backup_restore_evidence_conflict");
   }
   if (
@@ -258,6 +356,8 @@ export function buildProductionDeployPlan({
             manifestPath,
             "--remote-evidence",
             /** @type {string} */ (remoteRestoreEvidencePath),
+            "--backup-export",
+            resolvedBackupExportPath,
           ],
         }]
       : []),
@@ -475,13 +575,16 @@ export function validateRemoteRestoreEvidence(evidence, expected) {
       : Number.NaN;
   const now =
     expected.now instanceof Date ? expected.now.getTime() : Date.now();
-  // 0509#3576: schema identity replaces whole-commit identity, not freshness.
-  // Evidence must stay under 24h INCLUDING the deploy's freshness headroom
-  // (D1_REMOTE_RESTORE_EVIDENCE_MIN_VALIDITY_MS, 12h in the deploy), so the
-  // effective acceptance window is headroom-bounded. The 14d absolute ceiling
-  // is retained beneath it and can only bind if the 24h bound is ever raised.
-  const maxAgeMs = 14 * 24 * 60 * 60 * 1000;
-  const freshnessMs = 24 * 60 * 60 * 1000;
+  // 0509#3576: schema identity replaces whole-commit identity, and the PROOF's
+  // freshness is no longer what keeps the backup recent — the export record
+  // does that (validateBackupExport). A restore drill is expensive, so its
+  // output is reusable for a week while the schema still matches; the 14d
+  // absolute ceiling is retained beneath that window so it can never grow
+  // past it silently. Headroom still applies: the deploy adds
+  // D1_REMOTE_RESTORE_EVIDENCE_MIN_VALIDITY_MS (12h) so evidence that would
+  // expire inside the deploy window is refused up front.
+  const maxAgeMs = RESTORE_PROOF_MAX_AGE_MS;
+  const freshnessMs = RESTORE_PROOF_FRESHNESS_MS;
   const minimumValidityMs =
     Number.isSafeInteger(expected.minimumValidityMs) &&
     Number(expected.minimumValidityMs) >= 0
@@ -490,7 +593,7 @@ export function validateRemoteRestoreEvidence(evidence, expected) {
   if (
     !Number.isFinite(generatedAt) ||
     generatedAt > now + 5 * 60 * 1000 ||
-    now + minimumValidityMs - generatedAt > maxAgeMs ||
+    now + minimumValidityMs - generatedAt >= maxAgeMs ||
     now + minimumValidityMs - generatedAt >= freshnessMs
   ) {
     issues.push("remote_restore_evidence_stale");

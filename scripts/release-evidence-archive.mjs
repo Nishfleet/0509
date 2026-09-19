@@ -29,6 +29,11 @@ const ALLOWED_EVIDENCE = [
   /^test-results\/worker-rollback-target-[A-Za-z0-9._-]+\.json$/u,
   /^test-results\/gate-c-[A-Za-z0-9._-]+\.json$/u,
   /^test-results\/production-soak-[A-Za-z0-9._-]+\.json$/u,
+  // 0509#3576: the public-safe record of the backup the deploy gate accepted
+  // (bucket, object key, byte size, digest). Archived when present so a
+  // release carries its own evidence of what it proved. Deliberately NOT
+  // required: a deferred release has no backup proof at all.
+  /^test-results\/d1-backup-export\.json$/u,
 ];
 // The production deploy pipeline writes the gate-B / launch-readiness manifest
 // AND the deploy-readiness manifest to a single file:

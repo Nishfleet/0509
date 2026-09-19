@@ -557,8 +557,8 @@ describe("exact production candidate workflow", () => {
     expect(providerCas).toMatch(
       /TOLERATE_MAIN_DRIFT[\s\S]*?git merge-base --is-ancestor "\$PINNED_SHA" "\$remote_sha"/,
     );
-    // Nightly D1 backup (d1-backup-r2.yml schedule) uses this gate; schedule
-    // must accept empty expected_sha and reject a smuggled one.
+    // Scheduled D1 backup (d1-restore-proof-auto-refresh.yml) uses this gate;
+    // schedule must accept empty expected_sha and reject a smuggled one.
     expect(verifier).toContain("unexpected_schedule_expected_sha");
     expect(verifier).toMatch(/schedule\)\s*\n[\s\S]*unexpected_schedule_expected_sha/);
     expect(providerCas).toContain("curl --disable");

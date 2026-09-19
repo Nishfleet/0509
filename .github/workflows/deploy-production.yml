@@ -533,6 +533,25 @@ jobs:
           chmod 600 test-results/d1-remote-restore-evidence.json
           rm -rf -- test-results/remote-restore-download
 
+      # 0509#3576: the cheap half of the backup proof. The 6-hourly
+      # export-only job in d1-restore-proof-auto-refresh.yml publishes a small
+      # record at a fixed R2 key; this fetches it into the one path the gate
+      # reads (BACKUP_EXPORT_PATH in scripts/deploy-production-plan.mjs). It
+      # sits here, in the credentialed deploy job, so the verifier that checks
+      # the record never holds Cloudflare credentials itself, and the
+      # unprivileged prepare job above can never use this record to skip
+      # generating fresh restore evidence. Deliberately above the final main
+      # reconfirm: a read must never come between that check and the first
+      # provider mutation.
+      - name: Fetch fresh backup export record
+        if: env.BACKUP_PROOF_STATUS == 'required'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: >-
+          node scripts/fetch-d1-backup-export-record.mjs
+          --output test-results/d1-backup-export.json
+
       - name: Reconfirm frozen main before provider mutation
         shell: bash
         env:

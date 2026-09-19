@@ -1537,7 +1537,7 @@ async function runAutomation(outputPath) {
     process.stdout.write(
       `${JSON.stringify({
         ok: true,
-        policy: "fresh-schema-24h",
+        policy: "fresh-export-12h-reusable-schema-proof-7d",
         backupFile: ownedBackup.fileName,
         remoteObjectKey,
         scratchRemoved: true,
