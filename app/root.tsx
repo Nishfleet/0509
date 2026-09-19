@@ -13,6 +13,7 @@ import {
 import { useEffect, useLayoutEffect, useRef } from "react";
 
 import { getCloudflareContext } from "~/lib/cloudflare-context";
+import { ErrorPageRecovery } from "~/components/error-page-recovery";
 import type { LoaderFunctionArgs } from "react-router";
 import "./app.css";
 import type { AppEnv } from "~/lib/env.server";
@@ -27,6 +28,13 @@ import {
 } from "~/lib/siterep-widget";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import { htmlLangForPathname } from "~/lib/locale-markets";
+import {
+  GONE_PAGE_DESCRIPTION,
+  GONE_PAGE_TITLE,
+  NOT_FOUND_DESCRIPTION,
+  NOT_FOUND_TITLE,
+  publicSeoMeta,
+} from "~/lib/seo";
 import { applyTheme, THEME_BOOT_SCRIPT, THEME_COLOR_LIGHT } from "~/lib/theme-client";
 import type { AppSession, PricingPlan, UsageBundle } from "~/lib/types";
 export {
@@ -88,7 +96,34 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   } satisfies RootLoaderData;
 }
 
-export const meta = (args: { data?: RootLoaderData }) => {
+export const meta = (args: { data?: RootLoaderData; error?: unknown }) => {
+  // Issue #3617: a thrown 404/410 collapses the router to this root route
+  // (`findNearestBoundary` bubbles to the root ErrorBoundary, and the active
+  // match set is sliced to it), so the matched child's own `meta` never runs.
+  // The live 404 therefore rendered the bare `<title>Five to Nine</title>`
+  // even though app/routes/not-found.tsx declares a titled page — the two
+  // renderers disagreed in production. The error branch below is what the
+  // browser actually receives, and it emits the full share-meta block so the
+  // page every rotated-away brand URL lands on (#3496) renders like the
+  // marketing pages. Titles/descriptions come from app/lib/seo.ts so both
+  // renderers read one source; tests/error-page-recovery.test.ts pins them.
+  if (args.error !== undefined && isRouteErrorResponse(args.error)) {
+    if (args.error.status === 404) {
+      return publicSeoMeta({
+        title: NOT_FOUND_TITLE,
+        description: NOT_FOUND_DESCRIPTION,
+        pathname: "/",
+      });
+    }
+    if (args.error.status === 410) {
+      return publicSeoMeta({
+        title: GONE_PAGE_TITLE,
+        description: GONE_PAGE_DESCRIPTION,
+        pathname: "/",
+      });
+    }
+  }
+
   const tags: Array<{ title: string } | { name: string; content: string }> = [
     { title: "Five to Nine" },
   ];
@@ -477,9 +512,20 @@ export function ErrorBoundary({ error }: { error: unknown }) {
             <p key={paragraph}>{paragraph}</p>
           ))}
           {isNotFound || isGone ? (
-            <div className="f9-action-row">
-              {goneDomain ? (
-                <>
+            <>
+              {/* Issue #3617: only the /timeline/:domain 410 can name the
+                  brand, so it keeps its existing brand-specific pair —
+                  /search is parameterised there, which is the one case where
+                  the query IS prefilled. The brand pair stays first because
+                  the visitor's original intent is the brand they asked for;
+                  the shared catalog + signup recovery row follows it, so the
+                  page never dead-ends whichever exit they pick. The 404
+                  branch renders the recovery row alone, which is what
+                  app/routes/not-found.tsx renders too — the two renderers of
+                  this one page stay pinned by
+                  tests/error-page-recovery.test.ts. */}
+              {isGone && goneDomain ? (
+                <div className="f9-action-row">
                   <Link
                     className="f9-wk-btn"
                     to={`/search?q=${encodeURIComponent(goneDomain)}`}
@@ -492,18 +538,10 @@ export function ErrorBoundary({ error }: { error: unknown }) {
                   >
                     See ads for {goneDomain}
                   </Link>
-                </>
-              ) : (
-                <>
-                  <Link className="f9-wk-btn" to="/">
-                    Back to Five to Nine
-                  </Link>
-                  <Link className="f9-wk-btn-quiet" to="/search">
-                    Open search
-                  </Link>
-                </>
-              )}
-            </div>
+                </div>
+              ) : null}
+              <ErrorPageRecovery kind={isGone ? "gone" : "notFound"} />
+            </>
           ) : (
             <>
               <p>
