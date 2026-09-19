@@ -207,3 +207,58 @@ describe("offer timeline route fixture (issue #2320)", () => {
     expect(markup).toContain("CTA: Buy the kit");
   });
 });
+
+// Issue #2564: the extractor must not emit a class-name-shaped ctaText — the
+// exact predicate the #2320 display guard rejects (a no-space `ic-*`/`js-*`
+// token, or an all-lowercase dashed token with 3+ segments). Class-like
+// candidates are treated as chrome at every pickBestCta tier, so a page
+// whose only selectable node is chrome bails instead of leaking the class
+// into ctaText.
+describe("CTA class-name extractor guard (issue #2564)", () => {
+  it("bails only_chrome_anchors when the only anchor text is a leaked class", () => {
+    const html = '<nav><a href="/nav">ic-left-nav</a></nav>';
+    const { ctaText, ctaFunnel } = extractLandingPageSignals(html);
+    expect(ctaText).toBeNull();
+    expect(ctaFunnel).toEqual({ stage: "bailed", reasonCode: "only_chrome_anchors" });
+  });
+
+  it("bails only_chrome_buttons when the only button text is a leaked class", () => {
+    const html = "<button>ic-left-nav</button>";
+    const { ctaText, ctaFunnel } = extractLandingPageSignals(html);
+    expect(ctaText).toBeNull();
+    expect(ctaFunnel).toEqual({ stage: "bailed", reasonCode: "only_chrome_buttons" });
+  });
+
+  it("skips a class-like candidate even when it carries a priority verb", () => {
+    // `js-submit` matches the /\bsubmit\b/ priority pattern — the class-name
+    // gate runs before the priority scan, so it still never reaches ctaText.
+    const html = '<a href="/go">js-submit</a>';
+    const { ctaText, ctaFunnel } = extractLandingPageSignals(html);
+    expect(ctaText).toBeNull();
+    expect(ctaFunnel).toEqual({ stage: "bailed", reasonCode: "only_chrome_anchors" });
+  });
+
+  it("skips a dashed multi-segment token and still reaches a real anchor", () => {
+    const html = `
+      <nav><a href="/nav">promo-banner-title</a></nav>
+      <main><a href="/learn">Learn more</a></main>
+    `;
+    const { ctaText } = extractLandingPageSignals(html);
+    expect(ctaText).toBe("Learn more");
+  });
+
+  it("skips a class-like submit value", () => {
+    const html = '<form><input type="submit" value="promo-banner-title"></form>';
+    const { ctaText } = extractLandingPageSignals(html);
+    expect(ctaText).toBeNull();
+  });
+
+  it("keeps a single-hyphen token the exact predicate does not reject", () => {
+    // The binding predicate rejects only `ic-*`/`js-*` prefixes or 3+ dashed
+    // segments — "buy-now" is not class-like at display time either, so the
+    // extractor must not widen the net.
+    const html = "<button>buy-now</button>";
+    const { ctaText } = extractLandingPageSignals(html);
+    expect(ctaText).toBe("buy-now");
+  });
+});
