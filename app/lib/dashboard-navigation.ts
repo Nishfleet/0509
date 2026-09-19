@@ -56,7 +56,7 @@ export const DASHBOARD_PRIMARY_NAV: DashboardNavSection[] = [
         // /app/c/:id (the drill-in), the old /app/watchlists* board/fold
         // routes, collections (its "Pinned" section lives here) and presence:
         // the row stays lit while a competitor is open.
-        activePaths: ["/app/c", "/app/watchlists", "/app/presence", "/app/collections"],
+        activePaths: ["/app/c", "/app/watchlists", "/app/presence", "/app/collections", "/app/competitors"],
       },
       {
         label: "Briefs",
