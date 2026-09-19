@@ -9,7 +9,7 @@
   "scripts": {
     "audit:contrast": "node e2e/contrast-audit.mjs",
     "audit:surface": "node e2e/surface-audit.mjs",
-    "backup:d1": "node scripts/d1-backup.mjs",
+    "backup:d1": "mkdir -p backups/d1 && wrangler d1 export \"${D1_DATABASE_NAME:-0509}\" --remote --output \"backups/d1/${D1_DATABASE_NAME:-0509}-$(date -u +%Y-%m-%dT%H-%M-%SZ).sql\"",
     "backup:d1:r2": "node scripts/d1-backup-to-r2.mjs",
     "restore:d1:transform": "node scripts/d1-restore-transform.mjs",
     "restore:d1:remote-evidence": "node scripts/d1-remote-restore-evidence.mjs",
@@ -26,7 +26,7 @@
     "canary:pricing": "node scripts/dodo-pricing-canary.mjs",
     "canary:fanout": "node scripts/monitoring-fanout-canary.mjs",
     "canary:presence": "node scripts/presence-website-canary.mjs",
-    "canary:presence-pilot": "node scripts/presence-pilot-canary.mjs",
+    "canary:presence-pilot": "vitest run tests/presence-robots.test.ts tests/presence-safe-fetch.test.ts tests/presence-tracking.test.ts tests/presence-pilot-rollout.test.ts",
     "canary:proof-budget-skip-surface": "node scripts/canary-proof-budget-skip-surface.mjs",
     "canary:cta-detector": "node scripts/canary-cta-detector.mjs",
     "canary:sitemap-coverage": "node scripts/canary-sitemap-coverage.mjs",
@@ -79,7 +79,7 @@
     "verify:claims": "node scripts/verify-claims.mjs",
     "test:integration": "bash ./scripts/ci-vitest-run.sh -- vitest run --configLoader runner --project workers",
     "migrations:check": "bash ./scripts/ci-vitest-run.sh -- vitest run --configLoader runner --project workers tests/integration/migrations/",
-    "test:capture-gate": "bash ./scripts/test-capture-gate.sh",
+    "test:capture-gate": "vitest run --configLoader runner --project node tests/capture-validity.test.ts tests/capture-validity-pipeline.test.ts tests/capture-validity-termination.test.ts tests/capture-validity-corroboration.test.ts tests/capture-validity-public-rules.test.ts tests/capture-rules-page.test.ts && vitest run --configLoader runner --project workers tests/integration/capture-validity/capture-validity.integration.test.ts",
     "test:watch": "vitest --configLoader runner",
     "typecheck": "npm run cf-typegen && react-router typegen && tsc -b"
   },
