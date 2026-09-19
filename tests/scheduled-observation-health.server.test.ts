@@ -176,6 +176,13 @@ describe("scheduled observation gap check", () => {
 
     expect(health.find((entry) => entry.cron === "0 */3 * * *")?.overdue).toBe(false);
     expect(health.filter((entry) => entry.overdue)).toHaveLength(0);
+    // Pin the value itself: the staleness fixtures in this file stay green for
+    // any 5-6h deadline too, but anything <=6h re-introduces a red window
+    // between a single missed slot (staleness peaks at ~6h) and the recovery
+    // write — exactly the bug this suite must keep fixed.
+    expect(health.find((entry) => entry.cron === "0 */3 * * *")?.maxAgeMs).toBe(
+      7 * 60 * 60 * 1000,
+    );
   });
 
   it("gives newly activated schedules one cadence before paging", async () => {

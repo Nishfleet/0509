@@ -9,7 +9,9 @@ export const SCHEDULED_OBSERVATION_DEADLINES = Object.freeze([
   // latency, not one: a single dropped cron slot leaves a 6h gap before the
   // next slot writes, so 4h flipped /api/health/deep red for up to ~3h on an
   // expected Cloudflare cron miss (issue #2182). Two consecutive misses still
-  // go red inside ~2h.
+  // go red ~1h into the second missed slot (crossing = last write + 7h); the
+  // deliberate trade is one extra cadence of dead-cron detection latency
+  // (+7h vs the old +4h) for a single-miss false positive rate of zero.
   { cron: "0 */3 * * *", maxAgeMs: 7 * 60 * 60 * 1000 },
   { cron: "17 */6 * * *", maxAgeMs: 7 * 60 * 60 * 1000 },
   { cron: "0 4 * * *", maxAgeMs: 26 * 60 * 60 * 1000 },
