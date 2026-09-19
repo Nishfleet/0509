@@ -5,7 +5,12 @@ export const SCHEDULED_OBSERVATION_MAX_FUTURE_SKEW_MS = 5 * 60 * 1000;
 export const SCHEDULED_OBSERVATION_ALERT_THROTTLE_MS = 6 * 60 * 60 * 1000;
 
 export const SCHEDULED_OBSERVATION_DEADLINES = Object.freeze([
-  { cron: "0 */3 * * *", maxAgeMs: 4 * 60 * 60 * 1000 },
+  // The deadline must span two cadences plus the recovery fire's write
+  // latency, not one: a single dropped cron slot leaves a 6h gap before the
+  // next slot writes, so 4h flipped /api/health/deep red for up to ~3h on an
+  // expected Cloudflare cron miss (issue #2182). Two consecutive misses still
+  // go red inside ~2h.
+  { cron: "0 */3 * * *", maxAgeMs: 7 * 60 * 60 * 1000 },
   { cron: "17 */6 * * *", maxAgeMs: 7 * 60 * 60 * 1000 },
   { cron: "0 4 * * *", maxAgeMs: 26 * 60 * 60 * 1000 },
   { cron: "0 5 * * MON", maxAgeMs: 8 * 24 * 60 * 60 * 1000 },

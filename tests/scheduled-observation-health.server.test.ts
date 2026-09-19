@@ -141,7 +141,7 @@ describe("scheduled observation gap check", () => {
     const health = await listScheduledObservationHealth(
       {
         DB: healthDb([
-          { cron: "0 */3 * * *", last_scheduled_at: "2026-07-30T06:00:00.000Z" },
+          { cron: "0 */3 * * *", last_scheduled_at: "2026-07-30T03:00:00.000Z" },
           { cron: "17 */6 * * *", last_scheduled_at: "2026-07-30T06:17:00.000Z" },
           { cron: "0 4 * * *", last_scheduled_at: "2026-07-30T04:00:00.000Z" },
           { cron: "0 5 * * MON", last_scheduled_at: "2026-07-27T05:00:00.000Z" },
@@ -153,8 +153,29 @@ describe("scheduled observation gap check", () => {
     expect(health.find((entry) => entry.cron === "0 */3 * * *")?.overdue).toBe(true);
     expect(health.filter((entry) => entry.overdue)).toHaveLength(1);
     expect(formatScheduledObservationHealthLines(health)).toEqual([
-      "Scheduled-work gap check OVERDUE for 0 */3 * * *; last observed: 2026-07-30T06:00:00.000Z.",
+      "Scheduled-work gap check OVERDUE for 0 */3 * * *; last observed: 2026-07-30T03:00:00.000Z.",
     ]);
+  });
+
+  it("stays fresh through a single missed three-hourly fire (issue #2182)", async () => {
+    // The 2026-09-09 incident: the 15:00 UTC slot never recorded, so at 16:42
+    // the freshest evidence was 12:00 — 4h42m old. The 7h deadline spans two
+    // cadences plus the recovery write latency, so deep health stays green.
+    const now = new Date("2026-07-30T16:42:00.000Z");
+    const health = await listScheduledObservationHealth(
+      {
+        DB: healthDb([
+          { cron: "0 */3 * * *", last_scheduled_at: "2026-07-30T12:00:00.000Z" },
+          { cron: "17 */6 * * *", last_scheduled_at: "2026-07-30T12:17:00.000Z" },
+          { cron: "0 4 * * *", last_scheduled_at: "2026-07-30T04:00:00.000Z" },
+          { cron: "0 5 * * MON", last_scheduled_at: "2026-07-27T05:00:00.000Z" },
+        ]),
+      } as never,
+      { now },
+    );
+
+    expect(health.find((entry) => entry.cron === "0 */3 * * *")?.overdue).toBe(false);
+    expect(health.filter((entry) => entry.overdue)).toHaveLength(0);
   });
 
   it("gives newly activated schedules one cadence before paging", async () => {
@@ -187,7 +208,7 @@ describe("scheduled observation gap check", () => {
   it("uses a rolling throttle while paging a newly unhealthy schedule immediately", async () => {
     const firstAt = new Date("2026-07-30T11:59:59.999Z");
     const db = healthDb(
-      [{ cron: "0 */3 * * *", last_scheduled_at: "2026-07-30T06:00:00.000Z" }],
+      [{ cron: "0 */3 * * *", last_scheduled_at: "2026-07-30T03:00:00.000Z" }],
       firstAt.toISOString(),
     );
     const env = { DB: db, LAUNCH_CANARY_EMAIL: "ops@0509.io" };
@@ -199,7 +220,7 @@ describe("scheduled observation gap check", () => {
     })).resolves.toMatchObject({ sent: false, reason: "throttled" });
 
     db.setRows([
-      { cron: "0 */3 * * *", last_scheduled_at: "2026-07-30T06:00:00.000Z" },
+      { cron: "0 */3 * * *", last_scheduled_at: "2026-07-30T03:00:00.000Z" },
       { cron: "17 */6 * * *", last_scheduled_at: "2026-07-30T04:17:00.000Z" },
     ]);
     await expect(sendScheduledObservationGapAlert(env as never, {
@@ -211,7 +232,7 @@ describe("scheduled observation gap check", () => {
   it("keeps provider-unknown retries on one durable key across six-hour rotation", async () => {
     const firstAt = new Date("2026-07-30T06:00:00.000Z");
     const db = healthDb([
-      { cron: "0 */3 * * *", last_scheduled_at: "2026-07-30T00:00:00.000Z" },
+      { cron: "0 */3 * * *", last_scheduled_at: "2026-07-29T21:00:00.000Z" },
       { cron: "17 */6 * * *", last_scheduled_at: firstAt.toISOString() },
       { cron: "0 4 * * *", last_scheduled_at: firstAt.toISOString() },
       { cron: "0 5 * * MON", last_scheduled_at: firstAt.toISOString() },
@@ -239,7 +260,7 @@ describe("scheduled observation gap check", () => {
   it("bounds retries after a definitive gap-alert rejection", async () => {
     const firstAt = new Date("2026-07-30T06:00:00.000Z");
     const db = healthDb([
-      { cron: "0 */3 * * *", last_scheduled_at: "2026-07-30T00:00:00.000Z" },
+      { cron: "0 */3 * * *", last_scheduled_at: "2026-07-29T21:00:00.000Z" },
       { cron: "17 */6 * * *", last_scheduled_at: firstAt.toISOString() },
       { cron: "0 4 * * *", last_scheduled_at: firstAt.toISOString() },
       { cron: "0 5 * * MON", last_scheduled_at: firstAt.toISOString() },
@@ -286,7 +307,7 @@ describe("scheduled observation gap check", () => {
               future_observation_count: 1,
             },
           ],
-          "2026-07-30T06:00:00.000Z",
+          "2026-07-30T03:00:00.000Z",
         ),
       } as never,
       { now },
@@ -311,8 +332,8 @@ describe("scheduled observation gap check", () => {
       SET baseline_at = ?, updated_at = ?
       WHERE cron = ?
     `).run(
-      "2026-07-30T06:00:00.000Z",
-      "2026-07-30T06:00:00.000Z",
+      "2026-07-30T03:00:00.000Z",
+      "2026-07-30T03:00:00.000Z",
       "0 */3 * * *",
     );
     harness.sqlite.prepare(`
