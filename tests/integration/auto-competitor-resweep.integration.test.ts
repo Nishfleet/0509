@@ -15,7 +15,7 @@ import {
 } from "~/lib/auto-competitor-resweep.server";
 import { buildDiscoveryCacheKey } from "~/lib/discovery-cache.server";
 import { upsertDiscoveryCacheEntry } from "~/lib/data.server";
-import type { SearchResponse } from "~/lib/types";
+import type { AdDiscoveryProvider, SearchResponse } from "~/lib/types";
 
 import { appEnv, db, ISO_T0, seedUser, uid } from "./fixtures";
 
@@ -387,5 +387,148 @@ describe("listResweepUsers / runAutoCompetitorResweep — fair sweep ordering (i
     const roundTwo = await listResweepUsers(appEnv, 100);
     expect(roundTwo.length).toBe(100);
     expect(roundTwo[0]).toBe(keyOrdered[99]);
+  });
+
+  it("ignores surfaced rows under a different provider or route context and breaks timestamp ties by user_id", async () => {
+    // Other-provider / other-route surfaced rows left behind by past passes or
+    // other consumers must NOT place their workspace in the swept ordering —
+    // the join filters on provider and route_context. And since the acceptance
+    // names the `user_id ASC` tie-break explicitly, exercise it on a swept
+    // pair with identical fetched_at (the helper block above staggers every
+    // timestamp, so the tie branch is otherwise never taken).
+    const otherProvider: AdDiscoveryProvider =
+      PROVIDER === "demo" ? "meta_api" : "demo";
+
+    async function seedForeignSurfacedRow(
+      userId: string,
+      opts: {
+        provider?: AdDiscoveryProvider;
+        routeContext?: "public_search" | "scheduled_warmup";
+        fetchedAt: string;
+      },
+    ) {
+      const provider = opts.provider ?? PROVIDER;
+      const fingerprint = `auto-competitor-surfaced:${userId}`;
+      await upsertDiscoveryCacheEntry(appEnv, {
+        cacheKey: buildDiscoveryCacheKey({
+          provider,
+          fingerprint,
+          country: "all",
+          cursor: null,
+        }),
+        provider,
+        routeContext: opts.routeContext ?? "scheduled_warmup",
+        queryFingerprint: fingerprint,
+        country: "all",
+        cursor: null,
+        payload: {
+          ads: [],
+          nextCursor: null,
+          source: "demo",
+          provider,
+          cacheStatus: "hit",
+          surfacedCandidates: [],
+        } as unknown as SearchResponse,
+        fetchedAt: opts.fetchedAt,
+        expiresAt: FAR_FUTURE,
+        browserMsUsed: 0,
+      });
+    }
+
+    // Never-swept group: one with no row at all, one whose only surfaced row
+    // belongs to the OTHER provider, one whose only row sits under the wrong
+    // route context. Both foreign rows carry timestamps OLDER than every
+    // qualifying swept row this file leaves behind (test 1 seeds staggered
+    // rows starting at ISO_T0 = 2026-01-01T00:00:00.000Z) — if either join
+    // filter were ignored, that workspace would rank FIRST among the swept
+    // workspaces and the ordering assertions below would fail.
+    const foreignAt = "2025-12-31T23:40:00.000Z";
+    const neverSwept = [
+      await seedPaidBrandedWorkspace("https://allbirds.com"),
+      await seedPaidBrandedWorkspace("https://allbirds.com"),
+      await seedPaidBrandedWorkspace("https://allbirds.com"),
+    ];
+    await seedForeignSurfacedRow(neverSwept[1], {
+      provider: otherProvider,
+      fetchedAt: foreignAt,
+    });
+    await seedForeignSurfacedRow(neverSwept[2], {
+      routeContext: "public_search",
+      fetchedAt: foreignAt,
+    });
+    // Sanity: the foreign rows really exist — they are ignored by the join's
+    // provider/route_context filters, not because the rows are absent.
+    for (const [reqProvider, reqRoute, userId] of [
+      [otherProvider, "scheduled_warmup", neverSwept[1]],
+      [PROVIDER, "public_search", neverSwept[2]],
+    ] as const) {
+      const foreign = await db()
+        .prepare(
+          `SELECT fetched_at FROM discovery_cache_entry
+           WHERE provider = ? AND route_context = ? AND query_fingerprint = ?`,
+        )
+        .bind(reqProvider, reqRoute, `auto-competitor-surfaced:${userId}`)
+        .first<{ fetched_at: string }>();
+      expect(foreign).not.toBeNull();
+    }
+
+    // Swept pair with IDENTICAL fetched_at — the tie-break branch. Older than
+    // every other qualifying swept row the file leaves behind, so the pair
+    // must land directly after the never-swept workspaces.
+    const tiedAt = "2025-12-31T23:50:00.000Z";
+    const tied = [
+      await seedPaidBrandedWorkspace("https://allbirds.com"),
+      await seedPaidBrandedWorkspace("https://allbirds.com"),
+    ];
+    for (const id of tied) {
+      await seedForeignSurfacedRow(id, { fetchedAt: tiedAt });
+    }
+    // Sanity: the tie really is a tie — both qualifying rows share fetched_at.
+    const tiedRows =
+      (
+        await db()
+          .prepare(
+            `SELECT fetched_at FROM discovery_cache_entry
+             WHERE provider = ? AND route_context = 'scheduled_warmup'
+               AND query_fingerprint IN (?, ?)`,
+          )
+          .bind(
+            PROVIDER,
+            `auto-competitor-surfaced:${tied[0]}`,
+            `auto-competitor-surfaced:${tied[1]}`,
+          )
+          .all<{ fetched_at: string }>()
+      ).results ?? [];
+    expect(tiedRows.length).toBe(2);
+    expect(tiedRows[0].fetched_at).toBe(tiedAt);
+    expect(tiedRows[1].fetched_at).toBe(tiedAt);
+
+    // Note: storage persists across its() in this file (see fixtures.uid), and
+    // earlier tests leave extra never-swept members in the NULL group (test
+    // 1's starved workspace etc.), so assert ORDER RELATIONS on the ids this
+    // test creates instead of whole-list slices.
+    const cmp = (a: string, b: string) => (a < b ? -1 : 1);
+    const nullGroup = [...neverSwept].sort(cmp);
+    const tiedOrdered = [...tied].sort(cmp);
+
+    const uncapped = await listResweepUsers(appEnv, 100_000);
+    const idx = (id: string) => uncapped.indexOf(id);
+    const groupBounds = nullGroup.map(idx);
+    const tiedBounds = tiedOrdered.map(idx);
+
+    // Whole never-swept group before the whole tied pair.
+    expect(Math.max(...groupBounds)).toBeLessThan(Math.min(...tiedBounds));
+    // Inside each group: `user_id ASC` — the acceptance's explicit tie-break.
+    // The tied pair's qualifying rows share fetched_at, so ONLY the id
+    // tie-break can produce that order.
+    expect(groupBounds).toEqual([...groupBounds].sort((a, b) => a - b));
+    expect(tiedBounds).toEqual([...tiedBounds].sort((a, b) => a - b));
+
+    // The cap operates on the same ordering: listResweepUsers(env, k) must
+    // equal the uncapped list's first k elements — a lowered userLimit
+    // truncates the SAME rotation, it does not re-freeze it alphabetically.
+    for (const k of [1, 3, 5, 8]) {
+      expect(await listResweepUsers(appEnv, k)).toEqual(uncapped.slice(0, k));
+    }
   });
 });

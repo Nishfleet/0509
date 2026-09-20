@@ -291,6 +291,14 @@ function resolveSelfRegistrableDomain(brandWebsite: string | null): string | nul
  * provider + `scheduled_warmup` route context the surfaced read uses, so a
  * provider flip drops the workspace back to never-swept instead of ranking it
  * by foreign-provider rows. `user_id ASC` breaks ties deterministically.
+ *
+ * A selected workspace keeps its old rank when the pass never reaches the
+ * surfaced-cache write — the sweep failed, or the branding domain was
+ * unparseable — so failed work retries FIRST on the next tick. Do not "fix"
+ * that by refreshing `fetched_at` on failure: it would convert retry-first
+ * into retry-last. Similarly, `user_plan.plan` is re-checked inside this
+ * module's loop because a plan can change between selection and processing.
+ *
  * Ordering by identity instead would re-sweep the same alphabetical workspaces
  * forever and starve the rest the moment anyone lowers `userLimit` — the
  * #2457 defect in the mention resweep, latent here because no caller passes a
@@ -312,7 +320,7 @@ export async function listResweepUsers(
       LEFT JOIN discovery_cache_entry dce
         ON dce.provider = ?
        AND dce.route_context = 'scheduled_warmup'
-       AND dce.query_fingerprint = '${SURFACED_FINGERPRINT_PREFIX}:' || user_plan.user_id
+       AND dce.query_fingerprint = ? || user_plan.user_id
       WHERE user_plan.plan != 'free'
         AND workspace_branding.brand_website IS NOT NULL
         AND TRIM(workspace_branding.brand_website) != ''
@@ -321,6 +329,7 @@ export async function listResweepUsers(
       LIMIT ?
     `,
     provider,
+    `${SURFACED_FINGERPRINT_PREFIX}:`,
     limit,
   );
   return rows.map((row) => row.user_id);
@@ -375,6 +384,8 @@ export async function runAutoCompetitorResweep(
   for (const userId of userIds) {
     try {
       if (!options.userId) {
+        // Also enforced in the listResweepUsers query; re-checked here because
+        // a plan can change between selection and processing.
         const plan = await getUserPlan(env, userId);
         if (!isPaidPlanFamily(plan)) {
           continue;
