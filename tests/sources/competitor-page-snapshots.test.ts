@@ -106,7 +106,7 @@ describe("loadCompetitorSourceSnapshots", () => {
 
   it("returns the latest snapshot and the diff of the last two per enabled adapter", async () => {
     const adapter = fakeAdapter("google_ads", [
-      { eventType: "ad_launched", title: "New creative", summary: "s", metadata: {} },
+      { eventType: "ad_new", title: "New creative", summary: "s", metadata: {} },
     ]);
     enabledSources = [adapter];
     rowsBySource = {
@@ -134,7 +134,7 @@ describe("loadCompetitorSourceSnapshots", () => {
 
   it("diffs against null when only one snapshot exists, matching the first-fetch write path", async () => {
     const adapter = fakeAdapter("subdomains", [
-      { eventType: "ad_launched", title: "First", summary: "s", metadata: {} },
+      { eventType: "ad_new", title: "First", summary: "s", metadata: {} },
     ]);
     enabledSources = [adapter];
     rowsBySource = {
