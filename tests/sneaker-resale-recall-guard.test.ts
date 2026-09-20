@@ -168,7 +168,8 @@ describe("probeSneakerResaleDomain transport-error retry", () => {
 // evaluateSneakerResaleRecall pass/fail/carve-out and KNOWN_NO_COVERAGE /
 // KNOWN_IDENTITY_GAPS handling, all on injected fixtures — no network.
 describe("evaluateSneakerResaleRecall tier classification", () => {
-  function probe(domain, { rowCount = 0, verified = 0, likely = 0, unmatched = 0, status = 200, isWarming = false, rateLimited = false, requestError = undefined } = {}) {
+  /** Matches SneakerResaleProbe from canary-sneaker-resale-recall.mjs */
+  function probe(domain: string, { rowCount = 0, verified = 0, likely = 0, unmatched = 0, status = 200, isWarming = false, rateLimited = false, requestError = undefined } = {}) {
     return {
       domain,
       brand: domain,
@@ -178,6 +179,7 @@ describe("evaluateSneakerResaleRecall tier classification", () => {
       isWarming,
       rateLimited,
       requestError,
+      headline: null,
     };
   }
 
