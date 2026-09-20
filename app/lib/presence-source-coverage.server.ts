@@ -529,8 +529,9 @@ export function presenceSourceCoverageForDocs(): Array<{
     {
       sourceId: "hiring",
       label: SOURCE_LABELS.hiring,
-      productionStatus: "coming_soon",
-      notes: "Hiring (job boards) source wired in as a stub (seam #2218). Live adapter lands in #2199.",
+      productionStatus: "active",
+      notes:
+        "Hiring (job boards) wired in and live (#2199; enabled by the requiresEnv fix in #2709): the tracked brand's public Greenhouse / Ashby / Lever job board snapshotted weekly — open roles stored, new and closed roles alert through the seam's Meta alert path. No credentials (public job feeds); covers only what the public board publishes — no headcount, pipeline, or employer-internal data.",
     },
   ];
 }
