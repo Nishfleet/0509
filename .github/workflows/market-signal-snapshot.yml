@@ -123,8 +123,40 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           XDG_CONFIG_HOME: ${{ runner.temp }}/market-signal-wrangler-config
         run: |
+          set -euo pipefail
           unset CF_API_TOKEN CF_API_KEY CF_EMAIL CLOUDFLARE_API_KEY CLOUDFLARE_EMAIL
-          npm run signal:market -- --output "$SNAPSHOT_PATH"
+          mkdir -p "$(dirname "$SNAPSHOT_PATH")"
+          # One SQL file, one wrangler call. db/queries/market-signal.sql is proved
+          # against the migrated schema by tests/market-signal-query.test.ts.
+          product="$(npx wrangler d1 execute 0509 --remote --file db/queries/market-signal.sql --json \
+            | jq -c '.[0] | if .success and (.results|length)==1 then .results[0] else error("D1 signal query returned no successful result.") end
+                     | .planMix = (.plan_mix_json // "{}" | fromjson) | .supportCategories7d = (.support_categories_json // "{}" | fromjson)
+                     | .billingEventTypes7d = (.billing_event_types_json // "{}" | fromjson)
+                     | del(.plan_mix_json, .support_categories_json, .billing_event_types_json)')"
+          if issues="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues?state=all&per_page=100" 2>/dev/null)"; then
+            github="$(jq -c --arg now "$(date -u +%FT%TZ)" '
+              [ .[][] | select(.pull_request|not) | {number, state: (.state|ascii_upcase), labels: [.labels[].name], createdAt: .created_at, closedAt: .closed_at} ]
+              | ($now|fromdateiso8601) as $n
+              | { openTotal: map(select(.state=="OPEN"))|length,
+                  opened7d: map(select((.createdAt|fromdateiso8601) >= $n-604800))|length,
+                  openedPrevious7d: map(select((.createdAt|fromdateiso8601) >= $n-1209600 and (.createdAt|fromdateiso8601) < $n-604800))|length,
+                  closed7d: map(select(.closedAt != null and (.closedAt|fromdateiso8601) >= $n-604800))|length,
+                  recent: (sort_by(.createdAt)|reverse|.[:10]) }' <<<"$issues")"
+            github_health=ok
+          else
+            echo "market_signal_github_issues_unavailable" >&2; github='{"unavailable":true}'; github_health=unavailable
+          fi
+          jq -n --argjson product "$product" --argjson github "$github" --arg gh "$github_health" --arg now "$(date -u +%FT%TZ)" '
+            ($now|fromdateiso8601) as $e | def iso(t): (t|todateiso8601);
+            { schemaVersion: 2, generatedAt: $now,
+              windows: { timezone: "UTC",
+                recent24h: {start: iso($e-86400), end: iso($e)}, previous24h: {start: iso($e-172800), end: iso($e-86400)},
+                recent7d: {start: iso($e-604800), end: iso($e)}, previous7d: {start: iso($e-1209600), end: iso($e-604800)} },
+              product: $product, github: $github,
+              sourceHealth: { cloudflareD1: "ok", githubIssues: $gh },
+              privacy: "Aggregate product metrics and repository issue metadata only; no customer identity or message body.",
+              countScope: "Customer-facing counts are organic only: they exclude fleet-synthetic identities (canary user ids, *@0509.internal mailboxes, codex-qa-*/codex-free-qa-*/auth-QA*/bet1-3322-* addresses) and canary-owned watchlists. synthetic_* fields carry that excluded fleet activity so it stays visible but can never be read as organic growth." }' \
+            > "$SNAPSHOT_PATH"
       - name: Verify snapshot freshness
         run: |
           node -e "

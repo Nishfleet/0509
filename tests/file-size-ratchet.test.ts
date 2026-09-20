@@ -50,7 +50,6 @@ export const SEEDED_OVER_800_TEST_FILES = [
   "tests/agent-actions.server.test.ts",
   "tests/api-v1.route.test.ts",
   "tests/auth.server.test.ts",
-  "tests/bet2-live-verification.test.ts",
   "tests/billing-page.route.test.ts",
   "tests/clients.route.test.ts",
   "tests/competitor-site-content.test.ts",

@@ -5,6 +5,7 @@ import { createRequestHandler, RouterContextProvider } from "react-router";
 import { isBuyerSurfaceLocaleId } from "../app/lib/locale-markets";
 import { cloudflareRuntimeContext } from "../app/lib/cloudflare-context";
 import { reportScheduledTaskFailure } from "../app/lib/cron-failure-alert.server";
+import { checkSneakerResaleRecall } from "../app/lib/sneaker-resale-recall.server";
 import {
 	recordCanaryReceipt,
 } from "../app/lib/email-delivery-canary.server";
@@ -80,6 +81,7 @@ import {
   resolveScheduledTask,
   STATUS_PROBES_CRON,
   WEEKLY_DIGEST_CRON,
+  REGULAR_MONITORING_CRON,
 } from "./schedule";
 import { withSecurityHeaders, generateCspNonce } from "./security-headers";
 import {
@@ -608,6 +610,24 @@ export default {
 		const observe = <T>(taskName: ReleaseScheduledTaskName, taskPromise: Promise<T>) =>
 			observeScheduledTask(env, ctx, { ...observationContext, taskName }, taskPromise);
 
+    if (controller.cron === REGULAR_MONITORING_CRON) {
+      // Seed-list recall (issue #1945): every sneaker-resale brand must keep at
+      // least one verified/likely row in the public-search cache. Was a VPS
+      // timer + script; now app code on the Worker's own schedule (#3679).
+      ctx.waitUntil(
+        checkSneakerResaleRecall(env).then(
+          (result) =>
+            result.missing.length > 0
+              ? reportScheduledTaskFailure(
+                  env,
+                  "sneaker_resale_recall",
+                  new Error(`seed-list recall regression: ${result.missing.length}/${result.checked} brands without a verified or likely row: ${result.missing.join(", ")}`),
+                )
+              : undefined,
+          (error) => reportScheduledTaskFailure(env, "sneaker_resale_recall", error),
+        ),
+      );
+    }
     if (controller.cron === WEEKLY_DIGEST_CRON) {
       // Monday morning: the operator gets last week's business numbers
       // alongside the weekly digests. Idempotency-keyed per day, so a cron

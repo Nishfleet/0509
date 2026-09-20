@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { buildSignalSql } from "../scripts/market-signal-snapshot.mjs";
+import { readFileSync } from "node:fs";
+
+const buildSignalSql = (_generatedAt?: Date) => readFileSync("db/queries/market-signal.sql", "utf8");
 
 // Prevention mechanism for issue #1942: the daily market-signal
 // `billing_problem_events_24h` metric must report only real-user payment

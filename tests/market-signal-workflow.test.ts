@@ -87,12 +87,12 @@ describe("daily market-signal D1 snapshot workflow", () => {
     const generate = job.steps?.find((step) => step.name === "Generate market-signal D1 snapshot");
     expect(generate?.run).toContain("unset CF_API_TOKEN");
     expect(generate?.env?.XDG_CONFIG_HOME).toBe("${{ runner.temp }}/market-signal-wrangler-config");
-    expect(generate?.run).toContain("npm run signal:market");
+    expect(generate?.run).toContain("wrangler d1 execute 0509 --remote --file db/queries/market-signal.sql");
   });
 
   it("writes the snapshot to the exact path the Hermes contract reads", () => {
     expect(job.env?.SNAPSHOT_PATH).toBe(snapshotPath);
-    expect(source).toContain(`--output "$SNAPSHOT_PATH"`);
+    expect(source).toContain(`> "$SNAPSHOT_PATH"`);
     expect(source).toContain(`git add -- "$SNAPSHOT_PATH"`);
     expect(contract).toContain(`ops/market-signal/0509-market-signal.json`);
     // The snapshot no longer lands on main or in this public repo; Hermes
