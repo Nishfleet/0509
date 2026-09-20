@@ -62,8 +62,26 @@ export function createSqliteD1() {
                 };
               },
               async all<T>() {
+                const statement = sqlite.prepare(sql);
+                // Real D1 all() returns a D1Result carrying `meta` — and still
+                // executes write statements. Mirror that: drivers like
+                // kysely-d1 route every query through all() and read
+                // meta.changes / meta.last_row_id.
+                if (statement.columns().length === 0) {
+                  const result = statement.run(...bound);
+                  return {
+                    results: [] as T[],
+                    success: true,
+                    meta: {
+                      changes: Number(result.changes ?? 0),
+                      last_row_id: Number(result.lastInsertRowid ?? 0),
+                    },
+                  };
+                }
                 return {
-                  results: sqlite.prepare(sql).all(...bound) as T[],
+                  results: statement.all(...bound) as T[],
+                  success: true,
+                  meta: { changes: 0, last_row_id: 0 },
                 };
               },
               async first<T>() {

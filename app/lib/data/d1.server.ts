@@ -1,8 +1,13 @@
+import { CamelCasePlugin, Kysely } from "kysely";
+import { D1Dialect } from "kysely-d1";
+
 import { chunkForBoundParams, D1_MAX_BOUND_PARAMS } from "~/lib/d1-chunk.server";
+import type { Database } from "~/lib/data/d1-schema.server";
 import type { AppEnv } from "~/lib/env.server";
 
 /**
- * Shared D1 helpers. All IN-list expansion must go through `queryIn` /
+ * Shared D1 helpers plus the Kysely instance new data-layer code queries
+ * through (#3783). All IN-list expansion must go through `queryIn` /
  * `chunkForBoundParams` so statements stay under D1's 100 bound-parameter cap.
  */
 
@@ -12,6 +17,22 @@ export function ensureDb(env: AppEnv) {
   }
 
   return env.DB;
+}
+
+/**
+ * Typed query builder over the D1 `DB` binding. `CamelCasePlugin` maps the
+ * camelCase `Database` schema onto the snake_case columns migrations create
+ * and maps result rows back. A fresh instance per call is intentional:
+ * Kysely holds no open connection and `env` is request-scoped.
+ *
+ * Existing callers keep the raw helpers below; each `data/` directory
+ * migrates to `kyselyDb` in its own PR.
+ */
+export function kyselyDb(env: AppEnv) {
+  return new Kysely<Database>({
+    dialect: new D1Dialect({ database: ensureDb(env) }),
+    plugins: [new CamelCasePlugin()],
+  });
 }
 
 export async function queryAll<T>(env: AppEnv, sql: string, ...bindings: unknown[]) {
