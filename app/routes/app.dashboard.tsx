@@ -525,6 +525,7 @@ export async function action(args: ActionFunctionArgs) {
   const intent = String(formData.get("intent") ?? "");
   if (
     intent === "create-watchlist" ||
+    intent === "create-handoff-watchlists" ||
     intent === "preview-market-desk-import" ||
     intent === "create-market-desk-import" ||
     intent === "finish"

@@ -323,6 +323,44 @@ describe("dashboard route agent memory", () => {
     expect(clone).not.toHaveBeenCalled();
   });
 
+  it("delegates the create-handoff-watchlists intent to the setup-checklist action (issue #3750)", async () => {
+    const handleSetupChecklistAction = vi.fn().mockResolvedValue({
+      ok: false,
+      intent: "create-handoff-watchlists",
+      message: "No competitors were carried from your search. Add a competitor below.",
+    });
+    vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => ({})) }));
+    vi.doMock("~/lib/with-workspace.server", () => ({
+      withWorkspace: vi.fn().mockResolvedValue({
+        ok: true,
+        workspaceUserId: "owner-1",
+      }),
+      planLimitExceededActionResult: vi.fn(),
+    }));
+    vi.doMock("~/lib/setup-checklist-action.server", () => ({
+      handleSetupChecklistAction,
+      oversizedMultipartImportMessage: vi.fn(() => null),
+    }));
+    const request = new Request("http://localhost/app", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: "intent=create-handoff-watchlists&country=United%20States",
+    });
+
+    const { action } = await import("~/routes/app.dashboard");
+    const result = await action({
+      context: createContext(),
+      request,
+      params: {},
+    } as never);
+
+    expect(handleSetupChecklistAction).toHaveBeenCalledOnce();
+    const [handlerArgs, handlerFormData] = handleSetupChecklistAction.mock.calls[0];
+    expect(handlerArgs).toMatchObject({ request });
+    expect((handlerFormData as FormData).get("intent")).toBe("create-handoff-watchlists");
+    expect(result).toMatchObject({ intent: "create-handoff-watchlists" });
+  });
+
   it("provides a complete fail-closed readiness fallback shape", async () => {
     const { unavailableWorkspaceReadiness } = await import("~/routes/app.dashboard");
 
