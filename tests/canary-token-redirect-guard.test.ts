@@ -18,6 +18,11 @@ import { describe, expect, it } from "vitest";
  * This guard keeps the pattern from coming back. `tests/` is not scanned:
  * mocked request headers there exercise the server-side read path, they are
  * not outbound sends. `docs/` and `legacy/` are historical records.
+ *
+ * Known limits (heuristic trip-wire, not an AST check): an attach built
+ * through a renamed alias (`{[hdr]: token}`) is invisible to a literal scan,
+ * and `redirect: "manual"` is paired to an attach site by a ±25-line window,
+ * so an unrelated manual fetch inside the window can satisfy the check.
  */
 
 const SOURCE_SUFFIX = /\.(?:ts|tsx|js|jsx|mjs|cjs)$/;
@@ -31,16 +36,21 @@ const SKIP_DIRS = new Set([
   "docs",
   "legacy",
 ]);
-const SKIP_FILES = new Set(["worker-configuration.d.ts"]);
+const SKIP_FILES = /\.d\.ts$/;
 
 // An attach site is a request-header object entry or a Headers.set/append call
 // carrying the token. `headers.get(...)` reads are the server side and do not
-// match.
+// match. Header names are case-insensitive on the wire, so the literal is too.
 const ATTACH =
-  /(["']x-0509-canary-token["']|\[\s*CANARY_TOKEN_HEADER\s*\])\s*:|\.(?:set|append)\(\s*(?:["']x-0509-canary-token["']|CANARY_TOKEN_HEADER)/;
+  /(["']x-0509-canary-token["']|\[\s*CANARY_TOKEN_HEADER\s*\])\s*:|\.(?:set|append)\(\s*(?:["']x-0509-canary-token["']|CANARY_TOKEN_HEADER)/i;
+// A `{ "x-0509-canary-token": string }` shape inside a type/interface block is
+// a declaration, not a send — primitive type keywords never appear as runtime
+// header values, so lines ending in one are skipped.
+const TYPE_ANNOTATION =
+  /:\s*(?:readonly\s+)?(?:string|number|boolean|unknown|symbol|bigint|object|void|never|any)(?:\[\])?(?:\s*[|&]\s*[\w.<>]+)*[\s;,)}\]]*$/;
 const REDIRECT_GUARD = /redirect:\s*["']manual["']/;
-const CANONICAL_BASE = /validateCanonicalBaseUrl|CANONICAL_(?:BASE_)?URL|https:\/\/(?:www\.)?0509\.io/;
-const GUARDED_HELPER = /fetchCanary|validateCanonicalBaseUrl/;
+const CANONICAL_BASE =
+  /validateCanonicalBaseUrl|CANONICAL_(?:BASE_)?URL|https:\/\/(?:www\.)?0509\.io(?![\w.-])/;
 const GUARD_WINDOW_LINES = 25;
 
 function sourceFiles(dir: string): string[] {
@@ -50,23 +60,25 @@ function sourceFiles(dir: string): string[] {
     if (entry.isDirectory()) {
       return SKIP_DIRS.has(entry.name) ? [] : sourceFiles(path);
     }
-    return SOURCE_SUFFIX.test(entry.name) && !SKIP_FILES.has(entry.name) ? [path] : [];
+    return SOURCE_SUFFIX.test(entry.name) && !SKIP_FILES.test(entry.name) ? [path] : [];
   });
 }
 
 describe("canary token redirect guard (#2817)", () => {
   it("never attaches x-0509-canary-token outbound without the canonical-origin and redirect guards", () => {
+    const files = sourceFiles(".");
+    expect(files.length).toBeGreaterThan(0);
+
     const offenders: string[] = [];
 
-    for (const path of sourceFiles(".")) {
+    for (const path of files) {
       const lines = readFileSync(path, "utf8").split("\n");
-      const attachLines = lines.flatMap((line, index) => (ATTACH.test(line) ? [index] : []));
+      const attachLines = lines.flatMap((line, index) =>
+        ATTACH.test(line) && !TYPE_ANNOTATION.test(line) ? [index] : [],
+      );
       if (attachLines.length === 0) continue;
 
-      const content = lines.join("\n");
-      if (GUARDED_HELPER.test(content)) continue;
-
-      const hasCanonicalBase = CANONICAL_BASE.test(content);
+      const hasCanonicalBase = CANONICAL_BASE.test(lines.join("\n"));
       for (const index of attachLines) {
         const window = lines
           .slice(Math.max(0, index - GUARD_WINDOW_LINES), index + GUARD_WINDOW_LINES + 1)
@@ -80,9 +92,8 @@ describe("canary token redirect guard (#2817)", () => {
     expect(
       offenders,
       "these sites attach x-0509-canary-token without a guard; fetch() would forward the " +
-        "token to a redirect target. Route through a guarded helper (fetchCanary/" +
-        "validateCanonicalBaseUrl style), or build the URL from the canonical " +
-        "https://0509.io origin and fetch with `redirect: \"manual\"` — see issue #2817.",
+        "token to a redirect target. Build the URL from the canonical https://0509.io " +
+        'origin (validated) and fetch with `redirect: "manual"` — see issue #2817.',
     ).toEqual([]);
   });
 });
