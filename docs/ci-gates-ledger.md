@@ -14,7 +14,8 @@ Standing rules that earn a gate (cited per row below):
 - **R3 nothing-fails-silently** — every scheduled job monitors its own freshness
   or has a monitor that does.
 - **R4 reversibility-over-gating** — a merge must be as undoable as a deploy
-  (Nish, canonical; enforced by auto-revert).
+  (Nish, canonical; enforced by `wrangler rollback` in deploy-production.yml
+  plus `git revert` since `auto-revert.yml` was deleted 2026-09-20).
 - **R5 independent verifier integrity** — required verifiers may not self-certify
   their own definitions (sol-sweep finding; Nish 2026-08-25 "no agent runs amok
   and bypasses our quality gates").
@@ -76,7 +77,7 @@ DELETE.
 | `gate-integrity.yml` | Gate-bypass *moves* RVI cannot see (copies, driver-step swaps) | Nish 2026-08-25 ("cover all our bases"); fleet-ops#828 / 0509#1273 prose-attest shape | ~1 min compile + diff gate | **KEEP** detector, **MERGE-INTO** `required-verifier-integrity` — one integrity workflow files both, and the second admin attestation (`gate-integrity-attest:`) is dropped; two admin attestations per push is not acceptable |
 | `deploy-production.yml` (732 lines, 6 jobs) push-to-main deploy + Gate A/B/C + restore-evidence + ledger | Undeployable or unrestorable state reaching prod | R1 restore-evidence-before-migrations (incidents: scratch-restore kill #630, deploy drift 0509 .lane reports, #2840 gate-B, #2975 concurrency) | Runs only on main | **KEPT, TRIMMED** (#3070): step audit table below — every surviving step names an incident/rule or is pinned by the gate tests; only `- name: Typecheck` had none and was deleted, with its coverage moved into `scripts/deploy-production.mjs` as an explicit `npm run typecheck` ahead of `wrangler deploy` (2026-09-12 re-scope) |
 | `preview-assert.yml` | Merge lands a diff that fails the release assertion on main | Incident 0509#1576: 9 of 120 merges auto-reverted because the assertion ran only after merge | Path-gated (PR #1580 lesson) ~5 min | **KEEP** |
-| `auto-revert.yml` | Red main after merge | R4 reversibility (Nish canonical) | Runs on failure only | **KEEP** |
+| ~~`auto-revert.yml`~~ | Red main after merge | R4 reversibility (Nish canonical) | — | **REMOVED 2026-09-20** — 100 runs, 0 failures, 30 reverts over its life; deleted in the #3679 watcher batch (5d19b38e0) with `tests/auto-revert-workflow.test.ts`. The stock replacement is `wrangler rollback` in deploy-production.yml plus `git revert`. |
 | ~~`auto-merge-arm.yml`~~ | Un-armed merges / merge-queue misuse | fleet-ops#1457, #3532 | — | **REMOVED 2026-09-20** — the merge queue is the stock replacement. `allow_auto_merge=true` on the repo plus ruleset 21391031's `merge_queue` rule (HEADGREEN) lands a PR once the four required checks pass. Proof: 11 PRs merged 09-19 08:47Z–18:45Z while this workflow was already disabled since 08:28Z. |
 | ~~`review-gate.yml`~~ | Greptile review budget burn | Incident 2026-08-03: 50/month budget ran dry across 185 PRs/30d | — | **REMOVED 2026-09-20** — the Copilot pull-request reviewer is active on this repo and unmetered, so there is no budget left to ration. A hand-built backpressure tier ladder around a reviewer we no longer pay per-review for is pure overhead. |
 | `semgrep-actionlint.yml` | Malformed/miswritten workflow + TS checks | Purpose-built for the smallest-diff rule (fork-guard authorizers); not yet a required context | ~2 min per PR | **MERGE-INTO** the one PR job as a path-gated step (`.github/**`) so it is one context, not a fourth workflow |
@@ -165,7 +166,10 @@ them.
 | `Emit deploy-age measure line` (deploy) | #2975 item 4 stalled-deploy detector | <1 s | KEEP |
 | `Emit deploy-chain progress line` (deploy) | #2975 reopened-accept chain detector | <1 s | KEEP |
 
-Note for the next auditor: `auto-revert.yml`'s assertion classifier still lists
+Note for the next auditor (superseded 2026-09-20 — `auto-revert.yml` and
+`tests/auto-revert-workflow.test.ts` were deleted in 5d19b38e0, so the
+classifier and pin this describes are gone; kept as the record of the #3070
+trim decision): `auto-revert.yml`'s assertion classifier still lists
 `"Typecheck"` — the string is test-pinned there, so it stays; after this trim a
 typecheck failure inside the plan surfaces under the `Deploy` step, which the
 same classifier already treats as an assertion step, so revert semantics are
@@ -189,8 +193,8 @@ Fill per deletion batch when merged:
 | uptime-health.yml deletion — issue #3068, PR #3216 | 4.2 min median, 6 required contexts, 26 workflow files | 4.2 min median (unchanged — the check was dispatch-only, 0 PR jobs), 6 required contexts (ruleset `main-merge-queue` verified unchanged), 25 workflow files | −1 workflow file, −1 dispatchable hosted job, 0 PR-job delta |
 | #3070 trim (deploy-production.yml) | Deploy Worker job 22.5 min — run 34380544970, 2026-09-09 | pending first green post-merge run (deploy chain red on #3174 stale-ledger blocker); expected ≈22 min | discrete 62 s step removed; `npm run typecheck` re-added inside `npm run deploy` per re-scope, net ≈ −0–20 s |
 
-| ~~`red-on-main-watch.yml`~~ | Red main going unnoticed | 15-min sweep for a first-run failure | — | **REMOVED 2026-09-20** — 32 failures in 45 runs (71%): the alert failed more often than the thing it watched. It filed 16 `red-on-main` issues and 6 are still open, so its output was not acted on either. `auto-revert.yml` and `stop-the-line-watch.yml` cover red main with clean records. |
-| ~~`stop-the-line-watch.yml`~~ | Consecutive red pair on main | Gate C / freeze doctrine | — | **REMOVED 2026-09-20** — broken by PR #3670, which deleted `.github/scripts/`. The fleet-ops reusable workflow it calls runs `.github/scripts/stop-the-line-detector.mjs` **from the caller's checkout**, so a dispatched run now dies with MODULE_NOT_FOUND. Making it work again means reinstating 51 KB of detector glue in this repo to run a second-order watcher, when `auto-revert.yml` already covers the primary undo with 0 failures in 100 runs. |
+| ~~`red-on-main-watch.yml`~~ | Red main going unnoticed | 15-min sweep for a first-run failure | — | **REMOVED 2026-09-20** — 32 failures in 45 runs (71%): the alert failed more often than the thing it watched. It filed 16 `red-on-main` issues and 6 are still open, so its output was not acted on either. `auto-revert.yml` and `stop-the-line-watch.yml` covered red main with clean records when these rows were struck — both were removed later the same day in the #3679 watcher batch (5d19b38e0); since then a red main is caught by the deploy workflow's own smoke failure plus `wrangler rollback`, and a genuinely broken commit on main waits for a person + `git revert`. |
+| ~~`stop-the-line-watch.yml`~~ | Consecutive red pair on main | Gate C / freeze doctrine | — | **REMOVED 2026-09-20** — broken by PR #3670, which deleted `.github/scripts/`. The fleet-ops reusable workflow it calls runs `.github/scripts/stop-the-line-detector.mjs` **from the caller's checkout**, so a dispatched run now dies with MODULE_NOT_FOUND. Making it work again means reinstating 51 KB of detector glue in this repo to run a second-order watcher, when `auto-revert.yml` covered the primary undo with 0 failures in 100 runs at strike time — and was itself removed later that day (#3679 watcher batch, 5d19b38e0), leaving the stock `wrangler rollback` + `git revert` as the undo path. |
 
 ## Disabled-state audit, 2026-09-20
 
@@ -203,11 +207,13 @@ the `0509-liveness` systemd timer owned liveness, and that timer was never
 installed on netcup. It was installed and proven on 2026-09-20.
 
 **Re-enabled (3)** — each guards something with no stock replacement and has a
-clean record:
+clean record. (One of the three, `auto-revert.yml`, was removed again later the
+same day by the #3679 watcher batch — its row below is struck; the remaining two
+are live.)
 
 | workflow | record | why it earns its place |
 | --- | --- | --- |
-| `auto-revert.yml` | 100 runs, 0 failures, 30 reverts | R4 reversibility on a repo that deploys to production on every merge. 30 `auto-revert-halt` issues filed, 0 still open — its output gets acted on. |
+| ~~`auto-revert.yml`~~ | 100 runs, 0 failures, 30 reverts | R4 reversibility on a repo that deploys to production on every merge. 30 `auto-revert-halt` issues filed, 0 still open — its output gets acted on. **Removed later the same day** in the #3679 watcher batch (5d19b38e0); `wrangler rollback` plus `git revert` is the replacement. |
 | `market-signal-snapshot-age.yml` | 42 runs, 42 green | R3. Its parent `market-signal-snapshot.yml` is active, so the job it watches was running unwatched — the precise shape of the #1894 miss. |
 | `ads-prog-seo-canary.yml` | recently unblocked (#3619) | Guards `/ads/:domain` noindex/sitemap parity. The SEO surface is the acquisition channel, and there is no stock equivalent. |
 
