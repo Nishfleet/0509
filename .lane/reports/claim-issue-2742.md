@@ -25,11 +25,15 @@ Corpus size and full `price_tier` distribution:
 | **total**    | **94** |
 
 Affected-set query — `price_tier` in a named band AND `price_text`
-matching any of the 13 alphabetic unrecognised markers (`RS.` / `RS ` /
+matching any of the 13 alphabetic unrecognised markers (`RS.` / `RS␣` /
 `INR` / `JPY` / `CNY` / `AUD` / `CAD` / `CHF` / `SEK` / `NOK` / `DKK` /
 `RUB` / `KRW`), tested case-insensitively via `UPPER(price_text) LIKE
-'%<marker>%'` to replicate `toUpperCase().includes(marker)` in
-`parsePriceToEur` exactly:
+'%<marker>%'` — ASCII-exact with `toUpperCase().includes(marker)` in
+`parsePriceToEur` (SQLite `UPPER`/`LIKE` fold ASCII only; JS folds a few
+non-ASCII letters — ı→I, ſ→S, K→K — into marker letters too, so the SQL
+predicate alone could miss a hypothetical exotic-fold row). The airtight
+anchor is the full enumeration below: every named-band `price_text` is
+listed verbatim, so no fold-dependent text can hide in the affected set:
 
     SELECT price_text, price_tier, COUNT(*) FROM landing_page_snapshot
     WHERE price_tier IN ('under_30','30_to_100','100_to_250','over_250')
@@ -56,10 +60,16 @@ Cross-checks, all consistent with zero stored damage:
 - Full enumeration of every `price_text` value in the four named bands
   (21 distinct strings over 28 rows): all are `$…`, `£…`, `€…`, or
   percent-off promo strings — none carries an unrecognised marker.
-- `price_tier` is written only at INSERT time via `extractPriceTier`
-  (`app/lib/data/ads.server.ts`), which post-#2433 (merged 2026-09-11,
-  commit 82ff523ef) returns `unknown` for every marker above — so a
-  marker row in a named band can only be a pre-fix write, and none exist.
+- `price_tier` is written only at INSERT time via `extractPriceTier`,
+  at all four writer sites — `app/lib/data/ads.server.ts`,
+  `app/lib/demo-brand-backfill.server.ts`,
+  `app/lib/sitemap-timeline-backfill.server.ts`,
+  `app/lib/sneaker-resale-backfill.server.ts`. There is no `UPDATE` of
+  `price_tier` anywhere in `app/`, `workers/`, or `migrations/`, and
+  migration 0086 is a bare `ADD COLUMN` with no backfill. Post-#2433
+  (merged 2026-09-11, commit 82ff523ef) the extractor returns `unknown`
+  for every marker above — so a marker row in a named band can only be a
+  pre-fix write, and none exist.
 
 Why the exposure was nil: the bug window ran from the guard's
 introduction (#1279 phase 1) to the #2433 merge on 2026-09-11, but the
@@ -69,6 +79,19 @@ EUR/USD/GBP-denominated. The digest "Value-tier swing" section
 (`delivery.server.ts` → `loadPriceTierSwing`) reads this same column, so
 with zero inflated rows there is no tier-movement overstatement to
 correct either.
+
+## Appendix: complete named-band `price_text` population (prod, 2026-09-20)
+
+Every distinct `price_text` value stored in a named band — 21 strings,
+28 rows. This is the enumeration that makes the zero-affected verdict
+fold-proof:
+
+- `100_to_250`: `$150`, `$179`, `$189`, `$219`
+- `30_to_100`: `$100` ×2, `£50` ×2, `$49`, `€35`, `30% Off`, `50% off`,
+  `Up To 40% Off`, `Up To 50% Off`
+- `under_30`: `10% Off` ×2, `10% off`, `15% Off`, `20% OFF`, `5% Off`,
+  `Up To 20% Off`, `Up To 25% Off`, `Up to 25% off`
+- `over_250`: `€34,90` ×2, `€ 40,00`, `€ 42,75`, `$799,99`
 
 ## Incidental finding (filed separately, out of this issue's scope)
 
