@@ -369,24 +369,3 @@ export const linkedinConnector = {
   },
 };
 
-export function buildLinkedInOAuthAuthorizeUrl(
-  env: import("~/lib/env.server").AppEnv,
-  state: string,
-  pkceChallenge: string,
-) {
-  const clientId = env.LINKEDIN_CLIENT_ID?.trim();
-  if (!clientId) {
-    return null;
-  }
-  const redirectUri = `${env.BETTER_AUTH_URL?.replace(/\/$/, "") ?? "https://0509.io"}/api/presence/oauth/linkedin/callback`;
-  const params = new URLSearchParams({
-    response_type: "code",
-    client_id: clientId,
-    redirect_uri: redirectUri,
-    state,
-    scope: LINKEDIN_OAUTH_SCOPES.join(" "),
-    code_challenge: pkceChallenge,
-    code_challenge_method: "S256",
-  });
-  return `https://www.linkedin.com/oauth/v2/authorization?${params.toString()}`;
-}

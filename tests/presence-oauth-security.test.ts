@@ -1,258 +1,197 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AppEnv } from "~/lib/env.server";
-import {
-  consumePresenceOAuthTransaction,
-  createPresenceOAuthTransaction,
-  generatePkcePair,
-  presenceOAuthConfigured,
-  redactOAuthStateForLogs,
-  signPresenceOAuthState,
-  verifyPresenceOAuthState,
-} from "~/lib/presence-oauth-transaction.server";
+/**
+ * Security invariants of the Better Auth-backed presence OAuth flow
+ * (issue #3788). The hand-rolled transaction record is gone: PKCE, signed
+ * state, expiry and single-use consumption are owned by the plugin's
+ * /api/auth/callback/linkedin handler. What remains ours — and is pinned here:
+ * the finalize route never trusts client-supplied `code`/`state` params, only
+ * finalizes a freshly linked `account` row bound to the session user, and
+ * re-validates that the entity belongs to the caller's workspace.
+ */
 
-const OAUTH_SECRET = "a".repeat(32);
+const session = {
+  user: {
+    id: "user-1",
+    email: "owner@example.com",
+    name: "Owner",
+  },
+  session: {
+    id: "session-1",
+    userId: "user-1",
+    expiresAt: "2026-06-01T00:00:00.000Z",
+  },
+};
 
-function createMockDb() {
-  const rows = new Map<string, Record<string, unknown>>();
+function createContext(env: Record<string, unknown> = {}) {
   return {
-    prepare(sql: string) {
-      const bindings: unknown[] = [];
-      const statement = {
-        bind(...args: unknown[]) {
-          bindings.push(...args);
-          return statement;
-        },
-        async run() {
-          if (sql.includes("INSERT INTO presence_oauth_transaction")) {
-            const [
-              id,
-              userId,
-              workspaceUserId,
-              connectorId,
-              callbackUri,
-              returnPath,
-              pkceVerifier,
-              expiresAt,
-              ,
-              createdAt,
-            ] = bindings;
-            rows.set(String(id), {
-              id,
-              user_id: userId,
-              workspace_user_id: workspaceUserId,
-              connector_id: connectorId,
-              callback_uri: callbackUri,
-              return_path: returnPath,
-              pkce_verifier: pkceVerifier,
-              expires_at: expiresAt,
-              consumed_at: null,
-              created_at: createdAt,
-            });
-            return { meta: { changes: 1 } };
-          }
-          if (sql.includes("UPDATE presence_oauth_transaction")) {
-            const [consumedAt, id] = bindings;
-            const row = rows.get(String(id));
-            if (!row || row.consumed_at || Date.parse(String(row.expires_at)) <= Date.parse(String(consumedAt))) {
-              return { meta: { changes: 0 } };
-            }
-            row.consumed_at = consumedAt;
-            return { meta: { changes: 1 } };
-          }
-          return { meta: { changes: 0 } };
-        },
-        async first<T>() {
-          if (sql.includes("SELECT * FROM presence_oauth_transaction WHERE id = ?")) {
-            const row = rows.get(String(bindings[0]));
-            return (row ?? null) as T;
-          }
-          return null as T;
-        },
-      };
-      return statement;
+    cloudflare: {
+      env: {
+        BETTER_AUTH_URL: "https://0509.io",
+        LINKEDIN_CLIENT_ID: "linkedin-client",
+        LINKEDIN_CLIENT_SECRET: "linkedin-secret",
+        ...env,
+      },
     },
-    _rows: rows,
   };
 }
 
-const baseEnv = {
-  META_TOKEN_ENCRYPTION_SECRET: "x".repeat(32),
-  BETTER_AUTH_URL: "https://0509.io",
-  PRESENCE_OAUTH_STATE_SECRET: OAUTH_SECRET,
-} satisfies Partial<AppEnv> as AppEnv;
+function dbReturning(row: Record<string, unknown> | null) {
+  return {
+    prepare: vi.fn().mockReturnValue({
+      bind: vi.fn().mockReturnValue({
+        first: vi.fn().mockResolvedValue(row),
+      }),
+    }),
+  };
+}
 
-describe("presence oauth transactions", () => {
-  let db: ReturnType<typeof createMockDb>;
+function mockFinishDeps(overrides: {
+  entity?: unknown;
+  token?: string | null;
+  configured?: boolean;
+} = {}) {
+  const upsertSourceConnection = vi.fn().mockResolvedValue(undefined);
+  const getBetterAuthLinkedAccountToken = vi
+    .fn()
+    .mockResolvedValue(overrides.token === undefined ? "linkedin-access-token" : overrides.token);
+  vi.doMock("~/lib/auth.server", () => ({
+    requireWorkspaceSession: vi.fn().mockResolvedValue({
+      session,
+      workspaceUserId: "workspace-1",
+    }),
+  }));
+  vi.doMock("~/lib/context.server", () => ({
+    getEnv: vi.fn((context) => context.cloudflare.env),
+  }));
+  vi.doMock("~/lib/presence-access-gates.server", () => ({
+    evaluateConnectorAccessGate: vi.fn().mockResolvedValue({ allowed: true }),
+  }));
+  vi.doMock("~/lib/better-auth.server", () => ({
+    getBetterAuthLinkedAccountToken,
+    isBetterAuthConfigured: vi.fn().mockReturnValue(overrides.configured ?? true),
+  }));
+  vi.doMock("~/lib/credential-crypto.server", () => ({
+    credentialFingerprint: vi.fn().mockResolvedValue("fingerprint-1"),
+    encryptCredential: vi.fn().mockResolvedValue("encrypted-1"),
+  }));
+  vi.doMock("~/lib/presence-data.server", () => ({
+    getTrackedEntity: vi
+      .fn()
+      .mockResolvedValue(overrides.entity === undefined ? { id: "entity-1" } : overrides.entity),
+    upsertSourceConnection,
+  }));
+  return { getBetterAuthLinkedAccountToken, upsertSourceConnection };
+}
 
-  beforeEach(() => {
-    db = createMockDb();
-    baseEnv.DB = db as unknown as D1Database;
+beforeEach(() => {
+  vi.resetModules();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  vi.resetModules();
+  vi.useRealTimers();
+});
+
+describe("presence oauth finalize security", () => {
+  it("ignores client-supplied code/state params — no fresh linked account, no write", async () => {
+    const { upsertSourceConnection } = mockFinishDeps();
+
+    const { loader } = await import("~/routes/api.presence.oauth.linkedin.callback");
+    const response = await loader({
+      context: createContext({ DB: dbReturning(null) }),
+      request: new Request(
+        "https://0509.io/api/presence/oauth/linkedin/callback?code=forged&state=forged.state",
+      ),
+    } as never);
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("/app/presence?oauth=linkedin_failed");
+    expect(upsertSourceConnection).not.toHaveBeenCalled();
   });
 
-  it("fails closed when oauth secret is missing", () => {
-    const env = { ...baseEnv, PRESENCE_OAUTH_STATE_SECRET: undefined };
-    expect(presenceOAuthConfigured(env)).toBe(false);
-    expect(() => createPresenceOAuthTransaction(env, {
-      userId: "u1",
-      workspaceUserId: "u1",
-      connectorId: "linkedin",
-      callbackUri: "https://0509.io/callback",
-      returnPath: "/app/presence",
-    })).rejects.toThrow();
+  it("rejects a stale linked account — the grant must be fresh", async () => {
+    const { upsertSourceConnection, getBetterAuthLinkedAccountToken } = mockFinishDeps();
+
+    const { loader } = await import("~/routes/api.presence.oauth.linkedin.callback");
+    const response = await loader({
+      context: createContext({
+        DB: dbReturning({
+          id: "account-row-1",
+          accountId: "li-member-9",
+          updatedAt: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
+        }),
+      }),
+      request: new Request(
+        "https://0509.io/api/presence/oauth/linkedin/callback?code=c&state=s",
+      ),
+    } as never);
+
+    expect(response.headers.get("location")).toBe("/app/presence?oauth=linkedin_failed");
+    expect(getBetterAuthLinkedAccountToken).not.toHaveBeenCalled();
+    expect(upsertSourceConnection).not.toHaveBeenCalled();
   });
 
-  it("creates signed one-time transactions with PKCE", async () => {
-    const created = await createPresenceOAuthTransaction(baseEnv, {
-      userId: "u1",
-      workspaceUserId: "ws1",
-      connectorId: "linkedin",
-      callbackUri: "https://0509.io/api/presence/oauth/linkedin/callback",
-      returnPath: "/app/presence/entity-1",
-    });
-    expect(created.state).toContain(".");
-    expect(created.pkceChallenge).toMatch(/^[A-Za-z0-9_-]+$/);
-    const verified = await verifyPresenceOAuthState(baseEnv, created.state);
-    expect(verified.ok).toBe(true);
+  it("rejects an entity outside the caller's workspace", async () => {
+    const { upsertSourceConnection } = mockFinishDeps({ entity: null });
+
+    const { loader } = await import("~/routes/api.presence.oauth.linkedin.callback");
+    const response = await loader({
+      context: createContext({
+        DB: dbReturning({
+          id: "account-row-1",
+          accountId: "li-member-9",
+          updatedAt: new Date().toISOString(),
+        }),
+      }),
+      request: new Request(
+        "https://0509.io/api/presence/oauth/linkedin/callback?entity=other-workspace-entity",
+      ),
+    } as never);
+
+    expect(response.headers.get("location")).toBe("/app/presence?oauth=linkedin_failed");
+    expect(upsertSourceConnection).not.toHaveBeenCalled();
   });
 
-  it("rejects tampered state signatures", async () => {
-    const created = await createPresenceOAuthTransaction(baseEnv, {
-      userId: "u1",
-      workspaceUserId: "ws1",
-      connectorId: "linkedin",
-      callbackUri: "https://0509.io/callback",
-      returnPath: "/app/presence",
-    });
-    const sigStart = created.state.lastIndexOf(".") + 1;
-    const sigChars = created.state.slice(sigStart).split("");
-    sigChars[0] = sigChars[0] === "a" ? "b" : "a";
-    const tampered = created.state.slice(0, sigStart) + sigChars.join("");
-    const verified = await verifyPresenceOAuthState(baseEnv, tampered);
-    expect(verified.ok).toBe(false);
+  it("fails closed when Better Auth is not configured", async () => {
+    const { upsertSourceConnection } = mockFinishDeps({ configured: false });
+
+    const { loader } = await import("~/routes/api.presence.oauth.linkedin.callback");
+    const response = await loader({
+      context: createContext({
+        DB: dbReturning({
+          id: "account-row-1",
+          accountId: "li-member-9",
+          updatedAt: new Date().toISOString(),
+        }),
+      }),
+      request: new Request("https://0509.io/api/presence/oauth/linkedin/callback"),
+    } as never);
+
+    expect(response.headers.get("location")).toBe("/app/presence?oauth=linkedin_failed");
+    expect(upsertSourceConnection).not.toHaveBeenCalled();
   });
 
-  it("consumes transactions once and blocks replay", async () => {
-    const created = await createPresenceOAuthTransaction(baseEnv, {
-      userId: "u1",
-      workspaceUserId: "ws1",
-      connectorId: "linkedin",
-      callbackUri: "https://0509.io/callback",
-      returnPath: "/app/presence",
-    });
-    const verified = await verifyPresenceOAuthState(baseEnv, created.state);
-    expect(verified.ok).toBe(true);
-    if (!verified.ok) return;
+  it("fails closed when the linked grant cannot be read back", async () => {
+    const { upsertSourceConnection } = mockFinishDeps({ token: null });
 
-    const first = await consumePresenceOAuthTransaction(baseEnv, {
-      transactionId: verified.transactionId,
-      userId: "u1",
-      workspaceUserId: "ws1",
-      connectorId: "linkedin",
-      callbackUri: "https://0509.io/callback",
-    });
-    expect(first.ok).toBe(true);
+    const { loader } = await import("~/routes/api.presence.oauth.linkedin.callback");
+    const response = await loader({
+      context: createContext({
+        DB: dbReturning({
+          id: "account-row-1",
+          accountId: "li-member-9",
+          updatedAt: new Date().toISOString(),
+        }),
+      }),
+      request: new Request("https://0509.io/api/presence/oauth/linkedin/callback"),
+    } as never);
 
-    const replay = await consumePresenceOAuthTransaction(baseEnv, {
-      transactionId: verified.transactionId,
-      userId: "u1",
-      workspaceUserId: "ws1",
-      connectorId: "linkedin",
-      callbackUri: "https://0509.io/callback",
-    });
-    expect(replay.ok).toBe(false);
-    expect(replay.code).toBe("transaction_consumed");
-  });
-
-  it("rejects wrong user, workspace, connector, and callback", async () => {
-    const created = await createPresenceOAuthTransaction(baseEnv, {
-      userId: "u1",
-      workspaceUserId: "ws1",
-      connectorId: "linkedin",
-      callbackUri: "https://0509.io/callback",
-      returnPath: "/app/presence",
-    });
-    const verified = await verifyPresenceOAuthState(baseEnv, created.state);
-    if (!verified.ok) throw new Error("expected valid state");
-
-    expect(
-      (await consumePresenceOAuthTransaction(baseEnv, {
-        transactionId: verified.transactionId,
-        userId: "other",
-        workspaceUserId: "ws1",
-        connectorId: "linkedin",
-        callbackUri: "https://0509.io/callback",
-      })).code,
-    ).toBe("user_mismatch");
-
-    expect(
-      (await consumePresenceOAuthTransaction(baseEnv, {
-        transactionId: verified.transactionId,
-        userId: "u1",
-        workspaceUserId: "other",
-        connectorId: "linkedin",
-        callbackUri: "https://0509.io/callback",
-      })).code,
-    ).toBe("workspace_mismatch");
-
-    expect(
-      (await consumePresenceOAuthTransaction(baseEnv, {
-        transactionId: verified.transactionId,
-        userId: "u1",
-        workspaceUserId: "ws1",
-        connectorId: "x",
-        callbackUri: "https://0509.io/callback",
-      })).code,
-    ).toBe("connector_mismatch");
-
-    expect(
-      (await consumePresenceOAuthTransaction(baseEnv, {
-        transactionId: verified.transactionId,
-        userId: "u1",
-        workspaceUserId: "ws1",
-        connectorId: "linkedin",
-        callbackUri: "https://evil.example/callback",
-      })).code,
-    ).toBe("callback_mismatch");
-  });
-
-  it("rejects expired transactions", async () => {
-    const created = await createPresenceOAuthTransaction(baseEnv, {
-      userId: "u1",
-      workspaceUserId: "ws1",
-      connectorId: "linkedin",
-      callbackUri: "https://0509.io/callback",
-      returnPath: "/app/presence",
-    });
-    const verified = await verifyPresenceOAuthState(baseEnv, created.state);
-    if (!verified.ok) throw new Error("expected valid state");
-
-    const row = db._rows.get(verified.transactionId);
-    if (row) {
-      row.expires_at = new Date(Date.now() - 60_000).toISOString();
-    }
-
-    const consumed = await consumePresenceOAuthTransaction(baseEnv, {
-      transactionId: verified.transactionId,
-      userId: "u1",
-      workspaceUserId: "ws1",
-      connectorId: "linkedin",
-      callbackUri: "https://0509.io/callback",
-    });
-    expect(consumed.ok).toBe(false);
-    expect(consumed.code).toBe("transaction_expired");
-  });
-
-  it("generates distinct PKCE pairs", async () => {
-    const first = await generatePkcePair();
-    const second = await generatePkcePair();
-    expect(first.verifier).not.toBe(second.verifier);
-    expect(first.challenge).not.toBe(second.challenge);
-  });
-
-  it("redacts oauth state for logs", async () => {
-    const state = await signPresenceOAuthState(baseEnv, "transaction-id");
-    expect(redactOAuthStateForLogs(state)).not.toContain(OAUTH_SECRET);
-    expect(redactOAuthStateForLogs(state)).toContain("…");
+    expect(response.headers.get("location")).toBe(
+      "/app/presence?oauth=linkedin_token_missing",
+    );
+    expect(upsertSourceConnection).not.toHaveBeenCalled();
   });
 });

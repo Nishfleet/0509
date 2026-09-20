@@ -1,6 +1,6 @@
 import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
-import { magicLink, organization } from "better-auth/plugins";
+import { genericOAuth, magicLink, organization } from "better-auth/plugins";
 
 import {
   appOrigin,
@@ -9,7 +9,14 @@ import {
   isEmailSendingConfigured,
   type AppEnv,
 } from "~/lib/env.server";
-import { promiseWithTimeout, PromiseTimeoutError } from "~/lib/fetch-timeout.server";
+import { readResponseJsonWithinLimit } from "~/lib/bounded-response.server";
+import {
+  fetchWithTimeout,
+  promiseWithTimeout,
+  PromiseTimeoutError,
+  releaseFetchTimeout,
+} from "~/lib/fetch-timeout.server";
+import { LINKEDIN_OAUTH_SCOPES } from "~/lib/presence-connectors/linkedin.server";
 import {
 	CLOUDFLARE_EMAIL_SEND_TIMEOUT_MS,
 	consultEmailSuppression,
@@ -339,6 +346,7 @@ export function getBetterAuth(env: AppEnv, request: Request) {
           },
         },
       }),
+      ...presenceOAuthPlugins(env, request),
     ],
     secret,
     socialProviders: socialProviders(env),
@@ -1524,6 +1532,163 @@ export function buildBetterAuthMagicLinkEmail(input: {
 
 function absoluteAppUrl(env: AppEnv, request: Request, path: string) {
   return new URL(path, betterAuthBaseURL(env, request)).toString();
+}
+
+const LINKEDIN_USERINFO_TIMEOUT_MS = 10_000;
+const LINKEDIN_USERINFO_JSON_MAX_BYTES = 64_000;
+
+/**
+ * Presence connector OAuth (issue #3788): the LinkedIn connect flow rides
+ * Better Auth's genericOAuth provider instead of the retired
+ * presence_oauth_transaction record — the plugin owns PKCE, the signed state
+ * and its 10-minute expiry, and consumes the state row on callback parse
+ * (single-use). The connector's extra fields need no record of their own:
+ * connectorId IS the providerId, the session-user binding is the link flow's
+ * `link` payload, workspaceUserId is re-derived from the session at finalize
+ * time, and returnPath travels inside the server-set callbackURL.
+ */
+function presenceOAuthPlugins(env: AppEnv, request: Request) {
+  const clientId = env.LINKEDIN_CLIENT_ID?.trim();
+  const clientSecret = env.LINKEDIN_CLIENT_SECRET?.trim();
+  if (!clientId || !clientSecret) {
+    return [];
+  }
+  return [
+    genericOAuth({
+      config: [
+        {
+          providerId: "linkedin",
+          clientId,
+          clientSecret,
+          authorizationUrl: "https://www.linkedin.com/oauth/v2/authorization",
+          tokenUrl: "https://www.linkedin.com/oauth/v2/accessToken",
+          // LinkedIn's token endpoint authenticates the client in the POST
+          // body (client_id + client_secret form fields).
+          authentication: "post",
+          scopes: [...LINKEDIN_OAUTH_SCOPES],
+          pkce: true,
+          disableImplicitSignUp: true,
+          disableSignUp: true,
+          getUserInfo: async (tokens) => {
+            if (!tokens.accessToken) {
+              return null;
+            }
+            // This provider is only ever used through /api/auth/link-social,
+            // which binds the grant to the SESSION user and requires the
+            // returned email to equal theirs. LinkedIn's granted scopes
+            // (r_basicprofile, r_organization_social) serve no email claim,
+            // so the verified session is the source of truth.
+            const session = await getBetterAuthSession(env, request);
+            if (!session) {
+              return null;
+            }
+            const profile = await fetchLinkedInMemberProfile(tokens.accessToken);
+            if (!profile) {
+              return null;
+            }
+            return {
+              user: {
+                id: profile.id,
+                email: session.user.email,
+                emailVerified: true,
+                name: profile.name ?? "LinkedIn account",
+              },
+              data: { id: profile.id },
+            };
+          },
+        },
+      ],
+    }),
+  ];
+}
+
+async function fetchLinkedInMemberProfile(accessToken: string) {
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(
+      "https://api.linkedin.com/v2/me",
+      { headers: { authorization: `Bearer ${accessToken}` } },
+      { timeoutMs: LINKEDIN_USERINFO_TIMEOUT_MS },
+    );
+  } catch {
+    return null;
+  }
+  if (!response.ok || !response.body) {
+    releaseFetchTimeout(response);
+    return null;
+  }
+  const payload = await readResponseJsonWithinLimit<{
+    id?: unknown;
+    localizedFirstName?: unknown;
+    localizedLastName?: unknown;
+  }>(response, LINKEDIN_USERINFO_JSON_MAX_BYTES);
+  const id = typeof payload?.id === "string" && payload.id.trim() ? payload.id.trim() : null;
+  if (!id) {
+    return null;
+  }
+  const nameParts = [payload?.localizedFirstName, payload?.localizedLastName]
+    .filter((part): part is string => typeof part === "string" && Boolean(part.trim()))
+    .map((part) => part.trim());
+  return { id, name: nameParts.length ? nameParts.join(" ") : null };
+}
+
+/**
+ * Begin a Better Auth account-link redirect for a presence connector. Returns
+ * the provider authorization URL; the linked `account` row (with the
+ * encrypted grant) lands on the session user when the provider redirects back
+ * through /api/auth/callback/<provider>.
+ */
+export async function startBetterAuthAccountLink(
+  env: AppEnv,
+  request: Request,
+  input: {
+    provider: string;
+    callbackURL: string;
+    errorCallbackURL: string;
+  },
+) {
+  const auth = getBetterAuth(env, request);
+  const response = await auth.handler(
+    new Request(
+      new URL(`${BETTER_AUTH_BASE_PATH}/link-social`, betterAuthBaseURL(env, request)),
+      {
+        body: JSON.stringify({
+          callbackURL: input.callbackURL,
+          disableRedirect: true,
+          errorCallbackURL: input.errorCallbackURL,
+          provider: input.provider,
+        }),
+        headers: betterAuthJsonHeaders(request),
+        method: "POST",
+      },
+    ),
+  );
+  const result = (await response.json().catch(() => null)) as { url?: string } | null;
+  if (!response.ok || !result?.url) {
+    throw new Error("Better Auth did not return an account-link URL.");
+  }
+  return { url: result.url };
+}
+
+/**
+ * Read the plaintext grant Better Auth stored on the linked `account` row
+ * (encryptOAuthTokens decrypts it). Returns null when the account is gone or
+ * the token cannot be produced — callers treat that as a failed connect.
+ */
+export async function getBetterAuthLinkedAccountToken(
+  env: AppEnv,
+  request: Request,
+  input: { accountId: string },
+) {
+  const auth = getBetterAuth(env, request);
+  const result = (await auth.api
+    .getAccessToken({
+      body: { accountId: input.accountId },
+      headers: request.headers,
+    })
+    .catch(() => null)) as { accessToken?: string } | null;
+  const accessToken = result?.accessToken?.trim();
+  return accessToken || null;
 }
 
 function passkeyRpId(baseURL: string) {
