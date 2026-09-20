@@ -183,7 +183,9 @@ export interface AppEnv {
    * Optional: unbound envs (unit tests, local dev without `wrangler dev`)
    * fall back to the same-isolate guard.
    */
-  SELECTION_ENRICHMENT_LEASE?: DurableObjectNamespace;
+  SELECTION_ENRICHMENT_LEASE?: DurableObjectNamespace<
+    import("../../workers/selection-enrichment-lease").SelectionEnrichmentLease
+  >;
   MONITORING_WORKFLOW?: Workflow;
   OPS_ALLOWLIST_EMAILS?: string;
   UNSUBSCRIBE_SIGNING_SECRET?: string;

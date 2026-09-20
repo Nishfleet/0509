@@ -525,7 +525,9 @@ describe("prepareSearchResultSelection deferCapture lease (issue #3244)", () => 
 
     // A stand-in for the bound namespace: idFromName/get/stub.fetch is the
     // whole client contract; a held lease answers { claimed: false }.
-    const stubFetch = vi.fn(async () => Response.json({ claimed: false }));
+    const stubFetch = vi.fn(async (_input: unknown) =>
+      Response.json({ claimed: false }),
+    );
     const lease = {
       idFromName: vi.fn((name: string) => `id:${name}`),
       get: vi.fn(() => ({ fetch: stubFetch })),
