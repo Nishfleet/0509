@@ -104,8 +104,9 @@ const IDENTITY_OVERRIDES: Record<
   // look-alike ids are NOT substitutes: 100064558275258 is goatapp's
   // new-experience profile id (the fb://profile/… target — 0 library ads under
   // it) and 222826840917934 is "The GOAT" mouth-tape brand (thegoatco.au). The
-  // 2026-09-10 probe that read this id as the mouth-tape page was the
-  // filter-less domain cache key fixed in 08ae3be9b, not a wrong curated id.
+  // 2026-09-10 probe that read this id as the mouth-tape page is consistent
+  // with the filter-less domain cache key fixed in 08ae3be9b — what is proven
+  // is that the curated id was never wrong, not the exact poisoning path.
   "goat.com": { siteName: "GOAT", advertiserPageId: "746493592053334" },
   // On runs its ads across both on.com and its long-standing on-running.com
   // host (on-running.com now redirects into www.on.com). The live redirect

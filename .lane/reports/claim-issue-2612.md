@@ -21,10 +21,12 @@ Library UI:
 - `100064558275258` is goatapp's new-experience profile id (fb://profile
   target); it returns 0 library ads and must never be substituted.
 
-Root cause of the Sep-10 misread: the v2 domain cache key omitted the result
-filters, so a differently-filtered writer could poison the goat.com entry —
-fixed next day by 08ae3be9b ("key the domain cache on the result filters",
-merged Sep 11). The #1982 curated id + tests were already correct.
+Root cause of the Sep-10 misread: consistent with the v2 domain cache key
+omitting the result filters, so a differently-filtered writer could poison the
+goat.com entry — fixed next day by 08ae3be9b ("key the domain cache on the
+result filters", merged Sep 11). Proven: the #1982 curated id + tests were
+already correct (live typeahead pairing and page-scoped ads all landing on
+goat.com); the exact poisoning path is inferred, not demonstrated end-to-end.
 
 Production state (already green before this diff):
 
