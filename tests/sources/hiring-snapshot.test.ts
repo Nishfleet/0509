@@ -199,6 +199,82 @@ describe("fetchHiringSnapshot — no derivable domain", () => {
   });
 });
 
+// --- discovery guess path: probe body is the feed body (#2624) ----------
+
+describe("fetchHiringSnapshot — label-guessed board fetched once", () => {
+  it("reuses the discovery probe's body; no second feed request", async () => {
+    latestSnapshot = null;
+    storedRow = {
+      target_id: "https://acme.example",
+      job_board_provider: null,
+      job_board_slug: null,
+      job_board_verified: null,
+    };
+    const feedUrl =
+      "https://boards-api.greenhouse.io/v1/boards/acme/jobs?content=false";
+    const calls: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      calls.push(url);
+      if (url === feedUrl) {
+        return new Response(
+          JSON.stringify({
+            jobs: [
+              {
+                id: 101,
+                title: "Staff Engineer",
+                location: { name: "London" },
+                departments: [{ name: "Engineering" }],
+                absolute_url: "https://boards.greenhouse.io/acme/jobs/101",
+                updated_at: "2026-09-09T00:00:00.000Z",
+              },
+            ],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      // Homepage: HTML, no board links, no careers link -> guess path only.
+      return new Response("<html><body>hi</body></html>", {
+        status: 200,
+        headers: { "Content-Type": "text/html" },
+      });
+    });
+
+    const result = await fetchHiringSnapshot({} as never, {
+      competitorId,
+      competitorLabel,
+    });
+
+    // Homepage + the single probe — the guess's 200 body feeds the snapshot.
+    expect(calls).toEqual(["https://acme.example", feedUrl]);
+    expect("unavailable" in result).toBe(false);
+    if ("unavailable" in result) throw new Error("unreachable");
+    expect(result.payload.provider).toBe("greenhouse");
+    expect(result.payload.slug).toBe("acme");
+    expect(result.payload.verified).toBe(false);
+    expect(result.payload.jobs).toEqual([
+      {
+        id: "101",
+        title: "Staff Engineer",
+        location: "London",
+        department: "Engineering",
+        url: "https://boards.greenhouse.io/acme/jobs/101",
+        postedAt: "2026-09-09T00:00:00.000Z",
+      },
+    ]);
+    expect(result.competitorUpdate).toEqual({
+      job_board_provider: "greenhouse",
+      job_board_slug: "acme",
+      job_board_verified: 0,
+    });
+  });
+});
+
 // --- diff --------------------------------------------------------------
 
 describe("diffHiring", () => {

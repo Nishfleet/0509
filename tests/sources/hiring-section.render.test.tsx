@@ -131,7 +131,10 @@ describe("HiringSection render", () => {
     expect(html).toContain("unconfirmed board");
     expect(html).toContain("4 open roles");
     expect(html).toContain("Job board URL");
-    expect(html).toContain('aria-label="Job board URL"');
+    // A real <label for> association, not a bare span + aria-label (#2624).
+    expect(html).toContain('for="hiring-job-board-url"');
+    expect(html).toContain('id="hiring-job-board-url"');
+    expect(html).not.toContain('aria-label="Job board URL"');
   });
 
   it("does not show the manual override on a verified board view", () => {
@@ -143,7 +146,7 @@ describe("HiringSection render", () => {
     );
     expect(html).not.toContain("unconfirmed board");
     expect(html).not.toContain("Job board URL");
-    expect(html).not.toContain('aria-label="Job board URL"');
+    expect(html).not.toContain("hiring-job-board-url");
   });
 
   it("reads opened/closed from the single grouped role_change entry", () => {
@@ -173,7 +176,9 @@ describe("HiringSection render", () => {
     );
     expect(html).toContain("No public job board detected");
     expect(html).toContain("Job board URL");
-    expect(html).toContain('aria-label="Job board URL"');
+    expect(html).toContain('for="hiring-job-board-url"');
+    expect(html).toContain('id="hiring-job-board-url"');
+    expect(html).not.toContain('aria-label="Job board URL"');
   });
 
   it("treats a payload with no provider as no board", () => {

@@ -131,6 +131,9 @@ async function discoverThenFetch(
   const fetched = await fetchJobs(
     { provider: discovery.provider, slug: discovery.slug },
     defaultFetch,
+    // A label-guessed board carries its probe's feed body — reuse it instead
+    // of requesting the same URL a second time in this check (#2624).
+    discovery.prefetchedBody,
   );
   if (fetched.unavailable) {
     // Fresh discovery that falls over on its own feed: leave the board

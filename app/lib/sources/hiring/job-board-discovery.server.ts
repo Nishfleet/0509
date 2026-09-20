@@ -1,5 +1,6 @@
 import type { SourceFetchContext } from "~/lib/sources/types";
 import { registrableDomainFromHostname } from "~/lib/search-query";
+import { buildJobFeedUrl } from "~/lib/sources/hiring/hiring-signals.server";
 
 /**
  * Job-board slug discovery (#2199).
@@ -41,9 +42,6 @@ export const JOB_BOARD_PROVIDERS: readonly JobBoardProvider[] = [
 ];
 
 export const GREENHOUSE_BOARDS_URL = "https://boards.greenhouse.io";
-export const GREENHOUSE_API_URL = "https://boards-api.greenhouse.io";
-export const ASHBY_API_URL = "https://api.ashbyhq.com";
-export const LEVER_API_URL = "https://api.lever.co";
 
 /** One page / one probe fetch budget. 20s, one attempt, no retry. */
 export const FETCH_TIMEOUT_MS = 20_000;
@@ -97,6 +95,13 @@ export interface DiscoverOptions {
 
 export interface DiscoveredBoard extends JobBoard {
   verified: boolean;
+  /**
+   * Parsed body of a domain-label guess probe — the probe URL IS the
+   * provider's public feed URL (`buildJobFeedUrl`), so a 200's body is the
+   * same payload the weekly fetch would download. Carried through so the
+   * fetch is not duplicated (#2624).
+   */
+  prefetchedBody?: unknown;
 }
 
 /**
@@ -173,35 +178,36 @@ export function findCareersLink(html: string, baseUrl: string): string | null {
   return null;
 }
 
+/** A domain-guess hit: the board plus the probe's already-downloaded feed body. */
+export interface GuessedBoard extends JobBoard {
+  prefetchedBody?: unknown;
+}
+
 /**
  * Try Greenhouse, then Ashby, then Lever for a board whose company slug equals
  * the registrable-domain label. Keep the FIRST provider that returns HTTP 200.
  * A thrown/timed-out probe just means that provider is not it (continue). When
  * none return 200, null. Fetch is injected for testability.
+ *
+ * The probe URL is the provider's public job-feed URL (`buildJobFeedUrl`), so
+ * a 200 response body IS the feed payload — it is returned as `prefetchedBody`
+ * so the snapshot fetch reuses it instead of requesting the same URL twice in
+ * one weekly check (#2624).
  */
 export async function guessBoardFromDomain(
   domainLabel: string,
   fetchFn: FetchFn = defaultFetch,
-): Promise<JobBoard | null> {
+): Promise<GuessedBoard | null> {
   const label = domainLabel.toLowerCase();
-  const probes: Array<{ provider: JobBoardProvider; url: string }> = [
-    {
-      provider: "greenhouse",
-      url: `${GREENHOUSE_API_URL}/v1/boards/${label}/jobs`,
-    },
-    {
-      provider: "ashby",
-      url: `${ASHBY_API_URL}/posting-api/job-board/${label}`,
-    },
-    {
-      provider: "lever",
-      url: `${LEVER_API_URL}/v0/postings/${label}?mode=json`,
-    },
-  ];
-  for (const p of probes) {
-    const ok = await probeOk(p.url, fetchFn);
-    if (!ok) continue;
-    return { provider: p.provider, slug: label };
+  for (const provider of JOB_BOARD_PROVIDERS) {
+    const hit = await probeFeed(
+      buildJobFeedUrl({ provider, slug: label }),
+      fetchFn,
+    );
+    if (!hit.ok) continue;
+    return hit.body !== undefined
+      ? { provider, slug: label, prefetchedBody: hit.body }
+      : { provider, slug: label };
   }
   return null;
 }
@@ -242,7 +248,7 @@ export async function discoverJobBoard(
   if (label) {
     const guessed = await guessBoardFromDomain(label, fetchFn);
     if (guessed) {
-      return { provider: guessed.provider, slug: guessed.slug, verified: false };
+      return { ...guessed, verified: false };
     }
   }
 
@@ -323,15 +329,25 @@ async function fetchHtml(
   return { ok: true, html };
 }
 
-async function probeOk(url: string, fetchFn: FetchFn): Promise<boolean> {
+/**
+ * Probe a feed URL. A 200 keeps its parsed JSON body (for reuse as
+ * `prefetchedBody`); an unreadable body still counts as a hit — the feed
+ * fetch path surfaces the parse break the same way it does today.
+ */
+async function probeFeed(
+  url: string,
+  fetchFn: FetchFn,
+): Promise<{ ok: true; body: unknown } | { ok: false }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
     const res = await fetchFn(url, { signal: controller.signal });
     clearTimeout(timer);
-    return res.ok;
+    if (!res.ok) return { ok: false };
+    const body = await res.json().catch(() => undefined);
+    return { ok: true, body };
   } catch {
     clearTimeout(timer);
-    return false;
+    return { ok: false };
   }
 }
