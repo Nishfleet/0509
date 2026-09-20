@@ -10,9 +10,9 @@ import {
   contentLengthExceeds,
   readResponseBytesWithinLimit,
 } from "~/lib/bounded-response.server";
+import { fetchPublicCreativeResource } from "~/lib/creative-text.server";
 import type { AppEnv } from "~/lib/env.server";
-import { fetchWithTimeout, releaseFetchTimeout } from "~/lib/fetch-timeout.server";
-import { resolvePublicHttpUrl, resolvePublicRedirectUrl } from "~/lib/public-url.server";
+import { releaseFetchTimeout } from "~/lib/fetch-timeout.server";
 import type { AdRecord } from "~/lib/types";
 
 export const CREATIVE_ARTIFACT_KEY_PREFIX = "creatives/";
@@ -26,8 +26,6 @@ export const ALLOWED_RASTER_IMAGE_TYPES: ReadonlySet<string> = new Set([
   "image/gif",
   "image/avif",
 ]);
-const MAX_CREATIVE_FETCH_REDIRECTS = 5;
-const CREATIVE_RESOURCE_FETCH_TIMEOUT_MS = 12_000;
 const META_AD_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
 
 export function creativeArtifactObjectKey(metaAdId: string): string | null {
@@ -189,39 +187,4 @@ async function fetchGuardedCreativeImage(
   }
 
   return { bytes, contentType };
-}
-
-// Same SSRF contract as creative-text.server.ts: every hop must resolve to
-// a public internet address or the Worker refuses the fetch.
-async function fetchPublicCreativeResource(
-  url: string,
-  headers: Record<string, string>,
-): Promise<Response | null> {
-  let currentUrl = await resolvePublicHttpUrl(url);
-
-  for (
-    let redirects = 0;
-    currentUrl && redirects <= MAX_CREATIVE_FETCH_REDIRECTS;
-    redirects += 1
-  ) {
-    const response = await fetchWithTimeout(
-      currentUrl.toString(),
-      {
-        redirect: "manual",
-        headers,
-      },
-      { timeoutMs: CREATIVE_RESOURCE_FETCH_TIMEOUT_MS },
-    );
-
-    if (response.status >= 300 && response.status < 400) {
-      const redirected = resolvePublicRedirectUrl(response.headers.get("location"), currentUrl);
-      releaseFetchTimeout(response);
-      currentUrl = redirected ? await resolvePublicHttpUrl(redirected) : null;
-      continue;
-    }
-
-    return response;
-  }
-
-  return null;
 }

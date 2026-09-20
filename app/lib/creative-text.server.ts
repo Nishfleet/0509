@@ -109,7 +109,7 @@ const CREATIVE_RESOURCE_FETCH_TIMEOUT_MS = 12_000;
 // attacker-influenced content. Every fetch, including each redirect hop, must
 // resolve to the public internet (same guard as landing-pages.server.ts), or
 // the Worker becomes an SSRF proxy into private address space.
-async function fetchPublicCreativeResource(
+export async function fetchPublicCreativeResource(
   url: string,
   headers: Record<string, string>,
 ): Promise<Response | null> {

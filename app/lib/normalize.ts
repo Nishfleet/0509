@@ -179,7 +179,7 @@ export function buildSearchParams(query: NormalizedSavedQuery) {
   return params;
 }
 
-export function hashString(value: string) {
+export function fnv1a32(value: string) {
   let hash = 2166136261;
 
   for (let index = 0; index < value.length; index += 1) {
@@ -187,5 +187,9 @@ export function hashString(value: string) {
     hash = Math.imul(hash, 16777619);
   }
 
-  return `fnv1a-${(hash >>> 0).toString(16)}`;
+  return hash >>> 0;
+}
+
+export function hashString(value: string) {
+  return `fnv1a-${fnv1a32(value).toString(16)}`;
 }
