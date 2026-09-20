@@ -79,11 +79,54 @@ jobs:
         run: npm run deploy
         env:
           NODE_OPTIONS: --max-old-space-size=4096
-      - name: Install Playwright browser
-        run: npx playwright install chromium
+      # The deploy gate asks one question: did the version we just shipped come
+      # up and serve traffic? The app's own /api/health/deep answers it — edge,
+      # D1, scheduled work and the scheduled-gap check, computed by the running
+      # Worker. No browser, no live crawled data, no fixtures, ~2s.
+      #
+      # It replaced `npm run e2e:prod:public`: 1,335 lines of Playwright across
+      # five specs, 4m43s of a 14m deploy, gating production on whether a nike
+      # search currently returns verified rows and whether 217 /brands anchors
+      # each answer inside a sequential probe. Those are product truths that
+      # depend on crawled data, not on this deploy, so they failed at random:
+      # six of twelve deploys rolled back on three DIFFERENT specs, and the spec
+      # CI failed on at 03:52 passed locally against the same live site minutes
+      # later (#3753).
+      #
+      # The tell was in the suite's own comments. That 217-anchor probe's ceiling
+      # went 60s -> 120s -> 240s -> 420s, each raise reasoned carefully from
+      # measurements. Four rounds of tuning a budget rather than asking whether a
+      # deploy gate should be crawling the site at all.
+      #
+      # The suite is not deleted. It moves to prod-public-canary.yml on a
+      # schedule, where a failure files an issue instead of reverting a release.
       - name: Smoke test production
         id: smoke
-        run: npm run e2e:prod:public
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5 6; do
+            # A freshly deployed Worker can take a few seconds to serve its
+            # first request while the version propagates, so a cold 5xx is
+            # retried. A body that parses but reports a failing check is NOT
+            # retried — that is the answer, not a warm-up artifact.
+            code="$(curl -sS -o body.json -w '%{http_code}' --max-time 30 https://0509.io/api/health/deep || true)"
+            if [ "$code" = "200" ]; then
+              if jq -e '.status == "ok" and (.checks | to_entries | all(.value == "ok"))' body.json >/dev/null; then
+                echo "health ok: $(jq -c '.checks' body.json)"
+                break
+              fi
+              echo "health reported a failing check: $(jq -c '{status, checks}' body.json)" >&2
+              exit 1
+            fi
+            echo "attempt ${attempt}: HTTP ${code}, retrying in 10s" >&2
+            [ "$attempt" -lt 6 ] || { echo "health never returned 200" >&2; exit 1; }
+            sleep 10
+          done
+          # The marketing home page is the other thing a broken deploy takes
+          # down, and it is not behind the health route.
+          home="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 https://0509.io/)"
+          [ "$home" = "200" ] || { echo "home returned ${home}" >&2; exit 1; }
+          echo "home ok"
       - name: Roll back on failed smoke
         if: failure() && steps.smoke.outcome == 'failure'
         run: npx wrangler rollback --yes --message "smoke failed on ${{ github.sha }}"

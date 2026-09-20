@@ -1,0 +1,100 @@
+name: Prod public canary
+
+# The 1,335-line prod-public Playwright suite, moved off the deploy path (#3753).
+#
+# It was the deploy gate until 2026-09-20, where it failed six of twelve
+# production deploys on three different specs and rolled each one back. It was
+# not catching six regressions: the spec CI failed on at 03:52 passed against
+# the same live site minutes later. The suite asserts product truths that depend
+# on crawled data — does a nike search currently return verified rows, do all
+# 217 /brands anchors answer a sequential probe — and none of those depend on
+# the deploy that was being gated.
+#
+# The suite is still worth running. It is monitoring, so a failure files an
+# issue rather than reverting a release. The deploy now gates on
+# /api/health/deep, which the running Worker computes and which answers the only
+# question a deploy gate has: did this version come up and serve traffic.
+
+on:
+  schedule:
+    # Every 6 hours, off the hour so it never queues behind the fleet's :00
+    # rails or the 04:3x market-signal snapshot.
+    - cron: "37 1,7,13,19 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: 0509-prod-public-canary
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  canary:
+    name: Prod public suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ".node-version"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Install Playwright browser
+        run: npx playwright install chromium
+
+      - name: Run the prod-public suite
+        id: suite
+        run: npm run e2e:prod:public
+
+      - name: Keep traces on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v6.0.0
+        with:
+          name: prod-public-canary-${{ github.run_id }}
+          path: test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # One open issue, updated — not a new issue every six hours. The same
+      # alert shape market-signal-snapshot-age.yml uses: the filed issue IS the
+      # signal, and it self-clears on recovery.
+      - name: File or update the alert
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          existing="$(gh issue list --label prod-public-canary --state open --json number -q '.[0].number // empty')"
+          {
+            printf 'The prod-public suite failed at %s.\n\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            printf 'Run: %s\n\n' "$RUN_URL"
+            printf 'This is monitoring, not a deploy gate (#3753). A failure here means a\n'
+            printf 'product surface is wrong on the live site, not that the last deploy was\n'
+            printf 'bad. Traces are attached to the run.\n'
+          } > alert.md
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body-file alert.md
+          else
+            gh issue create --title "prod-public canary is failing" \
+              --label prod-public-canary --label agent-ready --body-file alert.md
+          fi
+
+      - name: Close the alert on recovery
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for n in $(gh issue list --label prod-public-canary --state open --json number -q '.[].number'); do
+            gh issue close "$n" --comment "prod-public suite green again in run ${{ github.run_id }}."
+          done
