@@ -35,7 +35,7 @@
  *     `tripFraction` of the daily limit.
  */
 
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
@@ -58,7 +58,7 @@ const SQL_KEYWORDS = new Set([
 
 /** @param {DatabaseSync} db @param {string} migrationsDir */
 export function applyMigrationsToDatabase(db, migrationsDir) {
-  const files = readdirSync(migrationsDir)
+  const files = (existsSync(migrationsDir) ? readdirSync(migrationsDir) : [])
     .filter((name) => name.endsWith(".sql"))
     .sort();
   if (files.length === 0) {
@@ -329,10 +329,10 @@ export function scanCanaryBudgets(root) {
   const scriptsDir = join(root, "scripts");
   const workflowsDir = join(root, ".github", "workflows");
   const files = [
-    ...readdirSync(scriptsDir)
+    ...(existsSync(scriptsDir) ? readdirSync(scriptsDir) : [])
       .filter((name) => name.includes("canary") && name.endsWith(".mjs") && !name.endsWith(".lib.mjs"))
       .map((name) => join("scripts", name)),
-    ...readdirSync(workflowsDir)
+    ...(existsSync(workflowsDir) ? readdirSync(workflowsDir) : [])
       .filter((name) => name.includes("canary") && name.endsWith(".yml"))
       .map((name) => join(".github", "workflows", name)),
   ].sort();
