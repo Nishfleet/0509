@@ -124,10 +124,19 @@ live in two bounded stores: structured JSON lines in Workers Logs (platform wind
   `watchlist`, `proof_capture`, `user_plan`); they are never emitted as anonymous
   events or logged.
 - **Post-enable canary** (spec §8 gate 8): after each deploy that ships the enabled
-  flag, run `node scripts/funnel-canary-check.mjs` — it fetches `/` with and without
-  `Sec-GPC: 1` and asserts both return 200 (the product must work identically for
-  opted-out visitors, spec §5). Rollback plan on a red canary: flip
+  flag, check that `/` behaves identically for an opted-out visitor (spec §5):
+
+  ```bash
+  curl -s -o /dev/null -w '%{http_code}\n' https://0509.io/
+  curl -s -o /dev/null -w '%{http_code}\n' -H 'Sec-GPC: 1' https://0509.io/
+  ```
+
+  Both must be 200. Rollback plan on a red canary: flip
   `FUNNEL_MEASUREMENT_ENABLED` back to `"0"` in `wrangler.jsonc` and redeploy.
+
+  (`scripts/funnel-canary-check.mjs` was 141 lines wrapping exactly those two
+  requests, run by no workflow and no npm script. Deleted 2026-09-20 — two curls
+  are the whole check.)
 
 Anonymous funnel events collect through the structured-logs path above; the
 account-scoped measures (signup completion, first watchlist, first proof, paid
