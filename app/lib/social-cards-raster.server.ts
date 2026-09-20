@@ -77,13 +77,31 @@ function ensureResvg(): Promise<void> {
 /**
  * Issue #3782: rasterized PNGs live in the Cache API (`social-card-raster-v1`),
  * not an in-isolate Map — a cold isolate no longer re-renders a card a
- * neighbour isolate just rasterized. The card's request URL is already a
- * valid cache key; `cache-control` on the stored response bounds the
- * lifetime and the runtime's own eviction bounds capacity (the old Map's
- * 256-entry cap).
+ * neighbour isolate just rasterized. `cache-control` on the stored response
+ * bounds the lifetime and the runtime's own eviction bounds capacity (the
+ * old Map's 256-entry cap).
  */
 const PNG_CACHE_NAME = "social-card-raster-v1";
 const PNG_CACHE_MAX_AGE_S = 30 * 24 * 60 * 60;
+
+/**
+ * Cache key: the request URL plus a short hash of the SVG body. The entry
+ * outlives both the served `cache-control` (max-age=3600) and the old
+ * isolate-bounded Map, so keying on the URL alone could keep serving a card
+ * whose score/top-ads changed for the full 30-day TTL. Content in the key
+ * makes a changed card miss immediately while a stable card still avoids
+ * re-raster.
+ */
+async function svgKeyedCacheKey(url: string, svg: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(svg),
+  );
+  const hex = Array.from(new Uint8Array(digest, 0, 8), (b) =>
+    b.toString(16).padStart(2, "0"),
+  ).join("");
+  return `${url}${url.includes("?") ? "&" : "?"}svgv=${hex}`;
+}
 
 /**
  * Rasterize an SVG card body to PNG bytes. The SVG is already 1200×630, so we
@@ -107,9 +125,10 @@ export async function rasterizeSocialCardPng(svg: string): Promise<Uint8Array> {
  * `caches` is absent under plain node, in which case this just renders.
  */
 export async function rasterizeSocialCardPngCached(url: string, svg: string): Promise<Uint8Array> {
-  const cached = await readCachedBytes(PNG_CACHE_NAME, url);
+  const key = await svgKeyedCacheKey(url, svg);
+  const cached = await readCachedBytes(PNG_CACHE_NAME, key);
   if (cached) return cached;
   const png = await rasterizeSocialCardPng(svg);
-  await writeCachedBytes(PNG_CACHE_NAME, url, png, "image/png", PNG_CACHE_MAX_AGE_S);
+  await writeCachedBytes(PNG_CACHE_NAME, key, png, "image/png", PNG_CACHE_MAX_AGE_S);
   return png;
 }
