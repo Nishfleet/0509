@@ -1,6 +1,6 @@
 # REBUILD keep-list — engine audit (issue #3843, umbrella #3842)
 
-Audit date: **2026-09-20** (all timestamps UTC). Brand under test: **Gymshark** (`gymshark.com`), a well-known global DTC brand; `allbirds.com` used once to isolate a brand-level block.
+Audit date: **2026-09-20** (all timestamps UTC). Brand under test: **Gymshark** (`gymshark.com`), a well-known global DTC brand; `allbirds.com` used twice — website-bot-block control and seed cold-cache control, both brand-level isolation probes.
 
 **Method.** No mocks. Server modules ran on real workerd via the repo's `workers` vitest project (Miniflare, real outbound `fetch`, real local D1 with all migrations applied), driving each adapter's `fetch(env, ctx)` / connector's `poll(ctx, target)` and the seam's `runSources` end-to-end. App surfaces were probed live on production `https://0509.io` (public GETs plus the designed reject paths only — nothing mutating). Host limits: no Cloudflare API credentials on this machine, so prod secret presence is inferred from prod's own `/status` surface, never assumed.
 
@@ -11,8 +11,8 @@ Audit date: **2026-09-20** (all timestamps UTC). Brand under test: **Gymshark** 
 | `sources/google-ads` (`google_ads`) | **WORKS** | `adapter.fetch` → Google Ads Transparency public `SearchCreatives` RPC returned real creatives: `advertiserName:"Gymshark Ltd"`, `advertiserId:"AR05501100765344694273"`, `creativeId:"CR17278358977440120833"`, `lastShownAt:2026-09-20T16:56:55Z`, `truncated:true` (200-creative cap hit — demand exists) | 17:22:10 |
 | `sources/subdomains` | **WORKS** | `adapter.fetch` → crt.sh: real subdomains for gymshark.com, classified (`preview.develop.gymshark.com` internal; `reviews.api.develop.gymshark.com` public) with `firstSeen` dates | 17:22:20 |
 | `sources/hiring` | **WORKS** (with caveat) | With stored board `greenhouse/gymshark` (verified — `boards.greenhouse.io/gymshark` 301→`job-boards.greenhouse.io/gymshark` 200): `adapter.fetch` returned real jobs — "Creative Lead, Solihull" id `4793583101`, "Designer – Menswear" id `4974423101`, real `postedAt`/`url`. **Caveat:** homepage auto-discovery leg returned `unavailable:site_unreachable` for gymshark.com (72ms) — workerd plain fetch is bot-gated there while `curl` gets 200 in 67ms. Keep the stored-board path; discovery needs a browser leg or tolerates misses. | 17:25:06 |
-| `sources/google` (SERP) | **NEEDS KEY** | `requiresEnv` false; `fetch` → `{unavailable:true, reason:"not_configured"}`. Wants `SERP_PROVIDER=decodo` + `DECODO_SCRAPER_AUTH` (paid scraper). Prod presence unverifiable from this host. | 17:22:05 |
-| `sources/linkedin` (ads) | **NEEDS KEY** | `fetch` → `{unavailable:true, reason:"no_credentials"}` — wants `DECODO_SCRAPER_AUTH`. Prod `/status` shows the flag not killed (`linkedinAdsSourceKilled:false`) but capture counters `counted:false` (DECODO_BUDGET KV unwired). | 17:22:10 |
+| `sources/google-search` (SERP) | **NEEDS KEY** | `requiresEnv` false; `fetch` → `{unavailable:true, reason:"not_configured"}`. Wants `SERP_PROVIDER=decodo` + `DECODO_SCRAPER_AUTH` (paid scraper). Prod presence unverifiable from this host. | 17:22:05 |
+| `sources/linkedin-ads` (ads) | **NEEDS KEY** | `fetch` → `{unavailable:true, reason:"no_credentials"}` — wants `DECODO_SCRAPER_AUTH`. Prod `/status` shows the flag not killed (`linkedinAdsSourceKilled:false`) but capture counters `counted:false` (DECODO_BUDGET KV unwired). | 17:22:10 |
 | `sources/tiktok` | **BROKEN in prod / needs key locally** | Local: `{unavailable:true, reason:"not_configured"}` (`DECODO_SCRAPER_AUTH`). Prod `/status` 17:14Z: flag `active` but **"0 of 22 active watchlists captured in the last 8 days — 22 missed this weekly window"** — running (or scheduled) and producing nothing. Do not port blind; needs a keyed re-probe. | 17:14:28 (prod) |
 | `sources` seam (`registry`/`run`/`capture-usage`/`types`) | **WORKS** | `runSources` end-to-end on real D1 persisted **2 `source_snapshot` rows** for the watchlist (`subdomains`, `google_ads`) — store/diff/alert machinery proven, not just fetches. | 17:22:31 |
 | `presence-connectors/website` | **WORKS** (brand-dependent) | `poll` allbirds.com → `ok:true`, 1 item (1.6s). `poll` gymshark.com → `fetch_failed` twice — homepage fetch bot-blocked for workerd's signature (curl 200). Module GA in prod (`/status` `website: active`). | 17:22:46 / 17:25:08 |
@@ -48,7 +48,7 @@ Engine code below is proven live today (verdicts above). Shared spine files are 
 - `app/lib/sources/hiring.server.ts` + `app/lib/sources/hiring/` — **proven** (stored-board path)
 - `app/lib/sources/google-search.server.ts` + `app/lib/sources/google-search/` — dormant until `DECODO_SCRAPER_AUTH`
 - `app/lib/sources/linkedin-ads.server.ts` + `app/lib/sources/linkedin-ads/` — dormant until `DECODO_SCRAPER_AUTH`
-- `app/lib/sources/tiktok-ads.server.ts` + `app/lib/sources/tiktok-ads/` — dormant/broken-prod; re-probe with key before trusting
+- `app/lib/sources/tiktok-ads.server.ts` + `app/lib/sources/tiktok-ads/` — keep, but do not port blind: dormant locally, prod-showing zero; re-probe with key before trusting — if it still produces zero under a key, delete
 
 D1 tables: `source_snapshot` (snapshots), `watchlist` (competitor rows incl. `job_board_*`/`tiktok_advertiser` write-back columns), `watch_event` (alert emission via `createWatchEvent`), `user` (FK chain). Decodo usage counters ride `DECODO_BUDGET` KV (not D1).
 
@@ -86,7 +86,7 @@ D1 tables: `discovery_cache_entry`, `discovery_fetch_log`, `discovery_query_leas
 ### Auth (better-auth — magic-link proven end-to-end)
 
 - `app/lib/better-auth.server.ts`, `app/lib/auth.server.ts`, `app/lib/auth-client.ts`, `app/lib/better-auth-magic-link-sign-in.server.ts`, `app/lib/authenticated-api-limits.server.ts`
-- `app/routes/auth.*.tsx/ts`, `app/routes/api.auth.$.ts`
+- `app/routes/auth.*.tsx|.ts`, `app/routes/api.auth.$.ts`
 - `app/lib/delivery.server.ts`, `app/lib/unsubscribe.server.ts` — Cloudflare Email send lane (prod: email accepted 1h before check) + signed unsubscribe
 - `app/lib/workspace.server.ts`, `app/lib/plan.server.ts`, `app/lib/plan-entitlements.ts`
 
@@ -112,13 +112,13 @@ D1 tables: `watchlist_run`, `release_scheduled_observation`, `scheduled_observat
 
 ### Shared spine (keep-because-imported)
 
-`app/lib/env.server.ts`, `app/lib/data/` (d1/helpers/watch-events/watchlists-core + leaves actually imported by kept engines), `app/lib/fetch-timeout.server.ts`, `app/lib/public-url.server.ts`, `app/lib/competitor-website.ts`, `app/lib/weekly-public-moves.server.ts` (currently only `domainFromWatchlistTargetId` — fold it and drop the rest), `app/lib/e2e-*.server.ts` only if the e2e harness survives, `app/components/sources/` + `app/components/presence/` (the Section renderers for kept engines), `app/routes.ts` + the routes serving kept surfaces (`search`, `ads/:domain`, `status`, `auth/*`, `api/auth/*`, `api/billing/*`, `api/webhooks/dodo`, `api/pricing-preview`, `app/*` shell), `workers/`, `app/entry.server.tsx`, `app/root.tsx`, `app/app.css`, `vite.config.ts`, `react-router.config.ts`, `wrangler.jsonc`, `package.json`, `migrations/` — **replaced**: umbrella resets D1 to a fresh `0001` schema carrying only the tables named above.
+`app/lib/env.server.ts`, `app/lib/data.server.ts` + `app/lib/types.ts` (root barrel and shared types actually imported by kept engines — seed and dodo-billing import both), `app/lib/data/` (d1/helpers/watch-events/watchlists-core + leaves actually imported by kept engines), `app/lib/fetch-timeout.server.ts`, `app/lib/public-url.server.ts`, `app/lib/competitor-website.ts`, `app/lib/weekly-public-moves.server.ts` (currently only `domainFromWatchlistTargetId` — fold it and drop the rest), `app/lib/e2e-*.server.ts` only if the e2e harness survives, `app/components/sources/` + `app/components/presence/` (the Section renderers for kept engines), `app/routes.ts` + the routes serving kept surfaces (`search`, `ads/:domain`, `status`, `auth/*`, `api/auth/*`, `api/billing/*`, `api/webhooks/dodo`, `api/pricing-preview`, `app/*` shell), `workers/`, `app/entry.server.tsx`, `app/root.tsx`, `app/app.css`, `vite.config.ts`, `react-router.config.ts`, `wrangler.jsonc`, `package.json`, `migrations/` — **replaced**: umbrella resets D1 to a fresh `0001` schema carrying only the tables named above.
 
 ## DELETE — everything not listed above
 
 Feature surfaces with no place in the rebuild spec (per umbrella #3842's flow):
 
-- `app/lib/customer-agent-actions/` + `customer_api_key`/`agent_*` machinery (MCP/API surface), `app/lib/report-builder.server.ts` + share/report/export routes (`share_link`, `report` tables), `collection*`/`tag`/`saved_query` review surfaces, `support_case*`, `proof_*`/`evidence_*` productization not named above, `whatsapp*`/`slack*`/`teams*` lanes (`WHATSAPP_*` env surface), `client_room*`, `presence` UI beyond the kept mention engines, `brand-page/` extra surfaces, `competitor_graph`, `landing_page` history extras beyond the signal extraction used by seed.
+- `app/lib/customer-agent-actions/` + `customer_api_key`/`agent_*` machinery (MCP/API surface), `app/lib/report-builder.server.ts` + share/report/export routes (`share_link`, `report` tables), `collection*`/`tag`/`saved_query` review surfaces, `support_case*`, `proof_*`/`evidence_*` productization not named above (billing's `evidence_top_up_*`/`evidence_usage_*` tables stay), `whatsapp*`/`slack*`/`teams*` lanes (`WHATSAPP_*` env surface), `client_room*`, `presence` UI beyond the kept mention engines, `brand-page/` extra surfaces, `competitor_graph`, `landing_page` history extras beyond the signal extraction used by seed.
 - `app/routes/` and `app/components/` entries not reachable from the keep list (≈197 routes today; the rebuild's four places are Home/Competitors/Alerts/Settings).
 - `e2e/`, `tests/` — suite dies with the schema it pins; the rebuild rewrites tests against the fresh schema. `scripts/`, `ops/` review by owner (deploy/liveness machinery moves with the deploy pipeline, not the product code).
 - `legacy/`, `automation/`, `brand/`, `build/`, `data/`, `db/`, `extension/`, `docs/` historicals (except this file and `docs/PROJECT-HISTORY.md` if kept as the audit log), `.lane/`, `coverage/`, `test-results/`, `playwright-report/`, `var/`, `deploy-ledger.jsonl`, stray root `test-issuer*.mjs` files.
