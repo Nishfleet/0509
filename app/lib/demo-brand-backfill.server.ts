@@ -46,9 +46,6 @@ import { jsonValue, nowIso } from "~/lib/data/helpers.server";
 import { DEMO_BRAND_PAGE_DOMAINS } from "~/lib/demo-brand-pages";
 import type { AppEnv } from "~/lib/env.server";
 import {
-  startLandingPagePipelineVolumeInstrumentation,
-} from "~/lib/cta-pipeline-stage-counts.server";
-import {
   captureLandingPageSnapshot,
   type LandingPageCaptureFailureDetail,
 } from "~/lib/landing-pages.server";
@@ -411,28 +408,14 @@ export async function runDemoBrandBackfill(
       }
 
       let reasonCode: string | null = null;
-      // Issue #2077: instrument each capture so cta_pipeline_stage_counts
-      // fills for the backfill volume path.
-      const instr = startLandingPagePipelineVolumeInstrumentation({
-        watchlistId: "demo_brand_backfill",
-        scanId: rowId,
-        adId: null,
+      const snapshot = await capture(env, demoBrandHomepage(domain), {
+        preferRendered: true,
+        requireScreenshot: true,
+        routeContext: "proof_capture",
+        onFailure: (detail) => {
+          reasonCode = detail.reasonCode;
+        },
       });
-      let snapshot: LandingPageSnapshotData | null = null;
-      try {
-        snapshot = await capture(env, demoBrandHomepage(domain), {
-          preferRendered: true,
-          requireScreenshot: true,
-          routeContext: "proof_capture",
-          onFailure: (detail) => {
-            reasonCode = detail.reasonCode;
-          },
-          instrumentation: instr.instrumentation,
-        });
-        instr.recordCaptureOutcome(snapshot, reasonCode);
-      } finally {
-        await instr.finish(env);
-      }
 
       if (!snapshot) {
         await recordDemoBrandProofHoleAttempt(env, domain, day, false);
