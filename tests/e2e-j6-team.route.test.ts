@@ -51,16 +51,22 @@ function workspaceFixture() {
     );
   `);
   applyMigration(harness.sqlite, "migrations/0027_workspace_members.sql");
+  applyMigration(harness.sqlite, "migrations/0106_organization_plugin.sql");
   harness.sqlite.exec(`
     INSERT INTO user (id, name, email, emailVerified, createdAt, updatedAt) VALUES
       ('e2e-agency', 'E2E Agency', 'e2e-agency@example.invalid', 1, datetime('now'), datetime('now')),
       ('e2e-removed-member', 'E2E Removed Member', 'e2e-removed-member@example.invalid', 1, datetime('now'), datetime('now')),
       ('e2e-active-member', 'E2E Active Member', 'e2e-active-member@example.invalid', 1, datetime('now'), datetime('now'));
     INSERT INTO user_plan (user_id, plan) VALUES ('e2e-agency', 'agency'), ('e2e-removed-member', 'free');
-    INSERT INTO workspace_member (id, owner_user_id, member_user_id, invited_email, status, created_at, accepted_at)
-      VALUES ('e2e-member-active', 'e2e-agency', 'e2e-active-member', 'e2e-active-member@example.invalid', 'active', datetime('now', '-2 day'), datetime('now', '-1 day'));
-    INSERT INTO workspace_member (id, owner_user_id, member_user_id, invited_email, status, created_at, accepted_at, revoked_at)
-      VALUES ('e2e-member-revoked', 'e2e-agency', 'e2e-removed-member', 'e2e-removed-member@example.invalid', 'revoked', datetime('now', '-2 day'), datetime('now', '-1 day'), datetime('now'));
+    INSERT INTO organization (id, name, slug, createdAt, metadata)
+      SELECT 'org_' || id, name, 'org-' || id, createdAt, json_object('ownerUserId', id) FROM user;
+    INSERT INTO member (id, organizationId, userId, role, createdAt)
+      SELECT 'mem_' || id, 'org_' || id, id, 'owner', createdAt FROM user;
+    INSERT INTO invitation (id, organizationId, email, role, status, createdAt, inviterId) VALUES
+      ('e2e-member-active', 'org_e2e-agency', 'e2e-active-member@example.invalid', 'member', 'accepted', datetime('now', '-2 day'), 'e2e-agency'),
+      ('e2e-member-revoked', 'org_e2e-agency', 'e2e-removed-member@example.invalid', 'member', 'canceled', datetime('now', '-2 day'), 'e2e-agency');
+    INSERT INTO member (id, organizationId, userId, role, createdAt) VALUES
+      ('e2e-member-active', 'org_e2e-agency', 'e2e-active-member', 'member', datetime('now', '-1 day'));
   `);
   return harness;
 }
@@ -105,10 +111,13 @@ describe("Journey 6 team replay contract", () => {
       provider: { called: false, reason: "e2e_network_denied" },
       cleanup: { rawTokensExposed: false, rawHashesExposed: false, rawProviderIdsExposed: false, piiExposed: false },
     });
-    expect(harness.sqlite.prepare("SELECT id, status, member_user_id FROM workspace_member ORDER BY id").all()).toEqual([
-      { id: "e2e-member-active", status: "active", member_user_id: "e2e-active-member" },
-      { id: "e2e-member-revoked", status: "revoked", member_user_id: "e2e-removed-member" },
+    expect(harness.sqlite.prepare("SELECT id, status FROM invitation ORDER BY id").all()).toEqual([
+      { id: "e2e-member-active", status: "accepted" },
+      { id: "e2e-member-revoked", status: "canceled" },
     ]);
+    expect(
+      harness.sqlite.prepare("SELECT id, userId FROM member WHERE role = 'member' ORDER BY id").all(),
+    ).toEqual([{ id: "e2e-member-active", userId: "e2e-active-member" }]);
   });
 
   it("fences replay ownership and completion by processing token and run", () => {

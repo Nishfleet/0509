@@ -108,11 +108,20 @@ export const SCOPED_VIA_PARENT: ReadonlyArray<{ table: string; parent: string }>
   { table: "presence_item_revision", parent: "presence_item" },
 ];
 
-/** The membership table itself — becomes role-bearing (P2) and multi (P6). */
-export const MEMBERSHIP_TABLES = ["workspace_member"] as const;
+/**
+ * Membership tables. `member`/`invitation` are the live Better Auth
+ * organization-plugin pair (issue #3787): member rows are seats (owner or
+ * teammate role), invitation rows are the invite lifecycle incl. tombstones.
+ * `workspace_member` is the retired hand-rolled table kept for rollback until
+ * the expand/contract drop phase lands — it is classified, never read.
+ */
+export const MEMBERSHIP_TABLES = ["member", "invitation", "workspace_member"] as const;
 
-/** The ownership unit introduced by migration 0089 (adopted, epic #2993). */
-export const OWNERSHIP_UNIT_TABLES = ["org"] as const;
+/**
+ * Ownership units. `organization` is the live plugin table (issue #3787);
+ * `org` is the 0089 predecessor kept for rollback in the same expand phase.
+ */
+export const OWNERSHIP_UNIT_TABLES = ["org", "organization"] as const;
 
 /**
  * Platform/infra tables that stay user-keyed or ownerless by design. Every

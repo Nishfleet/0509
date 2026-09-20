@@ -118,10 +118,10 @@ export function prepareAtomicShareLinkInsert(
           ? = ?
           OR EXISTS (
             SELECT 1
-            FROM workspace_member live_membership
-            WHERE live_membership.owner_user_id = ?
-              AND live_membership.member_user_id = ?
-              AND live_membership.status = 'active'
+            FROM member live_membership
+            WHERE live_membership.organizationId = 'org_' || ?
+              AND live_membership.userId = ?
+              AND live_membership.role = 'member'
           )
         )
         AND EXISTS (

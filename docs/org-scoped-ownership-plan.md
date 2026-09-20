@@ -114,8 +114,10 @@ only through watchlist-scoped parents; it never joins to a user directly.
 |---|---|
 | user, session, account, passkey, verification, better_auth_magic_link_ticket | auth identity |
 | user_plan, dodo_webhook_event | billing, per-user subscription (seat pricing is Nish-reserved, out of scope) |
-| workspace_member | the membership table itself — becomes role-bearing in P2, multi-membership in P6 |
-| org | the ownership unit (P2 extends it) |
+| member, invitation | the live membership pair — Better Auth organization-plugin tables (issue #3787): `member` rows are seats (owner/teammate role), `invitation` rows are the invite lifecycle incl. tombstones; multi-membership still lands in P6 |
+| workspace_member | retired membership table — kept for rollback through the #3787 expand window, never read |
+| org | retired ownership unit — kept for rollback alongside `workspace_member` |
+| organization | the live ownership unit — Better Auth plugin table holding the per-user personal org (issue #3787; P2 extends it) |
 | presence_pilot_workspace | internal allowlist (hashed workspace ids) |
 | presence_oauth_transaction | per-user OAuth handshake |
 | pricing_region_preference | personal UI preference |

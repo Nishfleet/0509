@@ -37,6 +37,9 @@ function fakeDb(state: { firstResults?: FakeRow[]; allResults?: FakeRow[]; runCh
         },
       };
     },
+    async batch(statements: Array<{ run(): Promise<unknown> }>) {
+      return Promise.all(statements.map((statement) => statement.run()));
+    },
   };
   return { db, calls };
 }
@@ -57,6 +60,7 @@ function workspaceSqlite() {
     );
   `);
   applyMigration(harness.sqlite, "migrations/0027_workspace_members.sql");
+  applyMigration(harness.sqlite, "migrations/0106_organization_plugin.sql");
   harness.sqlite.exec(`
     INSERT INTO user (id, name, email, createdAt, updatedAt)
     VALUES
@@ -67,8 +71,26 @@ function workspaceSqlite() {
       ('member-3', 'Member Three', 'member3@x.com', datetime('now'), datetime('now'));
     INSERT INTO user_plan (user_id, plan)
     VALUES ('agency-owner', 'agency'), ('agency-other', 'agency');
+    INSERT INTO organization (id, name, slug, createdAt, metadata)
+      SELECT 'org_' || id, name, 'org-' || id, createdAt, json_object('ownerUserId', id) FROM user;
+    INSERT INTO member (id, organizationId, userId, role, createdAt)
+      SELECT 'mem_' || id, 'org_' || id, id, 'owner', createdAt FROM user;
   `);
   return harness;
+}
+
+function seatRows(harness: ReturnType<typeof createSqliteD1>, orgUserId: string) {
+  return harness.sqlite
+    .prepare(
+      `SELECT kind, id FROM (
+         SELECT 'member' AS kind, id FROM member
+          WHERE organizationId = 'org_' || ? AND role = 'member'
+         UNION ALL
+         SELECT 'invite' AS kind, id FROM invitation
+          WHERE organizationId = 'org_' || ? AND status = 'pending'
+       )`,
+    )
+    .all(orgUserId, orgUserId);
 }
 
 const sqliteFixtures: Array<ReturnType<typeof createSqliteD1>> = [];
@@ -134,7 +156,7 @@ describe("workspace seats", () => {
         {
           id: "member-1",
           invitedEmail: "member@x.com",
-          status: "invited",
+          status: "pending",
         },
       ],
     });
@@ -149,14 +171,26 @@ describe("workspace seats", () => {
       expect(result.inviteeEmail).toBe("member@x.com");
       expect(result.token.length).toBeGreaterThan(40);
     }
-    const update = calls.find((call) => call.sql.includes("UPDATE workspace_member"));
-    expect(update?.sql).toContain("token_expires_at");
+    const update = calls.find((call) => call.sql.includes("UPDATE invitation"));
+    expect(update?.sql).toContain("expiresAt");
     expect(update?.bindings[2]).toBe("member-1");
     expect(update?.bindings[3]).toBe("agency-owner");
   });
 
   it("does not report an invite insert that changed zero rows as success", async () => {
-    const { db } = fakeDb({ runChanges: 0 });
+    const { db } = fakeDb({
+      firstResults: [
+        { name: "Asha", createdAt: "2026-01-01", updatedAt: "2026-01-01" },
+        {
+          id: "org_agency-owner",
+          name: "Asha",
+          ownerUserId: "agency-owner",
+          createdAt: "2026-01-01",
+          updatedAt: "2026-01-01",
+        },
+      ],
+      runChanges: 0,
+    });
     await expect(
       createWorkspaceInvite(envWith(db), {
         ownerUserId: "agency-owner",
@@ -166,13 +200,13 @@ describe("workspace seats", () => {
     ).resolves.toMatchObject({ ok: false });
   });
 
-  it("does not resend active member rows", async () => {
+  it("does not resend accepted invitations", async () => {
     const { db } = fakeDb({
       firstResults: [
         {
           id: "member-1",
           invitedEmail: "member@x.com",
-          status: "active",
+          status: "accepted",
         },
       ],
     });
@@ -190,10 +224,11 @@ describe("workspace seats", () => {
       firstResults: [
         {
           id: "m-1",
+          organizationId: "org_agency-owner",
           ownerUserId: "agency-owner",
           invitedEmail: "member@x.com",
           tokenExpiresAt: null,
-          status: "invited",
+          status: "pending",
           ownerName: "Asha",
         },
         { id: "existing-membership" },
@@ -215,10 +250,11 @@ describe("workspace seats", () => {
       firstResults: [
         {
           id: "m-1",
+          organizationId: "org_agency-owner",
           ownerUserId: "agency-owner",
           invitedEmail: "right@x.com",
           tokenExpiresAt: null,
-          status: "invited",
+          status: "pending",
           ownerName: "Asha",
         },
       ],
@@ -238,8 +274,8 @@ describe("workspace seats", () => {
     const harness = workspaceSqlite();
     sqliteFixtures.push(harness);
     harness.sqlite.exec(`
-      INSERT INTO workspace_member (id, owner_user_id, invited_email, status)
-      VALUES ('existing', 'agency-owner', 'existing@x.com', 'invited');
+      INSERT INTO invitation (id, organizationId, email, role, status, createdAt, inviterId)
+      VALUES ('existing', 'org_agency-owner', 'existing@x.com', 'member', 'pending', datetime('now'), 'agency-owner');
     `);
 
     const [first, second] = await Promise.all([
@@ -256,24 +292,18 @@ describe("workspace seats", () => {
     ]);
 
     expect([first, second].filter((result) => result.ok)).toHaveLength(1);
-    expect(
-      harness.sqlite
-        .prepare(
-          "SELECT COUNT(*) AS count FROM workspace_member WHERE owner_user_id = 'agency-owner' AND status IN ('invited', 'active')",
-        )
-        .get(),
-    ).toMatchObject({ count: 2 });
+    expect(seatRows(harness, "agency-owner")).toHaveLength(2);
   });
 
   it("does not count expired pending invitations as occupied seats", async () => {
     const harness = workspaceSqlite();
     sqliteFixtures.push(harness);
     harness.sqlite.exec(`
-      INSERT INTO workspace_member
-        (id, owner_user_id, invited_email, status, token_hash, token_expires_at)
+      INSERT INTO invitation
+        (id, organizationId, email, role, status, expiresAt, createdAt, inviterId, tokenHash)
       VALUES
-        ('expired-seat', 'agency-owner', 'expired@x.com', 'invited', 'expired-token', datetime('now', '-1 minute')),
-        ('live-seat', 'agency-owner', 'live@x.com', 'invited', 'live-token', datetime('now', '+1 day'));
+        ('expired-seat', 'org_agency-owner', 'expired@x.com', 'member', 'pending', datetime('now', '-1 minute'), datetime('now', '-2 day'), 'agency-owner', 'expired-token'),
+        ('live-seat', 'org_agency-owner', 'live@x.com', 'member', 'pending', datetime('now', '+1 day'), datetime('now'), 'agency-owner', 'live-token');
     `);
 
     const invite = await createWorkspaceInvite(envWith(harness.db), {
@@ -284,7 +314,7 @@ describe("workspace seats", () => {
 
     expect(invite.ok).toBe(true);
     expect(
-      harness.sqlite.prepare("SELECT COUNT(*) AS count FROM workspace_member WHERE owner_user_id = 'agency-owner'").get(),
+      harness.sqlite.prepare("SELECT COUNT(*) AS count FROM invitation WHERE organizationId = 'org_agency-owner'").get(),
     ).toEqual({ count: 3 });
   });
 
@@ -302,7 +332,7 @@ describe("workspace seats", () => {
     });
     expect(invite.ok).toBe(true);
     harness.sqlite.exec(
-      "UPDATE workspace_member SET token_expires_at = datetime('now', '-1 minute') WHERE invited_email = 'member@x.com'",
+      "UPDATE invitation SET expiresAt = datetime('now', '-1 minute') WHERE email = 'member@x.com'",
     );
 
     const members = await listWorkspaceMembers(envWith(harness.db), "agency-owner");
@@ -321,19 +351,19 @@ describe("workspace seats", () => {
       }),
     ).resolves.toMatchObject({ ok: true, inviteeEmail: "member@x.com" });
     const refreshed = harness.sqlite
-      .prepare("SELECT token_expires_at AS tokenExpiresAt FROM workspace_member WHERE id = ?")
-      .get(members[0]!.id) as { tokenExpiresAt: string };
-    expect(Date.parse(refreshed.tokenExpiresAt)).toBeGreaterThan(Date.now());
+      .prepare("SELECT expiresAt FROM invitation WHERE id = ?")
+      .get(members[0]!.id) as { expiresAt: string };
+    expect(Date.parse(refreshed.expiresAt)).toBeGreaterThan(Date.now());
   });
 
   it("does not let an expired invite in another workspace lock an email forever", async () => {
     const harness = workspaceSqlite();
     sqliteFixtures.push(harness);
     harness.sqlite.exec(`
-      INSERT INTO workspace_member
-        (id, owner_user_id, invited_email, status, token_hash, token_expires_at)
+      INSERT INTO invitation
+        (id, organizationId, email, role, status, expiresAt, createdAt, inviterId, tokenHash)
       VALUES
-        ('expired-other', 'agency-other', 'member@x.com', 'invited', 'old-token', datetime('now', '-1 minute'));
+        ('expired-other', 'org_agency-other', 'member@x.com', 'member', 'pending', datetime('now', '-1 minute'), datetime('now', '-2 day'), 'agency-other', 'old-token');
     `);
 
     const invite = await createWorkspaceInvite(envWith(harness.db), {
@@ -345,19 +375,19 @@ describe("workspace seats", () => {
     expect(invite.ok).toBe(true);
     expect(
       harness.sqlite
-        .prepare("SELECT owner_user_id FROM workspace_member WHERE invited_email = 'member@x.com' ORDER BY owner_user_id")
+        .prepare("SELECT organizationId FROM invitation WHERE email = 'member@x.com' ORDER BY organizationId")
         .all(),
-    ).toEqual([{ owner_user_id: "agency-other" }, { owner_user_id: "agency-owner" }]);
+    ).toEqual([{ organizationId: "org_agency-other" }, { organizationId: "org_agency-owner" }]);
   });
 
   it("still blocks an email with a live invitation in another workspace", async () => {
     const harness = workspaceSqlite();
     sqliteFixtures.push(harness);
     harness.sqlite.exec(`
-      INSERT INTO workspace_member
-        (id, owner_user_id, invited_email, status, token_hash, token_expires_at)
+      INSERT INTO invitation
+        (id, organizationId, email, role, status, expiresAt, createdAt, inviterId, tokenHash)
       VALUES
-        ('live-other', 'agency-other', 'member@x.com', 'invited', 'live-token', datetime('now', '+1 day'));
+        ('live-other', 'org_agency-other', 'member@x.com', 'member', 'pending', datetime('now', '+1 day'), datetime('now'), 'agency-other', 'live-token');
     `);
 
     await expect(
@@ -368,7 +398,7 @@ describe("workspace seats", () => {
       }),
     ).resolves.toMatchObject({ ok: false });
     expect(
-      harness.sqlite.prepare("SELECT COUNT(*) AS count FROM workspace_member WHERE invited_email = 'member@x.com'").get(),
+      harness.sqlite.prepare("SELECT COUNT(*) AS count FROM invitation WHERE email = 'member@x.com'").get(),
     ).toEqual({ count: 1 });
   });
 
@@ -391,7 +421,7 @@ describe("workspace seats", () => {
 
     expect([first, second].filter((result) => result.ok)).toHaveLength(1);
     expect(
-      harness.sqlite.prepare("SELECT COUNT(*) AS count FROM workspace_member WHERE invited_email = 'member@x.com'").get(),
+      harness.sqlite.prepare("SELECT COUNT(*) AS count FROM invitation WHERE email = 'member@x.com'").get(),
     ).toEqual({ count: 1 });
   });
 
@@ -399,10 +429,10 @@ describe("workspace seats", () => {
     const harness = workspaceSqlite();
     sqliteFixtures.push(harness);
     harness.sqlite.exec(`
-      INSERT INTO workspace_member
-        (id, owner_user_id, invited_email, status, token_hash, token_expires_at)
+      INSERT INTO invitation
+        (id, organizationId, email, role, status, expiresAt, createdAt, inviterId, tokenHash)
       VALUES
-        ('expired-other', 'agency-other', 'member@x.com', 'invited', 'old-token', datetime('now', '-1 minute'));
+        ('expired-other', 'org_agency-other', 'member@x.com', 'member', 'pending', datetime('now', '-1 minute'), datetime('now', '-2 day'), 'agency-other', 'old-token');
     `);
     const invite = await createWorkspaceInvite(envWith(harness.db), {
       ownerUserId: "agency-owner",
@@ -418,22 +448,20 @@ describe("workspace seats", () => {
       }),
     ).resolves.toMatchObject({ ok: false });
     expect(
-      harness.sqlite.prepare("SELECT token_hash FROM workspace_member WHERE id = 'expired-other'").get(),
-    ).toEqual({ token_hash: "old-token" });
+      harness.sqlite.prepare("SELECT tokenHash FROM invitation WHERE id = 'expired-other'").get(),
+    ).toEqual({ tokenHash: "old-token" });
   });
 
   it("does not resend an expired invite to an email that is already an active member", async () => {
     const harness = workspaceSqlite();
     sqliteFixtures.push(harness);
     harness.sqlite.exec(`
-      INSERT INTO workspace_member
-        (id, owner_user_id, member_user_id, invited_email, status, token_hash, token_expires_at, accepted_at)
+      INSERT INTO member (id, organizationId, userId, role, createdAt)
+      VALUES ('active-member', 'org_agency-owner', 'member-1', 'member', datetime('now'));
+      INSERT INTO invitation
+        (id, organizationId, email, role, status, expiresAt, createdAt, inviterId, tokenHash)
       VALUES
-        ('active-member', 'agency-owner', 'member-1', 'old-member@x.com', 'active', NULL, NULL, datetime('now'));
-      INSERT INTO workspace_member
-        (id, owner_user_id, invited_email, status, token_hash, token_expires_at)
-      VALUES
-        ('expired-other', 'agency-other', 'member@x.com', 'invited', 'old-token', datetime('now', '-1 minute'));
+        ('expired-other', 'org_agency-other', 'member@x.com', 'member', 'pending', datetime('now', '-1 minute'), datetime('now', '-2 day'), 'agency-other', 'old-token');
     `);
 
     await expect(
@@ -443,20 +471,20 @@ describe("workspace seats", () => {
       }),
     ).resolves.toMatchObject({ ok: false });
     expect(
-      harness.sqlite.prepare("SELECT token_hash FROM workspace_member WHERE id = 'expired-other'").get(),
-    ).toEqual({ token_hash: "old-token" });
+      harness.sqlite.prepare("SELECT tokenHash FROM invitation WHERE id = 'expired-other'").get(),
+    ).toEqual({ tokenHash: "old-token" });
   });
 
   it("does not resend an expired invitation after its seat has been reallocated", async () => {
     const harness = workspaceSqlite();
     sqliteFixtures.push(harness);
     harness.sqlite.exec(`
-      INSERT INTO workspace_member
-        (id, owner_user_id, invited_email, status, token_hash, token_expires_at)
+      INSERT INTO invitation
+        (id, organizationId, email, role, status, expiresAt, createdAt, inviterId, tokenHash)
       VALUES
-        ('expired-seat', 'agency-owner', 'expired@x.com', 'invited', 'expired-token', datetime('now', '-1 minute')),
-        ('live-seat-1', 'agency-owner', 'live1@x.com', 'invited', 'live-token-1', datetime('now', '+1 day')),
-        ('live-seat-2', 'agency-owner', 'live2@x.com', 'invited', 'live-token-2', datetime('now', '+1 day'));
+        ('expired-seat', 'org_agency-owner', 'expired@x.com', 'member', 'pending', datetime('now', '-1 minute'), datetime('now', '-2 day'), 'agency-owner', 'expired-token'),
+        ('live-seat-1', 'org_agency-owner', 'live1@x.com', 'member', 'pending', datetime('now', '+1 day'), datetime('now'), 'agency-owner', 'live-token-1'),
+        ('live-seat-2', 'org_agency-owner', 'live2@x.com', 'member', 'pending', datetime('now', '+1 day'), datetime('now'), 'agency-owner', 'live-token-2');
     `);
 
     await expect(
@@ -466,22 +494,15 @@ describe("workspace seats", () => {
       }),
     ).resolves.toMatchObject({ ok: false });
     expect(
-      harness.sqlite.prepare("SELECT token_hash FROM workspace_member WHERE id = 'expired-seat'").get(),
-    ).toEqual({ token_hash: "expired-token" });
+      harness.sqlite.prepare("SELECT tokenHash FROM invitation WHERE id = 'expired-seat'").get(),
+    ).toEqual({ tokenHash: "expired-token" });
   });
 
   it("fails closed when duplicate active memberships exist", async () => {
-    const harness = workspaceSqlite();
-    sqliteFixtures.push(harness);
-    harness.sqlite.exec(`
-      INSERT INTO workspace_member
-        (id, owner_user_id, member_user_id, invited_email, status, accepted_at)
-      VALUES
-        ('m-1', 'agency-owner', 'member-1', 'member@x.com', 'active', datetime('now')),
-        ('m-2', 'agency-owner', 'member-1', 'member2@x.com', 'active', datetime('now'));
-    `);
-
-    await expect(resolveWorkspace(envWith(harness.db), "member-1")).resolves.toEqual({
+    const { db } = fakeDb({
+      firstResults: [{ ownerUserId: "agency-owner", ownerName: "Asha", membershipCount: 2 }],
+    });
+    await expect(resolveWorkspace(envWith(db), "member-1")).resolves.toEqual({
       workspaceUserId: "member-1",
       isMember: false,
       ownerName: null,
@@ -508,9 +529,14 @@ describe("workspace seats", () => {
     ).resolves.toMatchObject({ ok: false });
     expect(
       harness.sqlite
-        .prepare("SELECT status, member_user_id FROM workspace_member WHERE invited_email = 'member@x.com'")
+        .prepare("SELECT status FROM invitation WHERE email = 'member@x.com'")
         .get(),
-    ).toMatchObject({ status: "invited", member_user_id: null });
+    ).toMatchObject({ status: "pending" });
+    expect(
+      harness.sqlite
+        .prepare("SELECT COUNT(*) AS count FROM member WHERE organizationId = 'org_agency-owner' AND role = 'member'")
+        .get(),
+    ).toEqual({ count: 0 });
   });
 
   it("accepts a valid invite while preserving the member transition", async () => {
@@ -532,9 +558,14 @@ describe("workspace seats", () => {
     ).resolves.toEqual({ ok: true, ownerName: "Asha" });
     expect(
       harness.sqlite
-        .prepare("SELECT status, member_user_id, token_hash FROM workspace_member WHERE invited_email = 'member@x.com'")
+        .prepare("SELECT status, tokenHash FROM invitation WHERE email = 'member@x.com'")
         .get(),
-    ).toMatchObject({ status: "active", member_user_id: "member-1", token_hash: null });
+    ).toMatchObject({ status: "accepted", tokenHash: null });
+    expect(
+      harness.sqlite
+        .prepare("SELECT userId, role FROM member WHERE organizationId = 'org_agency-owner' AND role = 'member'")
+        .get(),
+    ).toMatchObject({ userId: "member-1", role: "member" });
   });
 
   it("does not let an existing workspace owner accept another workspace invite", async () => {
@@ -542,8 +573,8 @@ describe("workspace seats", () => {
     sqliteFixtures.push(harness);
     harness.sqlite.exec(`
       INSERT INTO user_plan (user_id, plan) VALUES ('member-1', 'starter');
-      INSERT INTO workspace_member (id, owner_user_id, invited_email, status)
-      VALUES ('owned-seat', 'member-1', 'member2@x.com', 'invited');
+      INSERT INTO invitation (id, organizationId, email, role, status, createdAt, inviterId)
+      VALUES ('owned-seat', 'org_member-1', 'member2@x.com', 'member', 'pending', datetime('now'), 'member-1');
     `);
     const invite = await createWorkspaceInvite(envWith(harness.db), {
       ownerUserId: "agency-owner",
@@ -571,7 +602,7 @@ describe("workspace seats", () => {
     });
     expect(invite.ok).toBe(true);
     harness.sqlite.exec(
-      "UPDATE workspace_member SET token_expires_at = datetime('now', '-1 minute') WHERE invited_email = 'member@x.com'",
+      "UPDATE invitation SET expiresAt = datetime('now', '-1 minute') WHERE email = 'member@x.com'",
     );
 
     await expect(
@@ -587,8 +618,8 @@ describe("workspace seats", () => {
     const harness = workspaceSqlite();
     sqliteFixtures.push(harness);
     harness.sqlite.exec(`
-      INSERT INTO workspace_member (id, owner_user_id, invited_email, status)
-      VALUES ('pending', 'agency-owner', 'member@x.com', 'invited');
+      INSERT INTO invitation (id, organizationId, email, role, status, createdAt, inviterId)
+      VALUES ('pending', 'org_agency-owner', 'member@x.com', 'member', 'pending', datetime('now'), 'agency-owner');
     `);
 
     await expect(
@@ -611,14 +642,24 @@ describe("workspace seats", () => {
     ).resolves.toMatchObject({ ok: false });
   });
 
-  it("installs the active member uniqueness invariant without repairing rows", async () => {
+  it("enforces the one-teammate-seat-per-user invariant across workspaces", () => {
     const harness = workspaceSqlite();
     sqliteFixtures.push(harness);
-    applyMigration(harness.sqlite, "migrations/0067_workspace_member_invariants.sql");
 
     const index = harness.sqlite
-      .prepare("SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'idx_workspace_member_active_member'")
+      .prepare("SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'idx_member_teammate_seat'")
       .get() as { sql: string } | undefined;
-    expect(index?.sql).toContain("WHERE status = 'active' AND member_user_id IS NOT NULL");
+    expect(index?.sql).toContain("role = 'member'");
+
+    harness.sqlite.exec(`
+      INSERT INTO member (id, organizationId, userId, role, createdAt)
+      VALUES ('m-1', 'org_agency-owner', 'member-1', 'member', datetime('now'));
+    `);
+    expect(() =>
+      harness.sqlite.exec(`
+        INSERT INTO member (id, organizationId, userId, role, createdAt)
+        VALUES ('m-2', 'org_agency-other', 'member-1', 'member', datetime('now'));
+      `),
+    ).toThrow();
   });
 });

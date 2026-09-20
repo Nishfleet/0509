@@ -59,6 +59,9 @@ DELETE FROM share_link WHERE user_id LIKE 'e2e-%';
 DELETE FROM presence_oauth_transaction WHERE user_id LIKE 'e2e-%' OR workspace_user_id LIKE 'e2e-%';
 DELETE FROM agent_action_audit WHERE user_id LIKE 'e2e-%';
 DELETE FROM workspace_member WHERE owner_user_id LIKE 'e2e-%' OR member_user_id LIKE 'e2e-%';
+DELETE FROM invitation WHERE organizationId LIKE 'org_e2e-%' OR inviterId LIKE 'e2e-%';
+DELETE FROM member WHERE organizationId LIKE 'org_e2e-%' OR userId LIKE 'e2e-%';
+DELETE FROM organization WHERE id LIKE 'org_e2e-%';
 DELETE FROM dodo_webhook_event WHERE user_id LIKE 'e2e-%' OR event_id LIKE 'e2e-%';
 DELETE FROM session WHERE userId LIKE 'e2e-%';
 DELETE FROM account WHERE userId LIKE 'e2e-%';
@@ -366,10 +369,6 @@ INSERT INTO support_case_event (id, case_id, user_id, event_type, message, visib
   ('e2e-support-recovery-failed', 'e2e-support-recovery-case', 'e2e-support-recovery', 'support_notification_failed', 'Operator notification failed safely.', 0, '{"fixture":true,"sanitized":true}', strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-2 hours', '+1 minute')),
   ('e2e-support-recovery-sent', 'e2e-support-recovery-case', 'e2e-support-recovery', 'support_notified', 'Operator notification recovered.', 0, '{"fixture":true,"sanitized":true}', strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour'));
 
-INSERT INTO workspace_member (id, owner_user_id, member_user_id, invited_email, role, status, token_hash, token_expires_at, created_at, accepted_at, revoked_at) VALUES
-  ('e2e-member-active', 'e2e-agency', 'e2e-active-member', 'e2e-active-member@example.invalid', 'member', 'active', NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-10 days'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-9 days'), NULL),
-  ('e2e-member-revoked', 'e2e-agency', 'e2e-removed-member', 'e2e-removed-member@example.invalid', 'member', 'revoked', NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-10 days'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-9 days'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-4 days'));
-
 -- WP-C2 Gate-B first-run fixtures (self-contained; cleaned by the LIKE 'e2e-%' resets).
 -- e2e-free-firstbrief: free (weekly) workspace with exactly ONE filed brief — the
 -- Beat 4 front page + retirement + weekly cadence truth.
@@ -422,3 +421,23 @@ INSERT INTO landing_page_snapshot (
   'Shop Now', NULL, 0, NULL, NULL,
   '2026-08-25T00:00:00.000Z', '2026-08-27T00:00:00.000Z'
 );
+
+-- Issue #3787: personal orgs + owner member rows for every e2e user on the
+-- Better Auth organization plugin tables. The 0106 backfill ran before this
+-- fixture, so the fixture seeds the plugin tables the same way the migration
+-- would have had the users existed. Kept last so every INSERT INTO user above
+-- is covered.
+INSERT INTO organization (id, name, slug, logo, createdAt, metadata)
+SELECT 'org_' || id, name, 'org-' || id, NULL, createdAt, json_object('ownerUserId', id)
+  FROM user WHERE id LIKE 'e2e-%';
+INSERT INTO member (id, organizationId, userId, role, createdAt)
+SELECT 'mem_' || id, 'org_' || id, id, 'owner', createdAt
+  FROM user WHERE id LIKE 'e2e-%';
+
+-- Team seats on the plugin tables: e2e-member-active is an accepted invite +
+-- member row; e2e-member-revoked is a canceled invitation tombstone.
+INSERT INTO invitation (id, organizationId, email, role, status, expiresAt, createdAt, inviterId, tokenHash) VALUES
+  ('e2e-member-active', 'org_e2e-agency', 'e2e-active-member@example.invalid', 'member', 'accepted', NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-10 days'), 'e2e-agency', NULL),
+  ('e2e-member-revoked', 'org_e2e-agency', 'e2e-removed-member@example.invalid', 'member', 'canceled', NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-10 days'), 'e2e-agency', NULL);
+INSERT INTO member (id, organizationId, userId, role, createdAt) VALUES
+  ('e2e-member-active', 'org_e2e-agency', 'e2e-active-member', 'member', strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-9 days'));

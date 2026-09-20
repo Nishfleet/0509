@@ -291,25 +291,52 @@ export async function runJ6TeamReplay(env: AppEnv, mapping: J6TeamReplayMapping)
     }
     if (createdIds.size > 0) {
       const placeholders = [...createdIds].map(() => "?").join(",");
-      await ensureDb(env).prepare(`DELETE FROM workspace_member WHERE owner_user_id = ? AND id IN (${placeholders})`)
-        .bind(PERSONA, ...createdIds)
-        .run();
+      const db = ensureDb(env);
+      await db.batch([
+        db.prepare(`DELETE FROM member WHERE organizationId = 'org_' || ? AND role = 'member' AND id IN (${placeholders})`)
+          .bind(PERSONA, ...createdIds),
+        db.prepare(`DELETE FROM invitation WHERE organizationId = 'org_' || ? AND id IN (${placeholders})`)
+          .bind(PERSONA, ...createdIds),
+      ]);
     }
   }
 }
 
 async function readAllWorkspaceMembers(env: AppEnv) {
   return (await ensureDb(env).prepare(`
-    SELECT id, owner_user_id AS ownerUserId, member_user_id AS memberUserId,
-           invited_email AS invitedEmail, status, created_at AS createdAt,
-           accepted_at AS acceptedAt, token_expires_at AS tokenExpiresAt,
-           revoked_at AS revokedAt
-      FROM workspace_member WHERE owner_user_id = ? ORDER BY created_at ASC
+    SELECT id, ?1 AS ownerUserId, memberUserId, invitedEmail, status, createdAt,
+           acceptedAt, tokenExpiresAt, revokedAt
+      FROM (
+        SELECT i.id AS id,
+               NULL AS memberUserId,
+               i.email AS invitedEmail,
+               CASE i.status WHEN 'pending' THEN 'invited' ELSE 'revoked' END AS status,
+               i.createdAt AS createdAt,
+               NULL AS acceptedAt,
+               i.expiresAt AS tokenExpiresAt,
+               NULL AS revokedAt
+          FROM invitation i
+         WHERE i.organizationId = 'org_' || ?1 AND i.status != 'accepted'
+        UNION ALL
+        SELECT mm.id,
+               mm.userId,
+               u.email,
+               'active',
+               COALESCE(inv.createdAt, mm.createdAt),
+               mm.createdAt,
+               NULL,
+               NULL
+          FROM member mm
+          JOIN user u ON u.id = mm.userId
+          LEFT JOIN invitation inv ON inv.id = mm.id
+         WHERE mm.organizationId = 'org_' || ?1 AND mm.role = 'member'
+      )
+      ORDER BY createdAt ASC
   `).bind(PERSONA).all<WorkspaceMemberRow>()).results ?? [];
 }
 
 async function hasNullTokenHash(env: AppEnv, id: string) {
-  const row = await ensureDb(env).prepare("SELECT token_hash AS tokenHash FROM workspace_member WHERE id = ? LIMIT 1").bind(id).first<{ tokenHash: string | null }>();
+  const row = await ensureDb(env).prepare("SELECT tokenHash FROM invitation WHERE id = ? LIMIT 1").bind(id).first<{ tokenHash: string | null }>();
   return row?.tokenHash === null;
 }
 
