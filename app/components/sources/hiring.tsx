@@ -245,16 +245,16 @@ function ManualBoardOverride() {
         });
       }}
     >
-      <div className="f9-field">
+      <label className="f9-field" htmlFor="hiring-job-board-url">
         <span>Job board URL</span>
         <input
+          id="hiring-job-board-url"
           type="url"
           value={url}
           onChange={(event) => setUrl(event.currentTarget.value)}
           placeholder="https://boards.greenhouse.io/acme"
-          aria-label="Job board URL"
         />
-      </div>
+      </label>
       {error ? <p className="f9-wk-note">{error}</p> : null}
       {confirmed ? <p className="f9-wk-note">Board confirmed — saved.</p> : null}
       <button type="submit" className="f9-wk-btn">

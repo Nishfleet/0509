@@ -92,14 +92,7 @@ export async function fetchGreenhouseJobs(
   const url = buildJobFeedUrl({ provider: "greenhouse", slug });
   const body = await fetchJsonBody(url, fetchFn);
   if ("unavailable" in body) return body;
-  const value = asRecord(body.value);
-  const jobs =
-    value && Array.isArray(value.jobs) ? (value.jobs as unknown[]) : null;
-  if (!jobs) return { unavailable: true, reason: "parse_break" };
-  const normalized = jobs
-    .map((raw) => normalizeGreenhouse(raw))
-    .filter((j): j is HiringJob => j !== null);
-  return { jobs: normalized };
+  return parseGreenhouseBody(body.value);
 }
 
 export async function fetchAshbyJobs(
@@ -109,14 +102,7 @@ export async function fetchAshbyJobs(
   const url = buildJobFeedUrl({ provider: "ashby", slug });
   const body = await fetchJsonBody(url, fetchFn);
   if ("unavailable" in body) return body;
-  const value = asRecord(body.value);
-  const jobs =
-    value && Array.isArray(value.jobs) ? (value.jobs as unknown[]) : null;
-  if (!jobs) return { unavailable: true, reason: "parse_break" };
-  const normalized = jobs
-    .map((raw) => normalizeAshby(raw))
-    .filter((j): j is HiringJob => j !== null);
-  return { jobs: normalized };
+  return parseAshbyBody(body.value);
 }
 
 export async function fetchLeverJobs(
@@ -126,13 +112,56 @@ export async function fetchLeverJobs(
   const url = buildJobFeedUrl({ provider: "lever", slug });
   const body = await fetchJsonBody(url, fetchFn);
   if ("unavailable" in body) return body;
-  // Lever returns a bare array of postings.
-  const jobs = Array.isArray(body.value) ? (body.value as unknown[]) : null;
+  return parseLeverBody(body.value);
+}
+
+/**
+ * Parse an already-downloaded Greenhouse feed body (`{ jobs: [...] }`).
+ * Exported so a discovery probe can hand its response straight in — the probe
+ * URL IS this feed URL, so a second request would be a pure duplicate.
+ */
+export function parseGreenhouseBody(value: unknown): JobsFetch {
+  const v = asRecord(value);
+  const jobs =
+    v && Array.isArray(v.jobs) ? (v.jobs as unknown[]) : null;
+  if (!jobs) return { unavailable: true, reason: "parse_break" };
+  const normalized = jobs
+    .map((raw) => normalizeGreenhouse(raw))
+    .filter((j): j is HiringJob => j !== null);
+  return { jobs: normalized };
+}
+
+/** Parse an already-downloaded Ashby feed body (`{ jobs: [...] }`). */
+export function parseAshbyBody(value: unknown): JobsFetch {
+  const v = asRecord(value);
+  const jobs =
+    v && Array.isArray(v.jobs) ? (v.jobs as unknown[]) : null;
+  if (!jobs) return { unavailable: true, reason: "parse_break" };
+  const normalized = jobs
+    .map((raw) => normalizeAshby(raw))
+    .filter((j): j is HiringJob => j !== null);
+  return { jobs: normalized };
+}
+
+/** Parse an already-downloaded Lever feed body (a bare postings array). */
+export function parseLeverBody(value: unknown): JobsFetch {
+  const jobs = Array.isArray(value) ? (value as unknown[]) : null;
   if (!jobs) return { unavailable: true, reason: "parse_break" };
   const normalized = jobs
     .map((raw) => normalizeLever(raw))
     .filter((j): j is HiringJob => j !== null);
   return { jobs: normalized };
+}
+
+function parseJobsBody(provider: JobBoardProvider, value: unknown): JobsFetch {
+  switch (provider) {
+    case "greenhouse":
+      return parseGreenhouseBody(value);
+    case "ashby":
+      return parseAshbyBody(value);
+    case "lever":
+      return parseLeverBody(value);
+  }
 }
 
 /**
@@ -144,13 +173,19 @@ export async function fetchLeverJobs(
 export async function fetchJobs(
   board: BoardRef,
   fetchFn: FetchFn = defaultFetch,
+  prefetchedBody?: unknown,
 ): Promise<FetchJobsResult> {
+  // A domain-label discovery probe already requested this exact feed URL; when
+  // its body is handed in as `prefetchedBody` the feed is NOT fetched again —
+  // one request per weekly check instead of two (#2624).
   const raw: JobsFetch =
-    board.provider === "greenhouse"
-      ? await fetchGreenhouseJobs(board.slug, fetchFn)
-      : board.provider === "ashby"
-        ? await fetchAshbyJobs(board.slug, fetchFn)
-        : await fetchLeverJobs(board.slug, fetchFn);
+    prefetchedBody !== undefined
+      ? parseJobsBody(board.provider, prefetchedBody)
+      : board.provider === "greenhouse"
+        ? await fetchGreenhouseJobs(board.slug, fetchFn)
+        : board.provider === "ashby"
+          ? await fetchAshbyJobs(board.slug, fetchFn)
+          : await fetchLeverJobs(board.slug, fetchFn);
   if ("unavailable" in raw) return raw;
   const fetchedAt = nowIso();
   return {
@@ -191,9 +226,9 @@ function normalizeGreenhouse(raw: unknown): HiringJob | null {
     department: greenhouseDepartment(j),
     url: httpUrl(j.absolute_url) ?? null,
     postedAt:
-      scalarString(j.last_updated_at) ??
-      scalarString(j.updated_at) ??
-      scalarString(j.created_at) ??
+      postedAtIso(j.last_updated_at) ??
+      postedAtIso(j.updated_at) ??
+      postedAtIso(j.created_at) ??
       null,
   };
 }
@@ -226,11 +261,26 @@ function normalizeAshby(raw: unknown): HiringJob | null {
     id,
     title: scalarString(j.title) ?? "",
     location: locationName(j.location),
-    department:
-      scalarString(j.department) ?? scalarString(asRecord(j.team)?.name) ?? null,
+    department: ashbyDepartment(j),
     url: httpUrl(j.jobUrl) ?? null,
-    postedAt: scalarString(j.publishedAt) ?? null,
+    postedAt: postedAtIso(j.publishedAt),
   };
+}
+
+/**
+ * Live Ashby posting-api returns `department` and `team` as plain strings
+ * (confirmed against api.ashbyhq.com/posting-api 2026-09-20 — #2624); earlier
+ * fixtures modelled them as `{ name }` objects. Accept both shapes so a
+ * string team still lands instead of silently dropping to "(none)".
+ */
+function ashbyDepartment(j: JsonRecord): string | null {
+  return (
+    scalarString(j.department) ??
+    scalarString(asRecord(j.department)?.name) ??
+    scalarString(j.team) ??
+    scalarString(asRecord(j.team)?.name) ??
+    null
+  );
 }
 
 function normalizeLever(raw: unknown): HiringJob | null {
@@ -247,7 +297,7 @@ function normalizeLever(raw: unknown): HiringJob | null {
       (cats ? scalarString(cats.department, false) : null) ??
       (cats ? scalarString(cats.team, false) : null),
     url: httpUrl(j.hostedUrl) ?? null,
-    postedAt: scalarString(j.createdAt) ?? null,
+    postedAt: postedAtIso(j.createdAt),
   };
 }
 
@@ -303,6 +353,27 @@ function scalarString(value: unknown, allowEmpty = true): string | null {
   }
   if (typeof value === "number") return String(value);
   return null;
+}
+
+/**
+ * Normalize a posting timestamp to ISO. Lever's `createdAt` is epoch
+ * milliseconds as a number (confirmed live 2026-09-20 — #2624); a bare
+ * numeric string of 10+ digits is treated the same so an epoch never reaches
+ * the snapshot as a number-string. Already-string values (ISO or similar)
+ * pass through.
+ */
+function postedAtIso(value: unknown): string | null {
+  if (typeof value === "number") return epochMsToIso(value);
+  const s = scalarString(value);
+  if (!s) return null;
+  if (/^\d{10,}$/.test(s)) return epochMsToIso(Number(s));
+  return s;
+}
+
+function epochMsToIso(ms: number): string | null {
+  if (!Number.isFinite(ms)) return null;
+  const d = new Date(ms);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
 function locationName(value: unknown): string | null {

@@ -171,7 +171,7 @@ describe("fetchGreenhouseJobs", () => {
 });
 
 describe("fetchAshbyJobs", () => {
-  it("normalizes jobUrl, location.name, department and team.name", async () => {
+  it("normalizes jobUrl, location, department and team (live string shape)", async () => {
     const { fn, mock, calls } = makeFetch(() => jsonResponse(ashbyBody));
 
     const result = await fetchAshbyJobs("gamma", fn);
@@ -202,7 +202,7 @@ describe("fetchAshbyJobs", () => {
 });
 
 describe("fetchLeverJobs", () => {
-  it("normalizes the bare postings array (text, categories, hostedUrl)", async () => {
+  it("normalizes the bare postings array (text, categories, hostedUrl, epoch-ms createdAt)", async () => {
     const { fn, mock, calls } = makeFetch(() => jsonResponse(leverBody));
 
     const result = await fetchLeverJobs("beta", fn);
@@ -217,7 +217,7 @@ describe("fetchLeverJobs", () => {
           location: "New York",
           department: "Sales",
           url: "https://jobs.lever.co/beta/l1",
-          postedAt: "2026-03-01T00:00:00Z",
+          postedAt: "2026-03-01T00:00:00.000Z",
         },
         {
           id: "l2",
@@ -225,7 +225,7 @@ describe("fetchLeverJobs", () => {
           location: "Remote",
           department: "Marketing",
           url: "https://jobs.lever.co/beta/l2",
-          postedAt: "2026-03-02T00:00:00Z",
+          postedAt: "2026-03-02T00:00:00.000Z",
         },
       ],
     });
@@ -240,6 +240,24 @@ describe("fetchLeverJobs", () => {
       reason: "parse_break",
     });
     expect(mock).toHaveBeenCalledTimes(1);
+  });
+
+  it("normalizes a numeric-string createdAt to ISO (never stores a bare number-string)", async () => {
+    const body = JSON.stringify([
+      {
+        id: "l9",
+        text: "Producer",
+        categories: { location: "Remote" },
+        hostedUrl: "https://jobs.lever.co/beta/l9",
+        createdAt: "1772323200000",
+      },
+    ]);
+    const { fn } = makeFetch(() => jsonResponse(body));
+
+    const result = await fetchLeverJobs("beta", fn);
+
+    if (!("jobs" in result)) throw new Error("expected jobs");
+    expect(result.jobs[0].postedAt).toBe("2026-03-01T00:00:00.000Z");
   });
 });
 
@@ -424,6 +442,42 @@ describe("fetchJobs dispatcher", () => {
       status: 500,
     });
     expect(result).not.toHaveProperty("jobs");
+  });
+
+  it("reuses a prefetched feed body and makes no request (#2624)", async () => {
+    const { fn, mock } = makeFetch(() => {
+      throw new Error("must not fetch");
+    });
+
+    const wrapped = wrappedOf(
+      await fetchJobs(
+        { provider: "greenhouse", slug: "acme" },
+        fn,
+        JSON.parse(greenhouseBody),
+      ),
+    );
+
+    expect(mock).not.toHaveBeenCalled();
+    expect(wrapped.provider).toBe("greenhouse");
+    expect(wrapped.slug).toBe("acme");
+    expect(wrapped.jobs).toHaveLength(2);
+    expect(wrapped.jobs[0].title).toBe("Engineering Manager");
+    expect(wrapped.counts.byDepartment).toEqual({ Engineering: 1, Design: 1 });
+  });
+
+  it("surfaces a parse_break from a prefetched body without refetching", async () => {
+    const { fn, mock } = makeFetch(() => {
+      throw new Error("must not fetch");
+    });
+
+    const result = await fetchJobs(
+      { provider: "lever", slug: "beta" },
+      fn,
+      { jobs: [] },
+    );
+
+    expect(result).toEqual({ unavailable: true, reason: "parse_break" });
+    expect(mock).not.toHaveBeenCalled();
   });
 });
 

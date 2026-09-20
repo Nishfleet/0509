@@ -3,9 +3,6 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import {
-  ASHBY_API_URL,
-  GREENHOUSE_API_URL,
-  LEVER_API_URL,
   discoverJobBoard,
   findBoardInHtml,
   findCareersLink,
@@ -15,6 +12,7 @@ import type {
   DiscoverOptions,
   FetchFn,
 } from "~/lib/sources/hiring/job-board-discovery.server";
+import { buildJobFeedUrl } from "~/lib/sources/hiring/hiring-signals.server";
 import type { SourceFetchContext } from "~/lib/sources/types";
 
 /**
@@ -351,6 +349,10 @@ describe("findCareersLink", () => {
 });
 
 describe("guessBoardFromDomain", () => {
+  const greenhouseProbe = buildJobFeedUrl({ provider: "greenhouse", slug: "acme" });
+  const ashbyProbe = buildJobFeedUrl({ provider: "ashby", slug: "acme" });
+  const leverProbe = buildJobFeedUrl({ provider: "lever", slug: "acme" });
+
   function bodyResponse(status: number): Response {
     return new Response(status === 200 ? "{}" : null, { status });
   }
@@ -366,11 +368,9 @@ describe("guessBoardFromDomain", () => {
     await expect(guessBoardFromDomain("acme", fetchFn)).resolves.toEqual({
       provider: "ashby",
       slug: "acme",
+      prefetchedBody: {},
     });
-    expect(calls).toEqual([
-      `${GREENHOUSE_API_URL}/v1/boards/acme/jobs`,
-      `${ASHBY_API_URL}/posting-api/job-board/acme`,
-    ]);
+    expect(calls).toEqual([greenhouseProbe, ashbyProbe]);
   });
 
   it("keeps the first 200 (Greenhouse) and stops probing", async () => {
@@ -383,8 +383,38 @@ describe("guessBoardFromDomain", () => {
     await expect(guessBoardFromDomain("acme", fetchFn)).resolves.toEqual({
       provider: "greenhouse",
       slug: "acme",
+      prefetchedBody: {},
     });
-    expect(calls).toEqual([`${GREENHOUSE_API_URL}/v1/boards/acme/jobs`]);
+    expect(calls).toEqual([greenhouseProbe]);
+  });
+
+  it("carries the probe's parsed feed body as prefetchedBody (#2624)", async () => {
+    const feedBody = { jobs: [{ id: 7, title: "Engineer" }] };
+    const fetchFn = vi.fn(async () => {
+      return new Response(JSON.stringify(feedBody), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as unknown as FetchFn;
+
+    const result = await guessBoardFromDomain("acme", fetchFn);
+
+    expect(result).toEqual({
+      provider: "greenhouse",
+      slug: "acme",
+      prefetchedBody: feedBody,
+    });
+  });
+
+  it("still returns the board when a 200 probe body is not readable JSON", async () => {
+    const fetchFn = vi.fn(async () => {
+      return new Response("<html>not json</html>", { status: 200 });
+    }) as unknown as FetchFn;
+
+    const result = await guessBoardFromDomain("acme", fetchFn);
+
+    expect(result).toEqual({ provider: "greenhouse", slug: "acme" });
+    expect(result).not.toHaveProperty("prefetchedBody");
   });
 
   it("returns null when all three providers answer non-200", async () => {
@@ -395,11 +425,7 @@ describe("guessBoardFromDomain", () => {
     }) as unknown as FetchFn;
 
     await expect(guessBoardFromDomain("acme", fetchFn)).resolves.toBeNull();
-    expect(calls).toEqual([
-      `${GREENHOUSE_API_URL}/v1/boards/acme/jobs`,
-      `${ASHBY_API_URL}/posting-api/job-board/acme`,
-      `${LEVER_API_URL}/v0/postings/acme?mode=json`,
-    ]);
+    expect(calls).toEqual([greenhouseProbe, ashbyProbe, leverProbe]);
   });
 
   it("continues to the next provider when a probe throws or aborts", async () => {
@@ -410,18 +436,16 @@ describe("guessBoardFromDomain", () => {
     const fetchFn = vi.fn(async (input: string | URL | Request) => {
       const url = urlOf(input);
       calls.push(url);
-      if (url.startsWith(GREENHOUSE_API_URL)) aborted();
+      if (url === greenhouseProbe) aborted();
       return bodyResponse(200);
     }) as unknown as FetchFn;
 
     await expect(guessBoardFromDomain("acme", fetchFn)).resolves.toEqual({
       provider: "ashby",
       slug: "acme",
+      prefetchedBody: {},
     });
-    expect(calls).toEqual([
-      `${GREENHOUSE_API_URL}/v1/boards/acme/jobs`,
-      `${ASHBY_API_URL}/posting-api/job-board/acme`,
-    ]);
+    expect(calls).toEqual([greenhouseProbe, ashbyProbe]);
   });
 
   it("continues past a thrown probe and a 404 to Lever", async () => {
@@ -429,13 +453,14 @@ describe("guessBoardFromDomain", () => {
     const fetchFn = vi.fn(async (input: string | URL | Request) => {
       const url = urlOf(input);
       calls.push(url);
-      if (url.startsWith(GREENHOUSE_API_URL)) throw new Error("socket hang up");
-      return bodyResponse(url.startsWith(ASHBY_API_URL) ? 404 : 200);
+      if (url === greenhouseProbe) throw new Error("socket hang up");
+      return bodyResponse(url === ashbyProbe ? 404 : 200);
     }) as unknown as FetchFn;
 
     await expect(guessBoardFromDomain("acme", fetchFn)).resolves.toEqual({
       provider: "lever",
       slug: "acme",
+      prefetchedBody: {},
     });
     expect(calls).toHaveLength(3);
   });
@@ -450,17 +475,18 @@ describe("guessBoardFromDomain", () => {
     await expect(guessBoardFromDomain("ACME", fetchFn)).resolves.toEqual({
       provider: "greenhouse",
       slug: "acme",
+      prefetchedBody: {},
     });
-    expect(calls[0]).toBe(`${GREENHOUSE_API_URL}/v1/boards/acme/jobs`);
+    expect(calls[0]).toBe(greenhouseProbe);
   });
 });
 
 describe("discoverJobBoard", () => {
   const home = "https://acme.com";
   const careers = "https://acme.com/careers";
-  const greenhouseProbe = `${GREENHOUSE_API_URL}/v1/boards/acme/jobs`;
-  const ashbyProbe = `${ASHBY_API_URL}/posting-api/job-board/acme`;
-  const leverProbe = `${LEVER_API_URL}/v0/postings/acme?mode=json`;
+  const greenhouseProbe = buildJobFeedUrl({ provider: "greenhouse", slug: "acme" });
+  const ashbyProbe = buildJobFeedUrl({ provider: "ashby", slug: "acme" });
+  const leverProbe = buildJobFeedUrl({ provider: "lever", slug: "acme" });
 
   function discover(
     routes: Record<string, () => Response | Promise<Response>>,
@@ -507,6 +533,7 @@ describe("discoverJobBoard", () => {
       provider: "greenhouse",
       slug: "acme",
       verified: false,
+      prefetchedBody: {},
     });
     expect(calls).toEqual([home, careers, greenhouseProbe]);
   });
@@ -568,6 +595,7 @@ describe("discoverJobBoard", () => {
       provider: "greenhouse",
       slug: "acme",
       verified: false,
+      prefetchedBody: {},
     });
     expect(calls).toEqual([home, careers, greenhouseProbe]);
   });
