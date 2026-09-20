@@ -211,9 +211,11 @@ function weeklyDigestZoneOffsetMs(instant: Date, timeZone: string): number {
 
 /**
  * UTC ms for a local wall time (year/month/day/hour) in `timeZone`.
- * `offsetHintMs` is the zone's offset near the target; one refinement
- * against the offset at the result lands the instant correctly across a DST
- * change sitting between the hint and the target.
+ * `offsetHintMs` is the zone's offset near the target; one refinement —
+ * measuring the offset at the guess, not at the result — lands the instant
+ * correctly across a DST change sitting between the hint and the target:
+ * exact whenever guess and target sit on the same side of the zone's
+ * transition, which every reachable catch-up target does.
  */
 function weeklyDigestLocalInstantUtc(
   fields: { year: number; month: number; day: number; hour: number },
@@ -589,7 +591,11 @@ export async function runDigestDeliveryCycleDetailed(
 		lookbackDays,
 	})) {
 		await enqueueDigestScheduleJobs(env, {
-			cadence,
+			// The planner emits weekly-shaped period rows only; pin the cadence
+			// so a hypothetical non-weekly caller can never file these weekly
+			// periods as daily rows (where the UNIQUE period key would not
+			// collide with a same-shaped daily job).
+			cadence: "weekly",
 			periodStart: catchUp.periodStart,
 			periodEnd: catchUp.periodEnd,
 			onlyUserIds: catchUp.userIds,
