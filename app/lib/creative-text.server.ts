@@ -410,7 +410,8 @@ async function extractCreativeTextFromImage(
   image: CreativeImagePayload,
   ad: KnownAdText,
 ): Promise<CreativeOcrResult> {
-  if (!env.AI) {
+  const ai = env.AI;
+  if (!ai) {
     return {
       text: null,
       imageUrl: image.imageUrl,
@@ -426,7 +427,7 @@ async function extractCreativeTextFromImage(
         lastAttempt = attempt;
         try {
           const response = await promiseWithTimeout(
-            env.AI.run(CREATIVE_TEXT_OCR_MODEL, {
+            ai.run(CREATIVE_TEXT_OCR_MODEL, {
               image: [...image.bytes],
               prompt: OCR_PROMPT,
               max_tokens: 256,
