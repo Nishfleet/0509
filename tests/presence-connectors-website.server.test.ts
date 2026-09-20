@@ -166,4 +166,47 @@ describe("presence website connector decode wiring", () => {
     // Identical visible page => identical content hash (no phantom change).
     expect(second.items[0]?.contentHash).toBe(first.items[0]?.contentHash);
   });
+
+  it("does not fabricate a change when only inline script/style text differs between polls", async () => {
+    // stripHtml strips tags but keeps the TEXT inside <script>/<style> blocks.
+    // Per-poll noise inside them (analytics snippets, build ids) used to land
+    // in the hashed excerpt, phantom-changing the snapshot on an identical
+    // visible page.
+    const buildHtml = (noise: string) =>
+      `<html><head><title>Stable page</title>` +
+      `<script>window.__BUILD_ID__="${noise}";analytics.track("${noise}")</script>` +
+      `<style>.ad-${noise}{display:none}</style>` +
+      `</head><body><h1>Stable heading</h1><p>Stable page copy about the roadmap.</p></body></html>`;
+
+    let pollIndex = 0;
+    const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/robots.txt")) {
+        return new Response("User-agent: FiveToNinePresenceBot\nAllow: /", { status: 200 });
+      }
+      if (url === "https://1.1.1.1" || url === "https://1.1.1.1/") {
+        pollIndex += 1;
+        const html = pollIndex <= 2 ? buildHtml("aaa-first") : buildHtml("zzz-second");
+        return new Response(html, { status: 200, headers: { "content-type": "text/html" } });
+      }
+      return new Response("not found", { status: 404 });
+    });
+
+    const first = await websiteConnector.poll(
+      { env: baseEnv, userId: "u1", trackingMode: "competitor", fetchImpl: fetchImpl as unknown as typeof fetch },
+      { targetUrl: "https://1.1.1.1", metadata: {} },
+    );
+    expect(first.ok).toBe(true);
+    expect(first.items).toHaveLength(1);
+
+    const second = await websiteConnector.poll(
+      { env: baseEnv, userId: "u1", trackingMode: "competitor", fetchImpl: fetchImpl as unknown as typeof fetch },
+      { targetUrl: "https://1.1.1.1", metadata: {} },
+    );
+    expect(second.ok).toBe(true);
+    expect(second.items).toHaveLength(1);
+
+    expect(second.items[0]?.contentHash).toBe(first.items[0]?.contentHash);
+    // The stored excerpt is the hashed text: no script/style noise leaks in.
+    expect(first.items[0]?.bodyExcerpt).toBe("Stable page Stable heading Stable page copy about the roadmap.");
+  });
 });
