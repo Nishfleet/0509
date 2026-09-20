@@ -31,6 +31,7 @@ async function renderAuthForm(props: {
   initialEmail?: string;
   initialName?: string;
   initialCompetitor?: string;
+  initialBrandWebsite?: string;
   redirectTo?: string;
 }) {
   const { AuthForm } = await import("~/components/auth-form");
@@ -39,6 +40,7 @@ async function renderAuthForm(props: {
       mode: props.mode,
       redirectTo: props.redirectTo ?? "/app#setup-checklist",
       ...(props.initialCompetitor !== undefined ? { initialCompetitor: props.initialCompetitor } : {}),
+      ...(props.initialBrandWebsite !== undefined ? { initialBrandWebsite: props.initialBrandWebsite } : {}),
       ...(props.linkSent
         ? {
             linkSent: true,
@@ -367,6 +369,7 @@ describe("/auth/signup resend action", () => {
       name: "Nish Kumar",
       redirectTo: "/app#setup-checklist",
       competitor: "",
+      brandWebsite: "",
     });
     // The refusal came out of the existing send path — not a bypass around it.
     expect(sendBetterAuthMagicLink).toHaveBeenCalledTimes(1);
@@ -407,5 +410,27 @@ describe("/auth/signup resend action", () => {
     const markup = await renderAuthForm({ mode: "signup" });
     expect(markup).toContain('name="competitor"');
     expect(markup).not.toContain('name="competitor" type="hidden"');
+  });
+
+  it("signup form shows the optional Your-website field; login does not (issue #2414)", async () => {
+    await mockReactRouter();
+    const signup = await renderAuthForm({ mode: "signup" });
+    expect(signup).toContain("<span>Your website</span>");
+    expect(signup).toContain('name="brandWebsite"');
+
+    const login = await renderAuthForm({ mode: "login" });
+    expect(login).not.toContain("Your website");
+    expect(login).not.toContain('name="brandWebsite"');
+  });
+
+  it("the Your-website value survives the resend form like the hidden name input (issue #2414)", async () => {
+    await mockReactRouter();
+    const sent = await renderAuthForm({
+      mode: "signup",
+      linkSent: true,
+      initialEmail: "new@example.com",
+      initialBrandWebsite: "mybrand.com",
+    });
+    expect(sent).toContain('name="brandWebsite" value="mybrand.com"');
   });
 });

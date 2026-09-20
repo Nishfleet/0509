@@ -8,6 +8,8 @@ interface AuthFormProps {
   initialName?: string;
   /** ?competitor= deep-link prefill — round-trips through the magic-link redirect like name does. */
   initialCompetitor?: string;
+  /** The visitor's own brand site — optional on signup, saved on magic-link landing (issue #2414). */
+  initialBrandWebsite?: string;
   message?: string | null;
   error?: string | null;
   /** WP-39: magic-link already sent — show recovery (resend / change email). */
@@ -51,6 +53,7 @@ export function AuthForm({
   initialEmail,
   initialName,
   initialCompetitor,
+  initialBrandWebsite,
   message,
   error,
   linkSent = false,
@@ -79,6 +82,7 @@ export function AuthForm({
     : `/auth/login?redirectTo=${encodeURIComponent(redirectTo)}`;
   const prefilledName = (initialName ?? "").trim();
   const prefilledCompetitor = (initialCompetitor ?? "").trim();
+  const prefilledBrandWebsite = (initialBrandWebsite ?? "").trim();
   // Issue #3177: the join path asks exactly one question (the /join input)
   // and ends in one confirm — the signup step it redirects into must not
   // re-ask anything. When the confirm folded its answers into `source=join`
@@ -147,6 +151,9 @@ export function AuthForm({
             {isSignup && (initialCompetitor ?? "").trim() ? (
               <input name="competitor" type="hidden" value={(initialCompetitor ?? "").trim()} />
             ) : null}
+            {isSignup && prefilledBrandWebsite ? (
+              <input name="brandWebsite" type="hidden" value={prefilledBrandWebsite} />
+            ) : null}
             <button className="f9-wk-btn" disabled={pending} type="submit">
               {emailPending ? "Sending…" : "Resend link"}
             </button>
@@ -188,6 +195,24 @@ export function AuthForm({
                 defaultValue={initialCompetitor ?? ""}
                 name="competitor"
                 placeholder="competitor.com (optional)"
+                type="text"
+              />
+            </label>
+          )
+        ) : null}
+        {isSignup ? (
+          joinPath ? (
+            prefilledBrandWebsite ? (
+              <input name="brandWebsite" type="hidden" value={prefilledBrandWebsite} />
+            ) : null
+          ) : (
+            <label className="f9-field">
+              <span>Your website</span>
+              <input
+                autoComplete="off"
+                defaultValue={initialBrandWebsite ?? ""}
+                name="brandWebsite"
+                placeholder="yourwebsite.com (optional)"
                 type="text"
               />
             </label>

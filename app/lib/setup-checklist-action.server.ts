@@ -26,6 +26,55 @@ import {
 import type { ClientRoomRecord, ClientRoomResourceRef } from "~/lib/types";
 
 /**
+ * Issue #2414 — the signup "Your website" field survives the magic-link
+ * round-trip as a short-lived cookie (the visitor leaves the browser, opens
+ * the setup link, lands signed in). Mirrors the signup-source cookie: same
+ * attributes, same 0509.io/0509.in domain mapping, TTL matched to the handoff
+ * token's 30-minute window. The first setup-checklist POST reads it via
+ * `saveOptionalBrandWebsite`; after that the workspace branding row is the
+ * record and the cookie simply expires.
+ */
+export const SIGNUP_BRAND_WEBSITE_COOKIE = "f9_signup_brand_website";
+const SIGNUP_BRAND_WEBSITE_TTL_MS = 30 * 60 * 1000;
+
+export function signupBrandWebsiteCookieHeader(request: Request, brandWebsite: string) {
+  const parts = [
+    `${SIGNUP_BRAND_WEBSITE_COOKIE}=${encodeURIComponent(brandWebsite.slice(0, 300))}`,
+    "HttpOnly",
+    `Max-Age=${Math.floor(SIGNUP_BRAND_WEBSITE_TTL_MS / 1000)}`,
+    "Path=/",
+    "SameSite=Lax",
+  ];
+  const hostname = new URL(request.url).hostname.toLowerCase();
+  if (hostname === "0509.io" || hostname.endsWith(".0509.io")) {
+    parts.push("Domain=0509.io");
+  } else if (hostname === "0509.in" || hostname.endsWith(".0509.in")) {
+    parts.push("Domain=0509.in");
+  }
+  if (new URL(request.url).protocol === "https:") {
+    parts.push("Secure");
+  }
+  return parts.join("; ");
+}
+
+export function readSignupBrandWebsiteCookie(request: Request): string | null {
+  const prefix = `${SIGNUP_BRAND_WEBSITE_COOKIE}=`;
+  for (const part of (request.headers.get("cookie") ?? "").split(";")) {
+    const cookie = part.trim();
+    if (!cookie.startsWith(prefix)) {
+      continue;
+    }
+    try {
+      const value = decodeURIComponent(cookie.slice(prefix.length)).trim();
+      return value || null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/**
  * Issue #2723: derive the tracking role on the setup-checklist CREATE paths
  * the same way the watchlist update path does — `self` only when the
  * target's registrable domain matches the workspace `brandWebsite`,
@@ -106,6 +155,17 @@ export async function handleSetupChecklistAction(
     if (brandWebsiteInput || formData.has("brandWebsite")) {
       await upsertWorkspaceBranding(env, workspaceUserId, {
         brandWebsite: brandWebsite.normalizedUrl,
+      });
+      return;
+    }
+    // Issue #2414 — the signup "Your website" answer rides the magic-link gap
+    // in the short-lived cookie when no checklist form field carried it.
+    const cookieWebsite = normalizeCompetitorWebsiteInput(
+      readSignupBrandWebsiteCookie(request) ?? "",
+    );
+    if (cookieWebsite.normalizedUrl) {
+      await upsertWorkspaceBranding(env, workspaceUserId, {
+        brandWebsite: cookieWebsite.normalizedUrl,
       });
     }
   }
@@ -571,7 +631,8 @@ async function handleCreateHandoffWatchlists(input: {
   // workspace branding, via `deriveTrackingRole`) decides which candidates
   // are the customer's own brand rather than competitors.
   const handoffBrandWebsiteUrl = normalizeCompetitorWebsiteInput(
-    String(formData.get("brandWebsite") ?? "").trim(),
+    String(formData.get("brandWebsite") ?? "").trim() ||
+      (readSignupBrandWebsiteCookie(request) ?? ""),
   ).normalizedUrl;
   const queued = new Set<string>();
   const rejected: Array<{ advertiser: string; reason: string }> = [];

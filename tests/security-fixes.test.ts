@@ -95,6 +95,7 @@ describe("auth open-redirect protection", () => {
       prefillEmail: "",
       prefillName: "",
       prefillCompetitor: "",
+      prefillBrandWebsite: "",
       linkSent: false,
       linkResent: false,
     });
