@@ -1300,28 +1300,13 @@ function BrandRecentWatchChanges({ changes }: { changes: AdsDomainRecentChange[]
   );
 }
 
-/**
- * Display-time guard for extracted CTA text (issue #2320).
- *
- * The landing-page CTA extractor can leak a CSS class name (e.g. `ic-left-nav`)
- * into `ctaText`, and the public offer timeline was rendering it as a labeled
- * fact — "CTA: ic-left-nav" — next to the page's "No proof, no claim" branding,
- * which reads as fabricated data. This predicate rejects any no-space value
- * shaped like a class name at display time. The extractor fix itself is tracked
- * separately (out of scope, issue must-not); this only stops the garbage from
- * rendering.
- */
-export function isClassLikeCtaText(value: string | null): boolean {
-  if (!value) {
-    return false;
-  }
-  return (
-    !/\s/.test(value) &&
-    (/^(ic|js)-/.test(value) || /^[a-z]+(-[a-z]+){2,}$/.test(value))
-  );
-}
-
-const NO_CLEAR_CTA_LABEL = "No clear CTA";
+// Issue #2320/#2576: the class-name CTA display guard now lives in
+// ~/lib/offer-timeline and is applied inside OfferTimelineLedger — the render
+// choke point — so it covers the flat `ctaText` field AND each side of the
+// before/after transition diff on every surface that mounts the ledger
+// (this page and /timeline/:domain). Re-exported here for the binding test
+// import in tests/cta-anchor-probe.test.ts.
+export { isClassLikeCtaText } from "~/lib/offer-timeline";
 
 /**
  * Offer Timeline on the public `/ads/:domain` page. Hidden when nothing is
@@ -1375,16 +1360,6 @@ export function BrandOfferTimeline({
   }
 
   const stateWord = entries.length === 1 ? "dated state" : "dated states";
-  // Issue #2320: reject CTA values shaped like CSS class names at display time
-  // and render "No clear CTA" instead — a leaked `ic-*`/`js-*` class (or a
-  // no-space dashed token) must never surface as a captured fact on the public
-  // page. The extractor fix is tracked separately; this is render-time only.
-  const guardedEntries = entries.map((entry) => {
-    if (isClassLikeCtaText(entry.ctaText)) {
-      return { ...entry, ctaText: NO_CLEAR_CTA_LABEL };
-    }
-    return entry;
-  });
   return (
     <section className="f9-ads-sec" aria-labelledby="brand-offer-timeline-title">
       <div className="f9-container">
@@ -1397,7 +1372,7 @@ export function BrandOfferTimeline({
             {`${entries.length} ${stateWord} on record`}
           </span>
         </div>
-        <OfferTimelineLedger entries={guardedEntries} />
+        <OfferTimelineLedger entries={entries} />
         {timelineIndexable && (
           <p className="f9-timeline-also">
             <Link to={`/timeline/${encodeURIComponent(domain)}`}>{`Full offer timeline for ${domain}`}</Link>

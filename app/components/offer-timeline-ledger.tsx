@@ -1,4 +1,17 @@
-import type { OfferLedgerEntry } from "~/lib/offer-timeline";
+import { isClassLikeCtaText, type OfferLedgerEntry } from "~/lib/offer-timeline";
+
+const NO_CLEAR_CTA_LABEL = "No clear CTA";
+
+/**
+ * Display-time CTA value (issues #2320, #2576): a CSS class name the extractor
+ * leaked into `ctaText` (e.g. `ic-left-nav`) must never render as a captured
+ * fact on the public timeline — not on the flat `CTA:` field and not on either
+ * side of the before/after transition diff. Both are replaced with the honest
+ * "No clear CTA" fallback; a null side still renders "—" via the caller.
+ */
+function displayCtaText(value: string | null): string | null {
+  return isClassLikeCtaText(value) ? NO_CLEAR_CTA_LABEL : value;
+}
 
 function formLabel(value: boolean | null): string {
   if (value === true) {
@@ -50,6 +63,7 @@ export function OfferTimelineLedger({ entries }: { entries: OfferLedgerEntry[] }
     <ol className="f9-timeline-ledger">
       {entries.map((entry) => {
         const sourceHost = sourceHostOf(entry.canonicalUrl);
+        const ctaText = displayCtaText(entry.ctaText);
         const hasReceipts = Boolean(
           entry.screenshotHref || entry.pageTextHref || sourceHost,
         );
@@ -68,7 +82,7 @@ export function OfferTimelineLedger({ entries }: { entries: OfferLedgerEntry[] }
             <div className="f9-timeline-body">
               <p className="f9-timeline-headline">{entry.headline}</p>
               <p className="f9-timeline-fields">
-                {entry.ctaText ? <span>{`CTA: ${entry.ctaText}`}</span> : null}
+                {ctaText ? <span>{`CTA: ${ctaText}`}</span> : null}
                 {entry.priceText ? <span>{`Price: ${entry.priceText}`}</span> : null}
                 <span>{formLabel(entry.formPresent)}</span>
               </p>
@@ -84,8 +98,8 @@ export function OfferTimelineLedger({ entries }: { entries: OfferLedgerEntry[] }
                   {entry.transition.ctaText ? (
                     <ChangeRow
                       label="CTA"
-                      before={entry.transition.ctaText.before ?? "—"}
-                      after={entry.transition.ctaText.after ?? "—"}
+                      before={displayCtaText(entry.transition.ctaText.before) ?? "—"}
+                      after={displayCtaText(entry.transition.ctaText.after) ?? "—"}
                     />
                   ) : null}
                   {entry.transition.priceText ? (
