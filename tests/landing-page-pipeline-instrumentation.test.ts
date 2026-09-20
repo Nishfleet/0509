@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  CTA_PIPELINE_STAGES,
   createLandingPagePipelineCounters,
   ctaPipelineBailReasonFromCounters,
   ctaPipelineStageCountsFromCounters,
@@ -470,6 +471,34 @@ describe("diff_computed excludes baseline_established (issue #2443)", () => {
   });
 });
 
+describe("CTA funnel stage vocabulary and rescue mapping", () => {
+  it("CTA_PIPELINE_STAGES keeps the six-stage funnel contract (issue #1565)", () => {
+    expect(CTA_PIPELINE_STAGES).toEqual([
+      "checks_started",
+      "page_fetch_succeeded",
+      "validity_passed",
+      "dom_extracted",
+      "diff_computed",
+      "event_emitted",
+    ]);
+  });
+
+  it("a fetch rescued by the render fallback counts as page_fetch_succeeded (issue #2893)", () => {
+    const counters = createLandingPagePipelineCounters({
+      scanId: "proof-request:watch-2893:run-1",
+      watchlistId: "watch-2893",
+      adId: "ad-2893",
+      extractorVersion: "lp-signals-v1",
+    });
+    recordFetchStage(counters, "failed", "http_error");
+    recordRenderStage(counters, "succeeded");
+
+    expect(ctaPipelineStageCountsFromCounters(counters).page_fetch_succeeded).toBe(
+      1,
+    );
+  });
+});
+
 describe("ctaPipelineBailReasonFromCounters (issue #2157)", () => {
   const bailCounters = () =>
     createLandingPagePipelineCounters({
@@ -535,5 +564,84 @@ describe("ctaPipelineBailReasonFromCounters (issue #2157)", () => {
       });
       expect(ctaPipelineBailReasonFromCounters(c)).toBeNull();
     }
+  });
+
+  it("does not bail at fetch when the render fallback rescued it (issue #2893)", () => {
+    const c = bailCounters();
+    recordFetchStage(c, "failed", "http_error");
+    recordRenderStage(c, "succeeded");
+    recordValidityStage(c, "succeeded");
+    recordExtractStage(c, {
+      ctaText: null,
+      priceText: null,
+      formPresent: null,
+      headline: null,
+      ctaFunnelStage: "bailed",
+      ctaFunnelReasonCode: "no_cta_candidates",
+    });
+
+    // The rescued check fell through fetch and bailed at the next real gate.
+    expect(ctaPipelineBailReasonFromCounters(c)).toEqual({
+      stage: "dom_extracted",
+      reason: "no_cta_candidates",
+    });
+  });
+
+  it("returns null when the diff stage never ran (volume paths)", () => {
+    const c = bailCounters();
+    recordFetchStage(c, "succeeded");
+    recordValidityStage(c, "succeeded");
+    recordExtractStage(c, {
+      ctaText: "Buy now",
+      priceText: "$9",
+      formPresent: true,
+      headline: "Sale",
+      ctaFunnelStage: "reached",
+    });
+
+    // diff.status stays null on volume paths — not an event_emitted bail.
+    expect(ctaPipelineBailReasonFromCounters(c)).toBeNull();
+  });
+
+  it("returns null when the diff was skipped for lack of a snapshot", () => {
+    const c = bailCounters();
+    recordFetchStage(c, "succeeded");
+    recordDiffStage(c, { status: "skipped_no_snapshot" });
+
+    expect(ctaPipelineBailReasonFromCounters(c)).toBeNull();
+  });
+
+  it("attributes a no-event diff to event_emitted with the field bail reason", () => {
+    const c = bailCounters();
+    recordFetchStage(c, "succeeded");
+    recordValidityStage(c, "succeeded");
+    recordExtractStage(c, {
+      ctaText: "Buy now",
+      priceText: "$9",
+      formPresent: true,
+      headline: "Sale",
+      ctaFunnelStage: "reached",
+    });
+    recordDiffStage(c, {
+      status: "invalidated",
+      confirmedEventTypes: [],
+      fieldBails: { cta: "cta_selector_mismatch", headline: "no_cta_change" },
+    });
+
+    expect(ctaPipelineBailReasonFromCounters(c)).toEqual({
+      stage: "event_emitted",
+      reason: "cta_selector_mismatch",
+    });
+  });
+
+  it("falls back to no_event_emitted when the diff ran with no field bails", () => {
+    const c = bailCounters();
+    recordFetchStage(c, "succeeded");
+    recordDiffStage(c, { status: "suppressed" });
+
+    expect(ctaPipelineBailReasonFromCounters(c)).toEqual({
+      stage: "event_emitted",
+      reason: "no_event_emitted",
+    });
   });
 });

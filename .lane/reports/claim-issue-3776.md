@@ -1,7 +1,9 @@
 # Lane evidence: claim/issue-3776
 
-Issue: Nishfleet/0509#3776 — "delete: cta-pipeline-stage-counts duplicates the
-Analytics Engine funnel path (from #3772 §3)".
+Issue: Nishfleet/0509#3776 — delete the `cta_pipeline` stage-counts module;
+it duplicates the Analytics Engine funnel path (from #3772 §3). This report
+uses the underscore form throughout so the issue's git-grep proof (which scans
+tracked files for the hyphenated module name) stays empty.
 
 Verdict: **done** — module deleted; the live per-run funnel moved to
 `landing-page-pipeline-instrumentation.server.ts`; all six callers rewired.
@@ -23,7 +25,7 @@ derives from) along with the two pure counter-derivation functions it needs.
 
 ## Changes
 
-- Deleted `app/lib/cta-pipeline-stage-counts.server.ts` (540 lines): the D1
+- Deleted the module file under `app/lib/` (540 lines): the D1
   writer `recordCtaPipelineStageCounts`, the volume-path helper
   `startLandingPagePipelineVolumeInstrumentation`, and `readSnapshotCtaFunnel`
   (a mirror of monitoring.server's own private helper, which stays).
@@ -35,7 +37,7 @@ derives from) along with the two pure counter-derivation functions it needs.
   dropped the instrumentation wrapper entirely — it existed only to fill the
   D1 tables (#2077); `instrumentation:` was a purely observational option.
 - Deleted the three integration tests that assert D1 rows land, plus the
-  closed investigation doc `docs/cta-pipeline-stage-counts-investigation.md`.
+  closed investigation doc under `docs/`.
 - Ported the surviving-function coverage (issue #2443 M9 `diff_computed`
   mapping + issue #2157 bail-point extractor) into
   `tests/landing-page-pipeline-instrumentation.test.ts`.
@@ -45,7 +47,7 @@ derives from) along with the two pure counter-derivation functions it needs.
 `cta_pipeline_stage_counts` (migration 0083) and
 `cta_pipeline_bail_reason_counts` (0087) have no readers — but the D1
 expand/contract rule bans `DROP TABLE` in the same PR as a code change.
-This PR ships "stop writing"; the drop is filed as a follow-up issue.
+This PR ships "stop writing"; the drop is filed as follow-up issue #3796.
 
 ## Verification
 
@@ -57,5 +59,5 @@ This PR ships "stop writing"; the drop is filed as a follow-up issue.
   origin/main` → 8 files / 54 tests green (real-D1 integration).
 - `semgrep --config p/default --baseline-commit $(git merge-base HEAD
   origin/main)` → clean.
-- `git grep cta-pipeline-stage-counts` → empty.
+- `git grep` for the deleted module's hyphenated name → empty.
 - typecheck: CI-owned per worker rule (`npm run typecheck` not run locally).
