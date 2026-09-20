@@ -228,13 +228,13 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
   const headers = new Headers();
   if (signupSource) {
-    headers.set("Set-Cookie", signupSourceCookieHeader(request, signupSource));
+    headers.set("Set-Cookie", await signupSourceCookieHeader(request, signupSource));
   }
   if (brandWebsite) {
     const { signupBrandWebsiteCookieHeader } = await import(
       "~/lib/setup-checklist-action.server"
     );
-    headers.append("Set-Cookie", signupBrandWebsiteCookieHeader(request, brandWebsite));
+    headers.append("Set-Cookie", await signupBrandWebsiteCookieHeader(request, brandWebsite));
   }
   throw redirect(`${next.pathname}${next.search}`, { headers });
 }

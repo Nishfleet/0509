@@ -287,7 +287,21 @@ describe("auth form server validation", () => {
     const location = new URL(response?.headers.get("Location") ?? "", "https://0509.io");
     expect(location.searchParams.get("brandWebsite")).toBe("mybrand.com");
     expect(location.searchParams.get("redirectTo")).toBe(magicRedirectTo);
-    expect(response?.headers.get("Set-Cookie")).toContain("f9_signup_brand_website=mybrand.com");
+    // The cookie serializes through React Router's createCookie (#3780):
+    // assert the name/attributes and prove the value round-trips through the
+    // real parser rather than hardcoding the framework's codec.
+    const brandCookie = response?.headers.get("Set-Cookie") ?? "";
+    expect(brandCookie).toContain("f9_signup_brand_website=");
+    const { readSignupBrandWebsiteCookie } = await import(
+      "~/lib/setup-checklist-action.server"
+    );
+    expect(
+      await readSignupBrandWebsiteCookie(
+        new Request("https://0509.io/", {
+          headers: { cookie: brandCookie.split(";")[0] },
+        }),
+      ),
+    ).toBe("mybrand.com");
   });
 
   it("keeps the default checklist redirect when the seed probe finds nothing — signup is never blocked (issue #2414)", async () => {
@@ -333,10 +347,20 @@ describe("auth form server validation", () => {
       redirectTo: "/app#setup-checklist",
     }));
     // The brand site still rides the cookie — it lands in workspace branding
-    // on the first checklist POST even with zero suggestions.
-    expect(response?.headers.get("Set-Cookie")).toContain(
-      "f9_signup_brand_website=obscure-brand.example",
+    // on the first checklist POST even with zero suggestions. Decoded through
+    // the real parser since createCookie owns the value codec (#3780).
+    const setCookie = response?.headers.get("Set-Cookie") ?? "";
+    expect(setCookie).toContain("f9_signup_brand_website=");
+    const { readSignupBrandWebsiteCookie } = await import(
+      "~/lib/setup-checklist-action.server"
     );
+    expect(
+      await readSignupBrandWebsiteCookie(
+        new Request("https://0509.io/", {
+          headers: { cookie: setCookie.split(";")[0] },
+        }),
+      ),
+    ).toBe("obscure-brand.example");
   });
 
   it("rejects malformed login email before calling Better Auth", async () => {

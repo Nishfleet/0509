@@ -8,7 +8,8 @@ const flushDeferredInstantAlertsMock = vi.hoisted(() => vi.fn());
 const runPresencePollingBatchMock = vi.hoisted(() => vi.fn());
 const resumePendingDigestScheduleJobsDetailedMock = vi.hoisted(() => vi.fn());
 
-vi.mock("react-router", () => ({
+vi.mock("react-router", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("react-router")>()),
   createContext: vi.fn(() => ({})),
   createRequestHandler: vi.fn(() => vi.fn()),
   RouterContextProvider: class {},

@@ -15,6 +15,7 @@ import {
 import { hasClassifierScriptChar } from "~/lib/language-classifier";
 import { resolvePublicHttpUrl, resolvePublicRedirectUrl } from "~/lib/public-url.server";
 import { stripScriptAndStyle } from "~/lib/sanitize-text.server";
+import { withTransientRetry } from "~/lib/transient-retry.server";
 import type { AdRecord } from "~/lib/types";
 
 export const CREATIVE_TEXT_EXTRACTOR_VERSION = "creative-text-v2";
@@ -398,12 +399,19 @@ async function extractCreativeTextFromSnapshotImage(
   };
 }
 
+/**
+ * Loop-control throwable: the OCR provider answered an empty result, which
+ * gets one immediate retry (no backoff) distinct from a provider failure.
+ */
+class CreativeOcrEmptyResultSignal extends Error {}
+
 async function extractCreativeTextFromImage(
   env: CreativeTextEnv,
   image: CreativeImagePayload,
   ad: KnownAdText,
 ): Promise<CreativeOcrResult> {
-  if (!env.AI) {
+  const ai = env.AI;
+  if (!ai) {
     return {
       text: null,
       imageUrl: image.imageUrl,
@@ -412,68 +420,67 @@ async function extractCreativeTextFromImage(
     };
   }
 
-  let lastReason: CreativeUnreadableReasonCode = "ocr_provider_failed";
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    try {
-      const response = await promiseWithTimeout(
-        env.AI.run(CREATIVE_TEXT_OCR_MODEL, {
-          image: [...image.bytes],
-          prompt: OCR_PROMPT,
-          max_tokens: 256,
-        }),
-        CREATIVE_OCR_TIMEOUT_MS,
-        "Creative OCR provider timed out.",
-      );
-      const rawDescription = readOcrDescription(response);
-      if (!rawDescription.trim()) {
-        lastReason = "ocr_empty_result";
-        if (attempt === 1) continue;
-        return {
-          text: null,
-          imageUrl: image.imageUrl,
-          reasonCode: lastReason,
-          metadata: buildOcrMetadata(image, attempt),
-        };
-      }
+  let lastAttempt = 1;
+  try {
+    return await withTransientRetry(
+      async (attempt) => {
+        lastAttempt = attempt;
+        try {
+          const response = await promiseWithTimeout(
+            ai.run(CREATIVE_TEXT_OCR_MODEL, {
+              image: [...image.bytes],
+              prompt: OCR_PROMPT,
+              max_tokens: 256,
+            }),
+            CREATIVE_OCR_TIMEOUT_MS,
+            "Creative OCR provider timed out.",
+          );
+          const rawDescription = readOcrDescription(response);
+          if (!rawDescription.trim()) {
+            throw new CreativeOcrEmptyResultSignal();
+          }
 
-      const text = selectCreativeTextCandidates(splitTextLines(rawDescription), ad);
-      if (!text) {
-        return {
-          text: null,
-          imageUrl: image.imageUrl,
-          reasonCode: "ocr_text_filtered",
-          metadata: buildOcrMetadata(image, attempt),
-        };
-      }
+          const text = selectCreativeTextCandidates(splitTextLines(rawDescription), ad);
+          if (!text) {
+            return {
+              text: null,
+              imageUrl: image.imageUrl,
+              reasonCode: "ocr_text_filtered",
+              metadata: buildOcrMetadata(image, attempt),
+            };
+          }
 
-      return {
-        text,
-        imageUrl: image.imageUrl,
-        reasonCode: null,
-        metadata: buildOcrMetadata(image, attempt),
-      };
-    } catch (error) {
-      lastReason = "ocr_provider_failed";
-      logCreativeCaptureWarning(lastReason, error, attempt);
-      if (attempt === 1 && isTransientOcrError(error)) {
-        await delay(CREATIVE_OCR_RETRY_BACKOFF_MS);
-        continue;
-      }
-      return {
-        text: null,
-        imageUrl: image.imageUrl,
-        reasonCode: lastReason,
-        metadata: buildOcrMetadata(image, attempt),
-      };
-    }
+          return {
+            text,
+            imageUrl: image.imageUrl,
+            reasonCode: null,
+            metadata: buildOcrMetadata(image, attempt),
+          };
+        } catch (error) {
+          if (!(error instanceof CreativeOcrEmptyResultSignal)) {
+            logCreativeCaptureWarning("ocr_provider_failed", error, attempt);
+          }
+          throw error;
+        }
+      },
+      {
+        maxAttempts: 2,
+        shouldRetry: (error) =>
+          error instanceof CreativeOcrEmptyResultSignal || isTransientOcrError(error),
+        backoffMs: (error) =>
+          error instanceof CreativeOcrEmptyResultSignal ? 0 : CREATIVE_OCR_RETRY_BACKOFF_MS,
+      },
+    );
+  } catch (error) {
+    const reasonCode: CreativeUnreadableReasonCode =
+      error instanceof CreativeOcrEmptyResultSignal ? "ocr_empty_result" : "ocr_provider_failed";
+    return {
+      text: null,
+      imageUrl: image.imageUrl,
+      reasonCode,
+      metadata: buildOcrMetadata(image, lastAttempt),
+    };
   }
-
-  return {
-    text: null,
-    imageUrl: image.imageUrl,
-    reasonCode: lastReason,
-    metadata: buildOcrMetadata(image, 2),
-  };
 }
 
 async function readDirectCreativeImage(
@@ -693,10 +700,6 @@ function isTransientOcrError(error: unknown) {
   return /\b(?:3007|3008|3036|3040)\b|timeout|timed out|capacity|rate.?limit|temporar/i.test(
     message,
   );
-}
-
-function delay(ms: number) {
-  return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 
 function logCreativeCaptureWarning(

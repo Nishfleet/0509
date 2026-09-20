@@ -64,7 +64,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         new URL(request.url).searchParams.get("source"),
     });
     if (signupSource) {
-      headers.append("Set-Cookie", signupSourceCookieHeader(request, signupSource));
+      headers.append("Set-Cookie", await signupSourceCookieHeader(request, signupSource));
     }
   }
   throw redirect(oauthStart.url, { headers });

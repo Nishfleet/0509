@@ -28,6 +28,7 @@ import {
 } from "~/lib/browser-job-telemetry.server";
 import type { LandingPageSnapshotData, ProofDeviceProfile, ProofRenderMode } from "~/lib/types";
 import { promiseWithTimeout } from "~/lib/fetch-timeout.server";
+import { withTransientRetry } from "~/lib/transient-retry.server";
 
 const TITLE_REGEX = /<title[^>]*>([^<]+)<\/title>/i;
 const OG_TITLE_REGEX =
@@ -394,11 +395,10 @@ export async function captureBrowserRunSnapshot(
       await recordRun("failed", { reason: "canonical_unresolved" });
       return null;
     }
-    let screenshot: Uint8Array | ArrayBuffer | Buffer | null = null;
     const captureWarningCodes: string[] = [];
-    for (let attempt = 1; attempt <= SCREENSHOT_CAPTURE_ATTEMPTS; attempt += 1) {
-      try {
-        screenshot = await promiseWithTimeout(
+    const screenshot: Uint8Array | ArrayBuffer | Buffer | null = await withTransientRetry(
+      () =>
+        promiseWithTimeout(
           page.screenshot({
             type: "jpeg",
             quality: 85,
@@ -406,15 +406,17 @@ export async function captureBrowserRunSnapshot(
           }),
           SCREENSHOT_CAPTURE_TIMEOUT_MS,
           "Browser Run screenshot timed out.",
-        );
-        break;
-      } catch (error) {
-        if (attempt >= SCREENSHOT_CAPTURE_ATTEMPTS) {
-          captureWarningCodes.push("screenshot_capture_failed");
-          logRenderedCaptureWarning("screenshot_capture_failed", error);
-        }
-      }
-    }
+        ),
+      {
+        maxAttempts: SCREENSHOT_CAPTURE_ATTEMPTS,
+        shouldRetry: () => true,
+        backoffMs: 0,
+      },
+    ).catch((error) => {
+      captureWarningCodes.push("screenshot_capture_failed");
+      logRenderedCaptureWarning("screenshot_capture_failed", error);
+      return null;
+    });
 
     const snapshot = await buildBrowserRenderedSnapshot(env, {
       url: targetUrl,
@@ -541,11 +543,10 @@ async function captureDesktopLegArtifacts(
     // The desktop leg has its own bounded screenshot budget, mirroring the
     // mobile leg's bounded retry so a transient provider flake cannot drop
     // the desktop artifact silently.
-    let screenshot: Uint8Array | ArrayBuffer | Buffer | null = null;
     const captureWarningCodes: string[] = [];
-    for (let attempt = 1; attempt <= SCREENSHOT_CAPTURE_ATTEMPTS; attempt += 1) {
-      try {
-        screenshot = await promiseWithTimeout(
+    let screenshot: Uint8Array | ArrayBuffer | Buffer | null = await withTransientRetry(
+      () =>
+        promiseWithTimeout(
           page.screenshot({
             type: "jpeg",
             quality: 85,
@@ -553,15 +554,17 @@ async function captureDesktopLegArtifacts(
           }),
           SCREENSHOT_CAPTURE_TIMEOUT_MS,
           "Browser Run desktop screenshot timed out.",
-        );
-        break;
-      } catch (error) {
-        if (attempt >= SCREENSHOT_CAPTURE_ATTEMPTS) {
-          captureWarningCodes.push("screenshot_capture_failed");
-          logRenderedCaptureWarning("screenshot_capture_failed", error);
-        }
-      }
-    }
+        ),
+      {
+        maxAttempts: SCREENSHOT_CAPTURE_ATTEMPTS,
+        shouldRetry: () => true,
+        backoffMs: 0,
+      },
+    ).catch((error) => {
+      captureWarningCodes.push("screenshot_capture_failed");
+      logRenderedCaptureWarning("screenshot_capture_failed", error);
+      return null;
+    });
     // Mirror the mobile leg's screenshot byte cap: an oversized desktop
     // screenshot is dropped (and recorded), never persisted at any size.
     if (screenshot && toUint8Array(screenshot).byteLength > MAX_RENDERED_SCREENSHOT_BYTES) {
@@ -700,6 +703,13 @@ export async function captureRenderedLandingPageSnapshot(
   });
 }
 
+/**
+ * Loop-control throwable: a Browserless attempt that produced no snapshot but
+ * is worth one more try (transient provider outcome). Real errors keep their
+ * own identity so the per-attempt warning log stays accurate.
+ */
+class BrowserlessProofRetryableSignal extends Error {}
+
 export async function captureBrowserlessProofSnapshot(
   env: AppEnv,
   url: string,
@@ -763,31 +773,37 @@ export async function captureBrowserlessProofSnapshot(
   };
 
   const targetUrl = publicUrl.toString();
-  for (let attempt = 1; attempt <= MAX_BROWSERLESS_PROOF_RETRIES + 1; attempt += 1) {
-    try {
-      const { snapshot, retryable } = await attemptBrowserlessProofSnapshot(
-        env,
-        targetUrl,
-        options,
-        recordRun,
-      );
-      if (snapshot) {
-        return snapshot;
-      }
-      // Permanent validation failures (non-public canonical URL, blocked
-      // document requests) are never retried — they would waste a paid call.
-      if (!retryable || attempt > MAX_BROWSERLESS_PROOF_RETRIES) {
+  return withTransientRetry(
+    async () => {
+      try {
+        const { snapshot, retryable } = await attemptBrowserlessProofSnapshot(
+          env,
+          targetUrl,
+          options,
+          recordRun,
+        );
+        if (snapshot) {
+          return snapshot;
+        }
+        // Permanent validation failures (non-public canonical URL, blocked
+        // document requests) are never retried — they would waste a paid call.
+        if (retryable) {
+          throw new BrowserlessProofRetryableSignal();
+        }
         return null;
+      } catch (error) {
+        if (!(error instanceof BrowserlessProofRetryableSignal)) {
+          logRenderedCaptureWarning("browserless_render_failed", error);
+        }
+        throw error;
       }
-    } catch (error) {
-      logRenderedCaptureWarning("browserless_render_failed", error);
-      if (attempt > MAX_BROWSERLESS_PROOF_RETRIES) {
-        return null;
-      }
-    }
-    await sleep(BROWSERLESS_RETRY_DELAY_MS);
-  }
-  return null;
+    },
+    {
+      maxAttempts: MAX_BROWSERLESS_PROOF_RETRIES + 1,
+      shouldRetry: () => true,
+      backoffMs: BROWSERLESS_RETRY_DELAY_MS,
+    },
+  ).catch(() => null);
 }
 
 type BrowserlessProofPayload = {
@@ -945,10 +961,6 @@ function isTransientHttpStatus(status: number) {
   return status === 429 || status >= 500;
 }
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 export async function captureBrowserRunQuickActionContent(
   env: AppEnv,
   options: BrowserRunQuickActionContentOptions,
@@ -1029,9 +1041,8 @@ async function fetchQuickActionWithRetry<TPayload, TResult>(
     payload: BrowserRunQuickActionEnvelope<TPayload> | null,
   ) => TResult,
 ): Promise<TResult> {
-  let lastError: unknown = null;
-  for (let attempt = 1; attempt <= QUICK_ACTION_MAX_ATTEMPTS; attempt += 1) {
-    try {
+  return withTransientRetry(
+    async () => {
       let response: Response;
       try {
         response = await fetchWithTimeout(
@@ -1057,21 +1068,19 @@ async function fetchQuickActionWithRetry<TPayload, TResult>(
       >(response, BROWSER_RUN_QUICK_ACTION_JSON_MAX_BYTES);
 
       return onResolved(response, payload);
-    } catch (error) {
-      lastError = error;
-      if (!isQuickActionRetryable(error) || attempt >= QUICK_ACTION_MAX_ATTEMPTS) {
-        throw error;
-      }
-      const retryAfterMs =
+    },
+    {
+      maxAttempts: QUICK_ACTION_MAX_ATTEMPTS,
+      shouldRetry: isQuickActionRetryable,
+      backoffMs: (error) =>
         error instanceof BrowserRunQuickActionError &&
         error.retryAfterSeconds &&
         error.retryAfterSeconds > 0
           ? Math.min(error.retryAfterSeconds * 1000, QUICK_ACTION_RETRY_MAX_DELAY_MS)
-          : QUICK_ACTION_RETRY_DELAY_MS;
-      await sleep(retryAfterMs);
-    }
-  }
-  throw lastError;
+          : QUICK_ACTION_RETRY_DELAY_MS,
+      maxBackoffMs: QUICK_ACTION_RETRY_MAX_DELAY_MS,
+    },
+  );
 }
 
 function isQuickActionRetryable(error: unknown) {
@@ -1088,24 +1097,22 @@ function isQuickActionRetryable(error: unknown) {
  * loads. Returns which strategy succeeded and how many attempts were used.
  */
 async function gotoWithEscalatingWaitStrategy(page: BrowserRunPage, targetUrl: string) {
-  let pageLoadStrategy: "networkidle2" | "load" = "networkidle2";
-  for (let attempt = 1; attempt <= BROWSER_RUN_GOTO_STRATEGIES.length; attempt += 1) {
-    const strategy = BROWSER_RUN_GOTO_STRATEGIES[attempt - 1];
-    try {
+  return withTransientRetry(
+    async (attempt) => {
+      const strategy = BROWSER_RUN_GOTO_STRATEGIES[attempt - 1];
       await page.goto(targetUrl, {
         waitUntil: strategy.waitUntil,
         timeout: strategy.timeoutMs,
       });
-      pageLoadStrategy = strategy.waitUntil;
-      return { pageLoadStrategy, gotoAttempts: attempt };
-    } catch (error) {
-      if (attempt >= BROWSER_RUN_GOTO_STRATEGIES.length) {
-        throw error;
-      }
-      logRenderedCaptureWarning("browser_goto_retry", error);
-    }
-  }
-  return { pageLoadStrategy, gotoAttempts: BROWSER_RUN_GOTO_STRATEGIES.length };
+      return { pageLoadStrategy: strategy.waitUntil, gotoAttempts: attempt };
+    },
+    {
+      maxAttempts: BROWSER_RUN_GOTO_STRATEGIES.length,
+      shouldRetry: () => true,
+      backoffMs: 0,
+      onRetryError: (error) => logRenderedCaptureWarning("browser_goto_retry", error),
+    },
+  );
 }
 
 async function buildBrowserRenderedSnapshot(
@@ -1348,20 +1355,16 @@ async function putArtifactWithRetry(
   value: ArrayBuffer | Uint8Array | string,
   options: R2PutOptions,
 ): Promise<void> {
-  let lastError: unknown = null;
-  for (let attempt = 1; attempt <= R2_PUT_ATTEMPTS; attempt += 1) {
-    try {
+  await withTransientRetry(
+    async () => {
       await bucket.put(key, value, options);
-      return;
-    } catch (error) {
-      lastError = error;
-      if (attempt >= R2_PUT_ATTEMPTS) {
-        throw error;
-      }
-      await sleep(R2_PUT_RETRY_DELAY_MS);
-    }
-  }
-  throw lastError;
+    },
+    {
+      maxAttempts: R2_PUT_ATTEMPTS,
+      shouldRetry: () => true,
+      backoffMs: R2_PUT_RETRY_DELAY_MS,
+    },
+  );
 }
 
 function logRenderedCaptureWarning(reasonCode: string, error: unknown) {

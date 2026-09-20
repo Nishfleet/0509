@@ -1,5 +1,8 @@
 /**
- * Bounded transient-retry for money-path reads (issue #2001).
+ * Bounded transient-retry for money-path reads (issue #2001), and the app's
+ * one shared retry helper (issue #3780): every `for (let attempt = ...)`
+ * loop in app code runs through `withTransientRetry` so attempt counting,
+ * the backoff sleep, and last-error rethrow live in exactly one place.
  *
  * The money path (the /search selected-result step and the /ads/:domain
  * cohort) intermittently answered 5xx (and, on /ads, a spurious
@@ -20,7 +23,22 @@ const MAX_BACKOFF_MS = 500;
 
 export interface TransientRetryOptions {
   maxAttempts?: number;
-  backoffMs?: number;
+  /**
+   * Fixed delay between attempts, or a per-error resolver (e.g. honoring a
+   * Retry-After carried on the thrown error). `attempt` is the attempt that
+   * just failed (1-based).
+   */
+  backoffMs?: number | ((error: unknown, attempt: number) => number);
+  /** Upper bound on the resolved delay. Defaults to MAX_BACKOFF_MS. */
+  maxBackoffMs?: number;
+  /**
+   * Retry predicate for the thrown value; defaults to `isTransientError`.
+   * Pass `() => true` for retry-everything loops, or a narrower predicate
+   * (status checks, marker throwables) for result-shaped retries.
+   */
+  shouldRetry?: (error: unknown, attempt: number) => boolean;
+  /** Called after a failed attempt that will be retried (never on the last). */
+  onRetryError?: (error: unknown, attempt: number) => void;
   sleepImpl?: (ms: number) => Promise<void>;
   nowImpl?: () => number;
 }
@@ -52,30 +70,35 @@ export function isTransientError(error: unknown): boolean {
 }
 
 /**
- * Run `fn` with up to `maxAttempts` total attempts. Retries only when the
- * thrown value looks transient (isTransientError); the last attempt's error
- * is rethrown unchanged so the caller's existing error UX owns the response.
+ * Run `fn` with up to `maxAttempts` total attempts. `fn` receives the 1-based
+ * attempt number so loops that change shape per attempt (escalating
+ * strategies, telemetry counts) keep working. Retries only when `shouldRetry`
+ * (default `isTransientError`) accepts the thrown value; the last attempt's
+ * error is rethrown unchanged so the caller's existing error UX owns the
+ * response.
  */
 export async function withTransientRetry<T>(
-  fn: () => Promise<T>,
+  fn: (attempt: number) => Promise<T>,
   options: TransientRetryOptions = {},
 ): Promise<T> {
   const maxAttempts = Math.max(1, options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS);
-  const backoffMs = Math.min(
-    Math.max(0, options.backoffMs ?? DEFAULT_BACKOFF_MS),
-    MAX_BACKOFF_MS,
-  );
+  const maxBackoffMs = Math.max(0, options.maxBackoffMs ?? MAX_BACKOFF_MS);
   const sleepImpl = options.sleepImpl ?? defaultSleep;
+  const shouldRetry = options.shouldRetry ?? isTransientError;
+  const backoffMs = options.backoffMs ?? DEFAULT_BACKOFF_MS;
   let lastError: unknown;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      return await fn();
+      return await fn(attempt);
     } catch (error) {
       lastError = error;
-      if (attempt >= maxAttempts || !isTransientError(error)) {
+      if (attempt >= maxAttempts || !shouldRetry(error, attempt)) {
         throw error;
       }
-      await sleepImpl(backoffMs);
+      options.onRetryError?.(error, attempt);
+      const delayMs =
+        typeof backoffMs === "function" ? backoffMs(error, attempt) : backoffMs;
+      await sleepImpl(Math.min(Math.max(0, delayMs), maxBackoffMs));
     }
   }
   throw lastError;

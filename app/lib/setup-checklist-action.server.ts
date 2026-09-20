@@ -1,4 +1,4 @@
-import { redirect } from "react-router";
+import { createCookie, redirect } from "react-router";
 import type { ActionFunctionArgs } from "react-router";
 import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
 import { sanitizeCustomerFacingMessage } from "~/lib/customer-route-error";
@@ -37,41 +37,44 @@ import type { ClientRoomRecord, ClientRoomResourceRef } from "~/lib/types";
 export const SIGNUP_BRAND_WEBSITE_COOKIE = "f9_signup_brand_website";
 const SIGNUP_BRAND_WEBSITE_TTL_MS = 30 * 60 * 1000;
 
+/**
+ * Same `createCookie` move as the signup-source cookie (issue #3780): the
+ * framework serializes/parses the value; name, HttpOnly, Path=/,
+ * SameSite=Lax and the 30-minute Max-Age are fixed attributes, while Domain
+ * (0509.io/0509.in apex only) and Secure stay request-scoped per-call.
+ * The framework's value codec replaces the old `encodeURIComponent` payload —
+ * a pre-change cookie decodes to null, which the checklist read path already
+ * treats as "visitor did not answer the website question".
+ */
+const signupBrandWebsiteCookie = createCookie(SIGNUP_BRAND_WEBSITE_COOKIE, {
+  httpOnly: true,
+  maxAge: Math.floor(SIGNUP_BRAND_WEBSITE_TTL_MS / 1000),
+  path: "/",
+  sameSite: "lax",
+});
+
 export function signupBrandWebsiteCookieHeader(request: Request, brandWebsite: string) {
-  const parts = [
-    `${SIGNUP_BRAND_WEBSITE_COOKIE}=${encodeURIComponent(brandWebsite.slice(0, 300))}`,
-    "HttpOnly",
-    `Max-Age=${Math.floor(SIGNUP_BRAND_WEBSITE_TTL_MS / 1000)}`,
-    "Path=/",
-    "SameSite=Lax",
-  ];
   const hostname = new URL(request.url).hostname.toLowerCase();
-  if (hostname === "0509.io" || hostname.endsWith(".0509.io")) {
-    parts.push("Domain=0509.io");
-  } else if (hostname === "0509.in" || hostname.endsWith(".0509.in")) {
-    parts.push("Domain=0509.in");
-  }
-  if (new URL(request.url).protocol === "https:") {
-    parts.push("Secure");
-  }
-  return parts.join("; ");
+  const domain =
+    hostname === "0509.io" || hostname.endsWith(".0509.io")
+      ? "0509.io"
+      : hostname === "0509.in" || hostname.endsWith(".0509.in")
+        ? "0509.in"
+        : undefined;
+  return signupBrandWebsiteCookie.serialize(brandWebsite.slice(0, 300), {
+    domain,
+    secure: new URL(request.url).protocol === "https:",
+  });
 }
 
-export function readSignupBrandWebsiteCookie(request: Request): string | null {
-  const prefix = `${SIGNUP_BRAND_WEBSITE_COOKIE}=`;
-  for (const part of (request.headers.get("cookie") ?? "").split(";")) {
-    const cookie = part.trim();
-    if (!cookie.startsWith(prefix)) {
-      continue;
-    }
-    try {
-      const value = decodeURIComponent(cookie.slice(prefix.length)).trim();
-      return value || null;
-    } catch {
-      return null;
-    }
+export async function readSignupBrandWebsiteCookie(
+  request: Request,
+): Promise<string | null> {
+  const value = await signupBrandWebsiteCookie.parse(request.headers.get("cookie"));
+  if (typeof value !== "string") {
+    return null;
   }
-  return null;
+  return value.trim() || null;
 }
 
 /**
@@ -161,7 +164,7 @@ export async function handleSetupChecklistAction(
     // Issue #2414 — the signup "Your website" answer rides the magic-link gap
     // in the short-lived cookie when no checklist form field carried it.
     const cookieWebsite = normalizeCompetitorWebsiteInput(
-      readSignupBrandWebsiteCookie(request) ?? "",
+      (await readSignupBrandWebsiteCookie(request)) ?? "",
     );
     if (cookieWebsite.normalizedUrl) {
       await upsertWorkspaceBranding(env, workspaceUserId, {
@@ -632,7 +635,7 @@ async function handleCreateHandoffWatchlists(input: {
   // are the customer's own brand rather than competitors.
   const handoffBrandWebsiteUrl = normalizeCompetitorWebsiteInput(
     String(formData.get("brandWebsite") ?? "").trim() ||
-      (readSignupBrandWebsiteCookie(request) ?? ""),
+      ((await readSignupBrandWebsiteCookie(request)) ?? ""),
   ).normalizedUrl;
   const queued = new Set<string>();
   const rejected: Array<{ advertiser: string; reason: string }> = [];
