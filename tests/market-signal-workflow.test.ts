@@ -91,8 +91,8 @@ describe("daily market-signal D1 snapshot workflow", () => {
     // returns a per-file execution summary, not the SELECT's rows.
     expect(generate?.run).toContain('wrangler d1 execute 0509 --remote --command="$(cat db/queries/market-signal.sql)"');
     // Comments may mention --file to explain the contrast; the invocation is
-    // the regression.
-    expect(generate?.run).not.toContain("--file db/queries/market-signal.sql");
+    // the regression, in either --file <path> or --file=<path> form.
+    expect(generate?.run).not.toMatch(/--file[ =]db\/queries\/market-signal\.sql/);
   });
 
   it("fails closed when wrangler returns an execution summary instead of rows", () => {
@@ -104,11 +104,15 @@ describe("daily market-signal D1 snapshot workflow", () => {
     // users_total count is missing, so a stats-shaped response can never pass
     // silently again.
     const generate = job.steps?.find((step) => step.name === "Generate market-signal D1 snapshot")?.run ?? "";
-    expect(generate).toContain('has("users_total")');
+    // Pin the jq code, not the comment prose that also names the clause.
+    expect(generate).toContain('(.results[0]|has("users_total"))');
     const freshness = job.steps?.find((step) => step.name === "Verify snapshot freshness")?.run ?? "";
-    expect(freshness).toContain("users_total");
-    expect(freshness).toContain("market_signal_snapshot_hollow");
-    expect(freshness).toContain("process.exit(1)");
+    // Pin the guard's own check and its exit: the bare "users_total" string and
+    // the pre-existing generatedAt exits would satisfy weaker assertions even
+    // with the guard deleted. Number.isFinite(...) is load-bearing — COUNT(*)
+    // legitimately yields 0, which a truthiness rewrite would wrongly reject.
+    expect(freshness).toContain("Number.isFinite(snapshot.product && snapshot.product.users_total)");
+    expect(freshness).toMatch(/market_signal_snapshot_hollow[^)]*\);\s*process\.exit\(1\)/);
   });
 
   it("writes the snapshot to the exact path the Hermes contract reads", () => {

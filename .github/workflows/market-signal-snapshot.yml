@@ -181,7 +181,7 @@ jobs:
             // response produces a product section with no real metric columns
             // but a valid generatedAt, so freshness alone cannot catch it.
             if (!Number.isFinite(snapshot.product && snapshot.product.users_total)) {
-              console.error('market_signal_snapshot_hollow: product.users_total missing');
+              console.error('market_signal_snapshot_hollow: product.users_total is not a finite number');
               process.exit(1);
             }
             console.log('market_signal_snapshot_fresh ' + snapshot.generatedAt);
