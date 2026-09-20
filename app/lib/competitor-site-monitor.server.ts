@@ -1248,6 +1248,8 @@ export interface WebsiteCoverageLabelInput {
     pageBudget: number;
     fetchedPageCount: number;
     finalizedAt: string | null;
+    /** Honest crawl-discovered count; null when the scan recorded none. */
+    crawlDiscoveredCount: number | null;
   };
   pages: readonly { canonicalUrl: string; discoverySource: WebsitePageDiscoverySource }[];
 }
@@ -1274,6 +1276,12 @@ export function buildWebsiteCoverageLabel(input: WebsiteCoverageLabelInput): str
       : `${watched} of ${known} known pages watched`,
     `sitemap discovered ${sitemapCount}`,
   ];
+  // Only a persisted crawl count is honest — a null column means the scan
+  // recorded none, so the clause is omitted rather than estimated from
+  // discovery sources that cannot separate crawl hits from sitemap hits.
+  if (input.scan.crawlDiscoveredCount !== null) {
+    clauses.push(`crawl reached ${input.scan.crawlDiscoveredCount}`);
+  }
   const lastFullCrawl = formatLastFullCrawlDate(input.scan.status, input.scan.finalizedAt);
   if (lastFullCrawl !== null) {
     clauses.push(`last full crawl ${lastFullCrawl}`);

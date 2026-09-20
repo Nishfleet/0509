@@ -574,6 +574,7 @@ describe("FULLSITE_WATCH_ENABLED feature flag", () => {
     applyMigration(harness.sqlite, "migrations/0047_monitoring_fanout_orchestration.sql");
     harness.sqlite.exec("PRAGMA foreign_keys = ON;");
     applyMigration(harness.sqlite, "migrations/0077_competitor_site_monitoring.sql");
+    applyMigration(harness.sqlite, "migrations/0107_website_site_scan_crawl_count.sql");
     const env = { DB: harness.db, FULLSITE_WATCH_ENABLED: "0" } as unknown as AppEnv;
     try {
       harness.sqlite
@@ -626,6 +627,7 @@ describe("runWebsiteSiteScan", () => {
     harness.sqlite.exec("PRAGMA foreign_keys = ON;");
     applyMigration(harness.sqlite, "migrations/0077_competitor_site_monitoring.sql");
     applyMigration(harness.sqlite, "migrations/0082_website_page_kind_careers_legal.sql");
+    applyMigration(harness.sqlite, "migrations/0107_website_site_scan_crawl_count.sql");
     env = { DB: harness.db } as AppEnv;
 
     harness.sqlite
@@ -1184,6 +1186,7 @@ describe("buildWebsiteCoverageLabel", () => {
         pageBudget: 50,
         fetchedPageCount: 2,
         finalizedAt: null,
+        crawlDiscoveredCount: null,
       },
       pages,
     });
@@ -1199,6 +1202,7 @@ describe("buildWebsiteCoverageLabel", () => {
         pageBudget: 50,
         fetchedPageCount: 3,
         finalizedAt: "2026-08-01T03:00:00.000Z",
+        crawlDiscoveredCount: null,
       },
       pages,
     });
@@ -1214,6 +1218,7 @@ describe("buildWebsiteCoverageLabel", () => {
         pageBudget: 50,
         fetchedPageCount: 4,
         finalizedAt: "2026-08-01T03:00:00.000Z",
+        crawlDiscoveredCount: null,
       },
       pages,
     });
@@ -1228,13 +1233,49 @@ describe("buildWebsiteCoverageLabel", () => {
         pageBudget: 50,
         fetchedPageCount: 1,
         finalizedAt: null,
+        crawlDiscoveredCount: null,
       },
       pages,
     });
     expect(label).toContain("sitemap discovered 3");
-    // Crawl pages persist as "sitemap_content" so no honest crawl count
-    // exists yet (#2771) — the label must not claim one.
+    // A null crawl count means the scan recorded none — the label must not
+    // claim a crawl reach it cannot prove (#2771).
     expect(label).not.toContain("crawl reached");
+  });
+
+  it("renders crawl reached N only from the scan's persisted count", () => {
+    const label = buildWebsiteCoverageLabel({
+      scan: {
+        status: "complete",
+        inventoryComplete: true,
+        pageBudget: 50,
+        fetchedPageCount: 4,
+        finalizedAt: "2026-08-01T03:00:00.000Z",
+        crawlDiscoveredCount: 3,
+      },
+      pages,
+    });
+    expect(label).toContain("crawl reached 3");
+    // The count comes from the manifest column, never inferred from page
+    // discovery sources — sitemap_content rows must not leak into it.
+    expect(label).toContain(
+      "All 4 known pages watched; sitemap discovered 3; crawl reached 3; last full crawl 2026-08-01",
+    );
+  });
+
+  it("renders crawl reached 0 when the scan recorded an empty crawl", () => {
+    const label = buildWebsiteCoverageLabel({
+      scan: {
+        status: "complete",
+        inventoryComplete: true,
+        pageBudget: 50,
+        fetchedPageCount: 4,
+        finalizedAt: "2026-08-01T03:00:00.000Z",
+        crawlDiscoveredCount: 0,
+      },
+      pages,
+    });
+    expect(label).toContain("crawl reached 0");
   });
 
   it("renders the real finalized date, never a placeholder", () => {
@@ -1245,6 +1286,7 @@ describe("buildWebsiteCoverageLabel", () => {
         pageBudget: 50,
         fetchedPageCount: 4,
         finalizedAt: "2026-08-01T03:00:00.000Z",
+        crawlDiscoveredCount: null,
       },
       pages,
     });
@@ -1261,6 +1303,7 @@ describe("buildWebsiteCoverageLabel", () => {
         pageBudget: 50,
         fetchedPageCount: 2,
         finalizedAt: null,
+        crawlDiscoveredCount: null,
       },
       pages,
     });
@@ -1276,6 +1319,7 @@ describe("buildWebsiteCoverageLabel", () => {
         pageBudget: 50,
         fetchedPageCount: 2,
         finalizedAt: "not-a-date",
+        crawlDiscoveredCount: null,
       },
       pages,
     });
@@ -1292,6 +1336,7 @@ describe("buildWebsiteCoverageLabel", () => {
         pageBudget: 50,
         fetchedPageCount: 4,
         finalizedAt: "",
+        crawlDiscoveredCount: null,
       },
       pages,
     });
@@ -1311,6 +1356,7 @@ describe("buildWebsiteCoverageLabel", () => {
         pageBudget: 50,
         fetchedPageCount: 3,
         finalizedAt: "2026-08-15T03:00:00.000Z",
+        crawlDiscoveredCount: null,
       },
       pages,
     });
@@ -1326,6 +1372,7 @@ describe("buildWebsiteCoverageLabel", () => {
         pageBudget: 50,
         fetchedPageCount: 1,
         finalizedAt: "2026-08-15T03:00:00.000Z",
+        crawlDiscoveredCount: null,
       },
       pages,
     });
@@ -1341,6 +1388,7 @@ describe("buildWebsiteCoverageLabel", () => {
         pageBudget: 50,
         fetchedPageCount: 1,
         finalizedAt: null,
+        crawlDiscoveredCount: null,
       },
       pages,
     });

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { getLatestCompleteWebsiteScanBaseline } from "~/lib/data/watchlist-site-pages.server";
+import {
+  getLatestCompleteWebsiteScanBaseline,
+  getLatestWebsiteSiteScanForWatchlist,
+} from "~/lib/data/watchlist-site-pages.server";
 
 import {
   appEnv,
@@ -224,5 +227,53 @@ describe("getLatestCompleteWebsiteScanBaseline against real D1", () => {
     expect(baseline?.scan.id).toBe(scanId);
     expect(baseline?.pages).toEqual([]);
     expect(baseline?.observations).toEqual([]);
+  });
+});
+
+/**
+ * Migration 0107 (#2771) adds `website_site_scan.crawl_discovered_count`, the
+ * nullable home of the coverage label's "crawl reached N". This is the expand
+ * phase only — the dual-write/backfill/read-switch land in later PRs — so the
+ * contract proven here is: inserts that never name the column still work and
+ * read back null, a written value round-trips through the data layer, and the
+ * CHECK bound rejects a negative count. A mocked binding sees none of that.
+ */
+describe("website_site_scan.crawl_discovered_count (expand phase)", () => {
+  it("reads null for rows written by code that predates the dual-write", async () => {
+    const { workspaceId, watchlistId } = await seedWorkspaceAndWatchlist();
+    const runId = await seedRun(watchlistId, { startedAt: "2026-02-01T00:00:00.000Z" });
+    // seedScan's INSERT names no crawl column — the pre-dual-write write shape.
+    await seedScan({ workspaceId, watchlistId, runId, status: "complete" });
+
+    const latest = await getLatestWebsiteSiteScanForWatchlist(appEnv, watchlistId);
+    expect(latest?.scan.crawlDiscoveredCount).toBeNull();
+  });
+
+  it("round-trips a written count through the scan record", async () => {
+    const { workspaceId, watchlistId } = await seedWorkspaceAndWatchlist();
+    const runId = await seedRun(watchlistId, { startedAt: "2026-02-01T00:00:00.000Z" });
+    const scanId = await seedScan({ workspaceId, watchlistId, runId, status: "complete" });
+
+    await db()
+      .prepare("UPDATE website_site_scan SET crawl_discovered_count = ? WHERE id = ?")
+      .bind(7, scanId)
+      .run();
+
+    const latest = await getLatestWebsiteSiteScanForWatchlist(appEnv, watchlistId);
+    expect(latest?.scan.id).toBe(scanId);
+    expect(latest?.scan.crawlDiscoveredCount).toBe(7);
+  });
+
+  it("rejects a negative crawl count at the schema bound", async () => {
+    const { workspaceId, watchlistId } = await seedWorkspaceAndWatchlist();
+    const runId = await seedRun(watchlistId, { startedAt: "2026-02-01T00:00:00.000Z" });
+    const scanId = await seedScan({ workspaceId, watchlistId, runId, status: "complete" });
+
+    await expect(
+      db()
+        .prepare("UPDATE website_site_scan SET crawl_discovered_count = ? WHERE id = ?")
+        .bind(-1, scanId)
+        .run(),
+    ).rejects.toThrow();
   });
 });

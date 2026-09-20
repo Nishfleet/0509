@@ -96,6 +96,7 @@ async function loadWebsiteCoverageLabel(
         pageBudget: latest.scan.pageBudget,
         fetchedPageCount: latest.scan.fetchedPageCount,
         finalizedAt: latest.scan.finalizedAt,
+        crawlDiscoveredCount: latest.scan.crawlDiscoveredCount,
       },
       pages: latest.pages,
     });

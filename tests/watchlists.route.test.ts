@@ -1083,7 +1083,7 @@ describe("watchlists route rendering", () => {
     },
     creativeWall: [],
     trendDailyActivity: [],
-    websiteCoverageLabel: "2 of 8 known pages watched; sitemap discovered 6; last full crawl 2026-04-18",
+    websiteCoverageLabel: "2 of 8 known pages watched; sitemap discovered 6; crawl reached 2; last full crawl 2026-04-18",
   };
 
   it("renders a selected competitor as one entity-owned detail surface", async () => {
@@ -1230,6 +1230,8 @@ describe("watchlists route rendering", () => {
     expect(markup).toContain("What changed");
     expect(markup).toContain('data-coverage="website"');
     expect(markup).toContain("2 of 8 known pages watched");
+    // #2771: the restored clause renders only a persisted crawl count.
+    expect(markup).toContain("crawl reached 2");
     expect(markup).not.toContain("whole site");
     expect(markup).toContain("f9-evidence-diff-plate");
     expect(markup).toContain("High confidence");
