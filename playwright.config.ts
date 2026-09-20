@@ -1,28 +1,12 @@
 import { defineConfig, devices } from "@playwright/test";
-import {
-  buildLocalReleaseServerCommand,
-  isLocalReleaseServerIdentity,
-  parseExactLoopbackOrigin,
-} from "./scripts/local-release-server.mjs";
 
 const shouldStartLocalServer = process.env.E2E_START_LOCAL_SERVER === "1";
-const strictReleaseProof = process.env.E2E_RELEASE_STRICT === "1";
-if (strictReleaseProof && !process.env.E2E_BASE_URL) {
-  throw new Error("E2E_BASE_URL is required for an isolated local release run.");
-}
 const localBaseURL = process.env.E2E_BASE_URL ?? "http://127.0.0.1:4179";
-const parsedLocalBaseURL = parseExactLoopbackOrigin(localBaseURL);
 const previewBaseURL = process.env.E2E_PREVIEW_BASE_URL ?? localBaseURL;
 const productionBaseURL = process.env.E2E_PROD_BASE_URL ?? "https://0509.io";
 const authState = process.env.AUTH_STATE ?? ".auth/0509-internal.json";
 const journeyReleaseMatch = /journey-[1-6]-release\.spec\.ts/;
-const releaseServerIdentity = process.env.PLAYWRIGHT_RELEASE_SERVER_ID;
-if (strictReleaseProof && !isLocalReleaseServerIdentity(releaseServerIdentity)) {
-  throw new Error("PLAYWRIGHT_RELEASE_SERVER_ID is required for an isolated local release run.");
-}
-const outputDir = strictReleaseProof
-  ? `test-results/e2e/${releaseServerIdentity}`
-  : "test-results/e2e";
+const outputDir = "test-results/e2e";
 // Diagnostic engine matrix (firefox/webkit/mobile) is not the release gate.
 // On the hardened vps-verify runner, Journey 1 desktop under mobile-safari
 // regularly needs ~31–33s (run 31236680609: mobile 25.9s pass, tablet 29.5s
@@ -47,9 +31,7 @@ export default defineConfig({
   // The release-manifest reporter is appended by the proof runner via
   // Playwright 1.63's --add-reporter (issue #1727) instead of overriding the
   // configured reporters here.
-  reporter: strictReleaseProof
-    ? [["list"]]
-    : process.env.CI
+  reporter: process.env.CI
       ? [["dot"], ["html", { open: "never" }]]
       : "list",
   timeout: 30_000,
@@ -80,7 +62,7 @@ export default defineConfig({
   },
   webServer: shouldStartLocalServer
       ? {
-        command: buildLocalReleaseServerCommand(parsedLocalBaseURL.origin),
+        command: "npm run e2e:serve:local",
         reuseExistingServer: false,
         timeout: 120_000,
         url: localBaseURL,

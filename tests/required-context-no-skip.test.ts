@@ -95,13 +95,13 @@ describe("required contexts can never conclude skipped", () => {
       expect(runs).toContain("npm run build");
       expect(runs).toContain("npm run e2e:prepare:local");
       expect(runs).toContain(
-        "node scripts/run-local-release-proof.mjs --journeys=1,2,3,4,5,6",
+        "npm run e2e:local:release",
       );
       const upload = (job.steps ?? []).find((step) =>
         step.uses?.startsWith("actions/upload-artifact@"),
       );
       expect(upload?.if).toBe("failure()");
-      expect(String(upload?.with?.path)).toContain("gate-b-manifest");
+      expect(String(upload?.with?.path)).toContain("test-results/e2e");
     });
   });
 });
