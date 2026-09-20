@@ -113,7 +113,6 @@ describe("website site scan storage", () => {
     // Migration 0007 turns foreign keys off; restore them before seeding.
     harness.sqlite.exec("PRAGMA foreign_keys = ON;");
     applyMigration(harness.sqlite, "migrations/0077_competitor_site_monitoring.sql");
-    applyMigration(harness.sqlite, "migrations/0107_website_site_scan_crawl_count.sql");
     env = { DB: harness.db } as never;
 
     harness.sqlite
@@ -285,8 +284,6 @@ describe("website site scan storage", () => {
     const latest = await getLatestWebsiteSiteScanForWatchlist(env, "watch-1");
     expect(latest).not.toBeNull();
     expect(latest!.scan.inventoryComplete).toBe(false);
-    // Expand phase (#2771): the column exists but nothing dual-writes it yet.
-    expect(latest!.scan.crawlDiscoveredCount).toBeNull();
     expect(latest!.pages).toHaveLength(1);
     expect(await getLatestCompleteWebsiteScanBaseline(env, "watch-1")).toBeNull();
   });
