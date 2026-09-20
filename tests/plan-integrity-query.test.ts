@@ -18,7 +18,7 @@ interface AuditRow {
 }
 
 // db/queries/plan-integrity.sql is what `npm run billing:integrity` runs via
-// `wrangler d1 execute --remote --command "$(cat db/queries/plan-integrity.sql)"`
+// `wrangler d1 execute 0509 --remote --command="$(cat db/queries/plan-integrity.sql)"`
 // — `--file` returns execution stats, not the SELECT rows (issue #3848).
 // Prove it against the real migrated schema and
 // real seed rows covering every bucket (issue #3673).
