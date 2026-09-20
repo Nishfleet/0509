@@ -66,6 +66,7 @@ import {
   type ReleaseScheduledTaskName,
 } from "../app/lib/release-scheduled-observation.server";
 import { runRetentionSweep } from "../app/lib/retention.server";
+import { pingLiveness } from "../app/lib/liveness-ping.server";
 import { runStatusProbes } from "../app/lib/status-probes.server";
 import {
   recordScheduledObservationGapCheckHeartbeat,
@@ -592,6 +593,10 @@ export default {
           reportScheduledTaskFailure(env, "status_probes", error),
         ),
       );
+      // Dead-man ping — see app/lib/liveness-ping.server.ts for why this is a
+      // report-out rather than another check computed by the Worker it watches.
+      const livenessPing = pingLiveness(env);
+      if (livenessPing) ctx.waitUntil(livenessPing);
       return;
     }
 

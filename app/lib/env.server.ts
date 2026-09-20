@@ -61,6 +61,11 @@ export interface AppEnv {
   BROWSER_RUN_API_TOKEN?: string;
   BROWSER_RUN_SESSION_REUSE?: string;
   CANARY_BYPASS_TOKEN?: string;
+  // healthchecks.io dead-man ping URL, pinged by the */5 status-probe cron in
+  // workers/app.ts. Optional on purpose: unset means no ping, so the mechanism
+  // ships before the check exists. Setting it is the whole activation step —
+  // `wrangler secret put LIVENESS_PING_URL`, nothing to deploy.
+  LIVENESS_PING_URL?: string;
   BETTER_AUTH_URL?: string;
   DB?: D1Database;
   /**
