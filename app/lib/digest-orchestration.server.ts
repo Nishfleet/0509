@@ -1,6 +1,7 @@
 import {
   type DigestCadence,
   digestMetadataForEvent,
+  readDigestIntelligence,
 } from "~/lib/change-intelligence";
 import {
   claimDigestScheduleJob,
@@ -31,6 +32,7 @@ import type { listProofCapturePairsForEventIds } from "~/lib/data.server";
 import { reportScheduledTaskFailure } from "~/lib/cron-failure-alert.server";
 import { isCustomerDigestEligibleEvent } from "~/lib/delivery-policy.server";
 import { deliveryPreDispatchStaleBefore } from "~/lib/delivery-attempt-lease";
+import { shadowScoreDigestItems } from "~/lib/digest-alerts-jev.server";
 import {
   DIGEST_ITEM_SET_PROVENANCE,
   readDigestSourceEventId,
@@ -1088,6 +1090,31 @@ async function runDigestForUser(
     }
   }
   input.handledDigestRunIds.add(digestRunId);
+
+  // Jev advisory scoring (issue #3539): observe-only. While JEV_ALERTS is on,
+  // one batched typesafe/jev call scores this run's candidate items and the
+  // answers are persisted to digest_item_jev_score for the #3531 benchmark.
+  // Cohort membership, ordering and delivery are never affected; every
+  // failure degrades to a log line and today's behaviour.
+  const cohortEventIds = new Set(
+    selectedDigestItems.map((item) => item.eventId),
+  );
+  await shadowScoreDigestItems(env, {
+    digestRunId,
+    cadence,
+    periodStart,
+    periodEnd,
+    items: orderedDigestItems.map((item) => ({
+      eventId: item.eventId,
+      watchlistId: item.watchlistId,
+      watchlistName: item.watchlistName,
+      eventType: item.eventType,
+      title: item.title,
+      summary: item.summary,
+      priorityScore: readDigestIntelligence(item.metadata).priorityScore,
+      inCohort: cohortEventIds.has(item.eventId),
+    })),
+  });
 
   const deliverySnapshot = canonicalDigest
     ? buildPersistedDigestDeliverySnapshot(canonicalDigest)

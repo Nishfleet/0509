@@ -77,6 +77,8 @@ export {
   addDigestItem,
   upsertDigestDelivery,
   updateDigestRunSummary,
+  upsertDigestItemJevScores,
+  listDigestItemJevScores,
   listDigests,
   getDigest,
   getDigestByPeriod,
@@ -173,6 +175,8 @@ export type {
 
 export type {
   DigestScheduleJob,
+  DigestItemJevScoreInput,
+  DigestItemJevScoreRecord,
 } from "~/lib/data/digests.server";
 
 export type {

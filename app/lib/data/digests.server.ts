@@ -1366,3 +1366,161 @@ export async function listRetryableDigestRuns(
     periodEnd: row.period_end,
   }));
 }
+
+// ── Jev advisory digest scores (issue #3539, additive evidence) ──────────
+// Written only while JEV_ALERTS is on; read by the #3531 benchmark. Nothing
+// in the cohort, ordering or delivery paths reads this table.
+
+export interface DigestItemJevScoreInput {
+  digestRunId: string;
+  /** The watch_event id the digest item was built from. */
+  eventId: string;
+  watchlistId: string;
+  eventType: string;
+  /** True when the existing priorityScore cohort selected the item. */
+  inCohort: boolean;
+  /** The heuristic score the cohort ranked on; null when absent. */
+  priorityScore: number | null;
+  /** Noul probability that the item is worth telling the customer about. */
+  worthTellingP: number;
+  /** Ordinal significance 0-3 (the issue's worth_alert). */
+  worthAlert: number;
+  worthAlertConfidence: number | null;
+  /** Provisional: in-cohort item below the advisory suppress floor. */
+  wouldSuppress: boolean;
+  stateSha256: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  ms: number;
+}
+
+export interface DigestItemJevScoreRecord extends DigestItemJevScoreInput {
+  id: string;
+  createdAt: string;
+}
+
+interface DigestItemJevScoreRow {
+  id: string;
+  digest_run_id: string;
+  event_id: string;
+  watchlist_id: string;
+  event_type: string;
+  in_cohort: number;
+  priority_score: number | null;
+  worth_telling_p: number;
+  worth_alert: number;
+  worth_alert_confidence: number | null;
+  would_suppress: number;
+  state_sha256: string;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  ms: number;
+  created_at: string;
+}
+
+/**
+ * Persist one scored candidate per (digest_run_id, event_id). Retries upsert
+ * the same key so a re-scored run replaces its advisory row instead of
+ * duplicating it. Returns the number of rows written.
+ */
+export async function upsertDigestItemJevScores(
+  env: AppEnv,
+  rows: readonly DigestItemJevScoreInput[],
+): Promise<number> {
+  if (rows.length === 0) return 0;
+  const db = ensureDb(env);
+  const createdAt = nowIso();
+  const statements = rows.map((row) =>
+    db
+      .prepare(
+        `
+        INSERT INTO digest_item_jev_score (
+          id, digest_run_id, event_id, watchlist_id, event_type,
+          in_cohort, priority_score, worth_telling_p, worth_alert,
+          worth_alert_confidence, would_suppress, state_sha256, model,
+          input_tokens, output_tokens, ms, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(digest_run_id, event_id) DO UPDATE SET
+          watchlist_id = excluded.watchlist_id,
+          event_type = excluded.event_type,
+          in_cohort = excluded.in_cohort,
+          priority_score = excluded.priority_score,
+          worth_telling_p = excluded.worth_telling_p,
+          worth_alert = excluded.worth_alert,
+          worth_alert_confidence = excluded.worth_alert_confidence,
+          would_suppress = excluded.would_suppress,
+          state_sha256 = excluded.state_sha256,
+          model = excluded.model,
+          input_tokens = excluded.input_tokens,
+          output_tokens = excluded.output_tokens,
+          ms = excluded.ms,
+          created_at = excluded.created_at
+        `,
+      )
+      .bind(
+        createId(),
+        row.digestRunId,
+        row.eventId,
+        row.watchlistId,
+        row.eventType,
+        row.inCohort ? 1 : 0,
+        row.priorityScore,
+        row.worthTellingP,
+        row.worthAlert,
+        row.worthAlertConfidence,
+        row.wouldSuppress ? 1 : 0,
+        row.stateSha256,
+        row.model,
+        row.inputTokens,
+        row.outputTokens,
+        row.ms,
+        createdAt,
+      ),
+  );
+  await db.batch(statements);
+  return rows.length;
+}
+
+function toDigestItemJevScoreRecord(
+  row: DigestItemJevScoreRow,
+): DigestItemJevScoreRecord {
+  return {
+    id: row.id,
+    digestRunId: row.digest_run_id,
+    eventId: row.event_id,
+    watchlistId: row.watchlist_id,
+    eventType: row.event_type,
+    inCohort: row.in_cohort === 1,
+    priorityScore: row.priority_score,
+    worthTellingP: row.worth_telling_p,
+    worthAlert: row.worth_alert,
+    worthAlertConfidence: row.worth_alert_confidence,
+    wouldSuppress: row.would_suppress === 1,
+    stateSha256: row.state_sha256,
+    model: row.model,
+    inputTokens: row.input_tokens,
+    outputTokens: row.output_tokens,
+    ms: row.ms,
+    createdAt: row.created_at,
+  };
+}
+
+/** Every advisory score recorded for one digest run, in write order. */
+export async function listDigestItemJevScores(
+  env: AppEnv,
+  digestRunId: string,
+): Promise<DigestItemJevScoreRecord[]> {
+  const rows = await many<DigestItemJevScoreRow>(
+    env,
+    `
+      SELECT *
+      FROM digest_item_jev_score
+      WHERE digest_run_id = ?
+      ORDER BY created_at ASC, event_id ASC
+    `,
+    digestRunId,
+  );
+  return rows.map(toDigestItemJevScoreRecord);
+}

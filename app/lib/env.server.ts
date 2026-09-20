@@ -141,6 +141,15 @@ export interface AppEnv {
    * build env objects by hand; absent means log-only emission.
    */
   FUNNEL_ANALYTICS?: AnalyticsEngineDataset;
+  /**
+   * Jev advisory scoring for digest candidates (issue #3539, epic #3530).
+   * Absent or any value other than "1"/"true"/"yes"/"on" leaves scoring
+   * disabled — byte-identical current behaviour. When on, each digest run
+   * makes one batched observe-only env.AI.run("typesafe/jev") call and writes
+   * evidence rows to digest_item_jev_score; cohort membership, ordering and
+   * delivery are never affected. Rollback is flipping this flag off.
+   */
+  JEV_ALERTS?: string;
   LANDING_PAGE_ARTIFACTS?: R2Bucket;
   /**
    * Explicit gate for the R2 -> D1 orphan reconciliation delete path. Absent or

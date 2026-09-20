@@ -111,7 +111,13 @@
     // Issue #2110: Full-Site Watch broad rollout. Empty canary list = every
     // host (parseFullSiteWatchCanaryHosts). Rollback is flipping this flag off.
     "FULLSITE_WATCH_ENABLED": "true",
-    "FULLSITE_WATCH_CANARY_HOSTS": ""
+    "FULLSITE_WATCH_CANARY_HOSTS": "",
+    // Issue #3539 (epic #3530): Jev advisory scoring of digest candidates.
+    // "0" = byte-identical current behaviour (the production posture). "1"
+    // runs one observe-only typesafe/jev call per digest run and writes
+    // digest_item_jev_score evidence rows; nothing is suppressed or reordered
+    // until the #3531 benchmark records a go row. Rollback is flipping to "0".
+    "JEV_ALERTS": "0"
     // Issue #2968 (external audit, low): Google OAuth was staged in #2404
     // but BETTER_AUTH_GOOGLE_CLIENT_ID/SECRET were never configured in
     // production, so the branded "Continue with Google" button never
