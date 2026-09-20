@@ -8,7 +8,7 @@ name: Market-signal snapshot age monitor
 # >26h with no alert because the snapshot workflow was cancelled by deploy churn
 # and nothing else watched the published file's age.
 #
-# Alert shape (matches auto-revert.yml): on a stale/missing snapshot the monitor
+# Alert shape: on a stale/missing snapshot the monitor
 # opens or comments a single `market-signal-stale` issue and exits 0 -- the
 # filed issue IS the signal, so the run does not double a stale-snapshot fault
 # with its own GitHub failure email. On a fresh snapshot it closes any open
