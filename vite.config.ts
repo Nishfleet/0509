@@ -6,7 +6,6 @@ import { cloudflare } from "@cloudflare/vite-plugin";
 import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
 import { defineConfig, searchForWorkspaceRoot } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
-import { resolveLocalReleaseCloudflareInspectorPort } from "./scripts/local-release-server.mjs";
 
 const require = createRequire(import.meta.url);
 
@@ -34,7 +33,7 @@ const e2eBetterAuthSecret =
 // the dev server never enumerates host interfaces at boot (`os.networkInterfaces`
 // can abort boot on hardened runners with `uv_interface_addresses ... system
 // error 97`). Manual `npm run dev` keeps the default inspector.
-const cloudflareInspectorPort = resolveLocalReleaseCloudflareInspectorPort();
+const cloudflareInspectorPort = String(process.env.E2E_TEST_MODE) === "1" ? false : undefined;
 
 // The `workers` vitest project runs `tests/integration/**` on real workerd via
 // Miniflare, against a real local D1 built by applying the repo's real

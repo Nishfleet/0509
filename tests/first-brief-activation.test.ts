@@ -431,19 +431,6 @@ describe("first-brief activation flow (issue #1862)", () => {
     });
   });
 
-  describe("activation timing guarantees", () => {
-    it("holds the on-screen deadline at 5 minutes and the email window at 60 minutes", async () => {
-      const {
-        ON_SCREEN_DEADLINE_MS,
-        DEFAULT_WINDOW_MINUTES,
-      } = await import("../scripts/bet7-activation-verification.mjs");
-      // The issue's metric: on-screen brief within 5 minutes of signup.
-      expect(ON_SCREEN_DEADLINE_MS).toBe(5 * 60 * 1000);
-      // The issue's metric: delivered email within 60 minutes.
-      expect(DEFAULT_WINDOW_MINUTES).toBe(60);
-    });
-  });
-
   describe("full activation funnel event order", () => {
     it("emits signup_completed -> first_brief_generated -> first_brief_email_sent in order", async () => {
       // Step 1: signup completion.

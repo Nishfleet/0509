@@ -301,18 +301,15 @@ jobs:
         run: npm run build
       - name: Prepare local D1 fixture
         run: npm run e2e:prepare:local
-      - name: Gate-B local release proof (journeys 1-6)
+      - name: Local release proof (journeys 1-6)
         env:
-          E2E_RELEASE_BASE: HEAD
           NODE_OPTIONS: --max-old-space-size=2048
-        run: node scripts/run-local-release-proof.mjs --journeys=1,2,3,4,5,6
-      - name: Preserve failed Gate-B diagnostics
+        run: npm run e2e:local:release
+      - name: Preserve failed release-proof diagnostics
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: gate-b-release-proof-diagnostics-${{ github.sha }}-${{ github.run_id }}
-          path: |
-            test-results/gate-b-manifest-*.json
-            test-results/gate-b-artifacts/**
+          path: test-results/e2e/**
           if-no-files-found: warn
           retention-days: 30

@@ -90,7 +90,6 @@ export const SEEDED_OVER_800_TEST_FILES = [
   "tests/ops.route.test.ts",
   "tests/plan-limits.route.test.ts",
   "tests/plan-monitoring.test.ts",
-  "tests/playwright-release-manifest-reporter.test.ts",
   "tests/presence.route.test.ts",
   "tests/provider-bakeoff.test.ts",
   "tests/search-answer.test.ts",

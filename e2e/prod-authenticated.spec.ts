@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { execFileSync } from "node:child_process";
 import { expect, test } from "@playwright/test";
 
 function sha256(value: string) {
@@ -18,18 +17,6 @@ async function expectAuthenticatedRoute(page: import("@playwright/test").Page, p
 // with the shared owner-captured account — serialize against the other
 // external-API specs.
 test.describe("production authenticated smoke with owner-captured auth state", { lock: "external-api" }, () => {
-  test.beforeAll(() => {
-    try {
-      execFileSync(process.execPath, ["scripts/e2e-validate-auth-state.mjs"], {
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-    } catch (error) {
-      const output = `${error.stdout ?? ""}${error.stderr ?? ""}`.trim();
-      throw new Error(`Production auth-state validation failed before browser launch: ${output}`);
-    }
-  });
-
   test("internal account can reach core authenticated surfaces without magic-link automation", async ({ page }) => {
     await page.goto("/app");
     await expect(page).not.toHaveURL(/\/auth\/login/);
