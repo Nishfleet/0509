@@ -229,6 +229,31 @@ export function isCookieBannerOrConsent(text: string | null): boolean {
   return COOKIE_BANNER_OR_CONSENT_PATTERNS.some((needle) => lower.includes(needle));
 }
 
+/**
+ * Display-time guard for extracted CTA text (issue #2320, extended #2576).
+ *
+ * The landing-page CTA extractor can leak a CSS class name (e.g. `ic-left-nav`)
+ * into `ctaText`, and the public offer timeline was rendering it as a labeled
+ * fact — "CTA: ic-left-nav" — next to the page's "No proof, no claim" branding,
+ * which reads as fabricated data. This predicate rejects any no-space value
+ * shaped like a class name at display time. It lives in this module so the
+ * ledger component can apply it to the flat field AND to each side of a
+ * before/after transition diff on every surface that mounts it — the #2320
+ * route-level map guarded `OfferLedgerEntry.ctaText` only, leaving the
+ * transition row (`CTA: <before> → <after>`) able to surface the same leak
+ * (issue #2576). The extractor keeps its own intentional copy, pinned in
+ * lockstep against this one by tests/cta-anchor-probe.test.ts.
+ */
+export function isClassLikeCtaText(value: string | null): boolean {
+  if (!value) {
+    return false;
+  }
+  return (
+    !/\s/.test(value) &&
+    (/^(ic|js)-/.test(value) || /^[a-z]+(-[a-z]+){2,}$/.test(value))
+  );
+}
+
 interface CaptureValiditySnapshot {
   canonicalUrl: string;
   headline: string;

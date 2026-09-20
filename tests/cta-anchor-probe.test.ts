@@ -2,7 +2,8 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { extractLandingPageSignals } from "~/lib/landing-page-signals.server";
-import type { OfferLedgerEntry } from "~/lib/offer-timeline";
+import { OfferTimelineLedger } from "~/components/offer-timeline-ledger";
+import type { OfferFieldChange, OfferLedgerEntry } from "~/lib/offer-timeline";
 import { BrandOfferTimeline, isClassLikeCtaText } from "~/routes/ads.$domain";
 
 // Issue #1401: the CTA detector was silent for 75 days because pages whose
@@ -302,5 +303,86 @@ describe("CTA class-name extractor guard (issue #2564)", () => {
       expect(isClassLikeCtaText(value)).toBe(false);
     }
     expect(extractLandingPageSignals("<button>buy-now</button>").ctaText).toBe("buy-now");
+  });
+});
+
+// Issue #2576: the #2320 display guard covered `OfferLedgerEntry.ctaText` only.
+// The same ledger row's transition diff renders `CTA: <before> → <after>` from
+// the extractor-derived field, so a snapshot pair whose extracted CTA is a
+// leaked class (e.g. `ic-left-nav`) surfaced the garbage in the diff even while
+// the flat field was guarded. The guard now lives inside OfferTimelineLedger —
+// the render choke point — so both sides of the diff fall back to the honest
+// "No clear CTA" on every surface that mounts the ledger (/ads/:domain and
+// /timeline/:domain). These cases pin the transition-diff guard.
+describe("CTA class-name transition-diff guard (issue #2576)", () => {
+  function transitionEntry(
+    ctaTransition: OfferFieldChange<string | null> | null,
+  ): OfferLedgerEntry {
+    return {
+      id: "snap-nykaa-transition",
+      capturedAt: "2026-08-28T00:00:00.000Z",
+      dateLabel: "28 Aug 2026",
+      canonicalUrl: "https://www.nykaa.com/",
+      headline: "Beauty shopping",
+      ctaText: "Shop now",
+      priceText: null,
+      formPresent: false,
+      screenshotHref: null,
+      pageTextHref: null,
+      evidenceNote: null,
+      transition: {
+        headline: null,
+        ctaText: ctaTransition,
+        priceText: null,
+        formPresent: null,
+      },
+      runExtentLabel: null,
+    };
+  }
+
+  it("guards a leaked class on the before side of the CTA diff", () => {
+    const markup = renderToStaticMarkup(
+      createElement(OfferTimelineLedger, {
+        entries: [transitionEntry({ before: "ic-left-nav", after: "Shop now" })],
+      }),
+    );
+    expect(markup).toContain('f9-timeline-before">No clear CTA<');
+    expect(markup).toContain('f9-timeline-after">Shop now<');
+    // The leaked class must never surface as a labeled fact.
+    expect(markup).not.toContain("ic-left-nav");
+  });
+
+  it("guards a leaked class on the after side while a null before still renders the em dash", () => {
+    const markup = renderToStaticMarkup(
+      createElement(OfferTimelineLedger, {
+        entries: [transitionEntry({ before: null, after: "js-submit" })],
+      }),
+    );
+    expect(markup).toContain('f9-timeline-before">—<');
+    expect(markup).toContain('f9-timeline-after">No clear CTA<');
+    expect(markup).not.toContain("js-submit");
+  });
+
+  it("renders a genuine CTA transition untouched", () => {
+    const markup = renderToStaticMarkup(
+      createElement(OfferTimelineLedger, {
+        entries: [transitionEntry({ before: "Shop now", after: "Buy the kit" })],
+      }),
+    );
+    expect(markup).toContain('f9-timeline-before">Shop now<');
+    expect(markup).toContain('f9-timeline-after">Buy the kit<');
+    expect(markup).not.toContain("No clear CTA");
+  });
+
+  it("route fixture: the /ads/:domain row guards the transition diff too", () => {
+    const markup = renderToStaticMarkup(
+      createElement(BrandOfferTimeline, {
+        domain: "nykaa.com",
+        timelineIndexable: false,
+        entries: [transitionEntry({ before: "ic-left-nav", after: "Shop now" })],
+      }),
+    );
+    expect(markup).toContain("No clear CTA");
+    expect(markup).not.toContain("ic-left-nav");
   });
 });
