@@ -49,8 +49,9 @@ list, and its test live in `db/queries/market-signal.sql` and
 `tests/market-signal-query.test.ts` (issue #3321). The previous home,
 `scripts/weekly-business-metrics.mjs` with `tests/unit/weekly-business-metrics.test.ts`,
 was 1,328 lines that CI never ran; it was deleted 2026-09-20 and the query it
-wrapped now runs as one `wrangler d1 execute --remote --file` step in
-`.github/workflows/market-signal-snapshot.yml`.
+wrapped now runs as one `wrangler d1 execute --remote --command` step in
+`.github/workflows/market-signal-snapshot.yml` (`--file` returns an execution
+summary, not rows — issue #3848).
 
 ## Launch funnel (manual)
 
