@@ -128,6 +128,7 @@ interface WebsiteSiteScanRow {
   discovered_page_count: number;
   sitemap_document_count: number;
   fetched_page_count: number;
+  crawl_discovered_count: number | null;
   page_budget: number;
   scan_cursor: string | null;
   inventory_hash: string | null;
@@ -183,6 +184,7 @@ function toWebsiteSiteScanRecord(row: WebsiteSiteScanRow): WebsiteSiteScanRecord
     discoveredPageCount: row.discovered_page_count,
     sitemapDocumentCount: row.sitemap_document_count,
     fetchedPageCount: row.fetched_page_count,
+    crawlDiscoveredCount: row.crawl_discovered_count,
     pageBudget: row.page_budget,
     scanCursor: row.scan_cursor,
     inventoryHash: row.inventory_hash,

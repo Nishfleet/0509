@@ -480,6 +480,8 @@ export interface WebsiteSiteScanRecord {
   discoveredPageCount: number;
   sitemapDocumentCount: number;
   fetchedPageCount: number;
+  /** Crawl-discovered page count; null until the dual-write phase (#2771). */
+  crawlDiscoveredCount: number | null;
   /** Bounded per-run page policy (rotating batch size). */
   pageBudget: number;
   scanCursor: string | null;
