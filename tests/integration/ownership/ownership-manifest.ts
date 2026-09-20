@@ -28,6 +28,10 @@ export const PHASE_ISSUES = {
   rolesEnforcement: 3078, // P5
   multiMembership: 3079, // P6
   readSwitchCutover: 3080, // P7
+  // REBUILD (umbrella #3842): the fresh schema in migrations/0001_init.sql
+  // lands its tables before any app code reads them, so their boundary probes
+  // arrive with the P2 cut that wires the routes.
+  rebuildCut: 3847,
 } as const;
 
 /**
@@ -82,6 +86,18 @@ export const OWNED_PROBE_PENDING: ReadonlyArray<{ table: string; phaseIssue: num
   // #3175 (slice 2): per-user dismissal ledger for suggested competitors; the
   // derivation consults it so a removed suggestion is never re-suggested.
   { table: "competitor_suggestion_dismissal", phaseIssue: PHASE_ISSUES.orgIdCoverageBackfill },
+  // REBUILD schema (#3846, umbrella #3842): every table below carries
+  // `workspace_id NOT NULL` with an ON DELETE CASCADE FK to `workspace`, so
+  // each is directly owned. No boundary probe exists yet because no app code
+  // reads them until the P2 cut (#3847) lands the route tree.
+  { table: "plan", phaseIssue: PHASE_ISSUES.rebuildCut },
+  { table: "entity", phaseIssue: PHASE_ISSUES.rebuildCut },
+  { table: "suggestion", phaseIssue: PHASE_ISSUES.rebuildCut },
+  { table: "signal", phaseIssue: PHASE_ISSUES.rebuildCut },
+  { table: "alert", phaseIssue: PHASE_ISSUES.rebuildCut },
+  { table: "digest", phaseIssue: PHASE_ISSUES.rebuildCut },
+  { table: "send_target", phaseIssue: PHASE_ISSUES.rebuildCut },
+  { table: "send_attempt", phaseIssue: PHASE_ISSUES.rebuildCut },
 ];
 
 /**
@@ -106,6 +122,10 @@ export const SCOPED_VIA_PARENT: ReadonlyArray<{ table: string; parent: string }>
   { table: "collection_item_tag", parent: "collection_item" },
   { table: "presence_poll_cursor", parent: "source_target" },
   { table: "presence_item_revision", parent: "presence_item" },
+  // REBUILD schema (#3846): neither carries `workspace_id`; both reach the
+  // ownership root through the chain snapshot -> watch -> entity.
+  { table: "watch", parent: "entity" },
+  { table: "snapshot", parent: "watch" },
 ];
 
 /**
@@ -120,8 +140,11 @@ export const MEMBERSHIP_TABLES = ["member", "invitation", "workspace_member"] as
 /**
  * Ownership units. `organization` is the live plugin table (issue #3787);
  * `org` is the 0089 predecessor kept for rollback in the same expand phase.
+ * `workspace` is the REBUILD tenant boundary (#3846, umbrella #3842) — the
+ * root every rebuild table scopes to, directly or through a parent. The three
+ * coexist only until the P2 cut (#3847) removes the pre-rebuild chain.
  */
-export const OWNERSHIP_UNIT_TABLES = ["org", "organization"] as const;
+export const OWNERSHIP_UNIT_TABLES = ["org", "organization", "workspace"] as const;
 
 /**
  * Platform/infra tables that stay user-keyed or ownerless by design. Every
@@ -178,6 +201,11 @@ export const PLATFORM_TABLES: ReadonlyArray<{ table: string; reason: string }> =
   { table: "status_probe_samples", reason: "status-probe telemetry samples (probe name, ok/latency, checked_at) — ops observability rows, no customer data" },
   { table: "email_delivery_canary", reason: "email delivery round-trip canary rows (token, sent/received/failed, latency) — ops observability, no customer data (issue #3188)" },
   { table: "competitor_graph", reason: "curated global brand→peer reference map (issue #1258) — shared seed corpus written by migrations/curation, no user or workspace columns" },
+  {
+    table: "source",
+    reason:
+      "REBUILD (#3846): global source registry — no user or workspace column by design. This is what makes the charter's rule true that adding a source is a row plus a plugin, never a migration; the per-tenant subscription to a source is `watch`, which is scoped via `entity`",
+  },
 ];
 
 /** Shadow/backup table-name shapes that migrations must never leave behind. */

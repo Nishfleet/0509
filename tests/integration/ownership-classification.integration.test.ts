@@ -133,8 +133,11 @@ describe("ownership manifest classification", () => {
       expect(entry.reason.trim().length).toBeGreaterThan(0);
     }
     // Membership + ownership-unit sets are exactly the live plugin tables
-    // plus their rollback-era predecessors (issue #3787 expand phase).
+    // plus their rollback-era predecessors (issue #3787 expand phase), plus
+    // the REBUILD tenant boundary `workspace` (#3846, umbrella #3842). This
+    // stays an explicit pin, not a free-form set: a new ownership unit is a
+    // reviewed decision, so adding one must show up in this diff.
     expect(MEMBERSHIP_TABLES).toEqual(["member", "invitation", "workspace_member"]);
-    expect(OWNERSHIP_UNIT_TABLES).toEqual(["org", "organization"]);
+    expect(OWNERSHIP_UNIT_TABLES).toEqual(["org", "organization", "workspace"]);
   });
 });
