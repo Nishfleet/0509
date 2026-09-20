@@ -1,3 +1,5 @@
+import { createCookie } from "react-router";
+
 import { execute, queryOne } from "~/lib/data/d1.server";
 import type { AppEnv } from "~/lib/env.server";
 import {
@@ -245,38 +247,32 @@ function refererSignupSource(request: Request): string | null {
   return allowlistedSignupSource(`ref:${domain}`);
 }
 
+/**
+ * The signup-source cookie as a React Router `createCookie` (issue #3780) —
+ * the framework owns the Set-Cookie string now. The request-scoped parts
+ * (Domain on the 0509.io/0509.in apex, Secure on https) stay per-call
+ * serialize options; name, HttpOnly, Path=/, SameSite=Lax and the 24h
+ * Max-Age are fixed here. Note the framework's value codec replaces the old
+ * `encodeURIComponent` payload — a pre-change cookie decodes to null, which
+ * callers already treat as "no attribution remembered".
+ */
+const signupSourceCookie = createCookie(SIGNUP_SOURCE_COOKIE, {
+  httpOnly: true,
+  maxAge: Math.floor(SIGNUP_SOURCE_TTL_MS / 1000),
+  path: "/",
+  sameSite: "lax",
+});
+
 export function signupSourceCookieHeader(request: Request, source: string) {
-  const parts = [
-    `${SIGNUP_SOURCE_COOKIE}=${encodeURIComponent(source)}`,
-    "HttpOnly",
-    `Max-Age=${Math.floor(SIGNUP_SOURCE_TTL_MS / 1000)}`,
-    "Path=/",
-    "SameSite=Lax",
-  ];
-  const domain = signupSourceCookieDomain(request);
-  if (domain) {
-    parts.push(`Domain=${domain}`);
-  }
-  if (new URL(request.url).protocol === "https:") {
-    parts.push("Secure");
-  }
-  return parts.join("; ");
+  return signupSourceCookie.serialize(source, {
+    domain: signupSourceCookieDomain(request),
+    secure: new URL(request.url).protocol === "https:",
+  });
 }
 
-export function readSignupSourceCookie(request: Request): string | null {
-  const prefix = `${SIGNUP_SOURCE_COOKIE}=`;
-  for (const part of (request.headers.get("cookie") ?? "").split(";")) {
-    const cookie = part.trim();
-    if (!cookie.startsWith(prefix)) {
-      continue;
-    }
-    try {
-      return allowlistedSignupSource(decodeURIComponent(cookie.slice(prefix.length)));
-    } catch {
-      return null;
-    }
-  }
-  return null;
+export async function readSignupSourceCookie(request: Request): Promise<string | null> {
+  const value = await signupSourceCookie.parse(request.headers.get("cookie"));
+  return typeof value === "string" ? allowlistedSignupSource(value) : null;
 }
 
 /**
@@ -361,7 +357,7 @@ export async function applySignupSourceToNewUser(
     }
   }
   if (!source && input.request) {
-    source = readSignupSourceCookie(input.request);
+    source = await readSignupSourceCookie(input.request);
   }
   if (!source) {
     return null;

@@ -40,6 +40,7 @@ import {
   resolvePublicHttpUrl,
   resolvePublicRedirectUrl,
 } from "~/lib/public-url.server";
+import { withTransientRetry } from "~/lib/transient-retry.server";
 import type { LandingPageSnapshotData } from "~/lib/types";
 
 const TITLE_REGEX = /<title[^>]*>([^<]+)<\/title>/i;
@@ -784,12 +785,18 @@ async function captureRenderedSnapshot(
   }
 }
 
+/**
+ * Loop-control throwable: a fetch answered a transient HTTP status (429/5xx
+ * non-redirect) — the attempt already released its timeout handle, and the
+ * last attempt never throws this (it returns the response for the caller).
+ */
+class TransientLandingFetchStatusSignal extends Error {}
+
 async function fetchLandingPageWithTransientRetry(
   url: string,
 ): Promise<{ fetchAttempts: number; response: Response }> {
-  let lastError: unknown = null;
-  for (let attempt = 1; attempt <= MAX_LANDING_PAGE_FETCH_ATTEMPTS; attempt += 1) {
-    try {
+  return withTransientRetry(
+    async (attempt) => {
       const response = await fetchWithTimeout(
         url,
         {
@@ -808,27 +815,20 @@ async function fetchLandingPageWithTransientRetry(
         isTransientFetchStatus(response.status)
       ) {
         releaseFetchTimeout(response);
-        await sleep(LANDING_PAGE_FETCH_RETRY_DELAY_MS);
-        continue;
+        throw new TransientLandingFetchStatusSignal();
       }
       return { fetchAttempts: attempt, response };
-    } catch (error) {
-      lastError = error;
-      if (attempt >= MAX_LANDING_PAGE_FETCH_ATTEMPTS) {
-        throw error;
-      }
-      await sleep(LANDING_PAGE_FETCH_RETRY_DELAY_MS);
-    }
-  }
-  throw lastError;
+    },
+    {
+      maxAttempts: MAX_LANDING_PAGE_FETCH_ATTEMPTS,
+      shouldRetry: () => true,
+      backoffMs: LANDING_PAGE_FETCH_RETRY_DELAY_MS,
+    },
+  );
 }
 
 function isTransientFetchStatus(status: number) {
   return status === 429 || status >= 500;
-}
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function isRedirectStatus(status: number) {

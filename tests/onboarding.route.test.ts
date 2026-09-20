@@ -1672,13 +1672,22 @@ describe("setup checklist actions", () => {
       isSignupFirstBriefEnabled: vi.fn().mockReturnValue(false),
     }));
 
-    const { handleSetupChecklistAction: action } = await import("~/lib/setup-checklist-action.server");
+    const { handleSetupChecklistAction: action, signupBrandWebsiteCookieHeader } =
+      await import("~/lib/setup-checklist-action.server");
     const formData = new FormData();
     formData.set("intent", "create-handoff-watchlists");
     formData.set("country", "United States");
     // No `brandWebsite` form field — the HandoffConfirm form never posts one.
     // The visitor's own domain arrives via the signup cookie and must classify
-    // as `self`, not be tracked as a competitor.
+    // as `self`, not be tracked as a competitor. The fixture cookie is written
+    // through the real serializer so the test sees the shipped codec (the
+    // cookie moved to React Router's createCookie in #3780).
+    const brandWebsiteCookie = (
+      await signupBrandWebsiteCookieHeader(
+        new Request("http://localhost/app/onboard"),
+        "mybrand.com",
+      )
+    ).split(";")[0];
     formData.append("candidate", JSON.stringify({
       advertiser: "My Brand",
       pageId: null,
@@ -1698,7 +1707,7 @@ describe("setup checklist actions", () => {
           context: createContext(),
           request: new Request("http://localhost/app/onboard", {
             method: "POST",
-            headers: { cookie: "f9_signup_brand_website=mybrand.com" },
+            headers: { cookie: brandWebsiteCookie },
             body: formData,
           }),
         } as never),

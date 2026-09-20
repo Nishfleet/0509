@@ -35,7 +35,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const RENDERED = "rendered-by-test";
 
 async function loadWorker() {
-  vi.doMock("react-router", () => ({
+  vi.doMock("react-router", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("react-router")>()),
     createRequestHandler:
       () => async () =>
         new Response(RENDERED, {

@@ -19,6 +19,7 @@ import {
   type JsonRecord,
 } from "~/lib/data/helpers.server";
 import type { AppEnv } from "~/lib/env.server";
+import { withTransientRetry } from "~/lib/transient-retry.server";
 import type {
   AgentActionAuditRecord,
   AgentActionAuditStatus,
@@ -540,18 +541,20 @@ async function terminalizeStartedAtomicActionAuditWithRetry(
   env: AppEnv,
   input: Parameters<typeof terminalizeStartedAtomicActionAudit>[1],
 ) {
-  for (let attempt = 1; attempt <= ATOMIC_ACTION_TERMINALIZE_ATTEMPTS; attempt += 1) {
-    try {
-      return await terminalizeStartedAtomicActionAudit(env, input);
-    } catch {
-      if (attempt === ATOMIC_ACTION_TERMINALIZE_ATTEMPTS) {
-        throw new AtomicCustomerAgentActionReplayUnavailableError(
-          "Action recovery is temporarily unavailable. Retry with the same idempotency key.",
-        );
-      }
-    }
+  try {
+    return await withTransientRetry(
+      () => terminalizeStartedAtomicActionAudit(env, input),
+      {
+        maxAttempts: ATOMIC_ACTION_TERMINALIZE_ATTEMPTS,
+        shouldRetry: () => true,
+        backoffMs: 0,
+      },
+    );
+  } catch {
+    throw new AtomicCustomerAgentActionReplayUnavailableError(
+      "Action recovery is temporarily unavailable. Retry with the same idempotency key.",
+    );
   }
-  return false;
 }
 
 async function replayExistingAtomicAction<T extends JsonRecord>(

@@ -43,7 +43,8 @@ async function loadWorker() {
       { headers: { "content-type": "text/html; charset=utf-8" } },
     );
 
-  vi.doMock("react-router", () => ({
+  vi.doMock("react-router", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("react-router")>()),
     createRequestHandler: () => async (_request: Request, context: { get: (k: unknown) => unknown }) => {
       // The worker sets `{ env, ctx, country, cspNonce }` on the context.
       const value = context.get(SYMBOL_FOR_TEST) as { cspNonce?: string } | undefined;

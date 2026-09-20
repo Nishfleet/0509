@@ -69,41 +69,58 @@ describe("allowlisted signup_source", () => {
     expect(allowlistedSignupSource(`ref:${"d".repeat(41)}`)).toBeNull();
   });
 
-  it("sets and reads only an allowlisted cookie value", () => {
-    const header = signupSourceCookieHeader(
+  it("sets and reads only an allowlisted cookie value", async () => {
+    // issue #3780: the cookie now serializes through React Router's
+    // createCookie, so the attributes (name, HttpOnly, Path, SameSite, Max-Age,
+    // Domain, Secure) are the contract — the value codec is the framework's.
+    const header = await signupSourceCookieHeader(
       new Request("https://0509.io/auth/signup"),
       "locale-ja-sneaker-resale",
     );
-    expect(header).toContain(`${SIGNUP_SOURCE_COOKIE}=locale-ja-sneaker-resale`);
+    expect(header).toContain(`${SIGNUP_SOURCE_COOKIE}=`);
     expect(header).toContain("HttpOnly");
     expect(header).toContain("SameSite=Lax");
     expect(header).toContain("Path=/");
     expect(header).toContain("Domain=0509.io");
+    expect(header).toContain("Max-Age=86400");
+    expect(header).toContain("Secure");
     expect(header).not.toContain("script");
 
     const request = new Request("https://0509.io/api/auth/magic-link/verify", {
-      headers: { cookie: `${SIGNUP_SOURCE_COOKIE}=locale-ja-sneaker-resale` },
+      headers: { cookie: header.split(";")[0] },
     });
-    expect(readSignupSourceCookie(request)).toBe("locale-ja-sneaker-resale");
+    expect(await readSignupSourceCookie(request)).toBe("locale-ja-sneaker-resale");
     expect(
-      readSignupSourceCookie(
+      await readSignupSourceCookie(
         new Request("https://0509.io/", {
           headers: { cookie: `${SIGNUP_SOURCE_COOKIE}=<script>` },
         }),
       ),
     ).toBeNull();
+    // A cookie written by the pre-createCookie format decodes to null, not a
+    // crash or a raw value leaking past the allowlist.
+    expect(
+      await readSignupSourceCookie(
+        new Request("https://0509.io/", {
+          headers: { cookie: `${SIGNUP_SOURCE_COOKIE}=pricing-free` },
+        }),
+      ),
+    ).toBeNull();
   });
 
-  it("round-trips slug and ref: cookie values unchanged (issue #2108)", () => {
+  it("round-trips slug and ref: cookie values unchanged (issue #2108)", async () => {
     for (const source of ["summer-2026-launch", "ref:example.com"]) {
-      const header = signupSourceCookieHeader(new Request("https://0509.io/auth/signup"), source);
-      expect(header).toContain(`${SIGNUP_SOURCE_COOKIE}=${encodeURIComponent(source)}`);
+      const header = await signupSourceCookieHeader(
+        new Request("https://0509.io/auth/signup"),
+        source,
+      );
+      expect(header).toContain(`${SIGNUP_SOURCE_COOKIE}=`);
       const request = new Request("https://0509.io/api/auth/magic-link/verify", {
         headers: {
           cookie: header.split(";")[0],
         },
       });
-      expect(readSignupSourceCookie(request)).toBe(source);
+      expect(await readSignupSourceCookie(request)).toBe(source);
     }
   });
 });
@@ -308,9 +325,15 @@ describe("signup action dual-write", () => {
     const location = response.headers.get("Location") ?? "";
     expect(location).toContain("source=pricing-free");
     expect(location).not.toContain("script");
-    expect(response.headers.get("Set-Cookie") ?? "").toContain(
-      `${SIGNUP_SOURCE_COOKIE}=pricing-free`,
-    );
+    const setCookie = response.headers.get("Set-Cookie") ?? "";
+    expect(setCookie).toContain(`${SIGNUP_SOURCE_COOKIE}=`);
+    expect(
+      await readSignupSourceCookie(
+        new Request("https://0509.io/", {
+          headers: { cookie: setCookie.split(";")[0] },
+        }),
+      ),
+    ).toBe("pricing-free");
     expect(statements.some((sql) => sql.includes("signup_source_pending"))).toBe(true);
     expect(JSON.stringify(statements)).not.toContain("script");
   });
