@@ -7,7 +7,7 @@ import { TiktokAdsSection } from "~/components/sources/tiktok-ads";
 import { SubdomainsSection } from "~/components/sources/subdomains";
 import { HiringSection } from "~/components/sources/hiring";
 import { getPlanEntitlements, type PlanFamily } from "~/lib/plan-entitlements";
-import type { SourceChange, SourceId, SourceSnapshotRecord } from "~/lib/sources/types";
+import type { SourceChange, SourceId, SourceSectionData, SourceSnapshotRecord } from "~/lib/sources/types";
 
 /**
  * Renders the enabled source adapter sections for a competitor. The seam
@@ -35,7 +35,7 @@ import type { SourceChange, SourceId, SourceSnapshotRecord } from "~/lib/sources
 
 export interface SourceSectionsProps {
   competitorId: string;
-  snapshots?: Record<string, { snapshot: SourceSnapshotRecord | null; diff: SourceChange[] }>;
+  snapshots?: Record<string, SourceSectionData>;
   /** The competitor owner's plan family; drives plan-locked source lines. */
   plan?: PlanFamily;
 }

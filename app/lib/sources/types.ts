@@ -84,6 +84,16 @@ export interface SourceSnapshotRecord {
   createdAt: string;
 }
 
+/**
+ * The per-source render bundle the competitor page passes to each Section:
+ * the latest stored snapshot plus the diff of the last two snapshots
+ * (recomputed through the adapter, same call the write path makes).
+ */
+export interface SourceSectionData {
+  snapshot: SourceSnapshotRecord | null;
+  diff: SourceChange[];
+}
+
 export interface SourceFetchContext {
   /** The competitor watchlist id the snapshot is for. */
   competitorId: string;
