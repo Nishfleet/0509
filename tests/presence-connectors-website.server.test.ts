@@ -206,7 +206,12 @@ describe("presence website connector decode wiring", () => {
     expect(second.items).toHaveLength(1);
 
     expect(second.items[0]?.contentHash).toBe(first.items[0]?.contentHash);
-    // The stored excerpt is the hashed text: no script/style noise leaks in.
-    expect(first.items[0]?.bodyExcerpt).toBe("Stable page Stable heading Stable page copy about the roadmap.");
+    // Title extraction reads the raw body and is unaffected by the strip pass.
+    expect(first.items[0]?.title).toBe("Stable page");
+    // The stored excerpt is the hashed text: no script/style noise leaks in,
+    // and it is identical across both polls.
+    const excerpt = "Stable page Stable heading Stable page copy about the roadmap.";
+    expect(first.items[0]?.bodyExcerpt).toBe(excerpt);
+    expect(second.items[0]?.bodyExcerpt).toBe(excerpt);
   });
 });
