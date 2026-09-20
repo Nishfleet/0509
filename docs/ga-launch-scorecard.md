@@ -90,7 +90,7 @@ Billing + email canaries passed on production during the 2026-06-24 integration 
 
 ## Owner actions (remaining)
 
-1. **Fan-out activation ladder** (`docs/monitoring-fanout-rollout.md`): shadow → allowlist (`MAX_INFLIGHT=1`, notifications off) → 75-job → one nightly window. Validate with `node scripts/monitoring-fanout-canary.mjs --step <step> --remote`.
+1. **Fan-out activation ladder** (`docs/monitoring-fanout-rollout.md`): shadow → allowlist (`MAX_INFLIGHT=1`, notifications off) → 75-job → one nightly window. That ladder is complete (`MONITORING_FANOUT_MODE: "fanout"`, `MONITORING_FANOUT_GLOBAL: "1"` in `wrangler.jsonc`); its per-rung validator was deleted 2026-09-20.
 2. **UptimeRobot** — owner verification on `0509.io/api/health`.
 3. **Agency sale** — only after live fan-out ladder passes.
 

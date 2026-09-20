@@ -144,10 +144,10 @@ describe("BET 9 mobile first-viewport budget — input + CTA above the fold (iss
 
 describe("BET 9 design-system ratchet stays clean (issue #1488 accept #5)", () => {
   it("scans only app/, so docs/ design artefacts add no ratchet debt", () => {
-    // The ratchet (`scripts/design-system-ratchet.mjs`) scans SCAN_DIRS = ["app"].
+    // The ratchet script scanned SCAN_DIRS = ["app"] (deleted 2026-09-20 — no
     // The direction artefacts live under docs/, out of the design-system scan —
     // verifying they cannot inflate the ceilings. The real pass is the
-    // design-system-ratchet.test.ts suite which runs the script itself.
+    // PR check ever ran it; docs/design-system-ratchet.json is now an editorial floor).
     expect(cssPath).toMatch(/^docs\//);
   });
 });

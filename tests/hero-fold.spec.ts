@@ -17,7 +17,8 @@ import {
  * The `chromium` and `mobile-chromium` projects target the live homepage by
  * default (E2E_PROD_BASE_URL, same source as `prod-public`), so this is the
  * live canary that proves the deployed hero meets the design gate — the same
- * posture as `scripts/bet9-first-viewport-verification.mjs`. Point
+ * posture as the BET-9 verification script (deleted 2026-09-20; this spec
+ * is now the whole contract). Point
  * E2E_PROD_BASE_URL at a local fixture server (e.g.
  * http://127.0.0.1:4179) to run it against a local build.
  *

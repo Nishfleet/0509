@@ -47,12 +47,16 @@ Nish 2026-08-08) made the v4 landing language — the `--wk-*` token layer and
 the product's ONLY design system. The Evidence Desk (`f9-ed-*`) and every
 earlier era are being wiped, report documents included (their proof
 semantics survive verbatim; their skin does not). Enforcement is
-mechanical: `scripts/design-system-ratchet.mjs` fails CI when any
-legacy-marker count exceeds its ceiling; counts at or below pass, so two
-legal sweeps cannot collide in the merge queue. Ceilings are a recorded
-floor in `docs/design-system-ratchet.json`, tightened by hand: the weekly
-auto-tighten workflow was removed 2026-09-20 because no PR check ever
-enforced the ceiling, so the bot was maintaining a number nothing read.
+editorial, not mechanical. `docs/design-system-ratchet.json` records the
+legacy-marker counts as a floor to work down from, and code review is what
+holds the line.
+
+The ratchet used to claim it was mechanical. It was not: `ratchet-auto-tighten.yml`
+tightened the ceiling weekly, and `scripts/design-system-ratchet.mjs` checked it —
+but no PR check and no npm script CI runs ever invoked that script, so the number
+went down and nothing ever read it. The workflow and the script were both removed
+2026-09-20. Claiming a gate that does not run is worse than admitting there is
+none, because it stops anyone from building the real one.
 
 `f9-evidence-*` is the system's evidence-document vocabulary — the
 full-volume proof surfaces (report cover, plates, diff panes) named for

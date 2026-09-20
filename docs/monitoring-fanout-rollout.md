@@ -1,5 +1,18 @@
 # Monitoring Fan-Out Rollout Runbook
 
+> **Status 2026-09-20: this rollout is COMPLETE.** `wrangler.jsonc` carries
+> `MONITORING_FANOUT_MODE: "fanout"`, `MONITORING_FANOUT_GLOBAL: "1"` and
+> `MONITORING_FANOUT_MAX_INFLIGHT: "8"` — the top of the ladder below. The
+> document is kept as the record of how the migration was staged.
+>
+> The per-rung validator (`scripts/monitoring-fanout-canary.mjs` + its 383-line
+> lib, deleted 2026-09-20) had no job left once the last rung landed, and no
+> workflow or npm script CI runs had ever invoked it. If fan-out ever needs
+> staging again, the rungs are config values in `wrangler.jsonc` and the state
+> is readable from D1 — verify by reading them, not by rebuilding a validator
+> whose own correctness nothing checked.
+
+
 **Status:** FIXED-CANDIDATE/LIVE CONFIG RECORD — dated dispatch proof only; current Gate A–C release readiness is 0/6 with all six journeys active and four frozen candidates blocked. Agency checkout is open with `MONITORING_FANOUT_MODE=fanout` and `MONITORING_FANOUT_GLOBAL=1`, but the current all-six candidate/review/Gate C and real scan health still require refresh.
 
 ## Production reality after global fan-out deploy
@@ -49,7 +62,7 @@
 
 | Ladder step | Simulated (vitest) | Live (owner) | Pass criteria |
 |-------------|-------------------|--------------|---------------|
-| **Config** | `tests/monitoring-fanout-guard.test.ts` | `node scripts/monitoring-fanout-canary.mjs --step config` | `fanout` default; internal workspace secret set; `GLOBAL=1` |
+| **Config** | `tests/monitoring-fanout-guard.test.ts` | *(validator deleted — see the status note above)* | `fanout` default; internal workspace secret set; `GLOBAL=1` |
 | **Shadow** | `tests/monitoring-fanout.test.ts` shadow mode | Set `MONITORING_FANOUT_MODE=shadow`, observe one cron window | `shadowOnly > 0`; zero `watchlist_run` rows; no deliveries |
 | **Allowlist (1 watchlist)** | dispatch + binding-missing tests | `fanout` + allowlist internal user ID, `MAX_INFLIGHT=1`, notifications off | Exactly one queued/dispatched run; `dispatchFailures = 0` |
 | **75-job fleet** | `schedules 75 eligible watchlists` | Internal workspace with 75 active agency watchlists | `queued >= 75`; `dispatchFailures = 0`; slots ≤ `MAX_INFLIGHT` |
@@ -63,7 +76,7 @@
 
 ## Activation ladder
 
-1. **Shadow** on preview/staging — verify eligible counts only (`node scripts/monitoring-fanout-canary.mjs --step shadow --shadow-only N`)
+1. **Shadow** on preview/staging — verify eligible counts only (*(validator deleted — see the status note above)*)
 2. **Fan-out + allowlist** — one internal workspace user ID, `MONITORING_FANOUT_MAX_INFLIGHT=1`, notifications disabled, single watchlist
 3. **75-watchlist scheduling test** — allowlisted workspace only; validate with `--step fleet75 --remote`
 4. **One full nightly window** + reconciliation warmup observation (`--step nightly --remote`)
@@ -77,19 +90,19 @@
 MONITORING_FANOUT_MODE=fanout \
 MONITORING_FANOUT_GLOBAL=1 \
 MONITORING_FANOUT_INTERNAL_WORKSPACE_USER_ID=1 \
-node scripts/monitoring-fanout-canary.mjs --step config
+# validator deleted 2026-09-20 — read the wrangler.jsonc vars instead
 
 # After a shadow cron window (pass shadowOnly count from logs)
-node scripts/monitoring-fanout-canary.mjs --step shadow --shadow-only 3
+# validator deleted 2026-09-20 — read the wrangler.jsonc vars instead
 
 # After allowlist pilot — read-only D1 metrics from production
-node scripts/monitoring-fanout-canary.mjs --step allowlist --remote
+# validator deleted 2026-09-20 — read the wrangler.jsonc vars instead
 
 # After 75-job proof
-node scripts/monitoring-fanout-canary.mjs --step fleet75 --remote --json
+# validator deleted 2026-09-20 — read the wrangler.jsonc vars instead
 
 # Offline evaluation from saved wrangler JSON
-node scripts/monitoring-fanout-canary.mjs --step nightly --metrics-file ./tmp/fanout-metrics.json
+# validator deleted 2026-09-20 — read the wrangler.jsonc vars instead
 ```
 
 The canary script never sets vars, triggers crons, or sends customer notifications. Coordinator merges `npm run canary:fanout` separately if desired.
@@ -178,12 +191,12 @@ agency workspace (priorityScanSlots=25; ranks beyond run on 6h-aligned ticks onl
   of inflight doubles the ceiling at the same cadence and scan cap.
 - If real scans complete well under the 30-minute cap in production, re-run the
   simulation with `MONITORING_CADENCE_MINUTES` unchanged and a smaller worst-run
-  constant in `scripts/presence-load-test.mjs`; the published numbers scale as
+  constant in the load-test harness (`scripts/presence-load-test.mjs`, deleted 2026-09-20 — it was never run by CI); the published numbers scale as
   `inflight * floor(2 * cadence / worst_run)`.
 
 ### Schedule-slip canary
 
-`node scripts/monitoring-fanout-canary.mjs --step cadence [--cadence-hours 3]`
+*(validator deleted — see the status note above)*
 alerts when the oldest queued scheduled run has been waiting more than one
 cadence beyond its due window (`schedule_slipped_more_than_one_cadence`), and
 warns once it is past one cadence. Read queue age via `--remote` (D1
