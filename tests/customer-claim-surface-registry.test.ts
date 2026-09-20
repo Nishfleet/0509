@@ -432,7 +432,9 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
   e2eRoutePaths: [],
 };
 
-const catalogClaimOwners: Record<CatalogName, string> = {
+// Partial: e2eRoutePaths lost its owner when the api/e2e surface was swept
+// (#3861) — the catalog stays so a resurrected canary route fails unmapped.
+const catalogClaimOwners: Partial<Record<CatalogName, string>> = {
   agentActions: "API-LIVE-CATALOG",
   billingSkus: "BILLING-PORTAL-PLAN-CHANGE",
   planFamilies: "PLAN-CADENCE",
