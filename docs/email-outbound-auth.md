@@ -27,8 +27,10 @@ Selectors `cf1`, `cf2`, `cf2024-01` and `default` are intentionally empty.
 
 ## Regression gate
 
-`node scripts/check-outbound-email-auth.mjs` fails loud (exit 1) if any of
-these regress: SPF softfail, DMARC without `p=`/`rua`, DKIM not published at
+Check by hand after any Cloudflare Email or zone-DNS change with `dig +short TXT
+0509.io | grep spf1`, `dig +short TXT _dmarc.0509.io` and `dig +short TXT
+cf2024-1._domainkey.0509.io`. (`scripts/check-outbound-email-auth.mjs` wrapped
+those three lookups and was deleted 2026-09-20.) What must not regress: SPF softfail, DMARC without `p=`/`rua`, DKIM not published at
 `cf2024-1._domainkey` (selector list overridable via `CHECK_DKIM_SELECTORS`).
 Run it after any Cloudflare Email or zone-DNS change.
 

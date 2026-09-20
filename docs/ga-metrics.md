@@ -31,7 +31,7 @@ The **direction metric** (fleet-ops#4518) is signups/week — the fixture-free
 trailing-7d/30d count of production `user.createdAt` rows, emitted by:
 
 ```bash
-node scripts/weekly-business-metrics.mjs --json
+gh workflow run market-signal-snapshot.yml --ref main   # was: node scripts/weekly-business-metrics.mjs --json
 ```
 
 That JSON (its `signups_7d`) — not the unfiltered day-count above — is the
@@ -40,13 +40,17 @@ fleet-synthetic identity list `SYNTHETIC_USER_PATTERNS`: the #2908 QA/canary
 fixture identities (billing-canary, `codex-qa-*`, `codex-free-qa-*`,
 `auth-QA`), the billing-canary guard id, the launch-readiness canary owner
 id, every `*@0509.internal` mailbox, and the `bet1-3322-*` burst cohort — the
-same list `scripts/market-signal-snapshot.mjs` consumes, so the two reads
+same list `db/queries/market-signal.sql` consumes, so the two reads
 cannot drift (issues #3471, #3486). When the caller supplies the
 Workers-Logs NDJSON (`--events-ndjson <path|->`) it cross-checks each
 surviving row against its `signup_completed` funnel event; survivors without
 one are listed as `suspect`, never silently counted. Its definition, fixture
-list, and unit test live in `scripts/weekly-business-metrics.mjs` and
-`tests/unit/weekly-business-metrics.test.ts` (issue #3321).
+list, and its test live in `db/queries/market-signal.sql` and
+`tests/market-signal-query.test.ts` (issue #3321). The previous home,
+`scripts/weekly-business-metrics.mjs` with `tests/unit/weekly-business-metrics.test.ts`,
+was 1,328 lines that CI never ran; it was deleted 2026-09-20 and the query it
+wrapped now runs as one `wrangler d1 execute --remote --file` step in
+`.github/workflows/market-signal-snapshot.yml`.
 
 ## Launch funnel (manual)
 
@@ -98,7 +102,7 @@ live in two bounded stores: structured JSON lines in Workers Logs (platform wind
   `result_count_bucket` or `error_kind` where applicable. No query text, URLs, emails,
   names, error text, or stack traces can enter a record — the helper only accepts typed
   coarse inputs.
-- **Operator aggregates.** `node scripts/funnel-daily-counts.mjs` reads NDJSON log
+- **Operator aggregates.** (`scripts/funnel-daily-counts.mjs`, deleted 2026-09-20, read NDJSON log
   lines from stdin (e.g. `wrangler tail --format json`) and prints bounded daily counts
   per event with bucket/error-kind distributions. It never prints raw records and flags
   any record carrying keys outside the allowlist.
@@ -109,7 +113,7 @@ live in two bounded stores: structured JSON lines in Workers Logs (platform wind
   `error_kind` in `blob2`–`blob5`, the `event_id` as the sampling index. No field
   outside the §4 allowlist can reach the dataset, and a missing binding degrades to
   log-only emission — never a request failure.
-- **Read path.** `node scripts/weekly-business-metrics.mjs --json` prints the funnel
+- **Read path.** The market-signal workflow's snapshot JSON carries the funnel
   section as `.funnel`: `<kind>_7d`/`<kind>_30d` counts for the visit→signup kinds
   (`home_view`, `search_preview_submit`, `search_preview_result`,
   `search_preview_error`, `signup_start`) plus a `kinds` table covering every emitted

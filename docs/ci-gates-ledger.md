@@ -44,6 +44,25 @@ Standing rules that earn a gate (cited per row below):
 - 26 workflow files, 5,093 lines of workflow YAML; `deploy-production.yml` alone
   728 lines / 6 jobs.
 
+## Superseded by the stock pipeline, 2026-09-20
+
+Read the rows below with this first. #3684 replaced `deploy-production.yml`
+wholesale for #3679: **97 lines and two jobs**, not 732 lines and six. The
+Gate A/B/C chain, the scratch-D1 restore-evidence drill, the soak finalizer, the
+candidate CAS pinning and the on-main deploy ledger are all gone, along with the
+~100 scripts that implemented them. The deploy is now `npm ci` -> typecheck ->
+test -> build -> `wrangler d1 migrations apply` -> `wrangler deploy` ->
+health-check -> `wrangler rollback` on failure.
+
+Rows describing those gates are kept as the record of why each one existed. They
+are **not** a description of what runs today. A row struck through was removed on
+the date its disposition names; a row that still reads KEEP and names a deleted
+file is superseded by this note.
+
+Still true, and the part worth carrying forward: a new gate needs a row here
+with a named incident or a standing rule behind it. "It seemed prudent" is
+DELETE.
+
 ## The table
 
 | Gate / workflow | What it blocks | Justification (named incident / rule) | Cost per PR | Disposition |
@@ -72,7 +91,7 @@ Standing rules that earn a gate (cited per row below):
 | `market-signal-snapshot.yml` | Missing daily market-signal D1 snapshot | Incident: cron OAuth expiry left it stale 5 mornings (PR #557) | Daily | **KEEP** |
 | `market-signal-snapshot-age.yml` | A missed daily snapshot being silent | R3 + issue #1894 (2026-09-06 miss) | Daily | **KEEP** |
 | `d1-backup-r2.yml` | No restorable D1 backup | R1 | Daily | **KEEP** |
-| `d1-backup-validate.yml` | Broken backup tooling in a PR | R1 (validated tooling) | Path-gated to backup scripts/wrangler.jsonc | **KEEP** |
+| ~~`d1-backup-validate.yml`~~ | Broken backup tooling in a PR | R1 (validated tooling) | — | **REMOVED 2026-09-20** — with the backup tooling it validated. `d1-backup-weekly.yml` is two vendor commands (`wrangler d1 export`, `wrangler r2 object put`) plus a read-back; there is no bespoke tooling left for a PR to break. |
 | `d1-remote-restore-evidence.yml` | Deploy without proved restore | R1 (#2975 per-lane concurrency fix) | On deploy cadence | **KEEP** |
 | `d1-restore-proof-auto-refresh.yml` | Backup proof going stale between restores | R1 | Daily | **KEEP** — candidate to MERGE-INTO `d1-backup-r2`'s schedule; the deletion PR decides with one cron |
 | `finalize-production-soak.yml` | Un-halting a deploy without soak proof | Gate C (deploy-production-gate tests) | Dispatch-only post-deploy | **KEEP** |
@@ -92,10 +111,10 @@ Standing rules that earn a gate (cited per row below):
 3. **TRIM `deploy-production.yml`** — DONE in #3070: the audit of every named
    step is the table below. Exactly one step (`- name: Typecheck`) had no
    incident behind it and was deleted; per the 2026-09-12 re-scope its coverage
-   moved into `scripts/deploy-production.mjs` as an explicit `npm run
-   typecheck` ahead of `wrangler deploy`, so the deploy path keeps the gate in
-   the named script rather than relying on an inference about what
-   `launch:readiness:predeploy` contains. Every other step either names an
+   moved into the deploy script as an explicit `npm run typecheck` ahead of
+   `wrangler deploy`. (Superseded 2026-09-20: `scripts/deploy-production.mjs` is
+   deleted and the stock workflow runs `npm run typecheck` as a named step in
+   its `verify` job, which is the same gate one layer less deep.) Every other step either names an
    incident/rule or is pinned by `deploy-production-gate.test.ts` and
    `production-candidate-workflow.test.ts` (step names, ordering, and run lines
    are asserted there), so deleting it would weaken an encoded gate.

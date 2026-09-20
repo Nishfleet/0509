@@ -2,14 +2,18 @@
 
 ## D1 backup posture
 
-- `npm run backup:d1:r2` is the owner-operated backup command. It exports the remote D1 database (`0509`) to `$HOME/.local/state/0509/backups/d1/<timestamp>.sql` and uploads it to the R2 bucket under `backups/d1/` when production auth is available, then publishes the small export record at the fixed key `backups/d1/export-record.json` describing exactly that upload. Keeping retained copies outside the checkout prevents Actions cleanup from deleting them.
-- The repository validation gate is `node scripts/validate-d1-backup.mjs`. It dry-runs backup-script prerequisites, the D1 binding, and the current migration chain through the latest migration; it does not prove that a fresh production R2 object exists.
-- `.github/workflows/d1-backup-r2.yml` is the explicit backup-only fallback: it supports `workflow_dispatch`, runs only on protected `main`, uses the branch-restricted `production` GitHub Environment, validates with `node scripts/validate-d1-backup.mjs`, then runs `npm run backup:d1:r2` with `D1_BACKUP_AUTOMATION_APPROVED=0509-weekly-d1-to-r2`. Scheduled off-machine backups are produced every 6 hours by the export-only job of `d1-restore-proof-auto-refresh.yml`, which also publishes the fixed-key export record the deploy gate reads; the nightly cron that used to live here was retired on 2026-09-19 (0509#3576) so one database export cannot be scheduled twice for the same coverage. This workflow stays as the manual break-glass path.
-- **Unblocked 2026-07-13:** repository secrets `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` (scoped custom token: D1 Edit + Workers R2 Storage Edit) were added by the owner, and dispatch run `29225583866` completed the full validate → export → upload chain ("Upload complete. Backup complete.", fresh timestamped object under the private R2 backup prefix). Historical context: the former weekly backup-only cron produced runs `28339411098`, `28758345164`, and `29212868653` while the secrets were missing; that redundant cron is now retired in favor of the scheduled restore-evidence proof.
-- **Mac-side scheduled backup (the currently-live automated path):** a Claude scheduled task `0509-weekly-d1-backup` on Nish's Mac runs the manual-approved backup weekly (Sunday mornings, local). Caveat found 2026-07-13: its runs on 2026-07-05/12 silently produced no artifact because the task prompt predated the `D1_BACKUP_MANUAL_APPROVED` interlock; the prompt now sets the marker and verifies a fresh `$HOME/.local/state/0509/backups/d1/` file plus `validate-d1-backup.mjs` before reporting success. This path depends on the Mac being awake/app open — the Actions path above remains the wanted off-machine redundancy.
-- Cloudflare documents that D1 export blocks other database requests while it runs. Keep this schedule in a low-traffic window and move it if real customer traffic shows a better quiet period.
-- Manual run any time: `D1_BACKUP_MANUAL_APPROVED=0509-manual-d1-export npm run backup:d1:r2` from the repo root (wrangler OAuth session and R2 access must be available). This marker is the script's explicit confirmation for a production-blocking remote D1 export; unapproved manual runs fail before Wrangler starts.
-- Backup command output redacts temporary signed export URL query strings before logging.
+- **The backup is `.github/workflows/d1-backup-weekly.yml`**, scheduled Sundays. It runs two vendor commands — `wrangler d1 export 0509 --remote` then `wrangler r2 object put` into `0509-landing-page-artifacts/backups/d1/` — and reads the object back to prove it landed. Retention is the 90-day R2 lifecycle rule in `config/r2-retention-policy.json`, not a cleanup job.
+- **Point-in-time restore inside 30 days is D1 Time Travel**, which needs no backup at all:
+
+  ```bash
+  wrangler d1 time-travel restore 0509 --timestamp=2026-09-14T00:00:00Z
+  ```
+
+  The weekly export exists to cover the ground *beyond* that 30-day window.
+- Manual run any time: `gh workflow run d1-backup-weekly.yml --ref main`.
+- Cloudflare documents that D1 export blocks other database requests while it runs. Keep the schedule in a low-traffic window and move it if real customer traffic shows a better quiet period.
+
+Superseded 2026-09-20, recorded so the old commands are not hunted for: `npm run backup:d1:r2`, `scripts/validate-d1-backup.mjs`, `scripts/fetch-d1-backup-export-record.mjs`, `scripts/d1-restore-transform.mjs`, `.github/workflows/d1-backup-r2.yml` and the scratch-D1 restore-evidence drill are all deleted. That family was ~25 scripts and 5 workflows proving a bookmark that Time Travel already guarantees, and its scheduled cadence had silently stopped — `d1-backup-r2.yml` handed its schedule to `d1-restore-proof-auto-refresh.yml` in #3576, that workflow was later disabled, and the repo ran with NO scheduled backup from 2026-09-19T04:39Z until `d1-backup-weekly.yml` landed. The Mac-side `0509-weekly-d1-backup` scheduled task is likewise not the live path any more.
 
 ### Hardened runner routing
 
@@ -95,7 +99,7 @@ drill. A deploy operator who cannot tell which one fired cannot tell which fix
 to use.
 
 Only the credentialed deploy job reads the record
-(`scripts/fetch-d1-backup-export-record.mjs`, one `wrangler r2 object get` on
+(one `wrangler r2 object get` on
 the proven path — no bucket listing needed). The verifier stays
 credential-free: the file is passed to it as a path, and the preparation job
 gets no such flag, so it can never use a fresh export record to skip generating
@@ -194,6 +198,7 @@ an artifact is published.
 - 2026-06-27 release backup before `0060`: timestamped object under the private R2 backup prefix confirmed.
 - 2026-06-28 post-cleanup backup after `0060`: timestamped object under the private R2 backup prefix confirmed.
 - The post-cleanup backup passed an isolated local SQLite import smoke; aggregate schema, migration-ledger, plan, Dodo linkage, and retired-provider invariants passed.
+- **Unblocked 2026-07-13:** repository secrets `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` (scoped custom token: D1 Edit + Workers R2 Storage Edit) were added by the owner, and dispatch run `29225583866` completed the full validate → export → upload chain ("Upload complete. Backup complete.", fresh timestamped object under the private R2 backup prefix). Historical context: the former weekly backup-only cron produced runs `28339411098`, `28758345164`, and `29212868653` while the secrets were missing; that redundant cron is now retired in favor of the scheduled restore-evidence proof.
 - 2026-07-02 owner-operated manual backup: `D1_BACKUP_MANUAL_APPROVED=0509-manual-d1-export npm run backup:d1:r2` exported remote D1, uploaded a fresh object under the private R2 backup prefix, and pruned only old local backup copies. `node scripts/validate-d1-backup.mjs` passed afterward through migration `0062_dodo_plan_change_pending_target.sql`.
 - 2026-06-28 scheduled GitHub Actions backup run `28339411098` reached `node scripts/validate-d1-backup.mjs`, then failed at `Run approved D1-to-R2 backup` because the required Cloudflare repository secrets were not configured — the same failure repeated on `28758345164` (2026-07-05) and `29212868653` (2026-07-12) before the secrets were added.
 - 2026-07-13 GitHub Actions dispatch run `29225583866`: first successful Actions backup end-to-end — validation passed, remote D1 exported (15.7 MB), fresh timestamped object uploaded under the private R2 backup prefix. Actions backups are proven; the weekly schedule now runs off-machine.
@@ -247,20 +252,20 @@ Nish's explicit go-ahead.
 
 ## Uptime monitoring
 
-### Production liveness — the `0509-liveness` systemd timer
+### Production liveness — the dead-man ping
 
-Production liveness detection runs as the `0509-liveness` systemd timer on the
-VPS (`ops/liveness/`, installed by `ops/liveness/provision-production-liveness.sh`).
-It fires on a true offset five-minute cadence (`*:2/5`) outside GitHub Actions
-entirely and probes the same two public endpoints: `https://0509.io/api/health`
-must return HTTP 200 JSON with `status: "ok"` and `app: "0509"`, and
-`https://0509.io/api/health/deep` must return `checks.d1: "ok"` and
-`checks.scheduledWork: "ok"` — so a sustained D1 outage turns the probe red even
-while the shallow edge check stays green. The probe uses no secrets or private
-canary tokens and writes one JSON record per run to
-`/var/lib/0509-liveness/probes.jsonl` on the VPS.
+The Worker's five-minute status-probe cron sends a ping to an external
+healthchecks.io check (`LIVENESS_PING_URL`, a Worker secret; unset means no
+ping). Nothing here alerts. **The external service alerts when the pings stop** —
+Worker down, cron trigger lost, account suspended, Cloudflare outage. See
+`app/lib/liveness-ping.server.ts`.
 
-Retired: `.github/workflows/uptime-health.yml` was deleted (issue #3068). Its
+That direction is the whole point. Every other health signal in this repo is
+computed BY the Worker it describes, so none of them can report a Worker that is
+down. Two previous attempts added an external watcher and each one then needed
+its own watcher:
+
+- `.github/workflows/uptime-health.yml` polled from GitHub Actions and was deleted (issue #3068). Its
 5-minute Actions cron was never real liveness — scheduled runs fired about once
 an hour in practice (median 63 minutes between runs over 300 observations,
 2026-07-25..2026-08-11) and queued behind CI on the three-runner FIFO — and the
