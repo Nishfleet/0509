@@ -1535,7 +1535,7 @@ async function runInstantAttemptPipeline(
   const failedAt =
     providerResult.status === "failed" ? new Date().toISOString() : null;
 
-  let attemptId: string;
+  let attemptId: string | null;
   if (attemptDedupe.attemptId) {
     const finalized = await finalizeInstantDeliveryAttempt(env, {
       attemptId: attemptDedupe.attemptId,
@@ -1571,29 +1571,44 @@ async function runInstantAttemptPipeline(
     });
     attemptId = attemptDedupe.retryAttempt.id;
   } else {
-    attemptId = await createDeliveryAttempt(env, {
-      userId: input.userId,
-      watchlistId: input.watchlistId,
-      digestRunId: null,
-      deliveryTargetId: input.deliveryTarget.id,
-      lane: input.lane,
-      channel,
-      provider: providerResult.provider,
-      status: providerResult.status,
-      webhookStatus: providerResult.webhookStatus,
-      targetValue: input.deliveryTarget.targetValue,
-      providerMessageId: providerResult.providerMessageId,
-      providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
-      templateName: outcome.templateName,
-      eventIds,
-      payloadSnapshot: claimSnapshot,
-      idempotencyKey: attemptDedupe.idempotencyKey,
-      errorMessage: providerResult.errorMessage,
-      sentAt: outcome.sentAt,
-      failedAt,
-    });
+    // No owned pre-send claim: the provider send already happened, so a
+    // failed audit write must not surface as a send failure — same contract
+    // as recordAccountDeliveryAttempt in delivery-account-emails.server.ts.
+    // With no attempt row there is nothing to link, so the target-success
+    // write below is skipped too (D1 is the same dependency anyway), and a
+    // later run finds no dedupe row and re-sends — the accepted trade.
+    try {
+      attemptId = await createDeliveryAttempt(env, {
+        userId: input.userId,
+        watchlistId: input.watchlistId,
+        digestRunId: null,
+        deliveryTargetId: input.deliveryTarget.id,
+        lane: input.lane,
+        channel,
+        provider: providerResult.provider,
+        status: providerResult.status,
+        webhookStatus: providerResult.webhookStatus,
+        targetValue: input.deliveryTarget.targetValue,
+        providerMessageId: providerResult.providerMessageId,
+        providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+        templateName: outcome.templateName,
+        eventIds,
+        payloadSnapshot: claimSnapshot,
+        idempotencyKey: attemptDedupe.idempotencyKey,
+        errorMessage: providerResult.errorMessage,
+        sentAt: outcome.sentAt,
+        failedAt,
+      });
+    } catch (error) {
+      console.warn("Instant delivery attempt record failed after provider send.", {
+        channel,
+        userId: input.userId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      attemptId = null;
+    }
   }
-  if (providerResult.status === "sent") {
+  if (providerResult.status === "sent" && attemptId !== null) {
     await persistDeliveryTargetSuccess(
       env,
       input.deliveryTarget,

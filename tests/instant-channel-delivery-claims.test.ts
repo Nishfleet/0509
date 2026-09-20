@@ -128,6 +128,8 @@ function installMocks(
     forceFirstTwoReads?: boolean;
     failDispatchMarkOnce?: boolean;
     failFinalizeOnce?: boolean;
+    failCreateOnce?: boolean;
+    unownedClaim?: boolean;
     providerResults?: Array<Record<string, unknown>>;
     slackPreparationFailure?: boolean;
   } = {},
@@ -137,6 +139,7 @@ function installMocks(
   let reads = 0;
   let failDispatchMarkOnce = options.failDispatchMarkOnce === true;
   let failFinalizeOnce = options.failFinalizeOnce === true;
+  let failCreateOnce = options.failCreateOnce === true;
   const deliveryTarget = target(channel);
   const provider =
     channel === "whatsapp"
@@ -188,6 +191,10 @@ function installMocks(
     return attempt?.idempotencyKey === key ? { ...attempt } : null;
   });
   const createDeliveryAttempt = vi.fn(async (_env: unknown, input: Record<string, unknown>) => {
+    if (failCreateOnce) {
+      failCreateOnce = false;
+      throw new Error("injected post-send D1 failure");
+    }
     if (attempt) throw new Error("UNIQUE constraint failed: delivery_attempt.idempotency_key");
     const timestamp = String(input.timestamp ?? new Date().toISOString());
     attempt = {
@@ -233,6 +240,28 @@ function installMocks(
     },
   );
 
+  const upsertDeliveryTarget = vi.fn().mockResolvedValue(deliveryTarget);
+
+  // runInstantAttemptPipeline imports claimInstantDeliveryAttempt from the
+  // leaf module, not the data.server barrel — mock it there. Other exports
+  // stay real via importOriginal.
+  vi.doMock("~/lib/data/delivery-records-attempts.server", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("~/lib/data/delivery-records-attempts.server")>();
+    return {
+      ...actual,
+      claimInstantDeliveryAttempt: vi.fn(async (...args: unknown[]) => {
+        if (options.unownedClaim) {
+          return {
+            attemptId: null,
+            claimUpdatedAt: null,
+            duplicate: null,
+            reclaimed: false,
+          };
+        }
+        return actual.claimInstantDeliveryAttempt(...args as never);
+      }),
+    };
+  });
   vi.doMock("~/lib/data.server", () => ({
     createDeliveryAttempt,
     getDeliveryAttemptByIdempotencyKey,
@@ -253,6 +282,10 @@ function installMocks(
       updatedAt: "2026-07-15T00:00:00.000Z",
     }),
     getWatchlistDeliveryConfig: vi.fn().mockResolvedValue(null),
+    getUserDeliveryProfile: vi.fn().mockResolvedValue({
+      email: "owner@example.com",
+      emailVerified: true,
+    }),
     legacyWorkspaceDeliveryDefaults: vi.fn(),
     listAdsByIds: vi.fn().mockResolvedValue([]),
     listDeliveryTargets: vi.fn(async (
@@ -262,7 +295,7 @@ function installMocks(
     ) => input?.channel === channel ? [deliveryTarget] : []),
     reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
     updateDeliveryAttemptResult,
-    upsertDeliveryTarget: vi.fn().mockResolvedValue(deliveryTarget),
+    upsertDeliveryTarget,
     upsertDigestDelivery: vi.fn(),
   }));
   vi.doMock("~/lib/whatsapp.server", () => ({
@@ -290,6 +323,7 @@ function installMocks(
     providerSend,
     prepareSlackWebhookTarget,
     prepareTeamsWebhookTarget,
+    upsertDeliveryTarget,
     setAttemptUpdatedAt(value: string) {
       if (attempt) attempt = { ...attempt, updatedAt: value };
     },
@@ -448,4 +482,35 @@ it("fails Slack local preparation before crossing the provider boundary", async 
     providerStatusLastSeenAt: null,
     errorMessage: "Slack webhook could not be decrypted.",
   });
+});
+
+it("treats the post-send attempt record as best-effort for an unowned WhatsApp claim", async () => {
+  const state = installMocks("whatsapp", { unownedClaim: true, failCreateOnce: true });
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  const { deliverWatchlistAlerts } = await import("~/lib/delivery.server");
+
+  const result = await deliverWatchlistAlerts({ DB: {} } as never, alertInput as never);
+
+  expect(state.providerSend).toHaveBeenCalledTimes(1);
+  expect(state.createDeliveryAttempt).toHaveBeenCalledTimes(1);
+  expect(state.attempt).toBeNull();
+  expect(state.upsertDeliveryTarget).not.toHaveBeenCalled();
+  expect(result.details).toHaveLength(1);
+  expect(result.details[0]).toMatchObject({ channel: "whatsapp", status: "sent" });
+  expect(warn).toHaveBeenCalledWith(
+    "Instant delivery attempt record failed after provider send.",
+    { channel: "whatsapp", userId: "user-1", error: "injected post-send D1 failure" },
+  );
+});
+
+it("still records the attempt after an unowned WhatsApp send when persistence works", async () => {
+  const state = installMocks("whatsapp", { unownedClaim: true });
+  const { deliverWatchlistAlerts } = await import("~/lib/delivery.server");
+
+  const result = await deliverWatchlistAlerts({ DB: {} } as never, alertInput as never);
+
+  expect(state.providerSend).toHaveBeenCalledTimes(1);
+  expect(state.attempt).toMatchObject({ status: "sent" });
+  expect(state.upsertDeliveryTarget).toHaveBeenCalledTimes(1);
+  expect(result.details[0]).toMatchObject({ channel: "whatsapp", status: "sent" });
 });
