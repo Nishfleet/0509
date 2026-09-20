@@ -1,6 +1,7 @@
 import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import { magicLink } from "better-auth/plugins";
+import { EncryptJWT, base64url, jwtDecrypt, type JWTPayload } from "jose";
 
 import {
   appOrigin,
@@ -1546,32 +1547,33 @@ function readCookies(request: Request, name: string) {
     .map((cookie) => cookie.slice(name.length + 1));
 }
 
+// The magic-link ticket envelope is a compact JWE (jose EncryptJWT, alg "dir"
+// + A256GCM) keyed by BETTER_AUTH_SECRET: the payload carries the redeemable
+// magic-link token, so the envelope must stay encrypted, not just signed. The
+// expiry rides the standard `exp` claim — jwtDecrypt enforces it — while the
+// internal contract keeps the millisecond `expiresAt` field callers check.
 async function encryptBetterAuthMagicLinkPayload(
   env: AppEnv,
   payload: Record<string, unknown>,
 ) {
-  const iv = new Uint8Array(12);
-  crypto.getRandomValues(iv);
-  const encrypted = await crypto.subtle.encrypt(
-    { iv, name: "AES-GCM" },
-    await betterAuthMagicLinkContextKey(env),
-    new TextEncoder().encode(JSON.stringify(payload)),
-  );
-  return `v1.${base64UrlEncodeBytes(iv)}.${base64UrlEncodeBytes(new Uint8Array(encrypted))}`;
+  const { expiresAt, ...claims } = payload;
+  const envelope = new EncryptJWT(claims as JWTPayload)
+    .setProtectedHeader({ alg: "dir", enc: "A256GCM" })
+    .setIssuedAt();
+  if (typeof expiresAt === "number" && Number.isFinite(expiresAt)) {
+    envelope.setExpirationTime(Math.floor(expiresAt / 1000));
+  }
+  return envelope.encrypt(await betterAuthMagicLinkContextKey(env));
 }
 
 async function decryptBetterAuthMagicLinkPayload(env: AppEnv, value: string) {
   try {
-    const [version, encodedIv, encodedCiphertext, extra] = value.split(".");
-    if (version !== "v1" || !encodedIv || !encodedCiphertext || extra !== undefined) {
-      return null;
-    }
-    const decrypted = await crypto.subtle.decrypt(
-      { iv: base64UrlToBytes(encodedIv), name: "AES-GCM" },
-      await betterAuthMagicLinkContextKey(env),
-      base64UrlToBytes(encodedCiphertext),
-    );
-    return JSON.parse(new TextDecoder().decode(decrypted)) as Record<string, unknown>;
+    const { payload } = await jwtDecrypt(value, await betterAuthMagicLinkContextKey(env));
+    const { exp, iat, ...claims } = payload;
+    return {
+      ...claims,
+      ...(typeof exp === "number" ? { expiresAt: exp * 1000 } : {}),
+    } as Record<string, unknown>;
   } catch {
     return null;
   }
@@ -1606,22 +1608,7 @@ async function betterAuthMagicLinkTicketStorageId(env: AppEnv, ticketId: string)
     key,
     new TextEncoder().encode(`0509:better-auth:magic-link-ticket:${ticketId}`),
   );
-  return `v1.${base64UrlEncodeBytes(new Uint8Array(digest))}`;
-}
-
-function base64UrlEncodeBytes(bytes: Uint8Array) {
-  let binary = "";
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
-}
-
-function base64UrlToBytes(value: string) {
-  const normalized = value.replaceAll("-", "+").replaceAll("_", "/");
-  const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), "=");
-  const binary = atob(padded);
-  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  return `v1.${base64url.encode(new Uint8Array(digest))}`;
 }
 
 function originFromUrl(value: string | null) {
@@ -1642,7 +1629,7 @@ function authModeFromMetadata(metadata: Record<string, unknown> | undefined): "l
 function randomBetterAuthState() {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
-  return base64UrlEncodeBytes(bytes);
+  return base64url.encode(bytes);
 }
 
 function isBetterAuthMagicLinkTicketId(value: string) {

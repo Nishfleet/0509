@@ -154,6 +154,10 @@ export default defineConfig(async ({ mode }) => ({
           // Integration suites belong to the `workers` project below; running
           // them on node would silently skip the real runtime.
           exclude: [INTEGRATION_TEST_GLOB, NODE_RUNNER_GATE_GLOB],
+          // Installs workerd-only runtime primitives (crypto.subtle.timingSafeEqual)
+          // backed by Node's real equivalents so plain-node suites exercise the
+          // same contract production runs.
+          setupFiles: ["./tests/setup-runtime-primitives.ts"],
           testTimeout: 10_000,
         },
       },

@@ -45,6 +45,7 @@
     "@resvg/resvg-wasm": "^2.6.2",
     "better-auth": "^1.6.20",
     "isbot": "^5.2.1",
+    "jose": "^6.2.10",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router": "^8.3.0",

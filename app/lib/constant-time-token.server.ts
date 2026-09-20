@@ -7,11 +7,10 @@
  * operations (canary cleanup that deletes R2 artifacts and D1 rows, plus
  * release-soak task triggers).
  *
- * To close the oracle we SHA-256 both sides and compare the digests with a
- * loop whose runtime does not depend on the number of matching bytes. Even if
- * the WebCrypto SHA-256 digest leaks nothing useful, the comparison that
- * followed was the timing-dependent step, and that comparison is now
- * constant-time.
+ * To close the oracle we SHA-256 both sides and compare the digests with the
+ * runtime's `crypto.subtle.timingSafeEqual` primitive. Even if the WebCrypto
+ * SHA-256 digest leaks nothing useful, the comparison that followed was the
+ * timing-dependent step, and that comparison is now constant-time.
  */
 
 const textEncoder = new TextEncoder();
@@ -47,10 +46,5 @@ export async function constantTimeTokenEqual(
     sha256Utf8(expected),
   ]);
 
-  let difference = 0;
-  for (let index = 0; index < actualDigest.length; index += 1) {
-    difference |= actualDigest[index]! ^ expectedDigest[index]!;
-  }
-
-  return difference === 0;
+  return crypto.subtle.timingSafeEqual(actualDigest, expectedDigest);
 }
