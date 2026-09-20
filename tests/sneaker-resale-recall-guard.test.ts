@@ -169,7 +169,19 @@ describe("probeSneakerResaleDomain transport-error retry", () => {
 // KNOWN_IDENTITY_GAPS handling, all on injected fixtures — no network.
 describe("evaluateSneakerResaleRecall tier classification", () => {
   /** Matches SneakerResaleProbe from canary-sneaker-resale-recall.mjs */
-  function probe(domain: string, { rowCount = 0, verified = 0, likely = 0, unmatched = 0, status = 200, isWarming = false, rateLimited = false, requestError = undefined } = {}) {
+  function probe(
+    domain: string,
+    { rowCount = 0, verified = 0, likely = 0, unmatched = 0, status = 200, isWarming = false, rateLimited = false, requestError }: {
+      rowCount?: number;
+      verified?: number;
+      likely?: number;
+      unmatched?: number;
+      status?: number | null;
+      isWarming?: boolean;
+      rateLimited?: boolean;
+      requestError?: string;
+    } = {},
+  ) {
     return {
       domain,
       brand: domain,
