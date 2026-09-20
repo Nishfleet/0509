@@ -231,7 +231,7 @@ describe("fetchHiringSnapshot — label-guessed board fetched once", () => {
                 location: { name: "London" },
                 departments: [{ name: "Engineering" }],
                 absolute_url: "https://boards.greenhouse.io/acme/jobs/101",
-                updated_at: "2026-09-09T00:00:00.000Z",
+                updated_at: "2026-09-09T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
               },
             ],
           }),
@@ -264,7 +264,7 @@ describe("fetchHiringSnapshot — label-guessed board fetched once", () => {
         location: "London",
         department: "Engineering",
         url: "https://boards.greenhouse.io/acme/jobs/101",
-        postedAt: "2026-09-09T00:00:00.000Z",
+        postedAt: "2026-09-09T00:00:00.000Z", // fixed-date: historical fixture (issue #3215 sweep)
       },
     ]);
     expect(result.competitorUpdate).toEqual({
