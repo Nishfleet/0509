@@ -26,7 +26,9 @@ Use this file as the instruction entrypoint for non-Claude coding agents in this
 - Never write a shared evidence file (`.lane/report.md`, `report.md`, `docs/status.md`, or any single file other lanes also append to). One shared file makes every parallel lane's PR conflict with every other lane's PR.
 - `tests/lane-evidence-collision.test.ts` enforces this and runs in CI via `npm run test`; reintroducing a shared report path fails the build.
 - Some local clones exclude `.lane/` via `.git/info/exclude`, so a new lane record may need `git add -f .lane/reports/<branch-name>.md`.
-- Historical records from the old shared `.lane/report.md` were previously kept under `.lane/reports/archived-shared-report-*.md`; the whole `.lane/` tree was retired from the working tree by #2991 and is retained in git history instead.
+- Historical records from the old shared `.lane/report.md` were previously kept under `.lane/reports/archived-shared-report-*.md`.
+- The line that used to sit here claimed the whole `.lane/` tree "was retired from the working tree and is retained in git history instead". That was not true, and it contradicted the first rule in this section. `.lane/reports/` holds 74 tracked files on `main`, 133 of them added during September alone, and `tests/lane-evidence-collision.test.ts` reads that directory out of the working tree — the guard would pass on an empty set if the tree really were retired. Two rules pointing opposite ways is why the directory kept growing: an agent reading top-down writes a record, an agent reading bottom-up believes it should not exist.
+- Open question, not a rule yet: `docs/ci-gates-ledger.md` says future reports should go to `archive/lane/` so the live tree stays small, and nothing enforces that. Moving the path while parallel packets are in flight would collide with every open lane, so it is tracked separately rather than changed here.
 
 ## D1 Integration Tests (workerd)
 
