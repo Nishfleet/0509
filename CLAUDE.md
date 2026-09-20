@@ -29,52 +29,27 @@ Who may merge: anyone — Nish, Codex, or Claude — once the change has an
 independent review and its checks are green. Do not merge over a failing or
 pending required check, and never force-merge.
 
-### Changing a protected verifier: the sole-admin attestation path
+### What actually gates a merge
 
-`.github/workflows/required-verifier-integrity.yml` blocks any PR that touches
-a protected verifier definition — `ci.yml`, `secret-scan.yml`, the gate's own
-workflow and scripts, and the production deploy-authorization chain
-(`deploy-production.yml`, `finalize-production-soak.yml`,
-`scripts/ci-verify-production-candidate.sh`,
-`scripts/ci-verify-provider-main-cas.sh`) — unless the change is independently
-approved. This repository has exactly one collaborator and GitHub forbids
-approving your own pull request, so that requirement alone is impossible to
-satisfy here.
+Four required checks on the `main-merge-queue` ruleset, with an **empty bypass
+list**:
 
-Nish decided on 2026-08-20 to keep the gate and add a second, deliberately loud
-remedy rather than allow self-approval. Two ways to unblock such a PR:
+```
+Gitleaks   codex-node-checks   semgrep   preview-assert
+```
 
-1. **Independent review (preferred).** A repository admin or maintainer other
-   than the PR author submits an APPROVED review dated at or after the current
-   head commit. This stays first-class and is tried first. The moment a second
-   admin/maintainer exists on this repo, this becomes the only path to use and
-   the attestation path should be deleted.
-2. **Sole-admin attestation.** A repository **admin** posts a PR comment whose
-   entire body is exactly:
+The merge queue tests the merge result before it lands, so a PR that would red
+`main` never reaches it. There is no admin bypass and no attestation ritual.
 
-   ```
-   verifier-attest: <40-hex current head sha>
-   ```
+This section used to describe `required-verifier-integrity.yml` and a
+`verifier-attest: <sha>` PR comment that a sole admin could post to unblock a
+protected-verifier change. That workflow was deleted on 2026-09-20 (#3670), and
+before it was deleted it was **never a required check** — it and
+`gate-integrity.yml` ran advisory for their whole life, so the bypass they
+guarded against was open the entire time they appeared to be closing it.
 
-   Then re-run the `required-verifier-integrity` check.
-
-Attestation rules worth knowing before reaching for it:
-
-- Admin permission is verified through the collaborator-permission API, not
-  from the comment or its `author_association`. `maintain` is not enough.
-- The sha must equal the PR's **current** head sha. Pushing any new commit
-  invalidates the attestation, exactly as it dismisses a stale approval — post
-  a fresh one against the new sha.
-- The body must match exactly. A comment that merely mentions the phrase in
-  prose does not attest.
-- Using it is never quiet: the job prints a `::warning::` annotation and writes
-  a job-summary entry naming the attesting admin, the sha, and the fact that no
-  independent reviewer saw the change. That record is the point — it is what
-  makes this different from a `gh pr merge --admin` bypass, which leaves
-  nothing behind.
-
-Prefer remedy 1 whenever a second reviewer exists. Remedy 2 is a
-single-collaborator accommodation, not a shortcut.
+The attestation ritual is gone with them. An agent following the old text would
+have posted a comment that nothing reads.
 
 Deploy-gate e2e (Gate-B journeys, restore-evidence) is Codex-owned; product
 changes that alter public copy/states require the gate specs to be updated in the
@@ -130,7 +105,7 @@ npm run dev
 - `workers/app.ts` — Cloudflare Worker entry with scheduled event handler
 - `workers/monitoring-workflow.ts` — Cloudflare Workflow for watchlist scans (active in prod when `MONITORING_FANOUT_MODE=fanout`; gate is `resolveMonitoringFanoutMode()` in `app/lib/monitoring-fanout.server.ts`)
 - `workers/schedule.ts` — cron string → scheduled task mapping
-- `migrations/` — D1 schema migrations (sequential numbered SQL; `0004` intentionally absent, currently through `0065`; post-deploy cleanup allowlist in `scripts/d1-migration-sync-check.lib.mjs` is empty)
+- `migrations/` — D1 schema migrations (sequential numbered SQL; `0004` intentionally absent). `wrangler d1 migrations apply 0509 --remote` runs them, and `wrangler d1 migrations list` is the authority on what is applied — do not restate a tip number here, it was stale by forty files the last time anyone checked.
 - `tests/` — Vitest coverage for search, monitoring, analysis, onboarding, plan limits, reporting, billing webhooks, and route exposure
 - `scripts/` — deploy, prod canaries, launch-readiness canary, D1 backup
 - `docs/launch-readiness.md` — launch gate definition (accurate, maintained)
@@ -187,10 +162,10 @@ Audit-program, incident, and verification history: `docs/PROJECT-HISTORY.md`.
 
 - `https://0509.io`, `https://www.0509.io`, and `https://api.0509.io` are the primary production domains for the current Cloudflare app under `app/` and `workers/`.
 - **Deploys go through CI, not your terminal.** Every push to `main` auto-deploys through `.github/workflows/deploy-production.yml`, which runs typecheck, full tests, restore-evidence materialization, `npm run deploy`, and release-evidence verification. Do not run `npm run deploy` locally for routine ships. Local deploy is break-glass only when Actions is down and no CI deploy is in flight. Full gate sequence and incident history: `docs/PROJECT-HISTORY.md`.
-- **Manual dispatches of `Deploy production` go through `scripts/dispatch-deploy-production.sh`.** It resolves the live main tip (or validates an explicit `--expected-sha`), fails fast if it cannot, and rejects placeholder/sentinel SHAs (`aaaa…40` is valid 40-hex, so the workflow's Authorize gate alone cannot catch it — three red runs on 2026-08-14 were burned exactly that way). Never hand-build `gh workflow run deploy-production.yml -f expected_sha=…`.
+- **Manual dispatches of `Deploy production` use the stock command:** `gh workflow run deploy-production.yml --ref main`. The workflow guards `main` itself (`Only main deploys`) and ships `github.sha`, so nothing needs resolving or validating beforehand. `scripts/dispatch-deploy-production.sh` did that resolution and was deleted with the rest of `scripts/` (`aaaa…40` is valid 40-hex, so the workflow's Authorize gate alone cannot catch it — three red runs on 2026-08-14 were burned exactly that way). Never hand-build `gh workflow run deploy-production.yml -f expected_sha=…`.
 - `0509.in`, `www.0509.in`, and `api.0509.in` are redirect compatibility routes only. Do not introduce new `.in` product copy, auth origins, SEO links, or support addresses.
 - Cloudflare deploy state is represented by `wrangler.jsonc`: D1 database `0509`, R2 bucket binding `LANDING_PAGE_ARTIFACTS`, Browser Rendering, Workers AI, Cloudflare Email Service, and `MonitoringWorkflow` bindings are configured there. `wrangler.jsonc` sets `MONITORING_FANOUT_MODE: "fanout"` and `MONITORING_FANOUT_GLOBAL: "1"` (max 8 in-flight via `MONITORING_FANOUT_MAX_INFLIGHT`).
-- Remote D1 migrations: remote D1 and the repo migration chain are through `0070_release_scheduled_observations.sql`. The post-deploy cleanup allowlist in `scripts/d1-migration-sync-check.lib.mjs` is empty.
+- Remote D1 migrations: the deploy workflow applies them with `wrangler d1 migrations apply 0509 --remote` before `wrangler deploy`, so the chain moves on every deploy. Read the live state with `wrangler d1 migrations list 0509 --remote` rather than trusting a number written here.
 - Crons: `13 * * * *` (hourly observation-gap check), `17 */6 * * *` (discovery warmup), `0 */3 * * *` (monitoring scans), `0 4 * * *` (daily digest), and `0 5 * * MON` (weekly digest).
 - scheduled monitoring runs via the `MonitoringWorkflow` fan-out path (not inline). The real gate is `resolveMonitoringFanoutMode()` in `app/lib/monitoring-fanout.server.ts` — inline is only the unset-var default/fallback. There is no `shouldRunScheduledMonitoringInline` helper.
 - auth/origin logic should stay proxy-aware for Cloudflare and any future front-door changes:
@@ -230,7 +205,7 @@ The product is **Five to Nine**; **0509.io** is its current production domain (0
 - Immutability: create new objects, never mutate existing ones.
 - File organization: 200-400 lines typical, 800 max.
 - D1 queries: always use parameterized `.bind()` — never string interpolation.
-- Prod schema changes go through ONE door: a numbered file in `migrations/` applied with `npx wrangler d1 migrations apply 0509 --remote`. Never run DDL via `wrangler d1 execute --remote`. `npm run deploy` enforces migration sync through `scripts/check-d1-migrations-synced.mjs`; only migrations explicitly listed in `POST_DEPLOY_CLEANUP_MIGRATIONS` may trail, and that allowlist is currently empty. Incident history: `docs/PROJECT-HISTORY.md`.
+- Prod schema changes go through ONE door: a numbered file in `migrations/` applied with `npx wrangler d1 migrations apply 0509 --remote`. Never run DDL via `wrangler d1 execute --remote`. The deploy workflow applies pending migrations itself, before `wrangler deploy`, so schema and code land in one ordered step. `npm run deploy` is now plain `wrangler deploy`; the separate sync check it used to run was deleted with `scripts/`. Incident history: `docs/PROJECT-HISTORY.md`.
 
 ## Design System
 

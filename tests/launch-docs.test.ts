@@ -43,12 +43,25 @@ describe("final launch documentation", () => {
     expect(scorecard).toContain("manual run `28540913266` and scheduled runs");
     expect(ownerActions).toContain("SCHEDULED PASS / ALERT UNPROVEN");
     expect(backupUptime).toContain(".github/workflows/uptime-health.yml");
-    // Production liveness detection moved off GitHub Actions onto the VPS
-    // systemd timer at ops/liveness/ (the GitHub 5-minute cron never
-    // delivered — median 63 min between scheduled runs over 300 observations,
-    // 2026-07-25..2026-08-11), and the dispatch-only workflow file was deleted
-    // outright in issue #3068. The docs must still name the timer as the owner.
-    expect(backupUptime).toContain("0509-liveness");
+    // The docs must name whatever currently owns production liveness. That has
+    // now moved twice, and each move left the previous owner named in a doc
+    // that had stopped being true:
+    //
+    //   Actions cron (#3068)  -> deleted; a 5-minute schedule fired at a median
+    //                            of 63 minutes over 300 observations.
+    //   ops/liveness/ timer   -> deleted 2026-09-20; it was installed on no host
+    //                            for weeks, and once installed the release-soak
+    //                            finalizer that read its evidence was itself
+    //                            gone, so it observed and told nobody.
+    //   dead-man ping         -> current. The Worker's five-minute cron reports
+    //                            out to an external check; that service alerts
+    //                            when the reports stop, which is the one thing
+    //                            an in-Worker check can never do.
+    //
+    // Pin the mechanism, not a filename, so the next move updates the doc
+    // rather than this assertion.
+    expect(backupUptime).toContain("dead-man ping");
+    expect(backupUptime).toContain("LIVENESS_PING_URL");
     expect(ownerActions).toContain("D1-to-R2 scheduled backup");
     expect(ownerActions).toContain("PROVEN DISPATCH 2026-07-13 / FUTURE OBSERVATION OPEN");
     expect(scorecard).toContain("Restore drill");

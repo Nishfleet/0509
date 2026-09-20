@@ -16,7 +16,7 @@ state is this repo:
 
 - **What remains / what landed:** this section + the per-phase entries below.
 - **The mechanical terminal gate:** `docs/design-system-ratchet.json` +
-  `scripts/design-system-ratchet.mjs`. The JSON is the live source of
+  `docs/design-system-ratchet.json (the script that read it was deleted 2026-09-20)`. The JSON is the live source of
   truth for every ceiling. Legacy-marker keys (`BANNED_MARKERS`) are at
   0. Pattern ceilings (`raw-hex-color`, `non-token-border-radius`,
   `css-gradient`, `css-important`, `non-token-font-family`) remain
@@ -35,7 +35,7 @@ Ratified by Nish, non-negotiable:
    Presence merges into Watch; locked features are hidden from nav
    (gate-visibility); member pages keep URLs with owning-row active state.
 3. Free plan = weekly watch (implemented behavior wins; all copy derives).
-4. `scripts/design-system-ratchet.mjs` + `docs/design-system-ratchet.json`
+4. `docs/design-system-ratchet.json (its script was removed 2026-09-20)` + `docs/design-system-ratchet.json`
    fail CI only when a count exceeds its ceiling (never exact-match) —
    the program's terminal condition is every ceiling at zero, plus a
    zero-S1/S2 fresh tri-audit. A fourth design era cannot ship while
