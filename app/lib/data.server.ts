@@ -84,6 +84,7 @@ export {
   listRetryableDigestRuns,
   enqueueDigestScheduleJobs,
   listDigestScheduleJobTimezones,
+  listDigestScheduleJobPeriodEnds,
   listRetryableDigestScheduleJobs,
   exhaustStaleMaxAttemptDigestScheduleJobs,
   claimDigestScheduleJob,

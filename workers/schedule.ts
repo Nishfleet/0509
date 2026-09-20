@@ -75,7 +75,9 @@ export function resolveScheduledTask(cron: string): ScheduledTask {
     // The three-hourly tick also hosts the weekly brief: the digest cycle
     // enqueues a workspace only while its local time is inside the Monday
     // 05:00-08:00 window. The window equals the tick spacing, so every
-    // timezone enters it exactly once per local Monday (issue #2406).
+    // timezone enters it exactly once per local Monday (issue #2406); a
+    // workspace whose one in-window tick was lost is caught later the same
+    // local Monday by the issue-#2734 catch-up, keyed to the missed tick.
     return {
       kind: "monitoring",
       includeScans: true,

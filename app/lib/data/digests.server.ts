@@ -244,6 +244,42 @@ export async function listDigestScheduleJobTimezones(env: AppEnv) {
 	return rows.map((row) => ({ userId: row.user_id, timezone: row.timezone }));
 }
 
+/**
+ * Weekly catch-up dedupe read (issue #2734): the period_end values of
+ * schedule jobs already filed for `userIds` inside [periodEndGte,
+ * periodEndLt). The catch-up resolver checks each workspace's local ISO-week
+ * span against these so a brief already filed — by the on-time window tick,
+ * an earlier catch-up, or any other enqueue — blocks a second weekly job for
+ * the same week.
+ */
+export async function listDigestScheduleJobPeriodEnds(
+	env: AppEnv,
+	input: {
+		cadence: DigestScheduleJob["cadence"];
+		periodEndGte: string;
+		periodEndLt: string;
+		userIds: string[];
+	},
+) {
+	if (input.userIds.length === 0) return [];
+	const rows = await many<{ user_id: string; period_end: string }>(
+		env,
+		`
+			SELECT user_id, period_end
+			FROM digest_schedule_job
+			WHERE cadence = ?
+				AND period_end >= ?
+				AND period_end < ?
+				AND user_id IN (SELECT value FROM json_each(?))
+		`,
+		input.cadence,
+		input.periodEndGte,
+		input.periodEndLt,
+		JSON.stringify(input.userIds),
+	);
+	return rows.map((row) => ({ userId: row.user_id, periodEnd: row.period_end }));
+}
+
 export async function listRetryableDigestScheduleJobs(
 	env: AppEnv,
 	input: {
