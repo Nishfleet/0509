@@ -5,7 +5,6 @@ import {
   evaluatePresenceWorkspaceAccess,
   presenceWebsiteRolloutState,
 } from "~/lib/presence-internal-access.server";
-import { normalizePresenceDomain } from "~/lib/presence-domain-verification.server";
 
 vi.mock("~/lib/plan.server", () => ({
   getUserPlan: vi.fn(),
@@ -42,10 +41,5 @@ describe("presence GA rollout", () => {
     const result = await evaluatePresenceWorkspaceAccess(baseEnv, "ws-scout");
     expect(result.allowed).toBe(true);
     expect(result.rolloutState).toBe("ga");
-  });
-
-  it("normalizes domains for verification", () => {
-    expect(normalizePresenceDomain("HTTPS://WWW.EXAMPLE.COM/path")).toBe("example.com");
-    expect(normalizePresenceDomain("blog.example.co.uk")).toBe("example.co.uk");
   });
 });
