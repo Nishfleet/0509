@@ -16,7 +16,7 @@
 #     merge_queue ruleset still runs every required check (Gitleaks, the
 #     codex-node-checks shards, semgrep, preview-assert) and only the queue
 #     merges, as github-merge-queue[bot], so push workflows on main still fire
-#     (this is the auto-revert contract - verified live by #2046 and #1579,
+#     (verified live by #2046 and #1579,
 #     both queue-merged as github-merge-queue[bot] with checks observed).
 #     Nothing here weakens any gate for any PR.
 #   - Same opt-out contract the deleted arm enforced: draft PRs, [no-merge]
