@@ -54,5 +54,16 @@ describe("hiringAdapter", () => {
   it("lists hiring as active in the docs coverage table", () => {
     const entry = presenceSourceCoverageForDocs().find((d) => d.sourceId === "hiring");
     expect(entry?.productionStatus).toBe("active");
+    // Pin the note's substance (tiktok precedent, presence-source-coverage
+    // tests) so the freshly-written accuracy can't silently drift.
+    expect(entry?.notes).toContain("Greenhouse");
+    expect(entry?.notes).toContain("No credentials");
+  });
+
+  it("stays out of the free plan (plan gate, not requiresEnv, excludes it)", () => {
+    // free ships sources: ["meta"] — the plan gate, not the env filter, keeps
+    // hiring off the free tier; this pins that the flip is plan-gated.
+    const freeIds = getEnabledSources(baseEnv, "free").map((a) => a.id);
+    expect(freeIds).not.toContain("hiring");
   });
 });
