@@ -282,10 +282,58 @@ function resolveSelfRegistrableDomain(brandWebsite: string | null): string | nul
 }
 
 /**
+ * Paid, branded workspaces ordered by oldest work first (issue #2778). The
+ * surfaced-candidate set lives in the Phase 1 discovery cache under the
+ * `auto-competitor-surfaced:<user_id>` fingerprint — the same string
+ * `buildSurfacedFingerprint` composes — and every sweep pass refreshes its
+ * `fetched_at`, so `MIN(fetched_at)` is the workspace's oldest *sweep*; a
+ * workspace with no surfaced row at all sorts first. The join carries the same
+ * provider + `scheduled_warmup` route context the surfaced read uses, so a
+ * provider flip drops the workspace back to never-swept instead of ranking it
+ * by foreign-provider rows. `user_id ASC` breaks ties deterministically.
+ * Ordering by identity instead would re-sweep the same alphabetical workspaces
+ * forever and starve the rest the moment anyone lowers `userLimit` — the
+ * #2457 defect in the mention resweep, latent here because no caller passes a
+ * tight limit today.
+ */
+export async function listResweepUsers(
+  env: AppEnv,
+  limit: number,
+): Promise<string[]> {
+  if (!env.DB) return [];
+  const provider = resolveCommercialDiscoveryProvider(env);
+  const rows = await many<{ user_id: string; oldest_swept_at: string | null }>(
+    env,
+    `
+      SELECT user_plan.user_id AS user_id,
+             MIN(dce.fetched_at) AS oldest_swept_at
+      FROM user_plan
+      INNER JOIN workspace_branding ON workspace_branding.user_id = user_plan.user_id
+      LEFT JOIN discovery_cache_entry dce
+        ON dce.provider = ?
+       AND dce.route_context = 'scheduled_warmup'
+       AND dce.query_fingerprint = '${SURFACED_FINGERPRINT_PREFIX}:' || user_plan.user_id
+      WHERE user_plan.plan != 'free'
+        AND workspace_branding.brand_website IS NOT NULL
+        AND TRIM(workspace_branding.brand_website) != ''
+      GROUP BY user_plan.user_id
+      ORDER BY (oldest_swept_at IS NULL) DESC, oldest_swept_at ASC, user_id ASC
+      LIMIT ?
+    `,
+    provider,
+    limit,
+  );
+  return rows.map((row) => row.user_id);
+}
+
+/**
  * Periodic auto-competitor re-sweep. Re-runs the Phase 1 keyword expansion for
  * every paid workspace, diffs the result against current watchlists and the
  * already-surfaced candidate set, and surfaces only net-new advertisers.
  *
+ * Workspaces are picked by `listResweepUsers` — oldest sweep first, so a
+ * lowered `userLimit` rotates the population instead of freezing the first
+ * alphabetical `userLimit` ids (issue #2778).
  * Runs through the existing monitoring fan-out scheduling surface: it is called
  * from `runScheduledMonitoring` when `includeAutoCompetitorResweep` is true, and
  * it respects `MONITORING_FANOUT_MODE` and paid-tier plan gating. It reuses the
@@ -319,22 +367,7 @@ export async function runAutoCompetitorResweep(
   if (options.userId) {
     userIds = [options.userId];
   } else {
-    const limit = options.userLimit ?? 10_000;
-    const rows = await many<{ user_id: string }>(
-      env,
-      `
-        SELECT DISTINCT user_plan.user_id
-        FROM user_plan
-        INNER JOIN workspace_branding ON workspace_branding.user_id = user_plan.user_id
-        WHERE user_plan.plan != 'free'
-          AND workspace_branding.brand_website IS NOT NULL
-          AND TRIM(workspace_branding.brand_website) != ''
-        ORDER BY user_plan.user_id
-        LIMIT ?
-      `,
-      limit,
-    );
-    userIds = rows.map((row) => row.user_id);
+    userIds = await listResweepUsers(env, options.userLimit ?? 10_000);
   }
 
   result.users = userIds.length;
