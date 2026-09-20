@@ -486,10 +486,6 @@ export function rateLimitPolicyFor(request: Request): EdgeLimitPolicy | null {
     return { scope: "auth", limit: 2, periodSeconds: 60, binding: "RL_AUTH" };
   }
 
-  if (pathname.startsWith("/api/delivery-status")) {
-    return { scope: "delivery-webhook", limit: 180, periodSeconds: 60, binding: "RL_DELIVERY_WEBHOOK" };
-  }
-
   // Provider webhooks (Dodo, etc.): higher ceiling than generic writes.
   // Signature verification remains the real auth gate for these routes.
   if (pathname.startsWith("/api/webhooks/")) {
