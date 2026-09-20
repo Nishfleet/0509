@@ -199,6 +199,32 @@ describe("fetchAshbyJobs", () => {
       ],
     });
   });
+
+  it("still accepts { name }-object location/team/department shapes", async () => {
+    // Tolerance kept deliberately: the live posting-api returns plain strings,
+    // but the { name } fallback must keep working (#2624 review).
+    const body = JSON.stringify({
+      jobs: [
+        {
+          id: "a9",
+          title: "PM",
+          location: { name: "Berlin" },
+          team: { name: "Core" },
+          jobUrl: "https://jobs.ashbyhq.com/gamma/a9",
+          publishedAt: "2026-02-03T00:00:00Z",
+        },
+      ],
+    });
+    const { fn } = makeFetch(() => jsonResponse(body));
+
+    const result = await fetchAshbyJobs("gamma", fn);
+
+    if (!("jobs" in result)) throw new Error("expected jobs");
+    expect(result.jobs[0]).toMatchObject({
+      location: "Berlin",
+      department: "Core",
+    });
+  });
 });
 
 describe("fetchLeverJobs", () => {
