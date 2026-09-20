@@ -17,8 +17,10 @@ interface AuditRow {
   reason: string | null;
 }
 
-// db/queries/plan-integrity.sql is what `npm run billing:integrity` runs with
-// `wrangler d1 execute --file`. Prove it against the real migrated schema and
+// db/queries/plan-integrity.sql is what `npm run billing:integrity` runs via
+// `wrangler d1 execute --remote --command "$(cat db/queries/plan-integrity.sql)"`
+// — `--file` returns execution stats, not the SELECT rows (issue #3848).
+// Prove it against the real migrated schema and
 // real seed rows covering every bucket (issue #3673).
 function seededDb() {
   const db = new DatabaseSync(":memory:");
