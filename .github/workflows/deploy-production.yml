@@ -47,6 +47,11 @@ jobs:
     name: Deploy production
     needs: verify
     runs-on: ubuntu-latest
+    # issues: write is for the deploy-failing alert below — the only thing that
+    # reports a bad commit sitting on main after a rollback.
+    permissions:
+      contents: read
+      issues: write
     timeout-minutes: 45
     environment:
       name: production
@@ -130,6 +135,57 @@ jobs:
       - name: Roll back on failed smoke
         if: failure() && steps.smoke.outcome == 'failure'
         run: npx wrangler rollback --yes --message "smoke failed on ${{ github.sha }}"
+      # A failed production deploy is the one event nothing else reports.
+      # `wrangler rollback` puts the SITE back, but the commit that failed is
+      # still on main, so the next merge redeploys it and the cycle repeats
+      # until a human notices from run history.
+      #
+      # This is the whole replacement for auto-revert.yml (262 lines, deleted in
+      # #3692). That workflow opened a revert PR automatically, with loop guards,
+      # freshness guards and a PAT, because the gate it reacted to was a flaky
+      # 1,335-line Playwright suite that red-flagged 9 of 120 merges (0509#1576).
+      # The gate is now a deterministic health check (#3757), so a failure here
+      # means something is genuinely broken rather than that a crawl timed out.
+      # Something genuinely broken wants a person, not an automatic revert.
+      #
+      # One open issue, commented on and closed on recovery — the same
+      # self-clearing shape market-signal-snapshot-age.yml uses.
+      - name: Say so, loudly
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          existing="$(gh issue list --label deploy-failing --state open --json number -q '.[0].number // empty')"
+          {
+            printf 'Production deploy failed on `%s`.\n\n' "$SHA"
+            printf 'Run: %s\n\n' "$RUN_URL"
+            printf 'The site is fine — `wrangler rollback` restored the previous version.\n'
+            printf 'The commit is not. It is still on `main`, so the next merge will\n'
+            printf 'redeploy it and this will happen again.\n\n'
+            printf 'Fix forward, or revert it:\n\n'
+            printf '    git revert --no-edit %s\n\n' "$SHA"
+            printf 'This issue closes itself on the next green deploy.\n'
+          } > deploy-alert.md
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body-file deploy-alert.md
+          else
+            gh issue create --title "Production deploy is failing" \
+              --label deploy-failing --label agent-ready --body-file deploy-alert.md
+          fi
+
+      - name: Close the alert on a green deploy
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for n in $(gh issue list --label deploy-failing --state open --json number -q '.[].number'); do
+            gh issue close "$n" --comment "Green deploy on ${{ github.sha }} (run ${{ github.run_id }})."
+          done
+
       - name: Keep smoke traces on failure
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v6.0.0
