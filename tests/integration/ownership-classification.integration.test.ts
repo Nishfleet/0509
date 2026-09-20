@@ -132,8 +132,9 @@ describe("ownership manifest classification", () => {
     for (const entry of PLATFORM_TABLES) {
       expect(entry.reason.trim().length).toBeGreaterThan(0);
     }
-    // Membership + ownership-unit tables are singletons.
-    expect(MEMBERSHIP_TABLES).toEqual(["workspace_member"]);
-    expect(OWNERSHIP_UNIT_TABLES).toEqual(["org"]);
+    // Membership + ownership-unit sets are exactly the live plugin tables
+    // plus their rollback-era predecessors (issue #3787 expand phase).
+    expect(MEMBERSHIP_TABLES).toEqual(["member", "invitation", "workspace_member"]);
+    expect(OWNERSHIP_UNIT_TABLES).toEqual(["org", "organization"]);
   });
 });

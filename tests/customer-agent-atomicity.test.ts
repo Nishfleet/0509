@@ -24,11 +24,11 @@ function migrate(harness: Harness) {
       actions_write_enabled INTEGER NOT NULL DEFAULT 0,
       FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE
     );
-    CREATE TABLE workspace_member (
+    CREATE TABLE member (
       id TEXT PRIMARY KEY NOT NULL,
-      owner_user_id TEXT NOT NULL,
-      member_user_id TEXT,
-      status TEXT NOT NULL
+      organizationId TEXT NOT NULL,
+      userId TEXT NOT NULL,
+      role TEXT NOT NULL
     );
   `);
   applyMigration(harness.sqlite, "migrations/0035_agent_action_audit.sql");
@@ -56,8 +56,8 @@ function migrate(harness: Harness) {
     INSERT INTO user (id) VALUES ('owner-1'), ('member-2');
     INSERT INTO customer_api_key (id, user_id, actions_write_enabled)
     VALUES ('key-1', 'owner-1', 1), ('key-2', 'member-2', 1);
-    INSERT INTO workspace_member (id, owner_user_id, member_user_id, status)
-    VALUES ('membership-1', 'owner-1', 'member-2', 'active');
+    INSERT INTO member (id, organizationId, userId, role)
+    VALUES ('membership-1', 'org_owner-1', 'member-2', 'member');
     INSERT INTO collection (id, user_id) VALUES ('collection-1', 'owner-1'), ('collection-2', 'member-2');
     INSERT INTO watchlist (id, user_id) VALUES ('watchlist-1', 'owner-1');
   `);
@@ -429,7 +429,7 @@ describe("Journey 4 atomic customer-agent effects", () => {
         {
           requestFingerprint: "fp-removed-member-share",
           prepare: (db, auditId) => {
-            harness.sqlite.prepare("UPDATE workspace_member SET status = 'revoked' WHERE id = 'membership-1'").run();
+            harness.sqlite.prepare("DELETE FROM member WHERE id = 'membership-1'").run();
             return {
               statement: prepareAtomicShareLinkInsert(db, {
                 auditId,

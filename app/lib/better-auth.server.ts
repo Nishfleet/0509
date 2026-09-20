@@ -1,6 +1,6 @@
 import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
-import { magicLink } from "better-auth/plugins";
+import { magicLink, organization } from "better-auth/plugins";
 
 import {
   appOrigin,
@@ -121,6 +121,31 @@ export function isBetterAuthOauthCallbackRequest(request: Request): boolean {
 
 export function isBetterAuthPasskeyEnabled(env: AppEnv) {
   return isBetterAuthConfigured(env);
+}
+
+/**
+ * Seat cap for the organization plugin's own session-bound endpoints (issue
+ * #3787). Defense-in-depth only — the authoritative cap is the conditional
+ * write in workspace.server.ts, which stays atomic with the insert. An org
+ * here is always a personal org; its owner is the role='owner' member row.
+ */
+async function organizationSeatLimit(env: AppEnv, organizationId: string): Promise<number> {
+  if (!env.DB) {
+    return 1;
+  }
+  const owner = await env.DB.prepare(
+    `SELECT userId FROM member WHERE organizationId = ? AND role = 'owner' LIMIT 1`,
+  )
+    .bind(organizationId)
+    .first<{ userId: string }>();
+  if (!owner?.userId) {
+    return 1;
+  }
+  const { getUserPlan } = await import("~/lib/plan.server");
+  const { getWorkspaceSeatLimit } = await import("~/lib/plan-entitlements");
+  return (await getUserPlan(env, owner.userId)) === "agency"
+    ? getWorkspaceSeatLimit("agency")
+    : 1;
 }
 
 export function getBetterAuth(env: AppEnv, request: Request) {
@@ -280,6 +305,29 @@ export function getBetterAuth(env: AppEnv, request: Request) {
         origin: trustedOrigins,
         rpID: passkeyRpId(baseURL),
         rpName: "Five to Nine",
+      }),
+      // Issue #3787: the workspace teams model lives on the plugin's
+      // organization/member/invitation tables. The invite/accept/revoke flow
+      // stays in workspace.server.ts (sessionless token flow, atomic seat
+      // cap); the options below only fence the plugin's own endpoints so a
+      // session hitting /api/auth/organization/* cannot mint a team.
+      organization({
+        allowUserToCreateOrganization: false,
+        membershipLimit: (_user, org) => organizationSeatLimit(env, org.id),
+        invitationLimit: async ({ organization: org }) =>
+          Math.max(0, (await organizationSeatLimit(env, org.id)) - 1),
+        schema: {
+          invitation: {
+            additionalFields: {
+              tokenHash: {
+                type: "string",
+                required: false,
+                input: false,
+                returned: false,
+              },
+            },
+          },
+        },
       }),
     ],
     secret,

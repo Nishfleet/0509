@@ -583,6 +583,7 @@ describe("Better Auth magic links", () => {
         return { id: "magic-link" };
       }),
       passkey: vi.fn(() => ({ id: "passkey" })),
+      organization: vi.fn(() => ({ id: "organization" })),
     }));
 
     const ticketDb = dbWithMagicLinkTickets("user-1");
@@ -663,6 +664,7 @@ describe("Better Auth magic links", () => {
         return { id: "magic-link" };
       }),
       passkey: vi.fn(() => ({ id: "passkey" })),
+      organization: vi.fn(() => ({ id: "organization" })),
     }));
     const promiseWithTimeout = vi.fn(
       async (_operation: Promise<unknown>, _timeoutMs: number, message?: string) => {
