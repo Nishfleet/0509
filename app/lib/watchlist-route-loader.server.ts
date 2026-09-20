@@ -428,7 +428,12 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
         .then(({ loadCompetitorSourceSnapshots }) =>
           loadCompetitorSourceSnapshots(env, selectedWatchlist.id, plan),
         )
-        .catch(() => ({} as Record<string, SourceSectionData>))
+        .catch((error) => {
+          console.warn("Competitor source snapshots load failed; hiding the sections.", {
+            errorName: error instanceof Error ? error.name : typeof error,
+          });
+          return {} as Record<string, SourceSectionData>;
+        })
     : {};
   const suggestedCompetitorsPanel = await suggestedCompetitorsPanelPromise;
 

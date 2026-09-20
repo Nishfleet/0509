@@ -132,4 +132,35 @@ describe("watchlists route loader — sourceSnapshots", () => {
     expect(loadCompetitorSourceSnapshots).not.toHaveBeenCalled();
     expect(payload.sourceSnapshots).toEqual({});
   });
+
+  it("degrades to an empty map when the snapshot read fails on an open evidence tab", async () => {
+    loadCompetitorSourceSnapshots.mockRejectedValue(new Error("D1 down"));
+    mockLoaderBoundaries();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { loader } = await import("~/routes/app.watchlists");
+    const payload = await loader({
+      context: { cloudflare: { env: {} } },
+      request: new Request(
+        "http://localhost/app/watchlists?watchlist=watch-1&tab=evidence",
+      ),
+    } as never);
+
+    expect(payload.sourceSnapshots).toEqual({});
+    expect(warn).toHaveBeenCalledWith(
+      "Competitor source snapshots load failed; hiding the sections.",
+      expect.objectContaining({ errorName: "Error" }),
+    );
+  });
+
+  it("pays nothing when no competitor is open, even with tab=evidence", async () => {
+    mockLoaderBoundaries();
+    const { loader } = await import("~/routes/app.watchlists");
+    const payload = await loader({
+      context: { cloudflare: { env: {} } },
+      request: new Request("http://localhost/app/watchlists?tab=evidence"),
+    } as never);
+
+    expect(loadCompetitorSourceSnapshots).not.toHaveBeenCalled();
+    expect(payload.sourceSnapshots).toEqual({});
+  });
 });

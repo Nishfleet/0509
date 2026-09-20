@@ -79,7 +79,9 @@ export async function getLatestSourceSnapshot(
 /**
  * The newest `limit` snapshots for one (watchlist, source), newest first.
  * The competitor page reads two: the latest to render and the previous one
- * to diff against.
+ * to diff against. `fetched_at` ties cannot exist: the write-path row id is
+ * `createStableId([watchlistId, sourceId, fetchedAt])`, so a same-instant
+ * second write fails on the PK before it can land.
  */
 export async function getRecentSourceSnapshots(
   env: AppEnv,
@@ -120,7 +122,11 @@ export async function loadCompetitorSourceSnapshots(
       let rows: SourceSnapshotRecord[];
       try {
         rows = await getRecentSourceSnapshots(env, watchlistId, adapter.id, 2);
-      } catch {
+      } catch (error) {
+        console.warn("Competitor source snapshot read failed; hiding the section.", {
+          sourceId: adapter.id,
+          errorName: error instanceof Error ? error.name : typeof error,
+        });
         return [adapter.id, { snapshot: null, diff: [] }];
       }
       const latest = rows[0] ?? null;
@@ -130,9 +136,13 @@ export async function loadCompetitorSourceSnapshots(
       let diff: SourceChange[] = [];
       try {
         diff = adapter.diff(rows[1] ?? null, { payload: latest.payload });
-      } catch {
+      } catch (error) {
         // A stored payload the adapter's diff cannot handle must not take
         // the evidence tab down — render the snapshot without a delta.
+        console.warn("Competitor source diff failed; rendering without a delta.", {
+          sourceId: adapter.id,
+          errorName: error instanceof Error ? error.name : typeof error,
+        });
       }
       return [adapter.id, { snapshot: latest, diff }];
     }),
