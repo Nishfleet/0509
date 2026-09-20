@@ -1,5 +1,6 @@
 import { decodeHtmlEntities } from "~/lib/decode-html.server";
 import { evaluateConnectorAccessGate } from "~/lib/presence-access-gates.server";
+import { readQuotaWindowLedger } from "~/lib/presence-quota-ledger.server";
 import { presenceContentHash } from "~/lib/presence-hash";
 import { presenceSafeFetch } from "~/lib/presence-robots.server";
 import { normalizePublicHttpUrl } from "~/lib/public-url.server";
@@ -110,11 +111,6 @@ export const YOUTUBE_MAX_RESULTS = 50;
 const YOUTUBE_USAGE_WINDOW_MS = 24 * 60 * 60 * 1000;
 /** Watch-URL host family — the only hostname a YouTube mention's canonicalUrl may carry. */
 const YOUTUBE_WATCH_HOST = "www.youtube.com";
-
-interface YouTubeUsageWindow {
-  windowStart: string;
-  count: number;
-}
 
 interface YouTubeSearchResponse {
   items?: YouTubeSearchResult[];
@@ -465,107 +461,30 @@ interface YouTubeUsage {
 
 /**
  * Reads every youtube target's `youtubeUsage` window out of
- * `presence_poll_cursor.cursor_json` and returns the rolling-24h total plus a
- * `nextCursor(...)` that folds this target's prior cursor keys forward with
- * the counter incremented (or the window rotated) as required. The
- * env-held Google API key is a single project principal, so the sum is taken
- * across ALL youtube targets — not just this workspace user's.
+ * `presence_poll_cursor.cursor_json` via the shared quota-window ledger and
+ * adapts its `nextCursor(counted, extra)` to this connector's watermark
+ * signature: the prior record's keys (including any lastItemPublishedAt) are
+ * carried forward, this poll's watermark is written only when the page
+ * actually surfaced one, and every sent call counts (no documented
+ * empty-results exemption), so `counted` is always true here.
  */
 async function readYouTubeUsage(
   ctx: PresenceConnectorContext,
   targetId: string,
 ): Promise<YouTubeUsage> {
-  const db = ctx.env.DB;
-  const now = Date.now();
-
-  if (!db) {
-    // No D1 binding means no cursor persistence either — nothing can be
-    // tracked, so there is no prior usage to enforce against.
-    return {
-      used: 0,
-      nextCursor: (priorRecord, watermarkIso) => nextUsageCursor({}, priorRecord, watermarkIso, now),
-    };
-  }
-
-  const rows = await db
-    .prepare(
-      `SELECT st.id AS target_id, pc.cursor_json AS cursor_json
-       FROM source_target st
-       JOIN presence_poll_cursor pc ON pc.source_target_id = st.id
-       WHERE st.connector_id = 'youtube' AND st.deleted_at IS NULL`,
-    )
-    .all<{ target_id: string; cursor_json: string }>();
-
-  let used = 0;
-  let ownCursor: Record<string, unknown> = {};
-  for (const row of rows.results ?? []) {
-    const cursor = parseCursorJson(row.cursor_json);
-    const window = readUsageWindow(cursor, now);
-    used += window?.count ?? 0;
-    if (row.target_id === targetId) {
-      ownCursor = cursor;
-    }
-  }
-
-  const ownWindow = readUsageWindow(ownCursor, now);
+  const ledger = await readQuotaWindowLedger(
+    ctx.env.DB,
+    { connectorId: "youtube", cursorKey: "youtubeUsage", windowMs: YOUTUBE_USAGE_WINDOW_MS },
+    targetId,
+  );
   return {
-    used,
+    used: ledger.used,
     nextCursor: (priorRecord, watermarkIso) =>
-      nextUsageCursor(ownCursor, priorRecord, watermarkIso, now, ownWindow, true),
+      ledger.nextCursor(true, {
+        ...priorRecord,
+        ...(watermarkIso ? { lastItemPublishedAt: watermarkIso } : {}),
+      }),
   };
-}
-
-/**
- * Folds the next cursor: the prior record's keys (including any
- * lastItemPublishedAt) carried forward, this poll's watermark (only when the
- * page actually surfaced one), and this target's youtubeUsage window —
- * counted (every sent call counts, whether or not it returned results) or
- * merely opened. The usage SUM is recomputed fresh on the next poll by
- * readYouTubeUsage, which reads every target's window.
- */
-function nextUsageCursor(
-  ownCursor: Record<string, unknown>,
-  priorRecord: Record<string, unknown>,
-  watermarkIso: string | null | undefined,
-  now: number,
-  ownWindow?: YouTubeUsageWindow | null,
-  counted = true,
-): Record<string, unknown> {
-  const youtubeUsage: YouTubeUsageWindow = counted
-    ? ownWindow
-      ? { windowStart: ownWindow.windowStart, count: ownWindow.count + 1 }
-      : { windowStart: new Date(now).toISOString(), count: 1 }
-    : (ownWindow ?? { windowStart: new Date(now).toISOString(), count: 0 });
-  const watermarkKeys = watermarkIso ? { lastItemPublishedAt: watermarkIso } : {};
-  return { ...ownCursor, ...priorRecord, ...watermarkKeys, youtubeUsage };
-}
-
-function readUsageWindow(cursor: Record<string, unknown>, now: number): YouTubeUsageWindow | null {
-  const raw = cursor.youtubeUsage;
-  if (!raw || typeof raw !== "object") {
-    return null;
-  }
-  const { windowStart, count } = raw as Partial<YouTubeUsageWindow>;
-  if (typeof windowStart !== "string" || typeof count !== "number") {
-    return null;
-  }
-  const started = new Date(windowStart).getTime();
-  if (Number.isNaN(started) || now - started >= YOUTUBE_USAGE_WINDOW_MS) {
-    return null; // window closed — its calls no longer count
-  }
-  return { windowStart, count };
-}
-
-function parseCursorJson(value: string | null): Record<string, unknown> {
-  if (!value) return {};
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : {};
-  } catch {
-    return {};
-  }
 }
 
 function normalizeMatchPhrase(value: unknown): string | null {

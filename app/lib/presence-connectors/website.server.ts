@@ -1,4 +1,5 @@
 import { decodeHtmlEntities as decodeXml } from "~/lib/decode-html.server";
+import { parseFeedItems, stripHtml } from "~/lib/presence-connectors/rss.server";
 import { presenceContentHash } from "~/lib/presence-hash";
 import {
   assertRobotsAllowedForUrls,
@@ -238,7 +239,7 @@ async function fetchFeed(
     };
   }
 
-  const items = parseFeedItems(response.body, feedUrl);
+  const items = await parseFeedItems(response.body, feedUrl);
   if (items.length === 0 && !looksLikeFeedDocument(response.body)) {
     return {
       ok: false,
@@ -324,49 +325,6 @@ async function fetchPageChange(
   };
 }
 
-function parseFeedItems(xml: string, feedUrl: string): NormalizedPresenceItem[] {
-  const entries: NormalizedPresenceItem[] = [];
-  const itemBlocks = [
-    ...xml.matchAll(/<item\b[^>]*>([\s\S]*?)<\/item>/gi),
-    ...xml.matchAll(/<entry\b[^>]*>([\s\S]*?)<\/entry>/gi),
-  ];
-
-  for (const match of itemBlocks.slice(0, 25)) {
-    const block = match[1] ?? "";
-    const title = decodeXml(extractTag(block, "title") ?? "Untitled post");
-    const link =
-      block.match(/<link[^>]+href=["']([^"']+)["']/i)?.[1] ??
-      extractTag(block, "link") ??
-      feedUrl;
-    const publishedAt = extractTag(block, "pubDate") ?? extractTag(block, "published") ?? extractTag(block, "updated");
-    const parsedPublishedAt = publishedAt ? new Date(publishedAt) : null;
-    const author =
-      extractTag(block, "author") ??
-      block.match(/<name>([^<]+)<\/name>/i)?.[1] ??
-      null;
-    const excerpt = decodeXml(
-      stripHtml(extractTag(block, "description") ?? extractTag(block, "summary") ?? extractTag(block, "content") ?? ""),
-    ).slice(0, 280);
-    const observedAt = new Date().toISOString();
-    entries.push({
-      externalId: extractTag(block, "guid") ?? extractTag(block, "id"),
-      canonicalUrl: link,
-      title,
-      bodyExcerpt: excerpt || null,
-      author,
-      publishedAt:
-        parsedPublishedAt && !Number.isNaN(parsedPublishedAt.getTime())
-          ? parsedPublishedAt.toISOString()
-          : observedAt,
-      observedAt,
-      contentHash: "",
-      raw: { kind: "feed_entry", feedUrl },
-    });
-  }
-
-  return entries;
-}
-
 function looksLikeFeedDocument(xml: string) {
   return /<(rss|feed)\b/i.test(xml) || /<rdf:RDF\b/i.test(xml);
 }
@@ -407,13 +365,4 @@ function extractTitle(html: string) {
       html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)?.[1] ??
       "",
   ) || null;
-}
-
-function extractTag(block: string, tag: string) {
-  const match = block.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"));
-  return match?.[1]?.trim() ?? null;
-}
-
-function stripHtml(value: string) {
-  return value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 }
