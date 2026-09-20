@@ -78,6 +78,7 @@ const DIGEST_SCHEDULE_JOB_ALERT_LEASE_MS = 15 * 60 * 1000;
 const DAILY_HEARTBEAT_QUIET_STREAK = 3;
 const WEEKLY_DIGEST_LOCAL_START_HOUR = 5;
 const WEEKLY_DIGEST_LOCAL_END_HOUR = 8;
+const WEEKLY_DIGEST_TICK_MS = 3 * 60 * 60 * 1000;
 
 /**
  * True when `instant` sits inside the workspace-local Monday 05:00-08:00
@@ -108,16 +109,15 @@ export function isWithinWeeklyDigestLocalWindow(
 }
 
 /**
- * Workspaces whose local Monday brief window is open at `at`. Mirrors the
- * strict-mock precedent in `loadDigestScreenshotPairs`: a test double
- * without the catalog helper (or a throwing property lookup) yields an
- * empty list so a weekly enqueue can never fire ungated on every
- * three-hourly tick.
+ * Workspaces with an active watchlist plus the timezone their weekly brief
+ * files against. Mirrors the strict-mock precedent in
+ * `loadDigestScreenshotPairs`: a test double without the catalog helper (or
+ * a throwing property lookup) yields an empty list so a weekly enqueue can
+ * never fire ungated on every three-hourly tick.
  */
-async function listWeeklyDigestWindowUserIds(
+async function listWeeklyDigestWindowCandidates(
   env: AppEnv,
-  at: Date,
-): Promise<string[]> {
+): Promise<Array<{ userId: string; timezone: string | null }>> {
   let listCandidates:
     | typeof import("~/lib/data.server").listDigestScheduleJobTimezones
     | undefined;
@@ -131,12 +131,7 @@ async function listWeeklyDigestWindowUserIds(
     return [];
   }
   try {
-    const candidates = await listCandidates(env);
-    return candidates
-      .filter((candidate) =>
-        isWithinWeeklyDigestLocalWindow(at, candidate.timezone),
-      )
-      .map((candidate) => candidate.userId);
+    return await listCandidates(env);
   } catch (error) {
     // A candidates-query failure must not take the hosting monitoring tick's
     // scans down with it; log so the skipped enqueue is visible in worker
@@ -144,6 +139,224 @@ async function listWeeklyDigestWindowUserIds(
     console.error("Weekly digest window candidate lookup failed.", error);
     return [];
   }
+}
+
+interface WeeklyDigestLocalFields {
+  weekday: string | undefined;
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+}
+
+/**
+ * Local calendar fields for `instant` in `timezone` — the catch-up resolver
+ * needs the local date as well as the window gate's weekday+hour so the
+ * workspace's own Monday boundaries can be priced in UTC. Some ICU builds
+ * emit hour 24 at local midnight; the %24 fold keeps that at 0.
+ */
+function weeklyDigestLocalFields(
+  instant: Date,
+  timezone: string,
+): WeeklyDigestLocalFields | null {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: timezone,
+    weekday: "short",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    hour12: false,
+  }).formatToParts(instant);
+  const field = (type: string) =>
+    parts.find((part) => part.type === type)?.value;
+  const year = Number(field("year"));
+  const month = Number(field("month"));
+  const day = Number(field("day"));
+  const hour = Number(field("hour")) % 24;
+  if ([year, month, day, hour].some((value) => Number.isNaN(value))) {
+    return null;
+  }
+  return { weekday: field("weekday"), year, month, day, hour };
+}
+
+/**
+ * Milliseconds `timeZone` is ahead of UTC at `instant`, read off Intl so
+ * half-hour and three-quarter-hour zones stay honest. Second precision is
+ * enough — no current IANA offset has sub-second granularity.
+ */
+function weeklyDigestZoneOffsetMs(instant: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(instant);
+  const field = (type: string) =>
+    Number(parts.find((part) => part.type === type)?.value ?? 0);
+  const asUtc = Date.UTC(
+    field("year"),
+    field("month") - 1,
+    field("day"),
+    field("hour") % 24,
+    field("minute"),
+    field("second"),
+  );
+  return asUtc - Math.floor(instant.getTime() / 1000) * 1000;
+}
+
+/**
+ * UTC ms for a local wall time (year/month/day/hour) in `timeZone`.
+ * `offsetHintMs` is the zone's offset near the target; one refinement
+ * against the offset at the result lands the instant correctly across a DST
+ * change sitting between the hint and the target.
+ */
+function weeklyDigestLocalInstantUtc(
+  fields: { year: number; month: number; day: number; hour: number },
+  timeZone: string,
+  offsetHintMs: number,
+): number {
+  const naive = Date.UTC(fields.year, fields.month - 1, fields.day, fields.hour);
+  const guess = naive - offsetHintMs;
+  return naive - weeklyDigestZoneOffsetMs(new Date(guess), timeZone);
+}
+
+export interface WeeklyDigestCatchUpWindow {
+  /** The three-hourly tick that fell inside the workspace's closed window. */
+  tickAt: Date;
+  /** Local Monday 00:00 and next local Monday 00:00, in UTC — the ISO-week span the existence read dedupes on. */
+  weekStartAt: Date;
+  weekEndAt: Date;
+}
+
+/**
+ * Issue #2734: a workspace whose local Monday 05:00-08:00 window is already
+ * closed at `instant` — its one in-window tick was lost to a delayed or
+ * dropped cron event, or to the candidates read failing closed there — gets
+ * a catch-up enqueue keyed to the missed tick itself, so the job carries the
+ * same (cadence, period) tuple the on-time enqueue would have filed and the
+ * UNIQUE period key dedupes it. Returns null before and inside the window
+ * (the live gate owns that case) and on every other weekday.
+ */
+export function resolveWeeklyDigestCatchUpWindow(
+  instant: Date,
+  timezone: string | null | undefined,
+): WeeklyDigestCatchUpWindow | null {
+  const zone = safeTimeZone(timezone);
+  const local = weeklyDigestLocalFields(instant, zone);
+  if (
+    !local ||
+    local.weekday !== "Mon" ||
+    local.hour < WEEKLY_DIGEST_LOCAL_END_HOUR
+  ) {
+    return null;
+  }
+  const offsetMs = weeklyDigestZoneOffsetMs(instant, zone);
+  const windowStartMs = weeklyDigestLocalInstantUtc(
+    { ...local, hour: WEEKLY_DIGEST_LOCAL_START_HOUR },
+    zone,
+    offsetMs,
+  );
+  // Window width equals tick spacing, so exactly one three-hourly tick sat
+  // inside the closed window — the same period_end the on-time enqueue used.
+  const tickMs =
+    Math.ceil(windowStartMs / WEEKLY_DIGEST_TICK_MS) * WEEKLY_DIGEST_TICK_MS;
+  if (tickMs > instant.getTime()) {
+    return null;
+  }
+  return {
+    tickAt: new Date(tickMs),
+    weekStartAt: new Date(
+      weeklyDigestLocalInstantUtc({ ...local, hour: 0 }, zone, offsetMs),
+    ),
+    weekEndAt: new Date(
+      weeklyDigestLocalInstantUtc(
+        { ...local, day: local.day + 7, hour: 0 },
+        zone,
+        offsetMs,
+      ),
+    ),
+  };
+}
+
+/**
+ * Catch-up enqueue plan for `at` (issue #2734): every candidate whose local
+ * Monday window already closed and that still has no weekly job filed for
+ * its ISO week, grouped by the missed tick so each enqueue carries the
+ * on-time period tuple. The existence read fails closed like the candidates
+ * read — a weekly enqueue never fires unverified.
+ */
+async function planWeeklyDigestCatchUpEnqueues(
+  env: AppEnv,
+  input: {
+    candidates: Array<{ userId: string; timezone: string | null }>;
+    at: Date;
+    lookbackDays: number;
+  },
+): Promise<Array<{ periodStart: string; periodEnd: string; userIds: string[] }>> {
+  const missed: Array<{ userId: string; window: WeeklyDigestCatchUpWindow }> =
+    [];
+  for (const candidate of input.candidates) {
+    const window = resolveWeeklyDigestCatchUpWindow(input.at, candidate.timezone);
+    if (window) missed.push({ userId: candidate.userId, window });
+  }
+  if (missed.length === 0) return [];
+
+  let listFiled:
+    | typeof import("~/lib/data.server").listDigestScheduleJobPeriodEnds
+    | undefined;
+  try {
+    listFiled = (await import("~/lib/data.server"))
+      .listDigestScheduleJobPeriodEnds;
+  } catch {
+    listFiled = undefined;
+  }
+  if (typeof listFiled !== "function") {
+    return [];
+  }
+
+  let filed: Array<{ userId: string; periodEnd: string }>;
+  try {
+    filed = await listFiled(env, {
+      cadence: "weekly",
+      periodEndGte: new Date(
+        Math.min(...missed.map((job) => job.window.weekStartAt.getTime())),
+      ).toISOString(),
+      periodEndLt: new Date(
+        Math.max(...missed.map((job) => job.window.weekEndAt.getTime())),
+      ).toISOString(),
+      userIds: missed.map((job) => job.userId),
+    });
+  } catch (error) {
+    console.error("Weekly digest catch-up dedupe lookup failed.", error);
+    return [];
+  }
+
+  const groups = new Map<string, string[]>();
+  for (const job of missed) {
+    const covered = filed.some((row) => {
+      const filedAt = Date.parse(row.periodEnd);
+      return (
+        row.userId === job.userId &&
+        filedAt >= job.window.weekStartAt.getTime() &&
+        filedAt < job.window.weekEndAt.getTime()
+      );
+    });
+    if (covered) continue;
+    const periodEnd = job.window.tickAt.toISOString();
+    groups.set(periodEnd, [...(groups.get(periodEnd) ?? []), job.userId]);
+  }
+  return [...groups.entries()].map(([periodEnd, userIds]) => ({
+    periodStart: new Date(
+      Date.parse(periodEnd) - input.lookbackDays * 24 * 60 * 60 * 1000,
+    ).toISOString(),
+    periodEnd,
+    userIds,
+  }));
 }
 // Zero-noise triage sources: recent candidates carry the suppressed/detected
 // statuses that never become watch events, and recent proof captures carry
@@ -346,18 +559,42 @@ export async function runDigestDeliveryCycleDetailed(
     stalePreDispatchBefore: deliveryPreDispatchStaleBefore(periodEnd.getTime()),
     limit: DIGEST_RETRY_SWEEP_LIMIT,
   });
+  // Weekly cadence files per workspace when its local Monday 05:00-08:00
+  // window opens (issue #2406); the hosting three-hourly tick evaluates the
+  // gate against the tick's scheduled time. Daily stays ungated. The one
+  // candidates read feeds the catch-up gate below as well.
+  const weeklyCandidates =
+    cadence === "weekly" ? await listWeeklyDigestWindowCandidates(env) : [];
   await enqueueDigestScheduleJobs(env, {
 		cadence,
 		periodStart: periodStartIso,
 		periodEnd: periodEndIso,
-		// Weekly cadence files per workspace when its local Monday 05:00-08:00
-		// window opens (issue #2406); the hosting three-hourly tick evaluates
-		// the gate against the tick's scheduled time. Daily stays ungated.
 		onlyUserIds:
 			cadence === "weekly"
-				? await listWeeklyDigestWindowUserIds(env, periodEnd)
+				? weeklyCandidates
+						.filter((candidate) =>
+							isWithinWeeklyDigestLocalWindow(periodEnd, candidate.timezone),
+						)
+						.map((candidate) => candidate.userId)
 				: undefined,
 	});
+	// Issue #2734: a tick lost past a workspace's 05:00-08:00 local window (or
+	// a candidates read that failed closed there) used to cost the whole week
+	// — a job that is never enqueued is invisible to the pending-job recovery
+	// sweep. Once the workspace's local Monday is past 08:00, the catch-up
+	// files it under the missed tick's own period, exactly once per ISO week.
+	for (const catchUp of await planWeeklyDigestCatchUpEnqueues(env, {
+		candidates: weeklyCandidates,
+		at: periodEnd,
+		lookbackDays,
+	})) {
+		await enqueueDigestScheduleJobs(env, {
+			cadence,
+			periodStart: catchUp.periodStart,
+			periodEnd: catchUp.periodEnd,
+			onlyUserIds: catchUp.userIds,
+		});
+	}
 
   const handledDigestRunIds = new Set<string>();
   const scheduled = await drainDigestScheduleJobs(env, {
