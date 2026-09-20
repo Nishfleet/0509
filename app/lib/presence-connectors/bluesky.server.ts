@@ -303,7 +303,13 @@ function gatedXrpcHandler(
         { status: 502, headers: { "content-type": "application/json" } },
       );
     }
-    return new Response(text, { status: response.status, headers: response.headers });
+    // Only content-type crosses back over the seam: forwarding upstream
+    // headers would carry a stale content-length/content-encoding for the
+    // re-serialized body (and cookies we never asked for).
+    return new Response(text, {
+      status: response.status,
+      headers: { "content-type": response.headers.get("content-type") ?? "application/json" },
+    });
   };
 }
 
@@ -371,6 +377,8 @@ async function searchPosts(
       // Unparseable or over-cap bodies were transport-class failures under
       // the raw-fetch version (null payload -> bluesky_api_error upstream);
       // a real XRPC error body still yields the honest empty page it did.
+      // `UnknownXRPCError` is @atcute/client's sentinel for a non-XRPC error
+      // body — if upstream renames it, HTML 5xxs flip back to empty pages.
       if (code === "UnknownXRPCError" || code === "ResponseTooLarge") {
         return null;
       }

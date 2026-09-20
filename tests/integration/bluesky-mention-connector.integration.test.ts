@@ -338,6 +338,27 @@ describe("bluesky mention connector — poll", () => {
     expect(result.errorCode).toBe("bluesky_api_error");
   });
 
+  it("treats an unparseable createSession body as unreachable", async () => {
+    const routes = {
+      "/xrpc/com.atproto.server.createSession": { status: 200, body: "<not json>" },
+    };
+    const result = await pollBlueskyMention(makeCtx(xrpcFetcher(routes)), "Brand X makes a comeback");
+    expect(result.ok).toBe(false);
+    expect(result.errorCode).toBe("bluesky_unreachable");
+  });
+
+  it("treats an over-cap createSession body as an auth failure from the 502 cap response", async () => {
+    const routes = {
+      "/xrpc/com.atproto.server.createSession": {
+        status: 200,
+        body: `{"accessJwt":"${"x".repeat(20_000)}","refreshJwt":"r"}`,
+      },
+    };
+    const result = await pollBlueskyMention(makeCtx(xrpcFetcher(routes)), "Brand X makes a comeback");
+    expect(result.ok).toBe(false);
+    expect(result.errorCode).toBe("bluesky_auth_failed");
+  });
+
   it("is gated at poll when the rollout is off", async () => {
     const result = await pollBlueskyMention(makeCtx(xrpcFetcher(AUTHED_SESSION), { PRESENCE_BLUESKY_ROLLOUT: undefined }), "phrase");
     expect(result.ok).toBe(false);
