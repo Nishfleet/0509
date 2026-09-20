@@ -441,8 +441,7 @@
       "audience": "customers and operators",
       "owner": "monitoring operations",
       "source": [
-        "docs/monitoring-fanout-rollout.md",
-        "app/routes/ops.tsx"
+        "docs/monitoring-fanout-rollout.md"
       ],
       "requiredGate": "G11-CAPACITY-SLO,G360-P1-OPS",
       "requiredEvidence": "plan-limit load, completed scans, quota reconciliation, failure/compensation and deployed soak",
@@ -487,16 +486,6 @@
     }
   ],
   "explicitExclusions": [
-    {
-      "claimId": "E2E-CANARY-ROUTES",
-      "classification": "rejected",
-      "source": [
-        "app/routes.ts",
-        "app/lib/e2e-harness-guard.server.ts",
-        "tests/e2e-harness-guard.test.ts"
-      ],
-      "reason": "Local fixture and token-guarded canary routes are operator/test surfaces, not supported customer capabilities; their exclusion still requires route-guard and no-public-nav proof."
-    },
     {
       "claimId": "NATIVE-APP-EDITING",
       "classification": "rejected",

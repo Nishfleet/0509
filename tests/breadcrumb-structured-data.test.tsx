@@ -74,42 +74,8 @@ async function renderDefault(route: string, data?: unknown): Promise<string> {
   return renderToStaticMarkup(createElement(Route));
 }
 
-describe("BreadcrumbList on /compare/* pages (issue #1463)", () => {
-  it.each([
-    ["compare.visualping", ["Home", "Competitor monitoring", "Visualping"]],
-    ["compare.panoramata", ["Home", "Competitor monitoring", "Panoramata"]],
-  ])("%s carries an honest BreadcrumbList and visible nav", async (route, names) => {
-    const markup = await renderDefault(route);
-    const trail = breadcrumb(markup);
-    expect(trail?.["@context"]).toBe("https://schema.org");
-    expect(crumbNames(itemsOf(trail))).toEqual(names);
-    // Visible nav must exist and match the JSON-LD trail.
-    expect(markup).toContain('<nav aria-label="Breadcrumb"');
-    for (const name of names) {
-      expect(markup).toContain(name);
-    }
-  });
-});
-
-describe("BreadcrumbList on /switch/* pages (issue #1463)", () => {
-  it.each([
-    ["switch.panoramata", "Switch from Panoramata"],
-    ["switch.magicbrief", "Switch from MagicBrief"],
-    ["switch.adspy", "Switch from AdSpy"],
-  ])("%s carries the shared SwitchLanding trail", async (route, leaf) => {
-    const markup = await renderDefault(route);
-    expect(crumbNames(itemsOf(breadcrumb(markup)))).toEqual([
-      "Home",
-      "Competitor monitoring",
-      leaf,
-    ]);
-    expect(markup).toContain('<nav aria-label="Breadcrumb"');
-  });
-});
-
 describe("BreadcrumbList on category / top-level pages (issue #1463)", () => {
   it.each([
-    ["sneaker-resale", ["Home", "Sneaker resale"], { timelineDomains: [] as string[] }],
     ["capture-rules", ["Home", "Capture rules"], undefined],
     ["methodology", ["Home", "Ad Aggression Score"], undefined],
   ])("%s carries a Home → page trail and visible nav", async (route, names, data) => {

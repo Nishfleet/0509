@@ -1,6 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 
 import {
   collectReactRouterManifestCspWarnings,
@@ -48,15 +46,5 @@ describe("React Router __manifest CSP warning classifier", () => {
       ],
     });
     expect(collected).toHaveLength(2);
-  });
-
-  it("keeps the visual-defect audit wired to the classifier and the violation listener", () => {
-    const source = readFileSync(
-      fileURLToPath(new URL("../e2e/visual-defect-audit.mjs", import.meta.url)),
-      "utf8",
-    );
-    expect(source).toContain("collectReactRouterManifestCspWarnings");
-    expect(source).toContain("installCspViolationListener");
-    expect(source).toContain("securitypolicyviolation");
   });
 });

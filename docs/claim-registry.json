@@ -15,8 +15,8 @@
       "surface": "app/routes/marketing.tsx hero deck and FAQ, app/routes/competitor-monitoring.tsx, homepage proof-brief trail note",
       "source": {
         "kind": "test",
-        "ref": "tests/customer-claim-audit-table.test.ts",
-        "assert": "AUDIT-SAVES-SCREENSHOTS row: screenshot copy is qualified to captures that include one; the site never promises a screenshot on every capture"
+        "ref": "tests/monitoring-landing-page-snapshot.test.ts",
+        "assert": "succeeded proof captures carry a non-null screenshot artifact key — the persist path writes screenshot_artifact_key only when the capture includes one"
       },
       "liveBasis": {
         "kind": "d1",
@@ -37,8 +37,8 @@
       "surface": "app/lib/pricing.ts Starter/Agency feature list",
       "source": {
         "kind": "test",
-        "ref": "tests/customer-claim-audit-table.test.ts",
-        "assert": "AUDIT-LANDING-PAGE-CHANGE-HISTORY: pricing feature string is scoped to brands with a baseline — no 'with screenshots' promise and no 'as scheduled watches complete' promise"
+        "ref": "tests/customer-claim-surface-registry.test.ts",
+        "assert": "pricing feature bullets resolve to verified registry rows, and the timeline-route gate keeps the unqualified 'Landing-page change history with screenshots' promise out of app/lib/pricing.ts"
       },
       "liveBasis": {
         "kind": "d1",
