@@ -4,7 +4,9 @@ import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 
 // db/queries/market-signal.sql is what the daily workflow runs with
-// `wrangler d1 execute --file`. Prove it against the real migrated schema.
+// `wrangler d1 execute --command "$(cat db/queries/market-signal.sql)"` (never
+// `--file`, which returns an execution summary, not rows — issue #3848).
+// Prove it against the real migrated schema.
 describe("db/queries/market-signal.sql", () => {
   it("runs against the migrated schema and returns one row with the contract's columns", () => {
     const db = new DatabaseSync(":memory:");

@@ -87,7 +87,32 @@ describe("daily market-signal D1 snapshot workflow", () => {
     const generate = job.steps?.find((step) => step.name === "Generate market-signal D1 snapshot");
     expect(generate?.run).toContain("unset CF_API_TOKEN");
     expect(generate?.env?.XDG_CONFIG_HOME).toBe("${{ runner.temp }}/market-signal-wrangler-config");
-    expect(generate?.run).toContain("wrangler d1 execute 0509 --remote --file db/queries/market-signal.sql");
+    // --command, never --file (issue #3848): `d1 execute --remote --file`
+    // returns a per-file execution summary, not the SELECT's rows.
+    expect(generate?.run).toContain('wrangler d1 execute 0509 --remote --command="$(cat db/queries/market-signal.sql)"');
+    // Comments may mention --file to explain the contrast; the invocation is
+    // the regression, in either --file <path> or --file=<path> form.
+    expect(generate?.run).not.toMatch(/--file[ =]db\/queries\/market-signal\.sql/);
+  });
+
+  it("fails closed when wrangler returns an execution summary instead of rows", () => {
+    // Regression guard (issue #3848): a stats-shaped .results[0]
+    // ({"Total queries executed":1,"Rows read":N,...}) passed the old jq
+    // success check and the generatedAt freshness check, so a hollow snapshot
+    // published cleanly. The generate jq must require a real metric column on
+    // the row, and the freshness step must reject a product section whose
+    // users_total count is missing, so a stats-shaped response can never pass
+    // silently again.
+    const generate = job.steps?.find((step) => step.name === "Generate market-signal D1 snapshot")?.run ?? "";
+    // Pin the jq code, not the comment prose that also names the clause.
+    expect(generate).toContain('(.results[0]|has("users_total"))');
+    const freshness = job.steps?.find((step) => step.name === "Verify snapshot freshness")?.run ?? "";
+    // Pin the guard's own check and its exit: the bare "users_total" string and
+    // the pre-existing generatedAt exits would satisfy weaker assertions even
+    // with the guard deleted. Number.isFinite(...) is load-bearing — COUNT(*)
+    // legitimately yields 0, which a truthiness rewrite would wrongly reject.
+    expect(freshness).toContain("Number.isFinite(snapshot.product && snapshot.product.users_total)");
+    expect(freshness).toMatch(/market_signal_snapshot_hollow[^)]*\);\s*process\.exit\(1\)/);
   });
 
   it("writes the snapshot to the exact path the Hermes contract reads", () => {

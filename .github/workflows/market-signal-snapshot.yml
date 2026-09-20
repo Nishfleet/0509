@@ -128,8 +128,14 @@ jobs:
           mkdir -p "$(dirname "$SNAPSHOT_PATH")"
           # One SQL file, one wrangler call. db/queries/market-signal.sql is proved
           # against the migrated schema by tests/market-signal-query.test.ts.
-          product="$(npx wrangler d1 execute 0509 --remote --file db/queries/market-signal.sql --json \
-            | jq -c '.[0] | if .success and (.results|length)==1 then .results[0] else error("D1 signal query returned no successful result.") end
+          # --command, never --file: `d1 execute --remote --file` puts a per-file
+          # execution summary ({"Total queries executed":1,"Rows read":N,...}) in
+          # .results, not the SELECT's rows, and jq then shaped that stats object
+          # into a hollow snapshot that still passed the freshness gate (issue
+          # #3848). The has("users_total") clause makes a stats-shaped response a
+          # hard error instead of silent "{}" fallbacks.
+          product="$(npx wrangler d1 execute 0509 --remote --command="$(cat db/queries/market-signal.sql)" --json \
+            | jq -c '.[0] | if .success and (.results|length)==1 and (.results[0]|has("users_total")) then .results[0] else error("D1 signal query returned no successful result.") end
                      | .planMix = (.plan_mix_json // "{}" | fromjson) | .supportCategories7d = (.support_categories_json // "{}" | fromjson)
                      | .billingEventTypes7d = (.billing_event_types_json // "{}" | fromjson)
                      | del(.plan_mix_json, .support_categories_json, .billing_event_types_json)')"
@@ -169,6 +175,13 @@ jobs:
             }
             if (Math.abs(Date.now() - generatedAt) > 60 * 60 * 1000) {
               console.error('market_signal_snapshot_stale: ' + snapshot.generatedAt);
+              process.exit(1);
+            }
+            // Hollow-snapshot guard (issue #3848): a stats-shaped wrangler
+            // response produces a product section with no real metric columns
+            // but a valid generatedAt, so freshness alone cannot catch it.
+            if (!Number.isFinite(snapshot.product && snapshot.product.users_total)) {
+              console.error('market_signal_snapshot_hollow: product.users_total is not a finite number');
               process.exit(1);
             }
             console.log('market_signal_snapshot_fresh ' + snapshot.generatedAt);
