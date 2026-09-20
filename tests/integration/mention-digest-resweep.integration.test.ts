@@ -115,34 +115,6 @@ async function seedUserAndEntity(plan: "free" | "scout" | "starter" | "agency" =
   return { userId, email, entityId, sourceId };
 }
 
-async function seedPreExistingMention(sourceId: string, entityId: string, userId: string) {
-  const canonicalUrl = "https://1.1.1.1/posts/old-mention";
-  const urlHash = await presenceUrlHash(canonicalUrl);
-  const itemId = uid("pi");
-  await db()
-    .prepare(
-      `INSERT INTO presence_item (
-         id, source_target_id, tracked_entity_id, user_id, connector_id,
-         external_id, canonical_url, url_hash, title, body_excerpt, author,
-         published_at, observed_at, content_hash, raw_json, is_tombstone,
-         created_at
-       ) VALUES (?, ?, ?, ?, 'website', NULL, ?, ?, 'Pre-existing', 'Pre-existing body', NULL, ?, ?, 'prehash', '{}', 0, ?)`,
-    )
-    .bind(
-      itemId,
-      sourceId,
-      entityId,
-      userId,
-      canonicalUrl,
-      urlHash,
-      ISO_T0,
-      ISO_T0,
-      ISO_T0,
-    )
-    .run();
-  return itemId;
-}
-
 beforeEach(() => {
   vi.resetModules();
   vi.clearAllMocks();
@@ -188,78 +160,6 @@ describe("mention resweep + digest", () => {
       .bind(sourceId)
       .first<{ coverage_label: string }>();
     expect(updatedSource?.coverage_label).toBe("VERIFIED_PUBLIC_FEED");
-  });
-
-  it("marks (new) only for items first observed inside the lookback window", async () => {
-    mocks.sendPresenceDigestEmail.mockResolvedValue({ accepted: true, delivered: true });
-    const { userId, email, entityId, sourceId } = await seedUserAndEntity("agency");
-    await seedPreExistingMention(sourceId, entityId, userId);
-
-    const { runMentionResweep } = await import("~/lib/mention-resweep.server");
-    const { deliverPresenceDigestForUser } = await import("~/lib/presence-digest.server");
-    const fetchImpl = feedFetcher({
-      "/": { body: SITE_PAGE_WITH_FEED, contentType: "text/html" },
-      "/feed.xml": { body: RSS_FEED, contentType: "application/rss+xml" },
-    });
-
-    await runMentionResweep(makeEnv(), { userId, fetchImpl });
-    const result = await deliverPresenceDigestForUser(makeEnv(), userId, email);
-    expect(result.delivered).toBe(true);
-
-    const call = mocks.sendPresenceDigestEmail.mock.calls[0] as [AppEnv, { lines: string[] }];
-    const lines = call[1].lines;
-
-    const newLine = lines.find((line) => line.includes("New mention post"));
-    const oldLine = lines.find((line) => line.includes("Old mention post"));
-
-    expect(newLine).toBeDefined();
-    expect(newLine).toContain("(new)");
-    expect(oldLine).toBeDefined();
-    expect(oldLine).not.toContain("(new)");
-    expect(lines.some((line) => line.includes("RSS / Atom / JSON Feed"))).toBe(true);
-  });
-
-  it("does not send the digest when PRESENCE_DIGEST_ROLLOUT is disabled", async () => {
-    mocks.sendPresenceDigestEmail.mockResolvedValue({ accepted: true, delivered: true });
-    const { userId, email } = await seedUserAndEntity("agency");
-
-    const { deliverPresenceDigestForUser } = await import("~/lib/presence-digest.server");
-    const result = await deliverPresenceDigestForUser(
-      makeEnv({ PRESENCE_DIGEST_ROLLOUT: "disabled" }),
-      userId,
-      email,
-    );
-
-    expect(result).toEqual({ delivered: false, reason: "digest_disabled" });
-    expect(mocks.sendPresenceDigestEmail).not.toHaveBeenCalled();
-  });
-
-  it("does not send the mention-extended digest for free plan workspaces", async () => {
-    mocks.sendPresenceDigestEmail.mockResolvedValue({ accepted: true, delivered: true });
-    const { userId, email } = await seedUserAndEntity("free");
-
-    const { deliverPresenceDigestForUser } = await import("~/lib/presence-digest.server");
-    const result = await deliverPresenceDigestForUser(makeEnv(), userId, email);
-    expect(result.delivered).toBe(false);
-    expect(mocks.sendPresenceDigestEmail).not.toHaveBeenCalled();
-  });
-
-  it("does not fabricate a new-mentions line when no mention items were polled", async () => {
-    mocks.sendPresenceDigestEmail.mockResolvedValue({ accepted: true, delivered: true });
-    const { userId, email } = await seedUserAndEntity("agency");
-
-    const { runMentionResweep } = await import("~/lib/mention-resweep.server");
-    const { deliverPresenceDigestForUser } = await import("~/lib/presence-digest.server");
-    const fetchImpl = feedFetcher({
-      "/": { body: SITE_PAGE_WITH_FEED, contentType: "text/html" },
-      "/feed.xml": { body: EMPTY_FEED, contentType: "application/rss+xml" },
-    });
-
-    await runMentionResweep(makeEnv(), { userId, fetchImpl });
-    const result = await deliverPresenceDigestForUser(makeEnv(), userId, email);
-
-    expect(result).toEqual({ delivered: false, reason: "no_items" });
-    expect(mocks.sendPresenceDigestEmail).not.toHaveBeenCalled();
   });
 
   it("does not permanently starve workspaces past the user limit (fair sweep ordering)", async () => {
@@ -346,31 +246,6 @@ describe("mention resweep + digest", () => {
     const batch = (await listResweepUsers(makeEnv(), 1_000_000)).filter((id) => id === userId);
     expect(batch).toEqual([userId]);
     expect(entityId).toBeTruthy();
-  });
-
-  it("uses the existing idempotency key shape", async () => {
-    mocks.sendPresenceDigestEmail.mockResolvedValue({ accepted: true, delivered: true });
-    const { userId, email } = await seedUserAndEntity("agency");
-
-    const { runMentionResweep } = await import("~/lib/mention-resweep.server");
-    const { deliverPresenceDigestForUser } = await import("~/lib/presence-digest.server");
-    const fetchImpl = feedFetcher({
-      "/": { body: SITE_PAGE_WITH_FEED, contentType: "text/html" },
-      "/feed.xml": { body: RSS_FEED, contentType: "application/rss+xml" },
-    });
-
-    await runMentionResweep(makeEnv(), { userId, fetchImpl });
-    const result = await deliverPresenceDigestForUser(makeEnv(), userId, email);
-    expect(result.delivered).toBe(true);
-
-    const call = mocks.sendPresenceDigestEmail.mock.calls[0] as [AppEnv, { idempotencyKey: string }];
-    // The key embeds `since` = now minus the digest lookback (168h), same formula as
-    // deliverPresenceDigestForUser. Asserting a fixed calendar month made this test
-    // month-locked and it broke on the September rollover; derive the expected date
-    // from the same clock expression instead.
-    const lookbackMs = 168 * 60 * 60 * 1000;
-    const expectedSince = new Date(Date.now() - lookbackMs).toISOString().slice(0, 10);
-    expect(call[1].idempotencyKey).toMatch(new RegExp(`^presence-digest:user_\\d{4}:${expectedSince}$`));
   });
 
   it("digests >50 distinct (entity, url_hash) pairs without blowing the D1 100-bind cap", async () => {

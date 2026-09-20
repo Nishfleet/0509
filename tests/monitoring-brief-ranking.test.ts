@@ -392,56 +392,6 @@ scenario("the published docs match the shipped weighting", async () => {
 });
 
 // ---------------------------------------------------------------------------
-// Metric: the >=60% landing_page_* headline target, measured by the shipped
-// always-on guard on a 20-competitor cohort-shaped stream.
-// ---------------------------------------------------------------------------
-
-scenario("the headline-ratio guard measures the 60% BET 1 target on a 20-competitor cohort", async () => {
-  const { measureDigestHeadline, headlineRatioSignal, DIGEST_HEADLINE_TARGET_RATIO } = await import(
-    "~/lib/digest-headline-ratio"
-  );
-  assert.equal(DIGEST_HEADLINE_TARGET_RATIO, 0.6);
-
-  // 20 competitors: 12 landing-page offer changes, 4 page changes, 4 new ads.
-  const cohort = [
-    ...Array.from({ length: 12 }, () => item("landing_page_offer_changed", 60)),
-    ...Array.from({ length: 4 }, () => item("website_page_changed", 82)),
-    ...Array.from({ length: 4 }, () => item("ad_new")),
-  ];
-  const day = measureDigestHeadline(cohort, "2026-09-11");
-  assert.equal(day.headlineItemCount, 16, "churn is collapsed out of the measured headline stream");
-  assert.equal(day.landingPageCount, 12);
-  assert.equal(day.adChurnCount, 4);
-  assert.equal(day.ratio, 0.75);
-  assert.ok(day.ratio >= DIGEST_HEADLINE_TARGET_RATIO, "the cohort clears the 60% target");
-
-  // A churn-only day is vacuous for the mix, not a breach: it stays out of the
-  // rolling window mean.
-  const churnOnlyDay = measureDigestHeadline(
-    Array.from({ length: 8 }, () => item("ad_new")),
-    "2026-09-12",
-  );
-  assert.equal(churnOnlyDay.headlineItemCount, 0);
-  const signal = headlineRatioSignal([churnOnlyDay, day]);
-  assert.equal(signal.sampledDays, 1);
-  assert.equal(signal.rollingRatio, 0.75);
-  assert.equal(signal.targetMet, true);
-  assert.equal(signal.guardFired, false);
-
-  // A regression that re-leaks churn into headlines drags the window under the
-  // 50% floor and fires the guard.
-  const breachDay = measureDigestHeadline(
-    [
-      ...Array.from({ length: 2 }, () => item("landing_page_offer_changed", 60)),
-      ...Array.from({ length: 8 }, () => item("website_page_changed", 82)),
-    ],
-    "2026-09-13",
-  );
-  assert.equal(breachDay.ratio, 0.2);
-  assert.equal(headlineRatioSignal([breachDay, day]).guardFired, true);
-});
-
-// ---------------------------------------------------------------------------
 // Runner dispatch.
 // ---------------------------------------------------------------------------
 

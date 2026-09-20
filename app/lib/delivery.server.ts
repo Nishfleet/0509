@@ -3907,10 +3907,10 @@ export async function sendPresenceDigestEmail(
 ) {
   const { buildUnsubscribeUrl } = await import("~/lib/unsubscribe.server");
 
-  // Every exit reports the same {accepted, delivered} shape main introduced,
-  // because presence-digest.server.ts reads both fields off the result. A bare
-  // `false` would make delivery.accepted undefined and silently downgrade every
-  // one of these outcomes to "send_failed".
+  // Every exit reports the same {accepted, delivered} shape main introduced;
+  // callers read both fields off the result. A bare `false` would make
+  // delivery.accepted undefined and silently downgrade every one of these
+  // outcomes to "send_failed".
   const notSent = { accepted: false, delivered: false };
 
   const normalized = input.email.trim().toLowerCase();
