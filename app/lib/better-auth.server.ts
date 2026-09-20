@@ -11,6 +11,7 @@ import {
 } from "~/lib/env.server";
 import { promiseWithTimeout, PromiseTimeoutError } from "~/lib/fetch-timeout.server";
 import {
+	CLOUDFLARE_EMAIL_SEND_TIMEOUT_MS,
 	consultEmailSuppression,
 	isRecipientRejection,
 	recordEmailBounceFailure,
@@ -19,7 +20,16 @@ import type { AppSession } from "~/lib/types";
 
 export const BETTER_AUTH_BASE_PATH = "/api/auth";
 export const BETTER_AUTH_OAUTH_PROVIDERS = ["google", "microsoft"] as const;
-export const BETTER_AUTH_EMAIL_SEND_TIMEOUT_MS = 10_000;
+// Strictly larger than CLOUDFLARE_EMAIL_SEND_TIMEOUT_MS on purpose: the provider
+// send is already bounded inside sendCloudflareEmail and resolves a slow send as
+// a recorded "pending" instead of throwing. An equal outer bound always wins the
+// race (its timer starts earlier, before the suppression consult and render) and
+// throws to Better Auth while env.EMAIL.send is still in flight — the user retry
+// then sends a second secret-bearing email (issue #2764). The slack covers the
+// suppression consult, render, bounce bookkeeping and attempt record around the
+// send. The magic-link call site wraps a raw env.EMAIL.send with no inner bound,
+// so this constant is its only bound and stays a real timeout there.
+export const BETTER_AUTH_EMAIL_SEND_TIMEOUT_MS = CLOUDFLARE_EMAIL_SEND_TIMEOUT_MS + 5_000;
 const BETTER_AUTH_MAGIC_LINK_CONFIRMATION_COOKIE = "f9_better_magic";
 const BETTER_AUTH_MAGIC_LINK_CONFIRMATION_COOKIE_PATH = "/auth";
 const BETTER_AUTH_MAGIC_LINK_CONFIRMATION_LEGACY_COOKIE_PATH = "/auth/better/magic-link";

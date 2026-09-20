@@ -13,6 +13,7 @@ import {
   isSameOriginAuthFormPost,
   sendBetterAuthMagicLink,
 } from "~/lib/better-auth.server";
+import { CLOUDFLARE_EMAIL_SEND_TIMEOUT_MS } from "~/lib/delivery-email-core.server";
 import type { AppEnv } from "~/lib/env.server";
 
 const db = {} as D1Database;
@@ -1386,6 +1387,83 @@ describe("Better Auth magic links", () => {
 		expect(email.html).not.toContain("Activate account");
 		expect(email.html).toContain(">Sign in</a>");
 	});
+});
+
+describe("Better Auth email verification send", () => {
+  afterEach(() => {
+    vi.doUnmock("~/lib/delivery.server");
+    vi.doUnmock("better-auth");
+    vi.doUnmock("better-auth/plugins");
+  });
+
+  it("keeps the outer bound strictly larger than the provider send bound", () => {
+    expect(BETTER_AUTH_EMAIL_SEND_TIMEOUT_MS).toBeGreaterThan(
+      CLOUDFLARE_EMAIL_SEND_TIMEOUT_MS,
+    );
+  });
+
+  it("lets a send slower than the provider bound resolve instead of racing it", async () => {
+    let capturedConfig:
+      | {
+          emailVerification?: {
+            sendVerificationEmail?: (input: {
+              user: { id: string; email: string; name?: string | null };
+              url: string;
+            }) => Promise<void>;
+          };
+        }
+      | undefined;
+    vi.doMock("better-auth", () => ({
+      betterAuth: vi.fn((config: unknown) => {
+        capturedConfig = config as typeof capturedConfig;
+        return { api: {}, handler: vi.fn() };
+      }),
+    }));
+    vi.doMock("better-auth/plugins", () => ({
+      magicLink: vi.fn(() => ({ id: "magic-link" })),
+      passkey: vi.fn(() => ({ id: "passkey" })),
+      organization: vi.fn(() => ({ id: "organization" })),
+    }));
+    const sendEmailVerificationEmail = vi.fn(
+      () =>
+        new Promise<void>((resolve) =>
+          setTimeout(resolve, CLOUDFLARE_EMAIL_SEND_TIMEOUT_MS + 1_000),
+        ),
+    );
+    vi.doMock("~/lib/delivery.server", () => ({ sendEmailVerificationEmail }));
+
+    vi.useFakeTimers();
+    try {
+      // A vi.doMock from an earlier test survives vi.resetModules(); the real
+      // promiseWithTimeout is the thing under test here, so shed any leaked
+      // fetch-timeout mock before importing the module that closes over it.
+      vi.doUnmock("~/lib/fetch-timeout.server");
+      const testEnv = env();
+      const { getBetterAuth } = await import("~/lib/better-auth.server");
+      getBetterAuth(testEnv, new Request("https://0509.io/auth/signup"));
+      const sendVerificationEmail =
+        capturedConfig?.emailVerification?.sendVerificationEmail;
+      expect(sendVerificationEmail).toBeTypeOf("function");
+
+      const attempt = sendVerificationEmail!({
+        user: { id: "user-1", email: "owner@example.com", name: "Owner" },
+        url: "https://0509.io/api/auth/verify-email?token=secret-token",
+      });
+      const resolved = expect(attempt).resolves.toBeUndefined();
+      await vi.advanceTimersByTimeAsync(CLOUDFLARE_EMAIL_SEND_TIMEOUT_MS + 2_000);
+      await resolved;
+      expect(sendEmailVerificationEmail).toHaveBeenCalledWith(
+        testEnv,
+        expect.objectContaining({
+          userId: "user-1",
+          email: "owner@example.com",
+          verifyUrl: "https://0509.io/api/auth/verify-email?token=secret-token",
+        }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("Better Auth auth page errors", () => {
