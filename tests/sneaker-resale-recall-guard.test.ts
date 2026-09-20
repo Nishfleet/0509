@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  KNOWN_IDENTITY_GAPS,
   REQUEST_ERROR_RETRY_DELAY_MS,
   REQUEST_ERROR_RETRY_LIMIT,
   RUN_WALL_BUDGET_MS,
@@ -157,6 +158,104 @@ describe("probeSneakerResaleDomain transport-error retry", () => {
     expect(probe.status).toBe(503);
     expect(probe.requestError).toBe("HTTP 503");
     expect(evaluateSneakerResaleRecall([probe]).pass).toBe(false);
+  });
+});
+
+// Tier-classification assertions restored for issue #2691. Issue #2381
+// deleted the 401-line recall test on the same day the rename merge re-added
+// a trimmed suite, so the original pass/fail/carve-out cases that the run
+// relies on had no pin. These cover exactly what the issue lists:
+// evaluateSneakerResaleRecall pass/fail/carve-out and KNOWN_NO_COVERAGE /
+// KNOWN_IDENTITY_GAPS handling, all on injected fixtures — no network.
+describe("evaluateSneakerResaleRecall tier classification", () => {
+  function probe(domain, { rowCount = 0, verified = 0, likely = 0, unmatched = 0, status = 200, isWarming = false, rateLimited = false, requestError = undefined } = {}) {
+    return {
+      domain,
+      brand: domain,
+      rowCount,
+      tierCounts: { verified, likely, unmatched },
+      status,
+      isWarming,
+      rateLimited,
+      requestError,
+    };
+  }
+
+  it("passes when every domain has at least one verified or likely row", () => {
+    const verdict = evaluateSneakerResaleRecall([
+      probe("komu.test", { rowCount: 14, verified: 14 }),
+      probe("puma.test", { rowCount: 14, verified: 7, likely: 7 }),
+      probe("flightclub.test", { rowCount: 17, verified: 3, likely: 2, unmatched: 12 }),
+    ]);
+    expect(verdict.pass).toBe(true);
+    expect(verdict.failures).toHaveLength(0);
+    expect(verdict.identityGaps).toHaveLength(0);
+  });
+
+  it("fails a settled unknown domain that dead-ends at 0 rows", () => {
+    const verdict = evaluateSneakerResaleRecall([probe("komu.test")]);
+    expect(verdict.pass).toBe(false);
+    expect(verdict.failures.map((p) => p.domain)).toEqual(["komu.test"]);
+  });
+
+  it("fails a blanket-unmatched unknown domain (rows present, all Unmatched)", () => {
+    const verdict = evaluateSneakerResaleRecall([
+      probe("komu.test", { rowCount: 30, unmatched: 30 }),
+    ]);
+    expect(verdict.pass).toBe(false);
+    expect(verdict.failures.map((p) => p.domain)).toEqual(["komu.test"]);
+  });
+
+  it("surfaces a known identity-gap domain instead of failing it", () => {
+    const verdict = evaluateSneakerResaleRecall([
+      probe("reebok.com"),
+      probe("zappos.com"),
+    ]);
+    expect(verdict.pass).toBe(true);
+    expect(verdict.failures).toHaveLength(0);
+    expect(verdict.identityGaps.map((g) => g.probe.domain)).toEqual(["reebok.com", "zappos.com"]);
+    expect(Object.fromEntries(KNOWN_IDENTITY_GAPS)).toEqual({
+      "reebok.com": "Nishfleet/0509#1950",
+      "zappos.com": "Nishfleet/0509#2059",
+    });
+  });
+
+  it("still fails a settled non-gap dead-end beside a surfaced identity gap", () => {
+    const verdict = evaluateSneakerResaleRecall([
+      probe("reebok.com"),
+      probe("komu.test"),
+    ]);
+    expect(verdict.pass).toBe(false);
+    expect(verdict.failures.map((p) => p.domain)).toEqual(["komu.test"]);
+    expect(verdict.identityGaps.map((g) => g.probe.domain)).toEqual(["reebok.com"]);
+  });
+
+  it("fails a cannot-confirm probe even when the domain is a known identity gap", () => {
+    const verdict = evaluateSneakerResaleRecall([
+      probe("reebok.com", { status: null, requestError: "timeout" }),
+    ]);
+    expect(verdict.pass).toBe(false);
+    expect(verdict.failures.map((p) => p.domain)).toEqual(["reebok.com"]);
+    expect(verdict.identityGaps).toHaveLength(0);
+  });
+
+  it("surfaces a stuck warming probe instead of failing it", () => {
+    const verdict = evaluateSneakerResaleRecall([
+      probe("komu.test", { isWarming: true }),
+    ]);
+    expect(verdict.pass).toBe(true);
+    expect(verdict.warming.map((p) => p.domain)).toEqual(["komu.test"]);
+    expect(verdict.failures).toHaveLength(0);
+  });
+
+  it("still fails a settled non-warming dead-end alongside a warming probe", () => {
+    const verdict = evaluateSneakerResaleRecall([
+      probe("komu.test", { isWarming: true }),
+      probe("newbalance.test"),
+    ]);
+    expect(verdict.pass).toBe(false);
+    expect(verdict.warming.map((p) => p.domain)).toEqual(["komu.test"]);
+    expect(verdict.failures.map((p) => p.domain)).toEqual(["newbalance.test"]);
   });
 });
 
