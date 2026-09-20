@@ -1,14 +1,18 @@
+import { sql, type Kysely } from "kysely";
 import { describe, expect, it, vi } from "vitest";
 
 import { D1_MAX_BOUND_PARAMS } from "~/lib/d1-chunk.server";
 import {
   ensureDb,
   execute,
+  kyselyDb,
   queryAll,
   queryIn,
   queryOne,
 } from "~/lib/data/d1.server";
 import type { AppEnv } from "~/lib/env.server";
+
+import { createSqliteD1 } from "./helpers/sqlite-d1";
 
 type Prepared = {
   bind: (...bindings: unknown[]) => Prepared;
@@ -132,5 +136,59 @@ describe("d1.server helpers", () => {
     });
 
     expect(binds.map((b) => b.length)).toEqual([2, 2, 1]);
+  });
+});
+
+describe("kyselyDb", () => {
+  it("throws when DB is missing", () => {
+    expect(() => kyselyDb({} as AppEnv)).toThrow(/D1 binding `DB` is not configured/);
+  });
+
+  it("binds parameters and camel-cases raw query results", async () => {
+    const sqlite = createSqliteD1();
+    try {
+      sqlite.sqlite.exec(
+        "CREATE TABLE widget (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, created_at TEXT NOT NULL)",
+      );
+      await sqlite.db
+        .prepare("INSERT INTO widget (id, user_id, created_at) VALUES (?, ?, ?)")
+        .bind("w1", "u1", "2026-09-20")
+        .run();
+
+      const env = { DB: sqlite.db } as unknown as AppEnv;
+      const result = await sql<{ userId: string; createdAt: string }>`
+        SELECT user_id, created_at FROM widget WHERE id = ${"w1"}
+      `.execute(kyselyDb(env));
+
+      expect(result.rows).toEqual([{ userId: "u1", createdAt: "2026-09-20" }]);
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("translates camelCase schema identifiers to snake_case columns", async () => {
+    const sqlite = createSqliteD1();
+    try {
+      sqlite.sqlite.exec("CREATE TABLE widget (id TEXT PRIMARY KEY, user_id TEXT NOT NULL)");
+      await sqlite.db
+        .prepare("INSERT INTO widget (id, user_id) VALUES (?, ?)")
+        .bind("w1", "u1")
+        .run();
+
+      const env = { DB: sqlite.db } as unknown as AppEnv;
+      const db = kyselyDb(env) as unknown as Kysely<{
+        widget: { id: string; userId: string };
+      }>;
+
+      const rows = await db
+        .selectFrom("widget")
+        .select("userId")
+        .where("id", "=", "w1")
+        .execute();
+
+      expect(rows).toEqual([{ userId: "u1" }]);
+    } finally {
+      sqlite.close();
+    }
   });
 });
