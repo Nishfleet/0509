@@ -8,6 +8,7 @@ import { CreativeWall } from "~/components/creative-wall";
 import { SecondaryAction, TertiaryAction } from "~/components/evidence/cta";
 import { SourceSections } from "~/components/sources/source-sections";
 import type { PlanFamily } from "~/lib/plan-entitlements";
+import type { SourceSectionData } from "~/lib/sources/types";
 import { ProofGlossary } from "~/components/proof-glossary";
 import { SubmitButton } from "~/components/submit-button";
 import { WatchlistTrends } from "~/components/watchlist-trends";
@@ -86,6 +87,8 @@ type DetailData = ComponentProps<typeof EventChangesSection>["data"] &
     websiteCoverageLabel?: string | null;
     /** The proof archive (issue #2173) — loaded only when the Archive tab is open. */
     archive?: DomainArchive | null;
+    /** Stored source snapshots per adapter (issue #2581) — loaded only when the Evidence tab is open. */
+    sourceSnapshots?: Record<string, SourceSectionData>;
   };
 
 export interface CompetitorDetailProps {
@@ -360,11 +363,16 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
           />
         ) : null}
         {/* Seam #2218: one slot for all competitor-monitoring source
-            sections. Stub sections render nothing, so on main no new
-            sections appear. The Meta block above is unchanged. `plan`
-            drives the plan-locked source lines (#2212); absent `sources`
-            entitlement means all sources, so on main no locked lines. */}
-        <SourceSections competitorId={watchlist.id} plan={props.data.plan as PlanFamily} />
+            sections, fed by the loader's `sourceSnapshots` map (#2581) —
+            latest snapshot plus the diff of the last two per adapter; a
+            source with no stored snapshot renders nothing. The Meta block
+            above is unchanged. `plan` drives the plan-locked source lines
+            (#2212); absent `sources` entitlement means all sources. */}
+        <SourceSections
+          competitorId={watchlist.id}
+          plan={props.data.plan as PlanFamily}
+          snapshots={data.sourceSnapshots}
+        />
         <div className="f9-panel-toolbar">
           <div>
             <p className="f9-evidence-micro">Evidence and delivery</p>

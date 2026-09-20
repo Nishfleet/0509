@@ -22,6 +22,7 @@ import {
   visibleDeliveryChannels,
 } from "~/lib/watchlist-display";
 import type { SuggestedCompetitorsPanelData } from "~/lib/auto-competitor-suggested-loader.server";
+import type { SourceSectionData } from "~/lib/sources/types";
 
 /**
  * `/app/watchlists` loader (BL-007 extraction).
@@ -159,8 +160,11 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
   const { resolveWatchlistDetailTab, WATCHLIST_DETAIL_TAB_PARAM } = await import(
     "~/lib/watchlist-detail-tabs"
   );
-  const archiveTabActive =
-    resolveWatchlistDetailTab(url.searchParams.get(WATCHLIST_DETAIL_TAB_PARAM)) === "archive";
+  const detailTab = resolveWatchlistDetailTab(url.searchParams.get(WATCHLIST_DETAIL_TAB_PARAM));
+  const archiveTabActive = detailTab === "archive";
+  // Issue #2581: the evidence tab's source sections read stored
+  // source_snapshot rows — like the archive, only when the tab is open.
+  const evidenceTabActive = detailTab === "evidence";
   // BL-006 list/detail split (brief §7): `/app/watchlists` IS the watch board.
   // A competitor's detail only loads when a band is opened (`?watchlist=<id>`),
   // so the default view no longer pays for twelve detail queries — or renders
@@ -271,6 +275,7 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
       deliveryTestRequestTokens: {} as Record<string, string>,
       websiteCoverageLabel: null as string | null,
       archive: null as import("~/lib/archive").DomainArchive | null,
+      sourceSnapshots: {} as Record<string, SourceSectionData>,
     };
   }
 
@@ -414,6 +419,22 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
         )
         .catch(() => null)
     : null;
+  // Issue #2581: the evidence tab renders each enabled source's Section from
+  // the stored snapshots — latest row plus the diff of the last two, keyed by
+  // sourceId. A read failure degrades to an empty map (sections hide), the
+  // same honest-degrade rule the archive above follows.
+  const sourceSnapshots: Record<string, SourceSectionData> = evidenceTabActive
+    ? await import("~/lib/sources/run.server")
+        .then(({ loadCompetitorSourceSnapshots }) =>
+          loadCompetitorSourceSnapshots(env, selectedWatchlist.id, plan),
+        )
+        .catch((error) => {
+          console.warn("Competitor source snapshots load failed; hiding the sections.", {
+            errorName: error instanceof Error ? error.name : typeof error,
+          });
+          return {} as Record<string, SourceSectionData>;
+        })
+    : {};
   const suggestedCompetitorsPanel = await suggestedCompetitorsPanelPromise;
 
   return {
@@ -471,6 +492,7 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
         .map((target) => [target.id, crypto.randomUUID()]),
     ),
     archive,
+    sourceSnapshots,
   };
 }
 

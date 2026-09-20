@@ -10,6 +10,7 @@ import type {
   SourceCompetitorUpdate,
   SourceFetchContext,
   SourceFetchResult,
+  SourceSectionData,
   SourceSnapshotInput,
   SourceSnapshotRecord,
 } from "~/lib/sources/types";
@@ -45,6 +46,17 @@ interface SourceSnapshotRow {
   created_at: string;
 }
 
+function toSourceSnapshotRecord(row: SourceSnapshotRow): SourceSnapshotRecord {
+  return {
+    id: row.id,
+    watchlistId: row.watchlist_id,
+    sourceId: row.source_id as SourceSnapshotRecord["sourceId"],
+    fetchedAt: row.fetched_at,
+    payload: JSON.parse(row.payload_json) as JsonRecord,
+    createdAt: row.created_at,
+  };
+}
+
 export async function getLatestSourceSnapshot(
   env: AppEnv,
   watchlistId: string,
@@ -61,14 +73,81 @@ export async function getLatestSourceSnapshot(
     .bind(watchlistId, sourceId)
     .first<SourceSnapshotRow>();
   if (!row) return null;
-  return {
-    id: row.id,
-    watchlistId: row.watchlist_id,
-    sourceId: row.source_id as SourceSnapshotRecord["sourceId"],
-    fetchedAt: row.fetched_at,
-    payload: JSON.parse(row.payload_json) as JsonRecord,
-    createdAt: row.created_at,
-  };
+  return toSourceSnapshotRecord(row);
+}
+
+/**
+ * The newest `limit` snapshots for one (watchlist, source), newest first.
+ * The competitor page reads two: the latest to render and the previous one
+ * to diff against. `fetched_at` ties cannot exist: the write-path row id is
+ * `createStableId([watchlistId, sourceId, fetchedAt])`, so a same-instant
+ * second write fails on the PK before it can land.
+ */
+export async function getRecentSourceSnapshots(
+  env: AppEnv,
+  watchlistId: string,
+  sourceId: string,
+  limit: number,
+): Promise<SourceSnapshotRecord[]> {
+  const result = await ensureDb(env)
+    .prepare(
+      `SELECT id, watchlist_id, source_id, fetched_at, payload_json, created_at
+       FROM source_snapshot
+       WHERE watchlist_id = ? AND source_id = ?
+       ORDER BY fetched_at DESC
+       LIMIT ?`,
+    )
+    .bind(watchlistId, sourceId, limit)
+    .all<SourceSnapshotRow>();
+  return (result.results ?? []).map(toSourceSnapshotRecord);
+}
+
+/**
+ * Competitor-page read path (issue #2581): the `snapshots` map
+ * `SourceSections` renders. One entry per adapter `runSources` could write
+ * for (`getEnabledSources` — env + plan), so the read set always matches the
+ * write set. `diff` replays the same `adapter.diff(prev, next)` call the
+ * write path made when the latest snapshot was stored; a stored payload a
+ * diff cannot handle degrades that source to an empty diff, and a failed
+ * read degrades it to `snapshot: null` — the page never 500s on source data.
+ */
+export async function loadCompetitorSourceSnapshots(
+  env: AppEnv,
+  watchlistId: string,
+  plan: PlanFamily,
+): Promise<Record<string, SourceSectionData>> {
+  const adapters = getEnabledSources(env, plan);
+  const entries = await Promise.all(
+    adapters.map(async (adapter): Promise<[string, SourceSectionData]> => {
+      let rows: SourceSnapshotRecord[];
+      try {
+        rows = await getRecentSourceSnapshots(env, watchlistId, adapter.id, 2);
+      } catch (error) {
+        console.warn("Competitor source snapshot read failed; hiding the section.", {
+          sourceId: adapter.id,
+          errorName: error instanceof Error ? error.name : typeof error,
+        });
+        return [adapter.id, { snapshot: null, diff: [] }];
+      }
+      const latest = rows[0] ?? null;
+      if (!latest) {
+        return [adapter.id, { snapshot: null, diff: [] }];
+      }
+      let diff: SourceChange[] = [];
+      try {
+        diff = adapter.diff(rows[1] ?? null, { payload: latest.payload });
+      } catch (error) {
+        // A stored payload the adapter's diff cannot handle must not take
+        // the evidence tab down — render the snapshot without a delta.
+        console.warn("Competitor source diff failed; rendering without a delta.", {
+          sourceId: adapter.id,
+          errorName: error instanceof Error ? error.name : typeof error,
+        });
+      }
+      return [adapter.id, { snapshot: latest, diff }];
+    }),
+  );
+  return Object.fromEntries(entries);
 }
 
 export async function persistSourceSnapshot(
