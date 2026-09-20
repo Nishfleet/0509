@@ -1390,6 +1390,12 @@ describe("Better Auth magic links", () => {
 });
 
 describe("Better Auth email verification send", () => {
+  afterEach(() => {
+    vi.doUnmock("~/lib/delivery.server");
+    vi.doUnmock("better-auth");
+    vi.doUnmock("better-auth/plugins");
+  });
+
   it("keeps the outer bound strictly larger than the provider send bound", () => {
     expect(BETTER_AUTH_EMAIL_SEND_TIMEOUT_MS).toBeGreaterThan(
       CLOUDFLARE_EMAIL_SEND_TIMEOUT_MS,
@@ -1406,7 +1412,7 @@ describe("Better Auth email verification send", () => {
             }) => Promise<void>;
           };
         }
-      | null = null;
+      | undefined;
     vi.doMock("better-auth", () => ({
       betterAuth: vi.fn((config: unknown) => {
         capturedConfig = config as typeof capturedConfig;
@@ -1456,9 +1462,6 @@ describe("Better Auth email verification send", () => {
       );
     } finally {
       vi.useRealTimers();
-      vi.doUnmock("~/lib/delivery.server");
-      vi.doUnmock("better-auth");
-      vi.doUnmock("better-auth/plugins");
     }
   });
 });
