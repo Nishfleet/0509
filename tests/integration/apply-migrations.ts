@@ -5,7 +5,7 @@ import { env } from "cloudflare:workers";
  * Migrations 0079 and 0081 are pure data seeds (5 demo brands + 25 sitemap
  * brands) that prod already applied. They stay in the chain byte-for-byte,
  * but integration-test DBs must be schema-only (issue #2344), so we skip
- * them by name here. The seed rows live in `scripts/seed-demo-brands.mjs`;
+ * them by name here. The seed rows live in `db/seed/*.sql`;
  * tests that need them import and apply the seed SQL directly.
  */
 const SKIP_MIGRATIONS = new Set([

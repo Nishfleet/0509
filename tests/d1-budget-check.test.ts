@@ -11,7 +11,7 @@ import {
   parseEstimates,
   runBudgetCheck,
   scanCanaryBudgets,
-} from "../scripts/ci-d1-budget-check.lib.mjs";
+} from "./helpers/d1-budget-check.mjs";
 
 const REPO_ROOT = process.cwd();
 
@@ -127,6 +127,7 @@ describe("ci-d1-budget-check", () => {
   it("requires every canary to declare its D1 budget", () => {
     const root = mkdtempSync(join(tmpdir(), "d1-budget-canary-"));
     mkdirSync(join(root, "scripts"), { recursive: true });
+    mkdirSync(join(root, "tests", "fixtures"), { recursive: true });
     mkdirSync(join(root, ".github", "workflows"), { recursive: true });
     writeFileSync(
       join(root, "scripts", "ok-canary.mjs"),
@@ -147,15 +148,16 @@ describe("ci-d1-budget-check", () => {
   it("fails when the daily estimate crosses the trip threshold", () => {
     const root = mkdtempSync(join(tmpdir(), "d1-budget-trip-"));
     mkdirSync(join(root, "scripts"), { recursive: true });
+    mkdirSync(join(root, "tests", "fixtures"), { recursive: true });
     mkdirSync(join(root, "migrations"), { recursive: true });
     mkdirSync(join(root, ".github", "workflows"), { recursive: true });
     writeFileSync(join(root, "migrations", "0001_init.sql"), "CREATE TABLE big (id TEXT);");
     writeFileSync(
-      join(root, "scripts", "d1-budget-estimates.json"),
+      join(root, "tests", "fixtures", "d1-budget-estimates.json"),
       JSON.stringify({ tables: { big: 400_000 } }),
     );
     writeFileSync(
-      join(root, "scripts", "d1-budget-queries.json"),
+      join(root, "tests", "fixtures", "d1-budget-queries.json"),
       JSON.stringify({ queries: [{ name: "huge", sql: "SELECT id FROM big", callsPerDay: 2 }] }),
     );
     writeFileSync(join(root, "scripts", "probe-canary.mjs"), "// d1-budget: reads=1 writes=0 runs_per_day=1\n");

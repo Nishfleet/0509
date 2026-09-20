@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { SITEMAP_BRAND_SEED_SQL } from "../../scripts/seed-demo-brands.mjs";
+import SITEMAP_BRAND_SEED_SQL from "../../db/seed/sitemap-brands.sql?raw";
 import { loadOfferTimeline } from "~/lib/offer-timeline.server";
 
 import { appEnv, db } from "./fixtures";

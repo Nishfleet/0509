@@ -2,7 +2,7 @@ import {
   RELEASE_SCHEDULE_CRONS as RUNTIME_RELEASE_SCHEDULE_CRONS,
   RELEASE_SCHEDULED_TASK_NAMES as RUNTIME_RELEASE_SCHEDULED_TASK_NAMES,
   expectedReleaseSchedule as runtimeExpectedReleaseSchedule,
-} from "../../scripts/release-scheduled-observation-contract.mjs";
+} from "./release-scheduled-observation-contract-data.mjs";
 
 export const RELEASE_SCHEDULED_TASK_NAMES = RUNTIME_RELEASE_SCHEDULED_TASK_NAMES as readonly [
   "billing_lifecycle_email_recovery",
