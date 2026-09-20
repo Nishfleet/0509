@@ -37,6 +37,23 @@
       "class_name": "MonitoringWorkflow"
     }
   ],
+  // Mirrors the production SELECTION_ENRICHMENT_LEASE binding (issue #3782):
+  // the local workerd serves the same per-ad Durable Object lease, so the
+  // e2e harness exercises the cross-isolate claim path, not the Map fallback.
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SELECTION_ENRICHMENT_LEASE",
+        "class_name": "SelectionEnrichmentLease"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["SelectionEnrichmentLease"]
+    }
+  ],
   "r2_buckets": [
     {
       "binding": "LANDING_PAGE_ARTIFACTS",

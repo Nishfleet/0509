@@ -117,6 +117,7 @@ export async function loadWorker() {
     _input: unknown,
     taskPromise: Promise<unknown>,
   ) => taskPromise);
+  const runStatusProbes = vi.fn().mockResolvedValue([]);
 
   vi.doMock("../../app/lib/monitoring.server", () => ({
     flushDeferredInstantAlerts,
@@ -172,33 +173,49 @@ export async function loadWorker() {
   vi.doMock("../../workers/digest-schedule-recovery", () => ({
     scheduleDigestScheduleExhaustionRecovery,
   }));
-  vi.doMock("../../workers/schedule", async (importOriginal) => ({
-    ...(await importOriginal<typeof import("../../workers/schedule")>()),
-    resolveScheduledTask: vi.fn((cron: string) =>
-      cron === WARMUP_CRON
-        ? { kind: "discovery_warmup" }
-        : cron === DAILY_DIGEST_CRON
-          ? {
-              kind: "monitoring",
-              includeScans: false,
-              includeDigests: true,
-              includeMentionResweep: false,
-              includeAutoCompetitorResweep: true,
-              digestCadence: "daily",
-              digestLookbackDays: 1,
-            }
-          : {
-              kind: "monitoring",
-              includeScans: true,
-              includeDigests: true,
-              digestCadence: "weekly",
-              digestLookbackDays: 7,
-            },
-    ),
+  vi.doMock("../../app/lib/status-probes.server", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("../../app/lib/status-probes.server")>()),
+    runStatusProbes,
   }));
+  vi.doMock("../../workers/schedule", async (importOriginal) => {
+    const real = await importOriginal<typeof import("../../workers/schedule")>();
+    return {
+      ...real,
+      resolveScheduledTask: vi.fn((cron: string) => {
+        const probes = real.STATUS_PROBE_CRON_PROBES[cron];
+        if (probes) {
+          return { kind: "status_probes", probes };
+        }
+        return cron === WARMUP_CRON
+          ? { kind: "discovery_warmup" }
+          : cron === DAILY_DIGEST_CRON
+            ? {
+                kind: "monitoring",
+                includeScans: false,
+                includeDigests: true,
+                includeMentionResweep: false,
+                includeAutoCompetitorResweep: true,
+                digestCadence: "daily",
+                digestLookbackDays: 1,
+              }
+            : {
+                kind: "monitoring",
+                includeScans: true,
+                includeDigests: true,
+                digestCadence: "weekly",
+                digestLookbackDays: 7,
+              };
+      }),
+    };
+  });
   vi.doMock("../../workers/primary-domain", () => ({ primaryDomainRedirect: vi.fn().mockReturnValue(null) }));
   vi.doMock("../../workers/security-headers", () => ({ withSecurityHeaders: vi.fn((response) => response) }));
   vi.doMock("../../workers/monitoring-workflow", () => ({ MonitoringWorkflow: class MonitoringWorkflow {} }));
+  // Issue #3782: the DO class imports `cloudflare:workers`, which plain node
+  // cannot resolve — stub the export like the workflow class above.
+  vi.doMock("../../workers/selection-enrichment-lease", () => ({
+    SelectionEnrichmentLease: class SelectionEnrichmentLease {},
+  }));
   vi.doMock("../../app/lib/rate-limit.server", () => ({
     cleanupRateLimitEvents,
     enforceRequestRateLimit: vi.fn().mockResolvedValue(null),
@@ -207,6 +224,7 @@ export async function loadWorker() {
   const worker = await import("../../workers/app");
   return {
     worker: worker.default,
+    runStatusProbes,
     runScheduledMonitoring,
     runScheduledDiscoveryWarmup,
     runDemoBrandBackfill,
