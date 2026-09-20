@@ -67,6 +67,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     // The optional "First competitor website" field pre-fills from a
     // ?competitor= deep link the same way the email/name pre-fills do.
     prefillCompetitor: competitor || "",
+    // Issue #2414 — the optional "Your website" field round-trips through the
+    // sent/resend states the same way.
+    prefillBrandWebsite: url.searchParams.get("brandWebsite")?.trim() || "",
     linkSent,
     linkResent,
     ...(oauthProviders.length > 0 ? { oauthProviders } : {}),
@@ -89,6 +92,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const name = String(formData.get("name") ?? "").trim();
   const competitor = String(formData.get("competitor") ?? "").trim();
+  const brandWebsite = String(formData.get("brandWebsite") ?? "").trim();
   let redirectTo = safeRedirectPath(String(formData.get("redirectTo") ?? ""), "/app#setup-checklist");
   // Issue #2415 — an inline competitor website on the signup form lands the
   // new user straight in the setup checklist with that brand pre-tracked,
@@ -104,14 +108,68 @@ export async function action({ context, request }: ActionFunctionArgs) {
   // undefined when empty, mirroring the login route), so email-only signup
   // is allowed — the name is backfilled later from the onboarding flow.
   if (!isPlausibleEmail(email)) {
-    return signupActionError("email_invalid", { email, name, redirectTo, competitor });
+    return signupActionError("email_invalid", { email, name, redirectTo, competitor, brandWebsite });
   }
 
   if (!isBetterAuthConfigured(env)) {
-    return signupActionError("better_auth_not_configured", { email, name, redirectTo, competitor });
+    return signupActionError("better_auth_not_configured", { email, name, redirectTo, competitor, brandWebsite });
   }
   if (!isSameOriginAuthFormPost(env, request)) {
-    return signupActionError("request_invalid", { email, name, redirectTo, competitor });
+    return signupActionError("request_invalid", { email, name, redirectTo, competitor, brandWebsite });
+  }
+
+  // Issue #2414 — an optional "Your website" on signup seeds the auto-competitor
+  // engine for the visitor's own brand: the same cache-only anonymous probe
+  // /search runs, and the top 3 ride into the setup checklist inside the signed
+  // #2174 handoff token (no `pick` = every seeded row pre-confirmed). The
+  // checklist confirm then creates them within the plan cap, so a free signup
+  // accepts exactly one. Only when the checklist is still the destination — an
+  // explicit redirectTo or an inline `competitor` fold wins.
+  if (brandWebsite && redirectTo === "/app#setup-checklist") {
+    const { normalizeCompetitorWebsiteInput, registrableDomainFromLandingPage } =
+      await import("~/lib/competitor-website");
+    const brandDomain = registrableDomainFromLandingPage(
+      normalizeCompetitorWebsiteInput(brandWebsite).normalizedUrl,
+    );
+    if (brandDomain) {
+      try {
+        const { getOptionalCloudflareContext } = await import("~/lib/cloudflare-context");
+        const { defaultCountryForVisitor } = await import("~/lib/countries");
+        const cloudflare = getOptionalCloudflareContext(context);
+        const country = defaultCountryForVisitor(
+          cloudflare?.country ?? request.headers.get("cf-ipcountry"),
+        );
+        const { seedAutoCompetitors } = await import("~/lib/auto-competitor-seed.server");
+        const seeded = await seedAutoCompetitors(env, {
+          domain: brandDomain,
+          country,
+          // No user row exists at signup time; the anonymous-preview sentinel
+          // /search uses — accept-time dedupe happens in the checklist action.
+          userId: "anonymous-search-preview",
+        });
+        const candidates = seeded.slice(0, 3);
+        if (candidates.length > 0) {
+          const { signCompetitorHandoff } = await import("~/lib/competitor-handoff.server");
+          const token = await signCompetitorHandoff(env, {
+            domain: brandDomain,
+            country,
+            candidates: candidates.map((candidate) => ({
+              advertiser: candidate.advertiser,
+              pageId: candidate.advertiserPageId,
+              landingPageUrl: candidate.registrableDomain
+                ? `https://${candidate.registrableDomain}`
+                : null,
+              targetCountry: candidate.countries[0] ?? null,
+            })),
+          });
+          if (token) {
+            redirectTo = `/app?handoff=${token}#setup-checklist`;
+          }
+        }
+      } catch {
+        // Discovery is best-effort — a probe failure must never block signup.
+      }
+    }
   }
 
   try {
@@ -125,7 +183,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     console.warn("failed to send Better Auth signup email", {
       errorName: error instanceof Error ? error.name : typeof error,
     });
-    return signupActionError("send_failed", { email, name, redirectTo, competitor });
+    return signupActionError("send_failed", { email, name, redirectTo, competitor, brandWebsite });
   }
 
   // CTA markers (`source=`) select an allowlisted funnel kind. The /pricing
@@ -159,6 +217,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
   if (competitor) {
     next.searchParams.set("competitor", competitor);
   }
+  if (brandWebsite) {
+    next.searchParams.set("brandWebsite", brandWebsite);
+  }
   if (isResend) {
     next.searchParams.set("resent", "1");
   }
@@ -168,6 +229,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const headers = new Headers();
   if (signupSource) {
     headers.set("Set-Cookie", signupSourceCookieHeader(request, signupSource));
+  }
+  if (brandWebsite) {
+    const { signupBrandWebsiteCookieHeader } = await import(
+      "~/lib/setup-checklist-action.server"
+    );
+    headers.append("Set-Cookie", signupBrandWebsiteCookieHeader(request, brandWebsite));
   }
   throw redirect(`${next.pathname}${next.search}`, { headers });
 }
@@ -251,6 +318,7 @@ export default function SignupRoute() {
           initialEmail={actionData?.email ?? loaderData.prefillEmail}
           initialName={actionData?.name ?? loaderData.prefillName}
           initialCompetitor={actionData?.competitor ?? loaderData.prefillCompetitor}
+          initialBrandWebsite={actionData?.brandWebsite ?? loaderData.prefillBrandWebsite}
           linkResent={loaderData.linkResent && !actionData?.error}
           linkSent={loaderData.linkSent && !actionData?.error}
           message={loaderData.message}
@@ -294,7 +362,7 @@ function signupErrorMessage(code: string | null) {
 
 function signupActionError(
   code: string,
-  values: { email: string; name: string; redirectTo: string; competitor: string },
+  values: { email: string; name: string; redirectTo: string; competitor: string; brandWebsite: string },
 ) {
   return {
     ok: false as const,

@@ -91,6 +91,7 @@ describe("auth signup loader", () => {
       prefillEmail: "",
       prefillName: "",
       prefillCompetitor: "",
+      prefillBrandWebsite: "",
       linkSent: false,
       linkResent: false,
     });
@@ -1614,6 +1615,200 @@ describe("setup checklist actions", () => {
     expect(createWatchlistWithinLimit).toHaveBeenCalledTimes(1);
     expect(queueFirstWatchlistScan).not.toHaveBeenCalled();
     expect(completeUserOnboarding).not.toHaveBeenCalled();
+  });
+
+  it("saves the signup brand-website cookie on the first checklist POST and self-classifies the matching candidate (issue #2414)", async () => {
+    const completeUserOnboarding = vi.fn().mockResolvedValue(undefined);
+    const upsertWorkspaceBranding = vi.fn().mockResolvedValue({
+      brandName: null,
+      brandWebsite: null,
+    });
+    const createWatchlistWithinLimit = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: "created",
+        watchlist: { id: "watch-self", targetLabel: "Mybrand" },
+        current: 1,
+        limit: 3,
+      })
+      .mockResolvedValueOnce({
+        status: "created",
+        watchlist: { id: "watch-2", targetLabel: "Rothys" },
+        current: 2,
+        limit: 3,
+      });
+    const queueFirstWatchlistScan = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => authModuleFromSession({
+        user: {
+          id: "user-1",
+          email: "owner@example.com",
+          name: "Owner",
+          onboardedAt: null,
+        },
+        session: {
+          id: "session-1",
+          userId: "user-1",
+          expiresAt: "2026-04-03T00:00:00.000Z",
+        },
+      }));
+    vi.doMock("~/lib/data.server", () => ({
+      completeUserOnboarding,
+      createWatchlistWithinLimit,
+      upsertWorkspaceBranding,
+    }));
+    vi.doMock("~/lib/first-watchlist-scan.server", () => ({
+      queueFirstWatchlistScan,
+      queueFirstWatchlistScanForSignupFirstBrief: vi.fn(),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      checkPlanLimit: vi.fn().mockResolvedValue({
+        allowed: true,
+        current: 0,
+        limit: 3,
+      }),
+    }));
+    vi.doMock("~/lib/env.server", () => ({
+      isSignupFirstBriefEnabled: vi.fn().mockReturnValue(false),
+    }));
+
+    const { handleSetupChecklistAction: action } = await import("~/lib/setup-checklist-action.server");
+    const formData = new FormData();
+    formData.set("intent", "create-handoff-watchlists");
+    formData.set("country", "United States");
+    // No `brandWebsite` form field — the HandoffConfirm form never posts one.
+    // The visitor's own domain arrives via the signup cookie and must classify
+    // as `self`, not be tracked as a competitor.
+    formData.append("candidate", JSON.stringify({
+      advertiser: "My Brand",
+      pageId: null,
+      landingPageUrl: "https://mybrand.com",
+      targetCountry: null,
+    }));
+    formData.append("candidate", JSON.stringify({
+      advertiser: "Rothy's",
+      pageId: "page-1",
+      landingPageUrl: "https://rothys.com",
+      targetCountry: "United States",
+    }));
+
+    await expectRedirect(
+      () =>
+        action({
+          context: createContext(),
+          request: new Request("http://localhost/app/onboard", {
+            method: "POST",
+            headers: { cookie: "f9_signup_brand_website=mybrand.com" },
+            body: formData,
+          }),
+        } as never),
+      "/app?setup=watchlist&created=2",
+    );
+
+    expect(createWatchlistWithinLimit).toHaveBeenNthCalledWith(
+      1,
+      {},
+      "user-1",
+      expect.objectContaining({ trackingRole: "self" }),
+      3,
+    );
+    expect(createWatchlistWithinLimit).toHaveBeenNthCalledWith(
+      2,
+      {},
+      "user-1",
+      expect.objectContaining({ trackingRole: "competitor" }),
+      3,
+    );
+    expect(upsertWorkspaceBranding).toHaveBeenCalledWith({}, "user-1", {
+      brandWebsite: "https://mybrand.com",
+    });
+    expect(completeUserOnboarding).toHaveBeenCalledWith({}, "user-1");
+  });
+
+  it("lets a free plan accept exactly one handoff candidate — its whole competitor quota (issue #2414)", async () => {
+    const completeUserOnboarding = vi.fn().mockResolvedValue(undefined);
+    const upsertWorkspaceBranding = vi.fn().mockResolvedValue({
+      brandName: null,
+      brandWebsite: null,
+    });
+    const createWatchlistWithinLimit = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: "created",
+        watchlist: { id: "watch-1", targetLabel: "Rothys" },
+        current: 1,
+        limit: 1,
+      })
+      .mockResolvedValue({
+        status: "over_cap",
+        current: 1,
+        limit: 1,
+      });
+    const queueFirstWatchlistScan = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => authModuleFromSession({
+        user: {
+          id: "user-1",
+          email: "owner@example.com",
+          name: "Owner",
+          onboardedAt: null,
+        },
+        session: {
+          id: "session-1",
+          userId: "user-1",
+          expiresAt: "2026-04-03T00:00:00.000Z",
+        },
+      }));
+    vi.doMock("~/lib/data.server", () => ({
+      completeUserOnboarding,
+      createWatchlistWithinLimit,
+      upsertWorkspaceBranding,
+    }));
+    vi.doMock("~/lib/first-watchlist-scan.server", () => ({
+      queueFirstWatchlistScan,
+      queueFirstWatchlistScanForSignupFirstBrief: vi.fn(),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      checkPlanLimit: vi.fn().mockResolvedValue({
+        allowed: true,
+        current: 0,
+        limit: 1,
+      }),
+    }));
+    vi.doMock("~/lib/env.server", () => ({
+      isSignupFirstBriefEnabled: vi.fn().mockReturnValue(false),
+    }));
+
+    const { handleSetupChecklistAction: action } = await import("~/lib/setup-checklist-action.server");
+    const formData = new FormData();
+    formData.set("intent", "create-handoff-watchlists");
+    formData.set("country", "United States");
+    for (const candidate of [
+      { advertiser: "Rothy's", pageId: "page-1", landingPageUrl: "https://rothys.com", targetCountry: "United States" },
+      { advertiser: "Vivaia", pageId: null, landingPageUrl: "https://vivaia.com", targetCountry: null },
+      { advertiser: "Allbirds", pageId: null, landingPageUrl: "https://allbirds.com", targetCountry: null },
+    ]) {
+      formData.append("candidate", JSON.stringify(candidate));
+    }
+
+    await expectRedirect(
+      () =>
+        action({
+          context: createContext(),
+          request: new Request("http://localhost/app/onboard", {
+            method: "POST",
+            body: formData,
+          }),
+        } as never),
+      "/app?setup=watchlist&created=1",
+    );
+
+    // All three candidates were offered to the atomic cap check; exactly one
+    // watchlist was created and one first scan queued — the rest over_cap.
+    expect(createWatchlistWithinLimit).toHaveBeenCalledTimes(3);
+    expect(queueFirstWatchlistScan).toHaveBeenCalledTimes(1);
+    expect(upsertWorkspaceBranding).not.toHaveBeenCalled();
+    expect(completeUserOnboarding).toHaveBeenCalledWith({}, "user-1");
   });
 
 });
