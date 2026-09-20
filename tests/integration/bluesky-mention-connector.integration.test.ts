@@ -318,6 +318,26 @@ describe("bluesky mention connector — poll", () => {
     expect((result.cursor as { cursor?: string } | undefined)?.cursor).toBe("cursor-2");
   });
 
+  it("treats an over-cap searchPosts body as a transport failure, not an empty page", async () => {
+    const routes = {
+      ...AUTHED_SESSION,
+      "/xrpc/app.bsky.feed.searchPosts": { status: 200, body: `{"posts":[${"x".repeat(600_000)}]}` },
+    };
+    const result = await pollBlueskyMention(makeCtx(xrpcFetcher(routes)), "Brand X makes a comeback");
+    expect(result.ok).toBe(false);
+    expect(result.errorCode).toBe("bluesky_api_error");
+  });
+
+  it("treats an unparseable searchPosts body as a transport failure, not an empty page", async () => {
+    const routes = {
+      ...AUTHED_SESSION,
+      "/xrpc/app.bsky.feed.searchPosts": { status: 200, body: "<not json>" },
+    };
+    const result = await pollBlueskyMention(makeCtx(xrpcFetcher(routes)), "Brand X makes a comeback");
+    expect(result.ok).toBe(false);
+    expect(result.errorCode).toBe("bluesky_api_error");
+  });
+
   it("is gated at poll when the rollout is off", async () => {
     const result = await pollBlueskyMention(makeCtx(xrpcFetcher(AUTHED_SESSION), { PRESENCE_BLUESKY_ROLLOUT: undefined }), "phrase");
     expect(result.ok).toBe(false);

@@ -1,5 +1,8 @@
-import { readResponseJsonWithinLimit } from "~/lib/bounded-response.server";
-import { fetchWithTimeout, releaseFetchTimeout } from "~/lib/fetch-timeout.server";
+import { Client, type FetchHandler } from "@atcute/client";
+import "@atcute/atproto";
+import "@atcute/bluesky";
+import { readResponseTextWithinLimit } from "~/lib/bounded-response.server";
+import { fetchWithTimeout } from "~/lib/fetch-timeout.server";
 import { presenceContentHash } from "~/lib/presence-hash";
 import { evaluateConnectorAccessGate } from "~/lib/presence-access-gates.server";
 import { resolvePublicHttpUrl } from "~/lib/public-url.server";
@@ -14,13 +17,14 @@ import type {
   ValidateTargetResult,
 } from "~/lib/presence-types";
 
-// research: This is a raw JSON XRPC client (fetch against the AT-Protocol
-// appview endpoints documented at
-// https://docs.bsky.app/docs/api/app-bsky-feed-search-posts) rather than the
-// `@atproto/api` SDK. The connector uses exactly two endpoints
-// (com.atproto.server.createSession, app.bsky.feed.searchPosts), so the SDK's
-// install weight and API surface buy nothing here (the dependency comparison
-// lives in the PR body: raw client chosen, no new npm dependency at all).
+// research: The XRPC transport is `@atcute/client` — chosen in the #3789
+// dependency comparison (issue comment): +3 KiB gzip vs +152 KiB for
+// `@atproto/api`, and `@atcute/bluesky`/`@atcute/atproto` contribute
+// ambient-typed calls for `app.bsky.feed.searchPosts` /
+// `com.atproto.server.createSession` at zero runtime bytes
+// (`sideEffects: false`). The library only sees a `(pathname, init)` fetch
+// handler — origin choice, the SSRF gate, timeouts and byte caps all stay in
+// this file's handler below.
 // help-first: the deterministic test entry point is
 // `npx vitest run tests/integration/bluesky-mention-connector.integration.test.ts`.
 //
@@ -253,6 +257,60 @@ async function pollOnce(
   }
 }
 
+/**
+ * Thrown inside the XRPC fetch handler when the resolved endpoint fails the
+ * SSRF gate — callers map it to the connector's error codes.
+ */
+class EndpointBlockedError extends Error {}
+
+function pdsBase(ctx: PresenceConnectorContext): string {
+  return ctx.env.PRESENCE_BSKY_PDS_URL?.trim() || DEFAULT_PDS_URL;
+}
+
+function appviewBase(ctx: PresenceConnectorContext): string {
+  return ctx.env.PRESENCE_BSKY_APPVIEW_URL?.trim() || DEFAULT_APPVIEW_URL;
+}
+
+/**
+ * The one seam between `@atcute/client` and the outside world. The library
+ * hands us `/xrpc/<nsid>?<query>` plus a RequestInit; everything else stays
+ * ours — the origin is picked per-method (PDS for `com.atproto.server.*`,
+ * appview otherwise), the absolute URL still goes through the SSRF gate, the
+ * request rides `fetchWithTimeout` + `ctx.fetchImpl`, and the body is capped
+ * (16 KiB session / 512 KiB search) before the library ever parses it. A
+ * response over the cap reads as a 502 with an XRPC error payload.
+ */
+function gatedXrpcHandler(
+  ctx: PresenceConnectorContext,
+  fetchImpl: typeof fetch,
+): FetchHandler {
+  return async (pathname, init) => {
+    const isPds = pathname.startsWith("/xrpc/com.atproto.server.");
+    const base = isPds ? pdsBase(ctx) : appviewBase(ctx);
+    const maxBytes = isPds ? SESSION_MAX_BYTES : SEARCH_MAX_BYTES;
+    const resolved = await resolvePublicHttpUrl(new URL(pathname, base));
+    if (!resolved) {
+      throw new EndpointBlockedError();
+    }
+    const response = await fetchWithTimeout(resolved.toString(), init, {
+      fetcher: fetchImpl,
+      timeoutMs: FETCH_TIMEOUT_MS,
+    });
+    const text = await readResponseTextWithinLimit(response, maxBytes);
+    if (text === null) {
+      return new Response(
+        JSON.stringify({ error: "ResponseTooLarge", message: "XRPC response exceeded the byte cap." }),
+        { status: 502, headers: { "content-type": "application/json" } },
+      );
+    }
+    return new Response(text, { status: response.status, headers: response.headers });
+  };
+}
+
+function xrpcClient(ctx: PresenceConnectorContext, fetchImpl: typeof fetch): Client {
+  return new Client({ handler: gatedXrpcHandler(ctx, fetchImpl) });
+}
+
 async function createSession(
   ctx: PresenceConnectorContext,
   fetchImpl: typeof fetch,
@@ -266,47 +324,33 @@ async function createSession(
       errorMessage: "Bluesky API credentials are not configured.",
     };
   }
-  const base = ctx.env.PRESENCE_BSKY_PDS_URL?.trim() || DEFAULT_PDS_URL;
-  const url = await resolvePublicHttpUrl(`${base}/xrpc/com.atproto.server.createSession`);
-  if (!url) {
-    return {
-      ok: false,
-      errorCode: "ssrf_blocked",
-      errorMessage: "Bluesky PDS endpoint failed the SSRF gate.",
-    };
-  }
-  let response: Response;
+  const client = xrpcClient(ctx, fetchImpl);
   try {
-    response = await fetchWithTimeout(
-      url.toString(),
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ identifier, password }),
-      },
-      { fetcher: fetchImpl, timeoutMs: FETCH_TIMEOUT_MS },
-    );
-  } catch {
+    const res = await client.post("com.atproto.server.createSession", {
+      input: { identifier, password },
+    });
+    if (!res.ok || !res.data?.accessJwt) {
+      return {
+        ok: false,
+        errorCode: "bluesky_auth_failed",
+        errorMessage: `Bluesky session creation failed (${res.status}).`,
+      };
+    }
+    return { ok: true, accessJwt: res.data.accessJwt };
+  } catch (error) {
+    if (error instanceof EndpointBlockedError) {
+      return {
+        ok: false,
+        errorCode: "ssrf_blocked",
+        errorMessage: "Bluesky PDS endpoint failed the SSRF gate.",
+      };
+    }
     return {
       ok: false,
       errorCode: "bluesky_unreachable",
       errorMessage: "Bluesky session creation failed.",
     };
   }
-  const payload = await readResponseJsonWithinLimit<{
-    accessJwt?: string | null;
-    error?: string;
-    message?: string;
-  }>(response, SESSION_MAX_BYTES);
-  releaseFetchTimeout(response);
-  if (!response.ok || !payload?.accessJwt) {
-    return {
-      ok: false,
-      errorCode: "bluesky_auth_failed",
-      errorMessage: `Bluesky session creation failed (${response.status}).`,
-    };
-  }
-  return { ok: true, accessJwt: payload.accessJwt };
 }
 
 async function searchPosts(
@@ -316,29 +360,26 @@ async function searchPosts(
   phrase: string,
   cursor?: string,
 ): Promise<SearchPostsResponse | null> {
-  const base = ctx.env.PRESENCE_BSKY_APPVIEW_URL?.trim() || DEFAULT_APPVIEW_URL;
-  const url = new URL(`${base}/xrpc/app.bsky.feed.searchPosts`);
-  url.searchParams.set("q", phrase);
-  url.searchParams.set("sort", "latest");
-  url.searchParams.set("limit", "100");
-  if (cursor) url.searchParams.set("cursor", cursor);
-  const resolved = await resolvePublicHttpUrl(url);
-  if (!resolved) {
-    return null;
-  }
-  let response: Response;
+  const client = xrpcClient(ctx, fetchImpl);
   try {
-    response = await fetchWithTimeout(
-      resolved.toString(),
-      { headers: { authorization: `Bearer ${accessJwt}` } },
-      { fetcher: fetchImpl, timeoutMs: FETCH_TIMEOUT_MS },
-    );
+    const res = await client.get("app.bsky.feed.searchPosts", {
+      params: { q: phrase, sort: "latest", limit: 100, ...(cursor ? { cursor } : {}) },
+      headers: { authorization: `Bearer ${accessJwt}` },
+    });
+    if (!res.ok) {
+      const code = res.data?.error;
+      // Unparseable or over-cap bodies were transport-class failures under
+      // the raw-fetch version (null payload -> bluesky_api_error upstream);
+      // a real XRPC error body still yields the honest empty page it did.
+      if (code === "UnknownXRPCError" || code === "ResponseTooLarge") {
+        return null;
+      }
+      return { posts: [] };
+    }
+    return res.data as SearchPostsResponse;
   } catch {
     return null;
   }
-  const payload = await readResponseJsonWithinLimit<SearchPostsResponse>(response, SEARCH_MAX_BYTES);
-  releaseFetchTimeout(response);
-  return payload;
 }
 
 async function normalizePost(post: SearchPostView): Promise<NormalizedPresenceItem> {
