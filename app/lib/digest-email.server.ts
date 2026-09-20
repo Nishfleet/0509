@@ -68,6 +68,7 @@ import {
   EMAIL_CASE_LINE,
   EMAIL_CASE_META_STYLE,
   EMAIL_MONO_FONT,
+  escapeEmailHtml as escapeHtml,
   renderEmailCaseStamp,
   renderEmailContentSurface,
   renderEmailProofTrail,
@@ -1929,13 +1930,4 @@ function truncate(value: string, limit: number) {
 
 function readString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
-}
-
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
 }

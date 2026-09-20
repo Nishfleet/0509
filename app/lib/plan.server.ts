@@ -1,4 +1,5 @@
 import type { AppEnv } from "~/lib/env.server";
+import { queryOne } from "~/lib/data/d1.server";
 import {
   getIncludedEvidenceAllowance,
   getPlanEntitlements,
@@ -36,27 +37,8 @@ interface CountRow {
   count: number;
 }
 
-function ensureDb(env: AppEnv) {
-  if (!env.DB) {
-    throw new Error("Cloudflare D1 binding `DB` is not configured.");
-  }
-
-  return env.DB;
-}
-
-async function many<T>(env: AppEnv, sql: string, ...bindings: unknown[]) {
-  const db = ensureDb(env);
-  const result = await db.prepare(sql).bind(...bindings).all<T>();
-  return result.results ?? [];
-}
-
-async function one<T>(env: AppEnv, sql: string, ...bindings: unknown[]) {
-  const rows = await many<T>(env, sql, ...bindings);
-  return rows[0] ?? null;
-}
-
 async function countWatchlists(env: AppEnv, userId: string) {
-  const row = await one<CountRow>(
+  const row = await queryOne<CountRow>(
     env,
     `
       SELECT COUNT(*) AS count
@@ -71,7 +53,7 @@ async function countWatchlists(env: AppEnv, userId: string) {
 }
 
 async function countCollections(env: AppEnv, userId: string) {
-  const row = await one<CountRow>(
+  const row = await queryOne<CountRow>(
     env,
     `
       SELECT COUNT(*) AS count
@@ -85,7 +67,7 @@ async function countCollections(env: AppEnv, userId: string) {
 }
 
 export async function getUserPlan(env: AppEnv, userId: string): Promise<PlanFamily> {
-  const row = await one<EffectivePlanRow>(
+  const row = await queryOne<EffectivePlanRow>(
     env,
     `
       SELECT plan, dodo_status, dodo_next_billing_at
@@ -229,7 +211,7 @@ async function countProofCapturesForWorkspaceSinceLegacy(
   userId: string,
   attemptedSince: string,
 ) {
-  const row = await one<CountRow>(
+  const row = await queryOne<CountRow>(
     env,
     `
       SELECT COUNT(*) AS count
@@ -247,7 +229,7 @@ async function countProofCapturesForWorkspaceSinceLegacy(
 
 async function sumLegacyProofUsageCredits(env: AppEnv, userId: string, now: string) {
   try {
-    const row = await one<CountRow>(
+    const row = await queryOne<CountRow>(
       env,
       `
         SELECT COALESCE(SUM(credits), 0) AS count
@@ -260,7 +242,7 @@ async function sumLegacyProofUsageCredits(env: AppEnv, userId: string, now: stri
     );
     return Number(row?.count ?? 0);
   } catch {
-    const row = await one<CountRow>(
+    const row = await queryOne<CountRow>(
       env,
       `
         SELECT COALESCE(SUM(quantity_remaining), 0) AS count

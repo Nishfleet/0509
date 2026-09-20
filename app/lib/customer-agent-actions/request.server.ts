@@ -10,6 +10,7 @@ import {
   isCustomerAgentActionName,
   type CustomerAgentActionName,
 } from "~/lib/agent-action-catalog";
+import { fnv1a32 } from "~/lib/normalize";
 
 const IDEMPOTENCY_REQUIRED_ACTIONS = new Set<CustomerAgentActionName>([
   "counter_move_brief.create",
@@ -197,7 +198,7 @@ export function readStringList(input: Record<string, unknown>, field: string) {
 }
 
 export function buildAgentActionRequestFingerprint(actionName: CustomerAgentActionName, input: Record<string, unknown>) {
-  return fnv1a32(`${actionName}:${stableStringify(sanitizeAgentActionInputForFingerprint(actionName, input))}`);
+  return `fnv1a:${fnv1a32(`${actionName}:${stableStringify(sanitizeAgentActionInputForFingerprint(actionName, input))}`).toString(16).padStart(8, "0")}`;
 }
 
 function sanitizeAgentActionInputForFingerprint(actionName: CustomerAgentActionName, input: Record<string, unknown>) {
@@ -265,11 +266,3 @@ function stableStringify(value: unknown): string {
   return "null";
 }
 
-function fnv1a32(value: string) {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return `fnv1a:${(hash >>> 0).toString(16).padStart(8, "0")}`;
-}
