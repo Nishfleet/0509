@@ -1518,14 +1518,26 @@ export async function action({ context, request }: ActionFunctionArgs) {
           "That result is not public Meta Ad Library evidence. Select a live ad result and retry.",
       };
     }
-    await addAdToCollection(
-      env,
-      workspaceUserId,
-      collectionId,
-      ad,
-      String(formData.get("note") ?? "").trim() || null,
-      tags,
-    );
+    // A stale or tampered collectionId (or one deleted in another tab) makes
+    // the ownership-scoped lookup in addAdToCollection throw "Collection not
+    // found."; convert it to the same inline feedback the sibling
+    // delete-collection intent returns instead of nuking the page into the
+    // route ErrorBoundary.
+    try {
+      await addAdToCollection(
+        env,
+        workspaceUserId,
+        collectionId,
+        ad,
+        String(formData.get("note") ?? "").trim() || null,
+        tags,
+      );
+    } catch {
+      return {
+        ok: false,
+        message: "We couldn't find that collection. Refresh the page and try again.",
+      };
+    }
 
     return {
       ok: true,

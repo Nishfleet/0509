@@ -126,6 +126,29 @@ describe("search collection integrity", () => {
     expect(addAdToCollection).not.toHaveBeenCalled();
   });
 
+  it("returns inline feedback when the collection is missing", async () => {
+    const listAdsByIds = vi.fn().mockResolvedValue([canonicalAd]);
+    const addAdToCollection = vi
+      .fn()
+      .mockRejectedValue(new Error("Collection not found."));
+    const env = installMocks(listAdsByIds, addAdToCollection);
+    const { action } = await import("~/routes/search");
+    const body = new FormData();
+    body.set("intent", "save-to-collection");
+    body.set("collectionId", "collection-404");
+    body.set("adId", canonicalAd.metaAdId);
+
+    const result = await action({
+      context: { cloudflare: { env } },
+      request: new Request("https://0509.io/search", { method: "POST", body }),
+    } as never);
+
+    expect(result).toEqual({
+      ok: false,
+      message: "We couldn't find that collection. Refresh the page and try again.",
+    });
+  });
+
   it("rejects free-plan saves entirely (collections are paid)", async () => {
     const listAdsByIds = vi.fn().mockResolvedValue([canonicalAd]);
     const addAdToCollection = vi.fn().mockResolvedValue(undefined);
