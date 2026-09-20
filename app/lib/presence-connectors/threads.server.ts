@@ -1,4 +1,5 @@
 import { evaluateConnectorAccessGate } from "~/lib/presence-access-gates.server";
+import { readQuotaWindowLedger } from "~/lib/presence-quota-ledger.server";
 import { presenceContentHash } from "~/lib/presence-hash";
 import { presenceSafeFetch } from "~/lib/presence-robots.server";
 import { normalizePublicHttpUrl } from "~/lib/public-url.server";
@@ -69,11 +70,6 @@ export const THREADS_DAILY_QUERY_CAP = 2_200;
 const THREADS_USAGE_WINDOW_MS = 24 * 60 * 60 * 1000;
 const THREADS_SEARCH_FIELDS =
   "id,text,media_type,permalink,timestamp,username,has_replies,is_quote_post,is_reply";
-
-interface ThreadsUsageWindow {
-  windowStart: string;
-  count: number;
-}
 
 interface ThreadsMedia {
   id?: string;
@@ -242,7 +238,11 @@ export const threadsConnector = {
     // read every threads target's `threadsUsage` window from
     // presence_poll_cursor.cursor_json and refuse the poll when the open
     // windows already total the cap — never send a query we cannot account.
-    const usage = await readThreadsUsage(ctx, target.id);
+    const usage = await readQuotaWindowLedger(
+      ctx.env.DB,
+      { connectorId: "threads", cursorKey: "threadsUsage", windowMs: THREADS_USAGE_WINDOW_MS },
+      target.id,
+    );
     if (usage.used >= THREADS_DAILY_QUERY_CAP) {
       return {
         ok: false,
@@ -350,94 +350,6 @@ function buildThreadsMeUrl(accessToken: string): string {
   url.searchParams.set("fields", "id");
   url.searchParams.set("access_token", accessToken);
   return url.toString();
-}
-
-interface ThreadsUsage {
-  used: number;
-  nextCursor: (counted: boolean, extra?: Record<string, unknown>) => Record<string, unknown>;
-}
-
-/**
- * Reads every threads target's `threadsUsage` window out of
- * `presence_poll_cursor.cursor_json` and returns the rolling-24h total plus
- * a `nextCursor(counted)` that folds this target's own prior cursor keys
- * forward with the counter incremented (or the window rotated) as required.
- * The env-held token is a single Meta principal, so the sum is taken across
- * ALL threads targets — not just this workspace user's.
- */
-async function readThreadsUsage(
-  ctx: PresenceConnectorContext,
-  targetId: string,
-): Promise<ThreadsUsage> {
-  const db = ctx.env.DB;
-  const now = Date.now();
-
-  if (!db) {
-    // No D1 binding means no cursor persistence either — nothing can be
-    // tracked, so there is no prior usage to enforce against.
-    return { used: 0, nextCursor: (_counted, extra = {}) => ({ ...extra }) };
-  }
-
-  const rows = await db
-    .prepare(
-      `SELECT st.id AS target_id, pc.cursor_json AS cursor_json
-       FROM source_target st
-       JOIN presence_poll_cursor pc ON pc.source_target_id = st.id
-       WHERE st.connector_id = 'threads' AND st.deleted_at IS NULL`,
-    )
-    .all<{ target_id: string; cursor_json: string }>();
-
-  let used = 0;
-  let ownCursor: Record<string, unknown> = {};
-  for (const row of rows.results ?? []) {
-    const cursor = parseCursorJson(row.cursor_json);
-    const window = readUsageWindow(cursor, now);
-    used += window?.count ?? 0;
-    if (row.target_id === targetId) {
-      ownCursor = cursor;
-    }
-  }
-
-  const ownWindow = readUsageWindow(ownCursor, now);
-  return {
-    used,
-    nextCursor: (counted, extra = {}) => {
-      const threadsUsage: ThreadsUsageWindow = counted
-        ? ownWindow
-          ? { windowStart: ownWindow.windowStart, count: ownWindow.count + 1 }
-          : { windowStart: new Date(now).toISOString(), count: 1 }
-        : (ownWindow ?? { windowStart: new Date(now).toISOString(), count: 0 });
-      return { ...ownCursor, ...extra, threadsUsage };
-    },
-  };
-}
-
-function readUsageWindow(cursor: Record<string, unknown>, now: number): ThreadsUsageWindow | null {
-  const raw = cursor.threadsUsage;
-  if (!raw || typeof raw !== "object") {
-    return null;
-  }
-  const { windowStart, count } = raw as Partial<ThreadsUsageWindow>;
-  if (typeof windowStart !== "string" || typeof count !== "number") {
-    return null;
-  }
-  const started = new Date(windowStart).getTime();
-  if (Number.isNaN(started) || now - started >= THREADS_USAGE_WINDOW_MS) {
-    return null; // window closed — its queries no longer count
-  }
-  return { windowStart, count };
-}
-
-function parseCursorJson(value: string | null): Record<string, unknown> {
-  if (!value) return {};
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : {};
-  } catch {
-    return {};
-  }
 }
 
 async function normalizeThreadsMedia(post: ThreadsMedia): Promise<NormalizedPresenceItem | null> {

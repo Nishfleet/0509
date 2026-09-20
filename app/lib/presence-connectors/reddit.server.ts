@@ -1,6 +1,10 @@
 import { readResponseJsonWithinLimit } from "~/lib/bounded-response.server";
 import { fetchWithTimeout, releaseFetchTimeout } from "~/lib/fetch-timeout.server";
 import { evaluateConnectorAccessGate } from "~/lib/presence-access-gates.server";
+import {
+  readQuotaWindowLedger,
+  type QuotaUsageLedger,
+} from "~/lib/presence-quota-ledger.server";
 import { presenceContentHash } from "~/lib/presence-hash";
 import { presenceSafeFetch } from "~/lib/presence-robots.server";
 import { normalizePublicHttpUrl, resolvePublicHttpUrl } from "~/lib/public-url.server";
@@ -100,11 +104,6 @@ export interface RedditPollTarget {
   targetUrl: string | null;
   targetHandle: string | null;
   metadata: Record<string, unknown>;
-}
-
-interface RedditUsageWindow {
-  windowStart: string;
-  count: number;
 }
 
 interface CachedAccessToken {
@@ -257,7 +256,11 @@ export const redditConnector = {
     // logic: read every reddit target's open usage window from
     // presence_poll_cursor.cursor_json and refuse the poll when they already
     // total the cap — never send a read we cannot account.
-    const usage = await readRedditUsage(ctx, target.id);
+    const usage = await readQuotaWindowLedger(
+      ctx.env.DB,
+      { connectorId: "reddit", cursorKey: "redditUsage", windowMs: REDDIT_WINDOW_MS },
+      target.id,
+    );
     if (usage.used >= REDDIT_RATE_BUDGET_PER_WINDOW) {
       return {
         ok: false,
@@ -386,7 +389,7 @@ async function pollOnce(
   ctx: PresenceConnectorContext,
   token: string,
   subreddit: string | null,
-  options: { limit?: number; usage?: UsageLedger },
+  options: { limit?: number; usage?: QuotaUsageLedger },
 ): Promise<PollResult> {
   const usage = options.usage;
   const limit = options.limit ?? REDDIT_LISTING_LIMIT;
@@ -488,94 +491,6 @@ interface RedditListingPost {
     num_comments?: number;
     subreddit?: string;
   };
-}
-
-interface UsageLedger {
-  used: number;
-  nextCursor: (counted: boolean) => Record<string, unknown>;
-}
-
-/**
- * Reads every reddit target's `redditUsage` window out of
- * `presence_poll_cursor.cursor_json` and returns the fleet-wide total plus a
- * `nextCursor(counted)` that folds this target's own prior cursor keys
- * forward with the counter incremented (or the window rotated) as required.
- * The env-held client id/secret are a single fleet principal, so the sum is
- * taken across ALL reddit targets — not just this workspace user's.
- */
-async function readRedditUsage(
-  ctx: PresenceConnectorContext,
-  targetId: string,
-): Promise<UsageLedger> {
-  const db = ctx.env.DB;
-  const now = Date.now();
-
-  if (!db) {
-    // No D1 binding means no cursor persistence either — nothing can be
-    // tracked, so there is no prior usage to enforce against.
-    return { used: 0, nextCursor: (counted, extra = {}) => ({ ...extra }) };
-  }
-
-  const rows = await db
-    .prepare(
-      `SELECT st.id AS target_id, pc.cursor_json AS cursor_json
-       FROM source_target st
-       JOIN presence_poll_cursor pc ON pc.source_target_id = st.id
-       WHERE st.connector_id = 'reddit' AND st.deleted_at IS NULL`,
-    )
-    .all<{ target_id: string; cursor_json: string }>();
-
-  let used = 0;
-  let ownCursor: Record<string, unknown> = {};
-  for (const row of rows.results ?? []) {
-    const cursor = parseCursorJson(row.cursor_json);
-    const window = readUsageWindow(cursor, now);
-    used += window?.count ?? 0;
-    if (row.target_id === targetId) {
-      ownCursor = cursor;
-    }
-  }
-
-  const ownWindow = readUsageWindow(ownCursor, now);
-  return {
-    used,
-    nextCursor: (counted, extra = {}) => {
-      const redditUsage: RedditUsageWindow = counted
-        ? ownWindow
-          ? { windowStart: ownWindow.windowStart, count: ownWindow.count + 1 }
-          : { windowStart: new Date(now).toISOString(), count: 1 }
-        : (ownWindow ?? { windowStart: new Date(now).toISOString(), count: 0 });
-      return { ...ownCursor, ...extra, redditUsage };
-    },
-  };
-}
-
-function readUsageWindow(cursor: Record<string, unknown>, now: number): RedditUsageWindow | null {
-  const raw = cursor.redditUsage;
-  if (!raw || typeof raw !== "object") {
-    return null;
-  }
-  const { windowStart, count } = raw as Partial<RedditUsageWindow>;
-  if (typeof windowStart !== "string" || typeof count !== "number") {
-    return null;
-  }
-  const started = new Date(windowStart).getTime();
-  if (Number.isNaN(started) || now - started >= REDDIT_WINDOW_MS) {
-    return null; // window closed — its reads no longer count
-  }
-  return { windowStart, count };
-}
-
-function parseCursorJson(value: string | null): Record<string, unknown> {
-  if (!value) return {};
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : {};
-  } catch {
-    return {};
-  }
 }
 
 async function normalizeRedditPost(
