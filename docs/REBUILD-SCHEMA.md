@@ -104,7 +104,8 @@ snapshot         (id, watch_id, fetched_at, payload_json, payload_hash,
 suggestion       (id, workspace_id, entity_id NULL, kind('add'|'retire'),
                   candidate_domain, candidate_name, verdict_p, verdict_json,
                   status('auto_on','pending','accepted','dismissed'),
-                  decided_by, decided_at, reason)  UNIQUE(workspace_id, candidate_domain)
+                  decided_by, decided_at, reason)
+                 UNIQUE(workspace_id, candidate_domain) WHERE status='dismissed'
 alert            (id, workspace_id, entity_id, signal_id NULL, kind,
                   severity, title, body, status, read_at)
 digest           (id, workspace_id, kind, period_start, period_end,
@@ -220,7 +221,10 @@ one).
 **Auth — better-auth owned, verbatim.** `user`, `session`, `account`,
 `verification`, `better_auth_magic_link_ticket`. The magic-link path is the
 proven sign-in (49 dispatches/24h on prod). OAuth providers remain keys-only
-adds; `account` already carries them.
+adds; `account` already carries them. Until the cut lands, `0000_auth.sql`
+and `0044_better_auth_magic_link_tickets.sql` remain the co-owners of these
+shapes — the copies here are byte-shape-identical so `IF NOT EXISTS` is a
+safe no-op on this branch and the sole definition after the cut.
 
 **`workspace`** — the tenant boundary. Owns `owner_user_id→user`. The old
 repo grew *two* workspace systems (`org` + better-auth `organization`/
@@ -242,15 +246,25 @@ config change, not a column). Billing webhook idempotency stays on verbatim
 unique `one self per workspace`; `CHECK` pins self to `state='on'`.
 `dismissed` rows are the never-re-suggest memory for post-creation
 dismissals; `off` keeps history and stops collection — the poll contract is
-`watch JOIN entity WHERE entity.state='on'`.
+`watch JOIN entity WHERE entity.state='on'`, and alerts stop the same way
+(no new signals → nothing to alert on; historical alerts keep their rows).
+`UNIQUE(workspace_id, id)` also serves as the target for composite FKs on
+`signal`/`alert`, so a row carrying the wrong workspace id is a constraint
+error, not a silent cross-tenant leak.
 
 **`suggestion`** — the judge queue + pre-entity dismissal memory. A sweep
 candidate or a "still a competitor?" check writes a row: `kind`, `verdict_p`,
 `verdict_json` (the judge's context), `status`, `decided_by`, `decided_at`.
-`UNIQUE(workspace_id, candidate_domain)` makes "dismissed ⇒ never
-re-suggested" a constraint, not a convention. p≥0.9 auto-applies (status
-`auto_on` + entity upsert); below that it sits `pending` for the user — the
-"otherwise ask" surface.
+A domain can carry many verdict rows over its life (an `auto_on` add must
+still accept a later `retire` verdict), so the uniqueness is **partial** —
+`UNIQUE(workspace_id, candidate_domain) WHERE status='dismissed'` — which is
+exactly the half that must be a constraint: "dismissed ⇒ never re-suggested"
+holds even under a retry race, while repeat verdicts stay legal. The sweep's
+skip-check is "dismissed suggestion exists OR entity row exists for this
+domain". p≥0.9 auto-applies (status `auto_on` + entity upsert); below that it
+sits `pending` for the user — the "otherwise ask" surface. `entity_id` is a
+single-column `SET NULL` FK on purpose: a hard-deleted entity must not take
+its dismissed memory with it.
 
 **`source`** — the registry. `key` UNIQUE (`meta-ads`, `google-ads`,
 `subdomains`, `hiring`, `website`, `gnews`, `gdelt`, `hn`, `x`, `blog-rss`,
@@ -259,7 +273,11 @@ re-suggested" a constraint, not a convention. p≥0.9 auto-applies (status
 `plugin_key` (the code module), `enabled`, `config_json`. Seeded in the
 migration from the keep-list verdicts and the mentions scout (#3849): the
 proven set `enabled=1`; credential/approval-gated sources seeded `enabled=0`
-so launch posture is data, not code.
+so launch posture is data, not code. `source.kind` is the source's class;
+`signal.kind` is what an emitted row is — the mapping is the plugin's
+contract (`mention`→`mention`, `ads`→`ad`, `site`→`change`, `hiring`→`job`,
+and nothing stops a source emitting more than one kind — `website` may emit
+`change` rows for diffs and `mention`-shaped rows for content finds).
 
 **`watch`** — entity × source subscription. `target_key` is the
 source-native locator (feed URL, handle, advertiser id, board slug, search
@@ -275,9 +293,9 @@ deletions (flip, never delete — inherited rule). Kinds are plugin-owned:
 `mention`, `ad`, `change`, `job` at launch.
 
 **`mention` / `change` (views)** — per-kind read shapes over `signal`,
-exposing `json_extract`ed payload fields. The entity names in the issue map
-to real schema objects; views keep "every view reads one signals table"
-literally true.
+exposing `json_extract`ed payload fields; both filter `tombstoned = 0`. The
+entity names in the issue map to real schema objects; views keep "every view
+reads one signals table" literally true.
 
 **`snapshot`** — raw per-watch poll payloads (diff input, proof/debug,
 bounded retention). Pipeline state, not a view source: views never read it.
@@ -285,9 +303,10 @@ bounded retention). Pipeline state, not a view source: views never read it.
 **`alert`** — feed rows. `severity`, `status('unread','read','archived')`,
 `signal_id` nullable (state-change/review alerts may carry no signal).
 
-**`digest`** — the brief. `kind('daily','weekly')`, `period_*`, `status`,
-`subject`, `payload_json` (the assembled sections — items compose from
-`alert`/`signal` at build, snapshotted here), `sent_at`.
+**`digest`** — the brief. `kind('daily','weekly')`, `period_*` (with
+`CHECK(period_end >= period_start)`), `status`, `subject`, `payload_json`
+(the assembled sections — items compose from `alert`/`signal` at build,
+snapshotted here), `sent_at`.
 
 **Delivery + ops (adapted verbatim keeps).** `send_target` (org-scoped
 channels: `email` live, `slack`/`teams`/`whatsapp` dormant),

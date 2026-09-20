@@ -147,13 +147,19 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_entity_workspace_domain
   ON entity(workspace_id, domain);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_entity_one_self_per_workspace
   ON entity(workspace_id) WHERE role = 'self';
+-- FK target for the composite (workspace_id, entity_id) foreign keys on
+-- signal/alert — makes cross-workspace leakage a constraint
+-- error instead of plugin-code discipline.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_entity_workspace_id
+  ON entity(workspace_id, id);
 CREATE INDEX IF NOT EXISTS idx_entity_workspace_role_state
   ON entity(workspace_id, role, state);
 
 -- The judge queue + pre-entity dismissal memory. Every sweep candidate and
 -- every "still a competitor?" review writes a row; p>=0.9 auto-applies,
--- below that it stays pending for the user. UNIQUE(workspace_id,
--- candidate_domain) makes dismissed-never-re-suggested a constraint.
+-- below that it stays pending for the user. A partial unique index on
+-- status='dismissed' makes dismissed-never-re-suggested a constraint while
+-- still allowing repeat verdicts for the same domain.
 CREATE TABLE IF NOT EXISTS suggestion (
   id TEXT PRIMARY KEY NOT NULL,
   workspace_id TEXT NOT NULL,
@@ -170,11 +176,20 @@ CREATE TABLE IF NOT EXISTS suggestion (
   reason TEXT,
   created_at TEXT NOT NULL,
   FOREIGN KEY (workspace_id) REFERENCES workspace(id) ON DELETE CASCADE,
+  -- Deliberately single-column + SET NULL, not the composite pair: a
+  -- hard-deleted entity must not take its dismissed-suggestion memory with
+  -- it (never-re-suggest lives on candidate_domain).
   FOREIGN KEY (entity_id) REFERENCES entity(id) ON DELETE SET NULL
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_suggestion_workspace_domain
+-- Only the dismissed half needs to be a constraint: an entity that already
+-- owns a suggestion row (auto_on) must still accept later retire/re-review
+-- verdicts for the same domain. Plain index for the lookup; the partial
+-- unique makes double-dismissal races impossible.
+CREATE INDEX IF NOT EXISTS idx_suggestion_workspace_domain
   ON suggestion(workspace_id, candidate_domain);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_suggestion_dismissed_domain
+  ON suggestion(workspace_id, candidate_domain) WHERE status = 'dismissed';
 CREATE INDEX IF NOT EXISTS idx_suggestion_status ON suggestion(status);
 
 -- --------------------------------------------------------------------------
@@ -272,7 +287,7 @@ CREATE TABLE IF NOT EXISTS signal (
   CHECK (kind <> 'mention' OR (canonical_url IS NOT NULL AND url_hash IS NOT NULL)),
   CHECK (kind <> 'change' OR aspect IS NOT NULL),
   FOREIGN KEY (workspace_id) REFERENCES workspace(id) ON DELETE CASCADE,
-  FOREIGN KEY (entity_id) REFERENCES entity(id) ON DELETE CASCADE,
+  FOREIGN KEY (workspace_id, entity_id) REFERENCES entity(workspace_id, id) ON DELETE CASCADE,
   FOREIGN KEY (source_id) REFERENCES source(id) ON DELETE CASCADE,
   FOREIGN KEY (watch_id) REFERENCES watch(id) ON DELETE SET NULL
 );
@@ -307,7 +322,7 @@ SELECT
   json_extract(payload_json, '$.before') AS before_json,
   json_extract(payload_json, '$.after') AS after_json
 FROM signal
-WHERE kind = 'change';
+WHERE kind = 'change' AND tombstoned = 0;
 
 -- Raw per-watch poll payloads: diff input and proof/debug, bounded retention.
 -- Pipeline state only — views never read this table.
@@ -342,7 +357,7 @@ CREATE TABLE IF NOT EXISTS alert (
   read_at TEXT,
   created_at TEXT NOT NULL,
   FOREIGN KEY (workspace_id) REFERENCES workspace(id) ON DELETE CASCADE,
-  FOREIGN KEY (entity_id) REFERENCES entity(id) ON DELETE CASCADE,
+  FOREIGN KEY (workspace_id, entity_id) REFERENCES entity(workspace_id, id) ON DELETE CASCADE,
   FOREIGN KEY (signal_id) REFERENCES signal(id) ON DELETE SET NULL
 );
 
@@ -361,6 +376,7 @@ CREATE TABLE IF NOT EXISTS digest (
   payload_json TEXT NOT NULL DEFAULT '{}',
   sent_at TEXT,
   created_at TEXT NOT NULL,
+  CHECK (period_end >= period_start),
   FOREIGN KEY (workspace_id) REFERENCES workspace(id) ON DELETE CASCADE
 );
 

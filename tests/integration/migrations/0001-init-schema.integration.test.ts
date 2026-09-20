@@ -195,6 +195,18 @@ describe("migration 0001_init — REBUILD schema (issue #3846)", () => {
       .bind(ISO_T0, ISO_T0, offComp)
       .run();
 
+    const dismissedComp = await seedEntity(wsId, "competitor", `${uid("dis")}.test`);
+    await seedWatch(dismissedComp, "src_gdelt", `phrase:${dismissedComp}`);
+    await db()
+      .prepare(
+        `UPDATE entity
+         SET state = 'dismissed', state_changed_at = ?, state_reason = 'not a competitor',
+             state_changed_by = 'user', updated_at = ?
+         WHERE id = ?`,
+      )
+      .bind(ISO_T0, ISO_T0, dismissedComp)
+      .run();
+
     const polled = await db()
       .prepare(
         `SELECT w.entity_id FROM watch w
@@ -205,7 +217,10 @@ describe("migration 0001_init — REBUILD schema (issue #3846)", () => {
       .all<{ entity_id: string }>();
     const polledIds = polled.results.map((r) => r.entity_id);
     expect(polledIds).toContain(onComp);
+    // off and dismissed both drop out of the refresh schedule (collection +
+    // downstream alerts stop at the same predicate)
     expect(polledIds).not.toContain(offComp);
+    expect(polledIds).not.toContain(dismissedComp);
 
     // off keeps history: a signal written before the flip is still readable
     const sigId = await seedSignal(wsId, offComp, "mention");
@@ -309,16 +324,38 @@ describe("migration 0001_init — REBUILD schema (issue #3846)", () => {
       .bind(wsId, dismissedDomain)
       .first<{ id: string }>();
     expect(blocked).not.toBeNull();
-    // and the unique key makes a second suggestion row for it impossible
+    // the partial unique makes a second dismissed row for it impossible
     await expect(
       db()
         .prepare(
           `INSERT INTO suggestion (id, workspace_id, kind, candidate_domain, status, created_at)
-           VALUES (?, ?, 'add', ?, 'pending', ?)`,
+           VALUES (?, ?, 'add', ?, 'dismissed', ?)`,
         )
         .bind(uid("sug"), wsId, dismissedDomain, ISO_T0)
         .run(),
     ).rejects.toThrow();
+    // but a later retire verdict on an already-suggested domain is legal —
+    // the judge queue must accept repeat verdicts per domain
+    const retireDomain = `${uid("retire")}.test`;
+    await db()
+      .prepare(
+        `INSERT INTO suggestion (id, workspace_id, kind, candidate_domain, status, created_at)
+         VALUES (?, ?, 'add', ?, 'auto_on', ?)`,
+      )
+      .bind(uid("sug"), wsId, retireDomain, ISO_T0)
+      .run();
+    await db()
+      .prepare(
+        `INSERT INTO suggestion (id, workspace_id, kind, candidate_domain, status, verdict_p, decided_by, created_at)
+         VALUES (?, ?, 'retire', ?, 'pending', 0.62, 'jev', ?)`,
+      )
+      .bind(uid("sug"), wsId, retireDomain, ISO_T0)
+      .run();
+    const verdicts = await db()
+      .prepare(`SELECT COUNT(*) AS n FROM suggestion WHERE workspace_id = ? AND candidate_domain = ?`)
+      .bind(wsId, retireDomain)
+      .first<{ n: number }>();
+    expect(verdicts?.n).toBe(2);
 
     const alertId = uid("alert");
     await db()
@@ -380,5 +417,42 @@ describe("migration 0001_init — REBUILD schema (issue #3846)", () => {
       .bind(wsId)
       .first<{ tier: string }>();
     expect(plan?.tier).toBe("starter");
+  });
+
+  it("(7) expandability proof: a new source is a row + a plugin, never a migration", async () => {
+    const userId = await seedUser();
+    const wsId = await seedWorkspace(userId);
+    const compId = await seedEntity(wsId, "competitor", `${uid("comp")}.test`);
+
+    // INSERT is the whole schema-side cost of a new source
+    const newSourceId = uid("src");
+    await db()
+      .prepare(
+        `INSERT INTO source (id, key, kind, display_name, plugin_key, enabled, created_at)
+         VALUES (?, 'podcast', 'mention', 'Podcast RSS', 'rss-feed', 1, ?)`,
+      )
+      .bind(newSourceId, ISO_T0)
+      .run();
+
+    const watchId = await seedWatch(compId, newSourceId, "https://pods.test/feed.xml");
+    const sigId = uid("sig");
+    await db()
+      .prepare(
+        `INSERT INTO signal (
+           id, workspace_id, entity_id, source_id, watch_id, kind, title, url,
+           canonical_url, url_hash, payload_json, dedup_key, observed_at, created_at
+         ) VALUES (?, ?, ?, ?, ?, 'mention', ?, ?, ?, ?, '{}', ?, ?, ?)`,
+      )
+      .bind(sigId, wsId, compId, newSourceId, watchId, "Podcast mention",
+            "https://pods.test/ep1", "https://pods.test/ep1", `ph_${uid("h")}`,
+            `pd_${uid("d")}`, ISO_T0, ISO_T0)
+      .run();
+
+    const row = await db()
+      .prepare(`SELECT source_id, entity_id FROM mention WHERE id = ?`)
+      .bind(sigId)
+      .first<{ source_id: string; entity_id: string }>();
+    expect(row?.source_id).toBe(newSourceId);
+    expect(row?.entity_id).toBe(compId);
   });
 });
