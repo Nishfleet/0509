@@ -193,8 +193,8 @@ Fill per deletion batch when merged:
 | uptime-health.yml deletion — issue #3068, PR #3216 | 4.2 min median, 6 required contexts, 26 workflow files | 4.2 min median (unchanged — the check was dispatch-only, 0 PR jobs), 6 required contexts (ruleset `main-merge-queue` verified unchanged), 25 workflow files | −1 workflow file, −1 dispatchable hosted job, 0 PR-job delta |
 | #3070 trim (deploy-production.yml) | Deploy Worker job 22.5 min — run 34380544970, 2026-09-09 | pending first green post-merge run (deploy chain red on #3174 stale-ledger blocker); expected ≈22 min | discrete 62 s step removed; `npm run typecheck` re-added inside `npm run deploy` per re-scope, net ≈ −0–20 s |
 
-| ~~`red-on-main-watch.yml`~~ | Red main going unnoticed | 15-min sweep for a first-run failure | — | **REMOVED 2026-09-20** — 32 failures in 45 runs (71%): the alert failed more often than the thing it watched. It filed 16 `red-on-main` issues and 6 are still open, so its output was not acted on either. `auto-revert.yml` and `stop-the-line-watch.yml` cover red main with clean records. |
-| ~~`stop-the-line-watch.yml`~~ | Consecutive red pair on main | Gate C / freeze doctrine | — | **REMOVED 2026-09-20** — broken by PR #3670, which deleted `.github/scripts/`. The fleet-ops reusable workflow it calls runs `.github/scripts/stop-the-line-detector.mjs` **from the caller's checkout**, so a dispatched run now dies with MODULE_NOT_FOUND. Making it work again means reinstating 51 KB of detector glue in this repo to run a second-order watcher, when `auto-revert.yml` already covers the primary undo with 0 failures in 100 runs. |
+| ~~`red-on-main-watch.yml`~~ | Red main going unnoticed | 15-min sweep for a first-run failure | — | **REMOVED 2026-09-20** — 32 failures in 45 runs (71%): the alert failed more often than the thing it watched. It filed 16 `red-on-main` issues and 6 are still open, so its output was not acted on either. `auto-revert.yml` and `stop-the-line-watch.yml` covered red main with clean records when these rows were struck — both were removed later the same day in the #3679 watcher batch (5d19b38e0); since then a red main is caught by the deploy workflow's own smoke failure plus `wrangler rollback`, and a genuinely broken commit on main waits for a person + `git revert`. |
+| ~~`stop-the-line-watch.yml`~~ | Consecutive red pair on main | Gate C / freeze doctrine | — | **REMOVED 2026-09-20** — broken by PR #3670, which deleted `.github/scripts/`. The fleet-ops reusable workflow it calls runs `.github/scripts/stop-the-line-detector.mjs` **from the caller's checkout**, so a dispatched run now dies with MODULE_NOT_FOUND. Making it work again means reinstating 51 KB of detector glue in this repo to run a second-order watcher, when `auto-revert.yml` covered the primary undo with 0 failures in 100 runs at strike time — and was itself removed later that day (#3679 watcher batch, 5d19b38e0), leaving the stock `wrangler rollback` + `git revert` as the undo path. |
 
 ## Disabled-state audit, 2026-09-20
 
@@ -207,7 +207,9 @@ the `0509-liveness` systemd timer owned liveness, and that timer was never
 installed on netcup. It was installed and proven on 2026-09-20.
 
 **Re-enabled (3)** — each guards something with no stock replacement and has a
-clean record:
+clean record. (One of the three, `auto-revert.yml`, was removed again later the
+same day by the #3679 watcher batch — its row below is struck; the remaining two
+are live.)
 
 | workflow | record | why it earns its place |
 | --- | --- | --- |
