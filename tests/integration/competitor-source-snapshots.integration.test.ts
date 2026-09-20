@@ -67,11 +67,12 @@ describe("competitor-page source snapshot reads", () => {
     await persistSourceSnapshot(appEnv, wl, "subdomains", "2026-09-19T00:00:00.000Z", nextPayload);
 
     // The fixture env carries no DECODO_SCRAPER_AUTH and no kill flags, so
-    // getEnabledSources resolves to exactly google_ads + subdomains on a
-    // plan whose sources entitlement is "all".
+    // getEnabledSources resolves to google_ads + subdomains + hiring (the
+    // credential-free adapters; #2709) on a plan whose sources entitlement
+    // is "all".
     const map = await loadCompetitorSourceSnapshots(appEnv, wl, "starter");
 
-    expect(Object.keys(map).sort()).toEqual(["google_ads", "subdomains"]);
+    expect(Object.keys(map).sort()).toEqual(["google_ads", "hiring", "subdomains"]);
     expect(map.subdomains.snapshot?.payload).toEqual(nextPayload);
     // The same adapter.diff(prev, next) the write path ran: one public name
     // added → one website_page_added change.
@@ -80,5 +81,6 @@ describe("competitor-page source snapshot reads", () => {
     expect(map.subdomains.diff[0].metadata.subdomain).toBe("b.example.com");
     // An enabled source with no stored row renders null/[].
     expect(map.google_ads).toEqual({ snapshot: null, diff: [] });
+    expect(map.hiring).toEqual({ snapshot: null, diff: [] });
   });
 });
