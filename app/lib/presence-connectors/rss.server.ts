@@ -13,6 +13,7 @@ import type {
   ValidateTargetResult,
 } from "~/lib/presence-types";
 import { resolvePublicHttpUrl, resolvePublicRedirectUrl } from "~/lib/public-url.server";
+import { XMLParser } from "fast-xml-parser";
 
 /**
  * RSS / Atom / JSON Feed presence connector.
@@ -580,39 +581,212 @@ function readJsonFeedAuthor(item: Record<string, unknown>): string | null {
 }
 
 async function parseXmlFeedItems(xml: string, feedUrl: string): Promise<NormalizedPresenceItem[]> {
-  const blocks = [
-    ...xml.matchAll(/<item\b[^>]*>([\s\S]*?)<\/item>/gi),
-    ...xml.matchAll(/<entry\b[^>]*>([\s\S]*?)<\/entry>/gi),
-  ];
+  // Issue #3781: fast-xml-parser structural extraction replaces the hand-rolled
+  // regex scanner. Options mirror the old regex semantics: first-match pre-order,
+  // raw entities (decodeXml stays the single decode pass), attribute-href
+  // priority for <link>, author <name> descendant capture, and an excerpt
+  // pipeline equivalent to stripHtml (text runs joined with " " then
+  // whitespace-collapsed + trimmed). CDATA content is surfaced as plain text
+  // instead of being carved through a regex span; malformed XML is best-effort
+  // (suppressErrors) rather than an all-or-nothing miss.
+  const parser = new XMLParser({
+    ignoreAttributes: false,
+    attributeNamePrefix: "@_",
+    preserveOrder: true,
+    trimValues: false,
+    processEntities: false,
+    parseTagValue: false,
+    parseNodeValue: false,
+    parseAttributeValue: false,
+    ignoreComments: true,
+    ignorePiTags: true,
+    suppressErrors: true,
+  });
 
+  let parsed: unknown;
+  try {
+    parsed = parser.parse(xml);
+  } catch {
+    return [];
+  }
+
+  // preserveOrder makes parse() return an ARRAY of root nodes
+  // (`[{ "?xml": … }, { rss: […] }]`) — only flat non-array shapes are a
+  // parse failure here.
+  type FxpNode = Record<string, unknown>;
+  const isNode = (v: unknown): v is FxpNode =>
+    typeof v === "object" && v !== null && !Array.isArray(v);
+  const roots: FxpNode[] = Array.isArray(parsed)
+    ? parsed.filter(isNode)
+    : isNode(parsed)
+      ? [parsed]
+      : [];
+  if (roots.length === 0) return [];
+
+  // preserveOrder shape: every node is `{ [tagName]: children[] }` plus an
+  // optional `":@"` attribute sibling; text shows up as `{ "#text": value }`.
+  const elementName = (node: FxpNode): string | null => {
+    for (const key of Object.keys(node)) {
+      if (key !== "@_") return key;
+    }
+    return null;
+  };
+
+  const isConnectedNode = (node: FxpNode, name: string): boolean => {
+    const elName = elementName(node);
+    return elName !== null && elName !== "#text" && elName.toLowerCase() === name.toLowerCase();
+  };
+
+  // First-match pre-order scan — equivalent to extractTag's first-occurrence
+  // search over the block's serialized inner markup.
+  const findFirstElement = (root: FxpNode, tag: string): FxpNode | null => {
+    const target = tag.toLowerCase();
+    const walk = (node: FxpNode): FxpNode | null => {
+      for (const key of Object.keys(node)) {
+        if (key === ":@") continue;
+        const childArray = node[key];
+        if (!Array.isArray(childArray)) continue;
+        for (const child of childArray) {
+          if (!isNode(child)) continue;
+          if (isConnectedNode(child, target)) return child;
+          const found = walk(child);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+    return walk(root);
+  };
+
+  // All descendant text runs in document order, raw (no entity decode —
+  // decoding stays a single decodeXml pass at the call sites).
+  const textRuns = (root: FxpNode): string[] => {
+    const runs: string[] = [];
+    const walk = (node: FxpNode): void => {
+      for (const key of Object.keys(node)) {
+        if (key === ":@") continue;
+        const value = node[key];
+        if (key === "#text") {
+          if (typeof value === "string" && value) runs.push(value);
+          continue;
+        }
+        if (Array.isArray(value)) {
+          for (const child of value) {
+            if (isNode(child)) walk(child);
+          }
+        }
+      }
+    };
+    walk(root);
+    return runs;
+  };
+
+  // extractTag(block, tag) equivalent: the first matching element in
+  // pre-order, then its descendant text runs joined with " ", whitespace-
+  // collapsed and trimmed once. For the single-text-node elements the
+  // fixtures pin this is exactly the old `match[2].trim()`.
+  const firstElementInner = (root: FxpNode, tag: string): string | null => {
+    const el = findFirstElement(root, tag);
+    if (!el) return null;
+    return textRuns(el).join(" ").replace(/\s+/g, " ").trim();
+  };
+
+  // Pre-order list of every matching element (the old link lookup scanned the
+  // whole block for the first href-bearing <link> before falling back to the
+  // first <link>'s inner text, so multi-link entries need all candidates).
+  const findAllElements = (root: FxpNode, tag: string): FxpNode[] => {
+    const target = tag.toLowerCase();
+    const found: FxpNode[] = [];
+    const walk = (node: FxpNode): void => {
+      for (const key of Object.keys(node)) {
+        if (key === ":@") continue;
+        const childArray = node[key];
+        if (!Array.isArray(childArray)) continue;
+        for (const child of childArray) {
+          if (!isNode(child)) continue;
+          if (isConnectedNode(child, target)) found.push(child);
+          walk(child);
+        }
+      }
+    };
+    walk(root);
+    return found;
+  };
+
+  // <link href="..."> wins over <link>text</link> (the old regex matched the
+  // href attribute form anywhere in the block first); falls back to the first
+  // <link> element's inner text.
+  const firstLinkValue = (root: FxpNode): string | null => {
+    const linkEls = findAllElements(root, "link");
+    if (linkEls.length === 0) return null;
+    for (const linkEl of linkEls) {
+      const attrs = linkEl[":@"];
+      if (attrs && typeof attrs === "object") {
+        const href = (attrs as Record<string, unknown>)["@_href"];
+        if (typeof href === "string" && href) return href;
+      }
+    }
+    const runs = textRuns(linkEls[0] as FxpNode);
+    return runs.length > 0 ? runs.join("").trim() : null;
+  };
+
+  const firstAuthorName = (root: FxpNode): string | null => {
+    const authorEl = findFirstElement(root, "author");
+    if (!authorEl) return null;
+    const nameEl = findFirstElement(authorEl, "name");
+    if (!nameEl) return null;
+    const runs = textRuns(nameEl);
+    // The old capture was ([^<]+) — a raw, non-empty token with no whitespace
+    // collapsing. An empty <name> left the old branch empty so the plain-text
+    // author fallback ran; keep that fallback behavior by returning null here.
+    const joined = runs.join("");
+    return joined ? joined : null;
+  };
+
+  const items: FxpNode[] = [];
+  const entryNodes: FxpNode[] = [];
+  const collect = (node: FxpNode): void => {
+    for (const key of Object.keys(node)) {
+      if (key === "@_") continue;
+      const childArray = node[key];
+      if (!Array.isArray(childArray)) continue;
+      for (const child of childArray) {
+        if (!isNode(child)) continue;
+        if (isConnectedNode(child, "item")) items.push(child);
+        else if (isConnectedNode(child, "entry")) entryNodes.push(child);
+        collect(child);
+      }
+    }
+  };
+  for (const root of roots) {
+    collect(root);
+  }
+
+  const blocks = [...items, ...entryNodes].slice(0, MAX_FEED_ITEMS);
+  const observedAt = new Date().toISOString();
   const entries: NormalizedPresenceItem[] = [];
-  for (const match of blocks.slice(0, MAX_FEED_ITEMS)) {
-    const block = match[1] ?? "";
-    const observedAt = new Date().toISOString();
 
-    const title = decodeXml(extractTag(block, "title") ?? "Untitled post");
-    const link =
-      block.match(/<link[^>]+href=["']([^"']+)["']/i)?.[1] ??
-      extractTag(block, "link") ??
-      feedUrl;
+  for (const block of blocks) {
+    const title = decodeXml(firstElementInner(block, "title") ?? "Untitled post");
+    const link = firstLinkValue(block) ?? firstElementInner(block, "link") ?? feedUrl;
     const publishedRaw =
-      extractTag(block, "pubDate") ??
-      extractTag(block, "published") ??
-      extractTag(block, "updated") ??
+      firstElementInner(block, "pubDate") ??
+      firstElementInner(block, "published") ??
+      firstElementInner(block, "updated") ??
       null;
     const author =
-      decodeXml(block.match(/<author\b[^>]*>[\s\S]*?<name>([^<]+)<\/name>[\s\S]*?<\/author>/i)?.[1] ?? "") ||
-      decodeXml(extractTag(block, "author") ?? "") ||
+      decodeXml(firstAuthorName(block) ?? "") ||
+      decodeXml(firstElementInner(block, "author") ?? "") ||
       null;
     const excerpt = decodeXml(
       stripHtml(
-        extractTag(block, "description") ??
-          extractTag(block, "summary") ??
-          extractTag(block, "content") ??
+        firstElementInner(block, "description") ??
+          firstElementInner(block, "summary") ??
+          firstElementInner(block, "content") ??
           "",
       ),
     ).slice(0, MAX_FEED_EXCERPT_CHARS);
-    const externalId = extractTag(block, "guid") ?? extractTag(block, "id") ?? null;
+    const externalId = firstElementInner(block, "guid") ?? firstElementInner(block, "id") ?? null;
 
     entries.push({
       externalId,
@@ -639,21 +813,6 @@ async function parseXmlFeedItems(xml: string, feedUrl: string): Promise<Normaliz
   }
 
   return entries;
-}
-
-// Matches `<tag ...>inner</tag>` for any tag name; the caller checks the name.
-// A single precompiled regex avoids `new RegExp(userInput)` (ReDoS) and is
-// faster than rebuilding per call. `tag` is always a hardcoded literal here.
-const ANY_TAG_RE = /<([a-zA-Z][a-zA-Z0-9:_-]*)\b[^>]*>([\s\S]*?)<\/\1>/gi;
-
-function extractTag(block: string, tag: string): string | null {
-  const lower = tag.toLowerCase();
-  for (const match of block.matchAll(ANY_TAG_RE)) {
-    if (match[1]?.toLowerCase() === lower) {
-      return match[2]?.trim() ?? null;
-    }
-  }
-  return null;
 }
 
 /** Strip tags + collapse whitespace. Shared: the rss connector uses it while

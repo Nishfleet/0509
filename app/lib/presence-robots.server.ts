@@ -7,6 +7,7 @@ import {
   resolvePublicRedirectUrl,
 } from "~/lib/public-url.server";
 import { fetchWithTimeout, releaseFetchTimeout } from "~/lib/fetch-timeout.server";
+import RobotsParser from "robots-parser";
 
 export const PRESENCE_BOT_NAME = "FiveToNinePresenceBot";
 export const PRESENCE_BOT_INFO_URL = "https://0509.io/bots/presence";
@@ -24,6 +25,14 @@ export interface RobotsPolicy {
   fetchedAt: string;
   sitemaps: string[];
   rules: RobotsRule[];
+  /** Raw robots.txt the rules were parsed from. Present on freshly fetched
+   * "ok" policies (issue #3781): when set, `isRobotsAllowed` delegates the
+   * allow/disallow decision to robots-parser (battle-tested REP rules:
+   * longest-match precedence, `*` wildcards, `$` end anchors, empty-Disallow
+   * = allow-all) instead of the legacy rule matcher below. Policies
+   * constructed without it (fixture tests, in-memory branches) keep using
+   * the legacy matcher so its pinned behavior does not change. */
+  body?: string | null;
 }
 
 export interface RobotsRule {
@@ -90,6 +99,7 @@ export async function fetchRobotsPolicy(
       fetchedAt,
       sitemaps: parsed.sitemaps,
       rules: parsed.rules,
+      body: response.body,
     };
   }
 
@@ -111,6 +121,25 @@ export function isRobotsAllowed(policy: RobotsPolicy, targetUrl: string) {
     }
   } catch {
     return false;
+  }
+
+  // Fresh policies carry the raw robots.txt: delegate the decision to
+  // robots-parser (issue #3781). The legacy pattern matcher below stays as
+  // the engine for policies constructed without a body (fixture tests and
+  // in-memory branches) so their pinned byte-for-byte behavior is unchanged.
+  if (typeof policy.body === "string") {
+    try {
+      const parser = new RobotsParser(new URL(targetUrl).origin, policy.body);
+      // robots-parser returns true/false for matched rules and undefined when
+      // no rule group applies — the REP default is allow. The same default is
+      // what the legacy matcher produces for an empty rule list.
+      const verdict = parser.isAllowed(targetUrl, PRESENCE_USER_AGENT);
+      return verdict !== false;
+    } catch {
+      // robots-parser refusing to parse would only ever be a parse edge the
+      // legacy matcher can still answer; fall through rather than blocking a
+      // decision on the library's error path.
+    }
   }
 
   return pathAllowed(policy.rules, path);

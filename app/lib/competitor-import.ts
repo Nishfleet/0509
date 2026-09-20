@@ -1,6 +1,7 @@
 import { emptyCompetitorWebsite, normalizeCompetitorWebsiteInput, watchlistFingerprint } from "~/lib/competitor-website";
 import { isSecretishMemoryString } from "~/lib/agent-redaction";
 import { normalizeSavedQuery } from "~/lib/normalize";
+import Papa from "papaparse";
 import type { NormalizedSavedQuery, WatchTargetType, WatchlistTrackingRole } from "~/lib/types";
 
 export const COMPETITOR_IMPORT_MAX_BYTES = 200_000;
@@ -441,63 +442,22 @@ function invalidPreparedRow(row: ParsedImportRow, reason: string) {
   };
 }
 
+// Issue #3781: the hand-rolled character-state CSV scanner is gone; papaparse
+// (verified on workerd in tests/integration/parser-lib-compat-3781.integration.test.ts)
+// does the RFC-compliant quoting/line-handling. Byte-parity with the old
+// parser is kept on the code paths the fixtures pin by preserving the two
+// old invariants here: cells are run through `cleanCell` (collapse internal
+// whitespace, trim, whitespace-only -> null -> "") exactly at cell-push time,
+// and a record is kept only when at least one cleaned cell trims non-empty.
+// `delimiter` is pinned to "," because papaparse's delimiter auto-detection
+// would otherwise guess ";" on semicolon-heavy inputs, which the hand-rolled
+// parser never did.
 function parseCsvRecords(input: string) {
-  const chars = Array.from(input);
-  const state = chars.reduce((current, char, index) => {
-    if (current.skipNext) {
-      return {
-        ...current,
-        skipNext: false,
-      };
-    }
-
-    const next = chars[index + 1];
-    if (char === '"') {
-      if (current.inQuotes && next === '"') {
-        return {
-          ...current,
-          cell: `${current.cell}"`,
-          skipNext: true,
-        };
-      }
-
-      return {
-        ...current,
-        inQuotes: !current.inQuotes,
-      };
-    }
-    if (char === "," && !current.inQuotes) {
-      return {
-        ...current,
-        record: [...current.record, cleanCell(current.cell) ?? ""],
-        cell: "",
-      };
-    }
-    if ((char === "\n" || char === "\r") && !current.inQuotes) {
-      const record = [...current.record, cleanCell(current.cell) ?? ""];
-      return {
-        ...current,
-        records: record.some((value) => value.trim()) ? [...current.records, record] : current.records,
-        record: [],
-        cell: "",
-        skipNext: char === "\r" && next === "\n",
-      };
-    }
-
-    return {
-      ...current,
-      cell: `${current.cell}${char}`,
-    };
-  }, {
-    records: [] as string[][],
-    record: [] as string[],
-    cell: "",
-    inQuotes: false,
-    skipNext: false,
-  });
-
-  const finalRecord = [...state.record, cleanCell(state.cell) ?? ""];
-  return finalRecord.some((value) => value.trim()) ? [...state.records, finalRecord] : state.records;
+  const parsed = Papa.parse<string[]>(input, { header: false, delimiter: ",", skipEmptyLines: false });
+  const rows = (parsed.data ?? []) as unknown[];
+  return rows
+    .map((row) => (Array.isArray(row) ? row : [row]).map((cell) => cleanCell(typeof cell === "string" ? cell : String(cell ?? "")) ?? ""))
+    .filter((record) => record.some((value) => value.trim()));
 }
 
 function hasKnownHeader(header: string[]) {

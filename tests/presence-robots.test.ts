@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   assertRobotsAllowedForUrls,
   clearRobotsCacheForTests,
+  fetchRobotsPolicy,
   isRobotsAllowed,
   parseRobotsTxt,
   PRESENCE_BOT_NAME,
@@ -120,5 +121,68 @@ describe("presence robots fetch policy", () => {
       fetchImpl as typeof fetch,
     );
     expect(result.allowed).toBe(true);
+  });
+});
+
+// Issue #3781: the production decision engine behind isRobotsAllowed is now
+// robots-parser (when the policy carries the raw robots.txt body). These
+// fixtures pin that the delegated engine produces the SAME verdicts the
+// legacy rule matcher passes on the byte-for-byte fixture inputs, plus the
+// spec behaviors it must honor (`$` end anchor, empty Disallow = allow-all).
+describe("presence robots-parser delegation (issue #3781)", () => {
+  const bodyWithBody = (body: string) => ({
+    status: "ok" as const,
+    fetchedAt: "",
+    sitemaps: [] as string[],
+    rules: parseRobotsTxt(body).rules,
+    body,
+  });
+
+  it("matches the legacy verdicts on the pinned group/wildcard fixtures when delegated", () => {
+    const delegated = bodyWithBody(`
+User-agent: *
+Disallow: /private
+Allow: /private/ok
+
+User-agent: ${PRESENCE_BOT_NAME}
+Disallow: /admin
+Allow: /admin/public
+`);
+    expect(isRobotsAllowed(delegated, "https://example.com/admin/public")).toBe(true);
+    expect(isRobotsAllowed(delegated, "https://example.com/admin/secret")).toBe(false);
+  });
+
+  it("honors the $ end anchor and wildcard path when delegated", () => {
+    const delegated = bodyWithBody(`
+User-agent: ${PRESENCE_BOT_NAME}
+Disallow: /*.pdf$
+Allow: /
+`);
+    expect(isRobotsAllowed(delegated, "https://example.com/file.pdf")).toBe(false);
+    expect(isRobotsAllowed(delegated, "https://example.com/file.pdfx")).toBe(true);
+  });
+
+  it("treats an empty Disallow as allow-all when delegated", () => {
+    const delegated = bodyWithBody(`
+User-agent: *
+Disallow:
+`);
+    expect(isRobotsAllowed(delegated, "https://example.com/anything")).toBe(true);
+  });
+
+  it("populates the policy body on fresh fetches and still blocks disallowed paths", async () => {
+    clearRobotsCacheForTests();
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.endsWith("/robots.txt")) {
+        return new Response(`User-agent: ${PRESENCE_BOT_NAME}\nDisallow: /feed`, { status: 200 });
+      }
+      return new Response("feed", { status: 200 });
+    });
+
+    const policy = await fetchRobotsPolicy("https://example.com", fetchImpl as typeof fetch);
+    expect(policy.status).toBe("ok");
+    expect(typeof policy.body).toBe("string");
+    expect(isRobotsAllowed(policy, "https://example.com/feed")).toBe(false);
+    expect(isRobotsAllowed(policy, "https://example.com/feed/other")).toBe(false);
   });
 });
