@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  CTA_PIPELINE_STAGES,
   createLandingPagePipelineCounters,
+  ctaPipelineBailReasonFromCounters,
+  ctaPipelineStageCountsFromCounters,
   flushLandingPagePipelineCounters,
   recordDiffStage,
   recordExtractStage,
@@ -375,5 +378,270 @@ describe("landing-page pipeline instrumentation (issue #949)", () => {
     expect(logged.cta_field_extraction_funnel).toBe("cta_field_unchanged");
 
     logSpy.mockRestore();
+  });
+});
+
+/**
+ * Issue #2443 (finding M9): `diff_computed` counted `baseline_established`.
+ *
+ * `ctaPipelineStageCountsFromCounters` documents `diff_computed` as "the
+ * change-diff stage ran against a prior capture". `baseline_established` is by
+ * definition the no-prior-capture case (`recordDiffStage`'s `ctaUnchanged`
+ * doc: "Null when there was no prior capture to diff against
+ * (baseline_established)"), so a first-ever capture of a page was counted as a
+ * computed diff — overstating `diff_computed` and understating the real
+ * bail-out point for new pages.
+ */
+function countersWithDiff(status: Parameters<typeof recordDiffStage>[1]["status"]) {
+  const counters = createLandingPagePipelineCounters({
+    scanId: "proof-request:watch-2443:run-1",
+    watchlistId: "watch-2443",
+    adId: "ad-2443",
+    extractorVersion: "lp-signals-v1",
+  });
+  recordFetchStage(counters, "succeeded");
+  recordValidityStage(counters, "succeeded", null);
+  recordExtractStage(counters, {
+    ctaText: "Buy now",
+    priceText: "Starting at ₹499",
+    formPresent: true,
+    headline: "Glow Serum Sale",
+    warnings: [],
+    ctaFunnelStage: "reached",
+    ctaFunnelReasonCode: null,
+  });
+  recordDiffStage(counters, { status });
+  return counters;
+}
+
+describe("diff_computed excludes baseline_established (issue #2443)", () => {
+  it("baseline_established is not diff_computed", () => {
+    // repro from the issue, verbatim: a first capture has no prior capture to
+    // diff against, so it did NOT run a computed diff.
+    const counters = createLandingPagePipelineCounters({
+      scanId: "proof-request:watch-2443:run-baseline",
+      watchlistId: "watch-2443",
+      adId: "ad-2443",
+      extractorVersion: "lp-signals-v1",
+    });
+    recordDiffStage(counters, { status: "baseline_established" });
+
+    expect(ctaPipelineStageCountsFromCounters(counters).diff_computed).toBe(0);
+  });
+
+  it("confirmed is diff_computed", () => {
+    expect(
+      ctaPipelineStageCountsFromCounters(countersWithDiff("confirmed"))
+        .diff_computed,
+    ).toBe(1);
+  });
+
+  it("suppressed is diff_computed (a real prior capture was diffed)", () => {
+    expect(
+      ctaPipelineStageCountsFromCounters(countersWithDiff("suppressed"))
+        .diff_computed,
+    ).toBe(1);
+  });
+
+  it("invalidated is diff_computed (a real prior capture was diffed)", () => {
+    expect(
+      ctaPipelineStageCountsFromCounters(countersWithDiff("invalidated"))
+        .diff_computed,
+    ).toBe(1);
+  });
+
+  it("skipped_no_snapshot is not diff_computed", () => {
+    expect(
+      ctaPipelineStageCountsFromCounters(countersWithDiff("skipped_no_snapshot"))
+        .diff_computed,
+    ).toBe(0);
+  });
+
+  it("a null diff status (volume paths that never run the diff) is not diff_computed", () => {
+    const counters = createLandingPagePipelineCounters({
+      scanId: "selection:watch-2443:run-2",
+      watchlistId: "watch-2443",
+      adId: null,
+      extractorVersion: "lp-signals-v1",
+    });
+    recordFetchStage(counters, "succeeded");
+    expect(
+      ctaPipelineStageCountsFromCounters(counters).diff_computed,
+    ).toBe(0);
+  });
+});
+
+describe("CTA funnel stage vocabulary and rescue mapping", () => {
+  it("CTA_PIPELINE_STAGES keeps the six-stage funnel contract (issue #1565)", () => {
+    expect(CTA_PIPELINE_STAGES).toEqual([
+      "checks_started",
+      "page_fetch_succeeded",
+      "validity_passed",
+      "dom_extracted",
+      "diff_computed",
+      "event_emitted",
+    ]);
+  });
+
+  it("a fetch rescued by the render fallback counts as page_fetch_succeeded (issue #2893)", () => {
+    const counters = createLandingPagePipelineCounters({
+      scanId: "proof-request:watch-2893:run-1",
+      watchlistId: "watch-2893",
+      adId: "ad-2893",
+      extractorVersion: "lp-signals-v1",
+    });
+    recordFetchStage(counters, "failed", "http_error");
+    recordRenderStage(counters, "succeeded");
+
+    expect(ctaPipelineStageCountsFromCounters(counters).page_fetch_succeeded).toBe(
+      1,
+    );
+  });
+});
+
+describe("ctaPipelineBailReasonFromCounters (issue #2157)", () => {
+  const bailCounters = () =>
+    createLandingPagePipelineCounters({
+      scanId: "proof-request:watch-2157:run-1",
+      watchlistId: "watch-2157",
+      adId: "ad-2157",
+      extractorVersion: "lp-signals-v1",
+    });
+
+  it("returns the expected bail point for each bail shape", () => {
+    // fetch bail
+    {
+      const c = bailCounters();
+      recordFetchStage(c, "failed", "landing_blocked");
+      expect(ctaPipelineBailReasonFromCounters(c)).toEqual({
+        stage: "page_fetch_succeeded",
+        reason: "landing_blocked",
+      });
+    }
+    // validity bail
+    {
+      const c = bailCounters();
+      recordFetchStage(c, "succeeded");
+      recordValidityStage(c, "capture_failed", "challenge_page");
+      expect(ctaPipelineBailReasonFromCounters(c)).toEqual({
+        stage: "validity_passed",
+        reason: "challenge_page",
+      });
+    }
+    // extract bail
+    {
+      const c = bailCounters();
+      recordFetchStage(c, "succeeded");
+      recordValidityStage(c, "succeeded");
+      recordExtractStage(c, {
+        ctaText: null,
+        priceText: null,
+        formPresent: null,
+        headline: null,
+        ctaFunnelStage: "bailed",
+        ctaFunnelReasonCode: "no_cta_candidates",
+      });
+      expect(ctaPipelineBailReasonFromCounters(c)).toEqual({
+        stage: "dom_extracted",
+        reason: "no_cta_candidates",
+      });
+    }
+    // success — no bail
+    {
+      const c = bailCounters();
+      recordFetchStage(c, "succeeded");
+      recordValidityStage(c, "succeeded");
+      recordExtractStage(c, {
+        ctaText: "Buy now",
+        priceText: "$9",
+        formPresent: true,
+        headline: "Sale",
+        ctaFunnelStage: "reached",
+      });
+      recordDiffStage(c, {
+        status: "confirmed",
+        confirmedEventTypes: ["landing_page_cta_changed"],
+      });
+      expect(ctaPipelineBailReasonFromCounters(c)).toBeNull();
+    }
+  });
+
+  it("does not bail at fetch when the render fallback rescued it (issue #2893)", () => {
+    const c = bailCounters();
+    recordFetchStage(c, "failed", "http_error");
+    recordRenderStage(c, "succeeded");
+    recordValidityStage(c, "succeeded");
+    recordExtractStage(c, {
+      ctaText: null,
+      priceText: null,
+      formPresent: null,
+      headline: null,
+      ctaFunnelStage: "bailed",
+      ctaFunnelReasonCode: "no_cta_candidates",
+    });
+
+    // The rescued check fell through fetch and bailed at the next real gate.
+    expect(ctaPipelineBailReasonFromCounters(c)).toEqual({
+      stage: "dom_extracted",
+      reason: "no_cta_candidates",
+    });
+  });
+
+  it("returns null when the diff stage never ran (volume paths)", () => {
+    const c = bailCounters();
+    recordFetchStage(c, "succeeded");
+    recordValidityStage(c, "succeeded");
+    recordExtractStage(c, {
+      ctaText: "Buy now",
+      priceText: "$9",
+      formPresent: true,
+      headline: "Sale",
+      ctaFunnelStage: "reached",
+    });
+
+    // diff.status stays null on volume paths — not an event_emitted bail.
+    expect(ctaPipelineBailReasonFromCounters(c)).toBeNull();
+  });
+
+  it("returns null when the diff was skipped for lack of a snapshot", () => {
+    const c = bailCounters();
+    recordFetchStage(c, "succeeded");
+    recordDiffStage(c, { status: "skipped_no_snapshot" });
+
+    expect(ctaPipelineBailReasonFromCounters(c)).toBeNull();
+  });
+
+  it("attributes a no-event diff to event_emitted with the field bail reason", () => {
+    const c = bailCounters();
+    recordFetchStage(c, "succeeded");
+    recordValidityStage(c, "succeeded");
+    recordExtractStage(c, {
+      ctaText: "Buy now",
+      priceText: "$9",
+      formPresent: true,
+      headline: "Sale",
+      ctaFunnelStage: "reached",
+    });
+    recordDiffStage(c, {
+      status: "invalidated",
+      confirmedEventTypes: [],
+      fieldBails: { cta: "cta_selector_mismatch", headline: "no_cta_change" },
+    });
+
+    expect(ctaPipelineBailReasonFromCounters(c)).toEqual({
+      stage: "event_emitted",
+      reason: "cta_selector_mismatch",
+    });
+  });
+
+  it("falls back to no_event_emitted when the diff ran with no field bails", () => {
+    const c = bailCounters();
+    recordFetchStage(c, "succeeded");
+    recordDiffStage(c, { status: "suppressed" });
+
+    expect(ctaPipelineBailReasonFromCounters(c)).toEqual({
+      stage: "event_emitted",
+      reason: "no_event_emitted",
+    });
   });
 });
