@@ -3,6 +3,11 @@ import {
   readResponseTextWithinLimit,
 } from "~/lib/bounded-response.server";
 import {
+  dropEdgeObjectCacheForTests,
+  readCachedJson,
+  writeCachedJson,
+} from "~/lib/edge-object-cache.server";
+import {
   resolvePublicHttpUrl,
   resolvePublicRedirectUrl,
 } from "~/lib/public-url.server";
@@ -31,19 +36,19 @@ export interface RobotsRule {
   pattern: string;
 }
 
-interface RobotsCacheEntry {
-  policy: RobotsPolicy;
-  expiresAt: number;
-}
+/**
+ * Issue #3782: the robots policy cache lives in the Cache API, not an
+ * in-isolate Map — a cold isolate no longer re-fetches robots.txt for an
+ * origin a neighbour isolate already fetched.
+ */
+const ROBOTS_CACHE_NAME = "presence-robots-v1";
 
-const robotsCache = new Map<string, RobotsCacheEntry>();
-
-function cacheKeyForUrl(url: URL) {
-  return `${url.protocol}//${url.host}`;
+function robotsCacheKeyForUrl(url: URL) {
+  return `https://robots-cache.0509.internal/${encodeURIComponent(`${url.protocol}//${url.host}`)}`;
 }
 
 export function clearRobotsCacheForTests() {
-  robotsCache.clear();
+  return dropEdgeObjectCacheForTests(ROBOTS_CACHE_NAME);
 }
 
 export async function fetchRobotsPolicy(
@@ -60,10 +65,10 @@ export async function fetchRobotsPolicy(
     };
   }
 
-  const key = cacheKeyForUrl(safeOrigin);
-  const cached = robotsCache.get(key);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.policy;
+  const key = robotsCacheKeyForUrl(safeOrigin);
+  const cached = await readCachedJson<RobotsPolicy>(ROBOTS_CACHE_NAME, key);
+  if (cached !== undefined) {
+    return cached;
   }
 
   const robotsUrl = new URL("/robots.txt", safeOrigin);
@@ -93,7 +98,7 @@ export async function fetchRobotsPolicy(
     };
   }
 
-  robotsCache.set(key, { policy, expiresAt: Date.now() + ROBOTS_CACHE_TTL_MS });
+  await writeCachedJson(ROBOTS_CACHE_NAME, key, policy, ROBOTS_CACHE_TTL_MS);
   return policy;
 }
 

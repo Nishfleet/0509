@@ -6,10 +6,12 @@ import {
   DAILY_DIGEST_CRON,
   DISCOVERY_WARMUP_CRON,
   REGULAR_MONITORING_CRON,
+  STATUS_PROBE_CRON_PROBES,
   STATUS_PROBES_CRON,
   WEEKLY_DIGEST_CRON,
   resolveScheduledTask,
 } from "../workers/schedule";
+import { STATUS_PROBE_NAMES } from "~/lib/status-probes.server";
 import { RELEASE_SCHEDULE_CRONS } from "../app/lib/release-scheduled-observation-contract";
 import { SCHEDULED_OBSERVATION_DEADLINES } from "../app/lib/scheduled-observation-health.server";
 
@@ -19,7 +21,6 @@ describe("worker schedule", () => {
 
     expect(wranglerConfig).toContain(`"${DISCOVERY_WARMUP_CRON}"`);
     expect(wranglerConfig).toContain(`"${REGULAR_MONITORING_CRON}"`);
-    expect(wranglerConfig).not.toContain('"*/30 * * * *"');
   });
 
   it("routes regular scans separately from daily digest generation", () => {
@@ -71,20 +72,38 @@ describe("worker schedule", () => {
     });
   });
 
-  it("pins the 5-minute status-probe cron to its own inert kind, outside the four-cron soak contract", () => {
-    // The status-probe cron must be registered in wrangler and resolve to its
-    // own kind: resolveScheduledTask's fallthrough for unrecognized crons is a
-    // full monitoring tick, so an unpinned 5-minute cron would run the real
-    // workload every five minutes.
+  it("gives each status-probe cadence its own Cron Trigger with an exact probe set (issue #3782)", () => {
+    // One trigger per cadence, each pinned to the probes it may run — no
+    // in-code tick arithmetic. Every probe cron must be registered in
+    // wrangler AND resolve to its own kind: resolveScheduledTask's
+    // fallthrough for unrecognized crons is a full monitoring tick, so an
+    // unpinned probe cron would run the real workload on a probe cadence.
     const wranglerConfig = readFileSync("wrangler.jsonc", "utf8");
-    expect(wranglerConfig).toContain(`"${STATUS_PROBES_CRON}"`);
-    expect(resolveScheduledTask(STATUS_PROBES_CRON)).toEqual({ kind: "status_probes" });
+    const expected: Record<string, string[]> = {
+      [STATUS_PROBES_CRON]: ["public_search", "billing_dodo", "uptime"],
+      "*/15 * * * *": ["email_delivery"],
+      "*/30 * * * *": ["signin_dispatch"],
+      "25 * * * *": ["provider_meta"],
+    };
+    expect(Object.keys(STATUS_PROBE_CRON_PROBES).sort()).toEqual(
+      Object.keys(expected).sort(),
+    );
+    for (const [cron, probes] of Object.entries(expected)) {
+      expect(wranglerConfig).toContain(`"${cron}"`);
+      expect(resolveScheduledTask(cron)).toEqual({ kind: "status_probes", probes });
+    }
+    // The trigger table must cover every probe exactly once — a probe absent
+    // from every row silently never runs, and a probe on two rows double-fires.
+    const scheduled = Object.values(STATUS_PROBE_CRON_PROBES).flat();
+    expect([...scheduled].sort()).toEqual([...STATUS_PROBE_NAMES].sort());
+  });
 
+  it("pins the status-probe crons outside the four-cron soak contract", () => {
     // Gap-check boundary (packet 2026-09-12): the deep-health gap check
-    // accepts exactly the four workload crons. The probe cron is a
-    // control-plane cron like the hourly gap check — it must neither be
+    // accepts exactly the four workload crons. The probe crons are
+    // control-plane crons like the hourly gap check — they must neither be
     // flagged as a gap (not added to the deadline list) nor hide one (no
-    // workload cron replaced). Its liveness evidence is the
+    // workload cron replaced). Their liveness evidence is the
     // status_probe_samples table's checked_at freshness, not the soak table.
     expect(SCHEDULED_OBSERVATION_DEADLINES.map(({ cron }) => cron)).toEqual([
       REGULAR_MONITORING_CRON,
@@ -92,6 +111,8 @@ describe("worker schedule", () => {
       DAILY_DIGEST_CRON,
       WEEKLY_DIGEST_CRON,
     ]);
-    expect(RELEASE_SCHEDULE_CRONS).not.toContain(STATUS_PROBES_CRON);
+    for (const cron of Object.keys(STATUS_PROBE_CRON_PROBES)) {
+      expect(RELEASE_SCHEDULE_CRONS).not.toContain(cron);
+    }
   });
 });

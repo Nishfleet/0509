@@ -1,6 +1,7 @@
 import {
   DAILY_DIGEST_CRON,
   REGULAR_MONITORING_CRON,
+  STATUS_PROBE_CRON_PROBES,
   WEEKLY_DIGEST_CRON,
 } from "../workers/schedule";
 import {
@@ -59,6 +60,33 @@ describe("Worker scheduled handler", () => {
     );
     expect(loaded.observeScheduledTask).not.toHaveBeenCalled();
   });
+
+  // One `it` per cron: the worker module is cached per test, so each entry
+  // needs the fresh-module beforeEach to wire a live runStatusProbes mock.
+  it.each(Object.entries(STATUS_PROBE_CRON_PROBES))(
+    "dispatches the %s status-probe Cron Trigger to exactly its own probe set (issue #3782)",
+    async (cron, probes) => {
+      // Every probe cron runs runStatusProbes with the probes its table row
+      // names and can never fall through into the monitoring tick.
+      const loaded = await runCron(cron);
+      expect(loaded.runStatusProbes).toHaveBeenCalledWith(
+        expect.anything(),
+        { probes },
+      );
+      expect(loaded.runScheduledMonitoring).not.toHaveBeenCalled();
+      expect(loaded.runScheduledDiscoveryWarmup).not.toHaveBeenCalled();
+      // The shared outbox drain + liveness ping ride only the */5 trigger —
+      // the cadence they had under the single probe cron.
+      if (cron === "*/5 * * * *") {
+        expect(loaded.scheduleBillingLifecycleEmailRecovery).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.anything(),
+        );
+      } else {
+        expect(loaded.scheduleBillingLifecycleEmailRecovery).not.toHaveBeenCalled();
+      }
+    },
+  );
 
   it("pages a rejected in-Worker gap check", async () => {
     const loaded = await loadWorker();

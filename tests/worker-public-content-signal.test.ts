@@ -114,6 +114,10 @@ async function loadWorker() {
   vi.doMock("../workers/monitoring-workflow", () => ({
     MonitoringWorkflow: class MonitoringWorkflow {},
   }));
+  // Issue #3782: the lease class imports `cloudflare:workers` (no node resolution).
+  vi.doMock("../workers/selection-enrichment-lease", () => ({
+    SelectionEnrichmentLease: class SelectionEnrichmentLease {},
+  }));
   // Spread the real module: this suite stubs the two header FUNCTIONS, but
   // the edge cache (issue #2950) imports the policy DATA (the cacheable path
   // lists) from the same module — a wholesale replacement would hand it

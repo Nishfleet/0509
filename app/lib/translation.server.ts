@@ -1,4 +1,8 @@
 import { classifyLanguage } from "~/lib/language-classifier";
+import {
+  readCachedJson,
+  writeCachedJson,
+} from "~/lib/edge-object-cache.server";
 import type { AppEnv } from "~/lib/env.server";
 import type { AdRecord, AnalysisFieldInput } from "~/lib/types";
 
@@ -12,8 +16,15 @@ const AMBIGUOUS_LATIN_DIACRITICS = /[\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u024F\u1E
 const AMBIGUOUS_SHORT_SAMPLE_LENGTH = 80;
 const OBVIOUS_ENGLISH_WORDS =
   /\b(?:the|and|your|you|with|off|now|get|free|our|for|this|today|new|shop|sale|buy|save|only|all)\b/i;
-const DETECTION_CACHE_LIMIT = 500;
-const detectionCache = new Map<string, string | null>();
+/**
+ * Issue #3782: the language-detection cache lives in the Cache API
+ * (`lang-detect-v1`), not an in-isolate Map — a cold isolate no longer
+ * re-runs the llama-3.2 detection call for a sample a neighbour isolate
+ * already classified. Entries carry a 7-day TTL; the Cache API's own
+ * eviction bounds the rest (the old Map cap of 500 is the runtime's job now).
+ */
+const DETECTION_CACHE_NAME = "lang-detect-v1";
+const DETECTION_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_TRANSLATION_INPUT_LENGTH = 1600;
 const REGIONAL_SCRIPT_LANGUAGE_CODES: Record<string, string> = {
   bengali: "bn",
@@ -181,14 +192,36 @@ export function hasAmbiguousLatinSignals(sample: string) {
   return compact.length < AMBIGUOUS_SHORT_SAMPLE_LENGTH && !OBVIOUS_ENGLISH_WORDS.test(compact);
 }
 
+/**
+ * The sample is raw ad copy — arbitrary text that cannot ride a URL path —
+ * so the cache key is its SHA-256. Keyed on the same 200-char prefix the old
+ * Map used.
+ */
+async function detectionCacheKey(sample: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(sample.slice(0, 200)),
+  );
+  const hex = [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+  return `https://langdetect.0509.internal/${hex}`;
+}
+
 async function detectLanguageCode(env: Pick<AppEnv, "AI">, sample: string) {
   if (!env.AI) {
     return null;
   }
 
-  const cacheKey = sample.slice(0, 200);
-  if (detectionCache.has(cacheKey)) {
-    return detectionCache.get(cacheKey) ?? null;
+  // `caches` is absent under plain node (unit tests, non-Worker callers):
+  // detection then runs uncached, which is correct.
+  const cacheKey =
+    typeof caches === "undefined" ? null : await detectionCacheKey(sample);
+  if (cacheKey) {
+    const cached = await readCachedJson<string | null>(DETECTION_CACHE_NAME, cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
   }
 
   try {
@@ -211,21 +244,15 @@ async function detectLanguageCode(env: Pick<AppEnv, "AI">, sample: string) {
           : "";
     const match = raw.trim().toLowerCase().match(/^[a-z]{2}/);
     const detected = match ? match[0] : null;
-    rememberDetection(cacheKey, detected);
+    if (cacheKey) {
+      // A null result is a real answer (undetectable/ambiguous): it is cached
+      // for the same TTL so the fallback path does not re-spend the AI call.
+      await writeCachedJson(DETECTION_CACHE_NAME, cacheKey, detected, DETECTION_CACHE_TTL_MS);
+    }
     return detected;
   } catch {
     return null;
   }
-}
-
-function rememberDetection(key: string, value: string | null) {
-  if (detectionCache.size >= DETECTION_CACHE_LIMIT) {
-    const oldest = detectionCache.keys().next().value;
-    if (oldest !== undefined) {
-      detectionCache.delete(oldest);
-    }
-  }
-  detectionCache.set(key, value);
 }
 
 function buildTranslationInput(ad: TranslationCandidateAd) {

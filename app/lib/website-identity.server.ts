@@ -1,4 +1,9 @@
 import { decodeHtmlEntities } from "~/lib/decode-html.server";
+import {
+  dropEdgeObjectCacheForTests,
+  readCachedJson,
+  writeCachedJson,
+} from "~/lib/edge-object-cache.server";
 import { fetchWithTimeout, releaseFetchTimeout } from "~/lib/fetch-timeout.server";
 import { resolvePublicHttpUrl, resolvePublicRedirectUrl } from "~/lib/public-url.server";
 import { foldDomainLabel, parseSearchInputFromWebsiteField, registrableDomainFromHostname } from "~/lib/search-query";
@@ -203,11 +208,25 @@ const IDENTITY_OVERRIDES: Record<
   "saucony.co.uk": { providerQuery: "Saucony" },
 };
 
-const identityCache = new Map<string, { expiresAt: number; identity: WebsiteIdentity | null }>();
+/**
+ * Issue #3782: the 6h result cache lives in the Cache API (`identity-v1`), not
+ * an in-isolate Map — a cold isolate no longer re-runs the redirect-alias
+ * fetch chain for a domain a neighbour isolate already resolved.
+ */
+const IDENTITY_CACHE_NAME = "website-identity-v1";
+
+function identityCacheKey(registrableDomain: string): string {
+  return `https://identity-cache.0509.internal/${registrableDomain}`;
+}
+
 // Issue #3319: one in-flight resolution per registrable domain. A keyword
 // search now pre-warms the identity BEFORE the discovery reads (see
 // `prewarmWebsiteIdentity`), and the later tier-labelling call must join
 // that same task instead of starting a second fetch chain for the domain.
+// The promise can only ever be joined inside the isolate that owns it — the
+// prewarm and its consumer run on the same request — so this map is
+// per-isolate by construction; the durable dedup is the Cache API entry the
+// task writes on settle.
 const identityInFlight = new Map<string, Promise<WebsiteIdentity | null>>();
 
 /**
@@ -239,10 +258,12 @@ async function resolveWebsiteIdentityUncached(
   void livePromise.then(() => undefined, () => undefined);
 
   const identity = applyIdentityOverride(await live, registrableDomain);
-  identityCache.set(registrableDomain, {
+  await writeCachedJson(
+    IDENTITY_CACHE_NAME,
+    identityCacheKey(registrableDomain),
     identity,
-    expiresAt: Date.now() + IDENTITY_CACHE_TTL_MS,
-  });
+    IDENTITY_CACHE_TTL_MS,
+  );
 
   return identity;
 }
@@ -258,9 +279,14 @@ export async function resolveWebsiteIdentity(domainUrl: string): Promise<Website
     return null;
   }
 
-  const cached = identityCache.get(registrableDomain);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.identity;
+  const cached = await readCachedJson<WebsiteIdentity | null>(
+    IDENTITY_CACHE_NAME,
+    identityCacheKey(registrableDomain),
+  );
+  if (cached !== undefined) {
+    // A cached `null` is a real answer (unreachable homepage, curated-only
+    // identity): it still skips the fetch chain for the 6h TTL.
+    return cached;
   }
 
   // Concurrent callers for the same domain share ONE deadline race, one
@@ -354,8 +380,8 @@ function applyIdentityOverride(
 }
 
 export function clearWebsiteIdentityCacheForTests() {
-  identityCache.clear();
   identityInFlight.clear();
+  return dropEdgeObjectCacheForTests(IDENTITY_CACHE_NAME);
 }
 
 /**

@@ -70,11 +70,19 @@ type EnrichAndPersistSelectedAdOptions = {
   captureCreativeAndTranslation: boolean;
 };
 
-/** FIX-13: prevent a revalidation from scheduling a second enrichment while one runs. */
+/**
+ * FIX-13 / issue #3782: prevent a revalidation from scheduling a second
+ * enrichment while one runs. The lease is a Durable Object — one instance
+ * per metaAdId — so it holds across isolates (a per-isolate Map let a
+ * second isolate's revalidation schedule a duplicate Browser Rendering
+ * capture). Envs without the binding (unit tests, local dev) fall back to
+ * the in-isolate Map, which is still strictly better than no guard; a DO
+ * failure degrades the same way rather than blocking the request.
+ */
 const ENRICHMENT_IN_FLIGHT_MS = 90_000;
 const enrichmentInFlightStartedAt = new Map<string, number>();
 
-function tryClaimSelectionEnrichment(metaAdId: string, nowMs: number = Date.now()): boolean {
+function tryClaimInIsolate(metaAdId: string, nowMs: number = Date.now()): boolean {
   const started = enrichmentInFlightStartedAt.get(metaAdId);
   if (started != null && nowMs - started < ENRICHMENT_IN_FLIGHT_MS) {
     return false;
@@ -83,8 +91,36 @@ function tryClaimSelectionEnrichment(metaAdId: string, nowMs: number = Date.now(
   return true;
 }
 
-function releaseSelectionEnrichment(metaAdId: string) {
+async function tryClaimSelectionEnrichment(env: AppEnv, metaAdId: string): Promise<boolean> {
+  const lease = env.SELECTION_ENRICHMENT_LEASE;
+  if (!lease) {
+    return tryClaimInIsolate(metaAdId);
+  }
+  try {
+    const stub = lease.get(lease.idFromName(metaAdId));
+    const response = await stub.fetch("https://selection-lease.0509.internal/acquire", {
+      method: "POST",
+      body: JSON.stringify({ ttlMs: ENRICHMENT_IN_FLIGHT_MS }),
+    });
+    const { claimed } = (await response.json()) as { claimed?: boolean };
+    return claimed === true;
+  } catch {
+    // A broken lease must not block enrichment entirely; the in-isolate
+    // guard is the degraded mode.
+    return tryClaimInIsolate(metaAdId);
+  }
+}
+
+function releaseSelectionEnrichment(env: AppEnv, metaAdId: string) {
   enrichmentInFlightStartedAt.delete(metaAdId);
+  const lease = env.SELECTION_ENRICHMENT_LEASE;
+  if (lease) {
+    // Fire-and-forget: the lease's own TTL covers a lost release.
+    const stub = lease.get(lease.idFromName(metaAdId));
+    void stub
+      .fetch("https://selection-lease.0509.internal/release", { method: "POST" })
+      .catch(() => undefined);
+  }
 }
 
 /** Test helper — clear in-flight enrichment claims between cases. */
@@ -161,7 +197,7 @@ export async function prepareSearchResultSelection(
         // waitUntil path uses; on miss, short-circuit to a failure-labelled
         // promise so the pane still renders honest capture-gap copy instead
         // of an indefinitely-pending spinner.
-        const claimed = tryClaimSelectionEnrichment(selectedAdBase.metaAdId);
+        const claimed = await tryClaimSelectionEnrichment(env, selectedAdBase.metaAdId);
         if (!claimed) {
           const selectedAdCapture: Promise<SelectedAdCapturePayload> =
             Promise.resolve({
@@ -208,7 +244,7 @@ export async function prepareSearchResultSelection(
               } satisfies LandingPageCaptureFailureDetail,
             }))
             .finally(() => {
-              releaseSelectionEnrichment(selectedAdBase.metaAdId);
+              releaseSelectionEnrichment(env, selectedAdBase.metaAdId);
             });
         return {
           result: {
@@ -239,7 +275,7 @@ export async function prepareSearchResultSelection(
       // WP-11 paint-fast path: return base ad now; finish enrichment async.
       // FIX-13: revalidations must not schedule a second enrichment while one
       // is already in flight for this ad.
-      const claimed = tryClaimSelectionEnrichment(selectedAdBase.metaAdId);
+      const claimed = await tryClaimSelectionEnrichment(env, selectedAdBase.metaAdId);
       selectionEnrichmentPending = true;
       if (claimed) {
         options.waitUntil(
@@ -254,7 +290,7 @@ export async function prepareSearchResultSelection(
               );
             })
             .finally(() => {
-              releaseSelectionEnrichment(selectedAdBase.metaAdId);
+              releaseSelectionEnrichment(env, selectedAdBase.metaAdId);
             }),
         );
       }

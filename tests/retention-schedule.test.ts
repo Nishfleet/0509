@@ -53,6 +53,8 @@ vi.mock("../workers/digest-schedule-recovery", () => ({
   scheduleDigestScheduleExhaustionRecovery: vi.fn(),
 }));
 vi.mock("../workers/monitoring-workflow", () => ({ MonitoringWorkflow: class {} }));
+// Issue #3782: the lease class imports `cloudflare:workers` (no node resolution).
+vi.mock("../workers/selection-enrichment-lease", () => ({ SelectionEnrichmentLease: class {} }));
 vi.mock("../workers/primary-domain", () => ({ primaryDomainRedirect: vi.fn(() => null) }));
 vi.mock("../workers/security-headers", () => ({
   withSecurityHeaders: vi.fn((response: Response) => response),

@@ -15,15 +15,14 @@ import {
 import { sendBetterAuthMagicLink } from "~/lib/better-auth.server";
 import { consultEmailSuppression } from "~/lib/delivery-email-core.server";
 import { isEmailSendingConfigured } from "~/lib/env.server";
-import {
-  EMAIL_DELIVERY_CANARY_EVERY_TICKS,
-  emailCanaryDueThisTick,
-  runEmailDeliveryProbe,
-} from "~/lib/email-delivery-canary.server";
+import { runEmailDeliveryProbe } from "~/lib/email-delivery-canary.server";
 
 /**
- * Live synthetic probes for every public surface, run by the 5-minute
- * status-probe cron in workers/app.ts. Every state the /status page reports
+ * Live synthetic probes for every public surface, run by the per-cadence
+ * status-probe Cron Triggers in workers/app.ts (issue #3782: one trigger per
+ * cadence, dispatched on `controller.cron` via STATUS_PROBE_CRON_PROBES in
+ * workers/schedule.ts — no in-code tick scheduler). Every state the /status
+ * page reports
  * traces to a row in `status_probe_samples` (migration 0097) — no fake green.
  *
  * Rules (packet 2026-09-12):
@@ -51,33 +50,21 @@ export type StatusProbeName = (typeof STATUS_PROBE_NAMES)[number];
 export const STATUS_PROBE_TIMEOUT_MS = 10_000;
 export const STATUS_PROBE_RETENTION_DAYS = 7;
 
-/**
- * Per-probe cadence, in cron ticks (the cron fires every 5 minutes). The
- * runner runs each probe only on its own budget:
- * - public_search / billing_dodo / uptime: every tick (cheap D1/self reads);
+/*
+ * Per-probe cadence is owned by the Cron Trigger table, not this module —
+ * workers/schedule.ts STATUS_PROBE_CRON_PROBES names the trigger that runs
+ * each probe:
+ * - public_search / billing_dodo / uptime: every 5 minutes (cheap
+ *   D1/self reads);
  * - signin_dispatch: every 30 min — it sends real (canary) mail through the
  *   send_email binding, so it must not crowd the customer email budget;
  * - provider_meta: hourly at :25 — it drives one shallow Meta Ad Library
  *   capture through the real browser-provider chain, which costs browser
  *   minutes, so it stays clear of the :00 monitoring rails;
- * - email_delivery: every 15 minutes on the canary module's own budget —
- *   it sends one real canary mail through the send_email binding and reads
- *   the loop rows, so 5-minute sends would crowd the customer email budget.
+ * - email_delivery: every 15 minutes — it sends one real canary mail
+ *   through the send_email binding and reads the loop rows, so 5-minute
+ *   sends would crowd the customer email budget.
  */
-const PROBE_EVERY_TICKS: Record<StatusProbeName, number> = {
-  public_search: 1,
-  signin_dispatch: 6,
-  billing_dodo: 1,
-  provider_meta: 12,
-  uptime: 1,
-  // Email-delivery canary (#3188): every 3rd tick = every 15 minutes. It
-  // sends real mail and must not crowd the customer email budget the way a
-  // 5-minute send would; :00/:15/:30/:45 UTC is the same cadence a */15
-  // cron would fire, without a second scheduler.
-  email_delivery: EMAIL_DELIVERY_CANARY_EVERY_TICKS,
-};
-
-const PROVIDER_META_TICK_OFFSET = 5; // UTC minute 25 within the hour
 
 export type StatusProbeResult = {
   probe: StatusProbeName;
@@ -342,26 +329,6 @@ async function runUptimeProbe(env: AppEnv): Promise<{ ok: boolean; detail: strin
   };
 }
 
-function tickKey(now: Date): { tickIndex: number; utcMinute: number } {
-  const utcMinute = now.getUTCMinutes();
-  const tickIndex = Math.floor(utcMinute / 5);
-  return { tickIndex, utcMinute };
-}
-
-export function probeDueThisTick(probe: StatusProbeName, now: Date): boolean {
-  const { tickIndex, utcMinute } = tickKey(now);
-  const every = PROBE_EVERY_TICKS[probe];
-  if (probe === "provider_meta") {
-    return utcMinute % 60 === PROVIDER_META_TICK_OFFSET * 5;
-  }
-  if (probe === "email_delivery") {
-    // Owned by the canary module so the budget, the window arithmetic and
-    // the canary rows all agree on what "every 15 minutes" means.
-    return emailCanaryDueThisTick(now);
-  }
-  return tickIndex % every === 0;
-}
-
 const PROBE_RUNNERS: Record<StatusProbeName, (env: AppEnv) => Promise<{ ok: boolean; detail: string }>> = {
   public_search: runPublicSearchProbe,
   signin_dispatch: runSigninDispatchProbe,
@@ -372,16 +339,19 @@ const PROBE_RUNNERS: Record<StatusProbeName, (env: AppEnv) => Promise<{ ok: bool
 };
 
 /**
- * Cron entry point. Never throws: every probe failure is a sample row, and a
- * sample-write failure is a console warning — a broken probe rail must not
- * turn into a cron failure alert for the wrong reason.
+ * Cron entry point. The caller names the probes — the Cron Trigger that
+ * fired owns the set (workers/schedule.ts STATUS_PROBE_CRON_PROBES), so a
+ * trigger can only ever run its own probes. `probes` omitted = run all six
+ * (tests and the one-off ops path). Never throws: every probe failure is a
+ * sample row, and a sample-write failure is a console warning — a broken
+ * probe rail must not turn into a cron failure alert for the wrong reason.
  */
 export async function runStatusProbes(
   env: AppEnv,
-  options: { now?: Date } = {},
+  options: { probes?: readonly StatusProbeName[]; now?: Date } = {},
 ): Promise<StatusProbeResult[]> {
   const now = options.now ?? new Date();
-  const due = STATUS_PROBE_NAMES.filter((probe) => probeDueThisTick(probe, now));
+  const due = options.probes ?? STATUS_PROBE_NAMES;
   const results: StatusProbeResult[] = [];
   for (const probe of due) {
     results.push(await withProbeTimeout(probe, () => PROBE_RUNNERS[probe](env)));

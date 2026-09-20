@@ -512,4 +512,75 @@ describe("prepareSearchResultSelection deferCapture lease (issue #3244)", () => 
     resolveDeferCapture(null);
     await requireCapturePayload(anonymous);
   });
+
+  it("routes the lease through the SELECTION_ENRICHMENT_LEASE Durable Object when bound (issue #3782)", async () => {
+    const captureLandingPageSnapshot = vi.fn();
+    mockCaptureModules({ captureLandingPageSnapshot });
+
+    const {
+      prepareSearchResultSelection,
+      resetSelectionEnrichmentInFlightForTests,
+    } = await import("~/lib/search-selection.server");
+    resetSelectionEnrichmentInFlightForTests();
+
+    // A stand-in for the bound namespace: idFromName/get/stub.fetch is the
+    // whole client contract; a held lease answers { claimed: false }.
+    const stubFetch = vi.fn(async () => Response.json({ claimed: false }));
+    const lease = {
+      idFromName: vi.fn((name: string) => `id:${name}`),
+      get: vi.fn(() => ({ fetch: stubFetch })),
+    };
+    const env = { SELECTION_ENRICHMENT_LEASE: lease } as never;
+
+    const blocked = await prepareSearchResultSelection(
+      env,
+      resultWith([{ ...baseAd }]),
+      null,
+      { hydratePersisted: false, deferCapture: true },
+    );
+    // The DO answered "held", so the defer short-circuits — and the claim
+    // never touched the in-isolate Map fallback.
+    expect(lease.idFromName).toHaveBeenCalledWith(baseAd.metaAdId);
+    expect(stubFetch).toHaveBeenCalledTimes(1);
+    expect(captureLandingPageSnapshot).not.toHaveBeenCalled();
+    const payload = await requireCapturePayload(blocked);
+    expect(payload.landingPageCaptureFailure?.reasonCode).toBe(
+      "enrichment_in_flight",
+    );
+
+    // A granted claim runs the capture and releases through the object.
+    stubFetch.mockImplementation(async (input) =>
+      Response.json({
+        claimed: String(input).endsWith("/acquire"),
+      }),
+    );
+    const capturePromise = Promise.resolve({
+      rawUrl: "https://example.com/offer",
+      canonicalUrl: "https://example.com/offer",
+      rawHeadline: "Launch offer",
+      normalizedHeadline: "launch offer",
+      normalizedHeadlineHash: "hash",
+      ctaText: "Buy now",
+      priceText: null,
+      formPresent: false,
+      captureMethod: "landing_page_fetch",
+      capturedAt: new Date().toISOString(),
+      artifactKey: null,
+      metadata: {},
+    });
+    captureLandingPageSnapshot.mockImplementation(() => capturePromise);
+    const granted = await prepareSearchResultSelection(
+      env,
+      resultWith([{ ...baseAd }]),
+      null,
+      { hydratePersisted: false, deferCapture: true },
+    );
+    expect(captureLandingPageSnapshot).toHaveBeenCalledTimes(1);
+    await requireCapturePayload(granted);
+    // acquire (blocked) + acquire (granted) + release all went to the
+    // lease object.
+    const urls = stubFetch.mock.calls.map(([input]) => String(input));
+    expect(urls.filter((url) => url.endsWith("/acquire"))).toHaveLength(2);
+    expect(urls.filter((url) => url.endsWith("/release"))).toHaveLength(1);
+  });
 });

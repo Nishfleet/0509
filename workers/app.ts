@@ -80,6 +80,7 @@ import { scheduleDigestScheduleExhaustionRecovery } from "./digest-schedule-reco
 import { primaryDomainRedirect } from "./primary-domain";
 import {
   resolveScheduledTask,
+  STATUS_PROBE_CRON_PROBES,
   STATUS_PROBES_CRON,
   WEEKLY_DIGEST_CRON,
   REGULAR_MONITORING_CRON,
@@ -99,6 +100,9 @@ import {
   isSiteRepWidgetIsolatedPath,
 } from "../app/lib/siterep-widget";
 export { MonitoringWorkflow } from "./monitoring-workflow";
+// Issue #3782: per-ad enrichment lease — one Durable Object instance per
+// metaAdId so the in-flight claim holds across isolates.
+export { SelectionEnrichmentLease } from "./selection-enrichment-lease";
 
 // Content-Signal (issue #2302): the AI-use reservation robots.txt declares once
 // per crawl, and that markdownResponse already stamps on /llms.txt and the
@@ -579,30 +583,35 @@ export default {
       return;
     }
 
-    if (controller.cron === STATUS_PROBES_CRON) {
-      // Live status probes (migration 0097): every 5 minutes, sample the
-      // public surfaces the /status page reports. Early-returned like the
-      // gap check so the cron can never fall through into the default
-      // monitoring tick — resolveScheduledTask pins it to its own kind, and
-      // the probe cron stays outside the four-cron soak contract on purpose
-      // (its liveness evidence is the samples table itself, not the soak
-      // observation rows).
-      scheduleBillingLifecycleEmailRecovery(env, ctx);
+    const statusProbesForCron = STATUS_PROBE_CRON_PROBES[controller.cron];
+    if (statusProbesForCron) {
+      // Live status probes (migration 0097): one Cron Trigger per cadence
+      // (issue #3782), dispatched here on `controller.cron` — each trigger
+      // can only ever run the probes its table row names. Early-returned
+      // like the gap check so the cron can never fall through into the
+      // default monitoring tick — resolveScheduledTask pins every probe
+      // cron to its own kind, and the probe crons stay outside the
+      // four-cron soak contract on purpose (liveness evidence is the
+      // samples table itself, not the soak observation rows).
+      if (controller.cron === STATUS_PROBES_CRON) {
+        // The every-5-minute trigger is the old probe tick's successor:
+        // it alone still carries the shared outbox drain and the dead-man
+        // ping at the same cadence they used to fire.
+        scheduleBillingLifecycleEmailRecovery(env, ctx);
+        const livenessPing = pingLiveness(env);
+        if (livenessPing) ctx.waitUntil(livenessPing);
+      }
       ctx.waitUntil(
-        runStatusProbes(env).catch((error) =>
+        runStatusProbes(env, { probes: statusProbesForCron }).catch((error) =>
           reportScheduledTaskFailure(env, "status_probes", error),
         ),
       );
-      // Dead-man ping — see app/lib/liveness-ping.server.ts for why this is a
-      // report-out rather than another check computed by the Worker it watches.
-      const livenessPing = pingLiveness(env);
-      if (livenessPing) ctx.waitUntil(livenessPing);
       return;
     }
 
     const scheduledTask = resolveScheduledTask(controller.cron);
     if (scheduledTask.kind === "status_probes") {
-      // Unreachable: STATUS_PROBES_CRON early-returns above. The guard pins
+      // Unreachable: every probe cron early-returns above. The guard pins
       // that so a probe tick can never widen into the monitoring fallthrough
       // if the early return moves, and narrows the union for the monitoring
       // field reads below.

@@ -8,11 +8,11 @@ import {
   EMAIL_DELIVERY_CANARY_ADDRESS,
   EMAIL_DELIVERY_CANARY_LATE_MS,
   buildCanarySubject,
-  emailCanaryDueThisTick,
 } from "~/lib/email-delivery-canary.server";
 import {
-  probeDueThisTick,
-} from "~/lib/status-probes.server";
+  STATUS_PROBE_CRON_PROBES,
+  STATUS_PROBES_EMAIL_CRON,
+} from "../workers/schedule";
 import {
   recordCanaryReceipt,
   runEmailDeliveryProbe,
@@ -238,18 +238,17 @@ describe("getEmailDeliveryStatus", () => {
   });
 });
 
-describe("probe integration (no second scheduler)", () => {
-  it("is due only on :00, :15, :30 and :45 — the */15 minutes without a */15 cron", () => {
-    for (const minute of [0, 15, 30, 45]) {
-      const at = new Date(`2026-09-12T05:${String(minute).padStart(2, "0")}:00Z`);
-      expect(emailCanaryDueThisTick(at)).toBe(true);
-      expect(probeDueThisTick("email_delivery", at)).toBe(true);
-    }
-    for (const minute of [5, 10, 20, 27, 50, 59]) {
-      const at = new Date(`2026-09-12T05:${String(minute).padStart(2, "0")}:00Z`);
-      expect(emailCanaryDueThisTick(at)).toBe(false);
-      expect(probeDueThisTick("email_delivery", at)).toBe(false);
-    }
+describe("probe integration", () => {
+  it("owns exactly one Cron Trigger — every 15 minutes on :00/:15/:30/:45 (issue #3782)", () => {
+    // The tick scheduler is gone: the cadence is the trigger itself.
+    expect(STATUS_PROBES_EMAIL_CRON).toBe("*/15 * * * *");
+    expect(STATUS_PROBE_CRON_PROBES[STATUS_PROBES_EMAIL_CRON]).toEqual(["email_delivery"]);
+    // And no other trigger may name it — a probe on two crons double-sends
+    // real canary mail.
+    const owners = Object.values(STATUS_PROBE_CRON_PROBES).filter((probes) =>
+      probes.includes("email_delivery"),
+    );
+    expect(owners).toHaveLength(1);
   });
 
   it("reports honestly through the probe shape", async () => {

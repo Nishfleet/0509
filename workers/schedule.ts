@@ -1,17 +1,49 @@
+import type { StatusProbeName } from "../app/lib/status-probes.server";
+
 export const DISCOVERY_WARMUP_CRON = "17 */6 * * *";
 export const REGULAR_MONITORING_CRON = "0 */3 * * *";
 export const DAILY_DIGEST_CRON = "0 4 * * *";
 export const WEEKLY_DIGEST_CRON = "0 5 * * MON";
 /**
- * Live status probes (app/lib/status-probes.server.ts). A control-plane cron
- * like the hourly gap check: deliberately OUTSIDE the four-cron release-soak
- * contract (SCHEDULED_OBSERVATION_DEADLINES stays exactly the four workload
- * crons, so the gap alerter neither pages for this cron nor misses one of the
- * four). Its liveness evidence is the status_probe_samples table itself — if
- * this cron stops, checked_at stops advancing on /status.
+ * Live status probes (app/lib/status-probes.server.ts). Issue #3782: each
+ * probe cadence is its own Cron Trigger — the old single 5-minute cron +
+ * in-code tick arithmetic could only express "every N×5 minutes" and could
+ * not pin provider_meta to minute 25. Control-plane crons like the hourly
+ * gap check: deliberately OUTSIDE the four-cron release-soak contract
+ * (SCHEDULED_OBSERVATION_DEADLINES stays exactly the four workload crons, so
+ * the gap alerter neither pages for these crons nor misses one of the
+ * four). Liveness evidence is the status_probe_samples table itself — if a
+ * cron stops, checked_at stops advancing on /status.
+ *
+ * Cadence map (must stay in sync with wrangler.jsonc triggers.crons):
+ * - STATUS_PROBES_CRON            every 5 min — cheap D1/self reads;
+ * - STATUS_PROBES_EMAIL_CRON      every 15 min — sends a real canary mail
+ *   through send_email; 5-minute sends would crowd the customer email
+ *   budget;
+ * - STATUS_PROBES_SIGNIN_CRON     every 30 min — real canary mail through
+ *   send_email, same budget;
+ * - STATUS_PROBES_PROVIDER_META_CRON  hourly at minute 25 — one shallow
+ *   Meta Ad Library capture through the real browser-provider chain
+ *   (browser minutes), kept clear of the :00 monitoring rails.
  */
 export const STATUS_PROBES_CRON = "*/5 * * * *";
+export const STATUS_PROBES_EMAIL_CRON = "*/15 * * * *";
+export const STATUS_PROBES_SIGNIN_CRON = "*/30 * * * *";
+export const STATUS_PROBES_PROVIDER_META_CRON = "25 * * * *";
 export { SCHEDULED_OBSERVATION_GAP_CHECK_CRON } from "../app/lib/scheduled-observation-health.server";
+
+/**
+ * The exact probe set each status-probe Cron Trigger owns. Dispatch on
+ * `controller.cron` uses this map — a probe can only ever run on the trigger
+ * that names it, so cadence drift requires editing this table AND the
+ * wrangler trigger list together.
+ */
+export const STATUS_PROBE_CRON_PROBES: Readonly<Record<string, readonly StatusProbeName[]>> = {
+  [STATUS_PROBES_CRON]: ["public_search", "billing_dodo", "uptime"],
+  [STATUS_PROBES_EMAIL_CRON]: ["email_delivery"],
+  [STATUS_PROBES_SIGNIN_CRON]: ["signin_dispatch"],
+  [STATUS_PROBES_PROVIDER_META_CRON]: ["provider_meta"],
+};
 
 export type ScheduledTask =
   | {
@@ -19,6 +51,8 @@ export type ScheduledTask =
     }
   | {
       kind: "status_probes";
+      /** The exact probe set this cron trigger owns (issue #3782). */
+      probes: readonly StatusProbeName[];
     }
   | {
       kind: "monitoring";
@@ -31,11 +65,12 @@ export type ScheduledTask =
     };
 
 export function resolveScheduledTask(cron: string): ScheduledTask {
-  if (cron === STATUS_PROBES_CRON) {
+  const probes = STATUS_PROBE_CRON_PROBES[cron];
+  if (probes) {
     // Must resolve to its own kind, never the monitoring fallthrough below:
-    // an unrecognized cron silently runs the full monitoring tick, so the
-    // 5-minute probe rail must be pinned here (and in tests) to stay inert.
-    return { kind: "status_probes" };
+    // an unrecognized cron silently runs the full monitoring tick, so every
+    // probe rail must be pinned here (and in tests) to stay inert.
+    return { kind: "status_probes", probes };
   }
 
   if (cron === DISCOVERY_WARMUP_CRON) {

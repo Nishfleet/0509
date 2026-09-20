@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   STATUS_PROBE_NAMES,
   getPublicStatusProbes,
-  probeDueThisTick,
   pruneStatusProbeSamples,
   runStatusProbes,
   type PublicStatusProbe,
@@ -64,22 +63,24 @@ describe("status probe sample schema (migration 0097)", () => {
   });
 });
 
-describe("probe cadence", () => {
-  it("runs the cheap probes every tick and budgets the expensive ones", () => {
-    const at = (minute: number) => new Date(`2026-09-12T05:${String(minute).padStart(2, "0")}:00.000Z`);
-    for (const minute of [0, 5, 10, 55]) {
-      expect(probeDueThisTick("public_search", at(minute))).toBe(true);
-      expect(probeDueThisTick("billing_dodo", at(minute))).toBe(true);
-      expect(probeDueThisTick("uptime", at(minute))).toBe(true);
-    }
-    // signin_dispatch sends real canary mail: every 30 minutes only.
-    expect(probeDueThisTick("signin_dispatch", at(0))).toBe(true);
-    expect(probeDueThisTick("signin_dispatch", at(5))).toBe(false);
-    expect(probeDueThisTick("signin_dispatch", at(30))).toBe(true);
-    // provider_meta drives a browser capture: once per hour, off the :00 rails.
-    expect(probeDueThisTick("provider_meta", at(0))).toBe(false);
-    expect(probeDueThisTick("provider_meta", at(25))).toBe(true);
-    expect(probeDueThisTick("provider_meta", at(30))).toBe(false);
+describe("probe dispatch", () => {
+  it("runs exactly the probes the caller names — the cron trigger owns the cadence (issue #3782)", async () => {
+    const { db } = probeDb();
+    const env = {
+      DB: db,
+      APP_ORIGIN: "http://127.0.0.1:9",
+    } as unknown as AppEnv;
+    // The */30 trigger names signin_dispatch alone; no tick arithmetic may
+    // smuggle the cheap probes in beside it.
+    const results = await runStatusProbes(env, {
+      probes: ["signin_dispatch"],
+      now: new Date("2026-09-12T05:05:00.000Z"),
+    });
+    expect(results.map((result) => result.probe)).toEqual(["signin_dispatch"]);
+    const rows = (await db!.prepare(
+      "SELECT DISTINCT probe FROM status_probe_samples",
+    ).bind().all()).results as Array<{ probe: string }>;
+    expect(rows).toEqual([{ probe: "signin_dispatch" }]);
   });
 });
 
@@ -94,7 +95,11 @@ describe("runStatusProbes", () => {
       // network from tests, and the probe records an honest failed sample.
       APP_ORIGIN: "http://127.0.0.1:9",
     } as unknown as AppEnv;
-    const results = await runStatusProbes(env, { now: new Date("2026-09-12T05:05:00.000Z") });
+    // The */5 cron's probe set, passed the way workers/app.ts passes it.
+    const results = await runStatusProbes(env, {
+      probes: ["public_search", "billing_dodo", "uptime"],
+      now: new Date("2026-09-12T05:05:00.000Z"),
+    });
     const due = new Set(results.map((result) => result.probe));
     expect(due.has("public_search")).toBe(true);
     expect(due.has("billing_dodo")).toBe(true);
@@ -122,7 +127,10 @@ describe("runStatusProbes", () => {
     } as unknown as AppEnv;
     // uptime throws when fetch fails (dead loopback port) — the
     // assertion is that runStatusProbes still resolves with a failed sample.
-    const results = await runStatusProbes(env, { now: new Date("2026-09-12T05:05:00.000Z") });
+    const results = await runStatusProbes(env, {
+      probes: ["uptime"],
+      now: new Date("2026-09-12T05:05:00.000Z"),
+    });
     const uptime = results.find((result) => result.probe === "uptime");
     expect(uptime).toBeDefined();
     expect(uptime!.ok).toBe(false);

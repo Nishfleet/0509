@@ -15,6 +15,8 @@ import {
   sendScheduledObservationGapAlert,
 } from "~/lib/scheduled-observation-health.server";
 
+import { STATUS_PROBE_CRON_PROBES } from "../workers/schedule";
+
 import { applyMigration, createSqliteD1 } from "./helpers/sqlite-d1";
 
 const sendOperatorAlertEmailDetailed = vi.fn();
@@ -122,13 +124,16 @@ describe("scheduled observation gap check", () => {
     const configuredCrons = [...cronBlock.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
     expect(configuredCrons).toContain(SCHEDULED_OBSERVATION_GAP_CHECK_CRON);
 
-    // The status-probe cron (packet 2026-09-12) is a control-plane cron, not
-    // a workload cron — it lives in workers/schedule.ts as `kind: "status_probes"`
-    // and intentionally stays OUT of the four-cron soak contract. Strip it the
-    // same way we strip the gap check so the workload set can be compared.
-    const STATUS_PROBES_CRON_STRING = "*/5 * * * *";
+    // The status-probe crons (issue #3782 — one Cron Trigger per cadence)
+    // are control-plane crons, not workload crons — they live in
+    // workers/schedule.ts as `kind: "status_probes"` and intentionally stay
+    // OUT of the four-cron soak contract. Strip every key of
+    // STATUS_PROBE_CRON_PROBES the same way we strip the gap check so the
+    // workload set can be compared.
     const workloadCrons = configuredCrons.filter(
-      (cron) => cron !== SCHEDULED_OBSERVATION_GAP_CHECK_CRON && cron !== STATUS_PROBES_CRON_STRING,
+      (cron) =>
+        cron !== SCHEDULED_OBSERVATION_GAP_CHECK_CRON &&
+        STATUS_PROBE_CRON_PROBES[cron] === undefined,
     );
 
     expect(workloadCrons.sort()).toEqual(

@@ -426,17 +426,12 @@ export async function runEmailDeliveryCanaryTick(
 
 
 /*
- * Status-probe integration: the canary rides the five-minute live-probe cron in
- * app/lib/status-probes.server.ts on a 15-minute budget (every third 5-minute
- * tick — :00, :15, :30, :45 UTC, the same minutes a star-slash-15 cron would fire).
- * No second scheduler: the probe sample row for `email_delivery` is the
+ * Status-probe integration: the canary rides its own every-15-minutes Cron
+ * Trigger (STATUS_PROBES_EMAIL_CRON in workers/schedule.ts, issue #3782 —
+ * :00, :15, :30, :45 UTC), dispatched to the `email_delivery` probe on
+ * `controller.cron`. The probe sample row for `email_delivery` is the
  * cron's own public-safe evidence, while the D1 loop rows carry the metric.
  */
-export const EMAIL_DELIVERY_CANARY_EVERY_TICKS = 3;
-
-export function emailCanaryDueThisTick(now: Date): boolean {
-	return Math.floor(now.getUTCMinutes() / 5) % EMAIL_DELIVERY_CANARY_EVERY_TICKS === 0;
-}
 
 /**
  * Probe-shaped wrapper over the full tick (sweep + send + loop assessment).

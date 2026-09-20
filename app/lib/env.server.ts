@@ -176,6 +176,14 @@ export interface AppEnv {
   // Optional until #2181 wires the binding in wrangler.jsonc; the budget
   // helper treats an absent binding as "no quota enforced".
   DECODO_BUDGET?: KVNamespace;
+  /**
+   * Issue #3782: per-ad enrichment lease as a Durable Object
+   * (workers/selection-enrichment-lease.ts) so a revalidation routed to a
+   * second isolate cannot schedule a duplicate Browser Rendering capture.
+   * Optional: unbound envs (unit tests, local dev without `wrangler dev`)
+   * fall back to the same-isolate guard.
+   */
+  SELECTION_ENRICHMENT_LEASE?: DurableObjectNamespace;
   MONITORING_WORKFLOW?: Workflow;
   OPS_ALLOWLIST_EMAILS?: string;
   UNSUBSCRIBE_SIGNING_SECRET?: string;

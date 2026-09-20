@@ -13,8 +13,8 @@
  * the rasterized PNG is cached per card URL so repeat requests for the same
  * brand/score card don't re-render on every hit. The HTTP `cache-control` on
  * the card (max-age=3600) already absorbs most repeat traffic at the edge;
- * this in-isolate cache just avoids re-rasterizing within a single isolate's
- * lifetime.
+ * the Cache API entry (issue #3782 — previously an in-isolate Map) avoids
+ * re-rasterizing when a request lands on a cold isolate.
  */
 import { Resvg, initWasm } from "@resvg/resvg-wasm";
 import resvgWasm from "@resvg/resvg-wasm/index_bg.wasm";
@@ -22,6 +22,10 @@ import resvgWasm from "@resvg/resvg-wasm/index_bg.wasm";
 import interBoldDataUri from "../assets/fonts/Inter-Bold.ttf?inline";
 // @ts-ignore — Vite inlines the .ttf as a base64 data URI with ?inline.
 import interSemiBoldDataUri from "../assets/fonts/Inter-SemiBold.ttf?inline";
+import {
+  readCachedBytes,
+  writeCachedBytes,
+} from "~/lib/edge-object-cache.server";
 
 let resvgReady: Promise<void> | null = null;
 
@@ -70,9 +74,16 @@ function ensureResvg(): Promise<void> {
   return resvgReady;
 }
 
-/** Bounded in-isolate cache of rasterized PNGs, keyed by the card URL. */
-const PNG_CACHE = new Map<string, Uint8Array>();
-const PNG_CACHE_MAX = 256;
+/**
+ * Issue #3782: rasterized PNGs live in the Cache API (`social-card-raster-v1`),
+ * not an in-isolate Map — a cold isolate no longer re-renders a card a
+ * neighbour isolate just rasterized. The card's request URL is already a
+ * valid cache key; `cache-control` on the stored response bounds the
+ * lifetime and the runtime's own eviction bounds capacity (the old Map's
+ * 256-entry cap).
+ */
+const PNG_CACHE_NAME = "social-card-raster-v1";
+const PNG_CACHE_MAX_AGE_S = 30 * 24 * 60 * 60;
 
 /**
  * Rasterize an SVG card body to PNG bytes. The SVG is already 1200×630, so we
@@ -93,17 +104,12 @@ export async function rasterizeSocialCardPng(svg: string): Promise<Uint8Array> {
 
 /**
  * Rasterize and cache a card by its full request URL. Returns the PNG bytes.
- * The cache is bounded (PNG_CACHE_MAX entries, evicting the oldest) so a
- * long-lived isolate with many distinct brand cards can't grow unbounded.
+ * `caches` is absent under plain node, in which case this just renders.
  */
 export async function rasterizeSocialCardPngCached(url: string, svg: string): Promise<Uint8Array> {
-  const cached = PNG_CACHE.get(url);
+  const cached = await readCachedBytes(PNG_CACHE_NAME, url);
   if (cached) return cached;
   const png = await rasterizeSocialCardPng(svg);
-  if (PNG_CACHE.size >= PNG_CACHE_MAX) {
-    const oldest = PNG_CACHE.keys().next().value;
-    if (oldest !== undefined) PNG_CACHE.delete(oldest);
-  }
-  PNG_CACHE.set(url, png);
+  await writeCachedBytes(PNG_CACHE_NAME, url, png, "image/png", PNG_CACHE_MAX_AGE_S);
   return png;
 }

@@ -22,6 +22,23 @@
       "class_name": "MonitoringWorkflow"
     }
   ],
+  // Issue #3782: per-ad selection-enrichment lease — the old in-isolate Map
+  // let a revalidation on a second isolate schedule a duplicate Browser
+  // Rendering capture. One DO instance per metaAdId.
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SELECTION_ENRICHMENT_LEASE",
+        "class_name": "SelectionEnrichmentLease"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["SelectionEnrichmentLease"]
+    }
+  ],
   "routes": [
     {
       "pattern": "0509.io",
@@ -67,8 +84,15 @@
       "name": "EMAIL"
     }
   ],
+  // Issue #3782: the status probes moved off one 5-minute cron + in-code tick
+  // arithmetic onto one Cron Trigger per cadence (see STATUS_PROBE_CRON_PROBES
+  // in workers/schedule.ts — keep this list and that table in sync):
+  //   */5      public_search, billing_dodo, uptime
+  //   */15     email_delivery canary (real send_email mail)
+  //   */30     signin_dispatch (real send_email mail)
+  //   25 *     provider_meta (Meta Ad Library capture, off the :00 rails)
   "triggers": {
-    "crons": ["*/5 * * * *", "13 * * * *", "17 */6 * * *", "0 */3 * * *", "0 4 * * *", "0 5 * * MON"]
+    "crons": ["*/5 * * * *", "*/15 * * * *", "*/30 * * * *", "25 * * * *", "13 * * * *", "17 */6 * * *", "0 */3 * * *", "0 4 * * *", "0 5 * * MON"]
   },
   "vars": {
     "APP_NAME": "0509",

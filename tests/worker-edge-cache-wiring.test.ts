@@ -110,6 +110,8 @@ async function loadWorker() {
     marketingPageHtmlForPathname: () => null,
   }));
   vi.doMock("../workers/monitoring-workflow", () => ({ MonitoringWorkflow: class {} }));
+  // Issue #3782: the lease class imports `cloudflare:workers` (no node resolution).
+  vi.doMock("../workers/selection-enrichment-lease", () => ({ SelectionEnrichmentLease: class {} }));
   vi.doMock("../workers/delivery-recovery", () => ({
     scheduleBillingLifecycleEmailRecovery: vi.fn(),
   }));
