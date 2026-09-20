@@ -10,7 +10,9 @@ import { fetchHiringSnapshot, diffHiring } from "~/lib/sources/hiring/hiring-sna
  * week, snapshotting the open roles and alerting on new/closed roles. The
  * weekly cadence is the per-competitor 7-day gate reused from the snapshot
  * submodule. No credentials are needed (job feeds are public), so
- * `requiresEnv` is always false.
+ * `requiresEnv` always returns true — the env filter enables the source on
+ * every plan that includes it (#2709: false here meant "not connected", so
+ * hiring was filtered out of getEnabledSources and stuck at "coming_soon").
  */
 export const hiringAdapter: SourceAdapter = {
   id: "hiring",
@@ -18,7 +20,7 @@ export const hiringAdapter: SourceAdapter = {
   kind: "signal",
   implemented: true,
   cadence: "weekly",
-  requiresEnv: () => false,
+  requiresEnv: () => true,
   async fetch(env: unknown, competitor: SourceFetchContext): Promise<SourceFetchResult> {
     return fetchHiringSnapshot(env as AppEnv, competitor);
   },
