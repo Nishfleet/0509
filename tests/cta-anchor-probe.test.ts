@@ -374,6 +374,18 @@ describe("CTA class-name transition-diff guard (issue #2576)", () => {
     expect(markup).not.toContain("No clear CTA");
   });
 
+  it("guards a diff whose before and after are both leaked classes", () => {
+    const markup = renderToStaticMarkup(
+      createElement(OfferTimelineLedger, {
+        entries: [transitionEntry({ before: "ic-left-nav", after: "js-submit" })],
+      }),
+    );
+    expect(markup).toContain('f9-timeline-before">No clear CTA<');
+    expect(markup).toContain('f9-timeline-after">No clear CTA<');
+    expect(markup).not.toContain("ic-left-nav");
+    expect(markup).not.toContain("js-submit");
+  });
+
   it("route fixture: the /ads/:domain row guards the transition diff too", () => {
     const markup = renderToStaticMarkup(
       createElement(BrandOfferTimeline, {
