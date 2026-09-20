@@ -1,6 +1,7 @@
 import { decodeHtmlEntities as decodeXml } from "~/lib/decode-html.server";
 import { parseFeedItems, stripHtml } from "~/lib/presence-connectors/rss.server";
 import { presenceContentHash } from "~/lib/presence-hash";
+import { stripScriptAndStyle } from "~/lib/sanitize-text.server";
 import {
   assertRobotsAllowedForUrls,
   presenceSafeFetch,
@@ -302,12 +303,16 @@ async function fetchPageChange(
 
   const title = extractTitle(response.body) ?? "Website update";
   const observedAt = new Date().toISOString();
-  const contentHash = await presenceContentHash({ title, bodyExcerpt: stripHtml(response.body).slice(0, 280) });
+  // stripHtml keeps <script>/<style> text, which carries per-poll noise
+  // (analytics snippets, build ids); strip those blocks first so the hashed
+  // and stored excerpt reflect only the visible page.
+  const bodyExcerpt = stripHtml(stripScriptAndStyle(response.body)).slice(0, 280);
+  const contentHash = await presenceContentHash({ title, bodyExcerpt });
   const item: NormalizedPresenceItem = {
     externalId: null,
     canonicalUrl: siteUrl,
     title,
-    bodyExcerpt: stripHtml(response.body).slice(0, 280) || null,
+    bodyExcerpt: bodyExcerpt || null,
     author: null,
     publishedAt: observedAt,
     observedAt,
