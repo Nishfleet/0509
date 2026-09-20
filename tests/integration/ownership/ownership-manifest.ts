@@ -101,6 +101,7 @@ export const SCOPED_VIA_PARENT: ReadonlyArray<{ table: string; parent: string }>
   { table: "proof_capture", parent: "proof_target" },
   { table: "digest_delivery", parent: "digest_run" },
   { table: "digest_item", parent: "digest_run" },
+  { table: "digest_item_jev_score", parent: "digest_run" },
   { table: "ad_observation", parent: "watchlist_run" },
   { table: "collection_item", parent: "collection" },
   { table: "collection_item_tag", parent: "collection_item" },

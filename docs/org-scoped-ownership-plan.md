@@ -99,6 +99,7 @@ is authoritative when the two disagree; PRs that move a table update both.
 | landing_page_snapshot * | (content-addressed artifact store, keyed by canonical_url hash) | stays shared (see reason) |
 | digest_delivery | digest_run | inherits |
 | digest_item | digest_run (+ watchlist_id) | inherits |
+| digest_item_jev_score | digest_run (+ watchlist_id) | inherits |
 | ad_observation | watchlist_run | inherits |
 | collection_item | collection | inherits |
 | collection_item_tag | collection_item | inherits |
