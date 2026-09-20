@@ -33,7 +33,6 @@
     "scripts/check-worker-bundle-size.mjs",
     "scripts/verify-deploy-readiness.mjs",
     "scripts/verify-cross-browser-risk-proof.mjs",
-    "scripts/gate-c-soak*.mjs",
     "scripts/check-live-public-home*.mjs",
     "scripts/release-scheduled-observation-contract.mjs",
     "e2e/csp-manifest-warning.mjs",
