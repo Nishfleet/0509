@@ -40,8 +40,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 
-export const ESTIMATES_PATH = "scripts/d1-budget-estimates.json";
-export const QUERIES_PATH = "scripts/d1-budget-queries.json";
+export const ESTIMATES_PATH = "tests/fixtures/d1-budget-estimates.json";
+export const QUERIES_PATH = "tests/fixtures/d1-budget-queries.json";
 
 const CANARY_BUDGET_PATTERN =
   /d1-budget:\s*reads=(\d+)\s+writes=(\d+)\s+runs_per_day=(\d+)/;

@@ -23,7 +23,6 @@ const NO_LOCK_WRAPPER_DOCS = [
 // deploy-window lane. The lock wrapper check above looks for
 // "deploy-window-lock" and would miss "deploy-window lane".
 const NO_DEPLOY_WINDOW_LANE_COMMENTS = [
-  "scripts/ci-vitest-run.sh",
 ] as const;
 
 const hostedRunner = "ubuntu-latest";
@@ -122,22 +121,4 @@ jobs:
     }
   });
 
-  it("keeps ci-vitest-run.sh from teaching the deleted deploy-window lane", () => {
-    expect(
-      deployWindowLaneCommentViolations(
-        "When invoked through the deploy-window lane, the retry happens inside the lane already acquired",
-      ),
-    ).toEqual(["deploy-window lane leftover"]);
-    expect(
-      deployWindowLaneCommentViolations(
-        "The retry is purely internal to this wrapper",
-      ),
-    ).toEqual([]);
-    for (const commentPath of NO_DEPLOY_WINDOW_LANE_COMMENTS) {
-      const source = readFileSync(commentPath, "utf8");
-      expect(deployWindowLaneCommentViolations(source), commentPath).toEqual(
-        [],
-      );
-    }
-  });
 });

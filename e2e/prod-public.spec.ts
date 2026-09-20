@@ -495,4 +495,42 @@ test.describe("public production-safe E2E smoke", { lock: "external-api" }, () =
     await page.getByRole("link", { name: "Sign in" }).click();
     await expect(page).toHaveURL(/\/auth\/login\?redirectTo=%2Fapp/);
   });
+  test("home answers 200 with and without Global Privacy Control", async ({ request }) => {
+    for (const headers of [{}, { "Sec-GPC": "1" }]) {
+      const response = await request.get("/", { headers });
+      expect(response.status(), JSON.stringify(headers)).toBe(200);
+    }
+  });
+
+  test("health is ok on every public host", async ({ request }) => {
+    for (const host of ["https://0509.io", "https://www.0509.io", "https://api.0509.io"]) {
+      const response = await request.get(`${host}/api/health`);
+      expect(response.ok(), host).toBe(true);
+      const payload = (await response.json()) as { status?: string };
+      expect(payload.status, host).toBe("ok");
+    }
+  });
+
+  test("pricing preview is available and consistent for IN, US and GB", async ({ request }) => {
+    for (const country of ["IN", "US", "GB"]) {
+      const response = await request.get(`/api/pricing-preview?country=${country}`);
+      expect(response.ok(), country).toBe(true);
+      const preview = (await response.json()) as {
+        available?: boolean;
+        country?: string;
+        prices?: Record<string, { monthly?: { currency?: string } | null; yearly?: { currency?: string } | null }>;
+        annualValidation?: Record<string, { monthlyAmount?: number; annualAmount?: number }>;
+      };
+      expect(preview.available, country).toBe(true);
+      expect(preview.country, country).toBe(country);
+      for (const plan of ["scout", "starter"]) {
+        expect(preview.prices?.[plan]?.monthly?.currency, `${country} ${plan} monthly`).toBeTruthy();
+        expect(preview.prices?.[plan]?.yearly?.currency, `${country} ${plan} yearly`).toBeTruthy();
+        const check = preview.annualValidation?.[plan];
+        expect(Number(check?.monthlyAmount), `${country} ${plan} monthlyAmount`).toBeGreaterThan(0);
+        expect(Number(check?.annualAmount), `${country} ${plan} annualAmount`).toBeGreaterThan(0);
+        expect(Number(check?.annualAmount), `${country} ${plan} annual <= 12x monthly`).toBeLessThanOrEqual(12 * Number(check?.monthlyAmount));
+      }
+    }
+  });
 });
