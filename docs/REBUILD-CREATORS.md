@@ -65,14 +65,14 @@ author:     Gymshark
 |---|---|---|---|
 | `feeds/videos.xml` | **A** | any public channel, latest 15, no history, no pagination | free |
 | YouTube Data API v3 `channels.list` / `videos.list` | **A** | any public channel, with statistics and full history | 1 quota unit per call against a default 10,000/day |
-| YouTube Data API v3 `search.list` | **A** | discovery — other people's videos about a creator | **100 units per call** → ~100 searches/day on the default quota |
+| YouTube Data API v3 `search.list` | **A** | discovery — other people's videos about a creator | **capped at 100 calls/day**, a separate allocation from the 10,000-unit pool |
 | Scraping `youtube.com/@handle` | **D** | — | rejected; the feed exists |
 
 **The channel-id resolution trap, and it is real.** A stale id does not return an empty feed — it returns **404 with 1,613 B of Google's HTML error page** (probed 12:00:46 UTC with a carried-over id). I recovered the correct id by fetching `https://www.youtube.com/@Gymshark/about` with a browser UA (200, **2,068,147 B**) and taking the most frequent `UC…` token: 182 occurrences against 7 for the runner-up.
 
 So: **resolve handle → channel id once, cache it on the entity, never per poll**, and treat a feed 404 as a source failure rather than "no videos". That 2 MB bot-gated page is a Browser Run job, not a plain `fetch` (keep-list finding 6).
 
-**The split that decides the tier:** the feed gives *what this creator published*. Finding *what others published about them* needs `search.list` at 100 units a call, or the SERP. The free feed is the MVP; the keyed Data API is the upgrade, and its quota — ~100 searches/day — is the number that decides whether it scales to 100 creators.
+**The split that decides the tier:** the feed gives *what this creator published*. Finding *what others published about them* needs `search.list` or the SERP. Read the current quota table carefully, because the widely-repeated "search costs 100 units" figure is not what it says today: `search.list` has its **own 100-calls-per-day allocation**, separate from the 10,000 units/day that cover `channels.list`, `videos.list` and `commentThreads.list` at **1 unit each**. So enrichment-by-id is effectively free and **discovery is the scarce resource** — 100 searches a day does not stretch across 100 creators, and the SERP has to carry it.
 
 ---
 
@@ -118,7 +118,7 @@ I grepped that 372 KB for `"id":"7…"` and `video/7…` and found **nothing**. 
 | TikTok Research API | **A** | broad, but restricted | applicant-gated; see below |
 | TikTok Commercial Content Library | **A** | ads, not organic | free — and it is an **ads** source, filed under the ads engine |
 
-**On the Research API:** it is the only official route to other accounts' organic data, and eligibility has historically been restricted to non-profit academic researchers in the US and EU. I have not re-read the current eligibility page today, so: **treat as closed until someone reads developers.tiktok.com and says otherwise.** We are a commercial product; the base rate on this is "no".
+**On the Research API: confirmed closed to us.** Eligibility, read on developers.tiktok.com today, is academic institutions in the US, EEA, UK, Canada and Switzerland; EU not-for-profit research organisations; and Brazilian academic or non-profit youth-safety research — all *"on a not-for-profit basis"*, with a defined proposal, ethics approval and data-security commitments, plus EU DSA Vetted Researchers. A commercial product does not qualify. Not a maybe.
 
 ---
 
@@ -157,7 +157,12 @@ A **media-not-found** error, not an auth error. The endpoint accepted the unauth
 | Instagram Graph API `business_discovery` | **A** | **another** business/creator account's counts and recent media | free, but needs a Facebook app, a connected IG Business account and App Review |
 | Browser Run on the profile | **D** | the grid | browser-seconds; **unproven here** |
 
-**`business_discovery` is the one official route that sees other accounts** — it is designed for exactly this — but it requires an approved Facebook app with a connected Instagram Business account. That is a real onboarding cost and a real review, not a signup. **It is the right P3 upgrade and the wrong MVP.**
+**`business_discovery` is the one official route that sees other accounts** — it returns another Business/Creator account's `followers_count`, `media_count`, profile fields and `/media` edge with like and comment counts. Two conditions decide whether we can use it, both read today:
+
+- It lives on **"Instagram API with Facebook Login for Business"** — the Page-linked configuration. The newer *Business Login for Instagram* flavour does **not** carry it, so choosing the wrong login flavour silently forecloses the feature.
+- It is **exempt from the impressions-scaled business rate limit** (`4800 × impressions / 24 h`) and bound by the app-level platform cap instead, which is what makes it viable for polling accounts we have no relationship with. Age-gated accounts return nothing.
+
+It needs an approved Facebook app with a connected Instagram Business account: a real onboarding cost and a real review, not a signup. **It is the right P3 upgrade and the wrong MVP** — and it is the only route to an *exact* follower count, against the logged-out page's rounded "9M".
 
 **Rank C is a warning, not a footnote.** Parsing `og:description` for "9M Followers" is markup-dependent and will break silently. Two mitigations, both cheap: parse defensively and treat a parse failure as a source failure; and note that "9M" is **rounded** — Instagram's logged-out page does not expose an exact count, so week-over-week deltas below a million are invisible on this route. For a creator with 40k followers the rounding is fine; for Gymshark it is useless. That is a product-level limitation, not a bug.
 
@@ -315,7 +320,7 @@ Plus the mentions engine's six sources (`REBUILD-MENTIONS.md`), which are platfo
 1. **Bluesky app password** on a throwaway handle → the whole public network, near-real-time, documented API.
 2. **Twitch developer application** → Helix app access token → any channel's full public data.
 
-**Then, in order of value per unit of effort:** YouTube Data API key (unlocks `search.list` discovery at 100 units/call); the `instagram_oembed` tokenless test (ten seconds, and it either unlocks the TikTok-style chain for Instagram or it does not); Instagram `business_discovery` via an approved Facebook app (the only official route to another account's exact counts).
+**Then, in order of value per unit of effort:** YouTube Data API key (enrichment at 1 unit a call is effectively free; `search.list` discovery is capped at 100 calls/day and will not stretch to 100 creators); the `instagram_oembed` tokenless test (ten seconds, and it either unlocks the TikTok-style chain for Instagram or it does not); Instagram `business_discovery` via an approved Facebook app (the only official route to another account's exact counts).
 
 **Out, each for a stated reason:** X (every route closed, spend decision), Patreon (403/401/404 on everything public), Threads competitors (brittle 600 KB scrape for data the official API gives only for your own account), LinkedIn personal profiles (unproven and hard-gated), TikTok Research API (applicant-gated, we do not qualify).
 
@@ -331,47 +336,78 @@ The one route with a real unit cost is **Browser Run**, and none of the four MVP
 
 ## Paid providers — the money decision
 
-**Nothing below was purchased, signed up for, or trialled.** Prices are read from public pricing pages.
+**Nothing below was purchased, signed up for, or trialled.** Every figure is quoted from the vendor's live public pricing page, read **2026-09-21** from this VPS. Where a page would not render a number, the row says so.
 
-All four pricing pages were read **2026-09-21 ~12:12 UTC** from this VPS. `scrapecreators.com/pricing` is a **404**; the tiers live on the homepage at `/#pricing`.
+### The unit trap, first, because it inverts the ranking
 
-| Provider | Tier | Monthly USD | Billing unit | Derived $/1,000 records | Platforms | Other accounts? |
-|---|---|---|---|---|---|---|
-| **Apify** <br><https://apify.com/pricing> | Free / Starter / Scale / Business | $0 / **$19** / **$199** / **$999** | platform credit; `1 CU = 1 GB RAM for 1 hour`. Store actors are "pay per event" or "pay per usage" — **the plan page publishes no per-result price** | actor-specific — the TikTok Scraper (`clockworks/tiktok-scraper`, its own page) is **$1.70 / 1,000 results**, pay-per-event | IG, TikTok, YouTube, X, FB, LinkedIn via separate actors | **yes** |
-| **Bright Data** <br><https://brightdata.com/products/web-scraper/pricing> | Free / Pay-as-you-go / Scale / Enterprise | $0 (5K records/mo) / usage / **$499** (384,000 records incl.) / custom | records | **$1.50 / 1K** PAYG; **$1.30 / 1K** additional on Scale | IG (profiles, posts, reels), TikTok (profiles, posts), LinkedIn (people, company, jobs, posts), X (profiles, posts), YouTube (videos, channels), FB pages | **yes** |
-| **ScrapeCreators** <br><https://scrapecreators.com/#pricing> | Free / Freelance / Business / Enterprise | $0 (100 credits) / **$47** (25,000) / **$497** (500,000) / custom | credits, **never expire**, pay-as-you-go not subscription | **$1.88 / 1K** (Freelance) → **$0.99 / 1K** (Business) | 37+ APIs — TikTok, IG, YouTube, FB, X, LinkedIn, Reddit, Pinterest, Threads, Bluesky, Twitch, Spotify | **yes** |
-| **EnsembleData** <br><https://ensembledata.com/pricing> | Free / Wood / Bronze / Silver / Gold / Platinum | $0 (50/day) / **$100** (1,500/day) / **$200** (5,000/day) / **$400** (11,000/day) / **$800** (25,000/day) / **$1,400** (50,000/day) | in-house "units", **quota is per day**; an endpoint costs **1–10 units**, some variable by `#posts` / `#replies` | Wood ≈ 45,000 units/mo for $100 → **$2.22 / 1K units**; Platinum ≈ 1.5M/mo for $1,400 → **$0.93 / 1K units**. **Records ≠ units** — divide by 1–10 | TikTok, Instagram, YouTube, Threads, Reddit, Twitch, Twitter, Snapchat | **yes** |
+Three of these vendors bill in three different things, and quoting their headline rates side by side gives the wrong answer:
 
-**RapidAPI-hosted social APIs** are a whole category of resellers wrapping the same scraping, with per-call freemium tiers. Not priced here: they are a marketplace of individually-maintained listings, so "RapidAPI" is not a vendor you can evaluate — each listing is. Named so the category is not mistaken for an unexplored option.
+- **Bright Data** bills per **record** — "one extracted item… e.g. one LinkedIn profile".
+- **ScrapeCreators** bills per **request** (1 credit = 1 request). A single "user posts" request returns many records, so its effective cost per record is well below its headline.
+- **EnsembleData** bills in **units**, and its published packing table is what decides everything: **1 unit = 10 posts**, or 30 comments, or 20 hashtag/keyword search results, and 2 units = 100 followers. A "User Info" call is 1 unit; "IG User Detailed Info" is 10.
+
+So EnsembleData at 1,000 posts = **100 units**, not 1,000. That is an order of magnitude, and it moves it from "most expensive" to **cheapest by roughly 10×**.
+
+### Per-record prices
+
+| Provider | Tier | Monthly USD | Billing unit | Derived cost | Other accounts? |
+|---|---|---|---|---|---|
+| **EnsembleData** <br><https://ensembledata.com/pricing> | Wood / Bronze / Silver / Gold / Platinum | **$100** (1,500 units/day) / **$200** (5,000) / **$400** (11,000) / **$800** (25,000) / **$1,400** (50,000) | units, **quota resets daily at 00:00 UTC**; 1 unit = 10 posts | $2.22 → $0.93 per 1,000 **units** = **$0.22 → $0.09 per 1,000 posts** | **yes**, arbitrary usernames |
+| **ScrapeCreators** <br><https://scrapecreators.com/#pricing> | Free / Freelance / Business / Enterprise | $0 (100 credits) / **$47** (25,000) / **$497** (500,000) / custom | credits = **requests**; never expire; pay-as-you-go, not a subscription | **$1.88 → $0.99 per 1,000 requests**; per record, lower | **yes**, by handle or URL |
+| **Bright Data** <br><https://brightdata.com/pricing/web-scraper> | Free / PAYG / Scale / Enterprise | $0 (5K records/mo) / usage / **$499** (384,000 records incl.) / custom | records | **$1.50 / 1K** PAYG, **$1.30 / 1K** additional on Scale. Datasets: **$250 / 100K = $2.50 / 1K** | **yes** |
+| **Apify** <br><https://apify.com/pricing> | Free / Starter / Scale / Business | $0 / **$19** / **$199** / **$999** — the fee is a **usage credit**, and unused credit expires at cycle end | per actor, pay-per-event | Instagram **$2.70** (Free) / **$2.30** (Starter) / **$1.50** (Scale+) per 1K results; TikTok from **$1.70**; YouTube **$2.40–$5.00** (the actor page contradicts itself — budget $5.00); **X `apidojo/tweet-scraper` $0.40 per 1,000 tweets** | **yes** |
+| **CreatorDB** <br><https://creatordb.app/pricing> | Free / Pro / Premium / Enterprise | $0 / **$79** (3,160 credits) / **$249** (12,450) / **$749** (74,900) | credits; a profile is 2, a verified email 15 | **$20 → $80 per 1,000 profiles** | yes |
+| **Modash** <br><https://www.modash.io/pricing> | Essentials / Performance / Enterprise | **$199** (300 opened profiles) / **$499** (800) / "Starts at $14,700 Yearly" | opened profiles | **~$663 per 1,000 profiles** | yes — but this is a discovery tool, not a data pipe |
+| **Phyllo** <br><https://getphyllo.com/pricing> | — | **not published** — "Get a Quote" only | — | — | — |
+
+**RapidAPI** hosts hundreds of resold social scrapers on a standard `BASIC / PRO / ULTRA / MEGA` ladder. Its `/pricing` pages render tier prices client-side and returned **HTTP 200 with no price in the served HTML** from this host, so no figure is quoted. It is a marketplace of individually-maintained listings, not a vendor you can evaluate — named so the category is not mistaken for an unexplored option.
 
 ### What this costs at 100 tracked creators, daily
 
 Model: 100 creators × 4 platforms × 1 poll/day × ~10 records = **4,000 records/day ≈ 120,000 records/month**.
 
-| Provider | Cost at 120k records/month |
-|---|---|
-| Bright Data, pay-as-you-go | **~$180** |
-| Bright Data, Scale | **$499** (covers 384k, so ~3× headroom) |
-| Apify (at the TikTok actor's $1.70/1K) | **~$204** of credit — the $199 Scale plan does not quite cover it |
-| ScrapeCreators, Business rate | **~$119** of credit; $497 buys roughly four months |
-| EnsembleData | **$200 – $1,400** depending on units-per-call (1–10). The spread is the whole risk. |
+| Provider | Cost at 120k records/month | Note |
+|---|---|---|
+| **EnsembleData** | **$100/mo (Wood)** | 120k posts = 12,000 units/month = 400/day, well inside Wood's 1,500/day |
+| **ScrapeCreators** | **~$119 of credit** at the Business rate | and credits never expire, so $497 buys roughly four months |
+| **Bright Data** PAYG | **~$180/mo** | Scale at $499 gives 3× headroom |
+| **Apify** | **~$204–$600/mo** | depends entirely on which actor; Instagram and YouTube are the expensive ones |
+| **CreatorDB / Modash** | **$2,400 / $79,000** | profile-priced tools; wrong shape for per-post polling |
 
-**The finding the packet asked for.** That is **$1.20 – $5.00 per tracked creator per month** in raw data cost, before a single Worker request, before D1, before Jev. Any plan that lets a customer track ten competitors at under roughly $20/month is **underwater on data alone** on any of these providers. The zero-spend set is not a cost optimisation — it is what makes the unit economics exist at all.
+**The finding the packet asked for.** The per-record vendors land at **$1.50–$5.00 per 1,000 records**, which is **$1.80–$6.00 per tracked creator per month** before a single Worker request. A plan letting a customer track ten competitors at under ~$20/month is underwater on data alone **on those vendors**. EnsembleData's post-packing changes that picture materially — roughly **$1.00 per 100 creators per month** — which is the one number in this section worth a second look before any decision is made.
 
-**EnsembleData deserves one extra warning.** Its quota is **per day**, not per month, so a backfill or a retry storm cannot borrow from tomorrow — it just fails. And "units" are 1–10 per endpoint with some variable by result count, so the monthly bill is not knowable in advance from the price page. That is the opposite of what a cost-capped product wants.
+### Official APIs — what they actually give you about *other* accounts
+
+| Platform | Route | Other accounts? | Price | Binding constraint |
+|---|---|---|---|---|
+| **Twitch** | Helix + **app access token** (client id + secret, client-credentials — no user OAuth) | **yes, fully.** `/helix/users`, `/channels`, `/videos`, `/clips`, `/streams` all documented as "Requires an app access token or user access token" | **free**, no fee published | token-bucket, 1 point/request, separate app and user buckets. The guide's `Ratelimit-Limit: 800` is a **worked example, not a documented ceiling** — read the header at runtime |
+| **YouTube** | Data API v3 | yes, any public channel or video | free | **`search.list` is capped at 100 calls/day**, separate from the 10,000-unit pool that covers `channels.list` / `videos.list` / `commentThreads.list` at **1 unit each**. Discovery is the scarce thing; enrichment by id is effectively free |
+| **Instagram** | Graph API **`business_discovery`** | **yes** — another Business/Creator account's `followers_count`, `media_count`, profile and `/media` with like and comment counts | free | Available **only on "Instagram API with Facebook Login for Business"** — the Page-linked configuration. The newer Business-Login-for-Instagram flavour does not carry it. Age-gated accounts return nothing. Notably it is exempt from the impressions-scaled business rate limit (`4800 × impressions / 24 h`) and bound by the app-level platform cap instead |
+| **TikTok** | Display API | **no — own account only** (`user.info.basic`, `video.list` under the creator's OAuth) | free | — |
+| **TikTok** | Research API | yes, broadly | free | **Closed to us.** Eligibility is academic institutions in the US/EEA/UK/Canada/Switzerland, EU non-profits, and Brazilian academic/non-profit youth-safety research, all on a **not-for-profit basis**, with ethics approval. A commercial product does not qualify |
+| **TikTok** | Commercial Content API | yes, ads only | free, by application (~2 working days) | **EU-country ad data only** in the current phase. This is an **ads** source and belongs to the ads engine, not here |
+| **Patreon** | API v2 | **no — own account only.** No documented route returns another creator's campaign data without their authorization | not published | 100 req / 2 s per client, 100 req / min per token |
+| **LinkedIn** | self-serve (Sign In with LinkedIn / Share / Plugins) | **no** — the authenticated member's own basic profile only. Everything else is partner-gated by application | not published | no public people-search or profile-lookup exists on the self-serve track |
+
+**Two official routes are genuinely open to other accounts, and one of them is free and unblocked: Twitch Helix.** The other, Instagram `business_discovery`, is free but needs an approved Facebook app in a specific login configuration — a real onboarding cost, and the only official path to another account's *exact* follower count (as against the rounded "9M" the logged-out page gives).
 
 ### Recommendation on spend
 
-**Buy nothing yet.** The four zero-spend MVP routes are proven and free, and two free signups (Bluesky app password, Twitch developer app) convert the two highest-value unproven rows to rank A at no cost. Revisit paid providers only when a **named, measured** gap survives that work.
+**Buy nothing yet.** The four zero-spend MVP routes are proven and free, and two free signups — a Bluesky app password and a Twitch developer app — convert our two weakest rows to rank A at no cost. Revisit paid providers only when a **named, measured** gap survives that work.
 
 **If and when a provider is bought**, the shape of the decision is:
 
-- **ScrapeCreators** is the cheapest per record at scale ($0.99/1K on Business), credits never expire, and its 37+ APIs cover more of our platform list than anyone else — including Threads and Bluesky, our two weakest rows. Best fit on paper.
-- **Bright Data** is the most predictable — flat per-record pricing, a published Scale tier, and the broadest LinkedIn coverage, which is the one platform nothing else reaches.
-- **Apify** is the most flexible and the least predictable, because pricing is per actor and the plan page publishes no per-result rate.
-- **EnsembleData** is the one to avoid for a cost-capped product, for the daily-quota and variable-unit reasons above.
+- **EnsembleData is the cheapest real bulk creator data by roughly 10×**, because it packs 10 posts into a unit. Its risks are real and both are about shape, not price: the quota is **per day** so a backfill cannot borrow from tomorrow, and its 8 platforms exclude LinkedIn and Pinterest.
+- **ScrapeCreators** is the breadth buy — 37+ APIs, the only vendor covering Threads *and* Bluesky *and* the ad libraries, credits that never expire, and it bills per request rather than per record.
+- **Bright Data** is the predictability buy — flat per-record pricing, no charge for failed deliveries, an SLA, and the only real LinkedIn coverage.
+- **Apify** is worth exactly one thing: **X at $0.40 per 1,000 tweets** via `apidojo/tweet-scraper`, the best X price found anywhere in this research. Its Instagram and YouTube rates are the most expensive here.
+- **CreatorDB and Modash** are profile-priced discovery tools at $20–$663 per 1,000 profiles. Wrong shape for daily polling; possibly right for the one-time "who are this creator's rivals" question.
 
-**The single money decision for Nish:** *do we buy any creator data at all, and if so, is it ScrapeCreators Business at $497 (≈ four months of 100-creator coverage, credits that never expire) or Bright Data Scale at $499/month (384,000 records, predictable, best LinkedIn)?* Everything else in this document is free and needs no decision.
+**The money decisions for Nish, in priority order:**
+
+1. **X.** `apidojo/tweet-scraper` on Apify at **$0.40 / 1,000 tweets** is the cheapest X route found in either document, and it is an order of magnitude below what the X API tiers imply. X is currently ships-dark in both the mentions and creators sets; this is the one number that could change that, for roughly $19–$199/month of Apify credit.
+2. **Bulk creator data.** If we buy any, **EnsembleData Wood at $100/month** covers 100 creators daily with 3× headroom, at roughly a tenth of the per-record vendors. **ScrapeCreators Business at $497** is the alternative if Threads, Bluesky and the ad libraries matter more than price.
+3. Everything else in this document is free and needs no decision.
 
 ---
 
