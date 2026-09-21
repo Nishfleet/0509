@@ -333,7 +333,45 @@ The one route with a real unit cost is **Browser Run**, and none of the four MVP
 
 **Nothing below was purchased, signed up for, or trialled.** Prices are read from public pricing pages.
 
-<!-- PROVIDER_TABLE -->
+All four pricing pages were read **2026-09-21 ~12:12 UTC** from this VPS. `scrapecreators.com/pricing` is a **404**; the tiers live on the homepage at `/#pricing`.
+
+| Provider | Tier | Monthly USD | Billing unit | Derived $/1,000 records | Platforms | Other accounts? |
+|---|---|---|---|---|---|---|
+| **Apify** <br><https://apify.com/pricing> | Free / Starter / Scale / Business | $0 / **$19** / **$199** / **$999** | platform credit; `1 CU = 1 GB RAM for 1 hour`. Store actors are "pay per event" or "pay per usage" — **the plan page publishes no per-result price** | actor-specific — the TikTok Scraper (`clockworks/tiktok-scraper`, its own page) is **$1.70 / 1,000 results**, pay-per-event | IG, TikTok, YouTube, X, FB, LinkedIn via separate actors | **yes** |
+| **Bright Data** <br><https://brightdata.com/products/web-scraper/pricing> | Free / Pay-as-you-go / Scale / Enterprise | $0 (5K records/mo) / usage / **$499** (384,000 records incl.) / custom | records | **$1.50 / 1K** PAYG; **$1.30 / 1K** additional on Scale | IG (profiles, posts, reels), TikTok (profiles, posts), LinkedIn (people, company, jobs, posts), X (profiles, posts), YouTube (videos, channels), FB pages | **yes** |
+| **ScrapeCreators** <br><https://scrapecreators.com/#pricing> | Free / Freelance / Business / Enterprise | $0 (100 credits) / **$47** (25,000) / **$497** (500,000) / custom | credits, **never expire**, pay-as-you-go not subscription | **$1.88 / 1K** (Freelance) → **$0.99 / 1K** (Business) | 37+ APIs — TikTok, IG, YouTube, FB, X, LinkedIn, Reddit, Pinterest, Threads, Bluesky, Twitch, Spotify | **yes** |
+| **EnsembleData** <br><https://ensembledata.com/pricing> | Free / Wood / Bronze / Silver / Gold / Platinum | $0 (50/day) / **$100** (1,500/day) / **$200** (5,000/day) / **$400** (11,000/day) / **$800** (25,000/day) / **$1,400** (50,000/day) | in-house "units", **quota is per day**; an endpoint costs **1–10 units**, some variable by `#posts` / `#replies` | Wood ≈ 45,000 units/mo for $100 → **$2.22 / 1K units**; Platinum ≈ 1.5M/mo for $1,400 → **$0.93 / 1K units**. **Records ≠ units** — divide by 1–10 | TikTok, Instagram, YouTube, Threads, Reddit, Twitch, Twitter, Snapchat | **yes** |
+
+**RapidAPI-hosted social APIs** are a whole category of resellers wrapping the same scraping, with per-call freemium tiers. Not priced here: they are a marketplace of individually-maintained listings, so "RapidAPI" is not a vendor you can evaluate — each listing is. Named so the category is not mistaken for an unexplored option.
+
+### What this costs at 100 tracked creators, daily
+
+Model: 100 creators × 4 platforms × 1 poll/day × ~10 records = **4,000 records/day ≈ 120,000 records/month**.
+
+| Provider | Cost at 120k records/month |
+|---|---|
+| Bright Data, pay-as-you-go | **~$180** |
+| Bright Data, Scale | **$499** (covers 384k, so ~3× headroom) |
+| Apify (at the TikTok actor's $1.70/1K) | **~$204** of credit — the $199 Scale plan does not quite cover it |
+| ScrapeCreators, Business rate | **~$119** of credit; $497 buys roughly four months |
+| EnsembleData | **$200 – $1,400** depending on units-per-call (1–10). The spread is the whole risk. |
+
+**The finding the packet asked for.** That is **$1.20 – $5.00 per tracked creator per month** in raw data cost, before a single Worker request, before D1, before Jev. Any plan that lets a customer track ten competitors at under roughly $20/month is **underwater on data alone** on any of these providers. The zero-spend set is not a cost optimisation — it is what makes the unit economics exist at all.
+
+**EnsembleData deserves one extra warning.** Its quota is **per day**, not per month, so a backfill or a retry storm cannot borrow from tomorrow — it just fails. And "units" are 1–10 per endpoint with some variable by result count, so the monthly bill is not knowable in advance from the price page. That is the opposite of what a cost-capped product wants.
+
+### Recommendation on spend
+
+**Buy nothing yet.** The four zero-spend MVP routes are proven and free, and two free signups (Bluesky app password, Twitch developer app) convert the two highest-value unproven rows to rank A at no cost. Revisit paid providers only when a **named, measured** gap survives that work.
+
+**If and when a provider is bought**, the shape of the decision is:
+
+- **ScrapeCreators** is the cheapest per record at scale ($0.99/1K on Business), credits never expire, and its 37+ APIs cover more of our platform list than anyone else — including Threads and Bluesky, our two weakest rows. Best fit on paper.
+- **Bright Data** is the most predictable — flat per-record pricing, a published Scale tier, and the broadest LinkedIn coverage, which is the one platform nothing else reaches.
+- **Apify** is the most flexible and the least predictable, because pricing is per actor and the plan page publishes no per-result rate.
+- **EnsembleData** is the one to avoid for a cost-capped product, for the daily-quota and variable-unit reasons above.
+
+**The single money decision for Nish:** *do we buy any creator data at all, and if so, is it ScrapeCreators Business at $497 (≈ four months of 100-creator coverage, credits that never expire) or Bright Data Scale at $499/month (384,000 records, predictable, best LinkedIn)?* Everything else in this document is free and needs no decision.
 
 ---
 
