@@ -1,15 +1,15 @@
+import type { Route } from "./+types/login";
+import { env } from "cloudflare:workers";
 import { Form, useActionData, useNavigation } from "react-router";
 
 import { createAuth } from "../lib/auth.server";
 
-type Env = { DB: D1Database; EMAIL: { send(m: unknown): Promise<unknown> } };
-
-export async function action({ request, context }: { request: Request; context: { cloudflare: { env: Env } } }) {
+export async function action({ request }: Route.ActionArgs) {
   const form = await request.formData();
   const email = String(form.get("email") ?? "").trim().toLowerCase();
   if (!email) return { error: "Enter your email." };
 
-  const auth = createAuth(context.cloudflare.env as never);
+  const auth = createAuth(env as never);
   // better-auth owns minting, sending and verification. We only hand it the
   // address and report back; a failure here must not reveal whether the
   // address exists.

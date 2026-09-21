@@ -1,17 +1,20 @@
+import type { Route } from "./+types/api.auth.$";
+import { env } from "cloudflare:workers";
+
 import { createAuth } from "../lib/auth.server";
 
 /**
  * better-auth's own handler, mounted whole.
  *
- * Every auth route the plugins define — magic-link request and verify, passkey
- * registration and assertion, session, sign-out — is served from here. Nothing
- * is reimplemented above it, which is the point: the routes and the schema come
- * from the same library version, so they cannot drift apart.
+ * Bindings come from `cloudflare:workers`, which is how this scaffold exposes
+ * them. They are NOT on `context.cloudflare.env` — that is the React Router 7
+ * shape and this app provides no getLoadContext, so reaching for it throws and
+ * every auth route 500s.
  */
-export async function loader({ request, context }: { request: Request; context: { cloudflare: { env: never } } }) {
-  return createAuth(context.cloudflare.env).handler(request);
+export async function loader({ request }: Route.LoaderArgs) {
+  return createAuth(env as never).handler(request);
 }
 
-export async function action({ request, context }: { request: Request; context: { cloudflare: { env: never } } }) {
-  return createAuth(context.cloudflare.env).handler(request);
+export async function action({ request }: Route.ActionArgs) {
+  return createAuth(env as never).handler(request);
 }
