@@ -12,6 +12,12 @@ import { expect, test } from "@playwright/test";
 // migrations, so a session assertion would be testing the empty state, not the
 // product. The gated surfaces are J1-J14 in docs/REBUILD-DONE.md and they land
 // with the engines that fill those tables.
+//
+// Nothing below pins human-facing copy. A merge-queue proof that asserts exact
+// strings turns every copy edit into a red gate (2026-09-21T16:03Z: runs
+// 35623125629 and 35623124105 failed on the landing h1 copy, fixed by
+// 5aa0e76a9). What is asserted is the contract: the element exists, is
+// labelled, is enabled, or points at the right destination.
 
 test("the landing page renders its headline and its contact link", async ({ page }) => {
   const response = await page.goto("/");
@@ -20,10 +26,8 @@ test("the landing page renders its headline and its contact link", async ({ page
   const headline = page.getByRole("heading", { level: 1 });
   await expect(headline).toBeVisible();
   await expect(headline).not.toBeEmpty();
-  await expect(page.getByRole("link", { name: "support@0509.io" })).toHaveAttribute(
-    "href",
-    "mailto:support@0509.io",
-  );
+  // The contract is the destination (the support address), not the link text.
+  await expect(page.locator('a[href="mailto:support@0509.io"]')).toBeVisible();
 });
 
 test("the landing page does not scroll horizontally", async ({ page }) => {
@@ -48,9 +52,15 @@ test("the login page renders the one input that signs you in", async ({ page }) 
   const response = await page.goto("/login");
   expect(response?.status()).toBe(200);
 
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Sign in");
-  await expect(page.getByLabel("Email")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Send me a link" })).toBeEnabled();
+  const heading = page.getByRole("heading", { level: 1 });
+  await expect(heading).toBeVisible();
+  await expect(heading).not.toBeEmpty();
+  // "labelled input" in FEATURE-MAP: an email field with a programmatic label.
+  // The label's text and the button's name are copy, so they are not asserted.
+  const email = page.locator('input[type="email"][name="email"]');
+  await expect(email).toBeVisible();
+  await expect(page.locator('label[for="email"]')).not.toBeEmpty();
+  await expect(page.locator('button[type="submit"]')).toBeEnabled();
 });
 
 test("the page reaches first paint with no console errors", async ({ page }) => {
