@@ -26,8 +26,11 @@ test("the landing page renders its headline and its contact link", async ({ page
   const headline = page.getByRole("heading", { level: 1 });
   await expect(headline).toBeVisible();
   await expect(headline).not.toBeEmpty();
-  // The contract is the destination (the support address), not the link text.
-  await expect(page.locator('a[href="mailto:support@0509.io"]')).toBeVisible();
+  // The contract is the destination (the support address) plus a real
+  // accessible name — the display text itself stays unasserted.
+  const contact = page.locator('a[href="mailto:support@0509.io"]');
+  await expect(contact).toBeVisible();
+  await expect(contact).toHaveAccessibleName(/\S/);
 });
 
 test("the landing page does not scroll horizontally", async ({ page }) => {
@@ -55,11 +58,12 @@ test("the login page renders the one input that signs you in", async ({ page }) 
   const heading = page.getByRole("heading", { level: 1 });
   await expect(heading).toBeVisible();
   await expect(heading).not.toBeEmpty();
-  // "labelled input" in FEATURE-MAP: an email field with a programmatic label.
-  // The label's text and the button's name are copy, so they are not asserted.
+  // "labelled input" in FEATURE-MAP, proven directly on the field: a visible
+  // email input with any programmatic accessible name. Label text and button
+  // copy stay unasserted.
   const email = page.locator('input[type="email"][name="email"]');
   await expect(email).toBeVisible();
-  await expect(page.locator('label[for="email"]')).not.toBeEmpty();
+  await expect(email).toHaveAccessibleName(/\S/);
   await expect(page.locator('button[type="submit"]')).toBeEnabled();
 });
 
