@@ -10,6 +10,9 @@ Umbrella #3842. Author: Fable. Checked by the Opus deputy. Pairs with docs/REBUI
 4. Per-brand OFF is absolute: an off brand produces no alerts, no brief lines, no counts. Dismissed suggestions never appear anywhere.
 5. Every message says what it is, why it was sent, and how to stop it, in one line at the bottom. One-click unsubscribe per channel. Sentence case, no exclamation marks (DESIGN.md voice).
 6. Channels are rows in a `channel` table (email now; Slack, push, webhook later). Adding one is never a migration. Email goes through Cloudflare Email Service; nothing hand-rolled around it.
+7. Both emails are transactional: each is triggered by one user's own subscription state and addressed to that user alone, with no marketing content. Cloudflare Email Service's terms cover transactional mail only, and the brief is designed to stay inside that line (no promotions, no broadcast lists, one recipient per message, unsubscribe honoured before the next send). If Cloudflare ever classifies the brief otherwise, the channel decision goes to Nish; nothing else changes.
+
+Schema requirements (carried by the schema PR): a `delivery` record per item per channel per recipient, unique on that triple; an `incident` record per (workspace, page) with `opened_at`, `closed_at`, so "one open incident email per page per day" is a constraint, not a convention.
 
 ## Channels and cadence
 
