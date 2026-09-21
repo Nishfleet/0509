@@ -50,7 +50,13 @@
   // forwarded header: auth origin trust and the magic-link URL both come from
   // it, and a client-supplied value would let a link point anywhere.
   // BETTER_AUTH_SECRET stays a Worker secret.
-  "vars": { "BETTER_AUTH_URL": "https://0509.io" },
+  // JEV_API_BASE is the evaluation endpoint — the same upstream the fleet
+  // LiteLLM pass-through forwards to. The key is a Worker secret
+  // (JEV_API_KEY); unset means verdicts mark unreviewed rather than fail.
+  "vars": {
+    "BETTER_AUTH_URL": "https://0509.io",
+    "JEV_API_BASE": "https://ai-gateway.vercel.sh/v4/ai/evaluation-model"
+  },
 
   "d1_databases": [
     {
@@ -63,18 +69,42 @@
   // Browser Rendering: brand pages bot-gate a plain workerd fetch, so every
   // arbitrary-homepage read goes through real Chrome. Measured ~7 s per ads
   // pull; the cost model turns on keeping concurrency at or under the included
-  // ten (docs/REBUILD-COST.md).
-  "browser": { "binding": "BROWSER" },
+  // ten (docs/REBUILD-COST.md). "remote": true exists for `wrangler dev` —
+  // quickAction() is not implemented in local mode; a deploy ignores the flag.
+  "browser": { "binding": "BROWSER", "remote": true },
 
   // Transactional send only. The weekly brief's standing on this lane is an
   // open question recorded on docs/REBUILD-DELIVERY.md.
   "send_email": [{ "name": "EMAIL" }],
 
+  // Snapshot bodies and screenshot pairs — blobs never become D1 rows
+  // (docs/REBUILD-COST.md). Bucket pre-created: 0509-snapshots.
+  "r2_buckets": [{ "binding": "SNAPSHOTS", "bucket_name": "0509-snapshots" }],
+
+  // Hot counters: per-brand-per-day Browser Run budget. A counter is a KV
+  // write, never a D1 row.
+  "kv_namespaces": [{ "binding": "COUNTERS", "id": "de8578b053224b059226a76fc46c0548" }],
+
+  // The daily site sweep. Cron fires the Workflow; step.do retries carry the
+  // per-watch work (fleet issue 0509#3879).
+  "workflows": [
+    {
+      "name": "site-sweep",
+      "binding": "SITE_SWEEP",
+      "class_name": "SiteSweepWorkflow"
+    }
+  ],
+
+  // Engine telemetry — one data point per sweep for the run ledger.
+  "analytics_engine_datasets": [
+    { "binding": "ENGINE_TELEMETRY", "dataset": "0509_engine" }
+  ],
+
   "triggers": {
-    // The dead-man ping, and nothing else yet. Every five minutes: an external
-    // service alerts when the reports stop, which is the one failure a Worker
-    // cannot report about itself.
-    "crons": ["*/5 * * * *"]
+    // The dead-man ping every five minutes: an external service alerts when
+    // the reports stop, which is the one failure a Worker cannot report about
+    // itself. The 04:38 UTC tick is the daily site sweep.
+    "crons": ["*/5 * * * *", "38 4 * * *"]
   },
 
   "routes": [
