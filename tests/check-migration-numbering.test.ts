@@ -27,11 +27,17 @@ import { isolatedGitEnv } from "./helpers/git-env";
  * sort last — the #2506 incident, one release earlier.
  *
  * Fails closed: an unresolvable base ref is a failure, not a pass — an
- * unchecked migration numbering assertion must never read as safe. Two
+ * unchecked migration numbering assertion must never read as safe. Three
  * adjacent bypasses are closed the same way: `--no-renames` decomposes a
  * `git mv` (R100) into D+A so a rename onto a stale number is still checked,
- * and an added `.sql` that does not match `<NNNN>_*.sql` is an offender —
- * wrangler would apply it while a number-only gate never sees it.
+ * an added `.sql` that does not match `<NNNN>_*.sql` is an offender —
+ * wrangler would apply it while a number-only gate never sees it — and a
+ * separate rename-detection pass flags every `git mv` whose source is a
+ * migration .sql on the base branch (issue #3875): production's
+ * d1_migrations ledger records applied migrations by filename, so renaming a
+ * base migration re-keys the ledger and the file is applied again or fails
+ * the deploy — onto a strictly higher number the A-side check alone would
+ * wave it through as a legitimately new migration.
  *
  * The first test in this file is the gate itself: it runs the check against
  * the real repository (origin/main...HEAD) and is wired as a named step in
@@ -64,6 +70,7 @@ interface NumberingOffender {
   file: string;
   number: number | null;
   duplicateOf: string | null;
+  renamedFrom?: string;
 }
 
 interface NumberingResult {
@@ -111,8 +118,46 @@ function checkMigrationNumbering(
   const added = diff ? diff.split("\n").filter(Boolean).sort() : [];
 
   const offenders: NumberingOffender[] = [];
+
+  // Renames are detected in a second pass — the A-side diff above deliberately
+  // runs --no-renames, which decomposes a `git mv` into D+A and loses the link
+  // between old and new paths. A rename whose source is a migration .sql on
+  // the base branch is never a new migration: the production d1_migrations
+  // ledger keys applied migrations by filename, so the renamed file re-keys
+  // the ledger — onto a strictly higher number the A-side check would wave it
+  // through as new (issue #3875). Files moved INTO migrations/ from elsewhere
+  // in the repo are not ledger entries and stay on the numbering path.
+  const renamedFrom = new Map<string, string>();
+  const renameDiff = git(
+    cwd,
+    "diff",
+    "--name-status",
+    "--diff-filter=R",
+    "--find-renames",
+    `${baseSha}...${headRef}`,
+  );
+  for (const line of renameDiff.split("\n").filter(Boolean)) {
+    const [status, from, to] = line.split("\t");
+    if (
+      status?.startsWith("R") &&
+      from?.startsWith(`${MIGRATIONS_DIR}/`) &&
+      from.endsWith(".sql") &&
+      to
+    ) {
+      renamedFrom.set(to, from);
+      offenders.push({
+        file: to,
+        number: migrationNumber(to),
+        duplicateOf: null,
+        renamedFrom: from,
+      });
+    }
+  }
+
   const seenInPr = new Map<number, string>();
   for (const file of added) {
+    // Rename targets already carry the more accurate rename offender.
+    if (renamedFrom.has(file)) continue;
     const number = migrationNumber(file);
     if (number === null) {
       // wrangler applies every .sql under migrations/ — a non-<NNNN>_*.sql
@@ -135,8 +180,14 @@ function checkMigrationNumbering(
 }
 
 function formatOffenders(result: NumberingResult): string {
-  const lines = result.offenders.map(({ file, number, duplicateOf }) =>
-    number === null
+  const lines = result.offenders.map(({ file, number, duplicateOf, renamedFrom }) =>
+    renamedFrom
+      ? `  offending file: ${file}\n  renamed from: ${renamedFrom}\n` +
+        "  renaming a migration re-keys the production ledger — applied " +
+        "migrations are recorded by filename — so the file is applied again " +
+        "or fails the deploy; add a new migration instead of renaming one " +
+        "that exists on the base branch"
+      : number === null
       ? `  offending file: ${file}\n  its name does not match the ` +
         `${MIGRATIONS_DIR}/<NNNN>_*.sql numbering rule`
       : `  offending file: ${file}\n  its number: ${number}\n` +
@@ -295,6 +346,96 @@ describe("ci-migration-numbering (issue #2507)", () => {
     expect(result.added).toEqual(["migrations/0107_old_top_renamed.sql"]);
     expect(result.offenders).toHaveLength(1);
     expect(result.offenders[0].file).toBe("migrations/0107_old_top_renamed.sql");
+  });
+
+  it("fails when a base migration is renamed onto a strictly higher number", () => {
+    // The #3875 hole: under --no-renames the rename shows as D+A and the added
+    // 0200 sorts above the base top, so the numbering check alone passes it —
+    // but 0088 already exists on the base branch and may be applied to
+    // production, where the d1_migrations ledger keys it by filename.
+    const repo = setupRepo({
+      "migrations/0088_recreate_delivery_hot_path_indexes.sql": "SELECT 1;",
+    });
+    gitOrThrow(repo, ["checkout", "-b", "feature"]);
+    renameSync(
+      join(repo, "migrations/0088_recreate_delivery_hot_path_indexes.sql"),
+      join(repo, "migrations/0200_recreate_delivery_hot_path_indexes.sql"),
+    );
+    gitOrThrow(repo, ["add", "-A"]);
+    gitOrThrow(repo, ["commit", "-m", "renumber migration"]);
+    const result = checkMigrationNumbering(repo, "main", "HEAD");
+    expect(result.offenders).toHaveLength(1);
+    expect(result.offenders[0].file).toBe(
+      "migrations/0200_recreate_delivery_hot_path_indexes.sql",
+    );
+    expect(result.offenders[0].renamedFrom).toBe(
+      "migrations/0088_recreate_delivery_hot_path_indexes.sql",
+    );
+    expect(formatOffenders(result)).toContain("renamed from");
+  });
+
+  it("fails when a base migration is renamed keeping its number, and reports the rename rather than the stale number", () => {
+    // Same-number renames were already caught by the A-side check (the added
+    // path still carries a number <= baseTop); the rename pass keeps the
+    // verdict but names the real offence — re-keying the applied ledger.
+    const repo = setupRepo({
+      "migrations/0088_recreate_delivery_hot_path_indexes.sql": "SELECT 1;",
+      "migrations/0107_website_site_scan_crawl_count.sql": "SELECT 1;",
+    });
+    gitOrThrow(repo, ["checkout", "-b", "feature"]);
+    renameSync(
+      join(repo, "migrations/0088_recreate_delivery_hot_path_indexes.sql"),
+      join(repo, "migrations/0088_org_scoped_ownership.sql"),
+    );
+    gitOrThrow(repo, ["add", "-A"]);
+    gitOrThrow(repo, ["commit", "-m", "rename migration same number"]);
+    const result = checkMigrationNumbering(repo, "main", "HEAD");
+    expect(result.offenders).toHaveLength(1);
+    expect(result.offenders[0].file).toBe("migrations/0088_org_scoped_ownership.sql");
+    expect(result.offenders[0].renamedFrom).toBe(
+      "migrations/0088_recreate_delivery_hot_path_indexes.sql",
+    );
+  });
+
+  it("fails when a base migration is moved out of migrations/", () => {
+    // The rename pass is unscoped on the target side: moving an applied
+    // migration out of the directory removes a filename the production ledger
+    // recorded, which fails the deploy's apply step.
+    const repo = setupRepo({
+      "migrations/0088_recreate_delivery_hot_path_indexes.sql": "SELECT 1;",
+    });
+    gitOrThrow(repo, ["checkout", "-b", "feature"]);
+    mkdirSync(join(repo, "archive"), { recursive: true });
+    renameSync(
+      join(repo, "migrations/0088_recreate_delivery_hot_path_indexes.sql"),
+      join(repo, "archive/0088_recreate_delivery_hot_path_indexes.sql"),
+    );
+    gitOrThrow(repo, ["add", "-A"]);
+    gitOrThrow(repo, ["commit", "-m", "move migration out"]);
+    const result = checkMigrationNumbering(repo, "main", "HEAD");
+    expect(result.offenders).toHaveLength(1);
+    expect(result.offenders[0].renamedFrom).toBe(
+      "migrations/0088_recreate_delivery_hot_path_indexes.sql",
+    );
+  });
+
+  it("treats a file moved into migrations/ as a new migration, not a rename offence", () => {
+    // Source is not a migration on the base branch, so there is no ledger
+    // entry to re-key — the file is checked by numbering like any add.
+    const repo = setupRepo({
+      "migrations/0088_recreate_delivery_hot_path_indexes.sql": "SELECT 1;",
+      "docs/0090_draft.sql": "SELECT 1;",
+    });
+    gitOrThrow(repo, ["checkout", "-b", "feature"]);
+    renameSync(
+      join(repo, "docs/0090_draft.sql"),
+      join(repo, "migrations/0090_draft.sql"),
+    );
+    gitOrThrow(repo, ["add", "-A"]);
+    gitOrThrow(repo, ["commit", "-m", "move draft into migrations"]);
+    const result = checkMigrationNumbering(repo, "main", "HEAD");
+    expect(result.added).toEqual(["migrations/0090_draft.sql"]);
+    expect(result.offenders).toEqual([]);
   });
 
   it("fails when an added .sql file does not match the numbering rule", () => {
