@@ -11,7 +11,7 @@ export function meta(_: Route.MetaArgs) {
     {
       name: "description",
       content:
-        "Five to Nine is taking a season to become what it should have been. Back autumn 2026.",
+        "Quietly, we're rebuilding. You'll see where you stand when it's ready. Autumn 2026.",
     },
     // noindex while the public site is gated behind the redesign. This comes
     // off in the PR that removes the gate — not before, and not separately.
@@ -22,15 +22,14 @@ export function meta(_: Route.MetaArgs) {
 /**
  * The public site while the rebuild is in progress.
  *
- * Quiet on purpose. The first version of this page shouted in 5rem caps with a
- * struck "old site → new site" mark; Nish read the caps as aggressive and the
- * strike as a jab at our own work. So: sentence case at weight 600, one narrow
- * column with air around it, and the copy hints rather than declares. The only
- * colour on the page is the wordmark's 09.
+ * Five things, and nothing else: the wordmark, the headline, one sentence, the
+ * date, the address. Earlier versions carried a shouted caps headline, a struck
+ * "old site → new site" mark, a mono eyebrow and a breathing dot; Nish cut all
+ * of it. What is left is quiet on purpose, and the only colour on the page is
+ * the wordmark's 09.
  *
- * Still deliberately static — no loader, no state, no client behaviour beyond
- * the framework's own hydration. The largest paint is the headline, which is
- * text, so nothing here can push LCP past its budget.
+ * Deliberately static — no loader, no state, no client behaviour beyond the
+ * framework's own hydration, and no animation at all.
  */
 export default function Page() {
   return (
@@ -42,20 +41,11 @@ export default function Page() {
       </header>
 
       <div className="max-w-[34rem] py-20 sm:py-28">
-        <p className="text-ink-faint flex items-center gap-2.5 font-mono text-[0.72rem] font-normal tracking-[0.14em] lowercase">
-          <span
-            aria-hidden="true"
-            className="bg-ink-faint inline-block size-[5px] motion-safe:animate-[breathe_3.2s_ease-in-out_infinite]"
-          />
-          a quiet rebuild
-        </p>
-
-        <h1 className="font-display mt-7 text-[clamp(1.75rem,3.6vw,2.9rem)] leading-[1.15] font-semibold tracking-[-0.02em]">
-          Something is being watched.
+        <h1 className="font-display text-[clamp(1.75rem,3.6vw,2.9rem)] leading-[1.15] font-semibold tracking-[-0.02em]">
+          Quietly, we&rsquo;re rebuilding.
         </h1>
 
         <p className="text-ink-soft mt-7 text-[clamp(1rem,1.3vw,1.1rem)] leading-[1.65]">
-          Five to Nine is taking a season to become what it should have been.
           You&rsquo;ll see where you stand when it&rsquo;s ready.
         </p>
 

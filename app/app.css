@@ -78,12 +78,3 @@ body {
     transition: none !important;
   }
 }
-
-/* The one motion on the page: a 5px dot that breathes, so the page reads as
-   something running rather than something parked. Opacity only — no movement,
-   no scale (DESIGN.md §9). motion-safe: in the markup means prefers-reduced-
-   motion removes it entirely. */
-@keyframes breathe {
-  0%, 100% { opacity: 0.25; }
-  50% { opacity: 1; }
-}
