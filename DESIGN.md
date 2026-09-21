@@ -217,8 +217,18 @@ switch that lives on the brand, and the page says so in its opening line.
 One screen, no nav, no login. The top of Home in the same skin: the rank line, the
 four-week standing, the three read-this-first marks, the counts checked, a small wordmark
 and exactly one action — "Track your own brand — €10/mo". Nothing else, per
-`docs/REBUILD-STANDING-CARD.md` (#3898). The OG image is the rank line and the standing
-chart on the cream ground, rendered from the same data.
+`docs/REBUILD-STANDING-CARD.md` (#3898).
+
+**The OG image is an SVG template rendered by `@resvg/resvg-wasm`, not HTML-to-image.**
+Satori does not run on workerd, so the usual HTML → PNG route is unavailable: we build an
+SVG string from the data and rasterise it in the Worker. That constrains the design, and
+the design is built to the constraint rather than fighting it — the OG card is **text, one
+line chart as a single SVG `path`, and the logo**, on the cream ground. The rank line in
+Bricolage Grotesque caps with the rank on a green rect, the four-week standing as one
+accent path with the other brands as thin `--ink-soft` paths, the week label in mono, and
+the wordmark. No captures, no photographs, no marks, no web fonts loaded at render time —
+the two faces are embedded in the template as subset WOFF2. If a value would need HTML
+layout to place, it does not belong on the OG card.
 
 ### 2.9 The own-site incident state
 
@@ -489,7 +499,7 @@ The bar exists because the old landing served in 4.50s (#3842, 2026-09-21 14:50 
 |---|---|
 | LCP, landing and Home, simulated 4G | **< 1.5 s** |
 | Home JavaScript, gzipped | **< 150 KB** |
-| Chart library, gzipped, on the Home route | **< 20 KB** |
+| Chart library, gzipped, on the Home route | **< 30 KB** |
 | Home loader, p95 over 100 loads | < 500 ms |
 | Console errors, any of the seven screens | 0 |
 | Horizontal overflow at 390 | 0 px |
@@ -500,10 +510,14 @@ How each is kept:
 - Fonts: one Google Fonts `<link>`, three families, latin subset, `font-display: swap`,
   preconnect to both hosts. The LCP element is display text, so it must not wait on a
   font swap — the fallback metric is matched with `size-adjust`.
-- The chart is the only client library on Home. Recharts ships well over 20 KB gzipped
-  as a whole, so the standing chart imports only the line-chart surface it uses, and if
-  the measured route cost still exceeds 20 KB the chart is rendered on the server as SVG
-  and hydrated only for the hover read-out. **Measured before it ships, not assumed.**
+- The chart is the only client library on Home, and it is **uPlot**. It is maintained,
+  it is a line chart library rather than a chart framework, and it lands comfortably
+  inside the 30 KB gzipped budget where a React chart framework does not. **Recharts is
+  out** — it ships well past the budget even when tree-shaken — and so is a hand-rolled
+  inline SVG chart, which is glue by another name. The four-week standing line is a uPlot
+  line chart, styled entirely from the tokens in §4: `--ink-soft` hairlines for the other
+  brands, the accent marker band under an ink stroke for "you", `--line` gridlines,
+  mono axis labels. Measure the route's gzipped cost before it ships; do not assume it.
 - Captures are R2 objects served through Images with explicit `width`/`height` and
   `loading="lazy"` below the fold; the first read-this-first plate is eager.
 - No client-side data fetching: React Router loaders own every read, so Home is one
@@ -528,7 +542,7 @@ re-issued, so the library names and versions are restated here as the contract.
 | Per-brand switch | `switch` | The label is part of the control's hit area |
 | The mark | our composition of `<s>` + `<ins>` on tokens | Semantic HTML, not a component; it appears at four sizes |
 | Capture plate | `aspect-ratio` + `img` | Opens `dialog` for the before/after pair |
-| Four-week standing chart | `chart` block → **Recharts 3.10.1** | Line chart only. See §10 on the budget |
+| Four-week standing chart | **uPlot** | Line chart only, styled from the tokens. Recharts and hand-rolled SVG are both out — see §10 |
 | Snapshot cells, facts | `card` with dividers | Never a stat "tile" with a shadow |
 | Identity card fields | `popover` + `input` for tap-to-edit | No `form` wrapper, no labels above fields |
 | Competitors list, alerts feed | `@tanstack/react-table` 9.2.4 headless + our row | Headless only; no themed table library |
@@ -539,6 +553,7 @@ re-issued, so the library names and versions are restated here as the contract.
 | "Why we flagged this" | `drawer` on mobile, `popover` on desktop | The machinery, one tap away |
 | Sheets, dialogs, tooltips, menus | `dialog`, `sheet`, `tooltip`, `dropdown-menu` | Base UI 1.8.0 under all of them |
 | Toasts | `sonner` | Only for "saved" and "undo"; never for alerts |
+| Standing-card OG image | SVG template + **`@resvg/resvg-wasm`** | Satori does not run on workerd; see §2.8 for what that allows on the card |
 | Icons | `lucide-react` 1.47.0 | Sparingly: the product's vocabulary is type, not icons |
 | Class merging | `cn` 0.3.0 | |
 | Any input that validates | **TanStack Form 1.33.5 + zod 4.6.5** | The same schema parses `formData` in the action |
