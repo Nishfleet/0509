@@ -1,0 +1,62 @@
+/**
+ * Worker config for Five to Nine (0509).
+ *
+ * The Worker name stays "0509" on purpose: Worker secrets are scoped to the
+ * name, so renaming it would orphan DODO_API_KEY, BETTER_AUTH_* and the rest,
+ * and the first deploy would come up unconfigured.
+ *
+ * Declares only what this app uses. The pre-rebuild Worker carried Workflow and
+ * Durable Object classes, eight rate-limit bindings and eight cron triggers;
+ * none are here, because nothing in this app reads them. Bindings come back one
+ * at a time, with the engine packet that needs them.
+ */
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "0509",
+  // >= 2026-08-04, so nodejs_compat is on by default and needs no flag.
+  "compatibility_date": "2026-09-16",
+  "main": "./workers/app.ts",
+  "observability": {
+    // p95 request duration per route comes from here, which is how
+    // docs/REBUILD-DONE.md's performance gate gets measured without a load
+    // generator pointed at production.
+    "enabled": true
+  },
+  "upload_source_maps": true,
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "0509",
+      "database_id": "746c6e3d-782e-443a-82d6-28ca93a16294"
+    }
+  ],
+
+  // Browser Rendering: brand pages bot-gate a plain workerd fetch, so every
+  // arbitrary-homepage read goes through real Chrome. Measured ~7 s per ads
+  // pull; the cost model turns on keeping concurrency at or under the included
+  // ten (docs/REBUILD-COST.md).
+  "browser": { "binding": "BROWSER" },
+
+  // Transactional send only. The weekly brief's standing on this lane is an
+  // open question recorded on docs/REBUILD-DELIVERY.md.
+  "send_email": [{ "name": "EMAIL" }],
+
+  "triggers": {
+    // The dead-man ping, and nothing else yet. Every five minutes: an external
+    // service alerts when the reports stop, which is the one failure a Worker
+    // cannot report about itself.
+    "crons": ["*/5 * * * *"]
+  },
+
+  "routes": [
+    { "pattern": "0509.io", "custom_domain": true },
+    { "pattern": "www.0509.io", "custom_domain": true },
+    { "pattern": "api.0509.io", "custom_domain": true },
+    // Compatibility only: these 308 to the .io equivalents in workers/app.ts.
+    // Kept because old links point here; no new product surface may use them.
+    { "pattern": "0509.in", "custom_domain": true },
+    { "pattern": "www.0509.in", "custom_domain": true },
+    { "pattern": "api.0509.in", "custom_domain": true }
+  ]
+}
