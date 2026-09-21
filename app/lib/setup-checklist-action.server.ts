@@ -291,7 +291,7 @@ export async function handleSetupChecklistAction(
       };
     }
 
-    const { createWatchlistWithinLimit, upsertAgentMemory, upsertClientRoom } = await import("~/lib/data.server");
+    const { createWatchlistWithinLimit } = await import("~/lib/data.server");
     const { isSignupFirstBriefEnabled } = await import("~/lib/env.server");
     const signupFirstBriefEnabled = isSignupFirstBriefEnabled(env);
     const clientRoomContextRequested = rowsToCreate.some((row) => Boolean(row.client));
@@ -324,8 +324,6 @@ export async function handleSetupChecklistAction(
         row,
         watchlistId: watchlist.id,
         watchlistLabel: watchlist.targetLabel,
-        upsertAgentMemory,
-        upsertClientRoom: clientRoomEntitled ? upsertClientRoom : undefined,
       });
       if (result.status === "created" && !queuedWatchlistIds.has(watchlist.id)) {
         queuedWatchlistIds.add(watchlist.id);
@@ -877,54 +875,12 @@ async function persistCompetitorImportContext(input: {
   row: CompetitorImportRow;
   watchlistId: string;
   watchlistLabel: string;
-  upsertAgentMemory: typeof import("~/lib/data.server").upsertAgentMemory;
-  upsertClientRoom?: typeof import("~/lib/data.server").upsertClientRoom;
 }) {
   if (!hasCompetitorImportContext(input.row)) {
     return;
   }
 
-  const value = competitorImportContextValue(input.row, input.watchlistLabel);
-  if (input.row.notes || input.row.tags.length > 0) {
-    await input.upsertAgentMemory(input.env, input.workspaceUserId, {
-      scope: "competitor",
-      key: "import_context",
-      watchlistId: input.watchlistId,
-      value,
-      source: "market_desk_import",
-    });
-  }
 
-  if (!input.row.client || !input.upsertClientRoom) {
-    return;
-  }
-
-  const room = await input.upsertClientRoom(input.env, input.workspaceUserId, {
-    name: `${input.row.client} watch`,
-    clientLabel: input.row.client,
-  });
-  if (!room) {
-    return;
-  }
-
-  await input.upsertClientRoom(input.env, input.workspaceUserId, {
-    roomId: room.id,
-    name: room.name,
-    clientLabel: room.clientLabel ?? input.row.client,
-    status: room.status,
-    resourceRefs: mergeClientRoomWatchlistRef(room, {
-      resourceType: "watchlist",
-      resourceId: input.watchlistId,
-      label: input.watchlistLabel,
-    }),
-    notes: {
-      ...room.notes,
-      marketDeskImport: {
-        source: "onboarding",
-        importedGrouping: true,
-      },
-    },
-  });
 }
 
 function hasCompetitorImportContext(row: CompetitorImportRow) {

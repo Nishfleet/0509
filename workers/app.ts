@@ -106,7 +106,7 @@ function publicFileResponse(
 }
 
 export default {
-  async fetch(request, env, ctx) {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     const url = new URL(request.url);
     const primaryDomainResponse = primaryDomainRedirect(request);
     if (primaryDomainResponse) {

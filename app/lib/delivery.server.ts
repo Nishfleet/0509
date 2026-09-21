@@ -2615,8 +2615,12 @@ async function resolveShareForwardUrl(
   },
 ): Promise<string | null> {
   try {
-    const listActive = deliveryData.listActiveShareLinks;
-    const createShare = deliveryData.createShareLink;
+    const listActive = (deliveryData as Record<string, unknown>).listActiveShareLinks as
+      | ((env: AppEnv, userId: string, limit: number) => Promise<Array<{ resourceType: string; resourceId: string; token: string }>>)
+      | undefined;
+    const createShare = (deliveryData as Record<string, unknown>).createShareLink as
+      | ((env: AppEnv, session: unknown, input: unknown) => Promise<{ token: string }>)
+      | undefined;
     if (typeof listActive !== "function" || typeof createShare !== "function") {
       return null;
     }
@@ -4277,7 +4281,7 @@ async function mintMonthlyReportShare(
   const resourceId = monthlyReportResourceId(monthKey);
   try {
     return (
-      await deliveryData.createShareLink(env, session, {
+      await (deliveryData as unknown as { createShareLink(env: AppEnv, session: unknown, input: unknown): Promise<{ token: string }> }).createShareLink(env, session, {
         id: `${resourceId}:${userId}`,
         resourceType: "report",
         resourceId,
@@ -4290,7 +4294,7 @@ async function mintMonthlyReportShare(
       throw error;
     }
     return (
-      await deliveryData.createShareLink(env, session, {
+      await (deliveryData as unknown as { createShareLink(env: AppEnv, session: unknown, input: unknown): Promise<{ token: string }> }).createShareLink(env, session, {
         resourceType: "report",
         resourceId,
         isSnapshot: true,
@@ -4341,7 +4345,7 @@ async function sendOneMonthlyReport(
     // busy workspace can own more than 50 newer shares, and `listActiveShareLinks`
     // would then miss this month's row.
     const linkId = `${resourceId}:${input.userId}`;
-    const existing = await deliveryData.getShareLinkById(env, input.userId, linkId);
+    const existing = await (deliveryData as Record<string, unknown> as { getShareLinkById?: (env: AppEnv, userId: string, id: string) => Promise<{ token: string } | null> }).getShareLinkById?.(env, input.userId, linkId);
     const token =
       existing?.token ??
       (await mintMonthlyReportShare(env, input.userId, input.monthKey, built.snapshot as unknown as Record<string, unknown>));

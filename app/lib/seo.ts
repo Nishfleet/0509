@@ -340,14 +340,11 @@ export function publicSeoMeta(input: {
   // page-specific card through this same call with no per-page wiring. The
   // fixed hub/marketing surfaces derive theirs from the shared registry
   // (issue #3114). An explicit ogImageUrl/ogImageAlt always wins.
-  const guideCard = input.ogImageUrl
-    ? null
-    : null;
   const surfaceCard = input.ogImageUrl
     ? null
     : staticSurfaceSocialCardForPathname(input.pathname);
-  const overrideImage = input.ogImageUrl ?? guideCard?.url ?? surfaceCard?.url;
-  const overrideAlt = input.ogImageAlt ?? guideCard?.alt ?? surfaceCard?.alt;
+  const overrideImage = input.ogImageUrl ?? surfaceCard?.url;
+  const overrideAlt = input.ogImageAlt ?? surfaceCard?.alt;
   const imageUrl = overrideImage ?? SOCIAL_IMAGE_URL;
   const imageAlt = overrideImage ? (overrideAlt ?? SOCIAL_IMAGE_ALT) : SOCIAL_IMAGE_ALT;
   const imageType =
