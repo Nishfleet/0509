@@ -300,8 +300,8 @@ bans. Instrument Sans replaces it — narrower, denser in tables, and it carries
 dashboard-template associations. This is the one face the brief chooses rather than
 inherits, because Nish reserved display, eyebrow, accent and strike, not body.
 
-Loaded as one Google Fonts `<link>`, latin subset, `font-display: swap`, three families.
-
+The faces are self-hosted under `public/fonts/` — no Google `<link>`, no preconnect.
+Latin subset, `font-display: swap`, three families, served from the app's own origin.
 **Scale** (rem, 16px root). Display sizes are fluid; the clamp is given, not the endpoints.
 
 | Token | Size | Line height | Tracking | Where |
@@ -507,10 +507,11 @@ The bar exists because the old landing served in 4.50s (#3842, 2026-09-21 14:50 
 
 How each is kept:
 
-- Fonts: one Google Fonts `<link>`, three families, latin subset, `font-display: swap`,
-  preconnect to both hosts. The LCP element is display text, so it must not wait on a
-  font swap — the fallback metric is matched with `size-adjust`.
-- The chart is the only client library on Home, and it is **uPlot**. It is maintained,
+- Fonts: self-hosted under `public/fonts/` — the exact latin files Google's css2 API
+  served for the project link, OFL — so the display face fetches in parallel with the
+  CSS from the app's own origin instead of behind a two-host render-blocking chain.
+  `font-display: swap` stays. The landing route preloads the display face, which is the
+  LCP element's face.- The chart is the only client library on Home, and it is **uPlot**. It is maintained,
   it is a line chart library rather than a chart framework, and it lands comfortably
   inside the 30 KB gzipped budget where a React chart framework does not. **Recharts is
   out** — it ships well past the budget even when tree-shaken — and so is a hand-rolled
