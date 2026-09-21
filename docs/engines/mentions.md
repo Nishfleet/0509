@@ -44,7 +44,7 @@ I also tested decoding the `guid` directly. It is 256 base64 characters decoding
 
 Five consecutive challenges and no result markers. The contract's finding was real when it was taken; it does not reproduce four hours later from the same host. The plausible cause is that this IP has been used for SERP probes by several agents today — which is itself the lesson: **a shared datacenter IP's SERP access degrades with use, so SERP is not a source you can schedule.**
 
-**Consequence:** DuckDuckGo leaves the MVP set and becomes a registry row with `enabled = 0`, alongside X. The MVP set is the five sources that returned real data today. This costs the "any blog, any forum" breadth claim, and the honest replacement for it is Google News — whose first Gymshark item today is a **law firm's blog** (`advertisinglaw.fkks.com`), not a newspaper.
+**Consequence:** DuckDuckGo leaves the MVP set and becomes a registry row with `is_enabled = 0`, alongside X. The MVP set is the five sources that returned real data today. This costs the "any blog, any forum" breadth claim, and the honest replacement for it is Google News — whose first Gymshark item today is a **law firm's blog** (`advertisinglaw.fkks.com`), not a newspaper.
 
 ### 0.3 The homonym problem is live on Hacker News, in the first record returned.
 
@@ -88,7 +88,7 @@ Confirmed unchanged from the contract, so not re-probed in depth: Reddit `search
 
 Everything else about this engine is forced by the contracts. This is the only real fork, and 0.1 created it.
 
-`docs/REBUILD-SCHEMA.md` puts a conditional CHECK on `signal`: a row with `kind = 'mentions'` must carry `canonical_url` and `url_hash`. `docs/REBUILD-MENTIONS.md` rule 1 then says `url_hash` is the cross-source dedup key. Google News cannot supply a real URL. So one of those two has to give.
+`docs/REBUILD-SCHEMA.md` puts a conditional CHECK on `signal`: a row with `kind = 'mention'` must carry `canonical_url` and `url_hash` (`CHECK (kind <> 'mention' OR (canonical_url IS NOT NULL AND url_hash IS NOT NULL))`). `docs/REBUILD-MENTIONS.md` rule 1 then says `url_hash` is the cross-source dedup key. Google News cannot supply a real URL. So one of those two has to give.
 
 ### Candidate A — resolve before storing
 
@@ -101,7 +101,7 @@ Every surviving Google News item gets a Browser Run pass on its article link; th
 
 ### Candidate B — store the Google URL, move dedup to D8
 
-`canonical_url` = the `news.google.com/rss/articles/…` URL (the CHECK is satisfied; it is a real, working, public URL). `external_id` = `guid`. A new column-free field from the feed, `publisher`, = the host of `<source url>`. Cross-source dedup stops being string equality on `url_hash` and becomes **D8 `duplicate_signal`**, which `docs/REBUILD-JEV.md` already declares is *"the only dedup"*.
+`canonical_url` = the `news.google.com/rss/articles/…` URL (the CHECK is satisfied; it is a real, working, public URL). `dedup_key` = `guid`. A new column-free field from the feed, `publisher`, = the host of `<source url>`. Cross-source dedup stops being string equality on `url_hash` and becomes **D8 `duplicate_signal`**, which `docs/REBUILD-JEV.md` already declares is *"the only dedup"*.
 
 - Zero browser-seconds. Mentions stay a pure `fetch` engine, which is the premise the whole cost model rests on.
 - Nothing is reverse-engineered and nothing races a vendor's SPA.
@@ -118,7 +118,7 @@ Candidate A spends half the product's entire browser allowance to convert a work
 **Grafted from A, because A was right about one thing.** A real publisher URL is genuinely better when we can get one for free, and four of the five MVP sources hand us one. So:
 
 1. **`canonical_url` is upgradeable.** A Google News signal starts with the Google URL. When D8 later collapses it against an item from a source that carries a real URL (HN, Medium, a watched feed), the **real URL wins** and replaces it on the surviving row. Google News is a discovery source whose URL is provisional, and the schema does not need to change for that — it is an `UPDATE` on one column.
-2. **`publisher` is populated from `<source url>` on every Google News row**, so the UI can say "Frankfurt Kurnit Klein & Selz" and the standing engine can weigh outlets, without any resolution.
+2. **The publisher is stored on every Google News row**, in `payload_json.publisher`, read from `<source url>`'s host, so the UI can say "Frankfurt Kurnit Klein & Selz" and the standing engine can weigh outlets, without any resolution.
 
 **Rejected from A, recorded so it is not re-litigated:** Browser Run for Google News URL resolution. The number to beat is **5.0 browser-hours per month at 100 brands** for zero new signal. If someone later argues for it, that is the figure they must argue against.
 
@@ -134,15 +134,15 @@ cron ──► queue mentions-fast ──┐
    └───► queue mentions-paced ─┘
 ```
 
-1. **Cron** reads `watch JOIN entity JOIN source WHERE entity.state = 'on' AND source.kind = 'mentions' AND source.enabled = 1`. `entity.state = 'on'` is the only per-brand switch — delivery rule 4 ("per-brand OFF is absolute") is enforced here, at collection, not later by filtering.
+1. **Cron** reads `watch JOIN entity JOIN source WHERE entity.state = 'on' AND source.kind = 'mentions' AND source.is_enabled = 1`. `entity.state = 'on'` is the only per-brand switch — delivery rule 4 ("per-brand OFF is absolute") is enforced here, at collection, not later by filtering.
 2. **Queue message** is `{ watch_id, source_id, entity_id, workspace_id }`. Nothing else; the consumer re-reads what it needs.
 3. **Consumer** calls the one upstream (§1), computes `payload_hash` over the response body, and writes the body to R2 at `mentions/<workspace_id>/<watch_id>/<iso-date>/<payload_hash>`.
 4. **`snapshot`** gets exactly one row per watch per tick: `payload_r2_key`, `payload_hash`, `item_count`, `fetched_at`. This is the cost boundary from `docs/REBUILD-SCHEMA.md` and it is not negotiable. **If `payload_hash` matches the previous snapshot for this watch, the row is still written** (coverage and freshness must be answerable) but no judgment runs and no R2 body is re-stored — the key points at the existing object.
-5. **`MentionsJudgeWorkflow`** reads the snapshot, parses items, and for each item not already present by `(source_id, external_id)`:
+5. **`MentionsJudgeWorkflow`** reads the snapshot, parses items, and for each item not already present by `(source_id, dedup_key)` — the table's own UNIQUE constraint:
    - **D5** `mention_is_about_brand` → below 0.1, logged to `jev_verdict` and dropped, no `signal` row ever written.
-   - **D8** `duplicate_signal` against the workspace's last 30 days → on collapse, no new row; the existing row's `metrics_json` gains the second sighting, and its `canonical_url` is upgraded per §2 graft 1.
+   - **D8** `duplicate_signal` against the workspace's last 30 days → on collapse, no new row; the existing row's `engagement_json` gains the second sighting and `last_seen_at` advances, and its `canonical_url` is upgraded per §2 graft 1.
    - **D6** `mention_matters` → the row is written either way; `p` decides whether the feed shows it or hides it behind "show all".
-6. **`signal`** gets a row per surviving item, `kind = 'mentions'`, `snapshot_id` pointing back for the proof trail. `mention` is the view over it. No mention table exists.
+6. **`signal`** gets a row per surviving item, `kind = 'mention'` (**singular** — see the vocabulary trap below), `snapshot_id` pointing back for the proof trail. `mention` is the view over it. No mention table exists.
 7. **`jev_verdict`** takes every call, unique on `(question_id, input_hash)` — the contract's cache, enforced by the database.
 8. **`user_decision`** feeds the next context pack: a user marking a mention "not noteworthy" is read into `user_memory` for that subject's later D6 calls.
 9. **`alert`** rows are written for D6 `p >= 0.9` items per the delivery contract's Alerts column. This engine writes alerts; it never sends anything. Engine 7 owns sending.
@@ -266,7 +266,7 @@ Template per umbrella #3842. Each is sized for one 45-minute worker with no desi
 
 ### P5.1 — The source registry rows and the mentions adapter contract
 
-**GOAL.** Add the six `source` rows for the mentions engine and one shared adapter interface they all satisfy. Each adapter is a pure function `(target, cursor) => Promise<{ items, canaryCount, rawBody }>`; it performs exactly one `fetch` with `AbortSignal.timeout(8000)` and does no storage, no judgment and no retry. Rows, with `kind = 'mentions'`: `news.google_rss` (`rss`), `reddit.search_rss` (`rss`), `hn.algolia` (`official_api`), `youtube.channel_rss` (`rss`), `medium.tag_rss` (`rss`), and `ddg.html` (`scraped_page`, **`enabled = 0`**, reason recorded: 202-challenged 5/5 attempts 2026-09-21). Every row carries its canary query and the expected-nonzero flag.
+**GOAL.** Add the six `source` rows for the mentions engine and one shared adapter interface they all satisfy. Each adapter is a pure function `(target, cursor) => Promise<{ items, canaryCount, rawBody }>`; it performs exactly one `fetch` with `AbortSignal.timeout(8000)` and does no storage, no judgment and no retry. Rows, with `kind = 'mentions'`: `news.google_rss` (`rss`), `reddit.search_rss` (`rss`), `hn.algolia` (`official_api`), `youtube.channel_rss` (`rss`), `medium.tag_rss` (`rss`), and `ddg.html` (`scraped_page`, **`is_enabled = 0`**, reason recorded: 202-challenged 5/5 attempts 2026-09-21). Every row carries its canary query and the expected-nonzero flag.
 
 **STOCK FEATURE OR LIBRARY.** `@extractus/feed-extractor` **8.0.3** via `extractFromXml(xml: string)` — we own the `fetch`, it owns RSS/Atom/RDF/JSON normalisation (handles all four; `parseRdfFeed.js` verified present). `zod` **4.6.5** for the adapter return shape. Platform `fetch` + `AbortSignal.timeout`. `HTMLRewriter` (platform, 0 bytes) for any HTML body.
 
@@ -274,7 +274,7 @@ Template per umbrella #3842. Each is sized for one 45-minute worker with no desi
 
 **FORBIDDEN.** A hand-written XML or RSS parser. `rss-parser` (requires Node's HTTP client at module load). `cheerio` (116 KB, pulls undici). Any `CHECK` constraint on `source.platform` — a new platform is a row, never a migration. Retry logic inside an adapter. Any `fetch` without the 8 s abort. Enabling `ddg.html`.
 
-**PROOF REQUIRED.** One live call per enabled adapter from a `wrangler dev` Worker, each printing status, byte count, parsed item count and the first record's `external_id`, with a UTC timestamp. The HN call must return `objectID 47123304` or a later story under query `gymshark`. The Reddit call must show the `t3_`/`t5_` split and prove the `t5_` rows are filtered out.
+**PROOF REQUIRED.** One live call per enabled adapter from a `wrangler dev` Worker, each printing status, byte count, parsed item count and the first record's `dedup_key`, with a UTC timestamp. The HN call must return `objectID 47123304` or a later story under query `gymshark`. The Reddit call must show the `t3_`/`t5_` split and prove the `t5_` rows are filtered out.
 
 **PUSH.** Branch `engine/mentions-adapters` off `origin/main`, pushed within 5 minutes of the first commit.
 
@@ -284,7 +284,7 @@ Template per umbrella #3842. Each is sized for one 45-minute worker with no desi
 
 ### P5.2 — The two queues, the cron, and the snapshot write
 
-**GOAL.** Wire `cron "17 2 * * *"` → enqueue one message per eligible watch → two consumers → one `snapshot` row per watch per tick with the body in R2. Eligibility is `watch JOIN entity JOIN source WHERE entity.state = 'on' AND source.kind = 'mentions' AND source.enabled = 1`. Rate-classed routing: Reddit and any `scraped_page` source to `mentions-paced`, everything else to `mentions-fast`. An unchanged `payload_hash` still writes the snapshot row but reuses the existing R2 key and sets a `judged = 0` skip flag.
+**GOAL.** Wire `cron "17 2 * * *"` → enqueue one message per eligible watch → two consumers → one `snapshot` row per watch per tick with the body in R2. Eligibility is `watch JOIN entity JOIN source WHERE entity.state = 'on' AND source.kind = 'mentions' AND source.is_enabled = 1`. Rate-classed routing: Reddit and any `scraped_page` source to `mentions-paced`, everything else to `mentions-fast`. An unchanged `payload_hash` still writes the snapshot row but reuses the existing R2 key and sets a `judged = 0` skip flag.
 
 **STOCK FEATURE OR LIBRARY.** Cloudflare Cron Triggers, Queues (`max_concurrency` **10** fast / **1** paced, `max_batch_size` 10/1, `max_retries` 5/3, `dead_letter_queue: "mentions-dlq"`), R2 binding, D1 `batch()`. `wrangler` **4.135.0**.
 
@@ -302,7 +302,7 @@ Template per umbrella #3842. Each is sized for one 45-minute worker with no desi
 
 ### P5.3 — D5, D8, D6 in the judge Workflow
 
-**GOAL.** `MentionsJudgeWorkflow` consumes a snapshot, diffs items against existing `(source_id, external_id)` pairs, and runs D5 → D8 → D6 in that order, writing `jev_verdict` for every call and `signal` rows for survivors. D5 below 0.1 writes a verdict and no signal. D8 at or above 0.9 collapses and upgrades `canonical_url` per the design's graft rule. Jev calls are batched ten items per `step.do`; each step returns ids only, never bodies.
+**GOAL.** `MentionsJudgeWorkflow` consumes a snapshot, diffs items against existing `(source_id, dedup_key)` pairs, and runs D5 → D8 → D6 in that order, writing `jev_verdict` for every call and `signal` rows for survivors. D5 below 0.1 writes a verdict and no signal. D8 at or above 0.9 collapses and upgrades `canonical_url` per the design's graft rule. Jev calls are batched ten items per `step.do`; each step returns ids only, never bodies.
 
 **STOCK FEATURE OR LIBRARY.** Cloudflare Workflows (`step.do` with `{ retries: { limit: 5, delay: "10 seconds", backoff: "exponential" }, timeout: "30 minutes" }`). The shipped TypeSafe SDK/plugin for Jev, configured as a Worker secret. `zod` **4.6.5** for the context-pack shape.
 
@@ -338,15 +338,15 @@ Template per umbrella #3842. Each is sized for one 45-minute worker with no desi
 
 ### P5.5 — The unified mention record and the Alerts feed read path
 
-**GOAL.** Land the adapter→`signal` field mapping exactly as the contract's table specifies, and the Alerts feed that reads it. Per-source truths that are bugs if missed: Medium's `guid` is the canonical (not `link`, which carries `?source=rss------<tag>-<n>`); Reddit rows must be filtered to the `t3_` id prefix and sorted by parsed `<updated>`, because `sort=new` does not order the feed; Google News `publisher` comes from `<source url>`'s host and `canonical_url` stays the Google URL; **`occurred_at` may be null and null is never `now()`** — those rows sort by `observed_at` and the UI says "found today".
+**GOAL.** Land the adapter→`signal` field mapping exactly as the contract's table specifies, and the Alerts feed that reads it. Per-source truths that are bugs if missed: Medium's `guid` is the canonical (not `link`, which carries `?source=rss------<tag>-<n>`); Reddit rows must be filtered to the `t3_` id prefix and sorted by parsed `<updated>`, because `sort=new` does not order the feed; Google News's publisher goes to `payload_json.publisher` from `<source url>`'s host and `canonical_url` stays the Google URL; **`published_at` may be null and null is never `now()`** — those rows sort by `observed_at` and the UI says "found today".
 
-**STOCK FEATURE OR LIBRARY.** The `mention` view over `signal` (already in `0001_init.sql`). `date-fns` **4.4.0** + `@date-fns/tz` **1.5.0** for occurred/observed arithmetic, `Intl.DateTimeFormat` for display. **Never `Temporal`** — workerd#6907 returns `epochMilliseconds: 0`. React Router 8 loaders; shadcn/ui components from the CLI.
+**STOCK FEATURE OR LIBRARY.** The `mention` view over `signal` (already in `0001_init.sql`). `date-fns` **4.4.0** + `@date-fns/tz` **1.5.0** for published/observed arithmetic, `Intl.DateTimeFormat` for display. **Never `Temporal`** — workerd#6907 returns `epochMilliseconds: 0`. React Router 8 loaders; shadcn/ui components from the CLI.
 
 **FILES IN SCOPE.** `workers/mentions/map.ts`, `app/routes/alerts.tsx`, `app/components/mention-row.tsx`, `tests/mentions/map.test.ts`.
 
-**FORBIDDEN.** A `mention` table. Stamping `now()` into `occurred_at`. Storing Medium's `link` as canonical. Ingesting a `t5_` Reddit row. Showing a D6-below-0.1 item in the default feed. Any `Temporal` use, including a `typeof Temporal === 'undefined'` feature-detect (workerd exposes a broken global).
+**FORBIDDEN.** A `mention` table. Stamping `now()` into `published_at`. Storing Medium's `link` as canonical. Ingesting a `t5_` Reddit row. Showing a D6-below-0.1 item in the default feed. Any `Temporal` use, including a `typeof Temporal === 'undefined'` feature-detect (workerd exposes a broken global).
 
-**PROOF REQUIRED.** Real rows from a real workspace: one Google News mention showing `publisher = advertisinglaw.fkks.com` (or the live equivalent) with the Google `canonical_url`; one Reddit mention with a `t3_` `external_id` and a `t5_` row proven filtered out; one Medium mention whose `canonical_url` is the `guid` form `https://medium.com/p/<id>`; one row with `occurred_at` null rendering as "found today". Alerts screenshot at 1440 and 390, zero console errors, no horizontal scroll at 390.
+**PROOF REQUIRED.** Real rows from a real workspace: one Google News mention showing `payload_json.publisher = advertisinglaw.fkks.com` (or the live equivalent) with the Google `canonical_url`; one Reddit mention with a `t3_` `dedup_key` and a `t5_` row proven filtered out; one Medium mention whose `canonical_url` is the `guid` form `https://medium.com/p/<id>`; one row with `published_at` null rendering as "found today". Alerts screenshot at 1440 and 390, zero console errors, no horizontal scroll at 390.
 
 **PUSH.** Branch `engine/mentions-feed`.
 
@@ -356,15 +356,15 @@ Template per umbrella #3842. Each is sized for one 45-minute worker with no desi
 
 ### P5.6 — X and the disabled-source contract
 
-**GOAL.** Add `x.*` as a `source` row with `enabled = 0` and a recorded reason, and prove that a disabled source is invisible everywhere — not polled, not counted, not rendered, not a degraded pill — so that enabling it later is one `UPDATE` and nothing else. Per Fable's note, the cheapest known route is Apify at roughly $0.40 per 1,000 tweets; the row carries that figure and the `approved_cost` field stays null until Nish says yes.
+**GOAL.** Add `x.*` as a `source` row with `is_enabled = 0` and a recorded reason, and prove that a disabled source is invisible everywhere — not polled, not counted, not rendered, not a degraded pill — so that enabling it later is one `UPDATE` and nothing else. Per Fable's note, the cheapest known route is Apify at roughly $0.40 per 1,000 tweets; the row carries that figure and the `approved_cost` field stays null until Nish says yes.
 
-**STOCK FEATURE OR LIBRARY.** The `source` registry's `enabled` column and the eligibility join from P5.2. No new mechanism.
+**STOCK FEATURE OR LIBRARY.** The `source` registry's `is_enabled` column and the eligibility join from P5.2. No new mechanism.
 
 **FILES IN SCOPE.** `migrations/` for the row only, `tests/mentions/disabled-source.test.ts`.
 
 **FORBIDDEN.** Any X adapter code, any credential, any Apify call, any spend. A migration to enable a source later. Rendering a disabled source as degraded — disabled and degraded are different states and the UI must not conflate them.
 
-**PROOF REQUIRED.** A test run on a real workspace showing the disabled row produces zero queue messages, zero `snapshot` rows and zero UI surface, and that flipping `enabled = 1` on a copy of the row in a local D1 produces a queue message — proving the switch is a row, not a migration. Cite the row id and both tick outputs.
+**PROOF REQUIRED.** A test run on a real workspace showing the disabled row produces zero queue messages, zero `snapshot` rows and zero UI surface, and that flipping `is_enabled = 1` on a copy of the row in a local D1 produces a queue message — proving the switch is a row, not a migration. Cite the row id and both tick outputs.
 
 **PUSH.** Branch `engine/mentions-x-disabled`.
 
