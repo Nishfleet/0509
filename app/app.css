@@ -1,15 +1,80 @@
 @import "tailwindcss" source(".");
 
+/* The 0509 visual language. Values and faces per DESIGN.md §3–4: cream ground,
+   heavy black grotesk in caps for display, mono eyebrows, ONE accent = the green
+   marker, red strike for "before". No pure black, no pure white, no second hue. */
+
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif,
-    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --color-bone: #f4f1e8;
+  --color-card: #fffdf6;
+  --color-ink: #0e0d0a;
+  --color-ink-soft: #55524a;
+  --color-ink-faint: #8e8878;
+  --color-line: #ddd6c6;
+  --color-accent: #16c47f;
+  --color-accent-ink: #064d31;
+  --color-accent-wash: #d9f6e8;
+  --color-strike: #e0442c;
+  --color-on-accent: #0e0d0a;
+
+  --font-display: "Bricolage Grotesque", ui-sans-serif, sans-serif;
+  --font-sans: "Instrument Sans", ui-sans-serif, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+/* Dark, per DESIGN.md §4. Warm near-black and warm off-white, never #000/#fff.
+   Declared after @theme so these win over the generated :root values. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-bone: #14130f;
+    --color-card: #1c1a15;
+    --color-ink: #f2efe4;
+    --color-ink-soft: #a9a294;
+    --color-ink-faint: #7b7568;
+    --color-line: #322e25;
+    --color-accent: #2ee59c;
+    --color-accent-ink: #9ff0cd;
+    --color-accent-wash: #10281f;
+    --color-strike: #ff7a63;
+    --color-on-accent: #0e0d0a;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --color-bone: #14130f;
+  --color-card: #1c1a15;
+  --color-ink: #f2efe4;
+  --color-ink-soft: #a9a294;
+  --color-ink-faint: #7b7568;
+  --color-line: #322e25;
+  --color-accent: #2ee59c;
+  --color-accent-ink: #9ff0cd;
+  --color-accent-wash: #10281f;
+  --color-strike: #ff7a63;
+  --color-on-accent: #0e0d0a;
+  color-scheme: dark;
 }
 
 html,
 body {
-  @apply bg-white dark:bg-gray-950;
+  background: var(--color-bone);
+  color: var(--color-ink);
+  max-width: 100%;
+  overflow-x: hidden;
+}
 
-  @media (prefers-color-scheme: dark) {
-    color-scheme: dark;
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
   }
 }

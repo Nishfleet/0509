@@ -18,8 +18,11 @@ export const links: Route.LinksFunction = () => [
     crossOrigin: "anonymous",
   },
   {
+    // DESIGN.md §3: Bricolage Grotesque for display, Instrument Sans for body,
+    // IBM Plex Mono for eyebrows and data. One request, latin subset,
+    // font-display: swap so display text paints before the face arrives.
     rel: "stylesheet",
-    href: "https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap",
+    href: "https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap",
   },
 ];
 
