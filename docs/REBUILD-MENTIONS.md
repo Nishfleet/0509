@@ -37,7 +37,7 @@ Status and byte counts are from my probes; a record id or URL is quoted for ever
 | 10b | X | `syndication.twitter.com/srv/timeline-profile/screen-name/gymshark` | **429**, 20 B, `Rate limit exceeded` | **BLOCKED** |
 | 10c | X | `nitter.poast.org/search` | **000** — connection failed | **DEAD** |
 | 10d | X | the SuperGrok seat | **not wired** — see §10 | **DEAD** |
-| 11 | SERP (DuckDuckGo) | `html.duckduckgo.com/html/` | **200**, 42,890 B, 10 result links | **WORKS** — with a caveat that inverts expectations |
+| 11 | SERP (DuckDuckGo) | `html.duckduckgo.com/html/` | **200**, 42,890 B, 10 links *and* **202**, ~14 KB, 0 links | **INTERMITTENT** — both outcomes reproduced from this VPS |
 | 11b | SERP (Bing) | `bing.com/search?format=rss` | **200**, 4,973 B | **WORKS technically, blocked by its own terms** |
 | 12 | GDELT | `api.gdeltproject.org/api/v2/doc/doc` | **429** | **PACED-CRON ONLY** |
 
@@ -112,9 +112,11 @@ That single item is the argument for this source: a class action over influencer
 - **Record shape:** `title` (which carries ` - <Publisher>` as a suffix — split on the last ` - ` to get the publisher), `link`, `guid` (opaque but stable), `pubDate`, `source` element with `url`.
 - **Cursor:** max `pubDate`. Dedup on `guid`.
 
-**The one real problem: `link` is a Google redirect, not the article.** The `guid` is a base64-ish blob, not a URL. `REBUILD-SCHEMA.md` requires every mention to carry `canonical_url` and `url_hash`, so a Google News mention **cannot be stored until the redirect is resolved**. That is a `fetch(link, { redirect: "manual" })` and reading `Location` — one extra request per new item, not per poll, and only for items that survive dedup on `guid`. Budget it.
+**The one real problem: `link` is a Google redirect, not the article.** The `guid` is a base64-ish blob, not a URL.
 
-**Anti-pattern:** storing the `news.google.com/rss/articles/…` URL as the canonical. Two different Google News queries produce different opaque URLs for the same article, so dedup silently fails and the user sees the same story twice.
+**Rule: the opaque `news.google.com/rss/articles/…` URL is never stored as `canonical_url`.** Two different Google News queries produce two different opaque URLs for the *same* article. Store either one and `url_hash` stops being a dedup key — the same story lands twice for one brand, and a story found by both Google News and any other source lands twice again. `REBUILD-SCHEMA.md` requires every mention to carry `canonical_url` and `url_hash`, so a Google News item **is not a storable mention until its real URL is resolved**.
+
+**How it is resolved is not this document's call.** Resolution is a real engine step with real cost — one request per *new* item that survives `guid` dedup, not one per poll — and it belongs to **D8** in the architect's engine design, which owns fetching, retries and the Browser Run fallback for items a plain `fetch` cannot follow. This document's contribution is the constraint, not the mechanism: no canonical, no signal row.
 
 ---
 
@@ -295,25 +297,39 @@ GET https://nitter.poast.org/search?f=tweets&q=gymshark
 
 The SERP is the only route that covers "any blog, any forum, any site that mentioned us". Two endpoints, two different problems.
 
-### DuckDuckGo HTML — works, and a *plainer* User-Agent works better
+### DuckDuckGo HTML — INTERMITTENT, and that is worse than broken
+
+Two agents probed the same endpoint from the same VPS on the same day and got different answers. Both sets of results stand.
 
 ```
+--- my probes, 2026-09-21 -------------------------------------------------
 GET https://html.duckduckgo.com/html/?q=gymshark
-  User-Agent: Mozilla/5.0 (compatible; 0509-research/1.0)
+  UA: Mozilla/5.0 (compatible; 0509-research/1.0)
 → 200, 42,890 B, 10 result links                                      (12:02:39 UTC)
 
+GET https://html.duckduckgo.com/html/?q=gymshark
+  UA: Mozilla/5.0 (compatible; 0509-research/1.0)
+→ 200, 37,629 B                                                       (12:00:46 UTC)
+
 GET https://html.duckduckgo.com/html/?q="gymshark" review
-  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) … Chrome/141.0
+  UA: Mozilla/5.0 (Windows NT 10.0; Win64; x64) … Chrome/141.0
 → 202, 14,234 B, 0 result links — a challenge page                    (12:02:28 UTC)
+
+--- the deputy's probes, same day, same host ------------------------------
+five requests, three seconds apart, browser UA
+→ 202, ~14 KB, 0 result links, every time
 ```
 
-**The honest-identifying UA got a 200 with results; the spoofed-Chrome UA got a 202 challenge.** That is the opposite of the usual scraping instinct, and it is the single most actionable finding in this section: **do not spoof a browser UA on the SERP route.** Send an honest identifying User-Agent.
+**Verdict: INTERMITTENT, and therefore out of the MVP.** Intermittence is worse than consistent failure here, and the reason is the failure shape: a 202 is a **success status carrying an empty result set**. A one-off check passes, the adapter ships, and then it returns nothing for days without ever erroring. That is the same class of failure as Substack's 200-with-zero-results (§7) — the most expensive kind, because nobody goes looking.
 
-This also corrects the inherited claim that `html.duckduckgo.com` flatly 202-challenges from a datacenter IP. It does not — it challenges *some* requests, and the UA is at least one of the variables.
+**On the User-Agent, precisely, because the pattern is suggestive and the sample is small.** Across all eight observations the correlation is clean: honest identifying UA → 200 with results (2 of 2); spoofed browser UA → 202 challenge (6 of 6). So "do not spoof a browser UA on the SERP route" is a good working hypothesis and the opposite of the usual scraping instinct. It is **not proven**, for two reasons: eight probes inside four minutes is not a sample, and my one browser-UA failure also carried a *quoted, two-term* query while both successes were a single bare term — so query shape is an uncontrolled second variable. Anyone who wants to promote DuckDuckGo to the MVP owes a proper matrix: both UAs × both query shapes × several hours apart.
+
+This does correct the inherited claim that `html.duckduckgo.com` flatly 202-challenges from a datacenter IP — it does not always. It just cannot be relied on to not.
 
 - **Key:** none. **Cost:** free.
-- **Parsing:** results are `<a class="result__a" href="//duckduckgo.com/l/?uddg=<percent-encoded-target>">`. The `uddg` parameter must be decoded to get the real URL. **The first results are ads** — in my probe, two `ad_provider=bingv7aa` redirect chains before any organic result. An adapter that takes `results[0]` ingests an advertisement as a brand mention.
+- **Parsing, for whenever it is wired:** results are `<a class="result__a" href="//duckduckgo.com/l/?uddg=<percent-encoded-target>">`, and `uddg` must be percent-decoded to get the real URL. **The first results are ads** — in my 200 response, two `ad_provider=bingv7aa` redirect chains before any organic result. An adapter that takes `results[0]` ingests an advertisement as a brand mention.
 - **Freshness:** whatever the index holds — days, not minutes. The SERP is a **breadth** source, not a fast one. Nothing time-sensitive should depend on it.
+- **If it is ever wired**, it needs a canary (§ the record spec) and an explicit check that a 202 is treated as a source failure, never as zero results.
 
 ### Bing RSS — works technically, and its own terms forbid us
 
@@ -328,7 +344,9 @@ Real results, first item `https://de.gymshark.com/`. But the feed ships its own 
 
 Private and non-commercial use, inside an RSS aggregator, only. Anything else needs Microsoft's express written permission. **0509 is a commercial product and is not an RSS aggregator**, so this route is closed by terms, not by technology. Recorded in full because "it returns 200" would otherwise make it look like the best SERP option available.
 
-**Result: DuckDuckGo HTML is the SERP route.** One query per brand per day, honest UA, ads filtered, `uddg` decoded, paced through the same single-concurrency Queue consumer as Reddit.
+**Result: there is no dependable zero-spend SERP route today.** DuckDuckGo is intermittent from our egress and Bing is closed by its own terms. That is a real gap, and it matters most for the two jobs only a SERP does: finding arbitrary blogs and forums that mentioned a brand, and resolving which Substack publication or TikTok video to track in the first place.
+
+What it does **not** block: the MVP. Google News indexes far more than newspapers — the first item in §3 is a law-firm blog — so blog coverage degrades rather than disappears. Record this as a gap to close with evidence, not as a source to ship on a single green probe.
 
 ---
 
@@ -351,7 +369,7 @@ Same result the keep-list got on two attempts twelve seconds apart. The 5-second
 
 ## Recommended MVP set
 
-Six sources. Every one of them returned real data from this VPS today, needs no key, and costs nothing.
+Five sources. Every one of them returned real data from this VPS today, on every attempt, needs no key, and costs nothing.
 
 | Source | Plugin key | Reliability (per `REBUILD-SCHEMA.md`) | Cadence |
 |---|---|---|---|
@@ -360,8 +378,6 @@ Six sources. Every one of them returned real data from this VPS today, needs no 
 | Hacker News Algolia | `hn.algolia` | `official_api` | daily |
 | YouTube channel feed | `youtube.channel_rss` | `rss` | daily |
 | Medium tag feed | `medium.tag_rss` | `rss` | daily |
-| DuckDuckGo HTML | `ddg.html` | `scraped_page` | daily, concurrency 1 |
-
 Plus **Pinterest `pinterest.user_rss`** where the brand has a handle — filed as competitor activity, not mentions (§5).
 
 **Deliberately out of the MVP, each for a stated reason:**
@@ -374,12 +390,13 @@ Plus **Pinterest `pinterest.user_rss`** where the brand has a handle — filed a
 | Substack | search is silently blocked; tracking is just the blog adapter (§7). |
 | GDELT | 429-prone; overlaps Google News (§12). |
 | Bing RSS | terms forbid commercial, non-aggregator use (§11). |
+| DuckDuckGo HTML | **intermittent** — 200-with-results and 202-with-nothing both reproduced from this host the same day (§11). A 202 is a success status carrying an empty set, so it fails silently. Needs a proper probe matrix before it ships. |
 
-**Cost at 100 tracked brands, daily.** Six polls per brand per day = 600 fetches/day ≈ 18,000/month. Against the Workers Paid allowance of 10M requests/month that is **0.18%**, and no source charges anything. Per `REBUILD-SCHEMA.md` this writes **one `snapshot` row per watch per tick** — 600 D1 rows/day, ~18,000/month against 50M included rows-written — plus `signal` rows only for items that survive judgment. The bodies go to R2. Nothing here approaches the 2026-09-17 rows-written anti-pattern.
+**Cost at 100 tracked brands, daily.** Five polls per brand per day = 500 fetches/day ≈ 15,000/month. Against the Workers Paid allowance of 10M requests/month that is **0.15%**, and no source charges anything. Per `REBUILD-SCHEMA.md` this writes **one `snapshot` row per watch per tick** — 500 D1 rows/day, ~15,000/month against 50M included rows-written — plus `signal` rows only for items that survive judgment. The bodies go to R2. Nothing here approaches the 2026-09-17 rows-written anti-pattern.
 
-**The real budget is rate limits, not money.** Reddit 429s on a second request within fifteen seconds; GDELT 429s at twelve-second spacing; DuckDuckGo challenges some requests. Two engineering consequences:
+**The real budget is rate limits and bot-gating, not money.** Reddit 429s on a second request within fifteen seconds; GDELT 429s at twelve-second spacing; DuckDuckGo challenges unpredictably. Two engineering consequences:
 
-1. Polls go through a **Queue consumer with `max_concurrency: 1`** for the rate-limited sources (Reddit, DuckDuckGo, GDELT), not a `Promise.all` over brands.
+1. Polls go through a **Queue consumer with `max_concurrency: 1`** for the rate-limited sources (Reddit today; GDELT and DuckDuckGo if either is ever added), not a `Promise.all` over brands.
 2. The tick is **cron → enqueue → consumer**, never work done inline in `scheduled` (`REBUILD-STACK.md` §4.10).
 
 ---
@@ -411,7 +428,7 @@ Aligned to `docs/REBUILD-SCHEMA.md` on main. **A mention is not its own table.**
 
 **Three rules the adapters must share, each earned from a probe above:**
 
-1. **`url_hash` is the cross-source dedup key.** Google News, DuckDuckGo and a Medium tag feed will all surface the same article. Dedup on the resolved canonical URL, not on `external_id`, or the user sees it three times.
+1. **`url_hash` is the cross-source dedup key.** Google News, a SERP and a Medium tag feed will all surface the same article. Dedup on the resolved canonical URL, not on `external_id`, or the user sees it three times. **This is also why Google News cannot store its own link** — see the rule below.
 2. **`occurred_at` may be unknown, and unknown is not `now()`.** The SERP has no publish date. Leave it null and sort those rows by `observed_at`, with the UI saying "found today" rather than inventing a publication date. Stamping `now()` corrupts every "this week vs last week" comparison the product is built on.
 3. **A source with a known-good canary that returns zero is a failure, not a quiet day.** Substack's 200-with-nothing (§7) is the reason this rule exists. Store the canary result alongside `item_count` on the `snapshot` row, and alert on the source, not on the brand.
 
@@ -419,11 +436,12 @@ Aligned to `docs/REBUILD-SCHEMA.md` on main. **A mention is not its own table.**
 
 ## Findings the rebuild must not inherit
 
-1. **Reddit's RSS endpoint is open unauthenticated; its JSON endpoint is not.** Both were probed within two seconds of each other. Any doc saying "Reddit is 403" is describing `search.json` only.
-2. **Substack returns 200 with zero results for every query, including `nike`.** A silent block. Every source adapter needs a canary.
-3. **The SuperGrok X route is dead** — no uncommented grok rung in the live router config; the only mention is a dead-rung comment reading `403 personal-team`. X is a spend decision, not a wiring task.
-4. **An honest User-Agent beats a spoofed Chrome one on DuckDuckGo.** 200 with results vs 202 challenge, same host, four minutes apart.
-5. **Bing's RSS terms forbid our use.** It works, and we cannot use it.
-6. **Google News links are opaque redirects**, so a mention cannot be stored until the redirect is resolved — a real per-item cost, not a detail.
-7. **Reddit 429s on a second request within fifteen seconds** from a datacenter IP. Concurrency 1, always.
-8. **A stale YouTube channel id 404s silently-ish** — the feed returns a 404 HTML page, not an empty feed. Resolve the handle once, cache it on the entity, and treat a 404 as a source failure rather than "no videos".
+1. **The Google News `articles/…` URL is not a canonical URL.** Two queries produce two opaque URLs for one article, which breaks `url_hash` dedup at the source. Resolution is D8's job; the constraint is absolute — no canonical, no signal row.
+2. **Reddit's RSS endpoint is open unauthenticated; its JSON endpoint is not.** Both were probed within two seconds of each other. Any doc saying "Reddit is 403" is describing `search.json` only.
+3. **Substack returns 200 with zero results for every query, including `nike`.** A silent block. Every source adapter needs a canary.
+4. **The SuperGrok X route is dead** — no uncommented grok rung in the live router config; the only mention is a dead-rung comment reading `403 personal-team`. X is a spend decision, not a wiring task.
+5. **DuckDuckGo is intermittent from our egress, and its failure is a 202 carrying an empty set.** Two agents, same host, same day: 200 with 10 result links, and five consecutive 202s with none. A success status with no results is the same silent-failure class as Substack (§7). Out of the MVP until a proper probe matrix says otherwise. The honest-UA-beats-spoofed-UA correlation held across all eight observations and is a hypothesis worth testing, not a finding to build on — query shape was an uncontrolled second variable.
+6. **Bing's RSS terms forbid our use.** It works, and we cannot use it.
+7. **Google News links are opaque redirects**, so a mention cannot be stored until the redirect is resolved — a real per-item cost, not a detail.
+8. **Reddit 429s on a second request within fifteen seconds** from a datacenter IP. Concurrency 1, always.
+9. **A stale YouTube channel id 404s silently-ish** — the feed returns a 404 HTML page, not an empty feed. Resolve the handle once, cache it on the entity, and treat a 404 as a source failure rather than "no videos".
