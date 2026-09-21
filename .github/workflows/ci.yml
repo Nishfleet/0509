@@ -63,7 +63,10 @@ jobs:
     if: github.event_name != 'deployment_status'
     # fleet-ci on merge_group/push only; pull_request stays hosted so fork
     # PRs never execute on the box (fleet-ops#5935).
-    runs-on: ${{ (github.event_name == 'merge_group' || github.event_name == 'push') && 'fleet-ci' || 'ubuntu-latest' }}
+    # Stays on a hosted runner: the docker:// step below runs as root and leaves
+    # root-owned files in a persistent fleet-ci workspace, which broke every later
+    # checkout on that runner (three merge_group failures, 2026-09-22 01:33-01:47 IST).
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
