@@ -9,7 +9,8 @@
     "app/routes/**/*.{ts,tsx}",
     "app/root.tsx",
     "app/routes.ts",
-    "workers/app.ts"
+    "workers/app.ts",
+    "e2e/*.setup.ts"
   ],
   "project": ["app/**/*.{ts,tsx}", "workers/**/*.ts", "e2e/**/*.ts", "tests/**/*.ts"],
 
