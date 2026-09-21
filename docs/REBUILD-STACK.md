@@ -803,7 +803,159 @@ Cache `.lycheecache` with `actions/cache@v4`; it is one block of stock YAML, not
 
 ---
 
-## 7. Replace-the-glue table
+## 7. The API surface — agent-native by default
+
+Charter addendum: the product ships an API and an MCP server. Every version below read 2026-09-21.
+
+### 7.1 MCP on Workers — do not write an `McpAgent`
+
+**Recommendation: `createMcpHandler` from `agents/mcp/server`, with `McpServer` from `@modelcontextprotocol/server` 2.0.0.**
+
+This is the single most likely thing in the rebuild to be built wrong from memory, because every blog post and every pre-August-2026 example shows the deprecated shape. Cloudflare's own page says it plainly (<https://developers.cloudflare.com/agents/model-context-protocol/apis/agent-api/>, last updated 2026-07-27):
+
+> `McpAgent` remains available only for existing legacy servers while they migrate. It is deprecated and feature-frozen. Migrate to `createMcpHandler` at your earliest convenience.
+
+Versions: `agents` **0.24.0** (2026-09-18), `@modelcontextprotocol/server` **2.0.0**, `@modelcontextprotocol/client` **2.0.0**, `@modelcontextprotocol/sdk` **1.30.0** (now the legacy generation). Install line from the docs: `npm i agents @modelcontextprotocol/server@2.0.0 zod`.
+
+```ts
+import { McpServer } from "@modelcontextprotocol/server";
+import { createMcpHandler } from "agents/mcp/server";
+
+function createServer() {
+  const server = new McpServer({ name: "0509", version: "1.0.0" });
+  server.registerTool("list_competitors",
+    { description: "…", inputSchema: { workspaceId: z.string() } },
+    async ({ workspaceId }) => ({ content: [{ type: "text", text: "…" }] }));
+  return server;
+}
+```
+
+**Why this matters for a single-Worker React Router app, and it is the whole reason to pick it:** the handler is a plain `(request, env, ctx) => Response`. It is **stateless — no Durable Object, no `migrations`, no `new_sqlite_classes`**. The docs say it can be composed inside another handler, and `handler.fetch(request, { authInfo, parsedBody })` is the documented hook for exactly the case where an outer framework has already parsed the request. So the MCP endpoint is a React Router **resource route**, not a second app.
+
+`McpAgent`, by contrast, backs every client session with a Durable Object and its own SQLite — durable state we do not need, a DO binding and a migration we do not want, and a documented gotcha that reconnecting starts a new session with reset state.
+
+Two config lines are load-bearing:
+
+- `"run_worker_first": ["/mcp"]` in `wrangler.jsonc`, so static assets never shadow the endpoint.
+- `allowedHostnames` / `allowedOriginHostnames` set explicitly once we are on a custom domain — the default allowlist covers only localhost and `workers.dev`.
+
+Options on `createMcpHandler`: `route` (default `/mcp`), `corsOptions`, `allowedHostnames`, `allowedOriginHostnames`, `authContext`, `legacy` (default `"stateless"`), `responseMode`, `onerror`, `maxSubscriptions` (1024), `keepAliveMs` (15000). Two traps worth naming: **the import path is load-bearing** — `agents/mcp` exports a legacy-overload `createMcpHandler`, `agents/mcp/server` exports the stateless one — and the callable must not be the Worker's default export, because Wrangler treats a function default export as a `WorkerEntrypoint` class.
+
+**Transport: Streamable HTTP. SSE is deprecated.** Cloudflare: *"Server-Sent Events (SSE) was previously used for remote MCP connections but has been deprecated in favor of Streamable HTTP … new servers should use the stateless Streamable HTTP handler."* Upstream agrees — <https://modelcontextprotocol.io/specification/2026-07-28/basic/transports> names exactly two bindings, stdio and Streamable HTTP, and HTTP+SSE is on the deprecated list.
+
+| Rejected | Why |
+|---|---|
+| `McpAgent` (`agents/mcp`) | Deprecated and feature-frozen by its own docs; forces a Durable Object + migration for state we do not need. |
+| `@modelcontextprotocol/sdk` 1.30.0 standalone | The legacy generation, and it hard-depends on `express`, `cors`, `raw-body` and `@hono/node-server` — Node-shaped baggage in a Worker bundle. Cloudflare lists it only for "custom transport ownership". |
+
+**Do not start from the C3 MCP templates.** Both exist — `--template=cloudflare/ai/demos/remote-mcp-authless` and `--template=cloudflare/ai/demos/remote-mcp-github-oauth` — and the same docs page says not to use them: *"The quick-deploy templates in this section still use the deprecated `McpAgent` path. Do not use that path for a new server. Start with the `mcp-worker` example."* That example (<https://github.com/cloudflare/agents/tree/main/examples/mcp-worker>) is Vite 8 + React 19 + one Worker with `assets` and `run_worker_first: ["/mcp"]` — structurally the closest published thing to our app.
+
+**Install note from the manifest, not the docs:** `agents@0.24.0` declares `@modelcontextprotocol/client`, `@modelcontextprotocol/sdk` and `@modelcontextprotocol/server` as **exact-pinned, non-optional** peers (none appear in `peerDependenciesMeta`). Expect all three in `package.json` even for a stateless-only server. Cloudflare's own example does exactly that.
+
+### 7.2 MCP auth — OAuth 2.1 and RFC 9728 are a MUST
+
+**`@cloudflare/workers-oauth-provider` 0.10.3** (2026-08-10, zero dependencies). It needs one KV binding:
+
+```jsonc
+{ "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "<id>" }] }
+```
+
+```ts
+export default new OAuthProvider({
+  apiRoute: "/mcp",
+  apiHandler: createMcpHandler(createServer),
+  defaultHandler: MyAuthHandler,
+  authorizeEndpoint: "/authorize",
+  tokenEndpoint: "/token",
+});
+```
+
+The provider reads the bearer token, rejects missing/invalid/expired credentials, checks the audience, and exposes the authenticated application data. **Application permissions — scope, ownership, tenancy — remain ours to enforce**; the provider does not do multi-tenancy for us. `props` are AES-GCM encrypted at rest; inside a tool they are read with `getMcpAuthContext()`, with standard token metadata at `context.http.authInfo`. Never log or return the raw token.
+
+**This is not optional decoration.** MCP revision **2026-07-28** states: *"MCP servers **MUST** implement OAuth 2.0 Protected Resource Metadata (RFC9728)"* and *"Authorization servers MUST implement OAuth 2.1"*. Dynamic Client Registration (RFC 7591) is **deprecated** in the same revision, retained only for servers without Client ID Metadata Documents — so prefer `clientIdMetadataDocumentEnabled`, which additionally needs `"compatibility_flags": ["global_fetch_strictly_public"]`.
+
+**Build from the package README, not the docs page.** The README at <https://github.com/cloudflare/workers-oauth-provider> is ahead of Cloudflare's authorization page, which still shows the deprecated `MyMCPServer.serve("/mcp")` form in its `apiHandler` examples. And read the confused-deputy warning in <https://developers.cloudflare.com/agents/model-context-protocol/guides/securing-mcp-server/>: with a third-party upstream provider *"you must implement your own consent dialog before forwarding users upstream"*.
+
+### 7.3 API keys — better-auth's plugin, as shipped
+
+**`@better-auth/api-key` 1.7.5** — its own package since 1.7, same split as `@better-auth/passkey`. Exports `apiKey` and `API_KEY_TABLE_NAME`, whose value is `"apikey"` (read from the unpacked `dist/index.mjs`).
+
+```ts
+import { apiKey } from "@better-auth/api-key";
+export const auth = betterAuth({ plugins: [ apiKey() ] });
+```
+
+`npx auth@latest generate` emits **one table, `apikey`, with 22 columns**: `id`, `configId`, `name`, `start`, `prefix`, `key`, `referenceId`, `refillInterval`, `refillAmount`, `lastRefillAt`, `enabled`, `rateLimitEnabled`, `rateLimitTimeWindow`, `rateLimitMax`, `requestCount`, `remaining`, `lastRequest`, `expiresAt`, `createdAt`, `updatedAt`, `permissions`, `metadata`.
+
+Note what those columns mean: **per-key rate limiting, quotas with refill, expiry, permissions and org ownership all ship in the box.** A hand-written key table with a hand-written quota counter is exactly the glue this rebuild deletes, and it would be a strictly worse version of a table better-auth will generate for free. The plugin also supports sessions-from-API-keys, so one authorization path serves both the browser and the API.
+
+Total auth tables for our set is now **six**: `user`, `session`, `account`, `verification`, `passkey`, `apikey`.
+
+### 7.4 Rate limiting — the platform binding
+
+```jsonc
+{ "ratelimits": [ { "name": "MY_RATE_LIMITER", "namespace_id": "1001",
+                    "simple": { "limit": 100, "period": 60 } } ] }
+```
+
+```js
+const { success } = await env.MY_RATE_LIMITER.limit({ key: pathname });
+```
+
+<https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/>. **`period` must be `10` or `60` seconds — there is no other value.**
+
+Read the two caveats before designing anything on it. The docs say *"Rate limits that you define and enforce in your Worker are local to the Cloudflare location"* — it is **per-colo, not global** — and that it is *"permissive, eventually consistent, and intentionally designed to not be used as an accurate accounting system."*
+
+So the division of labour is: **the binding is the cheap abuse shield** at the edge (per-IP, per-path, before any D1 read); **`apikey.rateLimitMax` / `rateLimitTimeWindow` is the billable quota**, because it is exact, per-key, and already persisted. Using the binding to enforce a customer's plan limit would under-count across colos and over-count nothing — a billing bug by construction.
+
+### 7.5 OpenAPI from zod schemas
+
+**Recommendation: `zod-openapi` (samchungy) 6.0.2 — zero runtime dependencies, peer `zod ^4.0.0` only, no router coupling.**
+
+It reads zod 4's native `.meta()` with **no `extendZodWithOpenApi` monkey-patch**. `createDocument(...)` is pure and synchronous and returns a complete OpenAPI 3.1 document from a hand-written `paths` object, so the same schema object validates the request in a loader *and* documents it:
+
+```ts
+export const document = createDocument({
+  openapi: "3.1.0",
+  info: { title: "0509 API", version: "1.0.0" },
+  paths: { "/api/competitors": { get: { responses: { "200": { /* zod schema */ } } } } },
+});
+// app/routes/api.openapi[.]json.ts
+export function loader() { return Response.json(document); }
+```
+
+Because it is pure, the document can equally be generated in a build step and shipped as a static asset — zero runtime cost for a page nobody requests hot.
+
+**Zod 4 ships `z.toJSONSchema()` natively (<https://zod.dev/json-schema>) and it is not enough on its own.** It emits JSON Schema, not an OpenAPI document: no `info`, no `paths`, no `servers`, no `securitySchemes`. Registry mode returns `{ schemas: {...} }` rather than `{ components: { schemas } }`, and `$ref`s are bare ids (`"User"`) rather than `#/components/schemas/User`. Choosing it as the primary means hand-writing `info`/`paths`, renaming a key, rewriting every `$ref`, and re-deriving the input/output component split — all of which `createDocument` already does on the same zod 4 engine. Worth knowing for its real job: schema fragments for AI structured output.
+
+| Rejected | Why |
+|---|---|
+| `chanfana` 3.4.0 (Cloudflare's own) | **The router is a hard constructor requirement** — `if (!router) throw new Error("Router is required")`, with only `fromHono` and `fromIttyRouter` adapters shipped. Adopting it means running Hono or itty-router *inside* the Worker alongside React Router's request handler and rewriting every endpoint as an `OpenAPIRoute` subclass. Wrong shape for resource routes, whatever its pedigree. |
+| `@hono/zod-openapi` 1.6.3 | It *is* Hono — `OpenAPIHono` extends Hono, `peerDependencies` require `hono >= 4.10.0`, and the document only exists as a method on that instance. Two routers in one Worker to emit a JSON file. |
+
+Runner-up, named so it is not re-researched: `@asteasolutions/zod-to-openapi` 9.1.0 is also router-free and has the larger install base. Prefer it **only** if we ever need OpenAPI 3.0.x or 3.2 output; it costs a runtime dependency (`openapi3-ts`) and still requires the `extendZodWithOpenApi(z)` global side-effect, which is an entrypoint-ordering hazard in a bundled Worker.
+
+### 7.6 `llms.txt`
+
+The spec is <https://llmstxt.org/> — "The /llms.txt file, v2", published 2024-09-03, modified 2026-08-10. It describes itself as a **proposal**, not a standard.
+
+Structure, per the spec: an H1 with the project name (**the only required section**), then an optional blockquote summary, then optional prose sections **containing no headings**, then zero or more H2 sections each holding a markdown list of `[name](url): notes` links. `## Optional` is a convention for secondary links — and **v2 removed its mechanical meaning**; the changelog is explicit that "Optional sections... no longer carry mechanical semantics".
+
+**v2 also loosened the location**: the file may live at `/llms.txt` *or at any subpath*, covering the URLs beneath it, with agents preferring the most specific. And it added link-relation discovery: `rel="alternate" type="text/markdown"` to the markdown version of a page, `rel="describedby"` to the covering `llms.txt`, as `<link>` elements or an HTTP `Link:` header.
+
+The companion convention is a clean markdown version of each page at the same URL with `.md` appended or substituted (`index.md` for directory URLs).
+
+**`llms-full.txt` is not in the spec** — zero occurrences on llmstxt.org. It is vendor precedent. Cloudflare's own is **56.7 MiB**, which is the argument against shipping one.
+
+**Cloudflare's implementation is the pattern worth copying**, and it is two-tier: the root `/llms.txt` (16,049 B) is a *product directory* whose 107 links all point at other `llms.txt` files, and each per-product `llms.txt` is the *page index*, linking to `/index.md` URLs. Every page is also served as markdown via `Accept: text/markdown`, and the HTML carries `<link rel="alternate" type="text/markdown">`. Their blog post on it (<https://blog.cloudflare.com/agent-readiness/>) notes the markdown route is a URL Rewrite Rule plus a Request Header Transform Rule — *"without any additional build step or content duplication"* — and that their own Agent Readiness scanner *"do[es] not check for llms.txt"*, only markdown content negotiation.
+
+**For 0509:** one `/llms.txt` at the root, H1 + blockquote + one H2 section per public surface, generated from the same route manifest the sitemap uses. Markdown versions of the public marketing and docs pages via content negotiation, with `rel="alternate"`. **No `llms-full.txt`** — it is unspecified, and a site this size has nothing to put in one.
+
+`llms.txt` and `robots.txt` do different jobs; the spec says so. Note also that Cloudflare's AI-crawler controls moved: "Block AI bots" is deprecated in favour of behaviour-based policies (Search / Agent / Training) in **AI Crawl Control** (<https://developers.cloudflare.com/ai-crawl-control/>), which also tracks robots.txt violations and carries the closed-beta Pay Per Crawl. An agent-native product should be **Search and Agent allowed**; Training is a separate decision and Nish's.
+
+---
+
+## 8. Replace-the-glue table
 
 Every capability the rebuild needs → the one thing that provides it → the version pinned today. "platform" means it is in the runtime and costs no dependency.
 
@@ -842,8 +994,14 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | E2E against production | `@playwright/test` | 1.63.0 |
 | Performance gate | `treosh/lighthouse-ci-action` | v12.6.2 |
 | Link checking | `lycheeverse/lychee-action` | v2.9.0 |
+| MCP server | `createMcpHandler` (`agents/mcp/server`) + `@modelcontextprotocol/server` | `agents` 0.24.0 / 2.0.0 |
+| MCP auth | `@cloudflare/workers-oauth-provider` | 0.10.3 |
+| API keys + per-key quota | `@better-auth/api-key` (`apikey` table) | 1.7.5 |
+| Edge abuse shield | Cloudflare rate limiting binding (`period` 10 or 60 only) | platform |
+| OpenAPI document | `zod-openapi` (samchungy) | 6.0.2 |
+| Agent-readable docs | `/llms.txt` + `Accept: text/markdown` + `rel="alternate"` | spec v2 (2026-08-10) |
 
-**Runtime dependencies this stack adds beyond the scaffold: seven.** `better-auth`, `@better-auth/passkey`, `@better-auth/api-key`, `diff`, `@extractus/feed-extractor`, `uplot` + `uplot-react`, `date-fns` + `@date-fns/tz`. `zod` arrives transitively through better-auth; `fast-xml-parser` arrives transitively through feed-extractor. Everything else in the table is a platform primitive with no bundle cost.
+**Runtime dependencies this stack adds beyond the scaffold: ten.** `better-auth`, `@better-auth/passkey`, `@better-auth/api-key`, `diff`, `@extractus/feed-extractor`, `uplot` + `uplot-react`, `date-fns` + `@date-fns/tz`, and for the API surface `agents`, `@modelcontextprotocol/server` (which drags `@modelcontextprotocol/client` and `@modelcontextprotocol/sdk` as exact-pinned peers), `@cloudflare/workers-oauth-provider` and `zod-openapi`. `zod` arrives transitively through better-auth; `fast-xml-parser` arrives transitively through feed-extractor. Everything else in the table is a platform primitive with no bundle cost.
 
 ---
 
