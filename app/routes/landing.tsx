@@ -5,6 +5,16 @@ import type { Route } from "./+types/landing";
 // print on the only page the public can reach.
 const CONTACT = "support@0509.io";
 
+export const links: Route.LinksFunction = () => [
+  {
+    rel: "preload",
+    href: "/fonts/bricolage-grotesque-latin.woff2",
+    as: "font",
+    type: "font/woff2",
+    crossOrigin: "anonymous",
+  },
+];
+
 export function meta(_: Route.MetaArgs) {
   return [
     { title: "Five to Nine" },
