@@ -72,3 +72,21 @@ the font link at `app/root.tsx:157` (opsz `12..96`, weights `600;700;800`,
   one line if Nish prefers otherwise.
 - The 390 home render deliberately shows the expanded-row **sheet** open (spec
   §5 "row expansion as a sheet"); the in-place expansion is on the 1440 render.
+
+## Failed commands + out-of-scope finding
+
+- `POST 127.0.0.1:4000/jev` failed twice: HTTP 529, then connection refused.
+  Root cause found: `fleet-litellm-proxy.service` crash-loops at startup —
+  `ImportError: Could not import cline_stealth_llm from fleet_cline_adapter`;
+  `~/.config/fleet-ops/fleet_cline_adapter.py` is absent from disk entirely
+  (config reference at litellm-proxy.yaml:431–436 survives it). Whole seat
+  router is down: nothing listens on :4000, so every litellm seat and the /jev
+  pass-through are walled. Filed as **fleet-ops#8019** (plain issue, evidence +
+  fix options; repairing the spend-governance router config is out of this
+  packet's scope).
+- Consequences for this PR (recorded on its body): `jev needs_review:
+  unavailable; advisory-only; review policy unchanged`; the senior reviewer
+  call produced no output before timeout → `review: skipped, no capable seat`;
+  **auto-merge NOT armed** per worker.md step 9 fallback.
+
+PR: https://github.com/Nishfleet/0509/pull/3883
