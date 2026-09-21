@@ -689,6 +689,8 @@ a { color: inherit; text-decoration: none; }
   .cp-snap .cell:first-child { padding-left: 20px; }
   .rtf-item { grid-template-columns: 1fr; }
   .rtf-item .shot { width: 100%; max-width: 300px; }
+  .dev.shot-dev { grid-template-columns: 92px 1fr; }
+  .dev.shot-dev .shot { grid-column: 1 / -1; width: 100%; max-width: 300px; }
   .rank-row { grid-template-columns: 24px 32px 1fr auto; row-gap: 6px; }
   .rank-row .name { grid-column: 3; }
   .rank-row .tsw, .rank-row .undolink { grid-column: 4; grid-row: 1; align-self: start; margin-top: 5px; }
