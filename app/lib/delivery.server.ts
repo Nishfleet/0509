@@ -4028,7 +4028,9 @@ export function buildMonthlyReportEmail(input: {
   name: string | null;
   monthLabel: string;
   changeCount: number;
-  shareUrl: string;
+  // Optional since REBUILD P2 C3 (#3862): /share is a swept route, so the
+  // report email carries no link until P3 decides what replaces it.
+  shareUrl?: string | null;
 }) {
   const greeting = input.name?.trim() ? `Hi ${escapeHtml(input.name.trim())},` : "Hi,";
   const changeLabel = input.changeCount === 1 ? "change" : "changes";
@@ -4042,7 +4044,7 @@ export function buildMonthlyReportEmail(input: {
       <p style="margin: 0 0 20px; font-size: 18px; line-height: 1.3; letter-spacing: -0.3px; color: ${EMAIL_CASE_INK}; font-weight: 700;">${changeLabel} in ${escapeHtml(input.monthLabel)}, ready to review</p>
       <p style="margin: 0 0 16px; color: ${EMAIL_CASE_INK_SOFT};">We file this report for you at the start of every month. No proof, no claim — every line is backed by a stored capture.</p>
       <p style="margin: 0 0 20px;">
-        <a href="${escapeHtml(input.shareUrl)}" style="${EMAIL_CASE_BUTTON_STYLE}">Open your report</a>
+        ${input.shareUrl ? `<a href="${escapeHtml(input.shareUrl)}" style="${EMAIL_CASE_BUTTON_STYLE}">Open your report</a>` : ""}
       </p>
       <p style="margin: 0; font-family: ${EMAIL_MONO_FONT}; font-size: 12px; letter-spacing: 0.04em; color: ${EMAIL_CASE_INK_FAINT};">
         This link is a read-only snapshot. You can still build any report by hand
@@ -4056,7 +4058,7 @@ export function buildMonthlyReportEmail(input: {
     `Your ${input.monthLabel} report is ready: ${input.changeCount} ${changeLabel}.`,
     "We file this report for you at the start of every month. No proof, no claim.",
     "",
-    `Open your report: ${input.shareUrl}`,
+    ...(input.shareUrl ? [`Open your report: ${input.shareUrl}`] : []),
   ].join("\n");
 
   return { subject, preheader, html, text };

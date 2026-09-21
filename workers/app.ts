@@ -4,6 +4,7 @@ import { createRequestHandler, RouterContextProvider } from "react-router";
 
 import { cloudflareRuntimeContext } from "../app/lib/cloudflare-context";
 import { pingLiveness } from "../app/lib/liveness-ping.server";
+import type { AppEnv } from "../app/lib/env.server";
 import { enforceRequestRateLimit } from "../app/lib/rate-limit.server";
 import { publicSeoFileForPathname } from "../app/lib/seo";
 import { canonicalPathRedirect } from "./canonical-path";
@@ -242,7 +243,11 @@ export default {
   // quiet exactly when it matters. docs/REBUILD-DONE.md gates completion on
   // this ping running seven consecutive days without a miss, so it must not go
   // inert between the cut and P3.
-  async scheduled(_controller, env, ctx) {
+  async scheduled(
+    _controller: ScheduledController,
+    env: AppEnv,
+    ctx: ExecutionContext,
+  ) {
     const livenessPing = pingLiveness(env);
     if (livenessPing) ctx.waitUntil(livenessPing);
   },
