@@ -26,4 +26,22 @@ is the deploy step, not a ledger read, and is deliberately not matched.
 - `npx vitest run --configLoader runner --project node --changed origin/main` — 5/5 (affected mode selected only this file)
 - `semgrep --config p/default --baseline-commit "$(git merge-base HEAD origin/main)" --quiet --metrics=off` — clean
 - termination: `gh run list -R Nishfleet/0509 --workflow 'Deploy production' --branch main --limit 1` → success (35531893039 @ d4bd9fe1, 2026-09-20T19:18:53Z); last 5 runs all green
-- live: `curl -s https://0509.io/api/health/deep` → `{"status":"ok", checks all ok}` 2026-09-21T01:12Z. The rebuilt /status page renders no commit sha — the literal "version newer than 3b3de23d" bullet has no surface post-rebuild; the deployed tree postdates the issue's baseline by the whole rebuild.
+- live: `curl -s https://0509.io/api/health/deep` → `{"status":"ok", checks all ok}` 2026-09-21T01:12Z. The rebuilt /status page renders no commit sha — the literal "version newer than 3b3de23d" bullet has no surface post-rebuild; the deployed tree postdates the issue's baseline by the whole rebuild. Follow-up filed as #3868.
+
+## Reviewer round (senior seat, GLM-5.3-Flash via pareto — pi `reviewer` subagent)
+
+No Critical/High findings; merge-ready verdict. The reviewer independently
+re-derived the fixture against the real run log (multiset-identical, 112/97)
+and reproduced the fails-before swap (3/5 red on the fc28cd44e workflow).
+
+Acted on:
+- tripwire regex widened: `migration[\s_-]?ledgers?` + `list[-\s]migrations`
+  added (space-separated and reversed phrasings no longer escape)
+- scan surface widened from step name+run to each job's full serialized
+  surface (`JSON.stringify` of the parsed job) — env/with/uses/composite
+  carriers are covered; YAML comments are dropped by `parse` so prose cannot
+  false-positive
+- filed #3868: the /status version bullet needs a real surface post-rebuild
+
+Noted: the fixture embeds the full 112/97-name lists verbatim rather than only
+the diff — deliberate, the acceptance names "the exact two ledger lists".

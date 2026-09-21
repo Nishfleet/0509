@@ -24,25 +24,25 @@ const workflowsDirectory = ".github/workflows";
 
 // The comparison primitives the failed gate needed: a read of the applied or
 // backup migration ledger (`d1 migrations list`, the internal `d1_migrations`
-// table, the sync-check token set) or the deleted script chain that performed
-// it. `wrangler d1 migrations apply` is the deploy step, not a ledger read,
-// and is deliberately not matched.
+// table, a `migration ledger`/`list-migrations` phrasing, the sync-check token
+// set) or the deleted script chain that performed it.
+// `wrangler d1 migrations apply` is the deploy step, not a ledger read, and is
+// deliberately not matched.
 const LEDGER_COMPARISON =
-  /d1\s+migrations\s+list\b|\bd1_migrations\b|migration[_-]?ledger|source_backup_migration|repository_migration_names|verify-remote-restore-evidence|d1-remote-restore-evidence|d1-migration-sync-check/i;
+  /d1\s+migrations\s+list\b|list[-\s]migrations|\bd1_migrations\b|migration[\s_-]?ledgers?|source_backup_migration|repository_migration_names|verify-remote-restore-evidence|d1-remote-restore-evidence|d1-migration-sync-check/i;
 
-type Step = { name?: string; run?: string };
-type Workflow = { jobs?: Record<string, { steps?: Step[] }> };
+type Workflow = { jobs?: Record<string, unknown> };
 
+// Scans each job's whole serialized surface — name, run, env, uses, with, and
+// job-level fields — not just step name+run, so a composite action or an
+// env-carried ledger read cannot slip the tripwire. YAML comments are dropped
+// by `parse` before scanning, so prose can never false-positive.
 function ledgerComparisonSteps(workflowText: string): string[] {
   const parsed = parse(workflowText) as Workflow;
   const offenders: string[] = [];
   for (const [jobId, job] of Object.entries(parsed.jobs ?? {})) {
-    for (const step of job?.steps ?? []) {
-      const surface = `${step.name ?? ""}\n${step.run ?? ""}`;
-      if (LEDGER_COMPARISON.test(surface)) {
-        offenders.push(`${jobId} › ${step.name ?? (step.run ?? "").slice(0, 60)}`);
-      }
-    }
+    const match = `${jobId}\n${JSON.stringify(job)}`.match(LEDGER_COMPARISON);
+    if (match) offenders.push(`${jobId} › …${match[0]}…`);
   }
   return offenders;
 }
@@ -176,8 +176,8 @@ describe("deploy restore-evidence gate (0509#3314)", () => {
     }
   });
 
-  it("flags the fault shape that failed run 34705843153", () => {
-    const reintroduced = `
+  it("flags the fault shape that failed run 34705843153, however it is carried", () => {
+    const viaRun = `
 jobs:
   generate_restore_evidence:
     steps:
@@ -185,10 +185,18 @@ jobs:
         run: node scripts/verify-remote-restore-evidence.mjs
       - run: npx wrangler d1 migrations list 0509 --remote --json
 `;
-    expect(ledgerComparisonSteps(reintroduced)).toEqual([
-      "generate_restore_evidence › Generate D1 remote restore evidence",
-      "generate_restore_evidence › npx wrangler d1 migrations list 0509 --remote --json",
+    expect(ledgerComparisonSteps(viaRun)).toEqual([
+      "generate_restore_evidence › …verify-remote-restore-evidence…",
     ]);
+    const viaEnv = `
+jobs:
+  evidence:
+    env:
+      APPLIED: d1_migrations
+    steps:
+      - run: node reproduce.mjs
+`;
+    expect(ledgerComparisonSteps(viaEnv)).toEqual(["evidence › …d1_migrations…"]);
   });
 
   it("does not flag the legitimate apply step — `migrations apply` is not a ledger read", () => {
@@ -196,11 +204,7 @@ jobs:
       join(workflowsDirectory, "deploy-production.yml"),
       "utf8",
     );
-    const parsed = parse(deploy) as Workflow;
-    const surfaces = Object.values(parsed.jobs ?? {}).flatMap((job) =>
-      (job?.steps ?? []).map((step) => `${step.name ?? ""}\n${step.run ?? ""}`),
-    );
-    expect(surfaces.some((s) => s.includes("migrations apply"))).toBe(true);
+    expect(deploy).toContain("wrangler d1 migrations apply 0509 --remote");
     expect(ledgerComparisonSteps(deploy)).toEqual([]);
   });
 
