@@ -125,7 +125,8 @@ describe("dashboard first 15 minutes activation", () => {
 
     expect(markup).toContain('id="setup-checklist"');
     expect(markup).toContain("Setup · 0 of 1 done");
-    expect(markup).toContain("Finish the workspace that sends your first brief");
+    expect(markup).toContain("Add a competitor — the rest is automatic");
+    expect(markup).not.toContain("Finish the workspace");
     expect(markup).toContain("First competitor");
     expect(markup).toContain("Next");
     expect(markup).toContain('aria-current="step"');
@@ -137,6 +138,72 @@ describe("dashboard first 15 minutes activation", () => {
     expect(markup).toContain("Add your brand website");
     expect(markup).not.toContain("f9-first-run-spine");
     expect(markup.match(/f9-evidence-cta--rank1/g)?.length ?? 0).toBe(1);
+  });
+
+  it("renders the three system steps as automatic once a competitor is saved", async () => {
+    await mockRouter(
+      baseDashboardData({
+        workspaceReadiness: {
+          readyCount: 1,
+          totalCount: 4,
+          items: [
+            {
+              id: "first_competitor",
+              label: "First competitor",
+              status: "ready",
+              detail: "Competitor search exists.",
+              action: null,
+            },
+            {
+              id: "first_watchlist",
+              label: "First watchlist",
+              status: "needs_setup",
+              detail: "Create one retained watchlist.",
+              action: { label: "Add a competitor", href: "/app/watchlists" },
+            },
+            {
+              id: "first_proof",
+              label: "First evidence",
+              status: "needs_setup",
+              detail: "Refresh a watchlist to capture landing-page evidence.",
+              action: { label: "Capture evidence", href: "/app/watchlists" },
+            },
+            {
+              id: "first_digest",
+              label: "First digest",
+              status: "needs_setup",
+              detail: "Digest history appears after monitored changes.",
+              action: { label: "Open digests", href: "/app/digests" },
+            },
+          ],
+          billing: { plan: "starter" },
+          nudges: [],
+          counts: { agentMemoryEntries: 0, competitors: 0, activeWatchlists: 0 },
+        },
+      }),
+    );
+
+    const { default: AppDashboardRoute } =
+      await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
+
+    // The card stays up until the system steps finish, but nothing on it is a
+    // user task: no Next/Pending stamp, no aria-current, no action link, and
+    // no quick-create form — the three remaining items tick themselves.
+    expect(markup).toContain('id="setup-checklist"');
+    expect(markup).toContain("Your first brief is on its way");
+    expect(markup).not.toContain("Finish the workspace");
+    expect(markup.match(/Automatic/g)?.length ?? 0).toBe(3);
+    expect(markup).not.toContain('aria-current="step"');
+    expect(markup).not.toContain(">Next<");
+    expect(markup).not.toContain(">Pending<");
+    expect(markup).not.toContain("Capture evidence");
+    expect(markup).not.toContain("Open digests");
+    expect(markup).not.toContain("Track this competitor");
+    // Pending detail is the system's own description, not a user instruction.
+    expect(markup).toContain("Captured automatically by the activation scan.");
+    expect(markup).not.toContain("Refresh a watchlist to capture");
+    expect(markup).not.toContain("Create one retained watchlist.");
   });
 
   it("keeps the filed brief reachable while setup still has another step", async () => {
@@ -684,7 +751,7 @@ describe("dashboard first 15 minutes activation", () => {
             },
           ],
           nudges: [],
-          counts: { agentMemoryEntries: 0 },
+          counts: { agentMemoryEntries: 0, competitors: 1 },
         },
       }),
     );
@@ -695,7 +762,9 @@ describe("dashboard first 15 minutes activation", () => {
 
     expect(markup).toContain("Tracking is paused");
     expect(markup).toContain("Resume a competitor watch");
-    expect(markup).toContain("Add a competitor");
+    // A paused watchlist is an operational choice, not a setup gap: the saved
+    // competitor completes the step and the checklist does not re-present.
+    expect(markup).not.toContain('id="setup-checklist"');
     expect(markup).toContain("/app/watchlists");
     expect(markup).toContain(
       "Every competitor is paused. No checks run until you resume one.",

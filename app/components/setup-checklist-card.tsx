@@ -8,6 +8,7 @@ import type { CompetitorImportPreview, CompetitorImportRow } from "~/lib/competi
 import { getPlanLimit } from "~/lib/plan-entitlements";
 import {
   blockingSetupItems,
+  isAutomaticSetupItem,
   isBlockingSetupItemComplete,
   pendingBlockingSetupItems,
 } from "~/lib/setup-checklist";
@@ -30,6 +31,18 @@ const SETUP_ACTION_INTENTS = new Set([
   "create-handoff-watchlists",
   "finish",
 ]);
+
+/**
+ * Detail line for an automatic item while it is still pending. The server's
+ * `item.detail` is written as a user instruction ("Create one retained
+ * watchlist.") — accurate when the item is a task, wrong for steps the system
+ * runs itself. These state what happens instead of asking for it.
+ */
+const AUTOMATIC_PENDING_DETAIL: Record<string, string> = {
+  first_watchlist: "Created automatically when you add a competitor.",
+  first_proof: "Captured automatically by the activation scan.",
+  first_digest: "Filed automatically once the first scan completes.",
+};
 
 export interface SetupHandoffCandidate {
   advertiser: string;
@@ -59,7 +72,13 @@ export function SetupChecklistCard({
 }) {
   const items = blockingSetupItems(readiness);
   const pendingItems = pendingBlockingSetupItems(readiness);
-  const nextItem = pendingItems[0] ?? null;
+  /**
+   * Only the first pending NON-automatic item is a user step — the automatic
+   * items (watchlist, first proof, first digest) are the system's own pipeline
+   * and tick themselves; they never hold "Next" or an action link.
+   */
+  const nextItem =
+    pendingItems.find((item) => !isAutomaticSetupItem(item)) ?? null;
   const readyCount = items.filter((item) => isBlockingSetupItemComplete(readiness, item)).length;
   const hasWatchlistCapacity =
     (readiness.counts?.activeWatchlists ?? 0) <
@@ -124,7 +143,10 @@ export function SetupChecklistCard({
   const canSubmitWebsite = Boolean(website.trim()) && !normalizedWebsite.error;
   const nextIsCompetitor = nextItem?.id === "first_competitor";
 
-  if (!nextItem) return null;
+  // The card stays mounted while only automatic items are pending — the
+  // dashboard revalidates on the first-scan poll, so they tick live — and
+  // retires itself once the whole blocking list is done.
+  if (pendingItems.length === 0) return null;
 
   return (
     <section
@@ -136,7 +158,11 @@ export function SetupChecklistCard({
         <span className="f9-evidence-micro">
           Setup · {readyCount} of {items.length} done
         </span>
-        <h2 id="setup-checklist-title">Finish the workspace that sends your first brief</h2>
+        <h2 id="setup-checklist-title">
+          {nextItem
+            ? "Add a competitor — the rest is automatic"
+            : "Your first brief is on its way"}
+        </h2>
       </header>
 
       {setupActionData?.message ? (
@@ -196,7 +222,7 @@ export function SetupChecklistCard({
             Track {normalizedWebsite.displayName ?? "this competitor"}
           </SubmitButton>
         </createFetcher.Form>
-      ) : !hasActionableImportPreview && nextItem.action ? (
+      ) : !hasActionableImportPreview && nextItem?.action ? (
         <div className="f9-evidence-action-row">
           <PrimaryAction to={nextItem.action.href}>{nextItem.action.label}</PrimaryAction>
         </div>
@@ -205,7 +231,8 @@ export function SetupChecklistCard({
       <ol className="f9-evidence-setup-list">
         {items.map((item) => {
           const done = isBlockingSetupItemComplete(readiness, item);
-          const isNext = item.id === nextItem.id;
+          const automatic = isAutomaticSetupItem(item);
+          const isNext = item.id === nextItem?.id;
           return (
             <li
               aria-current={isNext ? "step" : undefined}
@@ -214,11 +241,15 @@ export function SetupChecklistCard({
               key={item.id}
             >
               <span className="f9-evidence-setup-stamp">
-                {done ? "Done" : isNext ? "Next" : "Pending"}
+                {done ? "Done" : isNext ? "Next" : automatic ? "Automatic" : "Pending"}
               </span>
               <span>
                 <strong>{item.label}</strong>
-                <small>{item.detail}</small>
+                <small>
+                  {!done && automatic
+                    ? (AUTOMATIC_PENDING_DETAIL[item.id] ?? item.detail)
+                    : item.detail}
+                </small>
               </span>
             </li>
           );
