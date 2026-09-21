@@ -11,4 +11,6 @@ export default [
   route("app/alerts", "routes/app.alerts.tsx"),
   route("app/settings", "routes/app.settings.tsx"),
   route("api/health", "routes/api.health.ts"),
+  // better-auth mounts its whole surface here: magic link, passkey, session.
+  route("api/auth/*", "routes/api.auth.$.ts"),
 ] satisfies RouteConfig;

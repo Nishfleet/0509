@@ -46,6 +46,12 @@
     { "tag": "v2", "deleted_classes": ["SelectionEnrichmentLease"] }
   ],
 
+  // BETTER_AUTH_URL must be the canonical origin, never derived from a
+  // forwarded header: auth origin trust and the magic-link URL both come from
+  // it, and a client-supplied value would let a link point anywhere.
+  // BETTER_AUTH_SECRET stays a Worker secret.
+  "vars": { "BETTER_AUTH_URL": "https://0509.io" },
+
   "d1_databases": [
     {
       "binding": "DB",
