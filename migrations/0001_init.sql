@@ -1,19 +1,122 @@
-PRAGMA foreign_keys = ON;
+-- REBUILD 0001_init.sql — the whole schema, issue #3846, umbrella #3842.
+-- Authored by the deputy orchestrator 2026-09-21. Replaces the 106-file pre-rebuild chain.
+-- Design and rationale: docs/REBUILD-SCHEMA.md. Jev contract: docs/REBUILD-JEV.md.
 
--- REBUILD P1 init schema (issue #3846, umbrella #3842). Design record:
--- docs/REBUILD-SCHEMA.md. This file coexists with the pre-rebuild migration
--- chain on its own branch; the P2 cut deletes the old files.
---
--- Shape: one tracked entity (self brand + competitors), one signal spine
--- every view reads, sources as a registry table (new source = a row + a
--- plugin, never a migration), competitor state machine on the entity row.
+-- ---------------------------------------------------------------------------
+-- 1. Drop the pre-rebuild schema.
+-- Derived by applying the 106 pre-rebuild migrations to a local D1 and reading
+-- sqlite_master (2026-09-21): 97 tables. Not derived by grepping the old files —
+-- that chain has 200 CREATE TABLE and 96 DROP TABLE statements because of
+-- SQLite's rebuild-and-copy pattern, so parsing overcounts.
+-- Ordered children-first from PRAGMA foreign_key_list: D1 does not honour
+-- PRAGMA foreign_keys = OFF inside a migration, so dropping a parent before its
+-- child fails with "no such table". This order is topological, not alphabetical.
+-- The names the new schema reuses are dropped too: CREATE TABLE IF NOT EXISTS
+-- silently keeps an existing table, which would preserve the old definitions.
+-- ---------------------------------------------------------------------------
+DROP TABLE IF EXISTS "session";
+DROP TABLE IF EXISTS "account";
+DROP TABLE IF EXISTS "verification";
+DROP TABLE IF EXISTS "passkey";
+DROP TABLE IF EXISTS "saved_query";
+DROP TABLE IF EXISTS "collection_item_tag";
+DROP TABLE IF EXISTS "collection_item";
+DROP TABLE IF EXISTS "collection";
+DROP TABLE IF EXISTS "tag";
+DROP TABLE IF EXISTS "ad_observation";
+DROP TABLE IF EXISTS "website_page_observation";
+DROP TABLE IF EXISTS "watch_event";
+DROP TABLE IF EXISTS "proof_capture";
+DROP TABLE IF EXISTS "proof_target";
+DROP TABLE IF EXISTS "event_candidate";
+DROP TABLE IF EXISTS "ad";
+DROP TABLE IF EXISTS "website_site_scan_page";
+DROP TABLE IF EXISTS "website_site_scan";
+DROP TABLE IF EXISTS "watchlist_run";
+DROP TABLE IF EXISTS "digest_item";
+DROP TABLE IF EXISTS "watchlist_delivery_config";
+DROP TABLE IF EXISTS "web_mention_observation";
+DROP TABLE IF EXISTS "web_mention_target";
+DROP TABLE IF EXISTS "agent_memory";
+DROP TABLE IF EXISTS "delivery_attempt";
+DROP TABLE IF EXISTS "delivery_target";
+DROP TABLE IF EXISTS "source_snapshot";
+DROP TABLE IF EXISTS "watchlist";
+DROP TABLE IF EXISTS "landing_page_snapshot";
+DROP TABLE IF EXISTS "analysis_field";
+DROP TABLE IF EXISTS "digest_delivery";
+DROP TABLE IF EXISTS "digest_run";
+DROP TABLE IF EXISTS "meta_integration_log";
+DROP TABLE IF EXISTS "workspace_delivery_config";
+DROP TABLE IF EXISTS "discovery_cache_entry";
+DROP TABLE IF EXISTS "discovery_query_lease";
+DROP TABLE IF EXISTS "customer_meta_connection";
+DROP TABLE IF EXISTS "rate_limit_events";
+DROP TABLE IF EXISTS "proof_usage_credit";
+DROP TABLE IF EXISTS "share_link";
+DROP TABLE IF EXISTS "agent_action_audit";
+DROP TABLE IF EXISTS "customer_api_key";
+DROP TABLE IF EXISTS "dodo_webhook_event";
+DROP TABLE IF EXISTS "workspace_branding";
+DROP TABLE IF EXISTS "workspace_member";
+DROP TABLE IF EXISTS "client_room_resource";
+DROP TABLE IF EXISTS "client_room";
+DROP TABLE IF EXISTS "support_case_event";
+DROP TABLE IF EXISTS "support_case";
+DROP TABLE IF EXISTS "better_auth_magic_link_ticket";
+DROP TABLE IF EXISTS "monitoring_concurrency_slot";
+DROP TABLE IF EXISTS "evidence_usage_reservation";
+DROP TABLE IF EXISTS "evidence_usage_period";
+DROP TABLE IF EXISTS "evidence_top_up_adjustment";
+DROP TABLE IF EXISTS "evidence_top_up_ledger_entry";
+DROP TABLE IF EXISTS "proof_usage_credit_migration";
+DROP TABLE IF EXISTS "evidence_top_up_grant";
+DROP TABLE IF EXISTS "search_domain_identity_cache";
+DROP TABLE IF EXISTS "source_connection";
+DROP TABLE IF EXISTS "presence_item_revision";
+DROP TABLE IF EXISTS "presence_item";
+DROP TABLE IF EXISTS "presence_entity_link";
+DROP TABLE IF EXISTS "presence_alert_cursor";
+DROP TABLE IF EXISTS "presence_domain_verification";
+DROP TABLE IF EXISTS "presence_poll_cursor";
+DROP TABLE IF EXISTS "source_target";
+DROP TABLE IF EXISTS "tracked_entity";
+DROP TABLE IF EXISTS "presence_oauth_transaction";
+DROP TABLE IF EXISTS "presence_pilot_workspace";
+DROP TABLE IF EXISTS "user_plan";
+DROP TABLE IF EXISTS "cron_failure_alert_throttle";
+DROP TABLE IF EXISTS "digest_schedule_job";
+DROP TABLE IF EXISTS "release_scheduled_observation";
+DROP TABLE IF EXISTS "scheduled_observation_health_state";
+DROP TABLE IF EXISTS "scheduled_observation_alert_state";
+DROP TABLE IF EXISTS "cron_failure_alert_accepted_window";
+DROP TABLE IF EXISTS "discovery_fetch_log";
+DROP TABLE IF EXISTS "discovery_provider_state";
+DROP TABLE IF EXISTS "browser_job_telemetry";
+DROP TABLE IF EXISTS "cta_pipeline_stage_counts";
+DROP TABLE IF EXISTS "retention_sweep_state";
+DROP TABLE IF EXISTS "cta_pipeline_bail_reason_counts";
+DROP TABLE IF EXISTS "org";
+DROP TABLE IF EXISTS "competitor_suggestion_dismissal";
+DROP TABLE IF EXISTS "member";
+DROP TABLE IF EXISTS "invitation";
+DROP TABLE IF EXISTS "user";
+DROP TABLE IF EXISTS "signup_source_pending";
+DROP TABLE IF EXISTS "demo_brand_proof_hole_state";
+DROP TABLE IF EXISTS "ads_domain_publisher_state";
+DROP TABLE IF EXISTS "e2e_test_mode";
+DROP TABLE IF EXISTS "email_suppression";
+DROP TABLE IF EXISTS "error_report";
+DROP TABLE IF EXISTS "status_probe_samples";
+DROP TABLE IF EXISTS "email_delivery_canary";
+DROP TABLE IF EXISTS "competitor_graph";
+DROP TABLE IF EXISTS "organization";
 
--- --------------------------------------------------------------------------
--- Auth (better-auth owned — verbatim from the proven schema; the magic-link
--- path is the launch sign-in)
--- --------------------------------------------------------------------------
+-- ---------------------------------------------------------------------------
+-- 2. Auth — better-auth owned. Magic link is the proven sign-in path.
+-- ---------------------------------------------------------------------------
 
-CREATE TABLE IF NOT EXISTS user (
+CREATE TABLE user (
   id TEXT PRIMARY KEY NOT NULL,
   name TEXT NOT NULL,
   email TEXT NOT NULL UNIQUE,
@@ -23,42 +126,39 @@ CREATE TABLE IF NOT EXISTS user (
   updatedAt TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS session (
+CREATE TABLE session (
   id TEXT PRIMARY KEY NOT NULL,
-  expiresAt TEXT NOT NULL,
+  userId TEXT NOT NULL,
   token TEXT NOT NULL UNIQUE,
-  createdAt TEXT NOT NULL,
-  updatedAt TEXT NOT NULL,
+  expiresAt TEXT NOT NULL,
   ipAddress TEXT,
   userAgent TEXT,
-  userId TEXT NOT NULL,
+  createdAt TEXT NOT NULL,
+  updatedAt TEXT NOT NULL,
   FOREIGN KEY (userId) REFERENCES user(id) ON DELETE CASCADE
 );
+CREATE INDEX idx_session_user ON session(userId);
 
-CREATE INDEX IF NOT EXISTS idx_session_user_id ON session(userId);
-CREATE INDEX IF NOT EXISTS idx_session_expires_at ON session(expiresAt);
-
-CREATE TABLE IF NOT EXISTS account (
+CREATE TABLE account (
   id TEXT PRIMARY KEY NOT NULL,
+  userId TEXT NOT NULL,
   accountId TEXT NOT NULL,
   providerId TEXT NOT NULL,
-  userId TEXT NOT NULL,
   accessToken TEXT,
   refreshToken TEXT,
-  idToken TEXT,
   accessTokenExpiresAt TEXT,
   refreshTokenExpiresAt TEXT,
   scope TEXT,
+  idToken TEXT,
   password TEXT,
   createdAt TEXT NOT NULL,
   updatedAt TEXT NOT NULL,
-  FOREIGN KEY (userId) REFERENCES user(id) ON DELETE CASCADE
+  FOREIGN KEY (userId) REFERENCES user(id) ON DELETE CASCADE,
+  UNIQUE (providerId, accountId)
 );
+CREATE INDEX idx_account_user ON account(userId);
 
-CREATE INDEX IF NOT EXISTS idx_account_user_id ON account(userId);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_account_provider_lookup ON account(providerId, accountId);
-
-CREATE TABLE IF NOT EXISTS verification (
+CREATE TABLE verification (
   id TEXT PRIMARY KEY NOT NULL,
   identifier TEXT NOT NULL,
   value TEXT NOT NULL,
@@ -66,176 +166,104 @@ CREATE TABLE IF NOT EXISTS verification (
   createdAt TEXT NOT NULL,
   updatedAt TEXT NOT NULL
 );
+CREATE INDEX idx_verification_identifier ON verification(identifier);
 
-CREATE INDEX IF NOT EXISTS idx_verification_identifier ON verification(identifier);
-CREATE INDEX IF NOT EXISTS idx_verification_expires_at ON verification(expiresAt);
+-- ---------------------------------------------------------------------------
+-- 3. Tenancy and billing.
+-- ---------------------------------------------------------------------------
 
-CREATE TABLE IF NOT EXISTS better_auth_magic_link_ticket (
-  id TEXT PRIMARY KEY,
-  mode TEXT NOT NULL CHECK (mode IN ('login', 'signup')),
-  payload TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  expires_at TEXT NOT NULL,
-  consumed_at TEXT
-) STRICT;
-
-CREATE INDEX IF NOT EXISTS idx_better_auth_magic_link_ticket_expires
-  ON better_auth_magic_link_ticket(expires_at);
-
--- --------------------------------------------------------------------------
--- Workspace + plan
--- --------------------------------------------------------------------------
-
--- One workspace per user at launch; owner_user_id is the proven `org` shape.
--- Multi-seat defers to the better-auth organization plugin (it regenerates
--- its own tables when enabled — no schema cost now).
-CREATE TABLE IF NOT EXISTS workspace (
+CREATE TABLE workspace (
   id TEXT PRIMARY KEY NOT NULL,
   name TEXT NOT NULL,
   owner_user_id TEXT NOT NULL,
   created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
   FOREIGN KEY (owner_user_id) REFERENCES user(id) ON DELETE CASCADE
 );
+CREATE INDEX idx_workspace_owner ON workspace(owner_user_id);
 
-CREATE INDEX IF NOT EXISTS idx_workspace_owner ON workspace(owner_user_id);
-
-CREATE TABLE IF NOT EXISTS plan (
+CREATE TABLE plan (
   id TEXT PRIMARY KEY NOT NULL,
   workspace_id TEXT NOT NULL UNIQUE,
-  tier TEXT NOT NULL DEFAULT 'free' CHECK (tier IN ('free', 'starter', 'agency')),
-  status TEXT NOT NULL DEFAULT 'active'
-    CHECK (status IN ('trialing', 'active', 'past_due', 'cancelled', 'expired')),
+  tier TEXT NOT NULL DEFAULT 'free' CHECK (tier IN ('free','starter','agency')),
+  status TEXT NOT NULL DEFAULT 'active',
   provider TEXT NOT NULL DEFAULT 'dodo',
   provider_customer_id TEXT,
   provider_subscription_id TEXT,
   current_period_end TEXT,
   limits_json TEXT NOT NULL DEFAULT '{}',
-  created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   FOREIGN KEY (workspace_id) REFERENCES workspace(id) ON DELETE CASCADE
 );
 
--- --------------------------------------------------------------------------
--- Entity: the self brand and every competitor share one table (role column).
--- The tracking state machine lives on the row: on | off | dismissed, with
--- changed_at + reason + who. `off` keeps history and stops collection;
--- `dismissed` is the never-re-suggest memory; self is pinned `on`.
--- --------------------------------------------------------------------------
+CREATE TABLE dodo_webhook_event (
+  id TEXT PRIMARY KEY NOT NULL,
+  event_type TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  received_at TEXT NOT NULL,
+  processed_at TEXT
+);
 
-CREATE TABLE IF NOT EXISTS entity (
+-- ---------------------------------------------------------------------------
+-- 4. Entities — you and your competition are the same kind of thing.
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE entity (
   id TEXT PRIMARY KEY NOT NULL,
   workspace_id TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('self', 'competitor')),
+  role TEXT NOT NULL CHECK (role IN ('self','competitor')),
   domain TEXT NOT NULL,
-  name TEXT NOT NULL,
-  avatar_url TEXT,
+  name TEXT,
   identity_json TEXT NOT NULL DEFAULT '{}',
-  origin TEXT NOT NULL DEFAULT 'manual' CHECK (origin IN ('manual', 'auto', 'seed')),
-  state TEXT NOT NULL DEFAULT 'on' CHECK (state IN ('on', 'off', 'dismissed')),
+  origin TEXT NOT NULL DEFAULT 'manual' CHECK (origin IN ('manual','auto','seed')),
+  confirmed_at TEXT,
+  state TEXT NOT NULL DEFAULT 'on' CHECK (state IN ('on','off','dismissed')),
   state_changed_at TEXT,
   state_reason TEXT,
-  state_changed_by TEXT CHECK (state_changed_by IN ('user', 'jev', 'auto')),
-  confirmed_at TEXT,
+  state_changed_by TEXT CHECK (state_changed_by IS NULL OR state_changed_by IN ('user','jev','auto')),
   created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  CHECK (role = 'competitor' OR state = 'on'),
-  FOREIGN KEY (workspace_id) REFERENCES workspace(id) ON DELETE CASCADE
+  FOREIGN KEY (workspace_id) REFERENCES workspace(id) ON DELETE CASCADE,
+  UNIQUE (workspace_id, domain),
+  CHECK (role = 'competitor' OR state = 'on')
 );
+CREATE UNIQUE INDEX idx_entity_one_self ON entity(workspace_id) WHERE role = 'self';
+CREATE INDEX idx_entity_ws_state ON entity(workspace_id, state);
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_entity_workspace_domain
-  ON entity(workspace_id, domain);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_entity_one_self_per_workspace
-  ON entity(workspace_id) WHERE role = 'self';
--- FK target for the composite (workspace_id, entity_id) foreign keys on
--- signal/alert — makes cross-workspace leakage a constraint
--- error instead of plugin-code discipline.
-CREATE UNIQUE INDEX IF NOT EXISTS idx_entity_workspace_id
-  ON entity(workspace_id, id);
-CREATE INDEX IF NOT EXISTS idx_entity_workspace_role_state
-  ON entity(workspace_id, role, state);
-
--- The judge queue + pre-entity dismissal memory. Every sweep candidate and
--- every "still a competitor?" review writes a row; p>=0.9 auto-applies,
--- below that it stays pending for the user. A partial unique index on
--- status='dismissed' makes dismissed-never-re-suggested a constraint while
--- still allowing repeat verdicts for the same domain.
-CREATE TABLE IF NOT EXISTS suggestion (
+CREATE TABLE suggestion (
   id TEXT PRIMARY KEY NOT NULL,
   workspace_id TEXT NOT NULL,
   entity_id TEXT,
-  kind TEXT NOT NULL CHECK (kind IN ('add', 'retire')),
+  kind TEXT NOT NULL CHECK (kind IN ('add','retire')),
   candidate_domain TEXT NOT NULL,
   candidate_name TEXT,
+  evidence_json TEXT NOT NULL DEFAULT '{}',
   verdict_p REAL,
-  verdict_json TEXT NOT NULL DEFAULT '{}',
-  status TEXT NOT NULL DEFAULT 'pending'
-    CHECK (status IN ('pending', 'auto_on', 'accepted', 'dismissed')),
-  decided_by TEXT CHECK (decided_by IN ('user', 'jev', 'auto')),
+  verdict_reason TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('auto_on','pending','accepted','dismissed')),
+  decided_by TEXT,
   decided_at TEXT,
-  reason TEXT,
   created_at TEXT NOT NULL,
   FOREIGN KEY (workspace_id) REFERENCES workspace(id) ON DELETE CASCADE,
-  -- Deliberately single-column + SET NULL, not the composite pair: a
-  -- hard-deleted entity must not take its dismissed-suggestion memory with
-  -- it (never-re-suggest lives on candidate_domain).
-  FOREIGN KEY (entity_id) REFERENCES entity(id) ON DELETE SET NULL
+  FOREIGN KEY (entity_id) REFERENCES entity(id) ON DELETE SET NULL,
+  UNIQUE (workspace_id, candidate_domain)
 );
 
--- Only the dismissed half needs to be a constraint: an entity that already
--- owns a suggestion row (auto_on) must still accept later retire/re-review
--- verdicts for the same domain. Plain index for the lookup; the partial
--- unique makes double-dismissal races impossible.
-CREATE INDEX IF NOT EXISTS idx_suggestion_workspace_domain
-  ON suggestion(workspace_id, candidate_domain);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_suggestion_dismissed_domain
-  ON suggestion(workspace_id, candidate_domain) WHERE status = 'dismissed';
-CREATE INDEX IF NOT EXISTS idx_suggestion_status ON suggestion(status);
+-- ---------------------------------------------------------------------------
+-- 5. Sources — a new source is a row plus a plugin, never a migration.
+-- No workspace column by design; that is what makes the rule true.
+-- ---------------------------------------------------------------------------
 
--- --------------------------------------------------------------------------
--- Source registry — a new source is a row here + a plugin, never a migration.
--- Seeded from the keep-list verdicts and the mentions scout (#3849): proven
--- routes enabled, credential/approval-gated ones parked (enabled=0).
--- --------------------------------------------------------------------------
-
-CREATE TABLE IF NOT EXISTS source (
+CREATE TABLE source (
   id TEXT PRIMARY KEY NOT NULL,
   key TEXT NOT NULL UNIQUE,
-  kind TEXT NOT NULL CHECK (kind IN ('mention', 'ads', 'site', 'hiring')),
-  display_name TEXT NOT NULL,
+  kind TEXT NOT NULL,
   plugin_key TEXT NOT NULL,
-  enabled INTEGER NOT NULL DEFAULT 1,
-  config_json TEXT NOT NULL DEFAULT '{}',
-  created_at TEXT NOT NULL
+  reliability TEXT NOT NULL DEFAULT 'best_effort'
+    CHECK (reliability IN ('official_api','rss','scraped_page','best_effort')),
+  is_enabled INTEGER NOT NULL DEFAULT 1,
+  config_json TEXT NOT NULL DEFAULT '{}'
 );
 
-INSERT OR IGNORE INTO source (id, key, kind, display_name, plugin_key, enabled, config_json, created_at) VALUES
-  ('src_meta_ads',    'meta-ads',    'ads',     'Meta Ad Library (browser)', 'meta-library-browser', 1, '{}', datetime('now')),
-  ('src_google_ads',  'google-ads',  'ads',     'Google Ads Transparency',   'google-ads',           1, '{}', datetime('now')),
-  ('src_tiktok_ads',  'tiktok-ads',  'ads',     'TikTok Creative Center',    'tiktok-ads',           0, '{"needs":"DECODO_SCRAPER_AUTH","note":"prod showed zero captures; re-probe with key before enabling"}', datetime('now')),
-  ('src_linkedin_ads','linkedin-ads','ads',     'LinkedIn Ad Library',       'linkedin-ads',         0, '{"needs":"DECODO_SCRAPER_AUTH"}', datetime('now')),
-  ('src_subdomains',  'subdomains',  'site',    'Subdomain discovery (crt.sh)','subdomains',         1, '{}', datetime('now')),
-  ('src_website',     'website',     'site',    'Website change watch',      'website',              1, '{}', datetime('now')),
-  ('src_hiring',      'hiring',      'hiring',  'Job boards',                'hiring',               1, '{"needs":"stored board slug; homepage discovery bot-gated"}', datetime('now')),
-  ('src_gnews',       'gnews',       'mention', 'Google News RSS',           'gnews-rss',            1, '{}', datetime('now')),
-  ('src_gdelt',       'gdelt',       'mention', 'GDELT DOC 2.0',             'gdelt',                1, '{"rate":"one request per 5s"}', datetime('now')),
-  ('src_hn',          'hn',          'mention', 'Hacker News (Algolia)',     'hn-algolia',           1, '{}', datetime('now')),
-  ('src_x',           'x',           'mention', 'X via SuperGrok x_search',  'x-supergrok',          1, '{"needs":"SuperGrok seat; token refresh lane + client-version headers"}', datetime('now')),
-  ('src_blog_rss',    'blog-rss',    'mention', 'Publisher/blog RSS',        'rss-feed',             1, '{}', datetime('now')),
-  ('src_substack',    'substack',    'mention', 'Substack feeds',            'rss-feed',             1, '{}', datetime('now')),
-  ('src_medium',      'medium',      'mention', 'Medium feeds',              'rss-feed',             1, '{}', datetime('now')),
-  ('src_youtube',     'youtube',     'mention', 'YouTube channel feeds',     'youtube-feed',         1, '{}', datetime('now')),
-  ('src_bluesky',     'bluesky',     'mention', 'Bluesky searchPosts',       'bluesky',              0, '{"needs":"BSKY app-password session"}', datetime('now')),
-  ('src_reddit',      'reddit',      'mention', 'Reddit Data API',           'reddit',               0, '{"needs":"REDDIT_COMMERCIAL_ACCESS approval"}', datetime('now')),
-  ('src_pinterest',   'pinterest',   'mention', 'Pinterest',                 'pinterest',            0, '{"needs":"no free public mention-search surface"}', datetime('now'));
-
--- --------------------------------------------------------------------------
--- Watch: entity x source subscription. The refresh schedule polls
--- `watch JOIN entity WHERE entity.state = 'on'` — that join IS the
--- charter-addendum contract (off/dismissed entities stop collection).
--- --------------------------------------------------------------------------
-
-CREATE TABLE IF NOT EXISTS watch (
+CREATE TABLE watch (
   id TEXT PRIMARY KEY NOT NULL,
   entity_id TEXT NOT NULL,
   source_id TEXT NOT NULL,
@@ -244,31 +272,54 @@ CREATE TABLE IF NOT EXISTS watch (
   last_polled_at TEXT,
   is_active INTEGER NOT NULL DEFAULT 1,
   config_json TEXT NOT NULL DEFAULT '{}',
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
   FOREIGN KEY (entity_id) REFERENCES entity(id) ON DELETE CASCADE,
-  FOREIGN KEY (source_id) REFERENCES source(id) ON DELETE CASCADE
+  FOREIGN KEY (source_id) REFERENCES source(id) ON DELETE CASCADE,
+  UNIQUE (entity_id, source_id, target_key)
+);
+CREATE INDEX idx_watch_due ON watch(is_active, last_polled_at);
+
+CREATE TABLE page (
+  id TEXT PRIMARY KEY NOT NULL,
+  entity_id TEXT NOT NULL,
+  url TEXT NOT NULL,
+  title TEXT,
+  role TEXT CHECK (role IS NULL OR role IN ('home','pricing','product','blog','careers','legal','other')),
+  role_decided_for_hash TEXT,
+  discovered_at TEXT NOT NULL,
+  FOREIGN KEY (entity_id) REFERENCES entity(id) ON DELETE CASCADE,
+  UNIQUE (entity_id, url)
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_watch_entity_source_target
-  ON watch(entity_id, source_id, target_key);
-CREATE INDEX IF NOT EXISTS idx_watch_source ON watch(source_id);
+-- ---------------------------------------------------------------------------
+-- 6. The cost boundary: one row per watch per tick, body in R2.
+-- ---------------------------------------------------------------------------
 
--- --------------------------------------------------------------------------
--- Signal: the one table every view reads. Envelope + promoted filter columns
--- + payload_json for the kind-specific remainder. kind is plugin-owned text
--- (mention|ad|change|job at launch); per-kind required fields are enforced by
--- the conditional CHECKs below. mention/change ship as views.
--- --------------------------------------------------------------------------
+CREATE TABLE snapshot (
+  id TEXT PRIMARY KEY NOT NULL,
+  watch_id TEXT NOT NULL,
+  page_id TEXT,
+  fetched_at TEXT NOT NULL,
+  payload_r2_key TEXT,
+  payload_hash TEXT NOT NULL,
+  item_count INTEGER NOT NULL DEFAULT 0,
+  FOREIGN KEY (watch_id) REFERENCES watch(id) ON DELETE CASCADE,
+  FOREIGN KEY (page_id) REFERENCES page(id) ON DELETE SET NULL
+);
+CREATE INDEX idx_snapshot_watch_time ON snapshot(watch_id, fetched_at);
 
-CREATE TABLE IF NOT EXISTS signal (
+-- ---------------------------------------------------------------------------
+-- 7. The spine every view reads — curated, not raw.
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE signal (
   id TEXT PRIMARY KEY NOT NULL,
   workspace_id TEXT NOT NULL,
   entity_id TEXT NOT NULL,
   source_id TEXT NOT NULL,
   watch_id TEXT,
+  snapshot_id TEXT,
   kind TEXT NOT NULL,
-  title TEXT NOT NULL,
+  title TEXT,
   summary TEXT,
   url TEXT,
   canonical_url TEXT,
@@ -276,185 +327,145 @@ CREATE TABLE IF NOT EXISTS signal (
   author TEXT,
   aspect TEXT,
   evidence_url TEXT,
-  engagement_json TEXT NOT NULL DEFAULT '{}',
+  engagement_json TEXT,
   payload_json TEXT NOT NULL DEFAULT '{}',
   dedup_key TEXT NOT NULL,
   published_at TEXT,
   observed_at TEXT NOT NULL,
   last_seen_at TEXT,
-  tombstoned INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL,
-  CHECK (kind <> 'mention' OR (canonical_url IS NOT NULL AND url_hash IS NOT NULL)),
-  CHECK (kind <> 'change' OR aspect IS NOT NULL),
+  is_tombstoned INTEGER NOT NULL DEFAULT 0,
   FOREIGN KEY (workspace_id) REFERENCES workspace(id) ON DELETE CASCADE,
-  FOREIGN KEY (workspace_id, entity_id) REFERENCES entity(workspace_id, id) ON DELETE CASCADE,
+  FOREIGN KEY (entity_id) REFERENCES entity(id) ON DELETE CASCADE,
   FOREIGN KEY (source_id) REFERENCES source(id) ON DELETE CASCADE,
-  FOREIGN KEY (watch_id) REFERENCES watch(id) ON DELETE SET NULL
+  FOREIGN KEY (watch_id) REFERENCES watch(id) ON DELETE SET NULL,
+  FOREIGN KEY (snapshot_id) REFERENCES snapshot(id) ON DELETE SET NULL,
+  UNIQUE (source_id, dedup_key),
+  CHECK (kind <> 'mention' OR (canonical_url IS NOT NULL AND url_hash IS NOT NULL)),
+  CHECK (kind <> 'change' OR aspect IS NOT NULL)
 );
+CREATE INDEX idx_signal_ws_time ON signal(workspace_id, observed_at);
+CREATE INDEX idx_signal_entity_kind ON signal(entity_id, kind, observed_at);
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_signal_source_dedup
-  ON signal(source_id, dedup_key);
-CREATE INDEX IF NOT EXISTS idx_signal_workspace_observed
-  ON signal(workspace_id, observed_at);
-CREATE INDEX IF NOT EXISTS idx_signal_entity_kind_observed
-  ON signal(entity_id, kind, observed_at);
-CREATE INDEX IF NOT EXISTS idx_signal_url_hash ON signal(url_hash);
+CREATE VIEW mention AS
+  SELECT id, workspace_id, entity_id, source_id, title, summary, canonical_url,
+         url_hash, author, engagement_json, published_at, observed_at
+  FROM signal WHERE kind = 'mention' AND is_tombstoned = 0;
 
-CREATE VIEW IF NOT EXISTS mention AS
-SELECT
-  id, workspace_id, entity_id, source_id, watch_id,
-  title, summary, url, canonical_url, url_hash, author,
-  engagement_json, payload_json, published_at, observed_at, last_seen_at,
-  tombstoned, created_at,
-  json_extract(payload_json, '$.external_id') AS external_id,
-  json_extract(payload_json, '$.source_target') AS source_target,
-  json_extract(payload_json, '$.match_class') AS match_class,
-  json_extract(payload_json, '$.match_confirmed') AS match_confirmed,
-  json_extract(payload_json, '$.excerpt') AS excerpt
-FROM signal
-WHERE kind = 'mention' AND tombstoned = 0;
+CREATE VIEW change AS
+  SELECT id, workspace_id, entity_id, source_id, snapshot_id, aspect, title,
+         summary, evidence_url, observed_at
+  FROM signal WHERE kind = 'change' AND is_tombstoned = 0;
 
-CREATE VIEW IF NOT EXISTS change AS
-SELECT
-  id, workspace_id, entity_id, source_id, watch_id,
-  aspect, title, summary, url, evidence_url,
-  observed_at, created_at,
-  json_extract(payload_json, '$.before') AS before_json,
-  json_extract(payload_json, '$.after') AS after_json
-FROM signal
-WHERE kind = 'change' AND tombstoned = 0;
+-- ---------------------------------------------------------------------------
+-- 8. Judgments — logged once, cached by input hash (docs/REBUILD-JEV.md).
+-- ---------------------------------------------------------------------------
 
--- Raw per-watch poll payloads: diff input and proof/debug, bounded retention.
--- Pipeline state only — views never read this table.
-CREATE TABLE IF NOT EXISTS snapshot (
+CREATE TABLE jev_verdict (
   id TEXT PRIMARY KEY NOT NULL,
-  watch_id TEXT NOT NULL,
-  fetched_at TEXT NOT NULL,
-  payload_json TEXT NOT NULL DEFAULT '{}',
-  payload_hash TEXT,
-  item_count INTEGER,
-  created_at TEXT NOT NULL,
-  FOREIGN KEY (watch_id) REFERENCES watch(id) ON DELETE CASCADE
+  question_id TEXT NOT NULL,
+  input_hash TEXT NOT NULL,
+  signal_id TEXT,
+  entity_id TEXT,
+  p REAL,
+  choice TEXT,
+  score REAL,
+  reason TEXT,
+  decided_at TEXT NOT NULL,
+  FOREIGN KEY (signal_id) REFERENCES signal(id) ON DELETE CASCADE,
+  FOREIGN KEY (entity_id) REFERENCES entity(id) ON DELETE CASCADE,
+  UNIQUE (question_id, input_hash)
 );
 
-CREATE INDEX IF NOT EXISTS idx_snapshot_watch_fetched
-  ON snapshot(watch_id, fetched_at);
+CREATE TABLE user_decision (
+  id TEXT PRIMARY KEY NOT NULL,
+  workspace_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  signal_id TEXT,
+  entity_id TEXT,
+  verdict TEXT NOT NULL,
+  note TEXT,
+  decided_at TEXT NOT NULL,
+  FOREIGN KEY (workspace_id) REFERENCES workspace(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE,
+  FOREIGN KEY (signal_id) REFERENCES signal(id) ON DELETE CASCADE,
+  FOREIGN KEY (entity_id) REFERENCES entity(id) ON DELETE CASCADE
+);
+CREATE INDEX idx_user_decision_ws ON user_decision(workspace_id, decided_at);
 
--- --------------------------------------------------------------------------
--- Alert feed + digest brief
--- --------------------------------------------------------------------------
+-- ---------------------------------------------------------------------------
+-- 9. Alerts, the weekly brief, and the email lane.
+-- ---------------------------------------------------------------------------
 
-CREATE TABLE IF NOT EXISTS alert (
+CREATE TABLE alert (
   id TEXT PRIMARY KEY NOT NULL,
   workspace_id TEXT NOT NULL,
   entity_id TEXT,
   signal_id TEXT,
-  kind TEXT NOT NULL CHECK (kind IN ('signal', 'suggestion', 'system')),
-  severity TEXT NOT NULL DEFAULT 'info' CHECK (severity IN ('info', 'notable', 'major')),
+  kind TEXT NOT NULL,
+  severity TEXT NOT NULL DEFAULT 'normal',
   title TEXT NOT NULL,
   body TEXT,
-  status TEXT NOT NULL DEFAULT 'unread' CHECK (status IN ('unread', 'read', 'archived')),
+  status TEXT NOT NULL DEFAULT 'unread',
   read_at TEXT,
   created_at TEXT NOT NULL,
   FOREIGN KEY (workspace_id) REFERENCES workspace(id) ON DELETE CASCADE,
-  FOREIGN KEY (workspace_id, entity_id) REFERENCES entity(workspace_id, id) ON DELETE CASCADE,
+  FOREIGN KEY (entity_id) REFERENCES entity(id) ON DELETE CASCADE,
   FOREIGN KEY (signal_id) REFERENCES signal(id) ON DELETE SET NULL
 );
+CREATE INDEX idx_alert_ws_status ON alert(workspace_id, status, created_at);
 
-CREATE INDEX IF NOT EXISTS idx_alert_workspace_status_created
-  ON alert(workspace_id, status, created_at);
-CREATE INDEX IF NOT EXISTS idx_alert_entity ON alert(entity_id);
-
-CREATE TABLE IF NOT EXISTS digest (
+CREATE TABLE digest (
   id TEXT PRIMARY KEY NOT NULL,
   workspace_id TEXT NOT NULL,
-  kind TEXT NOT NULL CHECK (kind IN ('daily', 'weekly')),
+  kind TEXT NOT NULL DEFAULT 'weekly',
   period_start TEXT NOT NULL,
   period_end TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'sent', 'failed', 'skipped')),
+  status TEXT NOT NULL DEFAULT 'pending',
   subject TEXT,
   payload_json TEXT NOT NULL DEFAULT '{}',
   sent_at TEXT,
-  created_at TEXT NOT NULL,
-  CHECK (period_end >= period_start),
   FOREIGN KEY (workspace_id) REFERENCES workspace(id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_digest_workspace_period
-  ON digest(workspace_id, period_start, period_end);
-
--- --------------------------------------------------------------------------
--- Delivery + ops (keep-list machinery; delivery tables adapted to the new
--- schema — old FKs pointed at watchlist/digest_run which do not exist post-cut)
--- --------------------------------------------------------------------------
-
-CREATE TABLE IF NOT EXISTS send_target (
+CREATE TABLE send_target (
   id TEXT PRIMARY KEY NOT NULL,
   workspace_id TEXT NOT NULL,
-  channel TEXT NOT NULL CHECK (channel IN ('email', 'slack', 'teams', 'whatsapp')),
+  channel TEXT NOT NULL DEFAULT 'email',
   target_value TEXT NOT NULL,
-  is_validated INTEGER NOT NULL DEFAULT 0,
-  is_opted_in INTEGER NOT NULL DEFAULT 1,
-  is_paused INTEGER NOT NULL DEFAULT 0,
+  is_verified INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
   FOREIGN KEY (workspace_id) REFERENCES workspace(id) ON DELETE CASCADE,
   UNIQUE (workspace_id, channel, target_value)
 );
 
-CREATE TABLE IF NOT EXISTS send_attempt (
+CREATE TABLE send_attempt (
   id TEXT PRIMARY KEY NOT NULL,
   workspace_id TEXT NOT NULL,
-  digest_id TEXT,
   send_target_id TEXT,
-  channel TEXT NOT NULL CHECK (channel IN ('email', 'slack', 'teams', 'whatsapp')),
-  provider TEXT NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('pending', 'sent', 'failed', 'skipped')),
-  target_value TEXT NOT NULL,
-  provider_message_id TEXT,
-  idempotency_key TEXT,
-  error_message TEXT,
-  payload_snapshot_json TEXT NOT NULL DEFAULT '{}',
-  sent_at TEXT,
-  failed_at TEXT,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
+  digest_id TEXT,
+  idempotency_key TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL,
+  error TEXT,
+  attempted_at TEXT NOT NULL,
   FOREIGN KEY (workspace_id) REFERENCES workspace(id) ON DELETE CASCADE,
-  FOREIGN KEY (digest_id) REFERENCES digest(id) ON DELETE SET NULL,
-  FOREIGN KEY (send_target_id) REFERENCES send_target(id) ON DELETE SET NULL
+  FOREIGN KEY (send_target_id) REFERENCES send_target(id) ON DELETE SET NULL,
+  FOREIGN KEY (digest_id) REFERENCES digest(id) ON DELETE SET NULL
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_send_attempt_idempotency
-  ON send_attempt(idempotency_key) WHERE idempotency_key IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_send_attempt_workspace
-  ON send_attempt(workspace_id, created_at);
+-- ---------------------------------------------------------------------------
+-- 10. Platform.
+-- ---------------------------------------------------------------------------
 
-CREATE TABLE IF NOT EXISTS email_suppression (
-  address TEXT NOT NULL,
-  reason TEXT NOT NULL CHECK (reason IN ('bounce', 'complaint')),
-  source TEXT NOT NULL,
-  detail TEXT,
-  consecutive_failures INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  PRIMARY KEY (address, reason)
+CREATE TABLE email_suppression (
+  address TEXT PRIMARY KEY NOT NULL,
+  reason TEXT NOT NULL,
+  created_at TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS rate_limit_events (
-  id TEXT PRIMARY KEY,
-  scope TEXT NOT NULL,
-  key_hash TEXT NOT NULL,
-  route TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+CREATE TABLE rate_limit_events (
+  id TEXT PRIMARY KEY NOT NULL,
+  bucket TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  occurred_at TEXT NOT NULL
 );
-
-CREATE TABLE IF NOT EXISTS dodo_webhook_event (
-  event_id TEXT PRIMARY KEY,
-  event_type TEXT NOT NULL,
-  user_id TEXT,
-  received_at TEXT NOT NULL DEFAULT (datetime('now')),
-  payload_timestamp TEXT,
-  processed_at TEXT,
-  outcome TEXT NOT NULL DEFAULT 'received',
-  metadata_json TEXT NOT NULL DEFAULT '{}'
-);
+CREATE INDEX idx_rate_limit_bucket ON rate_limit_events(bucket, subject, occurred_at);
