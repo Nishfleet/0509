@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Home — Five to Nine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body class="app">
+
+<nav class="rail" aria-label="Primary">
+  <span class="mark-logo">f<em>·</em>n</span>
+  <a class="on" href="#"><span class="dot"></span>Home</a>
+  <a href="#"><span class="dot"></span>Competitors</a>
+  <a href="#"><span class="dot"></span>Alerts</a>
+  <a class="rail-foot" href="#"><span class="dot"></span>Settings</a>
+</nav>
+
+<div class="shell">
+
+  <header class="pg-head">
+    <span class="eyebrow">Mon 21 Sep · week 38 so far</span>
+    <h1 class="display">Good morning — you&rsquo;re <ins class="after">#2 of 6</ins> this week.</h1>
+    <p class="sub">Kindred is the mover — <b>3 new ads</b>, a pricing test, and the loudest mention spike. You climbed two places; Bramble slipped to #3. Casetta stays paused, history kept.</p>
+  </header>
+
+  <section class="rtf" aria-label="Read this first">
+    <div class="sec-head">
+      <div>
+        <span class="eyebrow">Read this first</span>
+        <h2 style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:1.6rem;text-transform:uppercase;letter-spacing:-0.02em">The three things that matter this week</h2>
+      </div>
+      <span class="mono">picked for you · full context</span>
+    </div>
+
+    <div class="rtf-item">
+      <div class="shot lg">
+        <div class="chrome"><i></i><i></i><i></i><span class="dom">kindred.com/pricing</span></div>
+        <div class="view">
+          <span class="bar strong"></span><span class="bar"></span>
+          <span class="row2"><span class="bar accent"></span><span class="bar"></span></span>
+          <span class="bar"></span><span class="bar"></span>
+        </div>
+        <div class="cap"><span>capture</span><span>06:12</span></div>
+        <i class="flag">after</i>
+      </div>
+      <div>
+        <p class="ctx"><strong>Kindred · site change</strong> — pricing page · caught yesterday 06:12</p>
+        <p class="mark"><s>10% off annual</s><span aria-hidden="true">→</span><ins>20% off annual</ins></p>
+        <p class="why"><b>Why it matters:</b> they&rsquo;re testing a deeper annual cut the same week their ads pivot to &ldquo;affordable&rdquo; — a price push, not a coincidence.</p>
+      </div>
+    </div>
+
+    <div class="rtf-item yours">
+      <div class="shot lg">
+        <div class="chrome"><i></i><i></i><i></i><span class="dom">loopwell.com/pricing</span></div>
+        <div class="view">
+          <span class="bar strong"></span><span class="bar"></span>
+          <span class="row2"><span class="bar red"></span><span class="bar"></span></span>
+          <span class="bar"></span><span class="bar"></span>
+        </div>
+        <div class="cap"><span>capture</span><span>14:02</span></div>
+        <i class="flag red">unintended?</i>
+      </div>
+      <div>
+        <p class="ctx"><strong>Your site · needs a look</strong> — /pricing · flagged today 14:02</p>
+        <p class="mark"><s>“Start free trial” button</s><span aria-hidden="true">→</span><ins>gone</ins></p>
+        <p class="why"><b>Probably unintended.</b> The main CTA vanished from your pricing page in the last deploy — no matching announcement. Roll back or confirm it was deliberate.</p>
+      </div>
+    </div>
+
+    <div class="rtf-item">
+      <div class="shot lg">
+        <div class="chrome"><i></i><i></i><i></i><span class="dom">reddit.com/r/saas</span></div>
+        <div class="view">
+          <span class="bar strong"></span><span class="bar"></span><span class="bar"></span>
+          <span class="bar accent"></span><span class="bar"></span>
+        </div>
+        <div class="cap"><span>thread</span><span>6h</span></div>
+      </div>
+      <div>
+        <p class="ctx"><strong>You · mention spike</strong> — r/saas comparison thread · 6h ago</p>
+        <p class="mark"><s>“loopwell or kindred?”</s><span aria-hidden="true">→</span><ins>240+ votes, you lead</ins></p>
+        <p class="why"><b>Why it matters:</b> the thread rates your onboarding over Kindred&rsquo;s twice — the exact wedge their &ldquo;affordable&rdquo; ads don&rsquo;t cover.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="chips" aria-label="Your set">
+    <span class="chip you"><span class="mg you">L</span>You · Loopwell</span>
+    <span class="chip"><span class="mg">K</span>Kindred</span>
+    <span class="chip"><span class="mg">B</span>Bramble</span>
+    <span class="chip"><span class="mg">F</span>Fieldset</span>
+    <span class="chip"><span class="mg">N</span>Northbeam</span>
+    <span class="chip off"><span class="mg">C</span>Casetta · off</span>
+    <a class="chip add" href="#">Add a competitor</a>
+  </div>
+
+  <section class="stand" aria-label="Four-week standing">
+    <div class="stand-card">
+      <div class="stand-head">
+        <h3>The last four weeks</h3>
+        <span class="mono">standing · one line per brand · yours in green</span>
+      </div>
+      <svg viewBox="0 0 720 252" role="img" aria-label="Four-week standing: Kindred climbs 3 to 1, Loopwell 4 to 2, Bramble slips 1 to 3, Fieldset 5 to 4, Northbeam 2 to 5, Casetta paused at 6">
+        <!-- rank gridlines: #1 top … #6 bottom -->
+        <g stroke="#e0ddd4" stroke-width="1">
+          <line x1="40" y1="40" x2="540" y2="40"/><line x1="40" y1="75" x2="540" y2="75"/>
+          <line x1="40" y1="110" x2="540" y2="110"/><line x1="40" y1="145" x2="540" y2="145"/>
+          <line x1="40" y1="180" x2="540" y2="180"/><line x1="40" y1="215" x2="540" y2="215"/>
+        </g>
+        <g fill="#6a665b" font-size="10" letter-spacing="1">
+          <text x="8" y="44">1</text><text x="8" y="79">2</text><text x="8" y="114">3</text>
+          <text x="8" y="149">4</text><text x="8" y="184">5</text><text x="8" y="219">6</text>
+        </g>
+        <!-- competitors: quiet ink lines -->
+        <g fill="none" stroke="#171611" stroke-opacity="0.3" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">
+          <polyline points="60,75 220,75 380,110 540,40"/><!-- Kindred -->
+          <polyline points="60,40 220,40 380,40 540,110"/><!-- Bramble -->
+          <polyline points="60,180 220,180 380,145 540,145"/><!-- Fieldset -->
+          <polyline points="60,110 220,145 380,75 540,180"/><!-- Northbeam -->
+        </g>
+        <!-- Casetta: watched to W36, paused since -->
+        <polyline points="60,215 220,215" fill="none" stroke="#6a665b" stroke-width="2"/>
+        <polyline points="220,215 540,215" fill="none" stroke="#6a665b" stroke-opacity="0.45" stroke-width="2" stroke-dasharray="5 5"/>
+        <circle cx="540" cy="215" r="3.5" fill="#f4f1e8" stroke="#6a665b" stroke-width="1.5"/>
+        <!-- you: the accent line -->
+        <polyline points="60,145 220,110 380,145 540,75" fill="none" stroke="#16c47f" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+        <g fill="#16c47f"><circle cx="220" cy="110" r="3"/><circle cx="380" cy="145" r="3"/><circle cx="540" cy="75" r="3.5"/></g>
+        <!-- end labels -->
+        <g font-size="11" letter-spacing="0.5">
+          <text x="552" y="44" fill="#171611" font-weight="600">KINDRED 1</text>
+          <text x="552" y="79" fill="#064d31" font-weight="600">YOU 2</text>
+          <text x="552" y="114" fill="#171611">BRAMBLE 3</text>
+          <text x="552" y="149" fill="#171611">FIELDSET 4</text>
+          <text x="552" y="184" fill="#171611">NORTHBM 5</text>
+          <text x="552" y="219" fill="#6a665b">CASETTA off</text>
+        </g>
+        <g fill="#6a665b" font-size="10" letter-spacing="1.5">
+          <text x="52" y="240">WK 35</text><text x="212" y="240">WK 36</text>
+          <text x="372" y="240">WK 37</text><text x="520" y="240">THIS WK</text>
+        </g>
+      </svg>
+      <div class="stand-cap">
+        <span class="mono">drawn statically — production renders this with Recharts</span>
+        <span class="mono">tap a line end for the brand</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="ranklist" aria-label="This week's ranking">
+    <div class="sec-head">
+      <div>
+        <span class="eyebrow">Where you stand</span>
+        <h2 style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:1.6rem;text-transform:uppercase;letter-spacing:-0.02em">The week, ranked</h2>
+      </div>
+      <span class="mono">tap a row for the evidence</span>
+    </div>
+
+    <div class="rank-row">
+      <span class="pos first">1</span><span class="mg">K</span>
+      <span class="name">Kindred <span class="mv up">▲2</span><small>kindred.com</small></span>
+      <span class="move">
+        <span class="mini-mark"><s class="before">10% off annual</s><span aria-hidden="true">→</span><ins class="after">20% off annual</ins></span>
+        <span class="why">Pricing test + 3 new &ldquo;affordable&rdquo; ads — why it moved.</span>
+      </span>
+      <span class="srcs"><span class="src">Meta</span><span class="src">Site</span><span class="src">Reddit</span></span>
+      <label class="tsw"><input type="checkbox" checked /><span class="track"></span><span class="tsw-label">Tracking</span></label>
+      <div class="rank-expand">
+        <div class="ev">
+          <div class="shot">
+            <div class="chrome"><i></i><i></i><i></i><span class="dom">meta · ad library</span></div>
+            <div class="view"><span class="bar strong"></span><span class="bar"></span><span class="bar accent"></span><span class="bar"></span></div>
+            <div class="cap"><span>ad</span><span>2h</span></div>
+          </div>
+          <p><b>3 new Meta ads</b> in rotation — all three lead on &ldquo;affordable&rdquo;.</p>
+          <div class="meta"><span class="src">Meta</span><a class="see" href="#">See the ads →</a></div>
+        </div>
+        <div class="ev">
+          <div class="shot">
+            <div class="chrome"><i></i><i></i><i></i><span class="dom">kindred.com/pricing</span></div>
+            <div class="view"><span class="bar strong"></span><span class="row2"><span class="bar accent"></span><span class="bar"></span></span><span class="bar"></span></div>
+            <div class="cap"><span>capture</span><span>06:12</span></div>
+          </div>
+          <p><b>Pricing page A/B test</b> — annual toggle defaults on for half of visits.</p>
+          <div class="meta"><span class="src">Site</span><a class="see" href="#">See the diff →</a></div>
+        </div>
+        <div class="ev">
+          <div class="shot">
+            <div class="chrome"><i></i><i></i><i></i><span class="dom">reddit.com/r/saas</span></div>
+            <div class="view"><span class="bar strong"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span></div>
+            <div class="cap"><span>thread</span><span>6h</span></div>
+          </div>
+          <p><b>r/saas comparison thread</b> next to Loopwell — pricing named twice.</p>
+          <div class="meta"><span class="src">Reddit</span><a class="see" href="#">Read the thread →</a></div>
+        </div>
+        <div class="ev">
+          <p><b>The week, filed.</b> 38 mentions · 3 new ads · 1 site change · 1 thread.</p>
+          <p style="margin-top:6px;color:var(--ink-2)">Every item opens its capture — no dead ends.</p>
+          <div class="meta"><a class="see" href="#">Open Kindred&rsquo;s page →</a></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="rank-row">
+      <span class="pos">2</span><span class="mg you">L</span>
+      <span class="name">Loopwell — you <span class="mv up">▲2</span><small>loopwell.com</small></span>
+      <span class="move">
+        <span class="mini-mark"><s class="before">#4 last week</s><span aria-hidden="true">→</span><ins class="after">#2 this week</ins></span>
+        <span class="why">The r/saas thread did it — 240+ votes, pricing praised.</span>
+      </span>
+      <span class="srcs"><span class="src">Reddit</span><span class="src">Meta</span><span class="src">Site</span></span>
+      <label class="tsw"><input type="checkbox" checked disabled /><span class="track"></span><span class="tsw-label">You</span></label>
+    </div>
+
+    <div class="rank-row">
+      <span class="pos">3</span><span class="mg">B</span>
+      <span class="name">Bramble <span class="mv dn">▼2</span><small>bramble.io</small></span>
+      <span class="move">
+        <span class="mini-mark"><s class="before">15% annual cut</s><span aria-hidden="true">→</span><ins class="after">30% annual cut</ins></span>
+        <span class="why">Pricing rewrite landed quietly — no announcement, just the page.</span>
+      </span>
+      <span class="srcs"><span class="src">Site</span><span class="src">News</span></span>
+      <label class="tsw"><input type="checkbox" checked /><span class="track"></span><span class="tsw-label">Tracking</span></label>
+    </div>
+
+    <div class="rank-row">
+      <span class="pos">4</span><span class="mg">F</span>
+      <span class="name">Fieldset <span class="mv up">▲1</span><small>fieldset.co</small></span>
+      <span class="move">
+        <span class="mini-mark"><s class="before">0 open roles</s><span aria-hidden="true">→</span><ins class="after">2 growth roles</ins></span>
+        <span class="why">First hiring signal in 3 months — growth push coming.</span>
+      </span>
+      <span class="srcs"><span class="src">Hiring</span><span class="src">Site</span></span>
+      <label class="tsw"><input type="checkbox" checked /><span class="track"></span><span class="tsw-label">Tracking</span></label>
+    </div>
+
+    <div class="rank-row">
+      <span class="pos">5</span><span class="mg">N</span>
+      <span class="name">Northbeam <span class="mv dn">▼3</span><small>northbeam.app</small></span>
+      <span class="move">
+        <span class="mini-mark"><s class="before">3 integrations</s><span aria-hidden="true">→</span><ins class="after">9 integrations</ins></span>
+        <span class="why">New integrations page — but mentions went quiet this week.</span>
+      </span>
+      <span class="srcs"><span class="src">Site</span><span class="src">X</span></span>
+      <label class="tsw"><input type="checkbox" checked /><span class="track"></span><span class="tsw-label">Tracking</span></label>
+    </div>
+
+    <div class="rank-row is-off">
+      <span class="pos">6</span><span class="mg">C</span>
+      <span class="name">Casetta<small>casetta.shop · paused — history kept</small></span>
+      <span class="move">
+        <span class="mini-mark"><span style="color:var(--ink-3)">watching stopped 12 Sep</span></span>
+        <span class="why">Off brands keep their file — switch back on anytime.</span>
+      </span>
+      <span class="srcs"><span class="src">—</span></span>
+      <label class="tsw"><input type="checkbox" /><span class="track"></span><span class="tsw-label">Off</span></label>
+    </div>
+
+    <div class="rank-row is-dismissed">
+      <span class="pos">·</span><span class="mg" style="opacity:0.5">P</span>
+      <span class="name"><b>Ponytail</b> <span class="mv flat">dismissed</span><small>ponytail.io · out of your set — nothing kept</small></span>
+      <span class="move"><span class="mini-mark"><span style="color:var(--ink-3)">removed from watch 9 Sep</span></span></span>
+      <span class="srcs"></span>
+      <a class="undolink" href="#">Undo</a>
+    </div>
+  </section>
+
+  <footer class="pg-foot">4 developments today · weekly brief lands Friday 06:00 your time</footer>
+
+</div>
+
+<div class="sheet-backdrop" aria-hidden="true"></div>
+<aside class="sheet" aria-label="Kindred — the week's evidence">
+  <div class="grab"></div>
+  <h4>Kindred <span class="mv up" style="font-family:'IBM Plex Mono',monospace;font-size:12px">▲2</span></h4>
+  <p class="sheet-sub">kindred.com · the week&rsquo;s evidence</p>
+  <div class="ev">
+    <div class="shot">
+      <div class="chrome"><i></i><i></i><i></i><span class="dom">meta</span></div>
+      <div class="view"><span class="bar strong"></span><span class="bar accent"></span><span class="bar"></span></div>
+      <div class="cap"><span>ad</span><span>2h</span></div>
+    </div>
+    <p><b>3 new Meta ads</b> — all lead on &ldquo;affordable&rdquo;.<br/><span class="meta"><span class="src">Meta</span><a class="see" href="#">See the ads →</a></span></p>
+  </div>
+  <div class="ev">
+    <div class="shot">
+      <div class="chrome"><i></i><i></i><i></i><span class="dom">kindred.com</span></div>
+      <div class="view"><span class="bar strong"></span><span class="row2"><span class="bar accent"></span><span class="bar"></span></span><span class="bar"></span></div>
+      <div class="cap"><span>capture</span><span>06:12</span></div>
+    </div>
+    <p><b>Pricing A/B test</b> — <s class="before">10% off annual</s> → <ins class="after">20% off annual</ins>.<br/><span class="meta"><span class="src">Site</span><a class="see" href="#">See the diff →</a></span></p>
+  </div>
+  <div class="ev">
+    <div class="shot">
+      <div class="chrome"><i></i><i></i><i></i><span class="dom">r/saas</span></div>
+      <div class="view"><span class="bar strong"></span><span class="bar"></span><span class="bar"></span></div>
+      <div class="cap"><span>thread</span><span>6h</span></div>
+    </div>
+    <p><b>Comparison thread</b> — pricing named twice.<br/><span class="meta"><span class="src">Reddit</span><a class="see" href="#">Read it →</a></span></p>
+  </div>
+  <div class="sheet-track">
+    <label class="tsw"><input type="checkbox" checked /><span class="track"></span><span class="tsw-label">Tracking</span></label>
+    <a class="see" href="#" style="font-size:12.5px;font-weight:600;color:var(--accent-ink);text-decoration:underline;text-underline-offset:3px">Open page →</a>
+  </div>
+</aside>
+
+<nav class="tabbar" aria-label="Primary">
+  <a class="on" href="#">Home<span class="dot"></span></a>
+  <a href="#">Competitors<span class="dot"></span></a>
+  <a href="#">Alerts<span class="dot"></span></a>
+  <a href="#">Settings<span class="dot"></span></a>
+</nav>
+
+</body>
+</html>
