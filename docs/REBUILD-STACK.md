@@ -161,9 +161,11 @@ Scripts, from `transformPackageJson` in the same file: `deploy`, `preview`, `cf-
 The packet asked for `npx @better-auth/cli generate`. **That package is deprecated**: `@better-auth/cli@latest` is **1.4.21**, published **2026-03-01**, three minors behind `better-auth` 1.7.5, and it warns on run that it is no longer supported. The CLI moved to the standalone `auth` package in better-auth 1.5. `better-auth` core itself ships **no** `bin`. The current CLI ships as the `auth` package (1.7.5, `bin: { auth, better-auth }`), and every current doc page uses it:
 
 ```
-npx auth@latest generate     # emit the schema
-npx auth@latest migrate      # apply it (Kysely adapters only)
+npx auth@1.7.5 generate     # emit the schema
+npx auth@1.7.5 migrate      # apply it (Kysely adapters only)
 ```
+
+**Pin the CLI version; never `@latest`.** better-auth validates the schema against the live database **in production** (§2.3, point 3), so the generator and the library have to agree by construction. `@latest` silently drifts ahead of the installed `better-auth` on some future run, emits a schema the running library does not expect, and the first request after deploy fails that validation check. `auth@1.7.5` matches `better-auth` 1.7.5 exactly and moves only when that does.
 
 Cited: <https://www.better-auth.com/docs/concepts/cli>, <https://www.better-auth.com/docs/adapters/sqlite> (both read 2026-09-21). `generate` flags: `-c/--cwd`, `--output`, `--config`, `-y/--yes`, `--adapter` (`prisma|drizzle|kysely`), `--dialect`. Other commands: `create-admin`, `init`, `upgrade`, `info`, `secret`.
 
@@ -199,7 +201,7 @@ export const auth = betterAuth({
 });
 ```
 
-**Rejected, recorded so it is not re-litigated:** `kysely-d1` 0.4.0 (`aidenwallis/kysely-d1`) — it exists, it works, and it is what the better-auth adapters page still links, but it is a third dependency for a dialect that now ships in the box. `kysely` itself stays as a peer at 0.29.6, pulled in by better-auth; `better-auth-cloudflare` (a community meta-package with its own CLI and resource provisioner — that is glue by definition); `@better-auth/drizzle-adapter` + drizzle (a second schema source of truth next to `0001_init.sql`, and `getMigrations` explicitly does not work with it).
+**Rejected, recorded so it is not re-litigated:** `kysely-d1` 0.4.0 (`aidenwallis/kysely-d1`) — it exists, it works, and it is what the better-auth adapters page still links, but it is a third dependency for a dialect that now ships in the box. `kysely` itself stays as a peer at 0.29.6, pulled in by better-auth; `better-auth-cloudflare` (a community meta-package with its own CLI and resource provisioner — that is glue by definition); `@better-auth/drizzle-adapter` + drizzle (a second schema source of truth next to `0001_rebuild.sql`, and `getMigrations` explicitly does not work with it).
 
 ### 2.3 Config shape as shipped
 
@@ -224,13 +226,37 @@ Three things the docs make mandatory and are easy to miss:
 
 1. **`nodejs_compat` is required.** "Better Auth uses `AsyncLocalStorage`." — <https://www.better-auth.com/docs/integrations/hono> §Cloudflare Workers. It is on by default for `compatibility_date` ≥ `2026-08-04` (§5, platform fact 2), so the scaffold already satisfies it — **set it explicitly anyway**, because the Vitest plugin injects it into tests regardless and an implicit dependency is exactly how a green test suite ships a broken deploy.
 2. **`advanced.database.joins: true`** — "The Kysely SQLite dialect supports joins out of the box since version `1.4.0` … seeing upwards of 2x to 3x performance improvements depending on database latency." (<https://www.better-auth.com/docs/adapters/sqlite>). Off by default. `/get-session` runs on every request; this is the single cheapest latency win in the auth path.
-3. **Schema validation runs in production.** "Validation is enabled by default, including in production … Requests await the same check and fail if the schema does not match" (<https://www.better-auth.com/docs/concepts/database>). Kysely "reads live database metadata and needs database access during initialization" — so a drift between `0001_init.sql` and better-auth's expectations is a **runtime 500 on first request**, not a startup warning. `REBUILD-SCHEMA.md` already carries the four auth tables verbatim; that is why.
+3. **Schema validation runs in production.** "Validation is enabled by default, including in production … Requests await the same check and fail if the schema does not match" (<https://www.better-auth.com/docs/concepts/database>). Kysely "reads live database metadata and needs database access during initialization" — so a drift between `0001_rebuild.sql` and better-auth's expectations is a **runtime 500 on first request**, not a startup warning. `REBUILD-SCHEMA.md` already carries the four auth tables verbatim; that is why.
 
 ### 2.4 Generating the schema against D1
 
 The CLI cannot reach D1 — "Cloudflare D1 can only be queried through a Cloudflare Worker, so the CLI cannot access it directly" (same page). Two stock routes, both vendor-sanctioned; **take the first**:
 
-- **Generate locally, apply with Wrangler.** Point `database` at a local SQLite file in a CLI-only config, run `npx auth@latest generate --adapter kysely`, and paste the emitted SQL into `migrations/0001_init.sql`. The schema is identical — the same Kysely SQLite dialect emits it.
+- **Generate against an empty local SQLite, apply with Wrangler.** This is the route that works, and the obvious shortcut does not: **`--adapter kysely` does not bypass introspection.** `auth generate` reads live database metadata before emitting — it is a generator, not a schema printer — so both forms die at `SqliteIntrospector.getTables` against any placeholder, and a `D1Database` binding exists only inside workerd where a Node CLI cannot reach it.
+
+  The working recipe, verified and recorded in the header of `migrations/0001_rebuild.sql` on main. Create the config file temporarily, take the SQL verbatim, then delete both the file and the dependency:
+
+  ```ts
+  // auth.cli.config.ts
+  import Database from "better-sqlite3";
+  import { betterAuth } from "better-auth";
+  import { magicLink } from "better-auth/plugins";
+  import { apiKey } from "@better-auth/api-key";
+  import { passkey } from "@better-auth/passkey";
+  import { SqliteDialect } from "kysely";
+  export const auth = betterAuth({
+    database: { dialect: new SqliteDialect({ database: new Database(":memory:") }), type: "sqlite" },
+    plugins: [magicLink({ sendMagicLink: async () => {} }), passkey(), apiKey()],
+  });
+  ```
+
+  ```
+  npm i -D better-sqlite3
+  npx auth@1.7.5 generate --config auth.cli.config.ts --output better-auth-schema.sql -y
+  npm uninstall better-sqlite3 && rm auth.cli.config.ts
+  ```
+
+  `better-sqlite3` is a **temporary devDependency**, present for one command and removed in the same breath — it never lands in `package.json` on a commit. D1 is SQLite and the emitted DDL is dialect-identical, so an empty in-memory SQLite database is the correct stand-in rather than a workaround. Take the output **verbatim**, unreformatted — `date` columns, quoted `"user"` and all — because the library and the database have to agree by construction. Regenerate with the command above rather than editing by hand.
 - **Programmatic migration endpoint.** `getMigrations(auth.options)` from `better-auth/db/migration`, returning `{ toBeCreated, toBeAdded, runMigrations }`, behind a protected route. The docs' own comment: *"Protect or remove this endpoint in production."* For us this is a second, unguarded write path into D1 next to `wrangler d1 migrations apply` — it is the documented escape hatch, not the plan.
 
 ### 2.5 Tables `auth generate` emits for our plugin set
@@ -895,7 +921,7 @@ import { apiKey } from "@better-auth/api-key";
 export const auth = betterAuth({ plugins: [ apiKey() ] });
 ```
 
-`npx auth@latest generate` emits **one table, `apikey`, with 22 columns**: `id`, `configId`, `name`, `start`, `prefix`, `key`, `referenceId`, `refillInterval`, `refillAmount`, `lastRefillAt`, `enabled`, `rateLimitEnabled`, `rateLimitTimeWindow`, `rateLimitMax`, `requestCount`, `remaining`, `lastRequest`, `expiresAt`, `createdAt`, `updatedAt`, `permissions`, `metadata`.
+`npx auth@1.7.5 generate` (§2.4) emits **one table, `apikey`, with 22 columns**: `id`, `configId`, `name`, `start`, `prefix`, `key`, `referenceId`, `refillInterval`, `refillAmount`, `lastRefillAt`, `enabled`, `rateLimitEnabled`, `rateLimitTimeWindow`, `rateLimitMax`, `requestCount`, `remaining`, `lastRequest`, `expiresAt`, `createdAt`, `updatedAt`, `permissions`, `metadata`.
 
 Note what those columns mean: **per-key rate limiting, quotas with refill, expiry, permissions and org ownership all ship in the box.** A hand-written key table with a hand-written quota counter is exactly the glue this rebuild deletes, and it would be a strictly worse version of a table better-auth will generate for free. The plugin also supports sessions-from-API-keys, so one authorization path serves both the browser and the API.
 
@@ -978,7 +1004,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | Auth (sessions, magic link) | `better-auth` | 1.7.5 |
 | Auth ↔ D1 | better-auth's built-in D1 Kysely dialect — binding passed directly | bundled in 1.7.5 |
 | Passkeys | `@better-auth/passkey` (SimpleWebAuthn) | 1.7.5 |
-| Auth schema generation | `npx auth@latest generate` | `auth` 1.7.5 |
+| Auth schema generation | `npx auth@1.7.5 generate` against an empty local SQLite (§2.4) | `auth` 1.7.5, pinned |
 | Styling | `tailwindcss` + `@tailwindcss/vite` | 4.3.3 (scaffold pins ^4.2.2) |
 | Components | `shadcn` CLI → copied source | 4.21.0 |
 | Durable scheduling + retries | Cloudflare Workflows (`step.sleep`, `step.do`) | platform |
@@ -1024,7 +1050,9 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 
 | The brief said | What is true today | Evidence |
 |---|---|---|
-| `npx @better-auth/cli generate` | `npx auth@latest generate` — `@better-auth/cli` is stuck at 1.4.21 (2026-03-01) vs better-auth 1.7.5 | npm; <https://www.better-auth.com/docs/concepts/cli> |
+| `npx @better-auth/cli generate` | `npx auth@1.7.5 generate` — `@better-auth/cli` is deprecated at 1.4.21 (2026-03-01); the CLI moved to the `auth` package in 1.5, and the version is pinned, never `@latest` | npm; <https://www.better-auth.com/docs/concepts/cli> |
+| (implicit) `--adapter kysely` avoids needing a live database | it does not — both forms die at `SqliteIntrospector.getTables`. Generate against an empty in-memory SQLite (§2.4) | `migrations/0001_rebuild.sql` header on main |
+| `migrations/0001_init.sql` | **`0001_rebuild.sql`** — `0001_init.sql` is already recorded in production's `d1_migrations`, so a file with that name is silently skipped | same |
 | "the stock D1/Kysely adapter" (implying a third-party one) | better-auth ships its own D1 dialect; the binding is passed straight to `database` | unpacked `@better-auth/kysely-adapter@1.7.5/dist/` |
 | `@cloudflare/vitest-pool-workers` current setup | superseded by `@cloudflare/vitest-plugin`; `defineWorkersConfig`/`poolOptions` removed | <https://developers.cloudflare.com/workers/testing/vitest-integration/> |
 | (implicit) use the current vitest | vitest 5.0.1 is **not** supported — pin 4.1.11 | plugin peerDeps; <https://developers.cloudflare.com/workers/testing/vitest-integration/write-your-first-test/> |
