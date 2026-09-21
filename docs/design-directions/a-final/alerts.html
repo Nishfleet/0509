@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Alerts — 0509</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body class="app">
+
+<nav class="rail" aria-label="Primary">
+  <span class="mark">05<em>09</em></span>
+  <a href="home.html"><span class="dot"></span>Home</a>
+  <a href="competitor.html"><span class="dot"></span>Competitors</a>
+  <a class="on" href="#"><span class="dot"></span>Alerts</a>
+  <a class="foot" href="settings.html"><span class="dot"></span>Settings</a>
+</nav>
+
+<div class="shell">
+
+  <header class="pghead">
+    <span class="eyebrow">Everything we caught, newest first</span>
+    <h1>Alerts</h1>
+    <p class="why">Only one thing here emailed you: your own site. Everything else waited until you came to look.</p>
+  </header>
+
+  <div class="incident">
+    <div class="h">
+      <span class="tag">Open incident</span>
+      <span class="pill live"><b>Your site</b></span>
+      <span class="pill">loopwell.com/pricing</span>
+      <span class="age">opened 06:03 &middot; 4h ago</span>
+    </div>
+    <div class="grid">
+      <span class="plate broke" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><span>06:02</span></span>
+      <div>
+        <p class="mark-line"><s>Start free trial</s><span class="arrow" aria-hidden="true">&rarr;</span><ins>button missing</ins></p>
+        <p><b>Your pricing page lost its button.</b> The page still loads, but &ldquo;Start free trial&rdquo; is gone and nothing took its place. It went with your 05:48 deploy. We emailed you at 06:03 and we re-check every 20 minutes &mdash; the next check is in 16 minutes. If you meant to remove it, tell us and we stop asking.</p>
+        <div class="acts">
+          <a class="btn" href="#">Open the capture pair</a>
+          <a class="btn ghost" href="#">I meant to do this</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="typechips" aria-label="Filter by type">
+    <a class="tchip on" href="#">All <b>41</b></a>
+    <a class="tchip" href="#">Site changes <b>5</b></a>
+    <a class="tchip" href="#">Ads <b>6</b></a>
+    <a class="tchip" href="#">Mentions <b>28</b></a>
+    <a class="tchip" href="#">Hiring <b>2</b></a>
+    <a class="tchip" href="#">Your site <b>1</b></a>
+  </div>
+
+  <span class="daymark">New</span>
+
+  <div class="alerts">
+    <div class="alert">
+      <span class="plate hit" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><span>02:40</span></span>
+      <div class="b">
+        <p class="t">Kindred started selling on price</p>
+        <p class="mark-line"><s>&ldquo;built for serious teams&rdquo;</s><span class="arrow" aria-hidden="true">&rarr;</span><ins>&ldquo;affordable from day one&rdquo;</ins></p>
+        <p>Three new ads, all leading with cost &mdash; the first price-led copy in their library since August.</p>
+        <div class="h"><span class="pill">Meta ads</span></div>
+      </div>
+      <span class="age">2h</span>
+    </div>
+
+    <div class="alert">
+      <span class="plate" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><span>08:55</span></span>
+      <div class="b">
+        <p class="t">Kindred was compared with you on Reddit</p>
+        <p>A 240-vote thread in r/saas. Pricing comes up twice and the top comment rates your onboarding above theirs.</p>
+        <div class="h"><span class="pill">Reddit</span></div>
+      </div>
+      <span class="age">6h</span>
+    </div>
+
+    <div class="alert low">
+      <span class="plate" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><span>07:10</span></span>
+      <div class="b">
+        <p class="t">Northbeam reordered its footer links</p>
+        <p>We were not sure this mattered, so it sits here rather than in your brief. Nothing is thrown away.</p>
+        <div class="h"><span class="pill">Site change</span><a class="why-tap" style="margin-top:0" href="#">Why we flagged this</a></div>
+      </div>
+      <span class="age">9h</span>
+    </div>
+
+  </div>
+
+  <span class="daymark">Yesterday</span>
+
+  <div class="alerts" style="margin-top:8px">
+    <div class="alert">
+      <span class="plate hit" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><span>04:12</span></span>
+      <div class="b">
+        <p class="t">Bramble changed its pricing</p>
+        <p class="mark-line"><s>20% off annual</s><span class="arrow" aria-hidden="true">&rarr;</span><ins>30% off annual</ins></p>
+        <p>Their third price move this quarter and the first past 25%.</p>
+        <div class="h"><span class="pill">Site change</span><span class="pill">pricing</span></div>
+      </div>
+      <span class="age">1d</span>
+    </div>
+
+    <div class="alert">
+      <span class="plate hit" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><span>21:04</span></span>
+      <div class="b">
+        <p class="t">Kindred is testing its pricing toggle</p>
+        <p class="mark-line"><s>monthly by default</s><span class="arrow" aria-hidden="true">&rarr;</span><ins>annual by default</ins></p>
+        <p>Annual defaults on for half our captures across six hours, so this is a live test rather than a rollout.</p>
+        <div class="h"><span class="pill">Site change</span><span class="pill">pricing</span></div>
+      </div>
+      <span class="age">1d</span>
+    </div>
+
+    <div class="alert">
+      <span class="plate" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><span>16:30</span></span>
+      <div class="b">
+        <p class="t">Fieldset posted two growth roles</p>
+        <p class="mark-line"><s>4 open roles</s><span class="arrow" aria-hidden="true">&rarr;</span><ins>6 open roles</ins></p>
+        <p>Their first hiring in three months.</p>
+        <div class="h"><span class="pill">Hiring</span></div>
+      </div>
+      <span class="age">1d</span>
+    </div>
+
+    <div class="alert low">
+      <span class="plate" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><span>11:02</span></span>
+      <div class="b">
+        <p class="t">Bramble appeared in a tooling roundup</p>
+        <p>Low reach, so we counted it toward standing without promoting it. Two near-identical reposts are collapsed into this row.</p>
+        <div class="h"><span class="pill">Medium</span><span class="pill dim">and 2 more</span></div>
+      </div>
+      <span class="age">1d</span>
+    </div>
+  </div>
+
+  <p class="pgfoot">Casetta is off, so nothing from it reaches this page &mdash; its history is still on its own page. X has been rate-limiting us since Friday; we retry every hour.</p>
+
+</div>
+
+<nav class="tabbar" aria-label="Primary">
+  <a href="home.html">Home<span class="dot"></span></a>
+  <a href="competitor.html">Competitors<span class="dot"></span></a>
+  <a class="on" href="#">Alerts<span class="dot"></span></a>
+  <a href="settings.html">Settings<span class="dot"></span></a>
+</nav>
+
+</body>
+</html>
