@@ -175,7 +175,7 @@ export default tseslint.config(
   },
 
   {
-    files: ["**/*.js", "**/*.mjs", "*.config.ts", "e2e/**/*.ts", "tests/**/*.ts"],
+    files: ["**/*.js", "**/*.mjs", "**/*.cjs", "*.config.ts", "e2e/**/*.ts", "tests/**/*.ts"],
     extends: [tseslint.configs.disableTypeChecked],
     rules: {
       "no-inline-comments": "off",
