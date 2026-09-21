@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
@@ -27,7 +27,11 @@ import { isolatedGitEnv } from "./helpers/git-env";
  * sort last — the #2506 incident, one release earlier.
  *
  * Fails closed: an unresolvable base ref is a failure, not a pass — an
- * unchecked migration numbering assertion must never read as safe.
+ * unchecked migration numbering assertion must never read as safe. Two
+ * adjacent bypasses are closed the same way: `--no-renames` decomposes a
+ * `git mv` (R100) into D+A so a rename onto a stale number is still checked,
+ * and an added `.sql` that does not match `<NNNN>_*.sql` is an offender —
+ * wrangler would apply it while a number-only gate never sees it.
  *
  * The first test in this file is the gate itself: it runs the check against
  * the real repository (origin/main...HEAD) and is wired as a named step in
@@ -58,7 +62,7 @@ function migrationNumber(file: string): number | null {
 
 interface NumberingOffender {
   file: string;
-  number: number;
+  number: number | null;
   duplicateOf: string | null;
 }
 
@@ -99,6 +103,7 @@ function checkMigrationNumbering(
     "diff",
     "--name-only",
     "--diff-filter=A",
+    "--no-renames",
     `${baseSha}...${headRef}`,
     "--",
     `${MIGRATIONS_DIR}/`,
@@ -109,7 +114,14 @@ function checkMigrationNumbering(
   const seenInPr = new Map<number, string>();
   for (const file of added) {
     const number = migrationNumber(file);
-    if (number === null) continue; // non-<NNNN>_*.sql files are not numbered migrations
+    if (number === null) {
+      // wrangler applies every .sql under migrations/ — a non-<NNNN>_*.sql
+      // name would evade a number-only gate entirely, so it fails closed.
+      if (file.endsWith(".sql")) {
+        offenders.push({ file, number: null, duplicateOf: null });
+      }
+      continue;
+    }
     if (number <= baseTop) {
       offenders.push({ file, number, duplicateOf: null });
     } else if (seenInPr.has(number)) {
@@ -123,11 +135,13 @@ function checkMigrationNumbering(
 }
 
 function formatOffenders(result: NumberingResult): string {
-  const lines = result.offenders.map(
-    ({ file, number, duplicateOf }) =>
-      `  offending file: ${file}\n  its number: ${number}\n` +
-      `  required minimum: ${result.minimum} (highest on base is ${result.baseTop})` +
-      (duplicateOf ? `\n  duplicate of: ${duplicateOf} (added in this PR)` : ""),
+  const lines = result.offenders.map(({ file, number, duplicateOf }) =>
+    number === null
+      ? `  offending file: ${file}\n  its name does not match the ` +
+        `${MIGRATIONS_DIR}/<NNNN>_*.sql numbering rule`
+      : `  offending file: ${file}\n  its number: ${number}\n` +
+        `  required minimum: ${result.minimum} (highest on base is ${result.baseTop})` +
+        (duplicateOf ? `\n  duplicate of: ${duplicateOf} (added in this PR)` : ""),
   );
   return (
     "newly added migration(s) do not sort last — duplicate or stale migration " +
@@ -261,6 +275,38 @@ describe("ci-migration-numbering (issue #2507)", () => {
       "migrations/0090_event_type_free_text.sql",
     );
     expect(formatOffenders(result)).toContain("duplicate of");
+  });
+
+  it("fails when a rename carries a migration onto a number already on base", () => {
+    // A pure `git mv` is reported as R100, invisible to a bare --diff-filter=A;
+    // --no-renames decomposes it into D+A so the new path is checked.
+    const repo = setupRepo({
+      "migrations/0088_recreate_delivery_hot_path_indexes.sql": "SELECT 1;",
+      "migrations/0107_old_top.sql": "SELECT 1;",
+    });
+    gitOrThrow(repo, ["checkout", "-b", "feature"]);
+    renameSync(
+      join(repo, "migrations/0107_old_top.sql"),
+      join(repo, "migrations/0107_old_top_renamed.sql"),
+    );
+    gitOrThrow(repo, ["add", "-A"]);
+    gitOrThrow(repo, ["commit", "-m", "rename migration"]);
+    const result = checkMigrationNumbering(repo, "main", "HEAD");
+    expect(result.added).toEqual(["migrations/0107_old_top_renamed.sql"]);
+    expect(result.offenders).toHaveLength(1);
+    expect(result.offenders[0].file).toBe("migrations/0107_old_top_renamed.sql");
+  });
+
+  it("fails when an added .sql file does not match the numbering rule", () => {
+    const repo = setupRepo({
+      "migrations/0088_recreate_delivery_hot_path_indexes.sql": "SELECT 1;",
+    });
+    addOnPr(repo, ["migrations/0099a_unnumbered.sql"]);
+    const result = checkMigrationNumbering(repo, "main", "HEAD");
+    expect(result.offenders).toHaveLength(1);
+    expect(result.offenders[0].file).toBe("migrations/0099a_unnumbered.sql");
+    expect(result.offenders[0].number).toBeNull();
+    expect(formatOffenders(result)).toContain("numbering rule");
   });
 
   it("fails closed when the base ref cannot be resolved", () => {
