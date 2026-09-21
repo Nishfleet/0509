@@ -3,7 +3,6 @@ import path from "node:path";
 
 import { reactRouter } from "@react-router/dev/vite";
 import { cloudflare } from "@cloudflare/vite-plugin";
-import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
 import { defineConfig, searchForWorkspaceRoot } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 
@@ -157,33 +156,15 @@ export default defineConfig(async ({ mode }) => ({
           testTimeout: 10_000,
         },
       },
-      {
-        // Real workerd (via Miniflare) + real local D1 with the repo's real
-        // migrations applied. This is the only project where a D1 assertion
-        // means anything: everything else mocks the binding.
-        extends: true,
-        plugins: [
-          cloudflareTest(async () => ({
-            wrangler: { configPath: "./tests/integration/wrangler.test.jsonc" },
-            miniflare: {
-              // Test-only binding: the setup file applies these inside workerd.
-              bindings: {
-                TEST_MIGRATIONS: await readD1Migrations(
-                  path.join(import.meta.dirname, "migrations"),
-                ),
-              },
-            },
-          })),
-        ],
-        test: {
-          name: "workers",
-          include: [INTEGRATION_TEST_GLOB],
-          setupFiles: ["./tests/integration/apply-migrations.ts"],
-          // Applying 70+ migrations to a fresh local D1 costs more than a unit
-          // test's 10s budget on a loaded CI runner.
-          testTimeout: 30_000,
-        },
-      },
+      // REBUILD P2 C3 (#3862): the `workers` project is retired until P3.
+      // Every integration suite it ran asserted against pre-rebuild tables and
+      // was deleted by this sweep, leaving the project matching zero files —
+      // and vitest exits 1 on "No test files found", which reddened CI.
+      //
+      // Deliberately removed rather than given passWithNoTests: a project that
+      // matches nothing and reports green is a gate that cannot fail, which is
+      // strictly worse than no gate. P3 restores it when there are integration
+      // suites written against migrations/0001_rebuild.sql.
     ],
   },
 }));
