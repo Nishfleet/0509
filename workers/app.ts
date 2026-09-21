@@ -3,6 +3,7 @@
 import { createRequestHandler, RouterContextProvider } from "react-router";
 
 import { cloudflareRuntimeContext } from "../app/lib/cloudflare-context";
+import { pingLiveness } from "../app/lib/liveness-ping.server";
 import { enforceRequestRateLimit } from "../app/lib/rate-limit.server";
 import { publicSeoFileForPathname } from "../app/lib/seo";
 import { canonicalPathRedirect } from "./canonical-path";
@@ -232,8 +233,17 @@ export default {
   // material, but the hard rule for this sweep is that nothing reachable at
   // runtime — route, loader, action or cron — may read a dropped table, so
   // the rail goes inert here until P3 rewires the kept modules against the
-  // fresh schema. The Cron Triggers still fire on their wrangler schedules;
-  // they now cost an empty handler invocation instead of a dropped-table
-  // query.
-  async scheduled() {},
+  // fresh schema. The Cron Triggers still fire on their wrangler schedules.
+  //
+  // One arm survives: the dead-man ping. It reads no D1 table at all — it is an
+  // outbound HTTP report to an external service — so it does not touch the
+  // reachability rule, and it is the one signal a Worker cannot fake. Every
+  // other health check here is computed BY the Worker it describes and so goes
+  // quiet exactly when it matters. docs/REBUILD-DONE.md gates completion on
+  // this ping running seven consecutive days without a miss, so it must not go
+  // inert between the cut and P3.
+  async scheduled(_controller, env, ctx) {
+    const livenessPing = pingLiveness(env);
+    if (livenessPing) ctx.waitUntil(livenessPing);
+  },
 };
