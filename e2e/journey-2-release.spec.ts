@@ -71,7 +71,7 @@ for (const viewport of viewports) {
     await signInAs(context, baseURL, "e2e-free");
 
     await page.goto("/app?website=nykaa.com#setup-checklist");
-    await expect(page.getByRole("heading", { name: "Finish the workspace that sends your first brief" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Add a competitor — the rest is automatic" })).toBeVisible();
     await expect(
       page.getByText(
         "Paste one competitor website to start.",
@@ -235,7 +235,7 @@ for (const viewport of viewports) {
     );
     await signInAs(context, baseURL, persona);
     await page.goto("/app#setup-checklist");
-    await expect(page.getByRole("heading", { name: "Finish the workspace that sends your first brief" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Add a competitor — the rest is automatic" })).toBeVisible();
     const website = page.getByLabel("Competitor website");
     await expect(website).toHaveAttribute("aria-describedby", "setup-competitor-hint");
     await expect(website).toHaveAttribute("aria-invalid", "false");

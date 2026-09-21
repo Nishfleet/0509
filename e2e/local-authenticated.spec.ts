@@ -373,7 +373,7 @@ test.describe("local authenticated E2E harness", { lock: "d1" }, () => {
     await page.goto("/app");
 
     await expect(page).toHaveURL(/\/app/);
-    await expect(page.getByRole("heading", { name: "Finish the workspace that sends your first brief" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Add a competitor — the rest is automatic" })).toBeVisible();
     await expect(
       page.getByText("Paste one competitor website to start."),
     ).toBeVisible();

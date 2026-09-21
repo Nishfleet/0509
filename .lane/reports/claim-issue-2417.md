@@ -48,3 +48,33 @@ Files outside `files:`/`do:` touched: `tests/dashboard-activation.route.test.ts`
 only — required because it asserted the retired heading verbatim; same
 test-update scope as merged R1/R2 (PRs #3754, #3108). No weakened assertions;
 the new spec adds coverage.
+
+## Review round 1 (devin-issue@0509-2417, 2026-09-21 ~08:5xZ)
+
+Independent reviewer verdict: BLOCKING. Adjudication:
+
+- ACT ON — saved-search state (first_competitor ready via saved query,
+  competitors=0) left first_watchlist pending with no system path to complete
+  it, but the card claimed "Your first brief is on its way". Fixed: an
+  automatic item only counts as self-ticking while its pipeline is armed
+  (activeWatchlists > 0); a pending first_watchlist (implies zero watchlists)
+  is always the user's Next, carrying its server action "Add a competitor".
+- ACT ON — same hole for all-paused accounts: proof/digest pending with
+  activeWatchlists=0 never tick. Same fix surfaces first_proof as Next with
+  its "Capture evidence" action.
+- ACT ON — e2e specs still asserted the retired heading
+  (e2e/local-authenticated.spec.ts, e2e/journey-2-release.spec.ts ×2);
+  updated to "Add a competitor — the rest is automatic" per the repo's
+  same-landing-sequence gate-spec rule.
+- ACT ON (noted) — needs_proof rows now keep the server's truthful detail
+  ("Evidence attempts have run…") instead of the generic automatic override.
+- NOTED — "Setup · N of 4 done" still counts system items (intended: they do
+  tick to done); dead `nextItem?.action` branch left (harmless, may future
+  items carry actions); AUTOMATIC_PENDING_DETAIL fallback noted.
+- Heading for a non-competitor Next derives from the item's server-provided
+  action label ("Capture evidence — the rest is automatic") — no invented
+  copy. Specs reworked: saved-search spec now asserts the Next state, new
+  spec pins the real ticking state (competitor + active watchlist), paused
+  spec fixture completed with production-emitted proof/digest rows.
+- Re-verified: vitest changed-mode 23 files / 324 tests pass; semgrep
+  diff-scoped clean.

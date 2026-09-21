@@ -72,13 +72,19 @@ export function SetupChecklistCard({
 }) {
   const items = blockingSetupItems(readiness);
   const pendingItems = pendingBlockingSetupItems(readiness);
+  const activeWatchlists = readiness.counts?.activeWatchlists ?? 0;
   /**
-   * Only the first pending NON-automatic item is a user step — the automatic
-   * items (watchlist, first proof, first digest) are the system's own pipeline
-   * and tick themselves; they never hold "Next" or an action link.
+   * Only a pending item the system can complete unaided is "automatic" —
+   * and only while its pipeline is armed. Proof and digest tick themselves
+   * while an active watchlist exists to scan; a pending first_watchlist
+   * (which means no competitor exists yet) still needs the user's
+   * add-competitor submit, and a paused-everything account ticks nothing.
+   * Unarmed pending items stay the user's next step.
    */
   const nextItem =
-    pendingItems.find((item) => !isAutomaticSetupItem(item)) ?? null;
+    pendingItems.find(
+      (item) => !isAutomaticSetupItem(item) || activeWatchlists === 0,
+    ) ?? null;
   const readyCount = items.filter((item) => isBlockingSetupItemComplete(readiness, item)).length;
   const hasWatchlistCapacity =
     (readiness.counts?.activeWatchlists ?? 0) <
@@ -160,7 +166,11 @@ export function SetupChecklistCard({
         </span>
         <h2 id="setup-checklist-title">
           {nextItem
-            ? "Add a competitor — the rest is automatic"
+            ? nextIsCompetitor
+              ? "Add a competitor — the rest is automatic"
+              : `${nextItem.action?.label ?? nextItem.label}${
+                  pendingItems.length > 1 ? " — the rest is automatic" : ""
+                }`
             : "Your first brief is on its way"}
         </h2>
       </header>
@@ -246,7 +256,7 @@ export function SetupChecklistCard({
               <span>
                 <strong>{item.label}</strong>
                 <small>
-                  {!done && automatic
+                  {!done && automatic && item.status === "needs_setup"
                     ? (AUTOMATIC_PENDING_DETAIL[item.id] ?? item.detail)
                     : item.detail}
                 </small>
