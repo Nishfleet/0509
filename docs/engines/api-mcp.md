@@ -186,6 +186,16 @@ The shape that matters: `createDocument(...)` is **pure and synchronous**. So th
 
 ---
 
+## 5b. Jev decisions used (none owned, and none called)
+
+This engine **owns no decision and makes no Jev call**. Every judgment an agent can read — D1's competitor verdicts, D3/D3s change verdicts, D4's picks, D5/D6 on mentions, D8 collapses, D9 page roles — was made in the collection pipeline and stored in `jev_verdict` and on the `signal` rows.
+
+What the API and the MCP tools **do** expose is the verdict as data, because an agent that cannot see why an item was kept is being asked to trust a number: each returned item carries its `question_id`, `p`, and Jev's one-line reason, marked as Jev's read. An item without a verdict is returned as `"unreviewed"` — the same word the UI uses — never silently as confirmed.
+
+**An API call must never trigger a judgment.** A tool that called Jev on read would make an unauthenticated-adjacent surface into a per-request seat cost and a per-request latency, and it would produce verdicts outside the Workflow that logs them. The read surface reads.
+
+---
+
 ## 6. Workflow / Queue / cron layout
 
 **None.** This engine is a synchronous read surface. It has no cron, no queue, no Workflow, and it must acquire none — every number it returns was computed by engines 1–7 and stored. An API endpoint that triggers a crawl is how a read surface becomes a cost surface.

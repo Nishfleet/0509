@@ -182,6 +182,19 @@ Two absolute rules, enforced at query time:
 
 ---
 
+## 4b. Jev decisions used (none owned)
+
+This engine **owns no decision** and must not call Jev. It is a transport: it consumes verdicts made upstream and renders them. Naming them here so a packet does not reach for the SDK.
+
+| Id | Owned by | What this engine consumes | Context-pack fields |
+|---|---|---|---|
+| **D3s** `own_site_breakage` | engine 4 (site change) | the `p >= 0.5` verdict that opened the `incident` row, plus its one-line kind for the subject line | none — the verdict and its reason arrive on the `incident` row |
+| **D4** `read_this_first` | engine 6 (standing) | the top three items and the why-line, already in `digest.payload_json` | none — read from the row |
+
+Two consequences. **The brief must never re-rank or re-judge**: if it reordered D4's picks, the email and Home would disagree, which is the failure `docs/REBUILD-STANDING.md` exists to prevent. And **Jev's one-line reasons are shown verbatim**, marked as Jev's read; `docs/REBUILD-JEV.md` bars generating longer copy, so every other sentence in the brief is a fixed template string filled with counts.
+
+---
+
 ## 5. Workflow / Queue / cron layout, with the numbers
 
 ```jsonc
