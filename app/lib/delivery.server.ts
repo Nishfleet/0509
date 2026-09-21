@@ -344,16 +344,9 @@ export async function deliverWeeklyDigest(env: AppEnv, input: DeliverWeeklyDiges
   // view of this digest via the existing share-link machinery. Plan-gated on
   // `share_links` (Starter+); free-plan and internal-lane briefs render no
   // forward line. Resolved once per digest run, reused across targets.
-  const digestForwardUrl =
-    lane === "customer" &&
-    emailTargets.length > 0 &&
-    canUsePlanFeature(entitledConfigs.plan, "share_links")
-      ? await resolveShareForwardUrl(env, {
-          userId: input.userId,
-          resourceType: "digest",
-          resourceId: input.digestRunId,
-        })
-      : null;
+  // REBUILD P2 C3 (#3862): the share-forward line is a swept surface
+  // (/share route deleted, share_link table dropped). Always absent until P3.
+  const digestForwardUrl: string | null = null;
 
   for (const target of emailTargets) {
     attempts.push(
@@ -665,16 +658,9 @@ export async function deliverWatchlistAlerts(env: AppEnv, input: DeliverWatchlis
   // view of this watchlist via the existing share-link machinery. Plan-gated
   // on `share_links` (Starter+); free-plan and internal-lane alerts render no
   // forward line. Resolved once per watchlist run, reused across batches.
-  const alertForwardUrl =
-    lane === "customer" &&
-    emailTargets.length > 0 &&
-    canUsePlanFeature(entitledConfigs.plan, "share_links")
-      ? await resolveShareForwardUrl(env, {
-          userId: input.userId,
-          resourceType: "watchlist",
-          resourceId: input.watchlist.id,
-        })
-      : null;
+  // REBUILD P2 C3 (#3862): the share-forward line is a swept surface
+  // (/share route deleted, share_link table dropped). Always absent until P3.
+  const alertForwardUrl: string | null = null;
 
   for (const batch of batches) {
     const content = buildInstantAlertContent(
@@ -2596,63 +2582,7 @@ async function persistDeliveryTargetSuccess(
   });
 }
 
-/**
- * Issue #2175 do-step 3: the one-click "forward to a teammate / client" URL
- * behind every customer brief — the live share view of the digest (or, for
- * instant alerts, the watchlist), produced by the existing share-link
- * machinery. Reuse-first: an active link for the same resource is reused so
- * re-sends never multiply links; otherwise one is created with the standard
- * token shape and default TTL. The caller applies the plan gate
- * (`share_links`) before invoking this. Any failure degrades to null — the
- * brief simply omits the forward line, delivery is never blocked.
- */
-async function resolveShareForwardUrl(
-  env: AppEnv,
-  input: {
-    userId: string;
-    resourceType: ShareResourceType;
-    resourceId: string;
-  },
-): Promise<string | null> {
-  try {
-    const listActive = (deliveryData as Record<string, unknown>).listActiveShareLinks as
-      | ((env: AppEnv, userId: string, limit: number) => Promise<Array<{ resourceType: string; resourceId: string; token: string }>>)
-      | undefined;
-    const createShare = (deliveryData as Record<string, unknown>).createShareLink as
-      | ((env: AppEnv, session: unknown, input: unknown) => Promise<{ token: string }>)
-      | undefined;
-    if (typeof listActive !== "function" || typeof createShare !== "function") {
-      return null;
-    }
-    const active = await listActive(env, input.userId, 50);
-    const existing = active.find(
-      (link) =>
-        link.resourceType === input.resourceType &&
-        link.resourceId === input.resourceId,
-    );
-    const token =
-      existing?.token ??
-      (
-        await createShare(env, systemShareSession(input.userId), {
-          resourceType: input.resourceType,
-          resourceId: input.resourceId,
-          isSnapshot: false,
-        })
-      ).token;
-    return `${appBaseUrl(env)}/share/${token}`;
-  } catch {
-    return null;
-  }
-}
 
-/**
- * Minimal session shape for system-actor share creation during delivery:
- * `createShareLink` reads only `session.user.id` (the workspace owner the
- * link belongs to). No request session exists in the cron/delivery context.
- */
-function systemShareSession(userId: string): AppSession {
-  return { user: { id: userId } } as unknown as AppSession;
-}
 
 async function resolveEntitledDeliveryConfigs(
   env: AppEnv,
@@ -4259,50 +4189,6 @@ type MonthlyReportOutcome =
   | "share_failed"
   | "failed";
 
-/**
- * Mint the month's share link under its deterministic id.
- *
- * `createShareLink` with an explicit id uses INSERT OR IGNORE and then rejects
- * the row as `share_link_inactive` if it is not live (revoked, or past the
- * 90-day default TTL). Because the id is deterministic, a dead row would
- * otherwise make that month permanently unfileable — every later cron tick
- * would take the error branch and page, with no way to clear it. So on that one
- * rejection, mint under a fresh id: a new live row for the same month is the
- * correct outcome (the month is not yet filed), and a superseded dead row is
- * harmless.
- */
-async function mintMonthlyReportShare(
-  env: AppEnv,
-  userId: string,
-  monthKey: string,
-  snapshot: Record<string, unknown>,
-): Promise<string> {
-  const session = systemShareSession(userId);
-  const resourceId = monthlyReportResourceId(monthKey);
-  try {
-    return (
-      await (deliveryData as unknown as { createShareLink(env: AppEnv, session: unknown, input: unknown): Promise<{ token: string }> }).createShareLink(env, session, {
-        id: `${resourceId}:${userId}`,
-        resourceType: "report",
-        resourceId,
-        isSnapshot: true,
-        snapshotPayload: snapshot,
-      })
-    ).token;
-  } catch (error) {
-    if (!(error instanceof Error) || error.message !== "share_link_inactive") {
-      throw error;
-    }
-    return (
-      await (deliveryData as unknown as { createShareLink(env: AppEnv, session: unknown, input: unknown): Promise<{ token: string }> }).createShareLink(env, session, {
-        resourceType: "report",
-        resourceId,
-        isSnapshot: true,
-        snapshotPayload: snapshot,
-      })
-    ).token;
-  }
-}
 
 /**
  * One workspace, one month: mint (or reuse) the report share link, then email
@@ -4338,26 +4224,11 @@ async function sendOneMonthlyReport(
   const built = await buildMonthlyReportSnapshot(env, input.userId);
   if (!built) return "nothing_to_file";
 
-  const resourceId = monthlyReportResourceId(input.monthKey);
-  let shareUrl: string;
-  try {
-    // Read the month's link by its own id, not through a LIMIT-50 window: a
-    // busy workspace can own more than 50 newer shares, and `listActiveShareLinks`
-    // would then miss this month's row.
-    const linkId = `${resourceId}:${input.userId}`;
-    const existing = await (deliveryData as Record<string, unknown> as { getShareLinkById?: (env: AppEnv, userId: string, id: string) => Promise<{ token: string } | null> }).getShareLinkById?.(env, input.userId, linkId);
-    const token =
-      existing?.token ??
-      (await mintMonthlyReportShare(env, input.userId, input.monthKey, built.snapshot as unknown as Record<string, unknown>));
-    shareUrl = `${appBaseUrl(env)}/share/${token}`;
-  } catch (error) {
-    console.error("Monthly report share mint failed.", {
-      userId: input.userId,
-      monthKey: input.monthKey,
-      error,
-    });
-    return "share_failed";
-  }
+  // REBUILD P2 C3 (#3862): the monthly report's share link is gone. /share is a
+  // swept route and share_link is a dropped table, so this once minted a token
+  // for a URL that 404s. The link line is simply absent until P3 decides what,
+  // if anything, replaces it.
+  const shareUrl: string | null = null;
 
   let unsubscribeUrl: string | null = null;
   if (primaryTarget.id) {
