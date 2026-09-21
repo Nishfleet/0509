@@ -91,7 +91,7 @@ But `workers/app.ts` in a React Router 8 framework-mode app is *already* the def
 
 ### Screening, and the decision
 
-**Candidate B ships. Candidate A is recorded with its trigger.**
+**Decision: API keys (bearer) for v1, on both the REST API and the MCP server.** One credential, one code path, one quota. Candidate A is recorded with its revisit trigger, not deferred vaguely.
 
 Three reasons, in order of weight:
 
@@ -99,14 +99,14 @@ Three reasons, in order of weight:
 2. **Blast radius.** Candidate A moves every page load of the product behind an auth library to serve one endpoint. That is a disproportionate coupling for a v1 whose landing page has a 1.5 s LCP budget.
 3. **The charter names API keys.** It is not ambiguous, and `docs/REBUILD-STACK.md` §7.3 independently reached the same conclusion.
 
-**The cost of this choice, stated plainly so nobody discovers it in a support thread:** our MCP server is non-conformant with the 2026-07-28 revision's authorization section. Clients that require RFC 9728 discovery will not connect by URL alone; they need a configured `Authorization: Bearer <key>` header. Settings' "Connect your agent" panel must therefore show the header, not just the URL.
+**The conformance gap, stated plainly so nobody discovers it in a support thread:** our MCP server is non-conformant with the 2026-07-28 revision's authorization section, which makes OAuth 2.1 and RFC 9728 a MUST. Clients that require RFC 9728 discovery will not connect by URL alone; they need a configured `Authorization: Bearer <key>` header. Two obligations follow, and both are packet requirements rather than notes: Settings' "Connect your agent" panel shows **the header alongside the URL**, and the API docs say the server uses bearer tokens rather than OAuth, so an integrator finds out from us before they find out from a failed connection.
 
 **Grafted from A, because A was right that discovery matters:**
 
 1. **`/.well-known/oauth-protected-resource` is implemented when A lands, and not before.** Serving the metadata document while no authorization server exists would advertise a flow that does not work — worse than not serving it.
 2. **`llms.txt` and the OpenAPI document are the discovery surface we *can* honestly ship now** (§4). An agent that can read finds the API without any handshake.
 
-**The trigger for revisiting:** the first customer who needs an interactive MCP client that will not accept a configured header. At that point Candidate A is additive — `apiRoute: "/mcp"`, `apiHandler` the existing handler, `defaultHandler` the existing React Router export — and the `apikey` table stays for metering regardless. Nothing in this design has to be undone.
+**The revisit trigger, stated precisely: the first client that refuses a bearer token.** Not "when we have time", not "when a customer asks about OAuth" — a client that will accept an `Authorization: Bearer` header, however configured, is served by v1 and is not a trigger. At that point Candidate A is additive — `apiRoute: "/mcp"`, `apiHandler` the existing handler, `defaultHandler` the existing React Router export — and the `apikey` table stays for metering regardless. Nothing in this design has to be undone.
 
 **Rejected outright, recorded:** `McpAgent` from `agents/mcp` — deprecated and feature-frozen by Cloudflare's own docs, and it forces a Durable Object plus a migration for session state we do not want. The C3 MCP templates (`remote-mcp-authless`, `remote-mcp-github-oauth`) — the same docs page says not to start from them because they use the deprecated path. `@modelcontextprotocol/sdk` **as the server** — it hard-depends on `express`, `cors`, `raw-body` and `@hono/node-server`; it appears in our tree only because `agents` pins it as a peer. `chanfana` and `@hono/zod-openapi` — both require a router (Hono or itty) running *inside* the Worker beside React Router's handler, to emit a JSON file.
 
@@ -256,7 +256,7 @@ The only concurrency control is the rate-limit binding (§3), and the only sched
 
 ### P8.1 — The `apikey` and `passkey` tables, and "Connect your agent"
 
-**GOAL.** Add `@better-auth/api-key` and `@better-auth/passkey` to the better-auth config, run `npx auth@latest generate` and land the two tables the shipped `0001_rebuild.sql` is missing — `apikey` (22 columns) and `passkey` — as an additive migration. Build the Settings panel: create a key, name it, show it **once**, list keys by `start`/`prefix` with `lastRequest` and `remaining`, and revoke. Per-key quota comes from the plan's entitlements in `plan.limits_json`.
+**GOAL.** Add `@better-auth/api-key` and `@better-auth/passkey` to the better-auth config, run `npx auth@latest generate` and land the two tables the shipped `0001_rebuild.sql` is missing — `apikey` (22 columns) and `passkey` — as an additive migration. Build the Settings "Connect your agent" panel: create a key, name it, show it **once**, list keys by `start`/`prefix` with `lastRequest` and `remaining`, and revoke. The panel shows the **MCP URL and the `Authorization: Bearer` header together** — per §1 the server is bearer-authenticated, not OAuth, so a URL on its own is an incomplete instruction. Per-key quota comes from the plan's entitlements in `plan.limits_json`.
 
 **STOCK FEATURE OR LIBRARY.** `@better-auth/api-key` **1.7.5** (`apiKey()`, `API_KEY_TABLE_NAME === "apikey"`), `@better-auth/passkey` **1.7.5**, `better-auth` **1.7.5**, CLI `npx auth@latest generate --adapter kysely`. The binding goes straight to `database:` — better-auth ships its own D1 Kysely dialect, selected by duck-typing the binding.
 

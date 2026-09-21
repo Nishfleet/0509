@@ -4,31 +4,30 @@ P3 step 7 of umbrella #3842. Written by the Opus deputy (second architect), **20
 
 ---
 
-## 0. The live probe, and it is a blocker
+## 0. The live probe: the sending domain is provisioned
 
-Cloudflare Email Sending requires a `cf-bounce` subdomain carrying SPF, DKIM and MX, plus DMARC on the zone (`docs/REBUILD-STACK.md` §4.7). I queried the live zone, **2026-09-21 12:18 UTC**, system resolver, and confirmed each answer's DNS status code:
+Cloudflare Email Sending requires a `cf-bounce` subdomain carrying SPF, DKIM and MX, plus DMARC on the zone (`docs/REBUILD-STACK.md` §4.7). Queried **2026-09-21 12:44 UTC** through the VPS system resolver (`127.0.0.53`, systemd-resolved, upstreams `46.38.252.230` netcup and `100.100.100.100` Tailscale MagicDNS). Public resolvers are not reachable from this host — `@8.8.8.8` and `@1.1.1.1` both time out, consistent with the outbound-DNS firewall — so the system resolver is the only vantage available here, and every answer below is `NOERROR`:
 
-| Record | Result |
+| Record | Answer |
 |---|---|
-| `0509.io` **A** | `188.114.97.4`, `188.114.96.4` — the zone resolves, proxied through Cloudflare |
-| `0509.io` **TXT** | **NXDOMAIN** |
-| `0509.io` **MX** | **NXDOMAIN** |
-| `cf-bounce.0509.io` **MX** | **NXDOMAIN** |
-| `cf-bounce.0509.io` **TXT** | **NXDOMAIN** |
-| `cf-bounce._domainkey.0509.io` **TXT** | **NXDOMAIN** |
-| `_dmarc.0509.io` **TXT** | **NXDOMAIN** |
+| `0509.io` **MX** | `72 route1.mx.cloudflare.net`, `29 route2…`, `1 route3…` |
+| `0509.io` **TXT** | `v=spf1 include:_spf.mx.cloudflare.net -all` |
+| `_dmarc.0509.io` **TXT** | `v=DMARC1; p=reject; rua=mailto:dmarc@0509.io` |
+| `cf-bounce.0509.io` **MX** | `72 route1…`, `29 route2…`, `1 route3.mx.cloudflare.net` |
+| `cf-bounce.0509.io` **TXT** | `v=spf1 include:_spf.mx.cloudflare.net ~all` |
+| `cf-bounce._domainkey.0509.io` **TXT** | `v=DKIM1; h=sha256; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A…` (2048-bit, two strings) |
 
-Controls on the same resolver in the same second: `google.com A` → `142.251.14.138`, `gmail.com MX` → `10 alt1.gmail-smtp-in.l.google.com`. The resolver is healthy; the records are absent.
+**The domain is fully provisioned for Email Sending.** The DKIM selector is `cf-bounce._domainkey`, which is the *Sending* selector — Routing uses `cf2024-1._domainkey` — so this is Email Sending specifically, not merely inbound routing. Corroborated by production behaviour: the pre-wipe app sent **49 magic links a day** through this same `send_email` binding, from senders such as `status-canary@0509.io`.
 
-Zone state, read from the Cloudflare API with the deploy token at 12:19 UTC: **`0509.io` is zone `ff6dcd042f7b15f41e47ad456bad8665`, status `active`** (and `0509.in` is `d0afec7272d4f7866df6f65cc3f01e83`, also active). So the zone is on Cloudflare and ready; what is missing is the Email Sending provisioning step. The deploy token has no DNS permission, so the record write is not something a worker packet can do with the credentials that exist today.
+**Correcting my own earlier reading.** An earlier pass of this document reported all of these as `NXDOMAIN` and called the engine blocked. That was wrong. The tell was visible at the time and I did not chase it: `NXDOMAIN` means *the name does not exist*, so it cannot be the answer for a TXT query on a zone whose A record resolves in the same second — the correct answer for a missing record type on an existing name is `NOERROR` with no data. My control was `gmail.com MX`, which proved the resolver answered *some* mail query but nothing about this zone. **A negative DNS result needs a same-zone positive control**, and that is the rule this engine's probes follow from here.
 
-**Three consequences, and the first is the one that matters:**
+**What actually remains, and it is a verification, not a blocker:**
 
-1. **No email can be sent from `0509.io` until those records exist.** Not the brief, not the incident alert, not the magic link that `docs/REBUILD-ONBOARDING.md` step 1 depends on. This is a hard prerequisite for P3 step 7 and it is also a hard prerequisite for **sign-in**, which is step 1 of the whole product. It is not this engine's job to discover that in week three.
-2. It is a **console-and-DNS action**, not code. Cloudflare writes the records automatically for a zone already on Cloudflare — which this is — once Email Sending is enabled for the domain. That is the stock path and no packet below writes a DNS record by hand.
-3. **Email Service is Beta, Workers Paid only**, with 3,000 messages/month included and daily limits that *"begin conservatively and scale based on sending behavior"* — unpublished numbers. A cold domain's first week is the constrained one, which argues for sending the brief to real recipients early and in small numbers rather than discovering the ramp at launch.
+1. **Sender identity.** DNS authorises the domain; Email Service still requires the specific sender address to be a configured, verified identity. `brief@0509.io` and the incident sender are new addresses that the pre-wipe app did not use, so each needs confirming per the Email Service docs before its first send. That is P7.1's job and it is a check, not a build.
+2. **Email Service is Beta, Workers Paid only**, with 3,000 messages/month included and daily limits that *"begin conservatively and scale based on sending behavior"* — unpublished numbers. The prior app's 49/day establishes the domain has a sending history rather than a cold reputation, which helps, but the ramp is still unpublished. This is why §5 caps send concurrency at 2.
+3. **SPF on the apex is `-all` (hard fail)** while `cf-bounce` is `~all`. A misconfigured sender does not degrade to a spam folder; it is rejected. That makes point 1 sharper than it sounds.
 
-The remaining upstream facts are cited from Cloudflare's docs rather than probed, because probing them means sending mail from a domain that cannot yet send mail. They are marked as cited in §3.
+The remaining upstream facts are cited from Cloudflare's docs rather than probed, because probing them means sending live mail; they are marked as cited in §3.
 
 ---
 
@@ -259,7 +258,7 @@ Everything else — Queues, D1, R2, Workers — is inside included tiers by thre
 
 | Failure | Detection | Degraded state |
 |---|---|---|
-| **Mail DNS absent** (today's state, §0) | every send fails at the binding | **This is a launch blocker, not a degraded state.** Sign-in itself does not work without it. It fails loud: the deploy check in P7.1 refuses to call the send path green until a real message is accepted. |
+| **Unverified sender address** | `EMAIL.send` rejects, or the message fails DMARC at the recipient | the domain is provisioned (§0) but each sender identity is separate, and the apex SPF is `-all`, so an unverified sender is rejected rather than soft-landed. Fails loud at P7.1: the send path is not green until a real message passes SPF, DKIM and DMARC in a real inbox. |
 | Email Service throttles or is down | `EMAIL.send` rejects | queue retries with backoff; after 5, DLQ **and** an in-app Alerts row: "we could not send your brief — here it is in the app". The brief content is already in `digest.payload_json`, so the user loses the channel, not the information. |
 | Worker dies mid-send | `send_attempt` left `status='pending'` | the nightly sweeper re-enqueues after 1 hour. The claim row is what makes this detectable at all. |
 | `digest` written but never enqueued | `status='pending'` over 6 hours | nightly sweeper re-enqueues. |
@@ -276,21 +275,21 @@ Everything else — Queues, D1, R2, Workers — is inside included tiers by thre
 
 ---
 
-### P7.1 — Enable Email Sending on the zone and prove one real message
+### P7.1 — Verify the sender identity and prove one real message
 
-**GOAL.** Turn on Cloudflare Email Sending for `0509.io` (zone `ff6dcd042f7b15f41e47ad456bad8665`), let Cloudflare write the `cf-bounce` SPF, DKIM and MX records and the `_dmarc` record for the zone it already manages, add the `send_email` binding to `wrangler.jsonc`, and send one real message to a real inbox from a deployed Worker. Today all seven of those records are **NXDOMAIN** (probed 2026-09-21 12:18 UTC), so nothing else in this engine can be proven until this lands.
+**GOAL.** The sending domain is already provisioned (§0: MX, SPF, DKIM at `cf-bounce._domainkey`, and `_dmarc` with `p=reject`, all `NOERROR` at 2026-09-21 12:44 UTC; the pre-wipe app sent 49 magic links a day through this same binding). So this packet **verifies rather than builds**: confirm or create the sender identities this engine needs — `brief@0509.io` and the incident sender, neither of which the prior app used — per the Email Service docs, add the `send_email` binding to `wrangler.jsonc`, and send one real message from each from a deployed Worker.
 
-**STOCK FEATURE OR LIBRARY.** Cloudflare Email Service (Beta, Workers Paid). `wrangler.jsonc`: `{ "send_email": [ { "name": "EMAIL", "remote": true } ] }` — the key is `send_email` and the field is `name`, not `binding`. Cloudflare's own automatic DNS provisioning for a zone it manages.
+**STOCK FEATURE OR LIBRARY.** Cloudflare Email Service (Beta, Workers Paid). `wrangler.jsonc`: `{ "send_email": [ { "name": "EMAIL", "remote": true } ] }` — the key is `send_email` and the field is `name`, not `binding`. Sender identity configuration through the Cloudflare dashboard / Email Service API as documented.
 
 **FILES IN SCOPE.** `wrangler.jsonc` (the `send_email` block only). No application code.
 
-**FORBIDDEN.** Writing any DNS record by hand or by script. A second mail provider (`docs/REBUILD-KEEPLIST.md` and the fleet rule: outbound email is Cloudflare, never Resend). Any SMTP client in the Worker. Claiming this green from a local `wrangler dev` run — the binding needs `"remote": true` and a real deploy. **Sending to more than one address**; this is a transactional probe, not a test blast on a cold domain.
+**FORBIDDEN.** Writing or altering any DNS record — the zone is provisioned and correct; a "fix" here breaks a working mail domain. A second mail provider (outbound email is Cloudflare, never Resend). Any SMTP client in the Worker. Claiming this green from a local `wrangler dev` run — the binding needs `"remote": true` and a real deploy. Sending to more than the two verification addresses. Assuming a sender works because the domain is authorised: the apex SPF is **`-all`**, a hard fail, so an unverified sender is rejected outright rather than soft-landing in spam.
 
-**PROOF REQUIRED.** (a) The same seven DNS queries from §0 re-run after provisioning, each now returning records, pasted with the UTC timestamp — SPF containing `include:_spf.mx.cloudflare.net`, DKIM at `cf-bounce._domainkey`, three `route{1,2,3}.mx.cloudflare.net` MX records on `cf-bounce`, and a `_dmarc` record. (b) One real message accepted by `env.EMAIL.send` from the deployed Worker, with the call's returned identifier and the UTC timestamp, and a screenshot of it in a real inbox showing the `From` and the SPF/DKIM/DMARC pass in the received headers.
+**PROOF REQUIRED.** (a) The §0 DNS table re-run, **naming the resolver used** and showing `NOERROR` with a same-zone positive control in the same run — not a different domain. (b) The sender identity for `brief@0509.io` shown as verified in the Email Service configuration. (c) One real message from each new sender, accepted by `env.EMAIL.send` from the deployed Worker, with the call's returned identifier and the UTC timestamp, plus a screenshot of each in a real inbox showing **SPF, DKIM and DMARC all passing** in the received headers — DMARC is `p=reject`, so a pass is the only acceptable result.
 
-**PUSH.** Branch `engine/email-enable` off `origin/main`, pushed within 5 minutes.
+**PUSH.** Branch `engine/email-sender-identity` off `origin/main`, pushed within 5 minutes.
 
-**COST.** 1 message against 3,000/month included. $0.00.
+**COST.** 2 messages against 3,000/month included. $0.00.
 
 ---
 
