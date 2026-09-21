@@ -2,7 +2,6 @@ import { betterAuth } from "better-auth";
 import { magicLink } from "better-auth/plugins";
 import { apiKey } from "@better-auth/api-key";
 import { passkey } from "@better-auth/passkey";
-import { D1Dialect } from "kysely-d1";
 
 /**
  * Auth, as better-auth ships it.
@@ -21,7 +20,10 @@ import { D1Dialect } from "kysely-d1";
  */
 export function createAuth(env: { DB: D1Database; BETTER_AUTH_SECRET?: string; BETTER_AUTH_URL?: string }) {
   return betterAuth({
-    database: { dialect: new D1Dialect({ database: env.DB }), type: "sqlite" },
+    // The binding goes in directly: @better-auth/kysely-adapter duck-types
+    // batch/exec/prepare and supplies its own D1SqliteDialect, so no separate
+    // D1 dialect dependency is needed (verified at dist/index.mjs:102).
+    database: env.DB,
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL,
     plugins: [
