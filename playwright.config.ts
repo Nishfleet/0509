@@ -11,6 +11,8 @@ import { defineConfig, devices } from "@playwright/test";
 // production url to test against", which is exactly the split above:
 // https://playwright.dev/docs/test-webserver
 const baseURL = process.env.PLAYWRIGHT_TEST_BASE_URL ?? "http://127.0.0.1:8787";
+export const accessStatePath = "e2e/.auth/access.json";
+const accessState = process.env.CF_ACCESS_CLIENT_ID ? { storageState: accessStatePath } : {};
 
 export default defineConfig({
   testDir: "./e2e",
@@ -23,24 +25,24 @@ export default defineConfig({
   use: {
     baseURL,
     trace: "on-first-retry",
-    // Production sits behind Cloudflare Access; only / and /api/health are
-    // public. CI passes the agents' service token as two secrets and Access
-    // accepts them as headers on every request. Locally, unset means no headers.
-    extraHTTPHeaders: process.env.CF_ACCESS_CLIENT_ID
-      ? {
-          "CF-Access-Client-Id": process.env.CF_ACCESS_CLIENT_ID,
-          "CF-Access-Client-Secret": process.env.CF_ACCESS_CLIENT_SECRET ?? "",
-        }
-      : undefined,
   },
+  // Production sits behind Cloudflare Access; only / and /api/health are
+  // public. The setup project presents the agents' service token once and
+  // saves the CF_Authorization cookie Access issues; the browser then sends
+  // that cookie to 0509.io only, so third-party origins (fonts, the beacon)
+  // never see an Access header and CORS stays quiet. Locally (no token) the
+  // setup project is absent and tests run without it.
   projects: [
+    ...(process.env.CF_ACCESS_CLIENT_ID ? [{ name: "setup", testMatch: /auth\.setup\.ts/ }] : []),
     {
       name: "desktop-1440",
-      use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } },
+      use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 }, ...accessState },
+      dependencies: process.env.CF_ACCESS_CLIENT_ID ? ["setup"] : [],
     },
     {
       name: "phone-390",
-      use: { ...devices["Desktop Chrome"], viewport: { width: 390, height: 844 } },
+      use: { ...devices["Desktop Chrome"], viewport: { width: 390, height: 844 }, ...accessState },
+      dependencies: process.env.CF_ACCESS_CLIENT_ID ? ["setup"] : [],
     },
   ],
   webServer: process.env.PLAYWRIGHT_TEST_BASE_URL

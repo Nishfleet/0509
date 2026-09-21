@@ -165,11 +165,16 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
-      - name: Audit the deployed URL against the budgets
-        uses: treosh/lighthouse-ci-action@v12
+      - name: Exchange the Access service token for the CF_Authorization cookie
+        # Access issues the cookie on a token-authenticated request; grep prints
+        # it as NAME=value, which is exactly the GITHUB_ENV line format.
+        run: |
+          curl -sS -o /dev/null -D - -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" "${{ github.event.deployment_status.environment_url }}/login" | grep -io 'CF_Authorization=[^;]*' >> "$GITHUB_ENV"
         env:
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+      - name: Audit the deployed URL against the budgets
+        uses: treosh/lighthouse-ci-action@v12
         with:
           urls: |
             ${{ github.event.deployment_status.environment_url }}
