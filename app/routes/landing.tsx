@@ -1,6 +1,9 @@
 import type { Route } from "./+types/landing";
 
-const CONTACT = "hello@0509.io";
+// support@ is the address with an explicit Cloudflare Email Routing rule.
+// hello@ only lands in the inbox via the catch-all, so it is not the one to
+// print on the only page the public can reach.
+const CONTACT = "support@0509.io";
 
 export function meta(_: Route.MetaArgs) {
   return [
@@ -10,6 +13,8 @@ export function meta(_: Route.MetaArgs) {
       content:
         "Five to Nine is being rebuilt from the ground up. Watching you and your competition across the internet, properly this time. Back autumn 2026.",
     },
+    // noindex while the public site is gated behind the redesign. This comes
+    // off in the PR that removes the gate — not before, and not separately.
     { name: "robots", content: "noindex" },
   ];
 }
