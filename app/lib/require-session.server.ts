@@ -1,8 +1,7 @@
+import { env } from "cloudflare:workers";
 import { redirect } from "react-router";
 
 import { createAuth } from "./auth.server";
-
-type Env = { DB: D1Database; EMAIL: { send(m: unknown): Promise<unknown> } };
 
 /**
  * The gate for every /app surface.
@@ -11,7 +10,7 @@ type Env = { DB: D1Database; EMAIL: { send(m: unknown): Promise<unknown> } };
  * parses one itself. No session means /login, which is the only branch: a
  * half-authenticated page is worse than a redirect.
  */
-export async function requireSession(request: Request, env: Env) {
+export async function requireSession(request: Request) {
   const auth = createAuth(env as never);
   const session = await auth.api.getSession({ headers: request.headers });
   if (!session) throw redirect("/login");

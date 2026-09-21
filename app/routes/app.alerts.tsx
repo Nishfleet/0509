@@ -1,7 +1,7 @@
 import { requireSession } from "../lib/require-session.server";
 
-export async function loader({ request, context }: { request: Request; context: { cloudflare: { env: never } } }) {
-  const session = await requireSession(request, context.cloudflare.env);
+export async function loader({ request }: { request: Request }) {
+  const session = await requireSession(request);
   return { email: session.user.email };
 }
 
