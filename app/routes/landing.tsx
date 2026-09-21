@@ -11,7 +11,7 @@ export function meta(_: Route.MetaArgs) {
     {
       name: "description",
       content:
-        "Quietly, we're rebuilding. You'll see where you stand when it's ready. Autumn 2026.",
+        "Quietly, we're rebuilding. You'll see where you stand when it's ready.",
     },
     // noindex while the public site is gated behind the redesign. This comes
     // off in the PR that removes the gate — not before, and not separately.
@@ -22,11 +22,14 @@ export function meta(_: Route.MetaArgs) {
 /**
  * The public site while the rebuild is in progress.
  *
- * Five things, and nothing else: the wordmark, the headline, one sentence, the
- * date, the address. Earlier versions carried a shouted caps headline, a struck
- * "old site → new site" mark, a mono eyebrow and a breathing dot; Nish cut all
- * of it. What is left is quiet on purpose, and the only colour on the page is
- * the wordmark's 09.
+ * Four things, and nothing else: the wordmark, the headline, one sentence, the
+ * address. Earlier versions carried a shouted caps headline, a struck
+ * "old site → new site" mark, a mono eyebrow, a breathing dot and a date; Nish
+ * cut all of it. What is left is quiet on purpose, and the only colour on the
+ * page is the wordmark's 09.
+ *
+ * No date on purpose too: a date on a coming-soon page is a promise that ages
+ * badly in public, and this one would have gone stale without anyone noticing.
  *
  * Deliberately static — no loader, no state, no client behaviour beyond the
  * framework's own hydration, and no animation at all.
@@ -47,10 +50,6 @@ export default function Page() {
 
         <p className="text-ink-soft mt-7 text-[clamp(1rem,1.3vw,1.1rem)] leading-[1.65]">
           You&rsquo;ll see where you stand when it&rsquo;s ready.
-        </p>
-
-        <p className="text-ink-faint mt-14 font-mono text-[0.74rem] tracking-[0.12em] lowercase">
-          autumn 2026
         </p>
       </div>
 
