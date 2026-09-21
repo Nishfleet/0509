@@ -1,8 +1,0 @@
-{
-  "labels": ["review:deep"],
-  "disabledLabels": ["review:skip"],
-  "triggerOnUpdates": false,
-  "skipReview": "AUTOMATIC",
-  "strictness": 3,
-  "statusCheck": false
-}
