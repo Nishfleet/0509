@@ -186,7 +186,7 @@ The card never shows a spinner in place of a field. Every empty field says what 
 
 **GOAL.** Turn any of `gymshark.com`, `https://www.gymshark.com/en-GB/`, `@gymshark`, `https://www.youtube.com/user/GymSharkTV` into a canonical subject `{ kind: 'domain'|'handle'|'channel', registrable, url, platform? }`, and add the 24-hour KV probe cache around it.
 
-**STOCK FEATURE OR LIBRARY.** `URL` and `URL.canParse` (platform); `tldts` **7.0.20** for the registrable domain + public-suffix handling (**this is an addition to `docs/REBUILD-STACK.md` — add the row in this PR**; it is 0 dependencies and the only maintained PSL implementation that ships a Workers-clean ESM build); `zod` **4.6.5** for the parsed shape; Workers KV binding for the cache.
+**STOCK FEATURE OR LIBRARY.** `URL` and `URL.canParse` (platform); `tldts` **7.4.13** (npm `latest`, published 2026-09-13, read 2026-09-21) for the registrable domain + public-suffix handling (**this is an addition to `docs/REBUILD-STACK.md` — add the row in this PR**; it is 0 dependencies and the only maintained PSL implementation that ships a Workers-clean ESM build); `zod` **4.6.5** for the parsed shape; Workers KV binding for the cache.
 
 **FILES IN SCOPE.** `app/lib/identity/normalise.ts`, `app/lib/identity/probe-cache.ts`, `docs/REBUILD-STACK.md` (one row), `tests/unit/identity/normalise.test.ts`.
 
