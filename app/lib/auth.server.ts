@@ -18,7 +18,14 @@ import { passkey } from "@better-auth/passkey";
  *   apiKey    — the agent-native surface (#3905). Included now purely so its
  *               table lands in 0001_rebuild.sql and P3 needs no migration.
  */
-export function createAuth(env: { DB: D1Database; BETTER_AUTH_SECRET?: string; BETTER_AUTH_URL?: string }) {
+type AuthEnv = {
+  DB: D1Database;
+  EMAIL: { send(message: unknown): Promise<unknown> };
+  BETTER_AUTH_SECRET?: string;
+  BETTER_AUTH_URL?: string;
+};
+
+export function createAuth(env: AuthEnv) {
   return betterAuth({
     // The binding goes in directly: @better-auth/kysely-adapter duck-types
     // batch/exec/prepare and supplies its own D1SqliteDialect, so no separate
@@ -28,9 +35,23 @@ export function createAuth(env: { DB: D1Database; BETTER_AUTH_SECRET?: string; B
     baseURL: env.BETTER_AUTH_URL,
     plugins: [
       magicLink({
-        sendMagicLink: async () => {
-          // Wired to the EMAIL binding in the delivery slice; the plugin owns
-          // token minting and verification either way.
+        // One send, through the platform binding. better-auth mints and
+        // verifies the token; this only carries it. Transactional, so no
+        // List-Unsubscribe header — that belongs on the weekly brief.
+        sendMagicLink: async ({ email, url }) => {
+          await env.EMAIL.send({
+            to: email,
+            from: { email: "hello@0509.io", name: "Five to Nine" },
+            subject: "Your sign-in link",
+            text: [
+              "Sign in to Five to Nine:",
+              "",
+              url,
+              "",
+              "The link works once and expires shortly.",
+              "If you did not ask for it, ignore this email.",
+            ].join("\n"),
+          });
         },
       }),
       passkey(),
