@@ -6,6 +6,8 @@ Umbrella #3842. Author: Fable. Checked by the Opus deputy. Pairs with the identi
 
 One input. Under 30 seconds to a confirmed brand card. Under 60 seconds to "here's who you're up against". Home is never empty, even on second zero. No form, ever: the card is the form.
 
+How the budget is kept (measured 2026-09-21 by the deputy: the ads leg is ~7 s, every other source under 1 s): every source call has a hard timeout of 8 s and a slow or down source (crt.sh returned 404/502 that day) yields its fields to the next crawl instead of holding the card; all Jev field checks for the card go in one batched request, not one per field; the card is shown as soon as name and domain are known, and fills as the rest lands.
+
 ## Steps and states
 
 **1. Sign in.** Magic link or passkey (better-auth as shipped). No password screen. After sign-in, a workspace exists and the user lands on step 2 immediately; nothing else is asked.
