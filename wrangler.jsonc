@@ -37,7 +37,14 @@
   // was ad-hoc coordination for the old selection pipeline, that pipeline is
   // gone, and there are 0 users. Tag v2 follows the old v1 so the chain is
   // continuous rather than restarting.
-  "migrations": [{ "tag": "v2", "deleted_classes": ["SelectionEnrichmentLease"] }],
+  // The chain has to carry its own history: wrangler validates it locally and
+  // rejects deleting a class this config never declared ("Cannot apply
+  // deleted_classes migration to non-existent class"). v1 mirrors what the
+  // pre-rebuild Worker did; v2 removes it. End state: no Durable Objects.
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["SelectionEnrichmentLease"] },
+    { "tag": "v2", "deleted_classes": ["SelectionEnrichmentLease"] }
+  ],
 
   "d1_databases": [
     {
