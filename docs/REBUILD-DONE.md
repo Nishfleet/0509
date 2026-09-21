@@ -13,7 +13,7 @@ Umbrella #3842. Author: Fable. Checked by the Opus deputy. Nish's words: "you ca
 | J5 | Onboard a bot-blocking site | card still confirmed; site fields say what fills them and when |
 | J6 | Turn a competitor off and back on | off: absent from Home, Alerts, brief; on: history intact |
 | J7 | A competitor changes its pricing page | before-and-after mark in Alerts within one tick, correct kind, screenshot pair, in the next brief |
-| J8 | Your own site breaks | incident email within one tick, "fixed" follow-up after repair, one email per incident |
+| J8 | Your own site breaks | fixture: a dead domain from Nish's portfolio serving a Worker whose state is a KV flag, broken two ways in turn: a hard 500, and a soft 200 with the pricing content gone (the case D3s exists for). Each way: incident email within one tick, "fixed" follow-up after the flag flips back, one email per incident |
 | J9 | Mentions land from three sources | news, HN, RSS at minimum; homonym mention correctly dropped (D5) |
 | J10 | New ad creative appears | visible on the competitor page within one tick, deduped on re-crawl |
 | J11 | The weekly brief | real inbox, real workspace, order per docs/REBUILD-DELIVERY.md, quiet-week variant also sent |
@@ -23,7 +23,7 @@ Umbrella #3842. Author: Fable. Checked by the Opus deputy. Nish's words: "you ca
 
 ## B. Quality gates (each is a number, measured on production)
 
-- Performance: LCP under 1.5 s on simulated 4G for landing and Home; Home JavaScript under 150 KB gzipped; no request over 500 ms on the Home loader at p95 over 100 loads.
+- Performance: LCP under 1.5 s on simulated 4G for landing and Home (Lighthouse CI, stock action); Home JavaScript under 150 KB gzipped; Home loader p95 under 500 ms as reported by Workers Analytics over the whole soak, not a synthetic run.
 - Accessibility: zero WCAG 2.2 AA violations on the seven screens (axe), full keyboard path through J3 and J6, contrast pass in light and dark.
 - Mobile: no horizontal scroll at 390 on any screen; bottom tab bar reachable; row expansion as a sheet.
 - Errors: zero console errors on the seven screens; error tracking shows zero unhandled exceptions over 7 days of the soak.
@@ -40,14 +40,14 @@ Umbrella #3842. Author: Fable. Checked by the Opus deputy. Nish's words: "you ca
 - No `scripts/`, `ops/`, `.github/scripts`, `.lane/`, hooks, wrappers or helper files. `package.json` scripts: build, dev, test, typecheck, deploy only.
 - Workflows: `ci.yml` and `deploy-production.yml` only; required checks unchanged by name.
 - Every dependency in `package.json` is named in docs/REBUILD-STACK.md with a reason.
-- Docs: README, DESIGN, CLAUDE, and the REBUILD docs only; every path a doc names exists (checked in review, not by a bespoke test).
+- Docs: README, DESIGN, CLAUDE, and the REBUILD docs only. Links and paths in docs are checked by lychee as a stock GitHub Action in ci.yml; paths held in code constants (sitemap lists, route tables) are a review item on every PR that touches them, because lychee cannot see them (the #3866 class).
 - Tests: every file under `tests/` and `e2e/` tests product behaviour; no test about the fleet, CI, migration numbering or docs.
 
 ## E. Cost
 
-- Cloudflare bill for the 7-day soak, extrapolated, under $10 a month at the current brand count, with the per-brand unit cost from docs/REBUILD-COST.md measured, not estimated.
+- Cloudflare bill for the 14-day soak, extrapolated, under $10 a month at the current brand count, with the per-brand unit cost from docs/REBUILD-COST.md measured, not estimated.
 - Billing notifications at $10 and $25 confirmed set.
 
-## F. The 7-day soak
+## F. The 14-day soak
 
-Complete is declared only after seven consecutive days on production with one real workspace tracking at least four brands, every line above green on day 7, and the numbers pasted into #3842 by the deputy with links. Fable checks, Nish sees it last.
+Complete is declared only after **fourteen** consecutive days on production with one real workspace tracking at least four brands, spanning two weekly rollovers so J12's movement is real, every line above green on day 14, and the numbers pasted into #3842 by the deputy with links. Where a gate above says 7 days (uptime, errors, nightly Workflow) it is measured over the same fourteen. Fable checks, Nish sees it last.
