@@ -24,6 +24,28 @@
   },
   "upload_source_maps": true,
 
+  // The pre-rebuild Worker declared one Durable Object class,
+  // SelectionEnrichmentLease (tag v1, new_sqlite_classes). The fresh app does
+  // not export it, and Cloudflare refuses a version that drops a class still
+  // backing live Durable Objects:
+  //
+  //   New version of script does not export class 'SelectionEnrichmentLease'
+  //   which is depended on by existing Durable Objects [code: 10064]
+  //
+  // A delete-class migration is the mechanism the error itself names. This
+  // deletes the objects along with the class, which is correct here: the lease
+  // was ad-hoc coordination for the old selection pipeline, that pipeline is
+  // gone, and there are 0 users. Tag v2 follows the old v1 so the chain is
+  // continuous rather than restarting.
+  // The chain has to carry its own history: wrangler validates it locally and
+  // rejects deleting a class this config never declared ("Cannot apply
+  // deleted_classes migration to non-existent class"). v1 mirrors what the
+  // pre-rebuild Worker did; v2 removes it. End state: no Durable Objects.
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["SelectionEnrichmentLease"] },
+    { "tag": "v2", "deleted_classes": ["SelectionEnrichmentLease"] }
+  ],
+
   "d1_databases": [
     {
       "binding": "DB",
