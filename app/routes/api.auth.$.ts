@@ -1,3 +1,4 @@
+import type { Route } from "./+types/api.auth.$";
 import { env } from "cloudflare:workers";
 
 import { createAuth } from "../lib/auth.server";
@@ -10,10 +11,10 @@ import { createAuth } from "../lib/auth.server";
  * shape and this app provides no getLoadContext, so reaching for it throws and
  * every auth route 500s.
  */
-export async function loader({ request }: { request: Request }) {
+export async function loader({ request }: Route.LoaderArgs) {
   return createAuth(env as never).handler(request);
 }
 
-export async function action({ request }: { request: Request }) {
+export async function action({ request }: Route.ActionArgs) {
   return createAuth(env as never).handler(request);
 }

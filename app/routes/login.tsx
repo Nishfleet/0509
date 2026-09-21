@@ -1,9 +1,10 @@
+import type { Route } from "./+types/login";
 import { env } from "cloudflare:workers";
 import { Form, useActionData, useNavigation } from "react-router";
 
 import { createAuth } from "../lib/auth.server";
 
-export async function action({ request }: { request: Request }) {
+export async function action({ request }: Route.ActionArgs) {
   const form = await request.formData();
   const email = String(form.get("email") ?? "").trim().toLowerCase();
   if (!email) return { error: "Enter your email." };

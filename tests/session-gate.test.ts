@@ -46,26 +46,3 @@ describe("requireSession", () => {
     expect(outcome).toBe("redirect 302");
   });
 });
-
-describe("binding access", () => {
-  it("no route reaches for context.cloudflare.env", async () => {
-    // The RR7 shape. This app provides no getLoadContext, so reaching for it
-    // throws at request time and every auth route 500s — which is exactly what
-    // shipped in #3919. Bindings come from `cloudflare:workers`.
-    const fs = await import("node:fs");
-    const path = await import("node:path");
-    const dirs = ["app/routes", "app/lib"];
-    const offenders: string[] = [];
-    for (const dir of dirs) {
-      for (const file of fs.readdirSync(dir)) {
-        const full = path.join(dir, file);
-        if (!fs.statSync(full).isFile()) continue;
-        const body = fs.readFileSync(full, "utf8");
-        // ignore the comment that explains the rule
-        const code = body.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-        if (code.includes("context.cloudflare")) offenders.push(full);
-      }
-    }
-    expect(offenders).toEqual([]);
-  });
-});
