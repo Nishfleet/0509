@@ -3,17 +3,32 @@ import type {
   WorkspaceReadinessItem,
 } from "~/lib/workspace-readiness.server";
 
-export const BLOCKING_SETUP_ITEM_IDS = [
-  "first_competitor",
+export const USER_SETUP_ITEM_IDS = ["first_competitor"] as const;
+
+// The rest of the blocking list is the system's own pipeline — the watchlist
+// create that rides on the add-competitor submit, the activation scan's first
+// proof, and the auto-filed first digest. They complete without a user step,
+// so the card shows them ticking, never as pending user tasks.
+export const AUTOMATIC_SETUP_ITEM_IDS = [
   "first_watchlist",
   "first_proof",
   "first_digest",
 ] as const;
 
+export const BLOCKING_SETUP_ITEM_IDS = [
+  ...USER_SETUP_ITEM_IDS,
+  ...AUTOMATIC_SETUP_ITEM_IDS,
+] as const;
+
+const AUTOMATIC_SETUP_ITEMS = new Set<string>(AUTOMATIC_SETUP_ITEM_IDS);
 const BLOCKING_SETUP_ITEMS = new Set<string>(BLOCKING_SETUP_ITEM_IDS);
 
 export function isBlockingSetupItem(item: WorkspaceReadinessItem) {
   return BLOCKING_SETUP_ITEMS.has(item.id);
+}
+
+export function isAutomaticSetupItem(item: WorkspaceReadinessItem) {
+  return AUTOMATIC_SETUP_ITEMS.has(item.id);
 }
 
 export function isBlockingSetupItemComplete(
