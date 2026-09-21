@@ -219,24 +219,19 @@ four-week standing, the three read-this-first marks, the counts checked, a small
 and exactly one action — "Track your own brand — €10/mo". Nothing else, per
 `docs/REBUILD-STANDING-CARD.md` (#3898).
 
-**The OG image is an SVG template rendered by `@resvg/resvg-wasm`, not HTML-to-image.**
-Satori does not run on workerd, so the usual HTML → PNG route is unavailable: we build an
-SVG string from the data and rasterise it in the Worker. That constrains the design, and
-the design is built to the constraint rather than fighting it — the OG card is **text, one
-line chart as a single SVG `path`, and the logo**, on the cream ground. The rank line in
-Bricolage Grotesque caps with the rank on a green rect, the four-week standing as one
-accent path with the other brands as thin `--ink-soft` paths, the week label in mono, and
-the wordmark. No captures, no photographs, no marks, no web fonts loaded at render time —
-the two faces are embedded in the template as subset WOFF2. If a value would need HTML
-layout to place, it does not belong on the OG card.
+**The OG image is rendered by Cloudflare Browser Rendering from the same HTML and CSS
+as the card page itself** — not from a separate template. The engine design (#3914) chose
+this at roughly 0.06 browser-hours a month, which is the cheapest line in the cost model,
+and it means the OG image cannot drift from the card: there is one design, screenshotted
+at 1200x630. No second renderer, no second stylesheet, no hand-maintained SVG twin.
 
-### 2.9 The own-site incident state
-
-The same mark object, with three differences: it sits on the green wash on Home and
-carries the red rule on Alerts; its take says *what we think happened and what we will do
-next*, with a real re-check time; and it always offers "I meant to do this", which closes
-the incident and feeds `user_memory` so the same judgment is not made twice. A fixed
-incident gets a one-line "fixed" row under the original, never a new alert.
+What that buys: the OG image can carry exactly what the card carries — the rank line with
+the rank on its green marker, the four-week standing line, the week label in mono, and the
+wordmark, all in the real faces on the real cream ground. Keep it to those four things
+anyway, because an OG image is read at thumbnail size: no captures, no marks, no counts
+table. **Measure the render before you ship it** — one render per workspace per week is
+the budget, and a card that takes longer than the weekly rollover window is a defect, not
+a tolerance.
 
 ---
 
@@ -442,8 +437,13 @@ action that fills it.
 | Competitor page, just added | "Watching from today. The first ads and mentions land within the hour; site changes need a second snapshot, so the first mark comes tomorrow." |
 | Alerts, nothing yet | "Nothing has interrupted you. When your own site breaks you'll get an email; everything else waits here." |
 | A degraded source | "X has been rate-limiting us since Friday. We show it as degraded rather than pretend the count is complete." |
-| Identity card, field pending | "logo: looking on the site" / "we'll fill this on the first crawl, within the hour" |
-| Standing chart, week one | The chart renders with one point and the line label reads "first week" — it is never hidden |
+
+**A chart with one week of data is never hidden.** It renders with its single point and
+the line labelled "first week". This is the rule the other empty states are a special case
+of: a surface that has *some* truth shows that truth at whatever size it is, because
+hiding it teaches the user the product is not running. Applies to the standing chart on
+Home, on the public card and in the OG image.
+| Identity card, field pending | "logo: looking on your site" / "we'll fill this on the first crawl, within the hour" |
 
 ---
 
@@ -553,7 +553,7 @@ re-issued, so the library names and versions are restated here as the contract.
 | "Why we flagged this" | `drawer` on mobile, `popover` on desktop | The machinery, one tap away |
 | Sheets, dialogs, tooltips, menus | `dialog`, `sheet`, `tooltip`, `dropdown-menu` | Base UI 1.8.0 under all of them |
 | Toasts | `sonner` | Only for "saved" and "undo"; never for alerts |
-| Standing-card OG image | SVG template + **`@resvg/resvg-wasm`** | Satori does not run on workerd; see §2.8 for what that allows on the card |
+| Standing-card OG image | **Cloudflare Browser Rendering**, screenshotting the card page at 1200x630 | One design, not a twin (#3914, ~0.06 browser-hours/month). See §2.8 |
 | Icons | `lucide-react` 1.47.0 | Sparingly: the product's vocabulary is type, not icons |
 | Class merging | `cn` 0.3.0 | |
 | Any input that validates | **TanStack Form 1.33.5 + zod 4.6.5** | The same schema parses `formData` in the action |
