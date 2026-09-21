@@ -1,0 +1,42 @@
+# Guardrails: what we never do, what we keep, how a takedown works
+
+Umbrella #3842. Author: Fable. Checked by the Opus deputy. Nish's decisions stand: we track brands and creators across the internet regardless of a platform's terms; paid data providers only with his yes; never his accounts or the fleet's logged-in sessions for collection.
+
+## Who can be tracked
+
+- Brands, companies, products, and creators who publish under a public handle or domain. The test is: does the subject present itself to the public for commercial or audience reasons.
+- Never a private individual. A handle with no public commercial or audience presence is refused at onboarding with one line: "we track brands and creators, not people". Jev D7 (identity) carries a `public_subject` field; below 0.1 the input is refused, between it is asked.
+- Never minors, never accounts marked private, never anything behind a login we would have to hold.
+
+## What we collect and keep
+
+- Public pages, public posts, public ad libraries, public feeds. Screenshots of public pages. No DMs, no private groups, no purchased personal data.
+- Raw snapshots and screenshots: kept 1 year, then only the before-and-after marks and summaries (the R2 lifecycle rule does this, nothing hand-rolled).
+- Mentions: the headline, URL, source, date, and the excerpt needed to show the mark. Never the full text of third-party posts.
+- Jev verdicts and context packs: workspace-owned, deleted with the workspace.
+- Own-site data (the user's own pages): same rules, plus incident records kept 1 year.
+
+## Deletion
+
+- Deleting a workspace deletes every owned row (ownership manifest) and every R2 object under its prefix, within one Workflow run, and stops every email. J14 in docs/REBUILD-DONE.md proves it.
+- A user removing a competitor keeps history (product rule) unless they choose "remove and forget", which deletes that entity's signals for that workspace.
+
+## Takedown
+
+- Any brand or person can ask to be removed from public standing cards and from tracking by any workspace, by email to the address in the footer. Handled within 72 hours by hand (Nish or the deputy), recorded on a `takedown` row with the subject, the date and the action. A subject on the takedown list is refused at onboarding and dropped from existing workspaces at the next tick, with a one-line note to the owner.
+- Public standing cards show only what docs/REBUILD-STANDING-CARD.md allows; a takedown removes the subject from every card on the next render.
+
+## Collection conduct
+
+- Rate limits per source live in the source registry, honoured by the Workflow, never by a sleep loop in code. A source that blocks us is marked degraded in the UI, not retried harder.
+- Robots.txt is honoured for plain fetches of the user's own site and for blog/RSS discovery. For competitor public pages the decision is Nish's (2026-09-21): we fetch what a browser would show a logged-out visitor, through Browser Rendering, at the registry's rate.
+- Identities used for collection: dedicated, disposable, created per the standing rule, stored in Nish's credential store, never in the repo. Egress from Cloudflare or the VPS only.
+- Paid data providers: none until Nish approves the provider and the monthly cost; the approval and the cost line are recorded on the source registry row.
+
+## What the footer says
+
+Privacy and terms pages exist from day one, plain words, matching this document: what we collect, how long, how to be removed, who to email. No claim on any public surface that this document does not back.
+
+## Proof required
+
+A refused private-handle onboarding (recorded), a completed takedown round-trip on a test subject (row, timestamps, card re-rendered without it), a workspace deletion verified against R2 and D1, and the R2 lifecycle rule visible in the Cloudflare dashboard.
