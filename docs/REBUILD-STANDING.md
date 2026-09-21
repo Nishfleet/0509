@@ -36,6 +36,9 @@ The sentence under the headline ("Kindred is the mover: 3 new ads and the loudes
 - Fewer than 2 ON brands: no ranking, Home says "add a competitor to see where you stand".
 - The score is recomputed nightly by the Workflow that closes the day; the week rolls at the user's brief time (Monday 08:00 local) so the email and Home agree.
 - Standing is stored per week per brand, so the four-week line chart on Home reads history, not recomputation.
+- A week is an absolute half-open range `[week_start_at, week_end_at)` stored as instants (UTC), computed from the user's local Monday 08:00 at rollover time. Never a date string: local rollover across daylight-saving changes makes weeks 23 or 25 hours long, and a date would let two weeks claim the same day.
+
+Schema requirements (carried by the schema PR): a `standing` table (workspace, entity, week_start_at, week_end_at, score, rank, movement, why_line); a config table for the weights; `timezone` and `brief_at` on `workspace`.
 
 ## Proof required
 
