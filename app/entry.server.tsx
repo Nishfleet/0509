@@ -4,7 +4,6 @@ import { isbot } from "isbot";
 import { renderToReadableStream } from "react-dom/server";
 
 import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
-import { reportError } from "~/lib/error-report.server";
 
 // Issue #3456: without this export React Router defaults the loader-data
 // handoff stream timeout to 4,950ms — every deferred still pending ~5s after
@@ -81,17 +80,13 @@ export function handleError(
   error: unknown,
   args: { request: Request; context?: unknown },
 ) {
-  const cloudflare = getOptionalCloudflareContext(args.context);
+  void getOptionalCloudflareContext(args.context);
   let route = "unknown_route";
   try {
     route = new URL(args.request.url).pathname;
   } catch {
     // Request URL parse failures are reported under the fallback name.
   }
-  void reportError(cloudflare?.env ?? {}, {
-    route,
-    reasonCode: "loader_error",
-    error,
-  });
+  console.error("loader_error", route, error);
 }
 
