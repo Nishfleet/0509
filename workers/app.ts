@@ -12,7 +12,7 @@ export default {
     return requestHandler(request);
   },
 
-  async scheduled(_controller, _env, ctx) {
+  scheduled(_controller, _env, ctx) {
     // The dead-man ping: an external service alerts when the reports stop,
     // which is the one failure a Worker cannot report about itself.
     const ping = pingLiveness();

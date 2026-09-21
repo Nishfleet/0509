@@ -6,10 +6,11 @@ import { createAuth } from "../lib/auth.server";
 
 export async function action({ request }: Route.ActionArgs) {
   const form = await request.formData();
-  const email = String(form.get("email") ?? "").trim().toLowerCase();
+  const submitted = form.get("email");
+  const email = typeof submitted === "string" ? submitted.trim().toLowerCase() : "";
   if (!email) return { error: "Enter your email." };
 
-  const auth = createAuth(env as never);
+  const auth = createAuth(env);
   // better-auth owns minting, sending and verification. We only hand it the
   // address and report back; a failure here must not reveal whether the
   // address exists.

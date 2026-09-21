@@ -9,9 +9,15 @@
 # the merge ref, so a job that skips there gives the queue no verdict.
 name: CI
 
+# `deployment_status` is the third trigger and it is the stock one: Cloudflare
+# Workers Builds emit GitHub deployments, so the production suites fire on the
+# real deploy with no polling. https://playwright.dev/docs/ci#on-deployment
+# The four required jobs guard themselves off that event; they have nothing to
+# say about a deployment and a job that reports on the wrong event is noise.
 on:
   pull_request:
   merge_group:
+  deployment_status:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -23,6 +29,7 @@ permissions:
 jobs:
   codex-node-checks:
     name: codex-node-checks
+    if: github.event_name != 'deployment_status'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -36,6 +43,14 @@ jobs:
         # cf-typegen and react-router typegen generate worker-configuration.d.ts
         # and the route types, so `tsc -b` cannot run before them.
         run: npm run typecheck
+      - name: Lint
+        # Rung 2 of the correction ladder (docs/REBUILD-TRUST.md B): every
+        # mistake worth correcting twice becomes a rule here rather than a
+        # sentence in a doc. `npm run lint` is `eslint . && knip` — the rules
+        # and the dead-code finder in one gate. It runs after typecheck because
+        # typed lint rules need the generated route types that typecheck emits.
+        run: npm run lint
+
       - name: Test
         run: npm test
       - name: Build
@@ -43,6 +58,7 @@ jobs:
 
   Gitleaks:
     name: Gitleaks
+    if: github.event_name != 'deployment_status'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -58,6 +74,7 @@ jobs:
 
   semgrep:
     name: semgrep
+    if: github.event_name != 'deployment_status'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     container:
@@ -70,6 +87,7 @@ jobs:
 
   preview-assert:
     name: preview-assert
+    if: github.event_name != 'deployment_status'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -81,15 +99,75 @@ jobs:
       - run: npm ci
       - name: Build the Worker as the deploy would
         run: npm run build
-      - name: Assert /api/health answers from the built Worker
-        # The smallest honest proof that the thing we are about to ship starts
-        # and serves: build it, run it under wrangler's local runtime, ask it.
-        run: |
-          set -euo pipefail
-          npx wrangler dev --port 8787 --local &
-          for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:8787/api/health >/tmp/health.json 2>/dev/null; then break; fi
-            sleep 2
-          done
-          cat /tmp/health.json
-          grep -q '"status":"ok"' /tmp/health.json
+
+      - name: Install the browser Playwright will drive
+        run: npx playwright install --with-deps chromium
+
+      - name: Run the e2e suite against the built Worker
+        # This replaced a curl-and-grep loop against /api/health. The proof is
+        # the same shape — build it, run it, ask it — but now the agent that
+        # wrote the change runs the same suite a user's browser would, and a
+        # route that renders blank fails here instead of in production.
+        #
+        # PLAYWRIGHT_TEST_BASE_URL is deliberately unset: playwright.config.ts
+        # then starts `wrangler dev` itself through webServer and tears it down.
+        run: npm run e2e
+
+      - name: Keep the trace when it fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-preview
+          path: playwright-report/
+          retention-days: 7
+
+  e2e-production:
+    name: e2e-production
+    # Not a required check, on purpose: it cannot run on a pull request, and a
+    # required check that never reports blocks the merge queue forever.
+    if: github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Run the same suite against what was just deployed
+        run: npm run e2e
+        env:
+          # Setting this switches playwright.config.ts out of webServer mode.
+          PLAYWRIGHT_TEST_BASE_URL: ${{ github.event.deployment_status.target_url }}
+
+      - name: Keep the trace when it fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-production
+          path: playwright-report/
+          retention-days: 7
+
+  lighthouse:
+    name: lighthouse
+    # The performance half of verification (talk 14:30): correctness says the
+    # feature works, this says it is still fast. Budgets live in
+    # lighthouse-budget.json and are declared at error level, which is the only
+    # thing that fails the job — the action has no `fail:` input, it calls
+    # core.setFailed() for assertions at error level and only annotates warns.
+    # docs/REBUILD-STACK.md 6.3.
+    if: github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - name: Audit the deployed URL against the budgets
+        uses: treosh/lighthouse-ci-action@v12
+        with:
+          urls: |
+            ${{ github.event.deployment_status.target_url }}
+          budgetPath: ./lighthouse-budget.json
+          uploadArtifacts: true
+          temporaryPublicStorage: true

@@ -12,9 +12,9 @@ import { createAuth } from "../lib/auth.server";
  * every auth route 500s.
  */
 export async function loader({ request }: Route.LoaderArgs) {
-  return createAuth(env as never).handler(request);
+  return createAuth(env).handler(request);
 }
 
 export async function action({ request }: Route.ActionArgs) {
-  return createAuth(env as never).handler(request);
+  return createAuth(env).handler(request);
 }
