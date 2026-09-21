@@ -11,7 +11,7 @@ import { createAuth } from "./auth.server";
  * half-authenticated page is worse than a redirect.
  */
 export async function requireSession(request: Request) {
-  const auth = createAuth(env as never);
+  const auth = createAuth(env);
   const session = await auth.api.getSession({ headers: request.headers });
   if (!session) throw redirect("/login");
   return session;

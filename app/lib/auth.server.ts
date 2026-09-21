@@ -18,12 +18,12 @@ import { passkey } from "@better-auth/passkey";
  *   apiKey    — the agent-native surface (#3905). Included now purely so its
  *               table lands in 0001_rebuild.sql and P3 needs no migration.
  */
-type AuthEnv = {
+interface AuthEnv {
   DB: D1Database;
   EMAIL: { send(message: unknown): Promise<unknown> };
   BETTER_AUTH_SECRET?: string;
   BETTER_AUTH_URL?: string;
-};
+}
 
 export function createAuth(env: AuthEnv) {
   return betterAuth({
@@ -59,5 +59,3 @@ export function createAuth(env: AuthEnv) {
     ],
   });
 }
-
-export type Auth = ReturnType<typeof createAuth>;
