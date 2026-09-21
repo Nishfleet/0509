@@ -158,7 +158,7 @@ Scripts, from `transformPackageJson` in the same file: `deploy`, `preview`, `cf-
 
 ### 2.1 The CLI command is `auth`, not `@better-auth/cli`
 
-The packet asked for `npx @better-auth/cli generate`. **That package is stale**: `@better-auth/cli@latest` is **1.4.21**, published **2026-03-01**, three minors behind `better-auth` 1.7.5. The current CLI ships as the `auth` package (1.7.5, `bin: { auth, better-auth }`), and every current doc page uses it:
+The packet asked for `npx @better-auth/cli generate`. **That package is deprecated**: `@better-auth/cli@latest` is **1.4.21**, published **2026-03-01**, three minors behind `better-auth` 1.7.5, and it warns on run that it is no longer supported. The CLI moved to the standalone `auth` package in better-auth 1.5. `better-auth` core itself ships **no** `bin`. The current CLI ships as the `auth` package (1.7.5, `bin: { auth, better-auth }`), and every current doc page uses it:
 
 ```
 npx auth@latest generate     # emit the schema
@@ -199,7 +199,7 @@ export const auth = betterAuth({
 });
 ```
 
-**Rejected, recorded so it is not re-litigated:** `aidenwallis/kysely-d1` (a third dependency for a dialect that ships in the box); `better-auth-cloudflare` (a community meta-package with its own CLI and resource provisioner — that is glue by definition); `@better-auth/drizzle-adapter` + drizzle (a second schema source of truth next to `0001_init.sql`, and `getMigrations` explicitly does not work with it).
+**Rejected, recorded so it is not re-litigated:** `kysely-d1` 0.4.0 (`aidenwallis/kysely-d1`) — it exists, it works, and it is what the better-auth adapters page still links, but it is a third dependency for a dialect that now ships in the box. `kysely` itself stays as a peer at 0.29.6, pulled in by better-auth; `better-auth-cloudflare` (a community meta-package with its own CLI and resource provisioner — that is glue by definition); `@better-auth/drizzle-adapter` + drizzle (a second schema source of truth next to `0001_init.sql`, and `getMigrations` explicitly does not work with it).
 
 ### 2.3 Config shape as shipped
 
@@ -222,7 +222,7 @@ export const auth = betterAuth({
 
 Three things the docs make mandatory and are easy to miss:
 
-1. **`nodejs_compat` is required.** "Better Auth uses `AsyncLocalStorage`." — <https://www.better-auth.com/docs/integrations/hono> §Cloudflare Workers. The C3-generated `wrangler.jsonc` does **not** include it; adding the flag is a real edit we own.
+1. **`nodejs_compat` is required.** "Better Auth uses `AsyncLocalStorage`." — <https://www.better-auth.com/docs/integrations/hono> §Cloudflare Workers. It is on by default for `compatibility_date` ≥ `2026-08-04` (§5, platform fact 2), so the scaffold already satisfies it — **set it explicitly anyway**, because the Vitest plugin injects it into tests regardless and an implicit dependency is exactly how a green test suite ships a broken deploy.
 2. **`advanced.database.joins: true`** — "The Kysely SQLite dialect supports joins out of the box since version `1.4.0` … seeing upwards of 2x to 3x performance improvements depending on database latency." (<https://www.better-auth.com/docs/adapters/sqlite>). Off by default. `/get-session` runs on every request; this is the single cheapest latency win in the auth path.
 3. **Schema validation runs in production.** "Validation is enabled by default, including in production … Requests await the same check and fail if the schema does not match" (<https://www.better-auth.com/docs/concepts/database>). Kysely "reads live database metadata and needs database access during initialization" — so a drift between `0001_init.sql` and better-auth's expectations is a **runtime 500 on first request**, not a startup warning. `REBUILD-SCHEMA.md` already carries the four auth tables verbatim; that is why.
 
@@ -493,114 +493,172 @@ Single current link: **<https://developers.cloudflare.com/workers/platform/prici
 
 ## 5. Libraries — one recommendation each
 
-Sizes were measured today, not quoted: bundlephobia's `/api/size` where it answered, otherwise gzip of the jsDelivr `/+esm` bundle. The method is named per row because the two are not interchangeable.
+**Two platform facts to get right first, because both are commonly quoted stale and both change answers below.**
+
+1. **The Worker script-size limit is 64 MiB uncompressed, on Free and Paid, and there is no compressed limit.** Verbatim from <https://developers.cloudflare.com/workers/platform/limits/> (read 2026-09-21): *"There is no compressed size limit. Only the uncompressed bundle size counts."* The old "1 MiB free / 10 MiB paid compressed" framing is gone. What binds instead is **startup CPU** — *"A Worker must parse and execute its global scope … within 1 second"*, error `10021`, checkable with `wrangler check startup` — and per-request CPU (10 ms on Free).
+2. **`nodejs_compat` is on by default for `compatibility_date` ≥ `2026-08-04`.** Verbatim from <https://developers.cloudflare.com/workers/configuration/compatibility-flags/>: *"For compatibility dates of `2026-08-04` or later, Workers and Pages projects enable both `nodejs_compat` and `nodejs_compat_v2` by default."* So better-auth's `AsyncLocalStorage` requirement (§2.3) is satisfied by the scaffold's compatibility date alone. **Set the flag explicitly anyway** — the Vitest plugin injects it into tests regardless (§6.1), so an implicit dependency is the exact shape of bug where tests pass and deploy fails.
+
+**Size method, named per row because the numbers are not interchangeable.** `bundlejs` (esbuild, minify + gzip, **full package export, no tree-shaking**) is the primary; `bundlephobia` where noted; raw `curl | gzip -9` for `.wasm` and `dist` files. A full-export number is an upper bound, not what a route ships.
 
 ### 5.1 HTML → plain text
 
-**Recommendation: `HTMLRewriter` — the workerd platform primitive. Zero bytes, zero dependencies.**
+**Recommendation: `HTMLRewriter` — the workerd platform primitive. 0 bytes, 0 dependencies.**
 
-It is a streaming HTML parser built into the runtime (<https://developers.cloudflare.com/workers/runtime-apis/html-rewriter/>). For "give me the visible copy of this marketing page", you attach a text handler to the selectors you care about and drop `script`/`style`/`nav`/`footer`. It never buffers the document, which matters when the page is 2 MB of hydration payload. A library here would be a dependency doing worse what the runtime already does.
+<https://developers.cloudflare.com/workers/runtime-apis/html-rewriter/>. For "give me the visible copy of this marketing page", you attach `text()` handlers to the selectors you care about and never materialise a DOM. **Yes, the primitive beats every library here** — a library would be a dependency doing worse what the runtime already does, and doing it with the whole document in memory.
+
+One real caveat from those docs: *text chunks are not text nodes.* A single node arrives across several `text()` calls, so you must concatenate until `lastInTextNode` is true. Getting that wrong produces a diff full of phantom changes.
+
+`HTMLRewriter` is Workers-only. If the same extraction is ever needed in the browser bundle, the built-in `DOMParser` is the 0-byte answer there; a shared isomorphic implementation would be `html-to-text` (below).
 
 | Rejected | Why |
 |---|---|
-| `html-to-text` 10.0.1 (7.4 KB gzip, jsDelivr) | Wants a whole document string in memory and carries its own DOM parser. Fine in Node; on Workers it is a second parser next to the one in the runtime. |
-| `cheerio` 1.2.0 (**119.0 KB gzip**, 11 deps, bundlephobia) | Builds a full jQuery-style tree for what is a streaming text extraction. The size alone disqualifies it from a Worker bundle. |
+| `html-to-text` 10.0.1 — **46.4 KB gzip** (bundlejs, full export) | Genuinely Workers-clean (pure ESM, no node builtins — its `lib/html-to-text.mjs` was grepped, the only `node:` hits are object keys). Rejected on price: 46 KB to get word-wrapping and list-bullet rendering that a diff does not want. Keep it in mind only if browser-side extraction becomes mandatory. |
+| `cheerio` 1.2.0 — **116.2 KB gzip**, 11 deps (bundlephobia) | Pulls `undici@7` and `iconv-lite`; a bundler build of it fails on both. `engines.node >= 20.18.1`. ~10× the primitive for a full jQuery-style tree. |
 
-`@mozilla/readability` + `linkedom` (86.8 KB gzip for linkedom alone) is the right tool for *article* extraction and the wrong one for diffing a landing page, where nav and pricing are the signal Readability throws away.
+`@mozilla/readability` 0.6.0 (11.8 KB gzip) + `linkedom` 0.18.13 is the right tool for *article* extraction and the wrong one here twice over: Readability strips nav, header and pricing — exactly the marketing copy we diff — and linkedom reaches for the native `canvas` addon, which workerd cannot load.
 
 ### 5.2 Text change diff
 
-**Recommendation: `diff` (jsdiff) 9.0.0 — 7.9 KB gzip, 0 dependencies (bundlephobia).**
+**Recommendation: `diff` (jsdiff) 9.0.0 — 8.3 KB gzip full export (bundlejs), 0 dependencies.**
 
-Structured, typed hunks (`diffWords`, `diffLines`, `diffSentences`, `structuredPatch`) — which is what "before-and-after marks" needs, and what Jev needs as context. Pure ESM, no node builtins.
+<https://github.com/kpdecker/jsdiff>. It is the only candidate that emits a *structured* result out of the box: `{ value, added, removed, count }` change objects, `diffWords` / `diffLines` / `diffSentences` granularity, and `createPatch` / `structuredPatch`. Word-level is the right unit for page copy, and structured hunks are what Jev needs as context for "what changed, where on the page".
+
+Dual ESM+CJS with a `browser` field, zero node builtins (`libesm/index.js` grepped) — the same code runs in the Worker and in the browser bundle.
 
 | Rejected | Why |
 |---|---|
-| `fast-diff` 1.3.0 (3.0 KB gzip) | Smaller, but character-level only: returns `[-1|0|1, text]` tuples with no word or line structure. We would rebuild hunking on top — glue. |
-| `diff-match-patch` 1.0.5 (6.7 KB gzip, jsDelivr) | Google's original, **unmaintained since 2018** on npm and character-level like `fast-diff`. No reason to take an abandoned package to save 1.2 KB. |
+| `fast-diff` 1.3.0 — 3.4 KB gzip | Character-level only: a flat `[[-1\|0\|1, string]]` array, no word or line modes, no patch format. We would write the copy-diff layer ourselves. Glue. |
+| `diff-match-patch` 1.0.5 — 6.6 KB gzip | A community fork of Google's abandoned library, **last published 2020-05-20**, CJS-only, character-level again. No reason to adopt a six-year-dead package to save 1.7 KB. |
 
 ### 5.3 RSS / Atom / RDF parsing
 
-**Recommendation: `fast-xml-parser` 5.11.1 — 9.6 KB gzip (jsDelivr), 0 dependencies.**
+**Recommendation: `@extractus/feed-extractor` 8.0.3 — 24.5 KB gzip (bundlejs), one dependency (`fast-xml-parser ^5.10.1`).**
 
-Pure JS, no node builtins, no streams; parses RSS 2.0, Atom and RDF alike because it parses XML rather than pretending to know feeds. It is already the choice named in the #3880 packet, so mentions and creators share one parser.
+<https://github.com/extractus/feed-extractor>, published 2026-08-06, MIT. It is the only candidate that handles **all four** formats and normalises them to one shape — verified in the published ESM tree, not from the README: `esm/src/utils/` contains `parseRssFeed.js`, `parseAtomFeed.js`, **`parseRdfFeed.js`** (`data["rdf:RDF"]`, with `dc:date` handling — real RSS 1.0) and `parseJsonFeed.js`.
+
+The part that makes it Workers-clean: it exposes **`extractFromXml(xml: string)`**, so we do our own `fetch()` in the Worker and hand it a string, never touching its network layer.
 
 | Rejected | Why |
 |---|---|
-| `rss-parser` 3.13.0 (**32.1 KB gzip**, 2 deps, bundlephobia) | Built on `xml2js` and Node `http`/streams. 3.4× the size for feed-shaped sugar we can write in ten lines of mapping. |
-| `feedparser` 2.6.0 | Node-only by construction — `sax` over Node streams, `Transform` from `node:stream`. Not a Workers candidate. |
+| `rss-parser` 3.13.0 — 42 KB gzip | **Requires Node's HTTP client at module load**: `lib/parser.js` lines 2–5 are `require('http')`, `require('https')`, `require('url')`, plus `xml2js`. CJS-only, last published 2023-04-11. Even with `nodejs_compat` this ships a Node HTTP stack into a runtime that has `fetch`. |
+| `feedparser` 2.6.0 — 30.3 KB gzip | A `readable-stream@2` Transform over `sax`, plus four separate `lodash.*` packages. Push-stream shape is wrong when the body is already in memory. |
 
-`@extractus/feed-extractor` 7.1.3 (10.1 KB gzip) is a close second and normalises feeds for you; rejected only because it wraps `fast-xml-parser` anyway, so we would carry both.
+**Note for #3880.** The creators packet names `fast-xml-parser` 5.11.1 (24.7 KB gzip) directly. That is a defensible choice and it is the dependency either way — feed-extractor is a thin normaliser on top of it. The recommendation here is feed-extractor because at the *same* gzip cost it ships the RSS/Atom/RDF/JSON normalisers we would otherwise hand-write, and hand-writing them is the thing this rebuild forbids.
 
 ### 5.4 OpenGraph + schema.org extraction
 
-**Recommendation: `HTMLRewriter` again — zero bytes.**
+**Recommendation: `HTMLRewriter` again — 0 bytes.**
 
-OG is `<meta property="og:*" content>`; Twitter cards are `<meta name="twitter:*">`; schema.org is the text of `<script type="application/ld+json">`. Three selectors and `JSON.parse`. Everything in this category is a Node scraper wearing a bigger dependency tree.
+Both targets are trivially selector-addressable. OG is `meta[property^="og:"]` → `getAttribute('content')`. Twitter cards are `meta[name^="twitter:"]`. schema.org is `script[type="application/ld+json"]` → accumulate `text()` until `lastInTextNode` → `JSON.parse`. Every library in this category is a Node scraper wearing a much bigger dependency tree.
 
 | Rejected | Why |
 |---|---|
-| `metascraper` 5.58.1 | A plugin-per-field architecture (`metascraper-title`, `-image`, `-logo`, …) — roughly a dozen packages for three selectors, and it expects `cheerio`. |
-| `open-graph-scraper` 6.12.0 | Does its own fetching with its own HTTP client and options surface; we already have `fetch` and Browser Run. Bundles `cheerio`. |
+| `metascraper` 5.58.1 | **Cannot run on workerd at any size.** Its mandatory `@metascraper/helpers` depends on **`re2`**, a C++ node-gyp native addon, plus `jsdom`. Root declares `engines.node >= 22`. |
+| `open-graph-scraper` 6.12.0 | Bundles its own **undici** HTTP client and `iconv-lite` charset decoding; a bundler build fails on both. We already have `fetch` and Browser Run. |
+
+Also rejected: `microdata-node` 2.0.0 — it parses HTML **microdata** (`itemscope`/`itemprop`), not JSON-LD, and was last published 2020-05-11 against `htmlparser2@4`.
 
 ### 5.5 Brand logo fetch
 
-**Recommendation: the site's own metadata via `HTMLRewriter`, with DuckDuckGo's icon endpoint as the fallback. Zero spend, no key, no signup.**
+**Recommendation: a zero-spend cascade over `fetch` + `HTMLRewriter`, results cached in R2 by domain. No key, no signup, no dependency.**
 
-Order of preference, all from the page we already fetched for the site-change engine: `<link rel="icon">` / `rel="apple-touch-icon"` (highest resolution wins) → the web app manifest's `icons[]` → `og:image`. Fallback when a domain gives none: `https://icons.duckduckgo.com/ip3/<domain>.ico` (no key, no quota published). `https://www.google.com/s2/favicons?domain=<domain>&sz=128` is the second fallback; it is undocumented and unversioned, so it is a fallback and never the primary.
+Order: web-app-manifest `icons[]` (512/192) → `<link rel="apple-touch-icon">` → `<link rel="icon">` → Google `faviconV2` at `size=256` → DuckDuckGo `ip3` → `/favicon.ico` → `og:image` last. Resolve every href with `new URL(href, pageUrl)`.
+
+Two implementation details that are bugs if missed, both observed live on 2026-09-21: **always GET, never HEAD** (stripe.com's `/favicon.ico` answers HEAD with `content-length: 0` and GET with 15,086 bytes), and **check `res.ok`** (Google and DuckDuckGo both return 404 *with a placeholder image body*).
+
+Live probe, `curl -sIL`, 2026-09-21:
+
+| Endpoint | Result |
+|---|---|
+| `https://icons.duckduckgo.com/ip3/stripe.com.ico` | 200, `image/x-icon` |
+| `https://icons.duckduckgo.com/ip3/vercel.com.ico` | 200, `image/vnd.microsoft.icon` |
+| `https://www.google.com/s2/favicons?domain=stripe.com&sz=128` | 200 `image/png` (301 → `t3.gstatic.com/faviconV2`) |
+| `https://img.logo.dev/stripe.com` (no token) | 404 |
+| `https://cdn.brandfetch.io/stripe.com/w/400` (no client id) | 200 **`text/html`** — a docs page, not an image |
+| `https://logo.clearbit.com/stripe.com` | **no DNS record** — `getent hosts` returns nothing |
 
 | Rejected | Why |
 |---|---|
-| Clearbit Logo API | **Retired.** `logo.clearbit.com` was sunset after the HubSpot acquisition; building on a dead endpoint is not an option regardless of price. |
-| logo.dev / Brandfetch | Both are real products with real free tiers, and both are a signup, an API key in the secret store, and a third-party dependency in the identity-card path — for an asset the brand already serves from its own domain. **Money and terms, so Nish's call, not a default.** Revisit only if the metadata route measurably fails on real brands. |
+| **Clearbit Logo API** | **Retired.** Deprecated 2025-03-18, shut down 2025-12-08, and the hostname no longer resolves — a harder signal than a 404. <https://developers.hubspot.com/changelog/upcoming-sunset-of-clearbits-free-logo-api> |
+| **Brandfetch** | Free tier is 1M renders/month with no attribution, but the guidelines state *"Programmatic access to logo images is not permitted"* — browser `<img>` only, no Worker proxying. Our path is a Worker. <https://docs.brandfetch.com/logo-api/guidelines> |
+| **logo.dev** | Community tier is $0 / 500K requests per month, but commercial use requires a visible "Logos provided by Logo.dev" link and **rehosting or caching the bytes is a Pro ($180/mo) feature**. A Worker that proxies and caches into R2 is rehosting by their definition. <https://www.logo.dev/pricing> |
+
+So both paid options are blocked by *terms*, not by price — which makes this a Nish decision only if the zero-spend cascade measurably fails on real brands. The Google `s2/faviconV2` endpoint is undocumented and unversioned, which is why it sits fourth and is proxied-and-cached rather than hotlinked.
 
 ### 5.6 Runtime validation
 
-**Recommendation: `zod` 4.6.5.** Zod 4 is the shipped major, and it is already a *transitive* dependency: `better-auth@1.7.5` depends on `zod: ^4.5.4`. Adding it explicitly costs nothing new in the tree.
+**Recommendation: `zod` 4.6.5.** Zod 4 is the shipped stable major (`dist-tags.latest` = 4.6.5), and it is already a **transitive dependency**: `better-auth@1.7.5` depends on `zod: ^4.5.4`. Adding it explicitly costs nothing new in the tree.
 
-Measured 88.6 KB gzip for the whole package (bundlephobia) — that figure is the entire surface; `zod/mini` and tree-shaking cut what actually lands in a route bundle, and most of our validation is server-side in loaders and actions where the Worker's 10 MiB compressed script limit is the only ceiling.
+Quote the right number. The full-surface export is 86.5 KB gzip (bundlephobia) and that is not what ships. Zod's own published figures (<https://zod.dev/packages/mini>): a boolean parse is **5.91 KB** gzip with `zod`, **2.12 KB** with `zod/mini`; an object schema is **13.1 KB** vs **4.0 KB**. Server-side schemas in loaders and actions are bounded only by the 64 MiB Worker limit; anything that reaches the browser bundle uses `zod/mini`.
 
 | Rejected | Why |
 |---|---|
-| `valibot` 1.1.0 (13.2 KB gzip, jsDelivr) | Genuinely smaller, and genuinely a second validation vocabulary in a codebase that already pulls Zod 4 through better-auth. Two schema libraries is the glue we are deleting. |
-| `arktype` 2.1.28 (12.3 KB gzip) | Same objection, plus a type-syntax-in-strings model that most reviewers cannot read at a glance. |
+| `valibot` 1.5.0 — 15.4 KB gzip full export | Smaller in the abstract, and a second validation vocabulary in a codebase that already pulls Zod 4 through better-auth. `zod/mini` closes the gap to ~2 KB. Two schema libraries is the glue we are deleting. |
+| `arktype` 2.2.3 — 47.2 KB gzip, 3 deps | The largest of the three, and a type-syntax-in-strings model whose cost lands on the editor. |
 
 ### 5.7 Charts under 20 KB
 
-**Recommendation: `uPlot` 1.6.32 — 21.9 KB gzip, 0 dependencies (bundlephobia), plus 0.8 KB gzip of CSS.**
+**Finding: nothing maintained meets the 20 KB gzip bar. This one needs a decision, not a recommendation.**
 
-**Finding, stated plainly: nothing maintained meets the 20 KB bar.** uPlot is the smallest maintained real charting library and it misses by **1.9 KB**. Canvas-based, time-series first, no framework coupling — it is the right shape for "you vs them, this week". I am recommending it and flagging the 1.9 KB rather than quietly redefining the budget. If the 20 KB number is hard, the only honest alternative is inline SVG generated from the series, which is hand-rolled by definition and therefore needs Nish's or Fable's explicit call, not mine.
+Measured today:
 
-| Rejected | Why |
-|---|---|
-| `recharts` 3.10.1 (**151.5 KB gzip**, 11 deps) | 7× the budget. This is what `shadcn/ui`'s own chart component wraps, so "just use the shadcn chart" is the expensive answer wearing our design system's badge. |
-| `chart.js` 4.5.1 (68.4 KB gzip) | 3.4× the budget, and drags a legend/tooltip/animation stack we would turn off. |
+| Candidate | gzip | Source | Under 20 KB? |
+|---|---|---|---|
+| inline SVG, no library | **0** | — | yes |
+| `frappe-charts` 1.6.2 | 18.8 KB | bundlejs | yes on paper |
+| `uplot` 1.6.32 (`dist/uPlot.iife.min.js`) | **21,995 B** + 762 B CSS | local `curl \| gzip -9` | no |
+| `uplot-react` 1.2.4 + `uplot` | **27.9 KB** | bundlejs | no |
+| `chart.js` 4.5.1 | 70.7 KB | bundlejs | no |
+| `recharts` 3.10.1 | 148 KB, 11 deps | bundlephobia | no |
+| `@observablehq/plot` 0.6.17 | 170 KB | bundlejs | no |
 
-`frappe-charts` 1.6.2 does fit at 18.7 KB gzip — and was **last published 2021-06-16**. Dead, so not a candidate.
+uPlot's README claim of "~50 KB min" checks out exactly (51,081 B minified) — but gzipped it is **22 KB**, and in React the real total with `uplot-react` and the stylesheet is **~24–28 KB**. It misses by 20–40%, not by a rounding error. It is also Canvas-based, so it renders nothing during SSR and needs a `useEffect` + imperative wrapper — on an SSR-by-default React Router 8 app that is a hydration flash on every chart.
+
+`frappe-charts` is the only library under the bar and it is not a candidate: **last published 2021-06-16**, five years stale, imperative DOM mutation with no React wrapper, and it would fight React's reconciler.
+
+**The two honest options, both needing a call above me:**
+
+- **Accept ~24–28 KB and take `uplot` 1.6.32.** It is world-class at what it does (166k points in ~25 ms) and the budget was an estimate, not a measurement.
+- **Inline SVG, 0 KB.** For sparklines, small bar charts and a weekly you-vs-them line, a chart is twenty lines of `<polyline points>` / `<rect>` over a scale function. It SSRs perfectly with no `useEffect`, gives real DOM nodes for accessibility and theming, and costs nothing. But it *is* hand-rolled, which the charter forbids me from choosing unilaterally.
+
+A library starts earning its bytes at axes, legends, panning, brushing and 10k+ points. Home and the competitor drill-in have none of those. **Recorded as open item 1 below.** `recharts` (148 KB) is explicitly rejected even though `shadcn/ui`'s own chart component wraps it — "just use the shadcn chart" is the expensive answer wearing our design system's badge.
 
 ### 5.8 OG image rendering
 
-**Recommendation: Cloudflare Browser Run `/screenshot` — zero bundle bytes, and we already pay for the binding.**
+**Recommendation: Cloudflare Browser Run `/screenshot` on cache miss, into R2 — 0 bundle bytes, and the binding already exists for the site-change engine.**
 
-We need OG cards for a handful of public surfaces, not per-request at scale. Browser Run renders a real page with our real fonts and our real design tokens, so the card cannot drift from the site; the same binding already exists for the site-change engine. The cost is browser-seconds (§4.3), and the results are cached in R2, so the steady-state cost of an unchanged card is an R2 Class B read.
+We need cards for a handful of public surfaces, not per-request at scale. Browser Run renders the real page with our real fonts and real design tokens, so the card **cannot drift from the site**; anything satori-based is a second rendering of the design system that silently diverges. `/screenshot` accepts raw `html` and a `viewport` — set `{ width: 1200, height: 630 }`, because the default is 1920×1080. Steady-state cost of an unchanged card is an R2 Class B read.
+
+**The satori route is a trap right now, and the trap is not size.** Three findings, all verified:
+
+- **`satori@0.33.4` does not run on workerd.** 0.33.0 (published 2026-08-20) added `harfbuzzjs` for text shaping, whose Emscripten glue calls `WebAssembly.instantiate` on raw bytes at runtime and `require("fs")` under `ENVIRONMENT_IS_NODE`. Workers accept only **pre-compiled** WASM modules (<https://developers.cloudflare.com/workers/runtime-apis/webassembly/>). Corroborated at <https://github.com/meleksomai/os/issues/99>.
+- **Size is a non-issue, contrary to the old framing.** `@resvg/resvg-wasm@2.6.2`'s `index_bg.wasm` is 2,478,606 B raw — **3.8% of the 64 MiB uncompressed budget**, and there is no compressed limit at all. What actually bites is the **1-second startup CPU limit** (`wrangler check startup`), which is why both shipping wrappers chose the smaller resvg 2.4.x (1,378,357 B) instead.
+- **Workers Free gives 10 ms CPU per request**, so live satori+resvg rendering is not viable on Free at all, whatever library wraps it.
 
 | Rejected | Why |
 |---|---|
-| `satori` 0.33.4 + `@resvg/resvg-wasm` 2.6.2 (**181.3 KB gzip** and 2.7 KB gzip for the JS shim, 13 deps) | The 2.7 KB is the loader, not the renderer — the actual `.wasm` binary is a separate multi-MB artifact counted against the Worker's compressed script-size limit (1 MiB Free / 10 MiB Paid, <https://developers.cloudflare.com/workers/platform/limits/>). Satori also implements its own CSS subset, so the card is a *second* rendering of the design system that silently diverges from the first. |
-| `workers-og` 0.0.27 / `@cf-wasm/og` 0.5.0 | Wrappers over exactly that satori+resvg pair, adding a maintainer between us and two upstreams. `workers-og` is still pre-1.0 at 0.0.x. |
+| `satori` 0.33.4 + `@resvg/resvg-wasm` 2.6.2, wired by hand | Broken on workerd as above, and it reimplements a CSS subset — no WOFF2 (so Google Fonts' `css2` URLs are unusable directly), no WebP, silent failure on external images. |
+| `workers-og` 0.0.27 | Last published 2025-06-12, repo idle ~15 months, still pre-1.0, no `workerd` export condition, pinned to `satori ^0.15.2` — it works by accident of an ancient pin. |
+
+**If per-request rendering is ever needed**, the library answer is **`@cf-wasm/og` 0.5.0** (<https://github.com/fineshopdesign/cf-wasm>) — it pins `satori@0.32.0` exactly (the last pre-harfbuzz release), ships a real `workerd` export condition with deploy-time `.wasm` module imports, and its `@cf-wasm/satori` dependency shipped 2026-09-19. It requires `cache.setExecutionContext(ctx)` inside `fetch`. Recorded so the option is not re-researched; not adopted, because Browser Run already covers our volume with zero dependencies and zero drift.
 
 ### 5.9 Date and time with timezones
 
-**Recommendation: `Intl.DateTimeFormat` for display, `date-fns` 4.4.0 (17.5 KB gzip, 0 deps) + `@date-fns/tz` 1.5.0 (2.2 KB gzip) for arithmetic across zones.**
+**Recommendation: `Intl.DateTimeFormat` for display (0 bytes, in the runtime and every browser) + `date-fns` 4.4.0 (17.1 KB gzip full export, 0 deps) + `@date-fns/tz` 1.5.0 (1.97 KB gzip) for arithmetic across zones.**
 
-`Intl` is in the runtime and in every browser; it needs no dependency to render a timestamp in the user's zone. `date-fns` v4 is the first version with first-class time-zone support via the separate `@date-fns/tz` package, and it tree-shakes per function, so a loader that imports three helpers ships three helpers.
+`date-fns` v4 is the first version with first-class time-zone support, via the separate `@date-fns/tz` package. `TZDate` performs all calculations in a given zone rather than the system zone; the README puts `TZDateMini` at **916 B** and full `TZDate` at ~1.2 KB. It is under 2 KB precisely because it leans on the platform's `Intl` instead of bundling a tzdb. Per-function ESM, so a loader importing three helpers ships three helpers.
+
+**`Temporal`: do not use it on Workers. This is now verified, not an open question.** Two independent facts:
+
+- There is **no `temporal` compatibility flag** in workerd — `src/workerd/io/compatibility-date.capnp` (189 flags) contains none, and the flags doc has no entry.
+- A global `Temporal` *is* nonetheless exposed in the deployed runtime since roughly 2026-07-30, and **it is broken**: `Temporal.Now.instant().epochMilliseconds` returns **`0`** while `Date.now()` is correct, because V8's Temporal bypasses workerd's virtualised clock. <https://github.com/cloudflare/workerd/issues/6907>, open, no maintainer response. This also breaks the standard polyfill guard `typeof Temporal === 'undefined'`, so **do not feature-detect it.**
+
+**One `Intl` caveat that every option here inherits.** workerd's embedded tzdata can lag IANA: <https://github.com/cloudflare/workerd/issues/7256> (opened 2026-09-06) reports `Africa/Casablanca` and `Africa/El_Aaiun` still resolving to UTC+01:00 after the 2026-09-20 transition, because the bundled tzdata predates IANA 2026c. The reporter's summary is the one to remember: *"The failure is silent. `Date` instants stay correct — only the wall-clock label is wrong."* Timestamps are safe; user-facing wall-clock labels in recently-changed zones are not. Digest send times are wall-clock, so this is ours to watch.
 
 | Rejected | Why |
 |---|---|
-| `luxon` 3.7.2 (21.9 KB gzip) | Monolithic — one class, no tree-shaking, so you pay all 21.9 KB for `DateTime.fromISO`. |
-| `dayjs` 1.11.23 (3.1 KB gzip) | Smallest, but time zones are a plugin over `Intl` with a mutable global plugin registry, and its objects are the mutable Moment-style API the house immutability rule forbids. |
-
-**`Temporal`: not verified.** I did not confirm whether workerd exposes `Temporal` today behind a compatibility flag. Until someone reads <https://developers.cloudflare.com/workers/runtime-apis/> and says otherwise, treat it as unavailable and revisit before C4 freezes the dependency list.
+| `luxon` 3.7.2 — 22.1 KB gzip | One monolithic `DateTime` class, **no tree-shaking** — you pay all 22 KB to format one date. ~10× the date-fns + tz pairing for the same `Intl`-backed capability. |
+| `dayjs` 1.11.23 — 3.45 KB core | No `"exports"` map, no `"module"` field, no `"type": "module"` — a CJS package with a mutable-global plugin registry (`dayjs.extend(timezone)`) that defeats static analysis, plus the Moment-style mutable API the house immutability rule forbids. |
 
 ---
 
@@ -775,26 +833,25 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | HTML → text | `HTMLRewriter` | platform |
 | OG + schema.org extraction | `HTMLRewriter` | platform |
 | Change diff | `diff` (jsdiff) | 9.0.0 |
-| Feed parsing | `fast-xml-parser` | 5.11.1 |
+| Feed parsing | `@extractus/feed-extractor` (wraps `fast-xml-parser`) | 8.0.3 / 5.11.1 |
 | Logo | page metadata via `HTMLRewriter`, DuckDuckGo icon fallback | platform |
 | Validation | `zod` | 4.6.5 |
-| Charts | `uplot` | 1.6.32 (21.9 KB gzip — see §5.7) |
+| Charts | **undecided** — `uplot` at ~24–28 KB gzip in React, or 0 KB inline SVG | 1.6.32 / — (see §5.7) |
 | OG images | Browser Run `/screenshot` → R2 | platform |
-| Dates + timezones | `Intl` + `date-fns` + `@date-fns/tz` | platform / 4.4.0 / 1.5.0 |
+| Dates + timezones | `Intl` + `date-fns` + `@date-fns/tz` (**never `Temporal`** — workerd#6907) | platform / 4.4.0 / 1.5.0 |
 | Unit + integration tests | `vitest` (**pinned 4.1.11**) + `@cloudflare/vitest-plugin` | 4.1.11 / 1.1.13 |
 | E2E against production | `@playwright/test` | 1.63.0 |
 | Performance gate | `treosh/lighthouse-ci-action` | v12.6.2 |
 | Link checking | `lycheeverse/lychee-action` | v2.9.0 |
 
-**Runtime dependencies this stack adds beyond the scaffold: five.** `better-auth`, `@better-auth/passkey`, `diff`, `fast-xml-parser`, `uplot`. (`zod` arrives transitively through better-auth; `date-fns` + `@date-fns/tz` are the sixth and seventh if timezone arithmetic proves necessary beyond `Intl`.)
+**Runtime dependencies this stack adds beyond the scaffold: six, plus one undecided.** `better-auth`, `@better-auth/passkey`, `@better-auth/api-key`, `diff`, `@extractus/feed-extractor`, `date-fns` + `@date-fns/tz`. `zod` arrives transitively through better-auth; `fast-xml-parser` arrives transitively through feed-extractor. The chart library is the undecided one (§5.7). Everything else in the table is a platform primitive with no bundle cost.
 
 ---
 
 ## Open items for Nish or Fable
 
-1. **The 20 KB chart budget is missed by 1.9 KB** by the only maintained candidate (§5.7). Accept uPlot at 21.9 KB, or set a different bar — the alternative is hand-written SVG, which the no-glue rule forbids me from choosing alone.
-2. **Paid logo APIs (logo.dev, Brandfetch) are a money-and-terms decision** (§5.5). The zero-spend metadata route is the default until he says otherwise.
-3. **`Temporal` in workerd is unverified** (§5.9) and should be checked before C4 freezes dependencies.
+1. **The chart budget.** No maintained library fits under 20 KB gzip (§5.7). `uplot` in React measures ~24–28 KB; the only 0 KB option is inline SVG, which is hand-rolled and therefore not mine to choose. **Decide: raise the budget to 28 KB and take uPlot, or approve inline SVG for sparklines and bars.** Nothing else in the stack is blocked on this.
+2. **Paid logo APIs are blocked by terms, not price** (§5.5). Brandfetch forbids programmatic access; logo.dev makes caching a $180/mo Pro feature. The zero-spend cascade is the default and needs no decision unless it measurably fails on real brands.
 
 ## Corrections this document makes to its own brief
 
@@ -805,3 +862,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | `@cloudflare/vitest-pool-workers` current setup | superseded by `@cloudflare/vitest-plugin`; `defineWorkersConfig`/`poolOptions` removed | <https://developers.cloudflare.com/workers/testing/vitest-integration/> |
 | (implicit) use the current vitest | vitest 5.0.1 is **not** supported — pin 4.1.11 | plugin peerDeps; <https://developers.cloudflare.com/workers/testing/vitest-integration/write-your-first-test/> |
 | "the 10 concurrent limit" on Browser Rendering | 10 is the *included allotment*; the hard cap is 200, and extra browsers are $2.00/month each | <https://developers.cloudflare.com/browser-rendering/platform/pricing/>, `/platform/limits/` |
+| (widely quoted) 1 MiB / 10 MiB compressed Worker size limit | 64 MiB **uncompressed** on both plans; *"There is no compressed size limit."* The real ceiling is 1 s startup CPU | <https://developers.cloudflare.com/workers/platform/limits/> |
+| (implicit) add `nodejs_compat` to make better-auth work | on by default for `compatibility_date` ≥ `2026-08-04` — set it explicitly anyway, for the deploy/test asymmetry | <https://developers.cloudflare.com/workers/configuration/compatibility-flags/> |
+| `@resvg/resvg-wasm` + current `satori` for OG images | `satori` ≥ 0.33.0 does not run on workerd — `harfbuzzjs` instantiates WASM from raw bytes at runtime | <https://developers.cloudflare.com/workers/runtime-apis/webassembly/>, vercel/satori releases |
+| `Temporal` "should be checked" | checked: no compat flag exists, the leaked global returns `epochMilliseconds === 0`. Do not use, do not feature-detect | <https://github.com/cloudflare/workerd/issues/6907> |
