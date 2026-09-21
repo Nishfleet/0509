@@ -52,16 +52,6 @@ jobs:
           else
             npm install --ignore-scripts
           fi
-      - name: Check migration numbering (a new migration must sort last)
-        # Pre-merge sibling of allowedProductionMigrationLedgers (issue #2507):
-        # a migration added in this PR whose 4-digit prefix is <= the highest
-        # prefix on origin/main fails the PR here, before the deploy flash that
-        # duplicate 0088 caused on 2026-09-10. The gate lives in the test file
-        # itself; this step pins it inside this required job so the assertion
-        # does not depend on which vitest shard happens to collect the file.
-        run: |
-          npx --no-install vitest run --configLoader runner \
-            --project node tests/check-migration-numbering.test.ts
       - name: Build
         run: npm run build
       - name: Test (shard 1 of ${{ env.VITEST_TOTAL_SHARDS }})
