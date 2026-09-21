@@ -436,12 +436,11 @@ Aligned to `docs/REBUILD-SCHEMA.md` on main. **A mention is not its own table.**
 
 ## Findings the rebuild must not inherit
 
-1. **The Google News `articles/…` URL is not a canonical URL.** Two queries produce two opaque URLs for one article, which breaks `url_hash` dedup at the source. Resolution is D8's job; the constraint is absolute — no canonical, no signal row.
+1. **The Google News `articles/…` URL is not a canonical URL.** Two queries produce two opaque URLs for one article, which breaks `url_hash` dedup at the source. Resolving it is a real per-item cost and it is D8's job; the constraint here is absolute — no canonical, no signal row.
 2. **Reddit's RSS endpoint is open unauthenticated; its JSON endpoint is not.** Both were probed within two seconds of each other. Any doc saying "Reddit is 403" is describing `search.json` only.
 3. **Substack returns 200 with zero results for every query, including `nike`.** A silent block. Every source adapter needs a canary.
 4. **The SuperGrok X route is dead** — no uncommented grok rung in the live router config; the only mention is a dead-rung comment reading `403 personal-team`. X is a spend decision, not a wiring task.
 5. **DuckDuckGo is intermittent from our egress, and its failure is a 202 carrying an empty set.** Two agents, same host, same day: 200 with 10 result links, and five consecutive 202s with none. A success status with no results is the same silent-failure class as Substack (§7). Out of the MVP until a proper probe matrix says otherwise. The honest-UA-beats-spoofed-UA correlation held across all eight observations and is a hypothesis worth testing, not a finding to build on — query shape was an uncontrolled second variable.
 6. **Bing's RSS terms forbid our use.** It works, and we cannot use it.
-7. **Google News links are opaque redirects**, so a mention cannot be stored until the redirect is resolved — a real per-item cost, not a detail.
-8. **Reddit 429s on a second request within fifteen seconds** from a datacenter IP. Concurrency 1, always.
-9. **A stale YouTube channel id 404s silently-ish** — the feed returns a 404 HTML page, not an empty feed. Resolve the handle once, cache it on the entity, and treat a 404 as a source failure rather than "no videos".
+7. **Reddit 429s on a second request within fifteen seconds** from a datacenter IP. Concurrency 1, always.
+8. **A stale YouTube channel id 404s silently-ish** — the feed returns a 404 HTML page, not an empty feed. Resolve the handle once, cache it on the entity, and treat a 404 as a source failure rather than "no videos".
