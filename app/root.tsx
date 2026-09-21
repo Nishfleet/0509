@@ -10,12 +10,6 @@ import {
 import type { Route } from "./+types/root";
 import "./app.css";
 
-// Fonts (@font-face lives in app.css, files under public/fonts/) are
-// self-hosted as of issue 0509#3936 — no Google hosts, no preconnect, so root
-// exports no links. Landing preloads the display face (the LCP element's)
-// from its own links(); the other faces route through app.css like any other
-// public asset.
-
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">

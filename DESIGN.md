@@ -511,7 +511,8 @@ How each is kept:
   served for the project link, OFL — so the display face fetches in parallel with the
   CSS from the app's own origin instead of behind a two-host render-blocking chain.
   `font-display: swap` stays. The landing route preloads the display face, which is the
-  LCP element's face.- The chart is the only client library on Home, and it is **uPlot**. It is maintained,
+  LCP element's face.
+- The chart is the only client library on Home, and it is **uPlot**. It is maintained,
   it is a line chart library rather than a chart framework, and it lands comfortably
   inside the 30 KB gzipped budget where a React chart framework does not. **Recharts is
   out** — it ships well past the budget even when tree-shaken — and so is a hand-rolled

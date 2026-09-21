@@ -6,10 +6,6 @@ import type { Route } from "./+types/landing";
 const CONTACT = "support@0509.io";
 
 export const links: Route.LinksFunction = () => [
-  // The LCP element is this page's h1, set in Bricolage Grotesque. With the
-  // face self-hosted (app.css), the preload takes it out of the CSS→font
-  // chain: the woff2 fetch starts at the same moment as the CSS instead of
-  // after it, and the swap repaint lands inside the 1.5 s LCP budget.
   {
     rel: "preload",
     href: "/fonts/bricolage-grotesque-latin.woff2",

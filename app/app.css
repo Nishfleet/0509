@@ -22,17 +22,8 @@
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
 }
 
-/* Faces are self-hosted, not a Google Fonts <link>: the Google round trip
-   (CSS host, then woff2 host) is a render-blocking chain that ends past the
-   1.5 s LCP budget on simulated 4G (issue 0509#3936 measured 2021 ms). The
-   four files under /fonts/ are the exact latin-subset files Google's css2 API
-   served for the project link on 2026-09-22, OFL-licensed, now served from the
-   app's own origin so the display face loads in parallel with the CSS instead
-   of after it. The repo contains no characters outside the latin subset, so
-   latin is the only subset fetched. Weight ranges reproduce the served set:
-   Bricolage wght 700–800 and Instrument Sans wght 400–600 are variable files;
-   IBM Plex Mono is static per weight. Landing preloads the display face.
- */
+/* Faces are self-hosted (latin subset, OFL); weight ranges reproduce Google's
+   served set. See commit fd1457288 and issue 0509#3936. */
 @font-face {
   font-family: "Bricolage Grotesque";
   font-style: normal;
