@@ -21,7 +21,9 @@ export default [
   route("api/auth/*", "routes/api.auth.$.ts"),
   route("api/billing/dodo/checkout", "routes/api.billing.dodo.checkout.ts"),
   route("api/billing/dodo/cancel", "routes/api.billing.dodo.cancel.ts"),
-  route("api/billing/dodo/canary", "routes/api.billing.dodo.canary.ts"),
+  // api.billing.dodo.canary.ts stays on disk per the keep-list but is NOT
+  // registered: its closure queries `watchlist`, which 0001_init.sql drops.
+  // It goes dormant until P3 rewires the billing canary to the new schema.
   route("api/billing/dodo/portal", "routes/api.billing.dodo.portal.ts"),
   route("api/billing/dodo/plan-change", "routes/api.billing.dodo.plan-change.ts"),
   route("api/pricing-preview", "routes/api.pricing-preview.ts"),
