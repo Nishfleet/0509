@@ -30,7 +30,7 @@ Plain `fetch` + `HTMLRewriter` extraction → normalised visible text → hash �
 
 - identical length, 1,608,007 bytes both times;
 - **different raw sha256** — `a865bdf16608abde…` vs `7bae93a10827fd8a…`;
-- exactly four differing 1,000-character blocks, all inside `__NEXT_DATA__`, all of this form:
+- an **exhaustive** character-level diff of the whole 1.6 MB document (`difflib.SequenceMatcher`, `autojunk=False`) found **exactly four replacements and nothing else**, all inside the feature-flag block of `__NEXT_DATA__`, on the flags `ecom.web.plp.tabbed.link.cards` and `ecom.web.mss.allstores`:
 
 ```
 A: …tabbed.link.cards","enabled":true,"variant":{"name":"gs-test_web_t127.1","enabled":true}…
@@ -39,7 +39,7 @@ A: …web.mss.allstores","enabled":true,"variant":{"name":"gs-test_web_t143.0","
 B: …web.mss.allstores","enabled":true,"variant":{"name":"gs-test_web_t143.1","enabled":true}…
 ```
 
-— A/B-test bucket assignments, re-rolled per request;
+— A/B-test bucket assignments, re-rolled per request. Not a sample: the whole document was compared, and there is no other difference anywhere in it;
 
 - and **extracted visible text identical**: 14,814 characters, sha `f7be8377d65cf6d4…` both times.
 
