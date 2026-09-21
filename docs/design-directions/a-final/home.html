@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Home — 0509</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body class="app">
+
+<nav class="rail" aria-label="Primary">
+  <span class="mark">05<em>09</em></span>
+  <a class="on" href="#"><span class="dot"></span>Home</a>
+  <a href="competitor.html"><span class="dot"></span>Competitors</a>
+  <a href="alerts.html"><span class="dot"></span>Alerts</a>
+  <a class="foot" href="#"><span class="dot"></span>Settings</a>
+</nav>
+
+<div class="shell">
+
+  <header class="pghead">
+    <span class="eyebrow">Mon 21 Sep &middot; week 4 of watching</span>
+    <h1>Good morning. You&rsquo;re <span class="n">#2 of 6</span> this week.</h1>
+    <p class="why"><b>Kindred is the mover</b> &mdash; 3 new ads and the loudest mention spike. Casetta is paused, so everyone below it moved up one. Your own site had one change we couldn&rsquo;t place.</p>
+  </header>
+
+  <div class="blockhead">
+    <h2>Read this first</h2>
+    <span class="mono">3 of 41 noteworthy &middot; picked by Jev</span>
+  </div>
+
+  <div class="first">
+    <div class="item own">
+      <span class="plate broke" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><span>06:02</span></span>
+      <div class="body">
+        <div class="top-row">
+          <span class="pill live"><b>Your site</b></span>
+          <span class="pill">loopwell.com/pricing</span>
+          <span class="age">4h ago</span>
+        </div>
+        <p class="mark-line"><s>Start free trial</s><span class="arrow" aria-hidden="true">&rarr;</span><ins>button missing</ins></p>
+        <p class="take"><b>This looks unintended.</b> The pricing page still renders, but the primary button is gone from the markup and nothing replaced it. Deploy 3a91f went out at 05:48. We re-check in 20 minutes.</p>
+        <p class="jev">Jev D3s own_site_breakage p 0.81 &middot; &ldquo;removal with no replacement CTA on a conversion page&rdquo; &middot; emailed you 06:03</p>
+      </div>
+    </div>
+    <div class="item">
+      <span class="plate hit" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><span>04:12</span></span>
+      <div class="body">
+        <div class="top-row">
+          <span class="pill"><b>Bramble</b></span>
+          <span class="pill">Site change</span>
+          <span class="pill">pricing</span>
+          <span class="age">yesterday</span>
+        </div>
+        <p class="mark-line"><s>20% off annual</s><span class="arrow" aria-hidden="true">&rarr;</span><ins>30% off annual</ins></p>
+        <p class="take">Their third discount move this quarter, and the first to go past 25%. It lands the week they dropped below you on mentions.</p>
+        <p class="jev">Jev D3 noteworthy p 0.94, kind: pricing &middot; D4 importance 8.6</p>
+      </div>
+    </div>
+    <div class="item">
+      <span class="plate" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><span>02:40</span></span>
+      <div class="body">
+        <div class="top-row">
+          <span class="pill"><b>Kindred</b></span>
+          <span class="pill">Meta ads</span>
+          <span class="pill">3 creatives</span>
+          <span class="age">2h ago</span>
+        </div>
+        <p class="mark-line"><s>&ldquo;built for serious teams&rdquo;</s><span class="arrow" aria-hidden="true">&rarr;</span><ins>&ldquo;affordable from day one&rdquo;</ins></p>
+        <p class="take">All three new creatives lead on price for the first time since we started watching them in August. Same week Bramble deepened its discount.</p>
+        <p class="jev">Jev D3 noteworthy p 0.97, kind: offer &middot; D4 importance 8.1</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="chips" aria-label="Your set">
+    <span class="chip you"><span class="mg you">L</span>You &middot; Loopwell</span>
+    <a class="chip" href="competitor.html"><span class="mg">K</span>Kindred</a>
+    <a class="chip" href="competitor.html"><span class="mg">B</span>Bramble</a>
+    <a class="chip" href="competitor.html"><span class="mg">F</span>Fieldset</a>
+    <a class="chip" href="competitor.html"><span class="mg">N</span>Northbeam</a>
+    <a class="chip off" href="competitor.html"><span class="mg">C</span>Casetta &middot; off</a>
+    <a class="chip add" href="#">+ Add a competitor</a>
+  </div>
+
+  <div class="blockhead">
+    <h2>Where you&rsquo;ve stood</h2>
+    <span class="mono">four weeks &middot; rank 1 is top</span>
+  </div>
+
+  <div class="chartbox">
+    <!-- Concept only. Production renders this with Recharts 3.10.1 via the
+         shadcn chart block (docs/REBUILD-STACK.md). No legend: lines are
+         labelled at their own end. -->
+    <svg viewBox="0 0 760 214" role="img" aria-label="Four weeks of standing. Kindred moved 3rd to 1st. You moved 5th to 2nd. Bramble 1st to 3rd. Fieldset 4th. Northbeam 2nd to 5th. Casetta paused after week 3.">
+      <g stroke="#ddd6c6" stroke-width="1">
+        <line x1="40" y1="28" x2="548" y2="28" /><line x1="40" y1="56" x2="548" y2="56" />
+        <line x1="40" y1="84" x2="548" y2="84" /><line x1="40" y1="112" x2="548" y2="112" />
+        <line x1="40" y1="140" x2="548" y2="140" /><line x1="40" y1="168" x2="548" y2="168" />
+      </g>
+      <g font-family="IBM Plex Mono, monospace" font-size="10" fill="#8e8878" text-anchor="end">
+        <text x="28" y="32">1</text><text x="28" y="60">2</text><text x="28" y="88">3</text>
+        <text x="28" y="116">4</text><text x="28" y="144">5</text><text x="28" y="172">6</text>
+      </g>
+      <g fill="none" stroke="#55524a" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round">
+        <polyline points="40,84 209,56 378,56 547,28" />
+        <polyline points="40,28 209,28 378,28 547,84" />
+        <polyline points="40,112 209,140 378,112 547,112" />
+        <polyline points="40,56 209,84 378,140 547,140" />
+        <polyline points="40,168 209,168 378,168" stroke-dasharray="4 4" stroke="#8e8878" />
+      </g>
+      <polyline points="40,140 209,112 378,84 547,56" fill="none" stroke="#16c47f" stroke-width="7" stroke-linejoin="round" stroke-linecap="round" />
+      <polyline points="40,140 209,112 378,84 547,56" fill="none" stroke="#0e0d0a" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
+      <g fill="#0e0d0a"><circle cx="547" cy="56" r="4.5" /></g>
+      <g font-family="IBM Plex Mono, monospace" font-size="10" letter-spacing="0.4">
+        <text x="558" y="32" fill="#55524a">Kindred</text>
+        <rect x="556" y="48" width="66" height="14" fill="#16c47f" />
+        <text x="560" y="59" fill="#0e0d0a" font-weight="600">YOU</text>
+        <text x="588" y="59" fill="#0e0d0a">Loopwell</text>
+        <text x="558" y="88" fill="#55524a">Bramble</text>
+        <text x="558" y="116" fill="#55524a">Fieldset</text>
+        <text x="558" y="144" fill="#55524a">Northbeam</text>
+        <text x="392" y="182" fill="#8e8878">Casetta paused</text>
+      </g>
+      <g font-family="IBM Plex Mono, monospace" font-size="10" fill="#8e8878" text-anchor="middle">
+        <text x="40" y="202">31 AUG</text><text x="209" y="202">07 SEP</text>
+        <text x="378" y="202">14 SEP</text><text x="547" y="202">THIS WEEK</text>
+      </g>
+    </svg>
+  </div>
+
+  <div class="blockhead">
+    <h2>Where everyone stands</h2>
+    <span class="mono">tap a row for the week&rsquo;s evidence</span>
+  </div>
+
+  <div class="rows">
+
+    <div class="row">
+      <div class="line1">
+        <span class="pos">1</span>
+        <span class="mg">K</span>
+        <span class="nm"><strong>Kindred</strong><span>kindred.com</span></span>
+        <span class="mv up">&#9650; 2</span>
+        <label class="sw"><input type="checkbox" checked /><span class="track"></span><span class="lab">On</span></label>
+      </div>
+      <div class="move-mark">
+        <p class="mark-line"><s>&ldquo;built for serious teams&rdquo;</s><span class="arrow" aria-hidden="true">&rarr;</span><ins>&ldquo;affordable from day one&rdquo;</ins></p>
+        <p class="because"><b>Why it moved:</b> 3 new Meta creatives in 48 hours, all leading on price, plus a 38-mention week &mdash; their loudest since we started watching.</p>
+      </div>
+      <div class="pills">
+        <span class="pill"><b>3</b> ads</span><span class="pill"><b>38</b> mentions</span><span class="pill"><b>1</b> site change</span><span class="pill">Reddit</span><span class="pill">Meta</span><span class="pill">TikTok</span><span class="pill">Press</span><span class="pill dim">Hiring &mdash; none</span>
+      </div>
+    </div>
+
+    <div class="row me open">
+      <div class="line1">
+        <span class="pos">2</span>
+        <span class="mg you">L</span>
+        <span class="nm"><strong>Loopwell &mdash; you</strong><span>loopwell.com</span></span>
+        <span class="mv up">&#9650; 1</span>
+        <label class="sw"><input type="checkbox" checked disabled /><span class="track"></span><span class="lab">You</span></label>
+      </div>
+      <div class="move-mark">
+        <p class="mark-line"><s>#3 last week</s><span class="arrow" aria-hidden="true">&rarr;</span><ins>#2 this week</ins></p>
+        <p class="because"><b>Why you moved:</b> you passed Bramble on mentions (27 to 19) after the r/saas thread, and Casetta going off freed a place. Your own pricing page changed &mdash; see above.</p>
+      </div>
+      <div class="pills">
+        <span class="pill"><b>2</b> ads</span><span class="pill"><b>27</b> mentions</span><span class="pill live"><b>1</b> site change</span><span class="pill">Reddit</span><span class="pill">HN</span><span class="pill">Substack</span><span class="pill dim">X &mdash; degraded</span>
+      </div>
+
+      <div class="evid">
+        <div class="tabs">
+          <a class="tab on" href="#">Site changes <b>1</b></a>
+          <a class="tab" href="#">Ads <b>2</b></a>
+          <a class="tab" href="#">Mentions <b>27</b></a>
+          <a class="tab" href="#">Hiring <b>0</b></a>
+        </div>
+        <div class="ev">
+          <span class="plate broke" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><span>06:02</span></span>
+          <div>
+            <div class="h"><span class="pill live"><b>Unintended</b></span><span class="pill">/pricing</span><span class="age">4h ago</span></div>
+            <p class="mark-line"><s>Start free trial</s><span class="arrow" aria-hidden="true">&rarr;</span><ins>button missing</ins></p>
+            <p>Captured 06:02, 20 minutes after deploy 3a91f. Re-checking every 20 minutes until it comes back or you tell us it was deliberate.</p>
+          </div>
+        </div>
+        <div class="ev">
+          <span class="plate" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><span>08:55</span></span>
+          <div>
+            <div class="h"><span class="pill"><b>Reddit</b></span><span class="pill">r/saas</span><span class="age">6h ago</span></div>
+            <p><b>&ldquo;Loopwell vs Kindred, six months in&rdquo;</b> &mdash; 240 votes, pricing named twice, your onboarding rated above theirs by the top comment.</p>
+          </div>
+        </div>
+        <div class="ev">
+          <span class="plate" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><span>MON</span></span>
+          <div>
+            <div class="h"><span class="pill"><b>Meta</b></span><span class="pill">2 new</span><span class="age">mon</span></div>
+            <p>Two creatives entered rotation on Monday, both reusing the September hook. Neither mentions price.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="line1">
+        <span class="pos">3</span>
+        <span class="mg">B</span>
+        <span class="nm"><strong>Bramble</strong><span>bramble.io</span></span>
+        <span class="mv dn">&#9660; 2</span>
+        <label class="sw"><input type="checkbox" checked /><span class="track"></span><span class="lab">On</span></label>
+      </div>
+      <div class="move-mark">
+        <p class="mark-line"><s>20% off annual</s><span class="arrow" aria-hidden="true">&rarr;</span><ins>30% off annual</ins></p>
+        <p class="because"><b>Why it moved:</b> the discount is the week&rsquo;s biggest pricing move, but mentions fell to 19 from 31 &mdash; they are buying attention, not earning it.</p>
+      </div>
+      <div class="pills">
+        <span class="pill"><b>0</b> ads</span><span class="pill"><b>19</b> mentions</span><span class="pill"><b>2</b> site changes</span><span class="pill">Medium</span><span class="pill">Blogs</span><span class="pill">Press</span>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="line1">
+        <span class="pos">4</span>
+        <span class="mg">F</span>
+        <span class="nm"><strong>Fieldset</strong><span>fieldset.co</span></span>
+        <span class="mv flat">&mdash;</span>
+        <label class="sw"><input type="checkbox" checked /><span class="track"></span><span class="lab">On</span></label>
+      </div>
+      <div class="move-mark">
+        <p class="mark-line"><s>4 open roles</s><span class="arrow" aria-hidden="true">&rarr;</span><ins>6 open roles</ins></p>
+        <p class="because"><b>Why it held:</b> two growth hires posted Thursday, their first in three months. Nothing else moved &mdash; no ads, 12 mentions, no site change.</p>
+      </div>
+      <div class="pills">
+        <span class="pill"><b>0</b> ads</span><span class="pill"><b>12</b> mentions</span><span class="pill"><b>2</b> new roles</span><span class="pill">Hiring</span><span class="pill">LinkedIn</span>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="line1">
+        <span class="pos">5</span>
+        <span class="mg">N</span>
+        <span class="nm"><strong>Northbeam</strong><span>northbeam.app</span></span>
+        <span class="mv dn">&#9660; 3</span>
+        <label class="sw"><input type="checkbox" checked /><span class="track"></span><span class="lab">On</span></label>
+      </div>
+      <div class="move-mark">
+        <p class="mark-line"><s>no integrations page</s><span class="arrow" aria-hidden="true">&rarr;</span><ins>18 integrations listed</ins></p>
+        <p class="because"><b>Why it moved:</b> a new page is a launch signal, but it drew almost nothing &mdash; 9 mentions, their quietest week since June.</p>
+      </div>
+      <div class="pills">
+        <span class="pill"><b>0</b> ads</span><span class="pill"><b>9</b> mentions</span><span class="pill"><b>1</b> site change</span><span class="pill">Blogs</span><span class="pill dim">Reddit &mdash; none</span>
+      </div>
+    </div>
+
+    <div class="row is-off">
+      <div class="line1">
+        <span class="pos">6</span>
+        <span class="mg">C</span>
+        <span class="nm"><strong>Casetta</strong><span>casetta.shop &middot; paused 12 Sep &middot; history kept</span></span>
+        <span class="mv flat">off</span>
+        <label class="sw"><input type="checkbox" /><span class="track"></span><span class="lab">Off</span></label>
+      </div>
+      <div class="move-mark">
+        <p class="because">Not watched since 12 Sep, so this week is blank by choice. Nine weeks of history are still here &mdash; turn the switch back on and we pick up where we left off.</p>
+      </div>
+    </div>
+
+  </div>
+
+  <p class="pgfoot">41 items checked across 17 sources since Sunday &middot; next brief Monday 08:00 IST &middot; your own site re-checks in 16 minutes</p>
+
+</div>
+
+<nav class="tabbar" aria-label="Primary">
+  <a class="on" href="#">Home<span class="dot"></span></a>
+  <a href="competitor.html">Competitors<span class="dot"></span></a>
+  <a href="alerts.html">Alerts<span class="dot"></span></a>
+  <a href="#">Settings<span class="dot"></span></a>
+</nav>
+
+</body>
+</html>
