@@ -212,6 +212,9 @@ jobs:
           # The Claude GitHub App is not installed on the org; the workflow token
           # carries the pull-requests/issues write scope this job declares.
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          # Only the bot this job targets; never '*' on this public repo, where
+          # any external App could then invoke the action with a prompt it controls.
+          allowed_bots: 'nishfleet-worker'
           use_sticky_comment: true
           prompt: |
             REPO: ${{ github.repository }}
