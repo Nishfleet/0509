@@ -98,6 +98,13 @@ export const OWNED_PROBE_PENDING: ReadonlyArray<{ table: string; phaseIssue: num
   { table: "digest", phaseIssue: PHASE_ISSUES.rebuildCut },
   { table: "send_target", phaseIssue: PHASE_ISSUES.rebuildCut },
   { table: "send_attempt", phaseIssue: PHASE_ISSUES.rebuildCut },
+  // The user_memory requirement from docs/REBUILD-JEV.md: a user's verdict on a
+  // signal ("not noteworthy", "this change on my own site was deliberate"),
+  // carried into the next Jev context pack. Directly workspace-owned.
+  { table: "user_decision", phaseIssue: PHASE_ISSUES.rebuildCut },
+  // Workspace-owned: the Jev context pack embeds the asking workspace's brand
+  // card and the stored reason names that workspace's brands. Tenant data.
+  { table: "jev_verdict", phaseIssue: PHASE_ISSUES.rebuildCut },
 ];
 
 /**
@@ -126,6 +133,8 @@ export const SCOPED_VIA_PARENT: ReadonlyArray<{ table: string; parent: string }>
   // ownership root through the chain snapshot -> watch -> entity.
   { table: "watch", parent: "entity" },
   { table: "snapshot", parent: "watch" },
+  // Pages discovered for a tracked brand; carries the D9 page-role judgment.
+  { table: "page", parent: "entity" },
 ];
 
 /**
