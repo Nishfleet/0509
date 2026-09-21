@@ -1,0 +1,92 @@
+# The four checks the main-merge-queue ruleset requires, by exactly these names:
+#   Gitleaks   codex-node-checks   semgrep   preview-assert
+# Bypass actors on that ruleset is empty, so a renamed job is not a cosmetic
+# change — a required check that never reports fails closed and nothing can
+# merge, including the PR that renamed it. Verified against the live ruleset
+# (id 21391031) on 2026-09-21 before this file was written.
+#
+# Every job runs on pull_request and merge_group: the queue evaluates checks on
+# the merge ref, so a job that skips there gives the queue no verdict.
+name: CI
+
+on:
+  pull_request:
+  merge_group:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  codex-node-checks:
+    name: codex-node-checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        # cf-typegen and react-router typegen generate worker-configuration.d.ts
+        # and the route types, so `tsc -b` cannot run before them.
+        run: npm run typecheck
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npm run build
+
+  Gitleaks:
+    name: Gitleaks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  semgrep:
+    name: semgrep
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    container:
+      image: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@v5
+      - run: semgrep ci --config auto --error
+        env:
+          SEMGREP_RULES: p/typescript p/security-audit
+
+  preview-assert:
+    name: preview-assert
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build the Worker as the deploy would
+        run: npm run build
+      - name: Assert /api/health answers from the built Worker
+        # The smallest honest proof that the thing we are about to ship starts
+        # and serves: build it, run it under wrangler's local runtime, ask it.
+        run: |
+          set -euo pipefail
+          npx wrangler dev --port 8787 --local &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8787/api/health >/tmp/health.json 2>/dev/null; then break; fi
+            sleep 2
+          done
+          cat /tmp/health.json
+          grep -q '"status":"ok"' /tmp/health.json
