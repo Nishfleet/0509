@@ -20,7 +20,8 @@ new build's source of truth.
 | `onboarding.html` | One input → the identity card drawing itself → who you're up against |
 | `home.html` | Greeting, **Read this first** (three marks, own-site first), chip row, four-week standing, ranked rows with per-row marks and source pills, one row expanded in place |
 | `competitor.html` | Tracking switch, snapshot, the week's biggest move, developments feed with type chips, peers rail |
-| `alerts.html` | Open own-site incident, type chips, day-grouped chronological rows with captures |
+| `alerts.html` | Open own-site incident, type chips, New / Yesterday rows in the Deel–Qatalog–Fireflies pattern |
+| `settings.html` | The four settings, **Connect your agent** (MCP URL, API key, Claude / Cursor / ChatGPT), and the quiet rows |
 
 The market is fictional and shared with the three original directions: Loopwell (you),
 Kindred, Bramble, Fieldset, Northbeam, and Casetta (paused). The capture plates stand in
@@ -39,6 +40,19 @@ for stored screenshots; production serves real R2 captures.
 5. **Source pills per row** — where the week's noise came from, with dim pills for
    sources that produced nothing or are degraded.
 
+## Copy references (Mobbin, pulled by Fable)
+
+- **Headline** — one outcome in plain words, no product name: Dovetail "Finally, all of
+  your customer feedback in one place", Canny "Build the features that close deals",
+  Visitors "Fast, private, realtime web analytics", StackAI "From process to AI agent, in
+  minutes". Ours: **"Know where you stand. And who's gaining on you."** Sub says what we
+  watch and that we name the rivals; CTA microcopy follows Canny's "No credit card
+  required" shape with **"One input. Sixty seconds to your first standing."**
+- **Alerts rows** — Deel / Qatalog / Fireflies: bold first line is who did what, one plain
+  sentence, source pill, relative time, grouped New / Yesterday / Earlier.
+- **Agent row** — Bloom's "Connect MCP": the server URL, what it works with, one link out.
+- **Onboarding** — Bloom "Add your brand" and Clay's editable generated context, as before.
+
 ## Re-render
 
 Playwright is no longer in this repo. Use a one-off stock invocation from anywhere:
@@ -53,6 +67,6 @@ Widths: `1440,900` (desktop) and `390,844` (mobile), first viewport.
 
 ## Verification
 
-All 10 renders, Playwright 1.63.0 chromium, `document.fonts.ready` awaited:
+All 12 renders, Playwright 1.63.0 chromium, `document.fonts.ready` awaited:
 **0 console errors, 0 failed requests, 0 px horizontal overflow at both widths**, measured
 by comparing `documentElement.scrollWidth` with `clientWidth` on every page at every width.

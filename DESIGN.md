@@ -50,10 +50,26 @@ render is checked at.
 Order: ticker → header → hero (copy + live proof) → the mark → the live standing card →
 how it works → what we watch → price → footer.
 
-**First viewport must contain, in this order:** who it is for (mono eyebrow), what it
-does (the display headline), the one input with the price on its button, and three real
-marks caught this morning — one of which is the user's *own site*. That last card is the
-product's second promise and it earns its place in the fold.
+**First viewport must contain, in this order:** who it is for (mono eyebrow), the
+outcome (the display headline), one sentence saying what we watch, the one input with the
+price on its button, the microcopy under it, and three real marks caught this morning —
+one of which is the user's *own site*.
+
+**The headline is one outcome in plain words and never contains the product name.** The
+pattern is Dovetail's "Finally, all of your customer feedback in one place", Canny's
+"Build the features that close deals", Visitors' "Fast, private, realtime web analytics"
+and StackAI's "From process to AI agent, in minutes" — an outcome, or a from → to with a
+time, never a description of the software. Ours: **"Know where you stand. And who's
+gaining on you."** It states the outcome, it carries the creator positioning Nish wrote
+("see where you stand, and who is gaining on you"), and it works for a company and a
+creator without a second headline. The two runners-up, kept for a future test: "Your
+brand, your rivals, the whole internet, every Monday" and "See where you stand against
+the brands you compete with."
+
+The sub is **one sentence**: what we watch (ads, mentions, site changes, hiring) and that
+we name the rivals so you do not have to know them. Under the CTA, one line of microcopy
+in the Canny pattern ("No credit card required" → ours: **"One input. Sixty seconds to
+your first standing."**). No exclamation marks anywhere on the page.
 
 - Hero is a two-column grid at ≥1080px (1.15fr copy / 0.85fr proof), stacked below.
 - The proof column is live data from a public workspace we run ourselves, re-rendered
@@ -86,7 +102,7 @@ the current step on the marker runs across the top of all three.
 3. **Who you're up against.** Accepted competitors (D1 p ≥ 0.9) listed ON with a
    one-line reason each; maybes below on the bone ground, off, with Jev's reason and its
    probability. "Add one we missed" is the same one input, inline, at the bottom of the
-   list. One action: "Start watching — $11/mo".
+   list. One action: "Start watching — €10/mo".
 
 First viewport of screen 2 at 390 shows the card header and the first four fields. First
 viewport of screen 3 shows the heading and three candidates.
@@ -163,10 +179,16 @@ one.
   actions — "Open the capture pair" and "I meant to do this". It stays pinned until
   acknowledged or closed.
 - **Type chips**: All, Site changes, Ads, Mentions, Hiring, Your site — each with a count.
-- **Rows** are chronological under mono day markers, each with a capture thumbnail, the
-  brand and source pills, a title, the mark where there is one, and the age. Low-confidence
-  items ("possibly", D3 between) sit on the bone ground rather than the card, labelled, and
-  are never deleted.
+- **Rows** follow the notification pattern Deel, Qatalog and Fireflies use: the **first
+  line, in display bold, is who did what** — "Bramble changed its pricing", "Kindred
+  started selling on price", "Fieldset posted two growth roles". Then the mark where there
+  is one, then **one plain sentence** of context, then the source pill and the relative
+  time. Never a question id, never a probability, never a confidence label.
+- **Grouping** is **New / Yesterday / Earlier**, as mono day markers — not calendar dates.
+  A row moves from New to Yesterday on its own; nothing is marked read by hand.
+- Low-confidence items sit on the bone ground rather than the card and say so in words
+  ("We were not sure this mattered, so it sits here rather than in your brief"), with
+  "Why we flagged this" behind a tap. They are never deleted.
 - Off brands produce nothing here. The footer line says so by name, so an absence is
   never mistaken for a failure.
 
@@ -180,15 +202,21 @@ edited in place:
 3. Delivery email address.
 4. Your public standing card — off (default) / on, with the URL and a "rotate the link".
 
-Under them, quiet rows that are not settings: plan and price with one "change plan", and
-"delete everything" with what it deletes. Per-brand tracking is **not** repeated here —
-it is the same switch that lives on the brand.
+Then **"Connect your agent"** (§2.11) as its own block: the MCP server row with the URL,
+its own switch and the Claude / Cursor / ChatGPT pills, and the API key row with the
+masked key, "Rotate", and the last-used line.
+
+Under both, quiet rows that are **not** settings, set in the body face rather than the
+display face so they read as information: the plan with its price and one "Change plan";
+"Suggestions you dismissed" with the count and a way back; and "Delete everything" with
+exactly what it removes. Per-brand tracking is **not** repeated here — it is the same
+switch that lives on the brand, and the page says so in its opening line.
 
 ### 2.8 The public standing card (`/s/<slug>`)
 
 One screen, no nav, no login. The top of Home in the same skin: the rank line, the
 four-week standing, the three read-this-first marks, the counts checked, a small wordmark
-and exactly one action — "Track your own brand — $11/mo". Nothing else, per
+and exactly one action — "Track your own brand — €10/mo". Nothing else, per
 `docs/REBUILD-STANDING-CARD.md` (#3898). The OG image is the rank line and the standing
 chart on the cream ground, rendered from the same data.
 
@@ -199,6 +227,53 @@ carries the red rule on Alerts; its take says *what we think happened and what w
 next*, with a real re-check time; and it always offers "I meant to do this", which closes
 the incident and feeds `user_memory` so the same judgment is not made twice. A fixed
 incident gets a one-line "fixed" row under the original, never a new alert.
+
+---
+
+## 2.10 Machinery the user never sees
+
+Jev is how the product decides; it is not how the product talks. **No customer surface
+ever shows a question id, a decision code, a probability, an importance score or the word
+"Jev" as a system.** This applies to Home, Competitors, Alerts, the brief and the public
+card.
+
+| Never | Instead |
+|---|---|
+| `Jev D3 noteworthy p 0.94, kind: pricing` | "Our read: a real price move, not a test — it is live for everyone and it is their deepest discount yet." |
+| `Jev D3s own_site_breakage p 0.81` | "Our read: this looks like a mistake, not a decision — a conversion page lost its only button and nothing replaced it." |
+| `Jev was unsure at p 0.42` | "We were not sure this mattered, so it sits here rather than in your brief." |
+| `D4 importance 8.6` | (nothing — it decides the order, it is not shown) |
+| "3 of 41 noteworthy · picked by Jev" | "3 of 41 worth knowing" |
+
+Every one of those plain lines carries a **"Why we flagged this"** tap beneath it: a
+small mono link that opens a sheet with the evidence, what was compared, the confidence,
+and the decision that was made. The machinery is one tap away and never in the way —
+this is the "depth by tapping in" rule applied to our own reasoning.
+
+Written as "our read", not "the AI thinks". The product did the work; it says what it
+concluded.
+
+---
+
+## 2.11 Agent-native
+
+**Everything a person can see on Home, Competitors and Alerts is available to an agent
+through the same API, at the same moment.** Not an export, not a subset, not a delayed
+feed — the same reads. This is a product property, so it gets surface in three places:
+
+1. **Settings → "Connect your agent"** (§2.7): the MCP server URL with a copy action, a
+   read-only API key shown once and rotatable, the last-used line ("Last used 11 minutes
+   ago by Claude"), a link to the API docs, and one row of what it works with —
+   **Claude, Cursor, ChatGPT**.
+2. **Landing → "Built for your agents too"**: one short section, the same three names,
+   the MCP URL, an example question an agent can answer from it, and "Read the API docs".
+   Reference: Bloom's "Connect MCP" row. It sits between "What we watch" and the price.
+3. **The API docs**, linked from both, never embedded.
+
+Rules: the key is read-only and shown once; rotating breaks the old key immediately and
+says so; the MCP server has its own switch so it can be turned off without deleting the
+key; agent reads count toward nothing the user pays per-unit for. The three names are set
+as **mono pills, not logos** — we do not use another company's mark to borrow credibility.
 
 ---
 
@@ -308,8 +383,10 @@ Declared under both `@media (prefers-color-scheme: dark)` scoped to
 
 1. **Primary** — filled ink, square, display 700, one per viewport. Always a verb.
    **The price is on the button** wherever the action starts or changes a subscription:
-   `Build my watch  $11/mo`, `Start watching  $11/mo`. Scout is $11/mo; Starter $59;
-   Agency $199. There is no free tier and no "free" anywhere in the copy (#3896).
+   `Start watching  €10/mo`. List prices from the ledger, localized at checkout by
+   Dodo: **Scout €10/month, Starter €46/month, Agency €136/month.** There is no free
+   plan and no "free" anywhere in the copy (#3896). **No trial copy until Nish decides**
+   whether to offer Dodo's time-limited trial — do not write "try it free" anywhere.
 2. **Secondary** — ghost: ink hairline, transparent, green wash on hover. Reserved for
    the alternative to the primary ("See the live card", "I meant to do this").
 3. **Tertiary** — mono caps, underlined, no box. In-feed actions: "See the three ads →",
@@ -457,7 +534,9 @@ re-issued, so the library names and versions are restated here as the contract.
 | Competitors list, alerts feed | `@tanstack/react-table` 9.2.4 headless + our row | Headless only; no themed table library |
 | Developments feed | plain list + `toggle-group` | Chronological; filters do not change the layout |
 | Incident block | `alert` | The only red in the product |
-| Settings rows | `card` + `switch` + `select` + `popover` | Four rows |
+| Settings rows | `card` + `switch` + `select` + `popover` | Four settings, then the agent block, then the quiet rows |
+| Key / URL with copy | `input` readonly + `button` + `tooltip` | Never a custom clipboard widget |
+| "Why we flagged this" | `drawer` on mobile, `popover` on desktop | The machinery, one tap away |
 | Sheets, dialogs, tooltips, menus | `dialog`, `sheet`, `tooltip`, `dropdown-menu` | Base UI 1.8.0 under all of them |
 | Toasts | `sonner` | Only for "saved" and "undo"; never for alerts |
 | Icons | `lucide-react` 1.47.0 | Sparingly: the product's vocabulary is type, not icons |
