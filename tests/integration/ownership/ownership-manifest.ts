@@ -102,6 +102,9 @@ export const OWNED_PROBE_PENDING: ReadonlyArray<{ table: string; phaseIssue: num
   // signal ("not noteworthy", "this change on my own site was deliberate"),
   // carried into the next Jev context pack. Directly workspace-owned.
   { table: "user_decision", phaseIssue: PHASE_ISSUES.rebuildCut },
+  // Workspace-owned: the Jev context pack embeds the asking workspace's brand
+  // card and the stored reason names that workspace's brands. Tenant data.
+  { table: "jev_verdict", phaseIssue: PHASE_ISSUES.rebuildCut },
 ];
 
 /**
@@ -211,11 +214,6 @@ export const PLATFORM_TABLES: ReadonlyArray<{ table: string; reason: string }> =
     table: "source",
     reason:
       "REBUILD (#3846): global source registry — no user or workspace column by design. This is what makes the charter's rule true that adding a source is a row plus a plugin, never a migration; the per-tenant subscription to a source is `watch`, which is scoped via `entity`",
-  },
-  {
-    table: "jev_verdict",
-    reason:
-      "REBUILD (#3846): the judgment cache from docs/REBUILD-JEV.md, keyed by (question_id, input_hash) — dedup across identical inputs is the point, exactly as for discovery_cache_entry. It carries no owner column; its signal_id and entity_id are nullable provenance, not scope. Tenant separation comes from the input hash itself, which always includes the asking workspace's own brand card",
   },
 ];
 

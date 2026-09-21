@@ -86,7 +86,7 @@ The asymmetry between those last two is deliberate. `kind` is CHECKed to `ads` /
 
 **`signal`** — the curated spine every view reads. `kind` is a plugin-owned string, never an enum. Conditional CHECKs enforce per-kind requirements. `mention` and `change` are views over it.
 
-**`jev_verdict`** — every judgment logged with `question_id`, `input_hash`, `p`, `reason`, `decided_at`, and unique on `(question_id, input_hash)` so the contract's "same question plus same input hash is a cached verdict, never a second call" is enforced by the database rather than by discipline.
+**`jev_verdict`** — every judgment logged with `workspace_id`, `question_id`, `input_hash`, `p`, `reason`, `decided_at`, and unique on `(question_id, input_hash)` so the contract's "same question plus same input hash is a cached verdict, never a second call" is enforced by the database rather than by discipline.
 
 **`user_decision`** — the `user_memory` requirement: a user's verdict keyed to the signal it was made on, so "not noteworthy" and "this change on my own site was deliberate" survive and feed the next context pack.
 
