@@ -23,6 +23,15 @@ export default defineConfig({
   use: {
     baseURL,
     trace: "on-first-retry",
+    // Production sits behind Cloudflare Access; only / and /api/health are
+    // public. CI passes the agents' service token as two secrets and Access
+    // accepts them as headers on every request. Locally, unset means no headers.
+    extraHTTPHeaders: process.env.CF_ACCESS_CLIENT_ID
+      ? {
+          "CF-Access-Client-Id": process.env.CF_ACCESS_CLIENT_ID,
+          "CF-Access-Client-Secret": process.env.CF_ACCESS_CLIENT_SECRET ?? "",
+        }
+      : undefined,
   },
   projects: [
     {
