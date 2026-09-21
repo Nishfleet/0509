@@ -88,7 +88,7 @@ const IDENTITY_OVERRIDES: Record<
 > = {
   // GOAT's marketplace CDN returns 403 to scripted fetches regardless of the
   // user-agent (even a full browser UA), so live identity resolution cannot
-  // read its homepage. The sneaker-resale seed list names the brand "GOAT";
+  // read its homepage. The resale seed list names the brand "GOAT";
   // the curated siteName is the matching alias the post-fetch classifier uses
   // to connect GOAT's ads to a searched goat.com. The provider query itself
   // is the registrable domain goat.com (issue #1999), not this alias. The

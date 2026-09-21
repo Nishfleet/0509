@@ -1,7 +1,7 @@
 /**
  * Public Offer Timeline data layer — bounded D1 reads only.
  *
- * A public `/timeline/:domain` request must NEVER trigger live scraping,
+ * A public `the public proof ledger` request must NEVER trigger live scraping,
  * Browser Rendering, or any other paid operation. Snapshots already exist
  * from monitoring (#952). This module only lists them.
  */
@@ -127,7 +127,7 @@ export async function loadOfferTimeline(
     .filter((row) => canonicalUrlBelongsToDomain(row.canonical_url, input.domain))
     .filter((row) => !row.is_ad_destination)
     .map(rowToSnapshot)
-    // Proof gate (issue #1284): a public /timeline/:domain row may only show
+    // Proof gate (issue #1284): a public the public proof ledger row may only show
     // a competitor state that carries BOTH a stored screenshot artifact AND a
     // stored page-text extract. A row with neither — the seeded backfill
     // (migrations 0079/0081) — used to render the public "Captured on <date>,
@@ -476,7 +476,7 @@ function escapeLike(value: string): string {
  * canonical row→snapshot mapper used by `loadOfferTimeline`; exported so the
  * /llms-full.txt full-text feed (issue #2043) and the signed-in archive read
  * (issue #2173) can reuse the exact same artifact-key extraction and proof
- * mapping the /timeline/:domain loader uses, instead of re-deriving it and
+ * mapping the the public proof ledger loader uses, instead of re-deriving it and
  * risking drift.
  */
 export function rowToSnapshot(row: LandingPageSnapshotRow): OfferSnapshotInput {

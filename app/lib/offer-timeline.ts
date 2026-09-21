@@ -453,7 +453,7 @@ export function isPlaceholderOfferPrice(priceText: string): boolean {
  *
  * Move-validity gate (issue #3128): a price transition whose BEFORE or AFTER
  * is a currency-zero placeholder is not rendered as a move. This is the
- * shared rendering path for both /timeline/:domain and /briefs/weekly, so a
+ * shared rendering path for both the public proof ledger and /briefs/weekly, so a
  * "$0.00 → £0.00" row can never surface on either public surface. Placeholder
  * values also never act as the "after" half of a published move — the next
  * real capture keeps diffing until a real (non-placeholder) state.

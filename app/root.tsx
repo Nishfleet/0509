@@ -527,7 +527,7 @@ export function ErrorBoundary({ error }: { error: unknown }) {
           ))}
           {isNotFound || isGone ? (
             <>
-              {/* Issue #3617: only the /timeline/:domain 410 can name the
+              {/* Issue #3617: only the public proof-ledger 410 can name the
                   brand, so it keeps its existing brand-specific pair —
                   /search is parameterised there, which is the one case where
                   the query IS prefilled. The brand pair stays first because

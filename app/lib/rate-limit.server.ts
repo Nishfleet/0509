@@ -43,7 +43,7 @@ function isE2ETestMode(env: AppEnv): boolean {
 // against the operators' published IP ranges, so trusting it is safe — a
 // scraper spoofing a Googlebot user-agent still gets the anonymous budget. The
 // exemption is scoped to the public indexable brand-page route (the
-// /ads/:domain and /timeline/:domain surfaces) and deliberately leaves every
+// /ads/:domain and the public proof ledger surfaces) and deliberately leaves every
 // auth, write, and API scope untouched.
 const VERIFIED_BOT_EXEMPT_SCOPES = new Set(["public-brand-page"]);
 
@@ -52,7 +52,7 @@ function isVerifiedSearchCrawler(request: Request): boolean {
 }
 
 // The sitemap-coverage canary (issue #3166) probes EVERY advertised URL,
-// including the whole /ads/:domain + /timeline/:domain cohort — ~134 URLs
+// including the whole /ads/:domain + the public proof ledger cohort — ~134 URLs
 // against the 60/60s sustained brand-page edge budget (#2985, raised from
 // 12/60s by #3156), so a single fast-paced run 429s its own tail. The
 // canary token gets the same public-brand-page exemption a verified
@@ -96,7 +96,7 @@ export const PUBLIC_SEARCH_ANON_BROWSER_LIMIT = 2;
 export const PUBLIC_SEARCH_SELECTION_PER_MINUTE_LIMIT = 3;
 export const PUBLIC_BRAND_PAGE_PER_MINUTE_LIMIT = 60;
 // Issue #3156 raised this above the #2964 parity rate (12/60s): this ONE
-// bucket serves /ads/:domain, /timeline/:domain AND the
+// bucket serves /ads/:domain, the public proof ledger AND the
 // /api/ads/capture-failures/:domain noindex probe, so the status-probe +
 // noindex-probe pattern spends 2 events per URL — at 12/60s even the
 // issue's acceptance crawl (1 req/URL, 3s apart = 20/60s) 429'd mid-sitemap.
@@ -497,20 +497,10 @@ export function rateLimitPolicyFor(request: Request): EdgeLimitPolicy | null {
   }
 
   if (pathname.startsWith("/api/")) {
-    // /api/demo-proof keeps its own dedicated edge bucket (issue #2964
+    // /api/proof-demo keeps its own dedicated edge bucket (issue #2964
     // budget parity): 30/10min legacy -> 3/60s, same sustained rate, fail
     // closed. A degraded edge limiter 429s the public endpoint instead of
     // silently admitting unbounded traffic.
-    if (pathname === "/api/demo-proof") {
-      return {
-        scope: "public-proof-brief",
-        limit: PUBLIC_PROOF_BRIEF_PER_MINUTE_LIMIT,
-        periodSeconds: 60,
-        binding: "RL_PROOF_BRIEF",
-        keyByIpOnly: true,
-      };
-    }
-
     // Covers the remaining /api/* reads on the shared edge bucket.
     return { scope: "api-read", limit: 240, periodSeconds: 60, binding: "RL_API_READ" };
   }

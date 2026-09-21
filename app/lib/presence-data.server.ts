@@ -743,7 +743,7 @@ export async function listPresenceItems(
 }
 
 /**
- * One mention row on the public /timeline/:domain page (issue #3179): what a
+ * One mention row on the public the public proof ledger page (issue #3179): what a
  * source published about this brand, with the link. Plainer than
  * PresenceItemRecord on purpose — the public page shows the mention, its
  * source label and its date, nothing workspace-internal.

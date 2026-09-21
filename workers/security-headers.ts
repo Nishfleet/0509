@@ -165,19 +165,13 @@ export const PUBLIC_CACHEABLE_HTML_PATHS = new Set([
   "/",
   "/pricing",
   // Issue #3193: the rest of the public marketing route families the TTFB
-  // contract names. /brands, /brands/:category, /guides, /guides/:slug and the
+  // contract names. /brands, brand-pages/:category, /guides, guide-pages/:slug and the
   // remaining canonical /compare and /switch pages are all anonymous public
   // SEO surfaces; they now ride exactly the same public, max-age=300 + edge
   // cache contract as "/" and "/pricing".
   "/brands",
   "/guides",
   "/compare",
-  "/compare/keeptabz",
-  "/compare/gethookd",
-  "/compare/bigspy",
-  "/compare/minea",
-  "/compare/poweradspy",
-  "/switch/magicbrief",
   "/help",
   "/docs",
   "/terms",
@@ -185,21 +179,6 @@ export const PUBLIC_CACHEABLE_HTML_PATHS = new Set([
   "/changelog",
   "/trust",
   "/capture-rules",
-  "/compare/meta-ad-library",
-  "/compare/visualping",
-  "/compare/visualping-ad-library",
-  "/compare/visualping-ad-libraries",
-  "/compare/spyland",
-  "/compare/pulzifi",
-  "/compare/foreplay",
-  "/compare/foreplay-spyder",
-  "/compare/panoramata",
-  "/compare/adspyder",
-  "/compare/adspy",
-  "/switch/panoramata",
-  "/switch/visualping",
-  "/switch/magicbrief",
-  "/switch/adspy",
   "/methodology",
   "/methodology/ad-aggression-score",
   // Issue #3391 (the TTFB watch): /search was the last anonymous public HTML
@@ -213,12 +192,9 @@ export const PUBLIC_CACHEABLE_HTML_PATHS = new Set([
 ]);
 export const PUBLIC_CACHEABLE_HTML_PREFIXES = [
   "/ads/",
-  "/timeline/",
   // Issue #3193: whole route families whose every entry is public marketing
   // content, so future guides / brand categories / vendor pages are covered
   // without touching this list again.
-  "/brands/",
-  "/guides/",
 ] as const;
 
 function isPublicCacheableHtmlRequest(request: Request): boolean {

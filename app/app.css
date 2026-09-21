@@ -4976,7 +4976,7 @@ one signal-green accent.
   color: var(--ld-green-ink);
 }
 
-/* Migration CTA block (sneaker-resale landing). Inline flex with the honest
+/* Migration CTA block (resale landing). Inline flex with the honest
    not-imported boundary kept on the page; the button is the only self-serve
    action. */
 .ld-migration-cta {
@@ -8120,7 +8120,7 @@ reds soften --- */
   }
 }
 
-/* Public Offer Timeline (/timeline/:domain). Reuses ads-page tokens. */
+/* Public Offer Timeline (the public proof ledger). Reuses ads-page tokens. */
 .f9-timeline-asof {
   display: flex;
   flex-wrap: wrap;
@@ -8283,7 +8283,7 @@ reds soften --- */
   }
 }
 
-/* Issue #2173 — the proof archive. One renderer behind /timeline/:domain,
+/* Issue #2173 — the proof archive. One renderer behind the public proof ledger,
    the signed-in Archive tab, and frozen share snapshots; it reuses the
    timeline ledger's visual language so a row reads the same everywhere. */
 .f9-archive-month {

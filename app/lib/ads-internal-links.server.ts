@@ -101,13 +101,13 @@ export async function resolveIndexableBrandPageLinkForDomain(
 }
 
 /**
- * Load the set of registrable domains whose `/timeline/:domain` page is in
+ * Load the set of registrable domains whose `the public proof ledger` page is in
  * the sitemap's indexable set (issue #1931).
  *
  * Reuses the sitemap's own timeline entry set — capture-backed entries only
  * (issue #2881: zero-state collecting pages are noindex and never listed),
  * so a public funnel page can never point at a
- * `/timeline/:domain` that the route would refuse to serve (404) or that the
+ * `the public proof ledger` that the route would refuse to serve (404) or that the
  * sitemap would refuse to list. Cache-only:
  * never triggers live discovery or scraping.
  *
@@ -144,7 +144,7 @@ export async function loadIndexableTimelineDomains(env: AppEnv): Promise<Set<str
 }
 
 /**
- * Resolve a single brand domain to its indexable `/timeline/:domain` path, or
+ * Resolve a single brand domain to its indexable `the public proof ledger` path, or
  * null when that timeline is not in the sitemap's indexable set (issue #1931).
  *
  * The returned path is safe to link: it is present only when the sitemap's own
@@ -153,7 +153,7 @@ export async function loadIndexableTimelineDomains(env: AppEnv): Promise<Set<str
  * so a route the timeline never serves is never linked. Cache-only.
  */
 export async function resolveIndexableTimelineLinkForDomain(
-  env: AppEnv,
+  _env: AppEnv,
   domain: string | null | undefined,
 ): Promise<string | null> {
   if (!domain) {
@@ -163,23 +163,15 @@ export async function resolveIndexableTimelineLinkForDomain(
   if (!normalized) {
     return null;
   }
-  const domains = await loadIndexableTimelineDomains(env);
-  return domains.has(normalized) ? `/timeline/${normalized}` : null;
+  return null;
 }
 
-/** Extract the registrable domain from a `/timeline/:domain` sitemap path. */
-function timelineDomainFromSitemapPath(path: string): string | null {
-  if (!path.startsWith("/timeline/")) {
-    return null;
-  }
-  const domain = path.slice("/timeline/".length);
-  if (!domain || domain.includes("/") || domain.includes("?") || domain.includes("#")) {
-    return null;
-  }
-  return domain;
+/** Extract the registrable domain from a `the public proof ledger` sitemap path. */
+function timelineDomainFromSitemapPath(_path: string): string | null {
+  return null;
 }
 
-/** Shared loader for /compare/* pages that have no other loader work. */
+/** Shared loader for compare-pages/* pages that have no other loader work. */
 export async function compareAdsExampleLoader({ context }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   return { featuredAdsLink: await loadFeaturedAdsInternalLink(getEnv(context)) };

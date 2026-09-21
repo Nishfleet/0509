@@ -134,16 +134,16 @@ const FUNNEL_MESSAGES: Record<FunnelEventKind, string> = {
   search_preview_result: "Anonymous search preview returned results",
   search_preview_error: "Anonymous search preview failed",
   signup_start: "Anonymous signup started",
-  signup_start_locale_en: "Anonymous signup started from the English sneaker-resale page",
-  signup_start_locale_de: "Anonymous signup started from the German sneaker-resale page",
-  signup_start_locale_ja: "Anonymous signup started from the Japanese sneaker-resale page",
-  signup_start_locale_pt_br: "Anonymous signup started from the Brazilian Portuguese sneaker-resale page",
+  signup_start_locale_en: "Anonymous signup started from the English resale page",
+  signup_start_locale_de: "Anonymous signup started from the German resale page",
+  signup_start_locale_ja: "Anonymous signup started from the Japanese resale page",
+  signup_start_locale_pt_br: "Anonymous signup started from the Brazilian Portuguese resale page",
   pricing_free_card_clicked: "Anonymous signup started from the pricing Free card",
   search_likely_confirm_signup_started: "Anonymous signup started from the search Likely-match confirm",
-  locale_segment_view_en: "Anonymous English sneaker-resale page view",
-  locale_segment_view_de: "Anonymous German sneaker-resale page view",
-  locale_segment_view_ja: "Anonymous Japanese sneaker-resale page view",
-  locale_segment_view_pt_br: "Anonymous Brazilian Portuguese sneaker-resale page view",
+  locale_segment_view_en: "Anonymous English resale page view",
+  locale_segment_view_de: "Anonymous German resale page view",
+  locale_segment_view_ja: "Anonymous Japanese resale page view",
+  locale_segment_view_pt_br: "Anonymous Brazilian Portuguese resale page view",
   signup_completed: "Signup completed via magic-link verification",
   first_brief_generated: "First brief generated for a signup workspace",
   first_brief_viewed: "First brief viewed in session",
@@ -372,7 +372,7 @@ export function emitFunnelSignupStart(env: AppEnv, request: Request) {
 }
 
 /**
- * Locale sneaker-resale page view. Locale is an allowlisted id, never a
+ * Locale resale page view. Locale is an allowlisted id, never a
  * caller-controlled string, so it can only select which event kind fires.
  */
 export function emitFunnelLocaleSegmentView(
@@ -385,7 +385,7 @@ export function emitFunnelLocaleSegmentView(
 
 /**
  * Signup attribution from an allowlisted `source=` marker (the /pricing
- * Free card or a sneaker-resale locale page). The raw query value is compared
+ * Free card or a resale locale page). The raw query value is compared
  * to constants and never stored.
  */
 export function emitFunnelSignupStartFromAllowlistedSource(

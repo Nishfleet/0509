@@ -218,7 +218,7 @@ export interface AppEnv {
   PUBLIC_BRAND_PAGES_INDEXABLE?: string;
   /**
    * Public Offer Timeline share-link chrome. Unset or any value other than
-   * "0" shows the copyable `/timeline/:domain` URL. Explicit "0" hides it
+   * "0" shows the copyable `the public proof ledger` URL. Explicit "0" hides it
    * (rollback for #967 share-link generation). The timeline route itself
    * still renders logged out.
    */

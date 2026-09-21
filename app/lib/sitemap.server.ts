@@ -1,6 +1,6 @@
 /**
  * Dynamic sitemap entries for indexable /ads/:domain brand pages and
- * /timeline/:domain offer timelines.
+ * the public proof ledger offer timelines.
  *
  * The static sitemap in app/lib/seo.ts deliberately lists no /ads/* path —
  * the set must be dynamic. This module generates it from existing
@@ -59,7 +59,7 @@
  *   8. This is a bounded cache read only — sitemap generation never triggers
  *      live discovery, Browser Rendering, or any paid operation.
  *
- * The sitemap also appends dynamic /timeline/:domain entries (the Offer
+ * The sitemap also appends dynamic the public proof ledger entries (the Offer
  * Timeline) from `landing_page_snapshot` rows, with its own rules below
  * (SITEMAP_TIMELINE_PATH_LIMIT and indexableTimelineEntriesFromRows):
  *
@@ -139,7 +139,7 @@ import type { AdRecord } from "~/lib/types";
 export const SITEMAP_BRAND_PATH_LIMIT = 5000;
 
 /**
- * Hard bound on dynamic /timeline/:domain entries per sitemap render, next
+ * Hard bound on dynamic the public proof ledger entries per sitemap render, next
  * to the brand-page bound above. Same rationale: keeps the D1 read and the
  * sitemap bounded (500 timelines is the same crawl-budget ceiling).
  */
@@ -486,19 +486,19 @@ function isMissingSitemapTableError(error: unknown): boolean {
 /**
  * Static sitemap entries scoped to a single buyer-surface locale: only paths
  * rooted under `/<locale>/` (issue #1561). Each `/<locale>/sitemap.xml` is a
- * pure static feed — brand (`/ads/:domain`) and timeline (`/timeline/:domain`)
+ * pure static feed — brand (`/ads/:domain`) and timeline (`the public proof ledger`)
  * entries are EN-prefixed and belong to the root sitemap only, so they never
  * leak into a locale feed and can never duplicate a root `<loc>`.
  *
  * The locale feed is derived from the buyer-surface cluster that serves 200
  * under every locale prefix (issue #2294): `BUYER_SURFACE_PATHS` plus the
- * compare/switch children (`BUYER_SURFACE_CHILD_PATHS`) plus the `/guides/*`
+ * compare/switch children (`BUYER_SURFACE_CHILD_PATHS`) plus the `guide-pages/*`
  * how-to cluster — the single source of truth in `app/lib/locale-markets.ts`
  * (and the guide path in `SITEMAP_PATHS`). Each entry reuses the EN
  * path set from `SITEMAP_STATIC_ENTRIES` so the two can never
  * drift. The bare `/{locale}` index and `/{locale}/sitemap.xml` are excluded
  * — neither is a real page to advertise. The genuinely translated
- * sneaker-resale cluster stays for the locales that ship it (de, ja, pt-br).
+ * resale cluster stays for the locales that ship it (de, ja, pt-br).
  */
 export function staticSitemapEntriesForLocale(
   locale: BuyerSurfaceLocaleId,
@@ -510,7 +510,7 @@ export function staticSitemapEntriesForLocale(
   const buyerSurfacePaths = [
     ...BUYER_SURFACE_PATHS,
     ...BUYER_SURFACE_CHILD_PATHS,
-    // Issue #2295: the /guides/* how-to cluster must not drop out of the
+    // Issue #2295: the guide-pages/* how-to cluster must not drop out of the
     // locale sitemaps when the guide set grows. #2030: the guide set moved
     // into BUYER_SURFACE_GUIDE_PATHS, the same source of truth the sitemap
     // hreflang alternates read, so a new guide lights up both in one place.
@@ -522,14 +522,8 @@ export function staticSitemapEntriesForLocale(
     if (!en) continue;
     entries.push({ ...en, path: `${prefix}${path.replace(/^\//, "")}` });
   }
-  // The genuinely translated sneaker-resale cluster stays for the locales
-  // that ship it (de, ja, pt-br). fr/es have no sneaker-resale page.
-  if (locale === "de" || locale === "ja" || locale === "pt-br") {
-    const sneakerEn = entryByPath.get("/sneaker-resale");
-    if (sneakerEn) {
-      entries.push({ ...sneakerEn, path: `${prefix}sneaker-resale` });
-    }
-  }
+  // The genuinely translated resale cluster stays for the locales
+  // that ship it (de, ja, pt-br). fr/es have no resale page.
   return entries;
 }
 
@@ -576,7 +570,7 @@ export function newestChangelogLastmod(
 /**
  * Stamp dated static sitemap entries with an honest `lastmod` derived from
  * their content data at render time (issue #2297). /changelog gets the
- * newest changelog entry date. /compare/* and /methodology have no per-page
+ * newest changelog entry date. compare-pages/* and /methodology have no per-page
  * content date field, so they keep no `lastmod` — inventing one would be a
  * false freshness claim Google then distrusts. Other static paths are
  * unchanged.
@@ -596,7 +590,7 @@ function staticEntriesWithDatedLastmod(
 }
 
 /**
- * Dynamic sitemap entries for the curated /brands/:slug category pages
+ * Dynamic sitemap entries for the curated brand-pages/:slug category pages
  * (issue #2067). One entry per curated category with at least
  * BRAND_CATEGORY_PAGE_MIN_BRANDS live brands (issue #3126), derived from the
  * same indexable brand-page set the hub and category routes read — a category
@@ -641,10 +635,6 @@ export function brandCategorySitemapEntries(
     if (count < BRAND_CATEGORY_PAGE_MIN_BRANDS) {
       continue;
     }
-    entries.push({
-      path: `/brands/${slug}`,
-      lastmod: newestLastmod ?? undefined,
-    });
   }
   return entries;
 }
@@ -652,8 +642,8 @@ export function brandCategorySitemapEntries(
 /**
  * Full production sitemap body: static funnel entries first, then the
  * dynamic indexable brand-page entries (with lastmod from their cache
- * fetched_at), then the dynamic curated /brands/:slug category entries
- * (issue #2067), then the dynamic indexable /timeline/:domain entries (with
+ * fetched_at), then the dynamic curated brand-pages/:slug category entries
+ * (issue #2067), then the dynamic indexable the public proof ledger entries (with
  * lastmod from their newest snapshot capture). The root feed
  * deliberately EXCLUDES every buyer-surface locale-prefixed path (those live
  * only in their own `/<locale>/sitemap.xml` — see
@@ -692,7 +682,7 @@ export interface TimelineSitemapRow {
 }
 
 /**
- * Recover the /timeline/:domain a snapshot row backs, or null. Lossless-only,
+ * Recover the the public proof ledger a snapshot row backs, or null. Lossless-only,
  * mirroring the loader's own domain recovery: the registrable domain of the
  * row's canonical_url hostname (never guessed from the URL text), gated by the
  * same normalizeBrandPageDomain the timeline route applies to its :domain
@@ -718,7 +708,7 @@ export function timelineDomainFromSnapshotRow(row: TimelineSitemapRow): string |
 }
 
 /**
- * Pure core: reduce snapshot rows to deduped, bounded /timeline/:domain
+ * Pure core: reduce snapshot rows to deduped, bounded the public proof ledger
  * sitemap entries that the timeline route would render indexable. Mirrors
  * `loadOfferTimeline`'s own noindex predicate for capture-backed pages
  * (entries.length > 0): a domain with ZERO recorded offer states is never
@@ -741,7 +731,7 @@ export function indexableTimelineEntriesFromRows(
   rows: readonly TimelineSitemapRow[],
 ): SitemapEntry[] {
   // Group input rows by derived registrable domain. Rows whose URL cannot be
-  // losslessly mapped to a /timeline/:domain param (timelineDomainFromSnapshotRow
+  // losslessly mapped to a the public proof ledger param (timelineDomainFromSnapshotRow
   // returns null — reserved TLDs, non-http(s) URLs, etc.) are dropped here and
   // never enter a bucket, matching rule 10 of the module docblock.
   const byDomain = new Map<string, TimelineSitemapRow[]>();
@@ -763,7 +753,7 @@ export function indexableTimelineEntriesFromRows(
     // Loader's per-domain window: only the first TIMELINE_SNAPSHOT_LIMIT
     // rows (the input is ASC, matching the loader's `ORDER BY ... ASC LIMIT
     // TIMELINE_SNAPSHOT_LIMIT` window). Rows past the loader's window are
-    // unreachable on /timeline/:domain, so they cannot back a sitemap entry.
+    // unreachable on the public proof ledger, so they cannot back a sitemap entry.
     const window = bucket.length > TIMELINE_SNAPSHOT_LIMIT
       ? bucket.slice(0, TIMELINE_SNAPSHOT_LIMIT)
       : bucket;
@@ -784,7 +774,7 @@ export function indexableTimelineEntriesFromRows(
       }
       // Brand-page gate (issue #1729): an ad-destination row (the loader
       // excludes it from the ledger) must not qualify its domain either, so
-      // the sitemap cannot list a /timeline/:domain whose only qualifying
+      // the sitemap cannot list a the public proof ledger whose only qualifying
       // snapshots are ad destinations. Mirrors loadOfferTimeline's filter.
       if (row.is_ad_destination) {
         continue;
@@ -796,10 +786,6 @@ export function indexableTimelineEntriesFromRows(
       continue;
     }
 
-    entries.push({
-      path: `/timeline/${domain}`,
-      lastmod,
-    });
   }
 
   // Cap at SITEMAP_TIMELINE_PATH_LIMIT distinct domains. Map iteration is
@@ -821,7 +807,7 @@ export function indexableTimelineEntriesFromRows(
  *
  * Deliberately NOT suppressed by the PUBLIC_BRAND_PAGES_INDEXABLE brake: that
  * env noindexes /ads/* pages only, and the timeline route never reads it —
- * /timeline/:domain indexability is purely the empty-ledger rule above.
+ * the public proof ledger indexability is purely the empty-ledger rule above.
  * Mirroring the loader means timeline locs stay live under the brake (the
  * pages they point to still render indexable).
  *
@@ -885,7 +871,7 @@ export async function loadIndexableTimelineEntries(
 }
 
 /**
- * The /timeline/:domain sitemap set: ONLY capture-backed entries — a domain
+ * The the public proof ledger sitemap set: ONLY capture-backed entries — a domain
  * with at least one proof-complete, non-ad-destination snapshot (i.e. at
  * least one recorded offer state). Zero-state "collecting" pages are never
  * listed (issue #2881): listing a domain with 0 recorded offer states ships

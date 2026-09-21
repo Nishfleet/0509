@@ -3,7 +3,7 @@ import { Link } from "react-router";
 interface ErrorPageRecoveryProps {
   /**
    * `notFound` — the matched catch-all or a thrown 404. `gone` — a thrown 410
-   * (an unprovisioned /timeline/:domain, #1309). Both are the same dead-end
+   * (an unprovisioned the public proof ledger, #1309). Both are the same dead-end
    * surface, so the recovery row is shared.
    */
   kind: "notFound" | "gone";

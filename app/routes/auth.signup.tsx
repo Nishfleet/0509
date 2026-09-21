@@ -187,7 +187,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   // CTA markers (`source=`) select an allowlisted funnel kind. The /pricing
-  // Free card and locale sneaker-resale pages both use this path. The raw
+  // Free card and locale resale pages both use this path. The raw
   // query value is compared to constants and never recorded.
   const { emitFunnelSignupStartFromAllowlistedSource } =
     await import("~/lib/funnel-measurement.server");

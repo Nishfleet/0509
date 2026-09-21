@@ -41,7 +41,7 @@ export const PUBLIC_PROOF_FEATURED_WEBSITE = "nykaa.com";
  * picked its featured brand from `cf-ipcountry` could replay one market's
  * page (nykaa hero + proof brief) to another market for the 5-minute
  * max-age. The SSR loader now pins this single brand for EVERY visitor and
- * the client personalizes after mount via /api/demo-proof — the same
+ * the client personalizes after mount via /api/proof-demo — the same
  * client-fetch pattern the pricing section already uses (issue #2389) — so
  * the personalized brief still resolves the visitor's country per-request
  * and keeps the #1468 parity ladder with the /ads/:domain page.

@@ -181,7 +181,7 @@ export const BRAND_CATEGORIES: Readonly<Record<string, string>> = {
 export const BRAND_CATEGORY_OTHER = "More brands";
 
 /**
- * Minimum live brands a curated category needs before its /brands/:slug page
+ * Minimum live brands a curated category needs before its brand-pages/:slug page
  * may ship (issue #3126). A category that resolves for fewer than this many
  * indexable /ads pages would be a near-empty acquisition surface — the kind
  * of one-brand page that made six of seven categories look abandoned. The

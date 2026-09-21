@@ -21,15 +21,11 @@ import { registrableDomainFromHostname } from "~/lib/search-query";
  * 0087_signup_source_open_allowlist.sql so code and D1 never disagree.
  */
 
+export const LOCALE_SNEAKER_RESALE_SIGNUP_SOURCES: readonly string[] = [];
+
 export const SIGNUP_SOURCE_COOKIE = "f9_signup_source";
 export const SIGNUP_SOURCE_TTL_MS = 24 * 60 * 60 * 1000;
 
-export const LOCALE_SNEAKER_RESALE_SIGNUP_SOURCES = [
-  "locale-en-sneaker-resale",
-  "locale-de-sneaker-resale",
-  "locale-ja-sneaker-resale",
-  "locale-pt-br-sneaker-resale",
-] as const;
 
 /**
  * The exact signup-URL marker the /search warming-exhausted signup block
@@ -50,14 +46,14 @@ export const SEARCH_WARMING_EXHAUSTED_SIGNUP_SOURCE = "search_warming_exhausted"
  * pricing-Free marker); only the allowlist membership is recorded here.
  */
 /**
- * The exact marker the /guides/how-to-track-competitor-ads guide carries on
+ * The exact marker the guide-pages/how-to-track-competitor-ads guide carries on
  * its /search preview CTA (issue 2152): the guide is an organic-search entry
  * point, so a signup that starts from its preview is attributed to the guide.
  */
 export const GUIDE_TRACK_ADS_SIGNUP_SOURCE = "guide_track_ads";
 
 /**
- * The exact marker the /guides/how-to-monitor-meta-ad-library guide carries on
+ * The exact marker the guide-pages/how-to-monitor-meta-ad-library guide carries on
  * its /search preview CTA (issue 2867): the guide is an organic-search entry
  * point, so a signup that starts from its preview is attributed to the guide.
  * Hyphen slug — inside the open slug shape, so no migration literal needed.
@@ -65,7 +61,7 @@ export const GUIDE_TRACK_ADS_SIGNUP_SOURCE = "guide_track_ads";
 export const GUIDE_MONITOR_AD_LIBRARY_SIGNUP_SOURCE = "guide-monitor-ad-library";
 
 /**
- * The exact marker the /guides/how-to-monitor-competitor-landing-page-changes
+ * The exact marker the guide-pages/how-to-monitor-competitor-landing-page-changes
  * guide carries on its /search preview CTA (issue 2888): the guide is an
  * organic-search entry point, so a signup that starts from its preview is
  * attributed to the guide. Hyphen slug — inside the open slug shape, so no
@@ -84,7 +80,7 @@ export const GUIDE_PROVE_WHAT_CHANGED_SIGNUP_SOURCE = "guide-prove-what-changed"
 export const GUIDE_STANDING_WATCH_SIGNUP_SOURCE = "guide-standing-watch";
 
 /**
- * The exact marker the /guides/meta-ad-library-api-limitations explainer
+ * The exact marker the guide-pages/meta-ad-library-api-limitations explainer
  * carries on its /search preview CTA (issue 3127): the guide is an
  * organic-search entry point, so a signup that starts from its preview is
  * attributed to the guide. Hyphen slug — inside the open slug shape, so no
@@ -93,7 +89,7 @@ export const GUIDE_STANDING_WATCH_SIGNUP_SOURCE = "guide-standing-watch";
 export const GUIDE_API_LIMITS_SIGNUP_SOURCE = "guide-api-limitations";
 
 /**
- * The exact marker the /guides/can-ChatGPT-monitor-competitor-ads guide
+ * The exact marker the guide-pages/can-ChatGPT-monitor-competitor-ads guide
  * carries on its /search preview CTA (issue 3421): the guide is an
  * organic-search entry point, so a signup that starts from its preview is
  * attributed to the guide. Hyphen slug — inside the open slug shape, so no

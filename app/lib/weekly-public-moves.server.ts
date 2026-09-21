@@ -7,7 +7,7 @@
  * module never triggers live scraping, Browser Rendering, or any paid
  * operation.
  *
- * Honesty gates (the same ones /ads/:domain and /timeline/:domain render
+ * Honesty gates (the same ones /ads/:domain and the public proof ledger render
  * under, reused — not re-implemented):
  *
  *   1. Domain gate: a move is published only when its domain is in the
@@ -15,7 +15,7 @@
  *      mirror of the /ads/:domain loader's indexability rules: public_search
  *      context, resolved non-demo provider, non-demo payload, ads present,
  *      7-day freshness, >=1 verified-linked ad, no aliases, lookup parity)
- *      or `loadIndexableTimelineEntries` (the /timeline/:domain mirror:
+ *      or `loadIndexableTimelineEntries` (the the public proof ledger mirror:
  *      proof-complete, not ad-destination, lossless domain recovery). A
  *      customer-private or otherwise non-indexable domain can never appear —
  *      its watch events and snapshots are dropped here even when they exist.
@@ -51,7 +51,6 @@ import {
 import { registrableDomainFromHostname } from "~/lib/search-query";
 import {
   loadIndexableBrandPageEntries,
-  loadIndexableTimelineEntries,
   timelineDomainFromSnapshotRow,
   type TimelineSitemapRow,
 } from "~/lib/sitemap.server";
@@ -106,7 +105,7 @@ export interface WeeklyPublicMove {
   capturedAt: string;
   /** `/ads/:domain` when that brand page is sitemap-indexable, else null. */
   adsPath: string | null;
-  /** `/timeline/:domain` when that timeline is sitemap-indexable, else null. */
+  /** `the public proof ledger` when that timeline is sitemap-indexable, else null. */
   timelinePath: string | null;
 }
 
@@ -328,7 +327,7 @@ function isMissingTableError(error: unknown, table: string): boolean {
 interface IndexableDomainSets {
   /** Domains whose /ads/:domain page the sitemap lists. */
   adsDomains: Set<string>;
-  /** Domains whose /timeline/:domain the sitemap lists. */
+  /** Domains whose the public proof ledger the sitemap lists. */
   timelineDomains: Set<string>;
   /** Union — the domains any weekly move may name. */
   allowed: Set<string>;
@@ -350,16 +349,11 @@ async function loadIndexableDomainSets(env: AppEnv): Promise<IndexableDomainSets
     return empty;
   }
   try {
-    const [brandEntries, timelineEntries] = await Promise.all([
-      loadIndexableBrandPageEntries(env),
-      loadIndexableTimelineEntries(env),
-    ]);
+    const brandEntries = await loadIndexableBrandPageEntries(env);
     const adsDomains = new Set(
       brandEntries.map((entry) => entry.path.slice("/ads/".length)),
     );
-    const timelineDomains = new Set(
-      timelineEntries.map((entry) => entry.path.slice("/timeline/".length)),
-    );
+    const timelineDomains = new Set<string>();
     return {
       adsDomains,
       timelineDomains,
@@ -382,9 +376,7 @@ function linksForDomain(
   // hub follows).
   return {
     adsPath: sets.adsDomains.has(domain) ? `/ads/${domain}` : null,
-    timelinePath: sets.timelineDomains.has(domain)
-      ? `/timeline/${domain}`
-      : null,
+    timelinePath: null,
   };
 }
 
