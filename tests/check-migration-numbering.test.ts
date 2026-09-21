@@ -1,0 +1,272 @@
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { afterAll, describe, expect, it } from "vitest";
+
+import { isolatedGitEnv } from "./helpers/git-env";
+
+/**
+ * A newly added migration must sort LAST (issue #2507, detector half of #2506).
+ *
+ * On 2026-09-10 `0088_org_scoped_ownership.sql` landed after
+ * `0088_recreate_delivery_hot_path_indexes.sql` had already been applied to
+ * production: a duplicate migration number took every deploy down and nothing
+ * caught it at PR time. The gate that fired
+ * (`allowedProductionMigrationLedgers`) is correct but runs after merge, in
+ * the deploy — the worst possible place. This is its pre-merge sibling.
+ *
+ * The rule is deliberately narrow: for every migration file ADDED in this PR
+ * (A-diff against the merge base), its 4-digit prefix must be strictly greater
+ * than the highest 4-digit prefix among migrations that already exist on the
+ * base branch. Global uniqueness is NOT enforced — the repo already carries
+ * historical duplicate numbers (0010, 0014, 0017, 0018, 0028, 0067, 0087,
+ * 0088), and renumbering or renaming existing migrations is out of scope and
+ * dangerous for anything already applied to D1. A duplicate WITHIN one PR is
+ * still caught: two added migrations sharing a prefix mean one of them cannot
+ * sort last — the #2506 incident, one release earlier.
+ *
+ * Fails closed: an unresolvable base ref is a failure, not a pass — an
+ * unchecked migration numbering assertion must never read as safe.
+ *
+ * The first test in this file is the gate itself: it runs the check against
+ * the real repository (origin/main...HEAD) and is wired as a named step in
+ * the required `codex-node-checks` CI job, so a failure names the offending
+ * file and the required minimum number directly in the check log. Ad-hoc:
+ * `npx vitest run --configLoader runner --project node tests/check-migration-numbering.test.ts`
+ */
+
+const REPO_ROOT = process.cwd();
+const MIGRATIONS_DIR = "migrations";
+const GIT_ENV = isolatedGitEnv();
+
+function git(cwd: string, ...args: string[]): string {
+  return execFileSync("git", args, {
+    cwd,
+    encoding: "utf8",
+    env: GIT_ENV,
+    maxBuffer: 64 * 1024 * 1024,
+  }).trim();
+}
+
+function migrationNumber(file: string): number | null {
+  const basename = file.split("/").pop() ?? "";
+  if (!basename.endsWith(".sql")) return null;
+  const match = /^(\d{4})_/.exec(basename);
+  return match ? Number(match[1]) : null;
+}
+
+interface NumberingOffender {
+  file: string;
+  number: number;
+  duplicateOf: string | null;
+}
+
+interface NumberingResult {
+  baseSha: string;
+  baseTop: number;
+  minimum: number;
+  added: string[];
+  offenders: NumberingOffender[];
+}
+
+function checkMigrationNumbering(
+  cwd: string,
+  baseRef: string,
+  headRef: string,
+): NumberingResult {
+  // Throws when the base is unresolvable — the caller (test or CI step) fails.
+  const baseSha = git(cwd, "merge-base", baseRef, headRef);
+
+  const tree = git(
+    cwd,
+    "ls-tree",
+    "-r",
+    "--name-only",
+    baseSha,
+    "--",
+    `${MIGRATIONS_DIR}/`,
+  );
+  const numbers = tree
+    .split("\n")
+    .filter((line) => line.endsWith(".sql"))
+    .map(migrationNumber)
+    .filter((n): n is number => n !== null);
+  const baseTop = numbers.length ? Math.max(...numbers) : 0;
+
+  const diff = git(
+    cwd,
+    "diff",
+    "--name-only",
+    "--diff-filter=A",
+    `${baseSha}...${headRef}`,
+    "--",
+    `${MIGRATIONS_DIR}/`,
+  );
+  const added = diff ? diff.split("\n").filter(Boolean).sort() : [];
+
+  const offenders: NumberingOffender[] = [];
+  const seenInPr = new Map<number, string>();
+  for (const file of added) {
+    const number = migrationNumber(file);
+    if (number === null) continue; // non-<NNNN>_*.sql files are not numbered migrations
+    if (number <= baseTop) {
+      offenders.push({ file, number, duplicateOf: null });
+    } else if (seenInPr.has(number)) {
+      offenders.push({ file, number, duplicateOf: seenInPr.get(number)! });
+    } else {
+      seenInPr.set(number, file);
+    }
+  }
+
+  return { baseSha, baseTop, minimum: baseTop + 1, added, offenders };
+}
+
+function formatOffenders(result: NumberingResult): string {
+  const lines = result.offenders.map(
+    ({ file, number, duplicateOf }) =>
+      `  offending file: ${file}\n  its number: ${number}\n` +
+      `  required minimum: ${result.minimum} (highest on base is ${result.baseTop})` +
+      (duplicateOf ? `\n  duplicate of: ${duplicateOf} (added in this PR)` : ""),
+  );
+  return (
+    "newly added migration(s) do not sort last — duplicate or stale migration " +
+    `number blocks the PR.\n${lines.join("\n")}`
+  );
+}
+
+const scratchRepos: string[] = [];
+
+function gitOrThrow(repo: string, args: string[]) {
+  const result = execFileSync("git", args, { cwd: repo, encoding: "utf8", env: GIT_ENV });
+  return result;
+}
+
+/** Commit the given migration files on a fresh repo's main branch. */
+function setupRepo(migrations: Record<string, string>): string {
+  const repo = mkdtempSync(join(tmpdir(), "mig-numbering-"));
+  scratchRepos.push(repo);
+  gitOrThrow(repo, ["init", "--initial-branch", "main"]);
+  gitOrThrow(repo, ["config", "user.email", "test@example.com"]);
+  gitOrThrow(repo, ["config", "user.name", "Test"]);
+  gitOrThrow(repo, ["config", "commit.gpgsign", "false"]);
+  for (const [file, content] of Object.entries(migrations)) {
+    const full = join(repo, file);
+    mkdirSync(dirname(full), { recursive: true });
+    writeFileSync(full, content);
+  }
+  gitOrThrow(repo, ["add", "."]);
+  gitOrThrow(repo, ["commit", "-m", "base"]);
+  return repo;
+}
+
+/** Commit `file` as an added migration on a new `feature` branch. */
+function addOnPr(repo: string, files: string[]) {
+  gitOrThrow(repo, ["checkout", "-b", "feature"]);
+  for (const file of files) {
+    const full = join(repo, file);
+    mkdirSync(dirname(full), { recursive: true });
+    writeFileSync(full, "SELECT 1;");
+  }
+  gitOrThrow(repo, ["add", "."]);
+  gitOrThrow(repo, ["commit", "-m", "added migration"]);
+}
+
+afterAll(() => {
+  for (const dir of scratchRepos) rmSync(dir, { recursive: true, force: true });
+});
+
+describe("ci-migration-numbering (issue #2507)", () => {
+  it("gate: every migration added in this diff sorts above the base top", () => {
+    // The required-check gate itself: on a PR that adds a stale or duplicate
+    // migration number this fails and formatOffenders names the file and the
+    // required minimum. On clean main and on PRs adding no migrations, added
+    // is empty and the check passes.
+    const result = checkMigrationNumbering(REPO_ROOT, "origin/main", "HEAD");
+    expect(result.offenders, formatOffenders(result)).toEqual([]);
+  });
+
+  it("passes on clean main: a diff adding no migrations has no offenders", () => {
+    const repo = setupRepo({
+      "migrations/0088_recreate_delivery_hot_path_indexes.sql": "SELECT 1;",
+    });
+    const result = checkMigrationNumbering(repo, "main", "HEAD");
+    expect(result.baseTop).toBe(88);
+    expect(result.added).toEqual([]);
+    expect(result.offenders).toEqual([]);
+  });
+
+  it("passes when the added migration sorts strictly above the base top", () => {
+    const repo = setupRepo({
+      "migrations/0087_cta_pipeline_bail_reason_counts.sql": "SELECT 1;",
+      "migrations/0087_signup_source_open_allowlist.sql": "SELECT 1;",
+      "migrations/0088_recreate_delivery_hot_path_indexes.sql": "SELECT 1;",
+    });
+    addOnPr(repo, ["migrations/0089_org_scoped_ownership.sql"]);
+    const result = checkMigrationNumbering(repo, "main", "HEAD");
+    expect(result.baseTop).toBe(88);
+    expect(result.added).toEqual(["migrations/0089_org_scoped_ownership.sql"]);
+    expect(result.offenders).toEqual([]);
+  });
+
+  it("fails when the added migration duplicates the current top number, naming the file and the minimum", () => {
+    const repo = setupRepo({
+      "migrations/0088_recreate_delivery_hot_path_indexes.sql": "SELECT 1;",
+    });
+    addOnPr(repo, ["migrations/0088_org_scoped_ownership.sql"]);
+    const result = checkMigrationNumbering(repo, "main", "HEAD");
+    expect(result.offenders).toHaveLength(1);
+    expect(result.offenders[0].file).toBe("migrations/0088_org_scoped_ownership.sql");
+    expect(result.minimum).toBe(89);
+    expect(formatOffenders(result)).toContain("migrations/0088_org_scoped_ownership.sql");
+    expect(formatOffenders(result)).toContain("required minimum: 89");
+  });
+
+  it("fails when the added migration number is below the base top", () => {
+    const repo = setupRepo({
+      "migrations/0088_recreate_delivery_hot_path_indexes.sql": "SELECT 1;",
+    });
+    addOnPr(repo, ["migrations/0001_dupe.sql"]);
+    const result = checkMigrationNumbering(repo, "main", "HEAD");
+    expect(result.offenders).toHaveLength(1);
+    expect(result.offenders[0].file).toBe("migrations/0001_dupe.sql");
+    expect(result.minimum).toBe(89);
+  });
+
+  it("does not trip on historical duplicate numbers already on the base branch", () => {
+    const repo = setupRepo({
+      "migrations/0087_cta_pipeline_bail_reason_counts.sql": "SELECT 1;",
+      "migrations/0087_signup_source_open_allowlist.sql": "SELECT 1;",
+      "migrations/0088_recreate_delivery_hot_path_indexes.sql": "SELECT 1;",
+    });
+    addOnPr(repo, ["migrations/0090_event_type_free_text.sql"]);
+    const result = checkMigrationNumbering(repo, "main", "HEAD");
+    expect(result.offenders).toEqual([]);
+  });
+
+  it("fails when two migrations added in the same PR share a prefix above the base top", () => {
+    const repo = setupRepo({
+      "migrations/0088_recreate_delivery_hot_path_indexes.sql": "SELECT 1;",
+    });
+    addOnPr(repo, [
+      "migrations/0090_event_type_free_text.sql",
+      "migrations/0090_widen_source_target_connector.sql",
+    ]);
+    const result = checkMigrationNumbering(repo, "main", "HEAD");
+    expect(result.offenders).toHaveLength(1);
+    expect(result.offenders[0].file).toBe(
+      "migrations/0090_widen_source_target_connector.sql",
+    );
+    expect(result.offenders[0].duplicateOf).toBe(
+      "migrations/0090_event_type_free_text.sql",
+    );
+    expect(formatOffenders(result)).toContain("duplicate of");
+  });
+
+  it("fails closed when the base ref cannot be resolved", () => {
+    const repo = setupRepo({
+      "migrations/0088_top.sql": "SELECT 1;",
+    });
+    expect(() => checkMigrationNumbering(repo, "no-such-ref", "HEAD")).toThrow();
+  });
+});
