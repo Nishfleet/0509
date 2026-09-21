@@ -76,7 +76,7 @@ No design in this document approaches that: the largest here is 300,000 rows a m
 
 ## Guardrails, as numbers
 
-- Browser Rendering: **≤ 10 concurrent browsers**, ever. Duration budget ≤ 20 browser-seconds per brand per day.
+- Browser Rendering: **≤ 10 concurrent browsers**, a config value. Raising it costs $2 per extra concurrent browser per month and needs Nish's deliberate yes, recorded in the PR with the cost. No agent leaves it hanging while customers wait: if a sweep cannot finish in its window at the cap, escalate to Nish the same day with the measured number and a proposed cap, and meanwhile prioritise ON brands' home and pricing pages over long-tail pages. Never drop brands silently. Duration budget ≤ 20 browser-seconds per brand per day.
 - D1: no write per observed element. Snapshots are one row per watch per tick; signals are one row per item that survived judgment.
 - Blobs — screenshots, raw payloads, HTML — in **R2**, never base64 into a D1 row.
 - Hot counters (poll cursors, budgets, tallies) in **KV or a Durable Object**, never a D1 write per increment.
