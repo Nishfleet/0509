@@ -153,7 +153,6 @@ const CLAIM_CHECKS: Record<string, ClaimCheck> = {
   "OP-MONITORING-CAPACITY": sourcePatternCheck(/capacity|queue|backpressure|Agency/iu),
   "COMPAT-MOBILE-A11Y": sourcePatternCheck(/Firefox|WebKit|Safari|Android Chrome/iu),
   "GA-AGENCY-STATUS": sourcePatternCheck(/release|readiness|GA/iu),
-  "E2E-CANARY-ROUTES": sourcePatternCheck(/api\/e2e|guardE2EHarnessReplayRequest/u),
   "NATIVE-APP-EDITING": sourcePatternCheck(/Native app work is `LATER\/REJECT`|native app.*REJECT/iu),
 };
 
@@ -204,7 +203,6 @@ const expectedClaimIds = [
 ] as const;
 
 const expectedExclusionIds = [
-  "E2E-CANARY-ROUTES",
   "NATIVE-APP-EDITING",
 ] as const;
 
@@ -262,8 +260,12 @@ function registryContractSha256() {
 // 2026-09-20: re-pinned after #3679 (stock deploy) repointed OP-BACKUP-RESTORE to
 // d1-backup-weekly.yml and stated the weekly-export + Time Travel truth; the
 // restore-evidence validator it used to cite was deleted.
+// 2026-09-21: re-pinned after #3861 (REBUILD P2 C2 marketing sweep) deleted the
+// public marketing/ops route surface — OP-MONITORING-CAPACITY lost its ops-route
+// source and the E2E-CANARY-ROUTES exclusion was removed with the api/e2e
+// routes and harness it documented.
 const EXPECTED_REGISTRY_CONTRACT_SHA256 =
-  "02f6af87705a0d56b2c78f92c0a4efc2bf57fa372a6ecec09af3d4887bc6946f";
+  "3760dd55ac92dc0f286647c9033a8d984b17d3be378f6a64115c1622c9c70e9f";
 
 type Catalogs = {
   agentActions: string[];
@@ -424,15 +426,15 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
     "/mcp/setup",
     "/status", "/changelog", "/trust", "/privacy", "/terms",
   ],
-  e2eRoutePaths: [
-    "api/e2e/j3/replay", "api/e2e/j4/replay", "api/e2e/billing/replay",
-    "api/e2e/billing/state", "api/e2e/support/replay", "api/e2e/support/state",
-    "api/e2e/auth/replay", "api/e2e/retention/replay", "api/e2e/retention/state",
-    "api/e2e/team/replay", "api/e2e/team/state",
-  ],
+  // Issue #3861 (REBUILD P2 C2): the api/e2e canary routes were swept with the
+  // marketing/ops surface, so the live catalog is empty. The entry stays so a
+  // resurrected api/e2e route fails unmapped instead of passing silently.
+  e2eRoutePaths: [],
 };
 
-const catalogClaimOwners: Record<CatalogName, string> = {
+// Partial: e2eRoutePaths lost its owner when the api/e2e surface was swept
+// (#3861) — the catalog stays so a resurrected canary route fails unmapped.
+const catalogClaimOwners: Partial<Record<CatalogName, string>> = {
   agentActions: "API-LIVE-CATALOG",
   billingSkus: "BILLING-PORTAL-PLAN-CHANGE",
   planFamilies: "PLAN-CADENCE",
@@ -441,7 +443,6 @@ const catalogClaimOwners: Record<CatalogName, string> = {
   customerNavPaths: "CUSTOMER-ROUTE-CATALOG",
   publicMarkdownPaths: "CUSTOMER-ROUTE-CATALOG",
   sitemapPaths: "SEO-CANONICAL-INDEXING",
-  e2eRoutePaths: "E2E-CANARY-ROUTES",
 };
 
 function catalogDriftErrors(catalogs: Catalogs) {

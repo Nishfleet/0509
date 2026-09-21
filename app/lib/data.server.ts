@@ -167,11 +167,6 @@ export type {
 } from "~/lib/data/billing-lifecycle-reconciliation.server";
 
 export type {
-  LaunchCanaryCleanupInput,
-  LaunchCanaryCleanupResult,
-} from "~/lib/data/launch-canary-cleanup.server";
-
-export type {
   DigestScheduleJob,
 } from "~/lib/data/digests.server";
 
@@ -734,10 +729,6 @@ export const listBillingLifecycleReconciliationCandidates: typeof import("~/lib/
 export const reconcileBillingLifecycleEmailAttempt: typeof import("~/lib/data/billing-lifecycle-reconciliation.server").reconcileBillingLifecycleEmailAttempt = (
   ...args: Parameters<typeof import("~/lib/data/billing-lifecycle-reconciliation.server").reconcileBillingLifecycleEmailAttempt>
 ) => import("~/lib/data/billing-lifecycle-reconciliation.server").then((m) => m.reconcileBillingLifecycleEmailAttempt(...args));
-
-export const cleanupLaunchReadinessCanary: typeof import("~/lib/data/launch-canary-cleanup.server").cleanupLaunchReadinessCanary = (
-  ...args: Parameters<typeof import("~/lib/data/launch-canary-cleanup.server").cleanupLaunchReadinessCanary>
-) => import("~/lib/data/launch-canary-cleanup.server").then((m) => m.cleanupLaunchReadinessCanary(...args));
 
 export const requeueExhaustedDigestScheduleJobWithAudit: typeof import("~/lib/data/digest-schedule-recovery.server").requeueExhaustedDigestScheduleJobWithAudit = (
   ...args: Parameters<typeof import("~/lib/data/digest-schedule-recovery.server").requeueExhaustedDigestScheduleJobWithAudit>
