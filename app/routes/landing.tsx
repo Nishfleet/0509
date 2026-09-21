@@ -1,8 +1,5 @@
 import type { Route } from "./+types/landing";
 
-// support@ is the address with an explicit Cloudflare Email Routing rule.
-// hello@ only reaches the inbox via the catch-all, so it is not the one to
-// print on the only page the public can reach.
 const CONTACT = "support@0509.io";
 
 export const links: Route.LinksFunction = () => [
@@ -23,27 +20,10 @@ export function meta(_: Route.MetaArgs) {
       content:
         "Quietly, we're rebuilding. You'll see where you stand when it's ready.",
     },
-    // noindex while the public site is gated behind the redesign. This comes
-    // off in the PR that removes the gate — not before, and not separately.
     { name: "robots", content: "noindex" },
   ];
 }
 
-/**
- * The public site while the rebuild is in progress.
- *
- * Four things, and nothing else: the wordmark, the headline, one sentence, the
- * address. Earlier versions carried a shouted caps headline, a struck
- * "old site → new site" mark, a mono eyebrow, a breathing dot and a date; Nish
- * cut all of it. What is left is quiet on purpose, and the only colour on the
- * page is the wordmark's 09.
- *
- * No date on purpose too: a date on a coming-soon page is a promise that ages
- * badly in public, and this one would have gone stale without anyone noticing.
- *
- * Deliberately static — no loader, no state, no client behaviour beyond the
- * framework's own hydration, and no animation at all.
- */
 export default function Page() {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-[64rem] flex-col justify-between px-6 py-12 sm:px-12 sm:py-16">

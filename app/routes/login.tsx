@@ -11,11 +11,6 @@ export async function action({ request }: Route.ActionArgs) {
   if (!email) return { error: "Enter your email." };
 
   const auth = createAuth(env);
-  // better-auth owns minting, sending and verification. We only hand it the
-  // address and report back; a failure here must not reveal whether the
-  // address exists.
-  // headers are required by the endpoint (requireHeaders: true) — better-auth
-  // uses them for origin and rate-limit context, so pass the real ones.
   await auth.api
     .signInMagicLink({ body: { email, callbackURL: "/app" }, headers: request.headers })
     .catch(() => undefined);
