@@ -140,7 +140,7 @@ jobs:
         run: npm run e2e
         env:
           # Setting this switches playwright.config.ts out of webServer mode.
-          PLAYWRIGHT_TEST_BASE_URL: ${{ github.event.deployment_status.target_url }}
+          PLAYWRIGHT_TEST_BASE_URL: ${{ github.event.deployment_status.environment_url }}
 
       - name: Keep the trace when it fails
         if: failure()
@@ -167,7 +167,7 @@ jobs:
         uses: treosh/lighthouse-ci-action@v12
         with:
           urls: |
-            ${{ github.event.deployment_status.target_url }}
+            ${{ github.event.deployment_status.environment_url }}
           budgetPath: ./lighthouse-budget.json
           uploadArtifacts: true
           temporaryPublicStorage: true
