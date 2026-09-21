@@ -1,0 +1,68 @@
+{
+  // Test-only Worker config for the workerd/D1 integration project (see the
+  // `workers` project in vite.config.ts). It deliberately declares ONLY the D1
+  // binding: these suites exercise the D1 data layer directly, so there is no
+  // `main` entrypoint, no browser/AI/workflow/email bindings, and no routes or
+  // cron triggers to simulate.
+  //
+  // `compatibility_date` and `compatibility_flags` MUST stay identical to the
+  // production wrangler.jsonc — a runtime-behaviour difference between the
+  // tests and production would make a green suite meaningless.
+  //
+  // `database_id` is a local-only placeholder. Miniflare never contacts the
+  // Cloudflare API here; the schema comes from applying the real
+  // `migrations/*.sql` in tests/integration/apply-migrations.ts.
+  "name": "0509-d1-integration-tests",
+  "compatibility_date": "2026-03-29",
+  "compatibility_flags": ["nodejs_compat"],
+  "unsafe": {
+    "bindings": [
+      // Real production wiring for the edge Rate Limiting bindings (issue
+      // #2985): the public hot-path limiters fail closed with 429 when a
+      // binding is missing, so integration suites that call them must run
+      // against the same bindings production declares. Capacities mirror
+      // wrangler.jsonc / app/lib/rate-limit.server.ts; the local miniflare
+      // limiters enforce them per key.
+      { "name": "RL_AUTH",
+ "type": "ratelimit", "namespace_id": "1001", "simple": { "limit": 2, "period": 60 } },
+      { "name": "RL_AUTH_GET",
+ "type": "ratelimit", "namespace_id": "1012", "simple": { "limit": 60, "period": 60 } },
+      { "name": "RL_SEARCH_ANON_BROWSER",
+ "type": "ratelimit", "namespace_id": "1002", "simple": { "limit": 2, "period": 60 } },
+      { "name": "RL_PROOF_BRIEF",
+ "type": "ratelimit", "namespace_id": "1003", "simple": { "limit": 3, "period": 60 } },
+      { "name": "RL_SEARCH_SELECTION",
+ "type": "ratelimit", "namespace_id": "1004", "simple": { "limit": 3, "period": 60 } },
+      { "name": "RL_SEARCH_IP",
+ "type": "ratelimit", "namespace_id": "1005", "simple": { "limit": 10, "period": 60 } },
+      { "name": "RL_BRAND_PAGE",
+ "type": "ratelimit", "namespace_id": "1006", "simple": { "limit": 60, "period": 60 } },
+      { "name": "RL_WRITE",
+ "type": "ratelimit", "namespace_id": "1007", "simple": { "limit": 60, "period": 60 } },
+      { "name": "RL_STATUS",
+ "type": "ratelimit", "namespace_id": "1008", "simple": { "limit": 120, "period": 60 } },
+      { "name": "RL_DELIVERY_WEBHOOK",
+ "type": "ratelimit", "namespace_id": "1009", "simple": { "limit": 180, "period": 60 } },
+      { "name": "RL_API_READ",
+ "type": "ratelimit", "namespace_id": "1010", "simple": { "limit": 240, "period": 60 } },
+      { "name": "RL_WEBHOOK",
+ "type": "ratelimit", "namespace_id": "1011", "simple": { "limit": 300, "period": 60 } }
+    ]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "0509-d1-integration-tests",
+      "database_id": "00000000-0000-0000-0000-000000000000"
+    },
+    {
+      // Scratch D1 for migration-apply tests that must interleave seed data
+      // between migration steps (issue #2774). The shared DB binding already
+      // has every migration applied by the setup file, so a second database
+      // is the only way to observe a mid-chain apply.
+      "binding": "DB_MIGRATION_SCRATCH",
+      "database_name": "0509-d1-migration-scratch",
+      "database_id": "00000000-0000-0000-0000-000000000001"
+    }
+  ]
+}
