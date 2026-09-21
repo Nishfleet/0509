@@ -13,7 +13,7 @@ Umbrella #3842. Author: Fable. Checked by the Opus deputy. Nish's words: "you ca
 | J5 | Onboard a bot-blocking site | card still confirmed; site fields say what fills them and when |
 | J6 | Turn a competitor off and back on | off: absent from Home, Alerts, brief; on: history intact |
 | J7 | A competitor changes its pricing page | before-and-after mark in Alerts within one tick, correct kind, screenshot pair, in the next brief |
-| J8 | Your own site breaks | incident email within one tick, "fixed" follow-up after repair, one email per incident |
+| J8 | Your own site breaks | incident email within one tick, "fixed" follow-up after repair, one email per incident. Fixture is **`fixture.0509.in`** — a separate Worker with its own name and `routes` block, deployed by normal CI, state in a KV flag flipped through a token-guarded route. **Not `0509.in`**: that is a live production redirect (verified 308 to `0509.io`, 2026-09-21) and breaking it on purpose would break production. Break it two ways: hard (500) and soft (200 with the pricing section gone), because only the soft case exercises D3s |
 | J9 | Mentions land from three sources | news, HN, RSS at minimum; homonym mention correctly dropped (D5) |
 | J10 | New ad creative appears | visible on the competitor page within one tick, deduped on re-crawl |
 | J11 | The weekly brief | real inbox, real workspace, order per docs/REBUILD-DELIVERY.md, quiet-week variant also sent |
