@@ -74,11 +74,11 @@
   "routes": [
     { "pattern": "0509.io", "custom_domain": true },
     { "pattern": "www.0509.io", "custom_domain": true },
-    { "pattern": "api.0509.io", "custom_domain": true },
-    // Compatibility only: these 308 to the .io equivalents in workers/app.ts.
-    // Kept because old links point here; no new product surface may use them.
-    { "pattern": "0509.in", "custom_domain": true },
-    { "pattern": "www.0509.in", "custom_domain": true },
-    { "pattern": "api.0509.in", "custom_domain": true }
+    { "pattern": "api.0509.io", "custom_domain": true }
+    // The .in hosts are deliberately absent. Their 308 to the .io twins is a
+    // zone-level Redirect Rule on the 0509.in zone (phase
+    // http_request_dynamic_redirect, ruleset f7743879d6904ebea189b42c85713069),
+    // which runs before the Worker and costs no invocation. Adding a route here
+    // would put the Worker in that path for nothing.
   ]
 }
