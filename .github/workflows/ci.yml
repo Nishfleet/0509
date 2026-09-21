@@ -49,9 +49,12 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # The gitleaks BINARY is MIT and free; gitleaks-action@v2 is the part
+      # that demands an organisation licence and aborts without one. Run the
+      # official image directly — no wrapper action, no script.
+      - uses: docker://ghcr.io/gitleaks/gitleaks:v8.29.0
+        with:
+          args: detect --source . --redact --exit-code 1
 
   semgrep:
     name: semgrep
@@ -61,9 +64,9 @@ jobs:
       image: semgrep/semgrep
     steps:
       - uses: actions/checkout@v5
-      - run: semgrep ci --config auto --error
-        env:
-          SEMGREP_RULES: p/typescript p/security-audit
+      # `semgrep ci` is the hosted mode and needs SEMGREP_APP_TOKEN, exiting 2
+      # without one. `semgrep scan` is the local mode and needs nothing.
+      - run: semgrep scan --config p/typescript --config p/security-audit --error
 
   preview-assert:
     name: preview-assert
