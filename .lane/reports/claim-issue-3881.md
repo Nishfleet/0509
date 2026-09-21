@@ -19,7 +19,7 @@ Role: scout. Research only, no code. Files in scope: `docs/REBUILD-COST.md`,
 - §2 per-1,000-operations marginal-cost table (the deliverable unit the
   packet asked for).
 - §3 stay-cheap practices: 11 items citing 4 dated non-vendor write-ups
-  (littlebearapps $4,868 D1-write disaster; honeymarron 10B→2.4M rows_read
+  (littlebearapps $4,868 bill — $4,779 of it write charges — D1-write disaster; honeymarron 10B→2.4M rows_read
   reduction; toolchew production cost model; cloudsecop D1 production
   gotchas) plus official docs (use-indexes, metrics-analytics, pricing
   footnotes).

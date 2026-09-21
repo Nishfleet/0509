@@ -185,12 +185,13 @@ fork is priced separately in §5.
 | Pipeline orchestration | 1 Workflow instance/day: 4 steps; 2 queue messages × 3 ops; ~5 AE datapoints; ~3 misc Worker requests (cron share, flush, read-back) | WF 1 inv + 4 steps; Queues 6 ops; AE 5 dp; Workers 3 req |
 
 **Daily totals per brand:** BR 105 s · Workers ~10 req / ~600 CPU-ms · AI ~33
-neurons · D1 ~3 W / ~12 R · R2 12 A-ops + ~1.55 MB + 5 B-ops · KV 4 W / ~8 R ·
-Email 1 · Workflow 1 inv + 4 steps · Queues 6 ops · AE 5 dp · DO 0 · Vectorize
-0 (see trap below).
+neurons · D1 ~4 W (1+1+1+1+0.06 — the alert row is the only fractional write)
+/ ~12 R · R2 12 A-ops + ~1.55 MB + 5 B-ops (digest/artifact reads) · KV 4 W /
+~8 R (poll counters + misc reads) · Email 1 · Workflow 1 inv + 4 steps ·
+Queues 6 ops · AE 5 dp · DO 0 · Vectorize 0 (see trap below).
 
 **Monthly per brand (×30):** BR 0.875 h · 300 req / 18,000 CPU-ms · ~1,000
-neurons · 90 W / 360 R rows · 360 A + 150 B ops, ~48 MB steady-state storage
+neurons · ~120 W / 360 R rows · 360 A + 150 B ops, ~48 MB steady-state storage
 (30-day retention) · 120 KV W / 240 R · 30 sends · 30 inv + 120 steps · 180
 queue ops · 150 AE dp.
 
@@ -202,7 +203,7 @@ queue ops · 150 AE dp.
 | Worker requests | 3,000 — incl | 30,000 — incl | 300,000 — incl (3% of 10M) |
 | Worker CPU-ms | 180k — incl | 1.8M — incl | 18M — incl (**60%** of 30M — watch) |
 | Workers AI neurons | ~10k — free tier | ~100k — free tier | ~990k → 690k over 300k/mo free → **$7.59** |
-| D1 rows W / R | 900 / 3.6k — incl | 9k / 36k — incl | 90k / 360k — incl |
+| D1 rows W / R | 1.2k / 3.6k — incl | 12k / 36k — incl | 120k / 360k — incl |
 | R2 storage | ~0.5 GB — incl | ~4.8 GB — incl | ~48 GB → 38 × $0.015 = **$0.57** |
 | R2 A / B ops | 3.6k / 1.5k — incl | 36k / 15k — incl | 360k / 150k — incl |
 | KV W / R | 1.2k / 2.4k — incl | 12k / 24k — incl | 120k / 240k — incl |
@@ -220,10 +221,14 @@ queue ops · 150 AE dp.
    +$0.75/mo per 1,000 brands per second-of-cadence. Snapshot cadence and
    session length are the throttle — poll-fetch first, browse only on signal.
 2. **Judgment-call size and model.** Workers AI is the #2 line at 1,000 brands.
-   The neuron spread across usable models is ~80× (granite-micro 1,542/M-in vs
-   glm-5.3 127,273/M-in); the same 2 calls/day at glm-5.3 instead of
-   llama-8b-fp8 would move this line from $7.59 to ≈$65/mo. Call count ×
-   prompt size × model choice is the lever — not "using AI less".
+   The input-side neuron spread across usable models is ~80× (granite-micro
+   1,542/M-in vs glm-5.3 127,273/M-in) — and output tokens carry ~63% of this
+   workload's per-call neuron count (300 out × 34,868 vs 1,500 in × 4,119),
+   so the *output* rate dominates. Same 2 calls/day at 1,000 brands:
+   llama-8b-fp8 $7.59 → llama-3.3-70b-instruct-fp8-fast ≈$66/mo ($26.37 in +
+   $40.55 out) → glm-5.3 ≈$205/mo gross ($126 in + $79.20 out; ≈$202 after
+   the free allocation). Call count × prompt size × model choice is the
+   lever — not "using AI less".
 3. **Digest fan-out volume.** Email sends are free up to 3,000/mo — *exactly*
    100 brands × 30 days. One more daily send per brand at 100 brands, or the
    same cadence at 101 brands, starts billing at $0.35/1k. Bundling the digest
@@ -241,8 +246,9 @@ lane (weekly batch or on-demand), never a per-poll step
 
 On 2026-09-17 this account's D1 rows-written line reached roughly **$105**. At
 $1.00/M marginal beyond the 50M/mo inclusion, that is ≈**105M billable written
-rows, ≈155M rows total** — an event-volume number (~5.2M rows/day pace), not a
-watchlist-count number.
+rows, ≈155M rows total** — an event-volume number (~5.2M rows/day pace if the
+$105 accrued month-to-date across ~30 days; ~105M/day if it was a single-day
+spend — either way it is not a watchlist-count number).
 
 Same event stream, two write shapes:
 
@@ -256,10 +262,11 @@ advice. Assumptions stated: 50:1 summary fan-in (one row per entity-day per
 event kind, updated in place); batching via `.batch()` does not itself reduce
 row counts — the summary shape does. The 50:1 figure is the design target the
 schema already supports (`signal` + per-kind detail rollups, REBUILD-SCHEMA);
-if the real fan-in is 10:1 the numbers become $0.0001/1k and $15.50 — still a
-6.8× cut, and the mechanism (write a rollup, not the event) is identical.
+if the real fan-in is 10:1 the numbers become $0.0001/1k and $15.50 gross
+marginal (vs $155 gross — a 10× cut on the same frame), and the mechanism
+(write a rollup, not the event) is identical.
 
-Honest bound: per-brand watchlist writes alone (~3/day batched, ~50/day
+Honest bound: per-brand watchlist writes alone (~4/day batched, ~50/day
 row-per-event) stay inside the 50M inclusion even at 1,000 brands. The
 guardrail exists for the **event lanes** — raw mention hits, creative diffs,
 poll results — where volume is unbounded per brand. Little Bear's measured
