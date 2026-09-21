@@ -685,6 +685,16 @@ You're running `vitest@5.0.1`, but this version of `@cloudflare/vitest-plugin` o
 
 A warning, not an error, is the dangerous case: tests pass until an internal Vitest API moves. **`vitest` is pinned at `4.1.11` in `package.json`, exact, with this paragraph as the reason.**
 
+**And the pin does not install on its own.** Verified on this VPS: with npm 10.9.8, `vitest@4.1.11` plus `@cloudflare/vitest-plugin@1.1.13` **cannot be installed** without an `overrides` block. npm does not report a conflict — it **crashes** inside arborist's peer walk, after fetching `@vitest/browser-playwright@5.0.1` while resolving the 4.1.11 pin:
+
+```
+npm error Cannot read properties of null (reading 'edgesOut')
+```
+
+Ruled out by the deputy: tree corruption, the packages themselves, and a Vite mismatch (`vitest@4.1.11` declares `vite ^6 || ^7 || ^8`; the scaffold ships Vite 8.0.3). The fix is a `package.json` `overrides` block pinning the whole `@vitest/*` family to `4.1.11`. With it in place the install resolves cleanly: `vitest` 4.1.11, `@vitest/runner` 4.1.11, `@vitest/snapshot` 4.1.11, plugin 1.1.13, exporting `cloudflareTest` and `readD1Migrations`.
+
+This is worth its own paragraph because the failure mode teaches the wrong lesson: an `edgesOut` crash reads like a corrupt `node_modules` and invites `rm -rf node_modules package-lock.json`, which does nothing. **The `overrides` block is not optional tidying — it is the only thing that makes the documented, supported version pair installable.** C4 ships it with the scaffold, not after the first red CI run.
+
 **Third: `defineWorkersConfig` and `poolOptions.workers` no longer exist** (removed in pool 0.13.0). The current shape:
 
 ```ts
