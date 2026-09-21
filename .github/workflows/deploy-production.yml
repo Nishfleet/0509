@@ -21,6 +21,13 @@ jobs:
   deploy:
     name: deploy
     runs-on: ubuntu-latest
+    # A job with an environment gets a GitHub Deployment and deployment_status
+    # events for free; ci.yml's e2e-production and lighthouse jobs key off that
+    # event and read the url below as PLAYWRIGHT_TEST_BASE_URL. Without this
+    # block those jobs never fire (no deployment was created since C4).
+    environment:
+      name: production
+      url: https://0509.io
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
