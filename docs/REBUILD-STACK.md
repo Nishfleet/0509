@@ -616,10 +616,9 @@ uPlot's README claim of "~50 KB min" checks out exactly (51,081 B minified) — 
 
 `frappe-charts` is the only library under the bar and it is not a candidate: **last published 2021-06-16**, five years stale, imperative DOM mutation with no React wrapper, and it would fight React's reconciler.
 
-**The two honest options, both needing a call above me:**
+**Decision (Fable, 2026-09-21): budget raised to 30 KB gzip; take `uplot` 1.6.32.** It is the only maintained candidate. `frappe-charts` is rejected as unmaintained since 2021 despite fitting the old bar, and inline SVG is rejected as hand-rolled. The 20 KB figure was an estimate written before anyone measured; 24–28 KB is the measured cost of the maintained option, and 30 KB is the bar that reflects it.
 
-- **Accept ~24–28 KB and take `uplot` 1.6.32.** It is world-class at what it does (166k points in ~25 ms) and the budget was an estimate, not a measurement.
-- **Inline SVG, 0 KB.** For sparklines, small bar charts and a weekly you-vs-them line, a chart is twenty lines of `<polyline points>` / `<rect>` over a scale function. It SSRs perfectly with no `useEffect`, gives real DOM nodes for accessibility and theming, and costs nothing. But it *is* hand-rolled, which the charter forbids me from choosing unilaterally.
+Consequence to carry into C4: uPlot is Canvas-based, so a chart renders nothing during SSR. Wrap it once, in one component, with the server rendering the axis frame and the canvas painting on mount — not a `useEffect` copy-pasted per chart.
 
 A library starts earning its bytes at axes, legends, panning, brushing and 10k+ points. Home and the competitor drill-in have none of those. **Recorded as open item 1 below.** `recharts` (148 KB) is explicitly rejected even though `shadcn/ui`'s own chart component wraps it — "just use the shadcn chart" is the expensive answer wearing our design system's badge.
 
@@ -836,7 +835,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | Feed parsing | `@extractus/feed-extractor` (wraps `fast-xml-parser`) | 8.0.3 / 5.11.1 |
 | Logo | page metadata via `HTMLRewriter`, DuckDuckGo icon fallback | platform |
 | Validation | `zod` | 4.6.5 |
-| Charts | **undecided** — `uplot` at ~24–28 KB gzip in React, or 0 KB inline SVG | 1.6.32 / — (see §5.7) |
+| Charts | `uplot` (+ `uplot-react`) — ~24–28 KB gzip, budget raised to 30 KB | 1.6.32 / 1.2.4 |
 | OG images | Browser Run `/screenshot` → R2 | platform |
 | Dates + timezones | `Intl` + `date-fns` + `@date-fns/tz` (**never `Temporal`** — workerd#6907) | platform / 4.4.0 / 1.5.0 |
 | Unit + integration tests | `vitest` (**pinned 4.1.11**) + `@cloudflare/vitest-plugin` | 4.1.11 / 1.1.13 |
@@ -844,7 +843,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | Performance gate | `treosh/lighthouse-ci-action` | v12.6.2 |
 | Link checking | `lycheeverse/lychee-action` | v2.9.0 |
 
-**Runtime dependencies this stack adds beyond the scaffold: six, plus one undecided.** `better-auth`, `@better-auth/passkey`, `@better-auth/api-key`, `diff`, `@extractus/feed-extractor`, `date-fns` + `@date-fns/tz`. `zod` arrives transitively through better-auth; `fast-xml-parser` arrives transitively through feed-extractor. The chart library is the undecided one (§5.7). Everything else in the table is a platform primitive with no bundle cost.
+**Runtime dependencies this stack adds beyond the scaffold: seven.** `better-auth`, `@better-auth/passkey`, `@better-auth/api-key`, `diff`, `@extractus/feed-extractor`, `uplot` + `uplot-react`, `date-fns` + `@date-fns/tz`. `zod` arrives transitively through better-auth; `fast-xml-parser` arrives transitively through feed-extractor. Everything else in the table is a platform primitive with no bundle cost.
 
 ---
 
