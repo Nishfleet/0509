@@ -66,9 +66,39 @@
   // ten (docs/REBUILD-COST.md).
   "browser": { "binding": "BROWSER" },
 
-  // Transactional send only. The weekly brief's standing on this lane is an
-  // open question recorded on docs/REBUILD-DELIVERY.md.
+  // The one send lane's outbound binding (0509#3979, docs/engines/delivery.md
+  // § P7.2). Delivers the weekly brief now and the incident email when engine 4
+  // writes its row. Auth's magic link routes through the same
+  // workers/delivery/send.ts, so this binding has exactly one call site.
   "send_email": [{ "name": "EMAIL" }],
+
+  // The one send lane (0509#3979, docs/engines/delivery.md § P7.2, §5).
+  // The weekly brief (engine 6) and the incident email (engine 4) both write
+  // their row and put `{ digest_id }` on `send-email`; this consumer is the
+  // only thing that calls EMAIL.send. The numbers are the packet's, not
+  // defaults: max_batch_size 1 because each send is its own API call and a
+  // partial batch failure is ambiguous; max_concurrency 2 because Email
+  // Service is Beta with unpublished, reputation-gated daily limits and a cold
+  // domain, so two concurrent sends clears a 25-workspace Monday without
+  // looking like a blast. The dead letter queue is mandatory — messages that
+  // reach the retry limit are deleted permanently otherwise, and a silently
+  // dropped brief is the failure the contract forbids.
+  "queues": {
+    "producers": [
+      { "queue": "send-email", "binding": "SEND_EMAIL" },
+      { "queue": "send-email-dlq", "binding": "SEND_EMAIL_DLQ" }
+    ],
+    "consumers": [
+      {
+        "queue": "send-email",
+        "max_batch_size": 1,
+        "max_batch_timeout": 30,
+        "max_retries": 5,
+        "max_concurrency": 2,
+        "dead_letter_queue": "send-email-dlq"
+      }
+    ]
+  },
 
   "triggers": {
     // The dead-man ping, and nothing else yet. Every five minutes: an external
