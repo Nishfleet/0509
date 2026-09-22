@@ -113,7 +113,7 @@ describe("checkCostRegression", () => {
     expect(DOC).toContain("That dataset has no script name");
   });
 
-  it("reads the committed GraphQL response: D1 and browser stay quiet, the one Class A op alerts", async () => {
+  it("reads the committed GraphQL response and stays quiet on that ordinary day", async () => {
     const result = await checkCostRegression({
       graphql: REAL_GRAPHQL,
       day: DAY,
@@ -124,20 +124,11 @@ describe("checkCostRegression", () => {
       r2_class_a: 1,
       browser_rendering_seconds: 4943.228,
     });
-    expect(result.alerts.map((row) => row.line)).toEqual(["r2_class_a"]);
-    expect(result.alerts).toEqual([
-      {
-        id: "cost-guard:2026-09-21:r2_class_a",
-        line: "r2_class_a",
-        measured: 1,
-        expected: result.expected.r2_class_a,
-        day: DAY,
-      },
-    ]);
+    expect(result.alerts).toEqual([]);
     expect(17_499).toBeLessThan(D1_TRIP_ROWS);
     expect(4_943_228).toBeLessThan(BROWSER_TRIP_MS);
     expect(result.expected.d1_rows_written).toBeCloseTo(FIGURES.d1Week / FIGURES.days + 10, 6);
-    expect(result.expected.r2_class_a).toBeCloseTo(FIGURES.r2ClassAWeek / FIGURES.days, 10);
+    expect(result.expected.r2_class_a).toBe(FIGURES.r2ClassAWeek);
     expect(result.expected.browser_rendering_seconds).toBeCloseTo(
       FIGURES.browserWeekMs / FIGURES.days / 1000 + 15,
       6,
@@ -205,23 +196,32 @@ describe("checkCostRegression", () => {
     expect(result.alerts[0]?.measured).toBe(5_000_000);
   });
 
-  it("writes cost-guard:2026-09-21:r2_class_a at one Class A op and stays quiet at zero", async () => {
-    const quiet = await checkCostRegression({ graphql: day(0, 0, 0), day: DAY, onBrands: 1 });
+  it("writes cost-guard:2026-09-21:r2_class_a at 4 Class A ops and stays quiet at 3", async () => {
+    const quiet = await checkCostRegression({
+      graphql: day(0, FIGURES.r2ClassAWeek * 3, 0),
+      day: DAY,
+      onBrands: 1,
+    });
+    expect(quiet.totals.r2_class_a).toBe(3);
     expect(quiet.alerts).toEqual([]);
-    expect(quiet.expected.r2_class_a).toBeCloseTo(FIGURES.r2ClassAWeek / FIGURES.days, 10);
-    const result = await checkCostRegression({ graphql: day(0, 1, 0), day: DAY, onBrands: 1 });
+    const tripped = FIGURES.r2ClassAWeek * 3 + 1;
+    const result = await checkCostRegression({
+      graphql: day(0, tripped, 0),
+      day: DAY,
+      onBrands: 1,
+    });
     expect(result.alerts).toEqual([
       {
         id: "cost-guard:2026-09-21:r2_class_a",
         line: "r2_class_a",
-        measured: 1,
-        expected: result.expected.r2_class_a,
+        measured: tripped,
+        expected: FIGURES.r2ClassAWeek,
         day: DAY,
       },
     ]);
     const hundred = await checkCostRegression({ graphql: day(0, 1, 0), day: DAY, onBrands: 100 });
-    expect(hundred.expected.r2_class_a).toBe(result.expected.r2_class_a);
-    expect(hundred.alerts.map((row) => row.id)).toEqual(["cost-guard:2026-09-21:r2_class_a"]);
+    expect(hundred.expected.r2_class_a).toBe(FIGURES.r2ClassAWeek);
+    expect(hundred.alerts).toEqual([]);
   });
 
   it("counts ListObjects as Class A and DeleteObject as free", async () => {
@@ -239,15 +239,7 @@ describe("checkCostRegression", () => {
       onBrands: 0,
     });
     expect(result.totals.r2_class_a).toBe(2);
-    expect(result.alerts).toEqual([
-      {
-        id: "cost-guard:2026-09-21:r2_class_a",
-        line: "r2_class_a",
-        measured: 2,
-        expected: result.expected.r2_class_a,
-        day: DAY,
-      },
-    ]);
+    expect(result.alerts).toEqual([]);
   });
 
   it("refuses an unrecognized R2 action instead of dropping it", async () => {
