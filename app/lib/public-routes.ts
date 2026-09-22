@@ -27,6 +27,18 @@ export const PUBLIC_SURFACES: readonly PublicSurface[] = [
     note: "app/routes/login.tsx; public page, listed per build step 1",
   },
   {
+    path: "/s/:slug",
+    kind: "route",
+    indexable: false,
+    note: "app/routes/s.$slug.tsx; a published standing card. Not advertised until slugs can be enumerated from data (0509#3898); sitemapEntries(surfaces, dynamicLocs) is the seam.",
+  },
+  {
+    path: "/design/brand-chips",
+    kind: "route",
+    indexable: false,
+    note: "app/routes/design.brand-chips.tsx; a design-directions page, not a public surface of the product.",
+  },
+  {
     path: "/*",
     kind: "route",
     indexable: false,

@@ -278,12 +278,16 @@ describe("manifest, routes.ts and public/ agree (0509#3989)", () => {
     const gated = await sessionGatedRouteFiles();
     expect(gated.length).toBeGreaterThan(0);
 
-    const urlByFile = new Map(
-      routes.map((route) => [
-        route.file?.replace(/^routes\//, "") ?? "",
-        routePathToUrl(route.path ?? ""),
-      ]),
-    );
+    const urlByFile = new Map<string, string>();
+    const walk = (entries: typeof routes, parentUrl: string): void => {
+      for (const entry of entries) {
+        const path = entry.path ?? "";
+        const url = parentUrl + routePathToUrl(path);
+        if (entry.file) urlByFile.set(entry.file.replace(/^routes\//, ""), url);
+        if (entry.children) walk(entry.children, url);
+      }
+    };
+    walk(routes, "");
 
     for (const file of gated) {
       const url = urlByFile.get(file);
