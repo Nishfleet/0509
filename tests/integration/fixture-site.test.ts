@@ -1,5 +1,5 @@
 import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import worker from "../../workers/fixture-site";
 
@@ -40,6 +40,14 @@ const readPricing = (html: string) => {
 };
 
 describe("0509-fixture-site", () => {
+  // One KV key backs every test, so a flip in one test would leak into the next
+  // and make the suite order-dependent. Reset to healthy before each: the
+  // healthy-page test only passes reliably because it runs first otherwise, and
+  // --sequence.shuffle turns that into a red gate.
+  beforeEach(async () => {
+    await env.STATE.put("break-mode", "off");
+  });
+
   it("serves the healthy page with its pricing section and price tokens", async () => {
     const res = await get();
     expect(res.status).toBe(200);
@@ -119,8 +127,11 @@ describe("0509-fixture-site", () => {
     expect(readPricing(await res.text())).not.toBeNull();
   });
 
-  it("403s on a wrong token", async () => {
-    expect((await flip("hard", "wrong-token")).status).toBe(403);
+  it("403s on a wrong token of the same length, so the constant-time compare is really exercised", async () => {
+    // Same byte length as `Bearer integration-token` (23): the gate short-circuits
+    // on byteLength before timingSafeEqual, so a shorter wrong token never reaches
+    // the compare and a stubbed timingSafeEqual would still pass.
+    expect((await flip("hard", "integration-tokeX")).status).toBe(403);
   });
 
   it("403s on no Authorization header", async () => {

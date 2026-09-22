@@ -12,6 +12,15 @@
 // 0509-fixture-site-state namespace on first deploy and keeps it linked across
 // later deploys, even though the id is never written back here (CI deploys have
 // no checkout to write to).
+//
+// The break state has NO TTL and the deploy job never resets it, so it survives
+// deploys: a round-trip that forgets to repair leaves the fixture broken while
+// every later deploy still reports success. End every round-trip with
+// `POST /__break?mode=off`.
+//
+// The Worker also needs the `FIXTURE_SITE_TOKEN` Worker secret. Without it every
+// flip answers 503 and the fixture stays healthy forever, which is why the
+// Worker fails loudly rather than reading healthy by default.
 {
   "$schema": "../node_modules/wrangler/config-schema.json",
   "name": "0509-fixture-site",

@@ -41,14 +41,28 @@ const PRICING_SECTION = `    <section id="pricing" aria-labelledby="pricing-head
       </ul>
       <p><a href="https://0509.io/checkout?plan=pro" rel="nofollow">Choose a plan and check out</a></p>
     </section>`;
+//
+// NOTE: that href points at a URL the app does not serve yet (app/routes.ts has
+// no /checkout route, J13 unbuilt), so it resolves 404 today. It is a markup
+// marker on purpose, not a resolving target: D3s's "checkout link resolving"
+// evidence (docs/engines/site-change.md) is computed against the live app and
+// would read false in this fixture's healthy baseline, which would hand the
+// judge evidence that cannot distinguish a healthy page from a broken one.
+// When /checkout ships, point this at it and the marker becomes real.
 
 const renderPage = (mode: BreakMode): string => {
   const pricing = mode === "soft" ? "" : PRICING_SECTION;
   // The mode is echoed in the body on purpose: an observer reading a 200 needs
-  // to tell "healthy" from "soft-broken" without trusting a header, and the D3
-  // verdict that consumes this fixture keys off the section's absence, not off
-  // this marker. It is not asserted verbatim anywhere.
-  const marker = `    <p id="mode" data-mode="${mode}">fixture site, mode: ${mode}</p>`;
+  // to tell "healthy" from "soft-broken" without trusting a header. It is
+  // aria-hidden because docs/engines/site-change.md:61 documents that the D3
+  // hash is over normalised extracted text which DROPS aria-hidden elements —
+  // a visible marker saying "mode: soft" lands in the exact text the judge
+  // word-diffs, which announces the deliberate break and talks the fixture's
+  // own incident out of firing. Outside the diff, the data-mode attribute is
+  // still greppable by an operator.
+  const marker =
+    `    <p id="mode" data-mode="${mode}" aria-hidden="true">` +
+    `fixture site, mode: ${mode}</p>`;
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -68,7 +82,13 @@ ${pricing}
 `;
 };
 
-const HTML_HEADERS = { "content-type": "text/html; charset=utf-8" };
+// No-store, on both the page and the flip response: the fixture's whole value
+// is that a fresh fetch observes the current mode, so no zone Cache Rule or
+// intermediate cache may answer a stale one.
+const HTML_HEADERS = {
+  "content-type": "text/html; charset=utf-8",
+  "cache-control": "no-store",
+};
 
 export default {
   async fetch(request, env): Promise<Response> {
