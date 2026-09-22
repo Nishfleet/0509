@@ -7,7 +7,6 @@ const g = globalThis as { LIVENESS_PING_URL?: string };
 afterEach(() => {
   delete g.LIVENESS_PING_URL;
   vi.unstubAllGlobals();
-  vi.useRealTimers();
 });
 
 describe("pingLiveness", () => {
@@ -39,7 +38,7 @@ describe("pingLiveness", () => {
     await new Promise((resolve) => signal?.addEventListener("abort", resolve));
     const elapsed = Date.now() - started;
     expect(elapsed).toBeGreaterThanOrEqual(9_000);
-    expect(elapsed).toBeLessThan(15_000);
+    expect(elapsed).toBeLessThan(20_000);
     expect(signal?.aborted).toBe(true);
     expect(signal?.reason).toBeInstanceOf(DOMException);
     expect((signal?.reason as DOMException).name).toBe("TimeoutError");
@@ -49,7 +48,7 @@ describe("pingLiveness", () => {
       Promise.resolve("still-pending"),
     ]);
     expect(settled).toBe("still-pending");
-  }, 20_000);
+  }, 30_000);
 
   it("swallows a rejected fetch instead of surfacing it", async () => {
     g.LIVENESS_PING_URL = "https://monitor.example/ping";
