@@ -80,13 +80,17 @@ test("the privacy page does not scroll horizontally", async ({ page }) => {
   const width = page.viewportSize()?.width ?? 0;
   const edges = await page.evaluate(() => {
     return ["main", "footer a"].map((selector) => {
-      const rect = document.querySelector(selector)?.getBoundingClientRect();
-      return { left: rect?.left ?? 0, right: rect?.right ?? 0 };
+      const element = document.querySelector(selector);
+      if (element === null) {
+        throw new Error(`selector matched nothing: ${selector}`);
+      }
+      const rect = element.getBoundingClientRect();
+      return { selector, left: rect.left, right: rect.right };
     });
   });
   for (const edge of edges) {
-    expect(edge.left).toBeGreaterThanOrEqual(0);
-    expect(edge.right).toBeLessThanOrEqual(width + 1);
+    expect(edge.left, `${edge.selector} left edge`).toBeGreaterThanOrEqual(0);
+    expect(edge.right, `${edge.selector} right edge`).toBeLessThanOrEqual(width + 1);
   }
 });
 
