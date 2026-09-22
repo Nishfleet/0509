@@ -9,7 +9,6 @@ on:
 
 permissions:
   issues: write
-  pull-requests: read
   actions: read
   contents: read
 
@@ -203,12 +202,10 @@ jobs:
           day=${SINCE%%T*}
           machine_tmp=$(mktemp)
           human_tmp=$(mktemp)
-          # gh issue list prints app/sentry and app/nishfleet-worker.
-          # The REST logins for those same accounts are sentry[bot] and nishfleet-worker[bot].
           gh issue list --repo "$REPO" --state all --limit 200 \
             --search "created:>=${day} (label:machine-reported OR label:deploy-regression)" \
             --json number,author,labels,createdAt \
-            --jq "if length >= 200 then error(\"machine issue list hit the cap\") else . end | unique_by(.number) | map(select(.createdAt >= \"${SINCE}\")) | map(select(.author.login == \"app/sentry\" or .author.login == \"sentry[bot]\" or .author.login == \"app/nishfleet-worker\" or .author.login == \"nishfleet-worker[bot]\")) | map(select(any(.labels[]?; .name == \"machine-reported\" or .name == \"deploy-regression\"))) | {machine: length, ids: (map(.number)|sort|map(tostring)|join(\",\"))}" \
+            --jq "if length >= 200 then error(\"machine issue list hit the cap\") else . end | unique_by(.number) | map(select(.createdAt >= \"${SINCE}\")) | map(select(.author.login == \"app/sentry\" or .author.login == \"app/nishfleet-worker\")) | map(select(any(.labels[]?; .name == \"machine-reported\" or .name == \"deploy-regression\"))) | {machine: length, ids: (map(.number)|sort|map(tostring)|join(\",\"))}" \
             > "$machine_tmp"
           gh issue list --repo "$REPO" --state all --limit 200 \
             --search "created:>=${day} label:bug author:nish3451" \
@@ -290,24 +287,24 @@ jobs:
             --jq '.[] | select(.user.login == "github-actions[bot]") | select(.body | contains("parity-scorecard")) | .body' \
             > "$comments"
           prev=0
-          prev_until=""
+          prev_anchor=""
           last=$(grep -E '^streak=[0-9]+$' "$comments" | tail -1 || true)
-          last_until=$(grep -E '^until=[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$' "$comments" | tail -1 || true)
+          last_anchor=$(grep -E '^schedule_until=[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$' "$comments" | tail -1 || true)
           if [ -n "$last" ]; then
             prev=${last#streak=}
           fi
-          if [ -n "$last_until" ]; then
-            prev_until=${last_until#until=}
+          if [ -n "$last_anchor" ]; then
+            prev_anchor=${last_anchor#schedule_until=}
           fi
           case "$prev" in
             ''|*[!0-9]*) echo "previous streak is not a number" >&2; exit 1 ;;
           esac
           advance=0
           if [ "$EVENT" = "schedule" ]; then
-            if [ -z "$prev_until" ]; then
+            if [ -z "$prev_anchor" ]; then
               advance=1
             else
-              prev_epoch=$(date -u -d "$prev_until" +%s)
+              prev_epoch=$(date -u -d "$prev_anchor" +%s)
               this_epoch=$(date -u -d "$UNTIL" +%s)
               if [ $((this_epoch - prev_epoch)) -ge $((6 * 24 * 3600)) ]; then
                 advance=1
@@ -338,7 +335,11 @@ jobs:
             echo "| 4 | Bugs the system caught | machine ${M4_MACHINE}, person ${M4_HUMAN} | ${M4_COLOR} | machine ${M4_MACHINE_IDS}; person ${M4_PERSON_IDS} |"
             echo
             echo "parity-scorecard"
-            echo "until=${UNTIL}"
+            if [ "$EVENT" = "schedule" ]; then
+              echo "schedule_until=${UNTIL}"
+            elif [ -n "$prev_anchor" ]; then
+              echo "schedule_until=${prev_anchor}"
+            fi
             echo "streak=${streak}"
           } > "$body"
           if [ "$streak" -eq 0 ] && [ "$prev" -ge 2 ]; then
