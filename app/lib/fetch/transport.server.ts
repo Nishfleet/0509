@@ -18,7 +18,6 @@ interface ReadUrlSuccess {
 
 type ReadUrlFailure =
   | { ok: false; reason: "invalid-url"; detail: string }
-  | { ok: false; reason: "fetch-failed"; detail: string }
   | { ok: false; reason: "escalation-failed"; detail: string };
 
 export type ReadUrlResult = ReadUrlSuccess | ReadUrlFailure;
