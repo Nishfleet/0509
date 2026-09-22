@@ -33,7 +33,7 @@ async function removeProbes(): Promise<void> {
 
 describe("architecture lint (#4272)", () => {
   it(
-    "rejects a component importing a data writer, a data writer importing auth, and an import cycle",
+    "rejects a component importing a data writer, a data writer importing auth, an import cycle, and auth-client importing cloudflare:workers",
     { timeout: 60_000 },
     async () => {
       await writeProbes();
@@ -55,6 +55,25 @@ describe("architecture lint (#4272)", () => {
           const messages = byFile.get(rel) ?? [];
           expect(messages.some((message) => message.ruleId === "import-x/no-cycle")).toBe(true);
         }
+
+        const realClient = await eslint.lintFiles(["app/lib/auth-client.ts"]);
+        const realMessages = realClient[0]?.messages ?? [];
+        expect(realMessages.some((message) => message.ruleId === "no-restricted-imports")).toBe(
+          false,
+        );
+
+        const synthetic = await eslint.lintText(
+          'import { env } from "cloudflare:workers";\n\nexport const leaked = env;\n',
+          { filePath: path.join(REPO_ROOT, "app/lib/auth-client.ts") },
+        );
+        const syntheticMessages = synthetic[0]?.messages ?? [];
+        expect(
+          syntheticMessages.some(
+            (message) =>
+              message.ruleId === "no-restricted-imports" &&
+              message.message.includes("cloudflare:workers"),
+          ),
+        ).toBe(true);
       } finally {
         await removeProbes();
       }

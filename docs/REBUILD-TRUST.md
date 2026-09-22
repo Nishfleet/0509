@@ -324,7 +324,10 @@ Everything else is a named export, so grep can find it.
 `kysely`, `better-auth`, and `cloudflare:workers` stay on
 `no-restricted-imports`. Those are package names, not element types. The
 client block is the later one, and it repeats the paved-path list, because
-a later block replaces the rule.
+a later block replaces the rule. `app/lib/auth-client.ts` is the one module
+allowed to import `better-auth` client subpaths, so the client block skips
+it. A following block still bans `cloudflare:workers` and the exact paved-path
+packages there.
 
 **Rejected for this pass, on top of the original fork below.**
 
