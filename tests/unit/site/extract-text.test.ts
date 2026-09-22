@@ -34,8 +34,32 @@ describe("extractPageText", () => {
     expect(extracted.text).not.toContain("Enable JavaScript");
     expect(extracted.text).not.toContain("gs-test_web_t127");
     expect(extracted.text).not.toContain("color:red");
+    expect(extracted.text).not.toContain("decorative icon");
     expect(extracted.charCount).toBe(extracted.text.length);
-    expect(extracted.hash).toHaveLength(64);
+    expect(extracted.hash).toBe(await sha256Hex(extracted.text));
+  });
+
+  it("keeps reading after a hidden void element and separates text nodes", async () => {
+    const html = "<p>before</p><img aria-hidden='true'><br aria-hidden='true'><p>after</p><div>Alpha</div><div>Beta</div>";
+    const nested = "<div aria-hidden='true'><img aria-hidden='true'>hidden</div><p>kept</p>";
+
+    const extracted = await extractPageText(html);
+    const nestedExtracted = await extractPageText(nested);
+
+    expect(extracted.text).toBe("before after Alpha Beta");
+    expect(nestedExtracted.text).toBe("kept");
+  });
+
+  it("does not split a text node that arrives in more than one chunk", async () => {
+    const body = "a".repeat(70_000);
+    const extracted = await extractPageText(`<p>${body}</p>`);
+    expect(extracted.text).toBe(body);
+    expect(extracted.hash).toBe(await sha256Hex(body));
+  });
+
+  it("records that an unclosed hidden element drops the rest of the page", async () => {
+    const extracted = await extractPageText("<div aria-hidden='true'>oops<p>after</p>");
+    expect(extracted.text).toBe("");
   });
 
   it("ignores a script-only edit and moves when visible copy changes", async () => {
@@ -66,6 +90,7 @@ describe("extractPageText", () => {
     const b = await extractPageText(gymB);
 
     expect(a.hash).toBe(b.hash);
+    expect(a.hash).toBe(await sha256Hex(a.text));
     expect(a.charCount).toBe(b.charCount);
     expect(a.charCount).toBeGreaterThan(10_000);
     expect(a.text).toContain("Last Chance Sale");

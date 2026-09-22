@@ -1,5 +1,22 @@
 const SKIP_SELECTOR = "script, style, noscript, [aria-hidden='true']";
 
+const VOID_ELEMENTS = new Set([
+  "area",
+  "base",
+  "br",
+  "col",
+  "embed",
+  "hr",
+  "img",
+  "input",
+  "link",
+  "meta",
+  "param",
+  "source",
+  "track",
+  "wbr",
+]);
+
 export interface ExtractedPageText {
   text: string;
   hash: string;
@@ -31,6 +48,7 @@ export async function extractPageText(html: string): Promise<ExtractedPageText> 
   const rewritten = new HTMLRewriter()
     .on(SKIP_SELECTOR, {
       element(element) {
+        if (VOID_ELEMENTS.has(element.tagName.toLowerCase())) return;
         state.skip += 1;
         element.onEndTag(() => {
           state.skip -= 1;
@@ -54,7 +72,7 @@ export async function extractPageText(html: string): Promise<ExtractedPageText> 
     state.parts.push(state.pending);
   }
 
-  const text = collapseWhitespace(state.parts.join(""));
+  const text = collapseWhitespace(state.parts.join(" "));
   const hash = await sha256Hex(text);
   return { text, hash, charCount: text.length };
 }
