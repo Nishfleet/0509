@@ -65,6 +65,29 @@ jobs:
           cat /tmp/health.json
           grep -q '"status":"ok"' /tmp/health.json
 
+      - name: Deploy the fixture-site Worker
+        # J8's breakable own-site fixture (0509#4046): a separate Worker with
+        # its own name and route on fixture.0509.in, deployed by the normal CI
+        # deploy job — no bespoke deploy path.
+        #
+        # continue-on-error, because this job carries `environment: production`
+        # and its status gates ci.yml's e2e-production and lighthouse jobs. A
+        # failure here — the likeliest being the first-ever custom domain created
+        # on the 0509.in zone — would otherwise skip the app's own production
+        # verification, which is exactly the inverting this comment needs to keep
+        # false: test infrastructure must never stand between a good app deploy
+        # and its verification.
+        #
+        # The KV binding has no id on purpose, matching the e2e inbox: wrangler's
+        # deploy-time resource provisioning creates the 0509-fixture-site-state
+        # namespace on first deploy and inherits it from the deployed Worker's
+        # settings on later ones.
+        continue-on-error: true
+        run: npx wrangler deploy --config workers/fixture-site.wrangler.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
       - name: Deploy the e2e inbox Worker
         # The J1 mail sink (0509#3927): a separate Worker with its own name
         # and route, same fixture shape as J8's fixture.0509.in. Runs AFTER the
