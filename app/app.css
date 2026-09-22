@@ -1,6 +1,4 @@
 @import "tailwindcss" source(".");
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
 
 /* The 0509 visual language. Values and faces per DESIGN.md §3–4: cream ground,
    heavy black grotesk in caps for display, mono eyebrows, ONE accent = the green
@@ -80,24 +78,6 @@
     --color-strike: #ff7a63;
     --color-on-accent: #0e0d0a;
     color-scheme: dark;
-    --background: #14130f;
-    --foreground: #f2efe4;
-    --card: #1c1a15;
-    --card-foreground: #f2efe4;
-    --popover: #1c1a15;
-    --popover-foreground: #f2efe4;
-    --primary: #f2efe4;
-    --primary-foreground: #14130f;
-    --secondary: #1c1a15;
-    --secondary-foreground: #f2efe4;
-    --muted: #322e25;
-    --muted-foreground: #a9a294;
-    --accent: #2ee59c;
-    --accent-foreground: #0e0d0a;
-    --destructive: #ff7a63;
-    --border: #322e25;
-    --input: #322e25;
-    --ring: #f2efe4;
   }
 }
 
@@ -114,24 +94,6 @@
   --color-strike: #ff7a63;
   --color-on-accent: #0e0d0a;
   color-scheme: dark;
-  --background: #14130f;
-  --foreground: #f2efe4;
-  --card: #1c1a15;
-  --card-foreground: #f2efe4;
-  --popover: #1c1a15;
-  --popover-foreground: #f2efe4;
-  --primary: #f2efe4;
-  --primary-foreground: #14130f;
-  --secondary: #1c1a15;
-  --secondary-foreground: #f2efe4;
-  --muted: #322e25;
-  --muted-foreground: #a9a294;
-  --accent: #2ee59c;
-  --accent-foreground: #0e0d0a;
-  --destructive: #ff7a63;
-  --border: #322e25;
-  --input: #322e25;
-  --ring: #f2efe4;
 }
 
 html,
@@ -155,53 +117,4 @@ body {
     animation: none !important;
     transition: none !important;
   }
-}
-
-@theme inline {
-  --font-heading: var(--font-sans);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-foreground: var(--foreground);
-  --color-background: var(--background);
-  --radius-sm: 0;
-  --radius-md: 0;
-  --radius-lg: 0;
-  --radius-xl: 0;
-  --radius-2xl: 0;
-  --radius-3xl: 0;
-  --radius-4xl: 0;
-}
-
-:root {
-  --background: #f4f1e8;
-  --foreground: #0e0d0a;
-  --card: #fffdf6;
-  --card-foreground: #0e0d0a;
-  --popover: #fffdf6;
-  --popover-foreground: #0e0d0a;
-  --primary: #0e0d0a;
-  --primary-foreground: #f4f1e8;
-  --secondary: #fffdf6;
-  --secondary-foreground: #0e0d0a;
-  --muted: #f4f1e8;
-  --muted-foreground: #55524a;
-  --accent: #16c47f;
-  --accent-foreground: #0e0d0a;
-  --destructive: #e0442c;
-  --border: #ddd6c6;
-  --input: #ddd6c6;
-  --ring: #0e0d0a;
-  --radius: 0;
 }

@@ -64,7 +64,15 @@ test("the capture plate opens the before/after pair", async ({ page }, testInfo)
   expect(cls).toBeLessThan(0.05);
   expect(errors).toEqual([]);
 
-  await page.screenshot({
-    path: testInfo.project.name === "phone-390" ? "e2e/capture-plate-390.png" : "e2e/capture-plate-1440.png",
-  });
+  const bare = await page.request.get("/media/shot/e2e/capture-plate/after.png");
+  expect(bare.status()).toBe(400);
+  const bad = await page.request.get("/media/shot/e2e/capture-plate/after.png?width=abc&height=74");
+  expect(bad.status()).toBe(400);
+  const other = await page.request.get("/media/mentions/ws/body?width=104&height=74");
+  expect(other.status()).toBe(404);
+  const image = await page.request.get("/media/shot/e2e/capture-plate/after.png?width=104&height=74");
+  expect(image.status()).toBe(200);
+  expect(image.headers()["content-type"] ?? "").toContain("image/webp");
+
+  await page.screenshot({ path: testInfo.outputPath("plate.png") });
 });

@@ -8,7 +8,7 @@ import {
   CapturePlate,
   captureImageSrc,
 } from "../../app/components/capture-plate";
-import { captureKeyAllowed } from "../../app/lib/capture-image";
+import { captureDimensions, captureKeyAllowed } from "../../app/lib/capture-image";
 
 const stored = {
   before: { objectKey: "shot/e2e/capture-plate/before.png", alt: "Before" },
@@ -29,7 +29,20 @@ describe("captureKeyAllowed", () => {
     expect(captureKeyAllowed("shot/e2e/capture-plate/before.png")).toBe(true);
     expect(captureKeyAllowed("shot/e2e/capture-plate/../mentions/secret")).toBe(false);
     expect(captureKeyAllowed("mentions/ws/body")).toBe(false);
+    expect(captureKeyAllowed("shot/brand/home.png")).toBe(false);
     expect(captureKeyAllowed("/shot/e2e/capture-plate/before.png")).toBe(false);
+  });
+});
+
+describe("captureDimensions", () => {
+  it("accepts a positive integer pair and rejects anything else", () => {
+    expect(captureDimensions("104", "74")).toEqual({ width: 104, height: 74 });
+    expect(captureDimensions("76", "56")).toEqual({ width: 76, height: 56 });
+    expect(captureDimensions(null, "74")).toBeNull();
+    expect(captureDimensions("abc", "74")).toBeNull();
+    expect(captureDimensions("0", "74")).toBeNull();
+    expect(captureDimensions("2001", "74")).toBeNull();
+    expect(captureDimensions("104.5", "74")).toBeNull();
   });
 });
 
@@ -42,14 +55,10 @@ describe("captureImageSrc", () => {
 });
 
 describe("CapturePlate", () => {
-  it("reserves the desktop box and loads the first plate immediately", () => {
+  it("puts explicit width and height on the first plate and loads it immediately", () => {
     const html = markup({ ...stored, loading: "eager", label: "Read this first" });
     expect(html).toContain('data-slot="capture-plate"');
     expect(html).toContain('aria-label="Read this first"');
-    expect(html).toContain("w-[104px]");
-    expect(html).toContain("h-[74px]");
-    expect(html).toContain("max-[859px]:w-[76px]");
-    expect(html).toContain("max-[859px]:h-[56px]");
     expect(html).toContain(`width="${CAPTURE_PLATE_DESKTOP.width}"`);
     expect(html).toContain(`height="${CAPTURE_PLATE_DESKTOP.height}"`);
     expect(html).toContain('loading="eager"');

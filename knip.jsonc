@@ -28,10 +28,7 @@
   // Neither is a missing dependency.
   // `tailwindcss` is imported by `@import "tailwindcss"` in app/app.css; knip
   // does not follow CSS imports and says so in its own hint output.
-  "ignoreDependencies": ["cloudflare", "@react-router/node", "tailwindcss", "shadcn", "tw-animate-css"],
-  "ignoreIssues": {
-    "app/components/ui/**": ["exports"]
-  },
+  "ignoreDependencies": ["cloudflare", "@react-router/node", "tailwindcss"],
 
   "ignore": ["**/+types/**", "docs/design-directions/**", "lighthouserc.cjs"]
 }
