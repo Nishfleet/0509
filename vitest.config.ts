@@ -45,10 +45,10 @@ export default defineConfig({
         },
       },
       {
-        // The J1 mail-sink Worker (0509#3927): real workerd + real local KV.
-        // Its token gate and email handler run against the same binding kinds
-        // production has — a broken gate fails in a merge gate, not in CI's
-        // production lane.
+        // The J1 mail-sink Worker (0509#3927, 0509#4210): real workerd and a
+        // real local SQLite Durable Object. Its token gate and email handler
+        // run against the same binding kinds production has. A broken gate
+        // fails in a merge gate, not in CI's production lane.
         plugins: [
           cloudflareTest(() => ({
             wrangler: { configPath: "./tests/integration/wrangler.e2e-inbox.test.jsonc" },
