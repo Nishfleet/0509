@@ -1,6 +1,6 @@
 export interface CostAlert {
   id: string;
-  line: "d1_rows_written" | "browser_rendering_seconds";
+  line: "d1_rows_written" | "r2_class_a" | "browser_rendering_seconds";
   measured: number;
   expected: number;
   day: string;
@@ -18,6 +18,7 @@ export interface CostGuardResult {
   totals: CostTotals;
   expected: {
     d1_rows_written: number;
+    r2_class_a: number;
     browser_rendering_seconds: number;
   };
   alerts: CostAlert[];
@@ -50,6 +51,8 @@ const D1_ROWS_PER_BRAND_PER_DAY = 10;
 const BROWSER_DURATION_WEEK_MS = 62_703_271;
 
 const BROWSER_SECONDS_PER_BRAND_PER_DAY = 15;
+
+const R2_CLASS_A_WEEK = 1;
 
 const GROUP_LIMIT = {
   d1: 10,
@@ -271,6 +274,7 @@ export async function checkCostRegression(input: CostGuardInput): Promise<CostGu
   const { totals, browserMs } = readScopedTotals(graphql, day);
   const expected = {
     d1_rows_written: documentedDay(D1_ROWS_WRITTEN_WEEK, D1_ROWS_PER_BRAND_PER_DAY, input.onBrands),
+    r2_class_a: R2_CLASS_A_WEEK,
     browser_rendering_seconds: documentedDay(
       BROWSER_DURATION_WEEK_MS / 1000,
       BROWSER_SECONDS_PER_BRAND_PER_DAY,
@@ -283,6 +287,13 @@ export async function checkCostRegression(input: CostGuardInput): Promise<CostGu
       totals.d1_rows_written,
       expected.d1_rows_written,
       exceedsTriple(totals.d1_rows_written, D1_ROWS_WRITTEN_WEEK, D1_ROWS_PER_BRAND_PER_DAY, input.onBrands),
+      day,
+    ),
+    ...oneAlert(
+      "r2_class_a",
+      totals.r2_class_a,
+      expected.r2_class_a,
+      totals.r2_class_a > COST_REGRESSION_MULTIPLE * R2_CLASS_A_WEEK,
       day,
     ),
     ...oneAlert(

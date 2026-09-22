@@ -37,6 +37,11 @@ function documented() {
   );
   const modelSeconds = oneNumber(DOC, /≈(\d+) browser-seconds per brand per day/g, "browser model");
   if (modelSeconds !== browserPerBrand) throw new Error("browser model and table estimate disagree");
+  const r2ClassAWeek = oneNumber(
+    DOC,
+    /\| R2 `0509-snapshots` \|[^|]*\| Class A: `PutBucket` (\d+)/g,
+    "snapshot class A",
+  );
   const dailyRows = [...DOC.matchAll(/^\| (\d{4}-\d{2}-\d{2}) \| [\d,]+ \| [\d,]+ \| [\d,]+ \| ([\d,]+) \|$/gm)].map(
     (match) => Number(match[2]?.replaceAll(",", "")),
   );
@@ -53,6 +58,7 @@ function documented() {
     d1PerBrand,
     browserWeekMs,
     browserPerBrand,
+    r2ClassAWeek,
     dailyRows,
     days: dailyRows.length,
     multiple: 3,
@@ -123,8 +129,8 @@ describe("checkCostRegression", () => {
     expect(FIGURES.d1Week).toBe(223_287);
     expect(FIGURES.browserPerBrand).toBe(15);
     expect(FIGURES.browserWeekMs).toBe(62_703_271);
+    expect(FIGURES.r2ClassAWeek).toBe(1);
     expect(DOC).toContain("That dataset has no script name");
-    expect(DOC).not.toMatch(/Class A per brand/);
   });
 
   it("reads the committed GraphQL response and stays quiet on that ordinary day", async () => {
@@ -191,10 +197,29 @@ describe("checkCostRegression", () => {
     expect(result.alerts[0]?.measured).toBe(5_000_000);
   });
 
-  it("reports a million Class A puts and does not alert, because the doc carries no per-brand Class A figure", async () => {
-    const result = await checkCostRegression({ graphql: day(0, 1_000_000, 0), day: DAY, onBrands: 1 });
-    expect(result.totals.r2_class_a).toBe(1_000_000);
-    expect(result.alerts).toEqual([]);
+  it("writes cost-guard:2026-09-21:r2_class_a when Class A is more than three times the documented week", async () => {
+    const quiet = await checkCostRegression({
+      graphql: day(0, FIGURES.r2ClassAWeek * 3, 0),
+      day: DAY,
+      onBrands: 1,
+    });
+    expect(quiet.totals.r2_class_a).toBe(3);
+    expect(quiet.alerts).toEqual([]);
+    const tripped = FIGURES.r2ClassAWeek * 3 + 1;
+    const result = await checkCostRegression({
+      graphql: day(0, tripped, 0),
+      day: DAY,
+      onBrands: 1,
+    });
+    expect(result.alerts).toEqual([
+      {
+        id: "cost-guard:2026-09-21:r2_class_a",
+        line: "r2_class_a",
+        measured: tripped,
+        expected: FIGURES.r2ClassAWeek,
+        day: DAY,
+      },
+    ]);
   });
 
   it("counts ListObjects as Class A and DeleteObject as free", async () => {
@@ -202,7 +227,7 @@ describe("checkCostRegression", () => {
       graphql: envelope({
         d1: [{ dimensions: { date: DAY, databaseId: FIGURES.databaseId }, sum: { rowsWritten: 0 } }],
         r2: [
-          { dimensions: { date: DAY, actionType: "ListObjects", bucketName: FIGURES.bucket }, sum: { requests: 4 } },
+          { dimensions: { date: DAY, actionType: "ListObjects", bucketName: FIGURES.bucket }, sum: { requests: 2 } },
           { dimensions: { date: DAY, actionType: "DeleteObject", bucketName: FIGURES.bucket }, sum: { requests: 100 } },
           { dimensions: { date: DAY, actionType: "GetObject", bucketName: FIGURES.bucket }, sum: { requests: 9 } },
         ],
@@ -211,7 +236,7 @@ describe("checkCostRegression", () => {
       day: DAY,
       onBrands: 0,
     });
-    expect(result.totals.r2_class_a).toBe(4);
+    expect(result.totals.r2_class_a).toBe(2);
     expect(result.alerts).toEqual([]);
   });
 
