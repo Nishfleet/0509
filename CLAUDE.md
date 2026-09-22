@@ -86,6 +86,14 @@ PR. With it set, there is no local server and the suite runs against that URL â€
 that is what the `deployment_status` job runs against production. Same
 assertions both times.
 
+**Run it before the PR opens.** A change under `app/`, `workers/` or `e2e/`
+runs `npm run e2e` in preview mode locally first and quotes the Playwright
+summary line (`N passed`) under `run-proof:` in the PR body. `preview-assert`
+reruns the same suite, so the quote is not the proof; it is the evidence that
+you drove the app yourself before asking a reviewer to. Chromium is already
+installed on this host (`~/.cache/ms-playwright`), so the run costs one
+`wrangler dev` start.
+
 ## Architecture
 
 - `app/routes.ts` â€” the route registry. A route not listed here cannot be
