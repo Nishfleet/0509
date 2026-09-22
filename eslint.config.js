@@ -1,19 +1,27 @@
 import js from "@eslint/js";
+import boundaries from "eslint-plugin-boundaries";
+import importX, { createNodeResolver } from "eslint-plugin-import-x";
 import reactHooks from "eslint-plugin-react-hooks";
 import noComments from "eslint-plugin-no-comments";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
-const SERVER_ONLY_IMPORTS = [
+const SERVER_IMPORT_RECEIPT =
+  "A client module may not import a *.server module. Only route modules and other *.server modules may. React Router tree-shakes .server files out of the browser bundle only for route modules; anywhere else the server code ships to the browser. docs/REBUILD-TRUST.md C1.";
+
+const CLOUDFLARE_WORKERS_IMPORT = {
+  name: "cloudflare:workers",
+  message:
+    "cloudflare:workers is a Workers runtime module and does not exist in the browser. Bindings are read in *.server modules and passed down. Source: commit 7727bf787 / #3918.",
+};
+
+const SERVER_ELEMENT_TYPES = ["server-leaf", "data-writer", "db", "auth"];
+
+const PAVED_PATH_PATTERNS = [
   {
-    group: ["**/*.server", "**/*.server.ts", "**/*.server.js"],
+    group: ["better-auth/*", "@better-auth/passkey/*", "@better-auth/api-key/*"],
     message:
-      "A client module may not import a *.server module. Only route modules and other *.server modules may. React Router tree-shakes .server files out of the browser bundle only for route modules; anywhere else the server code ships to the browser. docs/REBUILD-TRUST.md C1.",
-  },
-  {
-    name: "cloudflare:workers",
-    message:
-      "cloudflare:workers is a Workers runtime module and does not exist in the browser. Bindings are read in *.server modules and passed down. Source: commit 7727bf787 / #3918.",
+      "better-auth subpath imports (client SDKs, plugin clients) live in exactly one module, app/lib/auth-client.ts; the server config stays in app/lib/auth.server.ts. A second import site is a second session authority. Source: 0509#3961 review — `paths` matches exact specifiers only, so `better-auth/client` slipped past the bare-name rule.",
   },
 ];
 
@@ -168,36 +176,160 @@ export default tseslint.config(
   },
 
   {
+    files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
+    ignores: ["app/lib/db.server.ts", "app/lib/auth.server.ts", "app/lib/auth-client.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        { paths: ONE_PAVED_PATH_IMPORTS, patterns: PAVED_PATH_PATTERNS },
+      ],
+    },
+  },
+
+  {
     files: ["app/**/*.{ts,tsx}"],
     ignores: [
       "app/**/*.server.ts",
       "app/routes/**",
       "app/root.tsx",
       "app/entry.*.tsx",
+      "app/lib/auth-client.ts",
     ],
     rules: {
-      "no-restricted-imports": ["error", { paths: [], patterns: SERVER_ONLY_IMPORTS.filter((r) => "group" in r), }],
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [...ONE_PAVED_PATH_IMPORTS, CLOUDFLARE_WORKERS_IMPORT],
+          patterns: PAVED_PATH_PATTERNS,
+        },
+      ],
     },
   },
 
   {
     files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
-    ignores: ["app/lib/db.server.ts", "app/lib/auth.server.ts", "app/lib/auth-client.ts"],
+    plugins: { boundaries, "import-x": importX },
+    settings: {
+      "import/resolver": {
+        node: { extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"] },
+      },
+      "import-x/extensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
+      "import-x/parsers": {
+        "@typescript-eslint/parser": [".ts", ".tsx"],
+      },
+      "import-x/resolver-next": [
+        createNodeResolver({
+          extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
+        }),
+      ],
+      "boundaries/legacy-warnings": false,
+      "boundaries/elements": [
+        // mode "file" is the 7.2.0 match for a single file. db, auth, and
+        // each server module are files, not folders. A later major drops
+        // this option. legacy-warnings is off so that notice is not printed
+        // on every lint run.
+        { type: "db", pattern: "app/lib/db.server.ts", mode: "file" },
+        { type: "auth", pattern: "app/lib/auth.server.ts", mode: "file" },
+        { type: "data-writer", pattern: "app/lib/data/**/*.server.ts", mode: "file" },
+        { type: "server-leaf", pattern: "app/lib/**/*.server.ts", mode: "file" },
+        { type: "component", pattern: "app/components/**/*.{ts,tsx}", mode: "file" },
+        { type: "route", pattern: "app/root.tsx", mode: "file" },
+        { type: "route", pattern: "app/routes", partialMatch: false },
+        { type: "worker", pattern: "workers", partialMatch: false },
+      ],
+      "boundaries/files": [
+        { category: "server-module", pattern: "app/**/*.server.ts" },
+        {
+          category: "route-module",
+          pattern: ["app/routes/**/*.ts", "app/routes/**/*.tsx", "app/root.tsx"],
+        },
+        { category: "entry", pattern: ["app/entry.*.ts", "app/entry.*.tsx"] },
+        { category: "client", pattern: ["app/**/*.ts", "app/**/*.tsx"] },
+      ],
+    },
     rules: {
-      "no-restricted-imports": [
+      "boundaries/dependencies": [
         "error",
         {
-          paths: ONE_PAVED_PATH_IMPORTS,
-          patterns: [
+          default: "disallow",
+          policies: [
             {
-              group: ["better-auth/*", "@better-auth/passkey/*", "@better-auth/api-key/*"],
-              message:
-                "better-auth subpath imports (client SDKs, plugin clients) live in exactly one module, app/lib/auth-client.ts; the server config stays in app/lib/auth.server.ts. A second import site is a second session authority. Source: 0509#3961 review — `paths` matches exact specifiers only, so `better-auth/client` slipped past the bare-name rule.",
+              from: {
+                file: {
+                  categories: {
+                    anyOf: ["client"],
+                    noneOf: ["server-module", "route-module", "entry"],
+                  },
+                },
+              },
+              disallow: { to: { element: { types: SERVER_ELEMENT_TYPES } } },
+              message: SERVER_IMPORT_RECEIPT,
+            },
+            {
+              allow: {
+                to: {
+                  file: {
+                    categories: { anyOf: ["client"], noneOf: ["server-module", "route-module"] },
+                  },
+                },
+              },
+            },
+            {
+              from: { file: { categories: "entry" } },
+              allow: { to: { element: { types: ["component", ...SERVER_ELEMENT_TYPES] } } },
+            },
+            {
+              from: { element: { type: "route" } },
+              allow: {
+                to: { element: { types: ["component", ...SERVER_ELEMENT_TYPES] } },
+              },
+            },
+            {
+              from: { element: { type: "server-leaf" } },
+              allow: { to: { element: { types: SERVER_ELEMENT_TYPES } } },
+            },
+            {
+              from: { element: { type: "data-writer" } },
+              allow: {
+                to: { element: { types: ["data-writer", "db", "server-leaf"] } },
+              },
+            },
+            {
+              from: { element: { type: "auth" } },
+              allow: {
+                to: { element: { types: ["server-leaf", "data-writer", "db", "worker"] } },
+              },
+            },
+            {
+              from: { element: { type: "worker" } },
+              allow: { to: { element: { types: SERVER_ELEMENT_TYPES } } },
             },
           ],
         },
       ],
+      "import-x/no-cycle": ["error", { ignoreExternal: true }],
     },
+  },
+
+  {
+    files: ["**/*.{ts,tsx,js,mjs,cjs}"],
+    plugins: { "import-x": importX },
+    rules: { "import-x/no-default-export": "error" },
+  },
+
+  {
+    files: [
+      "app/routes/**/*.{ts,tsx}",
+      "app/root.tsx",
+      "app/routes.ts",
+      "app/entry.*.{ts,tsx}",
+      "**/*.config.{ts,js,mjs,cjs}",
+      "eslint.config.js",
+      "workers/app.ts",
+      "workers/fixture-site.ts",
+      "workers/e2e-inbox.ts",
+    ],
+    rules: { "import-x/no-default-export": "off" },
   },
 
   {
