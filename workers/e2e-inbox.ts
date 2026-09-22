@@ -3,19 +3,6 @@ interface InboxEnv {
   E2E_INBOX_TOKEN?: string;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 const timingSafeEqual = (
   crypto.subtle as SubtleCrypto & {
     timingSafeEqual(a: ArrayBufferView, b: ArrayBufferView): boolean;

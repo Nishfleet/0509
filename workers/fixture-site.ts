@@ -7,9 +7,6 @@ interface FixtureEnv {
   FIXTURE_SITE_TOKEN?: string;
 }
 
-
-
-
 type BreakMode = "off" | "hard" | "soft";
 
 const BREAK_KEY = "break-mode";
@@ -17,20 +14,11 @@ const BREAK_KEY = "break-mode";
 const isBreakMode = (value: string | null): value is BreakMode =>
   value === "off" || value === "hard" || value === "soft";
 
-
-
-
-
-
 const timingSafeEqual = (
   crypto.subtle as SubtleCrypto & {
     timingSafeEqual(a: ArrayBufferView, b: ArrayBufferView): boolean;
   }
 ).timingSafeEqual.bind(crypto.subtle);
-
-
-
-
 
 const PRICING_SECTION = `    <section id="pricing" aria-labelledby="pricing-heading">
       <h2 id="pricing-heading">Pricing</h2>
@@ -41,14 +29,6 @@ const PRICING_SECTION = `    <section id="pricing" aria-labelledby="pricing-head
       </ul>
       <p><a href="https://0509.io/checkout?plan=pro" rel="nofollow">Choose a plan and check out</a></p>
     </section>`;
-
-
-
-
-
-
-
-
 
 const renderPage = (mode: BreakMode): string => {
   const pricing = mode === "soft" ? "" : PRICING_SECTION;
@@ -82,9 +62,6 @@ ${pricing}
 `;
 };
 
-
-
-
 const HTML_HEADERS = {
   "content-type": "text/html; charset=utf-8",
   "cache-control": "no-store",
@@ -111,9 +88,6 @@ export default {
     return new Response(renderPage(mode), { status: 200, headers: HTML_HEADERS });
   },
 } satisfies ExportedHandler<FixtureEnv>;
-
-
-
 
 async function flip(request: Request, env: FixtureEnv): Promise<Response> {
   if (request.method !== "POST") {
