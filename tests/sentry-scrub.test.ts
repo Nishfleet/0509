@@ -3,9 +3,10 @@ import type { Breadcrumb, ErrorEvent } from "@sentry/cloudflare";
 
 const captured = vi.hoisted(() => ({
   options: undefined as
-    | (() => {
-        tracesSampleRate?: number;
+    | ((env: { SENTRY_DSN?: string }) => {
         dsn?: string;
+        tracesSampleRate?: number;
+        integrations?: { name?: string; maxRequestBodySize?: string }[];
         dataCollection?: {
           userInfo?: boolean;
           cookies?: boolean | object;
@@ -24,28 +25,40 @@ const captured = vi.hoisted(() => ({
 
 vi.mock("@sentry/cloudflare", () => ({
   withSentry: (
-    options: () => unknown,
+    options: (env: { SENTRY_DSN?: string }) => unknown,
     handler: { fetch?: unknown; scheduled?: unknown },
   ) => {
     captured.options = options as NonNullable<typeof captured.options>;
     captured.handler = handler;
     return handler;
   },
+  httpServerIntegration: (options?: { maxRequestBodySize?: string }) => ({
+    name: "HttpServer",
+    ...options,
+  }),
 }));
 
 vi.mock("react-router", () => ({
   createRequestHandler: () => () => new Response("ok"),
 }));
 
-import "../workers/app";
+import worker from "../workers/app";
+
+const MAGIC = "https://0509.io/api/auth/magic-link/verify?token=secret-token&email=a@b.c";
 
 describe("sentry scrub", () => {
-  it("wraps fetch and scheduled, and does not embed a DSN", () => {
+  it("keeps fetch and scheduled, and reads the DSN from env", () => {
+    expect(worker).toBe(captured.handler);
     expect(typeof captured.handler?.fetch).toBe("function");
     expect(typeof captured.handler?.scheduled).toBe("function");
-    const options = captured.options?.();
-    expect(options?.dsn).toBeUndefined();
+    const options = captured.options?.({ SENTRY_DSN: "https://example.invalid/1" });
+    expect(options?.dsn).toBe("https://example.invalid/1");
+    expect(captured.options?.({}).dsn).toBeUndefined();
     expect(options?.tracesSampleRate).toBe(0);
+    expect(options?.integrations?.[0]).toMatchObject({
+      name: "HttpServer",
+      maxRequestBodySize: "none",
+    });
     expect(options?.dataCollection).toMatchObject({
       userInfo: false,
       cookies: false,
@@ -57,16 +70,15 @@ describe("sentry scrub", () => {
     });
   });
 
-  it("strips magic-link credentials from the event and its breadcrumbs", () => {
-    const options = captured.options?.();
-    const send = options?.beforeSend;
-    const crumb = options?.beforeBreadcrumb;
+  it("strips magic-link credentials, including console arguments, without mutating the event", () => {
+    const send = captured.options?.({})?.beforeSend;
+    const crumb = captured.options?.({})?.beforeBreadcrumb;
     expect(send).toBeTypeOf("function");
     expect(crumb).toBeTypeOf("function");
 
-    const event = send?.({
+    const source = {
       request: {
-        url: "https://0509.io/api/auth/magic-link/verify?token=secret-token&email=a@b.c",
+        url: MAGIC,
         method: "GET",
         headers: { cookie: "session=secret" },
         cookies: { session: "secret" },
@@ -77,19 +89,24 @@ describe("sentry scrub", () => {
       transaction: "/api/auth/magic-link/verify?token=secret-token",
       breadcrumbs: [
         {
-          message: "opened https://0509.io/api/auth/magic-link/verify?token=secret-token.",
-          data: { url: "https://0509.io/login?token=secret-token" },
+          category: "console",
+          message: `opened ${MAGIC}.`,
+          data: {
+            arguments: [`opened ${MAGIC}`],
+            logger: "console",
+            url: "https://0509.io/login?token=secret-token",
+          },
         },
       ],
       exception: {
-        values: [
-          {
-            type: "Error",
-            value: "failed https://0509.io/api/auth/magic-link/verify?token=secret-token",
-          },
-        ],
+        values: [{ type: "Error", value: `failed ${MAGIC}` }],
       },
-    });
+    };
+
+    const event = send?.(source);
+    expect(source.request.url).toBe(MAGIC);
+    expect(source.request.headers).toEqual({ cookie: "session=secret" });
+    expect(source.breadcrumbs[0]?.data.arguments[0]).toBe(`opened ${MAGIC}`);
 
     expect(event?.request?.url).toBe("https://0509.io/api/auth/magic-link/verify");
     expect(event?.request?.headers).toBeUndefined();
@@ -101,6 +118,9 @@ describe("sentry scrub", () => {
     expect(event?.breadcrumbs?.[0]?.message).toBe(
       "opened https://0509.io/api/auth/magic-link/verify.",
     );
+    expect(event?.breadcrumbs?.[0]?.data?.arguments).toEqual([
+      "opened https://0509.io/api/auth/magic-link/verify",
+    ]);
     expect(event?.breadcrumbs?.[0]?.data?.url).toBe("https://0509.io/login");
     expect(event?.exception?.values?.[0]?.value).toBe(
       "failed https://0509.io/api/auth/magic-link/verify",
@@ -108,9 +128,10 @@ describe("sentry scrub", () => {
 
     const bare = crumb?.({
       message: "no url here",
-      data: { url: "https://0509.io/app" },
+      data: { url: "https://0509.io/app", arguments: ["plain"] },
     });
     expect(bare?.message).toBe("no url here");
     expect(bare?.data?.url).toBe("https://0509.io/app");
+    expect(bare?.data?.arguments).toEqual(["plain"]);
   });
 });

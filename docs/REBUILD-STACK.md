@@ -691,9 +691,9 @@ We need cards for a handful of public surfaces, not per-request at scale. Browse
 
 `npm view @sentry/cloudflare version` on 2026-09-22 returned `10.75.1`. Doc: <https://docs.sentry.io/platforms/javascript/guides/cloudflare/>.
 
-`withSentry()` wraps the default export in `workers/app.ts`. The SDK reads the DSN from the Worker secret `SENTRY_DSN`. That value is not in this repo and not in `wrangler.jsonc`. With no DSN the SDK sends nothing.
+`withSentry()` wraps the default export in `workers/app.ts`. The options callback passes `dsn: env.SENTRY_DSN`. That value is the Worker secret. It is not in this repo and not in `wrangler.jsonc`. With no DSN the SDK sends nothing.
 
-The options turn off user fields, cookies, headers, bodies, query strings, stack-frame locals, and database query values. `beforeSend` and `beforeBreadcrumb` drop the query string and fragment from every URL. A magic-link URL is a working credential. `tracesSampleRate` is `0`. This row is the error feed, not a tracing product.
+`httpServerIntegration({ maxRequestBodySize: "none" })` replaces the default HttpServer integration so incoming bodies are not read. `dataCollection` turns off user fields, cookies, headers, query strings, stack-frame locals, and database query values. `beforeSend` and `beforeBreadcrumb` return new objects and strip the query string and fragment from URL strings, including console breadcrumb `data.arguments`. The request URL has no `dataCollection` switch. A magic-link URL is a working credential. `tracesSampleRate` is `0`. This row is the error feed, not a tracing product.
 
 The install doc requires `nodejs_compat` because the SDK uses `AsyncLocalStorage`. `compatibility_date` `2026-09-16` already turns that flag on. `wrangler.jsonc` sets the flag explicitly so the test runner and the deploy agree.
 

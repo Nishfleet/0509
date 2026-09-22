@@ -30,42 +30,59 @@ function redactText(value: string): string {
   });
 }
 
+function redactValue(value: unknown): unknown {
+  if (typeof value === "string") return redactText(value);
+  if (Array.isArray(value)) return value.map((item: unknown) => redactValue(item));
+  if (typeof value !== "object" || value === null) return value;
+  const prototype: unknown = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return value;
+  const next: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    next[key] = redactValue(item);
+  }
+  return next;
+}
+
 function redactBreadcrumb(breadcrumb: Breadcrumb): Breadcrumb {
-  if (typeof breadcrumb.message === "string") {
-    breadcrumb.message = redactText(breadcrumb.message);
-  }
-  if (!breadcrumb.data) return breadcrumb;
-  const data = breadcrumb.data as Record<string, unknown>;
-  for (const key of ["url", "from", "to"]) {
-    const value = data[key];
-    if (typeof value === "string") data[key] = redactText(value);
-  }
-  return breadcrumb;
+  return {
+    ...breadcrumb,
+    message:
+      typeof breadcrumb.message === "string" ? redactText(breadcrumb.message) : breadcrumb.message,
+    data: breadcrumb.data
+      ? (redactValue(breadcrumb.data) as Breadcrumb["data"])
+      : breadcrumb.data,
+  };
 }
 
 function redactEvent(event: ErrorEvent): ErrorEvent {
   const request = event.request;
-  if (request) {
-    if (typeof request.url === "string") request.url = stripQueryAndHash(request.url);
-    request.headers = undefined;
-    request.cookies = undefined;
-    request.data = undefined;
-    request.query_string = undefined;
-  }
-  event.user = undefined;
-  if (typeof event.transaction === "string") {
-    event.transaction = stripQueryAndHash(event.transaction);
-  }
-  if (event.breadcrumbs) {
-    for (const breadcrumb of event.breadcrumbs) redactBreadcrumb(breadcrumb);
-  }
-  const values = event.exception?.values;
-  if (values) {
-    for (const item of values) {
-      if (typeof item.value === "string") item.value = redactText(item.value);
-    }
-  }
-  return event;
+  return {
+    ...event,
+    request: request
+      ? {
+          ...request,
+          url: typeof request.url === "string" ? stripQueryAndHash(request.url) : request.url,
+          headers: undefined,
+          cookies: undefined,
+          data: undefined,
+          query_string: undefined,
+        }
+      : request,
+    user: undefined,
+    transaction:
+      typeof event.transaction === "string"
+        ? stripQueryAndHash(event.transaction)
+        : event.transaction,
+    breadcrumbs: event.breadcrumbs?.map((breadcrumb) => redactBreadcrumb(breadcrumb)),
+    exception: event.exception
+      ? {
+          ...event.exception,
+          values: event.exception.values?.map((item) =>
+            typeof item.value === "string" ? { ...item, value: redactText(item.value) } : item,
+          ),
+        }
+      : event.exception,
+  };
 }
 
 const handler = {
@@ -81,9 +98,17 @@ const handler = {
   },
 } satisfies ExportedHandler<Env>;
 
+function readDsn(env: Env): string | undefined {
+  const bag = env as unknown as Record<string, unknown>;
+  const value = bag.SENTRY_DSN;
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
 export default Sentry.withSentry(
-  () => ({
+  (env) => ({
+    dsn: readDsn(env),
     tracesSampleRate: 0,
+    integrations: [Sentry.httpServerIntegration({ maxRequestBodySize: "none" })],
     dataCollection: {
       userInfo: false,
       cookies: false,
