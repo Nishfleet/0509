@@ -16,9 +16,6 @@ test.skip(
 );
 
 test("a passkey registered on first sign-in signs in on its own", async ({ page, context }) => {
-  // Cause is the spec. The inbox poll allows 120s and the URL assert below
-  // allows 20s. The default 30s test budget ends before either can finish.
-  test.setTimeout(180_000);
   const token = requireInboxToken();
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
 
@@ -58,13 +55,15 @@ test("a passkey registered on first sign-in signs in on its own", async ({ page,
 
     // The passkey alone: a resident credential on the virtual authenticator
     // answers the empty allowCredentials list the sign-in button produces.
-    // Cause is the spec. On 2026-09-22 against https://0509.io,
-    // verify-authentication returned 200 with the session cookie at 4.5s and
-    // the URL reached /onboarding at 9s. Run 35754687604's 5s expect expired
-    // on /login during that redirect. 20s is about twice the measured 9s.
-    // A redirect that never arrives still fails.
+    // J1 checks /onboarding after the magic-link response. This checks it
+    // after verify-authentication.
+    const sessionReady = page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/auth/passkey/verify-authentication") && response.ok(),
+    );
     await page.getByRole("button", { name: /passkey/i }).click();
-    await expect(page).toHaveURL(/\/onboarding/, { timeout: 20_000 });
+    await sessionReady;
+    await expect(page).toHaveURL(/\/onboarding/);
     await expect(page.getByText(email)).toBeVisible();
     console.log(`passkey sign-in email=${email} sessionAt=${new Date().toISOString()}`);
   } finally {
