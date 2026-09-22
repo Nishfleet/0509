@@ -695,6 +695,25 @@ We need cards for a handful of public surfaces, not per-request at scale. Browse
 | `luxon` 3.7.2 — 22.1 KB gzip | One monolithic `DateTime` class, **no tree-shaking** — you pay all 22 KB to format one date. ~10× the date-fns + tz pairing for the same `Intl`-backed capability. |
 | `dayjs` 1.11.23 — 3.45 KB core | No `"exports"` map, no `"module"` field, no `"type": "module"` — a CJS package with a mutable-global plugin registry (`dayjs.extend(timezone)`) that defeats static analysis, plus the Moment-style mutable API the house immutability rule forbids. |
 
+### 5.10 Error tracking
+
+**Recommendation: `@sentry/cloudflare` 10.75.1.**
+
+`npm view @sentry/cloudflare version` on 2026-09-21 returned `10.75.1`. Doc: <https://docs.sentry.io/platforms/javascript/guides/cloudflare/>.
+
+`withSentry()` wraps the default export in `workers/app.ts`. The `dsn` key is left unset on purpose: the SDK's own `getFinalOptions` falls back to `env.SENTRY_DSN` (`build/esm/options.js`), so the Worker secret — set with `wrangler secret put`, the *value* never in this repo — is read by the SDK itself. The code never names `SENTRY_DSN`, which is why the generated `Env` needs no new member and `wrangler.jsonc` needs no `secrets` declaration. With no DSN the SDK sends nothing, so dev and test runs stay quiet.
+
+PII stays out of the event through the SDK's stock `dataCollection` switches, not hand-rolled scrubbing: every category is off — `userInfo`, `cookies`, `httpHeaders`, `httpBodies`, `urlQueryParams`, `graphQL`, `genAI`, `stackFrameVariables` and `databaseQueryData` (the SDK defaults are on). A magic-link URL is a working credential; `urlQueryParams: false` keeps its token out of the request URL on the event. `tracesSampleRate` is `0` — this row is the error feed, not a tracing product.
+
+The SDK imports `node:async_hooks`; `compatibility_date` `2026-09-16` already enables `nodejs_compat` (platform fact 2 above), so no flag is set and `wrangler.jsonc` is untouched.
+
+From an error to a labelled issue there is no code of ours: Sentry's own GitHub integration opens the repo issue on a new error (org, project, alert and `SENTRY_DSN` secret provisioned under #4099). Plan is the Sentry Developer plan, $0 — a card or a trial stops the work.
+
+| Rejected | Why |
+|---|---|
+| Cloudflare Notifications webhook reshaped into a GitHub issue | The webhook body is not a GitHub issue. Closing that gap is an adapter, and an adapter is the thing this rebuild forbids. |
+| `beforeSend`/`beforeBreadcrumb` regex scrubbing layered on `dataCollection` | Hand-rolled redaction is the wrap-the-SDK shape the packet forbids, and it misses fields the stock switches already cover. The switches are the config. |
+
 ---
 
 ## 6. Testing — and what not to build
@@ -1068,6 +1087,7 @@ The version in this table is the `package.json` specifier. An earlier section of
 | `@better-auth/api-key` | ^1.7.5 | §7.3 | API keys, quotas, and expiry ship in this plugin | A hand-written key table | 1.7.5 |
 | `@better-auth/passkey` | ^1.7.5 | §2.5 | Passkeys. The plugin pulls SimpleWebAuthn | A hand-rolled WebAuthn | 1.7.5 |
 | `@cloudflare/puppeteer` | ^1.4.0 | §4.3 | Session leg of the ads transport (`connect`, `launch`, `sessions`) | `@cloudflare/playwright`, the other session SDK. This file imports puppeteer | 1.4.0 |
+| `@sentry/cloudflare` | ^10.75.1 | §5.10 | Worker error capture — `withSentry()` wraps the default export; Sentry's own GitHub integration opens the issue | Cloudflare Notifications + a webhook reshaper (an adapter — forbidden glue) | 10.75.1 |
 | `better-auth` | ^1.7.5 | §2 | Sessions and magic link on D1 | A custom session table, `kysely-d1`, `better-auth-cloudflare` | 1.7.5 |
 | `class-variance-authority` | ^0.7.1 | §3.2 | Variant map the badge component imports | A hand-written variant map | 0.7.1 |
 | `clsx` | ^2.1.1 | §3.2 | `cn()` in `app/lib/utils.ts` | String concatenation | 2.1.1 |

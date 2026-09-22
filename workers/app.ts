@@ -1,3 +1,4 @@
+import { withSentry } from "@sentry/cloudflare";
 import { createRequestHandler } from "react-router";
 
 import { pingLiveness } from "../app/lib/liveness-ping.server";
@@ -8,7 +9,7 @@ const requestHandler = createRequestHandler(
   import.meta.env.MODE,
 );
 
-export default {
+const handler = {
   async fetch(request) {
     return requestHandler(request);
   },
@@ -22,3 +23,21 @@ export default {
     await handleBatch(env, batch);
   },
 } satisfies ExportedHandler<Env>;
+
+export default withSentry(
+  () => ({
+    tracesSampleRate: 0,
+    dataCollection: {
+      userInfo: false,
+      cookies: false,
+      httpHeaders: false,
+      httpBodies: [],
+      urlQueryParams: false,
+      graphQL: { document: false, variables: false },
+      genAI: { inputs: false, outputs: false },
+      stackFrameVariables: false,
+      databaseQueryData: false,
+    },
+  }),
+  handler,
+);
