@@ -388,13 +388,18 @@ describe("IdentityTailWorkflow (#3885 P4)", () => {
   it("leaves the draft unconfirmed when the re-judge cannot reach Jev", async () => {
     await seedUser();
     await seedDraftEntity("e-retry", "retry.example");
-    const { run } = tailWorkflow("http://127.0.0.1:1/jev");
-    await expect(run(tailEvent("e-retry", "retry.example", "unverified"))).rejects.toThrow(
-      "public_subject re-judge",
-    );
+    const { run, sendSpy } = tailWorkflow("http://127.0.0.1:1/jev");
+    // P4: the Jev call is never retried — an unreachable verdict is an
+    // outcome, not a throw, so the tail still seeds watches and snapshots.
+    await run(tailEvent("e-retry", "retry.example", "unverified"));
     const row = await env.DB.prepare(`SELECT confirmed_at FROM entity WHERE id = 'e-retry'`).first();
     expect(row).toBeTruthy();
     expect(row?.confirmed_at).toBeNull();
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+    const refusal = await env.DB
+      .prepare(`SELECT id FROM user_decision WHERE workspace_id = 'w1' AND note = 'retry.example'`)
+      .first();
+    expect(refusal).toBeNull();
     await env.DB.prepare(`DELETE FROM entity WHERE id = 'e-retry'`).run();
   });
 });

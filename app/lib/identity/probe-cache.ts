@@ -1,12 +1,27 @@
+import type { z } from "zod";
+
 const TTL_SECONDS = 86_400;
 
 function probeKey(domain: string, probe: string): string {
   return `identity:${domain}:${probe}`;
 }
 
-async function probeGet<T>(kv: KVNamespace, domain: string, probe: string): Promise<T | null> {
+async function probeGet<T>(
+  kv: KVNamespace,
+  domain: string,
+  probe: string,
+  schema: z.ZodType<T>,
+): Promise<T | null> {
   const raw = await kv.get(probeKey(domain, probe));
-  return raw ? (JSON.parse(raw) as T) : null;
+  if (raw === null) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  const result = schema.safeParse(parsed);
+  return result.success ? result.data : null;
 }
 
 async function probePut(
@@ -23,10 +38,11 @@ export async function probeThrough<T>(
   domain: string,
   probe: string,
   run: () => Promise<T>,
+  schema: z.ZodType<T>,
   cacheable: (v: T) => boolean = () => true,
 ): Promise<T> {
   if (!kv) return run();
-  const hit = await probeGet<T>(kv, domain, probe);
+  const hit = await probeGet(kv, domain, probe, schema);
   if (hit !== null) return hit;
   const value = await run();
   if (cacheable(value)) await probePut(kv, domain, probe, value);

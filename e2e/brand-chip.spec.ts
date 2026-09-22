@@ -76,6 +76,10 @@ test("a failed logo falls back to the monogram and the row does not scroll or sh
     (window as unknown as { __stay: number }).__stay = 1;
   });
   await page.getByRole("link", { name: "You · Loopwell" }).click();
-  await page.waitForURL(/\/app\/competitors\/loopwell$/);
+  // The chip links into /app, which sits behind the session gate: an
+  // unauthenticated click lands on /login. The assertion is that the gate
+  // redirects through client-side navigation — __stay survives — rather than
+  // a full reload (webServer now migrates the local D1, so the gate is real).
+  await page.waitForURL(/\/login$/);
   expect(await page.evaluate(() => (window as unknown as { __stay?: number }).__stay)).toBe(1);
 });

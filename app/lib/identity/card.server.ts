@@ -7,12 +7,12 @@ import { insertOnboardingRunStmt } from "../data/onboarding-run.server";
 import { insertHomePageStmt, insertRolePageStmt } from "../data/page.server";
 import { takedownSubjectsPresent } from "../data/takedown.server";
 import { priorRefusalExists, userDecisionStmts } from "../data/user-decision.server";
-import { readJson, readUrl, type ReadUrlResult } from "../fetch/transport.server";
+import { readJson, readUrl, ReadUrlResultSchema, type ReadUrlResult } from "../fetch/transport.server";
 import { jevAsk, jevConfig, type JevQuestion } from "../jev/client";
 import { buildIdentityPack, inputHash } from "../jev/context-pack";
 import type { CardField, CardResult } from "./card-types";
 import { extract, type Extracted } from "./extract";
-import { logoCandidates, resolveLogo } from "./logo-cascade";
+import { logoCandidates, LogoResolutionSchema, resolveLogo } from "./logo-cascade";
 import { NormalisedSubject, normaliseInput } from "./normalise";
 import { probeThrough } from "./probe-cache";
 
@@ -73,6 +73,13 @@ async function wikidataLabel(qid: string): Promise<string | null> {
   );
   return body.entities?.[qid]?.labels?.en?.value ?? null;
 }
+
+const WdResult = z.object({
+  qid: z.string(),
+  claims: WdClaims,
+  country: z.string().nullable(),
+});
+const WdCachedResult = WdResult.nullable();
 
 async function wikidata(
   name: string,
@@ -175,6 +182,7 @@ export async function buildIdentityCard(
         cacheKey,
         "homepage",
         () => readUrl(pageUrl),
+        ReadUrlResultSchema,
         (v) => v.ok,
       )
     : { ok: false, reason: "invalid-url", detail: "no homepage URL for this input" };
@@ -199,7 +207,8 @@ export async function buildIdentityCard(
   const candidateName = extracted?.name ?? subject.handle ?? subject.registrable ?? null;
   const wdName = candidateName ?? subject.registrable;
   const wdP = wdName
-    ? probe("wikidata", () => probeThrough(cache, cacheKey, "wikidata", () => wikidata(wdName, probeFailures)), probeFailures)
+    ? probe("wikidata", () =>
+        probeThrough(cache, cacheKey, "wikidata", () => wikidata(wdName, probeFailures), WdCachedResult), probeFailures)
     : Promise.resolve(null);
 
   const [manifestIcons, wd] = await Promise.all([
@@ -211,11 +220,22 @@ export async function buildIdentityCard(
     ? probe("logo", () =>
         probeThrough(cache, cacheKey, "logo", () =>
           resolveLogo(logoCandidates(pageUrl, extracted, manifestIcons.ok ? manifestIcons.value : [])),
+          LogoResolutionSchema,
         ), probeFailures)
     : Promise.resolve(null);
 
   const logoRes = await logoP;
-  const logo = logoRes?.ok ? logoRes.value : null;
+  const logo = logoRes?.ok ? logoRes.value.hit : null;
+  if (logoRes?.ok && !logoRes.value.hit && logoRes.value.misses.length) {
+    const summary = logoRes.value.misses
+      .slice(0, 4)
+      .map((m) => `${m.via}: ${m.reason}`)
+      .join("; ");
+    probeFailures.push({
+      leg: "logo",
+      reason: `${String(logoRes.value.misses.length)} candidates missed — ${summary}${logoRes.value.misses.length > 4 ? "; …" : ""}`,
+    });
+  }
 
   const fields: Record<string, { value: unknown; via: string }> = {};
   const put = (name: string, value: unknown, via: string) => {

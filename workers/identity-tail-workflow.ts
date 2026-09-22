@@ -21,67 +21,97 @@ export interface Params {
   publicSubject: "cleared" | "ask" | "unverified";
 }
 
+type GateOutcome =
+  | { outcome: "confirmed"; prob?: number | null; reason?: string | null; inputHash?: string }
+  | { outcome: "refused"; prob: number | null; reason: string | null; inputHash: string }
+  | { outcome: "unreachable"; reason: string };
+
 export class IdentityTailWorkflow extends WorkflowEntrypoint<Env, Params> {
   override async run(event: WorkflowEvent<Params>, step: WorkflowStep) {
     const p = event.payload;
 
-    const persisted = await step.do("persist", { retries: { limit: 24, delay: "1 hour" } }, async () => {
-      const now = new Date().toISOString();
-      if (p.publicSubject !== "unverified") {
+    const gate: GateOutcome = await step.do("public-subject-gate", async () => {
+      try {
+        if (p.publicSubject !== "unverified") return { outcome: "confirmed" };
+        const jev = jevConfig(this.env);
+        if (!jev) return { outcome: "unreachable", reason: "JEV_URL unset" };
+        const pack = {
+          subject: { input: p.domain, domain: p.domain, homepage_url: p.homepageUrl },
+        };
+        const res = await jevAsk(jev, pack, {
+          public_subject: {
+            type: "boolean",
+            instructions:
+              "Is this input a brand, company or public creator — a public subject we may track — and not a private person?",
+          },
+        });
+        if (!res.ok) return { outcome: "unreachable", reason: res.reason };
+        const prob = res.answers.public_subject?.probability ?? null;
+        const reason = res.answers.public_subject?.reason ?? null;
+        const packHash = await inputHash(pack);
+        return prob !== null && prob < 0.1
+          ? { outcome: "refused", prob, reason, inputHash: packHash }
+          : { outcome: "confirmed", prob, reason, inputHash: packHash };
+      } catch (err) {
+        return {
+          outcome: "unreachable",
+          reason: err instanceof Error ? err.message : "gate error",
+        };
+      }
+    });
+
+    if (gate.outcome === "refused") {
+      await step.do("persist-refusal", { retries: { limit: 24, delay: "1 hour" } }, async () => {
+        const now = new Date().toISOString();
         await this.env.DB.batch([
-          confirmEntityStmt(this.env.DB, {
-            entityId: p.entityId,
+          insertVerdictStmt(this.env.DB, {
+            id: crypto.randomUUID(),
             workspaceId: p.workspaceId,
+            questionId: "public_subject",
+            inputHash: gate.inputHash,
+            entityId: null,
+            p: gate.prob,
+            choice: null,
+            reason: gate.reason,
             now,
           }),
-        ]);
-        return { refused: false };
-      }
-
-      const jev = jevConfig(this.env);
-      if (!jev) throw new Error("public_subject unverified and JEV_URL is unset");
-      const pack = { subject: { input: p.domain, domain: p.domain, homepage_url: p.homepageUrl } };
-      const res = await jevAsk(jev, pack, {
-        public_subject: {
-          type: "boolean",
-          instructions:
-            "Is this input a brand, company or public creator — a public subject we may track — and not a private person?",
-        },
-      });
-      if (!res.ok) throw new Error(`public_subject re-judge failed: ${res.reason}`);
-      const prob = res.answers.public_subject?.probability ?? null;
-      const verdict = insertVerdictStmt(this.env.DB, {
-        id: crypto.randomUUID(),
-        workspaceId: p.workspaceId,
-        questionId: "public_subject",
-        inputHash: await inputHash(pack),
-        entityId: null,
-        p: prob,
-        choice: null,
-        reason: res.answers.public_subject?.reason ?? null,
-        now,
-      });
-      if (prob !== null && prob < 0.1) {
-        await this.env.DB.batch([
-          verdict,
           ...userDecisionStmts(this.env.DB, [
             { workspaceId: p.workspaceId, userId: p.userId, verdict: "refused:public_subject", note: p.domain },
           ]),
           deleteEntityStmt(this.env.DB, { entityId: p.entityId, workspaceId: p.workspaceId }),
         ]);
-        return { refused: true };
-      }
-      await this.env.DB.batch([
-        verdict,
-        confirmEntityStmt(this.env.DB, {
-          entityId: p.entityId,
-          workspaceId: p.workspaceId,
-          now,
-        }),
-      ]);
-      return { refused: false };
-    });
-    if (persisted.refused) return;
+      });
+      return;
+    }
+
+    if (gate.outcome === "confirmed") {
+      await step.do("persist", { retries: { limit: 24, delay: "1 hour" } }, async () => {
+        const now = new Date().toISOString();
+        const stmts = [
+          confirmEntityStmt(this.env.DB, {
+            entityId: p.entityId,
+            workspaceId: p.workspaceId,
+            now,
+          }),
+        ];
+        if (gate.inputHash) {
+          stmts.unshift(
+            insertVerdictStmt(this.env.DB, {
+              id: crypto.randomUUID(),
+              workspaceId: p.workspaceId,
+              questionId: "public_subject",
+              inputHash: gate.inputHash,
+              entityId: null,
+              p: gate.prob ?? null,
+              choice: null,
+              reason: gate.reason ?? null,
+              now,
+            }),
+          );
+        }
+        await this.env.DB.batch(stmts);
+      });
+    }
 
     const watches = await step.do("seed-watches", async () => {
       const sources = await enabledSources(this.env.DB);

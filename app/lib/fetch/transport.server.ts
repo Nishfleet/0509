@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { z } from "zod";
 
 const FETCH_TIMEOUT_MS = 8_000;
 
@@ -21,6 +22,22 @@ type ReadUrlFailure =
   | { ok: false; reason: "escalation-failed"; detail: string };
 
 export type ReadUrlResult = ReadUrlSuccess | ReadUrlFailure;
+
+const ReadUrlSuccessSchema = z.object({
+  ok: z.literal(true),
+  html: z.string(),
+  transport: z.enum(["fetch", "browser"]),
+  status: z.number(),
+  ms: z.number(),
+  browserMsUsed: z.number().optional(),
+  escalated: z.boolean(),
+});
+const ReadUrlFailureSchema = z.object({
+  ok: z.literal(false),
+  reason: z.enum(["invalid-url", "escalation-failed"]),
+  detail: z.string(),
+});
+export const ReadUrlResultSchema = z.union([ReadUrlSuccessSchema, ReadUrlFailureSchema]);
 
 const CHALLENGE_MARKERS = [
   "cf-browser-verification",

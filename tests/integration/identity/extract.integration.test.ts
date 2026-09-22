@@ -49,7 +49,7 @@ describe("logoCandidates + resolveLogo", () => {
       }
       return new Response("not found", { status: 404 });
     };
-    const hit = await resolveLogo(
+    const { hit, misses } = await resolveLogo(
       [
         { url: "https://a.test/one.png", via: "manifest" },
         { url: "https://icons.duckduckgo.com/ip3/x.ico", via: "duckduckgo-ip3" },
@@ -59,5 +59,6 @@ describe("logoCandidates + resolveLogo", () => {
     );
     expect(hit?.via).toBe("duckduckgo-ip3");
     expect(calls.length).toBe(2); // stops at first success; og:image never tried
+    expect(misses).toEqual([{ via: "manifest", reason: "http 404" }]);
   });
 });

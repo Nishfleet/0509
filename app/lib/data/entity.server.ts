@@ -1,5 +1,4 @@
 import { env } from "cloudflare:workers";
-import { z } from "zod";
 
 export function upsertSelfEntityStmt(
   db: D1Database,
@@ -89,15 +88,4 @@ export async function confirmedSelfEntityForWorkspace(
     .bind(workspaceId)
     .first<{ id: string }>();
   return row ? { id: row.id } : null;
-}
-
-const IdentityMeta = z.object({
-  public_subject: z.enum(["cleared", "ask", "unverified"]).optional(),
-});
-
-export function publicSubjectFromIdentityJson(
-  identityJson: string,
-): "cleared" | "ask" | "unverified" {
-  const parsed: unknown = JSON.parse(identityJson);
-  return IdentityMeta.parse(parsed).public_subject ?? "unverified";
 }
