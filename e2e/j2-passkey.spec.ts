@@ -54,7 +54,7 @@ test("a passkey registered on first sign-in signs in on its own", async ({ page,
   try {
     // Register through the real button. The status region is the contract;
     // its copy is not asserted (smoke.spec.ts's contract-not-copy convention).
-    await registerAffordance(page).click();
+    await (await registerAffordance(page)).click();
     await expect(page.getByRole("status")).toBeVisible();
 
     // Sign out has no UI affordance yet; the session ends through better-auth's

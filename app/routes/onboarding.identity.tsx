@@ -3,12 +3,8 @@ import type { Route } from "./+types/onboarding.identity";
 import { useState } from "react";
 import { redirect } from "react-router";
 
-import { StepBar } from "../components/onboarding/step-bar";
-import { OneInput } from "../components/one-input";
 import { authClient } from "../lib/auth-client";
 import { requireSession } from "../lib/require-session.server";
-
-const STEPS = ["one input", "your card", "who you're up against"] as const;
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
@@ -33,12 +29,9 @@ export default function OnboardingIdentity({ loaderData }: Route.ComponentProps)
 
   return (
     <main className="mx-auto flex min-h-svh w-full max-w-[52rem] flex-col gap-8 px-6 py-12 sm:px-10 sm:py-16">
-      <StepBar steps={STEPS} current={2} />
-      <OneInput
-        label="your website, or a handle"
-        action="/onboarding"
-        defaultValue={loaderData.input}
-      />
+      <p className="font-mono text-[0.72rem] leading-[1.4] text-ink-soft">
+        {loaderData.input}
+      </p>
       <p className="font-mono text-[0.72rem] leading-[1.4] text-ink-soft">
         Signed in as {loaderData.email}
       </p>

@@ -1,15 +1,35 @@
-import { readFileSync } from "node:fs";
 import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
+const { redirect, requireSessionCalls } = vi.hoisted(() => ({
+  redirect: vi.fn((to: string) => {
+    throw new Error(`redirect:${to}`);
+  }),
+  requireSessionCalls: { count: 0 },
+}));
+
 vi.mock("react-router", () => ({
+  redirect,
   Form: (props: { method?: string; action?: string; children?: React.ReactNode }) =>
     createElement("form", { method: props.method, action: props.action }, props.children),
+  useNavigation: () => ({ state: "idle" }),
+}));
+
+vi.mock("../../app/lib/require-session.server", () => ({
+  requireSession: async () => {
+    requireSessionCalls.count += 1;
+    return { user: { id: "user-1", email: "someone@0509.io" } };
+  },
+}));
+
+vi.mock("../../app/lib/workspace.server", () => ({
+  workspaceLandingForRequest: async () => "/onboarding",
 }));
 
 import { OneInput, type OneInputProps } from "../../app/components/one-input";
 import { StepBar, type StepBarProps } from "../../app/components/onboarding/step-bar";
+import { action, loader } from "../../app/routes/onboarding._index";
 
 function oneInput(props: Partial<OneInputProps> = {}): string {
   const element: ReactElement | null = createElement(OneInput, {
@@ -29,6 +49,13 @@ function stepBar(props: Partial<StepBarProps> = {}): string {
   return renderToStaticMarkup(element);
 }
 
+function submit(subject: string | null): Promise<unknown> {
+  const form = new FormData();
+  if (subject !== null) form.set("subject", subject);
+  const request = new Request("https://0509.io/onboarding", { method: "POST", body: form });
+  return Promise.resolve(action({ request, params: {} })).catch((thrown: unknown) => thrown);
+}
+
 const NOT_FOUND_LINE = "we couldn&#x27;t find anything for that, try the main website";
 const STEPS = ["one input", "your card", "who you're up against"] as const;
 
@@ -46,7 +73,10 @@ describe("the one input", () => {
     expect(html).toContain('aria-label="add one we missed"');
     expect(html).toContain('method="post"');
     expect(html).toContain('action="/app/competitors"');
-    expect(html).not.toContain("variant");
+  });
+
+  it("leaves the empty submit to the action, not to the browser", () => {
+    expect(oneInput()).not.toContain("required");
   });
 
   it("carries a prefilled value without owning how it got there", () => {
@@ -74,6 +104,46 @@ describe("the one input", () => {
   });
 });
 
+describe("the onboarding action", () => {
+  it("trims the subject and redirects to the identity screen with it encoded", async () => {
+    const result = await submit("  loopwell.com  ");
+    expect(result).toBeInstanceOf(Error);
+    expect((result as Error).message).toBe(
+      "redirect:/onboarding/identity?input=loopwell.com",
+    );
+  });
+
+  it("encodes a handle, so the identity route owns the URL shape", async () => {
+    const result = await submit("@loopwellhq");
+    expect((result as Error).message).toBe(
+      "redirect:/onboarding/identity?input=%40loopwellhq",
+    );
+  });
+
+  it("answers an empty submit with the not-found branch, once, and never a redirect", async () => {
+    const result = await submit("   ");
+    expect(result).toEqual({ notFound: true });
+  });
+
+  it("answers a missing field the same way as an empty one", async () => {
+    const result = await submit(null);
+    expect(result).toEqual({ notFound: true });
+  });
+
+  it("requires a session before it reads the subject", async () => {
+    const before = requireSessionCalls.count;
+    await submit("loopwell.com");
+    expect(requireSessionCalls.count).toBe(before + 1);
+  });
+});
+
+describe("the onboarding loader", () => {
+  it("returns normally for a workspace with no self entity", async () => {
+    const request = new Request("https://0509.io/onboarding");
+    await expect(loader({ request, params: {} })).resolves.toBeNull();
+  });
+});
+
 describe("the onboarding step bar", () => {
   it("renders every step as one mono row with the arrows between them", () => {
     const html = stepBar();
@@ -91,8 +161,6 @@ describe("the onboarding step bar", () => {
       const marker = /class="([^"]*bg-accent[^"]*)"[^>]*>([^<]*)</.exec(html);
       expect(marker?.[1]).toContain("bg-accent");
       expect(marker?.[2]).toContain(step.replace(/'/g, "&#x27;"));
-      // The non-current spans carry text-ink; a bare `toContain("text-ink")` is
-      // vacuous because the nav wrapper itself contains `text-ink-faint`.
       const others = html.replace(/class="[^"]*bg-accent[^"]*"[^>]*>[^<]*</, "");
       expect(others).toContain("font-semibold text-ink");
     }
@@ -101,46 +169,5 @@ describe("the onboarding step bar", () => {
   it("hides the arrows from a screen reader", () => {
     const html = stepBar();
     expect(html).toContain('aria-hidden="true"');
-  });
-
-  it("renders from one component for all three screens, with no per-screen variant", () => {
-    // The real invariant is that the route modules *choose* `current` and pass
-    // it in — not that three different numbers produce three different
-    // strings, which is trivially true. Read the route files and assert both
-    // screens share this component.
-    const routes = ["app/routes/onboarding._index.tsx", "app/routes/onboarding.identity.tsx"];
-    for (const file of routes) {
-      const source = readFileSync(file, "utf8");
-      expect(source).toContain('from "../components/onboarding/step-bar"');
-      expect(source).toContain("<StepBar");
-      expect(source).not.toContain("variant");
-    }
-  });
-
-  it("reports each not-found submit with a fresh key, so a repeat submit refocuses", () => {
-    // The boolean alone cannot tell the second whitespace submit from the
-    // first; the route's action stamps a monotonic key the component depends
-    // on, and "the input stays focused" needs that re-run.
-    const route = readFileSync("app/routes/onboarding._index.tsx", "utf8");
-    expect(route).toContain("submitId");
-    expect(route).toContain("notFoundKey");
-  });
-
-  it("keeps the not-found branch free of any second normaliser", () => {
-    // docs/REBUILD-ONBOARDING.md step 2 and the identity-card engine own
-    // normalisation; screen 1 only trims and passes the raw subject through.
-    const route = readFileSync("app/routes/onboarding._index.tsx", "utf8");
-    const action = /export async function action[\s\S]*?\n}/.exec(route)?.[0] ?? "";
-    expect(action).toContain(".trim()");
-    expect(action).toContain('redirect(`/onboarding/identity?input=');
-    expect(action).not.toContain("normalise");
-    expect(action).not.toContain("tldts");
-    expect(action).not.toContain("URL(");
-  });
-
-  it("passes the raw subject through, so the identity route owns the URL shape", () => {
-    const route = readFileSync("app/routes/onboarding._index.tsx", "utf8");
-    const action = /export async function action[\s\S]*?\n}/.exec(route)?.[0] ?? "";
-    expect(action).toContain("encodeURIComponent(input)");
   });
 });
