@@ -2,11 +2,12 @@ import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-const { redirect, requireSessionCalls } = vi.hoisted(() => ({
+const { redirect, requireSessionCalls, landingFor } = vi.hoisted(() => ({
   redirect: vi.fn((to: string) => {
     throw new Error(`redirect:${to}`);
   }),
   requireSessionCalls: { count: 0 },
+  landingFor: { value: "/onboarding" },
 }));
 
 vi.mock("react-router", () => ({
@@ -24,7 +25,7 @@ vi.mock("../../app/lib/require-session.server", () => ({
 }));
 
 vi.mock("../../app/lib/workspace.server", () => ({
-  workspaceLandingForRequest: async () => "/onboarding",
+  workspaceLandingForRequest: async () => landingFor.value,
 }));
 
 import { OneInput, type OneInputProps } from "../../app/components/one-input";
@@ -133,9 +134,16 @@ describe("the onboarding action", () => {
 });
 
 describe("the onboarding loader", () => {
-  it("returns normally for a workspace with no self entity", async () => {
+  it("returns null for a workspace with no self entity", async () => {
+    landingFor.value = "/onboarding";
     const request = new Request("https://0509.io/onboarding");
     await expect(loader({ request, params: {} })).resolves.toBeNull();
+  });
+
+  it("bounces a finished workspace to /app, the guard the placeholder route had", async () => {
+    landingFor.value = null as never;
+    const request = new Request("https://0509.io/onboarding");
+    await expect(loader({ request, params: {} })).rejects.toThrow("redirect:/app");
   });
 });
 
@@ -154,8 +162,11 @@ describe("the onboarding step bar", () => {
     for (const [index, step] of STEPS.entries()) {
       const html = stepBar({ current: index + 1 });
       const marker = /class="([^"]*bg-accent[^"]*)"[^>]*>([^<]*)</.exec(html);
+      const marked = marker?.[2] ?? "";
       expect(marker?.[1]).toContain("bg-accent");
-      expect(marker?.[2]).toContain(step.replace(/'/g, "&#x27;"));
+      // The marker's text is the step's own position number, so a marker on the
+      // wrong step cannot pass: the assertion is not just "a span has a class".
+      expect(marked.trim()).toBe(`${index + 1} ${step.replace(/'/g, "&#x27;")}`);
       const others = html.replace(/class="[^"]*bg-accent[^"]*"[^>]*>[^<]*</, "");
       expect(others).toContain("font-semibold text-ink");
     }

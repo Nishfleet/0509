@@ -83,12 +83,19 @@ test("a real domain redirects to the card screen, which does not overflow at 390
   expect(errors).toEqual([]);
 });
 
-test("a real @handle redirects to the card screen", async ({ page }) => {
+test("a real @handle redirects to the card screen, which does not overflow at 390 and logs no errors", async ({
+  page,
+}) => {
+  const errors = collectConsoleErrors(page);
   await signedIn(page);
   const input = inputOnScreen(page);
   await input.fill("@loopwellhq");
   await page.getByRole("button", { name: /continue/i }).click();
   await expect(page).toHaveURL(/\/onboarding\/identity\?input=%40loopwellhq$/);
+  // The redirect target of every subject the acceptance names is measured, so
+  // its overflow and its console output are not unmeasured at 390.
+  await assertNoOverflow(page);
+  expect(errors).toEqual([]);
 });
 
 test("an empty submit shows the one line, focused, on screen 1, with no error page and no overflow", async ({
@@ -126,12 +133,15 @@ test("a whitespace-only submit reaches the same one line", async ({ page }) => {
 test("a deliberate nonsense string is passed through to the card screen, not answered here", async ({
   page,
 }) => {
+  const errors = collectConsoleErrors(page);
   await signedIn(page);
   const input = inputOnScreen(page);
   await input.fill("qqqzzz-not-a-thing-9f3a");
   await page.getByRole("button", { name: /continue/i }).click();
   await expect(page).toHaveURL(/\/onboarding\/identity\?input=qqqzzz-not-a-thing-9f3a$/);
-  // No "nothing found anywhere" line on screen 1: that answer is the
-  // identity engine's (#3993), and screen 1 never renders an error page.
+  // No "nothing found anywhere" line on screen 1: that answer is the identity
+  // engine's (#3993), and screen 1 never renders an error page.
   await expect(page.getByRole("status")).toHaveCount(0);
+  await assertNoOverflow(page);
+  expect(errors).toEqual([]);
 });
