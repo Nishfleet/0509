@@ -266,6 +266,7 @@ jobs:
           M4_MACHINE_IDS: ${{ steps.m4.outputs.machine_ids }}
           M4_PERSON_IDS: ${{ steps.m4.outputs.person_ids }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EVENT: ${{ github.event_name }}
         run: |
           set -euo pipefail
           for c in "$M1_COLOR" "$M2_COLOR" "$M3_COLOR" "$M4_COLOR"; do
@@ -289,15 +290,39 @@ jobs:
             --jq '.[] | select(.user.login == "github-actions[bot]") | select(.body | contains("parity-scorecard")) | .body' \
             > "$comments"
           prev=0
+          prev_until=""
           last=$(grep -E '^streak=[0-9]+$' "$comments" | tail -1 || true)
+          last_until=$(grep -E '^until=[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$' "$comments" | tail -1 || true)
           if [ -n "$last" ]; then
             prev=${last#streak=}
+          fi
+          if [ -n "$last_until" ]; then
+            prev_until=${last_until#until=}
           fi
           case "$prev" in
             ''|*[!0-9]*) echo "previous streak is not a number" >&2; exit 1 ;;
           esac
+          # A rolling 7-day window overlaps itself. Only the Monday schedule
+          # advances the streak, and only when the previous card is at least
+          # 6 days older, so a dispatch of the same week cannot close #4267 early.
+          advance=0
+          if [ "$EVENT" = "schedule" ]; then
+            if [ -z "$prev_until" ]; then
+              advance=1
+            else
+              prev_epoch=$(date -u -d "$prev_until" +%s)
+              this_epoch=$(date -u -d "$UNTIL" +%s)
+              if [ $((this_epoch - prev_epoch)) -ge $((6 * 24 * 3600)) ]; then
+                advance=1
+              fi
+            fi
+          fi
           if [ "$M1_COLOR" = green ] && [ "$M2_COLOR" = green ] && [ "$M3_COLOR" = green ] && [ "$M4_COLOR" = green ]; then
-            streak=$((prev + 1))
+            if [ "$advance" -eq 1 ]; then
+              streak=$((prev + 1))
+            else
+              streak=$prev
+            fi
           else
             streak=0
           fi
@@ -316,6 +341,7 @@ jobs:
             echo "| 4 | Bugs the system caught | machine ${M4_MACHINE}, person ${M4_HUMAN} | ${M4_COLOR} | machine ${M4_MACHINE_IDS}; person ${M4_PERSON_IDS} |"
             echo
             echo "parity-scorecard"
+            echo "until=${UNTIL}"
             echo "streak=${streak}"
           } > "$body"
           if [ "$streak" -eq 0 ] && [ "$prev" -ge 2 ]; then
@@ -335,6 +361,9 @@ jobs:
           fi
           gh issue comment 4267 --repo "$REPO" --body-file "$body"
           if [ "$streak" -ge 4 ]; then
-            gh issue comment 4267 --repo "$REPO" --body "@nish3451 parity reached"
-            gh issue close 4267 --repo "$REPO" --reason completed
+            issue_state=$(gh issue view 4267 --repo "$REPO" --json state --jq .state)
+            if [ "$issue_state" = "OPEN" ]; then
+              gh issue comment 4267 --repo "$REPO" --body "@nish3451 parity reached"
+              gh issue close 4267 --repo "$REPO" --reason completed
+            fi
           fi
