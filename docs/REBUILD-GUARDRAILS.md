@@ -11,7 +11,7 @@ Umbrella #3842. Author: Fable. Checked by the Opus deputy. Nish's decisions stan
 ## What we collect and keep
 
 - Public pages, public posts, public ad libraries, public feeds. Screenshots of public pages. No DMs, no private groups, no purchased personal data.
-- Stored bodies on the `0509-snapshots` bucket follow this table. The platform deletes them. This repo ships no cron and no Worker that deletes objects. Expiry is day-granular, and Cloudflare typically removes an object within 24 hours of the day it expires, so the promise is the period in the table.
+- Stored bodies on the `0509-snapshots` bucket follow this table. The platform deletes an object when its rule expires. Age expiry is not a cron and not a Worker. Expiry is day-granular, and Cloudflare typically removes an object within 24 hours of the day it expires, so the promise is the period in the table.
 
 | Prefix | What it holds | Kept |
 |---|---|---|
