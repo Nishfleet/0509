@@ -41,11 +41,13 @@ jobs:
         # #4246: tests/queues-exist.test.ts compares the queues declared in
         # wrangler.jsonc against the account's, and it fails closed when the
         # credentials are absent on CI. `npm test` runs here on every push to
-        # main, so this step must supply the same pair ci.yml's Test step does;
-        # without them the queue check would redden the deploy before the
-        # Worker is ever uploaded. Both secrets are already in this job — the
-        # migration and deploy steps below read them — so this adds no new
-        # exposure, it stops the test step hiding them.
+        # main, so this step must supply the same pair ci.yml's Test step does.
+        #
+        # Said plainly: this env exists so the gate can pass, not to widen
+        # coverage. Both values are read by later steps in this same job (the
+        # D1 migration and the deploy below already read them), so this exposes
+        # them to no step that did not already have them — the token reaches
+        # `npm test` here exactly as it already did the deploy.
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

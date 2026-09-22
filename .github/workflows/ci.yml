@@ -66,6 +66,14 @@ jobs:
         # on a fork's. Supplying it here is what makes the check a gate: with
         # the secret absent the test fails closed instead of skipping, because
         # a fork PR is also green on a secret that was never provisioned.
+        #
+        # This is the credential-scope decision this change depends on. The
+        # variable is the same token the production deploy uses, and `npm test`
+        # here runs the tests a PR adds — so a same-repo branch can read this
+        # value from a test. The queue check only ever needs Cloudflare's
+        # Queues read scope. A token provisioned for exactly that read is the
+        # fix that keeps the gate without widening a deploy credential's reach;
+        # see the PR body's security note.
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

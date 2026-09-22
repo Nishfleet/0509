@@ -68,6 +68,11 @@ async function declaredQueues(): Promise<string[]> {
 // failure class pointed the other way. A required field is a parse error that
 // names the drift instead. Only `errors` is nullish, because the success path
 // really does send `"errors": null` rather than an absent key.
+//
+// `result_info.page` is parsed and asserted against the requested page rather
+// than only required: a required-but-unread field is a parse failure waiting to
+// happen on a value the check does not use, and asserting it turns a paginated
+// read that silently restarted at page 1 into a named failure.
 const queuePageSchema = z.object({
   success: z.boolean(),
   errors: z.array(z.object({ code: z.number(), message: z.string() })).nullish(),
@@ -94,7 +99,12 @@ async function accountQueues({ token, accountId }: Credentials): Promise<string[
       );
     }
     for (const queue of parsed.data.result) names.push(queue.queue_name);
-    const totalPages = parsed.data.result_info.total_pages;
+    const { page: returnedPage, total_pages: totalPages } = parsed.data.result_info;
+    if (returnedPage !== page) {
+      throw new Error(
+        `listing the account's queues returned page ${returnedPage} for a request for page ${page}`
+      );
+    }
     if (page >= totalPages) break;
     page += 1;
   }
@@ -132,18 +142,21 @@ function requiredCredentials(): Credentials {
 }
 
 describe("every queue wrangler.jsonc declares exists in the account (#4246)", () => {
-  // The repository's own workflows always supply both secrets, so a CI run
-  // without them is a regression in the workflow, not a fork. Failing here is
-  // what makes the skip below unreachable on this repo's CI: a check that
-  // skips is not a gate, and the gate's whole purpose is to be red before a
-  // merge that would redden production.
+  // A CI run without both secrets is red here. On this repo the secrets are
+  // always present for pull_request and merge_group runs because every PR
+  // source is a same-repo branch; a fork PR does not receive repository
+  // secrets, so a fork PR is red too, and this repo does not take fork PRs.
+  // The alternative — skip when the secret is absent — is the blind gate the
+  // issue is about.
   //
   // This asserts through the same `credentials()` the skip uses, on purpose.
   // The first draft asserted `expect.any(String)` on the raw values, which the
   // empty string satisfies — and an unset Actions secret is exactly the empty
   // string, so CI with unset secrets passed this test and skipped the queue
   // check: green on the failure the gate exists to catch. One definition of
-  // "has credentials" is what makes that divergence impossible.
+  // "has credentials" is what makes that divergence impossible. `it.skipIf`
+  // and this test both call `credentials()`; `process.env` does not change
+  // between collection and run, so they cannot disagree.
   it("has credentials on this repo's own CI, so the check cannot pass by skipping", () => {
     if (process.env.CI) {
       expect(
