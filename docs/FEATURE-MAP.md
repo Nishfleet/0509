@@ -34,6 +34,7 @@ state.
 
 | Route | File | Reach | Keyboard | What it does | Proof |
 |---|---|---|---|---|---|
+| `/onboarding` | `app/routes/onboarding.identity.tsx` | after sign-in (the first screen) | `Tab` to the input, type, `Enter` | One input — a domain, URL, `@handle` or channel URL — becomes the editable brand card. The card builds as probes answer (each field says what will fill it, never a spinner); fields Jev is unsure about are outlined "check this". One action: "That's me", which logs edits as `user_decision` rows and starts `IdentityTailWorkflow` (persist → seed watches → first snapshot → start discovery). | `e2e/onboarding-identity.spec.ts` — the input and the session gate; the timed three-input journey runs against production (**J-series**) |
 | `/app` | `app/routes/app.home.tsx` | after sign-in | `Tab` to the button, `Enter` | Home. The signed-in email and an "Add a passkey" button that runs better-auth's register ceremony (`generate-register-options` → `verify-registration`) against the live session. | **J3**, **J4**; the register ceremony is **J2** — `e2e/j2-passkey.spec.ts` |
 | `/app/competitors` | `app/routes/app.competitors.tsx` | — | — | The tracked set. Currently a stub. | **J6** |
 | `/app/competitors/:entityId` | `app/routes/app.competitor.tsx` | a row on `/app/competitors` | — | One competitor. Currently a stub. | **J7**, **J10** |

@@ -2,6 +2,8 @@ import { createRequestHandler } from "react-router";
 
 import { pingLiveness } from "../app/lib/liveness-ping.server";
 
+export { IdentityTailWorkflow } from "./identity-tail-workflow";
+
 const requestHandler = createRequestHandler(
   () => import("virtual:react-router/server-build"),
   import.meta.env.MODE,

@@ -1023,6 +1023,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | Feed parsing | `@extractus/feed-extractor` (wraps `fast-xml-parser`) | 8.0.3 / 5.11.1 |
 | Logo | page metadata via `HTMLRewriter`, DuckDuckGo icon fallback | platform |
 | Validation | `zod` | 4.6.5 |
+| Public-suffix + registrable domain parsing | `tldts` — zero deps, Workers-clean ESM, maintained PSL | 7.4.13 |
 | Charts | `uplot` (+ `uplot-react`) — ~24–28 KB gzip, budget raised to 30 KB | 1.6.32 / 1.2.4 |
 | OG images | Browser Run `/screenshot` → R2 | platform |
 | Dates + timezones | `Intl` + `date-fns` + `@date-fns/tz` (**never `Temporal`** — workerd#6907) | platform / 4.4.0 / 1.5.0 |
