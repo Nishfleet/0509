@@ -54,6 +54,16 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
+      - name: Deploy the e2e inbox Worker
+        # The J1/J2 mail sink (0509#3927): a separate Worker with its own name
+        # and route, same fixture shape as J8's fixture.0509.in. Its KV binding
+        # has no id on purpose — wrangler provisions the namespace on first
+        # deploy and keeps it linked on later ones.
+        run: npx wrangler deploy --config workers/e2e-inbox.wrangler.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
       - name: Smoke the deployed Worker
         # A deploy that reports success while the site 500s is not a success.
         run: |

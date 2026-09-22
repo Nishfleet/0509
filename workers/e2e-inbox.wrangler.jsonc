@@ -1,0 +1,20 @@
+// Config for the J1/J2 mail-sink Worker (0509#3927). It is a separate Worker
+// with its own name and routes block, same fixture shape as fixture.0509.in in
+// docs/REBUILD-DONE.md J8: Email Routing delivers e2e@0509.io to the `email`
+// handler, and the Playwright suite reads messages back over HTTPS.
+//
+// The KV binding is declared without an id on purpose: wrangler's automatic
+// resource provisioning creates the namespace on first deploy and keeps it
+// linked across later deploys even though the id is never written back here
+// (CI deploys have no checkout to write to).
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "0509-e2e-inbox",
+  "main": "./e2e-inbox.ts",
+  "compatibility_date": "2026-09-16",
+  "observability": {
+    "enabled": true
+  },
+  "kv_namespaces": [{ "binding": "INBOX" }],
+  "routes": [{ "pattern": "e2e-inbox.0509.io", "custom_domain": true }]
+}

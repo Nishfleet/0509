@@ -10,6 +10,10 @@
     "app/root.tsx",
     "app/routes.ts",
     "workers/app.ts",
+    // The e2e inbox Worker's front door is its own wrangler config
+    // (workers/e2e-inbox.wrangler.jsonc), which knip does not read — the file
+    // is an entry by name.
+    "workers/e2e-inbox.ts",
     "e2e/*.setup.ts"
   ],
   "project": ["app/**/*.{ts,tsx}", "workers/**/*.ts", "e2e/**/*.ts", "tests/**/*.ts"],

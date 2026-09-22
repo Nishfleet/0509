@@ -22,9 +22,9 @@ pointer. **Proof** is the e2e test or journey that asserts it.
 | Route | File | Reach | Keyboard | What it does | Proof |
 |---|---|---|---|---|---|
 | `/` | `public/index.html` | `https://0509.io` | — | The quiet rebuild notice. One `h1` (copy owned by `public/index.html`, not asserted verbatim), one contact link to `support@0509.io`. Static file: no loader, no client state. `robots: noindex` until the gate lifts. | `e2e/smoke.spec.ts` — headline, contact link, no horizontal scroll at 390, no console errors |
-| `/login` | `app/routes/login.tsx` | the `/login` URL; nothing links to it yet | `Tab` to the email field, type, `Enter` | One input. Submitting POSTs to the same route; better-auth mints and sends a magic link, then the page swaps to "Check your email". Never reveals whether the address exists. | `e2e/smoke.spec.ts` — heading, labelled input, enabled button. Sending is **J1** |
+| `/login` | `app/routes/login.tsx` | the `/login` URL; nothing links to it yet | `Tab` to the email field, type, `Enter` | One input. Submitting POSTs to the same route; better-auth mints and sends a magic link, then the page swaps to "Check your email". Never reveals whether the address exists. | `e2e/smoke.spec.ts` — heading, labelled input, enabled button. Sending is **J1** — `e2e/j1-magic-link.spec.ts` |
 | `/api/health` | `app/routes/api.health.ts` | `GET /api/health` | — | `{ status, app, timestamp }`. Reads nothing on purpose: a health check that queries the database reports the database. | `e2e/smoke.spec.ts` — 200, `status: "ok"`, parseable timestamp |
-| `/api/auth/*` | `app/routes/api.auth.$.ts` | the browser follows the magic link here | — | better-auth's whole surface, mounted whole: magic-link request and verify, passkey registration and assertion, session, sign-out. Nothing is reimplemented above it. | **J1**, **J2** |
+| `/api/auth/*` | `app/routes/api.auth.$.ts` | the browser follows the magic link here | — | better-auth's whole surface, mounted whole: magic-link request and verify, passkey registration and assertion, session, sign-out. Nothing is reimplemented above it. | **J1** — `e2e/j1-magic-link.spec.ts`; **J2** — `e2e/j2-passkey.spec.ts` |
 
 ## Signed in
 
@@ -45,6 +45,7 @@ state.
 | Surface | Where | Trigger | What it does |
 |---|---|---|---|
 | Dead-man ping | `app/lib/liveness-ping.server.ts`, called from `workers/app.ts` `scheduled` | cron `*/5 * * * *` | POSTs to `LIVENESS_PING_URL`. An external service alerts when the reports stop — the one failure a Worker cannot report about itself. Returns `null` when the var is unset, so no monitor is silence, not a scheduled error. |
+| e2e inbox | `workers/e2e-inbox.ts` (`workers/e2e-inbox.wrangler.jsonc`, Worker `0509-e2e-inbox`) | Email Routing `e2e@0509.io` delivers to its `email` handler; reads are `GET https://e2e-inbox.0509.io/message?to=<address>` | Test mail sink for **J1**/**J2** (0509#3927): stores the raw MIME in KV under the recipient address with a 1-hour TTL. Reads require `Authorization: Bearer $E2E_INBOX_TOKEN`; the endpoint answers 503 when the secret is not set, so a missing secret fails loudly rather than 404ing. |
 
 ---
 

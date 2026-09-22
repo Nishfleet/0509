@@ -155,6 +155,10 @@ jobs:
           PLAYWRIGHT_TEST_BASE_URL: ${{ github.event.deployment_status.environment_url }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          # J1/J2 read the e2e inbox Worker through this token (0509#3927).
+          # Absent, the secret resolves to "" and the specs fail loudly naming
+          # it — they never skip.
+          E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
 
       - name: Keep the trace when it fails
         if: failure()
