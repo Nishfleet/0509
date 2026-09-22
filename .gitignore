@@ -66,7 +66,6 @@ worker-configuration.d.ts
 # 55 of them had accumulated on main. None is read by app, workers, scripts,
 # tests or any workflow; the one code reference (weekly-business-metrics.mjs)
 # is a comment citing a burst script by name.
-#
 # NOT ignored, deliberately: .lane/reports/<branch>.md. Those are the lane
 # evidence records, and tests/lane-evidence-collision.test.ts enforces the
 # one-file-per-lane shape by listing them with `git ls-files --cached --others
@@ -78,3 +77,19 @@ worker-configuration.d.ts
 # already covered; the numbered form was not, so .pr-body-3095.md and six
 # siblings were committed to main.
 /.pr-body-*.md
+
+# From the React Router / Cloudflare scaffold.
+.env
+/node_modules/
+
+# React Router
+/build/
+
+# Cloudflare
+.mf
+.wrangler
+.dev.vars*
+
+!.dev.vars.example
+!.env.example
+e2e/.auth/

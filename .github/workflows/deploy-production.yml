@@ -1,7 +1,8 @@
-# Production deploy. Stock pipeline (0509#3679, 2026-09-20):
-# verify (no secrets) -> deploy: migrate, wrangler deploy, smoke, wrangler
-# rollback on a failed smoke. Restore is D1 Time Travel; the weekly export is
-# d1-backup-weekly.yml. No gate scripts, no evidence artifacts.
+# Push to main deploys. The migration step runs before the Worker goes out, so
+# schema and code land in one ordered step — and note what that means for this
+# rebuild: the first run of this workflow applies 0001_rebuild.sql, whose DROP
+# prologue wipes the pre-rebuild schema from production D1. Nish approved that
+# wipe on 2026-09-20; there are 0 users.
 name: Deploy production
 
 on:
@@ -9,188 +10,57 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
-concurrency:
-  group: 0509-production-provider-mutations
-  cancel-in-progress: false
-
 jobs:
-  verify:
-    name: Verify
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Set up Node
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: ".node-version"
-          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
-          package-manager-cache: ${{ runner.environment == 'github-hosted' }}
-      - name: Install dependencies
-        run: npm ci --no-audit --no-fund
-      - name: Typecheck
-        run: npm run typecheck
-        env:
-          NODE_OPTIONS: --max-old-space-size=4096
-      - name: Test
-        run: npm test
-      - name: Build
-        run: npm run build
-
   deploy:
-    name: Deploy production
-    needs: verify
+    name: deploy
     runs-on: ubuntu-latest
-    # issues: write is for the deploy-failing alert below — the only thing that
-    # reports a bad commit sitting on main after a rollback.
-    permissions:
-      contents: read
-      issues: write
-    timeout-minutes: 45
+    # A job with an environment gets a GitHub Deployment and deployment_status
+    # events for free; ci.yml's e2e-production and lighthouse jobs key off that
+    # event and read the url below as PLAYWRIGHT_TEST_BASE_URL. Without this
+    # block those jobs never fire (no deployment was created since C4).
     environment:
       name: production
       url: https://0509.io
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      WRANGLER_SEND_METRICS: "false"
+    timeout-minutes: 20
     steps:
-      - name: Only main deploys
-        run: test "$GITHUB_REF" = "refs/heads/main"
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          persist-credentials: false
-      - name: Set up Node
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: ".node-version"
-          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
-          package-manager-cache: ${{ runner.environment == 'github-hosted' }}
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
 
-      - name: Install dependencies
-        run: npm ci --no-audit --no-fund
-      - name: Build
-        run: npm run build
       - name: Apply D1 migrations
+        # Read this step's output before calling a deploy good: this is where
+        # the production database is reset.
         run: npx wrangler d1 migrations apply 0509 --remote
-      - name: Deploy Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Deploy the Worker
         run: npm run deploy
         env:
-          NODE_OPTIONS: --max-old-space-size=4096
-      # The deploy gate asks one question: did the version we just shipped come
-      # up and serve traffic? The app's own /api/health/deep answers it — edge,
-      # D1, scheduled work and the scheduled-gap check, computed by the running
-      # Worker. No browser, no live crawled data, no fixtures, ~2s.
-      #
-      # It replaced `npm run e2e:prod:public`: 1,335 lines of Playwright across
-      # five specs, 4m43s of a 14m deploy, gating production on whether a nike
-      # search currently returns verified rows and whether 217 /brands anchors
-      # each answer inside a sequential probe. Those are product truths that
-      # depend on crawled data, not on this deploy, so they failed at random:
-      # six of twelve deploys rolled back on three DIFFERENT specs, and the spec
-      # CI failed on at 03:52 passed locally against the same live site minutes
-      # later (#3753).
-      #
-      # The tell was in the suite's own comments. That 217-anchor probe's ceiling
-      # went 60s -> 120s -> 240s -> 420s, each raise reasoned carefully from
-      # measurements. Four rounds of tuning a budget rather than asking whether a
-      # deploy gate should be crawling the site at all.
-      #
-      # The suite is not deleted. It moves to prod-public-canary.yml on a
-      # schedule, where a failure files an issue instead of reverting a release.
-      - name: Smoke test production
-        id: smoke
-        run: |
-          set -euo pipefail
-          for attempt in 1 2 3 4 5 6; do
-            # A freshly deployed Worker can take a few seconds to serve its
-            # first request while the version propagates, so a cold 5xx is
-            # retried. A body that parses but reports a failing check is NOT
-            # retried — that is the answer, not a warm-up artifact.
-            code="$(curl -sS -o body.json -w '%{http_code}' --max-time 30 https://0509.io/api/health/deep || true)"
-            if [ "$code" = "200" ]; then
-              if jq -e '.status == "ok" and (.checks | to_entries | all(.value == "ok"))' body.json >/dev/null; then
-                echo "health ok: $(jq -c '.checks' body.json)"
-                break
-              fi
-              echo "health reported a failing check: $(jq -c '{status, checks}' body.json)" >&2
-              exit 1
-            fi
-            echo "attempt ${attempt}: HTTP ${code}, retrying in 10s" >&2
-            [ "$attempt" -lt 6 ] || { echo "health never returned 200" >&2; exit 1; }
-            sleep 10
-          done
-          # The marketing home page is the other thing a broken deploy takes
-          # down, and it is not behind the health route.
-          home="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 https://0509.io/)"
-          [ "$home" = "200" ] || { echo "home returned ${home}" >&2; exit 1; }
-          echo "home ok"
-      - name: Roll back on failed smoke
-        if: failure() && steps.smoke.outcome == 'failure'
-        run: npx wrangler rollback --yes --message "smoke failed on ${{ github.sha }}"
-      # A failed production deploy is the one event nothing else reports.
-      # `wrangler rollback` puts the SITE back, but the commit that failed is
-      # still on main, so the next merge redeploys it and the cycle repeats
-      # until a human notices from run history.
-      #
-      # This is the whole replacement for auto-revert.yml (262 lines, deleted in
-      # #3692). That workflow opened a revert PR automatically, with loop guards,
-      # freshness guards and a PAT, because the gate it reacted to was a flaky
-      # 1,335-line Playwright suite that red-flagged 9 of 120 merges (0509#1576).
-      # The gate is now a deterministic health check (#3757), so a failure here
-      # means something is genuinely broken rather than that a crawl timed out.
-      # Something genuinely broken wants a person, not an automatic revert.
-      #
-      # One open issue, commented on and closed on recovery — the same
-      # self-clearing shape market-signal-snapshot-age.yml uses.
-      - name: Say so, loudly
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          existing="$(gh issue list --label deploy-failing --state open --json number -q '.[0].number // empty')"
-          {
-            printf 'Production deploy failed on `%s`.\n\n' "$SHA"
-            printf 'Run: %s\n\n' "$RUN_URL"
-            printf 'The site is fine — `wrangler rollback` restored the previous version.\n'
-            printf 'The commit is not. It is still on `main`, so the next merge will\n'
-            printf 'redeploy it and this will happen again.\n\n'
-            printf 'Fix forward, or revert it:\n\n'
-            printf '    git revert --no-edit %s\n\n' "$SHA"
-            printf 'This issue closes itself on the next green deploy.\n'
-          } > deploy-alert.md
-          if [ -n "$existing" ]; then
-            gh issue comment "$existing" --body-file deploy-alert.md
-          else
-            gh issue create --title "Production deploy is failing" \
-              --label deploy-failing --label agent-ready --body-file deploy-alert.md
-          fi
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      - name: Close the alert on a green deploy
-        if: success()
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Smoke the deployed Worker
+        # A deploy that reports success while the site 500s is not a success.
         run: |
           set -euo pipefail
-          for n in $(gh issue list --label deploy-failing --state open --json number -q '.[].number'); do
-            gh issue close "$n" --comment "Green deploy on ${{ github.sha }} (run ${{ github.run_id }})."
+          for i in $(seq 1 20); do
+            if curl -fsS https://0509.io/api/health >/tmp/health.json 2>/dev/null; then break; fi
+            sleep 5
           done
-
-      - name: Keep smoke traces on failure
-        if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v6.0.0
-        with:
-          name: prod-smoke-${{ github.run_id }}
-          path: test-results
-          if-no-files-found: ignore
-          retention-days: 7
+          cat /tmp/health.json
+          grep -q '"status":"ok"' /tmp/health.json
