@@ -18,6 +18,9 @@
     // (workers/fixture-site.wrangler.jsonc), which knip does not read — the
     // file is an entry by name.
     "workers/fixture-site.ts",
+    // Nightly cost guard (0509#4186). The cron that calls it is not added
+    // here; this module is the front door that cron invokes.
+    "app/lib/observability/cost-guard.ts",
     "e2e/*.setup.ts",
     "app/components/ui/*.{ts,tsx}"
   ],

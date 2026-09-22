@@ -1,0 +1,97 @@
+{
+  "data": {
+    "viewer": {
+      "accounts": [
+        {
+          "browser": [
+            {
+              "dimensions": {
+                "date": "2026-09-21"
+              },
+              "sum": {
+                "totalSessionDurationMs": 4943228
+              }
+            }
+          ],
+          "d1": [
+            {
+              "dimensions": {
+                "date": "2026-09-21"
+              },
+              "sum": {
+                "rowsWritten": 17510
+              }
+            }
+          ],
+          "r2": [
+            {
+              "dimensions": {
+                "actionType": "GetObject"
+              },
+              "sum": {
+                "requests": 185
+              }
+            },
+            {
+              "dimensions": {
+                "actionType": "ListObjects"
+              },
+              "sum": {
+                "requests": 1609
+              }
+            },
+            {
+              "dimensions": {
+                "actionType": "PutBucket"
+              },
+              "sum": {
+                "requests": 1
+              }
+            },
+            {
+              "dimensions": {
+                "actionType": "HeadBucket"
+              },
+              "sum": {
+                "requests": 25
+              }
+            },
+            {
+              "dimensions": {
+                "actionType": "PutObject"
+              },
+              "sum": {
+                "requests": 91
+              }
+            },
+            {
+              "dimensions": {
+                "actionType": "DeleteObject"
+              },
+              "sum": {
+                "requests": 11
+              }
+            },
+            {
+              "dimensions": {
+                "actionType": "ListBuckets"
+              },
+              "sum": {
+                "requests": 1
+              }
+            },
+            {
+              "dimensions": {
+                "actionType": "HeadObject"
+              },
+              "sum": {
+                "requests": 588
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "errors": null
+}
