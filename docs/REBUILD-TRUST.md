@@ -75,7 +75,7 @@ glue the rebuild deletes.**
 
 | `PLAYWRIGHT_TEST_BASE_URL` | `webServer` | What runs | Where |
 |---|---|---|---|
-| unset | starts `npx wrangler dev --port 8787 --local`, waits on `/api/health` | the built Worker | `preview-assert`, every PR, and `npm run e2e` on a laptop |
+| unset | starts `npx wrangler dev --local` on a per-process port (8000 + pid % 1000), waits on `/api/health` | the built Worker | `preview-assert`, every PR, and `npm run e2e` on a laptop |
 | set | `undefined` | that URL | `e2e-production`, every successful deploy |
 
 This is the vendor's own division. `webServer`'s doc says it is for "when you
