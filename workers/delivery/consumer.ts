@@ -20,7 +20,21 @@
  * 'delivered', for the reasons recorded in `send.ts`.
  */
 
-import { sendMessage } from "./send";
+import { errorText, sendMessage } from "./send";
+
+/**
+ * A producer's payload_json that will not parse. It is thrown from render() and
+ * caught in deliver() so the claimed attempt resolves to 'failed' with this
+ * text rather than the exception escaping past the claim: the queue would
+ * redeliver, read the 'pending' row back as a duplicate, ack it, and the send
+ * would be lost with no record at all (0509#3979, the contract's first clause).
+ */
+export class PayloadError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PayloadError";
+  }
+}
 
 interface MessageRow {
   id: string;
@@ -149,10 +163,20 @@ async function markDigestSent(env: DeliveryEnv, digestId: string): Promise<void>
 }
 
 function render(message: MessageRow, to: string): EmailMessageBuilder {
-  const payload = JSON.parse(message.payload_json || "{}") as {
-    html?: string;
-    text?: string;
-  };
+  let payload: { html?: string; text?: string };
+  try {
+    payload = JSON.parse(message.payload_json || "{}") as {
+      html?: string;
+      text?: string;
+    };
+  } catch (cause) {
+    // A producer's payload is untrusted input. Throwing a typed error keeps
+    // the failure inside deliver()'s catch, where the claim resolves to
+    // 'failed' with a reason — instead of escaping past the claim and
+    // stranding a 'pending' row that the next delivery acks as a duplicate.
+    const detail = cause instanceof Error ? cause.message : String(cause);
+    throw new PayloadError(`payload_json for digest ${message.id} is not valid JSON: ${detail}`);
+  }
   const subject = message.subject ?? `Your ${message.kind} brief`;
   const text = payload.text ?? "";
   const html = payload.html ?? "";
@@ -197,18 +221,26 @@ export async function deliver(env: DeliveryEnv, message: DeliveryMessage): Promi
     return { outcome: "duplicate", attempt_id: null, idempotency_key: idempotencyKey };
   }
 
-  const email = render(digest, target.target_value);
-  const result = await sendMessage(env.EMAIL, email);
-  await resolveAttempt(env, claim.id, result.outcome, result.error);
-  if (result.outcome === "sent") {
-    await markDigestSent(env, digest.id);
+  // Everything past the claim is inside one try/catch: a row exists now, so
+  // every exit from here must resolve it. Escaping the throw instead would
+  // leave a 'pending' row that the queue's redelivery reads back as a
+  // duplicate and acks — the send lost with no record, the one failure the
+  // contract forbids (0509#3979, docs/engines/delivery.md §4).
+  try {
+    const email = render(digest, target.target_value);
+    const result = await sendMessage(env.EMAIL, email);
+    await resolveAttempt(env, claim.id, result.outcome, result.error);
+    if (result.outcome === "sent") {
+      await markDigestSent(env, digest.id);
+    }
+    return { outcome: result.outcome, attempt_id: claim.id, idempotency_key: idempotencyKey };
+  } catch (cause) {
+    // render() throws PayloadError; a D1 failure on resolve/mark can land
+    // here too. Resolve the claim to 'failed' so the queue retry can reclaim
+    // it, and rethrow nothing: the row is the record, not the exception.
+    await resolveAttempt(env, claim.id, "failed", errorText(cause));
+    return { outcome: "failed", attempt_id: claim.id, idempotency_key: idempotencyKey };
   }
-
-  return {
-    outcome: result.outcome,
-    attempt_id: claim.id,
-    idempotency_key: idempotencyKey,
-  };
 }
 
 /**

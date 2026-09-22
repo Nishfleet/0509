@@ -39,6 +39,11 @@ function errorText(end: unknown): string {
   return String(end).slice(0, MAX_ERROR_CHARS);
 }
 
+/** Exported so the consumer records the same truncated reason for a delivery
+ *  that failed before the send (a malformed payload) as for one the provider
+ *  rejected. One vocabulary for send_attempt.error. */
+export { errorText };
+
 /**
  * Sends one message and classifies the outcome. Never throws: the consumer
  * resolves send_attempt.status in every path, so "failed" is a row rather than

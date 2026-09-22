@@ -80,6 +80,21 @@ const seedDigest = async (status = "pending", payload: Record<string, unknown> =
   return id;
 };
 
+/** Seeds a digest row with a raw, producer-written payload_json that is not
+ *  valid JSON. A producer's hand-rolled payload is untrusted input, and this
+ *  file is the lane every producer funnels through — so the lane must survive
+ *  one without stranding a claimed row. */
+const seedMalformedPayloadDigest = async () => {
+  const id = `digest-${Math.random().toString(36).slice(2, 10)}`;
+  await env.DB.prepare(
+    `INSERT INTO digest (id, workspace_id, kind, period_start, period_end, status, subject, payload_json, sent_at)
+     VALUES (?, ?, 'weekly', '2026-09-15', '2026-09-22', 'pending', 'You are #2 of 9 this week', ?, NULL)`,
+  )
+    .bind(id, WS, "<<not>> valid json {{{")
+    .run();
+  return id;
+};
+
 const envFor = (rec: Recorder): DeliveryEnv =>
   ({ DB: env.DB, EMAIL: bindingFor(rec) }) as DeliveryEnv;
 
@@ -225,6 +240,46 @@ describe("send lane (0509#3979)", () => {
     await deliver(envFor(rec), message(digestId));
     const rows = await attemptRows();
     expect(rows.map((r) => r.status)).not.toContain("delivered");
+  });
+
+  // The contract's first clause is "cannot lose a send silently". A claim row
+  // is written before render, so a producer-written payload that will not
+  // parse must resolve the attempt to 'failed' rather than throw past the
+  // claim — a throw here would leave a 'pending' row that the redelivery
+  // reads back as a 'duplicate' and acks, losing the send with no record.
+  it("resolves the attempt to 'failed' when a producer's payload is not JSON", async () => {
+    const rec = recorder();
+    const digestId = await seedMalformedPayloadDigest();
+
+    const result = await deliver(envFor(rec), message(digestId));
+
+    expect(result.outcome).toBe("failed");
+    expect(result.attempt_id).toBeTruthy();
+    expect(rec.sent).toHaveLength(0);
+    const rows = await attemptRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe("failed");
+    expect(rows[0].error).toBeTruthy();
+    // The digest is never marked sent, so the sweeper can still see it.
+    expect((await digestStatus(digestId))?.status).toBe("pending");
+  });
+
+  // A failed send must still be reclaimable, which is what makes a queue
+  // retry work at all: the row is 'failed', not stranded 'pending'.
+  it("reclaims a failed attempt after a bad payload and still sends nothing", async () => {
+    const rec = recorder();
+    const digestId = await seedMalformedPayloadDigest();
+
+    const first = await deliver(envFor(rec), message(digestId));
+    expect(first.outcome).toBe("failed");
+
+    // The queue redelivers; the claim row is 'failed', so this delivery owns
+    // it again — it does not fall into the 'duplicate' branch above.
+    const second = await deliver(envFor(rec), message(digestId));
+    expect(second.outcome).toBe("failed");
+    expect(second.attempt_id).toBe(first.attempt_id);
+    expect(rec.sent).toHaveLength(0);
+    expect(await attemptRows()).toHaveLength(1);
   });
 
   it("returns no_digest for a work item whose digest row is gone", async () => {
