@@ -395,6 +395,10 @@ patterns, your instinct should be, I need to write a lint rule against it … yo
 can at least stop the bleeding."* A review comment that only asks for a change
 teaches one agent once; a rule teaches every agent forever.
 
+Implemented in the `opus-review` job's `prompt:` (`.github/workflows/ci.yml`) by
+PR #4255, which asks all three questions above word for word and states the
+verdict rule in its grade-capping form.
+
 Reviewers also check the two things no test checks: that
 `docs/FEATURE-MAP.md` matches `app/routes.ts` after a route change, and that
 every new dependency has a row in `docs/REBUILD-STACK.md`.
