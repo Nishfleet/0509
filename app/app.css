@@ -1,0 +1,120 @@
+@import "tailwindcss" source(".");
+
+/* The 0509 visual language. Values and faces per DESIGN.md §3–4: cream ground,
+   heavy black grotesk in caps for display, mono eyebrows, ONE accent = the green
+   marker, red strike for "before". No pure black, no pure white, no second hue. */
+
+@theme {
+  --color-bone: #f4f1e8;
+  --color-card: #fffdf6;
+  --color-ink: #0e0d0a;
+  --color-ink-soft: #55524a;
+  --color-ink-faint: #8e8878;
+  --color-line: #ddd6c6;
+  --color-accent: #16c47f;
+  --color-accent-ink: #064d31;
+  --color-accent-wash: #d9f6e8;
+  --color-strike: #e0442c;
+  --color-on-accent: #0e0d0a;
+
+  --font-display: "Bricolage Grotesque", ui-sans-serif, sans-serif;
+  --font-sans: "Instrument Sans", ui-sans-serif, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+/* Faces are self-hosted (latin subset, OFL); weight ranges reproduce Google's
+   served set. See commit fd1457288 and issue 0509#3936. */
+@font-face {
+  font-family: "Bricolage Grotesque";
+  font-style: normal;
+  font-weight: 700 800;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("/fonts/bricolage-grotesque-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Instrument Sans";
+  font-style: normal;
+  font-weight: 400 600;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("/fonts/instrument-sans-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-mono-latin-400.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-mono-latin-500.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Dark, per DESIGN.md §4. Warm near-black and warm off-white, never #000/#fff.
+   Declared after @theme so these win over the generated :root values. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-bone: #14130f;
+    --color-card: #1c1a15;
+    --color-ink: #f2efe4;
+    --color-ink-soft: #a9a294;
+    --color-ink-faint: #7b7568;
+    --color-line: #322e25;
+    --color-accent: #2ee59c;
+    --color-accent-ink: #9ff0cd;
+    --color-accent-wash: #10281f;
+    --color-strike: #ff7a63;
+    --color-on-accent: #0e0d0a;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --color-bone: #14130f;
+  --color-card: #1c1a15;
+  --color-ink: #f2efe4;
+  --color-ink-soft: #a9a294;
+  --color-ink-faint: #7b7568;
+  --color-line: #322e25;
+  --color-accent: #2ee59c;
+  --color-accent-ink: #9ff0cd;
+  --color-accent-wash: #10281f;
+  --color-strike: #ff7a63;
+  --color-on-accent: #0e0d0a;
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: var(--color-bone);
+  color: var(--color-ink);
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

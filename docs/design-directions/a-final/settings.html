@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Settings — 0509</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body class="app">
+
+<nav class="rail" aria-label="Primary">
+  <span class="mark">05<em>09</em></span>
+  <a href="home.html"><span class="dot"></span>Home</a>
+  <a href="competitor.html"><span class="dot"></span>Competitors</a>
+  <a href="alerts.html"><span class="dot"></span>Alerts</a>
+  <a class="foot on" href="#"><span class="dot"></span>Settings</a>
+</nav>
+
+<div class="shell">
+
+  <header class="pghead">
+    <span class="eyebrow">Four things you can change</span>
+    <h1>Settings</h1>
+    <p class="why">Turning a competitor on or off is not here &mdash; that switch lives on the brand, where you can see what it does.</p>
+  </header>
+
+  <div class="rows" style="margin-top:22px">
+    <div class="setrow">
+      <div>
+        <p class="k">When your brief arrives</p>
+        <p class="d">One email a week with where you stand and what moved. It arrives even in a quiet week, because silence reads as the product stopping.</p>
+      </div>
+      <span class="val">Monday 08:00<br /><a href="#">Change</a></span>
+    </div>
+    <div class="setrow">
+      <div>
+        <p class="k">Tell me when my own site breaks</p>
+        <p class="d">The only thing that interrupts you. We email within minutes when a page looks broken or changed in a way you did not mean, and again when it is fixed.</p>
+      </div>
+      <label class="sw"><input type="checkbox" checked /><span class="track"></span><span class="lab">On</span></label>
+    </div>
+    <div class="setrow">
+      <div>
+        <p class="k">Where we send it</p>
+        <p class="d">Defaults to the address you signed in with. One click unsubscribes from each kind of email separately.</p>
+      </div>
+      <span class="val">nish@loopwell.com<br /><a href="#">Change</a></span>
+    </div>
+    <div class="setrow">
+      <div>
+        <p class="k">Your public standing card</p>
+        <p class="d">A page anyone can open showing this week&rsquo;s standing, the four-week line and your three marks. Off by default. Turning it off returns a 404 within a minute.</p>
+        <div class="keyline"><code>0509.io/s/k3v9qp2r</code><a class="copy" href="#">Copy</a><a class="copy" href="#">Rotate the link</a></div>
+      </div>
+      <label class="sw"><input type="checkbox" checked /><span class="track"></span><span class="lab">On</span></label>
+    </div>
+  </div>
+
+  <div class="blockhead">
+    <h2>Connect your agent</h2>
+    <span class="mono">agent-native &middot; same data, same minute</span>
+  </div>
+
+  <div class="rows">
+    <div class="setrow">
+      <div>
+        <p class="k">MCP server</p>
+        <p class="d">Point your assistant here and it reads everything you see on Home, Competitors and Alerts &mdash; the standing, the marks, the evidence. Works with Claude, Cursor and ChatGPT.</p>
+        <div class="keyline"><code>https://api.0509.io/mcp</code><a class="copy" href="#">Copy</a></div>
+        <div class="srcline" style="margin-top:12px"><span class="pill"><b>Claude</b></span><span class="pill"><b>Cursor</b></span><span class="pill"><b>ChatGPT</b></span></div>
+      </div>
+      <label class="sw"><input type="checkbox" checked /><span class="track"></span><span class="lab">On</span></label>
+    </div>
+    <div class="setrow">
+      <div>
+        <p class="k">API key</p>
+        <p class="d">Read-only. Shown once when you make it; after that we can only replace it. Rotating takes effect immediately and breaks anything still using the old key.</p>
+        <div class="keyline"><code>sk_live_&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;4c1a</code><a class="copy" href="#">Rotate</a></div>
+        <p class="d" style="margin-top:10px">Last used 11 minutes ago by Claude. <a class="see" href="#">Read the API docs &rarr;</a></p>
+      </div>
+      <span class="val">Made 12 Aug</span>
+    </div>
+  </div>
+
+  <div class="rows quiet">
+    <div class="setrow">
+      <div>
+        <p class="k">Your plan</p>
+        <p class="d">Scout &mdash; five competitors watched at once, checked daily, four weeks of standing history. Own-site breakage alerts and full site-change tracking start on Starter.</p>
+      </div>
+      <span class="val">&euro;10/month<br /><a href="#">Change plan</a></span>
+    </div>
+    <div class="setrow">
+      <div>
+        <p class="k">Suggestions you dismissed</p>
+        <p class="d">Two brands you told us were not competitors. We will not suggest them again unless you put one back.</p>
+      </div>
+      <span class="val"><a href="#">See the 2</a></span>
+    </div>
+    <div class="setrow">
+      <div>
+        <p class="k">Delete everything</p>
+        <p class="d">Removes your card, every competitor, all nine weeks of history, every capture we stored, and stops all email. It takes one run and it cannot be undone.</p>
+      </div>
+      <span class="val"><a href="#">Delete</a></span>
+    </div>
+  </div>
+
+  <p class="pgfoot">Signed in as nish@loopwell.com &middot; watching since 12 August &middot; <a href="#">Privacy</a> &middot; <a href="#">Terms</a></p>
+
+</div>
+
+<nav class="tabbar" aria-label="Primary">
+  <a href="home.html">Home<span class="dot"></span></a>
+  <a href="competitor.html">Competitors<span class="dot"></span></a>
+  <a href="alerts.html">Alerts<span class="dot"></span></a>
+  <a class="on" href="#">Settings<span class="dot"></span></a>
+</nav>
+
+</body>
+</html>

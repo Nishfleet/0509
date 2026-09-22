@@ -1,0 +1,26 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+
+  // Dead code is the gardener's first job (talk 25:19: "delete tech debt that
+  // we already have"). knip is the stock finder; every entry below is the app's
+  // real front door, so anything it cannot reach from here is unreachable in
+  // production too.
+  "entry": [
+    "app/routes/**/*.{ts,tsx}",
+    "app/root.tsx",
+    "app/routes.ts",
+    "workers/app.ts",
+    "e2e/*.setup.ts"
+  ],
+  "project": ["app/**/*.{ts,tsx}", "workers/**/*.ts", "e2e/**/*.ts", "tests/**/*.ts"],
+
+  // `cloudflare:workers` is a Workers runtime module, not an npm package; knip
+  // reads the scheme as a package name. `@react-router/node` is knip's
+  // react-router plugin resolving @react-router/dev's config entry points.
+  // Neither is a missing dependency.
+  // `tailwindcss` is imported by `@import "tailwindcss"` in app/app.css; knip
+  // does not follow CSS imports and says so in its own hint output.
+  "ignoreDependencies": ["cloudflare", "@react-router/node", "tailwindcss"],
+
+  "ignore": ["**/+types/**", "docs/design-directions/**", "lighthouserc.cjs"]
+}
