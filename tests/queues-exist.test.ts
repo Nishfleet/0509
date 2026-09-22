@@ -1,8 +1,9 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { unstable_readConfig } from "wrangler";
+import { unstable_readConfig, type Unstable_Config } from "wrangler";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 // #4246: #4199 declared `send-email` and `send-email-dlq` in wrangler.jsonc,
 // neither of which existed in the account. `wrangler deploy --dry-run` exits 0
@@ -11,12 +12,13 @@ import { describe, expect, it } from "vitest";
 // "Deploy the Worker" on the next merge. That is the failure this test closes:
 // the declared queues are compared against the account's queues on the PR.
 //
-// Queues are the binding class that needs this. KV declared without an id,
-// D1 with a database_id and R2 with a bucket_name are all resolved or
-// provisioned by wrangler at deploy (workers/fixture-site.wrangler.jsonc and
-// workers/e2e-inbox.wrangler.jsonc rely on exactly that), so asserting them
-// here would invent reds for resources the deploy handles. A queue is not
-// provisioned: the upload is refused when it is missing.
+// Queues are the binding class that needs this. KV declared without an id is
+// provisioned by wrangler at deploy, and D1 carries a database_id that the
+// upload already resolves against the account — workers/fixture-site.wrangler.jsonc
+// and workers/e2e-inbox.wrangler.jsonc rely on exactly the KV behaviour — so
+// asserting either here would invent reds for resources the deploy handles. A
+// queue is not provisioned: the upload is refused when it is missing. R2 is a
+// separate gap, tracked in its own issue rather than asserted here.
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CONFIGS = [
@@ -25,85 +27,127 @@ const CONFIGS = [
   "workers/e2e-inbox.wrangler.jsonc"
 ];
 
-const ACCOUNT_QUEUES_URL = "https://api.cloudflare.com/client/v4/accounts";
+const API_BASE = "https://api.cloudflare.com/client/v4";
 
-interface QueueConfig {
-  consumers?: { queue: string; dead_letter_queue?: string }[];
-  producers?: { queue: string }[];
-}
+// wrangler's own config type, imported rather than hand-written: a hand-written
+// `QueueConfig` mirror of it would stop tracking the shape wrangler actually
+// produces and would need a cast to bridge the two.
+type QueueBindings = Unstable_Config["queues"];
 
 async function declaredQueues(): Promise<string[]> {
   const names = new Set<string>();
   for (const rel of CONFIGS) {
-    const config = (await unstable_readConfig({ config: path.join(REPO_ROOT, rel) })) as {
-      queues?: QueueConfig;
-    };
-    for (const consumer of config.queues?.consumers ?? []) {
+    const config = await unstable_readConfig({ config: path.join(REPO_ROOT, rel) });
+    const queues: QueueBindings | undefined = config.queues;
+    for (const consumer of queues?.consumers ?? []) {
       names.add(consumer.queue);
       if (consumer.dead_letter_queue) names.add(consumer.dead_letter_queue);
     }
-    for (const producer of config.queues?.producers ?? []) {
-      names.add(producer.queue);
+    for (const producer of queues?.producers ?? []) {
+      if (producer.queue) names.add(producer.queue);
     }
   }
   return [...names].sort();
 }
 
-async function accountQueues(token: string, accountId: string): Promise<string[]> {
-  const response = await fetch(`${ACCOUNT_QUEUES_URL}/${accountId}/queues?per_page=100`, {
-    headers: { authorization: `Bearer ${token}` }
-  });
-  const body = (await response.json()) as {
-    success: boolean;
-    errors?: { code: number; message: string }[];
-    result?: { queue_name: string }[];
-  };
-  if (!response.ok || !body.success) {
-    throw new Error(
-      `listing the account's queues failed: HTTP ${response.status} ` +
-        JSON.stringify(body.errors ?? body)
+// The API response is parsed, not asserted: `as QueuePage` would compile and
+// then hand `undefined` to the pagination loop the day Cloudflare renames a
+// field, and the failure would read as "the account has no queues".
+const queuePageSchema = z.object({
+  success: z.boolean(),
+  // The success path sends `"errors": null`, not an absent key: a strict
+  // `.optional()` here failed on the real response.
+  errors: z.array(z.object({ code: z.number(), message: z.string() })).nullish(),
+  result: z.array(z.object({ queue_name: z.string() })).nullish(),
+  result_info: z.object({ page: z.number(), total_pages: z.number() }).nullish()
+});
+
+// Every page, not just the first. `per_page=100` caps one page and the
+// account's queue count is not ours to assume; reading page 1 only would
+// report every queue past the hundredth as missing and redden an unrelated PR.
+async function accountQueues({ token, accountId }: Credentials): Promise<string[]> {
+  const names: string[] = [];
+  let page = 1;
+  for (;;) {
+    const response = await fetch(
+      `${API_BASE}/accounts/${accountId}/queues?per_page=100&page=${page}`,
+      { headers: { authorization: `Bearer ${token}` } }
     );
-  }
-  return (body.result ?? []).map((queue) => queue.queue_name).sort();
-}
-
-// The token is a repository secret, so it exists on this repo's own CI runs and
-// does not exist on a fork's. Skipping when it is absent keeps a fork's PR and a
-// laptop green — the same shape .github/workflows/ci.yml's deployment_status
-// jobs use for CF_ACCESS_* — while the CI branch below fails rather than skips,
-// so a missing secret on the repo's own run is red instead of silently green.
-const token = process.env.CLOUDFLARE_API_TOKEN;
-const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-
-describe("every queue wrangler.jsonc declares exists in the account (#4246)", () => {
-  it("has credentials on this repo's own CI, so the check cannot pass by skipping", () => {
-    if (process.env.CI && (!token || !accountId)) {
+    const parsed = queuePageSchema.safeParse(await response.json());
+    if (!response.ok || !parsed.success || !parsed.data.success) {
       throw new Error(
-        "CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are not set on a CI run: " +
-          "the queue check would skip, and a check that skips is not a gate. " +
-          "codex-node-checks must pass both secrets to `npm test`."
+        `listing the account's queues failed: HTTP ${response.status} ` +
+          (parsed.success ? JSON.stringify(parsed.data.errors ?? "") : parsed.error.message)
       );
     }
-    expect(true).toBe(true);
+    for (const queue of parsed.data.result ?? []) names.push(queue.queue_name);
+    const totalPages = parsed.data.result_info?.total_pages ?? 1;
+    if (page >= totalPages) break;
+    page += 1;
+  }
+  return names.sort();
+}
+
+interface Credentials {
+  token: string;
+  accountId: string;
+}
+
+// The credentials, or undefined when this run does not have them. Narrowing
+// happens in a function with an explicit throw rather than an `as string` or a
+// `!` at the call site: a cast would keep the queue check compiling and
+// silently query `undefined`, whereas this cannot narrow without the values.
+function credentials(): Credentials | undefined {
+  const token = process.env.CLOUDFLARE_API_TOKEN;
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  return token && accountId ? { token, accountId } : undefined;
+}
+
+function requiredCredentials(): Credentials {
+  const found = credentials();
+  if (!found) {
+    throw new Error(
+      "CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are not both set: " +
+        "the queue check would have skipped, and a check that skips is not a gate."
+    );
+  }
+  return found;
+}
+
+describe("every queue wrangler.jsonc declares exists in the account (#4246)", () => {
+  // The repository's own workflows always supply both secrets, so a CI run
+  // without them is a regression in the workflow, not a fork. Failing here is
+  // what makes the skip below unreachable on this repo's CI: a check that
+  // skips is not a gate, and the gate's whole purpose is to be red before a
+  // merge that would redden production.
+  it("has credentials on this repo's own CI, so the check cannot pass by skipping", () => {
+    if (process.env.CI) {
+      expect(
+        { token: process.env.CLOUDFLARE_API_TOKEN, account: process.env.CLOUDFLARE_ACCOUNT_ID },
+        "CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID must both be set on a CI run: " +
+          "without them the queue check skips, and a check that skips is not a gate. " +
+          "Every workflow that runs `npm test` passes both from repository secrets."
+      ).toEqual(expect.objectContaining({ token: expect.any(String), account: expect.any(String) }));
+    }
   });
 
-  it.skipIf(!token || !accountId)(
-    "declares no queue the account does not have",
-    async () => {
-      const declared = await declaredQueues();
-      const existing = await accountQueues(token as string, accountId as string);
-      const missing = declared.filter((name) => !existing.includes(name));
+  it("declares at least one queue, so an empty config is not a passing check", async () => {
+    expect(await declaredQueues()).not.toEqual([]);
+  });
 
-      expect(
-        missing,
-        `wrangler.jsonc declares ${missing.join(", ")}, which ` +
-          `${ACCOUNT_QUEUES_URL}/<account>/queues does not list. ` +
-          "wrangler deploy --dry-run cannot see this and every production " +
-          "deploy will fail at \"Deploy the Worker\". Create it with " +
-          `\`npx wrangler queues create <name>\` before merging.`
-      ).toEqual([]);
+  it.skipIf(!credentials())("declares no queue the account does not have", async () => {
+    const found = requiredCredentials();
+    const declared = await declaredQueues();
+    const existing = await accountQueues(found);
+    const missing = declared.filter((name) => !existing.includes(name));
 
-      expect(declared.length).toBeGreaterThan(0);
-    }
-  );
+    expect(
+      missing,
+      `wrangler.jsonc declares ${missing.join(", ")}, which ` +
+        `${API_BASE}/accounts/<account>/queues does not list. ` +
+        "wrangler deploy --dry-run cannot see this and every production " +
+        'deploy will fail at "Deploy the Worker". Create it with ' +
+        "`npx wrangler queues create <name>` before merging."
+    ).toEqual([]);
+  });
 });
