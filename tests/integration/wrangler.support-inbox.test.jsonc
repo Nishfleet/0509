@@ -1,0 +1,10 @@
+// Test config for the support inbox (0509#4229): real workerd, real local
+// D1. SUPPORT_INBOX_GITHUB_TOKEN is a var here so the handler has a token
+// to send. Production gets it as a secret on the deployed Worker.
+{
+  "name": "0509-support-inbox-v2-test",
+  "compatibility_date": "2026-09-16",
+  "main": "../../workers/support-inbox.ts",
+  "d1_databases": [{ "binding": "DB", "database_name": "0509-test", "database_id": "test" }],
+  "vars": { "SUPPORT_INBOX_GITHUB_TOKEN": "integration-token" }
+}

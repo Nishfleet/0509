@@ -101,3 +101,13 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Deploy the support inbox Worker
+        # User reports (0509#4229): a separate Worker, after the e2e inbox so
+        # it stays behind the app smoke. Email Routing is not changed here.
+        # The support@0509.io rule moves only after this Worker is up and
+        # SUPPORT_INBOX_GITHUB_TOKEN is set on it. The secret is not in this file.
+        run: npx wrangler deploy --config workers/support-inbox.wrangler.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

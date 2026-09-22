@@ -61,6 +61,25 @@ export default defineConfig({
         },
       },
       {
+        // Support inbox (0509#4229): real workerd and a real local D1 with
+        // migrations applied, including support_report. The GitHub call is
+        // stubbed. A line of the raw mail in the issue body fails here.
+        plugins: [
+          cloudflareTest(async () => ({
+            wrangler: { configPath: "./tests/integration/wrangler.support-inbox.test.jsonc" },
+            miniflare: {
+              bindings: { TEST_MIGRATIONS: await readD1Migrations("migrations") },
+            },
+          })),
+        ],
+        test: {
+          name: "support-inbox",
+          include: ["tests/integration/support-inbox.test.ts"],
+          setupFiles: ["./tests/integration/apply-migrations.ts"],
+          testTimeout: 30_000,
+        },
+      },
+      {
         // The J8 fixture-site Worker (0509#4046): real workerd + real local KV.
         // Its token-gated flip route and both break modes run against the same
         // binding kinds production has, so a break that does not survive the

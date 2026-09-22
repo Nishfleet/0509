@@ -1,0 +1,30 @@
+// Support inbox (0509#4229). A separate Worker so support mail is not the
+// app and not the old 0509-support-inbox bundle. Email Routing points at the
+// script name. There is no HTTP route: a route would publish an endpoint
+// this Worker answers with 404, and the raw mail is not served over HTTP.
+//
+// SUPPORT_INBOX_GITHUB_TOKEN is a Worker secret (issues write on
+// Nishfleet/0509). It is not a var here.
+//
+// The D1 binding is the app database. deploy-production.yml applies
+// migrations/0004_support_report.sql before this Worker is deployed.
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "0509-support-inbox-v2",
+  "main": "./support-inbox.ts",
+  "compatibility_date": "2026-09-16",
+  "workers_dev": false,
+  "observability": {
+    "enabled": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "0509",
+      "database_id": "746c6e3d-782e-443a-82d6-28ca93a16294"
+    }
+  ],
+  "triggers": {
+    "crons": ["0 0 * * *"]
+  }
+}
