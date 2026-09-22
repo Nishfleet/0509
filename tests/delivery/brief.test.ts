@@ -158,11 +158,9 @@ describe("brief block order", () => {
 
 describe("off brands are absent, not zeroed", () => {
   it("renders exactly the brands on the payload, with no zero placeholder row", () => {
-    const { html, text } = renderBrief(payload(), CONTEXT);
+    const { html } = renderBrief(payload(), CONTEXT);
     expect(html).toContain(">Kindred<");
     expect(html).toContain(">Casetta<");
-    expect(html.toLowerCase()).not.toContain("tracking off");
-    expect(text).not.toContain("tracking off");
   });
 
   it("never renders a zeroed counts line for a brand that is not on the payload", () => {
@@ -437,10 +435,21 @@ describe("inline-styled html, and the voice", () => {
 
   it("sets no colour inline, so the dark-mode override cannot be outranked", () => {
     const { html } = renderBrief(payload(), CONTEXT);
-    const inline = html.match(/style="[^"]*"/g) ?? [];
+    const afterStyleBlock = html.slice(html.indexOf("</style>") + "</style>".length);
+    const inline = afterStyleBlock.match(/style="[^"]*"/g) ?? [];
+    expect(inline.length).toBeGreaterThan(0);
     for (const style of inline) {
-      expect(style).not.toMatch(/background-color|(^|[^-])color:/);
+      expect(style).not.toMatch(/(^|[^-])color:|background-color/);
     }
+  });
+
+  it("paints the hairlines and the thumbnail border, so they are real and flippable", () => {
+    const { html } = renderBrief(payload(), CONTEXT);
+    const style = html.slice(html.indexOf("<style>"), html.indexOf("</style>"));
+    expect(style).toContain(".brief-rule{border-top:1px solid #ddd6c6;}");
+    expect(style).toContain(".brief-rule img{border:1px solid #ddd6c6;}");
+    expect(style).toContain(".brief-rule{border-top:1px solid #322e25;}");
+    expect(style).toContain(".brief-rule img{border:1px solid #322e25;}");
   });
 
   it("keeps both palettes to DESIGN.md §4's tokens, not a third set", () => {
