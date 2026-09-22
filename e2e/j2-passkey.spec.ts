@@ -16,8 +16,8 @@ test.skip(
 );
 
 test("a passkey registered on first sign-in signs in on its own", async ({ page, context }) => {
-  // Inbox poll is 120s, and the passkey redirect below needs 20s of its own.
-  // The default 30s test budget ends the test while the URL is still /login.
+  // Cause is the spec. The inbox poll allows 120s and the URL assert below
+  // allows 20s. The default 30s test budget ends before either can finish.
   test.setTimeout(180_000);
   const token = requireInboxToken();
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
@@ -58,9 +58,11 @@ test("a passkey registered on first sign-in signs in on its own", async ({ page,
 
     // The passkey alone: a resident credential on the virtual authenticator
     // answers the empty allowCredentials list the sign-in button produces.
-    // A production pass measured verify-authentication at 4.5s and /onboarding
-    // at 9s. Run 35754687604's default 5s expect expired on /login while that
-    // redirect was still in flight; the session cookie was already set.
+    // Cause is the spec. On 2026-09-22 against https://0509.io,
+    // verify-authentication returned 200 with the session cookie at 4.5s and
+    // the URL reached /onboarding at 9s. Run 35754687604's 5s expect expired
+    // on /login during that redirect. 20s is about twice the measured 9s.
+    // A redirect that never arrives still fails.
     await page.getByRole("button", { name: /passkey/i }).click();
     await expect(page).toHaveURL(/\/onboarding/, { timeout: 20_000 });
     await expect(page.getByText(email)).toBeVisible();
