@@ -96,12 +96,7 @@ const DOCUMENTED_HOSTS: readonly DocumentedHost[] = [
     // host does not resolve (NXDOMAIN) and the US API answers for both
     // gymshark (EU board) and stripe (US board).
     platform: "greenhouse",
-    hosts: [
-      "boards.greenhouse.io",
-      "job-boards.greenhouse.io",
-      "boards-api.greenhouse.io",
-      "job-boards.eu.greenhouse.io",
-    ],
+    hosts: ["boards.greenhouse.io", "job-boards.greenhouse.io", "job-boards.eu.greenhouse.io"],
     listingUrl: (slug) => `https://boards-api.greenhouse.io/v1/boards/${slug}/jobs`,
     accepts: (parsed) => hasArray(parsed, "jobs"),
     boardUrl: (host, slug) =>

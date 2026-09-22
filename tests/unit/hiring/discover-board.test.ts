@@ -192,8 +192,9 @@ describe("discoverBoard", () => {
 
   it("returns an honest none when the board probe is a non-2xx", async () => {
     // A documented shape in the nav but the listing 404s: not a board we track.
+    // The 404 reaches us as `ok: false`, which is the branch under test.
     const { probe } = stubProbe({
-      "https://api.lever.co/v0/postings/netflix?mode=json": { ...OK_JSON, ok: true, body: "Not found", contentType: "text/html" },
+      "https://api.lever.co/v0/postings/netflix?mode=json": { ok: false, contentType: null, body: "" },
     });
 
     const board = await discoverBoard(["https://jobs.lever.co/netflix"], "netflix.com", { probe });
@@ -245,8 +246,8 @@ describe("discoverBoard", () => {
 
   it("skips a failed ATS probe and accepts the next board the nav names", async () => {
     const { probe } = stubProbe({
-      // First nav candidate: greenhouse shape whose listing 404s.
-      "https://boards-api.greenhouse.io/v1/boards/typo/jobs": { ...OK_JSON, ok: true, contentType: "text/html", body: "" },
+      // First nav candidate: greenhouse shape whose listing 404s (non-2xx).
+      "https://boards-api.greenhouse.io/v1/boards/typo/jobs": { ok: false, contentType: null, body: "" },
       // Second nav candidate: a real lever board.
       "https://api.lever.co/v0/postings/realbrand?mode=json": { ...OK_JSON, body: "[]" },
     });
