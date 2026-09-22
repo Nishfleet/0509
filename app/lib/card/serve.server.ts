@@ -29,10 +29,17 @@ WHERE workspace_id = ? AND state = 'dismissed' AND state_reason = 'takedown' LIM
 // cheap oracle that the edge keeps asking the origin about, and the toggle-off
 // guarantee is symmetric — the origin stops serving immediately and every edge
 // copy expires inside the same minute either way.
-const NOT_FOUND = new Response("Not found", {
-  status: 404,
-  headers: { "cache-control": "public, s-maxage=60" },
-});
+//
+// Built per request, not hoisted: a `Response` constructed in the module's
+// global scope is I/O in workerd and fails the whole Worker at boot
+// ("Disallowed operation called within global scope"), which is what
+// `npm run e2e` catches.
+function notFound(): Response {
+  return new Response("Not found", {
+    status: 404,
+    headers: { "cache-control": "public, s-maxage=60" },
+  });
+}
 
 // The weekly rollover writes card/<workspace_id>/<week_start_at>/index.html.
 // The key sorts lexicographically because week_start_at is ISO-8601, so the
@@ -60,18 +67,18 @@ export async function serveCard(slug: string): Promise<Response> {
   const workspace = await env.DB.prepare(SELECT_PUBLISHED_WORKSPACE)
     .bind(slug)
     .first<PublishedWorkspace>();
-  if (workspace === null) return NOT_FOUND;
+  if (workspace === null) return notFound();
 
   const taken = await env.DB.prepare(SELECT_TAKEDOWN)
     .bind(workspace.id)
     .first<{ id: string }>();
-  if (taken !== null) return NOT_FOUND;
+  if (taken !== null) return notFound();
 
   const key = await newestCardKey(env.CARD_ARTIFACTS, workspace.id);
-  if (key === null) return NOT_FOUND;
+  if (key === null) return notFound();
 
   const object = await env.CARD_ARTIFACTS.get(key);
-  if (object === null) return NOT_FOUND;
+  if (object === null) return notFound();
 
   return new Response(object.body, {
     status: 200,
