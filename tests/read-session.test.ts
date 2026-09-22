@@ -12,6 +12,9 @@ vi.mock("better-auth", () => ({
 vi.mock("better-auth/plugins", () => ({ magicLink: () => ({}) }));
 vi.mock("@better-auth/api-key", () => ({ apiKey: () => ({}) }));
 vi.mock("@better-auth/passkey", () => ({ passkey: () => ({}) }));
+vi.mock("../app/lib/workspace.server", () => ({
+  ensureWorkspaceForSignIn: async () => undefined,
+}));
 
 import { createAuth, hasSessionCookie } from "../app/lib/auth.server";
 
