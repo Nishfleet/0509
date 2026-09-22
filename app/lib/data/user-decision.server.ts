@@ -1,0 +1,42 @@
+import { env } from "cloudflare:workers";
+
+interface UserDecisionInput {
+  workspaceId: string;
+  userId: string;
+  entityId?: string | null;
+  verdict: string;
+  note?: string | null;
+}
+
+export async function insertUserDecisions(db: D1Database, rows: UserDecisionInput[]): Promise<void> {
+  if (!rows.length) return;
+  const now = new Date().toISOString();
+  await db.batch(
+    rows.map((r) =>
+      db
+        .prepare(
+          `INSERT INTO user_decision (id, workspace_id, user_id, entity_id, verdict, note, decided_at)
+           VALUES (?,?,?,?,?,?,?)`,
+        )
+        .bind(crypto.randomUUID(), r.workspaceId, r.userId, r.entityId ?? null, r.verdict, r.note ?? null, now),
+    ),
+  );
+}
+
+export async function recordIdentityEdits(args: {
+  workspaceId: string;
+  userId: string;
+  entityId: string;
+  edits: Record<string, string>;
+}): Promise<void> {
+  await insertUserDecisions(
+    env.DB,
+    Object.entries(args.edits).map(([field, value]) => ({
+      workspaceId: args.workspaceId,
+      userId: args.userId,
+      entityId: args.entityId,
+      verdict: `identity_edit:${field}`,
+      note: value,
+    })),
+  );
+}

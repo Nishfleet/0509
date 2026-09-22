@@ -1,51 +1,27 @@
-// Identity card engine P4/P5-server (#3885): the card build orchestrator.
-// Normalise -> takedown refusal -> cached probes (8 s deadline each) ->
-// extract -> one batched Jev call (D7 per field + public_subject + D9 page
-// roles) -> one db.batch() write. Every probe returns {ok, value}|{ok:false,
-// reason} and never throws; a field Jev is unsure about is outlined
-// "check this", never silently filled and never silently dropped.
-
-import { extract, type Extracted } from "./extract";
-import { logoCandidates, resolveLogo } from "./logo-cascade";
-import { normaliseInput, type NormalisedSubject } from "./normalise";
-import { probeThrough } from "./probe-cache";
-import { fetchPage, type BrowserBinding, type TransportResult } from "../fetch/transport";
+import { env } from "cloudflare:workers";
 import { z } from "zod";
 
+import { insertUserDecisions } from "../data/user-decision.server";
+import { fetchPage, type BrowserBinding, type TransportResult } from "../fetch/transport";
 import { jevAsk, type JevQuestion } from "../jev/client";
 import { buildIdentityPack, inputHash } from "../jev/context-pack";
+import type { CardField, CardResult } from "./card-types";
+import { extract, type Extracted } from "./extract";
+import { logoCandidates, resolveLogo } from "./logo-cascade";
+import { normaliseInput } from "./normalise";
+import { probeThrough } from "./probe-cache";
 
-export interface CardDeps {
+interface CardDeps {
   db: D1Database;
   cache?: KVNamespace;
   browser?: BrowserBinding;
   jev?: { url: string; apiKey?: string };
 }
 
-export interface CardField {
-  name: string;
-  value: string | null;
-  state: "filled" | "check" | "empty";
-  via: string;
-  reason?: string;
-}
-
-export type CardResult =
-  | {
-      ok: true;
-      subject: NormalisedSubject;
-      entityId: string;
-      onboardingRunId: string;
-      fields: CardField[];
-      packHash: string;
-      verdictCount: number;
-      transport: "fetch" | "browser" | null;
-    }
-  | { ok: false; reason: string };
-
 const D7_FIELDS = ["name", "logo", "description", "category", "country", "socials", "pricing_page"] as const;
 const PAGE_ROLES = { home: "", pricing: "", product: "", blog: "", careers: "", legal: "", other: "" } as const;
 const NAV_JUDGED = 10;
+const REFUSAL_LINE = "we track brands and creators, not people";
 
 function id(): string {
   return crypto.randomUUID();
@@ -80,6 +56,38 @@ async function wikidata(name: string): Promise<{ qid: string; claims: Record<str
   return { qid, claims: body.entities?.[qid]?.claims ?? {} };
 }
 
+async function recordRefusal(
+  deps: CardDeps,
+  args: { workspaceId: string; userId: string; input: string },
+  verdict: string,
+  note: string,
+  verdictRow?: { p: number | null; reason: string | null; inputHash: string },
+): Promise<void> {
+  if (verdictRow) {
+    await deps.db
+      .prepare(
+        `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, entity_id, p, choice, reason, decided_at)
+         VALUES (?,?,?,?,?,?,?,?,?)
+         ON CONFLICT (question_id, input_hash) DO NOTHING`,
+      )
+      .bind(
+        id(),
+        args.workspaceId,
+        "public_subject",
+        verdictRow.inputHash,
+        null,
+        verdictRow.p,
+        null,
+        verdictRow.reason,
+        new Date().toISOString(),
+      )
+      .run();
+  }
+  await insertUserDecisions(deps.db, [
+    { workspaceId: args.workspaceId, userId: args.userId, verdict, note },
+  ]);
+}
+
 export async function buildIdentityCard(
   deps: CardDeps,
   args: { workspaceId: string; userId: string; input: string; onboardingRunId?: string },
@@ -88,7 +96,16 @@ export async function buildIdentityCard(
   if (!norm.ok) return { ok: false, reason: norm.reason };
   const subject = norm.subject;
 
-  // Guardrails: a subject on the takedown list is refused before any probe.
+  const refusalKey = subject.registrable ?? subject.handle ?? args.input;
+  const priorRefusal = await deps.db
+    .prepare(
+      `SELECT id FROM user_decision WHERE workspace_id = ? AND verdict LIKE 'refused:%' AND note = ? LIMIT 1`,
+    )
+    .bind(args.workspaceId, refusalKey)
+    .first<{ id: string }>()
+    .catch(() => null);
+  if (priorRefusal) return { ok: false, reason: REFUSAL_LINE };
+
   const subjects = [subject.registrable, subject.handle && `${subject.platform ?? "*"}:${subject.handle}`].filter(
     (s): s is string => Boolean(s),
   );
@@ -98,7 +115,10 @@ export async function buildIdentityCard(
       .bind(...subjects)
       .all<{ subject: string }>()
       .catch(() => ({ results: [] as { subject: string }[] }));
-    if (rows.results.length) return { ok: false, reason: "we track brands and creators, not people" };
+    if (rows.results.length) {
+      await recordRefusal(deps, args, "refused:takedown", refusalKey);
+      return { ok: false, reason: REFUSAL_LINE };
+    }
   }
 
   const cacheKey = subject.registrable ?? subject.handle ?? subject.input;
@@ -120,17 +140,17 @@ export async function buildIdentityCard(
   const extracted: Extracted | null = extractedRes?.ok ? extractedRes.value : null;
 
   const manifestHref = extracted?.manifestHref ?? null;
-  const manifestIconsP = (async () => {
-    if (!manifestHref) return [] as string[];
+  const fetchManifestIcons = async (): Promise<string[]> => {
+    if (!manifestHref) return [];
     const res = await fetch(manifestHref, { signal: AbortSignal.timeout(8_000) });
-    if (!res.ok) return [] as string[];
+    if (!res.ok) return [];
     const body = z
       .object({ icons: z.array(z.object({ src: z.string(), sizes: z.string().optional() })).optional() })
       .parse(await res.json());
     return (body.icons ?? [])
       .filter((i) => !i.sizes || /512|192/.test(i.sizes))
       .map((i) => new URL(i.src, manifestHref).toString());
-  })();
+  };
 
   const candidateName = extracted?.name ?? subject.handle ?? subject.registrable ?? null;
   const wdName = candidateName ?? subject.registrable;
@@ -138,7 +158,7 @@ export async function buildIdentityCard(
     ? probe(() => probeThrough(cache, cacheKey, "wikidata", () => wikidata(wdName)))
     : Promise.resolve(null);
 
-  const [manifestIcons, wd] = await Promise.all([probe(manifestIconsP), wdP]);
+  const [manifestIcons, wd] = await Promise.all([probe(fetchManifestIcons), wdP]);
 
   const logoP = extracted && pageUrl
     ? probeThrough(cache, cacheKey, "logo", () =>
@@ -148,7 +168,6 @@ export async function buildIdentityCard(
 
   const logo = await logoP;
 
-  // Assemble candidate fields with provenance.
   const fields: Record<string, { value: unknown; via: string }> = {};
   const put = (name: string, value: unknown, via: string) => {
     if (value !== null && value !== undefined && value !== "") fields[name] = { value, via };
@@ -167,7 +186,6 @@ export async function buildIdentityCard(
   const pricingCandidate = extracted?.navLinks.find((l) => /pricing|plans|membership|tarifs/i.test(l.href + " " + l.text));
   put("pricing_page", pricingCandidate?.href, "nav");
 
-  // One batched Jev call: D7 per present field + public_subject + D9 per nav page.
   const pack = buildIdentityPack({
     raw: args.input,
     kind: subject.kind,
@@ -177,6 +195,12 @@ export async function buildIdentityCard(
     reliability: { homepage: "scraped_page", wikidata: "official_api", nav: "scraped_page" },
   });
   const packHash = await inputHash(pack);
+
+  const judgedLinks = extracted?.navLinks.slice(0, NAV_JUDGED) ?? [];
+  const d9HashByUrl = new Map<string, string>();
+  for (const link of judgedLinks) {
+    d9HashByUrl.set(link.href, await inputHash({ url: link.href, title: link.text }));
+  }
 
   const questions: Record<string, JevQuestion> = {
     public_subject: {
@@ -192,7 +216,7 @@ export async function buildIdentityCard(
       };
     }
   }
-  for (const link of extracted?.navLinks.slice(0, NAV_JUDGED) ?? []) {
+  for (const link of judgedLinks) {
     questions[`d9_${link.href}`] = {
       type: "choice",
       instructions: `What role does this page play for the subject: ${link.href} (${link.text})?`,
@@ -206,17 +230,29 @@ export async function buildIdentityCard(
 
   const publicP = jev.ok ? jev.answers.public_subject?.probability : undefined;
   if (publicP !== undefined && publicP < 0.1) {
-    return { ok: false, reason: "we track brands and creators, not people" };
+    await recordRefusal(deps, args, "refused:public_subject", refusalKey, {
+      p: publicP,
+      reason: jev.ok ? (jev.answers.public_subject?.reason ?? null) : null,
+      inputHash: packHash,
+    });
+    return { ok: false, reason: REFUSAL_LINE };
   }
 
-  // Resolve each field's card state from its D7 verdict.
   const cardFields: CardField[] = [];
-  const verdictRows: { question_id: string; p: number | null; choice: string | null }[] = [];
+  const verdictRows: {
+    question_id: string;
+    input_hash: string;
+    p: number | null;
+    choice: string | null;
+    reason: string | null;
+  }[] = [];
   for (const f of D7_FIELDS) {
     const field = fields[f];
     const ans = jev.ok ? jev.answers[`d7_${f}`] : undefined;
     const p = ans?.probability;
-    if (jev.ok) verdictRows.push({ question_id: `d7_${f}`, p: p ?? null, choice: null });
+    if (jev.ok) {
+      verdictRows.push({ question_id: `d7_${f}`, input_hash: packHash, p: p ?? null, choice: null, reason: ans?.reason ?? null });
+    }
     if (!field) {
       cardFields.push({ name: f, value: null, state: "empty", via: "", reason: "we'll fill this after the first crawl" });
     } else if (p === undefined) {
@@ -230,9 +266,22 @@ export async function buildIdentityCard(
     }
   }
   if (jev.ok) {
-    verdictRows.push({ question_id: "public_subject", p: publicP ?? null, choice: null });
+    verdictRows.push({
+      question_id: "public_subject",
+      input_hash: packHash,
+      p: publicP ?? null,
+      choice: null,
+      reason: jev.answers.public_subject?.reason ?? null,
+    });
     for (const [qid, ans] of Object.entries(jev.answers)) {
-      if (qid.startsWith("d9_")) verdictRows.push({ question_id: "d9_page_role", p: null, choice: ans.choice ?? null });
+      if (!qid.startsWith("d9_")) continue;
+      verdictRows.push({
+        question_id: "d9_page_role",
+        input_hash: d9HashByUrl.get(qid.slice(3)) ?? packHash,
+        p: null,
+        choice: ans.choice ?? null,
+        reason: ans.reason ?? null,
+      });
     }
   }
 
@@ -245,32 +294,28 @@ export async function buildIdentityCard(
     built_at: now,
   });
 
-  // Upsert first, then read the canonical id back: on re-onboard the existing
-  // row keeps its id, and every child row below must point at it.
-  await deps.db
-    .prepare(
-      `INSERT INTO entity (id, workspace_id, role, domain, name, identity_json, origin, state, created_at)
-       VALUES (?,?,?,?,?,?, 'manual','on',?)
-       ON CONFLICT (workspace_id, domain) DO UPDATE SET name=excluded.name, identity_json=excluded.identity_json`,
-    )
-    .bind(
-      id(),
-      args.workspaceId,
-      "self",
-      domain,
-      cardFields.find((f) => f.name === "name")?.value ?? null,
-      identityJson,
-      now,
-    )
-    .run();
-  const entityRow = await deps.db
+  const existingEntity = await deps.db
     .prepare(`SELECT id FROM entity WHERE workspace_id = ? AND domain = ?`)
     .bind(args.workspaceId, domain)
     .first<{ id: string }>();
-  if (!entityRow) return { ok: false, reason: "entity-write-failed" };
-  const entityId = entityRow.id;
+  const entityId = existingEntity?.id ?? id();
 
   const stmts: D1PreparedStatement[] = [
+    deps.db
+      .prepare(
+        `INSERT INTO entity (id, workspace_id, role, domain, name, identity_json, origin, state, created_at)
+         VALUES (?,?,?,?,?,?, 'manual','on',?)
+         ON CONFLICT (workspace_id, domain) DO UPDATE SET name=excluded.name, identity_json=excluded.identity_json`,
+      )
+      .bind(
+        entityId,
+        args.workspaceId,
+        "self",
+        domain,
+        cardFields.find((f) => f.name === "name")?.value ?? null,
+        identityJson,
+        now,
+      ),
     deps.db
       .prepare(
         `INSERT INTO onboarding_run (id, workspace_id, user_id, input_raw, started_at, card_ready_at)
@@ -299,18 +344,18 @@ export async function buildIdentityCard(
           `INSERT INTO page (id, entity_id, url, title, role, role_decided_for_hash, discovered_at)
            VALUES (?,?,?,?,?,?,?) ON CONFLICT (entity_id, url) DO NOTHING`,
         )
-        .bind(id(), entityId, linkUrl, null, role, packHash.slice(0, 16), now),
+        .bind(id(), entityId, linkUrl, null, role, d9HashByUrl.get(linkUrl) ?? packHash, now),
       );
   }
   for (const v of verdictRows) {
     stmts.push(
       deps.db
         .prepare(
-          `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, entity_id, p, choice, decided_at)
-           VALUES (?,?,?,?,?,?,?,?)
+          `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, entity_id, p, choice, reason, decided_at)
+           VALUES (?,?,?,?,?,?,?,?,?)
            ON CONFLICT (question_id, input_hash) DO NOTHING`,
         )
-        .bind(id(), args.workspaceId, v.question_id, packHash, entityId, v.p, v.choice, now),
+        .bind(id(), args.workspaceId, v.question_id, v.input_hash, entityId, v.p, v.choice, v.reason, now),
       );
   }
   await deps.db.batch(stmts);
@@ -324,5 +369,24 @@ export async function buildIdentityCard(
     packHash,
     verdictCount: verdictRows.length,
     transport: homepage.ok ? homepage.transport : null,
+    browserMsUsed: homepage.ok ? homepage.browserMsUsed : null,
   };
+}
+
+export async function buildCardFromRequest(args: {
+  workspaceId: string;
+  userId: string;
+  input: string;
+  onboardingRunId?: string;
+}): Promise<CardResult> {
+  const jevUrl = (env as { JEV_URL?: string }).JEV_URL;
+  return buildIdentityCard(
+    {
+      db: env.DB,
+      cache: env.IDENTITY_CACHE,
+      browser: env.BROWSER,
+      jev: jevUrl ? { url: jevUrl, apiKey: (env as { JEV_API_KEY?: string }).JEV_API_KEY } : undefined,
+    },
+    args,
+  );
 }

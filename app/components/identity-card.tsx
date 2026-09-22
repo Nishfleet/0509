@@ -1,10 +1,6 @@
 import { useState } from "react";
 
-import type { CardField } from "../lib/identity/card.server";
-
-// The card is the form: every field is editable in place, fields Jev was
-// unsure about are outlined "check this", and an empty field says what will
-// fill it — never a spinner in place of a field (REBUILD-ONBOARDING.md).
+import type { CardField } from "../lib/identity/card-types";
 
 const FILLER: Record<string, string> = {
   name: "we'll fill this after the first crawl",

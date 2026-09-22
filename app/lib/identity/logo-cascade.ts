@@ -1,15 +1,6 @@
-// Identity card engine P2 (#3885): the zero-spend logo cascade
-// (REBUILD-STACK.md §5.5). Order: manifest icons[] -> apple-touch-icon ->
-// <link rel="icon"> -> Google faviconV2 sz=256 -> DuckDuckGo ip3 ->
-// /favicon.ico -> og:image last.
-//
-// Two live-probed traps honoured here: always GET, never HEAD (stripe.com
-// answers HEAD content-length:0 and GET 15,086 bytes), and check res.ok
-// (Google/DuckDuckGo return 404 with a placeholder image body).
-
 import type { Extracted } from "./extract";
 
-export interface LogoCandidate {
+interface LogoCandidate {
   url: string;
   via: string;
 }
@@ -28,12 +19,8 @@ export function logoCandidates(
 ): LogoCandidate[] {
   const out: LogoCandidate[] = [];
   const push = (url: string | null | undefined, via: string) => {
-    if (!url) return;
-    try {
-      out.push({ url: new URL(url, pageUrl).toString(), via });
-    } catch {
-      // a bad href is skipped, never fatal
-    }
+    if (!url || !URL.canParse(url, pageUrl)) return;
+    out.push({ url: new URL(url, pageUrl).toString(), via });
   };
 
   for (const icon of manifestIcons) push(icon, "manifest");
@@ -51,7 +38,6 @@ export function logoCandidates(
   push(`https://${host}/favicon.ico`, "favicon-ico");
   push(extracted.logoUrl, "ld-or-og");
 
-  // De-dupe preserving order.
   const seen = new Set<string>();
   return out.filter((c) => (seen.has(c.url) ? false : (seen.add(c.url), true)));
 }

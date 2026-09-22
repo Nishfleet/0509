@@ -1,15 +1,10 @@
-// Identity card engine P1 (#3885): the 24-hour KV probe cache.
-// identity:<registrable-domain>:<probe> — read-mostly, tolerant of the 60 s
-// propagation window, never same-key hot (REBUILD-STACK.md §4.5). Cache
-// failures degrade to a live probe; they never throw into the card path.
-
 const TTL_SECONDS = 86_400;
 
-export function probeKey(domain: string, probe: string): string {
+function probeKey(domain: string, probe: string): string {
   return `identity:${domain}:${probe}`;
 }
 
-export async function probeGet<T>(kv: KVNamespace, domain: string, probe: string): Promise<T | null> {
+async function probeGet<T>(kv: KVNamespace, domain: string, probe: string): Promise<T | null> {
   try {
     const raw = await kv.get(probeKey(domain, probe));
     return raw ? (JSON.parse(raw) as T) : null;
@@ -18,17 +13,15 @@ export async function probeGet<T>(kv: KVNamespace, domain: string, probe: string
   }
 }
 
-export async function probePut(
+async function probePut(
   kv: KVNamespace,
   domain: string,
   probe: string,
   value: unknown,
 ): Promise<void> {
-  try {
-    await kv.put(probeKey(domain, probe), JSON.stringify(value), { expirationTtl: TTL_SECONDS });
-  } catch {
-    // A cache write that fails loses a re-run optimisation, not the card.
-  }
+  await kv
+    .put(probeKey(domain, probe), JSON.stringify(value), { expirationTtl: TTL_SECONDS })
+    .catch(() => undefined);
 }
 
 export async function probeThrough<T>(

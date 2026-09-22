@@ -2,14 +2,6 @@ import { z } from "zod";
 
 const ContentResponse = z.object({ success: z.boolean().optional(), result: z.string().optional() });
 
-// Identity card engine P3 (#3885): fetch-then-browser transport.
-// Plain fetch first; escalate to Browser Rendering Quick Actions
-// (env.BROWSER.quickAction('content')) when the fetch is refused (non-2xx),
-// or yields under 200 characters of visible text (challenge/bot wall).
-// One escalation per call, no retry loops — the caller enforces the
-// one-escalation-per-onboarding budget. Never routed through a queue: this
-// path is interactive and uses the two reserved browser slots.
-
 export interface BrowserBinding {
   quickAction(
     action: "content",
@@ -33,8 +25,6 @@ const UA =
 const MIN_TEXT_CHARS = 200;
 const PROBE_TIMEOUT_MS = 8_000;
 
-// Cheap visible-text estimate for the escalation decision only — the real
-// extractor owns text for hashing. Tags and script/style bodies are dropped.
 function visibleLength(html: string): number {
   return html
     .replace(/<(script|style|noscript)[\s\S]*?<\/\1>/gi, " ")
@@ -59,7 +49,6 @@ export async function fetchPage(
     if (res.ok && visibleLength(html) >= MIN_TEXT_CHARS) {
       return { ok: true, html, transport: "fetch", status: res.status, ms: Date.now() - started, browserMsUsed: null };
     }
-    // Refused or a challenge body — escalate once if a browser is bound.
     if (!browser) {
       return {
         ok: false,

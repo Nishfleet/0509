@@ -1,17 +1,9 @@
 import { parse } from "tldts";
 import { z } from "zod";
 
-// Identity card engine P1 (#3885): turn one raw input — a domain, a URL, an
-// @handle or a channel URL — into a canonical subject. No hand-rolled
-// public-suffix logic: tldts carries the PSL.
-
 export const NormalisedSubject = z.object({
   kind: z.enum(["domain", "handle", "channel"]),
-  // eTLD+1 when the input pins one (domain kind); null for handles/channels,
-  // where the entity's own domain is still unknown.
   registrable: z.string().nullable(),
-  // Canonical probe target: the homepage for a domain, the channel URL for a
-  // channel, null for a bare handle (platform probes resolve it).
   url: z.string().nullable(),
   platform: z.string().optional(),
   handle: z.string().optional(),
@@ -34,7 +26,7 @@ const PLATFORM_HOSTS: Record<string, string> = {
 
 const HANDLE_RE = /^@?([A-Za-z0-9_.-]{1,64})$/;
 
-export type NormaliseResult =
+type NormaliseResult =
   | { ok: true; subject: NormalisedSubject }
   | { ok: false; reason: string };
 
@@ -42,7 +34,6 @@ export function normaliseInput(raw: string): NormaliseResult {
   const input = raw.trim();
   if (!input) return { ok: false, reason: "empty" };
 
-  // @handle — platform is deliberately unresolved; the probes decide.
   if (input.startsWith("@")) {
     const m = HANDLE_RE.exec(input);
     if (!m) return { ok: false, reason: "not a handle" };
@@ -52,7 +43,6 @@ export function normaliseInput(raw: string): NormaliseResult {
     };
   }
 
-  // Everything else is a URL or a bare domain/path.
   const withScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(input) ? input : `https://${input}`;
   if (!URL.canParse(withScheme)) return { ok: false, reason: "not a URL" };
   const url = new URL(withScheme);
@@ -70,8 +60,6 @@ export function normaliseInput(raw: string): NormaliseResult {
   const pathBits = url.pathname.split("/").filter(Boolean);
 
   if (platform) {
-    // A profile/channel URL on a known platform: youtube.com/user/X,
-    // youtube.com/@X, instagram.com/X, tiktok.com/@X, x.com/X, ...
     const handleBit = pathBits.find((b) => b !== "user" && b !== "c" && b !== "channel");
     const handle = handleBit?.replace(/^@/, "");
     if (!handle || pathBits.length === 0) {
@@ -91,7 +79,6 @@ export function normaliseInput(raw: string): NormaliseResult {
     };
   }
 
-  // A plain domain or a URL on the brand's own host.
   const registrable = parsed.domain;
   return {
     ok: true,

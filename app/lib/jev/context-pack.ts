@@ -1,10 +1,4 @@
-// Identity card engine P4 (#3885): the Jev context pack — the one JSON object
-// every question rides on (docs/REBUILD-JEV.md). For the card build it carries
-// what is known so far: the input, the extracted homepage fields, and which
-// probe produced each value. input_hash pins (question, pack) so the
-// jev_verdict UNIQUE(question_id, input_hash) cache can reuse a verdict.
-
-export interface IdentityPack {
+interface IdentityPack {
   self: { name: string | null; domain: string | null };
   subject: { input: string; kind: string; registrable: string | null; platform: string | null };
   item: Record<string, { value: unknown; via: string }>;

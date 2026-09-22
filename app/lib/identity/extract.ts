@@ -1,8 +1,5 @@
+import { parse } from "tldts";
 import { z } from "zod";
-
-// Identity card engine P2 (#3885): one HTML response -> the card's raw fields.
-// HTMLRewriter only (REBUILD-STACK.md §5.1/§5.4): no cheerio/jsdom/metascraper.
-// Runs inside workerd — tests for it live under tests/integration.
 
 export const Extracted = z.object({
   name: z.string().nullable(),
@@ -15,7 +12,6 @@ export const Extracted = z.object({
   manifestHref: z.string().nullable(),
   adLibraryHints: z.array(z.object({ platform: z.string(), id: z.string(), via: z.string() })),
   title: z.string().nullable(),
-  // Normalised visible text — the diff/hash input. Whitespace-collapsed.
   text: z.string(),
 });
 export type Extracted = z.infer<typeof Extracted>;
@@ -33,6 +29,14 @@ const SOCIAL_HOSTS = [
 
 const TEXT_LIMIT = 4000;
 const LINK_LIMIT = 50;
+
+function tryJson(raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
 
 function asArray<T>(v: T | T[] | undefined): T[] {
   if (v === undefined) return [];
@@ -156,11 +160,8 @@ export async function extract(html: string, pageUrl: string): Promise<Extracted>
 
   const ldDocs: unknown[] = [];
   for (const raw of ldBlocks) {
-    try {
-      ldDocs.push(JSON.parse(raw));
-    } catch {
-      // An unparsable ld+json block is skipped, not fatal.
-    }
+    const doc = tryJson(raw);
+    if (doc !== null) ldDocs.push(doc);
   }
   const ldOrg = findOrganization(ldDocs);
   const ldSameAs = asArray(ldOrg?.sameAs as string | string[] | undefined).filter(
@@ -184,7 +185,7 @@ export async function extract(html: string, pageUrl: string): Promise<Extracted>
     } catch {
       continue;
     }
-    if (SOCIAL_HOSTS.some((h) => resolved.hostname.endsWith(h))) {
+    if (SOCIAL_HOSTS.some((h) => parse(resolved.hostname).domain === h)) {
       socials.add(resolved.toString());
       continue;
     }
@@ -193,7 +194,6 @@ export async function extract(html: string, pageUrl: string): Promise<Extracted>
     }
   }
 
-  // Tracker ids in markup are the honest "advertises here" hints.
   const gtm = /GTM-[A-Z0-9]{4,}/.exec(html);
   if (gtm) adLibraryHints.push({ platform: "google", id: gtm[0], via: "gtm" });
   const gaId = /G-[A-Z0-9]{6,}/.exec(html);

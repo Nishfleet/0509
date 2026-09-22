@@ -1,12 +1,5 @@
 import { z } from "zod";
 
-// Identity card engine P4 (#3885): the Jev client. One request carries every
-// question; the wire shape is the probed contract in docs/engines/README.md:
-//   POST <JEV_URL> {"state": {...}, "questions": {"<id>": {type, instructions, criteria?}}}
-//   -> {"answers": {"<id>": {probability | choice+probabilities | score}}}
-// No retry loop, no prompt templating, no local fallback (REBUILD-JEV.md
-// principle 5). The UI never waits on Jev — callers degrade to "unreviewed".
-
 const JevAnswer = z.object({
   type: z.string().optional(),
   probability: z.number().optional(),
@@ -15,7 +8,7 @@ const JevAnswer = z.object({
   score: z.number().optional(),
   reason: z.string().optional(),
 });
-export type JevAnswer = z.infer<typeof JevAnswer>;
+type JevAnswer = z.infer<typeof JevAnswer>;
 
 const JevResponse = z.object({
   answers: z.record(z.string(), JevAnswer),

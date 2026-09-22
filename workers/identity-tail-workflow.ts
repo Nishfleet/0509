@@ -1,8 +1,3 @@
-// Identity card engine P5 (#3885): the durable tail, started when the user
-// taps "That's me". Steps are the durable boundary and the billing unit —
-// persist -> seed-watches -> first-snapshot -> start-discovery. A leg that
-// ever takes minutes lives here, never in the request path.
-
 import { WorkflowEntrypoint, type WorkflowStep, type WorkflowEvent } from "cloudflare:workers";
 
 import { fetchPage } from "../app/lib/fetch/transport";
@@ -30,8 +25,6 @@ export class IdentityTailWorkflow extends WorkflowEntrypoint<Env, Params> {
     });
 
     const watches = await step.do("seed-watches", async () => {
-      // The source registry is global and seeded elsewhere; onboarding reads
-      // it, never writes it. Only sources that exist get a watch.
       const sources = await this.env.DB.prepare(
         `SELECT id, kind FROM source WHERE is_enabled = 1`,
       ).all<{ id: string; kind: string }>();
@@ -76,8 +69,6 @@ export class IdentityTailWorkflow extends WorkflowEntrypoint<Env, Params> {
     });
 
     await step.do("start-discovery", async () => {
-      // Competitor discovery (#3884) owns the consumer; this enqueue is the
-      // contract hand-off so Home is not empty when the user lands.
       await this.env.PAGE_SWEEP.send({
         kind: "discover",
         workspaceId: p.workspaceId,
@@ -85,11 +76,6 @@ export class IdentityTailWorkflow extends WorkflowEntrypoint<Env, Params> {
         domain: p.domain,
         onboardingRunId: p.onboardingRunId,
       });
-      await this.env.DB.prepare(
-        `UPDATE onboarding_run SET competitors_ready_at = COALESCE(competitors_ready_at, NULL) WHERE id = ?`,
-      )
-        .bind(p.onboardingRunId)
-        .run();
       return watches;
     });
   }

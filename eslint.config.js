@@ -60,9 +60,9 @@ const WRITER_SYNTAX = [
       "One writer per table. Writes live in app/lib/data/<table>.server.ts, never in a route or a component. A route that writes directly becomes the second writer the moment another route needs the same row. docs/REBUILD-TRUST.md C5.",
   },
   {
-    selector: "CallExpression[callee.object.name='env'][callee.property.name='DB']",
+    selector: "MemberExpression[object.name='env'][property.name='DB']",
     message:
-      "Routes do not touch env.DB. Go through the one data layer in app/lib/data/. docs/REBUILD-TRUST.md C4.",
+      "Routes do not touch env.DB — not even to hand it to a helper. Go through the one data layer in app/lib/data/. Widened from the env.DB(...) call form after #3885's route walked through env.DB.prepare(...). docs/REBUILD-TRUST.md C4.",
   },
 ];
 
