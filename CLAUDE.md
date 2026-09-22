@@ -97,8 +97,10 @@ assertions both times.
 - `workers/app.ts` — the Worker entry and the `scheduled` handler.
 - `migrations/` — numbered D1 SQL. `wrangler d1 migrations list` is the
   authority on what is applied; do not restate a number here.
-- `tests/` — vitest. `tests/` is the node project (pure logic),
-  `tests/integration/` is the workers project (real workerd, real local D1).
+- `tests/` — vitest. Most of `tests/` is the node project (pure logic).
+  `tests/integration/` and `tests/unit/site/` run in the workers project.
+  The site tests need HTMLRewriter, which exists only in workerd. The
+  integration project also applies migrations to local D1.
 - `e2e/` — Playwright. Every test traces to a row in `docs/FEATURE-MAP.md`.
 
 ## Stack
