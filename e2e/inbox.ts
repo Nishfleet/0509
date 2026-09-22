@@ -120,7 +120,7 @@ async function waitForMagicLink(to: string, token: string): Promise<string> {
 }
 
 // J1's core: submit the login form for a fresh e2e+ address, read the real
-// email out of the inbox Worker, follow the link, land signed in on /app.
+// email out of the inbox Worker, follow the link, land signed in on /onboarding.
 // Timestamps are logged for the packet's proof line (send and session).
 export async function signInWithMagicLink(page: Page, email: string, token: string): Promise<void> {
   await page.goto("/login");
@@ -133,7 +133,7 @@ export async function signInWithMagicLink(page: Page, email: string, token: stri
   const link = await waitForMagicLink(email, token);
   const linkReadAt = new Date().toISOString();
   await page.goto(link);
-  await expect(page).toHaveURL(/\/app/);
+  await expect(page).toHaveURL(/\/onboarding/);
   console.log(
     `magic-link sign-in email=${email} sentAt=${sentAt} linkReadAt=${linkReadAt} sessionAt=${new Date().toISOString()}`,
   );
