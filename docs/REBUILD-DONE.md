@@ -27,14 +27,19 @@ Decisions recorded on 0509#3927 (2026-09-22):
   on `e2e@0509.io` delivers to the `0509-e2e-inbox` Worker
   (`workers/e2e-inbox.ts`), which stores the raw message in KV under the
   recipient address with a one-hour TTL. The spec signs up as
-  `e2e+<run-id>@0509.io` and reads the message back through
+  `e2e+<run-id>@0509.io` — per-run tags ride the same rule because
+  subaddressing (RFC 5233) is enabled on the zone and preserves the full
+  recipient in `message.to` — and reads the message back through
   `GET https://e2e-inbox.0509.io/message?to=<address>`, gated by the repo
-  secret `E2E_INBOX_TOKEN`. If the routing rule or the secret is missing at run
-  time the test fails loudly naming which one — it never skips. No D1 read, no
-  token-returning route in the app.
+  secret `E2E_INBOX_TOKEN`. If the routing rule, the subaddressing toggle or
+  the secret is missing at run time the test fails loudly naming which one —
+  it never skips. No D1 read, no token-returning route in the app.
 - **J2's passkey** is a virtual authenticator via Playwright's CDP WebAuthn
   domain — an accepted J2. It proves the app's WebAuthn wiring; the real-device
-  proof stays a one-time manual record.
+  proof stays a one-time manual record. Status 2026-09-22: **deferred** — the
+  app has no passkey UI (`app/**` was outside the packet's scope), so there is
+  no user journey to drive yet. The spec lands when the register/sign-in
+  affordance exists; tracked on #3927 and its follow-up issue.
 
 ## B. Quality gates (each is a number, measured on production)
 

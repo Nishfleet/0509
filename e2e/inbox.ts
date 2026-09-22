@@ -1,9 +1,10 @@
 import { expect, type Page } from "@playwright/test";
 
-// The J1/J2 mail path, per the amended decision on 0509#3927: Email Routing
-// delivers e2e@0509.io mail to the 0509-e2e-inbox Worker, which stores the raw
-// message in KV for an hour and serves it back on this one endpoint, gated by
-// the E2E_INBOX_TOKEN secret. Nothing here reads D1 and nothing shortens the
+// The J1 mail path, per the amended decision on 0509#3927: Email Routing's
+// e2e@0509.io rule delivers e2e+<run-id>@0509.io (zone subaddressing on, RFC
+// 5233) to the 0509-e2e-inbox Worker, which stores the raw message in KV for
+// an hour and serves it back on this one endpoint, gated by the
+// E2E_INBOX_TOKEN secret. Nothing here reads D1 and nothing shortens the
 // auth path — the link the test clicks is the link the app really sent.
 const INBOX_URL = "https://e2e-inbox.0509.io";
 const POLL_LIMIT_MS = 120_000;
@@ -35,8 +36,11 @@ function inboxHeaders(token: string): Record<string, string> {
   return headers;
 }
 
-// Quoted-printable decoding, byte-accurate: soft breaks go first, then =XX
-// pairs decode as bytes so multi-byte UTF-8 survives.
+// The app sends a text/plain body (app/lib/auth.server.ts), so there is no
+// MIME structure to parse. The only encoding that matters is quoted-printable,
+// applied only when the message's own Content-Transfer-Encoding says so —
+// decoding unconditionally would turn a plain body's literal `=` (`=3D`'s
+// honest form is the header's job) into hex escapes.
 function decodeQuotedPrintable(input: string): string {
   const stripped = input.replace(/=\r?\n/g, "");
   const bytes: number[] = [];
@@ -52,76 +56,71 @@ function decodeQuotedPrintable(input: string): string {
   return new TextDecoder().decode(new Uint8Array(bytes));
 }
 
-// Enough MIME for a magic-link email: split multipart bodies on the boundary,
-// decode each part's declared Content-Transfer-Encoding, and return the
-// concatenated text. base64 parts that do not decode are kept raw.
-function decodeMimeText(raw: string): string {
-  const boundary = /boundary="?([^";\r\n]+)"?/.exec(raw)?.[1];
-  const segments = boundary ? raw.split(`--${boundary}`) : [raw];
-  const parts: string[] = [];
-  for (const segment of segments) {
-    const splitAt = segment.search(/\r?\n\r?\n/);
-    const header = splitAt === -1 ? "" : segment.slice(0, splitAt);
-    const body = splitAt === -1 ? segment : segment.slice(splitAt);
-    const encoding = /content-transfer-encoding:\s*([0-9A-Za-z-]+)/i.exec(header)?.[1]?.toLowerCase();
-    if (encoding === "base64") {
-      try {
-        parts.push(Buffer.from(body.replace(/\s+/g, ""), "base64").toString("utf8"));
-      } catch {
-        parts.push(body);
-      }
-    } else if (encoding === "quoted-printable") {
-      parts.push(decodeQuotedPrintable(body));
-    } else {
-      parts.push(body);
-    }
-  }
-  return parts.join("\n");
-}
-
-function extractMagicLink(rawMessage: string): string | null {
-  const text = decodeMimeText(rawMessage);
+export function extractMagicLink(rawMessage: string): string | null {
+  const text = /content-transfer-encoding:\s*quoted-printable/i.test(rawMessage)
+    ? decodeQuotedPrintable(rawMessage)
+    : rawMessage;
   const match = /https:\/\/0509\.io\/api\/auth\/magic-link\/verify\?[^\s"'<>]+/.exec(text);
   return match ? match[0] : null;
 }
 
-// Poll until the message lands or the deadline passes. 403 and 503 are
-// immediate failures — the token gate answered, so the fault is the secret or
-// its absence on the Worker, not a slow email.
-async function waitForMagicLink(to: string, token: string): Promise<string> {
-  const deadline = Date.now() + POLL_LIMIT_MS;
-  let lastStatus = "the inbox endpoint did not respond";
-  while (Date.now() < deadline) {
-    const response = await fetch(`${INBOX_URL}/message?to=${encodeURIComponent(to)}`, {
-      headers: inboxHeaders(token),
-    });
-    if (response.status === 200) {
-      const link = extractMagicLink(await response.text());
-      if (link) return link;
-      lastStatus = "a message arrived but carried no magic-link verify URL";
-    } else if (response.status === 404) {
-      lastStatus = "inbox holds no message for this recipient";
-    } else if (response.status === 403) {
-      throw new Error(
-        "0509-e2e-inbox rejected E2E_INBOX_TOKEN (HTTP 403): the repo secret and the Worker secret disagree",
-      );
-    } else if (response.status === 503) {
-      throw new Error("0509-e2e-inbox reports E2E_INBOX_TOKEN is not set on the Worker");
-    } else {
-      lastStatus = `inbox endpoint answered HTTP ${response.status}`;
-    }
-    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+// One probe before polling: expect.poll retries a thrown callback for the
+// whole window, so the token gate's immediate answers (403/503) throw outside
+// it — a bad or missing secret fails in one round-trip, not in two minutes.
+async function probeInbox(url: string, headers: Record<string, string>): Promise<void> {
+  const probe = await fetch(url, { headers });
+  if (probe.status === 403) {
+    throw new Error(
+      "0509-e2e-inbox rejected E2E_INBOX_TOKEN (HTTP 403): the repo secret and the Worker secret disagree",
+    );
   }
+  if (probe.status === 503) {
+    throw new Error("0509-e2e-inbox reports E2E_INBOX_TOKEN is not set on the Worker");
+  }
+}
+
+// Poll until the message lands or the deadline passes.
+async function waitForMagicLink(to: string, token: string): Promise<string> {
+  const url = `${INBOX_URL}/message?to=${encodeURIComponent(to)}`;
+  const headers = inboxHeaders(token);
+  await probeInbox(url, headers);
+
+  let lastDetail = "the inbox endpoint did not respond";
+  let link: string | null = null;
+  try {
+    await expect
+      .poll(
+        async () => {
+          const response = await fetch(url, { headers });
+          if (response.status === 200) {
+            link = extractMagicLink(await response.text());
+            if (link) return true;
+            lastDetail = "a message arrived but carried no magic-link verify URL";
+          } else {
+            lastDetail =
+              response.status === 404
+                ? "inbox holds no message for this recipient"
+                : `inbox endpoint answered HTTP ${response.status}`;
+          }
+          return false;
+        },
+        { timeout: POLL_LIMIT_MS, intervals: [POLL_INTERVAL_MS] },
+      )
+      .toBe(true);
+  } catch {
+    // The named error below carries the detail; the poll's own timeout text
+    // would not.
+  }
+  if (link) return link;
   throw new Error(
-    `No magic-link email for ${to} within ${POLL_LIMIT_MS / 1000}s (${lastStatus}). ` +
+    `No magic-link email for ${to} within ${POLL_LIMIT_MS / 1000}s (${lastDetail}). ` +
       "If the inbox stayed at 404, the Email Routing rule e2e@0509.io -> 0509-e2e-inbox " +
-      "is missing or the app's EMAIL binding did not deliver.",
+      "is missing, zone subaddressing is off, or the app's EMAIL binding did not deliver.",
   );
 }
 
 // J1's core: submit the login form for a fresh e2e+ address, read the real
 // email out of the inbox Worker, follow the link, land signed in on /app.
-// J2 reuses it — passkey registration needs the fresh session this produces.
 // Timestamps are logged for the packet's proof line (send and session).
 export async function signInWithMagicLink(page: Page, email: string, token: string): Promise<void> {
   await page.goto("/login");
