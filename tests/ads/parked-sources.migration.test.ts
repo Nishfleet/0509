@@ -71,14 +71,19 @@ describe("migration file discipline", () => {
     expect(applied).not.toMatch(/INSERT\s+INTO\s+source\b/i);
   });
 
-  it("seeds source rows only in their own migration", async () => {
-    const files = await migrationFiles();
-    const seedingFiles: string[] = [];
-    for (const name of files) {
-      const sql = await readFile(path.join(MIGRATIONS, name), "utf8");
-      if (/INSERT\s+INTO\s+source\b/i.test(sql)) seedingFiles.push(name);
+  it("seeds the parked rows in their own migration, never in an applied one", async () => {
+    // The defect this guards is a source row shipped inside the already-applied
+    // file, not "another packet also seeds source rows". Assert that shape and
+    // not a whole-tree allowlist: other migrations (e.g. #3977's disabled X
+    // row) legitimately seed source rows in their own files, and a test that
+    // reddens main for them punishes the correct behaviour. The parked rows
+    // themselves must come from SEED_FILENAME, and that is what is asserted.
+    const seedSql = await readFile(path.join(MIGRATIONS, SEED_FILENAME), "utf8");
+    for (const platform of ["snap", "x", "pinterest", "amazon", "apple"]) {
+      expect(seedSql).toContain(`src_ads_${platform}_parked`);
     }
-    expect(seedingFiles).toEqual([SEED_FILENAME]);
+    const applied = await readFile(path.join(MIGRATIONS, APPLIED_FILENAME), "utf8");
+    expect(applied).not.toMatch(/INSERT\s+INTO\s+source\b/i);
   });
 
   it("states the probe evidence the parked rows rest on", async () => {
