@@ -39,6 +39,22 @@ export default defineConfig({
           testTimeout: 30_000,
         },
       },
+      {
+        // The J1 mail-sink Worker (0509#3927): real workerd + real local KV.
+        // Its token gate and email handler run against the same binding kinds
+        // production has — a broken gate fails in a merge gate, not in CI's
+        // production lane.
+        plugins: [
+          cloudflareTest(() => ({
+            wrangler: { configPath: "./tests/integration/wrangler.e2e-inbox.test.jsonc" },
+          })),
+        ],
+        test: {
+          name: "e2e-inbox",
+          include: ["tests/integration/e2e-inbox.test.ts"],
+          testTimeout: 30_000,
+        },
+      },
     ],
   },
 });

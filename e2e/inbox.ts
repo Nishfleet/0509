@@ -1,0 +1,140 @@
+import { expect, type Page } from "@playwright/test";
+
+// The J1 mail path, per the amended decision on 0509#3927: Email Routing's
+// e2e@0509.io rule delivers e2e+<run-id>@0509.io (zone subaddressing on, RFC
+// 5233) to the 0509-e2e-inbox Worker, which stores the raw message in KV for
+// an hour and serves it back on this one endpoint, gated by the
+// E2E_INBOX_TOKEN secret. Nothing here reads D1 and nothing shortens the
+// auth path — the link the test clicks is the link the app really sent.
+const INBOX_URL = "https://e2e-inbox.0509.io";
+const POLL_LIMIT_MS = 120_000;
+const POLL_INTERVAL_MS = 3_000;
+
+// Fail loudly, never skip: the amended decision on #3927 requires a missing
+// secret or routing rule to name itself in the failure. In the production lane
+// an absent env var means the repo secret is not wired into the job.
+export function requireInboxToken(): string {
+  const token = process.env.E2E_INBOX_TOKEN;
+  if (!token) {
+    throw new Error(
+      "E2E_INBOX_TOKEN is empty: the repo secret is not wired into the e2e-production job env in .github/workflows/ci.yml",
+    );
+  }
+  return token;
+}
+
+function inboxHeaders(token: string): Record<string, string> {
+  const headers: Record<string, string> = { authorization: `Bearer ${token}` };
+  // The inbox hostname may sit inside the same Access application as 0509.io;
+  // the service token headers are ignored anywhere it does not.
+  const id = process.env.CF_ACCESS_CLIENT_ID;
+  const secret = process.env.CF_ACCESS_CLIENT_SECRET;
+  if (id && secret) {
+    headers["CF-Access-Client-Id"] = id;
+    headers["CF-Access-Client-Secret"] = secret;
+  }
+  return headers;
+}
+
+// The app sends a text/plain body (app/lib/auth.server.ts), so there is no
+// MIME structure to parse. The only encoding that matters is quoted-printable,
+// applied only when the message's own Content-Transfer-Encoding says so —
+// decoding unconditionally would turn a plain body's literal `=` (`=3D`'s
+// honest form is the header's job) into hex escapes.
+function decodeQuotedPrintable(input: string): string {
+  const stripped = input.replace(/=\r?\n/g, "");
+  const bytes: number[] = [];
+  for (let i = 0; i < stripped.length; i++) {
+    const pair = stripped.slice(i + 1, i + 3);
+    if (stripped[i] === "=" && /^[0-9A-Fa-f]{2}$/.test(pair)) {
+      bytes.push(parseInt(pair, 16));
+      i += 2;
+    } else {
+      bytes.push(stripped.charCodeAt(i) & 0xff);
+    }
+  }
+  return new TextDecoder().decode(new Uint8Array(bytes));
+}
+
+export function extractMagicLink(rawMessage: string): string | null {
+  const text = /content-transfer-encoding:\s*quoted-printable/i.test(rawMessage)
+    ? decodeQuotedPrintable(rawMessage)
+    : rawMessage;
+  const match = /https:\/\/0509\.io\/api\/auth\/magic-link\/verify\?[^\s"'<>]+/.exec(text);
+  return match ? match[0] : null;
+}
+
+// One probe before polling: expect.poll retries a thrown callback for the
+// whole window, so the token gate's immediate answers (403/503) throw outside
+// it — a bad or missing secret fails in one round-trip, not in two minutes.
+async function probeInbox(url: string, headers: Record<string, string>): Promise<void> {
+  const probe = await fetch(url, { headers });
+  if (probe.status === 403) {
+    throw new Error(
+      "0509-e2e-inbox rejected E2E_INBOX_TOKEN (HTTP 403): the repo secret and the Worker secret disagree",
+    );
+  }
+  if (probe.status === 503) {
+    throw new Error("0509-e2e-inbox reports E2E_INBOX_TOKEN is not set on the Worker");
+  }
+}
+
+// Poll until the message lands or the deadline passes.
+async function waitForMagicLink(to: string, token: string): Promise<string> {
+  const url = `${INBOX_URL}/message?to=${encodeURIComponent(to)}`;
+  const headers = inboxHeaders(token);
+  await probeInbox(url, headers);
+
+  let lastDetail = "the inbox endpoint did not respond";
+  let link: string | null = null;
+  try {
+    await expect
+      .poll(
+        async () => {
+          const response = await fetch(url, { headers });
+          if (response.status === 200) {
+            link = extractMagicLink(await response.text());
+            if (link) return true;
+            lastDetail = "a message arrived but carried no magic-link verify URL";
+          } else {
+            lastDetail =
+              response.status === 404
+                ? "inbox holds no message for this recipient"
+                : `inbox endpoint answered HTTP ${response.status}`;
+          }
+          return false;
+        },
+        { timeout: POLL_LIMIT_MS, intervals: [POLL_INTERVAL_MS] },
+      )
+      .toBe(true);
+  } catch {
+    // The named error below carries the detail; the poll's own timeout text
+    // would not.
+  }
+  if (link) return link;
+  throw new Error(
+    `No magic-link email for ${to} within ${POLL_LIMIT_MS / 1000}s (${lastDetail}). ` +
+      "If the inbox stayed at 404, the Email Routing rule e2e@0509.io -> 0509-e2e-inbox " +
+      "is missing, zone subaddressing is off, or the app's EMAIL binding did not deliver.",
+  );
+}
+
+// J1's core: submit the login form for a fresh e2e+ address, read the real
+// email out of the inbox Worker, follow the link, land signed in on /app.
+// Timestamps are logged for the packet's proof line (send and session).
+export async function signInWithMagicLink(page: Page, email: string, token: string): Promise<void> {
+  await page.goto("/login");
+  await page.locator('input[name="email"]').fill(email);
+  const sentAt = new Date().toISOString();
+  await page.locator('button[type="submit"]').click();
+  // Sent state replaces the form; asserting the field is gone asserts the swap
+  // without pinning copy (smoke.spec.ts's contract-not-copy convention).
+  await expect(page.locator('input[name="email"]')).toHaveCount(0);
+  const link = await waitForMagicLink(email, token);
+  const linkReadAt = new Date().toISOString();
+  await page.goto(link);
+  await expect(page).toHaveURL(/\/app/);
+  console.log(
+    `magic-link sign-in email=${email} sentAt=${sentAt} linkReadAt=${linkReadAt} sessionAt=${new Date().toISOString()}`,
+  );
+}
