@@ -66,10 +66,8 @@
   // ten (docs/REBUILD-COST.md).
   "browser": { "binding": "BROWSER" },
 
-  // The one send lane's outbound binding (0509#3979, docs/engines/delivery.md
-  // § P7.2). Delivers the weekly brief now and the incident email when engine 4
-  // writes its row. Auth's magic link routes through the same
-  // workers/delivery/send.ts, so this binding has exactly one call site.
+  // Transactional send only. The weekly brief's standing on this lane is an
+  // open question recorded on docs/REBUILD-DELIVERY.md.
   "send_email": [{ "name": "EMAIL" }],
 
   // The one send lane (0509#3979, docs/engines/delivery.md § P7.2, §5).
@@ -84,10 +82,6 @@
   // reach the retry limit are deleted permanently otherwise, and a silently
   // dropped brief is the failure the contract forbids.
   "queues": {
-    "producers": [
-      { "queue": "send-email", "binding": "SEND_EMAIL" },
-      { "queue": "send-email-dlq", "binding": "SEND_EMAIL_DLQ" }
-    ],
     "consumers": [
       {
         "queue": "send-email",

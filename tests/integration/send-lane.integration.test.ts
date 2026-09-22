@@ -92,8 +92,6 @@ const readAttempts = async (): Promise<AttemptRow[]> =>
     ).all<AttemptRow>()
   ).results ?? [];
 
-const attemptRows = async () => await readAttempts();
-
 const digestStatus = async (id: string) =>
   await env.DB.prepare(`SELECT status, sent_at FROM digest WHERE id = ?`).bind(id).first<{
     status: string;
@@ -153,7 +151,7 @@ describe("send lane (0509#3979)", () => {
     expect(rec.sent[0].to).toBe(TARGET);
     expect(rec.sent[0].subject).toBe("You are #2 of 9 this week");
 
-    const rows = await attemptRows();
+    const rows = await readAttempts();
     expect(rows).toHaveLength(1);
     expect(rows[0].status).toBe("sent");
     expect(rows[0].error).toBeNull();
@@ -179,7 +177,7 @@ describe("send lane (0509#3979)", () => {
     expect(second.attempt_id).toBeNull();
     expect(second.idempotency_key).toBe(first.idempotency_key);
     expect(rec.sent).toHaveLength(1);
-    const rows = await attemptRows();
+    const rows = await readAttempts();
     expect(rows).toHaveLength(1);
     expect(rows[0].id).toBe(first.attempt_id);
     expect(rows[0].status).toBe("sent");
@@ -193,7 +191,7 @@ describe("send lane (0509#3979)", () => {
     const first = await deliver(envWith(bindingFor(failed)), message(digestId));
     expect(first.outcome).toBe("failed");
     expect(failed.sent).toHaveLength(0);
-    let rows = await attemptRows();
+    let rows = await readAttempts();
     expect(rows).toHaveLength(1);
     expect(rows[0].status).toBe("failed");
     expect(rows[0].error).toContain("Email Service rejected the send");
@@ -203,7 +201,7 @@ describe("send lane (0509#3979)", () => {
     expect(second.outcome).toBe("sent");
     expect(second.attempt_id).toBe(first.attempt_id);
     expect(good.sent).toHaveLength(1);
-    rows = await attemptRows();
+    rows = await readAttempts();
     expect(rows).toHaveLength(1);
     expect(rows[0].status).toBe("sent");
     expect(rows[0].error).toBeNull();
@@ -224,7 +222,7 @@ describe("send lane (0509#3979)", () => {
     expect(result.attempt_id).toBeNull();
     expect(result.idempotency_key).toBeNull();
     expect(rec.sent).toHaveLength(0);
-    expect(await attemptRows()).toHaveLength(0);
+    expect(await readAttempts()).toHaveLength(0);
     expect((await digestStatus(digestId))?.status).toBe("pending");
   });
 
@@ -232,7 +230,7 @@ describe("send lane (0509#3979)", () => {
     const rec = recorder();
     const digestId = await seedDigest("pending", { text: "brief" });
     await deliver(envWith(bindingFor(rec)), message(digestId));
-    const rows = await attemptRows();
+    const rows = await readAttempts();
     expect(rows.map((r) => r.status)).not.toContain("delivered");
   });
 
@@ -245,7 +243,7 @@ describe("send lane (0509#3979)", () => {
     expect(result.outcome).toBe("failed");
     expect(result.attempt_id).toBeTruthy();
     expect(rec.sent).toHaveLength(0);
-    const rows = await attemptRows();
+    const rows = await readAttempts();
     expect(rows).toHaveLength(1);
     expect(rows[0].status).toBe("failed");
     expect(rows[0].error).toBeTruthy();
@@ -263,7 +261,7 @@ describe("send lane (0509#3979)", () => {
     expect(second.outcome).toBe("failed");
     expect(second.attempt_id).toBe(first.attempt_id);
     expect(rec.sent).toHaveLength(0);
-    expect(await attemptRows()).toHaveLength(1);
+    expect(await readAttempts()).toHaveLength(1);
   });
 
   it("never leaves a sent attempt reclaimable when a post-send write throws", async () => {
@@ -271,36 +269,14 @@ describe("send lane (0509#3979)", () => {
     const rec = recorder();
 
     const realPrepare = env.DB.prepare.bind(env.DB);
-    let denyDigestWrites = false;
-    const flipToDeny = () => {
-      denyDigestWrites = true;
-    };
-    const spied = new Proxy(env.DB, {
+    const failing = new Proxy(env, {
       get(target, property) {
-        if (property === "prepare") {
-          return (query: string) => {
-            if (denyDigestWrites && query.includes("UPDATE digest")) {
-              throw new Error("D1 unavailable while marking the digest sent");
-            }
-            return realPrepare(query);
-          };
-        }
-        return Reflect.get(target, property) as unknown;
-      },
-    }) as D1Database;
-    const spiedEnv = { ...env, DB: spied, EMAIL: bindingFor(rec) } as Env;
-
-    const rowsBefore = await attemptRows().then((rows) => rows.length);
-    const failing = new Proxy(spiedEnv, {
-      get(target, property) {
-        if (property === "EMAIL") return bindingFor(rec);
         if (property === "DB") {
           return new Proxy(target.DB, {
             get(dbTarget, dbProperty) {
               if (dbProperty === "prepare") {
                 return (query: string) => {
                   if (query.includes("UPDATE digest")) {
-                    flipToDeny();
                     throw new Error("D1 unavailable while marking the digest sent");
                   }
                   return realPrepare(query);
@@ -310,16 +286,19 @@ describe("send lane (0509#3979)", () => {
             },
           }) as D1Database;
         }
+        if (property === "EMAIL") return bindingFor(rec);
         return Reflect.get(target, property) as unknown;
       },
     }) as Env;
 
+    const rowsBefore = await readAttempts().then((rows) => rows.length);
+
     await expect(deliver(failing, message(digestId))).rejects.toThrow("D1 unavailable while marking the digest sent");
 
-    expect(denyDigestWrites).toBe(true);
     expect(rec.sent).toHaveLength(1);
-    expect(await attemptRows()).toHaveLength(rowsBefore + 1);
-    const row = (await attemptRows())[0];
+    const rows = await readAttempts();
+    expect(rows).toHaveLength(rowsBefore + 1);
+    const row = rows[0];
     expect(row.status).toBe("sent");
 
     const second = await deliver(envWith(bindingFor(rec)), message(digestId));
@@ -332,7 +311,7 @@ describe("send lane (0509#3979)", () => {
     const result = await deliver(envWith(bindingFor(rec)), message("digest-does-not-exist"));
     expect(result.outcome).toBe("no_digest");
     expect(rec.sent).toHaveLength(0);
-    expect(await attemptRows()).toHaveLength(0);
+    expect(await readAttempts()).toHaveLength(0);
   });
 
   it("reports no_target when the workspace has no email target", async () => {
@@ -342,7 +321,7 @@ describe("send lane (0509#3979)", () => {
     const result = await deliver(envWith(bindingFor(rec)), message(digestId));
     expect(result.outcome).toBe("no_target");
     expect(rec.sent).toHaveLength(0);
-    expect(await attemptRows()).toHaveLength(0);
+    expect(await readAttempts()).toHaveLength(0);
   });
 
   it("acks a duplicate and retries a failed send from the batch", async () => {
