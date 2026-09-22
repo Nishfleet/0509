@@ -29,7 +29,7 @@ export default function OnboardingIdentity({ loaderData }: Route.ComponentProps)
 
   return (
     <main className="mx-auto flex min-h-svh w-full max-w-[52rem] flex-col gap-8 px-6 py-12 sm:px-10 sm:py-16">
-      <p className="font-mono text-[0.72rem] leading-[1.4] text-ink-soft">
+      <p className="font-mono text-[0.72rem] leading-[1.4] break-words text-ink-soft">
         {loaderData.input}
       </p>
       <p className="font-mono text-[0.72rem] leading-[1.4] text-ink-soft">
