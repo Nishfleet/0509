@@ -250,3 +250,25 @@ jobs:
       - name: merge_group reports the check so the queue can merge (the grade was enforced on the pull request)
         if: github.event_name == 'merge_group'
         run: "true"
+
+  # The grader arms the merge (Fable, 2026-09-22): seven worker PRs sat CLEAN
+  # and unmerged (#4175 #4188 #4192 #4197 #4198 #4205 #4213) because the
+  # worker's own step 9 arm runs only if the worker is still alive when the
+  # grade lands, and a 45-min TimeoutStartSec kill ends many before that. The
+  # arm belongs to the event, not the worker: a passing grade on a worker PR
+  # enqueues it; the merge queue still requires every check on the merge
+  # commit. Separate job so the elevated token never sits in the grader.
+  arm-merge:
+    name: arm-merge
+    needs: opus-review
+    if: github.event_name == 'pull_request' && github.event.pull_request.user.login == 'nishfleet-worker[bot]' && needs.opus-review.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Enqueue the graded PR on the merge queue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr merge ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --squash --auto

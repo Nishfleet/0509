@@ -22,10 +22,6 @@ export interface BrandSwitchProps {
   onChange?: (next: "on" | "off") => void;
 }
 
-export function brandsStillListed<T extends { state: string }>(brands: readonly T[]): T[] {
-  return brands.filter((brand) => brand.state !== "dismissed");
-}
-
 function pausedLine(pausedOn: string | undefined): string {
   const date = pausedOn?.trim();
   return date ? `paused ${date} · history kept` : "paused · history kept";
