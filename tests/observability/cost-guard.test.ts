@@ -69,33 +69,13 @@ function documented() {
 
 const FIGURES = documented();
 
-function d1Trips(rows: number, onBrands: number): boolean {
-  return (
-    rows * FIGURES.days >
-    FIGURES.multiple * (FIGURES.d1Week + FIGURES.d1PerBrand * onBrands * FIGURES.days)
-  );
-}
+const D1_QUIET_ROWS = 95_724;
+const D1_TRIP_ROWS = 95_725;
+const BROWSER_QUIET_MS = 26_917_830;
+const BROWSER_TRIP_MS = 26_917_831;
 
-function browserTrips(durationMs: number, onBrands: number): boolean {
-  return (
-    durationMs * FIGURES.days >
-    FIGURES.multiple * (FIGURES.browserWeekMs + FIGURES.browserPerBrand * 1000 * onBrands * FIGURES.days)
-  );
-}
-
-function smallestTrip(trips: (value: number) => boolean): number {
-  let low = 0;
-  let high = 1;
-  while (!trips(high)) {
-    low = high;
-    high *= 2;
-  }
-  while (low + 1 < high) {
-    const mid = Math.floor((low + high) / 2);
-    if (trips(mid)) high = mid;
-    else low = mid;
-  }
-  return high;
+function docLimit(weekFloor: number, perUnit: number, onBrands: number): number {
+  return FIGURES.multiple * (weekFloor + perUnit * onBrands * FIGURES.days);
 }
 
 function envelope(account: Record<string, unknown>) {
@@ -145,8 +125,8 @@ describe("checkCostRegression", () => {
       browser_rendering_seconds: 4943.228,
     });
     expect(result.alerts).toEqual([]);
-    expect(d1Trips(17_499, 1)).toBe(false);
-    expect(browserTrips(4_943_228, 1)).toBe(false);
+    expect(17_499).toBeLessThan(D1_TRIP_ROWS);
+    expect(4_943_228).toBeLessThan(BROWSER_TRIP_MS);
     expect(result.expected.d1_rows_written).toBeCloseTo(FIGURES.d1Week / FIGURES.days + 10, 6);
     expect(result.expected.browser_rendering_seconds).toBeCloseTo(
       FIGURES.browserWeekMs / FIGURES.days / 1000 + 15,
@@ -163,32 +143,50 @@ describe("checkCostRegression", () => {
     }
   });
 
-  it("writes cost-guard:2026-09-21:d1_rows_written when the D1 line is one row over the trip", async () => {
-    const rows = smallestTrip((value) => d1Trips(value, 1));
-    const under = await checkCostRegression({ graphql: day(rows - 1), day: DAY, onBrands: 1 });
+  it("locks 95724 quiet and 95725 alerting to the D1 figures in the cost doc", () => {
+    const limit = docLimit(FIGURES.d1Week, FIGURES.d1PerBrand, 1);
+    expect(D1_QUIET_ROWS * FIGURES.days).toBeLessThanOrEqual(limit);
+    expect(D1_TRIP_ROWS * FIGURES.days).toBeGreaterThan(limit);
+    expect(D1_QUIET_ROWS).toBe(D1_TRIP_ROWS - 1);
+  });
+
+  it("writes cost-guard:2026-09-21:d1_rows_written at 95725 rows and stays quiet at 95724", async () => {
+    const under = await checkCostRegression({ graphql: day(D1_QUIET_ROWS), day: DAY, onBrands: 1 });
     expect(under.alerts).toEqual([]);
-    const result = await checkCostRegression({ graphql: day(rows), day: DAY, onBrands: 1 });
+    const result = await checkCostRegression({ graphql: day(D1_TRIP_ROWS), day: DAY, onBrands: 1 });
     expect(result.alerts).toEqual([
       {
         id: "cost-guard:2026-09-21:d1_rows_written",
         line: "d1_rows_written",
-        measured: rows,
+        measured: D1_TRIP_ROWS,
         expected: result.expected.d1_rows_written,
         day: DAY,
       },
     ]);
-    expect(rows).toBeGreaterThan(3 * result.expected.d1_rows_written);
+    expect(D1_TRIP_ROWS).toBeGreaterThan(3 * result.expected.d1_rows_written);
+    expect(D1_QUIET_ROWS).toBeLessThanOrEqual(3 * result.expected.d1_rows_written);
   });
 
-  it("writes cost-guard:2026-09-21:browser_rendering_seconds one millisecond over the trip", async () => {
-    const durationMs = smallestTrip((value) => browserTrips(value, 1));
-    const under = await checkCostRegression({ graphql: day(0, 0, durationMs - 1), day: DAY, onBrands: 1 });
+  it("locks the browser boundary to the duration figures in the cost doc", () => {
+    const limit = docLimit(FIGURES.browserWeekMs, FIGURES.browserPerBrand * 1000, 1);
+    expect(BROWSER_QUIET_MS * FIGURES.days).toBeLessThanOrEqual(limit);
+    expect(BROWSER_TRIP_MS * FIGURES.days).toBeGreaterThan(limit);
+    expect(BROWSER_QUIET_MS).toBe(BROWSER_TRIP_MS - 1);
+  });
+
+  it("writes cost-guard:2026-09-21:browser_rendering_seconds at 26917831 ms and stays quiet one millisecond under", async () => {
+    const under = await checkCostRegression({ graphql: day(0, 0, BROWSER_QUIET_MS), day: DAY, onBrands: 1 });
     expect(under.alerts).toEqual([]);
-    const result = await checkCostRegression({ graphql: day(0, 0, durationMs), day: DAY, onBrands: 1 });
-    expect(result.alerts.map((row) => row.id)).toEqual(["cost-guard:2026-09-21:browser_rendering_seconds"]);
-    const alert = result.alerts[0];
-    expect(alert?.measured).toBeCloseTo(durationMs / 1000, 6);
-    expect(alert?.expected).toBe(result.expected.browser_rendering_seconds);
+    const result = await checkCostRegression({ graphql: day(0, 0, BROWSER_TRIP_MS), day: DAY, onBrands: 1 });
+    expect(result.alerts).toEqual([
+      {
+        id: "cost-guard:2026-09-21:browser_rendering_seconds",
+        line: "browser_rendering_seconds",
+        measured: BROWSER_TRIP_MS / 1000,
+        expected: result.expected.browser_rendering_seconds,
+        day: DAY,
+      },
+    ]);
   });
 
   it("names the five-million-row day the $105 pattern is priced at", async () => {

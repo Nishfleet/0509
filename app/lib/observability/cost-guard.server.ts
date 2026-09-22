@@ -249,7 +249,7 @@ async function fetchGraphql(
     signal: AbortSignal.timeout(30_000),
   });
   if (!response.ok) fail(`graphql http ${String(response.status)}`);
-  return response.json() as Promise<unknown>;
+  return response.json();
 }
 
 function oneAlert(
