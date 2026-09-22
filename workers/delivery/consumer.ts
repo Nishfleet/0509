@@ -28,8 +28,9 @@ import { errorText, sendMessage } from "./send";
  * text rather than the exception escaping past the claim: the queue would
  * redeliver, read the 'pending' row back as a duplicate, ack it, and the send
  * would be lost with no record at all (0509#3979, the contract's first clause).
+ * Not exported: nothing outside this file constructs it, and knip gates that.
  */
-export class PayloadError extends Error {
+class PayloadError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "PayloadError";
