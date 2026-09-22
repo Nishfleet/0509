@@ -101,17 +101,46 @@ describe("site diff — the hash gate", () => {
     ).toThrow(/hash gate has not fired/);
   });
 
-  it("the unchanged tick writes one row and nothing else — no mark is built", () => {
+  it("the unchanged tick writes one row and nothing else — no mark is built", async () => {
     // The gate's real consequence, asserted rather than described: on an
     // unchanged tick the sweep stops at the snapshot row, so there is no hunk
     // and no key anywhere. This is the "no screenshot, no diff, no Jev call"
-    // half of the acceptance, encoded as a type the engine cannot violate.
+    // half of the acceptance. The R2 recorder is asked to store a mark built
+    // from the pair, which the gate refuses, so the recorder stays empty for a
+    // reason that can fail: a gate that fired would write five keys.
     const prev = textHash(HEALTHY_TEXT);
     const next = textHash(HEALTHY_TEXT_AGAIN);
     expect(hasChanged(prev, next)).toBe(false);
-    const { written } = makeStore();
+
+    const { store, written } = makeStore();
+    expect(() =>
+      buildPageDiff({
+        prevHash: prev,
+        nextHash: next,
+        beforeText: HEALTHY_TEXT,
+        afterText: HEALTHY_TEXT_AGAIN,
+      }),
+    ).toThrow(/hash gate has not fired/);
+
+    const keys = {
+      beforeTextKey: markKey("watch-fixture", "2026-09-22T00:00:00Z", "before-text", "txt"),
+      afterTextKey: markKey("watch-fixture", "2026-09-22T00:00:00Z", "after-text", "txt"),
+      beforeScreenshotKey: markKey("watch-fixture", "2026-09-22T00:00:00Z", "before-shot", "png"),
+      afterScreenshotKey: markKey("watch-fixture", "2026-09-22T00:00:00Z", "after-shot", "png"),
+      hunksKey: markKey("watch-fixture", "2026-09-22T00:00:00Z", "hunks", "json"),
+    };
+    await expect(
+      storeMark(
+        store,
+        keys,
+        { changes: [], hunks: [], wordsBefore: 1, wordsAfter: 1, wordDelta: 0 },
+        HEALTHY_TEXT,
+        HEALTHY_TEXT_AGAIN,
+        new ArrayBuffer(1),
+        new ArrayBuffer(1),
+      ),
+    ).rejects.toThrow(/no changes/);
     expect(written.size).toBe(0);
-    expect(() => buildPageDiff({ prevHash: prev, nextHash: next, beforeText: HEALTHY_TEXT, afterText: HEALTHY_TEXT_AGAIN })).toThrow();
   });
 });
 
@@ -146,6 +175,20 @@ describe("site diff — word-level changes", () => {
     expect(changes[0].startWord).toBe(1);
   });
 
+  it("keeps every position a true before-text index once an insertion has shifted the text", () => {
+    // A change after an insertion must be located by the before text, never by
+    // the after text's own length: an added part is not in the before text, so
+    // it must not advance the before-text cursor.
+    const before = "alpha beta gamma delta epsilon";
+    const after = "alpha beta INSERTED gamma delta zeta";
+    const beforeWords = before.split(" ");
+    const changes = diffWordsPositioned(before, after);
+    expect(changes).toHaveLength(2);
+    expect(changes[0].startWord).toBe(2);
+    expect(changes[1].before).toBe("epsilon");
+    expect(beforeWords[changes[1].startWord]).toBe("epsilon");
+  });
+
   it("reports a removed run as an empty after, so a vanished section is visible", () => {
     const changes = diffWordsPositioned("Choose a plan and check out", "Choose a plan");
     expect(changes.length).toBeGreaterThan(0);
@@ -161,22 +204,37 @@ describe("site diff — stored hunks", () => {
     const hunks = buildStoredHunks(before, after);
     expect(hunks.length).toBeGreaterThan(0);
     const hunk = hunks[0];
-    expect(hunk).toMatchObject({ oldStart: 1, oldLines: 1, newStart: 1, newLines: 1 });
+    // `startWord` is the word index the change sits at, so the hunk carries the
+    // page position the packet asks for.
+    expect(hunk.startWord).toBe(1);
     expect(hunk.lines.some((l) => l.startsWith("-"))).toBe(true);
     expect(hunk.lines.some((l) => l.startsWith("+"))).toBe(true);
     expect(typeof hunk.startWord).toBe("number");
   });
 
-  it("keeps hunk lines bounded by context, so a body never reaches a step", () => {
+  it("locates a change in a one-line blob at its real word index", () => {
+    // The normalised text P1 emits is one line. Under a line patch every hunk
+    // of it reports position zero and covers the whole page; the position must
+    // instead be the word index the change actually sits at.
+    const before = "one two three four five six seven eight";
+    const after = "one two three four five six seven EIGHT";
+    const hunks = buildStoredHunks(before, after, 1);
+    expect(hunks).toHaveLength(1);
+    expect(hunks[0].startWord).toBe(7);
+    // One word of context either side of the change, not the whole eight.
+    expect(hunks[0].lines).toEqual([" seven", "-eight", "+EIGHT"]);
+  });
+
+  it("keeps a page's stored hunks far smaller than the page", () => {
     // A long page with one change far in: the stored hunk must carry the change
     // and its context, never the whole page. The 1 MiB step-output cap is the
     // reason this matters (docs/engines/site-change.md P3 FORBIDDEN).
-    const filler = Array.from({ length: 500 }, (_, i) => `line ${i}`).join("\n");
-    const before = `${filler}\nthe old line\n${filler}`;
-    const after = `${filler}\nthe new line\n${filler}`;
+    const filler = Array.from({ length: 500 }, (_, i) => `word${i}`).join(" ");
+    const before = `${filler} the old line ${filler}`;
+    const after = `${filler} the new line ${filler}`;
     const hunks = buildStoredHunks(before, after, 2);
     const totalHunkLines = hunks.reduce((n, h) => n + h.lines.length, 0);
-    expect(totalHunkLines).toBeLessThan(before.split("\n").length / 10);
+    expect(totalHunkLines).toBeLessThan(before.split(" ").length / 10);
     expect(hunks.length).toBe(1);
   });
 
@@ -216,10 +274,15 @@ describe("site diff — the real fixture-site text pair", () => {
     // The priced section vanished, so the word delta is negative — the code
     // evidence D3s reads without any Jev call.
     expect(diff.wordDelta).toBeLessThan(0);
-    // Every stored hunk names a page position.
+    // Every stored hunk names a real page position: the word in the before
+    // text at `startWord` is the word the hunk's own `-` line removed.
+    const beforeWords = HEALTHY_TEXT.split(" ");
     for (const hunk of diff.hunks) {
       expect(Number.isInteger(hunk.startWord)).toBe(true);
       expect(hunk.startWord).toBeGreaterThanOrEqual(0);
+      const firstRemoved = hunk.lines.find((l) => l.startsWith("-"));
+      expect(firstRemoved).toBeDefined();
+      expect(firstRemoved?.slice(1)).toBe(beforeWords[hunk.startWord]);
     }
   });
 
