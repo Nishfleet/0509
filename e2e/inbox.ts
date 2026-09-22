@@ -79,8 +79,11 @@ async function probeInbox(url: string, headers: Record<string, string>): Promise
   }
 }
 
-// Poll until the message lands or the deadline passes.
-async function waitForMagicLink(to: string, token: string): Promise<string> {
+// Poll until the message lands or the deadline passes. The inbox keys on the
+// recipient address, so a second email to the same address overwrites the
+// first: `exclude` carries links already read for this recipient, and the poll
+// keeps waiting while the stored message still points at one of them.
+export async function waitForMagicLink(to: string, token: string, exclude: string[] = []): Promise<string> {
   const url = `${INBOX_URL}/message?to=${encodeURIComponent(to)}`;
   const headers = inboxHeaders(token);
   await probeInbox(url, headers);
@@ -94,8 +97,11 @@ async function waitForMagicLink(to: string, token: string): Promise<string> {
           const response = await fetch(url, { headers });
           if (response.status === 200) {
             link = extractMagicLink(await response.text());
-            if (link) return true;
-            lastDetail = "a message arrived but carried no magic-link verify URL";
+            if (link && !exclude.includes(link)) return true;
+            lastDetail = link
+              ? "inbox still holds an earlier message for this recipient; the newer email has not landed"
+              : "a message arrived but carried no magic-link verify URL";
+            link = null;
           } else {
             lastDetail =
               response.status === 404
@@ -122,7 +128,11 @@ async function waitForMagicLink(to: string, token: string): Promise<string> {
 // J1's core: submit the login form for a fresh e2e+ address, read the real
 // email out of the inbox Worker, follow the link, land signed in on /onboarding.
 // Timestamps are logged for the packet's proof line (send and session).
-export async function signInWithMagicLink(page: Page, email: string, token: string): Promise<void> {
+export async function signInWithMagicLink(
+  page: Page,
+  email: string,
+  token: string,
+): Promise<{ link: string; status: number }> {
   await page.goto("/login");
   await page.locator('input[name="email"]').fill(email);
   const sentAt = new Date().toISOString();
@@ -132,9 +142,10 @@ export async function signInWithMagicLink(page: Page, email: string, token: stri
   await expect(page.locator('input[name="email"]')).toHaveCount(0);
   const link = await waitForMagicLink(email, token);
   const linkReadAt = new Date().toISOString();
-  await page.goto(link);
+  const response = await page.goto(link);
   await expect(page).toHaveURL(/\/onboarding/);
   console.log(
     `magic-link sign-in email=${email} sentAt=${sentAt} linkReadAt=${linkReadAt} sessionAt=${new Date().toISOString()}`,
   );
+  return { link, status: response?.status() ?? 0 };
 }
