@@ -20,8 +20,14 @@ on:
   deployment_status:
 
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # A deployment_status run verifies one deploy and must finish. Sharing the
+  # branch group with cancel-in-progress cancelled every production e2e today:
+  # each deploy emits pending, in_progress and success events, each a run, and
+  # merges 90 s apart cancelled the previous deploy's run (35754511999, 35754574851
+  # and four more, all "cancelled", 16:29-16:31Z). PR and queue runs keep the
+  # branch group so a superseded head is still cancelled.
+  group: ci-${{ github.event_name == 'deployment_status' && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'deployment_status' }}
 
 permissions:
   contents: read
