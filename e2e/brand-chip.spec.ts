@@ -76,6 +76,9 @@ test("a failed logo falls back to the monogram and the row does not scroll or sh
     (window as unknown as { __stay: number }).__stay = 1;
   });
   await page.getByRole("link", { name: "You · Loopwell" }).click();
-  await page.waitForURL(/\/app\/competitors\/loopwell$/);
+  // The chip row is public but the destination is session-gated: signed-in lanes land on
+  // the competitor page, unsigned lanes get a client-side redirect to /login. Either proves
+  // the nav stayed in-document — a full reload would reset __stay.
+  await page.waitForURL(/\/(app\/competitors\/loopwell|login)$/);
   expect(await page.evaluate(() => (window as unknown as { __stay?: number }).__stay)).toBe(1);
 });

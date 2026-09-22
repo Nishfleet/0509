@@ -1,9 +1,11 @@
 import { env } from "cloudflare:test";
+import type { WorkflowEvent, WorkflowStep } from "cloudflare:workers";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { readEntityForWorkspace } from "../../../app/lib/data/entity.server";
 import { buildIdentityCard } from "../../../app/lib/identity/card.server";
+import { IdentityTailWorkflow, type Params as TailParams } from "../../../workers/identity-tail-workflow";
 import fixture from "../../fixtures/gymshark-2026-09-21.html?raw";
 
 // The whole card write path against real local D1 (migrations applied by the
@@ -71,11 +73,16 @@ describe("buildIdentityCard (#3885 P4)", () => {
     );
     expect(res.ok).toBe(true);
     if (!res.ok) return;
+    expect(res.publicSubject).toBe("cleared");
 
-    const entity = await env.DB.prepare(`SELECT role, state, name FROM entity WHERE id = ?`).bind(res.entityId).first();
+    const entity = await env.DB
+      .prepare(`SELECT role, state, name, confirmed_at FROM entity WHERE id = ?`)
+      .bind(res.entityId)
+      .first();
     expect(entity?.role).toBe("self");
     expect(entity?.state).toBe("on");
     expect(entity?.name).toBe("Gymshark");
+    expect(entity?.confirmed_at).toBeNull();
 
     const pages = await env.DB.prepare(`SELECT role FROM page WHERE entity_id = ?`).bind(res.entityId).all();
     expect(pages.results.length).toBeGreaterThan(0);
@@ -99,6 +106,11 @@ describe("buildIdentityCard (#3885 P4)", () => {
     expect(desc?.state).toBe("check");
     const name = res.fields.find((f) => f.name === "name");
     expect(name).toMatchObject({ value: "Gymshark", state: "filled" });
+    const pricing = res.fields.find((f) => f.name === "pricing_page");
+    expect(pricing?.state).toBe("check");
+    expect(pricing?.value).toBeTruthy();
+    const category = res.fields.find((f) => f.name === "category");
+    expect(category?.state).toBe("empty");
   });
 
   it("refuses a takedown-listed subject before any probe and records the refusal", async () => {
@@ -160,12 +172,18 @@ describe("buildIdentityCard (#3885 P4)", () => {
     if (!res.ok) return;
     expect(res.verdictCount).toBe(0);
     expect(res.jevStatus).toBe("unreachable");
+    expect(res.publicSubject).toBe("unverified");
     expect(res.fields.find((f) => f.name === "name")?.state).toBe("check");
     const stored = await env.DB
       .prepare(`SELECT identity_json FROM entity WHERE id = ?`)
       .bind(res.entityId)
       .first<{ identity_json: string }>();
     expect(JSON.parse(stored?.identity_json ?? "{}").jev_status).toBe("unreachable");
+    const unconfirmed = await env.DB
+      .prepare(`SELECT confirmed_at FROM entity WHERE id = ?`)
+      .bind(res.entityId)
+      .first();
+    expect(unconfirmed?.confirmed_at).toBeNull();
   });
 
   it("leaves no rows when the persist batch fails", async () => {
@@ -216,5 +234,101 @@ describe("buildIdentityCard (#3885 P4)", () => {
     expect(second.entityId).toBe(first.entityId);
     const entities = await env.DB.prepare(`SELECT COUNT(*) AS n FROM entity WHERE workspace_id = 'w1'`).first<{ n: number }>();
     expect(entities?.n).toBe(1);
+  });
+});
+
+// The durable tail is the fail-closed gate: an unverified public_subject never
+// confirms. run() is driven directly with a stub step + env so the refusal and
+// confirm branches execute against real local D1.
+
+function stubStep() {
+  return {
+    do: async (_name: string, a: unknown, b?: () => Promise<unknown>) => {
+      const fn = typeof a === "function" ? (a as () => Promise<unknown>) : b;
+      return fn?.();
+    },
+  } as unknown as WorkflowStep;
+}
+
+function tailWorkflow(jevUrl: string, sendSpy = vi.fn(async () => ({}))) {
+  const wfEnv = {
+    ...env,
+    PAGE_SWEEP: { send: sendSpy },
+    JEV_URL: jevUrl,
+    JEV_API_KEY: "k",
+  } as Env;
+  const run = (event: WorkflowEvent<TailParams>) =>
+    IdentityTailWorkflow.prototype.run.call({ env: wfEnv }, event, stubStep());
+  return { run, sendSpy };
+}
+
+async function seedDraftEntity(id: string, domain: string) {
+  const now = new Date().toISOString();
+  await env.DB.prepare(`DELETE FROM entity WHERE workspace_id = 'w1'`).run();
+  await env.DB.prepare(
+    `INSERT OR IGNORE INTO entity (id, workspace_id, role, domain, origin, state, created_at)
+     VALUES (?, 'w1', 'self', ?, 'manual', 'on', ?)`,
+  ).bind(id, domain, now).run();
+}
+
+function tailEvent(entityId: string, domain: string, publicSubject: TailParams["publicSubject"]) {
+  return {
+    payload: {
+      workspaceId: "w1",
+      userId: "u1",
+      entityId,
+      onboardingRunId: "r1",
+      domain,
+      homepageUrl: null,
+      publicSubject,
+    },
+  } as WorkflowEvent<TailParams>;
+}
+
+describe("IdentityTailWorkflow (#3885 P4)", () => {
+  it("confirms a cleared subject without re-judging", async () => {
+    await seedUser();
+    await seedDraftEntity("e-clear", "clear.example");
+    const { run, sendSpy } = tailWorkflow("http://jev.test/jev");
+    await run(tailEvent("e-clear", "clear.example", "cleared"));
+    const row = await env.DB.prepare(`SELECT confirmed_at FROM entity WHERE id = 'e-clear'`).first();
+    expect(row?.confirmed_at).toBeTruthy();
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+    await env.DB.prepare(`DELETE FROM entity WHERE id = 'e-clear'`).run();
+  });
+
+  it("deletes the draft and records the refusal when Jev refuses the subject", async () => {
+    await seedUser();
+    await seedDraftEntity("e-refuse", "refuse.example");
+    stubFetch({ publicSubjectP: 0.05 });
+    const { run, sendSpy } = tailWorkflow("http://jev.test/jev");
+    await run(tailEvent("e-refuse", "refuse.example", "unverified"));
+
+    expect(await env.DB.prepare(`SELECT id FROM entity WHERE id = 'e-refuse'`).first()).toBeNull();
+    const refusal = await env.DB
+      .prepare(`SELECT verdict, note FROM user_decision WHERE workspace_id = 'w1' AND verdict = 'refused:public_subject' AND note = 'refuse.example'`)
+      .first<{ verdict: string; note: string }>();
+    expect(refusal).toBeTruthy();
+    const verdict = await env.DB
+      .prepare(`SELECT p, entity_id FROM jev_verdict WHERE workspace_id = 'w1' AND question_id = 'public_subject' AND entity_id IS NULL ORDER BY decided_at DESC LIMIT 1`)
+      .first<{ p: number; entity_id: string | null }>();
+    expect(verdict?.p).toBe(0.05);
+    expect(verdict?.entity_id).toBeNull();
+    expect(sendSpy).not.toHaveBeenCalled();
+    await env.DB.prepare(`DELETE FROM user_decision WHERE workspace_id = 'w1' AND note = 'refuse.example'`).run();
+    await env.DB.prepare(`DELETE FROM jev_verdict WHERE workspace_id = 'w1' AND entity_id IS NULL`).run();
+  });
+
+  it("leaves the draft unconfirmed when the re-judge cannot reach Jev", async () => {
+    await seedUser();
+    await seedDraftEntity("e-retry", "retry.example");
+    const { run } = tailWorkflow("http://127.0.0.1:1/jev");
+    await expect(run(tailEvent("e-retry", "retry.example", "unverified"))).rejects.toThrow(
+      "public_subject re-judge",
+    );
+    const row = await env.DB.prepare(`SELECT confirmed_at FROM entity WHERE id = 'e-retry'`).first();
+    expect(row).toBeTruthy();
+    expect(row?.confirmed_at).toBeNull();
+    await env.DB.prepare(`DELETE FROM entity WHERE id = 'e-retry'`).run();
   });
 });

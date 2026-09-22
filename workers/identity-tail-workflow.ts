@@ -1,37 +1,91 @@
 import { WorkflowEntrypoint, type WorkflowStep, type WorkflowEvent } from "cloudflare:workers";
 
-import { confirmEntityStmt } from "../app/lib/data/entity.server";
+import { confirmEntityStmt, deleteEntityStmt } from "../app/lib/data/entity.server";
+import { insertVerdictStmt } from "../app/lib/data/jev-verdict.server";
 import { insertSnapshotStmt } from "../app/lib/data/snapshot.server";
-import { insertWatchStmt } from "../app/lib/data/watch.server";
+import { enabledSources } from "../app/lib/data/source.server";
+import { userDecisionStmts } from "../app/lib/data/user-decision.server";
+import { insertWatchStmt, siteWatchIdForEntity } from "../app/lib/data/watch.server";
 import { readUrl } from "../app/lib/fetch/transport.server";
 import { extract } from "../app/lib/identity/extract";
+import { jevAsk, jevConfig } from "../app/lib/jev/client";
 import { inputHash } from "../app/lib/jev/context-pack";
 
-interface Params {
+export interface Params {
   workspaceId: string;
+  userId: string;
   entityId: string;
   onboardingRunId: string;
   domain: string;
   homepageUrl: string | null;
+  publicSubject: "cleared" | "ask" | "unverified";
 }
 
 export class IdentityTailWorkflow extends WorkflowEntrypoint<Env, Params> {
   override async run(event: WorkflowEvent<Params>, step: WorkflowStep) {
     const p = event.payload;
 
-    await step.do("persist", async () => {
-      await confirmEntityStmt(this.env.DB, {
-        entityId: p.entityId,
+    const persisted = await step.do("persist", { retries: { limit: 24, delay: "1 hour" } }, async () => {
+      const now = new Date().toISOString();
+      if (p.publicSubject !== "unverified") {
+        await this.env.DB.batch([
+          confirmEntityStmt(this.env.DB, {
+            entityId: p.entityId,
+            workspaceId: p.workspaceId,
+            now,
+          }),
+        ]);
+        return { refused: false };
+      }
+
+      const jev = jevConfig(this.env);
+      if (!jev) throw new Error("public_subject unverified and JEV_URL is unset");
+      const pack = { subject: { input: p.domain, domain: p.domain, homepage_url: p.homepageUrl } };
+      const res = await jevAsk(jev, pack, {
+        public_subject: {
+          type: "boolean",
+          instructions:
+            "Is this input a brand, company or public creator — a public subject we may track — and not a private person?",
+        },
+      });
+      if (!res.ok) throw new Error(`public_subject re-judge failed: ${res.reason}`);
+      const prob = res.answers.public_subject?.probability ?? null;
+      const verdict = insertVerdictStmt(this.env.DB, {
+        id: crypto.randomUUID(),
         workspaceId: p.workspaceId,
-        now: new Date().toISOString(),
-      }).run();
+        questionId: "public_subject",
+        inputHash: await inputHash(pack),
+        entityId: null,
+        p: prob,
+        choice: null,
+        reason: res.answers.public_subject?.reason ?? null,
+        now,
+      });
+      if (prob !== null && prob < 0.1) {
+        await this.env.DB.batch([
+          verdict,
+          ...userDecisionStmts(this.env.DB, [
+            { workspaceId: p.workspaceId, userId: p.userId, verdict: "refused:public_subject", note: p.domain },
+          ]),
+          deleteEntityStmt(this.env.DB, { entityId: p.entityId, workspaceId: p.workspaceId }),
+        ]);
+        return { refused: true };
+      }
+      await this.env.DB.batch([
+        verdict,
+        confirmEntityStmt(this.env.DB, {
+          entityId: p.entityId,
+          workspaceId: p.workspaceId,
+          now,
+        }),
+      ]);
+      return { refused: false };
     });
+    if (persisted.refused) return;
 
     const watches = await step.do("seed-watches", async () => {
-      const sources = await this.env.DB.prepare(
-        `SELECT id, kind FROM source WHERE is_enabled = 1`,
-      ).all<{ id: string; kind: string }>();
-      const stmts = (sources.results ?? []).map((s) =>
+      const sources = await enabledSources(this.env.DB);
+      const stmts = sources.map((s) =>
         insertWatchStmt(this.env.DB, {
           id: crypto.randomUUID(),
           entityId: p.entityId,
@@ -62,16 +116,11 @@ export class IdentityTailWorkflow extends WorkflowEntrypoint<Env, Params> {
       const hash = await inputHash(extracted.text);
       const r2Key = `snapshots/${p.entityId}/${String(Date.now())}.html`;
       await this.env.SNAPSHOTS.put(r2Key, res.html);
-      const watchId = await this.env.DB.prepare(
-        `SELECT w.id FROM watch w JOIN source s ON s.id = w.source_id
-         WHERE w.entity_id = ? AND s.kind = 'site' LIMIT 1`,
-      )
-        .bind(p.entityId)
-        .first<{ id: string }>();
+      const watchId = await siteWatchIdForEntity(this.env.DB, p.entityId);
       if (watchId) {
         await insertSnapshotStmt(this.env.DB, {
           id: crypto.randomUUID(),
-          watchId: watchId.id,
+          watchId,
           fetchedAt: new Date().toISOString(),
           r2Key,
           hash,

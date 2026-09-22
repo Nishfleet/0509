@@ -1,3 +1,17 @@
+export async function siteWatchIdForEntity(
+  db: D1Database,
+  entityId: string,
+): Promise<string | null> {
+  const row = await db
+    .prepare(
+      `SELECT w.id FROM watch w JOIN source s ON s.id = w.source_id
+       WHERE w.entity_id = ? AND s.kind = 'site' LIMIT 1`,
+    )
+    .bind(entityId)
+    .first<{ id: string }>();
+  return row?.id ?? null;
+}
+
 export function insertWatchStmt(
   db: D1Database,
   args: { id: string; entityId: string; sourceId: string; target: string },

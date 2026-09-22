@@ -108,6 +108,12 @@ function parseBrowserMs(res: Response): number | null {
   return Number.isFinite(value) && value >= 0 ? value : null;
 }
 
+export async function readJson(url: string): Promise<unknown> {
+  const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+  if (!res.ok) throw new Error(`json fetch answered ${String(res.status)}`);
+  return res.json();
+}
+
 export async function readUrl(url: string): Promise<ReadUrlResult> {
   const started = Date.now();
 

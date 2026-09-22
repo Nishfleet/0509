@@ -1,10 +1,11 @@
 import { env } from "cloudflare:workers";
 import { Suspense, useState } from "react";
 import { Await, data, Form, redirect } from "react-router";
+import { z } from "zod";
 
 import { IdentityCardFields } from "../components/identity-card";
 import { authClient } from "../lib/auth-client";
-import { readEntityForWorkspace } from "../lib/data/entity.server";
+import { publicSubjectFromIdentityJson, readEntityForWorkspace } from "../lib/data/entity.server";
 import { latestOnboardingRunId } from "../lib/data/onboarding-run.server";
 import { readHomeUrlForEntity } from "../lib/data/page.server";
 import { recordIdentityEdits } from "../lib/data/user-decision.server";
@@ -32,6 +33,18 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 const s = (v: FormDataEntryValue | null): string => (typeof v === "string" ? v : "");
 
+const EditsSchema = z.record(z.string(), z.string());
+
+function parseEdits(raw: string): Record<string, string> {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    const edits = EditsSchema.safeParse(parsed);
+    return edits.success ? edits.data : {};
+  } catch {
+    return {};
+  }
+}
+
 export async function action({ request }: Route.ActionArgs) {
   const session = await requireSession(request);
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
@@ -39,7 +52,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   const form = await request.formData();
   const entityId = s(form.get("entityId"));
-  const edits = JSON.parse(s(form.get("edits")) || "{}") as Record<string, string>;
+  const edits = parseEdits(s(form.get("edits")));
 
   const entity = await readEntityForWorkspace(entityId, workspaceId);
   if (!entity) throw new Response("entity not found for this workspace", { status: 404 });
@@ -53,7 +66,15 @@ export async function action({ request }: Route.ActionArgs) {
 
   await env.IDENTITY_TAIL.create({
     id: `identity-${entity.id}`,
-    params: { workspaceId, entityId: entity.id, onboardingRunId: runId, domain: entity.domain, homepageUrl },
+    params: {
+      workspaceId,
+      userId: session.user.id,
+      entityId: entity.id,
+      onboardingRunId: runId,
+      domain: entity.domain,
+      homepageUrl,
+      publicSubject: publicSubjectFromIdentityJson(entity.identityJson),
+    },
   });
   return redirect("/app/competitors");
 }
@@ -106,6 +127,9 @@ export default function Onboarding({ loaderData }: Route.ComponentProps) {
                     fields={card.fields}
                     onEdit={(name, value) => { setEdits((e) => ({ ...e, [name]: value })); }}
                   />
+                  {card.publicSubject !== "cleared" ? (
+                    <p>we track brands and creators, not people — check this card is yours</p>
+                  ) : null}
                   <button type="submit">That&apos;s me</button>
                 </Form>
               ) : (

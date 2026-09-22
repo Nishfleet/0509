@@ -20,5 +20,6 @@ export type CardResult =
       transport: "fetch" | "browser" | null;
       browserMsUsed: number | null;
       jevStatus: "ok" | "unconfigured" | "unreachable";
+      publicSubject: "cleared" | "ask" | "unverified";
     }
   | { ok: false; reason: string };

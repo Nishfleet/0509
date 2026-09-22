@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { z } from "zod";
 
 export function upsertSelfEntityStmt(
   db: D1Database,
@@ -29,11 +30,50 @@ export function confirmEntityStmt(
     .bind(args.now, args.entityId, args.workspaceId);
 }
 
+export function deleteEntityStmt(
+  db: D1Database,
+  args: { entityId: string; workspaceId: string },
+): D1PreparedStatement {
+  return db
+    .prepare(`DELETE FROM entity WHERE id = ? AND workspace_id = ?`)
+    .bind(args.entityId, args.workspaceId);
+}
+
+export async function selfEntityIdForDomain(
+  db: D1Database,
+  workspaceId: string,
+  domain: string,
+): Promise<string | null> {
+  const row = await db
+    .prepare(`SELECT id FROM entity WHERE workspace_id = ? AND domain = ?`)
+    .bind(workspaceId, domain)
+    .first<{ id: string }>();
+  return row?.id ?? null;
+}
+
 export async function readEntityForWorkspace(
   entityId: string,
   workspaceId: string,
-): Promise<{ id: string; domain: string } | null> {
-  return env.DB.prepare(`SELECT id, domain FROM entity WHERE id = ? AND workspace_id = ?`)
+): Promise<{ id: string; domain: string; identityJson: string } | null> {
+  const row = await env.DB
+    .prepare(`SELECT id, domain, identity_json FROM entity WHERE id = ? AND workspace_id = ?`)
     .bind(entityId, workspaceId)
-    .first<{ id: string; domain: string }>();
+    .first<{ id: string; domain: string; identity_json: string }>();
+  return row ? { id: row.id, domain: row.domain, identityJson: row.identity_json } : null;
+}
+
+const IdentityMeta = z.object({
+  public_subject: z.enum(["cleared", "ask", "unverified"]).optional(),
+});
+
+export function publicSubjectFromIdentityJson(
+  identityJson: string,
+): "cleared" | "ask" | "unverified" {
+  try {
+    const parsed: unknown = JSON.parse(identityJson);
+    const meta = IdentityMeta.safeParse(parsed);
+    return meta.success ? (meta.data.public_subject ?? "unverified") : "unverified";
+  } catch {
+    return "unverified";
+  }
 }

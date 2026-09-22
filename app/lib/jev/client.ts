@@ -23,6 +23,13 @@ export type JevResult =
   | { ok: true; answers: Record<string, JevAnswer>; ms: number }
   | { ok: false; reason: string; ms: number };
 
+export function jevConfig(env: {
+  JEV_URL?: string;
+  JEV_API_KEY?: string;
+}): { url: string; apiKey?: string } | undefined {
+  return env.JEV_URL ? { url: env.JEV_URL, apiKey: env.JEV_API_KEY } : undefined;
+}
+
 export async function jevAsk(
   config: { url: string; apiKey?: string },
   state: unknown,

@@ -1,13 +1,14 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
-import { upsertSelfEntityStmt } from "../data/entity.server";
+import { selfEntityIdForDomain, upsertSelfEntityStmt } from "../data/entity.server";
 import { insertVerdictStmt } from "../data/jev-verdict.server";
 import { insertOnboardingRunStmt } from "../data/onboarding-run.server";
 import { insertHomePageStmt, insertRolePageStmt } from "../data/page.server";
-import { userDecisionStmts } from "../data/user-decision.server";
-import { readUrl, type ReadUrlResult } from "../fetch/transport.server";
-import { jevAsk, type JevQuestion } from "../jev/client";
+import { takedownSubjectsPresent } from "../data/takedown.server";
+import { priorRefusalExists, userDecisionStmts } from "../data/user-decision.server";
+import { readJson, readUrl, type ReadUrlResult } from "../fetch/transport.server";
+import { jevAsk, jevConfig, type JevQuestion } from "../jev/client";
 import { buildIdentityPack, inputHash } from "../jev/context-pack";
 import type { CardField, CardResult } from "./card-types";
 import { extract, type Extracted } from "./extract";
@@ -21,7 +22,7 @@ interface CardDeps {
   jev?: { url: string; apiKey?: string };
 }
 
-const D7_FIELDS = ["name", "logo", "description", "category", "country", "socials", "pricing_page"] as const;
+const D7_FIELDS = ["name", "logo", "description", "category", "country", "socials"] as const;
 const PAGE_ROLES = { home: "", pricing: "", product: "", blog: "", careers: "", legal: "", other: "" } as const;
 const NAV_JUDGED = 10;
 const REFUSAL_LINE = "we track brands and creators, not people";
@@ -39,24 +40,65 @@ async function probe<T>(fn: () => Promise<T>): Promise<{ ok: true; value: T } | 
   }
 }
 
-async function wikidata(name: string): Promise<{ qid: string; claims: Record<string, unknown> } | null> {
-  const s = await fetch(
-    `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(name)}&language=en&format=json&limit=1`,
-    { signal: AbortSignal.timeout(8_000) },
+const WdClaims = z.record(
+  z.string(),
+  z
+    .array(z.object({ mainsnak: z.object({ datavalue: z.object({ value: z.unknown() }).optional() }) }))
+    .optional(),
+);
+const WdSearch = z.object({ search: z.array(z.object({ id: z.string() })).optional() });
+const WdEntityValue = z.object({ id: z.string(), "entity-type": z.string().optional() });
+const WdLabels = z.object({
+  entities: z
+    .record(z.string(), z.object({ labels: z.record(z.string(), z.object({ value: z.string() })).optional() }))
+    .optional(),
+});
+
+async function wikidataLabel(qid: string): Promise<string | null> {
+  const body = WdLabels.parse(
+    await readJson(
+      `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${qid}&props=labels&languages=en&format=json`,
+    ),
   );
-  if (!s.ok) return null;
-  const hits = z.object({ search: z.array(z.object({ id: z.string() })).optional() }).parse(await s.json());
+  return body.entities?.[qid]?.labels?.en?.value ?? null;
+}
+
+async function wikidata(
+  name: string,
+): Promise<{ qid: string; claims: z.infer<typeof WdClaims>; country: string | null } | null> {
+  const hits = WdSearch.parse(
+    await readJson(
+      `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(name)}&language=en&format=json&limit=1`,
+    ),
+  );
   const qid = hits.search?.[0]?.id;
   if (!qid) return null;
-  const c = await fetch(
-    `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${qid}&props=claims&format=json`,
-    { signal: AbortSignal.timeout(8_000) },
-  );
-  if (!c.ok) return { qid, claims: {} };
   const body = z
-    .object({ entities: z.record(z.string(), z.object({ claims: z.record(z.string(), z.unknown()).optional() })).optional() })
-    .parse(await c.json());
-  return { qid, claims: body.entities?.[qid]?.claims ?? {} };
+    .object({ entities: z.record(z.string(), z.object({ claims: WdClaims })).optional() })
+    .parse(
+      await readJson(
+        `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${qid}&props=claims&format=json`,
+      ),
+    );
+  const claims = body.entities?.[qid]?.claims ?? {};
+  const p17 = WdEntityValue.safeParse(claims.P17?.[0]?.mainsnak?.datavalue?.value);
+  let country: string | null = null;
+  if (p17.success && p17.data["entity-type"] === "item") {
+    const label = await probe(() => wikidataLabel(p17.data.id));
+    country = label.ok ? label.value : null;
+  }
+  return { qid, claims, country };
+}
+
+function iconArea(sizes: string | undefined): number {
+  if (!sizes) return 0;
+  if (sizes.trim() === "any") return Number.MAX_SAFE_INTEGER;
+  let best = 0;
+  for (const token of sizes.split(/\s+/)) {
+    const [w, h] = token.split("x").map(Number);
+    if (Number.isFinite(w) && Number.isFinite(h)) best = Math.max(best, w * h);
+  }
+  return best;
 }
 
 async function recordRefusal(
@@ -96,26 +138,17 @@ export async function buildIdentityCard(
   const subject = norm.subject;
 
   const refusalKey = subject.registrable ?? subject.handle ?? args.input;
-  const priorRefusal = await deps.db
-    .prepare(
-      `SELECT id FROM user_decision WHERE workspace_id = ? AND verdict LIKE 'refused:%' AND note = ? LIMIT 1`,
-    )
-    .bind(args.workspaceId, refusalKey)
-    .first<{ id: string }>();
-  if (priorRefusal) return { ok: false, reason: REFUSAL_LINE };
+  if (await priorRefusalExists(deps.db, args.workspaceId, refusalKey)) {
+    return { ok: false, reason: REFUSAL_LINE };
+  }
 
   const subjects = [subject.registrable, subject.handle && `${subject.platform ?? "*"}:${subject.handle}`].filter(
     (s): s is string => Boolean(s),
   );
-  if (subjects.length) {
-    const rows = await deps.db
-      .prepare(`SELECT subject FROM takedown WHERE subject IN (${subjects.map(() => "?").join(",")})`)
-      .bind(...subjects)
-      .all<{ subject: string }>();
-    if (rows.results.length) {
-      await recordRefusal(deps, args, "refused:takedown", refusalKey);
-      return { ok: false, reason: REFUSAL_LINE };
-    }
+  const taken = await takedownSubjectsPresent(deps.db, subjects);
+  if (taken.length) {
+    await recordRefusal(deps, args, "refused:takedown", refusalKey);
+    return { ok: false, reason: REFUSAL_LINE };
   }
 
   const cacheKey = subject.registrable ?? subject.handle ?? subject.input;
@@ -139,14 +172,13 @@ export async function buildIdentityCard(
   const manifestHref = extracted?.manifestHref ?? null;
   const fetchManifestIcons = async (): Promise<string[]> => {
     if (!manifestHref) return [];
-    const res = await fetch(manifestHref, { signal: AbortSignal.timeout(8_000) });
-    if (!res.ok) return [];
     const body = z
       .object({ icons: z.array(z.object({ src: z.string(), sizes: z.string().optional() })).optional() })
-      .parse(await res.json());
+      .parse(await readJson(manifestHref));
     return (body.icons ?? [])
-      .filter((i) => !i.sizes || /512|192/.test(i.sizes))
-      .map((i) => new URL(i.src, manifestHref).toString());
+      .map((i) => ({ url: new URL(i.src, manifestHref).toString(), area: iconArea(i.sizes) }))
+      .sort((a, b) => b.area - a.area)
+      .map((i) => i.url);
   };
 
   const candidateName = extracted?.name ?? subject.handle ?? subject.registrable ?? null;
@@ -172,16 +204,8 @@ export async function buildIdentityCard(
   put("name", candidateName, extracted?.ldOrganization ? "ld+json" : extracted ? "meta" : "input");
   put("logo", logo?.url ?? extracted?.logoUrl, logo ? `logo-cascade:${logo.via}` : extracted ? "ld+json|og" : "");
   put("description", extracted?.description, "meta");
-  const wdClaims = wd?.ok && wd.value ? wd.value.claims : null;
-  const wdCountryEntry = (
-    wdClaims?.P17 as { mainsnak?: { datavalue?: { value?: { id?: string; "entity-type"?: string } } }[] } | undefined
-  )?.mainsnak?.[0]?.datavalue?.value;
-  const wdCountry = wdCountryEntry?.["entity-type"] === "item" ? wdCountryEntry.id : null;
-  put("country", wdCountry, "wikidata");
-  put("category", typeof extracted?.ldOrganization?.["@type"] === "string" ? "organization" : null, "ld+json");
+  put("country", wd?.ok ? (wd.value?.country ?? null) : null, "wikidata");
   put("socials", extracted?.socials.length ? extracted.socials : null, "ld+json+links");
-  const pricingCandidate = extracted?.navLinks.find((l) => /pricing|plans|membership|tarifs/i.test(l.href + " " + l.text));
-  put("pricing_page", pricingCandidate?.href, "nav");
 
   const pack = buildIdentityPack({
     raw: args.input,
@@ -193,10 +217,15 @@ export async function buildIdentityCard(
   });
   const packHash = await inputHash(pack);
 
-  const judgedLinks = extracted?.navLinks.slice(0, NAV_JUDGED) ?? [];
-  const d9HashByUrl = new Map<string, string>();
+  const seenHrefs = new Set<string>();
+  const judgedLinks: { href: string; text: string; roleHash: string }[] = [];
+  for (const l of extracted?.navLinks ?? []) {
+    if (seenHrefs.has(l.href) || judgedLinks.length >= NAV_JUDGED) continue;
+    seenHrefs.add(l.href);
+    judgedLinks.push({ href: l.href, text: l.text, roleHash: "" });
+  }
   for (const link of judgedLinks) {
-    d9HashByUrl.set(link.href, await inputHash({ url: link.href, title: link.text }));
+    link.roleHash = await inputHash({ url: link.href, title: link.text });
   }
 
   const questions: Record<string, JevQuestion> = {
@@ -234,6 +263,8 @@ export async function buildIdentityCard(
     });
     return { ok: false, reason: REFUSAL_LINE };
   }
+  const publicSubject =
+    jev.ok && publicP !== undefined ? (publicP >= 0.9 ? "cleared" : "ask") : "unverified";
 
   const cardFields: CardField[] = [];
   const verdictRows: {
@@ -262,6 +293,14 @@ export async function buildIdentityCard(
       cardFields.push({ name: f, value: String(field.value), state: "check", via: field.via, reason: "check this" });
     }
   }
+  const pricingPick = jev.ok
+    ? judgedLinks.find((l) => jev.answers[`d9_${l.href}`]?.choice === "pricing")
+    : undefined;
+  cardFields.push(
+    pricingPick
+      ? { name: "pricing_page", value: pricingPick.href, state: "check", via: "d9", reason: "check this" }
+      : { name: "pricing_page", value: null, state: "empty", via: "", reason: "we'll fill this after the first crawl" },
+  );
   if (jev.ok) {
     verdictRows.push({
       question_id: "public_subject",
@@ -270,14 +309,14 @@ export async function buildIdentityCard(
       choice: null,
       reason: jev.answers.public_subject?.reason ?? null,
     });
-    for (const [qid, ans] of Object.entries(jev.answers)) {
-      if (!qid.startsWith("d9_")) continue;
+    for (const link of judgedLinks) {
+      const ans = jev.answers[`d9_${link.href}`];
       verdictRows.push({
         question_id: "d9_page_role",
-        input_hash: d9HashByUrl.get(qid.slice(3)) ?? packHash,
+        input_hash: link.roleHash,
         p: null,
-        choice: ans.choice ?? null,
-        reason: ans.reason ?? null,
+        choice: ans?.choice ?? null,
+        reason: ans?.reason ?? "no answer returned",
       });
     }
   }
@@ -291,13 +330,10 @@ export async function buildIdentityCard(
     packHash,
     built_at: now,
     jev_status: jevStatus,
+    public_subject: publicSubject,
   });
 
-  const existingEntity = await deps.db
-    .prepare(`SELECT id FROM entity WHERE workspace_id = ? AND domain = ?`)
-    .bind(args.workspaceId, domain)
-    .first<{ id: string }>();
-  const entityId = existingEntity?.id ?? id();
+  const entityId = (await selfEntityIdForDomain(deps.db, args.workspaceId, domain)) ?? id();
 
   const stmts: D1PreparedStatement[] = [
     upsertSelfEntityStmt(deps.db, {
@@ -327,20 +363,20 @@ export async function buildIdentityCard(
       }),
     );
   }
-  for (const [qid, ans] of Object.entries(jev.ok ? jev.answers : {})) {
-    if (!qid.startsWith("d9_")) continue;
-    const linkUrl = qid.slice(3);
-    const role = ans.choice && ans.choice in PAGE_ROLES ? ans.choice : "other";
-    stmts.push(
-      insertRolePageStmt(deps.db, {
-        id: id(),
-        entityId,
-        url: linkUrl,
-        role,
-        roleHash: d9HashByUrl.get(linkUrl) ?? packHash,
-        now,
-      }),
-    );
+  if (jev.ok) {
+    for (const link of judgedLinks) {
+      const choice = jev.answers[`d9_${link.href}`]?.choice;
+      stmts.push(
+        insertRolePageStmt(deps.db, {
+          id: id(),
+          entityId,
+          url: link.href,
+          role: choice && choice in PAGE_ROLES ? choice : "other",
+          roleHash: link.roleHash,
+          now,
+        }),
+      );
+    }
   }
   for (const v of verdictRows) {
     stmts.push(
@@ -370,11 +406,8 @@ export async function buildIdentityCard(
     transport: homepage.ok ? homepage.transport : null,
     browserMsUsed: homepage.ok ? (homepage.browserMsUsed ?? null) : null,
     jevStatus,
+    publicSubject,
   };
-}
-
-interface JevSecrets {
-  JEV_API_KEY?: string;
 }
 
 export async function buildCardFromRequest(args: {
@@ -383,14 +416,8 @@ export async function buildCardFromRequest(args: {
   input: string;
   onboardingRunId?: string;
 }): Promise<CardResult> {
-  const jevSecrets: JevSecrets = env;
-  const jevUrl = env.JEV_URL;
   return buildIdentityCard(
-    {
-      db: env.DB,
-      cache: env.IDENTITY_CACHE,
-      jev: jevUrl ? { url: jevUrl, apiKey: jevSecrets.JEV_API_KEY } : undefined,
-    },
+    { db: env.DB, cache: env.IDENTITY_CACHE, jev: jevConfig(env) },
     args,
   );
 }

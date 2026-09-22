@@ -20,10 +20,24 @@ export function userDecisionStmts(db: D1Database, rows: UserDecisionInput[]): D1
   );
 }
 
-export async function insertUserDecisions(db: D1Database, rows: UserDecisionInput[]): Promise<void> {
+async function insertUserDecisions(db: D1Database, rows: UserDecisionInput[]): Promise<void> {
   const stmts = userDecisionStmts(db, rows);
   if (!stmts.length) return;
   await db.batch(stmts);
+}
+
+export async function priorRefusalExists(
+  db: D1Database,
+  workspaceId: string,
+  note: string,
+): Promise<boolean> {
+  const row = await db
+    .prepare(
+      `SELECT id FROM user_decision WHERE workspace_id = ? AND verdict LIKE 'refused:%' AND note = ? LIMIT 1`,
+    )
+    .bind(workspaceId, note)
+    .first<{ id: string }>();
+  return row !== null;
 }
 
 export async function recordIdentityEdits(args: {
