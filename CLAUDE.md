@@ -45,7 +45,10 @@ not so you can follow them from memory — lint will tell you.
   asserts a shape instead of checking it. Source: ce5fed17d.
 - **`*.server` modules are imported by route modules and other `*.server`
   modules only.** React Router tree-shakes them out of the browser bundle for
-  route modules and nowhere else.
+  route modules and nowhere else. `boundaries/dependencies` enforces it.
+- **Named exports.** `import-x/no-default-export` everywhere except route
+  modules, config files, and the workerd entry files. A default export is
+  not something you can find with grep.
 - **One paved path per thing.** `kysely` in `app/lib/db.server.ts` only;
   `better-auth` in `app/lib/auth.server.ts` only. One data layer, one session
   authority.
