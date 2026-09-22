@@ -79,11 +79,6 @@ describe("the one input", () => {
     expect(oneInput()).not.toContain("required");
   });
 
-  it("carries a prefilled value without owning how it got there", () => {
-    const html = oneInput({ defaultValue: "@loopwellhq" });
-    expect(html).toContain('value="@loopwellhq"');
-  });
-
   it("shows one line and no error page when nothing was found", () => {
     const html = oneInput({ notFound: true });
     expect(html).toContain(NOT_FOUND_LINE);

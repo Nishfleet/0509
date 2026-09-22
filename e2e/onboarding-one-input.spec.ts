@@ -36,22 +36,25 @@ function inputOnScreen(page: Page) {
 }
 
 // `overflow-x: hidden` on html/body makes documentElement.scrollWidth blind to
-// the overflow, so measure the input's and the step bar's own boxes instead.
+// the overflow, so a node's own box crossing the viewport is the honest signal.
+// Screen 1 and the identity landing render different children, so measure every
+// element inside `<main>` rather than naming a selector that only one has.
 async function assertNoOverflow(page: Page) {
-  const overflows = await page.evaluate(() => {
+  const overflowing = await page.evaluate(() => {
     const doc = document.documentElement;
-    const wide = doc.scrollWidth > doc.clientWidth;
-    const el = document.querySelector("input[name=subject]")?.getBoundingClientRect();
-    const bar = document.querySelector("nav")?.getBoundingClientRect();
-    return {
-      wide,
-      inputPastRight: el ? el.right > doc.clientWidth + 1 : false,
-      barPastRight: bar ? bar.right > doc.clientWidth + 1 : false,
-    };
+    const limit = doc.clientWidth + 1;
+    const pastRight: string[] = [];
+    const main = document.querySelector("main");
+    if (!main) return [`no <main> on ${location.pathname}`];
+    for (const node of main.querySelectorAll("*")) {
+      const box = node.getBoundingClientRect();
+      if (box.width > 0 && box.right > limit) {
+        pastRight.push(`${node.tagName.toLowerCase()}.${node.className}`);
+      }
+    }
+    return pastRight;
   });
-  expect(overflows.wide).toBe(false);
-  expect(overflows.inputPastRight).toBe(false);
-  expect(overflows.barPastRight).toBe(false);
+  expect(overflowing).toEqual([]);
 }
 
 function collectConsoleErrors(page: Page): string[] {

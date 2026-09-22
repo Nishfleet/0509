@@ -6,7 +6,6 @@ export interface OneInputProps {
   label: string;
   action: string;
   notFound?: boolean;
-  defaultValue?: string;
 }
 
 const NOT_FOUND_LINE = "we couldn't find anything for that, try the main website";
@@ -15,7 +14,6 @@ export function OneInput({
   label,
   action,
   notFound = false,
-  defaultValue,
 }: OneInputProps): ReactElement {
   const field = useRef<HTMLInputElement>(null);
   const navigation = useNavigation();
@@ -37,7 +35,6 @@ export function OneInput({
           type="text"
           aria-label={label}
           placeholder={label}
-          defaultValue={defaultValue}
           autoComplete="off"
           autoCapitalize="off"
           spellCheck={false}
