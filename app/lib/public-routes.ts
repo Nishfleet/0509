@@ -26,6 +26,12 @@ export const PUBLIC_SURFACES: readonly PublicSurface[] = [
     priority: 0.5,
     note: "app/routes/login.tsx; public page, listed per build step 1",
   },
+  {
+    path: "/*",
+    kind: "route",
+    indexable: false,
+    note: "app/routes/unmatched.tsx; the 404 catch-all. A page a crawler is sent to on a bad URL is not a page to index.",
+  },
 ];
 
 export interface ProtectedSurface {
