@@ -1087,6 +1087,8 @@ The version in this table is the `package.json` specifier. An earlier section of
 | `@types/react` | ^19.2.18 | §9 | JSX types for `"jsx": "react-jsx"` | Omitting it. Component files fail typecheck | 19.3.0 |
 | `@types/react-dom` | ^19.2.7 | §9 | Types for `react-dom/server` in unit tests | An untyped `renderToStaticMarkup` | 19.3.0 |
 | `eslint` | ^10.11.0 | §9 | `npm run lint` is `eslint . && knip` | oxlint or biome. Neither loads this type-checked config or its AST bans | 10.11.0 |
+| `eslint-plugin-boundaries` | ^7.2.0 | §9, REBUILD-TRUST §B4 | Declares element types and which of them may import which. Replaces the `**/*.server` glob | dependency-cruiser (a second tool, CI-only feedback), Sheriff (cannot add the other rules this config already runs), Feature-Sliced Design with steiger (a full restructure during the rebuild) | 7.2.0 |
+| `eslint-plugin-import-x` | ^4.17.1 | §9, REBUILD-TRUST §B4 | `import-x/no-cycle` on `app/**` and `workers/**`, and `import-x/no-default-export` except where the framework requires a default export | `eslint-plugin-import` (unmaintained). dependency-cruiser's cycle check, for the same second-tool reason as boundaries | 4.17.1 |
 | `eslint-plugin-react-hooks` | ^7.1.1 | §9 | Hooks rules on `app/` and `workers/` | Turning the rules off | 7.1.1 |
 | `globals` | ^17.12.0 | §9 | Browser and Node globals in `eslint.config.js` | A handwritten globals list | 17.12.0 |
 | `knip` | ^6.37.0 | §9 | Second half of `npm run lint`. Fails on an unused dependency | An allowlist. This file's rule is to remove the unused dependency | 6.37.0 |

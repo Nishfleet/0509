@@ -230,7 +230,8 @@ emits).
 
 Base: `@eslint/js` recommended, `typescript-eslint` **strict-type-checked** and
 **stylistic-type-checked**, `eslint-plugin-react-hooks` recommended on `app/**`
-and `workers/**`.
+and `workers/**`, `eslint-plugin-boundaries` 7.2.0 for element dependencies,
+and `eslint-plugin-import-x` 4.17.1 for cycles and named exports.
 
 Every boundary rule carries its provenance **in its own message**, so an agent
 that trips it reads the reason at the moment it matters:
@@ -239,7 +240,9 @@ that trips it reads the reason at the moment it matters:
 |---|---|---|
 | `no-restricted-syntax` on `MemberExpression[object.name='context'][property.name='cloudflare']` | bindings come from `cloudflare:workers` | 7727bf787 / #3918 — /api/auth, /app and the magic-link POST all 500'd in production |
 | `no-restricted-syntax` on an inline `TSTypeLiteral` in a `loader`/`action`/`meta`/`headers`/`links` parameter | use the framework's `Route` types | ce5fed17d — "a hand-written type annotation over a framework value is an assertion that it is shaped that way" |
-| `no-restricted-imports` pattern `**/*.server` outside route modules and other `.server` modules | the server boundary | Dune's renderer/main split, 27:44; here it is browser bundle vs Worker |
+| `boundaries/dependencies`: a client file may not import `server-leaf`, `data-writer`, `db`, or `auth` | the server boundary. The old `**/*.server` glob is gone. A later `no-restricted-imports` block replaces an earlier one, so that glob never fired | Dune's renderer/main split, 27:44; the error text is the old glob's receipt |
+| `import-x/no-cycle` on `app/**` and `workers/**` | no import cycles | closes the gap §B4 used to record |
+| `import-x/no-default-export` | named exports, so a module can be found by grep | off for route modules, config files, and the three workerd entries |
 | `no-restricted-imports` `cloudflare:workers` in client modules | same boundary, the other direction | 7727bf787 |
 | `no-restricted-imports` `kysely` outside `app/lib/db.server.ts`; `better-auth` and its plugins outside `app/lib/auth.server.ts` | one paved path per blessed pattern | 25:26 |
 | `no-restricted-syntax` on `insertInto` / `updateTable` / `deleteFrom` in `app/routes/**` | one writer per table | 25:26 |
@@ -276,6 +279,62 @@ heart. **That is the difference between rung 2 and rung 5.**
 
 ### B4. The one real fork — design-it-twice
 
+**2026-09-22, #4272.** The cycle gap at the bottom of this section is closed.
+`eslint-plugin-import-x` 4.17.1 runs `import-x/no-cycle` on `app/**` and
+`workers/**`, in the same `npm run lint` pass. `eslint-plugin-boundaries`
+7.2.0 declares the element types and which of them may import which. The
+hand-written `**/*.server` glob is gone. It was not holding the boundary:
+flat config replaces a rule instead of merging it, and the paved-path
+`no-restricted-imports` block comes later, so a component that imported
+`app/lib/data/workspace.server.ts` was green.
+
+`data-writer`, `component`, `route`, and `worker` are folders, so they are
+element types. `db` and `auth` are single files, so they are file categories.
+7.2.0 matches an element pattern as a folder. A file category is how it
+classifies one file, and one file can carry more than one. `server-leaf` is
+the category on every `app/lib/**/*.server.ts`. `db`, `auth`, and
+`data-writer` are extra categories on the files the table names.
+
+| Type | Files |
+|---|---|
+| `route` | `app/routes/**`, `app/root.tsx` |
+| `server-leaf` | `app/lib/**/*.server.ts`, including the three rows below |
+| `data-writer` | `app/lib/data/**/*.server.ts` |
+| `db` | `app/lib/db.server.ts` |
+| `auth` | `app/lib/auth.server.ts` |
+| `component` | `app/components/**` |
+| `worker` | `workers/**` |
+
+A route may import a component or any server element. A server-leaf may
+import a server-leaf, a data-writer, `db`, or `auth`. A data-writer may
+import a data-writer, `db`, or a server-leaf. `auth` may also import a
+worker, because `app/lib/auth.server.ts` imports `workers/delivery/send.ts`.
+A worker may import any server element, because `workers/app.ts` imports
+`app/lib/liveness-ping.server.ts`. Any file may import a shared client
+module such as `app/lib/utils.ts`. A client file that is not a route, a
+server module, or an entry may not import a server element. The error text
+is the old glob's receipt.
+
+`import-x/no-default-export` is on everywhere except route modules, config
+files, and the three workerd entries (`workers/app.ts`,
+`workers/fixture-site.ts`, `workers/e2e-inbox.ts`). React Router and those
+configs require a default export. workerd requires one on the Worker entry.
+Everything else is a named export, so grep can find it.
+
+`kysely`, `better-auth`, and `cloudflare:workers` stay on
+`no-restricted-imports`. Those are package names, not element types. The
+client block is the later one, and it repeats the paved-path list, because
+a later block replaces the rule. `app/lib/auth-client.ts` is the one module
+allowed to import `better-auth` client subpaths, so the client block skips
+it. A following block still bans `cloudflare:workers` and the exact paved-path
+packages there.
+
+**Rejected for this pass, on top of the original fork below.**
+
+- dependency-cruiser. A second tool, and the report shows up in CI rather than on the line. The three reasons under "Chosen: A" still hold. Its cycle check is the piece this section used to say was missing. `import-x/no-cycle` does that inside the lint run we already have.
+- Sheriff. It cannot add the broader rules this config already runs: the type-checked bans, the comment ban, `max-lines`.
+- Feature-Sliced Design with steiger. That is a full restructure while the rebuild is in progress, with 28 workers writing code at once.
+
 The vault's `design-it-twice` skill applies to exactly one decision here:
 **how are module boundaries enforced?** Both candidates are real, shipped tools;
 this is a shape choice, not a quality one.
@@ -306,13 +365,12 @@ cannot reach a `.server` module in one hop *or* in three: every hop in the chain
 is itself a client module and every one of them is covered. Transitive detection
 buys nothing where the direct rule is total.
 
-**Grafted from the loser:** dependency-cruiser's cycle and orphan detection is
-genuinely absent from ESLint. `knip` covers the orphan half (unused files,
-unused exports, unused dependencies — it found two on its first run). Cycles
-remain uncovered, and this doc says so rather than pretending otherwise.
-**Revisit if** the app grows a module that is neither a route nor a `.server`
-file and the boundary stops being expressible as a glob — a child issue reopens
-this fork rather than someone adding the tool quietly.
+**Grafted from the loser:** dependency-cruiser's orphan detection is covered
+by knip (unused files, unused exports, unused dependencies — it found two on
+its first run). Its cycle detection was the gap. That gap is closed by
+`import-x/no-cycle`, a stock plugin in the same lint run. The revisit
+condition in the original record, a module that is neither a route nor a
+`.server` file, is what the element types above are for.
 
 ### B5. The comment ban, and exactly how far stock ESLint reaches
 
@@ -474,7 +532,7 @@ a React Router 8 app on one Worker, and the equivalent conventions are these —
 | Dune convention | Ours | Enforced by |
 |---|---|---|
 | Features co-located in one folder | A feature is its route module plus its `app/lib/<feature>*.server.ts` leaf plus its `app/lib/data/<table>.server.ts` writer — not split by file type | `max-lines` on routes pushes logic to the leaf; the paved-path import rules keep it from going anywhere else |
-| Main process vs renderer thread | `*.server` modules vs client modules | `no-restricted-imports` pattern `**/*.server` |
+| Main process vs renderer thread | `*.server` modules vs client modules | `boundaries/dependencies` |
 | One blessed way per pattern | one data layer (`app/lib/db.server.ts`), one session authority (`app/lib/auth.server.ts`) | `no-restricted-imports` on `kysely`, `better-auth` and its plugins |
 | Thin entry points | routes are 150 lines and do not query | `max-lines`, plus `no-restricted-syntax` on `env.DB` in routes |
 | — | one writer per table | `no-restricted-syntax` on `insertInto`/`updateTable`/`deleteFrom` in routes |
