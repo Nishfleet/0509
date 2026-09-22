@@ -207,33 +207,42 @@ jobs:
         # admission property — see docs/USER-REPORTS.md 'The door, end to end'.
         if: failure()
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           sha7=${GITHUB_SHA::7}
           title="e2e-production red on $sha7"
           job_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs" \
-            --jq ".jobs[] | select(.name == \"e2e-production\") | .id")
-          failures=$(gh api "repos/$GITHUB_REPOSITORY/check-runs/$job_id/annotations" \
-            --jq '[.[] | select(.annotation_level == "failure") | .title] | unique | .[] | "- \(.)"')
+            --jq ".jobs[] | select(.name == \"e2e-production\") | .id" || true)
+          # The annotations call must not fail the step: the step's whole job is
+          # to turn a red run into a queued item, and a lookup hiccup that exits
+          # non-zero is a red run that dispatches nothing.
+          failures=""
+          if [ -n "$job_id" ]; then
+            failures=$(gh api "repos/$GITHUB_REPOSITORY/check-runs/$job_id/annotations" \
+              --jq '[.[] | select(.annotation_level == "failure") | .title] | unique | .[] | "- \(.)"' || true)
+          fi
           # One FEATURE-MAP row per failing spec, so the worker that claims this
-          # starts from the route rather than from a title.
+          # starts from the route rather than from a title. A spec can prove more
+          # than one row, so every matching row is named, not just the first.
           specs=$(printf '%s\n' "$failures" | grep -oE 'e2e/[A-Za-z0-9._-]+\.spec\.ts' | sort -u || true)
           maprows=""
           for spec in $specs; do
-            row=$(grep -F "$spec" docs/FEATURE-MAP.md | head -1 | awk -F'|' '{gsub(/^ +| +$/, "", $2); print $2}' || true)
-            maprows+="- $spec -> ${row:-unmapped}"$'\n'
+            rows=$(grep -F "\`$spec\`" docs/FEATURE-MAP.md | awk -F'|' '{gsub(/^ +| +$/, "", $2); print $2}' | sort -u || true)
+            while IFS= read -r row; do
+              maprows+="- $spec -> ${row:-unmapped}"$'\n'
+            done <<< "${rows:-unmapped}"
           done
           body=$(printf '%s\n' \
             "A red post-deploy e2e run on main. Opened by CI so the failure is queued instead of noticed by hand (0509#4208)." \
             "" \
             "- Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             "- Head: $GITHUB_SHA" \
-            "- Failing specs:" \
-            "$failures" \
+            "- Failing specs (from this job's check-run annotations):" \
+            "${failures:--annotations unavailable, see the run log-}" \
             "" \
             "Feature-map rows (spec -> route):" \
-            "$maprows" \
+            "${maprows:--none-}" \
             "" \
             "The reproducing worker drives 0509.io with the verify skill (.agents/skills/verify/) before changing code.")
           existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
@@ -288,24 +297,38 @@ jobs:
         # — `maxNumericValue ... expected: <=1500, found: 1973.132`.
         if: failure()
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           sha7=${GITHUB_SHA::7}
           title="lighthouse red on $sha7"
           job_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs" \
-            --jq ".jobs[] | select(.name == \"lighthouse\") | .id")
-          failures=$(gh api "repos/$GITHUB_REPOSITORY/check-runs/$job_id/annotations" \
-            --jq '[.[] | select(.annotation_level == "failure") | .message | split("\n") | map(select(test("^Report:") | not)) | join("\n")] | unique | .[] | "- \(.)"')
+            --jq ".jobs[] | select(.name == \"lighthouse\") | .id" || true)
+          # Same fail-open rule as the e2e step: a lookup error must not stop the
+          # ticket from being filed.
+          failures=""
+          if [ -n "$job_id" ]; then
+            failures=$(gh api "repos/$GITHUB_REPOSITORY/check-runs/$job_id/annotations" \
+              --jq '[.[] | select(.annotation_level == "failure") | .message | split("\n") | map(select(test("^Report:") | not) | select(test("^[0-9]+ result") | not) | select(test("^$") | not)) | join("\n")] | map(select(length > 0) | .) | unique | .[] | "- \(.)"' || true)
+          fi
+          # The audited route is the deployment URL's path; its FEATURE-MAP row
+          # is what tells a worker which route to open (Nish on 0509#4208).
+          url="${{ github.event.deployment_status.environment_url }}"
+          path=$(printf '%s' "$url" | sed -E 's#^[a-z]+://[^/]+##')
+          path=${path:-/}
+          row=$(awk -F'|' -v p="$path" '{r=$2; gsub(/^ +| +$|`/, "", r); if (r==p) {gsub(/^ +| +$/, "", $2); print $2; exit}}' docs/FEATURE-MAP.md || true)
           body=$(printf '%s\n' \
             "A red post-deploy Lighthouse run on main. Opened by CI so the regression is queued instead of noticed by hand (0509#4208)." \
             "" \
             "- Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             "- Head: $GITHUB_SHA" \
-            "- Failing assertions:" \
-            "$failures" \
+            "- Audited URL: $url" \
+            "- Failing assertions (from this job's check-run annotations):" \
+            "${failures:--annotations unavailable, see the run log-}" \
             "" \
-            "Feature map: the audited route is on the Public table of docs/FEATURE-MAP.md; the reproducing worker drives 0509.io with the verify skill (.agents/skills/verify/) before changing code.")
+            "Feature-map row (route -> row): $path -> ${row:-unmapped}" \
+            "" \
+            "The reproducing worker drives 0509.io with the verify skill (.agents/skills/verify/) before changing code.")
           existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
             --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
           if [ -n "$existing" ]; then
