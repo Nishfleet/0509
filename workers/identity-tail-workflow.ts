@@ -68,7 +68,15 @@ export class IdentityTailWorkflow extends WorkflowEntrypoint<Env, Params> {
         }
         return { snapshot: true, r2Key, hash };
       });
-    } catch {}
+    } catch (err) {
+      console.log(
+        JSON.stringify({
+          event: "first-snapshot-retries-exhausted",
+          entityId: p.entityId,
+          cause: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
 
     await step.do("start-discovery", async () => {
       await this.env.PAGE_SWEEP.send({

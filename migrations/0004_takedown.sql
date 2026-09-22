@@ -1,4 +1,4 @@
--- 0002_takedown.sql — the takedown list (docs/REBUILD-GUARDRAILS.md): a subject
+-- 0004_takedown.sql — the takedown list (docs/REBUILD-GUARDRAILS.md): a subject
 -- on it is refused at onboarding and dropped at the next tick. Expand-only:
 -- new table, no changes to existing tables, safe to roll back code over it.
 -- Recorded by hand (Nish or the deputy) when a removal request lands.
