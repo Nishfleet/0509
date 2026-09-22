@@ -54,8 +54,8 @@ describe("the source pill", () => {
     expect(html).toContain("reddit");
     expect(html).toContain("text-transform:uppercase");
     expect(html).toContain("var(--mono, var(--font-mono");
-    expect(html).toContain("var(--green, var(--color-accent");
-    expect(html).toContain("var(--green-ink, var(--color-accent-ink");
+    expect(html).toContain("var(--green, var(--color-green");
+    expect(html).toContain("var(--green-ink, var(--color-green-ink");
     expect(html).not.toContain("— none");
     expect(html).not.toContain("— degraded");
     expect(sourcePillStatus(reddit, liveSnapshot, NOW).state).toBe("live");
@@ -67,7 +67,7 @@ describe("the source pill", () => {
     expect(html).toContain("— none");
     expect(html).toContain("var(--ink-soft, var(--color-ink-soft");
     expect(html).not.toContain("var(--green");
-    expect(html).not.toContain("var(--color-accent");
+    expect(html).not.toContain("var(--color-green");
     expect(sourcePillStatus(reddit, quietSnapshot, NOW).state).toBe("none");
   });
 
@@ -157,7 +157,7 @@ describe("the source pill", () => {
   });
 
   it("keeps the green tokens off none and degraded entirely", () => {
-    const greenBits = ["var(--green", "var(--color-accent"];
+    const greenBits = ["var(--green", "var(--color-green"];
     for (const html of [
       pill(reddit, quietSnapshot),
       pill(reddit, null),
