@@ -40,17 +40,17 @@ export function OneInput({
           spellCheck={false}
           enterKeyHint="go"
           autoFocus
-          className="w-full border border-line bg-card px-4 py-3 font-sans text-base text-ink outline-none placeholder:text-ink-faint focus-visible:border-accent sm:max-w-[26rem]"
+          className="w-full border border-line bg-card px-4 py-3 font-sans text-body text-ink outline-none placeholder:text-ink-faint focus-visible:border-green sm:max-w-[26rem]"
         />
         <button
           type="submit"
-          className="shrink-0 border border-ink bg-accent px-5 py-3 font-display text-[0.95rem] font-bold uppercase tracking-[0.02em] text-on-accent"
+          className="shrink-0 border border-ink bg-green px-5 py-3 font-display text-[0.95rem] font-bold uppercase tracking-[0.02em] text-on-green"
         >
           Continue
         </button>
       </Form>
       {notFound ? (
-        <p role="status" className="font-mono text-[0.72rem] leading-[1.4] text-ink-soft">
+        <p role="status" className="font-mono text-meta text-ink-soft">
           {NOT_FOUND_LINE}
         </p>
       ) : null}

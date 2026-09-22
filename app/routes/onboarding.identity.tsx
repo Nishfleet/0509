@@ -29,10 +29,10 @@ export default function OnboardingIdentity({ loaderData }: Route.ComponentProps)
 
   return (
     <main className="mx-auto flex min-h-svh w-full max-w-[52rem] flex-col gap-8 px-6 py-12 sm:px-10 sm:py-16">
-      <p className="font-mono text-[0.72rem] leading-[1.4] break-words text-ink-soft">
+      <p className="font-mono text-meta break-words text-ink-soft">
         {loaderData.input}
       </p>
-      <p className="font-mono text-[0.72rem] leading-[1.4] text-ink-soft">
+      <p className="font-mono text-meta text-ink-soft">
         Signed in as {loaderData.email}
       </p>
       <button
@@ -44,12 +44,12 @@ export default function OnboardingIdentity({ loaderData }: Route.ComponentProps)
         {passkeyState === "working" ? "Follow the prompt…" : "Add a passkey"}
       </button>
       {passkeyState === "added" ? (
-        <p role="status" className="font-mono text-[0.72rem] text-ink-soft">
+        <p role="status" className="font-mono text-meta text-ink-soft">
           Passkey added. It can sign you in from now on.
         </p>
       ) : null}
       {passkeyState === "failed" ? (
-        <p role="alert" className="font-mono text-[0.72rem] text-ink-soft">
+        <p role="alert" className="font-mono text-meta text-ink-soft">
           The passkey prompt did not finish. Try again.
         </p>
       ) : null}

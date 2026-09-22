@@ -60,6 +60,13 @@ function submit(subject: string | null): Promise<unknown> {
 const NOT_FOUND_LINE = "we couldn&#x27;t find anything for that, try the main website";
 const STEPS = ["one input", "your card", "who you're up against"] as const;
 
+// The marker and the button paint with the registered theme tokens; `bg-accent`
+// and `text-on-accent` are not in app/app.css's @theme, so a class the app does
+// not register is a class that emits no CSS. The assertions name the tokens the
+// stylesheet defines, not a copy of a class string, so a rename fails here.
+const GREEN_MARKER = "bg-green";
+const ON_GREEN = "text-on-green";
+
 describe("the one input", () => {
   it("renders exactly one text field and one submit action", () => {
     const html = oneInput();
@@ -161,13 +168,14 @@ describe("the onboarding step bar", () => {
   it("puts the current step on the green marker and every other step in ink", () => {
     for (const [index, step] of STEPS.entries()) {
       const html = stepBar({ current: index + 1 });
-      const marker = /class="([^"]*bg-accent[^"]*)"[^>]*>([^<]*)</.exec(html);
+      const marker = new RegExp(`class="([^"]*${GREEN_MARKER}[^"]*)"[^>]*>([^<]*)<`).exec(html);
       const marked = marker?.[2] ?? "";
-      expect(marker?.[1]).toContain("bg-accent");
+      expect(marker?.[1]).toContain(GREEN_MARKER);
+      expect(marker?.[1]).toContain(ON_GREEN);
       // The marker's text is the step's own position number, so a marker on the
       // wrong step cannot pass: the assertion is not just "a span has a class".
       expect(marked.trim()).toBe(`${index + 1} ${step.replace(/'/g, "&#x27;")}`);
-      const others = html.replace(/class="[^"]*bg-accent[^"]*"[^>]*>[^<]*</, "");
+      const others = html.replace(new RegExp(`class="[^"]*${GREEN_MARKER}[^"]*"[^>]*>[^<]*<`), "");
       expect(others).toContain("font-semibold text-ink");
     }
   });

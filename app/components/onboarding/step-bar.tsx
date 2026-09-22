@@ -9,7 +9,7 @@ export function StepBar({ steps, current }: StepBarProps): ReactElement {
   return (
     <nav
       aria-label="Onboarding progress"
-      className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[0.66rem] uppercase tracking-[0.12em] text-ink-faint"
+      className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-pill uppercase tracking-[0.08em] text-ink-faint"
     >
       {steps.map((label, index) => {
         const position = index + 1;
@@ -20,7 +20,7 @@ export function StepBar({ steps, current }: StepBarProps): ReactElement {
               <span aria-hidden="true">{"->"}</span>
             )}
             {here ? (
-              <span className="bg-accent px-[7px] py-px font-semibold text-on-accent">
+              <span className="bg-green px-[7px] py-px font-semibold text-on-green">
                 {position} {label}
               </span>
             ) : (
