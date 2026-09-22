@@ -1,11 +1,27 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  countExtractedChars,
-  readUrl,
-  type BrowserBinding,
-  type TransportEnv,
-} from "../../app/lib/fetch/transport";
+import { countExtractedChars, readUrl } from "../../app/lib/fetch/transport";
+
+const browserHolder = vi.hoisted(() => ({
+  current: undefined as
+    | undefined
+    | (BrowserStub & { calls: string[]; closed: number }),
+}));
+
+vi.mock("cloudflare:workers", () => ({
+  env: {
+    get BROWSER() {
+      return browserHolder.current;
+    },
+  },
+}));
+
+interface BrowserStub {
+  quickAction(
+    action: "content",
+    options: { url: string },
+  ): Promise<Response>;
+}
 
 /**
  * The transport's job, pinned in real workerd rather than in a Node mock: a
@@ -43,7 +59,7 @@ function fakeBrowser(
   response:
     | { ok: true; html: string; status?: number; browserMs?: string }
     | { ok: false; throwOnCall?: boolean; status?: number },
-): BrowserBinding & { calls: string[]; closed: number } {
+): BrowserStub & { calls: string[]; closed: number } {
   const calls: string[] = [];
   const state = { closed: 0 };
   return {
@@ -72,13 +88,21 @@ function fakeBrowser(
         { status: 200, headers },
       );
     },
-    // Present so a call would be caught, not so it can be used.
     close() {
       state.closed += 1;
       return Promise.resolve();
     },
-  } as BrowserBinding & { calls: string[]; closed: number };
+  };
 }
+
+function install(browser: BrowserStub & { calls: string[]; closed: number }) {
+  browserHolder.current = browser;
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  browserHolder.current = undefined;
+});
 
 /** Swap the outbound `fetch` for one that serves `handlers` by URL. */
 function stubFetch(
@@ -96,12 +120,6 @@ function stubFetch(
   return { seen, restore: () => (globalThis.fetch = real) };
 }
 
-const env = (browser: BrowserBinding): TransportEnv => ({ BROWSER: browser });
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
-
 describe("readUrl", () => {
   it("serves a healthy page over plain fetch and never touches the browser", async () => {
     const stub = stubFetch({
@@ -114,7 +132,8 @@ describe("readUrl", () => {
       browserMs: "1",
     });
     try {
-      const result = await readUrl("https://brand.example/", env(browser));
+      install(browser);
+      const result = await readUrl("https://brand.example/");
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.transport).toBe("fetch");
@@ -141,7 +160,8 @@ describe("readUrl", () => {
       browserMs: "4123",
     });
     try {
-      const result = await readUrl("https://gated.example/", env(browser));
+      install(browser);
+      const result = await readUrl("https://gated.example/");
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.transport).toBe("browser");
@@ -167,7 +187,8 @@ describe("readUrl", () => {
       browserMs: "3500",
     });
     try {
-      const result = await readUrl("https://challenge.example/", env(browser));
+      install(browser);
+      const result = await readUrl("https://challenge.example/");
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       // The status alone cannot tell gated from served: this is a 200.
@@ -193,7 +214,8 @@ describe("readUrl", () => {
       browserMs: "2000",
     });
     try {
-      const result = await readUrl("https://shell.example/", env(browser));
+      install(browser);
+      const result = await readUrl("https://shell.example/");
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.transport).toBe("browser");
@@ -215,7 +237,8 @@ describe("readUrl", () => {
       browserMs: "5100",
     });
     try {
-      const result = await readUrl("https://refused.example/", env(browser));
+      install(browser);
+      const result = await readUrl("https://refused.example/");
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.transport).toBe("browser");
@@ -231,7 +254,8 @@ describe("readUrl", () => {
     });
     const browser = fakeBrowser({ ok: false, throwOnCall: true });
     try {
-      const result = await readUrl("https://gated.example/", env(browser));
+      install(browser);
+      const result = await readUrl("https://gated.example/");
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.reason).toBe("escalation-failed");
@@ -248,7 +272,8 @@ describe("readUrl", () => {
     });
     const browser = fakeBrowser({ ok: false, status: 429 });
     try {
-      const result = await readUrl("https://gated.example/", env(browser));
+      install(browser);
+      const result = await readUrl("https://gated.example/");
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.reason).toBe("escalation-failed");
@@ -262,7 +287,8 @@ describe("readUrl", () => {
     const stub = stubFetch({});
     const browser = fakeBrowser({ ok: true, html: SUBSTANTIAL_PAGE });
     try {
-      const result = await readUrl("not a url", env(browser));
+      install(browser);
+      const result = await readUrl("not a url");
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.reason).toBe("invalid-url");
@@ -277,7 +303,8 @@ describe("readUrl", () => {
     const stub = stubFetch({});
     const browser = fakeBrowser({ ok: true, html: SUBSTANTIAL_PAGE });
     try {
-      const result = await readUrl("ftp://brand.example/", env(browser));
+      install(browser);
+      const result = await readUrl("ftp://brand.example/");
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.reason).toBe("invalid-url");
@@ -297,7 +324,8 @@ describe("readUrl", () => {
       browserMs: "1000",
     });
     try {
-      await readUrl("https://gated.example/", env(browser));
+      install(browser);
+      await readUrl("https://gated.example/");
       // A per-request close re-pays cold-launch seconds and burns the
       // 3-instances-per-second rate limit (REBUILD-STACK.md §4.3).
       expect(browser.closed).toBe(0);
@@ -317,11 +345,42 @@ describe("readUrl", () => {
       browserMs: "900",
     });
     try {
-      const result = await readUrl("https://gated.example/", env(browser));
+      install(browser);
+      const result = await readUrl("https://gated.example/");
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.status).toBe(404);
     } finally {
+      stub.restore();
+    }
+  });
+
+  it("logs X-Browser-Ms-Used on every escalation", async () => {
+    const stub = stubFetch({
+      "https://gated.example/": () => new Response("Forbidden", { status: 403 }),
+    });
+    const browser = fakeBrowser({
+      ok: true,
+      html: SUBSTANTIAL_PAGE,
+      browserMs: "4123",
+    });
+    const lines: string[] = [];
+    const spy = vi.spyOn(console, "log").mockImplementation((line) => {
+      lines.push(String(line));
+    });
+    try {
+      install(browser);
+      await readUrl("https://gated.example/");
+      const escalation = lines
+        .map((line) => JSON.parse(line) as { event?: string; url?: string; browserMsUsed?: number })
+        .find((row) => row.event === "browser-escalation");
+      expect(escalation).toMatchObject({
+        event: "browser-escalation",
+        url: "https://gated.example/",
+        browserMsUsed: 4123,
+      });
+    } finally {
+      spy.mockRestore();
       stub.restore();
     }
   });
