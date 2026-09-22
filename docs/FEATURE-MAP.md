@@ -24,6 +24,7 @@ pointer. **Proof** is the e2e test or journey that asserts it.
 | `/` | `public/index.html` | `https://0509.io` | — | The quiet rebuild notice. One `h1` (copy owned by `public/index.html`, not asserted verbatim), one contact link to `support@0509.io`. Static file: no loader, no client state. `robots: noindex` until the gate lifts. | `e2e/smoke.spec.ts` — headline, contact link, no horizontal scroll at 390, no console errors |
 | `/login` | `app/routes/login.tsx` | the `/login` URL; nothing links to it yet | `Tab` to the email field, type, `Enter`; the passkey button is the next stop after submit | One input plus a "Sign in with a passkey" button. Submitting the input POSTs to the same route; better-auth mints and sends a magic link, then the page swaps to "Check your email". Never reveals whether the address exists. The passkey button runs better-auth's authenticate ceremony (`generate-authenticate-options` → `verify-authentication`) and lands on `/app`. | `e2e/smoke.spec.ts` — heading, labelled input, enabled buttons including the passkey control. Sending is **J1** — `e2e/j1-magic-link.spec.ts`; the passkey ceremony is **J2** — `e2e/j2-passkey.spec.ts` |
 | `/api/health` | `app/routes/api.health.ts` | `GET /api/health` | — | `{ status, app, timestamp }`. Reads nothing on purpose: a health check that queries the database reports the database. | `e2e/smoke.spec.ts` — 200, `status: "ok"`, parseable timestamp |
+| `/u/:token` | `app/routes/u.$token.tsx` | the link in a brief or incident email, `https://0509.io/u/<token>` | open the link, or the mail client's one-click POST | Writes `email_suppression` for that `send_target` on both GET and POST. An unknown token is a 404 and writes nothing. No session. | `tests/integration/delivery.integration.test.ts` — token becomes a suppression row and the next send is skipped |
 | `/api/auth/*` | `app/routes/api.auth.$.ts` | the browser follows the magic link here | — | better-auth's whole surface, mounted whole: magic-link request and verify, passkey registration and assertion, session, sign-out. Nothing is reimplemented above it. | **J1** — `e2e/j1-magic-link.spec.ts`; **J2** — `e2e/j2-passkey.spec.ts` |
 
 ## Signed in
@@ -37,7 +38,7 @@ state.
 | `/app` | `app/routes/app.home.tsx` | after sign-in | `Tab` to the button, `Enter` | Home. The signed-in email and an "Add a passkey" button that runs better-auth's register ceremony (`generate-register-options` → `verify-registration`) against the live session. | **J3**, **J4**; the register ceremony is **J2** — `e2e/j2-passkey.spec.ts` |
 | `/app/competitors` | `app/routes/app.competitors.tsx` | — | — | The tracked set. Currently a stub. | **J6** |
 | `/app/competitors/:entityId` | `app/routes/app.competitor.tsx` | a row on `/app/competitors` | — | One competitor. Currently a stub. | **J7**, **J10** |
-| `/app/alerts` | `app/routes/app.alerts.tsx` | — | — | What changed. Currently a stub. | **J7**, **J8** |
+| `/app/alerts` | `app/routes/app.alerts.tsx` | type the URL, there is no nav link yet | the list is in document order | Stored alert rows for the signed-in user's workspace, including "We could not send your brief" when the send lane gives up. Empty state: "Nothing in alerts." | **J7**, **J8**; the failed-send row is `tests/integration/delivery.integration.test.ts` |
 | `/app/settings` | `app/routes/app.settings.tsx` | — | — | Workspace settings. Currently a stub. | **J13**, **J14** |
 
 ## Not a route
@@ -45,16 +46,17 @@ state.
 | Surface | Where | Trigger | What it does |
 |---|---|---|---|
 | Dead-man ping | `app/lib/liveness-ping.server.ts`, called from `workers/app.ts` `scheduled` | cron `*/5 * * * *` | POSTs to `LIVENESS_PING_URL`. An external service alerts when the reports stop — the one failure a Worker cannot report about itself. Returns `null` when the var is unset, so no monitor is silence, not a scheduled error. |
+| Send lane | `workers/delivery/consumer.ts` on the `send-email` queue | a `{ digest_id }` or `{ incident_id }` message | Claims `send_attempt` before `EMAIL.send`, skips `email_suppression`, and writes `signal_delivery` for items quoted in a brief. `max_concurrency` is 2. The `0 3 * * *` cron re-enqueues a digest pending over 6 hours and a claim pending over 1 hour. |
 | e2e inbox | `workers/e2e-inbox.ts` (`workers/e2e-inbox.wrangler.jsonc`, Worker `0509-e2e-inbox`) | Email Routing `e2e@0509.io` delivers to its `email` handler — per-run `e2e+<tag>@0509.io` rides the same rule via zone subaddressing; reads are `GET https://e2e-inbox.0509.io/message?to=<address>` | Test mail sink for **J1** (0509#3927): stores the raw MIME in KV under the recipient address with a 1-hour TTL. Reads require `Authorization: Bearer $E2E_INBOX_TOKEN`; the endpoint answers 503 when the secret is not set, so a missing secret fails loudly rather than 404ing. |
 
 ---
 
 ## What is deliberately missing
 
-Five of the seven signed-in surfaces are stubs and this table says so rather
-than implying coverage. They fill in with the engine packets under #3842. The
-rule that keeps this file honest is the same one that keeps the product honest:
-a row describes what a user can do **today**, never what is planned.
+Competitors, the competitor page and settings are still stubs. Alerts lists
+rows that are already stored. The rule that keeps this file honest is the same
+one that keeps the product honest: a row describes what a user can do **today**,
+never what is planned.
 
 No navigation exists yet — there is no nav bar, no sidebar and no link between
 the signed-in routes. Reaching `/app/alerts` today means typing the URL. That is

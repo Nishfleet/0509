@@ -1,7 +1,9 @@
-import { betterAuth } from "better-auth";
-import { magicLink } from "better-auth/plugins";
 import { apiKey } from "@better-auth/api-key";
 import { passkey } from "@better-auth/passkey";
+import { betterAuth } from "better-auth";
+import { magicLink } from "better-auth/plugins";
+
+import { sendMail } from "../../workers/delivery/send";
 
 interface AuthEnv {
   DB: D1Database;
@@ -18,7 +20,7 @@ export function createAuth(env: AuthEnv) {
     plugins: [
       magicLink({
         sendMagicLink: async ({ email, url }) => {
-          await env.EMAIL.send({
+          await sendMail(env.EMAIL, {
             to: email,
             from: { email: "hello@0509.io", name: "Five to Nine" },
             subject: "Your sign-in link",

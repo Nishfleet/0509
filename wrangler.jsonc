@@ -66,15 +66,27 @@
   // ten (docs/REBUILD-COST.md).
   "browser": { "binding": "BROWSER" },
 
-  // Transactional send only. The weekly brief's standing on this lane is an
-  // open question recorded on docs/REBUILD-DELIVERY.md.
-  "send_email": [{ "name": "EMAIL" }],
+  // Transactional send. remote: true so a local binding cannot pretend to send.
+  "send_email": [{ "name": "EMAIL", "remote": true }],
+
+  "queues": {
+    "producers": [{ "queue": "send-email", "binding": "SEND_EMAIL" }],
+    "consumers": [
+      {
+        "queue": "send-email",
+        "max_batch_size": 1,
+        "max_batch_timeout": 30,
+        "max_retries": 5,
+        "max_concurrency": 2,
+        "dead_letter_queue": "send-email-dlq"
+      }
+    ]
+  },
 
   "triggers": {
-    // The dead-man ping, and nothing else yet. Every five minutes: an external
-    // service alerts when the reports stop, which is the one failure a Worker
-    // cannot report about itself.
-    "crons": ["*/5 * * * *"]
+    // */5 is the dead-man ping. 0 3 * * * re-enqueues a brief or attempt
+    // that was claimed and then never finished.
+    "crons": ["*/5 * * * *", "0 3 * * *"]
   },
 
   "routes": [
