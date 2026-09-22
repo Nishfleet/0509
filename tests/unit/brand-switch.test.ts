@@ -8,10 +8,9 @@ function markup(state: BrandSwitchState, pausedOn = "12 Sep"): string {
   return renderToStaticMarkup(createElement(BrandSwitch, { name: "Casetta", state, pausedOn }));
 }
 
-function elementWithRole(html: string, role: string): string {
-  const marker = `role="${role}"`;
+function elementWithMarker(html: string, marker: string): string {
   const markerAt = html.indexOf(marker);
-  if (markerAt < 0) throw new Error(`the row has no ${role}`);
+  if (markerAt < 0) throw new Error(`the row has no ${marker}`);
   const openAt = html.lastIndexOf("<", markerAt);
   const tag = /^<([a-zA-Z0-9]+)/.exec(html.slice(openAt))?.[1];
   if (tag === undefined) throw new Error("the switch tag has no name");
@@ -25,6 +24,10 @@ function elementWithRole(html: string, role: string): string {
     if (depth === 0) return html.slice(openAt, match.index + match[0].length);
   }
   throw new Error("the switch element does not close");
+}
+
+function elementWithRole(html: string, role: string): string {
+  return elementWithMarker(html, `role="${role}"`);
 }
 
 function openingTag(element: string): string {
@@ -90,9 +93,9 @@ describe("per-brand switch", () => {
     const html = renderToStaticMarkup(
       createElement(BrandSwitch, { name: "Casetta", monogram: "  ", state: "on" }),
     );
-    const monogram = elementWithRole(html, "switch");
-    expect(html).toContain(">C<");
-    expect(monogram).toContain(">ON<");
+    const monogram = elementWithMarker(html, 'data-slot="monogram"');
+    expect(monogram).toContain(">C<");
+    expect(monogram).not.toContain(">ON<");
   });
 
   it("keeps the state label inside the switch, so the label is part of the hit area", () => {

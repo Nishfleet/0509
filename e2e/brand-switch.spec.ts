@@ -1,10 +1,6 @@
-import { createServer, type ViteDevServer } from "vite";
-import tailwindcss from "@tailwindcss/vite";
 import { expect, test, type Page } from "@playwright/test";
 
 import { ON_CONSEQUENCE } from "../app/components/brand-switch";
-// The proof page loads this module in the browser. Importing it here keeps that file on the graph knip reads.
-import "./brand-switch-harness";
 
 const COLOR = {
   light: {
@@ -23,30 +19,6 @@ const COLOR = {
   },
 } as const;
 
-let server: ViteDevServer;
-let origin: string;
-
-test.beforeAll(async () => {
-  server = await createServer({
-    configFile: false,
-    root: process.cwd(),
-    appType: "mpa",
-    plugins: [tailwindcss()],
-    esbuild: { jsx: "automatic" },
-    server: { host: "127.0.0.1", port: 0 },
-  });
-  await server.listen();
-  const address = server.httpServer?.address();
-  if (address === null || address === undefined || typeof address === "string") {
-    throw new Error("vite did not bind a port");
-  }
-  origin = `http://127.0.0.1:${address.port}`;
-});
-
-test.afterAll(async () => {
-  await server.close();
-});
-
 async function thumbIsRight(page: Page, state: "on" | "off" | "you"): Promise<boolean> {
   const track = page.locator(`[data-state="${state}"] [data-slot="track"]`);
   const thumb = page.locator(`[data-state="${state}"] [data-slot="thumb"]`);
@@ -63,9 +35,9 @@ test("tab reaches the per-brand switch and space toggles it", async ({ page }, t
   const width = testInfo.project.use.viewport?.width === 390 ? "390" : "1440";
 
   for (const theme of ["light", "dark"] as const) {
-    const response = await page.goto(`${origin}/e2e/brand-switch.html?theme=${theme}`);
+    await page.emulateMedia({ colorScheme: theme });
+    const response = await page.goto("/design/brand-switch");
     expect(response?.status()).toBe(200);
-    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
 
     const kindred = page.getByRole("switch", { name: "Kindred" });
     const casetta = page.getByRole("switch", { name: "Casetta" });
@@ -107,7 +79,8 @@ test("tab reaches the per-brand switch and space toggles it", async ({ page }, t
     });
   }
 
-  await page.goto(`${origin}/e2e/brand-switch.html?theme=light`);
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.goto("/design/brand-switch");
   const kindred = page.getByRole("switch", { name: "Kindred" });
   const casetta = page.getByRole("switch", { name: "Casetta" });
   const you = page.getByRole("switch", { name: "Loopwell" });

@@ -15,4 +15,5 @@ export default [
   route("onboarding", "routes/onboarding.tsx"),
   route("*", "routes/unmatched.tsx"),
   route("design/brand-chips", "routes/design.brand-chips.tsx"),
+  route("design/brand-switch", "routes/design.brand-switch.tsx"),
 ] satisfies RouteConfig;

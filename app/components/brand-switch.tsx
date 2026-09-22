@@ -28,8 +28,8 @@ function pausedLine(pausedOn: string | undefined): string {
 
 function trackBackground(state: BrandSwitchState): string {
   if (state === "off") return "bg-card";
-  if (state === "you") return "bg-accent-wash";
-  return "bg-accent";
+  if (state === "you") return "bg-green-wash";
+  return "bg-green";
 }
 
 export function BrandSwitch({
@@ -53,7 +53,7 @@ export function BrandSwitch({
         state === "off"
           ? "flex min-w-0 flex-wrap items-center gap-3 border-b border-line px-[18px] py-[15px] text-ink-faint"
           : state === "you"
-            ? "flex min-w-0 flex-wrap items-center gap-3 border-b border-line bg-accent-wash px-[18px] py-[15px] text-ink"
+            ? "flex min-w-0 flex-wrap items-center gap-3 border-b border-line bg-green-wash px-[18px] py-[15px] text-ink"
             : "flex min-w-0 flex-wrap items-center gap-3 border-b border-line bg-card px-[18px] py-[15px] text-ink"
       }
     >
@@ -63,7 +63,7 @@ export function BrandSwitch({
           state === "off"
             ? "inline-grid size-[26px] shrink-0 place-items-center border-[1.5px] border-line bg-card font-display text-[0.8rem] font-extrabold text-ink-faint"
             : state === "you"
-              ? "inline-grid size-[26px] shrink-0 place-items-center border-[1.5px] border-ink bg-accent font-display text-[0.8rem] font-extrabold text-on-accent"
+              ? "inline-grid size-[26px] shrink-0 place-items-center border-[1.5px] border-ink bg-green font-display text-[0.8rem] font-extrabold text-on-green"
               : "inline-grid size-[26px] shrink-0 place-items-center border-[1.5px] border-ink bg-card font-display text-[0.8rem] font-extrabold text-ink"
         }
       >

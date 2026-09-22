@@ -9,7 +9,7 @@ const TRACK =
   "pointer-events-none relative inline-flex h-[22px] w-[38px] shrink-0 items-center rounded-none border-[1.5px] border-ink";
 
 const THUMB =
-  "pointer-events-none absolute top-[2px] left-[2px] size-[15px] rounded-none bg-ink transition-transform duration-[180ms] ease-[cubic-bezier(0.32,0.72,0,1)] data-checked:translate-x-[16px] data-unchecked:translate-x-0";
+  "pointer-events-none absolute top-[2px] left-[2px] size-[15px] rounded-none bg-ink transition-transform duration-switch ease-push data-checked:translate-x-[16px] data-unchecked:translate-x-0";
 
 function Switch({
   className,

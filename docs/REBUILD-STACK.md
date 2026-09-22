@@ -347,7 +347,7 @@ DESIGN.md §11's class-merging row says `cn` 0.3.0. The base-nova registry item 
 
 The `new-york` registry item still imports `@radix-ui/react-switch`. That vendor is not the one DESIGN.md §11 names, so it is not installed.
 
-The stock base-nova switch is a pill, about 32×18, and it fades when disabled. DESIGN.md §6 is a square 38×22 track, an ink hairline, an ink thumb, 180ms travel, and a You state that stays visible. Those measurements live in the copied component. The track fill is one class chosen by the caller (`bg-accent`, `bg-card`, or `bg-accent-wash`), so two background utilities are never both on the element.
+The stock base-nova switch is a pill, about 32×18, and it fades when disabled. DESIGN.md §6 is a square 38×22 track, an ink hairline, an ink thumb, 180ms travel, and a You state that stays visible. Those measurements live in the copied component. The thumb travel uses `duration-switch` and `ease-push` from `app/app.css`. The track fill is one class chosen by the caller (`bg-green`, `bg-card`, or `bg-green-wash`), so two background utilities are never both on the element.
 
 ---
 
