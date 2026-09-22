@@ -142,6 +142,7 @@ export function BrandChipRow({
       aria-label="Your set"
       className="flex w-full min-w-0 max-w-full flex-wrap gap-2"
       data-slot="brand-chip-row"
+      role="group"
     >
       {brands.map((brand, index) => (
         <BrandChip key={`${String(index)}:${brand.href}:${brand.name}`} {...brand} />

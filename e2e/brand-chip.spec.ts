@@ -72,11 +72,6 @@ test("a failed logo falls back to the monogram and the row does not scroll or sh
   const cls = await page.evaluate(() => (window as unknown as { __cls: number }).__cls);
   expect(cls).toBeLessThan(0.05);
 
-  await page.screenshot({
-    path: `tests/unit/brand-chip-sheet/${String(viewport)}.png`,
-    fullPage: true,
-  });
-
   await page.evaluate(() => {
     (window as unknown as { __stay: number }).__stay = 1;
   });

@@ -114,6 +114,8 @@ describe("the brand chip", () => {
       }),
     );
     expect(html).toContain('data-slot="brand-chip-row"');
+    expect(html).toContain('role="group"');
+    expect(html).toContain('aria-label="Your set"');
     expect(html).toContain("You · Loopwell");
     expect(html).toContain('src="/brand-chip-kindred.svg"');
     expect(html).toContain('src="/brand-chip-missing.png"');
