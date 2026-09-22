@@ -78,10 +78,10 @@ jobs:
         # false: test infrastructure must never stand between a good app deploy
         # and its verification.
         #
-        # The KV binding has no id on purpose, matching the e2e inbox: wrangler's
-        # deploy-time resource provisioning creates the 0509-fixture-site-state
-        # namespace on first deploy and inherits it from the deployed Worker's
-        # settings on later ones.
+        # The KV namespace id is pinned in the config, not provisioned at deploy
+        # time: this token can deploy Workers but cannot create KV namespaces,
+        # so every run failed Authentication error 10000 while
+        # continue-on-error kept the job green (0509#4046).
         continue-on-error: true
         run: npx wrangler deploy --config workers/fixture-site.wrangler.jsonc
         env:
