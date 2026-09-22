@@ -339,6 +339,16 @@ The generated `app/app.css` sets `--font-sans: "Inter", …` inside `@theme`. **
 
 No PostCSS config, no `tailwind.config.ts`, no CSS-in-JS, no `styled-components`, no design-token generator, no Storybook. `vite.config.ts` stays at the four plugins the scaffold wrote.
 
+### 3.6 The per-brand switch
+
+`app/components/ui/switch.tsx` is the shadcn `base-nova` switch on `@base-ui/react` 1.8.0, copied into the repo and then changed for DESIGN.md §6. The primitive is the one §3.2 already records. Class names go through `cn` in `app/lib/utils.ts`, the same function `badge.tsx` and `avatar.tsx` import. That function is `twMerge(clsx(...))`.
+
+DESIGN.md §11's class-merging row says `cn` 0.3.0. The base-nova registry item imports `{ cn } from "cn"`, the npm package. This repo already has one `cn`, in `app/lib/utils.ts`. The switch uses that one and does not add the npm package.
+
+The `new-york` registry item still imports `@radix-ui/react-switch`. That vendor is not the one DESIGN.md §11 names, so it is not installed.
+
+The stock base-nova switch is a pill, about 32×18, and it fades when disabled. DESIGN.md §6 is a square 38×22 track, an ink hairline, an ink thumb, 180ms travel, and a You state that stays visible. Those measurements live in the copied component. The thumb travel uses `duration-switch` and `ease-push` from `app/app.css`. The track fill is one class chosen by the caller (`bg-green`, `bg-card`, or `bg-green-wash`), so two background utilities are never both on the element.
+
 ---
 
 ## 4. Cloudflare primitives
@@ -1053,6 +1063,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | Edge abuse shield | Cloudflare rate limiting binding (`period` 10 or 60 only) | platform |
 | OpenAPI document | `zod-openapi` (samchungy) | 6.0.2, not yet installed |
 | Agent-readable docs | `/llms.txt` + `Accept: text/markdown` + `rel="alternate"` | spec v2 (2026-08-10) |
+| Per-brand switch | `@base-ui/react` switch, copied from the shadcn `base-nova` registry item | 1.8.0 |
 
 **Installed beyond the scaffold:** `better-auth` ^1.7.5, `@better-auth/passkey` ^1.7.5, `@better-auth/api-key` ^1.7.5, `zod` ^4.6.5 (also a better-auth peer), `@cloudflare/puppeteer` ^1.4.0, `@base-ui/react` 1.8.0, `clsx` ^2.1.1, `tailwind-merge` ^3.7.0, `class-variance-authority` ^0.7.1. **Not yet installed**, because the engine that needs them has not shipped: `diff` 9.0.0, `@extractus/feed-extractor` 8.0.3 (`fast-xml-parser` 5.11.1 comes with it), `uplot` 1.6.32, `uplot-react` 1.2.4, `date-fns` 4.4.0, `@date-fns/tz` 1.5.0, `agents` 0.24.0, `@modelcontextprotocol/server` 2.0.0 and its peers `@modelcontextprotocol/client` and `@modelcontextprotocol/sdk`, `@cloudflare/workers-oauth-provider` 0.10.3, `zod-openapi` 6.0.2, `lucide-react`. Do not delete those rows. Platform rows have no package. `create-cloudflare`, `shadcn`, and `auth@1.7.5` are npx-only and are not missing dependencies.
 
