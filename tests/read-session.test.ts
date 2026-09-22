@@ -1,39 +1,57 @@
 import { describe, expect, it, vi } from "vitest";
 
-const getSession = vi.fn(async () => ({ session: { id: "s" }, user: { email: "a@0509.io" } }));
-
-vi.mock("cloudflare:workers", () => ({ env: {} }));
+const { betterAuth } = vi.hoisted(() => {
+  const betterAuth = vi.fn((_options: unknown) => ({ api: {} }));
+  return { betterAuth };
+});
 
 vi.mock("better-auth", () => ({
-  betterAuth: () => ({ api: { getSession } }),
+  betterAuth: (options: unknown) => betterAuth(options),
 }));
 
 vi.mock("better-auth/plugins", () => ({ magicLink: () => ({}) }));
 vi.mock("@better-auth/api-key", () => ({ apiKey: () => ({}) }));
 vi.mock("@better-auth/passkey", () => ({ passkey: () => ({}) }));
 
-import { readSession } from "../app/lib/auth.server";
-import { requireSession } from "../app/lib/require-session.server";
+import { createAuth, hasSessionCookie } from "../app/lib/auth.server";
 
-describe("readSession", () => {
-  it("asks auth once per request, including the signed-in gate", async () => {
-    getSession.mockClear();
-    const request = new Request("https://0509.io/app", {
-      headers: { cookie: "better-auth.session_token=present" },
+describe("hasSessionCookie", () => {
+  it("matches the cookie the auth module issues, including the secure prefix", () => {
+    createAuth({
+      DB: {} as never,
+      EMAIL: { send: async () => undefined },
     });
-    await readSession(request);
-    await expect(requireSession(request)).resolves.toMatchObject({
-      user: { email: "a@0509.io" },
-    });
-    expect(getSession).toHaveBeenCalledOnce();
-  });
-
-  it("shares a miss across the gate on the same request", async () => {
-    getSession.mockClear();
-    getSession.mockResolvedValueOnce(null);
-    const request = new Request("https://0509.io/app");
-    await readSession(request);
-    await expect(requireSession(request)).rejects.toMatchObject({ status: 302 });
-    expect(getSession).toHaveBeenCalledOnce();
+    expect(betterAuth).toHaveBeenCalledWith(
+      expect.objectContaining({ advanced: { cookiePrefix: "better-auth" } }),
+    );
+    expect(hasSessionCookie(new Request("https://0509.io/missing"))).toBe(false);
+    expect(
+      hasSessionCookie(
+        new Request("https://0509.io/missing", {
+          headers: { cookie: "better-auth.session_token=abc" },
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      hasSessionCookie(
+        new Request("https://0509.io/missing", {
+          headers: { cookie: "theme=dark; __Secure-better-auth.session_token=abc" },
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      hasSessionCookie(
+        new Request("https://0509.io/missing", {
+          headers: { cookie: "better-auth.session_data=abc" },
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      hasSessionCookie(
+        new Request("https://0509.io/missing", {
+          headers: { cookie: "not-the-session_token=abc" },
+        }),
+      ),
+    ).toBe(false);
   });
 });

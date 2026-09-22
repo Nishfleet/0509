@@ -9,7 +9,7 @@ import {
 
 import type { Route } from "./+types/root";
 import { ErrorPage } from "./components/error-page";
-import { readSession } from "./lib/auth.server";
+import { hasSessionCookie } from "./lib/auth.server";
 import "./app.css";
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -34,10 +34,9 @@ export default function App() {
   return <Outlet />;
 }
 
-export async function loader({ request }: Route.LoaderArgs) {
-  const session = await readSession(request);
+export function loader({ request }: Route.LoaderArgs) {
   return {
-    signedIn: session !== null,
+    signedIn: hasSessionCookie(request),
     pathname: new URL(request.url).pathname,
   };
 }

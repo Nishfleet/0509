@@ -2,7 +2,6 @@ import { betterAuth } from "better-auth";
 import { magicLink } from "better-auth/plugins";
 import { apiKey } from "@better-auth/api-key";
 import { passkey } from "@better-auth/passkey";
-import { env } from "cloudflare:workers";
 
 interface AuthEnv {
   DB: D1Database;
@@ -11,18 +10,14 @@ interface AuthEnv {
   BETTER_AUTH_URL?: string;
 }
 
-const sessionByRequest = new WeakMap<Request, ReturnType<typeof loadSession>>();
+const COOKIE_PREFIX = "better-auth";
+const SESSION_COOKIE = `${COOKIE_PREFIX}.session_token`;
+const sessionCookieNames = new Set([SESSION_COOKIE, `__Secure-${SESSION_COOKIE}`]);
 
-function loadSession(request: Request) {
-  return createAuth(env).api.getSession({ headers: request.headers });
-}
-
-export function readSession(request: Request) {
-  const cached = sessionByRequest.get(request);
-  if (cached) return cached;
-  const pending = loadSession(request);
-  sessionByRequest.set(request, pending);
-  return pending;
+export function hasSessionCookie(request: Request) {
+  const header = request.headers.get("cookie");
+  if (!header) return false;
+  return header.split(";").some((part) => sessionCookieNames.has(part.trim().split("=")[0] ?? ""));
 }
 
 export function createAuth(env: AuthEnv) {
@@ -30,6 +25,7 @@ export function createAuth(env: AuthEnv) {
     database: env.DB,
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL,
+    advanced: { cookiePrefix: COOKIE_PREFIX },
     plugins: [
       magicLink({
         sendMagicLink: async ({ email, url }) => {

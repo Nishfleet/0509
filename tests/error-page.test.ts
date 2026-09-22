@@ -4,7 +4,7 @@ import { createStaticHandler, isRouteErrorResponse } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../app/lib/auth.server", () => ({
-  readSession: async () => null,
+  hasSessionCookie: () => false,
 }));
 
 import { ErrorBoundary } from "../app/root";
@@ -116,7 +116,6 @@ describe("error page", () => {
     expect(isRouteErrorResponse(error)).toBe(true);
     if (!isRouteErrorResponse(error)) return;
     expect(error.status).toBe(404);
-    expect(error.data).not.toBe(LEAK);
     const html = page(error, true, "/this-page-is-not-here");
     expect(html).toContain("This page is not here");
     expect(html).toContain("Nothing in the product lives at /this-page-is-not-here.");

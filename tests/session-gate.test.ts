@@ -9,8 +9,12 @@ vi.mock("cloudflare:workers", () => ({ env: {} }));
 import { requireSession } from "../app/lib/require-session.server";
 
 vi.mock("../app/lib/auth.server", () => ({
-  readSession: async (request: Request) =>
-    request.headers.get("cookie")?.includes("session") ? { user: { email: "a@0509.io" } } : null,
+  createAuth: (_env: unknown) => ({
+    api: {
+      getSession: async ({ headers }: { headers: Headers }) =>
+        headers.get("cookie")?.includes("session") ? { user: { email: "a@0509.io" } } : null,
+    },
+  }),
 }));
 
 const env = {} as never;

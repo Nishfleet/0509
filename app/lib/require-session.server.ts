@@ -1,9 +1,11 @@
+import { env } from "cloudflare:workers";
 import { redirect } from "react-router";
 
-import { readSession } from "./auth.server";
+import { createAuth } from "./auth.server";
 
 export async function requireSession(request: Request) {
-  const session = await readSession(request);
+  const auth = createAuth(env);
+  const session = await auth.api.getSession({ headers: request.headers });
   if (!session) throw redirect("/login");
   return session;
 }
