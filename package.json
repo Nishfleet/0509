@@ -16,6 +16,7 @@
     "@better-auth/api-key": "^1.7.5",
     "@better-auth/passkey": "^1.7.5",
     "@cloudflare/puppeteer": "^1.4.0",
+    "@extractus/feed-extractor": "^8.0.3",
     "better-auth": "^1.7.5",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -23,8 +24,9 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router": "^8.4.0",
-    "zod": "^4.6.5",
-    "tailwind-merge": "^3.7.0"
+    "tailwind-merge": "^3.7.0",
+    "tldts": "^7.4.13",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.56.0",
