@@ -357,6 +357,15 @@ messages, not deleted.
 
 ---
 
+
+**2026-09-22, moved to rung 2 (#4225).** The reviewer half above is gone:
+`eslint-plugin-no-comments` (`no-comments/disallowComments`, allow list
+`eslint` and `global` only) runs on `app/**` and `workers/**` in the same block
+as the other two comment rules. On the day it landed it found 59 comments in
+`workers/` that the grader had flagged on #4176 and the merge had kept, which
+is the exact hole B5 predicted. Their text is preserved in that PR's commit
+message; anything a future reader needs from it belongs in `docs/`, not in the
+file.
 ## C. The gardener
 
 > "every team really needs … a role that I'm calling a gardener … you want to
@@ -385,6 +394,10 @@ that rule**, before it merges. 26:01: *"whenever you see tech debt or bad
 patterns, your instinct should be, I need to write a lint rule against it … you
 can at least stop the bleeding."* A review comment that only asks for a change
 teaches one agent once; a rule teaches every agent forever.
+
+Implemented in the `opus-review` job's `prompt:` (`.github/workflows/ci.yml`) by
+PR #4255, which asks all three questions above word for word and states the
+verdict rule in its grade-capping form.
 
 Reviewers also check the two things no test checks: that
 `docs/FEATURE-MAP.md` matches `app/routes.ts` after a route change, and that

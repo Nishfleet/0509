@@ -176,9 +176,9 @@ async function escalate(
   try {
     res = await env.BROWSER.quickAction("content", { url });
   } catch (err) {
-    // Log every escalation, including the one that threw: the throw is the
-    // case the cost model most needs to see, and the denominator must not
-    // lose it.
+    
+    
+    
     logEscalation(url, null);
     return {
       result: null,
