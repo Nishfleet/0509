@@ -18,12 +18,14 @@ export default defineConfig({
           name: "node",
           environment: "node",
           include: ["tests/**/*.test.ts"],
-          exclude: ["tests/integration/**"],
+          exclude: ["tests/integration/**", "tests/unit/site/**"],
         },
       },
       {
         // Real workerd + real local D1 with migrations/0001_rebuild.sql applied.
         // The only project where a D1 assertion means anything.
+        // tests/unit/site also runs here: HTMLRewriter exists only in workerd,
+        // and the node project has no runtime to host it.
         plugins: [
           cloudflareTest(async () => ({
             wrangler: { configPath: "./tests/integration/wrangler.test.jsonc" },
@@ -34,7 +36,10 @@ export default defineConfig({
         ],
         test: {
           name: "workers",
-          include: ["tests/integration/**/*.integration.test.ts"],
+          include: [
+            "tests/integration/**/*.integration.test.ts",
+            "tests/unit/site/**/*.test.ts",
+          ],
           setupFiles: ["./tests/integration/apply-migrations.ts"],
           testTimeout: 30_000,
         },
