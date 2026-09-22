@@ -1,6 +1,10 @@
 import { type RouteConfig, route } from "@react-router/dev/routes";
 
 export default [
+  // Public, derived from app/lib/public-routes.ts (0509#3989). Both are
+  // resource routes: no layout, no client bundle, just the document.
+  route("robots.txt", "routes/robots[.]txt.ts"),
+  route("sitemap.xml", "routes/sitemap[.]xml.ts"),
   route("login", "routes/login.tsx"),
   route("privacy", "routes/privacy.tsx"),
   route("app", "routes/app.home.tsx"),
