@@ -14,6 +14,9 @@ export default defineConfig({
     projects: [
       {
         // Pure logic: no bindings, no workerd.
+        resolve: {
+          tsconfigPaths: true,
+        },
         test: {
           name: "node",
           environment: "node",

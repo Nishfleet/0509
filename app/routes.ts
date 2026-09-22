@@ -10,4 +10,6 @@ export default [
   route("api/health", "routes/api.health.ts"),
   route("api/auth/*", "routes/api.auth.$.ts"),
   route("onboarding", "routes/onboarding.tsx"),
+  route("capture-plate", "routes/capture-plate.tsx"),
+  route("media/*", "routes/media.$.ts"),
 ] satisfies RouteConfig;

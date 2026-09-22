@@ -10,7 +10,8 @@ import { defineConfig, devices } from "@playwright/test";
 // webServer's own doc says it is for "when you don't have a staging or
 // production url to test against", which is exactly the split above:
 // https://playwright.dev/docs/test-webserver
-const baseURL = process.env.PLAYWRIGHT_TEST_BASE_URL ?? "http://127.0.0.1:8787";
+const devPort = process.env.PLAYWRIGHT_DEV_PORT ?? "8787";
+const baseURL = process.env.PLAYWRIGHT_TEST_BASE_URL ?? `http://127.0.0.1:${devPort}`;
 export const accessStatePath = "e2e/.auth/access.json";
 const accessState = process.env.CF_ACCESS_CLIENT_ID ? { storageState: accessStatePath } : {};
 
@@ -48,9 +49,9 @@ export default defineConfig({
   webServer: process.env.PLAYWRIGHT_TEST_BASE_URL
     ? undefined
     : {
-        command: "npx wrangler dev --port 8787 --local",
-        url: "http://127.0.0.1:8787/api/health",
-        reuseExistingServer: !process.env.CI,
+        command: `npx wrangler r2 object put 0509-snapshots/shot/e2e/capture-plate/before.png --file tests/fixtures/capture-before.png --local --content-type image/png -y && npx wrangler r2 object put 0509-snapshots/shot/e2e/capture-plate/after.png --file tests/fixtures/capture-after.png --local --content-type image/png -y && npx wrangler dev --port ${devPort} --local`,
+        url: `http://127.0.0.1:${devPort}/api/health`,
+        reuseExistingServer: false,
         timeout: 120_000,
       },
 });

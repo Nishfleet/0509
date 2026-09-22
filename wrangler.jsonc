@@ -86,5 +86,15 @@
     // http_request_dynamic_redirect, ruleset f7743879d6904ebea189b42c85713069),
     // which runs before the Worker and costs no invocation. Adding a route here
     // would put the Worker in that path for nothing.
-  ]
+  ],
+
+  // Screenshots live in the bucket engine 10 already expires. The plate reads
+  // them through the Images binding (width and height on the request).
+  "r2_buckets": [
+    {
+      "binding": "SNAPSHOTS",
+      "bucket_name": "0509-snapshots"
+    }
+  ],
+  "images": { "binding": "IMAGES" }
 }
