@@ -1,65 +1,30 @@
-/**
- * The weekly brief's data contract, in one place.
- *
- * `digest.payload_json` is written by engine 6 (the standing rollover, P6.4) and
- * read here by engine 7. That makes this module the shape both sides must agree
- * on, so it is defined once rather than restated as an inline cast at the point
- * of use — a re-typed field at the read site is how the email and Home start
- * disagreeing, which is the exact failure docs/REBUILD-STANDING.md exists to
- * prevent (docs/engines/standing-home.md §7: "the brief and Home disagree").
- *
- * The rule this module exists to enforce: **the brief renders, it never
- * re-ranks.** D4's picks and Jev's one-line reasons arrive on the payload and
- * are shown verbatim; every other sentence on the page is a fixed template
- * string filled with counts (docs/REBUILD-DELIVERY.md rule 5, docs/engines/
- * delivery.md §4b).
- */
 
-/**
- * One before-and-after mark chosen by D4 (`read_this_first`).
- *
- * `jev_reason` is Jev's returned one-line reason, shown verbatim and marked as
- * Jev's read. Nothing here may be rewritten, summarised or extended —
- * docs/REBUILD-JEV.md bars generating longer copy.
- */
 interface BriefMark {
   signal_id: string;
   entity_id: string;
-  /** Brand name for the label above the mark. */
   entity_name: string;
   title: string;
-  /** Where the item was seen, as the source registry names it. */
   source: string;
-  /** ISO-8601 instant of the observation, formatted in workspace.timezone. */
   observed_at: string;
-  /** R2 object key for the screenshot thumbnail. Linked, never inlined. */
   thumbnail_r2_key: string | null;
-  /** Link to the item itself. */
   url: string;
-  /** Before-and-after pair for the one mark object (DESIGN.md §1.6). */
   before: string | null;
   after: string | null;
   jev_reason: string;
 }
 
-/** One line per ON brand, in the frozen rank order engine 6 wrote. */
 interface BriefBrandLine {
   entity_id: string;
   name: string;
-  /** Frozen rank for this week. Null only when the week is still in flight. */
   rank: number | null;
-  /** Last week's rank minus this week's, already computed by engine 6. */
   movement: number | null;
-  /** "new" when the brand was ON for the first time this week. */
   is_new: boolean;
-  /** The brand's biggest move this week, or null for a quiet brand. */
   biggest_move: string | null;
   ad_delta: number;
   mention_delta: number;
   site_change_count: number;
 }
 
-/** Own-site status: "nothing broke" or the list of what did. */
 interface BriefOwnSite {
   status: "ok" | "broken";
   incidents: {
@@ -70,66 +35,34 @@ interface BriefOwnSite {
   }[];
 }
 
-/** What was checked, for the footer's honesty line. */
 interface BriefChecked {
   mention_count: number;
   site_change_count: number;
   new_ad_count: number;
-  /** Source registry keys that answered this week, for the freshness line. */
   source_keys: string[];
-  /** Registry keys that did not answer, so a quiet week is never a blind one. */
   degraded_source_keys: string[];
 }
 
-/**
- * The payload as it sits in `digest.payload_json`.
- *
- * Every field the brief shows arrives here already decided. The only fields the
- * brief computes itself are the ones engine 6 cannot know (the recipient's
- * unsubscribe token and the next brief date), and those are passed in
- * separately rather than written into the payload.
- */
 export interface BriefPayload {
   workspace_id: string;
   timezone: string;
   period_start: string;
   period_end: string;
-  /** The customer's own rank, null when fewer than two ON brands. */
   headline_rank: number | null;
-  /** How many ON brands are ranked this week, self included. */
   headline_total: number;
-  /** Positive is up. Null when movement is not applicable. */
   headline_movement: number | null;
-  /**
-   * True when this workspace was ON for the first time this week, so there is
-   * no last week's rank to compare against and the headline says "new" rather
-   * than claiming a movement of zero.
-   */
   headline_is_new: boolean;
-  /** D4's top reason, or the counts sentence on a quiet week. */
   why_line: string;
-  /** True when D4 cleared nothing and the counts line is showing instead. */
   is_quiet_week: boolean;
-  /** D4's picks, already ordered. Never re-sorted here. */
   read_this_first: BriefMark[];
-  /** One line per ON brand, already ordered by frozen rank. */
   brands: BriefBrandLine[];
   own_site: BriefOwnSite;
   checked: BriefChecked;
-  /** When the next brief is due, for the footer. */
   next_brief_at: string | null;
 }
 
-/**
- * The one extra thing the brief needs that is not engine 6's to write: the
- * recipient's own unsubscribe link. Engine 6 writes a digest that is identical
- * for every recipient of that workspace; P7.3's one-click unsubscribe token
- * lives on `send_target`, which is per recipient.
- */
 export interface BriefContext {
-  /** Absolute URL of the one-click unsubscribe endpoint, or null. */
   unsubscribe_url: string | null;
-  /** Public base URL, used to turn an R2 key into a thumbnail link. */
   asset_base_url: string | null;
 }
 
@@ -139,17 +72,6 @@ export interface RenderedBrief {
   text: string;
 }
 
-/**
- * The per-brand query.
- *
- * OFF brands are absent, not zeroed (docs/REBUILD-DELIVERY.md rule 4): the join
- * on `entity` with `state = 'on'` is what makes that true at the source, so a
- * brand switched off mid-week has no row at all rather than a zeroed line.
- *
- * The brand rows arrive already ordered by frozen rank — this query does not
- * sort and must not, because the frozen order is engine 6's decision and
- * re-sorting here would let the email disagree with Home.
- */
 export const BRAND_LINES_QUERY = `
   SELECT s.entity_id AS entity_id,
          e.name      AS name,
@@ -164,17 +86,6 @@ export const BRAND_LINES_QUERY = `
    ORDER BY s.rank ASC, s.entity_id ASC
 `.trim();
 
-/**
- * Parse `digest.payload_json` into the brief's contract.
- *
- * Deliberately tolerant of extra fields and deliberately strict about the ones
- * the render needs. A payload written by a newer engine 6 that has grown a
- * field this build does not know must still send its brief — dropping a send
- * because of an unrecognised key is the "silence reads as 'the product
- * stopped'" failure docs/REBUILD-DELIVERY.md forbids. A payload missing a field
- * the render cannot do without throws, so the send lane records `failed` with
- * the reason rather than emailing a half-built brief.
- */
 export function parseBriefPayload(payloadJson: string): BriefPayload {
   const parsed: unknown = JSON.parse(payloadJson);
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {

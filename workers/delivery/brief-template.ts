@@ -1,28 +1,5 @@
-/**
- * The weekly brief's renderer: a plain template module.
- *
- * Deliberately not react-email and not mjml (docs/engines/delivery.md §2,
- * sub-decision, with the reasons recorded there): five fixed blocks do not earn
- * a second rendering system, and mail clients do not read a `<style>` block
- * reliably, so Tailwind has no email build to lean on. Everything here is a
- * template string with inline styles and a text alternative, which is content
- * rather than glue.
- *
- * Three invariants the module exists to hold:
- *
- * 1. **It never re-ranks and never re-judges.** D4's picks and Jev's one-line
- *    reasons come in on the payload and are rendered verbatim, in the order
- *    they arrived (docs/REBUILD-DELIVERY.md rule 5).
- * 2. **Every other sentence is a fixed template string filled with counts.**
- *    No prose is generated. A changed word is an edit to the strings below, so
- *    it is reviewable and never a model's idea.
- * 3. **Screenshots are linked, never inlined.** The 5 MiB message cap is reachable
- *    with base64 (docs/engines/delivery.md §3), so a thumbnail is a URL to R2.
- */
-
 import type { BriefContext, BriefPayload, RenderedBrief } from "./brief-data";
 
-/** Fixed template strings. Every one of them is sentence case, no exclamation. */
 const COPY = {
   subject: (rank: number, total: number) =>
     `Your weekly brief: you're #${n(rank)} of ${n(total)} this week`,
@@ -50,11 +27,19 @@ const COPY = {
 } as const;
 
 const COLORS = {
-  page: "#f4f4f5",
-  card: "#ffffff",
-  ink: "#18181b",
-  muted: "#52525b",
-  rule: "#d4d4d8",
+  page: "#f4f1e8",
+  card: "#fffdf6",
+  ink: "#0e0d0a",
+  muted: "#55524a",
+  rule: "#ddd6c6",
+} as const;
+
+const DARK_COLORS = {
+  page: "#14130f",
+  card: "#1c1a15",
+  ink: "#f2efe4",
+  muted: "#a9a294",
+  rule: "#322e25",
 } as const;
 
 const FONT = '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif';
@@ -63,7 +48,6 @@ function n(value: number): string {
   return String(value);
 }
 
-/** One place to escape text nodes, because brand names are data. */
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -73,16 +57,15 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function escapeAttr(value: string): string {
-  return encodeURI(value);
+const SAFE_URL_SCHEMES = ["https:", "http:", "mailto:"];
+
+function safeUrl(value: string): string | null {
+  const trimmed = value.trim();
+  const lower = trimmed.toLowerCase();
+  if (!SAFE_URL_SCHEMES.some((scheme) => lower.startsWith(scheme))) return null;
+  return escapeHtml(trimmed);
 }
 
-/**
- * Format every date the brief shows, in the workspace's own timezone.
- *
- * Returns the raw input when it will not parse, so a malformed date is visible
- * in the email rather than silently rendering as "Invalid Date".
- */
 function formatDate(iso: string, timezone: string, withTime: boolean): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
@@ -119,20 +102,17 @@ function countsSentence(checked: BriefPayload["checked"]): string {
   ].join(", ");
 }
 
-/** Turn an R2 key into the thumbnail link, or omit it when no base is configured. */
 function thumbnailSrc(r2Key: string | null, assetBaseUrl: string | null): string | null {
   if (r2Key === null) return null;
   if (assetBaseUrl === null) return null;
-  return `${assetBaseUrl.replace(/\/+$/, "")}/${r2Key.replace(/^\/+/, "")}`;
+  return safeUrl(`${assetBaseUrl.replace(/\/+$/, "")}/${r2Key.replace(/^\/+/, "")}`);
 }
-
-/* ------------------------------------------------------------------ block 1 */
 
 function renderHeadline(payload: BriefPayload): { html: string; text: string } {
   const { headline_rank, headline_total, headline_movement } = payload;
   if (headline_rank === null || headline_total < 2) {
     return {
-      html: `<p style="margin:0;font-family:${FONT};font-size:20px;line-height:28px;font-weight:600;color:${COLORS.ink};">${escapeHtml(COPY.noRank)}</p>`,
+      html: `<p style="margin:0;font-family:${FONT};font-size:20px;line-height:28px;font-weight:600;">${escapeHtml(COPY.noRank)}</p>`,
       text: COPY.noRank,
     };
   }
@@ -141,12 +121,12 @@ function renderHeadline(payload: BriefPayload): { html: string; text: string } {
   const period = `${formatDate(payload.period_start, payload.timezone, false)} – ${formatDate(payload.period_end, payload.timezone, false)}`;
 
   const html = [
-    `<p style="margin:0;font-family:${FONT};font-size:24px;line-height:32px;font-weight:600;color:${COLORS.ink};">`,
+    `<p style="margin:0;font-family:${FONT};font-size:24px;line-height:32px;font-weight:600;">`,
     escapeHtml(COPY.headline(headline_rank, headline_total)),
-    `<span style="font-weight:400;color:${COLORS.muted};"> ${escapeHtml(movement)}</span>`,
+    `<span class="brief-muted" style="font-weight:400;"> ${escapeHtml(movement)}</span>`,
     `</p>`,
-    `<p style="margin:4px 0 0;font-family:${FONT};font-size:14px;line-height:20px;color:${COLORS.muted};">${escapeHtml(period)}</p>`,
-    `<p style="margin:12px 0 0;font-family:${FONT};font-size:16px;line-height:24px;color:${COLORS.ink};">${escapeHtml(payload.why_line)}</p>`,
+    `<p class="brief-muted" style="margin:4px 0 0;font-family:${FONT};font-size:14px;line-height:20px;">${escapeHtml(period)}</p>`,
+    `<p style="margin:12px 0 0;font-family:${FONT};font-size:16px;line-height:24px;">${escapeHtml(payload.why_line)}</p>`,
   ].join("");
 
   const text = [
@@ -158,8 +138,6 @@ function renderHeadline(payload: BriefPayload): { html: string; text: string } {
   return { html, text };
 }
 
-/* ------------------------------------------------------------------ block 2 */
-
 function renderMark(
   mark: BriefPayload["read_this_first"][number],
   payload: BriefPayload,
@@ -169,20 +147,24 @@ function renderMark(
   const when = formatDate(mark.observed_at, payload.timezone, true);
   const thumb = thumbnailSrc(mark.thumbnail_r2_key, assetBaseUrl);
   const title = mark.title === "" ? mark.url : mark.title;
+  const href = safeUrl(mark.url);
 
   const html = [
-    `<div style="padding:16px 0;border-top:1px solid ${COLORS.rule};">`,
-    `<p style="margin:0;font-family:${FONT};font-size:13px;line-height:18px;color:${COLORS.muted};">${escapeHtml(label)}</p>`,
-    `<p style="margin:2px 0 0;font-family:${FONT};font-size:14px;line-height:20px;color:${COLORS.muted};">${escapeHtml(when)}</p>`,
-    `<p style="margin:6px 0 0;font-family:${FONT};font-size:16px;line-height:24px;color:${COLORS.ink};">`,
-    `<a href="${escapeAttr(mark.url)}" style="color:${COLORS.ink};">${escapeHtml(title)}</a></p>`,
+    `<div class="brief-rule" style="padding:16px 0;">`,
+    `<p class="brief-muted" style="margin:0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(label)}</p>`,
+    `<p class="brief-muted" style="margin:2px 0 0;font-family:${FONT};font-size:14px;line-height:20px;">${escapeHtml(when)}</p>`,
+    `<p style="margin:6px 0 0;font-family:${FONT};font-size:16px;line-height:24px;">`,
+    href === null
+      ? escapeHtml(title)
+      : `<a class="brief-ink" href="${href}">${escapeHtml(title)}</a>`,
+    `</p>`,
     mark.before !== null && mark.after !== null
-      ? `<p style="margin:6px 0 0;font-family:${FONT};font-size:14px;line-height:20px;color:${COLORS.muted};">${escapeHtml(`${mark.before} → ${mark.after}`)}</p>`
+      ? `<p class="brief-muted" style="margin:6px 0 0;font-family:${FONT};font-size:14px;line-height:20px;">${escapeHtml(`${mark.before} → ${mark.after}`)}</p>`
       : "",
-    thumb !== null
-      ? `<p style="margin:8px 0 0;"><a href="${escapeAttr(mark.url)}"><img src="${escapeAttr(thumb)}" alt="screenshot thumbnail" width="${n(120)}" height="${n(90)}" style="display:block;border-radius:4px;border:1px solid ${COLORS.rule};"></a></p>`
+    thumb !== null && href !== null
+      ? `<p style="margin:8px 0 0;"><a class="brief-ink" href="${href}"><img src="${thumb}" alt="screenshot thumbnail" width="${n(120)}" height="${n(90)}" style="display:block;border-radius:4px;"></a></p>`
       : "",
-    `<p style="margin:8px 0 0;font-family:${FONT};font-size:14px;line-height:20px;color:${COLORS.ink};">${escapeHtml(mark.jev_reason)}</p>`,
+    `<p style="margin:8px 0 0;font-family:${FONT};font-size:14px;line-height:20px;">${escapeHtml(mark.jev_reason)}</p>`,
     `</div>`,
   ].join("");
 
@@ -206,11 +188,11 @@ function renderReadThisFirst(
   const marks = payload.read_this_first.slice(0, 3);
 
   const heading = (text: string) =>
-    `<h2 style="margin:0 0 4px;font-family:${FONT};font-size:18px;line-height:24px;font-weight:600;color:${COLORS.ink};">${escapeHtml(text)}</h2>`;
+    `<h2 style="margin:0 0 4px;font-family:${FONT};font-size:18px;line-height:24px;font-weight:600;">${escapeHtml(text)}</h2>`;
 
   if (marks.length === 0) {
     return {
-      html: `${heading(COPY.readThisFirst)}<p style="margin:0;font-family:${FONT};font-size:16px;line-height:24px;color:${COLORS.ink};">${escapeHtml(COPY.nothingFirst)}</p>`,
+      html: `${heading(COPY.readThisFirst)}<p style="margin:0;font-family:${FONT};font-size:16px;line-height:24px;">${escapeHtml(COPY.nothingFirst)}</p>`,
       text: `${COPY.readThisFirst}\n${COPY.nothingFirst}`,
     };
   }
@@ -226,8 +208,6 @@ function renderReadThisFirst(
   return { html, text };
 }
 
-/* ------------------------------------------------------------------ block 3 */
-
 function renderBrandLine(line: BriefPayload["brands"][number]): { html: string; text: string } {
   const counts = [
     countPhrase(line.ad_delta, "new ad", "new ads"),
@@ -239,15 +219,15 @@ function renderBrandLine(line: BriefPayload["brands"][number]): { html: string; 
   const movement = movementText(line.movement, line.is_new);
 
   const html = [
-    `<div style="padding:10px 0;border-top:1px solid ${COLORS.rule};">`,
-    `<p style="margin:0;font-family:${FONT};font-size:16px;line-height:24px;color:${COLORS.ink};">`,
+    `<div class="brief-rule" style="padding:10px 0;">`,
+    `<p style="margin:0;font-family:${FONT};font-size:16px;line-height:24px;">`,
     `<strong>${escapeHtml(line.name)}</strong>`,
-    ` <span style="color:${COLORS.muted};">${escapeHtml(rankLabel)}, ${escapeHtml(movement)}</span>`,
+    ` <span class="brief-muted">${escapeHtml(rankLabel)}, ${escapeHtml(movement)}</span>`,
     `</p>`,
     line.biggest_move !== null
-      ? `<p style="margin:2px 0 0;font-family:${FONT};font-size:15px;line-height:22px;color:${COLORS.ink};">${escapeHtml(line.biggest_move)}</p>`
+      ? `<p style="margin:2px 0 0;font-family:${FONT};font-size:15px;line-height:22px;">${escapeHtml(line.biggest_move)}</p>`
       : "",
-    `<p style="margin:2px 0 0;font-family:${FONT};font-size:14px;line-height:20px;color:${COLORS.muted};">${escapeHtml(counts.join(" · "))}</p>`,
+    `<p class="brief-muted" style="margin:2px 0 0;font-family:${FONT};font-size:14px;line-height:20px;">${escapeHtml(counts.join(" · "))}</p>`,
     `</div>`,
   ].join("");
 
@@ -264,11 +244,11 @@ function renderBrandLine(line: BriefPayload["brands"][number]): { html: string; 
 
 function renderBrands(payload: BriefPayload): { html: string; text: string } {
   const heading = (text: string) =>
-    `<h2 style="margin:0 0 4px;font-family:${FONT};font-size:18px;line-height:24px;font-weight:600;color:${COLORS.ink};">${escapeHtml(text)}</h2>`;
+    `<h2 style="margin:0 0 4px;font-family:${FONT};font-size:18px;line-height:24px;font-weight:600;">${escapeHtml(text)}</h2>`;
 
   if (payload.brands.length === 0) {
     return {
-      html: `${heading(COPY.yourBrands)}<p style="margin:0;font-family:${FONT};font-size:16px;line-height:24px;color:${COLORS.ink};">${escapeHtml(COPY.noRank)}</p>`,
+      html: `${heading(COPY.yourBrands)}<p style="margin:0;font-family:${FONT};font-size:16px;line-height:24px;">${escapeHtml(COPY.noRank)}</p>`,
       text: `${COPY.yourBrands}\n${COPY.noRank}`,
     };
   }
@@ -281,12 +261,10 @@ function renderBrands(payload: BriefPayload): { html: string; text: string } {
   };
 }
 
-/* ------------------------------------------------------------------ block 4 */
-
 function renderOwnSite(payload: BriefPayload): { html: string; text: string } {
   const { own_site } = payload;
   const body = (text: string) =>
-    `<p style="margin:0;font-family:${FONT};font-size:16px;line-height:24px;color:${COLORS.ink};">${escapeHtml(text)}</p>`;
+    `<p style="margin:0;font-family:${FONT};font-size:16px;line-height:24px;">${escapeHtml(text)}</p>`;
 
   if (own_site.status === "ok" || own_site.incidents.length === 0) {
     return {
@@ -307,7 +285,7 @@ function renderOwnSite(payload: BriefPayload): { html: string; text: string } {
 
   const html = [
     body(COPY.ownSiteBroken(open.length)),
-    `<p style="margin:6px 0 0;font-family:${FONT};font-size:15px;line-height:22px;color:${COLORS.ink};">`,
+    `<p style="margin:6px 0 0;font-family:${FONT};font-size:15px;line-height:22px;">`,
     lines
       .split("\n")
       .map((line) => `<span style="display:block;">${escapeHtml(line)}</span>`)
@@ -317,8 +295,6 @@ function renderOwnSite(payload: BriefPayload): { html: string; text: string } {
 
   return { html, text: `${COPY.ownSiteBroken(open.length)}\n${lines}` };
 }
-
-/* ------------------------------------------------------------------ block 5 */
 
 function renderFooter(payload: BriefPayload, unsubscribeUrl: string | null): { html: string; text: string } {
   const checked = countsSentence(payload.checked);
@@ -335,15 +311,16 @@ function renderFooter(payload: BriefPayload, unsubscribeUrl: string | null): { h
       ? ` ${COPY.degraded(payload.checked.degraded_source_keys.length)}`
       : "";
 
+  const unsubscribeHref = unsubscribeUrl === null ? null : safeUrl(unsubscribeUrl);
   const html = [
-    `<div style="padding:16px 0 0;border-top:1px solid ${COLORS.rule};">`,
-    `<p style="margin:0;font-family:${FONT};font-size:13px;line-height:18px;color:${COLORS.muted};">${escapeHtml(COPY.footerTitle)}</p>`,
-    `<p style="margin:2px 0 0;font-family:${FONT};font-size:13px;line-height:18px;color:${COLORS.muted};">${escapeHtml(`${checked} across ${sources}.${degraded}`)}</p>`,
-    `<p style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;color:${COLORS.muted};">${escapeHtml(nextAt)}</p>`,
-    `<p style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;color:${COLORS.muted};">`,
-    unsubscribeUrl === null
+    `<div class="brief-rule" style="padding:16px 0 0;">`,
+    `<p class="brief-muted" style="margin:0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(COPY.footerTitle)}</p>`,
+    `<p class="brief-muted" style="margin:2px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(`${checked} across ${sources}.${degraded}`)}</p>`,
+    `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(nextAt)}</p>`,
+    `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">`,
+    unsubscribeHref === null
       ? escapeHtml(COPY.noUnsubscribe)
-      : `<a href="${escapeAttr(unsubscribeUrl)}" style="color:${COLORS.muted};">${escapeHtml(COPY.unsubscribe)}</a>`,
+      : `<a class="brief-muted" href="${unsubscribeHref}">${escapeHtml(COPY.unsubscribe)}</a>`,
     `</p>`,
     `</div>`,
   ].join("");
@@ -357,14 +334,26 @@ function renderFooter(payload: BriefPayload, unsubscribeUrl: string | null): { h
   return { html, text };
 }
 
-/* -------------------------------------------------------------------- entry */
+function briefStyle(): string {
+  return [
+    `<style>`,
+    `.brief-page{background-color:${COLORS.page};}`,
+    `.brief-card{background-color:${COLORS.card};color:${COLORS.ink};}`,
+    `.brief-muted{color:${COLORS.muted};}`,
+    `.brief-rule{border-top-color:${COLORS.rule};}`,
+    `.brief-rule img{border-color:${COLORS.rule};}`,
+    `a.brief-ink,a.brief-muted{color:inherit;}`,
+    `@media (prefers-color-scheme: dark) {`,
+    `.brief-page{background-color:${DARK_COLORS.page};}`,
+    `.brief-card{background-color:${DARK_COLORS.card};color:${DARK_COLORS.ink};}`,
+    `.brief-muted{color:${DARK_COLORS.muted};}`,
+    `.brief-rule{border-top-color:${DARK_COLORS.rule};}`,
+    `.brief-rule img{border-color:${DARK_COLORS.rule};}`,
+    `}`,
+    `</style>`,
+  ].join("");
+}
 
-/**
- * Render the brief in the contract's order: headline, read this first, per
- * brand, own site, footer. The order is the contract (docs/REBUILD-DELIVERY.md
- * "The weekly brief, in order") and is not reorderable by data — a block with
- * nothing in it still renders, so the shape of the message never changes.
- */
 export function renderBrief(payload: BriefPayload, context: BriefContext): RenderedBrief {
   const headline = renderHeadline(payload);
   const marks = renderReadThisFirst(payload, context.asset_base_url);
@@ -378,7 +367,7 @@ export function renderBrief(payload: BriefPayload, context: BriefContext): Rende
       : "Your weekly brief";
 
   const block = (inner: string) =>
-    `<div style="padding:20px 0;border-top:1px solid ${COLORS.rule};">${inner}</div>`;
+    `<div class="brief-rule" style="padding:20px 0;">${inner}</div>`;
 
   const html = [
     `<!doctype html>`,
@@ -387,11 +376,12 @@ export function renderBrief(payload: BriefPayload, context: BriefContext): Rende
     `<meta charset="utf-8">`,
     `<meta name="viewport" content="width=device-width,initial-scale=1">`,
     `<meta name="color-scheme" content="light dark">`,
+    briefStyle(),
     `<title>${escapeHtml(subject)}</title>`,
     `</head>`,
-    `<body style="margin:0;padding:0;background-color:${COLORS.page};">`,
+    `<body class="brief-page" style="margin:0;padding:0;">`,
     `<div style="padding:24px 12px;">`,
-    `<div style="max-width:600px;margin:0 auto;background-color:${COLORS.card};padding:24px;border-radius:8px;">`,
+    `<div class="brief-card" style="max-width:600px;margin:0 auto;padding:24px;border-radius:8px;">`,
     headline.html,
     block(marks.html),
     block(brands.html),

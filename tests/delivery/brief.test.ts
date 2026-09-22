@@ -162,8 +162,17 @@ describe("off brands are absent, not zeroed", () => {
     expect(html).toContain(">Kindred<");
     expect(html).toContain(">Casetta<");
     expect(html.toLowerCase()).not.toContain("tracking off");
-    expect(html).not.toContain("0 new ads &middot; 0 mentions");
     expect(text).not.toContain("tracking off");
+  });
+
+  it("never renders a zeroed counts line for a brand that is not on the payload", () => {
+    const { html, text } = renderBrief(
+      payload({ brands: [{ ...payload().brands[0], ad_delta: 0, mention_delta: 0, site_change_count: 0 }] }),
+      CONTEXT,
+    );
+    expect(text).not.toContain("0 new ads");
+    expect(html).not.toContain("0 new ads");
+    expect(text).toContain("no new ads · no mentions · no site changes");
   });
 
   it("counts only the brands that are present, in the counts sentence", () => {
@@ -248,6 +257,47 @@ describe("screenshots are linked, never inlined", () => {
   it("links the thumbnail through the asset base URL", () => {
     const { html } = renderBrief(payload(), CONTEXT);
     expect(html).toContain('<img src="https://assets.0509.io/captures/ws_1/sig_1/before.png"');
+  });
+
+  it("keeps an already percent-encoded key byte-for-byte, never re-encoding it", () => {
+    const { html } = renderBrief(
+      payload({
+        read_this_first: [
+          { ...payload().read_this_first[0], thumbnail_r2_key: "captures/ws_1/a%20b/x+y.png" },
+        ],
+      }),
+      CONTEXT,
+    );
+    expect(html).toContain("https://assets.0509.io/captures/ws_1/a%20b/x+y.png");
+    expect(html).not.toContain("%2520");
+  });
+
+  it("refuses a javascript: url rather than shipping it as a live link", () => {
+    const { html, text } = renderBrief(
+      payload({
+        read_this_first: [{ ...payload().read_this_first[0], url: "javascript:alert(1)", title: "" }],
+      }),
+      CONTEXT,
+    );
+    expect(html).not.toContain('href="javascript:');
+    expect(text).toContain("javascript:alert(1)");
+  });
+
+  it("refuses a javascript: unsubscribe url the same way", () => {
+    const { html } = renderBrief(payload(), { ...CONTEXT, unsubscribe_url: "javascript:alert(1)" });
+    expect(html).not.toContain('href="javascript:');
+    expect(html).toContain("Unsubscribe is not available right now");
+  });
+
+  it("escapes the quote it puts in an attribute, so a url cannot break out of it", () => {
+    const { html } = renderBrief(
+      payload({
+        read_this_first: [{ ...payload().read_this_first[0], url: 'https://x.example/a"onmouseover=x' }],
+      }),
+      CONTEXT,
+    );
+    expect(html).toContain("&quot;onmouseover=x");
+    expect(html).not.toContain('"onmouseover=x"');
   });
 
   it("omits the thumbnail, not the mark, when no asset base is configured", () => {
@@ -374,10 +424,31 @@ describe("dates", () => {
 });
 
 describe("inline-styled html, and the voice", () => {
-  it("styles every element inline and emits no <style> block or class", () => {
+  it("styles layout inline and puts colours in one <style> block, with a dark-mode override", () => {
     const { html } = renderBrief(payload(), CONTEXT);
-    expect(html).not.toContain("<style");
-    expect(html).not.toContain("class=");
+    expect(html).toContain("<style>");
+    expect(html).toContain("@media (prefers-color-scheme: dark) {");
+    expect(html).toContain(".brief-card{background-color:#1c1a15;color:#f2efe4;}");
+    expect(html).toContain(".brief-muted{color:#a9a294;}");
+    expect(html).toContain(".brief-page{background-color:#14130f;}");
+    expect(html).toContain('max-width:600px;margin:0 auto;padding:24px;border-radius:8px;');
+    expect(html.match(/<style>/g)).toHaveLength(1);
+  });
+
+  it("sets no colour inline, so the dark-mode override cannot be outranked", () => {
+    const { html } = renderBrief(payload(), CONTEXT);
+    const inline = html.match(/style="[^"]*"/g) ?? [];
+    for (const style of inline) {
+      expect(style).not.toMatch(/background-color|(^|[^-])color:/);
+    }
+  });
+
+  it("keeps both palettes to DESIGN.md §4's tokens, not a third set", () => {
+    const { html } = renderBrief(payload(), CONTEXT);
+    const style = html.slice(html.indexOf("<style>"), html.indexOf("</style>"));
+    for (const hex of ["#f4f1e8", "#fffdf6", "#0e0d0a", "#55524a", "#ddd6c6", "#14130f", "#1c1a15", "#f2efe4", "#a9a294", "#322e25"]) {
+      expect(style).toContain(hex);
+    }
   });
 
   it("carries no exclamation mark and no title case in its own copy", () => {
