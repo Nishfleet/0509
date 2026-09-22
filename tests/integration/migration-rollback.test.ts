@@ -1,4 +1,5 @@
 import { applyD1Migrations, env } from "cloudflare:test";
+import type { D1Migration } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
 /**
@@ -18,11 +19,11 @@ const SCHEMA_DUMP = `SELECT type, name, tbl_name, sql FROM sqlite_master
   WHERE name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name != 'd1_migrations'
   ORDER BY type, name`;
 
-const WRONG = {
+const WRONG: D1Migration = {
   name: "0003_wrong_additive.sql",
   queries: ["ALTER TABLE signal ADD COLUMN accidental_metric TEXT"],
 };
-const CORRECTIVE = {
+const CORRECTIVE: D1Migration = {
   name: "0004_corrective.sql",
   queries: ["ALTER TABLE signal DROP COLUMN accidental_metric"],
 };
@@ -53,9 +54,31 @@ async function columnNames(table: string): Promise<string[]> {
   return (results ?? []).map((r) => r.name);
 }
 
+// sqlite_master.sql text can legitimately differ after a DROP COLUMN rebuild,
+// so "schema matches" also stands on a position-independent digest of every
+// table's columns.
+async function columnDigest(): Promise<Record<string, string[]>> {
+  const { results: tables } = await env.DB.prepare(
+    `SELECT name FROM sqlite_master WHERE type = 'table'
+       AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name != 'd1_migrations'
+     ORDER BY name`,
+  ).all<{ name: string }>();
+  const digest: Record<string, string[]> = {};
+  for (const { name } of tables ?? []) {
+    const { results: cols } = await env.DB.prepare(
+      `SELECT name, type, "notnull", dflt_value, pk FROM pragma_table_info('${name}') ORDER BY cid`,
+    ).all<{ name: string; type: string; notnull: number; dflt_value: string | null; pk: number }>();
+    digest[name] = (cols ?? []).map(
+      (c) => `${c.name} ${c.type} notnull=${c.notnull} dflt=${c.dflt_value} pk=${c.pk}`,
+    );
+  }
+  return digest;
+}
+
 describe("a wrong migration has a proven way back", () => {
   it("an additive wrong is reversed by a newer forward migration", async () => {
     const before = await schemaDump();
+    const digestBefore = await columnDigest();
     console.log(`sqlite_master before (${before.length} objects):`);
     console.log(JSON.stringify(before, null, 2));
 
@@ -68,9 +91,11 @@ describe("a wrong migration has a proven way back", () => {
     console.log(`sqlite_master after corrective (${after.length} objects):`);
     console.log(JSON.stringify(after, null, 2));
     expect(after).toEqual(before);
+    expect(await columnDigest()).toEqual(digestBefore);
     expect(await appliedNames()).toContain(CORRECTIVE.name);
 
     await applyD1Migrations(env.DB, [WRONG]);
     expect(await columnNames("signal")).not.toContain("accidental_metric");
+    expect((await appliedNames()).filter((n) => n === WRONG.name)).toHaveLength(1);
   });
 });

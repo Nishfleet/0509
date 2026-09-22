@@ -38,6 +38,8 @@ export default defineConfig({
             "tests/integration/**/*.integration.test.ts",
             // #4180's acceptance names this file verbatim, without the
             // .integration infix; it still needs real workerd + real D1.
+            // Intentionally the only integration test outside the infix
+            // convention — do not let another project glob it in.
             "tests/integration/migration-rollback.test.ts",
           ],
           setupFiles: ["./tests/integration/apply-migrations.ts"],
