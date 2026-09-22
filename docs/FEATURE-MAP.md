@@ -34,11 +34,11 @@ state.
 
 | Route | File | Reach | Keyboard | What it does | Proof |
 |---|---|---|---|---|---|
-| `/app` | `app/routes/app.home.tsx` | after sign-in | `Tab` to the button, `Enter` | Home. The signed-in email and an "Add a passkey" button that runs better-auth's register ceremony (`generate-register-options` → `verify-registration`) against the live session. | **J3**, **J4**; the register ceremony is **J2** — `e2e/j2-passkey.spec.ts` |
+| `/app` | `app/routes/app.home.tsx`, `app/routes/home.tsx` | after sign-in | `Tab` to the button, `Enter` | Home. The signed-in email, an "Add a passkey" button, and the standing panel: rank, four-week line, why-line, read-this-first, source freshness. Fewer than two ON brands says to add a competitor. | **J3**, **J4**; the register ceremony is **J2** — `e2e/j2-passkey.spec.ts` |
 | `/app/competitors` | `app/routes/app.competitors.tsx` | — | — | The tracked set. Currently a stub. | **J6** |
 | `/app/competitors/:entityId` | `app/routes/app.competitor.tsx` | a row on `/app/competitors` | — | One competitor. Currently a stub. | **J7**, **J10** |
 | `/app/alerts` | `app/routes/app.alerts.tsx` | — | — | What changed. Currently a stub. | **J7**, **J8** |
-| `/app/settings` | `app/routes/app.settings.tsx` | — | — | Workspace settings. Currently a stub. | **J13**, **J14** |
+| `/app/settings` | `app/routes/app.settings.tsx`, `app/routes/settings.tsx` | — | edit weekday, hour, timezone, `Enter` | Workspace settings. Saving the brief time cancels the pending rollover and stores the next UTC instant. | **J13**, **J14** |
 
 ## Not a route
 

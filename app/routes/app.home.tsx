@@ -3,11 +3,14 @@ import type { Route } from "./+types/app.home";
 import { useState } from "react";
 
 import { authClient } from "../lib/auth-client";
+import { loadHome } from "../lib/data/standing.server";
 import { requireSession } from "../lib/require-session.server";
+import { StandingHome } from "./home";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
-  return { email: session.user.email };
+  const home = await loadHome(session.user.id);
+  return { email: session.user.email, home };
 }
 
 export default function Page({ loaderData }: Route.ComponentProps) {
@@ -33,6 +36,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       </button>
       {state === "added" ? <p role="status">Passkey added. It can sign you in from now on.</p> : null}
       {state === "failed" ? <p role="alert">The passkey prompt did not finish. Try again.</p> : null}
+      <StandingHome home={loaderData.home} />
     </main>
   );
 }
