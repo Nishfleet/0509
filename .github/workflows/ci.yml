@@ -164,6 +164,12 @@ jobs:
     if: github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Alert paths terminate in dispatch (0509#4208): a red production run opens
+    # the issue that queues its own repair instead of waiting for a human to
+    # notice. `issues: write` is what lets the ticket step below file it.
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -192,6 +198,53 @@ jobs:
           path: playwright-report/
           retention-days: 7
 
+      - name: Open the issue that dispatches this failure
+        # A red production run is a detector that must end in a queue item, not
+        # in a human noticing (0509#4208). Stock `gh` only: the issue names the
+        # run, the head SHA and the failing spec titles, which the job's own
+        # check-run annotations already carry (Playwright's github reporter
+        # writes one per failed test). The `machine-reported` label is the
+        # admission property — see docs/USER-REPORTS.md 'The door, end to end'.
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          sha7=${GITHUB_SHA::7}
+          title="e2e-production red on $sha7"
+          job_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs" \
+            --jq ".jobs[] | select(.name == \"e2e-production\") | .id")
+          failures=$(gh api "repos/$GITHUB_REPOSITORY/check-runs/$job_id/annotations" \
+            --jq '[.[] | select(.annotation_level == "failure") | .title] | unique | .[] | "- \(.)"')
+          # One FEATURE-MAP row per failing spec, so the worker that claims this
+          # starts from the route rather than from a title.
+          specs=$(printf '%s\n' "$failures" | grep -oE 'e2e/[A-Za-z0-9._-]+\.spec\.ts' | sort -u || true)
+          maprows=""
+          for spec in $specs; do
+            row=$(grep -F "$spec" docs/FEATURE-MAP.md | head -1 | awk -F'|' '{gsub(/^ +| +$/, "", $2); print $2}' || true)
+            maprows+="- $spec -> ${row:-unmapped}"$'\n'
+          done
+          body=$(printf '%s\n' \
+            "A red post-deploy e2e run on main. Opened by CI so the failure is queued instead of noticed by hand (0509#4208)." \
+            "" \
+            "- Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            "- Head: $GITHUB_SHA" \
+            "- Failing specs:" \
+            "$failures" \
+            "" \
+            "Feature-map rows (spec -> route):" \
+            "$maprows" \
+            "" \
+            "The reproducing worker drives 0509.io with the verify skill (.agents/skills/verify/) before changing code.")
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+            --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" \
+              --label machine-reported --body "$body"
+          fi
+
   lighthouse:
     name: lighthouse
     # The performance half of verification (talk 14:30): correctness says the
@@ -203,6 +256,11 @@ jobs:
     if: github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Same dispatch rule as e2e-production (0509#4208): a red performance run
+    # opens its own issue rather than waiting to be noticed.
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@v5
       - name: Exchange the Access service token for the CF_Authorization cookie
@@ -222,6 +280,40 @@ jobs:
           configPath: ./lighthouserc.cjs
           uploadArtifacts: true
           temporaryPublicStorage: true
+
+      - name: Open the issue that dispatches this failure
+        # The performance half of the same rule (0509#4208): a red budget
+        # assertion names the route and the measured value, which is the whole
+        # reproduction. The annotation message is the assertion lhci failed on
+        # — `maxNumericValue ... expected: <=1500, found: 1973.132`.
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          sha7=${GITHUB_SHA::7}
+          title="lighthouse red on $sha7"
+          job_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs" \
+            --jq ".jobs[] | select(.name == \"lighthouse\") | .id")
+          failures=$(gh api "repos/$GITHUB_REPOSITORY/check-runs/$job_id/annotations" \
+            --jq '[.[] | select(.annotation_level == "failure") | .message | split("\n") | map(select(test("^Report:") | not)) | join("\n")] | unique | .[] | "- \(.)"')
+          body=$(printf '%s\n' \
+            "A red post-deploy Lighthouse run on main. Opened by CI so the regression is queued instead of noticed by hand (0509#4208)." \
+            "" \
+            "- Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            "- Head: $GITHUB_SHA" \
+            "- Failing assertions:" \
+            "$failures" \
+            "" \
+            "Feature map: the audited route is on the Public table of docs/FEATURE-MAP.md; the reproducing worker drives 0509.io with the verify skill (.agents/skills/verify/) before changing code.")
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+            --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" \
+              --label machine-reported --body "$body"
+          fi
 
   # Opus 5 grades every PR (Nish 2026-09-22: "have opus 5 grade glm and ds4.1
   # flash"). Stock anthropics/claude-code-action on the Claude subscription
