@@ -18,12 +18,15 @@ export default defineConfig({
           name: "node",
           environment: "node",
           include: ["tests/**/*.test.ts"],
-          exclude: ["tests/integration/**"],
+          // This file needs the workers project's D1. Running it here has no DB.
+          exclude: ["tests/integration/**", "tests/mentions/disabled-source.test.ts"],
         },
       },
       {
-        // Real workerd + real local D1 with migrations/0001_rebuild.sql applied.
+        // Real workerd + real local D1. setupFiles applies every file in migrations/.
         // The only project where a D1 assertion means anything.
+        // tests/mentions/disabled-source.test.ts lives on the issue's path and
+        // still has to run here, because the node project has no D1 binding.
         plugins: [
           cloudflareTest(async () => ({
             wrangler: { configPath: "./tests/integration/wrangler.test.jsonc" },
@@ -34,7 +37,10 @@ export default defineConfig({
         ],
         test: {
           name: "workers",
-          include: ["tests/integration/**/*.integration.test.ts"],
+          include: [
+            "tests/integration/**/*.integration.test.ts",
+            "tests/mentions/disabled-source.test.ts",
+          ],
           setupFiles: ["./tests/integration/apply-migrations.ts"],
           testTimeout: 30_000,
         },
