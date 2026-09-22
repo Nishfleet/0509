@@ -299,7 +299,7 @@ npx shadcn@latest init
 npx shadcn@latest add button
 ```
 
-That is the whole installation. `init` writes `components.json`, rewrites `app/app.css` with the token blocks, and adds `clsx`/`tailwind-merge`/`class-variance-authority`/`lucide-react` plus `app/lib/utils.ts`.
+That is the whole installation. `init` writes `components.json`, rewrites `app/app.css` with the token blocks, and adds `clsx`/`tailwind-merge`/`class-variance-authority`/`lucide-react` plus `app/lib/utils.ts`. `npx shadcn@latest add badge avatar` also installs `@base-ui/react` 1.8.0, the primitive those copied files import (<https://base-ui.com/react/components/avatar>, DESIGN.md §11).
 
 ### 3.3 Tokens, theming, dark mode
 
@@ -1007,6 +1007,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | Auth schema generation | `npx auth@1.7.5 generate` against an empty local SQLite (§2.4) | `auth` 1.7.5, pinned |
 | Styling | `tailwindcss` + `@tailwindcss/vite` | 4.3.3 (scaffold pins ^4.2.2) |
 | Components | `shadcn` CLI → copied source | 4.21.0 |
+| Badge and avatar primitives | `@base-ui/react` | 1.8.0 |
 | Durable scheduling + retries | Cloudflare Workflows (`step.sleep`, `step.do`) | platform |
 | Fan-out + concurrency cap | Cloudflare Queues (`max_concurrency`) | platform |
 | Screenshots + rendered DOM | Browser Run (Quick Actions; sessions via `@cloudflare/puppeteer`) | platform |
