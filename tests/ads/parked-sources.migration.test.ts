@@ -82,21 +82,32 @@ describe("migration file discipline", () => {
   });
 
   it("states the probe evidence the parked rows rest on", async () => {
-    const sql = await readFile(path.join(MIGRATIONS, SEED_FILENAME), "utf8");
     // The dates and URLs that make these rows evidence rather than an opinion.
-    for (const [platform, url, status] of [
-      ["snap", "https://snap.com/political-ads", "404"],
-      ["x", "https://ads.x.com/ad-repository/search?q=gymshark", "404"],
-      ["pinterest", "https://ads.pinterest.com/ad-library/?q=gymshark", "404"],
-      ["amazon", "https://amazon.com/adlib", "404"],
-      ["apple", "https://ads.apple.com/transparency", "404"],
-    ] as const) {
+    // Each platform's (url, status) pairs come straight from
+    // docs/engines/ads.md probes 12-16. A wrong status in the SQL must fail
+    // THIS test — the file-wide toContain pattern that the first version used
+    // was masked by the other four rows' 404s (a real defect: snap's URL
+    // records 200 in the SQL and the doc, not 404). Asserting each
+    // (url, status) pair as a quoted JSON snippet makes a wrong probe red.
+    const probes: { platform: string; url: string; status: number | string }[] = [
+      { platform: "snap", url: "https://snap.com/political-ads", status: 200 },
+      { platform: "snap", url: "https://transparency.snap.com", status: "NXDOMAIN" },
+      { platform: "x", url: "https://ads.x.com/ad-repository/search?q=gymshark", status: 404 },
+      { platform: "pinterest", url: "https://ads.pinterest.com/ad-library/?q=gymshark", status: 404 },
+      { platform: "amazon", url: "https://amazon.com/adlib", status: 404 },
+      { platform: "apple", url: "https://ads.apple.com/transparency", status: 404 },
+    ];
+    const sql = await readFile(path.join(MIGRATIONS, SEED_FILENAME), "utf8");
+    for (const { platform, url, status } of probes) {
       expect(sql).toContain(`'ads.${platform}_parked', 'ads', '${platform}', 'ads.${platform}_parked', 'best_effort', 0`);
-      expect(sql).toContain(url);
-      expect(sql).toContain(`"status": ${status}`);
+      // Exact (url, status) pair as it appears in the SQL's JSON. Quoting the
+      // status so a JSON number is matched for 200/404 and a JSON string for
+      // "NXDOMAIN", which is how the SQL writes it.
+      const statusLiteral = typeof status === "number" ? String(status) : `"${status}"`;
+      expect(sql).toContain(
+        `"url": "${url}",\n           "status": ${statusLiteral}`,
+      );
     }
     expect(sql).toContain("2026-09-21T12:14:29Z");
-    expect(sql).toContain("NXDOMAIN");
-    expect(sql).toContain(`"status": "NXDOMAIN"`);
   });
 });
