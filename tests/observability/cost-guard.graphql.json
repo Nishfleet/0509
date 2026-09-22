@@ -16,76 +16,23 @@
           "d1": [
             {
               "dimensions": {
+                "databaseId": "746c6e3d-782e-443a-82d6-28ca93a16294",
                 "date": "2026-09-21"
               },
               "sum": {
-                "rowsWritten": 17510
+                "rowsWritten": 17499
               }
             }
           ],
           "r2": [
             {
               "dimensions": {
-                "actionType": "GetObject"
-              },
-              "sum": {
-                "requests": 185
-              }
-            },
-            {
-              "dimensions": {
-                "actionType": "ListObjects"
-              },
-              "sum": {
-                "requests": 1609
-              }
-            },
-            {
-              "dimensions": {
-                "actionType": "PutBucket"
+                "actionType": "PutBucket",
+                "bucketName": "0509-snapshots",
+                "date": "2026-09-21"
               },
               "sum": {
                 "requests": 1
-              }
-            },
-            {
-              "dimensions": {
-                "actionType": "HeadBucket"
-              },
-              "sum": {
-                "requests": 25
-              }
-            },
-            {
-              "dimensions": {
-                "actionType": "PutObject"
-              },
-              "sum": {
-                "requests": 91
-              }
-            },
-            {
-              "dimensions": {
-                "actionType": "DeleteObject"
-              },
-              "sum": {
-                "requests": 11
-              }
-            },
-            {
-              "dimensions": {
-                "actionType": "ListBuckets"
-              },
-              "sum": {
-                "requests": 1
-              }
-            },
-            {
-              "dimensions": {
-                "actionType": "HeadObject"
-              },
-              "sum": {
-                "requests": 588
               }
             }
           ]

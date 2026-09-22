@@ -4,147 +4,212 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it, vi } from "vitest";
 
-import {
-  COST_REGRESSION_MULTIPLE,
-  DOCUMENTED_PER_BRAND_PER_DAY,
-  checkCostRegression,
-} from "../../app/lib/observability/cost-guard";
+import { checkCostRegression } from "../../app/lib/observability/cost-guard.server";
 
-import type { CostAlert } from "../../app/lib/observability/cost-guard";
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 
 const REAL_GRAPHQL: unknown = JSON.parse(
   readFileSync(join(dirname(fileURLToPath(import.meta.url)), "cost-guard.graphql.json"), "utf8"),
 );
 
+const DOC = readFileSync(join(ROOT, "docs/REBUILD-COST.md"), "utf8");
+const WRANGLER = readFileSync(join(ROOT, "wrangler.jsonc"), "utf8");
+
 const DAY = "2026-09-21";
 
-function store() {
-  const rows: CostAlert[] = [];
+function oneNumber(text: string, pattern: RegExp, label: string): number {
+  const values = [...text.matchAll(pattern)].map((match) => Number(match[1]?.replaceAll(",", "")));
+  const distinct = [...new Set(values)];
+  if (distinct.length !== 1 || distinct[0] === undefined || !Number.isFinite(distinct[0])) {
+    throw new Error(`${label} matched ${distinct.join(", ") || "nothing"}`);
+  }
+  return distinct[0];
+}
+
+function documented() {
+  const d1Week = oneNumber(DOC, /wrote ([\d,]+) with no ON brand/g, "d1 week floor");
+  const d1PerBrand = oneNumber(DOC, /(\d+) snapshot rows per brand-day/g, "d1 per brand");
+  const browserWeekMs = oneNumber(DOC, /summed to ([\d,]+) ms/g, "browser week");
+  const browserPerBrand = oneNumber(
+    DOC,
+    /\| Browser Rendering duration \| (\d+) browser-seconds per brand per day/g,
+    "browser per brand",
+  );
+  const modelSeconds = oneNumber(DOC, /≈(\d+) browser-seconds per brand per day/g, "browser model");
+  if (modelSeconds !== browserPerBrand) throw new Error("browser model and table estimate disagree");
+  const dailyRows = [...DOC.matchAll(/^\| (\d{4}-\d{2}-\d{2}) \| [\d,]+ \| [\d,]+ \| [\d,]+ \| ([\d,]+) \|$/gm)].map(
+    (match) => Number(match[2]?.replaceAll(",", "")),
+  );
+  if (dailyRows.length !== 7) throw new Error(`expected 7 ordinary days, got ${String(dailyRows.length)}`);
+  const summed = dailyRows.reduce((sum, rows) => sum + rows, 0);
+  if (summed !== d1Week) throw new Error(`daily rows sum to ${String(summed)}, week floor is ${String(d1Week)}`);
+  const databaseIds = [...WRANGLER.matchAll(/"database_id": "([^"]+)"/g)].map((match) => match[1]);
+  const buckets = [...WRANGLER.matchAll(/"bucket_name": "([^"]+)"/g)].map((match) => match[1]);
+  if (databaseIds.length !== 1 || buckets.length !== 1) {
+    throw new Error("wrangler must declare one D1 database and one R2 bucket");
+  }
   return {
-    rows,
-    writeAlert(row: CostAlert) {
-      rows.push(row);
-      return { id: row.id };
-    },
+    d1Week,
+    d1PerBrand,
+    browserWeekMs,
+    browserPerBrand,
+    dailyRows,
+    days: dailyRows.length,
+    multiple: 3,
+    databaseId: databaseIds[0] ?? "",
+    bucket: buckets[0] ?? "",
   };
+}
+
+const FIGURES = documented();
+
+function d1Trips(rows: number, onBrands: number): boolean {
+  return (
+    rows * FIGURES.days >
+    FIGURES.multiple * (FIGURES.d1Week + FIGURES.d1PerBrand * onBrands * FIGURES.days)
+  );
+}
+
+function browserTrips(durationMs: number, onBrands: number): boolean {
+  return (
+    durationMs * FIGURES.days >
+    FIGURES.multiple * (FIGURES.browserWeekMs + FIGURES.browserPerBrand * 1000 * onBrands * FIGURES.days)
+  );
+}
+
+function smallestTrip(trips: (value: number) => boolean): number {
+  let low = 0;
+  let high = 1;
+  while (!trips(high)) {
+    low = high;
+    high *= 2;
+  }
+  while (low + 1 < high) {
+    const mid = Math.floor((low + high) / 2);
+    if (trips(mid)) high = mid;
+    else low = mid;
+  }
+  return high;
 }
 
 function envelope(account: Record<string, unknown>) {
   return { data: { viewer: { accounts: [account] } }, errors: null };
 }
 
-function quietAccount(rowsWritten: number) {
+function day(rowsWritten: number, classA = 0, durationMs = 0) {
   return envelope({
-    d1: [{ dimensions: { date: DAY }, sum: { rowsWritten } }],
-    r2: [{ dimensions: { actionType: "PutObject" }, sum: { requests: 10 } }],
-    browser: [{ dimensions: { date: DAY }, sum: { totalSessionDurationMs: 15_000 } }],
+    d1: [
+      {
+        dimensions: { date: DAY, databaseId: FIGURES.databaseId },
+        sum: { rowsWritten },
+      },
+    ],
+    r2:
+      classA === 0
+        ? []
+        : [
+            {
+              dimensions: { date: DAY, actionType: "PutObject", bucketName: FIGURES.bucket },
+              sum: { requests: classA },
+            },
+          ],
+    browser: [{ dimensions: { date: DAY }, sum: { totalSessionDurationMs: durationMs } }],
   });
 }
 
 describe("checkCostRegression", () => {
-  it("locks the documented per-brand-per-day figures", () => {
-    expect(DOCUMENTED_PER_BRAND_PER_DAY).toEqual({
-      d1_rows_written: 10,
-      r2_class_a: 10,
-      browser_rendering_seconds: 15,
-    });
-    expect(COST_REGRESSION_MULTIPLE).toBe(3);
+  it("pins the trip line to the figures docs/REBUILD-COST.md carries", () => {
+    expect(FIGURES.d1PerBrand).toBe(10);
+    expect(FIGURES.d1Week).toBe(223_287);
+    expect(FIGURES.browserPerBrand).toBe(15);
+    expect(FIGURES.browserWeekMs).toBe(62_703_271);
+    expect(DOC).toContain("That dataset has no script name");
+    expect(DOC).not.toMatch(/Class A per brand/);
   });
 
-  it("reads the committed GraphQL response for 2026-09-21 and names each line over 3x", async () => {
-    const alerts = store();
+  it("reads the committed GraphQL response and stays quiet on that ordinary day", async () => {
     const result = await checkCostRegression({
       graphql: REAL_GRAPHQL,
       day: DAY,
       onBrands: 1,
-      writeAlert: alerts.writeAlert,
     });
-
     expect(result.totals).toEqual({
-      d1_rows_written: 17_510,
-      r2_class_a: 1_702,
+      d1_rows_written: 17_499,
+      r2_class_a: 1,
       browser_rendering_seconds: 4943.228,
     });
-    expect(result.perBrand).toEqual(result.totals);
-    expect(result.alerts.map((row) => row.id)).toEqual([
-      "cost-guard:2026-09-21:d1_rows_written",
-      "cost-guard:2026-09-21:r2_class_a",
-      "cost-guard:2026-09-21:browser_rendering_seconds",
-    ]);
-    expect(alerts.rows).toEqual(result.alerts);
-    const d1 = result.alerts[0];
-    expect(d1).toMatchObject({
-      line: "d1_rows_written",
-      measured: 17_510,
-      expected: 10,
-      day: DAY,
-      total: 17_510,
-      onBrands: 1,
-    });
+    expect(result.alerts).toEqual([]);
+    expect(d1Trips(17_499, 1)).toBe(false);
+    expect(browserTrips(4_943_228, 1)).toBe(false);
+    expect(result.expected.d1_rows_written).toBeCloseTo(FIGURES.d1Week / FIGURES.days + 10, 6);
+    expect(result.expected.browser_rendering_seconds).toBeCloseTo(
+      FIGURES.browserWeekMs / FIGURES.days / 1000 + 15,
+      6,
+    );
   });
 
-  it("keeps the account total when the ON-brand count changes", async () => {
-    const result = await checkCostRegression({
-      graphql: REAL_GRAPHQL,
-      day: DAY,
-      onBrands: 2,
-      writeAlert: () => ({ id: "unused" }),
-    });
-    expect(result.totals.d1_rows_written).toBe(17_510);
-    expect(result.perBrand.d1_rows_written).toBe(8755);
+  it("stays quiet on every rows-written day the doc prints, at 0 and 1 ON brands", async () => {
+    for (const rows of FIGURES.dailyRows) {
+      for (const onBrands of [0, 1]) {
+        const result = await checkCostRegression({ graphql: day(rows), day: DAY, onBrands });
+        expect(result.alerts, `${String(rows)} rows, ${String(onBrands)} brands`).toEqual([]);
+      }
+    }
   });
 
-  it("writes cost-guard:2026-09-21:d1_rows_written when a threshold is deliberately tripped", async () => {
-    const alerts = store();
-    const result = await checkCostRegression({
-      graphql: quietAccount(31),
-      day: DAY,
-      onBrands: 1,
-      writeAlert: alerts.writeAlert,
-    });
+  it("writes cost-guard:2026-09-21:d1_rows_written when the D1 line is one row over the trip", async () => {
+    const rows = smallestTrip((value) => d1Trips(value, 1));
+    const under = await checkCostRegression({ graphql: day(rows - 1), day: DAY, onBrands: 1 });
+    expect(under.alerts).toEqual([]);
+    const result = await checkCostRegression({ graphql: day(rows), day: DAY, onBrands: 1 });
     expect(result.alerts).toEqual([
       {
         id: "cost-guard:2026-09-21:d1_rows_written",
         line: "d1_rows_written",
-        measured: 31,
-        expected: 10,
+        measured: rows,
+        expected: result.expected.d1_rows_written,
         day: DAY,
-        total: 31,
-        onBrands: 1,
       },
     ]);
+    expect(rows).toBeGreaterThan(3 * result.expected.d1_rows_written);
   });
 
-  it("does not alert at exactly three times the documented figure", async () => {
-    const alerts = store();
-    const result = await checkCostRegression({
-      graphql: envelope({
-        d1: [{ dimensions: { date: DAY }, sum: { rowsWritten: 30 } }],
-        r2: [{ dimensions: { actionType: "PutObject" }, sum: { requests: 30 } }],
-        browser: [{ dimensions: { date: DAY }, sum: { totalSessionDurationMs: 45_000 } }],
-      }),
-      day: DAY,
-      onBrands: 1,
-      writeAlert: alerts.writeAlert,
-    });
+  it("writes cost-guard:2026-09-21:browser_rendering_seconds one millisecond over the trip", async () => {
+    const durationMs = smallestTrip((value) => browserTrips(value, 1));
+    const under = await checkCostRegression({ graphql: day(0, 0, durationMs - 1), day: DAY, onBrands: 1 });
+    expect(under.alerts).toEqual([]);
+    const result = await checkCostRegression({ graphql: day(0, 0, durationMs), day: DAY, onBrands: 1 });
+    expect(result.alerts.map((row) => row.id)).toEqual(["cost-guard:2026-09-21:browser_rendering_seconds"]);
+    const alert = result.alerts[0];
+    expect(alert?.measured).toBeCloseTo(durationMs / 1000, 6);
+    expect(alert?.expected).toBe(result.expected.browser_rendering_seconds);
+  });
+
+  it("names the five-million-row day the $105 pattern is priced at", async () => {
+    const result = await checkCostRegression({ graphql: day(5_000_000), day: DAY, onBrands: 0 });
+    expect(result.alerts.map((row) => row.id)).toEqual(["cost-guard:2026-09-21:d1_rows_written"]);
+    expect(result.alerts[0]?.measured).toBe(5_000_000);
+  });
+
+  it("reports a million Class A puts and does not alert, because the doc carries no per-brand Class A figure", async () => {
+    const result = await checkCostRegression({ graphql: day(0, 1_000_000, 0), day: DAY, onBrands: 1 });
+    expect(result.totals.r2_class_a).toBe(1_000_000);
     expect(result.alerts).toEqual([]);
-    expect(alerts.rows).toEqual([]);
   });
 
   it("counts ListObjects as Class A and DeleteObject as free", async () => {
     const result = await checkCostRegression({
       graphql: envelope({
-        d1: [{ dimensions: { date: DAY }, sum: { rowsWritten: 0 } }],
+        d1: [{ dimensions: { date: DAY, databaseId: FIGURES.databaseId }, sum: { rowsWritten: 0 } }],
         r2: [
-          { dimensions: { actionType: "ListObjects" }, sum: { requests: 4 } },
-          { dimensions: { actionType: "DeleteObject" }, sum: { requests: 100 } },
-          { dimensions: { actionType: "GetObject" }, sum: { requests: 9 } },
+          { dimensions: { date: DAY, actionType: "ListObjects", bucketName: FIGURES.bucket }, sum: { requests: 4 } },
+          { dimensions: { date: DAY, actionType: "DeleteObject", bucketName: FIGURES.bucket }, sum: { requests: 100 } },
+          { dimensions: { date: DAY, actionType: "GetObject", bucketName: FIGURES.bucket }, sum: { requests: 9 } },
         ],
         browser: [{ dimensions: { date: DAY }, sum: { totalSessionDurationMs: 0 } }],
       }),
       day: DAY,
-      onBrands: 1,
-      writeAlert: () => ({ id: "unused" }),
+      onBrands: 0,
     });
     expect(result.totals.r2_class_a).toBe(4);
     expect(result.alerts).toEqual([]);
@@ -154,169 +219,157 @@ describe("checkCostRegression", () => {
     await expect(
       checkCostRegression({
         graphql: envelope({
-          d1: [{ dimensions: { date: DAY }, sum: { rowsWritten: 0 } }],
-          r2: [{ dimensions: { actionType: "NotARealAction" }, sum: { requests: 1 } }],
-          browser: [{ dimensions: { date: DAY }, sum: { totalSessionDurationMs: 0 } }],
+          d1: [],
+          r2: [
+            {
+              dimensions: { date: DAY, actionType: "NotARealAction", bucketName: FIGURES.bucket },
+              sum: { requests: 1 },
+            },
+          ],
+          browser: [],
         }),
         day: DAY,
-        onBrands: 1,
-        writeAlert: () => ({ id: "unused" }),
+        onBrands: 0,
       }),
     ).rejects.toThrow("cost-guard: unrecognized R2 actionType NotARealAction");
   });
 
-  it("refuses a full R2 page", async () => {
-    const r2 = Array.from({ length: 100 }, () => ({
-      dimensions: { actionType: "PutObject" },
-      sum: { requests: 1 },
-    }));
+  it("refuses a D1 group with no databaseId", async () => {
     await expect(
       checkCostRegression({
         graphql: envelope({
-          d1: [],
-          r2,
+          d1: [{ dimensions: { date: DAY }, sum: { rowsWritten: 5_097_246 } }],
+          r2: [],
           browser: [],
         }),
         day: DAY,
         onBrands: 1,
-        writeAlert: () => ({ id: "unused" }),
       }),
-    ).rejects.toThrow("cost-guard: r2 returned 100 groups, a full page");
+    ).rejects.toThrow("cost-guard: d1 group has no databaseId");
   });
 
-  it("sums every D1 group for the day", async () => {
-    const result = await checkCostRegression({
-      graphql: envelope({
-        d1: [
-          { dimensions: { date: DAY }, sum: { rowsWritten: 4 } },
-          { dimensions: { date: DAY }, sum: { rowsWritten: 6 } },
-        ],
-        r2: [],
-        browser: [],
-      }),
-      day: DAY,
-      onBrands: 1,
-      writeAlert: () => ({ id: "unused" }),
-    });
-    expect(result.totals.d1_rows_written).toBe(10);
-    expect(result.alerts).toEqual([]);
-  });
-
-  it("rejects a non-positive ON brand count", async () => {
+  it("refuses a D1 group for a different database", async () => {
     await expect(
       checkCostRegression({
-        graphql: quietAccount(0),
-        day: DAY,
-        onBrands: 0,
-        writeAlert: () => ({ id: "unused" }),
-      }),
-    ).rejects.toThrow("cost-guard: ON brand count must be a positive integer");
-  });
-
-  it("requests the previous UTC day from GraphQL", async () => {
-    const fetchImpl = vi.fn(() =>
-      Promise.resolve(
-        new Response(JSON.stringify(quietAccount(0)), {
-          status: 200,
-          headers: { "content-type": "application/json" },
+        graphql: envelope({
+          d1: [
+            {
+              dimensions: { date: DAY, databaseId: "887316c4-ca9d-4068-a7fa-1f530b479437" },
+              sum: { rowsWritten: 11 },
+            },
+          ],
+          r2: [],
+          browser: [],
         }),
-      ),
-    );
-    await checkCostRegression({
-      accountId: "0123456789abcdef0123456789abcdef",
-      apiToken: "test-token",
-      fetchImpl,
-      onBrands: 1,
-      now: new Date("2026-09-22T01:00:00Z"),
-      writeAlert: () => ({ id: "unused" }),
-    });
-    expect(fetchImpl).toHaveBeenCalledOnce();
-    const init = fetchImpl.mock.calls[0]?.[1];
-    expect(init?.headers).toMatchObject({ authorization: "Bearer test-token" });
-    const body = JSON.parse(String(init?.body)) as { query: string };
-    expect(body.query).toContain('date_geq: "2026-09-21"');
-    expect(body.query).toContain('date_leq: "2026-09-21"');
-    expect(body.query).toContain("d1AnalyticsAdaptiveGroups");
-    expect(body.query).toContain("r2OperationsAdaptiveGroups");
-    expect(body.query).toContain("browserRenderingBrowserTimeUsageAdaptiveGroups");
-  });
-
-  it("accepts the production account tag", async () => {
-    const fetchImpl = vi.fn(() =>
-      Promise.resolve(new Response(JSON.stringify(quietAccount(0)), { status: 200 })),
-    );
-    await checkCostRegression({
-      accountId: "f670a698e17bf160c8e4679823e68916",
-      apiToken: "test-token",
-      fetchImpl,
-      onBrands: 1,
-      day: DAY,
-      writeAlert: () => ({ id: "unused" }),
-    });
-    const init = fetchImpl.mock.calls[0]?.[1];
-    const body = JSON.parse(String(init?.body)) as { query: string };
-    expect(body.query).toContain('accountTag: "f670a698e17bf160c8e4679823e68916"');
-  });
-
-  it("reads 2026-10-31 when now is 2026-11-01T00:30:00Z", async () => {
-    const october = envelope({
-      d1: [{ dimensions: { date: "2026-10-31" }, sum: { rowsWritten: 0 } }],
-      r2: [],
-      browser: [],
-    });
-    const fetchImpl = vi.fn(() =>
-      Promise.resolve(new Response(JSON.stringify(october), { status: 200 })),
-    );
-    const result = await checkCostRegression({
-      accountId: "0123456789abcdef0123456789abcdef",
-      apiToken: "test-token",
-      fetchImpl,
-      onBrands: 1,
-      now: new Date("2026-11-01T00:30:00Z"),
-      writeAlert: () => ({ id: "unused" }),
-    });
-    expect(result.day).toBe("2026-10-31");
-    const init = fetchImpl.mock.calls[0]?.[1];
-    const body = JSON.parse(String(init?.body)) as { query: string };
-    expect(body.query).toContain('date_geq: "2026-10-31"');
-  });
-
-  it("refuses a GraphQL errors array", async () => {
-    await expect(
-      checkCostRegression({
-        graphql: { ...quietAccount(0), errors: [{ message: "budget" }] },
         day: DAY,
         onBrands: 1,
-        writeAlert: () => ({ id: "unused" }),
       }),
-    ).rejects.toThrow("cost-guard: graphql returned errors");
+    ).rejects.toThrow("cost-guard: d1 group is not this database");
   });
 
-  it("refuses a full D1 page and a full browser page", async () => {
+  it("refuses an R2 group for a different bucket", async () => {
+    await expect(
+      checkCostRegression({
+        graphql: envelope({
+          d1: [],
+          r2: [
+            {
+              dimensions: { date: DAY, actionType: "ListObjects", bucketName: "nish-hostinger-kvm4-backups" },
+              sum: { requests: 1609 },
+            },
+          ],
+          browser: [],
+        }),
+        day: DAY,
+        onBrands: 0,
+      }),
+    ).rejects.toThrow("cost-guard: r2 group is not the product bucket");
+  });
+
+  it("refuses a full D1 page, a full R2 page, and a full browser page", async () => {
     const d1 = Array.from({ length: 10 }, () => ({
-      dimensions: { date: DAY },
+      dimensions: { date: DAY, databaseId: FIGURES.databaseId },
       sum: { rowsWritten: 1 },
     }));
     await expect(
-      checkCostRegression({
-        graphql: envelope({ d1, r2: [], browser: [] }),
-        day: DAY,
-        onBrands: 1,
-        writeAlert: () => ({ id: "unused" }),
-      }),
+      checkCostRegression({ graphql: envelope({ d1, r2: [], browser: [] }), day: DAY, onBrands: 0 }),
     ).rejects.toThrow("cost-guard: d1 returned 10 groups, a full page");
+
+    const r2 = Array.from({ length: 100 }, () => ({
+      dimensions: { date: DAY, actionType: "PutObject", bucketName: FIGURES.bucket },
+      sum: { requests: 1 },
+    }));
+    await expect(
+      checkCostRegression({ graphql: envelope({ d1: [], r2, browser: [] }), day: DAY, onBrands: 0 }),
+    ).rejects.toThrow("cost-guard: r2 returned 100 groups, a full page");
 
     const browser = Array.from({ length: 10 }, () => ({
       dimensions: { date: DAY },
       sum: { totalSessionDurationMs: 1 },
     }));
     await expect(
-      checkCostRegression({
-        graphql: envelope({ d1: [], r2: [], browser }),
-        day: DAY,
-        onBrands: 1,
-        writeAlert: () => ({ id: "unused" }),
-      }),
+      checkCostRegression({ graphql: envelope({ d1: [], r2: [], browser }), day: DAY, onBrands: 0 }),
     ).rejects.toThrow("cost-guard: browser returned 10 groups, a full page");
+  });
+
+  it("refuses a GraphQL errors array", async () => {
+    await expect(
+      checkCostRegression({
+        graphql: { ...day(0), errors: [{ message: "budget" }] },
+        day: DAY,
+        onBrands: 0,
+      }),
+    ).rejects.toThrow("cost-guard: graphql returned errors");
+  });
+
+  it("rejects a negative ON brand count and accepts zero", async () => {
+    await expect(checkCostRegression({ graphql: day(0), day: DAY, onBrands: -1 })).rejects.toThrow(
+      "cost-guard: ON brand count must be a non-negative integer",
+    );
+    const result = await checkCostRegression({ graphql: day(0), day: DAY, onBrands: 0 });
+    expect(result.onBrands).toBe(0);
+    expect(result.alerts).toEqual([]);
+  });
+
+  it("requests the previous UTC day, this database, and the product bucket", async () => {
+    const fetchImpl = vi.fn(() =>
+      Promise.resolve(new Response(JSON.stringify(day(0)), { status: 200, headers: { "content-type": "application/json" } })),
+    );
+    await checkCostRegression({
+      accountId: "f670a698e17bf160c8e4679823e68916",
+      apiToken: "test-token",
+      fetchImpl,
+      onBrands: 1,
+      now: new Date("2026-09-22T01:00:00Z"),
+    });
+    const init = fetchImpl.mock.calls[0]?.[1];
+    expect(init?.headers).toMatchObject({ authorization: "Bearer test-token" });
+    const body = JSON.parse(String(init?.body)) as { query: string };
+    expect(body.query).toContain('date_geq: "2026-09-21"');
+    expect(body.query).toContain('date_leq: "2026-09-21"');
+    expect(body.query).toContain(`databaseId: "${FIGURES.databaseId}"`);
+    expect(body.query).toContain(`bucketName: "${FIGURES.bucket}"`);
+    expect(body.query).toContain('accountTag: "f670a698e17bf160c8e4679823e68916"');
+    expect(body.query).not.toContain("scriptName");
+  });
+
+  it("reads 2026-10-31 when now is 2026-11-01T00:30:00Z", async () => {
+    const october = envelope({
+      d1: [{ dimensions: { date: "2026-10-31", databaseId: FIGURES.databaseId }, sum: { rowsWritten: 0 } }],
+      r2: [],
+      browser: [{ dimensions: { date: "2026-10-31" }, sum: { totalSessionDurationMs: 0 } }],
+    });
+    const fetchImpl = vi.fn(() => Promise.resolve(new Response(JSON.stringify(october), { status: 200 })));
+    const result = await checkCostRegression({
+      accountId: "0123456789abcdef0123456789abcdef",
+      apiToken: "test-token",
+      fetchImpl,
+      onBrands: 0,
+      now: new Date("2026-11-01T00:30:00Z"),
+    });
+    expect(result.day).toBe("2026-10-31");
+    const init = fetchImpl.mock.calls[0]?.[1];
+    const body = JSON.parse(String(init?.body)) as { query: string };
+    expect(body.query).toContain('date_geq: "2026-10-31"');
   });
 });
