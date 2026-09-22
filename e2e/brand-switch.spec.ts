@@ -60,7 +60,7 @@ async function thumbIsRight(page: Page, state: "on" | "off" | "you"): Promise<bo
 
 test("tab reaches the per-brand switch and space toggles it", async ({ page }, testInfo) => {
   test.setTimeout(60_000);
-  const width = testInfo.project.name.includes("390") ? "390" : "1440";
+  const width = testInfo.project.use.viewport?.width === 390 ? "390" : "1440";
 
   for (const theme of ["light", "dark"] as const) {
     const response = await page.goto(`${origin}/e2e/brand-switch.html?theme=${theme}`);
@@ -102,7 +102,7 @@ test("tab reaches the per-brand switch and space toggles it", async ({ page }, t
     expect(overflow).toBe(false);
 
     await page.screenshot({
-      path: `tests/unit/brand-switch-proof/${width}-${theme}.png`,
+      path: testInfo.outputPath(`${width}-${theme}.png`),
       fullPage: true,
     });
   }
@@ -121,6 +121,7 @@ test("tab reaches the per-brand switch and space toggles it", async ({ page }, t
   await page.locator('[data-state="off"]').filter({ hasText: "Casetta" }).locator('[data-slot="state-label"]').click();
   await expect(casetta).toHaveAttribute("aria-checked", "true");
 
+  await casetta.focus();
   await page.keyboard.press("Tab");
   await expect(you).not.toBeFocused();
 });

@@ -39,7 +39,8 @@ export function BrandSwitch({
   pausedOn,
   onChange,
 }: BrandSwitchProps): ReactElement {
-  const letter = (monogram ?? name).trim().slice(0, 1).toUpperCase();
+  const monogramText = monogram?.trim() ?? "";
+  const letter = (monogramText === "" ? name.trim() : monogramText).slice(0, 1).toUpperCase();
   const operable = state !== "you";
   const checked = state !== "off";
   const label = STATE_LABEL[state];

@@ -339,7 +339,7 @@ No PostCSS config, no `tailwind.config.ts`, no CSS-in-JS, no `styled-components`
 
 ### 3.6 The per-brand switch
 
-The first component copied in is the switch. DESIGN.md §11 names it as shadcn/ui on Base UI, and names `cn` 0.3.0 for class merging. The registry item that matches that contract is the `base-nova` switch (<https://ui.shadcn.com/r/styles/base-nova/switch.json>, read 2026-09-22). Its dependencies are `@base-ui/react` 1.8.0 (<https://base-ui.com/react/components/switch>) and `cn` 0.3.0 (<https://www.npmjs.com/package/cn>).
+The first component copied in is the switch. DESIGN.md §11 names it as shadcn/ui on Base UI. The same table's class-merging row is verbatim `Class merging | cn 0.3.0`. The registry item that matches that contract is the `base-nova` switch (<https://ui.shadcn.com/r/styles/base-nova/switch.json>, read 2026-09-22). Its dependency list is `cn`, and the copied source imports `{ cn } from "cn"`. It does not import `@/lib/utils`. Dependencies: `@base-ui/react` 1.8.0 (<https://base-ui.com/react/components/switch>) and `cn` 0.3.0 (<https://www.npmjs.com/package/cn>).
 
 `cn` 0.3.0 is a compiled stand-in for `clsx` plus `tailwind-merge`. It ships no runtime dependencies of its own. §3.2 describes what `shadcn init` wrote in the 2026-09-21 React Router recipe (`clsx`, `tailwind-merge`, `class-variance-authority`, `lucide-react`). This switch does not run `init`, because `init` rewrites `app/app.css`, and it does not add those four packages. The copied file is `app/components/ui/switch.tsx`.
 

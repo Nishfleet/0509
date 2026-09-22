@@ -80,6 +80,21 @@ describe("per-brand switch", () => {
     expect(html.toLowerCase()).not.toContain("confirm");
   });
 
+  it("says history is kept when Off has no date", () => {
+    const html = renderToStaticMarkup(createElement(BrandSwitch, { name: "Casetta", state: "off" }));
+    expect(html).toContain("paused · history kept");
+    expect(html).not.toContain("paused 12 Sep");
+  });
+
+  it("uses the brand initial when the monogram is blank", () => {
+    const html = renderToStaticMarkup(
+      createElement(BrandSwitch, { name: "Casetta", monogram: "  ", state: "on" }),
+    );
+    const monogram = elementWithRole(html, "switch");
+    expect(html).toContain(">C<");
+    expect(monogram).toContain(">ON<");
+  });
+
   it("keeps the state label inside the switch, so the label is part of the hit area", () => {
     for (const state of ["on", "off", "you"] as const) {
       const control = elementWithRole(markup(state), "switch");
