@@ -90,6 +90,12 @@ export default tseslint.config(
       "coverage/**",
       "dist/**",
       ".react-router/**",
+      // wrangler dev / `npm run e2e` write generated bundles under
+      // .wrangler/tmp. Git already ignores them (.gitignore); without this
+      // entry `eslint .` lints them and `npm run lint` fails after any local
+      // run. Same class as .react-router/** and worker-configuration.d.ts.
+      // Source: #3944.
+      ".wrangler/**",
       "node_modules/**",
       "worker-configuration.d.ts",
       "docs/design-directions/**",
