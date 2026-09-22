@@ -1,0 +1,90 @@
+/**
+ * Worker config for Five to Nine (0509).
+ *
+ * The Worker name stays "0509" on purpose: Worker secrets are scoped to the
+ * name, so renaming it would orphan DODO_API_KEY, BETTER_AUTH_* and the rest,
+ * and the first deploy would come up unconfigured.
+ *
+ * Declares only what this app uses. The pre-rebuild Worker carried Workflow and
+ * Durable Object classes, eight rate-limit bindings and eight cron triggers;
+ * none are here, because nothing in this app reads them. Bindings come back one
+ * at a time, with the engine packet that needs them.
+ */
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "0509",
+  // >= 2026-08-04, so nodejs_compat is on by default and needs no flag.
+  "compatibility_date": "2026-09-16",
+  "main": "./workers/app.ts",
+  "observability": {
+    // p95 request duration per route comes from here, which is how
+    // docs/REBUILD-DONE.md's performance gate gets measured without a load
+    // generator pointed at production.
+    "enabled": true
+  },
+  "upload_source_maps": true,
+
+  // The pre-rebuild Worker declared one Durable Object class,
+  // SelectionEnrichmentLease (tag v1, new_sqlite_classes). The fresh app does
+  // not export it, and Cloudflare refuses a version that drops a class still
+  // backing live Durable Objects:
+  //
+  //   New version of script does not export class 'SelectionEnrichmentLease'
+  //   which is depended on by existing Durable Objects [code: 10064]
+  //
+  // A delete-class migration is the mechanism the error itself names. This
+  // deletes the objects along with the class, which is correct here: the lease
+  // was ad-hoc coordination for the old selection pipeline, that pipeline is
+  // gone, and there are 0 users. Tag v2 follows the old v1 so the chain is
+  // continuous rather than restarting.
+  // The chain has to carry its own history: wrangler validates it locally and
+  // rejects deleting a class this config never declared ("Cannot apply
+  // deleted_classes migration to non-existent class"). v1 mirrors what the
+  // pre-rebuild Worker did; v2 removes it. End state: no Durable Objects.
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["SelectionEnrichmentLease"] },
+    { "tag": "v2", "deleted_classes": ["SelectionEnrichmentLease"] }
+  ],
+
+  // BETTER_AUTH_URL must be the canonical origin, never derived from a
+  // forwarded header: auth origin trust and the magic-link URL both come from
+  // it, and a client-supplied value would let a link point anywhere.
+  // BETTER_AUTH_SECRET stays a Worker secret.
+  "vars": { "BETTER_AUTH_URL": "https://0509.io" },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "0509",
+      "database_id": "746c6e3d-782e-443a-82d6-28ca93a16294"
+    }
+  ],
+
+  // Browser Rendering: brand pages bot-gate a plain workerd fetch, so every
+  // arbitrary-homepage read goes through real Chrome. Measured ~7 s per ads
+  // pull; the cost model turns on keeping concurrency at or under the included
+  // ten (docs/REBUILD-COST.md).
+  "browser": { "binding": "BROWSER" },
+
+  // Transactional send only. The weekly brief's standing on this lane is an
+  // open question recorded on docs/REBUILD-DELIVERY.md.
+  "send_email": [{ "name": "EMAIL" }],
+
+  "triggers": {
+    // The dead-man ping, and nothing else yet. Every five minutes: an external
+    // service alerts when the reports stop, which is the one failure a Worker
+    // cannot report about itself.
+    "crons": ["*/5 * * * *"]
+  },
+
+  "routes": [
+    { "pattern": "0509.io", "custom_domain": true },
+    { "pattern": "www.0509.io", "custom_domain": true },
+    { "pattern": "api.0509.io", "custom_domain": true }
+    // The .in hosts are deliberately absent. Their 308 to the .io twins is a
+    // zone-level Redirect Rule on the 0509.in zone (phase
+    // http_request_dynamic_redirect, ruleset f7743879d6904ebea189b42c85713069),
+    // which runs before the Worker and costs no invocation. Adding a route here
+    // would put the Worker in that path for nothing.
+  ]
+}

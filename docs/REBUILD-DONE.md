@@ -37,8 +37,9 @@ Umbrella #3842. Author: Fable. Checked by the Opus deputy. Nish's words: "you ca
 
 ## D. Repository state
 
-- No `scripts/`, `ops/`, `.github/scripts`, `.lane/`, hooks, wrappers or helper files. `package.json` scripts: build, dev, test, typecheck, deploy only.
-- Workflows: `ci.yml` and `deploy-production.yml` only; required checks unchanged by name.
+- No `scripts/`, `ops/`, `.github/scripts`, `.lane/`, hooks, wrappers or helper files. `package.json` scripts: **build, dev, test, typecheck, deploy, lint, e2e** — nothing else, and every one of them a vendor command, never a file we wrote. `lint` is `eslint . && knip`; `e2e` is `playwright test`. Amended 2026-09-21 by docs/REBUILD-TRUST.md: the correction ladder's second rung has to be runnable by the agent that is about to be corrected, which means a script name, not a CI-only step.
+- Workflows: `ci.yml` and `deploy-production.yml` only; required checks unchanged by name. `ci.yml` also answers `deployment_status`, where `e2e-production` and `lighthouse` run against what was just deployed; neither is a required check, because a check that cannot report on a pull request blocks the merge queue forever.
+- Every e2e test traces to a row in `docs/FEATURE-MAP.md`, and every route in `app/routes.ts` has one. Checked by the Opus reviewer on every PR that touches a route; no bespoke test reads either file.
 - Every dependency in `package.json` is named in docs/REBUILD-STACK.md with a reason.
 - Docs: README, DESIGN, CLAUDE, and the REBUILD docs only; every path a doc names exists (checked in review, not by a bespoke test).
 - Tests: every file under `tests/` and `e2e/` tests product behaviour; no test about the fleet, CI, migration numbering or docs.
