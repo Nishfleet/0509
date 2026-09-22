@@ -1,88 +1,34 @@
-import { DurableObject } from "cloudflare:workers";
-
-const HOUR_MS = 60 * 60 * 1000;
-
 interface InboxEnv {
-  INBOX: DurableObjectNamespace<InboxMailbox>;
+  INBOX: KVNamespace;
   E2E_INBOX_TOKEN?: string;
 }
 
-// The J1 mail sink, decided on 0509#3927 (2026-09-22): Email Routing's
-// e2e@0509.io rule delivers here. Per-run addresses are e2e+<run-id>@0509.io,
-// and the same rule catches them because subaddressing (RFC 5233) is enabled
-// on the zone and preserves the full recipient in message.to. The raw MIME
-// lands in a SQLite Durable Object named for that recipient. The Playwright
-// suite reads it back through GET /message. Workers KV caches a missing key
-// for at least 60s, including at the edge that polled first, so the runner
-// kept reading 404 after the write had landed (0509#4210). This object
-// returns the row the write stored. A test-only route inside the app was
-// rejected. This Worker is a separate deployment so the magic link travels
-// the whole real path.
-// workerd's SubtleCrypto.timingSafeEqual — a synchronous constant-time
-// compare. The DOM lib's SubtleCrypto declaration shadows the workers-types
-// one under tsconfig.cloudflare.json, so the method's signature is restored
-// locally; the runtime call is the real one (exercised by the integration
-// test's 403/200 rows).
+
+
+
+
+
+
+
+
+
+
+
+
+
 const timingSafeEqual = (
   crypto.subtle as SubtleCrypto & {
     timingSafeEqual(a: ArrayBufferView, b: ArrayBufferView): boolean;
   }
 ).timingSafeEqual.bind(crypto.subtle);
 
-// One object per recipient. The name is message.to, the same string the
-// suite sends as ?to=, so the write and the read are the same instance.
-export class InboxMailbox extends DurableObject<InboxEnv> {
-  constructor(ctx: DurableObjectState, env: InboxEnv) {
-    super(ctx, env);
-    void ctx.blockConcurrencyWhile(() => {
-      this.ctx.storage.sql.exec(
-        `CREATE TABLE IF NOT EXISTS message (
-          id INTEGER PRIMARY KEY CHECK (id = 1),
-          raw TEXT NOT NULL,
-          created_at INTEGER NOT NULL
-        )`,
-      );
-      return Promise.resolve();
-    });
-  }
-
-  async store(raw: string): Promise<void> {
-    const now = Date.now();
-    this.ctx.storage.sql.exec(
-      `INSERT INTO message (id, raw, created_at) VALUES (1, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET raw = excluded.raw, created_at = excluded.created_at`,
-      raw,
-      now,
-    );
-    // The alarm deletes the row. The read below also refuses a row older
-    // than an hour, so a late alarm cannot serve a stale message.
-    await this.ctx.storage.setAlarm(now + HOUR_MS);
-  }
-
-  read(): string | null {
-    const row = this.ctx.storage.sql
-      .exec<{ raw: string; created_at: number }>("SELECT raw, created_at FROM message WHERE id = 1")
-      .toArray()[0];
-    if (!row) return null;
-    if (row.created_at + HOUR_MS <= Date.now()) {
-      this.ctx.storage.sql.exec("DELETE FROM message WHERE id = 1");
-      return null;
-    }
-    return row.raw;
-  }
-
-  alarm(): void {
-    this.ctx.storage.sql.exec("DELETE FROM message");
-  }
-}
-
 export default {
   async email(message, env) {
-    // Awaited, not waitUntil'd: a failed store rejects the delivery so Email
-    // Routing retries, instead of the test blaming a missing rule for what
-    // was really a dropped write.
+    
+    
+    
     const raw = await new Response(message.raw).text();
-    await env.INBOX.getByName(message.to).store(raw);
+    await env.INBOX.put(message.to, raw, { expirationTtl: 3600 });
   },
 
   async fetch(request, env) {
@@ -104,7 +50,7 @@ export default {
     if (!to) {
       return new Response("missing ?to=", { status: 400 });
     }
-    const message = await env.INBOX.getByName(to).read();
+    const message = await env.INBOX.get(to);
     if (message === null) {
       return new Response("no message stored for recipient", { status: 404 });
     }
