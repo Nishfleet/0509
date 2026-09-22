@@ -1,0 +1,11 @@
+// Test config for the fetch-then-browser transport (0509#3971): real workerd for
+// the fetch leg and the HTMLRewriter text extraction, a stand-in for the
+// Browser Run binding. The browser binding is deliberately NOT real here —
+// a local workerd has no Browser Run service — so the escalation's *shape* is
+// what is pinned, and the production escalation is evidenced in the PR body.
+{
+  "name": "0509-transport-test",
+  "compatibility_date": "2026-09-16",
+  "main": "../../workers/app.ts",
+  "browser": { "binding": "BROWSER" }
+}

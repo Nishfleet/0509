@@ -64,6 +64,11 @@
   // arbitrary-homepage read goes through real Chrome. Measured ~7 s per ads
   // pull; the cost model turns on keeping concurrency at or under the included
   // ten (docs/REBUILD-COST.md).
+  //
+  // Since P3 (#3971) it is the escalation target of the fetch-then-browser
+  // transport in app/lib/fetch/transport.ts: that module tries a plain `fetch`
+  // first and only reaches for this binding when the fetch is refused, so the
+  // binding now backs the interactive path as well as the sweep path.
   "browser": { "binding": "BROWSER" },
 
   // Transactional send only. The weekly brief's standing on this lane is an
