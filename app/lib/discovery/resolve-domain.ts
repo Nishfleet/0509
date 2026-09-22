@@ -150,7 +150,7 @@ async function slugGuess(name: string, fetchImpl: typeof fetch): Promise<Resolut
   return { domain: null, via: "unresolved", live: true };
 }
 
-async function homepageLive(domain: string, fetchImpl: typeof fetch): Promise<boolean> {
+export async function homepageLive(domain: string, fetchImpl: typeof fetch): Promise<boolean> {
   const res = await fetchImpl(`https://${domain}/`, {
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   }).catch(() => null);
