@@ -85,3 +85,36 @@ test("the page reaches first paint with no console errors", async ({ page }) => 
 
   expect(errors).toEqual([]);
 });
+
+test("/robots.txt is served with a crawler policy", async ({ request }) => {
+  const response = await request.get("/robots.txt");
+  expect(response.status()).toBe(200);
+  expect(response.headers()["content-type"]).toContain("text/plain");
+
+  const body = await response.text();
+  expect(body).toContain("User-agent: *");
+  expect(body).toContain("Allow: /");
+  expect(body).toMatch(/^Disallow: \/app\/?$/m);
+  expect(body).toMatch(/^Disallow: \/api\/?$/m);
+  expect(body).toMatch(/^Disallow: \/mcp\/?$/m);
+  expect(body).toContain("Sitemap: https://0509.io/sitemap.xml");
+  expect(body).not.toMatch(/^Disallow: \/\/?$/m);
+});
+
+test("/sitemap.xml is served as a valid absolute-URL document", async ({ request }) => {
+  const response = await request.get("/sitemap.xml");
+  expect(response.status()).toBe(200);
+  expect(response.headers()["content-type"]).toContain("application/xml");
+
+  const body = await response.text();
+  expect(body.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(true);
+  expect(body).toContain('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">');
+  expect(body.trimEnd().endsWith("</urlset>")).toBe(true);
+
+  const found = [...body.matchAll(/<loc>(.*?)<\/loc>/g)].map((match) => match[1]);
+  expect(found.length).toBeGreaterThan(0);
+  for (const loc of found) {
+    expect(loc.startsWith("https://0509.io/")).toBe(true);
+  }
+  expect(new Set(found).size).toBe(found.length);
+});
