@@ -53,11 +53,15 @@ const textHash = (text: string): string => {
   return h.toString(16).padStart(8, "0");
 };
 
-/** A recorder standing in for the R2 binding: proves keys and sizes. */
+/** A recorder standing in for the R2 binding: proves keys, types and bodies. */
 const makeStore = () => {
-  const written = new Map<string, { bytes: number; contentType: string; isImage: boolean }>();
+  const written = new Map<
+    string,
+    { bytes: number; contentType: string; isImage: boolean; body: string | null }
+  >();
   const store: MarkStore = {
     async put(key, value, options) {
+      const body = typeof value === "string" ? value : new TextDecoder().decode(value as ArrayBuffer);
       const bytes =
         typeof value === "string"
           ? new TextEncoder().encode(value).byteLength
@@ -67,7 +71,12 @@ const makeStore = () => {
               ? value.byteLength
               : 0;
       const contentType = options?.httpMetadata?.contentType ?? "application/octet-stream";
-      written.set(key, { bytes, contentType, isImage: contentType.startsWith("image/") });
+      written.set(key, {
+        bytes,
+        contentType,
+        isImage: contentType.startsWith("image/"),
+        body: contentType.startsWith("image/") ? null : body,
+      });
       return undefined;
     },
   };
@@ -241,6 +250,19 @@ describe("site diff — stored hunks", () => {
   it("rejects a negative context rather than producing an unbounded patch", () => {
     expect(() => buildStoredHunks("a", "b", -1)).toThrow(/context/);
   });
+
+  it("locates a pure insertion at a before-text index, never past its end", () => {
+    // A hunk with only `+` lines has no `-` line to stop on, so the position
+    // must be fixed at the insertion point rather than advanced past the last
+    // context line — a competitor adding a section is the common "launch" class.
+    const before = "Home About Contact";
+    const after = "Home Pricing About Contact";
+    const hunks = buildStoredHunks(before, after, 2);
+    expect(hunks).toHaveLength(1);
+    const beforeWords = before.split(" ");
+    expect(hunks[0].startWord).toBeLessThan(beforeWords.length);
+    expect(hunks[0].startWord).toBe(diffWordsPositioned(before, after)[0].startWord);
+  });
 });
 
 describe("site diff — the real fixture-site text pair", () => {
@@ -316,9 +338,10 @@ describe("site diff — the mark is keys, never a body", () => {
       afterText: SOFT_TEXT,
     });
     const { store, written } = makeStore();
+    const keys = keysFor("2026-09-22T00:00:00Z");
     const { refs } = await storeMark(
       store,
-      keysFor("2026-09-22T00:00:00Z"),
+      keys,
       diff,
       HEALTHY_TEXT,
       SOFT_TEXT,
@@ -336,6 +359,15 @@ describe("site diff — the mark is keys, never a body", () => {
     // inside a D1 row: every ref carries a byte count, which is the cost line.
     expect(refs.beforeScreenshotKey.bytes).toBe(4);
     expect(refs.beforeTextKey.bytes).toBeGreaterThan(0);
+    // The stored hunks body carries hunks and word changes, never the pages
+    // themselves: D3's `item` is the hunks, never full pages
+    // (docs/engines/site-change.md), and the texts already have their own keys.
+    // The body is asserted against the pages' distinguishing prose — the hunks
+    // legitimately contain the price token that disappeared.
+    const body = JSON.parse(written.get(keys.hunksKey)?.body ?? "{}");
+    expect(Object.keys(body).sort()).toEqual(["changes", "hunks"]);
+    expect(JSON.stringify(body)).not.toContain("Track every competitor move");
+    expect(JSON.stringify(body)).toContain("₹499");
   });
 
   it("returns a small reference object — keys only, no body field anywhere", async () => {

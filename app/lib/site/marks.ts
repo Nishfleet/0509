@@ -15,8 +15,6 @@ export interface MarkStore {
 }
 
 interface MarkBody {
-  beforeText: string;
-  afterText: string;
   hunks: StoredHunk[];
   changes: PageDiff["changes"];
 }
@@ -108,8 +106,6 @@ export async function storeMark(
     afterScreenshot,
   );
   const bodyRef = await putMarkBody(store, keys.hunksKey, {
-    beforeText,
-    afterText,
     hunks: diff.hunks,
     changes: diff.changes,
   });

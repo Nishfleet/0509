@@ -43,6 +43,11 @@ export default defineConfig({
             "tests/integration/migration-rollback.test.ts",
             "tests/unit/site/**/*.test.ts",
           ],
+          // The fixture-site project below owns its own integration file, which
+          // binds a different Worker with a different KV. Without this exclude
+          // the file matches both globs and fails in this project, where its
+          // `STATE` binding does not exist.
+          exclude: ["tests/integration/site/site-change-diff.integration.test.ts"],
           setupFiles: ["./tests/integration/apply-migrations.ts"],
           testTimeout: 30_000,
         },

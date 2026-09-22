@@ -129,11 +129,14 @@ export function buildStoredHunks(before: string, after: string, context = 2): St
     const lines = stripNoNewline(hunk.lines);
     // `oldStart` is 1-based and names the hunk's first line, which can be a
     // context line before the change. The change's own position is the first
-    // `-` line, one word per context line that preceded it.
+    // non-context line, one word per context line that preceded it. A pure
+    // insertion has no `-` line, so the break must be on anything that is not
+    // context — otherwise the trailing context words advance the position past
+    // the end of the before text.
     let startWord = hunk.oldStart - 1;
     for (const line of lines) {
-      if (line.startsWith("-")) break;
-      if (line.startsWith(" ")) startWord += 1;
+      if (!line.startsWith(" ")) break;
+      startWord += 1;
     }
     return {
       oldStart: hunk.oldStart,
