@@ -59,7 +59,7 @@ beforeEach(async () => {
   await seedWorkspace();
 });
 
-describe("card publish state (0002_card_publish.sql)", () => {
+describe("card publish state (0003_card_publish.sql)", () => {
   it("starts unpublished with no slug", async () => {
     const settings = await readCardSettings(WORKSPACE_ID);
     expect(settings).toEqual({ published: false, slug: null });

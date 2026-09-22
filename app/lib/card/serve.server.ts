@@ -9,7 +9,7 @@ import { env } from "cloudflare:workers";
 // is real.
 
 // One indexed read resolves the slug and carries the publish flag with it. The
-// UNIQUE index on workspace(card_slug) from 0002_card_publish.sql is what makes
+// UNIQUE index on workspace(card_slug) from 0003_card_publish.sql is what makes
 // it one read rather than a scan, and it is the only thing the public path can
 // learn from the tenant table.
 const SELECT_PUBLISHED_WORKSPACE = `SELECT id FROM workspace
