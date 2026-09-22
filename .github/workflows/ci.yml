@@ -60,6 +60,15 @@ jobs:
         run: npm run lint
 
       - name: Test
+        # #4246: tests/queues-exist.test.ts needs the account's queue list to
+        # compare against wrangler.jsonc, and a repository secret is available
+        # on this repo's own pull_request, merge_group and push runs but not
+        # on a fork's. Supplying it here is what makes the check a gate: with
+        # the secret absent the test fails closed instead of skipping, because
+        # a fork PR is also green on a secret that was never provisioned.
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npm test
       - name: Build
         run: npm run build
