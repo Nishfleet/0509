@@ -14,11 +14,20 @@ import { describe, expect, it } from "vitest";
  *
  * What is honestly provable here, and what is not: the ads sweep does not exist
  * yet (P3 / issue #4000), so no real tick runs and "zero queue messages" cannot
- * be measured end to end. What this file proves is the state that makes a tick
- * produce nothing for these rows — the row exists, is disabled, carries its
- * evidence, and nothing downstream references it — plus that the eligibility
- * predicate the sweep will use responds to the flag. When #4000 lands the tick
- * itself is measured there.
+ * be measured end to end.
+ *
+ * mechanism-impossible: the acceptance bullet "produces zero queue messages" is
+ * not measurable in this packet because the sweep that enqueues queue messages
+ * does not exist — `workers/app.ts`'s `scheduled` handler is a stub and there is
+ * no queue binding in `wrangler.jsonc`. A queue-message count asserted here
+ * would be a number the implementation does not yet produce. Declared per the
+ * fleet convention (fleet-ops#366) rather than implied by an empty assertion;
+ * #4000 ships the sweep and that test measures a real tick.
+ *
+ * What this file proves instead is the state that makes a tick produce nothing
+ * for these rows — the row exists, is disabled, carries its evidence, and
+ * nothing downstream references it — plus that the eligibility predicate the
+ * sweep will use responds to the flag.
  */
 
 /**
@@ -154,6 +163,30 @@ describe("parked ad platforms (#4039)", () => {
       .bind(...args)
       .first<{ n: number }>();
     expect(signals?.n, "a parked source has no UI surface").toBe(0);
+
+    // Positive control for the three zeros above. `snapshot` and `signal` are
+    // empty in a fresh D1, so a count of 0 is also what a broken query, a bad
+    // placeholder list or a mistyped column returns — a zero that proves
+    // nothing. Prove the id set and the placeholder wiring are correct by
+    // running the SAME placeholder list against the table where these ids
+    // definitely exist: `source` must see all five. A control that greps the
+    // real rows beats seeding workspace/entity/watch/signal/snapshot by hand
+    // through five foreign keys.
+    const sameIdsInSource = await env.DB.prepare(
+      `SELECT count(*) AS n FROM source WHERE id IN (${placeholders})`,
+    )
+      .bind(...args)
+      .first<{ n: number }>();
+    expect(sameIdsInSource?.n, "the placeholder list must resolve all five rows").toBe(
+      PARKED.length,
+    );
+
+    // And a zero that is not this query's answer: the signals for the parked
+    // rows are zero while the rows themselves are present, so the signal table
+    // is being read and simply has nothing for them.
+    expect(signals?.n).toBe(0);
+    expect(snapshots?.n).toBe(0);
+    expect(watches?.n).toBe(0);
   });
 
   it("would become eligible if someone enabled it, so the guard is real", async () => {

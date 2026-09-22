@@ -25,8 +25,34 @@ import { describe, expect, it } from "vitest";
 const MIGRATIONS = path.resolve(import.meta.dirname, "..", "..", "migrations");
 /** The migration production has already applied and must never gain SQL again. */
 const APPLIED_FILENAME = "0001_rebuild.sql";
-/** The only migration allowed to seed `source` rows today. */
-const SEED_FILENAME = "0002_parked_ads_sources.sql";
+/**
+ * A `source` INSERT statement, however its table name is quoted. `INSERT INTO
+ * source` and `INSERT INTO "source"` are the same statement to SQLite, so the
+ * guard must catch both. Matches `INSERT OR IGNORE/REPLACE INTO` too.
+ */
+const INSERT_INTO_SOURCE = /INSERT\s+(?:OR\s+\w+\s+)?INTO\s+["`[]?source["`\]]?\b/i;
+
+/**
+ * The filename is resolved by content, never hardcoded. Nish's numbering rule
+ * on #4039 says a file at the same number as an in-flight packet is renamed on
+ * merge conflict, so a name pinned here would ENOENT the moment #3977/#3969/
+ * #3905 renumbers this one. Resolve whichever migration seeds the parked rows
+ * and let the renumber be a pure rename.
+ */
+async function parkedSeedFile(): Promise<string> {
+  const seeding: string[] = [];
+  for (const name of await migrationFiles()) {
+    const sql = await readFile(path.join(MIGRATIONS, name), "utf8");
+    if (INSERT_INTO_SOURCE.test(sql) && sql.includes("src_ads_snap_parked")) {
+      seeding.push(name);
+    }
+  }
+  expect(
+    seeding,
+    "exactly one migration seeds the five parked ad rows; found " + JSON.stringify(seeding),
+  ).toHaveLength(1);
+  return seeding[0];
+}
 
 async function migrationFiles(): Promise<string[]> {
   const names = await readdir(MIGRATIONS);
@@ -68,7 +94,7 @@ describe("migration file discipline", () => {
     // The applied file's own DROP/CREATE statements are fine — they are what it
     // did. What must never appear again is a row INSERT into source: that is
     // this issue's original defect, verbatim.
-    expect(applied).not.toMatch(/INSERT\s+INTO\s+source\b/i);
+    expect(applied).not.toMatch(INSERT_INTO_SOURCE);
   });
 
   it("seeds the parked rows in their own migration, never in an applied one", async () => {
@@ -77,41 +103,61 @@ describe("migration file discipline", () => {
     // not a whole-tree allowlist: other migrations (e.g. #3977's disabled X
     // row) legitimately seed source rows in their own files, and a test that
     // reddens main for them punishes the correct behaviour. The parked rows
-    // themselves must come from SEED_FILENAME, and that is what is asserted.
-    const seedSql = await readFile(path.join(MIGRATIONS, SEED_FILENAME), "utf8");
+    // themselves must come from one migration, and that is what is asserted.
+    const seedSql = await readFile(path.join(MIGRATIONS, await parkedSeedFile()), "utf8");
     for (const platform of ["snap", "x", "pinterest", "amazon", "apple"]) {
       expect(seedSql).toContain(`src_ads_${platform}_parked`);
     }
     const applied = await readFile(path.join(MIGRATIONS, APPLIED_FILENAME), "utf8");
-    expect(applied).not.toMatch(/INSERT\s+INTO\s+source\b/i);
+    expect(applied).not.toMatch(INSERT_INTO_SOURCE);
   });
 
   it("states the probe evidence the parked rows rest on", async () => {
     // The dates and URLs that make these rows evidence rather than an opinion.
     // Each platform's (url, status) pairs come straight from
-    // docs/engines/ads.md probes 12-16. A wrong status in the SQL must fail
-    // THIS test — the file-wide toContain pattern that the first version used
-    // was masked by the other four rows' 404s (a real defect: snap's URL
-    // records 200 in the SQL and the doc, not 404). Asserting each
-    // (url, status) pair as a quoted JSON snippet makes a wrong probe red.
-    const probes: { platform: string; url: string; status: number | string }[] = [
-      { platform: "snap", url: "https://snap.com/political-ads", status: 200 },
-      { platform: "snap", url: "https://transparency.snap.com", status: "NXDOMAIN" },
-      { platform: "x", url: "https://ads.x.com/ad-repository/search?q=gymshark", status: 404 },
-      { platform: "pinterest", url: "https://ads.pinterest.com/ad-library/?q=gymshark", status: 404 },
-      { platform: "amazon", url: "https://amazon.com/adlib", status: 404 },
-      { platform: "apple", url: "https://ads.apple.com/transparency", status: 404 },
+    // docs/engines/ads.md probes 12-16.
+    //
+    // Each probe is asserted INSIDE its own row's slice, not against the whole
+    // file. Two defects in this gate's own lineage are why: (a) a file-wide
+    // check let the other four rows' 404s mask snap's 200, so a wrong status
+    // could not fail; (b) a file-wide check cannot see a probe moved to another
+    // platform's row. Slicing the SQL at each row id ties a probe to its row.
+    const probes: { id: string; url: string; status: number | string }[] = [
+      { id: "src_ads_snap_parked", url: "https://snap.com/political-ads", status: 200 },
+      { id: "src_ads_snap_parked", url: "https://transparency.snap.com", status: "NXDOMAIN" },
+      { id: "src_ads_x_parked", url: "https://ads.x.com/ad-repository/search?q=gymshark", status: 404 },
+      { id: "src_ads_pinterest_parked", url: "https://ads.pinterest.com/ad-library/?q=gymshark", status: 404 },
+      { id: "src_ads_amazon_parked", url: "https://amazon.com/adlib", status: 404 },
+      { id: "src_ads_apple_parked", url: "https://ads.apple.com/transparency", status: 404 },
     ];
-    const sql = await readFile(path.join(MIGRATIONS, SEED_FILENAME), "utf8");
-    for (const { platform, url, status } of probes) {
-      expect(sql).toContain(`'ads.${platform}_parked', 'ads', '${platform}', 'ads.${platform}_parked', 'best_effort', 0`);
-      // Exact (url, status) pair as it appears in the SQL's JSON. Quoting the
-      // status so a JSON number is matched for 200/404 and a JSON string for
-      // "NXDOMAIN", which is how the SQL writes it.
+    const sql = await readFile(path.join(MIGRATIONS, await parkedSeedFile()), "utf8");
+
+    // Slice the file into one block per parked row: from the row's id up to the
+    // next row's id (or EOF). The last slice is the final row.
+    const ids = [...new Set(probes.map((p) => p.id))];
+    const starts = ids
+      .map((id) => ({ id, at: sql.indexOf(`('${id}'`) }))
+      .filter((s) => s.at >= 0)
+      .sort((a, b) => a.at - b.at);
+    expect(starts, "every parked row id must appear in the seed migration").toHaveLength(ids.length);
+    const blockFor = (id: string): string => {
+      const i = starts.findIndex((s) => s.id === id);
+      const from = starts[i].at;
+      const to = i + 1 < starts.length ? starts[i + 1].at : sql.length;
+      return sql.slice(from, to);
+    };
+
+    for (const { id, url, status } of probes) {
+      const block = blockFor(id);
+      // The row tuple: kind, platform and is_enabled live in the same block.
+      const platform = id.replace(/^src_ads_|_parked$/g, "");
+      expect(block).toContain(`'ads.${platform}_parked', 'ads', '${platform}', 'ads.${platform}_parked', 'best_effort', 0`);
+      // Exact (url, status) pair as it appears in the SQL's JSON, inside this
+      // row's slice. Quoting the status so a JSON number is matched for 200/404
+      // and a JSON string for "NXDOMAIN", which is how the SQL writes it.
       const statusLiteral = typeof status === "number" ? String(status) : `"${status}"`;
-      expect(sql).toContain(
-        `"url": "${url}",\n           "status": ${statusLiteral}`,
-      );
+      expect(block).toContain(`"url": "${url}",`);
+      expect(block).toContain(`"status": ${statusLiteral}`);
     }
     expect(sql).toContain("2026-09-21T12:14:29Z");
   });
