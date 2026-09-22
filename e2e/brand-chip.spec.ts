@@ -78,10 +78,11 @@ test("a failed logo falls back to the monogram and the row does not scroll or sh
     (window as unknown as { __stay: number }).__stay = 1;
   });
   await you.click();
-  // The chip is a client navigation into a signed-in route. Production has no
-  // session, so the gate sends it to /login without reloading the document.
-  // Local preview's auth lookup throws on the empty D1, so the URL stays on
-  // the chip's href. A full document load would drop __stay either way.
-  await page.waitForURL(/\/(?:login|app\/competitors\/loopwell)$/);
+  // Client navigation into a signed-in route, and the document must stay.
+  // Production has no session, so requireSession sends the click to /login.
+  // Local preview's empty D1 makes that lookup throw, so the URL stays on
+  // the chip's href. Each mode asserts its own destination.
+  const signedOutLandsOnLogin = Boolean(process.env.PLAYWRIGHT_TEST_BASE_URL);
+  await page.waitForURL(signedOutLandsOnLogin ? /\/login$/ : /\/app\/competitors\/loopwell$/);
   expect(await page.evaluate(() => (window as unknown as { __stay?: number }).__stay)).toBe(1);
 });

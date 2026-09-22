@@ -16,7 +16,7 @@ test.skip(
 );
 
 test("a passkey registered on first sign-in signs in on its own", async ({ page, context }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(150_000);
   const token = requireInboxToken();
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
 
@@ -57,9 +57,11 @@ test("a passkey registered on first sign-in signs in on its own", async ({ page,
     // The passkey alone: a resident credential on the virtual authenticator
     // answers the empty allowCredentials list the sign-in button produces.
     await page.getByRole("button", { name: /passkey/i }).click();
-    // Measured from click to /onboarding: verify-authentication, then
-    // navigate("/app"), then the loader's redirect here. That chain took
-    // 7.4s, so the 5s expect default reports failure while it is still in flight.
+    // Measured 2026-09-22 against https://0509.io: 7.4s from this click to
+    // /onboarding (verify-authentication, navigate("/app"), then the loader
+    // redirect). The 5s expect default reports failure while that is in flight.
+    // The test ceiling stays above the inbox poll (120s) so a missing message
+    // still fails with the poll's own error.
     await expect(page).toHaveURL(/\/onboarding/, { timeout: 20_000 });
     await expect(page.getByText(email)).toBeVisible();
     console.log(`passkey sign-in email=${email} sessionAt=${new Date().toISOString()}`);
