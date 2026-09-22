@@ -30,7 +30,7 @@ function locs(body: string): string[] {
   return [...body.matchAll(/<loc>(.*?)<\/loc>/g)].map((match) => match[1]);
 }
 
-function robotsDisallowRules(body: string): string[] {
+function disallowRulesIn(body: string): string[] {
   return [...body.matchAll(/^Disallow:\s*(\S+)\s*$/gm)].map((match) => match[1]);
 }
 
@@ -117,17 +117,25 @@ describe("isProtectedPath matches the protected surface shape (0509#3989)", () =
 });
 
 describe("robots Disallow rules match what isProtectedPath protects (0509#3989)", () => {
-  const rules = robotsDisallowRules(renderRobots());
+  const rules = disallowRulesIn(renderRobots());
 
-  it("disallows exactly the registered protected surfaces", () => {
-    expect(rules.length).toBeGreaterThan(0);
+  it("renders one rule per entry of the exported rule list, in order", () => {
+    expect(robotsDisallowRules().length).toBeGreaterThan(0);
+    expect(rules).toEqual(robotsDisallowRules());
+    expect(new Set(rules).size).toBe(rules.length);
+  });
+
+  it("disallows the packet's three protected trees and the signed-in onboarding route", () => {
+    for (const expected of ["/app", "/api", "/mcp", "/onboarding"]) {
+      expect(rules, `${expected} must be disallowed`).toContain(expected);
+      expect(isProtectedPath(expected), `${expected} must be protected`).toBe(true);
+    }
+  });
+
+  it("every rendered rule is a protected path", () => {
     for (const rule of rules) {
       expect(isProtectedPath(rule), `${rule} must be protected`).toBe(true);
     }
-    for (const surface of PROTECTED_SURFACES) {
-      expect(rules, `${surface.path} must have a rule`).toContain(surface.path);
-    }
-    expect(new Set(rules).size).toBe(rules.length);
   });
 
   it("blocks no registered public route", () => {
@@ -136,7 +144,7 @@ describe("robots Disallow rules match what isProtectedPath protects (0509#3989)"
     expect(blocked).toEqual(registered.filter((url) => isProtectedPath(url)));
   });
 
-  it("keeps the robots rule and the manifest classifier from drifting on real paths", () => {
+  it("keeps the robots rule and the classifier from drifting on real paths", () => {
     const registered = routes.map((route) => routePathToUrl(route.path ?? ""));
     for (const url of registered) {
       if (isProtectedPath(url)) continue;
@@ -270,22 +278,19 @@ describe("manifest, routes.ts and public/ agree (0509#3989)", () => {
     const gated = await sessionGatedRouteFiles();
     expect(gated.length).toBeGreaterThan(0);
 
-    const registered = new Set(routes.map((route) => routePathToUrl(route.path ?? "")));
-    const moduleFileFor = (url: string): string => {
-      const base = url === "/" ? "home" : url.replace(/^\//, "").replace(/\//g, ".");
-      return `${base}.`;
-    };
-
-    const gatedByFile = new Map<string, string>();
-    for (const url of registered) {
-      for (const file of gated.filter((candidate) => candidate.startsWith(moduleFileFor(url)))) {
-        gatedByFile.set(file, url);
-      }
-    }
+    const urlByFile = new Map(
+      routes.map((route) => [
+        route.file?.replace(/^routes\//, "") ?? "",
+        routePathToUrl(route.path ?? ""),
+      ]),
+    );
 
     for (const file of gated) {
-      const url = gatedByFile.get(file);
-      expect(url, `${file} gates a session but matches no registered route`).toBeTruthy();
+      const url = urlByFile.get(file);
+      expect(
+        typeof url === "string",
+        `${file} gates a session but is not registered in app/routes.ts`,
+      ).toBe(true);
       if (url === undefined) continue;
       expect(isProtectedPath(url), `${url} (${file}) must be protected`).toBe(true);
     }
