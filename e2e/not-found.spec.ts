@@ -5,9 +5,11 @@ test("an unknown path is a 404 page with one action", async ({ page }, testInfo)
   page.on("console", (message) => {
     if (message.type() !== "error") return;
     // Chromium reports the document's own 404 as a console error. That line is
-    // the status this test asserts. A 404 for any other URL still fails.
+    // the status this test asserts. HTTP/1.1 includes the reason phrase
+    // ("404 (Not Found)"); HTTP/2 has none, so production prints "404 ()".
+    // A 404 for any other URL still fails.
     const failedDocument =
-      message.text() === "Failed to load resource: the server responded with a status of 404 (Not Found)" &&
+      /^Failed to load resource: the server responded with a status of 404\b/.test(message.text()) &&
       message.location().url.endsWith("/this-page-is-not-here");
     if (failedDocument) return;
     errors.push(`${message.text()} @ ${message.location().url}`);
