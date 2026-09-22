@@ -55,6 +55,22 @@ export default defineConfig({
           testTimeout: 30_000,
         },
       },
+      {
+        // The J8 fixture-site Worker (0509#4046): real workerd + real local KV.
+        // Its token-gated flip route and both break modes run against the same
+        // binding kinds production has, so a break that does not survive the
+        // round-trip fails in a merge gate instead of a live incident run.
+        plugins: [
+          cloudflareTest(() => ({
+            wrangler: { configPath: "./tests/integration/wrangler.fixture-site.test.jsonc" },
+          })),
+        ],
+        test: {
+          name: "fixture-site",
+          include: ["tests/integration/fixture-site.test.ts"],
+          testTimeout: 30_000,
+        },
+      },
     ],
   },
 });

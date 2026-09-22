@@ -3,10 +3,12 @@
 // docs/REBUILD-DONE.md J8: Email Routing delivers e2e@0509.io to the `email`
 // handler, and the Playwright suite reads messages back over HTTPS.
 //
-// The KV binding is declared without an id on purpose: wrangler's automatic
-// resource provisioning creates the namespace on first deploy and keeps it
-// linked across later deploys even though the id is never written back here
-// (CI deploys have no checkout to write to).
+// The KV namespace id is pinned. Every production deploy since 10:02Z on
+// 2026-09-22 (runs 35713766513 .. 35724931323) failed here: wrangler's
+// automatic provisioning lists /storage/kv/namespaces, and the production
+// environment's CLOUDFLARE_API_TOKEN answers 10000 Authentication error to
+// that call. The namespace 0509-e2e-inbox-inbox was created once on the
+// account (2026-09-22) and a pinned id needs no KV API call at deploy time.
 {
   "$schema": "../node_modules/wrangler/config-schema.json",
   "name": "0509-e2e-inbox",
@@ -15,6 +17,6 @@
   "observability": {
     "enabled": true
   },
-  "kv_namespaces": [{ "binding": "INBOX" }],
+  "kv_namespaces": [{ "binding": "INBOX", "id": "78f39fa16940460eb1249833c0657b20" }],
   "routes": [{ "pattern": "e2e-inbox.0509.io", "custom_domain": true }]
 }
