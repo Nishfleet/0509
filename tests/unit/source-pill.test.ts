@@ -61,17 +61,23 @@ describe("the source pill", () => {
     expect(sourcePillStatus(reddit, liveSnapshot, NOW).state).toBe("live");
   });
 
-  it("dims to 'name — none' when the source produced nothing, including no snapshot at all", () => {
+  it("dims to 'name — none' when a fresh capture produced nothing", () => {
     const html = pill(reddit, quietSnapshot);
     expect(html).toContain('data-state="none"');
     expect(html).toContain("— none");
     expect(html).toContain("var(--ink-soft, var(--color-ink-soft");
-    expect(html).toContain("#55524a");
-    expect(html).not.toContain("#16c47f");
-    expect(html).not.toContain("#064d31");
-    expect(pill(reddit, null)).toContain('data-state="none"');
+    expect(html).not.toContain("var(--green");
+    expect(html).not.toContain("var(--color-accent");
     expect(sourcePillStatus(reddit, quietSnapshot, NOW).state).toBe("none");
-    expect(sourcePillStatus(reddit, null, NOW).state).toBe("none");
+  });
+
+  it("renders a source with no capture at all as degraded, never as quiet-week", () => {
+    const html = pill(reddit, null);
+    expect(html).toContain('data-state="degraded"');
+    expect(html).toContain("no fresh data");
+    expect(html).toContain("last good unknown");
+    expect(html).not.toContain("— none");
+    expect(sourcePillStatus(reddit, null, NOW).state).toBe("degraded");
   });
 
   it("dims to degraded with the recorded reason in words and the last-good time", () => {
@@ -85,7 +91,7 @@ describe("the source pill", () => {
     expect(html).toContain("— degraded");
     expect(html).toContain("has been rate-limiting us since Friday");
     expect(html).toContain("last good 2026-09-19 06:02 UTC");
-    expect(html).not.toContain("#16c47f");
+    expect(html).not.toContain("var(--green");
     expect(sourcePillStatus(source, null, NOW).state).toBe("degraded");
   });
 
@@ -151,7 +157,7 @@ describe("the source pill", () => {
   });
 
   it("keeps the green tokens off none and degraded entirely", () => {
-    const greenBits = ["#16c47f", "#064d31", "#d9f6e8", "var(--green"];
+    const greenBits = ["var(--green", "var(--color-accent"];
     for (const html of [
       pill(reddit, quietSnapshot),
       pill(reddit, null),
@@ -162,16 +168,23 @@ describe("the source pill", () => {
     for (const bit of greenBits) expect(pill(reddit, liveSnapshot)).toContain(bit);
   });
 
-  it("does not call a stale snapshot live", () => {
+  it("renders a stale or unparseable capture as degraded with its last-good time", () => {
     const stale: SourceSnapshot = {
       item_count: 9,
       fetched_at: "2026-09-19T06:02:00.000Z",
       canary_count: 3,
     };
-    expect(sourcePillStatus(reddit, stale, NOW).state).toBe("none");
-    expect(pill(reddit, stale)).toContain('data-state="none"');
+    const html = pill(reddit, stale);
+    expect(html).toContain('data-state="degraded"');
+    expect(html).toContain("no fresh data");
+    expect(html).toContain("last good 2026-09-19 06:02 UTC");
+    expect(html).not.toContain("— none");
+    expect(sourcePillStatus(reddit, stale, NOW).state).toBe("degraded");
     const unparseable: SourceSnapshot = { item_count: 9, fetched_at: "yesterday" };
-    expect(sourcePillStatus(reddit, unparseable, NOW).state).toBe("none");
+    const unparseableHtml = pill(reddit, unparseable);
+    expect(unparseableHtml).toContain('data-state="degraded"');
+    expect(unparseableHtml).toContain("last good unknown");
+    expect(sourcePillStatus(reddit, unparseable, NOW).state).toBe("degraded");
   });
 
   it("survives malformed config_json and falls back to the row key for a name", () => {

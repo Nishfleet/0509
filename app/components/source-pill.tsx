@@ -25,11 +25,11 @@ export interface SourcePillStatus {
 }
 
 const MONO = 'var(--mono, var(--font-mono, "IBM Plex Mono", ui-monospace, monospace))';
-const INK_SOFT = "var(--ink-soft, var(--color-ink-soft, #55524a))";
-const LINE = "var(--line, var(--color-line, #ddd6c6))";
-const ACCENT = "var(--green, var(--color-accent, #16c47f))";
-const ACCENT_INK = "var(--green-ink, var(--color-accent-ink, #064d31))";
-const ACCENT_WASH = "var(--green-wash, var(--color-accent-wash, #d9f6e8))";
+const INK_SOFT = "var(--ink-soft, var(--color-ink-soft))";
+const LINE = "var(--line, var(--color-line))";
+const ACCENT = "var(--green, var(--color-accent))";
+const ACCENT_INK = "var(--green-ink, var(--color-accent-ink))";
+const ACCENT_WASH = "var(--green-wash, var(--color-accent-wash))";
 
 const LIVE_WINDOW_MS = 48 * 60 * 60 * 1000;
 
@@ -54,9 +54,14 @@ export function sourcePillStatus(
       (snapshot?.canary_count === 0 ? "not answering" : "no reason recorded");
     return { state: "degraded", reason, lastGoodAt };
   }
-  const fetchedMs = snapshot === null ? null : Date.parse(snapshot.fetched_at);
-  const fresh = fetchedMs !== null && !Number.isNaN(fetchedMs) && now - fetchedMs <= LIVE_WINDOW_MS;
-  if (snapshot === null || snapshot.item_count <= 0 || !fresh) {
+  const fetchedAt = snapshot === null ? null : blankToNull(snapshot.fetched_at);
+  const fetchedMs = fetchedAt === null ? Number.NaN : Date.parse(fetchedAt);
+  const captured = Number.isNaN(fetchedMs) ? null : fetchedAt;
+  const fresh = captured !== null && now - fetchedMs <= LIVE_WINDOW_MS;
+  if (snapshot === null || !fresh) {
+    return { state: "degraded", reason: "no fresh data", lastGoodAt: lastGoodAt ?? captured };
+  }
+  if (snapshot.item_count <= 0) {
     return { state: "none", reason: null, lastGoodAt };
   }
   return { state: "live", reason: null, lastGoodAt };
