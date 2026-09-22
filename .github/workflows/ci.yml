@@ -130,7 +130,9 @@ jobs:
         # regression is red before merge (poteto 03:24: a trace per change, not
         # per deploy; #4224). lhci starts wrangler dev itself: start-server-command
         # and the ready pattern are stock lhci flags. No loop, no script.
-        run: npx --yes @lhci/cli@0.15.1 collect --url=http://127.0.0.1:8787/ --start-server-command="npx wrangler dev --port 8787 --local" --start-server-ready-pattern="Ready on" --start-server-ready-timeout=120000 --number-of-runs=3
+        # Port 8788, not 8787: Playwright's webServer may still hold 8787 when this
+        # step starts (merge-group run 35746786576: "bind(): Address already in use").
+        run: npx --yes @lhci/cli@0.15.1 collect --url=http://127.0.0.1:8788/ --start-server-command="npx wrangler dev --port 8788 --local" --start-server-ready-pattern="Ready on" --start-server-ready-timeout=120000 --number-of-runs=3
 
       - name: Assert the Lighthouse budgets
         run: npx --yes @lhci/cli@0.15.1 assert --budgets-file=lighthouse-budget.json
