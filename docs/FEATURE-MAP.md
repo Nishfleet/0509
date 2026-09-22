@@ -22,9 +22,9 @@ pointer. **Proof** is the e2e test or journey that asserts it.
 | Route | File | Reach | Keyboard | What it does | Proof |
 |---|---|---|---|---|---|
 | `/` | `public/index.html` | `https://0509.io` | — | The quiet rebuild notice. One `h1` (copy owned by `public/index.html`, not asserted verbatim), one contact link to `support@0509.io`. Static file: no loader, no client state. `robots: noindex` until the gate lifts. | `e2e/smoke.spec.ts` — headline, contact link, no horizontal scroll at 390, no console errors |
-| `/login` | `app/routes/login.tsx` | the `/login` URL; nothing links to it yet | `Tab` to the email field, type, `Enter` | One input. Submitting POSTs to the same route; better-auth mints and sends a magic link, then the page swaps to "Check your email". Never reveals whether the address exists. | `e2e/smoke.spec.ts` — heading, labelled input, enabled button. Sending is **J1** — `e2e/j1-magic-link.spec.ts` |
+| `/login` | `app/routes/login.tsx` | the `/login` URL; nothing links to it yet | `Tab` to the email field, type, `Enter`; the passkey button is the next stop after submit | One input plus a "Sign in with a passkey" button. Submitting the input POSTs to the same route; better-auth mints and sends a magic link, then the page swaps to "Check your email". Never reveals whether the address exists. The passkey button runs better-auth's authenticate ceremony (`generate-authenticate-options` → `verify-authentication`) and lands on `/app`. | `e2e/smoke.spec.ts` — heading, labelled input, enabled buttons including the passkey control. Sending is **J1** — `e2e/j1-magic-link.spec.ts`; the passkey ceremony is **J2** — spec deferred on 0509#3927, unblocked by this UI |
 | `/api/health` | `app/routes/api.health.ts` | `GET /api/health` | — | `{ status, app, timestamp }`. Reads nothing on purpose: a health check that queries the database reports the database. | `e2e/smoke.spec.ts` — 200, `status: "ok"`, parseable timestamp |
-| `/api/auth/*` | `app/routes/api.auth.$.ts` | the browser follows the magic link here | — | better-auth's whole surface, mounted whole: magic-link request and verify, passkey registration and assertion, session, sign-out. Nothing is reimplemented above it. | **J1** — `e2e/j1-magic-link.spec.ts`; **J2** — deferred: no passkey UI exists yet (0509#3927) |
+| `/api/auth/*` | `app/routes/api.auth.$.ts` | the browser follows the magic link here | — | better-auth's whole surface, mounted whole: magic-link request and verify, passkey registration and assertion, session, sign-out. Nothing is reimplemented above it. | **J1** — `e2e/j1-magic-link.spec.ts`; **J2** — spec deferred on 0509#3927 (the UI now exists) |
 
 ## Signed in
 
@@ -34,7 +34,7 @@ state.
 
 | Route | File | Reach | Keyboard | What it does | Proof |
 |---|---|---|---|---|---|
-| `/app` | `app/routes/app.home.tsx` | after sign-in | — | Home. Currently the signed-in email and nothing else. | **J3**, **J4** |
+| `/app` | `app/routes/app.home.tsx` | after sign-in | `Tab` to the button, `Enter` | Home. The signed-in email and an "Add a passkey" button that runs better-auth's register ceremony (`generate-register-options` → `verify-registration`) against the live session. | **J3**, **J4**; the register ceremony is **J2** — spec deferred on 0509#3927 |
 | `/app/competitors` | `app/routes/app.competitors.tsx` | — | — | The tracked set. Currently a stub. | **J6** |
 | `/app/competitors/:entityId` | `app/routes/app.competitor.tsx` | a row on `/app/competitors` | — | One competitor. Currently a stub. | **J7**, **J10** |
 | `/app/alerts` | `app/routes/app.alerts.tsx` | — | — | What changed. Currently a stub. | **J7**, **J8** |

@@ -166,9 +166,21 @@ export default tseslint.config(
 
   {
     files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
-    ignores: ["app/lib/db.server.ts", "app/lib/auth.server.ts"],
+    ignores: ["app/lib/db.server.ts", "app/lib/auth.server.ts", "app/lib/auth-client.ts"],
     rules: {
-      "no-restricted-imports": ["error", { paths: ONE_PAVED_PATH_IMPORTS }],
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: ONE_PAVED_PATH_IMPORTS,
+          patterns: [
+            {
+              group: ["better-auth/*", "@better-auth/passkey/*", "@better-auth/api-key/*"],
+              message:
+                "better-auth subpath imports (client SDKs, plugin clients) live in exactly one module, app/lib/auth-client.ts; the server config stays in app/lib/auth.server.ts. A second import site is a second session authority. Source: 0509#3961 review — `paths` matches exact specifiers only, so `better-auth/client` slipped past the bare-name rule.",
+            },
+          ],
+        },
+      ],
     },
   },
 

@@ -1,7 +1,9 @@
 import type { Route } from "./+types/login";
 import { env } from "cloudflare:workers";
-import { Form, useActionData, useNavigation } from "react-router";
+import { useState } from "react";
+import { Form, useActionData, useNavigate, useNavigation } from "react-router";
 
+import { authClient } from "../lib/auth-client";
 import { createAuth } from "../lib/auth.server";
 
 export async function action({ request }: Route.ActionArgs) {
@@ -21,6 +23,19 @@ export async function action({ request }: Route.ActionArgs) {
 export default function Login() {
   const data = useActionData<typeof action>();
   const busy = useNavigation().state !== "idle";
+  const navigate = useNavigate();
+  const [passkeyState, setPasskeyState] = useState<"idle" | "working" | "failed">("idle");
+
+  async function signInWithPasskey() {
+    setPasskeyState("working");
+    const result = await authClient.signIn.passkey().catch(() => null);
+    if (result && !result.error) {
+      await navigate("/app");
+      return;
+    }
+    const code = result?.error && "code" in result.error ? result.error.code : "";
+    setPasskeyState(code === "AUTH_CANCELLED" ? "idle" : "failed");
+  }
 
   if (data && "sent" in data) {
     return (
@@ -39,6 +54,12 @@ export default function Login() {
         <input id="email" name="email" type="email" autoComplete="email" required />
         <button type="submit" disabled={busy}>{busy ? "Sending…" : "Send me a link"}</button>
       </Form>
+      <button type="button" onClick={() => void signInWithPasskey()} disabled={passkeyState === "working"}>
+        {passkeyState === "working" ? "Follow the prompt…" : "Sign in with a passkey"}
+      </button>
+      {passkeyState === "failed" ? (
+        <p role="alert">Passkey sign-in did not go through. Try again or use your email link.</p>
+      ) : null}
       {data && "error" in data ? <p role="alert">{data.error}</p> : null}
     </main>
   );

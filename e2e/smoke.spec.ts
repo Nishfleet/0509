@@ -65,6 +65,9 @@ test("the login page renders the one input that signs you in", async ({ page }) 
   await expect(email).toBeVisible();
   await expect(email).toHaveAccessibleName(/\S/);
   await expect(page.locator('button[type="submit"]')).toBeEnabled();
+  // The J2 affordance: a labelled, enabled passkey sign-in control. Its name is
+  // pattern-matched, not verbatim-pinned; the ceremony itself is J2's spec.
+  await expect(page.getByRole("button", { name: /passkey/i })).toBeEnabled();
 });
 
 test("the page reaches first paint with no console errors", async ({ page }) => {
