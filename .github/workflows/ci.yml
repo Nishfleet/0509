@@ -125,6 +125,24 @@ jobs:
         # then starts `wrangler dev` itself through webServer and tears it down.
         run: npm run e2e
 
+      - name: Collect Lighthouse against the built Worker
+        # Same budgets as the deployment_status lighthouse job, on the PR, so a
+        # regression is red before merge (poteto 03:24: a trace per change, not
+        # per deploy; #4224). lhci starts wrangler dev itself: start-server-command
+        # and the ready pattern are stock lhci flags. No loop, no script.
+        # A per-process port, like playwright.config.ts: the fleet-ci runners share
+        # this host with worker checkouts that run wrangler dev too (merge-group runs
+        # 35746786576, 35748807411: "Address already in use").
+        run: P=$((18000 + $$ % 1000)); npx --yes @lhci/cli@0.15.1 collect --url=http://127.0.0.1:$P/ --start-server-command="npx wrangler dev --port $P --local" --start-server-ready-pattern="Ready on" --start-server-ready-timeout=120000 --number-of-runs=3
+
+      - name: Assert the Lighthouse budgets
+        # lighthouse-budget.pr.json is the deterministic subset of lighthouse-budget.json:
+        # resource sizes and CLS. The timing rows (LCP, TTI) stay on the deployment_status
+        # job: on a shared runner the unchanged page measured LCP 1657 one run and under
+        # 1500 the run before (35748475565 vs 35746328688), and a required check that
+        # flips on runner load is not a gate. Production still enforces every row.
+        run: npx --yes @lhci/cli@0.15.1 assert --budgets-file=lighthouse-budget.pr.json
+
       - name: Keep the trace when it fails
         if: failure()
         uses: actions/upload-artifact@v4
