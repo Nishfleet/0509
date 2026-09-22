@@ -1,12 +1,21 @@
-import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
+import {
+  createExecutionContext,
+  env,
+  runInDurableObject,
+  waitOnExecutionContext,
+} from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
 import worker from "../../workers/e2e-inbox";
+import type { InboxMailbox } from "../../workers/e2e-inbox";
 
 /**
- * The mail-sink Worker's token gate and KV write, in real workerd against a
- * real local KV — the same binding kinds production gets. A missing or wrong
- * secret must fail loudly (0509#3927), which is what the 503/403 rows pin.
+ * The mail-sink Worker's token gate and mailbox write, in real workerd
+ * against a real local SQLite Durable Object. The same binding kinds
+ * production gets. A missing or wrong secret must fail loudly (0509#3927),
+ * which is what the 503/403 rows pin. The read-after-write row pins the
+ * reason KV was removed (0509#4210): a read before the write is 404, and
+ * the next read is 200 with no wait.
  */
 type EmailMessage = Parameters<typeof worker.email>[0];
 
@@ -42,12 +51,43 @@ const get = (path: string, token = "integration-token") =>
     createExecutionContext(),
   );
 
+const messagePath = (to: string) => `/message?to=${encodeURIComponent(to)}`;
+
 describe("0509-e2e-inbox", () => {
-  it("stores a delivered email in KV under the full recipient address", async () => {
+  it("stores a delivered email under the full recipient address", async () => {
+    const to = "e2e+vitest@0509.io";
     const ctx = createExecutionContext();
-    await worker.email(fakeMessage("e2e+vitest@0509.io", MIME), env, ctx);
+    await worker.email(fakeMessage(to, MIME), env, ctx);
     await waitOnExecutionContext(ctx);
-    expect(await env.INBOX.get("e2e+vitest@0509.io")).toBe(MIME);
+    expect(await env.INBOX.getByName(to).read()).toBe(MIME);
+  });
+
+  it("reads 404 before the write and 200 immediately after, with no wait", async () => {
+    const to = "e2e+immediate@0509.io";
+    expect((await get(messagePath(to))).status).toBe(404);
+
+    const ctx = createExecutionContext();
+    await worker.email(fakeMessage(to, MIME), env, ctx);
+    await waitOnExecutionContext(ctx);
+
+    const res = await get(messagePath(to));
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe(MIME);
+  });
+
+  it("reads a message older than one hour as 404", async () => {
+    const to = "e2e+expired@0509.io";
+    const ctx = createExecutionContext();
+    await worker.email(fakeMessage(to, MIME), env, ctx);
+    await waitOnExecutionContext(ctx);
+    const stub = env.INBOX.getByName(to);
+    await runInDurableObject(stub, async (_instance: InboxMailbox, state) => {
+      state.storage.sql.exec(
+        "UPDATE message SET created_at = ? WHERE id = 1",
+        Date.now() - 60 * 60 * 1000 - 1,
+      );
+    });
+    expect((await get(messagePath(to))).status).toBe(404);
   });
 
   it("serves a stored message to the bearer token", async () => {
