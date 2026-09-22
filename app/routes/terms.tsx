@@ -32,7 +32,7 @@ export default function Terms() {
         >
           0509.io
         </Link>
-        <h1 className="font-display mt-8 text-[clamp(1.75rem,3.6vw,2.9rem)] leading-[1.15] font-semibold tracking-[-0.02em]">
+        <h1 className="font-display mt-8 text-[clamp(1.7rem,3.6vw,2.8rem)] leading-[1.06] font-semibold tracking-[-0.035em]">
           Terms
         </h1>
         <p className="text-ink-soft mt-6 leading-[1.65]">

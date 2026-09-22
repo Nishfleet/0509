@@ -26,26 +26,25 @@ export const SECTIONS: Section[] = [
     heading: "Plans and prices",
     paragraphs: [
       "There is no free plan. Every paid plan starts with a 7-day trial. Prices are per workspace, billed monthly, in euros.",
-      "Prices can change. A change is announced before it applies to your next charge, and it never changes a charge already billed.",
     ],
   },
   {
     heading: "The trial",
     paragraphs: [
       "Every paid plan includes a 7-day trial. We take your card when you start the trial. On day 8 the trial ends and the first monthly charge is taken, unless you cancel before then.",
-      "Cancel during the trial and you are not charged. Nothing has to be returned, because there is nothing to return: you keep what you have already seen and the workspace closes.",
+      "Cancel during the trial and you are not charged.",
     ],
   },
   {
     heading: "Billing",
     paragraphs: [
-      "Billing goes through Dodo Payments, which takes the card and sends the receipt. We never see or store your card number. Your charge appears as a Dodo Payments charge on your statement.",
+      "Billing goes through Dodo Payments, which takes the card and sends the receipt.",
     ],
   },
   {
     heading: "Cancelling",
     paragraphs: [
-      "Cancel any time from workspace settings. Cancelling stops the next charge and the subscription does not renew. The workspace stays open and readable until the end of the period you have already paid for.",
+      "Cancel any time by emailing us at the address below. Cancelling stops the next charge and the subscription does not renew. The workspace stays open and readable until the end of the period you have already paid for.",
       "During the trial, cancel before day 8 and no charge is taken.",
     ],
   },
