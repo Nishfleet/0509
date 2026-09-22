@@ -36,10 +36,14 @@ Decisions recorded on 0509#3927 (2026-09-22):
   it never skips. No D1 read, no token-returning route in the app.
 - **J2's passkey** is a virtual authenticator via Playwright's CDP WebAuthn
   domain — an accepted J2. It proves the app's WebAuthn wiring; the real-device
-  proof stays a one-time manual record. Status 2026-09-22: **deferred** — the
-  app has no passkey UI (`app/**` was outside the packet's scope), so there is
-  no user journey to drive yet. The spec lands when the register/sign-in
-  affordance exists; tracked on #3927 and its follow-up issue.
+  proof stays a one-time manual record. Status 2026-09-22: the affordance
+  shipped in #3963 ("Add a passkey" on `/app`, "Sign in with a passkey" on
+  `/login`), and `e2e/j2-passkey.spec.ts` drives those real buttons through
+  the virtual authenticator — the wire shape is better-auth's client, not
+  bytes the spec constructed. Sign-out has no UI affordance yet, so the spec
+  ends the session through better-auth's real `POST /api/auth/sign-out` and
+  proves it by the `/app` → `/login` redirect before the passkey-only
+  sign-in.
 
 ## B. Quality gates (each is a number, measured on production)
 
