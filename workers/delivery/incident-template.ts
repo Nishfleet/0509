@@ -1,4 +1,4 @@
-import { formatInZone } from "./brief-template";
+import { escapeHtml, formatInZone } from "./brief-template";
 import { unsubscribeUrl } from "./send";
 
 import type { RenderedMail } from "./brief-template";
@@ -12,14 +12,6 @@ export interface IncidentRenderInput {
   link: string;
   unsubscribeToken: string;
   resolution: boolean;
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
 }
 
 function oneLine(value: string): string {
