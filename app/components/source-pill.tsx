@@ -27,9 +27,9 @@ export interface SourcePillStatus {
 const MONO = 'var(--mono, var(--font-mono, "IBM Plex Mono", ui-monospace, monospace))';
 const INK_SOFT = "var(--ink-soft, var(--color-ink-soft))";
 const LINE = "var(--line, var(--color-line))";
-const ACCENT = "var(--green, var(--color-accent))";
-const ACCENT_INK = "var(--green-ink, var(--color-accent-ink))";
-const ACCENT_WASH = "var(--green-wash, var(--color-accent-wash))";
+const ACCENT = "var(--green, var(--color-green))";
+const ACCENT_INK = "var(--green-ink, var(--color-green-ink))";
+const ACCENT_WASH = "var(--green-wash, var(--color-green-wash))";
 
 const LIVE_WINDOW_MS = 48 * 60 * 60 * 1000;
 
