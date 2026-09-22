@@ -357,6 +357,15 @@ messages, not deleted.
 
 ---
 
+
+**2026-09-22, moved to rung 2 (#4225).** The reviewer half above is gone:
+`eslint-plugin-no-comments` (`no-comments/disallowComments`, allow list
+`eslint` and `global` only) runs on `app/**` and `workers/**` in the same block
+as the other two comment rules. On the day it landed it found 59 comments in
+`workers/` that the grader had flagged on #4176 and the merge had kept, which
+is the exact hole B5 predicted. Their text is preserved in that PR's commit
+message; anything a future reader needs from it belongs in `docs/`, not in the
+file.
 ## C. The gardener
 
 > "every team really needs … a role that I'm calling a gardener … you want to

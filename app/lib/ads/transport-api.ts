@@ -4,38 +4,19 @@ import {
 	type AdsSourceDescriptor,
 } from "./descriptor";
 
-/**
- * The api transport — packet P1 of docs/engines/ads.md.
- *
- * One `fetch` per page with `AbortSignal.timeout`, optional bearer auth, and
- * bounded cursor pagination. It holds no platform knowledge: everything it
- * needs arrives on the descriptor. A non-2xx status is returned, not thrown —
- * the sweep marks the source degraded on it and never retries harder (the
- * rate limit lives on the `source` row and is honoured by the Workflow).
- * Thrown errors are reserved for transport-level failures a queue retry can
- * legitimately answer: timeouts, DNS, connection resets.
- */
-
 export interface ApiTransportContext {
-	/**
-	 * Worker env values by name, consulted only when `auth.kind` is
-	 * `bearer` — the descriptor names the variable, never holds the token.
-	 */
+	
 	secrets?: Record<string, string | undefined>;
-	/** Test seam; defaults to the global fetch. */
+	
 	fetchImpl?: typeof fetch;
 }
 
 export interface TransportResult {
-	/**
-	 * The decoded page payload. With `paginationCursorPath` set this is an
-	 * array of page payloads in fetch order; otherwise the single page's body
-	 * (parsed JSON when the body parses, else raw text).
-	 */
+	
 	payload: unknown;
-	/** The last HTTP status the platform returned. */
+	
 	status: number;
-	/** Wall time for the whole call, all pages included. */
+	
 	ms: number;
 }
 
@@ -48,9 +29,8 @@ export class AdsTransportAuthError extends Error {
 	}
 }
 
-/** Per-request ceiling; well under a queue consumer's patience. */
 const REQUEST_TIMEOUT_MS = 20_000;
-/** Pagination is a cost knob: five pages per pull, then the sweep moves on. */
+
 const MAX_PAGES = 5;
 
 export async function transportApi(
@@ -80,7 +60,7 @@ export async function transportApi(
 		const params = Object.fromEntries(
 			Object.entries(descriptor.params).map(([k, v]) => [
 				k,
-				// Raw substitution: URLSearchParams and JSON.stringify encode.
+				
 				renderDescriptorTemplate(v, { target, cursor }, false),
 			]),
 		);
@@ -105,11 +85,11 @@ export async function transportApi(
 		status = res.status;
 
 		const text = await res.text();
-		let pagePayload: unknown = text;
+		let pagePayload: unknown;
 		try {
 			pagePayload = JSON.parse(text);
 		} catch {
-			// Not JSON — the payload is the raw body and a field map decides.
+			pagePayload = text;
 		}
 		pages.push(pagePayload);
 
