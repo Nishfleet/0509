@@ -7,7 +7,7 @@ import { requireInboxToken, signInWithMagicLink } from "./inbox";
 // accepts Playwright's CDP WebAuthn virtual authenticator as the honest J2 —
 // it proves the app's WebAuthn wiring; the real-device proof stays a one-time
 // manual record. The ceremony is driven through the real affordances from
-// #3963 ("Add a passkey" on /app, "Sign in with a passkey" on /login): the
+// #3963 ("Add a passkey" on the signed-in page, "Sign in with a passkey" on /login): the
 // authenticator answers at the browser layer, so the wire shape is whatever
 // better-auth's client produces, not bytes this spec constructed.
 test.skip(
@@ -56,7 +56,7 @@ test("a passkey registered on first sign-in signs in on its own", async ({ page,
     // The passkey alone: a resident credential on the virtual authenticator
     // answers the empty allowCredentials list the sign-in button produces.
     await page.getByRole("button", { name: /passkey/i }).click();
-    await expect(page).toHaveURL(/\/app/);
+    await expect(page).toHaveURL(/\/onboarding/);
     await expect(page.getByText(email)).toBeVisible();
     console.log(`passkey sign-in email=${email} sessionAt=${new Date().toISOString()}`);
   } finally {

@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
-import { ensureWorkspace, firstWorkspaceId } from "../../app/lib/workspace.server";
+import { ensureWorkspace, firstWorkspaceId, workspaceLanding } from "../../app/lib/workspace.server";
 
 async function seedUser(id: string, email: string) {
   const now = "2026-09-22T12:00:00.000Z";
@@ -93,5 +93,29 @@ describe("ensureWorkspace against migrations/0001_rebuild.sql", () => {
     });
     expect(again.id).toBe(first.id);
     expect(await workspaceCount("user-4")).toBe(2);
+  });
+
+  it("lands on /onboarding until a self entity exists", async () => {
+    await seedUser("user-5", "maya@example.com");
+    const input = {
+      userId: "user-5",
+      email: "maya@example.com",
+      timezone: "UTC",
+      now: "2026-09-22T12:00:00.000Z",
+    };
+    expect(await workspaceLanding(env.DB, input)).toBe("/onboarding");
+    const workspaceId = firstWorkspaceId("user-5");
+    await env.DB.prepare(
+      `INSERT INTO entity (id, workspace_id, role, domain, created_at)
+       VALUES ('entity-5', ?, 'self', 'maya.example', '2026-09-22T12:01:00.000Z')`,
+    )
+      .bind(workspaceId)
+      .run();
+    expect(await workspaceLanding(env.DB, input)).toBeNull();
+    expect(await workspaceCount("user-5")).toBe(1);
+    const plans = await env.DB.prepare("SELECT count(*) AS n FROM plan WHERE workspace_id = ?")
+      .bind(workspaceId)
+      .first<{ n: number }>();
+    expect(plans?.n).toBe(0);
   });
 });

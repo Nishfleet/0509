@@ -1,3 +1,5 @@
+import { env } from "cloudflare:workers";
+
 import { canonicalTimezone, timezoneCookieValue } from "./timezone";
 
 interface WorkspaceRow {
@@ -31,6 +33,8 @@ ORDER BY created_at ASC
 LIMIT 1`;
 
 const FILL_TIMEZONE = `UPDATE workspace SET timezone = ? WHERE id = ? AND timezone = 'UTC'`;
+
+const SELECT_SELF = `SELECT id FROM entity WHERE workspace_id = ? AND role = 'self' LIMIT 1`;
 
 export function firstWorkspaceId(userId: string): string {
   return `ws_${userId}`;
@@ -92,5 +96,25 @@ export async function ensureWorkspaceForSignIn(
     email: user.email,
     timezone: await timezoneCookieValue(input.request?.headers.get("cookie") ?? null),
     now: input.now,
+  });
+}
+
+export async function workspaceLanding(
+  db: WorkspaceDb,
+  input: { userId: string; email: string; timezone: string | null; now?: string },
+): Promise<"/onboarding" | null> {
+  const workspace = await ensureWorkspace(db, input);
+  const self = await db.prepare(SELECT_SELF).bind(workspace.id).first<{ id: string }>();
+  return self ? null : "/onboarding";
+}
+
+export async function workspaceLandingForRequest(request: Request, userId: string): Promise<"/onboarding" | null> {
+  const header = request.headers.get("cookie");
+  const user = await env.DB.prepare('SELECT email FROM "user" WHERE id = ?').bind(userId).first<{ email: string }>();
+  if (!user?.email) return "/onboarding";
+  return workspaceLanding(env.DB, {
+    userId,
+    email: user.email,
+    timezone: await timezoneCookieValue(header),
   });
 }

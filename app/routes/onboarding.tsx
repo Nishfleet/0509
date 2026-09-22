@@ -1,4 +1,4 @@
-import type { Route } from "./+types/app.home";
+import type { Route } from "./+types/onboarding";
 
 import { useState } from "react";
 import { redirect } from "react-router";
@@ -10,7 +10,7 @@ import { workspaceLandingForRequest } from "../lib/workspace.server";
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
   const landing = await workspaceLandingForRequest(request, session.user.id);
-  if (landing) throw redirect(landing);
+  if (!landing) throw redirect("/app");
   return { email: session.user.email };
 }
 
@@ -30,7 +30,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
 
   return (
     <main>
-      <h1>Home</h1>
+      <input name="subject" placeholder="your website, or a handle" aria-label="your website, or a handle" autoFocus />
       <p>Signed in as {loaderData.email}</p>
       <button type="button" onClick={() => void addPasskey()} disabled={state === "working"}>
         {state === "working" ? "Follow the prompt…" : "Add a passkey"}
