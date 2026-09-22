@@ -4,6 +4,9 @@ import { Await, data, Form, redirect } from "react-router";
 
 import { IdentityCardFields } from "../components/identity-card";
 import { authClient } from "../lib/auth-client";
+import { readEntityForWorkspace } from "../lib/data/entity.server";
+import { latestOnboardingRunId } from "../lib/data/onboarding-run.server";
+import { readHomeUrlForEntity } from "../lib/data/page.server";
 import { recordIdentityEdits } from "../lib/data/user-decision.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { buildCardFromRequest } from "../lib/identity/card.server";
@@ -31,19 +34,26 @@ const s = (v: FormDataEntryValue | null): string => (typeof v === "string" ? v :
 
 export async function action({ request }: Route.ActionArgs) {
   const session = await requireSession(request);
+  const workspaceId = await readWorkspaceIdForOwner(session.user.id);
+  if (!workspaceId) throw new Error("signed-in user has no workspace");
+
   const form = await request.formData();
-  const workspaceId = s(form.get("workspaceId"));
   const entityId = s(form.get("entityId"));
-  const runId = s(form.get("onboardingRunId"));
-  const domain = s(form.get("domain"));
-  const homepageUrl = s(form.get("homepageUrl")) || null;
   const edits = JSON.parse(s(form.get("edits")) || "{}") as Record<string, string>;
 
-  await recordIdentityEdits({ workspaceId, userId: session.user.id, entityId, edits });
+  const entity = await readEntityForWorkspace(entityId, workspaceId);
+  if (!entity) throw new Response("entity not found for this workspace", { status: 404 });
+  const [homepageUrl, runId] = await Promise.all([
+    readHomeUrlForEntity(entity.id),
+    latestOnboardingRunId(workspaceId),
+  ]);
+  if (!runId) throw new Error("no onboarding run for this workspace");
+
+  await recordIdentityEdits({ workspaceId, userId: session.user.id, entityId: entity.id, edits });
 
   await env.IDENTITY_TAIL.create({
-    id: `identity-${entityId}`,
-    params: { workspaceId, entityId, onboardingRunId: runId, domain, homepageUrl },
+    id: `identity-${entity.id}`,
+    params: { workspaceId, entityId: entity.id, onboardingRunId: runId, domain: entity.domain, homepageUrl },
   });
   return redirect("/app/competitors");
 }
@@ -90,11 +100,7 @@ export default function Onboarding({ loaderData }: Route.ComponentProps) {
             {(card: CardResult) =>
               card.ok ? (
                 <Form method="post">
-                  <input type="hidden" name="workspaceId" value={loaderData.workspaceId} />
                   <input type="hidden" name="entityId" value={card.entityId} />
-                  <input type="hidden" name="onboardingRunId" value={card.onboardingRunId} />
-                  <input type="hidden" name="domain" value={card.subject.registrable ?? card.subject.handle ?? ""} />
-                  <input type="hidden" name="homepageUrl" value={card.subject.url ?? ""} />
                   <input type="hidden" name="edits" value={JSON.stringify(edits)} />
                   <IdentityCardFields
                     fields={card.fields}

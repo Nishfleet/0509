@@ -56,7 +56,7 @@ export default defineConfig({
   webServer: process.env.PLAYWRIGHT_TEST_BASE_URL
     ? undefined
     : {
-        command: `npx wrangler dev --port ${localPort} --local`,
+        command: `npx wrangler d1 migrations apply DB --local && npx wrangler dev --port ${localPort} --local`,
         url: `http://127.0.0.1:${localPort}/api/health`,
         reuseExistingServer: false,
         timeout: 120_000,

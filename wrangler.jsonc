@@ -50,7 +50,7 @@
   // forwarded header: auth origin trust and the magic-link URL both come from
   // it, and a client-supplied value would let a link point anywhere.
   // BETTER_AUTH_SECRET stays a Worker secret.
-  "vars": { "BETTER_AUTH_URL": "https://0509.io", "BROWSER_CONCURRENCY_CAP": "10" },
+  "vars": { "BETTER_AUTH_URL": "https://0509.io", "BROWSER_CONCURRENCY_CAP": "10", "JEV_URL": "" },
 
   // Identity-card engine (#3885): 24 h probe cache. No id — wrangler
   // provisions the namespace on first deploy and keeps it linked, same as
@@ -75,8 +75,8 @@
     { "binding": "CARD_ARTIFACTS", "bucket_name": "0509-snapshots" }
   ],
 
-  // The durable tail: persist -> seed-watches -> first-snapshot ->
-  // start-discovery after the user confirms the card.
+  // The durable tail: persist -> seed-watches -> start-discovery ->
+  // first-snapshot after the user confirms the card.
   "workflows": [
     { "name": "identity-tail", "binding": "IDENTITY_TAIL", "class_name": "IdentityTailWorkflow" }
   ],

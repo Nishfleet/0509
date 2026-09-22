@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { readEntityForWorkspace } from "../../../app/lib/data/entity.server";
 import { buildIdentityCard } from "../../../app/lib/identity/card.server";
 import fixture from "../../fixtures/gymshark-2026-09-21.html?raw";
 
@@ -42,39 +43,14 @@ function stubFetch(opts: { publicSubjectP?: number } = {}): ReturnType<typeof vi
   });
 }
 
-function countingDb(db: D1Database): { counts: { batch: number; run: number }; db: D1Database } {
-  const counts = { batch: 0, run: 0 };
-  const wrapStmt = (stmt: D1PreparedStatement): D1PreparedStatement =>
-    new Proxy(stmt, {
-      get(target, prop) {
-        if (prop === "bind") {
-          return (...a: unknown[]) =>
-            wrapStmt((target.bind as (...x: unknown[]) => D1PreparedStatement).apply(target, a));
-        }
-        if (prop === "run") {
-          return async (...a: unknown[]) => {
-            counts.run += 1;
-            return (target.run as (...x: unknown[]) => Promise<unknown>).apply(target, a);
-          };
-        }
-        const v = Reflect.get(target, prop) as unknown;
-        return typeof v === "function" ? v.bind(target) : v;
-      },
-    });
-  const proxy = new Proxy(db, {
-    get(target, prop) {
-      if (prop === "prepare") return (sql: string) => wrapStmt(target.prepare(sql));
-      if (prop === "batch") {
-        return async (stmts: D1PreparedStatement[]) => {
-          counts.batch += 1;
-          return target.batch(stmts);
-        };
-      }
-      const v = Reflect.get(target, prop) as unknown;
+function failingBatchDb(db: D1Database): D1Database {
+  return new Proxy(db, {
+    get(target, prop, recv) {
+      if (prop === "batch") return () => Promise.reject(new Error("injected batch failure"));
+      const v = Reflect.get(target, prop, recv) as unknown;
       return typeof v === "function" ? v.bind(target) : v;
     },
   });
-  return { counts, db: proxy };
 }
 
 async function seedUser() {
@@ -86,19 +62,15 @@ async function seedUser() {
 afterEach(() => vi.restoreAllMocks());
 
 describe("buildIdentityCard (#3885 P4)", () => {
-  it("writes entity + pages + verdicts in one batch", async () => {
+  it("writes entity + pages + verdicts", async () => {
     await seedUser();
     stubFetch();
-    const { counts, db } = countingDb(env.DB);
     const res = await buildIdentityCard(
-      { db, cache: env.IDENTITY_CACHE, jev: { url: "http://jev.test/jev" } },
+      { db: env.DB, cache: env.IDENTITY_CACHE, jev: { url: "http://jev.test/jev" } },
       { workspaceId: "w1", userId: "u1", input: "gymshark.com" },
     );
     expect(res.ok).toBe(true);
     if (!res.ok) return;
-
-    expect(counts.batch).toBe(1);
-    expect(counts.run).toBe(0);
 
     const entity = await env.DB.prepare(`SELECT role, state, name FROM entity WHERE id = ?`).bind(res.entityId).first();
     expect(entity?.role).toBe("self");
@@ -187,7 +159,44 @@ describe("buildIdentityCard (#3885 P4)", () => {
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     expect(res.verdictCount).toBe(0);
+    expect(res.jevStatus).toBe("unreachable");
     expect(res.fields.find((f) => f.name === "name")?.state).toBe("check");
+    const stored = await env.DB
+      .prepare(`SELECT identity_json FROM entity WHERE id = ?`)
+      .bind(res.entityId)
+      .first<{ identity_json: string }>();
+    expect(JSON.parse(stored?.identity_json ?? "{}").jev_status).toBe("unreachable");
+  });
+
+  it("leaves no rows when the persist batch fails", async () => {
+    await seedUser();
+    stubFetch();
+    await env.DB.prepare(`DELETE FROM takedown WHERE subject = 'gymshark.com'`).run();
+    await env.DB.prepare(`DELETE FROM user_decision WHERE workspace_id = 'w1'`).run();
+    await env.DB.prepare(`DELETE FROM entity WHERE workspace_id = 'w1'`).run();
+    await expect(
+      buildIdentityCard(
+        { db: failingBatchDb(env.DB), cache: env.IDENTITY_CACHE, jev: { url: "http://jev.test/jev" } },
+        { workspaceId: "w1", userId: "u1", input: "gymshark.com" },
+      ),
+    ).rejects.toThrow("injected batch failure");
+    const entities = await env.DB
+      .prepare(`SELECT COUNT(*) AS n FROM entity WHERE workspace_id = 'w1'`)
+      .first<{ n: number }>();
+    expect(entities?.n).toBe(0);
+  });
+
+  it("confirm path only sees entities inside the session workspace", async () => {
+    await seedUser();
+    const now = new Date().toISOString();
+    await env.DB.prepare(`INSERT OR IGNORE INTO "user" (id, name, email, "emailVerified", "createdAt", "updatedAt") VALUES ('u2','U2','u2@t.co',0,?,?)`).bind(now, now).run();
+    await env.DB.prepare(`INSERT OR IGNORE INTO workspace (id, name, owner_user_id, created_at) VALUES ('w2','W2','u2',?)`).bind(now).run();
+    await env.DB.prepare(
+      `INSERT OR IGNORE INTO entity (id, workspace_id, role, domain, origin, state, created_at)
+       VALUES ('e-other','w2','self','other.example','manual','on',?)`,
+    ).bind(now).run();
+    expect(await readEntityForWorkspace("e-other", "w1")).toBeNull();
+    expect((await readEntityForWorkspace("e-other", "w2"))?.domain).toBe("other.example");
   });
 
   it("re-onboard reuses the canonical entity id", async () => {

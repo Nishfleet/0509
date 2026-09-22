@@ -8,19 +8,22 @@ interface UserDecisionInput {
   note?: string | null;
 }
 
-export async function insertUserDecisions(db: D1Database, rows: UserDecisionInput[]): Promise<void> {
-  if (!rows.length) return;
+export function userDecisionStmts(db: D1Database, rows: UserDecisionInput[]): D1PreparedStatement[] {
   const now = new Date().toISOString();
-  await db.batch(
-    rows.map((r) =>
-      db
-        .prepare(
-          `INSERT INTO user_decision (id, workspace_id, user_id, entity_id, verdict, note, decided_at)
-           VALUES (?,?,?,?,?,?,?)`,
-        )
-        .bind(crypto.randomUUID(), r.workspaceId, r.userId, r.entityId ?? null, r.verdict, r.note ?? null, now),
-    ),
+  return rows.map((r) =>
+    db
+      .prepare(
+        `INSERT INTO user_decision (id, workspace_id, user_id, entity_id, verdict, note, decided_at)
+         VALUES (?,?,?,?,?,?,?)`,
+      )
+      .bind(crypto.randomUUID(), r.workspaceId, r.userId, r.entityId ?? null, r.verdict, r.note ?? null, now),
   );
+}
+
+export async function insertUserDecisions(db: D1Database, rows: UserDecisionInput[]): Promise<void> {
+  const stmts = userDecisionStmts(db, rows);
+  if (!stmts.length) return;
+  await db.batch(stmts);
 }
 
 export async function recordIdentityEdits(args: {

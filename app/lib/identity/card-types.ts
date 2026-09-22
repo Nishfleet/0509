@@ -19,5 +19,6 @@ export type CardResult =
       verdictCount: number;
       transport: "fetch" | "browser" | null;
       browserMsUsed: number | null;
+      jevStatus: "ok" | "unconfigured" | "unreachable";
     }
   | { ok: false; reason: string };

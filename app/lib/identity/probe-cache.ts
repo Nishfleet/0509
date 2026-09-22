@@ -5,12 +5,8 @@ function probeKey(domain: string, probe: string): string {
 }
 
 async function probeGet<T>(kv: KVNamespace, domain: string, probe: string): Promise<T | null> {
-  try {
-    const raw = await kv.get(probeKey(domain, probe));
-    return raw ? (JSON.parse(raw) as T) : null;
-  } catch {
-    return null;
-  }
+  const raw = await kv.get(probeKey(domain, probe));
+  return raw ? (JSON.parse(raw) as T) : null;
 }
 
 async function probePut(
@@ -19,9 +15,7 @@ async function probePut(
   probe: string,
   value: unknown,
 ): Promise<void> {
-  await kv
-    .put(probeKey(domain, probe), JSON.stringify(value), { expirationTtl: TTL_SECONDS })
-    .catch(() => undefined);
+  await kv.put(probeKey(domain, probe), JSON.stringify(value), { expirationTtl: TTL_SECONDS });
 }
 
 export async function probeThrough<T>(

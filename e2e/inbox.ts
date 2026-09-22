@@ -60,7 +60,7 @@ export function extractMagicLink(rawMessage: string): string | null {
   const text = /content-transfer-encoding:\s*quoted-printable/i.test(rawMessage)
     ? decodeQuotedPrintable(rawMessage)
     : rawMessage;
-  const match = /https:\/\/[^\s"'<>]+\/api\/auth\/magic-link\/verify\?[^\s"'<>]+/.exec(text);
+  const match = /https:\/\/0509\.io\/api\/auth\/magic-link\/verify\?[^\s"'<>]+/.exec(text);
   return match ? match[0] : null;
 }
 

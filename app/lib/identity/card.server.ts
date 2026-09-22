@@ -1,7 +1,11 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
-import { insertUserDecisions } from "../data/user-decision.server";
+import { upsertSelfEntityStmt } from "../data/entity.server";
+import { insertVerdictStmt } from "../data/jev-verdict.server";
+import { insertOnboardingRunStmt } from "../data/onboarding-run.server";
+import { insertHomePageStmt, insertRolePageStmt } from "../data/page.server";
+import { userDecisionStmts } from "../data/user-decision.server";
 import { readUrl, type ReadUrlResult } from "../fetch/transport.server";
 import { jevAsk, type JevQuestion } from "../jev/client";
 import { buildIdentityPack, inputHash } from "../jev/context-pack";
@@ -62,29 +66,25 @@ async function recordRefusal(
   note: string,
   verdictRow?: { p: number | null; reason: string | null; inputHash: string },
 ): Promise<void> {
-  if (verdictRow) {
-    await deps.db
-      .prepare(
-        `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, entity_id, p, choice, reason, decided_at)
-         VALUES (?,?,?,?,?,?,?,?,?)
-         ON CONFLICT (question_id, input_hash) DO NOTHING`,
-      )
-      .bind(
-        id(),
-        args.workspaceId,
-        "public_subject",
-        verdictRow.inputHash,
-        null,
-        verdictRow.p,
-        null,
-        verdictRow.reason,
-        new Date().toISOString(),
-      )
-      .run();
-  }
-  await insertUserDecisions(deps.db, [
+  const stmts: D1PreparedStatement[] = userDecisionStmts(deps.db, [
     { workspaceId: args.workspaceId, userId: args.userId, verdict, note },
   ]);
+  if (verdictRow) {
+    stmts.unshift(
+      insertVerdictStmt(deps.db, {
+        id: id(),
+        workspaceId: args.workspaceId,
+        questionId: "public_subject",
+        inputHash: verdictRow.inputHash,
+        entityId: null,
+        p: verdictRow.p,
+        choice: null,
+        reason: verdictRow.reason,
+        now: new Date().toISOString(),
+      }),
+    );
+  }
+  await deps.db.batch(stmts);
 }
 
 export async function buildIdentityCard(
@@ -101,8 +101,7 @@ export async function buildIdentityCard(
       `SELECT id FROM user_decision WHERE workspace_id = ? AND verdict LIKE 'refused:%' AND note = ? LIMIT 1`,
     )
     .bind(args.workspaceId, refusalKey)
-    .first<{ id: string }>()
-    .catch(() => null);
+    .first<{ id: string }>();
   if (priorRefusal) return { ok: false, reason: REFUSAL_LINE };
 
   const subjects = [subject.registrable, subject.handle && `${subject.platform ?? "*"}:${subject.handle}`].filter(
@@ -112,8 +111,7 @@ export async function buildIdentityCard(
     const rows = await deps.db
       .prepare(`SELECT subject FROM takedown WHERE subject IN (${subjects.map(() => "?").join(",")})`)
       .bind(...subjects)
-      .all<{ subject: string }>()
-      .catch(() => ({ results: [] as { subject: string }[] }));
+      .all<{ subject: string }>();
     if (rows.results.length) {
       await recordRefusal(deps, args, "refused:takedown", refusalKey);
       return { ok: false, reason: REFUSAL_LINE };
@@ -287,10 +285,12 @@ export async function buildIdentityCard(
   const now = new Date().toISOString();
   const domain = subject.registrable ?? subject.handle ?? args.input;
   const runId = args.onboardingRunId ?? id();
+  const jevStatus = !deps.jev ? "unconfigured" : jev.ok ? "ok" : "unreachable";
   const identityJson = JSON.stringify({
     fields: Object.fromEntries(cardFields.map((f) => [f.name, { value: f.value, state: f.state, via: f.via }])),
     packHash,
     built_at: now,
+    jev_status: jevStatus,
   });
 
   const existingEntity = await deps.db
@@ -300,37 +300,31 @@ export async function buildIdentityCard(
   const entityId = existingEntity?.id ?? id();
 
   const stmts: D1PreparedStatement[] = [
-    deps.db
-      .prepare(
-        `INSERT INTO entity (id, workspace_id, role, domain, name, identity_json, origin, state, created_at)
-         VALUES (?,?,?,?,?,?, 'manual','on',?)
-         ON CONFLICT (workspace_id, domain) DO UPDATE SET name=excluded.name, identity_json=excluded.identity_json`,
-      )
-      .bind(
-        entityId,
-        args.workspaceId,
-        "self",
-        domain,
-        cardFields.find((f) => f.name === "name")?.value ?? null,
-        identityJson,
-        now,
-      ),
-    deps.db
-      .prepare(
-        `INSERT INTO onboarding_run (id, workspace_id, user_id, input_raw, started_at, card_ready_at)
-         VALUES (?,?,?,?,?,?)
-         ON CONFLICT (id) DO UPDATE SET card_ready_at=excluded.card_ready_at`,
-      )
-      .bind(runId, args.workspaceId, args.userId, args.input, now, now),
+    upsertSelfEntityStmt(deps.db, {
+      id: entityId,
+      workspaceId: args.workspaceId,
+      domain,
+      name: cardFields.find((f) => f.name === "name")?.value ?? null,
+      identityJson,
+      now,
+    }),
+    insertOnboardingRunStmt(deps.db, {
+      id: runId,
+      workspaceId: args.workspaceId,
+      userId: args.userId,
+      inputRaw: args.input,
+      now,
+    }),
   ];
   if (subject.url) {
     stmts.push(
-      deps.db
-        .prepare(
-          `INSERT INTO page (id, entity_id, url, title, role, discovered_at) VALUES (?,?,?,?, 'home', ?)
-           ON CONFLICT (entity_id, url) DO NOTHING`,
-        )
-        .bind(id(), entityId, subject.url, extracted?.title ?? null, now),
+      insertHomePageStmt(deps.db, {
+        id: id(),
+        entityId,
+        url: subject.url,
+        title: extracted?.title ?? null,
+        now,
+      }),
     );
   }
   for (const [qid, ans] of Object.entries(jev.ok ? jev.answers : {})) {
@@ -338,24 +332,30 @@ export async function buildIdentityCard(
     const linkUrl = qid.slice(3);
     const role = ans.choice && ans.choice in PAGE_ROLES ? ans.choice : "other";
     stmts.push(
-      deps.db
-        .prepare(
-          `INSERT INTO page (id, entity_id, url, title, role, role_decided_for_hash, discovered_at)
-           VALUES (?,?,?,?,?,?,?) ON CONFLICT (entity_id, url) DO NOTHING`,
-        )
-        .bind(id(), entityId, linkUrl, null, role, d9HashByUrl.get(linkUrl) ?? packHash, now),
-      );
+      insertRolePageStmt(deps.db, {
+        id: id(),
+        entityId,
+        url: linkUrl,
+        role,
+        roleHash: d9HashByUrl.get(linkUrl) ?? packHash,
+        now,
+      }),
+    );
   }
   for (const v of verdictRows) {
     stmts.push(
-      deps.db
-        .prepare(
-          `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, entity_id, p, choice, reason, decided_at)
-           VALUES (?,?,?,?,?,?,?,?,?)
-           ON CONFLICT (question_id, input_hash) DO NOTHING`,
-        )
-        .bind(id(), args.workspaceId, v.question_id, v.input_hash, entityId, v.p, v.choice, v.reason, now),
-      );
+      insertVerdictStmt(deps.db, {
+        id: id(),
+        workspaceId: args.workspaceId,
+        questionId: v.question_id,
+        inputHash: v.input_hash,
+        entityId,
+        p: v.p,
+        choice: v.choice,
+        reason: v.reason,
+        now,
+      }),
+    );
   }
   await deps.db.batch(stmts);
 
@@ -369,7 +369,12 @@ export async function buildIdentityCard(
     verdictCount: verdictRows.length,
     transport: homepage.ok ? homepage.transport : null,
     browserMsUsed: homepage.ok ? (homepage.browserMsUsed ?? null) : null,
+    jevStatus,
   };
+}
+
+interface JevSecrets {
+  JEV_API_KEY?: string;
 }
 
 export async function buildCardFromRequest(args: {
@@ -378,12 +383,13 @@ export async function buildCardFromRequest(args: {
   input: string;
   onboardingRunId?: string;
 }): Promise<CardResult> {
-  const jevUrl = (env as { JEV_URL?: string }).JEV_URL;
+  const jevSecrets: JevSecrets = env;
+  const jevUrl = env.JEV_URL;
   return buildIdentityCard(
     {
       db: env.DB,
       cache: env.IDENTITY_CACHE,
-      jev: jevUrl ? { url: jevUrl, apiKey: (env as { JEV_API_KEY?: string }).JEV_API_KEY } : undefined,
+      jev: jevUrl ? { url: jevUrl, apiKey: jevSecrets.JEV_API_KEY } : undefined,
     },
     args,
   );
