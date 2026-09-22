@@ -1,279 +1,248 @@
+# The four checks the main-merge-queue ruleset requires, by exactly these names:
+#   Gitleaks   codex-node-checks   semgrep   preview-assert
+# Bypass actors on that ruleset is empty, so a renamed job is not a cosmetic
+# change — a required check that never reports fails closed and nothing can
+# merge, including the PR that renamed it. Verified against the live ruleset
+# (id 21391031) on 2026-09-21 before this file was written.
+#
+# Every job runs on pull_request and merge_group: the queue evaluates checks on
+# the merge ref, so a job that skips there gives the queue no verdict.
 name: CI
 
+# `deployment_status` is the third trigger and it is the stock one: Cloudflare
+# Workers Builds emit GitHub deployments, so the production suites fire on the
+# real deploy with no polling. https://playwright.dev/docs/ci#on-deployment
+# The four required jobs guard themselves off that event; they have nothing to
+# say about a deployment and a job that reports on the wrong event is noise.
 on:
   pull_request:
   merge_group:
-  workflow_dispatch:
+  deployment_status:
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
-  vulnerability-alerts: read
-
-env:
-  VITEST_TOTAL_SHARDS: "4"
+  contents: read
 
 jobs:
-
   codex-node-checks:
-    # Required context (branch protection). It must be structurally incapable
-    # of concluding SKIPPED: GitHub counts a skipped required context as
-    # satisfying branch protection, so there is NO job-level `if:` and NO
-    # `needs` here (a job with needs is skipped when its dependency fails;
-    # an if: can skip on cancellation or any future condition edit). The
-    # authorizer is step 1 of THIS job, so a fork PR or unapproved dispatch
-    # candidate fails the required check with a real failure - a gate that
-    # cannot verify must say no, never render green or skipped. This contract
-    # is identical for the sibling shard jobs below; tests/required-context-no-skip.test.ts
-    # enforces it structurally across all of them.
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    # The 270m job cap bounds setup plus all per-step waits. Each heavy step has
-    # one 180m total budget shared between its lane slot and the deploy gate.
-    timeout-minutes: 270
+    name: codex-node-checks
+    if: github.event_name != 'deployment_status'
+    # fleet-ci on merge_group/push only; pull_request stays hosted so fork
+    # PRs never execute on the box (fleet-ops#5935).
+    runs-on: ${{ (github.event_name == 'merge_group' || github.event_name == 'push') && 'fleet-ci' || 'ubuntu-latest' }}
+    timeout-minutes: 15
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: ".node-version"
-          cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' && 'npm' || '' }}
-          package-manager-cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' }}
-      - name: Install dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci --ignore-scripts
-          else
-            npm install --ignore-scripts
-          fi
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        # cf-typegen and react-router typegen generate worker-configuration.d.ts
+        # and the route types, so `tsc -b` cannot run before them.
+        run: npm run typecheck
+      - name: Lint
+        # Rung 2 of the correction ladder (docs/REBUILD-TRUST.md B): every
+        # mistake worth correcting twice becomes a rule here rather than a
+        # sentence in a doc. `npm run lint` is `eslint . && knip` — the rules
+        # and the dead-code finder in one gate. It runs after typecheck because
+        # typed lint rules need the generated route types that typecheck emits.
+        run: npm run lint
+
+      - name: Test
+        run: npm test
       - name: Build
         run: npm run build
-      - name: Test (shard 1 of ${{ env.VITEST_TOTAL_SHARDS }})
-        run: |
-          set -euo pipefail
-            npx --no-install vitest run --configLoader runner \
-              --shard=1/${{ env.VITEST_TOTAL_SHARDS }} \
-              --project node --coverage
-            npx --no-install vitest run --configLoader runner \
-              --project workers
-      - name: Typecheck
-        env:
-          # 4096 MB, uniformly with deploy-production.yml and
-          # preview-assert.yml (0509#3303): the old 2048 MB pin sat at the
-          # measured `tsc -b` peak (~2030 MB, run 34693260245) so the step
-          # exited 134 intermittently and unpredictably on retrigger.
-          NODE_OPTIONS: --max-old-space-size=4096
-        run: npm run typecheck
 
-  codex-node-checks-shard-2:
-    # Required context (branch protection) — shard 2 of 4. Same no-skip
-    # contract as codex-node-checks above: no job-level if:/needs:, authorizer
-    # is step 1, fork PR fails with a real failure. See that job's header.
-    name: codex-node-checks-shard-2
+  Gitleaks:
+    name: Gitleaks
+    if: github.event_name != 'deployment_status'
+    # fleet-ci on merge_group/push only; pull_request stays hosted so fork
+    # PRs never execute on the box (fleet-ops#5935).
+    # Stays on a hosted runner: the docker:// step below runs as root and leaves
+    # root-owned files in a persistent fleet-ci workspace, which broke every later
+    # checkout on that runner (three merge_group failures, 2026-09-22 01:33-01:47 IST).
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    timeout-minutes: 270
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: ".node-version"
-          cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' && 'npm' || '' }}
-          package-manager-cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' }}
-      - name: Install dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci --ignore-scripts
-          else
-            npm install --ignore-scripts
-          fi
-      - name: Test (shard 2 of ${{ env.VITEST_TOTAL_SHARDS }})
-        run: |
-          set -euo pipefail
-            npx --no-install vitest run --configLoader runner \
-              --shard=2/${{ env.VITEST_TOTAL_SHARDS }} \
-              --project node
-
-  codex-node-checks-shard-3:
-    # Required context (branch protection) — shard 3 of 4. Same no-skip
-    # contract as codex-node-checks above.
-    name: codex-node-checks-shard-3
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    timeout-minutes: 270
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: ".node-version"
-          cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' && 'npm' || '' }}
-          package-manager-cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' }}
-      - name: Install dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci --ignore-scripts
-          else
-            npm install --ignore-scripts
-          fi
-      - name: Test (shard 3 of ${{ env.VITEST_TOTAL_SHARDS }})
-        run: |
-          set -euo pipefail
-            npx --no-install vitest run --configLoader runner \
-              --shard=3/${{ env.VITEST_TOTAL_SHARDS }} \
-              --project node
-
-  codex-node-checks-shard-4:
-    # Required context (branch protection) — shard 4 of 4. Same no-skip
-    # contract as codex-node-checks above.
-    name: codex-node-checks-shard-4
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    timeout-minutes: 270
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: ".node-version"
-          cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' && 'npm' || '' }}
-          package-manager-cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' }}
-      - name: Install dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci --ignore-scripts
-          else
-            npm install --ignore-scripts
-          fi
-      - name: Test (shard 4 of ${{ env.VITEST_TOTAL_SHARDS }})
-        run: |
-          set -euo pipefail
-            npx --no-install vitest run --configLoader runner \
-              --shard=4/${{ env.VITEST_TOTAL_SHARDS }} \
-              --project node
-
-  dependabot-critical-check:
-    # Required context (branch protection). Same no-skip contract as
-    # codex-node-checks: no job-level if:/needs:, authorizer is step 1,
-    # fork PR or unapproved dispatch fails with a real failure.
-    # Queries open critical Dependabot alerts on direct dependencies.
-    name: dependabot-critical-check
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      vulnerability-alerts: read
     timeout-minutes: 10
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          persist-credentials: false
-      - name: Query open critical Dependabot alerts on direct deps
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          alerts=$(gh api \
-            --paginate \
-            -H "Accept: application/vnd.github+json" \
-            "/repos/${{ github.repository }}/dependabot/alerts?state=open&severity=critical&dependency_type=direct" \
-            --jq 'length')
-          if [ "$alerts" -gt 0 ]; then
-            echo "::error::Found $alerts open critical Dependabot alert(s) on direct dependencies"
-            gh api \
-              --paginate \
-              -H "Accept: application/vnd.github+json" \
-              "/repos/${{ github.repository }}/dependabot/alerts?state=open&severity=critical&dependency_type=direct" \
-              --jq '.[] | "\(.security_vulnerability.package.name) \(.security_vulnerability.severity) \(.security_vulnerability.advisory.ghsa_id) \(.html_url)"'
-            exit 1
-          fi
-          echo "No open critical Dependabot alerts on direct dependencies"
+      # The gitleaks BINARY is MIT and free; gitleaks-action@v2 is the part
+      # that demands an organisation licence and aborts without one. Run the
+      # official image directly — no wrapper action, no script.
+      - uses: docker://ghcr.io/gitleaks/gitleaks:v8.29.0
+        with:
+          args: detect --source . --redact --exit-code 1
 
-  release-proof:
-    # Gate-B release proof as a merge-queue gate (issue #2840): a batch whose
-    # merge would turn `Deploy production` red at `launch:readiness:predeploy`
-    # must be rejected by the queue, never merged to main. Runs build + the
-    # canonical local release proof (journeys 1-6) with the same env the
-    # deploy job's launch_readiness step uses (E2E_RELEASE_BASE=HEAD, default
-    # gate-b-manifest path), D1 fixture prepared by e2e:prepare:local.
-    #
-    # Deliberately job-level `if:`-gated to merge_group ONLY: this is a ~10
-    # minute proof and must not run on every pull_request push (100 PRs/day
-    # would sink the runners). It is therefore exempt from the
-    # never-conclude-skipped contract documented on codex-node-checks and
-    # enforced by tests/required-context-no-skip.test.ts: it is NOT (and must
-    # not be) added to that test's REQUIRED_JOBS list. Requiredness comes from
-    # the main-merge-queue ruleset (required_status_checks), which evaluates
-    # on the gh-readonly-queue merge ref where the event is always
-    # merge_group, so the check always reports a real verdict there; on any
-    # other event the check is simply absent, and a missing required check
-    # fails closed. PR runs show the job as skipped, which the ruleset never
-    # consults for queue batches.
-    # Per-merge-group-ref concurrency is already provided by the workflow-level
-    # `concurrency: ci-<ref>` block (cancel-in-progress); no job-level block.
-    name: release-proof
-    if: github.event_name == 'merge_group'
+  semgrep:
+    name: semgrep
+    if: github.event_name != 'deployment_status'
+    # Hosted on purpose: this is a docker job and the container runs as root
+    # on the self-hosted runners, leaving root-owned files in _work/0509 that
+    # break every later checkout on that runner (#3946; same class as #3948).
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    container:
+      image: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@v5
+      # `semgrep ci` is the hosted mode and needs SEMGREP_APP_TOKEN, exiting 2
+      # without one. `semgrep scan` is the local mode and needs nothing.
+      - run: semgrep scan --config p/typescript --config p/security-audit --error
+
+  preview-assert:
+    name: preview-assert
+    if: github.event_name != 'deployment_status'
+    # fleet-ci on merge_group/push only; pull_request stays hosted so fork
+    # PRs never execute on the box (fleet-ops#5935).
+    runs-on: ${{ (github.event_name == 'merge_group' || github.event_name == 'push') && 'fleet-ci' || 'ubuntu-latest' }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build the Worker as the deploy would
+        run: npm run build
+
+      - name: Install the browser Playwright will drive
+        run: npx playwright install --with-deps chromium
+
+      - name: Run the e2e suite against the built Worker
+        # This replaced a curl-and-grep loop against /api/health. The proof is
+        # the same shape — build it, run it, ask it — but now the agent that
+        # wrote the change runs the same suite a user's browser would, and a
+        # route that renders blank fails here instead of in production.
+        #
+        # PLAYWRIGHT_TEST_BASE_URL is deliberately unset: playwright.config.ts
+        # then starts `wrangler dev` itself through webServer and tears it down.
+        run: npm run e2e
+
+      - name: Keep the trace when it fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-preview
+          path: playwright-report/
+          retention-days: 7
+
+  e2e-production:
+    name: e2e-production
+    # Not a required check, on purpose: it cannot run on a pull request, and a
+    # required check that never reports blocks the merge queue forever.
+    if: github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Run the same suite against what was just deployed
+        run: npm run e2e
+        env:
+          # Setting this switches playwright.config.ts out of webServer mode.
+          PLAYWRIGHT_TEST_BASE_URL: ${{ github.event.deployment_status.environment_url }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+      - name: Keep the trace when it fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-production
+          path: playwright-report/
+          retention-days: 7
+
+  lighthouse:
+    name: lighthouse
+    # The performance half of verification (talk 14:30): correctness says the
+    # feature works, this says it is still fast. Budgets live in
+    # lighthouse-budget.json and are declared at error level, which is the only
+    # thing that fails the job — the action has no `fail:` input, it calls
+    # core.setFailed() for assertions at error level and only annotates warns.
+    # docs/REBUILD-STACK.md 6.3.
+    if: github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - name: Exchange the Access service token for the CF_Authorization cookie
+        # Access issues the cookie on a token-authenticated request; grep prints
+        # it as NAME=value, which is exactly the GITHUB_ENV line format.
+        run: |
+          curl -sS -o /dev/null -D - -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" "${{ github.event.deployment_status.environment_url }}/login" | grep -io 'CF_Authorization=[^;]*' >> "$GITHUB_ENV"
+        env:
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+      - name: Audit the deployed URL against the budgets
+        uses: treosh/lighthouse-ci-action@3e7e23fb74242897f95c0ba9cabad3d0227b9b18 # v12
+        with:
+          urls: |
+            ${{ github.event.deployment_status.environment_url }}
+          budgetPath: ./lighthouse-budget.json
+          configPath: ./lighthouserc.cjs
+          uploadArtifacts: true
+          temporaryPublicStorage: true
+
+  # Opus 5 grades every PR (Nish 2026-09-22: "have opus 5 grade glm and ds4.1
+  # flash"). Stock anthropics/claude-code-action on the Claude subscription
+  # token; no API spend. A D or F adds the blocked-by-judge label, which the
+  # worker's arm step already refuses (fleet-ops#4557); A to C removes it.
+  # Advisory in the ruleset on purpose: it runs only on pull_request, and a
+  # required check must also report on merge_group.
+  # Nish 2026-09-22: "you can't grade your own work. you grade opus." Opus
+  # grades only PRs opened by the worker app (GLM / DeepSeek packets). PRs by
+  # the Opus deputy or by Fable are reviewed by Fable, never by this job.
+  opus-review:
+    name: opus-review
+    if: github.event_name == 'merge_group' || (github.event_name == 'pull_request' && github.event.pull_request.user.login == 'nishfleet-worker[bot]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
-    timeout-minutes: 25
+      pull-requests: write
+      issues: write
+      id-token: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v5
+        if: github.event_name == 'pull_request'
         with:
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+          fetch-depth: 1
+      - uses: anthropics/claude-code-action@cfc3eb22bfed5c26ef66e3223c982af27e4524de # v1
+        if: github.event_name == 'pull_request'
         with:
-          node-version-file: ".node-version"
-          cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' && 'npm' || '' }}
-          package-manager-cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' }}
-      - name: Install dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci --ignore-scripts
-          else
-            npm install --ignore-scripts
-          fi
-      - name: Install Playwright browsers
-        # Same as the deploy job: install (not cache) — the deploy workflow
-        # installs chromium firefox webkit fresh each run too; the canonical
-        # proof runs on the chromium project only.
-        run: npx playwright install chromium
-      - name: Build
-        run: npm run build
-      - name: Prepare local D1 fixture
-        run: npm run e2e:prepare:local
-      - name: Local release proof (journeys 1-6)
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # The Claude GitHub App is not installed on the org; the workflow token
+          # carries the pull-requests/issues write scope this job declares.
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          # Only the bot this job targets; never '*' on this public repo, where
+          # any external App could then invoke the action with a prompt it controls.
+          allowed_bots: 'nishfleet-worker'
+          use_sticky_comment: true
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            You are the grader. The author is a fleet worker model (GLM or DeepSeek) executing a packet; you are Claude Opus 5. Read the PR body and the issue it cites, then the diff. Grade the PR A to F on: does the change do what the packet asked and nothing more; is every claim in the body proven by something in the diff or a cited run; tests assert behaviour, not implementation; no scripts, hooks, wrappers, helpers or inline programs (the repo's no-glue rule); no comment that justifies a workaround; the `encoded:` line names a real rung. Post ONE top-level comment via `gh pr comment` that starts with `Opus grade: <letter>` followed by at most eight lines of reasons, each tied to a file and line. Use inline comments only for concrete defects. If the grade is D or F run `gh pr edit --add-label blocked-by-judge`; if A, B or C run `gh pr edit --remove-label blocked-by-judge` (ignore the error if absent). Do not edit files. Do not approve or request changes through the review API.
+          claude_args: |
+            --model claude-opus-5
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr edit:*),Bash(gh issue view:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*)"
+      - name: A D or F grade fails this check (fail closed if the label read fails)
+        if: github.event_name == 'pull_request'
         env:
-          NODE_OPTIONS: --max-old-space-size=2048
-        run: npm run e2e:local:release
-      - name: Preserve failed release-proof diagnostics
-        if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: gate-b-release-proof-diagnostics-${{ github.sha }}-${{ github.run_id }}
-          path: test-results/e2e/**
-          if-no-files-found: warn
-          retention-days: 30
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr view ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --json labels --jq '.labels[].name' > "$RUNNER_TEMP/labels" && ! grep -qx blocked-by-judge "$RUNNER_TEMP/labels"
+      - name: merge_group reports the check so the queue can merge (the grade was enforced on the pull request)
+        if: github.event_name == 'merge_group'
+        run: "true"

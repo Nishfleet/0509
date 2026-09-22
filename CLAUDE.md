@@ -1,220 +1,167 @@
 # 0509.io — Five to Nine
 
-## Agent operating model (Nish, 2026-07-19; revised 2026-08-06)
+Competitor and category tracking. The product is **Five to Nine**; `0509.io` is
+its domain (05:09 = five to nine).
 
-What separates is **duties, not identities**. The 2026-07-19 version assigned
-roles by model — Claude reviews, Codex merges — which stopped matching how the
-work is actually done: Claude now implements, reviews and lands changes here.
-Naming models in a rule makes it go stale the moment the fleet changes, and a
-stale rule gets argued with instead of followed. These are stated as duties so
-they survive that.
+This repo was wiped and rebuilt in place on 2026-09-20 (charter #3842). If a
+line here contradicts something you remember about this codebase, this file
+wins and the memory is the old app.
 
-The separations that matter, and why:
+## The correction ladder
 
-- **Nothing merges on its own author's say-so.** Every substantial change gets an
-  independent review before merge — a different agent or Nish, never the author
-  reviewing itself. This is the rule the other two exist to protect.
-- **Builders do not land their own work.** A builder implements from a spec
-  (`docs/PRODUCT-READINESS-SPEC-*` — anchor strings, acceptance criteria,
-  guardrails) and stops at a pushed branch.
-- **Production state stays gated regardless of who is asking.** Remote D1
-  migrations, secrets, restore drills, and provider mutations need Nish's
-  explicit authorization, recorded where it will outlive the session. Merging a
-  reviewed PR is ordinary work; mutating production data is not.
-- **Do not route around safe-deploy.** Headless agent sessions are fail-closed by
-  the wrapper by design. If it blocks you, that is the control working — fix the
-  cause or ask Nish, never bypass it.
+When you correct an agent — or notice yourself about to correct one — land the
+fix at the **highest rung that can hold it**. A lint rule or a type beats a
+sentence in a doc, every time, because a doc is only read when someone chooses
+to read it.
 
-Who may merge: anyone — Nish, Codex, or Claude — once the change has an
-independent review and its checks are green. Do not merge over a failing or
-pending required check, and never force-merge.
+1. **The codebase.** Change the architecture so the mistake is not expressible.
+   This is the best rung: nothing to remember, nothing to enforce.
+2. **Static analysis.** `eslint.config.js`, `knip.jsonc`, `tsc -b`. If the
+   mistake is expressible, make it red. **Every rule in `eslint.config.js`
+   carries the issue or commit it came from in its own message** — a rule whose
+   reason is lost gets deleted by the next person who trips on it.
+3. **Rules.** This file. Guidance an agent will usually read and sometimes miss.
+4. **Skills.** The house skills in the vault.
+5. **Style guide.** Only a human reviewer enforces this, and at our PR rate that
+   is not enforcement. Anything that lives only here is a hole.
 
-### What actually gates a merge
+Source: Lauren Tan, *What I learned from reviewing 2,500 agent PRs*, 15:38.
+Transcript in the vault, `00 Inbox/agent-drop/claude/vps/2026-09-21-poteto-2500-prs-talk-transcript.md`.
 
-Four required checks on the `main-merge-queue` ruleset, with an **empty bypass
-list**:
+The design that put this in place, with every rule's provenance and the
+rejected alternatives: `docs/REBUILD-TRUST.md`.
+
+## Conventions, enforced not described
+
+These are in `eslint.config.js`. They are listed here so you know they exist,
+not so you can follow them from memory — lint will tell you.
+
+- **Bindings come from `cloudflare:workers`.** Never `context.cloudflare.env`:
+  this app provides no `getLoadContext`, so that property does not exist and
+  every route touching it 500s. Source: 7727bf787 / #3918.
+- **Routes use the framework's generated types.** `import type { Route } from
+  "./+types/<route>"`, then `Route.LoaderArgs` / `Route.ActionArgs` /
+  `Route.ComponentProps`. A hand-written object type on a loader parameter
+  asserts a shape instead of checking it. Source: ce5fed17d.
+- **`*.server` modules are imported by route modules and other `*.server`
+  modules only.** React Router tree-shakes them out of the browser bundle for
+  route modules and nowhere else.
+- **One paved path per thing.** `kysely` in `app/lib/db.server.ts` only;
+  `better-auth` in `app/lib/auth.server.ts` only. One data layer, one session
+  authority.
+- **One writer per table.** Writes live in `app/lib/data/<table>.server.ts`.
+  A route that writes directly becomes the second writer the moment a second
+  route needs the row.
+- **Routes are thin.** 150 lines, enforced. Logic goes to `app/lib/`.
+- **Comments are banned in app code.** Not style — agents use a comment to
+  justify a workaround instead of fixing the thing, and the next agent copies
+  the pattern. Decided by Nish, 2026-09-21, from the talk at 23:02. What stock
+  ESLint enforces is same-line comments and the workaround vocabulary
+  (`todo`, `hack`, `for now`, `revisit`, …); the rest is the reviewer's job.
+  Put the reason in the commit message, where it is read at the moment it
+  matters. Config files and tests are exempt.
+- **Immutability.** New objects, never mutation.
+
+## Commands
+
+```bash
+npm run dev        # react-router dev
+npm run build      # react-router build
+npm run typecheck  # wrangler types && react-router typegen && tsc -b
+npm run lint       # eslint . && knip
+npm test           # vitest run
+npm run e2e        # playwright test
+npm run deploy     # wrangler deploy
+```
+
+**`npm run typecheck` is the only real type gate.** `tsc --noEmit -p
+tsconfig.json` is a no-op here — `tsconfig.json` is `"files": []` plus two
+project references, so without `-b` it checks zero files and exits 0. Never
+cite it as type evidence.
+
+**`npm run e2e` has two modes and the environment picks.** With
+`PLAYWRIGHT_TEST_BASE_URL` unset, `playwright.config.ts` starts `wrangler dev`
+itself and tests the built Worker — that is what `preview-assert` runs on every
+PR. With it set, there is no local server and the suite runs against that URL —
+that is what the `deployment_status` job runs against production. Same
+assertions both times.
+
+## Architecture
+
+- `app/routes.ts` — the route registry. A route not listed here cannot be
+  reached. `docs/FEATURE-MAP.md` describes every one of them and is updated in
+  the same PR that changes one.
+- `app/routes/*` — route modules: loader, action, component.
+- `app/lib/*.server.ts` — server-only. Bindings, database, auth.
+- `app/lib/*.ts` — shared pure logic.
+- `workers/app.ts` — the Worker entry and the `scheduled` handler.
+- `migrations/` — numbered D1 SQL. `wrangler d1 migrations list` is the
+  authority on what is applied; do not restate a number here.
+- `tests/` — vitest. `tests/` is the node project (pure logic),
+  `tests/integration/` is the workers project (real workerd, real local D1).
+- `e2e/` — Playwright. Every test traces to a row in `docs/FEATURE-MAP.md`.
+
+## Stack
+
+React Router 8 framework mode on Cloudflare Workers · better-auth (magic link,
+passkey, API keys) · D1 · Tailwind 4 · vitest 4.1.11 with
+`@cloudflare/vitest-plugin` · Playwright 1.63.0.
+
+Every dependency and every version is justified with a vendor doc URL in
+`docs/REBUILD-STACK.md`. **Adding a dependency that is not in that file is a
+rejection**, not a review comment.
+
+## What gates a merge
+
+Four required checks on the `main-merge-queue` ruleset (id 21391031), **empty
+bypass list**:
 
 ```
 Gitleaks   codex-node-checks   semgrep   preview-assert
 ```
 
-The merge queue tests the merge result before it lands, so a PR that would red
-`main` never reaches it. There is no admin bypass and no attestation ritual.
+Renaming one of these is not cosmetic. A required check that never reports fails
+closed and nothing can merge again, including the PR that renamed it. The merge
+queue tests the merge result, so a PR that would redden `main` never lands.
 
-This section used to describe `required-verifier-integrity.yml` and a
-`verifier-attest: <sha>` PR comment that a sole admin could post to unblock a
-protected-verifier change. That workflow was deleted on 2026-09-20 (#3670), and
-before it was deleted it was **never a required check** — it and
-`gate-integrity.yml` ran advisory for their whole life, so the bypass they
-guarded against was open the entire time they appeared to be closing it.
+`e2e-production` and `lighthouse` run on `deployment_status` and are
+deliberately **not** required: they cannot run on a pull request, and a required
+check that cannot report blocks the queue forever.
 
-The attestation ritual is gone with them. An agent following the old text would
-have posted a comment that nothing reads.
+## Rules that are not about code
 
-Deploy-gate e2e (Gate-B journeys, restore-evidence) is Codex-owned; product
-changes that alter public copy/states require the gate specs to be updated in the
-same landing sequence.
+- Nothing merges on its own author's say-so. An independent reviewer or Nish,
+  never the author reviewing itself.
+- Production state stays gated: remote D1 migrations, secrets and provider
+  mutations need Nish's explicit authorization. Merging a reviewed green PR is
+  ordinary work; mutating production data is not.
+- Deploys go through CI. Every push to `main` deploys via
+  `.github/workflows/deploy-production.yml`. Local `npm run deploy` is
+  break-glass only.
+- Prod schema changes go through one door: a numbered file in `migrations/`.
+  Never DDL via `wrangler d1 execute --remote`.
+- No `scripts/`, `ops/`, `.github/scripts`, hooks, wrappers or helper files.
+  Workflow steps call vendor commands directly. `docs/REBUILD-DONE.md` §D is
+  the bar.
 
-History: `docs/PROJECT-HISTORY.md`.
+## Rebuild rules (charter #3842; these end a PR on sight)
 
-## Build
-```bash
-npm run build
-npm test
-npm run typecheck
-```
+- **Nothing from the pre-wipe code is reused.** Main was emptied at fa9d48aa4. Old files may be read for facts about an outside API (`git show 668d2452c:<path>` in a read-only worktree), never copied, never checked out beside a build. Every PR's new files are hash-checked against every blob that ever existed in the old tree.
+- **Stock only, at the version named in `docs/REBUILD-STACK.md`.** A PR names the library or Cloudflare primitive it uses and what it rejected. Hand-rolled schedulers, diffing, crawlers, queues, retries, auth, billing, email, charts or design systems are rejected. A hand-written type annotation over a framework value is a hand-rolled assertion: use the generated types.
+- **Roles.** Fable orchestrates and checks. The Opus deputy does research, design, architecture, packets and every review. Fleet workers execute packets only (`docs/engines/*.md`), with no design choice left; research or design written by a worker is discarded, not corrected.
+- **Jev decides every typed decision** (`docs/REBUILD-JEV.md`, D1–D9). Code never guesses with regexes where a judgment is needed; Jev internals are never shown to customers.
+- **Cost** (`docs/REBUILD-COST.md`): writes batched, blobs in R2, counters in KV/DO, Browser Rendering capped at 10 concurrent sessions as a config value. Raising the cap needs Nish's yes with the cost in the PR, and is never left to degrade customers.
+- **Guardrails** (`docs/REBUILD-GUARDRAILS.md`): brands and creators only, never private individuals; disposable identities for collection; paid data providers only with Nish's yes.
+- **The site is gated until the audit passes.** `/` and `/api/health` are public; `/login`, `/app`, `/api/auth` sit behind Cloudflare Access (Nish by email, agents by the service token in `~/.config/cloudflare/access-0509-agents.env`). A bare `curl` returning 302 to `cloudflareaccess.com` is the gate, not a bug. `0509.in` is a zone Redirect Rule, never code.
+- **Two orchestrator sessions work this repo.** Lanes are posted on #3842; before touching a file in the other lane, post one line there.
 
-**`npm run typecheck` is the only real type gate. `tsc --noEmit -p tsconfig.json` is a
-no-op here and will pass on anything.** `tsconfig.json` is `"files": []` plus two project
-references, so without `-b` it type-checks zero files and exits 0. `npm run typecheck` is
-`cf-typegen && react-router typegen && tsc -b`, which is what CI's `codex-node-checks` runs
-— the generated `worker-configuration.d.ts` and route types only exist after those first two
-steps. PR #552 shipped a `verify:` line claiming `npx tsc --noEmit -p tsconfig.json → clean`
-and CI failed it on a `TS2339` in the same diff. A gate that cannot go red is a missing gate,
-not a weak one: never cite `tsc --noEmit -p tsconfig.json` as type evidence.
+## Docs
 
-CI and deploy verification run on GitHub-hosted `ubuntu-latest`. Do not wrap
-those commands in `flock` or a custom lock script; GitHub's job isolation is
-the isolation. Production provider mutations use the
-`0509-production-provider-mutations` concurrency group.
-
-## Dev
-```bash
-npm run dev
-```
-
-## Stack
-
-- React Router v7 on Cloudflare Workers
-- Better Auth (email + OAuth)
-- D1 (Cloudflare SQLite)
-- Optional R2 (artifact storage retention)
-- Cloudflare Email Service (email delivery via the `EMAIL` send_email binding) — replaced Postmark on 2026-06-11; see `app/lib/delivery.server.ts`
-- WhatsApp Cloud API delivery is dormant (gated off, not claimed); Slack and Teams incoming-webhook delivery is a live Starter+ channel (2026-08-12 decision); the legacy Slack export/API/MCP surface is dormant; email is the verified default GA delivery channel
-- Dodo Payments (live checkout + signed webhooks); legacy secondary payment routes have been removed
-- Cloudflare Browser Rendering (primary ad discovery scrapes the Meta Ad Library; the Meta API token is a gated fallback)
-- Cloudflare Workers AI (creative-text OCR) and Cloudflare Workflows (monitoring fan-out — live in prod via `MONITORING_FANOUT_MODE=fanout`, see Production Reality)
-- Pure CSS via `app/app.css` (no Tailwind, no CSS-in-JS)
-- Vitest for testing
-
-## Architecture
-
-- `app/routes/` — React Router v7 routes (loaders/actions)
-- `app/lib/*.server.ts` — server-side logic (D1 queries, ad discovery, monitoring, analysis, delivery, billing)
-- `app/lib/*.ts` — shared logic (language classifier, types, display helpers)
-- `workers/app.ts` — Cloudflare Worker entry with scheduled event handler
-- `workers/monitoring-workflow.ts` — Cloudflare Workflow for watchlist scans (active in prod when `MONITORING_FANOUT_MODE=fanout`; gate is `resolveMonitoringFanoutMode()` in `app/lib/monitoring-fanout.server.ts`)
-- `workers/schedule.ts` — cron string → scheduled task mapping
-- `migrations/` — D1 schema migrations (sequential numbered SQL; `0004` intentionally absent). `wrangler d1 migrations apply 0509 --remote` runs them, and `wrangler d1 migrations list` is the authority on what is applied — do not restate a tip number here, it was stale by forty files the last time anyone checked.
-- `tests/` — Vitest coverage for search, monitoring, analysis, onboarding, plan limits, reporting, billing webhooks, and route exposure
-- `scripts/` — deploy, prod canaries, launch-readiness canary, D1 backup
-- `docs/launch-readiness.md` — launch gate definition (accurate, maintained)
-- `legacy/` — pre-Cloudflare reference material (`legacy/src/` Next.js prototype, `legacy/supabase/` old backend config). Historical reference only — not part of the live build. See `legacy/README.md`.
-
-## Key Files
-
-- `app/lib/data.server.ts` — D1 persistence barrel (352 lines, re-exports only); domain implementations live in `app/lib/data/*` leaves. Leaves must not import this barrel (cycle); importers keep using `~/lib/data.server`
-- `app/lib/customer-agent-actions.server.ts` — customer agent action dispatch (~2,600 lines)
-- `app/lib/browser-run.server.ts` — Browser Rendering snapshot runner (~700 lines)
-- `app/lib/evidence-usage.server.ts` — proof/evidence credit ledger (~790 lines)
-- Presence subsystem — `app/lib/presence-*.server.ts` (rollout-flag gated via `wrangler.jsonc` `PRESENCE_*` vars; website connector is GA, digest/X/Reddit/LinkedIn remain disabled)
-- `app/lib/ad-source.server.ts` — commercial discovery resolver (browser scraping primary, Meta API fallback, honest demo mode)
-- `app/lib/meta-library-browser.server.ts` — Browser Rendering scraper for the Meta Ad Library
-- `app/lib/meta-api.server.ts` — Meta Ad Library API client
-- `app/lib/monitoring.server.ts` — watchlist monitoring + digests + proof budgets
-- `app/lib/monitoring-fanout.server.ts` — scheduled monitoring fan-out orchestration (`resolveMonitoringFanoutMode()`; inline is only the unset-var default/fallback)
-- `app/lib/delivery.server.ts` — email (Cloudflare Email Service) delivery plus dormant WhatsApp/Slack code paths with idempotency keys, attempt records, and unsubscribe headers
-- `app/lib/unsubscribe.server.ts` — HMAC-signed unsubscribe tokens for the `/unsubscribe` route
-- `app/lib/whatsapp.server.ts` — WhatsApp Cloud API templates, webhook signature verification, target validation
-- `app/lib/dodo-billing.server.ts` — Dodo webhook verification + plan/credit grants
-- `app/lib/analysis.server.ts` — ad analysis (hook, offer, destination, language)
-- `app/lib/landing-page-signals.server.ts` — CTA, price, form extraction
-- `app/lib/language-classifier.ts` — 34-language detection: English/Hindi/Hinglish, 8 Indic scripts ("Regional"), 10 global scripts incl. Ethiopic ("Global"), and 14 Latin-script languages via cue-word profiles (es/pt/fr/de/it/nl/tr/pl/id/vi/sw/af/ha/yo). Short ambiguous Latin copy falls back to English; `translation.server.ts` then runs a Workers AI detect-and-translate fallback (llama-3.2-3b) at selection time. All non-English labels auto-translate via m2m100.
-- `app/lib/creative-text.server.ts` — creative text OCR (HTML + Workers AI)
-- `app/lib/plan.server.ts` — user plan lookup and free/starter/agency gating
-- `app/lib/rate-limit.server.ts` — D1-backed rate limiting (public search, auth, writes)
-- `app/lib/report-builder.server.ts` — shareable report assembly for collections and watchlists
-- `app/lib/ai-guarded-generation.server.ts` — shared scaffold for guarded Workers AI text generators (untrusted `<<<DATA>>>` envelope builder, prompt-field sanitizer, bounded never-throwing run wrapper, and grounding validation primitives). Used by `search-steal-summary.server.ts`, `counter-brief.server.ts`, and `digest-strategy.server.ts` — each keeps its own prompt/model/gates/output shape.
-- `app/lib/search-display.ts` — pure display/formatting/accumulation/URL helpers for the `/search` route (extracted from `search.tsx`; the route re-exports the test-facing names so `~/routes/search` imports still resolve)
-- `app/components/pill.tsx` — the one `<Pill>` badge component (families via `variant`: status / longevity / angle; `is-*` modifier via `state`). Replaced the scattered longevity/variant/angle/Sample/status pill markup
-- `app/components/search/result-row.tsx` — `SearchResultRow`, one `/search` result as a `RuledRow` in the landing language (BL-031; replaced the bordered `result-card.tsx`). The creative, angle, offer, destination and language live in the detail pane; demo results state `Sample` in the row's status cell and cannot be quick-saved
-- `app/lib/watchlist-route-loader.server.ts` / `app/lib/watchlist-route-actions.server.ts` — the `/app/watchlists` loader and action, moved out of the route verbatim (BL-007) so the route file stays under the 800-line ceiling; the route re-exports them as `loader` / `action`
-- `app/lib/watchlist-detail-tabs.ts` / `app/lib/watchlist-detail-display.ts` — URL-addressable competitor detail tabs (What changed · Evidence · Creative · Delivery · Setup) and the detail's pure presentation (status-strip cells, fact rail, delivery lines, one hard-failure count shared with the board)
-- `app/lib/watchlist-display.ts` — pure watchlist presentation/formatters (scan presentation, empty-event copy resolvers, run status/timing labels, delivery-channel visibility, proof summaries) extracted from `app/routes/app.watchlists.tsx`; the route re-exports the test-facing resolver names
-- `app/components/watchlists/` — presentational pieces of the watchlists route (FirstScanBanner, BulkSelectBar, DeliverySettingsCard, DeliveryTargetsSection, RecentChecksSection, RecentEvidenceChecksCard, CandidateHistory, EventChangesSection, CompetitorDetail, DetailTabBar, CompetitorRail, WatchlistSetupCard, WatchlistProofAge). All are read-only over loader data + scalar plan flags — props threaded explicitly, no context. `WatchlistProofAge` is re-exported from the route for its hydration test
-
-## Current Phase: Pre-Commercial-Launch Hardening
-
-The checked-in Cloudflare app is the active production runtime and billing is wired:
-
-- onboarding, collections, watchlists, digests, reports, share/export flows, customer API keys, and MCP endpoint exist in `app/`
-- **billing IS live via Dodo Payments**: `api.billing.dodo.checkout.ts` redirects to hosted checkout; `api.webhooks.dodo.ts` is signed, replay-windowed, monotonic, and idempotent. Failed/on-hold subscriptions retain the plan as dunning grace; cancelled/expired subscriptions and successful refunds revoke it. `/app/billing` shows plan, usage, and cancellation guidance and blocks double subscriptions. Do not describe billing as "not live."
-- Dodo returns to `/app/billing?checkout=dodo`, which renders a checkout-return notice that polls plan activation ~20x every 3s (`CheckoutReturnNotice` in `app/components/checkout-return-notice.tsx`, rendered on the billing page)
-- support contact is `support@0509.io` (`app/lib/support.ts`), surfaced on marketing footer, app sidebar, /terms, /privacy, /unsubscribe, and email footers; inbound routing is Cloudflare Email Routing (dashboard-configured)
-- Dodo is the only active billing processor. Stripe was never wired; tests assert no Stripe route exposure.
-- region-aware pricing was REMOVED in `migrations/0016_drop_region_pricing.sql`; pricing is live-loaded from Dodo (`app/lib/dodo-pricing.server.ts`, `/api/pricing-preview`)
-- plan gating is enforced at creation time (`checkPlanLimit`), on manual refresh (free plan blocked), on watchlist resume, and on downgrade/revocation/refund (over-limit watchlists auto-pause, newest kept); authenticated live search is rate-limited per account (60/10min)
-Current GA posture: Email is the verified default delivery lane; Slack and Teams incoming-webhook delivery is a live Starter+ channel (2026-08-12 decision); WhatsApp and the legacy Slack export/API/MCP surface are dormant/non-GA; Workflow-based monitoring fan-out is live in prod (`MONITORING_FANOUT_MODE=fanout`, max 8 in-flight).
-
-Audit-program, incident, and verification history: `docs/PROJECT-HISTORY.md`.
-
-## Production Reality
-
-- `https://0509.io`, `https://www.0509.io`, and `https://api.0509.io` are the primary production domains for the current Cloudflare app under `app/` and `workers/`.
-- **Deploys go through CI, not your terminal.** Every push to `main` auto-deploys through `.github/workflows/deploy-production.yml`, which runs typecheck, full tests, restore-evidence materialization, `npm run deploy`, and release-evidence verification. Do not run `npm run deploy` locally for routine ships. Local deploy is break-glass only when Actions is down and no CI deploy is in flight. Full gate sequence and incident history: `docs/PROJECT-HISTORY.md`.
-- **Manual dispatches of `Deploy production` use the stock command:** `gh workflow run deploy-production.yml --ref main`. The workflow guards `main` itself (`Only main deploys`) and ships `github.sha`, so nothing needs resolving or validating beforehand. `scripts/dispatch-deploy-production.sh` did that resolution and was deleted with the rest of `scripts/` (`aaaa…40` is valid 40-hex, so the workflow's Authorize gate alone cannot catch it — three red runs on 2026-08-14 were burned exactly that way). Never hand-build `gh workflow run deploy-production.yml -f expected_sha=…`.
-- `0509.in`, `www.0509.in`, and `api.0509.in` are redirect compatibility routes only. Do not introduce new `.in` product copy, auth origins, SEO links, or support addresses.
-- Cloudflare deploy state is represented by `wrangler.jsonc`: D1 database `0509`, R2 bucket binding `LANDING_PAGE_ARTIFACTS`, Browser Rendering, Workers AI, Cloudflare Email Service, and `MonitoringWorkflow` bindings are configured there. `wrangler.jsonc` sets `MONITORING_FANOUT_MODE: "fanout"` and `MONITORING_FANOUT_GLOBAL: "1"` (max 8 in-flight via `MONITORING_FANOUT_MAX_INFLIGHT`).
-- Remote D1 migrations: the deploy workflow applies them with `wrangler d1 migrations apply 0509 --remote` before `wrangler deploy`, so the chain moves on every deploy. Read the live state with `wrangler d1 migrations list 0509 --remote` rather than trusting a number written here.
-- Crons: `13 * * * *` (hourly observation-gap check), `17 */6 * * *` (discovery warmup), `0 */3 * * *` (monitoring scans), `0 4 * * *` (daily digest), and `0 5 * * MON` (weekly digest).
-- scheduled monitoring runs via the `MonitoringWorkflow` fan-out path (not inline). The real gate is `resolveMonitoringFanoutMode()` in `app/lib/monitoring-fanout.server.ts` — inline is only the unset-var default/fallback. There is no `shouldRunScheduledMonitoringInline` helper.
-- auth/origin logic should stay proxy-aware for Cloudflare and any future front-door changes:
-  - `app/lib/env.server.ts` must respect `Forwarded` and `x-forwarded-*` headers
-  - `tests/env.server.test.ts` covers that behavior
-  - `BETTER_AUTH_URL` is set to `https://0509.io` in `wrangler.jsonc` vars so auth origin trust and unsubscribe-link generation never derive from client-supplied forwarded headers.
-
-## Paperclip
-
-This project is managed by Paperclip under company Swish.
-- **Project:** 0509.in (URL key: `0509-in`)
-- **SaaS Builder** handles implementation tasks
-- **SaaS Reviewer** reviews completed work (Codex Reviewer retired 2026-06-12)
-
-## Brand
-
-The product is **Five to Nine**; **0509.io** is its current production domain (05:09 = five-to-nine). Use "Five to Nine" in customer-facing prose and the wordmark. Refunds: Nish's global no-refunds policy applies (digital product, purchases final, paired with the 100%-satisfaction support promise) — see global CLAUDE.md; keep refund-webhook revocation code in place for goodwill/dispute cases.
-
-## Product Shape
-
-- Analysis is the hook.
-- Monitoring is the retention loop.
-- Workspace memory is the compounding layer.
-
-## Conventions
-
-- **Global-first (Nish, 2026-06-12): no IST/India defaults anywhere.** 0509 may be India-first in marketing motion, but the product is built for the global market. UI timestamps render in the viewer's browser timezone/locale (`app/components/local-time.tsx`); emails use the workspace delivery timezone else UTC-labeled; search country defaults to the visitor's `cf-ipcountry` geo (`app/lib/countries.ts`) else "all" — never a hardcoded country; watchlists persist `target_country` at creation (migration 0025; NULL legacy rows keep their original India scan country so diffs stay coherent). Pricing is already served in the visitor's local currency via Dodo adaptive currency.
-
-- Keep new work in the Cloudflare app unless explicitly touching legacy reference code.
-- Favor honest product behavior over optimistic marketing claims.
-- If a live discovery provider is configured (browser scraping or Meta token) and live search fails, monitoring must fail honestly rather than silently degrading into demo-backed success. Demo mode is only for the explicitly unconfigured state and must always be labeled. `searchAds` in `meta-api.server.ts` defaults `allowDemoFallback` to `false`; callers that intentionally want demo on live failure must pass `allowDemoFallback: true`.
-- Verify the active runtime before making topology assumptions. Today the canonical public hosts all run through Cloudflare Worker custom domains.
-- For local Worker development, prefer `.dev.vars` over `.env.local`.
-- Cloudflare cost policy: stay on included/free usage by default. Only enable usage-billed add-ons when the missing capability is materially hampering product quality, operations, or launch. Note: monitoring already depends on usage-billed products (Browser Rendering, Workers AI, Workflows) — the account must be on Workers Paid for the cron design to function.
-- Email always goes through the Cloudflare Email Service `EMAIL` binding via `delivery.server.ts` with an idempotency key, a `delivery_attempt` record, and `List-Unsubscribe` headers — never add ad-hoc email sends. Cloudflare Email Service has no delivery webhooks; email `webhookStatus` stays `provider_unknown` (bounce data is in the dashboard Activity log / GraphQL API). Legacy `delivery_attempt` rows with `provider = 'postmark'` remain valid history.
-- `LANDING_PAGE_ARTIFACTS` should stay optional unless persisted HTML snapshots become operationally important enough to justify enabling R2.
-- Immutability: create new objects, never mutate existing ones.
-- File organization: 200-400 lines typical, 800 max.
-- D1 queries: always use parameterized `.bind()` — never string interpolation.
-- Prod schema changes go through ONE door: a numbered file in `migrations/` applied with `npx wrangler d1 migrations apply 0509 --remote`. Never run DDL via `wrangler d1 execute --remote`. The deploy workflow applies pending migrations itself, before `wrangler deploy`, so schema and code land in one ordered step. `npm run deploy` is now plain `wrangler deploy`; the separate sync check it used to run was deleted with `scripts/`. Incident history: `docs/PROJECT-HISTORY.md`.
-
-## Design System
-
-See `DESIGN.md` in the repo root for the canonical design reference. The picked aesthetic is **Vercel** (from the awesome-design-md collection). Read `DESIGN.md` before any UI work and align styling decisions with the documented patterns: color palette, typography, spacing, shadows, radii, component shapes.
-
-Per Nish's "delightmaxxing >>>>>" preference (2026-04-06): do not ship generic AI-default styling. If a UI change can be more delightful, more polished, or more consistent with Vercel's aesthetic, take the extra time to do it.
-
-Source: https://github.com/VoltAgent/awesome-design-md
-
-## Backlog
-
-Current backlog: `docs/BACKLOG.md`.
+`DESIGN.md` (the design system — read it before any UI work) ·
+`docs/FEATURE-MAP.md` (what exists and how to reach it) ·
+`docs/REBUILD-TRUST.md` (verification, the ladder, the gardener) ·
+`docs/REBUILD-STACK.md` (every dependency, probed) ·
+`docs/REBUILD-DONE.md` (the definition of complete) ·
+`docs/REBUILD-SCHEMA.md`, `REBUILD-DELIVERY.md`, `REBUILD-ONBOARDING.md`,
+`REBUILD-STANDING.md`, `REBUILD-COST.md`, `REBUILD-JEV.md`,
+`REBUILD-KEEPLIST.md`.

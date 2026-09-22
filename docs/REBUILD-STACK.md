@@ -1,80 +1,1063 @@
-# REBUILD stack — libraries and platform primitives (issue #3852, umbrella #3842)
+# REBUILD stack — the clean-room stack, probed
 
-Audit date: **2026-09-20** (UTC). Method: every version and publish date below was pulled live from the npm registry (`npm view <pkg> version` / `npm view <pkg> time`) on this date; capability claims cite official docs. The current `package.json` already sits on the target spine (react-router `^8.3.0`, react `^19.2.8`, better-auth `^1.6.20` with `database: env.DB`, kysely `^0.28.17` + kysely-d1 `^0.4.0`, `@cloudflare/vite-plugin` 1.52.1, `@cloudflare/puppeteer` 1.3.0, vitest `^4.1.10`, `@playwright/test` `^1.63.0`, wrangler 4.123.0, zod `^4.5.4` via `overrides`) — the audit below is "bump and confirm", not "discover".
+Umbrella #3842. Written by the Opus deputy, **2026-09-21 IST**. This file replaces the worker-written `docs/REBUILD-STACK.md` wholesale; nothing was carried over. Every version below was read from `registry.npmjs.org` or the GitHub releases API today, and every command was either run on this VPS or quoted from the vendor's own docs with the URL.
 
-## 1. Stack audit — latest stable today
+The rule this file exists to serve (Nish, 2026-09-21 ~16:55 IST): *"no handrolled bs. complete rebuild, clean, lightweight, the way the pro devs do it. no glue. no using existing bs."* So the test applied to every row is not "is this good" but **"is this what ships in the box"**.
 
-| Layer | Pick | Latest (published) | Recommended way for the rebuild | Anti-patterns to avoid |
-|---|---|---|---|---|
-| UI runtime | React | **19.3.0** (2026-09-09, [react.dev](https://react.dev/versions)) | Render through React Router 8 framework mode — SSR on Workers, no separate client entry. Use `use()` + Suspense for deferred loader data; React Compiler is stable, enable via the official babel/swc plugin only if a hot surface needs it | No `useEffect` data fetching (loaders own data); no RSC assumptions — RR is not an RSC framework; no module-level request state |
-| Framework | React Router | **8.4.0** (2026-09-15), `@react-router/dev` 8.4.0 | Framework mode + `@cloudflare/vite-plugin` **1.56.0** — the officially supported Workers path: dev runs server code inside workerd, `vite preview` previews in the Workers runtime, `wrangler deploy` ships the Vite build. Scaffold: `npm create cloudflare@latest -- <name> --framework=react-router`. Entry: `workers/app.ts` delegates to `createRequestHandler` with `{ cloudflare: { env, ctx } }` | SPA mode and prerendering are **not supported** under the Cloudflare Vite plugin ([docs](https://developers.cloudflare.com/workers/framework-guides/web-apps/react-router/)); `cloudflareDevProxy` is the superseded RR7/Pages path — do not use it; don't fetch in components outside loaders/actions |
-| CSS | Tailwind | **4.3.3** (2026-07-16, [docs](https://tailwindcss.com/docs)) + `@tailwindcss/vite` 4.3.3 (2026-07-16) | CSS-first config: `@import "tailwindcss"` + `@theme` tokens in one stylesheet; the Vite plugin goes alongside `cloudflare()` + `reactRouter()` in `vite.config.ts` | No `tailwind.config.ts` theme (ignored in v4); no `@apply` component classes; no separate PostCSS pipeline |
-| Components | shadcn/ui CLI | **4.21.0** (2026-09-04) | `npx shadcn@latest init` — since July 2026 new projects default to **Base UI** primitives (`@base-ui/react` **1.8.0**, 2026-09-04); `-b radix` pins Radix (`radix-ui` 1.6.7, 2026-07-24). Components are copied source you own — zero runtime wrapper dependency. `cn()` now comes from the `cn` package 0.3.0 — a compiled drop-in replacement for clsx + tailwind-merge; icons `lucide-react` 1.47.0 (2026-09-17); animations `tw-animate-css` 1.4.0 (2025-09-24, what the blocks import) | Don't depend on shadcn as a package — the registry pattern is the point; don't hand-rebuild its blocks; non-interactive CI that expects Radix must pass `-b radix` ([changelog](https://ui.shadcn.com/docs/changelog/2026-07-base-ui-default)) |
-| Auth | better-auth | **1.7.5** (2026-09-14, [docs](https://better-auth.com/docs)) | `database: env.DB` — better-auth runs its own Kysely against the D1 binding directly (proven in `app/lib/better-auth.server.ts` today). Plugins: `magicLink` (send via the `EMAIL` binding), `passkey` via `@better-auth/passkey` **1.7.5** + `@simplewebauthn/server` 14.0.2, `socialProviders` for Google/Microsoft. `secondaryStorage` → KV for sessions + built-in rate limiter | Never `disableCSRFCheck`/`disableOriginCheck`; re-run `@better-auth/cli migrate`/`generate` after any plugin change; model names are adapter names, not raw table names |
-| DB layer | Kysely + D1 | kysely **0.29.6** (2026-09-16, [kysely.dev](https://kysely.dev)) + `kysely-d1` **0.4.0** (2025-04-19, [github](https://github.com/aidenwallis/kysely-d1)) | `new Kysely<DB>({ dialect: new D1Dialect({ database: env.DB }) })` — what the repo runs. Generate the `DB` type from the fresh `migrations/0001` | Flag: `kysely-d1` last published Apr 2025 — the D1 API surface it wraps is stable, but the maintained-successor candidate is `@oselvar/kysely-cloudflare` (2026-06: Workers + DO-SQLite + REST dialects, batched transactions), and drizzle-orm 0.45.2 (2026-03-27) is the other first-class D1 ORM if we ever outgrow Kysely. No string-concat SQL; no ORM that can't run in workerd (Prisma needs driver adapters — skip) |
-| Runtime/infra | Workers platform | wrangler **4.135.0** (2026-09-18, [docs](https://developers.cloudflare.com/workers/wrangler/)), `@cloudflare/workers-types` 5.20260920.1 (2026-09-20) | `wrangler.jsonc` owns bindings; `wrangler types` generates `Env` (never hand-write it); `compatibility_flags: ["nodejs_compat"]`; `observability.enabled: true` | Bindings over the REST API, always; no floating promises (every promise awaited/returned/`ctx.waitUntil`'d); `crypto.randomUUID()` for ids, `crypto.subtle.timingSafeEqual` for secret compares; no `passThroughOnException`; don't destructure `ctx` |
-| Scheduling | Cron triggers | platform — `triggers.crons` in wrangler.jsonc ([docs](https://developers.cloudflare.com/workers/configuration/cron-triggers/)) | `scheduled()` handler fires the tick, then **hands off** — never do the fan-out inline | No `setTimeout`/`setInterval` in a Worker (isolate lifetime); no D1 cron tables |
-| Durable execution | Workflows | platform — `workflows` binding ([docs](https://developers.cloudflare.com/workflows/)) | `env.WORKFLOW.create({ params })` → `step.do()`/`step.sleep()`/`step.waitForEvent()` with per-step retries — the pattern already live in prod (`workers/monitoring-workflow.ts`). Extend `WorkflowEntrypoint`, use `this.env` | Don't rebuild retry/sleep machinery on top of Queues when a Workflow step does it natively; `implements` instead of `extends` on platform classes loses `this.env` |
-| Per-item lanes | Queues | platform — `queues` producers/consumers ([docs](https://developers.cloudflare.com/queues/)) | `env.Q.send`/`sendBatch` → `queue(batch)` consumer with `max_batch_size`, `max_retries`, `dead_letter_queue`. Only for high-volume per-item work where Workflows' orchestration is overkill | Not a cron replacement; not for multi-step orchestration (that's Workflows) |
-| Browser | Browser Rendering | `env.BROWSER` binding + `@cloudflare/puppeteer` **1.4.0** (2026-08-20); REST quick actions | Two shapes: (a) binding + puppeteer sessions for scripted pages; (b) REST endpoints — `/screenshot`, `/snapshot` (content+screenshot+markdown+a11y tree in one call), `/markdown`, `/content`, `/scrape`, `/links`, `/crawl`, `/json` (AI structured extraction — prompt or JSON schema, default model `@cf/meta/llama-3.3-70b-instruct-fp8-fast`, bills Workers AI) ([docs](https://developers.cloudflare.com/browser-run/)) | Plain `fetch` on brand homepages — proven bot-gated from workerd (REBUILD-KEEPLIST finding 3: gymshark.com 200 via curl, `fetch_failed` from workerd); any site-read that must succeed needs the browser leg |
-| Object storage | R2 | platform — `r2_buckets` binding ([docs](https://developers.cloudflare.com/r2/)) | `env.BUCKET.put/get` for screenshots, page snapshots, artifacts; lifecycle rules for retention | Never base64 artifacts into D1 rows |
-| KV | KV | platform — `kv_namespaces` binding ([docs](https://developers.cloudflare.com/kv/)) | Config, budget counters, better-auth `secondaryStorage` | KV is eventually consistent — never for exact counters/leases (that's D1 or a Durable Object) |
-| Vector | Vectorize | platform — `vectorize` binding ([docs](https://developers.cloudflare.com/vectorize/)) | `env.INDEX.upsert/query` for semantic competitor-similarity over embeddings | Not a primary store — keep the canonical row in D1, vectors are derived |
-| AI | Workers AI | platform — `ai` binding ([docs](https://developers.cloudflare.com/workers-ai/)) | `env.AI.run('@cf/…')` for OCR/translation/analysis (proven: creative-text OCR, m2m100 translation, llama detect). Put AI Gateway in front for logging/evals | No per-call glue: one guarded-generation scaffold pattern (already in repo) per generator, not one wrapper per call |
+Two conventions:
 
-## 2. Replace-the-glue table
+- **Probed** = I ran it here, on this VPS, today. **Cited** = I read it in the vendor's docs and the link is in the row.
+- Where a vendor's own doc is wrong or stale, the row says so and gives the evidence. Three of them are.
 
-| Capability the app needs | Use this (version) | The glue it replaces / what NOT to build |
+---
+
+## 1. The skeleton — React Router 8 framework mode on Workers
+
+### 1.1 The command
+
+```
+npx create-cloudflare@latest <name> --framework=react-router --no-git --no-deploy
+```
+
+**Probed 2026-09-21.** `create-cloudflare` 2.72.9 produced a 26-file tree with React Router **8.3.1**, React **19.2.8**, Wrangler **4.135.0**, Vite **8.0.3**. Doc: <https://developers.cloudflare.com/workers/framework-guides/web-apps/react-router/> (read 2026-09-21).
+
+**Trap — do not add `--platform=workers`.** With it, C3 exits:
+
+```
+╰  ERROR  Error: Unsupported framework: react-router
+```
+
+even though `react-router` is in C3's own framework map. **Probed twice here**, with `--platform=workers -y` and with `--lang=ts -y`; both fail the same way.
+
+Root cause, read out of the shipped bundle (`create-cloudflare@2.72.9/dist/cli.js`), so it is a real bug and not a flag typo:
+
+```js
+var isVariantInfo = (copyFiles) => {
+  return "path" in copyFiles;
+};
+var templateSupportsLanguage = (config, lang) => {
+  const { copyFiles } = config;
+  if (!copyFiles || isVariantInfo(copyFiles)) {
+    return false;            // <-- react-router lands here
+  }
+  ...
+};
+```
+
+The react-router template declares `copyFiles: { path: "./ts" }` (`templates/react-router/c3.ts`). `isVariantInfo` returns `true` for any object with a `path` key, so `templateSupportsLanguage` returns `false`, and `filterTemplatesByLanguage(getFrameworkMap(...), args.lang)` drops `react-router` from the map **whenever `args.lang` is set**. `-y`, `--lang` and `--platform` all cause `args.lang` to be set. The bare documented command leaves it unset, which is why it works.
+
+**Rule for the repo:** the scaffold command is run once, exactly as above, with no extra flags. If a future C3 fixes this, nothing changes for us.
+
+### 1.2 What the command actually does
+
+Not a Cloudflare-authored app. From `templates/react-router/c3.ts` in the installed package, verbatim:
+
+```
+// We use the upstream `create-react-router` default template and overlay
+// our Cloudflare-specific files via `copyFiles`. This avoids depending on
+// a third-party Cloudflare template that has been deleted upstream in the past.
+```
+
+So the sequence is: run `create-react-router` with the **default** template (<https://github.com/remix-run/react-router-templates/tree/main/default>), overlay Cloudflare files, then `configure()`:
+
+- installs `@cloudflare/vite-plugin` as a devDependency (1.56.0 today);
+- deletes `Dockerfile` and `.dockerignore`;
+- deletes `dependencies["@react-router/node"]`, `dependencies["@react-router/serve"]` and `scripts.start`.
+
+That deletion list *is* the "deliberately not added" list, enforced by the tool rather than by us.
+
+### 1.3 The files it produces
+
+| Path | Origin | Note |
 |---|---|---|
+| `app/root.tsx` | upstream default | `links` export — this is where Google Fonts go (§3.4) |
+| `app/routes.ts` | upstream default | route config, `@react-router/dev/routes` |
+| `app/routes/home.tsx` | C3 overlay | replaces upstream's |
+| `app/welcome/welcome.tsx` | C3 overlay | delete in the first real PR |
+| `app/app.css` | C3 overlay | `@import "tailwindcss" source(".");` — Tailwind 4 is already wired |
+| `workers/app.ts` | C3 overlay | the Worker entry, 11 lines, below |
+| `wrangler.jsonc` | C3 overlay | below |
+| `vite.config.ts` | C3 overlay | below |
+| `react-router.config.ts` | upstream default | `export default { ssr: true } satisfies Config;` |
+| `tsconfig.json` + `tsconfig.node.json` + `tsconfig.cloudflare.json` | C3 overlay | project references, `files: []` at the root |
+| `worker-configuration.d.ts` | `wrangler types` | regenerated by the `postinstall` script |
+| `public/`, `.gitignore`, `README.md` | mixed | — |
 
-*Version convention: npm rows cite `version (publish-date)` pulled live 2026-09-20; Cloudflare platform primitives have no npm version — the binding name/API is the contract, toolchain pin is wrangler 4.135.0 + `@cloudflare/workers-types` 5.20260920.1.*
-| Scheduling + retries | Cron triggers → Workflows (`step.do` retries, `step.sleep`) — platform features ([docs](https://developers.cloudflare.com/workflows/)). Queues only when a lane needs per-item backpressure/DLQ | Hand-rolled retry loops, sleep-in-request, a `cron_jobs` D1 table, external schedulers |
-| Page screenshots + diffing | Browser Rendering `/snapshot` or `/screenshot` (or `env.BROWSER` + `@cloudflare/puppeteer` 1.4.0) → PNG to R2 → **pixelmatch 7.2.0** (2026-04-29, pure JS, workers-safe) for pixel diffs ([docs](https://developers.cloudflare.com/browser-run/)) | Self-hosted headless Chrome; resemblejs 5.0.0 (last publish 2023-06 — stale); screenshot-on-every-poll (diff only on content-change signal) |
-| HTML→text + change detection | Browser Rendering `/markdown` or `/content` → normalize → sha256 hash gate → **`diff` 9.0.0** (2026-04-13) for human-readable deltas. `html-to-text` 10.0.1 (2026-08-19) as the non-browser fallback for raw HTML ([docs](https://developers.cloudflare.com/browser-run/quick-actions/markdown-endpoint/)) | Regex tag-stripping without stripping `script`/`style` first (the current presence snapshot bug, #2789); a custom DOM differ |
-| RSS/feed parsing | **`fast-xml-parser` 5.11.1** (2026-08-27, [npm](https://www.npmjs.com/package/fast-xml-parser)) — pure JS, no streams, workers-safe; `@extractus/feed-extractor` 8.0.3 (2026-08-06) is the maintained batteries-included alternative | `rss-parser` 3.13.0 (last publish **2023-04** — stale); `feedparser` (Node streams, heavier under workerd) |
-| Identity/OG extraction from a domain | Browser Rendering **`/json`** with a JSON schema ([docs](https://developers.cloudflare.com/browser-run/quick-actions/json-endpoint/)) (brand name, description, socials, theme color) — AI extraction is now a platform primitive; cheap path: fetch homepage + HTMLRewriter on `og:`/`twitter:`/JSON-LD meta | `open-graph-scraper` 6.12.0 / `metascraper` 5.58.1 are maintained but Node-oriented (undici deps — only under `nodejs_compat`); no regex-only OG parser as the primary path |
-| Logo fetch | **logo.dev** — `img.logo.dev/<domain>?token=pk_…` image URL, no SDK: free tier 500k logo displays + 500k brand searches/mo, monogram fallback, light/dark themes ([docs](https://www.logo.dev/docs/logo-images/introduction)). Zero-key fallback: `google.com/s2/favicons?domain=<d>&sz=128`; richer alternative: Brandfetch | Scraping `/favicon.ico` + resizing glue; shipping a logo pipeline at all |
-| Email sending | **Cloudflare Email Service** `send_email` binding → `env.EMAIL.send({ to, from: { email, name }, subject, html, text })` — transactional only, domain onboarded via `wrangler email sending enable` ([docs](https://developers.cloudflare.com/email-service/)); `mimetext` 3.0.28 only if raw MIME/attachments needed; REST API exists for non-Worker callers | SMTP libraries, third-party transactional vendors (Postmark was already cut); marketing/bulk sends on this lane |
-| Charts | **Recharts 3.10.1** (2026-07-25) — the library shadcn's chart blocks wrap ([ui.shadcn.com/charts](https://ui.shadcn.com/charts)) | Hand-rolled SVG/D3 glue for MVP charts; visx/chart.js (more surface than we need) |
-| Tables | **`@tanstack/react-table` 9.2.4** (2026-08-28, [docs](https://tanstack.com/table)) headless + shadcn `data-table` block | A table component library with its own theme system; hand-sort/paginate logic |
-| Forms + validation | **TanStack Form 1.33.5** (2026-08-11) + **zod 4.6.5** (2026-09-13) via Standard Schema — shadcn documents it first-class; the same zod schema parses `formData` in the RR action server-side. React Hook Form 7.88.0 (2026-09-11) is the equally-documented alternative if a form fights the TanStack shape | The retired shadcn `<Form>` wrapper (docs moved to direct library integration — [docs/forms](https://ui.shadcn.com/docs/forms)); uncontrolled hand-rolled form state; client-only validation |
-| i18n | **None for now** — per issue. Keep copy co-located per route so a later i18n pass is mechanical | Pulling an i18n framework at 0 users |
-| Analytics | **Cloudflare Web Analytics** — JS beacon, cookie-free, free, SPA-aware ([docs](https://developers.cloudflare.com/web-analytics/)) | GA4 + consent banner at MVP; self-rolled event pipeline before product signals exist |
-| Error tracking | Workers native observability first: `observability.enabled: true`, Workers Logs (`head_sampling_rate`), tail workers for structured events — zero deps ([docs](https://developers.cloudflare.com/workers/observability/)). **`@sentry/cloudflare` 10.75.0** (2026-09-16, `withSentry()` wrapper) only when we need issue grouping/releases | `toucan-js` (superseded by `@sentry/cloudflare`); bespoke `error_report` tables as an observability substitute |
-| Rate limiting | **`[[ratelimits]]` binding** — GA in wrangler ≥4.36: `env.RL.limit({ key })`, 10s/60s windows, per-location ([docs](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/)). Keep D1 counters only for globally-exact or credit-style limits — today's `rate-limit.server.ts` already splits exactly this way (public scopes on `RL_*` bindings, D1 `atomicClaim` for spend gates) | Hand-rolled per-request D1 writes on hot paths when per-location semantics suffice; assuming the binding is global (it isn't) |
-| Feature flags | **Cloudflare Flagship** — `env.FLAGS` binding (`flagship` block + app_id in wrangler.jsonc), targeting rules + % rollouts, `@cloudflare/flagship` 0.5.0 (2026-08-10) + `@openfeature/server-sdk` 1.23.0 server-side / `@openfeature/web-sdk` 1.10.0 browser ([docs](https://developers.cloudflare.com/flagship/)) | Env-var "flags" that need a redeploy; per-competitor on/off is **product state in D1**, not a flag — don't conflate |
+`workers/app.ts`, verbatim as generated:
 
-## 3. Design system + typography
+```ts
+import { createRequestHandler } from "react-router";
 
-**Recommendation: shadcn/ui on Tailwind 4, on the Base UI primitives track.** Reasons:
+const requestHandler = createRequestHandler(
+  () => import("virtual:react-router/server-build"),
+  import.meta.env.MODE,
+);
 
-1. The July-2026 shadcn default is Base UI (`@base-ui/react` 1.8.0 — 35 components, stable since Dec 2025, MUI full-time team, built-in RTL); Radix (`radix-ui` 1.6.7) remains fully supported one flag away (`-b radix`), so this is not a lock-in bet.
-2. The alternative — hand-rolling on Base UI/Radix directly — means rebuilding everything the registry gives for free: tokens, `cn()`, dark-mode wiring, charts, data-table, and every block's accessibility detail. shadcn's model (copied source you own) matches the umbrella's "no glue" rule: it's our code, not a dependency black box.
-3. Current shadcn is form-agnostic (TanStack Form or RHF), Tailwind-4-native (`@theme` + CSS variables), and registry-extensible — the four-place UI (Home/Competitors/Alerts/Settings) is exactly block territory.
+export default {
+  async fetch(request) {
+    return requestHandler(request);
+  },
+} satisfies ExportedHandler<Env>;
+```
 
-**Typography — two candidate Google Fonts pairings (neither is Inter):**
+`vite.config.ts`, verbatim — note the plugin order, which is load-bearing:
 
-- **A — analytical-modern:** [Space Grotesk](https://fonts.google.com/specimen/Space+Grotesk) display + [Instrument Sans](https://fonts.google.com/specimen/Instrument+Sans) body. Geometric, technical, reads like an instrument panel — fits "here's where you stand".
-- **B — editorial-premium:** [Fraunces](https://fonts.google.com/specimen/Fraunces) display (variable, optical sizing) + [Public Sans](https://fonts.google.com/specimen/Public+Sans) body. Serif headlines give the weekly-brief voice; neutral body keeps tables dense.
+```ts
+import { reactRouter } from "@react-router/dev/vite";
+import { cloudflare } from "@cloudflare/vite-plugin";
+import tailwindcss from "@tailwindcss/vite";
+import { defineConfig } from "vite";
 
-Both are variable fonts on Google Fonts — one `<link>` per family, `font-display: swap`, subset to latin.
+export default defineConfig({
+  plugins: [
+    cloudflare({ viteEnvironment: { name: "ssr" } }),
+    tailwindcss(),
+    reactRouter(),
+  ],
+  resolve: {
+    tsconfigPaths: true,
+  },
+});
+```
 
-## 4. Testing — current best practice on Workers
+`wrangler.jsonc`, verbatim (placeholders filled by C3):
 
-| Layer | Tool | What to test |
+```jsonc
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "<WORKER_NAME>",
+	"compatibility_date": "<COMPATIBILITY_DATE>",
+	"main": "./workers/app.ts",
+	"vars": {
+		"VALUE_FROM_CLOUDFLARE": "Hello from Cloudflare"
+	}
+}
+```
+
+Scripts, from `transformPackageJson` in the same file: `deploy`, `preview`, `cf-typegen` (`wrangler types`), `typecheck` (`wrangler types && react-router typegen && tsc -b`), `postinstall` (`wrangler types`).
+
+### 1.4 What is deliberately NOT added on top
+
+| Not added | Why |
+|---|---|
+| `@react-router/node`, `@react-router/serve`, `scripts.start` | C3 deletes them. The Worker is the server; a Node server is a second runtime to keep in sync. |
+| `Dockerfile`, `.dockerignore` | C3 deletes them. |
+| Any custom `server.ts` / Hono / Express layer | `createRequestHandler` in `workers/app.ts` is the whole server. Bindings reach loaders through the RR8 `context`, not through a framework. |
+| `assets` / `site` block in `wrangler.jsonc` | `@cloudflare/vite-plugin` writes the deploy-time config. Hand-adding `assets.directory` fights it. |
+| A `preset` in `react-router.config.ts` | `@react-router/cloudflare`'s preset belongs to the pre-Vite-plugin era. The generated config is three lines and no preset. |
+| A separate `tsconfig` for the Worker | Already there — `tsconfig.cloudflare.json`, referenced from the root. |
+| `@cloudflare/workers-types` | Superseded by `wrangler types` → `worker-configuration.d.ts`, which the `postinstall` script regenerates. Adding the types package gives you two competing `Env` definitions. |
+
+> **Note for C4.** The docs page at <https://developers.cloudflare.com/workers/framework-guides/web-apps/react-router/> describes the same command but lists a slightly different file set (it mentions `app/entry.server.ts`, which the current template does not emit). Trust the tree the command produces, not the page.
+
+---
+
+## 2. Auth — better-auth on Workers + D1
+
+**Versions, read from npm 2026-09-21:** `better-auth` **1.7.5**, `@better-auth/kysely-adapter` **1.7.5** (bundled), `@better-auth/passkey` **1.7.5**, `kysely` **0.29.6** (peer: `^0.28.17 || ^0.29.0`).
+
+### 2.1 The CLI command is `auth`, not `@better-auth/cli`
+
+The packet asked for `npx @better-auth/cli generate`. **That package is deprecated**: `@better-auth/cli@latest` is **1.4.21**, published **2026-03-01**, three minors behind `better-auth` 1.7.5, and it warns on run that it is no longer supported. The CLI moved to the standalone `auth` package in better-auth 1.5. `better-auth` core itself ships **no** `bin`. The current CLI ships as the `auth` package (1.7.5, `bin: { auth, better-auth }`), and every current doc page uses it:
+
+```
+npx auth@1.7.5 generate     # emit the schema
+npx auth@1.7.5 migrate      # apply it (Kysely adapters only)
+```
+
+**Pin the CLI version; never `@latest`.** better-auth validates the schema against the live database **in production** (§2.3, point 3), so the generator and the library have to agree by construction. `@latest` silently drifts ahead of the installed `better-auth` on some future run, emits a schema the running library does not expect, and the first request after deploy fails that validation check. `auth@1.7.5` matches `better-auth` 1.7.5 exactly and moves only when that does.
+
+Cited: <https://www.better-auth.com/docs/concepts/cli>, <https://www.better-auth.com/docs/adapters/sqlite> (both read 2026-09-21). `generate` flags: `-c/--cwd`, `--output`, `--config`, `-y/--yes`, `--adapter` (`prisma|drizzle|kysely`), `--dialect`. Other commands: `create-admin`, `init`, `upgrade`, `info`, `secret`.
+
+### 2.2 There is no third-party D1 adapter. It is built in.
+
+This is the load-bearing finding of this section, and it is **undocumented on the adapters pages** — `docs/adapters/sqlite.mdx` and `docs/adapters/other-relational-databases.mdx` do not mention D1 except to link the community package `aidenwallis/kysely-d1`. **That link is obsolete.**
+
+Probed: I unpacked `@better-auth/kysely-adapter@1.7.5` and read `dist/`. It ships `d1-sqlite-dialect-D4qp4-wW.mjs`, and `dist/index.mjs` selects it by duck-typing the binding:
+
+```js
+if ("batch" in db && "exec" in db && "prepare" in db) {
+    const { createD1IndexIntrospector, D1SqliteDialect } = await import("./d1-sqlite-dialect-D4qp4-wW.mjs");
+    dialect = new D1SqliteDialect({ database: db ...
+```
+
+A `D1Database` binding matches that shape, so **you pass the binding straight in**. No `kysely-d1`, no dialect of our own, no wrapper. The dialect is honest about D1's one real limitation:
+
+```js
+async beginTransaction() {
+    throw new Error("D1 does not support interactive transactions. Use the D1 batch() API instead.");
+}
+```
+
+Confirmed against the one doc page that does cover D1 — <https://www.better-auth.com/docs/concepts/database> §"Programmatic Migrations", Cloudflare D1 accordion, read 2026-09-21:
+
+```ts
+import { env } from "cloudflare:workers";
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  database: env.DB,
+  // ... rest of config
+});
+```
+
+**Rejected, recorded so it is not re-litigated:** `kysely-d1` 0.4.0 (`aidenwallis/kysely-d1`) — it exists, it works, and it is what the better-auth adapters page still links, but it is a third dependency for a dialect that now ships in the box. `kysely` itself stays as a peer at 0.29.6, pulled in by better-auth; `better-auth-cloudflare` (a community meta-package with its own CLI and resource provisioner — that is glue by definition); `@better-auth/drizzle-adapter` + drizzle (a second schema source of truth next to `0001_rebuild.sql`, and `getMigrations` explicitly does not work with it).
+
+### 2.3 Config shape as shipped
+
+```ts
+// app/lib/auth.server.ts
+import { env } from "cloudflare:workers";
+import { betterAuth } from "better-auth";
+import { magicLink } from "better-auth/plugins";
+import { passkey } from "@better-auth/passkey";
+
+export const auth = betterAuth({
+  database: env.DB,                 // the D1 binding, nothing wrapping it
+  advanced: { database: { joins: true } },
+  plugins: [
+    magicLink({ sendMagicLink: async ({ email, token, url }) => { /* Email Service binding */ } }),
+    passkey(),
+  ],
+});
+```
+
+Three things the docs make mandatory and are easy to miss:
+
+1. **`nodejs_compat` is required.** "Better Auth uses `AsyncLocalStorage`." — <https://www.better-auth.com/docs/integrations/hono> §Cloudflare Workers. It is on by default for `compatibility_date` ≥ `2026-08-04` (§5, platform fact 2), so the scaffold already satisfies it — **set it explicitly anyway**, because the Vitest plugin injects it into tests regardless and an implicit dependency is exactly how a green test suite ships a broken deploy.
+2. **`advanced.database.joins: true`** — "The Kysely SQLite dialect supports joins out of the box since version `1.4.0` … seeing upwards of 2x to 3x performance improvements depending on database latency." (<https://www.better-auth.com/docs/adapters/sqlite>). Off by default. `/get-session` runs on every request; this is the single cheapest latency win in the auth path.
+3. **Schema validation runs in production.** "Validation is enabled by default, including in production … Requests await the same check and fail if the schema does not match" (<https://www.better-auth.com/docs/concepts/database>). Kysely "reads live database metadata and needs database access during initialization" — so a drift between `0001_rebuild.sql` and better-auth's expectations is a **runtime 500 on first request**, not a startup warning. `REBUILD-SCHEMA.md` already carries the four auth tables verbatim; that is why.
+
+### 2.4 Generating the schema against D1
+
+The CLI cannot reach D1 — "Cloudflare D1 can only be queried through a Cloudflare Worker, so the CLI cannot access it directly" (same page). Two stock routes, both vendor-sanctioned; **take the first**:
+
+- **Generate against an empty local SQLite, apply with Wrangler.** This is the route that works, and the obvious shortcut does not: **`--adapter kysely` does not bypass introspection.** `auth generate` reads live database metadata before emitting — it is a generator, not a schema printer — so both forms die at `SqliteIntrospector.getTables` against any placeholder, and a `D1Database` binding exists only inside workerd where a Node CLI cannot reach it.
+
+  The working recipe, verified and recorded in the header of `migrations/0001_rebuild.sql` on main. Create the config file temporarily, take the SQL verbatim, then delete both the file and the dependency:
+
+  ```ts
+  // auth.cli.config.ts
+  import Database from "better-sqlite3";
+  import { betterAuth } from "better-auth";
+  import { magicLink } from "better-auth/plugins";
+  import { apiKey } from "@better-auth/api-key";
+  import { passkey } from "@better-auth/passkey";
+  import { SqliteDialect } from "kysely";
+  export const auth = betterAuth({
+    database: { dialect: new SqliteDialect({ database: new Database(":memory:") }), type: "sqlite" },
+    plugins: [magicLink({ sendMagicLink: async () => {} }), passkey(), apiKey()],
+  });
+  ```
+
+  ```
+  npm i -D better-sqlite3
+  npx auth@1.7.5 generate --config auth.cli.config.ts --output better-auth-schema.sql -y
+  npm uninstall better-sqlite3 && rm auth.cli.config.ts
+  ```
+
+  `better-sqlite3` is a **temporary devDependency**, present for one command and removed in the same breath — it never lands in `package.json` on a commit. D1 is SQLite and the emitted DDL is dialect-identical, so an empty in-memory SQLite database is the correct stand-in rather than a workaround. Take the output **verbatim**, unreformatted — `date` columns, quoted `"user"` and all — because the library and the database have to agree by construction. Regenerate with the command above rather than editing by hand.
+- **Programmatic migration endpoint.** `getMigrations(auth.options)` from `better-auth/db/migration`, returning `{ toBeCreated, toBeAdded, runMigrations }`, behind a protected route. The docs' own comment: *"Protect or remove this endpoint in production."* For us this is a second, unguarded write path into D1 next to `wrangler d1 migrations apply` — it is the documented escape hatch, not the plan.
+
+### 2.5 Tables `auth generate` emits for our plugin set
+
+Core (<https://www.better-auth.com/docs/concepts/database>, field lists read from the page source 2026-09-21):
+
+| Table | Columns |
+|---|---|
+| `user` | `id`, `name`, `email`, `emailVerified`, `image`, `createdAt`, `updatedAt` |
+| `session` | `id`, `userId` → `user.id`, `token`, `expiresAt`, `ipAddress`, `userAgent`, `createdAt`, `updatedAt` |
+| `account` | `id`, `userId` → `user.id`, `accountId`, `providerId`, `accessToken`, `refreshToken`, `accessTokenExpiresAt`, `refreshTokenExpiresAt`, `scope`, `idToken`, `password`, `createdAt`, `updatedAt` |
+| `verification` | `id`, `identifier`, `value`, `expiresAt`, `createdAt`, `updatedAt` |
+
+**magic-link adds no table.** `docs/plugins/magic-link.mdx` has no `## Schema` section; the plugin stores its token in the core `verification` table (`identifier`/`value`/`expiresAt`). Import is `better-auth/plugins` (server) and `better-auth/client/plugins` (client) — still in the main package.
+
+**passkey adds exactly one table**, `passkey` (<https://www.better-auth.com/docs/plugins/passkey>): `id`, `name?`, `publicKey`, `userId` → `user.id`, `credentialID`, `counter`, `deviceType`, `backedUp`, `transports?`, `createdAt`. It moved out of the main package in 1.7 — `npm install @better-auth/passkey`, `import { passkey } from "@better-auth/passkey"`, client `@better-auth/passkey/client`. It pulls `@simplewebauthn/server` ^13.3.1 and `@simplewebauthn/browser` ^13.3.0, which is the reference WebAuthn implementation, not a hand-roll.
+
+Total for our set: **five tables**, four core plus `passkey`.
+
+---
+
+## 3. Tailwind 4 + shadcn/ui on React Router 8
+
+### 3.1 Tailwind is already installed
+
+The scaffold ships `tailwindcss` and `@tailwindcss/vite` ^4.2.2 (upstream default template's `package.json`, read 2026-09-21; npm `latest` is **4.3.3**), `tailwindcss()` already in `vite.config.ts`, and `app/app.css` already opening with:
+
+```css
+@import "tailwindcss" source(".");
+```
+
+There is no `tailwind.config.js` and there must not be one — v4 is configured in CSS. **No PostCSS config either**: `@tailwindcss/vite` replaces `postcss.config.js` + `autoprefixer`. If either file appears in a PR, it is a regression.
+
+### 3.2 shadcn/ui init
+
+`shadcn` CLI **4.21.0** (npm, 2026-09-21). Per <https://ui.shadcn.com/docs/installation/react-router> (read 2026-09-21), a React Router project needs **no** pre-work — "This automatically configures Tailwind CSS and the `~/*` import alias":
+
+```
+npx shadcn@latest init
+npx shadcn@latest add button
+```
+
+That is the whole installation. `init` writes `components.json`, rewrites `app/app.css` with the token blocks, and adds `clsx`/`tailwind-merge`/`class-variance-authority`/`lucide-react` plus `app/lib/utils.ts`.
+
+### 3.3 Tokens, theming, dark mode
+
+Cited: <https://ui.shadcn.com/docs/theming>, <https://ui.shadcn.com/docs/dark-mode/vite> (read 2026-09-21).
+
+Tokens are plain CSS custom properties in `:root`, overridden under `.dark`, then mapped into Tailwind's theme with `@theme inline`:
+
+```css
+:root {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+}
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+}
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+}
+```
+
+Base token pairs: `background`/`foreground`, `card`, `popover`, `primary`, `secondary`, `muted`, `accent`, `destructive`, `border`, `input`, `ring`, `chart-1`…`chart-5`, `sidebar-*`. Adding a colour is three lines — declare it in `:root` and `.dark`, map it under `@theme inline` — and it produces `bg-*` / `text-*` utilities. **No new colour is ever a Tailwind config edit**, because there is no Tailwind config.
+
+**Dark mode, with one deliberate deviation.** shadcn's stock Vite recipe is a `ThemeProvider` holding `"light" | "dark" | "system"` in `localStorage` (key `vite-ui-theme`) and toggling a class on `document.documentElement`, plus a `ModeToggle` dropdown. That recipe is client-only and therefore **flashes on an SSR app**: the server renders light, the effect corrects it after hydration. On an SSR-by-default React Router app the honest stock fix is to read the preference server-side and render the class into `<html>` in `app/root.tsx`, with the `localStorage` provider still owning the toggle. This is the one place in this document where the vendor recipe does not fit the runtime, and it is recorded here rather than discovered in review.
+
+### 3.4 Fonts
+
+Google Fonts go through React Router's own `links` export in `app/root.tsx` — the upstream default template already ships the three-tag `preconnect` + stylesheet pattern there. No `@fontsource` packages, no self-hosting step, no font loader.
+
+The generated `app/app.css` sets `--font-sans: "Inter", …` inside `@theme`. **Inter is on the design system's ban list** (global rule: "No Inter/system-font sameness — pair a characterful display face with a readable body face"). Replacing it is one `@theme` line plus one `links` entry; `docs/design-directions/` owns the choice.
+
+### 3.5 No custom build steps
+
+No PostCSS config, no `tailwind.config.ts`, no CSS-in-JS, no `styled-components`, no design-token generator, no Storybook. `vite.config.ts` stays at the four plugins the scaffold wrote.
+
+---
+
+## 4. Cloudflare primitives
+
+All rows read from `developers.cloudflare.com` on **2026-09-21**. Three pricing pages sit outside <https://developers.cloudflare.com/workers/platform/pricing/> and are the usual cause of a surprise bill: Browser Rendering, Analytics Engine, Email Service.
+
+> **Rename.** Browser Rendering is now documented as **Browser Run**; `/browser-rendering/*` URLs still resolve.
+
+### 4.1 Workflows — scheduling and retries
+
+Binding (<https://developers.cloudflare.com/workflows/get-started/guide/>):
+
+```jsonc
+{ "workflows": [ { "name": "my-workflow", "binding": "MY_WORKFLOW", "class_name": "MyWorkflow" } ] }
+```
+
+Stock way (<https://developers.cloudflare.com/workflows/build/sleeping-and-retrying/>):
+
+```ts
+await step.sleep("sleep for a bit", "1 hour");
+await step.sleepUntil("sleep until X", Date.parse("24 Oct 2026 13:00:00 UTC"));
+await step.do("call an API",
+  { retries: { limit: 10, delay: "10 seconds", backoff: "exponential" }, timeout: "30 minutes" },
+  async () => { /* ... */ });
+```
+
+Defaults: `retries: { limit: 5, delay: 10000, backoff: "exponential" }`, `timeout: "10 minutes"`. Backoff is `constant | linear | exponential`.
+
+Limits (<https://developers.cloudflare.com/workflows/reference/limits/>): 10,000 steps per instance on Paid (configurable to 25,000; 1,024 on Free); 50,000 concurrent instances; **step output capped at 1 MiB**; max sleep 365 days; 30-day retention of completed state.
+
+Pricing (<https://developers.cloudflare.com/workflows/reference/pricing/>): requests, CPU ms, storage, **and steps** — 500,000 steps included, then **$0.80 per additional 100,000**. "A Workflow that is waiting on a response to an API call, paused as a result of calling `step.sleep`, or otherwise idle, does not incur CPU time."
+
+**Anti-pattern:** a `step.do` per line of code. Steps are the billing unit and the 1 MiB output cap is per step. A step is a *durable boundary* — one external call, one idempotent unit. Returning a page snapshot from a step instead of an R2 key hits the cap; wrapping control flow in steps multiplies the bill.
+
+### 4.2 Queues — `max_concurrency`
+
+```jsonc
+{ "queues": {
+    "producers": [ { "queue": "my-queue", "binding": "MY_QUEUE" } ],
+    "consumers": [ { "queue": "my-queue", "max_batch_size": 10, "max_batch_timeout": 30,
+                     "max_retries": 10, "max_concurrency": 10, "dead_letter_queue": "my-queue-dlq" } ]
+} }
+```
+
+`max_concurrency` is "The maximum number of concurrent consumers allowed to run at once", settable **1–250**; concurrency is on and autoscaling by default (<https://developers.cloudflare.com/queues/configuration/consumer-concurrency/>). **This is the knob that enforces the browser cap** (§4.3): the sweep consumer's `max_concurrency` is the config value Nish's standing rule refers to.
+
+Limits (<https://developers.cloudflare.com/queues/platform/limits/>): 128 KB message, 100 per batch, 5,000 msg/s per queue, 25 GB backlog, 15-minute consumer wall clock, retention up to 14 days.
+
+Pricing (<https://developers.cloudflare.com/queues/platform/pricing/>): "An operation is counted for each 64 KB of data that is written, read, or deleted", $0.40/million past 1M/month. A normal delivery is **three** operations (write + read + delete), and "Each retry incurs a read operation."
+
+**Anti-pattern:** shipping without `dead_letter_queue` — "messages that reach the retry limit are deleted permanently." And budgeting one op per message; the real multiplier is 3× plus retries plus 64 KB chunking.
+
+### 4.3 Browser Rendering / Browser Run — screenshots + DOM
+
+```jsonc
+"browser": { "binding": "MYBROWSER" }
+```
+
+Two routes, and the cheap one is not the famous one:
+
+- **Quick Actions** — `/content`, `/screenshot`, `/pdf`, `/markdown`, `/snapshot`, `/accessibilityTree`, `/scrape`, `/json`, `/links`, `/crawl` (REST-only). Reachable from REST **and** from the binding via `.quickAction("screenshot", { url })` with `compatibility_date` ≥ `2026-03-24`, and **without** `nodejs_compat`. <https://developers.cloudflare.com/browser-rendering/rest-api/>
+- **Browser Sessions** — `@cloudflare/puppeteer` or `@cloudflare/playwright`, requires `nodejs_compat`.
+
+**The 10-concurrent number is an allotment, not a ceiling.** The limits page gives the Paid hard cap as **200 concurrent browsers per account**; the pricing page gives **10 browsers included (averaged monthly), then $2.00 per additional browser**. Both are real and they answer different questions. Nish's standing rule — cap 10, raising it costs $2/browser/month and needs his recorded yes — is the *pricing* number, and it is the one we configure.
+
+Other limits that bite before concurrency does: **browser timeout 60 s of inactivity** (`keep_alive` extends to 10 minutes); **new browser instances 3 per second** on Paid; Quick Actions 30 requests/second. Browser hours: 10 h/month included, then $0.09/hour, with month-end rounding at the 1,800-second mark. Usage is reported in the `X-Browser-Ms-Used` header — that is the number to log per sweep.
+
+Session reuse (<https://developers.cloudflare.com/browser-rendering/workers-bindings/reuse-sessions/>): `puppeteer.sessions(endpoint)` → `puppeteer.connect(env.MYBROWSER, sessionId)` → **`browser.disconnect()`**, never `close()`.
+
+**Anti-pattern:** `browser.close()` per request. You re-pay the cold-launch browser-seconds every time and burn the 3-instances-per-second rate limit, which is tighter than concurrency for a bursty sweep. Second anti-pattern: reaching for a full session when `/markdown`, `/links` or `/content` does the job — cheaper, and it skips `nodejs_compat`.
+
+### 4.4 R2 — blobs and lifecycle
+
+```jsonc
+{ "r2_buckets": [ { "binding": "MY_BUCKET", "bucket_name": "<YOUR_BUCKET_NAME>" } ] }
+```
+
+Lifecycle rules (<https://developers.cloudflare.com/r2/buckets/object-lifecycles/>) expire/delete objects by age or date, transition Standard → Infrequent Access, and **abort incomplete multipart uploads**. Configured via dashboard, Wrangler, or the S3 API. Granularity is **days**; up to 1,000 rules per bucket; objects "typically removed within 24 hours" of expiry.
+
+Pricing (<https://developers.cloudflare.com/r2/pricing/>): Standard $0.015/GB-mo, Class A $4.50/M, Class B $0.36/M, **egress free**. Infrequent Access $0.01/GB-mo but Class A $9.00/M, Class B $0.90/M, $0.01/GB retrieval, **30-day minimum duration**.
+
+**Anti-pattern:** lifecycling snapshots into Infrequent Access. IA saves 33% on storage but costs 2× Class A, 2.5× Class B, adds retrieval fees, bills 30 days regardless of actual lifetime, and is **one-way** — "Once an object is stored in Infrequent Access, it cannot be transitioned to Standard Access using lifecycle policies." Our snapshots are small, short-lived and read on every diff: Standard plus an expiry rule. Second anti-pattern: multipart uploads with no abort rule, which accrues storage for parts nothing will complete.
+
+> **Restic note (fleet memory):** R2 age-expiry lifecycle rules corrupt a restic repository. Anything restic touches stays on IA-with-no-expiry or off R2 entirely. Not applicable to 0509's own buckets, listed so the rule is not re-derived.
+
+### 4.5 KV
+
+```jsonc
+{ "kv_namespaces": [ { "binding": "<NAME>", "id": "<NAMESPACE_ID>" } ] }
+```
+
+Limits (<https://developers.cloudflare.com/kv/platform/limits/>): 512-byte keys, 25 MiB values, **1 write per second to the same key**, 1,000 operations per Worker invocation, minimum `cacheTtl` 30 s. Consistency (<https://developers.cloudflare.com/kv/concepts/how-kv-works/>): "Changes may take up to 60 seconds or more to be visible in other global network locations", and **negative reads are cached too**.
+
+Pricing: 10M reads/mo then $0.50/M; 1M writes then **$5.00/M** — writes cost 10× reads.
+
+**Anti-pattern:** KV as a counter or a lock. Same-key writes are capped at 1/s, absence is cached for up to 60 s, and writes are 10× reads. Hot counters belong in Durable Object storage; KV is for read-mostly config and cached lookups.
+
+### 4.6 D1
+
+```jsonc
+{ "d1_databases": [ { "binding": "DB", "database_name": "<NAME>", "database_id": "<ID>" } ] }
+```
+
+`batch()` "Sends multiple SQL statements inside a single call to the database" and returns results positionally (<https://developers.cloudflare.com/d1/worker-api/d1-database/>). Limits: **10 GB max database** on Paid, 30 s per query, 100 bound parameters, 100 KB statement, 2 MB row. Billing: rows read $0.001/M past 25B; rows written **$1.00/M** past 50M — written is 1,000× read.
+
+**Anti-pattern:** awaiting prepared statements in a loop instead of `batch()`. And the one that produced the $105 bill on this account on 2026-09-17: **a row per observed event**. Billing is on rows *scanned*, not returned, so an unindexed `WHERE` bills every row it touched. `REBUILD-SCHEMA.md` is the structural answer — snapshots to R2, one `snapshot` row per watch per tick, `signal` rows only after judgment.
+
+### 4.7 Email Service — transactional and one-click unsubscribe
+
+The wrangler key is **`send_email`**, and the field is `name`, not `binding`:
+
+```jsonc
+{ "send_email": [ { "name": "EMAIL", "remote": true } ] }
+```
+
+```ts
+const response = await env.EMAIL.send({
+  to: "recipient@example.com", from: "welcome@yourdomain.com",
+  subject: "…", html: "…", text: "…",
+});
+```
+
+One-click unsubscribe **is** supported, as custom headers — the RFC 8058 pair, verbatim from Cloudflare's docs:
+
+```
+"List-Unsubscribe": "<https://yourdomain.com/unsubscribe?id=abc123>",
+"List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+```
+
+DNS (<https://developers.cloudflare.com/email-service/configuration/domains/>): SPF `v=spf1 include:_spf.mx.cloudflare.net ~all` on the `cf-bounce` subdomain, DKIM selector `cf-bounce._domainkey` for Sending (Routing uses `cf2024-1._domainkey`), DMARC on `_dmarc`, three `route{1,2,3}.mx.cloudflare.net` MX records on `cf-bounce`. Cloudflare writes them for a zone already on Cloudflare.
+
+Status and quota: **Beta, Workers Paid only**, "3,000 included per month, then $0.35 per 1,000 emails". Limits: 50 recipients per message, 5 MiB total, **16 KB for all custom headers combined**, and daily limits that "begin conservatively and scale based on sending behavior" — the numbers are not published. Inbound Email Routing is unlimited on all plans.
+
+**Anti-pattern:** sending the weekly brief as a bulk blast on a cold domain. It is a transactional product in Beta with 3,000/month included and reputation-gated daily limits. And omitting the `List-Unsubscribe` pair on anything a human could read as a list — Gmail and Yahoo bulk-sender rules require it and the docs put compliance on us.
+
+### 4.8 Web Analytics
+
+Free, all plans. Automatic for a zone proxied through Cloudflare; otherwise the beacon:
+
+```html
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js"
+        data-cf-beacon='{"token": "…", "spa": false}'></script>
+```
+
+"provides free, privacy-first analytics … does not collect or use your visitors' personal data" — no cookies, no `localStorage`, no cross-site identity. Metrics come from the Performance API, so this is also our field Core Web Vitals source next to Lighthouse CI's lab numbers.
+
+**Anti-pattern:** adding the beacon manually on a proxied zone that already has automatic setup — you double-count. And shipping the default snippet on an SSR/SPA app without `"spa": true`, which makes every client-side route change invisible. React Router 8 does client-side navigation; `"spa": true` is not optional for us. See <https://developers.cloudflare.com/web-analytics/get-started/web-analytics-spa/>.
+
+### 4.9 Workers Analytics Engine
+
+```jsonc
+{ "analytics_engine_datasets": [ { "binding": "<NAME>", "dataset": "<DATASET>" } ] }
+```
+
+```js
+env.WEATHER.writeDataPoint({ blobs: ["Seattle","USA","pro_sensor_9000"], doubles: [25, 0.5], indexes: ["a3cd45"] });
+```
+
+Limits (<https://developers.cloudflare.com/analytics/analytics-engine/limits/>): 20 blobs, 20 doubles, **1 index**; 16 KB total blobs per data point; index ≤ 96 bytes; 250 data points per invocation; **3 months retention**. Queried by SQL over HTTP with positional columns `blob1`…`blob20`, `double1`…`double20`, `index1`, `timestamp`. Pricing is published (10M data points/month included) but **"Currently, you will not be billed for your use of Workers Analytics Engine."**
+
+**This is where per-brand engine telemetry goes** — sweep durations, browser-ms, item counts, judgment outcomes — precisely because it is not D1 rows.
+
+**Anti-pattern:** `SELECT COUNT(*)`. Analytics Engine samples under load; the correct aggregate is `SUM(_sample_interval)`. And putting a high-cardinality value in `index1` — the index is the *sampling key*, one value of ≤96 bytes, not a primary key.
+
+### 4.10 Cron Triggers
+
+```jsonc
+{ "triggers": { "crons": ["*/3 * * * *", "0 15 1 * *"] } }
+```
+
+Handler `async scheduled(controller, env, ctx)`. Five fields, `L`/`W`/`#` supported, **one minute is the minimum interval**. Limit is per **account**: 5 (Free) / **250 (Paid)** — a per-Worker maximum is not stated on <https://developers.cloudflare.com/workers/platform/limits/>. CPU for sub-hour crons is 30 s; wall clock 15 minutes. Billing is ordinary Workers requests + CPU.
+
+**Anti-pattern, straight from the docs:** commenting out the `crons` key to disable a job — "Commenting out the `crons` key will not disable a Cron Trigger." You must set `crons: []` and redeploy. Second: doing the work inline in `scheduled`. The durable shape is **cron → enqueue → Queue consumer**, or **cron → Workflow**, so a 15-minute wall clock is never the thing that decides whether a sweep finished.
+
+### 4.11 Price sheet
+
+Single current link: **<https://developers.cloudflare.com/workers/platform/pricing/>** (read 2026-09-21). Workers Paid is $5/month/account including 10M requests and 30M CPU ms, and it also covers KV, Hyperdrive and Durable Objects usage. **It does not cover Browser Run, Analytics Engine or Email Service** — those are <https://developers.cloudflare.com/browser-rendering/platform/pricing/>, <https://developers.cloudflare.com/analytics/analytics-engine/pricing/> and <https://developers.cloudflare.com/email-service/platform/pricing/>. `docs/REBUILD-COST.md` owns the per-engine model; this row exists so nobody estimates a bill from one page.
+
+---
+
+## 5. Libraries — one recommendation each
+
+**Two platform facts to get right first, because both are commonly quoted stale and both change answers below.**
+
+1. **The Worker script-size limit is 64 MiB uncompressed, on Free and Paid, and there is no compressed limit.** Verbatim from <https://developers.cloudflare.com/workers/platform/limits/> (read 2026-09-21): *"There is no compressed size limit. Only the uncompressed bundle size counts."* The old "1 MiB free / 10 MiB paid compressed" framing is gone. What binds instead is **startup CPU** — *"A Worker must parse and execute its global scope … within 1 second"*, error `10021`, checkable with `wrangler check startup` — and per-request CPU (10 ms on Free).
+2. **`nodejs_compat` is on by default for `compatibility_date` ≥ `2026-08-04`.** Verbatim from <https://developers.cloudflare.com/workers/configuration/compatibility-flags/>: *"For compatibility dates of `2026-08-04` or later, Workers and Pages projects enable both `nodejs_compat` and `nodejs_compat_v2` by default."* So better-auth's `AsyncLocalStorage` requirement (§2.3) is satisfied by the scaffold's compatibility date alone. **Set the flag explicitly anyway** — the Vitest plugin injects it into tests regardless (§6.1), so an implicit dependency is the exact shape of bug where tests pass and deploy fails.
+
+**Size method, named per row because the numbers are not interchangeable.** `bundlejs` (esbuild, minify + gzip, **full package export, no tree-shaking**) is the primary; `bundlephobia` where noted; raw `curl | gzip -9` for `.wasm` and `dist` files. A full-export number is an upper bound, not what a route ships.
+
+### 5.1 HTML → plain text
+
+**Recommendation: `HTMLRewriter` — the workerd platform primitive. 0 bytes, 0 dependencies.**
+
+<https://developers.cloudflare.com/workers/runtime-apis/html-rewriter/>. For "give me the visible copy of this marketing page", you attach `text()` handlers to the selectors you care about and never materialise a DOM. **Yes, the primitive beats every library here** — a library would be a dependency doing worse what the runtime already does, and doing it with the whole document in memory.
+
+One real caveat from those docs: *text chunks are not text nodes.* A single node arrives across several `text()` calls, so you must concatenate until `lastInTextNode` is true. Getting that wrong produces a diff full of phantom changes.
+
+`HTMLRewriter` is Workers-only. If the same extraction is ever needed in the browser bundle, the built-in `DOMParser` is the 0-byte answer there; a shared isomorphic implementation would be `html-to-text` (below).
+
+| Rejected | Why |
+|---|---|
+| `html-to-text` 10.0.1 — **46.4 KB gzip** (bundlejs, full export) | Genuinely Workers-clean (pure ESM, no node builtins — its `lib/html-to-text.mjs` was grepped, the only `node:` hits are object keys). Rejected on price: 46 KB to get word-wrapping and list-bullet rendering that a diff does not want. Keep it in mind only if browser-side extraction becomes mandatory. |
+| `cheerio` 1.2.0 — **116.2 KB gzip**, 11 deps (bundlephobia) | Pulls `undici@7` and `iconv-lite`; a bundler build of it fails on both. `engines.node >= 20.18.1`. ~10× the primitive for a full jQuery-style tree. |
+
+`@mozilla/readability` 0.6.0 (11.8 KB gzip) + `linkedom` 0.18.13 is the right tool for *article* extraction and the wrong one here twice over: Readability strips nav, header and pricing — exactly the marketing copy we diff — and linkedom reaches for the native `canvas` addon, which workerd cannot load.
+
+### 5.2 Text change diff
+
+**Recommendation: `diff` (jsdiff) 9.0.0 — 8.3 KB gzip full export (bundlejs), 0 dependencies.**
+
+<https://github.com/kpdecker/jsdiff>. It is the only candidate that emits a *structured* result out of the box: `{ value, added, removed, count }` change objects, `diffWords` / `diffLines` / `diffSentences` granularity, and `createPatch` / `structuredPatch`. Word-level is the right unit for page copy, and structured hunks are what Jev needs as context for "what changed, where on the page".
+
+Dual ESM+CJS with a `browser` field, zero node builtins (`libesm/index.js` grepped) — the same code runs in the Worker and in the browser bundle.
+
+| Rejected | Why |
+|---|---|
+| `fast-diff` 1.3.0 — 3.4 KB gzip | Character-level only: a flat `[[-1\|0\|1, string]]` array, no word or line modes, no patch format. We would write the copy-diff layer ourselves. Glue. |
+| `diff-match-patch` 1.0.5 — 6.6 KB gzip | A community fork of Google's abandoned library, **last published 2020-05-20**, CJS-only, character-level again. No reason to adopt a six-year-dead package to save 1.7 KB. |
+
+### 5.3 RSS / Atom / RDF parsing
+
+**Recommendation: `@extractus/feed-extractor` 8.0.3 — 24.5 KB gzip (bundlejs), one dependency (`fast-xml-parser ^5.10.1`).**
+
+<https://github.com/extractus/feed-extractor>, published 2026-08-06, MIT. It is the only candidate that handles **all four** formats and normalises them to one shape — verified in the published ESM tree, not from the README: `esm/src/utils/` contains `parseRssFeed.js`, `parseAtomFeed.js`, **`parseRdfFeed.js`** (`data["rdf:RDF"]`, with `dc:date` handling — real RSS 1.0) and `parseJsonFeed.js`.
+
+The part that makes it Workers-clean: it exposes **`extractFromXml(xml: string)`**, so we do our own `fetch()` in the Worker and hand it a string, never touching its network layer.
+
+| Rejected | Why |
+|---|---|
+| `rss-parser` 3.13.0 — 42 KB gzip | **Requires Node's HTTP client at module load**: `lib/parser.js` lines 2–5 are `require('http')`, `require('https')`, `require('url')`, plus `xml2js`. CJS-only, last published 2023-04-11. Even with `nodejs_compat` this ships a Node HTTP stack into a runtime that has `fetch`. |
+| `feedparser` 2.6.0 — 30.3 KB gzip | A `readable-stream@2` Transform over `sax`, plus four separate `lodash.*` packages. Push-stream shape is wrong when the body is already in memory. |
+
+**Note for #3880.** The creators packet names `fast-xml-parser` 5.11.1 (24.7 KB gzip) directly. That is a defensible choice and it is the dependency either way — feed-extractor is a thin normaliser on top of it. The recommendation here is feed-extractor because at the *same* gzip cost it ships the RSS/Atom/RDF/JSON normalisers we would otherwise hand-write, and hand-writing them is the thing this rebuild forbids.
+
+### 5.4 OpenGraph + schema.org extraction
+
+**Recommendation: `HTMLRewriter` again — 0 bytes.**
+
+Both targets are trivially selector-addressable. OG is `meta[property^="og:"]` → `getAttribute('content')`. Twitter cards are `meta[name^="twitter:"]`. schema.org is `script[type="application/ld+json"]` → accumulate `text()` until `lastInTextNode` → `JSON.parse`. Every library in this category is a Node scraper wearing a much bigger dependency tree.
+
+| Rejected | Why |
+|---|---|
+| `metascraper` 5.58.1 | **Cannot run on workerd at any size.** Its mandatory `@metascraper/helpers` depends on **`re2`**, a C++ node-gyp native addon, plus `jsdom`. Root declares `engines.node >= 22`. |
+| `open-graph-scraper` 6.12.0 | Bundles its own **undici** HTTP client and `iconv-lite` charset decoding; a bundler build fails on both. We already have `fetch` and Browser Run. |
+
+Also rejected: `microdata-node` 2.0.0 — it parses HTML **microdata** (`itemscope`/`itemprop`), not JSON-LD, and was last published 2020-05-11 against `htmlparser2@4`.
+
+### 5.5 Brand logo fetch
+
+**Recommendation: a zero-spend cascade over `fetch` + `HTMLRewriter`, results cached in R2 by domain. No key, no signup, no dependency.**
+
+Order: web-app-manifest `icons[]` (512/192) → `<link rel="apple-touch-icon">` → `<link rel="icon">` → Google `faviconV2` at `size=256` → DuckDuckGo `ip3` → `/favicon.ico` → `og:image` last. Resolve every href with `new URL(href, pageUrl)`.
+
+Two implementation details that are bugs if missed, both observed live on 2026-09-21: **always GET, never HEAD** (stripe.com's `/favicon.ico` answers HEAD with `content-length: 0` and GET with 15,086 bytes), and **check `res.ok`** (Google and DuckDuckGo both return 404 *with a placeholder image body*).
+
+Live probe, `curl -sIL`, 2026-09-21:
+
+| Endpoint | Result |
+|---|---|
+| `https://icons.duckduckgo.com/ip3/stripe.com.ico` | 200, `image/x-icon` |
+| `https://icons.duckduckgo.com/ip3/vercel.com.ico` | 200, `image/vnd.microsoft.icon` |
+| `https://www.google.com/s2/favicons?domain=stripe.com&sz=128` | 200 `image/png` (301 → `t3.gstatic.com/faviconV2`) |
+| `https://img.logo.dev/stripe.com` (no token) | 404 |
+| `https://cdn.brandfetch.io/stripe.com/w/400` (no client id) | 200 **`text/html`** — a docs page, not an image |
+| `https://logo.clearbit.com/stripe.com` | **no DNS record** — `getent hosts` returns nothing |
+
+| Rejected | Why |
+|---|---|
+| **Clearbit Logo API** | **Retired.** Deprecated 2025-03-18, shut down 2025-12-08, and the hostname no longer resolves — a harder signal than a 404. <https://developers.hubspot.com/changelog/upcoming-sunset-of-clearbits-free-logo-api> |
+| **Brandfetch** | Free tier is 1M renders/month with no attribution, but the guidelines state *"Programmatic access to logo images is not permitted"* — browser `<img>` only, no Worker proxying. Our path is a Worker. <https://docs.brandfetch.com/logo-api/guidelines> |
+| **logo.dev** | Community tier is $0 / 500K requests per month, but commercial use requires a visible "Logos provided by Logo.dev" link and **rehosting or caching the bytes is a Pro ($180/mo) feature**. A Worker that proxies and caches into R2 is rehosting by their definition. <https://www.logo.dev/pricing> |
+
+So both paid options are blocked by *terms*, not by price — which makes this a Nish decision only if the zero-spend cascade measurably fails on real brands. The Google `s2/faviconV2` endpoint is undocumented and unversioned, which is why it sits fourth and is proxied-and-cached rather than hotlinked.
+
+### 5.6 Runtime validation
+
+**Recommendation: `zod` 4.6.5.** Zod 4 is the shipped stable major (`dist-tags.latest` = 4.6.5), and it is already a **transitive dependency**: `better-auth@1.7.5` depends on `zod: ^4.5.4`. Adding it explicitly costs nothing new in the tree.
+
+Quote the right number. The full-surface export is 86.5 KB gzip (bundlephobia) and that is not what ships. Zod's own published figures (<https://zod.dev/packages/mini>): a boolean parse is **5.91 KB** gzip with `zod`, **2.12 KB** with `zod/mini`; an object schema is **13.1 KB** vs **4.0 KB**. Server-side schemas in loaders and actions are bounded only by the 64 MiB Worker limit; anything that reaches the browser bundle uses `zod/mini`.
+
+| Rejected | Why |
+|---|---|
+| `valibot` 1.5.0 — 15.4 KB gzip full export | Smaller in the abstract, and a second validation vocabulary in a codebase that already pulls Zod 4 through better-auth. `zod/mini` closes the gap to ~2 KB. Two schema libraries is the glue we are deleting. |
+| `arktype` 2.2.3 — 47.2 KB gzip, 3 deps | The largest of the three, and a type-syntax-in-strings model whose cost lands on the editor. |
+
+### 5.7 Charts under 20 KB
+
+**Finding: nothing maintained meets the 20 KB gzip bar. This one needs a decision, not a recommendation.**
+
+Measured today:
+
+| Candidate | gzip | Source | Under 20 KB? |
+|---|---|---|---|
+| inline SVG, no library | **0** | — | yes |
+| `frappe-charts` 1.6.2 | 18.8 KB | bundlejs | yes on paper |
+| `uplot` 1.6.32 (`dist/uPlot.iife.min.js`) | **21,995 B** + 762 B CSS | local `curl \| gzip -9` | no |
+| `uplot-react` 1.2.4 + `uplot` | **27.9 KB** | bundlejs | no |
+| `chart.js` 4.5.1 | 70.7 KB | bundlejs | no |
+| `recharts` 3.10.1 | 148 KB, 11 deps | bundlephobia | no |
+| `@observablehq/plot` 0.6.17 | 170 KB | bundlejs | no |
+
+uPlot's README claim of "~50 KB min" checks out exactly (51,081 B minified) — but gzipped it is **22 KB**, and in React the real total with `uplot-react` and the stylesheet is **~24–28 KB**. It misses by 20–40%, not by a rounding error. It is also Canvas-based, so it renders nothing during SSR and needs a `useEffect` + imperative wrapper — on an SSR-by-default React Router 8 app that is a hydration flash on every chart.
+
+`frappe-charts` is the only library under the bar and it is not a candidate: **last published 2021-06-16**, five years stale, imperative DOM mutation with no React wrapper, and it would fight React's reconciler.
+
+**Decision (Fable, 2026-09-21): budget raised to 30 KB gzip; take `uplot` 1.6.32.** It is the only maintained candidate. `frappe-charts` is rejected as unmaintained since 2021 despite fitting the old bar, and inline SVG is rejected as hand-rolled. The 20 KB figure was an estimate written before anyone measured; 24–28 KB is the measured cost of the maintained option, and 30 KB is the bar that reflects it.
+
+Consequence to carry into C4: uPlot is Canvas-based, so a chart renders nothing during SSR. Wrap it once, in one component, with the server rendering the axis frame and the canvas painting on mount — not a `useEffect` copy-pasted per chart.
+
+A library starts earning its bytes at axes, legends, panning, brushing and 10k+ points. Home and the competitor drill-in have none of those. **Recorded as open item 1 below.** `recharts` (148 KB) is explicitly rejected even though `shadcn/ui`'s own chart component wraps it — "just use the shadcn chart" is the expensive answer wearing our design system's badge.
+
+### 5.8 OG image rendering
+
+**Recommendation: Cloudflare Browser Run `/screenshot` on cache miss, into R2 — 0 bundle bytes, and the binding already exists for the site-change engine.**
+
+We need cards for a handful of public surfaces, not per-request at scale. Browser Run renders the real page with our real fonts and real design tokens, so the card **cannot drift from the site**; anything satori-based is a second rendering of the design system that silently diverges. `/screenshot` accepts raw `html` and a `viewport` — set `{ width: 1200, height: 630 }`, because the default is 1920×1080. Steady-state cost of an unchanged card is an R2 Class B read.
+
+**The satori route is a trap right now, and the trap is not size.** Three findings, all verified:
+
+- **`satori@0.33.4` does not run on workerd.** 0.33.0 (published 2026-08-20) added `harfbuzzjs` for text shaping, whose Emscripten glue calls `WebAssembly.instantiate` on raw bytes at runtime and `require("fs")` under `ENVIRONMENT_IS_NODE`. Workers accept only **pre-compiled** WASM modules (<https://developers.cloudflare.com/workers/runtime-apis/webassembly/>). Corroborated at <https://github.com/meleksomai/os/issues/99>.
+- **Size is a non-issue, contrary to the old framing.** `@resvg/resvg-wasm@2.6.2`'s `index_bg.wasm` is 2,478,606 B raw — **3.8% of the 64 MiB uncompressed budget**, and there is no compressed limit at all. What actually bites is the **1-second startup CPU limit** (`wrangler check startup`), which is why both shipping wrappers chose the smaller resvg 2.4.x (1,378,357 B) instead.
+- **Workers Free gives 10 ms CPU per request**, so live satori+resvg rendering is not viable on Free at all, whatever library wraps it.
+
+| Rejected | Why |
+|---|---|
+| `satori` 0.33.4 + `@resvg/resvg-wasm` 2.6.2, wired by hand | Broken on workerd as above, and it reimplements a CSS subset — no WOFF2 (so Google Fonts' `css2` URLs are unusable directly), no WebP, silent failure on external images. |
+| `workers-og` 0.0.27 | Last published 2025-06-12, repo idle ~15 months, still pre-1.0, no `workerd` export condition, pinned to `satori ^0.15.2` — it works by accident of an ancient pin. |
+
+**If per-request rendering is ever needed**, the library answer is **`@cf-wasm/og` 0.5.0** (<https://github.com/fineshopdesign/cf-wasm>) — it pins `satori@0.32.0` exactly (the last pre-harfbuzz release), ships a real `workerd` export condition with deploy-time `.wasm` module imports, and its `@cf-wasm/satori` dependency shipped 2026-09-19. It requires `cache.setExecutionContext(ctx)` inside `fetch`. Recorded so the option is not re-researched; not adopted, because Browser Run already covers our volume with zero dependencies and zero drift.
+
+### 5.9 Date and time with timezones
+
+**Recommendation: `Intl.DateTimeFormat` for display (0 bytes, in the runtime and every browser) + `date-fns` 4.4.0 (17.1 KB gzip full export, 0 deps) + `@date-fns/tz` 1.5.0 (1.97 KB gzip) for arithmetic across zones.**
+
+`date-fns` v4 is the first version with first-class time-zone support, via the separate `@date-fns/tz` package. `TZDate` performs all calculations in a given zone rather than the system zone; the README puts `TZDateMini` at **916 B** and full `TZDate` at ~1.2 KB. It is under 2 KB precisely because it leans on the platform's `Intl` instead of bundling a tzdb. Per-function ESM, so a loader importing three helpers ships three helpers.
+
+**`Temporal`: do not use it on Workers. This is now verified, not an open question.** Two independent facts:
+
+- There is **no `temporal` compatibility flag** in workerd — `src/workerd/io/compatibility-date.capnp` (189 flags) contains none, and the flags doc has no entry.
+- A global `Temporal` *is* nonetheless exposed in the deployed runtime since roughly 2026-07-30, and **it is broken**: `Temporal.Now.instant().epochMilliseconds` returns **`0`** while `Date.now()` is correct, because V8's Temporal bypasses workerd's virtualised clock. <https://github.com/cloudflare/workerd/issues/6907>, open, no maintainer response. This also breaks the standard polyfill guard `typeof Temporal === 'undefined'`, so **do not feature-detect it.**
+
+**One `Intl` caveat that every option here inherits.** workerd's embedded tzdata can lag IANA: <https://github.com/cloudflare/workerd/issues/7256> (opened 2026-09-06) reports `Africa/Casablanca` and `Africa/El_Aaiun` still resolving to UTC+01:00 after the 2026-09-20 transition, because the bundled tzdata predates IANA 2026c. The reporter's summary is the one to remember: *"The failure is silent. `Date` instants stay correct — only the wall-clock label is wrong."* Timestamps are safe; user-facing wall-clock labels in recently-changed zones are not. Digest send times are wall-clock, so this is ours to watch.
+
+| Rejected | Why |
+|---|---|
+| `luxon` 3.7.2 — 22.1 KB gzip | One monolithic `DateTime` class, **no tree-shaking** — you pay all 22 KB to format one date. ~10× the date-fns + tz pairing for the same `Intl`-backed capability. |
+| `dayjs` 1.11.23 — 3.45 KB core | No `"exports"` map, no `"module"` field, no `"type": "module"` — a CJS package with a mutable-global plugin registry (`dayjs.extend(timezone)`) that defeats static analysis, plus the Moment-style mutable API the house immutability rule forbids. |
+
+---
+
+## 6. Testing — and what not to build
+
+### 6.1 Vitest on Workers — the package was renamed, and vitest 5 is not supported
+
+Two corrections to the packet, both load-bearing.
+
+**First: `@cloudflare/vitest-pool-workers` is superseded by `@cloudflare/vitest-plugin`.**
+
+> "Cloudflare provides the `@cloudflare/vitest-plugin` Vite plugin, which runs your Vitest tests inside the Workers runtime. … If you use `@cloudflare/vitest-pool-workers`, refer to Migrate to Vitest plugin."
+> — <https://developers.cloudflare.com/workers/testing/vitest-integration/> (page last updated 2026-08-20, read 2026-09-21)
+
+Current versions: `@cloudflare/vitest-plugin` **1.1.13**, `@cloudflare/vitest-pool-workers` **0.22.0**. The migration is a stock codemod, not hand-editing: `npx @cloudflare/codemods vitest:pool-workers-to-vitest-plugin`.
+
+**Second: pin `vitest@4.1.11`. Not 5.**
+
+npm `latest` for vitest is **5.0.1**, and every published version of the plugin and the pool peer-depends on `vitest: ^4.1.0`. The docs are explicit — "The `@cloudflare/vitest-plugin` package requires Vitest 4.1 or later" — and the runtime check only *warns* outside that range:
+
+```
+You're running `vitest@5.0.1`, but this version of `@cloudflare/vitest-plugin` only officially supports `vitest ^4.1.0`.
+`@cloudflare/vitest-plugin` currently depends on internal Vitest APIs that are not protected by semantic-versioning guarantees.
+```
+
+A warning, not an error, is the dangerous case: tests pass until an internal Vitest API moves. **`vitest` is pinned at `4.1.11` in `package.json`, exact, with this paragraph as the reason.**
+
+**And the pin does not install on its own.** Verified on this VPS: with npm 10.9.8, `vitest@4.1.11` plus `@cloudflare/vitest-plugin@1.1.13` **cannot be installed** without an `overrides` block. npm does not report a conflict — it **crashes** inside arborist's peer walk, after fetching `@vitest/browser-playwright@5.0.1` while resolving the 4.1.11 pin:
+
+```
+npm error Cannot read properties of null (reading 'edgesOut')
+```
+
+Ruled out by the deputy: tree corruption, the packages themselves, and a Vite mismatch (`vitest@4.1.11` declares `vite ^6 || ^7 || ^8`; the scaffold ships Vite 8.0.3). The fix is a `package.json` `overrides` block pinning the whole `@vitest/*` family to `4.1.11`. With it in place the install resolves cleanly: `vitest` 4.1.11, `@vitest/runner` 4.1.11, `@vitest/snapshot` 4.1.11, plugin 1.1.13, exporting `cloudflareTest` and `readD1Migrations`.
+
+This is worth its own paragraph because the failure mode teaches the wrong lesson: an `edgesOut` crash reads like a corrupt `node_modules` and invites `rm -rf node_modules package-lock.json`, which does nothing. **The `overrides` block is not optional tidying — it is the only thing that makes the documented, supported version pair installable.** C4 ships it with the scaffold, not after the first red CI run.
+
+**Third: `defineWorkersConfig` and `poolOptions.workers` no longer exist** (removed in pool 0.13.0). The current shape:
+
+```ts
+import { cloudflareTest } from "@cloudflare/vitest-plugin";
+import { defineConfig } from "vitest/config";
+
+export default defineConfig({
+  plugins: [
+    cloudflareTest({ wrangler: { configPath: "./wrangler.jsonc" } }),
+  ],
+});
+```
+
+<https://developers.cloudflare.com/workers/testing/vitest-integration/configuration/>
+
+Test-module surface, as of the plugin (not the pool):
+
+| Symbol | Module |
+|---|---|
+| `env`, `exports` | `cloudflare:workers` — **moved**; `SELF.fetch()` is now `exports.default.fetch()` |
+| `createExecutionContext`, `waitOnExecutionContext` | `cloudflare:test` |
+| `createScheduledController`, `createMessageBatch`, `getQueueResult` | `cloudflare:test` |
+| `applyD1Migrations(db, migrations)` | `cloudflare:test` |
+| `readD1Migrations(path)` | `@cloudflare/vitest-plugin` (Node side, for `setupFiles`) |
+| `fetchMock` | **removed** — Cloudflare now points at MSW |
+
+`tsconfig` types entry is `"@cloudflare/vitest-plugin/types"`.
+
+Storage isolation is now **per test file**, not per test; `isolatedStorage` and `singleWorker` were removed; sharing storage across files requires `--max-workers=1 --no-isolate` (<https://developers.cloudflare.com/workers/testing/vitest-integration/isolation-and-concurrency/>).
+
+Known issues that matter to us (<https://developers.cloudflare.com/workers/testing/vitest-integration/known-issues/>): **V8 coverage is unsupported — coverage must be Istanbul**; fake timers do not reach the KV/R2/cache simulators; the plugin auto-injects `nodejs_compat`, so **a test suite can pass while `wrangler deploy` fails** if the real `wrangler.jsonc` lacks the flag. Given §2.3 requires `nodejs_compat` for better-auth anyway, set it explicitly and do not rely on the injection.
+
+Coverage stays in CI and never runs inside a worker (house rule).
+
+### 6.2 Playwright against production
+
+`@playwright/test` **1.63.0**. Config is the stock `defineConfig` with `use.baseURL` and **no `webServer`** — the `webServer` doc says it is for "when you don't have a staging or production url to test against" (<https://playwright.dev/docs/test-webserver>). `baseURL` falls back to the built-in `PLAYWRIGHT_TEST_BASE_URL` env var. `workers: 1` on CI, per <https://playwright.dev/docs/ci#workers>.
+
+`microsoft/playwright-github-action` is **archived** and its own README says "We highly discourage the use of the GitHub Action." The stock CI is two commands, and for a deployed URL the stock trigger is `deployment_status` — verbatim from <https://playwright.dev/docs/ci#on-deployment>:
+
+```yml
+name: Playwright Tests
+on:
+  deployment_status:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    if: github.event.deployment_status.state == 'success'
+    steps:
+    - uses: actions/checkout@v6
+    - uses: actions/setup-node@v6
+      with:
+        node-version: lts/*
+    - name: Install dependencies
+      run: npm ci
+    - name: Install Playwright
+      run: npx playwright install --with-deps
+    - name: Run Playwright tests
+      run: npx playwright test
+      env:
+        PLAYWRIGHT_TEST_BASE_URL: ${{ github.event.deployment_status.target_url }}
+```
+
+Cloudflare Workers Builds emit GitHub deployments, so this fires on our real deploy with zero polling logic. Official container image: `mcr.microsoft.com/playwright:v1.63.0-noble`.
+
+### 6.3 Lighthouse CI
+
+`treosh/lighthouse-ci-action` **v12.6.2** (tag `v12` → commit `3e7e23fb74242897f95c0ba9cabad3d0227b9b18`), last push 2026-03-12. **`GoogleChrome/lighthouse-ci` ships no GitHub Action** — its repo root has no `action.yml`, and its own README links out to treosh's action. So treosh's is the stock one.
+
+```yml
+- name: Audit URLs using Lighthouse
+  uses: treosh/lighthouse-ci-action@v12
+  with:
+    urls: |
+      https://<prod>/
+    budgetPath: ./budget.json
+    uploadArtifacts: true
+    temporaryPublicStorage: true
+```
+
+**There is no `fail:` input.** The action runs `lhci assert`, reads `assertion-results.json`, and calls `core.setFailed()` for any assertion at `level: "error"`; `"warn"` only annotates. **Failing the build therefore means declaring the assertion at `error` level** — budgets default to `error`. A budget written entirely at `warn` is green and useless.
+
+This is the gate for the rebuild bar Nish set on 2026-09-21: LCP under 1.5 s on 4G, against a prod landing page that measured 4.50 s server time.
+
+### 6.4 lychee
+
+`lycheeverse/lychee-action` **v2.9.0** (2026-07-09), bundling lychee CLI `v0.24.2`. **`fail` already defaults to `true`** — a bare `uses: lycheeverse/lychee-action@v2` fails the job on a broken link. Config lives in `.lycheeignore` (regex per line) and `lychee.toml` (auto-loaded from cwd).
+
+**The load-bearing caveat: lychee does not crawl.** Its own feature table says `Recursion: no`. Pointing it at `https://<prod>` checks that one page's links and nothing else. For a React Router site the supported shape is to run it against the built output with a base URL:
+
+```yml
+- uses: lycheeverse/lychee-action@v2
+  with:
+    args: --root-dir "$(pwd)" --base-url https://<prod> --verbose --no-progress './build/client/**/*.html'
+```
+
+Cache `.lycheecache` with `actions/cache@v4`; it is one block of stock YAML, not a script.
+
+### 6.5 What NOT to build
+
+| Don't hand-roll | Stock replacement |
+|---|---|
+| A Miniflare bootstrap, `unstable_dev` wrapper, or `new Miniflare()` harness | `cloudflareTest({ wrangler: { configPath } })` |
+| A multi-Worker integration server | `createTestHarness()` from `wrangler` (<https://developers.cloudflare.com/workers/testing/test-harness/>) |
+| Per-test DB reset helpers | Per-file storage isolation, automatic |
+| A D1 seed/migrate runner | `readD1Migrations()` + `applyD1Migrations()` in `setupFiles` |
+| `fetch` interceptor shims | MSW (`fetchMock` was removed and Cloudflare points here) |
+| A "wait for deploy, then run E2E" poller | `on: deployment_status` + `PLAYWRIGHT_TEST_BASE_URL` |
+| A screenshot differ | `expect(page).toHaveScreenshot()` |
+| A test reporter or JSON→markdown summariser | Built-in `html`/`github`/`json`/`blob` reporters |
+| A flake-retry wrapper | `retries` + `trace: 'on-first-retry'` |
+| A perf-budget script or Lighthouse-score parser | `treosh/lighthouse-ci-action@v12` with `budget.json` at `error` level |
+| A link crawler or markdown-link regex | `lycheeverse/lychee-action@v2` |
+| A config-migration script | `npx @cloudflare/codemods vitest:pool-workers-to-vitest-plugin` |
+| An action-version bumper | Dependabot `package-ecosystem: "github-actions"` |
+
+---
+
+## 7. The API surface — agent-native by default
+
+Charter addendum: the product ships an API and an MCP server. Every version below read 2026-09-21.
+
+### 7.1 MCP on Workers — do not write an `McpAgent`
+
+**Recommendation: `createMcpHandler` from `agents/mcp/server`, with `McpServer` from `@modelcontextprotocol/server` 2.0.0.**
+
+This is the single most likely thing in the rebuild to be built wrong from memory, because every blog post and every pre-August-2026 example shows the deprecated shape. Cloudflare's own page says it plainly (<https://developers.cloudflare.com/agents/model-context-protocol/apis/agent-api/>, last updated 2026-07-27):
+
+> `McpAgent` remains available only for existing legacy servers while they migrate. It is deprecated and feature-frozen. Migrate to `createMcpHandler` at your earliest convenience.
+
+Versions: `agents` **0.24.0** (2026-09-18), `@modelcontextprotocol/server` **2.0.0**, `@modelcontextprotocol/client` **2.0.0**, `@modelcontextprotocol/sdk` **1.30.0** (now the legacy generation). Install line from the docs: `npm i agents @modelcontextprotocol/server@2.0.0 zod`.
+
+```ts
+import { McpServer } from "@modelcontextprotocol/server";
+import { createMcpHandler } from "agents/mcp/server";
+
+function createServer() {
+  const server = new McpServer({ name: "0509", version: "1.0.0" });
+  server.registerTool("list_competitors",
+    { description: "…", inputSchema: { workspaceId: z.string() } },
+    async ({ workspaceId }) => ({ content: [{ type: "text", text: "…" }] }));
+  return server;
+}
+```
+
+**Why this matters for a single-Worker React Router app, and it is the whole reason to pick it:** the handler is a plain `(request, env, ctx) => Response`. It is **stateless — no Durable Object, no `migrations`, no `new_sqlite_classes`**. The docs say it can be composed inside another handler, and `handler.fetch(request, { authInfo, parsedBody })` is the documented hook for exactly the case where an outer framework has already parsed the request. So the MCP endpoint is a React Router **resource route**, not a second app.
+
+`McpAgent`, by contrast, backs every client session with a Durable Object and its own SQLite — durable state we do not need, a DO binding and a migration we do not want, and a documented gotcha that reconnecting starts a new session with reset state.
+
+Two config lines are load-bearing:
+
+- `"run_worker_first": ["/mcp"]` in `wrangler.jsonc`, so static assets never shadow the endpoint.
+- `allowedHostnames` / `allowedOriginHostnames` set explicitly once we are on a custom domain — the default allowlist covers only localhost and `workers.dev`.
+
+Options on `createMcpHandler`: `route` (default `/mcp`), `corsOptions`, `allowedHostnames`, `allowedOriginHostnames`, `authContext`, `legacy` (default `"stateless"`), `responseMode`, `onerror`, `maxSubscriptions` (1024), `keepAliveMs` (15000). Two traps worth naming: **the import path is load-bearing** — `agents/mcp` exports a legacy-overload `createMcpHandler`, `agents/mcp/server` exports the stateless one — and the callable must not be the Worker's default export, because Wrangler treats a function default export as a `WorkerEntrypoint` class.
+
+**Transport: Streamable HTTP. SSE is deprecated.** Cloudflare: *"Server-Sent Events (SSE) was previously used for remote MCP connections but has been deprecated in favor of Streamable HTTP … new servers should use the stateless Streamable HTTP handler."* Upstream agrees — <https://modelcontextprotocol.io/specification/2026-07-28/basic/transports> names exactly two bindings, stdio and Streamable HTTP, and HTTP+SSE is on the deprecated list.
+
+| Rejected | Why |
+|---|---|
+| `McpAgent` (`agents/mcp`) | Deprecated and feature-frozen by its own docs; forces a Durable Object + migration for state we do not need. |
+| `@modelcontextprotocol/sdk` 1.30.0 standalone | The legacy generation, and it hard-depends on `express`, `cors`, `raw-body` and `@hono/node-server` — Node-shaped baggage in a Worker bundle. Cloudflare lists it only for "custom transport ownership". |
+
+**Do not start from the C3 MCP templates.** Both exist — `--template=cloudflare/ai/demos/remote-mcp-authless` and `--template=cloudflare/ai/demos/remote-mcp-github-oauth` — and the same docs page says not to use them: *"The quick-deploy templates in this section still use the deprecated `McpAgent` path. Do not use that path for a new server. Start with the `mcp-worker` example."* That example (<https://github.com/cloudflare/agents/tree/main/examples/mcp-worker>) is Vite 8 + React 19 + one Worker with `assets` and `run_worker_first: ["/mcp"]` — structurally the closest published thing to our app.
+
+**Install note from the manifest, not the docs:** `agents@0.24.0` declares `@modelcontextprotocol/client`, `@modelcontextprotocol/sdk` and `@modelcontextprotocol/server` as **exact-pinned, non-optional** peers (none appear in `peerDependenciesMeta`). Expect all three in `package.json` even for a stateless-only server. Cloudflare's own example does exactly that.
+
+### 7.2 MCP auth — OAuth 2.1 and RFC 9728 are a MUST
+
+**`@cloudflare/workers-oauth-provider` 0.10.3** (2026-08-10, zero dependencies). It needs one KV binding:
+
+```jsonc
+{ "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "<id>" }] }
+```
+
+```ts
+export default new OAuthProvider({
+  apiRoute: "/mcp",
+  apiHandler: createMcpHandler(createServer),
+  defaultHandler: MyAuthHandler,
+  authorizeEndpoint: "/authorize",
+  tokenEndpoint: "/token",
+});
+```
+
+The provider reads the bearer token, rejects missing/invalid/expired credentials, checks the audience, and exposes the authenticated application data. **Application permissions — scope, ownership, tenancy — remain ours to enforce**; the provider does not do multi-tenancy for us. `props` are AES-GCM encrypted at rest; inside a tool they are read with `getMcpAuthContext()`, with standard token metadata at `context.http.authInfo`. Never log or return the raw token.
+
+**This is not optional decoration.** MCP revision **2026-07-28** states: *"MCP servers **MUST** implement OAuth 2.0 Protected Resource Metadata (RFC9728)"* and *"Authorization servers MUST implement OAuth 2.1"*. Dynamic Client Registration (RFC 7591) is **deprecated** in the same revision, retained only for servers without Client ID Metadata Documents — so prefer `clientIdMetadataDocumentEnabled`, which additionally needs `"compatibility_flags": ["global_fetch_strictly_public"]`.
+
+**Build from the package README, not the docs page.** The README at <https://github.com/cloudflare/workers-oauth-provider> is ahead of Cloudflare's authorization page, which still shows the deprecated `MyMCPServer.serve("/mcp")` form in its `apiHandler` examples. And read the confused-deputy warning in <https://developers.cloudflare.com/agents/model-context-protocol/guides/securing-mcp-server/>: with a third-party upstream provider *"you must implement your own consent dialog before forwarding users upstream"*.
+
+### 7.3 API keys — better-auth's plugin, as shipped
+
+**`@better-auth/api-key` 1.7.5** — its own package since 1.7, same split as `@better-auth/passkey`. Exports `apiKey` and `API_KEY_TABLE_NAME`, whose value is `"apikey"` (read from the unpacked `dist/index.mjs`).
+
+```ts
+import { apiKey } from "@better-auth/api-key";
+export const auth = betterAuth({ plugins: [ apiKey() ] });
+```
+
+`npx auth@1.7.5 generate` (§2.4) emits **one table, `apikey`, with 22 columns**: `id`, `configId`, `name`, `start`, `prefix`, `key`, `referenceId`, `refillInterval`, `refillAmount`, `lastRefillAt`, `enabled`, `rateLimitEnabled`, `rateLimitTimeWindow`, `rateLimitMax`, `requestCount`, `remaining`, `lastRequest`, `expiresAt`, `createdAt`, `updatedAt`, `permissions`, `metadata`.
+
+Note what those columns mean: **per-key rate limiting, quotas with refill, expiry, permissions and org ownership all ship in the box.** A hand-written key table with a hand-written quota counter is exactly the glue this rebuild deletes, and it would be a strictly worse version of a table better-auth will generate for free. The plugin also supports sessions-from-API-keys, so one authorization path serves both the browser and the API.
+
+Total auth tables for our set is now **six**: `user`, `session`, `account`, `verification`, `passkey`, `apikey`.
+
+### 7.4 Rate limiting — the platform binding
+
+```jsonc
+{ "ratelimits": [ { "name": "MY_RATE_LIMITER", "namespace_id": "1001",
+                    "simple": { "limit": 100, "period": 60 } } ] }
+```
+
+```js
+const { success } = await env.MY_RATE_LIMITER.limit({ key: pathname });
+```
+
+<https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/>. **`period` must be `10` or `60` seconds — there is no other value.**
+
+Read the two caveats before designing anything on it. The docs say *"Rate limits that you define and enforce in your Worker are local to the Cloudflare location"* — it is **per-colo, not global** — and that it is *"permissive, eventually consistent, and intentionally designed to not be used as an accurate accounting system."*
+
+So the division of labour is: **the binding is the cheap abuse shield** at the edge (per-IP, per-path, before any D1 read); **`apikey.rateLimitMax` / `rateLimitTimeWindow` is the billable quota**, because it is exact, per-key, and already persisted. Using the binding to enforce a customer's plan limit would under-count across colos and over-count nothing — a billing bug by construction.
+
+### 7.5 OpenAPI from zod schemas
+
+**Recommendation: `zod-openapi` (samchungy) 6.0.2 — zero runtime dependencies, peer `zod ^4.0.0` only, no router coupling.**
+
+It reads zod 4's native `.meta()` with **no `extendZodWithOpenApi` monkey-patch**. `createDocument(...)` is pure and synchronous and returns a complete OpenAPI 3.1 document from a hand-written `paths` object, so the same schema object validates the request in a loader *and* documents it:
+
+```ts
+export const document = createDocument({
+  openapi: "3.1.0",
+  info: { title: "0509 API", version: "1.0.0" },
+  paths: { "/api/competitors": { get: { responses: { "200": { /* zod schema */ } } } } },
+});
+// app/routes/api.openapi[.]json.ts
+export function loader() { return Response.json(document); }
+```
+
+Because it is pure, the document can equally be generated in a build step and shipped as a static asset — zero runtime cost for a page nobody requests hot.
+
+**Zod 4 ships `z.toJSONSchema()` natively (<https://zod.dev/json-schema>) and it is not enough on its own.** It emits JSON Schema, not an OpenAPI document: no `info`, no `paths`, no `servers`, no `securitySchemes`. Registry mode returns `{ schemas: {...} }` rather than `{ components: { schemas } }`, and `$ref`s are bare ids (`"User"`) rather than `#/components/schemas/User`. Choosing it as the primary means hand-writing `info`/`paths`, renaming a key, rewriting every `$ref`, and re-deriving the input/output component split — all of which `createDocument` already does on the same zod 4 engine. Worth knowing for its real job: schema fragments for AI structured output.
+
+| Rejected | Why |
+|---|---|
+| `chanfana` 3.4.0 (Cloudflare's own) | **The router is a hard constructor requirement** — `if (!router) throw new Error("Router is required")`, with only `fromHono` and `fromIttyRouter` adapters shipped. Adopting it means running Hono or itty-router *inside* the Worker alongside React Router's request handler and rewriting every endpoint as an `OpenAPIRoute` subclass. Wrong shape for resource routes, whatever its pedigree. |
+| `@hono/zod-openapi` 1.6.3 | It *is* Hono — `OpenAPIHono` extends Hono, `peerDependencies` require `hono >= 4.10.0`, and the document only exists as a method on that instance. Two routers in one Worker to emit a JSON file. |
+
+Runner-up, named so it is not re-researched: `@asteasolutions/zod-to-openapi` 9.1.0 is also router-free and has the larger install base. Prefer it **only** if we ever need OpenAPI 3.0.x or 3.2 output; it costs a runtime dependency (`openapi3-ts`) and still requires the `extendZodWithOpenApi(z)` global side-effect, which is an entrypoint-ordering hazard in a bundled Worker.
+
+### 7.6 `llms.txt`
+
+The spec is <https://llmstxt.org/> — "The /llms.txt file, v2", published 2024-09-03, modified 2026-08-10. It describes itself as a **proposal**, not a standard.
+
+Structure, per the spec: an H1 with the project name (**the only required section**), then an optional blockquote summary, then optional prose sections **containing no headings**, then zero or more H2 sections each holding a markdown list of `[name](url): notes` links. `## Optional` is a convention for secondary links — and **v2 removed its mechanical meaning**; the changelog is explicit that "Optional sections... no longer carry mechanical semantics".
+
+**v2 also loosened the location**: the file may live at `/llms.txt` *or at any subpath*, covering the URLs beneath it, with agents preferring the most specific. And it added link-relation discovery: `rel="alternate" type="text/markdown"` to the markdown version of a page, `rel="describedby"` to the covering `llms.txt`, as `<link>` elements or an HTTP `Link:` header.
+
+The companion convention is a clean markdown version of each page at the same URL with `.md` appended or substituted (`index.md` for directory URLs).
+
+**`llms-full.txt` is not in the spec** — zero occurrences on llmstxt.org. It is vendor precedent. Cloudflare's own is **56.7 MiB**, which is the argument against shipping one.
+
+**Cloudflare's implementation is the pattern worth copying**, and it is two-tier: the root `/llms.txt` (16,049 B) is a *product directory* whose 107 links all point at other `llms.txt` files, and each per-product `llms.txt` is the *page index*, linking to `/index.md` URLs. Every page is also served as markdown via `Accept: text/markdown`, and the HTML carries `<link rel="alternate" type="text/markdown">`. Their blog post on it (<https://blog.cloudflare.com/agent-readiness/>) notes the markdown route is a URL Rewrite Rule plus a Request Header Transform Rule — *"without any additional build step or content duplication"* — and that their own Agent Readiness scanner *"do[es] not check for llms.txt"*, only markdown content negotiation.
+
+**For 0509:** one `/llms.txt` at the root, H1 + blockquote + one H2 section per public surface, generated from the same route manifest the sitemap uses. Markdown versions of the public marketing and docs pages via content negotiation, with `rel="alternate"`. **No `llms-full.txt`** — it is unspecified, and a site this size has nothing to put in one.
+
+`llms.txt` and `robots.txt` do different jobs; the spec says so. Note also that Cloudflare's AI-crawler controls moved: "Block AI bots" is deprecated in favour of behaviour-based policies (Search / Agent / Training) in **AI Crawl Control** (<https://developers.cloudflare.com/ai-crawl-control/>), which also tracks robots.txt violations and carries the closed-beta Pay Per Crawl. An agent-native product should be **Search and Agent allowed**; Training is a separate decision and Nish's.
+
+---
+
+## 8. Replace-the-glue table
+
+Every capability the rebuild needs → the one thing that provides it → the version pinned today. "platform" means it is in the runtime and costs no dependency.
+
+| Capability | Library or primitive | Version (2026-09-21) |
 |---|---|---|
-| Unit | **vitest 5.0.1** (2026-09-15, [docs](https://vitest.dev)), `node` project — pure functions, display helpers, classifiers; happy-dom where DOM is needed | Pure logic only — nothing that touches a binding |
-| Integration | vitest + **`@cloudflare/vitest-plugin` 1.1.13** (2026-09-18, [docs](https://developers.cloudflare.com/workers/testing/vitest-integration/)) — `workers` project on real workerd via Miniflare 5.x, real local D1 built by applying `migrations/*.sql` (`applyD1Migrations` from `cloudflare:test`) | Everything that touches D1/bindings: schema reads AND writes, source adapters, auth flows, delivery. Assert against the real schema — a mocked D1 can't see CHECK constraints or NULL semantics |
-| e2e | **`@playwright/test` 1.63.0** (2026-09-04, [docs](https://playwright.dev)) — against `vite preview` locally (Workers runtime), `wrangler versions upload` preview URLs in CI; chromium + one mobile-viewport project | The four journeys end-to-end: magic-link sign-in (test-mode send lane), domain → identity card, competitor on/off, alerts feed. Web-first assertions, console-error fails, `toHaveScreenshot` for visual baselines |
+| App framework, SSR, routing | `react-router` (framework mode) | 8.4.0 (`create-react-router` scaffolds 8.3.1) |
+| Framework build + Workers dev/deploy | `@react-router/dev` + `@cloudflare/vite-plugin` + `vite` | 8.4.0 / 1.56.0 / 8.0.3 |
+| Worker runtime, deploy, types | `wrangler` (`wrangler types`) | 4.135.0 |
+| Scaffold | `create-cloudflare --framework=react-router` | 2.72.9 |
+| Auth (sessions, magic link) | `better-auth` | 1.7.5 |
+| Auth ↔ D1 | better-auth's built-in D1 Kysely dialect — binding passed directly | bundled in 1.7.5 |
+| Passkeys | `@better-auth/passkey` (SimpleWebAuthn) | 1.7.5 |
+| Auth schema generation | `npx auth@1.7.5 generate` against an empty local SQLite (§2.4) | `auth` 1.7.5, pinned |
+| Styling | `tailwindcss` + `@tailwindcss/vite` | 4.3.3 (scaffold pins ^4.2.2) |
+| Components | `shadcn` CLI → copied source | 4.21.0 |
+| Durable scheduling + retries | Cloudflare Workflows (`step.sleep`, `step.do`) | platform |
+| Fan-out + concurrency cap | Cloudflare Queues (`max_concurrency`) | platform |
+| Screenshots + rendered DOM | Browser Run (Quick Actions; sessions via `@cloudflare/puppeteer`) | platform |
+| Blob storage + expiry | R2 + lifecycle rules | platform |
+| Read-mostly cache | Workers KV | platform |
+| Relational store | D1 (`batch()`) | platform |
+| Transactional email + one-click unsubscribe | Email Service `send_email` binding | platform (Beta) |
+| Field web vitals | Cloudflare Web Analytics (`"spa": true`) | platform |
+| Engine telemetry | Workers Analytics Engine (`writeDataPoint`) | platform |
+| Tick source | Cron Triggers → Queue or Workflow | platform |
+| HTML → text | `HTMLRewriter` | platform |
+| OG + schema.org extraction | `HTMLRewriter` | platform |
+| Change diff | `diff` (jsdiff) | 9.0.0 |
+| Feed parsing | `@extractus/feed-extractor` (wraps `fast-xml-parser`) | 8.0.3 / 5.11.1 |
+| Logo | page metadata via `HTMLRewriter`, DuckDuckGo icon fallback | platform |
+| Validation | `zod` | 4.6.5 |
+| Charts | `uplot` (+ `uplot-react`) — ~24–28 KB gzip, budget raised to 30 KB | 1.6.32 / 1.2.4 |
+| OG images | Browser Run `/screenshot` → R2 | platform |
+| Dates + timezones | `Intl` + `date-fns` + `@date-fns/tz` (**never `Temporal`** — workerd#6907) | platform / 4.4.0 / 1.5.0 |
+| Unit + integration tests | `vitest` (**pinned 4.1.11**) + `@cloudflare/vitest-plugin` | 4.1.11 / 1.1.13 |
+| E2E against production | `@playwright/test` | 1.63.0 |
+| Performance gate | `treosh/lighthouse-ci-action` | v12.6.2 |
+| Link checking | `lycheeverse/lychee-action` | v2.9.0 |
+| MCP server | `createMcpHandler` (`agents/mcp/server`) + `@modelcontextprotocol/server` | `agents` 0.24.0 / 2.0.0 |
+| MCP auth | `@cloudflare/workers-oauth-provider` | 0.10.3 |
+| API keys + per-key quota | `@better-auth/api-key` (`apikey` table) | 1.7.5 |
+| Edge abuse shield | Cloudflare rate limiting binding (`period` 10 or 60 only) | platform |
+| OpenAPI document | `zod-openapi` (samchungy) | 6.0.2 |
+| Agent-readable docs | `/llms.txt` + `Accept: text/markdown` + `rel="alternate"` | spec v2 (2026-08-10) |
 
-**Explicitly NOT to build** (the issue's "no custom harnesses" line):
+**Runtime dependencies this stack adds beyond the scaffold: ten.** `better-auth`, `@better-auth/passkey`, `@better-auth/api-key`, `diff`, `@extractus/feed-extractor`, `uplot` + `uplot-react`, `date-fns` + `@date-fns/tz`, and for the API surface `agents`, `@modelcontextprotocol/server` (which drags `@modelcontextprotocol/client` and `@modelcontextprotocol/sdk` as exact-pinned peers), `@cloudflare/workers-oauth-provider` and `zod-openapi`. `zod` arrives transitively through better-auth; `fast-xml-parser` arrives transitively through feed-extractor. Everything else in the table is a platform primitive with no bundle cost.
 
-- No mock-D1 unit tests for schema-touching code — the workers project exists precisely so real migrations run.
-- No jsdom reimplementation of workerd, no hand-rolled fetch mocks of Cloudflare bindings — the vitest plugin is the real runtime.
-- No custom visual-diff harness — Playwright's `toHaveScreenshot` is built in; pixelmatch is for the product's page-change feature, not the test suite.
-- No per-test container/DB infra — Miniflare state is per-file; seed unique ids instead.
-- Stale API names are a hard failure: `@cloudflare/vitest-pool-workers` was renamed to `@cloudflare/vitest-plugin` (2026-08-19); `SELF.fetch` → `exports.default.fetch` from `cloudflare:workers`.
+---
 
-## 5. P2 handoff — the pick list
+## Open items for Nish or Fable
 
-React 19.3.0 · React Router 8.4.0 framework mode on `@cloudflare/vite-plugin` 1.56.0 · Tailwind 4.3.3 (`@tailwindcss/vite`) · shadcn 4.21.0 on Base UI 1.8.0 · better-auth 1.7.5 (magicLink + @better-auth/passkey 1.7.5 + Google/Microsoft OAuth) on `env.DB` · Kysely 0.29.6 + kysely-d1 0.4.0 (watch: stale since 2025-04 — `@oselvar/kysely-cloudflare` is the successor candidate) · Cron → Workflows → Queues-if-needed · Browser Rendering (`/snapshot`, `/markdown`, `/json`, `env.BROWSER`+puppeteer 1.4.0) · R2 artifacts · KV config · Vectorize for similarity · Workers AI behind AI Gateway · `[[ratelimits]]` binding · Flagship for flags · logo.dev for logos · Web Analytics beacon · native Workers observability (Sentry optional) · vitest 5.0.1 two-project + Playwright 1.63.0.
+1. **The chart budget.** No maintained library fits under 20 KB gzip (§5.7). `uplot` in React measures ~24–28 KB; the only 0 KB option is inline SVG, which is hand-rolled and therefore not mine to choose. **Decide: raise the budget to 28 KB and take uPlot, or approve inline SVG for sparklines and bars.** Nothing else in the stack is blocked on this.
+2. **Paid logo APIs are blocked by terms, not price** (§5.5). Brandfetch forbids programmatic access; logo.dev makes caching a $180/mo Pro feature. The zero-spend cascade is the default and needs no decision unless it measurably fails on real brands.
+
+## Corrections this document makes to its own brief
+
+| The brief said | What is true today | Evidence |
+|---|---|---|
+| `npx @better-auth/cli generate` | `npx auth@1.7.5 generate` — `@better-auth/cli` is deprecated at 1.4.21 (2026-03-01); the CLI moved to the `auth` package in 1.5, and the version is pinned, never `@latest` | npm; <https://www.better-auth.com/docs/concepts/cli> |
+| (implicit) `--adapter kysely` avoids needing a live database | it does not — both forms die at `SqliteIntrospector.getTables`. Generate against an empty in-memory SQLite (§2.4) | `migrations/0001_rebuild.sql` header on main |
+| `migrations/0001_init.sql` | **`0001_rebuild.sql`** — `0001_init.sql` is already recorded in production's `d1_migrations`, so a file with that name is silently skipped | same |
+| "the stock D1/Kysely adapter" (implying a third-party one) | better-auth ships its own D1 dialect; the binding is passed straight to `database` | unpacked `@better-auth/kysely-adapter@1.7.5/dist/` |
+| `@cloudflare/vitest-pool-workers` current setup | superseded by `@cloudflare/vitest-plugin`; `defineWorkersConfig`/`poolOptions` removed | <https://developers.cloudflare.com/workers/testing/vitest-integration/> |
+| (implicit) use the current vitest | vitest 5.0.1 is **not** supported — pin 4.1.11 | plugin peerDeps; <https://developers.cloudflare.com/workers/testing/vitest-integration/write-your-first-test/> |
+| "the 10 concurrent limit" on Browser Rendering | 10 is the *included allotment*; the hard cap is 200, and extra browsers are $2.00/month each | <https://developers.cloudflare.com/browser-rendering/platform/pricing/>, `/platform/limits/` |
+| (widely quoted) 1 MiB / 10 MiB compressed Worker size limit | 64 MiB **uncompressed** on both plans; *"There is no compressed size limit."* The real ceiling is 1 s startup CPU | <https://developers.cloudflare.com/workers/platform/limits/> |
+| (implicit) add `nodejs_compat` to make better-auth work | on by default for `compatibility_date` ≥ `2026-08-04` — set it explicitly anyway, for the deploy/test asymmetry | <https://developers.cloudflare.com/workers/configuration/compatibility-flags/> |
+| `@resvg/resvg-wasm` + current `satori` for OG images | `satori` ≥ 0.33.0 does not run on workerd — `harfbuzzjs` instantiates WASM from raw bytes at runtime | <https://developers.cloudflare.com/workers/runtime-apis/webassembly/>, vercel/satori releases |
+| `Temporal` "should be checked" | checked: no compat flag exists, the leaked global returns `epochMilliseconds === 0`. Do not use, do not feature-detect | <https://github.com/cloudflare/workerd/issues/6907> |
