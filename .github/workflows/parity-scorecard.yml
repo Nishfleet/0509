@@ -302,9 +302,6 @@ jobs:
           case "$prev" in
             ''|*[!0-9]*) echo "previous streak is not a number" >&2; exit 1 ;;
           esac
-          # A rolling 7-day window overlaps itself. Only the Monday schedule
-          # advances the streak, and only when the previous card is at least
-          # 6 days older, so a dispatch of the same week cannot close #4267 early.
           advance=0
           if [ "$EVENT" = "schedule" ]; then
             if [ -z "$prev_until" ]; then
