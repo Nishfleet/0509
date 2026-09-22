@@ -82,9 +82,10 @@ jobs:
   semgrep:
     name: semgrep
     if: github.event_name != 'deployment_status'
-    # fleet-ci on merge_group/push only; pull_request stays hosted so fork
-    # PRs never execute on the box (fleet-ops#5935).
-    runs-on: ${{ (github.event_name == 'merge_group' || github.event_name == 'push') && 'fleet-ci' || 'ubuntu-latest' }}
+    # Hosted on purpose: this is a docker job and the container runs as root
+    # on the self-hosted runners, leaving root-owned files in _work/0509 that
+    # break every later checkout on that runner (#3946; same class as #3948).
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     container:
       image: semgrep/semgrep
