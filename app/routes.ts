@@ -14,4 +14,5 @@ export default [
   route("api/auth/*", "routes/api.auth.$.ts"),
   route("onboarding", "routes/onboarding.tsx"),
   route("*", "routes/unmatched.tsx"),
+  route("design/brand-chips", "routes/design.brand-chips.tsx"),
 ] satisfies RouteConfig;
