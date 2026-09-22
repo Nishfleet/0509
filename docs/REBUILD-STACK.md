@@ -685,6 +685,24 @@ We need cards for a handful of public surfaces, not per-request at scale. Browse
 | `luxon` 3.7.2 — 22.1 KB gzip | One monolithic `DateTime` class, **no tree-shaking** — you pay all 22 KB to format one date. ~10× the date-fns + tz pairing for the same `Intl`-backed capability. |
 | `dayjs` 1.11.23 — 3.45 KB core | No `"exports"` map, no `"module"` field, no `"type": "module"` — a CJS package with a mutable-global plugin registry (`dayjs.extend(timezone)`) that defeats static analysis, plus the Moment-style mutable API the house immutability rule forbids. |
 
+### 5.10 Error tracking
+
+**Recommendation: `@sentry/cloudflare` 10.75.1.**
+
+`npm view @sentry/cloudflare version` on 2026-09-22 returned `10.75.1`. Doc: <https://docs.sentry.io/platforms/javascript/guides/cloudflare/>.
+
+`withSentry()` wraps the default export in `workers/app.ts`. The SDK reads the DSN from the Worker secret `SENTRY_DSN`. That value is not in this repo and not in `wrangler.jsonc`. With no DSN the SDK sends nothing.
+
+The options turn off user fields, cookies, headers, bodies, query strings, stack-frame locals, and database query values. `beforeSend` and `beforeBreadcrumb` drop the query string and fragment from every URL. A magic-link URL is a working credential. `tracesSampleRate` is `0`. This row is the error feed, not a tracing product.
+
+The install doc requires `nodejs_compat` because the SDK uses `AsyncLocalStorage`. `compatibility_date` `2026-09-16` already turns that flag on. `wrangler.jsonc` sets the flag explicitly so the test runner and the deploy agree.
+
+Plan is the Sentry Developer plan, $0. A card or a trial stops the work. Sentry's own GitHub integration opens the repo issue. No Worker, Action, or webhook reshapes the payload.
+
+| Rejected | Why |
+|---|---|
+| Cloudflare Notifications webhook reshaped into a GitHub issue | The webhook body is not a GitHub issue. Closing that gap is an adapter, and an adapter is the thing this rebuild forbids. |
+
 ---
 
 ## 6. Testing — and what not to build

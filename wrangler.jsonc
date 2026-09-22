@@ -13,8 +13,12 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "0509",
-  // >= 2026-08-04, so nodejs_compat is on by default and needs no flag.
+  // >= 2026-08-04, so nodejs_compat is already on. @sentry/cloudflare
+  // requires the flag in this file (AsyncLocalStorage). Set it explicitly:
+  // the Vitest plugin injects it in tests, and an implicit flag is how a
+  // green suite ships a broken deploy.
   "compatibility_date": "2026-09-16",
+  "compatibility_flags": ["nodejs_compat"],
   "main": "./workers/app.ts",
   "observability": {
     // p95 request duration per route comes from here, which is how
