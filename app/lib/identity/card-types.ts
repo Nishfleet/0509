@@ -21,5 +21,6 @@ export type CardResult =
       browserMsUsed: number | null;
       jevStatus: "ok" | "unconfigured" | "unreachable";
       publicSubject: "cleared" | "ask" | "unverified";
+      probeFailures: { leg: string; reason: string }[];
     }
   | { ok: false; reason: string };

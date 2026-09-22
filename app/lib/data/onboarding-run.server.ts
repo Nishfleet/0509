@@ -13,10 +13,12 @@ export function insertOnboardingRunStmt(
     .bind(args.id, args.workspaceId, args.userId, args.inputRaw, args.now, args.now);
 }
 
-export async function latestOnboardingRunId(workspaceId: string): Promise<string | null> {
-  const row = await env.DB
-    .prepare(`SELECT id FROM onboarding_run WHERE workspace_id = ? ORDER BY started_at DESC LIMIT 1`)
-    .bind(workspaceId)
+export async function readOnboardingRunForWorkspace(
+  runId: string,
+  workspaceId: string,
+): Promise<{ id: string } | null> {
+  return env.DB
+    .prepare(`SELECT id FROM onboarding_run WHERE id = ? AND workspace_id = ?`)
+    .bind(runId, workspaceId)
     .first<{ id: string }>();
-  return row?.id ?? null;
 }

@@ -109,7 +109,20 @@ function parseBrowserMs(res: Response): number | null {
 }
 
 export async function readJson(url: string): Promise<unknown> {
-  const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+  let target: URL;
+  try {
+    target = new URL(url);
+  } catch {
+    throw new Error(`not a URL: ${url}`);
+  }
+  if (target.protocol !== "http:" && target.protocol !== "https:") {
+    throw new Error(`unsupported scheme: ${target.protocol}`);
+  }
+
+  const res = await fetch(url, {
+    headers: { accept: "application/json", "user-agent": FETCH_HEADERS["user-agent"] },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
   if (!res.ok) throw new Error(`json fetch answered ${String(res.status)}`);
   return res.json();
 }

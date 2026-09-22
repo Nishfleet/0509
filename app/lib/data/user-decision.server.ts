@@ -40,20 +40,39 @@ export async function priorRefusalExists(
   return row !== null;
 }
 
-export async function recordIdentityEdits(args: {
+export async function priorConfirmationExists(
+  workspaceId: string,
+  entityId: string,
+): Promise<boolean> {
+  const row = await env.DB
+    .prepare(
+      `SELECT id FROM user_decision WHERE workspace_id = ? AND verdict = 'confirmed:identity' AND entity_id = ? LIMIT 1`,
+    )
+    .bind(workspaceId, entityId)
+    .first<{ id: string }>();
+  return row !== null;
+}
+
+export async function recordIdentityConfirmation(args: {
   workspaceId: string;
   userId: string;
   entityId: string;
+  runId: string;
   edits: Record<string, string>;
 }): Promise<void> {
-  await insertUserDecisions(
-    env.DB,
-    Object.entries(args.edits).map(([field, value]) => ({
-      workspaceId: args.workspaceId,
-      userId: args.userId,
-      entityId: args.entityId,
-      verdict: `identity_edit:${field}`,
-      note: value,
-    })),
-  );
+  const rows: UserDecisionInput[] = Object.entries(args.edits).map(([field, value]) => ({
+    workspaceId: args.workspaceId,
+    userId: args.userId,
+    entityId: args.entityId,
+    verdict: `identity_edit:${field}`,
+    note: value,
+  }));
+  rows.push({
+    workspaceId: args.workspaceId,
+    userId: args.userId,
+    entityId: args.entityId,
+    verdict: "confirmed:identity",
+    note: args.runId,
+  });
+  await insertUserDecisions(env.DB, rows);
 }

@@ -13,7 +13,7 @@ import { buildIdentityPack, inputHash } from "../jev/context-pack";
 import type { CardField, CardResult } from "./card-types";
 import { extract, type Extracted } from "./extract";
 import { logoCandidates, resolveLogo } from "./logo-cascade";
-import { normaliseInput } from "./normalise";
+import { NormalisedSubject, normaliseInput } from "./normalise";
 import { probeThrough } from "./probe-cache";
 
 interface CardDeps {
@@ -31,12 +31,23 @@ function id(): string {
   return crypto.randomUUID();
 }
 
-async function probe<T>(fn: () => Promise<T>): Promise<{ ok: true; value: T } | { ok: false; reason: string }> {
+interface ProbeFailure {
+  leg: string;
+  reason: string;
+}
+
+async function probe<T>(
+  leg: string,
+  fn: () => Promise<T>,
+  failures: ProbeFailure[],
+): Promise<{ ok: true; value: T } | { ok: false; reason: string }> {
   try {
     const value = await fn();
     return { ok: true, value };
   } catch (err) {
-    return { ok: false, reason: err instanceof Error ? err.message : "failed" };
+    const reason = err instanceof Error ? err.message : "failed";
+    failures.push({ leg, reason });
+    return { ok: false, reason };
   }
 }
 
@@ -65,6 +76,7 @@ async function wikidataLabel(qid: string): Promise<string | null> {
 
 async function wikidata(
   name: string,
+  failures: ProbeFailure[],
 ): Promise<{ qid: string; claims: z.infer<typeof WdClaims>; country: string | null } | null> {
   const hits = WdSearch.parse(
     await readJson(
@@ -84,7 +96,7 @@ async function wikidata(
   const p17 = WdEntityValue.safeParse(claims.P17?.[0]?.mainsnak?.datavalue?.value);
   let country: string | null = null;
   if (p17.success && p17.data["entity-type"] === "item") {
-    const label = await probe(() => wikidataLabel(p17.data.id));
+    const label = await probe("wikidata-label", () => wikidataLabel(p17.data.id), failures);
     country = label.ok ? label.value : null;
   }
   return { qid, claims, country };
@@ -154,6 +166,8 @@ export async function buildIdentityCard(
   const cacheKey = subject.registrable ?? subject.handle ?? subject.input;
   const cache = deps.cache;
 
+  const probeFailures: ProbeFailure[] = [];
+
   const pageUrl = subject.url;
   const homepage: ReadUrlResult = pageUrl
     ? await probeThrough(
@@ -164,9 +178,10 @@ export async function buildIdentityCard(
         (v) => v.ok,
       )
     : { ok: false, reason: "invalid-url", detail: "no homepage URL for this input" };
+  if (!homepage.ok) probeFailures.push({ leg: "homepage", reason: `${homepage.reason}: ${homepage.detail}` });
 
   const html = homepage.ok ? homepage.html : null;
-  const extractedRes = html && pageUrl ? await probe(() => extract(html, pageUrl)) : null;
+  const extractedRes = html && pageUrl ? await probe("extract", () => extract(html, pageUrl), probeFailures) : null;
   const extracted: Extracted | null = extractedRes?.ok ? extractedRes.value : null;
 
   const manifestHref = extracted?.manifestHref ?? null;
@@ -184,18 +199,23 @@ export async function buildIdentityCard(
   const candidateName = extracted?.name ?? subject.handle ?? subject.registrable ?? null;
   const wdName = candidateName ?? subject.registrable;
   const wdP = wdName
-    ? probe(() => probeThrough(cache, cacheKey, "wikidata", () => wikidata(wdName)))
+    ? probe("wikidata", () => probeThrough(cache, cacheKey, "wikidata", () => wikidata(wdName, probeFailures)), probeFailures)
     : Promise.resolve(null);
 
-  const [manifestIcons, wd] = await Promise.all([probe(fetchManifestIcons), wdP]);
+  const [manifestIcons, wd] = await Promise.all([
+    probe("manifest", fetchManifestIcons, probeFailures),
+    wdP,
+  ]);
 
   const logoP = extracted && pageUrl
-    ? probeThrough(cache, cacheKey, "logo", () =>
-        resolveLogo(logoCandidates(pageUrl, extracted, manifestIcons.ok ? manifestIcons.value : [])),
-      )
+    ? probe("logo", () =>
+        probeThrough(cache, cacheKey, "logo", () =>
+          resolveLogo(logoCandidates(pageUrl, extracted, manifestIcons.ok ? manifestIcons.value : [])),
+        ), probeFailures)
     : Promise.resolve(null);
 
-  const logo = await logoP;
+  const logoRes = await logoP;
+  const logo = logoRes?.ok ? logoRes.value : null;
 
   const fields: Record<string, { value: unknown; via: string }> = {};
   const put = (name: string, value: unknown, via: string) => {
@@ -326,11 +346,20 @@ export async function buildIdentityCard(
   const runId = args.onboardingRunId ?? id();
   const jevStatus = !deps.jev ? "unconfigured" : jev.ok ? "ok" : "unreachable";
   const identityJson = JSON.stringify({
-    fields: Object.fromEntries(cardFields.map((f) => [f.name, { value: f.value, state: f.state, via: f.via }])),
-    packHash,
+    version: 1,
+    run_id: runId,
+    subject,
+    fields: Object.fromEntries(
+      cardFields.map((f) => [f.name, { value: f.value, state: f.state, via: f.via, reason: f.reason ?? null }]),
+    ),
+    pack_hash: packHash,
+    verdict_count: verdictRows.length,
     built_at: now,
     jev_status: jevStatus,
     public_subject: publicSubject,
+    transport: homepage.ok ? homepage.transport : null,
+    browser_ms_used: homepage.ok ? (homepage.browserMsUsed ?? null) : null,
+    probe_failures: probeFailures,
   });
 
   const entityId = (await selfEntityIdForDomain(deps.db, args.workspaceId, domain)) ?? id();
@@ -407,6 +436,58 @@ export async function buildIdentityCard(
     browserMsUsed: homepage.ok ? (homepage.browserMsUsed ?? null) : null,
     jevStatus,
     publicSubject,
+    probeFailures,
+  };
+}
+
+const StoredField = z.object({
+  value: z.string().nullable(),
+  state: z.enum(["filled", "check", "empty"]),
+  via: z.string(),
+  reason: z.string().nullable().optional(),
+});
+
+const StoredIdentityJson = z.object({
+  version: z.literal(1),
+  run_id: z.string(),
+  subject: NormalisedSubject,
+  fields: z.record(z.string(), StoredField),
+  pack_hash: z.string(),
+  verdict_count: z.number(),
+  built_at: z.string(),
+  jev_status: z.enum(["ok", "unconfigured", "unreachable"]),
+  public_subject: z.enum(["cleared", "ask", "unverified"]),
+  transport: z.enum(["fetch", "browser"]).nullable(),
+  browser_ms_used: z.number().nullable(),
+  probe_failures: z.array(z.object({ leg: z.string(), reason: z.string() })),
+});
+
+const CARD_FIELD_ORDER = new Map([...D7_FIELDS, "pricing_page"].map((name, i) => [name, i]));
+
+export function cardFromIdentityJson(entityId: string, identityJson: string): CardResult {
+  const stored = StoredIdentityJson.parse(JSON.parse(identityJson));
+  const fields: CardField[] = Object.entries(stored.fields)
+    .sort(([a], [b]) => (CARD_FIELD_ORDER.get(a) ?? 99) - (CARD_FIELD_ORDER.get(b) ?? 99))
+    .map(([name, f]) => ({
+      name,
+      value: f.value,
+      state: f.state,
+      via: f.via,
+      ...(f.reason ? { reason: f.reason } : {}),
+    }));
+  return {
+    ok: true,
+    subject: stored.subject,
+    entityId,
+    onboardingRunId: stored.run_id,
+    fields,
+    packHash: stored.pack_hash,
+    verdictCount: stored.verdict_count,
+    transport: stored.transport,
+    browserMsUsed: stored.browser_ms_used,
+    jevStatus: stored.jev_status,
+    publicSubject: stored.public_subject,
+    probeFailures: stored.probe_failures,
   };
 }
 

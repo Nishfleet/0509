@@ -104,9 +104,8 @@
   // open question recorded on docs/REBUILD-DELIVERY.md.
   "send_email": [{ "name": "EMAIL" }],
 
-  // Producer only on page-sweep: the sweep consumers land with their own
-  // engine packets (#3884 discovery, #3879 site-change). Declared now so the
-  // tail's start-discovery step has a real queue to write to.
+  // The page-sweep producer is the identity tail's start-discovery step
+  // (#3885); the queue's consumer ships with the discovery engine (#3884).
   // The one send lane (0509#3979, docs/engines/delivery.md § P7.2, §5) is the
   // consumer below. The weekly brief (engine 6) and the incident email
   // (engine 4) both write their row and put `{ digest_id }` on `send-email`;

@@ -1,49 +1,35 @@
 import { env } from "cloudflare:workers";
-import { Suspense, useState } from "react";
-import { Await, data, Form, redirect } from "react-router";
+import { useState } from "react";
+import { data, Form, redirect, useNavigation } from "react-router";
 import { z } from "zod";
 
 import { IdentityCardFields } from "../components/identity-card";
 import { authClient } from "../lib/auth-client";
-import { publicSubjectFromIdentityJson, readEntityForWorkspace } from "../lib/data/entity.server";
-import { latestOnboardingRunId } from "../lib/data/onboarding-run.server";
+import { confirmedSelfEntityForWorkspace, readSelfEntityForWorkspace } from "../lib/data/entity.server";
+import { readOnboardingRunForWorkspace } from "../lib/data/onboarding-run.server";
 import { readHomeUrlForEntity } from "../lib/data/page.server";
-import { recordIdentityEdits } from "../lib/data/user-decision.server";
+import { priorConfirmationExists, recordIdentityConfirmation } from "../lib/data/user-decision.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
-import { buildCardFromRequest } from "../lib/identity/card.server";
+import { buildCardFromRequest, cardFromIdentityJson } from "../lib/identity/card.server";
 import type { CardResult } from "../lib/identity/card-types";
 import { requireSession } from "../lib/require-session.server";
-import { workspaceLandingForRequest } from "../lib/workspace.server";
 import type { Route } from "./+types/onboarding.identity";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
-  const landing = await workspaceLandingForRequest(request, session.user.id);
-  if (!landing) throw redirect("/app");
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
   if (!workspaceId) throw new Error("signed-in user has no workspace");
+  if (await confirmedSelfEntityForWorkspace(workspaceId)) throw redirect("/app");
 
-  const url = new URL(request.url);
-  const input = url.searchParams.get("input")?.trim() ?? "";
-  if (!input) return data({ workspaceId, email: session.user.email, card: null as Promise<CardResult> | null });
-
-  const card = buildCardFromRequest({ workspaceId, userId: session.user.id, input });
-  return data({ workspaceId, email: session.user.email, card });
+  const entityId = new URL(request.url).searchParams.get("entity")?.trim() ?? "";
+  const entity = entityId ? await readSelfEntityForWorkspace(entityId, workspaceId) : null;
+  const card = entity ? cardFromIdentityJson(entity.id, entity.identityJson) : null;
+  return data({ email: session.user.email, card });
 }
 
 const s = (v: FormDataEntryValue | null): string => (typeof v === "string" ? v : "");
 
 const EditsSchema = z.record(z.string(), z.string());
-
-function parseEdits(raw: string): Record<string, string> {
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    const edits = EditsSchema.safeParse(parsed);
-    return edits.success ? edits.data : {};
-  } catch {
-    return {};
-  }
-}
 
 export async function action({ request }: Route.ActionArgs) {
   const session = await requireSession(request);
@@ -51,37 +37,63 @@ export async function action({ request }: Route.ActionArgs) {
   if (!workspaceId) throw new Error("signed-in user has no workspace");
 
   const form = await request.formData();
+  const intent = s(form.get("intent"));
+
+  if (intent === "find") {
+    const card = await buildCardFromRequest({ workspaceId, userId: session.user.id, input: s(form.get("input")) });
+    if (!card.ok) return data({ card });
+    return redirect(`/onboarding?entity=${card.entityId}`);
+  }
+
+  if (intent !== "confirm") throw new Response("unknown intent", { status: 400 });
+
   const entityId = s(form.get("entityId"));
-  const edits = parseEdits(s(form.get("edits")));
+  let edits: Record<string, string>;
+  try {
+    const parsed: unknown = JSON.parse(s(form.get("edits")) || "{}");
+    edits = EditsSchema.parse(parsed);
+  } catch {
+    throw new Response("malformed edits payload", { status: 400 });
+  }
 
-  const entity = await readEntityForWorkspace(entityId, workspaceId);
+  const entity = await readSelfEntityForWorkspace(entityId, workspaceId);
   if (!entity) throw new Response("entity not found for this workspace", { status: 404 });
-  const [homepageUrl, runId] = await Promise.all([
-    readHomeUrlForEntity(entity.id),
-    latestOnboardingRunId(workspaceId),
-  ]);
-  if (!runId) throw new Error("no onboarding run for this workspace");
+  const card = cardFromIdentityJson(entity.id, entity.identityJson);
+  if (!card.ok) throw new Response("stored card is unreadable", { status: 500 });
+  const run = await readOnboardingRunForWorkspace(card.onboardingRunId, workspaceId);
+  if (!run) throw new Response("onboarding run not found for this workspace", { status: 404 });
 
-  await recordIdentityEdits({ workspaceId, userId: session.user.id, entityId: entity.id, edits });
-
-  await env.IDENTITY_TAIL.create({
-    id: `identity-${entity.id}`,
-    params: {
+  if (!(await priorConfirmationExists(workspaceId, entity.id))) {
+    await recordIdentityConfirmation({
       workspaceId,
       userId: session.user.id,
       entityId: entity.id,
-      onboardingRunId: runId,
-      domain: entity.domain,
-      homepageUrl,
-      publicSubject: publicSubjectFromIdentityJson(entity.identityJson),
-    },
-  });
+      runId: card.onboardingRunId,
+      edits,
+    });
+    const homepageUrl = await readHomeUrlForEntity(entity.id);
+    await env.IDENTITY_TAIL.create({
+      id: `identity-${card.onboardingRunId}`,
+      params: {
+        workspaceId,
+        userId: session.user.id,
+        entityId: entity.id,
+        onboardingRunId: card.onboardingRunId,
+        domain: entity.domain,
+        homepageUrl,
+        publicSubject: card.publicSubject,
+      },
+    });
+  }
   return redirect("/app/competitors");
 }
 
-export default function Onboarding({ loaderData }: Route.ComponentProps) {
+export default function Onboarding({ loaderData, actionData }: Route.ComponentProps) {
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [passkeyState, setPasskeyState] = useState<"idle" | "working" | "added" | "failed">("idle");
+  const navigation = useNavigation();
+  const busy = navigation.state !== "idle";
+  const card: CardResult | null = actionData && "card" in actionData ? actionData.card : loaderData.card;
 
   async function addPasskey() {
     setPasskeyState("working");
@@ -104,44 +116,29 @@ export default function Onboarding({ loaderData }: Route.ComponentProps) {
       {passkeyState === "added" ? <p role="status">Passkey added. It can sign you in from now on.</p> : null}
       {passkeyState === "failed" ? <p role="alert">The passkey prompt did not finish. Try again.</p> : null}
 
-      <Form method="get" action="/onboarding">
-        <input
-          name="input"
-          placeholder="your website, or a handle"
-          aria-label="your website, or a handle"
-          autoFocus
-          required
-        />
-        <button type="submit">Find it</button>
+      <Form method="post">
+        <input type="hidden" name="intent" value="find" />
+        <input name="input" placeholder="your website, or a handle" aria-label="your website, or a handle" autoFocus required />
+        <button type="submit" disabled={busy}>{busy ? "Looking it up…" : "Find it"}</button>
       </Form>
+      {busy ? <p role="status">Looking it up — the card draws itself as sources answer…</p> : null}
 
-      {loaderData.card ? (
-        <Suspense fallback={<p role="status">Looking it up — the card draws itself as sources answer…</p>}>
-          <Await resolve={loaderData.card}>
-            {(card: CardResult) =>
-              card.ok ? (
-                <Form method="post">
-                  <input type="hidden" name="entityId" value={card.entityId} />
-                  <input type="hidden" name="edits" value={JSON.stringify(edits)} />
-                  <IdentityCardFields
-                    fields={card.fields}
-                    onEdit={(name, value) => { setEdits((e) => ({ ...e, [name]: value })); }}
-                  />
-                  {card.publicSubject !== "cleared" ? (
-                    <p>we track brands and creators, not people — check this card is yours</p>
-                  ) : null}
-                  <button type="submit">That&apos;s me</button>
-                </Form>
-              ) : (
-                <p role="alert">
-                  {card.reason === "we track brands and creators, not people"
-                    ? card.reason
-                    : "we couldn't find anything for that, try the main website"}
-                </p>
-              )
-            }
-          </Await>
-        </Suspense>
+      {card ? (
+        card.ok ? (
+          <Form method="post">
+            <input type="hidden" name="intent" value="confirm" />
+            <input type="hidden" name="entityId" value={card.entityId} />
+            <input type="hidden" name="edits" value={JSON.stringify(edits)} />
+            <IdentityCardFields
+              fields={card.fields}
+              onEdit={(name, value) => { setEdits((e) => ({ ...e, [name]: value })); }}
+            />
+            {card.publicSubject !== "cleared" ? <p>we track brands and creators, not people — check this card is yours</p> : null}
+            <button type="submit" disabled={busy}>That&apos;s me</button>
+          </Form>
+        ) : (
+          <p role="alert">{card.reason === "we track brands and creators, not people" ? card.reason : "we couldn't find anything for that, try the main website"}</p>
+        )
       ) : null}
     </main>
   );

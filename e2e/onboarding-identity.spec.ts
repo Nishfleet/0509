@@ -8,9 +8,9 @@ import { requireInboxToken, signInWithMagicLink } from "./inbox";
 // The timed journey tests are a production lane: they sign in over the real
 // mail path (one fresh e2e+ address per input, so each card lands in a fresh
 // workspace), the 30 s budget is measured from the input submit, never from
-// sign-in, and the loader's streamed response is captured for the transport +
-// browserMsUsed proof. They run when PLAYWRIGHT_TEST_BASE_URL points at the
-// deployed Worker.
+// sign-in, and the ?entity= document is captured for the transport +
+// browserMsUsed proof stored in identity_json. They run when
+// PLAYWRIGHT_TEST_BASE_URL points at the deployed Worker.
 //
 // The session-gate test runs in every lane, preview included: webServer now
 // applies migrations/ to the local D1 before `wrangler dev`, so Better Auth's
@@ -32,14 +32,14 @@ test.describe("production lane", () => {
       await signInWithMagicLink(page, email, token);
 
       const cardResponse = page.waitForResponse(
-        (r) => r.url().includes("/onboarding") && r.url().includes("input="),
+        (r) => r.url().includes("/onboarding") && r.url().includes("entity="),
       );
       const field = page.getByLabel(/your website/i);
       await field.fill(input);
       const submittedAt = Date.now();
       await field.press("Enter");
 
-      const me = page.getByRole("button", { name: /me/i });
+      const me = page.locator('button[type="submit"]').filter({ hasText: /me/i });
       await expect(me).toBeVisible({ timeout: 30_000 });
       const cardAt = Date.now();
       const stream = await (await cardResponse).text().catch(() => "");

@@ -54,12 +54,41 @@ export async function selfEntityIdForDomain(
 export async function readEntityForWorkspace(
   entityId: string,
   workspaceId: string,
-): Promise<{ id: string; domain: string; identityJson: string } | null> {
+): Promise<{ id: string; domain: string; identityJson: string; confirmedAt: string | null } | null> {
   const row = await env.DB
-    .prepare(`SELECT id, domain, identity_json FROM entity WHERE id = ? AND workspace_id = ?`)
+    .prepare(`SELECT id, domain, identity_json, confirmed_at FROM entity WHERE id = ? AND workspace_id = ?`)
     .bind(entityId, workspaceId)
-    .first<{ id: string; domain: string; identity_json: string }>();
-  return row ? { id: row.id, domain: row.domain, identityJson: row.identity_json } : null;
+    .first<{ id: string; domain: string; identity_json: string; confirmed_at: string | null }>();
+  return row
+    ? { id: row.id, domain: row.domain, identityJson: row.identity_json, confirmedAt: row.confirmed_at }
+    : null;
+}
+
+export async function readSelfEntityForWorkspace(
+  entityId: string,
+  workspaceId: string,
+): Promise<{ id: string; domain: string; identityJson: string; confirmedAt: string | null } | null> {
+  const row = await env.DB
+    .prepare(
+      `SELECT id, domain, identity_json, confirmed_at FROM entity WHERE id = ? AND workspace_id = ? AND role = 'self'`,
+    )
+    .bind(entityId, workspaceId)
+    .first<{ id: string; domain: string; identity_json: string; confirmed_at: string | null }>();
+  return row
+    ? { id: row.id, domain: row.domain, identityJson: row.identity_json, confirmedAt: row.confirmed_at }
+    : null;
+}
+
+export async function confirmedSelfEntityForWorkspace(
+  workspaceId: string,
+): Promise<{ id: string } | null> {
+  const row = await env.DB
+    .prepare(
+      `SELECT id FROM entity WHERE workspace_id = ? AND role = 'self' AND confirmed_at IS NOT NULL LIMIT 1`,
+    )
+    .bind(workspaceId)
+    .first<{ id: string }>();
+  return row ? { id: row.id } : null;
 }
 
 const IdentityMeta = z.object({
@@ -69,11 +98,6 @@ const IdentityMeta = z.object({
 export function publicSubjectFromIdentityJson(
   identityJson: string,
 ): "cleared" | "ask" | "unverified" {
-  try {
-    const parsed: unknown = JSON.parse(identityJson);
-    const meta = IdentityMeta.safeParse(parsed);
-    return meta.success ? (meta.data.public_subject ?? "unverified") : "unverified";
-  } catch {
-    return "unverified";
-  }
+  const parsed: unknown = JSON.parse(identityJson);
+  return IdentityMeta.parse(parsed).public_subject ?? "unverified";
 }

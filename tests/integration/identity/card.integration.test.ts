@@ -3,8 +3,15 @@ import type { WorkflowEvent, WorkflowStep } from "cloudflare:workers";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { readEntityForWorkspace } from "../../../app/lib/data/entity.server";
-import { buildIdentityCard } from "../../../app/lib/identity/card.server";
+import {
+  confirmEntityStmt,
+  confirmedSelfEntityForWorkspace,
+  readEntityForWorkspace,
+  readSelfEntityForWorkspace,
+} from "../../../app/lib/data/entity.server";
+import { readOnboardingRunForWorkspace } from "../../../app/lib/data/onboarding-run.server";
+import { priorConfirmationExists, recordIdentityConfirmation } from "../../../app/lib/data/user-decision.server";
+import { buildIdentityCard, cardFromIdentityJson } from "../../../app/lib/identity/card.server";
 import { IdentityTailWorkflow, type Params as TailParams } from "../../../workers/identity-tail-workflow";
 import fixture from "../../fixtures/gymshark-2026-09-21.html?raw";
 
@@ -111,6 +118,65 @@ describe("buildIdentityCard (#3885 P4)", () => {
     expect(pricing?.value).toBeTruthy();
     const category = res.fields.find((f) => f.name === "category");
     expect(category?.state).toBe("empty");
+
+    const row = await env.DB
+      .prepare(`SELECT identity_json FROM entity WHERE id = ?`)
+      .bind(res.entityId)
+      .first<{ identity_json: string }>();
+    const stored = cardFromIdentityJson(res.entityId, row?.identity_json ?? "");
+    expect(stored.ok).toBe(true);
+    if (!stored.ok) return;
+    expect(stored.onboardingRunId).toBe(res.onboardingRunId);
+    expect(stored.subject.registrable).toBe("gymshark.com");
+    expect(stored.transport).toBe("fetch");
+    expect(stored.publicSubject).toBe("cleared");
+    expect(stored.verdictCount).toBe(res.verdictCount);
+    expect(stored.fields.find((f) => f.name === "name")).toMatchObject({ value: "Gymshark", state: "filled" });
+
+    expect(await readSelfEntityForWorkspace(res.entityId, "w1")).toBeTruthy();
+    expect(await readOnboardingRunForWorkspace(res.onboardingRunId, "w1")).toBeTruthy();
+    expect(await readOnboardingRunForWorkspace(res.onboardingRunId, "w2")).toBeNull();
+  });
+
+  it("confirm marker records edits + confirmation and reads back per workspace", async () => {
+    await seedUser();
+    stubFetch();
+    await env.DB.prepare(`DELETE FROM user_decision WHERE workspace_id = 'w1'`).run();
+    const res = await buildIdentityCard(
+      { db: env.DB, cache: env.IDENTITY_CACHE, jev: { url: "http://jev.test/jev" } },
+      { workspaceId: "w1", userId: "u1", input: "gymshark.com" },
+    );
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+
+    expect(await priorConfirmationExists("w1", res.entityId)).toBe(false);
+    await recordIdentityConfirmation({
+      workspaceId: "w1",
+      userId: "u1",
+      entityId: res.entityId,
+      runId: res.onboardingRunId,
+      edits: { name: "Gymshark Ltd" },
+    });
+    expect(await priorConfirmationExists("w1", res.entityId)).toBe(true);
+    const marker = await env.DB
+      .prepare(`SELECT verdict, note FROM user_decision WHERE workspace_id = 'w1' AND verdict = 'confirmed:identity'`)
+      .first<{ verdict: string; note: string }>();
+    expect(marker?.note).toBe(res.onboardingRunId);
+    const edit = await env.DB
+      .prepare(`SELECT verdict, note FROM user_decision WHERE workspace_id = 'w1' AND verdict = 'identity_edit:name'`)
+      .first<{ verdict: string; note: string }>();
+    expect(edit?.note).toBe("Gymshark Ltd");
+
+    expect(await confirmedSelfEntityForWorkspace("w1")).toBeNull();
+    await env.DB.batch([
+      confirmEntityStmt(env.DB, {
+        entityId: res.entityId,
+        workspaceId: "w1",
+        now: new Date().toISOString(),
+      }),
+    ]);
+    expect(await confirmedSelfEntityForWorkspace("w1")).toMatchObject({ id: res.entityId });
+    expect(await confirmedSelfEntityForWorkspace("w2")).toBeNull();
   });
 
   it("refuses a takedown-listed subject before any probe and records the refusal", async () => {

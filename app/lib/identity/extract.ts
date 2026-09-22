@@ -43,16 +43,25 @@ function asArray<T>(v: T | T[] | undefined): T[] {
   return Array.isArray(v) ? v : [v];
 }
 
-function findOrganization(documents: unknown[]): Record<string, unknown> | null {
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
+const LdOrganization = z.looseObject({
+  "@type": z.literal("Organization"),
+  name: z.string().optional(),
+  logo: z.union([z.string(), z.looseObject({ url: z.string() })]).optional(),
+  sameAs: z.union([z.string(), z.array(z.string())]).optional(),
+});
+
+function findOrganization(
+  documents: unknown[],
+): { raw: Record<string, unknown>; org: z.infer<typeof LdOrganization> } | null {
   for (const doc of documents) {
-    for (const node of asArray(doc && typeof doc === "object" && "@graph" in doc ? (doc as { "@graph": unknown[] })["@graph"] : doc)) {
-      if (
-        node &&
-        typeof node === "object" &&
-        (node as Record<string, unknown>)["@type"] === "Organization"
-      ) {
-        return node as Record<string, unknown>;
-      }
+    const nodes = isRecord(doc) && "@graph" in doc ? doc["@graph"] : doc;
+    for (const node of asArray(nodes)) {
+      const org = LdOrganization.safeParse(node);
+      if (org.success && isRecord(node)) return { raw: node, org: org.data };
     }
   }
   return null;
@@ -163,17 +172,12 @@ export async function extract(html: string, pageUrl: string): Promise<Extracted>
     const doc = tryJson(raw);
     if (doc !== null) ldDocs.push(doc);
   }
-  const ldOrg = findOrganization(ldDocs);
-  const ldSameAs = asArray(ldOrg?.sameAs as string | string[] | undefined).filter(
-    (s): s is string => typeof s === "string",
-  );
-  const ldLogo = ldOrg?.logo;
-  const ldLogoUrl =
-    typeof ldLogo === "string"
-      ? ldLogo
-      : ldLogo && typeof ldLogo === "object"
-        ? ((ldLogo as Record<string, unknown>).url as string | undefined) ?? null
-        : null;
+  const found = findOrganization(ldDocs);
+  const ldOrg = found?.raw ?? null;
+  const org = found?.org ?? null;
+  const ldSameAs = asArray(org?.sameAs).filter((s): s is string => typeof s === "string");
+  const ldLogo = org?.logo;
+  const ldLogoUrl = typeof ldLogo === "string" ? ldLogo : (ldLogo?.url ?? null);
 
   const socials = new Set<string>(ldSameAs);
   const navLinks: { href: string; text: string }[] = [];
@@ -200,7 +204,7 @@ export async function extract(html: string, pageUrl: string): Promise<Extracted>
   if (gaId) adLibraryHints.push({ platform: "google", id: gaId[0], via: "ga4" });
 
   const name =
-    (typeof ldOrg?.name === "string" ? ldOrg.name : null) ??
+    org?.name ??
     meta.get("og:site_name") ??
     (title ? stripTagline(title) : null);
   const description =
