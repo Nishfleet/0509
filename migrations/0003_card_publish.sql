@@ -1,4 +1,4 @@
--- 0002_card_publish.sql — the public standing card's publish state.
+-- 0003_card_publish.sql — the public standing card's publish state.
 -- Issue #3969 (engine 9, P9.1), contract docs/REBUILD-STANDING-CARD.md.
 --
 -- Expand-only: two additive columns on `workspace`, one nullable and one with a

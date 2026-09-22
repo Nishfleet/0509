@@ -39,6 +39,25 @@ async function seedArtifact(workspaceId: string, weekStartAt: string, html: stri
   return key;
 }
 
+async function seedSubjectWithPrivateMention(workspaceId: string): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO entity (id, workspace_id, role, domain, identity_json, state, created_at)
+     VALUES (?, ?, 'competitor', ?, '{}', 'on', ?)`,
+  )
+    .bind("ent-private", workspaceId, "competitor.example", "2026-09-22T00:00:00Z")
+    .run();
+  await env.DB.prepare(
+    `INSERT INTO source (id, key, kind, platform, plugin_key, reliability)
+     VALUES ('src-private', 'mentions:private', 'mentions', 'reddit', 'private', 'scraped_page')`,
+  ).run();
+  await env.DB.prepare(
+    `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, summary, canonical_url, url_hash, payload_json, dedup_key, observed_at)
+     VALUES ('sig-private', ?, 'ent-private', 'src-private', 'mention', ?, ?, ?, 'hash-private', '{}', 'dedup-private', ?)`,
+  )
+    .bind(workspaceId, "private headline", "LEAK-MARKER-Private-Mention-Body", "https://competitor.example/post", "2026-09-22T00:00:00Z")
+    .run();
+}
+
 async function seedTakenDownSubject(workspaceId: string): Promise<void> {
   await env.DB.prepare(
     `INSERT INTO entity (id, workspace_id, role, domain, state, state_changed_at, state_reason, state_changed_by, created_at)
@@ -96,7 +115,7 @@ describe("card publish state (0003_card_publish.sql)", () => {
 
     await expect(
       env.DB.prepare("UPDATE workspace SET card_slug = ? WHERE id = ?").bind(a?.slug, "ws-2").run(),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/UNIQUE/);
   });
 
   it("resolves the owner's workspace read-only", async () => {
@@ -140,6 +159,18 @@ describe("the public serve path", () => {
     expect(await response.text()).toBe("<html>this week</html>");
   });
 
+  it("serves the newest week across more R2 keys than one list page", async () => {
+    const settings = await publishCard(WORKSPACE_ID);
+    for (let day = 1; day <= 120; day += 1) {
+      const stamp = `2026-09-${String((day % 28) + 1).padStart(2, "0")}T00:00:00Z`;
+      await seedArtifact(WORKSPACE_ID, `${stamp}-${String(day).padStart(3, "0")}`, `<html>week ${day}</html>`);
+    }
+    await seedArtifact(WORKSPACE_ID, "2026-09-30T00:00:00Z-latest", "<html>newest</html>");
+
+    const response = await serveCard(settings?.slug ?? "");
+    expect(await response.text()).toBe("<html>newest</html>");
+  });
+
   it("404s a published slug whose render has not happened", async () => {
     const settings = await publishCard(WORKSPACE_ID);
     const response = await serveCard(settings?.slug ?? "");
@@ -164,29 +195,18 @@ describe("the public serve path", () => {
     expect((await serveCard(settings?.slug ?? "")).status).toBe(404);
   });
 
-  it("never turns a content table into the response: private signal text stays out of the body", async () => {
-    await env.DB.prepare(
-      `INSERT INTO entity (id, workspace_id, role, domain, identity_json, state, created_at)
-       VALUES (?, ?, 'competitor', ?, '{}', 'on', ?)`,
-    )
-      .bind("ent-private", WORKSPACE_ID, "competitor.example", "2026-09-22T00:00:00Z")
-      .run();
-    await env.DB.prepare(
-      `INSERT INTO source (id, key, kind, platform, plugin_key, reliability)
-       VALUES ('src-private', 'mentions:private', 'mentions', 'reddit', 'private', 'scraped_page')`,
-    ).run();
-    await env.DB.prepare(
-      `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, summary, canonical_url, url_hash, payload_json, dedup_key, observed_at)
-       VALUES ('sig-private', ?, 'ent-private', 'src-private', 'mention', ?, ?, ?, 'hash-private', '{}', 'dedup-private', ?)`,
-    )
-      .bind(WORKSPACE_ID, "private headline", "LEAK-MARKER-Private-Mention-Body", "https://competitor.example/post", "2026-09-22T00:00:00Z")
-      .run();
-
+  it("streams the artifact verbatim: DB content never reaches the response body", async () => {
     const settings = await publishCard(WORKSPACE_ID);
-    await seedArtifact(WORKSPACE_ID, "2026-09-21T00:00:00Z", "<html>card</html>");
+    await seedSubjectWithPrivateMention(WORKSPACE_ID);
+    await seedArtifact(WORKSPACE_ID, "2026-09-21T00:00:00Z", "<html>card without the private mention</html>");
+
+    // The private row is really there: without this the absence assertion below
+    // would pass on an empty database and prove nothing.
+    const stored = await env.DB.prepare("SELECT summary FROM signal WHERE id = 'sig-private'").first<{ summary: string }>();
+    expect(stored?.summary).toContain("LEAK-MARKER");
 
     const response = await serveCard(settings?.slug ?? "");
     expect(response.status).toBe(200);
-    expect(await response.text()).not.toContain("LEAK-MARKER");
+    expect(await response.text()).toBe("<html>card without the private mention</html>");
   });
 });

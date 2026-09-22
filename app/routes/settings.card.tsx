@@ -1,7 +1,5 @@
 import type { Route } from "./+types/settings.card";
 
-import { useActionData, useLoaderData } from "react-router";
-
 import { requireSession } from "../lib/require-session.server";
 import {
   publishCard,
@@ -21,7 +19,11 @@ interface CardState {
 
 const EMPTY: CardState = { published: false, slug: null, url: null, rotated: null, error: null };
 
-function cardState(settings: { published: boolean; slug: string | null }, rotated: string | null, error: string | null): CardState {
+function cardState(
+  settings: { published: boolean; slug: string | null },
+  rotated: string | null,
+  error: string | null,
+): CardState {
   return {
     published: settings.published,
     slug: settings.slug,
@@ -66,7 +68,10 @@ export async function action({ request }: Route.ActionArgs) {
     if (slug === null) {
       const settings = await readCardSettings(workspaceId);
       return {
-        card: { ...cardState(settings ?? EMPTY, null, null), error: "A new URL could not be claimed. The old one still works." },
+        card: {
+          ...cardState(settings ?? EMPTY, null, null),
+          error: "A new URL could not be claimed. The old one still works.",
+        },
         hasWorkspace: true,
       };
     }
@@ -77,17 +82,29 @@ export async function action({ request }: Route.ActionArgs) {
   return { card: cardState(settings ?? EMPTY, null, null), hasWorkspace: true };
 }
 
-export default function Page() {
-  const state = useActionData<typeof action>();
-  const data = useLoaderData<typeof loader>();
-  const card = state?.card ?? data.card;
+function CopyButton({ url }: { url: string | null }) {
+  return (
+    <button
+      type="button"
+      disabled={url === null}
+      onClick={() => {
+        if (url !== null) void navigator.clipboard.writeText(`${location.origin}${url}`);
+      }}
+    >
+      Copy link
+    </button>
+  );
+}
+
+export default function Page({ loaderData, actionData }: Route.ComponentProps) {
+  const card = actionData?.card ?? loaderData.card;
 
   return (
     <main>
       <h1>Public card</h1>
-      {!data.hasWorkspace ? <p>Your workspace is still being set up.</p> : null}
-      {data.hasWorkspace && card.error !== null ? <p role="alert">{card.error}</p> : null}
-      {data.hasWorkspace && !card.published ? (
+      {!loaderData.hasWorkspace ? <p>Your workspace is still being set up.</p> : null}
+      {loaderData.hasWorkspace && card.error !== null ? <p role="alert">{card.error}</p> : null}
+      {loaderData.hasWorkspace && !card.published ? (
         <form method="post">
           <input type="hidden" name="intent" value="publish" />
           <button type="submit">Turn the public card on</button>
@@ -111,19 +128,5 @@ export default function Page() {
         </>
       ) : null}
     </main>
-  );
-}
-
-function CopyButton({ url }: { url: string | null }) {
-  return (
-    <button
-      type="button"
-      disabled={url === null}
-      onClick={() => {
-        if (url !== null) void navigator.clipboard.writeText(`${location.origin}${url}`);
-      }}
-    >
-      Copy link
-    </button>
   );
 }
