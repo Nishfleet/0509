@@ -15,7 +15,6 @@ const KNOWN_PLATFORMS: readonly BoardPlatform[] = [
   "ashby",
   "workable",
   "smartrecruiters",
-  "self",
 ];
 
 /**
@@ -178,16 +177,48 @@ describe("discoverBoard", () => {
     expect(calls).toEqual(["https://api.smartrecruiters.com/v1/companies/Visa/postings"]);
   });
 
-  it("tries the brand's own careers subdomain only when the nav names it", async () => {
-    const navLink = "https://careers.dropbox.com/";
+  it("tries a nav-named careers subdomain as a lead and keeps the board it reveals", async () => {
+    // The lead page must REVEAL a documented board; the board, not the
+    // subdomain, is what gets probed and what gets returned.
+    const leadUrl = "https://careers.dropbox.com/";
     const { probe, calls } = stubProbe({
-      [navLink]: { ok: true, contentType: "text/html; charset=utf-8", body: "<html><body>".concat("x".repeat(400)) },
+      [leadUrl]: {
+        ok: true,
+        contentType: "text/html; charset=utf-8",
+        body: '<html><body><a href="https://job-boards.greenhouse.io/dropbox">Open roles</a>'.concat("x".repeat(200)),
+      },
+      "https://boards-api.greenhouse.io/v1/boards/dropbox/jobs": { ...OK_JSON, body: '{"jobs":[{}]}' },
     });
 
-    const board = await discoverBoard([navLink, "https://www.dropbox.com/"], "dropbox.com", { probe });
-    expect(board).toEqual({ platform: "self", boardUrl: "https://careers.dropbox.com/", via: "subdomain" });
-    // Probed exactly the nav-named subdomain, no enumeration.
-    expect(calls).toEqual([navLink]);
+    const board = await discoverBoard([leadUrl, "https://www.dropbox.com/"], "dropbox.com", { probe });
+    expect(board).toEqual({ platform: "greenhouse", boardUrl: "https://job-boards.greenhouse.io/dropbox", via: "subdomain" });
+    expect(calls).toEqual([leadUrl, "https://boards-api.greenhouse.io/v1/boards/dropbox/jobs"]);
+  });
+
+  it("returns an honest none when a careers subdomain page reveals no board", async () => {
+    // A 200 HTML page that links no documented board is not a board: there is
+    // nothing true to track, so this is an honest none rather than a guess.
+    const leadUrl = "https://careers.airbnb.com/";
+    const { probe } = stubProbe({
+      [leadUrl]: {
+        ok: true,
+        contentType: "text/html; charset=utf-8",
+        body: "<html><body><div id=root></div>".concat("x".repeat(3000)),
+      },
+    });
+
+    const board = await discoverBoard([leadUrl], "airbnb.com", { probe });
+    expect(board).toEqual({ platform: "none", boardUrl: null, via: "none" });
+  });
+
+  it("returns an honest none when a careers-subdomain lead itself is a non-2xx", async () => {
+    // The lead's own fetch failing leaves nothing to scan, so no board is even
+    // attempted. careers.gymshark.com does not resolve from this egress either.
+    const { probe } = stubProbe({
+      "https://careers.gymshark.com/": { ok: false, contentType: null, body: "" },
+    });
+    const board = await discoverBoard(["https://careers.gymshark.com/"], "gymshark.com", { probe });
+    expect(board).toEqual({ platform: "none", boardUrl: null, via: "none" });
   });
 
   it("returns an honest none when the board probe is a non-2xx", async () => {
@@ -270,8 +301,9 @@ describe("discoverBoard", () => {
     expect(board.platform).toBe("lever");
   });
 
-  it("caps the careers-subdomain HTML body at a minimum parseable size", async () => {
-    // A 2xx whose body is a near-empty stub page is not a listing we can read.
+  it("caps the careers-subdomain lead body at a minimum parseable size", async () => {
+    // A 2xx whose body is a near-empty stub page is not worth scanning and is
+    // never a board.
     const { probe } = stubProbe({
       "https://careers.tinybrand.com/": { ok: true, contentType: "text/html", body: "<html></html>" },
     });

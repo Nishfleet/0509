@@ -14,16 +14,21 @@
  *      points at it. Subdomains are never enumerated — that is the crt.sh leg
  *      KEEPLIST already parks as unproven.
  *
- * A board is accepted only when its documented listing endpoint answers 2xx
- * with a body that carries the platform's listing field. A 200 over an
- * unrelated page, or a documented shape whose probe 404s, is an honest `none`.
+ * **A board is accepted only when its documented listing endpoint answers 2xx
+ * with a body carrying that platform's listing field** (`jobs`, `content`, or a
+ * postings array), probed with the shared `fetch` and an 8 s abort. A nav-named
+ * careers subdomain is a *lead*, not a board: it is fetched, and the board it
+ * reveals is the one probed. A subdomain that merely answers 200 — a marketing
+ * page, a "not hiring" page, or a client-rendered shell that 200s for every
+ * path — reveals no documented board and is an honest `none`, because there is
+ * nothing true to track.
  *
  * Rule 5 of the issue: `navLinks` is an argument, so this module imports
  * nothing from the identity engine.
  */
 
 /** A public ATS board host we recognise by its documented URL shape. */
-export type BoardPlatform = "greenhouse" | "lever" | "ashby" | "workable" | "smartrecruiters" | "self";
+export type BoardPlatform = "greenhouse" | "lever" | "ashby" | "workable" | "smartrecruiters";
 
 /** The result of probing one candidate URL. Injectable so tests need no network. */
 export interface ProbeResponse {
@@ -42,7 +47,7 @@ export interface DiscoveredBoard {
   platform: BoardPlatform | "none";
   /** The canonical human board URL, or null when none was found. */
   boardUrl: string | null;
-  /** How the board was found: from a nav ATS link, the brand's own subdomain, or neither. */
+  /** How the board was found: from a nav ATS link, a nav-named lead, or neither. */
   via: "nav" | "subdomain" | "none";
 }
 
@@ -54,31 +59,30 @@ export interface DiscoverOptions {
 /** The 8-second deadline identity-card.md §Workflow assigns every probe. */
 const PROBE_TIMEOUT_MS = 8_000;
 
-/** A real browser UA: the identity probe found origins do not gate on it, but a
- *  bare default is refused by a few. Matching the probes recorded for #3885. */
+/**
+ * A real browser UA: the identity probe found origins do not gate on it, but a
+ * bare default is refused by a few. Matching the probes recorded for #3885.
+ */
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 
-/** Minimum body length for an HTML careers page to count as parseable. */
+/** Minimum body length for an HTML lead page to be worth scanning for a board. */
 const MIN_HTML_BYTES = 200;
+
+/** The character class every ATS slug is drawn from. */
+const SLUG_CLASS = "[A-Za-z0-9_-]+";
 
 interface DocumentedHost {
   /** The platform name written to `source.platform`. */
   platform: BoardPlatform;
-  /** Hostnames this platform's public board lives on (exact match). */
+  /** Board host names this platform's public board lives on (www stripped). */
   hosts: readonly string[];
   /** Build the documented listing endpoint for a slug (never a guessed slug). */
   listingUrl: (slug: string) => string;
   /** True when a parsed JSON body carries this platform's documented listing field. */
   accepts: (parsed: unknown) => boolean;
-  /** The canonical board URL for a matched nav host + slug. */
-  boardUrl: (host: string, slug: string) => string;
-}
-
-function hasArray(parsed: unknown, key: string): boolean {
-  if (typeof parsed !== "object" || parsed === null) return false;
-  const value = (parsed as Record<string, unknown>)[key];
-  return Array.isArray(value);
+  /** The canonical board URL for a matched board host + slug. */
+  boardUrl: (matchedHost: string, slug: string) => string;
 }
 
 /**
@@ -99,8 +103,8 @@ const DOCUMENTED_HOSTS: readonly DocumentedHost[] = [
     hosts: ["boards.greenhouse.io", "job-boards.greenhouse.io", "job-boards.eu.greenhouse.io"],
     listingUrl: (slug) => `https://boards-api.greenhouse.io/v1/boards/${slug}/jobs`,
     accepts: (parsed) => hasArray(parsed, "jobs"),
-    boardUrl: (host, slug) =>
-      host.startsWith("job-boards.eu.")
+    boardUrl: (matchedHost, slug) =>
+      matchedHost.startsWith("job-boards.eu.")
         ? `https://job-boards.eu.greenhouse.io/${slug}`
         : `https://job-boards.greenhouse.io/${slug}`,
   },
@@ -110,34 +114,35 @@ const DOCUMENTED_HOSTS: readonly DocumentedHost[] = [
     listingUrl: (slug) => `https://api.lever.co/v0/postings/${slug}?mode=json`,
     // Lever's listing is a bare JSON array of postings.
     accepts: (parsed) => Array.isArray(parsed),
-    boardUrl: (_host, slug) => `https://jobs.lever.co/${slug}`,
+    boardUrl: (_matchedHost, slug) => `https://jobs.lever.co/${slug}`,
   },
   {
     platform: "ashby",
     hosts: ["jobs.ashbyhq.com"],
     listingUrl: (slug) => `https://api.ashbyhq.com/posting-api/job-board/${slug}`,
     accepts: (parsed) => hasArray(parsed, "jobs"),
-    boardUrl: (_host, slug) => `https://jobs.ashbyhq.com/${slug}`,
+    boardUrl: (_matchedHost, slug) => `https://jobs.ashbyhq.com/${slug}`,
   },
   {
     platform: "workable",
     hosts: ["apply.workable.com"],
     listingUrl: (slug) => `https://apply.workable.com/api/v1/widget/accounts/${slug}`,
     accepts: (parsed) => hasArray(parsed, "jobs"),
-    boardUrl: (_host, slug) => `https://apply.workable.com/${slug}`,
+    boardUrl: (_matchedHost, slug) => `https://apply.workable.com/${slug}`,
   },
   {
     platform: "smartrecruiters",
     hosts: ["jobs.smartrecruiters.com", "careers.smartrecruiters.com"],
     listingUrl: (slug) => `https://api.smartrecruiters.com/v1/companies/${slug}/postings`,
     accepts: (parsed) => hasArray(parsed, "content"),
-    boardUrl: (_host, slug) => `https://jobs.smartrecruiters.com/${slug}`,
+    boardUrl: (_matchedHost, slug) => `https://jobs.smartrecruiters.com/${slug}`,
   },
 ];
 
 /**
- * Subdomain labels that mean "this brand hosts its own careers board". Any other
- * subdomain in a nav (shop., api., www.) is not a careers board and is skipped.
+ * Subdomain labels that mean "this brand may host a careers board here". Any
+ * other subdomain in a nav (shop., api., www.) is not a careers board and is
+ * skipped. Such a link is a lead only: it is fetched and must reveal a board.
  */
 const CAREERS_LABELS: readonly string[] = ["careers", "jobs", "hiring"];
 
@@ -154,7 +159,8 @@ const defaultProbe: Probe = async (url) => {
   }
 };
 
-interface Candidate {
+/** A candidate whose documented listing endpoint we can probe directly. */
+interface BoardCandidate {
   via: "nav" | "subdomain";
   platform: BoardPlatform;
   boardUrl: string;
@@ -162,6 +168,18 @@ interface Candidate {
   probeUrl: string;
   /** Whether a 2xx response body proves this candidate. */
   acceptsBody: (body: string, contentType: string | null) => boolean;
+}
+
+/** A nav-named careers subdomain, fetched before it can become a board. */
+interface LeadCandidate {
+  leadUrl: string;
+}
+
+type RawCandidate = BoardCandidate | LeadCandidate;
+
+function hasArray(parsed: unknown, key: string): boolean {
+  if (typeof parsed !== "object" || parsed === null) return false;
+  return Array.isArray((parsed as Record<string, unknown>)[key]);
 }
 
 function parseJsonListing(body: string, accepts: (parsed: unknown) => boolean): boolean {
@@ -172,21 +190,14 @@ function parseJsonListing(body: string, accepts: (parsed: unknown) => boolean): 
   }
 }
 
-function isHtmlListing(body: string, contentType: string | null): boolean {
+function isHtmlPage(body: string, contentType: string | null): boolean {
   if (contentType !== null && !contentType.includes("html")) return false;
   return body.trim().length >= MIN_HTML_BYTES;
 }
 
 /** The first path segment of a URL — the slug a documented board shape carries. */
 function slugFromUrl(url: URL): string | null {
-  const segment = url.pathname.split("/").find((part) => part.length > 0);
-  return segment ?? null;
-}
-
-/** True when `host` is a subdomain of `domain` (e.g. careers.dropbox.com / dropbox.com). */
-function isSubdomainOf(host: string, domain: string): boolean {
-  const bareDomain = domain.replace(/^www\./, "");
-  return host.endsWith(`.${bareDomain}`) && host !== bareDomain;
+  return url.pathname.split("/").find((part) => part.length > 0) ?? null;
 }
 
 function toUrl(value: string): URL | null {
@@ -197,55 +208,78 @@ function toUrl(value: string): URL | null {
   }
 }
 
-/** Build the ordered candidate list from the nav links, without any network. */
-function candidatesFor(navLinks: readonly string[], domain: string): Candidate[] {
-  const candidates: Candidate[] = [];
+/** True when `host` is a subdomain of `domain` (e.g. careers.dropbox.com / dropbox.com). */
+function isSubdomainOf(host: string, domain: string): boolean {
+  const bareDomain = domain.replace(/^www\./, "");
+  return host.endsWith(`.${bareDomain}`) && host !== bareDomain;
+}
+
+/** A board candidate for a matched board host and a slug taken from a URL. */
+function boardCandidate(host: DocumentedHost, matchedHost: string, slug: string, via: "nav" | "subdomain"): BoardCandidate {
+  return {
+    via,
+    platform: host.platform,
+    boardUrl: host.boardUrl(matchedHost, slug),
+    probeUrl: host.listingUrl(slug),
+    acceptsBody: (body) => parseJsonListing(body, host.accepts),
+  };
+}
+
+/**
+ * Build the ordered candidate list from the nav links, without any network.
+ * A direct ATS nav link becomes a probed board candidate; a careers subdomain
+ * becomes a lead that `discoverBoard` fetches.
+ */
+function candidatesFor(navLinks: readonly string[], domain: string): RawCandidate[] {
+  const candidates: RawCandidate[] = [];
 
   for (const link of navLinks) {
     const url = toUrl(link);
     if (url?.protocol !== "https:") continue;
     const host = url.hostname.toLowerCase();
-
     const host0 = host.replace(/^www\./, "");
-    // 1. A documented public ATS board named by the nav.
+
     const documented = DOCUMENTED_HOSTS.find((h) => h.hosts.includes(host0));
     if (documented) {
-      // Greenhouse redirects www.boards... -> job-boards; keep it exact anyway.
       const slug = slugFromUrl(url);
-      if (slug !== null) {
-        candidates.push({
-          via: "nav",
-          platform: documented.platform,
-          boardUrl: documented.boardUrl(host0, slug),
-          probeUrl: documented.listingUrl(slug),
-          acceptsBody: (body) => parseJsonListing(body, documented.accepts),
-        });
-      }
+      if (slug !== null) candidates.push(boardCandidate(documented, host0, slug, "nav"));
       continue;
     }
 
-    // 2. The brand's own careers subdomain, only when the nav named it.
     const firstLabel = host.split(".")[0] ?? "";
     if (CAREERS_LABELS.includes(firstLabel) && isSubdomainOf(host, domain)) {
-      candidates.push({
-        via: "subdomain",
-        platform: "self",
-        boardUrl: `${url.origin}${url.pathname}`,
-        probeUrl: url.href,
-        acceptsBody: isHtmlListing,
-      });
+      candidates.push({ leadUrl: url.href });
     }
   }
 
   return candidates;
 }
 
+/** Documented board hosts embedded in a lead page's HTML, with their URL slug. */
+function boardsInHtml(body: string): { host: DocumentedHost; matchedHost: string; slug: string }[] {
+  const found: { host: DocumentedHost; matchedHost: string; slug: string }[] = [];
+  for (const host of DOCUMENTED_HOSTS) {
+    for (const hostName of host.hosts) {
+      const escaped = hostName.replace(/\./g, "\\.");
+      // Match the board host followed by a path slug, tolerating the scheme and
+      // whatever quotes, angle brackets or escapes the HTML wraps the URL in.
+      const pattern = new RegExp(`https?:\\/\\/${escaped}\\/(${SLUG_CLASS})`, "gi");
+      for (const match of body.matchAll(pattern)) {
+        const slug = match[1];
+        if (slug !== undefined) found.push({ host, matchedHost: hostName, slug });
+      }
+    }
+  }
+  return found;
+}
+
 /**
  * Discover a brand's real job board from its nav links.
  *
  * Probes candidates in nav order and returns the first the listing endpoint
- * proves. Returns an honest `none` when the nav names no board, or when every
- * named shape fails its probe — never a guess.
+ * proves. A nav-named careers subdomain is followed only as far as a documented
+ * board it reveals. Returns an honest `none` when the nav names no board, or
+ * when every named shape fails its probe — never a guess.
  */
 export async function discoverBoard(
   navLinks: readonly string[],
@@ -253,7 +287,19 @@ export async function discoverBoard(
   options: DiscoverOptions = {},
 ): Promise<DiscoveredBoard> {
   const probe = options.probe ?? defaultProbe;
-  const candidates = candidatesFor(navLinks, domain);
+  const candidates: BoardCandidate[] = [];
+
+  for (const raw of candidatesFor(navLinks, domain)) {
+    if ("leadUrl" in raw) {
+      const page = await probe(raw.leadUrl);
+      if (!page.ok || !isHtmlPage(page.body, page.contentType)) continue;
+      for (const found of boardsInHtml(page.body)) {
+        candidates.push(boardCandidate(found.host, found.matchedHost, found.slug, "subdomain"));
+      }
+      continue;
+    }
+    candidates.push(raw);
+  }
 
   for (const candidate of candidates) {
     const response = await probe(candidate.probeUrl);
