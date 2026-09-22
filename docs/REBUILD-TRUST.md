@@ -397,7 +397,11 @@ teaches one agent once; a rule teaches every agent forever.
 
 Implemented in the `opus-review` job's `prompt:` (`.github/workflows/ci.yml`) by
 PR #4255, which asks all three questions above word for word and states the
-verdict rule in its grade-capping form.
+verdict rule in its grade-capping form. The same prompt also asks a fourth
+question (Nish 2026-09-22): for a PR touching `app/` or `workers/`, the body
+must carry a `## Verification` section showing a real run of the verify skill
+(`.agents/skills/verify/`) at the PR head — commands, pasted output and the
+head SHA — and a missing or prose-only section fails the review.
 
 Reviewers also check the two things no test checks: that
 `docs/FEATURE-MAP.md` matches `app/routes.ts` after a route change, and that
