@@ -14,6 +14,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "0509",
   // >= 2026-08-04, so nodejs_compat is on by default and needs no flag.
+  // @sentry/cloudflare's AsyncLocalStorage requirement is already met by that.
   "compatibility_date": "2026-09-16",
   "main": "./workers/app.ts",
   "observability": {
@@ -51,6 +52,10 @@
   // it, and a client-supplied value would let a link point anywhere.
   // BETTER_AUTH_SECRET stays a Worker secret.
   "vars": { "BETTER_AUTH_URL": "https://0509.io" },
+
+  // Names only. The value is set with `wrangler secret put SENTRY_DSN` and
+  // never written here; listing the name is what puts it on the generated Env.
+  "secrets": { "required": ["SENTRY_DSN"] },
 
   "d1_databases": [
     {

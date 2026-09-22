@@ -1036,8 +1036,9 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | Edge abuse shield | Cloudflare rate limiting binding (`period` 10 or 60 only) | platform |
 | OpenAPI document | `zod-openapi` (samchungy) | 6.0.2 |
 | Agent-readable docs | `/llms.txt` + `Accept: text/markdown` + `rel="alternate"` | spec v2 (2026-08-10) |
+| Error tracking → GitHub issue | `@sentry/cloudflare` (`withSentry` around the Worker export; Sentry's own GitHub integration opens the issue) | 10.75.1 — <https://docs.sentry.io/platforms/javascript/guides/cloudflare/> |
 
-**Runtime dependencies this stack adds beyond the scaffold: ten.** `better-auth`, `@better-auth/passkey`, `@better-auth/api-key`, `diff`, `@extractus/feed-extractor`, `uplot` + `uplot-react`, `date-fns` + `@date-fns/tz`, and for the API surface `agents`, `@modelcontextprotocol/server` (which drags `@modelcontextprotocol/client` and `@modelcontextprotocol/sdk` as exact-pinned peers), `@cloudflare/workers-oauth-provider` and `zod-openapi`. `zod` arrives transitively through better-auth; `fast-xml-parser` arrives transitively through feed-extractor. Everything else in the table is a platform primitive with no bundle cost.
+**Runtime dependencies this stack adds beyond the scaffold: eleven.** `@sentry/cloudflare` is the eleventh. `better-auth`, `@better-auth/passkey`, `@better-auth/api-key`, `diff`, `@extractus/feed-extractor`, `uplot` + `uplot-react`, `date-fns` + `@date-fns/tz`, and for the API surface `agents`, `@modelcontextprotocol/server` (which drags `@modelcontextprotocol/client` and `@modelcontextprotocol/sdk` as exact-pinned peers), `@cloudflare/workers-oauth-provider` and `zod-openapi`. `zod` arrives transitively through better-auth; `fast-xml-parser` arrives transitively through feed-extractor. Everything else in the table is a platform primitive with no bundle cost.
 
 ---
 
