@@ -9,4 +9,5 @@ export default [
   route("app/settings", "routes/app.settings.tsx"),
   route("api/health", "routes/api.health.ts"),
   route("api/auth/*", "routes/api.auth.$.ts"),
+  route("*", "routes/unmatched.tsx"),
 ] satisfies RouteConfig;

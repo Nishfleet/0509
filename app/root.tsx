@@ -1,13 +1,17 @@
 import {
-  isRouteErrorResponse,
   Links,
   Meta,
   Outlet,
   Scripts,
   ScrollRestoration,
+  useLocation,
+  useRouteError,
+  useRouteLoaderData,
 } from "react-router";
 
 import type { Route } from "./+types/root";
+import { ErrorPage, errorPageAction, errorPageContent, readSignedIn } from "./components/error-page";
+import { readSignedIn as readSignedInSession } from "./lib/read-signed-in.server";
 import "./app.css";
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -32,31 +36,22 @@ export default function App() {
   return <Outlet />;
 }
 
-export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
-  let message = "Oops!";
-  let details = "An unexpected error occurred.";
-  let stack: string | undefined;
+export async function loader({ request }: Route.LoaderArgs) {
+  return { signedIn: await readSignedInSession(request) };
+}
 
-  if (isRouteErrorResponse(error)) {
-    message = error.status === 404 ? "404" : "Error";
-    details =
-      error.status === 404
-        ? "The requested page could not be found."
-        : error.statusText || details;
-  } else if (import.meta.env.DEV && error && error instanceof Error) {
-    details = error.message;
-    stack = error.stack;
-  }
-
+export function ErrorBoundary(_props: Route.ErrorBoundaryProps) {
+  const error: unknown = useRouteError();
+  const data: unknown = useRouteLoaderData("root");
+  const { pathname } = useLocation();
+  const content = errorPageContent(error, pathname);
+  const action = errorPageAction(readSignedIn(data));
   return (
-    <main className="pt-16 p-4 container mx-auto">
-      <h1>{message}</h1>
-      <p>{details}</p>
-      {stack && (
-        <pre className="w-full p-4 overflow-x-auto">
-          <code>{stack}</code>
-        </pre>
-      )}
-    </main>
+    <ErrorPage
+      title={content.title}
+      detail={content.detail}
+      actionHref={action.href}
+      actionLabel={action.label}
+    />
   );
 }
