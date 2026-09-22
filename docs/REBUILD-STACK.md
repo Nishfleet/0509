@@ -341,7 +341,7 @@ No PostCSS config, no `tailwind.config.ts`, no CSS-in-JS, no `styled-components`
 
 ### 3.6 The per-brand switch
 
-`app/components/ui/switch.tsx` is the shadcn `base-nova` switch on `@base-ui/react` 1.8.0, the primitive §3.2 already records. Class names go through `cn` in `app/lib/utils.ts`, the same function `badge.tsx` and `avatar.tsx` import. That function is `twMerge(clsx(...))`.
+`app/components/ui/switch.tsx` is the shadcn `base-nova` switch on `@base-ui/react` 1.8.0, copied into the repo and then changed for DESIGN.md §6. The primitive is the one §3.2 already records. Class names go through `cn` in `app/lib/utils.ts`, the same function `badge.tsx` and `avatar.tsx` import. That function is `twMerge(clsx(...))`.
 
 DESIGN.md §11's class-merging row says `cn` 0.3.0. The base-nova registry item imports `{ cn } from "cn"`, the npm package. This repo already has one `cn`, in `app/lib/utils.ts`. The switch uses that one and does not add the npm package.
 

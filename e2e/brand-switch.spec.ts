@@ -63,10 +63,12 @@ test("tab reaches the per-brand switch and space toggles it", async ({ page }, t
     expect(await thumbIsRight(page, "you")).toBe(true);
     expect(await thumbIsRight(page, "off")).toBe(false);
 
-    const box = await kindred.boundingBox();
-    if (box === null) throw new Error("the switch hit target has no box");
-    expect(box.width).toBeGreaterThanOrEqual(44);
-    expect(box.height).toBeGreaterThanOrEqual(44);
+    for (const control of [kindred, casetta, you]) {
+      const box = await control.boundingBox();
+      if (box === null) throw new Error("the switch hit target has no box");
+      expect(box.width).toBeGreaterThanOrEqual(44);
+      expect(box.height).toBeGreaterThanOrEqual(44);
+    }
 
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
@@ -97,4 +99,10 @@ test("tab reaches the per-brand switch and space toggles it", async ({ page }, t
   await casetta.focus();
   await page.keyboard.press("Tab");
   await expect(you).not.toBeFocused();
+  const landed = await page.evaluate(() => {
+    const active = document.activeElement;
+    if (active === null || active === document.body || active === document.documentElement) return "body";
+    return active.getAttribute("aria-label");
+  });
+  expect(landed === "Kindred" || landed === "body").toBe(true);
 });
