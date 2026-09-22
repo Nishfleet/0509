@@ -22,10 +22,6 @@ interface TargetRow {
   target_value: string;
 }
 
-/**
- * The work item a producer puts on the queue. The weekly brief and the
- * incident email share this envelope, which is what lets one lane serve both.
- */
 export interface DeliveryMessage {
   digest_id: string;
 }
