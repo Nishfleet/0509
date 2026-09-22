@@ -56,7 +56,10 @@ export default defineConfig({
   webServer: process.env.PLAYWRIGHT_TEST_BASE_URL
     ? undefined
     : {
-        command: `npx wrangler dev --port ${localPort} --local`,
+        // An empty local D1 makes the session lookup throw a schema mismatch
+        // instead of redirecting, so preview would not exercise the same gate
+        // production does. Apply the migrations, then start the Worker.
+        command: `npx wrangler d1 migrations apply 0509 --local </dev/null && npx wrangler dev --port ${localPort} --local`,
         url: `http://127.0.0.1:${localPort}/api/health`,
         reuseExistingServer: false,
         timeout: 120_000,
