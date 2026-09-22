@@ -72,8 +72,13 @@
   // The public-read separation argument is dropped and recorded as dropped:
   // the card objects stay public by serving through the route, while the
   // bucket itself is not exposed as a domain.
+  //
   "r2_buckets": [
     { "binding": "CARD_ARTIFACTS", "bucket_name": "0509-snapshots" }
+  ],
+
+  "workflows": [
+    { "name": "TakedownWorkflow", "binding": "TAKEDOWN_WORKFLOW", "class_name": "TakedownWorkflow" }
   ],
 
   // Browser Rendering: brand pages bot-gate a plain workerd fetch, so every

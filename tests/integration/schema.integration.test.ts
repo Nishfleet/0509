@@ -7,13 +7,18 @@ import { describe, expect, it } from "vitest";
  * Pins counts and the two facts that took a correction to get right: the
  * better-auth tables are the CLI's, not hand-written, and `user` carries no
  * pre-rebuild columns.
+ *
+ * The count itself is the expand-only gate: `0001_rebuild.sql` ships 31 tables
+ * and `0004_takedown.sql` adds exactly one, so a migration that silently grew
+ * the schema fails here rather than in a deploy.
  */
 describe("0001_rebuild.sql", () => {
   it("creates the whole schema and nothing else", async () => {
     const tables = await env.DB.prepare(
       "SELECT count(*) AS n FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name != 'd1_migrations' AND name NOT LIKE '_cf_%'",
     ).first<{ n: number }>();
-    expect(tables?.n).toBe(31);
+    // 31 from 0001_rebuild.sql plus 0004_takedown.sql's takedown.
+    expect(tables?.n).toBe(32);
   });
 
   it("carries better-auth's six generated tables", async () => {

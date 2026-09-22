@@ -413,8 +413,10 @@ Session reuse (<https://developers.cloudflare.com/browser-rendering/workers-bind
 ### 4.4 R2 — blobs and lifecycle
 
 ```jsonc
-{ "r2_buckets": [ { "binding": "MY_BUCKET", "bucket_name": "<YOUR_BUCKET_NAME>" } ] }
+{ "r2_buckets": [ { "binding": "CARD_ARTIFACTS", "bucket_name": "0509-snapshots" } ] }
 ```
+
+The bucket is `0509-snapshots`, bound as `CARD_ARTIFACTS`. It is the bucket `docs/REBUILD-GUARDRAILS.md`'s retention table names and the one whose objects `snapshot.payload_r2_key` names, so the takedown fan-out and the workspace-delete Workflow both delete from the bucket they write to, through the one binding that already exists.
 
 Lifecycle rules (<https://developers.cloudflare.com/r2/buckets/object-lifecycles/>) expire/delete objects by age or date, transition Standard → Infrequent Access, and **abort incomplete multipart uploads**. Configured via dashboard, Wrangler, or the S3 API. Granularity is **days**; up to 1,000 rules per bucket; objects "typically removed within 24 hours" of expiry.
 
