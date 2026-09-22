@@ -153,6 +153,25 @@ describe("readUrl", () => {
     }
   });
 
+  it("bounds the plain fetch with AbortSignal.timeout(8000)", async () => {
+    const stub = stubFetch({
+      "https://brand.example/": () =>
+        new Response(SUBSTANTIAL_PAGE, { status: 200 }),
+    });
+    const browser = fakeBrowser({ ok: true, html: SUBSTANTIAL_PAGE });
+    const spy = vi.spyOn(AbortSignal, "timeout");
+    try {
+      install(browser);
+      await readUrl("https://brand.example/");
+      // The 8 s deadline from the packet, pinned: any other value would still
+      // be an AbortSignal, so `instanceof` alone cannot catch a drift.
+      expect(spy).toHaveBeenCalledWith(8000);
+    } finally {
+      stub.restore();
+      spy.mockRestore();
+    }
+  });
+
   it("escalates on a non-2xx and returns the page with its browser-time cost", async () => {
     const stub = stubFetch({
       "https://gated.example/": () => new Response("Forbidden", { status: 403 }),
@@ -281,8 +300,36 @@ describe("readUrl", () => {
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.reason).toBe("escalation-failed");
+      expect(result.detail).toContain("browser answered 429");
       expect(browser.calls).toHaveLength(1);
     } finally {
+      stub.restore();
+    }
+  });
+
+  it("logs the escalation even when the browser call throws", async () => {
+    const stub = stubFetch({
+      "https://gated.example/": () => new Response("Forbidden", { status: 403 }),
+    });
+    const browser = fakeBrowser({ ok: false, throwOnCall: true });
+    const lines: string[] = [];
+    const spy = vi.spyOn(console, "log").mockImplementation((line) => {
+      lines.push(String(line));
+    });
+    try {
+      install(browser);
+      const result = await readUrl("https://gated.example/");
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      // The throw is the case the cost model most needs to see: an escalation
+      // that ran out of browser capacity must still count.
+      expect(result.detail).toContain("browser call threw");
+      const escalation = lines
+        .map((line) => JSON.parse(line) as { event?: string; browserMsUsed?: number | null })
+        .find((row) => row.event === "browser-escalation");
+      expect(escalation?.browserMsUsed).toBeNull();
+    } finally {
+      spy.mockRestore();
       stub.restore();
     }
   });

@@ -105,7 +105,7 @@ function parseBrowserMs(res: Response): number | null {
   const header = res.headers.get("X-Browser-Ms-Used");
   if (header === null) return null;
   const value = Number(header);
-  return Number.isFinite(value) && value > 0 ? value : null;
+  return Number.isFinite(value) && value >= 0 ? value : null;
 }
 
 export async function readUrl(url: string): Promise<ReadUrlResult> {
@@ -136,21 +136,21 @@ export async function readUrl(url: string): Promise<ReadUrlResult> {
     fetchHtml = await res.text();
   } catch (err) {
     const escalation = await escalate(url, started);
-    return escalation ?? {
+    return escalation.result ?? {
       ok: false,
       reason: "escalation-failed",
-      detail: `fetch threw (${err instanceof Error ? err.message : String(err)}); browser escalation failed`,
+      detail: `fetch threw (${err instanceof Error ? err.message : String(err)}); ${escalation.cause}`,
     };
   }
 
   const refused = await refusalReason(fetchStatus, fetchHtml);
   if (refused) {
     const escalation = await escalate(url, started);
-    if (escalation !== null) return escalation;
+    if (escalation.result !== null) return escalation.result;
     return {
       ok: false,
       reason: "escalation-failed",
-      detail: `fetch ${String(fetchStatus)} was refused (${refused}); browser escalation failed`,
+      detail: `fetch ${String(fetchStatus)} was refused (${refused}); ${escalation.cause}`,
     };
   }
 
@@ -167,44 +167,57 @@ export async function readUrl(url: string): Promise<ReadUrlResult> {
 async function escalate(
   url: string,
   started: number,
-): Promise<ReadUrlSuccess | null> {
+): Promise<{ result: ReadUrlSuccess | null; cause: string }> {
   if (!env.BROWSER || typeof env.BROWSER.quickAction !== "function") {
-    return null;
+    return { result: null, cause: "browser binding is not configured" };
   }
 
   let res: Response;
   try {
     res = await env.BROWSER.quickAction("content", { url });
-  } catch {
-    return null;
+  } catch (err) {
+    // Log every escalation, including the one that threw: the throw is the
+    // case the cost model most needs to see, and the denominator must not
+    // lose it.
+    logEscalation(url, null);
+    return {
+      result: null,
+      cause: `browser call threw (${err instanceof Error ? err.message : String(err)})`,
+    };
   }
 
   const browserMsUsed = parseBrowserMs(res);
   logEscalation(url, browserMsUsed);
 
-  if (!res.ok) return null;
+  if (!res.ok) return { result: null, cause: `browser answered ${String(res.status)}` };
 
   let html: string;
   let status: number;
   try {
     const body: unknown = await res.json();
     const result = readField(body, "result");
-    if (typeof result !== "string") return null;
+    if (typeof result !== "string") return { result: null, cause: "browser body had no string result" };
     html = result;
     const meta = readField(body, "meta");
     const metaStatus = readField(meta, "status");
     status = typeof metaStatus === "number" ? metaStatus : res.status;
-  } catch {
-    return null;
+  } catch (err) {
+    return {
+      result: null,
+      cause: `browser body was unreadable (${err instanceof Error ? err.message : String(err)})`,
+    };
   }
 
   return {
-    ok: true,
-    html,
-    transport: "browser",
-    status,
-    ms: Date.now() - started,
-    browserMsUsed: browserMsUsed ?? undefined,
-    escalated: true,
+    result: {
+      ok: true,
+      html,
+      transport: "browser",
+      status,
+      ms: Date.now() - started,
+      browserMsUsed: browserMsUsed ?? undefined,
+      escalated: true,
+    },
+    cause: "",
   };
 }
