@@ -1,6 +1,7 @@
 import { createRequestHandler } from "react-router";
 
 import { pingLiveness } from "../app/lib/liveness-ping.server";
+import { handleBatch } from "./delivery/consumer";
 
 const requestHandler = createRequestHandler(
   () => import("virtual:react-router/server-build"),
@@ -13,9 +14,11 @@ export default {
   },
 
   scheduled(_controller, _env, ctx) {
-    // The dead-man ping: an external service alerts when the reports stop,
-    // which is the one failure a Worker cannot report about itself.
     const ping = pingLiveness();
     if (ping) ctx.waitUntil(ping);
+  },
+
+  async queue(batch: MessageBatch, env: Env) {
+    await handleBatch(env, batch);
   },
 } satisfies ExportedHandler<Env>;
