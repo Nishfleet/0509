@@ -2,12 +2,15 @@ import type { Route } from "./+types/app.home";
 
 import { useState } from "react";
 
+import { SourcePills } from "../components/mention-row";
 import { authClient } from "../lib/auth-client";
+import { loadSourceLines } from "../lib/data/mentions.server";
 import { requireSession } from "../lib/require-session.server";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
-  return { email: session.user.email };
+  const sources = await loadSourceLines(session.user.id);
+  return { email: session.user.email, sources };
 }
 
 export default function Page({ loaderData }: Route.ComponentProps) {
@@ -28,6 +31,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     <main>
       <h1>Home</h1>
       <p>Signed in as {loaderData.email}</p>
+      <SourcePills lines={loaderData.sources.lines} allDown={loaderData.sources.allDown} />
       <button type="button" onClick={() => void addPasskey()} disabled={state === "working"}>
         {state === "working" ? "Follow the prompt…" : "Add a passkey"}
       </button>

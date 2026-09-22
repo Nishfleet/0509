@@ -140,14 +140,14 @@ cron ──► queue mentions-fast ──┐
 4. **`snapshot`** gets exactly one row per watch per tick: `payload_r2_key`, `payload_hash`, `item_count`, `fetched_at`. This is the cost boundary from `docs/REBUILD-SCHEMA.md` and it is not negotiable. **If `payload_hash` matches the previous snapshot for this watch, the row is still written** (coverage and freshness must be answerable) but no judgment runs and no R2 body is re-stored — the key points at the existing object.
 5. **`MentionsJudgeWorkflow`** reads the snapshot, parses items, and for each item not already present by `(source_id, dedup_key)` — the table's own UNIQUE constraint:
    - **D5** `mention_is_about_brand` → below 0.1, logged to `jev_verdict` and dropped, no `signal` row ever written.
-   - **D8** `duplicate_signal` against the workspace's last 30 days → on collapse, no new row; the existing row's `engagement_json` gains the second sighting and `last_seen_at` advances, and its `canonical_url` is upgraded per §2 graft 1.
+   - **D8** `duplicate_signal` against the workspace's last 30 days → `p >= 0.9` and the middle band collapse in the UI and **keep both `signal` rows**. `p <= 0.1` keeps them separate. The survivor is the earlier `observed_at`; a tie breaks to the higher `source.reliability` (`official_api` > `rss` > `scraped_page` > `best_effort`). The duplicate gets `payload_json.collapsed_into` set to the survivor id and is not tombstoned. The survivor takes the sighting (`engagement_json`, `last_seen_at` advances) and the `canonical_url` upgrade from §2 graft 1, with `url_hash` rewritten to match. `docs/engines/mentions.md` used to say "no new row"; that wording is superseded by `docs/REBUILD-JEV.md` and the 2026-09-22 decision on #3965.
    - **D6** `mention_matters` → the row is written either way; `p` decides whether the feed shows it or hides it behind "show all".
 6. **`signal`** gets a row per surviving item, `kind = 'mention'` (**singular** — see the vocabulary trap below), `snapshot_id` pointing back for the proof trail. `mention` is the view over it. No mention table exists.
 7. **`jev_verdict`** takes every call, unique on `(question_id, input_hash)` — the contract's cache, enforced by the database.
 8. **`user_decision`** feeds the next context pack: a user marking a mention "not noteworthy" is read into `user_memory` for that subject's later D6 calls.
 9. **`alert`** rows are written for D6 `p >= 0.9` items per the delivery contract's Alerts column. This engine writes alerts; it never sends anything. Engine 7 owns sending.
 
-**The canary, per source, is a `snapshot` column not a special case.** `docs/REBUILD-MENTIONS.md` §7 earned this rule with Substack's 200-and-nothing. Each source's registry row carries a canary query with a known-nonzero expectation; the consumer runs it on the same tick and stores the result count alongside `item_count`. Canary zero ⇒ the **source** is marked degraded, not the brand. Without this, DuckDuckGo's 202-with-a-14 KB-body would have been recorded as "no mentions this week" forever, which is exactly the failure that was sitting in the MVP set this morning.
+**The canary, per source, is source state, not a brand result.** `docs/REBUILD-MENTIONS.md` §7 earned this rule with Substack's 200-and-nothing. Each source's registry row carries a canary query with a known-nonzero expectation; the consumer runs it once per tick and stores the count, the degraded reason, and the last-good time on `source.config_json` (main has no canary column). Canary zero ⇒ the **source** is marked degraded, not the brand. Without this, DuckDuckGo's 202-with-a-14 KB-body would have been recorded as "no mentions this week" forever, which is exactly the failure that was sitting in the MVP set this morning.
 
 ---
 
@@ -191,7 +191,7 @@ Per `docs/REBUILD-STACK.md` §4.10, the tick is **cron → enqueue → consumer*
 | Id | When it runs | Context-pack fields actually needed | Action |
 |---|---|---|---|
 | **D5** `mention_is_about_brand` | once per new item, before any `signal` row exists | `self`, `subject` (card: name, domain, category), `item` (title, body excerpt, source, URL, captured-at), `reliability` | `p >= 0.9` keep · `p <= 0.1` drop and log · between: keep, marked "possibly" |
-| **D8** `duplicate_signal` | after D5 keeps, against the subject's last 30 days | `subject`, `item`, `history_30d` (kind, one-liner, date), plus both normalized-URL and normalized-title hashes | `p >= 0.9` collapse in UI, keep both rows · between: collapse, "and 1 more" |
+| **D8** `duplicate_signal` | after D5 keeps, against the subject's last 30 days | `subject`, `item`, `history_30d` (kind, one-liner, date), plus both normalized-URL and normalized-title hashes | `p >= 0.9` collapse in the UI, keep both rows · `p <= 0.1` keep separate · between: collapse, show "and 1 more". Survivor is the earlier `observed_at` (reliability breaks a tie). Duplicate stores `payload_json.collapsed_into`. `canonical_url` upgrade lands on the survivor. |
 | **D6** `mention_matters` | after D8, on every kept item | everything D5 had, plus `competitor_set`, `history_30d`, `user_memory` (prior "not noteworthy" marks), `reliability` | `p >= 0.9` feed + D4 candidate · `p <= 0.1` behind "show all" · between: feed, normal |
 
 - **Order is fixed: D5 → D8 → D6.** D5 first because the homonym problem is the main source of noise and everything downstream is wasted on a GameShark row. D8 before D6 so we do not pay a D6 call for an item we are about to collapse.
@@ -284,7 +284,7 @@ Template per umbrella #3842. Each is sized for one 45-minute worker with no desi
 
 ### P5.2 — The two queues, the cron, and the snapshot write
 
-**GOAL.** Wire `cron "17 2 * * *"` → enqueue one message per eligible watch → two consumers → one `snapshot` row per watch per tick with the body in R2. Eligibility is `watch JOIN entity JOIN source WHERE entity.state = 'on' AND source.kind = 'mentions' AND source.is_enabled = 1`. Rate-classed routing: Reddit and any `scraped_page` source to `mentions-paced`, everything else to `mentions-fast`. An unchanged `payload_hash` still writes the snapshot row but reuses the existing R2 key and sets a `judged = 0` skip flag.
+**GOAL.** Wire `cron "17 2 * * *"` → enqueue one message per eligible watch → two consumers → one `snapshot` row per watch per tick with the body in R2. Eligibility is `watch JOIN entity JOIN source WHERE entity.state = 'on' AND source.kind = 'mentions' AND source.is_enabled = 1`. Rate-classed routing: Reddit and any `scraped_page` source to `mentions-paced`, everything else to `mentions-fast`. An unchanged `payload_hash` still writes the snapshot row and reuses the existing R2 key, and the judge workflow is not started. `snapshot` has no `judged` column on main; the skip is "do not start the workflow". A row that is still `unreviewed` starts the workflow anyway so the next tick can finish it. The mentions cron is added beside the existing `*/5 * * * *` dead-man ping. It does not replace it.
 
 **STOCK FEATURE OR LIBRARY.** Cloudflare Cron Triggers, Queues (`max_concurrency` **10** fast / **1** paced, `max_batch_size` 10/1, `max_retries` 5/3, `dead_letter_queue: "mentions-dlq"`), R2 binding, D1 `batch()`. `wrangler` **4.135.0**.
 
@@ -320,11 +320,11 @@ Template per umbrella #3842. Each is sized for one 45-minute worker with no desi
 
 ### P5.4 — Per-source canaries and the degraded state
 
-**GOAL.** Every source poll also runs its registry canary query and stores the canary count on the `snapshot` row beside `item_count`. A canary of zero marks the **source** degraded with a reason and a last-good timestamp, surfaced as a greyed source pill in the Alerts feed and a line on Home. A degraded source never renders as "0 mentions" or contributes to a "quiet week".
+**GOAL.** Every enabled source runs its registry canary once per tick (not once per brand) and stores the count, the degraded reason, and the last-good timestamp on `source.config_json`. A canary of zero marks the **source** degraded, surfaced as a greyed source pill in the Alerts feed and a line on Home. A degraded source never renders as "0 mentions" or contributes to a "quiet week". A disabled source is not a degraded pill.
 
 **STOCK FEATURE OR LIBRARY.** The existing `source` registry columns and the `snapshot` row — no new table. Workers Analytics Engine `writeDataPoint` for the per-source time series (`blob1` = plugin_key, `double1` = item_count, `double2` = canary_count; index1 is the sampling key, low cardinality, never the brand).
 
-**FILES IN SCOPE.** `workers/mentions/canary.ts`, `workers/mentions/consumer.ts` (call site only), `app/routes/alerts.tsx` and `app/routes/home.tsx` (the degraded pill and the freshness line), `migrations/` only for the canary columns on `source`.
+**FILES IN SCOPE.** `workers/mentions/canary.ts`, `workers/mentions/consumer.ts` (call site only), `app/routes/app.alerts.tsx` and `app/routes/app.home.tsx` (the degraded pill and the freshness line). Canary count, `degradedSince`, and `lastGoodAt` live in `source.config_json`. Main has no canary columns on `snapshot` or `source`, and this packet does not add any.
 
 **FORBIDDEN.** Treating a 200 as success. Treating a zero result set as data. Attributing a source failure to a brand. `SELECT COUNT(*)` against Analytics Engine — the correct aggregate is `SUM(_sample_interval)`. A high-cardinality value in `index1`.
 
@@ -342,7 +342,7 @@ Template per umbrella #3842. Each is sized for one 45-minute worker with no desi
 
 **STOCK FEATURE OR LIBRARY.** The `mention` view over `signal` (already in `0001_init.sql`). `date-fns` **4.4.0** + `@date-fns/tz` **1.5.0** for published/observed arithmetic, `Intl.DateTimeFormat` for display. **Never `Temporal`** — workerd#6907 returns `epochMilliseconds: 0`. React Router 8 loaders; shadcn/ui components from the CLI.
 
-**FILES IN SCOPE.** `workers/mentions/map.ts`, `app/routes/alerts.tsx`, `app/components/mention-row.tsx`, `tests/mentions/map.test.ts`.
+**FILES IN SCOPE.** `workers/mentions/map.ts`, `app/routes/app.alerts.tsx`, `app/components/mention-row.tsx`, `tests/mentions/map.test.ts`. The feed reads `signal` and filters `json_extract(payload_json, '$.collapsed_into') IS NULL`. The `mention` view stays as shipped in `migrations/0001_rebuild.sql` and does not gain `payload_json`.
 
 **FORBIDDEN.** A `mention` table. Stamping `now()` into `published_at`. Storing Medium's `link` as canonical. Ingesting a `t5_` Reddit row. Showing a D6-below-0.1 item in the default feed. Any `Temporal` use, including a `typeof Temporal === 'undefined'` feature-detect (workerd exposes a broken global).
 
@@ -356,7 +356,7 @@ Template per umbrella #3842. Each is sized for one 45-minute worker with no desi
 
 ### P5.6 — X and the disabled-source contract
 
-**GOAL.** Add `x.*` as a `source` row with `is_enabled = 0` and a recorded reason, and prove that a disabled source is invisible everywhere — not polled, not counted, not rendered, not a degraded pill — so that enabling it later is one `UPDATE` and nothing else. Per Fable's note, the cheapest known route is Apify at roughly $0.40 per 1,000 tweets; the row carries that figure and the `approved_cost` field stays null until Nish says yes.
+**GOAL.** Add `x.apify` as a `source` row with `is_enabled = 0` and a recorded reason, and prove that a disabled source is invisible everywhere — not polled, not counted, not rendered, not a degraded pill — so that enabling it later is one `UPDATE` and nothing else. Per Fable's note, the cheapest known route is Apify at roughly $0.40 per 1,000 tweets; that figure is `quotedCost` inside `config_json`, and `approved_cost` stays null until Nish says yes. `source` has no `approved_cost` column on main.
 
 **STOCK FEATURE OR LIBRARY.** The `source` registry's `is_enabled` column and the eligibility join from P5.2. No new mechanism.
 
