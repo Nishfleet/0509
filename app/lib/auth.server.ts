@@ -2,12 +2,27 @@ import { betterAuth } from "better-auth";
 import { magicLink } from "better-auth/plugins";
 import { apiKey } from "@better-auth/api-key";
 import { passkey } from "@better-auth/passkey";
+import { env } from "cloudflare:workers";
 
 interface AuthEnv {
   DB: D1Database;
   EMAIL: { send(message: unknown): Promise<unknown> };
   BETTER_AUTH_SECRET?: string;
   BETTER_AUTH_URL?: string;
+}
+
+const sessionByRequest = new WeakMap<Request, ReturnType<typeof loadSession>>();
+
+function loadSession(request: Request) {
+  return createAuth(env).api.getSession({ headers: request.headers });
+}
+
+export function readSession(request: Request) {
+  const cached = sessionByRequest.get(request);
+  if (cached) return cached;
+  const pending = loadSession(request);
+  sessionByRequest.set(request, pending);
+  return pending;
 }
 
 export function createAuth(env: AuthEnv) {

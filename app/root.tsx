@@ -1,17 +1,15 @@
 import {
+  isRouteErrorResponse,
   Links,
   Meta,
   Outlet,
   Scripts,
   ScrollRestoration,
-  useLocation,
-  useRouteError,
-  useRouteLoaderData,
 } from "react-router";
 
 import type { Route } from "./+types/root";
-import { ErrorPage, errorPageAction, errorPageContent, readSignedIn } from "./components/error-page";
-import { readSignedIn as readSignedInSession } from "./lib/read-signed-in.server";
+import { ErrorPage } from "./components/error-page";
+import { readSession } from "./lib/auth.server";
 import "./app.css";
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -37,21 +35,23 @@ export default function App() {
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
-  return { signedIn: await readSignedInSession(request) };
+  const session = await readSession(request);
+  return {
+    signedIn: session !== null,
+    pathname: new URL(request.url).pathname,
+  };
 }
 
-export function ErrorBoundary(_props: Route.ErrorBoundaryProps) {
-  const error: unknown = useRouteError();
-  const data: unknown = useRouteLoaderData("root");
-  const { pathname } = useLocation();
-  const content = errorPageContent(error, pathname);
-  const action = errorPageAction(readSignedIn(data));
+export function ErrorBoundary({ error, loaderData }: Route.ErrorBoundaryProps) {
+  const notFound = isRouteErrorResponse(error) && error.status === 404;
+  const signedIn = loaderData?.signedIn === true;
+  const where = loaderData?.pathname ?? "this address";
   return (
     <ErrorPage
-      title={content.title}
-      detail={content.detail}
-      actionHref={action.href}
-      actionLabel={action.label}
+      title={notFound ? "This page is not here" : "The product hit a problem"}
+      detail={notFound ? `Nothing in the product lives at ${where}.` : "We have been told."}
+      actionHref={signedIn ? "/app" : "/"}
+      actionLabel={signedIn ? "Back to home" : "Back to the landing"}
     />
   );
 }
