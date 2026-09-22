@@ -11,10 +11,20 @@ Umbrella #3842. Author: Fable. Checked by the Opus deputy. Nish's decisions stan
 ## What we collect and keep
 
 - Public pages, public posts, public ad libraries, public feeds. Screenshots of public pages. No DMs, no private groups, no purchased personal data.
-- Raw snapshots and screenshots: kept 1 year, then only the before-and-after marks and summaries (the R2 lifecycle rule does this, nothing hand-rolled).
+- Stored bodies on the `0509-snapshots` bucket follow this table. The platform deletes an object when its rule expires. Age expiry is not a cron and not a Worker. Expiry is day-granular, and Cloudflare typically removes an object within 24 hours of the day it expires, so the promise is the period in the table.
+
+| Prefix | What it holds | Kept |
+|---|---|---|
+| `mentions/` | Feed bodies | 30 days |
+| `snapshot/` | Raw page snapshots | one year |
+| `shot/` | Before-and-after screenshots | one year |
+| `card/` | Standing-card artifacts | 90 days |
+| all prefixes | Incomplete multipart uploads | aborted after 7 days |
+
+- After a snapshot or screenshot passes one year, only the before-and-after marks and summaries remain.
 - Mentions: the headline, URL, source, date, and the excerpt needed to show the mark. Never the full text of third-party posts.
 - Jev verdicts and context packs: workspace-owned, deleted with the workspace.
-- Own-site data (the user's own pages): same rules, plus incident records kept 1 year.
+- Own-site data (the user's own pages): same rules, plus incident records kept one year.
 
 ## Deletion
 
