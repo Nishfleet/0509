@@ -1,10 +1,14 @@
 // Test config for the J1 mail-sink Worker (0509#3927): real workerd, real
-// local KV. E2E_INBOX_TOKEN is a var here so the token gate has something to
-// check — production gets it as a secret on the deployed Worker.
+// local SQLite Durable Object. E2E_INBOX_TOKEN is a var here so the token
+// gate has something to check. Production gets it as a secret on the
+// deployed Worker.
 {
   "name": "0509-e2e-inbox-test",
   "compatibility_date": "2026-09-16",
   "main": "../../workers/e2e-inbox.ts",
-  "kv_namespaces": [{ "binding": "INBOX" }],
+  "durable_objects": {
+    "bindings": [{ "name": "INBOX", "class_name": "InboxMailbox" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["InboxMailbox"] }],
   "vars": { "E2E_INBOX_TOKEN": "integration-token" }
 }

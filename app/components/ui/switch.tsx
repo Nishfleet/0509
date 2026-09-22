@@ -1,6 +1,6 @@
 import type { ComponentProps } from "react";
 import { Switch as SwitchPrimitive } from "@base-ui/react/switch";
-import { cn } from "cn";
+import { cn } from "../../lib/utils";
 
 const HIT =
   "inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center gap-[9px] border-0 bg-transparent p-0 text-inherit outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink data-disabled:cursor-not-allowed";

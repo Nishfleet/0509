@@ -299,7 +299,7 @@ npx shadcn@latest init
 npx shadcn@latest add button
 ```
 
-That is the whole installation. `init` writes `components.json`, rewrites `app/app.css` with the token blocks, and adds `clsx`/`tailwind-merge`/`class-variance-authority`/`lucide-react` plus `app/lib/utils.ts`.
+That is the whole installation. `init` writes `components.json`, rewrites `app/app.css` with the token blocks, and adds `clsx`/`tailwind-merge`/`class-variance-authority`/`lucide-react` plus `app/lib/utils.ts`. `npx shadcn@latest add badge avatar` also installs `@base-ui/react` 1.8.0, the primitive those copied files import (<https://base-ui.com/react/components/avatar>, DESIGN.md §11).
 
 ### 3.3 Tokens, theming, dark mode
 
@@ -339,9 +339,9 @@ No PostCSS config, no `tailwind.config.ts`, no CSS-in-JS, no `styled-components`
 
 ### 3.6 The per-brand switch
 
-The first component copied in is the switch. DESIGN.md §11 names it as shadcn/ui on Base UI. The same table's class-merging row is verbatim `Class merging | cn 0.3.0`. The registry item that matches that contract is the `base-nova` switch (<https://ui.shadcn.com/r/styles/base-nova/switch.json>, read 2026-09-22). Its dependency list is `cn`, and the copied source imports `{ cn } from "cn"`. It does not import `@/lib/utils`. Dependencies: `@base-ui/react` 1.8.0 (<https://base-ui.com/react/components/switch>) and `cn` 0.3.0 (<https://www.npmjs.com/package/cn>).
+`app/components/ui/switch.tsx` is the shadcn `base-nova` switch on `@base-ui/react` 1.8.0, the primitive §3.2 already records. Class names go through `cn` in `app/lib/utils.ts`, the same function `badge.tsx` and `avatar.tsx` import. That function is `twMerge(clsx(...))`.
 
-`cn` 0.3.0 is a compiled stand-in for `clsx` plus `tailwind-merge`. It ships no runtime dependencies of its own. §3.2 describes what `shadcn init` wrote in the 2026-09-21 React Router recipe (`clsx`, `tailwind-merge`, `class-variance-authority`, `lucide-react`). This switch does not run `init`, because `init` rewrites `app/app.css`, and it does not add those four packages. The copied file is `app/components/ui/switch.tsx`.
+DESIGN.md §11's class-merging row says `cn` 0.3.0. The base-nova registry item imports `{ cn } from "cn"`, the npm package. This repo already has one `cn`, in `app/lib/utils.ts`. The switch uses that one and does not add the npm package.
 
 The `new-york` registry item still imports `@radix-ui/react-switch`. That vendor is not the one DESIGN.md §11 names, so it is not installed.
 
@@ -1017,6 +1017,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | Auth schema generation | `npx auth@1.7.5 generate` against an empty local SQLite (§2.4) | `auth` 1.7.5, pinned |
 | Styling | `tailwindcss` + `@tailwindcss/vite` | 4.3.3 (scaffold pins ^4.2.2) |
 | Components | `shadcn` CLI → copied source | 4.21.0 |
+| Badge and avatar primitives | `@base-ui/react` | 1.8.0 |
 | Durable scheduling + retries | Cloudflare Workflows (`step.sleep`, `step.do`) | platform |
 | Fan-out + concurrency cap | Cloudflare Queues (`max_concurrency`) | platform |
 | Screenshots + rendered DOM | Browser Run (Quick Actions; sessions via `@cloudflare/puppeteer`) | platform |
@@ -1047,11 +1048,8 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | OpenAPI document | `zod-openapi` (samchungy) | 6.0.2 |
 | Agent-readable docs | `/llms.txt` + `Accept: text/markdown` + `rel="alternate"` | spec v2 (2026-08-10) |
 | Per-brand switch | `@base-ui/react` switch, copied from the shadcn `base-nova` registry item | 1.8.0 |
-| Class merging | `cn` | 0.3.0 |
 
 **Runtime dependencies this stack adds beyond the scaffold: ten.** `better-auth`, `@better-auth/passkey`, `@better-auth/api-key`, `diff`, `@extractus/feed-extractor`, `uplot` + `uplot-react`, `date-fns` + `@date-fns/tz`, and for the API surface `agents`, `@modelcontextprotocol/server` (which drags `@modelcontextprotocol/client` and `@modelcontextprotocol/sdk` as exact-pinned peers), `@cloudflare/workers-oauth-provider` and `zod-openapi`. `zod` arrives transitively through better-auth; `fast-xml-parser` arrives transitively through feed-extractor. Everything else in the table is a platform primitive with no bundle cost.
-
-The per-brand switch adds two more runtime dependencies on top of that list: `@base-ui/react` and `cn`. §3.6 records both, with the vendor pages.
 
 ---
 

@@ -4,10 +4,11 @@ import { apiKey } from "@better-auth/api-key";
 import { passkey } from "@better-auth/passkey";
 
 import { ensureWorkspaceForSignIn } from "./workspace.server";
+import { sendOrThrow } from "../../workers/delivery/send";
 
 interface AuthEnv {
   DB: D1Database;
-  EMAIL: { send(message: unknown): Promise<unknown> };
+  EMAIL: SendEmail;
   BETTER_AUTH_SECRET?: string;
   BETTER_AUTH_URL?: string;
 }
@@ -45,7 +46,7 @@ export function createAuth(env: AuthEnv) {
     plugins: [
       magicLink({
         sendMagicLink: async ({ email, url }) => {
-          await env.EMAIL.send({
+          await sendOrThrow(env.EMAIL, {
             to: email,
             from: { email: "hello@0509.io", name: "Five to Nine" },
             subject: "Your sign-in link",
