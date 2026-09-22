@@ -15,8 +15,6 @@ const CLOUDFLARE_WORKERS_IMPORT = {
     "cloudflare:workers is a Workers runtime module and does not exist in the browser. Bindings are read in *.server modules and passed down. Source: commit 7727bf787 / #3918.",
 };
 
-const SERVER_ELEMENT_TYPES = ["server-leaf", "data-writer", "db", "auth"];
-
 const PAVED_PATH_PATTERNS = [
   {
     group: ["better-auth/*", "@better-auth/passkey/*", "@better-auth/api-key/*"],
@@ -222,28 +220,24 @@ export default tseslint.config(
           extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
         }),
       ],
-      "boundaries/legacy-warnings": false,
       "boundaries/elements": [
-        // mode "file" is the 7.2.0 match for a single file. db, auth, and
-        // each server module are files, not folders. A later major drops
-        // this option. legacy-warnings is off so that notice is not printed
-        // on every lint run.
-        { type: "db", pattern: "app/lib/db.server.ts", mode: "file" },
-        { type: "auth", pattern: "app/lib/auth.server.ts", mode: "file" },
-        { type: "data-writer", pattern: "app/lib/data/**/*.server.ts", mode: "file" },
-        { type: "server-leaf", pattern: "app/lib/**/*.server.ts", mode: "file" },
-        { type: "component", pattern: "app/components/**/*.{ts,tsx}", mode: "file" },
-        { type: "route", pattern: "app/root.tsx", mode: "file" },
+        { type: "data-writer", pattern: "app/lib/data", partialMatch: false },
+        { type: "component", pattern: "app/components", partialMatch: false },
         { type: "route", pattern: "app/routes", partialMatch: false },
         { type: "worker", pattern: "workers", partialMatch: false },
       ],
       "boundaries/files": [
+        { category: "db", pattern: "app/lib/db.server.ts" },
+        { category: "auth", pattern: "app/lib/auth.server.ts" },
+        { category: "data-writer", pattern: "app/lib/data/**/*.server.ts" },
+        { category: "server-leaf", pattern: "app/lib/**/*.server.ts" },
         { category: "server-module", pattern: "app/**/*.server.ts" },
         {
           category: "route-module",
           pattern: ["app/routes/**/*.ts", "app/routes/**/*.tsx", "app/root.tsx"],
         },
         { category: "entry", pattern: ["app/entry.*.ts", "app/entry.*.tsx"] },
+        { category: "worker", pattern: "workers/**/*.ts" },
         { category: "client", pattern: ["app/**/*.ts", "app/**/*.tsx"] },
       ],
     },
@@ -262,7 +256,7 @@ export default tseslint.config(
                   },
                 },
               },
-              disallow: { to: { element: { types: SERVER_ELEMENT_TYPES } } },
+              disallow: { to: { file: { categories: "server-module" } } },
               message: SERVER_IMPORT_RECEIPT,
             },
             {
@@ -275,34 +269,28 @@ export default tseslint.config(
               },
             },
             {
+              from: { file: { categories: "route-module" } },
+              allow: { to: { file: { categories: "server-module" } } },
+            },
+            {
               from: { file: { categories: "entry" } },
-              allow: { to: { element: { types: ["component", ...SERVER_ELEMENT_TYPES] } } },
+              allow: { to: { file: { categories: "server-module" } } },
             },
             {
-              from: { element: { type: "route" } },
-              allow: {
-                to: { element: { types: ["component", ...SERVER_ELEMENT_TYPES] } },
+              from: {
+                file: {
+                  categories: { anyOf: ["server-leaf", "data-writer", "db", "auth"] },
+                },
               },
+              allow: { to: { file: { categories: "server-module" } } },
             },
             {
-              from: { element: { type: "server-leaf" } },
-              allow: { to: { element: { types: SERVER_ELEMENT_TYPES } } },
-            },
-            {
-              from: { element: { type: "data-writer" } },
-              allow: {
-                to: { element: { types: ["data-writer", "db", "server-leaf"] } },
-              },
-            },
-            {
-              from: { element: { type: "auth" } },
-              allow: {
-                to: { element: { types: ["server-leaf", "data-writer", "db", "worker"] } },
-              },
+              from: { file: { categories: "auth" } },
+              allow: { to: { element: { type: "worker" } } },
             },
             {
               from: { element: { type: "worker" } },
-              allow: { to: { element: { types: SERVER_ELEMENT_TYPES } } },
+              allow: { to: { file: { categories: "server-module" } } },
             },
           ],
         },

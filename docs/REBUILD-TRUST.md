@@ -288,17 +288,17 @@ flat config replaces a rule instead of merging it, and the paved-path
 `no-restricted-imports` block comes later, so a component that imported
 `app/lib/data/workspace.server.ts` was green.
 
-The config lists `db`, `auth`, and `data-writer` before the broader
-`server-leaf` pattern, so the first match wins. Those three, each other
-`app/lib/**/*.server.ts` file, and each component are files, so those
-descriptors use `mode: "file"`. 7.2.0 still matches that mode. A later
-major of the plugin drops it. `boundaries/legacy-warnings` is off so that
-notice is not printed on every lint run.
+`data-writer`, `component`, `route`, and `worker` are folders, so they are
+element types. `db` and `auth` are single files, so they are file categories.
+7.2.0 matches an element pattern as a folder. A file category is how it
+classifies one file, and one file can carry more than one. `server-leaf` is
+the category on every `app/lib/**/*.server.ts`. `db`, `auth`, and
+`data-writer` are extra categories on the files the table names.
 
 | Type | Files |
 |---|---|
 | `route` | `app/routes/**`, `app/root.tsx` |
-| `server-leaf` | `app/lib/**/*.server.ts`, except the three rows below |
+| `server-leaf` | `app/lib/**/*.server.ts`, including the three rows below |
 | `data-writer` | `app/lib/data/**/*.server.ts` |
 | `db` | `app/lib/db.server.ts` |
 | `auth` | `app/lib/auth.server.ts` |
