@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { BrandSwitch } from "../components/brand-switch";
 
@@ -9,13 +9,6 @@ export function meta() {
 export default function Page() {
   const [kindred, setKindred] = useState<"on" | "off">("on");
   const [casetta, setCasetta] = useState<"on" | "off">("off");
-
-  useEffect(() => {
-    const theme = new URLSearchParams(window.location.search).get("theme");
-    if (theme === "light" || theme === "dark") {
-      document.documentElement.dataset.theme = theme;
-    }
-  }, []);
 
   return (
     <main>

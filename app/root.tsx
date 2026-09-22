@@ -5,14 +5,21 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
+  useRouteLoaderData,
 } from "react-router";
 
 import type { Route } from "./+types/root";
 import "./app.css";
 
+export function loader({ request }: Route.LoaderArgs) {
+  const theme = new URL(request.url).searchParams.get("theme");
+  return { theme: theme === "light" || theme === "dark" ? theme : null };
+}
+
 export function Layout({ children }: { children: React.ReactNode }) {
+  const data = useRouteLoaderData<typeof loader>("root");
   return (
-    <html lang="en">
+    <html lang="en" data-theme={data?.theme ?? undefined}>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
