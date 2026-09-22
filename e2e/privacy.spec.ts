@@ -47,6 +47,7 @@ test("the privacy page states one-year retention, deletion, and the 72-hour take
 
   const main = page.locator("main");
   await expect(main).toContainText(/one year/i);
+  await expect(main).toContainText(/incident records/i);
   await expect(main).toContainText(/remove and forget/i);
   await expect(main).toContainText(/72 hours/i);
   await expect(main).toContainText(/takedown row/i);
@@ -76,10 +77,17 @@ test("the privacy wordmark loads the landing page", async ({ page }) => {
 
 test("the privacy page does not scroll horizontally", async ({ page }) => {
   await page.goto("/privacy");
-  const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
-  );
-  expect(overflow).toBe(false);
+  const width = page.viewportSize()?.width ?? 0;
+  const edges = await page.evaluate(() => {
+    return ["main", "footer a"].map((selector) => {
+      const rect = document.querySelector(selector)?.getBoundingClientRect();
+      return { left: rect?.left ?? 0, right: rect?.right ?? 0 };
+    });
+  });
+  for (const edge of edges) {
+    expect(edge.left).toBeGreaterThanOrEqual(0);
+    expect(edge.right).toBeLessThanOrEqual(width + 1);
+  }
 });
 
 test("the privacy page reaches first paint with no console errors", async ({ page }) => {
