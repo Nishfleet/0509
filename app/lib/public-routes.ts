@@ -28,7 +28,18 @@ export const PUBLIC_SURFACES: readonly PublicSurface[] = [
   },
 ];
 
-export const DISALLOWED_PREFIXES: readonly string[] = ["/app", "/api", "/mcp"];
+export interface ProtectedSurface {
+  readonly path: string;
+  readonly tree: boolean;
+  readonly note?: string;
+}
+
+export const PROTECTED_SURFACES: readonly ProtectedSurface[] = [
+  { path: "/app", tree: true, note: "signed-in app, behind requireSession" },
+  { path: "/onboarding", tree: false, note: "signed-in first-run, behind requireSession" },
+  { path: "/api", tree: true, note: "REST surface (docs/engines/api-mcp.md)" },
+  { path: "/mcp", tree: true, note: "agent surface (docs/engines/api-mcp.md)" },
+];
 
 export const SITE_ORIGIN = "https://0509.io";
 
@@ -39,13 +50,14 @@ function normalizePath(path: string): string {
 
 export function isProtectedPath(path: string): boolean {
   const normalized = normalizePath(path);
-  return DISALLOWED_PREFIXES.some(
-    (prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`),
-  );
+  return PROTECTED_SURFACES.some((surface) => {
+    if (normalized === surface.path) return true;
+    return surface.tree && normalized.startsWith(`${surface.path}/`);
+  });
 }
 
-function robotsDisallowLines(): string[] {
-  return DISALLOWED_PREFIXES.map((prefix) => `Disallow: ${prefix}`);
+export function robotsDisallowRules(): string[] {
+  return PROTECTED_SURFACES.flatMap((surface) => [surface.path, `${surface.path}/`]);
 }
 
 export function routePathToUrl(routePath: string): string {
@@ -110,7 +122,7 @@ export function renderRobots(): string {
     "# Landing / is noindex via page-level <meta> until the rebuild gate lifts (0509#3989 build step 3).",
     "User-agent: *",
     "Allow: /",
-    ...robotsDisallowLines(),
+    ...robotsDisallowRules().map((rule) => `Disallow: ${rule}`),
     "",
     `Sitemap: ${SITE_ORIGIN}/sitemap.xml`,
     "",

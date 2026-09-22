@@ -1,4 +1,4 @@
-import { readdir, stat } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -6,12 +6,13 @@ import { describe, expect, it } from "vitest";
 
 import routes from "../app/routes";
 import {
-  DISALLOWED_PREFIXES,
+  PROTECTED_SURFACES,
   PUBLIC_SURFACES,
   isProtectedPath,
   renderRobots,
   renderSitemap,
   routePathToUrl,
+  robotsDisallowRules,
   sitemapEntries,
   SITE_ORIGIN,
   type PublicSurface,
@@ -43,6 +44,18 @@ async function publicDirFiles(): Promise<string[]> {
   return files;
 }
 
+async function sessionGatedRouteFiles(): Promise<string[]> {
+  const routesDir = path.resolve(path.dirname(PUBLIC_DIR), "app", "routes");
+  const entries = await readdir(routesDir, { withFileTypes: true });
+  const gated: string[] = [];
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const source = await readFile(path.join(routesDir, entry.name), "utf8");
+    if (source.includes("requireSession")) gated.push(entry.name);
+  }
+  return gated;
+}
+
 describe("route classification against app/routes.ts (0509#3989)", () => {
   const registered = routes.map((route) => routePathToUrl(route.path ?? ""));
   const manifestPaths = new Set(PUBLIC_SURFACES.map((surface) => surface.path));
@@ -72,18 +85,24 @@ describe("route classification against app/routes.ts (0509#3989)", () => {
   });
 });
 
-describe("isProtectedPath is segment-scoped (0509#3989)", () => {
-  it("protects the prefix itself and its children", () => {
-    for (const prefix of DISALLOWED_PREFIXES) {
-      expect(isProtectedPath(prefix), prefix).toBe(true);
-      expect(isProtectedPath(`${prefix}/child`), prefix).toBe(true);
-      expect(isProtectedPath(`/${prefix.replace(/^\//, "")}/deeper/page`)).toBe(true);
+describe("isProtectedPath matches the protected surface shape (0509#3989)", () => {
+  it("protects every registered protected surface itself", () => {
+    for (const surface of PROTECTED_SURFACES) {
+      expect(isProtectedPath(surface.path), surface.path).toBe(true);
     }
   });
 
-  it("does not protect a path that merely starts with the same letters", () => {
-    for (const prefix of DISALLOWED_PREFIXES) {
-      const sibling = `${prefix}sibling`;
+  it("protects the children of a tree surface", () => {
+    for (const surface of PROTECTED_SURFACES) {
+      if (!surface.tree) continue;
+      expect(isProtectedPath(`${surface.path}/child`), surface.path).toBe(true);
+      expect(isProtectedPath(`${surface.path}/deeper/page`), surface.path).toBe(true);
+    }
+  });
+
+  it("does not protect a sibling that merely shares a leading substring", () => {
+    for (const surface of PROTECTED_SURFACES) {
+      const sibling = `${surface.path}sibling`;
       expect(isProtectedPath(sibling), sibling).toBe(false);
     }
     expect(isProtectedPath("/apple-touch-icon.png")).toBe(false);
@@ -100,14 +119,15 @@ describe("isProtectedPath is segment-scoped (0509#3989)", () => {
 describe("robots Disallow rules match what isProtectedPath protects (0509#3989)", () => {
   const rules = robotsDisallowRules(renderRobots());
 
-  it("disallows exactly the registered protected routes", () => {
+  it("disallows exactly the registered protected surfaces", () => {
     expect(rules.length).toBeGreaterThan(0);
     for (const rule of rules) {
       expect(isProtectedPath(rule), `${rule} must be protected`).toBe(true);
     }
-    for (const prefix of DISALLOWED_PREFIXES) {
-      expect(rules, `${prefix} must have a rule`).toContain(prefix);
+    for (const surface of PROTECTED_SURFACES) {
+      expect(rules, `${surface.path} must have a rule`).toContain(surface.path);
     }
+    expect(new Set(rules).size).toBe(rules.length);
   });
 
   it("blocks no registered public route", () => {
@@ -199,8 +219,8 @@ describe("robots.txt (0509#3989)", () => {
     expect(response.headers.get("Content-Type")).toContain("text/plain");
     expect(body).toContain("User-agent: *");
     expect(body).toContain("Allow: /");
-    for (const prefix of DISALLOWED_PREFIXES) {
-      expect(body).toContain(`Disallow: ${prefix}`);
+    for (const prefix of PROTECTED_SURFACES) {
+      expect(body).toContain(`Disallow: ${prefix.path}`);
     }
     expect(body).toContain(`Sitemap: ${SITE_ORIGIN}/sitemap.xml`);
   });
@@ -243,6 +263,31 @@ describe("manifest, routes.ts and public/ agree (0509#3989)", () => {
         false,
       );
       expect(served.has(`${SITE_ORIGIN}${row.path}`)).toBe(false);
+    }
+  });
+
+  it("protects every route that requireSession gates, wherever its URL lives", async () => {
+    const gated = await sessionGatedRouteFiles();
+    expect(gated.length).toBeGreaterThan(0);
+
+    const registered = new Set(routes.map((route) => routePathToUrl(route.path ?? "")));
+    const moduleFileFor = (url: string): string => {
+      const base = url === "/" ? "home" : url.replace(/^\//, "").replace(/\//g, ".");
+      return `${base}.`;
+    };
+
+    const gatedByFile = new Map<string, string>();
+    for (const url of registered) {
+      for (const file of gated.filter((candidate) => candidate.startsWith(moduleFileFor(url)))) {
+        gatedByFile.set(file, url);
+      }
+    }
+
+    for (const file of gated) {
+      const url = gatedByFile.get(file);
+      expect(url, `${file} gates a session but matches no registered route`).toBeTruthy();
+      if (url === undefined) continue;
+      expect(isProtectedPath(url), `${url} (${file}) must be protected`).toBe(true);
     }
   });
 });
