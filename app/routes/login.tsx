@@ -1,10 +1,11 @@
 import type { Route } from "./+types/login";
 import { env } from "cloudflare:workers";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Form, useActionData, useNavigate, useNavigation } from "react-router";
 
 import { authClient } from "../lib/auth-client";
 import { createAuth } from "../lib/auth.server";
+import { timezoneCookie } from "../lib/timezone";
 
 export async function action({ request }: Route.ActionArgs) {
   const form = await request.formData();
@@ -25,6 +26,14 @@ export default function Login() {
   const busy = useNavigation().state !== "idle";
   const navigate = useNavigate();
   const [passkeyState, setPasskeyState] = useState<"idle" | "working" | "failed">("idle");
+
+  useEffect(() => {
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (!zone) return;
+    void timezoneCookie.serialize(zone, { secure: location.protocol === "https:" }).then((baked) => {
+      document.cookie = baked;
+    });
+  }, []);
 
   async function signInWithPasskey() {
     setPasskeyState("working");
