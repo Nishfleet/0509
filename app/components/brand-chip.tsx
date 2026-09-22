@@ -99,7 +99,7 @@ export function BrandChip({
         aria-hidden="true"
         className={cn(
           "size-[26px] rounded-none after:rounded-none after:border-0",
-          self ? "bg-accent" : "bg-card",
+          self ? "bg-green" : "bg-card",
           off ? "text-ink-faint" : "text-ink",
         )}
         style={boxStyle}
@@ -117,7 +117,7 @@ export function BrandChip({
         <AvatarFallback
           className={cn(
             "rounded-none border-[1.5px] font-display text-[0.8rem] font-extrabold",
-            self ? "bg-accent" : "bg-card",
+            self ? "bg-green" : "bg-card",
             off ? "border-line text-ink-faint" : "border-ink text-ink",
           )}
         >

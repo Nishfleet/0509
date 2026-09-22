@@ -146,9 +146,9 @@ function paint(email: boolean): Paint {
   }
   return {
     struck: "var(--ink-soft, var(--color-ink-soft))",
-    strike: "var(--red, var(--color-strike))",
-    marker: "var(--green, var(--color-accent))",
-    onMarker: "var(--on-green, var(--color-on-accent))",
+    strike: "var(--red, var(--color-red))",
+    marker: "var(--green, var(--color-green))",
+    onMarker: "var(--on-green, var(--color-on-green))",
     ground: "transparent",
   };
 }
