@@ -11,6 +11,7 @@ permissions:
   issues: write
   actions: read
   contents: read
+  pull-requests: read
 
 concurrency:
   group: parity-scorecard
@@ -91,23 +92,32 @@ jobs:
         id: m2
         env:
           SINCE: ${{ steps.window.outputs.since }}
+          UNTIL: ${{ steps.window.outputs.until }}
         run: |
           set -euo pipefail
-          if [ -z "${SINCE}" ]; then
+          if [ -z "${SINCE}" ] || [ -z "${UNTIL}" ]; then
             echo "missing window" >&2
             exit 1
           fi
           tmp=$(mktemp)
-          # A failure is recovered when some success run was created at or
-          # after the failure, and no later than 60 minutes after it finished.
+          # A failure counts once its 60-minute recovery window has closed.
+          # timed_out counts as a failure. Recovered means a success run was
+          # created at or after the failure and no later than 60 minutes after
+          # it finished. The list starts one hour early so a failure this card
+          # held back is still visible next week.
+          query_since=$(date -u -d "${SINCE} - 1 hour" +%Y-%m-%dT%H:%M:%SZ)
           gh api --paginate --slurp \
-            "repos/${REPO}/actions/workflows/deploy-production.yml/runs?per_page=100&created=%3E%3D${SINCE}" \
-            | jq -c '
+            "repos/${REPO}/actions/workflows/deploy-production.yml/runs?per_page=100&created=%3E%3D${query_since}" \
+            | jq -c --arg until "$UNTIL" '
                 def epoch: fromdateiso8601;
-                [.[].workflow_runs[] | select(.status == "completed")]
+                ($until | epoch) as $until_epoch
+                | [.[].workflow_runs[] | select(.status == "completed")]
                 | . as $all
                 | [$all[] | select(.conclusion == "success")] as $ok
-                | [$all[] | select(.conclusion == "failure")] as $bad
+                | [$all[]
+                    | select(.conclusion == "failure" or .conclusion == "timed_out")
+                    | select(((.updated_at | epoch) + 3600) <= $until_epoch)
+                  ] as $bad
                 | [
                     $bad[] | . as $f
                     | select(
