@@ -30,7 +30,9 @@ jobs:
   codex-node-checks:
     name: codex-node-checks
     if: github.event_name != 'deployment_status'
-    runs-on: ubuntu-latest
+    # fleet-ci on merge_group/push only; pull_request stays hosted so fork
+    # PRs never execute on the box (fleet-ops#5935).
+    runs-on: ${{ (github.event_name == 'merge_group' || github.event_name == 'push') && 'fleet-ci' || 'ubuntu-latest' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
@@ -59,6 +61,11 @@ jobs:
   Gitleaks:
     name: Gitleaks
     if: github.event_name != 'deployment_status'
+    # fleet-ci on merge_group/push only; pull_request stays hosted so fork
+    # PRs never execute on the box (fleet-ops#5935).
+    # Stays on a hosted runner: the docker:// step below runs as root and leaves
+    # root-owned files in a persistent fleet-ci workspace, which broke every later
+    # checkout on that runner (three merge_group failures, 2026-09-22 01:33-01:47 IST).
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -75,7 +82,9 @@ jobs:
   semgrep:
     name: semgrep
     if: github.event_name != 'deployment_status'
-    runs-on: ubuntu-latest
+    # fleet-ci on merge_group/push only; pull_request stays hosted so fork
+    # PRs never execute on the box (fleet-ops#5935).
+    runs-on: ${{ (github.event_name == 'merge_group' || github.event_name == 'push') && 'fleet-ci' || 'ubuntu-latest' }}
     timeout-minutes: 10
     container:
       image: semgrep/semgrep
@@ -88,7 +97,9 @@ jobs:
   preview-assert:
     name: preview-assert
     if: github.event_name != 'deployment_status'
-    runs-on: ubuntu-latest
+    # fleet-ci on merge_group/push only; pull_request stays hosted so fork
+    # PRs never execute on the box (fleet-ops#5935).
+    runs-on: ${{ (github.event_name == 'merge_group' || github.event_name == 'push') && 'fleet-ci' || 'ubuntu-latest' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
@@ -212,6 +223,9 @@ jobs:
           # The Claude GitHub App is not installed on the org; the workflow token
           # carries the pull-requests/issues write scope this job declares.
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          # Only the bot this job targets; never '*' on this public repo, where
+          # any external App could then invoke the action with a prompt it controls.
+          allowed_bots: 'nishfleet-worker'
           use_sticky_comment: true
           prompt: |
             REPO: ${{ github.repository }}
