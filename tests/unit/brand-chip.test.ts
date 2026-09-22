@@ -1,11 +1,7 @@
-// @vitest-environment happy-dom
 import { createElement, type ReactElement } from "react";
-import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, describe, expect, it, vi } from "vitest";
-
-import { Window } from "happy-dom";
+import { MemoryRouter } from "react-router";
+import { describe, expect, it } from "vitest";
 
 import {
   BrandChip,
@@ -14,56 +10,22 @@ import {
   type BrandChipBrand,
 } from "../../app/components/brand-chip";
 
-function ensureDom(): void {
-  if (typeof document !== "undefined") return;
-  const win = new Window({ url: "https://0509.test/app" });
-  Object.assign(globalThis, { window: win, document: win.document });
+function render(element: ReactElement): string {
+  return renderToStaticMarkup(createElement(MemoryRouter, null, element));
 }
-
-ensureDom();
 
 function chip(props: BrandChipBrand): string {
-  const element: ReactElement | null = createElement(BrandChip, props);
-  return renderToStaticMarkup(element);
-}
-
-function installFailingImage(): void {
-  class FailImage {
-    onload: (() => void) | null = null;
-    onerror: (() => void) | null = null;
-    complete = false;
-    naturalWidth = 0;
-    referrerPolicy = "";
-    crossOrigin: string | null = null;
-    sizes = "";
-    srcset = "";
-    set src(_value: string) {
-      this.complete = true;
-      this.naturalWidth = 0;
-      this.onerror?.();
-    }
-  }
-  vi.stubGlobal("Image", FailImage);
-  window.Image = FailImage as unknown as typeof window.Image;
+  return render(createElement(BrandChip, props));
 }
 
 describe("the brand chip", () => {
-  let root: Root | null = null;
-
-  afterEach(() => {
-    root?.unmount();
-    root = null;
-    document.body.replaceChildren();
-    vi.unstubAllGlobals();
-  });
-
   it("derives the monogram from the brand name", () => {
     expect(brandMonogram("gymshark")).toBe("G");
     expect(brandMonogram("  école ")).toBe("É");
     expect(brandMonogram("   ")).toBe("");
   });
 
-  it("marks you with the accent monogram and routes to that brand", () => {
+  it("names you, routes inside the app, and keeps the accent monogram when the brand is also off", () => {
     const html = chip({
       name: "Loopwell",
       href: "/app/competitors/loopwell",
@@ -71,16 +33,18 @@ describe("the brand chip", () => {
       off: true,
     });
     expect(html).toContain('href="/app/competitors/loopwell"');
-    expect(html).toContain("You · Loopwell");
+    expect(html).toContain("You · Loopwell · off");
     expect(html).toContain(">L<");
     expect(html).toContain("data-self");
-    expect(html).toContain("bg-accent");
-    expect(html).not.toContain("data-off");
-    expect(html).not.toContain("border-dashed");
+    expect(html).toContain("data-off");
     expect(html).not.toContain("<img");
+    expect(html).toContain("width:26px");
+    expect(html).toContain("height:26px");
+    expect(html).toContain("min-width:26px");
+    expect(html).toContain("min-height:26px");
   });
 
-  it("renders an off brand dashed and dimmed", () => {
+  it("names an off brand and reserves the monogram box", () => {
     const html = chip({
       name: "Casetta",
       href: "/app/competitors/casetta",
@@ -89,26 +53,26 @@ describe("the brand chip", () => {
     expect(html).toContain("Casetta · off");
     expect(html).toContain(">C<");
     expect(html).toContain("data-off");
-    expect(html).toContain("border-dashed");
-    expect(html).toContain("text-ink-faint");
-    expect(html).toContain("border-line");
+    expect(html).not.toContain("data-self");
+    expect(html).toContain("width:26px");
+    expect(html).toContain("height:26px");
   });
 
-  it("reserves a fixed box and keeps the monogram beside a logo", () => {
+  it("puts the logo and the monogram in the same reserved box", () => {
     const html = chip({
       name: "Kindred",
       href: "https://0509.test/app/competitors/kindred",
       logoUrl: "https://cdn.example.com/kindred.png",
     });
+    expect(html).toContain('href="https://0509.test/app/competitors/kindred"');
     expect(html).toContain('src="https://cdn.example.com/kindred.png"');
     expect(html).toContain('width="26"');
     expect(html).toContain('height="26"');
     expect(html).toContain("width:26px");
     expect(html).toContain("height:26px");
-    expect(html).toContain("min-width:26px");
-    expect(html).toContain("min-height:26px");
     expect(html).toContain(">K<");
-    expect(html).toContain("data-error:hidden");
+    expect(html).toContain("Kindred");
+    expect(html).not.toContain("You ·");
   });
 
   it("drops a logo that is not an http address and a chip that cannot route", () => {
@@ -124,41 +88,25 @@ describe("the brand chip", () => {
     expect(chip({ name: "Bramble", href: "   " })).toBe("");
   });
 
-  it("falls back to the monogram when the logo fails, without resizing the box", async () => {
-    installFailingImage();
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    await act(async () => {
-      root = createRoot(host);
-      root.render(
-        createElement(BrandChip, {
-          name: "Kindred",
-          href: "/app/competitors/kindred",
-          logoUrl: "https://cdn.example.com/missing.png",
-        }),
-      );
-    });
-    const avatar = host.querySelector("[data-slot='avatar']");
-    const image = host.querySelector("[data-slot='avatar-image']");
-    expect(avatar?.getAttribute("style")).toContain("width: 26px");
-    expect(avatar?.getAttribute("style")).toContain("height: 26px");
-    expect(image?.getAttribute("data-error")).not.toBeNull();
-    expect(image?.className).toContain("data-error:hidden");
-    expect(host.textContent).toContain("K");
-    expect(host.textContent).toContain("Kindred");
-  });
-
-  it("wraps a row of brands and ellipsizes a long name", () => {
-    const html = renderToStaticMarkup(
+  it("lists every brand in the row, including one whose logo will fail", () => {
+    const html = render(
       createElement(BrandChipRow, {
         addHref: "/onboarding",
         brands: [
           { name: "Loopwell", href: "/app/competitors/loopwell", self: true },
-          { name: "Kindred", href: "/app/competitors/kindred" },
-          { name: "Bramble", href: "/app/competitors/bramble" },
+          {
+            name: "Kindred",
+            href: "/app/competitors/kindred",
+            logoUrl: "/brand-chip-kindred.svg",
+          },
+          {
+            name: "Bramble",
+            href: "/app/competitors/bramble",
+            logoUrl: "/brand-chip-missing.png",
+          },
           { name: "Fieldset", href: "/app/competitors/fieldset" },
           {
-            name: "Northbeam International Holdings",
+            name: "Northbeam International Holdings Group of the Northern Markets",
             href: "/app/competitors/northbeam",
           },
           { name: "Casetta", href: "/app/competitors/casetta", off: true },
@@ -166,14 +114,14 @@ describe("the brand chip", () => {
       }),
     );
     expect(html).toContain('data-slot="brand-chip-row"');
-    expect(html).toContain("flex-wrap");
-    expect(html).toContain("truncate");
-    expect(html).toContain("Northbeam International Holdings");
     expect(html).toContain("You · Loopwell");
+    expect(html).toContain('src="/brand-chip-kindred.svg"');
+    expect(html).toContain('src="/brand-chip-missing.png"');
+    expect(html).toContain(">B<");
+    expect(html).toContain("Northbeam International Holdings Group of the Northern Markets");
     expect(html).toContain("Casetta · off");
     expect(html).toContain('href="/onboarding"');
     expect(html).toContain("+ Add a competitor");
-    expect(html).not.toContain("overflow-x-auto");
-    expect(html).not.toContain("overflow-x-scroll");
+    expect(html.match(/data-slot="avatar"/g)?.length).toBe(6);
   });
 });

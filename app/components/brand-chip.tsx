@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactElement } from "react";
+import { Link } from "react-router";
 
 import { cn } from "../lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
@@ -56,9 +57,15 @@ function safeLogo(value: string | null | undefined): string | null {
 }
 
 function chipLabel(name: string, self: boolean, off: boolean): string {
+  if (self && off) return `You · ${name} · off`;
   if (self) return `You · ${name}`;
   if (off) return `${name} · off`;
   return name;
+}
+
+function chipLink(href: string): ReactElement {
+  if (href.startsWith("/")) return <Link to={href} />;
+  return <a href={href} rel="noreferrer" />;
 }
 
 export function BrandChip({
@@ -73,29 +80,27 @@ export function BrandChip({
   const to = safeHref(href);
   if (trimmed === "" || monogram === "" || to === null) return null;
 
-  const you = self;
-  const paused = off && !you;
   const logo = safeLogo(logoUrl);
-  const label = chipLabel(trimmed, you, paused);
+  const label = chipLabel(trimmed, self, off);
 
   return (
     <Badge
       variant="outline"
-      render={<a href={to} />}
-      data-self={you ? "" : undefined}
-      data-off={paused ? "" : undefined}
+      render={chipLink(to)}
+      data-self={self ? "" : undefined}
+      data-off={off ? "" : undefined}
       className={cn(
         "h-auto max-w-full min-h-11 min-w-0 shrink gap-[7px] rounded-none border-[1.5px] border-line bg-card py-[5px] pr-[11px] pl-[5px] text-[0.85rem] font-medium text-ink",
-        you && "border-ink font-semibold",
-        paused && "border-dashed text-ink-faint",
+        self && "border-ink font-semibold",
+        off && "border-dashed text-ink-faint",
       )}
     >
       <Avatar
         aria-hidden="true"
         className={cn(
           "size-[26px] rounded-none after:rounded-none after:border-0",
-          you ? "bg-accent text-ink" : "bg-card text-ink",
-          paused && "text-ink-faint",
+          self ? "bg-accent" : "bg-card",
+          off ? "text-ink-faint" : "text-ink",
         )}
         style={boxStyle}
       >
@@ -111,9 +116,9 @@ export function BrandChip({
         )}
         <AvatarFallback
           className={cn(
-            "rounded-none border-[1.5px] border-ink bg-card font-display text-[0.8rem] font-extrabold text-ink",
-            you && "border-ink bg-accent text-ink",
-            paused && "border-line bg-card text-ink-faint",
+            "rounded-none border-[1.5px] font-display text-[0.8rem] font-extrabold",
+            self ? "bg-accent" : "bg-card",
+            off ? "border-line text-ink-faint" : "border-ink text-ink",
           )}
         >
           {monogram}
@@ -142,12 +147,13 @@ export function BrandChipRow({
         <BrandChip key={`${String(index)}:${brand.href}:${brand.name}`} {...brand} />
       ))}
       {add === null ? null : (
-        <a
-          className="inline-flex min-h-11 items-center rounded-none border-[1.5px] border-dashed border-line px-[11px] font-mono text-[0.7rem] tracking-[0.08em] text-ink-soft uppercase"
-          href={add}
+        <Badge
+          variant="outline"
+          render={chipLink(add)}
+          className="h-auto min-h-11 rounded-none border-[1.5px] border-dashed border-line bg-transparent px-[11px] font-mono text-[0.7rem] tracking-[0.08em] text-ink-soft uppercase"
         >
           + Add a competitor
-        </a>
+        </Badge>
       )}
     </div>
   );
