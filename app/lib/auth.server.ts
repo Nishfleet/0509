@@ -3,6 +3,8 @@ import { magicLink } from "better-auth/plugins";
 import { apiKey } from "@better-auth/api-key";
 import { passkey } from "@better-auth/passkey";
 
+import { ensureWorkspaceForSignIn } from "./workspace.server";
+
 interface AuthEnv {
   DB: D1Database;
   EMAIL: { send(message: unknown): Promise<unknown> };
@@ -15,6 +17,20 @@ export function createAuth(env: AuthEnv) {
     database: env.DB,
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL,
+    databaseHooks: {
+      session: {
+        create: {
+          after: async (session, context) => {
+            const request = context?.request ?? null;
+            if (!request) return;
+            await ensureWorkspaceForSignIn(env.DB, {
+              userId: session.userId,
+              request,
+            });
+          },
+        },
+      },
+    },
     plugins: [
       magicLink({
         sendMagicLink: async ({ email, url }) => {

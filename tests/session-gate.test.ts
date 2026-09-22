@@ -8,6 +8,10 @@ vi.mock("cloudflare:workers", () => ({ env: {} }));
 
 import { requireSession } from "../app/lib/require-session.server";
 
+vi.mock("../app/lib/workspace.server", () => ({
+  ensureWorkspaceForSignIn: async () => null,
+}));
+
 vi.mock("../app/lib/auth.server", () => ({
   createAuth: (_env: unknown) => ({
     api: {
