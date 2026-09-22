@@ -19,6 +19,12 @@ import { z } from "zod";
 // asserting either here would invent reds for resources the deploy handles. A
 // queue is not provisioned: the upload is refused when it is missing. R2 is a
 // separate gap, tracked in its own issue rather than asserted here.
+//
+// This lives in the `node` project on purpose. That project is "pure logic: no
+// bindings, no workerd" (vitest.config.ts) and this test needs no binding: it
+// reads wrangler.jsonc through wrangler's own parser and the account's queue
+// list over plain HTTPS. A binding-less `fetch` is not a Cloudflare binding, so
+// the `workers` project's workerd/miniflare setup would add nothing.
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CONFIGS = [
@@ -97,9 +103,13 @@ interface Credentials {
 // happens in a function with an explicit throw rather than an `as string` or a
 // `!` at the call site: a cast would keep the queue check compiling and
 // silently query `undefined`, whereas this cannot narrow without the values.
+//
+// Empty and whitespace-only are absent, not present. An unset GitHub Actions
+// secret reaches the job as the empty string, so a truthy check on the raw
+// value would call an unset secret "present" and hand `Bearer ` to the API.
 function credentials(): Credentials | undefined {
-  const token = process.env.CLOUDFLARE_API_TOKEN;
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const token = process.env.CLOUDFLARE_API_TOKEN?.trim();
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID?.trim();
   return token && accountId ? { token, accountId } : undefined;
 }
 
@@ -120,14 +130,22 @@ describe("every queue wrangler.jsonc declares exists in the account (#4246)", ()
   // what makes the skip below unreachable on this repo's CI: a check that
   // skips is not a gate, and the gate's whole purpose is to be red before a
   // merge that would redden production.
+  //
+  // This asserts through the same `credentials()` the skip uses, on purpose.
+  // The first draft asserted `expect.any(String)` on the raw values, which the
+  // empty string satisfies — and an unset Actions secret is exactly the empty
+  // string, so CI with unset secrets passed this test and skipped the queue
+  // check: green on the failure the gate exists to catch. One definition of
+  // "has credentials" is what makes that divergence impossible.
   it("has credentials on this repo's own CI, so the check cannot pass by skipping", () => {
     if (process.env.CI) {
       expect(
-        { token: process.env.CLOUDFLARE_API_TOKEN, account: process.env.CLOUDFLARE_ACCOUNT_ID },
-        "CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID must both be set on a CI run: " +
-          "without them the queue check skips, and a check that skips is not a gate. " +
-          "Every workflow that runs `npm test` passes both from repository secrets."
-      ).toEqual(expect.objectContaining({ token: expect.any(String), account: expect.any(String) }));
+        credentials(),
+        "CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID must both be set and non-empty on a " +
+          "CI run: an unset Actions secret expands to the empty string, and an empty string is " +
+          "what the queue check below skips on, and a check that skips is not a gate. Every " +
+          "workflow that runs `npm test` passes both from repository secrets."
+      ).toBeDefined();
     }
   });
 
