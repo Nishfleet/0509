@@ -60,6 +60,7 @@ test("a passkey registered on first sign-in signs in on its own", async ({ page,
     await expect(page.getByText(email)).toBeVisible();
     console.log(`passkey sign-in email=${email} sessionAt=${new Date().toISOString()}`);
   } finally {
-    await cdp.send("WebAuthn.removeVirtualAuthenticator", { authenticatorId });
+    // A teardown rejection must not mask the ceremony's own failure.
+    await cdp.send("WebAuthn.removeVirtualAuthenticator", { authenticatorId }).catch(() => undefined);
   }
 });
