@@ -4,7 +4,7 @@ import { apiKey } from "@better-auth/api-key";
 import { passkey } from "@better-auth/passkey";
 
 import { ensureWorkspaceForSignIn } from "./workspace.server";
-import { sendMessage } from "../../workers/delivery/send";
+import { sendOrThrow } from "../../workers/delivery/send";
 
 interface AuthEnv {
   DB: D1Database;
@@ -46,11 +46,7 @@ export function createAuth(env: AuthEnv) {
     plugins: [
       magicLink({
         sendMagicLink: async ({ email, url }) => {
-          // Through the one send lane (workers/delivery/send.ts), so this repo
-          // has exactly one EMAIL.send call site (0509#3979). The magic link is
-          // transactional: it has no digest row and no suppression entry, so it
-          // sends directly rather than through the queue consumer.
-          const sent = await sendMessage(env.EMAIL, {
+          await sendOrThrow(env.EMAIL, {
             to: email,
             from: { email: "hello@0509.io", name: "Five to Nine" },
             subject: "Your sign-in link",
@@ -63,13 +59,6 @@ export function createAuth(env: AuthEnv) {
               "If you did not ask for it, ignore this email.",
             ].join("\n"),
           });
-          // sendMessage never throws — it resolves the failure — so the
-          // status has to be surfaced here or a rejected sign-in link is lost
-          // silently. This used to throw on its own before routing through the
-          // one lane; rethrowing keeps the caller's behaviour identical.
-          if (sent.outcome === "failed") {
-            throw new Error(`magic-link send failed for ${email}: ${sent.error ?? "unknown error"}`);
-          }
         },
       }),
       passkey(),

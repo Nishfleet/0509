@@ -1,35 +1,5 @@
-/**
- * The send-email Queue consumer — the one lane every outbound message travels.
- *
- * 0509#3979 / docs/engines/delivery.md § P7.2. The order is the whole design and
- * is fixed by the packet:
- *
- *   1. read the work item (a digest with status='pending'),
- *   2. look up the target and check email_suppression BEFORE rendering,
- *   3. insert send_attempt with a deterministic idempotency_key and
- *      status='pending' — that insert is the claim,
- *   4. only then send, and resolve the attempt to 'sent' or 'failed'.
- *
- * Claim before send, never send before record. Send-then-record duplicates when
- * the queue redelivers; record-then-send loses silently when the Worker dies.
- * A pending row that outlives the sweeper's threshold is a known unknown
- * (`docs/engines/delivery.md` §4, §7), which is the failure the contract cares
- * about most.
- *
- * Nothing here renders HTML for a suppressed address and nothing here records
- * 'delivered', for the reasons recorded in `send.ts`.
- */
-
 import { errorText, sendMessage } from "./send";
 
-/**
- * A producer's payload_json that will not parse. It is thrown from render() and
- * caught in deliver() so the claimed attempt resolves to 'failed' with this
- * text rather than the exception escaping past the claim: the queue would
- * redeliver, read the 'pending' row back as a duplicate, ack it, and the send
- * would be lost with no record at all (0509#3979, the contract's first clause).
- * Not exported: nothing outside this file constructs it, and knip gates that.
- */
 class PayloadError extends Error {
   constructor(message: string) {
     super(message);
@@ -41,7 +11,6 @@ interface MessageRow {
   id: string;
   workspace_id: string;
   kind: string;
-  status: string;
   subject: string | null;
   payload_json: string;
 }
@@ -51,11 +20,6 @@ interface TargetRow {
   workspace_id: string;
   channel_id: string;
   target_value: string;
-}
-
-export interface DeliveryEnv {
-  DB: D1Database;
-  EMAIL: SendEmail;
 }
 
 /**
@@ -82,11 +46,9 @@ interface DeliveryResult {
 
 const EMAIL_CHANNEL_KEY = "email";
 
-/** The queue redelivers a message that did not resolve, so a missing row is
- *  not an error — it is a work item that another consumer already finished. */
-async function readDigest(env: DeliveryEnv, digestId: string): Promise<MessageRow | null> {
+async function readDigest(env: Env, digestId: string): Promise<MessageRow | null> {
   return env.DB.prepare(
-    `SELECT id, workspace_id, kind, status, subject, payload_json
+    `SELECT id, workspace_id, kind, subject, payload_json
        FROM digest
       WHERE id = ?`,
   )
@@ -94,7 +56,7 @@ async function readDigest(env: DeliveryEnv, digestId: string): Promise<MessageRo
     .first<MessageRow>();
 }
 
-async function readTarget(env: DeliveryEnv, workspaceId: string): Promise<TargetRow | null> {
+async function readTarget(env: Env, workspaceId: string): Promise<TargetRow | null> {
   return env.DB.prepare(
     `SELECT st.id, st.workspace_id, st.channel_id, st.target_value
        FROM send_target st
@@ -107,7 +69,7 @@ async function readTarget(env: DeliveryEnv, workspaceId: string): Promise<Target
     .first<TargetRow>();
 }
 
-async function isSuppressed(env: DeliveryEnv, address: string): Promise<boolean> {
+async function isSuppressed(env: Env, address: string): Promise<boolean> {
   const row = await env.DB.prepare(
     `SELECT address FROM email_suppression WHERE address = ?`,
   )
@@ -116,18 +78,8 @@ async function isSuppressed(env: DeliveryEnv, address: string): Promise<boolean>
   return row !== null;
 }
 
-/**
- * The claim, and the duplicate detector, in one statement.
- *
- * `idempotency_key` is UNIQUE, so a concurrent consumer's insert conflicts.
- * The DO UPDATE guarded by `WHERE status = 'failed'` lets a genuinely failed
- * attempt be reclaimed on redelivery while leaving a 'pending' or 'sent' row
- * untouched. RETURNING gives the row only when this delivery owns the claim;
- * an empty result means another delivery already holds it, which is the
- * expected outcome of an at-least-once queue and not an error.
- */
 async function claimAttempt(
-  env: DeliveryEnv,
+  env: Env,
   idempotencyKey: string,
   workspaceId: string,
   targetId: string,
@@ -147,7 +99,7 @@ async function claimAttempt(
     .first<{ id: string }>();
 }
 
-async function resolveAttempt(env: DeliveryEnv, attemptId: string, outcome: "sent" | "failed", error: string | null): Promise<void> {
+async function resolveAttempt(env: Env, attemptId: string, outcome: "sent" | "failed", error: string | null): Promise<void> {
   await env.DB.prepare(
     `UPDATE send_attempt SET status = ?, error = ? WHERE id = ?`,
   )
@@ -155,7 +107,7 @@ async function resolveAttempt(env: DeliveryEnv, attemptId: string, outcome: "sen
     .run();
 }
 
-async function markDigestSent(env: DeliveryEnv, digestId: string): Promise<void> {
+async function markDigestSent(env: Env, digestId: string): Promise<void> {
   await env.DB.prepare(
     `UPDATE digest SET status = 'sent', sent_at = ? WHERE id = ?`,
   )
@@ -171,10 +123,6 @@ function render(message: MessageRow, to: string): EmailMessageBuilder {
       text?: string;
     };
   } catch (cause) {
-    // A producer's payload is untrusted input. Throwing a typed error keeps
-    // the failure inside deliver()'s catch, where the claim resolves to
-    // 'failed' with a reason — instead of escaping past the claim and
-    // stranding a 'pending' row that the next delivery acks as a duplicate.
     const detail = cause instanceof Error ? cause.message : String(cause);
     throw new PayloadError(`payload_json for digest ${message.id} is not valid JSON: ${detail}`);
   }
@@ -190,14 +138,7 @@ function render(message: MessageRow, to: string): EmailMessageBuilder {
   };
 }
 
-/**
- * One delivery: read, suppress-check, claim, render, send, resolve.
- *
- * The suppression check sits before render() on purpose — an unsubscribed
- * address never has HTML built for it, so there is no path where a suppressed
- * address reaches EMAIL.send through a subsequent change that only renders.
- */
-export async function deliver(env: DeliveryEnv, message: DeliveryMessage): Promise<DeliveryResult> {
+export async function deliver(env: Env, message: DeliveryMessage): Promise<DeliveryResult> {
   const digest = await readDigest(env, message.digest_id);
   if (!digest) {
     return { outcome: "no_digest", attempt_id: null, idempotency_key: null };
@@ -215,50 +156,29 @@ export async function deliver(env: DeliveryEnv, message: DeliveryMessage): Promi
   const idempotencyKey = `digest:${digest.id}:${target.id}`;
   const claim = await claimAttempt(env, idempotencyKey, digest.workspace_id, target.id, digest.id);
   if (!claim) {
-    // The claim row already exists and is not a 'failed' retry, so this
-    // delivery owns no send. A re-enqueued message lands here on the UNIQUE
-    // conflict, which is the only dedup this lane has — a hand-written
-    // SELECT-before-INSERT would race two consumers and lose.
     return { outcome: "duplicate", attempt_id: null, idempotency_key: idempotencyKey };
   }
 
-  // Everything past the claim is inside one try/catch: a row exists now, so
-  // every exit from here must resolve it. Escaping the throw instead would
-  // leave a 'pending' row that the queue's redelivery reads back as a
-  // duplicate and acks — the send lost with no record, the one failure the
-  // contract forbids (0509#3979, docs/engines/delivery.md §4).
+  let sent = false;
   try {
     const email = render(digest, target.target_value);
     const result = await sendMessage(env.EMAIL, email);
+    sent = result.outcome === "sent";
     await resolveAttempt(env, claim.id, result.outcome, result.error);
     if (result.outcome === "sent") {
       await markDigestSent(env, digest.id);
     }
     return { outcome: result.outcome, attempt_id: claim.id, idempotency_key: idempotencyKey };
   } catch (cause) {
-    // render() throws PayloadError; a D1 failure on resolve/mark can land
-    // here too. Resolve the claim to 'failed' so the queue retry can reclaim
-    // it, and rethrow nothing: the row is the record, not the exception.
+    if (sent) throw cause;
     await resolveAttempt(env, claim.id, "failed", errorText(cause));
     return { outcome: "failed", attempt_id: claim.id, idempotency_key: idempotencyKey };
   }
 }
 
-/**
- * The Queue consumer's batch handler: one message at a time (max_batch_size 1).
- *
- * A delivery that resolved 'failed' is retry()d so the queue's exponential
- * backoff applies and, past max_retries, the message lands in the dead letter
- * queue rather than being lost (`docs/engines/delivery.md` §7). The claim row
- * stays 'failed' and the redelivery reclaims it.
- *
- * Every other outcome is final: a duplicate, a suppressed address and a target
- * that does not exist have nothing for a retry to do, so they ack rather than
- * burning queue retries.
- */
 export async function handleBatch(
-  env: DeliveryEnv,
-  batch: ReadonlyBatch,
+  env: Env,
+  batch: MessageBatch,
 ): Promise<DeliveryResult[]> {
   const results: DeliveryResult[] = [];
   for (const item of batch.messages) {
@@ -277,15 +197,6 @@ export async function handleBatch(
     results.push(result);
   }
   return results;
-}
-
-/**
- * The subset of the runtime's MessageBatch this lane needs. The array is
- * readonly because workerd's is, and naming only these four members keeps the
- * handler testable with a plain object rather than a live queue.
- */
-interface ReadonlyBatch {
-  readonly messages: readonly { readonly body: unknown; ack(): void; retry(): void }[];
 }
 
 function parseMessage(body: unknown): DeliveryMessage | null {

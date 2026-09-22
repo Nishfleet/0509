@@ -1,27 +1,8 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { deliver, handleBatch, type DeliveryEnv, type DeliveryMessage } from "../../workers/delivery/consumer";
-
-/**
- * The send lane's three acceptance runs, in real workerd against the real
- * local D1 that migrations/0001_rebuild.sql applied (0509#3979,
- * docs/engines/delivery.md § P7.2 "PROOF REQUIRED"):
- *
- *   (a) a normal send that arrives,
- *   (b) the same message re-enqueued — the UNIQUE conflict, no second email,
- *   (c) a send to a suppressed address — no attempt row, no message.
- *
- * The EMAIL binding is a recorder rather than the real service, because this
- * run is in a merge gate: the claim/dup/suppress behaviour is asserted on the
- * rows D1 actually holds and on the calls the lane actually made. The live
- * inbox leg is the P7.2 lane's own acceptance note — the grep proving exactly
- * one EMAIL.send call site in the repo, cited in the PR body.
- *
- * The order under test is fixed by the packet: read, suppress-check, claim,
- * render, send, resolve. Rendering is asserted to not happen before the
- * suppression check (case c has no payload to render and still does nothing).
- */
+import { deliver, handleBatch, type DeliveryMessage } from "../../workers/delivery/consumer";
+import { sendOrThrow } from "../../workers/delivery/send";
 
 interface Recorder {
   sent: EmailMessageBuilder[];
@@ -41,6 +22,7 @@ const bindingFor = (rec: Recorder): SendEmail => ({
 const WS = "ws-send-lane";
 const CHANNEL = "chan-email";
 const TARGET = "reader@0509.io";
+const TARGET_ID = "reader-target";
 
 const seedWorkspace = async () => {
   await env.DB.prepare(
@@ -65,7 +47,7 @@ const seedChannel = async () => {
     `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at)
      VALUES (?, ?, ?, ?, 1, '2026-09-22T00:00:01Z')`,
   )
-    .bind(`${TARGET.split("@")[0]}-target`, WS, CHANNEL, TARGET)
+    .bind(TARGET_ID, WS, CHANNEL, TARGET)
     .run();
 };
 
@@ -80,10 +62,6 @@ const seedDigest = async (status = "pending", payload: Record<string, unknown> =
   return id;
 };
 
-/** Seeds a digest row with a raw, producer-written payload_json that is not
- *  valid JSON. A producer's hand-rolled payload is untrusted input, and this
- *  file is the lane every producer funnels through — so the lane must survive
- *  one without stranding a claimed row. */
 const seedMalformedPayloadDigest = async () => {
   const id = `digest-${Math.random().toString(36).slice(2, 10)}`;
   await env.DB.prepare(
@@ -95,25 +73,26 @@ const seedMalformedPayloadDigest = async () => {
   return id;
 };
 
-const envFor = (rec: Recorder): DeliveryEnv =>
-  ({ DB: env.DB, EMAIL: bindingFor(rec) }) as DeliveryEnv;
+interface AttemptRow {
+  id: string;
+  workspace_id: string;
+  send_target_id: string;
+  digest_id: string;
+  idempotency_key: string;
+  status: string;
+  error: string | null;
+  attempted_at: string;
+}
 
-const attemptRows = async () =>
+const readAttempts = async (): Promise<AttemptRow[]> =>
   (
     await env.DB.prepare(
       `SELECT id, workspace_id, send_target_id, digest_id, idempotency_key, status, error, attempted_at
          FROM send_attempt ORDER BY attempted_at ASC`,
-    ).all<{
-      id: string;
-      workspace_id: string;
-      send_target_id: string;
-      digest_id: string;
-      idempotency_key: string;
-      status: string;
-      error: string | null;
-      attempted_at: string;
-    }>()
+    ).all<AttemptRow>()
   ).results ?? [];
+
+const attemptRows = async () => await readAttempts();
 
 const digestStatus = async (id: string) =>
   await env.DB.prepare(`SELECT status, sent_at FROM digest WHERE id = ?`).bind(id).first<{
@@ -122,6 +101,28 @@ const digestStatus = async (id: string) =>
   }>();
 
 const message = (digestId: string): DeliveryMessage => ({ digest_id: digestId });
+
+const batchFor = (bodies: unknown[]) => {
+  const acked: number[] = [];
+  const retried: number[] = [];
+  const batch: MessageBatch = {
+    queue: "send-email",
+    messages: bodies.map((body, index) => ({
+      id: `msg-${index}`,
+      timestamp: new Date("2026-09-22T00:00:03Z"),
+      body,
+      attempts: 1,
+      ack: () => acked.push(index),
+      retry: () => retried.push(index),
+    })),
+    metadata: { metrics: { backlogCount: bodies.length, backlogBytes: 0 } },
+    ackAll: () => acked.push(...bodies.map((_, index) => index)),
+    retryAll: () => retried.push(...bodies.map((_, index) => index)),
+  };
+  return { batch, acked, retried };
+};
+
+const envWith = (email: SendEmail): Env => ({ ...env, EMAIL: email }) as Env;
 
 describe("send lane (0509#3979)", () => {
   beforeEach(async () => {
@@ -143,11 +144,11 @@ describe("send lane (0509#3979)", () => {
       text: "You are #2 of 9 this week.",
     });
 
-    const result = await deliver(envFor(rec), message(digestId));
+    const result = await deliver(envWith(bindingFor(rec)), message(digestId));
 
     expect(result.outcome).toBe("sent");
     expect(result.attempt_id).toBeTruthy();
-    expect(result.idempotency_key).toBe(`digest:${digestId}:${TARGET.split("@")[0]}-target`);
+    expect(result.idempotency_key).toBe(`digest:${digestId}:${TARGET_ID}`);
     expect(rec.sent).toHaveLength(1);
     expect(rec.sent[0].to).toBe(TARGET);
     expect(rec.sent[0].subject).toBe("You are #2 of 9 this week");
@@ -168,18 +169,15 @@ describe("send lane (0509#3979)", () => {
     const rec = recorder();
     const digestId = await seedDigest("pending", { text: "brief" });
 
-    const first = await deliver(envFor(rec), message(digestId));
+    const first = await deliver(envWith(bindingFor(rec)), message(digestId));
     expect(first.outcome).toBe("sent");
     expect(rec.sent).toHaveLength(1);
 
-    // The queue is at-least-once: put the identical work item on again and
-    // claim the send a second time.
-    const second = await deliver(envFor(rec), message(digestId));
+    const second = await deliver(envWith(bindingFor(rec)), message(digestId));
 
     expect(second.outcome).toBe("duplicate");
     expect(second.attempt_id).toBeNull();
     expect(second.idempotency_key).toBe(first.idempotency_key);
-    // No second email in the inbox, and the first claim row is untouched.
     expect(rec.sent).toHaveLength(1);
     const rows = await attemptRows();
     expect(rows).toHaveLength(1);
@@ -192,7 +190,7 @@ describe("send lane (0509#3979)", () => {
     const failed = recorder();
     failed.fail = new Error("Email Service rejected the send");
 
-    const first = await deliver(envFor(failed), message(digestId));
+    const first = await deliver(envWith(bindingFor(failed)), message(digestId));
     expect(first.outcome).toBe("failed");
     expect(failed.sent).toHaveLength(0);
     let rows = await attemptRows();
@@ -200,10 +198,8 @@ describe("send lane (0509#3979)", () => {
     expect(rows[0].status).toBe("failed");
     expect(rows[0].error).toContain("Email Service rejected the send");
 
-    // The redelivery reclaims the failed claim, which is the only reason a
-    // queue retry can work at all.
     const good = recorder();
-    const second = await deliver(envFor(good), message(digestId));
+    const second = await deliver(envWith(bindingFor(good)), message(digestId));
     expect(second.outcome).toBe("sent");
     expect(second.attempt_id).toBe(first.attempt_id);
     expect(good.sent).toHaveLength(1);
@@ -222,36 +218,29 @@ describe("send lane (0509#3979)", () => {
       .bind(TARGET)
       .run();
 
-    const result = await deliver(envFor(rec), message(digestId));
+    const result = await deliver(envWith(bindingFor(rec)), message(digestId));
 
     expect(result.outcome).toBe("suppressed");
     expect(result.attempt_id).toBeNull();
     expect(result.idempotency_key).toBeNull();
     expect(rec.sent).toHaveLength(0);
     expect(await attemptRows()).toHaveLength(0);
-    // The digest stays pending so the sweeper can see it, and it is never
-    // marked sent: an unsubscribed address is skipped, not delivered.
     expect((await digestStatus(digestId))?.status).toBe("pending");
   });
 
   it("never records 'delivered' any path", async () => {
     const rec = recorder();
     const digestId = await seedDigest("pending", { text: "brief" });
-    await deliver(envFor(rec), message(digestId));
+    await deliver(envWith(bindingFor(rec)), message(digestId));
     const rows = await attemptRows();
     expect(rows.map((r) => r.status)).not.toContain("delivered");
   });
 
-  // The contract's first clause is "cannot lose a send silently". A claim row
-  // is written before render, so a producer-written payload that will not
-  // parse must resolve the attempt to 'failed' rather than throw past the
-  // claim — a throw here would leave a 'pending' row that the redelivery
-  // reads back as a 'duplicate' and acks, losing the send with no record.
   it("resolves the attempt to 'failed' when a producer's payload is not JSON", async () => {
     const rec = recorder();
     const digestId = await seedMalformedPayloadDigest();
 
-    const result = await deliver(envFor(rec), message(digestId));
+    const result = await deliver(envWith(bindingFor(rec)), message(digestId));
 
     expect(result.outcome).toBe("failed");
     expect(result.attempt_id).toBeTruthy();
@@ -260,31 +249,87 @@ describe("send lane (0509#3979)", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].status).toBe("failed");
     expect(rows[0].error).toBeTruthy();
-    // The digest is never marked sent, so the sweeper can still see it.
     expect((await digestStatus(digestId))?.status).toBe("pending");
   });
 
-  // A failed send must still be reclaimable, which is what makes a queue
-  // retry work at all: the row is 'failed', not stranded 'pending'.
   it("reclaims a failed attempt after a bad payload and still sends nothing", async () => {
     const rec = recorder();
     const digestId = await seedMalformedPayloadDigest();
 
-    const first = await deliver(envFor(rec), message(digestId));
+    const first = await deliver(envWith(bindingFor(rec)), message(digestId));
     expect(first.outcome).toBe("failed");
 
-    // The queue redelivers; the claim row is 'failed', so this delivery owns
-    // it again — it does not fall into the 'duplicate' branch above.
-    const second = await deliver(envFor(rec), message(digestId));
+    const second = await deliver(envWith(bindingFor(rec)), message(digestId));
     expect(second.outcome).toBe("failed");
     expect(second.attempt_id).toBe(first.attempt_id);
     expect(rec.sent).toHaveLength(0);
     expect(await attemptRows()).toHaveLength(1);
   });
 
+  it("never leaves a sent attempt reclaimable when a post-send write throws", async () => {
+    const digestId = await seedDigest("pending", { text: "brief" });
+    const rec = recorder();
+
+    const realPrepare = env.DB.prepare.bind(env.DB);
+    let denyDigestWrites = false;
+    const flipToDeny = () => {
+      denyDigestWrites = true;
+    };
+    const spied = new Proxy(env.DB, {
+      get(target, property) {
+        if (property === "prepare") {
+          return (query: string) => {
+            if (denyDigestWrites && query.includes("UPDATE digest")) {
+              throw new Error("D1 unavailable while marking the digest sent");
+            }
+            return realPrepare(query);
+          };
+        }
+        return Reflect.get(target, property) as unknown;
+      },
+    }) as D1Database;
+    const spiedEnv = { ...env, DB: spied, EMAIL: bindingFor(rec) } as Env;
+
+    const rowsBefore = await attemptRows().then((rows) => rows.length);
+    const failing = new Proxy(spiedEnv, {
+      get(target, property) {
+        if (property === "EMAIL") return bindingFor(rec);
+        if (property === "DB") {
+          return new Proxy(target.DB, {
+            get(dbTarget, dbProperty) {
+              if (dbProperty === "prepare") {
+                return (query: string) => {
+                  if (query.includes("UPDATE digest")) {
+                    flipToDeny();
+                    throw new Error("D1 unavailable while marking the digest sent");
+                  }
+                  return realPrepare(query);
+                };
+              }
+              return Reflect.get(dbTarget, dbProperty) as unknown;
+            },
+          }) as D1Database;
+        }
+        return Reflect.get(target, property) as unknown;
+      },
+    }) as Env;
+
+    await expect(deliver(failing, message(digestId))).rejects.toThrow("D1 unavailable while marking the digest sent");
+
+    expect(denyDigestWrites).toBe(true);
+    expect(rec.sent).toHaveLength(1);
+    expect(await attemptRows()).toHaveLength(rowsBefore + 1);
+    const row = (await attemptRows())[0];
+    expect(row.status).toBe("sent");
+
+    const second = await deliver(envWith(bindingFor(rec)), message(digestId));
+    expect(second.outcome).toBe("duplicate");
+    expect(rec.sent).toHaveLength(1);
+  });
+
   it("returns no_digest for a work item whose digest row is gone", async () => {
     const rec = recorder();
-    const result = await deliver(envFor(rec), message("digest-does-not-exist"));
+    const result = await deliver(envWith(bindingFor(rec)), message("digest-does-not-exist"));
     expect(result.outcome).toBe("no_digest");
     expect(rec.sent).toHaveLength(0);
     expect(await attemptRows()).toHaveLength(0);
@@ -294,7 +339,7 @@ describe("send lane (0509#3979)", () => {
     const rec = recorder();
     await env.DB.exec("DELETE FROM send_target");
     const digestId = await seedDigest("pending", { text: "brief" });
-    const result = await deliver(envFor(rec), message(digestId));
+    const result = await deliver(envWith(bindingFor(rec)), message(digestId));
     expect(result.outcome).toBe("no_target");
     expect(rec.sent).toHaveLength(0);
     expect(await attemptRows()).toHaveLength(0);
@@ -303,59 +348,45 @@ describe("send lane (0509#3979)", () => {
   it("acks a duplicate and retries a failed send from the batch", async () => {
     const digestId = await seedDigest("pending", { text: "brief" });
     const normal = recorder();
-    await deliver(envFor(normal), message(digestId));
+    await deliver(envWith(bindingFor(normal)), message(digestId));
 
-    const batch = {
-      messages: [
-        {
-          body: message(digestId),
-          ack: () => undefined,
-          retry: () => undefined,
-        },
-      ],
-    };
-    const results = await handleBatch(envFor(recorder()), batch);
+    const duplicate = batchFor([message(digestId)]);
+    const results = await handleBatch(envWith(bindingFor(recorder())), duplicate.batch);
     expect(results[0].outcome).toBe("duplicate");
+    expect(duplicate.acked).toEqual([0]);
+    expect(duplicate.retried).toEqual([]);
     expect(normal.sent).toHaveLength(1);
 
     const failingDigest = await seedDigest("pending", { text: "again" });
-    let retried = false;
-    const failBatch = {
-      messages: [
-        {
-          body: message(failingDigest),
-          ack: () => undefined,
-          retry: () => {
-            retried = true;
-          },
-        },
-      ],
-    };
     const failed = recorder();
     failed.fail = new Error("throttled");
-    const failResults = await handleBatch(envFor(failed), failBatch);
+    const failBatch = batchFor([message(failingDigest)]);
+    const failResults = await handleBatch(envWith(bindingFor(failed)), failBatch.batch);
     expect(failResults[0].outcome).toBe("failed");
-    expect(retried).toBe(true);
+    expect(failBatch.retried).toEqual([0]);
+    expect(failBatch.acked).toEqual([]);
   });
 
   it("ignores a work item with no digest_id and a string body carries the id", async () => {
     const rec = recorder();
     const digestId = await seedDigest("pending", { text: "brief" });
-    let acked = 0;
-    const junk = {
-      messages: [
-        { body: { nope: true }, ack: () => acked++, retry: () => undefined },
-        {
-          body: JSON.stringify({ digest_id: digestId }),
-          ack: () => acked++,
-          retry: () => undefined,
-        },
-      ],
-    };
-    const results = await handleBatch(envFor(rec), junk);
+    const junk = batchFor([{ nope: true }, JSON.stringify({ digest_id: digestId })]);
+    const results = await handleBatch(envWith(bindingFor(rec)), junk.batch);
     expect(results[0].outcome).toBe("no_digest");
     expect(results[1].outcome).toBe("sent");
-    expect(acked).toBe(2);
+    expect(junk.acked).toEqual([0, 1]);
     expect(rec.sent).toHaveLength(1);
+  });
+
+  it("sendOrThrow rejects a provider failure and resolves a delivered send", async () => {
+    const rec = recorder();
+    rec.fail = new Error("magic-link rejected");
+    await expect(
+      sendOrThrow(bindingFor(rec), { to: TARGET, from: "hello@0509.io", subject: "Sign in", text: "link" }),
+    ).rejects.toThrow("magic-link rejected");
+
+    const good = recorder();
+    await sendOrThrow(bindingFor(good), { to: TARGET, from: "hello@0509.io", subject: "Sign in", text: "link" });
+    expect(good.sent).toHaveLength(1);
   });
 });
