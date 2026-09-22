@@ -37,7 +37,13 @@ test("a passkey registered on first sign-in signs in on its own", async ({ page,
   try {
     // Register through the real button. The status region is the contract;
     // its copy is not asserted (smoke.spec.ts's contract-not-copy convention).
+    // Any status matches, so a non-200 fails the expect with that status
+    // instead of waiting out the test for a response that already arrived.
+    const registered = page.waitForResponse((response) =>
+      response.url().includes("/api/auth/passkey/verify-registration"),
+    );
     await page.getByRole("button", { name: /passkey/i }).click();
+    expect((await registered).status()).toBe(200);
     await expect(page.getByRole("status")).toBeVisible();
 
     // Sign out has no UI affordance yet; the session ends through better-auth's
@@ -57,12 +63,11 @@ test("a passkey registered on first sign-in signs in on its own", async ({ page,
     // answers the empty allowCredentials list the sign-in button produces.
     // J1 checks /onboarding after the magic-link response. This checks it
     // after verify-authentication.
-    const sessionReady = page.waitForResponse(
-      (response) =>
-        response.url().includes("/api/auth/passkey/verify-authentication") && response.ok(),
+    const sessionReady = page.waitForResponse((response) =>
+      response.url().includes("/api/auth/passkey/verify-authentication"),
     );
     await page.getByRole("button", { name: /passkey/i }).click();
-    await sessionReady;
+    expect((await sessionReady).status()).toBe(200);
     await expect(page).toHaveURL(/\/onboarding/);
     await expect(page.getByText(email)).toBeVisible();
     console.log(`passkey sign-in email=${email} sessionAt=${new Date().toISOString()}`);
