@@ -260,6 +260,11 @@ export default tseslint.config(
               message: SERVER_IMPORT_RECEIPT,
             },
             {
+              from: { element: { type: "component" } },
+              disallow: { to: { file: { categories: "server-module" } } },
+              message: SERVER_IMPORT_RECEIPT,
+            },
+            {
               allow: {
                 to: {
                   file: {
@@ -269,24 +274,60 @@ export default tseslint.config(
               },
             },
             {
-              from: { file: { categories: "route-module" } },
-              allow: { to: { file: { categories: "server-module" } } },
+              from: [{ element: { type: "route" } }, { file: { categories: "route-module" } }],
+              allow: {
+                to: [
+                  { element: { type: "component" } },
+                  { element: { type: "data-writer" } },
+                  { file: { categories: { anyOf: ["server-leaf", "db", "auth"] } } },
+                ],
+              },
             },
             {
               from: { file: { categories: "entry" } },
-              allow: { to: { file: { categories: "server-module" } } },
+              allow: {
+                to: [
+                  { element: { type: "component" } },
+                  { file: { categories: "server-module" } },
+                ],
+              },
             },
             {
               from: {
                 file: {
-                  categories: { anyOf: ["server-leaf", "data-writer", "db", "auth"] },
+                  categories: {
+                    anyOf: ["server-leaf"],
+                    noneOf: ["data-writer", "db", "auth"],
+                  },
                 },
               },
-              allow: { to: { file: { categories: "server-module" } } },
+              allow: {
+                to: {
+                  file: { categories: { anyOf: ["server-leaf", "data-writer", "db", "auth"] } },
+                },
+              },
+            },
+            {
+              from: { element: { type: "data-writer" } },
+              allow: {
+                to: {
+                  file: {
+                    categories: {
+                      anyOf: ["data-writer", "db", "server-leaf"],
+                      noneOf: ["auth"],
+                    },
+                  },
+                },
+              },
             },
             {
               from: { file: { categories: "auth" } },
-              allow: { to: { element: { type: "worker" } } },
+              allow: {
+                to: [
+                  { file: { categories: { anyOf: ["server-leaf", "data-writer", "db"] } } },
+                  { element: { type: "worker" } },
+                ],
+              },
             },
             {
               from: { element: { type: "worker" } },

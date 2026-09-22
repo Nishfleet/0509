@@ -13,6 +13,8 @@ const SERVER_RECEIPT =
 const PROBES: Record<string, string> = {
   "app/components/boundary-probe.tsx":
     'import { readCardSettings } from "../lib/data/workspace.server";\n\nexport const leaked = readCardSettings;\n',
+  "app/lib/data/boundary-writer.server.ts":
+    'import { createAuth } from "../auth.server";\n\nexport const leakedAuth = createAuth;\n',
   "app/lib/cycle-a.ts": 'import { b } from "./cycle-b";\n\nexport const a = b;\n',
   "app/lib/cycle-b.ts": 'import { a } from "./cycle-a";\n\nexport const b = a;\n',
 };
@@ -31,7 +33,7 @@ async function removeProbes(): Promise<void> {
 
 describe("architecture lint (#4272)", () => {
   it(
-    "rejects a component importing a data writer, and an import cycle",
+    "rejects a component importing a data writer, a data writer importing auth, and an import cycle",
     { timeout: 60_000 },
     async () => {
       await writeProbes();
@@ -45,6 +47,9 @@ describe("architecture lint (#4272)", () => {
         const boundary = byFile.get("app/components/boundary-probe.tsx") ?? [];
         expect(boundary.some((message) => message.ruleId === "boundaries/dependencies")).toBe(true);
         expect(boundary.some((message) => message.message.includes(SERVER_RECEIPT))).toBe(true);
+
+        const writer = byFile.get("app/lib/data/boundary-writer.server.ts") ?? [];
+        expect(writer.some((message) => message.ruleId === "boundaries/dependencies")).toBe(true);
 
         for (const rel of ["app/lib/cycle-a.ts", "app/lib/cycle-b.ts"]) {
           const messages = byFile.get(rel) ?? [];
