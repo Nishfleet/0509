@@ -37,11 +37,11 @@ state.
 
 | Route | File | Reach | Keyboard | What it does | Proof |
 |---|---|---|---|---|---|
-| `/app` | `app/routes/app.home.tsx` | after sign-in, once the workspace has a self entity. Until then the loader redirects to `/onboarding` | `Tab` to the button, `Enter` | Home. The signed-in email and an "Add a passkey" button that runs better-auth's register ceremony (`generate-register-options` → `verify-registration`) against the live session. | **J3**, **J4**; the register ceremony is **J2** — `e2e/j2-passkey.spec.ts` |
+| `/app` | `app/routes/app.home.tsx`, `app/routes/home.tsx` | after sign-in, once the workspace has a self entity. Until then the loader redirects to `/onboarding` | `Tab` to the button, `Enter` | Home. The signed-in email, an "Add a passkey" button, and the standing panel read from `standing`: rank, four-week line, why-line, read-this-first, source freshness. Fewer than two ON brands says to add a competitor. A zero score is a dash. | **J3**, **J4**; the register ceremony is **J2** — `e2e/j2-passkey.spec.ts`; standing math is `tests/standing/score.test.ts` and `tests/integration/standing.integration.test.ts` |
 | `/app/competitors` | `app/routes/app.competitors.tsx` | — | — | The tracked set. Currently a stub. | **J6** |
 | `/app/competitors/:entityId` | `app/routes/app.competitor.tsx` | a row on `/app/competitors` | — | One competitor. Currently a stub. | **J7**, **J10** |
 | `/app/alerts` | `app/routes/app.alerts.tsx` | — | — | What changed. Currently a stub. | **J7**, **J8** |
-| `/app/settings` | `app/routes/app.settings.tsx` | — | — | Workspace settings. Links to the public card. | **J13**, **J14** |
+| `/app/settings` | `app/routes/app.settings.tsx`, `app/routes/settings.tsx` | — | edit weekday, hour, timezone, `Enter` | Workspace settings. Saving the brief time cancels the pending rollover and stores the next UTC instant. Links to the public card. | **J13**, **J14**; brief replace is `tests/standing/reconcile.test.ts` |
 | `/app/settings/card` | `app/routes/settings.card.tsx` | the "Public card" link on `/app/settings` | `Tab` to a button, `Enter` | The public-card switch: turn it on (which mints an opaque URL), copy the link, rotate the URL, turn it off. Turning it off is what the public route's 404 is graded on — the edge copy expires on its own inside a minute, which is the contract's "404 within a minute". | `tests/integration/card/public-card.integration.test.ts` — the writer's publish, rotate, unpublish and two-workspace uniqueness against real D1 |
 | `/onboarding` | `app/routes/onboarding.tsx` | the first signed-in request, when the workspace has no self entity. `/app` redirects here. A self entity sends this loader back to `/app`. | the input is focused | One input, placeholder "your website, or a handle", and the signed-in email. "Add a passkey" runs the same register ceremony as Home. The input does not post yet; saving the subject is #3996. | **J1** — `e2e/j1-magic-link.spec.ts`; the passkey control is **J2** — `e2e/j2-passkey.spec.ts` |
 
@@ -59,10 +59,11 @@ state.
 
 ## What is deliberately missing
 
-Five of the seven signed-in surfaces are stubs and this table says so rather
-than implying coverage. They fill in with the engine packets under #3842. The
-rule that keeps this file honest is the same one that keeps the product honest:
-a row describes what a user can do **today**, never what is planned.
+`/app/competitors`, `/app/competitors/:entityId`, and `/app/alerts` are stubs
+and this table says so rather than implying coverage. They fill in with the
+engine packets under #3842. The rule that keeps this file honest is the same
+one that keeps the product honest: a row describes what a user can do **today**,
+never what is planned.
 
 No navigation exists yet — there is no nav bar, no sidebar and no link between
 the signed-in routes. Reaching `/app/alerts` today means typing the URL. That is

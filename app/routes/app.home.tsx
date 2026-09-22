@@ -4,14 +4,17 @@ import { useState } from "react";
 import { redirect } from "react-router";
 
 import { authClient } from "../lib/auth-client";
+import { loadHome } from "../lib/data/standing.server";
 import { requireSession } from "../lib/require-session.server";
 import { workspaceLandingForRequest } from "../lib/workspace.server";
+import { StandingHome } from "./home";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
   const landing = await workspaceLandingForRequest(request, session.user.id);
   if (landing) throw redirect(landing);
-  return { email: session.user.email };
+  const home = await loadHome(session.user.id);
+  return { email: session.user.email, home };
 }
 
 export default function Page({ loaderData }: Route.ComponentProps) {
@@ -37,6 +40,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       </button>
       {state === "added" ? <p role="status">Passkey added. It can sign you in from now on.</p> : null}
       {state === "failed" ? <p role="alert">The passkey prompt did not finish. Try again.</p> : null}
+      <StandingHome home={loaderData.home} />
     </main>
   );
 }

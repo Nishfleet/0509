@@ -115,11 +115,18 @@
     ]
   },
 
+  "workflows": [
+    {
+      "name": "standing-rollover",
+      "binding": "STANDING_ROLLOVER",
+      "class_name": "StandingRolloverWorkflow"
+    }
+  ],
+
   "triggers": {
-    // The dead-man ping, and nothing else yet. Every five minutes: an external
-    // service alerts when the reports stop, which is the one failure a Worker
-    // cannot report about itself.
-    "crons": ["*/5 * * * *"]
+    // */5 is the dead-man ping. 0 3 * * * is the standing nightly refresh
+    // (engine 6): recompute the in-flight week, then reconcile a missed rollover.
+    "crons": ["*/5 * * * *", "0 3 * * *"]
   },
 
   "routes": [
