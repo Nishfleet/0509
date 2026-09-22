@@ -59,13 +59,20 @@ async function declaredQueues(): Promise<string[]> {
 // The API response is parsed, not asserted: `as QueuePage` would compile and
 // then hand `undefined` to the pagination loop the day Cloudflare renames a
 // field, and the failure would read as "the account has no queues".
+//
+// `result` and `result_info` are required, not `.nullish()`. On the real API a
+// `success: true` response always carries both (verified against the account:
+// `result` is the queue array, `result_info` carries `page`/`total_pages`), and
+// a fallback to `[]` / `1` here would turn a renamed field into "every declared
+// queue is missing" — a phantom red on unrelated PRs, which is the #4246
+// failure class pointed the other way. A required field is a parse error that
+// names the drift instead. Only `errors` is nullish, because the success path
+// really does send `"errors": null` rather than an absent key.
 const queuePageSchema = z.object({
   success: z.boolean(),
-  // The success path sends `"errors": null`, not an absent key: a strict
-  // `.optional()` here failed on the real response.
   errors: z.array(z.object({ code: z.number(), message: z.string() })).nullish(),
-  result: z.array(z.object({ queue_name: z.string() })).nullish(),
-  result_info: z.object({ page: z.number(), total_pages: z.number() }).nullish()
+  result: z.array(z.object({ queue_name: z.string() })),
+  result_info: z.object({ page: z.number(), total_pages: z.number() })
 });
 
 // Every page, not just the first. `per_page=100` caps one page and the
@@ -86,8 +93,8 @@ async function accountQueues({ token, accountId }: Credentials): Promise<string[
           (parsed.success ? JSON.stringify(parsed.data.errors ?? "") : parsed.error.message)
       );
     }
-    for (const queue of parsed.data.result ?? []) names.push(queue.queue_name);
-    const totalPages = parsed.data.result_info?.total_pages ?? 1;
+    for (const queue of parsed.data.result) names.push(queue.queue_name);
+    const totalPages = parsed.data.result_info.total_pages;
     if (page >= totalPages) break;
     page += 1;
   }
