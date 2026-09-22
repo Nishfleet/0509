@@ -20,8 +20,14 @@ on:
   deployment_status:
 
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # A deployment_status run verifies one deploy and must finish. Sharing the
+  # branch group with cancel-in-progress cancelled every production e2e today:
+  # each deploy emits pending, in_progress and success events, each a run, and
+  # merges 90 s apart cancelled the previous deploy's run (35754511999, 35754574851
+  # and four more, all "cancelled", 16:29-16:31Z). PR and queue runs keep the
+  # branch group so a superseded head is still cancelled.
+  group: ci-${{ github.event_name == 'deployment_status' && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'deployment_status' }}
 
 permissions:
   contents: read
@@ -30,9 +36,9 @@ jobs:
   codex-node-checks:
     name: codex-node-checks
     if: github.event_name != 'deployment_status'
-    # fleet-ci on merge_group/push only; pull_request stays hosted so fork
-    # PRs never execute on the box (fleet-ops#5935).
-    runs-on: ${{ (github.event_name == 'merge_group' || github.event_name == 'push') && 'fleet-ci' || 'ubuntu-latest' }}
+    # Hosted for every event. Public repo: minutes are free and the hosted pool
+    # is wider than the 3 owned runners (fleet-ops#5935 reversed 2026-09-22).
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
@@ -61,8 +67,8 @@ jobs:
   Gitleaks:
     name: Gitleaks
     if: github.event_name != 'deployment_status'
-    # fleet-ci on merge_group/push only; pull_request stays hosted so fork
-    # PRs never execute on the box (fleet-ops#5935).
+    # Hosted for every event. Public repo: minutes are free and the hosted pool
+    # is wider than the 3 owned runners (fleet-ops#5935 reversed 2026-09-22).
     # Stays on a hosted runner: the docker:// step below runs as root and leaves
     # root-owned files in a persistent fleet-ci workspace, which broke every later
     # checkout on that runner (three merge_group failures, 2026-09-22 01:33-01:47 IST).
@@ -98,9 +104,9 @@ jobs:
   preview-assert:
     name: preview-assert
     if: github.event_name != 'deployment_status'
-    # fleet-ci on merge_group/push only; pull_request stays hosted so fork
-    # PRs never execute on the box (fleet-ops#5935).
-    runs-on: ${{ (github.event_name == 'merge_group' || github.event_name == 'push') && 'fleet-ci' || 'ubuntu-latest' }}
+    # Hosted for every event. Public repo: minutes are free and the hosted pool
+    # is wider than the 3 owned runners (fleet-ops#5935 reversed 2026-09-22).
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
@@ -124,6 +130,24 @@ jobs:
         # PLAYWRIGHT_TEST_BASE_URL is deliberately unset: playwright.config.ts
         # then starts `wrangler dev` itself through webServer and tears it down.
         run: npm run e2e
+
+      - name: Collect Lighthouse against the built Worker
+        # Same budgets as the deployment_status lighthouse job, on the PR, so a
+        # regression is red before merge (poteto 03:24: a trace per change, not
+        # per deploy; #4224). lhci starts wrangler dev itself: start-server-command
+        # and the ready pattern are stock lhci flags. No loop, no script.
+        # A per-process port, like playwright.config.ts: the fleet-ci runners share
+        # this host with worker checkouts that run wrangler dev too (merge-group runs
+        # 35746786576, 35748807411: "Address already in use").
+        run: P=$((18000 + $$ % 1000)); npx --yes @lhci/cli@0.15.1 collect --url=http://127.0.0.1:$P/ --start-server-command="npx wrangler dev --port $P --local" --start-server-ready-pattern="Ready on" --start-server-ready-timeout=120000 --number-of-runs=3
+
+      - name: Assert the Lighthouse budgets
+        # lighthouse-budget.pr.json is the deterministic subset of lighthouse-budget.json:
+        # resource sizes and CLS. The timing rows (LCP, TTI) stay on the deployment_status
+        # job: on a shared runner the unchanged page measured LCP 1657 one run and under
+        # 1500 the run before (35748475565 vs 35746328688), and a required check that
+        # flips on runner load is not a gate. Production still enforces every row.
+        run: npx --yes @lhci/cli@0.15.1 assert --budgets-file=lighthouse-budget.pr.json
 
       - name: Keep the trace when it fails
         if: failure()
@@ -250,3 +274,25 @@ jobs:
       - name: merge_group reports the check so the queue can merge (the grade was enforced on the pull request)
         if: github.event_name == 'merge_group'
         run: "true"
+
+  # The grader arms the merge (Fable, 2026-09-22): seven worker PRs sat CLEAN
+  # and unmerged (#4175 #4188 #4192 #4197 #4198 #4205 #4213) because the
+  # worker's own step 9 arm runs only if the worker is still alive when the
+  # grade lands, and a 45-min TimeoutStartSec kill ends many before that. The
+  # arm belongs to the event, not the worker: a passing grade on a worker PR
+  # enqueues it; the merge queue still requires every check on the merge
+  # commit. Separate job so the elevated token never sits in the grader.
+  arm-merge:
+    name: arm-merge
+    needs: opus-review
+    if: github.event_name == 'pull_request' && github.event.pull_request.user.login == 'nishfleet-worker[bot]' && needs.opus-review.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Enqueue the graded PR on the merge queue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr merge ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --squash --auto

@@ -3,10 +3,10 @@
 // docs/REBUILD-DONE.md J8: Email Routing delivers e2e@0509.io to the `email`
 // handler, and the Playwright suite reads messages back over HTTPS.
 //
-// The KV binding is declared without an id on purpose: wrangler's automatic
-// resource provisioning creates the namespace on first deploy and keeps it
-// linked across later deploys even though the id is never written back here
-// (CI deploys have no checkout to write to).
+// The mailbox is a SQLite Durable Object, one instance per recipient
+// (0509#4210). Workers KV cached a missing key for 60s, so the runner read
+// 404 for the whole poll after the write had landed. Tag v1 creates the
+// class. Wrangler applies it on deploy. There is no KV binding.
 {
   "$schema": "../node_modules/wrangler/config-schema.json",
   "name": "0509-e2e-inbox",
@@ -15,6 +15,9 @@
   "observability": {
     "enabled": true
   },
-  "kv_namespaces": [{ "binding": "INBOX" }],
+  "durable_objects": {
+    "bindings": [{ "name": "INBOX", "class_name": "InboxMailbox" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["InboxMailbox"] }],
   "routes": [{ "pattern": "e2e-inbox.0509.io", "custom_domain": true }]
 }

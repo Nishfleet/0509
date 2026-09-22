@@ -1,12 +1,16 @@
 import type { Route } from "./+types/app.home";
 
 import { useState } from "react";
+import { redirect } from "react-router";
 
 import { authClient } from "../lib/auth-client";
 import { requireSession } from "../lib/require-session.server";
+import { workspaceLandingForRequest } from "../lib/workspace.server";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
+  const landing = await workspaceLandingForRequest(request, session.user.id);
+  if (landing) throw redirect(landing);
   return { email: session.user.email };
 }
 

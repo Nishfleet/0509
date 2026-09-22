@@ -86,6 +86,14 @@ PR. With it set, there is no local server and the suite runs against that URL �
 that is what the `deployment_status` job runs against production. Same
 assertions both times.
 
+**Run it before the PR opens.** A change under `app/`, `workers/` or `e2e/`
+runs `npm run e2e` in preview mode locally first and quotes the Playwright
+summary line (`N passed`) under `run-proof:` in the PR body. `preview-assert`
+reruns the same suite, so the quote is not the proof; it is the evidence that
+you drove the app yourself before asking a reviewer to. Chromium is already
+installed on this host (`~/.cache/ms-playwright`), so the run costs one
+`wrangler dev` start.
+
 ## Architecture
 
 - `app/routes.ts` — the route registry. A route not listed here cannot be
@@ -152,7 +160,7 @@ check that cannot report blocks the queue forever.
 - **Jev decides every typed decision** (`docs/REBUILD-JEV.md`, D1–D9). Code never guesses with regexes where a judgment is needed; Jev internals are never shown to customers.
 - **Cost** (`docs/REBUILD-COST.md`): writes batched, blobs in R2, counters in KV/DO, Browser Rendering capped at 10 concurrent sessions as a config value. Raising the cap needs Nish's yes with the cost in the PR, and is never left to degrade customers.
 - **Guardrails** (`docs/REBUILD-GUARDRAILS.md`): brands and creators only, never private individuals; disposable identities for collection; paid data providers only with Nish's yes.
-- **The site is gated until the audit passes.** `/` and `/api/health` are public; `/login`, `/app`, `/api/auth` sit behind Cloudflare Access (Nish by email, agents by the service token in `~/.config/cloudflare/access-0509-agents.env`). A bare `curl` returning 302 to `cloudflareaccess.com` is the gate, not a bug. `0509.in` is a zone Redirect Rule, never code.
+- **The site is gated until the audit passes.** `/` and `/api/health` are public; `/login`, `/app`, `/onboarding`, `/api/auth` sit behind Cloudflare Access (Nish by email, agents by the service token in `~/.config/cloudflare/access-0509-agents.env`). A bare `curl` returning 302 to `cloudflareaccess.com` is the gate, not a bug. `0509.in` is a zone Redirect Rule, never code.
 - **Two orchestrator sessions work this repo.** Lanes are posted on #3842; before touching a file in the other lane, post one line there.
 
 ## Docs

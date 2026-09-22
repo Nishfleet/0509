@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { z } from "zod";
 
 import { insertUserDecisions } from "../data/user-decision.server";
-import { fetchPage, type BrowserBinding, type TransportResult } from "../fetch/transport";
+import { readUrl, type ReadUrlResult } from "../fetch/transport.server";
 import { jevAsk, type JevQuestion } from "../jev/client";
 import { buildIdentityPack, inputHash } from "../jev/context-pack";
 import type { CardField, CardResult } from "./card-types";
@@ -14,7 +14,6 @@ import { probeThrough } from "./probe-cache";
 interface CardDeps {
   db: D1Database;
   cache?: KVNamespace;
-  browser?: BrowserBinding;
   jev?: { url: string; apiKey?: string };
 }
 
@@ -125,15 +124,15 @@ export async function buildIdentityCard(
   const cache = deps.cache;
 
   const pageUrl = subject.url;
-  const homepage: TransportResult = pageUrl
+  const homepage: ReadUrlResult = pageUrl
     ? await probeThrough(
         cache,
         cacheKey,
         "homepage",
-        () => fetchPage(pageUrl, deps.browser),
+        () => readUrl(pageUrl),
         (v) => v.ok,
       )
-    : { ok: false, reason: "no-url", status: null, ms: 0 };
+    : { ok: false, reason: "invalid-url", detail: "no homepage URL for this input" };
 
   const html = homepage.ok ? homepage.html : null;
   const extractedRes = html && pageUrl ? await probe(() => extract(html, pageUrl)) : null;
@@ -369,7 +368,7 @@ export async function buildIdentityCard(
     packHash,
     verdictCount: verdictRows.length,
     transport: homepage.ok ? homepage.transport : null,
-    browserMsUsed: homepage.ok ? homepage.browserMsUsed : null,
+    browserMsUsed: homepage.ok ? (homepage.browserMsUsed ?? null) : null,
   };
 }
 
@@ -384,7 +383,6 @@ export async function buildCardFromRequest(args: {
     {
       db: env.DB,
       cache: env.IDENTITY_CACHE,
-      browser: env.BROWSER,
       jev: jevUrl ? { url: jevUrl, apiKey: (env as { JEV_API_KEY?: string }).JEV_API_KEY } : undefined,
     },
     args,

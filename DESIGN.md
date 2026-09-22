@@ -390,8 +390,10 @@ Declared under both `@media (prefers-color-scheme: dark)` scoped to
    **The price is on the button** wherever the action starts or changes a subscription:
    `Start watching  €10/mo`. List prices from the ledger, localized at checkout by
    Dodo: **Scout €10/month, Starter €46/month, Agency €136/month.** There is no free
-   plan and no "free" anywhere in the copy (#3896). **No trial copy until Nish decides**
-   whether to offer Dodo's time-limited trial — do not write "try it free" anywhere.
+   plan and no "free" anywhere in the copy (#3896). **Trial copy is decided** (Nish,
+   2026-09-22, #3912 item 2): every paid plan carries a 7-day trial through Dodo, card up
+   front, charged on day 8 unless cancelled. Say exactly that. Never "try it free": there
+   is no free plan.
 2. **Secondary** — ghost: ink hairline, transparent, green wash on hover. Reserved for
    the alternative to the primary ("See the live card", "I meant to do this").
 3. **Tertiary** — mono caps, underlined, no box. In-feed actions: "See the three ads →",
@@ -574,8 +576,9 @@ These need Nish, and the brief deliberately stops rather than picking:
 1. **The name.** Three concepts rebranded the product to "Five to Nine"; the charter says
    rebuild in place and says nothing about a rename. The concept pages use the `05|09`
    wordmark, which works for either answer. Unresolved.
-2. **A trial.** No free tier is decided; whether Dodo's time-limited trial on a paid plan
-   is offered is a separate yes/no (#3896). The landing currently assumes no trial.
+2. **A trial.** Decided 2026-09-22 (#3912 item 2): a 7-day trial on every paid plan through
+   Dodo, card up front, charged on day 8 unless cancelled. No free tier. Landing and pricing
+   copy say so (#4014, #4132).
 3. **The landing's sample brand.** The live standing card needs one recognisable brand
    with active public competition, in a workspace we own. Not chosen.
 

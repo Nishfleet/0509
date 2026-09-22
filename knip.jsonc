@@ -14,7 +14,12 @@
     // (workers/e2e-inbox.wrangler.jsonc), which knip does not read — the file
     // is an entry by name.
     "workers/e2e-inbox.ts",
-    "e2e/*.setup.ts"
+    // The fixture-site Worker's front door is its own wrangler config
+    // (workers/fixture-site.wrangler.jsonc), which knip does not read — the
+    // file is an entry by name.
+    "workers/fixture-site.ts",
+    "e2e/*.setup.ts",
+    "app/components/ui/*.{ts,tsx}"
   ],
   "project": ["app/**/*.{ts,tsx}", "workers/**/*.ts", "e2e/**/*.ts", "tests/**/*.ts"],
 

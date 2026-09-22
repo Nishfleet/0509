@@ -1,0 +1,34 @@
+// Config for the J8 fixture-site Worker (0509#4046). It is a separate Worker
+// with its own name and routes block, same shape as the J1 mail sink in
+// workers/e2e-inbox.wrangler.jsonc. It lives on fixture.0509.in and NEVER on
+// 0509.in: 0509.in is a live production 308 redirect to 0509.io (a zone-level
+// Redirect Rule on the 0509.in zone), and a deliberate break there would break
+// production. docs/REBUILD-DONE.md J8 says this outright, and
+// docs/engines/delivery.md P7.5 requires the incident round-trip to run against
+// this fixture and no other host.
+//
+// The KV binding is declared without an id on purpose, exactly as the e2e
+// inbox's is: wrangler's deploy-time resource provisioning creates the
+// 0509-fixture-site-state namespace on first deploy and keeps it linked across
+// later deploys, even though the id is never written back here (CI deploys have
+// no checkout to write to).
+//
+// The break state has NO TTL and the deploy job never resets it, so it survives
+// deploys: a round-trip that forgets to repair leaves the fixture broken while
+// every later deploy still reports success. End every round-trip with
+// `POST /__break?mode=off`.
+//
+// The Worker also needs the `FIXTURE_SITE_TOKEN` Worker secret. Without it every
+// flip answers 503 and the fixture stays healthy forever, which is why the
+// Worker fails loudly rather than reading healthy by default.
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "0509-fixture-site",
+  "main": "./fixture-site.ts",
+  "compatibility_date": "2026-09-16",
+  "observability": {
+    "enabled": true
+  },
+  "kv_namespaces": [{ "binding": "STATE" }],
+  "routes": [{ "pattern": "fixture.0509.in", "custom_domain": true }]
+}

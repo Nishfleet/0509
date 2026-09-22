@@ -1,0 +1,10 @@
+// Test config for the J8 fixture-site Worker (0509#4046): real workerd, real
+// local KV. FIXTURE_SITE_TOKEN is a var here so the flip route's token gate has
+// something to check — production gets it as a secret on the deployed Worker.
+{
+  "name": "0509-fixture-site-test",
+  "compatibility_date": "2026-09-16",
+  "main": "../../workers/fixture-site.ts",
+  "kv_namespaces": [{ "binding": "STATE" }],
+  "vars": { "FIXTURE_SITE_TOKEN": "integration-token" }
+}

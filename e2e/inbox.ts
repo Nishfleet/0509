@@ -2,8 +2,8 @@ import { expect, type Page } from "@playwright/test";
 
 // The J1 mail path, per the amended decision on 0509#3927: Email Routing's
 // e2e@0509.io rule delivers e2e+<run-id>@0509.io (zone subaddressing on, RFC
-// 5233) to the 0509-e2e-inbox Worker, which stores the raw message in KV for
-// an hour and serves it back on this one endpoint, gated by the
+// 5233) to the 0509-e2e-inbox Worker, which stores the raw message in a
+// Durable Object for an hour and serves it back on this one endpoint, gated by the
 // E2E_INBOX_TOKEN secret. Nothing here reads D1 and nothing shortens the
 // auth path — the link the test clicks is the link the app really sent.
 const INBOX_URL = "https://e2e-inbox.0509.io";
@@ -60,7 +60,7 @@ export function extractMagicLink(rawMessage: string): string | null {
   const text = /content-transfer-encoding:\s*quoted-printable/i.test(rawMessage)
     ? decodeQuotedPrintable(rawMessage)
     : rawMessage;
-  const match = /https:\/\/0509\.io\/api\/auth\/magic-link\/verify\?[^\s"'<>]+/.exec(text);
+  const match = /https:\/\/[^\s"'<>]+\/api\/auth\/magic-link\/verify\?[^\s"'<>]+/.exec(text);
   return match ? match[0] : null;
 }
 
@@ -114,13 +114,13 @@ async function waitForMagicLink(to: string, token: string): Promise<string> {
   if (link) return link;
   throw new Error(
     `No magic-link email for ${to} within ${POLL_LIMIT_MS / 1000}s (${lastDetail}). ` +
-      "If the inbox stayed at 404, the Email Routing rule e2e@0509.io -> 0509-e2e-inbox " +
-      "is missing, zone subaddressing is off, or the app's EMAIL binding did not deliver.",
+      "A 404 means the sink has no stored message for this recipient. " +
+      "Nothing was written for the address, or the stored message is older than one hour.",
   );
 }
 
 // J1's core: submit the login form for a fresh e2e+ address, read the real
-// email out of the inbox Worker, follow the link, land signed in on /app.
+// email out of the inbox Worker, follow the link, land signed in on /onboarding.
 // Timestamps are logged for the packet's proof line (send and session).
 export async function signInWithMagicLink(page: Page, email: string, token: string): Promise<void> {
   await page.goto("/login");
@@ -133,7 +133,7 @@ export async function signInWithMagicLink(page: Page, email: string, token: stri
   const link = await waitForMagicLink(email, token);
   const linkReadAt = new Date().toISOString();
   await page.goto(link);
-  await expect(page).toHaveURL(/\/app/);
+  await expect(page).toHaveURL(/\/onboarding/);
   console.log(
     `magic-link sign-in email=${email} sentAt=${sentAt} linkReadAt=${linkReadAt} sessionAt=${new Date().toISOString()}`,
   );

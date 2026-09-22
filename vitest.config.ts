@@ -34,16 +34,21 @@ export default defineConfig({
         ],
         test: {
           name: "workers",
-          include: ["tests/integration/**/*.integration.test.ts"],
+          include: [
+            "tests/integration/**/*.integration.test.ts",
+            // #4180's acceptance names this file verbatim, without the
+            // .integration infix; it still needs real workerd + real D1.
+            "tests/integration/migration-rollback.test.ts",
+          ],
           setupFiles: ["./tests/integration/apply-migrations.ts"],
           testTimeout: 30_000,
         },
       },
       {
-        // The J1 mail-sink Worker (0509#3927): real workerd + real local KV.
-        // Its token gate and email handler run against the same binding kinds
-        // production has — a broken gate fails in a merge gate, not in CI's
-        // production lane.
+        // The J1 mail-sink Worker (0509#3927, 0509#4210): real workerd and a
+        // real local SQLite Durable Object. Its token gate and email handler
+        // run against the same binding kinds production has. A broken gate
+        // fails in a merge gate, not in CI's production lane.
         plugins: [
           cloudflareTest(() => ({
             wrangler: { configPath: "./tests/integration/wrangler.e2e-inbox.test.jsonc" },
@@ -52,6 +57,41 @@ export default defineConfig({
         test: {
           name: "e2e-inbox",
           include: ["tests/integration/e2e-inbox.test.ts"],
+          testTimeout: 30_000,
+        },
+      },
+      {
+        // The J8 fixture-site Worker (0509#4046): real workerd + real local KV.
+        // Its token-gated flip route and both break modes run against the same
+        // binding kinds production has, so a break that does not survive the
+        // round-trip fails in a merge gate instead of a live incident run.
+        plugins: [
+          cloudflareTest(() => ({
+            wrangler: { configPath: "./tests/integration/wrangler.fixture-site.test.jsonc" },
+          })),
+        ],
+        test: {
+          name: "fixture-site",
+          include: ["tests/integration/fixture-site.test.ts"],
+          testTimeout: 30_000,
+        },
+      },
+      {
+        // The P3 fetch-then-browser transport (0509#3971): real workerd for the
+        // plain-fetch leg and the HTMLRewriter text extraction, so the escalation
+        // predicates run against the same global `fetch`, `AbortSignal.timeout`
+        // and `HTMLRewriter` production uses. The outbound `fetch` is stubbed per
+        // test so every trigger is reachable deterministically, and `env` is
+        // mocked, so the browser binding declared below validates the config
+        // shape only.
+        plugins: [
+          cloudflareTest(() => ({
+            wrangler: { configPath: "./tests/integration/wrangler.transport.test.jsonc" },
+          })),
+        ],
+        test: {
+          name: "transport",
+          include: ["tests/integration/transport.test.ts"],
           testTimeout: 30_000,
         },
       },
