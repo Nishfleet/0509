@@ -1,8 +1,11 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { contrastRatio, Mark, markGrounds, markSizes, type MarkProps, type MarkSize } from "../../app/components/mark";
+import { Mark, markSizes, type MarkProps, type MarkSize } from "../../app/components/mark";
 
 const sourceUrl = "https://example.com/pricing";
 const capturedAt = "2026-09-22T06:02:00.000Z";
@@ -51,14 +54,15 @@ describe("the mark", () => {
     }
   });
 
-  it("inlines the email size on the light bone ground", () => {
+  it("inlines the email size on the light bone ground the app ships", () => {
     const html = mark({ size: "email" });
+    const { light } = shippedGrounds();
     expect(html).toContain("font-size:22px");
-    expect(html).toContain(markGrounds.light.inkSoft);
-    expect(html).toContain(markGrounds.light.bone);
-    expect(html).toContain(markGrounds.light.red);
-    expect(html).toContain(markGrounds.light.green);
-    expect(html).toContain(markGrounds.light.onGreen);
+    expect(html).toContain(light.inkSoft);
+    expect(html).toContain(light.bone);
+    expect(html).toContain("#e0442c");
+    expect(html).toContain("#16c47f");
+    expect(html).toContain("#0e0d0a");
     expect(html).not.toContain("var(--");
   });
 
@@ -75,7 +79,10 @@ describe("the mark", () => {
   it("shows a capture when a screenshot URL is present", () => {
     const html = mark({ size: "sm", screenshotUrl: "https://cdn.example.com/shot.png" });
     expect(html).toContain('src="https://cdn.example.com/shot.png"');
+    expect(html).toContain(`alt="Capture, ${capturedAt}"`);
     expect(html).not.toContain("screenshot unavailable");
+    expect(mark({ size: "sm", screenshotUrl: "/captures/shot.png" })).toContain('src="/captures/shot.png"');
+    expect(mark({ size: "email", screenshotUrl: "/captures/shot.png" })).toContain("screenshot unavailable");
   });
 
   it("is never shown without a source URL and a captured-at time", () => {
@@ -89,16 +96,52 @@ describe("the mark", () => {
     expect(mark({ size: "lg", after: "" })).toBe("");
   });
 
-  it("keeps the struck text at or above 3:1 on both grounds", () => {
-    const light = contrastRatio(markGrounds.light.inkSoft, markGrounds.light.bone);
-    const dark = contrastRatio(markGrounds.dark.inkSoft, markGrounds.dark.bone);
-    expect(light).toBeCloseTo(6.91, 2);
-    expect(dark).toBeCloseTo(7.33, 2);
-    expect(light).toBeGreaterThanOrEqual(3);
-    expect(dark).toBeGreaterThanOrEqual(3);
-    expect(markGrounds.light.inkSoft).toBe("#55524a");
-    expect(markGrounds.dark.inkSoft).toBe("#a9a294");
-    expect(markGrounds.light.bone).toBe("#f4f1e8");
-    expect(markGrounds.dark.bone).toBe("#14130f");
+  it("keeps the struck text at or above 3:1 on both grounds the app ships", () => {
+    const { light, dark } = shippedGrounds();
+    const lightRatio = contrastRatio(light.inkSoft, light.bone);
+    const darkRatio = contrastRatio(dark.inkSoft, dark.bone);
+    expect(lightRatio).toBeCloseTo(6.91, 2);
+    expect(darkRatio).toBeCloseTo(7.33, 2);
+    expect(lightRatio).toBeGreaterThanOrEqual(3);
+    expect(darkRatio).toBeGreaterThanOrEqual(3);
+    for (const size of ["lg", "md", "sm"] as const) {
+      const html = mark({ size });
+      expect(html).toContain("var(--ink-soft, var(--color-ink-soft))");
+      expect(html).not.toContain(light.inkSoft);
+      expect(html).not.toContain(dark.inkSoft);
+    }
   });
 });
+
+function shippedGrounds(): {
+  light: { inkSoft: string; bone: string };
+  dark: { inkSoft: string; bone: string };
+} {
+  const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../../app/app.css"), "utf8");
+  const ink = [...css.matchAll(/--color-ink-soft:\s*(#[0-9a-fA-F]{6})/g)].map((match) => match[1] ?? "");
+  const bone = [...css.matchAll(/--color-bone:\s*(#[0-9a-fA-F]{6})/g)].map((match) => match[1] ?? "");
+  expect(ink).toEqual(["#55524a", "#a9a294", "#a9a294"]);
+  expect(bone).toEqual(["#f4f1e8", "#14130f", "#14130f"]);
+  return {
+    light: { inkSoft: ink[0] ?? "", bone: bone[0] ?? "" },
+    dark: { inkSoft: ink[1] ?? "", bone: bone[1] ?? "" },
+  };
+}
+
+function contrastRatio(foreground: string, background: string): number {
+  const lighter = Math.max(relativeLuminance(foreground), relativeLuminance(background));
+  const darker = Math.min(relativeLuminance(foreground), relativeLuminance(background));
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+function relativeLuminance(hex: string): number {
+  const match = /^#([0-9a-fA-F]{6})$/.exec(hex);
+  const digits = match?.[1];
+  if (digits === undefined) throw new Error(`bad hex ${hex}`);
+  const value = Number.parseInt(digits, 16);
+  const channel = (shift: number) => {
+    const srgb = ((value >> shift) & 255) / 255;
+    return srgb <= 0.04045 ? srgb / 12.92 : ((srgb + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(16) + 0.7152 * channel(8) + 0.0722 * channel(0);
+}

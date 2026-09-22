@@ -1,20 +1,11 @@
 import type { CSSProperties, ReactElement } from "react";
 
-export const markGrounds = {
-  light: {
-    bone: "#f4f1e8",
-    inkSoft: "#55524a",
-    red: "#e0442c",
-    green: "#16c47f",
-    onGreen: "#0e0d0a",
-  },
-  dark: {
-    bone: "#14130f",
-    inkSoft: "#a9a294",
-    red: "#ff7a63",
-    green: "#2ee59c",
-    onGreen: "#0e0d0a",
-  },
+const emailPaint = {
+  bone: "#f4f1e8",
+  inkSoft: "#55524a",
+  red: "#e0442c",
+  green: "#16c47f",
+  onGreen: "#0e0d0a",
 } as const;
 
 export const markSizes = ["lg", "md", "sm", "email"] as const;
@@ -50,14 +41,6 @@ const DISPLAY_FONT =
 const EMAIL_FONT_FAMILY = '"Bricolage Grotesque", ui-sans-serif, sans-serif';
 const screenshotUnavailable = "screenshot unavailable";
 
-export function contrastRatio(foreground: string, background: string): number {
-  const foregroundLuminance = relativeLuminance(foreground);
-  const backgroundLuminance = relativeLuminance(background);
-  const lighter = Math.max(foregroundLuminance, backgroundLuminance);
-  const darker = Math.min(foregroundLuminance, backgroundLuminance);
-  return (lighter + 0.05) / (darker + 0.05);
-}
-
 export function Mark({
   before,
   after,
@@ -74,7 +57,7 @@ export function Mark({
 
   const email = size === "email";
   const colors = paint(email);
-  const shot = screenshotSrc(screenshotUrl);
+  const shot = screenshotSrc(screenshotUrl, email);
   const line: CSSProperties = {
     margin: 0,
     fontFamily: email ? EMAIL_FONT_FAMILY : DISPLAY_FONT,
@@ -98,7 +81,7 @@ export function Mark({
       {shot === null ? (
         <p style={{ margin: 0 }}>{screenshotUnavailable}</p>
       ) : (
-        <img src={shot} alt="" width={104} height={74} />
+        <img src={shot} alt={`Capture, ${capturedAt.trim()}`} width={104} height={74} />
       )}
       <p style={line}>
         <s
@@ -154,18 +137,18 @@ function fontSize(size: MarkSize): string {
 function paint(email: boolean): Paint {
   if (email) {
     return {
-      struck: markGrounds.light.inkSoft,
-      strike: markGrounds.light.red,
-      marker: markGrounds.light.green,
-      onMarker: markGrounds.light.onGreen,
-      ground: markGrounds.light.bone,
+      struck: emailPaint.inkSoft,
+      strike: emailPaint.red,
+      marker: emailPaint.green,
+      onMarker: emailPaint.onGreen,
+      ground: emailPaint.bone,
     };
   }
   return {
-    struck: `var(--ink-soft, var(--color-ink-soft, ${markGrounds.light.inkSoft}))`,
-    strike: `var(--red, var(--color-strike, ${markGrounds.light.red}))`,
-    marker: `var(--green, var(--color-accent, ${markGrounds.light.green}))`,
-    onMarker: `var(--on-green, var(--color-on-accent, ${markGrounds.light.onGreen}))`,
+    struck: "var(--ink-soft, var(--color-ink-soft))",
+    strike: "var(--red, var(--color-strike))",
+    marker: "var(--green, var(--color-accent))",
+    onMarker: "var(--on-green, var(--color-on-accent))",
     ground: "transparent",
   };
 }
@@ -191,29 +174,13 @@ function capturedInstant(value: string): string | null {
   return new Date(ms).toISOString();
 }
 
-function screenshotSrc(value: string | undefined): string | null {
+function screenshotSrc(value: string | undefined, email: boolean): string | null {
   if (value === undefined) return null;
   const trimmed = value.trim();
   if (trimmed === "") return null;
-  if (trimmed.startsWith("/") && !trimmed.startsWith("//")) return trimmed;
-  return httpUrl(trimmed);
-}
-
-function relativeLuminance(hex: string): number {
-  const match = /^#([0-9a-f]{6})$/i.exec(hex);
-  const digits = match?.[1];
-  if (digits === undefined) {
-    throw new Error(`contrastRatio expects a 6-digit hex color, received ${hex}`);
+  if (trimmed.startsWith("/") && !trimmed.startsWith("//")) {
+    if (email) return null;
+    return trimmed;
   }
-  const value = Number.parseInt(digits, 16);
-  const red = linearChannel((value >> 16) & 255);
-  const green = linearChannel((value >> 8) & 255);
-  const blue = linearChannel(value & 255);
-  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
-}
-
-function linearChannel(channel: number): number {
-  const srgb = channel / 255;
-  if (srgb <= 0.04045) return srgb / 12.92;
-  return ((srgb + 0.055) / 1.055) ** 2.4;
+  return httpUrl(trimmed);
 }
