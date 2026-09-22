@@ -2,6 +2,58 @@
   "name": "0509-test",
   "compatibility_date": "2026-09-16",
   "main": "../../workers/app.ts",
+  "vars": {
+    "PAGE_SWEEP_MAX_CONCURRENCY": "8",
+    "BROWSER_CONCURRENCY_CAP": "10"
+  },
   "d1_databases": [{ "binding": "DB", "database_name": "0509-test", "database_id": "test" }],
-  "r2_buckets": [{ "binding": "CARD_ARTIFACTS", "bucket_name": "0509-snapshots-test" }]
+  "r2_buckets": [
+    { "binding": "CARD_ARTIFACTS", "bucket_name": "0509-snapshots-test" }
+  ],
+  "workflows": [
+    {
+      "binding": "ADS_SWEEP",
+      "name": "ads-sweep",
+      "class_name": "AdsSweepWorkflow"
+    }
+  ],
+  "queues": {
+    "producers": [
+      { "binding": "PAGE_SWEEP", "queue": "page-sweep" },
+      { "binding": "FETCH_SWEEP", "queue": "fetch-sweep" }
+    ],
+    "consumers": [
+      // Shorter than production (max_retries 3, max_batch_timeout 5) so a
+      // dead-letter move finishes inside the suite. The production numbers
+      // are read from wrangler.jsonc by tests/unit/ads/sweep-cap.test.ts.
+      {
+        "queue": "page-sweep",
+        "max_batch_size": 10,
+        "max_batch_timeout": 1,
+        "max_retries": 1,
+        "max_concurrency": 8,
+        "dead_letter_queue": "page-sweep-dlq"
+      },
+      {
+        "queue": "fetch-sweep",
+        "max_batch_size": 10,
+        "max_batch_timeout": 1,
+        "max_retries": 1,
+        "max_concurrency": 20,
+        "dead_letter_queue": "fetch-sweep-dlq"
+      },
+      {
+        "queue": "page-sweep-dlq",
+        "max_batch_size": 10,
+        "max_batch_timeout": 1,
+        "max_retries": 1
+      },
+      {
+        "queue": "fetch-sweep-dlq",
+        "max_batch_size": 10,
+        "max_batch_timeout": 1,
+        "max_retries": 1
+      }
+    ]
+  }
 }

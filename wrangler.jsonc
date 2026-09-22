@@ -50,7 +50,14 @@
   // forwarded header: auth origin trust and the magic-link URL both come from
   // it, and a client-supplied value would let a link point anywhere.
   // BETTER_AUTH_SECRET stays a Worker secret.
-  "vars": { "BETTER_AUTH_URL": "https://0509.io" },
+  "vars": {
+    "BETTER_AUTH_URL": "https://0509.io",
+    // Ten browsers total. page-sweep takes 8; two stay free for interactive
+    // onboarding. Raising either number needs a recorded yes and $2 per extra
+    // concurrent browser per month (docs/engines/ads.md, docs/REBUILD-COST.md).
+    "PAGE_SWEEP_MAX_CONCURRENCY": "8",
+    "BROWSER_CONCURRENCY_CAP": "10"
+  },
 
   "d1_databases": [
     {
@@ -71,7 +78,8 @@
   // name a bucket nobody has created on the first main deploy to reference R2.
   // The public-read separation argument is dropped and recorded as dropped:
   // the card objects stay public by serving through the route, while the
-  // bucket itself is not exposed as a domain.
+  // bucket itself is not exposed as a domain. Ad payloads and the daily
+  // sweep record use this same binding, under ads/.
   "r2_buckets": [
     { "binding": "CARD_ARTIFACTS", "bucket_name": "0509-snapshots" }
   ],
@@ -91,19 +99,31 @@
   // open question recorded on docs/REBUILD-DELIVERY.md.
   "send_email": [{ "name": "EMAIL" }],
 
-  // The one send lane (0509#3979, docs/engines/delivery.md § P7.2, §5).
-  // The weekly brief (engine 6) and the incident email (engine 4) both write
-  // their row and put `{ digest_id }` on `send-email`; this consumer is the
-  // only thing that calls EMAIL.send. The numbers are the packet's, not
-  // defaults: max_batch_size 1 because each send is its own API call and a
-  // partial batch failure is ambiguous; max_concurrency 2 because Email
-  // Service is Beta with unpublished, reputation-gated daily limits and a cold
-  // domain, so two concurrent sends clears a 25-workspace Monday without
-  // looking like a blast. The dead letter queue is mandatory — messages that
-  // reach the retry limit are deleted permanently otherwise, and a silently
-  // dropped brief is the failure the contract forbids.
+  "workflows": [
+    {
+      "binding": "ADS_SWEEP",
+      "name": "ads-sweep",
+      "class_name": "AdsSweepWorkflow"
+    }
+  ],
+
   "queues": {
+    "producers": [
+      { "binding": "PAGE_SWEEP", "queue": "page-sweep" },
+      { "binding": "FETCH_SWEEP", "queue": "fetch-sweep" }
+    ],
     "consumers": [
+      // The one send lane (0509#3979, docs/engines/delivery.md § P7.2, §5).
+      // The weekly brief (engine 6) and the incident email (engine 4) both write
+      // their row and put `{ digest_id }` on `send-email`; this consumer is the
+      // only thing that calls EMAIL.send. The numbers are the packet's, not
+      // defaults: max_batch_size 1 because each send is its own API call and a
+      // partial batch failure is ambiguous; max_concurrency 2 because Email
+      // Service is Beta with unpublished, reputation-gated daily limits and a cold
+      // domain, so two concurrent sends clears a 25-workspace Monday without
+      // looking like a blast. The dead letter queue is mandatory — messages that
+      // reach the retry limit are deleted permanently otherwise, and a silently
+      // dropped brief is the failure the contract forbids.
       {
         "queue": "send-email",
         "max_batch_size": 1,
@@ -111,15 +131,42 @@
         "max_retries": 5,
         "max_concurrency": 2,
         "dead_letter_queue": "send-email-dlq"
+      },
+      {
+        "queue": "page-sweep",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
+        "max_concurrency": 8,
+        "dead_letter_queue": "page-sweep-dlq"
+      },
+      {
+        "queue": "fetch-sweep",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
+        "max_concurrency": 20,
+        "dead_letter_queue": "fetch-sweep-dlq"
+      },
+      {
+        "queue": "page-sweep-dlq",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 3
+      },
+      {
+        "queue": "fetch-sweep-dlq",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 3
       }
     ]
   },
 
   "triggers": {
-    // The dead-man ping, and nothing else yet. Every five minutes: an external
-    // service alerts when the reports stop, which is the one failure a Worker
-    // cannot report about itself.
-    "crons": ["*/5 * * * *"]
+    // */5 is the dead-man ping. 02:00 UTC starts AdsSweepWorkflow and does no
+    // fetch of its own.
+    "crons": ["*/5 * * * *", "0 2 * * *"]
   },
 
   "routes": [
