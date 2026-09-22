@@ -37,6 +37,11 @@ const CHALLENGE_MARKERS = [
   "verification successful. waiting for",
 ] as const;
 
+const FETCH_HEADERS = {
+  accept: "text/html,application/xhtml+xml",
+  "user-agent": "FiveToNineBot/1.0 (+https://0509.io)",
+} as const;
+
 export async function countExtractedChars(html: string): Promise<number> {
   let chars = 0;
   let text = "";
@@ -47,7 +52,7 @@ export async function countExtractedChars(html: string): Promise<number> {
   };
 
   const accumulate = {
-    text(chunk: { text: string; lastInTextNode: boolean }) {
+    text(chunk: Text) {
       text += chunk.text;
       if (chunk.lastInTextNode) flush();
     },
@@ -69,27 +74,39 @@ export async function countExtractedChars(html: string): Promise<number> {
   return chars;
 }
 
-async function fetchRefused(
+async function refusalReason(
   status: number,
   html: string,
-): Promise<{ reason: "status" | "challenge" | "thin-text" } | null> {
-  if (status < 200 || status > 299) return { reason: "status" };
+): Promise<"status" | "challenge" | "thin-text" | null> {
+  if (status < 200 || status > 299) return "status";
   const probe = html.slice(0, 20_000).toLowerCase();
   if (CHALLENGE_MARKERS.some((marker) => probe.includes(marker))) {
-    return { reason: "challenge" };
+    return "challenge";
   }
   if ((await countExtractedChars(html)) < MIN_EXTRACTED_CHARS) {
-    return { reason: "thin-text" };
+    return "thin-text";
   }
   return null;
 }
 
-function logEscalation(url: string, browserMsUsed: number) {
+function readField(value: unknown, key: string): unknown {
+  if (typeof value !== "object" || value === null) return undefined;
+  return (value as Record<string, unknown>)[key];
+}
+
+function logEscalation(url: string, browserMsUsed: number | null) {
   console.log(JSON.stringify({
     event: "browser-escalation",
     url,
     browserMsUsed,
   }));
+}
+
+function parseBrowserMs(res: Response): number | null {
+  const header = res.headers.get("X-Browser-Ms-Used");
+  if (header === null) return null;
+  const value = Number(header);
+  return Number.isFinite(value) && value > 0 ? value : null;
 }
 
 export async function readUrl(url: string): Promise<ReadUrlResult> {
@@ -112,26 +129,29 @@ export async function readUrl(url: string): Promise<ReadUrlResult> {
   let fetchStatus: number;
   let fetchHtml: string;
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+    const res = await fetch(url, {
+      headers: FETCH_HEADERS,
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
     fetchStatus = res.status;
     fetchHtml = await res.text();
   } catch (err) {
     const escalation = await escalate(url, started);
     return escalation ?? {
       ok: false,
-      reason: "fetch-failed",
-      detail: err instanceof Error ? err.message : String(err),
+      reason: "escalation-failed",
+      detail: `fetch threw (${err instanceof Error ? err.message : String(err)}); browser escalation failed`,
     };
   }
 
-  const refused = await fetchRefused(fetchStatus, fetchHtml);
+  const refused = await refusalReason(fetchStatus, fetchHtml);
   if (refused) {
     const escalation = await escalate(url, started);
     if (escalation !== null) return escalation;
     return {
       ok: false,
       reason: "escalation-failed",
-      detail: `fetch ${String(fetchStatus)} was refused (${refused.reason}); browser escalation failed`,
+      detail: `fetch ${String(fetchStatus)} was refused (${refused}); browser escalation failed`,
     };
   }
 
@@ -160,27 +180,21 @@ async function escalate(
     return null;
   }
 
-  const browserMsHeader = res.headers.get("X-Browser-Ms-Used");
-  const parsed = browserMsHeader === null ? undefined : Number(browserMsHeader);
-  const browserMsUsed =
-    parsed !== undefined && Number.isFinite(parsed) ? parsed : undefined;
-
-  if (browserMsUsed !== undefined) logEscalation(url, browserMsUsed);
+  const browserMsUsed = parseBrowserMs(res);
+  logEscalation(url, browserMsUsed);
 
   if (!res.ok) return null;
 
   let html: string;
   let status: number;
   try {
-    const body: {
-      success?: boolean;
-      result?: unknown;
-      meta?: { status?: number };
-    } = await res.json();
-    const result = body?.result;
+    const body: unknown = await res.json();
+    const result = readField(body, "result");
     if (typeof result !== "string") return null;
     html = result;
-    status = typeof body?.meta?.status === "number" ? body.meta.status : res.status;
+    const meta = readField(body, "meta");
+    const metaStatus = readField(meta, "status");
+    status = typeof metaStatus === "number" ? metaStatus : res.status;
   } catch {
     return null;
   }
@@ -191,7 +205,7 @@ async function escalate(
     transport: "browser",
     status,
     ms: Date.now() - started,
-    browserMsUsed,
+    browserMsUsed: browserMsUsed ?? undefined,
     escalated: true,
   };
 }

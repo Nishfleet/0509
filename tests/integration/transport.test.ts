@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { countExtractedChars, readUrl } from "../../app/lib/fetch/transport";
+import { countExtractedChars, readUrl } from "../../app/lib/fetch/transport.server";
 
 const browserHolder = vi.hoisted(() => ({
   current: undefined as
@@ -110,14 +110,16 @@ function stubFetch(
 ) {
   const real = globalThis.fetch;
   const seen: string[] = [];
-  globalThis.fetch = (async (input: RequestInfo | URL) => {
+  const inits: RequestInit[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     seen.push(url);
+    if (init) inits.push(init);
     const handler = handlers[url];
     if (!handler) throw new Error(`unexpected outbound fetch: ${url}`);
     return handler();
   }) as typeof fetch;
-  return { seen, restore: () => (globalThis.fetch = real) };
+  return { seen, inits, restore: () => (globalThis.fetch = real) };
 }
 
 describe("readUrl", () => {
@@ -144,6 +146,8 @@ describe("readUrl", () => {
       expect(result.html).toBe(SUBSTANTIAL_PAGE);
       expect(typeof result.ms).toBe("number");
       expect(browser.calls).toEqual([]);
+      expect(stub.inits).toHaveLength(1);
+      expect(stub.inits[0]?.signal).toBeInstanceOf(AbortSignal);
     } finally {
       stub.restore();
     }
@@ -384,6 +388,31 @@ describe("readUrl", () => {
       stub.restore();
     }
   });
+
+  it("logs an escalation whose browser header is absent, as null", async () => {
+    const stub = stubFetch({
+      "https://gated.example/": () => new Response("Forbidden", { status: 403 }),
+    });
+    const browser = fakeBrowser({ ok: true, html: SUBSTANTIAL_PAGE });
+    const lines: string[] = [];
+    const spy = vi.spyOn(console, "log").mockImplementation((line) => {
+      lines.push(String(line));
+    });
+    try {
+      install(browser);
+      const result = await readUrl("https://gated.example/");
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.browserMsUsed).toBeUndefined();
+      const escalation = lines
+        .map((line) => JSON.parse(line) as { event?: string; browserMsUsed?: number | null })
+        .find((row) => row.event === "browser-escalation");
+      expect(escalation?.browserMsUsed).toBeNull();
+    } finally {
+      spy.mockRestore();
+      stub.restore();
+    }
+  });
 });
 
 describe("countExtractedChars", () => {
@@ -402,13 +431,20 @@ describe("countExtractedChars", () => {
   });
 
   it("keeps visible text that precedes an interleaved non-rendering element", async () => {
-    // The trap a buffer reset falls into: `visible`, then a script, then more
-    // visible text. A discard handler that zeroes the shared buffer loses the
-    // first run, so this page (which is over the floor) would read as thin.
     const html =
       `<body><p>${"visible ".repeat(50)}</p>` +
       `<script>${"x".repeat(400)}</script>` +
       `<p>${"more text ".repeat(50)}</p></body>`;
-    expect(await countExtractedChars(html)).toBeGreaterThan(200);
+    expect(await countExtractedChars(html)).toBe(900);
+  });
+
+  it("counts the 200-character floor boundary as served", async () => {
+    const html = `<!doctype html><html><body><p>${"z".repeat(199)}</p></body></html>`;
+    const thin = await countExtractedChars(html);
+    const atFloor = await countExtractedChars(
+      `<!doctype html><html><body><p>${"z".repeat(200)}</p></body></html>`,
+    );
+    expect(thin).toBe(199);
+    expect(atFloor).toBe(200);
   });
 });

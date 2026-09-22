@@ -75,9 +75,10 @@ export default defineConfig({
         // The P3 fetch-then-browser transport (0509#3971): real workerd for the
         // plain-fetch leg and the HTMLRewriter text extraction, so the escalation
         // predicates run against the same global `fetch`, `AbortSignal.timeout`
-        // and `HTMLRewriter` production uses. The browser binding comes from the
-        // same wrangler shape production declares, so the module's env typing is
-        // the real one even though the stand-in is exercised.
+        // and `HTMLRewriter` production uses. The outbound `fetch` is stubbed per
+        // test so every trigger is reachable deterministically, and `env` is
+        // mocked, so the browser binding declared below validates the config
+        // shape only.
         plugins: [
           cloudflareTest(() => ({
             wrangler: { configPath: "./tests/integration/wrangler.transport.test.jsonc" },
