@@ -8,7 +8,6 @@ import { createAuth } from "../lib/auth.server";
 import { timezoneCookie } from "../lib/timezone";
 
 const RESEND_SECONDS = 30;
-// magicLink expiry when expiresIn is unset: (expiresIn || 300) seconds.
 const LINK_MINUTES = 5;
 const headingClass = "font-display mt-8 text-[1.15rem] leading-[1.1] font-bold tracking-[0.02em] uppercase";
 
