@@ -337,6 +337,16 @@ The generated `app/app.css` sets `--font-sans: "Inter", …` inside `@theme`. **
 
 No PostCSS config, no `tailwind.config.ts`, no CSS-in-JS, no `styled-components`, no design-token generator, no Storybook. `vite.config.ts` stays at the four plugins the scaffold wrote.
 
+### 3.6 The per-brand switch
+
+The first component copied in is the switch. DESIGN.md §11 names it as shadcn/ui on Base UI, and names `cn` 0.3.0 for class merging. The registry item that matches that contract is the `base-nova` switch (<https://ui.shadcn.com/r/styles/base-nova/switch.json>, read 2026-09-22). Its dependencies are `@base-ui/react` 1.8.0 (<https://base-ui.com/react/components/switch>) and `cn` 0.3.0 (<https://www.npmjs.com/package/cn>).
+
+`cn` 0.3.0 is a compiled stand-in for `clsx` plus `tailwind-merge`. It ships no runtime dependencies of its own. §3.2 describes what `shadcn init` wrote in the 2026-09-21 React Router recipe (`clsx`, `tailwind-merge`, `class-variance-authority`, `lucide-react`). This switch does not run `init`, because `init` rewrites `app/app.css`, and it does not add those four packages. The copied file is `app/components/ui/switch.tsx`.
+
+The `new-york` registry item still imports `@radix-ui/react-switch`. That vendor is not the one DESIGN.md §11 names, so it is not installed.
+
+The stock base-nova switch is a pill, about 32×18, and it fades when disabled. DESIGN.md §6 is a square 38×22 track, an ink hairline, an ink thumb, 180ms travel, and a You state that stays visible. Those measurements live in the copied component. The track fill is one class chosen by the caller (`bg-accent`, `bg-card`, or `bg-accent-wash`), so two background utilities are never both on the element.
+
 ---
 
 ## 4. Cloudflare primitives
@@ -1036,8 +1046,12 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | Edge abuse shield | Cloudflare rate limiting binding (`period` 10 or 60 only) | platform |
 | OpenAPI document | `zod-openapi` (samchungy) | 6.0.2 |
 | Agent-readable docs | `/llms.txt` + `Accept: text/markdown` + `rel="alternate"` | spec v2 (2026-08-10) |
+| Per-brand switch | `@base-ui/react` switch, copied from the shadcn `base-nova` registry item | 1.8.0 |
+| Class merging | `cn` | 0.3.0 |
 
 **Runtime dependencies this stack adds beyond the scaffold: ten.** `better-auth`, `@better-auth/passkey`, `@better-auth/api-key`, `diff`, `@extractus/feed-extractor`, `uplot` + `uplot-react`, `date-fns` + `@date-fns/tz`, and for the API surface `agents`, `@modelcontextprotocol/server` (which drags `@modelcontextprotocol/client` and `@modelcontextprotocol/sdk` as exact-pinned peers), `@cloudflare/workers-oauth-provider` and `zod-openapi`. `zod` arrives transitively through better-auth; `fast-xml-parser` arrives transitively through feed-extractor. Everything else in the table is a platform primitive with no bundle cost.
+
+The per-brand switch adds two more runtime dependencies on top of that list: `@base-ui/react` and `cn`. §3.6 records both, with the vendor pages.
 
 ---
 

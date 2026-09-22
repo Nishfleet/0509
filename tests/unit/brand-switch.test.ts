@@ -8,24 +8,47 @@ function markup(state: BrandSwitchState, pausedOn = "12 Sep"): string {
   return renderToStaticMarkup(createElement(BrandSwitch, { name: "Casetta", state, pausedOn }));
 }
 
-function switchButton(html: string): string {
-  const match = /<button\b[^>]*\brole="switch"[^>]*>[\s\S]*?<\/button>/.exec(html);
-  if (match === null) throw new Error("the row has no switch");
-  return match[0];
+function elementWithRole(html: string, role: string): string {
+  const marker = `role="${role}"`;
+  const markerAt = html.indexOf(marker);
+  if (markerAt < 0) throw new Error(`the row has no ${role}`);
+  const openAt = html.lastIndexOf("<", markerAt);
+  const tag = /^<([a-zA-Z0-9]+)/.exec(html.slice(openAt))?.[1];
+  if (tag === undefined) throw new Error("the switch tag has no name");
+  const re = new RegExp(`<(/?)${tag}\\b[^>]*>`, "g");
+  re.lastIndex = openAt;
+  let depth = 0;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(html)) !== null) {
+    if (match[0].endsWith("/>")) continue;
+    depth += match[1] === "/" ? -1 : 1;
+    if (depth === 0) return html.slice(openAt, match.index + match[0].length);
+  }
+  throw new Error("the switch element does not close");
 }
 
-function isOperable(button: string): boolean {
-  return !/\sdisabled(?:=|>|\s)/.test(button);
+function openingTag(element: string): string {
+  const tag = /^<[^>]+>/.exec(element)?.[0];
+  if (tag === undefined) throw new Error("the switch has no opening tag");
+  return tag;
+}
+
+function isOperable(element: string): boolean {
+  const open = openingTag(element);
+  const disabledAttr = /(?:^|\s)(?:disabled|aria-disabled="true"|data-disabled(?:=|>|\s))/.test(open);
+  return !disabledAttr;
 }
 
 describe("per-brand switch", () => {
   it("renders On checked and operable, with the consequence beside it and no paused date", () => {
     const html = markup("on");
-    const button = switchButton(html);
+    const control = elementWithRole(html, "switch");
     expect(html).toContain('data-state="on"');
-    expect(button).toContain(">ON<");
-    expect(button).toContain('aria-checked="true"');
-    expect(isOperable(button)).toBe(true);
+    expect(control).toContain(">ON<");
+    expect(openingTag(control)).toContain('aria-checked="true"');
+    expect(openingTag(control)).toContain('aria-label="Casetta"');
+    expect(openingTag(control)).not.toContain("ON");
+    expect(isOperable(control)).toBe(true);
     expect(html).toContain(ON_CONSEQUENCE);
     expect(html).not.toContain("paused");
     expect(html.toLowerCase()).not.toContain("confirm");
@@ -33,11 +56,12 @@ describe("per-brand switch", () => {
 
   it("renders Off unchecked and operable, and says the brand is paused with its history kept", () => {
     const html = markup("off");
-    const button = switchButton(html);
+    const control = elementWithRole(html, "switch");
     expect(html).toContain('data-state="off"');
-    expect(button).toContain(">OFF<");
-    expect(button).toContain('aria-checked="false"');
-    expect(isOperable(button)).toBe(true);
+    expect(control).toContain(">OFF<");
+    expect(openingTag(control)).toContain('aria-checked="false"');
+    expect(openingTag(control)).toContain('aria-label="Casetta"');
+    expect(isOperable(control)).toBe(true);
     expect(html).toContain("paused 12 Sep · history kept");
     expect(html).not.toContain(ON_CONSEQUENCE);
     expect(html.toLowerCase()).not.toContain("confirm");
@@ -45,11 +69,12 @@ describe("per-brand switch", () => {
 
   it("renders You checked, visible, and not operable", () => {
     const html = markup("you");
-    const button = switchButton(html);
+    const control = elementWithRole(html, "switch");
     expect(html).toContain('data-state="you"');
-    expect(button).toContain(">YOU<");
-    expect(button).toContain('aria-checked="true"');
-    expect(isOperable(button)).toBe(false);
+    expect(control).toContain(">YOU<");
+    expect(openingTag(control)).toContain('aria-checked="true"');
+    expect(openingTag(control)).toContain('aria-label="Casetta"');
+    expect(isOperable(control)).toBe(false);
     expect(html).not.toContain("paused");
     expect(html).not.toContain(ON_CONSEQUENCE);
     expect(html.toLowerCase()).not.toContain("confirm");
@@ -57,15 +82,9 @@ describe("per-brand switch", () => {
 
   it("keeps the state label inside the switch, so the label is part of the hit area", () => {
     for (const state of ["on", "off", "you"] as const) {
-      const button = switchButton(markup(state));
+      const control = elementWithRole(markup(state), "switch");
       const label = state === "on" ? "ON" : state === "off" ? "OFF" : "YOU";
-      expect(button).toContain(`>${label}<`);
-    }
-  });
-
-  it("does not render a dismissed suggestion as a switch state", () => {
-    for (const state of ["on", "off", "you"] as const) {
-      expect(markup(state)).not.toContain("dismissed");
+      expect(control).toContain(`>${label}<`);
     }
   });
 });

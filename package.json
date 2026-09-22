@@ -20,7 +20,9 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router": "^8.3.1",
-    "zod": "^4.6.5"
+    "zod": "^4.6.5",
+    "@base-ui/react": "1.8.0",
+    "cn": "0.3.0"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.56.0",

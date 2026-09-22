@@ -1,5 +1,7 @@
 import type { ReactElement } from "react";
 
+import { Switch } from "./ui/switch";
+
 export type BrandSwitchState = "on" | "off" | "you";
 
 export const ON_CONSEQUENCE =
@@ -10,9 +12,6 @@ const STATE_LABEL = {
   off: "OFF",
   you: "YOU",
 } as const;
-
-const THUMB =
-  "pointer-events-none absolute top-[2px] left-[2px] size-[15px] rounded-none bg-ink transition-transform duration-[180ms] ease-[cubic-bezier(0.32,0.72,0,1)]";
 
 export interface BrandSwitchProps {
   name: string;
@@ -79,29 +78,20 @@ export function BrandSwitch({
       >
         <span className="truncate">{name}</span>
       </span>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        aria-label={`${name} ${label}`}
+      <Switch
+        checked={checked}
         disabled={!operable}
-        data-slot="hit"
-        className="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center gap-[9px] border-0 bg-transparent p-0 text-inherit outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink disabled:cursor-not-allowed disabled:opacity-100"
-        onClick={() => {
+        aria-label={name}
+        trackClassName={trackBackground(state)}
+        onCheckedChange={(next) => {
           if (!operable) return;
-          onChange?.(checked ? "off" : "on");
+          onChange?.(next ? "on" : "off");
         }}
       >
-        <span
-          data-slot="track"
-          className={`relative inline-flex h-[22px] w-[38px] shrink-0 items-center rounded-none border-[1.5px] border-ink ${trackBackground(state)}`}
-        >
-          <span data-slot="thumb" className={checked ? `${THUMB} translate-x-[16px]` : `${THUMB} translate-x-0`} />
-        </span>
         <span data-slot="state-label" className="font-mono text-[0.66rem] tracking-[0.1em]">
           {label}
         </span>
-      </button>
+      </Switch>
       {state === "on" ? (
         <span data-slot="consequence" className="min-w-0 max-w-full font-mono text-[0.66rem] tracking-[0.05em] text-ink-soft">
           {ON_CONSEQUENCE}
