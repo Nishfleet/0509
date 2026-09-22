@@ -34,7 +34,12 @@ export default defineConfig({
         ],
         test: {
           name: "workers",
-          include: ["tests/integration/**/*.integration.test.ts"],
+          include: [
+            "tests/integration/**/*.integration.test.ts",
+            // #4180's acceptance names this file verbatim, without the
+            // .integration infix; it still needs real workerd + real D1.
+            "tests/integration/migration-rollback.test.ts",
+          ],
           setupFiles: ["./tests/integration/apply-migrations.ts"],
           testTimeout: 30_000,
         },

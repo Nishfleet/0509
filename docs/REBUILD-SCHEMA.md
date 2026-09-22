@@ -101,3 +101,15 @@ The asymmetry between those last two is deliberate. `kind` is CHECKed to `ads` /
 The list includes the names the new schema reuses — `user`, `session`, `account`, `verification`, `dodo_webhook_event`, `email_suppression`, `rate_limit_events` — because `CREATE TABLE IF NOT EXISTS` silently skips a table that already exists. Without dropping those, the database keeps the old definitions: I measured a live `user` still carrying a `signup_source` CHECK listing dead marketing values while the new file declared a clean seven-column table.
 
 `wrangler d1 migrations apply` does not object to the 106 applied migrations having vanished from the folder; tracking is by filename, so `0001_init.sql` is simply a name the migrations table has never seen. I verified that on a local D1 before relying on it.
+
+## When a migration is wrong
+
+D1 migrations are forward-only. `wrangler d1 migrations apply` records each file by name in `d1_migrations` and never runs a recorded name again; there is no down command and no un-apply. The way back depends on what the wrong file did.
+
+**Additive wrong** — the file added something that should not exist (a column, a table, an index). Write a new numbered migration that undoes it (`ALTER TABLE … DROP COLUMN`, `DROP TABLE`, `DROP INDEX`). Nothing written before or since is lost, and the fix goes through ordinary review like any other change. Proven in `tests/integration/migration-rollback.test.ts`: the test applies the real chain to local D1, applies a deliberately wrong additive file through the same `d1_migrations` machinery, then a corrective file, and asserts `sqlite_master` is identical before and after — and that re-offering the wrong filename is a no-op, because the name is already recorded.
+
+**Destructive wrong** — the file dropped or rewrote a column that carried history. No forward migration can bring the rows back; they are gone at apply time. The only way back is Time Travel: `wrangler d1 time-travel restore 0509 --bookmark <bookmark>` (or `--timestamp`, anything within the last 30 days). A restore returns the **whole database** to that point — every table — so everything written since the bookmark is lost with it. That cost is why a destructive migration is a different class of change, not a bigger additive one.
+
+The rule that follows: **no migration in this repo drops or rewrites a column carrying tracking history unless its PR body records a bookmark taken immediately before the apply** — `wrangler d1 time-travel info 0509` prints the current one. Without a recorded point there is nothing to restore to, and the destructive path back does not exist.
+
+There is deliberately no rollback script and no migration helper: the additive half is a new file in `migrations/`, and the destructive half is a human running one wrangler command against a recorded point.
