@@ -16,7 +16,7 @@ export interface SourceSnapshot {
   canary_count?: number | null;
 }
 
-export type SourcePillState = "live" | "none" | "degraded" | "disabled";
+type SourcePillState = "live" | "none" | "degraded" | "disabled";
 
 export interface SourcePillStatus {
   state: SourcePillState;
