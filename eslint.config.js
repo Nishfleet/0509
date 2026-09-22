@@ -1,5 +1,6 @@
 import js from "@eslint/js";
 import reactHooks from "eslint-plugin-react-hooks";
+import noComments from "eslint-plugin-no-comments";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
@@ -150,9 +151,13 @@ export default tseslint.config(
 
   {
     files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
-    plugins: { "react-hooks": reactHooks },
+    plugins: { "react-hooks": reactHooks, "no-comments": noComments },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      "no-comments/disallowComments": [
+        "error",
+        { allow: ["eslint", "global"] },
+      ],
       "no-inline-comments": "error",
       "no-warning-comments": [
         "error",

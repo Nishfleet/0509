@@ -1,23 +1,5 @@
 import { z } from "zod";
 
-/**
- * The ads engine's source descriptor — packet P1 of docs/engines/ads.md.
- *
- * A descriptor is DATA with a fixed shape, carried on a `source` row's
- * `config_json`. It names an endpoint template, a method, static params, an
- * auth kind, an optional wait-for selector (browser transport), an optional
- * pagination cursor path (api transport), a rate limit and a reliability.
- * It carries no conditionals and no expressions: a platform that needs
- * anything outside this set gets a real adapter module, not a bigger DSL.
- *
- * Two template tokens are recognised in `endpoint` and in `params` values:
- * `{target}` — the watch's target_key (an advertiser name, domain or id), and
- * `{cursor}` — the pagination cursor extracted at `paginationCursorPath`.
- * Both are substituted before the URL is built; `{target}` is required so a
- * descriptor can never pull "everybody's" ads.
- */
-
-/** Mirrors the `source.reliability` CHECK constraint in migrations/0001_rebuild.sql. */
 const RELIABILITY = ["official_api", "rss", "scraped_page", "best_effort"] as const;
 
 const TARGET_TOKEN = "{target}";
@@ -25,30 +7,30 @@ const CURSOR_TOKEN = "{cursor}";
 
 const authSchema = z.discriminatedUnion("kind", [
 	z.object({ kind: z.literal("none") }),
-	// `secretEnv` NAMES a Worker secret/var that holds the token (for example a
-	// research-API key). The row never carries a credential itself.
+	
+	
 	z.object({ kind: z.literal("bearer"), secretEnv: z.string().min(1) }),
 ]);
 
 export const adsSourceDescriptorSchema = z
 	.object({
 		transport: z.enum(["api", "browser"]),
-		// URL template, e.g. "https://example.com/ads?advertiser={target}".
+		
 		endpoint: z.string().min(1),
 		method: z.enum(["GET", "POST"]).default("GET"),
-		// Static parameters whose values may carry the same two tokens. GET
-		// sends them as query parameters; POST sends them as a JSON body.
+		
+		
 		params: z.record(z.string(), z.string()).default({}),
 		auth: authSchema.default({ kind: "none" }),
-		// Browser transport only: the CSS selector the page must render before
-		// content is captured. Its presence is what routes a browser descriptor
-		// onto a full session instead of a Quick Action.
+		
+		
+		
 		waitForSelector: z.string().min(1).optional(),
-		// Api transport only: dot path into the JSON response holding the
-		// next-page cursor, e.g. "data.next_cursor".
+		
+		
 		paginationCursorPath: z.string().min(1).optional(),
-		// Requests per minute the sweep honours for this source. Stored, not
-		// enforced here — pacing is the Workflow's job, never a sleep loop.
+		
+		
 		rateLimitPerMinute: z.number().int().positive(),
 		reliability: z.enum(RELIABILITY),
 	})
@@ -99,8 +81,8 @@ export const adsSourceDescriptorSchema = z
 				input: d.endpoint,
 			});
 		}
-		// The endpoint is a template; validate the URL it renders into, not the
-		// template text. Outbound ad-transparency surfaces are all https.
+		
+		
 		try {
 			const rendered = renderDescriptorTemplate(d.endpoint, {
 				target: "probe",
@@ -135,11 +117,6 @@ export class AdsDescriptorError extends Error {
 	}
 }
 
-/**
- * Parse and validate a descriptor from a `source` row's `config_json` (or an
- * already-decoded object). Throws AdsDescriptorError with every issue found —
- * a bad row is rejected where it is loaded, never discovered mid-sweep.
- */
 export function parseAdsDescriptor(raw: unknown): AdsSourceDescriptor {
 	let data: unknown = raw;
 	if (typeof raw === "string") {
@@ -160,16 +137,6 @@ export function parseAdsDescriptor(raw: unknown): AdsSourceDescriptor {
 	return result.data;
 }
 
-/**
- * Substitute the two template tokens. `target` is always present (a watch's
- * target_key); `cursor` defaults to the empty string, which is what the first
- * page of a paginated endpoint asks for.
- *
- * `encode` applies `encodeURIComponent` to the substituted values. The
- * endpoint template needs it — it renders into a raw URL string. Params
- * values must NOT be encoded here: GET params go through `URLSearchParams`
- * and POST params through `JSON.stringify`, both of which encode themselves.
- */
 export function renderDescriptorTemplate(
 	template: string,
 	vars: { target: string; cursor?: string },
@@ -182,11 +149,6 @@ export function renderDescriptorTemplate(
 	return template.split(TARGET_TOKEN).join(target).split(CURSOR_TOKEN).join(cursor);
 }
 
-/**
- * Read a dot path (`"data.next_cursor"`) out of a decoded JSON payload.
- * Numeric segments index into arrays. Returns undefined on any miss; a number
- * leaf is coerced to string so cursor types do not leak into callers.
- */
 export function readCursorPath(
 	payload: unknown,
 	path: string,

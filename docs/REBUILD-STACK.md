@@ -21,6 +21,8 @@ npx create-cloudflare@latest <name> --framework=react-router --no-git --no-deplo
 
 **Probed 2026-09-21.** `create-cloudflare` 2.72.9 produced a 26-file tree with React Router **8.3.1**, React **19.2.8**, Wrangler **4.135.0**, Vite **8.0.3**. Doc: <https://developers.cloudflare.com/workers/framework-guides/web-apps/react-router/> (read 2026-09-21).
 
+`package.json` pins `react-router` and `@react-router/dev` at `^8.4.0`. That is the version §8 names, and it is the version the lockfile already resolved. The scaffold's `^8.3.1` floor was the side that was wrong. `react` and `react-dom` stay `^19.2.8`, `vite` stays `^8.0.3`, `wrangler` stays `^4.135.0`. The carets on react and vite have resolved forward (`react` 19.3.0, `vite` 8.3.0); the declared pin is still the number in this paragraph.
+
 **Trap — do not add `--platform=workers`.** With it, C3 exits:
 
 ```
@@ -282,7 +284,7 @@ Total for our set: **five tables**, four core plus `passkey`.
 
 ### 3.1 Tailwind is already installed
 
-The scaffold ships `tailwindcss` and `@tailwindcss/vite` ^4.2.2 (upstream default template's `package.json`, read 2026-09-21; npm `latest` is **4.3.3**), `tailwindcss()` already in `vite.config.ts`, and `app/app.css` already opening with:
+The 2026-09-21 scaffold wrote `tailwindcss` and `@tailwindcss/vite` at `^4.2.2` (upstream default template's `package.json`; npm `latest` that day was **4.3.3**). The lockfile resolved both to 4.3.3, which is the version §8 names, so `package.json` now pins `^4.3.3`. `tailwindcss()` is already in `vite.config.ts`, and `app/app.css` already opens with:
 
 ```css
 @import "tailwindcss" source(".");
@@ -299,7 +301,7 @@ npx shadcn@latest init
 npx shadcn@latest add button
 ```
 
-That is the whole installation. `init` writes `components.json`, rewrites `app/app.css` with the token blocks, and adds `clsx`/`tailwind-merge`/`class-variance-authority`/`lucide-react` plus `app/lib/utils.ts`. `npx shadcn@latest add badge avatar` also installs `@base-ui/react` 1.8.0, the primitive those copied files import (<https://base-ui.com/react/components/avatar>, DESIGN.md §11).
+That is the whole installation. `init` writes `components.json`, rewrites `app/app.css` with the token blocks, and adds `clsx` `^2.1.1`, `tailwind-merge` `^3.7.0`, `class-variance-authority` `^0.7.1`, and `lucide-react`, plus `app/lib/utils.ts`. The first three are installed at those versions. `lucide-react` is not yet installed: no copied component imports it, and the engines that would render icons have not shipped. `npx shadcn@latest add badge avatar` also installs `@base-ui/react` 1.8.0, the primitive those copied files import (<https://base-ui.com/react/components/avatar>, DESIGN.md §11).
 
 ### 3.3 Tokens, theming, dark mode
 
@@ -398,7 +400,7 @@ Pricing (<https://developers.cloudflare.com/queues/platform/pricing/>): "An oper
 Two routes, and the cheap one is not the famous one:
 
 - **Quick Actions** — `/content`, `/screenshot`, `/pdf`, `/markdown`, `/snapshot`, `/accessibilityTree`, `/scrape`, `/json`, `/links`, `/crawl` (REST-only). Reachable from REST **and** from the binding via `.quickAction("screenshot", { url })` with `compatibility_date` ≥ `2026-03-24`, and **without** `nodejs_compat`. <https://developers.cloudflare.com/browser-rendering/rest-api/>
-- **Browser Sessions** — `@cloudflare/puppeteer` or `@cloudflare/playwright`, requires `nodejs_compat`.
+- **Browser Sessions.** `@cloudflare/puppeteer` `^1.4.0` is installed. `app/lib/ads/transport-browser.ts` imports `connect`, `launch`, and `sessions` from it. `@cloudflare/playwright` is the other session SDK and is not installed. Either one requires `nodejs_compat`.
 
 **The 10-concurrent number is an allotment, not a ceiling.** The limits page gives the Paid hard cap as **200 concurrent browsers per account**; the pricing page gives **10 browsers included (averaged monthly), then $2.00 per additional browser**. Both are real and they answer different questions. Nish's standing rule — cap 10, raising it costs $2/browser/month and needs his recorded yes — is the *pricing* number, and it is the one we configure.
 
@@ -545,6 +547,8 @@ One real caveat from those docs: *text chunks are not text nodes.* A single node
 
 ### 5.2 Text change diff
 
+**Not yet installed.** The change-diff engine has not shipped.
+
 **Recommendation: `diff` (jsdiff) 9.0.0 — 8.3 KB gzip full export (bundlejs), 0 dependencies.**
 
 <https://github.com/kpdecker/jsdiff>. It is the only candidate that emits a *structured* result out of the box: `{ value, added, removed, count }` change objects, `diffWords` / `diffLines` / `diffSentences` granularity, and `createPatch` / `structuredPatch`. Word-level is the right unit for page copy, and structured hunks are what Jev needs as context for "what changed, where on the page".
@@ -557,6 +561,8 @@ Dual ESM+CJS with a `browser` field, zero node builtins (`libesm/index.js` grepp
 | `diff-match-patch` 1.0.5 — 6.6 KB gzip | A community fork of Google's abandoned library, **last published 2020-05-20**, CJS-only, character-level again. No reason to adopt a six-year-dead package to save 1.7 KB. |
 
 ### 5.3 RSS / Atom / RDF parsing
+
+**Not yet installed.** The feed engine has not shipped. `fast-xml-parser` arrives only as this package's dependency, so it is not installed either.
 
 **Recommendation: `@extractus/feed-extractor` 8.0.3 — 24.5 KB gzip (bundlejs), one dependency (`fast-xml-parser ^5.10.1`).**
 
@@ -642,6 +648,8 @@ uPlot's README claim of "~50 KB min" checks out exactly (51,081 B minified) — 
 
 `frappe-charts` is the only library under the bar and it is not a candidate: **last published 2021-06-16**, five years stale, imperative DOM mutation with no React wrapper, and it would fight React's reconciler.
 
+**Not yet installed.** No chart ships yet, so `uplot` 1.6.32 and `uplot-react` 1.2.4 are not in `package.json`.
+
 **Decision (Fable, 2026-09-21): budget raised to 30 KB gzip; take `uplot` 1.6.32.** It is the only maintained candidate. `frappe-charts` is rejected as unmaintained since 2021 despite fitting the old bar, and inline SVG is rejected as hand-rolled. The 20 KB figure was an estimate written before anyone measured; 24–28 KB is the measured cost of the maintained option, and 30 KB is the bar that reflects it.
 
 Consequence to carry into C4: uPlot is Canvas-based, so a chart renders nothing during SSR. Wrap it once, in one component, with the server rendering the axis frame and the canvas painting on mount — not a `useEffect` copy-pasted per chart.
@@ -668,6 +676,8 @@ We need cards for a handful of public surfaces, not per-request at scale. Browse
 **If per-request rendering is ever needed**, the library answer is **`@cf-wasm/og` 0.5.0** (<https://github.com/fineshopdesign/cf-wasm>) — it pins `satori@0.32.0` exactly (the last pre-harfbuzz release), ships a real `workerd` export condition with deploy-time `.wasm` module imports, and its `@cf-wasm/satori` dependency shipped 2026-09-19. It requires `cache.setExecutionContext(ctx)` inside `fetch`. Recorded so the option is not re-researched; not adopted, because Browser Run already covers our volume with zero dependencies and zero drift.
 
 ### 5.9 Date and time with timezones
+
+**Not yet installed.** `date-fns` 4.4.0 and `@date-fns/tz` 1.5.0 are not in `package.json`. `Intl.DateTimeFormat` is the runtime and needs no dependency. The date engine that needs the two packages has not shipped.
 
 **Recommendation: `Intl.DateTimeFormat` for display (0 bytes, in the runtime and every browser) + `date-fns` 4.4.0 (17.1 KB gzip full export, 0 deps) + `@date-fns/tz` 1.5.0 (1.97 KB gzip) for arithmetic across zones.**
 
@@ -845,6 +855,8 @@ Charter addendum: the product ships an API and an MCP server. Every version belo
 
 ### 7.1 MCP on Workers — do not write an `McpAgent`
 
+**Not yet installed.** `agents` 0.24.0, `@modelcontextprotocol/server` 2.0.0, and the exact-pinned peers `@modelcontextprotocol/client` and `@modelcontextprotocol/sdk` are not in `package.json`. The MCP route has not shipped.
+
 **Recommendation: `createMcpHandler` from `agents/mcp/server`, with `McpServer` from `@modelcontextprotocol/server` 2.0.0.**
 
 This is the single most likely thing in the rebuild to be built wrong from memory, because every blog post and every pre-August-2026 example shows the deprecated shape. Cloudflare's own page says it plainly (<https://developers.cloudflare.com/agents/model-context-protocol/apis/agent-api/>, last updated 2026-07-27):
@@ -889,6 +901,8 @@ Options on `createMcpHandler`: `route` (default `/mcp`), `corsOptions`, `allowed
 **Install note from the manifest, not the docs:** `agents@0.24.0` declares `@modelcontextprotocol/client`, `@modelcontextprotocol/sdk` and `@modelcontextprotocol/server` as **exact-pinned, non-optional** peers (none appear in `peerDependenciesMeta`). Expect all three in `package.json` even for a stateless-only server. Cloudflare's own example does exactly that.
 
 ### 7.2 MCP auth — OAuth 2.1 and RFC 9728 are a MUST
+
+**Not yet installed.** `@cloudflare/workers-oauth-provider` 0.10.3 is not in `package.json`. MCP auth has not shipped.
 
 **`@cloudflare/workers-oauth-provider` 0.10.3** (2026-08-10, zero dependencies). It needs one KV binding:
 
@@ -946,6 +960,8 @@ So the division of labour is: **the binding is the cheap abuse shield** at the e
 
 ### 7.5 OpenAPI from zod schemas
 
+**Not yet installed.** `zod-openapi` 6.0.2 is not in `package.json`. The OpenAPI route has not shipped. `zod` itself is installed at `^4.6.5`.
+
 **Recommendation: `zod-openapi` (samchungy) 6.0.2 — zero runtime dependencies, peer `zod ^4.0.0` only, no router coupling.**
 
 It reads zod 4's native `.meta()` with **no `extendZodWithOpenApi` monkey-patch**. `createDocument(...)` is pure and synchronous and returns a complete OpenAPI 3.1 document from a hand-written `paths` object, so the same schema object validates the request in a loader *and* documents it:
@@ -997,20 +1013,20 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 
 | Capability | Library or primitive | Version (2026-09-21) |
 |---|---|---|
-| App framework, SSR, routing | `react-router` (framework mode) | 8.4.0 (`create-react-router` scaffolds 8.3.1) |
-| Framework build + Workers dev/deploy | `@react-router/dev` + `@cloudflare/vite-plugin` + `vite` | 8.4.0 / 1.56.0 / 8.0.3 |
+| App framework, SSR, routing | `react-router` (framework mode) | ^8.4.0 (scaffold wrote 8.3.1) |
+| Framework build + Workers dev/deploy | `@react-router/dev` + `@cloudflare/vite-plugin` + `vite` | ^8.4.0 / ^1.56.0 / ^8.0.3 |
 | Worker runtime, deploy, types | `wrangler` (`wrangler types`) | 4.135.0 |
 | Scaffold | `create-cloudflare --framework=react-router` | 2.72.9 |
 | Auth (sessions, magic link) | `better-auth` | 1.7.5 |
 | Auth ↔ D1 | better-auth's built-in D1 Kysely dialect — binding passed directly | bundled in 1.7.5 |
 | Passkeys | `@better-auth/passkey` (SimpleWebAuthn) | 1.7.5 |
 | Auth schema generation | `npx auth@1.7.5 generate` against an empty local SQLite (§2.4) | `auth` 1.7.5, pinned |
-| Styling | `tailwindcss` + `@tailwindcss/vite` | 4.3.3 (scaffold pins ^4.2.2) |
+| Styling | `tailwindcss` + `@tailwindcss/vite` | ^4.3.3 |
 | Components | `shadcn` CLI → copied source | 4.21.0 |
 | Badge and avatar primitives | `@base-ui/react` | 1.8.0 |
 | Durable scheduling + retries | Cloudflare Workflows (`step.sleep`, `step.do`) | platform |
 | Fan-out + concurrency cap | Cloudflare Queues (`max_concurrency`) | platform |
-| Screenshots + rendered DOM | Browser Run (Quick Actions; sessions via `@cloudflare/puppeteer`) | platform |
+| Screenshots + rendered DOM | Browser Run (Quick Actions; sessions via `@cloudflare/puppeteer`) | platform; `@cloudflare/puppeteer` ^1.4.0 |
 | Blob storage + expiry | R2 + lifecycle rules | platform |
 | Read-mostly cache | Workers KV | platform |
 | Relational store | D1 (`batch()`) | platform |
@@ -1020,28 +1036,67 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | Tick source | Cron Triggers → Queue or Workflow | platform |
 | HTML → text | `HTMLRewriter` | platform |
 | OG + schema.org extraction | `HTMLRewriter` | platform |
-| Change diff | `diff` (jsdiff) | 9.0.0 |
-| Feed parsing | `@extractus/feed-extractor` (wraps `fast-xml-parser`) | 8.0.3 / 5.11.1 |
+| Change diff | `diff` (jsdiff) | 9.0.0, not yet installed |
+| Feed parsing | `@extractus/feed-extractor` (wraps `fast-xml-parser`) | 8.0.3 / 5.11.1, not yet installed |
 | Logo | page metadata via `HTMLRewriter`, DuckDuckGo icon fallback | platform |
 | Validation | `zod` | 4.6.5 |
 | Public-suffix + registrable domain parsing | `tldts` — zero deps, Workers-clean ESM, maintained PSL | 7.4.13 |
-| Charts | `uplot` (+ `uplot-react`) — ~24–28 KB gzip, budget raised to 30 KB | 1.6.32 / 1.2.4 |
+| Charts | `uplot` (+ `uplot-react`), budget 30 KB gzip | 1.6.32 / 1.2.4, not yet installed |
 | OG images | Browser Run `/screenshot` → R2 | platform |
-| Dates + timezones | `Intl` + `date-fns` + `@date-fns/tz` (**never `Temporal`** — workerd#6907) | platform / 4.4.0 / 1.5.0 |
+| Dates + timezones | `Intl` + `date-fns` + `@date-fns/tz` (never `Temporal`, workerd#6907) | platform / 4.4.0, not yet installed / 1.5.0, not yet installed |
 | Unit + integration tests | `vitest` (**pinned 4.1.11**) + `@cloudflare/vitest-plugin` | 4.1.11 / 1.1.13 |
 | E2E against production | `@playwright/test` | 1.63.0 |
 | Performance gate | `treosh/lighthouse-ci-action` | v12.6.2 |
 | Link checking | `lycheeverse/lychee-action` | v2.9.0 |
-| MCP server | `createMcpHandler` (`agents/mcp/server`) + `@modelcontextprotocol/server` | `agents` 0.24.0 / 2.0.0 |
-| MCP auth | `@cloudflare/workers-oauth-provider` | 0.10.3 |
+| MCP server | `createMcpHandler` (`agents/mcp/server`) + `@modelcontextprotocol/server` | `agents` 0.24.0, not yet installed / 2.0.0, not yet installed |
+| MCP auth | `@cloudflare/workers-oauth-provider` | 0.10.3, not yet installed |
 | API keys + per-key quota | `@better-auth/api-key` (`apikey` table) | 1.7.5 |
 | Edge abuse shield | Cloudflare rate limiting binding (`period` 10 or 60 only) | platform |
-| OpenAPI document | `zod-openapi` (samchungy) | 6.0.2 |
+| OpenAPI document | `zod-openapi` (samchungy) | 6.0.2, not yet installed |
 | Agent-readable docs | `/llms.txt` + `Accept: text/markdown` + `rel="alternate"` | spec v2 (2026-08-10) |
 
-**Runtime dependencies this stack adds beyond the scaffold: ten.** `better-auth`, `@better-auth/passkey`, `@better-auth/api-key`, `diff`, `@extractus/feed-extractor`, `uplot` + `uplot-react`, `date-fns` + `@date-fns/tz`, and for the API surface `agents`, `@modelcontextprotocol/server` (which drags `@modelcontextprotocol/client` and `@modelcontextprotocol/sdk` as exact-pinned peers), `@cloudflare/workers-oauth-provider` and `zod-openapi`. `zod` arrives transitively through better-auth; `fast-xml-parser` arrives transitively through feed-extractor. Everything else in the table is a platform primitive with no bundle cost.
+**Installed beyond the scaffold:** `better-auth` ^1.7.5, `@better-auth/passkey` ^1.7.5, `@better-auth/api-key` ^1.7.5, `zod` ^4.6.5 (also a better-auth peer), `@cloudflare/puppeteer` ^1.4.0, `@base-ui/react` 1.8.0, `clsx` ^2.1.1, `tailwind-merge` ^3.7.0, `class-variance-authority` ^0.7.1. **Not yet installed**, because the engine that needs them has not shipped: `diff` 9.0.0, `@extractus/feed-extractor` 8.0.3 (`fast-xml-parser` 5.11.1 comes with it), `uplot` 1.6.32, `uplot-react` 1.2.4, `date-fns` 4.4.0, `@date-fns/tz` 1.5.0, `agents` 0.24.0, `@modelcontextprotocol/server` 2.0.0 and its peers `@modelcontextprotocol/client` and `@modelcontextprotocol/sdk`, `@cloudflare/workers-oauth-provider` 0.10.3, `zod-openapi` 6.0.2, `lucide-react`. Do not delete those rows. Platform rows have no package. `create-cloudflare`, `shadcn`, and `auth@1.7.5` are npx-only and are not missing dependencies.
 
 ---
+
+## 9. Every package.json dependency
+
+The version in this table is the `package.json` specifier. An earlier section often names the same number without the caret. `^` means the lockfile may resolve a later patch or minor; where it has, the resolved version is in the last column.
+
+| Package | Specifier | Where it is named | Why this one | Rejected | Lock |
+|---|---|---|---|---|---|
+| `@base-ui/react` | 1.8.0 | §3.2 | Badge and avatar import it | Radix. The copied shadcn files import Base UI | 1.8.0 |
+| `@better-auth/api-key` | ^1.7.5 | §7.3 | API keys, quotas, and expiry ship in this plugin | A hand-written key table | 1.7.5 |
+| `@better-auth/passkey` | ^1.7.5 | §2.5 | Passkeys. The plugin pulls SimpleWebAuthn | A hand-rolled WebAuthn | 1.7.5 |
+| `@cloudflare/puppeteer` | ^1.4.0 | §4.3 | Session leg of the ads transport (`connect`, `launch`, `sessions`) | `@cloudflare/playwright`, the other session SDK. This file imports puppeteer | 1.4.0 |
+| `better-auth` | ^1.7.5 | §2 | Sessions and magic link on D1 | A custom session table, `kysely-d1`, `better-auth-cloudflare` | 1.7.5 |
+| `class-variance-authority` | ^0.7.1 | §3.2 | Variant map the badge component imports | A hand-written variant map | 0.7.1 |
+| `clsx` | ^2.1.1 | §3.2 | `cn()` in `app/lib/utils.ts` | String concatenation | 2.1.1 |
+| `isbot` | ^5.1.36 | §9 | React Router's server runtime uses it to tell a bot request from a browser request. `react-router typegen` writes `isbot` back into `package.json` if the direct dependency is missing | Dropping it. Typegen then inserts `isbot@^5`, a looser pin, and `@react-router/dev` already depends on a copy of its own | 5.2.2 |
+| `react` | ^19.2.8 | §1.1 | UI runtime the scaffold emits | Preact. React Router 8's types are React | 19.3.0 |
+| `react-dom` | ^19.2.8 | §1.1 | Client renderer. Unit tests call `react-dom/server` | A second renderer | 19.3.0 |
+| `react-router` | ^8.4.0 | §1, §8 | Framework mode, SSR, routing | `@react-router/node` and `@react-router/serve`. C3 deletes both | 8.4.0 |
+| `tailwind-merge` | ^3.7.0 | §3.2 | Class conflict resolution inside `cn()` | A hand-written Tailwind merger | 3.7.0 |
+| `zod` | ^4.6.5 | §5.6 | Request validation. better-auth already depends on zod 4 | `valibot`, `arktype` | 4.6.5 |
+| `@cloudflare/vite-plugin` | ^1.56.0 | §1.2 | Workers dev and deploy from Vite | A hand-written wrangler wrapper, and a wrangler `assets` block | 1.56.0 |
+| `@cloudflare/vitest-plugin` | 1.1.13 | §6.1 | Tests run inside workerd | `@cloudflare/vitest-pool-workers` | 1.1.13 |
+| `@eslint/js` | ^10.0.1 | §9 | `js.configs.recommended` in `eslint.config.js` | Copying those rules by hand | 10.0.1 |
+| `@playwright/test` | ^1.63.0 | §6.2 | End-to-end tests against the deployed URL | A custom browser driver, `microsoft/playwright-github-action` (archived) | 1.63.0 |
+| `@react-router/dev` | ^8.4.0 | §1, §8 | `react-router` Vite plugin and `react-router typegen` | Calling the compiler as a loose script | 8.4.0 |
+| `@tailwindcss/vite` | ^4.3.3 | §3.1 | Tailwind in Vite with no PostCSS config | `postcss` plus `autoprefixer` | 4.3.3 |
+| `@types/node` | ^22.20.4 | §9 | `tsconfig.node.json` sets `"types": ["node"]` for `vite.config.ts` | Omitting it. `tsc` then has no Node types | 22.20.4 |
+| `@types/react` | ^19.2.18 | §9 | JSX types for `"jsx": "react-jsx"` | Omitting it. Component files fail typecheck | 19.3.0 |
+| `@types/react-dom` | ^19.2.7 | §9 | Types for `react-dom/server` in unit tests | An untyped `renderToStaticMarkup` | 19.3.0 |
+| `eslint` | ^10.11.0 | §9 | `npm run lint` is `eslint . && knip` | oxlint or biome. Neither loads this type-checked config or its AST bans | 10.11.0 |
+| `eslint-plugin-react-hooks` | ^7.1.1 | §9 | Hooks rules on `app/` and `workers/` | Turning the rules off | 7.1.1 |
+| `globals` | ^17.12.0 | §9 | Browser and Node globals in `eslint.config.js` | A handwritten globals list | 17.12.0 |
+| `knip` | ^6.37.0 | §9 | Second half of `npm run lint`. Fails on an unused dependency | An allowlist. This file's rule is to remove the unused dependency | 6.37.0 |
+| `tailwindcss` | ^4.3.3 | §3.1 | Styling, configured in CSS | Tailwind 3 and a `tailwind.config.js` | 4.3.3 |
+| `typescript` | ^5.9.3 | §9 | `tsc -b` in `npm run typecheck` | swc or babel, which strip types and do not check them | 5.9.3 |
+| `typescript-eslint` | ^8.70.0 | §9 | Type-checked lint rules | ESLint with no type information | 8.70.0 |
+| `vite` | ^8.0.3 | §1.1 | Dev server and bundler the scaffold wires | webpack | 8.3.0 |
+| `vitest` | 4.1.11 | §6.1 | Unit tests. Exact pin. The `overrides` block pins `@vitest/*` to the same version | vitest 5. The Workers plugin does not support it | 4.1.11 |
+| `wrangler` | ^4.135.0 | §1.3 | `wrangler types` and `wrangler deploy` | `@cloudflare/workers-types`. It fights the generated `Env` | 4.135.0 |
 
 ## Open items for Nish or Fable
 
