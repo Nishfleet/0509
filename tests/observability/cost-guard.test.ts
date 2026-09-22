@@ -240,4 +240,83 @@ describe("checkCostRegression", () => {
     expect(body.query).toContain("r2OperationsAdaptiveGroups");
     expect(body.query).toContain("browserRenderingBrowserTimeUsageAdaptiveGroups");
   });
+
+  it("accepts the production account tag", async () => {
+    const fetchImpl = vi.fn(() =>
+      Promise.resolve(new Response(JSON.stringify(quietAccount(0)), { status: 200 })),
+    );
+    await checkCostRegression({
+      accountId: "f670a698e17bf160c8e4679823e68916",
+      apiToken: "test-token",
+      fetchImpl,
+      onBrands: 1,
+      day: DAY,
+      writeAlert: () => ({ id: "unused" }),
+    });
+    const init = fetchImpl.mock.calls[0]?.[1];
+    const body = JSON.parse(String(init?.body)) as { query: string };
+    expect(body.query).toContain('accountTag: "f670a698e17bf160c8e4679823e68916"');
+  });
+
+  it("reads 2026-10-31 when now is 2026-11-01T00:30:00Z", async () => {
+    const october = envelope({
+      d1: [{ dimensions: { date: "2026-10-31" }, sum: { rowsWritten: 0 } }],
+      r2: [],
+      browser: [],
+    });
+    const fetchImpl = vi.fn(() =>
+      Promise.resolve(new Response(JSON.stringify(october), { status: 200 })),
+    );
+    const result = await checkCostRegression({
+      accountId: "0123456789abcdef0123456789abcdef",
+      apiToken: "test-token",
+      fetchImpl,
+      onBrands: 1,
+      now: new Date("2026-11-01T00:30:00Z"),
+      writeAlert: () => ({ id: "unused" }),
+    });
+    expect(result.day).toBe("2026-10-31");
+    const init = fetchImpl.mock.calls[0]?.[1];
+    const body = JSON.parse(String(init?.body)) as { query: string };
+    expect(body.query).toContain('date_geq: "2026-10-31"');
+  });
+
+  it("refuses a GraphQL errors array", async () => {
+    await expect(
+      checkCostRegression({
+        graphql: { ...quietAccount(0), errors: [{ message: "budget" }] },
+        day: DAY,
+        onBrands: 1,
+        writeAlert: () => ({ id: "unused" }),
+      }),
+    ).rejects.toThrow("cost-guard: graphql returned errors");
+  });
+
+  it("refuses a full D1 page and a full browser page", async () => {
+    const d1 = Array.from({ length: 10 }, () => ({
+      dimensions: { date: DAY },
+      sum: { rowsWritten: 1 },
+    }));
+    await expect(
+      checkCostRegression({
+        graphql: envelope({ d1, r2: [], browser: [] }),
+        day: DAY,
+        onBrands: 1,
+        writeAlert: () => ({ id: "unused" }),
+      }),
+    ).rejects.toThrow("cost-guard: d1 returned 10 groups, a full page");
+
+    const browser = Array.from({ length: 10 }, () => ({
+      dimensions: { date: DAY },
+      sum: { totalSessionDurationMs: 1 },
+    }));
+    await expect(
+      checkCostRegression({
+        graphql: envelope({ d1: [], r2: [], browser }),
+        day: DAY,
+        onBrands: 1,
+        writeAlert: () => ({ id: "unused" }),
+      }),
+    ).rejects.toThrow("cost-guard: browser returned 10 groups, a full page");
+  });
 });

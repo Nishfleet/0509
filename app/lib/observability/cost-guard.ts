@@ -1,30 +1,3 @@
-/**
- * Daily cost regression guard (0509#4186).
- *
- * Reads the previous UTC day's D1 rows written, R2 Class A operations and
- * Browser Rendering duration from Cloudflare's GraphQL analytics, divides
- * each by the ON-brand count the caller supplies, and writes one alert per
- * line that is more than three times the per-brand-per-day figure in
- * docs/REBUILD-COST.md (authored 2026-09-21):
- *
- * - d1_rows_written = 10. One snapshot row per watch per tick, ten sources
- *   per brand. The doc's table "10 brands → 3,000 snapshot rows / month"
- *   is 10 rows per brand per day.
- * - r2_class_a = 10. Those ten snapshots each store a body in R2, and a
- *   put is one Class A operation. The doc says "R2 holds the snapshot
- *   bodies" and does not print a second integer.
- * - browser_rendering_seconds = 15. The doc's line is "≈15 browser-seconds
- *   per brand per day".
- *
- * The alert id is `cost-guard:<day>:<line>`, stable for that day and line,
- * so the caller can insert it once. The guard reports. It does not turn a
- * brand or a source off, and it does not drop an analytics group to shrink
- * a total. An unrecognized R2 action fails the run.
- *
- * Class A / Class B / free operation names are the R2 pricing page as of
- * 2026-08-07: https://developers.cloudflare.com/r2/pricing/
- */
-
 export const DOCUMENTED_PER_BRAND_PER_DAY = {
   d1_rows_written: 10,
   r2_class_a: 10,
@@ -131,9 +104,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function previousUtcDay(now: Date): string {
-  const utc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  utc.setUTCDate(utc.getUTCDate() - 1);
-  const day = utc.toISOString().slice(0, 10);
+  const startOfUtcDay = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const day = new Date(startOfUtcDay - 86_400_000).toISOString().slice(0, 10);
   if (!DAY.test(day)) fail(`computed day ${day} is not YYYY-MM-DD`);
   return day;
 }
@@ -226,17 +198,18 @@ export function readCostTotals(graphql: unknown, day: string): CostTotals {
 }
 
 function expectedFigures(override: Partial<CostTotals> | undefined): CostTotals {
-  const expected: CostTotals = { ...DOCUMENTED_PER_BRAND_PER_DAY };
-  if (override === undefined) return expected;
+  const base: CostTotals = { ...DOCUMENTED_PER_BRAND_PER_DAY };
+  if (override === undefined) return base;
+  const picked: Partial<CostTotals> = {};
   for (const line of LINES) {
     const value = override[line];
     if (value === undefined) continue;
     if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
       fail(`expected ${line} is not a non-negative number`);
     }
-    expected[line] = value;
+    picked[line] = value;
   }
-  return expected;
+  return { ...base, ...picked };
 }
 
 function costQuery(accountId: string, day: string): string {
@@ -278,7 +251,8 @@ async function fetchGraphql(
     signal: AbortSignal.timeout(30_000),
   });
   if (!response.ok) fail(`graphql http ${String(response.status)}`);
-  return (await response.json()) as unknown;
+  const body: unknown = await response.json();
+  return body;
 }
 
 function perBrand(totals: CostTotals, onBrands: number): CostTotals {
@@ -305,7 +279,7 @@ export async function checkCostRegression(input: CostGuardInput): Promise<CostGu
   const totals = readCostTotals(graphql, day);
   const measured = perBrand(totals, input.onBrands);
   const expected = expectedFigures(input.expectedPerBrandPerDay);
-  const alerts: CostAlert[] = [];
+  let alerts: CostAlert[] = [];
   for (const line of LINES) {
     if (measured[line] <= expected[line] * COST_REGRESSION_MULTIPLE) continue;
     const row: CostAlert = {
@@ -319,7 +293,7 @@ export async function checkCostRegression(input: CostGuardInput): Promise<CostGu
     };
     const written = await Promise.resolve(input.writeAlert(row));
     if (written.id.length === 0) fail(`alert writer returned an empty id for ${line}`);
-    alerts.push({ ...row, id: written.id });
+    alerts = [...alerts, { ...row, id: written.id }];
   }
   return { day, onBrands: input.onBrands, totals, perBrand: measured, expected, alerts };
 }
