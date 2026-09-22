@@ -1,29 +1,10 @@
 @import "tailwindcss" source(".");
 
-/* The 0509 visual language: the ONE stylesheet of colour, type and motion
-   tokens (0509#3984). DESIGN.md is the authority — §3 typography, §4 colour,
-   §9 motion. Every surface draws from here, so two screens cannot drift into
-   two design systems.
-
-   The colour values live once per theme, under the exact names §4 lists
-   (`--bone`, `--green`, `--red`, `--on-green`, …), so the names in DESIGN.md
-   are the names in the browser. `@theme` aliases Tailwind's `--color-*`
-   namespace onto those same variables (`--color-green: var(--green)`), so
-   `bg-green` resolves to `var(--green)` and no utility carries a second hex;
-   the old alias names (`--color-accent`, `--color-strike`,
-   `--color-on-accent`) are kept alongside, because they are the Tailwind
-   colour the pre-#3984 tree already shipped under and nothing here removes a
-   name a surface may use. Type, motion and radius tokens live in that same
-   `@theme`, which is what gives them the `text-eyebrow` / `duration-push` /
-   `rounded-none` utilities and emits the variables §3 and §9 name. */
-
 @theme {
-  /* Families (DESIGN.md §3). */
   --font-display: "Bricolage Grotesque", ui-sans-serif, sans-serif;
   --font-sans: "Instrument Sans", ui-sans-serif, -apple-system, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
-  /* Type scale (DESIGN.md §3): size + line height + tracking per the table. */
   --text-display-1: clamp(2.35rem, 4.6vw, 4.1rem);
   --text-display-1--line-height: 1.04;
   --text-display-1--letter-spacing: -0.045em;
@@ -76,11 +57,6 @@
   --text-meta--line-height: 1.4;
   --text-meta--letter-spacing: 0.06em;
 
-  /* Motion (DESIGN.md §9). Six motions; every duration in the product is one
-     of these. Five share the one push curve, the fade arrives `linear`.
-     `--transition-duration-*` is the namespace that gives Tailwind a
-     `duration-push` utility; it resolves to the canonical `--duration-*` name
-     declared on :root below so there is still one source per duration. */
   --ease-push: cubic-bezier(.32, .72, 0, 1);
   --ease-fade: linear;
   --transition-duration-push: var(--duration-push);
@@ -91,14 +67,8 @@
   --transition-duration-fade: var(--duration-fade);
   --transition-duration-press: var(--duration-press);
 
-  /* Radius is 0 everywhere (DESIGN.md §3). */
   --radius-none: 0px;
 
-  /* Colour utilities resolve to the canonical §4 names below rather than to a
-     second set of hexes, so `bg-green` and `var(--green)` cannot drift. The
-     accent/strike/on-accent names are the pre-#3984 Tailwind colour the tree
-     shipped under; both point at the same variables, so no surface reading
-     either name can drift from DESIGN.md. */
   --color-bone: var(--bone);
   --color-card: var(--card);
   --color-ink: var(--ink);
@@ -110,20 +80,9 @@
   --color-green-wash: var(--green-wash);
   --color-red: var(--red);
   --color-on-green: var(--on-green);
-
-  --color-accent: var(--green);
-  --color-accent-ink: var(--green-ink);
-  --color-accent-wash: var(--green-wash);
-  --color-strike: var(--red);
-  --color-on-accent: var(--on-green);
 }
 
-/* ---------- colour values (DESIGN.md §4) ----------
-   The hex appears exactly once per token in each theme. tests/unit/theme.test.ts
-   reads the compiled sheet, so a token cannot move without the test moving. */
-
 :root {
-  /* Light (default). */
   --bone: #f4f1e8;
   --card: #fffdf6;
   --ink: #0e0d0a;
@@ -136,9 +95,6 @@
   --red: #e0442c;
   --on-green: #0e0d0a;
 
-  /* Motion (DESIGN.md §9). Six motions; nothing else exists. The curve is the
-     only motion token that also lives in `@theme` (it emits the `ease-*`
-     utilities) and it is declared there once, not here. */
   --duration-push: 320ms;
   --duration-sheet-up: 380ms;
   --duration-sheet-down: 280ms;
@@ -149,10 +105,6 @@
 
   color-scheme: light;
 }
-
-/* Dark, per §4. Warm near-black and warm off-white, never #000/#fff. Declared
-   under BOTH the media query (scoped so an explicit light theme still wins) and
-   the attribute, so the OS setting and `data-theme="dark"` carry one set. */
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -187,10 +139,6 @@
 
   color-scheme: dark;
 }
-
-/* ---------- the three self-hosted faces ----------
-   public/fonts holds the latin subsets; no Google <link>, no preconnect
-   (DESIGN.md §3). Weight ranges reproduce the served set. */
 
 @font-face {
   font-family: "Bricolage Grotesque";
@@ -230,8 +178,6 @@
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
-/* ---------- the page frame, from the same tokens ---------- */
-
 html,
 body {
   background: var(--bone);
@@ -247,8 +193,6 @@ body {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
-
-/* ---------- reduced motion: every transition and animation off ---------- */
 
 @media (prefers-reduced-motion: reduce) {
   *,

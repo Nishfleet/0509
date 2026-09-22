@@ -437,6 +437,30 @@ describe("the one stylesheet stays the one stylesheet (#3984)", () => {
     expect(css).not.toContain("@apply");
   });
 
+  it("carries no comment justifying a workaround", async () => {
+    // CLAUDE.md bans comments in app code, and ESLint only reads .ts/.tsx, so
+    // this stylesheet has no lint rule covering it. A comment in app code is
+    // where an agent writes the reason a workaround is fine instead of fixing
+    // the thing, so the whole of app/app.css carries none, and the reason for
+    // each decision lives in the commit that made it.
+    const css = await readFile(path.join(REPO_ROOT, "app/app.css"), "utf8");
+    expect(css).not.toContain("/*");
+    expect(css).not.toContain("//");
+  });
+
+  it("carries no second vocabulary for a §4 colour", async () => {
+    // The pre-#3984 tree shipped the accent as --color-accent/-ink/-wash and the
+    // strike as --color-strike/-on-accent. Two names for one colour is the drift
+    // this issue closes, so the alias set must stay gone: a re-added
+    // `--color-accent` would resolve to the same green today and to a different
+    // hex the moment someone edits one of the two. ASSERTING THE NAMES, not the
+    // hexes: the hexes are already pinned to §4 above.
+    const css = await readFile(path.join(REPO_ROOT, "app/app.css"), "utf8");
+    for (const legacy of ["--color-accent", "--color-accent-ink", "--color-accent-wash", "--color-strike", "--color-on-accent"]) {
+      expect(css, `${legacy} is a second name for a §4 colour`).not.toContain(legacy);
+    }
+  });
+
   it("self-hosts the three faces with font-display: swap and no Google link", async () => {
     const css = await readFile(path.join(REPO_ROOT, "app/app.css"), "utf8");
     for (const family of ["Bricolage Grotesque", "Instrument Sans", "IBM Plex Mono"]) {
