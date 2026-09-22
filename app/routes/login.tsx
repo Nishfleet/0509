@@ -3,6 +3,7 @@ import { env } from "cloudflare:workers";
 import { useState } from "react";
 import { Form, useActionData, useNavigate, useNavigation } from "react-router";
 
+import { Footer } from "../components/footer";
 import { authClient } from "../lib/auth-client";
 import { createAuth } from "../lib/auth.server";
 
@@ -42,6 +43,7 @@ export default function Login() {
       <main>
         <h1>Check your email</h1>
         <p>If that address can sign in, a link is on its way. It works once and expires shortly.</p>
+        <Footer />
       </main>
     );
   }
@@ -61,6 +63,7 @@ export default function Login() {
         <p role="alert">Passkey sign-in did not go through. Try again or use your email link.</p>
       ) : null}
       {data && "error" in data ? <p role="alert">{data.error}</p> : null}
+      <Footer />
     </main>
   );
 }

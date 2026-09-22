@@ -2,6 +2,7 @@ import { type RouteConfig, route } from "@react-router/dev/routes";
 
 export default [
   route("login", "routes/login.tsx"),
+  route("privacy", "routes/privacy.tsx"),
   route("app", "routes/app.home.tsx"),
   route("app/competitors", "routes/app.competitors.tsx"),
   route("app/competitors/:entityId", "routes/app.competitor.tsx"),
