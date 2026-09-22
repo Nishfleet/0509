@@ -93,14 +93,6 @@ export function diffWordsPositioned(before: string, after: string): WordChange[]
   return changes;
 }
 
-/**
- * The stored hunks, with page position. `structuredPatch` produces the bounded
- * `-`/`+` context the packet asks for, over a token-per-line rendering of both
- * texts, so a hunk's `oldStart` *is* its page position: the 1-based word index
- * in the before text. Extracted text is one normalised blob, so a line-based
- * patch of it would name the whole page as every hunk's position and bound
- * nothing.
- */
 export function buildStoredHunks(before: string, after: string, context = 2): StoredHunk[] {
   if (context < 0) {
     throw new RangeError("context must be zero or more words of context, never negative");
@@ -117,22 +109,11 @@ export function buildStoredHunks(before: string, after: string, context = 2): St
     { context },
   );
 
-  // jsdiff appends "\\ No newline at end of file" markers whenever an input does
-  // not end in a newline — true of every token-per-line rendering, because the
-  // last word has no newline after it. The marker is a file-format concern, not
-  // a fact about the copy, and it would sit in every stored hunk as noise the
-  // judge reads. Drop it; the hunk's own `-`/`+`/` ` lines carry all the meaning.
   const stripNoNewline = (lines: string[]): string[] =>
     lines.filter((line) => line !== "\\ No newline at end of file");
 
   return patch.hunks.map((hunk) => {
     const lines = stripNoNewline(hunk.lines);
-    // `oldStart` is 1-based and names the hunk's first line, which can be a
-    // context line before the change. The change's own position is the first
-    // non-context line, one word per context line that preceded it. A pure
-    // insertion has no `-` line, so the break must be on anything that is not
-    // context — otherwise the trailing context words advance the position past
-    // the end of the before text.
     let startWord = hunk.oldStart - 1;
     for (const line of lines) {
       if (!line.startsWith(" ")) break;
@@ -149,7 +130,6 @@ export function buildStoredHunks(before: string, after: string, context = 2): St
   });
 }
 
-/** Inputs to the hash-gated builder. */
 export interface PageDiffInput {
   prevHash: string;
   nextHash: string;

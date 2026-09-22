@@ -74,13 +74,6 @@ async function putMarkBody(
   return { key, bytes: encoded.byteLength, contentType: "application/json" };
 }
 
-/**
- * Assemble a mark: two texts, two screenshots and the hunks all in R2, with the
- * reference object that D1's snapshot and signal rows store. The caller
- * supplies the already-captured bytes because capture belongs to the escalation
- * path (P2). It refuses a `PageDiff` the hash gate never produced, which can
- * only happen if a caller built one by hand.
- */
 export async function storeMark(
   store: MarkStore,
   keys: MarkKeys,
