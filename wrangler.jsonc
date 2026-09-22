@@ -60,6 +60,18 @@
     }
   ],
 
+  // The public standing card's pre-rendered artifact (issue #3969, engine 9).
+  // The weekly rollover (engine 6) writes card/<workspace_id>/<week_start_at>/
+  // {index.html,og.png} here and /s/<slug> streams it. A bucket of its own
+  // rather than a prefix on 0509-snapshots because its objects are public:
+  // every read is unauthenticated, its retention is weekly, and engine 10's
+  // lifecycle rules for it are a different table than the snapshot bodies'.
+  // The bucket must exist before a remote deploy: wrangler fails the release
+  // on a binding naming a bucket that is not there.
+  "r2_buckets": [
+    { "binding": "CARD_ARTIFACTS", "bucket_name": "0509-cards" }
+  ],
+
   // Browser Rendering: brand pages bot-gate a plain workerd fetch, so every
   // arbitrary-homepage read goes through real Chrome. Measured ~7 s per ads
   // pull; the cost model turns on keeping concurrency at or under the included
