@@ -1,5 +1,9 @@
+import { DurableObject } from "cloudflare:workers";
+
+const HOUR_MS = 60 * 60 * 1000;
+
 interface InboxEnv {
-  INBOX: KVNamespace;
+  INBOX: DurableObjectNamespace<InboxMailbox>;
   E2E_INBOX_TOKEN?: string;
 }
 
@@ -9,13 +13,58 @@ const timingSafeEqual = (
   }
 ).timingSafeEqual.bind(crypto.subtle);
 
+export class InboxMailbox extends DurableObject<InboxEnv> {
+  constructor(ctx: DurableObjectState, env: InboxEnv) {
+    super(ctx, env);
+    void ctx.blockConcurrencyWhile(() => {
+      this.ctx.storage.sql.exec(
+        `CREATE TABLE IF NOT EXISTS message (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          raw TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        )`,
+      );
+      return Promise.resolve();
+    });
+  }
+
+  async store(raw: string): Promise<void> {
+    const now = Date.now();
+    this.ctx.storage.sql.exec(
+      `INSERT INTO message (id, raw, created_at) VALUES (1, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET raw = excluded.raw, created_at = excluded.created_at`,
+      raw,
+      now,
+    );
+    
+    
+    await this.ctx.storage.setAlarm(now + HOUR_MS);
+  }
+
+  read(): string | null {
+    const row = this.ctx.storage.sql
+      .exec<{ raw: string; created_at: number }>("SELECT raw, created_at FROM message WHERE id = 1")
+      .toArray()[0];
+    if (!row) return null;
+    if (row.created_at + HOUR_MS <= Date.now()) {
+      this.ctx.storage.sql.exec("DELETE FROM message WHERE id = 1");
+      return null;
+    }
+    return row.raw;
+  }
+
+  alarm(): void {
+    this.ctx.storage.sql.exec("DELETE FROM message");
+  }
+}
+
 export default {
   async email(message, env) {
     
     
     
     const raw = await new Response(message.raw).text();
-    await env.INBOX.put(message.to, raw, { expirationTtl: 3600 });
+    await env.INBOX.getByName(message.to).store(raw);
   },
 
   async fetch(request, env) {
@@ -37,7 +86,7 @@ export default {
     if (!to) {
       return new Response("missing ?to=", { status: 400 });
     }
-    const message = await env.INBOX.get(to);
+    const message = await env.INBOX.getByName(to).read();
     if (message === null) {
       return new Response("no message stored for recipient", { status: 404 });
     }
