@@ -4,7 +4,7 @@ import { expect, test } from "@playwright/test";
 // about to ship start and serve". It runs twice: against the built Worker on
 // every PR, and against production on every successful deployment.
 //
-// Every assertion here is reachable from docs/FEATURE-MAP.md. A test that
+// Every assertion here is reachable from .agents/skills/verify/feature-map.md. A test that
 // cannot be traced to a row in that file is testing something a user cannot do.
 //
 // What is deliberately NOT here: anything that needs a row in D1. `wrangler dev
@@ -58,7 +58,7 @@ test("the login page renders the one input that signs you in", async ({ page }) 
   const heading = page.getByRole("heading", { level: 1 });
   await expect(heading).toBeVisible();
   await expect(heading).not.toBeEmpty();
-  // "labelled input" in FEATURE-MAP, proven directly on the field: a visible
+  // "labelled input" in feature-map.md, proven directly on the field: a visible
   // email input with any programmatic accessible name. Label text and button
   // copy stay unasserted.
   const email = page.locator('input[type="email"][name="email"]');

@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 // The /privacy contract (0509#3986). Every assertion here is reachable from the
-// /privacy row in docs/FEATURE-MAP.md.
+// /privacy row in .agents/skills/verify/feature-map.md.
 //
 // Copy is pattern-matched, never pinned verbatim: a merge-queue proof that
 // asserts exact strings turns every wording edit into a red gate (the landing
