@@ -1,4 +1,4 @@
-type GeneratorKey = "news" | "hn" | "ads";
+export type GeneratorKey = "news" | "hn" | "ads";
 
 interface Evidence {
   sourceUrl: string;
