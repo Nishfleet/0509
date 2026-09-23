@@ -70,7 +70,9 @@ export default function Login() {
           disabled={wait > 0}
           onClick={() => {
             setWait(30);
-            void fetcher.submit({ email: data.email }, { method: "post" });
+            if (data.email) {
+              void fetcher.submit({ email: data.email }, { method: "post" });
+            }
           }}
         >
           {wait > 0 ? `Send it again in ${String(wait)}s` : "Send it again"}
