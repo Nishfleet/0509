@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const mentionItemSchema = z.object({
 	dedupKey: z.string().min(1),
-	url: z.string().url(),
+	url: z.url(),
 	title: z.string(),
 	publishedAt: z.string().nullable(),
 });
@@ -15,7 +15,9 @@ export const mentionsResultSchema = z.object({
 
 export type MentionsResult = z.infer<typeof mentionsResultSchema>;
 
-export type MentionsTarget = { readonly query: string };
+export interface MentionsTarget {
+	readonly query: string;
+}
 
 export type MentionsCursor = string | null;
 
