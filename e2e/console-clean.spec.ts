@@ -7,6 +7,15 @@ interface ConsoleEntry {
   url: string;
 }
 
+// Design pages may deliberately point at an asset that does not exist to prove
+// their fallback UI (#4509); the 404 that follows is the expected outcome, not a
+// screen defect. Exactly these asset paths are ignored.
+const intentionalMissingAssets = ["/capture-plate-missing.svg"];
+
+function isIntentionalMissingAsset(entry: ConsoleEntry): boolean {
+  return entry.url !== "" && intentionalMissingAssets.includes(new URL(entry.url).pathname);
+}
+
 function screenPaths(entries: RouteConfigEntry[], parent: string): string[] {
   const paths: string[] = [];
   for (const entry of entries) {
@@ -53,6 +62,7 @@ for (const target of targets) {
     const failures = [
       ...consoleErrors
         .filter((entry) => !ownDocument404(entry))
+        .filter((entry) => !isIntentionalMissingAsset(entry))
         .map((entry) => `${entry.text} @ ${entry.url}`),
       ...pageErrors,
     ];
