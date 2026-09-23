@@ -34,15 +34,16 @@ SET state = 'on', state_changed_at = ?, state_changed_by = 'user', state_reason 
 WHERE id = ? AND workspace_id = ?`;
 
 const ACCEPT_SUGGESTION_FOR_DOMAIN = `UPDATE suggestion
-SET status = 'accepted', decided_by = 'user', decided_at = ?, entity_id = ?
-WHERE workspace_id = ? AND candidate_domain = ? AND status = 'pending'`;
+SET status = 'accepted', decided_by = 'user', decided_at = ?,
+  entity_id = (SELECT id FROM entity WHERE workspace_id = ? AND domain = ?)
+WHERE workspace_id = ? AND candidate_domain = ? AND kind = 'add' AND status = 'pending'`;
 
 export async function listOnCompetitors(workspaceId: string): Promise<OnCompetitor[]> {
   const rows = await env.DB.prepare(SELECT_ON_COMPETITORS).bind(workspaceId).all<OnCompetitor>();
   return rows.results;
 }
 
-export async function setCompetitorOn(
+export function competitorOnStatement(
   workspaceId: string,
   input: {
     domain: string;
@@ -52,39 +53,32 @@ export async function setCompetitorOn(
     entityId?: string | null;
     now?: string;
   },
-): Promise<string> {
+): D1PreparedStatement {
   const at = input.now ?? new Date().toISOString();
   if (input.entityId) {
-    const turned = await env.DB.prepare(TURN_ON_EXISTING)
-      .bind(at, input.reason, input.entityId, workspaceId)
-      .run();
-    if (turned.meta.changes === 0) {
-      throw new Error(
-        `suggestion points at entity ${input.entityId}, which is not a row in workspace ${workspaceId}`,
-      );
-    }
-    return input.entityId;
+    return env.DB.prepare(TURN_ON_EXISTING).bind(at, input.reason, input.entityId, workspaceId);
   }
-  const row = await env.DB.prepare(UPSERT_ON_COMPETITOR)
-    .bind(crypto.randomUUID(), workspaceId, input.domain, input.name, input.origin, at, at, input.reason, at)
-    .first<{ id: string }>();
-  if (!row) throw new Error("entity upsert returned no id");
-  return row.id;
+  return env.DB.prepare(UPSERT_ON_COMPETITOR)
+    .bind(crypto.randomUUID(), workspaceId, input.domain, input.name, input.origin, at, at, input.reason, at);
 }
 
 export async function addUserCompetitor(
   workspaceId: string,
   input: { domain: string; name: string | null; now?: string },
 ): Promise<string> {
-  const entityId = await setCompetitorOn(workspaceId, {
-    domain: input.domain,
-    name: input.name,
-    origin: "manual",
-    reason: "added by you",
-    now: input.now,
-  });
-  await env.DB.prepare(ACCEPT_SUGGESTION_FOR_DOMAIN)
-    .bind(input.now ?? new Date().toISOString(), entityId, workspaceId, input.domain)
-    .run();
-  return entityId;
+  const at = input.now ?? new Date().toISOString();
+  const [upserted] = await env.DB.batch([
+    competitorOnStatement(workspaceId, {
+      domain: input.domain,
+      name: input.name,
+      origin: "manual",
+      reason: "added by you",
+      now: at,
+    }),
+    env.DB.prepare(ACCEPT_SUGGESTION_FOR_DOMAIN)
+      .bind(at, workspaceId, input.domain, workspaceId, input.domain),
+  ]);
+  const row = upserted.results[0] as { id: string } | undefined;
+  if (!row) throw new Error("entity upsert returned no id");
+  return row.id;
 }

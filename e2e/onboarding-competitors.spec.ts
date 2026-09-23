@@ -4,19 +4,17 @@ import { requireInboxToken, signInWithMagicLink } from "./inbox";
 
 // 0509#3999 screen 3. Production lane only, same boundary as
 // j1-magic-link.spec.ts: a session needs the real mail path, which the local
-// preview Worker lacks. The D1-side check that listed ids are real entity rows
-// lives in tests/integration/onboarding-competitors.integration.test.ts.
+// preview Worker lacks.
 test.skip(
   !process.env.PLAYWRIGHT_TEST_BASE_URL,
   "a signed-in session needs the production mail path; the local preview Worker cannot send email",
 );
 
-async function signedIn(page: Page): Promise<number> {
+async function signedIn(page: Page): Promise<void> {
   const token = requireInboxToken();
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
   await signInWithMagicLink(page, email, token);
   await expect(page).toHaveURL(/\/onboarding/);
-  return Date.now();
 }
 
 function collectConsoleErrors(page: Page): string[] {
@@ -54,16 +52,15 @@ test("a cold onboarding reaches screen 3 inside the 60 s budget with its chrome 
   page,
 }) => {
   const errors = collectConsoleErrors(page);
-  // t0 is the session landing on /onboarding — the earliest honest start until
-  // the card screen (#3993) merges; the real card->competitors leg is shorter.
-  const t0 = await signedIn(page);
+  await signedIn(page);
 
+  const t0 = Date.now();
   await page.goto("/onboarding/competitors");
   const heading = page.getByRole("heading", { level: 1 });
   await expect(heading).toBeVisible();
   const elapsedMs = Date.now() - t0;
   console.log(
-    `landing->competitors t0=${new Date(t0).toISOString()} rendered=${new Date().toISOString()} elapsed=${String(elapsedMs)}ms budget=60000ms`,
+    `prior-screen->competitors rendered=${new Date().toISOString()} elapsed=${String(elapsedMs)}ms budget=60000ms`,
   );
   expect(elapsedMs).toBeLessThan(60_000);
 
@@ -107,6 +104,13 @@ test("three added brands land as ON rows, each domain paired with a distinct ent
     await expect(rows.nth(index), `row ${String(index)} in first viewport (${testInfo.project.name})`)
       .toBeInViewport();
   }
+
+  await page.reload();
+  const afterReload = await page
+    .locator("[data-entity-id]")
+    .evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-entity-id")));
+  expect(afterReload.sort()).toEqual(seen.map((row) => row.id).sort());
+
   await assertNoOverflow(page);
   expect(errors).toEqual([]);
 });

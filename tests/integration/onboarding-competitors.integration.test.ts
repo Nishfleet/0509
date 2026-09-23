@@ -1,13 +1,16 @@
 import { env } from "cloudflare:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { OnCompetitorList } from "../../app/components/onboarding/competitor-lists";
 import {
   addUserCompetitor,
   listOnCompetitors,
 } from "../../app/lib/data/entity.server";
 import { markCompetitorsReady } from "../../app/lib/data/onboarding-run.server";
 import { acceptSuggestion, listMaybeCompetitors } from "../../app/lib/data/suggestion.server";
-import { domainFromInput } from "../../app/lib/subject.server";
+import { domainFromInput } from "../../app/routes/onboarding.competitors";
 
 // Issue #3999's write and read paths against real workerd D1 with
 // migrations/0001_rebuild.sql applied. The screen only renders these rows, so
@@ -40,6 +43,7 @@ async function seedSuggestion(
     entityId: string | null;
     domain: string;
     name: string | null;
+    kind: string;
     p: number | null;
     reason: string | null;
     status: string;
@@ -49,12 +53,13 @@ async function seedSuggestion(
   await env.DB.prepare(
     `INSERT INTO suggestion
        (id, workspace_id, entity_id, kind, candidate_domain, candidate_name, verdict_p, verdict_reason, status, created_at)
-     VALUES (?, ?, ?, 'add', ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
       overrides.workspaceId ?? WORKSPACE_ID,
       overrides.entityId ?? null,
+      overrides.kind ?? "add",
       overrides.domain ?? "alphaleteathletics.com",
       overrides.name ?? "Alphalete",
       overrides.p === undefined ? 0.42 : overrides.p,
@@ -180,6 +185,14 @@ describe("addUserCompetitor", () => {
     expect((await suggestionRow(dismissed))?.status).toBe("dismissed");
   });
 
+  it("leaves a pending retire suggestion for the same domain pending", async () => {
+    const retire = await seedSuggestion({ domain: "gymshark.com", kind: "retire", status: "pending" });
+    await addUserCompetitor(WORKSPACE_ID, { domain: "gymshark.com", name: null, now: NOW });
+
+    expect(await entityRow("gymshark.com")).toMatchObject({ state: "on", origin: "manual" });
+    expect((await suggestionRow(retire))?.status).toBe("pending");
+  });
+
   it("is idempotent for the same domain and re-on's a dismissed entity", async () => {
     await addUserCompetitor(WORKSPACE_ID, { domain: "gymshark.com", name: null, now: NOW });
     await env.DB.prepare("UPDATE entity SET state = 'dismissed' WHERE domain = 'gymshark.com'").run();
@@ -248,6 +261,20 @@ describe("acceptSuggestion", () => {
     await expect(acceptSuggestion(WORKSPACE_ID, suggestionId)).rejects.toThrow(/not a row in workspace/);
     expect((await suggestionRow(suggestionId))?.status).toBe("pending");
     expect(await entityRow("gymshark.com")).toBeNull();
+  });
+});
+
+describe("OnCompetitorList render", () => {
+  it("marks each listed brand with its entity row's id", async () => {
+    const entityId = await addUserCompetitor(WORKSPACE_ID, {
+      domain: "gymshark.com",
+      name: "Gymshark",
+      now: NOW,
+    });
+    const rows = await listOnCompetitors(WORKSPACE_ID);
+    const html = renderToStaticMarkup(createElement(OnCompetitorList, { rows }));
+    expect(html).toContain(`data-entity-id="${entityId}"`);
+    expect(html).toContain("gymshark.com");
   });
 });
 

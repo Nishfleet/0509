@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 
-import { setCompetitorOn } from "./entity.server";
+import { competitorOnStatement } from "./entity.server";
 
 export interface MaybeCompetitor {
   id: string;
@@ -29,9 +29,15 @@ const SELECT_PENDING_BY_ID = `SELECT id, entity_id, candidate_domain, candidate_
 FROM suggestion
 WHERE id = ? AND workspace_id = ? AND kind = 'add' AND status = 'pending'`;
 
-const MARK_ACCEPTED = `UPDATE suggestion
+const MARK_ACCEPTED_LINKED = `UPDATE suggestion
 SET status = 'accepted', decided_by = 'user', decided_at = ?, entity_id = ?
-WHERE id = ? AND workspace_id = ?`;
+WHERE id = ? AND workspace_id = ? AND status = 'pending'
+  AND EXISTS (SELECT 1 FROM entity WHERE id = ? AND workspace_id = ?)`;
+
+const MARK_ACCEPTED_FOR_DOMAIN = `UPDATE suggestion
+SET status = 'accepted', decided_by = 'user', decided_at = ?,
+  entity_id = (SELECT id FROM entity WHERE workspace_id = ? AND domain = ?)
+WHERE id = ? AND workspace_id = ? AND status = 'pending'`;
 
 export async function listMaybeCompetitors(workspaceId: string): Promise<MaybeCompetitor[]> {
   const rows = await env.DB.prepare(SELECT_MAYBES).bind(workspaceId).all<MaybeCompetitor>();
@@ -42,15 +48,26 @@ export async function acceptSuggestion(workspaceId: string, suggestionId: string
   const pending = await env.DB.prepare(SELECT_PENDING_BY_ID).bind(suggestionId, workspaceId).first<PendingSuggestionRow>();
   if (!pending) return false;
 
-  const entityId = await setCompetitorOn(workspaceId, {
+  const at = new Date().toISOString();
+  const entityId = pending.entity_id;
+  const turnOn = competitorOnStatement(workspaceId, {
     domain: pending.candidate_domain,
     name: pending.candidate_name,
     origin: "auto",
     reason: pending.verdict_reason,
-    entityId: pending.entity_id,
+    entityId,
+    now: at,
   });
-
-  const at = new Date().toISOString();
-  await env.DB.prepare(MARK_ACCEPTED).bind(at, entityId, suggestionId, workspaceId).run();
+  const mark = entityId === null
+    ? env.DB.prepare(MARK_ACCEPTED_FOR_DOMAIN)
+        .bind(at, workspaceId, pending.candidate_domain, suggestionId, workspaceId)
+    : env.DB.prepare(MARK_ACCEPTED_LINKED)
+        .bind(at, entityId, suggestionId, workspaceId, entityId, workspaceId);
+  const [turned] = await env.DB.batch([turnOn, mark]);
+  if (entityId !== null && turned.meta.changes === 0) {
+    throw new Error(
+      `suggestion points at entity ${entityId}, which is not a row in workspace ${workspaceId}`,
+    );
+  }
   return true;
 }
