@@ -4,7 +4,7 @@ import {
   BRAND_LINES_QUERY,
   parseBriefPayload,
   type BriefPayload,
-} from "../../workers/delivery/brief-data";
+} from "../../app/lib/brief-payload";
 import { renderBrief } from "../../workers/delivery/brief-template";
 
 /**
