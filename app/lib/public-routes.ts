@@ -1,4 +1,8 @@
-type SurfaceKind = "static" | "route" | "dynamic";
+import type { RouteConfigEntry } from "@react-router/dev/routes";
+
+import routes from "../routes";
+
+type SurfaceKind = "static" | "route";
 
 export interface PublicSurface {
   readonly path: string;
@@ -9,77 +13,105 @@ export interface PublicSurface {
   readonly note?: string;
 }
 
-export const PUBLIC_SURFACES: readonly PublicSurface[] = [
-  {
-    path: "/",
-    kind: "static",
-    indexable: false,
-    changeFrequency: "weekly",
-    priority: 1,
-    note: "public/index.html; noindex until the landing gate lifts (build step 3)",
-  },
-  {
-    path: "/login",
-    kind: "route",
-    indexable: true,
-    changeFrequency: "monthly",
-    priority: 0.5,
-    note: "app/routes/login.tsx; public page, listed per build step 1",
-  },
-  {
-    path: "/s/:slug",
-    kind: "route",
-    indexable: false,
-    note: "app/routes/s.$slug.tsx; a published standing card. Not advertised until slugs can be enumerated from data (0509#3898); sitemapEntries(surfaces, dynamicLocs) is the seam.",
-  },
-  {
-    path: "/design/brand-chips",
-    kind: "route",
-    indexable: false,
-    note: "app/routes/design.brand-chips.tsx; a design-directions page, not a public surface of the product.",
-  },
-  {
-    path: "/*",
-    kind: "route",
-    indexable: false,
-    note: "app/routes/unmatched.tsx; the 404 catch-all. A page a crawler is sent to on a bad URL is not a page to index.",
-  },
-];
-
 export interface ProtectedSurface {
   readonly path: string;
   readonly tree: boolean;
-  readonly note?: string;
 }
 
-export const PROTECTED_SURFACES: readonly ProtectedSurface[] = [
-  { path: "/app", tree: true, note: "signed-in app, behind requireSession" },
-  { path: "/onboarding", tree: false, note: "signed-in first-run, behind requireSession" },
-  { path: "/api", tree: true, note: "REST surface (docs/engines/api-mcp.md)" },
-  { path: "/mcp", tree: true, note: "agent surface (docs/engines/api-mcp.md)" },
+const PROTECTED_TREES: readonly string[] = ["/app", "/api", "/mcp"];
+
+const PROTECTED_LEAVES: readonly string[] = ["/onboarding"];
+
+const NON_INDEXABLE: readonly string[] = [
+  "/",
+  "/*",
+  "/s/:slug",
+  "/design/brand-chips",
+  "/robots.txt",
+  "/sitemap.xml",
 ];
 
-export const SITE_ORIGIN = "https://0509.io";
+const SITE_NOTES: Readonly<Record<string, string>> = {
+  "/": "public/index.html; noindex until the landing gate lifts (build step 3)",
+  "/login": "public page, listed per build step 1",
+  "/s/:slug":
+    "a published standing card. Not advertised until slugs can be enumerated from data (0509#3898); sitemapEntries(origin, surfaces, dynamicLocs) is the seam.",
+  "/design/brand-chips": "a design-directions page, not a public surface of the product.",
+  "/*": "the 404 catch-all. A page a crawler is sent to on a bad URL is not a page to index.",
+  "/robots.txt": "the crawler policy itself.",
+  "/sitemap.xml": "the index itself.",
+};
+
+const SEO_SURFACES: readonly string[] = ["/robots.txt", "/sitemap.xml"];
 
 function normalizePath(path: string): string {
   const trimmed = path.replace(/^\/+/, "").replace(/\/+$/, "");
   return trimmed === "" ? "/" : `/${trimmed}`;
 }
 
-export function isProtectedPath(path: string): boolean {
-  const normalized = normalizePath(path);
-  return PROTECTED_SURFACES.some((surface) => {
-    if (normalized === surface.path) return true;
-    return surface.tree && normalized.startsWith(`${surface.path}/`);
-  });
+function routePathToUrl(routePath: string): string {
+  return normalizePath(routePath.replace(/\/\*$/, ""));
 }
+
+export function isProtectedPath(value: string): boolean {
+  const normalized = normalizePath(value);
+  if (PROTECTED_LEAVES.includes(normalized)) return true;
+  return PROTECTED_TREES.some(
+    (tree) => normalized === tree || normalized.startsWith(`${tree}/`),
+  );
+}
+
+interface RegisteredRoute {
+  readonly file: string;
+  readonly url: string;
+}
+
+export function registeredRoutes(
+  entries: readonly RouteConfigEntry[],
+  parentUrl = "",
+): RegisteredRoute[] {
+  const found: RegisteredRoute[] = [];
+  for (const entry of entries) {
+    const url = `${parentUrl}${routePathToUrl(entry.path ?? "")}`;
+    if (entry.file) found.push({ file: entry.file.replace(/^routes\//, ""), url });
+    if (entry.children) found.push(...registeredRoutes(entry.children, url));
+  }
+  return found;
+}
+
+function registeredUrls(): string[] {
+  return registeredRoutes(routes as readonly RouteConfigEntry[]).map(({ url }) => url);
+}
+
+function hasRegisteredUrl(url: string): boolean {
+  return registeredUrls().includes(url);
+}
+
+export const PUBLIC_SURFACES: readonly PublicSurface[] = registeredUrls()
+  .filter((url) => !isProtectedPath(url) && !SEO_SURFACES.includes(url))
+  .map((url) => ({
+    path: url,
+    kind: "route" as const,
+    indexable: !NON_INDEXABLE.includes(url),
+    note: SITE_NOTES[url],
+  }))
+  .concat(
+    hasRegisteredUrl("/")
+      ? []
+      : [{ path: "/", kind: "static" as const, indexable: false, note: SITE_NOTES["/"] }],
+  );
+
+export const PROTECTED_SURFACES: readonly ProtectedSurface[] = [
+  ...PROTECTED_TREES.map((path) => ({ path, tree: true })),
+  ...PROTECTED_LEAVES.map((path) => ({ path, tree: false })),
+].filter(
+  (surface, index, all) => all.findIndex((other) => other.path === surface.path) === index,
+);
 
 export function robotsDisallowRules(): string[] {
-  return PROTECTED_SURFACES.flatMap((surface) => [surface.path, `${surface.path}/`]);
-}
-
-export function routePathToUrl(routePath: string): string {
-  return `/${routePath.replace(/^\//, "").replace(/\/\*$/, "")}`;
+  return PROTECTED_SURFACES.flatMap((surface) =>
+    surface.tree ? [`${surface.path}/`] : [surface.path],
+  );
 }
 
 export interface SitemapEntry {
@@ -88,27 +120,33 @@ export interface SitemapEntry {
   readonly priority?: number;
 }
 
-function toLoc(path: string): string {
-  return new URL(path, `${SITE_ORIGIN}/`).href;
+function toLoc(origin: string, value: string): string {
+  return new URL(value, `${origin}/`).href;
 }
 
 export function sitemapEntries(
+  origin: string,
   surfaces: readonly PublicSurface[] = PUBLIC_SURFACES,
   dynamicLocs: readonly string[] = [],
 ): SitemapEntry[] {
-  const rows: SitemapEntry[] = surfaces
+  return surfaces
     .filter((surface) => surface.indexable)
     .map((surface) => ({
-      loc: toLoc(surface.path),
+      loc: toLoc(origin, surface.path),
       changeFrequency: surface.changeFrequency,
       priority: surface.priority,
-    }));
+    }))
+    .concat(dynamicLocs.map((loc) => ({ loc })));
+}
 
-  for (const loc of dynamicLocs) {
-    rows.push({ loc });
-  }
+const XML_ESCAPES: Readonly<Record<string, string>> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+};
 
-  return rows;
+function escapeXml(value: string): string {
+  return value.replace(/[&<>]/g, (character) => XML_ESCAPES[character] ?? character);
 }
 
 export function renderSitemap(entries: readonly SitemapEntry[]): string {
@@ -135,24 +173,14 @@ export function renderSitemap(entries: readonly SitemapEntry[]): string {
   ].join("\n");
 }
 
-export function renderRobots(): string {
+export function renderRobots(origin: string): string {
   return [
     "# Landing / is noindex via page-level <meta> until the rebuild gate lifts (0509#3989 build step 3).",
     "User-agent: *",
     "Allow: /",
     ...robotsDisallowRules().map((rule) => `Disallow: ${rule}`),
     "",
-    `Sitemap: ${SITE_ORIGIN}/sitemap.xml`,
+    `Sitemap: ${origin}/sitemap.xml`,
     "",
   ].join("\n");
-}
-
-const XML_ESCAPES: Record<string, string> = {
-  "&": "&amp;",
-  "<": "&lt;",
-  ">": "&gt;",
-};
-
-function escapeXml(value: string): string {
-  return value.replace(/[&<>]/g, (character) => XML_ESCAPES[character] ?? character);
 }

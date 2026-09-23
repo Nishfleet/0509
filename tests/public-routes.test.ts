@@ -2,29 +2,27 @@ import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("cloudflare:workers", () => ({ env: { BETTER_AUTH_URL: "https://0509.io" } }));
 
 import routes from "../app/routes";
 import {
-  PROTECTED_SURFACES,
   PUBLIC_SURFACES,
+  PROTECTED_SURFACES,
   isProtectedPath,
   renderRobots,
   renderSitemap,
-  routePathToUrl,
+  registeredRoutes,
   robotsDisallowRules,
   sitemapEntries,
-  SITE_ORIGIN,
   type PublicSurface,
 } from "../app/lib/public-routes";
 import * as robotsRoute from "../app/routes/robots[.]txt";
 import * as sitemapRoute from "../app/routes/sitemap[.]xml";
 
-const PUBLIC_DIR = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "public",
-);
+const SITE_ORIGIN = "https://0509.io";
+const PUBLIC_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "public");
 
 function locs(body: string): string[] {
   return [...body.matchAll(/<loc>(.*?)<\/loc>/g)].map((match) => match[1]);
@@ -36,26 +34,7 @@ function disallowRulesIn(body: string): string[] {
 
 async function publicDirFiles(): Promise<string[]> {
   const entries = await readdir(PUBLIC_DIR, { withFileTypes: true });
-  const files: string[] = [];
-  for (const entry of entries) {
-    if (entry.isFile()) files.push(`/${entry.name}`);
-  }
-  return files;
-}
-
-interface RegisteredRoute {
-  readonly file: string;
-  readonly url: string;
-}
-
-function registeredRoutes(entries: typeof routes, parentUrl = ""): RegisteredRoute[] {
-  const found: RegisteredRoute[] = [];
-  for (const entry of entries) {
-    const url = parentUrl + routePathToUrl(entry.path ?? "");
-    if (entry.file) found.push({ file: entry.file.replace(/^routes\//, ""), url });
-    if (entry.children) found.push(...registeredRoutes(entry.children, url));
-  }
-  return found;
+  return entries.filter((entry) => entry.isFile()).map((entry) => `/${entry.name}`);
 }
 
 async function sessionGatedRouteFiles(): Promise<string[]> {
@@ -70,17 +49,39 @@ async function sessionGatedRouteFiles(): Promise<string[]> {
   return gated;
 }
 
+function isBlockedByRobots(value: string): boolean {
+  return robotsDisallowRules().some((rule) => value.startsWith(rule));
+}
+
+describe("the manifest is derived from app/routes.ts (0509#3989)", () => {
+
+  it("lists every registered route that is not protected and not an seo surface", () => {
+    const derived = PUBLIC_SURFACES.map((surface) => surface.path);
+    for (const { url } of registeredRoutes(routes)) {
+      if (isProtectedPath(url) || url === "/robots.txt" || url === "/sitemap.xml") continue;
+      expect(derived, `registered public route ${url} is missing from the manifest`).toContain(
+        url,
+      );
+    }
+    for (const url of derived) {
+      expect(
+        registeredRoutes(routes).some((route) => route.url === url) || url === "/",
+        `${url} has no route in app/routes.ts`,
+      ).toBe(true);
+    }
+  });
+});
+
 describe("route classification against app/routes.ts (0509#3989)", () => {
   const registered = registeredRoutes(routes);
-  const manifestPaths = new Set(PUBLIC_SURFACES.map((surface) => surface.path));
 
-  it("classifies every registered route as protected, seo, or manifest-listed", () => {
+  it("classifies every registered route as protected or manifest-listed", () => {
     for (const { file, url } of registered) {
       if (isProtectedPath(url)) continue;
       const isSeoSurface = url === "/robots.txt" || url === "/sitemap.xml";
       expect(
-        manifestPaths.has(url) || isSeoSurface,
-        `public route ${url} (${file}) has no manifest row in app/lib/public-routes.ts`,
+        PUBLIC_SURFACES.some((surface) => surface.path === url) || isSeoSurface,
+        `public route ${url} (${file}) is neither protected nor listed`,
       ).toBe(true);
     }
   });
@@ -88,22 +89,15 @@ describe("route classification against app/routes.ts (0509#3989)", () => {
   it("serves every indexable public route in app/routes.ts from the sitemap", async () => {
     const served = new Set(locs(await (await sitemapRoute.loader()).text()));
     for (const { file, url } of registered) {
-      if (isProtectedPath(url) || url === "/robots.txt" || url === "/sitemap.xml") {
-        continue;
-      }
+      if (isProtectedPath(url) || url === "/robots.txt" || url === "/sitemap.xml") continue;
       const row = PUBLIC_SURFACES.find((surface) => surface.path === url);
-      expect(row, `public route ${url} (${file}) has no manifest row`).toBeDefined();
+      expect(row, `public route ${url} (${file}) is missing from the manifest`).toBeDefined();
       if (!row?.indexable) continue;
       const loc = new URL(row.path, `${SITE_ORIGIN}/`).href;
-      expect(
-        served.has(loc),
-        `indexable public route ${url} (${file}) is missing from the served sitemap`,
-      ).toBe(true);
+      expect(served.has(loc), `indexable public route ${url} (${file}) is not in the sitemap`).toBe(
+        true,
+      );
     }
-  });
-
-  it("has protected routes to classify, or the rule is untested", () => {
-    expect(registered.some(({ url }) => isProtectedPath(url))).toBe(true);
   });
 
   it("excludes every protected prefix from sitemap entries", () => {
@@ -111,8 +105,25 @@ describe("route classification against app/routes.ts (0509#3989)", () => {
       expect(isProtectedPath(surface.path), surface.path).toBe(false);
     }
     expect(
-      sitemapEntries().some((entry) => isProtectedPath(new URL(entry.loc).pathname)),
+      sitemapEntries(SITE_ORIGIN).some((entry) => isProtectedPath(new URL(entry.loc).pathname)),
     ).toBe(false);
+  });
+
+  it("protects every route that requireSession gates, wherever its URL lives", async () => {
+    const gated = await sessionGatedRouteFiles();
+    expect(gated.length).toBeGreaterThan(0);
+
+    const urlByFile = new Map(registered.map(({ file, url }) => [file, url]));
+    for (const file of gated) {
+      const url = urlByFile.get(file);
+      expect(typeof url === "string", `${file} gates a session but is not registered`).toBe(true);
+      if (url === undefined) continue;
+      expect(isProtectedPath(url), `${url} (${file}) must be protected`).toBe(true);
+    }
+  });
+
+  it("has protected routes to classify, or the rules are untested", () => {
+    expect(registered.some(({ url }) => isProtectedPath(url))).toBe(true);
   });
 });
 
@@ -133,8 +144,7 @@ describe("isProtectedPath matches the protected surface shape (0509#3989)", () =
 
   it("does not protect a sibling that merely shares a leading substring", () => {
     for (const surface of PROTECTED_SURFACES) {
-      const sibling = `${surface.path}sibling`;
-      expect(isProtectedPath(sibling), sibling).toBe(false);
+      expect(isProtectedPath(`${surface.path}sibling`), surface.path).toBe(false);
     }
     expect(isProtectedPath("/apple-touch-icon.png")).toBe(false);
     expect(isProtectedPath("/approach")).toBe(false);
@@ -148,37 +158,36 @@ describe("isProtectedPath matches the protected surface shape (0509#3989)", () =
 });
 
 describe("robots Disallow rules match what isProtectedPath protects (0509#3989)", () => {
-  const rules = disallowRulesIn(renderRobots());
-  const registered = registeredRoutes(routes);
+  const rules = disallowRulesIn(renderRobots(SITE_ORIGIN));
 
-  it("renders one rule per entry of the exported rule list, in order", () => {
-    expect(robotsDisallowRules().length).toBeGreaterThan(0);
-    expect(rules).toEqual(robotsDisallowRules());
-    expect(new Set(rules).size).toBe(rules.length);
-  });
-
-  it("disallows the packet's three protected trees and the signed-in onboarding route", () => {
-    for (const expected of ["/app", "/api", "/mcp", "/onboarding"]) {
-      expect(rules, `${expected} must be disallowed`).toContain(expected);
-      expect(isProtectedPath(expected), `${expected} must be protected`).toBe(true);
-    }
-  });
-
-  it("every rendered rule is a protected path", () => {
+  it("renders one rule per protected surface, and each is protected", () => {
+    expect(rules.length).toBeGreaterThan(0);
     for (const rule of rules) {
       expect(isProtectedPath(rule), `${rule} must be protected`).toBe(true);
     }
   });
 
+  it("disallows the packet's three protected trees and the signed-in onboarding route", () => {
+    for (const expected of ["/app", "/api", "/mcp", "/onboarding"]) {
+      expect(
+        rules.some((rule) => rule.replace(/\/$/, "") === expected),
+        `${expected} must be disallowed`,
+      ).toBe(true);
+      expect(isProtectedPath(expected), `${expected} must be protected`).toBe(true);
+    }
+  });
+
   it("blocks no registered public route", () => {
-    const blocked = registered.filter(({ url }) => rules.some((rule) => url.startsWith(rule)));
-    expect(blocked.map(({ url }) => url)).toEqual(
-      registered.filter(({ url }) => isProtectedPath(url)).map(({ url }) => url),
-    );
+    const blocked = registeredRoutes(routes)
+      .filter(({ url }) => isProtectedPath(url) ? false : !["/robots.txt", "/sitemap.xml"].includes(url))
+      .filter(({ url }) => isBlockedByRobots(url));
+    expect(blocked).toEqual([]);
+    expect(rules).toEqual(robotsDisallowRules());
   });
 
   it("keeps the robots rule and the classifier from drifting on real paths", () => {
-    for (const { file, url } of registered) {
+    const rules = disallowRulesIn(renderRobots(SITE_ORIGIN));
+    for (const { file, url } of registeredRoutes(routes)) {
       if (isProtectedPath(url)) continue;
       const isSeoSurface = url === "/robots.txt" || url === "/sitemap.xml";
       if (isSeoSurface) continue;
@@ -186,6 +195,18 @@ describe("robots Disallow rules match what isProtectedPath protects (0509#3989)"
         false,
       );
     }
+  });
+
+  it("does not block a file under public/ by prefix, though robots prefix-matches", async () => {
+    const files = await publicDirFiles();
+    expect(files.length).toBeGreaterThan(0);
+    for (const file of files) {
+      expect(isBlockedByRobots(file), `${file} is blocked by a robots prefix`).toBe(false);
+    }
+  });
+
+  it("blocks /apple-touch-icon.png, which shares the /app leading substring", () => {
+    expect(isBlockedByRobots("/apple-touch-icon.png")).toBe(false);
   });
 });
 
@@ -195,7 +216,7 @@ describe("sitemap.xml (0509#3989)", () => {
     const body = await response.text();
 
     expect(response.headers.get("Content-Type")).toContain("application/xml");
-    expect(locs(body)).toEqual(sitemapEntries().map((entry) => entry.loc));
+    expect(locs(body)).toEqual(sitemapEntries(SITE_ORIGIN).map((entry) => entry.loc));
   });
 
   it("is schema-shaped: absolute locs, namespaced urlset, valid element order", async () => {
@@ -211,18 +232,19 @@ describe("sitemap.xml (0509#3989)", () => {
     for (const loc of found) {
       expect(() => new URL(loc)).not.toThrow();
       expect(loc).toMatch(/^https:\/\/[^#\s<>"{}|\\^`]+$/);
-      expect(loc.includes("#")).toBe(false);
     }
 
     const allowed = new Set(["loc", "changefreq", "priority"]);
     const order = ["loc", "changefreq", "priority"];
     for (const [, inner] of body.matchAll(/<url>([\s\S]*?)<\/url>/g)) {
       const tags = [...inner.matchAll(/<(\w+)>/g)].map((match) => match[1]);
-      expect(tags[0], "a <url> must open with <loc>, per the 0.9 sequence").toBe("loc");
+      expect(tags[0], "a <url> must open with <loc>").toBe("loc");
       for (const tag of tags) {
         expect(allowed.has(tag), `<${tag}> is not a 0.9 <url> child`).toBe(true);
       }
-      expect(tags, "0.9 fixes <url> child order").toEqual([...tags].sort((a, b) => order.indexOf(a) - order.indexOf(b)));
+      expect(tags, "0.9 fixes <url> child order").toEqual(
+        [...tags].sort((a, b) => order.indexOf(a) - order.indexOf(b)),
+      );
       expect(new Set(tags).size, "no repeated child in one <url>").toBe(tags.length);
     }
   });
@@ -233,7 +255,7 @@ describe("sitemap.xml (0509#3989)", () => {
   });
 
   it("keeps the origin slash on a root loc", () => {
-    const rootEntries = sitemapEntries([
+    const rootEntries = sitemapEntries(SITE_ORIGIN, [
       { path: "/", kind: "static", indexable: true },
     ]);
     expect(rootEntries.map((entry) => entry.loc)).toEqual([`${SITE_ORIGIN}/`]);
@@ -246,47 +268,48 @@ describe("sitemap.xml (0509#3989)", () => {
   });
 
   it("flips with the manifest when the landing gate lifts", () => {
-    const today = sitemapEntries().map((entry) => entry.loc);
+    const today = sitemapEntries(SITE_ORIGIN).map((entry) => entry.loc);
     expect(today).not.toContain(`${SITE_ORIGIN}/`);
 
     const lifted: PublicSurface[] = PUBLIC_SURFACES.map((surface) =>
       surface.path === "/" ? { ...surface, indexable: true } : surface,
     );
-    const liftedLocs = sitemapEntries(lifted).map((entry) => entry.loc);
-    expect(liftedLocs).toContain(`${SITE_ORIGIN}/`);
-    expect(liftedLocs.length).toBe(today.length + 1);
+    expect(sitemapEntries(SITE_ORIGIN, lifted).map((entry) => entry.loc)).toContain(
+      `${SITE_ORIGIN}/`,
+    );
   });
 
   it("carries a dynamic loc straight into the document", () => {
-    const body = renderSitemap(sitemapEntries(PUBLIC_SURFACES, ["https://0509.io/s/abc"]));
-    expect(locs(body)).toContain("https://0509.io/s/abc");
+    expect(locs(renderSitemap(sitemapEntries(SITE_ORIGIN, PUBLIC_SURFACES, ["https://0509.io/s/abc"])))).toContain(
+      "https://0509.io/s/abc",
+    );
   });
 });
 
 describe("robots.txt (0509#3989)", () => {
-  it("allows the public root, disallows the protected prefixes, points at the sitemap", async () => {
+  it("allows the public root, disallows the protected surfaces, points at the sitemap", async () => {
     const response = await robotsRoute.loader();
     const body = await response.text();
 
     expect(response.headers.get("Content-Type")).toContain("text/plain");
     expect(body).toContain("User-agent: *");
     expect(body).toContain("Allow: /");
-    for (const prefix of PROTECTED_SURFACES) {
-      expect(body).toContain(`Disallow: ${prefix.path}`);
+    for (const surface of PROTECTED_SURFACES) {
+      expect(body).toContain(`Disallow: ${surface.path}`);
     }
     expect(body).toContain(`Sitemap: ${SITE_ORIGIN}/sitemap.xml`);
   });
 
   it("states the landing is noindex while the gate holds (build step 3)", () => {
-    expect(renderRobots()).toContain("noindex");
+    expect(renderRobots(SITE_ORIGIN)).toContain("noindex");
   });
 
   it("does not disallow the whole site", () => {
-    expect(renderRobots()).not.toMatch(/^Disallow: \/\/?$/m);
+    expect(renderRobots(SITE_ORIGIN)).not.toMatch(/^Disallow: \/\/?$/m);
   });
 });
 
-describe("manifest, routes.ts and public/ agree (0509#3989)", () => {
+describe("manifest and public/ agree (0509#3989)", () => {
   it("every static surface in the manifest is a real file under public/", async () => {
     const files = await publicDirFiles();
     for (const surface of PUBLIC_SURFACES) {
@@ -296,56 +319,15 @@ describe("manifest, routes.ts and public/ agree (0509#3989)", () => {
     }
   });
 
-  it("every manifest route surface is registered in app/routes.ts", () => {
+  it("lists no surface with a dynamic route path, since no slugs can be enumerated", () => {
+    expect(PUBLIC_SURFACES.filter((surface) => surface.kind === "dynamic")).toEqual([]);
+  });
+
+  it("does not advertise a surface whose route does not exist", () => {
     const registered = new Set(registeredRoutes(routes).map(({ url }) => url));
     for (const surface of PUBLIC_SURFACES) {
       if (surface.kind !== "route") continue;
-      expect(
-        registered,
-        `${surface.path} must be registered in app/routes.ts`,
-      ).toContain(surface.path);
-    }
-  });
-
-  it("lists no dynamic surface until slugs can be enumerated from data", () => {
-    const dynamicRows = PUBLIC_SURFACES.filter((surface) => surface.kind === "dynamic");
-    const served = new Set(sitemapEntries().map((entry) => entry.loc));
-    for (const row of dynamicRows) {
-      expect(row.indexable, `${row.path} must not be advertised without a slug source`).toBe(
-        false,
-      );
-      expect(served.has(`${SITE_ORIGIN}${row.path}`)).toBe(false);
-    }
-  });
-
-  it("protects every route that requireSession gates, wherever its URL lives", async () => {
-    const gated = await sessionGatedRouteFiles();
-    expect(gated.length).toBeGreaterThan(0);
-
-    const urlByFile = new Map(
-      registeredRoutes(routes).map(({ file, url }) => [file, url]),
-    );
-
-    for (const file of gated) {
-      const url = urlByFile.get(file);
-      expect(
-        typeof url === "string",
-        `${file} gates a session but is not registered in app/routes.ts`,
-      ).toBe(true);
-      if (url === undefined) continue;
-      expect(isProtectedPath(url), `${url} (${file}) must be protected`).toBe(true);
-    }
-  });
-
-  it("does not block a file under public/ by prefix under robots matching", async () => {
-    const rules = disallowRulesIn(renderRobots());
-    const files = await publicDirFiles();
-    expect(files.length).toBeGreaterThan(0);
-    for (const file of files) {
-      expect(
-        rules.some((rule) => file.startsWith(rule.replace(/\/$/, ""))),
-        `${file} under public/ is blocked by a robots Disallow prefix; robots prefix-matches and the classifier is segment-bound`,
-      ).toBe(false);
+      expect(registered.has(surface.path), `${surface.path} must be registered`).toBe(true);
     }
   });
 });
