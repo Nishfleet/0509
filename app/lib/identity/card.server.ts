@@ -354,7 +354,7 @@ export async function buildIdentityCard(
       verdictRows.push({
         question_id: "d9_page_role",
         input_hash: link.roleHash,
-        p: null,
+        p: ans?.choice ? (ans.probabilities?.[ans.choice] ?? null) : null,
         choice: ans?.choice ?? null,
         reason: ans?.reason ?? "no answer returned",
       });

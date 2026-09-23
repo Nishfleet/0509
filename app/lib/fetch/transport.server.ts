@@ -212,9 +212,6 @@ async function escalate(
   try {
     res = await env.BROWSER.quickAction("content", { url });
   } catch (err) {
-    
-    
-    
     logEscalation(url, null);
     return {
       result: null,

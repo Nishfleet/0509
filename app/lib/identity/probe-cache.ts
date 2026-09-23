@@ -12,16 +12,26 @@ async function probeGet<T>(
   probe: string,
   schema: z.ZodType<T>,
 ): Promise<T | null> {
-  const raw = await kv.get(probeKey(domain, probe));
+  const key = probeKey(domain, probe);
+  const raw = await kv.get(key);
   if (raw === null) return null;
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
-  } catch {
+  } catch (err) {
+    console.error(
+      JSON.stringify({ event: "probe-cache-corrupt", key, error: err instanceof Error ? err.message : "parse failed" }),
+    );
+    await kv.delete(key);
     return null;
   }
   const result = schema.safeParse(parsed);
-  return result.success ? result.data : null;
+  if (!result.success) {
+    console.error(JSON.stringify({ event: "probe-cache-shape-mismatch", key, issues: result.error.issues.length }));
+    await kv.delete(key);
+    return null;
+  }
+  return result.data;
 }
 
 async function probePut(
