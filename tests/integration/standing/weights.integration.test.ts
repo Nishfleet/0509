@@ -23,7 +23,7 @@ const V1_WEIGHTS: { key: string; weight: number }[] = [
   { key: "weights_version", weight: 1 },
 ];
 
-describe("0005_scoring_weight_seed.sql", () => {
+describe("0006_scoring_weight_seed.sql", () => {
   it("seeds the eleven v1 scoring_weight rows", async () => {
     const rows = await env.DB.prepare(
       "SELECT key, weight FROM scoring_weight WHERE effective_from = '2026-01-01T00:00:00.000Z' ORDER BY key",

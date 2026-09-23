@@ -1,4 +1,4 @@
--- 0005_scoring_weight_seed.sql — v1 scoring_weight rows and the signal counting index.
+-- 0006_scoring_weight_seed.sql — v1 scoring_weight rows and the signal counting index.
 -- Issue #4414 (engine 6, P6.1).
 --
 -- Weights live in scoring_weight, not in code. effective_from is the version:
