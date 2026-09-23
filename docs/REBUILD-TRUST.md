@@ -120,7 +120,7 @@ child issues, listed in §E.
 
 ### A3. The feature map
 
-`docs/FEATURE-MAP.md`. Her framing, 11:02: a Slack report arrives as a vague
+`.agents/skills/verify/feature-map.md`. Her framing, 11:02: a Slack report arrives as a vague
 screenshot and three question marks, and an agent that can drive the app still
 has no idea what the user meant. The map is *materialised memory* — what exists,
 how a user reaches it (route, element, keyboard), what it does.
@@ -133,7 +133,7 @@ omits the gap is how an agent concludes the nav must already exist somewhere it
 has not looked.**
 
 Maintenance, per the packet: every PR that adds or changes a route updates
-`docs/FEATURE-MAP.md` in the same PR, and the Opus reviewer checks it against
+`.agents/skills/verify/feature-map.md` in the same PR, and the Opus reviewer checks it against
 `app/routes.ts` and the e2e test titles. **No bespoke test reads this file.**
 `docs/REBUILD-DONE.md` §D forbids tests about docs, and a test that greps a
 markdown table is the hand-rolled linter Fable already rejected once (ce5fed17d).
@@ -462,7 +462,7 @@ must carry a `## Verification` section showing a real run of the verify skill
 head SHA — and a missing or prose-only section fails the review.
 
 Reviewers also check the two things no test checks: that
-`docs/FEATURE-MAP.md` matches `app/routes.ts` after a route change, and that
+`.agents/skills/verify/feature-map.md` matches `app/routes.ts` after a route change, and that
 every new dependency has a row in `docs/REBUILD-STACK.md`.
 
 ### C2. The scout packet's gardener section
@@ -501,7 +501,7 @@ re-enabling is a config change and not a design session.
 > that compounds.
 >
 > **4. Feature-map drift.** Read `app/routes.ts` and the test titles in
-> `e2e/`. Compare against `docs/FEATURE-MAP.md`: a route with no row, a row with
+> `e2e/`. Compare against `.agents/skills/verify/feature-map.md`: a route with no row, a row with
 > no route, a row whose Proof column names a test that no longer exists, a row
 > describing behaviour the route no longer has. **If it has drifted, regenerate
 > the affected rows from those two sources by hand and open a PR with only that
@@ -552,7 +552,7 @@ Child issues under #3842. Numbers and labels are in the PR description and the
 umbrella.
 
 - **The comment sweep** (`agent-ready`) — strip comments from `app/**`, moving
-  anything load-bearing into the commit message or `docs/FEATURE-MAP.md`. §B5.
+  anything load-bearing into the commit message or `.agents/skills/verify/feature-map.md`. §B5.
 - **Error tracking** (`agent-ready`) — `@sentry/cloudflare`, Developer plan,
   `SENTRY_DSN` as a Worker secret, Sentry→GitHub issue alert, dependency row in
   `docs/REBUILD-STACK.md`. §A5.

@@ -105,7 +105,7 @@ installed on this host (`~/.cache/ms-playwright`).
 ## Architecture
 
 - `app/routes.ts` — the route registry. A route not listed here cannot be
-  reached. `docs/FEATURE-MAP.md` describes every one of them and is updated in
+  reached. `.agents/skills/verify/feature-map.md` describes every one of them and is updated in
   the same PR that changes one.
 - `app/routes/*` — route modules: loader, action, component.
 - `app/lib/*.server.ts` — server-only. Bindings, database, auth.
@@ -117,7 +117,7 @@ installed on this host (`~/.cache/ms-playwright`).
   `tests/integration/` and `tests/unit/site/` run in the workers project.
   The site tests need HTMLRewriter, which exists only in workerd. The
   integration project also applies migrations to local D1.
-- `e2e/` — Playwright. Every test traces to a row in `docs/FEATURE-MAP.md`.
+- `e2e/` — Playwright. Every test traces to a row in `.agents/skills/verify/feature-map.md`.
 
 ## Stack
 
@@ -176,7 +176,7 @@ check that cannot report blocks the queue forever.
 ## Docs
 
 `DESIGN.md` (the design system — read it before any UI work) ·
-`docs/FEATURE-MAP.md` (what exists and how to reach it) ·
+`.agents/skills/verify/feature-map.md` (what exists and how to reach it) ·
 `docs/REBUILD-TRUST.md` (verification, the ladder, the gardener) ·
 `docs/REBUILD-STACK.md` (every dependency, probed) ·
 `docs/REBUILD-DONE.md` (the definition of complete) ·
