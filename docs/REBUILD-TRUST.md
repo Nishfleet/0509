@@ -61,13 +61,32 @@ error (ce5fed17d).
 > "the ability for an agent to verify its own work is extremely powerful … it's
 > very, very powerful for building that trust" — 12:18
 
-Her verification skill has two halves: a **reproducible way to drive the real
-application**, and a **feature map** that tells the agent what the application
-even is. We need both. We do not need her first half's shape — she built a CLI
-inside a skill directory because Cursor's agent window is an Electron app with
-no test runner that can drive it. Ours is a web app, and the stock reproducible
-driver for a web app is Playwright. **Building a CLI here would be exactly the
-glue the rebuild deletes.**
+**Decision, 2026-09-22: both halves, in her shape.**
+`.agents/skills/verify/SKILL.md` is the drive-the-real-application half — a CLI
+an agent runs during its own work — and `.agents/skills/verify/feature-map.md`
+is the map half, in the same skill folder. Nish, reviewing the rejection that
+used to occupy this paragraph: *"make it exactly as described."* The rejection
+is kept below as the rejected alternative, because it is still the argument for
+what stays.
+
+**Scripts-to-zero survives this, because the CLI is not ours.** The driver is
+Google's stock `chrome-devtools` CLI, shipped by the `chrome-devtools-mcp`
+devDependency pinned at exactly `1.9.0`. Two `package.json` lines call it
+(`verify:start`, `verify:stop`), and no file appears under `scripts/`, `bin/` or
+`tools/`. Playwright keeps the CI half (A1, A2): the CLI is what an agent runs
+during its own work, the e2e suite is what the merge queue runs, and the two are
+not substitutes for each other.
+
+**Rejected — a first half with no CLI, this section's position until
+2026-09-22.** Her first half's shape was described as an artefact of her tools:
+Cursor's agent window is an Electron app with no test runner that can drive it,
+ours is a web app, and the stock reproducible driver for a web app is
+Playwright, so **a CLI we wrote here would be exactly the glue the rebuild
+deletes.** That reasoning is
+what put Playwright in A1 and it is not withdrawn. What it missed is that the
+CLI in question needed no writing — Google ships one, and it drives a *session*
+(clicks, throttled traces, heap snapshots, screenshots against the running app),
+which a spec file does not.
 
 ### A1. One Playwright config, two modes
 
@@ -120,21 +139,25 @@ child issues, listed in §E.
 
 ### A3. The feature map
 
-`docs/FEATURE-MAP.md`. Her framing, 11:02: a Slack report arrives as a vague
-screenshot and three question marks, and an agent that can drive the app still
+`.agents/skills/verify/feature-map.md`. Her framing, 11:02: a Slack report
+arrives as a vague screenshot and three question marks, and an agent that can
+drive the app still
 has no idea what the user meant. The map is *materialised memory* — what exists,
 how a user reaches it (route, element, keyboard), what it does.
 
 Ours is seeded from `app/routes.ts`, which is the only registry: a route not
 listed there cannot be reached. Every row carries its proof (an e2e test or a
-journey number), and the file states its own gaps — five of seven signed-in
-surfaces are stubs and there is no navigation between them. **A feature map that
+journey number) and the two columns that make it drivable — **Reach** (route,
+element role and accessible name, keyboard) and **Does** — and the file states
+its own gaps: five of seven signed-in surfaces are stubs and there is no
+navigation between them. **A feature map that
 omits the gap is how an agent concludes the nav must already exist somewhere it
 has not looked.**
 
 Maintenance, per the packet: every PR that adds or changes a route updates
-`docs/FEATURE-MAP.md` in the same PR, and the Opus reviewer checks it against
-`app/routes.ts` and the e2e test titles. **No bespoke test reads this file.**
+`.agents/skills/verify/feature-map.md` in the same PR, and the Opus reviewer
+checks it against `app/routes.ts` and the e2e test titles. **No bespoke test
+reads this file.**
 `docs/REBUILD-DONE.md` §D forbids tests about docs, and a test that greps a
 markdown table is the hand-rolled linter Fable already rejected once (ce5fed17d).
 The automation half of her version is in §C2: the scout packet regenerates the
@@ -462,7 +485,7 @@ must carry a `## Verification` section showing a real run of the verify skill
 head SHA — and a missing or prose-only section fails the review.
 
 Reviewers also check the two things no test checks: that
-`docs/FEATURE-MAP.md` matches `app/routes.ts` after a route change, and that
+`.agents/skills/verify/feature-map.md` matches `app/routes.ts` after a route change, and that
 every new dependency has a row in `docs/REBUILD-STACK.md`.
 
 ### C2. The scout packet's gardener section
@@ -501,7 +524,7 @@ re-enabling is a config change and not a design session.
 > that compounds.
 >
 > **4. Feature-map drift.** Read `app/routes.ts` and the test titles in
-> `e2e/`. Compare against `docs/FEATURE-MAP.md`: a route with no row, a row with
+> `e2e/`. Compare against `.agents/skills/verify/feature-map.md`: a route with no row, a row with
 > no route, a row whose Proof column names a test that no longer exists, a row
 > describing behaviour the route no longer has. **If it has drifted, regenerate
 > the affected rows from those two sources by hand and open a PR with only that
@@ -552,7 +575,7 @@ Child issues under #3842. Numbers and labels are in the PR description and the
 umbrella.
 
 - **The comment sweep** (`agent-ready`) — strip comments from `app/**`, moving
-  anything load-bearing into the commit message or `docs/FEATURE-MAP.md`. §B5.
+  anything load-bearing into the commit message or `.agents/skills/verify/feature-map.md`. §B5.
 - **Error tracking** (`agent-ready`) — `@sentry/cloudflare`, Developer plan,
   `SENTRY_DSN` as a Worker secret, Sentry→GitHub issue alert, dependency row in
   `docs/REBUILD-STACK.md`. §A5.

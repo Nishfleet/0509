@@ -9,7 +9,9 @@
     "test": "vitest run",
     "typecheck": "wrangler types && react-router typegen && tsc -b",
     "lint": "eslint . && knip",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "verify:start": "chrome-devtools start --headless --chromeArg=--no-sandbox --executablePath=\"$(node -p \"require('playwright-core').chromium.executablePath()\")\"",
+    "verify:stop": "chrome-devtools stop"
   },
   "dependencies": {
     "@base-ui/react": "1.8.0",
@@ -36,6 +38,7 @@
     "@types/node": "^22.20.4",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
+    "chrome-devtools-mcp": "1.9.0",
     "eslint": "^10.11.0",
     "eslint-plugin-boundaries": "^7.2.0",
     "eslint-plugin-import-x": "^4.17.1",

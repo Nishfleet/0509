@@ -846,6 +846,44 @@ Cache `.lycheecache` with `actions/cache@v4`; it is one block of stock YAML, not
 | A link crawler or markdown-link regex | `lycheeverse/lychee-action@v2` |
 | A config-migration script | `npx @cloudflare/codemods vitest:pool-workers-to-vitest-plugin` |
 | An action-version bumper | Dependabot `package-ecosystem: "github-actions"` |
+| A driver CLI written into a skill directory | Chrome's stock `chrome-devtools` CLI from `chrome-devtools-mcp` (§6.6). `docs/REBUILD-TRUST.md` §A records the 2026-09-22 reversal that put it there |
+
+### 6.6 The verification CLI — `chrome-devtools-mcp`
+
+**Pinned at exactly `1.9.0`** (#4251). Google's own MCP server for Chrome
+DevTools, and the CLI an agent drives the running app with. It ships two
+binaries: `chrome-devtools` (the CLI) and `chrome-devtools-mcp` (the server it
+starts). Repo: <https://github.com/ChromeDevTools/chrome-devtools-mcp>.
+
+**Probed 2026-09-23** on this VPS, at `1.9.0`, through `npm run verify:start`:
+
+- The daemon starts **headless with Playwright's Chromium**,
+  `--executablePath="$(node -p "require('playwright-core').chromium.executablePath()")"`
+  plus `--chromeArg=--no-sandbox`. Without the sandbox flag the launch dies with
+  `Target closed`; `chrome-devtools status` prints pid, socket and version, so
+  the daemon is observed rather than assumed.
+- Page ids are **positional and assigned in order of creation** (`new_page`
+  prints `1: about:blank`, `2: .../login [selected]`), not a `--pageId` flag.
+- `take_snapshot <pageId>` returns the accessibility tree with `uid=...` per
+  control; `click`, `fill` and `press_key` take that uid positionally.
+- `performance_start_trace <pageId> --reload true --autoStop true
+  --filePath trace.json.gz` writes the raw trace and prints LCP with its
+  TTFB / render-delay breakdown and CLS;
+  `performance_analyze_insight <pageId> <insightSetId> LCPBreakdown` prints the
+  same breakdown with percentages. The insight-set id comes from the trace's
+  own "Available insights" list (`NAVIGATION_0`, `NAVIGATION_1`, ...).
+- Memory tools are behind `--memoryDebugging` (on by default):
+  `take_heapsnapshot <pageId> <filePath>`, then
+  `compare_heapsnapshots <baseFilePath> <currentFilePath>` for the per-class
+  `sizeDelta` table. The command is **`take_heapsnapshot`**, not
+  `take_memory_snapshot`.
+- Layout: `emulate <pageId> --viewport 1440x900x1` and
+  `--viewport 390x844x1,touch,mobile`, then
+  `take_screenshot <pageId> --filePath <png>`.
+
+The procedure that uses it is `.agents/skills/verify/SKILL.md`; the map of what
+to drive is `.agents/skills/verify/feature-map.md`. Two `package.json` scripts
+call the binary directly (`verify:start`, `verify:stop`) — no wrapper file.
 
 ---
 
@@ -1086,6 +1124,7 @@ The version in this table is the `package.json` specifier. An earlier section of
 | `@types/node` | ^22.20.4 | §9 | `tsconfig.node.json` sets `"types": ["node"]` for `vite.config.ts` | Omitting it. `tsc` then has no Node types | 22.20.4 |
 | `@types/react` | ^19.2.18 | §9 | JSX types for `"jsx": "react-jsx"` | Omitting it. Component files fail typecheck | 19.3.0 |
 | `@types/react-dom` | ^19.2.7 | §9 | Types for `react-dom/server` in unit tests | An untyped `renderToStaticMarkup` | 19.3.0 |
+| `chrome-devtools-mcp` | 1.9.0 | §6.6 | The stock `chrome-devtools` CLI the `verify` skill drives the running app with | Writing our own browser driver; that is the glue the rebuild deletes | 1.9.0 |
 | `eslint` | ^10.11.0 | §9 | `npm run lint` is `eslint . && knip` | oxlint or biome. Neither loads this type-checked config or its AST bans | 10.11.0 |
 | `eslint-plugin-boundaries` | ^7.2.0 | §9, REBUILD-TRUST §B4 | Declares element types and which of them may import which. Replaces the `**/*.server` glob | dependency-cruiser (a second tool, CI-only feedback), Sheriff (cannot add the other rules this config already runs), Feature-Sliced Design with steiger (a full restructure during the rebuild) | 7.2.0 |
 | `eslint-plugin-import-x` | ^4.17.1 | §9, REBUILD-TRUST §B4 | `import-x/no-cycle` on `app/**` and `workers/**`, and `import-x/no-default-export` except where the framework requires a default export | `eslint-plugin-import` (unmaintained). dependency-cruiser's cycle check, for the same second-tool reason as boundaries | 4.17.1 |

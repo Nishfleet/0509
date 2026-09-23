@@ -70,9 +70,10 @@ and a support mail about the same failure can be linked by hand.
    intake asks Jev `repro_worthy` with the issue body; p >= 0.9 adds
    `agent-ready`, p <= 0.1 closes with `not-actionable`, in between parks
    `needs-orchestrator`.
-4. **Reproduction packet** (a section in `CLAUDE.md`): read the raw text from
-   D1, map it to `docs/FEATURE-MAP.md` rows, drive production through the e2e
-   helpers with the Access service token, and end with either a failing spec
+4. **Reproduction packet** (`.agents/skills/verify/SKILL.md` → "Reproduce a
+   vague user report"): read the raw text from D1, map it to
+   `.agents/skills/verify/feature-map.md` rows, drive production through the
+   skill's CLI with the Access service token, and end with either a failing spec
    under `e2e/` or a no-repro proof citing what was tried. Nothing from the raw
    text goes into the PR.
 5. **Proof of the program**: one real report, sent by Nish or Fable to

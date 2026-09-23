@@ -75,6 +75,8 @@ npm run lint       # eslint . && knip
 npm test           # vitest run
 npm run e2e        # playwright test
 npm run deploy     # wrangler deploy
+npm run verify:start  # chrome-devtools start (headless, Playwright's Chromium)
+npm run verify:stop   # chrome-devtools stop
 ```
 
 **`npm run typecheck` is the only real type gate.** `tsc --noEmit -p
@@ -95,12 +97,16 @@ summary line (`N passed`) under `run-proof:` in the PR body. `preview-assert`
 reruns the same suite, so the quote is not the proof; it is the evidence that
 you drove the app yourself before asking a reviewer to. Chromium is already
 installed on this host (`~/.cache/ms-playwright`), so the run costs one
-`wrangler dev` start.
+`wrangler dev` start. For the fuller run — the a11y snapshot, the console and
+network check, a throttled trace, a heap diff — the `verify` skill
+(`.agents/skills/verify/SKILL.md`) drives the real app over the Chrome DevTools
+protocol and records what it saw. It is also what the `## Verification` section
+of `.github/pull_request_template.md` asks for.
 
 ## Architecture
 
 - `app/routes.ts` — the route registry. A route not listed here cannot be
-  reached. `docs/FEATURE-MAP.md` describes every one of them and is updated in
+  reached. `.agents/skills/verify/feature-map.md` describes every one of them and is updated in
   the same PR that changes one.
 - `app/routes/*` — route modules: loader, action, component.
 - `app/lib/*.server.ts` — server-only. Bindings, database, auth.
@@ -112,7 +118,7 @@ installed on this host (`~/.cache/ms-playwright`), so the run costs one
   `tests/integration/` and `tests/unit/site/` run in the workers project.
   The site tests need HTMLRewriter, which exists only in workerd. The
   integration project also applies migrations to local D1.
-- `e2e/` — Playwright. Every test traces to a row in `docs/FEATURE-MAP.md`.
+- `e2e/` — Playwright. Every test traces to a row in `.agents/skills/verify/feature-map.md`.
 
 ## Stack
 
@@ -171,7 +177,8 @@ check that cannot report blocks the queue forever.
 ## Docs
 
 `DESIGN.md` (the design system — read it before any UI work) ·
-`docs/FEATURE-MAP.md` (what exists and how to reach it) ·
+`.agents/skills/verify/SKILL.md` (drive the real app and collect proof) ·
+`.agents/skills/verify/feature-map.md` (what exists and how to reach it) ·
 `docs/REBUILD-TRUST.md` (verification, the ladder, the gardener) ·
 `docs/REBUILD-STACK.md` (every dependency, probed) ·
 `docs/REBUILD-DONE.md` (the definition of complete) ·
