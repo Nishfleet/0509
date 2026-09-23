@@ -62,7 +62,7 @@ export const PROTECTED_SURFACES: readonly ProtectedSurface[] = [
   ...PROTECTED_LEAVES.map((path) => ({ path, tree: false })),
 ];
 
-export function robotsDisallowRules(): string[] {
+function robotsDisallowRules(): string[] {
   return PROTECTED_SURFACES.flatMap((surface) =>
     surface.tree ? [`${surface.path}$`, `${surface.path}/`] : [`${surface.path}$`],
   );
