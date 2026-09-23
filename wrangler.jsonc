@@ -79,6 +79,19 @@
     { "binding": "SNAPSHOTS", "bucket_name": "0509-snapshots" }
   ],
 
+  // Identity probe cache (engine 1, issue #4419): a read-through cache for
+  // probe results keyed identity:<registrable>:<probe> with a 24-hour TTL
+  // (docs/engines/identity-card.md P1, graft 1). KV only, for the same reason
+  // the doc picks it: the cache is read-mostly, tolerant of the 60-second
+  // propagation window and never same-key hot (docs/REBUILD-STACK.md §4.5).
+  //
+  // No id on purpose, matching the fixture-site and e2e-inbox KV bindings:
+  // wrangler's deploy-time resource provisioning creates the namespace on
+  // first deploy and inherits it from the deployed Worker's settings on later
+  // ones. Creating it here rather than by hand keeps the namespace id out of
+  // git and puts its creation on the deploy Nish approves.
+  "kv_namespaces": [{ "binding": "IDENTITY_CACHE" }],
+
   // Browser Rendering: brand pages bot-gate a plain workerd fetch, so every
   // arbitrary-homepage read goes through real Chrome. Measured ~7 s per ads
   // pull; the cost model turns on keeping concurrency at or under the included
