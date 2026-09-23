@@ -28,7 +28,6 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@axe-core/playwright": "^4.13.0",
     "@cloudflare/vite-plugin": "^1.56.0",
     "@cloudflare/vitest-plugin": "1.1.13",
     "@eslint/js": "^10.0.1",

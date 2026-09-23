@@ -809,8 +809,6 @@ jobs:
 
 Cloudflare Workers Builds emit GitHub deployments, so this fires on our real deploy with zero polling logic. Official container image: `mcr.microsoft.com/playwright:v1.63.0-noble`.
 
-Accessibility assertions inside a spec use **`@axe-core/playwright` ^4.13.0** — `new AxeBuilder({ page }).include(selector).analyze()` — the Deque-maintained axe driver for Playwright, and the same axe engine Lighthouse's accessibility category runs. #4116's toast acceptance ("the aria-live region asserted by an axe run") lands in `e2e/toast.spec.ts` this way. Rejected: `axe-playwright` (a community wrapper, a release behind axe-core) and asserting `aria-*` attributes by hand (attributes can be present and wrong; axe checks the region works).
-
 ### 6.3 Lighthouse CI
 
 `treosh/lighthouse-ci-action` **v12.6.2** (tag `v12` → commit `3e7e23fb74242897f95c0ba9cabad3d0227b9b18`), last push 2026-03-12. **`GoogleChrome/lighthouse-ci` ships no GitHub Action** — its repo root has no `action.yml`, and its own README links out to treosh's action. So treosh's is the stock one.
@@ -1061,7 +1059,6 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | Dates + timezones | `Intl` + `date-fns` + `@date-fns/tz` (never `Temporal`, workerd#6907) | platform / 4.4.0, not yet installed / 1.5.0, not yet installed |
 | Unit + integration tests | `vitest` (**pinned 4.1.11**) + `@cloudflare/vitest-plugin` | 4.1.11 / 1.1.13 |
 | E2E against production | `@playwright/test` | 1.63.0 |
-| A11y assertions inside e2e | `@axe-core/playwright` | 4.13.0 |
 | Performance gate | `treosh/lighthouse-ci-action` | v12.6.2 |
 | Link checking | `lycheeverse/lychee-action` | v2.9.0 |
 | MCP server | `createMcpHandler` (`agents/mcp/server`) + `@modelcontextprotocol/server` | `agents` 0.24.0, not yet installed / 2.0.0, not yet installed |
@@ -1071,7 +1068,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | OpenAPI document | `zod-openapi` (samchungy) | 6.0.2, not yet installed |
 | Agent-readable docs | `/llms.txt` + `Accept: text/markdown` + `rel="alternate"` | spec v2 (2026-08-10) |
 
-**Installed beyond the scaffold:** `better-auth` ^1.7.5, `@better-auth/passkey` ^1.7.5, `@better-auth/api-key` ^1.7.5, `zod` ^4.6.5 (also a better-auth peer), `@cloudflare/puppeteer` ^1.4.0, `@base-ui/react` 1.8.0, `clsx` ^2.1.1, `tailwind-merge` ^3.7.0, `class-variance-authority` ^0.7.1, `sonner` ^2.0.8, `@axe-core/playwright` ^4.13.0. **Not yet installed**, because the engine that needs them has not shipped: `diff` 9.0.0, `@extractus/feed-extractor` 8.0.3 (`fast-xml-parser` 5.11.1 comes with it), `uplot` 1.6.32, `uplot-react` 1.2.4, `date-fns` 4.4.0, `@date-fns/tz` 1.5.0, `agents` 0.24.0, `@modelcontextprotocol/server` 2.0.0 and its peers `@modelcontextprotocol/client` and `@modelcontextprotocol/sdk`, `@cloudflare/workers-oauth-provider` 0.10.3, `zod-openapi` 6.0.2, `lucide-react`. Do not delete those rows. Platform rows have no package. `create-cloudflare`, `shadcn`, and `auth@1.7.5` are npx-only and are not missing dependencies.
+**Installed beyond the scaffold:** `better-auth` ^1.7.5, `@better-auth/passkey` ^1.7.5, `@better-auth/api-key` ^1.7.5, `zod` ^4.6.5 (also a better-auth peer), `@cloudflare/puppeteer` ^1.4.0, `@base-ui/react` 1.8.0, `clsx` ^2.1.1, `tailwind-merge` ^3.7.0, `class-variance-authority` ^0.7.1, `sonner` ^2.0.8. **Not yet installed**, because the engine that needs them has not shipped: `diff` 9.0.0, `@extractus/feed-extractor` 8.0.3 (`fast-xml-parser` 5.11.1 comes with it), `uplot` 1.6.32, `uplot-react` 1.2.4, `date-fns` 4.4.0, `@date-fns/tz` 1.5.0, `agents` 0.24.0, `@modelcontextprotocol/server` 2.0.0 and its peers `@modelcontextprotocol/client` and `@modelcontextprotocol/sdk`, `@cloudflare/workers-oauth-provider` 0.10.3, `zod-openapi` 6.0.2, `lucide-react`. Do not delete those rows. Platform rows have no package. `create-cloudflare`, `shadcn`, and `auth@1.7.5` are npx-only and are not missing dependencies.
 
 ---
 
@@ -1096,7 +1093,6 @@ The version in this table is the `package.json` specifier. An earlier section of
 | `tailwind-merge` | ^3.7.0 | §3.2 | Class conflict resolution inside `cn()` | A hand-written Tailwind merger | 3.7.0 |
 | `zod` | ^4.6.5 | §5.6 | Request validation. better-auth already depends on zod 4 | `valibot`, `arktype` | 4.6.5 |
 | `@cloudflare/vite-plugin` | ^1.56.0 | §1.2 | Workers dev and deploy from Vite | A hand-written wrangler wrapper, and a wrangler `assets` block | 1.56.0 |
-| `@axe-core/playwright` | ^4.13.0 | §6.2 | axe assertions inside Playwright specs — #4116's aria-live proof | `axe-playwright` (community wrapper a release behind), hand-checking `aria-*` attributes | 4.13.0 |
 | `@cloudflare/vitest-plugin` | 1.1.13 | §6.1 | Tests run inside workerd | `@cloudflare/vitest-pool-workers` | 1.1.13 |
 | `@eslint/js` | ^10.0.1 | §9 | `js.configs.recommended` in `eslint.config.js` | Copying those rules by hand | 10.0.1 |
 | `@playwright/test` | ^1.63.0 | §6.2 | End-to-end tests against the deployed URL | A custom browser driver, `microsoft/playwright-github-action` (archived) | 1.63.0 |
