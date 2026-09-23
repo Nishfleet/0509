@@ -316,8 +316,13 @@ describe("manifest and public/ agree (0509#3989)", () => {
     }
   });
 
-  it("lists no surface with a dynamic route path, since no slugs can be enumerated", () => {
-    expect(PUBLIC_SURFACES.filter((surface) => (surface as { kind: string }).kind === "dynamic")).toEqual([]);
+  it("advertises no surface with a route pattern, since no slugs can be enumerated", () => {
+    const advertised = PUBLIC_SURFACES.filter((surface) => surface.indexable).map(
+      (surface) => surface.path,
+    );
+    for (const path of advertised) {
+      expect(path, `${path} is a route pattern, not a URL`).not.toMatch(/[:*]/);
+    }
   });
 
   it("does not advertise a surface whose route does not exist", () => {

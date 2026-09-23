@@ -117,7 +117,7 @@ export function sitemapEntries(
       changeFrequency: surface.changeFrequency,
       priority: surface.priority,
     }));
-  return [...rows, ...dynamicLocs.map((loc) => ({ loc }))];
+  return [...rows, ...dynamicLocs.map((loc) => ({ loc: toLoc(origin, loc) }))];
 }
 
 const XML_ESCAPES: Readonly<Record<string, string>> = {
@@ -161,7 +161,7 @@ export function renderRobots(origin: string): string {
     "Allow: /",
     ...robotsDisallowRules().map((rule) => `Disallow: ${rule}`),
     "",
-    `Sitemap: ${origin}/sitemap.xml`,
+    `Sitemap: ${toLoc(origin, "/sitemap.xml")}`,
     "",
   ].join("\n");
 }

@@ -120,8 +120,8 @@ test("/sitemap.xml is served as a valid absolute-URL document", async ({ request
   expect(found.length).toBeGreaterThan(0);
   for (const loc of found) {
     expect(loc.startsWith("https://0509.io/")).toBe(true);
+    expect(new URL(loc).pathname).not.toBe("/onboarding");
+    expect(new URL(loc).pathname.startsWith("/app")).toBe(false);
   }
   expect(new Set(found).size).toBe(found.length);
-  expect(found).not.toContain("https://0509.io/onboarding");
-  expect(found).not.toContain("https://0509.io/app");
 });
