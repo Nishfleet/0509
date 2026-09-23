@@ -1,5 +1,3 @@
-import type { Db } from "./workspace.server";
-
 const CLAIM_ATTEMPT = `INSERT INTO send_attempt
   (id, workspace_id, send_target_id, digest_id, idempotency_key, status, attempted_at)
 VALUES (?, ?, ?, ?, ?, 'pending', ?)
@@ -11,7 +9,7 @@ RETURNING id`;
 const RESOLVE_ATTEMPT = `UPDATE send_attempt SET status = ?, error = ? WHERE id = ?`;
 
 export async function claimSendAttempt(
-  db: Db,
+  db: D1Database,
   input: { idempotencyKey: string; workspaceId: string; targetId: string; digestId: string },
 ): Promise<{ id: string } | null> {
   const now = new Date().toISOString();
@@ -22,7 +20,7 @@ export async function claimSendAttempt(
 }
 
 export async function resolveSendAttempt(
-  db: Db,
+  db: D1Database,
   attemptId: string,
   outcome: "sent" | "failed",
   error: string | null,

@@ -9,7 +9,7 @@ import {
   ensureWorkspaceForSignIn,
   firstWorkspaceId,
   workspaceNameFromEmail,
-  type Db,
+  type WorkspaceDb,
 } from "../../app/lib/workspace.server";
 
 function openDb(): DatabaseSync {
@@ -31,7 +31,7 @@ function openDb(): DatabaseSync {
   return database;
 }
 
-function asDb(database: DatabaseSync): Db {
+function asWorkspaceDb(database: DatabaseSync): WorkspaceDb {
   return {
     prepare(query: string) {
       const statement = database.prepare(query);
@@ -91,7 +91,7 @@ describe("ensureWorkspace", () => {
   it("creates one workspace and no entity or plan row", async () => {
     const database = openDb();
     seedUser(database, "user-1", "ada@example.com");
-    const db = asDb(database);
+    const db = asWorkspaceDb(database);
     const row = await ensureWorkspace(db, {
       userId: "user-1",
       email: "ada@example.com",
@@ -125,7 +125,7 @@ describe("ensureWorkspace", () => {
   it("stores UTC when the browser sent no zone, then keeps the first real zone", async () => {
     const database = openDb();
     seedUser(database, "user-1", "ada@example.com");
-    const db = asDb(database);
+    const db = asWorkspaceDb(database);
     const created = await ensureWorkspace(db, {
       userId: "user-1",
       email: "ada@example.com",
@@ -161,8 +161,8 @@ describe("ensureWorkspace", () => {
       release = resolve;
     });
     let entered = 0;
-    const base = asDb(database);
-    const racing: Db = {
+    const base = asWorkspaceDb(database);
+    const racing: WorkspaceDb = {
       prepare(query: string) {
         const statement = base.prepare(query);
         return {
@@ -225,7 +225,7 @@ describe("ensureWorkspace", () => {
     const request = new Request("https://0509.io/api/auth/magic-link/verify", {
       headers: { cookie: await cookieHeader("Europe/London") },
     });
-    const row = await ensureWorkspaceForSignIn(asDb(database), {
+    const row = await ensureWorkspaceForSignIn(asWorkspaceDb(database), {
       userId: "user-1",
       request,
       now: "2026-09-22T12:00:00.000Z",
@@ -238,7 +238,7 @@ describe("ensureWorkspace", () => {
       brief_weekday: 1,
       brief_hour: 8,
     });
-    expect(await ensureWorkspaceForSignIn(asDb(database), { userId: "missing", request })).toBeNull();
+    expect(await ensureWorkspaceForSignIn(asWorkspaceDb(database), { userId: "missing", request })).toBeNull();
   });
 
   it("returns the row the other request wrote when the insert fails", async () => {
@@ -252,7 +252,7 @@ describe("ensureWorkspace", () => {
       created_at: "2026-09-22T12:00:00.000Z",
     };
     let reads = 0;
-    const db: Db = {
+    const db: WorkspaceDb = {
       prepare(query: string) {
         return {
           bind() {
