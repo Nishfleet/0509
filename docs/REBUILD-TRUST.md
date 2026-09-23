@@ -245,7 +245,7 @@ that trips it reads the reason at the moment it matters:
 | `import-x/no-default-export` | named exports, so a module can be found by grep | off for route modules, config files, and the three workerd entries |
 | `no-restricted-imports` `cloudflare:workers` in client modules | same boundary, the other direction | 7727bf787 |
 | `no-restricted-imports` `kysely` outside `app/lib/db.server.ts`; `better-auth` and its plugins outside `app/lib/auth.server.ts` | one paved path per blessed pattern | 25:26 |
-| `no-restricted-syntax` on `insertInto` / `updateTable` / `deleteFrom` in `app/routes/**` | one writer per table | 25:26 |
+| `no-restricted-syntax` on a `INSERT INTO` / `UPDATE` / `DELETE FROM` statement text in `app/**` and `workers/**` outside `app/lib/data/**` | one writer per table | 25:26; #4313 — the kysely selectors matched nothing after the raw-D1 rebuild, so the rule fires on the SQL text itself |
 | `no-restricted-syntax` on `env.DB` in `app/routes/**` | one data layer | 25:26 |
 | `max-lines: 150` on `app/routes/**` | routes stay thin | house rule, `coding-style.md` |
 | `no-inline-comments` + `no-warning-comments` on `app/**`, `workers/**` | comments banned in app code | 23:02, Nish 2026-09-21 |
@@ -535,7 +535,7 @@ a React Router 8 app on one Worker, and the equivalent conventions are these —
 | Main process vs renderer thread | `*.server` modules vs client modules | `boundaries/dependencies` |
 | One blessed way per pattern | one data layer (`app/lib/db.server.ts`), one session authority (`app/lib/auth.server.ts`) | `no-restricted-imports` on `kysely`, `better-auth` and its plugins |
 | Thin entry points | routes are 150 lines and do not query | `max-lines`, plus `no-restricted-syntax` on `env.DB` in routes |
-| — | one writer per table | `no-restricted-syntax` on `insertInto`/`updateTable`/`deleteFrom` in routes |
+| — | one writer per table | `no-restricted-syntax` on DML statement text in `app/**` + `workers/**` outside `app/lib/data/**` |
 | Comments banned | comments banned in app code | `no-inline-comments`, `no-warning-comments`, §B5 |
 
 Two of these name files that do not exist yet — `app/lib/db.server.ts` and
