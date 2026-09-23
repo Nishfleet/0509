@@ -21,9 +21,9 @@ import { toast } from "sonner";
 import { toastSaved } from "../../app/components/toaster";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const APP_DIR = path.join(REPO_ROOT, "app");
+const SCANNED_DIRS = ["app", "workers"];
 const ALLOWED = new Set(["app/components/toaster.tsx"]);
-const TOAST_USE = /from\s+["']sonner["']|\btoast\s*\(|\btoast\./;
+const TOAST_USE = /from\s+["']sonner["']|(?<![\w.])toast\s*\(|(?<![\w.])toast\./;
 
 async function toastCallSites(dir: string): Promise<string[]> {
   const found: string[] = [];
@@ -41,22 +41,43 @@ async function toastCallSites(dir: string): Promise<string[]> {
   return found;
 }
 
+async function allToastCallSites(): Promise<string[]> {
+  const found: string[] = [];
+  for (const dir of SCANNED_DIRS) {
+    found.push(...(await toastCallSites(path.join(REPO_ROOT, dir))));
+  }
+  return found;
+}
+
 describe("toast call-site lock", () => {
   it("flags a sonner import plus a toast() call in a planted module", async () => {
-    const probe = path.join(APP_DIR, "components", "toast-probe.tsx");
+    const probe = path.join(REPO_ROOT, "app", "components", "toast-probe.tsx");
     await writeFile(
       probe,
       'import { toast } from "sonner";\n\nexport function ping() {\n  toast("hi");\n}\n',
     );
     try {
-      expect(await toastCallSites(APP_DIR)).toContain("app/components/toast-probe.tsx");
+      expect(await allToastCallSites()).toContain("app/components/toast-probe.tsx");
+    } finally {
+      await rm(probe, { force: true });
+    }
+  });
+
+  it("does not fire on a member named toast", async () => {
+    const probe = path.join(REPO_ROOT, "app", "components", "toast-prop-probe.tsx");
+    await writeFile(
+      probe,
+      'export function ping(props: { toast: { label: string } }) {\n  return props.toast.label;\n}\n',
+    );
+    try {
+      expect(await allToastCallSites()).not.toContain("app/components/toast-prop-probe.tsx");
     } finally {
       await rm(probe, { force: true });
     }
   });
 
   it("finds no toast calls outside the allowed module", async () => {
-    expect(await toastCallSites(APP_DIR)).toEqual([]);
+    expect(await allToastCallSites()).toEqual([]);
   });
 });
 
@@ -101,6 +122,10 @@ describe("the mount and the skin", () => {
     expect(src).toContain('"--normal-text": "var(--ink)"');
     expect(src).toContain('"--normal-border": "var(--line)"');
     expect(src).toContain('"--border-radius": "0px"');
+    const css = await readFile(path.join(REPO_ROOT, "app", "app.css"), "utf8");
+    for (const token of ["--card", "--ink", "--line", "--font-sans"]) {
+      expect(css).toMatch(new RegExp(`${token}:\\s*[^;]`));
+    }
   });
 });
 
