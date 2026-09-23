@@ -174,7 +174,7 @@ export async function resolveCandidateDomain(
   if (env.kv) {
     await env.kv
       .put(cacheKey, JSON.stringify(resolution), { expirationTtl: CACHE_TTL_SECONDS })
-      .catch(() => {});
+      .catch(() => undefined);
   }
   return resolution;
 }

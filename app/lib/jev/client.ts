@@ -37,14 +37,18 @@ export async function jevAsk(
   fetchImpl: typeof fetch = fetch,
 ): Promise<Record<string, JevAnswer> | null> {
   if (!env.JEV_ENDPOINT) return null;
+  const model = env.JEV_MODEL ?? DEFAULT_MODEL;
   const res = await fetchImpl(env.JEV_ENDPOINT, {
     method: "POST",
     headers: {
       "content-type": "application/json",
+      "ai-gateway-protocol-version": "0.0.1",
+      "ai-evaluation-model-specification-version": "4",
+      "ai-model-id": model,
       ...(env.JEV_KEY ? { authorization: `Bearer ${env.JEV_KEY}` } : {}),
     },
     body: JSON.stringify({
-      model: env.JEV_MODEL ?? DEFAULT_MODEL,
+      model,
       state,
       questions,
     }),

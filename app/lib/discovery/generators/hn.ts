@@ -44,7 +44,7 @@ export function domainsFromHit(hit: HnHit, subjectDomain: string): string[] {
 }
 
 function prettify(domain: string): string {
-  const stem = parse(domain).domainWithoutSuffix || domain;
+  const stem = parse(domain).domainWithoutSuffix ?? domain;
   return stem
     .split(/[-.]/)
     .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
@@ -57,9 +57,11 @@ export async function hnCoMentions(
 ): Promise<Candidate[]> {
   const fetchImpl = env.fetchImpl ?? fetch;
   const url = `https://hn.algolia.com/api/v1/search?query=${encodeURIComponent(subject.name)}&tags=(story,comment)&hitsPerPage=50`;
-  const res = await fetchImpl(url, { signal: AbortSignal.timeout(8_000) });
-  if (!res.ok) return [];
-  const data = (await res.json()) as { hits?: HnHit[] };
+  const res = await fetchImpl(url, { signal: AbortSignal.timeout(8_000) }).catch(() => null);
+  if (!res?.ok) return [];
+  const raw = await res.text();
+  env.onPayload?.({ url, contentType: "application/json", body: raw });
+  const data = JSON.parse(raw) as { hits?: HnHit[] };
   const selfNorm = normaliseName(subject.name);
   const byKey = new Map<string, Candidate>();
   const add = (name: string, domain: string | undefined, sourceUrl: string, excerpt: string) => {

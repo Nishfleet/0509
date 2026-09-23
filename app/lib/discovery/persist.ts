@@ -43,6 +43,28 @@ function evidenceJson(scored: ScoredCandidate): string {
   });
 }
 
+export async function watchStatements(
+  db: D1Database,
+  entityId: string,
+  targetKey: string,
+): Promise<D1PreparedStatement[]> {
+  const sources = await db
+    .prepare("SELECT id FROM source WHERE is_enabled = 1 AND key NOT LIKE 'discovery.%'")
+    .all<{ id: string }>();
+  const stmts: D1PreparedStatement[] = [];
+  for (const source of sources.results) {
+    stmts.push(
+      db
+        .prepare(
+          `INSERT OR IGNORE INTO watch (id, entity_id, source_id, target_key)
+           VALUES (?, ?, ?, ?)`,
+        )
+        .bind(`wat_${await idHash(entityId, source.id, targetKey)}`, entityId, source.id, targetKey),
+    );
+  }
+  return stmts;
+}
+
 export async function persistDiscovery(
   env: PersistEnv,
   workspaceId: string,
@@ -50,9 +72,6 @@ export async function persistDiscovery(
   allRows: ScoredCandidate[],
 ): Promise<PersistResult> {
   const now = new Date().toISOString();
-  const sources = await env.DB.prepare(
-    "SELECT id FROM source WHERE is_enabled = 1 AND key NOT LIKE 'discovery.%'",
-  ).all<{ id: string }>();
   const judgedKeys = new Set(judged.map((j) => j.scored.key));
   const stmts: D1PreparedStatement[] = [];
   const result: PersistResult = { accepted: [], maybe: 0, dropped: 0, unjudged: 0 };
@@ -69,19 +88,7 @@ export async function persistDiscovery(
            VALUES (?, ?, 'competitor', ?, ?, 'auto', 'on', ?)`,
         ).bind(entityId, workspaceId, j.domain, j.scored.candidate.name, now),
       );
-      for (const source of sources.results) {
-        stmts.push(
-          env.DB.prepare(
-            `INSERT OR IGNORE INTO watch (id, entity_id, source_id, target_key)
-             VALUES (?, ?, ?, ?)`,
-          ).bind(
-            `wat_${await idHash(entityId, source.id, j.domain)}`,
-            entityId,
-            source.id,
-            j.domain,
-          ),
-        );
-      }
+      stmts.push(...(await watchStatements(env.DB, entityId, j.domain)));
       stmts.push(
         env.DB.prepare(
           `INSERT INTO suggestion

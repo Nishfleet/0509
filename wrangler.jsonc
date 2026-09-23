@@ -50,7 +50,27 @@
   // forwarded header: auth origin trust and the magic-link URL both come from
   // it, and a client-supplied value would let a link point anywhere.
   // BETTER_AUTH_SECRET stays a Worker secret.
-  "vars": { "BETTER_AUTH_URL": "https://0509.io" },
+  // JEV_* configure the Jev evaluation-model endpoint (docs/REBUILD-JEV.md).
+  // JEV_KEY stays a Worker secret; endpoint and model are config, not secrets.
+  "vars": {
+    "BETTER_AUTH_URL": "https://0509.io",
+    "JEV_ENDPOINT": "https://ai-gateway.vercel.sh/v4/ai/evaluation-model",
+    "JEV_MODEL": "typesafe-ai/jev"
+  },
+
+  // 30-day name->domain resolution cache for competitor discovery
+  // (docs/engines/competitor-discovery.md P3).
+  "kv_namespaces": [
+    { "binding": "RESOLVE_CACHE", "id": "e8b9454e2e2a41a5afe3b387c53fee98" }
+  ],
+
+  "workflows": [
+    {
+      "binding": "DISCOVERY_WORKFLOW",
+      "name": "discovery",
+      "class_name": "DiscoveryWorkflow"
+    }
+  ],
 
   "d1_databases": [
     {
@@ -103,6 +123,15 @@
   // reach the retry limit are deleted permanently otherwise, and a silently
   // dropped brief is the failure the contract forbids.
   "queues": {
+    // Discovery enqueues first-collection pulls for accepted competitors onto
+    // fetch-sweep and the Meta Ad Library keyword leg onto page-sweep
+    // (docs/engines/competitor-discovery.md). The consumer side of both queues
+    // — concurrency caps and dead-letter handling — lands with the sweep
+    // engine packets that serve them.
+    "producers": [
+      { "binding": "PAGE_SWEEP", "queue": "page-sweep" },
+      { "binding": "FETCH_SWEEP", "queue": "fetch-sweep" }
+    ],
     "consumers": [
       {
         "queue": "send-email",
@@ -116,10 +145,9 @@
   },
 
   "triggers": {
-    // The dead-man ping, and nothing else yet. Every five minutes: an external
-    // service alerts when the reports stop, which is the one failure a Worker
-    // cannot report about itself.
-    "crons": ["*/5 * * * *"]
+    // */5 is the dead-man ping. Monday 04:00 UTC starts one refresh-mode
+    // DiscoveryWorkflow per workspace (docs/engines/competitor-discovery.md).
+    "crons": ["*/5 * * * *", "0 4 * * 1"]
   },
 
   "routes": [

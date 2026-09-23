@@ -18,7 +18,7 @@ const GENERIC_NOUNS = new Set([
 
 export function cleanCandidateName(raw: string): string | null {
   let s = raw.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-  s = s.replace(/^\d{1,3}\s*[.\)\-–:x]\s*/i, "").trim();
+  s = s.replace(/^\d{1,3}\s*[.)\-–:x]\s*/i, "").trim();
   const cut = s.search(/\s[—–|·]|:|\s\(|\bvs\.?\b|\breview\b/i);
   if (cut > 0) s = s.slice(0, cut).trim();
   s = s.replace(/^[\p{P}\p{S}\s]+|[.,;:!?"”'’]+$/gu, "").trim();
@@ -27,7 +27,7 @@ export function cleanCandidateName(raw: string): string | null {
   if (words.length > 6) return null;
   if (/https?|www\.|@/.test(s)) return null;
   if (!/\p{L}/u.test(s)) return null;
-  const first = words[0]!.toLowerCase();
+  const first = (words[0] ?? "").toLowerCase();
   if (FIRST_WORD_STOP.has(first) && first !== "the") return null;
   if (words.every((w) => FIRST_WORD_STOP.has(w.toLowerCase()))) return null;
   if (words.length === 1 && GENERIC_NOUNS.has(first)) return null;

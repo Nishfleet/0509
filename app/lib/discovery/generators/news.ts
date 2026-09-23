@@ -81,7 +81,11 @@ export async function googleNewsRoundups(
     const q = encodeURIComponent(template.replace("%s", subject.name));
     const url = `https://news.google.com/rss/search?q=${q}&hl=en-US&gl=US&ceid=US:en`;
     const res = await fetchImpl(url, { signal: AbortSignal.timeout(8_000) }).catch(() => null);
-    if (res?.ok) items.push(...parseNewsFeed(await res.text()));
+    if (res?.ok) {
+      const body = await res.text();
+      env.onPayload?.({ url, contentType: "application/rss+xml", body });
+      items.push(...parseNewsFeed(body));
+    }
   }
   const seenLinks = new Set<string>();
   const uniqueItems = items.filter((item) => !seenLinks.has(item.link) && seenLinks.add(item.link));
@@ -106,7 +110,9 @@ export async function googleNewsRoundups(
   for (const item of uniqueItems.slice(0, ARTICLE_LIMIT)) {
     const res = await fetchImpl(item.link, { signal: AbortSignal.timeout(8_000) }).catch(() => null);
     if (!res?.ok) continue;
-    for (const name of await extractRoundupNames(await res.text(), subject.name)) {
+    const body = await res.text();
+    env.onPayload?.({ url: item.link, contentType: "text/html", body });
+    for (const name of await extractRoundupNames(body, subject.name)) {
       add(name, item, item.title);
     }
   }

@@ -24,6 +24,7 @@ export interface DiscoverySubject {
 
 export interface GeneratorEnv {
   fetchImpl?: typeof fetch;
+  onPayload?: (payload: { url: string; contentType: string; body: string }) => void;
 }
 
 export type Generator = (subject: DiscoverySubject, env: GeneratorEnv) => Promise<Candidate[]>;
