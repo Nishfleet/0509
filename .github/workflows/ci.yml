@@ -107,7 +107,10 @@ jobs:
     # Hosted for every event. Public repo: minutes are free and the hosted pool
     # is wider than the 3 owned runners (fleet-ops#5935 reversed 2026-09-22).
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Run 35785237529 spent 6.1 minutes in Playwright against a preview, before
+    # this job's lighthouse collects. A 15 minute cap does not fit the upload,
+    # the suite, and those collects together.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -121,15 +124,42 @@ jobs:
       - name: Install the browser Playwright will drive
         run: npx playwright install --with-deps chromium
 
-      - name: Run the e2e suite against the built Worker
-        # This replaced a curl-and-grep loop against /api/health. The proof is
-        # the same shape — build it, run it, ask it — but now the agent that
-        # wrote the change runs the same suite a user's browser would, and a
-        # route that renders blank fails here instead of in production.
-        #
-        # PLAYWRIGHT_TEST_BASE_URL is deliberately unset: playwright.config.ts
-        # then starts `wrangler dev` itself through webServer and tears it down.
+      - name: Refuse a run with no Cloudflare credentials
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "preview-assert: missing CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID; fork pull requests do not receive secrets"
+            exit 1
+          fi
+
+      - name: Apply D1 migrations to the preview database
+        run: npx wrangler d1 migrations apply PREVIEW_DB --remote --config wrangler.preview-migrations.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Deploy the Worker Preview
+        id: preview
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PREVIEW_NAME: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('q-{0}', github.run_id) }}
+        run: |
+          set -euo pipefail
+          WRANGLER_OUTPUT_FILE_PATH="$RUNNER_TEMP/preview.jsonl" npx wrangler preview --config build/server/wrangler.json --name "$PREVIEW_NAME" --json
+          URL=$(jq -er 'select(.type=="preview") | .deployment_urls[0]' "$RUNNER_TEMP/preview.jsonl" | tail -n 1)
+          test -n "$URL"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Run the e2e suite against the preview deployment
         run: npm run e2e
+        env:
+          PLAYWRIGHT_TEST_BASE_URL: ${{ steps.preview.outputs.url }}
+          E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
 
       - name: Collect Lighthouse against the built Worker
         # Same budgets as the deployment_status lighthouse job, on the PR, so a

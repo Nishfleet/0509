@@ -1,0 +1,14 @@
+// `wrangler d1 migrations apply` reads top-level d1_databases, not
+// previews.d1_databases. This file is the preview database only, and its
+// database_name and database_id must match wrangler.jsonc previews.d1_databases.
+// https://developers.cloudflare.com/workers/previews/resources/
+{
+  "d1_databases": [
+    {
+      "binding": "PREVIEW_DB",
+      "database_name": "0509-preview",
+      "database_id": "d6643a38-0666-470e-8e08-1953918dfd8a",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

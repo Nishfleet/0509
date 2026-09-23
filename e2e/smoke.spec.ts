@@ -7,11 +7,10 @@ import { expect, test } from "@playwright/test";
 // Every assertion here is reachable from .agents/skills/verify/feature-map.md. A test that
 // cannot be traced to a row in that file is testing something a user cannot do.
 //
-// What is deliberately NOT here: anything that needs a row in D1. `wrangler dev
-// --local` starts with an empty database and `preview-assert` applies no
-// migrations, so a session assertion would be testing the empty state, not the
-// product. The gated surfaces are J1-J14 in docs/REBUILD-DONE.md and they land
-// with the engines that fill those tables.
+// What is deliberately NOT here: anything that needs a row in D1. Session
+// flows are the J-specs. They run when PLAYWRIGHT_TEST_BASE_URL points at a
+// database that already has the schema. The gated surfaces are J1-J14 in
+// docs/REBUILD-DONE.md and they land with the engines that fill those tables.
 //
 // Nothing below pins human-facing copy. A merge-queue proof that asserts exact
 // strings turns every copy edit into a red gate (2026-09-21T16:03Z: runs

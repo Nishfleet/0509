@@ -3,9 +3,10 @@ import { defineConfig, devices } from "@playwright/test";
 // One config, two run modes, decided by PLAYWRIGHT_TEST_BASE_URL alone.
 //
 // Unset  -> Playwright starts the built Worker itself (webServer) and tests it.
-//           This is what `preview-assert` does on every PR.
-// Set    -> no webServer; the suite runs against that URL. This is what the
-//           `deployment_status` run does against production.
+//           Local `npm run e2e` uses this mode.
+// Set    -> no webServer; the suite runs against that URL. `preview-assert`
+//           sets it to the Worker Preview deployment URL. The
+//           `deployment_status` run sets it to production.
 //
 // webServer's own doc says it is for "when you don't have a staging or
 // production url to test against", which is exactly the split above:

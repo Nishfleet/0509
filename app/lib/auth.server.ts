@@ -23,11 +23,21 @@ export function hasSessionCookie(request: Request) {
   return header.split(";").some((part) => sessionCookieNames.has(part.trim().split("=")[0] ?? ""));
 }
 
+const PREVIEW_ALLOWED_HOSTS = ["*-0509.nishant345.workers.dev"];
+const PREVIEW_RP_ID = "nishant345.workers.dev";
+
+function baseURLFor(env: AuthEnv) {
+  if (env.BETTER_AUTH_URL) return env.BETTER_AUTH_URL;
+  return { allowedHosts: PREVIEW_ALLOWED_HOSTS, protocol: "https" as const };
+}
+
 export function createAuth(env: AuthEnv) {
+  const baseURL = baseURLFor(env);
+  const rpID = typeof baseURL === "string" ? new URL(baseURL).hostname : PREVIEW_RP_ID;
   return betterAuth({
     database: env.DB,
     secret: env.BETTER_AUTH_SECRET,
-    baseURL: env.BETTER_AUTH_URL,
+    baseURL,
     advanced: { cookiePrefix: COOKIE_PREFIX },
     databaseHooks: {
       session: {
@@ -61,7 +71,7 @@ export function createAuth(env: AuthEnv) {
           });
         },
       }),
-      passkey(),
+      passkey({ rpID }),
       apiKey(),
     ],
   });

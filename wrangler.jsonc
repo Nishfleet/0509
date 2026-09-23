@@ -23,6 +23,13 @@
     "enabled": true
   },
   "upload_source_maps": true,
+  // Production traffic stays on the custom domains below. The live subdomain
+  // setting is workers.dev off; say so here so a later deploy does not turn it
+  // on. Preview hostnames are a separate switch: deployment URLs
+  // (<version>-<worker>.<subdomain>.workers.dev) stay off unless preview_urls
+  // is set. https://developers.cloudflare.com/workers/previews/
+  "workers_dev": false,
+  "preview_urls": true,
 
   // The pre-rebuild Worker declared one Durable Object class,
   // SelectionEnrichmentLease (tag v1, new_sqlite_classes). The fresh app does
@@ -133,5 +140,30 @@
     // http_request_dynamic_redirect, ruleset f7743879d6904ebea189b42c85713069),
     // which runs before the Worker and costs no invocation. Adding a route here
     // would put the Worker in that path for nothing.
-  ]
+  ],
+
+  // Previews do not inherit vars, storage bindings, or API bindings
+  // (https://developers.cloudflare.com/workers/previews/configuration/).
+  // DB is D1 0509-preview (d6643a38-0666-470e-8e08-1953918dfd8a, created
+  // 2026-09-22T18:29:56Z), never production database 0509. This Worker has no
+  // kv_namespaces entry and no Analytics Engine binding, so there is no
+  // COUNTERS namespace and no preview dataset to declare. CARD_ARTIFACTS is
+  // omitted: the CI token cannot create an R2 bucket (Cloudflare API 10000)
+  // and this block must not name production bucket 0509-snapshots. Queue
+  // producers are omitted so a preview cannot send to the production
+  // send-email queue. Crons, routes, and queue consumers stay at the top
+  // level; previews do not run them. BETTER_AUTH_URL is absent so auth uses
+  // the preview host allow-list instead of https://0509.io.
+  "previews": {
+    "vars": {},
+    "d1_databases": [
+      {
+        "binding": "DB",
+        "database_name": "0509-preview",
+        "database_id": "d6643a38-0666-470e-8e08-1953918dfd8a"
+      }
+    ],
+    "browser": { "binding": "BROWSER" },
+    "send_email": [{ "name": "EMAIL" }]
+  }
 }
