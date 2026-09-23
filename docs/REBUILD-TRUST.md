@@ -63,11 +63,19 @@ error (ce5fed17d).
 
 Her verification skill has two halves: a **reproducible way to drive the real
 application**, and a **feature map** that tells the agent what the application
-even is. We need both. We do not need her first half's shape — she built a CLI
-inside a skill directory because Cursor's agent window is an Electron app with
-no test runner that can drive it. Ours is a web app, and the stock reproducible
-driver for a web app is Playwright. **Building a CLI here would be exactly the
-glue the rebuild deletes.**
+even is. We need both. **Decision, 2026-09-22 (#4251):** both halves ship as a
+skill — `.agents/skills/verify/SKILL.md`, landed via #4341 — on Nish's word:
+*"make it exactly as described."* The driver is Google's stock
+`chrome-devtools` CLI from the `chrome-devtools-mcp` package, not code we
+wrote, so scripts-to-zero still holds.
+
+**Rejected alternative.** Playwright alone, no skill — this section's original
+position. The reasoning: her CLI's shape answered an Electron app with no test
+runner that could drive it, ours is a web app whose stock reproducible driver
+is Playwright, and a hand-built CLI is exactly the glue the rebuild deletes.
+What it missed: the CLI is the vendor's stock binary rather than glue we
+wrote, and a skill directory is where the procedure and the feature map live
+so every agent session drives the app the same way.
 
 ### A1. One Playwright config, two modes
 
