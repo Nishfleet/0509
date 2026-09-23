@@ -1,5 +1,6 @@
 import { createRequestHandler } from "react-router";
 
+import { assertWorkerEnv, WorkerEnvError, workerEnvFailureResponse } from "../app/lib/env.server";
 import { pingLiveness } from "../app/lib/liveness-ping.server";
 import { handleBatch } from "./delivery/consumer";
 import { handleDlqBatch } from "./delivery/dlq-consumer";
@@ -12,6 +13,12 @@ const requestHandler = createRequestHandler(
 
 export default {
   async fetch(request) {
+    try {
+      assertWorkerEnv();
+    } catch (error) {
+      if (error instanceof WorkerEnvError) return workerEnvFailureResponse(error);
+      throw error;
+    }
     return requestHandler(request);
   },
 
