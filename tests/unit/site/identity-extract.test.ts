@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { extractIdentity } from "../../../app/lib/identity/extract";
+import { extractIdentity, identityExtractSchema } from "../../../app/lib/identity/extract";
 import { extractPageText } from "../../../app/lib/site/extract-text";
 import gym from "../../fixtures/gymshark-2026-09-22-a.html?raw";
 
@@ -8,7 +8,7 @@ const pageUrl = "https://www.gymshark.com/";
 
 describe("extractIdentity", () => {
   it("reads the Gymshark homepage into the identity card fields", async () => {
-    const card = await extractIdentity(gym, pageUrl);
+    const card = identityExtractSchema.parse(await extractIdentity(gym, pageUrl));
 
     expect(card.nameSources.ogSiteName).toBe("Gymshark");
     expect(card.nameSources.ldOrganizationName).toBe("Gymshark");
