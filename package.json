@@ -7,7 +7,7 @@
     "dev": "react-router dev",
     "deploy": "wrangler deploy",
     "test": "vitest run",
-    "typecheck": "wrangler types && react-router typegen && tsc -b",
+    "typecheck": "wrangler types --env-file .dev.vars.example && react-router typegen && tsc -b",
     "lint": "eslint . && knip",
     "e2e": "playwright test",
     "verify:start": "chrome-devtools start --headless --chromeArg=--no-sandbox --executablePath \"$(node -p \"require('playwright-core').chromium.executablePath()\")\"",

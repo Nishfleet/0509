@@ -12,9 +12,9 @@ const requestHandler = createRequestHandler(
 );
 
 export default {
-  async fetch(request, env) {
+  async fetch(request) {
     try {
-      assertWorkerEnv(env);
+      assertWorkerEnv();
     } catch (error) {
       if (error instanceof WorkerEnvError) return workerEnvFailureResponse(error);
       throw error;

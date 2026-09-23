@@ -1,6 +1,22 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("cloudflare:workers", () => ({
+  env: {},
+}));
+
+import { env } from "cloudflare:workers";
 
 import { createWorkerEnvCheck, WorkerEnvError, workerEnvFailureResponse } from "../app/lib/env.server";
+
+const KEYS = [
+  "DB",
+  "BETTER_AUTH_URL",
+  "BETTER_AUTH_SECRET",
+  "EMAIL",
+  "SEND_EMAIL",
+  "CARD_ARTIFACTS",
+  "BROWSER",
+] as const;
 
 function configured() {
   return {
@@ -14,9 +30,14 @@ function configured() {
   };
 }
 
-function namesOf(check: ReturnType<typeof createWorkerEnvCheck>, env: object) {
+function useEnv(values: object) {
+  for (const key of KEYS) Reflect.deleteProperty(env, key);
+  Object.assign(env, values);
+}
+
+function namesOf(check: () => void) {
   try {
-    check(env);
+    check();
   } catch (error) {
     expect(error).toBeInstanceOf(WorkerEnvError);
     return error as WorkerEnvError;
@@ -25,16 +46,22 @@ function namesOf(check: ReturnType<typeof createWorkerEnvCheck>, env: object) {
 }
 
 describe("worker env", () => {
+  beforeEach(() => {
+    Reflect.deleteProperty(globalThis, "LIVENESS_PING_URL");
+    useEnv({});
+  });
+
   it("accepts every required entry and an unset liveness URL", () => {
-    const check = createWorkerEnvCheck({});
-    expect(() => check(configured())).not.toThrow();
+    useEnv(configured());
+    expect(() => createWorkerEnvCheck()()).not.toThrow();
   });
 
   it("names every missing entry in one error", () => {
-    const env = configured();
-    delete env.DB;
-    delete env.BETTER_AUTH_SECRET;
-    const error = namesOf(createWorkerEnvCheck({}), env);
+    const values = configured();
+    delete values.DB;
+    delete values.BETTER_AUTH_SECRET;
+    useEnv(values);
+    const error = namesOf(createWorkerEnvCheck());
     expect(error.names).toEqual(["DB", "BETTER_AUTH_SECRET"]);
     expect(error.message).toBe(
       "misconfigured: DB (every read and write fails); BETTER_AUTH_SECRET (sign-in cannot be trusted)",
@@ -43,27 +70,32 @@ describe("worker env", () => {
   });
 
   it("names a malformed URL without echoing it", () => {
-    const env = { ...configured(), BETTER_AUTH_URL: "not-a-url" };
-    const error = namesOf(createWorkerEnvCheck({ LIVENESS_PING_URL: "also-not-a-url" }), env);
+    useEnv({ ...configured(), BETTER_AUTH_URL: "not-a-url" });
+    Reflect.set(globalThis, "LIVENESS_PING_URL", "also-not-a-url");
+    const error = namesOf(createWorkerEnvCheck());
     expect(error.names).toEqual(["BETTER_AUTH_URL", "LIVENESS_PING_URL"]);
     expect(error.message).not.toContain("not-a-url");
     expect(error.message).not.toContain("also-not-a-url");
   });
 
   it("treats a blank secret as missing and does not invent one", () => {
-    const env = { ...configured(), BETTER_AUTH_SECRET: "   " };
-    const error = namesOf(createWorkerEnvCheck({}), env);
+    useEnv({ ...configured(), BETTER_AUTH_SECRET: "   " });
+    const error = namesOf(createWorkerEnvCheck());
     expect(error.names).toEqual(["BETTER_AUTH_SECRET"]);
   });
 
   it("checks once per isolate", () => {
-    const check = createWorkerEnvCheck({});
-    check(configured());
-    expect(() => check({})).not.toThrow();
+    const check = createWorkerEnvCheck();
+    useEnv(configured());
+    expect(() => check()).not.toThrow();
+    useEnv({});
+    expect(() => check()).not.toThrow();
 
-    const failing = createWorkerEnvCheck({});
-    const first = namesOf(failing, {});
-    const second = namesOf(failing, configured());
+    const failing = createWorkerEnvCheck();
+    useEnv({});
+    const first = namesOf(failing);
+    useEnv(configured());
+    const second = namesOf(failing);
     expect(second.message).toBe(first.message);
     expect(second.names).toEqual([
       "DB",
