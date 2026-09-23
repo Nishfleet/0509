@@ -93,17 +93,20 @@ assertions both times.
 
 **Run it before the PR opens.** A change under `app/`, `workers/` or `e2e/`
 runs the specs that cover it locally first, in preview mode, by file:
-`npm run e2e -- e2e/<name>.spec.ts` (Playwright's own file filter). A change
-under `app/` or `workers/` also drives the running app with the verify skill —
-`.agents/skills/verify/SKILL.md` — and pastes that run into the PR template's
-`## Verification` section. Quote the summary line (`N passed`) under
-`run-proof:` in the PR body. `preview-assert`
-runs the whole suite on the PR, so the quote is not the proof; it is the
-evidence that you drove the app yourself before asking a reviewer to. Do not
-run the full suite, `npm run build` or `npm run typecheck` locally as well: CI
-runs all three, and on a fleet worker (25% of a core, 55-minute wall) the
-full local set is what timed workers out on 2026-09-23. Chromium is already
-installed on this host (`~/.cache/ms-playwright`).
+`npm run e2e -- e2e/<name>.spec.ts` (Playwright's own file filter). Nothing
+is pasted into the PR body: `preview-assert` runs the whole suite at the PR
+head and is the proof. Do not run the full suite, `npm run build` or
+`npm run typecheck` locally as well: CI runs all three, and on a fleet
+worker (25% of a core, 55-minute wall) the full local set is what timed
+workers out on 2026-09-23. Chromium is already installed on this host
+(`~/.cache/ms-playwright`).
+
+## Reproducing a user report
+
+1. **Read the raw report.** `npx wrangler d1 execute 0509 --remote --command "select raw from support_report where id = '<id>'"`, where `<id>` is the report id in the issue body. This is a read; never run any other statement against `--remote`. Never paste any of the raw text into the issue, the PR, a commit message or a spec.
+2. **Map the report to rows of `.agents/skills/verify/feature-map.md`** by the paths in the issue body and the words in the raw text, following the procedure in `.agents/skills/verify/SKILL.md#reproduce-a-vague-user-report` — link it, do not restate it. If no row matches, say in the issue whether the map is missing a feature or the report is not about this product, and stop.
+3. **Drive production through the e2e suite.** `source ~/.config/cloudflare/access-0509-agents.env`, then `PLAYWRIGHT_TEST_BASE_URL=https://0509.io npm run e2e -- e2e/report-<id>.spec.ts`. The deliverable is one spec `e2e/report-<id>.spec.ts` whose test title contains the report id. If the report reproduces, the test asserts the correct behaviour and is marked `test.fail()`, so CI stays green until the fix lands. If it does not reproduce, the test has no `test.fail()` and the issue gets a no-repro comment listing each step tried with its UTC timestamp.
+4. **The PR that fixes the report** removes the `test.fail()` from that spec and keeps the spec.
 
 ## Architecture
 

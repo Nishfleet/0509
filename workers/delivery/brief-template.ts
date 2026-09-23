@@ -24,6 +24,10 @@ const COPY = {
   noUnsubscribe: "Unsubscribe is not available right now — reply to this email and we will stop sending.",
   degraded: (count: number) =>
     `${n(count)} ${count === 1 ? "source" : "sources"} did not answer this week, so these counts are short.`,
+  blind: (source: string, when: string) =>
+    `${source} has not answered since ${when}, so this is not a quiet week we can vouch for.`,
+  blindNever: (source: string) =>
+    `${source} has not answered yet, so this is not a quiet week we can vouch for.`,
 } as const;
 
 const COLORS = {
@@ -108,7 +112,7 @@ function thumbnailSrc(r2Key: string | null, assetBaseUrl: string | null): string
   return safeUrl(`${assetBaseUrl.replace(/\/+$/, "")}/${r2Key.replace(/^\/+/, "")}`);
 }
 
-function renderHeadline(payload: BriefPayload): { html: string; text: string } {
+function renderHeadline(payload: BriefPayload, whyLine: string): { html: string; text: string } {
   const { headline_rank, headline_total, headline_movement } = payload;
   if (headline_rank === null || headline_total < 2) {
     return {
@@ -126,13 +130,13 @@ function renderHeadline(payload: BriefPayload): { html: string; text: string } {
     `<span class="brief-muted" style="font-weight:400;"> ${escapeHtml(movement)}</span>`,
     `</p>`,
     `<p class="brief-muted" style="margin:4px 0 0;font-family:${FONT};font-size:14px;line-height:20px;">${escapeHtml(period)}</p>`,
-    `<p style="margin:12px 0 0;font-family:${FONT};font-size:16px;line-height:24px;">${escapeHtml(payload.why_line)}</p>`,
+    `<p style="margin:12px 0 0;font-family:${FONT};font-size:16px;line-height:24px;">${escapeHtml(whyLine)}</p>`,
   ].join("");
 
   const text = [
     `${COPY.headline(headline_rank, headline_total)} — ${movement}`,
     period,
-    payload.why_line,
+    whyLine,
   ].join("\n");
 
   return { html, text };
@@ -355,7 +359,16 @@ function briefStyle(): string {
 }
 
 export function renderBrief(payload: BriefPayload, context: BriefContext): RenderedBrief {
-  const headline = renderHeadline(payload);
+  const quiet = payload.is_quiet_week && payload.read_this_first.length === 0;
+  const blindLine = payload.checked.degraded_sources
+    .map((source) =>
+      source.last_landed_at === null
+        ? COPY.blindNever(source.key)
+        : COPY.blind(source.key, formatDate(source.last_landed_at, payload.timezone, true)),
+    )
+    .join(" ");
+  const whyLine = quiet && blindLine !== "" ? blindLine : payload.why_line;
+  const headline = renderHeadline(payload, whyLine);
   const marks = renderReadThisFirst(payload, context.asset_base_url);
   const brands = renderBrands(payload);
   const ownSite = renderOwnSite(payload);
@@ -383,7 +396,7 @@ export function renderBrief(payload: BriefPayload, context: BriefContext): Rende
     `<div style="padding:24px 12px;">`,
     `<div class="brief-card" style="max-width:600px;margin:0 auto;padding:24px;border-radius:8px;">`,
     headline.html,
-    block(marks.html),
+    ...(quiet ? [] : [block(marks.html)]),
     block(brands.html),
     block(ownSite.html),
     footer.html,
@@ -395,8 +408,7 @@ export function renderBrief(payload: BriefPayload, context: BriefContext): Rende
   const text = [
     headline.text,
     "",
-    marks.text,
-    "",
+    ...(quiet ? [] : [marks.text, ""]),
     brands.text,
     "",
     ownSite.text,
