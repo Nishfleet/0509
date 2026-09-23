@@ -183,6 +183,50 @@ describe("send lane (0509#3979)", () => {
     expect(rows[0].status).toBe("sent");
   });
 
+  it("(stale) re-claims a pending attempt older than 1 hour and sends once", async () => {
+    const rec = recorder();
+    const digestId = await seedDigest("pending", { html: "<p>x</p>", text: "x" });
+    const attemptedAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    await env.DB.prepare(
+      `INSERT INTO send_attempt
+         (id, workspace_id, send_target_id, digest_id, idempotency_key, status, attempted_at)
+       VALUES ('stale-1', ?, ?, ?, ?, 'pending', ?)`,
+    )
+      .bind(WS, TARGET_ID, digestId, `digest:${digestId}:${TARGET_ID}`, attemptedAt)
+      .run();
+
+    const result = await deliver(envWith(bindingFor(rec)), message(digestId));
+
+    expect(result.outcome).toBe("sent");
+    expect(rec.sent).toHaveLength(1);
+    const rows = await readAttempts();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe("sent");
+    expect(rows[0].id).toBe("stale-1");
+  });
+
+  it("(fresh) a pending attempt younger than 1 hour is a duplicate", async () => {
+    const rec = recorder();
+    const digestId = await seedDigest("pending", { html: "<p>x</p>", text: "x" });
+    const attemptedAt = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    await env.DB.prepare(
+      `INSERT INTO send_attempt
+         (id, workspace_id, send_target_id, digest_id, idempotency_key, status, attempted_at)
+       VALUES ('stale-1', ?, ?, ?, ?, 'pending', ?)`,
+    )
+      .bind(WS, TARGET_ID, digestId, `digest:${digestId}:${TARGET_ID}`, attemptedAt)
+      .run();
+
+    const result = await deliver(envWith(bindingFor(rec)), message(digestId));
+
+    expect(result.outcome).toBe("duplicate");
+    expect(rec.sent).toHaveLength(0);
+    const rows = await readAttempts();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe("pending");
+    expect(rows[0].id).toBe("stale-1");
+  });
+
   it("(b2) retries a failed attempt and sends on the redelivery", async () => {
     const digestId = await seedDigest("pending", { text: "brief" });
     const failed = recorder();
