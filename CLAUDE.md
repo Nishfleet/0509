@@ -101,6 +101,13 @@ worker (25% of a core, 55-minute wall) the full local set is what timed
 workers out on 2026-09-23. Chromium is already installed on this host
 (`~/.cache/ms-playwright`).
 
+## Reproducing a user report
+
+1. **Read the raw report.** `npx wrangler d1 execute 0509 --remote --command "select raw from support_report where id = '<id>'"`, where `<id>` is the report id in the issue body. This is a read; never run any other statement against `--remote`. Never paste any of the raw text into the issue, the PR, a commit message or a spec.
+2. **Map the report to rows of `.agents/skills/verify/feature-map.md`** by the paths in the issue body and the words in the raw text, following the procedure in `.agents/skills/verify/SKILL.md#reproduce-a-vague-user-report` — link it, do not restate it. If no row matches, say in the issue whether the map is missing a feature or the report is not about this product, and stop.
+3. **Drive production through the e2e suite.** `source ~/.config/cloudflare/access-0509-agents.env`, then `PLAYWRIGHT_TEST_BASE_URL=https://0509.io npm run e2e -- e2e/report-<id>.spec.ts`. The deliverable is one spec `e2e/report-<id>.spec.ts` whose test title contains the report id. If the report reproduces, the test asserts the correct behaviour and is marked `test.fail()`, so CI stays green until the fix lands. If it does not reproduce, the test has no `test.fail()` and the issue gets a no-repro comment listing each step tried with its UTC timestamp.
+4. **The PR that fixes the report** removes the `test.fail()` from that spec and keeps the spec.
+
 ## Architecture
 
 - `app/routes.ts` — the route registry. A route not listed here cannot be

@@ -385,9 +385,9 @@ describe("the quiet week", () => {
     expect(text).toContain("Quiet week: 61 mentions checked, 14 site changes, no new ads.");
   });
 
-  it("keeps every block, so the shape of the message never changes", () => {
+  it("drops the empty read-this-first block and keeps the rest", () => {
     const { html } = renderBrief(quiet, CONTEXT);
-    expect(html).toContain("Read this first");
+    expect(html).not.toContain("Read this first");
     expect(html).toContain("Your tracked brands");
     expect(html).toContain("Your site looks fine.");
     expect(html).toContain("What was checked");

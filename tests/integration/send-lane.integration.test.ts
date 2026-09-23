@@ -183,6 +183,50 @@ describe("send lane (0509#3979)", () => {
     expect(rows[0].status).toBe("sent");
   });
 
+  it("(stale) re-claims a pending attempt older than 1 hour and sends once", async () => {
+    const rec = recorder();
+    const digestId = await seedDigest("pending", { html: "<p>x</p>", text: "x" });
+    const attemptedAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    await env.DB.prepare(
+      `INSERT INTO send_attempt
+         (id, workspace_id, send_target_id, digest_id, idempotency_key, status, attempted_at)
+       VALUES ('stale-1', ?, ?, ?, ?, 'pending', ?)`,
+    )
+      .bind(WS, TARGET_ID, digestId, `digest:${digestId}:${TARGET_ID}`, attemptedAt)
+      .run();
+
+    const result = await deliver(envWith(bindingFor(rec)), message(digestId));
+
+    expect(result.outcome).toBe("sent");
+    expect(rec.sent).toHaveLength(1);
+    const rows = await readAttempts();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe("sent");
+    expect(rows[0].id).toBe("stale-1");
+  });
+
+  it("(fresh) a pending attempt younger than 1 hour is a duplicate", async () => {
+    const rec = recorder();
+    const digestId = await seedDigest("pending", { html: "<p>x</p>", text: "x" });
+    const attemptedAt = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    await env.DB.prepare(
+      `INSERT INTO send_attempt
+         (id, workspace_id, send_target_id, digest_id, idempotency_key, status, attempted_at)
+       VALUES ('stale-1', ?, ?, ?, ?, 'pending', ?)`,
+    )
+      .bind(WS, TARGET_ID, digestId, `digest:${digestId}:${TARGET_ID}`, attemptedAt)
+      .run();
+
+    const result = await deliver(envWith(bindingFor(rec)), message(digestId));
+
+    expect(result.outcome).toBe("duplicate");
+    expect(rec.sent).toHaveLength(0);
+    const rows = await readAttempts();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe("pending");
+    expect(rows[0].id).toBe("stale-1");
+  });
+
   it("(b2) retries a failed attempt and sends on the redelivery", async () => {
     const digestId = await seedDigest("pending", { text: "brief" });
     const failed = recorder();
@@ -355,6 +399,38 @@ describe("send lane (0509#3979)", () => {
     expect(results[1].outcome).toBe("sent");
     expect(junk.acked).toEqual([0, 1]);
     expect(rec.sent).toHaveLength(1);
+  });
+
+  it("stamps a stable RFC 8058 unsubscribe token on every send", async () => {
+    const rec = recorder();
+    const firstId = await seedDigest("pending", {
+      html: "<p>You are #2 of 9 this week.</p>",
+      text: "You are #2 of 9 this week.",
+    });
+
+    const first = await deliver(envWith(bindingFor(rec)), message(firstId));
+    expect(first.outcome).toBe("sent");
+
+    const stored = await env.DB.prepare(
+      `SELECT unsubscribe_token FROM send_target WHERE id = 'reader-target'`,
+    ).first<{ unsubscribe_token: string | null }>();
+    const token = stored?.unsubscribe_token ?? "";
+    expect(token).toMatch(/^[0-9a-f]{64}$/);
+    expect(rec.sent[0].headers).toEqual({
+      "List-Unsubscribe": `<https://0509.io/u/${token}>`,
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    });
+
+    const secondId = await seedDigest("pending", {
+      html: "<p>You are #3 of 9 this week.</p>",
+      text: "You are #3 of 9 this week.",
+    });
+    const second = await deliver(envWith(bindingFor(rec)), message(secondId));
+    expect(second.outcome).toBe("sent");
+    expect(rec.sent[1].headers).toEqual({
+      "List-Unsubscribe": `<https://0509.io/u/${token}>`,
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    });
   });
 
   it("sendOrThrow rejects a provider failure and resolves a delivered send", async () => {
