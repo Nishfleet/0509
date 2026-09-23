@@ -87,6 +87,21 @@ describe("handleDlqBatch", () => {
     expect(ids).toEqual(["dlq:dg_1"]);
   });
 
+  it("acks an unparseable message without inserting an alert", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { env, recorded } = fakeEnv(() => Promise.resolve(null));
+    const { batch, ack, retry } = fakeBatch("not-a-message");
+
+    const ids = await handleDlqBatch(env, batch);
+
+    expect(recorded.some((row) => row.sql.startsWith("INSERT INTO alert"))).toBe(false);
+    expect(error).toHaveBeenCalledWith("send-email-dlq: unparseable message", "m1");
+    expect(ack).toHaveBeenCalledOnce();
+    expect(retry).not.toHaveBeenCalled();
+    expect(ids).toEqual([]);
+    error.mockRestore();
+  });
+
   it("acks a missing digest without inserting an alert", async () => {
     const { env, recorded } = fakeEnv((sql) => {
       if (sql.startsWith("SELECT workspace_id")) {
