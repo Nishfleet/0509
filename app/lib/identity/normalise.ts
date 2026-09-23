@@ -4,7 +4,7 @@ import { z } from "zod";
 export const SubjectSchema = z.object({
   kind: z.enum(["domain", "handle", "channel"]),
   registrable: z.string().min(1),
-  url: z.string().url().nullable(),
+  url: z.url().nullable(),
   platform: z.enum(["youtube", "instagram", "tiktok", "x"]).optional(),
 });
 

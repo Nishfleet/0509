@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { normaliseSubject, type NormaliseResult } from "../../../app/lib/identity/normalise";
+import { normaliseSubject, SubjectSchema, type NormaliseResult, type Subject } from "../../../app/lib/identity/normalise";
 
 const domain = (registrable: string, url: string): NormaliseResult => ({
   ok: true,
@@ -53,5 +53,9 @@ describe("normaliseSubject", () => {
     ["https://www.youtube.com/", fail("unsupported-platform")],
   ])("normaliseSubject(%j)", (input, expected) => {
     expect(normaliseSubject(input)).toEqual(expected);
+    if (expected.ok) {
+      const subject: Subject = SubjectSchema.parse(expected.subject);
+      expect(subject).toEqual(expected.subject);
+    }
   });
 });
