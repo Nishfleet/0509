@@ -6,7 +6,11 @@ import {
   CapturePlate,
   shotSrc,
   type CapturePlateProps,
+  type CaptureShot,
 } from "../../app/components/capture-plate";
+
+const BEFORE: CaptureShot = { src: "/before.png", capturedAt: "2026-09-20" };
+const AFTER: CaptureShot = { src: "/after.png", capturedAt: "2026-09-21" };
 
 function render(props: CapturePlateProps): string {
   return renderToStaticMarkup(createElement(CapturePlate, props));
@@ -23,8 +27,8 @@ describe("the capture plate", () => {
   it("renders the after shot at 104×74 and shrinks to 76×56 on a phone", () => {
     const html = render({
       label: "Pricing page",
-      before: { src: "/before.png", capturedAt: "2026-09-20" },
-      after: { src: "/after.png", capturedAt: "2026-09-21" },
+      before: BEFORE,
+      after: AFTER,
     });
     expect(html).toContain('width="104"');
     expect(html).toContain('height="74"');
@@ -38,8 +42,8 @@ describe("the capture plate", () => {
   it("reads the first plate eagerly with high fetch priority", () => {
     const html = render({
       label: "Homepage",
-      before: { src: "/before.png", capturedAt: "2026-09-20" },
-      after: { src: "/after.png", capturedAt: "2026-09-21" },
+      before: BEFORE,
+      after: AFTER,
       eager: true,
     });
     expect(html).toContain('loading="eager"');
