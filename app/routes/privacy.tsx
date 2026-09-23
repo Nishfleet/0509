@@ -1,4 +1,11 @@
+import type { Route } from "./+types/privacy";
+
 import { Footer } from "../components/footer";
+import {
+  breadcrumbJsonLd,
+  jsonLdGraph,
+  organizationJsonLd,
+} from "../lib/structured-data";
 
 function Section({
   heading,
@@ -60,6 +67,21 @@ const SECTIONS = [
     ],
   },
 ] as const;
+
+export function meta(_: Route.MetaArgs) {
+  return [
+    { title: "Privacy — Five to Nine" },
+    {
+      "script:ld+json": jsonLdGraph([
+        organizationJsonLd(),
+        breadcrumbJsonLd([
+          { name: "Five to Nine", path: "/" },
+          { name: "Privacy", path: "/privacy" },
+        ]),
+      ]),
+    },
+  ];
+}
 
 export default function Privacy() {
   return (

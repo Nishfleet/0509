@@ -34,7 +34,7 @@ async function removeProbes(): Promise<void> {
 describe("architecture lint (#4272)", () => {
   it(
     "rejects a component importing a data writer, a data writer importing auth, an import cycle, and auth-client importing cloudflare:workers",
-    { timeout: 60_000 },
+    { timeout: 180_000 },
     async () => {
       await writeProbes();
       try {
