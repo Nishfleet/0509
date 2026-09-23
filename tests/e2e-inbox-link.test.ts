@@ -107,6 +107,17 @@ describe("extractMagicLink", () => {
     expect(extractMagicLink("Subject: hello\n\nno link here")).toBeNull();
   });
 
+  it("reads a preview deployment host and rejects any other host", () => {
+    const preview =
+      "https://718ec890-0509.nishant345.workers.dev/api/auth/magic-link/verify?token=abc123&callbackURL=%2Fapp";
+    expect(extractMagicLink(`Sign in:\n\n${preview}`)).toBe(preview);
+    expect(
+      extractMagicLink(
+        "https://evil.example/api/auth/magic-link/verify?token=abc123&callbackURL=%2Fapp",
+      ),
+    ).toBeNull();
+  });
+
   it("reads the HTML href out of a multipart/alternative message", () => {
     expect(extractMagicLink(MULTIPART_QP)).toBe(EXPECTED);
   });

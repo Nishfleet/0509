@@ -165,12 +165,13 @@ jobs:
           echo "url=$URL" >> "$GITHUB_OUTPUT"
 
       - name: Run the e2e suite against the preview deployment
+        # Preview URLs are public. Access headers are for 0509.io. On run
+        # 35912553347 those headers made GET /login return 404, so this job
+        # does not send them. The inbox token stays: J1 reads the mail sink.
         run: npm run e2e
         env:
           PLAYWRIGHT_TEST_BASE_URL: ${{ steps.preview.outputs.url }}
           E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
-          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
 
       - name: Collect Lighthouse against the built Worker
         # Same budgets as the deployment_status lighthouse job, on the PR, so a

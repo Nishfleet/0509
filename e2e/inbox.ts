@@ -72,7 +72,10 @@ function decodedBodies(raw: string): string[] {
 }
 
 export function extractMagicLink(rawMessage: string): string | null {
-  const verifyUrl = /https:\/\/0509\.io\/api\/auth\/magic-link\/verify\?[^\s"'<>]+/;
+  // Production links use 0509.io. A Worker Preview builds the link on its
+  // deployment host, which is the only other host Better Auth allows.
+  const verifyUrl =
+    /https:\/\/(?:0509\.io|[a-z0-9-]+-0509\.nishant345\.workers\.dev)\/api\/auth\/magic-link\/verify\?[^\s"'<>]+/;
   for (const body of decodedBodies(rawMessage)) {
     const match = verifyUrl.exec(body);
     if (match) return match[0].replaceAll("&amp;", "&");
