@@ -153,10 +153,10 @@ export async function deliver(env: Env, message: DeliveryMessage): Promise<Deliv
     const email = render(digest, target.target_value);
     const result = await sendMessage(env.EMAIL, email);
     sent = result.outcome === "sent";
+    await resolveAttempt(env, claim.id, result.outcome, result.error);
     if (result.outcome === "sent") {
       const now = new Date().toISOString();
       await env.DB.batch([
-        env.DB.prepare("UPDATE send_attempt SET status = 'sent', error = NULL WHERE id = ?").bind(claim.id),
         env.DB.prepare("UPDATE digest SET status = 'sent', sent_at = ? WHERE id = ?").bind(now, digest.id),
         ...signalDeliveryStatements(
           env.DB,
@@ -167,8 +167,6 @@ export async function deliver(env: Env, message: DeliveryMessage): Promise<Deliv
           now,
         ),
       ]);
-    } else {
-      await resolveAttempt(env, claim.id, result.outcome, result.error);
     }
     return { outcome: result.outcome, attempt_id: claim.id, idempotency_key: idempotencyKey };
   } catch (cause) {
