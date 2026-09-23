@@ -36,11 +36,12 @@ function inboxHeaders(token: string): Record<string, string> {
   return headers;
 }
 
-// The app sends a text/plain body (app/lib/auth.server.ts), so there is no
-// MIME structure to parse. The only encoding that matters is quoted-printable,
-// applied only when the message's own Content-Transfer-Encoding says so —
-// decoding unconditionally would turn a plain body's literal `=` (`=3D`'s
-// honest form is the header's job) into hex escapes.
+// The app sends multipart/alternative (text and HTML); parts may be
+// quoted-printable or base64, and an HTML href escapes `&` as `&amp;`.
+// Quoted-printable is decoded only when the message's own
+// Content-Transfer-Encoding says so. Decoding unconditionally would turn a
+// plain body's literal `=` (`=3D`'s honest form is the header's job) into hex
+// escapes.
 function decodeQuotedPrintable(input: string): string {
   const stripped = input.replace(/=\r?\n/g, "");
   const bytes: number[] = [];
@@ -56,12 +57,27 @@ function decodeQuotedPrintable(input: string): string {
   return new TextDecoder().decode(new Uint8Array(bytes));
 }
 
+function decodedBodies(raw: string): string[] {
+  const quoted = /content-transfer-encoding:\s*quoted-printable/i.test(raw)
+    ? decodeQuotedPrintable(raw)
+    : raw;
+  const bodies = [quoted];
+  const base64Part = /content-transfer-encoding:\s*base64[^]*?\r?\n\r?\n([A-Za-z0-9+/=\r\n]+)/gi;
+  for (const match of raw.matchAll(base64Part)) {
+    const binary = atob(match[1].replace(/\s/g, ""));
+    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+    bodies.push(new TextDecoder().decode(bytes));
+  }
+  return bodies;
+}
+
 export function extractMagicLink(rawMessage: string): string | null {
-  const text = /content-transfer-encoding:\s*quoted-printable/i.test(rawMessage)
-    ? decodeQuotedPrintable(rawMessage)
-    : rawMessage;
-  const match = /https:\/\/0509\.io\/api\/auth\/magic-link\/verify\?[^\s"'<>]+/.exec(text);
-  return match ? match[0] : null;
+  const verifyUrl = /https:\/\/0509\.io\/api\/auth\/magic-link\/verify\?[^\s"'<>]+/;
+  for (const body of decodedBodies(rawMessage)) {
+    const match = verifyUrl.exec(body);
+    if (match) return match[0].replaceAll("&amp;", "&");
+  }
+  return null;
 }
 
 // One probe before polling: expect.poll retries a thrown callback for the
