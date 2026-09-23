@@ -3,6 +3,7 @@ import type { FeedData } from "@extractus/feed-extractor";
 import { z } from "zod";
 
 import { coMentions } from "../co-mentions";
+import { harvestHeadings } from "../roundup-article";
 import type { Candidate, Evidence, FetchText, Generator, Subject } from "../types";
 
 const SEARCH_URL = "https://news.google.com/rss/search?hl=en-GB&gl=GB&ceid=GB:en&q=";
@@ -19,9 +20,13 @@ const ENTRY_SCHEMA = z
   })
   .transform((entry) => ({
     title: entry.title,
+    link: entry.link ?? null,
     sourceUrl: entry.publisher ?? entry.link ?? "",
   }))
-  .refine((entry): entry is { title: string; sourceUrl: string } => entry.sourceUrl.length > 0);
+  .refine(
+    (entry): entry is { title: string; link: string | null; sourceUrl: string } =>
+      entry.sourceUrl.length > 0,
+  );
 
 type Entry = z.infer<typeof ENTRY_SCHEMA>;
 
@@ -48,6 +53,29 @@ function parseEntries(body: string): Entry[] {
   return parsed;
 }
 
+const ARTICLE_LIMIT = 5;
+
+type Merge = Map<string, { name: string; evidence: Evidence[] }>;
+
+function addCandidate(merged: Merge, name: string, evidence: Evidence): void {
+  const key = name.toLowerCase();
+  const existing = merged.get(key);
+  merged.set(key, {
+    name: existing === undefined ? name : existing.name,
+    evidence: existing === undefined ? [evidence] : [...existing.evidence, evidence],
+  });
+}
+
+function isGoogleNewsUrl(url: string): boolean {
+  let hostname: string;
+  try {
+    hostname = new URL(url).hostname;
+  } catch {
+    return true;
+  }
+  return hostname.endsWith("news.google.com");
+}
+
 const defaultFetchText: FetchText = async (url) => {
   try {
     const response = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
@@ -69,23 +97,48 @@ export const newsGenerator: Generator = async (subject: Subject, fetchText?: Fet
     queries.map((query) => fetchFn(SEARCH_URL + encodeURIComponent(query))),
   );
 
-  const merged = new Map<string, { name: string; evidence: Evidence[] }>();
+  const merged: Merge = new Map<string, { name: string; evidence: Evidence[] }>();
   for (const page of pages) {
     if (page.status !== "fulfilled") continue;
     if (!page.value.ok) continue;
 
     for (const entry of parseEntries(page.value.body)) {
       for (const name of coMentions(entry.title, subject.name)) {
-        const key = name.toLowerCase();
-        const item: Evidence = {
+        addCandidate(merged, name, {
           sourceUrl: entry.sourceUrl,
           excerpt: entry.title,
           generator: "news",
-        };
-        const existing = merged.get(key);
-        merged.set(key, {
-          name: existing === undefined ? name : existing.name,
-          evidence: existing === undefined ? [item] : [...existing.evidence, item],
+        });
+      }
+    }
+  }
+
+  const alternatives = pages[0];
+  if (alternatives?.status === "fulfilled" && alternatives.value.ok) {
+    const articles: { url: string; excerpt: string }[] = [];
+    for (const entry of parseEntries(alternatives.value.body)) {
+      if (entry.link === null) continue;
+      if (articles.length >= ARTICLE_LIMIT) break;
+      articles.push({ url: entry.link, excerpt: entry.title });
+    }
+
+    const responses = await Promise.allSettled(
+      articles.map((article) => fetchFn(article.url)),
+    );
+    for (const [index, response] of responses.entries()) {
+      if (response.status !== "fulfilled") continue;
+      const article = articles[index];
+      if (article === undefined) continue;
+      if (!response.value.ok) continue;
+      if (!(response.value.contentType ?? "").includes("html")) continue;
+      if (isGoogleNewsUrl(response.value.url)) continue;
+
+      const names = await harvestHeadings(response.value.body, subject.name);
+      for (const name of names) {
+        addCandidate(merged, name, {
+          sourceUrl: response.value.url,
+          excerpt: article.excerpt,
+          generator: "news",
         });
       }
     }
