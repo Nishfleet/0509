@@ -1,5 +1,9 @@
+import { useEffect } from "react";
+import { useSubmit } from "react-router";
+
 import type { Route } from "./+types/settings.card";
 
+import { toastSaved } from "../components/toaster";
 import { requireSession } from "../lib/require-session.server";
 import {
   publishCard,
@@ -36,31 +40,31 @@ function cardState(
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
-  if (workspaceId === null) return { card: EMPTY, hasWorkspace: false };
+  if (workspaceId === null) return { card: EMPTY, hasWorkspace: false, saved: null };
 
   const settings = await readCardSettings(workspaceId);
-  if (settings === null) return { card: EMPTY, hasWorkspace: true };
-  return { card: cardState(settings, null, null), hasWorkspace: true };
+  if (settings === null) return { card: EMPTY, hasWorkspace: true, saved: null };
+  return { card: cardState(settings, null, null), hasWorkspace: true, saved: null };
 }
 
 export async function action({ request }: Route.ActionArgs) {
   const session = await requireSession(request);
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
-  if (workspaceId === null) return { card: EMPTY, hasWorkspace: false };
+  if (workspaceId === null) return { card: EMPTY, hasWorkspace: false, saved: null };
 
   const form = await request.formData();
   const intent = form.get("intent");
 
   if (intent === "publish") {
     const settings = await publishCard(workspaceId);
-    if (settings === null) return { card: EMPTY, hasWorkspace: true };
-    return { card: cardState(settings, null, null), hasWorkspace: true };
+    if (settings === null) return { card: EMPTY, hasWorkspace: true, saved: null };
+    return { card: cardState(settings, null, null), hasWorkspace: true, saved: "publish" };
   }
 
   if (intent === "unpublish") {
     await unpublishCard(workspaceId);
     const settings = await readCardSettings(workspaceId);
-    return { card: cardState(settings ?? EMPTY, null, null), hasWorkspace: true };
+    return { card: cardState(settings ?? EMPTY, null, null), hasWorkspace: true, saved: "unpublish" };
   }
 
   if (intent === "rotate") {
@@ -72,14 +76,14 @@ export async function action({ request }: Route.ActionArgs) {
           ...cardState(settings ?? EMPTY, null, null),
           error: "A new URL could not be claimed. The old one still works.",
         },
-        hasWorkspace: true,
+        hasWorkspace: true, saved: null,
       };
     }
-    return { card: cardState({ published: true, slug }, slug, null), hasWorkspace: true };
+    return { card: cardState({ published: true, slug }, slug, null), hasWorkspace: true, saved: "rotate" };
   }
 
   const settings = await readCardSettings(workspaceId);
-  return { card: cardState(settings ?? EMPTY, null, null), hasWorkspace: true };
+  return { card: cardState(settings ?? EMPTY, null, null), hasWorkspace: true, saved: null };
 }
 
 function CopyButton({ url }: { url: string | null }) {
@@ -98,6 +102,19 @@ function CopyButton({ url }: { url: string | null }) {
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   const card = actionData?.card ?? loaderData.card;
+  const submit = useSubmit();
+
+  useEffect(() => {
+    const saved = actionData?.saved;
+    if (!saved) return;
+    const undo = saved === "publish" ? "unpublish" : saved === "unpublish" ? "publish" : undefined;
+    toastSaved(saved === "rotate" ? "New URL saved." : `Public card ${saved === "publish" ? "on" : "off"}.`,
+      undo === undefined ? undefined : () => {
+        const form = new FormData();
+        form.set("intent", undo);
+        void submit(form, { method: "post" });
+      });
+  }, [actionData, submit]);
 
   return (
     <main>

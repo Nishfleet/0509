@@ -250,6 +250,21 @@ export default tseslint.config(
   },
 
   {
+    files: ["app/components/toaster.tsx"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            ...ONE_PAVED_PATH_IMPORTS.filter((p) => p !== SONNER_IMPORT),
+            CLOUDFLARE_WORKERS_IMPORT,
+          ],
+        },
+      ],
+    },
+  },
+
+  {
     files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
     plugins: { boundaries, "import-x": importX },
     settings: {

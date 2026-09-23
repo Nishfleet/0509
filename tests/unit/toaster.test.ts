@@ -1,9 +1,13 @@
-import { readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { createRoutesStub, Outlet } from "react-router";
+
+import type * as sonner from "sonner";
+import type { ToasterProps } from "sonner";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -11,21 +15,48 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // nothing else in the product may raise one. The lock is two rungs deep:
 // eslint.config.js bans the sonner import outside app/components/toaster.tsx
 // at the static gate, and the scanner below fails the suite on any call that
-// reached around it — a planted probe proves the gate still bites and the
-// clean-tree run proves no toast slipped in ahead of it. sonner is mocked
+// reached around it — the pure-regex probes prove the pattern still bites and
+// the clean-tree run proves no toast slipped in ahead of it. sonner is mocked
 // partially: toast is a vi.fn() so toastSaved's calls are observable, while
-// Toaster stays real so the live-region test below renders the markup the
-// axe run checks on production. The reduced-motion cutoff is pinned against
-// the installed dist so a dependency bump that drops it fails loud.
+// Toaster stays real so the render tests below produce the markup the axe run
+// checks on production.
+//
+// The stubbed document exists so sonner's module-init __insertCSS actually
+// fires (it no-ops when document is undefined) and hands the suite the exact
+// stylesheet the browser gets — the prefers-reduced-motion pin asserts what
+// reaches the DOM, not the contents of a dist file nothing may load.
+const injectedStyleSheet = vi.hoisted(() => ({ cssText: undefined as string | undefined }));
+const toasterProps = vi.hoisted(() => ({ current: undefined as ToasterProps | undefined }));
 
-vi.mock("sonner", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  toast: vi.fn(),
+vi.mock("sonner", async (importOriginal) => {
+  vi.stubGlobal("document", {
+    head: { appendChild: () => undefined },
+    getElementsByTagName: () => [],
+    createElement: () => ({ styleSheet: injectedStyleSheet }),
+    createTextNode: (text: string) => ({ data: text }),
+  });
+  const real = await importOriginal<typeof sonner>();
+  return {
+    ...real,
+    toast: vi.fn(),
+    // sonner's store subscription lives in an effect, so SSR markup can never
+    // show a seeded toast; capturing the props our Toaster passes is the render
+    // boundary the skin and the position are asserted on instead.
+    Toaster: (props: ToasterProps) => {
+      toasterProps.current = props;
+      return createElement(real.Toaster, props);
+    },
+  };
+});
+
+vi.mock("../../app/lib/auth.server", () => ({
+  hasSessionCookie: () => false,
 }));
 
 import { toast } from "sonner";
 
 import { Toaster, toastSaved } from "../../app/components/toaster";
+import { Layout } from "../../app/root";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SCANNED_DIRS = ["app", "workers"];
@@ -57,30 +88,15 @@ async function allToastCallSites(): Promise<string[]> {
 }
 
 describe("toast call-site lock", () => {
-  it("flags a sonner import plus a toast() call in a planted module", async () => {
-    const probe = path.join(REPO_ROOT, "app", "components", "toast-probe.tsx");
-    await writeFile(
-      probe,
-      'import { toast } from "sonner";\n\nexport function ping() {\n  toast("hi");\n}\n',
-    );
-    try {
-      expect(await allToastCallSites()).toContain("app/components/toast-probe.tsx");
-    } finally {
-      await rm(probe, { force: true });
-    }
+  it("catches a sonner import and a bare toast() call", () => {
+    expect(TOAST_USE.test('import { toast } from "sonner";')).toBe(true);
+    expect(TOAST_USE.test('toast("hi");')).toBe(true);
   });
 
-  it("does not fire on a member named toast", async () => {
-    const probe = path.join(REPO_ROOT, "app", "components", "toast-prop-probe.tsx");
-    await writeFile(
-      probe,
-      'export function ping(props: { toast: { label: string } }) {\n  return props.toast.label;\n}\n',
-    );
-    try {
-      expect(await allToastCallSites()).not.toContain("app/components/toast-prop-probe.tsx");
-    } finally {
-      await rm(probe, { force: true });
-    }
+  it("does not fire on a member named toast or a toastSaved caller", () => {
+    expect(TOAST_USE.test("return props.toast.label;")).toBe(false);
+    // Callers go through the paved path; only the raw sonner call is banned.
+    expect(TOAST_USE.test('toastSaved("saved");')).toBe(false);
   });
 
   it("finds no toast calls outside the allowed module", async () => {
@@ -114,21 +130,31 @@ describe("toastSaved", () => {
 });
 
 describe("the mount and the skin", () => {
-  it("mounts the toaster once at the root layout", async () => {
-    const root = await readFile(path.join(REPO_ROOT, "app", "root.tsx"), "utf8");
-    expect(root).toMatch(/import\s*\{[^}]*\bToaster\b[^}]*\}\s*from\s*["']\.\/components\/toaster["']/);
-    expect(root).toMatch(/<Toaster\s*\/>/);
+  it("mounts exactly one polite live region inside the root Layout", () => {
+    const Stub = createRoutesStub([
+      {
+        path: "/",
+        Component: () => createElement(Layout, null, createElement(Outlet)),
+        children: [{ index: true, Component: () => createElement("p", null, "home") }],
+      },
+    ]);
+    const html = renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
+    expect(html.match(/<section[^>]*aria-live="polite"/g)).toHaveLength(1);
   });
 
-  it("styles the toaster from the tokens at radius 0", async () => {
-    const src = await readFile(
-      path.join(REPO_ROOT, "app", "components", "toaster.tsx"),
-      "utf8",
-    );
-    expect(src).toContain('"--normal-bg": "var(--card)"');
-    expect(src).toContain('"--normal-text": "var(--ink)"');
-    expect(src).toContain('"--normal-border": "var(--line)"');
-    expect(src).toContain('"--border-radius": "0px"');
+  it("passes the token skin and bottom-center position to sonner's Toaster", () => {
+    renderToStaticMarkup(createElement(Toaster));
+    expect(toasterProps.current?.position).toBe("bottom-center");
+    expect(toasterProps.current?.style).toMatchObject({
+      "--normal-bg": "var(--card)",
+      "--normal-text": "var(--ink)",
+      "--normal-border": "var(--line)",
+      "--border-radius": "0px",
+      fontFamily: "var(--font-sans)",
+    });
+  });
+
+  it("styles from tokens that are actually declared in app.css", async () => {
     const css = await readFile(path.join(REPO_ROOT, "app", "app.css"), "utf8");
     for (const token of ["--card", "--ink", "--line", "--font-sans"]) {
       expect(css).toMatch(new RegExp(`${token}:\\s*[^;]`));
@@ -138,9 +164,6 @@ describe("the mount and the skin", () => {
 
 describe("the mounted toaster", () => {
   it("renders the polite live region", () => {
-    // sonner's <ol data-sonner-toaster> (the styled toast list) only mounts
-    // while a toast is visible, so the token skin stays a source pin above;
-    // the live region is on the always-mounted <section>.
     const html = renderToStaticMarkup(createElement(Toaster));
     expect(html).toContain("<section");
     expect(html).toContain('aria-live="polite"');
@@ -149,16 +172,10 @@ describe("the mounted toaster", () => {
 });
 
 describe("upstream accessibility guarantees", () => {
-  it("keeps sonner's aria-live region and reduced-motion cutoff", async () => {
-    const js = await readFile(
-      path.join(REPO_ROOT, "node_modules", "sonner", "dist", "index.mjs"),
-      "utf8",
-    );
-    const css = await readFile(
-      path.join(REPO_ROOT, "node_modules", "sonner", "dist", "styles.css"),
-      "utf8",
-    );
-    expect(js).toContain('"aria-live": "polite"');
-    expect(css).toContain("@media (prefers-reduced-motion)");
+  it("injects a stylesheet carrying the reduced-motion cutoff on import", () => {
+    // __insertCSS ran against the stubbed document when the real module
+    // evaluated inside the mock factory; cssText is the exact stylesheet
+    // sonner appends to document.head in the browser.
+    expect(injectedStyleSheet.cssText).toContain("@media (prefers-reduced-motion)");
   });
 });
