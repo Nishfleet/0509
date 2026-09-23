@@ -1113,6 +1113,7 @@ The version in this table is the `package.json` specifier. An earlier section of
 | `vite` | ^8.0.3 | §1.1 | Dev server and bundler the scaffold wires | webpack | 8.3.0 |
 | `vitest` | 4.1.11 | §6.1 | Unit tests. Exact pin. The `overrides` block pins `@vitest/*` to the same version | vitest 5. The Workers plugin does not support it | 4.1.11 |
 | `wrangler` | ^4.135.0 | §1.3 | `wrangler types` and `wrangler deploy` | `@cloudflare/workers-types`. It fights the generated `Env` | 4.135.0 |
+| `chrome-devtools-mcp` | 1.9.0 | `.agents/skills/verify/SKILL.md` | Google's stock `chrome-devtools` CLI. Agents drive the running app and collect snapshots, traces and heap snapshots | A script under `scripts/`, `bin/` or `tools/`, and a second browser driver beside Playwright | 1.9.0 |
 
 ## Open items for Nish or Fable
 
