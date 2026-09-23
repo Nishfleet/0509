@@ -164,6 +164,9 @@ jobs:
     if: github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -173,10 +176,11 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Run the same suite against what was just deployed
-        run: npm run e2e
+        run: npm run e2e -- --reporter=github,json
         env:
           # Setting this switches playwright.config.ts out of webServer mode.
           PLAYWRIGHT_TEST_BASE_URL: ${{ github.event.deployment_status.environment_url }}
+          PLAYWRIGHT_JSON_OUTPUT_FILE: playwright-report/results.json
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           # J1/J2 read the e2e inbox Worker through this token (0509#3927).
@@ -191,6 +195,20 @@ jobs:
           name: playwright-report-production
           path: playwright-report/
           retention-days: 7
+      - name: Open or update the issue that dispatches the fix
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.deployment.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          TITLE="e2e-production red on ${SHA::7}"
+          FAILED=$(jq -r '.. | objects | select(has("specs")) | .specs[] | select(.ok == false) | "- `\(.file)`: \(.title)"' playwright-report/results.json || echo "- no results.json: the job failed before the suite ran")
+          FILES=$(jq -r '[.. | objects | select(has("specs")) | .specs[] | select(.ok == false) | .file] | unique | .[]' playwright-report/results.json || true)
+          ROWS=$(printf '%s\n' "$FILES" | grep -v '^$' | grep -F -f - .agents/skills/verify/feature-map.md | cut -d'|' -f2 || true)
+          BODY=$(printf 'Run: %s\nHead: %s\nArtifact: playwright-report-production on that run\n\nFailing tests:\n%s\n\nFeature-map rows (.agents/skills/verify/feature-map.md):\n%s\n\nPacket rule: reproduce the failure with the verify skill (.agents/skills/verify/) against https://0509.io before changing code, and paste that run in the PR.\n' "$RUN_URL" "$SHA" "$FAILED" "$ROWS")
+          N=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$N" ]; then gh issue comment "$N" --repo "$GITHUB_REPOSITORY" --body "$BODY"; else gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --label needs-split --label critical-path --body "$BODY"; fi
 
   lighthouse:
     name: lighthouse
