@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { Form, redirect, useRevalidator } from "react-router";
 
 import { readOnboardingCompetitors } from "../lib/data/entity.server";
+import { acceptSuggestion } from "../lib/data/suggestion.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { requireSession } from "../lib/require-session.server";
 
@@ -15,7 +16,17 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export async function action({ request }: Route.ActionArgs) {
-  await requireSession(request);
+  const session = await requireSession(request);
+  const form = await request.formData();
+  if (form.get("intent") === "accept") {
+    const suggestionId = form.get("suggestionId");
+    if (typeof suggestionId === "string" && suggestionId !== "") {
+      const workspaceId = await readWorkspaceIdForOwner(session.user.id);
+      if (workspaceId === null) throw redirect("/onboarding");
+      await acceptSuggestion({ workspaceId, suggestionId, now: new Date().toISOString() });
+      return null;
+    }
+  }
   throw redirect("/app");
 }
 
@@ -61,12 +72,24 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                     {maybe.p === null ? "" : ` ${String(Math.round(maybe.p * 100))}%`}
                   </p>
                 )}
+                <Form method="post">
+                  <input type="hidden" name="intent" value="accept" />
+                  <input type="hidden" name="suggestionId" value={maybe.suggestionId} />
+                  <button
+                    type="submit"
+                    aria-label={"Watch " + maybe.name}
+                    className="border-line text-ink-soft mt-1 border px-2 py-1 text-sm"
+                  >
+                    Watch
+                  </button>
+                </Form>
               </li>
             ))}
           </ul>
         </>
       ) : null}
       <Form method="post">
+        <input type="hidden" name="intent" value="start" />
         <button type="submit">Start watching — €10/mo</button>
       </Form>
     </main>
