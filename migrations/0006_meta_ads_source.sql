@@ -1,4 +1,4 @@
--- 0003_meta_ads_source.sql — the Meta ads source row (#3974).
+-- 0006_meta_ads_source.sql — the Meta ads source row (#3974).
 --
 -- Issue #3974 / engine issue #3891, packet P2 of docs/engines/ads.md.
 -- One source row. Not a schema change: a platform is an INSERT, and

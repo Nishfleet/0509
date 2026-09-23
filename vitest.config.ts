@@ -18,7 +18,7 @@ export default defineConfig({
           name: "node",
           environment: "node",
           include: ["tests/**/*.test.ts"],
-          exclude: ["tests/integration/**", "tests/unit/site/**"],
+          exclude: ["tests/integration/**", "tests/unit/site/**", "tests/unit/ads/meta.test.ts"],
         },
       },
       {
@@ -42,6 +42,9 @@ export default defineConfig({
             // .integration infix; it still needs real workerd + real D1.
             "tests/integration/migration-rollback.test.ts",
             "tests/unit/site/**/*.test.ts",
+            // #3974: mapMeta reads the Ad Library page with HTMLRewriter, so
+            // it runs where the workerd global exists, not under a Node shim.
+            "tests/unit/ads/meta.test.ts",
           ],
           setupFiles: ["./tests/integration/apply-migrations.ts"],
           testTimeout: 30_000,

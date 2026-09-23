@@ -51,6 +51,16 @@ const ONE_PAVED_PATH_IMPORTS = [
   SONNER_IMPORT,
 ];
 
+// Not a paved path — a dependency the stack review rejected outright. Nothing in
+// this repo may import it, tests included.
+const REJECTED_IMPORTS = [
+  {
+    name: "htmlrewriter",
+    message:
+      'HTMLRewriter is the workerd platform primitive (docs/REBUILD-STACK.md §5.1): the runtime global, typed by worker-configuration.d.ts, is the one implementation. A Node shim package does worse what the runtime already does; run code that needs it in the workers vitest project instead. Source: 0509#3974 review — devDependencies carried htmlrewriter@0.0.13, which docs/REBUILD-STACK.md does not name.',
+  },
+];
+
 const SUPPORT_ADDRESS_BAN = {
   selector:
     "Literal[value='support@0509.io'], TemplateLiteral[quasis.0.value.raw='support@0509.io'], JSXText[value=/support@0509\\.io/], Literal[value='mailto:support@0509.io']",
@@ -245,7 +255,7 @@ export default tseslint.config(
     rules: {
       "no-restricted-imports": [
         "error",
-        { paths: ONE_PAVED_PATH_IMPORTS, patterns: PAVED_PATH_PATTERNS },
+        { paths: [...ONE_PAVED_PATH_IMPORTS, ...REJECTED_IMPORTS], patterns: PAVED_PATH_PATTERNS },
       ],
     },
   },
@@ -264,7 +274,7 @@ export default tseslint.config(
       "no-restricted-imports": [
         "error",
         {
-          paths: [...ONE_PAVED_PATH_IMPORTS, CLOUDFLARE_WORKERS_IMPORT],
+          paths: [...ONE_PAVED_PATH_IMPORTS, ...REJECTED_IMPORTS, CLOUDFLARE_WORKERS_IMPORT],
           patterns: PAVED_PATH_PATTERNS,
         },
       ],
@@ -277,7 +287,7 @@ export default tseslint.config(
       "no-restricted-imports": [
         "error",
         {
-          paths: [...ONE_PAVED_PATH_IMPORTS, CLOUDFLARE_WORKERS_IMPORT],
+          paths: [...ONE_PAVED_PATH_IMPORTS, ...REJECTED_IMPORTS, CLOUDFLARE_WORKERS_IMPORT],
         },
       ],
     },
@@ -291,10 +301,20 @@ export default tseslint.config(
         {
           paths: [
             ...ONE_PAVED_PATH_IMPORTS.filter((p) => p !== SONNER_IMPORT),
+            ...REJECTED_IMPORTS,
             CLOUDFLARE_WORKERS_IMPORT,
           ],
         },
       ],
+    },
+  },
+
+  {
+    // The same rejected dependency outside app/ and workers/. The shim shape
+    // used to live in a test file (0509#3974), so the gate must see tests too.
+    files: ["tests/**/*.ts", "e2e/**/*.ts", "vite.config.ts", "vitest.config.ts"],
+    rules: {
+      "no-restricted-imports": ["error", { paths: REJECTED_IMPORTS }],
     },
   },
 

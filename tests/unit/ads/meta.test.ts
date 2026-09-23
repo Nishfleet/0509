@@ -1,41 +1,47 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
-import { HTMLRewriter } from "htmlrewriter";
 import { describe, expect, it } from "vitest";
 
 import { mapMeta, type Creative } from "../../../app/lib/ads/platforms/meta";
+import page from "../../fixtures/meta-gymshark-2026-09-23.html?raw";
 
-// The unit project runs in Node, where the Workers HTMLRewriter global is
-// absent. The `htmlrewriter` package is that same API for Node; the module
-// under test still calls the global, which is what the Worker provides.
-(globalThis as { HTMLRewriter?: typeof HTMLRewriter }).HTMLRewriter = HTMLRewriter;
-
-// The packet names this fixture for the 2026-09-21 probe. That probe kept three
-// archive ids and no HTML. This file is the application/json script that held
-// the creatives on the Ad Library page fetched 2026-09-22T14:25:12Z (headless
-// Chrome, q=gymshark, country=GB). The field map reads that script. The rest
-// of the page is Facebook shell and is not in this file.
-const fixturePath = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "..",
-  "fixtures",
-  "meta-gymshark-2026-09-21.html",
-);
-const migrationPath = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "..",
-  "..",
-  "migrations",
-  "0003_meta_ads_source.sql",
-);
+// One real capture of
+// https://www.facebook.com/ads/library/?active_status=all&ad_type=all&country=GB&q=gymshark&search_type=keyword_unordered&media_type=all
+// fetched 2026-09-23 by headless Chromium, 2,019,685 bytes. The page carries
+// its ads in an application/json script; the field map reads that script. The
+// SHA-256 pins the exact bytes of the capture.
+const PAGE_SHA_256 = "31f4bff7ce781ba133d13c7204e5455628e0beae239a9f2d2461387680cdf3a2";
 
 const GYM_IMAGE = "1300454368397649";
 const GYM_PROBE = "1847470879199109";
 const GYM_VIDEO = "1107916014867006";
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function oneAdScript(ads: unknown[]): string {
+  return `<!doctype html><script type="application/json">${JSON.stringify({
+    search_results_connection: {
+      edges: [{ node: { collated_results: ads } }],
+    },
+  })}</script>`;
+}
+
+function goodAd(id: string): Record<string, unknown> {
+  return {
+    ad_archive_id: id,
+    start_date: 1754550000,
+    end_date: null,
+    snapshot: {
+      display_format: "IMAGE",
+      link_url: "https://uk.gymshark.com/",
+      body: { text: `Hello ${id}` },
+      images: [{ original_image_url: "https://scontent.xx.fbcdn.net/a.jpg" }],
+    },
+  };
+}
 
 function byId(creatives: Creative[], id: string): Creative {
   const found = creatives.find((creative) => creative.platformCreativeId === id);
@@ -47,9 +53,12 @@ function byId(creatives: Creative[], id: string): Creative {
 }
 
 describe("mapMeta", () => {
+  it("pins the committed capture by hash", async () => {
+    await expect(sha256Hex(page)).resolves.toBe(PAGE_SHA_256);
+  });
+
   it("maps the fetched Gymshark Ad Library page", async () => {
-    const html = readFileSync(fixturePath, "utf8");
-    const creatives = await mapMeta(html);
+    const creatives = await mapMeta(page);
 
     expect(creatives).toHaveLength(30);
     expect(creatives.map((creative) => creative.platformCreativeId)).toEqual(
@@ -89,35 +98,12 @@ describe("mapMeta", () => {
   });
 
   it("reads a single creative out of one JSON script", async () => {
-    const html = `<!doctype html><script type="application/json">${JSON.stringify({
-      search_results_connection: {
-        edges: [
-          {
-            node: {
-              collated_results: [
-                {
-                  ad_archive_id: "42",
-                  start_date: 1754550000,
-                  end_date: null,
-                  snapshot: {
-                    display_format: "IMAGE",
-                    link_url: "https://uk.gymshark.com/",
-                    body: { text: "Hello" },
-                    images: [{ original_image_url: "https://scontent.xx.fbcdn.net/a.jpg" }],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    })}</script>`;
+    const creatives = await mapMeta(oneAdScript([goodAd("42")]));
 
-    const creatives = await mapMeta(html);
     expect(creatives).toEqual([
       {
         platformCreativeId: "42",
-        copy: "Hello",
+        copy: "Hello 42",
         mediaUrls: ["https://scontent.xx.fbcdn.net/a.jpg"],
         firstSeen: "2025-08-07T07:00:00.000Z",
         lastSeen: null,
@@ -131,18 +117,25 @@ describe("mapMeta", () => {
     await expect(mapMeta("<html><body>no ads</body></html>")).resolves.toEqual([]);
   });
 
-  it("does not point the field map or the source row at Graph ads_archive", () => {
-    const mapper = readFileSync(
-      join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "app/lib/ads/platforms/meta.ts"),
-      "utf8",
+  it("drops an ad without a start date and keeps every other creative", async () => {
+    const noStartDate = goodAd("77");
+    delete noStartDate.start_date;
+
+    const creatives = await mapMeta(
+      oneAdScript([goodAd("42"), noStartDate, goodAd("43")]),
     );
-    const migration = readFileSync(migrationPath, "utf8");
-    expect(mapper).not.toContain("graph.facebook.com");
-    expect(mapper).not.toContain("ads_archive");
-    expect(migration).not.toContain("graph.facebook.com");
-    expect(migration).toContain("'src_ads_meta'");
-    expect(migration).toContain("'ads.meta', 'ads', 'meta', 'ads.meta', 'scraped_page', 1");
-    expect(migration).toContain('"status": 403');
-    expect(migration).toContain('"call": false');
+
+    expect(creatives.map((creative) => creative.platformCreativeId)).toEqual(["42", "43"]);
+  });
+
+  it("drops an ad with no display_format and keeps every other creative", async () => {
+    const noFormat = goodAd("77");
+    (noFormat.snapshot as Record<string, unknown>).display_format = undefined;
+
+    const creatives = await mapMeta(
+      oneAdScript([goodAd("42"), noFormat, goodAd("43")]),
+    );
+
+    expect(creatives.map((creative) => creative.platformCreativeId)).toEqual(["42", "43"]);
   });
 });

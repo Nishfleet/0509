@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 /**
  * The Meta ads source row (#3974), read back from real D1 after the real
- * migrations run. The write is the INSERT in migrations/0003_meta_ads_source.sql.
+ * migrations run. The write is the INSERT in migrations/0006_meta_ads_source.sql.
  * There is no second writer: persisting creatives is a later packet.
  */
 

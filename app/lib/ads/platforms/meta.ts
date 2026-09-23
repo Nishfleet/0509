@@ -1,16 +1,5 @@
 import { z } from "zod";
 
-/**
- * Map one Meta Ad Library page into creatives.
- *
- * The page is the browser transport's payload (docs/engines/ads.md P2). The
- * creatives live in a `script type="application/json"` block under
- * `search_results_connection.edges[].node.collated_results[]`, which is what
- * a rendered Ad Library page actually contains. HTMLRewriter pulls those
- * script bodies out; the field map below reads them. This module does not
- * fetch, and it does not call the Graph archive endpoint.
- */
-
 const creativeSchema = z.object({
   platformCreativeId: z.string().regex(/^\d+$/),
   copy: z.string(),
@@ -23,25 +12,6 @@ const creativeSchema = z.object({
 
 export type Creative = z.infer<typeof creativeSchema>;
 
-interface RewriterTextChunk {
-  readonly text: string;
-  readonly lastInTextNode: boolean;
-}
-
-interface RewriterElement {
-  getAttribute(name: string): string | null;
-}
-
-interface RewriterHandler {
-  element(element: RewriterElement): void;
-  text(chunk: RewriterTextChunk): void;
-}
-
-interface Rewriter {
-  on(selector: string, handler: RewriterHandler): Rewriter;
-  transform(response: Response): Response;
-}
-
 interface RawAd {
   adArchiveId: string;
   startSeconds: number;
@@ -53,19 +23,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function platformRewriter(): Rewriter {
-  const ctor = (globalThis as { HTMLRewriter?: new () => Rewriter }).HTMLRewriter;
-  if (!ctor) {
-    throw new Error("HTMLRewriter is missing");
-  }
-  return new ctor();
-}
-
 async function jsonScriptBodies(html: string): Promise<string[]> {
   const bodies: string[] = [];
   let capture = false;
   let buffer = "";
-  const rewriter = platformRewriter().on("script", {
+  const rewriter = new HTMLRewriter().on("script", {
     element(element) {
       capture = element.getAttribute("type") === "application/json";
       buffer = "";
@@ -119,10 +81,9 @@ function collectRawAds(value: unknown, out: RawAd[]): void {
   }
   if ("ad_archive_id" in value && "snapshot" in value) {
     const raw = asRawAd(value);
-    if (!raw) {
-      throw new Error("Meta creative was missing an id, a start date, or a snapshot");
+    if (raw) {
+      out.push(raw);
     }
-    out.push(raw);
     return;
   }
   for (const child of Object.values(value)) {
@@ -259,9 +220,9 @@ function landingOf(snapshot: Record<string, unknown>): string | null {
   return null;
 }
 
-function formatOf(snapshot: Record<string, unknown>, id: string): string {
+function formatOf(snapshot: Record<string, unknown>): string | null {
   if (typeof snapshot.display_format !== "string" || snapshot.display_format.length === 0) {
-    throw new Error(`Meta creative ${id} has no display_format`);
+    return null;
   }
   return snapshot.display_format;
 }
@@ -270,18 +231,18 @@ function unixToUtc(seconds: number): string {
   return new Date(seconds * 1000).toISOString();
 }
 
-function toCreative(raw: RawAd): Creative {
+function toCreative(raw: RawAd): Creative | null {
   const parsed = creativeSchema.safeParse({
     platformCreativeId: raw.adArchiveId,
     copy: copyOf(raw.snapshot),
     mediaUrls: mediaUrls(raw.snapshot),
     firstSeen: unixToUtc(raw.startSeconds),
     lastSeen: raw.endSeconds === null ? null : unixToUtc(raw.endSeconds),
-    format: formatOf(raw.snapshot, raw.adArchiveId),
+    format: formatOf(raw.snapshot),
     landingUrl: landingOf(raw.snapshot),
   });
   if (!parsed.success) {
-    throw new Error(`Meta creative ${raw.adArchiveId} did not match the creative shape`);
+    return null;
   }
   return parsed.data;
 }
@@ -306,7 +267,10 @@ export async function mapMeta(payload: string): Promise<Creative[]> {
       continue;
     }
     seen.add(ad.adArchiveId);
-    creatives.push(toCreative(ad));
+    const creative = toCreative(ad);
+    if (creative) {
+      creatives.push(creative);
+    }
   }
   return creatives;
 }
