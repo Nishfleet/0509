@@ -547,7 +547,8 @@ One real caveat from those docs: *text chunks are not text nodes.* A single node
 
 ### 5.2 Text change diff
 
-**Not yet installed.** The change-diff engine has not shipped.
+**Installed: `diff` 9.0.0** (0509#4001, the word diff and the before-and-after mark). The
+change-diff engine has shipped; the judgement and sweep legs are the rest of #3879.
 
 **Recommendation: `diff` (jsdiff) 9.0.0 — 8.3 KB gzip full export (bundlejs), 0 dependencies.**
 

@@ -125,20 +125,18 @@ export function buildStoredHunks(before: string, after: string, context = 2): St
 }
 
 export interface PageDiffInput {
-  prevHash: string;
-  nextHash: string;
   beforeText: string;
   afterText: string;
   context?: number;
 }
 
 export function buildPageDiff(input: PageDiffInput): PageDiff {
-  const { prevHash, nextHash, beforeText, afterText, context = 2 } = input;
+  const { beforeText, afterText, context = 2 } = input;
 
-  if (prevHash.length === 0 || nextHash.length === 0 || prevHash === nextHash) {
+  if (beforeText.length === 0 || afterText.length === 0 || beforeText === afterText) {
     throw new Error(
-      "hash gate has not fired: refusing to diff unchanged payloads " +
-        "(a Workflow step that reaches this needs to write its snapshot row and stop)",
+      "nothing to diff: the two payloads are the same text, which is the unchanged tick " +
+        "the sweep writes as one snapshot row and stops on",
     );
   }
 

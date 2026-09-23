@@ -2,7 +2,7 @@ import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { buildPageDiff } from "../../../app/lib/site/diff";
-import { extractPageText } from "../../../app/lib/site/extract-text";
+import { extractPageText, hasChanged } from "../../../app/lib/site/extract-text";
 import { markKey, storeMark } from "../../../app/lib/site/marks";
 import worker from "../../../workers/fixture-site";
 
@@ -72,14 +72,10 @@ describe("engine 4 P3 — a real change, end to end", () => {
     // P3 refuses to build a mark when there is nothing to diff against. The
     // gate's real consequence is asserted so it can fail: a gate that fired
     // would write five keys to the bucket.
+    expect(hasChanged(first.hash, second.hash)).toBe(false);
     expect(() =>
-      buildPageDiff({
-        prevHash: first.hash,
-        nextHash: second.hash,
-        beforeText: first.text,
-        afterText: second.text,
-      }),
-    ).toThrow(/hash gate has not fired/);
+      buildPageDiff({ beforeText: first.text, afterText: second.text }),
+    ).toThrow(/nothing to diff/);
 
     await expect(
       storeMark(
@@ -111,12 +107,8 @@ describe("engine 4 P3 — a real change, end to end", () => {
     expect(after.text).not.toContain("₹499");
     expect(before.hash).not.toBe(after.hash);
 
-    const diff = buildPageDiff({
-      prevHash: before.hash,
-      nextHash: after.hash,
-      beforeText: before.text,
-      afterText: after.text,
-    });
+    expect(hasChanged(before.hash, after.hash)).toBe(true);
+    const diff = buildPageDiff({ beforeText: before.text, afterText: after.text });
 
     const removed = diff.hunks
       .flatMap((h) => h.lines.filter((l) => l.startsWith("-")))
@@ -143,26 +135,18 @@ describe("engine 4 P3 — a real change, end to end", () => {
     expect(repaired.hash).toBe(healthy.hash);
     expect(broken.hash).not.toBe(repaired.hash);
     // A healthy page reaches the gate with two identical hashes: no diff.
+    expect(hasChanged(healthy.hash, repaired.hash)).toBe(false);
     expect(() =>
-      buildPageDiff({
-        prevHash: healthy.hash,
-        nextHash: repaired.hash,
-        beforeText: healthy.text,
-        afterText: repaired.text,
-      }),
-    ).toThrow(/hash gate has not fired/);
+      buildPageDiff({ beforeText: healthy.text, afterText: repaired.text }),
+    ).toThrow(/nothing to diff/);
   });
 
   it("the mark is written as R2 keys — bytes as bytes, never base64 in a row", async () => {
     const before = await extractPageText(await (await getHome()).text());
     await flip("soft");
     const after = await extractPageText(await (await getHome()).text());
-    const diff = buildPageDiff({
-      prevHash: before.hash,
-      nextHash: after.hash,
-      beforeText: before.text,
-      afterText: after.text,
-    });
+    expect(hasChanged(before.hash, after.hash)).toBe(true);
+    const diff = buildPageDiff({ beforeText: before.text, afterText: after.text });
 
     for (const hunk of diff.hunks) {
       const firstRemoved = hunk.lines.find((l) => l.startsWith("-"));

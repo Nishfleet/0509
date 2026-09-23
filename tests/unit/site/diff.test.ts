@@ -2,7 +2,7 @@ import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
 import { buildPageDiff, buildStoredHunks, diffWordsPositioned } from "../../../app/lib/site/diff";
-import { extractPageText } from "../../../app/lib/site/extract-text";
+import { extractPageText, hasChanged } from "../../../app/lib/site/extract-text";
 import { markKey, markKeys, storeMark } from "../../../app/lib/site/marks";
 
 /**
@@ -13,9 +13,12 @@ import { markKey, markKeys, storeMark } from "../../../app/lib/site/marks";
  * (0509-fixture-site, 0509#4046, `workers/fixture-site.ts`): the healthy page
  * and its `soft` break, which is "200 with the pricing section gone". The
  * extracted strings are committed here rather than fetched, because what this
- * file proves is that the *diff layer* is correct — hash gate, word
- * granularity, page positions, hunk bounds, and the R2-key-only mark —
- * independent of how the strings got there.
+ * file proves is that the *diff layer* is correct — word granularity, page
+ * positions, hunk bounds, and the R2-key-only mark — independent of how the
+ * strings got there. The hash gate itself is P1's `hasChanged`
+ * (`app/lib/site/extract-text.ts`), which the sweep calls before it ever
+ * reaches this module; `buildPageDiff` refuses the one thing that means the
+ * gate did not fire, which is two identical texts.
  *
  * It runs in real workerd (vitest.config.ts, the `workers` project), so both
  * the hash and the R2 bucket are the real platform surfaces rather than a
@@ -53,26 +56,16 @@ const keysFor = (watchId: string, capturedAt: string) => ({
   hunksKey: markKey(watchId, capturedAt, "hunks", "json"),
 });
 
-describe("site diff — the hash gate", () => {
-  it("refuses to diff while the two hashes are equal", () => {
+describe("site diff — an unchanged tick is never diffed", () => {
+  it("refuses two identical texts, which is the unchanged tick", () => {
     expect(() =>
-      buildPageDiff({
-        prevHash: "same",
-        nextHash: "same",
-        beforeText: HEALTHY_TEXT,
-        afterText: HEALTHY_TEXT,
-      }),
-    ).toThrow(/hash gate has not fired/);
+      buildPageDiff({ beforeText: HEALTHY_TEXT, afterText: HEALTHY_TEXT }),
+    ).toThrow(/nothing to diff/);
   });
 
-  it("treats a first-seen page as having nothing to diff against", () => {
-    // No previous snapshot: not a change, a new page. The sweep still writes
-    // its snapshot row; what P3 refuses is the diff, because there is nothing
-    // to diff against.
-    for (const [prevHash, nextHash] of [["", "abc123"], ["abc123", ""]] as const) {
-      expect(() =>
-        buildPageDiff({ prevHash, nextHash, beforeText: HEALTHY_TEXT, afterText: SOFT_TEXT }),
-      ).toThrow(/hash gate has not fired/);
+  it("refuses an absent text, which is a page that never extracted", () => {
+    for (const [beforeText, afterText] of [["", SOFT_TEXT], [HEALTHY_TEXT, ""]] as const) {
+      expect(() => buildPageDiff({ beforeText, afterText })).toThrow(/nothing to diff/);
     }
   });
 
@@ -86,15 +79,11 @@ describe("site diff — the hash gate", () => {
     const prevHash = await textHash(HEALTHY_TEXT);
     const nextHash = await textHash(HEALTHY_TEXT_AGAIN);
     expect(prevHash).toBe(nextHash);
+    expect(hasChanged(prevHash, nextHash)).toBe(false);
 
     expect(() =>
-      buildPageDiff({
-        prevHash,
-        nextHash,
-        beforeText: HEALTHY_TEXT,
-        afterText: HEALTHY_TEXT_AGAIN,
-      }),
-    ).toThrow(/hash gate has not fired/);
+      buildPageDiff({ beforeText: HEALTHY_TEXT, afterText: HEALTHY_TEXT_AGAIN }),
+    ).toThrow(/nothing to diff/);
 
     const keys = keysFor("unchanged-tick", "2026-09-22T00:00:00.000Z");
     await expect(
@@ -240,16 +229,13 @@ describe("site diff — the real fixture-site text pair", () => {
   });
 
   it("builds positioned hunks for the real change, once the gate has fired", async () => {
-    const prevHash = await textHash(HEALTHY_TEXT);
-    const nextHash = await textHash(SOFT_TEXT);
-    expect(prevHash).not.toBe(nextHash);
+    // The hash gate that gates the diff is P1's, not this module's: the
+    // sweep asks `hasChanged` before it ever reaches the diff layer.
+    const beforeHash = await textHash(HEALTHY_TEXT);
+    const afterHash = await textHash(SOFT_TEXT);
+    expect(hasChanged(beforeHash, afterHash)).toBe(true);
 
-    const diff = buildPageDiff({
-      prevHash,
-      nextHash,
-      beforeText: HEALTHY_TEXT,
-      afterText: SOFT_TEXT,
-    });
+    const diff = buildPageDiff({ beforeText: HEALTHY_TEXT, afterText: SOFT_TEXT });
     expect(diff.hunks.length).toBeGreaterThan(0);
     expect(diff.changes.length).toBeGreaterThan(0);
     // The priced section vanished, so the word delta is negative — the code
@@ -268,12 +254,7 @@ describe("site diff — the real fixture-site text pair", () => {
   });
 
   it("names the vanished price tokens in the hunks", async () => {
-    const diff = buildPageDiff({
-      prevHash: await textHash(HEALTHY_TEXT),
-      nextHash: await textHash(SOFT_TEXT),
-      beforeText: HEALTHY_TEXT,
-      afterText: SOFT_TEXT,
-    });
+    const diff = buildPageDiff({ beforeText: HEALTHY_TEXT, afterText: SOFT_TEXT });
     const removed = diff.hunks.flatMap((h) => h.lines.filter((l) => l.startsWith("-"))).join("\n");
     expect(removed).toContain("₹499");
     expect(removed).toContain("₹2,499");
@@ -282,12 +263,7 @@ describe("site diff — the real fixture-site text pair", () => {
 
 describe("site diff — the mark is keys, never a body", () => {
   it("stores a mark as R2 keys — texts and screenshots by key, never base64 in a row", async () => {
-    const diff = buildPageDiff({
-      prevHash: await textHash(HEALTHY_TEXT),
-      nextHash: await textHash(SOFT_TEXT),
-      beforeText: HEALTHY_TEXT,
-      afterText: SOFT_TEXT,
-    });
+    const diff = buildPageDiff({ beforeText: HEALTHY_TEXT, afterText: SOFT_TEXT });
     const keys = keysFor("mark-bytes", "2026-09-22T01:00:00.000Z");
     const { refs } = await storeMark(
       env.CARD_ARTIFACTS,
@@ -332,12 +308,7 @@ describe("site diff — the mark is keys, never a body", () => {
   });
 
   it("returns a small reference object — keys only, no body field anywhere", async () => {
-    const diff = buildPageDiff({
-      prevHash: await textHash(HEALTHY_TEXT),
-      nextHash: await textHash(SOFT_TEXT),
-      beforeText: HEALTHY_TEXT,
-      afterText: SOFT_TEXT,
-    });
+    const diff = buildPageDiff({ beforeText: HEALTHY_TEXT, afterText: SOFT_TEXT });
     const keys = keysFor("mark-keys", "2026-09-22T02:00:00.000Z");
     await storeMark(
       env.CARD_ARTIFACTS,
