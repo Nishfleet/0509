@@ -8,8 +8,6 @@ export const DELIVERY_FAILED_KIND = "delivery_failed";
 export const DLQ_ALERT_PREFIX = "dlq:";
 export const DELIVERY_FAILED_TITLE = "We could not send your brief — here it is in the app";
 
-export type { DeliveryFailedAlert };
-
 export function deliveryFailedAlert(input: {
   digest_id: string;
   workspace_id: string;

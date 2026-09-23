@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 // The /privacy contract (0509#3986). Every assertion here is reachable from the
-// /privacy row in docs/FEATURE-MAP.md.
+// /privacy row in .agents/skills/verify/feature-map.md.
 //
 // Copy is pattern-matched, never pinned verbatim: a merge-queue proof that
 // asserts exact strings turns every wording edit into a red gate (the landing
@@ -105,4 +105,17 @@ test("the privacy page reaches first paint with no console errors", async ({ pag
   await page.waitForLoadState("networkidle");
 
   expect(errors).toEqual([]);
+});
+
+test("the privacy page serves one ld+json graph naming the organization and breadcrumbs", async ({
+  page,
+}) => {
+  await page.goto("/privacy");
+
+  const scripts = page.locator('script[type="application/ld+json"]');
+  await expect(scripts).toHaveCount(1);
+
+  const parsed = JSON.parse((await scripts.textContent()) ?? "");
+  const types = parsed["@graph"].map((node: { "@type": string }) => node["@type"]);
+  expect(types).toEqual(["Organization", "BreadcrumbList"]);
 });
