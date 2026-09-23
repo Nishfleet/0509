@@ -22,9 +22,12 @@ describe("preview resource config", () => {
     expect(id).toBe(PREVIEW_D1);
     expect(previews).toContain(`"database_id": "${id}"`);
     expect(previews).toContain('"database_name": "0509-preview"');
+    expect(wrangler.slice(0, wrangler.indexOf('"previews"'))).toContain(PROD_BUCKET);
     expect(previews).not.toContain(PROD_D1);
     expect(previews).not.toContain(PROD_BUCKET);
     expect(previews).not.toContain("BETTER_AUTH_URL");
-    expect(previews).not.toContain("send-email");
+    expect(previews).toContain('"queue": "send-email-preview"');
+    expect(previews).not.toContain('"queue": "send-email"');
+    expect(wrangler).toContain('"BETTER_AUTH_URL": "https://0509.io"');
   });
 });

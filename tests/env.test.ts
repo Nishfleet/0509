@@ -99,13 +99,25 @@ describe("worker env", () => {
     expect(second.message).toBe(first.message);
     expect(second.names).toEqual([
       "DB",
-      "BETTER_AUTH_URL",
       "BETTER_AUTH_SECRET",
       "EMAIL",
       "SEND_EMAIL",
-      "CARD_ARTIFACTS",
       "BROWSER",
     ]);
+  });
+
+  it("accepts a preview with no static auth origin and no card bucket", () => {
+    const values = configured();
+    delete values.BETTER_AUTH_URL;
+    delete values.CARD_ARTIFACTS;
+    useEnv(values);
+    expect(() => createWorkerEnvCheck()()).not.toThrow();
+  });
+
+  it("rejects a card binding that cannot get an object", () => {
+    useEnv({ ...configured(), CARD_ARTIFACTS: {} });
+    const error = namesOf(createWorkerEnvCheck());
+    expect(error.names).toEqual(["CARD_ARTIFACTS"]);
   });
 
   it("returns 503 and logs the same names", () => {

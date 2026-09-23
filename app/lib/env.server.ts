@@ -45,11 +45,11 @@ function binding(method?: "prepare" | "get" | "sendBatch") {
 
 const workerEnvSchema = z.object({
   DB: binding("prepare"),
-  BETTER_AUTH_URL: httpUrl,
+  BETTER_AUTH_URL: httpUrl.optional(),
   BETTER_AUTH_SECRET: z.string().min(1),
   EMAIL: binding(),
   SEND_EMAIL: binding("sendBatch"),
-  CARD_ARTIFACTS: binding("get"),
+  CARD_ARTIFACTS: binding("get").optional(),
   BROWSER: binding(),
   LIVENESS_PING_URL: httpUrl.optional(),
 });
