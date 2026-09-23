@@ -66,14 +66,16 @@ function addCandidate(merged: Merge, name: string, evidence: Evidence): void {
   });
 }
 
+const GOOGLE_NEWS_HOSTS = new Set(["news.google.com"]);
+
 function isGoogleNewsUrl(url: string): boolean {
   let hostname: string;
   try {
-    hostname = new URL(url).hostname;
+    hostname = new URL(url).hostname.toLowerCase();
   } catch {
     return true;
   }
-  return hostname.endsWith("news.google.com");
+  return GOOGLE_NEWS_HOSTS.has(hostname);
 }
 
 const defaultFetchText: FetchText = async (url) => {

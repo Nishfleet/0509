@@ -114,6 +114,19 @@ describe("newsGenerator roundup headings", () => {
     expect(candidates).toEqual([]);
   });
 
+  it("skips only the exact Google News host, not a host that merely ends with its name", async () => {
+    const candidates = await newsGenerator(
+      SUBJECT,
+      fetchTextWithArticle("https://worst-news.google.com.example.com/best-leggings"),
+    );
+
+    const alphalete = candidates.find((candidate) => candidate.name === "Alphalete Athletics");
+    const evidence = alphalete?.evidence.find((item) =>
+      item.sourceUrl.endsWith("/best-leggings"),
+    );
+    expect(evidence).toBeDefined();
+  });
+
   it("opens no article when both feed fetches fail", async () => {
     const articleRequests: string[] = [];
     const fetchText: FetchText = async (url) => {
