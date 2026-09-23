@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { serveShot } from "../../../app/lib/shot/serve.server";
+import { SHOT_WIDTHS, serveShot } from "../../../app/lib/shot/serve.server";
 
 const ONE_PIXEL_PNG = Uint8Array.from(
   atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="),
@@ -24,6 +24,14 @@ describe("serveShot", () => {
     expect(response.headers.get("cache-control")).toBe("private, max-age=86400");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
     expect((await response.arrayBuffer()).byteLength).toBeGreaterThan(0);
+  });
+
+  it("serves the workspace's own shot at every allowed width", async () => {
+    for (const width of SHOT_WIDTHS) {
+      const response = await serveShot("ws-1", OWN_KEY, String(width));
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")?.startsWith("image/")).toBe(true);
+    }
   });
 
   it("404s a key under another workspace", async () => {

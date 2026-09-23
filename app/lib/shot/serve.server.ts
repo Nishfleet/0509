@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 
-const SHOT_WIDTHS = [76, 104, 152, 208, 720, 1440] as const;
+export const SHOT_WIDTHS = [76, 104, 152, 208, 720, 1440] as const;
 
 function notFound(): Response {
   return new Response("Not found", {
@@ -22,7 +22,8 @@ export async function serveShot(
   const object = await env.SHOTS.get(key);
   if (object === null) return notFound();
 
-  const result = await env.IMAGES.input(object.body as ReadableStream<Uint8Array>)
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+  const result = await env.IMAGES.input(object.body)
     .transform({ width: w, fit: "scale-down" })
     .output({ format: "image/webp" });
 
