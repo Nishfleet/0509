@@ -15,7 +15,7 @@ export interface LogoResolution {
 const TRAILING_DOT_PATTERN = /\.$/;
 
 export function duckduckgoIconUrl(domain: string): string {
-  return `https://icons.duckduckgo.com/ip3/${strippedHost(domain) ?? domain}.ico`;
+  return `https://icons.duckduckgo.com/ip3/${registrableHost(domain) ?? domain}.ico`;
 }
 
 export function registrableHost(value: string): string | null {
@@ -25,10 +25,6 @@ export function registrableHost(value: string): string | null {
   if (bare !== null) return bare;
   const host = trimmed.replace(SUBDOMAIN_PATTERN, "").replace(TRAILING_DOT_PATTERN, "");
   return host.length > 0 ? host : null;
-}
-
-function strippedHost(value: string): string | null {
-  return registrableHost(value);
 }
 
 export function logoCandidates(input: {

@@ -194,22 +194,27 @@ export function socialHandle(url: string): string | null {
   return handle.length > 0 ? handle : null;
 }
 
+type LdRecord = Record<string, unknown>;
+
+function isLdRecord(value: unknown): value is LdRecord {
+  return typeof value === "object" && value !== null;
+}
+
 export function organizationFromLdJson(raw: string): LdOrganization | undefined {
   const parsed = parseJson(raw);
   if (parsed === undefined) return undefined;
 
-  const found: Record<string, unknown>[] = [];
+  const found: LdRecord[] = [];
   const walk = (node: unknown): void => {
     if (Array.isArray(node)) {
       for (const item of node) walk(item);
       return;
     }
-    if (typeof node !== "object" || node === null) return;
-    const record = node as Record<string, unknown>;
-    const type = record["@type"];
+    if (!isLdRecord(node)) return;
+    const type = node["@type"];
     const types = Array.isArray(type) ? type : [type];
-    if (types.some((value) => value === "Organization")) found.push(record);
-    for (const value of Object.values(record)) walk(value);
+    if (types.some((value) => value === "Organization")) found.push(node);
+    for (const value of Object.values(node)) walk(value);
   };
   walk(parsed);
 

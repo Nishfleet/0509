@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   adLibraryHintSchema,
@@ -309,22 +309,20 @@ describe("resolveLogo — all but one rung failing", () => {
 });
 
 describe("fetchLogoVerifier — GET, res.ok, no head-of-page judgement", () => {
-  const realFetch = globalThis.fetch;
-
   function recordFetch(handler: (request: Request) => Response | Promise<Response>): {
     called: { method: string; url: string }[];
   } {
     const called: { method: string; url: string }[] = [];
-    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
       const request = input instanceof Request ? input : new Request(input, init);
       called.push({ method: request.method, url: request.url });
       return handler(request);
-    }) as typeof fetch;
+    });
     return { called };
   }
 
   afterEach(() => {
-    globalThis.fetch = realFetch;
+    vi.unstubAllGlobals();
   });
 
   it("issues a GET and accepts a 200", async () => {
@@ -350,9 +348,9 @@ describe("fetchLogoVerifier — GET, res.ok, no head-of-page judgement", () => {
   });
 
   it("rejects a thrown fetch without propagating it", async () => {
-    globalThis.fetch = (() => {
+    vi.stubGlobal("fetch", () => {
       throw new Error("offline");
-    }) as typeof fetch;
+    });
     expect(await fetchLogoVerifier()("https://cdn.example.com/logo.png")).toBe(false);
   });
 });
