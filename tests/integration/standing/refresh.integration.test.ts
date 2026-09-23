@@ -221,7 +221,6 @@ describe("refreshWorkspaceScores against real D1", () => {
       )
       .all<{ detail: string }>();
     const details = (plan.results ?? []).map((row) => row.detail);
-    console.log("EXPLAIN QUERY PLAN refresh:", JSON.stringify(details));
     expect(details.some((detail) => /^SEARCH s /.test(detail))).toBe(true);
     expect(details.every((detail) => !/^SCAN s( |$)/.test(detail))).toBe(true);
   });
