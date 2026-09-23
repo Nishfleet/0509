@@ -18,4 +18,5 @@ export default [
   route("*", "routes/unmatched.tsx"),
   route("design/brand-chips", "routes/design.brand-chips.tsx"),
   route("design/nav", "routes/design.nav.tsx"),
+  route("design/capture-plates", "routes/design.capture-plates.tsx"),
 ] satisfies RouteConfig;
