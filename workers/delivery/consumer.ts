@@ -166,7 +166,7 @@ export async function handleBatch(
   return results;
 }
 
-function parseMessage(body: unknown): DeliveryMessage | null {
+export function parseMessage(body: unknown): DeliveryMessage | null {
   if (typeof body === "string") {
     try {
       const parsed = JSON.parse(body) as DeliveryMessage;

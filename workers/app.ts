@@ -2,6 +2,7 @@ import { createRequestHandler } from "react-router";
 
 import { pingLiveness } from "../app/lib/liveness-ping.server";
 import { handleBatch } from "./delivery/consumer";
+import { handleDlqBatch } from "./delivery/dlq-consumer";
 
 const requestHandler = createRequestHandler(
   () => import("virtual:react-router/server-build"),
@@ -19,6 +20,10 @@ export default {
   },
 
   async queue(batch: MessageBatch, env: Env) {
+    if (batch.queue === "send-email-dlq") {
+      await handleDlqBatch(env, batch);
+      return;
+    }
     await handleBatch(env, batch);
   },
 } satisfies ExportedHandler<Env>;
