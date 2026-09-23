@@ -5,9 +5,10 @@ import { deliver, type DeliveryMessage } from "../../workers/delivery/consumer";
 import { quotedSignalIds } from "../../workers/delivery/record";
 
 // Engine 7: a sent brief writes one signal_delivery row per quoted item in the
-// same D1 batch as the send resolution. The UNIQUE (signal_id, channel_id)
-// constraint is the "delivered once" mechanism; a later brief that quotes the
-// same signal inserts nothing.
+// same D1 batch as the digest resolution. The attempt is marked sent first, so
+// a failure in that batch cannot roll the send back into a redelivery. The
+// UNIQUE (signal_id, channel_id) constraint is the "delivered once" mechanism;
+// a later brief that quotes the same signal inserts nothing.
 
 interface Recorder {
   sent: EmailMessageBuilder[];
