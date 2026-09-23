@@ -6,6 +6,7 @@ import {
   DISALLOWED_PREFIXES,
   PUBLIC_PATHS,
   robotsTxt,
+  sitemapXml,
 } from "../app/lib/public-routes";
 
 describe("public-route manifest", () => {
@@ -40,5 +41,25 @@ describe("public-route manifest", () => {
     expect(body).toContain("Disallow: /api");
     expect(body).toContain("Disallow: /mcp");
     expect(body).toContain("Sitemap: https://0509.io/sitemap.xml");
+  });
+
+  it("sitemap.xml lists every public path as an absolute url in a sitemaps.org urlset", () => {
+    const body = sitemapXml("https://0509.io", PUBLIC_PATHS);
+    expect(body).toContain(
+      'xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"',
+    );
+    for (const p of PUBLIC_PATHS) {
+      expect(body).toContain(`<loc>https://0509.io${p}</loc>`);
+    }
+    for (const entry of routes) {
+      const path = "path" in entry ? entry.path : undefined;
+      if (path === undefined || path === "*") continue;
+      if (!(PUBLIC_PATHS as readonly string[]).includes(`/${path}`)) continue;
+      expect(body).toContain(`<loc>https://0509.io/${path}</loc>`);
+    }
+  });
+
+  it("sitemap.xml escapes xml-special characters in loc values", () => {
+    expect(sitemapXml("https://x", ["/a&b"])).toContain("/a&amp;b");
   });
 });
