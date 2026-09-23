@@ -35,9 +35,12 @@ const COPY = {
 
 export function renderIncidentOpen(ctx: IncidentOpenContext): RenderedBrief {
   const subject = COPY.openSubject(ctx.site, ctx.kind);
-  const lines = [subject, COPY.seen(ctx.opened_at)];
-  if (ctx.mark !== null) lines.push(COPY.mark(ctx.mark));
-  lines.push(COPY.recheck(ctx.recheck_at));
+  const lines = [
+    subject,
+    COPY.seen(ctx.opened_at),
+    ...(ctx.mark === null ? [] : [COPY.mark(ctx.mark)]),
+    COPY.recheck(ctx.recheck_at),
+  ];
   return {
     subject,
     text: [...lines, COPY.openLink(ctx.link)].join("\n"),

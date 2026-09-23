@@ -52,10 +52,24 @@ describe("open incident email", () => {
     );
   });
 
+  it("escapes the mark in html too, not only the site", () => {
+    const { html } = renderIncidentOpen({ ...OPEN, mark: "<i>gone</i>" });
+    expect(html).toContain("&lt;i&gt;");
+    expect(html).not.toContain("<i>");
+  });
+
   it("escapes the site name in html, never emitting it raw", () => {
     const { html } = renderIncidentOpen({ ...OPEN, site: "<b>x</b>" });
     expect(html).toContain("&lt;b&gt;");
     expect(html).not.toContain("<b>");
+  });
+
+  it("links the dashboard url in the html body", () => {
+    const { html } = renderIncidentOpen(OPEN);
+    expect(html).toContain(
+      '<a href="https://0509.io/site/inc_1">https://0509.io/site/inc_1</a>',
+    );
+    expect(html).toContain("<p>See it in Five to Nine: ");
   });
 });
 
@@ -73,6 +87,13 @@ describe("fixed incident email", () => {
       "We re-checked shop.example at 2026-09-23 05:52 UTC and it looks fixed.",
     );
     expect(text).toContain("https://0509.io/site/inc_1");
+  });
+
+  it("links the same url in the html", () => {
+    const { html } = renderIncidentFixed(FIXED);
+    expect(html).toContain(
+      '<a href="https://0509.io/site/inc_1">https://0509.io/site/inc_1</a>',
+    );
   });
 });
 
