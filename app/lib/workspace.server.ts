@@ -1,10 +1,10 @@
 import { env } from "cloudflare:workers";
 
 import { fillWorkspaceTimezone, insertWorkspace } from "./data/workspace.server";
-import type { WorkspaceDb } from "./data/workspace.server";
+import type { Db } from "./data/workspace.server";
 import { canonicalTimezone, timezoneCookieValue } from "./timezone";
 
-export type { WorkspaceDb };
+export type { Db };
 
 interface WorkspaceRow {
   id: string;
@@ -33,12 +33,12 @@ export function workspaceNameFromEmail(email: string): string {
   return local.length > 0 ? local : "workspace";
 }
 
-async function readWorkspace(db: WorkspaceDb, userId: string): Promise<WorkspaceRow | null> {
+async function readWorkspace(db: Db, userId: string): Promise<WorkspaceRow | null> {
   return db.prepare(SELECT_WORKSPACE).bind(userId).first<WorkspaceRow>();
 }
 
 async function withCapturedTimezone(
-  db: WorkspaceDb,
+  db: Db,
   row: WorkspaceRow,
   timezone: string,
 ): Promise<WorkspaceRow> {
@@ -48,7 +48,7 @@ async function withCapturedTimezone(
 }
 
 export async function ensureWorkspace(
-  db: WorkspaceDb,
+  db: Db,
   input: { userId: string; email: string; timezone: string | null; now?: string },
 ): Promise<WorkspaceRow> {
   const timezone = canonicalTimezone(input.timezone);
@@ -76,7 +76,7 @@ export async function ensureWorkspace(
 }
 
 export async function ensureWorkspaceForSignIn(
-  db: WorkspaceDb,
+  db: Db,
   input: { userId: string; request: Request | null; now?: string },
 ): Promise<WorkspaceRow | null> {
   const user = await db.prepare('SELECT email FROM "user" WHERE id = ?').bind(input.userId).first<{ email: string }>();
@@ -90,7 +90,7 @@ export async function ensureWorkspaceForSignIn(
 }
 
 export async function workspaceLanding(
-  db: WorkspaceDb,
+  db: Db,
   input: { userId: string; email: string; timezone: string | null; now?: string },
 ): Promise<"/onboarding" | null> {
   const workspace = await ensureWorkspace(db, input);

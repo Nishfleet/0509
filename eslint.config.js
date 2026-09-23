@@ -85,9 +85,23 @@ const BANNED_SYNTAX = [
   },
 ];
 
+// Full DML write shapes, strict enough to run unanchored: UPDATE needs the
+// `SET col =` tail so prose like "the update was set" cannot match.
+const DML_WRITE_SHAPE =
+  "INSERT(\\s+OR\\s+\\w+)?\\s+INTO|REPLACE\\s+INTO|UPDATE\\s+[\\w\".]+\\s+SET\\s+[\\w\".]+\\s*=|DELETE\\s+FROM";
+
+// Anchored at statement start, where a bare `UPDATE ` is already unambiguous,
+// plus `WITH`-led writes (a CTE can head INSERT/UPDATE/DELETE; a `WITH …
+// SELECT` read stays allowed because the inner shape must still match).
+const RAW_DML_START =
+  `^\\s*(INSERT(\\s+OR\\s+\\w+)?\\s+INTO|REPLACE\\s+INTO|UPDATE\\s|DELETE\\s+FROM` +
+  `|WITH\\b[\\s\\S]*\\b(${DML_WRITE_SHAPE}))`;
+
 const RAW_DML_WRITER = {
   selector:
-    "Literal[value=/^\\s*(INSERT\\s+INTO|UPDATE\\s|DELETE\\s+FROM)/i], TemplateLiteral[quasis.0.value.raw=/^\\s*(INSERT\\s+INTO|UPDATE\\s|DELETE\\s+FROM)/i]",
+    `Literal[value=/${RAW_DML_START}/i], ` +
+    `TemplateLiteral[quasis.0.value.raw=/${RAW_DML_START}/i], ` +
+    `TemplateElement[value.raw=/${DML_WRITE_SHAPE}/i]`,
   message:
     "One writer per table. Raw DML lives in app/lib/data/<table>.server.ts — this matches the statement text itself, so holding it in a module constant still counts. docs/REBUILD-TRUST.md C5. Source: 0509#4313 — the kysely-era insertInto/updateTable/deleteFrom selectors matched nothing after the raw-D1 rebuild, and app/lib/workspace.server.ts grew a second workspace writer while the rule stayed green.",
 };
@@ -193,9 +207,13 @@ export default tseslint.config(
     // prepare(<literal>) argument would stay green while a second writer
     // exists. app/lib/data/** is the paved path. workers/e2e-inbox.ts writes
     // to its own Durable Object sqlite via ctx.storage.sql — never env.DB —
-    // so it sits outside this rule's scope by kind, not by exemption.
-    // no-restricted-syntax options merge per index across matching blocks,
-    // which is why this array restates BANNED_SYNTAX instead of appending.
+    // so it sits outside this rule's scope by kind, not by exemption. The
+    // selector covers INSERT OR <conflict> INTO, REPLACE INTO and WITH-led
+    // writes, not only a leading INSERT INTO/UPDATE/DELETE FROM.
+    // A later matching block's no-restricted-syntax entry replaces the
+    // earlier one wholesale — flat config never merges a rule's option
+    // array — which is why this array restates BANNED_SYNTAX instead of
+    // appending.
     files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
     ignores: ["app/lib/data/**", "workers/e2e-inbox.ts"],
     rules: {

@@ -34,6 +34,50 @@ const INLINE_DML = `export async function runProbe(
 }
 `;
 
+// The D grade on #4336: a leading anchor alone let these through. Each one is
+// a write the gate must still see.
+const WRITE_VARIANTS: { name: string; code: string }[] = [
+  {
+    name: "INSERT OR IGNORE INTO",
+    code: `const PROBE = "INSERT OR IGNORE INTO workspace (id) VALUES ('probe')";
+export function runProbe(): string {
+  return PROBE;
+}
+`,
+  },
+  {
+    name: "REPLACE INTO",
+    code: `const PROBE = "REPLACE INTO workspace (id) VALUES ('probe')";
+export function runProbe(): string {
+  return PROBE;
+}
+`,
+  },
+  {
+    name: "WITH-led UPDATE",
+    code: `const PROBE =
+  "WITH d AS (SELECT 'probe' AS id) UPDATE workspace SET name = 'probe' WHERE id IN (SELECT id FROM d)";
+export function runProbe(): string {
+  return PROBE;
+}
+`,
+  },
+  {
+    name: "DML in a later template quasi",
+    code: `export function runProbe(id: string): string {
+  return \`WITH d AS (SELECT '\${id}' AS i) DELETE FROM workspace WHERE id IN (SELECT i FROM d)\`;
+}
+`,
+  },
+];
+
+// A WITH-led read is not a write; the gate must leave it alone.
+const READ_CTE = `const PROBE = "WITH n AS (SELECT 1 AS one) SELECT one FROM n";
+export function runProbe(): string {
+  return PROBE;
+}
+`;
+
 async function lintProbe(rel: string, code: string): Promise<{ ignored: boolean; messages: string[] }> {
   const file = path.join(REPO_ROOT, rel);
   await mkdir(path.dirname(file), { recursive: true });
@@ -68,6 +112,20 @@ describe("eslint one-writer-per-table rule (#4313)", () => {
 
   it("leaves the paved path in app/lib/data/ unblocked", { timeout: 60_000 }, async () => {
     const result = await lintProbe("app/lib/data/probe-writer-tmp.server.ts", CONST_DML);
+    expect(result.ignored).toBe(false);
+    expect(result.messages.some((m) => m.includes(WRITER_MESSAGE))).toBe(false);
+  });
+
+  for (const variant of WRITE_VARIANTS) {
+    it(`rejects ${variant.name}`, { timeout: 60_000 }, async () => {
+      const result = await lintProbe("app/lib/probe-writer-tmp.server.ts", variant.code);
+      expect(result.ignored).toBe(false);
+      expect(result.messages.some((m) => m.includes(WRITER_MESSAGE))).toBe(true);
+    });
+  }
+
+  it("leaves a WITH-led SELECT unblocked", { timeout: 60_000 }, async () => {
+    const result = await lintProbe("app/lib/probe-writer-tmp.server.ts", READ_CTE);
     expect(result.ignored).toBe(false);
     expect(result.messages.some((m) => m.includes(WRITER_MESSAGE))).toBe(false);
   });

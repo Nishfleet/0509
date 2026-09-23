@@ -90,7 +90,7 @@ interface BoundStatement {
   run(): Promise<unknown>;
 }
 
-export interface WorkspaceDb {
+export interface Db {
   prepare(query: string): {
     bind(...values: unknown[]): BoundStatement;
   };
@@ -103,7 +103,7 @@ ON CONFLICT(id) DO NOTHING`;
 const FILL_TIMEZONE = `UPDATE workspace SET timezone = ? WHERE id = ? AND timezone = 'UTC'`;
 
 export async function insertWorkspace(
-  db: WorkspaceDb,
+  db: Db,
   input: { id: string; name: string; ownerUserId: string; timezone: string; createdAt: string },
 ): Promise<void> {
   await db
@@ -112,6 +112,6 @@ export async function insertWorkspace(
     .run();
 }
 
-export async function fillWorkspaceTimezone(db: WorkspaceDb, id: string, timezone: string): Promise<void> {
+export async function fillWorkspaceTimezone(db: Db, id: string, timezone: string): Promise<void> {
   await db.prepare(FILL_TIMEZONE).bind(timezone, id).run();
 }
