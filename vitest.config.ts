@@ -18,14 +18,15 @@ export default defineConfig({
           name: "node",
           environment: "node",
           include: ["tests/**/*.test.ts"],
-          exclude: ["tests/integration/**", "tests/unit/site/**"],
+          exclude: ["tests/integration/**", "tests/unit/site/**", "tests/unit/identity/**"],
         },
       },
       {
         // Real workerd + real local D1 with migrations/0001_rebuild.sql applied.
         // The only project where a D1 assertion means anything.
         // tests/unit/site also runs here: HTMLRewriter exists only in workerd,
-        // and the node project has no runtime to host it.
+        // and the node project has no runtime to host it. tests/unit/identity
+        // joins it for the same reason: the extractor is an HTMLRewriter pass.
         plugins: [
           cloudflareTest(async () => ({
             wrangler: { configPath: "./tests/integration/wrangler.test.jsonc" },
@@ -42,6 +43,7 @@ export default defineConfig({
             // .integration infix; it still needs real workerd + real D1.
             "tests/integration/migration-rollback.test.ts",
             "tests/unit/site/**/*.test.ts",
+            "tests/unit/identity/**/*.test.ts",
           ],
           setupFiles: ["./tests/integration/apply-migrations.ts"],
           testTimeout: 30_000,
