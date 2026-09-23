@@ -10,7 +10,12 @@ const RESOLVE_ATTEMPT = `UPDATE send_attempt SET status = ?, error = ? WHERE id 
 
 export async function claimSendAttempt(
   db: D1Database,
-  input: { idempotencyKey: string; workspaceId: string; targetId: string; digestId: string },
+  input: {
+    idempotencyKey: string;
+    workspaceId: string;
+    targetId: string;
+    digestId: string | null;
+  },
 ): Promise<{ id: string } | null> {
   const now = new Date().toISOString();
   return db
