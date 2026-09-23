@@ -1,4 +1,4 @@
-import type { BriefContext, BriefPayload, RenderedBrief } from "./brief-data";
+import type { BriefContext, BriefPayload, RenderedBrief } from "../../app/lib/brief-payload";
 
 const COPY = {
   subject: (rank: number, total: number) =>

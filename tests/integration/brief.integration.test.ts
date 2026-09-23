@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   BRAND_LINES_QUERY,
   parseBriefPayload,
-} from "../../workers/delivery/brief-data";
+} from "../../app/lib/brief-payload";
 import { renderBrief } from "../../workers/delivery/brief-template";
 
 /**
