@@ -1,0 +1,23 @@
+// Config for the support-inbox Email Worker (0509#4229 child 2). Email
+// Routing binds a Worker by rule, so there is no routes block. The name is
+// 0509-support-inbox-v2 on purpose: 0509-support-inbox is the old Worker
+// still serving the alerts, fleet-signup and catch-all rules. The daily cron
+// runs the 90-day support_report delete — this Worker is the table's only
+// writer, so the retention sweep lives here and not in workers/app.ts.
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "0509-support-inbox-v2",
+  "main": "./support-inbox.ts",
+  "compatibility_date": "2026-09-16",
+  "observability": {
+    "enabled": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "0509",
+      "database_id": "746c6e3d-782e-443a-82d6-28ca93a16294"
+    }
+  ],
+  "triggers": { "crons": ["17 3 * * *"] }
+}
