@@ -11,9 +11,13 @@ function screenPaths(entries: RouteConfigEntry[], parent: string): string[] {
   const paths: string[] = [];
   for (const entry of entries) {
     if (entry.file.endsWith(".ts")) continue;
-    const path = [parent, entry.path].filter(Boolean).join("/");
-    paths.push(path);
-    if (entry.children) paths.push(...screenPaths(entry.children, path));
+    if (entry.path) {
+      const path = [parent, entry.path].filter(Boolean).join("/");
+      paths.push(path);
+      if (entry.children) paths.push(...screenPaths(entry.children, path));
+    } else if (entry.children) {
+      paths.push(...screenPaths(entry.children, parent));
+    }
   }
   return paths;
 }
