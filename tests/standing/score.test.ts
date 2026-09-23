@@ -40,6 +40,14 @@ describe("weightsAsOf", () => {
     expect(weightsAsOf(rows, "2026-09-21T00:00:00.000Z").get("mention_matters")).toBe(3);
   });
 
+  it("keeps a row whose effective_from equals the week", () => {
+    const rows: readonly WeightRow[] = [
+      { key: "mention_matters", weight: 3, effective_from: "2026-09-14T00:00:00.000Z" },
+      { key: "mention_matters", weight: 7, effective_from: "2026-09-21T00:00:00.000Z" },
+    ];
+    expect(weightsAsOf(rows, "2026-09-21T00:00:00.000Z").get("mention_matters")).toBe(7);
+  });
+
   it("omits a key whose only row is after the week", () => {
     const rows: readonly WeightRow[] = [
       { key: "ad_copy_change", weight: 3, effective_from: "2026-09-28T00:00:00.000Z" },
@@ -78,7 +86,7 @@ describe("scoreByEntity", () => {
     const weights = new Map(V1_WEIGHTS);
     weights.delete("ad_copy_change");
     expect(() => scoreByEntity(counts, weights)).toThrowError(
-      "scoring_weight has no row for ad_copy_change",
+      new Error("scoring_weight has no row for ad_copy_change"),
     );
   });
 });
