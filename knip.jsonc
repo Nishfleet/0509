@@ -14,6 +14,10 @@
     // (workers/e2e-inbox.wrangler.jsonc), which knip does not read — the file
     // is an entry by name.
     "workers/e2e-inbox.ts",
+    // The support inbox Worker's front door is its own wrangler config
+    // (workers/support-inbox.wrangler.jsonc), which knip does not read — the
+    // file is an entry by name.
+    "workers/support-inbox.ts",
     // The fixture-site Worker's front door is its own wrangler config
     // (workers/fixture-site.wrangler.jsonc), which knip does not read — the
     // file is an entry by name.
