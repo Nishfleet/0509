@@ -13,6 +13,7 @@ export default [
     route("card", "routes/settings.card.tsx"),
   ]),
   route("s/:slug", "routes/s.$slug.tsx"),
+  route("u/:token", "routes/u.$token.tsx"),
   route("api/health", "routes/api.health.ts"),
   route("api/auth/*", "routes/api.auth.$.ts"),
   route("onboarding", "routes/onboarding.tsx"),
