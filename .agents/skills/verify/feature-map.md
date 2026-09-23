@@ -73,6 +73,6 @@ a row describes what a user can do **today**, never what is planned.
 
 The four places — Home, Competitors, Alerts, Settings — are linked from
 `app/components/nav.tsx`, drawn by `app/components/app-shell.tsx` on each of the
-four routes. `/app/competitors/:entityId` is reached from a row on
-`/app/competitors` and `/app/settings/card` from the Settings page; neither is
-a nav place.
+four routes. `/app/competitors/:entityId` has no path yet — `/app/competitors`
+is a stub, so there is no row to open it from (row 45);
+`/app/settings/card` is reached from the Settings page. Neither is a nav place.
