@@ -166,7 +166,6 @@ describe("site diff — stored hunks", () => {
     expect(hunk.startWord).toBe(1);
     expect(hunk.lines.some((l) => l.startsWith("-"))).toBe(true);
     expect(hunk.lines.some((l) => l.startsWith("+"))).toBe(true);
-    expect(typeof hunk.startWord).toBe("number");
   });
 
   it("locates a change in a one-line blob at its real word index", () => {
@@ -214,13 +213,18 @@ describe("site diff — stored hunks", () => {
 });
 
 describe("site diff — the real fixture-site text pair", () => {
-  it("the soft break is a real copy change: a priced section disappears", async () => {
-    expect(HEALTHY_TEXT).toContain("₹499");
-    expect(SOFT_TEXT).not.toContain("₹499");
-    // The aria-hidden mode marker is dropped by normalisation, so the only
-    // difference the diff sees is the pricing section — the deliberate break.
-    expect(HEALTHY_TEXT).not.toContain("mode: soft");
-    expect(SOFT_TEXT).not.toContain("mode: soft");
+  it("a vanished section drops the priced words out of the text", () => {
+    // Derived from the shipped diff, not restated from the constants: the two
+    // texts are the fixture-site page and its soft break, and the proof that
+    // the break is a real copy change is that the diff's removed side carries
+    // the priced tokens while its changed side does not.
+    const changes = diffWordsPositioned(HEALTHY_TEXT, SOFT_TEXT);
+    const removed = changes.map((c) => c.before).join(" ");
+    const added = changes.map((c) => c.after).join(" ");
+    expect(removed).toContain("₹499");
+    expect(removed).toContain("₹2,499");
+    expect(added).not.toContain("₹499");
+    expect(added).not.toContain("₹2,499");
   });
 
   it("the unchanged tick produces the same hash", async () => {

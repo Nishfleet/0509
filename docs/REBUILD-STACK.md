@@ -548,7 +548,8 @@ One real caveat from those docs: *text chunks are not text nodes.* A single node
 ### 5.2 Text change diff
 
 **Installed: `diff` 9.0.0** (0509#4001, the word diff and the before-and-after mark). The
-change-diff engine has shipped; the judgement and sweep legs are the rest of #3879.
+word-diff and mark legs of P3 have shipped (#4001); the per-page transport (P2), the
+sweep Workflow (P5), and the surface (P6) remain, and the judgement step (#4333) is separate.
 
 **Recommendation: `diff` (jsdiff) 9.0.0 — 8.3 KB gzip full export (bundlejs), 0 dependencies.**
 
@@ -1051,7 +1052,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | Tick source | Cron Triggers → Queue or Workflow | platform |
 | HTML → text | `HTMLRewriter` | platform |
 | OG + schema.org extraction | `HTMLRewriter` | platform |
-| Change diff | `diff` (jsdiff) | 9.0.0
+| Change diff | `diff` (jsdiff) | 9.0.0 |
 | Feed parsing | `@extractus/feed-extractor` (wraps `fast-xml-parser`) | 8.0.3 / 5.11.1, not yet installed |
 | Logo | page metadata via `HTMLRewriter`, DuckDuckGo icon fallback | platform |
 | Validation | `zod` | 4.6.5 |
@@ -1070,6 +1071,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | Agent-readable docs | `/llms.txt` + `Accept: text/markdown` + `rel="alternate"` | spec v2 (2026-08-10) |
 
 **Installed beyond the scaffold:** `better-auth` ^1.7.5, `@better-auth/passkey` ^1.7.5, `@better-auth/api-key` ^1.7.5, `zod` ^4.6.5 (also a better-auth peer), `@cloudflare/puppeteer` ^1.4.0, `@base-ui/react` 1.8.0, `clsx` ^2.1.1, `tailwind-merge` ^3.7.0, `class-variance-authority` ^0.7.1, `sonner` ^2.0.8, `diff` ^9.0.0 (0509#4001). **Not yet installed**, because the engine that needs them has not shipped: `@extractus/feed-extractor` 8.0.3 (`fast-xml-parser` 5.11.1 comes with it), `uplot` 1.6.32, `uplot-react` 1.2.4, `date-fns` 4.4.0, `@date-fns/tz` 1.5.0, `agents` 0.24.0, `@modelcontextprotocol/server` 2.0.0 and its peers `@modelcontextprotocol/client` and `@modelcontextprotocol/sdk`, `@cloudflare/workers-oauth-provider` 0.10.3, `zod-openapi` 6.0.2, `lucide-react`. Do not delete those rows. Platform rows have no package. `create-cloudflare`, `shadcn`, and `auth@1.7.5` are npx-only and are not missing dependencies.
+
 ---
 
 ## 9. Every package.json dependency
