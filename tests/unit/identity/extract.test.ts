@@ -312,9 +312,9 @@ describe("fetchLogoVerifier — GET, res.ok, no head-of-page judgement", () => {
   const realFetch = globalThis.fetch;
 
   function recordFetch(handler: (request: Request) => Response | Promise<Response>): {
-    called: Array<{ method: string; url: string }>;
+    called: { method: string; url: string }[];
   } {
-    const called: Array<{ method: string; url: string }> = [];
+    const called: { method: string; url: string }[] = [];
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const request = input instanceof Request ? input : new Request(input, init);
       called.push({ method: request.method, url: request.url });
