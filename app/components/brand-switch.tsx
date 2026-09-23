@@ -1,5 +1,7 @@
 import type { ReactElement } from "react";
 
+import { cn } from "../lib/utils";
+import { DAY_MONTH } from "./competitor-header";
 import { Switch } from "./ui/switch";
 
 export type BrandSwitchState = "on" | "off" | "you";
@@ -9,6 +11,41 @@ const STATE_TEXT: Record<BrandSwitchState, string> = {
   off: "OFF",
   you: "YOU",
 };
+
+export function brandSwitchNote(state: BrandSwitchState, pausedOn: Date | null): string {
+  if (state === "on") return "Off pauses tracking · history kept";
+  if (state === "you") return "Your brand · always tracked";
+  if (pausedOn === null) return "paused · history kept";
+  const day = DAY_MONTH.format(pausedOn);
+  return `paused ${day} · history kept`;
+}
+
+export function brandRowClass(state: BrandSwitchState): string {
+  if (state === "off") return "text-ink-faint";
+  if (state === "you") return "bg-green-wash";
+  return "";
+}
+
+export function BrandSwitchField({
+  state,
+  brandName,
+  pausedOn,
+  onCheckedChange,
+}: {
+  state: BrandSwitchState;
+  brandName: string;
+  pausedOn: Date | null;
+  onCheckedChange?: (checked: boolean) => void;
+}): ReactElement {
+  return (
+    <div data-slot="brand-switch-field" data-state={state} className="flex min-w-0 flex-wrap items-center gap-3">
+      <BrandSwitch state={state} brandName={brandName} onCheckedChange={onCheckedChange} />
+      <p className={cn("min-w-0 text-meta", state === "off" ? "text-ink-faint" : "text-ink-soft")}>
+        {brandSwitchNote(state, pausedOn)}
+      </p>
+    </div>
+  );
+}
 
 export function BrandSwitch({
   state,
