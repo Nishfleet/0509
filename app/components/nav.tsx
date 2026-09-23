@@ -8,7 +8,7 @@ const places = [
   { to: "/app/settings", label: "Settings", end: false },
 ] as const;
 
-export function Nav() {
+function Nav() {
   return (
     <nav
       aria-label="Places"
