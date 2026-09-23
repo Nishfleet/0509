@@ -33,6 +33,10 @@ describe("coMentions", () => {
   it("dedupes case-insensitively and keeps the first spelling seen", () => {
     expect(coMentions("Gymshark or Lululemon or lululemon", BRAND)).toEqual(["Lululemon"]);
   });
+
+  it("dedupes a second capitalised spelling, which the lowercase twin cannot prove on its own", () => {
+    expect(coMentions("Gymshark or Lululemon or LULULEMON", BRAND)).toEqual(["Lululemon"]);
+  });
 });
 
 describe("leadingName", () => {
