@@ -1113,6 +1113,7 @@ The version in this table is the `package.json` specifier. An earlier section of
 | `vite` | ^8.0.3 | §1.1 | Dev server and bundler the scaffold wires | webpack | 8.3.0 |
 | `vitest` | 4.1.11 | §6.1 | Unit tests. Exact pin. The `overrides` block pins `@vitest/*` to the same version | vitest 5. The Workers plugin does not support it | 4.1.11 |
 | `wrangler` | ^4.135.0 | §1.3 | `wrangler types` and `wrangler deploy` | `@cloudflare/workers-types`. It fights the generated `Env` | 4.135.0 |
+| `chrome-devtools-mcp` | 1.9.0 | `.agents/skills/verify/SKILL.md` | Google's stock `chrome-devtools` CLI ([ChromeDevTools/chrome-devtools-mcp](https://github.com/ChromeDevTools/chrome-devtools-mcp) 1.9.0). `verify:start` pins `--executablePath` to Playwright's Chromium, so the CLI does not launch a second browser. Optional peers `@blackwell-systems/gcf` and `@toon-format/toon` are upstream devDependencies; the lockfile does not install them | A script under `scripts/`, `bin/` or `tools/` | 1.9.0 |
 
 ## Open items for Nish or Fable
 

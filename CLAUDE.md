@@ -75,6 +75,8 @@ npm run lint       # eslint . && knip
 npm test           # vitest run
 npm run e2e        # playwright test
 npm run deploy     # wrangler deploy
+npm run verify:start # chrome-devtools start, headless, Playwright's Chromium, --no-sandbox
+npm run verify:stop  # chrome-devtools stop
 ```
 
 **`npm run typecheck` is the only real type gate.** `tsc --noEmit -p
