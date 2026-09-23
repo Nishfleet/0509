@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { type BriefPayload } from "../../workers/delivery/brief-data";
+import { type BriefPayload } from "../../app/lib/brief-payload";
 import { renderBrief } from "../../workers/delivery/brief-template";
 
 /**
