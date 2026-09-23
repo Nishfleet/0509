@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 
 import { cn } from "../lib/utils";
+import { DAY_MONTH } from "./competitor-header";
 import { Switch } from "./ui/switch";
 
 export type BrandSwitchState = "on" | "off" | "you";
@@ -10,12 +11,6 @@ const STATE_TEXT: Record<BrandSwitchState, string> = {
   off: "OFF",
   you: "YOU",
 };
-
-const DAY_MONTH = new Intl.DateTimeFormat("en-GB", {
-  day: "numeric",
-  month: "short",
-  timeZone: "UTC",
-});
 
 export function brandSwitchNote(state: BrandSwitchState, pausedOn: Date | null): string {
   if (state === "on") return "Off pauses tracking · history kept";
