@@ -1081,6 +1081,7 @@ The version in this table is the `package.json` specifier. An earlier section of
 | `@base-ui/react` | 1.8.0 | §3.2 | Badge and avatar import it | Radix. The copied shadcn files import Base UI | 1.8.0 |
 | `@better-auth/api-key` | ^1.7.5 | §7.3 | API keys, quotas, and expiry ship in this plugin | A hand-written key table | 1.7.5 |
 | `@better-auth/passkey` | ^1.7.5 | §2.5 | Passkeys. The plugin pulls SimpleWebAuthn | A hand-rolled WebAuthn | 1.7.5 |
+| `@sentry/cloudflare` | ^10.75.1 | #3926, REBUILD-TRUST §A5 | Worker error capture: `withSentry()` wraps the default export in `workers/app.ts`, and Sentry's own GitHub integration turns a new error into a GitHub issue with no code of ours in the path. Doc: <https://docs.sentry.io/platforms/javascript/guides/cloudflare/> | A Cloudflare Notifications webhook reshaped into a GitHub issue by a Worker or an Action (an adapter, which is glue) | 10.75.1 |
 | `@cloudflare/puppeteer` | ^1.4.0 | §4.3 | Session leg of the ads transport (`connect`, `launch`, `sessions`) | `@cloudflare/playwright`, the other session SDK. This file imports puppeteer | 1.4.0 |
 | `better-auth` | ^1.7.5 | §2 | Sessions and magic link on D1 | A custom session table, `kysely-d1`, `better-auth-cloudflare` | 1.7.5 |
 | `class-variance-authority` | ^0.7.1 | §3.2 | Variant map the badge component imports | A hand-written variant map | 0.7.1 |
