@@ -1,4 +1,5 @@
 import { NavLink } from "react-router";
+import type { ReactNode } from "react";
 
 const places = [
   { to: "/app", label: "Home", end: true },
@@ -32,5 +33,14 @@ export function Nav() {
         ))}
       </ul>
     </nav>
+  );
+}
+
+export function AppShell({ children }: { children: ReactNode }) {
+  return (
+    <div className="min-[860px]:flex">
+      <Nav />
+      <main className="min-w-0 flex-1 p-4 pb-[92px] min-[860px]:pb-4">{children}</main>
+    </div>
   );
 }
