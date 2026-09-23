@@ -24,6 +24,21 @@ for (const path of PUBLIC_ROUTES) {
   });
 }
 
+test("the public footers carry the same links", async ({ page }) => {
+  const seen: string[][] = [];
+  for (const path of PUBLIC_ROUTES) {
+    const response = await page.goto(path);
+    expect(response?.status()).toBe(200);
+    const hrefs = await page.locator("footer a").evaluateAll((anchors) =>
+      anchors.map((anchor) => anchor.getAttribute("href")),
+    );
+    seen.push(hrefs.filter((href): href is string => href !== null));
+  }
+  for (const hrefs of seen) {
+    expect(hrefs).toEqual(["/privacy", "/terms", "mailto:support@0509.io"]);
+  }
+});
+
 test("the terms page states conduct and removal, and makes no unbacked retention claim", async ({
   page,
 }) => {
