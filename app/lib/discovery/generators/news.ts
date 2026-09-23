@@ -66,16 +66,14 @@ function addCandidate(merged: Merge, name: string, evidence: Evidence): void {
   });
 }
 
-const GOOGLE_NEWS_HOSTS = new Set(["news.google.com"]);
+const GOOGLE_NEWS_HOST = "news.google.com";
 
-function isGoogleNewsUrl(url: string): boolean {
-  let hostname: string;
+function hostnameOf(url: string): string | null {
   try {
-    hostname = new URL(url).hostname.toLowerCase();
+    return new URL(url).hostname.toLowerCase();
   } catch {
-    return true;
+    return null;
   }
-  return GOOGLE_NEWS_HOSTS.has(hostname);
 }
 
 const defaultFetchText: FetchText = async (url) => {
@@ -125,20 +123,19 @@ export const newsGenerator: Generator = async (subject: Subject, fetchText?: Fet
     }
 
     const responses = await Promise.allSettled(
-      articles.map((article) => fetchFn(article.url)),
+      articles.map(async (article) => ({ article, fetched: await fetchFn(article.url) })),
     );
-    for (const [index, response] of responses.entries()) {
-      if (response.status !== "fulfilled") continue;
-      const article = articles[index];
-      if (article === undefined) continue;
-      if (!response.value.ok) continue;
-      if (!(response.value.contentType ?? "").includes("html")) continue;
-      if (isGoogleNewsUrl(response.value.url)) continue;
+    for (const outcome of responses) {
+      if (outcome.status !== "fulfilled") continue;
+      const { article, fetched } = outcome.value;
+      if (!fetched.ok) continue;
+      if (!(fetched.contentType ?? "").includes("html")) continue;
+      if (hostnameOf(fetched.url) === GOOGLE_NEWS_HOST) continue;
 
-      const names = await harvestHeadings(response.value.body, subject.name);
+      const names = await harvestHeadings(fetched.body, subject.name);
       for (const name of names) {
         addCandidate(merged, name, {
-          sourceUrl: response.value.url,
+          sourceUrl: fetched.url,
           excerpt: article.excerpt,
           generator: "news",
         });

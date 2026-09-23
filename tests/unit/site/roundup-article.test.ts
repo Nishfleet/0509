@@ -127,6 +127,15 @@ describe("newsGenerator roundup headings", () => {
     expect(evidence).toBeDefined();
   });
 
+  it("does not let an unnameable final url stand in for the Google News host", async () => {
+    const candidates = await newsGenerator(SUBJECT, fetchTextWithArticle("not a url"));
+
+    const evidence = candidates
+      .flatMap((candidate) => candidate.evidence)
+      .find((item) => item.sourceUrl === "not a url");
+    expect(evidence).toBeDefined();
+  });
+
   it("opens no article when both feed fetches fail", async () => {
     const articleRequests: string[] = [];
     const fetchText: FetchText = async (url) => {
