@@ -1,21 +1,33 @@
 import js from "@eslint/js";
+import boundaries from "eslint-plugin-boundaries";
+import importX, { createNodeResolver } from "eslint-plugin-import-x";
 import reactHooks from "eslint-plugin-react-hooks";
 import noComments from "eslint-plugin-no-comments";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
-const SERVER_ONLY_IMPORTS = [
+const SERVER_IMPORT_RECEIPT =
+  "A client module may not import a *.server module. Only route modules and other *.server modules may. React Router tree-shakes .server files out of the browser bundle only for route modules; anywhere else the server code ships to the browser. docs/REBUILD-TRUST.md C1.";
+
+const CLOUDFLARE_WORKERS_IMPORT = {
+  name: "cloudflare:workers",
+  message:
+    "cloudflare:workers is a Workers runtime module and does not exist in the browser. Bindings are read in *.server modules and passed down. Source: commit 7727bf787 / #3918.",
+};
+
+const PAVED_PATH_PATTERNS = [
   {
-    group: ["**/*.server", "**/*.server.ts", "**/*.server.js"],
+    group: ["better-auth/*", "@better-auth/passkey/*", "@better-auth/api-key/*"],
     message:
-      "A client module may not import a *.server module. Only route modules and other *.server modules may. React Router tree-shakes .server files out of the browser bundle only for route modules; anywhere else the server code ships to the browser. docs/REBUILD-TRUST.md C1.",
-  },
-  {
-    name: "cloudflare:workers",
-    message:
-      "cloudflare:workers is a Workers runtime module and does not exist in the browser. Bindings are read in *.server modules and passed down. Source: commit 7727bf787 / #3918.",
+      "better-auth subpath imports (client SDKs, plugin clients) live in exactly one module, app/lib/auth-client.ts; the server config stays in app/lib/auth.server.ts. A second import site is a second session authority. Source: 0509#3961 review — `paths` matches exact specifiers only, so `better-auth/client` slipped past the bare-name rule.",
   },
 ];
+
+const SONNER_IMPORT = {
+  name: "sonner",
+  message:
+    "sonner is imported in exactly one module, app/components/toaster.tsx, which owns every toast() call behind toastSaved(). DESIGN.md §11: toasts are only 'saved' and 'undo' — a second import site is a second toast authority. Source: 0509#4116.",
+};
 
 const ONE_PAVED_PATH_IMPORTS = [
   {
@@ -36,9 +48,18 @@ const ONE_PAVED_PATH_IMPORTS = [
     name: "@better-auth/passkey",
     message: "Same paved path as better-auth: app/lib/auth.server.ts only.",
   },
+  SONNER_IMPORT,
 ];
 
+const SUPPORT_ADDRESS_BAN = {
+  selector:
+    "Literal[value='support@0509.io'], TemplateLiteral[quasis.0.value.raw='support@0509.io'], JSXText[value=/support@0509\\.io/], Literal[value='mailto:support@0509.io']",
+  message:
+    "The support address is typed once, in app/components/footer.tsx; every page imports <Footer /> instead. A second literal is a second address to change and a page that silently keeps the old one. Source: 0509#3986 review — `encoded: structure` names rung 1, and a constant alone does not stop a re-type.",
+};
+
 const BANNED_SYNTAX = [
+  SUPPORT_ADDRESS_BAN,
   {
     selector: "NewExpression[callee.name='RegExp'] > Literal.arguments, NewExpression[callee.name='RegExp'] > TemplateLiteral",
     message:
@@ -64,19 +85,32 @@ const BANNED_SYNTAX = [
   },
 ];
 
-const WRITER_SYNTAX = [
-  {
-    selector:
-      "CallExpression[callee.property.name=/^(insertInto|updateTable|deleteFrom)$/]",
-    message:
-      "One writer per table. Writes live in app/lib/data/<table>.server.ts, never in a route or a component. A route that writes directly becomes the second writer the moment another route needs the same row. docs/REBUILD-TRUST.md C5.",
-  },
-  {
-    selector: "CallExpression[callee.object.name='env'][callee.property.name='DB']",
-    message:
-      "Routes do not touch env.DB. Go through the one data layer in app/lib/data/. docs/REBUILD-TRUST.md C4.",
-  },
-];
+// Full DML write shapes, strict enough to run unanchored: UPDATE needs the
+// `SET col =` tail so prose like "the update was set" cannot match.
+const DML_WRITE_SHAPE =
+  "INSERT(\\s+OR\\s+\\w+)?\\s+INTO|REPLACE\\s+INTO|UPDATE\\s+[\\w\".]+\\s+SET\\s+[\\w\".]+\\s*=|DELETE\\s+FROM";
+
+// Anchored at statement start, where a bare `UPDATE ` is already unambiguous,
+// plus `WITH`-led writes (a CTE can head INSERT/UPDATE/DELETE; a `WITH …
+// SELECT` read stays allowed because the inner shape must still match).
+const RAW_DML_START =
+  `^\\s*(INSERT(\\s+OR\\s+\\w+)?\\s+INTO|REPLACE\\s+INTO|UPDATE\\s|DELETE\\s+FROM` +
+  `|WITH\\b[\\s\\S]*\\b(${DML_WRITE_SHAPE}))`;
+
+const RAW_DML_WRITER = {
+  selector:
+    `Literal[value=/${RAW_DML_START}/i], ` +
+    `TemplateLiteral[quasis.0.value.raw=/${RAW_DML_START}/i], ` +
+    `TemplateElement[value.raw=/${DML_WRITE_SHAPE}/i]`,
+  message:
+    "One writer per table. Raw DML lives in app/lib/data/<table>.server.ts — this matches the statement text itself, so holding it in a module constant still counts. docs/REBUILD-TRUST.md C5. Source: 0509#4313 — the kysely-era insertInto/updateTable/deleteFrom selectors matched nothing after the raw-D1 rebuild, and app/lib/workspace.server.ts grew a second workspace writer while the rule stayed green.",
+};
+
+const ENV_DB_IN_ROUTES = {
+  selector: "CallExpression[callee.object.name='env'][callee.property.name='DB']",
+  message:
+    "Routes do not touch env.DB. Go through the one data layer in app/lib/data/. docs/REBUILD-TRUST.md C4.",
+};
 
 const WORKAROUND_TERMS = [
   "todo",
@@ -168,32 +202,96 @@ export default tseslint.config(
   },
 
   {
+    // The writer rule fires on the DML statement text, not a call shape: this
+    // repo keeps its SQL in module constants (0509#4313), so matching only a
+    // prepare(<literal>) argument would stay green while a second writer
+    // exists. app/lib/data/** is the paved path. workers/e2e-inbox.ts writes
+    // to its own Durable Object sqlite via ctx.storage.sql — never env.DB —
+    // so it sits outside this rule's scope by kind, not by exemption. The
+    // selector covers INSERT OR <conflict> INTO, REPLACE INTO and WITH-led
+    // writes, not only a leading INSERT INTO/UPDATE/DELETE FROM.
+    // A later matching block's no-restricted-syntax entry replaces the
+    // earlier one wholesale — flat config never merges a rule's option
+    // array — which is why this array restates BANNED_SYNTAX instead of
+    // appending.
+    files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
+    ignores: ["app/lib/data/**", "workers/e2e-inbox.ts"],
+    rules: {
+      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, RAW_DML_WRITER],
+    },
+  },
+
+  {
+    // The one blessed site for the support address. It still bans every other
+    // shape; only the address literal is allowed here. 0509#3986.
+    files: ["app/components/footer.tsx"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX.filter((rule) => rule !== SUPPORT_ADDRESS_BAN),
+        RAW_DML_WRITER,
+      ],
+    },
+  },
+
+  {
+    files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
+    ignores: [
+      "app/lib/db.server.ts",
+      "app/lib/auth.server.ts",
+      "app/lib/auth-client.ts",
+      "app/components/toaster.tsx",
+    ],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        { paths: ONE_PAVED_PATH_IMPORTS, patterns: PAVED_PATH_PATTERNS },
+      ],
+    },
+  },
+
+  {
     files: ["app/**/*.{ts,tsx}"],
     ignores: [
       "app/**/*.server.ts",
       "app/routes/**",
       "app/root.tsx",
       "app/entry.*.tsx",
+      "app/lib/auth-client.ts",
+      "app/components/toaster.tsx",
     ],
-    rules: {
-      "no-restricted-imports": ["error", { paths: [], patterns: SERVER_ONLY_IMPORTS.filter((r) => "group" in r), }],
-    },
-  },
-
-  {
-    files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
-    ignores: ["app/lib/db.server.ts", "app/lib/auth.server.ts", "app/lib/auth-client.ts"],
     rules: {
       "no-restricted-imports": [
         "error",
         {
-          paths: ONE_PAVED_PATH_IMPORTS,
-          patterns: [
-            {
-              group: ["better-auth/*", "@better-auth/passkey/*", "@better-auth/api-key/*"],
-              message:
-                "better-auth subpath imports (client SDKs, plugin clients) live in exactly one module, app/lib/auth-client.ts; the server config stays in app/lib/auth.server.ts. A second import site is a second session authority. Source: 0509#3961 review — `paths` matches exact specifiers only, so `better-auth/client` slipped past the bare-name rule.",
-            },
+          paths: [...ONE_PAVED_PATH_IMPORTS, CLOUDFLARE_WORKERS_IMPORT],
+          patterns: PAVED_PATH_PATTERNS,
+        },
+      ],
+    },
+  },
+
+  {
+    files: ["app/lib/auth-client.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [...ONE_PAVED_PATH_IMPORTS, CLOUDFLARE_WORKERS_IMPORT],
+        },
+      ],
+    },
+  },
+
+  {
+    files: ["app/components/toaster.tsx"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            ...ONE_PAVED_PATH_IMPORTS.filter((p) => p !== SONNER_IMPORT),
+            CLOUDFLARE_WORKERS_IMPORT,
           ],
         },
       ],
@@ -201,10 +299,167 @@ export default tseslint.config(
   },
 
   {
+    files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
+    plugins: { boundaries, "import-x": importX },
+    settings: {
+      "import/resolver": {
+        node: { extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"] },
+      },
+      "import-x/extensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
+      "import-x/parsers": {
+        "@typescript-eslint/parser": [".ts", ".tsx"],
+      },
+      "import-x/resolver-next": [
+        createNodeResolver({
+          extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
+        }),
+      ],
+      "boundaries/elements": [
+        { type: "data-writer", pattern: "app/lib/data", partialMatch: false },
+        { type: "component", pattern: "app/components", partialMatch: false },
+        { type: "route", pattern: "app/routes", partialMatch: false },
+        { type: "worker", pattern: "workers", partialMatch: false },
+      ],
+      "boundaries/files": [
+        { category: "db", pattern: "app/lib/db.server.ts" },
+        { category: "auth", pattern: "app/lib/auth.server.ts" },
+        { category: "data-writer", pattern: "app/lib/data/**/*.server.ts" },
+        { category: "server-leaf", pattern: "app/lib/**/*.server.ts" },
+        { category: "server-module", pattern: "app/**/*.server.ts" },
+        {
+          category: "route-module",
+          pattern: ["app/routes/**/*.ts", "app/routes/**/*.tsx", "app/root.tsx"],
+        },
+        { category: "entry", pattern: ["app/entry.*.ts", "app/entry.*.tsx"] },
+        { category: "worker", pattern: "workers/**/*.ts" },
+        { category: "client", pattern: ["app/**/*.ts", "app/**/*.tsx"] },
+      ],
+    },
+    rules: {
+      "boundaries/dependencies": [
+        "error",
+        {
+          default: "disallow",
+          policies: [
+            {
+              from: {
+                file: {
+                  categories: {
+                    anyOf: ["client"],
+                    noneOf: ["server-module", "route-module", "entry"],
+                  },
+                },
+              },
+              disallow: { to: { file: { categories: "server-module" } } },
+              message: SERVER_IMPORT_RECEIPT,
+            },
+            {
+              from: { element: { type: "component" } },
+              disallow: { to: { file: { categories: "server-module" } } },
+              message: SERVER_IMPORT_RECEIPT,
+            },
+            {
+              allow: {
+                to: {
+                  file: {
+                    categories: { anyOf: ["client"], noneOf: ["server-module", "route-module"] },
+                  },
+                },
+              },
+            },
+            {
+              from: [{ element: { type: "route" } }, { file: { categories: "route-module" } }],
+              allow: {
+                to: [
+                  { element: { type: "component" } },
+                  { element: { type: "data-writer" } },
+                  { file: { categories: { anyOf: ["server-leaf", "db", "auth"] } } },
+                ],
+              },
+            },
+            {
+              from: { file: { categories: "entry" } },
+              allow: {
+                to: [
+                  { element: { type: "component" } },
+                  { file: { categories: "server-module" } },
+                ],
+              },
+            },
+            {
+              from: {
+                file: {
+                  categories: {
+                    anyOf: ["server-leaf"],
+                    noneOf: ["data-writer", "db", "auth"],
+                  },
+                },
+              },
+              allow: {
+                to: {
+                  file: { categories: { anyOf: ["server-leaf", "data-writer", "db", "auth"] } },
+                },
+              },
+            },
+            {
+              from: { element: { type: "data-writer" } },
+              allow: {
+                to: {
+                  file: {
+                    categories: {
+                      anyOf: ["data-writer", "db", "server-leaf"],
+                      noneOf: ["auth"],
+                    },
+                  },
+                },
+              },
+            },
+            {
+              from: { file: { categories: "auth" } },
+              allow: {
+                to: [
+                  { file: { categories: { anyOf: ["server-leaf", "data-writer", "db"] } } },
+                  { element: { type: "worker" } },
+                ],
+              },
+            },
+            {
+              from: { element: { type: "worker" } },
+              allow: { to: { file: { categories: "server-module" } } },
+            },
+          ],
+        },
+      ],
+      "import-x/no-cycle": ["error", { ignoreExternal: true }],
+    },
+  },
+
+  {
+    files: ["**/*.{ts,tsx,js,mjs,cjs}"],
+    plugins: { "import-x": importX },
+    rules: { "import-x/no-default-export": "error" },
+  },
+
+  {
+    files: [
+      "app/routes/**/*.{ts,tsx}",
+      "app/root.tsx",
+      "app/routes.ts",
+      "app/entry.*.{ts,tsx}",
+      "**/*.config.{ts,js,mjs,cjs}",
+      "eslint.config.js",
+      "workers/app.ts",
+      "workers/fixture-site.ts",
+      "workers/e2e-inbox.ts",
+    ],
+    rules: { "import-x/no-default-export": "off" },
+  },
+
+  {
     files: ["app/routes/**/*.{ts,tsx}"],
     rules: {
       "max-lines": ["error", { max: 150, skipBlankLines: false, skipComments: false }],
-      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, ...WRITER_SYNTAX],
+      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, RAW_DML_WRITER, ENV_DB_IN_ROUTES],
     },
   },
 

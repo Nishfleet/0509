@@ -695,6 +695,19 @@ We need cards for a handful of public surfaces, not per-request at scale. Browse
 | `luxon` 3.7.2 — 22.1 KB gzip | One monolithic `DateTime` class, **no tree-shaking** — you pay all 22 KB to format one date. ~10× the date-fns + tz pairing for the same `Intl`-backed capability. |
 | `dayjs` 1.11.23 — 3.45 KB core | No `"exports"` map, no `"module"` field, no `"type": "module"` — a CJS package with a mutable-global plugin registry (`dayjs.extend(timezone)`) that defeats static analysis, plus the Moment-style mutable API the house immutability rule forbids. |
 
+### 5.10 Toasts
+
+**Installed: `sonner` ^2.0.8** (lock 2.0.8). <https://sonner.emilkowal.ski/> (read 2026-09-23).
+
+DESIGN.md §11 names it: a toast says "saved" and offers "undo", and nothing else in the product raises one. It is also the stock shadcn/ui answer — the `sonner` block wraps this library — so the pick is the paved path, not a divergence. Base UI 1.8.0 ships no toast primitive, so the alternative was hand-rolling the queue, the swipe-to-dismiss and the screen-reader announcements.
+
+What the component owes us, it already ships: the toaster section renders `aria-live="polite"` / `aria-relevant="additions text"`, and its stylesheet carries a `@media (prefers-reduced-motion)` cutoff that disables every toast transition and animation. Both are pinned by `tests/unit/toaster.test.ts` — the live-region markup on the rendered `<section>`, and the reduced-motion cutoff on the exact stylesheet the installed package injects into `document.head` at import — so a version bump that drops either one fails the suite instead of regressing silently. Styling is token-pure: `app/components/toaster.tsx` sets `--normal-bg`/`--normal-text`/`--normal-border`/`--border-radius` to `var(--card)`/`var(--ink)`/`var(--line)`/`0` — the theme flip in `app/app.css` reaches the toast on its own.
+
+| Rejected | Why |
+|---|---|
+| A hand-rolled live region | Queueing, swipe gestures and aria-live announcements rebuilt in-house — exactly the hand-rolled machinery this file exists to refuse. The one component §11 allows to be ours is the mark. |
+| `react-hot-toast` 2.x | A second library for the same job where the design doc and the shadcn map both name sonner. |
+
 ---
 
 ## 6. Testing — and what not to build
@@ -1024,6 +1037,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | Styling | `tailwindcss` + `@tailwindcss/vite` | ^4.3.3 |
 | Components | `shadcn` CLI → copied source | 4.21.0 |
 | Badge and avatar primitives | `@base-ui/react` | 1.8.0 |
+| Toasts | `sonner` | 2.0.8 |
 | Durable scheduling + retries | Cloudflare Workflows (`step.sleep`, `step.do`) | platform |
 | Fan-out + concurrency cap | Cloudflare Queues (`max_concurrency`) | platform |
 | Screenshots + rendered DOM | Browser Run (Quick Actions; sessions via `@cloudflare/puppeteer`) | platform; `@cloudflare/puppeteer` ^1.4.0 |
@@ -1054,7 +1068,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | OpenAPI document | `zod-openapi` (samchungy) | 6.0.2, not yet installed |
 | Agent-readable docs | `/llms.txt` + `Accept: text/markdown` + `rel="alternate"` | spec v2 (2026-08-10) |
 
-**Installed beyond the scaffold:** `better-auth` ^1.7.5, `@better-auth/passkey` ^1.7.5, `@better-auth/api-key` ^1.7.5, `zod` ^4.6.5 (also a better-auth peer), `@cloudflare/puppeteer` ^1.4.0, `@base-ui/react` 1.8.0, `clsx` ^2.1.1, `tailwind-merge` ^3.7.0, `class-variance-authority` ^0.7.1. **Not yet installed**, because the engine that needs them has not shipped: `diff` 9.0.0, `@extractus/feed-extractor` 8.0.3 (`fast-xml-parser` 5.11.1 comes with it), `uplot` 1.6.32, `uplot-react` 1.2.4, `date-fns` 4.4.0, `@date-fns/tz` 1.5.0, `agents` 0.24.0, `@modelcontextprotocol/server` 2.0.0 and its peers `@modelcontextprotocol/client` and `@modelcontextprotocol/sdk`, `@cloudflare/workers-oauth-provider` 0.10.3, `zod-openapi` 6.0.2, `lucide-react`. Do not delete those rows. Platform rows have no package. `create-cloudflare`, `shadcn`, and `auth@1.7.5` are npx-only and are not missing dependencies.
+**Installed beyond the scaffold:** `better-auth` ^1.7.5, `@better-auth/passkey` ^1.7.5, `@better-auth/api-key` ^1.7.5, `zod` ^4.6.5 (also a better-auth peer), `@cloudflare/puppeteer` ^1.4.0, `@base-ui/react` 1.8.0, `clsx` ^2.1.1, `tailwind-merge` ^3.7.0, `class-variance-authority` ^0.7.1, `sonner` ^2.0.8. **Not yet installed**, because the engine that needs them has not shipped: `diff` 9.0.0, `@extractus/feed-extractor` 8.0.3 (`fast-xml-parser` 5.11.1 comes with it), `uplot` 1.6.32, `uplot-react` 1.2.4, `date-fns` 4.4.0, `@date-fns/tz` 1.5.0, `agents` 0.24.0, `@modelcontextprotocol/server` 2.0.0 and its peers `@modelcontextprotocol/client` and `@modelcontextprotocol/sdk`, `@cloudflare/workers-oauth-provider` 0.10.3, `zod-openapi` 6.0.2, `lucide-react`. Do not delete those rows. Platform rows have no package. `create-cloudflare`, `shadcn`, and `auth@1.7.5` are npx-only and are not missing dependencies.
 
 ---
 
@@ -1075,6 +1089,7 @@ The version in this table is the `package.json` specifier. An earlier section of
 | `react` | ^19.2.8 | §1.1 | UI runtime the scaffold emits | Preact. React Router 8's types are React | 19.3.0 |
 | `react-dom` | ^19.2.8 | §1.1 | Client renderer. Unit tests call `react-dom/server` | A second renderer | 19.3.0 |
 | `react-router` | ^8.4.0 | §1, §8 | Framework mode, SSR, routing | `@react-router/node` and `@react-router/serve`. C3 deletes both | 8.4.0 |
+| `sonner` | ^2.0.8 | §5.10 | The one toast surface: "saved" and "undo" per DESIGN.md §11 | A hand-rolled live region (Base UI ships no toast primitive), `react-hot-toast` | 2.0.8 |
 | `tailwind-merge` | ^3.7.0 | §3.2 | Class conflict resolution inside `cn()` | A hand-written Tailwind merger | 3.7.0 |
 | `zod` | ^4.6.5 | §5.6 | Request validation. better-auth already depends on zod 4 | `valibot`, `arktype` | 4.6.5 |
 | `@cloudflare/vite-plugin` | ^1.56.0 | §1.2 | Workers dev and deploy from Vite | A hand-written wrangler wrapper, and a wrangler `assets` block | 1.56.0 |
@@ -1087,6 +1102,8 @@ The version in this table is the `package.json` specifier. An earlier section of
 | `@types/react` | ^19.2.18 | §9 | JSX types for `"jsx": "react-jsx"` | Omitting it. Component files fail typecheck | 19.3.0 |
 | `@types/react-dom` | ^19.2.7 | §9 | Types for `react-dom/server` in unit tests | An untyped `renderToStaticMarkup` | 19.3.0 |
 | `eslint` | ^10.11.0 | §9 | `npm run lint` is `eslint . && knip` | oxlint or biome. Neither loads this type-checked config or its AST bans | 10.11.0 |
+| `eslint-plugin-boundaries` | ^7.2.0 | §9, REBUILD-TRUST §B4 | Declares element types and which of them may import which. Replaces the `**/*.server` glob | dependency-cruiser (a second tool, CI-only feedback), Sheriff (cannot add the other rules this config already runs), Feature-Sliced Design with steiger (a full restructure during the rebuild) | 7.2.0 |
+| `eslint-plugin-import-x` | ^4.17.1 | §9, REBUILD-TRUST §B4 | `import-x/no-cycle` on `app/**` and `workers/**`, and `import-x/no-default-export` except where the framework requires a default export | `eslint-plugin-import` (unmaintained). dependency-cruiser's cycle check, for the same second-tool reason as boundaries | 4.17.1 |
 | `eslint-plugin-react-hooks` | ^7.1.1 | §9 | Hooks rules on `app/` and `workers/` | Turning the rules off | 7.1.1 |
 | `globals` | ^17.12.0 | §9 | Browser and Node globals in `eslint.config.js` | A handwritten globals list | 17.12.0 |
 | `knip` | ^6.37.0 | §9 | Second half of `npm run lint`. Fails on an unused dependency | An allowlist. This file's rule is to remove the unused dependency | 6.37.0 |
@@ -1096,6 +1113,7 @@ The version in this table is the `package.json` specifier. An earlier section of
 | `vite` | ^8.0.3 | §1.1 | Dev server and bundler the scaffold wires | webpack | 8.3.0 |
 | `vitest` | 4.1.11 | §6.1 | Unit tests. Exact pin. The `overrides` block pins `@vitest/*` to the same version | vitest 5. The Workers plugin does not support it | 4.1.11 |
 | `wrangler` | ^4.135.0 | §1.3 | `wrangler types` and `wrangler deploy` | `@cloudflare/workers-types`. It fights the generated `Env` | 4.135.0 |
+| `chrome-devtools-mcp` | 1.9.0 | `.agents/skills/verify/SKILL.md` | Google's stock `chrome-devtools` CLI ([ChromeDevTools/chrome-devtools-mcp](https://github.com/ChromeDevTools/chrome-devtools-mcp) 1.9.0). `verify:start` pins `--executablePath` to Playwright's Chromium, so the CLI does not launch a second browser. Optional peers `@blackwell-systems/gcf` and `@toon-format/toon` are upstream devDependencies; the lockfile does not install them | A script under `scripts/`, `bin/` or `tools/` | 1.9.0 |
 
 ## Open items for Nish or Fable
 
