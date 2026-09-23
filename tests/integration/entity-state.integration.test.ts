@@ -82,6 +82,10 @@ describe("entity data layer", () => {
     expect(await readCompetitor(ws, "es2-dismissed")).toBeNull();
     expect(await readCompetitor(ws, "es2-self")).toBeNull();
     expect(await readCompetitor(ws, "es2-other")).toBeNull();
+    expect(await readCompetitor(ws, "es2-missing")).toBeNull();
+    expect(await setCompetitorState(ws, "es2-missing", "off", "2026-09-23T09:00:00.000Z")).toBe(
+      false,
+    );
   });
 
   it("flips a competitor off, stamps the change, and no-ops on a repeat", async () => {
