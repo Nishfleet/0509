@@ -63,11 +63,19 @@ error (ce5fed17d).
 
 Her verification skill has two halves: a **reproducible way to drive the real
 application**, and a **feature map** that tells the agent what the application
-even is. We need both. We do not need her first half's shape — she built a CLI
-inside a skill directory because Cursor's agent window is an Electron app with
-no test runner that can drive it. Ours is a web app, and the stock reproducible
-driver for a web app is Playwright. **Building a CLI here would be exactly the
-glue the rebuild deletes.**
+even is. We need both. **Decision, 2026-09-22 (#4251):** both halves ship as a
+skill — `.agents/skills/verify/SKILL.md`, landed via #4341 — on Nish's word:
+*"make it exactly as described."* The driver is Google's stock
+`chrome-devtools` CLI from the `chrome-devtools-mcp` package, not code we
+wrote, so scripts-to-zero still holds.
+
+**Rejected alternative.** Playwright alone, no skill — this section's original
+position. The reasoning: her CLI's shape answered an Electron app with no test
+runner that could drive it, ours is a web app whose stock reproducible driver
+is Playwright, and a hand-built CLI is exactly the glue the rebuild deletes.
+What it missed: the CLI is the vendor's stock binary rather than glue we
+wrote, and a skill directory is where the procedure and the feature map live
+so every agent session drives the app the same way.
 
 ### A1. One Playwright config, two modes
 
@@ -120,7 +128,7 @@ child issues, listed in §E.
 
 ### A3. The feature map
 
-`docs/FEATURE-MAP.md`. Her framing, 11:02: a Slack report arrives as a vague
+`.agents/skills/verify/feature-map.md`. Her framing, 11:02: a Slack report arrives as a vague
 screenshot and three question marks, and an agent that can drive the app still
 has no idea what the user meant. The map is *materialised memory* — what exists,
 how a user reaches it (route, element, keyboard), what it does.
@@ -133,7 +141,7 @@ omits the gap is how an agent concludes the nav must already exist somewhere it
 has not looked.**
 
 Maintenance, per the packet: every PR that adds or changes a route updates
-`docs/FEATURE-MAP.md` in the same PR, and the Opus reviewer checks it against
+`.agents/skills/verify/feature-map.md` in the same PR, and the Opus reviewer checks it against
 `app/routes.ts` and the e2e test titles. **No bespoke test reads this file.**
 `docs/REBUILD-DONE.md` §D forbids tests about docs, and a test that greps a
 markdown table is the hand-rolled linter Fable already rejected once (ce5fed17d).
@@ -245,7 +253,7 @@ that trips it reads the reason at the moment it matters:
 | `import-x/no-default-export` | named exports, so a module can be found by grep | off for route modules, config files, and the three workerd entries |
 | `no-restricted-imports` `cloudflare:workers` in client modules | same boundary, the other direction | 7727bf787 |
 | `no-restricted-imports` `kysely` outside `app/lib/db.server.ts`; `better-auth` and its plugins outside `app/lib/auth.server.ts` | one paved path per blessed pattern | 25:26 |
-| `no-restricted-syntax` on `insertInto` / `updateTable` / `deleteFrom` in `app/routes/**` | one writer per table | 25:26 |
+| `no-restricted-syntax` on DML write text — `INSERT [OR …] INTO`, `REPLACE INTO`, `UPDATE … SET`, `DELETE FROM`, `WITH …` writes — in `app/**` and `workers/**` outside `app/lib/data/**` | one writer per table | 25:26; #4313 — the kysely selectors matched nothing after the raw-D1 rebuild, so the rule fires on the SQL text itself |
 | `no-restricted-syntax` on `env.DB` in `app/routes/**` | one data layer | 25:26 |
 | `max-lines: 150` on `app/routes/**` | routes stay thin | house rule, `coding-style.md` |
 | `no-inline-comments` + `no-warning-comments` on `app/**`, `workers/**` | comments banned in app code | 23:02, Nish 2026-09-21 |
@@ -455,14 +463,13 @@ teaches one agent once; a rule teaches every agent forever.
 
 Implemented in the `opus-review` job's `prompt:` (`.github/workflows/ci.yml`) by
 PR #4255, which asks all three questions above word for word and states the
-verdict rule in its grade-capping form. The same prompt also asks a fourth
-question (Nish 2026-09-22): for a PR touching `app/` or `workers/`, the body
-must carry a `## Verification` section showing a real run of the verify skill
-(`.agents/skills/verify/`) at the PR head — commands, pasted output and the
-head SHA — and a missing or prose-only section fails the review.
+verdict rule in its grade-capping form. The fourth question (Nish 2026-09-22,
+a pasted `## Verification` section) was removed by #4523: proof at the prose
+rung failed 37 of 39 graded PRs. The running app is proven by `preview-assert`,
+a required check that builds the Worker and runs the e2e suite at the PR head.
 
 Reviewers also check the two things no test checks: that
-`docs/FEATURE-MAP.md` matches `app/routes.ts` after a route change, and that
+`.agents/skills/verify/feature-map.md` matches `app/routes.ts` after a route change, and that
 every new dependency has a row in `docs/REBUILD-STACK.md`.
 
 ### C2. The scout packet's gardener section
@@ -501,7 +508,7 @@ re-enabling is a config change and not a design session.
 > that compounds.
 >
 > **4. Feature-map drift.** Read `app/routes.ts` and the test titles in
-> `e2e/`. Compare against `docs/FEATURE-MAP.md`: a route with no row, a row with
+> `e2e/`. Compare against `.agents/skills/verify/feature-map.md`: a route with no row, a row with
 > no route, a row whose Proof column names a test that no longer exists, a row
 > describing behaviour the route no longer has. **If it has drifted, regenerate
 > the affected rows from those two sources by hand and open a PR with only that
@@ -535,7 +542,7 @@ a React Router 8 app on one Worker, and the equivalent conventions are these —
 | Main process vs renderer thread | `*.server` modules vs client modules | `boundaries/dependencies` |
 | One blessed way per pattern | one data layer (`app/lib/db.server.ts`), one session authority (`app/lib/auth.server.ts`) | `no-restricted-imports` on `kysely`, `better-auth` and its plugins |
 | Thin entry points | routes are 150 lines and do not query | `max-lines`, plus `no-restricted-syntax` on `env.DB` in routes |
-| — | one writer per table | `no-restricted-syntax` on `insertInto`/`updateTable`/`deleteFrom` in routes |
+| — | one writer per table | `no-restricted-syntax` on DML statement text in `app/**` + `workers/**` outside `app/lib/data/**` |
 | Comments banned | comments banned in app code | `no-inline-comments`, `no-warning-comments`, §B5 |
 
 Two of these name files that do not exist yet — `app/lib/db.server.ts` and
@@ -552,7 +559,7 @@ Child issues under #3842. Numbers and labels are in the PR description and the
 umbrella.
 
 - **The comment sweep** (`agent-ready`) — strip comments from `app/**`, moving
-  anything load-bearing into the commit message or `docs/FEATURE-MAP.md`. §B5.
+  anything load-bearing into the commit message or `.agents/skills/verify/feature-map.md`. §B5.
 - **Error tracking** (`agent-ready`) — `@sentry/cloudflare`, Developer plan,
   `SENTRY_DSN` as a Worker secret, Sentry→GitHub issue alert, dependency row in
   `docs/REBUILD-STACK.md`. §A5.

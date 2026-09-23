@@ -71,7 +71,7 @@ and a support mail about the same failure can be linked by hand.
    `agent-ready`, p <= 0.1 closes with `not-actionable`, in between parks
    `needs-orchestrator`.
 4. **Reproduction packet** (a section in `CLAUDE.md`): read the raw text from
-   D1, map it to `docs/FEATURE-MAP.md` rows, drive production through the e2e
+   D1, map it to `.agents/skills/verify/feature-map.md` rows, drive production through the e2e
    helpers with the Access service token, and end with either a failing spec
    under `e2e/` or a no-repro proof citing what was tried. Nothing from the raw
    text goes into the PR.

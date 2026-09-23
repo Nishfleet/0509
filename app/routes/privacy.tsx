@@ -1,4 +1,11 @@
+import type { Route } from "./+types/privacy";
+
 import { Footer } from "../components/footer";
+import {
+  breadcrumbJsonLd,
+  jsonLdGraph,
+  organizationJsonLd,
+} from "../lib/structured-data";
 
 function Section({
   heading,
@@ -61,6 +68,21 @@ const SECTIONS = [
   },
 ] as const;
 
+export function meta(_: Route.MetaArgs) {
+  return [
+    { title: "Privacy — Five to Nine" },
+    {
+      "script:ld+json": jsonLdGraph([
+        organizationJsonLd(),
+        breadcrumbJsonLd([
+          { name: "Five to Nine", path: "/" },
+          { name: "Privacy", path: "/privacy" },
+        ]),
+      ]),
+    },
+  ];
+}
+
 export default function Privacy() {
   return (
     <main className="bg-bone text-ink mx-auto w-full max-w-[46rem] px-6 py-16 sm:py-24">
@@ -69,7 +91,7 @@ export default function Privacy() {
           className="font-display text-ink text-base font-bold tracking-[-0.03em]"
           href="/"
         >
-          05<span className="bg-accent text-on-accent px-[5px]">09</span>
+          05<span className="bg-green text-on-green px-[5px]">09</span>
         </a>
         <h1 className="font-display mt-8 text-[clamp(1.75rem,3.6vw,2.9rem)] leading-[1.15] font-semibold tracking-[-0.02em]">
           Privacy
