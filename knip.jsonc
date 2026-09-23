@@ -1,5 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreExportsUsedInFile": { "function": true },
 
   // Dead code is the gardener's first job (talk 25:19: "delete tech debt that
   // we already have"). knip is the stock finder; every entry below is the app's

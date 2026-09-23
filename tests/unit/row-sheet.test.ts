@@ -2,12 +2,7 @@ import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import {
-  RowExpansion,
-  rowPanelClass,
-  rowSheetPopupClass,
-  useIsPhone,
-} from "../../app/components/row-sheet";
+import { RowExpansion, rowPanelClass, rowSheetPopupClass } from "../../app/components/row-sheet";
 
 function render(element: ReactElement): string {
   return renderToStaticMarkup(element);
@@ -54,7 +49,6 @@ describe("the row expansion", () => {
     expect(html).toContain('data-slot="row-panel"');
     expect(html).toContain("detail");
     expect(html).not.toContain('data-slot="row-sheet"');
-    expect(useIsPhone).toBeTypeOf("function");
   });
 
   it("stays closed when defaultOpen is omitted", () => {
