@@ -10,6 +10,9 @@ import { describe, expect, it } from "vitest";
 // the `09` span painted as a transparent box while a string assertion stayed
 // green. This compiles the page's colour and type utilities against the real
 // `app/app.css` and fails when one of them emits nothing.
+//
+// The scan reads static className="..." strings only. A className={...}
+// expression, a template, or a class on an imported component is not seen.
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const PRIVACY = path.join(REPO_ROOT, "app/routes/privacy.tsx");
@@ -46,7 +49,10 @@ async function classesWithNoRule(names: string[]): Promise<string[]> {
   const css = await readFile(path.join(REPO_ROOT, "app/app.css"), "utf8");
   const { build } = await compile(css, {
     base: REPO_ROOT,
-    loadStylesheet: async () => {
+    loadStylesheet: async (id) => {
+      if (id !== "tailwindcss") {
+        throw new Error(`app/app.css imported ${id}; this detector only resolves tailwindcss`);
+      }
       const resolved = path.join(REPO_ROOT, "node_modules", "tailwindcss", "index.css");
       return {
         path: resolved,
