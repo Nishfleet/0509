@@ -11,13 +11,17 @@ const STATE_TEXT: Record<BrandSwitchState, string> = {
   you: "YOU",
 };
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const DAY_MONTH = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric",
+  month: "short",
+  timeZone: "UTC",
+});
 
 export function brandSwitchNote(state: BrandSwitchState, pausedOn: Date | null): string {
   if (state === "on") return "Off pauses tracking · history kept";
   if (state === "you") return "Your brand · always tracked";
   if (pausedOn === null) return "paused · history kept";
-  const day = `${String(pausedOn.getUTCDate())} ${MONTHS[pausedOn.getUTCMonth()]}`;
+  const day = DAY_MONTH.format(pausedOn);
   return `paused ${day} · history kept`;
 }
 

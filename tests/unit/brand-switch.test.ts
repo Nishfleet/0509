@@ -60,7 +60,7 @@ describe("the brand switch note", () => {
   });
 
   it("prints the paused date for off from the UTC instant", () => {
-    expect(brandSwitchNote("off", new Date("2026-09-22T12:00:00Z"))).toBe("paused 22 Sep · history kept");
+    expect(brandSwitchNote("off", new Date("2026-09-22T12:00:00Z"))).toBe("paused 22 Sept · history kept");
     expect(brandSwitchNote("off", null)).toBe("paused · history kept");
   });
 
@@ -82,7 +82,7 @@ describe("the brand switch field", () => {
     const html = renderField("off", new Date("2026-09-22T12:00:00Z"));
     expect(html).toContain('data-slot="brand-switch-field"');
     expect(html).toContain('data-slot="brand-switch"');
-    expect(html).toContain("paused 22 Sep · history kept");
+    expect(html).toContain("paused 22 Sept · history kept");
     expect(html).not.toContain('role="dialog"');
   });
 
