@@ -1,4 +1,4 @@
-import type { RenderedBrief } from "./brief-data";
+import type { RenderedBrief } from "../../app/lib/brief-payload";
 import { escapeHtml } from "./brief-template";
 
 export interface IncidentOpenContext {
