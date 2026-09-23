@@ -23,7 +23,9 @@ describe("public-route manifest", () => {
       const urlPath = `/${path}`;
       const classified =
         (PUBLIC_PATHS as readonly string[]).includes(urlPath) ||
-        DISALLOWED_PREFIXES.some((prefix) => urlPath.startsWith(prefix)) ||
+        DISALLOWED_PREFIXES.some(
+          (prefix) => urlPath === prefix || urlPath.startsWith(`${prefix}/`),
+        ) ||
         path === CARD_ROUTE_PATH;
       expect(
         classified,

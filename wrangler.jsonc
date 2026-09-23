@@ -103,6 +103,7 @@
   // reach the retry limit are deleted permanently otherwise, and a silently
   // dropped brief is the failure the contract forbids.
   "queues": {
+    "producers": [{ "queue": "send-email", "binding": "SEND_EMAIL" }],
     "consumers": [
       {
         "queue": "send-email",
@@ -116,10 +117,11 @@
   },
 
   "triggers": {
-    // The dead-man ping, and nothing else yet. Every five minutes: an external
-    // service alerts when the reports stop, which is the one failure a Worker
-    // cannot report about itself.
-    "crons": ["*/5 * * * *"]
+    // The dead-man ping, every five minutes: an external service alerts when
+    // the reports stop, which is the one failure a Worker cannot report about
+    // itself. Also the nightly delivery sweeper, which re-enqueues stale
+    // pending digests and claims.
+    "crons": ["*/5 * * * *", "0 3 * * *"]
   },
 
   "routes": [
