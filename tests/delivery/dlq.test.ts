@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { deliveryFailedAlert, handleDlqBatch } from "../../workers/delivery/dlq-consumer";
+import {
+  DELIVERY_FAILED_KIND,
+  DELIVERY_FAILED_TITLE,
+  DLQ_ALERT_PREFIX,
+  deliveryFailedAlert,
+  handleDlqBatch,
+} from "../../workers/delivery/dlq-consumer";
 
 interface Recorded {
   sql: string;
@@ -48,8 +54,9 @@ describe("deliveryFailedAlert", () => {
       reason: "invalid recipient",
       now: "2026-09-23T00:00:00.000Z",
     });
-    expect(alert.id).toBe("dlq:dg_1");
-    expect(alert.kind).toBe("delivery_failed");
+    expect(alert.id).toBe(`${DLQ_ALERT_PREFIX}dg_1`);
+    expect(alert.kind).toBe(DELIVERY_FAILED_KIND);
+    expect(alert.title).toBe(DELIVERY_FAILED_TITLE);
     expect(alert.body).toContain("invalid recipient");
   });
 

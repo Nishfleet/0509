@@ -23,7 +23,7 @@ export function deliveryFailedAlert(input: {
 }): DeliveryFailedAlert {
   const reason = input.reason ?? "unknown error";
   return {
-    id: DLQ_ALERT_PREFIX + input.digest_id,
+    id: `${DLQ_ALERT_PREFIX}${input.digest_id}`,
     workspace_id: input.workspace_id,
     kind: DELIVERY_FAILED_KIND,
     severity: "high",
