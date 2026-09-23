@@ -56,7 +56,12 @@ export default defineConfig({
   webServer: process.env.PLAYWRIGHT_TEST_BASE_URL
     ? undefined
     : {
-        command: `npx wrangler d1 migrations apply DB --local && npx wrangler dev --port ${localPort} --local`,
+        // The local D1 starts empty, so `auth.api.getSession` throws a schema
+        // mismatch instead of redirecting and preview never exercises the
+        // session gate production does. Apply the same migrations
+        // deploy-production.yml applies --remote, then start the Worker. This
+        // is the stock `wrangler d1 migrations apply`; no wrapper.
+        command: `npx wrangler d1 migrations apply 0509 --local </dev/null && npx wrangler dev --port ${localPort} --local`,
         url: `http://127.0.0.1:${localPort}/api/health`,
         reuseExistingServer: false,
         timeout: 120_000,

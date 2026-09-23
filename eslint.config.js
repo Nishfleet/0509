@@ -44,7 +44,15 @@ const ONE_PAVED_PATH_IMPORTS = [
   },
 ];
 
+const SUPPORT_ADDRESS_BAN = {
+  selector:
+    "Literal[value='support@0509.io'], TemplateLiteral[quasis.0.value.raw='support@0509.io'], JSXText[value=/support@0509\\.io/], Literal[value='mailto:support@0509.io']",
+  message:
+    "The support address is typed once, in app/components/footer.tsx; every page imports <Footer /> instead. A second literal is a second address to change and a page that silently keeps the old one. Source: 0509#3986 review — `encoded: structure` names rung 1, and a constant alone does not stop a re-type.",
+};
+
 const BANNED_SYNTAX = [
+  SUPPORT_ADDRESS_BAN,
   {
     selector: "NewExpression[callee.name='RegExp'] > Literal.arguments, NewExpression[callee.name='RegExp'] > TemplateLiteral",
     message:
@@ -170,6 +178,18 @@ export default tseslint.config(
         { terms: WORKAROUND_TERMS, location: "anywhere" },
       ],
       "no-restricted-syntax": ["error", ...BANNED_SYNTAX],
+    },
+  },
+
+  {
+    // The one blessed site for the support address. It still bans every other
+    // shape; only the address literal is allowed here. 0509#3986.
+    files: ["app/components/footer.tsx"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX.filter((rule) => rule !== SUPPORT_ADDRESS_BAN),
+      ],
     },
   },
 

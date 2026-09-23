@@ -72,14 +72,28 @@ test("a failed logo falls back to the monogram and the row does not scroll or sh
   const cls = await page.evaluate(() => (window as unknown as { __cls: number }).__cls);
   expect(cls).toBeLessThan(0.05);
 
+  // The chip's `href` is `/app/competitors/loopwell`, a session-gated route:
+  // `requireSession` (app/lib/require-session.server.ts) redirects a visitor
+  // with no session to `/login`. Both modes now reach that gate, because
+  // playwright.config.ts applies the D1 migrations to the local database
+  // before `wrangler dev` starts, exactly as deploy-production.yml does for
+  // the real database. Before that the local D1 was empty, so
+  // `auth.api.getSession` threw a schema mismatch and the URL stayed on the
+  // chip's own href — a preview-only end state that asserted nothing a
+  // visitor can reach (0509#4244, run 35754687604: `waitForURL` timeout,
+  // "navigated to https://0509.io/login").
+  //
+  // The design page owns two things here, and both are asserted: the chip
+  // points at the app route, and following it is a client-side navigation
+  // (React Router handles the loader's redirect in the document, so the
+  // `__stay` marker set before the click is still there after). A hard reload
+  // would clear it.
+  const self = page.getByRole("link", { name: "You · Loopwell" });
+  await expect(self).toHaveAttribute("href", "/app/competitors/loopwell");
   await page.evaluate(() => {
     (window as unknown as { __stay: number }).__stay = 1;
   });
-  await page.getByRole("link", { name: "You · Loopwell" }).click();
-  // The chip links into /app, which sits behind the session gate: an
-  // unauthenticated click lands on /login. The assertion is that the gate
-  // redirects through client-side navigation — __stay survives — rather than
-  // a full reload (webServer now migrates the local D1, so the gate is real).
+  await self.click();
   await page.waitForURL(/\/login$/);
   expect(await page.evaluate(() => (window as unknown as { __stay?: number }).__stay)).toBe(1);
 });
