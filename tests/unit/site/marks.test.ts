@@ -103,9 +103,26 @@ describe("r2SiteArtifacts", () => {
     await artifacts.putDiffHunks(key, diff, "2026-09-23T06:00:01.000Z");
 
     expect(await artifacts.getDiffHunks(key)).toEqual(diff);
-    const raw = await (await env.SITE_ARTIFACTS.get(key))?.text();
-    expect(raw).not.toContain("base64");
+    const stored = await env.SITE_ARTIFACTS.get(key);
+    const raw = await stored?.text();
+
+    expect(raw).toBe(JSON.stringify(diff));
+    expect(stored?.size).toBe(new TextEncoder().encode(raw ?? "").byteLength);
+    expect(stored?.customMetadata?.captured_at).toBe("2026-09-23T06:00:01.000Z");
     expect(after.text).not.toBe(before.text);
+  });
+
+  it("rejects a body that is not a PageDiff instead of casting it", async () => {
+    const key = diffHunksKey({
+      workspaceId: "ws-marks",
+      entityId: "e1",
+      pageId: "p1",
+      fetchedAt: "2026-09-23T06:00:02.000Z",
+    });
+
+    await env.SITE_ARTIFACTS.put(key, JSON.stringify({ hunks: [{ atWord: 0 }] }));
+
+    await expect(artifacts.getDiffHunks(key)).rejects.toThrow(/hunks/);
   });
 
   it("returns null for a missing key rather than throwing", async () => {

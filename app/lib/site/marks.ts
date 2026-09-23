@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 import type { PageDiff } from "./diff";
 
 export interface StoredDiff {
@@ -58,6 +60,18 @@ export function buildStoredDiff(opts: {
   };
 }
 
+const diffHunkSchema = z.object({
+  before: z.string(),
+  after: z.string(),
+  atWord: z.number().int().nonnegative(),
+});
+
+const pageDiffSchema = z.object({
+  hunks: z.array(diffHunkSchema),
+  addedWords: z.number().int().nonnegative(),
+  removedWords: z.number().int().nonnegative(),
+});
+
 export interface SiteArtifacts {
   putText(key: string, body: string, capturedAt: string): Promise<void>;
   putDiffHunks(key: string, diff: PageDiff, capturedAt: string): Promise<void>;
@@ -88,7 +102,7 @@ export function r2SiteArtifacts(bucket: R2Bucket): SiteArtifacts {
     async getDiffHunks(key) {
       const object = await bucket.get(key);
       if (object === null) return null;
-      return JSON.parse(await object.text()) as PageDiff;
+      return pageDiffSchema.parse(JSON.parse(await object.text()));
     },
   };
 }

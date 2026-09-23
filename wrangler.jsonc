@@ -75,11 +75,10 @@
   "r2_buckets": [
     { "binding": "CARD_ARTIFACTS", "bucket_name": "0509-snapshots" },
     // Site-change artifacts (site-change engine, #3879 packet P3): the raw
-    // extracted texts, the screenshot pairs and the diff-hunks JSON. Same
-    // bucket as the card artifacts because the standing-card prefix is owned
-    // by its own R2 lifecycle rule; the `site/` prefix sits beside `card/`
-    // under that bucket and gets its own (yet-to-be-added) one-year expiry,
-    // documented in docs/engines/site-change.md §"Failure modes".
+    // extracted texts, the screenshot pairs and the diff-hunks JSON, under a
+    // `site/` prefix on the same 0509-snapshots bucket as the card artifacts.
+    // Its one-year expiry is docs/engines/site-change.md §"Failure modes",
+    // tracked as its own guardrails work rather than carried on this binding.
     { "binding": "SITE_ARTIFACTS", "bucket_name": "0509-snapshots" }
   ],
 

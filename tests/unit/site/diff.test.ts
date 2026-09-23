@@ -8,7 +8,7 @@ import gymA from "../../fixtures/gymshark-2026-09-22-a.html?raw";
 import gymB from "../../fixtures/gymshark-2026-09-22-b.html?raw";
 
 describe("diffPageText", () => {
-  it("returns no hunks for identical text, without running the differ", () => {
+  it("returns no hunks for identical text", () => {
     const diff = diffPageText("same words here", "same words here");
 
     expect(diff.hunks).toEqual([]);
@@ -26,10 +26,12 @@ describe("diffPageText", () => {
     expect(isEmptyDiff(diff)).toBe(false);
   });
 
-  it("offsets a hunk by the words that precede it, not by the whole text", () => {
-    const diff = diffPageText("alpha beta gamma", "alpha delta gamma");
+  it("uses structuredPatch's own word position, not a hand-folded counter", () => {
+    const before = alpha;
+    const diff = diffPageText(before, "alpha delta gamma");
 
     expect(diff.hunks).toEqual([{ before: "beta", after: "delta", atWord: 1 }]);
+    expect(before.split(/\s+/)[diff.hunks[0]?.atWord]).toBe("beta");
   });
 
   it("keeps an adjacent replacement to one hunk, as jsdiff merges them", () => {
@@ -43,7 +45,7 @@ describe("diffPageText", () => {
   it("counts an insertion as added words with an empty before", () => {
     const diff = diffPageText("Price is 50", "Price is now 50");
 
-    expect(diff.hunks).toEqual([{ before: "", after: "now ", atWord: 2 }]);
+    expect(diff.hunks).toEqual([{ before: "", after: "now", atWord: 2 }]);
     expect(diff.addedWords).toBe(1);
     expect(diff.removedWords).toBe(0);
   });
@@ -51,9 +53,22 @@ describe("diffPageText", () => {
   it("counts a deletion as removed words with an empty after", () => {
     const diff = diffPageText("Free shipping today", "Free shipping");
 
-    expect(diff.hunks).toEqual([{ before: " today", after: "", atWord: 2 }]);
+    expect(diff.hunks).toEqual([{ before: "today", after: "", atWord: 2 }]);
     expect(diff.addedWords).toBe(0);
     expect(diff.removedWords).toBe(1);
+  });
+
+  it("separates two distant hunks and offsets each from its own preceding words", () => {
+    const before = "a b c d e f g h i j";
+    const after = "A b c d e f g h i J";
+    const diff = diffPageText(before, after);
+
+    expect(diff.hunks).toEqual([
+      { before: "a", after: "A", atWord: 0 },
+      { before: "j", after: "J", atWord: 9 },
+    ]);
+    expect(before.split(/\s+/)[diff.hunks[0]?.atWord as number]).toBe("a");
+    expect(before.split(/\s+/)[diff.hunks[1]?.atWord as number]).toBe("j");
   });
 
   it("diffs the real gymshark pair to nothing, because the hash gate never escalates it", async () => {
@@ -72,8 +87,14 @@ describe("diffPageText", () => {
     const diff = diffPageText(a.text, b.text);
 
     expect(diff.hunks).toEqual([{ before: "Summer", after: "Winter", atWord: 1 }]);
+    expect(diff.addedWords).toBe(1);
+    expect(diff.removedWords).toBe(1);
+    expect(a.text.split(/\s+/)[diff.hunks[0]?.atWord as number]).toBe("Summer");
+    expect(b.text.split(/\s+/)[diff.hunks[0]?.atWord as number]).toBe("Winter");
   });
 });
+
+const alpha = "alpha beta gamma";
 
 describe("countWords", () => {
   it("counts whitespace-separated words and treats blank as zero", () => {
