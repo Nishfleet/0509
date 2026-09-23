@@ -38,12 +38,12 @@ state.
 
 | Route | File | Reach | Keyboard | What it does | Proof |
 |---|---|---|---|---|---|
-| `/app` | `app/routes/app.home.tsx` | after sign-in, once the workspace has a self entity. Until then the loader redirects to `/onboarding` | `Tab` to the button, `Enter` | Home. The signed-in email and an "Add a passkey" button that runs better-auth's register ceremony (`generate-register-options` → `verify-registration`) against the live session. | **J3**, **J4**; the register ceremony is **J2** — `e2e/j2-passkey.spec.ts` |
-| `/app/competitors` | `app/routes/app.competitors.tsx` | — | — | The tracked set. Currently a stub. | **J6** |
-| `/app/competitors/:entityId` | `app/routes/app.competitor.tsx` | a row on `/app/competitors` | — | One competitor. Currently a stub. | **J7**, **J10** |
-| `/app/alerts` | `app/routes/app.alerts.tsx` | — | — | What changed. Currently a stub. | **J7**, **J8** |
-| `/app/settings` | `app/routes/app.settings.tsx` | — | — | Workspace settings. Links to the public card. | **J13**, **J14** |
-| `/app/settings/card` | `app/routes/settings.card.tsx` | the "Public card" link on `/app/settings` | `Tab` to a button, `Enter` | The public-card switch: turn it on (which mints an opaque URL), copy the link, rotate the URL, turn it off. Turning it off is what the public route's 404 is graded on — the edge copy expires on its own inside a minute, which is the contract's "404 within a minute". | `tests/integration/card/public-card.integration.test.ts` — the writer's publish, rotate, unpublish and two-workspace uniqueness against real D1 |
+| `/app` | `app/routes/app.home.tsx` | after sign-in, once the workspace has a self entity. Until then the loader redirects to `/onboarding`. The app nav is on the page and links to Competitors, Alerts and Settings. | `Tab` through Home, Competitors, Alerts, Settings, then the passkey button. `Enter` follows the focused link. Home carries `aria-current="page"`. | Home. The signed-in email and an "Add a passkey" button that runs better-auth's register ceremony (`generate-register-options` → `verify-registration`) against the live session. | **J3**, **J4**; the register ceremony is **J2** — `e2e/j2-passkey.spec.ts`. The nav is `tests/unit/nav.test.ts`. |
+| `/app/competitors` | `app/routes/app.competitors.tsx` | the Competitors entry in the app nav | `Tab` to Competitors, `Enter`. Competitors carries `aria-current="page"`. | The tracked set. Currently a stub. | **J6**. The nav is `tests/unit/nav.test.ts`. |
+| `/app/competitors/:entityId` | `app/routes/app.competitor.tsx` | a row on `/app/competitors`. That row is not built yet, so the URL is still how you open one competitor. The app nav is on this page, with Competitors current. | `Tab` through the nav. Competitors carries `aria-current="page"`. | One competitor. Currently a stub. | **J7**, **J10**. The nav is `tests/unit/nav.test.ts`. |
+| `/app/alerts` | `app/routes/app.alerts.tsx` | the Alerts entry in the app nav | `Tab` to Alerts, `Enter`. Alerts carries `aria-current="page"`. | What changed. Currently a stub. | **J7**, **J8**. The nav is `tests/unit/nav.test.ts`. |
+| `/app/settings` | `app/routes/app.settings.tsx` | the Settings entry in the app nav | `Tab` to Settings, `Enter`, then `Tab` to the public card link. Settings carries `aria-current="page"`. | Workspace settings. Links to the public card. | **J13**, **J14**. The nav is `tests/unit/nav.test.ts`. |
+| `/app/settings/card` | `app/routes/settings.card.tsx` | the "Public card" link on `/app/settings`. The settings shell keeps the app nav on the page, with Settings current. | `Tab` to a button, `Enter`. Settings in the nav carries `aria-current="page"`. | The public-card switch: turn it on (which mints an opaque URL), copy the link, rotate the URL, turn it off. Turning it off is what the public route's 404 is graded on — the edge copy expires on its own inside a minute, which is the contract's "404 within a minute". | `tests/integration/card/public-card.integration.test.ts` — the writer's publish, rotate, unpublish and two-workspace uniqueness against real D1. The nav on this URL is `tests/unit/nav.test.ts`. |
 | `/onboarding` | `app/routes/onboarding.tsx` | the first signed-in request, when the workspace has no self entity. `/app` redirects here. A self entity sends this loader back to `/app`. | the input is focused | One input, placeholder "your website, or a handle", and the signed-in email. "Add a passkey" runs the same register ceremony as Home. The input does not post yet; saving the subject is #3996. | **J1** — `e2e/j1-magic-link.spec.ts`; the passkey control is **J2** — `e2e/j2-passkey.spec.ts` |
 
 ## Not a route
@@ -66,7 +66,11 @@ than implying coverage. They fill in with the engine packets under #3842. The
 rule that keeps this file honest is the same one that keeps the product honest:
 a row describes what a user can do **today**, never what is planned.
 
-No navigation exists yet — there is no nav bar, no sidebar and no link between
-the signed-in routes. Reaching `/app/alerts` today means typing the URL. That is
-a real gap, and it is here because a feature map that omits the gap is how an
-agent concludes the nav must already exist somewhere it has not looked.
+The signed-in routes share one nav, `app/components/nav.tsx`. It links Home
+(`/app`), Competitors (`/app/competitors`), Alerts (`/app/alerts`) and Settings
+(`/app/settings`). It renders on those routes, on `/app/competitors/:entityId`
+and on `/app/settings/card`, and on no public route. The current entry sets
+`aria-current="page"`. At 860px and wider it is a rail. Below that it is the
+bottom tab bar from DESIGN.md §8. A surface with no row in `app/routes.ts` is
+left out. Competitor detail and the public card are not nav entries. They are
+reached from their parent pages.
