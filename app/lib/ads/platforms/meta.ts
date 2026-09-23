@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { isRecord } from "../../discovery/page-names";
+
 const creativeSchema = z.object({
   platformCreativeId: z.string().regex(/^\d+$/),
   copy: z.string(),
@@ -16,11 +18,8 @@ interface RawAd {
   adArchiveId: string;
   startSeconds: number;
   endSeconds: number | null;
+  format: string;
   snapshot: Record<string, unknown>;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 async function jsonScriptBodies(html: string): Promise<string[]> {
@@ -47,6 +46,13 @@ async function jsonScriptBodies(html: string): Promise<string[]> {
   return bodies;
 }
 
+function formatOf(snapshot: Record<string, unknown>): string | null {
+  if (typeof snapshot.display_format !== "string" || snapshot.display_format.length === 0) {
+    return null;
+  }
+  return snapshot.display_format;
+}
+
 function asRawAd(value: Record<string, unknown>): RawAd | null {
   const id = value.ad_archive_id;
   if (typeof id !== "string" || !/^\d+$/.test(id)) {
@@ -58,6 +64,10 @@ function asRawAd(value: Record<string, unknown>): RawAd | null {
   if (typeof value.start_date !== "number" || !Number.isFinite(value.start_date)) {
     return null;
   }
+  const format = formatOf(value.snapshot);
+  if (format === null) {
+    return null;
+  }
   const end = value.end_date;
   const endSeconds =
     typeof end === "number" && Number.isFinite(end) && end > 0 ? end : null;
@@ -65,6 +75,7 @@ function asRawAd(value: Record<string, unknown>): RawAd | null {
     adArchiveId: id,
     startSeconds: value.start_date,
     endSeconds,
+    format,
     snapshot: value.snapshot,
   };
 }
@@ -92,18 +103,14 @@ function collectRawAds(value: unknown, out: RawAd[]): void {
 }
 
 function httpUrl(value: unknown): string | null {
-  if (typeof value !== "string" || value.length === 0) {
+  if (typeof value !== "string" || !URL.canParse(value)) {
     return null;
   }
-  try {
-    const url = new URL(value);
-    if (url.protocol !== "http:" && url.protocol !== "https:") {
-      return null;
-    }
-    return url.toString();
-  } catch {
+  const url = new URL(value);
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
     return null;
   }
+  return url.toString();
 }
 
 function pushImage(urls: string[], value: unknown): void {
@@ -220,45 +227,28 @@ function landingOf(snapshot: Record<string, unknown>): string | null {
   return null;
 }
 
-function formatOf(snapshot: Record<string, unknown>): string | null {
-  if (typeof snapshot.display_format !== "string" || snapshot.display_format.length === 0) {
-    return null;
-  }
-  return snapshot.display_format;
-}
-
 function unixToUtc(seconds: number): string {
   return new Date(seconds * 1000).toISOString();
 }
 
-function toCreative(raw: RawAd): Creative | null {
-  const parsed = creativeSchema.safeParse({
+function toCreative(raw: RawAd): Creative {
+  return creativeSchema.parse({
     platformCreativeId: raw.adArchiveId,
     copy: copyOf(raw.snapshot),
     mediaUrls: mediaUrls(raw.snapshot),
     firstSeen: unixToUtc(raw.startSeconds),
     lastSeen: raw.endSeconds === null ? null : unixToUtc(raw.endSeconds),
-    format: formatOf(raw.snapshot),
+    format: raw.format,
     landingUrl: landingOf(raw.snapshot),
   });
-  if (!parsed.success) {
-    return null;
-  }
-  return parsed.data;
 }
 
 export async function mapMeta(payload: string): Promise<Creative[]> {
   const bodies = await jsonScriptBodies(payload);
   const raw: RawAd[] = [];
   for (const body of bodies) {
-    try {
-      collectRawAds(JSON.parse(body) as unknown, raw);
-    } catch (error) {
-      if (error instanceof SyntaxError) {
-        continue;
-      }
-      throw error;
-    }
+    const parsed: unknown = JSON.parse(body);
+    collectRawAds(parsed, raw);
   }
   const seen = new Set<string>();
   const creatives: Creative[] = [];
@@ -267,10 +257,7 @@ export async function mapMeta(payload: string): Promise<Creative[]> {
       continue;
     }
     seen.add(ad.adArchiveId);
-    const creative = toCreative(ad);
-    if (creative) {
-      creatives.push(creative);
-    }
+    creatives.push(toCreative(ad));
   }
   return creatives;
 }

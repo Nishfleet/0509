@@ -117,6 +117,10 @@ describe("mapMeta", () => {
     await expect(mapMeta("<html><body>no ads</body></html>")).resolves.toEqual([]);
   });
 
+  it("rejects a JSON script that does not parse", async () => {
+    await expect(mapMeta('<script type="application/json">{</script>')).rejects.toThrow(SyntaxError);
+  });
+
   it("drops an ad without a start date and keeps every other creative", async () => {
     const noStartDate = goodAd("77");
     delete noStartDate.start_date;
