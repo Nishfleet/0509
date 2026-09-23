@@ -20,7 +20,7 @@ function header(props: CompetitorHeaderProps): string {
 
 describe("the competitor page frame", () => {
   it("formats the paused line in en-GB UTC", () => {
-    expect(competitorPausedLine("2026-09-22T12:00:00.000Z")).toBe("Paused 22 Sep");
+    expect(competitorPausedLine("2026-09-22T12:00:00.000Z")).toBe("Paused 22 Sept");
     expect(competitorPausedLine(null)).toBe("Paused");
   });
 
@@ -74,7 +74,7 @@ describe("the competitor page frame", () => {
       state: "off",
       stateChangedAt: "2026-09-22T12:00:00.000Z",
     });
-    expect(off).toContain("Paused 22 Sep");
+    expect(off).toContain("Paused 22 Sept");
   });
 
   it("names every snapshot cell and never says no data", () => {

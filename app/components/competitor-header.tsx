@@ -9,10 +9,7 @@ const DAY_MONTH = new Intl.DateTimeFormat("en-GB", {
 
 export function competitorPausedLine(stateChangedAt: string | null): string {
   if (stateChangedAt === null) return "Paused";
-  const dayMonth = DAY_MONTH.formatToParts(new Date(stateChangedAt))
-    .map((part) => (part.type === "month" ? part.value.slice(0, 3) : part.value))
-    .join("");
-  return `Paused ${dayMonth}`;
+  return `Paused ${DAY_MONTH.format(new Date(stateChangedAt))}`;
 }
 
 export interface CompetitorHeaderProps {
