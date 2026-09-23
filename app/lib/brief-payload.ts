@@ -232,3 +232,11 @@ export function parseBriefPayload(payloadJson: string): BriefPayload {
     next_brief_at: optionalString("next_brief_at"),
   };
 }
+
+export function readBriefPayload(payloadJson: string): BriefPayload | null {
+  try {
+    return parseBriefPayload(payloadJson);
+  } catch {
+    return null;
+  }
+}
