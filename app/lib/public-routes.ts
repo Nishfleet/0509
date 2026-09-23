@@ -2,14 +2,9 @@ import type { RouteConfigEntry } from "@react-router/dev/routes";
 
 import routes from "../routes";
 
-type SurfaceKind = "static" | "route";
-
 export interface PublicSurface {
   readonly path: string;
-  readonly kind: SurfaceKind;
   readonly indexable: boolean;
-  readonly changeFrequency?: "daily" | "weekly" | "monthly" | "yearly";
-  readonly priority?: number;
 }
 
 export interface ProtectedSurface {
@@ -26,14 +21,7 @@ const PROTECTED_TREES: readonly string[] = ["/app", "/api", "/mcp"];
 
 const PROTECTED_LEAVES: readonly string[] = ["/onboarding"];
 
-const NON_INDEXABLE: readonly string[] = [
-  "/",
-  "/*",
-  "/s/:slug",
-  "/design/brand-chips",
-  "/robots.txt",
-  "/sitemap.xml",
-];
+const NOT_ADVERTISED: readonly string[] = ["/", "/*", "/s/:slug", "/design/brand-chips"];
 
 const SEO_SURFACES: readonly string[] = ["/robots.txt", "/sitemap.xml"];
 
@@ -49,9 +37,7 @@ function routePathToUrl(routePath: string): string {
 export function isProtectedPath(value: string): boolean {
   const normalized = normalizePath(value);
   if (PROTECTED_LEAVES.includes(normalized)) return true;
-  return PROTECTED_TREES.some(
-    (tree) => normalized === tree || normalized.startsWith(`${tree}/`),
-  );
+  return PROTECTED_TREES.some((tree) => normalized === tree || normalized.startsWith(`${tree}/`));
 }
 
 export function registeredRoutes(
@@ -84,21 +70,13 @@ export function robotsDisallowRules(): string[] {
 
 export const PUBLIC_SURFACES: readonly PublicSurface[] = [
   ...REGISTERED_URLS.filter((url) => !isProtectedPath(url) && !SEO_SURFACES.includes(url)).map(
-    (url): PublicSurface => ({
-      path: url,
-      kind: "route",
-      indexable: !NON_INDEXABLE.includes(url),
-    }),
+    (url): PublicSurface => ({ path: url, indexable: !NOT_ADVERTISED.includes(url) }),
   ),
-  ...(REGISTERED_URLS.includes("/")
-    ? []
-    : [{ path: "/", kind: "static" as const, indexable: false }]),
+  ...(REGISTERED_URLS.includes("/") ? [] : [{ path: "/", indexable: false }]),
 ];
 
 export interface SitemapEntry {
   readonly loc: string;
-  readonly changeFrequency?: PublicSurface["changeFrequency"];
-  readonly priority?: number;
 }
 
 function toLoc(origin: string, value: string): string {
@@ -108,41 +86,19 @@ function toLoc(origin: string, value: string): string {
 export function sitemapEntries(
   origin: string,
   surfaces: readonly PublicSurface[] = PUBLIC_SURFACES,
-  dynamicLocs: readonly string[] = [],
 ): SitemapEntry[] {
-  const rows: SitemapEntry[] = surfaces
+  return surfaces
     .filter((surface) => surface.indexable)
-    .map((surface) => ({
-      loc: toLoc(origin, surface.path),
-      changeFrequency: surface.changeFrequency,
-      priority: surface.priority,
-    }));
-  return [...rows, ...dynamicLocs.map((loc) => ({ loc: toLoc(origin, loc) }))];
+    .map((surface) => ({ loc: toLoc(origin, surface.path) }));
 }
 
-const XML_ESCAPES: Readonly<Record<string, string>> = {
-  "&": "&amp;",
-  "<": "&lt;",
-  ">": "&gt;",
-};
-
 function escapeXml(value: string): string {
-  return value.replace(/[&<>]/g, (character) => XML_ESCAPES[character] ?? character);
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 export function renderSitemap(entries: readonly SitemapEntry[]): string {
   const rows = entries.map((entry) =>
-    [
-      "  <url>",
-      `    <loc>${escapeXml(entry.loc)}</loc>`,
-      ...(entry.changeFrequency
-        ? [`    <changefreq>${entry.changeFrequency}</changefreq>`]
-        : []),
-      ...(entry.priority !== undefined
-        ? [`    <priority>${entry.priority.toFixed(1)}</priority>`]
-        : []),
-      "  </url>",
-    ].join("\n"),
+    ["  <url>", `    <loc>${escapeXml(entry.loc)}</loc>`, "  </url>"].join("\n"),
   );
 
   return [

@@ -117,11 +117,14 @@ test("/sitemap.xml is served as a valid absolute-URL document", async ({ request
   expect(body.trimEnd().endsWith("</urlset>")).toBe(true);
 
   const found = [...body.matchAll(/<loc>(.*?)<\/loc>/g)].map((match) => match[1]);
-  expect(found.length).toBeGreaterThan(0);
+  // The advertised set is the two public routes that exist. A new public route
+  // that fails to reach this document is a red gate, not a quiet gap.
+  expect(found).toEqual(["https://0509.io/login", "https://0509.io/privacy"]);
+
   for (const loc of found) {
-    expect(loc.startsWith("https://0509.io/")).toBe(true);
-    expect(new URL(loc).pathname).not.toBe("/onboarding");
-    expect(new URL(loc).pathname.startsWith("/app")).toBe(false);
+    const { origin, pathname } = new URL(loc);
+    expect(origin).toBe("https://0509.io");
+    expect(pathname).not.toMatch(/[:*]/);
+    expect(pathname).not.toMatch(/^\/(app|api|mcp|onboarding)(\/|$)/);
   }
-  expect(new Set(found).size).toBe(found.length);
 });
