@@ -40,7 +40,7 @@ interface WorkspaceOutcome {
 export interface FanOutSummary {
   takedownId: string;
   subjectValue: string;
-  completedAt: string;
+  completedAt: string | null;
   workspaces: WorkspaceOutcome[];
   selfWorkspaces: number;
 }
@@ -77,23 +77,27 @@ ON CONFLICT(id) DO NOTHING`;
 
 const SET_FANNED_OUT = `UPDATE takedown SET fanned_out_at = ?, note = ? WHERE id = ? AND fanned_out_at IS NULL`;
 
-export const HANDLE_SUBJECT_UNRESOLVED = "handle subject unresolved";
-const HANDLE_SUBJECT_NOTE = `${HANDLE_SUBJECT_UNRESOLVED}: a handle takedown has no join key against entity.domain until P1.1 lands a handle -> registrable normaliser (#3885); the fan-out is complete (fanned_out_at set) and no entity row was touched.`;
+const PARK_UNRESOLVED = `UPDATE takedown SET note = ? WHERE id = ? AND fanned_out_at IS NULL`;
 
 const SUBJECT_KIND_DOMAIN = "domain";
 const SUBJECT_KIND_HANDLE = "handle";
 
-function normaliseDomain(value: string): string | null {
-  const trimmed = value.trim().toLowerCase();
-  if (trimmed.length === 0) return null;
-  const candidate = URL.canParse(trimmed) ? new URL(trimmed) : new URL(`https://${trimmed}`);
-  const host = candidate.hostname.toLowerCase().replace(/^www\./, "");
-  return host.length > 0 ? host : null;
+export const SUBJECT_UNRESOLVED = "subject unresolved";
+
+function isResolvable(granted: TakedownRow): boolean {
+  const value = granted.subject_value.trim().toLowerCase();
+  if (value.length === 0) return false;
+  if (granted.subject_kind === SUBJECT_KIND_HANDLE) return false;
+  if (granted.subject_kind !== SUBJECT_KIND_DOMAIN) return false;
+  if (value.includes("/") || value.includes(" ") || value.includes("@")) return false;
+  return value.includes(".");
 }
 
-function normaliseSubject(kind: string, value: string): string | null {
-  if (kind === SUBJECT_KIND_DOMAIN) return normaliseDomain(value);
-  return null;
+function unresolvableNote(granted: TakedownRow): string {
+  if (granted.subject_kind === SUBJECT_KIND_HANDLE) {
+    return `${SUBJECT_UNRESOLVED}: a handle has no join key against entity.domain until P1.1 lands a handle -> registrable normaliser (#3885); fanned_out_at stays NULL so the row is not recorded as removed`;
+  }
+  return `${SUBJECT_UNRESOLVED}: subject_value is not a bare registrable, so it cannot match entity.domain; fanned_out_at stays NULL so the row is not recorded as removed`;
 }
 
 function parseKeys(raw: string): string[] {
@@ -147,25 +151,35 @@ export async function fanOutTakedown(
     };
   }
 
-  const subject = normaliseSubject(granted.subject_kind, granted.subject_value);
+  const subject = granted.subject_value.trim().toLowerCase();
 
-  const affected: AffectedWorkspace[] =
-    subject === null
-      ? []
-      : await step.do("gather affected workspaces", async () => {
-          const rows = await env.DB.prepare(SELECT_AFFECTED).bind(subject).all<{
-            workspace_id: string;
-            entity_id: string;
-            entity_role: "self" | "competitor";
-            r2_keys: string;
-          }>();
-          return (rows.results ?? []).map((row) => ({
-            workspaceId: row.workspace_id,
-            entityId: row.entity_id,
-            entityRole: row.entity_role,
-            r2Keys: parseKeys(row.r2_keys),
-          }));
-        });
+  if (!isResolvable(granted)) {
+    await step.do("park the unresolved row", async () => {
+      await env.DB.prepare(PARK_UNRESOLVED).bind(unresolvableNote(granted), granted.id).run();
+    });
+    return {
+      takedownId: granted.id,
+      subjectValue: granted.subject_value,
+      completedAt: null,
+      workspaces: [],
+      selfWorkspaces: 0,
+    };
+  }
+
+  const affected: AffectedWorkspace[] = await step.do("gather affected workspaces", async () => {
+    const rows = await env.DB.prepare(SELECT_AFFECTED).bind(subject).all<{
+      workspace_id: string;
+      entity_id: string;
+      entity_role: "self" | "competitor";
+      r2_keys: string;
+    }>();
+    return (rows.results ?? []).map((row) => ({
+      workspaceId: row.workspace_id,
+      entityId: row.entity_id,
+      entityRole: row.entity_role,
+      r2Keys: parseKeys(row.r2_keys),
+    }));
+  });
   const outcomes: WorkspaceOutcome[] = [];
   let selfWorkspaces = 0;
 
@@ -183,13 +197,7 @@ export async function fanOutTakedown(
     const finishedAt = new Date().toISOString();
     const notes: string[] = [];
     if (granted.note !== null && granted.note.length > 0) notes.push(granted.note);
-    if (subject === null) {
-      notes.push(
-        granted.subject_kind === SUBJECT_KIND_HANDLE
-          ? HANDLE_SUBJECT_NOTE
-          : `takedown ${granted.id} holds un-normalisable subject value, so nothing fanned out`,
-      );
-    } else if (affected.length === 0) {
+    if (affected.length === 0) {
       notes.push(`no workspace tracks ${granted.subject_value}, so there was nothing to fan out`);
     }
     if (selfWorkspaces > 0) {

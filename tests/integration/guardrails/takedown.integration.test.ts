@@ -275,12 +275,9 @@ describe("TakedownWorkflow", () => {
     expect(partial?.fanned_out_at).toBeNull();
   });
 
-  it("parks a handle takedown with its reason on note, touching no entity row", async () => {
-    // entity.domain holds the registrable P1.1 produces. No handle can match it
-    // until that normaliser is on main (#3885), so a handle takedown must
-    // record the fact rather than fabricate a join key.
+  it("parks a handle takedown with fanned_out_at NULL and the reason on note", async () => {
     await seedUserAndWorkspace("ws-h", "user-h");
-    await seedEntity("ws-h", "ent-h", "competitor", "removedcreator.com");
+    await seedEntity("ws-h", "ent-h", "competitor", "removed.example");
     await seedGrantedTakedownKind("td-handle", "handle", "@RemovedCreator");
 
     await runFanOut("td-handle");
@@ -289,15 +286,15 @@ describe("TakedownWorkflow", () => {
     const row = await env.DB.prepare("SELECT fanned_out_at, note FROM takedown WHERE id = ?")
       .bind("td-handle")
       .first<{ fanned_out_at: string | null; note: string | null }>();
-    expect(row?.fanned_out_at).not.toBeNull();
-    expect(row?.note).toContain("handle subject unresolved");
+    expect(row?.fanned_out_at).toBeNull();
+    expect(row?.note).toContain("subject unresolved");
     expect(row?.note).toContain("P1.1");
     expect(await alertCount("ws-h")).toBe(0);
   });
 
   it("parks a channel-URL handle takedown the same way, because it is still a handle", async () => {
     await seedUserAndWorkspace("ws-c", "user-c");
-    await seedEntity("ws-c", "ent-c", "competitor", "removedcreator.com");
+    await seedEntity("ws-c", "ent-c", "competitor", "removed.example");
     await seedGrantedTakedownKind("td-chan", "handle", "https://www.youtube.com/user/removedcreator");
 
     await runFanOut("td-chan");
@@ -306,8 +303,8 @@ describe("TakedownWorkflow", () => {
     const row = await env.DB.prepare("SELECT fanned_out_at, note FROM takedown WHERE id = ?")
       .bind("td-chan")
       .first<{ fanned_out_at: string | null; note: string | null }>();
-    expect(row?.fanned_out_at).not.toBeNull();
-    expect(row?.note).toContain("handle subject unresolved");
+    expect(row?.fanned_out_at).toBeNull();
+    expect(row?.note).toContain("subject unresolved");
   });
 
   it("dismisses the entity when a domain takedown names the domain the entity row holds", async () => {
@@ -320,14 +317,19 @@ describe("TakedownWorkflow", () => {
     expect(await entityState("ent-d")).toMatchObject({ state: "dismissed" });
   });
 
-  it("strips a URL down to the registrable domain it addresses", async () => {
+  it("parks a domain takedown whose value is a URL, because the join key must be the bare registrable", async () => {
     await seedUserAndWorkspace("ws-u", "user-u");
     await seedEntity("ws-u", "ent-u", "competitor", "removed.example");
     await seedGrantedTakedown("td-url", "https://www.removed.example/en-GB/");
 
     await runFanOut("td-url");
 
-    expect(await entityState("ent-u")).toMatchObject({ state: "dismissed" });
+    expect(await entityState("ent-u")).toMatchObject({ state: "on" });
+    const row = await env.DB.prepare("SELECT fanned_out_at, note FROM takedown WHERE id = ?")
+      .bind("td-url")
+      .first<{ fanned_out_at: string | null; note: string | null }>();
+    expect(row?.fanned_out_at).toBeNull();
+    expect(row?.note).toContain("subject unresolved");
   });
 
   it(
@@ -435,6 +437,29 @@ describe("the nightly reconciliation", () => {
     expect(await runNightlyReconciliation(fakeEnv as never, new Date("2026-09-22T04:00:00Z"))).toBe(
       false,
     );
+  });
+
+  it("skips a parked row: an un-resolvable subject is not re-driven every night", async () => {
+    await seedGrantedTakedownKind("td-parked", "handle", "@RemovedCreator");
+    await env.DB.prepare(
+      "UPDATE takedown SET note = 'subject unresolved: a handle has no join key' WHERE id = 'td-parked'",
+    ).run();
+    await seedGrantedTakedown("td-live", "live.example");
+
+    const calls: string[] = [];
+    const fakeEnv = {
+      DB: env.DB,
+      TAKEDOWN_WORKFLOW: {
+        create: (options: { id: string }) => {
+          calls.push(options.id);
+          return Promise.resolve({});
+        },
+      },
+    };
+
+    const reran = await reconcileUnfannedTakedowns(fakeEnv as never);
+    expect(reran).toEqual(["td-live"]);
+    expect(calls).toEqual(["td-live-1"]);
   });
 
   it("re-runs only the granted takedowns whose fan-out has not completed", async () => {
