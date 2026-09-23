@@ -18,12 +18,14 @@ export default defineConfig({
           name: "node",
           environment: "node",
           include: ["tests/**/*.test.ts"],
-          exclude: ["tests/integration/**"],
+          exclude: ["tests/integration/**", "tests/unit/site/**"],
         },
       },
       {
         // Real workerd + real local D1 with migrations/0001_rebuild.sql applied.
         // The only project where a D1 assertion means anything.
+        // tests/unit/site also runs here: HTMLRewriter exists only in workerd,
+        // and the node project has no runtime to host it.
         plugins: [
           cloudflareTest(async () => ({
             wrangler: { configPath: "./tests/integration/wrangler.test.jsonc" },
@@ -34,16 +36,22 @@ export default defineConfig({
         ],
         test: {
           name: "workers",
-          include: ["tests/integration/**/*.integration.test.ts"],
+          include: [
+            "tests/integration/**/*.integration.test.ts",
+            // #4180's acceptance names this file verbatim, without the
+            // .integration infix; it still needs real workerd + real D1.
+            "tests/integration/migration-rollback.test.ts",
+            "tests/unit/site/**/*.test.ts",
+          ],
           setupFiles: ["./tests/integration/apply-migrations.ts"],
           testTimeout: 30_000,
         },
       },
       {
-        // The J1 mail-sink Worker (0509#3927): real workerd + real local KV.
-        // Its token gate and email handler run against the same binding kinds
-        // production has — a broken gate fails in a merge gate, not in CI's
-        // production lane.
+        // The J1 mail-sink Worker (0509#3927, 0509#4210): real workerd and a
+        // real local SQLite Durable Object. Its token gate and email handler
+        // run against the same binding kinds production has. A broken gate
+        // fails in a merge gate, not in CI's production lane.
         plugins: [
           cloudflareTest(() => ({
             wrangler: { configPath: "./tests/integration/wrangler.e2e-inbox.test.jsonc" },
@@ -52,6 +60,25 @@ export default defineConfig({
         test: {
           name: "e2e-inbox",
           include: ["tests/integration/e2e-inbox.test.ts"],
+          testTimeout: 30_000,
+        },
+      },
+      {
+        // The support-inbox Email Worker (0509#4229): real workerd + real
+        // local D1 with migrations applied, so the support_report insert and
+        // the text-free issue body run against the schema the deploy ships.
+        plugins: [
+          cloudflareTest(async () => ({
+            wrangler: { configPath: "./tests/integration/wrangler.support-inbox.test.jsonc" },
+            miniflare: {
+              bindings: { TEST_MIGRATIONS: await readD1Migrations("migrations") },
+            },
+          })),
+        ],
+        test: {
+          name: "support-inbox",
+          include: ["tests/integration/support-inbox.test.ts"],
+          setupFiles: ["./tests/integration/apply-migrations.ts"],
           testTimeout: 30_000,
         },
       },
@@ -68,6 +95,25 @@ export default defineConfig({
         test: {
           name: "fixture-site",
           include: ["tests/integration/fixture-site.test.ts"],
+          testTimeout: 30_000,
+        },
+      },
+      {
+        // The P3 fetch-then-browser transport (0509#3971): real workerd for the
+        // plain-fetch leg and the HTMLRewriter text extraction, so the escalation
+        // predicates run against the same global `fetch`, `AbortSignal.timeout`
+        // and `HTMLRewriter` production uses. The outbound `fetch` is stubbed per
+        // test so every trigger is reachable deterministically, and `env` is
+        // mocked, so the browser binding declared below validates the config
+        // shape only.
+        plugins: [
+          cloudflareTest(() => ({
+            wrangler: { configPath: "./tests/integration/wrangler.transport.test.jsonc" },
+          })),
+        ],
+        test: {
+          name: "transport",
+          include: ["tests/integration/transport.test.ts"],
           testTimeout: 30_000,
         },
       },

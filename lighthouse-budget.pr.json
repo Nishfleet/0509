@@ -1,0 +1,12 @@
+[
+  {
+    "path": "/*",
+    "timings": [
+      { "metric": "cumulative-layout-shift", "budget": 0.1 }
+    ],
+    "resourceSizes": [
+      { "resourceType": "script", "budget": 150 },
+      { "resourceType": "total", "budget": 500 }
+    ]
+  }
+]

@@ -9,39 +9,51 @@
     "test": "vitest run",
     "typecheck": "wrangler types && react-router typegen && tsc -b",
     "lint": "eslint . && knip",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "verify:start": "chrome-devtools start --headless --chromeArg=--no-sandbox --executablePath \"$(node -p \"require('playwright-core').chromium.executablePath()\")\"",
+    "verify:stop": "chrome-devtools stop"
   },
   "dependencies": {
+    "@base-ui/react": "1.8.0",
     "@better-auth/api-key": "^1.7.5",
     "@better-auth/passkey": "^1.7.5",
+    "@cloudflare/puppeteer": "^1.4.0",
     "better-auth": "^1.7.5",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "isbot": "^5.1.36",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-router": "^8.3.1",
-    "zod": "4.6.5"
+    "react-router": "^8.4.0",
+    "sonner": "^2.0.8",
+    "tailwind-merge": "^3.7.0",
+    "tldts": "^7.4.13",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.56.0",
     "@cloudflare/vitest-plugin": "1.1.13",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.63.0",
-    "@react-router/dev": "^8.3.1",
-    "@tailwindcss/vite": "^4.2.2",
+    "@react-router/dev": "^8.4.0",
+    "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^22.20.4",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "eslint": "^10.11.0",
+    "eslint-plugin-boundaries": "^7.2.0",
+    "eslint-plugin-import-x": "^4.17.1",
+    "eslint-plugin-no-comments": "^1.2.1",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.12.0",
-    "htmlrewriter": "0.0.13",
     "knip": "^6.37.0",
-    "tailwindcss": "^4.2.2",
+    "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.70.0",
     "vite": "^8.0.3",
     "vitest": "4.1.11",
-    "wrangler": "^4.135.0"
+    "wrangler": "^4.135.0",
+    "chrome-devtools-mcp": "1.9.0"
   },
   "overrides": {
     "vitest": "4.1.11",
@@ -49,6 +61,7 @@
     "@vitest/snapshot": "4.1.11",
     "@vitest/browser-playwright": "4.1.11",
     "@vitest/ui": "4.1.11",
-    "@vitest/coverage-v8": "4.1.11"
+    "@vitest/coverage-v8": "4.1.11",
+    "@puppeteer/browsers": "3.2.2"
   }
 }

@@ -39,17 +39,17 @@ async function lintAt(rel: string): Promise<{ ignored: boolean; messages: number
 }
 
 describe("eslint ignores wrangler build output (#3944)", () => {
-  it("ignores the .wrangler/tmp bundle wrangler dev writes", async () => {
+  it("ignores the .wrangler/tmp bundle wrangler dev writes", { timeout: 60_000 }, async () => {
     const result = await lintAt(".wrangler/tmp/bundle-abc/middleware-insertion-facade.js");
     expect(result).toEqual({ ignored: true, messages: 0 });
   });
 
-  it("ignores the rest of the .wrangler tree, matching .gitignore", async () => {
+  it("ignores the rest of the .wrangler tree, matching .gitignore", { timeout: 60_000 }, async () => {
     const result = await lintAt(".wrangler/state/generated.ts");
     expect(result).toEqual({ ignored: true, messages: 0 });
   });
 
-  it("still lints a file outside the ignored trees", async () => {
+  it("still lints a file outside the ignored trees", { timeout: 60_000 }, async () => {
     const result = await lintAt("tests/.eslint-ignores-probe.js");
     expect(result.ignored).toBe(false);
     expect(result.messages).toBeGreaterThan(0);

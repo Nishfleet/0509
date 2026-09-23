@@ -14,14 +14,16 @@
     // (workers/e2e-inbox.wrangler.jsonc), which knip does not read — the file
     // is an entry by name.
     "workers/e2e-inbox.ts",
+    // The support inbox Worker's front door is its own wrangler config
+    // (workers/support-inbox.wrangler.jsonc), which knip does not read — the
+    // file is an entry by name.
+    "workers/support-inbox.ts",
     // The fixture-site Worker's front door is its own wrangler config
     // (workers/fixture-site.wrangler.jsonc), which knip does not read — the
     // file is an entry by name.
     "workers/fixture-site.ts",
     "e2e/*.setup.ts",
-    // The Meta field map (#3974). Nothing in the running Worker calls it until
-    // the ads sweep exists; the module is the packet, so it is a front door.
-    "app/lib/ads/platforms/meta.ts"
+    "app/components/ui/*.{ts,tsx}"
   ],
   "project": ["app/**/*.{ts,tsx}", "workers/**/*.ts", "e2e/**/*.ts", "tests/**/*.ts"],
 

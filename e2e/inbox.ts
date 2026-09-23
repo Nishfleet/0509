@@ -2,8 +2,8 @@ import { expect, type Page } from "@playwright/test";
 
 // The J1 mail path, per the amended decision on 0509#3927: Email Routing's
 // e2e@0509.io rule delivers e2e+<run-id>@0509.io (zone subaddressing on, RFC
-// 5233) to the 0509-e2e-inbox Worker, which stores the raw message in KV for
-// an hour and serves it back on this one endpoint, gated by the
+// 5233) to the 0509-e2e-inbox Worker, which stores the raw message in a
+// Durable Object for an hour and serves it back on this one endpoint, gated by the
 // E2E_INBOX_TOKEN secret. Nothing here reads D1 and nothing shortens the
 // auth path — the link the test clicks is the link the app really sent.
 const INBOX_URL = "https://e2e-inbox.0509.io";
@@ -36,11 +36,12 @@ function inboxHeaders(token: string): Record<string, string> {
   return headers;
 }
 
-// The app sends a text/plain body (app/lib/auth.server.ts), so there is no
-// MIME structure to parse. The only encoding that matters is quoted-printable,
-// applied only when the message's own Content-Transfer-Encoding says so —
-// decoding unconditionally would turn a plain body's literal `=` (`=3D`'s
-// honest form is the header's job) into hex escapes.
+// The app sends multipart/alternative (text and HTML); parts may be
+// quoted-printable or base64, and an HTML href escapes `&` as `&amp;`.
+// Quoted-printable is decoded only when the message's own
+// Content-Transfer-Encoding says so. Decoding unconditionally would turn a
+// plain body's literal `=` (`=3D`'s honest form is the header's job) into hex
+// escapes.
 function decodeQuotedPrintable(input: string): string {
   const stripped = input.replace(/=\r?\n/g, "");
   const bytes: number[] = [];
@@ -56,12 +57,27 @@ function decodeQuotedPrintable(input: string): string {
   return new TextDecoder().decode(new Uint8Array(bytes));
 }
 
+function decodedBodies(raw: string): string[] {
+  const quoted = /content-transfer-encoding:\s*quoted-printable/i.test(raw)
+    ? decodeQuotedPrintable(raw)
+    : raw;
+  const bodies = [quoted];
+  const base64Part = /content-transfer-encoding:\s*base64[^]*?\r?\n\r?\n([A-Za-z0-9+/=\r\n]+)/gi;
+  for (const match of raw.matchAll(base64Part)) {
+    const binary = atob(match[1].replace(/\s/g, ""));
+    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+    bodies.push(new TextDecoder().decode(bytes));
+  }
+  return bodies;
+}
+
 export function extractMagicLink(rawMessage: string): string | null {
-  const text = /content-transfer-encoding:\s*quoted-printable/i.test(rawMessage)
-    ? decodeQuotedPrintable(rawMessage)
-    : rawMessage;
-  const match = /https:\/\/0509\.io\/api\/auth\/magic-link\/verify\?[^\s"'<>]+/.exec(text);
-  return match ? match[0] : null;
+  const verifyUrl = /https:\/\/0509\.io\/api\/auth\/magic-link\/verify\?[^\s"'<>]+/;
+  for (const body of decodedBodies(rawMessage)) {
+    const match = verifyUrl.exec(body);
+    if (match) return match[0].replaceAll("&amp;", "&");
+  }
+  return null;
 }
 
 // One probe before polling: expect.poll retries a thrown callback for the
@@ -79,8 +95,11 @@ async function probeInbox(url: string, headers: Record<string, string>): Promise
   }
 }
 
-// Poll until the message lands or the deadline passes.
-async function waitForMagicLink(to: string, token: string): Promise<string> {
+// Poll until the message lands or the deadline passes. The inbox keys on the
+// recipient address, so a second email to the same address overwrites the
+// first: `exclude` carries links already read for this recipient, and the poll
+// keeps waiting while the stored message still points at one of them.
+export async function waitForMagicLink(to: string, token: string, exclude: string[] = []): Promise<string> {
   const url = `${INBOX_URL}/message?to=${encodeURIComponent(to)}`;
   const headers = inboxHeaders(token);
   await probeInbox(url, headers);
@@ -94,8 +113,11 @@ async function waitForMagicLink(to: string, token: string): Promise<string> {
           const response = await fetch(url, { headers });
           if (response.status === 200) {
             link = extractMagicLink(await response.text());
-            if (link) return true;
-            lastDetail = "a message arrived but carried no magic-link verify URL";
+            if (link && !exclude.includes(link)) return true;
+            lastDetail = link
+              ? "inbox still holds an earlier message for this recipient; the newer email has not landed"
+              : "a message arrived but carried no magic-link verify URL";
+            link = null;
           } else {
             lastDetail =
               response.status === 404
@@ -114,15 +136,19 @@ async function waitForMagicLink(to: string, token: string): Promise<string> {
   if (link) return link;
   throw new Error(
     `No magic-link email for ${to} within ${POLL_LIMIT_MS / 1000}s (${lastDetail}). ` +
-      "If the inbox stayed at 404, the Email Routing rule e2e@0509.io -> 0509-e2e-inbox " +
-      "is missing, zone subaddressing is off, or the app's EMAIL binding did not deliver.",
+      "A 404 means the sink has no stored message for this recipient. " +
+      "Nothing was written for the address, or the stored message is older than one hour.",
   );
 }
 
 // J1's core: submit the login form for a fresh e2e+ address, read the real
 // email out of the inbox Worker, follow the link, land signed in on /onboarding.
 // Timestamps are logged for the packet's proof line (send and session).
-export async function signInWithMagicLink(page: Page, email: string, token: string): Promise<void> {
+export async function signInWithMagicLink(
+  page: Page,
+  email: string,
+  token: string,
+): Promise<{ link: string; status: number }> {
   await page.goto("/login");
   await page.locator('input[name="email"]').fill(email);
   const sentAt = new Date().toISOString();
@@ -132,9 +158,10 @@ export async function signInWithMagicLink(page: Page, email: string, token: stri
   await expect(page.locator('input[name="email"]')).toHaveCount(0);
   const link = await waitForMagicLink(email, token);
   const linkReadAt = new Date().toISOString();
-  await page.goto(link);
+  const response = await page.goto(link);
   await expect(page).toHaveURL(/\/onboarding/);
   console.log(
     `magic-link sign-in email=${email} sentAt=${sentAt} linkReadAt=${linkReadAt} sessionAt=${new Date().toISOString()}`,
   );
+  return { link, status: response?.status() ?? 0 };
 }

@@ -1,0 +1,12 @@
+// Test config for the fetch-then-browser transport (0509#3971): real workerd for
+// the fetch leg and the HTMLRewriter text extraction, a stand-in for the
+// Browser Run binding. `env` from cloudflare:workers is fully mocked, so the
+// browser binding below is declared only to pin the config shape production
+// uses; it is never exercised. The production escalation is evidenced in the PR
+// body.
+{
+  "name": "0509-transport-test",
+  "compatibility_date": "2026-09-16",
+  "main": "../../workers/app.ts",
+  "browser": { "binding": "BROWSER" }
+}

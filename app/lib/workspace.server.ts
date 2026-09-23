@@ -1,6 +1,10 @@
 import { env } from "cloudflare:workers";
 
+import { fillWorkspaceTimezone, insertWorkspace } from "./data/workspace.server";
+import type { WorkspaceDb } from "./data/workspace.server";
 import { canonicalTimezone, timezoneCookieValue } from "./timezone";
+
+export type { WorkspaceDb };
 
 interface WorkspaceRow {
   id: string;
@@ -12,27 +16,10 @@ interface WorkspaceRow {
   created_at: string;
 }
 
-interface BoundStatement {
-  first<T>(): Promise<T | null>;
-  run(): Promise<unknown>;
-}
-
-export interface WorkspaceDb {
-  prepare(query: string): {
-    bind(...values: unknown[]): BoundStatement;
-  };
-}
-
-const INSERT_WORKSPACE = `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at)
-VALUES (?, ?, ?, ?, 1, 8, ?)
-ON CONFLICT(id) DO NOTHING`;
-
 const SELECT_WORKSPACE = `SELECT id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at
 FROM workspace WHERE owner_user_id = ?
 ORDER BY created_at ASC
 LIMIT 1`;
-
-const FILL_TIMEZONE = `UPDATE workspace SET timezone = ? WHERE id = ? AND timezone = 'UTC'`;
 
 const SELECT_SELF = `SELECT id FROM entity WHERE workspace_id = ? AND role = 'self' LIMIT 1`;
 
@@ -56,7 +43,7 @@ async function withCapturedTimezone(
   timezone: string,
 ): Promise<WorkspaceRow> {
   if (row.timezone !== "UTC" || timezone === "UTC") return row;
-  await db.prepare(FILL_TIMEZONE).bind(timezone, row.id).run();
+  await fillWorkspaceTimezone(db, row.id, timezone);
   return { ...row, timezone };
 }
 
@@ -70,10 +57,13 @@ export async function ensureWorkspace(
 
   const createdAt = input.now ?? new Date().toISOString();
   try {
-    await db
-      .prepare(INSERT_WORKSPACE)
-      .bind(firstWorkspaceId(input.userId), workspaceNameFromEmail(input.email), input.userId, timezone, createdAt)
-      .run();
+    await insertWorkspace(db, {
+      id: firstWorkspaceId(input.userId),
+      name: workspaceNameFromEmail(input.email),
+      ownerUserId: input.userId,
+      timezone,
+      createdAt,
+    });
   } catch (error) {
     const raced = await readWorkspace(db, input.userId);
     if (raced) return withCapturedTimezone(db, raced, timezone);

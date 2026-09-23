@@ -63,11 +63,19 @@ error (ce5fed17d).
 
 Her verification skill has two halves: a **reproducible way to drive the real
 application**, and a **feature map** that tells the agent what the application
-even is. We need both. We do not need her first half's shape — she built a CLI
-inside a skill directory because Cursor's agent window is an Electron app with
-no test runner that can drive it. Ours is a web app, and the stock reproducible
-driver for a web app is Playwright. **Building a CLI here would be exactly the
-glue the rebuild deletes.**
+even is. We need both. **Decision, 2026-09-22 (#4251):** both halves ship as a
+skill — `.agents/skills/verify/SKILL.md`, landed via #4341 — on Nish's word:
+*"make it exactly as described."* The driver is Google's stock
+`chrome-devtools` CLI from the `chrome-devtools-mcp` package, not code we
+wrote, so scripts-to-zero still holds.
+
+**Rejected alternative.** Playwright alone, no skill — this section's original
+position. The reasoning: her CLI's shape answered an Electron app with no test
+runner that could drive it, ours is a web app whose stock reproducible driver
+is Playwright, and a hand-built CLI is exactly the glue the rebuild deletes.
+What it missed: the CLI is the vendor's stock binary rather than glue we
+wrote, and a skill directory is where the procedure and the feature map live
+so every agent session drives the app the same way.
 
 ### A1. One Playwright config, two modes
 
@@ -75,7 +83,7 @@ glue the rebuild deletes.**
 
 | `PLAYWRIGHT_TEST_BASE_URL` | `webServer` | What runs | Where |
 |---|---|---|---|
-| unset | starts `npx wrangler dev --port 8787 --local`, waits on `/api/health` | the built Worker | `preview-assert`, every PR, and `npm run e2e` on a laptop |
+| unset | starts `npx wrangler dev --local` on a per-process port (8000 + pid % 1000), waits on `/api/health` | the built Worker | `preview-assert`, every PR, and `npm run e2e` on a laptop |
 | set | `undefined` | that URL | `e2e-production`, every successful deploy |
 
 This is the vendor's own division. `webServer`'s doc says it is for "when you
@@ -120,7 +128,7 @@ child issues, listed in §E.
 
 ### A3. The feature map
 
-`docs/FEATURE-MAP.md`. Her framing, 11:02: a Slack report arrives as a vague
+`.agents/skills/verify/feature-map.md`. Her framing, 11:02: a Slack report arrives as a vague
 screenshot and three question marks, and an agent that can drive the app still
 has no idea what the user meant. The map is *materialised memory* — what exists,
 how a user reaches it (route, element, keyboard), what it does.
@@ -133,7 +141,7 @@ omits the gap is how an agent concludes the nav must already exist somewhere it
 has not looked.**
 
 Maintenance, per the packet: every PR that adds or changes a route updates
-`docs/FEATURE-MAP.md` in the same PR, and the Opus reviewer checks it against
+`.agents/skills/verify/feature-map.md` in the same PR, and the Opus reviewer checks it against
 `app/routes.ts` and the e2e test titles. **No bespoke test reads this file.**
 `docs/REBUILD-DONE.md` §D forbids tests about docs, and a test that greps a
 markdown table is the hand-rolled linter Fable already rejected once (ce5fed17d).
@@ -230,7 +238,8 @@ emits).
 
 Base: `@eslint/js` recommended, `typescript-eslint` **strict-type-checked** and
 **stylistic-type-checked**, `eslint-plugin-react-hooks` recommended on `app/**`
-and `workers/**`.
+and `workers/**`, `eslint-plugin-boundaries` 7.2.0 for element dependencies,
+and `eslint-plugin-import-x` 4.17.1 for cycles and named exports.
 
 Every boundary rule carries its provenance **in its own message**, so an agent
 that trips it reads the reason at the moment it matters:
@@ -239,10 +248,12 @@ that trips it reads the reason at the moment it matters:
 |---|---|---|
 | `no-restricted-syntax` on `MemberExpression[object.name='context'][property.name='cloudflare']` | bindings come from `cloudflare:workers` | 7727bf787 / #3918 — /api/auth, /app and the magic-link POST all 500'd in production |
 | `no-restricted-syntax` on an inline `TSTypeLiteral` in a `loader`/`action`/`meta`/`headers`/`links` parameter | use the framework's `Route` types | ce5fed17d — "a hand-written type annotation over a framework value is an assertion that it is shaped that way" |
-| `no-restricted-imports` pattern `**/*.server` outside route modules and other `.server` modules | the server boundary | Dune's renderer/main split, 27:44; here it is browser bundle vs Worker |
+| `boundaries/dependencies`: a client file may not import `server-leaf`, `data-writer`, `db`, or `auth` | the server boundary. The old `**/*.server` glob is gone. A later `no-restricted-imports` block replaces an earlier one, so that glob never fired | Dune's renderer/main split, 27:44; the error text is the old glob's receipt |
+| `import-x/no-cycle` on `app/**` and `workers/**` | no import cycles | closes the gap §B4 used to record |
+| `import-x/no-default-export` | named exports, so a module can be found by grep | off for route modules, config files, and the three workerd entries |
 | `no-restricted-imports` `cloudflare:workers` in client modules | same boundary, the other direction | 7727bf787 |
 | `no-restricted-imports` `kysely` outside `app/lib/db.server.ts`; `better-auth` and its plugins outside `app/lib/auth.server.ts` | one paved path per blessed pattern | 25:26 |
-| `no-restricted-syntax` on `insertInto` / `updateTable` / `deleteFrom` in `app/routes/**` | one writer per table | 25:26 |
+| `no-restricted-syntax` on DML write text — `INSERT [OR …] INTO`, `REPLACE INTO`, `UPDATE … SET`, `DELETE FROM`, `WITH …` writes — in `app/**` and `workers/**` outside `app/lib/data/**` | one writer per table | 25:26; #4313 — the kysely selectors matched nothing after the raw-D1 rebuild, so the rule fires on the SQL text itself |
 | `no-restricted-syntax` on `env.DB` in `app/routes/**` | one data layer | 25:26 |
 | `max-lines: 150` on `app/routes/**` | routes stay thin | house rule, `coding-style.md` |
 | `no-inline-comments` + `no-warning-comments` on `app/**`, `workers/**` | comments banned in app code | 23:02, Nish 2026-09-21 |
@@ -276,6 +287,62 @@ heart. **That is the difference between rung 2 and rung 5.**
 
 ### B4. The one real fork — design-it-twice
 
+**2026-09-22, #4272.** The cycle gap at the bottom of this section is closed.
+`eslint-plugin-import-x` 4.17.1 runs `import-x/no-cycle` on `app/**` and
+`workers/**`, in the same `npm run lint` pass. `eslint-plugin-boundaries`
+7.2.0 declares the element types and which of them may import which. The
+hand-written `**/*.server` glob is gone. It was not holding the boundary:
+flat config replaces a rule instead of merging it, and the paved-path
+`no-restricted-imports` block comes later, so a component that imported
+`app/lib/data/workspace.server.ts` was green.
+
+`data-writer`, `component`, `route`, and `worker` are folders, so they are
+element types. `db` and `auth` are single files, so they are file categories.
+7.2.0 matches an element pattern as a folder. A file category is how it
+classifies one file, and one file can carry more than one. `server-leaf` is
+the category on every `app/lib/**/*.server.ts`. `db`, `auth`, and
+`data-writer` are extra categories on the files the table names.
+
+| Type | Files |
+|---|---|
+| `route` | `app/routes/**`, `app/root.tsx` |
+| `server-leaf` | `app/lib/**/*.server.ts`, including the three rows below |
+| `data-writer` | `app/lib/data/**/*.server.ts` |
+| `db` | `app/lib/db.server.ts` |
+| `auth` | `app/lib/auth.server.ts` |
+| `component` | `app/components/**` |
+| `worker` | `workers/**` |
+
+A route may import a component or any server element. A server-leaf may
+import a server-leaf, a data-writer, `db`, or `auth`. A data-writer may
+import a data-writer, `db`, or a server-leaf. `auth` may also import a
+worker, because `app/lib/auth.server.ts` imports `workers/delivery/send.ts`.
+A worker may import any server element, because `workers/app.ts` imports
+`app/lib/liveness-ping.server.ts`. Any file may import a shared client
+module such as `app/lib/utils.ts`. A client file that is not a route, a
+server module, or an entry may not import a server element. The error text
+is the old glob's receipt.
+
+`import-x/no-default-export` is on everywhere except route modules, config
+files, and the three workerd entries (`workers/app.ts`,
+`workers/fixture-site.ts`, `workers/e2e-inbox.ts`). React Router and those
+configs require a default export. workerd requires one on the Worker entry.
+Everything else is a named export, so grep can find it.
+
+`kysely`, `better-auth`, and `cloudflare:workers` stay on
+`no-restricted-imports`. Those are package names, not element types. The
+client block is the later one, and it repeats the paved-path list, because
+a later block replaces the rule. `app/lib/auth-client.ts` is the one module
+allowed to import `better-auth` client subpaths, so the client block skips
+it. A following block still bans `cloudflare:workers` and the exact paved-path
+packages there.
+
+**Rejected for this pass, on top of the original fork below.**
+
+- dependency-cruiser. A second tool, and the report shows up in CI rather than on the line. The three reasons under "Chosen: A" still hold. Its cycle check is the piece this section used to say was missing. `import-x/no-cycle` does that inside the lint run we already have.
+- Sheriff. It cannot add the broader rules this config already runs: the type-checked bans, the comment ban, `max-lines`.
+- Feature-Sliced Design with steiger. That is a full restructure while the rebuild is in progress, with 28 workers writing code at once.
+
 The vault's `design-it-twice` skill applies to exactly one decision here:
 **how are module boundaries enforced?** Both candidates are real, shipped tools;
 this is a shape choice, not a quality one.
@@ -306,13 +373,12 @@ cannot reach a `.server` module in one hop *or* in three: every hop in the chain
 is itself a client module and every one of them is covered. Transitive detection
 buys nothing where the direct rule is total.
 
-**Grafted from the loser:** dependency-cruiser's cycle and orphan detection is
-genuinely absent from ESLint. `knip` covers the orphan half (unused files,
-unused exports, unused dependencies — it found two on its first run). Cycles
-remain uncovered, and this doc says so rather than pretending otherwise.
-**Revisit if** the app grows a module that is neither a route nor a `.server`
-file and the boundary stops being expressible as a glob — a child issue reopens
-this fork rather than someone adding the tool quietly.
+**Grafted from the loser:** dependency-cruiser's orphan detection is covered
+by knip (unused files, unused exports, unused dependencies — it found two on
+its first run). Its cycle detection was the gap. That gap is closed by
+`import-x/no-cycle`, a stock plugin in the same lint run. The revisit
+condition in the original record, a module that is neither a route nor a
+`.server` file, is what the element types above are for.
 
 ### B5. The comment ban, and exactly how far stock ESLint reaches
 
@@ -357,6 +423,15 @@ messages, not deleted.
 
 ---
 
+
+**2026-09-22, moved to rung 2 (#4225).** The reviewer half above is gone:
+`eslint-plugin-no-comments` (`no-comments/disallowComments`, allow list
+`eslint` and `global` only) runs on `app/**` and `workers/**` in the same block
+as the other two comment rules. On the day it landed it found 59 comments in
+`workers/` that the grader had flagged on #4176 and the merge had kept, which
+is the exact hole B5 predicted. Their text is preserved in that PR's commit
+message; anything a future reader needs from it belongs in `docs/`, not in the
+file.
 ## C. The gardener
 
 > "every team really needs … a role that I'm calling a gardener … you want to
@@ -386,8 +461,16 @@ patterns, your instinct should be, I need to write a lint rule against it … yo
 can at least stop the bleeding."* A review comment that only asks for a change
 teaches one agent once; a rule teaches every agent forever.
 
+Implemented in the `opus-review` job's `prompt:` (`.github/workflows/ci.yml`) by
+PR #4255, which asks all three questions above word for word and states the
+verdict rule in its grade-capping form. The same prompt also asks a fourth
+question (Nish 2026-09-22): for a PR touching `app/` or `workers/`, the body
+must carry a `## Verification` section showing a real run of the verify skill
+(`.agents/skills/verify/`) at the PR head — commands, pasted output and the
+head SHA — and a missing or prose-only section fails the review.
+
 Reviewers also check the two things no test checks: that
-`docs/FEATURE-MAP.md` matches `app/routes.ts` after a route change, and that
+`.agents/skills/verify/feature-map.md` matches `app/routes.ts` after a route change, and that
 every new dependency has a row in `docs/REBUILD-STACK.md`.
 
 ### C2. The scout packet's gardener section
@@ -426,7 +509,7 @@ re-enabling is a config change and not a design session.
 > that compounds.
 >
 > **4. Feature-map drift.** Read `app/routes.ts` and the test titles in
-> `e2e/`. Compare against `docs/FEATURE-MAP.md`: a route with no row, a row with
+> `e2e/`. Compare against `.agents/skills/verify/feature-map.md`: a route with no row, a row with
 > no route, a row whose Proof column names a test that no longer exists, a row
 > describing behaviour the route no longer has. **If it has drifted, regenerate
 > the affected rows from those two sources by hand and open a PR with only that
@@ -457,10 +540,10 @@ a React Router 8 app on one Worker, and the equivalent conventions are these —
 | Dune convention | Ours | Enforced by |
 |---|---|---|
 | Features co-located in one folder | A feature is its route module plus its `app/lib/<feature>*.server.ts` leaf plus its `app/lib/data/<table>.server.ts` writer — not split by file type | `max-lines` on routes pushes logic to the leaf; the paved-path import rules keep it from going anywhere else |
-| Main process vs renderer thread | `*.server` modules vs client modules | `no-restricted-imports` pattern `**/*.server` |
+| Main process vs renderer thread | `*.server` modules vs client modules | `boundaries/dependencies` |
 | One blessed way per pattern | one data layer (`app/lib/db.server.ts`), one session authority (`app/lib/auth.server.ts`) | `no-restricted-imports` on `kysely`, `better-auth` and its plugins |
 | Thin entry points | routes are 150 lines and do not query | `max-lines`, plus `no-restricted-syntax` on `env.DB` in routes |
-| — | one writer per table | `no-restricted-syntax` on `insertInto`/`updateTable`/`deleteFrom` in routes |
+| — | one writer per table | `no-restricted-syntax` on DML statement text in `app/**` + `workers/**` outside `app/lib/data/**` |
 | Comments banned | comments banned in app code | `no-inline-comments`, `no-warning-comments`, §B5 |
 
 Two of these name files that do not exist yet — `app/lib/db.server.ts` and
@@ -477,7 +560,7 @@ Child issues under #3842. Numbers and labels are in the PR description and the
 umbrella.
 
 - **The comment sweep** (`agent-ready`) — strip comments from `app/**`, moving
-  anything load-bearing into the commit message or `docs/FEATURE-MAP.md`. §B5.
+  anything load-bearing into the commit message or `.agents/skills/verify/feature-map.md`. §B5.
 - **Error tracking** (`agent-ready`) — `@sentry/cloudflare`, Developer plan,
   `SENTRY_DSN` as a Worker secret, Sentry→GitHub issue alert, dependency row in
   `docs/REBUILD-STACK.md`. §A5.

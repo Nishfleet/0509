@@ -45,7 +45,10 @@ not so you can follow them from memory — lint will tell you.
   asserts a shape instead of checking it. Source: ce5fed17d.
 - **`*.server` modules are imported by route modules and other `*.server`
   modules only.** React Router tree-shakes them out of the browser bundle for
-  route modules and nowhere else.
+  route modules and nowhere else. `boundaries/dependencies` enforces it.
+- **Named exports.** `import-x/no-default-export` everywhere except route
+  modules, config files, and the workerd entry files. A default export is
+  not something you can find with grep.
 - **One paved path per thing.** `kysely` in `app/lib/db.server.ts` only;
   `better-auth` in `app/lib/auth.server.ts` only. One data layer, one session
   authority.
@@ -72,6 +75,8 @@ npm run lint       # eslint . && knip
 npm test           # vitest run
 npm run e2e        # playwright test
 npm run deploy     # wrangler deploy
+npm run verify:start # chrome-devtools start, headless, Playwright's Chromium, --no-sandbox
+npm run verify:stop  # chrome-devtools stop
 ```
 
 **`npm run typecheck` is the only real type gate.** `tsc --noEmit -p
@@ -86,10 +91,24 @@ PR. With it set, there is no local server and the suite runs against that URL �
 that is what the `deployment_status` job runs against production. Same
 assertions both times.
 
+**Run it before the PR opens.** A change under `app/`, `workers/` or `e2e/`
+runs the specs that cover it locally first, in preview mode, by file:
+`npm run e2e -- e2e/<name>.spec.ts` (Playwright's own file filter). A change
+under `app/` or `workers/` also drives the running app with the verify skill —
+`.agents/skills/verify/SKILL.md` — and pastes that run into the PR template's
+`## Verification` section. Quote the summary line (`N passed`) under
+`run-proof:` in the PR body. `preview-assert`
+runs the whole suite on the PR, so the quote is not the proof; it is the
+evidence that you drove the app yourself before asking a reviewer to. Do not
+run the full suite, `npm run build` or `npm run typecheck` locally as well: CI
+runs all three, and on a fleet worker (25% of a core, 55-minute wall) the
+full local set is what timed workers out on 2026-09-23. Chromium is already
+installed on this host (`~/.cache/ms-playwright`).
+
 ## Architecture
 
 - `app/routes.ts` — the route registry. A route not listed here cannot be
-  reached. `docs/FEATURE-MAP.md` describes every one of them and is updated in
+  reached. `.agents/skills/verify/feature-map.md` describes every one of them and is updated in
   the same PR that changes one.
 - `app/routes/*` — route modules: loader, action, component.
 - `app/lib/*.server.ts` — server-only. Bindings, database, auth.
@@ -97,9 +116,11 @@ assertions both times.
 - `workers/app.ts` — the Worker entry and the `scheduled` handler.
 - `migrations/` — numbered D1 SQL. `wrangler d1 migrations list` is the
   authority on what is applied; do not restate a number here.
-- `tests/` — vitest. `tests/` is the node project (pure logic),
-  `tests/integration/` is the workers project (real workerd, real local D1).
-- `e2e/` — Playwright. Every test traces to a row in `docs/FEATURE-MAP.md`.
+- `tests/` — vitest. Most of `tests/` is the node project (pure logic).
+  `tests/integration/` and `tests/unit/site/` run in the workers project.
+  The site tests need HTMLRewriter, which exists only in workerd. The
+  integration project also applies migrations to local D1.
+- `e2e/` — Playwright. Every test traces to a row in `.agents/skills/verify/feature-map.md`.
 
 ## Stack
 
@@ -158,7 +179,7 @@ check that cannot report blocks the queue forever.
 ## Docs
 
 `DESIGN.md` (the design system — read it before any UI work) ·
-`docs/FEATURE-MAP.md` (what exists and how to reach it) ·
+`.agents/skills/verify/feature-map.md` (what exists and how to reach it) ·
 `docs/REBUILD-TRUST.md` (verification, the ladder, the gardener) ·
 `docs/REBUILD-STACK.md` (every dependency, probed) ·
 `docs/REBUILD-DONE.md` (the definition of complete) ·
