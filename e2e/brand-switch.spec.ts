@@ -15,7 +15,7 @@ for (const colorScheme of ["light", "dark"] as const) {
     const loopwell = page.getByRole("switch", { name: "Loopwell tracking" });
     await expect(loopwell).toHaveAttribute("data-disabled", "");
 
-    await expect(page.getByText("paused 22 Sep · history kept")).toBeVisible();
+    await expect(page.getByText("paused 22 Sept · history kept")).toBeVisible();
 
     const boxes = await page.locator("[data-slot='brand-switch']").evaluateAll((elements) =>
       elements.map((el) => {
@@ -58,7 +58,7 @@ test("Tab reaches the switch and Space toggles it", async ({ page }) => {
     .locator("[data-slot='brand-switch-row']")
     .filter({ hasText: "Kindred" });
   await expect(kindredRow).toHaveAttribute("data-state", "off");
-  await expect(kindredRow).toContainText("paused 22 Sep · history kept");
+  await expect(kindredRow).toContainText("paused 22 Sept · history kept");
 
   await page.keyboard.press("Space");
   await expect(kindred).toHaveAttribute("aria-checked", "true");
