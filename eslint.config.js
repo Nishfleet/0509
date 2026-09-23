@@ -451,6 +451,7 @@ export default tseslint.config(
       "workers/app.ts",
       "workers/fixture-site.ts",
       "workers/e2e-inbox.ts",
+      "workers/support-inbox.ts",
     ],
     rules: { "import-x/no-default-export": "off" },
   },
