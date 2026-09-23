@@ -1,8 +1,8 @@
 import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { buildPageDiff, canDiff } from "../../../app/lib/site/diff";
-import { extractPageText, hasChanged } from "../../../app/lib/site/extract-text";
+import { buildPageDiff } from "../../../app/lib/site/diff";
+import { extractPageText } from "../../../app/lib/site/extract-text";
 import { markKey, storeMark } from "../../../app/lib/site/marks";
 import worker from "../../../workers/fixture-site";
 
@@ -67,8 +67,7 @@ describe("engine 4 P3 — a real change, end to end", () => {
     const second = await extractPageText(await (await getHome()).text());
 
     expect(first.hash).toBe(second.hash);
-    expect(hasChanged(first.hash, second.hash)).toBe(false);
-    expect(canDiff(first.hash, second.hash)).toBe(false);
+        expect(first.hash).toBe(second.hash);
 
     // P3 refuses to build a mark when there is nothing to diff against. The
     // gate's real consequence is asserted so it can fail: a gate that fired
@@ -110,7 +109,7 @@ describe("engine 4 P3 — a real change, end to end", () => {
 
     expect(before.text).toContain("₹499");
     expect(after.text).not.toContain("₹499");
-    expect(canDiff(before.hash, after.hash)).toBe(true);
+    expect(before.hash).not.toBe(after.hash);
 
     const diff = buildPageDiff({
       prevHash: before.hash,
@@ -142,8 +141,16 @@ describe("engine 4 P3 — a real change, end to end", () => {
     const repaired = await extractPageText(await (await getHome()).text());
 
     expect(repaired.hash).toBe(healthy.hash);
-    expect(hasChanged(broken.hash, repaired.hash)).toBe(true);
-    expect(hasChanged(healthy.hash, repaired.hash)).toBe(false);
+    expect(broken.hash).not.toBe(repaired.hash);
+    // A healthy page reaches the gate with two identical hashes: no diff.
+    expect(() =>
+      buildPageDiff({
+        prevHash: healthy.hash,
+        nextHash: repaired.hash,
+        beforeText: healthy.text,
+        afterText: repaired.text,
+      }),
+    ).toThrow(/hash gate has not fired/);
   });
 
   it("the mark is written as R2 keys — bytes as bytes, never base64 in a row", async () => {

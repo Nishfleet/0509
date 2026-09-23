@@ -1,7 +1,5 @@
 import { diffWords, structuredPatch } from "diff";
 
-import { hasChanged } from "./extract-text";
-
 export interface WordChange {
   before: string;
   after: string;
@@ -28,11 +26,6 @@ export interface PageDiff {
 }
 
 const splitWords = (text: string): string[] => text.split(/\s+/).filter(Boolean);
-
-export function canDiff(prevHash: string, nextHash: string): boolean {
-  if (prevHash.length === 0 || nextHash.length === 0) return false;
-  return hasChanged(prevHash, nextHash);
-}
 
 export function diffWordsPositioned(before: string, after: string): WordChange[] {
   const parts = diffWords(before, after);
@@ -99,7 +92,10 @@ export function buildStoredHunks(before: string, after: string, context = 2): St
     throw new RangeError("context must be zero or more words of context, never negative");
   }
 
-  const toWordLines = (text: string): string => splitWords(text).join("\n");
+  const withNewline = (text: string): string =>
+    text.endsWith("\n") ? text : `${text}\n`;
+
+  const toWordLines = (text: string): string => withNewline(splitWords(text).join("\n"));
   const patch = structuredPatch(
     "before",
     "after",
@@ -110,11 +106,8 @@ export function buildStoredHunks(before: string, after: string, context = 2): St
     { context },
   );
 
-  const stripNoNewline = (lines: string[]): string[] =>
-    lines.filter((line) => line !== "\\ No newline at end of file");
-
   return patch.hunks.map((hunk) => {
-    const lines = stripNoNewline(hunk.lines);
+    const lines = hunk.lines;
     let startWord = hunk.oldStart - 1;
     for (const line of lines) {
       if (!line.startsWith(" ")) break;
@@ -142,7 +135,7 @@ export interface PageDiffInput {
 export function buildPageDiff(input: PageDiffInput): PageDiff {
   const { prevHash, nextHash, beforeText, afterText, context = 2 } = input;
 
-  if (!canDiff(prevHash, nextHash)) {
+  if (prevHash.length === 0 || nextHash.length === 0 || prevHash === nextHash) {
     throw new Error(
       "hash gate has not fired: refusing to diff unchanged payloads " +
         "(a Workflow step that reaches this needs to write its snapshot row and stop)",

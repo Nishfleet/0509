@@ -1,8 +1,8 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
-import { buildPageDiff, buildStoredHunks, canDiff, diffWordsPositioned } from "../../../app/lib/site/diff";
-import { extractPageText, hasChanged } from "../../../app/lib/site/extract-text";
+import { buildPageDiff, buildStoredHunks, diffWordsPositioned } from "../../../app/lib/site/diff";
+import { extractPageText } from "../../../app/lib/site/extract-text";
 import { markKey, markKeys, storeMark } from "../../../app/lib/site/marks";
 
 /**
@@ -54,24 +54,7 @@ const keysFor = (watchId: string, capturedAt: string) => ({
 });
 
 describe("site diff — the hash gate", () => {
-  it("treats equal hashes as unchanged", () => {
-    expect(hasChanged("abc123", "abc123")).toBe(false);
-  });
-
-  it("treats a first-seen page as unchanged, not as a change", () => {
-    // No previous snapshot: not a change, a new page. The sweep still writes
-    // its snapshot row; what P3 refuses is the diff, because there is nothing
-    // to diff against. P1's own `hasChanged` is the sweep's predicate.
-    expect(canDiff("", "abc123")).toBe(false);
-    expect(canDiff("abc123", "")).toBe(false);
-    expect(hasChanged("", "abc123")).toBe(true);
-  });
-
-  it("fires only on two present, different hashes", () => {
-    expect(hasChanged("abc123", "def456")).toBe(true);
-  });
-
-  it("refuses to diff before the gate has fired", () => {
+  it("refuses to diff while the two hashes are equal", () => {
     expect(() =>
       buildPageDiff({
         prevHash: "same",
@@ -80,6 +63,17 @@ describe("site diff — the hash gate", () => {
         afterText: HEALTHY_TEXT,
       }),
     ).toThrow(/hash gate has not fired/);
+  });
+
+  it("treats a first-seen page as having nothing to diff against", () => {
+    // No previous snapshot: not a change, a new page. The sweep still writes
+    // its snapshot row; what P3 refuses is the diff, because there is nothing
+    // to diff against.
+    for (const [prevHash, nextHash] of [["", "abc123"], ["abc123", ""]] as const) {
+      expect(() =>
+        buildPageDiff({ prevHash, nextHash, beforeText: HEALTHY_TEXT, afterText: SOFT_TEXT }),
+      ).toThrow(/hash gate has not fired/);
+    }
   });
 
   it("the unchanged tick writes one row and nothing else — no mark is built", async () => {
@@ -91,8 +85,7 @@ describe("site diff — the hash gate", () => {
     // objects to the bucket.
     const prevHash = await textHash(HEALTHY_TEXT);
     const nextHash = await textHash(HEALTHY_TEXT_AGAIN);
-    expect(hasChanged(prevHash, nextHash)).toBe(false);
-    expect(canDiff(prevHash, nextHash)).toBe(false);
+    expect(prevHash).toBe(nextHash);
 
     expect(() =>
       buildPageDiff({
@@ -243,13 +236,13 @@ describe("site diff — the real fixture-site text pair", () => {
 
   it("the unchanged tick produces the same hash", async () => {
     expect(await textHash(HEALTHY_TEXT)).toBe(await textHash(HEALTHY_TEXT_AGAIN));
-    expect(hasChanged(await textHash(HEALTHY_TEXT), await textHash(HEALTHY_TEXT_AGAIN))).toBe(false);
+    expect(await textHash(HEALTHY_TEXT)).toBe(await textHash(HEALTHY_TEXT_AGAIN));
   });
 
   it("builds positioned hunks for the real change, once the gate has fired", async () => {
     const prevHash = await textHash(HEALTHY_TEXT);
     const nextHash = await textHash(SOFT_TEXT);
-    expect(hasChanged(prevHash, nextHash)).toBe(true);
+    expect(prevHash).not.toBe(nextHash);
 
     const diff = buildPageDiff({
       prevHash,
