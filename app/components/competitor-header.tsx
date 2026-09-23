@@ -1,14 +1,18 @@
 import type { ReactElement, ReactNode } from "react";
 import { Link } from "react-router";
 
+const DAY_MONTH = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric",
+  month: "short",
+  timeZone: "UTC",
+});
+
 export function competitorPausedLine(stateChangedAt: string | null): string {
   if (stateChangedAt === null) return "Paused";
-  const dayMonth = new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "short",
-    timeZone: "UTC",
-  }).format(new Date(stateChangedAt));
-  return `Paused ${dayMonth.replace("Sept", "Sep")}`;
+  const dayMonth = DAY_MONTH.formatToParts(new Date(stateChangedAt))
+    .map((part) => (part.type === "month" ? part.value.slice(0, 3) : part.value))
+    .join("");
+  return `Paused ${dayMonth}`;
 }
 
 export interface CompetitorHeaderProps {
