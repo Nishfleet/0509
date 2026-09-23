@@ -1,7 +1,7 @@
 import type { ReactElement, ReactNode } from "react";
 import { Link } from "react-router";
 
-const DAY_MONTH = new Intl.DateTimeFormat("en-GB", {
+export const DAY_MONTH = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
   month: "short",
   timeZone: "UTC",
