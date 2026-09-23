@@ -21,4 +21,5 @@ export default [
   route("design/brand-chips", "routes/design.brand-chips.tsx"),
   route("design/nav", "routes/design.nav.tsx"),
   route("onboarding/competitors", "routes/onboarding.competitors.tsx"),
+  route("design/capture-plates", "routes/design.capture-plates.tsx"),
 ] satisfies RouteConfig;

@@ -54,6 +54,9 @@ const SELECT_COMPETITOR =
 const SET_COMPETITOR_STATE =
   "UPDATE entity SET state = ?, state_changed_at = ?, state_changed_by = 'user', state_reason = NULL WHERE id = ? AND workspace_id = ? AND role = 'competitor' AND state IN ('on', 'off') AND state <> ?";
 
+const INSERT_COMPETITOR_FROM_SUGGESTION =
+  "INSERT INTO entity (id, workspace_id, role, domain, name, origin, confirmed_at, state, state_changed_at, state_changed_by, created_at) SELECT ?1, workspace_id, 'competitor', candidate_domain, candidate_name, 'auto', ?2, 'on', ?2, 'user', ?2 FROM suggestion WHERE id = ?3 AND workspace_id = ?4 AND status = 'pending' ON CONFLICT (workspace_id, domain) DO UPDATE SET state = 'on', state_changed_at = excluded.state_changed_at, state_changed_by = 'user'";
+
 const SELECT_ON =
   "SELECT e.id AS entity_id, e.name, e.domain, s.verdict_reason AS reason FROM entity e LEFT JOIN suggestion s ON s.entity_id = e.id AND s.workspace_id = e.workspace_id WHERE e.workspace_id = ? AND e.role = 'competitor' AND e.state = 'on' ORDER BY e.created_at ASC, e.id ASC";
 
@@ -116,4 +119,15 @@ export async function readOnboardingCompetitors(
   }));
 
   return { on, maybes };
+}
+
+export function insertCompetitorFromSuggestion(input: {
+  entityId: string;
+  now: string;
+  suggestionId: string;
+  workspaceId: string;
+}): D1PreparedStatement {
+  return env.DB
+    .prepare(INSERT_COMPETITOR_FROM_SUGGESTION)
+    .bind(input.entityId, input.now, input.suggestionId, input.workspaceId);
 }
