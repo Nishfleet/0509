@@ -65,19 +65,17 @@ export function logoCandidates(
   return out.filter((c) => (seen.has(c.url) ? false : (seen.add(c.url), true)));
 }
 
+export type ProbeFetch = (url: string, init?: { signal?: AbortSignal }) => Promise<Response>;
+
 export async function resolveLogo(
   candidates: LogoCandidate[],
-  fetchFn: typeof fetch = fetch,
+  fetchFn: ProbeFetch,
   deadlineMs = 8_000,
 ): Promise<LogoResolution> {
   const misses: LogoMiss[] = [];
   for (const c of candidates) {
     try {
-      const res = await fetchFn(c.url, {
-        method: "GET",
-        signal: AbortSignal.timeout(deadlineMs),
-        redirect: "follow",
-      });
+      const res = await fetchFn(c.url, { signal: AbortSignal.timeout(deadlineMs) });
       if (!res.ok) {
         misses.push({ via: c.via, reason: `http ${String(res.status)}` });
         continue;

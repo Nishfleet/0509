@@ -64,26 +64,19 @@ export async function action({ request }: Route.ActionArgs) {
   if (!run) throw new Response("onboarding run not found for this workspace", { status: 404 });
 
   if (!(await priorConfirmationExists(workspaceId, entity.id))) {
-    await recordIdentityConfirmation({
-      workspaceId,
-      userId: session.user.id,
-      entityId: entity.id,
-      runId: card.onboardingRunId,
-      edits,
-    });
-    const homepageUrl = await readHomeUrlForEntity(entity.id);
-    await env.IDENTITY_TAIL.create({
-      id: `identity-${card.onboardingRunId}`,
-      params: {
-        workspaceId,
-        userId: session.user.id,
-        entityId: entity.id,
-        onboardingRunId: card.onboardingRunId,
-        domain: entity.domain,
-        homepageUrl,
-        publicSubject: card.publicSubject,
-      },
-    });
+    const instanceId = `identity-${card.onboardingRunId}`;
+    const existing = await env.IDENTITY_TAIL.get(instanceId).then((h) => h.status()).catch(() => null);
+    if (existing === null) {
+      await env.IDENTITY_TAIL.create({
+        id: instanceId,
+        params: {
+          workspaceId, userId: session.user.id, entityId: entity.id,
+          onboardingRunId: card.onboardingRunId, domain: entity.domain,
+          homepageUrl: await readHomeUrlForEntity(entity.id), publicSubject: card.publicSubject,
+        },
+      });
+    }
+    await recordIdentityConfirmation({ workspaceId, userId: session.user.id, entityId: entity.id, runId: card.onboardingRunId, edits });
   }
   return redirect("/app/competitors");
 }
@@ -132,6 +125,9 @@ export default function Onboarding({ loaderData, actionData }: Route.ComponentPr
             <IdentityCardFields
               fields={card.fields}
               onEdit={(name, value) => { setEdits((e) => ({ ...e, [name]: value })); }}
+              transport={card.transport}
+              browserMsUsed={card.browserMsUsed}
+              jevStatus={card.jevStatus}
             />
             {card.publicSubject !== "cleared" ? <p>we track brands and creators, not people — check this card is yours</p> : null}
             <button type="submit" disabled={busy}>That&apos;s me</button>

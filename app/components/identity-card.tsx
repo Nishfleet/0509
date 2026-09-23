@@ -15,15 +15,26 @@ const FILLER: Record<string, string> = {
 export function IdentityCardFields({
   fields,
   onEdit,
+  transport,
+  browserMsUsed,
+  jevStatus,
 }: {
   fields: CardField[];
   onEdit: (name: string, value: string) => void;
+  transport: "fetch" | "browser" | null;
+  browserMsUsed: number | null;
+  jevStatus: "ok" | "unconfigured" | "unreachable";
 }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
 
   return (
-    <dl className="identity-card">
+    <dl
+      className="identity-card"
+      data-transport={transport ?? "none"}
+      data-browser-ms-used={browserMsUsed ?? "none"}
+      data-jev={jevStatus}
+    >
       {fields.map((f) => (
         <div key={f.name} data-state={f.state}>
           <dt>{f.name.replace("_", " ")}</dt>

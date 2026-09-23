@@ -43,6 +43,9 @@ export async function jevAsk(
       signal: AbortSignal.timeout(timeoutMs),
       headers: {
         "content-type": "application/json",
+        "ai-gateway-protocol-version": "0.0.1",
+        "ai-evaluation-model-specification-version": "4",
+        "ai-model-id": "typesafe-ai/jev",
         ...(config.apiKey ? { authorization: `Bearer ${config.apiKey}` } : {}),
       },
       body: JSON.stringify({ state, questions }),

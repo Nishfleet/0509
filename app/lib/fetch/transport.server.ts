@@ -125,7 +125,10 @@ function parseBrowserMs(res: Response): number | null {
   return Number.isFinite(value) && value >= 0 ? value : null;
 }
 
-export async function readJson(url: string): Promise<unknown> {
+export async function probeFetch(
+  url: string,
+  init?: { accept?: string; signal?: AbortSignal },
+): Promise<Response> {
   let target: URL;
   try {
     target = new URL(url);
@@ -135,11 +138,18 @@ export async function readJson(url: string): Promise<unknown> {
   if (target.protocol !== "http:" && target.protocol !== "https:") {
     throw new Error(`unsupported scheme: ${target.protocol}`);
   }
-
-  const res = await fetch(url, {
-    headers: { accept: "application/json", "user-agent": FETCH_HEADERS["user-agent"] },
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  return fetch(url, {
+    headers: {
+      accept: init?.accept ?? "*/*",
+      "user-agent": FETCH_HEADERS["user-agent"],
+    },
+    signal: init?.signal ?? AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    redirect: "follow",
   });
+}
+
+export async function readJson(url: string): Promise<unknown> {
+  const res = await probeFetch(url, { accept: "application/json" });
   if (!res.ok) throw new Error(`json fetch answered ${String(res.status)}`);
   return res.json();
 }

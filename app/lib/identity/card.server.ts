@@ -7,7 +7,7 @@ import { insertOnboardingRunStmt } from "../data/onboarding-run.server";
 import { insertHomePageStmt, insertRolePageStmt } from "../data/page.server";
 import { takedownSubjectsPresent } from "../data/takedown.server";
 import { priorRefusalExists, userDecisionStmts } from "../data/user-decision.server";
-import { readJson, readUrl, ReadUrlResultSchema, type ReadUrlResult } from "../fetch/transport.server";
+import { probeFetch, readJson, readUrl, ReadUrlResultSchema, type ReadUrlResult } from "../fetch/transport.server";
 import { jevAsk, jevConfig, type JevQuestion } from "../jev/client";
 import { buildIdentityPack, inputHash } from "../jev/context-pack";
 import type { CardField, CardResult } from "./card-types";
@@ -219,7 +219,7 @@ export async function buildIdentityCard(
   const logoP = extracted && pageUrl
     ? probe("logo", () =>
         probeThrough(cache, cacheKey, "logo", () =>
-          resolveLogo(logoCandidates(pageUrl, extracted, manifestIcons.ok ? manifestIcons.value : [])),
+          resolveLogo(logoCandidates(pageUrl, extracted, manifestIcons.ok ? manifestIcons.value : []), probeFetch),
           LogoResolutionSchema,
         ), probeFailures)
     : Promise.resolve(null);

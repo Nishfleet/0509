@@ -8,8 +8,8 @@ import { requireInboxToken, signInWithMagicLink } from "./inbox";
 // The timed journey tests are a production lane: they sign in over the real
 // mail path (one fresh e2e+ address per input, so each card lands in a fresh
 // workspace), the 30 s budget is measured from the input submit, never from
-// sign-in, and the ?entity= document is captured for the transport +
-// browserMsUsed proof stored in identity_json. They run when
+// sign-in, and the rendered card carries the transport + browserMsUsed the
+// build recorded in identity_json (data-* on .identity-card). They run when
 // PLAYWRIGHT_TEST_BASE_URL points at the deployed Worker.
 //
 // The session-gate test runs in every lane, preview included: webServer now
@@ -31,9 +31,6 @@ test.describe("production lane", () => {
       const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
       await signInWithMagicLink(page, email, token);
 
-      const cardResponse = page.waitForResponse(
-        (r) => r.url().includes("/onboarding") && r.url().includes("entity="),
-      );
       const field = page.getByLabel(/your website/i);
       await field.fill(input);
       const submittedAt = Date.now();
@@ -42,9 +39,14 @@ test.describe("production lane", () => {
       const me = page.locator('button[type="submit"]').filter({ hasText: /me/i });
       await expect(me).toBeVisible({ timeout: 30_000 });
       const cardAt = Date.now();
-      const stream = await (await cardResponse).text().catch(() => "");
-      const transport = /"transport":"(fetch|browser)"/.exec(stream)?.[1] ?? "unseen";
-      const browserMsUsed = /"browserMsUsed":(\d+)/.exec(stream)?.[1] ?? "none";
+
+      // The transport proof is what the card persisted: the built card renders
+      // the transport and browser-milliseconds recorded in identity_json.
+      const cardEl = page.locator(".identity-card");
+      const transport = await cardEl.getAttribute("data-transport");
+      const browserMsUsed = await cardEl.getAttribute("data-browser-ms-used");
+      expect(transport).toMatch(/^(fetch|browser|none)$/);
+      if (transport === "browser") expect(browserMsUsed).toMatch(/^\d+$/);
 
       await me.click();
       await expect(page).toHaveURL(/\/app\/competitors/, { timeout: 30_000 });

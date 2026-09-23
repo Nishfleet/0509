@@ -50,7 +50,18 @@
   // forwarded header: auth origin trust and the magic-link URL both come from
   // it, and a client-supplied value would let a link point anywhere.
   // BETTER_AUTH_SECRET stays a Worker secret.
-  "vars": { "BETTER_AUTH_URL": "https://0509.io", "BROWSER_CONCURRENCY_CAP": "10", "JEV_URL": "" },
+  //
+  // JEV_URL is the TypeSafe evaluation-model endpoint — the same
+  // ai-gateway.vercel.sh URL the fleet's LiteLLM /jev pass-through wraps
+  // (fleet-ops config/litellm-proxy.yaml). The credential stays a Worker
+  // secret: `wrangler secret put JEV_API_KEY`. Local dev overrides the URL to
+  // the fleet proxy (127.0.0.1:4000/jev) via .dev.vars, which takes the proxy's
+  // virtual key as JEV_API_KEY instead.
+  "vars": {
+    "BETTER_AUTH_URL": "https://0509.io",
+    "BROWSER_CONCURRENCY_CAP": "10",
+    "JEV_URL": "https://ai-gateway.vercel.sh/v4/ai/evaluation-model"
+  },
 
   // Identity-card engine (#3885): 24 h probe cache. No id — wrangler
   // provisions the namespace on first deploy and keeps it linked, same as
