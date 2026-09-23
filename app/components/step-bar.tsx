@@ -7,7 +7,7 @@ export function StepBar({ current }: { current: 1 | 2 | 3 }): ReactElement {
     <nav aria-label="Onboarding progress">
       <ol className="flex gap-4 font-mono text-[0.75rem] uppercase">
         {ONBOARDING_STEPS.map((label, index) => {
-          const step = (index + 1) as 1 | 2 | 3;
+          const step = index + 1;
           const active = step === current;
           return (
             <li
