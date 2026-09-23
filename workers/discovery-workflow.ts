@@ -24,7 +24,7 @@ import {
 	persistDiscovery,
 	persistRefresh,
 	recordGeneratorSnapshot,
-} from "../app/lib/discovery/persist";
+} from "../app/lib/data/discovery.server";
 import {
 	resolveCandidateDomain,
 	type Resolution,

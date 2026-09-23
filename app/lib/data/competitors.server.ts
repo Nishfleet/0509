@@ -1,9 +1,16 @@
 import { env } from "cloudflare:workers";
 import { getDomain } from "tldts";
 
-import { discoveryEntityId, watchStatements } from "../discovery/persist";
 import { resolveCandidateDomain } from "../discovery/resolve-domain";
 import { normaliseName } from "../discovery/types";
+import { setCompetitorStateStmt, upsertTrackedCompetitorStmt } from "./entity.server";
+import { discoveryEntityId, idHash } from "./ids.server";
+import {
+	dismissSuggestionByDomainStmt,
+	insertPendingNameSuggestionStmt,
+	setSuggestionStatusStmt,
+} from "./suggestion.server";
+import { setEntityWatchesActiveStmt, watchStatements } from "./watch.server";
 
 export interface CompetitorRow {
 	id: string;
@@ -43,14 +50,7 @@ export async function listCompetitors(workspaceId: string) {
 }
 
 async function suggestionId(workspaceId: string, candidateDomain: string): Promise<string> {
-	const digest = await crypto.subtle.digest(
-		"SHA-256",
-		new TextEncoder().encode(`${workspaceId}:${candidateDomain}`),
-	);
-	return `sug_${[...new Uint8Array(digest)]
-		.slice(0, 12)
-		.map((b) => b.toString(16).padStart(2, "0"))
-		.join("")}`;
+	return `sug_${await idHash(workspaceId, candidateDomain)}`;
 }
 
 export async function setCompetitorState(
@@ -60,13 +60,14 @@ export async function setCompetitorState(
 ): Promise<void> {
 	const now = new Date().toISOString();
 	await env.DB.batch([
-		env.DB.prepare(
-			`UPDATE entity SET state = ?, state_changed_by = 'user', state_changed_at = ?
-			 WHERE id = ? AND workspace_id = ? AND role = 'competitor'`,
-		).bind(state, now, entityId, workspaceId),
-		env.DB.prepare(
-			"UPDATE watch SET is_active = ? WHERE entity_id = ?",
-		).bind(state === "on" ? 1 : 0, entityId),
+		setCompetitorStateStmt(env.DB, {
+			entityId,
+			workspaceId,
+			state,
+			changedBy: "user",
+			now,
+		}),
+		setEntityWatchesActiveStmt(env.DB, entityId, state === "on"),
 	]);
 }
 
@@ -82,18 +83,20 @@ export async function dismissCompetitor(
 		.first<{ domain: string }>();
 	if (!entity) return;
 	await env.DB.batch([
-		env.DB.prepare(
-			`UPDATE entity SET state = 'dismissed', state_changed_by = 'user', state_changed_at = ?
-			 WHERE id = ?`,
-		).bind(now, entityId),
-		env.DB.prepare("UPDATE watch SET is_active = 0 WHERE entity_id = ?").bind(entityId),
-		env.DB.prepare(
-			`INSERT INTO suggestion
-			   (id, workspace_id, kind, candidate_domain, status, decided_by, decided_at, created_at)
-			 VALUES (?, ?, 'add', ?, 'dismissed', 'user', ?, ?)
-			 ON CONFLICT(workspace_id, candidate_domain) DO UPDATE SET
-			   status = 'dismissed', decided_by = 'user', decided_at = excluded.decided_at`,
-		).bind(await suggestionId(workspaceId, entity.domain), workspaceId, entity.domain, now, now),
+		setCompetitorStateStmt(env.DB, {
+			entityId,
+			workspaceId,
+			state: "dismissed",
+			changedBy: "user",
+			now,
+		}),
+		setEntityWatchesActiveStmt(env.DB, entityId, false),
+		dismissSuggestionByDomainStmt(env.DB, {
+			id: await suggestionId(workspaceId, entity.domain),
+			workspaceId,
+			domain: entity.domain,
+			now,
+		}),
 	]);
 }
 
@@ -101,12 +104,12 @@ export async function dismissSuggestion(
 	workspaceId: string,
 	suggestionIdValue: string,
 ): Promise<void> {
-	await env.DB.prepare(
-		`UPDATE suggestion SET status = 'dismissed', decided_by = 'user', decided_at = ?
-		 WHERE id = ? AND workspace_id = ?`,
-	)
-		.bind(new Date().toISOString(), suggestionIdValue, workspaceId)
-		.run();
+	await setSuggestionStatusStmt(env.DB, {
+		id: suggestionIdValue,
+		workspaceId,
+		status: "dismissed",
+		now: new Date().toISOString(),
+	}).run();
 }
 
 async function acceptDomain(
@@ -118,15 +121,17 @@ async function acceptDomain(
 	const now = new Date().toISOString();
 	const entityId = await discoveryEntityId(workspaceId, domain);
 	const stmts = [
-		env.DB.prepare(
-			`INSERT INTO entity (id, workspace_id, role, domain, name, origin, state, created_at)
-			 VALUES (?, ?, 'competitor', ?, ?, ?, 'on', ?)
-			 ON CONFLICT(workspace_id, domain) DO UPDATE SET
-			   state = 'on', state_changed_by = 'user', state_changed_at = excluded.created_at`,
-		).bind(entityId, workspaceId, domain, name, origin, now),
-		env.DB.prepare("UPDATE watch SET is_active = 1 WHERE entity_id = ?").bind(entityId),
+		upsertTrackedCompetitorStmt(env.DB, {
+			id: entityId,
+			workspaceId,
+			domain,
+			name,
+			origin,
+			now,
+		}),
+		setEntityWatchesActiveStmt(env.DB, entityId, true),
+		...(await watchStatements(env.DB, entityId, domain)),
 	];
-	stmts.push(...(await watchStatements(env.DB, entityId, domain)));
 	await env.DB.batch(stmts);
 }
 
@@ -151,12 +156,12 @@ export async function acceptSuggestion(
 	}
 	if (domain === null) return { accepted: false };
 	await acceptDomain(workspaceId, domain, suggestion.candidate_name, "auto");
-	await env.DB.prepare(
-		`UPDATE suggestion SET status = 'accepted', decided_by = 'user', decided_at = ?
-		 WHERE id = ?`,
-	)
-		.bind(new Date().toISOString(), suggestionIdValue)
-		.run();
+	await setSuggestionStatusStmt(env.DB, {
+		id: suggestionIdValue,
+		workspaceId,
+		status: "accepted",
+		now: new Date().toISOString(),
+	}).run();
 	return { accepted: true };
 }
 
@@ -178,18 +183,12 @@ export async function addCompetitor(
 		return { domain: resolution.domain, pending: null };
 	}
 	const candidateDomain = `name:${normaliseName(trimmed)}`;
-	await env.DB.prepare(
-		`INSERT OR IGNORE INTO suggestion
-		   (id, workspace_id, kind, candidate_domain, candidate_name, status, created_at)
-		 VALUES (?, ?, 'add', ?, ?, 'pending', ?)`,
-	)
-		.bind(
-			await suggestionId(workspaceId, candidateDomain),
-			workspaceId,
-			candidateDomain,
-			trimmed,
-			new Date().toISOString(),
-		)
-		.run();
+	await insertPendingNameSuggestionStmt(env.DB, {
+		id: await suggestionId(workspaceId, candidateDomain),
+		workspaceId,
+		domain: candidateDomain,
+		name: trimmed,
+		now: new Date().toISOString(),
+	}).run();
 	return { domain: null, pending: trimmed };
 }

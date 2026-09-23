@@ -28,9 +28,9 @@ describe("parseNewsFeed", () => {
 
   it("parses every item with title, link and publisher domain", () => {
     expect(items.length).toBeGreaterThanOrEqual(40);
-    expect(items[0]!.title).toContain("activewear");
-    expect(items[0]!.link).toContain("news.google.com/rss/articles/");
-    expect(items[0]!.publisherDomain).toBe("gq-magazine.co.uk");
+    expect(items[0]?.title).toContain("activewear");
+    expect(items[0]?.link).toContain("news.google.com/rss/articles/");
+    expect(items[0]?.publisherDomain).toBe("gq-magazine.co.uk");
   });
 
   it("keeps publisher domains off the google redirect", () => {
@@ -79,7 +79,7 @@ describe("name extractors", () => {
 
 describe("hn co-mentions", () => {
   it("extracts registrable domains from hit urls and entity-encoded comment links", () => {
-    const hit = HN_JSON.hits.find((h) => h["objectID"] === "42603967")!;
+    const hit = HN_JSON.hits.find((h) => h["objectID"] === "42603967") ?? {};
     const domains = domainsFromHit(hit, "gymshark.com");
     expect(domains).toContain("theguardian.com");
     expect(domains).not.toContain("gymshark.com");
@@ -98,8 +98,8 @@ describe("hn co-mentions", () => {
     const candidates = await hnCoMentions(GYMSHARK, { fetchImpl: fetchImpl as typeof fetch });
     const byDomain = new Map(candidates.map((c) => [c.domain, c]));
     expect(byDomain.has("theguardian.com")).toBe(true);
-    expect(byDomain.get("theguardian.com")!.evidence[0]!.generator).toBe(HN_GENERATOR);
-    expect(byDomain.get("theguardian.com")!.evidence[0]!.sourceUrl).toContain("news.ycombinator.com/item?id=42603967");
+    expect(byDomain.get("theguardian.com")?.evidence[0]?.generator).toBe(HN_GENERATOR);
+    expect(byDomain.get("theguardian.com")?.evidence[0]?.sourceUrl).toContain("news.ycombinator.com/item?id=42603967");
     expect(candidates.every((c) => c.domain !== "gymshark.com")).toBe(true);
   });
 });
@@ -124,9 +124,9 @@ describe("googleNewsRoundups", () => {
     expect(names).toContain("Helimix");
     expect(names).toContain("Ghost");
     expect(names).toContain("SHARKYS GYM");
-    const helimix = candidates.find((c) => c.name === "Helimix")!;
-    expect(helimix.evidence[0]!.generator).toBe(NEWS_GENERATOR);
-    expect(helimix.evidence[0]!.publisherDomain).toBeTruthy();
+    const helimix = candidates.find((c) => c.name === "Helimix");
+    expect(helimix?.evidence[0]?.generator).toBe(NEWS_GENERATOR);
+    expect(helimix?.evidence[0]?.publisherDomain).toBeTruthy();
     expect(names).not.toContain("Gymshark");
   });
 });

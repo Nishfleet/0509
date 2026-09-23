@@ -24,8 +24,8 @@ describe("scoreCandidates", () => {
       cand("Alphalete Athletics", "www.alphalete.com", [ev("news")]),
     ]);
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.domain).toBe("alphalete.com");
-    expect(rows[0]!.candidate.evidence).toHaveLength(3);
+    expect(rows[0]?.domain).toBe("alphalete.com");
+    expect(rows[0]?.candidate.evidence).toHaveLength(3);
   });
 
   it("dedupes by exact normalised name when no domain exists", () => {
@@ -35,7 +35,7 @@ describe("scoreCandidates", () => {
       cand("NVG TN", undefined, [ev("hn")]),
     ]);
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.generatorCount).toBe(2);
+    expect(rows[0]?.generatorCount).toBe(2);
   });
 
   it("counts independent generators and independent publishers", () => {
@@ -46,9 +46,9 @@ describe("scoreCandidates", () => {
         ev("hn"),
       ]),
     ]);
-    expect(rows[0]!.generatorCount).toBe(2);
-    expect(rows[0]!.publisherCount).toBe(3);
-    expect(rows[0]!.evidenceCount).toBe(3);
+    expect(rows[0]?.generatorCount).toBe(2);
+    expect(rows[0]?.publisherCount).toBe(3);
+    expect(rows[0]?.evidenceCount).toBe(3);
   });
 
   it("orders by corroboration, not probability", () => {
@@ -79,10 +79,10 @@ describe("buildShortlist", () => {
       ],
       20,
     );
-    const obscure = rows.find((r) => r.domain === "obscure.example")!;
-    expect(obscure.evidenceCount).toBe(1);
-    expect(obscure.guaranteedVia).toBe("meta-ads");
-    expect(obscure.shortlisted).toBe(true);
-    expect(rows.find((r) => r.domain === "loud-mixed.example")!.guaranteedVia).toBeNull();
+    const obscure = rows.find((r) => r.domain === "obscure.example");
+    expect(obscure?.evidenceCount).toBe(1);
+    expect(obscure?.guaranteedVia).toBe("meta-ads");
+    expect(obscure?.shortlisted).toBe(true);
+    expect(rows.find((r) => r.domain === "loud-mixed.example")?.guaranteedVia).toBeNull();
   });
 });

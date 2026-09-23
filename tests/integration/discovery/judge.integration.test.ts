@@ -6,11 +6,11 @@ import {
   judgeShortlist,
   judgeTracked,
 } from "../../../app/lib/discovery/judge";
+import { discoveryEntityId } from "../../../app/lib/data/ids.server";
 import {
-  discoveryEntityId,
   persistDiscovery,
   persistRefresh,
-} from "../../../app/lib/discovery/persist";
+} from "../../../app/lib/data/discovery.server";
 import type { ScoredCandidate } from "../../../app/lib/discovery/shortlist";
 
 // Jev is stubbed per case (its verdicts are inputs, not the thing under test);
@@ -113,8 +113,8 @@ describe("judgeShortlist + persistDiscovery against real D1", () => {
     const row = scored({ name: "Alphalete Athletics", domain: "alphaleteathletics.com" });
     const judged = await judgeShortlist(JEV_ENV(impl), workspaceId, [row], new Map());
     expect(judged).toHaveLength(1);
-    expect(judged[0]!.decision).toBe("accept");
-    expect(judged[0]!.p).toBe(0.93);
+    expect(judged[0]?.decision).toBe("accept");
+    expect(judged[0]?.p).toBe(0.93);
     const result = await persistDiscovery({ DB: env.DB }, workspaceId, judged, [row]);
     expect(result.accepted).toEqual(["alphaleteathletics.com"]);
     const entity = await env.DB.prepare(
@@ -135,7 +135,7 @@ describe("judgeShortlist + persistDiscovery against real D1", () => {
       .bind(workspaceId)
       .first();
     expect(verdict).toMatchObject({ question_id: "d1.is_competitor", p: 0.93 });
-    expect(verdict!.entity_id).toBe(await discoveryEntityId(workspaceId, "alphaleteathletics.com"));
+    expect(verdict?.entity_id).toBe(await discoveryEntityId(workspaceId, "alphaleteathletics.com"));
   });
 
   it("handles the p = 0.9 boundary as add, and p <= 0.1 as dismissed", async () => {
@@ -143,11 +143,11 @@ describe("judgeShortlist + persistDiscovery against real D1", () => {
     const { impl } = jevStub(0.9);
     const boundary = scored({ name: "Boundary Brand", domain: "boundary.test" });
     const judged = await judgeShortlist(JEV_ENV(impl), workspaceId, [boundary], new Map());
-    expect(judged[0]!.decision).toBe("accept");
+    expect(judged[0]?.decision).toBe("accept");
     const { impl: implDrop } = jevStub(0.05);
     const loser = scored({ name: "Noise Publisher", domain: "noise.test" });
     const judgedDrop = await judgeShortlist(JEV_ENV(implDrop), workspaceId, [loser], new Map());
-    expect(judgedDrop[0]!.decision).toBe("drop");
+    expect(judgedDrop[0]?.decision).toBe("drop");
     await persistDiscovery({ DB: env.DB }, workspaceId, [...judged, ...judgedDrop], [boundary, loser]);
     const dropped = await env.DB.prepare(
       "SELECT status, decided_by FROM suggestion WHERE candidate_domain = 'noise.test'",
@@ -181,7 +181,7 @@ describe("judgeShortlist + persistDiscovery against real D1", () => {
     await persistDiscovery({ DB: env.DB }, workspaceId, first, [row]);
     const second = await judgeShortlist(JEV_ENV(impl), workspaceId, [row], new Map());
     const jevCallsAfter = calls.filter((u) => u.includes("jev.test")).length;
-    expect(second[0]!.p).toBe(0.55);
+    expect(second[0]?.p).toBe(0.55);
     expect(jevCallsAfter).toBe(jevCalls);
   });
 
@@ -204,8 +204,8 @@ describe("judgeShortlist + persistDiscovery against real D1", () => {
     const impl = (async () => new Response("down", { status: 502 })) as typeof fetch;
     const row = scored({ name: "Uncalled", domain: "uncalled.test" });
     const judged = await judgeShortlist(JEV_ENV(impl), workspaceId, [row], new Map());
-    expect(judged[0]!.judged).toBe(false);
-    expect(judged[0]!.decision).toBe("maybe");
+    expect(judged[0]?.judged).toBe(false);
+    expect(judged[0]?.decision).toBe("maybe");
     await persistDiscovery({ DB: env.DB }, workspaceId, judged, [row]);
     const row2 = await env.DB.prepare(
       "SELECT status, verdict_p FROM suggestion WHERE candidate_domain = 'uncalled.test'",
@@ -289,7 +289,7 @@ describe("judgeTracked + persistRefresh (D2)", () => {
       return new Response("ok", { status: 200 });
     }) as typeof fetch;
     const outcomes = await judgeTracked(JEV_ENV(impl), workspaceId);
-    expect(outcomes[0]!.action).toBe("ask");
+    expect(outcomes[0]?.action).toBe("ask");
     await persistRefresh({ DB: env.DB }, workspaceId, outcomes);
     const entity = await env.DB.prepare(
       "SELECT state FROM entity WHERE domain = 'rival.test'",
@@ -322,6 +322,6 @@ describe("judgeTracked + persistRefresh (D2)", () => {
       return new Response("ok", { status: 200 });
     }) as typeof fetch;
     const outcomes = await judgeTracked(JEV_ENV(impl), workspaceId);
-    expect(outcomes[0]!.action).toBe("ask");
+    expect(outcomes[0]?.action).toBe("ask");
   });
 });
