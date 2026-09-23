@@ -1,10 +1,17 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  SITE_URL,
   breadcrumbJsonLd,
   jsonLdGraph,
   organizationJsonLd,
 } from "../../app/lib/structured-data";
+
+describe("SITE_URL", () => {
+  it("is the canonical site origin every node builds on", () => {
+    expect(SITE_URL).toBe("https://0509.io");
+  });
+});
 
 describe("organizationJsonLd", () => {
   it("returns the Organization node and claims nothing unbacked", () => {
