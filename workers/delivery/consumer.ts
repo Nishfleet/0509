@@ -1,3 +1,4 @@
+import { quotedSignalIds, signalDeliveryStatements } from "./record";
 import { errorText, sendMessage } from "./send";
 
 class PayloadError extends Error {
@@ -103,14 +104,6 @@ async function resolveAttempt(env: Env, attemptId: string, outcome: "sent" | "fa
     .run();
 }
 
-async function markDigestSent(env: Env, digestId: string): Promise<void> {
-  await env.DB.prepare(
-    `UPDATE digest SET status = 'sent', sent_at = ? WHERE id = ?`,
-  )
-    .bind(new Date().toISOString(), digestId)
-    .run();
-}
-
 function render(message: MessageRow, to: string): EmailMessageBuilder {
   let payload: { html?: string; text?: string };
   try {
@@ -160,9 +153,22 @@ export async function deliver(env: Env, message: DeliveryMessage): Promise<Deliv
     const email = render(digest, target.target_value);
     const result = await sendMessage(env.EMAIL, email);
     sent = result.outcome === "sent";
-    await resolveAttempt(env, claim.id, result.outcome, result.error);
     if (result.outcome === "sent") {
-      await markDigestSent(env, digest.id);
+      const now = new Date().toISOString();
+      await env.DB.batch([
+        env.DB.prepare("UPDATE send_attempt SET status = 'sent', error = NULL WHERE id = ?").bind(claim.id),
+        env.DB.prepare("UPDATE digest SET status = 'sent', sent_at = ? WHERE id = ?").bind(now, digest.id),
+        ...signalDeliveryStatements(
+          env.DB,
+          digest.workspace_id,
+          target.channel_id,
+          claim.id,
+          quotedSignalIds(digest.payload_json),
+          now,
+        ),
+      ]);
+    } else {
+      await resolveAttempt(env, claim.id, result.outcome, result.error);
     }
     return { outcome: result.outcome, attempt_id: claim.id, idempotency_key: idempotencyKey };
   } catch (cause) {
