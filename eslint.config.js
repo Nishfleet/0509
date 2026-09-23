@@ -85,19 +85,32 @@ const BANNED_SYNTAX = [
   },
 ];
 
-const WRITER_SYNTAX = [
-  {
-    selector:
-      "CallExpression[callee.property.name=/^(insertInto|updateTable|deleteFrom)$/]",
-    message:
-      "One writer per table. Writes live in app/lib/data/<table>.server.ts, never in a route or a component. A route that writes directly becomes the second writer the moment another route needs the same row. docs/REBUILD-TRUST.md C5.",
-  },
-  {
-    selector: "CallExpression[callee.object.name='env'][callee.property.name='DB']",
-    message:
-      "Routes do not touch env.DB. Go through the one data layer in app/lib/data/. docs/REBUILD-TRUST.md C4.",
-  },
-];
+// Full DML write shapes, strict enough to run unanchored: UPDATE needs the
+// `SET col =` tail so prose like "the update was set" cannot match.
+const DML_WRITE_SHAPE =
+  "INSERT(\\s+OR\\s+\\w+)?\\s+INTO|REPLACE\\s+INTO|UPDATE\\s+[\\w\".]+\\s+SET\\s+[\\w\".]+\\s*=|DELETE\\s+FROM";
+
+// Anchored at statement start, where a bare `UPDATE ` is already unambiguous,
+// plus `WITH`-led writes (a CTE can head INSERT/UPDATE/DELETE; a `WITH …
+// SELECT` read stays allowed because the inner shape must still match).
+const RAW_DML_START =
+  `^\\s*(INSERT(\\s+OR\\s+\\w+)?\\s+INTO|REPLACE\\s+INTO|UPDATE\\s|DELETE\\s+FROM` +
+  `|WITH\\b[\\s\\S]*\\b(${DML_WRITE_SHAPE}))`;
+
+const RAW_DML_WRITER = {
+  selector:
+    `Literal[value=/${RAW_DML_START}/i], ` +
+    `TemplateLiteral[quasis.0.value.raw=/${RAW_DML_START}/i], ` +
+    `TemplateElement[value.raw=/${DML_WRITE_SHAPE}/i]`,
+  message:
+    "One writer per table. Raw DML lives in app/lib/data/<table>.server.ts — this matches the statement text itself, so holding it in a module constant still counts. docs/REBUILD-TRUST.md C5. Source: 0509#4313 — the kysely-era insertInto/updateTable/deleteFrom selectors matched nothing after the raw-D1 rebuild, and app/lib/workspace.server.ts grew a second workspace writer while the rule stayed green.",
+};
+
+const ENV_DB_IN_ROUTES = {
+  selector: "CallExpression[callee.object.name='env'][callee.property.name='DB']",
+  message:
+    "Routes do not touch env.DB. Go through the one data layer in app/lib/data/. docs/REBUILD-TRUST.md C4.",
+};
 
 const WORKAROUND_TERMS = [
   "todo",
@@ -189,6 +202,26 @@ export default tseslint.config(
   },
 
   {
+    // The writer rule fires on the DML statement text, not a call shape: this
+    // repo keeps its SQL in module constants (0509#4313), so matching only a
+    // prepare(<literal>) argument would stay green while a second writer
+    // exists. app/lib/data/** is the paved path. workers/e2e-inbox.ts writes
+    // to its own Durable Object sqlite via ctx.storage.sql — never env.DB —
+    // so it sits outside this rule's scope by kind, not by exemption. The
+    // selector covers INSERT OR <conflict> INTO, REPLACE INTO and WITH-led
+    // writes, not only a leading INSERT INTO/UPDATE/DELETE FROM.
+    // A later matching block's no-restricted-syntax entry replaces the
+    // earlier one wholesale — flat config never merges a rule's option
+    // array — which is why this array restates BANNED_SYNTAX instead of
+    // appending.
+    files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
+    ignores: ["app/lib/data/**", "workers/e2e-inbox.ts"],
+    rules: {
+      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, RAW_DML_WRITER],
+    },
+  },
+
+  {
     // The one blessed site for the support address. It still bans every other
     // shape; only the address literal is allowed here. 0509#3986.
     files: ["app/components/footer.tsx"],
@@ -196,6 +229,7 @@ export default tseslint.config(
       "no-restricted-syntax": [
         "error",
         ...BANNED_SYNTAX.filter((rule) => rule !== SUPPORT_ADDRESS_BAN),
+        RAW_DML_WRITER,
       ],
     },
   },
@@ -425,7 +459,7 @@ export default tseslint.config(
     files: ["app/routes/**/*.{ts,tsx}"],
     rules: {
       "max-lines": ["error", { max: 150, skipBlankLines: false, skipComments: false }],
-      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, ...WRITER_SYNTAX],
+      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, RAW_DML_WRITER, ENV_DB_IN_ROUTES],
     },
   },
 
