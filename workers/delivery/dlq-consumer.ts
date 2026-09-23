@@ -31,7 +31,7 @@ export async function handleDlqBatch(env: Env, batch: MessageBatch): Promise<str
   let ids: string[] = [];
   for (const item of batch.messages) {
     const parsed = parseMessage(item.body);
-    if (!parsed) {
+    if (!parsed || !("digest_id" in parsed)) {
       console.error("send-email-dlq: unparseable message", item.id);
       item.ack();
       continue;
