@@ -20,19 +20,34 @@ export type CheckPageResult =
       transport: "fetch" | "browser";
     };
 
+function logScreenshotMiss(url: string, cause: string): void {
+  console.log(JSON.stringify({
+    event: "screenshot-miss",
+    url,
+    cause,
+  }));
+}
+
 async function captureScreenshot(url: string, key: string): Promise<string | null> {
-  if (!env.BROWSER) return null;
+  if (!env.BROWSER) {
+    logScreenshotMiss(url, "browser binding is not configured");
+    return null;
+  }
   try {
     const res = await env.BROWSER.quickAction("screenshot", {
       url,
       viewport: { width: 1440, height: 900 },
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      logScreenshotMiss(url, `browser answered ${String(res.status)}`);
+      return null;
+    }
     await env.SNAPSHOTS.put(key, await res.arrayBuffer(), {
       httpMetadata: { contentType: "image/png" },
     });
     return key;
-  } catch {
+  } catch (err) {
+    logScreenshotMiss(url, err instanceof Error ? err.message : String(err));
     return null;
   }
 }
