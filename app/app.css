@@ -102,6 +102,7 @@
   --duration-switch: 180ms;
   --duration-fade: 160ms;
   --duration-press: 140ms;
+  --app-nav-clearance: 92px;
 
   color-scheme: light;
 }
@@ -203,9 +204,9 @@ body {
   }
 }
 
-@media (max-width: 859px) {
-  body:has(nav[aria-label="App"]) [data-sonner-toaster][data-y-position="bottom"] {
-    --offset-bottom: 92px !important;
-    --mobile-offset-bottom: 92px !important;
+@media (width < 860px) {
+  body:has(nav[data-app-nav]) [data-sonner-toaster][data-y-position="bottom"] {
+    --offset-bottom: var(--app-nav-clearance) !important;
+    --mobile-offset-bottom: var(--app-nav-clearance) !important;
   }
 }

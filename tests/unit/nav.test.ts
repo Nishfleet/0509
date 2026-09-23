@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createElement, type ReactNode } from "react";
@@ -10,25 +11,6 @@ import { SignedInFrame, signedInNav } from "../../app/components/nav";
 import routeConfig from "../../app/routes";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-
-const SIGNED_IN_PAGES = [
-  "app/routes/app.home.tsx",
-  "app/routes/app.competitors.tsx",
-  "app/routes/app.competitor.tsx",
-  "app/routes/app.alerts.tsx",
-  "app/routes/app.settings.tsx",
-];
-
-const WITHOUT_NAV = [
-  "app/root.tsx",
-  "app/routes/login.tsx",
-  "app/routes/privacy.tsx",
-  "app/routes/onboarding.tsx",
-  "app/routes/unmatched.tsx",
-  "app/routes/s.$slug.tsx",
-  "app/routes/design.brand-chips.tsx",
-  "app/routes/settings.card.tsx",
-];
 
 interface RegistryEntry {
   path?: string;
@@ -126,9 +108,16 @@ describe("signed-in nav", () => {
       expect(rendered.status).toBe(200);
       expect(rendered.html).toContain(`>${item.heading}<`);
       expect(rendered.html.split("<nav").length - 1).toBe(1);
-      const links = anchors(navHtml(rendered.html));
+      const block = navHtml(rendered.html);
+      const links = anchors(block);
       expect(links.map((link) => link.href)).toEqual(signedInNav.map((entry) => entry.href));
       expect(links.filter((link) => link.current).map((link) => link.href)).toEqual([item.current]);
+      const tags = block.match(/<a\b[^>]*>/g) ?? [];
+      const currentTag = tags.find((tag) => tag.includes('aria-current="page"'));
+      expect(currentTag).toContain(" underline ");
+      expect(tags.filter((tag) => !tag.includes('aria-current="page"')).every((tag) => tag.includes("no-underline"))).toBe(
+        true,
+      );
     }
   });
 
@@ -145,6 +134,12 @@ describe("signed-in nav", () => {
 
     const registered = registeredPaths(routeConfig);
     for (const href of hrefs) expect(registered).toContain(href);
+    const competitors = routeConfig.find((entry) => entry.path === "app/competitors");
+    const detail = routeConfig.find((entry) => entry.path === "app/competitors/:entityId");
+    const settings = routeConfig.find((entry) => entry.path === "app/settings");
+    expect(competitors?.children).toBeUndefined();
+    expect(detail?.path).toBe("app/competitors/:entityId");
+    expect(settings?.children?.some((entry) => entry.path === "card")).toBe(true);
 
     const handler = createStaticHandler(registryRoutes(routeConfig));
     for (const href of hrefs) {
@@ -162,22 +157,34 @@ describe("signed-in nav", () => {
     }
   });
 
-  it("is on the signed-in pages and absent from public routes and the card child", () => {
-    for (const file of SIGNED_IN_PAGES) {
-      expect(readFileSync(path.join(ROOT, file), "utf8")).toContain("SignedInFrame");
+  it("is on every app.* route and absent from the other route modules", () => {
+    const routeDir = path.join(ROOT, "app/routes");
+    const routeFiles = readdirSync(routeDir).filter((name) => name.endsWith(".tsx"));
+    const shellFiles = routeFiles.filter((name) => name.startsWith("app."));
+    const bareFiles = routeFiles.filter((name) => !name.startsWith("app."));
+    expect(shellFiles.length).toBeGreaterThan(0);
+    expect(bareFiles.length).toBeGreaterThan(0);
+    for (const name of shellFiles) {
+      expect(readFileSync(path.join(routeDir, name), "utf8")).toContain("SignedInFrame");
     }
-    for (const file of WITHOUT_NAV) {
-      const source = readFileSync(path.join(ROOT, file), "utf8");
+    for (const name of [...bareFiles, "root.tsx"]) {
+      const file = name === "root.tsx" ? path.join(ROOT, "app/root.tsx") : path.join(routeDir, name);
+      const source = readFileSync(file, "utf8");
       expect(source).not.toContain("SignedInFrame");
       expect(source).not.toContain("components/nav");
     }
-    expect(readFileSync(path.join(ROOT, "app/routes.ts"), "utf8")).not.toContain("nav.tsx");
+    const routesDiff = execFileSync("git", ["diff", "origin/main", "--", "app/routes.ts"], {
+      cwd: ROOT,
+      encoding: "utf8",
+    });
+    expect(routesDiff).toBe("");
   });
 
   it("keeps the bottom tab bar from covering a saved toast", () => {
     const css = readFileSync(path.join(ROOT, "app/app.css"), "utf8");
-    expect(css).toContain('nav[aria-label="App"]');
-    expect(css).toContain("--offset-bottom: 92px");
-    expect(css).toContain("--mobile-offset-bottom: 92px");
+    expect(css).toContain("nav[data-app-nav]");
+    expect(css).toContain("--app-nav-clearance: 92px");
+    expect(css).toContain("--offset-bottom: var(--app-nav-clearance)");
+    expect(css).toContain("--mobile-offset-bottom: var(--app-nav-clearance)");
   });
 });
