@@ -19,14 +19,14 @@ export async function sweepPending(env: Env, now: Date): Promise<SweepResult> {
   )
     .bind(digestCutoff)
     .all<{ id: string }>();
-  const digestIds = (digestRows.results ?? []).map((row) => row.id);
+  const digestIds = digestRows.results.map((row) => row.id);
 
   const attemptRows = await env.DB.prepare(
     `SELECT DISTINCT digest_id FROM send_attempt WHERE status = 'pending' AND attempted_at < ? AND digest_id IS NOT NULL`,
   )
     .bind(attemptCutoff)
     .all<{ digest_id: string }>();
-  const attemptIds = (attemptRows.results ?? []).map((row) => row.digest_id);
+  const attemptIds = attemptRows.results.map((row) => row.digest_id);
 
   const merged = [...new Set([...digestIds, ...attemptIds])];
 
