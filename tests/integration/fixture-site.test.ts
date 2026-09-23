@@ -186,8 +186,17 @@ describe("price variant", () => {
     expect(html).toContain("₹1,299");
   });
 
-  it("flips to raised and stamps the variant and the flip time on the page", async () => {
-    const res = await setPrice("raised");
+  it("flips to raised and back to base, stamping the flip time on the page", async () => {
+    const raiseCtx = createExecutionContext();
+    const res = await worker.fetch(
+      new Request("https://fixture.0509.in/__price?variant=raised", {
+        method: "POST",
+        headers: { authorization: `Bearer ${TOKEN}` },
+      }),
+      env,
+      raiseCtx,
+    );
+    await waitOnExecutionContext(raiseCtx);
     expect(res.status).toBe(200);
     const html = await (await get()).text();
     expect(html).toContain('data-variant="raised"');
@@ -195,6 +204,22 @@ describe("price variant", () => {
     expect(html).not.toContain("₹1,299");
     const at = /data-flipped-at="([^"]*)"/.exec(html)?.[1];
     expect(Number.isFinite(Date.parse(at ?? ""))).toBe(true);
+
+    const baseCtx = createExecutionContext();
+    const back = await worker.fetch(
+      new Request("https://fixture.0509.in/__price?variant=base", {
+        method: "POST",
+        headers: { authorization: `Bearer ${TOKEN}` },
+      }),
+      env,
+      baseCtx,
+    );
+    await waitOnExecutionContext(baseCtx);
+    expect(back.status).toBe(200);
+    const restored = await (await get()).text();
+    expect(restored).toContain('data-variant="base"');
+    expect(restored).toContain("₹1,299");
+    expect(restored).not.toContain("₹1,499");
   });
 
   it("403s with no token, 405s a GET, and 400s an unknown variant", async () => {
