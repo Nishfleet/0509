@@ -93,17 +93,13 @@ assertions both times.
 
 **Run it before the PR opens.** A change under `app/`, `workers/` or `e2e/`
 runs the specs that cover it locally first, in preview mode, by file:
-`npm run e2e -- e2e/<name>.spec.ts` (Playwright's own file filter). A change
-under `app/` or `workers/` also drives the running app with the verify skill —
-`.agents/skills/verify/SKILL.md` — and pastes that run into the PR template's
-`## Verification` section. Quote the summary line (`N passed`) under
-`run-proof:` in the PR body. `preview-assert`
-runs the whole suite on the PR, so the quote is not the proof; it is the
-evidence that you drove the app yourself before asking a reviewer to. Do not
-run the full suite, `npm run build` or `npm run typecheck` locally as well: CI
-runs all three, and on a fleet worker (25% of a core, 55-minute wall) the
-full local set is what timed workers out on 2026-09-23. Chromium is already
-installed on this host (`~/.cache/ms-playwright`).
+`npm run e2e -- e2e/<name>.spec.ts` (Playwright's own file filter). Nothing
+is pasted into the PR body: `preview-assert` runs the whole suite at the PR
+head and is the proof. Do not run the full suite, `npm run build` or
+`npm run typecheck` locally as well: CI runs all three, and on a fleet
+worker (25% of a core, 55-minute wall) the full local set is what timed
+workers out on 2026-09-23. Chromium is already installed on this host
+(`~/.cache/ms-playwright`).
 
 ## Architecture
 
