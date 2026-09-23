@@ -10,12 +10,16 @@ export interface PublicSurface {
   readonly indexable: boolean;
   readonly changeFrequency?: "daily" | "weekly" | "monthly" | "yearly";
   readonly priority?: number;
-  readonly note?: string;
 }
 
 export interface ProtectedSurface {
   readonly path: string;
   readonly tree: boolean;
+}
+
+interface RegisteredRoute {
+  readonly file: string;
+  readonly url: string;
 }
 
 const PROTECTED_TREES: readonly string[] = ["/app", "/api", "/mcp"];
@@ -30,17 +34,6 @@ const NON_INDEXABLE: readonly string[] = [
   "/robots.txt",
   "/sitemap.xml",
 ];
-
-const SITE_NOTES: Readonly<Record<string, string>> = {
-  "/": "public/index.html; noindex until the landing gate lifts (build step 3)",
-  "/login": "public page, listed per build step 1",
-  "/s/:slug":
-    "a published standing card. Not advertised until slugs can be enumerated from data (0509#3898); sitemapEntries(origin, surfaces, dynamicLocs) is the seam.",
-  "/design/brand-chips": "a design-directions page, not a public surface of the product.",
-  "/*": "the 404 catch-all. A page a crawler is sent to on a bad URL is not a page to index.",
-  "/robots.txt": "the crawler policy itself.",
-  "/sitemap.xml": "the index itself.",
-};
 
 const SEO_SURFACES: readonly string[] = ["/robots.txt", "/sitemap.xml"];
 
@@ -61,11 +54,6 @@ export function isProtectedPath(value: string): boolean {
   );
 }
 
-interface RegisteredRoute {
-  readonly file: string;
-  readonly url: string;
-}
-
 export function registeredRoutes(
   entries: readonly RouteConfigEntry[],
   parentUrl = "",
@@ -79,40 +67,33 @@ export function registeredRoutes(
   return found;
 }
 
-function registeredUrls(): string[] {
-  return registeredRoutes(routes as readonly RouteConfigEntry[]).map(({ url }) => url);
-}
+const REGISTERED_ROUTES = registeredRoutes(routes);
 
-function hasRegisteredUrl(url: string): boolean {
-  return registeredUrls().includes(url);
-}
-
-export const PUBLIC_SURFACES: readonly PublicSurface[] = registeredUrls()
-  .filter((url) => !isProtectedPath(url) && !SEO_SURFACES.includes(url))
-  .map((url) => ({
-    path: url,
-    kind: "route" as const,
-    indexable: !NON_INDEXABLE.includes(url),
-    note: SITE_NOTES[url],
-  }))
-  .concat(
-    hasRegisteredUrl("/")
-      ? []
-      : [{ path: "/", kind: "static" as const, indexable: false, note: SITE_NOTES["/"] }],
-  );
+const REGISTERED_URLS = REGISTERED_ROUTES.map(({ url }) => url);
 
 export const PROTECTED_SURFACES: readonly ProtectedSurface[] = [
   ...PROTECTED_TREES.map((path) => ({ path, tree: true })),
   ...PROTECTED_LEAVES.map((path) => ({ path, tree: false })),
-].filter(
-  (surface, index, all) => all.findIndex((other) => other.path === surface.path) === index,
-);
+];
 
 export function robotsDisallowRules(): string[] {
   return PROTECTED_SURFACES.flatMap((surface) =>
-    surface.tree ? [`${surface.path}/`] : [surface.path],
+    surface.tree ? [`${surface.path}$`, `${surface.path}/`] : [`${surface.path}$`],
   );
 }
+
+export const PUBLIC_SURFACES: readonly PublicSurface[] = [
+  ...REGISTERED_URLS.filter((url) => !isProtectedPath(url) && !SEO_SURFACES.includes(url)).map(
+    (url): PublicSurface => ({
+      path: url,
+      kind: "route",
+      indexable: !NON_INDEXABLE.includes(url),
+    }),
+  ),
+  ...(REGISTERED_URLS.includes("/")
+    ? []
+    : [{ path: "/", kind: "static" as const, indexable: false }]),
+];
 
 export interface SitemapEntry {
   readonly loc: string;
@@ -129,14 +110,14 @@ export function sitemapEntries(
   surfaces: readonly PublicSurface[] = PUBLIC_SURFACES,
   dynamicLocs: readonly string[] = [],
 ): SitemapEntry[] {
-  return surfaces
+  const rows: SitemapEntry[] = surfaces
     .filter((surface) => surface.indexable)
     .map((surface) => ({
       loc: toLoc(origin, surface.path),
       changeFrequency: surface.changeFrequency,
       priority: surface.priority,
-    }))
-    .concat(dynamicLocs.map((loc) => ({ loc })));
+    }));
+  return [...rows, ...dynamicLocs.map((loc) => ({ loc }))];
 }
 
 const XML_ESCAPES: Readonly<Record<string, string>> = {

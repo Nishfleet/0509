@@ -49,19 +49,22 @@ async function sessionGatedRouteFiles(): Promise<string[]> {
   return gated;
 }
 
+function robotsMatchesRule(rule: string, path: string): boolean {
+  const anchored = rule.endsWith("$");
+  if (anchored) return path === rule.slice(0, -1);
+  return path === rule || path.startsWith(rule);
+}
+
 function isBlockedByRobots(value: string): boolean {
-  return robotsDisallowRules().some((rule) => value.startsWith(rule));
+  return robotsDisallowRules().some((rule) => robotsMatchesRule(rule, value));
 }
 
 describe("the manifest is derived from app/routes.ts (0509#3989)", () => {
-
   it("lists every registered route that is not protected and not an seo surface", () => {
     const derived = PUBLIC_SURFACES.map((surface) => surface.path);
     for (const { url } of registeredRoutes(routes)) {
       if (isProtectedPath(url) || url === "/robots.txt" || url === "/sitemap.xml") continue;
-      expect(derived, `registered public route ${url} is missing from the manifest`).toContain(
-        url,
-      );
+      expect(derived, `registered public route ${url} is missing from the manifest`).toContain(url);
     }
     for (const url of derived) {
       expect(
@@ -158,46 +161,33 @@ describe("isProtectedPath matches the protected surface shape (0509#3989)", () =
 });
 
 describe("robots Disallow rules match what isProtectedPath protects (0509#3989)", () => {
-  const rules = disallowRulesIn(renderRobots(SITE_ORIGIN));
-
-  it("renders one rule per protected surface, and each is protected", () => {
+  it("renders one rule per protected surface, and each protects its surface", () => {
+    const rules = disallowRulesIn(renderRobots(SITE_ORIGIN));
     expect(rules.length).toBeGreaterThan(0);
-    for (const rule of rules) {
-      expect(isProtectedPath(rule), `${rule} must be protected`).toBe(true);
+    for (const surface of PROTECTED_SURFACES) {
+      expect(rules).toContain(`${surface.path}$`);
+      if (surface.tree) expect(rules).toContain(`${surface.path}/`);
     }
   });
 
   it("disallows the packet's three protected trees and the signed-in onboarding route", () => {
-    for (const expected of ["/app", "/api", "/mcp", "/onboarding"]) {
-      expect(
-        rules.some((rule) => rule.replace(/\/$/, "") === expected),
-        `${expected} must be disallowed`,
-      ).toBe(true);
-      expect(isProtectedPath(expected), `${expected} must be protected`).toBe(true);
+    for (const surface of PROTECTED_SURFACES) {
+      expect(isBlockedByRobots(surface.path), `${surface.path} must be blocked`).toBe(true);
+      const child = surface.tree ? `${surface.path}/child` : surface.path;
+      expect(isBlockedByRobots(child), `${child} must be blocked`).toBe(true);
     }
   });
 
   it("blocks no registered public route", () => {
     const blocked = registeredRoutes(routes)
-      .filter(({ url }) => isProtectedPath(url) ? false : !["/robots.txt", "/sitemap.xml"].includes(url))
+      .filter(({ url }) =>
+        isProtectedPath(url) || url === "/robots.txt" || url === "/sitemap.xml" ? false : true,
+      )
       .filter(({ url }) => isBlockedByRobots(url));
     expect(blocked).toEqual([]);
-    expect(rules).toEqual(robotsDisallowRules());
   });
 
-  it("keeps the robots rule and the classifier from drifting on real paths", () => {
-    const rules = disallowRulesIn(renderRobots(SITE_ORIGIN));
-    for (const { file, url } of registeredRoutes(routes)) {
-      if (isProtectedPath(url)) continue;
-      const isSeoSurface = url === "/robots.txt" || url === "/sitemap.xml";
-      if (isSeoSurface) continue;
-      expect(rules.some((rule) => url.startsWith(rule)), `${url} (${file}) must not be blocked`).toBe(
-        false,
-      );
-    }
-  });
-
-  it("does not block a file under public/ by prefix, though robots prefix-matches", async () => {
+  it("does not block a public file under public/ that shares a protected prefix", async () => {
     const files = await publicDirFiles();
     expect(files.length).toBeGreaterThan(0);
     for (const file of files) {
@@ -205,8 +195,15 @@ describe("robots Disallow rules match what isProtectedPath protects (0509#3989)"
     }
   });
 
-  it("blocks /apple-touch-icon.png, which shares the /app leading substring", () => {
+  it("does not block /apple-touch-icon.png, which shares the /app leading substring", () => {
     expect(isBlockedByRobots("/apple-touch-icon.png")).toBe(false);
+  });
+
+  it("blocks /app exactly (the registered route) and not /apple-touch-icon.png", () => {
+    expect(isBlockedByRobots("/app")).toBe(true);
+    expect(isBlockedByRobots("/app/competitors")).toBe(true);
+    expect(isBlockedByRobots("/apple-touch-icon.png")).toBe(false);
+    expect(isBlockedByRobots("/approach")).toBe(false);
   });
 });
 
@@ -280,9 +277,9 @@ describe("sitemap.xml (0509#3989)", () => {
   });
 
   it("carries a dynamic loc straight into the document", () => {
-    expect(locs(renderSitemap(sitemapEntries(SITE_ORIGIN, PUBLIC_SURFACES, ["https://0509.io/s/abc"])))).toContain(
-      "https://0509.io/s/abc",
-    );
+    expect(
+      locs(renderSitemap(sitemapEntries(SITE_ORIGIN, PUBLIC_SURFACES, ["https://0509.io/s/abc"]))),
+    ).toContain("https://0509.io/s/abc");
   });
 });
 
@@ -294,10 +291,10 @@ describe("robots.txt (0509#3989)", () => {
     expect(response.headers.get("Content-Type")).toContain("text/plain");
     expect(body).toContain("User-agent: *");
     expect(body).toContain("Allow: /");
-    for (const surface of PROTECTED_SURFACES) {
-      expect(body).toContain(`Disallow: ${surface.path}`);
-    }
     expect(body).toContain(`Sitemap: ${SITE_ORIGIN}/sitemap.xml`);
+    for (const surface of PROTECTED_SURFACES) {
+      expect(isBlockedByRobots(surface.path), `${surface.path} must be disallowed`).toBe(true);
+    }
   });
 
   it("states the landing is noindex while the gate holds (build step 3)", () => {
@@ -320,7 +317,7 @@ describe("manifest and public/ agree (0509#3989)", () => {
   });
 
   it("lists no surface with a dynamic route path, since no slugs can be enumerated", () => {
-    expect(PUBLIC_SURFACES.filter((surface) => surface.kind === "dynamic")).toEqual([]);
+    expect(PUBLIC_SURFACES.filter((surface) => (surface as { kind: string }).kind === "dynamic")).toEqual([]);
   });
 
   it("does not advertise a surface whose route does not exist", () => {

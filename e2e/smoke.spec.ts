@@ -94,12 +94,16 @@ test("/robots.txt is served with a crawler policy", async ({ request }) => {
   const body = await response.text();
   expect(body).toContain("User-agent: *");
   expect(body).toContain("Allow: /");
+  expect(body).toContain("Disallow: /app$");
   expect(body).toContain("Disallow: /app/");
-  expect(body).toContain("Disallow: /onboarding");
+  expect(body).toContain("Disallow: /onboarding$");
+  expect(body).toContain("Disallow: /api$");
   expect(body).toContain("Disallow: /api/");
+  expect(body).toContain("Disallow: /mcp$");
   expect(body).toContain("Disallow: /mcp/");
   expect(body).toContain("Sitemap: https://0509.io/sitemap.xml");
   expect(body).not.toMatch(/^Disallow: \/\/?$/m);
+  expect(body).not.toMatch(/^Disallow: \/app$/m);
 });
 
 test("/sitemap.xml is served as a valid absolute-URL document", async ({ request }) => {
@@ -119,4 +123,5 @@ test("/sitemap.xml is served as a valid absolute-URL document", async ({ request
   }
   expect(new Set(found).size).toBe(found.length);
   expect(found).not.toContain("https://0509.io/onboarding");
+  expect(found).not.toContain("https://0509.io/app");
 });
