@@ -61,7 +61,7 @@ export default defineConfig({
         // session gate production does. Apply the same migrations
         // deploy-production.yml applies --remote, then start the Worker. This
         // is the stock `wrangler d1 migrations apply`; no wrapper.
-        command: `npx wrangler d1 migrations apply 0509 --local </dev/null && npx wrangler dev --port ${localPort} --local`,
+        command: `npx wrangler d1 migrations apply 0509 --local </dev/null && npx wrangler dev --env-file .dev.vars.example --port ${localPort} --local`,
         url: `http://127.0.0.1:${localPort}/api/health`,
         reuseExistingServer: false,
         timeout: 120_000,
