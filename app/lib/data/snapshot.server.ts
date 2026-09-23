@@ -8,7 +8,7 @@ const INSERT_SNAPSHOT = `INSERT INTO snapshot
   (id, watch_id, page_id, fetched_at, payload_r2_key, payload_hash, item_count)
 VALUES (?, ?, ?, ?, ?, ?, 1)`;
 
-export interface SiteSnapshotRow {
+interface SiteSnapshotRow {
   id: string;
   payload_hash: string;
   payload_r2_key: string | null;
