@@ -1,0 +1,134 @@
+Received: from c-bee.cloudflare-email.net (104.30.2.144)
+        by cloudflare-email.net (cloudflare) id Q3RR179lBj50
+        for <e2e+459c6c0ec101@0509.io>; Wed, 23 Sep 2026 04:35:55 +0000
+ARC-Seal: i=1; a=rsa-sha256; s=cf2024-1; d=cloudflare-email.net; cv=none;
+	b=T0oZ49ozDiDDd4/qu93tTMkZoCPO+rzFat8Ate8N6GiJ4/WsvI+PQLW7naayoun4/0zHwNku7
+	vm7P80GYD7YKQBCt7Ve5MM/Ux35hzZ69KmCUJXfhxhIBMAeuZm7lwUT6NiIuy7ygGGsUAxQ1kbn
+	xSEml00aS3uafkdRt9nrryIVD7uhfYkHriZr6aXoBwQsC9kC8qZxv6YPhJ4DtonEcK8ALjSmPAK
+	QyQf1icMbtkSIAKTRkyoYwALGOd4l4VpJMhe94aGaJwK6/GUnRXMi6Y2mPrk5zqZ5S2Nc+ds7y6
+	Gi1PqIfKzcBD0tOvXeRhtMwL86chJVrhUpftAx11B6mQ==;
+ARC-Message-Signature: i=1; a=rsa-sha256; s=cf2024-1; d=cloudflare-email.net; c=relaxed/relaxed;
+	h=To:Subject:Date:From:from:reply-to:cc:resent-date:resent-from:resent-to
+	:resent-cc:in-reply-to:references:list-id:list-help:list-subscribe
+	:list-post:list-owner:list-archive; t=1790138155; x=1790742955; bh=owvnfDEZ
+	LEARewdTGeLczy1zWa9k+iYELI5r3wOWT0o=; b=O8Vydw+Czmc55KdqfeDV7oF2BobY/LulJwQ
+	51X7jZABxkg6PkKz0w98l0EFdtJfgNhORFsOFoADS96oz37rOfCMZP3k99fkiKqAmFhH1iKSF7R
+	Ss8WVbM8nxl9cnbUcXnaKGsGwLMUfBgsVMOSG7Q6f7oIbDnC6XyuVFx/S/YvPnkAo+oSDy7VyhH
+	rCDwyMSC1iSqxJ51bFpR1AMGTdjwiKrpoextlWHL5q2wmajWY7Ze4r4Itu67xMPxwRCZq02LJ3l
+	45iwiMPdDoqFFtencTvDQKAf7bonUIeqzBLdYGTWG21Z38/ch+iD9j/yv1TRxTEzdzXIrk8G/cj
+	jWUzhlg==;
+ARC-Authentication-Results: i=1; mx.cloudflare.net;
+	dkim=pass header.d=0509.io header.s=cf-bounce header.b=X+PWh21y;
+	dkim=pass header.d=cloudflare-email.net header.s=cf2024-1 header.b=NMRvMg8w;
+	dmarc=pass header.from=0509.io policy.dmarc=reject;
+	spf=none (mx.cloudflare.net: no SPF records found for postmaster@c-bee.cloudflare-email.net) smtp.helo=c-bee.cloudflare-email.net;
+	spf=pass (mx.cloudflare.net: domain of bounces@cf-bounce.0509.io designates 104.30.2.144 as permitted sender) smtp.mailfrom=bounces@cf-bounce.0509.io;
+	arc=none smtp.remote-ip=104.30.2.144
+Received-SPF: pass (mx.cloudflare.net: domain of bounces@cf-bounce.0509.io designates 104.30.2.144 as permitted sender)
+	receiver=mx.cloudflare.net; client-ip=104.30.2.144; envelope-from="bounces@cf-bounce.0509.io"; helo=c-bee.cloudflare-email.net;
+Authentication-Results: mx.cloudflare.net;
+	dkim=pass header.d=0509.io header.s=cf-bounce header.b=X+PWh21y;
+	dkim=pass header.d=cloudflare-email.net header.s=cf2024-1 header.b=NMRvMg8w;
+	dmarc=pass header.from=0509.io policy.dmarc=reject;
+	spf=none (mx.cloudflare.net: no SPF records found for postmaster@c-bee.cloudflare-email.net) smtp.helo=c-bee.cloudflare-email.net;
+	spf=pass (mx.cloudflare.net: domain of bounces@cf-bounce.0509.io designates 104.30.2.144 as permitted sender) smtp.mailfrom=bounces@cf-bounce.0509.io;
+	arc=none smtp.remote-ip=104.30.2.144
+X-CF-SpamH-Score: 1
+DKIM-Signature: v=1; a=rsa-sha256; s=cf-bounce; d=0509.io; c=relaxed/relaxed;
+	h=To:Subject:Date:From:Feedback-ID:from:reply-to:cc:resent-date
+	:resent-from:resent-to:resent-cc:in-reply-to:references:list-id:list-help
+	:list-unsubscribe:list-unsubscribe-post:list-subscribe:list-post
+	:list-owner:list-archive; t=1790138155; x=1790742955; bh=owvnfDEZLEARewdTGe
+	Lczy1zWa9k+iYELI5r3wOWT0o=; b=X+PWh21ymw2tZoGVijjZG1szGkguw8VBqAhnI3VL0REvx
+	/fIedexqcBTU4KnfumrYZocRkpn/sxJL7geQnNP6fTzzc5OOn3k1H7M2wpgdXIG9rSoehaa5Kjc
+	z3luXa5PKd3ke88UZ8FhxN7lBv2DBuzegYMOVXkuYuFjvBOnA4Ebk9F18Rq26LUWHryoNoBH8RN
+	CqT+f5mvGYbWwxWPI//+EXgxGb1mNlhEhH3Ci5rhPq7mmmhRPbPZnwd/8Tn/RycE+VEQQqzaD/2
+	3YQd1xTcfhkCIWmdZCV3qwZG9DQqwn/3BToeDy9Iy/olfez3osf15vjTpJfhJHT6MdmREqJg==;
+DKIM-Signature: v=1; a=rsa-sha256; s=cf2024-1; d=cloudflare-email.net; c=relaxed/relaxed;
+	h=To:Subject:Date:From:Feedback-ID:from:reply-to:cc:resent-date
+	:resent-from:resent-to:resent-cc:in-reply-to:references:list-id:list-help
+	:list-unsubscribe:list-unsubscribe-post:list-subscribe:list-post
+	:list-owner:list-archive; t=1790138155; x=1790742955; bh=owvnfDEZLEARewdTGe
+	Lczy1zWa9k+iYELI5r3wOWT0o=; b=NMRvMg8wQe3Lz6WdiTAmTR+wFK2aOVf6YRmlCxfiKGQ49
+	xrlSciAf21hhs+Q1KTWNlwbeTJlJpYYk9305JejRNQ9NVQ3d1/XR1fUNGgYmTmvenrHDO9S6Hhl
+	/6nQopRQ6qPsXAw1JGy1uqpQGUrwJ8eAy5XK6T7lP/1bFsqdqV4/+uKMDtpmhljBbXGmRCFXq60
+	h3a+FNy6UtNNwVvBM/9GAhOxAzl6R8tVZnk8T2PBIxIeBq+Bagw82Fyl8eBVIVJ8zuxjfwiiYC1
+	lNiN8BEZ2iQe7z6Yqz9bGdY/iDHUNiJpeaYCi5wuDleg48bKldfFl8PdDFm5MKN5jmkNA2Gw==;
+Feedback-ID: 0509.io:5:3:Cloudflare
+From: brief@0509.io
+Message-ID: <ub4cpiLZUmBryAPtt8yxMsqVd0aLJdp54RkC@0509.io>
+Date: Wed, 23 Sep 2026 04:35:52 +0000
+Subject: Your weekly brief
+To: e2e+459c6c0ec101@0509.io
+MIME-Version: 1.0
+Content-Type: multipart/alternative;
+ boundary="dwO9W0njgZ7tbYRxCJIMZqqbWnsmtQ3PGzch6awR"
+
+--dwO9W0njgZ7tbYRxCJIMZqqbWnsmtQ3PGzch6awR
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+Add a competitor to see where you stand
+
+Read this first
+Nothing this week needed reading first.
+
+Your tracked brands
+Add a competitor to see where you stand
+
+Your site looks fine.
+
+What was checked: no mentions, no site changes, no new ads across no source=
+s answered.
+Next brief: Sep 28, 2026, 8:00 AM
+Unsubscribe is not available right now =E2=80=94 reply to this email and we=
+ will stop sending.
+--dwO9W0njgZ7tbYRxCJIMZqqbWnsmtQ3PGzch6awR
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+<!doctype html><html lang=3D"en"><head><meta charset=3D"utf-8"><meta name=
+=3D"viewport" content=3D"width=3Ddevice-width,initial-scale=3D1"><meta name=
+=3D"color-scheme" content=3D"light dark"><style>.brief-page{background-colo=
+r:#f4f1e8;}.brief-card{background-color:#fffdf6;color:#0e0d0a;}.brief-muted=
+{color:#55524a;}.brief-rule{border-top:1px solid #ddd6c6;}.brief-rule img{b=
+order:1px solid #ddd6c6;}a.brief-ink,a.brief-muted{color:inherit;}@media (p=
+refers-color-scheme: dark) {.brief-page{background-color:#14130f;}.brief-ca=
+rd{background-color:#1c1a15;color:#f2efe4;}.brief-muted{color:#a9a294;}.bri=
+ef-rule{border-top:1px solid #322e25;}.brief-rule img{border:1px solid #322=
+e25;}}</style><title>Your weekly brief</title></head><body class=3D"brief-p=
+age" style=3D"margin:0;padding:0;"><div style=3D"padding:24px 12px;"><div c=
+lass=3D"brief-card" style=3D"max-width:600px;margin:0 auto;padding:24px;bor=
+der-radius:8px;"><p style=3D"margin:0;font-family:-apple-system,BlinkMacSys=
+temFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:20px;line-he=
+ight:28px;font-weight:600;">Add a competitor to see where you stand</p><div=
+ class=3D"brief-rule" style=3D"padding:20px 0;"><h2 style=3D"margin:0 0 4px=
+;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,A=
+rial,sans-serif;font-size:18px;line-height:24px;font-weight:600;">Read this=
+ first</h2><p style=3D"margin:0;font-family:-apple-system,BlinkMacSystemFon=
+t,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:2=
+4px;">Nothing this week needed reading first.</p></div><div class=3D"brief-=
+rule" style=3D"padding:20px 0;"><h2 style=3D"margin:0 0 4px;font-family:-ap=
+ple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;=
+font-size:18px;line-height:24px;font-weight:600;">Your tracked brands</h2><=
+p style=3D"margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI"=
+,Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:24px;">Add a =
+competitor to see where you stand</p></div><div class=3D"brief-rule" style=
+=3D"padding:20px 0;"><p style=3D"margin:0;font-family:-apple-system,BlinkMa=
+cSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:16px;lin=
+e-height:24px;">Your site looks fine.</p></div><div class=3D"brief-rule" st=
+yle=3D"padding:16px 0 0;"><p class=3D"brief-muted" style=3D"margin:0;font-f=
+amily:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sa=
+ns-serif;font-size:13px;line-height:18px;">What was checked</p><p class=3D"=
+brief-muted" style=3D"margin:2px 0 0;font-family:-apple-system,BlinkMacSyst=
+emFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-hei=
+ght:18px;">no mentions, no site changes, no new ads across no sources answe=
+red.</p><p class=3D"brief-muted" style=3D"margin:8px 0 0;font-family:-apple=
+-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;fon=
+t-size:13px;line-height:18px;">Next brief: Sep 28, 2026, 8:00 AM</p><p clas=
+s=3D"brief-muted" style=3D"margin:8px 0 0;font-family:-apple-system,BlinkMa=
+cSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:13px;lin=
+e-height:18px;">Unsubscribe is not available right now =E2=80=94 reply to t=
+his email and we will stop sending.</p></div></div></div></body></html>
+--dwO9W0njgZ7tbYRxCJIMZqqbWnsmtQ3PGzch6awR--
+
