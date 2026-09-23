@@ -7,19 +7,19 @@ export interface TakedownParams {
 interface TakedownRow {
   id: string;
   subject_kind: string;
-  subject_value: string;
   reason: string;
   requested_at: string;
   actioned_at: string;
   actioned_by: string;
+  subject_value: string;
   fanned_out_at: string | null;
   note: string | null;
 }
 
-interface TakedownEnv {
-  DB: D1Database;
-  CARD_ARTIFACTS: R2Bucket;
-}
+type TakedownEnv = Pick<Env, "DB" | "CARD_ARTIFACTS">;
+type ReconcileEnv = Pick<Env, "DB" | "TAKEDOWN_WORKFLOW">;
+
+export type { ReconcileEnv };
 
 interface AffectedWorkspace {
   workspaceId: string;
@@ -77,6 +77,9 @@ ON CONFLICT(id) DO NOTHING`;
 
 const SET_FANNED_OUT = `UPDATE takedown SET fanned_out_at = ?, note = ? WHERE id = ? AND fanned_out_at IS NULL`;
 
+export const HANDLE_SUBJECT_UNRESOLVED = "handle subject unresolved";
+const HANDLE_SUBJECT_NOTE = `${HANDLE_SUBJECT_UNRESOLVED}: a handle takedown has no join key against entity.domain until P1.1 lands a handle -> registrable normaliser (#3885); the fan-out is complete (fanned_out_at set) and no entity row was touched.`;
+
 const SUBJECT_KIND_DOMAIN = "domain";
 const SUBJECT_KIND_HANDLE = "handle";
 
@@ -88,23 +91,8 @@ function normaliseDomain(value: string): string | null {
   return host.length > 0 ? host : null;
 }
 
-function normaliseHandle(value: string): string | null {
-  const trimmed = value.trim();
-  if (trimmed.length === 0) return null;
-  const candidate = URL.canParse(trimmed) ? trimmed : `https://${trimmed}`;
-  if (URL.canParse(candidate)) {
-    const segments = new URL(candidate).pathname.split("/").filter((segment) => segment.length > 0);
-    const last = segments.at(-1)?.toLowerCase() ?? "";
-    const handle = last.replace(/^@/, "");
-    if (handle.length > 0) return handle;
-  }
-  const bare = trimmed.toLowerCase().replace(/^@/, "");
-  return bare.length > 0 ? bare : null;
-}
-
 function normaliseSubject(kind: string, value: string): string | null {
   if (kind === SUBJECT_KIND_DOMAIN) return normaliseDomain(value);
-  if (kind === SUBJECT_KIND_HANDLE) return normaliseHandle(value);
   return null;
 }
 
@@ -145,24 +133,27 @@ export async function fanOutTakedown(
   takedownId: string,
   step: WorkflowStep,
 ): Promise<FanOutSummary> {
-  const granted = await step.do("load granted takedown", async () => {
+  const granted = await step.do("load granted takedown", () => {
     return env.DB.prepare(SELECT_TAKEDOWN).bind(takedownId).first<TakedownRow>();
   });
 
   if (granted === null) {
+    const completedAt = await step.do("record empty fan-out", () => new Date().toISOString());
     return {
       takedownId,
       subjectValue: "",
-      completedAt: new Date().toISOString(),
+      completedAt,
       workspaces: [],
       selfWorkspaces: 0,
     };
   }
 
-  const subject = normaliseSubject(granted.subject_kind, granted.subject_value);
+  const subject = await step.do("normalise subject", () => {
+    return normaliseSubject(granted.subject_kind, granted.subject_value);
+  });
 
   const affected = await step.do("gather affected workspaces", async () => {
-    if (subject === null) return [] as AffectedWorkspace[];
+    if (subject === null) return null;
     const rows = await env.DB.prepare(SELECT_AFFECTED).bind(subject).all<{
       workspace_id: string;
       entity_id: string;
@@ -176,17 +167,18 @@ export async function fanOutTakedown(
       r2Keys: parseKeys(row.r2_keys),
     }));
   });
-  const workspaces: WorkspaceOutcome[] = [];
+  const workspaces: AffectedWorkspace[] = affected ?? [];
+  const outcomes: WorkspaceOutcome[] = [];
   let selfWorkspaces = 0;
 
-  for (const [index, workspace] of affected.entries()) {
+  for (const [index, workspace] of workspaces.entries()) {
     const outcome = await step.do(
-      `remove subject from workspace ${String(index + 1)} of ${String(affected.length)}`,
+      `remove subject from workspace ${String(index + 1)} of ${String(workspaces.length)}`,
       { retries: { limit: 5, delay: "1 second", backoff: "exponential" } },
-      async () => removeSubject(env, workspace, granted.id, granted.subject_value),
+      () => removeSubject(env, workspace, granted.id, granted.subject_value),
     );
     if (outcome.role === "self") selfWorkspaces += 1;
-    workspaces.push(outcome);
+    outcomes.push(outcome);
   }
 
   const completedAt = await step.do("record the completed fan-out", async () => {
@@ -194,8 +186,12 @@ export async function fanOutTakedown(
     const notes: string[] = [];
     if (granted.note !== null && granted.note.length > 0) notes.push(granted.note);
     if (subject === null) {
-      notes.push(`takedown ${granted.id} holds un-normalisable subject value, so nothing fanned out`);
-    } else if (affected.length === 0) {
+      notes.push(
+        granted.subject_kind === SUBJECT_KIND_HANDLE
+          ? HANDLE_SUBJECT_NOTE
+          : `takedown ${granted.id} holds un-normalisable subject value, so nothing fanned out`,
+      );
+    } else if (workspaces.length === 0) {
       notes.push(`no workspace tracks ${granted.subject_value}, so there was nothing to fan out`);
     }
     if (selfWorkspaces > 0) {
@@ -205,10 +201,9 @@ export async function fanOutTakedown(
     }
     const combinedNote = notes.length > 0 ? notes.join(" ") : null;
 
-    const finalised = await env.DB.prepare(SET_FANNED_OUT)
+    await env.DB.prepare(SET_FANNED_OUT)
       .bind(finishedAt, combinedNote, granted.id)
       .run();
-    if ((finalised.meta.changes ?? 0) === 0) return granted.fanned_out_at ?? finishedAt;
     return finishedAt;
   });
 
@@ -216,7 +211,7 @@ export async function fanOutTakedown(
     takedownId: granted.id,
     subjectValue: granted.subject_value,
     completedAt,
-    workspaces,
+    workspaces: outcomes,
     selfWorkspaces,
   };
 }

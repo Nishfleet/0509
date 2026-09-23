@@ -1,14 +1,9 @@
-import type { TakedownParams } from "../workflows/takedown";
+import type { ReconcileEnv } from "../workflows/takedown";
 
 export const RECONCILIATION_UTC_HOUR = 3;
 
 interface UnfannedTakedown {
   id: string;
-}
-
-interface ReconcileEnv {
-  DB: D1Database;
-  TAKEDOWN_WORKFLOW: Workflow<TakedownParams>;
 }
 
 const SELECT_UNFANNED = `SELECT id FROM takedown WHERE fanned_out_at IS NULL AND actioned_at IS NOT NULL ORDER BY actioned_at ASC`;

@@ -275,29 +275,39 @@ describe("TakedownWorkflow", () => {
     expect(partial?.fanned_out_at).toBeNull();
   });
 
-  it("fans out a handle takedown on the registrable the entity row holds", async () => {
+  it("parks a handle takedown with its reason on note, touching no entity row", async () => {
+    // entity.domain holds the registrable P1.1 produces. No handle can match it
+    // until that normaliser is on main (#3885), so a handle takedown must
+    // record the fact rather than fabricate a join key.
     await seedUserAndWorkspace("ws-h", "user-h");
-    await seedEntity("ws-h", "ent-h", "competitor", "removedcreator");
+    await seedEntity("ws-h", "ent-h", "competitor", "removedcreator.com");
     await seedGrantedTakedownKind("td-handle", "handle", "@RemovedCreator");
 
     await runFanOut("td-handle");
 
-    expect(await entityState("ent-h")).toMatchObject({ state: "dismissed" });
-    const fanned = await env.DB.prepare("SELECT fanned_out_at FROM takedown WHERE id = ?")
+    expect(await entityState("ent-h")).toMatchObject({ state: "on" });
+    const row = await env.DB.prepare("SELECT fanned_out_at, note FROM takedown WHERE id = ?")
       .bind("td-handle")
-      .first<{ fanned_out_at: string | null }>();
-    expect(fanned?.fanned_out_at).not.toBeNull();
-    expect(await alertCount("ws-h")).toBe(1);
+      .first<{ fanned_out_at: string | null; note: string | null }>();
+    expect(row?.fanned_out_at).not.toBeNull();
+    expect(row?.note).toContain("handle subject unresolved");
+    expect(row?.note).toContain("P1.1");
+    expect(await alertCount("ws-h")).toBe(0);
   });
 
-  it("normalises a handle so a channel URL still reaches the same registrable", async () => {
+  it("parks a channel-URL handle takedown the same way, because it is still a handle", async () => {
     await seedUserAndWorkspace("ws-c", "user-c");
-    await seedEntity("ws-c", "ent-c", "competitor", "removedcreator");
+    await seedEntity("ws-c", "ent-c", "competitor", "removedcreator.com");
     await seedGrantedTakedownKind("td-chan", "handle", "https://www.youtube.com/user/removedcreator");
 
     await runFanOut("td-chan");
 
-    expect(await entityState("ent-c")).toMatchObject({ state: "dismissed" });
+    expect(await entityState("ent-c")).toMatchObject({ state: "on" });
+    const row = await env.DB.prepare("SELECT fanned_out_at, note FROM takedown WHERE id = ?")
+      .bind("td-chan")
+      .first<{ fanned_out_at: string | null; note: string | null }>();
+    expect(row?.fanned_out_at).not.toBeNull();
+    expect(row?.note).toContain("handle subject unresolved");
   });
 
   it("dismisses the entity when a domain takedown names the domain the entity row holds", async () => {
@@ -362,7 +372,7 @@ describe("TakedownWorkflow", () => {
   );
 
   it("completes a takedown for a subject no workspace tracks yet and records why", async () => {
-    await seedGrantedTakedownKind("td-nomatch", "handle", "@nobodytracksme");
+    await seedGrantedTakedown("td-nomatch", "nobodytracks.example");
 
     await runFanOut("td-nomatch");
 
@@ -370,7 +380,7 @@ describe("TakedownWorkflow", () => {
       .bind("td-nomatch")
       .first<{ fanned_out_at: string | null; note: string | null }>();
     expect(row?.fanned_out_at).not.toBeNull();
-    expect(row?.note).toContain("no workspace tracks @nobodytracksme");
+    expect(row?.note).toContain("no workspace tracks nobodytracks.example");
   });
 
   it("is idempotent: a second run over the same subject changes nothing and does not re-alert", async () => {
