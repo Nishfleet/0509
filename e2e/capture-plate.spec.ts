@@ -17,7 +17,7 @@ test("a capture plate keeps its size, opens the pair, and falls back with no shi
   const consoleErrors: string[] = [];
   page.on("console", (msg) => {
     if (msg.type() !== "error") return;
-    if (msg.location().url.endsWith("/capture-plate-missing.svg")) return;
+    if (msg.location().url.split("?")[0].endsWith("/capture-plate-missing.svg")) return;
     consoleErrors.push(msg.text());
   });
 
