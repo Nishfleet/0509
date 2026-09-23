@@ -1,4 +1,4 @@
-import { readdir } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -14,7 +14,6 @@ import {
   renderRobots,
   renderSitemap,
   registeredRoutes,
-  robotsDisallowRules,
   sitemapEntries,
 } from "../app/lib/public-routes";
 import * as robotsRoute from "../app/routes/robots[.]txt";
@@ -23,6 +22,12 @@ import * as sitemapRoute from "../app/routes/sitemap[.]xml";
 const SITE_ORIGIN = "https://0509.io";
 const SEO_SURFACES = ["/robots.txt", "/sitemap.xml"];
 const PUBLIC_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "public");
+const APP_ROUTES_DIR = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "app",
+  "routes",
+);
 
 function locs(body: string): string[] {
   return [...body.matchAll(/<loc>(.*?)<\/loc>/g)].map((match) => match[1]);
@@ -44,7 +49,7 @@ function robotsMatchesRule(rule: string, path: string): boolean {
 }
 
 function isBlockedByRobots(value: string): boolean {
-  return robotsDisallowRules().some((rule) => robotsMatchesRule(rule, value));
+  return disallowRulesIn(renderRobots(SITE_ORIGIN)).some((rule) => robotsMatchesRule(rule, value));
 }
 
 describe("the manifest is derived from app/routes.ts (0509#3989)", () => {
@@ -102,6 +107,31 @@ describe("route classification against app/routes.ts (0509#3989)", () => {
 
   it("has protected routes to classify, or the rules are untested", () => {
     expect(registered.some(({ url }) => isProtectedPath(url))).toBe(true);
+  });
+});
+
+describe("the signed-in set is anchored to the requireSession guard (0509#3989)", () => {
+  it("protects every registered route whose module calls requireSession", async () => {
+    const guarded: string[] = [];
+    for (const { file, url } of registeredRoutes(routes)) {
+      if (SEO_SURFACES.includes(url)) continue;
+      const source = await readFile(path.join(APP_ROUTES_DIR, file), "utf8");
+      if (!/\brequireSession\s*\(/.test(source)) continue;
+      guarded.push(url);
+      expect(
+        isProtectedPath(url),
+        `${url} (${file}) calls requireSession but is not protected`,
+      ).toBe(true);
+    }
+    expect(guarded.length).toBeGreaterThan(0);
+  });
+
+  it("serves no protected URL in the sitemap", async () => {
+    const served = locs(await (await sitemapRoute.loader()).text());
+    expect(served.length).toBeGreaterThan(0);
+    for (const loc of served) {
+      expect(isProtectedPath(new URL(loc).pathname), `${loc} is protected`).toBe(false);
+    }
   });
 });
 
@@ -245,9 +275,9 @@ describe("robots.txt (0509#3989)", () => {
     const body = await response.text();
 
     expect(response.headers.get("Content-Type")).toContain("text/plain");
-    expect(body).toContain("User-agent: *");
-    expect(body).toContain("Allow: /");
-    expect(body).toContain(`Sitemap: ${SITE_ORIGIN}/sitemap.xml`);
+    expect(body.split("\n")).toContain("User-agent: *");
+    expect(body.split("\n")).toContain("Allow: /");
+    expect(body.split("\n")).toContain(`Sitemap: ${SITE_ORIGIN}/sitemap.xml`);
     for (const surface of PROTECTED_SURFACES) {
       expect(isBlockedByRobots(surface.path), `${surface.path} must be disallowed`).toBe(true);
     }

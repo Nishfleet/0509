@@ -92,8 +92,8 @@ test("/robots.txt is served with a crawler policy", async ({ request }) => {
   expect(response.headers()["content-type"]).toContain("text/plain");
 
   const body = await response.text();
-  expect(body).toContain("User-agent: *");
-  expect(body).toContain("Allow: /");
+  expect(body.split("\n")).toContain("User-agent: *");
+  expect(body.split("\n")).toContain("Allow: /");
   expect(body).toContain("Disallow: /app$");
   expect(body).toContain("Disallow: /app/");
   expect(body).toContain("Disallow: /onboarding$");
