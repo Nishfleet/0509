@@ -57,9 +57,9 @@ function firstContent(current: string | null, value: string | null): string | nu
   return value;
 }
 
-function absoluteUrl(href: string, pageUrl: string): string | null {
+function resolveUrl(href: string, pageUrl: string): URL | null {
   try {
-    return new URL(href, pageUrl).href;
+    return new URL(href, pageUrl);
   } catch {
     return null;
   }
@@ -67,7 +67,8 @@ function absoluteUrl(href: string, pageUrl: string): string | null {
 
 function socialHost(hostname: string): string {
   const labels = hostname.toLowerCase().split(".");
-  while (labels[0] === "www" || labels[0] === "m" || labels[0] === "uk") {
+  const first = labels[0];
+  if (first === "www" || first === "m" || first === "uk") {
     labels.shift();
   }
   return labels.join(".");
@@ -254,13 +255,13 @@ export async function extractIdentity(html: string, pageUrl: string): Promise<Id
         const href = element.getAttribute("href");
         if (rel === null || href === null) return;
         const tokens = rel.split(/\s+/).map((token) => token.toLowerCase());
-        const resolved = absoluteUrl(href, pageUrl);
+        const resolved = resolveUrl(href, pageUrl);
         if (resolved === null) return;
         if (tokens.includes("apple-touch-icon")) {
-          state.appleTouchIcon = firstContent(state.appleTouchIcon, resolved);
+          state.appleTouchIcon = firstContent(state.appleTouchIcon, resolved.href);
         }
         if (tokens.includes("manifest")) {
-          state.manifestUrl = firstContent(state.manifestUrl, resolved);
+          state.manifestUrl = firstContent(state.manifestUrl, resolved.href);
         }
       },
     })
@@ -268,21 +269,17 @@ export async function extractIdentity(html: string, pageUrl: string): Promise<Id
       element(element) {
         const href = element.getAttribute("href");
         if (href === null) return;
-        const resolved = absoluteUrl(href, pageUrl);
+        const resolved = resolveUrl(href, pageUrl);
         if (resolved === null) return;
-        state.anchors.push(resolved);
+        state.anchors.push(resolved.href);
       },
     })
     .on("nav a[href]", {
       element(element) {
         const href = element.getAttribute("href");
         if (href === null) return;
-        let url: URL;
-        try {
-          url = new URL(href, pageUrl);
-        } catch {
-          return;
-        }
+        const url = resolveUrl(href, pageUrl);
+        if (url === null) return;
         if (url.origin !== pageOrigin) return;
         state.navLinks.push(url.href);
       },
