@@ -1,5 +1,5 @@
 export const PUBLIC_PATHS = ["/", "/privacy"] as const;
-export const DISALLOWED_PREFIXES = ["/app", "/api", "/mcp", "/login", "/onboarding", "/design"] as const;
+export const DISALLOWED_PREFIXES = ["/app", "/api", "/mcp", "/u", "/login", "/onboarding", "/design"] as const;
 export const CARD_ROUTE_PATH = "s/:slug";
 export function sitemapXml(origin: string, paths: readonly string[]): string {
   const rows = paths.map((path) => {
