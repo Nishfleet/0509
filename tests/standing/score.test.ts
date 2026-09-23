@@ -31,6 +31,15 @@ describe("weightsAsOf", () => {
     expect(weightsAsOf(MENTION_ROWS, "2026-09-21T00:00:00.000Z").get("mention_matters")).toBe(3);
   });
 
+  it("keeps the latest row when the input is not already sorted", () => {
+    const rows: readonly WeightRow[] = [
+      { key: "mention_matters", weight: 50, effective_from: "2026-09-28T00:00:00.000Z" },
+      { key: "mention_matters", weight: 3, effective_from: "2026-09-14T00:00:00.000Z" },
+      { key: "mention_matters", weight: 100, effective_from: "2026-09-07T00:00:00.000Z" },
+    ];
+    expect(weightsAsOf(rows, "2026-09-21T00:00:00.000Z").get("mention_matters")).toBe(3);
+  });
+
   it("omits a key whose only row is after the week", () => {
     const rows: readonly WeightRow[] = [
       { key: "ad_copy_change", weight: 3, effective_from: "2026-09-28T00:00:00.000Z" },
