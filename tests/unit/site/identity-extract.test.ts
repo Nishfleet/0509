@@ -24,6 +24,13 @@ describe("extractIdentity", () => {
       "images.ctfassets.net/wl6q2in9o7k3/QN3GChnXFjOolrl6zNQBp/",
     );
     expect(card.ldOrganizationLogo).toContain("Gymshark_Combi_Logo_Black.png");
+    expect(card.socials.map((s) => s.platform).sort()).toEqual([
+      "facebook",
+      "instagram",
+      "tiktok",
+      "twitter",
+      "youtube",
+    ]);
     expect(card.socials).toEqual([
       { platform: "facebook", url: "https://www.facebook.com/Gymshark/" },
       { platform: "twitter", url: "https://twitter.com/Gymshark" },
