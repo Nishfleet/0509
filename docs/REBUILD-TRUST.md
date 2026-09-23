@@ -463,11 +463,10 @@ teaches one agent once; a rule teaches every agent forever.
 
 Implemented in the `opus-review` job's `prompt:` (`.github/workflows/ci.yml`) by
 PR #4255, which asks all three questions above word for word and states the
-verdict rule in its grade-capping form. The same prompt also asks a fourth
-question (Nish 2026-09-22): for a PR touching `app/` or `workers/`, the body
-must carry a `## Verification` section showing a real run of the verify skill
-(`.agents/skills/verify/`) at the PR head — commands, pasted output and the
-head SHA — and a missing or prose-only section fails the review.
+verdict rule in its grade-capping form. The fourth question (Nish 2026-09-22,
+a pasted `## Verification` section) was removed by #4523: proof at the prose
+rung failed 37 of 39 graded PRs. The running app is proven by `preview-assert`,
+a required check that builds the Worker and runs the e2e suite at the PR head.
 
 Reviewers also check the two things no test checks: that
 `.agents/skills/verify/feature-map.md` matches `app/routes.ts` after a route change, and that
