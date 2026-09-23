@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import type { DiffHunk } from "../../../app/lib/site/diff";
 import { diffPageText } from "../../../app/lib/site/diff";
 
 const BEFORE = "Welcome to Acme. Plans start at £40 a month. Cancel anytime.";
@@ -7,9 +8,10 @@ const BEFORE = "Welcome to Acme. Plans start at £40 a month. Cancel anytime.";
 describe("diffPageText", () => {
   it("reports no change for identical texts", () => {
     const result = diffPageText(BEFORE, BEFORE);
+    const hunks: DiffHunk[] = result.hunks;
 
     expect(result.changed).toBe(false);
-    expect(result.hunks).toEqual([]);
+    expect(hunks).toEqual([]);
     expect(result.addedWords).toBe(0);
     expect(result.removedWords).toBe(0);
   });
