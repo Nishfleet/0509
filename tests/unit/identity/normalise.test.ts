@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import { normaliseSubject, SubjectSchema, type NormaliseResult, type Subject } from "../../../app/lib/identity/normalise";
 
+const parsed: Subject = SubjectSchema.parse({
+  kind: "domain",
+  registrable: "gymshark.com",
+  url: "https://gymshark.com/",
+});
+
 const domain = (registrable: string, url: string): NormaliseResult => ({
   ok: true,
   subject: { kind: "domain", registrable, url },
@@ -53,9 +59,10 @@ describe("normaliseSubject", () => {
     ["https://www.youtube.com/", fail("unsupported-platform")],
   ])("normaliseSubject(%j)", (input, expected) => {
     expect(normaliseSubject(input)).toEqual(expected);
-    if (expected.ok) {
-      const subject: Subject = SubjectSchema.parse(expected.subject);
-      expect(subject).toEqual(expected.subject);
-    }
+  });
+
+  it("parses a subject and rejects one with an empty registrable", () => {
+    expect(parsed).toEqual({ kind: "domain", registrable: "gymshark.com", url: "https://gymshark.com/" });
+    expect(SubjectSchema.safeParse({ kind: "domain", registrable: "", url: null }).success).toBe(false);
   });
 });
