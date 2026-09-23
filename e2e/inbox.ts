@@ -57,7 +57,7 @@ function decodeQuotedPrintable(input: string): string {
   return new TextDecoder().decode(new Uint8Array(bytes));
 }
 
-function decodedBodies(raw: string): string[] {
+export function decodedBodies(raw: string): string[] {
   const quoted = /content-transfer-encoding:\s*quoted-printable/i.test(raw)
     ? decodeQuotedPrintable(raw)
     : raw;
@@ -69,6 +69,21 @@ function decodedBodies(raw: string): string[] {
     bodies.push(new TextDecoder().decode(bytes));
   }
   return bodies;
+}
+
+// The whole stored message exactly as the inbox Worker holds it, headers
+// included. `waitForMagicLink` returns the link it polled for; a spec that
+// asserts the email's own content (its Message-ID, its send time, its HTML
+// part) needs the headers too, and a second poll cannot be trusted to return
+// the same message.
+export async function readRawMessage(to: string, token: string): Promise<string> {
+  const response = await fetch(`${INBOX_URL}/message?to=${encodeURIComponent(to)}`, {
+    headers: inboxHeaders(token),
+  });
+  if (response.status !== 200) {
+    throw new Error(`inbox answered HTTP ${response.status} for ${to}`);
+  }
+  return response.text();
 }
 
 export function extractMagicLink(rawMessage: string): string | null {
