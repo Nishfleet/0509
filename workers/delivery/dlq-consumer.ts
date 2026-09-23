@@ -1,3 +1,4 @@
+import { insertDeliveryFailedAlert } from "../../app/lib/data/alert.server";
 import { parseMessage } from "./consumer";
 
 export const DELIVERY_FAILED_KIND = "delivery_failed";
@@ -68,20 +69,7 @@ export async function handleDlqBatch(env: Env, batch: MessageBatch): Promise<str
       reason,
       now: new Date().toISOString(),
     });
-    await env.DB.prepare(
-      `INSERT INTO alert (id, workspace_id, kind, severity, title, body, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING`,
-    )
-      .bind(
-        alert.id,
-        alert.workspace_id,
-        alert.kind,
-        alert.severity,
-        alert.title,
-        alert.body,
-        alert.status,
-        alert.created_at,
-      )
-      .run();
+    await insertDeliveryFailedAlert(env.DB, alert);
     item.ack();
     ids = [...ids, alert.id];
   }
