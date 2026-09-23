@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { evaluateCost } from "../../app/lib/observability/cost-guard";
-import type { DailyUsage } from "../../app/lib/observability/cost-guard";
+import {
+  COST_GUARD_FACTOR,
+  EXPECTED_PER_BRAND_DAY,
+  evaluateCost,
+} from "../../app/lib/observability/cost-guard";
+import type { CostLine, DailyUsage } from "../../app/lib/observability/cost-guard";
 
 const AT_FACTOR: DailyUsage = {
   day: "2026-09-21",
@@ -10,7 +14,14 @@ const AT_FACTOR: DailyUsage = {
   browserMs: 450_000,
 };
 
+const LINES: readonly CostLine[] = ["d1_rows_written", "r2_class_a_ops", "browser_ms"];
+
 describe("evaluateCost", () => {
+  it("reads the documented per-brand figures and the factor of three", () => {
+    expect(COST_GUARD_FACTOR).toBe(3);
+    expect(LINES.map((line) => EXPECTED_PER_BRAND_DAY[line])).toEqual([10, 10, 15_000]);
+  });
+
   it("returns no breach at exactly three times the documented per-brand figure", () => {
     expect(evaluateCost(AT_FACTOR, 10)).toEqual([]);
   });

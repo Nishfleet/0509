@@ -31,9 +31,5 @@
   // does not follow CSS imports and says so in its own hint output.
   "ignoreDependencies": ["cloudflare", "@react-router/node", "tailwindcss"],
 
-  "ignore": ["**/+types/**", "docs/design-directions/**", "lighthouserc.cjs"],
-
-  "ignoreIssues": {
-    "app/lib/observability/cost-guard.ts": ["exports", "types"]
-  }
+  "ignore": ["**/+types/**", "docs/design-directions/**", "lighthouserc.cjs"]
 }
