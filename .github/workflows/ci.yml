@@ -263,6 +263,9 @@ jobs:
     if: github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@v5
       - name: Exchange the Access service token for the CF_Authorization cookie
@@ -274,6 +277,7 @@ jobs:
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
       - name: Audit the deployed URL against the budgets
+        id: lhci
         uses: treosh/lighthouse-ci-action@3e7e23fb74242897f95c0ba9cabad3d0227b9b18 # v12
         with:
           urls: |
@@ -282,6 +286,20 @@ jobs:
           configPath: ./lighthouserc.cjs
           uploadArtifacts: true
           temporaryPublicStorage: true
+      - name: Open or update the issue that dispatches the fix
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.deployment.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ASSERTIONS: ${{ steps.lhci.outputs.assertionResults }}
+          LINKS: ${{ steps.lhci.outputs.links }}
+        run: |
+          TITLE="lighthouse red on ${SHA::7}"
+          FAILED=$(printf '%s' "$ASSERTIONS" | jq -r '.[] | "- \(.auditId) \(.auditProperty // ""): actual \(.actual), budget \(.expected)"' || echo "- no assertion results: the job failed before the audit ran")
+          BODY=$(printf "Run: %s\nHead: %s\nReport: %s\n\nFailed budgets (lighthouse-budget.json):\n%s\n\nFeature-map row (.agents/skills/verify/feature-map.md): \`/\`, the audited URL.\n\nPacket rule: reproduce the failure with the verify skill (.agents/skills/verify/) against https://0509.io before changing code, and paste that run in the PR.\n" "$RUN_URL" "$SHA" "$LINKS" "$FAILED")
+          N=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$N" ]; then gh issue comment "$N" --repo "$GITHUB_REPOSITORY" --body "$BODY"; else gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --label needs-split --label critical-path --body "$BODY"; fi
 
   # Opus 5 grades every PR (Nish 2026-09-22: "have opus 5 grade glm and ds4.1
   # flash"). Stock anthropics/claude-code-action on the Claude subscription
@@ -330,11 +348,9 @@ jobs:
 
             Then answer docs/REBUILD-TRUST.md §C1's three questions, asked of the diff and nothing else: 1. **Does this diff add a workaround?** A retry around a thing that should not fail, a fallback that hides a missing case, a cast that silences a type, a `catch {}` that swallows. 2. **Does it add a comment that justifies one?** Per §B5 — the comment *is* the tell. If removing the comment would make the code look wrong, the code is wrong. 3. **Does it add a second way to do something that already has one paved path?** A second query builder, a second session read, a second fetch wrapper, a second date formatter.
 
-            4. **For a PR touching `app/` or `workers/`, does the body carry a `## Verification` section showing a real run of the verify skill (`.agents/skills/verify/`) at the PR head?** That means commands, pasted output and the head SHA. A missing or prose-only section fails the review.
-
             A "yes" to any of the three §C1 questions caps the grade at D unless the diff carries the lint rule that makes it impossible, or the body cites a filed 0509 issue for that rule.
 
-            Answer all four questions in your comment, each as a yes or a no with the file and line that decides it. Post ONE top-level comment via `gh pr comment` that starts with `Opus grade: <letter>` followed by at most eight lines of reasons, each tied to a file and line. Use inline comments only for concrete defects. If the grade is D or F run `gh pr edit --add-label blocked-by-judge` and hand the PR back to the queue: `gh issue edit <each issue the PR closes> --add-label agent-ready --remove-label agent-in-progress` (intake then starts a worker that continues this same PR, fleet-ops#8418). If A, B or C run `gh pr edit --remove-label blocked-by-judge` and `gh issue edit <each issue the PR closes> --remove-label agent-ready` (ignore the error if absent). Do not edit files. Do not approve or request changes through the review API.
+            Answer all three questions in your comment, each as a yes or a no with the file and line that decides it. Post ONE top-level comment via `gh pr comment` that starts with `Opus grade: <letter>` followed by at most eight lines of reasons, each tied to a file and line. Use inline comments only for concrete defects. If the grade is D or F run `gh pr edit --add-label blocked-by-judge` and hand the PR back to the queue: `gh issue edit <each issue the PR closes> --add-label agent-ready --remove-label agent-in-progress` (intake then starts a worker that continues this same PR, fleet-ops#8418). If A, B or C run `gh pr edit --remove-label blocked-by-judge` and `gh issue edit <each issue the PR closes> --remove-label agent-ready` (ignore the error if absent). Do not edit files. Do not approve or request changes through the review API.
           claude_args: |
             --model claude-opus-5-5
             --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr edit:*),Bash(gh issue view:*),Bash(gh issue edit:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*)"
