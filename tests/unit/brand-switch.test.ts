@@ -48,13 +48,16 @@ describe("the per-brand switch renders DESIGN.md 6's three states", () => {
     expect(html.toLowerCase()).not.toContain("confirm");
   });
 
-  it("You is checked and carries the disabled attribute, so it is visible but not operable", () => {
+  it("You is checked and carries the disabled attribute on the switch, so it is visible but not operable", () => {
     const view = brandSwitchView("you");
     const html = row({ name: "Loopwell", state: "you" });
     expect(view).toEqual({ checked: true, operable: false, label: "YOU" });
     expect(html).toContain('data-state="you"');
     expect(html).toContain('aria-checked="true"');
-    expect(html).toContain("disabled");
+    const switchAt = html.indexOf('data-slot="switch"');
+    const switchEnd = html.indexOf("</button>", switchAt);
+    const switchHtml = switchEnd >= 0 ? html.slice(switchAt, switchEnd) : html.slice(switchAt);
+    expect(switchHtml).toMatch(/\bdisabled\b(=|>|\s|$)/);
     expect(html).not.toContain("paused");
     expect(html).not.toContain(ON_CONSEQUENCE);
   });
@@ -68,9 +71,9 @@ describe("the per-brand switch renders DESIGN.md 6's three states", () => {
             ? row({ name: "Casetta", state: "you" })
             : row({ name: "Casetta", state: "on" });
       const switchAt = html.indexOf('data-slot="switch"');
-      const wordAt = html.indexOf(`>${brandSwitchView(state).label}<`);
-      expect(switchAt, "switch slot exists").toBeGreaterThanOrEqual(0);
-      expect(wordAt, "state word sits inside the switch").toBeGreaterThan(switchAt);
+      const switchEnd = html.indexOf("</button>", switchAt);
+      const switchHtml = switchEnd >= 0 ? html.slice(switchAt, switchEnd) : html.slice(switchAt);
+      expect(switchHtml).toContain(`>${brandSwitchView(state).label}<`);
     }
   });
 
@@ -92,10 +95,12 @@ describe("pausedLine trims a date and keeps history kept", () => {
 });
 
 describe("the three states exhaust the state union", () => {
-  it.each<BrandSwitchState>(["on", "off", "you"])("%s has a defined view", (state) => {
-    const view = brandSwitchView(state);
-    expect(["ON", "OFF", "YOU"]).toContain(view.label);
-    expect(typeof view.checked).toBe("boolean");
-    expect(typeof view.operable).toBe("boolean");
+  it.each<BrandSwitchState>(["on", "off", "you"])("%s has the exact view DESIGN.md 6 names", (state) => {
+    const expected = {
+      on: { checked: true, operable: true, label: "ON" },
+      off: { checked: false, operable: true, label: "OFF" },
+      you: { checked: true, operable: false, label: "YOU" },
+    } as const;
+    expect(brandSwitchView(state)).toEqual(expected[state]);
   });
 });
