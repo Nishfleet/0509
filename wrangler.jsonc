@@ -73,7 +73,10 @@
   // the card objects stay public by serving through the route, while the
   // bucket itself is not exposed as a domain.
   "r2_buckets": [
-    { "binding": "CARD_ARTIFACTS", "bucket_name": "0509-snapshots" }
+    { "binding": "CARD_ARTIFACTS", "bucket_name": "0509-snapshots" },
+    // Raw site snapshots live under snapshot/site/, covered by the one-year
+    // snapshot/ lifecycle in docs/REBUILD-GUARDRAILS.md.
+    { "binding": "SNAPSHOTS", "bucket_name": "0509-snapshots" }
   ],
 
   // Browser Rendering: brand pages bot-gate a plain workerd fetch, so every
