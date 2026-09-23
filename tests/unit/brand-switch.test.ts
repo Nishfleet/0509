@@ -2,11 +2,23 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { BrandSwitch, type BrandSwitchState } from "../../app/components/brand-switch";
+import {
+  BrandSwitch,
+  type BrandSwitchState,
+  brandRowClass,
+  BrandSwitchField,
+  brandSwitchNote,
+} from "../../app/components/brand-switch";
 
 function render(state: BrandSwitchState): string {
   return renderToStaticMarkup(
     createElement(BrandSwitch, { state, brandName: "Loopwell" }),
+  );
+}
+
+function renderField(state: BrandSwitchState, pausedOn: Date | null): string {
+  return renderToStaticMarkup(
+    createElement(BrandSwitchField, { state, brandName: "Loopwell", pausedOn }),
   );
 }
 
@@ -38,5 +50,45 @@ describe("the brand switch", () => {
     expect(html).toContain('aria-checked="true"');
     expect(html).toContain(">YOU<");
     expect(html).toContain('data-disabled=""');
+  });
+});
+
+describe("the brand switch note", () => {
+  it("prints the consequence for on: off pauses tracking, history kept", () => {
+    expect(brandSwitchNote("on", null)).toContain("history kept");
+    expect(brandSwitchNote("on", null)).toContain("Off pauses tracking");
+  });
+
+  it("prints the paused date for off from the UTC instant", () => {
+    expect(brandSwitchNote("off", new Date("2026-09-22T12:00:00Z"))).toBe("paused 22 Sep · history kept");
+    expect(brandSwitchNote("off", null)).toBe("paused · history kept");
+  });
+
+  it("marks you as always tracked", () => {
+    expect(brandSwitchNote("you", null)).toBe("Your brand · always tracked");
+  });
+});
+
+describe("brandRowClass", () => {
+  it("dims off rows, washes you rows and leaves on rows alone", () => {
+    expect(brandRowClass("off")).toBe("text-ink-faint");
+    expect(brandRowClass("you")).toBe("bg-green-wash");
+    expect(brandRowClass("on")).toBe("");
+  });
+});
+
+describe("the brand switch field", () => {
+  it("prints the consequence next to the control with no confirmation", () => {
+    const html = renderField("off", new Date("2026-09-22T12:00:00Z"));
+    expect(html).toContain('data-slot="brand-switch-field"');
+    expect(html).toContain('data-slot="brand-switch"');
+    expect(html).toContain("paused 22 Sep · history kept");
+    expect(html).not.toContain('role="dialog"');
+  });
+
+  it("renders the note in every state", () => {
+    expect(renderField("on", null)).toContain("Off pauses tracking · history kept");
+    expect(renderField("you", null)).toContain("Your brand · always tracked");
+    expect(renderField("off", null)).toContain("paused · history kept");
   });
 });
