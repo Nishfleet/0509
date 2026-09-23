@@ -86,6 +86,24 @@ describe("newsGenerator", () => {
     }
   });
 
+  it("ignores an entry that carries neither a publisher nor a link", async () => {
+    const body = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Gymshark news</title>
+    <link>https://news.google.com/</link>
+    <description>Google News</description>
+    <item>
+      <title>${GLAMOUR_TITLE}</title>
+    </item>
+  </channel>
+</rss>`;
+
+    const candidates = await newsGenerator(SUBJECT, fetchTextWith(body));
+
+    expect(candidates).toEqual([]);
+  });
+
   it("merges the same co-mentioned brand across the two feeds into one candidate", async () => {
     const alternativesBody = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
