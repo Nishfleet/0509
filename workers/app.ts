@@ -1,5 +1,6 @@
 import { createRequestHandler } from "react-router";
 
+import { assertWorkerEnv, WorkerEnvError, workerEnvFailureResponse } from "../app/lib/env.server";
 import { pingLiveness } from "../app/lib/liveness-ping.server";
 import { handleBatch } from "./delivery/consumer";
 import { NIGHTLY_CRON, sweepPending } from "./delivery/sweeper";
@@ -10,7 +11,13 @@ const requestHandler = createRequestHandler(
 );
 
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
+    try {
+      assertWorkerEnv(env);
+    } catch (error) {
+      if (error instanceof WorkerEnvError) return workerEnvFailureResponse(error);
+      throw error;
+    }
     return requestHandler(request);
   },
 
