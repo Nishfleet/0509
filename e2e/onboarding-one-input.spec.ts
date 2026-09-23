@@ -35,7 +35,13 @@ function inputOnScreen(page: Page) {
 }
 
 function assertNothingBelowForm(page: Page) {
-  return expect(page.getByRole("status")).toHaveCount(0);
+  // #3996 reading (a): the "nothing found anywhere" line belongs to the card
+  // screen (#3993, docs/engines/identity-card.md) for a probed subject. Screen
+  // 1 never probes and must never fake that answer, so the honest assertion
+  // here is the absence of the line and of any error surface — not
+  // `role="status"`, which the identity landing only renders after a passkey
+  // is added and which therefore passes whatever the page shows.
+  return expect(page.getByText(/find anything/i)).toHaveCount(0);
 }
 
 // `overflow-x: hidden` on html/body makes documentElement.scrollWidth blind to
@@ -142,7 +148,10 @@ test("a deliberate nonsense string is passed through to the card screen, not ans
   await expect(page).toHaveURL(/\/onboarding\/identity\?input=qqqzzz-not-a-thing-9f3a$/);
   // The "nothing found anywhere" line is the identity engine's answer (all
   // probes empty, docs/engines/identity-card.md) and renders on the card
-  // (#3993). Screen 1 must not fake it with a second normaliser.
+  // (#3993). Screen 1 must not fake it with a second normaliser. The
+  // pass-through itself is the reachable proof: the landing renders the exact
+  // raw string it was handed, so screen 1 never rewrote it.
+  await expect(page.getByText("qqqzzz-not-a-thing-9f3a")).toBeVisible();
   await assertNothingBelowForm(page);
   await assertNoOverflow(page);
   expect(errors).toEqual([]);

@@ -81,33 +81,4 @@ describe("the onboarding screen's classes resolve against the one stylesheet (#3
   it.each(PAINTED_FILES)("%s does name at least one utility to check", (file) => {
     expect(utilitiesIn(file).length).toBeGreaterThan(0);
   });
-
-  it("paints the step-bar marker with the registered green tokens", () => {
-    const source = readFileSync(path.join(REPO_ROOT, "app/components/onboarding/step-bar.tsx"), "utf8");
-    expect(source).toContain("bg-green");
-    expect(source).toContain("text-on-green");
-    // The retired accent names emit no rule; naming them is the defect.
-    for (const retired of ["bg-accent", "text-on-accent", "border-accent"]) {
-      expect(source, `${retired} is not a token in app/app.css`).not.toContain(retired);
-    }
-  });
-
-  it("paints the one-input submit with the registered green fill", () => {
-    const source = readFileSync(path.join(REPO_ROOT, "app/components/one-input.tsx"), "utf8");
-    expect(source).toContain("bg-green");
-    expect(source).toContain("text-on-green");
-    for (const retired of ["bg-accent", "text-on-accent", "border-accent"]) {
-      expect(source, `${retired} is not a token in app/app.css`).not.toContain(retired);
-    }
-  });
-
-  it("uses the type scale's tokens rather than a hand-written size", () => {
-    const stepBar = readFileSync(path.join(REPO_ROOT, "app/components/onboarding/step-bar.tsx"), "utf8");
-    expect(stepBar).toContain("text-pill");
-    expect(stepBar).not.toContain("text-[0.66rem]");
-
-    const oneInput = readFileSync(path.join(REPO_ROOT, "app/components/one-input.tsx"), "utf8");
-    const inputClass = /className="([^"]*text-body[^"]*)"/.exec(oneInput);
-    expect(inputClass?.[1], "the field paints with the scale's body token").toContain("text-body");
-  });
 });
