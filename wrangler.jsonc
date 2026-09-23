@@ -73,7 +73,10 @@
   // the card objects stay public by serving through the route, while the
   // bucket itself is not exposed as a domain.
   "r2_buckets": [
-    { "binding": "CARD_ARTIFACTS", "bucket_name": "0509-snapshots" }
+    { "binding": "CARD_ARTIFACTS", "bucket_name": "0509-snapshots" },
+    // Raw site snapshots live under snapshot/site/, covered by the one-year
+    // snapshot/ lifecycle in docs/REBUILD-GUARDRAILS.md.
+    { "binding": "SNAPSHOTS", "bucket_name": "0509-snapshots" }
   ],
 
   // Browser Rendering: brand pages bot-gate a plain workerd fetch, so every
@@ -103,6 +106,7 @@
   // reach the retry limit are deleted permanently otherwise, and a silently
   // dropped brief is the failure the contract forbids.
   "queues": {
+    "producers": [{ "queue": "send-email", "binding": "SEND_EMAIL" }],
     "consumers": [
       {
         "queue": "send-email",
@@ -111,15 +115,23 @@
         "max_retries": 5,
         "max_concurrency": 2,
         "dead_letter_queue": "send-email-dlq"
+      },
+      // #4065: a message that exhausts send-email lands here and becomes one alert.
+      {
+        "queue": "send-email-dlq",
+        "max_batch_size": 1,
+        "max_batch_timeout": 30,
+        "max_retries": 3
       }
     ]
   },
 
   "triggers": {
-    // The dead-man ping, and nothing else yet. Every five minutes: an external
-    // service alerts when the reports stop, which is the one failure a Worker
-    // cannot report about itself.
-    "crons": ["*/5 * * * *"]
+    // The dead-man ping, every five minutes: an external service alerts when
+    // the reports stop, which is the one failure a Worker cannot report about
+    // itself. Also the nightly delivery sweeper, which re-enqueues stale
+    // pending digests and claims.
+    "crons": ["*/5 * * * *", "0 3 * * *"]
   },
 
   "routes": [

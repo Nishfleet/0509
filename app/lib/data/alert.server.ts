@@ -2,6 +2,38 @@ import { env } from "cloudflare:workers";
 
 import { briefText } from "../delivery-alert";
 
+const INSERT_DELIVERY_FAILED = `INSERT INTO alert (id, workspace_id, kind, severity, title, body, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING`;
+
+export interface DeliveryFailedAlert {
+  id: string;
+  workspace_id: string;
+  kind: string;
+  severity: string;
+  title: string;
+  body: string;
+  status: string;
+  created_at: string;
+}
+
+export async function insertDeliveryFailedAlert(
+  db: D1Database,
+  alert: DeliveryFailedAlert,
+): Promise<void> {
+  await db
+    .prepare(INSERT_DELIVERY_FAILED)
+    .bind(
+      alert.id,
+      alert.workspace_id,
+      alert.kind,
+      alert.severity,
+      alert.title,
+      alert.body,
+      alert.status,
+      alert.created_at,
+    )
+    .run();
+}
+
 export interface DeliveryFailureRow {
   id: string;
   title: string;

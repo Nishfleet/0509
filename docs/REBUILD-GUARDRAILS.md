@@ -36,6 +36,36 @@ Umbrella #3842. Author: Fable. Checked by the Opus deputy. Nish's decisions stan
 - Any brand or person can ask to be removed from public standing cards and from tracking by any workspace, by email to the address in the footer. Handled within 72 hours by hand (Nish or the deputy), recorded on a `takedown` row with the subject, the date and the action. A subject on the takedown list is refused at onboarding and dropped from existing workspaces at the next tick, with a one-line note to the owner.
 - Public standing cards show only what docs/REBUILD-STANDING-CARD.md allows; a takedown removes the subject from every card on the next render.
 
+### Who reads it
+
+- support@0509.io is the address in the footer and on /privacy. Email Routing hands it to the `0509-support-inbox` Worker, which stores it and forwards it to Nish's Gmail (#4310). Nish reads it there. He may ask the deputy to draft the reply and the record; Nish sends the reply and authorizes the write.
+
+### The 72-hour clock
+
+- The clock starts when the message reaches support@0509.io (its received time), not when someone opens it. Weekends count.
+- Within 72 hours the requester has one of three replies: done, refused, or a request for the missing detail. The wording for each is below.
+
+### What a request must contain
+
+- The subject: a domain (`example.com`) or a public handle and its platform.
+- Who is asking: the brand or creator, or someone who says they act for them. We do not ask for ID.
+- If either is missing, reply once within 72 hours: "To remove this we need the domain or public handle, and who you are in relation to it. Reply with both and we will handle it within 72 hours of your reply." The clock restarts on their reply.
+
+### Recording it
+
+- The takedown row is every `entity` row whose domain is the subject, in every workspace, set to state `dismissed` with `state_reason` `takedown`, `state_changed_by` the handler and `state_changed_at` the time it was done. That is what `app/lib/card/serve.server.ts` reads to drop the subject from a card.
+- This is a production D1 write, so it needs Nish's yes (CLAUDE.md). The deputy may prepare it; Nish authorizes it.
+- Each affected workspace owner gets the one-line note at the next tick: "<subject> asked to be removed from tracking, so we stopped tracking it."
+
+### What the requester is told
+
+- Done: "Done. <subject> is no longer tracked by any workspace on Five to Nine and no longer appears on any public standing card. We recorded your request on <date, UTC>."
+- Refused: we refuse only when the request is about a subject the requester neither is nor says they act for. "We can't act on this request. We remove a brand or creator when they, or someone acting for them, ask. This request is about <subject>, and it does not say you act for them. If you do, reply saying so and we will handle it within 72 hours of your reply."
+
+### No machinery
+
+- No form, no ticketing tool, no automation. A handful a year, handled by hand.
+
 ## Collection conduct
 
 - Rate limits per source live in the source registry, honoured by the Workflow, never by a sleep loop in code. A source that blocks us is marked degraded in the UI, not retried harder.

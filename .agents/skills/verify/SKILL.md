@@ -26,7 +26,7 @@ The port is per process, the same formula as `playwright.config.ts`: `8000 + (pi
 npm run build
 export PLAYWRIGHT_LOCAL_PORT="${PLAYWRIGHT_LOCAL_PORT:-$((8000 + $$ % 1000))}"
 npx wrangler d1 migrations apply 0509 --local </dev/null
-npx wrangler dev --local --port "$PLAYWRIGHT_LOCAL_PORT"
+npx wrangler dev --env-file .dev.vars.example --local --port "$PLAYWRIGHT_LOCAL_PORT"
 ```
 
 Wait until `curl -fsS "http://127.0.0.1:${PLAYWRIGHT_LOCAL_PORT}/api/health"` returns. Then open the page:
@@ -118,4 +118,4 @@ npx chrome-devtools take_screenshot <pageId> --filePath /tmp/verify-proof/login-
 
 ## Reproduce a vague user report
 
-Map the words and the screenshot onto feature-map rows. The map is `docs/FEATURE-MAP.md` until #4332 moves it to `feature-map.md` beside this skill. Drive those rows with `take_snapshot`, `click`, `fill` and `press_key`. Report the url, the snapshot lines you saw, console errors and failed requests. Quote what the page showed.
+Map the words and the screenshot onto feature-map rows. The map is `feature-map.md` beside this skill. Drive those rows with `take_snapshot`, `click`, `fill` and `press_key`. Report the url, the snapshot lines you saw, console errors and failed requests. Quote what the page showed.
