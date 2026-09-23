@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { diffPageText } from "../../../app/lib/site/diff";
+import { diffPageText, toSentenceLines } from "../../../app/lib/site/diff";
 import { extractPageText } from "../../../app/lib/site/extract-text";
 
 describe("diffPageText", () => {
@@ -20,8 +20,10 @@ describe("diffPageText", () => {
     expect(pageDiff).not.toBeNull();
     if (pageDiff === null) return;
 
-    // diff@9.0.0 treats "$" as its own punctuation token and keeps it on the
-    // unchanged "Plans start at $" word, so the removed word is "10".
+    expect(toSentenceLines(prev.text)).toBe("Plans start at $10.\nCancel any time.");
+    expect(toSentenceLines(next.text)).toBe("Plans start at $12.\nCancel any time.");
+    // diff@9.0.0 attaches "$" to the preceding token. The unchanged word is
+    // "Plans start at $" and the removed and added words are "10" and "12".
     expect(pageDiff.words.some((change) => change.removed === true && change.value.includes("10"))).toBe(true);
     expect(pageDiff.words.some((change) => change.added === true && change.value.includes("12"))).toBe(true);
     expect(pageDiff.words.some((change) => change.added !== true && change.removed !== true && change.value.endsWith("$"))).toBe(true);
