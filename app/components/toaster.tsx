@@ -1,13 +1,15 @@
 import type { CSSProperties } from "react";
 import { Toaster as SonnerToaster, toast } from "sonner";
 
-const TOASTER_STYLE = {
+type StyleVars = CSSProperties & Record<`--${string}`, string>;
+
+const TOASTER_STYLE: StyleVars = {
   "--normal-bg": "var(--card)",
   "--normal-text": "var(--ink)",
   "--normal-border": "var(--line)",
   "--border-radius": "0px",
   fontFamily: "var(--font-sans)",
-} as CSSProperties;
+};
 
 const UNDO_BUTTON_STYLE = { borderRadius: 0 } satisfies CSSProperties;
 
