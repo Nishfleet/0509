@@ -82,13 +82,13 @@ describe("site diff — an unchanged tick is never diffed", () => {
     }
   });
 
-  it("the unchanged tick writes one row and nothing else — no mark is built", async () => {
-    // The gate's real consequence, asserted rather than described: on an
-    // unchanged tick the sweep stops at the snapshot row, so there is no hunk
-    // and no key anywhere. This is the "no screenshot, no diff, no Jev call"
-    // half of the acceptance. The store is a real R2 binding, so the empty
-    // assertion below reads real storage: a gate that fired would write five
-    // objects to the bucket.
+  it("refuses at all three layers on an unchanged tick — gate, diff, and mark", async () => {
+    // The unchanged tick's consequence, asserted rather than described: the
+    // hash gate is false, the diff layer throws on the identical pair, and the
+    // mark refuses a diff with no changes. The bucket is a real R2 binding, so
+    // the empty assertion reads real storage: a gate that fired would have
+    // written five objects to it. The snapshot row itself belongs to the sweep
+    // (P5), which is not what this file owns.
     const prevHash = await textHash(HEALTHY_TEXT);
     const nextHash = await textHash(HEALTHY_TEXT_AGAIN);
     expect(prevHash).toBe(nextHash);
