@@ -16,3 +16,17 @@ test("GET /robots.txt serves the manifest-generated file", async ({
   expect(body).toContain("Disallow: /app");
   expect(body).toMatch(/^Sitemap: https?:\/\/\S+\/sitemap\.xml$/m);
 });
+
+test("GET /sitemap.xml serves the manifest-generated urlset", async ({
+  request,
+}) => {
+  const response = await request.get("/sitemap.xml");
+  expect(response.status()).toBe(200);
+  expect(response.headers()["content-type"]).toMatch(/^application\/xml/);
+
+  const body = await response.text();
+  expect(body).toContain(
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+  );
+  expect(body).toMatch(/<loc>https?:\/\/[^<]+\/privacy<\/loc>/);
+});
