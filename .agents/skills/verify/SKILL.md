@@ -20,7 +20,7 @@ npm run verify:stop
 
 ### Local
 
-The port is per process, the same derivation as `playwright.config.ts`: `8000 + (pid % 1000)`. The local D1 is empty until migrations are applied; without them `/login` throws a schema mismatch instead of rendering.
+The port is per process, the same formula as `playwright.config.ts`: `8000 + (pid % 1000)`. Run the block in one shell so the exported port is the port wrangler binds. The local D1 is empty until migrations are applied; without them `/login` throws a schema mismatch instead of rendering.
 
 ```bash
 npm run build
@@ -52,7 +52,7 @@ npx chrome-devtools navigate_page <pageId> --url "https://0509.io/login"
 npx chrome-devtools take_snapshot <pageId>
 ```
 
-The snapshot is the app (heading "Sign in"), not the Access login page.
+Do not use `set -x` and do not echo the header JSON. The stock CLI takes those headers only as `--extraHttpHeaders`. A proving run's emulate stdout was exactly `Emulation configured successfully` and contained neither header value. If the output is anything else, stop and do not paste it. The snapshot is the app (heading "Sign in"), not the Access login page.
 
 ## Drive it
 
@@ -68,6 +68,8 @@ Take a new snapshot after every navigation. The feature map names each control b
 
 ## Proof per change type
 
+Write proof files under `/tmp/verify-proof/` (`mkdir -p /tmp/verify-proof`) so they stay out of the worktree.
+
 ### Correctness
 
 Snapshot before and after the action. Then:
@@ -77,7 +79,7 @@ npx chrome-devtools list_console_messages <pageId> --types error
 npx chrome-devtools list_network_requests <pageId>
 ```
 
-Zero console errors. No failed requests (status 4xx or 5xx).
+Zero console errors. On the app's own origin, no response with status 4xx or 5xx.
 
 ### Performance
 
@@ -85,7 +87,7 @@ Local only. Throttle, trace, then read the LCP breakdown:
 
 ```bash
 npx chrome-devtools emulate <pageId> --cpuThrottlingRate 4 --networkConditions "Slow 4G"
-npx chrome-devtools performance_start_trace <pageId> --reload true --autoStop true --filePath trace.json.gz
+npx chrome-devtools performance_start_trace <pageId> --reload true --autoStop true --filePath /tmp/verify-proof/trace.json.gz
 npx chrome-devtools performance_analyze_insight <pageId> NAVIGATION_0 LCPBreakdown
 ```
 
@@ -96,9 +98,9 @@ The trace summary names LCP, TTFB and render delay. On production, skip the `emu
 The daemon starts with memory debugging on. Capture before and after the interactions, then compare:
 
 ```bash
-npx chrome-devtools take_heapsnapshot <pageId> before.heapsnapshot
-npx chrome-devtools take_heapsnapshot <pageId> after.heapsnapshot
-npx chrome-devtools compare_heapsnapshots before.heapsnapshot after.heapsnapshot
+npx chrome-devtools take_heapsnapshot <pageId> /tmp/verify-proof/before.heapsnapshot
+npx chrome-devtools take_heapsnapshot <pageId> /tmp/verify-proof/after.heapsnapshot
+npx chrome-devtools compare_heapsnapshots /tmp/verify-proof/before.heapsnapshot /tmp/verify-proof/after.heapsnapshot
 ```
 
 The stock CLI command is `take_heapsnapshot`. There is no `take_memory_snapshot`.
@@ -109,9 +111,9 @@ Screenshots at the same widths as the Playwright projects:
 
 ```bash
 npx chrome-devtools emulate <pageId> --viewport "1440x900x1"
-npx chrome-devtools take_screenshot <pageId> --filePath login-1440.png
+npx chrome-devtools take_screenshot <pageId> --filePath /tmp/verify-proof/login-1440.png
 npx chrome-devtools emulate <pageId> --viewport "390x844x2,mobile,touch"
-npx chrome-devtools take_screenshot <pageId> --filePath login-390.png
+npx chrome-devtools take_screenshot <pageId> --filePath /tmp/verify-proof/login-390.png
 ```
 
 ## Reproduce a vague user report
