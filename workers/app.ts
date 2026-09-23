@@ -1,7 +1,9 @@
 import { createRequestHandler } from "react-router";
 
+import { assertWorkerEnv, WorkerEnvError, workerEnvFailureResponse } from "../app/lib/env.server";
 import { pingLiveness } from "../app/lib/liveness-ping.server";
 import { handleBatch } from "./delivery/consumer";
+import { handleDlqBatch } from "./delivery/dlq-consumer";
 import { NIGHTLY_CRON, sweepPending } from "./delivery/sweeper";
 
 const requestHandler = createRequestHandler(
@@ -11,6 +13,12 @@ const requestHandler = createRequestHandler(
 
 export default {
   async fetch(request) {
+    try {
+      assertWorkerEnv();
+    } catch (error) {
+      if (error instanceof WorkerEnvError) return workerEnvFailureResponse(error);
+      throw error;
+    }
     return requestHandler(request);
   },
 
@@ -24,6 +32,10 @@ export default {
   },
 
   async queue(batch: MessageBatch, env: Env) {
+    if (batch.queue === "send-email-dlq") {
+      await handleDlqBatch(env, batch);
+      return;
+    }
     await handleBatch(env, batch);
   },
 } satisfies ExportedHandler<Env>;

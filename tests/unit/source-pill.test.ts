@@ -30,6 +30,14 @@ const parked: SourceRow = {
   config_json: '{"state":"parked","reason":"no reachable surface"}',
 };
 
+const xDisabled: SourceRow = {
+  key: "x.search",
+  platform: "x",
+  is_enabled: 0,
+  config_json:
+    '{"disabled_reason":"No paid X provider until revenue","decided_by":"Nish","decided_at":"2026-09-22","cheapest_route":{"provider":"Apify","usd_per_1000_tweets":0.40},"approved_cost":null,"source_doc":"docs/engines/mentions.md P5.6"}',
+};
+
 const liveSnapshot: SourceSnapshot = {
   item_count: 4,
   fetched_at: "2026-09-22T06:02:00.000Z",
@@ -144,6 +152,16 @@ describe("the source pill", () => {
     expect(
       sourcePillStatus({ ...reddit, is_enabled: 1, config_json: '{"state":"parked"}' }, liveSnapshot, NOW).state,
     ).toBe("disabled");
+  });
+
+  it("hides the disabled X row as disabled, never degraded, and shows it once only is_enabled flips (#3977)", () => {
+    expect(sourcePillStatus(xDisabled, null, NOW).state).toBe("disabled");
+    expect(sourcePillStatus(xDisabled, liveSnapshot, NOW).state).toBe("disabled");
+    expect(pill(xDisabled, null)).toBe("");
+    expect(pill(xDisabled, liveSnapshot)).toBe("");
+    const xEnabled: SourceRow = { ...xDisabled, is_enabled: 1 };
+    expect(sourcePillStatus(xEnabled, liveSnapshot, NOW).state).toBe("live");
+    expect(pill(xEnabled, liveSnapshot)).toContain('data-state="live"');
   });
 
   it("never colour-codes a pill by which source it is", () => {
