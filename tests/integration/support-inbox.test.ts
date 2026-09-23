@@ -1,6 +1,7 @@
 import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { insertSupportReport } from "../../app/lib/data/support_report.server";
 import worker from "../../workers/support-inbox";
 
 /**
@@ -12,12 +13,13 @@ import worker from "../../workers/support-inbox";
  */
 type EmailMessage = Parameters<typeof worker.email>[0];
 type InboxEnv = Parameters<typeof worker.email>[1];
+type ScheduledCtrl = Parameters<typeof worker.scheduled>[0];
 
 const ISSUES_URL = "https://api.github.com/repos/Nishfleet/0509/issues";
 
 const MIME = [
   "From: Jane User <jane@customer.example>",
-  "To: support@0509.io",
+  "To: support+vitest@0509.io",
   "Subject: Refund please",
   "Content-Type: text/plain; charset=utf-8",
   "",
@@ -28,7 +30,7 @@ const MIME = [
 
 const fakeMessage = (forward: () => Promise<void>): EmailMessage =>
   ({
-    to: "support@0509.io",
+    to: "support+vitest@0509.io",
     from: "jane@customer.example",
     headers: new Headers({ subject: "Refund please", "user-agent": "Thunderbird 128" }),
     raw: new Response(MIME).body,
@@ -38,11 +40,11 @@ const fakeMessage = (forward: () => Promise<void>): EmailMessage =>
     reply: () => Promise.resolve(),
   }) as unknown as EmailMessage;
 
-const deliver = async (inboxEnv: InboxEnv = env) => {
+const deliver = async (inboxEnv: InboxEnv = env, fetchStatus = 201) => {
   const forward = vi.fn(() => Promise.resolve());
   const fetchSpy = vi
     .spyOn(globalThis, "fetch")
-    .mockResolvedValue(new Response("{}", { status: 201 }));
+    .mockResolvedValue(new Response("{}", { status: fetchStatus }));
   const ctx = createExecutionContext();
   await worker.email(fakeMessage(forward), inboxEnv, ctx);
   await waitOnExecutionContext(ctx);
@@ -124,5 +126,60 @@ describe("0509-support-inbox-v2", () => {
       "support-inbox: SUPPORT_INBOX_GITHUB_TOKEN is not set",
       row?.id,
     );
+  });
+
+  it("logs a failed issue create instead of throwing", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const { fetchSpy } = await deliver(env, 500);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(errorSpy).toHaveBeenCalledWith(
+      "support-inbox: issue create failed",
+      500,
+      expect.any(String),
+    );
+  });
+
+  it("still stores and opens the issue when forward throws", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const forward = vi.fn(() => Promise.reject(new Error("cannot forward")));
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response("{}", { status: 201 }));
+    const ctx = createExecutionContext();
+    await worker.email(fakeMessage(forward), env, ctx);
+    await waitOnExecutionContext(ctx);
+
+    const row = await env.DB.prepare("SELECT id FROM support_report").first<{ id: string }>();
+    expect(row?.id).toBeTruthy();
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs the 90-day delete from the scheduled cron", async () => {
+    await insertSupportReport(env.DB, {
+      id: "old-report",
+      receivedAt: new Date(Date.now() - 91 * 24 * 60 * 60 * 1000).toISOString(),
+      fromDomain: "customer.example",
+      subjectSha256: "0".repeat(64),
+      raw: "old mail",
+    });
+    const ctx = createExecutionContext();
+    worker.scheduled(
+      {
+        scheduledTime: Date.now(),
+        cron: "17 3 * * *",
+        noRetry: () => undefined,
+      } as unknown as ScheduledCtrl,
+      env,
+      ctx,
+    );
+    await waitOnExecutionContext(ctx);
+
+    const row = await env.DB
+      .prepare("SELECT id FROM support_report WHERE id = ?")
+      .bind("old-report")
+      .first<{ id: string }>();
+    expect(row).toBeNull();
   });
 });
