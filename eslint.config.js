@@ -23,6 +23,12 @@ const PAVED_PATH_PATTERNS = [
   },
 ];
 
+const SONNER_IMPORT = {
+  name: "sonner",
+  message:
+    "sonner is imported in exactly one module, app/components/toaster.tsx, which owns every toast() call behind toastSaved(). DESIGN.md §11: toasts are only 'saved' and 'undo' — a second import site is a second toast authority. Source: 0509#4116.",
+};
+
 const ONE_PAVED_PATH_IMPORTS = [
   {
     name: "kysely",
@@ -42,6 +48,7 @@ const ONE_PAVED_PATH_IMPORTS = [
     name: "@better-auth/passkey",
     message: "Same paved path as better-auth: app/lib/auth.server.ts only.",
   },
+  SONNER_IMPORT,
 ];
 
 const SUPPORT_ADDRESS_BAN = {
@@ -195,7 +202,12 @@ export default tseslint.config(
 
   {
     files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
-    ignores: ["app/lib/db.server.ts", "app/lib/auth.server.ts", "app/lib/auth-client.ts"],
+    ignores: [
+      "app/lib/db.server.ts",
+      "app/lib/auth.server.ts",
+      "app/lib/auth-client.ts",
+      "app/components/toaster.tsx",
+    ],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -212,6 +224,7 @@ export default tseslint.config(
       "app/root.tsx",
       "app/entry.*.tsx",
       "app/lib/auth-client.ts",
+      "app/components/toaster.tsx",
     ],
     rules: {
       "no-restricted-imports": [

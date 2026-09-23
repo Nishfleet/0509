@@ -2,23 +2,30 @@ import { readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // #4116: toasts exist for exactly two moments — "saved" and "undo" — and
-// nothing else in the product may raise one. The lock is mechanical: only
-// app/components/toaster.tsx may import sonner or call toast(); every other
-// module goes through toastSaved(). The scanner below is the gate; a probe
-// file proves the gate still bites, and the clean-tree run proves no toast
-// slipped in ahead of it. The accessibility half (aria-live announcement,
-// prefers-reduced-motion) is delegated to sonner and pinned here against the
-// installed dist so a dependency bump that drops either guarantee fails loud
-// instead of regressing silently.
+// nothing else in the product may raise one. The lock is two rungs deep:
+// eslint.config.js bans the sonner import outside app/components/toaster.tsx
+// at the static gate, and the scanner below fails the suite on any call that
+// reached around it — a planted probe proves the gate still bites and the
+// clean-tree run proves no toast slipped in ahead of it. sonner is mocked
+// partially: toast is a vi.fn() so toastSaved's calls are observable, while
+// Toaster stays real so the live-region test below renders the markup the
+// axe run checks on production. The reduced-motion cutoff is pinned against
+// the installed dist so a dependency bump that drops it fails loud.
 
-vi.mock("sonner", () => ({ toast: vi.fn(), Toaster: () => null }));
+vi.mock("sonner", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  toast: vi.fn(),
+}));
 
 import { toast } from "sonner";
 
-import { toastSaved } from "../../app/components/toaster";
+import { Toaster, toastSaved } from "../../app/components/toaster";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SCANNED_DIRS = ["app", "workers"];
@@ -126,6 +133,18 @@ describe("the mount and the skin", () => {
     for (const token of ["--card", "--ink", "--line", "--font-sans"]) {
       expect(css).toMatch(new RegExp(`${token}:\\s*[^;]`));
     }
+  });
+});
+
+describe("the mounted toaster", () => {
+  it("renders the polite live region", () => {
+    // sonner's <ol data-sonner-toaster> (the styled toast list) only mounts
+    // while a toast is visible, so the token skin stays a source pin above;
+    // the live region is on the always-mounted <section>.
+    const html = renderToStaticMarkup(createElement(Toaster));
+    expect(html).toContain("<section");
+    expect(html).toContain('aria-live="polite"');
+    expect(html).toContain('aria-relevant="additions text"');
   });
 });
 
