@@ -41,6 +41,7 @@ interface DeliveryResult {
 }
 
 const EMAIL_CHANNEL_KEY = "email";
+const STALE_CLAIM_MS = 60 * 60 * 1000;
 
 async function readDigest(env: Env, digestId: string): Promise<MessageRow | null> {
   return env.DB.prepare(
@@ -82,16 +83,17 @@ async function claimAttempt(
   digestId: string,
 ): Promise<{ id: string } | null> {
   const now = new Date().toISOString();
+  const staleBefore = new Date(Date.now() - STALE_CLAIM_MS).toISOString();
   return env.DB.prepare(
     `INSERT INTO send_attempt
        (id, workspace_id, send_target_id, digest_id, idempotency_key, status, attempted_at)
      VALUES (?, ?, ?, ?, ?, 'pending', ?)
      ON CONFLICT(idempotency_key) DO UPDATE
        SET status = 'pending', error = NULL, attempted_at = excluded.attempted_at
-       WHERE send_attempt.status = 'failed'
+       WHERE send_attempt.status = 'failed' OR (send_attempt.status = 'pending' AND send_attempt.attempted_at < ?)
      RETURNING id`,
   )
-    .bind(idempotencyKey, workspaceId, targetId, digestId, idempotencyKey, now)
+    .bind(idempotencyKey, workspaceId, targetId, digestId, idempotencyKey, now, staleBefore)
     .first<{ id: string }>();
 }
 
