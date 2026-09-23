@@ -1,5 +1,6 @@
 import { markDigestSent } from "../../app/lib/data/digest.server";
 import { claimSendAttempt, resolveSendAttempt } from "../../app/lib/data/send_attempt.server";
+import { writeUnsubscribeToken } from "../../app/lib/data/send_target.server";
 
 import { errorText, sendMessage } from "./send";
 
@@ -86,11 +87,7 @@ function newUnsubscribeToken(): string {
 
 async function ensureUnsubscribeToken(env: Env, target: TargetRow): Promise<string> {
   if (target.unsubscribe_token !== null) return target.unsubscribe_token;
-  await env.DB.prepare(
-    `UPDATE send_target SET unsubscribe_token = ? WHERE id = ? AND unsubscribe_token IS NULL`,
-  )
-    .bind(newUnsubscribeToken(), target.id)
-    .run();
+  await writeUnsubscribeToken(env.DB, { targetId: target.id, token: newUnsubscribeToken() });
   const row = await env.DB.prepare(
     `SELECT unsubscribe_token FROM send_target WHERE id = ?`,
   )
