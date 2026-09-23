@@ -57,6 +57,18 @@ const baseKeys = () => ({
   hunksKey: markKey("watch-fixture", CAPTURED_AT, "hunks", "json"),
 });
 
+const expectHunksLocateRemovals = (
+  hunks: ReturnType<typeof buildPageDiff>["hunks"],
+  beforeWords: string[],
+): void => {
+  for (const hunk of hunks) {
+    const firstRemoved = hunk.lines.find((l) => l.startsWith("-"));
+    expect(firstRemoved).toBeDefined();
+    // The hunk's own position points at the word its `-` line removed.
+    expect(beforeWords[hunk.startWord]).toBe(firstRemoved?.slice(1));
+  }
+};
+
 describe("engine 4 P3 — a real change, end to end", () => {
   beforeEach(async () => {
     await flip("off");
@@ -115,12 +127,7 @@ describe("engine 4 P3 — a real change, end to end", () => {
     expect(removed).toContain("₹499");
     expect(removed).toContain("₹2,499");
 
-    const beforeWords = before.text.split(" ");
-    for (const hunk of diff.hunks) {
-      const firstRemoved = hunk.lines.find((l) => l.startsWith("-"));
-      expect(firstRemoved).toBeDefined();
-      expect(beforeWords[hunk.startWord]).toBe(firstRemoved?.slice(1));
-    }
+    expectHunksLocateRemovals(diff.hunks, before.text.split(" "));
     expect(diff.wordDelta).toBeLessThan(-10);
   });
 
@@ -147,11 +154,7 @@ describe("engine 4 P3 — a real change, end to end", () => {
     expect(hasChanged(before.hash, after.hash)).toBe(true);
     const diff = buildPageDiff({ beforeText: before.text, afterText: after.text });
 
-    for (const hunk of diff.hunks) {
-      const firstRemoved = hunk.lines.find((l) => l.startsWith("-"));
-      expect(firstRemoved).toBeDefined();
-      expect(before.text.split(" ")[hunk.startWord]).toBe(firstRemoved?.slice(1));
-    }
+    expectHunksLocateRemovals(diff.hunks, before.text.split(" "));
 
     const keys = baseKeys();
     const { refs } = await storeMark(

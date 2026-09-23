@@ -26,8 +26,21 @@ import { markKey, storeMark } from "../../../app/lib/site/marks";
  * writes on the snapshot row, and `env.CARD_ARTIFACTS` is a real R2 binding,
  * so every "five keys, with these content types" assertion is checked against
  * real storage. The same pair is driven end to end through the real fixture
- * Worker in `tests/integration/site/site-change-diff.integration.test.ts`.
+ * Worker in `tests/integration/site/site-change-diff.test.ts`.
  */
+
+const expectHunksLocateRemovals = (
+  hunks: ReturnType<typeof buildStoredHunks>,
+  beforeWords: string[],
+): void => {
+  for (const hunk of hunks) {
+    const firstRemoved = hunk.lines.find((l) => l.startsWith("-"));
+    expect(firstRemoved).toBeDefined();
+    // The hunk's own position points at the word the `-` line removes, so the
+    // stored hunks carry the page position the packet asks for.
+    expect(firstRemoved?.slice(1)).toBe(beforeWords[hunk.startWord]);
+  }
+};
 
 /** The healthy fixture page, extracted and whitespace-normalised. */
 const HEALTHY_TEXT = `Five to Nine — fixture Track every competitor move, in one weekly brief Pricing Starter — ₹499 / month Pro — ₹1,299 / month Team — ₹2,499 / month Choose a plan and check out`;
@@ -246,14 +259,7 @@ describe("site diff — the real fixture-site text pair", () => {
     expect(diff.wordDelta).toBeLessThan(0);
     // Every stored hunk names a real page position: the word in the before
     // text at `startWord` is the word the hunk's own `-` line removed.
-    const beforeWords = HEALTHY_TEXT.split(" ");
-    for (const hunk of diff.hunks) {
-      expect(Number.isInteger(hunk.startWord)).toBe(true);
-      expect(hunk.startWord).toBeGreaterThanOrEqual(0);
-      const firstRemoved = hunk.lines.find((l) => l.startsWith("-"));
-      expect(firstRemoved).toBeDefined();
-      expect(firstRemoved?.slice(1)).toBe(beforeWords[hunk.startWord]);
-    }
+    expectHunksLocateRemovals(diff.hunks, HEALTHY_TEXT.split(" "));
   });
 
   it("names the vanished price tokens in the hunks", async () => {
@@ -324,10 +330,23 @@ describe("site diff — the mark is keys, never a body", () => {
     ).rejects.toThrow(/no changes/);
   });
 
-  it("keeps mark keys unique per role so a before and an after never collide", () => {
-    const a = markKey("w", "2026-09-22T00:00:00Z", "before-text", "txt");
-    const b = markKey("w", "2026-09-22T00:00:00Z", "after-text", "txt");
-    expect(a).not.toBe(b);
+  it("names every role's key exactly, so a retried step rewrites instead of colliding", () => {
+    // The key is deterministic from (watchId, capturedAt, role): two roles for
+    // the same watch and moment take two distinct keys, and the same watch and
+    // moment twice produces the byte-identical key, which is what makes a
+    // retried `step.do` an overwrite rather than an orphan.
+    const roles = ["before-text", "after-text", "before-shot", "after-shot", "hunks"] as const;
+    const extensions = {
+      "before-text": "txt",
+      "after-text": "txt",
+      "before-shot": "png",
+      "after-shot": "png",
+      hunks: "json",
+    } as const;
+    const keys = roles.map((role) => markKey("w", "2026-09-22T00:00:00Z", role, extensions[role]));
+    expect(new Set(keys).size).toBe(roles.length);
+    expect(keys[0]).toBe("marks/w/2026-09-22T00-00-00Z/before-text.txt");
+    expect(markKey("w", "2026-09-22T00:00:00Z", "before-text", "txt")).toBe(keys[0]);
   });
 
   it("refuses to build a key with no watch and no moment", () => {
