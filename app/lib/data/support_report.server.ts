@@ -4,6 +4,8 @@ VALUES (?, ?, ?, ?, ?)`;
 
 const DELETE_EXPIRED_REPORTS = `DELETE FROM support_report WHERE received_at < ?`;
 
+const RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+
 export interface SupportReportRow {
   id: string;
   receivedAt: string;
@@ -26,7 +28,7 @@ export async function deleteExpiredSupportReports(
   db: D1Database,
   now: Date,
 ): Promise<number> {
-  const cutoff = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString();
+  const cutoff = new Date(now.getTime() - RETENTION_MS).toISOString();
   const result = await db.prepare(DELETE_EXPIRED_REPORTS).bind(cutoff).run();
   return result.meta.changes;
 }

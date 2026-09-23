@@ -8,4 +8,4 @@ CREATE TABLE support_report (
   raw TEXT NOT NULL
 );
 
-CREATE INDEX support_report_received_at ON support_report (received_at);
+CREATE INDEX idx_support_report_received_at ON support_report (received_at);

@@ -43,13 +43,14 @@ describe("support_report writer (0509#4229)", () => {
 
   it("(b) deletes reports older than 90 days and keeps newer ones", async () => {
     await insertReport("sr-old", new Date(NOW.getTime() - 91 * DAY_MS).toISOString(), "old");
+    await insertReport("sr-edge", new Date(NOW.getTime() - 90 * DAY_MS).toISOString(), "edge");
     await insertReport("sr-new", new Date(NOW.getTime() - DAY_MS).toISOString(), "new");
 
     expect(await deleteExpiredSupportReports(env.DB, NOW)).toBe(1);
 
-    const remaining = await env.DB.prepare("SELECT id FROM support_report").all<{
+    const remaining = await env.DB.prepare("SELECT id FROM support_report ORDER BY id").all<{
       id: string;
     }>();
-    expect(remaining.results.map((r) => r.id)).toEqual(["sr-new"]);
+    expect(remaining.results.map((r) => r.id)).toEqual(["sr-edge", "sr-new"]);
   });
 });
