@@ -119,6 +119,20 @@ describe("resolveBrandName", () => {
 		expect(result).toBeNull();
 	});
 
+	it("returns null when the Wikidata body fails validation", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => Response.json({ hits: [{ label: "Gymshark" }] })),
+		);
+
+		const result = await resolveBrandName(
+			sources({ ldOrganizationName: "", ogSiteName: "", title: "" }),
+			"Gymshark",
+		);
+
+		expect(result).toBeNull();
+	});
+
 	it("returns null without calling fetch when every source and the term are empty", async () => {
 		const fetchMock = vi.fn();
 		vi.stubGlobal("fetch", fetchMock);
