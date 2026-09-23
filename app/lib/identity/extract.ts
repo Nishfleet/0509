@@ -33,7 +33,11 @@ const LINK_LIMIT = 50;
 function tryJson(raw: string): unknown {
   try {
     return JSON.parse(raw);
-  } catch {
+  } catch (err) {
+    console.error(JSON.stringify({
+      event: "ldjson-parse-failed",
+      error: err instanceof Error ? err.message : String(err),
+    }));
     return null;
   }
 }
@@ -182,11 +186,13 @@ export async function extract(html: string, pageUrl: string): Promise<Extracted>
   const socials = new Set<string>(ldSameAs);
   const navLinks: { href: string; text: string }[] = [];
   const pageHost = new URL(pageUrl).hostname;
+  let unparseableHrefs = 0;
   for (const a of anchors) {
     let resolved: URL;
     try {
       resolved = new URL(a.href, pageUrl);
     } catch {
+      unparseableHrefs += 1;
       continue;
     }
     if (SOCIAL_HOSTS.some((h) => parse(resolved.hostname).domain === h)) {
@@ -196,6 +202,9 @@ export async function extract(html: string, pageUrl: string): Promise<Extracted>
     if (resolved.hostname === pageHost || resolved.hostname.endsWith(`.${pageHost}`)) {
       navLinks.push({ href: resolved.toString(), text: a.text });
     }
+  }
+  if (unparseableHrefs > 0) {
+    console.error(JSON.stringify({ event: "anchor-href-unparseable", count: unparseableHrefs, pageUrl }));
   }
 
   const gtm = /GTM-[A-Z0-9]{4,}/.exec(html);

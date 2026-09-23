@@ -1,4 +1,3 @@
-import { env } from "cloudflare:workers";
 import { useState } from "react";
 import { data, Form, redirect, useNavigation } from "react-router";
 import { z } from "zod";
@@ -7,10 +6,9 @@ import { IdentityCardFields } from "../components/identity-card";
 import { authClient } from "../lib/auth-client";
 import { confirmedSelfEntityForWorkspace, readSelfEntityForWorkspace } from "../lib/data/entity.server";
 import { readOnboardingRunForWorkspace } from "../lib/data/onboarding-run.server";
-import { readHomeUrlForEntity } from "../lib/data/page.server";
-import { priorConfirmationExists, recordIdentityConfirmation } from "../lib/data/user-decision.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { buildCardFromRequest, cardFromIdentityJson } from "../lib/identity/card.server";
+import { confirmIdentityCard } from "../lib/identity/confirm.server";
 import type { CardResult } from "../lib/identity/card-types";
 import { requireSession } from "../lib/require-session.server";
 import type { Route } from "./+types/onboarding.identity";
@@ -63,21 +61,15 @@ export async function action({ request }: Route.ActionArgs) {
   const run = await readOnboardingRunForWorkspace(card.onboardingRunId, workspaceId);
   if (!run) throw new Response("onboarding run not found for this workspace", { status: 404 });
 
-  if (!(await priorConfirmationExists(workspaceId, entity.id))) {
-    const instanceId = `identity-${card.onboardingRunId}`;
-    const existing = await env.IDENTITY_TAIL.get(instanceId).then((h) => h.status()).catch(() => null);
-    if (existing === null) {
-      await env.IDENTITY_TAIL.create({
-        id: instanceId,
-        params: {
-          workspaceId, userId: session.user.id, entityId: entity.id,
-          onboardingRunId: card.onboardingRunId, domain: entity.domain,
-          homepageUrl: await readHomeUrlForEntity(entity.id), publicSubject: card.publicSubject,
-        },
-      });
-    }
-    await recordIdentityConfirmation({ workspaceId, userId: session.user.id, entityId: entity.id, runId: card.onboardingRunId, edits });
-  }
+  await confirmIdentityCard({
+    workspaceId,
+    userId: session.user.id,
+    entityId: entity.id,
+    onboardingRunId: card.onboardingRunId,
+    domain: entity.domain,
+    publicSubject: card.publicSubject,
+    edits,
+  });
   return redirect("/app/competitors");
 }
 
@@ -90,12 +82,19 @@ export default function Onboarding({ loaderData, actionData }: Route.ComponentPr
 
   async function addPasskey() {
     setPasskeyState("working");
-    const result = await authClient.passkey.addPasskey().catch(() => null);
-    if (result && !result.error) {
+    let result: Awaited<ReturnType<typeof authClient.passkey.addPasskey>>;
+    try {
+      result = await authClient.passkey.addPasskey();
+    } catch (err) {
+      console.error(JSON.stringify({ event: "passkey-add-failed", error: err instanceof Error ? err.message : String(err) }));
+      setPasskeyState("failed");
+      return;
+    }
+    if (!result.error) {
       setPasskeyState("added");
       return;
     }
-    const code = result?.error && "code" in result.error ? result.error.code : "";
+    const code = "code" in result.error ? result.error.code : "";
     setPasskeyState(code === "ERROR_CEREMONY_ABORTED" ? "idle" : "failed");
   }
 
