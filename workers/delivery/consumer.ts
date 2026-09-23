@@ -1,3 +1,6 @@
+import { markDigestSent } from "../../app/lib/data/digest.server";
+import { claimSendAttempt, resolveSendAttempt } from "../../app/lib/data/send_attempt.server";
+
 import { errorText, sendMessage } from "./send";
 
 class PayloadError extends Error {
@@ -75,43 +78,6 @@ async function isSuppressed(env: Env, address: string): Promise<boolean> {
   return row !== null;
 }
 
-async function claimAttempt(
-  env: Env,
-  idempotencyKey: string,
-  workspaceId: string,
-  targetId: string,
-  digestId: string,
-): Promise<{ id: string } | null> {
-  const now = new Date().toISOString();
-  return env.DB.prepare(
-    `INSERT INTO send_attempt
-       (id, workspace_id, send_target_id, digest_id, idempotency_key, status, attempted_at)
-     VALUES (?, ?, ?, ?, ?, 'pending', ?)
-     ON CONFLICT(idempotency_key) DO UPDATE
-       SET status = 'pending', error = NULL, attempted_at = excluded.attempted_at
-       WHERE send_attempt.status = 'failed'
-     RETURNING id`,
-  )
-    .bind(idempotencyKey, workspaceId, targetId, digestId, idempotencyKey, now)
-    .first<{ id: string }>();
-}
-
-async function resolveAttempt(env: Env, attemptId: string, outcome: "sent" | "failed", error: string | null): Promise<void> {
-  await env.DB.prepare(
-    `UPDATE send_attempt SET status = ?, error = ? WHERE id = ?`,
-  )
-    .bind(outcome, error, attemptId)
-    .run();
-}
-
-async function markDigestSent(env: Env, digestId: string): Promise<void> {
-  await env.DB.prepare(
-    `UPDATE digest SET status = 'sent', sent_at = ? WHERE id = ?`,
-  )
-    .bind(new Date().toISOString(), digestId)
-    .run();
-}
-
 function newUnsubscribeToken(): string {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
@@ -181,7 +147,12 @@ export async function deliver(env: Env, message: DeliveryMessage): Promise<Deliv
   }
 
   const idempotencyKey = `digest:${digest.id}:${target.id}`;
-  const claim = await claimAttempt(env, idempotencyKey, digest.workspace_id, target.id, digest.id);
+  const claim = await claimSendAttempt(env.DB, {
+    idempotencyKey,
+    workspaceId: digest.workspace_id,
+    targetId: target.id,
+    digestId: digest.id,
+  });
   if (!claim) {
     return { outcome: "duplicate", attempt_id: null, idempotency_key: idempotencyKey };
   }
@@ -192,14 +163,14 @@ export async function deliver(env: Env, message: DeliveryMessage): Promise<Deliv
     const email = render(digest, target.target_value, token);
     const result = await sendMessage(env.EMAIL, email);
     sent = result.outcome === "sent";
-    await resolveAttempt(env, claim.id, result.outcome, result.error);
+    await resolveSendAttempt(env.DB, claim.id, result.outcome, result.error);
     if (result.outcome === "sent") {
-      await markDigestSent(env, digest.id);
+      await markDigestSent(env.DB, digest.id);
     }
     return { outcome: result.outcome, attempt_id: claim.id, idempotency_key: idempotencyKey };
   } catch (cause) {
     if (sent) throw cause;
-    await resolveAttempt(env, claim.id, "failed", errorText(cause));
+    await resolveSendAttempt(env.DB, claim.id, "failed", errorText(cause));
     return { outcome: "failed", attempt_id: claim.id, idempotency_key: idempotencyKey };
   }
 }
