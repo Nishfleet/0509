@@ -12,7 +12,7 @@ export function StepBar({ current }: { current: 1 | 2 | 3 }): ReactElement {
           return (
             <li
               key={label}
-              {...(active ? { "aria-current": "step" as const } : {})}
+              aria-current={active ? "step" : undefined}
               className={active ? "border-b-2 border-current" : "opacity-60"}
             >
               {step} {label}
