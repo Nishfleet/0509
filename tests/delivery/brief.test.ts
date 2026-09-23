@@ -569,6 +569,22 @@ describe("degraded sources", () => {
     );
     expect(parsed.checked.degraded_sources).toEqual([{ key: "meta", last_landed_at: null }]);
   });
+
+  it("keeps a named source's last-landed time when the same key is also listed", () => {
+    const parsed = parseBriefPayload(
+      JSON.stringify({
+        ...BRIEF_WINDOW,
+        checked: {
+          degraded_sources: [{ key: "meta", last_landed_at: "2026-09-19T08:00:00.000Z" }],
+          degraded_source_keys: ["meta", "reddit"],
+        },
+      }),
+    );
+    expect(parsed.checked.degraded_sources).toEqual([
+      { key: "meta", last_landed_at: "2026-09-19T08:00:00.000Z" },
+      { key: "reddit", last_landed_at: null },
+    ]);
+  });
 });
 
 describe("the subject line", () => {
