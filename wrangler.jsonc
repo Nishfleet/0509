@@ -85,7 +85,7 @@
   // the doc picks it: the cache is read-mostly, tolerant of the 60-second
   // propagation window and never same-key hot (docs/REBUILD-STACK.md §4.5).
   //
-  // No id on purpose, matching the fixture-site and e2e-inbox KV bindings:
+  // No id on purpose, matching the fixture-site KV binding (also id-less):
   // wrangler's deploy-time resource provisioning creates the namespace on
   // first deploy and inherits it from the deployed Worker's settings on later
   // ones. Creating it here rather than by hand keeps the namespace id out of
