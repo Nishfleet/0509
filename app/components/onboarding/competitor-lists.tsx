@@ -78,9 +78,9 @@ export function MaybeCompetitorList({ rows }: { rows: readonly MaybeCompetitorRo
                 </button>
               </Form>
             </div>
-            <p className="mt-2 font-sans text-body-sm text-ink-soft">
-              {maybe.reason ?? "Still checking this one."}
-            </p>
+            {maybe.reason ? (
+              <p className="mt-2 font-sans text-body-sm text-ink-soft">{maybe.reason}</p>
+            ) : null}
             {maybe.p !== null ? (
               <p className="mt-1 font-mono text-meta text-ink-faint">p {maybe.p.toFixed(2)}</p>
             ) : null}

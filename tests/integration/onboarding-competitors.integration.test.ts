@@ -3,11 +3,11 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   addUserCompetitor,
-  domainFromInput,
   listOnCompetitors,
 } from "../../app/lib/data/entity.server";
 import { markCompetitorsReady } from "../../app/lib/data/onboarding-run.server";
 import { acceptSuggestion, listMaybeCompetitors } from "../../app/lib/data/suggestion.server";
+import { domainFromInput } from "../../app/lib/subject.server";
 
 // Issue #3999's write and read paths against real workerd D1 with
 // migrations/0001_rebuild.sql applied. The screen only renders these rows, so
@@ -132,6 +132,25 @@ describe("listOnCompetitors / listMaybeCompetitors", () => {
     expect(on[0]?.name).toBe("Vuori");
     expect(on[0]?.reason).toBe("same DTC activewear buyer");
   });
+
+  it("lists one ON row per entity when several accepted suggestions point at it", async () => {
+    const entityId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO entity (id, workspace_id, role, domain, name, origin, state, created_at)
+       VALUES (?, ?, 'competitor', 'gymshark.com', 'Gymshark', 'auto', 'on', ?)`,
+    )
+      .bind(entityId, WORKSPACE_ID, NOW)
+      .run();
+    const first = await seedSuggestion({ domain: "gymshark.com", entityId, status: "accepted", reason: "first verdict" });
+    const second = await seedSuggestion({ domain: "gymshark.net", entityId, status: "accepted", reason: "second verdict" });
+    await env.DB.prepare("UPDATE suggestion SET decided_at = ? WHERE id = ?").bind("2026-09-23T08:01:00.000Z", first).run();
+    await env.DB.prepare("UPDATE suggestion SET decided_at = ? WHERE id = ?").bind("2026-09-23T08:02:00.000Z", second).run();
+
+    const on = await listOnCompetitors(WORKSPACE_ID);
+    expect(on).toHaveLength(1);
+    expect(on[0]?.id).toBe(entityId);
+    expect(on[0]?.reason).toBe("second verdict");
+  });
 });
 
 describe("addUserCompetitor", () => {
@@ -151,6 +170,14 @@ describe("addUserCompetitor", () => {
 
     const suggestion = await suggestionRow(suggestionId);
     expect(suggestion).toMatchObject({ status: "accepted", decided_by: "user", entity_id: entityId });
+  });
+
+  it("leaves a dismissed suggestion for the same domain dismissed", async () => {
+    const dismissed = await seedSuggestion({ domain: "gymshark.com", status: "dismissed" });
+    await addUserCompetitor(WORKSPACE_ID, { domain: "gymshark.com", name: null, now: NOW });
+
+    expect(await entityRow("gymshark.com")).toMatchObject({ state: "on", origin: "manual" });
+    expect((await suggestionRow(dismissed))?.status).toBe("dismissed");
   });
 
   it("is idempotent for the same domain and re-on's a dismissed entity", async () => {
@@ -205,6 +232,22 @@ describe("acceptSuggestion", () => {
     const foreign = await seedSuggestion({ workspaceId: "ws-other", domain: "elsewhere.com" });
     expect(await acceptSuggestion(WORKSPACE_ID, foreign)).toBe(false);
     expect(await entityRow("elsewhere.com")).toBeNull();
+  });
+
+  it("fails loudly when the linked entity is not a row in this workspace", async () => {
+    await seedWorkspace("ws-other", "user-2");
+    const foreignEntityId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO entity (id, workspace_id, role, domain, name, origin, state, created_at)
+       VALUES (?, 'ws-other', 'competitor', 'gymshark.com', 'Gymshark', 'auto', 'off', ?)`,
+    )
+      .bind(foreignEntityId, NOW)
+      .run();
+    const suggestionId = await seedSuggestion({ domain: "gymshark.com", entityId: foreignEntityId });
+
+    await expect(acceptSuggestion(WORKSPACE_ID, suggestionId)).rejects.toThrow(/not a row in workspace/);
+    expect((await suggestionRow(suggestionId))?.status).toBe("pending");
+    expect(await entityRow("gymshark.com")).toBeNull();
   });
 });
 

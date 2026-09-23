@@ -4,14 +4,13 @@ import { useEffect } from "react";
 import { Form, Link, redirect, useRevalidator } from "react-router";
 
 import { MaybeCompetitorList, OnCompetitorList } from "../components/onboarding/competitor-lists";
-import { StepBar } from "../components/onboarding/step-bar";
-import { addUserCompetitor, domainFromInput, listOnCompetitors } from "../lib/data/entity.server";
+import { addUserCompetitor, listOnCompetitors } from "../lib/data/entity.server";
 import { markCompetitorsReady } from "../lib/data/onboarding-run.server";
 import { acceptSuggestion, listMaybeCompetitors } from "../lib/data/suggestion.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { requireSession } from "../lib/require-session.server";
+import { domainFromInput } from "../lib/subject.server";
 
-const STEPS = ["one input", "your card", "who you're up against"] as const;
 const POLL_MS = 5000;
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -64,7 +63,6 @@ export default function OnboardingCompetitors({ loaderData, actionData }: Route.
 
   return (
     <main className="mx-auto flex min-h-svh w-full max-w-[52rem] flex-col gap-6 px-6 py-12 sm:px-10 sm:py-16">
-      <StepBar steps={STEPS} current={3} />
       <h1 className="font-display text-display-2 font-extrabold uppercase text-ink">
         Here's who you're up against.
       </h1>

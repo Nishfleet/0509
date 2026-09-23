@@ -10,7 +10,12 @@ export interface OnCompetitor {
 const SELECT_ON_COMPETITORS = `SELECT e.id, e.domain, COALESCE(e.name, e.domain) AS name,
   COALESCE(s.verdict_reason, e.state_reason) AS reason
 FROM entity e
-LEFT JOIN suggestion s ON s.entity_id = e.id AND s.kind = 'add'
+LEFT JOIN suggestion s ON s.id = (
+  SELECT s2.id FROM suggestion s2
+  WHERE s2.entity_id = e.id AND s2.kind = 'add' AND s2.status = 'accepted'
+  ORDER BY s2.decided_at DESC, s2.created_at DESC, s2.id DESC
+  LIMIT 1
+)
 WHERE e.workspace_id = ? AND e.role = 'competitor' AND e.state = 'on'
 ORDER BY e.created_at ASC, e.id ASC`;
 
@@ -30,19 +35,11 @@ WHERE id = ? AND workspace_id = ?`;
 
 const ACCEPT_SUGGESTION_FOR_DOMAIN = `UPDATE suggestion
 SET status = 'accepted', decided_by = 'user', decided_at = ?, entity_id = ?
-WHERE workspace_id = ? AND candidate_domain = ?`;
+WHERE workspace_id = ? AND candidate_domain = ? AND status = 'pending'`;
 
 export async function listOnCompetitors(workspaceId: string): Promise<OnCompetitor[]> {
   const rows = await env.DB.prepare(SELECT_ON_COMPETITORS).bind(workspaceId).all<OnCompetitor>();
   return rows.results;
-}
-
-export function domainFromInput(input: string): string | null {
-  const trimmed = input.trim().toLowerCase();
-  const withoutScheme = trimmed.replace(/^[a-z][a-z0-9+.-]*:\/\//, "").replace(/^www\./, "");
-  const host = (withoutScheme.split(/[\s/?#@]/)[0] ?? "").replace(/^\.+|\.+$/g, "");
-  if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(host)) return null;
-  return host;
 }
 
 export async function setCompetitorOn(
@@ -61,7 +58,12 @@ export async function setCompetitorOn(
     const turned = await env.DB.prepare(TURN_ON_EXISTING)
       .bind(at, input.reason, input.entityId, workspaceId)
       .run();
-    if (turned.meta.changes > 0) return input.entityId;
+    if (turned.meta.changes === 0) {
+      throw new Error(
+        `suggestion points at entity ${input.entityId}, which is not a row in workspace ${workspaceId}`,
+      );
+    }
+    return input.entityId;
   }
   const row = await env.DB.prepare(UPSERT_ON_COMPETITOR)
     .bind(crypto.randomUUID(), workspaceId, input.domain, input.name, input.origin, at, at, input.reason, at)
