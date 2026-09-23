@@ -7,5 +7,8 @@
     { "binding": "CARD_ARTIFACTS", "bucket_name": "0509-snapshots-test" },
     { "binding": "SNAPSHOTS", "bucket_name": "0509-snapshots-test" }
   ],
-  "kv_namespaces": [{ "binding": "RESOLVE_CACHE", "id": "resolve-cache-test" }]
+  "kv_namespaces": [
+    { "binding": "IDENTITY_CACHE", "id": "test" },
+    { "binding": "RESOLVE_CACHE", "id": "resolve-cache-test" }
+  ]
 }
