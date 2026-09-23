@@ -101,6 +101,7 @@ function payload(overrides: Partial<BriefPayload> = {}): BriefPayload {
       new_ad_count: 9,
       source_keys: ["meta", "google_news", "ddg"],
       degraded_source_keys: [],
+      degraded_sources: [],
     },
     next_brief_at: "2026-09-28T12:00:00.000Z",
     ...overrides,
@@ -518,6 +519,71 @@ describe("parseBriefPayload", () => {
   it("ignores a bad movement instead of rendering NaN", () => {
     const parsed = parseBriefPayload(JSON.stringify({ ...JSON.parse(stored), headline_movement: "x" }));
     expect(parsed.headline_movement).toBeNull();
+  });
+});
+
+const BRIEF_WINDOW = {
+  workspace_id: "ws_1",
+  timezone: "UTC",
+  period_start: "2026-09-14T12:00:00.000Z",
+  period_end: "2026-09-21T12:00:00.000Z",
+  why_line: "x",
+};
+
+describe("degraded sources", () => {
+  it("keeps a degraded source and the time it last landed", () => {
+    const parsed = parseBriefPayload(
+      JSON.stringify({
+        ...BRIEF_WINDOW,
+        checked: {
+          degraded_sources: [{ key: "reddit", last_landed_at: "2026-09-19T08:00:00.000Z" }],
+        },
+      }),
+    );
+    expect(parsed.checked.degraded_sources).toEqual([
+      { key: "reddit", last_landed_at: "2026-09-19T08:00:00.000Z" },
+    ]);
+  });
+
+  it("names a key-only degraded source with no last-landed time", () => {
+    const parsed = parseBriefPayload(
+      JSON.stringify({
+        ...BRIEF_WINDOW,
+        checked: { degraded_source_keys: ["reddit"] },
+      }),
+    );
+    expect(parsed.checked.degraded_sources).toEqual([{ key: "reddit", last_landed_at: null }]);
+  });
+
+  it("drops an empty key and a blank last-landed time", () => {
+    const parsed = parseBriefPayload(
+      JSON.stringify({
+        ...BRIEF_WINDOW,
+        checked: {
+          degraded_sources: [
+            { key: "", last_landed_at: "x" },
+            { key: "meta", last_landed_at: "" },
+          ],
+        },
+      }),
+    );
+    expect(parsed.checked.degraded_sources).toEqual([{ key: "meta", last_landed_at: null }]);
+  });
+
+  it("keeps a named source's last-landed time when the same key is also listed", () => {
+    const parsed = parseBriefPayload(
+      JSON.stringify({
+        ...BRIEF_WINDOW,
+        checked: {
+          degraded_sources: [{ key: "meta", last_landed_at: "2026-09-19T08:00:00.000Z" }],
+          degraded_source_keys: ["meta", "reddit"],
+        },
+      }),
+    );
+    expect(parsed.checked.degraded_sources).toEqual([
+      { key: "meta", last_landed_at: "2026-09-19T08:00:00.000Z" },
+      { key: "reddit", last_landed_at: null },
+    ]);
   });
 });
 
