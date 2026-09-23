@@ -35,8 +35,11 @@ describe("extractIdentity", () => {
   });
 
   it("skips an ld+json block that is not JSON", async () => {
-    await expect(
-      extractIdentity('<script type="application/ld+json">{not json</script>', pageUrl),
-    ).resolves.toBeDefined();
+    const card = await extractIdentity(
+      '<script type="application/ld+json">{not json</script>',
+      pageUrl,
+    );
+
+    expect(card.nameSources.ldOrganizationName).toBeNull();
   });
 });

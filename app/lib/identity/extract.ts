@@ -184,14 +184,8 @@ function collectSocials(sameAs: readonly string[], anchors: readonly string[]): 
   for (const href of [...sameAs, ...anchors]) {
     const platform = platformForUrl(href);
     if (platform === null || seen.has(platform)) continue;
-    let url: string;
-    try {
-      url = new URL(href).href;
-    } catch {
-      continue;
-    }
     seen.add(platform);
-    socials.push({ platform, url });
+    socials.push({ platform, url: new URL(href).href });
   }
   return socials;
 }
@@ -247,7 +241,7 @@ export async function extractIdentity(html: string, pageUrl: string): Promise<Id
         state.ldPending = "";
       },
       text(chunk) {
-        state.ldPending ??= "";
+        if (state.ldPending === null) return;
         state.ldPending += chunk.text;
         if (!chunk.lastInTextNode) return;
         state.ldBlocks.push(state.ldPending);
