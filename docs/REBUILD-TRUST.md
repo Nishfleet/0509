@@ -64,7 +64,7 @@ error (ce5fed17d).
 Her verification skill has two halves: a **reproducible way to drive the real
 application**, and a **feature map** that tells the agent what the application
 even is. We need both. **Decision, 2026-09-22 (#4251):** both halves ship as a
-skill — `.agents/skills/verify/SKILL.md`, landed via #4331 — on Nish's word:
+skill — `.agents/skills/verify/SKILL.md`, landed via #4341 — on Nish's word:
 *"make it exactly as described."* The driver is Google's stock
 `chrome-devtools` CLI from the `chrome-devtools-mcp` package, not code we
 wrote, so scripts-to-zero still holds.
