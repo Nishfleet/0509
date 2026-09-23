@@ -401,6 +401,38 @@ describe("send lane (0509#3979)", () => {
     expect(rec.sent).toHaveLength(1);
   });
 
+  it("stamps a stable RFC 8058 unsubscribe token on every send", async () => {
+    const rec = recorder();
+    const firstId = await seedDigest("pending", {
+      html: "<p>You are #2 of 9 this week.</p>",
+      text: "You are #2 of 9 this week.",
+    });
+
+    const first = await deliver(envWith(bindingFor(rec)), message(firstId));
+    expect(first.outcome).toBe("sent");
+
+    const stored = await env.DB.prepare(
+      `SELECT unsubscribe_token FROM send_target WHERE id = 'reader-target'`,
+    ).first<{ unsubscribe_token: string | null }>();
+    const token = stored?.unsubscribe_token ?? "";
+    expect(token).toMatch(/^[0-9a-f]{64}$/);
+    expect(rec.sent[0].headers).toEqual({
+      "List-Unsubscribe": `<https://0509.io/u/${token}>`,
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    });
+
+    const secondId = await seedDigest("pending", {
+      html: "<p>You are #3 of 9 this week.</p>",
+      text: "You are #3 of 9 this week.",
+    });
+    const second = await deliver(envWith(bindingFor(rec)), message(secondId));
+    expect(second.outcome).toBe("sent");
+    expect(rec.sent[1].headers).toEqual({
+      "List-Unsubscribe": `<https://0509.io/u/${token}>`,
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    });
+  });
+
   it("sendOrThrow rejects a provider failure and resolves a delivered send", async () => {
     const rec = recorder();
     rec.fail = new Error("magic-link rejected");
