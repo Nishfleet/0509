@@ -101,3 +101,18 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Deploy the support inbox Worker
+        # The user-report door (0509#4229, docs/USER-REPORTS.md): the support
+        # address lands in workers/support-inbox.ts once the Email Routing rule
+        # moves (child 4, gated on Nish). Runs AFTER the app smoke so it can
+        # never stand between a good app deploy and its verification.
+        # continue-on-error for the same reason as the fixture-site step: this
+        # job carries `environment: production` and its status gates ci.yml's
+        # e2e-production and lighthouse jobs. Its D1 table (`support_report`)
+        # comes from the `Apply D1 migrations` step earlier in this job.
+        continue-on-error: true
+        run: npx wrangler deploy --config workers/support-inbox.wrangler.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
