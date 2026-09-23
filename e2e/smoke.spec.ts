@@ -13,11 +13,11 @@ import { expect, test } from "@playwright/test";
 // product. The gated surfaces are J1-J14 in docs/REBUILD-DONE.md and they land
 // with the engines that fill those tables.
 //
-// Nothing below pins human-facing copy. A merge-queue proof that asserts exact
-// strings turns every copy edit into a red gate (2026-09-21T16:03Z: runs
-// 35623125629 and 35623124105 failed on the landing h1 copy, fixed by
-// 5aa0e76a9). What is asserted is the contract: the element exists, is
-// labelled, is enabled, or points at the right destination.
+// The landing h1 is the one pinned string (DESIGN.md §2.1). A merge-queue proof
+// that asserts other exact strings turns every copy edit into a red gate
+// (2026-09-21T16:03Z: runs 35623125629 and 35623124105 failed on the old landing
+// h1, fixed by 5aa0e76a9). Everywhere else the contract is: the element exists,
+// is labelled, is enabled, or points at the right destination.
 
 test("the landing page renders its headline and its contact link", async ({ page }) => {
   const response = await page.goto("/");
@@ -25,7 +25,7 @@ test("the landing page renders its headline and its contact link", async ({ page
 
   const headline = page.getByRole("heading", { level: 1 });
   await expect(headline).toBeVisible();
-  await expect(headline).not.toBeEmpty();
+  await expect(headline).toHaveText("Know where you stand. And who's gaining on you.");
   // The contract is the destination (the support address) plus a real
   // accessible name — the display text itself stays unasserted.
   const contact = page.locator('a[href="mailto:support@0509.io"]');
