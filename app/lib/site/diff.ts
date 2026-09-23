@@ -1,13 +1,23 @@
-import { structuredPatch } from "diff";
+import { diffWords, structuredPatch } from "diff";
 
-interface DiffHunk {
+interface WordChange {
   before: string;
   after: string;
   atWord: number;
 }
 
+interface StoredHunk {
+  oldStart: number;
+  oldLines: number;
+  newStart: number;
+  newLines: number;
+  lines: string[];
+  atWord: number;
+}
+
 export interface PageDiff {
-  hunks: DiffHunk[];
+  changes: WordChange[];
+  hunks: StoredHunk[];
   addedWords: number;
   removedWords: number;
 }
@@ -19,18 +29,52 @@ export function countWords(value: string): number {
   return trimmed === "" ? 0 : trimmed.split(/\s+/).length;
 }
 
-function toWordLines(text: string): string {
-  const trimmed = text.trim();
-  if (trimmed === "") return "";
-  return `${trimmed.split(/\s+/).join("\n")}\n`;
+function words(value: string): string[] {
+  const trimmed = value.trim();
+  return trimmed === "" ? [] : trimmed.split(/\s+/);
+}
+
+function toWordLines(value: string): string {
+  const list = words(value);
+  return list.length === 0 ? "" : `${list.join("\n")}\n`;
 }
 
 export function diffPageText(before: string, after: string): PageDiff {
   if (before === after) {
-    return { hunks: [], addedWords: 0, removedWords: 0 };
+    return { changes: [], hunks: [], addedWords: 0, removedWords: 0 };
   }
 
-  const patch = structuredPatch(
+  const changes: WordChange[] = [];
+  let atWord = 0;
+  let removed: string[] = [];
+  let added: string[] = [];
+  let changeAt = 0;
+
+  const flush = () => {
+    if (removed.length === 0 && added.length === 0) return;
+    changes.push({ before: removed.join(" "), after: added.join(" "), atWord: changeAt });
+    removed = [];
+    added = [];
+  };
+
+  for (const part of diffWords(before, after)) {
+    if (part.removed) {
+      if (removed.length === 0 && added.length === 0) changeAt = atWord;
+      removed.push(...words(part.value));
+      atWord += countWords(part.value);
+      continue;
+    }
+    if (part.added) {
+      if (removed.length === 0 && added.length === 0) changeAt = atWord;
+      added.push(...words(part.value));
+      continue;
+    }
+    flush();
+    atWord += countWords(part.value);
+  }
+  flush();
+
+  const hunks: StoredHunk[] = structuredPatch(
     "before",
     "after",
     toWordLines(before),
@@ -38,39 +82,26 @@ export function diffPageText(before: string, after: string): PageDiff {
     "",
     "",
     { context: CONTEXT_WORDS },
-  );
-
-  const hunks: DiffHunk[] = [];
-  let addedWords = 0;
-  let removedWords = 0;
-
-  for (const hunk of patch.hunks) {
-    const removed: string[] = [];
-    const added: string[] = [];
-    let atWord = hunk.oldStart - 1;
-
+  ).hunks.map((hunk) => {
+    let hunkAtWord = hunk.oldStart - 1;
     for (const line of hunk.lines) {
-      if (line.startsWith("-")) {
-        removed.push(line.slice(1));
-        continue;
-      }
-      if (line.startsWith("+")) {
-        added.push(line.slice(1));
-        continue;
-      }
-      if (removed.length === 0 && added.length === 0) {
-        atWord += 1;
-      }
+      if (!line.startsWith(" ")) break;
+      hunkAtWord += 1;
     }
+    return {
+      oldStart: hunk.oldStart,
+      oldLines: hunk.oldLines,
+      newStart: hunk.newStart,
+      newLines: hunk.newLines,
+      lines: hunk.lines,
+      atWord: hunkAtWord,
+    };
+  });
 
-    if (removed.length === 0 && added.length === 0) continue;
+  const addedWords = changes.reduce((total, change) => total + countWords(change.after), 0);
+  const removedWords = changes.reduce((total, change) => total + countWords(change.before), 0);
 
-    hunks.push({ before: removed.join(" "), after: added.join(" "), atWord });
-    removedWords += removed.length;
-    addedWords += added.length;
-  }
-
-  return { hunks, addedWords, removedWords };
+  return { changes, hunks, addedWords, removedWords };
 }
 
 export function isEmptyDiff(diff: PageDiff): boolean {

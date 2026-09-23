@@ -60,14 +60,24 @@ export function buildStoredDiff(opts: {
   };
 }
 
-const diffHunkSchema = z.object({
+const wordChangeSchema = z.object({
   before: z.string(),
   after: z.string(),
   atWord: z.number().int().nonnegative(),
 });
 
+const storedHunkSchema = z.object({
+  oldStart: z.number().int(),
+  oldLines: z.number().int(),
+  newStart: z.number().int(),
+  newLines: z.number().int(),
+  lines: z.array(z.string()),
+  atWord: z.number().int().nonnegative(),
+});
+
 const pageDiffSchema = z.object({
-  hunks: z.array(diffHunkSchema),
+  changes: z.array(wordChangeSchema),
+  hunks: z.array(storedHunkSchema),
   addedWords: z.number().int().nonnegative(),
   removedWords: z.number().int().nonnegative(),
 });
@@ -79,19 +89,17 @@ export interface SiteArtifacts {
   getDiffHunks(key: string): Promise<PageDiff | null>;
 }
 
-const ONE_YEAR = "public, max-age=31536000";
-
 export function r2SiteArtifacts(bucket: R2Bucket): SiteArtifacts {
   return {
     async putText(key, body, capturedAt) {
       await bucket.put(key, body, {
-        httpMetadata: { contentType: "text/plain; charset=utf-8", cacheControl: ONE_YEAR },
+        httpMetadata: { contentType: "text/plain; charset=utf-8" },
         customMetadata: { captured_at: capturedAt },
       });
     },
     async putDiffHunks(key, diff, capturedAt) {
       await bucket.put(key, JSON.stringify(diff), {
-        httpMetadata: { contentType: "application/json; charset=utf-8", cacheControl: ONE_YEAR },
+        httpMetadata: { contentType: "application/json; charset=utf-8" },
         customMetadata: { captured_at: capturedAt },
       });
     },

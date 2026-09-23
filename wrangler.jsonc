@@ -73,13 +73,7 @@
   // the card objects stay public by serving through the route, while the
   // bucket itself is not exposed as a domain.
   "r2_buckets": [
-    { "binding": "CARD_ARTIFACTS", "bucket_name": "0509-snapshots" },
-    // Site-change artifacts (site-change engine, #3879 packet P3): the raw
-    // extracted texts, the screenshot pairs and the diff-hunks JSON, under a
-    // `site/` prefix on the same 0509-snapshots bucket as the card artifacts.
-    // Its one-year expiry is docs/engines/site-change.md §"Failure modes",
-    // tracked as its own guardrails work rather than carried on this binding.
-    { "binding": "SITE_ARTIFACTS", "bucket_name": "0509-snapshots" }
+    { "binding": "CARD_ARTIFACTS", "bucket_name": "0509-snapshots" }
   ],
 
   // Browser Rendering: brand pages bot-gate a plain workerd fetch, so every
