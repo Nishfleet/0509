@@ -69,7 +69,7 @@ export default function Privacy() {
           className="font-display text-ink text-base font-bold tracking-[-0.03em]"
           href="/"
         >
-          05<span className="bg-accent text-on-accent px-[5px]">09</span>
+          05<span className="bg-green text-on-green px-[5px]">09</span>
         </a>
         <h1 className="font-display mt-8 text-[clamp(1.75rem,3.6vw,2.9rem)] leading-[1.15] font-semibold tracking-[-0.02em]">
           Privacy
