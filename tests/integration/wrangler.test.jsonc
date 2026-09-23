@@ -3,5 +3,9 @@
   "compatibility_date": "2026-09-16",
   "main": "../../workers/app.ts",
   "d1_databases": [{ "binding": "DB", "database_name": "0509-test", "database_id": "test" }],
-  "r2_buckets": [{ "binding": "CARD_ARTIFACTS", "bucket_name": "0509-snapshots-test" }]
+  "r2_buckets": [
+    { "binding": "CARD_ARTIFACTS", "bucket_name": "0509-snapshots-test" },
+    { "binding": "SHOTS", "bucket_name": "0509-snapshots-test" }
+  ],
+  "images": { "binding": "IMAGES" }
 }

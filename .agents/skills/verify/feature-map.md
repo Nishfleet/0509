@@ -46,6 +46,7 @@ state.
 | `/app/settings` | `app/routes/app.settings.tsx` | no link yet — type the URL; keyboard: — | Workspace settings. Links to the public card. | **J13**, **J14** |
 | `/app/settings/card` | `app/routes/settings.card.tsx` | the "Public card" link on `/app/settings`; `Tab` to the **Turn the public card on** button (role `button`), `Enter` | The public-card switch: turn it on (which mints an opaque URL), copy the link, rotate the URL, turn it off. Turning it off is what the public route's 404 is graded on — the edge copy expires on its own inside a minute, which is the contract's "404 within a minute". | `tests/integration/card/public-card.integration.test.ts` — the writer's publish, rotate, unpublish and two-workspace uniqueness against real D1 |
 | `/onboarding` | `app/routes/onboarding.tsx` | the first signed-in request, when the workspace has no self entity. `/app` redirects here. A self entity sends this loader back to `/app`; the input is focused | One input, placeholder "your website, or a handle", and the signed-in email. "Add a passkey" runs the same register ceremony as Home. The input does not post yet; saving the subject is #3996. | **J1** — `e2e/j1-magic-link.spec.ts`; the passkey control is **J2** — `e2e/j2-passkey.spec.ts` |
+| `/app/shots/*` | `app/routes/app.shots.$.ts` | type the URL while signed in; no link yet; keyboard: — | Session-gated. Returns the workspace's own `shot/` object resized to an allowed width, 404 otherwise. | `tests/integration/shot/serve-shot.integration.test.ts` |
 
 ## Not a route
 

@@ -73,8 +73,13 @@
   // the card objects stay public by serving through the route, while the
   // bucket itself is not exposed as a domain.
   "r2_buckets": [
-    { "binding": "CARD_ARTIFACTS", "bucket_name": "0509-snapshots" }
+    { "binding": "CARD_ARTIFACTS", "bucket_name": "0509-snapshots" },
+    // Before-and-after screenshots under shot/<workspace_id>/ (docs/REBUILD-GUARDRAILS.md, one-year prefix), served by /app/shots/* (#4511, parent #4018).
+    { "binding": "SHOTS", "bucket_name": "0509-snapshots" }
   ],
+
+  // Resizes shot/ captures for the capture plate (DESIGN.md §10).
+  "images": { "binding": "IMAGES" },
 
   // Browser Rendering: brand pages bot-gate a plain workerd fetch, so every
   // arbitrary-homepage read goes through real Chrome. Measured ~7 s per ads
