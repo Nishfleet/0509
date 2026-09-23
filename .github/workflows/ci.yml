@@ -148,6 +148,17 @@ jobs:
           PREVIEW_NAME: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('q-{0}', github.run_id) }}
         run: |
           set -euo pipefail
+          # A main deploy whose config omits preview_urls posts workers.dev off,
+          # and Preview URLs follow it off. This is the same JSON `wrangler deploy`
+          # posts from subdomainDeploy: workers.dev stays off, preview hostnames
+          # stay on. It does not upload a script or change routes.
+          curl -fsS -X POST "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/0509/subdomain" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -H "Cloudflare-Workers-Script-Api-Date: 2025-08-01" \
+            -d '{"enabled":false,"previews_enabled":true}' \
+            -o "$RUNNER_TEMP/subdomain.json"
+          jq -e '.success == true and .result.enabled == false and .result.previews_enabled == true' "$RUNNER_TEMP/subdomain.json"
           WRANGLER_OUTPUT_FILE_PATH="$RUNNER_TEMP/preview.jsonl" npx wrangler preview --config build/server/wrangler.json --name "$PREVIEW_NAME" --json
           URL=$(jq -er 'select(.type=="preview") | .deployment_urls[0]' "$RUNNER_TEMP/preview.jsonl" | tail -n 1)
           test -n "$URL"
