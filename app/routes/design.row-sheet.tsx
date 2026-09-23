@@ -5,19 +5,19 @@ const ROWS = [
     id: "row-sheet-fixture-1",
     name: "Row sheet fixture 1",
     summary:
-      "Sample row used to drive the e2e proof for 0509#4021; below 860px the row opens a sheet from the bottom, focus moves into it and back to the row on dismiss.",
+      "First of three rows on this fixture page. Below 860px a tap opens its sheet from the bottom; focus moves into the sheet and returns to this row on dismiss.",
   },
   {
     id: "row-sheet-fixture-2",
     name: "Row sheet fixture 2",
     summary:
-      "A second row rendered for keyboard sequencing; every row gets its own trigger id and aria-controls pairing.",
+      "A second row, so the page has more than one and a spec can prove each row owns its own sheet rather than a single shared popup.",
   },
   {
     id: "row-sheet-fixture-3",
     name: "Row sheet fixture 3",
     summary:
-      "A third row for the open/dismiss/open/dismiss sequence the spec drives; motion follows DESIGN.md §9 by number.",
+      "A third row for the open/dismiss/open/dismiss sequence the e2e spec drives across two rows. Motion is the DESIGN.md §9 budget by number.",
   },
 ];
 
@@ -32,7 +32,7 @@ export default function Page() {
       <ul className="mt-6 list-none">
         {ROWS.map((row) => (
           <li key={row.id}>
-            <RowSheet rowId={row.id} label={row.name}>
+            <RowSheet label={row.name}>
               <div className="flex flex-col gap-3 p-6">
                 <h2 className="font-display text-title font-semibold">{row.name}</h2>
                 <p className="text-body-sm text-ink-soft">{row.summary}</p>

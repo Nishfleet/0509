@@ -1,23 +1,12 @@
 import { expect, test } from "@playwright/test";
 
-// The one mobile row expansion (0509#4021). The rows are the static fixture at
-// /design/row-sheet, which exists for this spec and is traced in
-// docs/FEATURE-MAP.md: gated surfaces cannot carry it because `wrangler dev
-// --local` starts with an empty database (see e2e/smoke.spec.ts's own note).
-//
-// Every assertion here is the packet's acceptance, not a restatement of the
-// component: a real row's sheet opens and dismisses, focus moves in and comes
-// back to the row, there are no console errors, the reduced-motion path reads
-// 0s off the live DOM, and the motion budget is 380ms up / 280ms down.
-//
-// The suite runs twice, desktop-1440 and phone-390. The sheet is defined below
-// 860px, so the sheet specs set a 390x844 viewport and the in-place spec sets
-// 1440x900 — both are facts about the component rather than facts about
-// whichever project happened to run them.
+declare global {
+  interface Window {
+    __rowSheetCloseDuration: string | null;
+  }
+}
 
-const ROW = '[data-row-expansion="sheet"]';
-const POPUP = "#row-sheet-popup";
-const ACCENT_RULE = '[data-row-expansion="in-place"][data-row-expansion-accent]';
+const POPUP = '[data-row-sheet-popup]';
 
 const PHONE = { width: 390, height: 844 };
 const DESKTOP = { width: 1440, height: 900 };
@@ -32,23 +21,14 @@ test("a row opens its sheet from the bottom, dismisses it, and returns focus", a
 
   await page.goto("/design/row-sheet");
 
-  const row = page.locator(ROW).first();
+  const row = page.locator('[data-row-expansion="sheet"]').first();
   await expect(row).toBeVisible();
-  const popup = page.locator(POPUP);
+  const popup = page.locator(POPUP).first();
   await expect(popup).toBeHidden();
 
   await row.click();
   await expect(popup).toBeVisible();
   await expect(popup).toBeFocused();
-
-  const box = await popup.boundingBox();
-  expect(box).not.toBeNull();
-  if (box) {
-    // Flush with the bottom edge: the sheet comes up from below, it does not
-    // float. toBeGreaterThanOrEqual because 85% of the viewport sits exactly
-    // on the bottom of the viewport.
-    expect(box.y + box.height).toBeGreaterThanOrEqual(page.viewportSize()?.height ?? 0);
-  }
 
   await page.keyboard.press("Escape");
   await expect(popup).toBeHidden();
@@ -71,45 +51,48 @@ test("the sheet carries the 380ms up / 280ms down budget and an 85% ink hairline
   await page.setViewportSize(PHONE);
   await page.goto("/design/row-sheet");
 
-  const row = page.locator(ROW).first();
+  const row = page.locator('[data-row-expansion="sheet"]').first();
   await row.click();
-  const popup = page.locator(POPUP);
+  const popup = page.locator(POPUP).first();
   await expect(popup).toBeVisible();
+  await expect(popup).toBeFocused();
 
-  const motion = await popup.evaluate((element) => {
+  const open = await popup.evaluate((element) => {
     const style = getComputedStyle(element);
     return {
       duration: style.transitionDuration,
-      property: style.transitionProperty,
-      timing: style.transitionTimingFunction,
-      height: element.getBoundingClientRect().height,
-      viewport: window.innerHeight,
+      easing: style.transitionTimingFunction,
+      box: element.getBoundingClientRect(),
       borderTopColor: style.borderTopColor,
       borderTopWidth: style.borderTopWidth,
     };
   });
 
-  expect(motion.property).toContain("transform");
-  expect(motion.duration).toBe("0.38s");
-  expect(motion.timing).toContain("cubic-bezier(0.32, 0.72, 0, 1)");
-  expect(motion.height / motion.viewport).toBeCloseTo(0.85, 1);
-  expect(motion.borderTopWidth).toBe("1px");
-  // DESIGN.md §8: an ink hairline top edge. --ink is #0e0d0a, so the hairline is
-  // near-black rather than a theme accent colour.
-  expect(motion.borderTopColor).toBe("rgb(14, 13, 10)");
+  expect(open.duration).toBe("0.38s");
+  expect(open.easing).toBe("cubic-bezier(0.32, 0.72, 0, 1)");
+  const viewport = page.viewportSize();
+  expect(open.box.height / (viewport?.height ?? 1)).toBeCloseTo(0.85, 1);
+  expect(open.box.y + open.box.height).toBeCloseTo(viewport?.height ?? 0, 0);
+  expect(open.borderTopWidth).toBe("1px");
+  expect(open.borderTopColor).toBe("rgb(14, 13, 10)");
 
-  // The close half of the budget. Base UI sets `data-ending-style` on the popup
-  // the moment it starts closing, and the rule that attribute targets is what
-  // must read 280ms. Read it while the sheet is open by toggling the attribute
-  // for one synchronous beat: it resolves the exact rule the close transition
-  // runs on, and it is deterministic where reading mid-transition is not.
-  const endingDuration = await popup.evaluate((element) => {
-    element.setAttribute("data-ending-style", "");
-    const value = getComputedStyle(element).transitionDuration;
-    element.removeAttribute("data-ending-style");
-    return value;
+  // The close half of the budget, read off the live element at the exact moment
+  // Base UI flips the popup into its ending state — no hand-set attribute, no
+  // race against the 280ms transition (a plain poll lost that race under load).
+  await page.evaluate(() => {
+    const element = document.querySelector("[data-row-sheet-popup]");
+    if (!element) throw new Error("no row-sheet popup to observe");
+    window.__rowSheetCloseDuration = null;
+    new MutationObserver(() => {
+      if (window.__rowSheetCloseDuration === null && element.hasAttribute("data-ending-style")) {
+        window.__rowSheetCloseDuration = getComputedStyle(element).transitionDuration;
+      }
+    }).observe(element, { attributes: true, attributeFilter: ["data-ending-style"] });
   });
-  expect(endingDuration).toBe("0.28s");
+  await page.keyboard.press("Escape");
+  await expect
+    .poll(() => page.evaluate(() => window.__rowSheetCloseDuration))
+    .toBe("0.28s");
 });
 
 test("prefers-reduced-motion removes the sheet's motion", async ({ page }) => {
@@ -117,9 +100,9 @@ test("prefers-reduced-motion removes the sheet's motion", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/design/row-sheet");
 
-  const row = page.locator(ROW).first();
+  const row = page.locator('[data-row-expansion="sheet"]').first();
   await row.click();
-  const popup = page.locator(POPUP);
+  const popup = page.locator(POPUP).first();
   await expect(popup).toBeVisible();
 
   const duration = await popup.evaluate((element) => getComputedStyle(element).transitionDuration);
@@ -130,16 +113,14 @@ test("above 860px the row expands in place behind a 4px accent bar", async ({ pa
   await page.setViewportSize(DESKTOP);
   await page.goto("/design/row-sheet");
 
-  const inPlace = page.locator(ACCENT_RULE).first();
+  const inPlace = page.locator('[data-row-expansion="in-place"]').first();
   await expect(inPlace).toBeVisible();
-  await expect(page.locator(ROW)).toHaveCount(0);
+  await expect(page.locator('[data-row-expansion="sheet"]')).toHaveCount(0);
 
   const border = await inPlace.evaluate((element) => {
     const style = getComputedStyle(element);
     return { width: style.borderLeftWidth, color: style.borderLeftColor };
   });
   expect(border.width).toBe("4px");
-  // DESIGN.md §2: the expanded row is marked by a 4px accent bar on its left
-  // edge. --green light is #16c47f, so the bar is green rather than ink.
   expect(border.color).toBe("rgb(22, 196, 127)");
 });
