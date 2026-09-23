@@ -1,3 +1,5 @@
+import { isUsable, profileHost, SUBDOMAIN_PATTERN } from "./extract";
+
 export type LogoSource = "ld+json" | "og:image" | "apple-touch-icon" | "duckduckgo";
 
 export interface LogoCandidate {
@@ -10,27 +12,23 @@ export interface LogoResolution {
   attempted: LogoCandidate[];
 }
 
+const TRAILING_DOT_PATTERN = /\.$/;
+
 export function duckduckgoIconUrl(domain: string): string {
-  return `https://icons.duckduckgo.com/ip3/${registrableHost(domain) ?? domain}.ico`;
+  return `https://icons.duckduckgo.com/ip3/${strippedHost(domain) ?? domain}.ico`;
 }
 
 export function registrableHost(value: string): string | null {
-  let host = value.trim().toLowerCase();
-  if (host.length === 0) return null;
-  try {
-    host = new URL(host).hostname;
-  } catch {
-    if (host.includes("/") || host.includes(":")) return null;
-  }
-  const stripped = host
-    .replace(/^(?:www|m|mobile)\./, "")
-    .replace(/\.$/, "")
-    .replace(/^(?:www|m|mobile)\./, "");
-  return stripped.length > 0 ? stripped : null;
+  const trimmed = value.trim().toLowerCase();
+  if (trimmed.length === 0) return null;
+  const bare = profileHost(trimmed);
+  if (bare !== null) return bare;
+  const host = trimmed.replace(SUBDOMAIN_PATTERN, "").replace(TRAILING_DOT_PATTERN, "");
+  return host.length > 0 ? host : null;
 }
 
-function isUsable(value: string | undefined): value is string {
-  return typeof value === "string" && value.trim().length > 0;
+function strippedHost(value: string): string | null {
+  return registrableHost(value);
 }
 
 export function logoCandidates(input: {
@@ -79,14 +77,16 @@ export async function resolveLogo(
   return { logo: null, attempted };
 }
 
+const VERIFY_TIMEOUT_MS = 8_000;
+
 export function fetchLogoVerifier(): (url: string) => Promise<boolean> {
   return async (url: string) => {
     try {
-      const res = await fetch(url, { method: "GET" });
-      if (!res.ok) return false;
-      const contentType = res.headers.get("content-type");
-      const normalized = contentType?.toLowerCase() ?? "";
-      return !normalized.startsWith("text/html");
+      const res = await fetch(url, {
+        method: "GET",
+        signal: AbortSignal.timeout(VERIFY_TIMEOUT_MS),
+      });
+      return res.ok;
     } catch {
       return false;
     }

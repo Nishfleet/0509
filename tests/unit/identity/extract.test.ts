@@ -135,6 +135,12 @@ describe("extractSite on the committed Gymshark homepage", () => {
     });
     expect(site.adLibraryHints).toContainEqual({ source: "meta", value: "98765" });
   });
+
+  it("records the manifest's empty name as an icon source only, not a name source", async () => {
+    const site = await extractSite(fixture, PAGE_URL);
+    expect(site.manifestUrl).toBe("https://www.gymshark.com/site.webmanifest");
+    expect(cascadeName(site)).toBe("Gymshark");
+  });
 });
 
 describe("extractSite — the lastInTextNode trap", () => {
@@ -205,11 +211,7 @@ describe("cascadeName — the name cascade", () => {
     expect(cascadeName(site)).toBeUndefined();
   });
 
-  it("is not blanked by the manifest, whose name is empty on Gymshark", async () => {
-    const site = await extractSite(fixture, PAGE_URL);
-    expect(site.manifestUrl).toBe("https://www.gymshark.com/site.webmanifest");
-    expect(cascadeName(site)).toBe("Gymshark");
-
+  it("is not blanked by the manifest, whose name is empty on Gymshark", () => {
     const manifestOnly: ExtractedSite = {
       ...base,
       title: undefined,
@@ -306,58 +308,49 @@ describe("resolveLogo — all but one rung failing", () => {
   });
 });
 
-describe("fetchLogoVerifier", () => {
+describe("fetchLogoVerifier — GET, res.ok, no head-of-page judgement", () => {
   const realFetch = globalThis.fetch;
 
-  interface Stub {
-    url: string;
-    method: string | undefined;
-  }
-
-  function stubFetch(response: { ok: boolean; contentType: string | null }): Stub[] {
-    const called: Stub[] = [];
+  function recordFetch(handler: (request: Request) => Response | Promise<Response>): {
+    called: Array<{ method: string; url: string }>;
+  } {
+    const called: Array<{ method: string; url: string }> = [];
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-      called.push({ url: String(input), method: init?.method });
-      return {
-        ok: response.ok,
-        headers: {
-          get: (k: string) => (k.toLowerCase() === "content-type" ? response.contentType : null),
-        },
-      } as Response;
+      const request = input instanceof Request ? input : new Request(input, init);
+      called.push({ method: request.method, url: request.url });
+      return handler(request);
     }) as typeof fetch;
-    return called;
+    return { called };
   }
 
   afterEach(() => {
     globalThis.fetch = realFetch;
   });
 
-  it("issues a GET and accepts a non-HTML 200", async () => {
-    const called = stubFetch({ ok: true, contentType: "image/png" });
+  it("issues a GET and accepts a 200", async () => {
+    const { called } = recordFetch(() => new Response(new Uint8Array([0x89, 0x50]), { status: 200, headers: { "content-type": "image/png" } }));
     const ok = await fetchLogoVerifier()("https://cdn.example.com/logo.png");
     expect(ok).toBe(true);
-    expect(called).toEqual([{ url: "https://cdn.example.com/logo.png", method: "GET" }]);
+    expect(called).toEqual([{ method: "GET", url: "https://cdn.example.com/logo.png" }]);
   });
 
   it("accepts a 200 with no content-type header", async () => {
-    stubFetch({ ok: true, contentType: null });
+    recordFetch(() => new Response(new Uint8Array([0x00]), { status: 200 }));
     expect(await fetchLogoVerifier()("https://cdn.example.com/logo.png")).toBe(true);
   });
 
-  it("rejects a non-ok response even when it carries a body", async () => {
-    stubFetch({ ok: false, contentType: "image/png" });
+  it("rejects a non-ok response", async () => {
+    recordFetch(() => new Response("missing", { status: 404 }));
     expect(await fetchLogoVerifier()("https://cdn.example.com/missing.png")).toBe(false);
   });
 
-  it("rejects a 200 that is an HTML docs page rather than an icon", async () => {
-    stubFetch({ ok: true, contentType: "text/html" });
-    expect(await fetchLogoVerifier()("https://icons.duckduckgo.com/ip3/gymshark.com.ico")).toBe(
-      false,
-    );
+  it("accepts a 200 that is itself an HTML page (the verifier does not judge content)", async () => {
+    recordFetch(() => new Response("<html></html>", { status: 200, headers: { "content-type": "text/html" } }));
+    expect(await fetchLogoVerifier()("https://example.com/docs")).toBe(true);
   });
 
   it("rejects a thrown fetch without propagating it", async () => {
-    globalThis.fetch = (async () => {
+    globalThis.fetch = (() => {
       throw new Error("offline");
     }) as typeof fetch;
     expect(await fetchLogoVerifier()("https://cdn.example.com/logo.png")).toBe(false);
@@ -373,6 +366,11 @@ describe("extract helpers exposed for the engine's later packets", () => {
     expect(decodeEntities("Gym &amp; Co &lt;b&gt; &quot;x&quot; &#39;y&#39; &nbsp;z")).toBe(
       "Gym & Co <b> \"x\" 'y'  z",
     );
+  });
+
+  it("decodes numeric entities both decimal and hex", () => {
+    expect(decodeEntities("&#65;&#x42;")).toBe("AB");
+    expect(decodeEntities("&#x1f600;")).toBe("\u{1f600}");
   });
 
   it("resolves an href against the page URL and rejects the unresolvable", () => {

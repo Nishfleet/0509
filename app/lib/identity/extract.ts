@@ -50,6 +50,8 @@ const IS_APPLE_TOUCH_REL = /(^|\s)apple-touch-icon(\s|$)/i;
 const IS_ICON_REL = /(^|\s)(?:shortcut\s+)?icon(\s|$)/i;
 const IS_MANIFEST_REL = /(^|\s)manifest(\s|$)/i;
 
+export const SUBDOMAIN_PATTERN = /^(?:www|m|mobile)\./;
+
 const SKIP_SELECTOR = "script, style, noscript, [aria-hidden='true']";
 
 const VOID_ELEMENTS = new Set([
@@ -123,31 +125,51 @@ export function normaliseText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
+const ENTITY_RE = /&(#x[0-9a-fA-F]+|#[0-9]+|amp|lt|gt|quot|apos|nbsp);/g;
+
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
+};
+
+function fromCodePoint(codePoint: number, fallback: string): string {
+  return Number.isInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff
+    ? String.fromCodePoint(codePoint)
+    : fallback;
+}
+
 export function decodeEntities(value: string): string {
-  return value
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'")
-    .replace(/&nbsp;/g, " ");
+  return value.replace(ENTITY_RE, (match, body: string) => {
+    if (body.startsWith("#x") || body.startsWith("#X")) {
+      return fromCodePoint(Number.parseInt(body.slice(2), 16), match);
+    }
+    if (body.startsWith("#")) {
+      return fromCodePoint(Number.parseInt(body.slice(1), 10), match);
+    }
+    return NAMED_ENTITIES[body] ?? match;
+  });
 }
 
 export function resolveUrl(href: string, base: string): string | null {
+  if (!URL.canParse(href, base)) return null;
+  return new URL(href, base).toString();
+}
+
+function parseJson(raw: string): unknown {
   try {
-    return new URL(href, base).toString();
+    return JSON.parse(raw);
   } catch {
-    return null;
+    return undefined;
   }
 }
 
 export function profileHost(url: string): string | null {
-  try {
-    return new URL(url).hostname.replace(/^(?:www|m|mobile)\./, "");
-  } catch {
-    return null;
-  }
+  if (!URL.canParse(url)) return null;
+  return new URL(url).hostname.replace(SUBDOMAIN_PATTERN, "");
 }
 
 export function socialPlatformFor(host: string): string | null {
@@ -158,12 +180,8 @@ export function socialPlatformFor(host: string): string | null {
 }
 
 export function socialHandle(url: string): string | null {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return null;
-  }
+  if (!URL.canParse(url)) return null;
+  const parsed = new URL(url);
   const segments = parsed.pathname
     .split("/")
     .map((segment) => segment.trim())
@@ -177,12 +195,8 @@ export function socialHandle(url: string): string | null {
 }
 
 export function organizationFromLdJson(raw: string): LdOrganization | undefined {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return undefined;
-  }
+  const parsed = parseJson(raw);
+  if (parsed === undefined) return undefined;
 
   const found: Record<string, unknown>[] = [];
   const walk = (node: unknown): void => {
@@ -399,7 +413,7 @@ export async function extractSite(html: string, responseUrl: string): Promise<Ex
   return parsed.data;
 }
 
-function isUsable(value: string | undefined): value is string {
+export function isUsable(value: string | undefined): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
