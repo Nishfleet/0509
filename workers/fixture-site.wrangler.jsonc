@@ -7,15 +7,15 @@
 // docs/engines/delivery.md P7.5 requires the incident round-trip to run against
 // this fixture and no other host.
 //
-// The KV namespace id is pinned, unlike the e2e inbox's id-less binding. The
-// id-less shape needs deploy-time resource provisioning, and the CI deploy
-// token (an Account API token) can deploy Workers but cannot create KV
-// namespaces: every fixture deploy failed Authentication error 10000 on
-// POST /storage/kv/namespaces while continue-on-error kept the job green
-// (observed in the 2026-09-22T19:27Z deploy run — 0509-fixture-site never
-// existed on the account). The 0509-fixture-site-state namespace was
-// provisioned once out-of-band; pinning its id means a deploy only needs
-// Workers write, never KV-namespace write.
+// The KV namespace id is pinned. The id-less shape needs deploy-time resource
+// provisioning, and the CI deploy token (an Account API token) can deploy
+// Workers but cannot create KV namespaces: every fixture deploy failed
+// Authentication error 10000 on POST /storage/kv/namespaces while
+// continue-on-error kept the job green (observed in the 2026-09-22T19:27Z
+// deploy run — 0509-fixture-site never existed on the account). The
+// 0509-fixture-site-state namespace was provisioned once out-of-band, the same
+// fix #4190 shipped for the sibling inbox Worker; pinning its id means a
+// deploy only needs Workers write, never KV-namespace write.
 //
 // The break state has NO TTL and the deploy job never resets it, so it survives
 // deploys: a round-trip that forgets to repair leaves the fixture broken while
