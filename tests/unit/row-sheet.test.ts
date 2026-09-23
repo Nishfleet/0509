@@ -6,6 +6,7 @@ import {
   RowExpansion,
   rowPanelClass,
   rowSheetPopupClass,
+  useIsPhone,
 } from "../../app/components/row-sheet";
 
 function render(element: ReactElement): string {
@@ -53,6 +54,7 @@ describe("the row expansion", () => {
     expect(html).toContain('data-slot="row-panel"');
     expect(html).toContain("detail");
     expect(html).not.toContain('data-slot="row-sheet"');
+    expect(useIsPhone).toBeTypeOf("function");
   });
 
   it("stays closed when defaultOpen is omitted", () => {
