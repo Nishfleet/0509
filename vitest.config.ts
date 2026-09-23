@@ -43,7 +43,6 @@ export default defineConfig({
             "tests/integration/migration-rollback.test.ts",
             "tests/unit/site/**/*.test.ts",
           ],
-          exclude: ["tests/integration/site/**"],
           setupFiles: ["./tests/integration/apply-migrations.ts"],
           testTimeout: 30_000,
         },
@@ -76,14 +75,9 @@ export default defineConfig({
         ],
         test: {
           name: "fixture-site",
-          // The J8 fixture's own gate, plus engine 4 P3's real-change proof
-          // (0509#4001): the diff and the mark over the fixture's own `soft`
-          // break. It needs the same real KV and token the fixture does, which
-          // only this project's config declares, so it runs here rather than in
-          // the node or workers projects.
           include: [
             "tests/integration/fixture-site.test.ts",
-            "tests/integration/site/site-change-diff.integration.test.ts",
+            "tests/integration/site/site-change-diff.test.ts",
           ],
           testTimeout: 30_000,
         },

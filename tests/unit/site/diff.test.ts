@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { buildPageDiff, buildStoredHunks, diffWordsPositioned } from "../../../app/lib/site/diff";
 import { extractPageText, hasChanged } from "../../../app/lib/site/extract-text";
-import { markKey, markKeys, storeMark } from "../../../app/lib/site/marks";
+import { markKey, storeMark } from "../../../app/lib/site/marks";
 
 /**
  * Engine 4, P3 — the word diff and the before-and-after mark (0509#4001;
@@ -225,7 +225,6 @@ describe("site diff — the real fixture-site text pair", () => {
 
   it("the unchanged tick produces the same hash", async () => {
     expect(await textHash(HEALTHY_TEXT)).toBe(await textHash(HEALTHY_TEXT_AGAIN));
-    expect(await textHash(HEALTHY_TEXT)).toBe(await textHash(HEALTHY_TEXT_AGAIN));
   });
 
   it("builds positioned hunks for the real change, once the gate has fired", async () => {
@@ -305,35 +304,6 @@ describe("site diff — the mark is keys, never a body", () => {
     expect(Object.keys(body).sort()).toEqual(["changes", "hunks"]);
     expect(JSON.stringify(body)).not.toContain("Track every competitor move");
     expect(JSON.stringify(body)).toContain("₹499");
-  });
-
-  it("returns a small reference object — keys only, no body field anywhere", async () => {
-    const diff = buildPageDiff({ beforeText: HEALTHY_TEXT, afterText: SOFT_TEXT });
-    const keys = keysFor("mark-keys", "2026-09-22T02:00:00.000Z");
-    await storeMark(
-      env.CARD_ARTIFACTS,
-      keys,
-      diff,
-      HEALTHY_TEXT,
-      SOFT_TEXT,
-      new Uint8Array([137, 80, 78, 71]).buffer,
-      new Uint8Array([137, 80, 78, 71]).buffer,
-    );
-
-    // Keys only, so it is safe to cross a Workflow step boundary: a step's
-    // output cap is 1 MiB and a body would blow it.
-    const small = markKeys(keys);
-    expect(Object.keys(small).sort()).toEqual([
-      "afterScreenshotKey",
-      "afterTextKey",
-      "beforeScreenshotKey",
-      "beforeTextKey",
-      "hunksKey",
-    ]);
-    for (const value of Object.values(small)) {
-      expect(typeof value).toBe("string");
-      expect(value.length).toBeLessThan(200);
-    }
   });
 
   it("refuses to store a mark with no changes", async () => {

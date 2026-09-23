@@ -67,7 +67,6 @@ describe("engine 4 P3 — a real change, end to end", () => {
     const second = await extractPageText(await (await getHome()).text());
 
     expect(first.hash).toBe(second.hash);
-        expect(first.hash).toBe(second.hash);
 
     // P3 refuses to build a mark when there is nothing to diff against. The
     // gate's real consequence is asserted so it can fail: a gate that fired

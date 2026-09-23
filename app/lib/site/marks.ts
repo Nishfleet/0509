@@ -102,13 +102,3 @@ export async function storeMark(
     },
   };
 }
-
-export function markKeys(keys: MarkKeys): MarkKeys {
-  return {
-    beforeTextKey: keys.beforeTextKey,
-    afterTextKey: keys.afterTextKey,
-    beforeScreenshotKey: keys.beforeScreenshotKey,
-    afterScreenshotKey: keys.afterScreenshotKey,
-    hunksKey: keys.hunksKey,
-  };
-}
