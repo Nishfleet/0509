@@ -250,8 +250,12 @@ jobs:
   # Nish 2026-09-22: "you can't grade your own work. you grade opus." Opus
   # grades only PRs opened by the worker app (GLM / DeepSeek packets). PRs by
   # the Opus deputy or by Fable are reviewed by Fable, never by this job.
+  # needs: a PR whose mechanical checks fail cannot merge whatever its grade,
+  # so grading it spends Nish's Claude quota for nothing (2026-09-23: 259
+  # grades in 24h, 189 of them D/F).
   opus-review:
     name: opus-review
+    needs: [codex-node-checks, semgrep, preview-assert]
     if: github.event_name == 'merge_group' || (github.event_name == 'pull_request' && github.event.pull_request.user.login == 'nishfleet-worker[bot]')
     runs-on: ubuntu-latest
     timeout-minutes: 15
