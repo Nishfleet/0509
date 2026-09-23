@@ -349,6 +349,8 @@ The `new-york` registry item still imports `@radix-ui/react-switch`. That vendor
 
 The stock base-nova switch is a pill, about 32×18, and it fades when disabled. DESIGN.md §6 is a square 38×22 track, an ink hairline, an ink thumb, 180ms travel, and a You state that stays visible. Those measurements live in the copied component. The thumb travel uses `duration-switch` and `ease-push` from `app/app.css`. The track fill is one class chosen by the caller (`bg-green`, `bg-card`, or `bg-green-wash`), so two background utilities are never both on the element.
 
+`BrandSwitchProps` is a discriminated union, not a bag of optionals: `state: "off"` requires `pausedOn: string`, and On and You cannot carry one at all (`pausedOn?: never`). DESIGN.md §6's Off sub-line reads "paused <date> · history kept", and #4017 item 4 repeats it, so an Off row with no date is a missing case. With `pausedOn?: string` it rendered `paused · history kept` instead — a silent fallback that hid the gap. The union makes that unrepresentable at compile time. `brandSwitchView` is the one place On/Off/You become `{ checked, operable, label }`, and both the component and `tests/unit/brand-switch.test.ts` read it.
+
 ---
 
 ## 4. Cloudflare primitives

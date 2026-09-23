@@ -8,8 +8,16 @@ export default function Page() {
 
   return (
     <main className="p-4">
-      <BrandSwitch name="Kindred" state={kindred} pausedOn="22 Sep" onChange={setKindred} />
-      <BrandSwitch name="Casetta" state={casetta} pausedOn="12 Sep" onChange={setCasetta} />
+      {kindred === "off" ? (
+        <BrandSwitch name="Kindred" state="off" pausedOn="22 Sep" onChange={setKindred} />
+      ) : (
+        <BrandSwitch name="Kindred" state="on" onChange={setKindred} />
+      )}
+      {casetta === "off" ? (
+        <BrandSwitch name="Casetta" state="off" pausedOn="12 Sep" onChange={setCasetta} />
+      ) : (
+        <BrandSwitch name="Casetta" state="on" onChange={setCasetta} />
+      )}
       <BrandSwitch name="Loopwell" state="you" />
     </main>
   );

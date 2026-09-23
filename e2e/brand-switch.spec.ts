@@ -87,11 +87,20 @@ test("tab reaches the per-brand switch and space toggles it", async ({ page }, t
   const casetta = page.getByRole("switch", { name: "Casetta" });
   const you = page.getByRole("switch", { name: "Loopwell" });
 
+  // DESIGN.md 6 and #4017 item 5: turning a brand off never asks for
+  // confirmation. A browser dialog during the toggle would fail here.
+  const dialogs: string[] = [];
+  page.on("dialog", (dialog) => {
+    dialogs.push(dialog.message());
+    void dialog.dismiss();
+  });
+
   await page.keyboard.press("Tab");
   await expect(kindred).toBeFocused();
   await page.keyboard.press("Space");
   await expect(kindred).toHaveAttribute("aria-checked", "false");
   await expect(page.getByText("paused 22 Sep · history kept")).toBeVisible();
+  expect(dialogs).toEqual([]);
 
   await page.locator('[data-state="off"]').filter({ hasText: "Casetta" }).locator('[data-slot="state-label"]').click();
   await expect(casetta).toHaveAttribute("aria-checked", "true");
@@ -102,7 +111,10 @@ test("tab reaches the per-brand switch and space toggles it", async ({ page }, t
   const landed = await page.evaluate(() => {
     const active = document.activeElement;
     if (active === null || active === document.body || active === document.documentElement) return "body";
-    return active.getAttribute("aria-label");
+    return active.getAttribute("aria-label") ?? active.tagName.toLowerCase();
   });
-  expect(landed === "Kindred" || landed === "body").toBe(true);
+  // Casetta is the last operable switch in the page; the You switch is disabled
+  // and is skipped by Tab. Focus therefore leaves the row of switches and lands
+  // on document.body until the user shifts context back.
+  expect(landed).toBe("body");
 });

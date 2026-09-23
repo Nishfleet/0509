@@ -13,17 +13,32 @@ const STATE_LABEL = {
   you: "YOU",
 } as const;
 
-export interface BrandSwitchProps {
-  name: string;
-  monogram?: string;
-  state: BrandSwitchState;
-  pausedOn?: string;
-  onChange?: (next: "on" | "off") => void;
+export interface BrandSwitchView {
+  checked: boolean;
+  operable: boolean;
+  label: (typeof STATE_LABEL)[BrandSwitchState];
 }
 
-function pausedLine(pausedOn: string | undefined): string {
-  const date = pausedOn?.trim();
-  return date ? `paused ${date} · history kept` : "paused · history kept";
+export function brandSwitchView(state: BrandSwitchState): BrandSwitchView {
+  return {
+    checked: state !== "off",
+    operable: state !== "you",
+    label: STATE_LABEL[state],
+  };
+}
+
+interface BrandSwitchCommon {
+  name: string;
+  monogram?: string;
+}
+
+export type BrandSwitchProps =
+  | (BrandSwitchCommon & { state: "on"; pausedOn?: never; onChange?: (next: "on" | "off") => void })
+  | (BrandSwitchCommon & { state: "off"; pausedOn: string; onChange?: (next: "on" | "off") => void })
+  | (BrandSwitchCommon & { state: "you"; pausedOn?: never; onChange?: (next: "on" | "off") => void });
+
+export function pausedLine(pausedOn: string): string {
+  return `paused ${pausedOn.trim()} · history kept`;
 }
 
 function trackBackground(state: BrandSwitchState): string {
@@ -32,18 +47,11 @@ function trackBackground(state: BrandSwitchState): string {
   return "bg-green";
 }
 
-export function BrandSwitch({
-  name,
-  monogram,
-  state,
-  pausedOn,
-  onChange,
-}: BrandSwitchProps): ReactElement {
+export function BrandSwitch(props: BrandSwitchProps): ReactElement {
+  const { name, monogram, state, onChange } = props;
   const monogramText = monogram?.trim() ?? "";
   const letter = (monogramText === "" ? name.trim() : monogramText).slice(0, 1).toUpperCase();
-  const operable = state !== "you";
-  const checked = state !== "off";
-  const label = STATE_LABEL[state];
+  const view = brandSwitchView(state);
 
   return (
     <div
@@ -80,17 +88,14 @@ export function BrandSwitch({
         <span className="truncate">{name}</span>
       </span>
       <Switch
-        checked={checked}
-        disabled={!operable}
+        checked={view.checked}
+        disabled={!view.operable}
         aria-label={name}
         trackClassName={trackBackground(state)}
-        onCheckedChange={(next) => {
-          if (!operable) return;
-          onChange?.(next ? "on" : "off");
-        }}
+        onCheckedChange={(next) => onChange?.(next ? "on" : "off")}
       >
         <span data-slot="state-label" className="font-mono text-[0.66rem] tracking-[0.1em]">
-          {label}
+          {view.label}
         </span>
       </Switch>
       {state === "on" ? (
@@ -98,9 +103,9 @@ export function BrandSwitch({
           {ON_CONSEQUENCE}
         </span>
       ) : null}
-      {state === "off" ? (
+      {props.state === "off" ? (
         <span data-slot="consequence" className="min-w-0 max-w-full font-mono text-[0.66rem] tracking-[0.05em]">
-          {pausedLine(pausedOn)}
+          {pausedLine(props.pausedOn)}
         </span>
       ) : null}
     </div>
