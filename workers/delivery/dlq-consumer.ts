@@ -1,20 +1,14 @@
-import { insertDeliveryFailedAlert } from "../../app/lib/data/alert.server";
+import {
+  insertDeliveryFailedAlert,
+  type DeliveryFailedAlert,
+} from "../../app/lib/data/alert.server";
 import { parseMessage } from "./consumer";
 
 export const DELIVERY_FAILED_KIND = "delivery_failed";
 export const DLQ_ALERT_PREFIX = "dlq:";
 export const DELIVERY_FAILED_TITLE = "We could not send your brief — here it is in the app";
 
-export interface DeliveryFailedAlert {
-  id: string;
-  workspace_id: string;
-  kind: string;
-  severity: string;
-  title: string;
-  body: string;
-  status: string;
-  created_at: string;
-}
+export type { DeliveryFailedAlert };
 
 export function deliveryFailedAlert(input: {
   digest_id: string;

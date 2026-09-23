@@ -1,6 +1,6 @@
 const INSERT_DELIVERY_FAILED = `INSERT INTO alert (id, workspace_id, kind, severity, title, body, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING`;
 
-export interface DeliveryFailedAlertRow {
+export interface DeliveryFailedAlert {
   id: string;
   workspace_id: string;
   kind: string;
@@ -13,7 +13,7 @@ export interface DeliveryFailedAlertRow {
 
 export async function insertDeliveryFailedAlert(
   db: D1Database,
-  alert: DeliveryFailedAlertRow,
+  alert: DeliveryFailedAlert,
 ): Promise<void> {
   await db
     .prepare(INSERT_DELIVERY_FAILED)
