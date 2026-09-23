@@ -1,5 +1,7 @@
 import { diffWords, structuredPatch } from "diff";
 
+import { hasChanged } from "./extract-text";
+
 export interface WordChange {
   before: string;
   after: string;
@@ -27,10 +29,9 @@ export interface PageDiff {
 
 const splitWords = (text: string): string[] => text.split(/\s+/).filter(Boolean);
 
-export function hasChanged(prevHash: string, nextHash: string): boolean {
-  if (typeof prevHash !== "string" || typeof nextHash !== "string") return false;
+export function canDiff(prevHash: string, nextHash: string): boolean {
   if (prevHash.length === 0 || nextHash.length === 0) return false;
-  return prevHash !== nextHash;
+  return hasChanged(prevHash, nextHash);
 }
 
 export function diffWordsPositioned(before: string, after: string): WordChange[] {
@@ -141,7 +142,7 @@ export interface PageDiffInput {
 export function buildPageDiff(input: PageDiffInput): PageDiff {
   const { prevHash, nextHash, beforeText, afterText, context = 2 } = input;
 
-  if (!hasChanged(prevHash, nextHash)) {
+  if (!canDiff(prevHash, nextHash)) {
     throw new Error(
       "hash gate has not fired: refusing to diff unchanged payloads " +
         "(a Workflow step that reaches this needs to write its snapshot row and stop)",

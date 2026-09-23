@@ -1,12 +1,9 @@
+import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
-import { buildPageDiff, buildStoredHunks, diffWordsPositioned, hasChanged } from "../../../app/lib/site/diff";
-import {
-  markKey,
-  markKeys,
-  storeMark,
-  type MarkStore,
-} from "../../../app/lib/site/marks";
+import { buildPageDiff, buildStoredHunks, canDiff, diffWordsPositioned } from "../../../app/lib/site/diff";
+import { extractPageText, hasChanged } from "../../../app/lib/site/extract-text";
+import { markKey, markKeys, storeMark } from "../../../app/lib/site/marks";
 
 /**
  * Engine 4, P3 — the word diff and the before-and-after mark (0509#4001;
@@ -15,18 +12,18 @@ import {
  * The texts below are the real, normalised copy of the fixture site we own
  * (0509-fixture-site, 0509#4046, `workers/fixture-site.ts`): the healthy page
  * and its `soft` break, which is "200 with the pricing section gone". The
- * extracted strings are committed here rather than fetched, because this suite
- * is the pure-logic `node` project and the fixture Worker needs workerd's
- * `SubtleCrypto.timingSafeEqual`, which the node runtime does not expose. The
- * same pair is driven for real, through the real Worker, in
- * `tests/integration/site/site-change-diff.integration.test.ts`.
+ * extracted strings are committed here rather than fetched, because what this
+ * file proves is that the *diff layer* is correct — hash gate, word
+ * granularity, page positions, hunk bounds, and the R2-key-only mark —
+ * independent of how the strings got there.
  *
- * So "two texts" here is not two invented strings: it is one real page before
- * and after a real change we induced on it. What this file proves is that the
- * *diff layer* is correct — hash gate, word granularity, page positions,
- * hunk bounds, and the R2-key-only mark — independent of how the strings got
- * there. The real-change round-trip and the unchanged-tick single-row claim
- * live in the integration test that can actually run a Worker.
+ * It runs in real workerd (vitest.config.ts, the `workers` project), so both
+ * the hash and the R2 bucket are the real platform surfaces rather than a
+ * second implementation: P1's `extractPageText` produces the hash the sweep
+ * writes on the snapshot row, and `env.CARD_ARTIFACTS` is a real R2 binding,
+ * so every "five keys, with these content types" assertion is checked against
+ * real storage. The same pair is driven end to end through the real fixture
+ * Worker in `tests/integration/site/site-change-diff.integration.test.ts`.
  */
 
 /** The healthy fixture page, extracted and whitespace-normalised. */
@@ -39,49 +36,22 @@ const SOFT_TEXT = `Five to Nine — fixture Track every competitor move, in one 
 const HEALTHY_TEXT_AGAIN = HEALTHY_TEXT;
 
 /**
- * A stable hash of the extracted text. The real engine uses SHA-256 over the
- * normalised text (P1 owns that); what this module's contract needs is a
- * deterministic function of the text, so "same text" and "changed text" are
- * distinguishable. FNV-1a, 8 hex chars — enough to be a distinct key in tests.
+ * P1's real hash over the already-extracted text. The extraction half of
+ * `extractPageText` is the identity on a text that carries no script, style,
+ * noscript or aria-hidden subtree, so wrapping keeps the string intact and
+ * only the SHA-256 half is used.
  */
-const textHash = (text: string): string => {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < text.length; i += 1) {
-    h ^= text.charCodeAt(i);
-    h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return h.toString(16).padStart(8, "0");
-};
+const textHash = async (text: string): Promise<string> =>
+  (await extractPageText(`<p>${text}</p>`)).hash;
 
-/** A recorder standing in for the R2 binding: proves keys, types and bodies. */
-const makeStore = () => {
-  const written = new Map<
-    string,
-    { bytes: number; contentType: string; isImage: boolean; body: string | null }
-  >();
-  const store: MarkStore = {
-    async put(key, value, options) {
-      const body = typeof value === "string" ? value : new TextDecoder().decode(value as ArrayBuffer);
-      const bytes =
-        typeof value === "string"
-          ? new TextEncoder().encode(value).byteLength
-          : value instanceof ArrayBuffer
-            ? value.byteLength
-            : value instanceof Uint8Array
-              ? value.byteLength
-              : 0;
-      const contentType = options?.httpMetadata?.contentType ?? "application/octet-stream";
-      written.set(key, {
-        bytes,
-        contentType,
-        isImage: contentType.startsWith("image/"),
-        body: contentType.startsWith("image/") ? null : body,
-      });
-      return undefined;
-    },
-  };
-  return { store, written };
-};
+/** A distinct R2 prefix per call, so a test never reads another test's mark. */
+const keysFor = (watchId: string, capturedAt: string) => ({
+  beforeTextKey: markKey(watchId, capturedAt, "before-text", "txt"),
+  afterTextKey: markKey(watchId, capturedAt, "after-text", "txt"),
+  beforeScreenshotKey: markKey(watchId, capturedAt, "before-shot", "png"),
+  afterScreenshotKey: markKey(watchId, capturedAt, "after-shot", "png"),
+  hunksKey: markKey(watchId, capturedAt, "hunks", "json"),
+});
 
 describe("site diff — the hash gate", () => {
   it("treats equal hashes as unchanged", () => {
@@ -89,10 +59,12 @@ describe("site diff — the hash gate", () => {
   });
 
   it("treats a first-seen page as unchanged, not as a change", () => {
-    // No previous snapshot: not a change, a new page. A gate that fired here
-    // would diff against nothing and mark every page on its first tick.
-    expect(hasChanged("", "abc123")).toBe(false);
-    expect(hasChanged("abc123", "")).toBe(false);
+    // No previous snapshot: not a change, a new page. The sweep still writes
+    // its snapshot row; what P3 refuses is the diff, because there is nothing
+    // to diff against. P1's own `hasChanged` is the sweep's predicate.
+    expect(canDiff("", "abc123")).toBe(false);
+    expect(canDiff("abc123", "")).toBe(false);
+    expect(hasChanged("", "abc123")).toBe(true);
   });
 
   it("fires only on two present, different hashes", () => {
@@ -114,33 +86,27 @@ describe("site diff — the hash gate", () => {
     // The gate's real consequence, asserted rather than described: on an
     // unchanged tick the sweep stops at the snapshot row, so there is no hunk
     // and no key anywhere. This is the "no screenshot, no diff, no Jev call"
-    // half of the acceptance. The R2 recorder is asked to store a mark built
-    // from the pair, which the gate refuses, so the recorder stays empty for a
-    // reason that can fail: a gate that fired would write five keys.
-    const prev = textHash(HEALTHY_TEXT);
-    const next = textHash(HEALTHY_TEXT_AGAIN);
-    expect(hasChanged(prev, next)).toBe(false);
+    // half of the acceptance. The store is a real R2 binding, so the empty
+    // assertion below reads real storage: a gate that fired would write five
+    // objects to the bucket.
+    const prevHash = await textHash(HEALTHY_TEXT);
+    const nextHash = await textHash(HEALTHY_TEXT_AGAIN);
+    expect(hasChanged(prevHash, nextHash)).toBe(false);
+    expect(canDiff(prevHash, nextHash)).toBe(false);
 
-    const { store, written } = makeStore();
     expect(() =>
       buildPageDiff({
-        prevHash: prev,
-        nextHash: next,
+        prevHash,
+        nextHash,
         beforeText: HEALTHY_TEXT,
         afterText: HEALTHY_TEXT_AGAIN,
       }),
     ).toThrow(/hash gate has not fired/);
 
-    const keys = {
-      beforeTextKey: markKey("watch-fixture", "2026-09-22T00:00:00Z", "before-text", "txt"),
-      afterTextKey: markKey("watch-fixture", "2026-09-22T00:00:00Z", "after-text", "txt"),
-      beforeScreenshotKey: markKey("watch-fixture", "2026-09-22T00:00:00Z", "before-shot", "png"),
-      afterScreenshotKey: markKey("watch-fixture", "2026-09-22T00:00:00Z", "after-shot", "png"),
-      hunksKey: markKey("watch-fixture", "2026-09-22T00:00:00Z", "hunks", "json"),
-    };
+    const keys = keysFor("unchanged-tick", "2026-09-22T00:00:00.000Z");
     await expect(
       storeMark(
-        store,
+        env.CARD_ARTIFACTS,
         keys,
         { changes: [], hunks: [], wordsBefore: 1, wordsAfter: 1, wordDelta: 0 },
         HEALTHY_TEXT,
@@ -149,7 +115,7 @@ describe("site diff — the hash gate", () => {
         new ArrayBuffer(1),
       ),
     ).rejects.toThrow(/no changes/);
-    expect(written.size).toBe(0);
+    expect(await env.CARD_ARTIFACTS.get(keys.hunksKey)).toBeNull();
   });
 });
 
@@ -237,7 +203,7 @@ describe("site diff — stored hunks", () => {
   it("keeps a page's stored hunks far smaller than the page", () => {
     // A long page with one change far in: the stored hunk must carry the change
     // and its context, never the whole page. The 1 MiB step-output cap is the
-    // reason this matters (docs/engines/site-change.md P3 FORBIDDEN).
+    // reason this matters.
     const filler = Array.from({ length: 500 }, (_, i) => `word${i}`).join(" ");
     const before = `${filler} the old line ${filler}`;
     const after = `${filler} the new line ${filler}`;
@@ -266,7 +232,7 @@ describe("site diff — stored hunks", () => {
 });
 
 describe("site diff — the real fixture-site text pair", () => {
-  it("the soft break is a real copy change: a priced section disappears", () => {
+  it("the soft break is a real copy change: a priced section disappears", async () => {
     expect(HEALTHY_TEXT).toContain("₹499");
     expect(SOFT_TEXT).not.toContain("₹499");
     // The aria-hidden mode marker is dropped by normalisation, so the only
@@ -275,14 +241,14 @@ describe("site diff — the real fixture-site text pair", () => {
     expect(SOFT_TEXT).not.toContain("mode: soft");
   });
 
-  it("the unchanged tick produces the same hash", () => {
-    expect(textHash(HEALTHY_TEXT)).toBe(textHash(HEALTHY_TEXT_AGAIN));
-    expect(hasChanged(textHash(HEALTHY_TEXT), textHash(HEALTHY_TEXT_AGAIN))).toBe(false);
+  it("the unchanged tick produces the same hash", async () => {
+    expect(await textHash(HEALTHY_TEXT)).toBe(await textHash(HEALTHY_TEXT_AGAIN));
+    expect(hasChanged(await textHash(HEALTHY_TEXT), await textHash(HEALTHY_TEXT_AGAIN))).toBe(false);
   });
 
-  it("builds positioned hunks for the real change, once the gate has fired", () => {
-    const prevHash = textHash(HEALTHY_TEXT);
-    const nextHash = textHash(SOFT_TEXT);
+  it("builds positioned hunks for the real change, once the gate has fired", async () => {
+    const prevHash = await textHash(HEALTHY_TEXT);
+    const nextHash = await textHash(SOFT_TEXT);
     expect(hasChanged(prevHash, nextHash)).toBe(true);
 
     const diff = buildPageDiff({
@@ -308,10 +274,10 @@ describe("site diff — the real fixture-site text pair", () => {
     }
   });
 
-  it("names the vanished price tokens in the hunks", () => {
+  it("names the vanished price tokens in the hunks", async () => {
     const diff = buildPageDiff({
-      prevHash: textHash(HEALTHY_TEXT),
-      nextHash: textHash(SOFT_TEXT),
+      prevHash: await textHash(HEALTHY_TEXT),
+      nextHash: await textHash(SOFT_TEXT),
       beforeText: HEALTHY_TEXT,
       afterText: SOFT_TEXT,
     });
@@ -322,25 +288,16 @@ describe("site diff — the real fixture-site text pair", () => {
 });
 
 describe("site diff — the mark is keys, never a body", () => {
-  const keysFor = (capturedAt: string) => ({
-    beforeTextKey: markKey("watch-fixture", capturedAt, "before-text", "txt"),
-    afterTextKey: markKey("watch-fixture", capturedAt, "after-text", "txt"),
-    beforeScreenshotKey: markKey("watch-fixture", capturedAt, "before-shot", "png"),
-    afterScreenshotKey: markKey("watch-fixture", capturedAt, "after-shot", "png"),
-    hunksKey: markKey("watch-fixture", capturedAt, "hunks", "json"),
-  });
-
   it("stores a mark as R2 keys — texts and screenshots by key, never base64 in a row", async () => {
     const diff = buildPageDiff({
-      prevHash: textHash(HEALTHY_TEXT),
-      nextHash: textHash(SOFT_TEXT),
+      prevHash: await textHash(HEALTHY_TEXT),
+      nextHash: await textHash(SOFT_TEXT),
       beforeText: HEALTHY_TEXT,
       afterText: SOFT_TEXT,
     });
-    const { store, written } = makeStore();
-    const keys = keysFor("2026-09-22T00:00:00Z");
+    const keys = keysFor("mark-bytes", "2026-09-22T01:00:00.000Z");
     const { refs } = await storeMark(
-      store,
+      env.CARD_ARTIFACTS,
       keys,
       diff,
       HEALTHY_TEXT,
@@ -349,8 +306,16 @@ describe("site diff — the mark is keys, never a body", () => {
       new Uint8Array([137, 80, 78, 71]).buffer,
     );
 
-    // Five keys, every one an R2 object, every one with a recorded type.
-    expect(written.size).toBe(5);
+    // Five objects in real R2, one per role, each with the content type the
+    // store actually recorded.
+    for (const ref of Object.values(refs)) {
+      expect(typeof ref.key).toBe("string");
+      expect(ref.key).toMatch(/^marks\/mark-bytes\//);
+      expect(ref.bytes).toBeGreaterThan(0);
+      const stored = await env.CARD_ARTIFACTS.get(ref.key);
+      expect(stored).not.toBeNull();
+      expect(stored?.size ?? -1).toBe(ref.bytes);
+    }
     expect(refs.beforeScreenshotKey.contentType).toBe("image/png");
     expect(refs.afterScreenshotKey.contentType).toBe("image/png");
     expect(refs.beforeTextKey.contentType).toContain("text/plain");
@@ -364,7 +329,10 @@ describe("site diff — the mark is keys, never a body", () => {
     // (docs/engines/site-change.md), and the texts already have their own keys.
     // The body is asserted against the pages' distinguishing prose — the hunks
     // legitimately contain the price token that disappeared.
-    const body = JSON.parse(written.get(keys.hunksKey)?.body ?? "{}");
+    const hunksObject = await env.CARD_ARTIFACTS.get(keys.hunksKey);
+    expect(hunksObject).not.toBeNull();
+    if (hunksObject === null) throw new Error("hunksKey must be present after storeMark");
+    const body = JSON.parse(await hunksObject.text());
     expect(Object.keys(body).sort()).toEqual(["changes", "hunks"]);
     expect(JSON.stringify(body)).not.toContain("Track every competitor move");
     expect(JSON.stringify(body)).toContain("₹499");
@@ -372,15 +340,14 @@ describe("site diff — the mark is keys, never a body", () => {
 
   it("returns a small reference object — keys only, no body field anywhere", async () => {
     const diff = buildPageDiff({
-      prevHash: textHash(HEALTHY_TEXT),
-      nextHash: textHash(SOFT_TEXT),
+      prevHash: await textHash(HEALTHY_TEXT),
+      nextHash: await textHash(SOFT_TEXT),
       beforeText: HEALTHY_TEXT,
       afterText: SOFT_TEXT,
     });
-    const { store } = makeStore();
-    const keys = keysFor("2026-09-22T00:00:00Z");
+    const keys = keysFor("mark-keys", "2026-09-22T02:00:00.000Z");
     await storeMark(
-      store,
+      env.CARD_ARTIFACTS,
       keys,
       diff,
       HEALTHY_TEXT,
@@ -406,11 +373,10 @@ describe("site diff — the mark is keys, never a body", () => {
   });
 
   it("refuses to store a mark with no changes", async () => {
-    const { store } = makeStore();
     await expect(
       storeMark(
-        store,
-        keysFor("2026-09-22T00:00:00Z"),
+        env.CARD_ARTIFACTS,
+        keysFor("mark-nochanges", "2026-09-22T03:00:00.000Z"),
         { changes: [], hunks: [], wordsBefore: 1, wordsAfter: 1, wordDelta: 0 },
         "same",
         "same",
@@ -431,4 +397,3 @@ describe("site diff — the mark is keys, never a body", () => {
     expect(() => markKey("w", "", "before-text", "txt")).toThrow(/capturedAt/);
   });
 });
-

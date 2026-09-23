@@ -6,13 +6,6 @@ export interface R2Ref {
   contentType: string;
 }
 
-export interface MarkStore {
-  put(
-    key: string,
-    value: ArrayBuffer | ArrayBufferView | string | null | ReadableStream,
-    options?: { httpMetadata?: { contentType?: string } },
-  ): Promise<unknown>;
-}
 
 interface MarkBody {
   hunks: StoredHunk[];
@@ -39,43 +32,38 @@ export function markKey(
   return `marks/${watchId}/${stamp}/${role}.${extension}`;
 }
 
-async function putTextBody(
-  store: MarkStore,
-  key: string,
-  text: string,
-): Promise<R2Ref> {
+async function putTextBody(store: R2Bucket, key: string, text: string): Promise<R2Ref> {
   const body = new TextEncoder().encode(text);
-  await store.put(key, body, { httpMetadata: { contentType: "text/plain; charset=utf-8" } });
-  return { key, bytes: body.byteLength, contentType: "text/plain; charset=utf-8" };
+  const contentType = "text/plain; charset=utf-8";
+  const stored = await store.put(key, body, { httpMetadata: { contentType } });
+  return { key, bytes: stored.size, contentType };
 }
 
 async function putScreenshots(
-  store: MarkStore,
+  store: R2Bucket,
   beforeKey: string,
   afterKey: string,
   beforeBytes: ArrayBuffer,
   afterBytes: ArrayBuffer,
 ): Promise<{ before: R2Ref; after: R2Ref }> {
-  await store.put(beforeKey, beforeBytes, { httpMetadata: { contentType: "image/png" } });
-  await store.put(afterKey, afterBytes, { httpMetadata: { contentType: "image/png" } });
+  const contentType = "image/png";
+  const beforeStored = await store.put(beforeKey, beforeBytes, { httpMetadata: { contentType } });
+  const afterStored = await store.put(afterKey, afterBytes, { httpMetadata: { contentType } });
   return {
-    before: { key: beforeKey, bytes: beforeBytes.byteLength, contentType: "image/png" },
-    after: { key: afterKey, bytes: afterBytes.byteLength, contentType: "image/png" },
+    before: { key: beforeKey, bytes: beforeStored.size, contentType },
+    after: { key: afterKey, bytes: afterStored.size, contentType },
   };
 }
 
-async function putMarkBody(
-  store: MarkStore,
-  key: string,
-  body: MarkBody,
-): Promise<R2Ref> {
+async function putMarkBody(store: R2Bucket, key: string, body: MarkBody): Promise<R2Ref> {
   const encoded = new TextEncoder().encode(JSON.stringify(body));
-  await store.put(key, encoded, { httpMetadata: { contentType: "application/json" } });
-  return { key, bytes: encoded.byteLength, contentType: "application/json" };
+  const contentType = "application/json";
+  const stored = await store.put(key, encoded, { httpMetadata: { contentType } });
+  return { key, bytes: stored.size, contentType };
 }
 
 export async function storeMark(
-  store: MarkStore,
+  store: R2Bucket,
   keys: MarkKeys,
   diff: PageDiff,
   beforeText: string,

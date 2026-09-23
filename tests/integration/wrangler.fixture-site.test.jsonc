@@ -6,5 +6,6 @@
   "compatibility_date": "2026-09-16",
   "main": "../../workers/fixture-site.ts",
   "kv_namespaces": [{ "binding": "STATE" }],
+  "r2_buckets": [{ "binding": "MARKS", "bucket_name": "0509-marks-test" }],
   "vars": { "FIXTURE_SITE_TOKEN": "integration-token" }
 }
