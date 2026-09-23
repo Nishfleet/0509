@@ -165,10 +165,37 @@ describe("engine 4 P3 — a real change, end to end", () => {
       new Uint8Array([137, 80, 78, 71]).buffer,
     );
 
-    // Five R2 objects in the bucket, one per role, with the recorded types.
+    // Five R2 objects in the bucket, one per role. The keys are exact, so the
+    // acceptance's "the R2 keys for both texts and both screenshots" is a
+    // reproducible assertion rather than a claim about a run.
+    expect(refs).toEqual({
+      beforeTextKey: {
+        key: "marks/watch-fixture/2026-09-22T00-00-00-000Z/before-text.txt",
+        bytes: expect.any(Number),
+        contentType: "text/plain; charset=utf-8",
+      },
+      afterTextKey: {
+        key: "marks/watch-fixture/2026-09-22T00-00-00-000Z/after-text.txt",
+        bytes: expect.any(Number),
+        contentType: "text/plain; charset=utf-8",
+      },
+      beforeScreenshotKey: {
+        key: "marks/watch-fixture/2026-09-22T00-00-00-000Z/before-shot.png",
+        bytes: 4,
+        contentType: "image/png",
+      },
+      afterScreenshotKey: {
+        key: "marks/watch-fixture/2026-09-22T00-00-00-000Z/after-shot.png",
+        bytes: 4,
+        contentType: "image/png",
+      },
+      hunksKey: {
+        key: "marks/watch-fixture/2026-09-22T00-00-00-000Z/hunks.json",
+        bytes: expect.any(Number),
+        contentType: "application/json",
+      },
+    });
     for (const ref of Object.values(refs)) {
-      expect(typeof ref.key).toBe("string");
-      expect(ref.key).toMatch(/^marks\/watch-fixture\//);
       expect(ref.bytes).toBeGreaterThan(0);
     }
 
