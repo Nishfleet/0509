@@ -34,6 +34,16 @@ const flip = (mode: string, token: string | null = TOKEN, method = "POST") =>
     createExecutionContext(),
   );
 
+const setPrice = (variant: string, token: string | null = TOKEN, method = "POST") =>
+  worker.fetch(
+    new Request(`https://fixture.0509.in/__price?variant=${variant}`, {
+      method,
+      headers: token === null ? {} : { authorization: `Bearer ${token}` },
+    }),
+    env,
+    createExecutionContext(),
+  );
+
 const readPricing = (html: string) => {
   const section = /<section id="pricing"[\s\S]*?<\/section>/.exec(html);
   return section?.[0] ?? null;
@@ -157,5 +167,92 @@ describe("0509-fixture-site", () => {
     );
     expect(res.status).toBe(503);
     expect(await res.text()).toContain("FIXTURE_SITE_TOKEN");
+  });
+});
+
+describe("price variant", () => {
+  beforeEach(async () => {
+    await env.STATE.put("break-mode", "off");
+    await env.STATE.put("price-variant", "base");
+    await env.STATE.delete("price-flipped-at");
+  });
+
+  it("serves a fresh page on the base price with no flip time", async () => {
+    const res = await get();
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('data-variant="base"');
+    expect(html).toContain('data-flipped-at=""');
+    expect(html).toContain("₹1,299");
+  });
+
+  it("flips to raised and back to base, stamping the flip time on the page", async () => {
+    const raiseCtx = createExecutionContext();
+    const res = await worker.fetch(
+      new Request("https://fixture.0509.in/__price?variant=raised", {
+        method: "POST",
+        headers: { authorization: `Bearer ${TOKEN}` },
+      }),
+      env,
+      raiseCtx,
+    );
+    await waitOnExecutionContext(raiseCtx);
+    expect(res.status).toBe(200);
+    const html = await (await get()).text();
+    expect(html).toContain('data-variant="raised"');
+    expect(html).toContain("₹1,499");
+    expect(html).not.toContain("₹1,299");
+    const at = /data-flipped-at="([^"]*)"/.exec(html)?.[1];
+    expect(Number.isFinite(Date.parse(at ?? ""))).toBe(true);
+
+    const baseCtx = createExecutionContext();
+    const back = await worker.fetch(
+      new Request("https://fixture.0509.in/__price?variant=base", {
+        method: "POST",
+        headers: { authorization: `Bearer ${TOKEN}` },
+      }),
+      env,
+      baseCtx,
+    );
+    await waitOnExecutionContext(baseCtx);
+    expect(back.status).toBe(200);
+    const restored = await (await get()).text();
+    expect(restored).toContain('data-variant="base"');
+    expect(restored).toContain("₹1,299");
+    expect(restored).not.toContain("₹1,499");
+  });
+
+  it("403s with no token, 405s a GET, and 400s an unknown variant", async () => {
+    expect((await setPrice("raised", null)).status).toBe(403);
+    expect((await setPrice("raised", TOKEN, "GET")).status).toBe(405);
+    expect((await setPrice("cheap")).status).toBe(400);
+  });
+
+  it("keeps data-variant on a soft break, when the pricing section is gone", async () => {
+    const priceCtx = createExecutionContext();
+    await worker.fetch(
+      new Request("https://fixture.0509.in/__price?variant=raised", {
+        method: "POST",
+        headers: { authorization: `Bearer ${TOKEN}` },
+      }),
+      env,
+      priceCtx,
+    );
+    await waitOnExecutionContext(priceCtx);
+
+    const breakCtx = createExecutionContext();
+    await worker.fetch(
+      new Request("https://fixture.0509.in/__break?mode=soft", {
+        method: "POST",
+        headers: { authorization: `Bearer ${TOKEN}` },
+      }),
+      env,
+      breakCtx,
+    );
+    await waitOnExecutionContext(breakCtx);
+
+    const html = await (await get()).text();
+    expect(readPricing(html)).toBeNull();
+    expect(html).toContain('data-variant="raised"');
   });
 });
