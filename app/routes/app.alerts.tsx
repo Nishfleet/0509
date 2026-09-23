@@ -1,4 +1,5 @@
 import type { Route } from "./+types/app.alerts";
+import { env } from "cloudflare:workers";
 
 import { readDeliveryFailures } from "../lib/data/alert.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
@@ -10,7 +11,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
   return {
     email: session.user.email,
-    failures: workspaceId === null ? [] : await readDeliveryFailures(workspaceId),
+    failures: workspaceId === null ? [] : await readDeliveryFailures(env.DB, workspaceId),
   };
 }
 

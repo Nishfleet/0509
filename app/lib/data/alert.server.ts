@@ -1,5 +1,3 @@
-import { env } from "cloudflare:workers";
-
 import { briefText } from "../delivery-alert";
 
 const INSERT_DELIVERY_FAILED = `INSERT INTO alert (id, workspace_id, kind, severity, title, body, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING`;
@@ -57,10 +55,11 @@ WHERE a.workspace_id = ? AND a.kind = 'delivery_failed'
 ORDER BY a.created_at DESC
 LIMIT 20`;
 
-export async function readDeliveryFailures(workspaceId: string): Promise<DeliveryFailureRow[]> {
-  const { results } = await env.DB.prepare(SELECT_DELIVERY_FAILURES)
-    .bind(workspaceId)
-    .all<AlertJoinRow>();
+export async function readDeliveryFailures(
+  db: D1Database,
+  workspaceId: string,
+): Promise<DeliveryFailureRow[]> {
+  const { results } = await db.prepare(SELECT_DELIVERY_FAILURES).bind(workspaceId).all<AlertJoinRow>();
   return results.map((row) => ({
     id: row.id,
     title: row.title,
