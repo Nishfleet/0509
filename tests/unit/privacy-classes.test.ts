@@ -1,7 +1,8 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-import { compileAppCss, REPO_ROOT } from "./compile-app-css";
+import { compile } from "tailwindcss";
 import { describe, expect, it } from "vitest";
 
 // #4309: the privacy wordmark used `bg-accent` / `text-on-accent` after #3984
@@ -13,6 +14,7 @@ import { describe, expect, it } from "vitest";
 // The scan reads static className="..." strings only. A className={...}
 // expression, a template, or a class on an imported component is not seen.
 
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const PRIVACY = path.join(REPO_ROOT, "app/routes/privacy.tsx");
 const WORDMARK = 'className="bg-green text-on-green px-[5px]"';
 const RETIRED_WORDMARK = 'className="bg-accent text-on-accent px-[5px]"';
@@ -44,7 +46,22 @@ function hasRule(css: string, className: string): boolean {
 }
 
 async function classesWithNoRule(names: string[]): Promise<string[]> {
-  const compiled = await compileAppCss(names);
+  const css = await readFile(path.join(REPO_ROOT, "app/app.css"), "utf8");
+  const { build } = await compile(css, {
+    base: REPO_ROOT,
+    loadStylesheet: async (id) => {
+      if (id !== "tailwindcss") {
+        throw new Error(`app/app.css imported ${id}; this detector only resolves tailwindcss`);
+      }
+      const resolved = path.join(REPO_ROOT, "node_modules", "tailwindcss", "index.css");
+      return {
+        path: resolved,
+        base: path.dirname(resolved),
+        content: await readFile(resolved, "utf8"),
+      };
+    },
+  });
+  const compiled = build(names);
   return names.filter((name) => !hasRule(compiled, name));
 }
 
