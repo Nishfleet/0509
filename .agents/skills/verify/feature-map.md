@@ -41,11 +41,11 @@ state.
 
 | Route | File | Reach | Does | Proof |
 |---|---|---|---|---|
-| `/app` | `app/routes/app.home.tsx` | after sign-in, once the workspace has a self entity. Until then the loader redirects to `/onboarding`; `Tab` to the **Add a passkey** button (role `button`), `Enter` | Home. The signed-in email and an "Add a passkey" button that runs better-auth's register ceremony (`generate-register-options` → `verify-registration`) against the live session. | **J3**, **J4**; the register ceremony is **J2** — `e2e/j2-passkey.spec.ts` |
-| `/app/competitors` | `app/routes/app.competitors.tsx` | no link yet — type the URL; keyboard: — | The tracked set. Currently a stub. | **J6** |
+| `/app` | `app/routes/app.home.tsx` | the Home place in the nav (left rail at 860px and up, bottom tab bar below). After sign-in, once the workspace has a self entity. Until then the loader redirects to `/onboarding`; `Tab` to Home in the nav, `Enter`; then `Tab` to the button, `Enter` | Home. The signed-in email and an "Add a passkey" button that runs better-auth's register ceremony (`generate-register-options` → `verify-registration`) against the live session. | **J3**, **J4**; the register ceremony is **J2** — `e2e/j2-passkey.spec.ts`; nav and active place — `tests/unit/app-shell.test.ts` |
+| `/app/competitors` | `app/routes/app.competitors.tsx` | the Competitors place in the nav (left rail at 860px and up, bottom tab bar below); `Tab` to Competitors in the nav, `Enter` | The tracked set. Currently a stub. | **J6**; nav and active place — `tests/unit/app-shell.test.ts` |
 | `/app/competitors/:entityId` | `app/routes/app.competitor.tsx` | no path yet — `/app/competitors` is a stub, so there is no row to open it from; type the URL | One competitor. Currently a stub. | **J7**, **J10** |
-| `/app/alerts` | `app/routes/app.alerts.tsx` | no link yet — type the URL; keyboard: — | What changed. Currently a stub. | **J7**, **J8** |
-| `/app/settings` | `app/routes/app.settings.tsx` | no link yet — type the URL; keyboard: — | Workspace settings. Links to the public card. | **J13**, **J14** |
+| `/app/alerts` | `app/routes/app.alerts.tsx` | the Alerts place in the nav (left rail at 860px and up, bottom tab bar below); `Tab` to Alerts in the nav, `Enter` | What changed. Currently a stub. | **J7**, **J8**; nav and active place — `tests/unit/app-shell.test.ts` |
+| `/app/settings` | `app/routes/app.settings.tsx` | the Settings place in the nav (left rail at 860px and up, bottom tab bar below); `Tab` to Settings in the nav, `Enter` | Workspace settings. Links to the public card. | **J13**, **J14**; nav and active place — `tests/unit/app-shell.test.ts` |
 | `/app/settings/card` | `app/routes/settings.card.tsx` | the "Public card" link on `/app/settings`; `Tab` to the **Turn the public card on** button (role `button`), `Enter` | The public-card switch: turn it on (which mints an opaque URL), copy the link, rotate the URL, turn it off. Turning it off is what the public route's 404 is graded on — the edge copy expires on its own inside a minute, which is the contract's "404 within a minute". | `tests/integration/card/public-card.integration.test.ts` — the writer's publish, rotate, unpublish and two-workspace uniqueness against real D1 |
 | `/onboarding` | `app/routes/onboarding.tsx` | the first signed-in request, when the workspace has no self entity. `/app` redirects here. A self entity sends this loader back to `/app`; the input is focused | One input, placeholder "your website, or a handle", and the signed-in email. "Add a passkey" runs the same register ceremony as Home. The input does not post yet; saving the subject is #3996. | **J1** — `e2e/j1-magic-link.spec.ts`; the passkey control is **J2** — `e2e/j2-passkey.spec.ts` |
 
@@ -72,7 +72,9 @@ than implying coverage. They fill in with the engine packets under #3842. The
 rule that keeps this file honest is the same one that keeps the product honest:
 a row describes what a user can do **today**, never what is planned.
 
-No navigation exists yet — there is no nav bar, no sidebar and no link between
-the signed-in routes. Reaching `/app/alerts` today means typing the URL. That is
-a real gap, and it is here because a feature map that omits the gap is how an
-agent concludes the nav must already exist somewhere it has not looked.
+The four places — Home, Competitors, Alerts, Settings — are linked from
+`app/components/nav.tsx`, drawn by `app/components/app-shell.tsx` on each of the
+four routes. `/app/competitors/:entityId` has no path yet — `/app/competitors`
+is a stub (`app/routes/app.competitors.tsx`), so there is no row to open it
+from; `/app/settings/card` is reached from the Settings page. Neither is a nav
+place.
