@@ -4,8 +4,7 @@ import { namesFromTitle } from "../names";
 import {
   normaliseName,
   type Candidate,
-  type DiscoverySubject,
-  type GeneratorEnv,
+  type Generator,
 } from "../types";
 
 export const HN_GENERATOR = "hn-algolia-comentions";
@@ -51,10 +50,7 @@ function prettify(domain: string): string {
     .join(" ");
 }
 
-export async function hnCoMentions(
-  subject: DiscoverySubject,
-  env: GeneratorEnv = {},
-): Promise<Candidate[]> {
+export const hnCoMentions: Generator = async (subject, env) => {
   const fetchImpl = env.fetchImpl ?? fetch;
   const url = `https://hn.algolia.com/api/v1/search?query=${encodeURIComponent(subject.name)}&tags=(story,comment)&hitsPerPage=50`;
   const res = await fetchImpl(url, { signal: AbortSignal.timeout(8_000) }).catch(() => null);
@@ -84,4 +80,4 @@ export async function hnCoMentions(
     }
   }
   return [...byKey.values()];
-}
+};

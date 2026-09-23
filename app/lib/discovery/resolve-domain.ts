@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { normaliseName } from "./types";
 
-export type ResolutionVia = "wikidata" | "slug" | "unresolved";
+type ResolutionVia = "wikidata" | "slug" | "unresolved";
 
 export interface Resolution {
   domain: string | null;

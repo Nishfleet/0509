@@ -1,12 +1,12 @@
 import { z } from "zod";
 
-export const CandidateEvidence = z.object({
+const CandidateEvidence = z.object({
   sourceUrl: z.string(),
   excerpt: z.string(),
   generator: z.string(),
   publisherDomain: z.string().optional(),
 });
-export type CandidateEvidence = z.infer<typeof CandidateEvidence>;
+type CandidateEvidence = z.infer<typeof CandidateEvidence>;
 
 export const Candidate = z.object({
   name: z.string(),
@@ -22,7 +22,7 @@ export interface DiscoverySubject {
   country?: string | null;
 }
 
-export interface GeneratorEnv {
+interface GeneratorEnv {
   fetchImpl?: typeof fetch;
   onPayload?: (payload: { url: string; contentType: string; body: string }) => void;
 }

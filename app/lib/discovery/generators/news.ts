@@ -5,8 +5,7 @@ import { cleanCandidateName, namesFromTitle } from "../names";
 import {
   normaliseName,
   type Candidate,
-  type DiscoverySubject,
-  type GeneratorEnv,
+  type Generator,
 } from "../types";
 
 export const NEWS_GENERATOR = "google-news-roundup";
@@ -35,7 +34,7 @@ export function parseNewsFeed(xml: string): NewsItem[] {
     .filter((item) => item.link.length > 0 && item.title.length > 0);
 }
 
-export async function extractRoundupNames(html: string, subjectName: string): Promise<string[]> {
+async function extractRoundupNames(html: string, subjectName: string): Promise<string[]> {
   if (typeof HTMLRewriter === "undefined") return [];
   const scoped: string[] = [];
   const loose: string[] = [];
@@ -71,10 +70,7 @@ export async function extractRoundupNames(html: string, subjectName: string): Pr
   return names;
 }
 
-export async function googleNewsRoundups(
-  subject: DiscoverySubject,
-  env: GeneratorEnv = {},
-): Promise<Candidate[]> {
+export const googleNewsRoundups: Generator = async (subject, env) => {
   const fetchImpl = env.fetchImpl ?? fetch;
   const items: NewsItem[] = [];
   for (const template of QUERY_TEMPLATES) {
@@ -117,4 +113,4 @@ export async function googleNewsRoundups(
     }
   }
   return [...byName.values()];
-}
+};

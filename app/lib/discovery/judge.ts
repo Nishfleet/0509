@@ -15,7 +15,7 @@ export interface JudgeEnv extends JevClientEnv {
   fetchImpl?: typeof fetch;
 }
 
-export type Decision = "accept" | "maybe" | "drop";
+type Decision = "accept" | "maybe" | "drop";
 
 export interface JudgedCandidate {
   scored: ScoredCandidate;
@@ -45,7 +45,7 @@ function stableStringify(value: unknown): string {
   return JSON.stringify(value);
 }
 
-export async function inputHash(questionId: string, pack: unknown): Promise<string> {
+async function inputHash(questionId: string, pack: unknown): Promise<string> {
   const digest = await crypto.subtle.digest(
     "SHA-256",
     new TextEncoder().encode(stableStringify({ q: questionId, pack })),

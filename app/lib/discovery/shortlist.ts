@@ -2,7 +2,7 @@ import { getDomain } from "tldts";
 
 import { normaliseName, type Candidate } from "./types";
 
-export const SHORTLIST_LIMIT = 20;
+const SHORTLIST_LIMIT = 20;
 
 export interface ScoredCandidate {
   candidate: Candidate;
