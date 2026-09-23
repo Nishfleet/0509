@@ -35,12 +35,18 @@ interface BriefOwnSite {
   }[];
 }
 
+interface BriefDegradedSource {
+  key: string;
+  last_landed_at: string | null;
+}
+
 interface BriefChecked {
   mention_count: number;
   site_change_count: number;
   new_ad_count: number;
   source_keys: string[];
   degraded_source_keys: string[];
+  degraded_sources: BriefDegradedSource[];
 }
 
 export interface BriefPayload {
@@ -175,12 +181,37 @@ export function parseBriefPayload(payloadJson: string): BriefPayload {
   const checked = typeof checkedRaw === "object" && checkedRaw !== null ? (checkedRaw as Record<string, unknown>) : {};
   const stringList = (value: unknown): string[] =>
     Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
+  const degradedSourceRaw = (entry: unknown): BriefDegradedSource | null => {
+    if (typeof entry !== "object" || entry === null) return null;
+    const row = entry as Record<string, unknown>;
+    if (typeof row.key !== "string" || row.key.length === 0) return null;
+    return {
+      key: row.key,
+      last_landed_at:
+        typeof row.last_landed_at === "string" && row.last_landed_at.length > 0
+          ? row.last_landed_at
+          : null,
+    };
+  };
+  const namedDegraded = Array.isArray(checked.degraded_sources)
+    ? checked.degraded_sources.flatMap((entry) => {
+        const source = degradedSourceRaw(entry);
+        return source === null ? [] : [source];
+      })
+    : [];
+  const degradedSources: BriefDegradedSource[] = [
+    ...namedDegraded,
+    ...stringList(checked.degraded_source_keys)
+      .filter((key) => !namedDegraded.some((source) => source.key === key))
+      .map((key) => ({ key, last_landed_at: null })),
+  ];
   const checkedCounts: BriefChecked = {
     mention_count: numberOrNull(checked.mention_count) ?? 0,
     site_change_count: numberOrNull(checked.site_change_count) ?? 0,
     new_ad_count: numberOrNull(checked.new_ad_count) ?? 0,
     source_keys: stringList(checked.source_keys),
     degraded_source_keys: stringList(checked.degraded_source_keys),
+    degraded_sources: degradedSources,
   };
 
   return {
