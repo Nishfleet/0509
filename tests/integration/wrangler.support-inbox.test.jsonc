@@ -1,0 +1,11 @@
+// Test config for the support-inbox Email Worker (0509#4229 child 2): real
+// workerd and a real local D1 carrying migrations/, so the insert runs against
+// the schema the deploy ships. SUPPORT_INBOX_GITHUB_TOKEN is a var here so the
+// token check has something to read; production gets it as a Worker secret.
+{
+  "name": "0509-support-inbox-test",
+  "compatibility_date": "2026-09-16",
+  "main": "../../workers/support-inbox.ts",
+  "d1_databases": [{ "binding": "DB", "database_name": "0509-test", "database_id": "test" }],
+  "vars": { "SUPPORT_INBOX_GITHUB_TOKEN": "integration-token" }
+}
