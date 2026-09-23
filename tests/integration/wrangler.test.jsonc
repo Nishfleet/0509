@@ -8,5 +8,9 @@
     { "binding": "SHOTS", "bucket_name": "0509-snapshots-test" },
     { "binding": "SNAPSHOTS", "bucket_name": "0509-snapshots-test" }
   ],
-  "images": { "binding": "IMAGES" }
+  "images": { "binding": "IMAGES" },
+  "kv_namespaces": [
+    { "binding": "IDENTITY_CACHE", "id": "test" },
+    { "binding": "RESOLVE_CACHE", "id": "resolve-cache-test" }
+  ]
 }

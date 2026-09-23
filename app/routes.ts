@@ -13,6 +13,7 @@ export default [
     route("card", "routes/settings.card.tsx"),
   ]),
   route("s/:slug", "routes/s.$slug.tsx"),
+  route("u/:token", "routes/u.$token.tsx"),
   route("api/health", "routes/api.health.ts"),
   route("api/auth/*", "routes/api.auth.$.ts"),
   route("onboarding", "routes/onboarding.tsx"),
@@ -20,5 +21,6 @@ export default [
   route("design/brand-chips", "routes/design.brand-chips.tsx"),
   route("design/nav", "routes/design.nav.tsx"),
   route("onboarding/competitors", "routes/onboarding.competitors.tsx"),
+  route("design/capture-plates", "routes/design.capture-plates.tsx"),
   route("app/shots/*", "routes/app.shots.$.ts"),
 ] satisfies RouteConfig;

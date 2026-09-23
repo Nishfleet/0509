@@ -19,6 +19,7 @@
     "@better-auth/passkey": "^1.7.5",
     "@cloudflare/puppeteer": "^1.4.0",
     "@extractus/feed-extractor": "8.0.3",
+    "@sentry/cloudflare": "^10.75.1",
     "better-auth": "^1.7.5",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
