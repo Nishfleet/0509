@@ -243,8 +243,8 @@ jobs:
 
   # Opus 5 grades every PR (Nish 2026-09-22: "have opus 5 grade glm and ds4.1
   # flash"). Stock anthropics/claude-code-action on the Claude subscription
-  # token; no API spend. A D or F adds the blocked-by-judge label, which the
-  # worker's arm step already refuses (fleet-ops#4557); A to C removes it.
+  # token; no API spend. A D or F adds the blocked-by-judge label, which fails this
+  # check (the PR stays armed but cannot merge) and re-queues the issue; A to C removes it.
   # Advisory in the ruleset on purpose: it runs only on pull_request, and a
   # required check must also report on merge_group.
   # Nish 2026-09-22: "you can't grade your own work. you grade opus." Opus
@@ -288,10 +288,10 @@ jobs:
 
             A "yes" to any of the three §C1 questions caps the grade at D unless the diff carries the lint rule that makes it impossible, or the body cites a filed 0509 issue for that rule.
 
-            Answer all four questions in your comment, each as a yes or a no with the file and line that decides it. Post ONE top-level comment via `gh pr comment` that starts with `Opus grade: <letter>` followed by at most eight lines of reasons, each tied to a file and line. Use inline comments only for concrete defects. If the grade is D or F run `gh pr edit --add-label blocked-by-judge`; if A, B or C run `gh pr edit --remove-label blocked-by-judge` (ignore the error if absent). Do not edit files. Do not approve or request changes through the review API.
+            Answer all four questions in your comment, each as a yes or a no with the file and line that decides it. Post ONE top-level comment via `gh pr comment` that starts with `Opus grade: <letter>` followed by at most eight lines of reasons, each tied to a file and line. Use inline comments only for concrete defects. If the grade is D or F run `gh pr edit --add-label blocked-by-judge` and hand the PR back to the queue: `gh issue edit <each issue the PR closes> --add-label agent-ready --remove-label agent-in-progress` (intake then starts a worker that continues this same PR, fleet-ops#8418). If A, B or C run `gh pr edit --remove-label blocked-by-judge` and `gh issue edit <each issue the PR closes> --remove-label agent-ready` (ignore the error if absent). Do not edit files. Do not approve or request changes through the review API.
           claude_args: |
             --model claude-opus-5-5
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr edit:*),Bash(gh issue view:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*)"
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr edit:*),Bash(gh issue view:*),Bash(gh issue edit:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*)"
       - name: A D or F grade fails this check (fail closed if the label read fails)
         if: github.event_name == 'pull_request'
         env:
@@ -300,25 +300,3 @@ jobs:
       - name: merge_group reports the check so the queue can merge (the grade was enforced on the pull request)
         if: github.event_name == 'merge_group'
         run: "true"
-
-  # The grader arms the merge (Fable, 2026-09-22): seven worker PRs sat CLEAN
-  # and unmerged (#4175 #4188 #4192 #4197 #4198 #4205 #4213) because the
-  # worker's own step 9 arm runs only if the worker is still alive when the
-  # grade lands, and a 45-min TimeoutStartSec kill ends many before that. The
-  # arm belongs to the event, not the worker: a passing grade on a worker PR
-  # enqueues it; the merge queue still requires every check on the merge
-  # commit. Separate job so the elevated token never sits in the grader.
-  arm-merge:
-    name: arm-merge
-    needs: opus-review
-    if: github.event_name == 'pull_request' && github.event.pull_request.user.login == 'nishfleet-worker[bot]' && needs.opus-review.result == 'success'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: write
-      pull-requests: write
-    steps:
-      - name: Enqueue the graded PR on the merge queue
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh pr merge ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --squash --auto
