@@ -1,6 +1,6 @@
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 
-export interface TakedownParams {
+interface TakedownParams {
   takedownId: string;
 }
 
