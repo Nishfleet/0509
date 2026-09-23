@@ -27,6 +27,7 @@
     "react-router": "^8.4.0",
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.7.0",
+    "tldts": "^7.4.13",
     "zod": "^4.6.5"
   },
   "devDependencies": {
@@ -39,6 +40,7 @@
     "@types/node": "^22.20.4",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
+    "chrome-devtools-mcp": "1.9.0",
     "eslint": "^10.11.0",
     "eslint-plugin-boundaries": "^7.2.0",
     "eslint-plugin-import-x": "^4.17.1",
@@ -51,8 +53,7 @@
     "typescript-eslint": "^8.70.0",
     "vite": "^8.0.3",
     "vitest": "4.1.11",
-    "wrangler": "^4.135.0",
-    "chrome-devtools-mcp": "1.9.0"
+    "wrangler": "^4.135.0"
   },
   "overrides": {
     "vitest": "4.1.11",

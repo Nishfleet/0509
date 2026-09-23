@@ -10,7 +10,7 @@ import {
 } from "../../app/lib/data/entity.server";
 import { markCompetitorsReady } from "../../app/lib/data/onboarding-run.server";
 import { acceptSuggestion, listMaybeCompetitors } from "../../app/lib/data/suggestion.server";
-import { domainFromInput } from "../../app/routes/onboarding.competitors";
+import { normaliseInput } from "../../app/lib/identity/normalise";
 
 // Issue #3999's write and read paths against real workerd D1 with
 // migrations/0001_rebuild.sql applied. The screen only renders these rows, so
@@ -305,14 +305,20 @@ describe("markCompetitorsReady", () => {
   });
 });
 
-describe("domainFromInput", () => {
-  it("normalises domains and URLs, and refuses what it cannot honestly name", () => {
-    expect(domainFromInput("gymshark.com")).toBe("gymshark.com");
-    expect(domainFromInput("  HTTPS://WWW.Gymshark.com/uk/men?utm=x ")).toBe("gymshark.com");
-    expect(domainFromInput("oneractive.com")).toBe("oneractive.com");
-    expect(domainFromInput("@gymshark")).toBeNull();
-    expect(domainFromInput("gymshark")).toBeNull();
-    expect(domainFromInput("not a domain")).toBeNull();
-    expect(domainFromInput("")).toBeNull();
+describe("the add input, parsed by the identity engine", () => {
+  const asDomain = (input: string): string | null => {
+    const parsed = normaliseInput(input);
+    return parsed.ok && parsed.subject.kind === "domain" ? parsed.subject.registrable : null;
+  };
+
+  it("names domains and URLs, and refuses what it cannot honestly name", () => {
+    expect(asDomain("gymshark.com")).toBe("gymshark.com");
+    expect(asDomain("  HTTPS://WWW.Gymshark.com/uk/men?utm=x ")).toBe("gymshark.com");
+    expect(asDomain("oneractive.com")).toBe("oneractive.com");
+    expect(asDomain("bbc.co.uk")).toBe("bbc.co.uk");
+    expect(asDomain("@gymshark")).toBeNull();
+    expect(asDomain("gymshark")).toBeNull();
+    expect(asDomain("not a domain")).toBeNull();
+    expect(asDomain("")).toBeNull();
   });
 });

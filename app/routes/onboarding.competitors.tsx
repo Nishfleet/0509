@@ -8,25 +8,10 @@ import { addUserCompetitor, listOnCompetitors } from "../lib/data/entity.server"
 import { markCompetitorsReady } from "../lib/data/onboarding-run.server";
 import { acceptSuggestion, listMaybeCompetitors } from "../lib/data/suggestion.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
+import { normaliseInput } from "../lib/identity/normalise";
 import { requireSession } from "../lib/require-session.server";
 
 const POLL_MS = 5000;
-
-export function domainFromInput(input: string): string | null {
-  const trimmed = input.trim().toLowerCase();
-  if (!trimmed || /\s/.test(trimmed) || trimmed.includes("@")) return null;
-  let host: string;
-  try {
-    host = new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`).hostname;
-  } catch {
-    return null;
-  }
-  const domain = host.startsWith("www.") ? host.slice(4) : host;
-  if (!domain.includes(".") || domain.startsWith(".") || domain.endsWith(".") || domain.includes("..")) {
-    return null;
-  }
-  return domain;
-}
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
@@ -54,11 +39,11 @@ export async function action({ request }: Route.ActionArgs) {
   const subject = form.get("subject");
   const input = typeof subject === "string" ? subject.trim() : "";
   if (!input) return null;
-  const domain = domainFromInput(input);
-  if (domain === null) {
+  const parsed = normaliseInput(input);
+  if (!parsed.ok || parsed.subject.kind !== "domain" || parsed.subject.registrable === null) {
     return { addError: "We couldn't find that one — try the brand's main website." };
   }
-  await addUserCompetitor(workspaceId, { domain, name: null });
+  await addUserCompetitor(workspaceId, { domain: parsed.subject.registrable, name: null });
   return null;
 }
 
@@ -67,13 +52,14 @@ export default function OnboardingCompetitors({ loaderData, actionData }: Route.
   const stillLooking = loaderData.stillLooking;
 
   useEffect(() => {
+    if (!stillLooking) return;
     const timer = setInterval(() => {
       void revalidator.revalidate();
     }, POLL_MS);
     return () => {
       clearInterval(timer);
     };
-  }, [revalidator]);
+  }, [revalidator, stillLooking]);
 
   return (
     <main className="mx-auto flex min-h-svh w-full max-w-[52rem] flex-col gap-6 px-6 py-12 sm:px-10 sm:py-16">

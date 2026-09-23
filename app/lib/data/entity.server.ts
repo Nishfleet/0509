@@ -67,7 +67,7 @@ export async function addUserCompetitor(
   input: { domain: string; name: string | null; now?: string },
 ): Promise<string> {
   const at = input.now ?? new Date().toISOString();
-  const [upserted] = await env.DB.batch([
+  const [upserted] = await env.DB.batch<Record<string, unknown>>([
     competitorOnStatement(workspaceId, {
       domain: input.domain,
       name: input.name,
@@ -78,7 +78,9 @@ export async function addUserCompetitor(
     env.DB.prepare(ACCEPT_SUGGESTION_FOR_DOMAIN)
       .bind(at, workspaceId, input.domain, workspaceId, input.domain),
   ]);
-  const row = upserted.results[0] as { id: string } | undefined;
-  if (!row) throw new Error("entity upsert returned no id");
+  const row = upserted.results[0];
+  if (row === undefined || typeof row.id !== "string") {
+    throw new Error("entity upsert returned no id");
+  }
   return row.id;
 }
