@@ -51,11 +51,17 @@ test("the sheet carries the 380ms up / 280ms down budget and an 85% ink hairline
   await page.setViewportSize(PHONE);
   await page.goto("/design/row-sheet");
 
+  const viewport = page.viewportSize();
   const row = page.locator('[data-row-expansion="sheet"]').first();
   await row.click();
   const popup = page.locator(POPUP).first();
   await expect(popup).toBeVisible();
   await expect(popup).toBeFocused();
+  // The sheet mounts with translate-y-full and transitions up over 380ms; wait
+  // until its bottom edge is flush with the viewport bottom before measuring.
+  await expect
+    .poll(() => popup.evaluate((element) => Math.round(element.getBoundingClientRect().bottom)))
+    .toBe(viewport?.height ?? 0);
 
   const open = await popup.evaluate((element) => {
     const style = getComputedStyle(element);
@@ -70,15 +76,14 @@ test("the sheet carries the 380ms up / 280ms down budget and an 85% ink hairline
 
   expect(open.duration).toBe("0.38s");
   expect(open.easing).toBe("cubic-bezier(0.32, 0.72, 0, 1)");
-  const viewport = page.viewportSize();
   expect(open.box.height / (viewport?.height ?? 1)).toBeCloseTo(0.85, 1);
-  expect(open.box.y + open.box.height).toBeCloseTo(viewport?.height ?? 0, 0);
+  expect(Math.round(open.box.y + open.box.height)).toBe(viewport?.height ?? 0);
   expect(open.borderTopWidth).toBe("1px");
   expect(open.borderTopColor).toBe("rgb(14, 13, 10)");
 
-  // The close half of the budget, read off the live element at the exact moment
-  // Base UI flips the popup into its ending state — no hand-set attribute, no
-  // race against the 280ms transition (a plain poll lost that race under load).
+  // The close half of the budget: a MutationObserver captures the popup's computed
+  // transitionDuration at the frame Base UI sets data-ending-style, which is the
+  // 280ms close rule.
   await page.evaluate(() => {
     const element = document.querySelector("[data-row-sheet-popup]");
     if (!element) throw new Error("no row-sheet popup to observe");
