@@ -5,55 +5,49 @@ import { Form, useNavigation } from "react-router";
 export interface OneInputProps {
   label: string;
   action: string;
-  notFound?: boolean;
 }
 
-const NOT_FOUND_LINE = "we couldn't find anything for that, try the main website";
-
-export function OneInput({
-  label,
-  action,
-  notFound = false,
-}: OneInputProps): ReactElement {
+export function OneInput({ label, action }: OneInputProps): ReactElement {
   const field = useRef<HTMLInputElement>(null);
   const navigation = useNavigation();
+  const submitted = useRef(false);
 
   useEffect(() => {
-    if (notFound && navigation.state === "idle") field.current?.focus();
-  }, [notFound, navigation.state]);
+    if (navigation.state !== "idle") {
+      submitted.current = true;
+      return;
+    }
+    if (submitted.current) {
+      submitted.current = false;
+      field.current?.focus();
+    }
+  }, [navigation.state]);
 
   return (
-    <div className="flex w-full flex-col gap-3">
-      <Form
-        method="post"
-        action={action}
-        className="flex w-full flex-col gap-3 sm:flex-row sm:items-start"
+    <Form
+      method="post"
+      action={action}
+      className="flex w-full flex-col gap-3 sm:flex-row sm:items-start"
+    >
+      <input
+        ref={field}
+        name="subject"
+        type="text"
+        aria-label={label}
+        placeholder={label}
+        autoComplete="off"
+        autoCapitalize="off"
+        spellCheck={false}
+        enterKeyHint="go"
+        autoFocus
+        className="w-full border border-line bg-card px-4 py-3 font-sans text-body text-ink outline-none placeholder:text-ink-faint focus-visible:border-green sm:max-w-[26rem]"
+      />
+      <button
+        type="submit"
+        className="shrink-0 border border-ink bg-green px-5 py-3 font-display text-[0.95rem] font-bold uppercase tracking-[0.02em] text-on-green"
       >
-        <input
-          ref={field}
-          name="subject"
-          type="text"
-          aria-label={label}
-          placeholder={label}
-          autoComplete="off"
-          autoCapitalize="off"
-          spellCheck={false}
-          enterKeyHint="go"
-          autoFocus
-          className="w-full border border-line bg-card px-4 py-3 font-sans text-body text-ink outline-none placeholder:text-ink-faint focus-visible:border-green sm:max-w-[26rem]"
-        />
-        <button
-          type="submit"
-          className="shrink-0 border border-ink bg-green px-5 py-3 font-display text-[0.95rem] font-bold uppercase tracking-[0.02em] text-on-green"
-        >
-          Continue
-        </button>
-      </Form>
-      {notFound ? (
-        <p role="status" className="font-mono text-meta text-ink-soft">
-          {NOT_FOUND_LINE}
-        </p>
-      ) : null}
-    </div>
+        Continue
+      </button>
+    </Form>
   );
 }

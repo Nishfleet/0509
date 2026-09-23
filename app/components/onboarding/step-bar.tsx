@@ -20,7 +20,7 @@ export function StepBar({ steps, current }: StepBarProps): ReactElement {
               <span aria-hidden="true">{"->"}</span>
             )}
             {here ? (
-              <span className="bg-green px-[7px] py-px font-semibold text-on-green">
+              <span aria-current="step" className="bg-green px-[7px] py-px font-semibold text-on-green">
                 {position} {label}
               </span>
             ) : (

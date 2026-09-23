@@ -10,15 +10,14 @@ import { requireInboxToken, signInWithMagicLink } from "./inbox";
 // empty D1 and no route to deliver mail, so the sign-in step cannot be honest
 // there — the same boundary j2-passkey.spec.ts documents.
 //
-// Nothing here pins the placeholder or the not-found copy verbatim (the
-// contract-not-copy convention in smoke.spec.ts): the input is found by its
-// accessible name pattern and the line is found by role, so a copy edit is
-// not a red gate. What is asserted is the contract today — a domain and a
-// handle each redirect to the card screen, and an empty submit renders one
-// line with the field still focused and no error page. The "nothing found
-// anywhere" variant of that line is the identity engine's answer (all probes
-// empty, docs/engines/identity-card.md) and is asserted with the card screen
-// in #3993; screen 1 must not fake it.
+// Screen 1's own reachable paths are the three the acceptance names: a real
+// domain and a real `@handle` each redirect to the identity landing, an empty
+// or whitespace submit stays on screen 1 with the input still focused and
+// nothing extra below it. The "nothing found anywhere" line lives on the
+// card screen (#3993) for a deliberate nonsense string, never here: reading
+// (a), the settled reading recorded on #3996 (2026-09-22). Screen 1 does
+// not own the line and does not write a second normaliser (the struck
+// blocker on #3885).
 test.skip(
   !process.env.PLAYWRIGHT_TEST_BASE_URL,
   "screen 1 needs a session, and a session needs the production mail path",
@@ -33,6 +32,10 @@ async function signedIn(page: Page): Promise<void> {
 
 function inputOnScreen(page: Page) {
   return page.getByRole("textbox", { name: /website, or a handle/i });
+}
+
+function assertNothingBelowForm(page: Page) {
+  return expect(page.getByRole("status")).toHaveCount(0);
 }
 
 // `overflow-x: hidden` on html/body makes documentElement.scrollWidth blind to
@@ -98,7 +101,7 @@ test("a real @handle redirects to the card screen, which does not overflow at 39
   expect(errors).toEqual([]);
 });
 
-test("an empty submit shows the one line, focused, on screen 1, with no error page and no overflow", async ({
+test("an empty submit stays on screen 1, focused, with nothing below the input and no error page", async ({
   page,
 }) => {
   const errors = collectConsoleErrors(page);
@@ -106,28 +109,26 @@ test("an empty submit shows the one line, focused, on screen 1, with no error pa
   const input = inputOnScreen(page);
   await expect(input).toBeFocused();
   // The field carries no `required`, so the empty submit reaches the action —
-  // the honest reachable path into the not-found branch on screen 1. A
-  // deliberate nonsense string is a *subject* — screen 1 passes it through and
-  // the identity engine answers "nothing found anywhere" on the card screen
-  // (#3993); screen 1 must not fake that answer with a second normaliser.
+  // the honest reachable path. The action stays on screen 1; nothing was
+  // probed, so there is nothing to report below the input.
   await input.fill("");
   await page.getByRole("button", { name: /continue/i }).click();
-  await expect(page.getByRole("status")).toBeVisible();
-  await expect(input).toBeFocused();
   await expect(page).toHaveURL(/\/onboarding$/);
   await expect(page).not.toHaveURL(/\/onboarding\/identity/);
+  await expect(input).toBeFocused();
+  await assertNothingBelowForm(page);
   await assertNoOverflow(page);
   expect(errors).toEqual([]);
 });
 
-test("a whitespace-only submit reaches the same one line", async ({ page }) => {
+test("a whitespace-only submit reaches the same quiet state", async ({ page }) => {
   await signedIn(page);
   const input = inputOnScreen(page);
   await input.fill("   ");
   await page.getByRole("button", { name: /continue/i }).click();
-  await expect(page.getByRole("status")).toBeVisible();
-  await expect(input).toBeFocused();
   await expect(page).toHaveURL(/\/onboarding$/);
+  await expect(input).toBeFocused();
+  await assertNothingBelowForm(page);
 });
 
 test("a deliberate nonsense string is passed through to the card screen, not answered here", async ({
@@ -139,9 +140,10 @@ test("a deliberate nonsense string is passed through to the card screen, not ans
   await input.fill("qqqzzz-not-a-thing-9f3a");
   await page.getByRole("button", { name: /continue/i }).click();
   await expect(page).toHaveURL(/\/onboarding\/identity\?input=qqqzzz-not-a-thing-9f3a$/);
-  // No "nothing found anywhere" line on screen 1: that answer is the identity
-  // engine's (#3993), and screen 1 never renders an error page.
-  await expect(page.getByRole("status")).toHaveCount(0);
+  // The "nothing found anywhere" line is the identity engine's answer (all
+  // probes empty, docs/engines/identity-card.md) and renders on the card
+  // (#3993). Screen 1 must not fake it with a second normaliser.
+  await assertNothingBelowForm(page);
   await assertNoOverflow(page);
   expect(errors).toEqual([]);
 });

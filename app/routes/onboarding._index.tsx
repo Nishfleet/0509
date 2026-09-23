@@ -21,21 +21,15 @@ export async function action({ request }: Route.ActionArgs) {
   const form = await request.formData();
   const subject = form.get("subject");
   const input = typeof subject === "string" ? subject.trim() : "";
-  if (!input) return { notFound: true as const };
+  if (!input) return null;
   return redirect(`/onboarding/identity?input=${encodeURIComponent(input)}`);
 }
 
-export default function OnboardingScreenOne({ actionData }: Route.ComponentProps) {
-  const notFound = Boolean(actionData?.notFound);
-
+export default function OnboardingScreenOne() {
   return (
     <main className="mx-auto flex min-h-svh w-full max-w-[52rem] flex-col gap-8 px-6 py-12 sm:px-10 sm:py-16">
       <StepBar steps={STEPS} current={1} />
-      <OneInput
-        label="your website, or a handle"
-        action="/onboarding"
-        notFound={notFound}
-      />
+      <OneInput label="your website, or a handle" action="/onboarding" />
     </main>
   );
 }

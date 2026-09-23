@@ -7,7 +7,7 @@ const { redirect, requireSessionCalls, landingFor } = vi.hoisted(() => ({
     throw new Error(`redirect:${to}`);
   }),
   requireSessionCalls: { count: 0 },
-  landingFor: { value: "/onboarding" },
+  landingFor: { value: "/onboarding" as string | null },
 }));
 
 vi.mock("react-router", () => ({
@@ -57,15 +57,7 @@ function submit(subject: string | null): Promise<unknown> {
   return Promise.resolve(action({ request, params: {} })).catch((thrown: unknown) => thrown);
 }
 
-const NOT_FOUND_LINE = "we couldn&#x27;t find anything for that, try the main website";
 const STEPS = ["one input", "your card", "who you're up against"] as const;
-
-// The marker and the button paint with the registered theme tokens; `bg-accent`
-// and `text-on-accent` are not in app/app.css's @theme, so a class the app does
-// not register is a class that emits no CSS. The assertions name the tokens the
-// stylesheet defines, not a copy of a class string, so a rename fails here.
-const GREEN_MARKER = "bg-green";
-const ON_GREEN = "text-on-green";
 
 describe("the one input", () => {
   it("renders exactly one text field and one submit action", () => {
@@ -87,17 +79,10 @@ describe("the one input", () => {
     expect(oneInput()).not.toContain("required");
   });
 
-  it("shows one line and no error page when nothing was found", () => {
-    const html = oneInput({ notFound: true });
-    expect(html).toContain(NOT_FOUND_LINE);
-    expect(html.match(/<p/g)?.length).toBe(1);
-    expect(html).not.toContain("<h1");
-  });
-
-  it("keeps the screen quiet when something was found", () => {
+  it("renders nothing but the input and its one action", () => {
     const html = oneInput();
-    expect(html).not.toContain(NOT_FOUND_LINE);
     expect(html.match(/<p/g)?.length ?? 0).toBe(0);
+    expect(html).not.toContain("<h1");
   });
 
   it("names the field for a screen reader without a visible label element", () => {
@@ -123,14 +108,14 @@ describe("the onboarding action", () => {
     );
   });
 
-  it("answers an empty submit with the not-found branch, once, and never a redirect", async () => {
+  it("stays on screen 1 for an empty submit, never a line and never a redirect", async () => {
     const result = await submit("   ");
-    expect(result).toEqual({ notFound: true });
+    expect(result).toBeNull();
   });
 
   it("answers a missing field the same way as an empty one", async () => {
     const result = await submit(null);
-    expect(result).toEqual({ notFound: true });
+    expect(result).toBeNull();
   });
 
   it("requires a session before it reads the subject", async () => {
@@ -148,7 +133,7 @@ describe("the onboarding loader", () => {
   });
 
   it("bounces a finished workspace to /app, the guard the placeholder route had", async () => {
-    landingFor.value = null as never;
+    landingFor.value = null;
     const request = new Request("https://0509.io/onboarding");
     await expect(loader({ request, params: {} })).rejects.toThrow("redirect:/app");
   });
@@ -161,23 +146,19 @@ describe("the onboarding step bar", () => {
       expect(html).toContain(step.replace(/'/g, "&#x27;"));
     }
     expect(html.match(/-&gt;/g)?.length).toBe(2);
-    expect(html).toContain("font-mono");
-    expect(html).toContain("uppercase");
   });
 
-  it("puts the current step on the green marker and every other step in ink", () => {
+  it("marks exactly one step, the current one, with its own number and label", () => {
     for (const [index, step] of STEPS.entries()) {
       const html = stepBar({ current: index + 1 });
-      const marker = new RegExp(`class="([^"]*${GREEN_MARKER}[^"]*)"[^>]*>([^<]*)<`).exec(html);
-      const marked = marker?.[2] ?? "";
-      expect(marker?.[1]).toContain(GREEN_MARKER);
-      expect(marker?.[1]).toContain(ON_GREEN);
-      // The marker's text is the step's own position number, so a marker on the
-      // wrong step cannot pass: the assertion is not just "a span has a class".
-      expect(marked.trim()).toBe(`${index + 1} ${step.replace(/'/g, "&#x27;")}`);
-      const others = html.replace(new RegExp(`class="[^"]*${GREEN_MARKER}[^"]*"[^>]*>[^<]*<`), "");
-      expect(others).toContain("font-semibold text-ink");
+      expect(html.match(/aria-current="step"/g)?.length).toBe(1);
+      const marker = /aria-current="step"[^>]*>([^<]*)</.exec(html);
+      expect(marker?.[1]?.trim()).toBe(`${index + 1} ${step.replace(/'/g, "&#x27;")}`);
     }
+  });
+
+  it("marks no step when the current position is out of range", () => {
+    expect(stepBar({ current: 0 })).not.toContain('aria-current="step"');
   });
 
   it("hides the arrows from a screen reader", () => {

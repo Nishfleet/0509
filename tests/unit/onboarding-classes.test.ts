@@ -107,7 +107,7 @@ describe("the onboarding screen's classes resolve against the one stylesheet (#3
     expect(stepBar).not.toContain("text-[0.66rem]");
 
     const oneInput = readFileSync(path.join(REPO_ROOT, "app/components/one-input.tsx"), "utf8");
-    expect(oneInput).toContain("text-meta");
-    expect(oneInput).not.toContain("text-[0.72rem]");
+    const inputClass = /className="([^"]*text-body[^"]*)"/.exec(oneInput);
+    expect(inputClass?.[1], "the field paints with the scale's body token").toContain("text-body");
   });
 });
