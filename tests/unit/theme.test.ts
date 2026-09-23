@@ -1,8 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
-import { compile } from "tailwindcss";
+import { compileAppCss, REPO_ROOT } from "./compile-app-css";
 import { describe, expect, it } from "vitest";
 
 // #3984: one stylesheet of colour, type and motion tokens. DESIGN.md is the
@@ -11,11 +10,6 @@ import { describe, expect, it } from "vitest";
 // value in BOTH themes. Parsing the doc rather than restating the values is the
 // point — a reworded hex in either file fails here instead of shipping as two
 // design systems, which is the drift the issue exists to stop.
-//
-// This file sits in tests/unit/, one level below the existing tests/*.test.ts,
-// so the repo root is two directories up.
-
-const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 // DESIGN.md writes negative tracking with U+2212 MINUS SIGN; CSS uses the ASCII
 // hyphen. Comparing the two literally would fail on the character alone, which
@@ -128,44 +122,6 @@ function declarationsIn(css: string, selectorMatches: (selector: string) => bool
   return out;
 }
 
-// Tailwind compiles app/app.css the way the build does, so the assertions are
-// about the stylesheet as Tailwind emits it rather than about the source text.
-async function compileAppCss(): Promise<string> {
-  const css = await readFile(path.join(REPO_ROOT, "app/app.css"), "utf8");
-  const { build } = await compile(css, {
-    base: REPO_ROOT,
-    // `@import "tailwindcss"` resolves through node_modules exactly as the Vite
-    // plugin resolves it; no copy of the package is checked in.
-    loadStylesheet: async () => {
-      const resolved = path.join(REPO_ROOT, "node_modules", "tailwindcss", "index.css");
-      return { path: resolved, base: path.dirname(resolved), content: await readFile(resolved, "utf8") };
-    },
-  });
-  return build([
-    // Every utility a token declares, so the output carries them all. The list
-    // is explicit on purpose: the served bundle tree-shakes any utility no
-    // surface uses, which would make an unused token invisible here — a token
-    // whose utility is never generated anywhere is itself a drift.
-    ...["bone", "card", "ink", "ink-soft", "ink-faint", "line", "green", "green-ink", "green-wash", "red", "on-green"]
-      .flatMap((token) => [`bg-${token}`, `text-${token}`, `border-${token}`]),
-    ...["display-1", "display-2", "display-3", "mark-lg", "mark-md", "mark-sm", "title", "row-name", "body", "body-sm", "eyebrow", "pill", "meta"]
-      .map((token) => `text-${token}`),
-    "ease-push",
-    "ease-fade",
-    "duration-push",
-    "duration-sheet-up",
-    "duration-sheet-down",
-    "duration-row",
-    "duration-switch",
-    "duration-fade",
-    "duration-press",
-    "font-display",
-    "font-sans",
-    "font-mono",
-    "rounded-none",
-  ]);
-}
-
 // ---------- everything computed once at module scope ----------
 // Awaiting inside a `describe` callback is a parse error (that callback is not
 // async), and recompiling Tailwind per assertion would be pure waste.
@@ -179,7 +135,30 @@ const colourDarkStart = colourSection.indexOf("### Dark");
 const lightColourRows = tableRows(colourSection.slice(colourLightStart, colourDarkStart), isHex);
 const darkColourRows = tableRows(colourSection.slice(colourDarkStart), isHex);
 
-const compiled = await compileAppCss();
+const compiled = await compileAppCss([
+  // Every utility a token declares, so the output carries them all. The list
+  // is explicit on purpose: the served bundle tree-shakes any utility no
+  // surface uses, which would make an unused token invisible here — a token
+  // whose utility is never generated anywhere is itself a drift.
+  ...["bone", "card", "ink", "ink-soft", "ink-faint", "line", "green", "green-ink", "green-wash", "red", "on-green"]
+    .flatMap((token) => [`bg-${token}`, `text-${token}`, `border-${token}`]),
+  ...["display-1", "display-2", "display-3", "mark-lg", "mark-md", "mark-sm", "title", "row-name", "body", "body-sm", "eyebrow", "pill", "meta"].map(
+    (token) => `text-${token}`,
+  ),
+  "ease-push",
+  "ease-fade",
+  "duration-push",
+  "duration-sheet-up",
+  "duration-sheet-down",
+  "duration-row",
+  "duration-switch",
+  "duration-fade",
+  "duration-press",
+  "font-display",
+  "font-sans",
+  "font-mono",
+  "rounded-none",
+]);
 const rootDecls = declarationsIn(compiled, (s) => s === ":root" || s === ":root, :host");
 // The dark media block AND the scoped selector it contains. §4 requires the
 // values under `@media (prefers-color-scheme: dark)` scoped to
