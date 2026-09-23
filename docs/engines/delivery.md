@@ -33,7 +33,7 @@ The remaining upstream facts are cited from Cloudflare's docs rather than probed
 
 ## 1. What the schema already decided, and one gap
 
-From `migrations/0001_rebuild.sql`:
+From `migrations/0001_rebuild.sql`, with `incident_notice` as widened by `migrations/0004_incident_notice_resolution.sql` (#4357):
 
 ```
 channel          id, key UNIQUE, is_enabled, config_json
@@ -47,13 +47,13 @@ digest           id, workspace_id, kind, period_start, period_end, status,
                  subject, payload_json, sent_at
 incident         id, workspace_id, entity_id, page_id, kind, opened_at, closed_at
 incident_notice  id, incident_id, page_id, sent_on, sent_at, is_resolution
-                 UNIQUE (page_id, sent_on)
+                 UNIQUE (page_id, sent_on, is_resolution)
 ```
 
 Three of those constraints are the contract, enforced by the database instead of by discipline, and that is exactly right:
 
 - **`send_attempt.idempotency_key UNIQUE`** is "delivered once".
-- **`incident_notice UNIQUE (page_id, sent_on)`** is *"never more than one open incident email per page per day"* — a constraint, not a convention, exactly as the contract demanded.
+- **`incident_notice UNIQUE (page_id, sent_on, is_resolution)`** is *"never more than one open incident email per page per day, and never more than one resolution notice either"* — a constraint, not a convention, exactly as the contract demanded.
 - **`channel` as a table** is "adding a channel is never a migration".
 
 **The gap, recorded because a worker will otherwise hit it silently.** `docs/REBUILD-DELIVERY.md` requires *"a `delivery` record per item per channel per **recipient**, unique on that triple"*. The shipped `signal_delivery` is unique on the **pair** `(signal_id, channel_id)` — there is no recipient in the key. Today the product has one `send_target` per workspace, so pair and triple coincide and nothing is wrong. The moment a workspace has two email recipients, the second recipient's send is suppressed by a constraint that was meant to prevent a duplicate, not a delivery. That is a silent under-delivery, which is worse than a duplicate.
@@ -166,11 +166,11 @@ Limits that shape the design, all from the same section:
 
 1. The site-change engine's D3s verdict at `p >= 0.5` opens an `incident` (workspace, entity, page, kind, `opened_at`) and writes an `alert` pinned until acknowledged.
 2. It enqueues `{ incident_id }` on the same `send-email` queue.
-3. The consumer inserts `incident_notice` with `sent_on = <UTC date>`, `is_resolution = 0`. **`UNIQUE (page_id, sent_on)` is what enforces one email per page per day** — a conflict means today's notice already went and this one is dropped, by the database.
+3. The consumer inserts `incident_notice` with `sent_on = <UTC date>`, `is_resolution = 0`. **`UNIQUE (page_id, sent_on, is_resolution)` is what enforces one open email per page per day** — with `is_resolution = 0` the key is one open notice per page per date, and a conflict means today's notice already went and this one is dropped, by the database.
 4. Send, with `idempotency_key = incident:<incident_id>:open`.
 5. A later re-check finding the page fixed sets `incident.closed_at` and enqueues a resolution notice: a second `incident_notice` with `is_resolution = 1` and `idempotency_key = incident:<incident_id>:fixed`.
 
-The resolution notice and the open notice share `(page_id, sent_on)` if both happen on the same day. That is a real collision and the fix is not to weaken the constraint: the resolution row uses the same `page_id` and `sent_on` but the *open* notice is already there, so the insert conflicts and the "fixed" email would be dropped — which is wrong, because the contract explicitly requires the follow-up. **Resolved by including `is_resolution` in the uniqueness**, which the shipped table does not do. This is a real schema defect and P7.5 fixes it with an additive migration rather than working around it in code.
+The resolution notice and the open notice share `(page_id, sent_on)` if both happen on the same day. That was a collision: the resolution row used the same `page_id` and `sent_on` as the open notice, so the insert conflicted and the "fixed" email was dropped — which is wrong, because the contract explicitly requires the follow-up. **Resolved by including `is_resolution` in the uniqueness**: `migrations/0004_incident_notice_resolution.sql` ships `UNIQUE (page_id, sent_on, is_resolution)`, so a same-day resolution is accepted and a second same-day open notice is still rejected. The constraint was fixed rather than worked around, and it is not weakened — a second open or second resolution for the same page and day still fails the insert (`tests/integration/incident-notice.integration.test.ts`).
 
 ### Per-brand OFF, and suppression
 
@@ -263,8 +263,8 @@ Everything else — Queues, D1, R2, Workers — is inside included tiers by thre
 | Worker dies mid-send | `send_attempt` left `status='pending'` | the nightly sweeper re-enqueues after 1 hour. The claim row is what makes this detectable at all. |
 | `digest` written but never enqueued | `status='pending'` over 6 hours | nightly sweeper re-enqueues. |
 | **Duplicate send** | `send_attempt.idempotency_key` UNIQUE conflict | the second consumer returns without sending. Not an error — the expected outcome of an at-least-once queue. |
-| **Second incident email same day** | `incident_notice UNIQUE (page_id, sent_on)` conflict | dropped by the database, as the contract requires. |
-| **"Fixed" follow-up dropped** by that same constraint | — | **a real defect in the shipped schema**; P7.5 adds `is_resolution` to the key. Until it lands, a same-day resolution is not sent, which the contract requires. |
+| **Second incident email same day** | `incident_notice UNIQUE (page_id, sent_on, is_resolution)` conflict on `is_resolution = 0` | dropped by the database, as the contract requires. |
+| **"Fixed" follow-up dropped** by that same constraint | — | **resolved by #4357**: `migrations/0004_incident_notice_resolution.sql` adds `is_resolution` to the key, so a same-day resolution is accepted while a second same-day open or resolution is still rejected. |
 | User unsubscribed | `email_suppression` hit before render | no send, no attempt row, no error. Alerts still shows everything in-app; unsubscribe is a channel opt-out, not an account opt-out. |
 | Bounce | **not detectable** — no delivery webhooks exist | `send_attempt.status` says `sent`, never `delivered`. Bounces are read from the dashboard Activity log out of band. The UI never claims arrival. |
 | Second `send_target` added for one workspace+channel | the tripwire test in P7.4 fails | build goes red before the under-delivery ships. |
@@ -349,7 +349,7 @@ Everything else — Queues, D1, R2, Workers — is inside included tiers by thre
 
 ### P7.5 — The own-site incident email, its "fixed" follow-up, and the constraint fix
 
-**GOAL.** On a D3s verdict at `p >= 0.5`, send the incident email within one Workflow tick: subject `"<site> looks broken: <one-line kind>"`, body carrying the before-and-after mark, when it was seen, when we re-check, and a link. `incident_notice UNIQUE (page_id, sent_on)` enforces one per page per day. A re-check finding the page fixed sends a one-line follow-up and sets `incident.closed_at`. **Fix the real defect first:** the shipped unique key drops a same-day "fixed" notice, so widen it to `(page_id, sent_on, is_resolution)` with an additive migration.
+**GOAL.** On a D3s verdict at `p >= 0.5`, send the incident email within one Workflow tick: subject `"<site> looks broken: <one-line kind>"`, body carrying the before-and-after mark, when it was seen, when we re-check, and a link. `incident_notice UNIQUE (page_id, sent_on, is_resolution)` enforces one open notice per page per day (`is_resolution = 0`) and one resolution notice per page per day (`is_resolution = 1`). A re-check finding the page fixed sends a one-line follow-up and sets `incident.closed_at`. **The widened key has shipped:** `migrations/0004_incident_notice_resolution.sql` moved the key from `(page_id, sent_on)` to `(page_id, sent_on, is_resolution)` (#4357), so the same-day "fixed" notice is accepted by the constraint instead of dropped.
 
 **STOCK FEATURE OR LIBRARY.** The `incident` and `incident_notice` tables. The `send-email` queue from P7.2 — this packet adds a payload shape, not a second send path. Idempotency keys `incident:<id>:open` and `incident:<id>:fixed`.
 
