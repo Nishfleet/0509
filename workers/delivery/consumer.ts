@@ -20,6 +20,7 @@ interface TargetRow {
   workspace_id: string;
   channel_id: string;
   target_value: string;
+  unsubscribe_token: string | null;
 }
 
 export interface DeliveryMessage {
@@ -54,7 +55,7 @@ async function readDigest(env: Env, digestId: string): Promise<MessageRow | null
 
 async function readTarget(env: Env, workspaceId: string): Promise<TargetRow | null> {
   return env.DB.prepare(
-    `SELECT st.id, st.workspace_id, st.channel_id, st.target_value
+    `SELECT st.id, st.workspace_id, st.channel_id, st.target_value, st.unsubscribe_token
        FROM send_target st
        JOIN channel c ON c.id = st.channel_id
       WHERE st.workspace_id = ? AND c.key = ? AND c.is_enabled = 1
@@ -111,7 +112,33 @@ async function markDigestSent(env: Env, digestId: string): Promise<void> {
     .run();
 }
 
-function render(message: MessageRow, to: string): EmailMessageBuilder {
+function newUnsubscribeToken(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function ensureUnsubscribeToken(env: Env, target: TargetRow): Promise<string> {
+  if (target.unsubscribe_token !== null) return target.unsubscribe_token;
+  await env.DB.prepare(
+    `UPDATE send_target SET unsubscribe_token = ? WHERE id = ? AND unsubscribe_token IS NULL`,
+  )
+    .bind(newUnsubscribeToken(), target.id)
+    .run();
+  const row = await env.DB.prepare(
+    `SELECT unsubscribe_token FROM send_target WHERE id = ?`,
+  )
+    .bind(target.id)
+    .first<{ unsubscribe_token: string | null }>();
+  if (row?.unsubscribe_token == null) {
+    throw new Error("send_target has no unsubscribe token");
+  }
+  return row.unsubscribe_token;
+}
+
+const UNSUBSCRIBE_BASE_URL = "https://0509.io/u/";
+
+function render(message: MessageRow, to: string, token: string): EmailMessageBuilder {
   let payload: { html?: string; text?: string };
   try {
     payload = JSON.parse(message.payload_json || "{}") as {
@@ -131,6 +158,10 @@ function render(message: MessageRow, to: string): EmailMessageBuilder {
     subject,
     html,
     text,
+    headers: {
+      "List-Unsubscribe": `<${UNSUBSCRIBE_BASE_URL}${token}>`,
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    },
   };
 }
 
@@ -157,7 +188,8 @@ export async function deliver(env: Env, message: DeliveryMessage): Promise<Deliv
 
   let sent = false;
   try {
-    const email = render(digest, target.target_value);
+    const token = await ensureUnsubscribeToken(env, target);
+    const email = render(digest, target.target_value, token);
     const result = await sendMessage(env.EMAIL, email);
     sent = result.outcome === "sent";
     await resolveAttempt(env, claim.id, result.outcome, result.error);
