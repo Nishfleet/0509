@@ -1,7 +1,12 @@
 import type { Route } from "./+types/app.alerts";
 import { env } from "cloudflare:workers";
 
-import { readDeliveryFailures, readOwnSiteIncidents, readTakedownNotes } from "../lib/data/alert.server";
+import {
+  readDeliveryFailures,
+  readOwnSiteIncidents,
+  readSignalAlerts,
+  readTakedownNotes,
+} from "../lib/data/alert.server";
 import { readCompetitors } from "../lib/data/entity.server";
 import { readWorkspaceIdForOwner, readWorkspaceTimezone } from "../lib/data/workspace.server";
 import { daysAgoLabel } from "../lib/delivery-alert";
@@ -9,7 +14,13 @@ import { offBrandsSentence } from "../lib/off-brands";
 import { requireSession } from "../lib/require-session.server";
 import { daysBefore, readSiteChangeViews } from "../lib/site-changes.server";
 import { groupByDay } from "../lib/alert-day";
-import { AlertFeedRow, type AlertFeedItem, type DeliveryFailureItem, type TakedownNoteItem } from "../components/alert-row";
+import {
+  AlertFeedRow,
+  type AlertFeedItem,
+  type DeliveryFailureItem,
+  type SignalAlertItem,
+  type TakedownNoteItem,
+} from "../components/alert-row";
 import { PAGE, PageHeading } from "../components/page-heading";
 
 const WHEN_CLASS = "text-ink-soft mt-2 block font-mono text-[0.75rem] tracking-[0.04em] uppercase";
@@ -21,6 +32,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const failures = workspaceId === null ? [] : await readDeliveryFailures(env.DB, workspaceId);
   const notes = workspaceId === null ? [] : await readTakedownNotes(env.DB, workspaceId);
   const incidents = workspaceId === null ? [] : await readOwnSiteIncidents(env.DB, workspaceId);
+  const signals = workspaceId === null ? [] : await readSignalAlerts(env.DB, workspaceId);
   const now = new Date();
   const changes =
     workspaceId === null
@@ -45,6 +57,12 @@ export async function loader({ request }: Route.LoaderArgs) {
       id: failure.id,
       at: failure.created_at,
       failure: { ...failure, when: daysAgoLabel(failure.created_at, now) } satisfies DeliveryFailureItem,
+    })),
+    ...signals.map((signal) => ({
+      kind: "signal" as const,
+      id: signal.id,
+      at: signal.created_at,
+      signal: { ...signal, when: daysAgoLabel(signal.created_at, now) } satisfies SignalAlertItem,
     })),
   ];
   return {

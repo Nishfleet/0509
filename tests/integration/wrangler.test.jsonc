@@ -34,6 +34,11 @@
       "name": "own-site-check-test",
       "binding": "OWN_SITE_CHECK",
       "class_name": "OwnSiteCheckWorkflow"
+    },
+    {
+      "name": "mentions-sweep-test",
+      "binding": "MENTIONS",
+      "class_name": "MentionsWorkflow"
     }
   ],
   "kv_namespaces": [

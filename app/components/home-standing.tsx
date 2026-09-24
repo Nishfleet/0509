@@ -3,6 +3,7 @@ import { Form, Link } from "react-router";
 
 import { brandMonogram } from "./brand-chip";
 import { EmptyState, fewerThanTwoOnBrands } from "./empty-state";
+import { FirstFilePanel } from "./first-file-panel";
 import type { HomeRow, HomeView } from "../lib/home-standing";
 import { cn } from "../lib/utils";
 
@@ -47,9 +48,7 @@ function body(view: HomeView): ReactElement {
   if (standing.kind === "gathering") {
     return (
       <div className="mt-6">
-        <EmptyState
-          sentence={`We're gathering the first week. Your first standing comes with the brief on ${standing.briefAt}.`}
-        />
+        <FirstFilePanel brands={standing.brands} firstSweepAt={standing.firstSweepAt} briefAt={standing.briefAt} />
       </div>
     );
   }

@@ -29,10 +29,20 @@ export interface DeliveryFailureItem {
   brief: BriefPayload | null;
 }
 
+export interface SignalAlertItem {
+  id: string;
+  title: string;
+  body: string | null;
+  url: string | null;
+  created_at: string;
+  when: string;
+}
+
 export type AlertFeedItem =
   | { kind: "change"; id: string; at: string; change: SiteChangeItemData }
   | { kind: "note"; id: string; at: string; note: TakedownNoteItem }
-  | { kind: "failure"; id: string; at: string; failure: DeliveryFailureItem };
+  | { kind: "failure"; id: string; at: string; failure: DeliveryFailureItem }
+  | { kind: "signal"; id: string; at: string; signal: SignalAlertItem };
 
 export function AlertFeedRow({ item, eager }: { item: AlertFeedItem; eager: boolean }): ReactElement {
   if (item.kind === "change") {
@@ -45,6 +55,26 @@ export function AlertFeedRow({ item, eager }: { item: AlertFeedItem; eager: bool
         <h3 className={TITLE}>{item.note.title}</h3>
         <time dateTime={item.note.created_at} className={WHEN_CLASS}>
           {item.note.when}
+        </time>
+      </article>
+    );
+  }
+
+  if (item.kind === "signal") {
+    return (
+      <article id={item.signal.id} data-testid="signal-alert" className={CARD}>
+        <h3 className={TITLE}>
+          {item.signal.url === null ? (
+            item.signal.title
+          ) : (
+            <a href={item.signal.url} rel="noopener noreferrer nofollow" target="_blank" className={SUMMARY}>
+              {item.signal.title}
+            </a>
+          )}
+        </h3>
+        {item.signal.body === null ? null : <p className={BODY}>{item.signal.body}</p>}
+        <time dateTime={item.signal.created_at} className={WHEN_CLASS}>
+          {item.signal.when}
         </time>
       </article>
     );
