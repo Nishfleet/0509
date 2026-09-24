@@ -85,8 +85,12 @@ function readEngagement(existing: string | null): Record<string, unknown> {
   return {};
 }
 
+function isUnknownArray(value: unknown): value is unknown[] {
+  return Array.isArray(value);
+}
+
 export function appendSighting(existing: string | null, sighting: Sighting): string {
   const base = readEngagement(existing);
-  const prior = base.sightings ?? [];
+  const prior = isUnknownArray(base.sightings) ? base.sightings : [];
   return JSON.stringify({ ...base, sightings: [...prior, sighting] });
 }
