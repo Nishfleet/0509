@@ -8,6 +8,7 @@ import {
   readTakedownNotes,
 } from "../lib/data/alert.server";
 import { readCompetitors } from "../lib/data/entity.server";
+import { readWorkspaceMentionSources } from "../lib/data/source.server";
 import { readWorkspaceIdForOwner, readWorkspaceTimezone } from "../lib/data/workspace.server";
 import { daysAgoLabel } from "../lib/delivery-alert";
 import { offBrandsSentence } from "../lib/off-brands";
@@ -22,6 +23,7 @@ import {
   type TakedownNoteItem,
 } from "../components/alert-row";
 import { PAGE, PageHeading } from "../components/page-heading";
+import { SourcePill } from "../components/source-pill";
 
 const WHEN_CLASS = "text-ink-soft mt-2 block font-mono text-[0.75rem] tracking-[0.04em] uppercase";
 
@@ -33,6 +35,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const notes = workspaceId === null ? [] : await readTakedownNotes(env.DB, workspaceId);
   const incidents = workspaceId === null ? [] : await readOwnSiteIncidents(env.DB, workspaceId);
   const signals = workspaceId === null ? [] : await readSignalAlerts(env.DB, workspaceId);
+  const sources = workspaceId === null ? [] : await readWorkspaceMentionSources(workspaceId);
   const now = new Date();
   const changes =
     workspaceId === null
@@ -72,6 +75,8 @@ export async function loader({ request }: Route.LoaderArgs) {
       fixed: incident.closed_at === null ? null : daysAgoLabel(incident.closed_at, now),
     })),
     groups: groupByDay(items, now, timeZone),
+    sources,
+    now: now.getTime(),
     offLine: offBrandsSentence(
       competitors.filter((competitor) => competitor.state === "off").map((competitor) => competitor.name),
     ),
@@ -85,6 +90,18 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       <p data-testid="alerts-contract" className="text-ink-soft mt-2 leading-[1.65]">
         One thing here interrupted you by email: your own site.
       </p>
+      {loaderData.sources.length > 0 ? (
+        <p data-testid="alerts-sources" className="mt-4 flex flex-wrap gap-2">
+          {loaderData.sources.map((entry) => (
+            <SourcePill
+              key={entry.source.key}
+              source={entry.source}
+              snapshot={entry.snapshot}
+              now={loaderData.now}
+            />
+          ))}
+        </p>
+      ) : null}
       {loaderData.incidents.map((incident) => (
         <article
           key={incident.id}
