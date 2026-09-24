@@ -6,7 +6,6 @@ import { requireSession } from "../lib/require-session.server";
 import { workspaceLandingForRequest } from "../lib/workspace.server";
 import { OneInput } from "../components/one-input";
 import { AddPasskey } from "../components/passkey-button";
-import { ONBOARDING_PAGE } from "../components/page-heading";
 import { OnboardingFrame } from "../components/onboarding-frame";
 import { subjectRedirect } from "../lib/onboarding-subject";
 import { isTakenDown } from "../lib/data/takedown.server";
@@ -33,12 +32,7 @@ export async function action({ request }: Route.ActionArgs) {
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   return (
-    <OnboardingFrame
-      step={1}
-      heading="Start with your website"
-      className={ONBOARDING_PAGE}
-      headingClassName="font-display text-display-2 mt-10 font-extrabold uppercase"
-    >
+    <OnboardingFrame step={1} heading="Start with your website or a handle" hideHeading>
       <p className="text-ink-soft mt-3 max-w-prose leading-[1.55]">
         We read it and draw your card, then find who you're up against. A handle like @yourbrand works too.
       </p>

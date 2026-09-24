@@ -7,15 +7,11 @@ export function OnboardingFrame({
   step,
   heading,
   hideHeading = false,
-  className,
-  headingClassName,
   children,
 }: {
   step: 1 | 2 | 3;
   heading: string;
   hideHeading?: boolean;
-  className?: string;
-  headingClassName?: string;
   children: ReactNode;
 }): ReactElement {
   return (
@@ -23,8 +19,8 @@ export function OnboardingFrame({
       <header>
         <StepBar current={step} />
       </header>
-      <main className={className}>
-        <h1 className={hideHeading ? "sr-only" : headingClassName}>{heading}</h1>
+      <main>
+        <h1 className={hideHeading ? "sr-only" : undefined}>{heading}</h1>
         {children}
       </main>
       <Footer />
