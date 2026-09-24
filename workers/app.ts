@@ -21,6 +21,7 @@ import { AccountDelete } from "./workflows/account-delete";
 import { Discovery } from "./workflows/discovery";
 import { OwnSiteCheck } from "./workflows/own-site-check";
 import { SiteSweep } from "./workflows/site-sweep";
+import { MentionsSweep } from "./workflows/mentions";
 import { StandingRollover } from "./workflows/standing-rollover";
 
 type WorkerEnv = Env & { SENTRY_DSN?: string; LIVENESS_PING_URL?: string };
@@ -99,5 +100,7 @@ export class DiscoveryWorkflow extends instrumentWorkflowWithSentry(sentryOption
 export class SiteSweepWorkflow extends instrumentWorkflowWithSentry(sentryOptions, SiteSweep) {}
 
 export class OwnSiteCheckWorkflow extends instrumentWorkflowWithSentry(sentryOptions, OwnSiteCheck) {}
+
+export class MentionsWorkflow extends instrumentWorkflowWithSentry(sentryOptions, MentionsSweep) {}
 
 export default withSentry(sentryOptions, handler);
