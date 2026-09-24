@@ -5,6 +5,8 @@ import { Link, redirect } from "react-router";
 
 import { DeleteAccount, SignOut } from "../components/account-settings";
 import { BriefScheduleSettings } from "../components/brief-schedule-settings";
+import { DismissedBrands } from "../components/dismissed-brands";
+import { OwnSiteAlertsSetting } from "../components/own-site-alerts-setting";
 import { BLOCK_HEADING, PAGE, PageHeading } from "../components/page-heading";
 import { AddPasskey } from "../components/passkey-button";
 import { deleteAccount } from "../lib/account-delete.server";
@@ -12,7 +14,14 @@ import { oauthHelpersContext } from "../lib/agent/context.server";
 import { signOut } from "../lib/auth.server";
 import { nextBriefAt } from "../lib/brief-schedule";
 import { formatBriefAt, parseBriefSchedule } from "../lib/brief-settings";
-import { readBriefScheduleForOwner, updateBriefSchedule } from "../lib/data/workspace.server";
+import { readUserDismissed, restoreSuggestion } from "../lib/data/suggestion.server";
+import {
+  readBriefScheduleForOwner,
+  updateBriefSchedule,
+  readOwnSiteAlerts,
+  setOwnSiteAlerts,
+  readWorkspaceIdForOwner,
+} from "../lib/data/workspace.server";
 import { requireSession } from "../lib/require-session.server";
 
 const MISMATCH = "That doesn't match your email. Type it exactly to delete your account.";
@@ -29,7 +38,10 @@ export async function loader({ request }: Route.LoaderArgs) {
     owned === null
       ? null
       : { ...owned.schedule, nextLine: formatBriefAt(nextBriefAt(owned.schedule, new Date()), owned.schedule.timezone) };
-  return { email: session.user.email, schedule };
+  const workspaceId = await readWorkspaceIdForOwner(session.user.id);
+  const ownSiteAlerts = workspaceId === null ? true : await readOwnSiteAlerts(workspaceId);
+  const dismissed = workspaceId === null ? [] : await readUserDismissed(workspaceId);
+  return { email: session.user.email, schedule, ownSiteAlerts, dismissed };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -37,6 +49,15 @@ export async function action({ request, context }: Route.ActionArgs) {
   const form = await request.formData();
   const intent = form.get("intent");
 
+  if (intent === "own-site-alerts") {
+    const workspaceId = await readWorkspaceIdForOwner(session.user.id);
+    if (workspaceId === null) return { saved: false, deleteError: null };
+    const raw = form.get("value");
+    const next = raw === "on" ? true : raw === "off" ? false : null;
+    if (next === null) return { saved: false, deleteError: null };
+    await setOwnSiteAlerts(workspaceId, next);
+    return { saved: true, deleteError: null };
+  }
   if (intent === "sign-out") {
     throw redirect("/login", { headers: await signOut(env, request) });
   }
@@ -47,6 +68,13 @@ export async function action({ request, context }: Route.ActionArgs) {
     const headers = await deleteAccount(context.get(oauthHelpersContext), request, session.user.id);
     if (headers === null) return { saved: null, deleteError: SIGN_IN_AGAIN };
     throw redirect("/login", { headers });
+  }
+  if (intent === "restore-suggestion") {
+    const workspaceId = await readWorkspaceIdForOwner(session.user.id);
+    const rawId = form.get("suggestionId");
+    const suggestionId = typeof rawId === "string" ? rawId.trim() : "";
+    if (workspaceId !== null && suggestionId !== "") await restoreSuggestion({ workspaceId, suggestionId });
+    return { saved: null, deleteError: null };
   }
   const owned = await readBriefScheduleForOwner(session.user.id);
   const schedule = parseBriefSchedule({
@@ -74,6 +102,8 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
           <BriefScheduleSettings schedule={loaderData.schedule} />
         </section>
       )}
+      <OwnSiteAlertsSetting on={loaderData.ownSiteAlerts} />
+      <DismissedBrands dismissed={loaderData.dismissed} />
       <section aria-labelledby="settings-agents" className={BLOCK}>
         <h2 id="settings-agents" className={BLOCK_HEADING}>
           Agents and API
