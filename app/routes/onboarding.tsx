@@ -7,7 +7,7 @@ import { authClient } from "../lib/auth-client";
 import { requireSession } from "../lib/require-session.server";
 import { workspaceLandingForRequest } from "../lib/workspace.server";
 import { OneInput } from "../components/one-input";
-import { StepBar } from "../components/step-bar";
+import { OnboardingFrame } from "../components/onboarding-frame";
 import { subjectRedirect } from "../lib/onboarding-subject";
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -39,8 +39,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   }
 
   return (
-    <main>
-      <StepBar current={1} />
+    <OnboardingFrame step={1} heading="Start with your website or a handle" hideHeading>
       <OneInput
         label="your website, or a handle"
         placeholder="your website, or a handle"
@@ -49,11 +48,11 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         message={actionData?.message}
       />
       <p>Signed in as {loaderData.email}</p>
-      <button type="button" onClick={() => void addPasskey()} disabled={state === "working"}>
+      <button type="button" className="min-h-11" onClick={() => void addPasskey()} disabled={state === "working"}>
         {state === "working" ? "Follow the prompt…" : "Add a passkey"}
       </button>
       {state === "added" ? <p role="status">Passkey added. It can sign you in from now on.</p> : null}
       {state === "failed" ? <p role="alert">The passkey prompt did not finish. Try again.</p> : null}
-    </main>
+    </OnboardingFrame>
   );
 }
