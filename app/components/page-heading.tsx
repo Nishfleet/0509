@@ -12,4 +12,3 @@ export function PageHeading({ title, lede }: { title: string; lede?: ReactNode }
 export const BLOCK_HEADING = "font-mono text-eyebrow text-ink-soft uppercase";
 
 export const PAGE = "mx-auto w-full max-w-3xl min-w-0 px-4 py-10 sm:px-8";
-export const ONBOARDING_PAGE = "mx-auto w-full max-w-2xl min-w-0 px-5 py-8 sm:px-8 sm:py-12";
