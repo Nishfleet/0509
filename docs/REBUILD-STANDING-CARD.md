@@ -1,26 +1,42 @@
-# The public standing card
+# The share image
 
-Umbrella #3842. Author: Fable. Checked by the Opus deputy. Pairs with docs/REBUILD-STANDING.md and docs/REBUILD-DELIVERY.md. With no free tier (#3896), this card is how the product is seen before it is bought, and how customers show it off.
+Umbrella #3842. Pairs with docs/REBUILD-STANDING.md and docs/REBUILD-DELIVERY.md. With no free tier (#3896), this is how customers show the product off.
+
+**Decided by Nish, 2026-09-24:** "the share is simply a screenshot with 0509 branding kind of like spotify shares, solves the privacy issue completely." This replaces the public standing card page (`/s/<slug>`), which was removed. There is no public URL for anything about a customer, so there is nothing to find, crawl, index or leak through a link.
 
 ## What it is
 
-One public page per workspace, off by default, that shows this week's standing for the workspace's brand against its ON competitors: the rank line ("#2 of 6 this week"), the four-week standing line, the three read-this-first marks with their before-and-after, and the counts checked. Nothing else. It looks like the top of Home, in the same skin, with the product's name as a small footer and one action: "Track your own brand".
+A picture the owner makes from Home, in the signed-in app, and posts wherever they like. It shows this week's standing for the workspace's own brand: the brand's name and logo, the rank line ("#2 of 6 this week"), the four-week standing line, the week label in mono, and the `05|09` wordmark with `0509.io`. Nothing else.
 
-## Two uses
+**Competitors are not named on it.** The rank says how many brands the owner is up against, not which ones, so their watch list stays private even in a picture they chose to post. This is the default picked when the design changed; naming competitors would be a new decision for Nish.
 
-1. **Customer share.** A paid user turns it on in Settings, gets a URL (`0509.io/s/<slug>`) and an OG image rendered from the same data, and posts it. The URL is the growth loop.
-2. **Landing sample.** The landing shows a real card for one well-known brand we track ourselves (a public workspace we own), refreshed weekly by the same pipeline. Not a mockup, not sample data: the card is proof the product is running. The brand is chosen for recognisability and for having active, public competition (a DTC brand with visible ad libraries).
+## How it is made
+
+- **One design, not a twin.** Cloudflare Browser Rendering screenshots the same Home component with the same tokens and fonts, at an explicit **1080×1080** viewport (square works in every feed and story). No second renderer, no SVG template, no canvas drawing by hand.
+- **On demand, behind the login.** The owner taps **Share** and the image is rendered from the current rows at that moment. It is never stored at a URL anyone else can open.
+- **On a phone** the share sheet opens with the image attached (the Web Share API with `files`). Anywhere that cannot share files, the image downloads instead.
+- **Browser Rendering stays inside the 10-session cap** (`docs/REBUILD-COST.md`). If every session is busy, the button says to try again in a minute. It never queues behind the sweeps.
+
+Rejected, recorded so it is not re-litigated:
+- A public card page with an unlisted link (built, then removed on Nish's call): a link can be forwarded, crawled and indexed, and it publishes a watch list.
+- `@resvg/resvg-wasm`: a 2.5 MB WASM module parsed on every request to the app, with its latest release in 2024.
+- `satori`: it does not run on workerd.
+- Client-side drawing on a canvas: a second rendering of the design system that drifts silently.
 
 ## Rules
 
-- Public data only: brand names, domains, logos, counts, rank, and marks whose source is a public URL. Never mentions text beyond the headline, never the user's own-site incidents, never anything from a paid-scraper source until Nish approves that source for public display.
-- Competitors named on a customer's card are that customer's choice: turning a competitor off removes it from the card on the next render. Dismissed brands never appear.
-- The card is cached at the edge and rendered on the weekly rollover, plus on demand when the owner toggles it; it never queries live. Cost: one render per workspace per week.
-- The slug is opaque and rotatable; turning the card off returns 404 within a minute (cache purge), and the OG image goes with it.
-- No login, no cookies, no tracking beyond Cloudflare Web Analytics.
-- Unlisted by default (Nish, 2026-09-24): a card is served with `X-Robots-Tag: noindex` and left out of `/sitemap.xml`, so only people the owner sends the link to find it. The owner can let search engines list it from Settings, only after ticking a box that confirms anyone searching will see their rank and every competitor they track, and that search engines can take days or weeks to drop it again. Turning the card off forgets that choice.
-- One CTA. Its price is on the button (Scout monthly, from the ledger).
+- Public data only: the brand's own name and logo, the rank, the count and the standing line. Never mentions text, never own-site incidents, never a competitor's name.
+- Rendered from live rows, so a brand that asked to be taken down (`takedown`) never appears, starting the moment the takedown is recorded.
+- The landing's sample is the same image, made from a workspace we own for a well-known brand we track ourselves. It is real, never sample data.
+
+## Leftovers
+
+`workspace.card_is_published`, `workspace.card_slug` and `workspace.card_is_indexable` (migrations 0003 and 0010) stay in D1, unused. Migrations are expand-only. Dropping them is a later migration that needs Nish's yes.
+
+## When it gets built
+
+After Home shows the weekly standing. The image photographs that part of Home, so building it earlier would photograph an empty page.
 
 ## Proof required
 
-A customer card and the landing sample both live on production, rendered by the pipeline (render id, timestamp), OG image validated with a card debugger, toggle-off proven to 404 within a minute, and the landing's LCP still under 1.5 s with the card in the first viewport.
+A share image from a real workspace on production, opened in the phone share sheet and posted, and the landing sample rendered by the same path.
