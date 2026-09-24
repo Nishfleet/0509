@@ -1,5 +1,7 @@
-import { readPageNames } from "./page-names";
+import { getDomain } from "tldts";
 import { z } from "zod";
+
+import { readPageNames } from "./page-names";
 
 export interface Resolution {
   domain: string | null;
@@ -39,10 +41,6 @@ function slugOf(s: string): string {
   return s.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
-function hostOf(url: string): string {
-  return new URL(url).hostname.toLowerCase().replace(/^www\./, "");
-}
-
 async function wikidataGet(url: string): Promise<unknown> {
   try {
     const res = await fetch(url, {
@@ -78,7 +76,7 @@ async function wikidataDomain(name: string): Promise<string | null> {
   const p856 = p856ClaimSchema.safeParse(claim);
   if (!p856.success) return null;
 
-  return hostOf(p856.data.mainsnak.datavalue.value);
+  return getDomain(p856.data.mainsnak.datavalue.value);
 }
 
 async function slugDomain(name: string): Promise<string | null> {

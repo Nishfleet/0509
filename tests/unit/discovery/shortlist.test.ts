@@ -46,6 +46,19 @@ describe("shortlist", () => {
     expect(result[0].domain).toBe("www.lush.com");
   });
 
+  it("counts one publisher once across its subdomains and groups a brand's subdomain with it (0509#4639)", () => {
+    const result = shortlist([
+      {
+        name: "Lush",
+        domain: "shop.lush.co.uk",
+        evidence: [ev("https://edition.cnn.com/a", "news"), ev("https://www.cnn.com/b", "news")],
+      },
+      candidate("Lush UK", "hn", "https://news.ycombinator.com/item?id=3", "www.lush.co.uk"),
+    ]);
+    expect(result).toHaveLength(1);
+    expect(result[0].publishers).toEqual(["cnn.com", "ycombinator.com"]);
+  });
+
   it("counts distinct publishers and tolerates an unparseable source URL", () => {
     const result = shortlist([
       {
