@@ -8,6 +8,7 @@ import { askNoul, JevUnavailableError } from "../jev/client.server";
 import { evidenceLine } from "./evidence-line";
 import { hnGenerator } from "./generators/hn";
 import { newsGenerator } from "./generators/news";
+import { storedMetaCandidates } from "./meta-adlib-store.server";
 import { resolveDomain } from "./resolve-domain.server";
 import { shortlist } from "./shortlist";
 import type { Candidate, Evidence } from "./types";
@@ -44,7 +45,8 @@ async function settledCandidates(self: DiscoverySelf): Promise<Candidate[]> {
 }
 
 export async function generateShortlist(self: DiscoverySelf): Promise<ShortlistedCandidate[]> {
-  const entries = shortlist(await settledCandidates(self));
+  const [live, stored] = await Promise.all([settledCandidates(self), storedMetaCandidates(self.workspaceId)]);
+  const entries = shortlist([...live, ...stored]);
   return entries.map((entry) => ({
     name: entry.name,
     domain: entry.domain ?? null,

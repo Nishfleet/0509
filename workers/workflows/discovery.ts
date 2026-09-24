@@ -3,6 +3,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 
 import { readDiscoveryContext } from "../../app/lib/data/entity.server";
 import { writeDiscoveryResults } from "../../app/lib/data/suggestion.server";
+import { enqueueMetaAdlib } from "../../app/lib/discovery/meta-adlib-enqueue.server";
 import { generateShortlist, judgeCandidates, resolveShortlist } from "../../app/lib/discovery/run.server";
 import type { DiscoveryParams } from "../../app/lib/discovery/start.server";
 
@@ -27,6 +28,7 @@ export class Discovery extends WorkflowEntrypoint<Env, DiscoveryParams> {
     const resolved = await step.do("resolve", RETRY, () => resolveShortlist(context, shortlisted));
     const results = await step.do("judge", RETRY, () => judgeCandidates(context, resolved));
     await step.do("write", RETRY, () => writeDiscoveryResults(workspaceId, results, new Date().toISOString()));
+    await step.do("enqueue-adlib", RETRY, () => enqueueMetaAdlib(workspaceId, event.timestamp));
 
     const outcome = {
       workspaceId,

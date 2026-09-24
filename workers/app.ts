@@ -10,6 +10,7 @@ import { assertWorkerEnv, WorkerEnvError, workerEnvFailureResponse } from "../ap
 import { pingLiveness } from "../app/lib/liveness-ping.server";
 import { handleBatch } from "./delivery/consumer";
 import { handleDlqBatch } from "./delivery/dlq-consumer";
+import { handlePageSweep, handlePageSweepDlq } from "./discovery/page-sweep";
 import { NIGHTLY_CRON, sweepPending } from "./delivery/sweeper";
 import { runNightlyStanding } from "./standing/nightly";
 import { AccountDelete } from "./workflows/account-delete";
@@ -61,6 +62,14 @@ const handler = {
   async queue(batch: MessageBatch, env: Env) {
     if (batch.queue === "send-email-dlq") {
       await handleDlqBatch(env, batch);
+      return;
+    }
+    if (batch.queue === "page-sweep") {
+      await handlePageSweep(batch);
+      return;
+    }
+    if (batch.queue === "page-sweep-dlq") {
+      await handlePageSweepDlq(batch);
       return;
     }
     await handleBatch(env, batch);

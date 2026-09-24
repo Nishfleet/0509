@@ -18,6 +18,28 @@ describe("evidenceLine", () => {
   it("still says where the name came from with no countable source", () => {
     expect(evidenceLine([])).toBe("Named alongside you online");
   });
+
+  it("names an ad-library candidate by the category it advertises in", () => {
+    expect(
+      evidenceLine([
+        {
+          sourceUrl: "https://www.facebook.com/ads/library/?id=1035896478962196",
+          excerpt: "Alphalete Athletics advertises in GB for gym apparel",
+          generator: "ads",
+        },
+      ]),
+    ).toBe("Advertises in the same category");
+    expect(
+      evidenceLine([
+        { sourceUrl: "https://www.glamour.co.uk", excerpt: "a", generator: "news" },
+        {
+          sourceUrl: "https://www.facebook.com/ads/library/?id=1",
+          excerpt: "b",
+          generator: "ads",
+        },
+      ]),
+    ).toBe("Named alongside you by 1 publisher and advertises in the same category");
+  });
 });
 
 describe("noulAction", () => {
