@@ -65,39 +65,43 @@ export default function Login() {
   }
 
   return (
-    <main className={SIGN_IN_SHELL}>
-      <Wordmark className="self-start" />
-      <h1 className={SIGN_IN_TITLE}>Sign in</h1>
-      <p className={SIGN_IN_LEDE}>We email you a link. Tap it and you're in. There is no password.</p>
-      <Form method="post" className="mt-8 flex flex-col gap-3">
-        <label htmlFor="email" className="font-mono text-eyebrow text-ink-soft uppercase">
-          Email
-        </label>
-        <Input id="email" name="email" type="email" autoComplete="email" inputMode="email" required />
-        <Button type="submit" size="lg" disabled={busy} className="mt-2">
-          {busy ? "Sending…" : "Email me a link"}
+    <div className={SIGN_IN_SHELL}>
+      <header className="self-start">
+        <Wordmark />
+      </header>
+      <main className="flex flex-col">
+        <h1 className={SIGN_IN_TITLE}>Sign in</h1>
+        <p className={SIGN_IN_LEDE}>We email you a link. Tap it and you're in. There is no password.</p>
+        <Form method="post" className="mt-8 flex flex-col gap-3">
+          <label htmlFor="email" className="font-mono text-eyebrow text-ink-soft uppercase">
+            Email
+          </label>
+          <Input id="email" name="email" type="email" autoComplete="email" inputMode="email" required />
+          <Button type="submit" size="lg" disabled={busy} className="mt-2">
+            {busy ? "Sending…" : "Email me a link"}
+          </Button>
+        </Form>
+        {data?.error ? (
+          <p role="alert" className="mt-3 text-[0.95rem]">
+            {data.error}
+          </p>
+        ) : null}
+        <Button
+          type="button"
+          variant="tertiary"
+          className="mt-4 self-start"
+          onClick={() => void signInWithPasskey()}
+          disabled={passkeyState === "working"}
+        >
+          {passkeyState === "working" ? "Follow the prompt…" : "Use a passkey instead"}
         </Button>
-      </Form>
-      {data?.error ? (
-        <p role="alert" className="mt-3 text-[0.95rem]">
-          {data.error}
-        </p>
-      ) : null}
-      <Button
-        type="button"
-        variant="tertiary"
-        className="mt-4 self-start"
-        onClick={() => void signInWithPasskey()}
-        disabled={passkeyState === "working"}
-      >
-        {passkeyState === "working" ? "Follow the prompt…" : "Use a passkey instead"}
-      </Button>
-      {passkeyState === "failed" ? (
-        <p role="alert" className="text-[0.95rem]">
-          Your passkey didn't sign you in. Try it again, or use the email link.
-        </p>
-      ) : null}
+        {passkeyState === "failed" ? (
+          <p role="alert" className="text-[0.95rem]">
+            Your passkey didn't sign you in. Try it again, or use the email link.
+          </p>
+        ) : null}
+      </main>
       <Footer />
-    </main>
+    </div>
   );
 }
