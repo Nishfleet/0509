@@ -149,6 +149,7 @@ async function statementsForWatch(input: {
         signalId,
         entityId: watch.entity_id,
         p: verdict.p,
+        choice: null,
         reason: null,
         decidedAt: now,
       });
