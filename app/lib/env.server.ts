@@ -14,6 +14,7 @@ const BINDING_NAMES = [
   "SIGN_IN_EMAIL_LIMIT",
   "SIGN_IN_IP_LIMIT",
   "AGENT_REGISTER_LIMIT",
+  "PROBE_LIMIT",
 ] as const satisfies readonly (keyof Env)[];
 
 const NOTES = {
@@ -29,6 +30,7 @@ const NOTES = {
   SIGN_IN_EMAIL_LIMIT: "one inbox can be flooded with sign-in links",
   SIGN_IN_IP_LIMIT: "one sender can spray sign-in links",
   AGENT_REGISTER_LIMIT: "anyone can fill OAUTH_KV with app registrations",
+  PROBE_LIMIT: "one user can run unlimited identity probes",
   LIVENESS_PING_URL: "absence means no monitor; a set value must be an http(s) URL",
   SITE_SWEEP_PING_URL: "absence means no monitor; a set value must be an http(s) URL",
 } as const satisfies Record<
@@ -70,6 +72,7 @@ const workerEnvSchema = z.object({
   SIGN_IN_EMAIL_LIMIT: binding("limit"),
   SIGN_IN_IP_LIMIT: binding("limit"),
   AGENT_REGISTER_LIMIT: binding("limit"),
+  PROBE_LIMIT: binding("limit"),
   LIVENESS_PING_URL: httpUrl.optional(),
   SITE_SWEEP_PING_URL: httpUrl.optional(),
 });
@@ -112,6 +115,7 @@ function snapshot(): Snapshot {
     SIGN_IN_EMAIL_LIMIT: env.SIGN_IN_EMAIL_LIMIT,
     SIGN_IN_IP_LIMIT: env.SIGN_IN_IP_LIMIT,
     AGENT_REGISTER_LIMIT: env.AGENT_REGISTER_LIMIT,
+    PROBE_LIMIT: env.PROBE_LIMIT,
     LIVENESS_PING_URL: globalUrl("LIVENESS_PING_URL"),
     SITE_SWEEP_PING_URL: globalUrl("SITE_SWEEP_PING_URL"),
   };
