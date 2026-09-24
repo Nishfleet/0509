@@ -3,6 +3,7 @@ import { type RouteConfig, layout, route } from "@react-router/dev/routes";
 export default [
   route("login", "routes/login.tsx"),
   route("privacy", "routes/privacy.tsx"),
+  route("terms", "routes/terms.tsx"),
   route("robots.txt", "routes/robots[.]txt.ts"),
   route("sitemap.xml", "routes/sitemap[.]xml.ts"),
   layout("routes/app-layout.tsx", [
@@ -15,6 +16,7 @@ export default [
     ]),
   ]),
   route("app/share.png", "routes/app.share[.]png.ts"),
+  route("app/changes/:signalId/:side", "routes/app.change-shot.ts"),
   route("u/:token", "routes/u.$token.tsx"),
   route("api/health", "routes/api.health.ts"),
   route("api/auth/*", "routes/api.auth.$.ts"),

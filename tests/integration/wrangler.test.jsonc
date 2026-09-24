@@ -25,6 +25,11 @@
       "class_name": "SiteSweepWorkflow"
     },
     {
+      "name": "account-delete-test",
+      "binding": "ACCOUNT_DELETE",
+      "class_name": "AccountDeleteWorkflow"
+    },
+    {
       "name": "own-site-check-test",
       "binding": "OWN_SITE_CHECK",
       "class_name": "OwnSiteCheckWorkflow"

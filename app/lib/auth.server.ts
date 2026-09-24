@@ -18,6 +18,7 @@ interface AuthEnv {
 }
 
 const COOKIE_PREFIX = "better-auth";
+const FRESH_SESSION_SECONDS = 60 * 60 * 24;
 const SESSION_COOKIE = `${COOKIE_PREFIX}.session_token`;
 const sessionCookieNames = new Set([SESSION_COOKIE, `__Secure-${SESSION_COOKIE}`]);
 
@@ -38,6 +39,8 @@ export function createAuth(env: AuthEnv) {
     secret: env.BETTER_AUTH_SECRET,
     baseURL: baseURL(env),
     advanced: { cookiePrefix: COOKIE_PREFIX },
+    session: { freshAge: FRESH_SESSION_SECONDS },
+    user: { deleteUser: { enabled: true } },
     databaseHooks: {
       session: {
         create: {
@@ -73,4 +76,23 @@ export function createAuth(env: AuthEnv) {
       }),
     ],
   });
+}
+
+export async function signOut(env: AuthEnv, request: Request): Promise<Headers> {
+  const { headers } = await createAuth(env).api.signOut({ headers: request.headers, returnHeaders: true });
+  return headers;
+}
+
+export async function deleteSignedInUser(env: AuthEnv, request: Request, now: Date): Promise<Headers | null> {
+  const auth = createAuth(env);
+  const session = await auth.api.getSession({ headers: request.headers });
+  if (!session) return null;
+  const age = now.getTime() - new Date(session.session.createdAt).getTime();
+  if (age >= FRESH_SESSION_SECONDS * 1000) return null;
+  const { apiKeys } = await auth.api.listApiKeys({ headers: request.headers });
+  await Promise.all(
+    apiKeys.map((key) => auth.api.deleteApiKey({ body: { keyId: key.id }, headers: request.headers })),
+  );
+  const { headers } = await auth.api.deleteUser({ body: {}, headers: request.headers, returnHeaders: true });
+  return headers;
 }

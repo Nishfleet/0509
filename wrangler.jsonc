@@ -183,6 +183,14 @@
     // alert and puts { incident_id } on send-email. An open incident whose
     // page answers cleanly again is closed and gets the one "looks fixed"
     // email. This is the hourly re-check the incident email promises.
+    // Deleting an account (Settings): better-auth deletes the user and the
+    // database cascades every owned row; this Workflow empties the account's
+    // stored files, one retried step per page of up to 1,000 objects.
+    {
+      "name": "account-delete",
+      "binding": "ACCOUNT_DELETE",
+      "class_name": "AccountDeleteWorkflow"
+    },
     {
       "name": "own-site-check",
       "binding": "OWN_SITE_CHECK",
@@ -219,7 +227,7 @@
   // Nothing here names a production resource: D1 0509-preview, R2
   // 0509-preview-snapshots, KV 0509-identity-cache-preview and
   // 0509-oauth-preview, rate-limit namespace 5092, queue send-email-preview and
-  // the four *-preview Workflows are preview twins. Previews run no crons and
+  // the *-preview Workflows are preview twins. Previews run no crons and
   // consume no queues, so a preview never sends a brief. Preview URLs sit
   // behind Cloudflare Access, like the gated routes of 0509.io.
   //
@@ -280,6 +288,11 @@
         },
         { "name": "site-sweep-preview", "binding": "SITE_SWEEP", "class_name": "SiteSweepWorkflow" },
         {
+          "name": "account-delete-preview",
+          "binding": "ACCOUNT_DELETE",
+          "class_name": "AccountDeleteWorkflow"
+        },
+        {
           "name": "own-site-check-preview",
           "binding": "OWN_SITE_CHECK",
           "class_name": "OwnSiteCheckWorkflow"
@@ -323,6 +336,11 @@
             "class_name": "DiscoveryWorkflow"
           },
           { "name": "site-sweep-preview", "binding": "SITE_SWEEP", "class_name": "SiteSweepWorkflow" },
+          {
+            "name": "account-delete-preview",
+            "binding": "ACCOUNT_DELETE",
+            "class_name": "AccountDeleteWorkflow"
+          },
           {
             "name": "own-site-check-preview",
             "binding": "OWN_SITE_CHECK",
